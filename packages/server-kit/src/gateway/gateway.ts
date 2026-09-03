@@ -106,7 +106,7 @@ export class Gateway {
     ws.on('message', (data) => this.onMessage(conn, data))
     ws.on('close', () => this.onClose(conn))
     ws.on('error', (err) => this.deps.log.warn('socket error', { conn: conn.id, err: String(err) }))
-    if (identity) void this.bind(conn, identity)
+    if (identity) this.guard(conn.enqueue(() => this.bind(conn, identity)), 'bind', { playerId: identity.playerId })
     else conn.helloTimer = this.deps.clock.setTimeout(() => { if (!conn.identity) conn.close(4001, 'HELLO timeout') }, this.deps.options.helloTimeoutMs)
   }
 
@@ -131,8 +131,12 @@ export class Gateway {
     conn.send({ t: 'WELCOME', playerId: identity.playerId, displayName: identity.displayName, balance, serverTime: this.deps.clock.now() })
     const room = this.deps.rooms.roomOf(identity.playerId)
     if (room) {
-      await room.onReconnect(identity.playerId)
-      conn.send(room.snapshot(identity.playerId))
+      try {
+        await room.onReconnect(identity.playerId)
+        conn.send(room.snapshot(identity.playerId))
+      } catch (err) {
+        this.deps.log.error('onReconnect failed', { playerId: identity.playerId, err: String(err) })
+      }
     }
   }
 
@@ -143,7 +147,7 @@ export class Gateway {
     if (!playerId || conn.replaced || this.bound.get(playerId) !== conn) return
     this.bound.delete(playerId)
     const room = this.deps.rooms.roomOf(playerId)
-    if (room) void room.onDisconnect(playerId)
+    if (room) this.guard(room.onDisconnect(playerId), 'onDisconnect', { playerId })
   }
 
   // ---------- messages ----------
@@ -262,6 +266,11 @@ export class Gateway {
     const room = this.deps.rooms.roomOf(playerId)
     if (!room) throw new RoomError('NOT_IN_ROOM')
     return room
+  }
+
+  /** Fire-and-forget async work must never become an unhandled rejection. */
+  private guard(p: Promise<unknown>, what: string, data?: object): void {
+    p.catch((err) => this.deps.log.error(`${what} failed`, { ...data, err: String(err) }))
   }
 
   // ---------- lobby / heartbeat / origin ----------
