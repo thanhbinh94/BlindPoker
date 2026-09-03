@@ -308,8 +308,8 @@ export class Room {
         await this.onHandComplete()
       }
       this.cancelTimers()
-      for (const p of this.seatedHumans()) await this.standUpNow(p)
       await this.distributeCarryOver()
+      for (const p of this.seatedHumans()) await this.standUpNow(p)
       this.status = 'CLOSED'
       this.broadcastRoomEvent({ type: 'ROOM_CLOSED', reason })
       this.onClosed?.(this, reason)
