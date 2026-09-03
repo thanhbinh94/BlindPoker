@@ -104,7 +104,7 @@ export type ClientMessage =
 export type ServerMessage =
   | { t: 'WELCOME'; playerId: string; displayName: string; balance: number; serverTime: number }
   | { t: 'ROOM_LIST'; rooms: RoomSummary[] }
-  | { t: 'ROOM_SNAPSHOT'; seq: number; room: RoomView; hand: HandView | null }
+  | { t: 'ROOM_SNAPSHOT'; seq: number; room: RoomView; hand: HandView | null; deadlineAt: number | null }
   | { t: 'GAME_EVENT'; seq: number; event: GameEvent & { deadlineAt?: number } }
   | { t: 'ROOM_EVENT'; seq: number; event: RoomEvent }
   | { t: 'BALANCE'; balance: number }

@@ -617,7 +617,7 @@ Mọi message client → server có thể mang `reqId?`; server trả lại nó 
 |---|---|
 | `WELCOME` | `{ playerId, displayName, balance, serverTime }` |
 | `ROOM_LIST` | `{ rooms: RoomSummary[] }` |
-| `ROOM_SNAPSHOT` | `{ seq, room: RoomView, hand?: HandView }` |
+| `ROOM_SNAPSHOT` | `{ seq, room: RoomView, hand?: HandView, deadlineAt: number | null }` |
 | `GAME_EVENT` | `{ seq, event: GameEvent }` |
 | `ROOM_EVENT` | `{ seq, event: PLAYER_JOINED \| PLAYER_LEFT \| PLAYER_SAT \| PLAYER_STOOD \| PLAYER_READY \| HOST_CHANGED \| PLAYER_DISCONNECTED \| PLAYER_RECONNECTED \| ROOM_STATUS \| ROOM_CLOSED }` |
 | `BALANCE` | `{ balance }` — sau settlement/daily/relief |
