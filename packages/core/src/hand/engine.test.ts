@@ -40,6 +40,8 @@ describe('playerView', () => {
     expect(v.seats[1]!.cardCount).toBe(2)
     expect(v.seats[1]!.hasDecided).toBe(true)
     expect(v.seats[1]!.decision).toBeNull()
+    expect(v.seats[1]!.stack).toBe(4000) // unchanged from before the decision: the wager waits for resolution
+    expect(v.pot).toBe(3000)
     const spectator = playerView(state, null)
     expect(spectator.mySeat).toBeNull()
     expect(spectator.seats.every((s) => s.holeCards === null)).toBe(true)

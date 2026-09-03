@@ -91,36 +91,49 @@ export function applyBlindCommand(input: HandState, cmd: HandCommand, _rng: Rng)
       return { state, events }
     }
     case 'TIMEOUT': {
-      decide(state, events, cmd.seat, { kind: 'fold' }, true)
+      // A table-wide timer may fire for seats that already decided: treat those as a no-op so timers stay idempotent.
+      const p = getPlayer(state, cmd.seat)
+      if (state.phase !== 'DECISION' || p.decision !== null) return { state, events }
+      decide(state, events, cmd.seat, { kind: 'fold' })
       return { state, events }
     }
     case 'ACTION': {
-      decide(state, events, cmd.seat, cmd.action, false)
+      decide(state, events, cmd.seat, cmd.action)
       return { state, events }
     }
   }
 }
 
-function decide(state: HandState, events: GameEvent[], seat: number, action: PlayerAction, timedOut: boolean): void {
+/**
+ * Records one seat's hidden decision. Nothing but `DECISION_MADE{seat}` is emitted and no chips move while the
+ * phase is still `DECISION`: stacks, `totalCommitted` and the pot would otherwise reveal who played.
+ */
+function decide(state: HandState, events: GameEvent[], seat: number, action: PlayerAction): void {
   const p = getPlayer(state, seat)
   const legal = blindLegalActions(state, seat)
   if (legal.kinds.length === 0) throw new EngineError('NOT_YOUR_TURN', `seat ${seat} has nothing to decide`)
   if (!legal.kinds.includes(action.kind)) throw new EngineError('ILLEGAL_ACTION', `${action.kind} is not legal in blind poker`)
-  let amount = 0
-  if (action.kind === 'play') {
-    amount = commit(state, p, rulesOf(state).fixedWager)
-    p.decision = 'play'
-  } else {
-    p.decision = 'fold'
-  }
+  p.decision = action.kind === 'play' ? 'play' : 'fold'
   p.hasActed = true
-  events.push({ type: 'PLAYER_ACTED', seat, action, amount, stack: p.stack, allIn: p.allIn, timedOut })
   events.push({ type: 'DECISION_MADE', seat })
-  if (amount > 0) events.push({ type: 'POT_UPDATED', pot: state.pot })
 
   if (state.players.some((x) => x.decision === null)) return
+  resolveDecisions(state, events)
+}
 
-  for (const x of state.players) if (x.decision === 'fold') x.folded = true
+/** All seats have decided: apply the wagers in seat order, reveal, then branch on how many are still playing. */
+function resolveDecisions(state: HandState, events: GameEvent[]): void {
+  const wager = rulesOf(state).fixedWager
+  for (const x of state.players) {
+    if (x.decision === 'play') {
+      const amount = commit(state, x, wager)
+      events.push({ type: 'PLAYER_ACTED', seat: x.seat, action: { kind: 'play' }, amount, stack: x.stack, allIn: x.allIn, timedOut: false })
+    } else {
+      x.folded = true
+      events.push({ type: 'PLAYER_ACTED', seat: x.seat, action: { kind: 'fold' }, amount: 0, stack: x.stack, allIn: x.allIn, timedOut: false })
+    }
+  }
+  events.push({ type: 'POT_UPDATED', pot: state.pot })
   events.push({ type: 'DECISIONS_REVEALED', decisions: state.players.map((x) => ({ seat: x.seat, decision: x.decision! })) })
   const playing = state.players.filter((x) => !x.folded).length
   if (playing === 0) carryOverAll(state, events)

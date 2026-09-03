@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Rng } from '../cards/rng.js'
 import { seededRng } from '../cards/rng.js'
 import { applyBlindCommand, blindLegalActions, blindRequiredStack, createBlindHand } from './blind.js'
+import { playerView } from './view.js'
 import { EngineError, type BlindRules, type GameEvent, type HandState } from './types.js'
 
 const identityRng: Rng = { int: (n) => n - 1 }
@@ -74,11 +75,31 @@ describe('mode B (play or fold)', () => {
     const t = new Table(rules(), [5000, 5000, 5000])
     expect(blindLegalActions(t.state, 0)).toMatchObject({ kinds: ['play', 'fold'], callAmount: 1000 })
     const ev = t.play(0)
-    expect(ev.map((e) => e.type)).toEqual(['PLAYER_ACTED', 'DECISION_MADE', 'POT_UPDATED'])
+    expect(ev.map((e) => e.type)).toEqual(['DECISION_MADE'])
     expect(blindLegalActions(t.state, 0).kinds).toEqual([])
     expect(() => t.play(0)).toThrow(/NOT_YOUR_TURN/)
-    expect(t.stack(0)).toBe(3000)
+    expect(t.stack(0)).toBe(4000) // wager is only committed once every seat has decided
+    expect(t.state.pot).toBe(3000)
     expect(t.state.phase).toBe('DECISION')
+    // nothing observable to seat 1 tells them what seat 0 chose
+    const v = playerView(t.state, 1)
+    expect(v.pot).toBe(3000)
+    expect(v.seats[0]).toMatchObject({ stack: 4000, totalCommitted: 1000, hasDecided: true, decision: null })
+  })
+  it('reveals every decision at once when the last seat decides', () => {
+    const t = new Table(rules(), [5000, 5000, 5000])
+    t.play(0); t.fold(1)
+    const ev = t.play(2)
+    expect(ev.map((e) => e.type)).toEqual([
+      'DECISION_MADE', 'PLAYER_ACTED', 'PLAYER_ACTED', 'PLAYER_ACTED', 'POT_UPDATED', 'DECISIONS_REVEALED',
+    ])
+    expect(ev.filter((e) => e.type === 'PLAYER_ACTED')).toMatchObject([
+      { seat: 0, action: { kind: 'play' } }, { seat: 1, action: { kind: 'fold' } }, { seat: 2, action: { kind: 'play' } },
+    ])
+    expect(t.stack(0)).toBe(3000)
+    expect(t.stack(1)).toBe(4000)
+    expect(t.state.pot).toBe(5000)
+    expect(t.state.phase).toBe('REVEAL')
   })
   it('one player plays → wins the pot immediately without reveal', () => {
     const t = new Table(rules(), [5000, 5000, 5000])
@@ -104,9 +125,17 @@ describe('mode B (play or fold)', () => {
     const t = new Table(rules(), [5000, 5000, 5000])
     t.play(0); t.play(1)
     const ev = t.apply({ type: 'TIMEOUT', seat: 2 })
-    expect(ev[0]).toMatchObject({ type: 'PLAYER_ACTED', seat: 2, action: { kind: 'fold' }, timedOut: true })
+    expect(ev).toContainEqual(expect.objectContaining({ type: 'PLAYER_ACTED', seat: 2, action: { kind: 'fold' } }))
     expect(t.state.phase).toBe('REVEAL')
     expect(t.state.players[2]!.folded).toBe(true)
+  })
+  it('timeout for an already-decided seat is a no-op', () => {
+    const t = new Table(rules(), [5000, 5000, 5000])
+    t.play(0)
+    const before = structuredClone(t.state)
+    const ev = t.apply({ type: 'TIMEOUT', seat: 0 })
+    expect(ev).toEqual([])
+    expect(t.state).toEqual(before)
   })
   it('two or more players → reveal and showdown among players only', () => {
     const t = new Table(rules({ holeCards: 3 }), [5000, 5000, 5000], 0, 0, identityRng)
