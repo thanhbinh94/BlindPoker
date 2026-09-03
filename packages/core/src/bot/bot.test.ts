@@ -39,6 +39,25 @@ describe('bot never makes illegal moves', () => {
     expect(rate).toBeGreaterThan(0.3)
     expect(rate).toBeLessThan(0.8)
   })
+  it('plays more often when a pot has carried over', () => {
+    const bot = createBotStrategy()
+    const rules: BlindRules = { mode: 'blind', holeCards: 2, decisionMode: 'playOrFold', fixedWager: 1000, tableFeeRate: 0.02 }
+    const playRate = (carryOverIn: number) => {
+      const rng = seededRng(31)
+      let plays = 0, decisions = 0
+      for (let i = 0; i < 500; i++) {
+        simulateHand({ handId: `c${i}`, rules, seats: seats([20000, 20000, 20000]), button: 0, carryOverIn }, (v, l, r) => {
+          const a = bot.decide(v, l, r)
+          decisions++
+          if (a.kind === 'play') plays++
+          return a
+        }, rng)
+      }
+      return plays / decisions
+    }
+    // decideBlind drops its threshold by 1.5 once carryOverIn exceeds 4 × the wager
+    expect(playRate(5 * rules.fixedWager)).toBeGreaterThan(playRate(0))
+  })
   it('plays 1000 hold’em hands with 2–6 bots', () => {
     const bot = createBotStrategy()
     const rng = seededRng(12)

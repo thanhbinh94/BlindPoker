@@ -73,7 +73,6 @@ function decideHoldem(view: HandView, legal: LegalActions, rng: Rng): PlayerActi
     return { kind: can('check') ? 'check' : 'fold' }
   }
   if (strength >= potOdds + 0.05 && can('call')) return { kind: 'call' }
-  if (can('allIn') && !can('call') && strength >= 0.5) return { kind: 'allIn' }
   return { kind: 'fold' }
 }
 
@@ -82,6 +81,7 @@ export function createBotStrategy(): BotStrategy {
     decide(view, legal, rng) {
       const action = view.mode === 'blind' ? decideBlind(view, legal, rng) : decideHoldem(view, legal, rng)
       if (legal.kinds.includes(action.kind)) return action
+      if (legal.kinds.length === 0) throw new Error('bot: no legal actions')
       return { kind: legal.kinds.includes('check') ? 'check' : legal.kinds.includes('fold') ? 'fold' : legal.kinds[0]! } as PlayerAction
     },
   }

@@ -26,7 +26,7 @@ export const ECONOMY = {
   consecutiveTimeoutsToStand: 3,
 } as const
 
-/** Index 0 = streak day 1 … index 28 = day 29; days beyond use the last entry. */
+/** Index 0 = streak day 1 … index 30 = day 31; days beyond use the last entry. */
 export const DAILY_REWARD_POINTS: readonly number[] = [
   5_000, 6_000, 7_000, 8_000, 10_000, 12_000, 15_000,          // 1–7
   10_000, 10_000, 10_000, 10_000, 10_000, 10_000,               // 8–13

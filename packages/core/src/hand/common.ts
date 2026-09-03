@@ -103,6 +103,7 @@ export function settle(state: HandState, events: GameEvent[], opts: { showdown: 
   }
 
   const results = distributePots(pots.filter((p) => p.amount > 0), rankBySeat, state.players.map((p) => p.seat), state.button)
+  if (results.some((r) => r.winners.length === 0)) throw new EngineError('INVALID_SETUP', 'no winners for a pot')
   const payoutBySeat = new Map<number, number>()
   for (const r of results) for (const w of r.winners) payoutBySeat.set(w.seat, (payoutBySeat.get(w.seat) ?? 0) + w.amount)
   for (const [seat, amount] of payoutBySeat) getPlayer(state, seat).stack += amount

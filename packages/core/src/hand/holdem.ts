@@ -78,6 +78,8 @@ export function createHoldemHand(input: CreateHoldemInput, rng: Rng): EngineResu
 
 export function holdemLegalActions(state: HandState, seat: number): LegalActions {
   const p = getPlayer(state, seat)
+  // A seat that is folded, all-in or simply not on turn has nothing it may legally do.
+  if (p.folded || p.allIn || state.actingSeat !== seat) return { seat, kinds: [], callAmount: 0, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 }
   const bb = rulesOf(state).bigBlind
   const toCall = Math.max(0, state.currentBet - p.betThisStreet)
   const kinds: ActionKind[] = ['fold']

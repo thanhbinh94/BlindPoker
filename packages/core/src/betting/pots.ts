@@ -64,6 +64,7 @@ export function distributePots(
           return order.filter((s) => ranked.includes(s) && rankBySeat.get(s) === bestRank)
         })()
       : order.filter((s) => pot.eligibleSeats.includes(s))
+    if (winnersInOrder.length === 0) throw new Error('distributePots: no eligible seats')
     const share = Math.floor(pot.amount / winnersInOrder.length)
     let remainder = pot.amount - share * winnersInOrder.length
     const winners = winnersInOrder.map((seat) => {

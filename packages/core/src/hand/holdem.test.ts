@@ -111,6 +111,26 @@ describe('betting rules', () => {
     expect(t.stack(2)).toBe(1048) // 1000 − 100 + 50 + 98
     t.assertMoney()
   })
+  it('caps the table fee at one big blind', () => {
+    const t = new Table([5000, 5000], 0, identityRng)
+    t.act(0, 'allIn') // heads-up: the button posts the SB and acts first
+    t.act(1, 'call')
+    t.advance(); t.advance(); t.advance()
+    expect(t.state.phase).toBe('COMPLETE')
+    // both committed 5000 → nothing uncalled; pot 10,000, floor(10,000 × 0.02) = 200, capped at 1 BB = 100
+    expect(t.state.result!.uncalledReturned).toBeNull()
+    expect(t.state.result!.fee).toBe(100)
+    t.assertMoney()
+  })
+  it('gives folded, all-in and off-turn seats no legal actions', () => {
+    const t = new Table([1000, 1000, 1000])
+    expect(t.legal(1).kinds).toEqual([]) // not on turn
+    t.act(0, 'fold')
+    expect(t.legal(0).kinds).toEqual([]) // folded
+    expect(t.legal(0)).toEqual({ seat: 0, kinds: [], callAmount: 0, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 })
+    t.act(1, 'allIn')
+    expect(t.legal(1).kinds).toEqual([]) // all-in
+  })
   it('enforces min-raise = last raise increment and rejects smaller raises', () => {
     const t = new Table([5000, 5000, 5000])
     t.act(0, 'raise', 300)
