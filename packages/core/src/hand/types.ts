@@ -105,7 +105,9 @@ export interface HandState {
   turnSeq: number
   currentBet: number
   minRaise: number
+  /** Total chips in play for this hand, INCLUDING `carryOverIn` (already folded into `pot` at hand start, e.g. before antes for Blind hands). Contrast with `settle()`, which recomputes pots from per-player contributions and adds `carryOverIn` to the main pot on top of them — do not double count. */
   pot: number
+  /** Chips carried over from a prior hand (e.g. an unresolved Blind-mode pot), added to `pot` at hand creation. */
   carryOverIn: number
   revealQueue: Street[]
   result: HandResult | null
