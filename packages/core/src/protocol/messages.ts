@@ -51,7 +51,7 @@ export interface RoomPlayerView {
   status: SeatStatus | null
   stack: number
   ready: boolean
-  /** Opaque, edition-specific cosmetics (e.g. avatar config); core never interprets it. */
+  /** Opaque, app-specific cosmetics (e.g. avatar config); core never interprets it. */
   cosmetics?: unknown
 }
 
