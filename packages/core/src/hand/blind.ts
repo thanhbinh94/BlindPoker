@@ -1,7 +1,7 @@
 import { createDeck } from '../cards/cards.js'
 import type { Rng } from '../cards/rng.js'
 import { shuffle } from '../cards/shuffle.js'
-import { carryOverAll, clone, commit, dealCards, getPlayer, revealNext, seatsClockwiseFrom, settle } from './common.js'
+import { cancelHand, carryOverAll, clone, commit, dealCards, getPlayer, revealNext, seatsClockwiseFrom, settle } from './common.js'
 import {
   EngineError,
   type BlindRules, type EngineResult, type GameEvent, type HandCommand, type HandState, type LegalActions, type PlayerAction, type SeatInput,
@@ -63,7 +63,7 @@ export function createBlindHand(input: CreateBlindInput, rng: Rng): EngineResult
 
   const order = seatsClockwiseFrom(state, state.button)
   for (let round = 0; round < input.rules.holeCards; round++) for (const p of order) p.holeCards.push(...dealCards(state, 1))
-  for (const p of state.players) events.push({ type: 'CARDS_DEALT', seat: p.seat, cards: p.holeCards.slice() })
+  for (const p of state.players) events.push({ type: 'CARDS_DEALT', seat: p.seat, cards: p.holeCards.slice(), cardCount: p.holeCards.length })
 
   if (state.phase === 'DECISION') {
     state.turnSeq += 1
@@ -84,6 +84,10 @@ export function applyBlindCommand(input: HandState, cmd: HandCommand, _rng: Rng)
   const events: GameEvent[] = []
   if (state.phase === 'COMPLETE') throw new EngineError('HAND_COMPLETE')
   switch (cmd.type) {
+    case 'CANCEL': {
+      cancelHand(state, events, cmd.reason)
+      return { state, events }
+    }
     case 'ADVANCE': {
       if (state.phase !== 'REVEAL') throw new EngineError('INVALID_COMMAND', 'ADVANCE only during REVEAL')
       revealNext(state, events)

@@ -1,7 +1,7 @@
 import { createDeck } from '../cards/cards.js'
 import type { Rng } from '../cards/rng.js'
 import { shuffle } from '../cards/shuffle.js'
-import { canAct, clone, commit, dealCards, getPlayer, revealNext, seatsClockwiseFrom, settle, unfolded } from './common.js'
+import { canAct, cancelHand, clone, commit, dealCards, getPlayer, revealNext, seatsClockwiseFrom, settle, unfolded } from './common.js'
 import {
   EngineError,
   type ActionKind, type EngineResult, type GameEvent, type HandCommand, type HandPlayer, type HandState,
@@ -58,7 +58,7 @@ export function createHoldemHand(input: CreateHoldemInput, rng: Rng): EngineResu
 
   const order = seatsClockwiseFrom(state, state.button)
   for (let round = 0; round < 2; round++) for (const p of order) p.holeCards.push(...dealCards(state, 1))
-  for (const p of state.players) events.push({ type: 'CARDS_DEALT', seat: p.seat, cards: p.holeCards.slice() })
+  for (const p of state.players) events.push({ type: 'CARDS_DEALT', seat: p.seat, cards: p.holeCards.slice(), cardCount: p.holeCards.length })
 
   const headsUp = state.players.length === 2
   const sb = headsUp ? getPlayer(state, state.button) : order[0]!
@@ -101,6 +101,10 @@ export function applyHoldemCommand(input: HandState, cmd: HandCommand, _rng: Rng
   const events: GameEvent[] = []
   if (state.phase === 'COMPLETE') throw new EngineError('HAND_COMPLETE')
   switch (cmd.type) {
+    case 'CANCEL': {
+      cancelHand(state, events, cmd.reason)
+      return { state, events }
+    }
     case 'ADVANCE': {
       if (state.phase !== 'REVEAL') throw new EngineError('INVALID_COMMAND', 'ADVANCE only during REVEAL')
       revealNext(state, events)

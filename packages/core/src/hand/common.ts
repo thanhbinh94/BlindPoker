@@ -117,6 +117,31 @@ export function settle(state: HandState, events: GameEvent[], opts: { showdown: 
   events.push({ type: 'HAND_COMPLETE' })
 }
 
+/**
+ * Aborts the hand: every chip committed this hand goes back to its owner and anything carried in stays carried out,
+ * so no money is created or destroyed and no fee is charged.
+ */
+export function cancelHand(state: HandState, events: GameEvent[], reason: string): void {
+  const refunds: { seat: number; amount: number }[] = []
+  for (const p of state.players) {
+    if (p.totalCommitted > 0) {
+      p.stack += p.totalCommitted
+      refunds.push({ seat: p.seat, amount: p.totalCommitted })
+    }
+    p.totalCommitted = 0
+    p.betThisStreet = 0
+    p.allIn = false
+  }
+  const carryOverOut = state.carryOverIn
+  state.pot = 0
+  const stacks = state.players.map((p) => ({ seat: p.seat, stack: p.stack }))
+  state.result = { pots: [], fee: 0, payouts: [], stacks, showdown: null, carryOverOut, uncalledReturned: null }
+  state.phase = 'COMPLETE'
+  state.actingSeat = null
+  events.push({ type: 'HAND_CANCELLED', reason, refunds, carryOverOut })
+  events.push({ type: 'HAND_COMPLETE' })
+}
+
 export function carryOverAll(state: HandState, events: GameEvent[]): void {
   const stacks = state.players.map((p) => ({ seat: p.seat, stack: p.stack }))
   state.result = { pots: [], fee: 0, payouts: [], stacks, showdown: null, carryOverOut: state.pot, uncalledReturned: null }

@@ -1,5 +1,8 @@
 import type { Card } from '../cards/cards.js'
-import type { Decision, GameMode, HandPhase, HandResult, HandState, Street } from './types.js'
+// Imported directly (not through `engine.js`) to keep `view.ts` free of a circular import.
+import { blindLegalActions } from './blind.js'
+import { holdemLegalActions } from './holdem.js'
+import type { Decision, GameEvent, GameMode, HandPhase, HandResult, HandState, LegalActions, Street } from './types.js'
 
 export interface SeatView {
   seat: number
@@ -31,7 +34,25 @@ export interface HandView {
   turnSeq: number
   seats: SeatView[]
   mySeat: number | null
+  /** What the viewer may do right now, or null when it is not their turn (or there is no viewer). */
+  legal: LegalActions | null
   result: HandResult | null
+}
+
+function viewerLegal(state: HandState, viewerSeat: number | null): LegalActions | null {
+  if (viewerSeat === null || state.phase === 'COMPLETE') return null
+  if (!state.players.some((p) => p.seat === viewerSeat)) return null
+  if (state.actingSeat !== viewerSeat && state.phase !== 'DECISION') return null
+  return state.rules.mode === 'holdem' ? holdemLegalActions(state, viewerSeat) : blindLegalActions(state, viewerSeat)
+}
+
+/**
+ * Strips the parts of an event a given viewer must not see. Hole cards dealt to another seat are blanked (the
+ * `cardCount` survives so clients can still render card backs); every other event is already viewer-safe.
+ */
+export function filterEvent(event: GameEvent, viewerSeat: number | null): GameEvent {
+  if (event.type === 'CARDS_DEALT' && event.seat !== viewerSeat) return { ...event, cards: [] }
+  return event
 }
 
 export function playerView(state: HandState, viewerSeat: number | null): HandView {
@@ -51,6 +72,7 @@ export function playerView(state: HandState, viewerSeat: number | null): HandVie
     actingSeat: state.actingSeat,
     turnSeq: state.turnSeq,
     mySeat: viewerSeat,
+    legal: viewerLegal(state, viewerSeat),
     result: state.result ? structuredClone(state.result) : null,
     seats: state.players.map((p) => {
       const mine = p.seat === viewerSeat

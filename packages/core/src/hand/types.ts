@@ -71,6 +71,7 @@ export type HandCommand =
   | { type: 'ACTION'; seat: number; action: PlayerAction }
   | { type: 'TIMEOUT'; seat: number }
   | { type: 'ADVANCE' }
+  | { type: 'CANCEL'; reason: string }
 
 export interface ShowdownHand {
   seat: number
@@ -107,7 +108,12 @@ export interface HandState {
   turnSeq: number
   currentBet: number
   minRaise: number
-  /** Total chips in play for this hand, INCLUDING `carryOverIn` (already folded into `pot` at hand start, e.g. before antes for Blind hands). Contrast with `settle()`, which recomputes pots from per-player contributions and adds `carryOverIn` to the main pot on top of them — do not double count. */
+  /**
+   * Total chips in play for this hand, INCLUDING `carryOverIn` (already folded into `pot` at hand start, e.g. before
+   * antes for Blind hands). Contrast with `settle()`, which recomputes pots from per-player contributions and adds
+   * `carryOverIn` to the main pot on top of them — do not double count.
+   * After COMPLETE this keeps the settled total for display; the SETTLEMENT event carries payouts.
+   */
   pot: number
   /** Chips carried over from a prior hand (e.g. an unresolved Blind-mode pot), added to `pot` at hand creation. */
   carryOverIn: number
@@ -118,7 +124,7 @@ export interface HandState {
 export type GameEvent =
   | { type: 'HAND_STARTED'; handId: string; mode: GameMode; button: number; seats: number[]; carryOverIn: number }
   | { type: 'BLINDS_POSTED'; posts: { seat: number; amount: number; kind: 'SB' | 'BB' | 'ANTE' }[] }
-  | { type: 'CARDS_DEALT'; seat: number; cards: Card[] }
+  | { type: 'CARDS_DEALT'; seat: number; cards: Card[]; cardCount: number }
   | { type: 'TURN_CHANGED'; seat: number; turnSeq: number; legal: LegalActions }
   | { type: 'PLAYER_ACTED'; seat: number; action: PlayerAction; amount: number; stack: number; allIn: boolean; timedOut: boolean }
   | { type: 'DECISION_PHASE'; seats: number[]; turnSeq: number }
@@ -128,6 +134,7 @@ export type GameEvent =
   | { type: 'POT_UPDATED'; pot: number }
   | { type: 'SHOWDOWN'; hands: ShowdownHand[] }
   | { type: 'SETTLEMENT'; payouts: { seat: number; amount: number }[]; fee: number; pots: PotResult[]; carryOverOut: number; stacks: { seat: number; stack: number }[]; uncalledReturned: { seat: number; amount: number } | null }
+  | { type: 'HAND_CANCELLED'; reason: string; refunds: { seat: number; amount: number }[]; carryOverOut: number }
   | { type: 'HAND_COMPLETE' }
 
 export interface EngineResult {
