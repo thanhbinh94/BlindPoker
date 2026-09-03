@@ -124,6 +124,7 @@ export class Room {
       if (existing) {
         if (!existing.leaveAfterHand) throw new RoomError('ALREADY_IN_ROOM')
         existing.leaveAfterHand = false // rejoined before the hand ended
+        existing.standAfterHand = false
         return
       }
       if (this.config.password !== undefined && password !== this.config.password) throw new RoomError('WRONG_PASSWORD')
@@ -315,13 +316,13 @@ export class Room {
     })
   }
 
-  private close(reason: string): void {
+  private async close(reason: string): Promise<void> {
     if (this.status === 'CLOSED') return
-    this.cancelTimers()
     if (this.runner && !this.runner.isComplete) {
-      this.runner.dispose()
-      this.runner = null
+      this.runner.cancel(reason)
+      await this.onHandComplete()
     }
+    this.cancelTimers()
     this.status = 'CLOSED'
     this.onClosed?.(this, reason)
   }
@@ -357,7 +358,7 @@ export class Room {
       }
     }
     const eligible = this.eligibleForHand()
-    if (eligible.length < 2) {
+    if (eligible.length < 2 || eligible.every((p) => p.identity.isBot)) {
       this.toOpen()
       return
     }
@@ -602,7 +603,7 @@ export class Room {
 
   private scheduleClose(): void {
     this.cancelClose()
-    this.closeTimer = this.deps.clock.setTimeout(() => void this.enqueue(() => { if (this.humanCount === 0) this.close('empty') }), this.deps.options.emptyRoomCloseMs)
+    this.closeTimer = this.deps.clock.setTimeout(() => void this.enqueue(async () => { if (this.humanCount === 0) await this.close('empty') }), this.deps.options.emptyRoomCloseMs)
   }
 
   private cancelClose(): void {

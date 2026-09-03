@@ -1,6 +1,6 @@
 import type { RoomConfig } from '@bp/core'
 import { describe, expect, it } from 'vitest'
-import { createRoomHarness } from '../testing/room-harness.js'
+import { createRoomHarness, TEST_ROOM_OPTIONS } from '../testing/room-harness.js'
 import { RoomError } from './types.js'
 
 const HOLDEM: RoomConfig = { name: 'T', mode: 'holdem', maxPlayers: 4, isPrivate: false, turnTimerSec: 30, autoStart: false, holdem: { smallBlind: 100, bigBlind: 200, minBuyInBB: 50, maxBuyInBB: 200 } }
@@ -147,5 +147,98 @@ describe('Room snapshot', () => {
     expect(inHand.hand?.legal?.kinds).toEqual(['play', 'fold'])
     expect(inHand.deadlineAt).toBe(h.clock.now() + 5_000)
     expect(h.room.snapshot(null).hand?.seats.every((s) => s.holeCards === null)).toBe(true)
+  })
+})
+
+describe('Bot-only rooms', () => {
+  it('never starts a hand with no humans, and closes the empty room once the current hand finishes', async () => {
+    const h = createRoomHarness(BLIND)
+    await h.room.sitDown('h', 0)
+    await h.room.setReady('h', true)
+    await h.room.startGame('h')
+    expect(h.room.handActive).toBe(true)
+    await h.room.leave('h')
+
+    // drive the (human-less-from-here) hand to completion via the bots' own timers
+    for (let i = 0; i < 1000 && h.room.handActive; i++) {
+      h.clock.advance(10)
+      await h.room.enqueue(() => undefined)
+    }
+    // HandRunner marks itself complete (handActive flips false) before the room's own
+    // onHandComplete() cleanup — nested-enqueued from inside the timer callback that just
+    // finished the hand — actually runs. A couple more queue flushes let that settle
+    // (settlement, history.recordHand, player removal) before we assert on its effects.
+    await h.room.enqueue(() => undefined)
+    await h.room.enqueue(() => undefined)
+    expect(h.room.handActive).toBe(false)
+
+    // the next-hand timer fires, but with zero humans eligible the room must NOT start a bot-only hand
+    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
+    await h.room.enqueue(() => undefined)
+    expect(h.room.handActive).toBe(false)
+    expect(h.room.status).toBe('OPEN')
+
+    // the empty-room grace period elapses and the room closes
+    h.clock.advance(TEST_ROOM_OPTIONS.emptyRoomCloseMs)
+    await h.room.enqueue(() => undefined)
+    expect(h.room.status).toBe('CLOSED')
+    expect(h.repos.hands).toHaveLength(1)
+  })
+
+  it('cancels and records a hand that is still in flight when the room closes', async () => {
+    // Once the fix above is in place, a bot-only hand can never actually be running when the
+    // empty-room timer fires (eligibleForHand always requires a human, and a human still counted
+    // in the room can't be removed until their own hand completes). So this exercises the private
+    // close() path directly, the same way it is reached from the empty-room timer, to verify it
+    // still cancels and records an in-flight hand instead of dropping it (mirrors shutdown()).
+    const h = createRoomHarness(BLIND, { options: { botDelayMs: [10_000, 10_000] } })
+    await h.room.sitDown('h', 0)
+    await h.room.setReady('h', true)
+    await h.room.startGame('h')
+    expect(h.room.handActive).toBe(true)
+
+    await h.room.enqueue(() => (h.room as unknown as { close(reason: string): Promise<void> }).close('empty'))
+
+    expect(h.room.status).toBe('CLOSED')
+    expect(h.room.handActive).toBe(false)
+    expect(h.repos.hands).toHaveLength(1)
+    expect(h.repos.hands.at(-1)?.cancelled).toBe(true)
+  })
+})
+
+describe('Rejoin mid-hand', () => {
+  it('clears the stand-after-hand flag so a player who rejoins before the hand ends keeps their seat and stack', async () => {
+    const h = createRoomHarness(HOLDEM)
+    await h.room.join(h.identity('a'))
+    await h.room.sitDown('h', 0, 20_000)
+    await h.room.sitDown('a', 1, 20_000)
+    await h.room.setReady('h', true)
+    await h.room.setReady('a', true)
+    await h.room.startGame('h')
+    expect(h.room.handActive).toBe(true)
+
+    await h.room.leave('h')
+    await h.room.join(h.identity('h'))
+
+    // drive the hand to completion: h is auto-folded already, so only 'a' ever needs a real decision
+    for (let i = 0; i < 1000 && h.room.handActive; i++) {
+      const snap = h.room.snapshot('a')
+      const legal = snap.hand?.legal
+      if (legal) {
+        const kind = legal.kinds.includes('check') ? 'check' : legal.kinds.includes('call') ? 'call' : 'fold'
+        await h.room.action('a', { kind }, snap.seq)
+      } else {
+        h.clock.advance(10)
+        await h.room.enqueue(() => undefined)
+      }
+    }
+    // Same queue-flush caveat as above: let the room's own onHandComplete() cleanup fully settle.
+    await h.room.enqueue(() => undefined)
+    await h.room.enqueue(() => undefined)
+    expect(h.room.handActive).toBe(false)
+
+    expect(h.room.hasPlayer('h')).toBe(true)
+    expect(h.room.players.get('h')?.seat).toBe(0)
+    expect(h.repos.entries.some((e) => e.entry.playerId === 'h' && e.entry.reason === 'cash_out')).toBe(false)
   })
 })
