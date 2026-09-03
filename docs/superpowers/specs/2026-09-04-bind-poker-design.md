@@ -268,9 +268,9 @@ Như mục 7.7.
 - 3 lá: max điểm Chen của 3 cặp con; +2 nếu có đôi, +5 nếu ba lá cùng số; +1 nếu ba lá cùng chất.
 
 ### 9.3 Blind Poker kiểu B
-- `threshold = 6 + 0.8 × (số đối thủ − 1)`; `score = chen + N(0, 1.5)` (nhiễu ngẫu nhiên); `play` nếu `score ≥ threshold`, ngược lại `fold`.
+- `threshold = 3 + 0.5 × (số đối thủ − 1)`; `score = chen + N(0, 1.5)` (nhiễu ngẫu nhiên); `play` nếu `score ≥ threshold`, ngược lại `fold`.
 - Nếu `carryOverPot > 4W` giảm threshold 1,5 (pot lớn đáng theo).
-- Kỳ vọng: bot play ~55–65% với 2 đối thủ, ~40% với 7 đối thủ.
+- Kỳ vọng: tỷ lệ play trung bình ≈ 50–55% (đo qua mô phỏng 2.000 ván với 2–8 người).
 
 ### 9.4 Normal Poker (should-have)
 - Preflop theo Chen: `≥ 10` raise 2,5–3 BB (hoặc 3× cược trước); `7–9` call; `< 7` fold trừ khi được check miễn phí; đã có raise trước: `≥ 12` re-raise, `≥ 9` call.
@@ -320,7 +320,7 @@ interface RoomConfig {
   blind?:  { holeCards: 2 | 3; decisionMode: 'none' | 'playOrFold'; fixedWager: number; botCount: number }
 }
 ```
-Server kiểm tra từng giá trị thuộc tập cho phép; sai → `ERROR INVALID_ROOM_CONFIG`.
+Server kiểm tra từng giá trị thuộc tập cho phép; sai → `ERROR INVALID_ROOM_CONFIG`. `blind.decisionMode` **bắt buộc**, không có giá trị mặc định: thiếu nó → `INVALID_ROOM_CONFIG`.
 
 ### 11.3 Ghế và trạng thái người trong phòng
 - Vào phòng = là "người xem trong phòng" (không ghế). `SIT_DOWN{seat, buyIn?}` chiếm ghế (Hold'em kèm buy-in; Blind không). `STAND_UP` rời ghế.
@@ -500,11 +500,14 @@ function createHand(config: RulesetConfig, seats: SeatInput[], rng: Rng): HandSt
 function legalActions(state: HandState, seat: number): LegalActions
 function applyAction(state: HandState, cmd: HandCommand, rng: Rng): { state: HandState; events: GameEvent[] }
 // HandCommand = PlayerAction{seat, action} | TimerExpired | AdvanceReveal (server đẩy để tạo nhịp lật bài)
+//              | { type: 'CANCEL'; reason } (hủy ván: hoàn lại mọi chip đã cược, không thu phí)
 ```
 Reducer thuần, không đồng hồ: nhịp lật bài và timeout là lệnh do server-kit gửi. Điều này khiến mọi kịch bản test là danh sách lệnh → so sánh state/events.
 
 ### 17.3 Events
-`HAND_STARTED{handId, button, blinds|wager, carryOver}`, `CARDS_DEALT{seat, cards}` (riêng từng người; người khác nhận `cardCount`), `BLINDS_POSTED`, `DECISION_PHASE{deadlineAt}`, `TURN_CHANGED{seat, legal, deadlineAt}`, `PLAYER_ACTED{seat, action, amount}`, `DECISIONS_REVEALED{seat→play|fold}`, `COMMUNITY_REVEALED{cards}`, `POT_UPDATED{pots}`, `SHOWDOWN{hands: {seat, cards, rank, label}}`, `SETTLEMENT{payouts, fee, carryOver}`, `HAND_COMPLETE{nextHandAt?}`, `HAND_CANCELLED{reason}`.
+`HAND_STARTED{handId, button, blinds|wager, carryOver}`, `CARDS_DEALT{seat, cards, cardCount}`, `BLINDS_POSTED`, `DECISION_PHASE{deadlineAt}`, `TURN_CHANGED{seat, legal, deadlineAt}`, `PLAYER_ACTED{seat, action, amount}`, `DECISION_MADE{seat}`, `DECISIONS_REVEALED{seat→play|fold}`, `COMMUNITY_REVEALED{cards}`, `POT_UPDATED{pot}`, `SHOWDOWN{hands: {seat, cards, rank, label}}`, `SETTLEMENT{payouts, fee, carryOver, uncalledReturned}`, `HAND_CANCELLED{reason, refunds, carryOverOut}`, `HAND_COMPLETE{nextHandAt?}`.
+
+`CARDS_DEALT` mang `cardCount` và được lọc theo từng người xem bằng `filterEvent(event, viewerSeat)`: lá của ghế khác trả về `cards: []`, chỉ còn `cardCount` để client vẽ lưng bài.
 
 ## 18. Database
 
@@ -607,6 +610,8 @@ Mọi message: `{ t: string, ...payload }`. Client→server có `reqId?: string`
 | `RESYNC` | — | |
 | `PONG` | — | |
 
+Mọi message client → server có thể mang `reqId?`; server trả lại nó trong `ACK`/`ERROR`. Riêng `ACTION` bắt buộc phải có `reqId`.
+
 ### 20.2 Server → Client
 | t | Payload |
 |---|---|
@@ -614,7 +619,7 @@ Mọi message: `{ t: string, ...payload }`. Client→server có `reqId?: string`
 | `ROOM_LIST` | `{ rooms: RoomSummary[] }` |
 | `ROOM_SNAPSHOT` | `{ seq, room: RoomView, hand?: HandView }` |
 | `GAME_EVENT` | `{ seq, event: GameEvent }` |
-| `ROOM_EVENT` | `{ seq, event: PLAYER_JOINED \| PLAYER_LEFT \| PLAYER_SAT \| PLAYER_STOOD \| PLAYER_READY \| HOST_CHANGED \| PLAYER_DISCONNECTED \| PLAYER_RECONNECTED \| ROOM_CLOSED }` |
+| `ROOM_EVENT` | `{ seq, event: PLAYER_JOINED \| PLAYER_LEFT \| PLAYER_SAT \| PLAYER_STOOD \| PLAYER_READY \| HOST_CHANGED \| PLAYER_DISCONNECTED \| PLAYER_RECONNECTED \| ROOM_STATUS \| ROOM_CLOSED }` |
 | `BALANCE` | `{ balance }` — sau settlement/daily/relief |
 | `NOTIFICATION` | `{ kind, payload }` — Normal dùng cho achievement; Lite không gửi |
 | `ACK` | `{ reqId }` |
@@ -623,7 +628,7 @@ Mọi message: `{ t: string, ...payload }`. Client→server có `reqId?: string`
 | `PING` | — |
 
 ### 20.3 Mã lỗi
-`UNAUTHENTICATED, INVALID_MESSAGE, RATE_LIMITED, ROOM_NOT_FOUND, ROOM_FULL, WRONG_PASSWORD, INVALID_ROOM_CONFIG, NOT_HOST, SEAT_TAKEN, INSUFFICIENT_BALANCE, NOT_YOUR_TURN, ILLEGAL_ACTION, INVALID_AMOUNT, STALE_STATE, DUPLICATE_REQUEST, NOT_IN_HAND, SERVER_SHUTDOWN, INTERNAL`.
+`UNAUTHENTICATED, INVALID_MESSAGE, RATE_LIMITED, ROOM_NOT_FOUND, ROOM_FULL, WRONG_PASSWORD, INVALID_ROOM_CONFIG, NOT_HOST, SEAT_TAKEN, INSUFFICIENT_BALANCE, NOT_YOUR_TURN, ILLEGAL_ACTION, INVALID_AMOUNT, STALE_STATE, DUPLICATE_REQUEST, NOT_IN_HAND, NOT_IN_ROOM, ALREADY_IN_ROOM, NOT_SEATED, GAME_IN_PROGRESS, NOT_ENOUGH_PLAYERS, DISPLAY_NAME_TAKEN, SERVER_SHUTDOWN, INTERNAL`.
 
 ### 20.4 Ranh giới protocol
 Core protocol chỉ gồm các message trên. Avatar/inventory/achievement/auth đi REST. `NOTIFICATION` là kênh mở để edition đẩy thông báo không liên quan gameplay; core không định nghĩa payload bên trong.
