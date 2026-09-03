@@ -87,6 +87,8 @@ export interface HandResult {
   stacks: { seat: number; stack: number }[]
   showdown: ShowdownHand[] | null
   carryOverOut: number
+  /** Excess bet nobody could call, handed back before pots and the fee were computed. */
+  uncalledReturned: { seat: number; amount: number } | null
 }
 
 export interface HandState {
@@ -125,7 +127,7 @@ export type GameEvent =
   | { type: 'COMMUNITY_REVEALED'; street: Street; cards: Card[]; community: Card[] }
   | { type: 'POT_UPDATED'; pot: number }
   | { type: 'SHOWDOWN'; hands: ShowdownHand[] }
-  | { type: 'SETTLEMENT'; payouts: { seat: number; amount: number }[]; fee: number; pots: PotResult[]; carryOverOut: number; stacks: { seat: number; stack: number }[] }
+  | { type: 'SETTLEMENT'; payouts: { seat: number; amount: number }[]; fee: number; pots: PotResult[]; carryOverOut: number; stacks: { seat: number; stack: number }[]; uncalledReturned: { seat: number; amount: number } | null }
   | { type: 'HAND_COMPLETE' }
 
 export interface EngineResult {

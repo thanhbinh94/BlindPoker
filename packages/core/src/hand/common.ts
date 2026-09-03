@@ -52,7 +52,34 @@ export function revealNext(state: HandState, events: GameEvent[]): void {
   events.push({ type: 'COMMUNITY_REVEALED', street, cards, community: state.community.slice() })
 }
 
+/**
+ * Gives back the part of a bet nobody could call: if exactly one player committed more than everyone else, the
+ * excess goes straight back to their stack before pots and the fee are computed. Returns what was given back.
+ */
+export function returnUncalled(state: HandState): { seat: number; amount: number } | null {
+  let max = 0
+  let second = 0
+  for (const p of state.players) {
+    if (p.totalCommitted > max) {
+      second = max
+      max = p.totalCommitted
+    } else if (p.totalCommitted > second) second = p.totalCommitted
+  }
+  if (max <= second) return null
+  const holders = state.players.filter((p) => p.totalCommitted === max)
+  if (holders.length !== 1) return null
+  const p = holders[0]!
+  const amount = max - second
+  p.totalCommitted -= amount
+  p.betThisStreet = Math.max(0, p.betThisStreet - amount)
+  p.stack += amount
+  state.pot -= amount
+  if (p.stack > 0) p.allIn = false
+  return { seat: p.seat, amount }
+}
+
 export function settle(state: HandState, events: GameEvent[], opts: { showdown: boolean; feeCap?: number }): void {
+  const uncalledReturned = returnUncalled(state)
   const pots = computePots(state.players.map((p) => ({ seat: p.seat, totalCommitted: p.totalCommitted, folded: p.folded })))
   if (pots.length === 0) throw new EngineError('INVALID_SETUP', 'no pot to settle')
   pots[0]!.amount += state.carryOverIn
@@ -82,19 +109,19 @@ export function settle(state: HandState, events: GameEvent[], opts: { showdown: 
 
   const payouts = [...payoutBySeat].map(([seat, amount]) => ({ seat, amount })).sort((a, b) => a.seat - b.seat)
   const stacks = state.players.map((p) => ({ seat: p.seat, stack: p.stack }))
-  state.result = { pots: results, fee, payouts, stacks, showdown, carryOverOut: 0 }
+  state.result = { pots: results, fee, payouts, stacks, showdown, carryOverOut: 0, uncalledReturned }
   state.phase = 'COMPLETE'
   state.actingSeat = null
   if (showdown) events.push({ type: 'SHOWDOWN', hands: showdown })
-  events.push({ type: 'SETTLEMENT', payouts, fee, pots: results, carryOverOut: 0, stacks })
+  events.push({ type: 'SETTLEMENT', payouts, fee, pots: results, carryOverOut: 0, stacks, uncalledReturned })
   events.push({ type: 'HAND_COMPLETE' })
 }
 
 export function carryOverAll(state: HandState, events: GameEvent[]): void {
   const stacks = state.players.map((p) => ({ seat: p.seat, stack: p.stack }))
-  state.result = { pots: [], fee: 0, payouts: [], stacks, showdown: null, carryOverOut: state.pot }
+  state.result = { pots: [], fee: 0, payouts: [], stacks, showdown: null, carryOverOut: state.pot, uncalledReturned: null }
   state.phase = 'COMPLETE'
   state.actingSeat = null
-  events.push({ type: 'SETTLEMENT', payouts: [], fee: 0, pots: [], carryOverOut: state.pot, stacks })
+  events.push({ type: 'SETTLEMENT', payouts: [], fee: 0, pots: [], carryOverOut: state.pot, stacks, uncalledReturned: null })
   events.push({ type: 'HAND_COMPLETE' })
 }

@@ -67,8 +67,12 @@ describe('settle', () => {
     const events: GameEvent[] = []
     settle(s, events, { showdown: false, feeCap: 100 })
     expect(s.phase).toBe('COMPLETE')
-    expect(s.result!.fee).toBe(6)
-    expect(a.stack).toBe(900 + 294)
+    // b holds the single highest commitment (200 vs 100) so 100 is uncalled and goes back — money is conserved
+    // even for this synthetic setup. Pot 200, fee floor(200 × 0.02) = 4, a takes 196.
+    expect(s.result!.uncalledReturned).toEqual({ seat: 1, amount: 100 })
+    expect(s.result!.fee).toBe(4)
+    expect(a.stack).toBe(900 + 196) // 1096
+    expect(b.stack).toBe(900)
     expect(s.result!.showdown).toBeNull()
     expect(events.map((e) => e.type)).toEqual(['SETTLEMENT', 'HAND_COMPLETE'])
   })

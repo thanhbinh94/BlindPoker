@@ -105,8 +105,10 @@ describe('betting rules', () => {
     t.act(1, 'fold')
     expect(t.state.phase).toBe('COMPLETE')
     expect(t.state.result!.showdown).toBeNull()
-    expect(t.state.result!.fee).toBe(3)
-    expect(t.stack(2)).toBe(1047)
+    // BB committed 100, SB 50 → 50 uncalled goes back; pot 100, fee floor(100 × 0.02) = 2 (cap 100)
+    expect(t.state.result!.uncalledReturned).toEqual({ seat: 2, amount: 50 })
+    expect(t.state.result!.fee).toBe(2)
+    expect(t.stack(2)).toBe(1048) // 1000 − 100 + 50 + 98
     t.assertMoney()
   })
   it('enforces min-raise = last raise increment and rejects smaller raises', () => {

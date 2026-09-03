@@ -107,8 +107,11 @@ describe('mode B (play or fold)', () => {
     expect(t.state.phase).toBe('COMPLETE')
     expect(t.state.community).toHaveLength(0)
     expect(t.state.result!.showdown).toBeNull()
-    // pot 3000 + 1000 = 4000, fee 80 → 3920 to seat 1 who put in 2000
-    expect(t.stack(1)).toBe(5000 - 2000 + 3920)
+    // seat 1 committed 2000, the folders 1000 each → 1000 uncalled goes back
+    expect(t.state.result!.uncalledReturned).toEqual({ seat: 1, amount: 1000 })
+    // pot 3000, fee 60 → 2940 to seat 1
+    expect(t.state.result!.fee).toBe(60)
+    expect(t.stack(1)).toBe(5000 - 2000 + 1000 + 2940) // 6940
     expect(t.types().slice(-3)).toEqual(['DECISIONS_REVEALED', 'SETTLEMENT', 'HAND_COMPLETE'])
     t.assertMoney()
   })

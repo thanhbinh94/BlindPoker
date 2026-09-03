@@ -185,6 +185,7 @@ Ký hiệu: **[C]** Core, **[N]** Normal-only, **[L]** Lite-only, **[O]** option
 - Mọi người chưa fold lật bài đồng thời (MVP không có muck).
 - Xếp hạng bằng 5 lá tốt nhất từ 7 lá.
 - Hòa: chia đều; chip lẻ trao cho người thắng gần button nhất theo chiều kim đồng hồ.
+- Cược không được theo (uncalled bet) được trả lại người đặt trước khi tính pot và phí.
 
 ### 7.6 Phí bàn
 - 2% mỗi pot (tính trên tổng pot chính + side), làm tròn xuống, tối đa 1 BB/ván, trừ trước khi chia. Ghi `table_fee`.
@@ -231,7 +232,7 @@ Royal flush (là straight flush cao nhất), Straight flush, Four of a kind, Ful
    - ≥ 2 người play: sang bước 5 với những người này.
 5. `REVEAL`: lật 3 lá chung, rồi 1, rồi 1 (nhịp 1,5 giây/lần) — chỉ để tạo kịch tính, không có hành động.
 6. `SHOWDOWN`: mọi người còn trong ván lật lá riêng; xếp hạng bằng 5 lá tốt nhất từ `holeCards + 5` lá (7 hoặc 8), không ràng buộc phải dùng lá riêng.
-7. `SETTLEMENT`: phí bàn 2% pot làm tròn xuống; phần còn lại cho người thắng; hòa chia đều, chip lẻ cho người thắng gần dealer marker nhất theo chiều kim đồng hồ.
+7. `SETTLEMENT`: cược không được theo (uncalled bet) được trả lại người đặt trước khi tính pot và phí. Phí bàn 2% pot làm tròn xuống; phần còn lại cho người thắng; hòa chia đều, chip lẻ cho người thắng gần dealer marker nhất theo chiều kim đồng hồ.
 8. `HAND_COMPLETE` → sau 5 giây `STARTING` nếu đủ điều kiện.
 
 ### 8.4 Pot cộng dồn
