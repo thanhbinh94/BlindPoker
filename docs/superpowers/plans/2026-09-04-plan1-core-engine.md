@@ -2797,7 +2797,6 @@ export function dailyRewardPoints(streakDay: number): number {
 
 `packages/core/src/protocol/messages.ts`:
 ```ts
-import type { Card } from '../cards/cards.js'
 import type { GameEvent, PlayerAction } from '../hand/types.js'
 import type { HandView } from '../hand/view.js'
 
@@ -2915,7 +2914,6 @@ export type ServerMessage =
 
 export type ClientMessageType = ClientMessage['t']
 export type ServerMessageType = ServerMessage['t']
-export type { Card }
 ```
 
 `packages/core/src/protocol/validate.ts`:
