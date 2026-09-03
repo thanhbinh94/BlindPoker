@@ -58,8 +58,12 @@ export function distributePots(
   const order = clockwiseFrom(seatOrder, button)
   return pots.map((pot) => {
     const ranked = pot.eligibleSeats.filter((s) => rankBySeat.has(s))
-    const bestRank = Math.max(...ranked.map((s) => rankBySeat.get(s)!))
-    const winnersInOrder = order.filter((s) => ranked.includes(s) && rankBySeat.get(s) === bestRank)
+    const winnersInOrder = ranked.length > 0
+      ? (() => {
+          const bestRank = Math.max(...ranked.map((s) => rankBySeat.get(s)!))
+          return order.filter((s) => ranked.includes(s) && rankBySeat.get(s) === bestRank)
+        })()
+      : order.filter((s) => pot.eligibleSeats.includes(s))
     const share = Math.floor(pot.amount / winnersInOrder.length)
     let remainder = pot.amount - share * winnersInOrder.length
     const winners = winnersInOrder.map((seat) => {

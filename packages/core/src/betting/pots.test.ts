@@ -52,6 +52,11 @@ describe('distributePots', () => {
     expect(res[0]!.winners).toEqual([{ seat: 0, amount: 200 }])
     expect(res[1]!.winners).toEqual([{ seat: 1, amount: 185 }, { seat: 2, amount: 185 }])
   })
+  it('splits a pot among all eligible seats when none of them has a rank (uncontested pot)', () => {
+    const res = distributePots([{ amount: 301, eligibleSeats: [2, 4] }], new Map(), [0, 2, 4], 0)
+    expect(res[0]!.winners).toEqual([{ seat: 2, amount: 151 }, { seat: 4, amount: 150 }])
+    expect(res[0]!.winners.reduce((a, w) => a + w.amount, 0)).toBe(301)
+  })
 })
 
 describe('tableFee', () => {
