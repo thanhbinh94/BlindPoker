@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { nodeBuiltinImportRegex } from './node-builtins.js'
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url))
 
@@ -64,11 +65,16 @@ describe('workspace dependency graph', () => {
 
   it('@bp/core source never mentions editions or imports other workspaces / node built-ins', () => {
     const core = pkgs.find((p) => p.name === '@bp/core')!
+    const builtinImport = nodeBuiltinImportRegex()
     for (const file of listFiles(join(core.dir, 'src'))) {
       const src = readFileSync(file, 'utf8')
-      expect(src, file).not.toMatch(/\bedition\b/i)
-      expect(src, file).not.toMatch(/from ['"]@bp\//)
-      expect(src, file).not.toMatch(/from ['"]node:/)
+      expect(src, file).not.toMatch(/\beditions?\b/i)
+      // `import … from`, `import(…)` and `require(…)` of any @bp package or `node:` specifier
+      expect(src, file).not.toMatch(/(?:from\s*|import\s*\(?\s*|require\s*\(\s*)['"](?:@bp\/|node:)/)
+      // the same three import forms for every bare Node built-in the ESLint rule forbids
+      expect(src, file).not.toMatch(builtinImport)
+      // edition names as literals; prose such as "normal sample" in a comment is fine
+      expect(src, file).not.toMatch(/['"](normal|lite)['"]/)
     }
   })
 })

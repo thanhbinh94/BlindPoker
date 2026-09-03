@@ -1,4 +1,7 @@
 import tseslint from 'typescript-eslint'
+import { FORBIDDEN_GLOBALS, NODE_BUILTINS } from './tooling/arch/node-builtins.js'
+
+const CORE_PURITY = '@bp/core must be pure: no @bp packages, no Node built-ins, no host globals'
 
 const forbid = (patterns, message) => ({
   'no-restricted-imports': ['error', { patterns: patterns.map((group) => ({ group: [group], message })) }],
@@ -14,10 +17,18 @@ export default tseslint.config(
   },
   {
     files: ['packages/core/**/*.ts'],
-    rules: forbid(
-      ['@bp/*', '**/server-kit/**', '**/ui-kit/**', '**/apps/**', 'node:*', 'fs', 'net', 'http', 'crypto'],
-      '@bp/core must be pure: no @bp packages, no Node built-ins',
-    ),
+    rules: {
+      // Bare built-ins go through `paths` (exact specifiers): as `patterns` they would also match relative imports
+      // that merely contain a segment of the same name, e.g. './constants/economy.js'.
+      'no-restricted-imports': ['error', {
+        paths: NODE_BUILTINS.filter((m) => !m.endsWith('*')).map((name) => ({ name, message: CORE_PURITY })),
+        patterns: [
+          { group: ['@bp/*', '**/server-kit/**', '**/ui-kit/**', '**/apps/**'], message: CORE_PURITY },
+          { group: NODE_BUILTINS.filter((m) => m.endsWith('*')), message: CORE_PURITY },
+        ],
+      }],
+      'no-restricted-globals': ['error', ...FORBIDDEN_GLOBALS],
+    },
   },
   {
     files: ['packages/server-kit/**/*.ts'],
