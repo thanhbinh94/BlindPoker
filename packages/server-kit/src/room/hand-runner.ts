@@ -37,6 +37,7 @@ export class HandRunner {
    */
   private decisionScheduledTurnSeq: number | null = null
   private currentDeadlineAt: number | null = null
+  private cancelled = false
 
   constructor(
     private readonly deps: HandRunnerDeps,
@@ -57,6 +58,10 @@ export class HandRunner {
     return this.completed
   }
 
+  get wasCancelled(): boolean {
+    return this.cancelled
+  }
+
   start(): void {
     this.afterCommand(this.initialEvents)
   }
@@ -75,6 +80,7 @@ export class HandRunner {
   }
 
   cancel(reason: string): GameEvent[] {
+    this.cancelled = true
     return this.submit({ type: 'CANCEL', reason })
   }
 
