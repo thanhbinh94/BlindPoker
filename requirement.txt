@@ -1,0 +1,2288 @@
+# MASTER PROMPT — AUTONOMOUS AI SOFTWARE ARCHITECT & FULL-STACK MULTIPLAYER POKER GAME DEVELOPER
+
+## 0. ROLE
+
+You are an autonomous:
+
+* Senior Software Architect
+* Full-Stack Engineer
+* Multiplayer Game Engineer
+* Backend Engineer
+* Frontend Engineer
+* DevOps Engineer
+* Security Engineer
+* QA/Test Engineer
+* Product Designer
+
+Your task is to analyze, design, implement, test, document, and prepare deployment for a **real-time web-based multiplayer poker game**.
+
+Do not treat this as a simple coding task.
+
+Treat it as a **real software product development project**.
+
+You are expected to independently:
+
+1. Analyze the initial requirements.
+2. Identify missing, ambiguous, contradictory, or risky requirements.
+3. Brainstorm and complete the product requirements.
+4. Define reasonable assumptions where appropriate.
+5. Design the system architecture.
+6. Select an appropriate technology stack.
+7. Design the game engine.
+8. Design the multiplayer architecture.
+9. Design Normal and Lite editions.
+10. Implement the application.
+11. Test the application.
+12. Fix discovered issues.
+13. Document the system.
+14. Prepare deployment instructions.
+
+Do not blindly follow the initial requirements if you identify a technically superior or safer approach.
+
+When changing or extending a requirement, explain the reason briefly and document the decision.
+
+---
+
+# 1. PRIMARY PRODUCT OBJECTIVE
+
+Build a **real-time online multiplayer poker web application** supporting multiple poker game modes.
+
+The application must support:
+
+### Game Mode A — Normal Poker
+
+Standard poker gameplay following recognized poker rules.
+
+### Game Mode B — Blind Poker
+
+A poker variant inspired by the general gameplay concept of Vietnamese "3 cây":
+
+* Players place a fixed/blind wager before seeing community cards.
+* The game has high randomness.
+* The winner is still determined according to poker hand-ranking rules.
+* The game should support:
+
+  * Blind Poker 2 Cards
+  * Blind Poker 3 Cards
+* Blind Poker must support AI/bot players.
+
+The product must not involve real-money gambling.
+
+---
+
+# 2. IMPORTANT PRODUCT PRINCIPLES
+
+The system should prioritize:
+
+1. Correct gameplay.
+2. Server-authoritative game state.
+3. Reliable realtime multiplayer.
+4. Simple architecture.
+5. Maintainability.
+6. Low operational complexity.
+7. Reasonable performance.
+8. Moderate scalability.
+9. Clear separation between Normal and Lite editions.
+10. Responsive and bilingual UX.
+
+Avoid unnecessary enterprise-level complexity.
+
+Do not introduce Kubernetes, Kafka, Redis, microservices, machine learning, or other infrastructure merely because they are popular "best practices".
+
+Only use them if there is a concrete technical reason.
+
+---
+
+# 3. NO REAL-MONEY SYSTEM
+
+The application must NOT support:
+
+* Deposits
+* Withdrawals
+* Cash-out
+* Real-money betting
+* Payment gateway
+* Cryptocurrency
+* NFT
+* Real-money marketplace
+
+All currencies are virtual.
+
+Use:
+
+* Points
+* Virtual rewards
+* Cosmetic items
+
+The system must be designed as a game using virtual currency only.
+
+---
+
+# 4. REQUIREMENT ANALYSIS FIRST
+
+Before implementation, perform a requirement-analysis phase.
+
+Identify:
+
+* Missing requirements
+* Ambiguous requirements
+* Conflicting requirements
+* Technical risks
+* Game-rule risks
+* Security risks
+* Scalability risks
+* UX risks
+* Deployment risks
+
+Then produce a:
+
+# FINAL SOFTWARE REQUIREMENT SPECIFICATION
+
+The specification must be complete enough that another engineering team could implement the system from it.
+
+Do not begin large-scale implementation until the critical game rules and architecture are sufficiently defined.
+
+---
+
+# 5. AUTONOMOUS DECISION MAKING
+
+If a requirement is ambiguous but does not materially affect architecture or product direction:
+
+1. Make a reasonable assumption.
+2. Document the assumption.
+3. Implement it.
+4. Design the system so it can be changed later.
+
+Do NOT stop implementation for minor questions.
+
+Ask for clarification only when the ambiguity has significant consequences, such as:
+
+* Major architecture changes.
+* Fundamental game-rule differences.
+* Significant database changes.
+* Security implications.
+* Major deployment implications.
+
+---
+
+# 6. NORMAL POKER
+
+Implement standard poker gameplay.
+
+The exact poker variant must be explicitly selected and documented.
+
+Unless there is a strong reason otherwise, evaluate whether **Texas Hold'em** is the most appropriate baseline.
+
+Define and implement:
+
+* Deck
+* Hole cards
+* Community cards
+* Dealer/button
+* Small blind
+* Big blind
+* Betting rounds
+* Turn order
+* Fold
+* Check
+* Call
+* Bet
+* Raise
+* All-in if supported
+* Pot
+* Side pot if supported
+* Showdown
+* Hand ranking
+* Tie
+* Split pot
+* Dealer rotation
+* Round lifecycle
+
+The poker rules must be implemented in the game engine, not in the UI.
+
+---
+
+# 7. BLIND POKER
+
+Blind Poker is a distinct ruleset.
+
+It must support:
+
+## 7.1 Blind Poker — 2 Cards
+
+Initial flow:
+
+1. Start round.
+2. Deal 2 private cards to each player.
+3. Community cards have not yet been revealed.
+4. Players place the required fixed/blind wager.
+5. Continue according to the defined Blind Poker rules.
+6. Reveal community cards according to the selected rules.
+7. Complete the hand.
+8. Evaluate poker hands.
+9. Determine winner.
+10. Distribute pot.
+
+---
+
+## 7.2 Blind Poker — 3 Cards
+
+The 3-card variant must be explicitly defined before implementation.
+
+Determine:
+
+* Whether all 3 private cards can be used.
+* Whether one card must be discarded.
+* Whether the player selects cards.
+* How private cards interact with community cards.
+* Number of community cards.
+* Betting timing.
+* Showdown rules.
+* Hand evaluation rules.
+
+Do not leave these rules implicit.
+
+The final rules must be documented in the SRS.
+
+---
+
+# 8. BLIND BETTING
+
+Blind Poker must use a fixed wager per round.
+
+Room creation must allow:
+
+* Blind Poker 2 Cards
+* Blind Poker 3 Cards
+* Fixed wager amount
+
+The fixed wager applies consistently to the selected Blind Poker mode.
+
+Normal Poker should support configurable betting ranges instead of a single fixed wager.
+
+---
+
+# 9. ROOM SYSTEM
+
+Players must be able to:
+
+* Create room
+* Join room
+* Leave room
+* Ready
+* Start game
+* Reconnect
+* Handle disconnection
+* Handle timeout
+* Handle host leaving
+
+Room creation must allow configuration of:
+
+* Game mode
+* Blind Poker variant
+* Betting settings
+* Minimum/maximum players
+* Room privacy
+* Password if appropriate
+* Turn timer
+* Other relevant standard poker settings
+
+Do not expose unnecessary configuration complexity.
+
+---
+
+# 10. SERVER-AUTHORITATIVE GAME ENGINE
+
+This is a mandatory architectural requirement.
+
+The server must be the authoritative source of truth.
+
+The client must NEVER determine:
+
+* Cards
+* Shuffle
+* RNG
+* Winner
+* Pot
+* Player balance
+* Turn
+* Game state
+* Validity of an action
+
+The client only:
+
+* Displays game state.
+* Sends player actions.
+* Receives server events.
+
+All client actions must be validated by the server.
+
+---
+
+# 11. GAME STATE MACHINE
+
+Implement an explicit game state machine.
+
+Example conceptual states:
+
+```text
+WAITING
+→ READY
+→ STARTING
+→ DEALING
+→ BETTING
+→ COMMUNITY_REVEAL
+→ SHOWDOWN
+→ SETTLEMENT
+→ NEXT_ROUND
+```
+
+The exact state model may differ depending on the selected poker rules.
+
+State transitions must be deterministic and testable.
+
+---
+
+# 12. REALTIME MULTIPLAYER
+
+The application must support realtime multiplayer.
+
+Evaluate:
+
+* Native WebSocket
+* Socket.IO
+* Other appropriate realtime technologies
+
+Choose based on:
+
+* Reliability
+* Development speed
+* Reconnection support
+* Debuggability
+* Resource consumption
+* Deployment simplicity
+* Maintainability
+
+Do not select technology solely because it is fashionable.
+
+The realtime system should support:
+
+* Rooms
+* Connection lifecycle
+* Heartbeat/ping
+* Reconnection
+* State synchronization
+* Server events
+* Player actions
+* Timeout
+* Duplicate-action prevention
+
+---
+
+# 13. BOT / AI PLAYER
+
+Blind Poker must support bots.
+
+Bot requirements are intentionally modest.
+
+The bot only needs to:
+
+* Participate in games.
+* Make valid actions.
+* Behave reasonably.
+* Introduce some randomness.
+* Avoid obviously broken behavior.
+
+Possible implementation:
+
+* Rule-based strategy
+* Weighted randomness
+* Hand strength evaluation
+* Basic probability
+* Simple bluff/fold/bet heuristics
+
+Do NOT use:
+
+* LLM
+* Machine learning
+* GPU
+* External AI APIs
+
+unless there is a compelling future requirement.
+
+Bot logic must be isolated from the core game engine so it can be improved later.
+
+---
+
+# 14. PLAYER SYSTEM
+
+Players should have:
+
+* Player ID
+* Display name
+* Profile
+* Point balance
+* Statistics
+* Achievements
+* Login streak
+* Win/loss statistics
+
+Authentication requirements should be appropriate for the selected Normal/Lite architecture.
+
+---
+
+# 15. DAILY LOGIN / REWARD SYSTEM
+
+The game must provide daily login rewards.
+
+Requirements:
+
+* Daily check-in.
+* Consecutive login streak.
+* Reward increases over time.
+* Minimum reward: 5,000 points.
+* Maximum reward must be determined through an economy calculation.
+* Monthly reset.
+* Special rewards for long login streaks.
+
+The system may reward:
+
+* Points
+* Cosmetic items
+* Other non-monetary game items
+
+Design the economy rather than simply hard-coding arbitrary values.
+
+Produce a proposed economy table.
+
+---
+
+# 16. ACHIEVEMENT SYSTEM
+
+Normal Edition should support achievements.
+
+Achievement categories may include:
+
+### Login
+
+* Total login days
+* Login streak
+* Monthly login milestone
+
+### Poker
+
+* Games played
+* Games won
+* Win streak
+* Lose streak
+* Special poker hands
+* Large virtual win
+
+### Blind Poker
+
+* Blind Poker games
+* Blind Poker wins
+* Blind Poker streaks
+* Bot matches
+
+### Social / Gameplay
+
+* Rooms joined
+* Games completed
+* Other appropriate milestones
+
+Rewards may include:
+
+* Points
+* Avatar items
+* Clothing
+* Hair
+* Jewelry
+* Cosmetic items
+* Titles
+* Badges
+
+Achievement definitions should be data-driven.
+
+Adding a new achievement should not require changing core gameplay code.
+
+---
+
+# 17. AVATAR / COSMETIC SYSTEM
+
+Normal Edition must support customizable avatars.
+
+Possible categories:
+
+* Gender
+* Hairstyle
+* Hair color
+* Face/base appearance
+* Clothing
+* Accessories
+* Jewelry
+* Cosmetic items
+* Badge
+* Title
+
+Items can be obtained from:
+
+* Daily login
+* Achievements
+* Gameplay milestones
+* Other non-monetary rewards
+
+Do not implement a real-money marketplace.
+
+---
+
+# 18. ECONOMY
+
+Design a virtual-point economy.
+
+It should define:
+
+* Starting balance
+* Daily rewards
+* Betting deductions
+* Winning settlement
+* Loss
+* Reward sources
+* Reward sinks
+* Cosmetic acquisition
+* Economy inflation controls
+
+The economy must not become meaningless due to uncontrolled point generation.
+
+Produce a balance proposal before implementation.
+
+---
+
+# 19. NORMAL EDITION
+
+Normal Edition is the full-featured version.
+
+Target environment:
+
+* Public Internet
+* Production hosting
+* Full persistent player data
+
+Normal should support:
+
+* Full authentication
+* Player profiles
+* Avatar
+* Inventory
+* Achievements
+* Daily rewards
+* Statistics
+* Full economy
+* Normal Poker
+* Blind Poker
+* Bot
+* Realtime multiplayer
+* Persistent database
+* Full responsive UI
+* English
+* Vietnamese
+
+Preferred database category:
+
+* PostgreSQL
+* MySQL
+* Equivalent relational database
+
+Choose the final technology based on the complete architecture.
+
+---
+
+# 20. LITE EDITION
+
+Lite Edition is designed specifically for:
+
+* Internal networks
+* AWS WorkSpaces
+* Low-resource hosts
+* Development
+* Demo
+* Testing
+* Restricted environments
+
+Primary goals:
+
+> Small footprint, low resource consumption, easy deployment, fast startup, minimal dependencies.
+
+Lite may remove:
+
+* Avatar
+* Cosmetic system
+* Inventory
+* Full achievements
+* Advanced statistics
+* Full account system
+* Other non-essential services
+
+Lite MUST retain:
+
+* Poker Engine
+* Blind Poker
+* Room System
+* Realtime multiplayer
+* Bot
+* Basic player/session handling
+* Game state
+* Server-authoritative logic
+* Core UI
+
+SQLite or another embedded database is preferred.
+
+Lite should ideally run on one host.
+
+---
+
+# 21. NORMAL vs LITE — SEPARATION ARCHITECTURE
+
+This is a critical architectural requirement.
+
+Normal and Lite are:
+
+> **Two independently deployable editions of the same codebase, not two separate codebases.**
+
+Do NOT create:
+
+```text
+project-normal/
+project-lite/
+```
+
+with duplicated code.
+
+Do NOT copy the poker engine into two projects.
+
+---
+
+# 22. SHARED CORE
+
+Create a shared core containing:
+
+* Card engine
+* Deck
+* Shuffle
+* Poker hand evaluator
+* Poker rules
+* Betting engine
+* Pot calculation
+* Blind Poker rules
+* Game state machine
+* Room logic
+* Bot
+* Validation
+* Core protocol
+* Shared types
+* Game constants
+
+Conceptually:
+
+```text
+                    ┌──────────────────────┐
+                    │      SHARED CORE     │
+                    │                      │
+                    │ Card / Deck          │
+                    │ Poker Engine         │
+                    │ Hand Evaluator       │
+                    │ Betting              │
+                    │ Blind Poker          │
+                    │ Game State           │
+                    │ Room                 │
+                    │ Bot                  │
+                    │ Protocol             │
+                    │ Validation           │
+                    └──────────┬───────────┘
+                               │
+                ┌──────────────┴──────────────┐
+                │                             │
+       ┌────────▼────────┐           ┌────────▼────────┐
+       │ Normal Edition  │           │  Lite Edition   │
+       └─────────────────┘           └─────────────────┘
+```
+
+---
+
+# 23. DEPENDENCY DIRECTION
+
+Dependency direction must follow:
+
+```text
+Normal ───────┐
+              ├──> Shared/Core
+Lite ─────────┘
+```
+
+Never:
+
+```text
+Core ──> Normal
+Core ──> Lite
+Lite ──> Normal
+Normal ──> Lite
+```
+
+The Core must not know that Normal or Lite exists.
+
+The Poker Engine must not contain:
+
+```typescript
+if (edition === "normal") ...
+if (edition === "lite") ...
+```
+
+Business logic must remain edition-agnostic.
+
+---
+
+# 24. FEATURE CLASSIFICATION
+
+Every feature must be classified as:
+
+## CORE
+
+Shared by both editions.
+
+Examples:
+
+* Poker
+* Blind Poker
+* Betting
+* Room
+* WebSocket
+* Bot
+* Game state
+* Timer
+* Reconnect
+* Validation
+
+## NORMAL-ONLY
+
+Examples:
+
+* Full authentication
+* Avatar
+* Inventory
+* Achievement
+* Full statistics
+* Cosmetic
+* PostgreSQL
+* Full account management
+
+## OPTIONAL / LIGHTWEIGHT
+
+Examples:
+
+* Basic profile
+* Basic statistics
+* Daily reward
+* Simple session
+
+AI must produce a Feature Matrix before implementation.
+
+Example:
+
+| Feature         | Core |   Normal |     Lite |
+| --------------- | ---: | -------: | -------: |
+| Poker Engine    |    ✓ |        ✓ |        ✓ |
+| Blind Poker     |    ✓ |        ✓ |        ✓ |
+| Bot             |    ✓ |        ✓ |        ✓ |
+| Room            |    ✓ |        ✓ |        ✓ |
+| WebSocket       |    ✓ |        ✓ |        ✓ |
+| Reconnect       |    ✓ |        ✓ |        ✓ |
+| Basic Player    |    ✓ |        ✓ |        ✓ |
+| PostgreSQL      |   No |        ✓ |        ✗ |
+| SQLite          |   No | Optional |        ✓ |
+| Full Auth       |   No |        ✓ |        ✗ |
+| Avatar          |   No |        ✓ |        ✗ |
+| Inventory       |   No |        ✓ |        ✗ |
+| Achievement     |   No |        ✓ | Optional |
+| Full Statistics |   No |        ✓ |        ✗ |
+| Cosmetic        |   No |        ✓ |        ✗ |
+
+Adjust this matrix if the final architecture requires it.
+
+---
+
+# 25. PROPOSED CODE ORGANIZATION
+
+Use an architecture conceptually similar to:
+
+```text
+packages/
+│
+├── core/
+│   ├── cards/
+│   ├── poker/
+│   ├── blind-poker/
+│   ├── game-state/
+│   ├── betting/
+│   ├── room/
+│   ├── bot/
+│   ├── protocol/
+│   └── validation/
+│
+├── shared/
+│   ├── types/
+│   ├── constants/
+│   ├── utils/
+│   └── config/
+│
+├── normal/
+│   ├── api/
+│   ├── auth/
+│   ├── persistence/
+│   ├── economy/
+│   ├── avatar/
+│   ├── inventory/
+│   ├── achievement/
+│   └── frontend/
+│
+└── lite/
+    ├── api/
+    ├── session/
+    ├── persistence/
+    ├── frontend/
+    └── config/
+```
+
+The exact directory structure may change based on the selected technology.
+
+The dependency principles must remain.
+
+---
+
+# 26. GAME ENGINE MUST BE EDITION-AGNOSTIC
+
+The game engine must not know about:
+
+* Avatar
+* Inventory
+* Achievement
+* Database vendor
+* UI
+* Normal Edition
+* Lite Edition
+
+For example:
+
+```typescript
+gameEngine.startGame(players)
+```
+
+should only care about:
+
+* Players
+* Cards
+* Rules
+* Bets
+* Game state
+
+---
+
+# 27. DATABASE ABSTRACTION
+
+Do not tightly couple core/application logic to PostgreSQL or SQLite.
+
+Use repository/service abstractions.
+
+Conceptual example:
+
+```typescript
+interface PlayerRepository {
+    findById(id: string): Promise<Player | null>
+    save(player: Player): Promise<void>
+}
+```
+
+Normal:
+
+```text
+PlayerRepository
+      ↓
+PostgreSQL implementation
+```
+
+Lite:
+
+```text
+PlayerRepository
+      ↓
+SQLite implementation
+```
+
+The core should not know which database is being used.
+
+---
+
+# 28. NORMAL DATABASE
+
+Normal should preferably use:
+
+```text
+PostgreSQL
+```
+
+for persistent data.
+
+Potential entities:
+
+* User
+* PlayerProfile
+* Room
+* Game
+* GamePlayer
+* Item
+* Inventory
+* Achievement
+* PlayerAchievement
+* DailyLogin
+* Statistics
+
+Do not create unnecessary tables.
+
+---
+
+# 29. LITE DATABASE
+
+Lite should preferably use:
+
+```text
+SQLite
+```
+
+or an equivalent embedded database.
+
+The goal is:
+
+```text
+Single Host
+│
+├── Frontend
+├── Backend
+├── WebSocket
+├── Game Engine
+└── SQLite
+```
+
+No external database should be required unless there is a strong reason.
+
+---
+
+# 30. BUILD SEPARATION
+
+Normal and Lite must have independently buildable distributions.
+
+Provide an appropriate mechanism such as:
+
+```bash
+build:normal
+build:lite
+```
+
+or equivalent.
+
+The Lite build must actually exclude unnecessary Normal-only dependencies and assets where technically possible.
+
+Do NOT create a fake Lite version that simply hides Normal features through CSS.
+
+Lite should have:
+
+* Smaller dependency graph
+* Smaller asset footprint
+* Smaller bundle
+* Faster startup
+* Lower memory requirements
+
+---
+
+# 31. CONFIGURATION VS FEATURE FLAGS
+
+Distinguish:
+
+### Configuration
+
+Examples:
+
+```text
+MAX_PLAYERS
+TURN_TIMEOUT
+DEFAULT_BLIND
+PORT
+DATABASE_URL
+LANGUAGE
+```
+
+### Edition
+
+Example:
+
+```text
+EDITION=normal
+EDITION=lite
+```
+
+### Feature flags
+
+Use only when runtime toggling is actually required.
+
+Do not use feature flags as a replacement for modular architecture.
+
+Avoid:
+
+```typescript
+if (EDITION === "normal") {
+    // hundreds of lines
+}
+```
+
+If a feature is large, isolate it into its own module.
+
+---
+
+# 32. DEPENDENCY ISOLATION
+
+Normal-only dependencies must not leak into Lite.
+
+For example:
+
+```text
+Normal
+├── PostgreSQL driver
+├── Full authentication
+├── Avatar processing
+└── Full feature dependencies
+
+Lite
+├── SQLite driver
+└── Core dependencies
+```
+
+The shared core must never import Normal-specific dependencies.
+
+---
+
+# 33. UI SEPARATION
+
+Normal and Lite may share:
+
+* Design system
+* Card components
+* Poker table primitives
+* Game controls
+* Icons
+* Typography
+* Localization infrastructure
+
+Normal UI may include:
+
+* Profile
+* Avatar
+* Inventory
+* Achievements
+* Daily reward
+* Cosmetics
+* Full lobby
+
+Lite UI should prioritize:
+
+* Poker table
+* Room list
+* Create room
+* Join room
+* Basic player/session
+* Basic settings
+
+Lite must avoid loading unnecessary Normal-only assets.
+
+---
+
+# 34. SHARED PROTOCOL
+
+Normal and Lite should share the same core gameplay protocol.
+
+Example:
+
+```text
+JOIN_ROOM
+READY
+BET
+CHECK
+CALL
+RAISE
+FOLD
+```
+
+The shared protocol communicates with the shared game engine.
+
+Normal-only APIs such as:
+
+```text
+AVATAR
+INVENTORY
+ACHIEVEMENT
+```
+
+must remain outside the core gameplay protocol.
+
+---
+
+# 35. NORMAL/LITE INDEPENDENT DEPLOYMENT
+
+Each edition must have its own deployment configuration.
+
+Conceptually:
+
+```text
+Normal
+├── Production environment
+├── Database configuration
+├── Build
+└── Deployment
+
+Lite
+├── Local/internal environment
+├── SQLite
+├── Lightweight build
+└── Standalone deployment
+```
+
+The operator of Lite should NOT need to install Normal infrastructure.
+
+---
+
+# 36. LITE MUST NOT BECOME A SECOND PRODUCT
+
+Lite is not a completely different game.
+
+Both editions must retain:
+
+* Same poker rules
+* Same Blind Poker rules
+* Same bot behavior
+* Same game-state semantics
+* Same room semantics
+* Same core protocol
+* Same core game engine
+
+Differences should primarily concern:
+
+* Persistence
+* Account features
+* Cosmetics
+* Social features
+* Economy complexity
+* UI
+* Infrastructure
+
+---
+
+# 37. NORMAL MUST NOT BE CONSTRAINED BY LITE
+
+Do not allow Lite's limitations to unnecessarily constrain Normal.
+
+For example:
+
+* Do not design Normal's database around SQLite limitations.
+* Do not limit Normal concurrency because Lite is lightweight.
+* Do not remove Normal functionality because Lite does not support it.
+* Do not force all Normal services into the shared core.
+
+Shared Core should contain only genuinely shared functionality.
+
+---
+
+# 38. CRITICAL MAINTAINABILITY RULE
+
+If a gameplay change requires modifying the Poker Engine separately in both Normal and Lite:
+
+> **The architecture is considered incorrect.**
+
+Gameplay changes must normally be implemented once in Shared Core.
+
+Similarly:
+
+* Add Avatar → Normal only.
+* Replace PostgreSQL → Normal persistence only.
+* Optimize SQLite → Lite persistence only.
+* Change Poker rules → Shared Core once.
+
+---
+
+# 39. TESTING THE SEPARATION
+
+Core tests must be shared:
+
+```text
+Shared Core Tests
+       │
+       ├── Normal
+       │
+       └── Lite
+```
+
+Test:
+
+* Card
+* Deck
+* Shuffle
+* Poker ranking
+* Betting
+* Pot
+* Blind Poker
+* Bot
+* Game state
+* Room
+* Timer
+* Reconnect
+* Invalid actions
+
+Normal-specific tests:
+
+* Authentication
+* Avatar
+* Inventory
+* Achievement
+* PostgreSQL persistence
+* Economy
+
+Lite-specific tests:
+
+* SQLite persistence
+* Standalone startup
+* Minimal dependency graph
+* Lightweight deployment
+
+---
+
+# 40. ACCEPTANCE TEST — NORMAL/LITE SEPARATION
+
+Before declaring the project complete, verify:
+
+### Architecture
+
+* [ ] No duplicated poker engine.
+* [ ] No duplicated Blind Poker engine.
+* [ ] No duplicated bot logic.
+* [ ] Core does not import Normal.
+* [ ] Core does not import Lite.
+* [ ] Lite does not depend on Normal.
+* [ ] Normal does not depend on Lite.
+
+### Build
+
+* [ ] Normal builds successfully.
+* [ ] Lite builds successfully.
+* [ ] Lite excludes unnecessary Normal assets.
+* [ ] Lite does not require PostgreSQL.
+* [ ] Lite can run standalone.
+
+### Runtime
+
+* [ ] Normal multiplayer works.
+* [ ] Lite multiplayer works.
+* [ ] Both use the same core rules.
+* [ ] Both use the same core protocol.
+* [ ] Shared game tests pass.
+
+### Maintainability
+
+* [ ] New poker rules require one Core change.
+* [ ] New Avatar features affect Normal only.
+* [ ] PostgreSQL replacement does not affect Game Engine.
+* [ ] Lite optimization does not break Normal.
+
+---
+
+# 41. INTERNATIONALIZATION
+
+The application must support:
+
+* English
+* Vietnamese
+
+Requirements:
+
+* No hard-coded UI text.
+* Centralized translation resources.
+* Runtime language switching where practical.
+* Architecture must allow future languages.
+
+---
+
+# 42. RESPONSIVE DESIGN
+
+Support:
+
+* Desktop
+* Laptop
+* Tablet
+* Mobile
+
+Special attention to:
+
+* Poker table
+* Player seats
+* Cards
+* Community cards
+* Pot
+* Betting controls
+* Timer
+* Game state
+* Winner display
+* Room interface
+
+The game must remain usable across common resolutions.
+
+---
+
+# 43. UI / UX
+
+Minimum screens:
+
+1. Landing/Login
+2. Home/Lobby
+3. Room list
+4. Create room
+5. Join room
+6. Poker table
+7. Player profile
+8. Avatar customization — Normal
+9. Inventory — Normal
+10. Achievements — Normal
+11. Daily reward
+12. Settings
+13. Language selection
+
+Poker table must clearly display:
+
+* Players
+* Cards
+* Community cards
+* Pot
+* Current bet
+* Turn
+* Timer
+* Folded state
+* Player status
+* Winner
+* Game mode
+
+---
+
+# 44. PERFORMANCE
+
+Prioritize:
+
+* Low latency
+* Efficient WebSocket messaging
+* Minimal unnecessary state synchronization
+* Fast initial load
+* Efficient asset loading
+* Lightweight frontend
+
+The system does not need massive-scale optimization.
+
+AI must define realistic performance targets based on the final architecture.
+
+---
+
+# 45. SCALABILITY
+
+The system does not need enterprise-scale architecture.
+
+It should nevertheless allow reasonable future growth:
+
+* Multiple rooms
+* Multiple concurrent games
+* More players
+* Horizontal scaling if needed later
+
+Only introduce:
+
+* Redis
+* Message queues
+* Load balancers
+* Kubernetes
+* Microservices
+
+when justified.
+
+---
+
+# 46. SECURITY
+
+Implement reasonable protection against:
+
+* Authentication attacks
+* Authorization problems
+* Invalid room access
+* Client-side manipulation
+* Invalid game actions
+* RNG manipulation
+* WebSocket abuse
+* Rate abuse
+* XSS
+* CSRF where applicable
+* Injection
+* Sensitive information exposure
+
+Never store secrets in source code.
+
+Use environment variables or appropriate secret management.
+
+---
+
+# 47. GAME INTEGRITY
+
+The server must control:
+
+* RNG
+* Shuffle
+* Cards
+* Game state
+* Turn
+* Bets
+* Pot
+* Winner
+* Settlement
+* Point balance
+
+Client state must always be treated as untrusted.
+
+---
+
+# 48. TIMER
+
+Players should have a turn timer.
+
+When the timer expires:
+
+* Auto-check if legal.
+* Otherwise auto-fold.
+* Or use another documented default action.
+
+The exact behavior must be consistent and documented.
+
+---
+
+# 49. DISCONNECTION / RECONNECTION
+
+When a player disconnects:
+
+* Do not crash the game.
+* Preserve game state.
+* Allow reconnection.
+* Use a reasonable reconnect window.
+* Apply a defined timeout behavior.
+
+Upon reconnect:
+
+* Authenticate/re-identify the player.
+* Restore current room/game state.
+* Resynchronize the client.
+
+---
+
+# 50. EDGE CASES
+
+Explicitly handle:
+
+* Player disconnect
+* Player reconnect
+* Browser close
+* Host leaves
+* Empty room
+* Full room
+* Duplicate action
+* Out-of-turn action
+* Invalid bet
+* Timeout
+* Tie
+* Split pot
+* Side pot
+* Duplicate connection
+* Server restart
+* WebSocket failure
+* Race conditions
+* Bot replacement where appropriate
+
+---
+
+# 51. OBSERVABILITY
+
+Normal should provide reasonable:
+
+* Structured logs
+* Error logs
+* Game logs
+* Connection logs
+* Health endpoint
+
+Avoid excessive monitoring infrastructure for MVP.
+
+---
+
+# 52. TECHNOLOGY SELECTION
+
+Before implementation, evaluate appropriate technologies.
+
+## Frontend
+
+Evaluate:
+
+* React
+* Next.js
+* Vue
+* Svelte
+* Other appropriate technologies
+
+## Backend
+
+Evaluate:
+
+* Node.js + TypeScript
+* Go
+* Python
+* Other appropriate technologies
+
+## Realtime
+
+Evaluate:
+
+* WebSocket
+* Socket.IO
+* Equivalent
+
+## Database
+
+Evaluate:
+
+* PostgreSQL
+* SQLite
+* Other relational options
+
+## Deployment
+
+Evaluate:
+
+* Docker
+* VPS
+* AWS
+* EC2
+* ECS
+* Cloud Run
+* Internal host
+* Other appropriate options
+
+Choose the final stack using:
+
+* Correctness
+* Development speed
+* Realtime suitability
+* Resource usage
+* Maintainability
+* Deployment complexity
+* Cost
+* Normal/Lite compatibility
+
+Explain the decision.
+
+---
+
+# 53. RECOMMENDED ARCHITECTURAL SHAPE
+
+The final architecture should conceptually resemble:
+
+```text
+                         INTERNET
+                            │
+                           HTTPS
+                            │
+                     ┌──────▼──────┐
+                     │   Frontend  │
+                     └──────┬──────┘
+                            │
+                   HTTP / WebSocket
+                            │
+                     ┌──────▼──────┐
+                     │   Backend   │
+                     ├─────────────┤
+                     │ Game Engine │
+                     │ Room Manager│
+                     │ Bot Engine  │
+                     │ Auth        │
+                     │ Economy     │
+                     │ Services    │
+                     └──────┬──────┘
+                            │
+                    ┌───────┴────────┐
+                    │                │
+               PostgreSQL          Other
+                 Normal          Services
+```
+
+Lite should simplify this to something closer to:
+
+```text
+                INTERNAL HOST
+                     │
+              ┌──────▼──────┐
+              │ Application │
+              ├─────────────┤
+              │ Frontend    │
+              │ Backend     │
+              │ WebSocket   │
+              │ Game Engine │
+              │ Bot         │
+              └──────┬──────┘
+                     │
+                  SQLite
+```
+
+These diagrams are conceptual. The final architecture must be determined after technology evaluation.
+
+---
+
+# 54. DEPLOYMENT — NORMAL
+
+Normal may be public on the Internet.
+
+Provide:
+
+* Production build
+* Environment variables
+* Database migration
+* Health check
+* Logging
+* Backup strategy
+* HTTPS
+* WebSocket configuration
+* Deployment documentation
+
+Docker may be used if appropriate.
+
+---
+
+# 55. DEPLOYMENT — LITE
+
+Lite should ideally support:
+
+```bash
+npm install
+npm run build
+npm run start
+```
+
+or equivalent.
+
+Docker support may also be provided:
+
+```bash
+docker compose up
+```
+
+The exact commands depend on the selected technology.
+
+The important requirement is:
+
+> Lite must be easy to build and run on a low-resource internal host.
+
+---
+
+# 56. DATA MODEL
+
+Design the minimum appropriate data model.
+
+Potential Normal entities:
+
+* User
+* PlayerProfile
+* Room
+* Game
+* GamePlayer
+* Item
+* Inventory
+* Achievement
+* PlayerAchievement
+* DailyLogin
+* Statistics
+
+Do not create unnecessary database entities.
+
+Lite may use a significantly reduced schema.
+
+---
+
+# 57. API DESIGN
+
+Define and document:
+
+* REST/HTTP endpoints if used.
+* Authentication endpoints.
+* Room endpoints.
+* Player endpoints.
+* Reward endpoints.
+* Achievement endpoints.
+* Normal-only endpoints.
+
+Separate core gameplay communication from optional feature APIs.
+
+---
+
+# 58. WEBSOCKET PROTOCOL
+
+Define a clear message protocol.
+
+Example categories:
+
+### Client → Server
+
+```text
+CREATE_ROOM
+JOIN_ROOM
+LEAVE_ROOM
+READY
+BET
+CHECK
+CALL
+RAISE
+FOLD
+RECONNECT
+```
+
+### Server → Client
+
+```text
+ROOM_STATE
+GAME_STATE
+PLAYER_JOINED
+PLAYER_LEFT
+TURN_CHANGED
+CARDS_DEALT
+COMMUNITY_CARD_REVEALED
+POT_UPDATED
+GAME_RESULT
+PLAYER_DISCONNECTED
+PLAYER_RECONNECTED
+ERROR
+```
+
+Use typed messages where possible.
+
+---
+
+# 59. TESTING
+
+Implement:
+
+## Unit Tests
+
+* Cards
+* Deck
+* Shuffle
+* Hand evaluator
+* Poker ranking
+* Betting
+* Pot
+* Blind Poker
+* Bot
+* Economy
+* Achievement rules
+
+## Integration Tests
+
+* Create room
+* Join room
+* Ready
+* Start game
+* Player action
+* Game completion
+* Reconnect
+
+## Multiplayer Tests
+
+* Multiple clients
+* Multiple rooms
+* Concurrent games
+* Disconnect
+* Reconnect
+* Invalid action
+* Out-of-turn action
+* Duplicate action
+
+---
+
+# 60. MVP SCOPE
+
+AI must explicitly classify features.
+
+## MUST HAVE
+
+* Core Poker
+* Blind Poker 2 Cards
+* Blind Poker 3 Cards
+* Room system
+* Realtime multiplayer
+* Bot
+* Point
+* Daily reward
+* Basic player/session
+* Normal edition
+* Lite edition
+* English
+* Vietnamese
+* Responsive UI
+
+## SHOULD HAVE
+
+* Achievement
+* Avatar
+* Inventory
+* Reconnect
+* Statistics
+
+## COULD HAVE
+
+* Chat
+* Emotes
+* Spectator mode
+* Advanced bot
+* Replay
+* Leaderboard
+
+## WILL NOT HAVE — MVP
+
+* Real-money payment
+* Cash-out
+* Marketplace
+* NFT
+* Blockchain
+* Machine-learning poker AI
+* Complex social network
+
+AI may adjust these categories if the requirement analysis identifies a better prioritization.
+
+---
+
+# 61. DEVELOPMENT WORKFLOW
+
+Follow this order.
+
+## PHASE 1 — REQUIREMENT ANALYSIS
+
+Analyze the initial specification.
+
+Identify gaps and ambiguities.
+
+---
+
+## PHASE 2 — BRAINSTORMING
+
+Explore:
+
+* Game rules
+* Architecture
+* Technology
+* UX
+* Economy
+* Bot
+* Deployment
+* Normal/Lite separation
+
+---
+
+## PHASE 3 — DECISIONS
+
+For every important decision, document:
+
+```text
+Decision
+Reason
+Alternative considered
+Trade-off
+```
+
+---
+
+## PHASE 4 — FINAL SRS
+
+Produce the complete Software Requirement Specification.
+
+---
+
+## PHASE 5 — ARCHITECTURE
+
+Produce:
+
+* System architecture
+* Module architecture
+* Normal/Lite architecture
+* Data model
+* API design
+* WebSocket protocol
+* Dependency graph
+* Deployment architecture
+
+---
+
+## PHASE 6 — CORE GAME ENGINE
+
+Implement and test:
+
+* Card engine
+* Deck
+* Shuffle
+* Hand evaluation
+* Poker rules
+* Blind Poker
+* Betting
+* Pot
+* Game state
+* Bot
+
+Do this before building extensive UI.
+
+---
+
+## PHASE 7 — BACKEND
+
+Implement:
+
+* Rooms
+* Sessions
+* WebSocket
+* Game management
+* Persistence
+* Reconnect
+* Timer
+* Validation
+* Economy
+* Normal/Lite services
+
+---
+
+## PHASE 8 — FRONTEND
+
+Implement:
+
+* Lobby
+* Room
+* Poker table
+* Player controls
+* Profile
+* Normal-only features
+* Lite UI
+* Responsive layout
+* i18n
+
+---
+
+## PHASE 9 — INTEGRATION
+
+Connect:
+
+* Frontend
+* WebSocket
+* Backend
+* Game engine
+* Database
+* Bot
+
+---
+
+## PHASE 10 — TESTING
+
+Run:
+
+* Unit tests
+* Integration tests
+* Multiplayer tests
+* Edge-case tests
+* Security checks
+* Normal/Lite separation tests
+
+Fix issues before declaring completion.
+
+---
+
+## PHASE 11 — DEPLOYMENT
+
+Prepare:
+
+* Normal build
+* Lite build
+* Normal deployment
+* Lite deployment
+* Environment configuration
+* README
+* Troubleshooting guide
+
+---
+
+# 62. CODE QUALITY
+
+Code must be:
+
+* Modular
+* Typed where possible
+* Testable
+* Maintainable
+* Production-oriented
+* Reasonably documented
+* Free from unnecessary duplication
+
+Avoid:
+
+* Dead code
+* Giant components
+* Giant services
+* Business logic inside UI
+* Hard-coded game rules
+* Hard-coded translations
+* Copy-pasted Normal/Lite implementations
+
+---
+
+# 63. ARCHITECTURAL LAYERS
+
+Prefer a structure conceptually similar to:
+
+```text
+UI
+ ↓
+Application Layer
+ ↓
+Game / Domain Services
+ ↓
+Shared Game Engine
+ ↓
+Persistence / Infrastructure
+```
+
+The exact architecture may vary.
+
+The core game logic must remain independently testable.
+
+---
+
+# 64. FINAL DELIVERABLES
+
+The completed project must include:
+
+## Requirements
+
+* Product Requirements
+* Functional Requirements
+* Non-functional Requirements
+* Game Rules
+* Blind Poker Rules
+* Economy Design
+* Achievement Design
+* Normal/Lite Feature Matrix
+
+## Architecture
+
+* System Architecture
+* Module Architecture
+* Dependency Graph
+* Database Design
+* API Specification
+* WebSocket Protocol
+* Deployment Architecture
+
+## Implementation
+
+* Frontend
+* Backend
+* Shared Core
+* Poker Engine
+* Blind Poker
+* Bot
+* Database
+* Normal Edition
+* Lite Edition
+
+## Testing
+
+* Unit Tests
+* Integration Tests
+* Multiplayer Tests
+* Edge Case Tests
+* Normal/Lite Separation Tests
+
+## Deployment
+
+* Normal deployment
+* Lite deployment
+* Environment configuration
+* Build instructions
+* Run instructions
+
+## Documentation
+
+* README
+* Architecture documentation
+* Game rules
+* Development guide
+* Deployment guide
+* Known limitations
+* Future roadmap
+
+---
+
+# 65. FINAL SOFTWARE REQUIREMENT SPECIFICATION STRUCTURE
+
+Before implementation, the final SRS must contain at minimum:
+
+1. Product Overview
+2. Goals
+3. Non-Goals
+4. User Personas
+5. User Stories
+6. Functional Requirements
+7. Normal Poker Rules
+8. Blind Poker Rules
+9. Bot Design
+10. Player System
+11. Room System
+12. Economy
+13. Daily Reward
+14. Achievement
+15. Avatar/Inventory
+16. Realtime Architecture
+17. Game State Machine
+18. Database
+19. API
+20. WebSocket Protocol
+21. Normal/Lite Feature Matrix
+22. Normal/Lite Architecture
+23. Security
+24. Performance
+25. Scalability
+26. Internationalization
+27. Responsive Design
+28. Deployment
+29. Testing
+30. Edge Cases
+31. Risks
+32. Assumptions
+33. MVP Scope
+34. Future Roadmap
+
+---
+
+# 66. SUCCESS CRITERIA
+
+The project is considered complete when:
+
+### Gameplay
+
+* [ ] Normal Poker works from room creation through showdown.
+* [ ] Blind Poker 2 Cards works.
+* [ ] Blind Poker 3 Cards works.
+* [ ] Poker hand ranking is correct.
+* [ ] Pot settlement is correct.
+* [ ] Bot can participate in Blind Poker.
+
+### Multiplayer
+
+* [ ] Players can create rooms.
+* [ ] Players can join rooms.
+* [ ] Realtime communication works.
+* [ ] Turn synchronization works.
+* [ ] Disconnect/reconnect works.
+* [ ] Invalid actions are rejected server-side.
+
+### Economy
+
+* [ ] Points work.
+* [ ] Daily rewards work.
+* [ ] Monthly reset works.
+* [ ] Economy is documented.
+
+### Normal
+
+* [ ] Full player profile works.
+* [ ] Avatar works.
+* [ ] Inventory works.
+* [ ] Achievement works.
+* [ ] Persistent database works.
+
+### Lite
+
+* [ ] Lite builds successfully.
+* [ ] Lite runs independently.
+* [ ] Lite uses lightweight persistence.
+* [ ] Lite does not require Normal infrastructure.
+* [ ] Lite has reduced dependency/asset footprint.
+
+### Shared Architecture
+
+* [ ] Poker engine is shared.
+* [ ] Blind Poker engine is shared.
+* [ ] Bot logic is shared.
+* [ ] Core protocol is shared.
+* [ ] Normal and Lite are independently deployable.
+* [ ] No duplicated core game logic exists.
+
+### UX
+
+* [ ] English works.
+* [ ] Vietnamese works.
+* [ ] Responsive UI works.
+* [ ] Poker table is usable across target resolutions.
+
+### Engineering
+
+* [ ] Core tests pass.
+* [ ] Integration tests pass.
+* [ ] Multiplayer tests pass.
+* [ ] Security checks pass.
+* [ ] Documentation is complete.
+* [ ] Normal deployment is documented.
+* [ ] Lite deployment is documented.
+
+---
+
+# 67. FINAL OPERATING PRINCIPLE
+
+Treat the project as a real software product.
+
+Think like:
+
+* A Product Manager when defining requirements.
+* A Game Designer when defining gameplay.
+* A Software Architect when defining system boundaries.
+* A Senior Engineer when writing code.
+* A QA Engineer when testing.
+* A Security Engineer when validating trust boundaries.
+* A DevOps Engineer when deploying.
+
+Do not blindly follow ambiguous requirements.
+
+Do not over-engineer.
+
+Do not under-engineer the game integrity.
+
+Prefer:
+
+> **Simple architecture + strong separation of responsibilities + authoritative server + shared game core + independently deployable Normal/Lite editions.**
+
+The most important architectural rule is:
+
+> **Shared Core → Separate Features → Separate Dependencies → Separate Builds**
+
+And the most important maintainability rule is:
+
+> **If a gameplay change requires modifying Normal and Lite separately, reconsider the architecture.**
+
+The final goal is a system that is:
+
+> **Correct, lightweight, realtime, secure enough for its scope, maintainable, easy to deploy, and extensible without unnecessary complexity.**
