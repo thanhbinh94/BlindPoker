@@ -1,5 +1,5 @@
 import { ECONOMY } from '../constants/economy.js'
-import type { PlayerAction, Ruleset } from '../hand/types.js'
+import type { EngineErrorCode, PlayerAction, Ruleset } from '../hand/types.js'
 import type { BlindRoomConfig, ClientMessage, ErrorCode, HoldemRoomConfig, RoomConfig } from './messages.js'
 
 export type ParseResult<T> = { ok: true; value: T } | { ok: false; code: ErrorCode; message: string }
@@ -27,9 +27,9 @@ export function parseClientMessage(raw: unknown): ParseResult<ClientMessage> {
   const withReq = <T extends object>(m: T): T & { reqId?: string } => (reqId === undefined ? m : { ...m, reqId })
   switch (raw.t) {
     case 'HELLO':
-      return isStr(raw.sessionToken) && raw.sessionToken.length > 0 ? { ok: true, value: { t: 'HELLO', sessionToken: raw.sessionToken } } : fail('INVALID_MESSAGE', 'HELLO needs sessionToken')
+      return isStr(raw.sessionToken) && raw.sessionToken.length > 0 ? { ok: true, value: withReq({ t: 'HELLO', sessionToken: raw.sessionToken }) } : fail('INVALID_MESSAGE', 'HELLO needs sessionToken')
     case 'LIST_ROOMS': case 'LEAVE_ROOM': case 'STAND_UP': case 'START_GAME': case 'RESYNC': case 'PONG':
-      return { ok: true, value: { t: raw.t } }
+      return { ok: true, value: withReq({ t: raw.t }) }
     case 'CREATE_ROOM': {
       const cfg = validateRoomConfig(raw.config)
       return cfg.ok ? { ok: true, value: withReq({ t: 'CREATE_ROOM', config: cfg.value }) } : fail('INVALID_MESSAGE', cfg.message)
@@ -52,9 +52,9 @@ export function parseClientMessage(raw: unknown): ParseResult<ClientMessage> {
       return { ok: true, value: withReq(m) }
     }
     case 'READY':
-      return isBool(raw.ready) ? { ok: true, value: { t: 'READY', ready: raw.ready } } : fail('INVALID_MESSAGE', 'READY needs boolean ready')
+      return isBool(raw.ready) ? { ok: true, value: withReq({ t: 'READY', ready: raw.ready }) } : fail('INVALID_MESSAGE', 'READY needs boolean ready')
     case 'KICK':
-      return isStr(raw.playerId) ? { ok: true, value: { t: 'KICK', playerId: raw.playerId } } : fail('INVALID_MESSAGE', 'KICK needs playerId')
+      return isStr(raw.playerId) ? { ok: true, value: withReq({ t: 'KICK', playerId: raw.playerId }) } : fail('INVALID_MESSAGE', 'KICK needs playerId')
     case 'ACTION': {
       const action = parseAction(raw.action)
       if (!isStr(raw.reqId) || !isInt(raw.baseSeq) || !action) return fail('INVALID_MESSAGE', 'ACTION needs reqId, baseSeq and a valid action')
@@ -105,8 +105,8 @@ export function validateRoomConfig(raw: unknown): ParseResult<RoomConfig> {
     const b = raw.blind
     if (!isObj(b)) return bad('blind settings are required')
     if (b.holeCards !== 2 && b.holeCards !== 3) return bad('holeCards must be 2 or 3')
-    const decisionMode = b.decisionMode === undefined ? 'playOrFold' : b.decisionMode
-    if (decisionMode !== 'none' && decisionMode !== 'playOrFold') return bad('decisionMode must be none or playOrFold')
+    const decisionMode = b.decisionMode
+    if (decisionMode !== 'none' && decisionMode !== 'playOrFold') return bad('decisionMode is required and must be none or playOrFold')
     if (!isInt(b.fixedWager) || !(ECONOMY.blindWagerTiers as readonly number[]).includes(b.fixedWager)) return bad('fixedWager must match a wager tier')
     const botCount = b.botCount === undefined ? 0 : b.botCount
     if (!isInt(botCount) || botCount < 0 || botCount > maxPlayers - 1) return bad('botCount must be 0..maxPlayers-1')
@@ -123,4 +123,19 @@ export function roomConfigToRuleset(config: RoomConfig): Ruleset {
   }
   const b = config.blind!
   return { mode: 'blind', holeCards: b.holeCards, decisionMode: b.decisionMode, fixedWager: b.fixedWager, tableFeeRate: ECONOMY.tableFeeRate }
+}
+
+const ENGINE_ERROR_TO_CODE: Record<EngineErrorCode, ErrorCode> = {
+  NOT_YOUR_TURN: 'NOT_YOUR_TURN',
+  ILLEGAL_ACTION: 'ILLEGAL_ACTION',
+  INVALID_AMOUNT: 'INVALID_AMOUNT',
+  NOT_IN_HAND: 'NOT_IN_HAND',
+  HAND_COMPLETE: 'NOT_IN_HAND',
+  INVALID_COMMAND: 'INTERNAL',
+  INVALID_SETUP: 'INTERNAL',
+}
+
+/** Maps an `EngineError.code` onto the wire `ErrorCode` a client sees. */
+export function engineErrorToErrorCode(code: EngineErrorCode): ErrorCode {
+  return ENGINE_ERROR_TO_CODE[code]
 }

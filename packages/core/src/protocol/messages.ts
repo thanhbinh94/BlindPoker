@@ -85,20 +85,21 @@ export type RoomEvent =
   | { type: 'ROOM_STATUS'; status: 'OPEN' | 'IN_GAME'; nextHandAt: number | null }
   | { type: 'ROOM_CLOSED'; reason: string }
 
+/** Every client message may carry a `reqId`; the server echoes it on `ACK` / `ERROR`. `ACTION` requires one. */
 export type ClientMessage =
-  | { t: 'HELLO'; sessionToken: string }
-  | { t: 'LIST_ROOMS' }
+  | { t: 'HELLO'; reqId?: string; sessionToken: string }
+  | { t: 'LIST_ROOMS'; reqId?: string }
   | { t: 'CREATE_ROOM'; reqId?: string; config: RoomConfig }
   | { t: 'JOIN_ROOM'; reqId?: string; roomId?: string; code?: string; password?: string }
-  | { t: 'LEAVE_ROOM' }
+  | { t: 'LEAVE_ROOM'; reqId?: string }
   | { t: 'SIT_DOWN'; reqId?: string; seat: number; buyIn?: number }
-  | { t: 'STAND_UP' }
-  | { t: 'READY'; ready: boolean }
-  | { t: 'START_GAME' }
-  | { t: 'KICK'; playerId: string }
+  | { t: 'STAND_UP'; reqId?: string }
+  | { t: 'READY'; reqId?: string; ready: boolean }
+  | { t: 'START_GAME'; reqId?: string }
+  | { t: 'KICK'; reqId?: string; playerId: string }
   | { t: 'ACTION'; reqId: string; baseSeq: number; action: PlayerAction }
-  | { t: 'RESYNC' }
-  | { t: 'PONG' }
+  | { t: 'RESYNC'; reqId?: string }
+  | { t: 'PONG'; reqId?: string }
 
 export type ServerMessage =
   | { t: 'WELCOME'; playerId: string; displayName: string; balance: number; serverTime: number }
