@@ -1,0 +1,77 @@
+import { createBotStrategy, seededRng, type RoomConfig } from '@bp/core'
+import { describe, expect, it } from 'vitest'
+import type { DomainEvent } from '../domain-events.js'
+import { silentLogger } from '../infra/logger.js'
+import { createMemoryRepositories } from '../memory-repositories.js'
+import { ManualClock } from '../testing/manual-clock.js'
+import { TEST_ROOM_OPTIONS } from '../testing/room-harness.js'
+import { RoomManager } from './room-manager.js'
+import { RoomError } from './types.js'
+
+const PUBLIC: RoomConfig = { name: 'Pub', mode: 'holdem', maxPlayers: 4, isPrivate: false, turnTimerSec: 30, autoStart: false, holdem: { smallBlind: 100, bigBlind: 200, minBuyInBB: 50, maxBuyInBB: 200 } }
+const PRIVATE: RoomConfig = { ...PUBLIC, name: 'Priv', isPrivate: true }
+const id = (playerId: string) => ({ playerId, displayName: playerId, isBot: false })
+
+function setup() {
+  const clock = new ManualClock()
+  const repos = createMemoryRepositories()
+  for (const p of ['h', 'a', 'b']) repos.addPlayer(p, p, 100_000)
+  const domainEvents: DomainEvent[] = []
+  const manager = new RoomManager({ clock, rng: seededRng(1), repos, outbox: { send: () => {} }, bot: createBotStrategy(), log: silentLogger, options: TEST_ROOM_OPTIONS, onDomainEvent: (e) => domainEvents.push(e) })
+  return { clock, repos, manager, domainEvents }
+}
+
+describe('RoomManager', () => {
+  it('creates rooms with unique codes, lists public ones newest first, finds by id/code/player', () => {
+    const { manager, domainEvents } = setup()
+    const r1 = manager.create(id('h'), PUBLIC)
+    const r2 = manager.create(id('a'), PRIVATE)
+    const r3 = manager.create(id('b'), { ...PUBLIC, name: 'Pub2' })
+    expect(r1.code).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/)
+    expect(new Set([r1.code, r2.code, r3.code]).size).toBe(3)
+    expect(manager.listPublic().map((s) => s.name)).toEqual(['Pub2', 'Pub'])
+    expect(manager.get(r2.roomId)).toBe(r2)
+    expect(manager.getByCode(r1.code.toLowerCase())).toBe(r1)
+    expect(manager.roomOf('a')).toBe(r2)
+    expect(manager.roomOf('zzz')).toBeUndefined()
+    expect(manager.size).toBe(3)
+    expect(domainEvents.filter((e) => e.type === 'ROOM_CREATED')).toHaveLength(3)
+  })
+
+  it('refuses a second room for a player already in one', () => {
+    const { manager } = setup()
+    manager.create(id('h'), PUBLIC)
+    expect(() => manager.create(id('h'), PUBLIC)).toThrow(RoomError)
+  })
+
+  it('notifies list subscribers on create, change and close, and drops closed rooms', async () => {
+    const { manager, clock } = setup()
+    let notified = 0
+    const off = manager.onListChanged(() => notified++)
+    const room = manager.create(id('h'), PUBLIC)
+    expect(notified).toBe(1)
+    await room.join(id('a'))
+    expect(notified).toBeGreaterThanOrEqual(2)
+    await room.leave('a')
+    await room.leave('h')
+    clock.advance(TEST_ROOM_OPTIONS.emptyRoomCloseMs)
+    await room.enqueue(() => undefined)
+    expect(manager.get(room.roomId)).toBeUndefined()
+    expect(manager.getByCode(room.code)).toBeUndefined()
+    expect(manager.listPublic()).toEqual([])
+    const before = notified
+    off()
+    manager.create(id('b'), PUBLIC)
+    expect(notified).toBe(before)
+  })
+
+  it('shutdown closes every room', async () => {
+    const { manager } = setup()
+    const r1 = manager.create(id('h'), PUBLIC)
+    const r2 = manager.create(id('a'), PRIVATE)
+    await manager.shutdown('bye')
+    expect(r1.status).toBe('CLOSED')
+    expect(r2.status).toBe('CLOSED')
+    expect(manager.size).toBe(0)
+  })
+})
