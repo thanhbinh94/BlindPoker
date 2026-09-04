@@ -1,0 +1,233 @@
+{
+  "app": {
+    "name": "Bind Poker",
+    "edition": "Bản Normal"
+  },
+  "nav": {
+    "main": "Điều hướng chính",
+    "lobby": "Sảnh chờ",
+    "daily": "Điểm danh",
+    "profile": "Hồ sơ",
+    "settings": "Cài đặt"
+  },
+  "auth": {
+    "title": "Bind Poker",
+    "lead": "Một tài khoản, mọi thiết bị. Điểm, tủ đồ và thành tựu của bạn theo tài khoản chứ không theo máy.",
+    "signIn": "Đăng nhập",
+    "register": "Đăng ký",
+    "email": "Email",
+    "emailPlaceholder": "ban@vidu.com",
+    "password": "Mật khẩu",
+    "passwordHint": "8–128 ký tự, khác với email của bạn.",
+    "showPassword": "Hiện mật khẩu",
+    "hidePassword": "Ẩn mật khẩu",
+    "displayName": "Tên hiển thị",
+    "displayNamePlaceholder": "Ví dụ: Minh Sài Gòn",
+    "displayNameHint": "2–20 ký tự: chữ, số, dấu cách và _ - .",
+    "submitSignIn": "Vào sảnh",
+    "submitRegister": "Tạo tài khoản",
+    "toRegister": "Chưa có tài khoản? Đăng ký",
+    "toSignIn": "Đã có tài khoản? Đăng nhập",
+    "name": {
+      "length": "Tên hiển thị cần 2–20 ký tự",
+      "chars": "Tên hiển thị chỉ gồm chữ, số, dấu cách và _ - .",
+      "edges": "Tên hiển thị không được bắt đầu hoặc kết thúc bằng _ - ."
+    },
+    "errors": {
+      "INVALID_EMAIL": "Địa chỉ email không hợp lệ",
+      "INVALID_PASSWORD": "Mật khẩu cần 8–128 ký tự và khác với email của bạn",
+      "INVALID_NAME": "Tên hiển thị không hợp lệ",
+      "EMAIL_TAKEN": "Email này đã có tài khoản",
+      "DISPLAY_NAME_TAKEN": "Tên hiển thị đã có người dùng",
+      "BAD_CREDENTIALS": "Email hoặc mật khẩu không đúng",
+      "RATE_LIMITED": "Bạn thử quá nhiều lần, vui lòng đợi {{seconds}} giây",
+      "FORBIDDEN": "Yêu cầu bị từ chối, vui lòng tải lại trang",
+      "NETWORK": "Không kết nối được máy chủ"
+    }
+  },
+  "session": {
+    "expired": "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
+    "checking": "Đang kiểm tra phiên đăng nhập…"
+  },
+  "placeholder": {
+    "title": "Đang xây dựng",
+    "lead": "Màn hình này sẽ có ở bản cập nhật kế tiếp.",
+    "signOut": "Đăng xuất"
+  },
+  "items": {
+    "base_01": "Nền mộc",
+    "base_02": "Nền ngói",
+    "base_03": "Nền chàm",
+    "base_04": "Nền sơn mài",
+    "base_05": "Nền khảm trai",
+    "face_01": "Nét bình thản",
+    "face_02": "Nét tươi cười",
+    "face_03": "Nét lì lợm",
+    "face_04": "Nét tinh quái",
+    "face_05": "Nét sắc lạnh",
+    "clothing_tee": "Áo thun",
+    "clothing_hoodie": "Áo hoodie",
+    "clothing_polo": "Áo polo",
+    "clothing_aodai": "Áo dài",
+    "clothing_suit": "Áo vest",
+    "clothing_kimono": "Kimono",
+    "jacket_champion": "Áo khoác quán quân",
+    "hair_short": "Tóc ngắn",
+    "hair_curly": "Tóc xoăn",
+    "hair_ponytail": "Tóc đuôi ngựa",
+    "hair_long": "Tóc dài",
+    "hair_bun": "Tóc búi",
+    "hair_mohawk": "Tóc mohawk",
+    "accessory_glasses": "Kính cận",
+    "accessory_headband": "Băng đô",
+    "accessory_mask": "Khẩu trang",
+    "accessory_conical_hat": "Nón lá",
+    "accessory_sunglasses": "Kính râm",
+    "hat_crown": "Vương miện",
+    "jewelry_stud": "Khuyên tai nụ",
+    "jewelry_ring": "Nhẫn bạc",
+    "jewelry_chain": "Dây chuyền",
+    "jewelry_pendant": "Mặt dây chuyền",
+    "ring_royal": "Nhẫn hoàng gia",
+    "title_rookie": "Tân binh",
+    "title_regular": "Khách quen",
+    "title_night_owl": "Cú đêm",
+    "title_devoted": "Bền bỉ",
+    "title_hot_hand": "Tay nóng",
+    "badge_bronze": "Huy hiệu đồng",
+    "badge_silver": "Huy hiệu bạc",
+    "badge_gold": "Huy hiệu vàng",
+    "badge_monthly": "Huy hiệu tháng",
+    "badge_veteran": "Huy hiệu kỳ cựu"
+  },
+  "achievements": {
+    "login_days_7": {
+      "name": "Bảy ngày ghé bàn",
+      "desc": "Đăng nhập đủ 7 ngày."
+    },
+    "login_days_30": {
+      "name": "Ba mươi ngày ghé bàn",
+      "desc": "Đăng nhập đủ 30 ngày."
+    },
+    "login_days_100": {
+      "name": "Trăm ngày ghé bàn",
+      "desc": "Đăng nhập đủ 100 ngày."
+    },
+    "login_streak_7": {
+      "name": "Chuỗi bảy ngày",
+      "desc": "Điểm danh liên tục 7 ngày."
+    },
+    "login_streak_28": {
+      "name": "Chuỗi hai tám ngày",
+      "desc": "Điểm danh liên tục 28 ngày."
+    },
+    "holdem_hands_10": {
+      "name": "Mười ván Hold'em",
+      "desc": "Chơi 10 ván Hold'em."
+    },
+    "holdem_hands_100": {
+      "name": "Trăm ván Hold'em",
+      "desc": "Chơi 100 ván Hold'em."
+    },
+    "holdem_hands_1000": {
+      "name": "Nghìn ván Hold'em",
+      "desc": "Chơi 1.000 ván Hold'em."
+    },
+    "holdem_wins_10": {
+      "name": "Mười ván thắng",
+      "desc": "Thắng 10 ván Hold'em."
+    },
+    "holdem_wins_100": {
+      "name": "Trăm ván thắng",
+      "desc": "Thắng 100 ván Hold'em."
+    },
+    "holdem_wins_500": {
+      "name": "Năm trăm ván thắng",
+      "desc": "Thắng 500 ván Hold'em."
+    },
+    "win_streak_3": {
+      "name": "Ba ván liền tay",
+      "desc": "Thắng 3 ván liên tiếp."
+    },
+    "win_streak_5": {
+      "name": "Năm ván liền tay",
+      "desc": "Thắng 5 ván liên tiếp."
+    },
+    "win_streak_10": {
+      "name": "Mười ván liền tay",
+      "desc": "Thắng 10 ván liên tiếp."
+    },
+    "lose_streak_10": {
+      "name": "Lì đòn",
+      "desc": "Thua 10 ván liên tiếp mà vẫn ngồi lại."
+    },
+    "hand_flush": {
+      "name": "Thùng",
+      "desc": "Thắng một ván bằng thùng."
+    },
+    "hand_full_house": {
+      "name": "Cù lũ",
+      "desc": "Thắng một ván bằng cù lũ."
+    },
+    "hand_quads": {
+      "name": "Tứ quý",
+      "desc": "Thắng một ván bằng tứ quý."
+    },
+    "hand_straight_flush": {
+      "name": "Thùng phá sảnh",
+      "desc": "Thắng một ván bằng thùng phá sảnh."
+    },
+    "hand_royal": {
+      "name": "Thùng phá sảnh hoàng gia",
+      "desc": "Thắng một ván bằng thùng phá sảnh hoàng gia."
+    },
+    "big_win_100k": {
+      "name": "Trăm nghìn một ván",
+      "desc": "Ăn 100.000 điểm trong một ván."
+    },
+    "big_win_500k": {
+      "name": "Nửa triệu một ván",
+      "desc": "Ăn 500.000 điểm trong một ván."
+    },
+    "blind_hands_10": {
+      "name": "Mười ván Bài Mù",
+      "desc": "Chơi 10 ván Bài Mù."
+    },
+    "blind_hands_100": {
+      "name": "Trăm ván Bài Mù",
+      "desc": "Chơi 100 ván Bài Mù."
+    },
+    "blind_hands_1000": {
+      "name": "Nghìn ván Bài Mù",
+      "desc": "Chơi 1.000 ván Bài Mù."
+    },
+    "blind_wins_10": {
+      "name": "Mười ván Bài Mù thắng",
+      "desc": "Thắng 10 ván Bài Mù."
+    },
+    "blind_wins_100": {
+      "name": "Trăm ván Bài Mù thắng",
+      "desc": "Thắng 100 ván Bài Mù."
+    },
+    "bot_hands_50": {
+      "name": "Bạn của máy",
+      "desc": "Chơi 50 ván có bot cùng bàn."
+    },
+    "rooms_10": {
+      "name": "Mười phòng",
+      "desc": "Vào 10 phòng chơi."
+    },
+    "rooms_100": {
+      "name": "Trăm phòng",
+      "desc": "Vào 100 phòng chơi."
+    },
+    "games_50": {
+      "name": "Năm mươi ván trọn vẹn",
+      "desc": "Chơi hết 50 ván từ đầu đến cuối."
+    },
+    "games_500": {
+      "name": "Năm trăm ván trọn vẹn",
+      "desc": "Chơi hết 500 ván từ đầu đến cuối."
+    }
+  }
+}

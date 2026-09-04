@@ -11,6 +11,8 @@
     "typecheck": "pnpm -r run typecheck",
     "lint": "eslint .",
     "build:normal": "pnpm --filter @bp/normal-server run build",
+    "build:normal-web": "pnpm --filter @bp/normal-web run build",
+    "dev:normal-web": "pnpm --filter @bp/normal-web run dev",
     "db:generate": "pnpm --filter @bp/normal-server db:generate",
     "build:lite": "pnpm --filter @bp/lite run build"
   },

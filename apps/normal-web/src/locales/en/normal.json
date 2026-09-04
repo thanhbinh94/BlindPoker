@@ -1,0 +1,233 @@
+{
+  "app": {
+    "name": "Bind Poker",
+    "edition": "Normal edition"
+  },
+  "nav": {
+    "main": "Main navigation",
+    "lobby": "Lobby",
+    "daily": "Daily",
+    "profile": "Profile",
+    "settings": "Settings"
+  },
+  "auth": {
+    "title": "Bind Poker",
+    "lead": "One account, every device. Your points, wardrobe and achievements follow the account, not the machine.",
+    "signIn": "Sign in",
+    "register": "Register",
+    "email": "Email",
+    "emailPlaceholder": "you@example.com",
+    "password": "Password",
+    "passwordHint": "8–128 characters, different from your email.",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "displayName": "Display name",
+    "displayNamePlaceholder": "e.g. Minh Saigon",
+    "displayNameHint": "2–20 characters: letters, digits, spaces and _ - .",
+    "submitSignIn": "Enter the lobby",
+    "submitRegister": "Create account",
+    "toRegister": "No account yet? Register",
+    "toSignIn": "Already have an account? Sign in",
+    "name": {
+      "length": "A display name needs 2–20 characters",
+      "chars": "A display name may only use letters, digits, spaces and _ - .",
+      "edges": "A display name may not start or end with _ - ."
+    },
+    "errors": {
+      "INVALID_EMAIL": "That email address is not valid",
+      "INVALID_PASSWORD": "A password needs 8–128 characters and must differ from your email",
+      "INVALID_NAME": "That display name is not valid",
+      "EMAIL_TAKEN": "That email already has an account",
+      "DISPLAY_NAME_TAKEN": "That display name is already taken",
+      "BAD_CREDENTIALS": "That email and password do not match an account",
+      "RATE_LIMITED": "Too many attempts — please wait {{seconds}} seconds",
+      "FORBIDDEN": "The request was refused — please reload the page",
+      "NETWORK": "Could not reach the server"
+    }
+  },
+  "session": {
+    "expired": "Your session has expired. Please sign in again.",
+    "checking": "Checking your session…"
+  },
+  "placeholder": {
+    "title": "Under construction",
+    "lead": "This screen arrives in the next update.",
+    "signOut": "Sign out"
+  },
+  "items": {
+    "base_01": "Plain base",
+    "base_02": "Tile base",
+    "base_03": "Indigo base",
+    "base_04": "Lacquer base",
+    "base_05": "Mother-of-pearl base",
+    "face_01": "Calm face",
+    "face_02": "Smiling face",
+    "face_03": "Poker face",
+    "face_04": "Sly face",
+    "face_05": "Steely face",
+    "clothing_tee": "T-shirt",
+    "clothing_hoodie": "Hoodie",
+    "clothing_polo": "Polo shirt",
+    "clothing_aodai": "Áo dài",
+    "clothing_suit": "Suit",
+    "clothing_kimono": "Kimono",
+    "jacket_champion": "Champion jacket",
+    "hair_short": "Short hair",
+    "hair_curly": "Curly hair",
+    "hair_ponytail": "Ponytail",
+    "hair_long": "Long hair",
+    "hair_bun": "Hair bun",
+    "hair_mohawk": "Mohawk",
+    "accessory_glasses": "Glasses",
+    "accessory_headband": "Headband",
+    "accessory_mask": "Face mask",
+    "accessory_conical_hat": "Conical hat",
+    "accessory_sunglasses": "Sunglasses",
+    "hat_crown": "Crown",
+    "jewelry_stud": "Stud earring",
+    "jewelry_ring": "Silver ring",
+    "jewelry_chain": "Chain",
+    "jewelry_pendant": "Pendant",
+    "ring_royal": "Royal ring",
+    "title_rookie": "Rookie",
+    "title_regular": "Regular",
+    "title_night_owl": "Night Owl",
+    "title_devoted": "Devoted",
+    "title_hot_hand": "Hot Hand",
+    "badge_bronze": "Bronze badge",
+    "badge_silver": "Silver badge",
+    "badge_gold": "Gold badge",
+    "badge_monthly": "Monthly badge",
+    "badge_veteran": "Veteran badge"
+  },
+  "achievements": {
+    "login_days_7": {
+      "name": "Seven days in",
+      "desc": "Sign in on 7 days."
+    },
+    "login_days_30": {
+      "name": "Thirty days in",
+      "desc": "Sign in on 30 days."
+    },
+    "login_days_100": {
+      "name": "A hundred days in",
+      "desc": "Sign in on 100 days."
+    },
+    "login_streak_7": {
+      "name": "Seven-day streak",
+      "desc": "Check in 7 days in a row."
+    },
+    "login_streak_28": {
+      "name": "Twenty-eight-day streak",
+      "desc": "Check in 28 days in a row."
+    },
+    "holdem_hands_10": {
+      "name": "Ten Hold'em hands",
+      "desc": "Play 10 hands of Hold'em."
+    },
+    "holdem_hands_100": {
+      "name": "A hundred Hold'em hands",
+      "desc": "Play 100 hands of Hold'em."
+    },
+    "holdem_hands_1000": {
+      "name": "A thousand Hold'em hands",
+      "desc": "Play 1,000 hands of Hold'em."
+    },
+    "holdem_wins_10": {
+      "name": "Ten hands won",
+      "desc": "Win 10 hands of Hold'em."
+    },
+    "holdem_wins_100": {
+      "name": "A hundred hands won",
+      "desc": "Win 100 hands of Hold'em."
+    },
+    "holdem_wins_500": {
+      "name": "Five hundred hands won",
+      "desc": "Win 500 hands of Hold'em."
+    },
+    "win_streak_3": {
+      "name": "Three in a row",
+      "desc": "Win 3 hands in a row."
+    },
+    "win_streak_5": {
+      "name": "Five in a row",
+      "desc": "Win 5 hands in a row."
+    },
+    "win_streak_10": {
+      "name": "Ten in a row",
+      "desc": "Win 10 hands in a row."
+    },
+    "lose_streak_10": {
+      "name": "Still seated",
+      "desc": "Lose 10 hands in a row and stay at the table."
+    },
+    "hand_flush": {
+      "name": "Flush",
+      "desc": "Win a hand with a flush."
+    },
+    "hand_full_house": {
+      "name": "Full house",
+      "desc": "Win a hand with a full house."
+    },
+    "hand_quads": {
+      "name": "Four of a kind",
+      "desc": "Win a hand with four of a kind."
+    },
+    "hand_straight_flush": {
+      "name": "Straight flush",
+      "desc": "Win a hand with a straight flush."
+    },
+    "hand_royal": {
+      "name": "Royal flush",
+      "desc": "Win a hand with a royal flush."
+    },
+    "big_win_100k": {
+      "name": "A hundred thousand in one",
+      "desc": "Take 100,000 points in a single hand."
+    },
+    "big_win_500k": {
+      "name": "Half a million in one",
+      "desc": "Take 500,000 points in a single hand."
+    },
+    "blind_hands_10": {
+      "name": "Ten Blind hands",
+      "desc": "Play 10 hands of Blind mode."
+    },
+    "blind_hands_100": {
+      "name": "A hundred Blind hands",
+      "desc": "Play 100 hands of Blind mode."
+    },
+    "blind_hands_1000": {
+      "name": "A thousand Blind hands",
+      "desc": "Play 1,000 hands of Blind mode."
+    },
+    "blind_wins_10": {
+      "name": "Ten Blind hands won",
+      "desc": "Win 10 hands of Blind mode."
+    },
+    "blind_wins_100": {
+      "name": "A hundred Blind hands won",
+      "desc": "Win 100 hands of Blind mode."
+    },
+    "bot_hands_50": {
+      "name": "Friend of the machines",
+      "desc": "Play 50 hands with a bot at the table."
+    },
+    "rooms_10": {
+      "name": "Ten rooms",
+      "desc": "Join 10 rooms."
+    },
+    "rooms_100": {
+      "name": "A hundred rooms",
+      "desc": "Join 100 rooms."
+    },
+    "games_50": {
+      "name": "Fifty hands through",
+      "desc": "See 50 hands through from deal to settlement."
+    },
+    "games_500": {
+      "name": "Five hundred hands through",
+      "desc": "See 500 hands through from deal to settlement."
+    }
+  }
+}

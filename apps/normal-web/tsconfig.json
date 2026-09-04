@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vitest/globals", "@testing-library/jest-dom"],
+    "resolveJsonModule": true
+  },
+  "include": [
+    "src",
+    "../../packages/ui-kit/src/css-modules.d.ts",
+    "../normal-server/data/items.json",
+    "../normal-server/data/achievements.json"
+  ]
+}

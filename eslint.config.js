@@ -3,6 +3,7 @@ import tseslint from 'typescript-eslint'
 import { FORBIDDEN_GLOBALS, NODE_BUILTINS } from './tooling/arch/node-builtins.js'
 
 const CORE_PURITY = '@bp/core must be pure: no @bp packages, no Node built-ins, no host globals'
+const WEB_ONLY = '@bp/normal-web may only depend on @bp/core and @bp/ui-kit, and runs in a browser'
 
 const forbid = (patterns, message) => ({
   'no-restricted-imports': ['error', { patterns: patterns.map((group) => ({ group: [group], message })) }],
@@ -68,5 +69,28 @@ export default tseslint.config(
     // `apps/normal-*` one above for these files, so it repeats the no-lite rule.)
     files: ['apps/normal-server/**/*.ts'],
     rules: forbid(['@bp/ui-kit', 'react', 'react-dom', '@bp/lite', '@bp/normal-web', '**/apps/**'], '@bp/normal-server may only depend on @bp/core, @bp/server-kit and @bp/http-kit'),
+  },
+  {
+    // The Normal web app is a browser bundle: @bp/core and @bp/ui-kit, and nothing else in the workspace —
+    // no server package, no other app, and no Node built-in, which would not survive the bundle anyway.
+    // (This block replaces the `apps/normal-*` one above for these files, so it repeats the no-lite rule.)
+    files: ['apps/normal-web/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        paths: NODE_BUILTINS.filter((m) => !m.endsWith('*')).map((name) => ({ name, message: WEB_ONLY })),
+        patterns: [
+          // The one relative escape this app is allowed is a *test* reading the server's catalogue JSON
+          // (`apps/normal-web/src/locales/locales.test.ts`): data rather than code, and never in the bundle.
+          // It is spelled relatively, so it matches none of these groups.
+          { group: ['@bp/server-kit', '@bp/http-kit', '@bp/lite', '@bp/normal-server', '**/apps/**'], message: WEB_ONLY },
+          { group: NODE_BUILTINS.filter((m) => m.endsWith('*')), message: WEB_ONLY },
+        ],
+      }],
+    },
+  },
+  {
+    // …except `vite.config.ts` and `vitest.config.ts`, which Node runs rather than the browser.
+    files: ['apps/normal-web/*.config.ts'],
+    rules: { 'no-restricted-imports': 'off' },
   },
 )
