@@ -20,6 +20,7 @@ import type { GameHistoryRepository, HandSummary } from '@bp/server-kit'
 import { desc, eq } from 'drizzle-orm'
 import type { AppDb } from '../db/client.js'
 import { gamePlayers, games } from '../db/schema.js'
+import { clampLimit, isUuid } from './util.js'
 
 /** One recorded hand as it looked from a given player's seat. */
 export interface GameRow {
@@ -40,12 +41,12 @@ export interface GameRow {
 }
 
 export interface NormalGameHistoryRepository extends GameHistoryRepository {
+  /** Newest first. `limit` is clamped to 1…200; anything non-finite falls back to 20. */
   listForPlayer(playerId: string, limit: number): Promise<GameRow[]>
 }
 
+const DEFAULT_HISTORY_LIMIT = 20
 const MAX_HISTORY_LIMIT = 200
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export function createHistoryRepository(db: AppDb): NormalGameHistoryRepository {
   return {
@@ -82,7 +83,7 @@ export function createHistoryRepository(db: AppDb): NormalGameHistoryRepository 
     },
 
     async listForPlayer(playerId, limit) {
-      if (!UUID.test(playerId)) return []
+      if (!isUuid(playerId)) return []
       const rows = await db
         .select({
           handId: games.id,
@@ -103,7 +104,7 @@ export function createHistoryRepository(db: AppDb): NormalGameHistoryRepository 
         .innerJoin(games, eq(games.id, gamePlayers.gameId))
         .where(eq(gamePlayers.playerId, playerId))
         .orderBy(desc(games.startedAt), desc(games.id))
-        .limit(Math.min(Math.max(limit, 1), MAX_HISTORY_LIMIT))
+        .limit(clampLimit(limit, DEFAULT_HISTORY_LIMIT, MAX_HISTORY_LIMIT))
       // `mode` and `best_category` are plain text/integer columns, but `recordHand` is their only
       // writer, so what comes back is what a `GameMode` and a `HandCategory` were on the way in.
       return rows.map((r) => ({

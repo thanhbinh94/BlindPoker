@@ -19,6 +19,7 @@ export type { GameRow, NormalGameHistoryRepository } from './history-repo.js'
 export { createHistoryRepository } from './history-repo.js'
 export type { NormalPlayerRepository, PlayerRow } from './player-repo.js'
 export { createPlayerRepository, DisplayNameTakenError } from './player-repo.js'
+export { clampLimit, cursorOf, isUuid } from './util.js'
 
 export interface NormalRepositories extends Repositories {
   db: AppDb

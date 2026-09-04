@@ -1,6 +1,6 @@
 import { HandCategory } from '@bp/core'
 import type { HandSummary, PublicRoomConfig } from '@bp/server-kit'
-import { asc, sql } from 'drizzle-orm'
+import { asc, eq, sql } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { AppDb } from '../db/client.js'
 import { gamePlayers, games, players, playerStats, users } from '../db/schema.js'
@@ -134,6 +134,27 @@ describe('history.recordHand', () => {
     expect(await db.select().from(playerStats)).toEqual([])
   })
 
+  it('rolls the games row back when a seat fails to insert', async () => {
+    // The other direction from the duplicate-hand test below: there the `games` insert is what
+    // fails, so the seats never run. Here the game lands and the *seats* are refused — two seats
+    // numbered 0 violate `primaryKey(game_id, seat)` — and a `games` row with no seats is a hand
+    // nobody played, which is worse than no row at all.
+    const human = await seedPlayer()
+    await expect(
+      repos.history.recordHand(
+        summary({
+          handId: 'hand-6',
+          players: [
+            { playerId: human, seat: 0, isBot: false, net: 10, won: true, bestCategory: null },
+            { playerId: 'bot-1', seat: 0, isBot: true, net: -10, won: false, bestCategory: null },
+          ],
+        }),
+      ),
+    ).rejects.toThrow()
+    expect(await db.select().from(games).where(eq(games.id, 'hand-6'))).toEqual([])
+    expect(await seatRows()).toEqual([])
+  })
+
   it('refuses to record the same hand twice, leaving the first recording intact', async () => {
     const human = await seedPlayer()
     const s = summary({ handId: 'hand-5', players: [{ playerId: human, seat: 0, isBot: false, net: 5, won: true, bestCategory: null }] })
@@ -173,5 +194,29 @@ describe('history.listForPlayer', () => {
   it('returns nothing for a player with no hands, or an id that is not a uuid', async () => {
     expect(await repos.history.listForPlayer('00000000-0000-4000-8000-000000000000', 10)).toEqual([])
     expect(await repos.history.listForPlayer('bot-1', 10)).toEqual([])
+  })
+
+  it('falls back to the default page rather than sending a non-finite limit to the driver', async () => {
+    const human = await seedPlayer()
+    for (let i = 1; i <= 3; i += 1) {
+      await repos.history.recordHand(
+        summary({ handId: `n${i}`, startedAt: START + i * 1000, players: [{ playerId: human, seat: 0, isBot: false, net: i, won: false, bestCategory: null }] }),
+      )
+    }
+    expect(await repos.history.listForPlayer(human, Number.NaN)).toHaveLength(3)
+    expect(await repos.history.listForPlayer(human, Number.POSITIVE_INFINITY)).toHaveLength(3)
+    expect(await repos.history.listForPlayer(human, 0)).toHaveLength(1)
+    expect(await repos.history.listForPlayer(human, 1.9)).toHaveLength(1)
+  })
+
+  it('round-trips a net above 2^31 as a number', async () => {
+    const human = await seedPlayer()
+    await repos.history.recordHand(
+      summary({ handId: 'big', fee: 3_000_000_000, players: [{ playerId: human, seat: 0, isBot: false, net: 5_000_000_000, won: true, bestCategory: null }] }),
+    )
+    const [row] = await repos.history.listForPlayer(human, 10)
+    expect(row!.net).toBe(5_000_000_000)
+    expect(row!.fee).toBe(3_000_000_000)
+    expect(typeof row!.net).toBe('number')
   })
 })

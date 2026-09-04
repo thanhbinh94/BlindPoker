@@ -23,6 +23,7 @@ import { and, desc, eq, gte, lt, sql } from 'drizzle-orm'
 import type { AppDb, AppTx } from '../db/client.js'
 import { rowsOf } from '../db/client.js'
 import { players, pointTransactions } from '../db/schema.js'
+import { clampLimit, cursorOf, isUuid } from './util.js'
 
 /** A ledger row as stored: `playerId` null means a sink (points that went to no player). */
 export interface LedgerRow {
@@ -60,6 +61,13 @@ export interface LedgerReader {
 
 export interface NormalBalanceRepository extends BalanceRepository {
   /**
+   * Opens a transaction of its own, on its own pooled connection. Never call it from inside another
+   * transaction on the same `db`: the outer transaction may already hold a lock on a `players` row
+   * this one needs, and the two connections would then wait on each other until a timeout. Use
+   * `creditWithin(tx, …)` from inside a transaction — that is what it is for.
+   */
+  apply(entries: BalanceEntry[], meta?: SettlementMeta): Promise<void>
+  /**
    * The whole of `apply`, minus the transaction, so a service that already has one — the daily
    * reward stamping a claim day, relief stamping its cooldown, an achievement granting an item —
    * can credit points and write its own half under a single commit.
@@ -78,16 +86,6 @@ export class UnknownPlayerError extends Error {
 const DEFAULT_LEDGER_LIMIT = 50
 const MAX_LEDGER_LIMIT = 500
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-/**
- * `players.id` is a `uuid`, so a malformed id would come back as a raw `22P02` from the driver —
- * the same failure as "no such player", dressed as a syntax error. Callers get the typed one.
- */
-function isUuid(id: string): boolean {
-  return UUID.test(id)
-}
-
 /** True when there is nothing to write: no entries *and* no fee. */
 function isNoop(entries: BalanceEntry[], meta?: SettlementMeta): boolean {
   return entries.length === 0 && !(meta !== undefined && meta.fee > 0)
@@ -100,10 +98,10 @@ export async function creditWithin(tx: AppTx, entries: BalanceEntry[], meta?: Se
   for (const e of entries) nets.set(e.playerId, (nets.get(e.playerId) ?? 0) + e.delta)
 
   if (nets.size > 0) {
-    const ids = [...nets.keys()].sort()
-    for (const id of ids) {
+    for (const id of nets.keys()) {
       if (!isUuid(id)) throw new UnknownPlayerError(id)
     }
+    const ids = [...nets.keys()].sort()
     // Raw SQL because the lock is the point: the query builder has no `FOR UPDATE` that reads as
     // plainly, and `rowsOf` is what makes one statement work on both `pg` and PGlite.
     const idList = sql.join(
@@ -117,10 +115,15 @@ export async function creditWithin(tx: AppTx, entries: BalanceEntry[], meta?: Se
 
     // Check everyone before moving anyone: `apply` is all-or-nothing, and while the transaction
     // would roll back a partial write anyway, a rejection should not have written to begin with.
-    for (const id of ids) {
+    //
+    // The lock was taken in `id` order — that is what makes two settlements over an overlapping pair
+    // deadlock-free — but the *checking* walks the batch's own order, so that when more than one
+    // player is insolvent the id named on the error is the same one `createMemoryRepositories` would
+    // name. A service or test that pins that id then behaves the same against either implementation.
+    for (const [id, net] of nets) {
       const balance = balances.get(id)
       if (balance === undefined) throw new UnknownPlayerError(id)
-      if (balance + nets.get(id)! < 0) throw new InsufficientBalanceError(id)
+      if (balance + net < 0) throw new InsufficientBalanceError(id)
     }
     for (const [id, net] of nets) {
       if (net !== 0) {
@@ -184,10 +187,11 @@ export function createLedgerReader(db: AppDb): LedgerReader {
   return {
     async list(playerId, opts) {
       if (!isUuid(playerId)) return []
-      const limit = Math.min(Math.max(opts?.limit ?? DEFAULT_LEDGER_LIMIT, 1), MAX_LEDGER_LIMIT)
-      const where = opts?.before === undefined
+      const limit = clampLimit(opts?.limit, DEFAULT_LEDGER_LIMIT, MAX_LEDGER_LIMIT)
+      const before = cursorOf(opts?.before)
+      const where = before === undefined
         ? eq(pointTransactions.playerId, playerId)
-        : and(eq(pointTransactions.playerId, playerId), lt(pointTransactions.id, opts.before))
+        : and(eq(pointTransactions.playerId, playerId), lt(pointTransactions.id, before))
       const rows = await db
         .select({
           id: pointTransactions.id,

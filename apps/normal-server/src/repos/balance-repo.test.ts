@@ -127,6 +127,24 @@ describe('balances.apply', () => {
     expect(await ledgerRows()).toEqual([{ player_id: id, amount: 0, reason: 'settlement', ref_id: 'h3', kind: null }])
   })
 
+  it('round-trips values above 2^31 as numbers', async () => {
+    // `balance`, `amount` and `fee` are `bigint mode: 'number'`, and `pg` hands `int8` back as a
+    // string. Every other value in this file would fit in an `int4`, so this is the test that would
+    // notice the mapping being lost — a string, or a silently truncated number.
+    const id = await seedPlayer(5_000_000_000)
+    await repos.balances.apply([{ playerId: id, delta: -3_000_000_000, reason: 'settlement', refId: 'big' }], { refId: 'big', fee: 4_000_000_000, kind: 'table_fee' })
+
+    const balance = await repos.balances.get(id)
+    expect(balance).toBe(2_000_000_000)
+    expect(typeof balance).toBe('number')
+    const [row] = await repos.ledger.list(id)
+    expect(row!.amount).toBe(-3_000_000_000)
+    expect(await repos.ledger.sums(0)).toEqual([
+      { reason: 'settlement', total: -3_000_000_000 },
+      { reason: 'table_fee', total: 4_000_000_000 },
+    ])
+  })
+
   it('throws UnknownPlayerError rather than silently skipping an id that is not there', async () => {
     const known = await seedPlayer(100)
     const missing = '00000000-0000-4000-8000-000000000000'
@@ -212,6 +230,22 @@ describe('ledger', () => {
   it('returns nothing for a player with no history', async () => {
     expect(await repos.ledger.list('00000000-0000-4000-8000-000000000000')).toEqual([])
     expect(await repos.ledger.list('not-a-uuid')).toEqual([])
+  })
+
+  it('falls back to the default page rather than sending a non-finite limit or cursor to the driver', async () => {
+    // `Number('abc')` is what the query-string layer above produces on a malformed page parameter;
+    // `limit NaN` reaches Postgres as `invalid input syntax for type bigint` — a 500, not a page.
+    const id = await seedPlayer(1000)
+    for (let i = 1; i <= 3; i += 1) await repos.balances.apply([{ playerId: id, delta: i, reason: 'settlement', refId: `h${i}` }])
+
+    expect((await repos.ledger.list(id, { limit: Number.NaN })).map((r) => r.refId)).toEqual(['h3', 'h2', 'h1'])
+    expect((await repos.ledger.list(id, { limit: Number.POSITIVE_INFINITY })).map((r) => r.refId)).toEqual(['h3', 'h2', 'h1'])
+    expect((await repos.ledger.list(id, { limit: 2, before: Number.NaN })).map((r) => r.refId)).toEqual(['h3', 'h2'])
+    expect((await repos.ledger.list(id, { limit: 2, before: Number.POSITIVE_INFINITY })).map((r) => r.refId)).toEqual(['h3', 'h2'])
+    // A fraction is not a `LIMIT` either, and 0 or a negative asks for a page nobody can use.
+    expect(await repos.ledger.list(id, { limit: 1.9 })).toHaveLength(1)
+    expect(await repos.ledger.list(id, { limit: 0 })).toHaveLength(1)
+    expect(await repos.ledger.list(id, { limit: -5 })).toHaveLength(1)
   })
 
   it('sums by reason over a window, sinks included', async () => {

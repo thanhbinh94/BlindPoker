@@ -17,6 +17,7 @@ import { eq } from 'drizzle-orm'
 import type { AppDb } from '../db/client.js'
 import { players } from '../db/schema.js'
 import { UnknownPlayerError } from './balance-repo.js'
+import { isUuid } from './util.js'
 
 /** The whole `players` row, as the profile and cosmetics endpoints want it. */
 export interface PlayerRow {
@@ -34,7 +35,14 @@ export interface PlayerRow {
 
 export interface NormalPlayerRepository extends PlayerRepository {
   findByIdFull(playerId: string): Promise<PlayerRow | null>
-  /** Renames a player, keeping `name_key` in step. Throws `DisplayNameTakenError` on a collision. */
+  /**
+   * Renames a player, keeping `name_key` in step. Throws `DisplayNameTakenError` on a collision.
+   *
+   * Uniqueness is the only rule enforced here, because it is the only one that cannot be decided
+   * before the write. Shape — the 2–20 code-point length, the allowed characters, the edge rule — is
+   * `validateDisplayName`'s job at the HTTP boundary, and a caller that skips it will get the
+   * database's raw `22001` from `varchar(20)` rather than a typed refusal.
+   */
   updateProfile(playerId: string, patch: { displayName?: string }): Promise<void>
   /** Stamps the relief cooldown. The credit itself goes through `balances.creditWithin`. */
   setLastRelief(playerId: string, at: Date): Promise<void>
@@ -49,28 +57,29 @@ export class DisplayNameTakenError extends Error {
 
 const NAME_KEY_CONSTRAINT = 'players_name_key_unique'
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-function isUuid(id: string): boolean {
-  return UUID.test(id)
-}
-
 /**
  * Drizzle wraps the driver's error in a `Failed query: …` of its own, so the SQLSTATE and the
  * constraint name are one or two `cause` links down — and the two drivers word the message
  * differently. Walking the chain for `23505` plus the constraint name is what both agree on.
+ *
+ * Every link is inspected rather than just the outermost: a wrapper that happened to carry a `code`
+ * of its own (a Node `ERR_*`, say) would otherwise mask the driver's `23505` and turn a name
+ * collision into a 500. And where the driver names the constraint outright, that name decides —
+ * drizzle's message embeds the query's *parameters*, so a player who tried to call themselves
+ * `players_name_key_unique` must not be able to talk the message scan into agreeing.
  */
 function isUniqueViolation(err: unknown, constraint: string): boolean {
-  let code: string | undefined
+  let unique = false
+  let named: boolean | undefined
   const messages: string[] = []
   for (let e: unknown = err; e instanceof Error; e = (e as { cause?: unknown }).cause) {
-    messages.push(e.message)
-    const c = (e as { code?: unknown }).code
-    if (typeof c === 'string') code ??= c
+    if ((e as { code?: unknown }).code === '23505') unique = true
     const name = (e as { constraint?: unknown }).constraint
-    if (typeof name === 'string') messages.push(name)
+    if (typeof name === 'string') named ??= name === constraint
+    messages.push(e.message)
   }
-  return code === '23505' && messages.some((m) => m.includes(constraint))
+  if (!unique) return false
+  return named ?? messages.some((m) => m.includes(constraint))
 }
 
 const COLUMNS = {
