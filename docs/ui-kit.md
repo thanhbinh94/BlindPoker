@@ -313,14 +313,14 @@ plus `@bp/core`'s engine and bot, which only the harness needs). Re-measured aft
 | Bundle | Raw (informational) | Gzip (**budgeted**) |
 | --- | --- | --- |
 | Playground JS (kit + React + i18next + core engine + bots) | 296.2 kB | **95.9 kB** of ≤ 250 kB |
-| Playground CSS (all of the kit's styles) | 41.1 kB | **9.3 kB** of ≤ 40 kB |
+| Playground CSS (all of the kit's styles) | 41.2 kB | **9.4 kB** of ≤ 40 kB |
 | Kit only (barrel + React + i18next, no engine) | 277.3 kB | 90.1 kB |
 
 Both packages declare `sideEffects` so a bundler may drop what an app does not import: `false` for `@bp/core`, and
 `["**/*.css"]` for `@bp/ui-kit`, whose stylesheet imports are the one thing that must survive tree-shaking.
 
-The kit's stylesheets are 56.8 kB of CSS source (comments and formatting included), which minifies to the 41.1 kB
-shipped above and compresses to 9.3 kB on the wire. The source figure is informational only: it is not held to a
+The kit's stylesheets are 56.8 kB of CSS source (comments and formatting included), which minifies to the 41.2 kB
+shipped above and compresses to 9.4 kB on the wire. The source figure is informational only: it is not held to a
 budget, and an earlier raw-size ceiling has been retired in favour of the gzip numbers.
 
 `src/index.ts` exports only ui-kit modules, and the kit imports just types and small helpers

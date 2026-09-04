@@ -680,6 +680,21 @@
   --card-w: clamp(18px, 5.2vw, 24px);
 }
 
+/* The turn ring is meant to sit over the avatar disc, not over the name beside it: `Seat` asks for a 38 px ring,
+   which is taller than a compact plate, so the chip sizes it down to the disc it belongs to. (The size arrives as
+   an inline custom property, so this has to set the box directly rather than re-declare `--ring`.) */
+.othersChip .timer {
+  left: 4px;
+  width: 28px;
+  height: 28px;
+}
+
+.othersChip .timerText {
+  bottom: -5px;
+  padding: 0 4px;
+  font-size: 0.5625rem;
+}
+
 /* The badge row and the bet chip stay — a folded or all-in seat must say so in words, not in hue alone — they just
    stop claiming a full line each. */
 .othersChip .tags {
