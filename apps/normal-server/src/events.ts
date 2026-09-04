@@ -31,11 +31,14 @@ import type { StatMetric } from './stats/player-stats.js'
  * `DAILY_CLAIMED` carries the day and streak so `stats` never has to re-read the row the economy
  * service just wrote; `STATS_UPDATED` names the metrics that were written so `achievements` can
  * consider a handful of definitions instead of all thirty-two.
+ *
+ * There is deliberately no `LOGIN` event. A "login day" is the daily check-in (§10.3 ruling), not a
+ * sign-in, so nothing subscribed to one — and an event with no subscriber is wiring that looks like
+ * a contract. `auth-service` still takes an optional `onLogin` hook; `app.ts` passes none.
  */
 export type AppEvent =
   | DomainEvent
   | { type: 'DAILY_CLAIMED'; playerId: string; day: number; streak: number }
-  | { type: 'LOGIN'; playerId: string; at: number }
   | { type: 'STATS_UPDATED'; playerId: string; changedMetrics: StatMetric[] }
 
 export type AppEventHandler = (e: AppEvent) => Promise<void> | void

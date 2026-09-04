@@ -13,6 +13,7 @@ import { createJsonLogger, readDotenv } from '@bp/http-kit'
 import { loadConfig } from './config.js'
 import { createPgDb } from './db/client.js'
 import { runMigrations } from './db/migrate.js'
+import { describeError } from './db/pg-errors.js'
 
 async function main(): Promise<void> {
   const config = loadConfig({ ...readDotenv('.env'), ...process.env })
@@ -32,7 +33,9 @@ async function main(): Promise<void> {
 main().then(
   () => process.exit(0),
   (err: unknown) => {
-    console.error(err instanceof Error ? err.message : String(err))
+    // The same rendering as `main.ts`: an unreachable database arrives as an `AggregateError` whose
+    // own message is empty, and this process is exactly the one an operator reads the logs of.
+    console.error(describeError(err))
     process.exit(1)
   },
 )

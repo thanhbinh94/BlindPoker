@@ -18,6 +18,7 @@ import { buildApp } from './app.js'
 import { loadConfig } from './config.js'
 import { createPgDb } from './db/client.js'
 import { runMigrations } from './db/migrate.js'
+import { describeError } from './db/pg-errors.js'
 
 /** Past this a stop stops being graceful: the process exits non-zero rather than hanging a deploy. */
 const SHUTDOWN_BUDGET_MS = 15_000
@@ -111,7 +112,9 @@ async function main(): Promise<void> {
 
 main().catch((err: unknown) => {
   // No logger yet on the configuration path, and a configuration error is a wall of text an operator
-  // has to read — so it goes to stderr as it is, not wrapped in a JSON line.
-  console.error(err instanceof Error ? err.message : String(err))
+  // has to read — so it goes to stderr as it is, not wrapped in a JSON line. `describeError` is what
+  // makes the *other* early failure readable: `pg` throws an `AggregateError` with an empty message
+  // when no address of the host answers, and printing `err.message` alone printed nothing at all.
+  console.error(describeError(err))
   process.exit(1)
 })

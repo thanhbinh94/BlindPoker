@@ -22,7 +22,14 @@ export function isLoopbackAddress(address: string | undefined): boolean {
   return addr === '::1' || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(addr)
 }
 
-/** Constant-time comparison that does not leak the expected length through an early return. */
+/**
+ * Constant-time comparison of two secrets *of the same length*.
+ *
+ * The length check is an early return, so a mismatched length is distinguishable from a mismatched
+ * value — which is conventional and fine here: `timingSafeEqual` throws on unequal lengths, and the
+ * length of a fixed-format token (32 random bytes, hex) is not the secret. What must not leak is
+ * *where* two equal-length values first differ, and that is what this prevents.
+ */
 export function secretEquals(given: string, expected: string): boolean {
   const a = Buffer.from(given, 'utf8')
   const b = Buffer.from(expected, 'utf8')

@@ -16,14 +16,17 @@ import { join } from 'node:path'
 import type { AddressInfo } from 'node:net'
 import { ECONOMY, type RoomConfig } from '@bp/core'
 import { assetSourceFromDir, DEFAULT_CSP } from '@bp/http-kit'
+import type { Logger } from '@bp/server-kit'
 import { TestClient } from '@bp/server-kit/testing'
 import { sql } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { FONTS_FILE_HOST, FONTS_STYLESHEET_HOST, normalCsp } from './app.js'
+import { FONTS_FILE_HOST, FONTS_STYLESHEET_HOST, logSettlementFailure, normalCsp, SESSION_SWEEP_INTERVAL_MS, UPGRADE_RATE_LIMIT } from './app.js'
+import { CONFIG_DEFAULTS } from './config.js'
 import { rowsOf, type AppDb } from './db/client.js'
+import { sessions as sessionsTable, users } from './db/schema.js'
 import { createTestDb, type TestDb } from './db/test-db.js'
 import { HEALTH_PING_TIMEOUT_MS, READ_RATE_LIMIT, WRITE_IP_RATE_LIMIT, WRITE_RATE_LIMIT } from './http/routes.js'
-import { buildTestApp, ORIGIN, resetDb, XRW, type Harness, type HarnessOptions } from './test-harness.js'
+import { buildTestApp, ORIGIN, resetDb, START, XRW, type Harness, type HarnessOptions } from './test-harness.js'
 
 /**
  * Two humans, no bots, no decisions: the shortest hand this engine can play. Everything after the
@@ -96,20 +99,45 @@ afterEach(async () => {
 })
 
 describe('GET /health', () => {
-  it('reports the edition, the version and a reachable database', async () => {
+  /**
+   * The body is Lite's, plus `edition` and `version`, so one monitoring check serves both editions
+   * (`apps/lite/server/src/http/routes.ts`). Asserted exactly rather than loosely: a key quietly
+   * renamed here is a check that silently stops meaning anything over there.
+   */
+  it('answers the Lite-shaped body, plus the edition and version', async () => {
     const h = await harness()
     const res = await h.app.fastify.inject('/health')
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual({ ok: true, edition: 'normal', version: expect.any(String), db: 'ok', uptimeSec: expect.any(Number) })
+    expect(res.json()).toEqual({
+      status: 'ok',
+      uptime: expect.any(Number),
+      connections: 0,
+      rooms: 0,
+      db: 'ok',
+      edition: 'normal',
+      version: expect.any(String),
+    })
     expect(res.headers['cache-control']).toBe('no-store')
   })
 
-  it('answers 503 with db: down when the pool cannot be reached', async () => {
+  it('answers 503 with db: error when the pool cannot be reached', async () => {
     const h = await harness()
     h.setDbUp(false)
     const res = await h.app.fastify.inject('/health')
     expect(res.statusCode).toBe(503)
-    expect(res.json()).toMatchObject({ ok: false, db: 'down' })
+    expect(res.json()).toMatchObject({ status: 'degraded', db: 'error' })
+  })
+
+  it('counts the live sockets and rooms the way Lite does', async () => {
+    const h = await harness()
+    const me = await h.register()
+    const base = await listen(h)
+    await connect(base, { cookie: me.cookie })
+
+    await vi.waitFor(async () => {
+      const body = (await h.app.fastify.inject('/health')).json() as { connections: number; rooms: number }
+      expect(body).toMatchObject({ connections: 1, rooms: 0 })
+    })
   })
 
   /**
@@ -124,7 +152,7 @@ describe('GET /health', () => {
     const startedAt = Date.now()
     const res = await h.app.fastify.inject('/health')
     expect(res.statusCode).toBe(503)
-    expect(res.json()).toMatchObject({ ok: false, db: 'down' })
+    expect(res.json()).toMatchObject({ status: 'degraded', db: 'error' })
     expect(Date.now() - startedAt).toBeLessThan(HEALTH_PING_TIMEOUT_MS * 3)
   })
 
@@ -133,7 +161,7 @@ describe('GET /health', () => {
     h.setDbProbe(() => Promise.reject(new Error('ECONNREFUSED')))
     const res = await h.app.fastify.inject('/health')
     expect(res.statusCode).toBe(503)
-    expect(res.json()).toMatchObject({ ok: false, db: 'down' })
+    expect(res.json()).toMatchObject({ status: 'degraded', db: 'error' })
   })
 })
 
@@ -318,6 +346,159 @@ describe('rate limits', () => {
   })
 })
 
+/**
+ * The regression for the blocker: with the deployment's own trust setting, an injected
+ * `X-Forwarded-For` must not buy a caller a fresh rate-limit bucket.
+ *
+ * `TRUST_PROXY=true` used to compile to "trust every hop", which made `req.ip` the *left-most*
+ * `X-Forwarded-For` entry — the one the client wrote, because Caddy appends rather than replaces —
+ * so every IP-keyed limiter in this edition (registration, login, the address bucket that exists
+ * precisely to stop a caller rotating its cookie) was bypassed by varying one header per request.
+ * `loadConfig` now refuses `true`; Compose sets `uniquelocal`, which is what is exercised here.
+ */
+describe('trusted proxies', () => {
+  const DEPLOYED = { config: { trustProxy: 'uniquelocal' }, readRateLimit: { limit: 1, windowMs: 60_000 } }
+  /** Every `ip` the app logged, in order — `warn('rate limited', { ip })` is `req.ip` verbatim. */
+  function ipRecorder(): { log: Logger; ips: string[] } {
+    const ips: string[] = []
+    const note = (_msg: string, data?: object): void => {
+      const ip = (data as { ip?: unknown } | undefined)?.ip
+      if (typeof ip === 'string') ips.push(ip)
+    }
+    return { ips, log: { debug: () => {}, info: () => {}, warn: note, error: note } }
+  }
+
+  it('ignores a spoofed X-Forwarded-For from an address that is not a trusted proxy', async () => {
+    const { log, ips } = ipRecorder()
+    const h = await harness({ ...DEPLOYED, log })
+    const get = (xff: string) =>
+      h.app.fastify.inject({ url: '/api/config', remoteAddress: '203.0.113.9', headers: { 'x-forwarded-for': xff } })
+
+    expect((await get('1.2.3.4')).statusCode).toBe(200)
+    // A different header, and — before the fix — a brand-new bucket. It is the same caller.
+    expect((await get('5.6.7.8')).statusCode).toBe(429)
+    expect((await get('9.9.9.9')).statusCode).toBe(429)
+    // …and `req.ip`, as the limiter saw it, was the socket peer every time.
+    expect(ips).toEqual(['203.0.113.9', '203.0.113.9'])
+  })
+
+  it('reads the forwarded address when the proxy really is one of the trusted hops', async () => {
+    const { log, ips } = ipRecorder()
+    const h = await harness({ ...DEPLOYED, log })
+    // 10.0.0.5 is inside `uniquelocal`: this is Caddy on the Compose bridge network.
+    const get = (xff: string) =>
+      h.app.fastify.inject({ url: '/api/config', remoteAddress: '10.0.0.5', headers: { 'x-forwarded-for': xff } })
+
+    // Two different real clients behind the one proxy: each gets its own bucket, as it must.
+    expect((await get('198.51.100.1')).statusCode).toBe(200)
+    expect((await get('198.51.100.2')).statusCode).toBe(200)
+    expect((await get('198.51.100.1')).statusCode).toBe(429)
+    expect(ips).toEqual(['198.51.100.1'])
+  })
+
+  it('ignores the header entirely when nothing is trusted, which is the default', async () => {
+    const h = await harness({ readRateLimit: { limit: 1, windowMs: 60_000 } })
+    expect(CONFIG_DEFAULTS.trustProxy).toBe(false)
+    const get = (xff: string) => h.app.fastify.inject({ url: '/api/config', remoteAddress: '203.0.113.9', headers: { 'x-forwarded-for': xff } })
+    expect((await get('1.2.3.4')).statusCode).toBe(200)
+    expect((await get('5.6.7.8')).statusCode).toBe(429)
+  })
+})
+
+describe('logSettlementFailure', () => {
+  const summary = {
+    handId: 'h-42', roomId: 'room-7', mode: 'holdem' as const, startedAt: 0, endedAt: 1, fee: 150, cancelled: false, players: [],
+    config: { name: 'Bàn 1', mode: 'holdem' as const, maxPlayers: 6, isPrivate: false, hasPassword: false, turnTimerSec: 30, autoStart: true },
+  }
+
+  it('raises an error line for a hand that was recorded but never paid', () => {
+    const lines: { msg: string; data?: object }[] = []
+    const log: Logger = { debug: () => {}, info: () => {}, warn: () => {}, error: (msg, data) => lines.push({ msg, ...(data === undefined ? {} : { data }) }) }
+
+    logSettlementFailure(log, { type: 'HAND_SETTLED', summary: { ...summary, settlementError: 'pool timeout' } })
+    expect(lines).toEqual([{ msg: 'hand settlement failed', data: { handId: 'h-42', roomId: 'room-7', fee: 150, err: 'pool timeout' } }])
+
+    // A hand that settled, and an event that is not a settlement, say nothing.
+    logSettlementFailure(log, { type: 'HAND_SETTLED', summary })
+    logSettlementFailure(log, { type: 'ROOM_JOINED', roomId: 'room-7', playerId: 'p1' })
+    expect(lines).toHaveLength(1)
+  })
+})
+
+/**
+ * The upgrade was the one internet-facing entry point nothing metered. Every refused one still cost
+ * a `sessions` primary-key lookup on a pool of ten connections, so an unauthenticated flood turned
+ * into sustained database work; and a signed-in caller could open sockets without bound.
+ */
+describe('websocket upgrade metering', () => {
+  it('refuses past the limit with a 429 before it ever looks a session up', async () => {
+    let lookups = 0
+    const h = await harness({ upgradeRateLimit: { limit: 2, windowMs: 60_000 } })
+    const me = await h.register()
+    const base = await listen(h)
+    // Counted through the service the resolver calls: a metered refusal must not reach it.
+    const real = h.app.services.auth.identityForToken.bind(h.app.services.auth)
+    h.app.services.auth.identityForToken = async (token) => {
+      lookups += 1
+      return real(token)
+    }
+
+    await connect(base, { cookie: me.cookie })
+    await connect(base, { cookie: me.cookie })
+    await expect(connect(base, { cookie: me.cookie })).rejects.toThrow('unexpected response 429')
+    expect(lookups).toBe(2)
+  })
+
+  it('answers 503 once it is holding as many connections as it is configured for', async () => {
+    const h = await harness({ config: { maxConnections: 1 } })
+    const me = await h.register()
+    const base = await listen(h)
+
+    const first = await connect(base, { cookie: me.cookie })
+    await first.next('WELCOME')
+    await expect(connect(base, { cookie: me.cookie })).rejects.toThrow('unexpected response 503')
+  })
+
+  it('meters thirty upgrades a minute per address by default', () => {
+    expect(UPGRADE_RATE_LIMIT).toEqual({ limit: 30, windowMs: 60_000 })
+  })
+})
+
+/**
+ * `session-service` deletes an expired row only when its token is presented, which never happens for
+ * a player who does not come back — so without this their rows sit in the table for the life of the
+ * database. The interval is injectable purely so the test does not wait an hour.
+ */
+describe('the expired-session sweep', () => {
+  it('deletes rows past their expiry and leaves the live ones alone', async () => {
+    const h = await harness({ sessionSweepIntervalMs: 5 })
+    const me = await h.register()
+    await db.insert(sessionsTable).values({
+      id: 'dead-session-of-a-player-who-never-came-back',
+      userId: (await db.select({ id: users.id }).from(users))[0]!.id,
+      expiresAt: new Date(START - 1),
+      createdAt: new Date(START - 100),
+      lastSeenAt: new Date(START - 100),
+    })
+    expect(await db.select({ id: sessionsTable.id }).from(sessionsTable)).toHaveLength(2)
+
+    await vi.waitFor(async () => {
+      expect(await db.select({ id: sessionsTable.id }).from(sessionsTable)).toHaveLength(1)
+    })
+    // The live session still resolves: the sweep is about expiry, not about signing anyone out.
+    expect((await h.app.fastify.inject({ url: '/api/auth/me', headers: { cookie: me.cookie } })).statusCode).toBe(200)
+  })
+
+  it('stops sweeping once the app is closed', async () => {
+    const h = await harness({ sessionSweepIntervalMs: 5 })
+    await h.app.close()
+    live.length = 0
+    // Nothing to assert but the absence of a timer holding the process open or writing to a closed
+    // pool; the run itself is the assertion, and `SESSION_SWEEP_INTERVAL_MS` is the production value.
+    expect(SESSION_SWEEP_INTERVAL_MS).toBe(3_600_000)
+  })
+})
+
 describe('the websocket, authenticated by the session cookie', () => {
   it('binds the player at the upgrade — no HELLO, no token in a query string', async () => {
     const h = await harness()
@@ -452,7 +633,7 @@ describe('a real boot', () => {
 
     const health = await fetch(`${base}/health`)
     expect(health.status).toBe(200)
-    expect(await health.json()).toMatchObject({ ok: true, edition: 'normal', db: 'ok' })
+    expect(await health.json()).toMatchObject({ status: 'ok', edition: 'normal', db: 'ok' })
 
     const config = await fetch(`${base}/api/config`)
     expect(config.status).toBe(200)
@@ -507,7 +688,7 @@ describe('a real boot', () => {
     })
 
     // Nobody holds this promise, exactly as `onDomainEvent` publishes it.
-    void h.app.services.bus.publish({ type: 'LOGIN', playerId: 'p1', at: 1 })
+    void h.app.services.bus.publish({ type: 'DAILY_CLAIMED', playerId: 'p1', day: 1, streak: 1 })
     const closed = h.app.close().then(() => {
       // Read inside the continuation: the assertion is about ordering, not about a later poll.
       expect(landed).toBe(true)

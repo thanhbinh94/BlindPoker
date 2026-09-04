@@ -13,6 +13,9 @@
  *
  * **Bots have no counters.** They have no `players` row at all, so they are skipped as subjects —
  * but their presence at the table is what `bot_hands` counts, which is a fact about the humans.
+ *
+ * **A hand nobody was paid for is not a hand played.** A cancelled hand moves no counter, and
+ * neither does one whose settlement failed (`summary.settlementError`) — see `onHandSettled`.
  */
 import type { HandSummary } from '@bp/server-kit'
 import { eq, sql } from 'drizzle-orm'
@@ -133,7 +136,14 @@ export function createStatsService(deps: StatsServiceDeps): StatsService {
   async function onHandSettled(summary: HandSummary): Promise<void> {
     // A cancelled hand is stored for an operator to look at, but nobody played it to a conclusion:
     // it is not a game completed, a hand played, or a streak broken.
-    if (summary.cancelled) return
+    //
+    // A hand whose settlement *failed* is the same thing for the same reason: `balances.apply`
+    // threw, so no point moved, and counting it would move `hands_won_*`, `biggest_win` and the
+    // streaks for a hand nobody was paid for — and an achievement evaluated on those counters can
+    // then pay a real, ledgered credit (`big_win_500k` is 30,000 points) for a win the ledger says
+    // never happened. A hand nobody was paid for is not a hand played. The row is still in `games`
+    // with its `settlement_error`, and `app.ts` logs it, so the operator reconciles from there.
+    if (summary.cancelled || summary.settlementError !== undefined) return
     for (const seat of summary.players) {
       if (seat.isBot) continue
       await apply(seat.playerId, patchForHand(summary, seat))

@@ -14,7 +14,7 @@ function recorder(): { log: Logger; errors: { msg: string; data?: object }[] } {
   return { log, errors }
 }
 
-const LOGIN: AppEvent = { type: 'LOGIN', playerId: 'p1', at: 1 }
+const CLAIMED: AppEvent = { type: 'DAILY_CLAIMED', playerId: 'p1', day: 1, streak: 1 }
 
 const tick = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
 
@@ -33,7 +33,7 @@ describe('createEventBus', () => {
       order.push('second')
     })
 
-    await bus.publish(LOGIN)
+    await bus.publish(CLAIMED)
 
     // The second subscriber does not start until the first has finished — which is what lets the
     // achievement module read counters the stats module wrote for the same event.
@@ -50,7 +50,7 @@ describe('createEventBus', () => {
       done = true
     })
 
-    await bus.publish(LOGIN)
+    await bus.publish(CLAIMED)
     expect(done).toBe(true)
   })
 
@@ -69,10 +69,10 @@ describe('createEventBus', () => {
       ran.push('third')
     })
 
-    await expect(bus.publish(LOGIN)).resolves.toBeUndefined()
+    await expect(bus.publish(CLAIMED)).resolves.toBeUndefined()
     expect(ran).toEqual(['third'])
     expect(errors).toHaveLength(2)
-    expect(errors[0]).toMatchObject({ msg: 'event subscriber failed', data: { event: 'LOGIN', error: 'boom' } })
+    expect(errors[0]).toMatchObject({ msg: 'event subscriber failed', data: { event: 'DAILY_CLAIMED', error: 'boom' } })
     expect(errors[1]!.data).toMatchObject({ error: 'async boom' })
   })
 
@@ -84,10 +84,10 @@ describe('createEventBus', () => {
       seen.push(e)
     })
 
-    await bus.publish(LOGIN)
+    await bus.publish(CLAIMED)
     off()
     off()
-    await bus.publish(LOGIN)
+    await bus.publish(CLAIMED)
 
     expect(seen).toHaveLength(1)
   })
@@ -104,7 +104,7 @@ describe('createEventBus', () => {
 
     // `void bus.publish(e)` is exactly what the room path does: the game loop must not wait for
     // bookkeeping, so nothing holds this promise. `idle()` is the only handle shutdown has on it.
-    void bus.publish(LOGIN)
+    void bus.publish(CLAIMED)
     expect(done).toBe(false)
 
     await bus.idle()
@@ -120,14 +120,14 @@ describe('createEventBus', () => {
     // `STATS_UPDATED` of its own. A single snapshot of the in-flight set would miss the second one.
     bus.subscribe(async (e) => {
       seen.push(e.type)
-      if (e.type !== 'LOGIN') return
+      if (e.type !== 'DAILY_CLAIMED') return
       await tick()
       void bus.publish({ type: 'STATS_UPDATED', playerId: 'p1', changedMetrics: ['totalLoginDays'] })
     })
 
-    void bus.publish(LOGIN)
+    void bus.publish(CLAIMED)
     await bus.idle()
-    expect(seen).toEqual(['LOGIN', 'STATS_UPDATED'])
+    expect(seen).toEqual(['DAILY_CLAIMED', 'STATS_UPDATED'])
   })
 
   it('idle() resolves immediately when nothing is running', async () => {
@@ -152,11 +152,11 @@ describe('createEventBus', () => {
       ran.push('last')
     })
 
-    await bus.publish(LOGIN)
+    await bus.publish(CLAIMED)
     expect(ran).toEqual(['middle', 'last'])
 
     ran.length = 0
-    await bus.publish(LOGIN)
+    await bus.publish(CLAIMED)
     expect(ran).toEqual(['middle'])
   })
 })

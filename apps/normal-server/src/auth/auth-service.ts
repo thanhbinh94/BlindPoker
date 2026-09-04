@@ -108,8 +108,12 @@ export interface AuthServiceDeps {
    */
   argon2Params?: Argon2Params
   /**
-   * Called after a successful sign-in. Task 5 publishes `{ type: 'LOGIN' }` on the bus from here —
-   * a hook rather than a bus dependency, so authentication does not have to know the bus exists.
+   * Called after a successful sign-in. A hook rather than a bus dependency, so authentication does
+   * not have to know the bus exists.
+   *
+   * Nothing wires it today: the progression layer counts a "login day" from the daily check-in
+   * (§10.3 ruling), not from a sign-in, so publishing an event here would have no subscriber. It
+   * stays optional for whatever wants the fact later — a "your devices" list, a security e-mail.
    */
   onLogin?: (playerId: string, at: number) => void
 }

@@ -10,6 +10,7 @@
  * `loadConfig` reports *every* problem at once. An operator filling in a fresh `.env` should learn
  * about all of the missing variables in one run, not one per restart.
  */
+import { isTrustProxyEntry, TRUST_PROXY_FORMS, trustProxyEntries, type TrustProxy } from './trust-proxy.js'
 
 export interface NormalConfig {
   port: number
@@ -22,7 +23,13 @@ export interface NormalConfig {
   reconnectWindowSec: number
   publicDir: string | null
   cookieSecure: boolean
-  trustProxy: boolean
+  /**
+   * Who may set `X-Forwarded-*`: `false`, or the spec string handed to Fastify's `trustProxy`
+   * verbatim. Never `true` — see `trust-proxy.ts` for why that is refused rather than defaulted.
+   */
+  trustProxy: TrustProxy
+  /** Live WebSocket connections this process accepts before answering an upgrade with 503 (§24). */
+  maxConnections: number
 }
 
 /** The optional half of the configuration: what you get when you set nothing but the required vars. */
@@ -34,7 +41,8 @@ export const CONFIG_DEFAULTS = {
   reconnectWindowSec: 90,
   publicDir: null,
   cookieSecure: true,
-  trustProxy: false,
+  trustProxy: false as TrustProxy,
+  maxConnections: 1_000,
 } satisfies Omit<NormalConfig, 'databaseUrl' | 'sessionSecret' | 'allowedOrigins'>
 
 /** A session secret shorter than this is not a secret, it is a formality. */
@@ -99,9 +107,27 @@ export function loadConfig(env: Record<string, string | undefined>): NormalConfi
     return fallback
   }
 
+  /**
+   * `DATABASE_URL`, parsed rather than pattern-matched.
+   *
+   * The scheme check this replaces was satisfied by a URL `pg` then refused to construct: a
+   * deployment whose `POSTGRES_PASSWORD` contains a `/` (which `openssl rand -base64` emits about
+   * two times in five) builds `postgres://postgres:ab/cd@db:5432/bind_poker`, where the `/`
+   * terminates the authority and the whole thing is invalid. `migrate` then exited non-zero with
+   * the single line `Invalid URL` — no variable named, no hint that the password was at fault. The
+   * URL is never echoed back: it carries the password.
+   */
   const databaseUrl = required('DATABASE_URL', 'postgres://user:password@host:5432/database')
-  if (databaseUrl && !/^postgres(ql)?:\/\//.test(databaseUrl)) {
-    problems.push(`DATABASE_URL must be a postgres:// or postgresql:// URL, got ${databaseUrl}`)
+  if (databaseUrl) {
+    let parsed: URL | null = null
+    try {
+      parsed = new URL(databaseUrl)
+    } catch {
+      problems.push('DATABASE_URL is not a valid URL — if the password contains / ? # @ it must be percent-encoded (or generate one with `openssl rand -hex 24`)')
+    }
+    if (parsed !== null && parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') {
+      problems.push(`DATABASE_URL must be a postgres:// or postgresql:// URL, got scheme ${parsed.protocol}`)
+    }
   }
 
   const sessionSecret = required('SESSION_SECRET', `at least ${MIN_SESSION_SECRET_LENGTH} random characters`)
@@ -130,7 +156,31 @@ export function loadConfig(env: Record<string, string | undefined>): NormalConfi
   // Spec §22.5: how long a disconnected seated player is held before the table folds for them.
   const reconnectWindowSec = integer('RECONNECT_WINDOW_SEC', CONFIG_DEFAULTS.reconnectWindowSec, 0, 3600)
   const cookieSecure = flag('COOKIE_SECURE', CONFIG_DEFAULTS.cookieSecure)
-  const trustProxy = flag('TRUST_PROXY', CONFIG_DEFAULTS.trustProxy)
+  const maxConnections = integer('MAX_CONNECTIONS', CONFIG_DEFAULTS.maxConnections, 1, 1_000_000)
+
+  /**
+   * `TRUST_PROXY` is a trust *specification*, and `true` is refused outright.
+   *
+   * `true` compiles to "trust every hop", which makes `req.ip` the left-most `X-Forwarded-For`
+   * entry — a value the client writes — and voids every IP-keyed rate limit here. There is no
+   * topology in which it is the right answer, so it is an error with the safe forms named rather
+   * than a value that quietly works until someone tries it.
+   */
+  const trustProxyRaw = trimmed('TRUST_PROXY')
+  let trustProxy: TrustProxy = CONFIG_DEFAULTS.trustProxy
+  if (trustProxyRaw !== undefined) {
+    const lower = trustProxyRaw.toLowerCase()
+    if (TRUE.has(lower)) {
+      problems.push(`TRUST_PROXY must name the hops to trust, not "${trustProxyRaw}": trusting every hop makes X-Forwarded-For client-controlled and voids every rate limit. Accepted: ${TRUST_PROXY_FORMS}`)
+    } else if (FALSE.has(lower)) {
+      trustProxy = false
+    } else {
+      const entries = trustProxyEntries(trustProxyRaw)
+      const bad = entries.filter((e) => !isTrustProxyEntry(e))
+      if (entries.length === 0 || bad.length > 0) problems.push(`TRUST_PROXY has unrecognised ${bad.length === 1 ? 'entry' : 'entries'} ${bad.join(', ')} — accepted: ${TRUST_PROXY_FORMS}`)
+      else trustProxy = entries.join(',')
+    }
+  }
 
   if (problems.length > 0) {
     throw new Error(`Invalid configuration:\n${problems.map((p) => `  - ${p}`).join('\n')}`)
@@ -148,5 +198,6 @@ export function loadConfig(env: Record<string, string | undefined>): NormalConfi
     publicDir: trimmed('PUBLIC_DIR') ?? CONFIG_DEFAULTS.publicDir,
     cookieSecure,
     trustProxy,
+    maxConnections,
   }
 }

@@ -71,7 +71,19 @@ export interface Harness {
 
 export interface HarnessOptions
   extends Partial<
-    Pick<AppDeps, 'assets' | 'roomOptions' | 'gatewayOptions' | 'rng' | 'writeRateLimit' | 'readRateLimit' | 'writeIpRateLimit'>
+    Pick<
+      AppDeps,
+      | 'assets'
+      | 'roomOptions'
+      | 'gatewayOptions'
+      | 'rng'
+      | 'writeRateLimit'
+      | 'readRateLimit'
+      | 'writeIpRateLimit'
+      | 'upgradeRateLimit'
+      | 'sessionSweepIntervalMs'
+      | 'log'
+    >
   > {
   config?: Partial<NormalConfig>
 }
@@ -99,7 +111,7 @@ export async function buildTestApp(db: AppDb, opts: HarnessOptions = {}): Promis
     // Counted, not closed: the PGlite handle is shared by the whole file, and the suite closes it.
     closeDb: async () => { closeDbCalls += 1 },
     pingDb: () => probe(),
-    log: silentLogger,
+    log: opts.log ?? silentLogger,
     now: () => nowMs,
     argon2Params: CHEAP_ARGON2,
     assets: opts.assets === undefined ? null : opts.assets,
@@ -111,6 +123,8 @@ export async function buildTestApp(db: AppDb, opts: HarnessOptions = {}): Promis
     ...(opts.writeRateLimit ? { writeRateLimit: opts.writeRateLimit } : {}),
     ...(opts.readRateLimit ? { readRateLimit: opts.readRateLimit } : {}),
     ...(opts.writeIpRateLimit ? { writeIpRateLimit: opts.writeIpRateLimit } : {}),
+    ...(opts.upgradeRateLimit ? { upgradeRateLimit: opts.upgradeRateLimit } : {}),
+    ...(opts.sessionSweepIntervalMs === undefined ? {} : { sessionSweepIntervalMs: opts.sessionSweepIntervalMs }),
   })
 
   const harness: Harness = {

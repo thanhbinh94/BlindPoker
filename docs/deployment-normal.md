@@ -39,12 +39,19 @@ Ba giá trị trong `.env` không có mặc định và bắt buộc phải đi�
 ```bash
 DOMAIN=poker.example.com
 
-# openssl rand -base64 24
+# openssl rand -hex 24
 POSTGRES_PASSWORD=…
 
 # openssl rand -base64 48
 SESSION_SECRET=…
 ```
+
+**`POSTGRES_PASSWORD` phải dùng bảng chữ cái an toàn cho URL.** Compose dựng `DATABASE_URL` bằng
+cách nội suy giá trị này vào `postgres://postgres:<pw>@db:5432/bind_poker`, và một dấu `/` trong mật
+khẩu sẽ **kết thúc phần authority** của URL — URL thành không hợp lệ và `migrate` từ chối khởi động.
+`openssl rand -base64 24` sinh ra `/` khoảng hai lần trên năm ở độ dài đó; `-hex` thì không bao giờ.
+Nếu bạn tự mang mật khẩu riêng thì phải percent-encode `/ ? # @`. `SESSION_SECRET` không nằm trong
+URL nào, nên `-base64 48` vẫn đúng cho nó.
 
 Giá trị mẫu trong `.env.example` là `CHANGE_ME` — cố tình ngắn hơn 32 ký tự, nên nếu quên dòng
 `SESSION_SECRET` thì server **dừng** kèm lý do thay vì chạy tiếp với một khoá ký phiên được công bố
@@ -83,6 +90,41 @@ Vì vậy hãy coi lần triển khai đầu là một lần chạy thử có gi
 có sự cố thì đọc log **theo đúng thứ tự khởi động** — `docker compose logs migrate` trước, rồi
 `app`, rồi `caddy`. Mục 10 liệt kê các triệu chứng thường gặp.
 
+### ⚠️ Pre-flight bắt buộc: chạy test suite một lần trên PostgreSQL **thật**
+
+Cùng một loại thành thật với cảnh báo bên trên, và cần làm **trước** lần deploy đầu.
+
+Toàn bộ test database của `@bp/normal-server` chạy trên **PGlite** — chính Postgres biên dịch sang
+WebAssembly, trong cùng tiến trình. Nhưng PGlite chỉ có **một kết nối**: hai transaction "đồng thời"
+ở đó không bao giờ thật sự chồng lên nhau, nên `SELECT … FOR UPDATE` — thứ mà **toàn bộ thiết kế
+tiền** dựa vào — không chứng minh được điều gì cả. Các test về serialize (`balance-repo.test.ts`
+chọn `Promise.all` hay chạy nối đuôi đúng theo điều kiện này, và một case trong
+`economy-service.test.ts` là `it.skip` nếu thiếu) **chỉ thực thi khi có `TEST_DATABASE_URL`**. Không
+có CI trong repository này. Vậy nên: hãy tự chạy nó một lần và lưu lại output.
+
+```bash
+cd /srv/bind-poker
+
+# 1. Dựng riêng service `db` (cần deploy/normal/.env cho POSTGRES_PASSWORD).
+docker compose -f deploy/normal/docker-compose.yml up -d db
+
+# 2. `db` không publish cổng nào ra host, nên mở tạm một cổng cho lần chạy này:
+docker compose -f deploy/normal/docker-compose.yml run --rm -d --publish 5432:5432 --name bp-preflight-db db
+#    …hoặc đơn giản là một container dùng một lần:
+#    docker run --rm -d -p 5432:5432 -e POSTGRES_PASSWORD=preflight --name bp-preflight-db postgres:16-alpine
+
+# 3. Chạy toàn bộ suite trên đó. `createTestDb()` tạo `bp_test_<random>` mỗi lần rồi tự drop.
+TEST_DATABASE_URL=postgres://postgres:preflight@localhost:5432/postgres   pnpm --filter @bp/normal-server test
+
+# 4. Dọn.
+docker rm -f bp-preflight-db
+```
+
+Phải **0 test bị skip** và tất cả pass. Nếu có gì hỏng ở đây mà không hỏng trên PGlite thì đó chính
+là một khác biệt Postgres-thật/PGlite (kiểu `numeric` trả về dạng chuỗi, vị trí SQLSTATE và tên
+constraint, cách quy hoạch `LockRows`) — và nó phải được sửa **trước** khi có tiền thật của người
+chơi đi qua.
+
 ```bash
 docker compose up -d --build
 docker compose ps
@@ -98,8 +140,12 @@ khởi động do compose ép chứ không do canh giờ:
 
 ```bash
 curl -fsS https://$DOMAIN/health
-# {"ok":true,"edition":"normal","version":"0.1.0","db":"ok","uptimeSec":…}
+# {"status":"ok","uptime":…,"connections":0,"rooms":0,"db":"ok","edition":"normal","version":"0.1.0"}
 ```
+
+Body này **trùng khoá với `/health` của Lite** (`status`, `uptime`, `connections`, `rooms`, `db`),
+chỉ thêm `edition` và `version` — nên một check giám sát duy nhất dùng được cho cả hai edition. Khi
+database không trả lời: `503` với `status:"degraded"` và `db:"error"`.
 
 Endpoint đó trả `503` khi tiến trình còn sống nhưng database không trả lời — đúng công dụng của nó,
 và cũng là thứ `HEALTHCHECK` của container dùng.
@@ -118,7 +164,7 @@ sau nhiều lần thử hỏng. Sửa nguyên nhân rồi `docker compose restar
 | --- | --- | --- | --- | --- |
 | `db` | `postgres:16-alpine` | không | `unless-stopped` | Volume `pgdata`. Healthcheck có nêu tên database (`-d bind_poker`) để một server còn đang initdb không bị coi là healthy. |
 | `migrate` | build tại chỗ | không | `no` | Áp migration rồi thoát. Hỏng ở đây thì `app` không khởi động — đó là chủ ý. `HEALTHCHECK` bị tắt vì container này không nghe cổng 8080. |
-| `app` | build tại chỗ | không (8080 nội bộ) | `unless-stopped` | `AUTO_MIGRATE=false`, `TRUST_PROXY=true`, `COOKIE_SECURE=true`. |
+| `app` | build tại chỗ | không (8080 nội bộ) | `unless-stopped` | `AUTO_MIGRATE=false`, `TRUST_PROXY=uniquelocal`, `COOKIE_SECURE=true`. |
 | `caddy` | `caddy:2-alpine` | 80, 443, 443/udp | `unless-stopped` | Volume `caddy_data` (tài khoản ACME + chứng chỉ) và `caddy_config`. |
 
 **Vì sao `migrate` là một service riêng chứ không phải một bước trong entrypoint của `app`.** `app`
@@ -140,13 +186,14 @@ một giá trị sai không bao giờ bị âm thầm thay bằng mặc định.
 
 | Biến | Ai đặt | Mặc định | Ý nghĩa |
 | --- | --- | --- | --- |
-| `DATABASE_URL` | compose, suy từ `POSTGRES_PASSWORD` | bắt buộc | `postgres://` hoặc `postgresql://`. Scheme được kiểm lúc khởi động. |
+| `DATABASE_URL` | compose, suy từ `POSTGRES_PASSWORD` | bắt buộc | `postgres://` hoặc `postgresql://`. Được **parse bằng `new URL()`** lúc khởi động, nên một mật khẩu chứa `/ ? # @` chưa percent-encode sẽ dừng server kèm tên biến thay vì để driver ném `Invalid URL`. |
 | `SESSION_SECRET` | `.env` | bắt buộc | Khoá HMAC sinh ra id phiên; tối thiểu 32 ký tự. **Đổi nó là đăng xuất tất cả.** Không bao giờ xuất hiện trong log. |
 | `ALLOWED_ORIGINS` | compose, suy từ `DOMAIN` | bắt buộc | Danh sách origin tuyệt đối ngăn cách bằng dấu phẩy (`https://host[:port]`, không path, không dấu `/` cuối). WebSocket upgrade từ nơi khác bị từ chối. |
 | `PORT` / `HOST` | — | `8080` / `0.0.0.0` | Bên trong container. Đổi thì phải đổi cả Caddyfile. |
 | `AUTO_MIGRATE` | compose | `true` | Ở đây là `false`: `migrate` giữ việc đó. Giá trị không nhận ra làm process dừng chứ không lấy mặc định. |
 | `COOKIE_SECURE` | compose | `true` | Gắn `Secure` vào cookie phiên. Chỉ đặt `false` cho người dev chạy `http://localhost`. |
-| `TRUST_PROXY` | compose | `false` | Ở đây là `true`, vì Caddy đặt `X-Forwarded-*`. Xem mục 9. |
+| `TRUST_PROXY` | compose | `false` | Ở đây là `uniquelocal`: Caddy tới app qua mạng bridge của Compose, một địa chỉ RFC1918. Đây là **danh sách hop được tin**, không phải bật/tắt — `true` bị từ chối lúc khởi động. Xem mục 9. |
+| `MAX_CONNECTIONS` | — | `1000` | Số socket WebSocket sống đồng thời (mục tiêu §24 của spec); vượt qua thì upgrade nhận `503`. |
 | `ECONOMY_TIMEZONE` | `.env` | `Asia/Ho_Chi_Minh` | Múi giờ IANA quyết định mốc "ngày mới" của thưởng hằng ngày. |
 | `LOG_LEVEL` | `.env` | `info` | `debug` \| `info` \| `warn` \| `error`. |
 | `RECONNECT_WINDOW_SEC` | — | `90` | Cửa sổ kết nối lại cho người đang ngồi ghế trước khi bàn tự fold hộ (0–3600). |
@@ -186,7 +233,23 @@ select reason, count(*), sum(amount) from point_transactions group by reason ord
 
 -- Bậc rút ngẫu nhiên của thưởng hằng ngày cạn item tới mức nào.
 select count(*) from point_transactions where reason = 'daily_item_fallback';
+
+-- Những ván ĐÃ GHI NHƯNG CHƯA TRẢ: `balances.apply` ném lỗi (pool cạn, statement timeout,
+-- database mất một nhịp) nên không có điểm nào chạy. Bình thường bảng này rỗng.
+select id, room_id, mode, fee, settlement_error, ended_at
+  from games where settlement_error is not null order by ended_at desc;
 ```
+
+Nếu truy vấn cuối trả về dòng nào, log của app cũng có một dòng `"hand settlement failed"` kèm
+`handId` cho đúng ván đó. Không có gì tự sửa hộ:
+
+- Ván **Hold'em** — chip đã nằm trên bàn nên số dư người chơi vẫn đúng; thứ bị mất là dòng sink
+  `table_fee`, tức là `Σ balances + Σ sinks` (spec §18.4) đã lệch đúng bằng `fee`. Bù lại bằng tay
+  bằng một dòng `point_transactions` sink (`player_id null`, `amount = fee`, `reason = kind =
+  'table_fee'`, `ref_id = games.id`).
+- Ván **Blind** — không ai được trả và cũng không ai bị trừ: ván đó coi như không diễn ra. Bộ đếm
+  cũng không nhúc nhích (`stats-service` bỏ qua ván có `settlement_error` đúng như bỏ qua ván bị
+  huỷ), nên không có thành tựu nào được mua bằng một lần ghi hỏng.
 
 ---
 
@@ -272,12 +335,29 @@ docker compose up -d    # tạo lại app và migrate với DATABASE_URL mới
 
 - **Chỉ HTTPS.** Cookie phiên là `HttpOnly; Secure; SameSite=Lax`, và `COOKIE_SECURE=true` nghĩa là
   trình duyệt sẽ không gửi nó qua HTTP thuần. Không có cấu hình HTTP nào chạy được.
-- **`TRUST_PROXY=true` chỉ đúng khi đứng sau Caddy.** Nó làm server tin `X-Forwarded-For`. Nếu có
-  thứ gì chạm được tới app **vòng qua** proxy thì bất kỳ ai cũng tự chọn được địa chỉ mà rate limit
-  đang đếm theo, và chọn một cái mới cho mỗi request. Đó là lý do `app` không publish cổng nào —
-  đừng thêm vào "để debug".
+- **`TRUST_PROXY` là danh sách hop được tin, không phải một công tắc.** Ở stack này giá trị đúng là
+  `uniquelocal` — Caddy tới app qua mạng bridge của Compose, một địa chỉ RFC1918 — và server chỉ đọc
+  `X-Forwarded-For` khi *peer của socket* nằm trong danh sách đó. Các giá trị được chấp nhận: `false`
+  (mặc định), `loopback`, `linklocal`, `uniquelocal`, hoặc danh sách địa chỉ/CIDR ngăn cách bằng dấu
+  phẩy.
+
+  **`TRUST_PROXY=true` bị từ chối lúc khởi động, và đó là chủ ý.** Nó nghĩa là "tin mọi hop", nên
+  `req.ip` trở thành phần tử **trái nhất** của `X-Forwarded-For`. Caddy *nối thêm* địa chỉ thật vào
+  cuối header nó nhận được chứ **không thay thế**, nên một request đi **xuyên qua** proxy mà mang sẵn
+  `X-Forwarded-For: 1.2.3.4` sẽ được đọc là `1.2.3.4`. Khi đó mọi rate limit theo IP ở đây — 10 đăng
+  ký/phút, 5 đăng nhập/phút/IP+email, rổ 120/phút/địa chỉ, 240/phút đọc, 30 upgrade WebSocket/phút —
+  bị vô hiệu chỉ bằng cách đổi một header mỗi request. Đây là mối nguy **qua** proxy, không chỉ khi
+  vòng qua nó. (`TRUST_PROXY=1` cũng không phải lời giải: Fastify ≥ 5.12 làm một số hop *fail closed*,
+  dồn mọi client vào đúng địa chỉ của Caddy để một người dùng hết rổ của tất cả.)
+
+  Vẫn nên giữ `app` không publish cổng nào — đừng thêm vào "để debug".
+- **HSTS.** Caddyfile đặt `Strict-Transport-Security: max-age=31536000; includeSubDomains`. Caddy 2
+  không tự thêm header này như v1, và nó không thuộc `@bp/http-kit` (Lite chạy http thuần trên LAN).
+- **WebSocket upgrade có rổ riêng.** 30 upgrade/phút/địa chỉ, tính **trước** khi tra session — mỗi
+  upgrade bị từ chối trước đây vẫn tốn một lượt tra `sessions` trên pool 10 kết nối — cộng trần
+  `MAX_CONNECTIONS` (mặc định 1000) trả `503` khi đầy.
 - **Rate limit là per-instance và nằm trong RAM.** 10 lần đăng ký/phút/IP, 5 lần đăng nhập/phút/IP+email,
-  `/api/*` mutating 60/phút/phiên **và** 120/phút/địa chỉ, đọc 240/phút/IP. Chúng bảo vệ tiến trình
+  `/api/*` mutating 60/phút/phiên **và** 120/phút/địa chỉ, đọc 240/phút/IP, WebSocket upgrade 30/phút/địa chỉ. Chúng bảo vệ tiến trình
   chứ không bảo vệ tài khoản: nhiều replica thì mỗi bản có bộ đếm riêng. Chặn brute-force mật khẩu
   chủ yếu là nhờ argon2id (m=64 MiB, t=3, p=1) chứ không phải mấy con số này.
 - **Secret nằm trong `.env` và không ở đâu khác.** `chmod 600 .env`. Cả `DATABASE_URL` lẫn
@@ -299,7 +379,10 @@ docker compose up -d    # tạo lại app và migrate với DATABASE_URL mới
 | `app` dừng với `SESSION_SECRET must be at least 32 characters, got 9` | Bạn đã copy `.env.example` mà quên đổi `CHANGE_ME`. Đúng như thiết kế — sinh một khoá thật (mục 2). |
 | `migrate` thoát khác 0, `app` không bao giờ khởi động | `docker compose logs migrate`. Thường là sai mật khẩu (`password authentication failed`) hoặc một migration xung đột với dữ liệu đã có. Việc `app` nằm im là đúng — một server chạy trên schema áp dở còn tệ hơn. |
 | `app` in `Invalid configuration:` rồi thoát | Danh sách bên dưới nêu **mọi** lỗi cùng lúc. Sửa hết rồi `docker compose up -d`. |
-| App đã lên, `/health` trả `"db":"down"` | Pool không tới được `db`. Kiểm `docker compose ps db` và log của nó; app tự phục hồi khi database trả lời lại. |
+| App đã lên, `/health` trả `"db":"error"` | Pool không tới được `db`. Kiểm `docker compose ps db` và log của nó; app tự phục hồi khi database trả lời lại. |
+| `app` hoặc `migrate` dừng với `DATABASE_URL is not a valid URL` | `POSTGRES_PASSWORD` chứa ký tự `/ ? # @`. Sinh lại bằng `openssl rand -hex 24` rồi làm theo mục 8 (đổi mật khẩu ở **cả hai** nơi). |
+| `app` dừng với `TRUST_PROXY must name the hops to trust` | Ai đó đặt `TRUST_PROXY=true`. Xem mục 9 — với stack này giá trị đúng là `uniquelocal`. |
+| Client bị `429` khi mở WebSocket | 30 upgrade/phút/địa chỉ. Một tab reload liên tục, hoặc `TRUST_PROXY` sai nên mọi người bị gộp vào địa chỉ của Caddy. |
 | Caddy trả `502 Bad Gateway` | `app` không nghe. `docker compose logs app` — hỏng lúc boot, hoặc vẫn đang khởi động. |
 | Chứng chỉ mãi không có | Xem mục 2. DNS, cổng 80, hoặc rate limit ACME. |
 | WebSocket kết nối rồi đóng ngay | `ALLOWED_ORIGINS` không chứa origin mà trang được phục vụ từ đó. Nó suy ra từ `DOMAIN`; trình duyệt ở `https://www.example.com` cần đúng origin đó trong danh sách. |

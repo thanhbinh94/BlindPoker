@@ -18,7 +18,7 @@
  */
 import { createHash } from 'node:crypto'
 import { createRateLimiter, HttpError, type RateLimiter } from '@bp/http-kit'
-import type { Logger } from '@bp/server-kit'
+import type { GameServer, Logger } from '@bp/server-kit'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import type { AchievementService } from '../achievements/achievement-service.js'
 import type { AchievementDef } from '../achievements/definitions.js'
@@ -54,9 +54,11 @@ export interface RouteDeps {
   catalog: ItemCatalog
   defs: AchievementDef[]
   log: Logger
+  /** Live socket and room counts for `/health` — the same two numbers Lite's probe reports. */
+  game: Pick<GameServer, 'connectionCount'> & { rooms: { size: number } }
   /** This package's version, for `/health`. */
   version: string
-  /** `false` answers `/health` with a 503 and `db: 'down'`. */
+  /** `false` answers `/health` with a 503 and `db: 'error'`. */
   pingDb: () => Promise<boolean>
   now?: () => number
   /** Lowered by tests that need to reach a limit without sending sixty real requests. */
@@ -78,7 +80,7 @@ export const READ_RATE_LIMIT = { limit: 240, windowMs: 60_000 }
  */
 export const WRITE_IP_RATE_LIMIT = { limit: 120, windowMs: 60_000 }
 
-/** How long `/health` waits for the database probe before answering `db: 'down'` on its own. */
+/** How long `/health` waits for the database probe before answering `db: 'error'` on its own. */
 export const HEALTH_PING_TIMEOUT_MS = 2_000
 
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
@@ -126,8 +128,14 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
   })
 
   /**
-   * The probe (spec §19.2). A 503 with `db: 'down'` rather than a throw: an orchestrator reads the
-   * status, and a health endpoint that 500s tells it nothing about *what* is unhealthy.
+   * The probe (spec §19.1/§19.2). A 503 with `db: 'error'` rather than a throw: an orchestrator
+   * reads the status, and a health endpoint that 500s tells it nothing about *what* is unhealthy.
+   *
+   * **The body is Lite's, plus `edition` and `version`.** `status`, `uptime`, `connections`, `rooms`
+   * and `db` are the same keys with the same meanings in both editions, so one monitoring check
+   * serves a Lite box on a LAN and this stack behind Caddy. (`status` reads `degraded` rather than
+   * Lite's `error` because the process answering is by definition not down; a monitor keys on the
+   * status code or on `db`, which are identical.)
    *
    * The probe is raced against its own deadline, because the one failure this endpoint exists for —
    * a pool with every client checked out, or a server that accepted the connection and went quiet —
@@ -138,11 +146,13 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     const expiry = new Promise<false>((resolve) => setTimeout(() => resolve(false), HEALTH_PING_TIMEOUT_MS).unref())
     const ok = await Promise.race([deps.pingDb().catch(() => false), expiry])
     return reply.code(ok ? 200 : 503).send({
-      ok,
+      status: ok ? 'ok' : 'degraded',
+      uptime: Math.max(0, Math.round((now() - startedAt) / 1000)),
+      connections: deps.game.connectionCount,
+      rooms: deps.game.rooms.size,
+      db: ok ? 'ok' : 'error',
       edition: 'normal',
       version: deps.version,
-      db: ok ? 'ok' : 'down',
-      uptimeSec: Math.max(0, Math.round((now() - startedAt) / 1000)),
     })
   })
 

@@ -619,7 +619,7 @@ Prefix `/api`. JSON. Lỗi: `{ error: { code, message } }`. Mutating request yê
 ### 19.1 Chung
 | Method | Path | Mô tả |
 |---|---|---|
-| GET | `/health` | `{ status, uptime, db: ok }` (Normal kiểm tra DB) |
+| GET | `/health` | `{ status, uptime, connections, rooms, db }` — cùng một shape ở cả hai edition; Normal thêm `edition`/`version` và thật sự ping DB |
 | GET | `/api/config` | Tham số công khai: bậc cược, giới hạn phòng, edition, ngôn ngữ hỗ trợ |
 
 ### 19.2 Normal
@@ -629,7 +629,7 @@ Auth = cookie phiên `bp_session` (`HttpOnly`, `SameSite=Lax`, `Secure` khi `COO
 
 | Method | Path | Auth | Thành công | Từ chối |
 |---|---|---|---|---|
-| GET | `/health` | — | `200 {ok:true, edition:"normal", version, db:"ok", uptimeSec}` | `503` cùng shape với `ok:false, db:"down"` |
+| GET | `/health` | — | `200 {status:"ok", uptime, connections, rooms, db:"ok", edition:"normal", version}` | `503` cùng shape với `status:"degraded", db:"error"` |
 | GET | `/api/config` | — | `200 {edition:"normal", wsPath:"/ws", economy{startingBalance, blindWagerTiers, holdemBlindTiers, reliefThreshold, reliefTarget}, languages:["vi","en"], reconnectWindowSec}` | `429 RATE_LIMITED` |
 | GET | `/api/catalog/items` | — | `200 {items: ItemDef[]}` | `429` |
 | GET | `/api/catalog/achievements` | — | `200 {achievements:[{id, category, metric, threshold, reward}]}` | `429` |
@@ -653,7 +653,8 @@ Auth = cookie phiên `bp_session` (`HttpOnly`, `SameSite=Lax`, `Secure` khi `COO
 
 - Thân lỗi và quy ước header giống hệt §19.3 (`{ error: { code, message } }`, trường phụ nằm **cạnh** `error`), chỉ khác CSP: Normal thêm `https://fonts.googleapis.com` vào `style-src` và `font-src 'self' https://fonts.gstatic.com`.
 - Rate-limit: `/api/*` mutating phải qua **hai** rổ — 60/phút theo phiên (key = SHA-256 của cookie, không giữ token sống trong bộ nhớ) **và** 120/phút theo địa chỉ, vì người gửi mỗi request một giá trị `bp_session` mới sẽ tự sinh một rổ phiên mới mỗi lần và không bao giờ bị chặn. Đọc 240/phút theo IP. Chỉ `POST /api/auth/register` và `POST /api/auth/login` được miễn (chúng có limiter riêng, chặt hơn nhiều); `/health` và static không tính. `429` kèm header `Retry-After` và `retryAfterSec`.
-- `/health` không chờ vô hạn: `ping()` đua với deadline của chính nó và handler đua lại lần nữa, nên một probe không bao giờ trả lời thành `db:"down"` sau 2 giây chứ không thành một request treo.
+- `/health` không chờ vô hạn: `ping()` đua với deadline của chính nó và handler đua lại lần nữa, nên một probe không bao giờ treo — quá 2 giây là trả `db:"error"`.
+- Body của `/health` là **body của Lite** (§19.1) cộng thêm `edition` và `version`, để một check giám sát duy nhất dùng được cho cả hai edition. `status` là `"degraded"` (Lite ghi `"error"`) vì tiến trình trả lời thì theo định nghĩa là chưa chết; thứ một monitor nên đọc là mã trạng thái hoặc `db`, và hai thứ đó giống hệt nhau ở cả hai edition.
 - `PATCH /api/me` **không** đổi tên trên bàn đang chơi: RoomActor giữ định danh nhận lúc bind, tên mới xuất hiện ở lần vào phòng kế tiếp.
 - Upgrade WebSocket `/ws` xác thực bằng chính cookie đó; thiếu/sai → HTTP `401` ngay ở bước upgrade (không phải close code), `Origin` phải nằm trong `ALLOWED_ORIGINS`.
 
@@ -820,6 +821,7 @@ Server-kit không import gì từ apps. Normal thêm route REST và module riên
 | `LITE_HAND_LOG` | — | `false` (`1`/`true`/`yes` để bật) |
 | `COOKIE_SECURE` | `true` | — (Lite không dùng cookie) |
 | `TRUST_PROXY` | `false` | — |
+| `MAX_CONNECTIONS` | 1.000 (§24) | — |
 | `AUTO_MIGRATE` | `true` | — |
 | `PUBLIC_DIR` | *(trống)* → chỉ API, log một cảnh báo | *(trống)* — thư mục giao diện thay bản nhúng trong exe |
 
@@ -828,7 +830,8 @@ Chi tiết bốn biến chỉ Normal có:
 | Biến | Mặc định | Ý nghĩa |
 |---|---|---|
 | `COOKIE_SECURE` | `true` | Gắn `Secure` vào cookie phiên. Đặt `false` **chỉ** cho người dev chạy `http://localhost`; đặt `false` trên môi trường thật là gửi cookie phiên qua HTTP thuần |
-| `TRUST_PROXY` | `false` | Tin `X-Forwarded-*` để lấy địa chỉ client. Bật **chỉ khi** có proxy do chính bạn kiểm soát đứng trước (Caddy trong §28.1); bật mà không có gì đứng trước thì bất kỳ ai cũng tự chọn được địa chỉ mà rate-limit đang đếm theo |
+| `TRUST_PROXY` | `false` | **Danh sách hop được tin**, không phải bật/tắt: `false`, một trong `loopback` / `linklocal` / `uniquelocal`, hoặc danh sách địa chỉ/CIDR ngăn cách bằng dấu phẩy (`10.0.0.0/8,192.168.1.7`). Chuỗi này được đưa thẳng cho `trustProxy` của Fastify (Fastify tự tách dấu phẩy rồi compile bằng `proxy-addr`). **`TRUST_PROXY=true` bị `loadConfig` TỪ CHỐI**: nó nghĩa là "tin mọi hop", nên `req.ip` thành phần tử **trái nhất** của `X-Forwarded-For` — thứ do client tự ghi, vì proxy *nối thêm* chứ không thay thế — và mọi rate-limit theo IP (đăng ký, đăng nhập, rổ theo địa chỉ ở §19.2) bị vô hiệu chỉ bằng cách đổi một header mỗi request. Số hop cũng không phải lời giải: Fastify ≥ 5.12 làm một giá trị số **fail closed**, dồn mọi client vào đúng địa chỉ của proxy. Compose §28.1 đặt `uniquelocal` (Caddy nằm trên mạng bridge, địa chỉ RFC1918) |
+| `MAX_CONNECTIONS` | `1000` | Số kết nối WebSocket sống đồng thời tiến trình này nhận (mục tiêu §24); vượt qua thì upgrade bị trả `503`. Đi kèm là rổ 30 upgrade/phút/địa chỉ, tính **trước** khi tra session — mỗi upgrade bị từ chối trước đây vẫn tốn một lượt tra `sessions` trên pool 10 kết nối |
 | `AUTO_MIGRATE` | `true` | Chạy migration ngay lúc boot. Đặt `false` khi có job riêng (`node dist/migrate-cli.js`) áp migration — đúng thứ mà nhiều replica cần, và là cấu hình của compose §28.1. Giá trị không nhận ra thì **dừng**, không âm thầm lấy mặc định |
 | `PUBLIC_DIR` | *(trống)* | Thư mục bundle web để phục vụ ở `/`. Trống = chạy thuần API. Plan 6 (`normal-web`) là thứ đổ file vào đây |
 
@@ -925,11 +928,11 @@ Người chơi (tên, stack, avatar/chữ cái, badge/title ở Normal), lá ri�
   |---|---|---|
   | `db` | `postgres:16-alpine` | `POSTGRES_DB=bind_poker`, volume `pgdata`, healthcheck `pg_isready -U postgres -d bind_poker` (có `-d`: trong lúc initdb server đã nhận kết nối nhưng database ứng dụng chưa tồn tại) |
   | `migrate` | image của app | `command: node dist/migrate-cli.js`, `depends_on: db (service_healthy)`, `restart: "no"` — job restart khi lỗi là job giấu lỗi |
-  | `app` | image của app | `depends_on: migrate (service_completed_successfully)`, `AUTO_MIGRATE=false`, `TRUST_PROXY=true`, `COOKIE_SECURE=true`, `restart: unless-stopped`, **không publish port nào ra host** |
+  | `app` | image của app | `depends_on: migrate (service_completed_successfully)`, `AUTO_MIGRATE=false`, `TRUST_PROXY=uniquelocal`, `COOKIE_SECURE=true`, `restart: unless-stopped`, **không publish port nào ra host** |
   | `caddy` | `caddy:2-alpine` | Port 80/443 (+443/udp), `Caddyfile` mount read-only, volume `caddy_data` (khóa ACME + chứng chỉ) và `caddy_config`, `depends_on: app` |
 
   `migrate` là service riêng chứ không phải một bước trong entrypoint của `app`: với `restart: unless-stopped`, migration chạy lúc boot sẽ chạy lại ở mỗi vòng crash-loop và ở mỗi replica thêm vào sau này. Migration vẫn idempotent (drizzle ghi bảng `drizzle.__drizzle_migrations`), nhưng thứ tự "db healthy → migrate xong → app khởi động" là thứ compose bảo đảm được còn entrypoint thì không.
-- **Caddyfile**: `{$DOMAIN} { encode gzip; reverse_proxy app:8080 }`. Đặt tên site bằng hostname là đủ để bật HTTPS tự động (Let's Encrypt + tự gia hạn + redirect 80→443). WebSocket không cần cấu hình gì thêm — `reverse_proxy` chuyển tiếp `Connection`/`Upgrade` sẵn — và chính nó đặt `X-Forwarded-*` mà `TRUST_PROXY=true` tin.
+- **Caddyfile**: `{$DOMAIN} { encode gzip; header Strict-Transport-Security "max-age=31536000; includeSubDomains"; reverse_proxy app:8080 }`. Đặt tên site bằng hostname là đủ để bật HTTPS tự động (Let's Encrypt + tự gia hạn + redirect 80→443). Caddy 2 **không** tự thêm HSTS như v1, nên nó là một dòng ở đây (không thuộc `http-kit`: Lite chạy http thuần trên LAN). WebSocket không cần cấu hình gì thêm — `reverse_proxy` chuyển tiếp `Connection`/`Upgrade` sẵn — và chính nó **nối thêm** vào `X-Forwarded-For`, thứ mà `TRUST_PROXY=uniquelocal` tin đúng một hop.
 - **`.env`** (mẫu `deploy/normal/.env.example`): `DOMAIN`, `POSTGRES_PASSWORD`, `SESSION_SECRET` bắt buộc (compose dùng `${VAR:?…}` nên thiếu là dừng ngay lúc `docker compose config`, không phải lúc container chạy); `ECONOMY_TIMEZONE`, `LOG_LEVEL` tùy chọn. `DATABASE_URL` và `ALLOWED_ORIGINS` **được suy ra** trong compose (`postgres://postgres:${POSTGRES_PASSWORD}@db:5432/bind_poker`, `https://${DOMAIN}`) để không có hai chỗ khai cùng một sự thật.
 - **Health**: `GET /health` trả `503` khi database không trả lời, nên `HEALTHCHECK` là kiểm tra phụ thuộc thật chứ không chỉ "tiến trình còn sống".
 - **Backup**: `deploy/normal/backup.sh` — `docker compose exec -T db pg_dump -U postgres -Fc bind_poker`, cron hằng ngày, giữ 14 ngày, từ chối giữ file rỗng. Restore: `deploy/normal/restore.md` (`pg_restore --clean --if-exists --no-owner`, **dừng `app` trước**, chạy `migrate` sau khi restore nếu image đã mới hơn bản dump). `SESSION_SECRET` không nằm trong dump — chuyển host phải mang nó theo, nếu không mọi phiên mất hiệu lực.

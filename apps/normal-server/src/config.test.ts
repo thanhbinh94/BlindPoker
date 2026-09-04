@@ -23,7 +23,8 @@ describe('loadConfig', () => {
       RECONNECT_WINDOW_SEC: '0',
       PUBLIC_DIR: '/srv/web',
       COOKIE_SECURE: 'false',
-      TRUST_PROXY: '1',
+      TRUST_PROXY: 'uniquelocal',
+      MAX_CONNECTIONS: '250',
       ALLOWED_ORIGINS: 'https://a.example.com, http://localhost:5173',
     })
     expect(c).toEqual({
@@ -37,7 +38,8 @@ describe('loadConfig', () => {
       reconnectWindowSec: 0,
       publicDir: '/srv/web',
       cookieSecure: false,
-      trustProxy: true,
+      trustProxy: 'uniquelocal',
+      maxConnections: 250,
     })
   })
 
@@ -78,6 +80,71 @@ describe('loadConfig', () => {
   it('rejects a database URL that is not postgres', () => {
     expect(() => loadConfig({ ...VALID, DATABASE_URL: 'mysql://localhost/bp' })).toThrow(/DATABASE_URL must be a postgres/)
     expect(loadConfig({ ...VALID, DATABASE_URL: 'postgresql://localhost/bp' }).databaseUrl).toBe('postgresql://localhost/bp')
+  })
+
+  /**
+   * The failure the guide used to walk two operators in five straight into: `openssl rand -base64 24`
+   * emits `/` about 40 % of the time at that length, the `/` ends the URL's authority section, and
+   * `pg` threw `Invalid URL` from inside the driver — no variable named, nothing pointing at the
+   * password. The check is `new URL()` now, so the failure is named beside every other one at start-up.
+   */
+  it('rejects a DATABASE_URL that is not a valid URL, and names the password as the likely cause', () => {
+    const message = (() => {
+      try {
+        loadConfig({ ...VALID, DATABASE_URL: 'postgres://postgres:ab/cd@db:5432/bind_poker' })
+        return ''
+      } catch (err) {
+        return (err as Error).message
+      }
+    })()
+    expect(message).toMatch(/DATABASE_URL is not a valid URL/)
+    expect(message).toMatch(/percent-encoded/)
+    // The URL carries the password, so it is never echoed back into the message.
+    expect(message).not.toContain('ab/cd')
+
+    // A password that only *looks* dangerous is fine: `@` and `+` parse, and `pg` reads the userinfo.
+    expect(loadConfig({ ...VALID, DATABASE_URL: 'postgres://postgres:a%2Fb+c@db:5432/bind_poker' }).databaseUrl).toContain('a%2Fb')
+  })
+
+  describe('TRUST_PROXY', () => {
+    /**
+     * The blocker this whole shape exists for: `true` compiles to "trust every hop" in Fastify, so
+     * `req.ip` becomes the client-written left-most `X-Forwarded-For` entry and every IP-keyed rate
+     * limit is bypassed by varying one header. It is refused with the safe forms named rather than
+     * silently accepted.
+     */
+    it('refuses a bare true, and says what to write instead', () => {
+      for (const raw of ['true', 'TRUE', '1', 'yes', 'on']) {
+        const message = (() => {
+          try {
+            loadConfig({ ...VALID, TRUST_PROXY: raw })
+            return ''
+          } catch (err) {
+            return (err as Error).message
+          }
+        })()
+        expect(message, raw).toMatch(/TRUST_PROXY must name the hops to trust/)
+        for (const form of ['uniquelocal', 'loopback', 'linklocal', 'comma-separated']) expect(message, `${raw} → ${form}`).toContain(form)
+      }
+    })
+
+    it('accepts false, the named ranges, and a comma-separated list of addresses and CIDRs', () => {
+      expect(loadConfig({ ...VALID }).trustProxy).toBe(false)
+      for (const raw of ['false', '0', 'no', 'off']) expect(loadConfig({ ...VALID, TRUST_PROXY: raw }).trustProxy, raw).toBe(false)
+      for (const name of ['uniquelocal', 'loopback', 'linklocal']) expect(loadConfig({ ...VALID, TRUST_PROXY: name }).trustProxy, name).toBe(name)
+      // Normalised to what Fastify's `proxy-addr` compile step expects: trimmed, comma-joined.
+      expect(loadConfig({ ...VALID, TRUST_PROXY: '10.0.0.0/8, 192.168.1.7 ,::1' }).trustProxy).toBe('10.0.0.0/8,192.168.1.7,::1')
+      expect(loadConfig({ ...VALID, TRUST_PROXY: 'loopback,172.16.0.0/12' }).trustProxy).toBe('loopback,172.16.0.0/12')
+      expect(loadConfig({ ...VALID, TRUST_PROXY: 'fc00::/7' }).trustProxy).toBe('fc00::/7')
+    })
+
+    it('names the entries it did not understand', () => {
+      expect(() => loadConfig({ ...VALID, TRUST_PROXY: 'uniquelocal,not-an-ip' })).toThrow(/not-an-ip/)
+      expect(() => loadConfig({ ...VALID, TRUST_PROXY: '10.0.0.0/33' })).toThrow(/TRUST_PROXY has unrecognised/)
+      expect(() => loadConfig({ ...VALID, TRUST_PROXY: 'localhost' })).toThrow(/TRUST_PROXY has unrecognised/)
+      // A hop count is not the fix either — Fastify ≥ 5.12 makes a number fail closed.
+      expect(() => loadConfig({ ...VALID, TRUST_PROXY: '2' })).toThrow(/TRUST_PROXY has unrecognised/)
+    })
   })
 
   it('requires absolute origins — no paths, no trailing slash, no wildcards', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { constraintOf, DatabaseFaultError, isDatabaseFault, isUniqueViolation, sanitizeDbError, sqlstate } from './pg-errors.js'
+import { constraintOf, DatabaseFaultError, DESCRIBE_MAX_DEPTH, describeError, isDatabaseFault, isUniqueViolation, sanitizeDbError, sqlstate } from './pg-errors.js'
 
 /** What the two drivers hand back: a SQLSTATE, and — usually, but not always — the constraint's name. */
 function driverError(opts: { code?: string; constraint?: string; message?: string }): Error {
@@ -102,5 +102,76 @@ describe('sanitizeDbError', () => {
   it('leaves an error of our own making exactly as it is', () => {
     const bug = new TypeError('catalog.defaults is not a function')
     expect(sanitizeDbError('register', bug)).toBe(bug)
+  })
+})
+
+describe('describeError', () => {
+  /**
+   * The failure this exists for. `pg` tries every address a host resolves to — and `localhost` on a
+   * dual-stack machine always resolves to two — then throws an `AggregateError` whose own `message`
+   * is the empty string. `console.error(err.message)` on an unreachable `DATABASE_URL` printed a
+   * blank line and exited 1, so the operator's entire diagnosis was "it failed".
+   */
+  it('unpacks an AggregateError whose own message is empty', () => {
+    const refused = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:5432'), { code: 'ECONNREFUSED' })
+    const refusedV6 = Object.assign(new Error('connect ECONNREFUSED ::1:5432'), { code: 'ECONNREFUSED' })
+    const text = describeError(new AggregateError([refused, refusedV6], ''))
+
+    expect(text).toContain('every connection attempt failed')
+    expect(text).toContain('ECONNREFUSED')
+    expect(text).toContain('127.0.0.1:5432')
+    expect(text.split('\n')).toHaveLength(3)
+  })
+
+  it('appends a code the message does not already carry, and never repeats one it does', () => {
+    expect(describeError(Object.assign(new Error('password authentication failed for user "postgres"'), { code: '28P01' }))).toBe(
+      'password authentication failed for user "postgres" (28P01)',
+    )
+    // The `pg` connect errors already name their own code; saying it twice reads like two faults.
+    expect(describeError(Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:5432'), { code: 'ECONNREFUSED' }))).toBe(
+      'connect ECONNREFUSED 127.0.0.1:5432',
+    )
+  })
+
+  it('is the plain message for an ordinary error, and String() for a non-error', () => {
+    expect(describeError(new Error('Invalid configuration:\n  - PORT must be an integer'))).toBe('Invalid configuration:\n  - PORT must be an integer')
+    expect(describeError('boom')).toBe('boom')
+    expect(describeError(undefined)).toBe('undefined')
+  })
+
+  /**
+   * The other shape, and the one a Compose deployment against `db:5432` actually produces: a single
+   * address, so no aggregate — drizzle's wrapper, whose message names the statement and not the
+   * fault, with `ECONNREFUSED` on the `cause` underneath it.
+   */
+  it('follows `cause`, so drizzle’s "Failed query" wrapper still names the fault', () => {
+    const refused = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:5432'), { code: 'ECONNREFUSED' })
+    const wrapped = new Error('Failed query: CREATE SCHEMA IF NOT EXISTS "drizzle"\nparams: ', { cause: refused })
+
+    const text = describeError(wrapped)
+    expect(text).toContain('Failed query')
+    expect(text).toContain('caused by:')
+    expect(text).toContain('ECONNREFUSED')
+  })
+
+  /** `sanitizeDbError`'s output keeps its driver error *off* `cause`, so nothing can walk to it. */
+  it('cannot walk from a DatabaseFaultError to the statement parameters it hid', () => {
+    const driver = Object.assign(new Error('duplicate key value violates unique constraint'), { code: '23505' })
+    const drizzled = new Error('Failed query: insert into users …\nparams: binh@example.com,$argon2id$v=19$m=65536', { cause: driver })
+    const text = describeError(sanitizeDbError('register', drizzled))
+
+    expect(text).toBe('register failed (sqlstate 23505)')
+    expect(text).not.toContain('binh@example.com')
+    expect(text).not.toContain('$argon2id$')
+  })
+
+  it('does not recurse for ever through nested aggregates or a cyclic cause', () => {
+    const deep = new AggregateError([new AggregateError([new AggregateError([new Error('leaf')], 'c')], 'b')], 'a')
+    expect(describeError(deep)).toContain('a')
+    expect(describeError(deep).length).toBeLessThan(400)
+
+    const loop = new Error('a')
+    ;(loop as { cause?: unknown }).cause = loop
+    expect(describeError(loop).split('\n')).toHaveLength(DESCRIBE_MAX_DEPTH + 1)
   })
 })

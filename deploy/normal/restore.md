@@ -85,7 +85,7 @@ curl -fsS https://$DOMAIN/health          # {"ok":true,…,"db":"ok"}
 docker compose exec -T db psql -U postgres -d bind_poker -c 'select count(*) from users'
 ```
 
-A `db":"down"` here means the app started before the restore finished; `docker compose restart app`.
+A `"db":"error"` here means the app started before the restore finished; `docker compose restart app`.
 
 ---
 

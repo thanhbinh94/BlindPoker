@@ -13,9 +13,18 @@
 {$DOMAIN} {
 	encode gzip
 
+	# HSTS. Caddy 2 does not add it on its own the way v1 did, and it does not belong in
+	# `@bp/http-kit` (Lite is plain http on a LAN) — so it is one line here, on the only edition
+	# that is internet-facing. A year, subdomains included; the session cookie is already `Secure`
+	# and Caddy already redirects http→https, so this is defence in depth.
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
 	# WebSocket upgrades need no configuration here: `reverse_proxy` passes `Connection` and
-	# `Upgrade` through, so `/ws` works as-is. It also sets `X-Forwarded-For` and
-	# `X-Forwarded-Proto`, which is why the app runs with `TRUST_PROXY=true` — and why the app must
-	# never be published on a host port where something could reach it around this proxy.
+	# `Upgrade` through, so `/ws` works as-is. It also **appends** the peer address to any
+	# `X-Forwarded-For` the client sent rather than replacing it — which is why the app trusts
+	# `TRUST_PROXY=uniquelocal` (this container's RFC1918 address on the Compose network) and not
+	# `true`: trusting every hop would make the left-most, client-written entry the address every
+	# rate limit keys on. The app must also never be published on a host port where something could
+	# reach it around this proxy.
 	reverse_proxy app:8080
 }

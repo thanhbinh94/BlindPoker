@@ -119,3 +119,46 @@ export function isUniqueViolation(err: unknown, constraint: string): boolean {
   if (named !== undefined) return named === constraint
   return links.some((e) => e.message.includes(constraint))
 }
+
+/** How far `describeError` follows `errors[]` and `cause` before it stops. Guards a cycle, too. */
+export const DESCRIBE_MAX_DEPTH = 3
+
+/**
+ * An error rendered for a human reading stderr, with the shapes a startup failure actually takes
+ * spelled out.
+ *
+ * `Error.message` alone is not enough here, in two different ways, and the Normal server's two
+ * entry points hit both:
+ *
+ * - When a host resolves to several addresses — and `localhost` on a dual-stack machine always does
+ *   — `pg` tries each and throws an **`AggregateError` whose own `message` is the empty string**, so
+ *   `console.error(err.message)` on an unreachable `DATABASE_URL` printed a blank line and exited 1.
+ *   The operator's whole diagnosis was "it failed".
+ * - Against a single address, the refusal arrives wrapped in **drizzle's `Failed query: …`**, whose
+ *   message names the statement and not the fault; `ECONNREFUSED` is on the `cause` underneath.
+ *
+ * So: the message, plus the `code` the driver attached (`ECONNREFUSED`, `ENOTFOUND`, `28P01`) which
+ * is very often the entire answer, then each of an `AggregateError`'s `errors[]` — or the `cause` —
+ * indented beneath it.
+ *
+ * Only for the two `main`/`migrate-cli` catch handlers, where the failure is a configuration error,
+ * a connection, or a migration: statements with no caller-supplied parameters. Anything thrown by a
+ * *request* is sanitized by `sanitizeDbError` long before it can reach a log, and the
+ * `DatabaseFaultError` that produces deliberately keeps its driver error off `cause`, so walking the
+ * chain here cannot reach one.
+ */
+export function describeError(err: unknown, depth = 0): string {
+  if (!(err instanceof Error)) return String(err)
+
+  const code = (err as { code?: unknown }).code
+  const suffix = typeof code === 'string' && code !== '' && !err.message.includes(code) ? ` (${code})` : ''
+  const head = err.message === '' ? `${err.name}: every connection attempt failed` : `${err.message}${suffix}`
+  if (depth >= DESCRIBE_MAX_DEPTH) return head
+
+  const indent = '  '.repeat(depth + 1)
+  if (err instanceof AggregateError && err.errors.length > 0) {
+    return [head, ...err.errors.map((e: unknown) => `${indent}- ${describeError(e, depth + 1)}`)].join('\n')
+  }
+  const cause = (err as { cause?: unknown }).cause
+  return cause === undefined || cause === null ? head : `${head}\n${indent}caused by: ${describeError(cause, depth + 1)}`
+}

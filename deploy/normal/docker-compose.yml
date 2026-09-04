@@ -72,9 +72,11 @@ services:
     image: bind-poker-normal:latest
     environment:
       <<: *app-env
-      # Behind Caddy, and only behind Caddy: with this on and nothing in front, any caller can pick
-      # the address the rate limiters key on by sending its own `X-Forwarded-For`.
-      TRUST_PROXY: "true"
+      # Who may set `X-Forwarded-For`, not whether to believe it. Caddy reaches the app over the
+      # Compose bridge network, an RFC1918 address, so `uniquelocal` trusts exactly that hop and
+      # nothing else. `TRUST_PROXY=true` is refused at startup: it trusts *every* hop, which makes
+      # `req.ip` the client-written left-most entry of the header and voids every rate limit.
+      TRUST_PROXY: "uniquelocal"
       COOKIE_SECURE: "true"
     depends_on:
       migrate:

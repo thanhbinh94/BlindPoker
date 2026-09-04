@@ -67,6 +67,10 @@ pnpm build:normal                           # typecheck + esbuild → dist/main.
 pnpm --filter @bp/normal-server dev         # build, then run (needs a real DATABASE_URL)
 ```
 
+> Before deploying, run that suite once against a **real** PostgreSQL with `TEST_DATABASE_URL` set:
+> PGlite is single-connection, so the row-lock serialization tests (`SELECT … FOR UPDATE`, which the
+> whole money design rests on) only actually execute there. Exact commands: deployment guide §2.
+
 - Operations, backup, upgrade, security — Vietnamese, like every operator guide here:
   [`docs/deployment-normal.md`](docs/deployment-normal.md)
 - Module map, event bus, ledger conventions, adding an item or achievement — English, like every

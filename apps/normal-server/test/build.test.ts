@@ -157,10 +157,15 @@ describe.skipIf(SKIP)('the production build', () => {
     const started = Date.now()
     const ran = await run('main.js', { DATABASE_URL: DEAD_DATABASE_URL, SESSION_SECRET: SECRET, ALLOWED_ORIGINS: 'http://localhost' })
     expect(ran.code).not.toBe(0)
-    // It got past configuration — the boot log is on stdout — and died on the database. The message
-    // itself is the driver's: `pg` raises an `AggregateError` whose own `message` is empty, so what
-    // reaches stderr today is drizzle's failing statement. Either shape satisfies this.
-    expect(ran.stderr).toMatch(/connect|ECONNREFUSED|failed query|database|password|role/i)
+    /**
+     * It got past configuration — the boot log is on stdout — and died on the database, and it says
+     * so. `pg` raises an `AggregateError` whose own `message` is the empty string when no address of
+     * the host answers, so `console.error(err.message)` used to print a blank line: the operator's
+     * whole diagnosis was "it failed". `describeError` unpacks `errors[]`, and this assertion is now
+     * on the text rather than on "either shape", so it cannot go on accepting the empty one.
+     */
+    expect(ran.stderr).toMatch(/ECONNREFUSED|connect/i)
+    expect(ran.stderr.trim()).not.toBe('')
     expect(Date.now() - started).toBeLessThan(FAIL_FAST_BUDGET_MS)
   })
 
@@ -168,5 +173,7 @@ describe.skipIf(SKIP)('the production build', () => {
     const ran = await run('migrate-cli.js', { DATABASE_URL: DEAD_DATABASE_URL, SESSION_SECRET: SECRET, ALLOWED_ORIGINS: 'http://localhost' })
     expect(ran.code).not.toBe(0)
     expect(ran.stdout).toContain('applying migrations')
+    // The init container's whole output on a bad `DATABASE_URL`: it has to name something.
+    expect(ran.stderr).toMatch(/ECONNREFUSED|connect/i)
   })
 })

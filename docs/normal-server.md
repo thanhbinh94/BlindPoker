@@ -25,6 +25,7 @@ src/
   migrate-cli.ts     the same config load, then migrations only, then exit
   app.ts             buildApp(): wiring, in the one order that works (below)
   config.ts          loadConfig(env) — reports every problem at once, then throws
+  trust-proxy.ts     TRUST_PROXY parsing, and the client address for the WS upgrade Fastify never sees
   events.ts          the process-local event bus
   errors.ts          ServiceError — a deliberate refusal, carrying the API's error code
 
@@ -91,9 +92,12 @@ what lets `stats` be written without ever naming `achievements`.
 type AppEvent =
   | DomainEvent                                                        // from server-kit
   | { type: 'DAILY_CLAIMED'; playerId; day; streak }
-  | { type: 'LOGIN'; playerId; at }
   | { type: 'STATS_UPDATED'; playerId; changedMetrics: StatMetric[] }
 ```
+
+There is deliberately no `LOGIN` event: a "login day" is the daily check-in (§10.3 ruling), not a
+sign-in, so nothing ever subscribed to one. `auth-service` still takes an optional `onLogin` hook for
+whatever wants the fact later; `app.ts` passes none.
 
 Three properties are load-bearing:
 
@@ -139,6 +143,26 @@ The invariant this buys (spec §18.4):
 
 with live Hold'em stacks and carry-over pots as the third term, held in memory until the hand ends
 or the server drains. `app.test.ts` asserts it over a real settled hand.
+
+### When a settlement failed
+
+`balances.apply` can throw — a pool exhausted, a statement timeout, the database briefly gone. The
+room records the hand anyway, with the reason in `games.settlement_error`, logs it, and still emits
+`HAND_SETTLED` so nothing downstream stalls. Two things follow, and they are the reason the column is
+worth querying:
+
+```sql
+select id, room_id, mode, fee, settlement_error, ended_at
+  from games where settlement_error is not null order by ended_at desc;
+```
+
+- **No counter moved.** `stats-service` skips a flagged hand exactly as it skips a cancelled one, so
+  no achievement can be bought by a failed write. `app.ts` raises one `error` line —
+  `hand settlement failed` with the `handId`, `roomId` and `fee` — through `logSettlementFailure`.
+- **A Hold'em hand's `table_fee` sink row is what was lost.** The seats' chips had already moved, so
+  balances are right, but `Σ balances + Σ sinks` has drifted by exactly `fee` and has to be put back
+  by hand: one sink row (`player_id null`, `amount = fee`, `reason = kind = 'table_fee'`,
+  `ref_id = games.id`). A Blind hand moved nothing at all and needs nothing.
 
 `point_transactions` is `ON DELETE restrict` on `players`. Deleting an account whose ledger rows
 remain would turn its whole history — credits included — into sink rows and take its balance out of
@@ -222,9 +246,13 @@ A whole database rather than a schema, because the generated migration writes it
 `REFERENCES "public"."players"`: under a different `search_path` the tables would be created in the
 throwaway schema while every foreign key still pointed at `public`.
 
-Use it before a release. PGlite is the same Postgres, but it is single-connection, so anything about
-genuine concurrency — `SELECT … FOR UPDATE` under contention in settlement, above all — is only
-really exercised here.
+**Run this once against a real server before every deploy, and record the output.** PGlite is the
+same Postgres, but it is single-connection, so anything about genuine concurrency —
+`SELECT … FOR UPDATE` under contention in settlement, above all — is only really exercised here:
+`balance-repo.test.ts` picks `Promise.all` over back-to-back on exactly this condition, and one case
+in `economy-service.test.ts` is `it.skip` without it. There is no CI in this repository, so nothing
+else will do it for you. `docs/deployment-normal.md` §2 has the exact commands for standing the
+Compose `db` service up for the run.
 
 `test/build.test.ts` runs the actual build and boots what it produced; `CI_SKIP_BUILD=1` skips it.
 

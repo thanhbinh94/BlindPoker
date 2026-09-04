@@ -122,6 +122,28 @@ describe('HAND_SETTLED', () => {
     expect(updates).toEqual([])
   })
 
+  /**
+   * A hand nobody was paid for is not a hand played.
+   *
+   * When `balances.apply` throws — a pool exhausted, a statement timeout, the database briefly gone
+   * — the room flags the summary and emits `HAND_SETTLED` anyway with `cancelled: false`, so the
+   * hand is recorded for an operator to reconcile. Counting it would move `hands_won_*`,
+   * `biggest_win` and the streaks for a hand in which no point moved, and the achievement module
+   * evaluating those counters could then pay a real, ledgered credit (`big_win_500k` is 30,000
+   * points) for a win the ledger says never happened.
+   */
+  it('ignores a hand whose settlement failed, so no achievement can be bought by a failed write', async () => {
+    const playerId = await seedPlayer()
+    const before = await stats.get(playerId)
+
+    await settle(hand({ settlementError: 'DatabaseFaultError: settlement failed (sqlstate 40P01)', players: [seat(playerId, { net: 500_000, won: true })] }))
+
+    expect(await stats.get(playerId)).toEqual(before)
+    expect(await stats.get(playerId)).toEqual(zeroStats())
+    // Nothing announced either: the achievement module is never given a threshold to compare.
+    expect(updates).toEqual([])
+  })
+
   it('counts the hand for the humans and nothing for the bots, but marks it as played against one', async () => {
     const playerId = await seedPlayer()
     await settle(hand({ players: [seat(playerId, { net: -100 }), seat('bot-1', { seat: 1, isBot: true, net: 100, won: true })] }))
@@ -196,9 +218,8 @@ describe('the other events', () => {
     expect(await stats.get(playerId)).toMatchObject({ totalLoginDays: 4, loginStreak: 1, bestLoginStreak: 3 })
   })
 
-  it('leaves the counters alone for a plain sign-in — a login day is a check-in', async () => {
+  it('leaves the counters alone for an event it does not handle', async () => {
     const playerId = await seedPlayer()
-    await bus.publish({ type: 'LOGIN', playerId, at: START })
     await bus.publish({ type: 'ROOM_CREATED', roomId: 'r1', hostPlayerId: playerId, config: CONFIG })
 
     expect(await stats.get(playerId)).toEqual(zeroStats())
