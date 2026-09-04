@@ -54,6 +54,13 @@ export function LobbyScreen({ client, lang, onLanguage, onEnteredRoom, extraNav,
     [request, onEnteredRoom],
   )
 
+  const closeCreate = useCallback(() => setCreating(false), [])
+  const clearError = useCallback(() => {
+    request.clear()
+    client.clearError()
+  }, [request, client])
+  const dismiss = useCallback((id: number) => client.dismissNotification(id), [client])
+
   const joinListed = (room: RoomSummary): void => void enter(() => client.joinRoom({ roomId: room.roomId }))
   const joinByCode = (code: string, password?: string): void =>
     void enter(() => client.joinRoom(password === undefined ? { code } : { code, password }))
@@ -101,18 +108,15 @@ export function LobbyScreen({ client, lang, onLanguage, onEnteredRoom, extraNav,
         </aside>
       </main>
 
-      <Modal open={creating} title={t('create.title')} closeLabel={t('actions.close')} onClose={() => setCreating(false)}>
+      <Modal open={creating} title={t('create.title')} closeLabel={t('actions.close')} onClose={closeCreate}>
         <CreateRoomForm onSubmit={create} busy={request.busy} lang={lang} />
       </Modal>
 
       <Toasts
         error={request.error ?? state.lastError}
         notifications={state.notifications}
-        onClearError={() => {
-          request.clear()
-          client.clearError()
-        }}
-        onDismiss={client.dismissNotification}
+        onClearError={clearError}
+        onDismiss={dismiss}
         lang={lang}
       />
     </div>

@@ -18,16 +18,21 @@ export interface ModalProps {
 export function Modal({ open, title, onClose, children, closeLabel }: ModalProps) {
   const titleId = useId()
   const dialogRef = useRef<HTMLDivElement>(null)
+  // Callers pass an inline arrow, so `onClose` is a new function on every render. Depending on it here would move
+  // focus back to the close button after every keystroke inside the dialog, so the latest one is read from a ref and
+  // the effect runs once per opening.
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
 
   useEffect(() => {
     if (!open) return
     dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus()
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') closeRef.current()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [open, onClose])
+  }, [open])
 
   if (!open) return null
 

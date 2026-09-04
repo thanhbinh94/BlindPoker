@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ClientError, ClientNotification } from '../client/types.js'
 import { errorLabel, formatPoints, type Language } from '../i18n/index.js'
@@ -33,11 +33,17 @@ const amountOf = (payload: unknown): number | null => {
 export function Toasts({ error, notifications, onClearError, onDismiss, lang }: ToastsProps) {
   const { t } = useTranslation()
 
+  // The countdown between hands re-renders the room every second. Depending on `onClearError` here would restart the
+  // timer on every one of those renders and the slip would never clear itself, so the schedule is keyed on the error
+  // alone (a stable object that changes only when a *new* refusal arrives) and reads the latest callback from a ref.
+  const clearRef = useRef(onClearError)
+  clearRef.current = onClearError
+
   useEffect(() => {
     if (error === null) return
-    const timer = setTimeout(onClearError, ERROR_TTL_MS)
+    const timer = setTimeout(() => clearRef.current(), ERROR_TTL_MS)
     return () => clearTimeout(timer)
-  }, [error, onClearError])
+  }, [error])
 
   if (error === null && notifications.length === 0) return null
 

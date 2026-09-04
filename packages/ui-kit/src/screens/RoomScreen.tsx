@@ -71,6 +71,12 @@ export function RoomScreen({ client, lang, onLeft, avatarFor, header, layout }: 
   )
 
   const act = useCallback((action: PlayerAction) => void request.run(() => client.act(action)), [request, client])
+  const closeBuyIn = useCallback(() => setBuyInSeat(null), [])
+  const clearError = useCallback(() => {
+    request.clear()
+    client.clearError()
+  }, [request, client])
+  const dismiss = useCallback((id: number) => client.dismissNotification(id), [client])
 
   if (room === null) return null
 
@@ -98,7 +104,10 @@ export function RoomScreen({ client, lang, onLeft, avatarFor, header, layout }: 
   const confirmBuyIn = async (): Promise<void> => {
     if (buyInSeat === null) return
     const typed = Number(buyIn)
-    const amount = Math.min(maxBuyIn, Math.max(minBuyIn, Number.isFinite(typed) ? Math.round(typed) : minBuyIn))
+    // Snap to the same grid the input's `step` offers, then clamp: a typed 10,350 must not become an illegal buy-in.
+    const step = bb > 0 ? bb : 1
+    const snapped = Math.round((Number.isFinite(typed) ? typed : minBuyIn) / step) * step
+    const amount = Math.min(maxBuyIn, Math.max(minBuyIn, snapped))
     if (await request.run(() => client.sitDown(buyInSeat, amount))) setBuyInSeat(null)
   }
 
@@ -222,7 +231,7 @@ export function RoomScreen({ client, lang, onLeft, avatarFor, header, layout }: 
         open={buyInSeat !== null}
         title={t('room.buyInTitle')}
         closeLabel={t('actions.close')}
-        onClose={() => setBuyInSeat(null)}
+        onClose={closeBuyIn}
       >
         <div className={s.buyIn}>
           <Field
@@ -242,7 +251,7 @@ export function RoomScreen({ client, lang, onLeft, avatarFor, header, layout }: 
             />
           </Field>
           <div className={s.buyInFoot}>
-            <Button variant="ghost" onClick={() => setBuyInSeat(null)}>
+            <Button variant="ghost" onClick={closeBuyIn}>
               {t('actions.cancel')}
             </Button>
             <Button variant="gold" size="lg" loading={request.busy} onClick={() => void confirmBuyIn()}>
@@ -255,11 +264,8 @@ export function RoomScreen({ client, lang, onLeft, avatarFor, header, layout }: 
       <Toasts
         error={request.error ?? state.lastError}
         notifications={state.notifications}
-        onClearError={() => {
-          request.clear()
-          client.clearError()
-        }}
-        onDismiss={client.dismissNotification}
+        onClearError={clearError}
+        onDismiss={dismiss}
         lang={lang}
       />
     </div>

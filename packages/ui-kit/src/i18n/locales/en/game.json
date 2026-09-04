@@ -204,8 +204,7 @@
     "hostLeft": "The host left",
     "reconnecting": "Connection lost — reconnecting…",
     "buyInTitle": "Choose your buy-in",
-    "controls": "Table controls",
-    "seatControls": "Your seat"
+    "controls": "Table controls"
   },
   "notify": {
     "KICKED": "You were removed from the room",

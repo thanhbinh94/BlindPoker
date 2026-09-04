@@ -204,8 +204,7 @@
     "hostLeft": "Chủ phòng đã rời đi",
     "reconnecting": "Mất kết nối — đang kết nối lại…",
     "buyInTitle": "Chọn mức mang vào",
-    "controls": "Điều khiển bàn",
-    "seatControls": "Ghế của bạn"
+    "controls": "Điều khiển bàn"
   },
   "notify": {
     "KICKED": "Bạn đã bị mời khỏi phòng",

@@ -83,6 +83,29 @@ describe('RoomScreen', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 
+  it('snaps a typed buy-in onto the big-blind grid and clamps it to the legal range', async () => {
+    const client = fakeClient(makeState({ room: standingRoom }))
+    wrap(client)
+
+    const confirm = async (typed: string): Promise<void> => {
+      await userEvent.click(screen.getAllByRole('button', { name: /sit down/i })[0]!)
+      const dialog = within(screen.getByRole('dialog'))
+      await userEvent.clear(dialog.getByLabelText('Buy-in'))
+      await userEvent.type(dialog.getByLabelText('Buy-in'), typed)
+      await userEvent.click(dialog.getByRole('button', { name: 'Sit down' }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    }
+
+    await confirm('10350') // nearest multiple of the 200-point step
+    expect(client.sitDown).toHaveBeenLastCalledWith(1, 10_400)
+
+    await confirm('999999') // above 200 BB
+    expect(client.sitDown).toHaveBeenLastCalledWith(1, 40_000)
+
+    await confirm('5') // below 50 BB
+    expect(client.sitDown).toHaveBeenLastCalledWith(1, 10_000)
+  })
+
   it('offers ready and stand-up once seated', async () => {
     const room = makeRoom({
       status: 'OPEN',

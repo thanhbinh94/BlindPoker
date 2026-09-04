@@ -85,6 +85,28 @@ describe('Field + Select', () => {
 })
 
 describe('Modal', () => {
+  it('keeps focus where the user put it while a fresh onClose arrives on every render', async () => {
+    const onClose = vi.fn()
+    const { rerender } = render(
+      <Modal open title="Hi" onClose={() => onClose()} closeLabel="Close">
+        <input aria-label="Amount" />
+      </Modal>,
+    )
+    const field = screen.getByLabelText('Amount')
+    await userEvent.click(field)
+    // Each keystroke re-renders the caller with a brand-new arrow; the dialog must not grab focus back.
+    for (const key of ['1', '2', '3']) {
+      await userEvent.keyboard(key)
+      rerender(
+        <Modal open title="Hi" onClose={() => onClose()} closeLabel="Close">
+          <input aria-label="Amount" />
+        </Modal>,
+      )
+    }
+    expect(field).toHaveFocus()
+    expect(field).toHaveValue('123')
+    expect(onClose).not.toHaveBeenCalled()
+  })
   it('renders a dialog when open, closes on Escape and backdrop, and not at all when closed', async () => {
     const onClose = vi.fn()
     const { rerender } = render(
