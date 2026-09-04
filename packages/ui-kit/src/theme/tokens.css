@@ -104,8 +104,12 @@
 }
 
 :root {
-  /* type — the app loads the web fonts; ui-kit only names them */
-  --font-display: 'Fraunces', 'Playfair Display', Georgia, serif;
+  /* type — the app loads the web fonts; ui-kit only names them.
+     The display fallbacks are ordered for Vietnamese: Georgia, the usual serif fallback, has no
+     precomposed glyphs for ế ộ ữ ằ on Windows, so a name in the wrong font falls back per character
+     and the diacritics land visibly out of line. Cambria and Constantia ship with Windows and cover
+     the whole Vietnamese repertoire; Times New Roman is the last stop before the generic serif. */
+  --font-display: 'Fraunces', 'Playfair Display', Cambria, Constantia, 'Times New Roman', Times, serif;
   --font-body: 'Be Vietnam Pro', 'Segoe UI', system-ui, sans-serif;
 
   /* 4px scale */
