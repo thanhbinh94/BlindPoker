@@ -7,7 +7,23 @@ export interface PlayerRecord {
   balance: number
 }
 
-export type TxReason = 'starting_balance' | 'settlement' | 'buy_in' | 'cash_out' | 'refund' | 'daily_reward' | 'relief' | 'achievement'
+/**
+ * Why points moved. `daily_login` is the check-in reward itself and `daily_item_fallback` the
+ * 10,000-point substitute paid when the day's random cosmetic tier has nothing left to give
+ * (spec §13.2) — a separate reason rather than a larger `daily_login`, so §12.5's flow-by-reason
+ * report can tell "the reward table paid this" from "the catalogue ran dry".
+ */
+export type TxReason =
+  | 'starting_balance'
+  | 'settlement'
+  | 'buy_in'
+  | 'cash_out'
+  | 'refund'
+  | 'daily_reward'
+  | 'daily_login'
+  | 'daily_item_fallback'
+  | 'relief'
+  | 'achievement'
 
 export interface BalanceEntry {
   playerId: string

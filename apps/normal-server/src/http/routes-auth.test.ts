@@ -23,6 +23,7 @@ const START = Date.UTC(2026, 8, 4, 3, 0)
 const XRW = { 'x-requested-with': REQUESTED_WITH }
 const GOOD = { email: 'binh@example.com', password: 'a good password', displayName: 'Bình An' }
 const DEFAULT_ITEMS = ['avatar_default']
+const DEFAULT_AVATAR = { base: 'avatar_default', face: 'face_x', clothing: 'shirt_x', hair: 'hair_x', hairColor: '#2b2b2b' }
 
 let test: TestDb
 let db: AppDb
@@ -51,7 +52,7 @@ async function buildTestApp(opts: AppOptions = {}): Promise<FastifyInstance> {
   const repos = createRepositories(db)
   sessionService = createSessionService(db, { secret: SECRET, now: () => nowMs })
   registerAuthRoutes(instance, {
-    auth: createAuthService({ db, repos, sessions: sessionService, catalog: { defaults: () => DEFAULT_ITEMS }, now: () => nowMs, argon2Params: CHEAP }),
+    auth: createAuthService({ db, repos, sessions: sessionService, catalog: { defaults: () => DEFAULT_ITEMS, defaultAvatar: () => DEFAULT_AVATAR }, now: () => nowMs, argon2Params: CHEAP }),
     sessions: sessionService,
     repos,
     cookieSecure: opts.cookieSecure ?? true,

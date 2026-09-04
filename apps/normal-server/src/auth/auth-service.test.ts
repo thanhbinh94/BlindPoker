@@ -27,6 +27,8 @@ const CHEAP = { memoryCost: 8_192, timeCost: 1, parallelism: 1 }
 const SECRET = 's'.repeat(32)
 const START = Date.UTC(2026, 8, 4, 3, 0)
 const DEFAULT_ITEMS = ['avatar_default', 'title_rookie']
+/** The catalogue stub's avatar: what `register` must store in `avatar_config`. */
+const DEFAULT_AVATAR = { base: 'avatar_default', face: 'face_x', clothing: 'shirt_x', hair: 'hair_x', hairColor: '#2b2b2b' }
 
 let test: TestDb
 let db: AppDb
@@ -48,7 +50,7 @@ beforeAll(async () => {
     db,
     repos,
     sessions: sessionService,
-    catalog: { defaults: () => defaults },
+    catalog: { defaults: () => defaults, defaultAvatar: () => DEFAULT_AVATAR },
     now: () => nowMs,
     argon2Params: CHEAP,
     onLogin: (playerId, at) => logins.push({ playerId, at }),
@@ -84,7 +86,7 @@ describe('register', () => {
     expect(user!.passwordHash.startsWith('$argon2id$')).toBe(true)
 
     expect(await repos.players.findById(userId)).toEqual({ playerId: userId, displayName: 'Bình An', balance: ECONOMY.startingBalance })
-    expect((await repos.players.findByIdFull(userId))!.avatarConfig).toEqual({})
+    expect((await repos.players.findByIdFull(userId))!.avatarConfig).toEqual(DEFAULT_AVATAR)
 
     const ledger = await db.select().from(pointTransactions)
     expect(ledger).toHaveLength(1)

@@ -25,6 +25,7 @@ import { eq } from 'drizzle-orm'
 import type { AppDb } from '../db/client.js'
 import { isUniqueViolation, sanitizeDbError } from '../db/pg-errors.js'
 import { dailyLogins, inventory, players, playerStats, users } from '../db/schema.js'
+import type { AvatarConfig } from '../inventory/avatar.js'
 import { creditWithin, type NormalRepositories } from '../repos/index.js'
 import { DUMMY_HASH, hashPassword, validatePassword, verifyPassword, type Argon2Params } from './password.js'
 import type { SessionService } from './session-service.js'
@@ -53,9 +54,17 @@ export class AuthError extends Error {
   }
 }
 
-/** What Task 5's item catalogue has to offer registration: the ids every new account starts with. */
+/**
+ * What the item catalogue has to offer registration: the ids every new account starts with, and the
+ * avatar those ids compose into.
+ *
+ * Both, rather than just the ids, because `avatar_config` is written in the same INSERT as the
+ * inventory rows and the two have to agree — an account granted `hair_short` but wearing nothing
+ * would render as a bald figure whose hair it owns.
+ */
 export interface DefaultItemCatalog {
   defaults(): string[]
+  defaultAvatar(): AvatarConfig
 }
 
 export interface RegisterInput {
@@ -155,6 +164,7 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
       const passwordHash = await hashPassword(input.password, deps.argon2Params)
       const at = new Date(now())
       const defaults = deps.catalog.defaults()
+      const avatarConfig = deps.catalog.defaultAvatar()
 
       let userId: string
       try {
@@ -168,7 +178,9 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
             displayName: name.name,
             nameKey: name.key,
             balance: 0,
-            avatarConfig: {},
+            // The default cosmetics, worn — see `DefaultItemCatalog`. Cast because the column is a
+            // generic jsonb bag; `readAvatarConfig` is what reads it back as an `AvatarConfig`.
+            avatarConfig: avatarConfig as unknown as Record<string, unknown>,
             createdAt: at,
           })
           // The starting balance arrives the way every other movement of points does — through the

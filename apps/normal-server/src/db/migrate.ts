@@ -25,16 +25,23 @@ import type * as schema from './schema.js'
  * `build` script itself only compiles.
  */
 export function migrationsFolder(): string {
+  const folder = join(packageRoot(), 'drizzle')
+  if (!existsSync(join(folder, 'meta', '_journal.json'))) {
+    throw new Error(`no drizzle migrations in ${folder}: the package root was found from ${fileURLToPath(import.meta.url)}, but its migrations were not shipped alongside it`)
+  }
+  return folder
+}
+
+/**
+ * The directory holding this package's `package.json` — the anchor for everything shipped beside
+ * `dist/` rather than compiled into it: `drizzle/` and `data/` (the item and achievement catalogues).
+ * Exported because those loaders need exactly the same search, and two copies of it could disagree.
+ */
+export function packageRoot(): string {
   const from = fileURLToPath(import.meta.url)
   let dir = dirname(from)
   for (;;) {
-    if (isPackageRoot(dir)) {
-      const folder = join(dir, 'drizzle')
-      if (!existsSync(join(folder, 'meta', '_journal.json'))) {
-        throw new Error(`no drizzle migrations in ${folder}: the package root was found from ${from}, but its migrations were not shipped alongside it`)
-      }
-      return folder
-    }
+    if (isPackageRoot(dir)) return dir
     const parent = dirname(dir)
     if (parent === dir) throw new Error(`no @bp/normal-server package root above ${from}`)
     dir = parent

@@ -1,0 +1,53 @@
+[
+  { "id": "base_01", "category": "base", "rarity": "common", "nameKey": "items.base_01", "assetKey": "base/base_01", "isDefault": true },
+  { "id": "base_02", "category": "base", "rarity": "common", "nameKey": "items.base_02", "assetKey": "base/base_02", "isDefault": false },
+  { "id": "base_03", "category": "base", "rarity": "common", "nameKey": "items.base_03", "assetKey": "base/base_03", "isDefault": false },
+  { "id": "base_04", "category": "base", "rarity": "rare", "nameKey": "items.base_04", "assetKey": "base/base_04", "isDefault": false },
+  { "id": "base_05", "category": "base", "rarity": "rare", "nameKey": "items.base_05", "assetKey": "base/base_05", "isDefault": false },
+
+  { "id": "face_01", "category": "face", "rarity": "common", "nameKey": "items.face_01", "assetKey": "face/face_01", "isDefault": true },
+  { "id": "face_02", "category": "face", "rarity": "common", "nameKey": "items.face_02", "assetKey": "face/face_02", "isDefault": false },
+  { "id": "face_03", "category": "face", "rarity": "common", "nameKey": "items.face_03", "assetKey": "face/face_03", "isDefault": false },
+  { "id": "face_04", "category": "face", "rarity": "rare", "nameKey": "items.face_04", "assetKey": "face/face_04", "isDefault": false },
+  { "id": "face_05", "category": "face", "rarity": "rare", "nameKey": "items.face_05", "assetKey": "face/face_05", "isDefault": false },
+
+  { "id": "clothing_tee", "category": "clothing", "rarity": "common", "nameKey": "items.clothing_tee", "assetKey": "clothing/clothing_tee", "isDefault": true },
+  { "id": "clothing_hoodie", "category": "clothing", "rarity": "common", "nameKey": "items.clothing_hoodie", "assetKey": "clothing/clothing_hoodie", "isDefault": false },
+  { "id": "clothing_polo", "category": "clothing", "rarity": "common", "nameKey": "items.clothing_polo", "assetKey": "clothing/clothing_polo", "isDefault": false },
+  { "id": "clothing_aodai", "category": "clothing", "rarity": "rare", "nameKey": "items.clothing_aodai", "assetKey": "clothing/clothing_aodai", "isDefault": false },
+  { "id": "clothing_suit", "category": "clothing", "rarity": "rare", "nameKey": "items.clothing_suit", "assetKey": "clothing/clothing_suit", "isDefault": false },
+  { "id": "clothing_kimono", "category": "clothing", "rarity": "rare", "nameKey": "items.clothing_kimono", "assetKey": "clothing/clothing_kimono", "isDefault": false },
+  { "id": "jacket_champion", "category": "clothing", "rarity": "epic", "nameKey": "items.jacket_champion", "assetKey": "clothing/jacket_champion", "isDefault": false },
+
+  { "id": "hair_short", "category": "hair", "rarity": "common", "nameKey": "items.hair_short", "assetKey": "hair/hair_short", "isDefault": true },
+  { "id": "hair_curly", "category": "hair", "rarity": "common", "nameKey": "items.hair_curly", "assetKey": "hair/hair_curly", "isDefault": false },
+  { "id": "hair_ponytail", "category": "hair", "rarity": "common", "nameKey": "items.hair_ponytail", "assetKey": "hair/hair_ponytail", "isDefault": false },
+  { "id": "hair_long", "category": "hair", "rarity": "rare", "nameKey": "items.hair_long", "assetKey": "hair/hair_long", "isDefault": false },
+  { "id": "hair_bun", "category": "hair", "rarity": "rare", "nameKey": "items.hair_bun", "assetKey": "hair/hair_bun", "isDefault": false },
+  { "id": "hair_mohawk", "category": "hair", "rarity": "rare", "nameKey": "items.hair_mohawk", "assetKey": "hair/hair_mohawk", "isDefault": false },
+
+  { "id": "accessory_glasses", "category": "accessory", "rarity": "common", "nameKey": "items.accessory_glasses", "assetKey": "accessory/accessory_glasses", "isDefault": false },
+  { "id": "accessory_headband", "category": "accessory", "rarity": "common", "nameKey": "items.accessory_headband", "assetKey": "accessory/accessory_headband", "isDefault": false },
+  { "id": "accessory_mask", "category": "accessory", "rarity": "common", "nameKey": "items.accessory_mask", "assetKey": "accessory/accessory_mask", "isDefault": false },
+  { "id": "accessory_conical_hat", "category": "accessory", "rarity": "rare", "nameKey": "items.accessory_conical_hat", "assetKey": "accessory/accessory_conical_hat", "isDefault": false },
+  { "id": "accessory_sunglasses", "category": "accessory", "rarity": "rare", "nameKey": "items.accessory_sunglasses", "assetKey": "accessory/accessory_sunglasses", "isDefault": false },
+  { "id": "hat_crown", "category": "accessory", "rarity": "epic", "nameKey": "items.hat_crown", "assetKey": "accessory/hat_crown", "isDefault": false },
+
+  { "id": "jewelry_stud", "category": "jewelry", "rarity": "common", "nameKey": "items.jewelry_stud", "assetKey": "jewelry/jewelry_stud", "isDefault": false },
+  { "id": "jewelry_ring", "category": "jewelry", "rarity": "common", "nameKey": "items.jewelry_ring", "assetKey": "jewelry/jewelry_ring", "isDefault": false },
+  { "id": "jewelry_chain", "category": "jewelry", "rarity": "rare", "nameKey": "items.jewelry_chain", "assetKey": "jewelry/jewelry_chain", "isDefault": false },
+  { "id": "jewelry_pendant", "category": "jewelry", "rarity": "rare", "nameKey": "items.jewelry_pendant", "assetKey": "jewelry/jewelry_pendant", "isDefault": false },
+  { "id": "ring_royal", "category": "jewelry", "rarity": "epic", "nameKey": "items.ring_royal", "assetKey": "jewelry/ring_royal", "isDefault": false },
+
+  { "id": "title_rookie", "category": "title", "rarity": "common", "nameKey": "items.title_rookie", "assetKey": "title/title_rookie", "isDefault": false },
+  { "id": "title_regular", "category": "title", "rarity": "common", "nameKey": "items.title_regular", "assetKey": "title/title_regular", "isDefault": false },
+  { "id": "title_night_owl", "category": "title", "rarity": "rare", "nameKey": "items.title_night_owl", "assetKey": "title/title_night_owl", "isDefault": false },
+  { "id": "title_devoted", "category": "title", "rarity": "rare", "nameKey": "items.title_devoted", "assetKey": "title/title_devoted", "isDefault": false },
+  { "id": "title_hot_hand", "category": "title", "rarity": "epic", "nameKey": "items.title_hot_hand", "assetKey": "title/title_hot_hand", "isDefault": false },
+
+  { "id": "badge_bronze", "category": "badge", "rarity": "common", "nameKey": "items.badge_bronze", "assetKey": "badge/badge_bronze", "isDefault": false },
+  { "id": "badge_silver", "category": "badge", "rarity": "common", "nameKey": "items.badge_silver", "assetKey": "badge/badge_silver", "isDefault": false },
+  { "id": "badge_gold", "category": "badge", "rarity": "rare", "nameKey": "items.badge_gold", "assetKey": "badge/badge_gold", "isDefault": false },
+  { "id": "badge_monthly", "category": "badge", "rarity": "rare", "nameKey": "items.badge_monthly", "assetKey": "badge/badge_monthly", "isDefault": false },
+  { "id": "badge_veteran", "category": "badge", "rarity": "epic", "nameKey": "items.badge_veteran", "assetKey": "badge/badge_veteran", "isDefault": false }
+]
