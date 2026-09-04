@@ -94,7 +94,7 @@ function RoomTicket({ room, onJoin, lang, busy }: RoomTicketProps) {
         <div className={s.ticketHead}>
           <h3 className={s.roomName}>{room.name}</h3>
           {room.config.hasPassword ? (
-            <svg className={s.lock} viewBox="0 0 12 14" width="12" height="14" role="img" aria-label={t('labels.private')}>
+            <svg className={s.lock} viewBox="0 0 12 14" width="12" height="14" role="img" aria-label={t('labels.password')}>
               <path d="M3.2 6V4a2.8 2.8 0 0 1 5.6 0v2" fill="none" stroke="currentColor" strokeWidth="1.5" />
               <rect x="1.4" y="5.8" width="9.2" height="7.4" rx="1.7" fill="currentColor" />
             </svg>

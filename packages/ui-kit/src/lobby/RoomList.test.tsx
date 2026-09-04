@@ -57,6 +57,7 @@ describe('RoomList', () => {
     expect(screen.getByText('2/6')).toBeInTheDocument()
     expect(screen.getByText('4/4')).toBeInTheDocument()
     expect(screen.getByText(/5\.000/)).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /mật khẩu/i })).toBeInTheDocument()
     await userEvent.click(screen.getAllByRole('button', { name: /vào/i })[0]!)
     expect(onJoin).toHaveBeenCalledWith(rooms[0])
   })

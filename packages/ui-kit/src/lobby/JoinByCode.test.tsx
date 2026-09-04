@@ -18,4 +18,13 @@ describe('JoinByCode', () => {
     await userEvent.click(screen.getByRole('button', { name: /join/i }))
     expect(onJoin).toHaveBeenCalledWith('AB12CD', 'pw12')
   })
+  it('wires both field wrappers to their CSS-module class', () => {
+    const { container } = render(
+      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+        <JoinByCode onJoin={() => {}} lang="en" />
+      </I18nextProvider>,
+    )
+    expect(container.querySelectorAll('[class*="joinField"]')).toHaveLength(2)
+    expect(container.querySelector('[class="undefined"]')).toBeNull()
+  })
 })

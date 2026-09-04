@@ -33,7 +33,7 @@ export function JoinByCode({ onJoin, busy = false, error = null }: JoinByCodePro
   return (
     <form className={s.join} onSubmit={submit} noValidate>
       <div className={s.joinRow}>
-        <span className={s.joinCode}>
+        <span className={s.joinField}>
           <Field label={t('labels.code')}>
             <input
               className={cx(s.input, s.code)}
@@ -48,7 +48,7 @@ export function JoinByCode({ onJoin, busy = false, error = null }: JoinByCodePro
             />
           </Field>
         </span>
-        <span className={s.joinPassword}>
+        <span className={s.joinField}>
           <Field label={t('labels.password')}>
             <input
               className={s.input}
