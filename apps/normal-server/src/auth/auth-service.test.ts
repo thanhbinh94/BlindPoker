@@ -159,6 +159,37 @@ describe('register', () => {
   })
 })
 
+describe('register: an unexpected database fault', () => {
+  it('never lets the driver error out, because its message carries the address and the password hash', async () => {
+    // A default item that is not in `items`: a foreign-key violation on the last insert of the
+    // transaction, which is exactly the class of fault that used to reach the log verbatim.
+    defaults = ['no_such_item']
+
+    let thrown: unknown
+    await auth.register(GOOD).catch((err: unknown) => {
+      thrown = err
+    })
+    expect(thrown).toBeInstanceOf(Error)
+
+    const err = thrown as Error & { cause?: unknown; sqlstate?: string; constraint?: string }
+    const everything = `${String(err)} ${err.stack ?? ''} ${JSON.stringify(err)}`
+    expect(everything).not.toContain('binh@example.com')
+    expect(everything).not.toContain('$argon2id$')
+    expect(err.message).toContain('register failed')
+    expect(err.sqlstate).toBe('23503')
+    expect(err.cause).toBeUndefined()
+
+    // And the transaction took the half-built account back with it.
+    expect(await db.select().from(users)).toEqual([])
+    expect(await db.select().from(pointTransactions)).toEqual([])
+  })
+
+  it('still answers the two collisions it understands', async () => {
+    await auth.register(GOOD)
+    await expectAuthError(auth.register({ ...GOOD, displayName: 'Someone Else' }), 'EMAIL_TAKEN')
+  })
+})
+
 describe('login', () => {
   it('signs in and stamps last_login_at', async () => {
     const registered = await auth.register(GOOD)

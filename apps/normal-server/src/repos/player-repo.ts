@@ -15,6 +15,7 @@ import { displayNameKey, normalizeDisplayName } from '@bp/core'
 import type { PlayerRecord, PlayerRepository } from '@bp/server-kit'
 import { eq } from 'drizzle-orm'
 import type { AppDb } from '../db/client.js'
+import { isUniqueViolation } from '../db/pg-errors.js'
 import { players } from '../db/schema.js'
 import { UnknownPlayerError } from './balance-repo.js'
 import { isUuid } from './util.js'
@@ -56,31 +57,6 @@ export class DisplayNameTakenError extends Error {
 }
 
 const NAME_KEY_CONSTRAINT = 'players_name_key_unique'
-
-/**
- * Drizzle wraps the driver's error in a `Failed query: …` of its own, so the SQLSTATE and the
- * constraint name are one or two `cause` links down — and the two drivers word the message
- * differently. Walking the chain for `23505` plus the constraint name is what both agree on.
- *
- * Every link is inspected rather than just the outermost: a wrapper that happened to carry a `code`
- * of its own (a Node `ERR_*`, say) would otherwise mask the driver's `23505` and turn a name
- * collision into a 500. And where the driver names the constraint outright, that name decides —
- * drizzle's message embeds the query's *parameters*, so a player who tried to call themselves
- * `players_name_key_unique` must not be able to talk the message scan into agreeing.
- */
-function isUniqueViolation(err: unknown, constraint: string): boolean {
-  let unique = false
-  let named: boolean | undefined
-  const messages: string[] = []
-  for (let e: unknown = err; e instanceof Error; e = (e as { cause?: unknown }).cause) {
-    if ((e as { code?: unknown }).code === '23505') unique = true
-    const name = (e as { constraint?: unknown }).constraint
-    if (typeof name === 'string') named ??= name === constraint
-    messages.push(e.message)
-  }
-  if (!unique) return false
-  return named ?? messages.some((m) => m.includes(constraint))
-}
 
 const COLUMNS = {
   playerId: players.id,

@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { AppDb } from './client.js'
 import { rowsOf } from './client.js'
+import { sqlstate } from './pg-errors.js'
 import * as schema from './schema.js'
 import type { TestDb } from './test-db.js'
 import { createTestDb } from './test-db.js'
@@ -18,13 +19,8 @@ async function failureOf(run: () => Promise<unknown>): Promise<{ code: string | 
     await run()
   } catch (err) {
     const messages: string[] = []
-    let code: string | undefined
-    for (let e: unknown = err; e instanceof Error; e = (e as { cause?: unknown }).cause) {
-      messages.push(e.message)
-      const c = (e as { code?: unknown }).code
-      if (typeof c === 'string') code ??= c
-    }
-    return { code, text: messages.join(' | ') }
+    for (let e: unknown = err; e instanceof Error; e = (e as { cause?: unknown }).cause) messages.push(e.message)
+    return { code: sqlstate(err), text: messages.join(' | ') }
   }
   throw new Error('expected the query to be rejected, but it succeeded')
 }

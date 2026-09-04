@@ -57,7 +57,11 @@ export const players = pgTable('players', {
   check('players_balance_non_negative', sql`${t.balance} >= 0`),
 ])
 
-/** Session cookies. `id` is the SHA-256 hex of the cookie value, so a stolen row is not a session. */
+/**
+ * Session cookies. `id` is `hex(HMAC-SHA256(SESSION_SECRET, token))` — see `auth/session-service.ts` —
+ * so a stolen row is not a session, and an attacker who can write rows still cannot mint an id for a
+ * token of their choosing without also holding the secret from the server's environment.
+ */
 export const sessions = pgTable('sessions', {
   id: text('id').primaryKey(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),

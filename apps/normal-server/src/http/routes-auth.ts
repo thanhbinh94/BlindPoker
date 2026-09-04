@@ -14,10 +14,10 @@
  * Every failure is `@bp/http-kit`'s envelope: the routes throw `HttpError` and the error handler
  * registered by `buildApp` (Task 6) turns it into `{ error: { code, message } }`.
  */
-import { createRateLimiter, HttpError, type RateLimiter } from '@bp/http-kit'
+import { createRateLimiter, HttpError, type RateLimiter, type RateLimitVerdict } from '@bp/http-kit'
 import type { Logger } from '@bp/server-kit'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
-import { AuthError, type AuthErrorCode, type AuthService, type SessionGrant } from '../auth/auth-service.js'
+import { AuthError, MAX_EMAIL_LENGTH, type AuthErrorCode, type AuthService, type SessionGrant } from '../auth/auth-service.js'
 import { cookieOptions, readSessionCookie, SESSION_COOKIE } from '../auth/cookie.js'
 import type { SessionService } from '../auth/session-service.js'
 import type { NormalPlayerRepository } from '../repos/index.js'
@@ -34,10 +34,19 @@ export interface AuthRouteDeps {
   now?: () => number
   /** Overridden by tests that need to reach the limit without sending five real passwords. */
   loginRateLimit?: { limit: number; windowMs: number }
+  /** Likewise for registration, whose limit is per address rather than per account. */
+  registerRateLimit?: { limit: number; windowMs: number }
 }
 
 /** Spec §19.2: five sign-in attempts a minute for one address from one place. */
 const LOGIN_RATE_LIMIT = { limit: 5, windowMs: 60_000 }
+
+/**
+ * Registration is the most expensive unauthenticated thing this server does - a 64 MiB argon2 hash
+ * and a six-statement transaction, with no password to be wrong first - so it is capped per address
+ * too. Ten a minute is far more than a person signs up, and far less than a machine would like.
+ */
+const REGISTER_RATE_LIMIT = { limit: 10, windowMs: 60_000 }
 
 /** How an `AuthError` reaches the client. The codes are the client's; only the status is added here. */
 const STATUS: Record<AuthErrorCode, number> = {
@@ -75,6 +84,19 @@ function stringField(body: unknown, key: string, code: AuthErrorCode): string {
   return value
 }
 
+/**
+ * The address as it goes into a rate-limit key: normalized, and *bounded*.
+ *
+ * The limiter holds one map entry per distinct key for a whole window and only sweeps once it is
+ * over a thousand keys, so an unbounded key is a body-sized allocation an unauthenticated caller
+ * gets to retain - and one an attacker can vary freely to dilute the limit they are under.
+ * Truncating rather than rejecting keeps an over-long address a `401 BAD_CREDENTIALS` like every
+ * other address that does not match an account, instead of a 400 that skips the limiter entirely.
+ */
+function limiterEmail(email: string): string {
+  return email.trim().toLowerCase().slice(0, MAX_EMAIL_LENGTH)
+}
+
 function credentials(req: FastifyRequest): { email: string; password: string } {
   return {
     email: stringField(req.body, 'email', 'INVALID_EMAIL'),
@@ -85,8 +107,17 @@ function credentials(req: FastifyRequest): { email: string; password: string } {
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): void {
   const now = deps.now ?? Date.now
   const loginLimiter: RateLimiter = createRateLimiter({ ...(deps.loginRateLimit ?? LOGIN_RATE_LIMIT), now })
+  const registerLimiter: RateLimiter = createRateLimiter({ ...(deps.registerRateLimit ?? REGISTER_RATE_LIMIT), now })
   const requireUser = createRequireUser(deps)
   decorateRequestUser(app)
+
+  /** One shape for "you have had enough": the `Retry-After` header and the same code in the envelope. */
+  function limit(req: FastifyRequest, reply: FastifyReply, verdict: RateLimitVerdict, message: string): void {
+    if (verdict.allowed) return
+    deps.log.warn('rate limited', { ip: req.ip, url: req.url })
+    reply.header('retry-after', String(verdict.retryAfterSec))
+    throw new HttpError(429, 'RATE_LIMITED', message, { retryAfterSec: verdict.retryAfterSec })
+  }
 
   /** Sets the cookie for a freshly issued session, giving it exactly that session's remaining life. */
   function grant(reply: FastifyReply, session: SessionGrant): void {
@@ -102,25 +133,33 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     return { playerId: player.playerId, displayName: player.displayName, balance: player.balance }
   }
 
-  app.post('/api/auth/register', async (req, reply) => {
+  app.post('/api/auth/register', {
+    preHandler: async (req, reply) => {
+      limit(req, reply, registerLimiter.check(req.ip), 'too many sign-ups from this address')
+    },
+  }, async (req, reply) => {
     const { email, password } = credentials(req)
     const displayName = stringField(req.body, 'displayName', 'INVALID_NAME')
     const session = await translating(() => deps.auth.register({ email, password, displayName, userAgent: req.headers['user-agent'] }))
     deps.log.info('account registered', { playerId: session.userId })
+    // The body first, the cookie second: `@fastify/cookie` writes reply cookies on `onSend` whatever
+    // the status, so setting it before this line could hand a client a 500 *and* a live session.
+    const body = await accountBody(session.userId)
     grant(reply, session)
-    return reply.code(201).send(await accountBody(session.userId))
+    return reply.code(201).send(body)
   })
 
   app.post('/api/auth/login', {
     // A pre-handler, not a check inside the body: `preHandler` runs after the body is parsed, so the
     // email is available, and a rate-limited attempt then never reaches argon2 at all.
+    //
+    // A missing `email` field is a 400 while an `email` that is merely not an address is a 401: the
+    // first is a malformed request, the second is a credential that matches no account - and
+    // answering the second with a 400 would tell a caller which addresses this server considers
+    // registerable.
     preHandler: async (req, reply) => {
       const email = stringField(req.body, 'email', 'INVALID_EMAIL')
-      const verdict = loginLimiter.check(`${req.ip}|${email.trim().toLowerCase()}`)
-      if (verdict.allowed) return
-      deps.log.warn('login rate limited', { ip: req.ip })
-      reply.header('retry-after', String(verdict.retryAfterSec))
-      throw new HttpError(429, 'RATE_LIMITED', 'too many sign-in attempts for this account', { retryAfterSec: verdict.retryAfterSec })
+      limit(req, reply, loginLimiter.check(`${req.ip}|${limiterEmail(email)}`), 'too many sign-in attempts for this account')
     },
   }, async (req, reply) => {
     const { email, password } = credentials(req)
@@ -128,8 +167,9 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
       deps.auth.login({ email, password, userAgent: req.headers['user-agent'], currentToken: readSessionCookie(req) }),
     )
     deps.log.info('signed in', { playerId: session.userId })
+    const body = await accountBody(session.userId)
     grant(reply, session)
-    return reply.code(200).send(await accountBody(session.userId))
+    return reply.code(200).send(body)
   })
 
   app.post('/api/auth/logout', async (req, reply) => {

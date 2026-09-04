@@ -35,7 +35,13 @@ let nowMs = START
  * parser, the CSRF guard and the error handler. Without these, `inject` would see neither the real
  * error envelope nor a real `Set-Cookie`, and the assertions below would be about a fiction.
  */
-async function buildTestApp(opts: { cookieSecure?: boolean; loginRateLimit?: { limit: number; windowMs: number } } = {}): Promise<FastifyInstance> {
+interface AppOptions {
+  cookieSecure?: boolean
+  loginRateLimit?: { limit: number; windowMs: number }
+  registerRateLimit?: { limit: number; windowMs: number }
+}
+
+async function buildTestApp(opts: AppOptions = {}): Promise<FastifyInstance> {
   const instance = Fastify({ logger: false })
   await instance.register(fastifyCookie)
   registerTolerantJsonParser(instance)
@@ -52,6 +58,7 @@ async function buildTestApp(opts: { cookieSecure?: boolean; loginRateLimit?: { l
     log: silentLogger,
     now: () => nowMs,
     ...(opts.loginRateLimit === undefined ? {} : { loginRateLimit: opts.loginRateLimit }),
+    ...(opts.registerRateLimit === undefined ? {} : { registerRateLimit: opts.registerRateLimit }),
   })
   await instance.ready()
   return instance
@@ -142,6 +149,36 @@ describe('POST /api/auth/register', () => {
     expect((name.json() as { error: { code: string } }).error.code).toBe('DISPLAY_NAME_TAKEN')
   })
 
+  it('does not let a caller choose which 409 their collision is reported as', async () => {
+    // `users_email_unique` is a legal display name, and drizzle's error message embeds the failing
+    // statement's parameters - so a constraint check that scanned that message would read this
+    // `players` collision as the EMAIL_TAKEN the caller wrote themselves.
+    expect((await register({ ...GOOD, displayName: 'users_email_unique' })).statusCode).toBe(201)
+    const res = await register({ ...GOOD, email: 'other@example.com', displayName: 'users_email_unique' })
+    expect(res.statusCode).toBe(409)
+    expect((res.json() as { error: { code: string } }).error.code).toBe('DISPLAY_NAME_TAKEN')
+
+    // And the same trick through the address, against a genuine email collision.
+    expect((await register({ ...GOOD, email: 'players_name_key_unique@example.com', displayName: 'Someone New' })).statusCode).toBe(201)
+    const again = await register({ ...GOOD, email: 'players_name_key_unique@example.com', displayName: 'Another Name' })
+    expect(again.statusCode).toBe(409)
+    expect((again.json() as { error: { code: string } }).error.code).toBe('EMAIL_TAKEN')
+  })
+
+  it('rate limits sign-ups per address, with Retry-After', async () => {
+    await app.close()
+    app = await buildTestApp({ registerRateLimit: { limit: 1, windowMs: 60_000 } })
+
+    expect((await register()).statusCode).toBe(201)
+    const limited = await register({ ...GOOD, email: 'other@example.com', displayName: 'Someone Else' })
+    expect(limited.statusCode).toBe(429)
+    expect(limited.json()).toEqual({ error: { code: 'RATE_LIMITED', message: expect.any(String) }, retryAfterSec: 60 })
+    expect(limited.headers['retry-after']).toBe('60')
+
+    nowMs += 60_000
+    expect((await register({ ...GOOD, email: 'other@example.com', displayName: 'Someone Else' })).statusCode).toBe(201)
+  })
+
   it('is refused without the CSRF header, before any account is created', async () => {
     const res = await app.inject({ method: 'POST', url: '/api/auth/register', payload: GOOD })
     expect(res.statusCode).toBe(403)
@@ -199,6 +236,20 @@ describe('POST /api/auth/login', () => {
     // And the window rolls over.
     nowMs += 60_000
     expect((await login({ email: GOOD.email, password: GOOD.password })).statusCode).toBe(200)
+  })
+
+  it('bounds the address it keys the limiter on, so one caller cannot retain a map entry per body', async () => {
+    await app.close()
+    app = await buildTestApp({ loginRateLimit: { limit: 2, windowMs: 60_000 } })
+
+    // Two 10 kB addresses agreeing on their first 254 characters. Untruncated they are two keys and
+    // twenty kilobytes of retained heap; truncated they are one key, and the third attempt is a 429.
+    const head = `${'a'.repeat(250)}@example.com`
+    const long = (tail: string) => head + tail.repeat(10_000)
+
+    expect((await login({ email: long('x'), password: 'wrong password' })).statusCode).toBe(401)
+    expect((await login({ email: long('x'), password: 'wrong password' })).statusCode).toBe(401)
+    expect((await login({ email: long('y'), password: 'wrong password' })).statusCode).toBe(429)
   })
 })
 

@@ -23,7 +23,7 @@
 import { ECONOMY, validateDisplayName, type PlayerIdentity } from '@bp/core'
 import { eq } from 'drizzle-orm'
 import type { AppDb } from '../db/client.js'
-import { isUniqueViolation } from '../db/pg-errors.js'
+import { isUniqueViolation, sanitizeDbError } from '../db/pg-errors.js'
 import { dailyLogins, inventory, players, playerStats, users } from '../db/schema.js'
 import { creditWithin, type NormalRepositories } from '../repos/index.js'
 import { DUMMY_HASH, hashPassword, validatePassword, verifyPassword, type Argon2Params } from './password.js'
@@ -105,7 +105,11 @@ export interface AuthServiceDeps {
   onLogin?: (playerId: string, at: number) => void
 }
 
-const MAX_EMAIL_LENGTH = 254
+/**
+ * RFC 5321's cap. Exported because the login rate limiter has to bound the address it keys on, and a
+ * second opinion about how long an address may be would let an over-long one slip past one of the two.
+ */
+export const MAX_EMAIL_LENGTH = 254
 /**
  * RFC-lite, and deliberately ASCII: the local part is checked against the RFC 5322 "atext" set
  * rather than "anything before an @". `users.email` is stored lowercased and the database CHECKs it
@@ -124,6 +128,15 @@ export function normalizeEmail(raw: string): string {
 
 export function isValidEmail(email: string): boolean {
   return email.length <= MAX_EMAIL_LENGTH && EMAIL.test(email)
+}
+
+/** Runs a query, and lets nothing but a sanitized fault out of it. */
+async function sanitizing<T>(operation: string, run: () => PromiseLike<T>): Promise<T> {
+  try {
+    return await run()
+  } catch (err) {
+    throw sanitizeDbError(operation, err)
+  }
 }
 
 export function createAuthService(deps: AuthServiceDeps): AuthService {
@@ -172,7 +185,11 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
       } catch (err) {
         if (isUniqueViolation(err, USERS_EMAIL_CONSTRAINT)) throw new AuthError('EMAIL_TAKEN')
         if (isUniqueViolation(err, PLAYERS_NAME_CONSTRAINT)) throw new AuthError('DISPLAY_NAME_TAKEN')
-        throw err
+        // Anything else is a 500, and a 500 is logged. Drizzle builds its message as
+        // `Failed query: … params: …`, and for the `users` insert those parameters are the address
+        // and the argon2 hash — offline-cracking material, in a log file, from a statement timeout.
+        // `sanitizeDbError` keeps the SQLSTATE and the constraint and drops the rest.
+        throw sanitizeDbError('register', err)
       }
 
       const { token, expiresAt } = await deps.sessions.create(userId, input.userAgent)
@@ -181,10 +198,11 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
 
     async login(input) {
       const email = normalizeEmail(input.email)
-      const [account] = await deps.db
-        .select({ id: users.id, passwordHash: users.passwordHash })
-        .from(users)
-        .where(eq(users.email, email))
+      // Same reasoning as `register`: this statement's parameter is the address, and the update
+      // below runs after a password has been verified — neither belongs in a 5xx log line.
+      const [account] = await sanitizing('login', () =>
+        deps.db.select({ id: users.id, passwordHash: users.passwordHash }).from(users).where(eq(users.email, email)),
+      )
 
       // Both branches verify a password against a real argon2id hash, so they cost the same and
       // answer the same. Deleting the `DUMMY_HASH` line would make the unknown address the fast one.
@@ -195,7 +213,7 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
       if (!(await verifyPassword(account.passwordHash, input.password))) throw new AuthError('BAD_CREDENTIALS')
 
       const at = now()
-      await deps.db.update(users).set({ lastLoginAt: new Date(at) }).where(eq(users.id, account.id))
+      await sanitizing('login', () => deps.db.update(users).set({ lastLoginAt: new Date(at) }).where(eq(users.id, account.id)))
       // Rotation, §23: the presented session dies whether or not it belonged to this account, and a
       // new one is issued regardless. Revoking first means a crash between the two leaves no session
       // rather than two.

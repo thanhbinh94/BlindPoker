@@ -48,6 +48,13 @@ export async function verifyPassword(hashed: string, plain: string): Promise<boo
 /** A hash of 32 random bytes: nothing verifies against it, and nothing has to, for it to cost what a real one costs. */
 export const DUMMY_HASH: Promise<string> = hashPassword(randomBytes(32).toString('base64url'))
 
+// The promise is created at import and first awaited on the first unknown-email sign-in, which may be
+// hours later. If argon2 fails at boot — a missing native binding, an allocation refused — Node's
+// default unhandled-rejection behaviour would kill the process in the meantime, with nothing said
+// about why. This marks it handled; `DUMMY_HASH` itself still rejects for whoever awaits it, so the
+// failure surfaces at the login that needed it rather than as a silent exit at start-up.
+void DUMMY_HASH.catch(() => {})
+
 export type PasswordRefusal = 'length' | 'weak'
 
 export type PasswordVerdict = { ok: true } | { ok: false; reason: PasswordRefusal }
