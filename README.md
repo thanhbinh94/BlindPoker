@@ -1,7 +1,19 @@
 # Bind Poker
 
 Real-time multiplayer poker (No-Limit Texas Hold'em + Blind Poker) with virtual points only.
-Two editions from one codebase: **Normal** (public, PostgreSQL) and **Lite** (single Windows exe, SQLite).
+Two editions from one codebase, sharing the engine, the room layer and the HTTP plumbing:
+
+| | **Normal** | **Lite** |
+| --- | --- | --- |
+| For | A public server on the Internet | One trusted LAN |
+| Ships as | A Docker image, behind Caddy | One Windows `.exe` |
+| Database | PostgreSQL 16 (Drizzle) | SQLite (`node:sqlite`), beside the exe |
+| Identity | Email + password (argon2id), session cookie | A display name and a bearer token |
+| Has | Cosmetics, inventory, avatars, achievements, points ledger | Points, daily reward, relief |
+| Needs | A host, a domain, TLS | A double-click |
+| Deploy guide | [`docs/deployment-normal.md`](docs/deployment-normal.md) | [`docs/deployment-lite.md`](docs/deployment-lite.md) |
+
+Both are points-only: nothing here is purchasable and nothing converts to money.
 
 Design: `docs/superpowers/specs/2026-09-04-bind-poker-design.md`.
 
@@ -21,7 +33,39 @@ pnpm lint
 - `packages/http-kit` — shared Fastify plumbing: `.env` reading, JSON logger, rate limiter, static assets, security headers, CSRF guard, error envelope
 - `packages/ui-kit` — shared React UI: game client, i18n (vi/en), theme, poker table, lobby, screens (see docs/ui-kit.md)
 - `apps/lite` — the Lite edition: Fastify + `node:sqlite` server, React web app, single-exe build
-- `apps/normal-server`, `apps/normal-web` (planned)
+- `apps/normal-server` — the Normal edition's backend: accounts, PostgreSQL, economy, cosmetics, achievements (see docs/normal-server.md)
+- `apps/normal-web` (planned)
+- `deploy/normal` — the Compose stack for the Normal edition: app + Postgres + Caddy, backup and restore
+
+## Normal edition
+
+A server for the open Internet: real accounts, PostgreSQL, HTTPS. It runs as a four-service Docker
+Compose stack — the app, `postgres:16`, a one-shot migration job, and Caddy terminating TLS.
+
+```bash
+cd deploy/normal
+cp .env.example .env && $EDITOR .env     # DOMAIN, POSTGRES_PASSWORD, SESSION_SECRET
+docker compose config                    # substitutes everything; fails loudly on a missing value
+docker compose up -d --build
+curl -fsS https://$DOMAIN/health         # {"ok":true,…,"db":"ok"}
+```
+
+DNS for `$DOMAIN` must already point at the host, and ports 80 and 443 must be reachable — Caddy
+gets a Let's Encrypt certificate on its first start. Start-up order is enforced, not timed: `db`
+becomes healthy, the `migrate` service applies the committed migrations and exits, then `app` starts.
+
+Without Docker, for development:
+
+```bash
+pnpm --filter @bp/normal-server test        # 300+ tests, on in-process PGlite — no database needed
+pnpm build:normal                           # typecheck + esbuild → dist/main.js, dist/migrate-cli.js
+pnpm --filter @bp/normal-server dev         # build, then run (needs a real DATABASE_URL)
+```
+
+- Operations, backup, upgrade, security: [`docs/deployment-normal.md`](docs/deployment-normal.md)
+- Module map, event bus, ledger conventions, adding an item or achievement:
+  [`docs/normal-server.md`](docs/normal-server.md)
+- Restore procedure: [`deploy/normal/restore.md`](deploy/normal/restore.md)
 
 ## Lite edition
 

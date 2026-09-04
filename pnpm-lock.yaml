@@ -123,6 +123,9 @@ importers:
       pg:
         specifier: 8.23.0
         version: 8.23.0
+      ws:
+        specifier: ^8.18.0
+        version: 8.21.3
     devDependencies:
       '@electric-sql/pglite':
         specifier: 0.5.8
@@ -133,6 +136,9 @@ importers:
       drizzle-kit:
         specifier: 0.31.10
         version: 0.31.10
+      esbuild:
+        specifier: ^0.24.0
+        version: 0.24.2
       typescript:
         specifier: ^5.6.3
         version: 5.9.3

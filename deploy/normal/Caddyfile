@@ -1,0 +1,21 @@
+# Caddy in front of the Normal server: TLS, compression, and nothing else.
+#
+# `{$DOMAIN}` is read from the environment (the `caddy` service in docker-compose.yml passes it), so
+# there is one place to set the hostname: `.env`.
+#
+# Naming the site by hostname is what turns on automatic HTTPS — Caddy gets a Let's Encrypt
+# certificate on first start and renews it, and redirects http:// to https:// on its own. That needs
+# port 80 and 443 reachable from the Internet and DNS already pointing here.
+#
+# For a local trial without a public name, use `localhost` instead of `{$DOMAIN}` (Caddy issues its
+# own internal certificate) and set `ALLOWED_ORIGINS=https://localhost` for the app.
+
+{$DOMAIN} {
+	encode gzip
+
+	# WebSocket upgrades need no configuration here: `reverse_proxy` passes `Connection` and
+	# `Upgrade` through, so `/ws` works as-is. It also sets `X-Forwarded-For` and
+	# `X-Forwarded-Proto`, which is why the app runs with `TRUST_PROXY=true` — and why the app must
+	# never be published on a host port where something could reach it around this proxy.
+	reverse_proxy app:8080
+}

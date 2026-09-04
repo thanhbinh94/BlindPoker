@@ -10,7 +10,7 @@
     "test:watch": "vitest",
     "typecheck": "pnpm -r run typecheck",
     "lint": "eslint .",
-    "build:normal": "pnpm --filter @bp/normal-server --filter @bp/normal-web run build",
+    "build:normal": "pnpm --filter @bp/normal-server run build",
     "db:generate": "pnpm --filter @bp/normal-server db:generate",
     "build:lite": "pnpm --filter @bp/lite run build"
   },

@@ -1,0 +1,52 @@
+# Exclusions for `docker build -f apps/normal-server/Dockerfile .`
+#
+# The name is not a typo. The build context is the *repository root* (a workspace package cannot be
+# installed without its workspace), so a `.dockerignore` sitting in this directory would never be
+# read. BuildKit looks for `<dockerfile>.dockerignore` first and falls back to `<context>/.dockerignore`,
+# which is how a per-Dockerfile ignore list can live next to its Dockerfile instead of at the root.
+#
+# Everything below is either rebuilt inside the image, useless to it, or must not be in an image at
+# all. The `node_modules` line is the one that matters most: copying a pnpm store into the context
+# costs hundreds of megabytes and the platform-specific binaries in it are wrong for Alpine anyway.
+
+node_modules
+**/node_modules
+
+# Rebuilt in the builder stage.
+dist
+**/dist
+release
+**/release
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+# Repository furniture with no bearing on the image.
+.git
+.gitignore
+.github
+.vscode
+.idea
+.claude
+.superpowers
+docs
+deploy
+requirement.txt
+README.md
+**/*.md
+
+# Test and e2e artefacts.
+coverage
+**/coverage
+playwright-report
+test-results
+apps/lite/e2e
+apps/normal-server/test
+
+# Never: real secrets, local databases, local editor state.
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+bind-poker.run.json
