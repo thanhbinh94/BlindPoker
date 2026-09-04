@@ -1,0 +1,41 @@
+{
+  "errors": {
+    "UNAUTHENTICATED": "You're not signed in",
+    "INVALID_MESSAGE": "Invalid request",
+    "RATE_LIMITED": "You're doing that too fast — try again shortly",
+    "ROOM_NOT_FOUND": "Room not found",
+    "ROOM_FULL": "Room is full",
+    "WRONG_PASSWORD": "Wrong password",
+    "INVALID_ROOM_CONFIG": "Invalid room settings",
+    "NOT_HOST": "You're not the host",
+    "SEAT_TAKEN": "Seat already taken",
+    "INSUFFICIENT_BALANCE": "Insufficient balance",
+    "NOT_YOUR_TURN": "It's not your turn",
+    "ILLEGAL_ACTION": "That action isn't allowed",
+    "INVALID_AMOUNT": "Invalid amount",
+    "STALE_STATE": "State is stale — try again",
+    "DUPLICATE_REQUEST": "Duplicate request",
+    "NOT_IN_HAND": "You're not in this hand",
+    "NOT_IN_ROOM": "You're not in a room",
+    "ALREADY_IN_ROOM": "You're already in another room",
+    "NOT_SEATED": "You're not seated",
+    "GAME_IN_PROGRESS": "A hand is in progress",
+    "NOT_ENOUGH_PLAYERS": "Not enough players",
+    "DISPLAY_NAME_TAKEN": "That display name is taken",
+    "SERVER_SHUTDOWN": "Server is shutting down",
+    "INTERNAL": "Something went wrong — please try again"
+  },
+  "language": {
+    "vi": "Tiếng Việt",
+    "en": "English"
+  },
+  "units": {
+    "points": "points",
+    "pointsShort": "pts",
+    "seconds": "sec"
+  },
+  "time": {
+    "seconds": "{{count}} sec",
+    "minutes": "{{count}} min"
+  }
+}

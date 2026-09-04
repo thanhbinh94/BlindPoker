@@ -1,0 +1,192 @@
+{
+  "app": {
+    "title": "Bind Poker"
+  },
+  "nav": {
+    "lobby": "Lobby",
+    "rooms": "Rooms",
+    "profile": "Profile",
+    "settings": "Settings",
+    "language": "Language",
+    "logout": "Log out"
+  },
+  "actions": {
+    "fold": "Fold",
+    "check": "Check",
+    "call": "Call",
+    "bet": "Bet",
+    "raise": "Raise",
+    "allIn": "All-in",
+    "play": "Play",
+    "sitDown": "Sit down",
+    "standUp": "Stand up",
+    "ready": "Ready",
+    "notReady": "Not ready",
+    "start": "Start",
+    "leave": "Leave",
+    "kick": "Kick",
+    "resync": "Resync",
+    "create": "Create room",
+    "join": "Join",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "close": "Close",
+    "back": "Back",
+    "retry": "Retry"
+  },
+  "labels": {
+    "pot": "Pot",
+    "carryOver": "Carry-over",
+    "balance": "Balance",
+    "stack": "Stack",
+    "seat": "Seat",
+    "dealer": "Dealer",
+    "you": "You",
+    "bot": "Bot",
+    "host": "Host",
+    "turn": "Turn",
+    "waiting": "Waiting",
+    "sittingOut": "Sitting out",
+    "disconnected": "Disconnected",
+    "allIn": "All-in",
+    "folded": "Folded",
+    "ready": "Ready",
+    "inHand": "In hand",
+    "nextHandIn": "Next hand in",
+    "fee": "Table fee",
+    "winner": "Winner",
+    "winners": "Winners",
+    "split": "Split",
+    "tie": "Tie",
+    "uncalledReturned": "Uncalled bet returned",
+    "handCancelled": "Hand cancelled",
+    "buyIn": "Buy-in",
+    "wager": "Wager",
+    "blinds": "Blinds",
+    "mode": "Mode",
+    "variant": "Variant",
+    "holeCards": "Hole cards",
+    "timer": "Timer",
+    "players": "Players",
+    "code": "Room code",
+    "password": "Password",
+    "private": "Private",
+    "public": "Public",
+    "autoStart": "Auto-start",
+    "name": "Name"
+  },
+  "mode": {
+    "holdem": "Texas Hold'em",
+    "blind": "Blind Poker"
+  },
+  "blind": {
+    "decision": {
+      "none": "Pure luck",
+      "playOrFold": "Play or fold"
+    },
+    "cards2": "2 cards",
+    "cards3": "3 cards"
+  },
+  "phase": {
+    "dealing": "Dealing",
+    "betting": "Betting",
+    "decision": "Deciding",
+    "reveal": "Revealing",
+    "showdown": "Showdown",
+    "complete": "Complete"
+  },
+  "street": {
+    "preflop": "Preflop",
+    "flop": "Flop",
+    "turn": "Turn",
+    "river": "River"
+  },
+  "card": {
+    "rank": {
+      "2": "2",
+      "3": "3",
+      "4": "4",
+      "5": "5",
+      "6": "6",
+      "7": "7",
+      "8": "8",
+      "9": "9",
+      "T": "10",
+      "J": "Jack",
+      "Q": "Queen",
+      "K": "King",
+      "A": "Ace"
+    },
+    "suit": {
+      "c": "clubs",
+      "d": "diamonds",
+      "h": "hearts",
+      "s": "spades"
+    },
+    "of": "{{rank}} of {{suit}}"
+  },
+  "hand": {
+    "highCard": "High card",
+    "pair": "Pair",
+    "twoPair": "Two pair",
+    "trips": "Three of a kind",
+    "straight": "Straight",
+    "flush": "Flush",
+    "fullHouse": "Full house",
+    "quads": "Four of a kind",
+    "straightFlush": "Straight flush",
+    "royalFlush": "Royal flush"
+  },
+  "status": {
+    "connecting": "Connecting",
+    "reconnecting": "Reconnecting",
+    "offline": "Offline",
+    "replaced": "Signed in elsewhere"
+  },
+  "lobby": {
+    "title": "Lobby",
+    "empty": "No rooms yet — create one.",
+    "create": "Create room",
+    "joinByCode": "Join by code",
+    "codePlaceholder": "Enter room code",
+    "passwordPlaceholder": "Enter password",
+    "filters": {
+      "all": "All",
+      "holdem": "Hold'em",
+      "blind": "Blind"
+    },
+    "playersOf": "{{current}}/{{max}} players"
+  },
+  "create": {
+    "title": "Create a room",
+    "name": "Room name",
+    "mode": "Game mode",
+    "maxPlayers": "Max players",
+    "turnTimer": "Turn timer",
+    "private": "Private room",
+    "password": "Room password",
+    "autoStart": "Auto-start",
+    "smallBlind": "Small blind",
+    "bigBlind": "Big blind",
+    "blindTier": "Blind tier",
+    "buyIn": "Buy-in",
+    "minBuyIn": "Min buy-in",
+    "maxBuyIn": "Max buy-in",
+    "holeCards": "Hole cards",
+    "decisionMode": "Decision mode",
+    "wager": "Fixed wager",
+    "botCount": "Bot count",
+    "submit": "Create room",
+    "invalid": "Room settings are invalid"
+  },
+  "room": {
+    "title": "Room",
+    "waitingForHost": "Waiting for the host to start",
+    "readyCount": "{{ready}}/{{total}} ready",
+    "startHint": "At least 2 players must be ready to start",
+    "leaveConfirm": "Leave this room?",
+    "closed": "Room closed",
+    "kicked": "You were kicked from the room",
+    "hostLeft": "The host left"
+  }
+}
