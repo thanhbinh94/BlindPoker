@@ -150,9 +150,18 @@ export function PokerTable({
   )
 
   if (mode === 'stack') {
+    // Spec §27.1/§27.3: the strip shows every other seat, always. Four opponents or more and it holds two rows
+    // open; seven or more and the plates go compact so the extra row fits rather than scrolling out of sight.
+    const opponents = order.filter((i) => i !== mySeat)
     return (
       <section className={cx(s.table, s.stack)} data-surface="night" aria-label={t('labels.table')}>
-        <div className={s.others}>{order.filter((i) => i !== mySeat).map(renderSeat)}</div>
+        <div
+          className={cx(s.others, opponents.length > 3 && s.othersTwoRow, opponents.length > 6 && s.othersChip)}
+          role="group"
+          aria-label={t('labels.players')}
+        >
+          {opponents.map(renderSeat)}
+        </div>
         <div className={s.stackFelt}>{centre}</div>
         {mySeat === null ? null : <div className={s.mine}>{renderSeat(mySeat)}</div>}
       </section>

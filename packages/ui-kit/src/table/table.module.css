@@ -594,25 +594,112 @@
   }
 }
 
-/* vertical layout under 768 px: opponents / board / me.
-   The board and my own seat are the two things that must never scroll away, so on a stage of known height the
-   opponents' strip is the part that gives: it takes the leftover row and scrolls inside it. */
+/* vertical layout under 768 px: opponents / board / me (spec §27.1 two-row grid, §27.3 "must show" list).
+   Every seat at the table has to be *visible*. An opponent parked behind an inner scrollbar is an opponent the
+   player does not know is at the table — so the strip never scrolls inside itself: it wraps as far as it needs to,
+   keeps a hard floor of two plate rows, and the felt is the row that gives instead. */
+/* Rows: opponents / felt / me. Two notes on the track sizes, both learned the hard way in the browser.
+   - `minmax(min-content, auto)` on the strip, not a bare `auto`: the two-row floor below is a `min-height`, and a
+     specified `min-height` *replaces* a grid item's automatic minimum size — so with a plain `auto` track a
+     squeezed stage shrinks the strip back to exactly those two rows and clips the third. Pinning the track's
+     minimum to the strip's own min-content height makes the floor a floor and never a ceiling.
+   - The felt is the only flexible row (`1fr`), so it is the one that takes or gives the slack — but its minimum is
+     `min-content`, not `0`. The board and the pot are on spec §27.3's must-show list; a `0` minimum collapses the
+     felt to its padding and drops the community cards behind the viewer's own seat. When even that does not fit,
+     `.roomMain` scrolls, which is a scrollbar the player can see. */
 .stack {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-rows: minmax(min-content, auto) minmax(min-content, 1fr) auto;
   gap: var(--space-3);
   align-self: stretch;
+  /* inside `.roomMain`, which centres its child: without this the strip would only be as wide as its plates */
+  width: 100%;
   min-height: 0;
+  /* one opponent block in the strip = plate + its cards + its badge row; the two-row floor is measured in these */
+  --plate-h: 104px;
 }
 
+/* `auto-fill`, not `auto-fit`: an empty trailing track keeps three columns at 360 px instead of stretching two
+   plates across the whole strip once the seats run out. */
 .others {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--plate-min, 104px), 1fr));
   gap: var(--space-2);
   align-items: start;
   align-content: start;
-  min-height: 0;
-  overflow-y: auto;
+}
+
+/* From four opponents up the strip is a two-row grid whatever the felt would rather have. Below that the seats fit
+   on one row anyway and reserving a second would only steal height from the board. */
+.othersTwoRow {
+  min-height: calc(2 * var(--plate-h) + var(--space-2));
+}
+
+/* Seven seats and up: three plates a row is already the floor at 360 px, so the block gives instead of the grid.
+   The opponent becomes a chip — avatar, name, stack, and a second line carrying the bet and the state badge side
+   by side instead of one under the other. What goes is the pair of face-down card backs: for an *opponent* they
+   only ever say "still holding two", which the badge row says in words. Everything spec §27.3 asks a seat to show
+   — name, stack, avatar, current bet, fold/all-in/sitting-out/disconnected — stays. Shrinking the block is what
+   keeps the third row on screen; hiding the ninth player is not an alternative. */
+.othersChip {
+  --plate-min: 96px;
+  --plate-h: 54px;
+}
+
+.othersChip .seat {
+  flex-flow: row wrap;
+  justify-content: center;
+  gap: 3px;
+}
+
+.othersChip .plate {
+  flex: 0 0 100%;
+}
+
+.othersChip .seatCards {
+  display: none;
+}
+
+.othersChip .plate {
+  gap: 5px;
+  padding: 3px 5px;
+}
+
+.othersChip .avatar {
+  width: 22px;
+  height: 22px;
+  font-size: 0.6875rem;
+}
+
+.othersChip .seatName,
+.othersChip .seatStack {
+  font-size: 0.6875rem;
+}
+
+.othersChip .cardSm {
+  --card-w: clamp(18px, 5.2vw, 24px);
+}
+
+/* The badge row and the bet chip stay — a folded or all-in seat must say so in words, not in hue alone — they just
+   stop claiming a full line each. */
+.othersChip .tags {
+  gap: 2px;
+}
+
+.othersChip .tags > * {
+  padding: 0 5px;
+  font-size: 0.625rem;
+  letter-spacing: 0;
+}
+
+.othersChip .bet {
+  padding: 0 6px;
+  font-size: 0.625rem;
+}
+
+.othersChip .bet::before {
+  width: 6px;
+  height: 6px;
 }
 
 /* plate first keeps every opponent's name on the same baseline whatever their card count */
