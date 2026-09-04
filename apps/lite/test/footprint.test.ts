@@ -13,7 +13,13 @@ import { gzipSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import { ASSET_MANIFEST, EXE, PUBLIC_DIR, SERVER_BUNDLE, sizeOf, walk } from './paths.js'
 
-/** Packages the Lite bundle must never pull in: Normal's ORM, hashing, Postgres driver and router. */
+/**
+ * Packages the Lite bundle must never pull in: Normal's ORM, hashing, Postgres driver and router.
+ *
+ * This is a denylist, and deliberately so. The single source of truth for what Lite depends on is
+ * `apps/lite/package.json`; this list only catches the specific heavyweights that would mean the
+ * boundary had been crossed. Adding a dependency is a change to the manifest, never to this array.
+ */
 const FORBIDDEN = ['drizzle', 'argon2', 'postgres', 'pg-protocol', 'better-sqlite3', 'react-router']
 
 /**

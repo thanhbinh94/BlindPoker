@@ -204,9 +204,12 @@ function buildExe({ smoke }) {
   }
 
   const size = statSync(EXE).size
+  // Not a reproducible-build hash: `useCodeCache` bakes this machine's V8 compilation into the blob,
+  // and the fallback above can change what went in. It fingerprints *this* released file — copy it
+  // to the server and compare — rather than something rebuildable from the same commit.
   const sha256 = createHash('sha256').update(readFileSync(EXE)).digest('hex')
   log(`exe: release/lite/bind-poker-lite.exe ${mb(size)}`)
-  log(`exe: sha256 ${sha256}`)
+  log(`exe: sha256 ${sha256} (identifies this build, not reproducible: useCodeCache)`)
   for (const name of RELEASE_FILES) log(`exe: release/lite/${name}`)
   if (size > MAX_EXE_BYTES) die(`exe: ${mb(size)} exceeds the ${mb(MAX_EXE_BYTES)} cap`)
 }

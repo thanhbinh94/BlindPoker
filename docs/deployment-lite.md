@@ -39,17 +39,26 @@ Chi tiết bước `exe`:
    postject in `The signature seems corrupted!` — bình thường: chèn section làm hỏng chữ ký
    Authenticode của Microsoft trên bản Node gốc. Ký lại (nếu muốn) là việc **sau** bước này.
 5. Chép `README-lite.md` và `.env.example` từ `apps/lite/release-src/` sang cạnh exe.
-6. `--smoke`: chạy chính exe vừa tạo với `--smoke`, database vào thư mục tạm, in JSON `/health`.
-   Mã thoát khác `0` là build hỏng.
+6. `--smoke`: chạy chính exe vừa tạo với `--smoke`, database vào thư mục tạm (`--smoke` tự dùng
+   `SQLITE_PATH` tạm trừ khi bạn đặt tường minh, nên nó không bao giờ tạo hay đụng vào file dữ
+   liệu thật; run file cũng bị xoá theo), in JSON `/health`. Mã thoát khác `0` là build hỏng.
 
 Bản build thử `useCodeCache=true` trước (nhanh khởi động hơn); nếu bước sinh blob hoặc smoke thất
 bại thì tự lùi về blob thường thay vì làm hỏng release.
 
+Vì thế **build không bit-reproducible**: code cache của V8 gắn với đúng bản Node và máy đã tạo ra
+nó, và bước fallback có thể đổi nội dung blob. Dòng `exe: sha256 …` cuối bước build vì vậy là dấu
+vân tay của **một file đã phát hành** (dùng để đối chiếu bản chép sang máy chủ), không phải một giá
+trị dựng lại được từ cùng một commit. Bước `exe` cũng chỉ chạy trên Windows **x64** — build.mjs
+dừng hẳn nếu Node đang chạy không phải x64, để không đặt tên release x64 lên một file arm64.
+
 Lúc chạy, server phân biệt hai chế độ bằng `process.getBuiltinModule('node:sea')`:
 
 - **Trong exe** (`sea.isSea()`): đọc `assets.json` rồi lấy từng file bằng `sea.getAsset()`.
-- **Khi dev**: đọc thư mục — `PUBLIC_DIR` nếu có, mặc định `dist/public` tính từ thư mục làm việc.
-  Không có thư mục đó thì API vẫn chạy, chỉ không có giao diện (log một dòng cảnh báo).
+- **Khi dev**: đọc thư mục — `PUBLIC_DIR` nếu có, mặc định `dist/public` tính từ `resolveBaseDir()`
+  (thư mục chứa exe khi đóng gói, cwd khi chạy `node dist/server.cjs`) — cùng quy tắc với
+  `SQLITE_PATH` và `.env`. Không có thư mục đó thì API vẫn chạy, chỉ không có giao diện
+  (log một dòng cảnh báo).
 
 ### Kiểm tra sau build
 
@@ -60,6 +69,10 @@ pnpm --filter @bp/lite test      # footprint + smoke
 - `dist/server.cjs` không được chứa `pg`, `drizzle`, `argon2`, `react-router`.
 - Tổng gzip của JS trong `dist/public` ≤ 250 KB, của CSS ≤ 40 KB.
 - `bind-poker-lite.exe` ≤ 120 MB (build hiện tại ~81 MB).
+
+**Danh sách phụ thuộc của Lite chỉ có một nguồn: `apps/lite/package.json`.** `footprint.test.ts`
+grep vài gói *cấm* trong bundle — đó là lưới chặn hồi quy, không phải allowlist. Muốn thêm hay bớt
+dependency thì sửa manifest; đừng sửa test để nó "đúng".
 
 Kiểm tra bằng trình duyệt thật (tuỳ chọn, cần tải Chromium ~150 MB một lần):
 
@@ -259,8 +272,11 @@ hoặc chấp nhận các ván đang dở bị huỷ và hoàn điểm — `--st
 Lite được thiết kế cho **mạng nội bộ tin cậy**. Những gì có sẵn:
 
 - Header trên mọi phản hồi: `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`,
-  `Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self'
-  'unsafe-inline'; connect-src 'self' ws: wss:`. Route `/api/*` và `/health` thêm `Cache-Control: no-store`.
+  `X-Frame-Options: DENY`, và `Content-Security-Policy: default-src 'self'; img-src 'self' data:;
+  style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self';
+  form-action 'self'; object-src 'none'`. (`connect-src 'self'` bao luôn WebSocket cùng origin theo
+  CSP 3, nên `ws:`/`wss:` không còn cần khai riêng.) Route `/api/*` và `/health` thêm
+  `Cache-Control: no-store`.
 - Chống CSRF: mọi `POST`/`PUT`/`PATCH`/`DELETE` phải có `X-Requested-With: bind-poker`. Chỉ
   fetch/XHR đặt được header tuỳ ý, và làm vậy từ origin khác sẽ kích hoạt preflight mà server này
   không trả lời.
