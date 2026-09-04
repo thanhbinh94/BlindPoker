@@ -8,7 +8,7 @@
  * cannot start or, worse, one that starts insecure.
  *
  * `loadConfig` reports *every* problem at once. An operator filling in a fresh `.env` should learn
- * about all four missing variables in one run, not one per restart.
+ * about all of the missing variables in one run, not one per restart.
  */
 
 export interface NormalConfig {

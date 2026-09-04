@@ -67,6 +67,6 @@ export default tseslint.config(
     // and @bp/http-kit, but nothing that draws a screen and no other app. (This block replaces the
     // `apps/normal-*` one above for these files, so it repeats the no-lite rule.)
     files: ['apps/normal-server/**/*.ts'],
-    rules: forbid(['@bp/ui-kit', 'react', 'react-dom', '@bp/lite', '**/apps/**'], '@bp/normal-server may only depend on @bp/core, @bp/server-kit and @bp/http-kit'),
+    rules: forbid(['@bp/ui-kit', 'react', 'react-dom', '@bp/lite', '@bp/normal-web', '**/apps/**'], '@bp/normal-server may only depend on @bp/core, @bp/server-kit and @bp/http-kit'),
   },
 )

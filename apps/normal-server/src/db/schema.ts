@@ -27,12 +27,17 @@ const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull(
 /** Accounts. Nothing game-related lives here: this table exists to answer "who is signing in". */
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
-  /** Always stored lowercased by the auth service; the unique index is therefore case-insensitive in effect. */
+  /** Stored lowercased, so the unique index is case-insensitive in effect — see the CHECK below. */
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   createdAt: createdAt(),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
-})
+}, (t) => [
+  // Without `citext`, "lowercased" is a promise made by whichever code inserts. One path that forgets
+  // — a seed script, an admin tool, a future OAuth link — is two accounts for one address and a login
+  // that resolves to whichever row the query folds to. The database keeps the promise instead.
+  check('users_email_lowercase', sql`${t.email} = lower(${t.email})`),
+])
 
 /** The game profile: one row per account, sharing its id. `balance` is the single source of points. */
 export const players = pgTable('players', {
@@ -72,18 +77,28 @@ export const sessions = pgTable('sessions', {
  * pot nobody could receive — is points that left balances and went to no player; it is recorded with
  * a null player so that `Σ balances + Σ sinks` stays constant and §12.5's monitoring query can read
  * both halves out of one table.
+ *
+ * Because a null player *means* sink, the ledger is `ON DELETE restrict`: deleting an account whose
+ * rows are still here would rewrite that player's whole history — credits included — into sink rows,
+ * and take their balance out of the economy unaccounted. Erasing a player is therefore a service that
+ * has to zero the balance through the ledger first, not a `DELETE` that quietly rewrites the past.
  */
 export const pointTransactions = pgTable('point_transactions', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),
-  playerId: uuid('player_id').references(() => players.id, { onDelete: 'set null' }),
+  playerId: uuid('player_id').references(() => players.id, { onDelete: 'restrict' }),
   amount: bigint('amount', { mode: 'number' }).notNull(),
   reason: text('reason').notNull(),
   refId: text('ref_id'),
   kind: text('kind'),
   createdAt: createdAt(),
 }, (t) => [
+  // The other half of "no player means sink": a sink says which kind it is, so a row with neither a
+  // player nor a kind — an orphan — cannot exist to be counted as one.
+  check('point_transactions_sink_has_kind', sql`${t.playerId} is not null or ${t.kind} is not null`),
   index('point_transactions_player_created_idx').on(t.playerId, t.createdAt),
   index('point_transactions_reason_created_idx').on(t.reason, t.createdAt),
+  // "Did this hand's settlement already land?" — reconciliation reads the ledger by reference.
+  index('point_transactions_ref_idx').on(t.refId),
 ])
 
 /** One row per completed (or cancelled) hand — `id` is the engine's `handId`. */

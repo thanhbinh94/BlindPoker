@@ -1,5 +1,5 @@
 {
-  "id": "512017a4-a820-4211-9ba6-d2a53de64db2",
+  "id": "6d510ffd-bc48-4d33-b02a-972aaf041af0",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -813,6 +813,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "point_transactions_ref_idx": {
+          "name": "point_transactions_ref_idx",
+          "columns": [
+            {
+              "expression": "ref_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -826,14 +841,19 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "point_transactions_sink_has_kind": {
+          "name": "point_transactions_sink_has_kind",
+          "value": "\"point_transactions\".\"player_id\" is not null or \"point_transactions\".\"kind\" is not null"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.sessions": {
@@ -982,7 +1002,12 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "users_email_lowercase": {
+          "name": "users_email_lowercase",
+          "value": "\"users\".\"email\" = lower(\"users\".\"email\")"
+        }
+      },
       "isRLSEnabled": false
     }
   },

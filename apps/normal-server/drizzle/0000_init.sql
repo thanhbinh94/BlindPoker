@@ -97,7 +97,8 @@ CREATE TABLE "point_transactions" (
 	"reason" text NOT NULL,
 	"ref_id" text,
 	"kind" text,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "point_transactions_sink_has_kind" CHECK ("point_transactions"."player_id" is not null or "point_transactions"."kind" is not null)
 );
 --> statement-breakpoint
 CREATE TABLE "sessions" (
@@ -115,7 +116,8 @@ CREATE TABLE "users" (
 	"password_hash" text NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"last_login_at" timestamp with time zone,
-	CONSTRAINT "users_email_unique" UNIQUE("email")
+	CONSTRAINT "users_email_unique" UNIQUE("email"),
+	CONSTRAINT "users_email_lowercase" CHECK ("users"."email" = lower("users"."email"))
 );
 --> statement-breakpoint
 ALTER TABLE "daily_logins" ADD CONSTRAINT "daily_logins_player_id_players_id_fk" FOREIGN KEY ("player_id") REFERENCES "public"."players"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -126,12 +128,13 @@ ALTER TABLE "inventory" ADD CONSTRAINT "inventory_item_id_items_id_fk" FOREIGN K
 ALTER TABLE "player_achievements" ADD CONSTRAINT "player_achievements_player_id_players_id_fk" FOREIGN KEY ("player_id") REFERENCES "public"."players"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "player_stats" ADD CONSTRAINT "player_stats_player_id_players_id_fk" FOREIGN KEY ("player_id") REFERENCES "public"."players"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "players" ADD CONSTRAINT "players_id_users_id_fk" FOREIGN KEY ("id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "point_transactions" ADD CONSTRAINT "point_transactions_player_id_players_id_fk" FOREIGN KEY ("player_id") REFERENCES "public"."players"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "point_transactions" ADD CONSTRAINT "point_transactions_player_id_players_id_fk" FOREIGN KEY ("player_id") REFERENCES "public"."players"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sessions" ADD CONSTRAINT "sessions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "game_players_player_idx" ON "game_players" USING btree ("player_id");--> statement-breakpoint
 CREATE INDEX "games_room_started_idx" ON "games" USING btree ("room_id","started_at");--> statement-breakpoint
 CREATE INDEX "items_category_rarity_idx" ON "items" USING btree ("category","rarity");--> statement-breakpoint
 CREATE INDEX "point_transactions_player_created_idx" ON "point_transactions" USING btree ("player_id","created_at");--> statement-breakpoint
 CREATE INDEX "point_transactions_reason_created_idx" ON "point_transactions" USING btree ("reason","created_at");--> statement-breakpoint
+CREATE INDEX "point_transactions_ref_idx" ON "point_transactions" USING btree ("ref_id");--> statement-breakpoint
 CREATE INDEX "sessions_user_idx" ON "sessions" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "sessions_expires_idx" ON "sessions" USING btree ("expires_at");

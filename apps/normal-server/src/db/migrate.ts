@@ -5,7 +5,7 @@
  * run time. `runMigrations` only has to find that folder and hand it to the migrator that matches the
  * driver behind the `AppDb`.
  */
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { migrate as migrateNodePg } from 'drizzle-orm/node-postgres/migrator'
@@ -16,18 +16,38 @@ import type { AppDb } from './client.js'
 import type * as schema from './schema.js'
 
 /**
- * Walks up from this module to the first directory holding a migrations journal. That is
- * `<package>/drizzle` whether this file is running from `src/db/` under vitest or from `dist/db/`
- * in the container, because the build copies `drizzle/` next to `dist/`.
+ * Finds `<package root>/drizzle`, the package root being the first directory at or above this module
+ * whose `package.json` is this package's. That holds whether the module runs from `src/db/` under
+ * vitest or from `dist/db/` after a build — and the search stops there rather than at the filesystem
+ * root, so a stray `drizzle/` further up the tree can never be mistaken for ours.
+ *
+ * Task 7 ships `drizzle/` (and `data/`) beside `dist/` in the image, keeping that layout intact; the
+ * `build` script itself only compiles.
  */
 export function migrationsFolder(): string {
-  let dir = dirname(fileURLToPath(import.meta.url))
+  const from = fileURLToPath(import.meta.url)
+  let dir = dirname(from)
   for (;;) {
-    const candidate = join(dir, 'drizzle')
-    if (existsSync(join(candidate, 'meta', '_journal.json'))) return candidate
+    if (isPackageRoot(dir)) {
+      const folder = join(dir, 'drizzle')
+      if (!existsSync(join(folder, 'meta', '_journal.json'))) {
+        throw new Error(`no drizzle migrations in ${folder}: the package root was found from ${from}, but its migrations were not shipped alongside it`)
+      }
+      return folder
+    }
     const parent = dirname(dir)
-    if (parent === dir) throw new Error('no drizzle migrations folder found above ' + fileURLToPath(import.meta.url))
+    if (parent === dir) throw new Error(`no @bp/normal-server package root above ${from}`)
     dir = parent
+  }
+}
+
+function isPackageRoot(dir: string): boolean {
+  const manifest = join(dir, 'package.json')
+  if (!existsSync(manifest)) return false
+  try {
+    return (JSON.parse(readFileSync(manifest, 'utf8')) as { name?: unknown }).name === '@bp/normal-server'
+  } catch {
+    return false
   }
 }
 

@@ -101,6 +101,12 @@ describe('schema', () => {
     expect(typeof row!.amount).toBe('number')
   })
 
+  it('refuses a player-less ledger row that does not say which sink it is', async () => {
+    const failure = await failureOf(() => db.insert(schema.pointTransactions).values({ playerId: null, amount: 10, reason: 'settlement', refId: 'hand-x' }))
+    expect(failure.code).toBe('23514')
+    expect(failure.text).toMatch(/point_transactions_sink_has_kind/)
+  })
+
   it('seats bots in a recorded hand, where a player-keyed table could not', async () => {
     const human = await seedPlayer(db, { email: 'seat@example.com', nameKey: 'seat' })
     await db.insert(schema.games).values({
@@ -144,16 +150,36 @@ describe('schema', () => {
   it('cascades a deleted account through the profile and its dependent rows', async () => {
     const id = await seedPlayer(db, { email: 'gone@example.com', nameKey: 'gone' })
     await db.insert(schema.playerStats).values({ playerId: id })
-    await db.insert(schema.pointTransactions).values({ playerId: id, amount: 10, reason: 'daily_reward' })
     await db.delete(schema.users).where(sql`${schema.users.id} = ${id}`)
 
     expect(await db.select().from(schema.players).where(sql`${schema.players.id} = ${id}`)).toHaveLength(0)
     expect(await db.select().from(schema.playerStats).where(sql`${schema.playerStats.playerId} = ${id}`)).toHaveLength(0)
-    // The ledger is not cascaded away with the account: the rows survive with a null player, so the
-    // points that left the economy still add up.
-    const ledger = await db.select().from(schema.pointTransactions).where(sql`${schema.pointTransactions.reason} = 'daily_reward'`)
+  })
+
+  it('refuses to delete an account that still has ledger history', async () => {
+    const id = await seedPlayer(db, { email: 'ledger@example.com', nameKey: 'ledger' })
+    await db.insert(schema.pointTransactions).values({ playerId: id, amount: 10, reason: 'daily_reward' })
+
+    // Deleting the account cascades to the profile, which the ledger's RESTRICT refuses: a delete
+    // would otherwise rewrite this player's whole history into player-less rows — i.e. into sinks —
+    // and drop their balance out of the economy with nothing recording where it went.
+    const failure = await failureOf(() => db.delete(schema.users).where(sql`${schema.users.id} = ${id}`))
+    // Postgres reports a blocked RESTRICT as `23001 restrict_violation`, keeping `23503` for the
+    // NO ACTION form; either way the row is refused by name.
+    expect(['23001', '23503']).toContain(failure.code)
+    expect(failure.text).toMatch(/point_transactions_player_id_players_id_fk/)
+
+    const ledger = await db.select().from(schema.pointTransactions).where(sql`${schema.pointTransactions.playerId} = ${id}`)
     expect(ledger).toHaveLength(1)
-    expect(ledger[0]!.playerId).toBeNull()
+    expect(ledger[0]!.playerId).toBe(id)
+    expect(await db.select().from(schema.players).where(sql`${schema.players.id} = ${id}`)).toHaveLength(1)
+  })
+
+  it('keeps email lowercase in the database, not merely by convention', async () => {
+    const failure = await failureOf(() => db.insert(schema.users).values({ email: 'Mixed@Example.com', passwordHash: 'h' }))
+    expect(failure.code).toBe('23514')
+    expect(failure.text).toMatch(/users_email_lowercase/)
+    await db.insert(schema.users).values({ email: 'mixed@example.com', passwordHash: 'h' })
   })
 
   it('rejects a profile with no account behind it', async () => {

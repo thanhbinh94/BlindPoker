@@ -53,15 +53,25 @@ async function createFreshPgTestDb(url: string): Promise<TestDb> {
   const scoped = new URL(url)
   scoped.pathname = `/${name}`
   const handle = createPgDb(scoped.toString(), { max: 4 })
-  await runMigrations(handle.db, 'pg')
+  // FORCE terminates anything still connected: a test that leaked a connection should not leave an
+  // undroppable database behind for the next run to trip over.
+  const drop = () => withAdmin(url, (db) => db.execute(sql.raw(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`)))
+
+  try {
+    await runMigrations(handle.db, 'pg')
+  } catch (err) {
+    // A failing migration is exactly when this path earns its keep; without this the run that
+    // discovers the bad migration also orphans a database, and CI accumulates them.
+    await handle.close().catch(() => {})
+    await drop().catch(() => {})
+    throw err
+  }
 
   return {
     db: handle.db,
     async close() {
       await handle.close()
-      // FORCE terminates anything still connected: a test that leaked a connection should not leave
-      // an undroppable database behind for the next run to trip over.
-      await withAdmin(url, (db) => db.execute(sql.raw(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`)))
+      await drop()
     },
   }
 }
