@@ -32,7 +32,9 @@ export function parseClientMessage(raw: unknown): ParseResult<ClientMessage> {
       return { ok: true, value: withReq({ t: raw.t }) }
     case 'CREATE_ROOM': {
       const cfg = validateRoomConfig(raw.config)
-      return cfg.ok ? { ok: true, value: withReq({ t: 'CREATE_ROOM', config: cfg.value }) } : fail('INVALID_MESSAGE', cfg.message)
+      // A bad config is a rejected request, not a malformed frame: keep INVALID_ROOM_CONFIG so the
+      // gateway does not count an honest client's validation mistake as protocol abuse.
+      return cfg.ok ? { ok: true, value: withReq({ t: 'CREATE_ROOM', config: cfg.value }) } : fail(cfg.code, cfg.message)
     }
     case 'JOIN_ROOM': {
       if (!isStr(raw.roomId) && !isStr(raw.code)) return fail('INVALID_MESSAGE', 'JOIN_ROOM needs roomId or code')

@@ -18,7 +18,7 @@
 - Server is authoritative: clients only ever receive `filterEvent(event, seat)` / `playerView(state, seat)` output; the raw `HandState` never leaves the room.
 - Every room mutation runs inside that room's serialized queue (`room.enqueue`). No two commands for the same room interleave.
 - Money invariant at the room level: for every completed hand, Σ balance deltas applied for human seats + fee + Σ bot net = 0; buy-in/cash-out are exact inverses. Tests assert this.
-- Timers are fenced: a fired timer checks `handId`, `turnSeq`, and phase before acting.
+- Timers are fenced by `turnSeq` + phase; the runner disposes all timers at COMPLETE and each hand has its own runner.
 - Message limits (spec §16.8/§23): 20 messages/s per connection (token bucket, burst 20), 4 KB max payload, heartbeat `PING` every 15 s, close after 30 s without `PONG`, `HELLO` must arrive within 5 s when the upgrade did not authenticate.
 - Reconnect window 90 s; spectator grace 5 min; empty room closes after 60 s; next hand 5 s after settlement; reveal pacing 1.5 s; bot think delay 1–3 s; 3 consecutive timeouts → stood up after the hand. All are `RoomOptions`/`GatewayOptions` so tests can shorten them.
 - Every commit message ends with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.

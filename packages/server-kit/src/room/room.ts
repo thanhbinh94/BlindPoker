@@ -1,0 +1,700 @@
+import {
+  EngineError, blindRequiredStack, engineErrorToErrorCode, filterEvent, nextButton, playerView, roomConfigToRuleset,
+  type GameEvent, type PlayerAction, type PlayerIdentity, type RoomConfig, type RoomEvent, type RoomPlayerView,
+  type RoomSummary, type RoomView, type Ruleset, type SeatStatus, type ServerMessage,
+} from '@bp/core'
+import type { TimerHandle } from '../infra/clock.js'
+import { newId } from '../infra/ids.js'
+import { InsufficientBalanceError, type BalanceEntry, type HandSummary } from '../repositories.js'
+import { HandRunner } from './hand-runner.js'
+import { RoomError, type RoomDeps, type RoomPlayer } from './types.js'
+
+export interface RoomInit {
+  roomId: string
+  code: string
+  config: RoomConfig
+  host: PlayerIdentity
+  deps: RoomDeps
+}
+
+type Snapshot = Extract<ServerMessage, { t: 'ROOM_SNAPSHOT' }>
+
+export class Room {
+  readonly roomId: string
+  readonly code: string
+  readonly config: RoomConfig
+  readonly rules: Ruleset
+  hostPlayerId: string
+  status: 'OPEN' | 'IN_GAME' | 'CLOSED' = 'OPEN'
+  readonly players = new Map<string, RoomPlayer>()
+  seq = 0
+  carryOverPot = 0
+  button: number | null = null
+  nextHandAt: number | null = null
+  deadlineAt: number | null = null
+  onClosed: ((room: Room, reason: string) => void) | null = null
+  onChanged: ((room: Room) => void) | null = null
+  /**
+   * Fires whenever the room's membership changes (host and bots included), so a `RoomManager` can
+   * keep an O(1) player → room index instead of scanning every room on every lookup. Assigned after
+   * construction, so the players seated by the constructor are seeded by the manager itself.
+   */
+  onMembership: ((playerId: string, joined: boolean) => void) | null = null
+
+  private readonly deps: RoomDeps
+  private runner: HandRunner | null = null
+  private queue: Promise<unknown> = Promise.resolve()
+  private nextHandTimer: TimerHandle | null = null
+  private closeTimer: TimerHandle | null = null
+  private carryOverReleaseTimer: TimerHandle | null = null
+  private readonly playerTimers = new Map<string, TimerHandle>()
+  private turnStartSeq = 0
+
+  constructor(init: RoomInit) {
+    this.roomId = init.roomId
+    this.code = init.code
+    this.config = init.config
+    this.deps = init.deps
+    this.rules = roomConfigToRuleset(init.config)
+    this.hostPlayerId = init.host.playerId
+    this.addPlayer(init.host)
+    if (init.config.mode === 'blind') {
+      const count = init.config.blind?.botCount ?? 0
+      for (let i = 0; i < count; i++) {
+        const bot = this.addPlayer({ playerId: `bot:${init.roomId}:${i}`, displayName: `Bot ${i + 1}`, isBot: true })
+        bot.seat = init.config.maxPlayers - 1 - i
+        bot.stack = init.deps.options.botStartingBalance
+        bot.ready = true
+      }
+    }
+  }
+
+  // ---------- queue ----------
+
+  enqueue<T>(fn: () => T | Promise<T>): Promise<T> {
+    const run = this.queue.then(fn, fn)
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  // ---------- reads ----------
+
+  get humanCount(): number {
+    return this.humans().length
+  }
+
+  /** Bots hold real seats, so they take capacity away from humans (spec §11.2). */
+  get seatedBotCount(): number {
+    return this.seated().filter((p) => p.identity.isBot).length
+  }
+
+  /** How many more humans the room can hold: seats minus the ones bots occupy. */
+  get humanCapacity(): number {
+    return this.config.maxPlayers - this.seatedBotCount
+  }
+
+  get handActive(): boolean {
+    return this.runner !== null && !this.runner.isComplete
+  }
+
+  hasPlayer(playerId: string): boolean {
+    return this.players.has(playerId)
+  }
+
+  summary(): RoomSummary {
+    const { password, ...rest } = this.config
+    return {
+      roomId: this.roomId,
+      code: this.code,
+      name: this.config.name,
+      mode: this.config.mode,
+      config: { ...rest, hasPassword: password !== undefined },
+      playerCount: this.humanCount + this.seatedBotCount,
+      maxPlayers: this.config.maxPlayers,
+      status: this.status === 'IN_GAME' ? 'IN_GAME' : 'OPEN',
+    }
+  }
+
+  view(): RoomView {
+    return {
+      ...this.summary(),
+      hostPlayerId: this.hostPlayerId,
+      players: [...this.players.values()].map((p) => this.playerView(p)),
+      carryOverPot: this.carryOverPot,
+      nextHandAt: this.nextHandAt,
+    }
+  }
+
+  snapshot(viewerId: string | null): Snapshot {
+    const viewer = viewerId === null ? undefined : this.players.get(viewerId)
+    const seat = viewer?.seat ?? null
+    const hand = this.runner && !this.runner.isComplete ? playerView(this.runner.state, seat) : null
+    return { t: 'ROOM_SNAPSHOT', seq: this.seq, room: this.view(), hand, deadlineAt: hand ? this.deadlineAt : null }
+  }
+
+  // ---------- membership ----------
+
+  /**
+   * Returns the snapshot as it stood *inside* the queue slot that admitted the player, so the
+   * caller cannot send a view that a later mutation has already moved past. Everything after it
+   * arrives as an event with a higher `seq`.
+   */
+  join(identity: PlayerIdentity, password?: string): Promise<Snapshot> {
+    return this.enqueue(() => {
+      this.assertOpen()
+      const existing = this.players.get(identity.playerId)
+      if (existing) {
+        if (!existing.leaveAfterHand) throw new RoomError('ALREADY_IN_ROOM')
+        existing.leaveAfterHand = false // rejoined before the hand ended
+        existing.standAfterHand = false
+        return this.snapshot(identity.playerId)
+      }
+      if (this.config.password !== undefined && password !== this.config.password) throw new RoomError('WRONG_PASSWORD')
+      if (this.humanCount >= this.humanCapacity) throw new RoomError('ROOM_FULL')
+      const p = this.addPlayer(identity)
+      this.cancelClose()
+      this.broadcastRoomEvent({ type: 'PLAYER_JOINED', player: this.playerView(p) }, identity.playerId)
+      this.deps.onDomainEvent?.({ type: 'ROOM_JOINED', roomId: this.roomId, playerId: identity.playerId })
+      this.changed()
+      return this.snapshot(identity.playerId)
+    })
+  }
+
+  /** Re-reads a player's balance and pushes `BALANCE` (Blind: also re-mirrors their stack). Queued. */
+  refreshBalance(playerId: string): Promise<void> {
+    return this.enqueue(() => this.pushBalance(playerId))
+  }
+
+  leave(playerId: string): Promise<void> {
+    return this.enqueue(() => {
+      this.assertOpen()
+      const p = this.mustPlayer(playerId)
+      if (this.inCurrentHand(p)) {
+        p.leaveAfterHand = true
+        p.standAfterHand = true
+        this.runner!.markAutoFold(p.seat!)
+        return
+      }
+      return this.removePlayer(p, 'left')
+    })
+  }
+
+  kick(hostId: string, targetId: string): Promise<void> {
+    return this.enqueue(() => {
+      this.assertOpen()
+      if (hostId !== this.hostPlayerId) throw new RoomError('NOT_HOST')
+      const target = this.mustPlayer(targetId)
+      if (targetId === hostId || target.identity.isBot) throw new RoomError('ILLEGAL_ACTION', 'cannot kick this player')
+      if (this.inCurrentHand(target)) throw new RoomError('GAME_IN_PROGRESS', 'player is in the current hand')
+      this.deps.outbox.send(targetId, { t: 'NOTIFICATION', kind: 'KICKED', payload: { roomId: this.roomId } })
+      return this.removePlayer(target, 'kicked')
+    })
+  }
+
+  // ---------- seats ----------
+
+  sitDown(playerId: string, seat: number, buyIn?: number): Promise<void> {
+    return this.enqueue(async () => {
+      this.assertOpen()
+      const p = this.mustPlayer(playerId)
+      if (!Number.isInteger(seat) || seat < 0 || seat >= this.config.maxPlayers) throw new RoomError('ILLEGAL_ACTION', 'seat out of range')
+      if (p.seat !== null) throw new RoomError('ILLEGAL_ACTION', 'already seated')
+      if (this.seatPlayer(seat)) throw new RoomError('SEAT_TAKEN')
+      if (this.rules.mode === 'holdem') {
+        const bb = this.rules.bigBlind
+        const min = (this.config.holdem?.minBuyInBB ?? 0) * bb
+        const max = (this.config.holdem?.maxBuyInBB ?? 0) * bb
+        if (buyIn === undefined || !Number.isInteger(buyIn) || buyIn < min || buyIn > max) throw new RoomError('INVALID_AMOUNT', `buy-in must be ${min}–${max}`)
+        try {
+          await this.deps.repos.balances.apply([{ playerId, delta: -buyIn, reason: 'buy_in', refId: this.roomId }])
+        } catch (err) {
+          if (err instanceof InsufficientBalanceError) throw new RoomError('INSUFFICIENT_BALANCE')
+          throw err
+        }
+        if (this.seatPlayer(seat)) {
+          // lost the race while awaiting: refund
+          await this.deps.repos.balances.apply([{ playerId, delta: buyIn, reason: 'refund', refId: this.roomId }])
+          throw new RoomError('SEAT_TAKEN')
+        }
+        p.stack = buyIn
+      } else {
+        const balance = await this.deps.repos.balances.get(playerId)
+        if (balance < blindRequiredStack(this.rules)) throw new RoomError('INSUFFICIENT_BALANCE')
+        if (this.seatPlayer(seat)) throw new RoomError('SEAT_TAKEN')
+        p.stack = balance
+      }
+      p.seat = seat
+      p.ready = false
+      p.sittingOut = false
+      p.consecutiveTimeouts = 0
+      this.broadcastRoomEvent({ type: 'PLAYER_SAT', playerId, seat, stack: p.stack })
+      this.changed()
+    })
+  }
+
+  standUp(playerId: string): Promise<void> {
+    return this.enqueue(async () => {
+      this.assertOpen()
+      const p = this.mustPlayer(playerId)
+      if (p.seat === null) throw new RoomError('NOT_SEATED')
+      if (this.inCurrentHand(p)) {
+        p.standAfterHand = true
+        this.runner!.markAutoFold(p.seat)
+        return
+      }
+      await this.standUpNow(p)
+    })
+  }
+
+  setReady(playerId: string, ready: boolean): Promise<void> {
+    return this.enqueue(() => {
+      this.assertOpen()
+      const p = this.mustPlayer(playerId)
+      if (p.seat === null) throw new RoomError('NOT_SEATED')
+      if (this.status !== 'OPEN') throw new RoomError('GAME_IN_PROGRESS')
+      p.ready = ready
+      this.broadcastRoomEvent({ type: 'PLAYER_READY', playerId, ready })
+      if (this.config.autoStart && ready && this.readySeats().length >= 2 && this.seatedHumans().every((h) => h.ready)) return this.startHand()
+      return undefined
+    })
+  }
+
+  startGame(playerId: string): Promise<void> {
+    return this.enqueue(() => {
+      this.assertOpen()
+      if (playerId !== this.hostPlayerId) throw new RoomError('NOT_HOST')
+      if (this.status !== 'OPEN') throw new RoomError('GAME_IN_PROGRESS')
+      if (this.readySeats().length < 2) throw new RoomError('NOT_ENOUGH_PLAYERS', 'need at least 2 ready players')
+      return this.startHand()
+    })
+  }
+
+  // ---------- gameplay ----------
+
+  action(playerId: string, action: PlayerAction, baseSeq: number): Promise<void> {
+    return this.enqueue(() => {
+      this.assertOpen()
+      const p = this.mustPlayer(playerId)
+      if (!this.runner || this.runner.isComplete) throw new RoomError('NOT_IN_HAND', 'no hand in progress')
+      if (p.seat === null) throw new RoomError('NOT_SEATED')
+      if (!this.runner.state.players.some((hp) => hp.seat === p.seat)) throw new RoomError('NOT_IN_HAND')
+      if (baseSeq < this.turnStartSeq) throw new RoomError('STALE_STATE', `turn changed at seq ${this.turnStartSeq}`)
+      try {
+        this.runner.submit({ type: 'ACTION', seat: p.seat, action })
+      } catch (err) {
+        if (err instanceof EngineError) throw new RoomError(engineErrorToErrorCode(err.code), err.message)
+        throw err
+      }
+    })
+  }
+
+  // ---------- connection lifecycle ----------
+
+  onDisconnect(playerId: string): Promise<void> {
+    return this.enqueue(() => {
+      const p = this.players.get(playerId)
+      if (!p || !p.connected) return
+      p.connected = false
+      const deadline = this.deps.clock.now() + this.deps.options.reconnectWindowMs
+      p.disconnectDeadline = deadline
+      this.broadcastRoomEvent({ type: 'PLAYER_DISCONNECTED', playerId, deadline }, playerId)
+      this.setPlayerTimer(playerId, this.deps.options.reconnectWindowMs, () => this.onReconnectExpired(playerId))
+    })
+  }
+
+  onReconnect(playerId: string): Promise<void> {
+    return this.enqueue(() => {
+      const p = this.players.get(playerId)
+      if (!p || p.connected) return
+      p.connected = true
+      p.disconnectDeadline = null
+      this.clearPlayerTimer(playerId)
+      this.broadcastRoomEvent({ type: 'PLAYER_RECONNECTED', playerId }, playerId)
+    })
+  }
+
+  private async onReconnectExpired(playerId: string): Promise<void> {
+    const p = this.players.get(playerId)
+    if (!p || p.connected) return
+    if (p.seat !== null) {
+      if (this.inCurrentHand(p)) {
+        p.standAfterHand = true
+        this.runner!.markAutoFold(p.seat)
+      } else await this.standUpNow(p)
+    }
+    this.setPlayerTimer(playerId, this.deps.options.spectatorGraceMs, () => {
+      const still = this.players.get(playerId)
+      if (!still || still.connected) return
+      if (this.inCurrentHand(still)) {
+        still.leaveAfterHand = true
+        return
+      }
+      return this.removePlayer(still, 'timeout')
+    })
+  }
+
+  // ---------- shutdown / close ----------
+
+  shutdown(reason: string): Promise<void> {
+    return this.enqueue(async () => {
+      if (this.status === 'CLOSED') return
+      if (this.runner && !this.runner.isComplete) {
+        this.runner.cancel(reason)
+        await this.onHandComplete()
+      }
+      this.cancelTimers()
+      await this.releaseCarryOver()
+      for (const p of this.seatedHumans()) await this.standUpNow(p)
+      this.status = 'CLOSED'
+      this.broadcastRoomEvent({ type: 'ROOM_CLOSED', reason })
+      this.onClosed?.(this, reason)
+    })
+  }
+
+  private async close(reason: string): Promise<void> {
+    if (this.status === 'CLOSED') return
+    if (this.runner && !this.runner.isComplete) {
+      this.runner.cancel(reason)
+      await this.onHandComplete()
+    }
+    this.cancelTimers()
+    await this.releaseCarryOver()
+    this.status = 'CLOSED'
+    this.onClosed?.(this, reason)
+  }
+
+  /**
+   * Spec §8.4. Returns a carry-over pot to the table: an equal share to every seated human, with
+   * the indivisible remainder (or the whole pot when nobody is seated) recorded as a `carry_over`
+   * sink so `Σ balances + Σ sinks` stays constant. Called from the release timer, `close()` and
+   * `shutdown()`; always runs on the room queue.
+   */
+  private async releaseCarryOver(): Promise<void> {
+    this.carryOverReleaseTimer?.cancel()
+    this.carryOverReleaseTimer = null
+    const pot = this.carryOverPot
+    if (pot <= 0) return
+    const humans = this.seatedHumans()
+    const share = humans.length === 0 ? 0 : Math.floor(pot / humans.length)
+    const remainder = pot - share * humans.length
+    const entries: BalanceEntry[] = share > 0
+      ? humans.map((p) => ({ playerId: p.identity.playerId, delta: share, reason: 'refund' as const, refId: this.roomId }))
+      : []
+    this.carryOverPot = 0
+    try {
+      await this.deps.repos.balances.apply(entries, { refId: this.roomId, fee: remainder, kind: 'carry_over' })
+    } catch (err) {
+      this.carryOverPot = pot // nothing was written: keep the pot so a later attempt can release it
+      this.deps.log.error('carry-over release failed', { roomId: this.roomId, pot, err: String(err) })
+      return
+    }
+    this.deps.log.info('carry-over released', { roomId: this.roomId, pot, recipients: humans.length, sink: remainder })
+    for (const p of humans) await this.pushBalance(p.identity.playerId)
+    // status is unchanged; the event exists so every view refreshes `carryOverPot`.
+    this.broadcastRoomEvent({ type: 'ROOM_STATUS', status: this.status === 'IN_GAME' ? 'IN_GAME' : 'OPEN', nextHandAt: this.nextHandAt })
+  }
+
+  private armCarryOverRelease(): void {
+    this.carryOverReleaseTimer?.cancel()
+    this.carryOverReleaseTimer = null
+    if (this.carryOverPot <= 0 || this.status === 'CLOSED') return
+    this.carryOverReleaseTimer = this.deps.clock.setTimeout(() => void this.enqueue(() => this.releaseCarryOver()), this.deps.options.carryOverReleaseMs)
+  }
+
+  // ---------- hand lifecycle ----------
+
+  private async startHand(): Promise<void> {
+    if (this.status === 'CLOSED' || (this.runner && !this.runner.isComplete)) return
+    this.nextHandTimer?.cancel()
+    this.nextHandTimer = null
+    this.carryOverReleaseTimer?.cancel()
+    this.carryOverReleaseTimer = null
+    const required = this.rules.mode === 'blind' ? blindRequiredStack(this.rules) : 1
+    if (this.rules.mode === 'blind') {
+      for (const p of this.seated()) {
+        if (p.identity.isBot) {
+          if (p.stack < required) p.stack = this.deps.options.botStartingBalance
+        } else p.stack = await this.deps.repos.balances.get(p.identity.playerId)
+      }
+    }
+    // A seated human who cannot cover the requirement sits the hand out rather than silently
+    // vanishing from the table: playerView reports SITTING_OUT until they can afford to play again.
+    for (const p of this.seated()) if (!p.identity.isBot) p.sittingOut = p.stack < required
+    const eligible = this.eligibleForHand()
+    if (eligible.length < 2 || eligible.every((p) => p.identity.isBot)) {
+      this.toOpen()
+      return
+    }
+    const seats = eligible.map((p) => p.seat!)
+    this.button = nextButton(this.button, seats, this.deps.rng)
+    const handId = newId()
+    const runner = new HandRunner(
+      {
+        clock: this.deps.clock,
+        rng: this.deps.rng,
+        bot: this.deps.bot,
+        log: this.deps.log,
+        turnTimerMs: this.deps.options.turnTimerMsOverride ?? this.config.turnTimerSec * 1000,
+        revealDelayMs: this.deps.options.revealDelayMs,
+        botDelayMs: this.deps.options.botDelayMs,
+        isBotSeat: (seat) => this.seatPlayer(seat)?.identity.isBot ?? false,
+        enqueue: (fn) => void this.enqueue(fn),
+        onEvents: (events, deadlineAt) => this.onHandEvents(events, deadlineAt),
+        onComplete: () => void this.enqueue(() => this.onHandComplete()),
+      },
+      { handId, rules: this.rules, seats: eligible.map((p) => ({ seat: p.seat!, playerId: p.identity.playerId, stack: p.stack, isBot: p.identity.isBot })), button: this.button, carryOverIn: this.carryOverPot },
+    )
+    this.runner = runner
+    this.carryOverPot = 0
+    this.nextHandAt = null
+    this.status = 'IN_GAME'
+    this.broadcastRoomEvent({ type: 'ROOM_STATUS', status: 'IN_GAME', nextHandAt: null })
+    this.changed()
+    runner.start()
+  }
+
+  private onHandEvents(events: GameEvent[], deadlineAt: number | null): void {
+    this.deadlineAt = deadlineAt
+    for (const event of events) {
+      if (event.type === 'PLAYER_ACTED') {
+        const p = this.seatPlayer(event.seat)
+        if (p && !p.identity.isBot) p.consecutiveTimeouts = event.timedOut ? p.consecutiveTimeouts + 1 : 0
+      }
+      this.seq += 1
+      const isTurn = event.type === 'TURN_CHANGED' || event.type === 'DECISION_PHASE'
+      if (isTurn) this.turnStartSeq = this.seq
+      const outbound = isTurn && deadlineAt !== null ? { ...event, deadlineAt } : event
+      for (const p of this.connectedHumans()) this.deps.outbox.send(p.identity.playerId, { t: 'GAME_EVENT', seq: this.seq, event: filterEvent(outbound, p.seat) })
+    }
+  }
+
+  private async onHandComplete(): Promise<void> {
+    const runner = this.runner
+    if (!runner || !runner.isComplete || runner.state.result === null) return
+    const state = runner.state
+    const result = state.result!
+    const entries: BalanceEntry[] = []
+    const summary: HandSummary = {
+      handId: state.handId,
+      roomId: this.roomId,
+      mode: this.rules.mode,
+      config: this.summary().config, // never the raw config: it would carry the room password
+      startedAt: runner.startedAt,
+      endedAt: this.deps.clock.now(),
+      fee: result.fee,
+      cancelled: runner.wasCancelled,
+      players: [],
+    }
+    for (const hp of state.players) {
+      const rp = this.seatPlayer(hp.seat)
+      const before = runner.stacksBefore.get(hp.seat) ?? hp.stack
+      const net = hp.stack - before
+      if (rp) rp.stack = hp.stack
+      if (rp && !rp.identity.isBot && this.rules.mode === 'blind' && net !== 0) entries.push({ playerId: rp.identity.playerId, delta: net, reason: 'settlement', refId: state.handId })
+      summary.players.push({ playerId: hp.playerId, seat: hp.seat, isBot: hp.isBot, net, won: net > 0, bestCategory: result.showdown?.find((h) => h.seat === hp.seat)?.category ?? null })
+    }
+    this.carryOverPot = result.carryOverOut
+    this.runner = null
+    this.deadlineAt = null
+    // Blind settles player nets; Hold'em moves nothing (chips are already on the table) but both
+    // modes must record the table fee as a sink, so the call also happens for an empty batch.
+    if (entries.length > 0 || result.fee > 0) {
+      try {
+        await this.deps.repos.balances.apply(entries, { refId: state.handId, fee: result.fee, kind: 'table_fee' })
+        for (const e of entries) await this.pushBalance(e.playerId)
+      } catch (err) {
+        // The hand is still recorded and still emitted, flagged, so an operator can reconcile it.
+        // Nothing is pushed to clients: their balances did not move.
+        summary.settlementError = String(err)
+        this.deps.log.error('settlement failed', { roomId: this.roomId, handId: state.handId, err: String(err) })
+      }
+    }
+    try {
+      await this.deps.repos.history.recordHand(summary)
+    } catch (err) {
+      this.deps.log.error('recordHand failed', { roomId: this.roomId, handId: state.handId, err: String(err) })
+    }
+    this.deps.onDomainEvent?.({ type: 'HAND_SETTLED', summary })
+
+    for (const p of [...this.players.values()]) {
+      if (!p.identity.isBot && p.consecutiveTimeouts >= this.deps.options.consecutiveTimeoutsToStand) {
+        p.standAfterHand = true
+        p.consecutiveTimeouts = 0
+      }
+      if (p.leaveAfterHand) await this.removePlayer(p, 'left')
+      else if (p.standAfterHand || (this.rules.mode === 'holdem' && p.seat !== null && p.stack === 0)) await this.standUpNow(p)
+    }
+    if (this.status === 'CLOSED') return
+    this.nextHandAt = this.deps.clock.now() + this.deps.options.handIntervalMs
+    this.broadcastRoomEvent({ type: 'ROOM_STATUS', status: 'IN_GAME', nextHandAt: this.nextHandAt })
+    this.nextHandTimer = this.deps.clock.setTimeout(() => void this.enqueue(() => this.startHand()), this.deps.options.handIntervalMs)
+  }
+
+  private toOpen(): void {
+    this.status = 'OPEN'
+    this.nextHandAt = null
+    for (const p of this.players.values()) if (!p.identity.isBot) p.ready = false
+    this.broadcastRoomEvent({ type: 'ROOM_STATUS', status: 'OPEN', nextHandAt: null })
+    this.armCarryOverRelease()
+    this.changed()
+  }
+
+  // ---------- helpers ----------
+
+  private addPlayer(identity: PlayerIdentity): RoomPlayer {
+    const p: RoomPlayer = {
+      identity, seat: null, stack: 0, ready: false, connected: true, joinedAt: this.deps.clock.now(), sittingOut: false,
+      consecutiveTimeouts: 0, disconnectDeadline: null, standAfterHand: false, leaveAfterHand: false,
+    }
+    this.players.set(identity.playerId, p)
+    this.onMembership?.(identity.playerId, true)
+    return p
+  }
+
+  /** A closed room accepts no further mutation — nothing may move points into or out of it. */
+  private assertOpen(): void {
+    if (this.status === 'CLOSED') throw new RoomError('ROOM_NOT_FOUND', 'room is closed')
+  }
+
+  private mustPlayer(playerId: string): RoomPlayer {
+    const p = this.players.get(playerId)
+    if (!p) throw new RoomError('NOT_IN_ROOM')
+    return p
+  }
+
+  private humans(): RoomPlayer[] {
+    return [...this.players.values()].filter((p) => !p.identity.isBot)
+  }
+
+  private connectedHumans(): RoomPlayer[] {
+    return this.humans().filter((p) => p.connected)
+  }
+
+  private seated(): RoomPlayer[] {
+    return [...this.players.values()].filter((p) => p.seat !== null)
+  }
+
+  private seatedHumans(): RoomPlayer[] {
+    return this.seated().filter((p) => !p.identity.isBot)
+  }
+
+  private readySeats(): RoomPlayer[] {
+    return this.seated().filter((p) => p.ready)
+  }
+
+  private seatPlayer(seat: number): RoomPlayer | undefined {
+    return [...this.players.values()].find((p) => p.seat === seat)
+  }
+
+  private inCurrentHand(p: RoomPlayer): boolean {
+    return p.seat !== null && this.runner !== null && !this.runner.isComplete && this.runner.state.players.some((hp) => hp.seat === p.seat)
+  }
+
+  private eligibleForHand(): RoomPlayer[] {
+    const required = this.rules.mode === 'blind' ? blindRequiredStack(this.rules) : 1
+    return this.seated().filter((p) => !p.sittingOut && !p.standAfterHand && !p.leaveAfterHand && p.stack >= required && (p.identity.isBot || this.status !== 'OPEN' || p.ready))
+  }
+
+  private playerView(p: RoomPlayer): RoomPlayerView {
+    let status: SeatStatus | null = null
+    if (p.seat !== null) {
+      if (!p.connected) status = 'DISCONNECTED'
+      else if (this.inCurrentHand(p)) status = 'IN_HAND'
+      else if (p.sittingOut) status = 'SITTING_OUT'
+      else status = p.ready ? 'READY' : 'SEATED'
+    }
+    const view: RoomPlayerView = {
+      playerId: p.identity.playerId, displayName: p.identity.displayName, isBot: p.identity.isBot, isHost: p.identity.playerId === this.hostPlayerId,
+      connected: p.connected, seat: p.seat, status, stack: p.stack, ready: p.ready,
+    }
+    if (p.cosmetics !== undefined) view.cosmetics = p.cosmetics
+    return view
+  }
+
+  private async standUpNow(p: RoomPlayer): Promise<void> {
+    if (p.seat === null) return
+    const seat = p.seat
+    if (this.rules.mode === 'holdem' && !p.identity.isBot && p.stack > 0) {
+      await this.deps.repos.balances.apply([{ playerId: p.identity.playerId, delta: p.stack, reason: 'cash_out', refId: this.roomId }])
+      await this.pushBalance(p.identity.playerId)
+    }
+    p.seat = null
+    p.stack = 0
+    p.ready = false
+    p.standAfterHand = false
+    p.consecutiveTimeouts = 0
+    this.broadcastRoomEvent({ type: 'PLAYER_STOOD', playerId: p.identity.playerId, seat })
+    this.changed()
+  }
+
+  private async removePlayer(p: RoomPlayer, reason: string): Promise<void> {
+    await this.standUpNow(p)
+    this.players.delete(p.identity.playerId)
+    this.onMembership?.(p.identity.playerId, false)
+    this.clearPlayerTimer(p.identity.playerId)
+    this.broadcastRoomEvent({ type: 'PLAYER_LEFT', playerId: p.identity.playerId })
+    if (p.identity.playerId === this.hostPlayerId) this.transferHost()
+    if (this.humanCount === 0) this.scheduleClose()
+    this.deps.log.info('player left room', { roomId: this.roomId, playerId: p.identity.playerId, reason })
+    this.changed()
+  }
+
+  private transferHost(): void {
+    const next = this.humans().filter((p) => !p.leaveAfterHand).sort((a, b) => a.joinedAt - b.joinedAt)[0]
+    if (!next) return
+    this.hostPlayerId = next.identity.playerId
+    this.broadcastRoomEvent({ type: 'HOST_CHANGED', hostPlayerId: this.hostPlayerId })
+  }
+
+  private async pushBalance(playerId: string): Promise<void> {
+    const p = this.players.get(playerId)
+    if (!p || !p.connected) return
+    try {
+      const balance = await this.deps.repos.balances.get(playerId)
+      if (this.rules.mode === 'blind' && p.seat !== null) p.stack = balance
+      this.deps.outbox.send(playerId, { t: 'BALANCE', balance })
+    } catch (err) {
+      this.deps.log.warn('balance lookup failed', { playerId, err: String(err) })
+    }
+  }
+
+  private broadcastRoomEvent(event: RoomEvent, excludePlayerId?: string): void {
+    this.seq += 1
+    for (const p of this.connectedHumans()) if (p.identity.playerId !== excludePlayerId) this.deps.outbox.send(p.identity.playerId, { t: 'ROOM_EVENT', seq: this.seq, event })
+  }
+
+  private changed(): void {
+    this.onChanged?.(this)
+  }
+
+  private setPlayerTimer(playerId: string, ms: number, fn: () => void | Promise<void>): void {
+    this.clearPlayerTimer(playerId)
+    this.playerTimers.set(playerId, this.deps.clock.setTimeout(() => void this.enqueue(fn), ms))
+  }
+
+  private clearPlayerTimer(playerId: string): void {
+    this.playerTimers.get(playerId)?.cancel()
+    this.playerTimers.delete(playerId)
+  }
+
+  private scheduleClose(): void {
+    this.cancelClose()
+    this.closeTimer = this.deps.clock.setTimeout(() => void this.enqueue(async () => { if (this.humanCount === 0) await this.close('empty') }), this.deps.options.emptyRoomCloseMs)
+  }
+
+  private cancelClose(): void {
+    this.closeTimer?.cancel()
+    this.closeTimer = null
+  }
+
+  private cancelTimers(): void {
+    this.cancelClose()
+    this.nextHandTimer?.cancel()
+    this.nextHandTimer = null
+    this.carryOverReleaseTimer?.cancel()
+    this.carryOverReleaseTimer = null
+    for (const t of this.playerTimers.values()) t.cancel()
+    this.playerTimers.clear()
+    this.runner?.dispose()
+  }
+}

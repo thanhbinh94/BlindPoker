@@ -237,10 +237,13 @@ Royal flush (là straight flush cao nhất), Straight flush, Four of a kind, Ful
 
 ### 8.4 Pot cộng dồn
 - Chỉ phát sinh ở kiểu B. Lưu trong state phòng. Hiển thị "Pot cộng dồn" trên bàn.
-- Khi phòng đóng hoặc không còn ≥ 2 người đủ điều kiện trong 60 giây: chia đều cho những người còn ngồi ghế và đủ điều kiện ở ván gần nhất; phần dư không chia được ghi `table_fee`.
+- Pot được giải phóng khi (a) phòng không thể bắt đầu ván mới liên tục trong `carryOverReleaseMs` (mặc định 60 giây), (b) phòng đóng, hoặc (c) server shutdown — tùy điều kiện nào đến trước.
+- Chia đều cho **mọi người thật đang ngồi ghế** (không xét stack): `share = floor(pot / n)`. Phần dư không chia được — hoặc toàn bộ pot khi không còn ai ngồi ghế — ghi thành một dòng sink `carry_over` qua `BalanceRepository.apply(entries, meta)`, không đưa cho một người bất kỳ.
+- Sau khi giải phóng, `carryOverPot = 0` và phòng phát `ROOM_EVENT ROOM_STATUS` (trạng thái không đổi) để mọi view cập nhật lại con số.
 
 ### 8.5 Bot trong Blind Poker
 - Bot ngồi từ khi tạo phòng theo `botCount`, luôn ready, không đếm là host.
+- Bot **chiếm ghế thật**: chúng tính vào `maxPlayers`. Sức chứa người thật = `maxPlayers − botCount đang ngồi`; vượt quá → `ROOM_FULL`. `RoomSummary.playerCount` đếm cả người thật lẫn bot đang ngồi, để danh sách phòng không hứa hẹn những ghế không tồn tại.
 - Balance bot ảo (RAM) khởi đầu 1.000.000, tự nạp lại khi < 2W; không ghi vào kinh tế người chơi.
 - Kiểu A: bot không có quyết định. Kiểu B: xem mục 9.
 
@@ -320,11 +323,14 @@ interface RoomConfig {
   blind?:  { holeCards: 2 | 3; decisionMode: 'none' | 'playOrFold'; fixedWager: number; botCount: number }
 }
 ```
-Server kiểm tra từng giá trị thuộc tập cho phép; sai → `ERROR INVALID_ROOM_CONFIG`. `blind.decisionMode` **bắt buộc**, không có giá trị mặc định: thiếu nó → `INVALID_ROOM_CONFIG`.
+Server kiểm tra từng giá trị thuộc tập cho phép; sai → `ERROR INVALID_ROOM_CONFIG`. `blind.decisionMode` **bắt buộc**, không có giá trị mặc định: thiếu nó → `INVALID_ROOM_CONFIG`. `INVALID_ROOM_CONFIG` là một yêu cầu bị từ chối, **không** phải frame hỏng: nó không tính vào `maxInvalidMessages` và không làm đóng kết nối.
+
+`maxPlayers` là số ghế, bao gồm cả ghế bot: một phòng blind `maxPlayers: 4, botCount: 2` chỉ còn chỗ cho 2 người thật (mục 8.5).
 
 ### 11.3 Ghế và trạng thái người trong phòng
 - Vào phòng = là "người xem trong phòng" (không ghế). `SIT_DOWN{seat, buyIn?}` chiếm ghế (Hold'em kèm buy-in; Blind không). `STAND_UP` rời ghế.
-- Trạng thái ghế: `EMPTY`, `SEATED`, `READY`, `IN_HAND`, `FOLDED`, `ALL_IN`, `SITTING_OUT`, `DISCONNECTED`.
+- Trạng thái ghế (`SeatStatus`, cấp phòng): `SEATED`, `READY`, `IN_HAND`, `SITTING_OUT`, `DISCONNECTED` (ghế trống = không có người, `seat: null`). `FOLDED`/`ALL_IN` **không** phải trạng thái phòng: chúng là cờ theo từng ván trong `HandView.seats` (`hasFolded`, `isAllIn`) và biến mất khi ván kết thúc.
+- `SITTING_OUT` được đặt lại mỗi lần phòng thử bắt đầu ván: người thật đang ngồi mà stack không đủ mức cược sẽ `sittingOut = true` (và trở lại `false` khi đủ).
 - Ready chỉ có ý nghĩa ở `OPEN`; khi ván bắt đầu tất cả ghế `READY` vào ván.
 
 ### 11.4 Host
@@ -337,7 +343,7 @@ Server kiểm tra từng giá trị thuộc tập cho phép; sai → `ERROR INVA
 ## 12. Economy
 
 ### 12.1 Nguyên tắc
-Điểm giữa người chơi là zero-sum; nguồn duy nhất là hệ thống (daily, achievement, cứu trợ), bể duy nhất là phí bàn và bot thắng. Mọi thay đổi balance đi qua `BalanceRepository.applySettlement` với `reason`.
+Điểm giữa người chơi là zero-sum; nguồn duy nhất là hệ thống (daily, achievement, cứu trợ), bể duy nhất là phí bàn và bot thắng. Mọi thay đổi balance đi qua `BalanceRepository.apply(entries, meta?)` với `reason` trên từng entry.
 
 ### 12.2 Tham số (JSON `economy.json`, chung cả hai edition; Normal đọc thêm phần item)
 | Tham số | Giá trị |
@@ -350,7 +356,9 @@ Server kiểm tra từng giá trị thuộc tập cho phép; sai → `ERROR INVA
 | `holdemBlindTiers` | 100/200, 250/500, 500/1k, 1k/2k, 2.5k/5k |
 
 ### 12.3 Phí bàn
-Hold'em: `min(floor(totalPot × 0,02), 1 BB)`. Blind: `floor(pot × 0,02)`. Không thu khi pot cộng dồn (chưa kết thúc). Ghi `table_fee`.
+Hold'em: `min(floor(totalPot × 0,02), 1 BB)`. Blind: `floor(pot × 0,02)`. Không thu khi pot cộng dồn (chưa kết thúc).
+
+Phí được ghi thành **dòng sink** bởi `BalanceRepository.apply(entries, meta)` với `meta.kind = 'table_fee'` — cùng transaction với các entry của người chơi. Hold'em không có entry nào (chip đã nằm trên bàn) nên gọi `apply([], { kind: 'table_fee', refId: handId, fee })`: một batch rỗng chỉ để ghi dòng sink. Pot cộng dồn khi được giải phóng (mục 8.4) ghi sink `carry_over` theo đúng cơ chế đó.
 
 ### 12.4 Cứu trợ
 `POST /api/economy/relief` (cả hai edition, REST — không nằm trong protocol gameplay): nếu `balance < 5.000` và `lastReliefAt` cách ≥ 24 giờ → balance = 5.000, ghi `relief`.
@@ -358,7 +366,7 @@ Hold'em: `min(floor(totalPot × 0,02), 1 BB)`. Blind: `floor(pot × 0,02)`. Khô
 ### 12.5 Ước lượng cân bằng
 - Người chơi đều: 30 ván Blind 5k/ngày, pot trung bình 15k → phí ≈ 300 × 30 = 9.000/ngày ở trần, thực tế 3.000–6.000. Daily trung bình 12.500 → dòng ròng +6.000 ÷ +9.000/ngày, tương đương 1–2 mức cược thấp. Chấp nhận: người chơi đều có tiến độ cảm nhận được, nhưng không "in tiền".
 - Người chơi nhiều (200 ván/ngày) phí ≈ 20.000–40.000 → âm nhẹ, phải thắng để giữ điểm.
-- Theo dõi: `SELECT reason, SUM(amount) FROM point_transactions WHERE created_at >= now() - interval '1 day' GROUP BY reason`. Nếu tổng nguồn > 1,5 × tổng bể trong 30 ngày liên tục → nâng `tableFeeRate` lên 0,03 hoặc mở shop đổi điểm (roadmap).
+- Theo dõi: `SELECT reason, SUM(amount) FROM point_transactions WHERE created_at >= now() - interval '1 day' GROUP BY reason` — các dòng sink (`table_fee`, `carry_over`) có `player_id IS NULL`, nên đây cũng là cách đọc tổng bể. Nếu tổng nguồn > 1,5 × tổng bể trong 30 ngày liên tục → nâng `tableFeeRate` lên 0,03 hoặc mở shop đổi điểm (roadmap).
 
 ### 12.6 Bảo toàn điểm
 Bất biến kiểm tra trong test: với mọi ván, `Σ balance trước = Σ balance sau + phí bàn` (cộng cả bot). Vi phạm là bug nghiêm trọng.
@@ -406,7 +414,7 @@ Cùng bảng, chỉ cột Điểm. Lưu `streak`, `last_daily_claim` trong `play
     reward: { points?: number; itemId?: string }
   }
   ```
-- Module `achievement` lắng nghe `StatsUpdated{playerId, changedMetrics}`; với mỗi def có metric thay đổi và chưa unlock: nếu `stats[metric] ≥ threshold` → ghi `player_achievements`, cộng thưởng qua `applySettlement(reason='achievement')`, thêm item, phát `AchievementUnlocked` tới client qua WS message `NOTIFICATION` (lightweight).
+- Module `achievement` lắng nghe `StatsUpdated{playerId, changedMetrics}`; với mỗi def có metric thay đổi và chưa unlock: nếu `stats[metric] ≥ threshold` → ghi `player_achievements`, cộng thưởng qua `apply([{ ..., reason: 'achievement' }])`, thêm item, phát `AchievementUnlocked` tới client qua WS message `NOTIFICATION` (lightweight).
 - `best_hand_rank` là metric số (category index 0–9) nên "special hand" dùng ngưỡng: flush=5, full house=6, quads=7, straight flush=8, royal=9.
 
 ### 14.2 Danh mục khởi đầu (28)
@@ -462,7 +470,7 @@ Một tiến trình giữ toàn bộ phòng trong RAM. Không Redis, không pub/
 ### 16.4 Đồng bộ
 - `ROOM_SNAPSHOT{seq, room, game?: PlayerView}` khi vào phòng, reconnect, RESYNC.
 - `GAME_EVENT{seq, event}` cho từng thay đổi. Client kiểm tra `seq === last + 1`, sai → gửi `RESYNC`.
-- `ACTION{reqId, baseSeq, action}`: server từ chối `STALE_STATE` nếu `baseSeq < currentSeq` **và** state đã đổi lượt kể từ đó (cho phép baseSeq cũ nếu vẫn cùng lượt để tránh từ chối oan do event phụ như PLAYER_JOINED). Server nhớ 32 `reqId` gần nhất mỗi kết nối; trùng → trả lại kết quả cũ, không áp dụng lại.
+- `ACTION{reqId, baseSeq, action}`: server từ chối `STALE_STATE` nếu `baseSeq < currentSeq` **và** state đã đổi lượt kể từ đó (cho phép baseSeq cũ nếu vẫn cùng lượt để tránh từ chối oan do event phụ như PLAYER_JOINED). Server nhớ 32 `reqId` gần nhất mỗi kết nối **cùng frame mà lần đầu đã trả về**; trùng → phát lại đúng frame đó (`ACK` vẫn là `ACK`, lỗi vẫn là đúng `ERROR` cũ), không áp dụng lại và không biến một yêu cầu đã thất bại thành thành công.
 
 ### 16.5 Heartbeat
 Server gửi `PING` mỗi 15 giây; không nhận `PONG` trong 30 giây → đóng socket → xử lý như disconnect. Client: 3 lần không nhận PING trong 45 giây → tự đóng và reconnect với backoff 1, 2, 4, 8 giây (tối đa 30 giây).
@@ -474,7 +482,10 @@ Server gửi `PING` mỗi 15 giây; không nhận `PONG` trong 30 giây → đó
 - Kết nối mới cùng session khi kết nối cũ còn sống → cũ nhận `SESSION_REPLACED` rồi đóng, mới nhận snapshot.
 
 ### 16.7 Server shutdown
-`SIGTERM`/`SIGINT` → dừng nhận kết nối mới → với mỗi phòng đang `IN_GAME`: hủy ván, hoàn mọi cược trong ván về stack, pot cộng dồn chia đều → mọi stack về balance → `applySettlement` → gửi `ERROR SERVER_SHUTDOWN` → đóng socket → thoát. Tối đa 10 giây.
+Hai pha, tối đa 10 giây (`shutdownTimeoutMs`; quá hạn thì bỏ dở và ghi warning):
+
+1. **Ngừng nhận** (`Gateway.stopAccepting()`): upgrade mới trả `HTTP/1.1 503 Service Unavailable`; `CREATE_ROOM`/`JOIN_ROOM` trả `ERROR SERVER_SHUTDOWN`; `RoomManager.create` ném `SERVER_SHUTDOWN`. Phiên đang chơi vẫn chạy tiếp.
+2. **Rút phòng rồi đóng socket**: với mỗi phòng — hủy ván đang chạy, hoàn mọi cược trong ván về stack, giải phóng pot cộng dồn (mục 8.4), mọi stack về balance qua `apply` → phòng `CLOSED`. Phòng `CLOSED` từ chối mọi lệnh sau đó bằng `ROOM_NOT_FOUND`, nên một `SIT_DOWN` chạy đua với shutdown không thể trừ buy-in vào phòng đang đóng. Cuối cùng gửi `ERROR SERVER_SHUTDOWN` và đóng mọi socket.
 
 ### 16.8 Lựa chọn công nghệ realtime
 Native WebSocket (`ws`) thay Socket.IO: protocol tự định nghĩa đã bao gồm reconnect/ack/heartbeat; giảm dependency và kích thước bundle Lite; debug bằng DevTools trực tiếp. Xem Phụ lục A.
@@ -514,15 +525,23 @@ Reducer thuần, không đồng hồ: nhịp lật bài và timeout là lệnh d
 ### 18.1 Interface (server-kit)
 ```ts
 interface PlayerRepository {
-  findById(id: string): Promise<PlayerRecord | null>
-  updateProfile(id: string, patch: Partial<Pick<PlayerRecord,'displayName'>>): Promise<void>
+  findById(playerId: string): Promise<PlayerRecord | null>
 }
 interface BalanceRepository {
   get(playerId: string): Promise<number>
-  applySettlement(entries: { playerId: string; delta: number; reason: TxReason; refId?: string }[]): Promise<void> // 1 transaction, từ chối nếu balance âm
+  // Atomic: all entries or none. Cộng dồn delta theo từng playerId trước, rồi mới kiểm tra
+  // `balance + net >= 0`; âm → InsufficientBalanceError và không ghi gì.
+  // meta.fee > 0 → ghi thêm một dòng sink loại meta.kind trong cùng transaction
+  // (point_transactions với player_id NULL).
+  apply(entries: { playerId: string; delta: number; reason: TxReason; refId?: string }[],
+        meta?: { refId: string; fee: number; kind: 'table_fee' | 'carry_over' }): Promise<void>
 }
-interface SessionRepository { create(playerId): Promise<SessionRecord>; findValid(id): Promise<SessionRecord|null>; revoke(id): Promise<void> }
 interface GameHistoryRepository { recordHand(summary: HandSummary): Promise<void> }
+// Do edition cấp: biến một HTTP upgrade (cookie) và/hoặc token của HELLO thành PlayerIdentity.
+interface SessionResolver {
+  fromUpgrade?(req: IncomingMessage): Promise<PlayerIdentity | null>
+  fromToken?(token: string): Promise<PlayerIdentity | null>
+}
 ```
 
 ### 18.2 Normal — PostgreSQL 16, Drizzle ORM, migration SQL trong `apps/normal-server/drizzle/`
@@ -531,7 +550,7 @@ users(id uuid pk, email citext unique, password_hash text, created_at, last_logi
 players(id uuid pk fk users, display_name varchar(20) unique, balance bigint check>=0, avatar_config jsonb,
         equipped_title text, equipped_badge text, last_relief_at, created_at)
 sessions(id text pk, user_id fk, expires_at, user_agent, created_at)
-point_transactions(id bigserial pk, player_id fk, amount bigint, reason text, ref_id text, created_at) -- index (player_id, created_at), (reason, created_at)
+point_transactions(id bigserial pk, player_id fk NULL, amount bigint, reason text, ref_id text, created_at) -- player_id NULL = dòng sink (table_fee, carry_over); index (player_id, created_at), (reason, created_at)
 games(id uuid pk, mode text, config jsonb, started_at, ended_at)
 game_players(game_id fk, player_id fk, seat int, net_result bigint, best_hand text, pk(game_id, player_id))
 items(id text pk, category text, rarity text, name_key text, asset_key text, is_default bool)
@@ -548,10 +567,11 @@ players(id text pk, display_name text unique collate nocase, session_token_hash 
         hands_played integer, hands_won integer, streak integer, last_daily_claim text, last_relief_at text, created_at text)
 hand_log(id integer pk, hand_id text, mode text, summary text, created_at text)  -- chỉ ghi khi LITE_HAND_LOG=1
 ```
-`SessionRepository` của Lite: token = 32 byte ngẫu nhiên base64url; DB lưu SHA-256 của token; phiên không hết hạn (mạng nội bộ), có thể xóa bằng lệnh admin (roadmap).
+`SessionResolver` của Lite: token = 32 byte ngẫu nhiên base64url; DB lưu SHA-256 của token; phiên không hết hạn (mạng nội bộ), có thể xóa bằng lệnh admin (roadmap).
 
 ### 18.4 Bất biến dữ liệu
-- `balance ≥ 0` do DB ép; `applySettlement` chạy trong transaction và kiểm tra trước khi ghi.
+- `balance ≥ 0` do DB ép; `apply` chạy trong transaction, cộng dồn theo người chơi rồi kiểm tra trước khi ghi.
+- Bất biến tiền: `Σ balance người chơi + Σ dòng sink (+ stack trên bàn và pot cộng dồn đang sống)` là hằng số.
 - Stack trong RAM ⇔ đã trừ balance; mọi đường thoát (đứng dậy, rời, timeout, shutdown) đều trả stack.
 
 ## 19. API (REST)
@@ -617,11 +637,11 @@ Mọi message client → server có thể mang `reqId?`; server trả lại nó 
 |---|---|
 | `WELCOME` | `{ playerId, displayName, balance, serverTime }` |
 | `ROOM_LIST` | `{ rooms: RoomSummary[] }` |
-| `ROOM_SNAPSHOT` | `{ seq, room: RoomView, hand?: HandView }` |
+| `ROOM_SNAPSHOT` | `{ seq, room: RoomView, hand?: HandView, deadlineAt: number | null }` |
 | `GAME_EVENT` | `{ seq, event: GameEvent }` |
 | `ROOM_EVENT` | `{ seq, event: PLAYER_JOINED \| PLAYER_LEFT \| PLAYER_SAT \| PLAYER_STOOD \| PLAYER_READY \| HOST_CHANGED \| PLAYER_DISCONNECTED \| PLAYER_RECONNECTED \| ROOM_STATUS \| ROOM_CLOSED }` |
 | `BALANCE` | `{ balance }` — sau settlement/daily/relief |
-| `NOTIFICATION` | `{ kind, payload }` — Normal dùng cho achievement; Lite không gửi |
+| `NOTIFICATION` | `{ kind, payload }` — Normal dùng cho achievement; Lite chỉ gửi `NOTIFICATION{kind:'KICKED'}` khi host kick (cả hai edition đều gửi thông báo này) |
 | `ACK` | `{ reqId }` |
 | `ERROR` | `{ reqId?, code, message }` |
 | `SESSION_REPLACED` | — |
