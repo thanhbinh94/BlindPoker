@@ -13,7 +13,7 @@ import { loadConfig, parseDotenv, resolveBaseDir, type LiteConfig } from './conf
 import { openDatabase } from './db/sqlite.js'
 import { assetSourceFromDir, assetSourceFromSea, type AssetSource } from './http/assets.js'
 import { createSqliteRepositories } from './repos/sqlite-repos.js'
-import { readRunFile, removeRunFile, resolveRunFilePath, RUN_FILE_NAME, type RunFile } from './run-file.js'
+import { liveInstanceAt, pidAlive, readRunFile, removeRunFile, resolveRunFilePath, RUN_FILE_NAME, type RunFile } from './run-file.js'
 
 /** Upper bound on a graceful stop; past it the process exits anyway rather than hanging a restart. */
 const SHUTDOWN_BUDGET_MS = 10_000
@@ -75,16 +75,6 @@ function loadAssets(baseDir: string, config: LiteConfig, log: Logger): AssetSour
 
 // ---------------------------------------------------------------------------- --stop / --status
 
-/** True while the process exists. `EPERM` means it exists but belongs to somebody else. */
-function pidAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (err) {
-    return (err as NodeJS.ErrnoException).code === 'EPERM'
-  }
-}
-
 /** The run file records the configured listen address; a wildcard bind is reached over the loopback. */
 function baseUrl(info: RunFile): string {
   const host = info.host === '0.0.0.0' || info.host === '::' || info.host === '' ? '127.0.0.1' : info.host
@@ -122,7 +112,9 @@ async function runStop(runFilePath: string): Promise<number> {
     })
   } catch (err) {
     if (!pidAlive(info.pid)) {
-      removeRunFile(runFilePath)
+      // Compare-and-delete against what we read: an instance that started in the meantime owns the
+      // file now, and taking it away would leave that live server with no way to be stopped.
+      removeRunFile(runFilePath, info)
       console.log(`nothing to stop: pid ${info.pid} is gone. Removed the stale ${RUN_FILE_NAME}.`)
       return 0
     }
@@ -178,7 +170,10 @@ function startupHint(err: unknown, config: LiteConfig | null): string | null {
   if (code.startsWith('SQLITE_') || message.includes('SQLITE_CANTOPEN')) {
     return 'the data file could not be opened — the folder holding the exe must be writable, or set SQLITE_PATH to one that is'
   }
-  if (/^(PORT|LOG_LEVEL|ECONOMY_TIMEZONE)\b/.test(message)) return 'fix the value in the .env file next to the executable, then start again'
+  if (message.startsWith('another instance is already running')) {
+    return 'stop the running one first: bind-poker-lite.exe --stop (or point SQLITE_PATH at a folder of its own)'
+  }
+  if (/^(PORT|LOG_LEVEL|ECONOMY_TIMEZONE|RECONNECT_WINDOW_SEC)\b/.test(message)) return 'fix the value in the .env file next to the executable, then start again'
   return null
 }
 
@@ -232,12 +227,26 @@ async function main(): Promise<void> {
 
   // Smoke mode proves the whole composition boots: an ephemeral port on the loopback, one request
   // through the real routing stack, then a clean shutdown. It is the release pipeline's gate.
+  // A smoke run is a *second* process, and often one sharing the data directory with a live server.
+  // It must never write the run file: that would overwrite the running instance's pid and token and
+  // then delete the file on the way out, leaving a live server with no way to be stopped.
+  const runFilePath = smoke ? null : resolveRunFilePath(baseDir, sqlitePath)
+
+  // Two servers on one data directory would fight over the SQLite file and over this run file, and
+  // the second one silently winning is how the first becomes unstoppable. Refuse instead.
+  if (runFilePath !== null) {
+    const running = liveInstanceAt(runFilePath)
+    if (running !== null) {
+      throw new Error(`another instance is already running (pid ${running.pid}, ${baseUrl(running)}) and owns ${runFilePath}`)
+    }
+  }
+
   const app = buildApp({
     config: smoke ? { ...config, port: 0, host: '127.0.0.1' } : config,
     repos,
     assets,
     log,
-    runFilePath: resolveRunFilePath(baseDir, sqlitePath),
+    runFilePath,
   })
 
   if (smoke) {

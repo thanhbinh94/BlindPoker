@@ -65,6 +65,14 @@ Request này **chỉ được chấp nhận từ chính máy chủ** (địa ch�
 file — máy khác trong LAN không tắt được server. File tự xoá khi server thoát êm; nếu bạn thấy nó
 còn đó mà server đã chết thì đó là dấu vết của một lần tắt cứng, `--stop` sẽ báo và dọn giúp.
 
+**`--stop` cần `HOST` là `0.0.0.0` (mặc định) hoặc `127.0.0.1`.** Nếu bạn đổi `HOST` thành một IP
+LAN cụ thể thì server không còn lắng nghe trên máy nội bộ, và lệnh này sẽ bị từ chối — khi đó
+chỉ còn `Ctrl`+`C` trong cửa sổ console (hoặc NSSM) là tắt êm được.
+
+Chạy hai bản exe cùng một thư mục dữ liệu là không được: bản thứ hai sẽ báo "another instance is
+already running" và thoát, để không giật mất `bind-poker.run.json` của bản đang chạy. `--smoke`
+cũng không bao giờ đụng tới file đó, nên kiểm tra nhanh lúc server đang chạy là an toàn.
+
 Quy tắc vận hành: **luôn chạy `--stop` trước khi cập nhật, khởi động lại hoặc tắt máy.**
 
 ---
@@ -208,7 +216,10 @@ database. There is nothing to install.
   safe either way. `--stop` reads `bind-poker.run.json` (written next to the data file at startup,
   holding the pid, port and a 32-byte token), posts the shutdown over the loopback — the endpoint
   refuses anything that is not a local caller with that token — and waits up to 15 s for the process
-  to exit. `bind-poker-lite.exe --status` prints the running instance's `/health`.
+  to exit. It therefore needs `HOST` to be `0.0.0.0` (the default) or `127.0.0.1`: a server bound to
+  one specific LAN address is not listening locally and can only be stopped with Ctrl+C or NSSM.
+  A second instance on the same data directory refuses to start rather than take the run file over,
+  and `--smoke` never writes one. `bind-poker-lite.exe --status` prints the running instance's `/health`.
 - **Configure it:** rename `.env.example` to `.env` next to the exe. Keys: `PORT` (8080), `HOST`
   (0.0.0.0), `SQLITE_PATH` (./bind-poker.sqlite), `LOG_LEVEL` (info), `ECONOMY_TIMEZONE`
   (Asia/Ho_Chi_Minh), `LITE_HAND_LOG` (false), `RECONNECT_WINDOW_SEC` (90), `ALLOWED_ORIGINS`,

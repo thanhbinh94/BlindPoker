@@ -10,7 +10,7 @@ import { DEFAULT_CONFIG, type LiteConfig } from './config.js'
 import { openDatabase } from './db/sqlite.js'
 import { assetSourceFromDir, type AssetSource } from './http/assets.js'
 import { createSqliteRepositories, type LiteRepositories } from './repos/sqlite-repos.js'
-import { RUN_FILE_NAME, type RunFile } from './run-file.js'
+import { RUN_FILE_NAME, writeRunFile, type RunFile } from './run-file.js'
 
 const XRW = { 'x-requested-with': 'bind-poker' }
 const CSP =
@@ -410,6 +410,38 @@ describe('the run file', () => {
     const h = makeApp()
     await h.app.listen()
     expect(existsSync(join(dir, RUN_FILE_NAME))).toBe(false)
+  })
+
+  /**
+   * `--smoke` is how the release pipeline boots a build, and it often runs in the directory a live
+   * server is using. It gets no run file path for exactly this reason: writing one would publish a
+   * pid and token that are about to disappear, and deleting it on the way out would leave the real
+   * server with nothing for `--stop` to find.
+   */
+  it('is left completely alone by a smoke-style app, which is given no path', async () => {
+    const path = join(tempDir('bp-run-'), RUN_FILE_NAME)
+    const live: RunFile = { pid: 4242, port: 8080, host: '0.0.0.0', token: 'a'.repeat(64) }
+    writeRunFile(path, live)
+
+    const h = makeApp() // no runFilePath, as `main.ts` builds it under `--smoke`
+    await h.app.listen()
+    await h.app.close()
+
+    expect(JSON.parse(readFileSync(path, 'utf8')) as RunFile).toEqual(live)
+  })
+
+  it('is not removed on close when another instance has taken it over', async () => {
+    const path = join(tempDir('bp-run-'), RUN_FILE_NAME)
+    const h = makeApp({ runFilePath: path })
+    await h.app.listen()
+    expect((JSON.parse(readFileSync(path, 'utf8')) as RunFile).token).toBe(h.app.runToken)
+
+    // A successor claims the directory while this instance is still winding down.
+    const successor: RunFile = { pid: process.pid + 1, port: 9999, host: '127.0.0.1', token: 'b'.repeat(64) }
+    writeRunFile(path, successor)
+    await h.app.close()
+
+    expect(JSON.parse(readFileSync(path, 'utf8')) as RunFile).toEqual(successor)
   })
 })
 

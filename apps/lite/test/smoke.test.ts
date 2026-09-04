@@ -63,6 +63,32 @@ function runSmoke(command: string, args: string[], label: string): Promise<Run> 
   })
 }
 
+/** Runs one Lite process to completion with the given argv and environment. */
+function run(command: string, args: string[], env: NodeJS.ProcessEnv): Promise<Run> {
+  return new Promise((resolve, reject) => {
+    const started = Date.now()
+    const child = spawn(command, args, { cwd: PACKAGE_ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()))
+    child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString()))
+    const timer = setTimeout(() => {
+      child.kill()
+      reject(new Error(`${args.join(' ')} did not exit within ${BUDGET_MS} ms
+stdout: ${stdout}
+stderr: ${stderr}`))
+    }, BUDGET_MS)
+    child.on('error', (err) => {
+      clearTimeout(timer)
+      reject(err)
+    })
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      resolve({ code, stdout, stderr, ms: Date.now() - started })
+    })
+  })
+}
+
 /**
  * `stderr` is reported rather than asserted empty: Node prints `ExperimentalWarning` lines for
  * features outside our control, and the release notes already tell operators to ignore them. It is
@@ -76,8 +102,9 @@ function expectHealthy(run: Run, label: string): void {
 }
 
 /**
- * A smoke run listens for real, so it writes a run file — and it must take it away again. One left
- * behind would make the next `--stop` chase a pid that no longer exists.
+ * A smoke run listens for real, but it is a *second* process and often shares the data directory
+ * with a live server — so it must write no run file at all. Writing one would overwrite the running
+ * instance's pid and token and then delete the file on the way out, leaving that server unstoppable.
  */
 function expectNoRunFile(): void {
   for (const dir of [scratchDir(), PACKAGE_ROOT]) {
@@ -90,6 +117,42 @@ describe.skipIf(!hasBundle)('dist/server.cjs', () => {
     expectHealthy(await runSmoke(process.execPath, [SERVER_BUNDLE], 'bundle'), 'node dist/server.cjs --smoke')
     expectNoRunFile()
   }, BUDGET_MS + 5_000)
+})
+
+/**
+ * The other half of the run file's contract, and it takes two real processes to show: a second
+ * server on the same data directory must refuse to start rather than overwrite the first one's run
+ * file. Silently taking it over is how a live server holding players' stacks becomes unstoppable.
+ *
+ * Both instances bind `PORT=0`, so nothing here depends on a free fixed port — the refusal comes
+ * from the run file alone, not from `EADDRINUSE`.
+ */
+describe.skipIf(!hasBundle)('a second instance on the same data directory', () => {
+  it('refuses to start, and leaves the running instance able to stop itself', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bp-lite-second-'))
+    const env = { ...process.env, PORT: '0', HOST: '127.0.0.1', SQLITE_PATH: join(dir, 'bp.sqlite'), LOG_LEVEL: 'warn' }
+    const runFile = join(dir, RUN_FILE_NAME)
+    const first = spawn(process.execPath, [SERVER_BUNDLE], { cwd: PACKAGE_ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] })
+    try {
+      const deadline = Date.now() + BUDGET_MS
+      while (!existsSync(runFile) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 50))
+      expect(existsSync(runFile), 'the first instance published its run file').toBe(true)
+
+      const second = await run(process.execPath, [SERVER_BUNDLE], env)
+      expect(second.code, `stderr: ${second.stderr}`).toBe(1)
+      expect(second.stderr).toContain('another instance is already running')
+      expect(second.stderr).toContain('--stop')
+
+      // The refusal must be inert: the first instance's file is untouched, so `--stop` still works.
+      const stop = await run(process.execPath, [SERVER_BUNDLE, '--stop'], env)
+      expect(stop.code, `stderr: ${stop.stderr}`).toBe(0)
+      expect(stop.stdout).toContain('stopped Bind Poker Lite gracefully')
+      expect(existsSync(runFile)).toBe(false)
+    } finally {
+      first.kill()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }, BUDGET_MS * 4)
 })
 
 describe.skipIf(!hasExe)('bind-poker-lite.exe', () => {

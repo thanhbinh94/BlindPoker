@@ -211,7 +211,18 @@ Endpoint đó có ba lớp chặn, theo thứ tự: rate-limit 5 lần/phút →
 sai thì `401`. Máy khác trong LAN, kể cả khi đọc trộm được token, vẫn không tắt được server.
 
 Nếu `bind-poker.run.json` còn nằm đó mà tiến trình đã chết (dấu vết của một lần tắt cứng), `--stop`
-báo rõ và xoá file giúp, thoát `0`.
+báo rõ và xoá file giúp, thoát `0`. Việc xoá luôn đọc lại file và đối chiếu `pid` + `token` trước:
+một bản đã khởi động trong luúc đó sẽ không bị dọn mất file của nó.
+
+⚠️ **`--stop` yêu cầu `HOST` là `0.0.0.0` (mặc định) hoặc `127.0.0.1`.** Endpoint chỉ trả lời địa chỉ
+loopback, nên nếu bạn đặt `HOST` thành một IP LAN cụ thể (ví dụ `HOST=192.168.1.10`) thì server
+không lắng nghe trên loopback nữa và `--stop` sẽ bị từ chối `403` — lúc đó chỉ còn `Ctrl`+`C`
+trong console (hoặc NSSM) là tắt êm được. `0.0.0.0` đã phục vụ cả LAN lẫn loopback, nên
+bình thường không có lý do để đổi.
+
+Một tiến trình thứ hai dùng chung thư mục dữ liệu sẽ **từ chối khởi động** ("another instance is
+already running …") thay vì chiếm file, và `--smoke` không bao giờ ghi run file — nếu không, một
+lần kiểm tra nhanh sẽ làm server đang chạy mất đường tắt êm.
 
 ### 6.3 Task Scheduler (khuyến nghị)
 

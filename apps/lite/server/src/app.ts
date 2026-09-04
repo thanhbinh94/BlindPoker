@@ -95,7 +95,7 @@ export function buildApp(deps: BuildAppDeps): LiteApp {
     // `fastify.close()` is not left waiting on connections that were upgraded out from under it,
     // and the database stays open until the last repository write has happened.
     closing ??= (async () => {
-      if (runFilePath) removeRunFile(runFilePath)
+      if (runFilePath) removeRunFile(runFilePath, { pid: process.pid, token: runToken })
       await game.shutdown('server shutdown')
       await fastify.close()
       repos.close()
