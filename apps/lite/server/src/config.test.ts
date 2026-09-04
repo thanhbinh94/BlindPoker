@@ -5,6 +5,12 @@ describe('parseDotenv', () => {
   it('parses keys, quotes, comments and blanks', () => {
     expect(parseDotenv('# c\nPORT=9000\nHOST="127.0.0.1"\nSQLITE_PATH=\'./x.sqlite\'\n\nLOG_LEVEL=debug # trailing\n')).toEqual({ PORT: '9000', HOST: '127.0.0.1', SQLITE_PATH: './x.sqlite', LOG_LEVEL: 'debug' })
   })
+  it('strips a trailing comment after a quoted value, and only comment-strips unquoted values', () => {
+    expect(parseDotenv('HOST="127.0.0.1" # note')).toEqual({ HOST: '127.0.0.1' })
+    expect(parseDotenv("A='x=y' # c")).toEqual({ A: 'x=y' })
+    expect(parseDotenv('B=plain#nohash')).toEqual({ B: 'plain#nohash' })
+    expect(parseDotenv('C="has # inside"')).toEqual({ C: 'has # inside' })
+  })
 })
 
 describe('loadConfig', () => {
