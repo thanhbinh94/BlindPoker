@@ -59,7 +59,13 @@ describe('multiplayer soak', () => {
     const balances = await Promise.all(ids.map((id) => ts.repos.balances.get(id)))
     const fees = ts.repos.hands.reduce((s, h) => s + h.fee, 0)
     const botNet = ts.repos.hands.flatMap((h) => h.players).filter((p) => p.isBot).reduce((s, p) => s + p.net, 0)
-    expect(balances.reduce((s, x) => s + x, 0) + fees + botNet).toBe(600_000)
+    const sinks = ts.repos.sinks.reduce((s, x) => s + x.fee, 0)
+    // every fee the engine took is a table_fee sink row; carry_over sinks are pot remainders
+    expect(ts.repos.sinks.filter((x) => x.kind === 'table_fee').reduce((s, x) => s + x.fee, 0)).toBe(fees)
+    // Σ human balances + bot nets + Σ sinks === the points everyone started with (no live carry-over
+    // or table stacks remain: shutdown released both).
+    expect(balances.reduce((s, x) => s + x, 0) + sinks + botNet).toBe(600_000)
+    for (const room of ts.server.rooms.all()) expect(room.carryOverPot).toBe(0)
     expect(ts.repos.hands.length).toBeGreaterThanOrEqual(20)
   }, 60_000)
 })

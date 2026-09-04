@@ -1,6 +1,6 @@
 import type { LegalActions, PlayerAction, RoomConfig } from '@bp/core'
 import { describe, expect, it } from 'vitest'
-import { createRoomHarness, type RoomHarness } from '../testing/room-harness.js'
+import { createRoomHarness, TEST_ROOM_OPTIONS, type RoomHarness } from '../testing/room-harness.js'
 import { RoomError } from './types.js'
 
 const HOLDEM: RoomConfig = { name: 'T', mode: 'holdem', maxPlayers: 4, isPrivate: false, turnTimerSec: 30, autoStart: false, holdem: { smallBlind: 100, bigBlind: 200, minBuyInBB: 50, maxBuyInBB: 200 } }
@@ -73,7 +73,8 @@ describe('Blind hands', () => {
     expect(summary.players.reduce((s, p) => s + p.net, 0) + summary.fee).toBe(0) // money conservation
     const settled = h.repos.entries.filter((e) => e.entry.reason === 'settlement')
     expect(settled.map((e) => e.entry.playerId).sort()).toEqual(['a', 'h'])
-    expect(settled[0]!.meta).toEqual({ refId: summary.handId, fee: summary.fee })
+    expect(settled[0]!.meta).toEqual({ refId: summary.handId, fee: summary.fee, kind: 'table_fee' })
+    expect(h.repos.sinks).toEqual([{ refId: summary.handId, fee: summary.fee, kind: 'table_fee' }])
     expect(await h.repos.balances.get('a')).toBe(100_000 - 1_000) // folded: lost the ante
     expect(h.last('a', 'BALANCE')).toEqual({ t: 'BALANCE', balance: 99_000 })
     expect(h.domainEvents.at(-1)).toMatchObject({ type: 'HAND_SETTLED', summary: { handId: summary.handId } })
@@ -126,6 +127,7 @@ describe('Hold’em hands', () => {
     expect(stacks[0]! + stacks[1]! + fee).toBe(40_000)
     expect(fee).toBeGreaterThan(0)
     expect(h.repos.entries.map((e) => e.entry.reason)).toEqual(['buy_in', 'buy_in']) // no settlement entries for hold'em
+    expect(h.repos.sinks).toEqual([{ refId: h.repos.hands[0]!.handId, fee, kind: 'table_fee' }]) // …but the fee sink is still recorded
     expect(events(h, 'a')).toContain('SHOWDOWN')
   })
 
@@ -233,15 +235,61 @@ describe('Leaving, disconnecting, shutting down', () => {
     expect(h.repos.hands[0]!.cancelled).toBe(true)
   })
 
-  it('shutdown splits a carried-over pot among seated humans', async () => {
+  it('shutdown splits a carried-over pot among seated humans and sinks the remainder', async () => {
     const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 0 } })
     await seatAndStart(h, ['h', 'a'])
     await playOut(h, () => ({ kind: 'fold' })) // both fold → 2000 carried
     expect(h.room.carryOverPot).toBe(2_000)
+    await h.room.join(h.identity('b')) // a third human takes a seat before the shutdown
+    await h.room.sitDown('b', 2)
     await h.room.shutdown('restart')
-    expect(await h.repos.balances.get('h')).toBe(100_000) // −1000 ante + 1000 refund
-    expect(await h.repos.balances.get('a')).toBe(100_000)
-    expect(h.repos.entries.filter((e) => e.entry.reason === 'refund')).toHaveLength(2)
+    // 2000 / 3 seated humans = 666 each, 2 left over → recorded as a carry_over sink, not given away.
+    expect(h.repos.entries.filter((e) => e.entry.reason === 'refund').map((e) => e.entry.delta)).toEqual([666, 666, 666])
+    expect(h.repos.sinks).toEqual([{ refId: 'room-1', fee: 2, kind: 'carry_over' }])
+    expect(await h.repos.balances.get('h')).toBe(99_666) // −1000 ante + 666
+    expect(await h.repos.balances.get('a')).toBe(99_666)
+    expect(await h.repos.balances.get('b')).toBe(100_666)
+    expect(h.room.carryOverPot).toBe(0)
+    const total = (await h.repos.balances.get('h')) + (await h.repos.balances.get('a')) + (await h.repos.balances.get('b'))
+    expect(total + h.repos.sinks.reduce((s, x) => s + x.fee, 0)).toBe(300_000)
+  })
+
+  it('releases a carry-over pot to the seated humans once the room cannot start a hand for carryOverReleaseMs', async () => {
+    // 'poor' can afford exactly one wager: after the all-fold hand its balance (1500) is below the
+    // 2 × 1000 requirement, so no further hand can start while both players stay seated.
+    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 0 } }, { players: [['h', 100_000], ['poor', 2_500]] })
+    await seatAndStart(h, ['h', 'poor'])
+    await playOut(h, () => ({ kind: 'fold' }))
+    expect(h.room.carryOverPot).toBe(2_000)
+    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs) // next-hand timer fires, nobody is eligible → OPEN + release armed
+    await tick(h)
+    expect(h.room.status).toBe('OPEN')
+    expect(h.room.carryOverPot).toBe(2_000)
+    h.clock.advance(TEST_ROOM_OPTIONS.carryOverReleaseMs)
+    await tick(h)
+    expect(h.room.carryOverPot).toBe(0)
+    expect(await h.repos.balances.get('h')).toBe(100_000) // −1000 ante + 1000 share
+    expect(await h.repos.balances.get('poor')).toBe(2_500)
+    expect(h.repos.sinks).toEqual([]) // 2000 split evenly between two seated humans: nothing left over
+    expect(h.last('h', 'BALANCE')).toEqual({ t: 'BALANCE', balance: 100_000 })
+    expect(h.last('h', 'ROOM_EVENT')?.event).toMatchObject({ type: 'ROOM_STATUS', status: 'OPEN' })
+    expect(h.room.view().carryOverPot).toBe(0)
+  })
+
+  it('sinks the whole carry-over pot when the room closes with nobody seated', async () => {
+    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 0 } })
+    await seatAndStart(h, ['h', 'a'])
+    await playOut(h, () => ({ kind: 'fold' }))
+    expect(h.room.carryOverPot).toBe(2_000)
+    await h.room.leave('h')
+    await h.room.leave('a')
+    h.clock.advance(TEST_ROOM_OPTIONS.emptyRoomCloseMs)
+    await tick(h)
+    expect(h.room.status).toBe('CLOSED')
+    expect(h.room.carryOverPot).toBe(0)
+    expect(h.repos.sinks).toEqual([{ refId: 'room-1', fee: 2_000, kind: 'carry_over' }])
+    const total = (await h.repos.balances.get('h')) + (await h.repos.balances.get('a'))
+    expect(total + h.repos.sinks.reduce((s, x) => s + x.fee, 0)).toBe(200_000)
   })
 })
 
@@ -259,7 +307,10 @@ describe('Money conservation over many hands', () => {
     const totalFees = h.repos.hands.reduce((s, x) => s + x.fee, 0)
     const botNet = h.repos.hands.flatMap((x) => x.players).filter((p) => p.isBot).reduce((s, p) => s + p.net, 0)
     const humanDelta = (await h.repos.balances.get('h')) + (await h.repos.balances.get('a')) - 200_000
-    expect(humanDelta + botNet + totalFees + h.room.carryOverPot).toBe(0)
+    const sinkTotal = h.repos.sinks.reduce((s, x) => s + x.fee, 0)
+    // every fee the engine took is recorded as a table_fee sink row, and nothing else is
+    expect(h.repos.sinks.filter((x) => x.kind === 'table_fee').reduce((s, x) => s + x.fee, 0)).toBe(totalFees)
+    expect(humanDelta + botNet + sinkTotal + h.room.carryOverPot).toBe(0)
     const seqs = h.ofType('h', 'GAME_EVENT').map((m) => m.seq)
     expect(seqs.every((s, i) => i === 0 || s > seqs[i - 1]!)).toBe(true)
   })

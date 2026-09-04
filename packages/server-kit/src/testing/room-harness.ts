@@ -25,6 +25,7 @@ export const TEST_ROOM_OPTIONS: RoomOptions = {
   reconnectWindowMs: 1_000,
   spectatorGraceMs: 2_000,
   emptyRoomCloseMs: 500,
+  carryOverReleaseMs: 200,
   turnTimerMsOverride: 5_000,
 }
 

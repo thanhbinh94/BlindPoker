@@ -64,6 +64,28 @@ go negative, before writing anything. `Room` relies on this to settle a
 hand's net results, buy-ins, cash-outs, and carry-over refunds as a single
 unit — a partial write would let points leak or be created.
 
+Two further rules the implementation must honor:
+
+- **Netting.** Entries are grouped by player and their deltas summed
+  *before* the negativity check, so a batch that debits and re-credits the
+  same player is judged on `balance + net >= 0`, not on intermediate
+  values. Only the net matters; the intermediate order does not.
+- **Sink rows.** When `meta` is present and `meta.fee > 0`, the same
+  transaction must record a sink row of `meta.kind` — points that left
+  player balances and went to no player. Normal writes a
+  `point_transactions` row with a null `player_id`; the in-memory
+  repositories push the meta onto `repos.sinks`. `meta.kind` is
+  `'table_fee'` (the rake of a settled hand, `refId` = handId) or
+  `'carry_over'` (the indivisible remainder of a released carry-over pot,
+  or the whole pot when nobody was seated, `refId` = roomId). Hold'em
+  settles no player entries at all, so its fee arrives as
+  `apply([], { kind: 'table_fee', ... })` — an empty batch that exists
+  purely to write the sink row.
+
+Sink rows are what make the money invariant checkable:
+`Σ player balances + Σ sinks (+ live table stacks and carry-over pots) `
+is constant for the lifetime of the server.
+
 ### `onDomainEvent`
 
 An optional sink for events an edition typically forwards to other
@@ -79,6 +101,18 @@ IN_GAME ──(hand loop: HandRunner runs a hand to completion)──> onHandCom
   onHandComplete ──(fewer than 2 eligible players)──> OPEN
 IN_GAME/OPEN ──(shutdown() or last human leaves + emptyRoomCloseMs)──> CLOSED
 ```
+
+### Carry-over pots (spec §8.4)
+
+When every player folds a Blind hand the pot is not paid out: it carries
+into the next hand. A pot must never be stranded, so `Room` releases it
+whenever the table stops being able to use it — when the room has been
+unable to start a hand for `carryOverReleaseMs` (the timer is armed each
+time the room falls back to `OPEN` and cancelled as soon as a hand
+starts), when the room closes, and on `shutdown()`. The pot is split
+evenly among the seated humans (regardless of stack); the indivisible
+remainder — or the whole pot, when nobody is seated — is recorded as a
+`carry_over` sink row rather than being handed to an arbitrary player.
 
 A room is created `OPEN` with its host seated. Each hand runs inside a
 `HandRunner` driven by `Room`'s own serialized queue (`enqueue`), so joins,
@@ -99,6 +133,7 @@ either starts the next hand after `handIntervalMs` or falls back to `OPEN`.
 | `reconnectWindowMs` | 90,000 | How long a disconnected seated player is held before auto-fold/stand |
 | `spectatorGraceMs` | 300,000 | After the reconnect window, how long before the player is removed from the room entirely |
 | `emptyRoomCloseMs` | 60,000 | How long an empty room stays open before closing |
+| `carryOverReleaseMs` | 60,000 | How long a room may sit unable to start a hand before its carry-over pot is released (spec §8.4) |
 | `consecutiveTimeoutsToStand` | 3 | Timed-out actions in a row before a human is stood up automatically |
 | `botStartingBalance` | 1,000,000 | Virtual balance bots start (and top up) with in Blind mode |
 | `turnTimerMsOverride` | — | Test hook: overrides `config.turnTimerSec * 1000` when set |

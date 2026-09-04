@@ -24,6 +24,7 @@ export const TEST_SERVER_ROOM_OPTIONS: Partial<RoomOptions> = {
   reconnectWindowMs: 300,
   spectatorGraceMs: 300,
   emptyRoomCloseMs: 200,
+  carryOverReleaseMs: 100,
   turnTimerMsOverride: 2_000,
 }
 

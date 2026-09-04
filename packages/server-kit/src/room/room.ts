@@ -40,6 +40,7 @@ export class Room {
   private queue: Promise<unknown> = Promise.resolve()
   private nextHandTimer: TimerHandle | null = null
   private closeTimer: TimerHandle | null = null
+  private carryOverReleaseTimer: TimerHandle | null = null
   private readonly playerTimers = new Map<string, TimerHandle>()
   private turnStartSeq = 0
 
@@ -308,7 +309,7 @@ export class Room {
         await this.onHandComplete()
       }
       this.cancelTimers()
-      await this.distributeCarryOver()
+      await this.releaseCarryOver()
       for (const p of this.seatedHumans()) await this.standUpNow(p)
       this.status = 'CLOSED'
       this.broadcastRoomEvent({ type: 'ROOM_CLOSED', reason })
@@ -323,24 +324,47 @@ export class Room {
       await this.onHandComplete()
     }
     this.cancelTimers()
+    await this.releaseCarryOver()
     this.status = 'CLOSED'
     this.onClosed?.(this, reason)
   }
 
-  private async distributeCarryOver(): Promise<void> {
-    if (this.carryOverPot <= 0) return
+  /**
+   * Spec §8.4. Returns a carry-over pot to the table: an equal share to every seated human, with
+   * the indivisible remainder (or the whole pot when nobody is seated) recorded as a `carry_over`
+   * sink so `Σ balances + Σ sinks` stays constant. Called from the release timer, `close()` and
+   * `shutdown()`; always runs on the room queue.
+   */
+  private async releaseCarryOver(): Promise<void> {
+    this.carryOverReleaseTimer?.cancel()
+    this.carryOverReleaseTimer = null
+    const pot = this.carryOverPot
+    if (pot <= 0) return
     const humans = this.seatedHumans()
-    if (humans.length === 0) {
-      this.carryOverPot = 0
+    const share = humans.length === 0 ? 0 : Math.floor(pot / humans.length)
+    const remainder = pot - share * humans.length
+    const entries: BalanceEntry[] = share > 0
+      ? humans.map((p) => ({ playerId: p.identity.playerId, delta: share, reason: 'refund' as const, refId: this.roomId }))
+      : []
+    this.carryOverPot = 0
+    try {
+      await this.deps.repos.balances.apply(entries, { refId: this.roomId, fee: remainder, kind: 'carry_over' })
+    } catch (err) {
+      this.carryOverPot = pot // nothing was written: keep the pot so a later attempt can release it
+      this.deps.log.error('carry-over release failed', { roomId: this.roomId, pot, err: String(err) })
       return
     }
-    const share = Math.floor(this.carryOverPot / humans.length)
-    const remainder = this.carryOverPot - share * humans.length
-    this.carryOverPot = 0
-    const entries = humans.map((p, i) => ({ playerId: p.identity.playerId, delta: share + (i === 0 ? remainder : 0), reason: 'refund' as const, refId: this.roomId })).filter((e) => e.delta > 0)
-    if (entries.length === 0) return
-    await this.deps.repos.balances.apply(entries)
+    this.deps.log.info('carry-over released', { roomId: this.roomId, pot, recipients: humans.length, sink: remainder })
     for (const p of humans) await this.pushBalance(p.identity.playerId)
+    // status is unchanged; the event exists so every view refreshes `carryOverPot`.
+    this.broadcastRoomEvent({ type: 'ROOM_STATUS', status: this.status === 'IN_GAME' ? 'IN_GAME' : 'OPEN', nextHandAt: this.nextHandAt })
+  }
+
+  private armCarryOverRelease(): void {
+    this.carryOverReleaseTimer?.cancel()
+    this.carryOverReleaseTimer = null
+    if (this.carryOverPot <= 0 || this.status === 'CLOSED') return
+    this.carryOverReleaseTimer = this.deps.clock.setTimeout(() => void this.enqueue(() => this.releaseCarryOver()), this.deps.options.carryOverReleaseMs)
   }
 
   // ---------- hand lifecycle ----------
@@ -349,6 +373,8 @@ export class Room {
     if (this.status === 'CLOSED' || (this.runner && !this.runner.isComplete)) return
     this.nextHandTimer?.cancel()
     this.nextHandTimer = null
+    this.carryOverReleaseTimer?.cancel()
+    this.carryOverReleaseTimer = null
     if (this.rules.mode === 'blind') {
       const required = blindRequiredStack(this.rules)
       for (const p of this.seated()) {
@@ -433,13 +459,15 @@ export class Room {
     this.carryOverPot = result.carryOverOut
     this.runner = null
     this.deadlineAt = null
-    if (entries.length > 0) {
+    // Blind settles player nets; Hold'em moves nothing (chips are already on the table) but both
+    // modes must record the table fee as a sink, so the call also happens for an empty batch.
+    if (entries.length > 0 || result.fee > 0) {
       try {
-        await this.deps.repos.balances.apply(entries, { refId: state.handId, fee: result.fee })
+        await this.deps.repos.balances.apply(entries, { refId: state.handId, fee: result.fee, kind: 'table_fee' })
+        for (const e of entries) await this.pushBalance(e.playerId)
       } catch (err) {
         this.deps.log.error('settlement failed', { roomId: this.roomId, handId: state.handId, err: String(err) })
       }
-      for (const e of entries) await this.pushBalance(e.playerId)
     }
     try {
       await this.deps.repos.history.recordHand(summary)
@@ -467,6 +495,7 @@ export class Room {
     this.nextHandAt = null
     for (const p of this.players.values()) if (!p.identity.isBot) p.ready = false
     this.broadcastRoomEvent({ type: 'ROOM_STATUS', status: 'OPEN', nextHandAt: null })
+    this.armCarryOverRelease()
     this.changed()
   }
 
@@ -615,6 +644,8 @@ export class Room {
     this.cancelClose()
     this.nextHandTimer?.cancel()
     this.nextHandTimer = null
+    this.carryOverReleaseTimer?.cancel()
+    this.carryOverReleaseTimer = null
     for (const t of this.playerTimers.values()) t.cancel()
     this.playerTimers.clear()
     this.runner?.dispose()

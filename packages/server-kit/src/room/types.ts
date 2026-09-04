@@ -29,6 +29,8 @@ export interface RoomOptions {
   reconnectWindowMs: number
   spectatorGraceMs: number
   emptyRoomCloseMs: number
+  /** How long a room may sit unable to start a hand before its carry-over pot is released to the seated humans. */
+  carryOverReleaseMs: number
   consecutiveTimeoutsToStand: number
   botStartingBalance: number
   /** Test hook: overrides `config.turnTimerSec * 1000` when set. */
@@ -42,6 +44,7 @@ export const DEFAULT_ROOM_OPTIONS: RoomOptions = {
   reconnectWindowMs: 90_000,
   spectatorGraceMs: 300_000,
   emptyRoomCloseMs: 60_000,
+  carryOverReleaseMs: 60_000,
   consecutiveTimeoutsToStand: 3,
   botStartingBalance: 1_000_000,
 }
