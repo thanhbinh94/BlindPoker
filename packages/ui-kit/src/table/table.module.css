@@ -670,6 +670,18 @@
   background: transparent;
 }
 
+/* spec §27.1: under 768 px a thumb cannot hit a 1-point step, so the range control drops out and
+   sizing is done with the presets plus the number input, which stay full-width in its place. */
+@media (max-width: 767px) {
+  .slider {
+    display: none;
+  }
+
+  .amount {
+    width: 100%;
+  }
+}
+
 /* ---------------- Hand result ---------------- */
 .result {
   display: flex;

@@ -26,7 +26,8 @@
   --red: #c8323c;
   --red-soft: rgba(200, 50, 60, 0.16);
   --red-ink: #fdf3f0; /* text on a red fill */
-  --teal: #3f938a;
+  --teal: #3f938a; /* teal as ink/hairline on a dark ground */
+  --teal-fill: #17594f; /* teal as a *fill*: dark enough for --teal-ink at 4.5:1 */
   --teal-ink: #f2f7f5; /* text on a teal fill */
 
   /* table */
@@ -64,6 +65,7 @@
   --red-soft: rgba(169, 36, 45, 0.12);
   --red-ink: #fdf3f0;
   --teal: #15544c;
+  --teal-fill: #124a43;
   --teal-ink: #f2f7f5;
 
   /* the felt is a physical object: night-side in both themes */

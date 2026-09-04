@@ -67,10 +67,11 @@
   border-color: rgba(0, 0, 0, 0.32);
 }
 
-/* teal: the everyday affirmative */
+/* teal: the everyday affirmative. `--teal-fill` is the darker sibling of `--teal`; the lighter
+   hairline teal only reaches 3.4:1 under --teal-ink, which is below the AA floor for button text. */
 .btn.primary {
   color: var(--teal-ink);
-  background-color: var(--teal);
+  background-color: var(--teal-fill);
 }
 
 /* gold: money moves */
@@ -217,6 +218,7 @@
   --red: #a9242d;
   --red-soft: rgba(169, 36, 45, 0.12);
   --teal: #15544c;
+  --teal-fill: #124a43;
 
   color: var(--ink);
   background: linear-gradient(172deg, #fbf7ee 0%, #f0e9d9 100%);
@@ -236,6 +238,7 @@
   --red-soft: rgba(200, 50, 60, 0.16);
   --red-ink: #fdf3f0;
   --teal: #3f938a;
+  --teal-fill: #17594f;
   --teal-ink: #f2f7f5;
 
   color: var(--ink);
