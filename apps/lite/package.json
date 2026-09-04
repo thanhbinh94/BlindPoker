@@ -20,8 +20,10 @@
     "@bp/server-kit": "workspace:*",
     "@bp/ui-kit": "workspace:*",
     "fastify": "^5.1.0",
+    "i18next": "^23.16.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-i18next": "^15.1.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.3",

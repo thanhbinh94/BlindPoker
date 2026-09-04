@@ -1,0 +1,61 @@
+{
+  "app": {
+    "name": "Bind Poker",
+    "edition": "Bản Lite"
+  },
+  "nav": {
+    "main": "Điều hướng chính",
+    "lobby": "Sảnh chờ",
+    "daily": "Điểm danh",
+    "settings": "Cài đặt"
+  },
+  "prompt": {
+    "title": "Vào bàn",
+    "lead": "Chọn một tên hiển thị. Không có mật khẩu — tên này chính là phiên chơi của bạn trên thiết bị này.",
+    "name": "Tên hiển thị",
+    "placeholder": "Ví dụ: Minh Sài Gòn",
+    "submit": "Vào sảnh",
+    "rules": "2–20 ký tự: chữ, số, dấu cách và _ - .",
+    "errors": {
+      "INVALID_NAME": "Tên hiển thị không hợp lệ",
+      "DISPLAY_NAME_TAKEN": "Tên hiển thị đã có người dùng",
+      "RATE_LIMITED": "Bạn thử quá nhiều lần, vui lòng đợi một lát",
+      "network": "Không kết nối được máy chủ"
+    }
+  },
+  "daily": {
+    "title": "Điểm danh hằng ngày",
+    "streak": "Chuỗi ngày",
+    "day": "Ngày {{day}}",
+    "todayReward": "Thưởng hôm nay",
+    "claimed": "Đã nhận hôm nay",
+    "claim": "Nhận thưởng",
+    "next": "Ngày mai",
+    "monthlyReset": "Chuỗi ngày bắt đầu lại vào ngày 1 mỗi tháng.",
+    "receipt": "Đã nhận {{points}} điểm — chuỗi {{streak}} ngày",
+    "loading": "Đang tải…",
+    "error": "Không tải được thông tin điểm danh",
+    "relief": {
+      "title": "Cứu trợ",
+      "lead": "Số dư dưới {{threshold}} điểm được nạp lên {{target}} điểm, mỗi {{hours}} giờ một lần.",
+      "button": "Nhận cứu trợ",
+      "cooldown": "Có thể nhận lại lúc {{at}}",
+      "receipt": "Đã nhận {{amount}} điểm cứu trợ"
+    }
+  },
+  "settings": {
+    "title": "Cài đặt",
+    "theme": "Giao diện",
+    "dark": "Tối",
+    "light": "Sáng",
+    "language": "Ngôn ngữ",
+    "account": "Tài khoản",
+    "playerId": "Mã người chơi",
+    "signOut": "Đăng xuất khỏi thiết bị",
+    "signOutConfirm": "Phiên chơi trên thiết bị này sẽ bị xóa. Không có mật khẩu để vào lại, và tên hiển thị cũ không thể đăng ký lần nữa.",
+    "version": "Phiên bản"
+  },
+  "session": {
+    "expired": "Phiên chơi đã hết hạn. Vui lòng nhập lại tên hiển thị."
+  }
+}

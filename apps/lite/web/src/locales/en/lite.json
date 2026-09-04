@@ -1,0 +1,61 @@
+{
+  "app": {
+    "name": "Bind Poker",
+    "edition": "Lite edition"
+  },
+  "nav": {
+    "main": "Main navigation",
+    "lobby": "Lobby",
+    "daily": "Daily",
+    "settings": "Settings"
+  },
+  "prompt": {
+    "title": "Take a seat",
+    "lead": "Pick a display name. There is no password — this name is your session on this device.",
+    "name": "Display name",
+    "placeholder": "e.g. Minh Saigon",
+    "submit": "Enter the lobby",
+    "rules": "2–20 characters: letters, digits, spaces and _ - .",
+    "errors": {
+      "INVALID_NAME": "That display name is not valid",
+      "DISPLAY_NAME_TAKEN": "That display name is already taken",
+      "RATE_LIMITED": "Too many attempts — please wait a moment",
+      "network": "Could not reach the server"
+    }
+  },
+  "daily": {
+    "title": "Daily reward",
+    "streak": "Streak",
+    "day": "Day {{day}}",
+    "todayReward": "Today's reward",
+    "claimed": "Claimed today",
+    "claim": "Claim",
+    "next": "Tomorrow",
+    "monthlyReset": "The streak restarts on the 1st of every month.",
+    "receipt": "Claimed {{points}} points — {{streak}} day streak",
+    "loading": "Loading…",
+    "error": "Could not load the daily reward",
+    "relief": {
+      "title": "Relief",
+      "lead": "A balance under {{threshold}} points is topped up to {{target}}, once every {{hours}} hours.",
+      "button": "Claim relief",
+      "cooldown": "Available again at {{at}}",
+      "receipt": "Received {{amount}} relief points"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "theme": "Theme",
+    "dark": "Dark",
+    "light": "Light",
+    "language": "Language",
+    "account": "Account",
+    "playerId": "Player id",
+    "signOut": "Sign out of this device",
+    "signOutConfirm": "The session on this device will be erased. There is no password to get back in, and the old display name cannot be registered again.",
+    "version": "Version"
+  },
+  "session": {
+    "expired": "Your session has expired. Please enter a display name again."
+  }
+}
