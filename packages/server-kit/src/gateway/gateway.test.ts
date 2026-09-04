@@ -235,8 +235,9 @@ describe('abuse protection', () => {
   it('rate-limits floods, closes after repeated invalid messages, and rejects oversized payloads', async () => {
     ts = await startTestServer()
     const a = await connect('a')
-    for (let i = 0; i < 40; i++) a.send({ t: 'PONG' })
+    for (let i = 0; i < 100; i++) a.send({ t: 'PONG' })
     await a.next('ERROR', (m) => m.code === 'RATE_LIMITED')
+    expect((await a.closed).code).toBe(4002) // a sustained flood costs a strike every 5 rejections
 
     const b = await connect('b')
     b.send({ t: 'NOPE' })
@@ -248,6 +249,16 @@ describe('abuse protection', () => {
     const c = await connect('c')
     c.send({ t: 'LIST_ROOMS', pad: 'x'.repeat(5000) })
     expect((await c.closed).code).toBe(1009)
+  })
+
+  it('does not treat a rejected room config as protocol abuse', async () => {
+    ts = await startTestServer()
+    const a = await connect('a')
+    for (let i = 0; i < 3; i++) {
+      expect(await a.request({ t: 'CREATE_ROOM', reqId: rid(), config: { name: '', mode: 'holdem' } })).toMatchObject({ t: 'ERROR', code: 'INVALID_ROOM_CONFIG' })
+    }
+    expect(a.isOpen).toBe(true) // three refusals in a row, still connected
+    expect(await a.request({ t: 'CREATE_ROOM', reqId: rid(), config: HOLDEM })).toMatchObject({ t: 'ACK' })
   })
 })
 

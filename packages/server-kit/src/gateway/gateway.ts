@@ -33,6 +33,9 @@ export const DEFAULT_GATEWAY_OPTIONS: GatewayOptions = {
   maxInvalidMessages: 3,
 }
 
+/** Consecutive rate-limited messages that add up to one strike toward `maxInvalidMessages`. */
+const RATE_LIMIT_STRIKE_EVERY = 5
+
 export interface GatewayDeps {
   clock: Clock
   rooms: RoomManager
@@ -212,9 +215,14 @@ export class Gateway {
 
   private onMessage(conn: ClientConnection, data: unknown): void {
     if (!conn.tryTake()) {
+      conn.rateLimitedStreak += 1
       conn.send({ t: 'ERROR', code: 'RATE_LIMITED', message: 'too many messages' })
+      // A client that keeps hammering a closed bucket is flooding, not merely unlucky: every fifth
+      // consecutive rejection costs one strike, so a sustained flood eventually closes the socket.
+      if (conn.rateLimitedStreak % RATE_LIMIT_STRIKE_EVERY === 0) this.strike(conn)
       return
     }
+    conn.rateLimitedStreak = 0
     let raw: unknown
     try {
       raw = JSON.parse(String(data))
@@ -232,8 +240,14 @@ export class Gateway {
   }
 
   private invalid(conn: ClientConnection, reqId: string | undefined, code: ErrorCode, message: string): void {
-    conn.invalidMessages += 1
     conn.send(reqId === undefined ? { t: 'ERROR', code, message } : { t: 'ERROR', reqId, code, message })
+    // Only unparseable frames count as abuse. A rejected room config (INVALID_ROOM_CONFIG) is a
+    // well-formed request the server said no to, and must never cost a client its connection.
+    if (code === 'INVALID_MESSAGE') this.strike(conn)
+  }
+
+  private strike(conn: ClientConnection): void {
+    conn.invalidMessages += 1
     if (conn.invalidMessages >= this.deps.options.maxInvalidMessages) conn.close(4002, 'too many invalid messages')
   }
 

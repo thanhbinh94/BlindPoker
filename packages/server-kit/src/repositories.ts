@@ -82,6 +82,8 @@ export interface HandSummary {
   endedAt: number
   fee: number
   cancelled: boolean
+  /** Set when `BalanceRepository.apply` rejected: the hand is recorded anyway so operators can reconcile. */
+  settlementError?: string
   players: HandSummaryPlayer[]
 }
 

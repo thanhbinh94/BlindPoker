@@ -11,6 +11,8 @@ export class ClientConnection {
   replaced = false
   lastPongAt: number
   invalidMessages = 0
+  /** Rate-limited messages since the last accepted one; see the gateway's flood accounting. */
+  rateLimitedStreak = 0
   /** Set once the close path has run for this socket, so it can be driven from the queue and be idempotent. */
   closeHandled = false
   helloTimer: TimerHandle | null = null

@@ -16,27 +16,32 @@ describe('Room membership', () => {
     const bots = [...h.room.players.values()].filter((p) => p.identity.isBot)
     expect(bots.map((b) => b.seat).sort()).toEqual([2, 3])
     expect(bots.every((b) => b.ready && b.connected)).toBe(true)
-    expect(h.room.summary()).toMatchObject({ code: 'ABC234', mode: 'blind', playerCount: 1, maxPlayers: 4, status: 'OPEN', config: { hasPassword: true } })
+    // playerCount counts everyone holding a seat: 1 human + 2 seated bots (spec §11.2/§8.5)
+    expect(h.room.summary()).toMatchObject({ code: 'ABC234', mode: 'blind', playerCount: 3, maxPlayers: 4, status: 'OPEN', config: { hasPassword: true } })
+    expect(h.room.seatedBotCount).toBe(2)
+    expect(h.room.humanCapacity).toBe(2) // 4 seats minus the 2 the bots hold
     expect((h.room.summary().config as { password?: string }).password).toBeUndefined()
   })
 
-  it('join: password, capacity, duplicates; leave: host transfer and empty-room close', async () => {
+  it('join: password, capacity net of seated bots, duplicates; leave: host transfer and empty-room close', async () => {
     const h = createRoomHarness(BLIND, { players: [['h', 1e5], ['a', 1e5], ['b', 1e5], ['c', 1e5], ['d', 1e5]] })
     expect(await code(h.room.join(h.identity('a'), 'nope'))).toBe('WRONG_PASSWORD')
     await h.room.join(h.identity('a'), 'pw12')
     expect(await code(h.room.join(h.identity('a'), 'pw12'))).toBe('ALREADY_IN_ROOM')
     expect(h.last('h', 'ROOM_EVENT')?.event).toMatchObject({ type: 'PLAYER_JOINED', player: { playerId: 'a' } })
     expect(h.domainEvents.at(-1)).toMatchObject({ type: 'ROOM_JOINED', playerId: 'a' })
-    await h.room.join(h.identity('b'), 'pw12')
-    await h.room.join(h.identity('c'), 'pw12')
-    expect(await code(h.room.join(h.identity('d'), 'pw12'))).toBe('ROOM_FULL') // 4 humans = maxPlayers
+    // 4 seats, 2 of them held by bots → room for exactly 2 humans, so the third is refused.
+    expect(await code(h.room.join(h.identity('b'), 'pw12'))).toBe('ROOM_FULL')
+    expect(h.room.summary().playerCount).toBe(4) // 2 humans + 2 seated bots
     await h.room.leave('h')
     expect(h.room.hostPlayerId).toBe('a') // earliest joiner
     expect(h.last('a', 'ROOM_EVENT')?.event).toMatchObject({ type: 'HOST_CHANGED', hostPlayerId: 'a' })
     expect(await code(h.room.leave('h'))).toBe('NOT_IN_ROOM')
+    await h.room.join(h.identity('b'), 'pw12') // the seat h vacated is free again
+    expect(h.room.humanCount).toBe(2)
     let closed: string | null = null
     h.room.onClosed = (_r, reason) => { closed = reason }
-    await h.room.leave('a'); await h.room.leave('b'); await h.room.leave('c')
+    await h.room.leave('a'); await h.room.leave('b')
     expect(h.room.status).toBe('OPEN')
     h.clock.advance(500)
     await h.room.enqueue(() => undefined)

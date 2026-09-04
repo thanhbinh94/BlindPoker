@@ -70,6 +70,17 @@ describe('parseClientMessage', () => {
     }
     expect(parseClientMessage({ t: 'PONG' })).toEqual({ ok: true, value: { t: 'PONG' } }) // absent stays absent
   })
+  it('reports a rejected CREATE_ROOM config as INVALID_ROOM_CONFIG, not INVALID_MESSAGE', () => {
+    const r = parseClientMessage({ t: 'CREATE_ROOM', config: {} })
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      expect(r.code).toBe('INVALID_ROOM_CONFIG')
+      expect(r.message).toMatch(/name/) // the specific reason survives too
+    }
+    const missing = parseClientMessage({ t: 'CREATE_ROOM' })
+    expect(missing.ok).toBe(false)
+    if (!missing.ok) expect(missing.code).toBe('INVALID_ROOM_CONFIG')
+  })
   it.each([
     [null], ['ACTION'], [{ t: 'NOPE' }], [{ t: 'ACTION', action: { kind: 'fold' } }],
     [{ t: 'ACTION', reqId: 'r', baseSeq: 1, action: { kind: 'bet' } }],

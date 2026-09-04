@@ -77,6 +77,16 @@ export class Room {
     return this.humans().length
   }
 
+  /** Bots hold real seats, so they take capacity away from humans (spec §11.2). */
+  get seatedBotCount(): number {
+    return this.seated().filter((p) => p.identity.isBot).length
+  }
+
+  /** How many more humans the room can hold: seats minus the ones bots occupy. */
+  get humanCapacity(): number {
+    return this.config.maxPlayers - this.seatedBotCount
+  }
+
   get handActive(): boolean {
     return this.runner !== null && !this.runner.isComplete
   }
@@ -93,7 +103,7 @@ export class Room {
       name: this.config.name,
       mode: this.config.mode,
       config: { ...rest, hasPassword: password !== undefined },
-      playerCount: this.humanCount,
+      playerCount: this.humanCount + this.seatedBotCount,
       maxPlayers: this.config.maxPlayers,
       status: this.status === 'IN_GAME' ? 'IN_GAME' : 'OPEN',
     }
@@ -129,7 +139,7 @@ export class Room {
         return
       }
       if (this.config.password !== undefined && password !== this.config.password) throw new RoomError('WRONG_PASSWORD')
-      if (this.humanCount >= this.config.maxPlayers) throw new RoomError('ROOM_FULL')
+      if (this.humanCount >= this.humanCapacity) throw new RoomError('ROOM_FULL')
       const p = this.addPlayer(identity)
       this.cancelClose()
       this.broadcastRoomEvent({ type: 'PLAYER_JOINED', player: this.playerView(p) }, identity.playerId)
@@ -382,14 +392,17 @@ export class Room {
     this.nextHandTimer = null
     this.carryOverReleaseTimer?.cancel()
     this.carryOverReleaseTimer = null
+    const required = this.rules.mode === 'blind' ? blindRequiredStack(this.rules) : 1
     if (this.rules.mode === 'blind') {
-      const required = blindRequiredStack(this.rules)
       for (const p of this.seated()) {
         if (p.identity.isBot) {
           if (p.stack < required) p.stack = this.deps.options.botStartingBalance
         } else p.stack = await this.deps.repos.balances.get(p.identity.playerId)
       }
     }
+    // A seated human who cannot cover the requirement sits the hand out rather than silently
+    // vanishing from the table: playerView reports SITTING_OUT until they can afford to play again.
+    for (const p of this.seated()) if (!p.identity.isBot) p.sittingOut = p.stack < required
     const eligible = this.eligibleForHand()
     if (eligible.length < 2 || eligible.every((p) => p.identity.isBot)) {
       this.toOpen()
@@ -473,6 +486,9 @@ export class Room {
         await this.deps.repos.balances.apply(entries, { refId: state.handId, fee: result.fee, kind: 'table_fee' })
         for (const e of entries) await this.pushBalance(e.playerId)
       } catch (err) {
+        // The hand is still recorded and still emitted, flagged, so an operator can reconcile it.
+        // Nothing is pushed to clients: their balances did not move.
+        summary.settlementError = String(err)
         this.deps.log.error('settlement failed', { roomId: this.roomId, handId: state.handId, err: String(err) })
       }
     }

@@ -129,6 +129,34 @@ describe('Blind hands', () => {
     expect(h.room.handActive).toBe(true)
     expect(h.room.snapshot(null).hand!.seats.map((s) => s.playerId).sort()).toEqual(['bot:room-1:0', 'h'])
     expect(h.room.players.get('poor')!.seat).toBe(1) // still seated, just not in this hand
+    const seats = h.room.snapshot(null).room.players
+    expect(seats.find((p) => p.playerId === 'poor')!.status).toBe('SITTING_OUT')
+    expect(seats.find((p) => p.playerId === 'h')!.status).toBe('IN_HAND')
+    // topping the balance back up clears the flag on the next attempt to start a hand
+    h.repos.records.get('poor')!.balance = 50_000
+    await playOut(h, () => ({ kind: 'fold' }))
+    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
+    await tick(h)
+    expect(h.room.players.get('poor')!.sittingOut).toBe(false)
+  })
+
+  it('records and emits a hand whose settlement failed, flagged, and pushes nothing to clients', async () => {
+    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 1 } })
+    await seatAndStart(h, ['h', 'a'])
+    const real = h.repos.balances.apply.bind(h.repos.balances)
+    h.repos.balances.apply = async (batch, meta) => {
+      if (meta?.kind === 'table_fee') throw new Error('ledger unavailable')
+      return real(batch, meta)
+    }
+    const pushedBefore = h.ofType('h', 'BALANCE').length
+    await playOut(h, (id) => ({ kind: id === 'h' ? 'play' : 'fold' }))
+    const summary = h.repos.hands[0]!
+    expect(summary.settlementError).toContain('ledger unavailable')
+    expect(h.domainEvents.at(-1)).toMatchObject({ type: 'HAND_SETTLED', summary: { handId: summary.handId } })
+    expect(h.ofType('h', 'BALANCE').length).toBe(pushedBefore) // nothing moved, so nothing is pushed
+    expect(await h.repos.balances.get('h')).toBe(100_000)
+    expect(await h.repos.balances.get('a')).toBe(100_000)
+    expect(h.repos.sinks).toEqual([]) // the fee sink is part of the same rejected transaction
   })
 })
 
