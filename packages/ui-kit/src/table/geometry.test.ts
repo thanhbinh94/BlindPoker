@@ -23,4 +23,21 @@ describe('ringPositions', () => {
       expect(p.y).toBeLessThanOrEqual(95)
     }
   })
+  it('spaces a full table evenly around the rim, not evenly in angle', () => {
+    const order = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    const pos = ringPositions(order, 0)
+    // distances in the table box's own pixels: it is twice as wide as it is tall
+    const points = order.map((seat) => pos.get(seat)!)
+    const gaps = points.map((p, i) => {
+      const next = points[(i + 1) % points.length]!
+      return Math.hypot((next.x - p.x) * 2, next.y - p.y)
+    })
+    const min = Math.min(...gaps)
+    const max = Math.max(...gaps)
+    // arcs are equal by construction; chords still vary a little with the curvature, but nowhere near the 2.4x
+    // spread an even sweep of angle produced on this box
+    expect(max / min).toBeLessThan(1.25)
+    // even angles would have crowded the flanks: the two seats beside the bottom one stay well apart vertically
+    expect(Math.abs(pos.get(2)!.y - pos.get(3)!.y)).toBeGreaterThan(10)
+  })
 })

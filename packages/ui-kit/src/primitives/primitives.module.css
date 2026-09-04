@@ -14,6 +14,8 @@
   font-weight: 600;
   letter-spacing: 0.01em;
   text-align: center;
+  /* a label that breaks across two lines doubles the row it sits in; a crowded row wraps instead */
+  white-space: nowrap;
   cursor: pointer;
   background: transparent;
   box-shadow: var(--shadow-1);
@@ -311,6 +313,8 @@
 .dialog {
   width: min(30rem, 100%);
   max-height: 86vh;
+  /* dvh, so a phone's collapsing address bar cannot push the dialog's own footer out of reach */
+  max-height: 86dvh;
   overflow-y: auto;
   padding: var(--space-5);
   color: var(--ink);

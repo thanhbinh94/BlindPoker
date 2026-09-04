@@ -87,8 +87,16 @@
 
 /* ── room ─────────────────────────────────────────────────────────────────── */
 
+/* The room is a stage of a *known* height, not a document that grows: header at the top, lacquered tray at the foot,
+   felt in between. Without this the table pushes the tray off the bottom of the viewport and the player has to
+   scroll to act on every turn. `--bp-stage` is the one knob a host app turns: leave it to fill the viewport, or set
+   `calc(100dvh - 64px)` when the app draws its own bar above the room (the playground sets `100%`). */
 .room {
   gap: var(--space-3);
+  height: var(--bp-stage, 100dvh);
+  /* below this a phone in landscape is better served by a scrolling page than by a crushed table */
+  min-height: 30rem;
+  overflow: hidden;
 }
 
 .roomMain {
@@ -97,7 +105,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  /* `safe` keeps the top of an overflowing stack reachable; browsers without it keep plain centring */
+  align-items: safe center;
+  justify-content: safe center;
   min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .overlay {

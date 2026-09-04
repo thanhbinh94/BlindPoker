@@ -21,14 +21,17 @@ export interface PokerTableProps {
   serverNow: () => number
   turnTimerMs: number
   lang: Language
-  /** Defaults to `stack` under 768 px and `ring` above it. */
+  /** Defaults to `stack` under 768 px wide or 620 px tall, and `ring` above both. */
   layout?: TableLayout
   avatarFor?: (player: RoomPlayerView) => ReactNode
   onSeatClick?: (seat: number) => void
   canSit: boolean
 }
 
-const NARROW = '(max-width: 767px)'
+/* The ring needs roughly 310 px of stage to seat everyone around it without the plates running into the board, and a
+   short window has no more to give than a narrow one — so a laptop with a 600 px-tall viewport gets the vertical
+   layout for the same reason a phone does. */
+const STACKED = '(max-width: 767px), (max-height: 620px)'
 
 const seatFromPlayer = (seat: number, player: RoomPlayerView): ClientSeat => ({
   seat,
@@ -49,8 +52,9 @@ const seatFromPlayer = (seat: number, player: RoomPlayerView): ClientSeat => ({
 
 /**
  * The table: seats on the rim of a lacquered ellipse with the viewer always at the bottom, community cards and pot in
- * the middle. Under 768 px it becomes a vertical stack — opponents on top, board in the middle, the viewer pinned to
- * the bottom — which is the same components in a different grid, not a second implementation.
+ * the middle. On a screen too narrow or too short for that it becomes a vertical stack — opponents on top, board in
+ * the middle, the viewer pinned to the bottom — which is the same components in a different grid, not a second
+ * implementation.
  */
 export function PokerTable({
   room,
@@ -66,7 +70,7 @@ export function PokerTable({
   canSit,
 }: PokerTableProps) {
   const { t } = useTranslation()
-  const narrow = useMediaQuery(NARROW)
+  const narrow = useMediaQuery(STACKED)
   const mode: TableLayout = layout ?? (narrow ? 'stack' : 'ring')
 
   const seated = new Map<number, RoomPlayerView>()
@@ -147,7 +151,7 @@ export function PokerTable({
 
   if (mode === 'stack') {
     return (
-      <section className={cx(s.table, s.stack)} aria-label={t('labels.table')}>
+      <section className={cx(s.table, s.stack)} data-surface="night" aria-label={t('labels.table')}>
         <div className={s.others}>{order.filter((i) => i !== mySeat).map(renderSeat)}</div>
         <div className={s.stackFelt}>{centre}</div>
         {mySeat === null ? null : <div className={s.mine}>{renderSeat(mySeat)}</div>}
@@ -156,7 +160,7 @@ export function PokerTable({
   }
 
   return (
-    <section className={cx(s.table, s.ring)} data-seats={room.maxPlayers} aria-label={t('labels.table')}>
+    <section className={cx(s.table, s.ring)} data-seats={room.maxPlayers} data-surface="night" aria-label={t('labels.table')}>
       <div className={s.felt} aria-hidden="true" />
       {centre}
       {order.map(renderSeat)}

@@ -84,6 +84,7 @@
     "variant": "Variant",
     "wager": "Wager",
     "waiting": "Waiting",
+    "waitingForTurn": "Waiting for your turn",
     "winner": "Winner",
     "winners": "Winners",
     "you": "You"

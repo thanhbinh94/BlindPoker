@@ -24,6 +24,9 @@ const SLIDER_STEPS = 50
  * Only the kinds the server declared legal are offered; the bet/raise control is bounded by the legal range and every
  * preset is clamped into it, so a click can never produce an illegal amount. Shortcuts: F fold, C check/call,
  * R focus the amount, Enter submit — all advertised through `aria-keyshortcuts`.
+ *
+ * Between turns the tray stays put and says so: it is a fixture of the room, not a popup, and a tray that came and
+ * went would resize the felt above it on every turn.
  */
 export function ActionBar({ hand, room, onAct, disabled = false, lang }: ActionBarProps) {
   const { t } = useTranslation()
@@ -83,7 +86,15 @@ export function ActionBar({ hand, room, onAct, disabled = false, lang }: ActionB
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [legal, disabled, sizing, kinds, emit, submit])
 
-  if (legal === null) return null
+  if (legal === null) {
+    return (
+      <div className={s.tray} data-surface="night" role="group" aria-label={t('labels.actions')}>
+        <p className={s.trayWait} role="status">
+          {t('labels.waitingForTurn')}
+        </p>
+      </div>
+    )
+  }
 
   const onAmountChange = (event: ChangeEvent<HTMLInputElement>): void => setRaw(event.target.value)
   const preset = (n: number): void => setRaw(String(clamp(n)))
@@ -97,7 +108,7 @@ export function ActionBar({ hand, room, onAct, disabled = false, lang }: ActionB
   // Blind mode's play-or-fold decision is its own two-button tray: no sizing, no call.
   if (kinds.includes('play')) {
     return (
-      <div className={s.tray} role="group" aria-label={t('labels.actions')}>
+      <div className={s.tray} data-surface="night" role="group" aria-label={t('labels.actions')}>
         <div className={s.trayRow}>
           <Button variant="danger" size="lg" disabled={disabled} aria-keyshortcuts="F" onClick={() => emit({ kind: 'fold' })}>
             {t('actions.fold')}
@@ -111,7 +122,7 @@ export function ActionBar({ hand, room, onAct, disabled = false, lang }: ActionB
   }
 
   return (
-    <div className={s.tray} role="group" aria-label={t('labels.actions')}>
+    <div className={s.tray} data-surface="night" role="group" aria-label={t('labels.actions')}>
       {sizing ? (
         <div className={s.sizer} role="group" aria-label={t('labels.betSize')}>
           <div className={s.presets}>

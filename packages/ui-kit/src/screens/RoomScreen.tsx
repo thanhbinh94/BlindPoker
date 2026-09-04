@@ -150,8 +150,9 @@ export function RoomScreen({ client, lang, onLeft, avatarFor, header, layout }: 
           avatarFor={avatarFor}
         />
 
+        {/* the result card is dealt onto the felt, so it keeps the felt's night palette in either theme */}
         {finished === null ? null : (
-          <div className={s.overlay}>
+          <div className={s.overlay} data-surface="night">
             <HandResult hand={finished} room={room} myPlayerId={state.me?.playerId ?? null} lang={lang} />
             {countdown}
           </div>
@@ -222,7 +223,9 @@ export function RoomScreen({ client, lang, onLeft, avatarFor, header, layout }: 
           </ul>
         )}
 
-        {hand === null || hand.legal === null ? null : (
+        {/* The tray belongs to a seated player in a live hand — it holds its place between turns rather than
+            appearing and disappearing under the felt. */}
+        {hand === null || hand.mySeat === null ? null : (
           <ActionBar hand={hand} room={room} onAct={act} disabled={request.busy || state.status !== 'open'} lang={lang} />
         )}
       </footer>

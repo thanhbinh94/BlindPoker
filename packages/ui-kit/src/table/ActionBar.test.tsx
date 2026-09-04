@@ -28,9 +28,11 @@ const wrap = (ui: React.ReactElement) =>
   render(<I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>{ui}</I18nextProvider>)
 
 describe('ActionBar', () => {
-  it('renders nothing without legal actions', () => {
-    const { container } = wrap(<ActionBar hand={hand(null)} room={room} onAct={() => {}} lang="en" />)
-    expect(container).toBeEmptyDOMElement()
+  it('holds the tray between turns instead of collapsing it', () => {
+    wrap(<ActionBar hand={hand(null)} room={room} onAct={() => {}} lang="en" />)
+    expect(screen.getByRole('group', { name: 'Actions' })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Waiting for your turn')
+    expect(screen.queryByRole('button')).toBeNull()
   })
   it('offers only legal kinds and emits fold/check/call', async () => {
     const onAct = vi.fn()

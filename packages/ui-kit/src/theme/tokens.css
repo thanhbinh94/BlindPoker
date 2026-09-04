@@ -81,6 +81,28 @@
   --shadow-2: 0 10px 28px rgba(27, 31, 46, 0.18), 0 2px 6px rgba(27, 31, 46, 0.1);
 }
 
+/* The felt and the tray are physical objects in a night room: `--felt` stays dark in the light theme on purpose, and
+   so must everything printed on them. `data-surface="night"` re-declares the ink half of the palette on such a
+   surface. `PokerTable` and `ActionBar` set it themselves; an app can put it on any panel it lays over the felt. */
+[data-surface='night'] {
+  color-scheme: dark;
+  --line: rgba(237, 231, 216, 0.12);
+  --ink: #ede7d8;
+  --ink-muted: #9aa4c0;
+  --bg: #0b1020;
+  --bg-elev: #141b33;
+  --gold: #d9a441;
+  --gold-soft: rgba(217, 164, 65, 0.16);
+  --gold-ink: #201607;
+  --red: #c8323c;
+  --red-soft: rgba(200, 50, 60, 0.16);
+  --red-ink: #fdf3f0;
+  --teal: #3f938a;
+  --teal-fill: #17594f;
+  --teal-ink: #f2f7f5;
+  --focus: #e8b95a;
+}
+
 :root {
   /* type — the app loads the web fonts; ui-kit only names them */
   --font-display: 'Fraunces', 'Playfair Display', Georgia, serif;

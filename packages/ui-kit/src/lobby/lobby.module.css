@@ -300,6 +300,14 @@
   text-transform: uppercase;
 }
 
+/* the wide tracking is for a six-character code, not for a sentence: the hint would be cut off wearing it */
+.code::placeholder {
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
 .check {
   display: flex;
   align-items: center;
@@ -317,11 +325,18 @@
   accent-color: var(--gold);
 }
 
+/* The settings list is longer than a phone screen, so the dialog scrolls — but the button that finishes the job
+   rides along at the foot of it instead of hiding below the fold. */
 .formFoot {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--space-3);
+  padding: var(--space-3) 0 var(--space-4);
+  background: linear-gradient(180deg, transparent, var(--bg-elev) 18px);
 }
 
 .alert {

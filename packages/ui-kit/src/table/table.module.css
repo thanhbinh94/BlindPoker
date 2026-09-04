@@ -22,7 +22,7 @@
 }
 
 .cardLg {
-  --card-w: clamp(40px, 10.4vw, 62px);
+  --card-w: var(--card-lg, clamp(40px, 10.4vw, 62px));
 }
 
 .cardHi {
@@ -131,7 +131,7 @@
 }
 
 .slot {
-  width: clamp(40px, 10.4vw, 62px);
+  width: var(--card-lg, clamp(40px, 10.4vw, 62px));
   aspect-ratio: 60 / 84;
   flex: none;
   border: 1.5px dashed rgba(217, 164, 65, 0.26);
@@ -339,6 +339,12 @@
   justify-content: center;
 }
 
+/* A seat's badges hang past the felt onto the page. Their default tint is translucent, which in the light theme
+   would leave gold ink floating on parchment, so on the table they mix their own tone into an opaque night ground. */
+.seat .tags > * {
+  background-color: color-mix(in srgb, currentColor 14%, var(--bg));
+}
+
 .dealer {
   position: absolute;
   right: -5px;
@@ -364,7 +370,7 @@
   padding: 1px var(--space-2);
   border: 1px solid rgba(217, 164, 65, 0.4);
   border-radius: var(--radius-pill);
-  background: rgba(4, 12, 14, 0.72);
+  background: #08171a;
   font-family: var(--font-display);
   font-size: 0.75rem;
   color: var(--gold);
@@ -478,13 +484,22 @@
   color: var(--ink);
 }
 
+/* Height-led, not width-led: inside a stage of known height (`RoomScreen`) the oval takes the space between the room
+   header and the action tray and derives its width from it, so the tray is never pushed off screen. The margins
+   reserve the half seat-block that hangs outside the box at the top and bottom. Where the height is *unknown* the
+   percentage resolves to `auto`, `min-height` takes over and the ratio gives the width. */
 .ring {
   position: relative;
-  width: 100%;
-  max-width: 980px;
-  /* the bottom seat straddles the rail, so its badges hang below the aspect-ratio box */
-  margin: 0 auto var(--space-7);
-  aspect-ratio: 16 / 10;
+  container-type: size;
+  height: calc(100% - var(--space-7) - var(--space-8));
+  min-height: 15rem;
+  /* 980 x 490 is the oval at full size; past that the stage just gets more air around it */
+  max-height: 490px;
+  width: auto;
+  max-width: min(980px, 100%);
+  /* asymmetric on purpose: the viewer's own seat at the bottom carries an extra badge row */
+  margin: var(--space-7) auto var(--space-8);
+  aspect-ratio: 2 / 1;
 }
 
 .felt {
@@ -501,11 +516,16 @@
     0 26px 60px rgba(3, 6, 16, 0.55);
 }
 
+/* 48 %, not 45 %: equidistant from the top and bottom seats is what keeps the board clear of them on a short stage.
+   The board is sized off the felt (`cqh`) rather than the viewport for the same reason; browsers without container
+   units keep the `vw` clamp on the line above. */
 .ring .centre {
   position: absolute;
   left: 50%;
-  top: 45%;
+  top: 48%;
   transform: translate(-50%, -50%);
+  --card-lg: clamp(40px, 10.4vw, 62px);
+  --card-lg: clamp(30px, 11cqh, 62px);
 }
 
 .centre {
@@ -519,23 +539,70 @@
   --seat-w: 15%;
 }
 
-.ring[data-seats='7'],
-.ring[data-seats='8'],
-.ring[data-seats='9'] {
+/* A full table seats nine blocks on a rim about fifteen name-plates long: at the default size two neighbours on the
+   short flanks sit on top of each other, so from seven seats up the plate goes compact. */
+.ring:is([data-seats='7'], [data-seats='8'], [data-seats='9']) {
   --seat-w: 13%;
+  --seat-min: 94px;
+  --seat-gap: 2px;
+  --seat-disc: 24px;
+  --seat-name: 0.75rem;
+}
+
+.ring:is([data-seats='7'], [data-seats='8'], [data-seats='9']) .cardSm {
+  --card-w: clamp(20px, 5vw, 26px);
 }
 
 .ring .seat {
   position: absolute;
   width: var(--seat-w);
-  min-width: 104px;
+  min-width: var(--seat-min, 104px);
+  gap: var(--seat-gap, 4px);
   transform: translate(-50%, -50%);
 }
 
-/* vertical layout under 768 px: opponents / board / me */
+.ring .avatar {
+  width: var(--seat-disc, 30px);
+  height: var(--seat-disc, 30px);
+  font-size: calc(var(--seat-disc, 30px) * 0.5);
+}
+
+.ring .plate {
+  gap: var(--seat-gap, 4px) 6px;
+  padding: 3px 6px;
+}
+
+.ring .seatName,
+.ring .seatStack {
+  font-size: var(--seat-name, 0.8125rem);
+}
+
+/* A ring squeezed into a short stage — a small window, or an app with a bar of its own above the room. The plates
+   keep their size because they carry the names; the cards and the gaps give, so a hand never lands on the board.
+   (`.ring` is a size container, so this asks about the felt, not the window.) */
+@container (max-height: 330px) {
+  .ring {
+    --seat-gap: 2px;
+  }
+
+  .ring .cardSm {
+    --card-w: clamp(20px, 5vw, 26px);
+  }
+
+  .ring .cardMd {
+    --card-w: clamp(24px, 6vw, 32px);
+  }
+}
+
+/* vertical layout under 768 px: opponents / board / me.
+   The board and my own seat are the two things that must never scroll away, so on a stage of known height the
+   opponents' strip is the part that gives: it takes the leftover row and scrolls inside it. */
 .stack {
   display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   gap: var(--space-3);
+  align-self: stretch;
+  min-height: 0;
 }
 
 .others {
@@ -543,6 +610,9 @@
   grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
   gap: var(--space-2);
   align-items: start;
+  align-content: start;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* plate first keeps every opponent's name on the same baseline whatever their card count */
@@ -588,8 +658,26 @@
 
 .trayRow {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
+}
+
+/* Reserve the sizing tray's height, so the felt above keeps one size whether the tray is offering four buttons and a
+   slider or just saying it is not your turn yet. */
+@media (min-width: 768px) {
+  .tray {
+    min-height: 8.25rem;
+    justify-content: center;
+  }
+}
+
+.trayWait {
+  padding: var(--space-2) 0;
+  text-align: center;
+  font-size: 0.9rem;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
 }
 
 .grow {
@@ -642,6 +730,20 @@
   gap: var(--space-3);
 }
 
+/* Above the phone breakpoint the presets sit beside the amount, not above it: one row less of tray is ~52 px more
+   felt, which on an 800 px-tall laptop is the difference between a comfortable table and a cramped one. */
+@media (min-width: 768px) {
+  .sizer {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .sizerRow {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
 .amount {
   width: 8.5rem;
   min-height: var(--tap);
@@ -671,7 +773,9 @@
 }
 
 /* spec §27.1: under 768 px a thumb cannot hit a 1-point step, so the range control drops out and
-   sizing is done with the presets plus the number input, which stay full-width in its place. */
+   sizing is done with the presets plus the number input, which stay full-width in its place.
+   The tray also tightens up: on a 375 px screen the four action buttons at full size push the felt — and the
+   viewer's own cards with it — off the bottom of the stage. */
 @media (max-width: 767px) {
   .slider {
     display: none;
@@ -679,6 +783,26 @@
 
   .amount {
     width: 100%;
+  }
+
+  .tray {
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3) calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .tray .trayRow > button {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0 var(--space-2);
+    font-size: 0.875rem;
+  }
+
+  .presets {
+    justify-content: space-between;
+  }
+
+  .preset {
+    flex: 1 1 0;
   }
 }
 
@@ -785,6 +909,33 @@
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--line);
+}
+
+/* On a phone the identity bar is competing with the felt for the same 800 px of screen: same information, less air. */
+@media (max-width: 767px) {
+  .header {
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .modeGlyph {
+    font-size: 1.375rem;
+  }
+
+  .roomName {
+    font-size: 1.0625rem;
+  }
+
+  .headMeta {
+    gap: 6px;
+    margin-top: 1px;
+    font-size: 0.75rem;
+  }
+
+  .conn {
+    padding: 2px var(--space-2);
+    font-size: 0.75rem;
+  }
 }
 
 .headMain {
