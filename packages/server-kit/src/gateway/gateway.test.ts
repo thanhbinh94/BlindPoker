@@ -16,14 +16,8 @@ const connect = async (id: string) => {
 }
 let n = 0
 const rid = () => `r${n++}`
-/** Polls until `pred` holds; the alternative is sleeping on a guessed duration. */
-async function waitUntil(pred: () => boolean, timeoutMs = 2000): Promise<void> {
-  const deadline = Date.now() + timeoutMs
-  while (!pred()) {
-    if (Date.now() > deadline) throw new Error('condition never became true')
-    await new Promise((r) => setTimeout(r, 5))
-  }
-}
+/** Lets every pending timer, socket event and queued task drain before asserting. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 60))
 afterEach(async () => {
   for (const c of clients.splice(0)) await c.close().catch(() => undefined)
   await ts?.close()
@@ -192,22 +186,30 @@ describe('bind and close races', () => {
     const room = ts.server.rooms.get(snap.room.roomId)!
     expect(room.players.get('a')!.connected).toBe(true)
 
-    // Hold the balance lookup open so the socket is guaranteed to die while bind() is still awaiting.
+    // Gate the balance lookup so the racing socket is guaranteed to die while bind() is still
+    // awaiting it, and so the test controls exactly when that bind resumes.
     const realGet = ts.repos.balances.get.bind(ts.repos.balances)
-    let slow = false
+    let openGate: () => void = () => {}
+    const gate = new Promise<void>((resolve) => { openGate = resolve })
+    let gated = true
     ts.repos.balances.get = async (playerId: string) => {
-      if (slow) await new Promise((r) => setTimeout(r, 120))
+      if (gated) {
+        gated = false
+        await gate
+      }
       return realGet(playerId)
     }
-    slow = true
     const racer = await TestClient.connect(ts.url)
     racer.send({ t: 'HELLO', sessionToken: 'tok:a' })
     await racer.close()
-    await a.closed // the racing session replaced the first one
-    slow = false
+    await a.closed // the racing session replaced the first one, then died mid-bind
 
-    // The player must end up disconnected: neither socket is alive to receive anything.
-    await waitUntil(() => room.players.get('a')!.connected === false)
+    openGate() // the bind resumes against a socket that is already gone
+    await settle()
+    await room.enqueue(() => undefined)
+    // The player must end up disconnected: neither socket is alive to receive anything, and the
+    // late-finishing bind must not resurrect them as connected.
+    expect(room.players.get('a')!.connected).toBe(false)
     expect(ts.server.connectionCount).toBe(0)
 
     // A real reconnect resyncs, and its very first frames are WELCOME then ROOM_SNAPSHOT.
