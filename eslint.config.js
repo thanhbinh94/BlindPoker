@@ -62,4 +62,11 @@ export default tseslint.config(
   },
   { files: ['apps/normal-*/**/*.{ts,tsx}'], rules: forbid(['@bp/lite', '**/apps/lite/**'], 'normal must not depend on lite') },
   { files: ['apps/lite/**/*.{ts,tsx}'], rules: forbid(['@bp/normal-*', '**/apps/normal-*/**'], 'lite must not depend on normal') },
+  {
+    // The Normal server is headless: it may reach for Node built-ins and for @bp/core, @bp/server-kit
+    // and @bp/http-kit, but nothing that draws a screen and no other app. (This block replaces the
+    // `apps/normal-*` one above for these files, so it repeats the no-lite rule.)
+    files: ['apps/normal-server/**/*.ts'],
+    rules: forbid(['@bp/ui-kit', 'react', 'react-dom', '@bp/lite', '**/apps/**'], '@bp/normal-server may only depend on @bp/core, @bp/server-kit and @bp/http-kit'),
+  },
 )
