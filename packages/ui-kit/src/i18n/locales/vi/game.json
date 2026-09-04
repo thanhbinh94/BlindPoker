@@ -49,6 +49,7 @@
     "sittingOut": "Tạm nghỉ",
     "disconnected": "Mất kết nối",
     "allIn": "Tất tay",
+    "faceDown": "Lá úp",
     "folded": "Đã bỏ bài",
     "ready": "Sẵn sàng",
     "inHand": "Đang chơi",
@@ -96,7 +97,7 @@
     "complete": "Kết thúc"
   },
   "street": {
-    "preflop": "Trước lật",
+    "preflop": "Preflop",
     "flop": "Flop",
     "turn": "Turn",
     "river": "River"

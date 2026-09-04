@@ -1,3 +1,10 @@
 export const UI_KIT_VERSION = '0.1.0'
 
 export * from './i18n/index.js'
+export * from './theme/index.js'
+export * from './primitives/Badge.js'
+export * from './primitives/Button.js'
+export * from './primitives/Field.js'
+export * from './primitives/Modal.js'
+export * from './primitives/Panel.js'
+export * from './primitives/Select.js'
