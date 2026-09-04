@@ -8,9 +8,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { migrate as migrateNodePg } from 'drizzle-orm/node-postgres/migrator'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
-import { migrate as migratePglite } from 'drizzle-orm/pglite/migrator'
 import type { PgliteDatabase } from 'drizzle-orm/pglite'
 import type { AppDb } from './client.js'
 import type * as schema from './schema.js'
@@ -21,8 +19,9 @@ import type * as schema from './schema.js'
  * vitest or from `dist/db/` after a build — and the search stops there rather than at the filesystem
  * root, so a stray `drizzle/` further up the tree can never be mistaken for ours.
  *
- * Task 7 ships `drizzle/` (and `data/`) beside `dist/` in the image, keeping that layout intact; the
- * `build` script itself only compiles.
+ * `scripts/build.mjs` neither copies nor rewrites that layout: it bundles `src/main.ts` to `dist/`
+ * and then *verifies* that `drizzle/` and `data/` are still siblings of it, which is the same thing
+ * the Dockerfile reproduces at `/app`.
  */
 export function migrationsFolder(): string {
   const folder = join(packageRoot(), 'drizzle')
@@ -58,10 +57,27 @@ function isPackageRoot(dir: string): boolean {
   }
 }
 
+/**
+ * Applies the migrations with the migrator that matches the driver behind `db`.
+ *
+ * Both migrators are loaded with a dynamic `import()` **inside** their branch, and that is not a
+ * style choice. A static `import ... from 'drizzle-orm/pglite/migrator'` is evaluated eagerly at
+ * module load, so it would sit in the production bundle for a branch production never takes — and
+ * the build's dependency guard cannot see the danger, because the specifier reduces to
+ * `drizzle-orm`, which *is* a declared dependency, while the pglite subpath's own needs are not.
+ * The day that subpath reaches for `@electric-sql/pglite` (a devDependency, genuinely absent from
+ * the deployed `node_modules`), the container would die on its first import. Deferring the load
+ * keeps the specifier out of `dist/main.js` entirely, which `scripts/build.mjs` now enforces.
+ */
 export async function runMigrations(db: AppDb, kind: 'pg' | 'pglite'): Promise<void> {
   const config = { migrationsFolder: migrationsFolder() }
   // `AppDb` is the supertype both driver databases satisfy; `kind` is the caller telling us which
   // one this actually is, which is the one thing the type cannot say.
-  if (kind === 'pg') await migrateNodePg(db as NodePgDatabase<typeof schema>, config)
-  else await migratePglite(db as PgliteDatabase<typeof schema>, config)
+  if (kind === 'pg') {
+    const { migrate } = await import('drizzle-orm/node-postgres/migrator')
+    await migrate(db as NodePgDatabase<typeof schema>, config)
+  } else {
+    const { migrate } = await import('drizzle-orm/pglite/migrator')
+    await migrate(db as PgliteDatabase<typeof schema>, config)
+  }
 }

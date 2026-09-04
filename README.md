@@ -54,6 +54,11 @@ DNS for `$DOMAIN` must already point at the host, and ports 80 and 443 must be r
 gets a Let's Encrypt certificate on its first start. Start-up order is enforced, not timed: `db`
 becomes healthy, the `migrate` service applies the committed migrations and exits, then `app` starts.
 
+> **This image has never been built.** The Compose file is validated by `docker compose config`, and
+> the bundle has been run standalone against its production-only `node_modules` — but no
+> `docker build` has been executed for this stack. Treat the first deploy as a supervised trial and
+> read `docker compose logs migrate` before `app`. Details in the deployment guide, §2.
+
 Without Docker, for development:
 
 ```bash
@@ -62,9 +67,10 @@ pnpm build:normal                           # typecheck + esbuild → dist/main.
 pnpm --filter @bp/normal-server dev         # build, then run (needs a real DATABASE_URL)
 ```
 
-- Operations, backup, upgrade, security: [`docs/deployment-normal.md`](docs/deployment-normal.md)
-- Module map, event bus, ledger conventions, adding an item or achievement:
-  [`docs/normal-server.md`](docs/normal-server.md)
+- Operations, backup, upgrade, security — Vietnamese, like every operator guide here:
+  [`docs/deployment-normal.md`](docs/deployment-normal.md)
+- Module map, event bus, ledger conventions, adding an item or achievement — English, like every
+  developer doc here: [`docs/normal-server.md`](docs/normal-server.md)
 - Restore procedure: [`deploy/normal/restore.md`](deploy/normal/restore.md)
 
 ## Lite edition

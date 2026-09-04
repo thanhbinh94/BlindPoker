@@ -11,7 +11,7 @@ timers, bots, the WebSocket protocol) and `@bp/http-kit` (Fastify plumbing share
 Its counterpart is `apps/lite`, which solves the same problem for one Windows executable and SQLite.
 Neither may import the other; ESLint enforces it.
 
-To *deploy* this, read [`deployment-normal.md`](deployment-normal.md). This page is for changing it.
+To *deploy* this, read [`deployment-normal.md`](deployment-normal.md) (Vietnamese, like every operator guide in this repository). This page is for changing the code, and is English, like every developer doc.
 
 Spec: §10 accounts, §12–15 economy/daily/achievements/avatar, §18.2 schema, §19.2 API, §22.5 env.
 

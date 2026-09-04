@@ -66,12 +66,40 @@ const BANNER = "import { createRequire as __bpCreateRequire } from 'node:module'
 const SIDECARS = ['drizzle/meta/_journal.json', 'data/items.json', 'data/achievements.json']
 
 /**
- * Every module specifier in the output, read off the two forms esbuild can emit for one: a static
- * `from '…'` / bare `import '…'`, and a `require('…')` from the banner's interop. Comments are *not*
- * matched on purpose — esbuild labels each bundled module with a `// ../../packages/core/src/…`
- * header, and those are exactly what a naive substring search would trip over.
+ * Module specifiers in the output, split by *when* the module they name is loaded.
+ *
+ * `EAGER` is `from '…'`, a bare `import '…'` and `require('…')` from the banner's interop — all
+ * resolved and evaluated the moment the entry point loads. `DEFERRED` is `import('…')`, resolved
+ * only if that line ever runs. The distinction is the whole point of the PGlite rule below: a
+ * migrator behind a branch production never takes is harmless, while the same migrator at module
+ * scope is a container that dies on boot.
+ *
+ * Comments are not matched on purpose — esbuild labels each bundled module with a
+ * `// ../../packages/core/src/…` header, and those are exactly what a naive substring search would
+ * trip over. (`\bimport\s*["']` cannot match `import("x")`: the quote has to come next, and there a
+ * paren does — which is why the deferred form needs a pattern of its own.)
  */
-const SPECIFIERS = /(?:\bfrom\s*|\bimport\s*|\brequire\s*\(\s*)["']([^"'\n]+)["']/g
+const EAGER_SPECIFIERS = /(?:\bfrom\s*|\bimport\s*|\brequire\s*\(\s*)["']([^"'\n]+)["']/g
+const DEFERRED_SPECIFIERS = /\bimport\s*\(\s*["']([^"'\n]+)["']/g
+
+/**
+ * Anything that pulls PGlite in.
+ *
+ * `@electric-sql/pglite` is a devDependency and is genuinely absent from the deployed
+ * `node_modules`. `drizzle-orm/pglite/*` is a subpath of a *declared* dependency, which is exactly
+ * why the "must be a dependencies entry" rule below cannot see it: the specifier reduces to
+ * `drizzle-orm` and passes, while the subpath's own needs are nobody's declared business.
+ *
+ * Eagerly importing either is the failure this guard exists to prevent, and no unit test can catch
+ * it — they run inside this repository, where PGlite *is* installed. `runMigrations` therefore
+ * loads each of its two migrators with `import()` inside the branch that uses it.
+ */
+const PGLITE_PREFIXES = ['@electric-sql/pglite', 'drizzle-orm/pglite']
+
+/** True when `specifier` names PGlite itself or one of drizzle's adapters for it. */
+function isPglite(specifier) {
+  return PGLITE_PREFIXES.some((prefix) => specifier === prefix || specifier.startsWith(`${prefix}/`))
+}
 
 /** The npm package a specifier belongs to: `drizzle-orm/pg-core` → `drizzle-orm`, scope included. */
 function packageNameOf(specifier) {
@@ -86,9 +114,12 @@ function packageNameOf(specifier) {
  * absent from `pnpm install --prod`, so it turns a green build into a container that dies on its
  * first import. A devDependency drifting into shipped code fails here instead.
  */
-function forbiddenReason(specifier, dependencies) {
+function forbiddenReason(specifier, dependencies, eager) {
   if (specifier.startsWith('@bp/')) return 'an unresolved workspace import'
   if (specifier.includes('../../packages/')) return 'a relative path into packages/'
+  if (eager && isPglite(specifier)) {
+    return 'PGlite at module scope: it is a devDependency and is absent from the production install, so the process would die on its first import — load it with `import()` inside the branch that needs it'
+  }
   if (specifier.startsWith('node:') || specifier.startsWith('.') || specifier.startsWith('/')) return null
   const name = packageNameOf(specifier)
   if (OPTIONAL_EXTERNAL.has(name) || dependencies.has(name)) return null
@@ -141,7 +172,6 @@ function bundle() {
     '--format=esm',
     '--target=node22',
     '--outdir=dist',
-    '--out-extension:.js=.js',
     ...EXTERNAL.map((name) => `--external:${name}`),
     `--banner:js=${BANNER}`,
     '--define:process.env.NODE_ENV="production"',
@@ -156,12 +186,18 @@ function bundle() {
     if (!existsSync(file)) die(`${rel} was not produced`)
     const source = readFileSync(file, 'utf8')
     const runtime = new Set()
-    for (const [, specifier] of source.matchAll(SPECIFIERS)) {
-      const reason = forbiddenReason(specifier, dependencies)
-      if (reason) die(`${rel} imports "${specifier}" — ${reason}`)
-      if (!specifier.startsWith('node:')) runtime.add(packageNameOf(specifier))
+    const deferred = new Set()
+    for (const [eager, pattern] of [[true, EAGER_SPECIFIERS], [false, DEFERRED_SPECIFIERS]]) {
+      for (const [, specifier] of source.matchAll(pattern)) {
+        const reason = forbiddenReason(specifier, dependencies, eager)
+        if (reason) die(`${rel} ${eager ? 'imports' : 'dynamically imports'} "${specifier}" — ${reason}`)
+        if (specifier.startsWith('node:')) continue
+        if (eager) runtime.add(packageNameOf(specifier))
+        else deferred.add(specifier)
+      }
     }
-    log(`bundle: ${rel} ${kb(statSync(file).size)} (needs ${[...runtime].sort().join(', ') || 'nothing but node built-ins'})`)
+    const lazily = deferred.size === 0 ? '' : `, lazily ${[...deferred].sort().join(', ')}`
+    log(`bundle: ${rel} ${kb(statSync(file).size)} (needs ${[...runtime].sort().join(', ') || 'nothing but node built-ins'}${lazily})`)
   }
 }
 

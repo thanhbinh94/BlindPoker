@@ -15,10 +15,17 @@
 
 set -euo pipefail
 
+# Everything below is relative to *this script*, not to whatever directory it was invoked from: the
+# compose file beside it, and the default output directory. A cron line that forgets to `cd` still
+# writes its dumps in one predictable place instead of scattering them across the filesystem.
 cd "$(dirname "$0")"
 
 # The custom format (`-Fc`): compressed, and `pg_restore` can read it selectively — a plain SQL
 # dump can only ever be replayed whole.
+#
+# The default lands inside the git checkout (gitignored, but still there). On a real host set
+# `BACKUP_DIR=/var/backups/bind-poker` — an absolute path is honoured as-is — so the dumps outlive a
+# `git clean` and are not carried along by anything that archives the checkout.
 BACKUP_DIR="${BACKUP_DIR:-backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
 STAMP="$(date +%F-%H%M)"

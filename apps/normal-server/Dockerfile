@@ -19,9 +19,10 @@ FROM node:22-alpine AS builder
 # since npm 10.9 — installing the pinned pnpm directly is one fewer thing to go wrong offline.
 RUN npm i -g pnpm@9
 
-# `argon2` publishes musl prebuilds, but a version bump or a new Node ABI silently falls back to
-# compiling from source; without these that fallback is a build failure with a confusing message.
-# Builder only — none of it reaches the runtime image.
+# Belt and braces, not load-bearing: argon2 0.45.1 ships `prebuilds/linux-x64/argon2.musl.node` and
+# its `node-gyp-build` install step picks that on Alpine x64. These are here so that a version bump
+# or a new Node ABI, which would silently fall back to compiling from source, is a slower build
+# rather than a failed one. Builder only — none of it reaches the runtime image.
 RUN apk add --no-cache python3 make g++
 
 WORKDIR /build
@@ -59,9 +60,14 @@ RUN pnpm --filter @bp/normal-server build
 # PGlite, drizzle-kit, esbuild, TypeScript — so nothing that only the tests and the build need is in
 # the shipped image.
 #
-# pnpm 9 semantics: no `--legacy` flag exists here and none is needed. pnpm 10 refuses this command
-# unless the workspace sets `inject-workspace-packages=true` and tells you to pass `--legacy`; that
-# is why the pnpm above is pinned to 9. If you move to pnpm 10, add `--legacy`.
+# pnpm 9 semantics: no `--legacy` flag exists here and none is needed. Verified on pnpm 9.15.9 —
+# the output boots standalone, and its `node_modules` holds the six production dependencies and no
+# devDependency at all.
+#
+# Two things break on pnpm 10, which is why the pin above is a pin and not a default: `deploy`
+# refuses to run unless the workspace sets `inject-workspace-packages=true` (and then wants
+# `--legacy`), and dependency install scripts no longer run by default (`onlyBuiltDependencies`),
+# which silently skips argon2's `node-gyp-build` step. Moving to 10 means addressing both.
 RUN pnpm --filter @bp/normal-server deploy --prod /out
 
 # ---------------------------------------------------------------------------- runtime

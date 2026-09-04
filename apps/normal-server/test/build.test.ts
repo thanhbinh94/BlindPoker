@@ -25,8 +25,15 @@ const DIST = join(ROOT, 'dist')
 
 /** Long enough for a cold `tsc` on a loaded machine; a build that needs more than this is broken. */
 const BUILD_TIMEOUT_MS = 240_000
-/** A misconfigured process must be dead well inside this — it is a container restart loop otherwise. */
+/** The hard stop: past this the child is killed and the test fails as "did not exit". */
 const BOOT_TIMEOUT_MS = 30_000
+/**
+ * The budget a *failing* start has to stay inside, and a real assertion rather than a restatement of
+ * the timeout above. Each of these exits in one to three seconds; ten leaves room for a loaded
+ * machine while still failing if a dead database ever turns into a connection retry loop, which
+ * under `restart: unless-stopped` is a container that never reports the problem.
+ */
+const FAIL_FAST_BUDGET_MS = 10_000
 
 const SKIP = Boolean(process.env['CI_SKIP_BUILD'])
 
@@ -39,6 +46,28 @@ interface Ran {
   code: number | null
   stdout: string
   stderr: string
+}
+
+/**
+ * The module specifiers in a built entry point, split by when the module is loaded — the same two
+ * patterns `scripts/build.mjs` enforces with. `eager` is `from '…'`, a bare `import '…'` and
+ * `require('…')`; `deferred` is `import('…')`, which resolves only if that line runs.
+ *
+ * Comments are deliberately not matched: esbuild labels each bundled module with a
+ * `// ../../packages/core/src/…` header, and a substring search would read those as imports.
+ */
+async function specifiersOf(name: string): Promise<{ eager: string[]; deferred: string[] }> {
+  const source = await readFile(join(DIST, name), 'utf8')
+  const all = (pattern: RegExp): string[] => [...source.matchAll(pattern)].map((m) => m[1] ?? '')
+  return {
+    eager: all(/(?:\bfrom\s*|\bimport\s*|\brequire\s*\(\s*)["']([^"'\n]+)["']/g),
+    deferred: all(/\bimport\s*\(\s*["']([^"'\n]+)["']/g),
+  }
+}
+
+/** PGlite itself, or one of drizzle's adapters for it. */
+function isPglite(specifier: string): boolean {
+  return ['@electric-sql/pglite', 'drizzle-orm/pglite'].some((p) => specifier === p || specifier.startsWith(`${p}/`))
 }
 
 /** Runs a built entry point to completion and reports how it ended — a non-zero exit is not a throw here. */
@@ -75,15 +104,28 @@ describe.skipIf(SKIP)('the production build', () => {
 
   it('inlines the workspace packages instead of importing them', async () => {
     for (const name of ['main.js', 'migrate-cli.js']) {
-      const source = await readFile(join(DIST, name), 'utf8')
-      // Module specifiers only. esbuild labels each bundled module with a `// ../../packages/…`
-      // comment, which is a record of what went *in* — not a path anything resolves at run time.
-      const specifiers = [...source.matchAll(/(?:\bfrom\s*|\bimport\s*|\brequire\s*\(\s*)["']([^"'\n]+)["']/g)].map((m) => m[1] ?? '')
-      expect(specifiers.filter((s) => s.startsWith('@bp/')), `${name} @bp imports`).toEqual([])
-      expect(specifiers.filter((s) => s.includes('../../packages/')), `${name} packages/ imports`).toEqual([])
+      const { eager, deferred } = await specifiersOf(name)
+      for (const list of [eager, deferred]) {
+        expect(list.filter((s) => s.startsWith('@bp/')), `${name} @bp imports`).toEqual([])
+        expect(list.filter((s) => s.includes('../../packages/')), `${name} packages/ imports`).toEqual([])
+      }
       // The externals are the deployment contract: they must come from `node_modules` at /app.
-      expect(specifiers).toContain('pg')
+      expect(eager).toContain('pg')
     }
+  })
+
+  it('never loads PGlite at module scope', async () => {
+    for (const name of ['main.js', 'migrate-cli.js']) {
+      const { eager } = await specifiersOf(name)
+      // PGlite is a devDependency and is genuinely absent from the production install, and
+      // `drizzle-orm/pglite/*` is a subpath of a declared dependency whose own needs are not
+      // declared here — so an import of either at module scope is a container that dies on boot.
+      // `runMigrations` loads both migrators with `import()` inside their branches, which is why
+      // this can only ever be an assertion about the *eager* half.
+      expect(eager.filter(isPglite), `${name} eager PGlite imports`).toEqual([])
+    }
+    // The pg migrator is the one production actually runs, and it must still be reachable.
+    expect((await specifiersOf('main.js')).deferred).toContain('drizzle-orm/node-postgres/migrator')
   })
 
   it('ships the migrations and the catalogues beside dist/', async () => {
@@ -119,7 +161,7 @@ describe.skipIf(SKIP)('the production build', () => {
     // itself is the driver's: `pg` raises an `AggregateError` whose own `message` is empty, so what
     // reaches stderr today is drizzle's failing statement. Either shape satisfies this.
     expect(ran.stderr).toMatch(/connect|ECONNREFUSED|failed query|database|password|role/i)
-    expect(Date.now() - started).toBeLessThan(BOOT_TIMEOUT_MS)
+    expect(Date.now() - started).toBeLessThan(FAIL_FAST_BUDGET_MS)
   })
 
   it('runs the migrate CLI as its own process and fails the same way', async () => {

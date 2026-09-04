@@ -58,6 +58,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # This container never listens on 8080, so the image's HEALTHCHECK would fail for the whole of
+    # its short life and paint `docker compose ps` red during the one minute an operator is most
+    # likely to be watching. Nothing reads it — `service_completed_successfully` reads the exit code.
+    healthcheck:
+      disable: true
     # A migration job that restarts on failure hides the failure. It runs once; a non-zero exit
     # leaves `app` unstarted and the reason in `docker compose logs migrate`.
     restart: "no"
@@ -95,7 +100,11 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - app
+      # Healthy, not merely started: the app image declares a HEALTHCHECK, and waiting for it closes
+      # the couple of seconds in which Caddy is serving and every request is a 502 because the pool
+      # is still opening.
+      app:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
