@@ -11,6 +11,13 @@ const NAV: { path: string; key: string }[] = [
   { path: '/settings', key: 'nav.settings' },
 ]
 
+/**
+ * Routes that print the balance in the page itself. On a phone the rail has room for the mark, three
+ * tabs and the connection dot — and not for a second copy of a number the page below is already
+ * showing, which is what was pushing the third tab off the edge at 375 px.
+ */
+const BALANCE_IN_PAGE = ['/daily', '/settings']
+
 const STATUS_KEY: Record<ConnectionStatus, string> = {
   idle: 'game:status.offline',
   connecting: 'game:status.connecting',
@@ -79,7 +86,7 @@ export function Shell({ path, identity, lang, onLanguage, bar = true, children }
           <span className={s.spacer} />
 
           {identity === null ? null : (
-            <span className={s.identity}>
+            <span className={s.identity} data-balance-in-page={String(BALANCE_IN_PAGE.includes(path))}>
               <span className={s.conn} data-status={identity.status}>
                 <span className={s.connDot} aria-hidden="true" />
                 <span className="visually-hidden">{t(STATUS_KEY[identity.status])}</span>

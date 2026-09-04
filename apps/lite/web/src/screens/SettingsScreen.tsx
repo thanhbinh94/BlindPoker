@@ -1,4 +1,4 @@
-import { Button, LanguageSwitch, Modal, Panel, THEME_MODES } from '@bp/ui-kit'
+import { Button, LanguageSwitch, Modal, Panel, THEME_MODES, formatPoints } from '@bp/ui-kit'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLanguagePref, useThemePref } from '../prefs.js'
@@ -10,6 +10,8 @@ const EMPTY = '—'
 export interface SettingsScreenProps {
   /** From the socket's `WELCOME`; `null` until it lands. */
   me: { playerId: string; displayName: string } | null
+  /** The live balance from the socket. Printed here so the rail can drop its copy on a phone. */
+  balance: number
   /** Fired after the token is gone, so the app can drop back to the name prompt. */
   onSignedOut: () => void
   version: string
@@ -22,7 +24,7 @@ export interface SettingsScreenProps {
  * `bp.theme` / `bp.lang`, and nothing has to be told. Signing out is different — it destroys a session that
  * cannot be recreated, because the display name stays registered — so it asks first.
  */
-export function SettingsScreen({ me, onSignedOut, version }: SettingsScreenProps) {
+export function SettingsScreen({ me, balance, onSignedOut, version }: SettingsScreenProps) {
   const { t } = useTranslation('lite')
   const { theme, setTheme } = useThemePref()
   const { lang, setLang } = useLanguagePref()
@@ -46,6 +48,12 @@ export function SettingsScreen({ me, onSignedOut, version }: SettingsScreenProps
           <div className={s.row}>
             <dt className={s.rowLabel}>{t('prompt.name')}</dt>
             <dd className={s.rowValue}>{me?.displayName ?? EMPTY}</dd>
+          </div>
+          <div className={s.row}>
+            <dt className={s.rowLabel}>{t('game:labels.balance')}</dt>
+            <dd className={s.rowValue}>
+              {formatPoints(balance, lang)} {t('common:units.pointsShort')}
+            </dd>
           </div>
           <div className={s.row}>
             <dt className={s.rowLabel}>{t('settings.playerId')}</dt>

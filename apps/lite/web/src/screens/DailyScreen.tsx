@@ -98,6 +98,11 @@ export function DailyScreen({ api, token, lang }: DailyScreenProps) {
       <div className={s.pageHead}>
         <h1 className={s.pageTitle}>{t('daily.title')}</h1>
         <span className={s.rule} aria-hidden="true" />
+        {me === null ? null : (
+          <span className={s.pageBalance}>
+            {t('game:labels.balance')}: {points(me.balance)}
+          </span>
+        )}
       </div>
 
       {receipt === null ? null : (

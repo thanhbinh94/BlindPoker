@@ -31,6 +31,26 @@ const parsePoints = (text: string): number => Number(text.replace(/\D/g, ''))
 
 const shot = (page: Page, name: string): Promise<Buffer> => page.screenshot({ path: `${SHOTS}${name}.png` })
 
+/**
+ * The rail must hold all three tabs at 375 px, entirely inside the viewport, with nothing pushing
+ * the page sideways. It used to lose the last tab off the right edge once the balance was in there
+ * too — which is why the balance moved into the page on `/daily` and `/settings`.
+ */
+async function expectRailFits(page: Page): Promise<void> {
+  const links = page.locator('header nav a')
+  await expect(links).toHaveCount(3)
+  const width = page.viewportSize()?.width ?? 0
+  for (const link of await links.all()) {
+    await expect(link).toBeVisible()
+    const label = (await link.textContent()) ?? '(unnamed tab)'
+    const box = await link.boundingBox()
+    expect(box, label).not.toBeNull()
+    expect(box!.x, `${label} starts inside the viewport`).toBeGreaterThanOrEqual(0)
+    expect(box!.x + box!.width, `${label} ends inside the viewport`).toBeLessThanOrEqual(width)
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth), 'the page does not scroll sideways').toBeLessThanOrEqual(width)
+}
+
 /** The name prompt, all the way to the lobby. Returns the session token the app stored for this device. */
 async function signIn(page: Page, displayName: string): Promise<string> {
   await page.goto('/')
@@ -259,10 +279,12 @@ test.describe('Bind Poker Lite', () => {
 
     await page.goto('/#/daily')
     await expect(page.getByRole('heading', { name: 'Điểm danh hằng ngày' })).toBeVisible()
+    await expectRailFits(page)
     await shot(page, 'daily-mobile')
 
     await page.goto('/#/settings')
     await expect(page.getByRole('heading', { name: 'Cài đặt' })).toBeVisible()
+    await expectRailFits(page)
     await shot(page, 'settings-mobile')
   })
 })

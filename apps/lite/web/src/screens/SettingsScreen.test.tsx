@@ -14,7 +14,7 @@ const CANCEL = 'Hủy'
 
 function setup(language: 'vi' | 'en' = 'vi') {
   const onSignedOut = vi.fn()
-  const view = renderWithI18n(<SettingsScreen me={ME} onSignedOut={onSignedOut} version="0.1.0" />, makeI18n(language))
+  const view = renderWithI18n(<SettingsScreen me={ME} balance={12_345} onSignedOut={onSignedOut} version="0.1.0" />, makeI18n(language))
   return { ...view, onSignedOut, user: userEvent.setup() }
 }
 
@@ -24,9 +24,11 @@ describe('SettingsScreen', () => {
     delete document.documentElement.dataset.theme
   })
 
-  it('shows the account, the player id and the build version', () => {
+  it('shows the account, the balance, the player id and the build version', () => {
     setup()
 
+    // The rail hides its own copy of the balance at 640px, so this one has to be here.
+    expect(screen.getByText(/12\.345/)).toBeInTheDocument()
     expect(screen.getByText(ME.displayName)).toBeInTheDocument()
     expect(screen.getByText(ME.playerId)).toBeInTheDocument()
     expect(screen.getByText(viLite.settings.playerId)).toBeInTheDocument()

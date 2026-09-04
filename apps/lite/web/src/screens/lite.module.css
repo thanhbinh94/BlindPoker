@@ -148,7 +148,10 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  flex: none;
+  /* Shrinkable, never growing: the nav is what the rail is for, so if something has to give up
+     width at a narrow viewport it is this side and not the third tab. */
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .balance {
@@ -198,6 +201,12 @@
   .edition,
   .wordmark,
   .railLang {
+    display: none;
+  }
+
+  /* On /daily and /settings the page prints the balance itself, so the rail's copy is the first
+     thing to go: without it the three tabs fit at 375 px instead of scrolling the last one away. */
+  .identity[data-balance-in-page='true'] .balance {
     display: none;
   }
 
@@ -412,10 +421,24 @@
   display: flex;
   align-items: baseline;
   gap: var(--space-3);
+  /* The balance wraps to its own line rather than being clipped when the title fills a phone. */
+  flex-wrap: wrap;
 }
 
 .pageTitle {
   flex: none;
+}
+
+/* The page's own copy of the balance. It is what lets the rail drop its copy at 640px, so it is
+   always rendered — not only on a phone — and reads as part of the heading rule. */
+.pageBalance {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .rule {

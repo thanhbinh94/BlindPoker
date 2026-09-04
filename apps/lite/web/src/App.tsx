@@ -100,7 +100,7 @@ export function App({ api, socketFactory, version = LITE_VERSION }: AppProps) {
         ) : path === '/daily' ? (
           <DailyScreen api={api} token={token} lang={lang} />
         ) : path === '/settings' ? (
-          <SettingsScreen me={state.me} onSignedOut={onSignedOut} version={version} />
+          <SettingsScreen me={state.me} balance={state.balance} onSignedOut={onSignedOut} version={version} />
         ) : (
           <LobbyScreen client={client} lang={lang} onLanguage={setLang} onEnteredRoom={() => navigate('/room')} />
         )}
