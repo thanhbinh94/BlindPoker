@@ -5,7 +5,7 @@ import { SUPPORTED_LANGUAGES, createI18n, setLanguage, type Language } from '../
 import { LobbyScreen } from '../src/screens/LobbyScreen.js'
 import { RoomScreen } from '../src/screens/RoomScreen.js'
 import { THEME_MODES, applyTheme, type ThemeMode } from '../src/theme/index.js'
-import { PLAYGROUND_MODES, createMockClient, type PlaygroundMode } from './mock-client.js'
+import { PLAYGROUND_MODES, PLAYGROUND_SEAT_COUNTS, createMockClient, type PlaygroundMode, type PlaygroundSeats } from './mock-client.js'
 import '../src/theme/index.css'
 
 type View = 'room' | 'lobby'
@@ -17,11 +17,12 @@ function App() {
   const [view, setView] = useState<View>('room')
   const [theme, setTheme] = useState<ThemeMode>('dark')
   const [lang, setLang] = useState<Language>('vi')
+  const [seats, setSeats] = useState<PlaygroundSeats>(4)
   const [stacked, setStacked] = useState(false)
   const [, bump] = useReducer((n: number) => n + 1, 0)
 
   const i18n = useMemo(() => createI18n({ language: 'vi', storage: null }), [])
-  const client = useMemo(() => createMockClient(mode, bump), [mode])
+  const client = useMemo(() => createMockClient(mode, seats, bump), [mode, seats])
 
   useEffect(() => () => client.stop(), [client])
   useEffect(() => applyTheme(document.documentElement, theme), [theme])
@@ -49,6 +50,16 @@ function App() {
             </select>
           </label>
           <label className="pg-ctl">
+            Seats
+            <select value={seats} onChange={(e) => setSeats(Number(e.target.value) as PlaygroundSeats)}>
+              {PLAYGROUND_SEAT_COUNTS.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="pg-ctl">
             Theme
             <select value={theme} onChange={(e) => setTheme(e.target.value as ThemeMode)}>
               {THEME_MODES.map((m) => (
@@ -68,7 +79,7 @@ function App() {
               ))}
             </select>
           </label>
-          <label className="pg-ctl pg-check">
+          <label className="pg-ctl">
             <input type="checkbox" checked={stacked} onChange={(e) => setStacked(e.target.checked)} />
             Force stack layout
           </label>
@@ -77,11 +88,13 @@ function App() {
           </button>
         </div>
 
-        {view === 'lobby' ? (
-          <LobbyScreen client={client.api} lang={lang} onLanguage={setLang} onEnteredRoom={() => setView('room')} />
-        ) : (
-          <RoomScreen client={client.api} lang={lang} onLeft={() => setView('lobby')} layout={stacked ? 'stack' : undefined} />
-        )}
+        <div className="pg-screen">
+          {view === 'lobby' ? (
+            <LobbyScreen client={client.api} lang={lang} onLanguage={setLang} onEnteredRoom={() => setView('room')} />
+          ) : (
+            <RoomScreen client={client.api} lang={lang} onLeft={() => setView('lobby')} layout={stacked ? 'stack' : undefined} />
+          )}
+        </div>
       </div>
     </I18nextProvider>
   )

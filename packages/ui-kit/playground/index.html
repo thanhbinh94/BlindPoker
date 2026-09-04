@@ -12,18 +12,26 @@
     />
     <style>
       /* Playground chrome only — the ui-kit itself never sees these rules. */
+      /* The harness owns the viewport and hands the screen what is left; `--bp-stage: 100%` is the same knob a real
+         app turns when it draws its own bar above the room. */
       .pg {
-        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        height: 100dvh;
+      }
+      .pg-screen {
+        flex: 1;
+        min-height: 0;
+        --bp-stage: 100%;
       }
       .pg-bar {
-        position: sticky;
-        top: 0;
+        flex: none;
         z-index: 50;
         display: flex;
         flex-wrap: wrap;
         align-items: end;
-        gap: 12px;
-        padding: 8px 16px;
+        gap: 10px 14px;
+        padding: 6px 14px;
         border-bottom: 1px solid var(--line);
         background: color-mix(in srgb, var(--bg) 88%, transparent);
         backdrop-filter: blur(8px);
@@ -35,17 +43,13 @@
       }
       .pg-ctl {
         display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-      .pg-check {
-        flex-direction: row;
         align-items: center;
         gap: 6px;
       }
+
       .pg-bar select,
       .pg-btn {
-        min-height: 32px;
+        min-height: 28px;
         padding: 0 8px;
         border: 1px solid var(--line);
         border-radius: 6px;
@@ -56,7 +60,6 @@
         letter-spacing: 0;
       }
       .pg-btn {
-        align-self: end;
         border-color: color-mix(in srgb, var(--gold) 50%, transparent);
         color: var(--gold);
         cursor: pointer;

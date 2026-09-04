@@ -28,8 +28,9 @@ export const PLAYGROUND_MODES: readonly PlaygroundMode[] = ['holdem', 'blindA', 
 
 const MY_ID = 'me'
 const MY_SEAT = 0
-const BOTS = ['Bảo', 'Chi', 'Dũng']
-const SEATS = 1 + BOTS.length
+const BOTS = ['Bảo', 'Chi', 'Dũng', 'Hằng', 'Khánh', 'Liên', 'Minh', 'Phúc']
+export const PLAYGROUND_SEAT_COUNTS = [4, 6, 9] as const
+export type PlaygroundSeats = (typeof PLAYGROUND_SEAT_COUNTS)[number]
 const START_STACK = 40_000
 const SMALL_BLIND = 100
 const BIG_BLIND = 200
@@ -53,30 +54,30 @@ const rulesFor = (mode: PlaygroundMode): Ruleset =>
         tableFeeRate: ECONOMY.tableFeeRate,
       }
 
-const configFor = (mode: PlaygroundMode): RoomSummary['config'] => ({
+const configFor = (mode: PlaygroundMode, seats: number): RoomSummary['config'] => ({
   name: mode === 'holdem' ? 'Đêm Sài Gòn' : 'Chiếu Bạc',
   mode: mode === 'holdem' ? 'holdem' : 'blind',
-  maxPlayers: SEATS,
+  maxPlayers: seats,
   isPrivate: false,
   turnTimerSec: TURN_TIMER_SEC,
   autoStart: true,
   hasPassword: false,
   ...(mode === 'holdem'
     ? { holdem: { smallBlind: SMALL_BLIND, bigBlind: BIG_BLIND, minBuyInBB: 50, maxBuyInBB: 200 } }
-    : { blind: { holeCards: mode === 'blindB' ? (3 as const) : (2 as const), decisionMode: mode === 'blindB' ? ('playOrFold' as const) : ('none' as const), fixedWager: FIXED_WAGER, botCount: BOTS.length } }),
+    : { blind: { holeCards: mode === 'blindB' ? (3 as const) : (2 as const), decisionMode: mode === 'blindB' ? ('playOrFold' as const) : ('none' as const), fixedWager: FIXED_WAGER, botCount: seats - 1 } }),
 })
 
 /** Two tickets for the lobby view: one open hold'em table, one locked blind room. */
 export const SAMPLE_ROOMS: RoomSummary[] = [
-  { roomId: 'r1', code: 'ABC234', name: 'Đêm Sài Gòn', mode: 'holdem', config: configFor('holdem'), playerCount: 3, maxPlayers: SEATS, status: 'OPEN' },
+  { roomId: 'r1', code: 'ABC234', name: 'Đêm Sài Gòn', mode: 'holdem', config: configFor('holdem', 6), playerCount: 3, maxPlayers: 6, status: 'OPEN' },
   {
     roomId: 'r2',
     code: 'XYZ789',
     name: 'Chiếu Bạc',
     mode: 'blind',
-    config: { ...configFor('blindB'), isPrivate: true, hasPassword: true },
+    config: { ...configFor('blindB', 4), isPrivate: true, hasPassword: true },
     playerCount: 2,
-    maxPlayers: SEATS,
+    maxPlayers: 4,
     status: 'IN_GAME',
   },
 ]
@@ -96,7 +97,8 @@ export interface MockClient {
  * the `GAME_EVENT` frame a server would send. When it is my turn it simply stops and waits for `act()`. So the
  * playground exercises the same reducer, the same views and the same hole-card hiding as production.
  */
-export function createMockClient(mode: PlaygroundMode, onChange: (state: ClientState) => void): MockClient {
+export function createMockClient(mode: PlaygroundMode, seatCount: number, onChange: (state: ClientState) => void): MockClient {
+  const SEATS = seatCount
   const rules = rulesFor(mode)
   const bot = createBotStrategy()
 
@@ -139,9 +141,9 @@ export function createMockClient(mode: PlaygroundMode, onChange: (state: ClientS
   const room = (nextHandAt: number | null): RoomView => ({
     roomId: 'r1',
     code: 'ABC234',
-    name: configFor(mode).name,
+    name: configFor(mode, SEATS).name,
     mode: rules.mode,
-    config: configFor(mode),
+    config: configFor(mode, SEATS),
     playerCount: SEATS,
     maxPlayers: SEATS,
     status: 'IN_GAME',
