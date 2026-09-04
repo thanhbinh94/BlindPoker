@@ -82,6 +82,7 @@ chọn; biến môi trường của hệ thống được ưu tiên hơn file `.
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn` hoặc `error`. |
 | `ECONOMY_TIMEZONE` | `Asia/Ho_Chi_Minh` | Múi giờ (IANA) quyết định lúc nào sang "ngày mới" để nhận thưởng hằng ngày. |
 | `LITE_HAND_LOG` | `false` | `true` để ghi lịch sử từng ván vào database. File dữ liệu sẽ phình nhanh hơn. |
+| `RECONNECT_WINDOW_SEC` | `90` | Giây chờ một người rớt mạng giữa ván trước khi ghế bị bỏ bài thay. |
 | `ALLOWED_ORIGINS` | *(trống)* | Danh sách origin được phép mở WebSocket, cách nhau bằng dấu phẩy. Bỏ trống = chỉ chấp nhận trang đến từ chính máy chủ này. Chỉ cần khi đặt sau reverse proxy. |
 | `PUBLIC_DIR` | *(trống)* | Thư mục giao diện web thay thế bản đã nhúng trong exe. |
 
@@ -210,7 +211,8 @@ database. There is nothing to install.
   to exit. `bind-poker-lite.exe --status` prints the running instance's `/health`.
 - **Configure it:** rename `.env.example` to `.env` next to the exe. Keys: `PORT` (8080), `HOST`
   (0.0.0.0), `SQLITE_PATH` (./bind-poker.sqlite), `LOG_LEVEL` (info), `ECONOMY_TIMEZONE`
-  (Asia/Ho_Chi_Minh), `LITE_HAND_LOG` (false), `ALLOWED_ORIGINS`, `PUBLIC_DIR`. Environment
+  (Asia/Ho_Chi_Minh), `LITE_HAND_LOG` (false), `RECONNECT_WINDOW_SEC` (90), `ALLOWED_ORIGINS`,
+  `PUBLIC_DIR`. Environment
   variables win over the file. Restart after editing.
 - **Data:** everything lives in `bind-poker.sqlite` beside the exe. Stop the server before copying
   it for a backup; delete it to start over.

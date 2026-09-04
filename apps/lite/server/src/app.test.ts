@@ -317,7 +317,7 @@ describe('static assets', () => {
     expect((res.json() as { error: { code: string } }).error.code).toBe('NOT_FOUND')
   })
 
-  it('404s an unknown method with the error envelope', async () => {
+  it('404s a known path requested with a method no route serves', async () => {
     const h = makeApp()
     const res = await h.app.fastify.inject({ method: 'DELETE', url: '/api/me', headers: XRW })
     expect(res.statusCode).toBe(404)

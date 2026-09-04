@@ -1,8 +1,8 @@
 import { dirname } from 'node:path'
 
-export interface LiteConfig { port: number; host: string; sqlitePath: string; handLog: boolean; logLevel: 'debug' | 'info' | 'warn' | 'error'; timezone: string; allowedOrigins: string[] | 'same-host'; publicDir: string | null }
+export interface LiteConfig { port: number; host: string; sqlitePath: string; handLog: boolean; logLevel: 'debug' | 'info' | 'warn' | 'error'; timezone: string; reconnectWindowSec: number; allowedOrigins: string[] | 'same-host'; publicDir: string | null }
 
-export const DEFAULT_CONFIG: LiteConfig = { port: 8080, host: '0.0.0.0', sqlitePath: './bind-poker.sqlite', handLog: false, logLevel: 'info', timezone: 'Asia/Ho_Chi_Minh', allowedOrigins: 'same-host', publicDir: null }
+export const DEFAULT_CONFIG: LiteConfig = { port: 8080, host: '0.0.0.0', sqlitePath: './bind-poker.sqlite', handLog: false, logLevel: 'info', timezone: 'Asia/Ho_Chi_Minh', reconnectWindowSec: 90, allowedOrigins: 'same-host', publicDir: null }
 
 export function parseDotenv(text: string): Record<string, string> {
   const out: Record<string, string> = {}
@@ -38,6 +38,12 @@ export function loadConfig(env: Record<string, string | undefined>, dotenvText?:
   if (!LEVELS.has(logLevel)) throw new Error(`LOG_LEVEL must be one of ${[...LEVELS].join(', ')}`)
   const timezone = get('ECONOMY_TIMEZONE') ?? DEFAULT_CONFIG.timezone
   if (!validTimezone(timezone)) throw new Error(`ECONOMY_TIMEZONE is not a valid IANA zone: ${timezone}`)
+  // Spec §22.5: how long a disconnected seated player is held before the table folds for them.
+  // Zero is meaningful (no grace at all); the ceiling only rules out a value that would wedge a room.
+  const reconnectWindowSec = get('RECONNECT_WINDOW_SEC') === undefined ? DEFAULT_CONFIG.reconnectWindowSec : Number(get('RECONNECT_WINDOW_SEC'))
+  if (!Number.isInteger(reconnectWindowSec) || reconnectWindowSec < 0 || reconnectWindowSec > 3600) {
+    throw new Error(`RECONNECT_WINDOW_SEC must be an integer 0–3600 seconds, got ${get('RECONNECT_WINDOW_SEC')}`)
+  }
   // Unset (or blank) is not "allow anything": Lite serves its own UI, so the page that opens a
   // socket must have come from this host. A list is only needed when a reverse proxy has changed
   // the public origin out from under the `Host` header.
@@ -49,6 +55,7 @@ export function loadConfig(env: Record<string, string | undefined>, dotenvText?:
     handLog: ['1', 'true', 'yes'].includes((get('LITE_HAND_LOG') ?? '').toLowerCase()),
     logLevel,
     timezone,
+    reconnectWindowSec,
     allowedOrigins: origins.length > 0 ? origins : DEFAULT_CONFIG.allowedOrigins,
     publicDir: get('PUBLIC_DIR') ?? null,
   }

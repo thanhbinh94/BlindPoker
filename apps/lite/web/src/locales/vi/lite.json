@@ -35,6 +35,10 @@
     "receipt": "Đã nhận {{points}} điểm — chuỗi {{streak}} ngày",
     "loading": "Đang tải…",
     "error": "Không tải được thông tin điểm danh",
+    "errors": {
+      "ALREADY_CLAIMED": "Hôm nay bạn đã nhận thưởng rồi",
+      "NOT_ELIGIBLE": "Chưa đủ điều kiện nhận cứu trợ lúc này"
+    },
     "relief": {
       "title": "Cứu trợ",
       "lead": "Số dư dưới {{threshold}} điểm được nạp lên {{target}} điểm, mỗi {{hours}} giờ một lần.",

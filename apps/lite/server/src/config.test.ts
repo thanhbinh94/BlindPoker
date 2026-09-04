@@ -29,9 +29,17 @@ describe('loadConfig', () => {
     expect(loadConfig({ ALLOWED_ORIGINS: '' }).allowedOrigins).toBe('same-host')
     expect(loadConfig({ ALLOWED_ORIGINS: ' , ' }).allowedOrigins).toBe('same-host')
   })
+  it('reads RECONNECT_WINDOW_SEC, defaulting to the 90 s of spec §22.5', () => {
+    expect(loadConfig({}).reconnectWindowSec).toBe(90)
+    expect(loadConfig({ RECONNECT_WINDOW_SEC: '30' }).reconnectWindowSec).toBe(30)
+    expect(loadConfig({ RECONNECT_WINDOW_SEC: '0' }).reconnectWindowSec).toBe(0)
+  })
   it('rejects invalid values', () => {
     expect(() => loadConfig({ PORT: 'abc' })).toThrow(/PORT/)
     expect(() => loadConfig({ LOG_LEVEL: 'loud' })).toThrow(/LOG_LEVEL/)
     expect(() => loadConfig({ ECONOMY_TIMEZONE: 'Mars/Olympus' })).toThrow(/ECONOMY_TIMEZONE/)
+    expect(() => loadConfig({ RECONNECT_WINDOW_SEC: 'soon' })).toThrow(/RECONNECT_WINDOW_SEC/)
+    expect(() => loadConfig({ RECONNECT_WINDOW_SEC: '-1' })).toThrow(/RECONNECT_WINDOW_SEC/)
+    expect(() => loadConfig({ RECONNECT_WINDOW_SEC: '99999' })).toThrow(/RECONNECT_WINDOW_SEC/)
   })
 })

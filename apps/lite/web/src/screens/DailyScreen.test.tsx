@@ -118,4 +118,34 @@ describe('DailyScreen', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(viLite.daily.error)
   })
+
+  it('says what the server actually refused when a claim comes back ALREADY_CLAIMED', async () => {
+    const api = stubApi({ claimDaily: vi.fn().mockRejectedValue(new ApiError(409, 'ALREADY_CLAIMED', 'nope')) })
+    const { user } = render(api)
+
+    await user.click(await screen.findByRole('button', { name: viLite.daily.claim }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(viLite.daily.errors.ALREADY_CLAIMED)
+  })
+
+  it('says what the server actually refused when relief comes back NOT_ELIGIBLE', async () => {
+    const api = stubApi({
+      me: vi.fn().mockResolvedValue(me({ balance: 200, relief: { eligible: true, reason: 'ok', retryAt: null } })),
+      relief: vi.fn().mockRejectedValue(new ApiError(409, 'NOT_ELIGIBLE', 'nope')),
+    })
+    const { user } = render(api)
+
+    await user.click(await screen.findByRole('button', { name: viLite.daily.relief.button }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(viLite.daily.errors.NOT_ELIGIBLE)
+  })
+
+  it('falls back to the generic message for a code it has no words for', async () => {
+    const api = stubApi({ claimDaily: vi.fn().mockRejectedValue(new ApiError(500, 'INTERNAL', 'boom')) })
+    const { user } = render(api)
+
+    await user.click(await screen.findByRole('button', { name: viLite.daily.claim }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(viLite.daily.error)
+  })
 })

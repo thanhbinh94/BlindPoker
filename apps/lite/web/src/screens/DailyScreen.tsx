@@ -1,12 +1,26 @@
 import { ECONOMY } from '@bp/core'
 import { Badge, Button, Panel, formatPoints, type Language } from '@bp/ui-kit'
+import type { TFunction } from 'i18next'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { LiteApi, MeDto } from '../api.js'
+import { ApiError, type LiteApi, type MeDto } from '../api.js'
 import s from './lite.module.css'
 
 const SEAL = '✦'
 const WARN = '!'
+
+/** Refusals this screen has words for; anything else is "could not load", which is what it is. */
+const DAILY_CODES = new Set(['ALREADY_CLAIMED', 'NOT_ELIGIBLE'])
+
+/**
+ * A refused claim is not a failure of the screen: the server has decided today is already spent, or
+ * that relief is not owed yet. Say which, rather than the generic "could not load the daily reward"
+ * a player would otherwise get for a perfectly well-understood answer.
+ */
+function refusalText(cause: unknown, t: TFunction): string {
+  if (cause instanceof ApiError && DAILY_CODES.has(cause.code)) return t(`daily.errors.${cause.code}`)
+  return t('daily.error')
+}
 
 const LOCALE: Record<Language, string> = { vi: 'vi-VN', en: 'en-US' }
 
@@ -30,7 +44,7 @@ export interface DailyScreenProps {
 export function DailyScreen({ api, token, lang }: DailyScreenProps) {
   const { t } = useTranslation('lite')
   const [me, setMe] = useState<MeDto | null>(null)
-  const [failed, setFailed] = useState(false)
+  const [failure, setFailure] = useState<string | null>(null)
   const [receipt, setReceipt] = useState<string | null>(null)
   const [busy, setBusy] = useState<'daily' | 'relief' | null>(null)
 
@@ -40,11 +54,11 @@ export function DailyScreen({ api, token, lang }: DailyScreenProps) {
   const load = useCallback(async (): Promise<void> => {
     try {
       setMe(await api.me(token))
-      setFailed(false)
+      setFailure(null)
     } catch {
-      setFailed(true)
+      setFailure(t('daily.error'))
     }
-  }, [api, token])
+  }, [api, t, token])
 
   useEffect(() => {
     void load()
@@ -56,8 +70,10 @@ export function DailyScreen({ api, token, lang }: DailyScreenProps) {
       const result = await api.claimDaily(token)
       setReceipt(t('daily.receipt', { points: formatPoints(result.points, lang), streak: result.streak }))
       await load()
-    } catch {
-      setFailed(true)
+    } catch (cause) {
+      // Reload either way: a refusal means this screen's picture of the day is out of date.
+      await load()
+      setFailure(refusalText(cause, t))
     } finally {
       setBusy(null)
     }
@@ -69,8 +85,9 @@ export function DailyScreen({ api, token, lang }: DailyScreenProps) {
       const result = await api.relief(token)
       setReceipt(t('daily.relief.receipt', { amount: formatPoints(result.amount, lang) }))
       await load()
-    } catch {
-      setFailed(true)
+    } catch (cause) {
+      await load()
+      setFailure(refusalText(cause, t))
     } finally {
       setBusy(null)
     }
@@ -91,17 +108,17 @@ export function DailyScreen({ api, token, lang }: DailyScreenProps) {
           {receipt}
         </p>
       )}
-      {failed ? (
+      {failure === null ? null : (
         <p className={s.alert} role="alert">
           <span className={s.slipGlyph} aria-hidden="true">
             {WARN}
           </span>
-          {t('daily.error')}
+          {failure}
         </p>
-      ) : null}
+      )}
 
       {me === null ? (
-        failed ? null : (
+        failure !== null ? null : (
           <p className={s.loading} aria-busy="true">
             {t('daily.loading')}
           </p>

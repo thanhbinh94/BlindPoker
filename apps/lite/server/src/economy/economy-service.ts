@@ -30,9 +30,10 @@ export function createEconomyService(deps: { repos: LiteRepositories; timezone: 
       const evaluation = evaluateDaily({ streak: player.streak, lastDailyClaim: player.lastDailyClaim }, nowMs, timezone)
       if (!evaluation.allowed) return { claimed: false, reason: 'already' }
 
+      // One transaction: the credit and the "today is spent" stamp are the same fact, and a crash
+      // between two separate writes would either pay forever or eat the day.
       const today = dayKey(nowMs, timezone)
-      await repos.balances.apply([{ playerId, delta: evaluation.points, reason: 'daily_reward', refId: today }])
-      repos.updateDaily(playerId, { streak: evaluation.streak, lastDailyClaim: today })
+      repos.claimDaily(playerId, { points: evaluation.points, streak: evaluation.streak, day: today })
       await deps.onBalanceChanged?.(playerId)
 
       const balance = await repos.balances.get(playerId)
@@ -46,8 +47,7 @@ export function createEconomyService(deps: { repos: LiteRepositories; timezone: 
       if (!check.eligible) return { granted: false, reason: check.reason === 'cooldown' ? 'cooldown' : 'balance', retryAt: check.retryAt }
 
       const amount = ECONOMY.reliefTarget - player.balance
-      await repos.balances.apply([{ playerId, delta: amount, reason: 'relief', refId: String(nowMs) }])
-      repos.updateRelief(playerId, nowMs)
+      repos.grantRelief(playerId, amount, nowMs)
       await deps.onBalanceChanged?.(playerId)
 
       const balance = await repos.balances.get(playerId)

@@ -193,7 +193,7 @@ describe('balances.apply', () => {
     await expect(r.balances.get(a)).resolves.toBe(790)
   })
 
-  it('records a carry_over sink for an empty batch (the Hold’em fee path)', async () => {
+  it('records a sink for an empty batch — the carry-over release, which moves no balances', async () => {
     const r = repos({ now: () => 42 })
     await r.balances.apply([], { kind: 'carry_over', refId: 'room-9', fee: 25 })
     expect(r.sinks()).toEqual([{ id: 1, kind: 'carry_over', refId: 'room-9', amount: 25, createdAt: 42 }])
@@ -267,6 +267,50 @@ describe('history.recordHand', () => {
   it('tolerates a summary naming a player that is not in the database', async () => {
     const r = repos()
     await expect(r.history.recordHand(handSummary([{ playerId: 'ghost', isBot: false, net: 1, won: true }]))).resolves.toBeUndefined()
+  })
+})
+
+describe('claimDaily / grantRelief', () => {
+  it('credits the reward and stamps the streak and claim day together', () => {
+    const r = repos()
+    const id = r.createPlayer('Alice', 'ha', 1_000).playerId
+    r.claimDaily(id, { points: 5_000, streak: 3, day: '2026-09-04' })
+    expect(r.getLitePlayer(id)).toMatchObject({ balance: 6_000, streak: 3, lastDailyClaim: '2026-09-04' })
+  })
+
+  it('credits the top-up and stamps the cooldown together', () => {
+    const r = repos()
+    const id = r.createPlayer('Alice', 'ha', 1_000).playerId
+    r.grantRelief(id, 4_000, 1_700_000)
+    expect(r.getLitePlayer(id)).toMatchObject({ balance: 5_000, lastReliefAt: 1_700_000 })
+  })
+
+  /**
+   * The point of the transaction: neither half may survive alone. A credit without the stamp pays
+   * out forever, a stamp without the credit eats the day. The trigger stands in for the crash.
+   */
+  it('rolls the credit back when the daily stamp fails, leaving neither write', () => {
+    const r = repos()
+    const id = r.createPlayer('Alice', 'ha', 1_000).playerId
+    r.db.exec(`CREATE TRIGGER boom BEFORE UPDATE OF streak ON players BEGIN SELECT RAISE(ABORT, 'boom'); END`)
+
+    expect(() => r.claimDaily(id, { points: 5_000, streak: 3, day: '2026-09-04' })).toThrow(/boom/)
+    expect(r.getLitePlayer(id)).toMatchObject({ balance: 1_000, streak: 0, lastDailyClaim: null })
+  })
+
+  it('rolls the credit back when the relief stamp fails, leaving neither write', () => {
+    const r = repos()
+    const id = r.createPlayer('Alice', 'ha', 1_000).playerId
+    r.db.exec(`CREATE TRIGGER boom BEFORE UPDATE OF last_relief_at ON players BEGIN SELECT RAISE(ABORT, 'boom'); END`)
+
+    expect(() => r.grantRelief(id, 4_000, 1_700_000)).toThrow(/boom/)
+    expect(r.getLitePlayer(id)).toMatchObject({ balance: 1_000, lastReliefAt: null })
+  })
+
+  it('refuses to move an unknown player and writes nothing', () => {
+    const r = repos()
+    expect(() => r.claimDaily('nobody', { points: 5_000, streak: 1, day: '2026-09-04' })).toThrow(/unknown player/)
+    expect(r.sinks()).toEqual([])
   })
 })
 

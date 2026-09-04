@@ -71,7 +71,9 @@ export function buildApp(deps: BuildAppDeps): LiteApp {
     repos,
     resolver: { fromToken: (token) => Promise.resolve(sessions.resolve(token)) },
     log,
-    ...(deps.roomOptions ? { roomOptions: deps.roomOptions } : {}),
+    // `RECONNECT_WINDOW_SEC` is the one room parameter Lite exposes (spec §22.5); a test's
+    // `roomOptions` still wins over it.
+    roomOptions: { reconnectWindowMs: config.reconnectWindowSec * 1000, ...deps.roomOptions },
     gatewayOptions: { allowedOrigins: config.allowedOrigins, ...deps.gatewayOptions },
     onDomainEvent: (event) => log.debug('domain event', { type: event.type }),
   })

@@ -61,7 +61,7 @@ describe('openDatabase / migrate', () => {
     db.close()
   })
 
-  it('migrate returns MIGRATIONS.length and applies the schema on a bare database', () => {
+  it('re-applies the whole schema after the tables are dropped and user_version is rewound', () => {
     const db = openDatabase(':memory:')
     db.exec('DROP INDEX idx_players_name_key; DROP TABLE players; DROP TABLE sinks; DROP TABLE hand_log; PRAGMA user_version = 0')
     expect(migrate(db)).toBe(MIGRATIONS.length)

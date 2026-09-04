@@ -34,6 +34,15 @@ export interface LiteRepositories extends Repositories {
   /** By identity key, so case and Unicode composition do not matter — `NGƯỜI` finds `Người`. */
   findByName(displayName: string): LitePlayerRecord | null
   getLitePlayer(playerId: string): LitePlayerRecord | null
+  /**
+   * Credits the daily reward and stamps the streak and claim day **in one transaction**. Two
+   * separate writes could be interrupted between them, and either half alone is a bug that pays
+   * out: a credit without the stamp is an unlimited reward, a stamp without the credit is a day
+   * silently lost.
+   */
+  claimDaily(playerId: string, claim: { points: number; streak: number; day: string }): void
+  /** Credits the relief top-up and stamps the cooldown in one transaction, for the same reason. */
+  grantRelief(playerId: string, amount: number, at: number): void
   updateDaily(playerId: string, patch: { streak: number; lastDailyClaim: string }): void
   updateRelief(playerId: string, at: number): void
   sinks(): LiteSinkRow[]
@@ -121,6 +130,20 @@ export function createSqliteRepositories(db: DatabaseSync, opts: { handLog: bool
       throw err
     }
     return result
+  }
+
+  /**
+   * The balance half of a write that has a second half. Must be called inside `transact`, so the
+   * caller's other statement commits or rolls back with it.
+   *
+   * `reason` and `refId` travel with the entry the way `balances.apply` takes them; Lite has no
+   * ledger table to put them in yet, so today they name the movement for the reader.
+   */
+  function creditWithin(entry: BalanceEntry): void {
+    const row = selectBalance.get(entry.playerId) as { balance: number } | undefined
+    if (!row) throw new Error(`unknown player ${entry.playerId}`)
+    if (Number(row.balance) + entry.delta < 0) throw new InsufficientBalanceError(entry.playerId)
+    if (entry.delta !== 0) addBalance.run(entry.delta, entry.playerId)
   }
 
   const balances = {
@@ -221,6 +244,20 @@ export function createSqliteRepositories(db: DatabaseSync, opts: { handLog: bool
     getLitePlayer(playerId) {
       const row = getRow(playerId)
       return row ? toRecord(row) : null
+    },
+
+    claimDaily(playerId, claim) {
+      transact(() => {
+        creditWithin({ playerId, delta: claim.points, reason: 'daily_reward', refId: claim.day })
+        updateDailyStmt.run(claim.streak, claim.day, playerId)
+      })
+    },
+
+    grantRelief(playerId, amount, at) {
+      transact(() => {
+        creditWithin({ playerId, delta: amount, reason: 'relief', refId: String(at) })
+        updateReliefStmt.run(at, playerId)
+      })
     },
 
     updateDaily(playerId, patch) {

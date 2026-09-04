@@ -35,6 +35,10 @@
     "receipt": "Claimed {{points}} points — {{streak}} day streak",
     "loading": "Loading…",
     "error": "Could not load the daily reward",
+    "errors": {
+      "ALREADY_CLAIMED": "Today's reward has already been claimed",
+      "NOT_ELIGIBLE": "Relief is not available right now"
+    },
     "relief": {
       "title": "Relief",
       "lead": "A balance under {{threshold}} points is topped up to {{target}}, once every {{hours}} hours.",
