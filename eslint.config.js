@@ -79,17 +79,33 @@ export default tseslint.config(
       'no-restricted-imports': ['error', {
         paths: NODE_BUILTINS.filter((m) => !m.endsWith('*')).map((name) => ({ name, message: WEB_ONLY })),
         patterns: [
-          // The one relative escape this app is allowed is a *test* reading the server's catalogue JSON
-          // (`apps/normal-web/src/locales/locales.test.ts`): data rather than code, and never in the bundle.
-          // It is spelled relatively, so it matches none of these groups.
-          { group: ['@bp/server-kit', '@bp/http-kit', '@bp/lite', '@bp/normal-server', '**/apps/**'], message: WEB_ONLY },
+          // Package specifiers, and the relative ones that climb out of this app into another. The relative
+          // half matters: `**/apps/**` alone never fires on `'../../../normal-server/…'`, which is how a
+          // browser bundle would quietly acquire a dependency on a Postgres server.
+          { group: ['@bp/server-kit', '@bp/http-kit', '@bp/lite', '@bp/normal-server', '**/apps/**', '**/normal-server/**', '**/lite/**'], message: WEB_ONLY },
           { group: NODE_BUILTINS.filter((m) => m.endsWith('*')), message: WEB_ONLY },
         ],
       }],
     },
   },
   {
-    // …except `vite.config.ts` and `vitest.config.ts`, which Node runs rather than the browser.
+    // The single exception, and it is a narrow one: a *test* may read the server's catalogue JSON, so that a
+    // new item or achievement cannot ship as a raw key on a wardrobe tile. Only `data/` is opened up —
+    // `**/normal-server/src/**` stays shut, so this can never become a door into the server's code, and
+    // nothing that ships in the bundle is covered by it at all.
+    files: ['apps/normal-web/**/*.test.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        paths: NODE_BUILTINS.filter((m) => !m.endsWith('*')).map((name) => ({ name, message: WEB_ONLY })),
+        patterns: [
+          { group: ['@bp/server-kit', '@bp/http-kit', '@bp/lite', '@bp/normal-server', '**/apps/**', '**/normal-server/src/**', '**/lite/**'], message: WEB_ONLY },
+          { group: NODE_BUILTINS.filter((m) => m.endsWith('*')), message: WEB_ONLY },
+        ],
+      }],
+    },
+  },
+  {
+    // …and `vite.config.ts` / `vitest.config.ts`, which Node runs rather than the browser.
     files: ['apps/normal-web/*.config.ts'],
     rules: { 'no-restricted-imports': 'off' },
   },

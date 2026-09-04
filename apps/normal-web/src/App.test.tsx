@@ -60,7 +60,7 @@ describe('App — the session gate', () => {
     renderApp(stubApi({ authMe: vi.fn(() => new Promise<AuthMeDto>(() => undefined)) }))
 
     expect(screen.getByRole('status')).toHaveTextContent(viNormal.session.checking)
-    expect(screen.queryByRole('tab', { name: viNormal.auth.signIn })).toBeNull()
+    expect(screen.queryByRole('link', { name: viNormal.auth.signIn })).toBeNull()
     expect(FakeSocket.instances).toHaveLength(0)
   })
 
@@ -83,7 +83,7 @@ describe('App — the session gate', () => {
   it('shows the sign-in card and opens no socket when the cookie names no session', async () => {
     renderApp(stubApi({ authMe: vi.fn().mockRejectedValue(UNAUTHORIZED) }))
 
-    expect(await screen.findByRole('tab', { name: viNormal.auth.signIn })).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: viNormal.auth.signIn })).toBeInTheDocument()
     expect(FakeSocket.instances).toHaveLength(0)
     // A visitor lost nothing, so there is no expiry notice to show them.
     expect(screen.queryByText(viNormal.session.expired)).toBeNull()
@@ -93,7 +93,7 @@ describe('App — the session gate', () => {
     window.history.replaceState(null, '', '/#/register')
     renderApp(stubApi({ authMe: vi.fn().mockRejectedValue(UNAUTHORIZED) }))
 
-    await waitFor(() => expect(screen.getByRole('tab', { name: viNormal.auth.register })).toHaveAttribute('aria-selected', 'true'))
+    await waitFor(() => expect(screen.getByRole('link', { name: viNormal.auth.register })).toHaveAttribute('aria-current', 'page'))
   })
 
   it('registers, connects and lands in the lobby', async () => {
@@ -102,7 +102,7 @@ describe('App — the session gate', () => {
     const user = userEvent.setup()
     renderApp(api)
 
-    await screen.findByRole('tab', { name: viNormal.auth.register })
+    await screen.findByRole('link', { name: viNormal.auth.register })
     await user.type(screen.getByLabelText(viNormal.auth.email), 'binh@example.com')
     await user.type(screen.getByLabelText(viNormal.auth.password), 'con-meo-den-1')
     await user.type(screen.getByLabelText(viNormal.auth.displayName), 'Bình')
@@ -127,7 +127,7 @@ describe('App — the session gate', () => {
     await user.click(await screen.findByRole('button', { name: viNormal.placeholder.signOut }))
 
     expect(api.logout).toHaveBeenCalledTimes(1)
-    expect(await screen.findByRole('tab', { name: viNormal.auth.signIn })).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: viNormal.auth.signIn })).toBeInTheDocument()
     expect(socket().closedWith).not.toBeNull()
     expect(localStorage.getItem(LAST_EMAIL_KEY)).toBeNull()
     // A deliberate sign-out is not an expiry: nothing was taken away, so nothing is explained.
@@ -161,11 +161,16 @@ describe('App — the reconnect probe', () => {
     })
   }
 
-  /** Runs the clock forward inside `act`, then hands it back so `waitFor` can work normally. */
-  async function advance(ms: number): Promise<void> {
+  /** Runs the clock forward inside `act`, keeping the fake clock so a second window can follow. */
+  async function tick(ms: number): Promise<void> {
     await act(async () => {
       vi.advanceTimersByTime(ms)
     })
+  }
+
+  /** One window, then back to the real clock so `waitFor` can work normally. */
+  async function advance(ms: number): Promise<void> {
+    await tick(ms)
     vi.useRealTimers()
   }
 
@@ -178,7 +183,7 @@ describe('App — the reconnect probe', () => {
     await advance(RECONNECT_PROBE_MS)
 
     await waitFor(() => expect(authMe).toHaveBeenCalledTimes(2))
-    expect(await screen.findByRole('tab', { name: viNormal.auth.signIn })).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: viNormal.auth.signIn })).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent(viNormal.session.expired)
   })
 
@@ -189,7 +194,31 @@ describe('App — the reconnect probe', () => {
     await advance(RECONNECT_PROBE_MS)
 
     await waitFor(() => expect(authMe).toHaveBeenCalledTimes(2))
-    expect(screen.queryByRole('tab', { name: viNormal.auth.signIn })).toBeNull()
+    expect(screen.queryByRole('link', { name: viNormal.auth.signIn })).toBeNull()
+  })
+
+  it('keeps asking, so a session that dies during a long outage is still noticed', async () => {
+    // 200 at ten seconds, 401 at twenty: the outage outlived the session. A probe that fired once would
+    // have left the player in a live-looking shell that could never recover.
+    const authMe = vi.fn().mockResolvedValueOnce(ME).mockResolvedValueOnce(ME).mockRejectedValue(UNAUTHORIZED)
+    await reconnecting(stubApi({ authMe }))
+
+    await tick(RECONNECT_PROBE_MS)
+    expect(authMe).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('link', { name: viNormal.auth.signIn })).toBeNull()
+
+    await tick(RECONNECT_PROBE_MS)
+    expect(authMe).toHaveBeenCalledTimes(3)
+    await advance(RECONNECT_PROBE_MS)
+
+    expect(await screen.findByRole('link', { name: viNormal.auth.signIn })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent(viNormal.session.expired)
+    // …and it stops once there is no session left to check.
+    const settled = authMe.mock.calls.length
+    vi.useFakeTimers()
+    await tick(RECONNECT_PROBE_MS * 3)
+    vi.useRealTimers()
+    expect(authMe).toHaveBeenCalledTimes(settled)
   })
 
   it('does not probe before ten seconds are up', async () => {

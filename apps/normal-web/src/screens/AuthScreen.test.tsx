@@ -33,29 +33,56 @@ const emailBox = (): HTMLInputElement => screen.getByLabelText(t.email) as HTMLI
 const passwordBox = (): HTMLInputElement => screen.getByLabelText(t.password) as HTMLInputElement
 const nameBox = (): HTMLInputElement => screen.getByLabelText(t.displayName) as HTMLInputElement
 const submit = (name: string): HTMLElement => screen.getByRole('button', { name })
+const modeLink = (name: string): HTMLElement => screen.getByRole('link', { name })
+
+/** Fills in whatever the given mode needs, so a test can get to the submit button in one line. */
+async function fill(user: ReturnType<typeof userEvent.setup>, opts: { name?: string } = {}): Promise<void> {
+  await user.type(emailBox(), 'binh@example.com')
+  await user.type(passwordBox(), PASSWORD)
+  if (opts.name !== undefined) await user.type(nameBox(), opts.name)
+}
 
 describe('AuthScreen', () => {
   beforeEach(() => {
     localStorage.clear()
+    window.history.replaceState(null, '', '/')
   })
 
-  it('opens on the sign-in tab: email and password, and no display name', () => {
+  it('opens on sign-in: email and password, and no display name', () => {
     setup(stubApi())
 
-    expect(screen.getByRole('tab', { name: t.signIn })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByRole('tab', { name: t.register })).toHaveAttribute('aria-selected', 'false')
+    // Two links, not a tab widget: the route is what decides which side of the card is showing.
+    expect(modeLink(t.signIn)).toHaveAttribute('aria-current', 'page')
+    expect(modeLink(t.signIn)).toHaveAttribute('href', '#/login')
+    expect(modeLink(t.register)).not.toHaveAttribute('aria-current')
+    expect(modeLink(t.register)).toHaveAttribute('href', '#/register')
     expect(emailBox()).toBeInTheDocument()
     expect(passwordBox()).toBeInTheDocument()
     expect(screen.queryByLabelText(t.displayName)).toBeNull()
   })
 
-  it('asks the app to change route rather than switching tabs on its own', async () => {
+  it('marks the register link as the current page when that is the mode', () => {
+    setup(stubApi(), 'register')
+
+    expect(modeLink(t.register)).toHaveAttribute('aria-current', 'page')
+    expect(modeLink(t.signIn)).not.toHaveAttribute('aria-current')
+    expect(nameBox()).toBeInTheDocument()
+  })
+
+  it('asks the app to change route rather than switching sides on its own', async () => {
     const { user, onMode } = setup(stubApi())
 
-    await user.click(screen.getByRole('tab', { name: t.register }))
+    await user.click(modeLink(t.register))
     expect(onMode).toHaveBeenCalledWith('register')
-    // The tab is still sign-in: the route is the source of truth, and the app has not moved it yet.
-    expect(screen.getByRole('tab', { name: t.signIn })).toHaveAttribute('aria-selected', 'true')
+    // Still sign-in: the route is the source of truth, and the app has not moved it yet.
+    expect(modeLink(t.signIn)).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('offers the same move at the foot of the card', async () => {
+    const { user, onMode } = setup(stubApi())
+
+    await user.click(screen.getByRole('link', { name: t.toRegister }))
+    expect(onMode).toHaveBeenCalledWith('register')
   })
 
   it('shows the expiry message when the session was refused', () => {
@@ -89,8 +116,7 @@ describe('AuthScreen', () => {
     const api = stubApi()
     const { user, onSignedIn } = setup(api)
 
-    await user.type(emailBox(), 'binh@example.com')
-    await user.type(passwordBox(), PASSWORD)
+    await fill(user)
     await user.click(submit(t.submitSignIn))
 
     await waitFor(() => expect(api.login).toHaveBeenCalledWith({ email: 'binh@example.com', password: PASSWORD }))
@@ -98,6 +124,17 @@ describe('AuthScreen', () => {
     expect(localStorage.getItem(LAST_EMAIL_KEY)).toBe('binh@example.com')
     // Nothing token-shaped: the session is a cookie this code never sees.
     expect(Object.keys(localStorage)).toEqual([LAST_EMAIL_KEY])
+  })
+
+  it('lets the button go again after a success, so a caller may keep the screen mounted', async () => {
+    const api = stubApi()
+    const { user } = setup(api)
+
+    await fill(user)
+    await user.click(submit(t.submitSignIn))
+
+    await waitFor(() => expect(api.login).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(submit(t.submitSignIn)).toBeEnabled())
   })
 
   it('registers with the normalized display name', async () => {
@@ -129,76 +166,135 @@ describe('AuthScreen', () => {
     expect(await screen.findByText(hint)).toBeInTheDocument()
     expect(screen.queryByText(t.displayNameHint)).toBeNull()
   })
+})
 
-  it.each([
-    ['an empty email', '', PASSWORD, viNormal.auth.errors.INVALID_EMAIL],
-    ['a short password', 'binh@example.com', 'short', viNormal.auth.errors.INVALID_PASSWORD],
-  ])('refuses %s without calling the server', async (_label, email, password, text) => {
+/**
+ * Where a refusal lands. A message that only says *that* something was wrong leaves a screen-reader user
+ * hunting for the box to go back to, so anything that is a fault in one field is put on that field —
+ * `aria-invalid`, the message wired through `aria-describedby`, and the caret moved there. What blames no
+ * single box stays on the card as one assertive alert.
+ */
+describe('AuthScreen — where a refusal lands', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('refuses an empty email on the email box, without calling the server', async () => {
     const api = stubApi()
     const { user } = setup(api)
 
-    if (email !== '') await user.type(emailBox(), email)
-    await user.type(passwordBox(), password)
+    await user.type(passwordBox(), PASSWORD)
     await user.click(submit(t.submitSignIn))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(text)
+    expect(await screen.findByText(t.errors.INVALID_EMAIL)).toBeInTheDocument()
+    expect(emailBox()).toHaveAttribute('aria-invalid', 'true')
+    expect(emailBox()).toHaveFocus()
+    expect(passwordBox()).not.toHaveAttribute('aria-invalid')
+    expect(screen.queryByRole('alert')).toBeNull()
     expect(api.login).not.toHaveBeenCalled()
   })
 
-  it('refuses an invalid display name on register without calling the server', async () => {
+  it('refuses a short password on the password box, without calling the server', async () => {
+    const api = stubApi()
+    const { user } = setup(api)
+
+    await user.type(emailBox(), 'binh@example.com')
+    await user.type(passwordBox(), 'short')
+    await user.click(submit(t.submitSignIn))
+
+    expect(await screen.findByText(t.errors.INVALID_PASSWORD)).toBeInTheDocument()
+    expect(passwordBox()).toHaveAttribute('aria-invalid', 'true')
+    expect(passwordBox()).toHaveFocus()
+    // The message is wired to the box, not merely printed near it.
+    expect(passwordBox().getAttribute('aria-describedby')).toContain('bp-auth-password-error')
+    expect(emailBox()).not.toHaveAttribute('aria-invalid')
+    expect(api.login).not.toHaveBeenCalled()
+  })
+
+  it('refuses an invalid display name on the name box, without calling the server', async () => {
     const api = stubApi()
     const { user } = setup(api, 'register')
 
-    await user.type(emailBox(), 'binh@example.com')
-    await user.type(passwordBox(), PASSWORD)
-    await user.type(nameBox(), 'A')
+    await fill(user, { name: 'A' })
     await user.click(submit(t.submitRegister))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.auth.errors.INVALID_NAME)
+    expect(await screen.findByText(t.errors.INVALID_NAME)).toBeInTheDocument()
+    expect(nameBox()).toHaveAttribute('aria-invalid', 'true')
+    expect(nameBox()).toHaveFocus()
     expect(api.register).not.toHaveBeenCalled()
   })
 
   it.each([
-    ['BAD_CREDENTIALS', 401, viNormal.auth.errors.BAD_CREDENTIALS],
     ['INVALID_EMAIL', 400, viNormal.auth.errors.INVALID_EMAIL],
-    ['INVALID_PASSWORD', 400, viNormal.auth.errors.INVALID_PASSWORD],
-    ['FORBIDDEN', 403, viNormal.auth.errors.FORBIDDEN],
-    ['NETWORK', 0, viNormal.auth.errors.NETWORK],
-  ])('localises the sign-in refusal %s', async (code, status, text) => {
+    ['EMAIL_TAKEN', 409, viNormal.auth.errors.EMAIL_TAKEN],
+  ])('puts the server refusal %s on the email box', async (code, status, text) => {
     const api = stubApi({ login: vi.fn().mockRejectedValue(new ApiError(status, code, 'nope')) })
     const { user, onSignedIn } = setup(api)
 
-    await user.type(emailBox(), 'binh@example.com')
-    await user.type(passwordBox(), PASSWORD)
+    await fill(user)
     await user.click(submit(t.submitSignIn))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(text)
+    expect(await screen.findByText(text)).toBeInTheDocument()
+    await waitFor(() => expect(emailBox()).toHaveAttribute('aria-invalid', 'true'))
+    expect(emailBox()).toHaveFocus()
+    expect(screen.queryByRole('alert')).toBeNull()
     expect(onSignedIn).not.toHaveBeenCalled()
     expect(localStorage.getItem(LAST_EMAIL_KEY)).toBeNull()
   })
 
+  it('puts the server refusal INVALID_PASSWORD on the password box', async () => {
+    const api = stubApi({ login: vi.fn().mockRejectedValue(new ApiError(400, 'INVALID_PASSWORD', 'nope')) })
+    const { user } = setup(api)
+
+    await fill(user)
+    await user.click(submit(t.submitSignIn))
+
+    expect(await screen.findByText(t.errors.INVALID_PASSWORD)).toBeInTheDocument()
+    await waitFor(() => expect(passwordBox()).toHaveAttribute('aria-invalid', 'true'))
+    expect(passwordBox()).toHaveFocus()
+    expect(emailBox()).not.toHaveAttribute('aria-invalid')
+  })
+
   it.each([
-    ['EMAIL_TAKEN', 409, viNormal.auth.errors.EMAIL_TAKEN],
-    ['DISPLAY_NAME_TAKEN', 409, viNormal.auth.errors.DISPLAY_NAME_TAKEN],
     ['INVALID_NAME', 400, viNormal.auth.errors.INVALID_NAME],
-  ])('localises the register refusal %s', async (code, status, text) => {
+    ['DISPLAY_NAME_TAKEN', 409, viNormal.auth.errors.DISPLAY_NAME_TAKEN],
+  ])('puts the server refusal %s on the display-name box', async (code, status, text) => {
     const api = stubApi({ register: vi.fn().mockRejectedValue(new ApiError(status, code, 'nope')) })
     const { user } = setup(api, 'register')
 
-    await user.type(emailBox(), 'binh@example.com')
-    await user.type(passwordBox(), PASSWORD)
-    await user.type(nameBox(), 'Bình')
+    await fill(user, { name: 'Bình' })
     await user.click(submit(t.submitRegister))
 
+    expect(await screen.findByText(text)).toBeInTheDocument()
+    await waitFor(() => expect(nameBox()).toHaveAttribute('aria-invalid', 'true'))
+    expect(nameBox()).toHaveFocus()
+    expect(emailBox()).not.toHaveAttribute('aria-invalid')
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it.each([
+    ['BAD_CREDENTIALS', 401, viNormal.auth.errors.BAD_CREDENTIALS],
+    ['FORBIDDEN', 403, viNormal.auth.errors.FORBIDDEN],
+    ['NETWORK', 0, viNormal.auth.errors.NETWORK],
+  ])('keeps the refusal %s on the card, because it blames no single box', async (code, status, text) => {
+    const api = stubApi({ login: vi.fn().mockRejectedValue(new ApiError(status, code, 'nope')) })
+    const { user, onSignedIn } = setup(api)
+
+    await fill(user)
+    await user.click(submit(t.submitSignIn))
+
     expect(await screen.findByRole('alert')).toHaveTextContent(text)
+    // Saying which half of a credential was wrong is how an address gets enumerated.
+    expect(emailBox()).not.toHaveAttribute('aria-invalid')
+    expect(passwordBox()).not.toHaveAttribute('aria-invalid')
+    expect(onSignedIn).not.toHaveBeenCalled()
   })
 
   it('says how long to wait when the server rate-limited the attempt', async () => {
     const api = stubApi({ login: vi.fn().mockRejectedValue(new ApiError(429, 'RATE_LIMITED', 'too many', { retryAfterSec: 42 })) })
     const { user } = setup(api)
 
-    await user.type(emailBox(), 'binh@example.com')
-    await user.type(passwordBox(), PASSWORD)
+    await fill(user)
     await user.click(submit(t.submitSignIn))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('42')
@@ -208,24 +304,24 @@ describe('AuthScreen', () => {
     const api = stubApi({ login: vi.fn().mockRejectedValue(new ApiError(500, 'INTERNAL', 'boom')) })
     const { user } = setup(api)
 
-    await user.type(emailBox(), 'binh@example.com')
-    await user.type(passwordBox(), PASSWORD)
+    await fill(user)
     await user.click(submit(t.submitSignIn))
 
     // `common:errors.INTERNAL`, quoted rather than imported: the app must not reach into the kit's sources.
     expect(await screen.findByRole('alert')).toHaveTextContent('Đã xảy ra lỗi, vui lòng thử lại')
   })
 
-  it('clears a stale refusal once the player edits a field', async () => {
-    const api = stubApi({ login: vi.fn().mockRejectedValue(new ApiError(401, 'BAD_CREDENTIALS', 'nope')) })
+  it('clears a stale refusal, and its invalid mark, once the player edits a field', async () => {
+    const api = stubApi({ login: vi.fn().mockRejectedValue(new ApiError(409, 'EMAIL_TAKEN', 'taken')) })
     const { user } = setup(api)
 
-    await user.type(emailBox(), 'binh@example.com')
-    await user.type(passwordBox(), PASSWORD)
+    await fill(user)
     await user.click(submit(t.submitSignIn))
-    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    await waitFor(() => expect(emailBox()).toHaveAttribute('aria-invalid', 'true'))
 
-    await user.type(passwordBox(), 'x')
-    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    await user.type(emailBox(), 'x')
+
+    await waitFor(() => expect(emailBox()).not.toHaveAttribute('aria-invalid'))
+    expect(screen.queryByText(t.errors.EMAIL_TAKEN)).toBeNull()
   })
 })

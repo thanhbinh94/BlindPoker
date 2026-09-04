@@ -223,7 +223,9 @@
     height: var(--tap);
   }
 
-  .bar {
+  /* On `.shell`, not on `.bar`: `--bp-stage` is computed from `--bp-bar` up here, and a redeclaration on the
+     bar itself would raise the rail without the stage below it ever hearing about it. */
+  .shell {
     --bp-bar: 56px;
   }
 }
@@ -294,17 +296,22 @@
 
 .tab {
   position: relative;
+  display: inline-flex;
   flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
   min-height: var(--tap);
   padding: 0 var(--space-3);
-  border: 0;
-  background: transparent;
   font-family: var(--font-body);
   font-size: 0.9375rem;
   font-weight: 600;
+  text-decoration: none;
   color: var(--ink-muted);
-  cursor: pointer;
   transition: color var(--dur-1) var(--ease);
+}
+
+.tab:hover {
+  color: var(--ink);
 }
 
 .tab::after {
@@ -321,11 +328,11 @@
     right var(--dur-2) var(--ease);
 }
 
-.tab[aria-selected='true'] {
+.tab[aria-current='page'] {
   color: var(--ink);
 }
 
-.tab[aria-selected='true']::after {
+.tab[aria-current='page']::after {
   left: var(--space-3);
   right: var(--space-3);
 }
@@ -392,6 +399,12 @@
   color: var(--ink-muted);
 }
 
+.fieldError {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--red);
+}
+
 .secret {
   display: flex;
   align-items: stretch;
@@ -429,8 +442,6 @@
 .switcher {
   align-self: center;
   padding: var(--space-2);
-  border: 0;
-  background: transparent;
   color: var(--ink-muted);
   font-family: var(--font-body);
   font-size: 0.875rem;

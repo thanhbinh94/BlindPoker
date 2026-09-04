@@ -106,17 +106,38 @@ export function useSessionGate({ api, socketStatus, onEnded }: SessionGateOption
 
   const signedIn = state === 'signedIn'
 
-  // The reconnect probe. Keyed on the status alone, so it is armed once when the socket starts reconnecting
-  // and disarmed the moment it stops — a socket that opens and drops repeatedly never accumulates ten
-  // seconds, which is correct: something is answering the handshake, so the session is not the problem.
+  // The reconnect probe. Armed when the socket starts reconnecting, disarmed the moment it stops — and it
+  // keeps asking for as long as that lasts, because a session can die *during* an outage: the first probe
+  // may well answer 200 and the second, a network-outage later, a 401. Asking once would leave the app in a
+  // live-looking shell that can never recover.
+  //
+  // The next probe is scheduled in `.finally` rather than by an interval, so a slow answer delays the
+  // following question instead of stacking a second one behind it. The effect is keyed on the status alone,
+  // so a socket that opens and drops repeatedly never accumulates ten seconds — which is right: something is
+  // answering the handshake, so the session is not the suspect.
   useEffect(() => {
     if (!signedIn || socketStatus !== 'reconnecting') return
-    const timer = setTimeout(() => {
-      void apiRef.current.authMe().catch((cause: unknown) => {
-        if (cause instanceof ApiError && cause.unauthenticated) onUnauthenticated()
-      })
-    }, RECONNECT_PROBE_MS)
-    return () => clearTimeout(timer)
+    let stopped = false
+    let timer: ReturnType<typeof setTimeout>
+
+    const arm = (): void => {
+      timer = setTimeout(() => {
+        void apiRef.current
+          .authMe()
+          .catch((cause: unknown) => {
+            if (cause instanceof ApiError && cause.unauthenticated) onUnauthenticated()
+          })
+          .finally(() => {
+            if (!stopped) arm()
+          })
+      }, RECONNECT_PROBE_MS)
+    }
+    arm()
+
+    return () => {
+      stopped = true
+      clearTimeout(timer)
+    }
   }, [signedIn, socketStatus, onUnauthenticated])
 
   return { state, signedIn, me, expired, signIn, signOut, onUnauthenticated }

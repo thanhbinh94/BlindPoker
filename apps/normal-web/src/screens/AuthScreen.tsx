@@ -1,7 +1,7 @@
 import { validateDisplayName } from '@bp/core'
 import { Button, Field, LanguageSwitch } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ApiError, NETWORK_ERROR_CODE, type AuthMeDto, type NormalApi } from '../api.js'
 import { useLanguagePref } from '../prefs.js'
@@ -15,6 +15,7 @@ const EYE_SHUT = '◎'
 /** Fixed ids rather than `useId`: this screen renders once, and the reveal button needs a stable target. */
 const PASSWORD_ID = 'bp-auth-password'
 const PASSWORD_HINT_ID = 'bp-auth-password-hint'
+const PASSWORD_ERROR_ID = 'bp-auth-password-error'
 
 export type AuthMode = 'signIn' | 'register'
 
@@ -34,6 +35,33 @@ const KNOWN_CODES = new Set([
   'FORBIDDEN',
 ])
 
+export type AuthField = 'email' | 'password' | 'displayName'
+
+/**
+ * Which control a refusal is *about*.
+ *
+ * Everything listed here is a fault in one field, so it is shown on that field and the focus goes there —
+ * hearing "that is not valid" without being told which box to go back to is the whole problem. What is
+ * deliberately absent is as important: `BAD_CREDENTIALS` blames neither box (saying which half was wrong is
+ * how an attacker enumerates addresses), and `RATE_LIMITED`, `FORBIDDEN` and `NETWORK` are about the
+ * request rather than anything the player typed. Those stay on the card, as one assertive alert.
+ */
+export const FIELD_OF: Record<string, AuthField> = {
+  INVALID_EMAIL: 'email',
+  EMAIL_TAKEN: 'email',
+  INVALID_PASSWORD: 'password',
+  INVALID_NAME: 'displayName',
+  DISPLAY_NAME_TAKEN: 'displayName',
+}
+
+/** A refusal, kept with the code that caused it so it can be put where it belongs. */
+export interface AuthRefusal {
+  code: string
+  text: string
+  /** The control at fault, or `null` when the refusal is about the request rather than a field. */
+  field: AuthField | null
+}
+
 /**
  * A refusal in the player's language.
  *
@@ -50,10 +78,16 @@ export function refusalText(cause: unknown, t: TFunction): string {
   return t('common:errors.INTERNAL')
 }
 
+/** The same refusal, routed: `refusalText` for the words, `FIELD_OF` for where they go. */
+export function refusalOf(cause: unknown, t: TFunction): AuthRefusal {
+  const code = cause instanceof ApiError ? cause.code : 'INTERNAL'
+  return { code, text: refusalText(cause, t), field: FIELD_OF[code] ?? null }
+}
+
 export interface AuthScreenProps {
   api: NormalApi
   mode: AuthMode
-  /** Fires when the player picks the other tab; the app moves the route to `/login` or `/register`. */
+  /** Fires when the player picks the other side; the app moves the route to `/login` or `/register`. */
   onMode: (mode: AuthMode) => void
   /** Fires with the account the server just bound the cookie to; the app opens the socket. */
   onSignedIn: (me: AuthMeDto) => void
@@ -62,7 +96,11 @@ export interface AuthScreenProps {
 }
 
 /**
- * The way in. One card on the ink ground with two tabs: sign in, or register.
+ * The way in. One card on the ink ground with two ways through it: sign in, or register.
+ *
+ * The two are **links**, not a tab widget. Picking one changes the hash route and the app re-renders this
+ * screen in the other mode, so they behave exactly like the rail's nav — `href` and `aria-current="page"`,
+ * which is what they are — rather than like a `tablist` with no panel to move to and no arrow keys.
  *
  * Nothing token-shaped crosses this screen. A successful call leaves a `HttpOnly` cookie the browser will
  * send from here on, and all this component gets back is who it now is — which it hands upward and forgets.
@@ -75,8 +113,12 @@ export function AuthScreen({ api, mode, onMode, onSignedIn, message = null }: Au
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [reveal, setReveal] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [refusal, setRefusal] = useState<AuthRefusal | null>(null)
   const [busy, setBusy] = useState(false)
+
+  const emailRef = useRef<HTMLInputElement>(null)
+  const passwordRef = useRef<HTMLInputElement>(null)
+  const nameRef = useRef<HTMLInputElement>(null)
 
   const registering = mode === 'register'
 
@@ -86,11 +128,23 @@ export function AuthScreen({ api, mode, onMode, onSignedIn, message = null }: Au
   const nameVerdict = validateDisplayName(displayName)
   const nameHint = displayName === '' || nameVerdict.ok ? t('auth.displayNameHint') : t(`auth.name.${nameVerdict.reason}`)
 
-  const switchTo = (next: AuthMode): void => {
-    if (next === mode) return
-    setError(null)
-    onMode(next)
+  /** The message this control should carry, if any. */
+  const errorFor = (field: AuthField): string | undefined =>
+    refusal !== null && refusal.field === field ? refusal.text : undefined
+  const passwordError = errorFor('password')
+
+  /**
+   * Records a refusal and, when it belongs to a control, puts the caret there. The focus move is what
+   * announces it: landing on the input reads its label, its `aria-invalid` state and the message now wired
+   * to it through `aria-describedby`, which is more use than a banner the player has to go looking for.
+   */
+  const refuse = (next: AuthRefusal): void => {
+    setRefusal(next)
+    const box = next.field === 'email' ? emailRef : next.field === 'password' ? passwordRef : next.field === 'displayName' ? nameRef : null
+    box?.current?.focus()
   }
+
+  const localRefusal = (code: string): AuthRefusal => ({ code, text: t(`auth.errors.${code}`), field: FIELD_OF[code] ?? null })
 
   const submit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
@@ -100,15 +154,15 @@ export function AuthScreen({ api, mode, onMode, onSignedIn, message = null }: Au
     // registerable, whether the password matches — is the server's to say.
     const address = email.trim()
     if (address === '') {
-      setError(t('auth.errors.INVALID_EMAIL'))
+      refuse(localRefusal('INVALID_EMAIL'))
       return
     }
     if (password.length < MIN_PASSWORD_LENGTH || password.length > MAX_PASSWORD_LENGTH) {
-      setError(t('auth.errors.INVALID_PASSWORD'))
+      refuse(localRefusal('INVALID_PASSWORD'))
       return
     }
     if (registering && !nameVerdict.ok) {
-      setError(t('auth.errors.INVALID_NAME'))
+      refuse(localRefusal('INVALID_NAME'))
       return
     }
 
@@ -120,12 +174,37 @@ export function AuthScreen({ api, mode, onMode, onSignedIn, message = null }: Au
         ? await api.register({ email: address, password, displayName: nameVerdict.ok ? nameVerdict.name : displayName })
         : await api.login({ email: address, password })
       saveLastEmail(address)
+      // Cleared before the hand-off rather than after it: `onSignedIn` unmounts this screen today, but a
+      // caller that kept it mounted would otherwise be left with a button disabled for good.
+      setBusy(false)
       onSignedIn(me)
     } catch (cause) {
-      setError(refusalText(cause, t))
+      refuse(refusalOf(cause, t))
       setBusy(false)
     }
   }
+
+  const clearOn = <T,>(set: (value: T) => void) => (value: T): void => {
+    set(value)
+    setRefusal(null)
+  }
+  const onEmail = clearOn(setEmail)
+  const onPassword = clearOn(setPassword)
+  const onName = clearOn(setDisplayName)
+
+  /** One of the two ways through the card. A real link: the route is what decides which side is showing. */
+  const modeLink = (target: AuthMode, path: string, label: string) => (
+    <a
+      className={s.tab}
+      href={`#${path}`}
+      aria-current={mode === target ? 'page' : undefined}
+      // The `href` is what makes this a link the browser understands; this tells the app in the same tick
+      // rather than waiting for the `hashchange` task, exactly as `useHashRoute`'s own `navigate` does.
+      onClick={() => onMode(target)}
+    >
+      {label}
+    </a>
+  )
 
   return (
     <main className={s.authStage}>
@@ -138,41 +217,26 @@ export function AuthScreen({ api, mode, onMode, onSignedIn, message = null }: Au
           <p className={s.lead}>{t('auth.lead')}</p>
         </div>
 
-        <div className={s.tabs} role="tablist" aria-label={t('auth.title')}>
-          <button
-            type="button"
-            role="tab"
-            className={s.tab}
-            aria-selected={!registering}
-            onClick={() => switchTo('signIn')}
-          >
-            {t('auth.signIn')}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            className={s.tab}
-            aria-selected={registering}
-            onClick={() => switchTo('register')}
-          >
-            {t('auth.register')}
-          </button>
-        </div>
+        <nav className={s.tabs} aria-label={t('auth.title')}>
+          {modeLink('signIn', '/login', t('auth.signIn'))}
+          {modeLink('register', '/register', t('auth.register'))}
+        </nav>
 
         {message === null ? null : (
           <p className={s.notice} role="status">
             {message}
           </p>
         )}
-        {error === null ? null : (
+        {refusal === null || refusal.field !== null ? null : (
           <p className={s.alert} role="alert">
-            {error}
+            {refusal.text}
           </p>
         )}
 
         <form className={s.form} onSubmit={submit} noValidate>
-          <Field label={t('auth.email')}>
+          <Field label={t('auth.email')} error={errorFor('email')}>
             <input
+              ref={emailRef}
               className={s.input}
               type="email"
               value={email}
@@ -180,10 +244,7 @@ export function AuthScreen({ api, mode, onMode, onSignedIn, message = null }: Au
               autoCapitalize="none"
               spellCheck={false}
               placeholder={t('auth.emailPlaceholder')}
-              onChange={(event) => {
-                setEmail(event.target.value)
-                setError(null)
-              }}
+              onChange={(event) => onEmail(event.target.value)}
             />
           </Field>
 
@@ -193,17 +254,21 @@ export function AuthScreen({ api, mode, onMode, onSignedIn, message = null }: Au
             </label>
             <div className={s.secret}>
               <input
+                ref={passwordRef}
                 id={PASSWORD_ID}
                 className={s.input}
                 type={reveal ? 'text' : 'password'}
                 value={password}
                 minLength={MIN_PASSWORD_LENGTH}
-                aria-describedby={registering ? PASSWORD_HINT_ID : undefined}
+                aria-invalid={passwordError === undefined ? undefined : true}
+                aria-describedby={
+                  // The hint and the error both describe this box; both ids go on, in reading order.
+                  [registering ? PASSWORD_HINT_ID : '', passwordError === undefined ? '' : PASSWORD_ERROR_ID]
+                    .filter((id) => id !== '')
+                    .join(' ') || undefined
+                }
                 autoComplete={registering ? 'new-password' : 'current-password'}
-                onChange={(event) => {
-                  setPassword(event.target.value)
-                  setError(null)
-                }}
+                onChange={(event) => onPassword(event.target.value)}
               />
               <button
                 type="button"
@@ -220,11 +285,17 @@ export function AuthScreen({ api, mode, onMode, onSignedIn, message = null }: Au
                 {t('auth.passwordHint')}
               </span>
             ) : null}
+            {passwordError === undefined ? null : (
+              <span className={s.fieldError} id={PASSWORD_ERROR_ID}>
+                {passwordError}
+              </span>
+            )}
           </div>
 
           {registering ? (
-            <Field label={t('auth.displayName')} hint={nameHint}>
+            <Field label={t('auth.displayName')} hint={nameHint} error={errorFor('displayName')}>
               <input
+                ref={nameRef}
                 className={s.input}
                 type="text"
                 value={displayName}
@@ -232,10 +303,7 @@ export function AuthScreen({ api, mode, onMode, onSignedIn, message = null }: Au
                 autoCapitalize="words"
                 spellCheck={false}
                 placeholder={t('auth.displayNamePlaceholder')}
-                onChange={(event) => {
-                  setDisplayName(event.target.value)
-                  setError(null)
-                }}
+                onChange={(event) => onName(event.target.value)}
               />
             </Field>
           ) : null}
@@ -245,9 +313,9 @@ export function AuthScreen({ api, mode, onMode, onSignedIn, message = null }: Au
           </Button>
         </form>
 
-        <button type="button" className={s.switcher} onClick={() => switchTo(registering ? 'signIn' : 'register')}>
+        <a className={s.switcher} href={registering ? '#/login' : '#/register'} onClick={() => onMode(registering ? 'signIn' : 'register')}>
           {t(registering ? 'auth.toSignIn' : 'auth.toRegister')}
-        </button>
+        </a>
       </div>
 
       <div className={s.authLang}>
