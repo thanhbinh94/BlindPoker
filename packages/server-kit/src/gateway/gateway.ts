@@ -20,6 +20,8 @@ export interface GatewayOptions {
   helloTimeoutMs: number
   allowedOrigins: string[] | null
   maxInvalidMessages: number
+  /** Room-list changes inside this window collapse into a single ROOM_LIST broadcast. */
+  lobbyCoalesceMs: number
 }
 
 export const DEFAULT_GATEWAY_OPTIONS: GatewayOptions = {
@@ -31,6 +33,7 @@ export const DEFAULT_GATEWAY_OPTIONS: GatewayOptions = {
   helloTimeoutMs: 5_000,
   allowedOrigins: null,
   maxInvalidMessages: 3,
+  lobbyCoalesceMs: 50,
 }
 
 /** Consecutive rate-limited messages that add up to one strike toward `maxInvalidMessages`. */
@@ -50,6 +53,8 @@ export class Gateway {
   private readonly bound = new Map<string, ClientConnection>()
   private readonly all = new Set<ClientConnection>()
   private heartbeat: TimerHandle | null = null
+  private lobbyTimer: TimerHandle | null = null
+  private lobbyDirty = false
   private accepting = true
   private readonly unsubscribeList: () => void
   readonly outbox: Outbox
@@ -57,7 +62,7 @@ export class Gateway {
   constructor(private readonly deps: GatewayDeps) {
     this.wss = new WebSocketServer({ noServer: true, maxPayload: deps.options.maxPayloadBytes })
     this.outbox = { send: (playerId, msg) => this.bound.get(playerId)?.send(msg) }
-    this.unsubscribeList = deps.rooms.onListChanged(() => this.broadcastRoomList())
+    this.unsubscribeList = deps.rooms.onListChanged(() => this.scheduleRoomListBroadcast())
     this.scheduleHeartbeat()
   }
 
@@ -127,6 +132,8 @@ export class Gateway {
     this.heartbeat?.cancel()
     this.heartbeat = null
     this.unsubscribeList()
+    this.lobbyTimer?.cancel()
+    this.lobbyTimer = null
     this.all.clear()
     this.bound.clear()
   }
@@ -362,9 +369,27 @@ export class Gateway {
 
   // ---------- lobby / heartbeat / origin ----------
 
+  /**
+   * A single seat change notifies the list twice (once for the room, once for the manager) and a
+   * busy server changes rooms constantly, so broadcasts are coalesced into one frame per window and
+   * the payload is serialized once for every lobby client instead of once per client.
+   */
+  private scheduleRoomListBroadcast(): void {
+    this.lobbyDirty = true
+    if (this.lobbyTimer) return
+    this.lobbyTimer = this.deps.clock.setTimeout(() => {
+      this.lobbyTimer = null
+      if (!this.lobbyDirty) return
+      this.lobbyDirty = false
+      this.broadcastRoomList()
+    }, this.deps.options.lobbyCoalesceMs)
+  }
+
   private broadcastRoomList(): void {
-    const rooms = this.deps.rooms.listPublic()
-    for (const conn of this.all) if (conn.inLobby && conn.identity) conn.send({ t: 'ROOM_LIST', rooms })
+    const lobby = [...this.all].filter((conn) => conn.inLobby && conn.identity !== null)
+    if (lobby.length === 0) return
+    const frame = JSON.stringify({ t: 'ROOM_LIST', rooms: this.deps.rooms.listPublic() } satisfies ServerMessage)
+    for (const conn of lobby) conn.sendRaw(frame)
   }
 
   private scheduleHeartbeat(): void {

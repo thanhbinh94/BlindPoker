@@ -37,6 +37,11 @@ export class ClientConnection {
     if (this.isOpen) this.socket.send(JSON.stringify(msg))
   }
 
+  /** Sends an already-serialized frame — lets one payload be shared by every lobby client. */
+  sendRaw(frame: string): void {
+    if (this.isOpen) this.socket.send(frame)
+  }
+
   tryTake(): boolean {
     return this.bucket.tryTake()
   }

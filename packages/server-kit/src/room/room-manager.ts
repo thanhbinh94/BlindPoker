@@ -6,6 +6,8 @@ import { RoomError, type RoomDeps } from './types.js'
 export class RoomManager {
   private readonly rooms = new Map<string, Room>()
   private readonly byCode = new Map<string, Room>()
+  /** playerId → the room they are in. Kept current by Room.onMembership; swept when a room closes. */
+  private readonly playerRooms = new Map<string, Room>()
   private readonly listeners = new Set<() => void>()
   private accepting = true
 
@@ -21,9 +23,17 @@ export class RoomManager {
     const roomId = newId()
     const code = newRoomCode((c) => this.byCode.has(c))
     const room = new Room({ roomId, code, config, host, deps: this.deps })
+    room.onMembership = (playerId, joined) => {
+      if (joined) this.playerRooms.set(playerId, room)
+      else if (this.playerRooms.get(playerId) === room) this.playerRooms.delete(playerId)
+    }
+    // The constructor seated the host and any bots before the hook existed: seed them now.
+    for (const playerId of room.players.keys()) this.playerRooms.set(playerId, room)
     room.onClosed = (r, reason) => {
       this.rooms.delete(r.roomId)
       this.byCode.delete(r.code)
+      // A closed room keeps its player map, so drop its index entries here rather than on removal.
+      for (const [playerId, inRoom] of this.playerRooms) if (inRoom === r) this.playerRooms.delete(playerId)
       this.deps.log.info('room closed', { roomId: r.roomId, reason })
       this.notify()
     }
@@ -45,8 +55,7 @@ export class RoomManager {
   }
 
   roomOf(playerId: string): Room | undefined {
-    for (const room of this.rooms.values()) if (room.hasPlayer(playerId)) return room
-    return undefined
+    return this.playerRooms.get(playerId)
   }
 
   listPublic(): RoomSummary[] {

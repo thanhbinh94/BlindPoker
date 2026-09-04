@@ -34,6 +34,12 @@ export class Room {
   deadlineAt: number | null = null
   onClosed: ((room: Room, reason: string) => void) | null = null
   onChanged: ((room: Room) => void) | null = null
+  /**
+   * Fires whenever the room's membership changes (host and bots included), so a `RoomManager` can
+   * keep an O(1) player → room index instead of scanning every room on every lookup. Assigned after
+   * construction, so the players seated by the constructor are seeded by the manager itself.
+   */
+  onMembership: ((playerId: string, joined: boolean) => void) | null = null
 
   private readonly deps: RoomDeps
   private runner: HandRunner | null = null
@@ -530,6 +536,7 @@ export class Room {
       consecutiveTimeouts: 0, disconnectDeadline: null, standAfterHand: false, leaveAfterHand: false,
     }
     this.players.set(identity.playerId, p)
+    this.onMembership?.(identity.playerId, true)
     return p
   }
 
@@ -612,6 +619,7 @@ export class Room {
   private async removePlayer(p: RoomPlayer, reason: string): Promise<void> {
     await this.standUpNow(p)
     this.players.delete(p.identity.playerId)
+    this.onMembership?.(p.identity.playerId, false)
     this.clearPlayerTimer(p.identity.playerId)
     this.broadcastRoomEvent({ type: 'PLAYER_LEFT', playerId: p.identity.playerId })
     if (p.identity.playerId === this.hostPlayerId) this.transferHost()
