@@ -8,7 +8,7 @@ export default defineConfig({
     name: 'lite',
     include: ['server/src/**/*.test.ts', 'test/**/*.test.ts', 'web/src/**/*.test.{ts,tsx}'],
     environmentMatchGlobs: [['web/src/**', 'jsdom']],
-    setupFiles: ['web/src/test-setup.ts'],
+    setupFiles: ['server/src/test-setup.ts', 'web/src/test-setup.ts'],
     globals: true,
     testTimeout: 20000,
     hookTimeout: 20000,
