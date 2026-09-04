@@ -5,10 +5,14 @@ packages/ui-kit/playground/dist
 .claude/launch.json
 release/
 coverage/
-*.sqlite
-*.sqlite-journal
+*.sqlite*
 .env
 .env.*
 !.env.example
 .DS_Store
 Thumbs.db
+apps/lite/dist/
+apps/lite/release/
+playwright-report/
+test-results/
+*.tsbuildinfo

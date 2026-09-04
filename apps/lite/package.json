@@ -1,0 +1,40 @@
+{
+  "name": "@bp/lite",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p server/tsconfig.json && tsc --noEmit -p web/tsconfig.json",
+    "dev:web": "vite --config web/vite.config.ts",
+    "dev:server": "node --experimental-strip-types server/src/main.ts",
+    "build:web": "vite build --config web/vite.config.ts",
+    "build:server": "node scripts/build.mjs server",
+    "build:exe": "node scripts/build.mjs exe",
+    "build": "node scripts/build.mjs all",
+    "start": "node dist/server.cjs",
+    "e2e": "playwright test -c e2e/playwright.config.ts"
+  },
+  "dependencies": {
+    "@bp/core": "workspace:*",
+    "@bp/server-kit": "workspace:*",
+    "@bp/ui-kit": "workspace:*",
+    "fastify": "^5.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "esbuild": "^0.24.0",
+    "jsdom": "^25.0.1",
+    "postject": "1.0.0-alpha.6",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  }
+}
