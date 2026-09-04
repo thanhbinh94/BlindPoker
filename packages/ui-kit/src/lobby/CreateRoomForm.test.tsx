@@ -39,11 +39,28 @@ describe('CreateRoomForm', () => {
       blind: { holeCards: 2, decisionMode: 'playOrFold', fixedWager: 1000, botCount: 2 },
     })
   })
-  it('shows a validation error instead of submitting when the name is empty', async () => {
+  it('shows a localized validation error instead of submitting when the name is empty', async () => {
     const onSubmit = vi.fn()
     wrap(<CreateRoomForm onSubmit={onSubmit} lang="en" />)
     await userEvent.click(screen.getByRole('button', { name: /^create/i }))
     expect(onSubmit).not.toHaveBeenCalled()
-    expect(screen.getByRole('alert')).toBeInTheDocument()
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent('Invalid room settings')
+    expect(alert).toHaveTextContent('The room name must be 1–30 characters.')
+  })
+
+  it('never puts the validator’s own English sentence on the page', async () => {
+    const onSubmit = vi.fn()
+    const { container } = render(
+      <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+        <CreateRoomForm onSubmit={onSubmit} lang="vi" />
+      </I18nextProvider>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: /tạo phòng/i }))
+    const raw = validateRoomConfig({ name: '', mode: 'holdem' })
+    expect(raw.ok).toBe(false)
+    if (!raw.ok) expect(container.textContent).not.toContain(raw.message)
+    expect(screen.getByRole('alert')).toHaveTextContent('Cấu hình phòng không hợp lệ')
+    expect(screen.getByRole('alert')).toHaveTextContent('Tên phòng cần 1–30 ký tự.')
   })
 })

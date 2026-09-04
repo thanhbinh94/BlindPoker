@@ -13,8 +13,13 @@ export interface ToastsProps {
   lang: Language
 }
 
-/** Errors clear themselves; notifications wait to be read. */
+/**
+ * Every slip clears itself. An error is a refusal the player just caused, so it goes sooner; a notification is news
+ * they may not have been looking at, so it stays longer. Neither waits forever: a stack of unread slips over the
+ * felt is a stack of buttons the player cannot reach.
+ */
 const ERROR_TTL_MS = 6000
+const NOTE_TTL_MS = 8000
 
 /** Redundant with the colour, on purpose: hue is never the only signal. */
 const GLYPH = { error: '!', note: '♠' }
@@ -69,16 +74,35 @@ export function Toasts({ error, notifications, onClearError, onDismiss, lang }: 
         </div>
       )}
       {notifications.map((n) => (
-        <div key={n.id} className={s.toast} role="status">
-          <span className={s.toastGlyph} aria-hidden="true">
-            {GLYPH.note}
-          </span>
-          <span className={s.toastText}>{describe(n)}</span>
-          <button type="button" className={s.toastClose} aria-label={t('actions.close')} onClick={() => onDismiss(n.id)}>
-            {'×'}
-          </button>
-        </div>
+        <NoteSlip key={n.id} id={n.id} text={describe(n)} closeLabel={t('actions.close')} onDismiss={onDismiss} />
       ))}
+    </div>
+  )
+}
+
+/**
+ * One notification slip, owning its own dismissal timer. Each slip is its own component so the schedule can be keyed
+ * on that slip's id — the same reason the error's timer is keyed on the error object, and the same ref trick for the
+ * callback, which the room re-creates on every tick of its countdown.
+ */
+function NoteSlip({ id, text, closeLabel, onDismiss }: { id: number; text: string; closeLabel: string; onDismiss: (id: number) => void }) {
+  const dismissRef = useRef(onDismiss)
+  dismissRef.current = onDismiss
+
+  useEffect(() => {
+    const timer = setTimeout(() => dismissRef.current(id), NOTE_TTL_MS)
+    return () => clearTimeout(timer)
+  }, [id])
+
+  return (
+    <div className={s.toast} role="status">
+      <span className={s.toastGlyph} aria-hidden="true">
+        {GLYPH.note}
+      </span>
+      <span className={s.toastText}>{text}</span>
+      <button type="button" className={s.toastClose} aria-label={closeLabel} onClick={() => onDismiss(id)}>
+        {'×'}
+      </button>
     </div>
   )
 }

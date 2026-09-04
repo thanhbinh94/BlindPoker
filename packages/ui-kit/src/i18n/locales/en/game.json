@@ -51,6 +51,7 @@
     "dealer": "Dealer",
     "decided": "Decided",
     "disconnected": "Disconnected",
+    "eligible": "Eligible",
     "emptySeat": "Empty seat",
     "faceDown": "Face-down card",
     "fee": "Table fee",
@@ -60,6 +61,7 @@
     "holeCards": "Hole cards",
     "host": "Host",
     "inHand": "In hand",
+    "mainPot": "Main pot",
     "mode": "Mode",
     "name": "Name",
     "notifications": "Notifications",
@@ -73,6 +75,7 @@
     "ready": "Ready",
     "seat": "Seat",
     "seatNumber": "Seat {{seat}}",
+    "sidePot": "Side pot {{n}}",
     "sittingOut": "Sitting out",
     "split": "Split",
     "stack": "Stack",
@@ -192,7 +195,12 @@
     "wager": "Fixed wager",
     "botCount": "Bots",
     "submit": "Create room",
-    "invalid": "Room settings are invalid"
+    "hint": {
+      "name": "The room name must be 1–30 characters.",
+      "password": "The password must be 4–20 characters.",
+      "buyIn": "The minimum buy-in must be at most the maximum.",
+      "botCount": "There must be fewer bots than seats."
+    }
   },
   "room": {
     "title": "Room",
@@ -206,6 +214,13 @@
     "reconnecting": "Connection lost — reconnecting…",
     "buyInTitle": "Choose your buy-in",
     "controls": "Table controls"
+  },
+  "cancel": {
+    "shutdown": "The server is shutting down",
+    "serverRestart": "The server restarted",
+    "roomClosed": "The room was closed",
+    "maintenance": "The server is under maintenance",
+    "other": "Reason not given"
   },
   "notify": {
     "KICKED": "You were removed from the room",

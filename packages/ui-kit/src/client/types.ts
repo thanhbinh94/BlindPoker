@@ -27,6 +27,12 @@ export interface ClientSeat {
 
 export interface ClientHandResult {
   payouts: { seat: number; amount: number }[]
+  /**
+   * The layered pots the engine settled, main pot first, straight from `SETTLEMENT.pots`. `payouts` is the same
+   * money summed per seat, which is all a single-pot hand needs; this is what lets a hand with a short all-in show
+   * who was eligible for what. Empty for a cancelled hand — nothing was settled.
+   */
+  pots: { amount: number; eligibleSeats: number[]; winners: { seat: number; amount: number }[] }[]
   fee: number
   showdown: ShowdownHand[] | null
   carryOverOut: number

@@ -57,6 +57,7 @@ function expectMirror(client: ClientState, engine: HandState, me: number) {
     if (view.phase !== 'COMPLETE') expect(cs.betThisStreet).toBe(sv.betThisStreet)
   }
   if (view.phase === 'COMPLETE') expect(hand.result?.payouts).toEqual(view.result?.payouts)
+  if (view.phase === 'COMPLETE') expect(hand.result?.pots).toEqual(view.result?.pots)
   if (view.phase === 'BETTING' && view.actingSeat === me) expect(hand.legal).toEqual(view.legal)
   if (view.phase === 'DECISION' && !view.seats.find((s) => s.seat === me)?.hasDecided) expect(hand.legal?.kinds).toEqual(['play', 'fold'])
 }
@@ -143,7 +144,7 @@ describe('HAND_CANCELLED', () => {
 
     const hand = client.hand!
     expect(hand.phase).toBe('COMPLETE')
-    expect(hand.result).toEqual({ cancelled: true, reason: 'shutdown', payouts: [], fee: 0, showdown: null, carryOverOut: 0, uncalledReturned: null })
+    expect(hand.result).toEqual({ cancelled: true, reason: 'shutdown', payouts: [], pots: [], fee: 0, showdown: null, carryOverOut: 0, uncalledReturned: null })
     expect(hand.pot).toBe(0)
     expect(state.pot).toBe(0)
     for (const p of state.players) {
@@ -296,6 +297,18 @@ describe('session handshake', () => {
     expect(s.deadlineAt).toBeNull()
     expect(s.roomStale).toBe(false)
     expect(s.lastError).toBeNull() // an expected probe answer, not a refusal to show the player
+  })
+})
+
+describe('notifications', () => {
+  it('keeps at most five, dropping the oldest', () => {
+    let s = initialClientState
+    for (let i = 1; i <= 8; i++) {
+      s = reduceClient(s, { type: 'server', msg: { t: 'NOTIFICATION', kind: `K${i}`, payload: null }, now: i })
+    }
+    expect(s.notifications).toHaveLength(5)
+    expect(s.notifications.map((n) => n.kind)).toEqual(['K4', 'K5', 'K6', 'K7', 'K8'])
+    expect(new Set(s.notifications.map((n) => n.id)).size).toBe(5)
   })
 })
 

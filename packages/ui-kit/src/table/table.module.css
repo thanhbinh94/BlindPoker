@@ -976,6 +976,62 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The side-pot ledger: a hairline-ruled list under the winners' rows, read as a receipt rather than a table.
+   Name and amount hold the top line; who was eligible and who was paid sit under it in the quiet ink. */
+.pots {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) 0 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+
+.potRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px var(--space-3);
+  align-items: baseline;
+}
+
+.potName {
+  font-family: var(--font-display);
+  font-size: 0.9375rem;
+  font-style: italic;
+  color: var(--ink);
+}
+
+.potAmount {
+  font-family: var(--font-display);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.potEligible {
+  grid-column: 1;
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+}
+
+.potWinners {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  grid-column: 2;
+}
+
+.potWinner {
+  font-size: 0.75rem;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .resultFoot {
   display: flex;
   flex-wrap: wrap;

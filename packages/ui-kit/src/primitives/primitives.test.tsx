@@ -137,6 +137,50 @@ describe('Modal', () => {
     expect(close).toBeInTheDocument()
     expect(screen.getByRole('dialog')).toContainElement(document.activeElement as HTMLElement)
   })
+  it('keeps Tab and Shift+Tab inside the dialog', async () => {
+    render(
+      <Modal open title="Buy-in" onClose={vi.fn()} closeLabel="Close">
+        <input aria-label="Amount" />
+        <button type="button">{GO}</button>
+      </Modal>,
+    )
+    const close = screen.getByRole('button', { name: 'Close' })
+    const amount = screen.getByLabelText('Amount')
+    const go = screen.getByRole('button', { name: 'Go' })
+    expect(close).toHaveFocus()
+
+    await userEvent.tab()
+    expect(amount).toHaveFocus()
+    await userEvent.tab()
+    expect(go).toHaveFocus()
+    // Past the last control the focus wraps to the first, instead of stepping onto the page behind.
+    await userEvent.tab()
+    expect(close).toHaveFocus()
+    await userEvent.tab({ shift: true })
+    expect(go).toHaveFocus()
+  })
+  it('hands focus back to whatever opened it', async () => {
+    const opener = document.createElement('button')
+    opener.textContent = 'Open'
+    document.body.appendChild(opener)
+    opener.focus()
+    expect(opener).toHaveFocus()
+
+    const { rerender } = render(
+      <Modal open title="Buy-in" onClose={vi.fn()} closeLabel="Close">
+        {BODY}
+      </Modal>,
+    )
+    expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus()
+
+    rerender(
+      <Modal open={false} title="Buy-in" onClose={vi.fn()} closeLabel="Close">
+        {BODY}
+      </Modal>,
+    )
+    expect(opener).toHaveFocus()
+    opener.remove()
+  })
   it('does not close when the dialog surface itself is clicked', async () => {
     const onClose = vi.fn()
     render(

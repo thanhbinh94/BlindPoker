@@ -15,6 +15,17 @@ export interface HandResultProps {
   onDismiss?: () => void
 }
 
+/**
+ * `HAND_CANCELLED.reason` is an operator-facing token the server picks ("shutdown", "server restart", …). It is not
+ * a sentence, and it is certainly not Vietnamese, so it is normalised to a key and looked up — anything the kit
+ * does not have wording for falls back to a plain "the hand was cancelled" rather than leaking the raw token.
+ */
+const reasonKey = (reason: string): string => {
+  const words = reason.trim().toLowerCase().split(/[\s_-]+/).filter((w) => w !== '')
+  if (words.length === 0) return 'other'
+  return words.map((w, i) => (i === 0 ? w : w[0]!.toUpperCase() + w.slice(1))).join('')
+}
+
 /** Showdown card: who won, with what, and for how much. Renders only for a completed hand that carries a result. */
 export function HandResult({ hand, room, myPlayerId, lang, onDismiss }: HandResultProps) {
   const { t } = useTranslation()
@@ -52,7 +63,36 @@ export function HandResult({ hand, room, myPlayerId, lang, onDismiss }: HandResu
         )}
       </div>
 
-      {result.cancelled && result.reason !== null ? <p className={s.resultNote}>{result.reason}</p> : null}
+      {result.cancelled && result.reason !== null ? (
+        <p className={s.resultNote}>{t(`cancel.${reasonKey(result.reason)}`, { defaultValue: t('cancel.other') })}</p>
+      ) : null}
+
+      {/* One pot needs no breakdown — `payouts` already says who took it. Two or more means somebody was all-in
+          for less than the rest, and "who was eligible for which pot" is the only way that reads as fair. */}
+      {result.pots.length > 1 ? (
+        <ul className={s.pots}>
+          {result.pots.map((pot, i) => {
+            const label = i === 0 ? t('labels.mainPot') : t('labels.sidePot', { n: i })
+            const eligibleText = `${t('labels.eligible')}: ${pot.eligibleSeats.map(nameOf).join(', ')}`
+            return (
+              <li key={`${label}${pot.amount}`} className={s.potRow}>
+                <span className={s.potName}>{label}</span>
+                <span className={s.potAmount}>{formatPoints(pot.amount, lang)}</span>
+                <span className={s.potEligible}>{eligibleText}</span>
+                <span className={s.potWinners}>
+                  {pot.winners
+                    .map((w) => ({ seat: w.seat, text: `${nameOf(w.seat)} +${formatPoints(w.amount, lang)}` }))
+                    .map((w) => (
+                      <span key={w.seat} className={s.potWinner}>
+                        {w.text}
+                      </span>
+                    ))}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      ) : null}
 
       <ul className={s.resultRows}>
         {rows.map(({ seat, amount }) => {

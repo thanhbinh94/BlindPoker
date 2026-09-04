@@ -23,15 +23,46 @@ export function Modal({ open, title, onClose, children, closeLabel }: ModalProps
   // the effect runs once per opening.
   const closeRef = useRef(onClose)
   closeRef.current = onClose
+  /** Whatever had focus when the dialog opened — the button that opened it, in every real case. */
+  const returnToRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     if (!open) return
+    const active = document.activeElement
+    returnToRef.current = active instanceof HTMLElement && active !== document.body ? active : null
     dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus()
+
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') closeRef.current()
+      if (event.key === 'Escape') {
+        closeRef.current()
+        return
+      }
+      // `aria-modal` tells a screen reader the rest of the page is inert; nothing tells the Tab key, so the dialog
+      // has to say it itself, or the next Tab lands on the page behind and the player never finds their way back.
+      if (event.key !== 'Tab') return
+      const dialog = dialogRef.current
+      if (dialog === null) return
+      const items = [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+        (el) => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true',
+      )
+      const first = items[0]
+      const last = items[items.length - 1]
+      if (first === undefined || last === undefined) return
+      const here = document.activeElement
+      const wrapping = event.shiftKey ? here === first || !dialog.contains(here) : here === last
+      if (!wrapping) return
+      event.preventDefault()
+      ;(event.shiftKey ? last : first).focus()
     }
+
     document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      // Closing hands focus back where it came from: a dialog that leaves focus on `<body>` drops a keyboard user
+      // at the top of the page, with no memory of the button they pressed.
+      returnToRef.current?.focus()
+      returnToRef.current = null
+    }
   }, [open])
 
   if (!open) return null

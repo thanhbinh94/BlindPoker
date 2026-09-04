@@ -3,7 +3,7 @@ import type { ClientAction, ClientHand, ClientHandResult, ClientSeat, ClientStat
 
 export { initialClientState } from './types.js'
 
-const NO_RESULT: ClientHandResult = { payouts: [], fee: 0, showdown: null, carryOverOut: 0, uncalledReturned: null, cancelled: false, reason: null }
+const NO_RESULT: ClientHandResult = { payouts: [], pots: [], fee: 0, showdown: null, carryOverOut: 0, uncalledReturned: null, cancelled: false, reason: null }
 
 const withHand = (state: ClientState, hand: ClientHand, patch: Partial<ClientHand>): ClientState => ({ ...state, hand: { ...hand, ...patch } })
 
@@ -45,7 +45,7 @@ export function handFromView(view: HandView, room: RoomView): ClientHand {
       lastAction: null,
       timedOut: false,
     })),
-    result: view.result ? { ...NO_RESULT, payouts: view.result.payouts, fee: view.result.fee, showdown: view.result.showdown, carryOverOut: view.result.carryOverOut, uncalledReturned: view.result.uncalledReturned } : null,
+    result: view.result ? { ...NO_RESULT, payouts: view.result.payouts, pots: view.result.pots, fee: view.result.fee, showdown: view.result.showdown, carryOverOut: view.result.carryOverOut, uncalledReturned: view.result.uncalledReturned } : null,
   }
 }
 
@@ -99,7 +99,7 @@ function settle(state: ClientState, hand: ClientHand, event: Extract<GameEvent, 
       ...hand, seats, phase: 'COMPLETE', legal: null, actingSeat: null,
       // The engine subtracts the returned bet from the pot without a further `POT_UPDATED`.
       pot: hand.pot - (uncalled?.amount ?? 0),
-      result: { payouts: event.payouts, fee: event.fee, showdown: hand.result?.showdown ?? null, carryOverOut: event.carryOverOut, uncalledReturned: uncalled, cancelled: false, reason: null },
+      result: { payouts: event.payouts, pots: event.pots, fee: event.fee, showdown: hand.result?.showdown ?? null, carryOverOut: event.carryOverOut, uncalledReturned: uncalled, cancelled: false, reason: null },
     },
   }
 }
@@ -232,11 +232,17 @@ function applyRoomEvent(room: RoomView, event: RoomEvent): RoomView {
   }
 }
 
+/**
+ * A slip nobody dismissed must not pile up forever: a long session, or a server that gets chatty, would otherwise
+ * grow the list without bound and stack toasts off the top of the screen. Five is what fits.
+ */
+const MAX_NOTIFICATIONS = 5
+
 /** Ids are derived from the live list, so they are unique among *undismissed* notifications — enough to key a toast. */
-const notify = (state: ClientState, kind: string, payload: unknown, at: number): ClientState => ({
-  ...state,
-  notifications: [...state.notifications, { id: state.notifications.reduce((m, n) => Math.max(m, n.id), 0) + 1, kind, payload, at }],
-})
+const notify = (state: ClientState, kind: string, payload: unknown, at: number): ClientState => {
+  const next = [...state.notifications, { id: state.notifications.reduce((m, n) => Math.max(m, n.id), 0) + 1, kind, payload, at }]
+  return { ...state, notifications: next.length > MAX_NOTIFICATIONS ? next.slice(next.length - MAX_NOTIFICATIONS) : next }
+}
 
 /** A backwards `seq` inside a room means we lost or reordered frames: apply anyway, but ask for a fresh snapshot. */
 const gap = (state: ClientState, seq: number): boolean => state.room !== null && seq <= state.seq

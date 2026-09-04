@@ -1,8 +1,8 @@
-import { ECONOMY, validateRoomConfig, type RoomConfig } from '@bp/core'
+import { ECONOMY, validateRoomConfig, type ErrorCode, type RoomConfig } from '@bp/core'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Language } from '../i18n/index.js'
+import { errorLabel, type Language } from '../i18n/index.js'
 import { Button } from '../primitives/Button.js'
 import { Field } from '../primitives/Field.js'
 import { Select } from '../primitives/Select.js'
@@ -22,6 +22,36 @@ export interface CreateRoomFormProps {
 const MODES: RoomMode[] = ['holdem', 'blind']
 const DEFAULT_TIMER: Record<RoomMode, number> = { holdem: 30, blind: 15 }
 const range = (from: number, to: number): number[] => Array.from({ length: to - from + 1 }, (_, i) => from + i)
+
+interface ConfigDraft {
+  name: string
+  isPrivate: boolean
+  password: string
+  mode: RoomMode
+  minBuyInBB: number
+  maxBuyInBB: number
+  botCount: number
+  maxPlayers: number
+}
+
+/**
+ * `validateRoomConfig` answers with an `ErrorCode` and a developer-facing English sentence. The code is
+ * translatable and the sentence is not, so the sentence never reaches the page: the failing field is re-derived
+ * here — from this form's own state, in the same order core checks it — and named in the player's language. Every
+ * refusal a *user* can produce through these controls is covered; anything else shows the code's wording alone.
+ */
+function hintKeyFor(draft: ConfigDraft): string | null {
+  const name = draft.name.trim()
+  if (name.length < 1 || name.length > 30) return 'create.hint.name'
+  if (draft.isPrivate && draft.password !== '' && (draft.password.length < 4 || draft.password.length > 20)) return 'create.hint.password'
+  if (draft.mode === 'holdem') {
+    const { min, max } = ECONOMY.buyInBBRange
+    if (draft.minBuyInBB > draft.maxBuyInBB || draft.minBuyInBB < min || draft.maxBuyInBB > max) return 'create.hint.buyIn'
+    return null
+  }
+  if (draft.botCount > draft.maxPlayers - 1) return 'create.hint.botCount'
+  return null
+}
 
 /**
  * Room settings per spec §11.2. Every option comes from `ECONOMY`, so the form can only offer values the
@@ -44,7 +74,7 @@ export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem',
   const [decisionMode, setDecisionMode] = useState<'none' | 'playOrFold'>('playOrFold')
   const [fixedWager, setFixedWager] = useState<number>(ECONOMY.blindWagerTiers[0])
   const [botCount, setBotCount] = useState(0)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<{ code: ErrorCode; hintKey: string | null } | null>(null)
 
   // Switching mode narrows the seat cap, the timer set and the bot ceiling: derive rather than reset,
   // so a mode round-trip never loses what the host already picked.
@@ -70,7 +100,7 @@ export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem',
       blind: mode === 'blind' ? { holeCards, decisionMode, fixedWager, botCount: bots } : undefined,
     })
     if (!parsed.ok) {
-      setError(parsed.message)
+      setError({ code: parsed.code, hintKey: hintKeyFor({ name, isPrivate, password, mode, minBuyInBB, maxBuyInBB, botCount: bots, maxPlayers }) })
       return
     }
     setError(null)
@@ -198,8 +228,8 @@ export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem',
 
       {error === null ? null : (
         <p className={s.alert} role="alert">
-          <strong>{t('create.invalid')}</strong>
-          {error}
+          <strong>{errorLabel(error.code, t)}</strong>
+          {error.hintKey === null ? null : <span>{t(error.hintKey)}</span>}
         </p>
       )}
 

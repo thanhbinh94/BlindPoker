@@ -76,6 +76,45 @@ describe('Toasts', () => {
     expect(onDismiss).toHaveBeenCalledWith(7)
   })
 
+  it('clears a notification after eight seconds, however often the screen re-renders', () => {
+    vi.useFakeTimers()
+    const onDismiss = vi.fn()
+    const note = { id: 3, kind: 'KICKED', payload: null, at: 0 }
+    const slip = (): ReactElement => (
+      // Again a fresh closure every render, exactly as the room's ticking countdown produces.
+      <Toasts error={null} notifications={[note]} onClearError={vi.fn()} onDismiss={(id) => onDismiss(id)} lang="en" />
+    )
+    const view = wrap(slip())
+
+    for (let i = 0; i < 3; i += 1) {
+      act(() => void vi.advanceTimersByTime(2000))
+      rewrap(view, slip())
+      expect(onDismiss).not.toHaveBeenCalled()
+    }
+    // A notification lingers longer than an error: the player did not ask for it and may not be looking.
+    act(() => void vi.advanceTimersByTime(2000)) // 8 s
+    expect(onDismiss).toHaveBeenCalledTimes(1)
+    expect(onDismiss).toHaveBeenCalledWith(3)
+
+    act(() => void vi.advanceTimersByTime(60_000))
+    expect(onDismiss).toHaveBeenCalledTimes(1)
+  })
+
+  it('gives each notification its own timer', () => {
+    vi.useFakeTimers()
+    const onDismiss = vi.fn()
+    const notes = [
+      { id: 1, kind: 'KICKED', payload: null, at: 0 },
+      { id: 2, kind: 'ROOM_CLOSED', payload: null, at: 0 },
+    ]
+    const view = wrap(<Toasts error={null} notifications={notes} onClearError={vi.fn()} onDismiss={onDismiss} lang="en" />)
+    act(() => void vi.advanceTimersByTime(5000))
+    rewrap(view, <Toasts error={null} notifications={[notes[1]!]} onClearError={vi.fn()} onDismiss={onDismiss} lang="en" />)
+    act(() => void vi.advanceTimersByTime(3000)) // 8 s for the first, only 8 s of wall clock for the second too
+    expect(onDismiss).toHaveBeenCalledTimes(1)
+    expect(onDismiss).toHaveBeenCalledWith(2)
+  })
+
   it('falls back to a generic line for a notification kind it does not know', () => {
     wrap(
       <Toasts

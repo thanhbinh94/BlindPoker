@@ -51,6 +51,7 @@
     "dealer": "Cái",
     "decided": "Đã chọn",
     "disconnected": "Mất kết nối",
+    "eligible": "Được chia",
     "emptySeat": "Ghế trống",
     "faceDown": "Lá úp",
     "fee": "Phí bàn",
@@ -60,6 +61,7 @@
     "holeCards": "Số lá riêng",
     "host": "Chủ phòng",
     "inHand": "Đang chơi",
+    "mainPot": "Pot chính",
     "mode": "Chế độ",
     "name": "Tên",
     "notifications": "Thông báo",
@@ -73,6 +75,7 @@
     "ready": "Sẵn sàng",
     "seat": "Ghế",
     "seatNumber": "Ghế {{seat}}",
+    "sidePot": "Pot phụ {{n}}",
     "sittingOut": "Tạm nghỉ",
     "split": "Chia đều",
     "stack": "Stack",
@@ -192,7 +195,12 @@
     "wager": "Mức cược cố định",
     "botCount": "Số lượng bot",
     "submit": "Tạo phòng",
-    "invalid": "Thông tin phòng không hợp lệ"
+    "hint": {
+      "name": "Tên phòng cần 1–30 ký tự.",
+      "password": "Mật khẩu cần 4–20 ký tự.",
+      "buyIn": "Buy-in tối thiểu phải nhỏ hơn hoặc bằng buy-in tối đa.",
+      "botCount": "Số bot phải ít hơn số ghế."
+    }
   },
   "room": {
     "title": "Phòng chơi",
@@ -206,6 +214,13 @@
     "reconnecting": "Mất kết nối — đang kết nối lại…",
     "buyInTitle": "Chọn mức mang vào",
     "controls": "Điều khiển bàn"
+  },
+  "cancel": {
+    "shutdown": "Máy chủ đang tắt",
+    "serverRestart": "Máy chủ khởi động lại",
+    "roomClosed": "Phòng đã đóng",
+    "maintenance": "Máy chủ đang bảo trì",
+    "other": "Không rõ lý do"
   },
   "notify": {
     "KICKED": "Bạn đã bị mời khỏi phòng",
