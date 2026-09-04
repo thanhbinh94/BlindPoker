@@ -4,3 +4,9 @@ declare module '*.module.css' {
 }
 
 declare module '*.css'
+
+/** Vite's `?raw` suffix: the file's text, which is how a test reads a stylesheet it wants to assert on. */
+declare module '*.css?raw' {
+  const source: string
+  export default source
+}

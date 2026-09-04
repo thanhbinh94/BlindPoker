@@ -1,0 +1,43 @@
+{
+  "name": "@bp/lite",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p server/tsconfig.json && tsc --noEmit -p web/tsconfig.json && tsc --noEmit -p test/tsconfig.json && tsc --noEmit -p e2e/tsconfig.json",
+    "dev:web": "vite --config web/vite.config.ts",
+    "dev:server": "node scripts/build.mjs server && node dist/server.cjs",
+    "build:web": "node scripts/build.mjs web",
+    "build:server": "node scripts/build.mjs server",
+    "build:exe": "node scripts/build.mjs exe --smoke",
+    "build": "node scripts/build.mjs all --smoke",
+    "start": "node dist/server.cjs",
+    "e2e": "playwright test -c e2e/playwright.config.ts"
+  },
+  "dependencies": {
+    "@bp/core": "workspace:*",
+    "@bp/server-kit": "workspace:*",
+    "@bp/ui-kit": "workspace:*",
+    "fastify": "^5.1.0",
+    "i18next": "^23.16.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-i18next": "^15.1.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/user-event": "^14.5.2",
+    "@playwright/test": "^1.49.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "esbuild": "^0.24.0",
+    "jsdom": "^25.0.1",
+    "postject": "1.0.0-alpha.6",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  }
+}

@@ -18,8 +18,21 @@ Node built-in, and never decides gameplay: it renders `ServerMessage`s and sends
 Five things, in this order.
 
 **1. Fonts are the app's job.** `ui-kit` only names them (`--font-display`, `--font-body`). Normal's `index.html`
-loads Fraunces and Be Vietnam Pro from Google Fonts; Lite ships offline and lets the fallbacks (Georgia,
+loads Fraunces and Be Vietnam Pro from Google Fonts; Lite ships offline and lets the fallbacks (Cambria,
 Segoe UI) stand. Never a runtime check — just a different `<head>`.
+
+The display fallbacks are ordered for Vietnamese, and that ordering is load-bearing rather than taste:
+
+```css
+--font-display: 'Fraunces', 'Playfair Display', Cambria, Constantia, 'Times New Roman', Times, serif;
+```
+
+Georgia used to sit where Cambria is, and it is the wrong choice here. Georgia's Windows build has no
+precomposed glyphs for the stacked Vietnamese vowels (`ế ộ ữ ằ`), so a heading or a player's name that falls
+back to it is rendered per character from whatever face the system substitutes — the diacritics land visibly
+off the baseline and at a different weight from the letters around them. Cambria and Constantia ship with
+Windows and cover the whole Vietnamese repertoire, which matters most on exactly the machine Lite runs on,
+where nothing is downloaded. `tokens.test.ts` asserts the stack never names Georgia again.
 
 **2. Styles.** One import, at the app entry, before your own CSS:
 

@@ -8,7 +8,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "pnpm -r exec tsc --noEmit -p tsconfig.json",
+    "typecheck": "pnpm -r run typecheck",
     "lint": "eslint .",
     "build:normal": "pnpm --filter @bp/normal-server --filter @bp/normal-web run build",
     "build:lite": "pnpm --filter @bp/lite run build"
