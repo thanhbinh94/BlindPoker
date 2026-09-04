@@ -134,7 +134,12 @@ export class Room {
 
   // ---------- membership ----------
 
-  join(identity: PlayerIdentity, password?: string): Promise<void> {
+  /**
+   * Returns the snapshot as it stood *inside* the queue slot that admitted the player, so the
+   * caller cannot send a view that a later mutation has already moved past. Everything after it
+   * arrives as an event with a higher `seq`.
+   */
+  join(identity: PlayerIdentity, password?: string): Promise<Snapshot> {
     return this.enqueue(() => {
       this.assertOpen()
       const existing = this.players.get(identity.playerId)
@@ -142,7 +147,7 @@ export class Room {
         if (!existing.leaveAfterHand) throw new RoomError('ALREADY_IN_ROOM')
         existing.leaveAfterHand = false // rejoined before the hand ended
         existing.standAfterHand = false
-        return
+        return this.snapshot(identity.playerId)
       }
       if (this.config.password !== undefined && password !== this.config.password) throw new RoomError('WRONG_PASSWORD')
       if (this.humanCount >= this.humanCapacity) throw new RoomError('ROOM_FULL')
@@ -151,7 +156,13 @@ export class Room {
       this.broadcastRoomEvent({ type: 'PLAYER_JOINED', player: this.playerView(p) }, identity.playerId)
       this.deps.onDomainEvent?.({ type: 'ROOM_JOINED', roomId: this.roomId, playerId: identity.playerId })
       this.changed()
+      return this.snapshot(identity.playerId)
     })
+  }
+
+  /** Re-reads a player's balance and pushes `BALANCE` (Blind: also re-mirrors their stack). Queued. */
+  refreshBalance(playerId: string): Promise<void> {
+    return this.enqueue(() => this.pushBalance(playerId))
   }
 
   leave(playerId: string): Promise<void> {

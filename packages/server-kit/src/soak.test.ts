@@ -9,11 +9,18 @@ const HOLDEM: RoomConfig = { name: 'H', mode: 'holdem', maxPlayers: 4, isPrivate
 let ts: TestServer
 afterEach(async () => { await ts?.close() })
 
-/** Plays until `hands` HAND_COMPLETE events have been seen, following a simple policy; returns seq gaps found. */
+/**
+ * Plays until `hands` HAND_COMPLETE events have been seen, following a simple policy.
+ *
+ * The `gaps` counter looks for seq *regressions* only. `seq` is room-wide and per-viewer filtering
+ * means a client legitimately never sees some of it (another seat's hole cards, turn events for a
+ * hand it is not in), so skips are expected; going backwards is not.
+ */
 async function autoplay(c: TestClient, mySeat: number, hands: number, policy: (kinds: string[], i: number) => string): Promise<{ gaps: number; completed: number }> {
   let completed = 0, gaps = 0, lastSeq = -1, i = 0
   while (completed < hands) {
-    const m = await c.next('GAME_EVENT', () => true, 8000)
+    // Generous per-message budget: six clients share one event loop with two full rooms of bots.
+    const m = await c.next('GAME_EVENT', () => true, 15_000)
     if (lastSeq >= 0 && m.seq !== lastSeq + 1 && m.seq <= lastSeq) gaps++
     lastSeq = m.seq
     const e = m.event

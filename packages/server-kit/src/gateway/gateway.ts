@@ -315,9 +315,11 @@ export class Gateway {
           if (this.deps.rooms.roomOf(playerId)) throw new RoomError('ALREADY_IN_ROOM')
           const room = msg.roomId !== undefined ? this.deps.rooms.get(msg.roomId) : msg.code !== undefined ? this.deps.rooms.getByCode(msg.code) : undefined
           if (!room) throw new RoomError('ROOM_NOT_FOUND')
-          await room.join(identity, msg.password)
+          // The snapshot is the one computed inside the queue slot that admitted us, so no mutation
+          // can slip between admission and the frame the client builds its state from.
+          const snapshot = await room.join(identity, msg.password)
           conn.inLobby = false
-          conn.send(room.snapshot(playerId))
+          conn.send(snapshot)
           break
         }
         case 'LEAVE_ROOM':

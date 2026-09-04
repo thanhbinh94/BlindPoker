@@ -231,6 +231,31 @@ describe('bind and close races', () => {
   }, 20_000)
 })
 
+describe('out-of-band pushes', () => {
+  it('notify reaches a live session, and balanceChanged refreshes a blind seat\u2019s mirrored stack', async () => {
+    ts = await startTestServer()
+    const a = await connect('a')
+    a.send({ t: 'CREATE_ROOM', config: { ...BLIND_BOT, blind: { ...BLIND_BOT.blind!, botCount: 0 } } })
+    const snap = await a.next('ROOM_SNAPSHOT')
+    a.send({ t: 'SIT_DOWN', seat: 0 })
+    await a.next('ROOM_EVENT', (m) => m.event.type === 'PLAYER_SAT')
+    const room = ts.server.rooms.get(snap.room.roomId)!
+    expect(room.view().players.find((p) => p.playerId === 'a')!.stack).toBe(100_000)
+
+    // points granted elsewhere (a purchase, a daily reward) must reach both the client and the seat
+    ts.repos.records.get('a')!.balance = 142_000
+    await ts.server.balanceChanged('a')
+    expect((await a.next('BALANCE')).balance).toBe(142_000)
+    expect(room.view().players.find((p) => p.playerId === 'a')!.stack).toBe(142_000)
+
+    ts.server.notify('a', { t: 'NOTIFICATION', kind: 'DAILY_REWARD', payload: { amount: 500 } })
+    expect(await a.next('NOTIFICATION')).toMatchObject({ kind: 'DAILY_REWARD', payload: { amount: 500 } })
+
+    ts.server.notify('nobody', { t: 'NOTIFICATION', kind: 'X', payload: null }) // offline: a no-op, not a throw
+    await ts.server.balanceChanged('b') // not in a room and not connected: also a no-op
+  })
+})
+
 describe('abuse protection', () => {
   it('rate-limits floods, closes after repeated invalid messages, and rejects oversized payloads', async () => {
     ts = await startTestServer()

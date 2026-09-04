@@ -26,10 +26,30 @@ httpServer.on('upgrade', (req, socket, head) => server.handleUpgrade(req, socket
 ```
 
 `createGameServer` wires a `RoomManager` and a `Gateway` together and returns
-a `GameServer` exposing `rooms`, `gateway`, `handleUpgrade`, `shutdown`, and
-`connectionCount`. The edition never touches `Room` or `Gateway` internals
-directly — `handleUpgrade` and `shutdown` are the whole surface it needs for
-a working HTTP server.
+a `GameServer` exposing `rooms`, `gateway`, `handleUpgrade`, `notify`,
+`balanceChanged`, `shutdown`, and `connectionCount`. The edition never
+touches `Room` or `Gateway` internals directly — `handleUpgrade` and
+`shutdown` are the whole surface it needs for a working HTTP server.
+
+### Pushing to a player from outside the game
+
+Editions own everything `server-kit` does not: purchases, daily rewards,
+achievements, moderation. Two methods let them reach a live session
+without knowing anything about rooms or sockets:
+
+```ts
+server.notify(playerId, { t: 'NOTIFICATION', kind: 'DAILY_REWARD', payload: { amount: 500 } })
+await server.balanceChanged(playerId) // after crediting points elsewhere
+```
+
+- **`notify(playerId, msg)`** — pushes any `ServerMessage` to that
+  player's current connection. A push, not a mailbox: if the player is
+  offline it does nothing.
+- **`balanceChanged(playerId)`** — re-reads the balance and pushes
+  `BALANCE`. If the player is seated in a Blind room it goes through the
+  room's queue (`Room.refreshBalance`) so the seat's mirrored `stack` is
+  updated too — in Blind mode a seat *is* the player's balance, and
+  without this it would keep showing the stale value until the next hand.
 
 ### `SessionResolver`
 
@@ -138,6 +158,9 @@ either starts the next hand after `handIntervalMs` or falls back to `OPEN`.
 | `botStartingBalance` | 1,000,000 | Virtual balance bots start (and top up) with in Blind mode |
 | `turnTimerMsOverride` | — | Test hook: overrides `config.turnTimerSec * 1000` when set |
 
+`createGameServer` also takes `shutdownTimeoutMs` (default 10,000) — the
+upper bound on `shutdown()`; see below.
+
 `GatewayOptions` (defaults from `DEFAULT_GATEWAY_OPTIONS`):
 
 | Option | Default | Purpose |
@@ -148,7 +171,8 @@ either starts the next hand after `handIntervalMs` or falls back to `OPEN`.
 | `maxPayloadBytes` | 4,096 | WebSocket frame size cap |
 | `helloTimeoutMs` | 5,000 | Time to send `HELLO` before an unauthenticated socket is closed |
 | `allowedOrigins` | `null` (any) | Optional allowlist checked against the upgrade request's `Origin` header |
-| `maxInvalidMessages` | 3 | Malformed/unparseable messages before a connection is closed |
+| `maxInvalidMessages` | 3 | Strikes before a connection is closed. Only `INVALID_MESSAGE` (unparseable frames) counts, plus one strike per 5 consecutive rate-limited messages; a rejected room config never does |
+| `lobbyCoalesceMs` | 50 | Room-list changes within this window collapse into one `ROOM_LIST` broadcast |
 
 ## Wire contract
 
@@ -162,32 +186,93 @@ either starts the next hand after `handIntervalMs` or falls back to `OPEN`.
 - **`reqId` / `ACK`**: any client message may carry a `reqId`; the gateway
   replies with `ACK { reqId }` on success or `ERROR { reqId, code, message }`
   on failure. Per connection, a small ring buffer of recent `reqId`s
-  (`ClientConnection.seenReqId`, last 32) makes a retransmitted duplicate
-  re-ACK instead of re-executing — the original result is not replayed, so
-  effects idempotent only through this dedupe (not through the domain
-  itself) should not rely on exact-once semantics.
+  (last 32) remembers the *frame each `reqId` produced*, so a retransmitted
+  duplicate is answered with that exact frame — an `ACK` stays an `ACK` and
+  a failure stays the same `ERROR` — instead of being re-executed or
+  mistaken for success.
 - **Per-viewer filtering**: nothing broadcasts a single shared payload.
   `GAME_EVENT`s go through `filterEvent(event, viewerSeat)` so hole cards
   belonging to other seats are stripped (only `cardCount` survives); `Room`
   sends to each connected human individually via the `Outbox`, and only to
   seats currently in the hand for turn-scoped events.
 
+## Reconnecting and frame order
+
+The client contract, in order:
+
+1. The first frame on any authenticated socket is **`WELCOME`**. It carries
+   the player's id, display name, balance and the server time.
+2. If the player is still in a room, the next frame is **`ROOM_SNAPSHOT`**.
+   Its `seq` is the room's `seq` at the moment the snapshot was taken.
+   `JOIN_ROOM` and `CREATE_ROOM` answer with a snapshot the same way —
+   `Room.join()` returns the snapshot computed *inside* the queue slot that
+   admitted the player, so nothing can slip between admission and the frame
+   the client builds its state from.
+3. Everything after that is an event — `GAME_EVENT` or `ROOM_EVENT` — with
+   `seq > snapshot.seq`. Apply them in order.
+
+Rules for the client:
+
+- **Gaps.** `seq` is room-wide. Per-viewer filtering means a client
+  legitimately never sees *some* values (another seat's hole cards, turn
+  events for a hand it is not in), so a skip is normal; a value that goes
+  backwards, or a gap the client cannot explain, means state is stale —
+  send `RESYNC` and rebuild from the snapshot it returns.
+- **In-flight actions.** After reconnecting, do not replay an `ACTION`
+  with its old `baseSeq`: the turn has almost certainly moved and the
+  server answers `STALE_STATE`. Re-send it with a fresh `baseSeq` taken
+  from the new snapshot, only if the snapshot still shows it as your turn.
+  Re-sending with the *same* `reqId` is safe by construction — the gateway
+  replays the exact frame the first attempt produced, `ACK` or `ERROR`,
+  rather than executing it twice.
+- **Lobby.** `ROOM_LIST` broadcasts only go to connections that have asked
+  for them; leaving a room does not re-subscribe you. Send `LIST_ROOMS`
+  again after `LEAVE_ROOM` to start receiving the live list.
+- **Bind failure.** If a resync fails server-side, the client gets
+  `ERROR { code: 'INTERNAL', message: 'resync required' }` after its
+  `WELCOME` — it should send `RESYNC` (or reconnect) rather than assume it
+  is in sync.
+
 ## Shutdown
 
-`GameServer.shutdown(reason?)` stops accepting new game state changes and
-tears down cleanly:
+`GameServer.shutdown(reason?)` is two-phase, so nothing new enters while
+the live state is being settled:
 
-1. `RoomManager.shutdown(reason)` runs `Room.shutdown(reason)` on every room
-   in parallel. Each room cancels any in-flight hand (refunding what's live),
-   distributes its carry-over pot evenly across seated humans, cashes out
-   every seated human's stack back to their balance (Hold'em), marks the
-   room `CLOSED`, and broadcasts `ROOM_EVENT { type: 'ROOM_CLOSED', reason }`.
-2. `Gateway.closeAll(1001, reason, { t: 'ERROR', code: 'SERVER_SHUTDOWN', message: reason })`
+1. **Stop accepting.** `Gateway.stopAccepting()` answers new upgrades with
+   `HTTP/1.1 503 Service Unavailable` and refuses `CREATE_ROOM`/`JOIN_ROOM`
+   with `ERROR { code: 'SERVER_SHUTDOWN' }`; `RoomManager.create` throws the
+   same. Sessions already in a hand keep playing.
+2. **Drain rooms.** `RoomManager.shutdown(reason)` runs `Room.shutdown(reason)`
+   on every room in parallel. Each room cancels any in-flight hand (refunding
+   what's live), releases its carry-over pot, cashes out every seated human's
+   stack back to their balance (Hold'em), marks the room `CLOSED`, and
+   broadcasts `ROOM_EVENT { type: 'ROOM_CLOSED', reason }`. A `CLOSED` room
+   refuses every further mutation with `ROOM_NOT_FOUND`, so a request racing
+   the shutdown cannot deduct a buy-in into a room that is going away.
+3. **Close sockets.** `Gateway.closeAll(1001, reason, { t: 'ERROR', code: 'SERVER_SHUTDOWN', message: reason })`
    sends every connected client a final `ERROR` and closes the socket.
 
+Steps 2 and 3 run inside a `Promise.race` with `shutdownTimeoutMs`
+(default 10,000). If the budget is exceeded the call returns anyway and
+logs a warning — a wedged repository must not hang a deploy.
+
+```ts
+const server = createGameServer({ repos, resolver, shutdownTimeoutMs: 10_000 })
+
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.once(signal, () => {
+    void (async () => {
+      httpServer.close()             // stop new HTTP connections
+      await server.shutdown(signal)  // stop accepting -> drain rooms -> close sockets
+      process.exit(0)
+    })()
+  })
+}
+```
+
 After `shutdown` resolves, every point that was ever in a stack or a
-carry-over pot has been returned to a `BalanceRepository` balance — nothing
-is left in RAM.
+carry-over pot has been returned to a `BalanceRepository` balance or
+recorded as a sink row — nothing is left in RAM.
 
 ## Testing utilities
 

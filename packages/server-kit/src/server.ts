@@ -1,6 +1,6 @@
 import type { IncomingMessage } from 'node:http'
 import type { Duplex } from 'node:stream'
-import { createBotStrategy, type BotStrategy, type Rng } from '@bp/core'
+import { createBotStrategy, type BotStrategy, type Rng, type ServerMessage } from '@bp/core'
 import type { DomainEvent } from './domain-events.js'
 import { DEFAULT_GATEWAY_OPTIONS, Gateway, type GatewayOptions } from './gateway/gateway.js'
 import { realClock, type Clock } from './infra/clock.js'
@@ -30,6 +30,18 @@ export interface GameServer {
   rooms: RoomManager
   gateway: Gateway
   handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void
+  /**
+   * Pushes a message to a player's live session, if they have one. Editions use it for things
+   * `server-kit` knows nothing about — daily rewards, friend requests, moderation notices.
+   * Silently does nothing when the player is offline: it is a push, not a mailbox.
+   */
+  notify(playerId: string, msg: ServerMessage): void
+  /**
+   * Tells the server a player's balance changed outside a hand (a purchase, a reward, an admin
+   * adjustment). Pushes `BALANCE`, and re-mirrors the player's Blind-mode stack if they are seated
+   * in one — without it a Blind seat would keep showing the stale balance until the next hand.
+   */
+  balanceChanged(playerId: string): Promise<void>
   shutdown(reason?: string): Promise<void>
   readonly connectionCount: number
 }
@@ -56,6 +68,18 @@ export function createGameServer(options: GameServerOptions): GameServer {
     handleUpgrade: (req, socket, head) => gw.handleUpgrade(req, socket, head),
     get connectionCount() {
       return gw.connectionCount
+    },
+    notify(playerId, msg) {
+      gw.outbox.send(playerId, msg)
+    },
+    async balanceChanged(playerId) {
+      const room = rooms.roomOf(playerId)
+      if (room) return room.refreshBalance(playerId) // queued: keeps the stack mirror consistent
+      try {
+        gw.outbox.send(playerId, { t: 'BALANCE', balance: await options.repos.balances.get(playerId) })
+      } catch (err) {
+        log.warn('balanceChanged lookup failed', { playerId, err: String(err) })
+      }
     },
     async shutdown(reason = 'server shutdown') {
       log.info('shutting down', { reason, rooms: rooms.size, connections: gw.connectionCount })
