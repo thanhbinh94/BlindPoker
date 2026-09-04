@@ -12,8 +12,10 @@ import type { InventoryService } from '../inventory/inventory-service.js'
 import { createInventoryService } from '../inventory/inventory-service.js'
 import type { ItemCatalog } from '../inventory/items.js'
 import { loadItemCatalog } from '../inventory/items.js'
+import { loadAchievements } from '../achievements/definitions.js'
 import type { NormalRepositories } from '../repos/index.js'
 import { createRepositories } from '../repos/index.js'
+import { DAILY_FIXED_ITEM_IDS } from './daily-rules.js'
 import type { EconomyService } from './economy-service.js'
 import { createEconomyService } from './economy-service.js'
 
@@ -24,6 +26,8 @@ let inv: InventoryService
 let catalog: ItemCatalog
 let bus: AppEventBus
 let economy: EconomyService
+/** Every id the random tiers must not draw: the day-28 pair plus every achievement's item reward. */
+let reserved: Set<string>
 
 let published: AppEvent[] = []
 let balanceCalls: { playerId: string; balance: number }[] = []
@@ -42,6 +46,12 @@ beforeAll(async () => {
   inv = createInventoryService(db)
   catalog = loadItemCatalog()
   await catalog.seed(db)
+  // Wired the way Task 6 wires it: the reward ids come from the loaded definitions, so
+  // `achievements.json` stays the only place one is written down.
+  const rewardItemIds = loadAchievements(catalog)
+    .map((d) => d.reward.itemId)
+    .filter((id): id is string => id !== undefined)
+  reserved = new Set([...DAILY_FIXED_ITEM_IDS, ...rewardItemIds])
   bus = createEventBus(silentLogger)
   bus.subscribe((e) => {
     published.push(e)
@@ -55,6 +65,7 @@ beforeAll(async () => {
     timezone: 'UTC',
     onBalanceChanged: (playerId, balance) => balanceCalls.push({ playerId, balance }),
     rng: () => rng(),
+    reservedItemIds: rewardItemIds,
   })
 })
 afterAll(async () => {
@@ -94,6 +105,25 @@ async function own(playerId: string, itemIds: string[]): Promise<void> {
   await db.transaction(async (tx) => {
     for (const itemId of itemIds) await inv.grant(tx, playerId, itemId, 'test')
   })
+}
+
+/** The items a random draw of `rarity` is actually allowed to reach. */
+function drawable(rarity: 'common' | 'rare'): string[] {
+  return catalog
+    .byRarity(rarity)
+    .filter((d) => d.category !== 'title' && d.category !== 'badge' && !reserved.has(d.id))
+    .map((d) => d.id)
+    .sort()
+}
+
+/** The rest of that rarity — what must stay unowned however many times the tier is drawn. */
+function undrawable(rarity: 'common' | 'rare'): string[] {
+  const pool = new Set(drawable(rarity))
+  return catalog
+    .byRarity(rarity)
+    .map((d) => d.id)
+    .filter((id) => !pool.has(id))
+    .sort()
 }
 
 async function ledger(playerId: string): Promise<{ amount: number; reason: string; refId: string | null }[]> {
@@ -182,13 +212,13 @@ describe('claimDaily', () => {
   })
 
   describe('the item column', () => {
-    const commonsFor = (): string[] => catalog.byRarity('common').map((d) => d.id).sort()
+    const unownedCommons = (): string[] => drawable('common').filter((id) => !catalog.defaults().includes(id))
 
     it('draws one unowned common on day 7, decided by the injected rng', async () => {
       const playerId = await seedPlayer()
       await own(playerId, catalog.defaults())
       await seedStreak(playerId, 6, 6)
-      const unowned = commonsFor().filter((id) => !catalog.defaults().includes(id))
+      const unowned = unownedCommons()
       rng = () => 0
 
       const result = await economy.claimDaily(playerId, OCT(7))
@@ -202,7 +232,7 @@ describe('claimDaily', () => {
       const playerId = await seedPlayer()
       await own(playerId, catalog.defaults())
       await seedStreak(playerId, 6, 6)
-      const unowned = commonsFor().filter((id) => !catalog.defaults().includes(id))
+      const unowned = unownedCommons()
       // Exactly 1 would index one past the end; the pick is clamped rather than trusted.
       rng = () => 1
 
@@ -211,7 +241,7 @@ describe('claimDaily', () => {
 
     it('credits 10,000 under its own reason when the tier has nothing unowned left', async () => {
       const playerId = await seedPlayer()
-      await own(playerId, commonsFor())
+      await own(playerId, drawable('common'))
       await seedStreak(playerId, 6, 6)
 
       const result = await economy.claimDaily(playerId, OCT(7))
@@ -270,6 +300,126 @@ describe('claimDaily', () => {
     })
   })
 
+  describe('what a random tier may draw', () => {
+    /** Rewinds the check-in to the eve of `day` so the tier can be drawn again. */
+    async function rewindTo(playerId: string, day: number): Promise<void> {
+      await seedStreak(playerId, day - 1, day - 1)
+    }
+
+    it('hands over the one drawable common left, and leaves the titles and badges alone', async () => {
+      const playerId = await seedPlayer()
+      const pool = drawable('common')
+      const last = pool[pool.length - 1]!
+      await own(playerId, pool.slice(0, -1))
+      await rewindTo(playerId, 7)
+
+      expect(await economy.claimDaily(playerId, OCT(7))).toMatchObject({ day: 7, item: last, fallbackPoints: 0 })
+
+      const owned = new Set((await inv.list(playerId)).map((o) => o.itemId))
+      for (const id of undrawable('common')) expect(owned.has(id), id).toBe(false)
+      expect(undrawable('common')).toEqual(['badge_bronze', 'badge_silver', 'title_regular', 'title_rookie'])
+    })
+
+    it('exhausts the rare tier without ever handing out a reserved id, then pays the fallback', async () => {
+      const playerId = await seedPlayer()
+      const pool = drawable('rare')
+      // A deterministic sweep across the pool rather than a fixed index, so the exclusion is proved
+      // for every position a draw can land on — and never `Math.random`.
+      let tick = 0
+      rng = () => {
+        tick += 1
+        return ((tick * 7) % 11) / 11
+      }
+
+      const drawn: string[] = []
+      for (let i = 0; i < pool.length; i += 1) {
+        await rewindTo(playerId, 14)
+        const result = await economy.claimDaily(playerId, OCT(14))
+        expect(result).toMatchObject({ day: 14, fallbackPoints: 0 })
+        drawn.push((result as { item: string }).item)
+      }
+
+      expect([...drawn].sort()).toEqual(pool)
+      const owned = new Set((await inv.list(playerId)).map((o) => o.itemId))
+      for (const id of undrawable('rare')) expect(owned.has(id), id).toBe(false)
+      // The two the schedule and the achievements have already promised are among them.
+      expect(owned.has('badge_monthly')).toBe(false)
+      expect(owned.has('title_devoted')).toBe(false)
+
+      // Nothing drawable left: the tier pays 10,000 rather than reaching for a reserved item.
+      await rewindTo(playerId, 21)
+      const dry = await economy.claimDaily(playerId, OCT(21))
+      expect(dry).toMatchObject({ day: 21, item: null, items: [], fallbackPoints: 10_000 })
+      expect((await ledger(playerId)).at(-1)).toMatchObject({ amount: 10_000, reason: 'daily_item_fallback' })
+
+      // And day 28 can still keep its own promise, because nothing took it first.
+      await rewindTo(playerId, 28)
+      expect(await economy.claimDaily(playerId, OCT(28))).toMatchObject({ items: ['badge_monthly', 'title_devoted'] })
+    })
+
+    it('never draws an id the caller reserved, even one of a drawable category', async () => {
+      const playerId = await seedPlayer()
+      // `jewelry_chain` is a rare piece of jewelry — drawable in every respect but this one.
+      const withReservation = createEconomyService({
+        db,
+        repos,
+        inventory: inv,
+        catalog,
+        bus,
+        timezone: 'UTC',
+        onBalanceChanged: () => {},
+        rng: () => 0,
+        reservedItemIds: ['jewelry_chain'],
+      })
+      const pool = drawable('rare').filter((id) => id !== 'jewelry_chain')
+
+      for (let i = 0; i < pool.length; i += 1) {
+        await seedStreak(playerId, 13, 13)
+        await withReservation.claimDaily(playerId, OCT(14))
+      }
+
+      const owned = new Set((await inv.list(playerId)).map((o) => o.itemId))
+      expect(owned.has('jewelry_chain')).toBe(false)
+      expect([...owned].sort()).toEqual(pool)
+
+      await seedStreak(playerId, 13, 13)
+      expect(await withReservation.claimDaily(playerId, OCT(14))).toMatchObject({ item: null, fallbackPoints: 10_000 })
+    })
+  })
+
+  describe('the configured timezone', () => {
+    it('draws the day boundary where ECONOMY_TIMEZONE says, not in UTC', async () => {
+      const playerId = await seedPlayer()
+      const hcm = createEconomyService({
+        db,
+        repos,
+        inventory: inv,
+        catalog,
+        bus,
+        timezone: 'Asia/Ho_Chi_Minh',
+        onBalanceChanged: () => {},
+        rng: () => 0,
+      })
+
+      // 17:30 UTC on the 4th is already 00:30 on the 5th in Ho Chi Minh City.
+      const at = Date.UTC(2026, 9, 4, 17, 30)
+      expect(await hcm.claimDaily(playerId, at)).toMatchObject({ ok: true, day: 1 })
+
+      // The day key reaches the ledger as the claim's reference and the row as its claim date, so a
+      // wrong zone would silently shift the reset for every player.
+      expect(await ledger(playerId)).toEqual([{ amount: 5_000, reason: 'daily_login', refId: `daily:${playerId}:2026-10-05` }])
+      const [row] = await db.select().from(dailyLogins).where(eq(dailyLogins.playerId, playerId))
+      expect(row).toMatchObject({ lastClaimDate: '2026-10-05', month: '2026-10' })
+
+      // Half an hour later is still the 5th there — and still the 4th in the UTC-configured service,
+      // which would let the same player claim again.
+      const later = Date.UTC(2026, 9, 4, 18, 0)
+      expect(await hcm.claimDaily(playerId, later)).toEqual({ ok: false, code: 'ALREADY_CLAIMED' })
+      expect(await hcm.dailyStatus(playerId, later)).toMatchObject({ claimable: false })
+      expect(await economy.dailyStatus(playerId, later)).toMatchObject({ claimable: true })
+    })
+  })
+
   it('refuses a player who does not exist', async () => {
     await expect(economy.claimDaily('00000000-0000-4000-8000-000000000000', OCT(1))).rejects.toThrow(/unknown player/)
     await expect(economy.claimDaily('not-a-uuid', OCT(1))).rejects.toThrow(/unknown player/)
@@ -285,6 +435,13 @@ describe('dailyStatus', () => {
     expect(before.calendar).toHaveLength(31)
     expect(before.calendar.filter((d) => d.item !== null).map((d) => d.day)).toEqual([7, 14, 21, 28])
     expect(before.calendar.reduce((sum, d) => sum + d.points, 0)).toBe(376_000)
+
+    // A copy per call: a caller decorating one response must not rewrite every later one.
+    const again = await economy.dailyStatus(playerId, OCT(1))
+    expect(again.calendar).not.toBe(before.calendar)
+    expect(again.calendar[6]).not.toBe(before.calendar[6])
+    before.calendar[6]!.points = -1
+    expect((await economy.dailyStatus(playerId, OCT(1))).calendar[6]!.points).toBe(15_000)
 
     await economy.claimDaily(playerId, OCT(1))
     expect(await economy.dailyStatus(playerId, OCT(1))).toMatchObject({ claimable: false, day: 1, streak: 1 })

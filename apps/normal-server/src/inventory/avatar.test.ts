@@ -128,9 +128,13 @@ describe('applyAvatarConfig', () => {
     expect(row).toMatchObject({ equippedTitle: null, equippedBadge: null })
   })
 
-  it('refuses a player who is not there', async () => {
+  it('refuses a player who is not there — through ownership, the only check it needs', async () => {
+    // Owning an item implies the `players` row exists (`inventory.player_id` cascades on delete),
+    // and every config names at least four items, so a missing player is refused before the write.
+    // There is no second, separate "no such player" answer to give.
     const err = await applyAvatarConfig(db, inv, '00000000-0000-4000-8000-000000000000', BASIC).catch((e: unknown) => e)
     expect((err as ServiceError).code).toBe('NOT_OWNED')
+    expect(await db.select().from(players)).toHaveLength(0)
   })
 })
 
@@ -191,5 +195,25 @@ describe('InventoryService', () => {
     // Ordered, so a seeded rng picks the same item every run.
     expect([...unowned].sort()).toEqual(unowned)
     expect(await db.transaction((tx) => inv.unownedOfRarity(tx, playerId, 'epic'))).toEqual(catalog.byRarity('epic').map((d) => d.id).sort())
+  })
+
+  it('drops the excluded ids and categories from the pool, and an empty exclusion excludes nothing', async () => {
+    const playerId = await seedPlayer()
+    const allRare = catalog.byRarity('rare').map((d) => d.id).sort()
+
+    const filtered = await db.transaction((tx) =>
+      inv.unownedOfRarity(tx, playerId, 'rare', { ids: ['jewelry_chain'], categories: ['title', 'badge'] }),
+    )
+    expect(filtered).not.toContain('jewelry_chain')
+    expect(filtered).not.toContain('badge_monthly')
+    expect(filtered).not.toContain('title_devoted')
+    expect(filtered).toEqual(
+      allRare.filter((id) => id !== 'jewelry_chain' && catalog.get(id)!.category !== 'title' && catalog.get(id)!.category !== 'badge'),
+    )
+
+    // `notInArray(col, [])` is `col <> all('{}')`, which Postgres reads as unknown for every row —
+    // an empty exclusion must mean "exclude nothing", not "exclude everything".
+    expect(await db.transaction((tx) => inv.unownedOfRarity(tx, playerId, 'rare', { ids: [], categories: [] }))).toEqual(allRare)
+    expect(await db.transaction((tx) => inv.unownedOfRarity(tx, playerId, 'rare', {}))).toEqual(allRare)
   })
 })

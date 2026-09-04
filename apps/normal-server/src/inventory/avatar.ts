@@ -126,10 +126,14 @@ export async function applyAvatarConfig(
   playerId: string,
   config: AvatarConfig,
 ): Promise<AvatarView> {
+  // This is also the existence check. `inventory.player_id` is `ON DELETE cascade`, so owning an
+  // item implies the `players` row is there — and every config names at least the four required
+  // layers, so a player who is not there owns none of them and is refused here. That leaves the
+  // `UPDATE` below with nothing to report: a zero-row result is unreachable, not a case to handle.
   const missing = await inventory.missingOf(playerId, itemIdsOf(config))
   if (missing.length > 0) throw new ServiceError('NOT_OWNED', `not owned: ${missing.join(', ')}`)
 
-  const updated = await db
+  await db
     .update(players)
     .set({
       avatarConfig: config as unknown as Record<string, unknown>,
@@ -137,8 +141,6 @@ export async function applyAvatarConfig(
       equippedBadge: config.badge ?? null,
     })
     .where(eq(players.id, playerId))
-    .returning({ id: players.id })
-  if (updated.length === 0) throw new ServiceError('UNKNOWN_PLAYER', `no such player: ${playerId}`)
 
   return { config }
 }

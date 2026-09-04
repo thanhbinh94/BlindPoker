@@ -21,11 +21,12 @@ import type { AppDb, AppTx } from '../db/client.js'
 import type { AppEventBus } from '../events.js'
 import { dailyLogins, players } from '../db/schema.js'
 import type { InventoryService } from '../inventory/inventory-service.js'
-import type { ItemCatalog } from '../inventory/items.js'
+import type { ItemCatalog, ItemCategory } from '../inventory/items.js'
 import { UnknownPlayerError, type NormalRepositories } from '../repos/index.js'
 import { isUuid } from '../repos/util.js'
 import {
   dailyCalendar,
+  DAILY_FIXED_ITEM_IDS,
   dayKey,
   itemMarkerForDay,
   itemRuleForDay,
@@ -99,15 +100,43 @@ export interface EconomyServiceDeps {
   now?: () => number
   /** Injectable so a test can pin which unowned item the day-7 draw lands on. */
   rng?: () => number
+  /**
+   * Ids the random tiers must never hand out because something else has already promised them —
+   * every achievement's `reward.itemId`. Task 6 passes them from the loaded definitions, so
+   * `achievements.json` stays the only place a reward id is written down.
+   *
+   * The day-28 pair is excluded regardless: it is this module's own promise to keep.
+   */
+  reservedItemIds?: Iterable<string>
 }
 
 /** The `source` recorded in `inventory` for anything the check-in hands out. */
 const DAILY_SOURCE = 'daily'
 
+/**
+ * Categories a random draw does not cover.
+ *
+ * §13.2's item column is about the avatar, and a title or a badge is not a layer of one: they are
+ * name decorations, earned by doing something. Leaving them in the pool would both dilute it and
+ * hand out — by chance, on day 14 — the very things day 28 and `login_streak_28` exist to award.
+ */
+const UNDRAWABLE_CATEGORIES = ['title', 'badge'] as const satisfies readonly ItemCategory[]
+
 export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
   const now = deps.now ?? Date.now
   const rng = deps.rng ?? Math.random
   const calendar = dailyCalendar()
+  /**
+   * What the random tiers may not draw, settled once at wiring time.
+   *
+   * `DAILY_FIXED_ITEM_IDS` first: a day-14 draw that took `badge_monthly` would leave day 28 with
+   * nothing to grant and — correctly, since the fallback belongs to the random tiers only — nothing
+   * to pay in its place, so a full 28-day streak would quietly be worth less than the schedule says.
+   * The same argument covers every achievement reward: an item handed out by chance is one a player
+   * can no longer earn.
+   */
+  const excludedIds: readonly string[] = [...new Set([...DAILY_FIXED_ITEM_IDS, ...(deps.reservedItemIds ?? [])])]
+  const drawExclusion = { ids: excludedIds, categories: UNDRAWABLE_CATEGORIES }
 
   /** The `daily_logins` row, locked for the duration of the caller's transaction. */
   async function lockDaily(tx: AppTx, playerId: string): Promise<{ streak: number; lastClaimDate: string | null; month: string; claimedDays: number }> {
@@ -157,7 +186,7 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
       return { items: granted, fallbackPoints: 0 }
     }
 
-    const unowned = await deps.inventory.unownedOfRarity(tx, playerId, rule.rarity)
+    const unowned = await deps.inventory.unownedOfRarity(tx, playerId, rule.rarity, drawExclusion)
     if (unowned.length === 0) {
       // A second ledger entry under its own reason, sharing the claim's refId: one claim, two rows,
       // and §12.5's report can see how often the catalogue is failing to keep up.
@@ -190,7 +219,10 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
         reward: outcome.points,
         item: itemMarkerForDay(outcome.day),
         nextResetAt: nextDayStartMs(nowMs, deps.timezone),
-        calendar,
+        // A copy per call. The schedule is constant, so it is built once — but handing every
+        // response the same array means one caller decorating an entry (a per-player "claimed"
+        // marker, say) would rewrite the calendar for every other player.
+        calendar: calendar.map((entry) => ({ ...entry })),
       }
     },
 

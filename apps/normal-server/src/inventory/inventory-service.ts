@@ -10,11 +10,26 @@
  * `ON CONFLICT DO NOTHING … RETURNING` is one statement whose result *is* the answer, so two claims
  * racing for the same item cannot both be told they were the first.
  */
-import { and, asc, eq, inArray, notExists } from 'drizzle-orm'
+import { and, asc, eq, inArray, notExists, notInArray } from 'drizzle-orm'
 import type { AppDb, AppTx } from '../db/client.js'
 import { inventory, items } from '../db/schema.js'
 import { isUuid } from '../repos/util.js'
-import type { Rarity } from './items.js'
+import type { ItemCategory, Rarity } from './items.js'
+
+/**
+ * What a draw must not reach.
+ *
+ * A pool is "every item of this rarity the player does not own", and that is one query — but not
+ * every item of a rarity is *drawable*. Some are promised elsewhere as fixed rewards, and some
+ * belong to categories the draw is not about. Expressing both as one exclusion keeps the decision
+ * at the caller, where the reasons live, rather than hard-coding a policy into the query.
+ */
+export interface ItemExclusion {
+  /** Ids that are spoken for — a fixed daily reward, an achievement's item. */
+  ids?: readonly string[]
+  /** Whole categories the draw does not cover. */
+  categories?: readonly ItemCategory[]
+}
 
 export interface OwnedItem {
   itemId: string
@@ -31,12 +46,13 @@ export interface InventoryService {
   grant(tx: AppTx, playerId: string, itemId: string, source: string): Promise<boolean>
   owns(playerId: string, itemId: string): Promise<boolean>
   /**
-   * The ids of every catalogue item of `rarity` this player does *not* own, in id order.
+   * The ids of every catalogue item of `rarity` this player does *not* own and `exclude` does not
+   * rule out, in id order.
    *
    * Ordered so the caller's random pick is reproducible from a seeded rng: an unordered result
    * would make the daily reward's "which common did I get" depend on the planner's mood.
    */
-  unownedOfRarity(tx: AppTx, playerId: string, rarity: Rarity): Promise<string[]>
+  unownedOfRarity(tx: AppTx, playerId: string, rarity: Rarity, exclude?: ItemExclusion): Promise<string[]>
   /**
    * Which of `itemIds` this player does not own — `[]` means they own them all.
    *
@@ -76,7 +92,7 @@ export function createInventoryService(db: AppDb): InventoryService {
       return rows.length > 0
     },
 
-    async unownedOfRarity(tx, playerId, rarity) {
+    async unownedOfRarity(tx, playerId, rarity, exclude) {
       if (!isUuid(playerId)) return []
       const rows = await tx
         .select({ id: items.id })
@@ -90,6 +106,10 @@ export function createInventoryService(db: AppDb): InventoryService {
                 .from(inventory)
                 .where(and(eq(inventory.playerId, playerId), eq(inventory.itemId, items.id))),
             ),
+            // Guarded on length: `notInArray(col, [])` is `col <> all('{}')`, which Postgres reads
+            // as unknown for every row and would empty the pool rather than exclude nothing.
+            exclude?.ids !== undefined && exclude.ids.length > 0 ? notInArray(items.id, [...exclude.ids]) : undefined,
+            exclude?.categories !== undefined && exclude.categories.length > 0 ? notInArray(items.category, [...exclude.categories]) : undefined,
           ),
         )
         .orderBy(asc(items.id))
