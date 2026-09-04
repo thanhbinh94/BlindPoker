@@ -26,6 +26,11 @@ export default tseslint.config(
     },
   },
   {
+    // Test fixtures render throwaway markup; hoisting every literal into a constant only obscures the assertion.
+    files: ['packages/ui-kit/**/*.test.tsx', 'apps/**/*.test.tsx'],
+    rules: { 'react/jsx-no-literals': 'off' },
+  },
+  {
     files: ['packages/core/**/*.ts'],
     rules: {
       // Bare built-ins go through `paths` (exact specifiers): as `patterns` they would also match relative imports
