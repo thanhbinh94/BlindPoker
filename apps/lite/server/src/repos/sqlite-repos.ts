@@ -165,12 +165,18 @@ export function createSqliteRepositories(db: DatabaseSync, opts: { handLog: bool
       /**
        * Counters move for every human in the hand regardless of `handLog` — they are player-facing
        * stats, not diagnostics. The `hand_log` row is the diagnostic, and it is opt-in.
+       *
+       * A cancelled hand never bumps counters (spec §18.2 "không ghi ván bị hủy" — cancelled hands
+       * are not recorded as played). The `hand_log` row is still written when enabled: it is a raw
+       * diagnostic trace, not the player-facing stat.
        */
       async recordHand(summary: HandSummary): Promise<void> {
         transact(() => {
-          for (const p of summary.players) {
-            if (p.isBot) continue
-            bumpHands.run(p.won ? 1 : 0, p.playerId)
+          if (!summary.cancelled) {
+            for (const p of summary.players) {
+              if (p.isBot) continue
+              bumpHands.run(p.won ? 1 : 0, p.playerId)
+            }
           }
           if (handLog) {
             insertHandLog.run(summary.handId, summary.roomId, summary.mode, summary.fee, summary.cancelled ? 1 : 0, JSON.stringify(summary), now())

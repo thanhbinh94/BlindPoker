@@ -210,6 +210,14 @@ describe('history.recordHand', () => {
     expect(r.getLitePlayer(a)).toMatchObject({ handsPlayed: 2, handsWon: 1 })
   })
 
+  it('does not bump hands_played/hands_won for a cancelled hand, but still writes hand_log when enabled', async () => {
+    const r = repos({ handLog: true })
+    const a = r.createPlayer('Alice', 'ha', 1000).playerId
+    await r.history.recordHand(handSummary([{ playerId: a, isBot: false, net: 0, won: false }], { cancelled: true }))
+    expect(r.getLitePlayer(a)).toMatchObject({ handsPlayed: 0, handsWon: 0 })
+    expect((r.db.prepare('SELECT COUNT(*) AS n FROM hand_log').get() as { n: number }).n).toBe(1)
+  })
+
   it('does not write hand_log when handLog is disabled', async () => {
     const r = repos({ handLog: false })
     const a = r.createPlayer('Alice', 'ha', 1000).playerId
