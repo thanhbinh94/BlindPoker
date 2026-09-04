@@ -52,4 +52,39 @@ describe('useGameClient', () => {
     act(() => result.current.connect())
     expect(FakeSocket.instances).toHaveLength(1)
   })
+
+  it('keeps one connection across re-renders, however often the screen above it updates', () => {
+    // The room re-renders once a second while a countdown runs; a connection keyed on anything that changes with
+    // it would tear the socket down and back up on every tick.
+    const { result, rerender } = renderHook(() => useGameClient({ url: 'ws://x/ws', token: 'tok:a', socketFactory: fakeSocketFactory }))
+    act(() => FakeSocket.instances[0]!.open())
+    for (let i = 0; i < 5; i += 1) {
+      rerender()
+      act(() => FakeSocket.instances.at(-1)!.receive({ t: 'BALANCE', balance: 100 + i }))
+    }
+    expect(FakeSocket.instances).toHaveLength(1)
+    expect(result.current.state.balance).toBe(104)
+  })
+
+  it('drops the room from state once the server acknowledges LEAVE_ROOM', async () => {
+    const { result } = renderHook(() => useGameClient({ url: 'ws://x/ws', token: 'tok:a', socketFactory: fakeSocketFactory }))
+    const sock = () => FakeSocket.instances.at(-1)!
+    act(() => sock().open())
+    act(() =>
+      sock().receive({
+        t: 'ROOM_SNAPSHOT', seq: 3, deadlineAt: null, hand: null,
+        room: { roomId: 'r', code: 'C', name: 'n', mode: 'holdem', config: { name: 'n', mode: 'holdem', maxPlayers: 2, isPrivate: false, turnTimerSec: 30, autoStart: false, hasPassword: false }, playerCount: 1, maxPlayers: 2, status: 'OPEN', hostPlayerId: 'a', carryOverPot: 0, nextHandAt: null, players: [] },
+      }),
+    )
+    expect(result.current.state.room?.code).toBe('C')
+
+    let leaving!: Promise<unknown>
+    act(() => { leaving = result.current.leaveRoom() })
+    const sent = sock().sent.at(-1) as { t: string; reqId: string }
+    expect(sent.t).toBe('LEAVE_ROOM')
+    act(() => sock().receive({ t: 'ACK', reqId: sent.reqId }))
+    await act(async () => { await leaving })
+    expect(result.current.state.room).toBeNull()
+    expect(result.current.state.hand).toBeNull()
+  })
 })

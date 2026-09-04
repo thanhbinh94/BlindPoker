@@ -75,6 +75,44 @@ describe('ActionBar', () => {
     await userEvent.click(screen.getByRole('button', { name: /max/i }))
     expect(amount).toHaveValue(5000)
   })
+  it('acts on the F, C and Enter shortcuts it advertises', async () => {
+    const onAct = vi.fn()
+    const { unmount } = wrap(
+      <ActionBar
+        hand={hand({ seat: 1, kinds: ['fold', 'call', 'raise', 'allIn'], callAmount: 200, minBet: 0, maxBet: 0, minRaiseTo: 400, maxRaiseTo: 5000 })}
+        room={room}
+        onAct={onAct}
+        lang="en"
+      />,
+    )
+    await userEvent.keyboard('f')
+    expect(onAct).toHaveBeenLastCalledWith({ kind: 'fold' })
+    await userEvent.keyboard('c')
+    expect(onAct).toHaveBeenLastCalledWith({ kind: 'call' })
+    await userEvent.keyboard('{Enter}')
+    expect(onAct).toHaveBeenLastCalledWith({ kind: 'raise', amount: 400 })
+    expect(onAct).toHaveBeenCalledTimes(3)
+
+    // The listener lives on `document`, so leaving it behind would keep folding hands in the next room.
+    unmount()
+    await userEvent.keyboard('f')
+    expect(onAct).toHaveBeenCalledTimes(3)
+  })
+  it('ignores its shortcuts while the tray is disabled', async () => {
+    const onAct = vi.fn()
+    wrap(
+      <ActionBar
+        hand={hand({ seat: 1, kinds: ['fold', 'check'], callAmount: 0, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 })}
+        room={room}
+        onAct={onAct}
+        disabled
+        lang="en"
+      />,
+    )
+    await userEvent.keyboard('f')
+    await userEvent.keyboard('c')
+    expect(onAct).not.toHaveBeenCalled()
+  })
   it('blind decision shows play with the wager and fold', async () => {
     const onAct = vi.fn()
     const blindRoom = { config: { mode: 'blind', blind: { fixedWager: 2000 } } } as unknown as RoomView
