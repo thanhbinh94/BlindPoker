@@ -767,8 +767,8 @@ Server-kit không import gì từ apps. Normal thêm route REST và module riên
 | `DATABASE_URL` | bắt buộc | — |
 | `SQLITE_PATH` | — | `./bind-poker.sqlite` |
 | `SESSION_SECRET` | bắt buộc (≥ 32 ký tự) | — |
-| `ALLOWED_ORIGINS` | bắt buộc (CSV) | mặc định cùng host |
-| `RECONNECT_WINDOW_SEC` | 90 | — (Lite dùng mặc định `DEFAULT_ROOM_OPTIONS.reconnectWindowMs` = 90 s) |
+| `ALLOWED_ORIGINS` | bắt buộc (CSV) | *(trống)* → `'same-host'`: `Origin` phải trùng `host[:port]` của header `Host` (không phân biệt scheme), không có `Origin` (client không phải trình duyệt) thì cho qua, còn lại `403` ở bước upgrade. Khai CSV khi sau reverse proxy — khi đó thiếu `Origin` cũng bị từ chối |
+| `RECONNECT_WINDOW_SEC` | 90 | 90 (`roomOptions.reconnectWindowMs`) |
 | `ECONOMY_TIMEZONE` | Asia/Ho_Chi_Minh | Asia/Ho_Chi_Minh |
 | `LOG_LEVEL` | info | info |
 | `LITE_HAND_LOG` | — | `false` (`1`/`true`/`yes` để bật) |

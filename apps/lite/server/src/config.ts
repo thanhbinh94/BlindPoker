@@ -1,8 +1,8 @@
 import { dirname } from 'node:path'
 
-export interface LiteConfig { port: number; host: string; sqlitePath: string; handLog: boolean; logLevel: 'debug' | 'info' | 'warn' | 'error'; timezone: string; allowedOrigins: string[] | null; publicDir: string | null }
+export interface LiteConfig { port: number; host: string; sqlitePath: string; handLog: boolean; logLevel: 'debug' | 'info' | 'warn' | 'error'; timezone: string; allowedOrigins: string[] | 'same-host'; publicDir: string | null }
 
-export const DEFAULT_CONFIG: LiteConfig = { port: 8080, host: '0.0.0.0', sqlitePath: './bind-poker.sqlite', handLog: false, logLevel: 'info', timezone: 'Asia/Ho_Chi_Minh', allowedOrigins: null, publicDir: null }
+export const DEFAULT_CONFIG: LiteConfig = { port: 8080, host: '0.0.0.0', sqlitePath: './bind-poker.sqlite', handLog: false, logLevel: 'info', timezone: 'Asia/Ho_Chi_Minh', allowedOrigins: 'same-host', publicDir: null }
 
 export function parseDotenv(text: string): Record<string, string> {
   const out: Record<string, string> = {}
@@ -38,7 +38,10 @@ export function loadConfig(env: Record<string, string | undefined>, dotenvText?:
   if (!LEVELS.has(logLevel)) throw new Error(`LOG_LEVEL must be one of ${[...LEVELS].join(', ')}`)
   const timezone = get('ECONOMY_TIMEZONE') ?? DEFAULT_CONFIG.timezone
   if (!validTimezone(timezone)) throw new Error(`ECONOMY_TIMEZONE is not a valid IANA zone: ${timezone}`)
-  const origins = get('ALLOWED_ORIGINS')
+  // Unset (or blank) is not "allow anything": Lite serves its own UI, so the page that opens a
+  // socket must have come from this host. A list is only needed when a reverse proxy has changed
+  // the public origin out from under the `Host` header.
+  const origins = (get('ALLOWED_ORIGINS') ?? '').split(',').map((s) => s.trim()).filter(Boolean)
   return {
     port,
     host: get('HOST') ?? DEFAULT_CONFIG.host,
@@ -46,7 +49,7 @@ export function loadConfig(env: Record<string, string | undefined>, dotenvText?:
     handLog: ['1', 'true', 'yes'].includes((get('LITE_HAND_LOG') ?? '').toLowerCase()),
     logLevel,
     timezone,
-    allowedOrigins: origins ? origins.split(',').map((s) => s.trim()).filter(Boolean) : null,
+    allowedOrigins: origins.length > 0 ? origins : DEFAULT_CONFIG.allowedOrigins,
     publicDir: get('PUBLIC_DIR') ?? null,
   }
 }

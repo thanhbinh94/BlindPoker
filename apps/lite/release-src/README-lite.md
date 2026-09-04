@@ -82,7 +82,7 @@ chọn; biến môi trường của hệ thống được ưu tiên hơn file `.
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn` hoặc `error`. |
 | `ECONOMY_TIMEZONE` | `Asia/Ho_Chi_Minh` | Múi giờ (IANA) quyết định lúc nào sang "ngày mới" để nhận thưởng hằng ngày. |
 | `LITE_HAND_LOG` | `false` | `true` để ghi lịch sử từng ván vào database. File dữ liệu sẽ phình nhanh hơn. |
-| `ALLOWED_ORIGINS` | *(trống)* | Danh sách origin được phép gọi API, cách nhau bằng dấu phẩy. Chỉ cần khi đặt sau reverse proxy. |
+| `ALLOWED_ORIGINS` | *(trống)* | Danh sách origin được phép mở WebSocket, cách nhau bằng dấu phẩy. Bỏ trống = chỉ chấp nhận trang đến từ chính máy chủ này. Chỉ cần khi đặt sau reverse proxy. |
 | `PUBLIC_DIR` | *(trống)* | Thư mục giao diện web thay thế bản đã nhúng trong exe. |
 
 Giá trị sai (ví dụ `PORT=abc`) làm server dừng ngay khi khởi động kèm thông báo lý do.

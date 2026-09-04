@@ -494,8 +494,8 @@ describe('websocket wiring', () => {
     return `ws://127.0.0.1:${new URL(address).port}/ws`
   }
 
-  async function connect(url: string): Promise<TestClient> {
-    const client = await TestClient.connect(url)
+  async function connect(url: string, headers: Record<string, string> = {}): Promise<TestClient> {
+    const client = await TestClient.connect(url, headers)
     clients.push(client)
     return client
   }
@@ -524,6 +524,30 @@ describe('websocket wiring', () => {
     const h = makeApp()
     const url = await listen(h)
     await expect(TestClient.connect(url.replace('/ws', '/socket'))).rejects.toThrow()
+  })
+
+  it('defaults to the same-host origin policy: this host is welcome, another site is not', async () => {
+    const h = makeApp()
+    expect(h.app.game.gateway).toBeDefined()
+    const session = await createSession(h, 'Alice')
+    const url = await listen(h)
+    const host = new URL(url.replace('ws://', 'http://')).host
+
+    const own = await connect(url, { origin: `http://${host}` })
+    expect((await own.hello(session.token)).playerId).toBe(session.playerId)
+
+    await expect(TestClient.connect(url, { origin: 'http://evil.example' })).rejects.toThrow()
+  })
+
+  it('honours an explicit ALLOWED_ORIGINS list instead, for a deployment behind a proxy', async () => {
+    const h = makeApp({ config: { allowedOrigins: ['https://poker.example.com'] } })
+    const session = await createSession(h, 'Alice')
+    const url = await listen(h)
+
+    const proxied = await connect(url, { origin: 'https://poker.example.com' })
+    expect((await proxied.hello(session.token)).playerId).toBe(session.playerId)
+
+    await expect(TestClient.connect(url, { origin: `http://${new URL(url.replace('ws://', 'http://')).host}` })).rejects.toThrow()
   })
 
   it('pushes a BALANCE frame when a daily claim changes the balance', async () => {

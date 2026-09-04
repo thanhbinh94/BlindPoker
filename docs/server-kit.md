@@ -170,9 +170,29 @@ upper bound on `shutdown()`; see below.
 | `rateLimitPerSec` / `rateLimitBurst` | 20 / 20 | Per-connection token-bucket for inbound messages |
 | `maxPayloadBytes` | 4,096 | WebSocket frame size cap |
 | `helloTimeoutMs` | 5,000 | Time to send `HELLO` before an unauthenticated socket is closed |
-| `allowedOrigins` | `null` (any) | Optional allowlist checked against the upgrade request's `Origin` header |
+| `allowedOrigins` | `null` (any) | Who may open a socket, by the upgrade request's `Origin` — see below |
 | `maxInvalidMessages` | 3 | Strikes before a connection is closed. Only `INVALID_MESSAGE` (unparseable frames) counts, plus one strike per 5 consecutive rate-limited messages; a rejected room config never does |
 | `lobbyCoalesceMs` | 50 | Room-list changes within this window collapse into one `ROOM_LIST` broadcast |
+
+### `allowedOrigins`
+
+`Origin` is the only cross-site signal a WebSocket upgrade carries — a browser
+always sets it and a page cannot forge it — so it is what stands between a
+player's open tab on some other site and a socket here. A refusal is an
+`HTTP/1.1 403` on the upgrade, before any authentication runs.
+
+| Value | Behaviour |
+|---|---|
+| `null` | Everything is allowed. Only correct when something in front already decides. |
+| `'same-host'` | An `Origin` whose `host[:port]` equals the request's `Host` header is allowed; so is a request with **no** `Origin` at all (a bot, a health probe, `wscat` — there is no site to forge from). Everything else is refused. |
+| `string[]` | Exactly these origins, matched whole. An absent `Origin` is refused: a list is a deliberate allowlist. |
+
+`'same-host'` is the right default for a server that also serves its own UI: it
+needs no configuration and still refuses a foreign page. Matching is
+scheme-insensitive (a TLS terminator in front rewrites `https` to `http`
+without changing the authority) and tolerates a `:80`/`:443` written out on one
+side and omitted on the other. Use the list form when a reverse proxy has
+changed the public origin out from under `Host`.
 
 ## Wire contract
 

@@ -122,7 +122,7 @@ lý do (`PORT must be an integer 0–65535, got abc`).
 | `LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error` |
 | `ECONOMY_TIMEZONE` | `Asia/Ho_Chi_Minh` | Múi giờ IANA quyết định mốc "ngày mới" của thưởng hằng ngày |
 | `LITE_HAND_LOG` | `false` | `1`/`true`/`yes` để ghi bảng `hand_log`; file dữ liệu phình nhanh hơn |
-| `ALLOWED_ORIGINS` | *(trống)* | CSV origin được phép; trống = chỉ cùng host. Chỉ cần khi đứng sau reverse proxy |
+| `ALLOWED_ORIGINS` | *(trống)* → `same-host` | CSV origin được phép mở WebSocket. Trống = chính sách **same-host**: `Origin` phải trùng `host[:port]` của header `Host` (không phân biệt scheme), client không gửi `Origin` (bot, health probe) vẫn vào được, mọi trang khác bị `403` ngay ở bước upgrade. Khai danh sách khi reverse proxy đổi origin công khai — lúc đó thiếu `Origin` cũng bị từ chối |
 | `PUBLIC_DIR` | *(trống)* | Thư mục giao diện thay cho bản nhúng trong exe; tương đối thì tính từ thư mục exe |
 
 ---

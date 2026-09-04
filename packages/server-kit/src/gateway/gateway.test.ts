@@ -39,6 +39,58 @@ async function seatTwo(a: TestClient, b: TestClient, config = HOLDEM, buyIn: num
   return snap
 }
 
+describe('origin policy', () => {
+  /** The `host[:port]` the ws client will put in its `Host` header for `ts.url`. */
+  const selfHost = (): string => new URL(ts.url).host
+
+  it("with 'same-host', accepts a browser from this host, a client with no Origin at all, and refuses a foreign one", async () => {
+    ts = await startTestServer({ gatewayOptions: { allowedOrigins: 'same-host' } })
+
+    const sameOrigin = await TestClient.connect(ts.url, { origin: `http://${selfHost()}` })
+    clients.push(sameOrigin)
+    expect((await sameOrigin.hello('tok:a')).playerId).toBe('a')
+
+    // No `Origin` header: a bot or a health probe, not a cross-site request.
+    const headless = await TestClient.connect(ts.url)
+    clients.push(headless)
+    expect((await headless.hello('tok:b')).playerId).toBe('b')
+
+    await expect(TestClient.connect(ts.url, { origin: 'http://evil.example' })).rejects.toThrow(/403/)
+  })
+
+  it("with 'same-host', ignores the scheme and a spelled-out default port", async () => {
+    ts = await startTestServer({ gatewayOptions: { allowedOrigins: 'same-host' } })
+    const host = selfHost()
+    for (const origin of [`https://${host}`, `HTTP://${host.toUpperCase()}`]) {
+      const c = await TestClient.connect(ts.url, { origin })
+      clients.push(c)
+      expect((await c.hello('tok:a')).playerId, origin).toBe('a')
+      await c.close()
+    }
+    // A host that merely starts the same way is a different host.
+    await expect(TestClient.connect(ts.url, { origin: `http://${host}.evil.example` })).rejects.toThrow(/403/)
+  })
+
+  it('with an explicit list, accepts exactly the listed origins and nothing else — not even this host', async () => {
+    ts = await startTestServer({ gatewayOptions: { allowedOrigins: ['https://poker.example.com'] } })
+
+    const listed = await TestClient.connect(ts.url, { origin: 'https://poker.example.com' })
+    clients.push(listed)
+    expect((await listed.hello('tok:a')).playerId).toBe('a')
+
+    await expect(TestClient.connect(ts.url, { origin: `http://${selfHost()}` })).rejects.toThrow(/403/)
+    // A list is a deliberate allowlist, so an absent Origin is not on it either.
+    await expect(TestClient.connect(ts.url)).rejects.toThrow(/403/)
+  })
+
+  it('with null, lets anything through — the caller has decided elsewhere', async () => {
+    ts = await startTestServer({ gatewayOptions: { allowedOrigins: null } })
+    const c = await TestClient.connect(ts.url, { origin: 'http://evil.example' })
+    clients.push(c)
+    expect((await c.hello('tok:a')).playerId).toBe('a')
+  })
+})
+
 describe('authentication', () => {
   it('accepts a valid token, rejects an invalid one, and closes silent sockets after the HELLO timeout', async () => {
     ts = await startTestServer({ gatewayOptions: { helloTimeoutMs: 150 } })

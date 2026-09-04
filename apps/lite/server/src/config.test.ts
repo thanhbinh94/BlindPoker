@@ -24,6 +24,11 @@ describe('loadConfig', () => {
     expect(c.timezone).toBe('UTC')
     expect(c.allowedOrigins).toEqual(['http://a', 'http://b'])
   })
+  it("defaults ALLOWED_ORIGINS to the same-host policy, and treats a blank value as unset", () => {
+    expect(loadConfig({}).allowedOrigins).toBe('same-host')
+    expect(loadConfig({ ALLOWED_ORIGINS: '' }).allowedOrigins).toBe('same-host')
+    expect(loadConfig({ ALLOWED_ORIGINS: ' , ' }).allowedOrigins).toBe('same-host')
+  })
   it('rejects invalid values', () => {
     expect(() => loadConfig({ PORT: 'abc' })).toThrow(/PORT/)
     expect(() => loadConfig({ LOG_LEVEL: 'loud' })).toThrow(/LOG_LEVEL/)

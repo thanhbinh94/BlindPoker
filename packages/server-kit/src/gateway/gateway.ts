@@ -18,7 +18,17 @@ export interface GatewayOptions {
   rateLimitBurst: number
   maxPayloadBytes: number
   helloTimeoutMs: number
-  allowedOrigins: string[] | null
+  /**
+   * Who may open a socket, by `Origin`:
+   *
+   * - `null` — anybody. Only correct when something in front is already deciding.
+   * - `'same-host'` — the page that opened the socket must have come from the host this request
+   *   named. The right default for a server that serves its own UI: it needs no configuration and
+   *   still refuses `evil.example` from a player's browser.
+   * - `string[]` — exactly these origins, matched whole. What a reverse-proxied deployment wants,
+   *   where the public origin is not the one the server sees in `Host`.
+   */
+  allowedOrigins: string[] | 'same-host' | null
   maxInvalidMessages: number
   /** Room-list changes inside this window collapse into a single ROOM_LIST broadcast. */
   lobbyCoalesceMs: number
@@ -407,10 +417,41 @@ export class Gateway {
     }, this.deps.options.heartbeatIntervalMs)
   }
 
+  /**
+   * `Origin` is the only cross-site signal an upgrade carries: a browser sets it and a page cannot
+   * forge it, so it is what stands between a player's open tab on `evil.example` and a socket here.
+   */
   private originAllowed(req: IncomingMessage): boolean {
     const allowed = this.deps.options.allowedOrigins
     if (allowed === null) return true
     const origin = req.headers.origin
-    return typeof origin === 'string' && allowed.includes(origin)
+    if (allowed !== 'same-host') return typeof origin === 'string' && allowed.includes(origin)
+    // No `Origin` at all means no browser: a bot, a health probe, `wscat`. There is no cross-site
+    // request to forge without a site, and refusing here would lock out every non-browser client.
+    if (typeof origin !== 'string' || origin === '') return true
+    const host = req.headers.host
+    return typeof host === 'string' && sameHost(origin, host)
   }
+}
+
+/** `host[:port]` of a URL, lowercased, with the scheme's default port dropped — a `Host` header's shape. */
+function hostOf(url: string): string | null {
+  try {
+    return new URL(url).host.toLowerCase()
+  } catch {
+    return null // an opaque origin (`null`, `file://`) or plain garbage: not this host
+  }
+}
+
+/**
+ * True when `origin` names the same `host[:port]` as the request's `Host` header. Scheme-insensitive
+ * on purpose — a TLS terminator in front changes `https` to `http` without changing the authority,
+ * and both the origin and the header are re-parsed under each scheme so `:80`/`:443` written out
+ * explicitly on one side and omitted on the other still match.
+ */
+function sameHost(origin: string, host: string): boolean {
+  const want = hostOf(origin)
+  if (want === null) return false
+  const raw = host.toLowerCase()
+  return want === raw || want === hostOf(`http://${raw}`) || want === hostOf(`https://${raw}`)
 }
