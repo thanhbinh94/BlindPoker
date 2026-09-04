@@ -36,16 +36,31 @@ describe('name validation', () => {
     expect(() => service(repos()).create('a'.repeat(21))).toThrow(InvalidNameError)
   })
 
-  it('rejects a name with leading whitespace', () => {
-    expect(() => service(repos()).create(' Alice')).toThrow(InvalidNameError)
+  it('normalizes surrounding and repeated whitespace instead of refusing it', () => {
+    const svc = service(repos())
+    expect(svc.create(' Alice ').displayName).toBe('Alice')
+    expect(svc.create('Nguyễn   Văn  B').displayName).toBe('Nguyễn Văn B')
   })
 
-  it('rejects a name with trailing whitespace', () => {
-    expect(() => service(repos()).create('Alice ')).toThrow(InvalidNameError)
+  it('stores the composed (NFC) form of a decomposed name', () => {
+    const r = repos()
+    const created = service(r).create('Bình'.normalize('NFD'))
+    expect(created.displayName).toBe('Bình')
+    expect(r.getLitePlayer(created.playerId)?.displayName).toBe('Bình')
   })
 
   it('rejects a name containing disallowed characters', () => {
     expect(() => service(repos()).create('<script>')).toThrow(InvalidNameError)
+  })
+
+  it('rejects a zero-width or bidi character hidden inside a name', () => {
+    expect(() => service(repos()).create('Ali​ce')).toThrow(InvalidNameError)
+    expect(() => service(repos()).create('‮Alice')).toThrow(InvalidNameError)
+  })
+
+  it('rejects a name that starts or ends with a separator', () => {
+    expect(() => service(repos()).create('.Alice')).toThrow(InvalidNameError)
+    expect(() => service(repos()).create('Alice-')).toThrow(InvalidNameError)
   })
 })
 
@@ -92,6 +107,24 @@ describe('duplicate names', () => {
     svc.create('Alice')
     expect(() => svc.create('ALICE')).toThrow(NameTakenError)
     expect(() => svc.create('aliCE')).toThrow(NameTakenError)
+  })
+
+  it('folds Vietnamese case too — NGƯỜI is the same identity as Người', () => {
+    const svc = service(repos())
+    svc.create('Người')
+    expect(() => svc.create('NGƯỜI')).toThrow(NameTakenError)
+  })
+
+  it('folds composition too — the decomposed spelling of a taken name is taken', () => {
+    const svc = service(repos())
+    svc.create('Bình')
+    expect(() => svc.create('Bình'.normalize('NFD'))).toThrow(NameTakenError)
+  })
+
+  it('does not fold diacritics away — Binh and Bình are different players', () => {
+    const svc = service(repos())
+    svc.create('Bình')
+    expect(svc.create('Binh').displayName).toBe('Binh')
   })
 })
 

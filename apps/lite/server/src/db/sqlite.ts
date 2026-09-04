@@ -39,10 +39,13 @@ function userVersion(db: DatabaseSync): number {
 export function migrate(db: DatabaseSync): number {
   let version = userVersion(db)
   for (let i = version; i < MIGRATIONS.length; i += 1) {
-    const statements = MIGRATIONS[i] ?? []
+    const steps = MIGRATIONS[i] ?? []
     db.exec('BEGIN IMMEDIATE')
     try {
-      for (const sql of statements) db.exec(sql)
+      for (const step of steps) {
+        if (typeof step === 'string') db.exec(step)
+        else step(db) // a data migration that needs a rule SQLite cannot express
+      }
       // `user_version` takes no bind parameters; `i` is a loop index, never user input.
       db.exec(`PRAGMA user_version = ${i + 1}`)
       db.exec('COMMIT')

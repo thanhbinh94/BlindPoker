@@ -55,6 +55,35 @@ describe('createPlayer / lookups', () => {
     expect(r.getLitePlayer(rec.playerId)).toEqual(rec)
   })
 
+  it('stores the NFC form of the name and its identity key beside it', () => {
+    const r = repos()
+    const rec = r.createPlayer('Bình'.normalize('NFD'), 'hash-a', 5000)
+    expect(rec.displayName).toBe('Bình')
+    expect(rec.nameKey).toBe('bình')
+    expect((r.db.prepare('SELECT display_name, name_key FROM players WHERE id = ?').get(rec.playerId) as { display_name: string; name_key: string })).toEqual({
+      display_name: 'Bình',
+      name_key: 'bình',
+    })
+  })
+
+  it('refuses a name whose identity key is taken, folding Vietnamese case and composition', () => {
+    const r = repos()
+    r.createPlayer('Người', 'hash-a', 5000)
+    expect(() => r.createPlayer('NGƯỜI', 'hash-b', 5000)).toThrow(NameTakenError)
+    expect(() => r.createPlayer('Người'.normalize('NFD'), 'hash-c', 5000)).toThrow(NameTakenError)
+    // Diacritics are not folded away: `Nguoi` is somebody else.
+    expect(r.createPlayer('Nguoi', 'hash-d', 5000).nameKey).toBe('nguoi')
+  })
+
+  it('finds by name through the key, so case and composition do not matter', () => {
+    const r = repos()
+    const rec = r.createPlayer('Người', 'hash-a', 5000)
+    for (const spelling of ['Người', 'NGƯỜI', ' người ', 'Người'.normalize('NFD')]) {
+      expect(r.findByName(spelling)?.playerId, spelling).toBe(rec.playerId)
+    }
+    expect(r.findByName('Nguoi')).toBeNull()
+  })
+
   it('rejects a duplicate display name case-insensitively with NameTakenError', () => {
     const r = repos()
     r.createPlayer('Alice', 'hash-a', 5000)

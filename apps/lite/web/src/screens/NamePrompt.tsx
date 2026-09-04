@@ -1,3 +1,4 @@
+import { validateDisplayName } from '@bp/core'
 import { Button, Field, LanguageSwitch } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
 import { useState, type FormEvent } from 'react'
@@ -7,22 +8,8 @@ import { useLanguagePref } from '../prefs.js'
 import s from './lite.module.css'
 
 const SPADE = '♠'
-/** Unicode letters (Vietnamese diacritics included), digits, space, underscore, hyphen, dot. */
-const NAME_PATTERN = /^[\p{L}\p{N} _.-]+$/u
-const MIN_NAME = 2
-const MAX_NAME = 20
 /** Refusals this screen has words for; anything else falls back to the kit's generic error. */
 const PROMPT_CODES = new Set(['INVALID_NAME', 'DISPLAY_NAME_TAKEN', 'RATE_LIMITED'])
-
-/**
- * The server's rule, restated on the client (`session-service.ts`): a name is taken exactly as typed, so
- * surrounding whitespace is a refusal rather than something to quietly trim away.
- */
-export function validateDisplayName(raw: string): boolean {
-  if (raw.trim() !== raw) return false
-  if (raw.length < MIN_NAME || raw.length > MAX_NAME) return false
-  return NAME_PATTERN.test(raw)
-}
 
 function refusalText(cause: unknown, t: TFunction): string {
   if (cause instanceof ApiError) {
@@ -54,13 +41,16 @@ export function NamePrompt({ api, onSession, message = null }: NamePromptProps) 
   const submit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
     if (busy) return
-    if (!validateDisplayName(name)) {
+    // The server's rule, not a restatement of it (`@bp/core/validateDisplayName`). The *normalized*
+    // name is what gets sent, so a stray trailing space is corrected here rather than refused there.
+    const verdict = validateDisplayName(name)
+    if (!verdict.ok) {
       setError(t('prompt.errors.INVALID_NAME'))
       return
     }
     setBusy(true)
     try {
-      onSession(await api.createSession(name))
+      onSession(await api.createSession(verdict.name))
     } catch (cause) {
       setError(refusalText(cause, t))
       setBusy(false)

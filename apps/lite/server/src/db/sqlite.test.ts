@@ -38,7 +38,7 @@ describe('openDatabase / migrate', () => {
   it('creates every column the repositories rely on', () => {
     const db = openDatabase(':memory:')
     const cols = (table: string) => (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((r) => r.name)
-    expect(cols('players')).toEqual(['id', 'display_name', 'token_hash', 'balance', 'hands_played', 'hands_won', 'streak', 'last_daily_claim', 'last_relief_at', 'created_at'])
+    expect(cols('players')).toEqual(['id', 'display_name', 'token_hash', 'balance', 'hands_played', 'hands_won', 'streak', 'last_daily_claim', 'last_relief_at', 'created_at', 'name_key'])
     expect(cols('sinks')).toEqual(['id', 'kind', 'ref_id', 'amount', 'created_at'])
     expect(cols('hand_log')).toEqual(['id', 'hand_id', 'room_id', 'mode', 'fee', 'cancelled', 'summary', 'created_at'])
     db.close()
@@ -63,9 +63,43 @@ describe('openDatabase / migrate', () => {
 
   it('migrate returns MIGRATIONS.length and applies the schema on a bare database', () => {
     const db = openDatabase(':memory:')
-    db.exec('DROP TABLE players; DROP TABLE sinks; DROP TABLE hand_log; PRAGMA user_version = 0')
+    db.exec('DROP INDEX idx_players_name_key; DROP TABLE players; DROP TABLE sinks; DROP TABLE hand_log; PRAGMA user_version = 0')
     expect(migrate(db)).toBe(MIGRATIONS.length)
     expect(tableNames(db)).toEqual(expect.arrayContaining(['hand_log', 'players', 'sinks']))
+    db.close()
+  })
+
+  it('backfills name_key for rows written before the column existed', () => {
+    const db = openDatabase(':memory:')
+    // Rewind to v1 and put two legacy rows in, one of them a name SQLite's ASCII-only `lower()`
+    // could never have folded — which is exactly why the backfill is JavaScript.
+    db.exec('DROP INDEX idx_players_name_key')
+    db.exec('ALTER TABLE players DROP COLUMN name_key')
+    db.exec('PRAGMA user_version = 1')
+    const insert = db.prepare('INSERT INTO players (id, display_name, token_hash, balance, created_at) VALUES (?, ?, ?, ?, ?)')
+    insert.run('p1', 'NGƯỜI', 'h1', 1000, 1)
+    insert.run('p2', 'Bình'.normalize('NFD'), 'h2', 1000, 2)
+
+    expect(migrate(db)).toBe(MIGRATIONS.length)
+    const keys = (db.prepare('SELECT id, name_key FROM players ORDER BY id').all() as { id: string; name_key: string }[])
+    expect(keys).toEqual([{ id: 'p1', name_key: 'người' }, { id: 'p2', name_key: 'bình' }])
+  })
+
+  it('keeps the older row when two legacy names fold to one key, rather than refusing to start', () => {
+    const db = openDatabase(':memory:')
+    db.exec('DROP INDEX idx_players_name_key')
+    db.exec('ALTER TABLE players DROP COLUMN name_key')
+    db.exec('PRAGMA user_version = 1')
+    const insert = db.prepare('INSERT INTO players (id, display_name, token_hash, balance, created_at) VALUES (?, ?, ?, ?, ?)')
+    insert.run('old', 'Người', 'h1', 1000, 1)
+    insert.run('new', 'NGƯỜI', 'h2', 1000, 2) // distinct under v1's ASCII-only NOCASE index
+
+    expect(migrate(db)).toBe(MIGRATIONS.length)
+    const keys = Object.fromEntries((db.prepare('SELECT id, name_key FROM players').all() as { id: string; name_key: string }[]).map((r) => [r.id, r.name_key]))
+    expect(keys.old).toBe('người')
+    expect(keys.new).toBe('người#new')
+    // Both players kept their display name; only the *next* claim on that key is refused.
+    expect((db.prepare('SELECT COUNT(*) AS n FROM players').get() as { n: number }).n).toBe(2)
     db.close()
   })
 

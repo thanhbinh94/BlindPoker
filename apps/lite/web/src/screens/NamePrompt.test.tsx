@@ -51,8 +51,9 @@ describe('NamePrompt', () => {
   it.each([
     ['too short', 'A'],
     ['too long', 'x'.repeat(21)],
-    ['leading whitespace', ' Bình'],
+    ['starting with a separator', '.Bình'],
     ['illegal character', 'Bình@'],
+    ['hiding a zero-width character', 'Bì​nh'],
   ])('refuses a name that is %s without calling the server', async (_label, value) => {
     const api = stubApi()
     const { user } = setup(api)
@@ -73,6 +74,16 @@ describe('NamePrompt', () => {
 
     await waitFor(() => expect(api.createSession).toHaveBeenCalledWith('Bình'))
     expect(onSession).toHaveBeenCalledWith(SESSION)
+  })
+
+  it('sends the normalized name, so a stray space is corrected rather than refused', async () => {
+    const api = stubApi()
+    const { user } = setup(api)
+
+    await user.type(nameBox(), '  Nguyễn   Văn A  ')
+    await user.click(submit())
+
+    await waitFor(() => expect(api.createSession).toHaveBeenCalledWith('Nguyễn Văn A'))
   })
 
   it.each([

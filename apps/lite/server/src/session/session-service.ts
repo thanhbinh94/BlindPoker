@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { ECONOMY, type PlayerIdentity } from '@bp/core'
+import { ECONOMY, validateDisplayName, type DisplayNameRefusal, type PlayerIdentity } from '@bp/core'
 import type { LiteRepositories } from '../repos/sqlite-repos.js'
 
 export interface SessionService {
@@ -11,20 +11,21 @@ export interface SessionService {
 
 export class InvalidNameError extends Error {}
 
-// Unicode letters (covers Vietnamese diacritics), digits, space, underscore, hyphen, dot.
-const NAME_PATTERN = /^[\p{L}\p{N} _.-]+$/u
-
 /**
- * `trim()` here is the validation, not a normalization step: a name with leading or trailing
- * whitespace is rejected outright rather than silently cleaned up, so the returned name is always
- * exactly what the caller typed.
+ * The rule itself is `@bp/core`'s (`validateDisplayName`) — the same one the sign-up form and the
+ * `name_key` index use. All this layer adds is the sentence a player reads.
  */
+const REFUSAL_MESSAGE: Record<DisplayNameRefusal, string> = {
+  length: 'display name must be 2-20 characters',
+  chars: 'display name may only contain letters, digits, spaces, "_", "-" and "."',
+  edges: 'display name must not start or end with " ", "_", "-" or "."',
+}
+
+/** The stored, normalized form of `raw` — NFC, trimmed, internal whitespace collapsed. */
 function validateName(raw: string): string {
-  const trimmed = raw.trim()
-  if (trimmed !== raw) throw new InvalidNameError('display name must not have leading or trailing whitespace')
-  if (trimmed.length < 2 || trimmed.length > 20) throw new InvalidNameError('display name must be 2-20 characters')
-  if (!NAME_PATTERN.test(trimmed)) throw new InvalidNameError('display name may only contain letters, digits, spaces, "_", "-" and "."')
-  return trimmed
+  const verdict = validateDisplayName(raw)
+  if (!verdict.ok) throw new InvalidNameError(REFUSAL_MESSAGE[verdict.reason])
+  return verdict.name
 }
 
 function hashTokenValue(token: string): string {

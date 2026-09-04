@@ -125,7 +125,7 @@ describe('POST /api/session', () => {
 
   it('rejects a malformed display name with INVALID_NAME', async () => {
     const h = makeApp()
-    for (const displayName of ['a', ' Alice', 'x'.repeat(21), 'Al<b>ice']) {
+    for (const displayName of ['a', '.Alice', 'x'.repeat(21), 'Al<b>ice', 'Ali​ce']) {
       const res = await h.app.fastify.inject({ method: 'POST', url: '/api/session', headers: XRW, payload: { displayName } })
       expect(res.statusCode).toBe(400)
       expect((res.json() as { error: { code: string } }).error.code).toBe('INVALID_NAME')

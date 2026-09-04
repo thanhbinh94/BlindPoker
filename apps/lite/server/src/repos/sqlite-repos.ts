@@ -1,11 +1,14 @@
 import { randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
+import { displayNameKey, normalizeDisplayName } from '@bp/core'
 import { InsufficientBalanceError, type BalanceEntry, type HandSummary, type PlayerRecord, type Repositories, type SettlementMeta } from '@bp/server-kit'
 
 /** The full `players` row — everything Lite stores about a player, not just what `server-kit` needs. */
 export interface LitePlayerRecord {
   playerId: string
   displayName: string
+  /** The identity `display_name` folds to (`@bp/core`'s `displayNameKey`); uniqueness is decided on this. */
+  nameKey: string
   balance: number
   handsPlayed: number
   handsWon: number
@@ -25,9 +28,10 @@ export interface LiteSinkRow {
 
 export interface LiteRepositories extends Repositories {
   db: DatabaseSync
+  /** Normalizes `displayName` to NFC and derives its `name_key`; throws `NameTakenError` if the key is in use. */
   createPlayer(displayName: string, tokenHash: string, startingBalance: number): LitePlayerRecord
   findByTokenHash(hash: string): LitePlayerRecord | null
-  /** Case-insensitive — `display_name` carries `COLLATE NOCASE`. */
+  /** By identity key, so case and Unicode composition do not matter — `NGƯỜI` finds `Người`. */
   findByName(displayName: string): LitePlayerRecord | null
   getLitePlayer(playerId: string): LitePlayerRecord | null
   updateDaily(playerId: string, patch: { streak: number; lastDailyClaim: string }): void
@@ -46,6 +50,7 @@ export class NameTakenError extends Error {
 interface PlayerRow {
   id: string
   display_name: string
+  name_key: string
   balance: number
   hands_played: number
   hands_won: number
@@ -59,6 +64,7 @@ function toRecord(row: PlayerRow): LitePlayerRecord {
   return {
     playerId: row.id,
     displayName: row.display_name,
+    nameKey: row.name_key,
     balance: Number(row.balance),
     handsPlayed: Number(row.hands_played),
     handsWon: Number(row.hands_won),
@@ -69,7 +75,7 @@ function toRecord(row: PlayerRow): LitePlayerRecord {
   }
 }
 
-const PLAYER_COLUMNS = 'id, display_name, balance, hands_played, hands_won, streak, last_daily_claim, last_relief_at, created_at'
+const PLAYER_COLUMNS = 'id, display_name, name_key, balance, hands_played, hands_won, streak, last_daily_claim, last_relief_at, created_at'
 
 export function createSqliteRepositories(db: DatabaseSync, opts: { handLog: boolean; now?: () => number }): LiteRepositories {
   const now = opts.now ?? Date.now
@@ -78,10 +84,10 @@ export function createSqliteRepositories(db: DatabaseSync, opts: { handLog: bool
   // Prepared once and reused for the process's lifetime: SQLite reuses the compiled plan, and
   // `StatementSync` resets itself between runs, so a single instance per statement is safe here
   // (everything below runs synchronously — no two callers can be mid-statement at the same time).
-  const insertPlayer = db.prepare('INSERT INTO players (id, display_name, token_hash, balance, created_at) VALUES (?, ?, ?, ?, ?)')
+  const insertPlayer = db.prepare('INSERT INTO players (id, display_name, name_key, token_hash, balance, created_at) VALUES (?, ?, ?, ?, ?, ?)')
   const selectById = db.prepare(`SELECT ${PLAYER_COLUMNS} FROM players WHERE id = ?`)
   const selectByTokenHash = db.prepare(`SELECT ${PLAYER_COLUMNS} FROM players WHERE token_hash = ?`)
-  const selectByName = db.prepare(`SELECT ${PLAYER_COLUMNS} FROM players WHERE display_name = ?`)
+  const selectByKey = db.prepare(`SELECT ${PLAYER_COLUMNS} FROM players WHERE name_key = ?`)
   const selectBalance = db.prepare('SELECT balance FROM players WHERE id = ?')
   const addBalance = db.prepare('UPDATE players SET balance = balance + ? WHERE id = ?')
   const insertSink = db.prepare('INSERT INTO sinks (kind, ref_id, amount, created_at) VALUES (?, ?, ?, ?)')
@@ -188,10 +194,13 @@ export function createSqliteRepositories(db: DatabaseSync, opts: { handLog: bool
     createPlayer(displayName, tokenHash, startingBalance) {
       const id = randomUUID()
       const createdAt = now()
+      // The stored name is the normalized one, and the key beside it is what uniqueness is decided
+      // on. Both come from `@bp/core`, so the database agrees with the validator that let this in.
+      const name = normalizeDisplayName(displayName)
       try {
-        insertPlayer.run(id, displayName, tokenHash, startingBalance, createdAt)
+        insertPlayer.run(id, name, displayNameKey(name), tokenHash, startingBalance, createdAt)
       } catch (err) {
-        if (err instanceof Error && /UNIQUE constraint failed: players\.display_name/.test(err.message)) throw new NameTakenError(displayName)
+        if (err instanceof Error && /UNIQUE constraint failed: players\.(display_name|name_key)/.test(err.message)) throw new NameTakenError(name)
         throw err
       }
       const row = getRow(id)
@@ -205,7 +214,7 @@ export function createSqliteRepositories(db: DatabaseSync, opts: { handLog: bool
     },
 
     findByName(displayName) {
-      const row = (selectByName.get(displayName) as PlayerRow | undefined) ?? null
+      const row = (selectByKey.get(displayNameKey(normalizeDisplayName(displayName))) as PlayerRow | undefined) ?? null
       return row ? toRecord(row) : null
     },
 
