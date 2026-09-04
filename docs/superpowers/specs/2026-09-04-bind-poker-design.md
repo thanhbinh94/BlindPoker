@@ -627,6 +627,7 @@ Prefix `/api`. JSON. Lỗi: `{ error: { code, message } }`. Mutating request yê
 | GET | `/api/rewards/daily` | Bearer | `200 {allowed, alreadyClaimed, day, points, nextDay, nextPoints, streak, lastClaim}` | `401 UNAUTHENTICATED` |
 | POST | `/api/rewards/daily/claim` | Bearer | `200 {claimed:true, points, streak, balance}` | `409 ALREADY_CLAIMED` (kèm `claimed:false`) |
 | POST | `/api/economy/relief` | Bearer | `200 {granted:true, amount, balance}` | `409 NOT_ELIGIBLE` (kèm `granted:false, reason:"balance"\|"cooldown", retryAt`) |
+| POST | `/api/admin/shutdown` | Run token | `200 {ok:true}` rồi tắt êm (stopAccepting → hoàn cược/cash-out → đóng listener → đóng database) | `429 RATE_LIMITED` (5 lần/phút) · `403 FORBIDDEN` (socket không phải loopback) · `401 UNAUTHENTICATED` (sai run token) |
 | GET | `/*` | — | Static `dist/public` (hoặc asset trong exe); đường dẫn không có phần mở rộng rơi về `index.html` | `404 NOT_FOUND` |
 
 - Thân lỗi luôn là `{ error: { code, message } }`; các trường phụ (`retryAfterSec`, `claimed`, `granted`, `reason`, `retryAt`) nằm cạnh `error`, không nằm trong nó.
@@ -872,9 +873,12 @@ Người chơi (tên, stack, avatar/chữ cái, badge/title ở Normal), lá ri�
 
 - Database **không** đi kèm: `bind-poker.sqlite` (+ `-wal`, `-shm`) được tạo cạnh exe ở lần chạy đầu.
 - Vận hành: copy thư mục vào host (thư mục có quyền ghi, không phải `C:\Program Files`), (tùy chọn) đổi `.env`, chạy exe → console in `Listening on http://0.0.0.0:8080`. Mở firewall cổng 8080 ở profile `Private` nếu cần. `GET /health` là endpoint giám sát (`503` khi database hỏng).
-- Chạy nền: `schtasks /Create /TN "BindPokerLite" … /SC ONSTART /RU SYSTEM` (khuyến nghị) hoặc `sc.exe create BindPokerLite binPath= "D:\bind-poker\bind-poker-lite.exe"`. Exe không nói giao thức SCM nên Service Control Manager báo start timeout dù server vẫn chạy.
+- Chạy nền: `schtasks /Create /TN "BindPokerLite" … /SC ONSTART /RU SYSTEM` (khuyến nghị) hoặc NSSM với `AppStopMethodConsole` — công cụ bọc dịch vụ duy nhất được hỗ trợ, vì nó dừng bằng Ctrl+C. Không dùng `sc.exe create`: exe không nói giao thức SCM nên Service Control Manager vừa báo start timeout dù server vẫn chạy, vừa giết cứng khi `sc stop`.
+- **Dừng (Windows không có `kill -TERM`)** — chỉ ba đường sau là tắt êm: `bind-poker-lite.exe --stop`, `Ctrl`+`C`/`Ctrl`+`Break` trong console của server (`SIGINT`/`SIGBREAK`), và một service wrapper gửi Ctrl+C (NSSM). `taskkill`, `schtasks /End`, `sc stop` và đóng cửa sổ console là **tắt cứng**: số dư đã ghi vẫn an toàn (mọi bút toán trong transaction) nhưng **stack Hold'em đang trên bàn và pot cộng dồn Blind B thì mất**. `main.ts` bắt `SIGTERM`/`SIGINT`/`SIGBREAK`/`SIGHUP` và chạy cùng một `close()` (drain 10 s).
+- **`--stop` / `--status`**: lúc `listen()`, server ghi `bind-poker.run.json` cạnh file dữ liệu (giải như `SQLITE_PATH`) với `{ pid, port, host, token }` — `token` là 32 byte ngẫu nhiên hex, file mode `0600` ở nơi có — và xoá nó ở `close()`. `--stop` đọc file, `POST /api/admin/shutdown` qua loopback (`X-Requested-With` + `Authorization: Bearer <token>`), rồi poll `pid` tới 15 s và thoát `0`/`1`; `--status` in `/health` của tiến trình đang chạy. Endpoint chặn ba lớp theo thứ tự: rate-limit 5/phút → địa chỉ socket phải loopback (`127.0.0.0/8`, `::1`, `::ffff:127.0.0.1`), nếu không `403` → so token constant-time, sai `401`. Trả `{ ok: true }` rồi mới drain (stopAccepting → hoàn cược/cash-out → đóng listener → đóng database).
+- Khởi động hỏng: in một dòng gợi ý (cổng bận / thiếu quyền / giá trị `.env` sai) và, khi `process.stdin.isTTY`, chờ một phím trước khi thoát để cửa sổ double-click còn đọc được.
 - Sao lưu: dừng server rồi chép cả ba file `.sqlite*`; hoặc `sqlite3.exe <db> ".backup '<đích>'"` khi đang chạy (chép tay lúc WAL đang mở có thể ra bản không nhất quán).
-- Nâng cấp: dừng exe, thay file, chạy lại; SQLite tự migrate theo `user_version`. Migration chỉ thêm, không có đường hạ cấp tự động — sao lưu trước.
+- Nâng cấp: `--stop`, thay file, chạy lại; SQLite tự migrate theo `user_version`. Migration chỉ thêm, không có đường hạ cấp tự động — sao lưu trước.
 - Tài liệu `docs/deployment-lite.md`, kèm troubleshooting (cổng bận, quyền ghi file sqlite, SmartScreen chặn exe chưa ký, `no web assets found` khi chạy sai thư mục).
 
 ## 29. Testing
@@ -927,6 +931,8 @@ ESLint boundary; test đọc `package.json` từng package và kiểm graph mụ
 | Side pot | Thuật toán tầng 7.4 |
 | Kết nối trùng | Thay kết nối cũ |
 | Server restart | Hủy ván, hoàn cược, stack về balance, thông báo |
+| Lite bị tắt cứng trên Windows (`taskkill`, `schtasks /End`, `sc stop`, đóng cửa sổ) | Không có đường drain: số dư đã ghi vẫn đúng, nhưng stack Hold'em trên bàn và pot cộng dồn Blind B mất. Chỉ `--stop`, `Ctrl`+`C`/`Ctrl`+`Break`, hoặc NSSM (gửi Ctrl+C) mới tắt êm — §28.2 |
+| `bind-poker.run.json` còn lại sau một lần tắt cứng | `--stop` phát hiện `pid` đã chết, xoá file và thoát `0`; lần khởi động sau ghi đè file |
 | WS lỗi giữa gửi | Client backoff reconnect, RESYNC |
 | Race giữa timer và action đến cùng lúc | Hàng đợi tuần tự; timer kiểm `handId` + `turnSeq` trước khi áp dụng |
 | Bot thay người | Không thay; bot chỉ theo `botCount` |

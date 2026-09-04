@@ -152,41 +152,87 @@ hành, nên nâng cấp là một chiều: **hạ cấp về exe cũ không có 
 
 ---
 
-## 6. Chạy nền
+## 6. Chạy nền và **cách dừng**
 
-**Task Scheduler (khuyến nghị):**
+### 6.1 Dừng êm hay dừng cứng
+
+Windows không có `kill -TERM`. Đây là điểm khác biệt vận hành quan trọng nhất giữa Lite và Normal,
+nên nói thẳng:
+
+| Cách dừng | Tín hiệu | Kết quả |
+| --- | --- | --- |
+| `bind-poker-lite.exe --stop` | HTTP loopback → `close()` | ✅ **Êm**. Cách duy nhất đúng khi chạy nền |
+| `Ctrl`+`C` trong console của server | `SIGINT` | ✅ Êm |
+| `Ctrl`+`Break` trong console đó | `SIGBREAK` | ✅ Êm |
+| NSSM `stop` với `AppStopMethodConsole` | Ctrl+C | ✅ Êm |
+| Bấm X đóng cửa sổ console | `SIGHUP`, rồi Windows giết sau vài giây | ❌ **Cứng** trên thực tế |
+| `taskkill` / `taskkill /F` | — | ❌ Cứng |
+| `schtasks /End /TN …` | — | ❌ Cứng |
+| `sc.exe stop …` | — | ❌ Cứng |
+| Shutdown/restart máy khi server đang chạy | — | ❌ Cứng |
+
+Dừng **êm** = `GameServer.shutdown()`: ngừng nhận kết nối mới, huỷ ván đang chơi, **hoàn lại điểm
+cược và cash-out toàn bộ stack Hold'em về số dư**, đóng socket với `SERVER_SHUTDOWN`, đóng listener
+rồi đóng database — tối đa 10 giây (`SHUTDOWN_BUDGET_MS`) rồi thoát dù còn dở.
+
+Dừng **cứng** = tiến trình biến mất ngay. Số dư đã ghi trong SQLite vẫn nguyên (mọi bút toán đều
+nằm trong transaction), nhưng **stack Hold'em đang trên bàn và pot cộng dồn của Blind B thì mất** —
+chúng chỉ tồn tại trong bộ nhớ cho tới lúc ván kết thúc hoặc server drain.
+
+### 6.2 `--stop` và `--status`
+
+```powershell
+D:\bind-poker\bind-poker-lite.exe --stop     # tắt êm, chờ tối đa 15 s, in kết quả, mã thoát 0/1
+D:\bind-poker\bind-poker-lite.exe --status   # in JSON /health của tiến trình đang chạy
+```
+
+Cơ chế: lúc `listen()`, server ghi **`bind-poker.run.json`** cạnh file dữ liệu (giải theo cùng quy
+tắc với `SQLITE_PATH` — cạnh exe khi chạy bản đóng gói) với `{ pid, port, host, token }`, `token`
+là 32 byte ngẫu nhiên dạng hex, quyền file `0600` ở nơi hệ thống có khái niệm đó. File bị xoá khi
+`close()` chạy. `--stop` đọc file, gọi `POST /api/admin/shutdown` qua loopback với header
+`X-Requested-With: bind-poker` và `Authorization: Bearer <token>`, rồi poll `pid` tới 15 giây.
+
+Endpoint đó có ba lớp chặn, theo thứ tự: rate-limit 5 lần/phút → **địa chỉ socket phải là loopback**
+(`127.0.0.0/8`, `::1`, `::ffff:127.0.0.1`), nếu không thì `403` → so token bằng `timingSafeEqual`,
+sai thì `401`. Máy khác trong LAN, kể cả khi đọc trộm được token, vẫn không tắt được server.
+
+Nếu `bind-poker.run.json` còn nằm đó mà tiến trình đã chết (dấu vết của một lần tắt cứng), `--stop`
+báo rõ và xoá file giúp, thoát `0`.
+
+### 6.3 Task Scheduler (khuyến nghị)
 
 ```powershell
 schtasks /Create /TN "BindPokerLite" /TR "D:\bind-poker\bind-poker-lite.exe" /SC ONSTART /RU SYSTEM /RL HIGHEST /F
 schtasks /Run /TN "BindPokerLite"
-schtasks /End /TN "BindPokerLite"
+D:\bind-poker\bind-poker-lite.exe --stop     # KHÔNG dùng schtasks /End
 ```
 
-**Windows Service:**
+### 6.4 NSSM (cách bọc dịch vụ được hỗ trợ)
 
 ```powershell
-sc.exe create BindPokerLite binPath= "D:\bind-poker\bind-poker-lite.exe" start= auto DisplayName= "Bind Poker Lite"
-sc.exe start BindPokerLite
+nssm install BindPokerLite D:\bind-poker\bind-poker-lite.exe
+nssm set BindPokerLite AppDirectory D:\bind-poker
+nssm set BindPokerLite AppStopMethodConsole 15000
+nssm start BindPokerLite ; nssm stop BindPokerLite
 ```
 
-Chú ý dấu cách sau mỗi `=`. Exe không nói giao thức của Service Control Manager nên SCM sẽ báo
-"dịch vụ không phản hồi kịp" dù server vẫn chạy — dùng Task Scheduler, hoặc bọc bằng NSSM, nếu
-thấy phiền. Tài khoản chạy (mặc định `SYSTEM`) phải có quyền ghi vào thư mục chứa exe.
+NSSM dừng bằng Ctrl+C nên đi vào đúng đường tắt êm. **Đừng** dùng `sc.exe create` trực tiếp: exe
+không nói giao thức Service Control Manager, nên SCM vừa báo "dịch vụ không phản hồi kịp" lúc khởi
+động, vừa giết cứng tiến trình khi `sc.exe stop`.
 
-Dừng bằng `SIGTERM`/`SIGINT` (đóng cửa sổ, `schtasks /End`, `sc.exe stop`) sẽ tắt êm: ván đang
-chơi bị huỷ và **hoàn lại điểm**, socket đóng, tối đa 10 giây rồi thoát.
+Ở mọi cách, tài khoản chạy (mặc định `SYSTEM`) phải có quyền ghi vào thư mục chứa exe.
 
 ---
 
 ## 7. Nâng cấp
 
 1. Sao lưu file `.sqlite` (mục 5).
-2. Dừng server.
+2. `bind-poker-lite.exe --stop` (mục 6.2) — không phải `schtasks /End`, không phải `taskkill`.
 3. Ghi đè `bind-poker-lite.exe`. **Giữ nguyên** `.env` và các file `.sqlite*`.
 4. Chạy lại — migration chạy tự động lúc khởi động.
 
 Ván đang chơi không sống qua lần khởi động lại (spec §32.8): dừng server lúc không ai đang chơi,
-hoặc chấp nhận các ván đang dở bị huỷ và hoàn điểm.
+hoặc chấp nhận các ván đang dở bị huỷ và hoàn điểm — `--stop` bảo đảm phần hoàn điểm đó thực sự chạy.
 
 ---
 
@@ -194,7 +240,9 @@ hoặc chấp nhận các ván đang dở bị huỷ và hoàn điểm.
 
 | Hiện tượng | Cách xử lý |
 | --- | --- |
-| `EADDRINUSE`, thoát ngay khi khởi động | Cổng đang bị chiếm: `netstat -ano \| findstr :8080`, tắt tiến trình đó hoặc đặt `PORT` khác |
+| `EADDRINUSE`, thoát ngay khi khởi động | Cổng đang bị chiếm: `netstat -ano \| findstr :8080`, tắt bản cũ bằng `--stop` hoặc đặt `PORT` khác. Server in sẵn một dòng gợi ý và, khi chạy từ console thật, chờ một phím trước khi đóng cửa sổ |
+| `--stop` báo `no running instance found` | Không có `bind-poker.run.json` cạnh file dữ liệu — server không chạy, hoặc lệnh chạy ở sai thư mục (`cwd` khi dùng `node dist/server.cjs`) |
+| Người chơi mất stack sau khi khởi động lại | Lần trước đã tắt cứng (mục 6.1). Dùng `--stop`; số dư trong database không bị ảnh hưởng |
 | SmartScreen "Windows protected your PC" | Exe chưa ký số: **More info** → **Run anyway**, hoặc ký release trước khi phát hành |
 | `SQLITE_CANTOPEN` / `EACCES` / `EPERM` | Thư mục chứa exe không cho ghi — chuyển đi nơi khác hoặc trỏ `SQLITE_PATH` sang chỗ ghi được |
 | Log `no web assets found` | Chạy `dist/server.cjs` ở sai thư mục làm việc: đặt `PUBLIC_DIR`, hoặc chạy từ `apps/lite` |

@@ -180,6 +180,10 @@ function buildExe({ smoke }) {
   // A SEA blob is only loadable by the exact Node build that produced it, and the release line is
   // Node 22; refusing early beats shipping an exe that crashes on startup.
   if (!process.version.startsWith('v22.')) die(`exe: needs Node 22 to produce a loadable SEA blob, got ${process.version}`)
+  // The exe is a copy of *this* `node.exe`, so it inherits this process's architecture — and the
+  // release is published as Windows x64. Building on arm64 would produce a file with the right name
+  // and the wrong CPU, which nothing downstream could tell apart.
+  if (process.arch !== 'x64') die(`exe: the release executable is Windows x64 only, and this Node is ${process.arch}`)
   if (!existsSync(join(DIST, 'server.cjs'))) die('dist/server.cjs is missing — run the server build first')
   if (!existsSync(PUBLIC_DIR)) die('dist/public is missing — run the web build first')
 

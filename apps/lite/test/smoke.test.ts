@@ -11,6 +11,7 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
+import { RUN_FILE_NAME } from '../server/src/run-file.js'
 import { EXE, PACKAGE_ROOT, SERVER_BUNDLE } from './paths.js'
 
 /** Generous next to the ~1 s a warm start takes, but short enough to fail rather than hang CI. */
@@ -74,14 +75,26 @@ function expectHealthy(run: Run, label: string): void {
   expect((JSON.parse(run.stdout.trim()) as { status: string }).status).toBe('ok')
 }
 
+/**
+ * A smoke run listens for real, so it writes a run file — and it must take it away again. One left
+ * behind would make the next `--stop` chase a pid that no longer exists.
+ */
+function expectNoRunFile(): void {
+  for (const dir of [scratchDir(), PACKAGE_ROOT]) {
+    expect(existsSync(join(dir, RUN_FILE_NAME)), `${join(dir, RUN_FILE_NAME)} was left behind`).toBe(false)
+  }
+}
+
 describe.skipIf(!hasBundle)('dist/server.cjs', () => {
   it('boots, answers /health and exits 0', async () => {
     expectHealthy(await runSmoke(process.execPath, [SERVER_BUNDLE], 'bundle'), 'node dist/server.cjs --smoke')
+    expectNoRunFile()
   }, BUDGET_MS + 5_000)
 })
 
 describe.skipIf(!hasExe)('bind-poker-lite.exe', () => {
   it('boots, answers /health and exits 0', async () => {
     expectHealthy(await runSmoke(EXE, [], 'exe'), 'bind-poker-lite.exe --smoke')
+    expectNoRunFile()
   }, BUDGET_MS + 5_000)
 })

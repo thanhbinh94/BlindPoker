@@ -1,18 +1,21 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ECONOMY } from '@bp/core'
+import { ECONOMY, type RoomConfig } from '@bp/core'
 import { silentLogger } from '@bp/server-kit'
 import { TestClient } from '@bp/server-kit/testing'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { buildApp, type LiteApp } from './app.js'
 import { DEFAULT_CONFIG, type LiteConfig } from './config.js'
 import { openDatabase } from './db/sqlite.js'
 import { assetSourceFromDir, type AssetSource } from './http/assets.js'
 import { createSqliteRepositories, type LiteRepositories } from './repos/sqlite-repos.js'
+import { RUN_FILE_NAME, type RunFile } from './run-file.js'
 
 const XRW = { 'x-requested-with': 'bind-poker' }
-const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:"
+const CSP =
+  "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'; " +
+  "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
 
 interface Harness {
   app: LiteApp
@@ -23,19 +26,30 @@ interface Harness {
 const started: Harness[] = []
 const dirs: string[] = []
 const clients: TestClient[] = []
+const openDatabases: LiteRepositories[] = []
+
+/** A throwaway directory, cleaned up by the `afterEach` below. */
+function tempDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix))
+  dirs.push(dir)
+  return dir
+}
 
 function publicDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'bp-app-'))
-  dirs.push(dir)
+  const dir = tempDir('bp-app-')
   mkdirSync(join(dir, 'assets'))
   writeFileSync(join(dir, 'index.html'), '<!doctype html><title>Bind Poker</title><div id="root"></div>')
   writeFileSync(join(dir, 'assets', 'app-abc123.js'), 'console.log(1)')
   return dir
 }
 
-function makeApp(opts: { assets?: AssetSource | null; config?: Partial<LiteConfig>; now?: number } = {}): Harness {
+function makeApp(opts: { assets?: AssetSource | null; config?: Partial<LiteConfig>; now?: number; runFilePath?: string } = {}): Harness {
   let nowMs = opts.now ?? Date.UTC(2026, 8, 4, 3, 0) // 2026-09-04 10:00 ICT
-  const repos = createSqliteRepositories(openDatabase(':memory:'), { handLog: false, now: () => nowMs })
+  const real = createSqliteRepositories(openDatabase(':memory:'), { handLog: false, now: () => nowMs })
+  openDatabases.push(real)
+  // `close()` is neutered so a test can still read the database after `app.close()` has run its
+  // refunds — the drain is the interesting half, and the `afterEach` closes the handle for real.
+  const repos: LiteRepositories = { ...real, close: () => {} }
   const config: LiteConfig = { ...DEFAULT_CONFIG, port: 0, host: '127.0.0.1', sqlitePath: ':memory:', ...opts.config }
   const assets = opts.assets === undefined ? assetSourceFromDir(publicDir()) : opts.assets
   const app = buildApp({
@@ -45,6 +59,7 @@ function makeApp(opts: { assets?: AssetSource | null; config?: Partial<LiteConfi
     log: silentLogger,
     now: () => nowMs,
     gatewayOptions: { heartbeatIntervalMs: 60_000, heartbeatTimeoutMs: 120_000 },
+    ...(opts.runFilePath === undefined ? {} : { runFilePath: opts.runFilePath }),
   })
   const harness: Harness = { app, repos, setNow: (ms) => { nowMs = ms } }
   started.push(harness)
@@ -60,6 +75,7 @@ async function createSession(h: Harness, displayName: string): Promise<{ playerI
 afterEach(async () => {
   for (const c of clients.splice(0)) await c.close().catch(() => {})
   for (const h of started.splice(0)) await h.app.close()
+  for (const r of openDatabases.splice(0)) r.close()
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
@@ -317,7 +333,158 @@ describe('security headers', () => {
       expect(res.headers['x-content-type-options']).toBe('nosniff')
       expect(res.headers['referrer-policy']).toBe('no-referrer')
       expect(res.headers['content-security-policy']).toBe(CSP)
+      expect(res.headers['x-frame-options']).toBe('DENY')
     }
+  })
+
+  it('names every directive the spec §19.3 header list requires', async () => {
+    const h = makeApp()
+    const csp = (await h.app.fastify.inject('/health')).headers['content-security-policy'] as string
+    const directives = new Map(csp.split('; ').map((d) => [d.split(' ')[0], d]))
+    expect(directives.get('connect-src')).toBe("connect-src 'self'")
+    expect(directives.get('frame-ancestors')).toBe("frame-ancestors 'none'")
+    expect(directives.get('base-uri')).toBe("base-uri 'self'")
+    expect(directives.get('form-action')).toBe("form-action 'self'")
+    expect(directives.get('object-src')).toBe("object-src 'none'")
+    // M1: the socket is same-origin, so `'self'` already covers it and the scheme sources are gone.
+    expect(csp).not.toContain('ws:')
+    expect(csp).not.toContain('wss:')
+  })
+})
+
+describe('request parsing', () => {
+  it('accepts a bodyless POST that still declares a JSON content type', async () => {
+    const h = makeApp()
+    const session = await createSession(h, 'Alice')
+    const res = await h.app.fastify.inject({
+      method: 'POST',
+      url: '/api/rewards/daily/claim',
+      headers: { authorization: `Bearer ${session.token}`, ...XRW, 'content-type': 'application/json' },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ claimed: true })
+  })
+
+  it('still rejects a malformed JSON body with BAD_REQUEST', async () => {
+    const h = makeApp()
+    const res = await h.app.fastify.inject({
+      method: 'POST',
+      url: '/api/session',
+      headers: { ...XRW, 'content-type': 'application/json' },
+      payload: '{"displayName": ',
+    })
+    expect(res.statusCode).toBe(400)
+    expect((res.json() as { error: { code: string } }).error.code).toBe('BAD_REQUEST')
+  })
+
+  it('matches the Bearer scheme case-insensitively', async () => {
+    const h = makeApp()
+    const session = await createSession(h, 'Alice')
+    for (const scheme of ['Bearer', 'bearer', 'BEARER', 'BeArEr']) {
+      const res = await h.app.fastify.inject({ url: '/api/me', headers: { authorization: `${scheme} ${session.token}` } })
+      expect(res.statusCode, scheme).toBe(200)
+    }
+  })
+})
+
+describe('the run file', () => {
+  it('is written when the listener binds and removed when the app closes', async () => {
+    const path = join(tempDir('bp-run-'), RUN_FILE_NAME)
+    const h = makeApp({ runFilePath: path })
+    expect(existsSync(path)).toBe(false)
+
+    const address = await h.app.listen()
+    expect(existsSync(path)).toBe(true)
+    const info = JSON.parse(readFileSync(path, 'utf8')) as RunFile
+    expect(info).toEqual({ pid: process.pid, port: Number(new URL(address).port), host: '127.0.0.1', token: h.app.runToken })
+    // The bound port, not the configured 0 — a run file naming port 0 would be useless to `--stop`.
+    expect(info.port).toBeGreaterThan(0)
+    expect(info.token).toMatch(/^[0-9a-f]{64}$/)
+
+    await h.app.close()
+    expect(existsSync(path)).toBe(false)
+  })
+
+  it('is not written at all when no path is configured', async () => {
+    const dir = tempDir('bp-run-')
+    const h = makeApp()
+    await h.app.listen()
+    expect(existsSync(join(dir, RUN_FILE_NAME))).toBe(false)
+  })
+})
+
+describe('POST /api/admin/shutdown', () => {
+  const HOLDEM: RoomConfig = {
+    name: 'Bàn', mode: 'holdem', maxPlayers: 4, isPrivate: false, turnTimerSec: 30, autoStart: false,
+    holdem: { smallBlind: 100, bigBlind: 200, minBuyInBB: 50, maxBuyInBB: 200 },
+  }
+
+  const auth = (token: string) => ({ authorization: `Bearer ${token}`, ...XRW })
+
+  it('refuses a caller that is not on the loopback with 403, without stopping anything', async () => {
+    const h = makeApp()
+    const res = await h.app.fastify.inject({ method: 'POST', url: '/api/admin/shutdown', headers: auth(h.app.runToken), remoteAddress: '10.0.0.5' })
+    expect(res.statusCode).toBe(403)
+    expect((res.json() as { error: { code: string } }).error.code).toBe('FORBIDDEN')
+    expect(h.app.isClosing).toBe(false)
+  })
+
+  it('refuses a wrong run token with 401, even from the loopback', async () => {
+    const h = makeApp()
+    for (const remoteAddress of ['127.0.0.1', '::1', '::ffff:127.0.0.1']) {
+      const res = await h.app.fastify.inject({ method: 'POST', url: '/api/admin/shutdown', headers: auth('0'.repeat(64)), remoteAddress })
+      expect(res.statusCode, remoteAddress).toBe(401)
+      expect((res.json() as { error: { code: string } }).error.code).toBe('UNAUTHENTICATED')
+    }
+    expect(h.app.isClosing).toBe(false)
+  })
+
+  it('refuses a request without X-Requested-With before it ever looks at the token', async () => {
+    const h = makeApp()
+    const res = await h.app.fastify.inject({ method: 'POST', url: '/api/admin/shutdown', headers: { authorization: `Bearer ${h.app.runToken}` } })
+    expect(res.statusCode).toBe(403)
+    expect(h.app.isClosing).toBe(false)
+  })
+
+  it('rate limits to 5 attempts per minute', async () => {
+    const h = makeApp()
+    for (let i = 0; i < 5; i += 1) {
+      const res = await h.app.fastify.inject({ method: 'POST', url: '/api/admin/shutdown', headers: auth('0'.repeat(64)), remoteAddress: '127.0.0.1' })
+      expect(res.statusCode).toBe(401)
+    }
+    const limited = await h.app.fastify.inject({ method: 'POST', url: '/api/admin/shutdown', headers: auth('0'.repeat(64)), remoteAddress: '127.0.0.1' })
+    expect(limited.statusCode).toBe(429)
+    expect(limited.headers['retry-after']).toBeDefined()
+  })
+
+  it('accepts the run token from the loopback, drains the room and gives the buy-in back', async () => {
+    const path = join(tempDir('bp-run-'), RUN_FILE_NAME)
+    const h = makeApp({ runFilePath: path })
+    const session = await createSession(h, 'Alice')
+    const address = await h.app.listen()
+    const client = await TestClient.connect(`ws://127.0.0.1:${new URL(address).port}/ws`)
+    clients.push(client)
+    await client.hello(session.token)
+
+    // Money leaves the balance for the stack the moment the player sits down (`reason: 'buy_in'`).
+    client.send({ t: 'CREATE_ROOM', config: HOLDEM })
+    await client.next('ROOM_SNAPSHOT')
+    client.send({ t: 'SIT_DOWN', seat: 0, buyIn: 20_000 })
+    await client.next('ROOM_EVENT', (m) => m.event.type === 'PLAYER_SAT')
+    expect(await h.repos.balances.get(session.playerId)).toBe(ECONOMY.startingBalance - 20_000)
+
+    const res = await h.app.fastify.inject({ method: 'POST', url: '/api/admin/shutdown', headers: auth(h.app.runToken), remoteAddress: '127.0.0.1' })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ ok: true })
+
+    // The endpoint replies first and drains afterwards; `close()` is memoized, so awaiting it here
+    // joins the shutdown the request started rather than beginning a second one.
+    await vi.waitFor(() => expect(h.app.isClosing).toBe(true))
+    await h.app.close()
+
+    expect(await h.repos.balances.get(session.playerId)).toBe(ECONOMY.startingBalance)
+    expect(await client.next('ERROR')).toMatchObject({ code: 'SERVER_SHUTDOWN' })
+    expect(existsSync(path)).toBe(false)
   })
 })
 

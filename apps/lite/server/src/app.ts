@@ -1,4 +1,6 @@
+import { randomBytes } from 'node:crypto'
 import type { IncomingMessage } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import type { Duplex } from 'node:stream'
 import { createGameServer, type GameServer, type GatewayOptions, type Logger, type RoomOptions } from '@bp/server-kit'
 import Fastify, { type FastifyInstance } from 'fastify'
@@ -7,14 +9,19 @@ import { createEconomyService } from './economy/economy-service.js'
 import type { AssetSource } from './http/assets.js'
 import { registerRoutes } from './http/routes.js'
 import type { LiteRepositories } from './repos/sqlite-repos.js'
+import { removeRunFile, writeRunFile } from './run-file.js'
 import { createSessionService } from './session/session-service.js'
 
 export interface LiteApp {
   fastify: FastifyInstance
   game: GameServer
-  /** Binds the HTTP listener and attaches the WebSocket upgrade handler. Resolves to the bound address. */
+  /** The run token this instance published; `POST /api/admin/shutdown` accepts nothing else. */
+  readonly runToken: string
+  /** True once a stop has begun, whether from a signal, `close()` or the admin endpoint. */
+  readonly isClosing: boolean
+  /** Binds the HTTP listener, attaches the WebSocket upgrade handler and writes the run file. Resolves to the bound address. */
   listen(): Promise<string>
-  /** Drains rooms, closes sockets and the listener, then closes the database. Idempotent. */
+  /** Removes the run file, drains rooms, closes sockets and the listener, then closes the database. Idempotent. */
   close(): Promise<void>
 }
 
@@ -26,6 +33,8 @@ export interface BuildAppDeps {
   now?: () => number
   roomOptions?: Partial<RoomOptions>
   gatewayOptions?: Partial<GatewayOptions>
+  /** Absolute path of this instance's `bind-poker.run.json`. `null` (the default) writes none. */
+  runFilePath?: string | null
 }
 
 /** A request body larger than this is a mistake or an attack: the largest thing Lite accepts is a display name. */
@@ -35,6 +44,27 @@ const WS_PATH = '/ws'
 export function buildApp(deps: BuildAppDeps): LiteApp {
   const { config, repos, log } = deps
   const fastify = Fastify({ logger: false, trustProxy: false, bodyLimit: BODY_LIMIT_BYTES })
+  const runFilePath = deps.runFilePath ?? null
+  // Fresh per boot: this is a handle on *this* process, not a password to be remembered.
+  const runToken = randomBytes(32).toString('hex')
+
+  /**
+   * Every mutating Lite route takes its input from headers or the URL, so a `POST` that announces
+   * `application/json` and then sends nothing is a normal request — but Fastify's stock parser
+   * answers an empty body with `FST_ERR_CTP_EMPTY_JSON_BODY` (400). Treat it as "no body" instead,
+   * and keep the 400 for a body that is present but malformed.
+   */
+  fastify.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body, done) => {
+    const text = typeof body === 'string' ? body.trim() : ''
+    if (text === '') return done(null, undefined)
+    try {
+      done(null, JSON.parse(text) as unknown)
+    } catch (err) {
+      const failure = err instanceof Error ? err : new Error(String(err))
+      ;(failure as Error & { statusCode?: number }).statusCode = 400
+      done(failure, undefined)
+    }
+  })
 
   const sessions = createSessionService(repos)
   const game = createGameServer({
@@ -55,6 +85,33 @@ export function buildApp(deps: BuildAppDeps): LiteApp {
     onBalanceChanged: (playerId) => game.balanceChanged(playerId),
   })
 
+  let closing: Promise<void> | null = null
+
+  const closeApp = (): Promise<void> => {
+    // Order matters: the run file goes first, because from here on this instance can no longer be
+    // stopped — then draining the game settles every live hand and closes the sockets, so
+    // `fastify.close()` is not left waiting on connections that were upgraded out from under it,
+    // and the database stays open until the last repository write has happened.
+    closing ??= (async () => {
+      if (runFilePath) removeRunFile(runFilePath)
+      await game.shutdown('server shutdown')
+      await fastify.close()
+      repos.close()
+    })()
+    return closing
+  }
+
+  /**
+   * The admin endpoint's exit: never awaited by the request that asked for it, because the drain
+   * closes the listener that request is riding on. `closeApp` is memoized, so a second call — a
+   * signal arriving at the same moment, the test harness's own `close()` — joins the first.
+   */
+  const requestShutdown = (): void => {
+    setTimeout(() => {
+      void closeApp().catch((err: unknown) => log.error('graceful shutdown failed', { err: String(err) }))
+    }, 0)
+  }
+
   registerRoutes(fastify, {
     repos,
     sessions,
@@ -63,6 +120,7 @@ export function buildApp(deps: BuildAppDeps): LiteApp {
     config,
     log,
     assets: deps.assets,
+    admin: { token: runToken, requestShutdown },
     ...(deps.now ? { now: deps.now } : {}),
   })
 
@@ -78,11 +136,15 @@ export function buildApp(deps: BuildAppDeps): LiteApp {
   }
 
   let upgradeAttached = false
-  let closing: Promise<void> | null = null
 
   return {
     fastify,
     game,
+    runToken,
+
+    get isClosing() {
+      return closing !== null
+    },
 
     async listen() {
       const address = await fastify.listen({ port: config.port, host: config.host })
@@ -90,19 +152,16 @@ export function buildApp(deps: BuildAppDeps): LiteApp {
         upgradeAttached = true
         fastify.server.on('upgrade', onUpgrade)
       }
+      if (runFilePath) {
+        // The bound port, not the configured one: `PORT=0` is a real deployment choice here, and a
+        // run file naming port 0 would be useless to `--stop`.
+        const bound = fastify.server.address()
+        const port = typeof bound === 'object' && bound !== null ? (bound as AddressInfo).port : config.port
+        writeRunFile(runFilePath, { pid: process.pid, port, host: config.host, token: runToken })
+      }
       return address
     },
 
-    close() {
-      // Order matters: draining the game first settles every live hand and closes the sockets, so
-      // `fastify.close()` is not left waiting on connections that were upgraded out from under it,
-      // and the database stays open until the last repository write has happened.
-      closing ??= (async () => {
-        await game.shutdown('server shutdown')
-        await fastify.close()
-        repos.close()
-      })()
-      return closing
-    },
+    close: closeApp,
   }
 }
