@@ -62,21 +62,39 @@ export interface RouteDeps {
   /** Lowered by tests that need to reach a limit without sending sixty real requests. */
   writeRateLimit?: { limit: number; windowMs: number }
   readRateLimit?: { limit: number; windowMs: number }
+  writeIpRateLimit?: { limit: number; windowMs: number }
 }
 
 /** Spec §19.2: sixty writes a minute for one session. */
-const WRITE_RATE_LIMIT = { limit: 60, windowMs: 60_000 }
+export const WRITE_RATE_LIMIT = { limit: 60, windowMs: 60_000 }
 /** …and 240 reads a minute for one address. */
-const READ_RATE_LIMIT = { limit: 240, windowMs: 60_000 }
+export const READ_RATE_LIMIT = { limit: 240, windowMs: 60_000 }
+/**
+ * The ceiling a *place* may write at, whatever cookies it presents.
+ *
+ * Twice the per-session limit, because two people behind one address are a household, not an
+ * attack — but a caller inventing a fresh `bp_session` value per request would otherwise mint a new
+ * per-session bucket every time and never be limited at all.
+ */
+export const WRITE_IP_RATE_LIMIT = { limit: 120, windowMs: 60_000 }
+
+/** How long `/health` waits for the database probe before answering `db: 'down'` on its own. */
+export const HEALTH_PING_TIMEOUT_MS = 2_000
 
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
-/** Sign-in and sign-up carry their own, much tighter limits; a second one here would never bind. */
-const UNLIMITED_PREFIX = '/api/auth/'
+/**
+ * The only two routes with limiters of their own (`registerAuthRoutes`), and they are far tighter
+ * than anything here — five sign-ins a minute per address and account, ten sign-ups per address. The
+ * exemption is those two requests, not the `/api/auth/` namespace: `GET /api/auth/me` and
+ * `POST /api/auth/logout` each cost a session lookup and a query, and nothing else limits them.
+ */
+const OWN_LIMITER = new Set(['/api/auth/register', '/api/auth/login'])
 
 export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
   const now = deps.now ?? Date.now
   const startedAt = now()
   const writeLimiter: RateLimiter = createRateLimiter({ ...(deps.writeRateLimit ?? WRITE_RATE_LIMIT), now })
+  const writeIpLimiter: RateLimiter = createRateLimiter({ ...(deps.writeIpRateLimit ?? WRITE_IP_RATE_LIMIT), now })
   const readLimiter: RateLimiter = createRateLimiter({ ...(deps.readRateLimit ?? READ_RATE_LIMIT), now })
 
   decorateRequestUser(app)
@@ -92,21 +110,33 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     const path = req.url.split('?')[0] ?? ''
     // `/health` is what a load balancer polls every few seconds, and the static SPA is files: only
     // the API is metered.
-    if (!path.startsWith('/api/') || path.startsWith(UNLIMITED_PREFIX)) return
-    const mutating = MUTATING.has(req.method)
-    const verdict = (mutating ? writeLimiter : readLimiter).check(mutating ? sessionKey(req) : `ip:${req.ip}`)
-    if (verdict.allowed) return
+    if (!path.startsWith('/api/')) return
+    if (req.method === 'POST' && OWN_LIMITER.has(path)) return
+    // A write has to satisfy *both* buckets. The session one is the limit that matters for a real
+    // client; the address one is what stops a caller from buying a fresh allowance by sending a
+    // cookie value nobody has ever issued.
+    const verdicts = MUTATING.has(req.method)
+      ? [writeLimiter.check(sessionKey(req)), writeIpLimiter.check(`ip:${req.ip}`)]
+      : [readLimiter.check(`ip:${req.ip}`)]
+    const denied = verdicts.find((v) => !v.allowed)
+    if (denied === undefined) return
     deps.log.warn('rate limited', { ip: req.ip, method: req.method, url: req.url })
-    reply.header('retry-after', String(verdict.retryAfterSec))
-    throw new HttpError(429, 'RATE_LIMITED', 'too many requests', { retryAfterSec: verdict.retryAfterSec })
+    reply.header('retry-after', String(denied.retryAfterSec))
+    throw new HttpError(429, 'RATE_LIMITED', 'too many requests', { retryAfterSec: denied.retryAfterSec })
   })
 
   /**
    * The probe (spec §19.2). A 503 with `db: 'down'` rather than a throw: an orchestrator reads the
    * status, and a health endpoint that 500s tells it nothing about *what* is unhealthy.
+   *
+   * The probe is raced against its own deadline, because the one failure this endpoint exists for —
+   * a pool with every client checked out, or a server that accepted the connection and went quiet —
+   * is exactly the one where the query never returns. Fastify's `requestTimeout` is 0, so without
+   * the race the orchestrator gets no answer at all rather than the 503 below.
    */
   app.get('/health', async (_req, reply) => {
-    const ok = await deps.pingDb()
+    const expiry = new Promise<false>((resolve) => setTimeout(() => resolve(false), HEALTH_PING_TIMEOUT_MS).unref())
+    const ok = await Promise.race([deps.pingDb().catch(() => false), expiry])
     return reply.code(ok ? 200 : 503).send({
       ok,
       edition: 'normal',

@@ -86,11 +86,14 @@ async function main(): Promise<void> {
     log.info('shutting down', { signal })
     // A hard deadline around the graceful path: a wedged room or a database that has stopped
     // answering must not keep the container alive past the orchestrator's own patience.
+    //
+    // Deliberately *not* `unref()`ed. If `close()` wedges on something that keeps no handle of its
+    // own, an unref'd timer would let the loop empty and Node exit 0 — reporting a clean stop for a
+    // shutdown that never finished. The success path clears it, so a ref'd timer costs nothing.
     const deadline = setTimeout(() => {
       log.error('graceful shutdown timed out', { budgetMs: SHUTDOWN_BUDGET_MS })
       process.exit(1)
     }, SHUTDOWN_BUDGET_MS)
-    deadline.unref()
     app
       .close()
       .then(() => {

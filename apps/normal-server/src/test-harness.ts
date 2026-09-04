@@ -58,13 +58,21 @@ export interface Harness {
   setNow(ms: number): void
   /** What `/health` will report until it is changed. */
   setDbUp(up: boolean): void
+  /** Replaces the health probe outright: a rejection, a hang, anything a real pool can do. */
+  setDbProbe(fn: () => Promise<boolean>): void
+  /** Makes the health probe never settle — a pool with every client checked out, or a server gone quiet. */
+  hangDbProbe(): void
+  /** How many times `buildApp`'s `closeDb` has been called; a shutdown that skipped it leaves this at 0. */
+  closeDbCalls(): number
   register(payload?: Record<string, unknown>): Promise<Account>
   /** `{ cookie, ...XRW }` — everything an authenticated mutating request needs. */
   auth(account: Account): Record<string, string>
 }
 
 export interface HarnessOptions
-  extends Partial<Pick<AppDeps, 'assets' | 'roomOptions' | 'gatewayOptions' | 'rng' | 'writeRateLimit' | 'readRateLimit'>> {
+  extends Partial<
+    Pick<AppDeps, 'assets' | 'roomOptions' | 'gatewayOptions' | 'rng' | 'writeRateLimit' | 'readRateLimit' | 'writeIpRateLimit'>
+  > {
   config?: Partial<NormalConfig>
 }
 
@@ -83,12 +91,14 @@ export function cookieHeader(res: LightMyRequestResponse): string {
 
 export async function buildTestApp(db: AppDb, opts: HarnessOptions = {}): Promise<Harness> {
   let nowMs = START
-  let dbUp = true
+  let closeDbCalls = 0
+  let probe: () => Promise<boolean> = () => Promise.resolve(true)
   const app = await buildApp({
     config: testConfig(opts.config),
     db,
-    closeDb: async () => {}, // the PGlite handle is shared by the whole file; the suite closes it
-    pingDb: async () => dbUp,
+    // Counted, not closed: the PGlite handle is shared by the whole file, and the suite closes it.
+    closeDb: async () => { closeDbCalls += 1 },
+    pingDb: () => probe(),
     log: silentLogger,
     now: () => nowMs,
     argon2Params: CHEAP_ARGON2,
@@ -100,13 +110,17 @@ export async function buildTestApp(db: AppDb, opts: HarnessOptions = {}): Promis
     ...(opts.rng ? { rng: opts.rng } : {}),
     ...(opts.writeRateLimit ? { writeRateLimit: opts.writeRateLimit } : {}),
     ...(opts.readRateLimit ? { readRateLimit: opts.readRateLimit } : {}),
+    ...(opts.writeIpRateLimit ? { writeIpRateLimit: opts.writeIpRateLimit } : {}),
   })
 
   const harness: Harness = {
     app,
     db,
     setNow: (ms) => { nowMs = ms },
-    setDbUp: (up) => { dbUp = up },
+    setDbUp: (up) => { probe = () => Promise.resolve(up) },
+    setDbProbe: (fn) => { probe = fn },
+    hangDbProbe: () => { probe = () => new Promise<boolean>(() => {}) },
+    closeDbCalls: () => closeDbCalls,
     auth: (account) => ({ cookie: account.cookie, ...XRW }),
     async register(payload = GOOD_ACCOUNT) {
       const res = await app.fastify.inject({ method: 'POST', url: '/api/auth/register', headers: XRW, payload })

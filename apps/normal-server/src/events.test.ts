@@ -92,6 +92,49 @@ describe('createEventBus', () => {
     expect(seen).toHaveLength(1)
   })
 
+  it('idle() waits for a publish nobody awaited, which is how every domain event arrives', async () => {
+    const { log } = recorder()
+    const bus = createEventBus(log)
+    let done = false
+    bus.subscribe(async () => {
+      await tick()
+      await tick()
+      done = true
+    })
+
+    // `void bus.publish(e)` is exactly what the room path does: the game loop must not wait for
+    // bookkeeping, so nothing holds this promise. `idle()` is the only handle shutdown has on it.
+    void bus.publish(LOGIN)
+    expect(done).toBe(false)
+
+    await bus.idle()
+    expect(done).toBe(true)
+  })
+
+  it('idle() also waits for a publish a subscriber started, which is not in flight yet when it is called', async () => {
+    const { log } = recorder()
+    const bus = createEventBus(log)
+    const seen: string[] = []
+
+    // The real chain: a settled hand moves counters, and the stats module then raises
+    // `STATS_UPDATED` of its own. A single snapshot of the in-flight set would miss the second one.
+    bus.subscribe(async (e) => {
+      seen.push(e.type)
+      if (e.type !== 'LOGIN') return
+      await tick()
+      void bus.publish({ type: 'STATS_UPDATED', playerId: 'p1', changedMetrics: ['totalLoginDays'] })
+    })
+
+    void bus.publish(LOGIN)
+    await bus.idle()
+    expect(seen).toEqual(['LOGIN', 'STATS_UPDATED'])
+  })
+
+  it('idle() resolves immediately when nothing is running', async () => {
+    const { log } = recorder()
+    await expect(createEventBus(log).idle()).resolves.toBeUndefined()
+  })
+
   it('delivers the event in flight to subscribers that were present when it was published', async () => {
     const { log } = recorder()
     const bus = createEventBus(log)

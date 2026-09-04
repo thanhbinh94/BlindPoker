@@ -44,10 +44,23 @@ export interface AppEventBus {
   publish(e: AppEvent): Promise<void>
   /** Returns an unsubscribe function. Calling it twice is harmless. */
   subscribe(fn: AppEventHandler): () => void
+  /**
+   * Resolves once every publish that has already started has finished.
+   *
+   * The point of a fire-and-forget publish is that the game loop does not wait for bookkeeping —
+   * but *shutdown* must, or the `player_stats` update and the achievement evaluation for the last
+   * hand of the drain land on a pool that is already closing, and a subscriber failure is only ever
+   * logged. `close()` awaits this between shutting the listener and closing the database.
+   *
+   * Loops rather than awaiting one snapshot: a subscriber may publish an event of its own (a stats
+   * write raises `STATS_UPDATED`), and that publish is in flight only after the first one resolves.
+   */
+  idle(): Promise<void>
 }
 
 export function createEventBus(log: Logger): AppEventBus {
   const handlers: AppEventHandler[] = []
+  const inFlight = new Set<Promise<void>>()
 
   return {
     subscribe(fn) {
@@ -61,16 +74,29 @@ export function createEventBus(log: Logger): AppEventBus {
       }
     },
 
-    async publish(e) {
-      // A snapshot, because a subscriber is allowed to unsubscribe itself (or another) while the
-      // event is in flight — splicing the array under the loop would otherwise skip the next one.
-      for (const fn of [...handlers]) {
-        try {
-          await fn(e)
-        } catch (err) {
-          log.error('event subscriber failed', { event: e.type, error: err instanceof Error ? err.message : String(err) })
+    publish(e) {
+      const running = (async () => {
+        // A snapshot, because a subscriber is allowed to unsubscribe itself (or another) while the
+        // event is in flight — splicing the array under the loop would otherwise skip the next one.
+        for (const fn of [...handlers]) {
+          try {
+            await fn(e)
+          } catch (err) {
+            log.error('event subscriber failed', { event: e.type, error: err instanceof Error ? err.message : String(err) })
+          }
         }
-      }
+      })()
+      // Registered synchronously, so a caller that never awaits the returned promise — which is
+      // every `void bus.publish(e)` in the room path — is still visible to `idle()`.
+      inFlight.add(running)
+      void running.finally(() => inFlight.delete(running))
+      return running
+    },
+
+    async idle() {
+      // `publish` never rejects (every subscriber error is caught above), so there is nothing here
+      // to guard against; the loop exists for publishes a subscriber started.
+      while (inFlight.size > 0) await Promise.all([...inFlight])
     },
   }
 }

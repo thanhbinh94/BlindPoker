@@ -58,11 +58,21 @@ export interface PgDbOptions {
 }
 
 /**
+ * How long a caller may wait for a free connection before `pg` gives up. Without it a pool whose
+ * clients are all checked out — a slow settlement, a lock — queues every new query forever, and the
+ * first thing to notice is `/health`, which is precisely the request that must never hang.
+ */
+export const CONNECTION_TIMEOUT_MS = 5_000
+
+/** The probe's own budget. Shorter than the pool's, so a wedged pool answers `false` rather than waiting on it. */
+export const PING_TIMEOUT_MS = 2_000
+
+/**
  * Opens a pooled `pg` connection. The pool is lazy — no connection is made until the first query —
  * so this never fails at construction; `ping()` is how you learn the database is reachable.
  */
 export function createPgDb(databaseUrl: string, opts: PgDbOptions = {}): DbHandle {
-  const pool = new pg.Pool({ connectionString: databaseUrl, max: opts.max ?? 10 })
+  const pool = new pg.Pool({ connectionString: databaseUrl, max: opts.max ?? 10, connectionTimeoutMillis: CONNECTION_TIMEOUT_MS })
   pool.on('error', (err) => opts.onError?.(err))
   const db = drizzle(pool, { schema })
   return {
@@ -72,8 +82,12 @@ export function createPgDb(databaseUrl: string, opts: PgDbOptions = {}): DbHandl
     },
     async ping() {
       try {
-        const res = await pool.query('SELECT 1 AS ok')
-        return res.rows.length === 1
+        // Raced rather than merely awaited: `connectionTimeoutMillis` bounds *acquiring* a client,
+        // but a server that accepted the connection and then stopped answering leaves the query
+        // itself outstanding with no deadline of its own. The timer is unref'd so a probe in flight
+        // cannot hold the process open.
+        const expiry = new Promise<false>((resolve) => setTimeout(() => resolve(false), PING_TIMEOUT_MS).unref())
+        return await Promise.race([pool.query('SELECT 1 AS ok').then((res) => res.rows.length === 1), expiry])
       } catch {
         return false
       }

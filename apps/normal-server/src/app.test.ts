@@ -22,6 +22,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { FONTS_FILE_HOST, FONTS_STYLESHEET_HOST, normalCsp } from './app.js'
 import { rowsOf, type AppDb } from './db/client.js'
 import { createTestDb, type TestDb } from './db/test-db.js'
+import { HEALTH_PING_TIMEOUT_MS, READ_RATE_LIMIT, WRITE_IP_RATE_LIMIT, WRITE_RATE_LIMIT } from './http/routes.js'
 import { buildTestApp, ORIGIN, resetDb, XRW, type Harness, type HarnessOptions } from './test-harness.js'
 
 /**
@@ -106,6 +107,30 @@ describe('GET /health', () => {
   it('answers 503 with db: down when the pool cannot be reached', async () => {
     const h = await harness()
     h.setDbUp(false)
+    const res = await h.app.fastify.inject('/health')
+    expect(res.statusCode).toBe(503)
+    expect(res.json()).toMatchObject({ ok: false, db: 'down' })
+  })
+
+  /**
+   * The failure the 503 exists for. A pool with every client checked out — or a server that accepted
+   * the connection and stopped answering — leaves the probe outstanding forever, and Fastify's
+   * `requestTimeout` is 0, so without a deadline of its own `/health` would never answer at all and
+   * the orchestrator would learn nothing.
+   */
+  it('answers 503 rather than hanging when the probe never settles', async () => {
+    const h = await harness()
+    h.hangDbProbe()
+    const startedAt = Date.now()
+    const res = await h.app.fastify.inject('/health')
+    expect(res.statusCode).toBe(503)
+    expect(res.json()).toMatchObject({ ok: false, db: 'down' })
+    expect(Date.now() - startedAt).toBeLessThan(HEALTH_PING_TIMEOUT_MS * 3)
+  })
+
+  it('answers 503 when the probe rejects outright', async () => {
+    const h = await harness()
+    h.setDbProbe(() => Promise.reject(new Error('ECONNREFUSED')))
     const res = await h.app.fastify.inject('/health')
     expect(res.statusCode).toBe(503)
     expect(res.json()).toMatchObject({ ok: false, db: 'down' })
@@ -241,13 +266,55 @@ describe('rate limits', () => {
     expect((await h.app.fastify.inject('/health')).statusCode).toBe(200)
   })
 
-  it('leaves sign-in to its own, tighter limiter', async () => {
-    const h = await harness({ writeRateLimit: { limit: 1, windowMs: 60_000 } })
+  it('leaves sign-in and sign-up to their own, tighter limiters', async () => {
+    const h = await harness({ writeRateLimit: { limit: 1, windowMs: 60_000 }, writeIpRateLimit: { limit: 1, windowMs: 60_000 } })
     await h.register()
     for (let i = 0; i < 3; i += 1) {
       const res = await h.app.fastify.inject({ method: 'POST', url: '/api/auth/login', headers: XRW, payload: { email: 'binh@example.com', password: 'wrong password' } })
       expect(res.statusCode, `attempt ${String(i)}`).toBe(401)
     }
+  })
+
+  /**
+   * The exemption is those two requests, not the namespace they live in. `GET /api/auth/me` costs a
+   * session lookup and a player select, `POST /api/auth/logout` a delete, and `registerAuthRoutes`
+   * limits neither — so exempting the whole prefix would leave a free authenticated load path.
+   */
+  it('meters the auth routes that have no limiter of their own', async () => {
+    const h = await harness({ writeRateLimit: { limit: 1, windowMs: 60_000 }, readRateLimit: { limit: 1, windowMs: 60_000 } })
+    const me = await h.register()
+
+    expect((await h.app.fastify.inject({ url: '/api/auth/me', headers: { cookie: me.cookie } })).statusCode).toBe(200)
+    const read = await h.app.fastify.inject({ url: '/api/auth/me', headers: { cookie: me.cookie } })
+    expect(read.statusCode).toBe(429)
+    expect(code(read)).toBe('RATE_LIMITED')
+
+    expect((await h.app.fastify.inject({ method: 'POST', url: '/api/auth/logout', headers: h.auth(me) })).statusCode).toBe(204)
+    expect((await h.app.fastify.inject({ method: 'POST', url: '/api/auth/logout', headers: h.auth(me) })).statusCode).toBe(429)
+  })
+
+  /**
+   * A caller that invents a fresh `bp_session` per request gets a fresh per-session bucket every
+   * time, so the session limit alone can never bind on that traffic. The address bucket is what
+   * does — and the request is still refused before `requireUser` looks anything up.
+   */
+  it('meters a caller that rotates its cookie, because a write must satisfy the address bucket too', async () => {
+    const h = await harness({ writeIpRateLimit: { limit: 3, windowMs: 60_000 } })
+    const bogus = (i: number) => ({ cookie: `bp_session=made-up-${String(i)}`, ...XRW })
+
+    for (let i = 0; i < 3; i += 1) {
+      // Each one is a brand-new session bucket, and each is refused by `requireUser` — but counted.
+      expect((await h.app.fastify.inject({ method: 'POST', url: '/api/economy/relief', headers: bogus(i) })).statusCode).toBe(401)
+    }
+    const limited = await h.app.fastify.inject({ method: 'POST', url: '/api/economy/relief', headers: bogus(99) })
+    expect(limited.statusCode).toBe(429)
+    expect(code(limited)).toBe('RATE_LIMITED')
+  })
+
+  it('caps a place at twice what it caps a session at, by default', async () => {
+    expect(WRITE_RATE_LIMIT).toEqual({ limit: 60, windowMs: 60_000 })
+    expect(WRITE_IP_RATE_LIMIT).toEqual({ limit: 120, windowMs: 60_000 })
+    expect(READ_RATE_LIMIT).toEqual({ limit: 240, windowMs: 60_000 })
   })
 })
 
@@ -397,6 +464,58 @@ describe('a real boot', () => {
     await h.app.close()
     await h.app.close()
     await expect(fetch(`${base}/health`)).rejects.toThrow()
+  })
+
+  /**
+   * The steps of `close()` are best-effort for a reason: `game.shutdown()` re-raises a drain failure
+   * that happens *before* its own budget expires, and an unguarded chain would then leave the
+   * listener up, the subscriptions attached and the pool open — for good, because the memoized
+   * promise means no later caller can finish the job.
+   */
+  it('finishes the shutdown even when a step rejects, and never memoizes the rejection', async () => {
+    const h = await harness()
+    await listen(h)
+    // Rejects *after* the real drain, so the step under test genuinely fails while the gateway's
+    // sockets and timers are still torn down — a stubbed-out shutdown would leak both into the run.
+    const drain = h.app.game.shutdown.bind(h.app.game)
+    h.app.game.shutdown = async (reason) => {
+      await drain(reason)
+      throw new Error('drain exploded')
+    }
+
+    await expect(h.app.close()).resolves.toBeUndefined()
+    expect(h.closeDbCalls()).toBe(1)
+    // The listener was still shut, and the memo resolves for every later caller rather than
+    // re-raising — and does not close the database a second time.
+    await expect(h.app.close()).resolves.toBeUndefined()
+    expect(h.closeDbCalls()).toBe(1)
+  })
+
+  /**
+   * Domain events are published fire-and-forget so the game loop never waits for bookkeeping — which
+   * means the `player_stats` write for the last hand of the drain is still running when the listener
+   * closes. Closing the pool under it would lose the counters with nothing but an `error` line.
+   */
+  it('drains the progression writes still in flight before closing the database', async () => {
+    const h = await harness()
+    let landed = false
+    let release = (): void => {}
+    const arrived = new Promise<void>((resolve) => { release = resolve })
+    h.app.services.bus.subscribe(async () => {
+      await arrived
+      landed = true
+    })
+
+    // Nobody holds this promise, exactly as `onDomainEvent` publishes it.
+    void h.app.services.bus.publish({ type: 'LOGIN', playerId: 'p1', at: 1 })
+    const closed = h.app.close().then(() => {
+      // Read inside the continuation: the assertion is about ordering, not about a later poll.
+      expect(landed).toBe(true)
+      expect(h.closeDbCalls()).toBe(1)
+    })
+
+    setTimeout(release, 50)
+    await closed
   })
 
   it('closes live sockets with SERVER_SHUTDOWN', async () => {

@@ -68,6 +68,15 @@ import { createStatsService, type StatsService } from './stats/stats-service.js'
 /** A request body larger than this is a mistake or an attack: the largest thing this API accepts is an avatar. */
 const BODY_LIMIT_BYTES = 16 * 1024
 
+/** How long `close()` waits for the progression writes the drain set off. */
+export const SHUTDOWN_DRAIN_MS = 5_000
+
+/** `promise`, given up on after `budgetMs`. The timer is unref'd so waiting on it never holds the process open. */
+async function withDeadline(promise: Promise<void>, budgetMs: number, onTimeout: () => void): Promise<void> {
+  const expiry = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), budgetMs).unref())
+  if ((await Promise.race([promise.then(() => 'done' as const), expiry])) === 'timeout') onTimeout()
+}
+
 /**
  * The Normal edition's CSP: the default, plus the two hosts Google Fonts needs.
  *
@@ -111,6 +120,7 @@ export interface AppDeps {
   /** Lowered by tests that need to reach a limit without sending sixty real requests. */
   writeRateLimit?: { limit: number; windowMs: number }
   readRateLimit?: { limit: number; windowMs: number }
+  writeIpRateLimit?: { limit: number; windowMs: number }
 }
 
 /** Everything `buildApp` constructed, for tests and for anything Task 7 mounts beside it. */
@@ -261,6 +271,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     ...(deps.now ? { now: deps.now } : {}),
     ...(deps.writeRateLimit ? { writeRateLimit: deps.writeRateLimit } : {}),
     ...(deps.readRateLimit ? { readRateLimit: deps.readRateLimit } : {}),
+    ...(deps.writeIpRateLimit ? { writeIpRateLimit: deps.writeIpRateLimit } : {}),
   })
 
   // Last: `/*` matches everything the routes above did not claim. The reserved list is exactly the
@@ -281,15 +292,33 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
 
   let closing: Promise<void> | null = null
   const close = (): Promise<void> => {
-    // Draining the game first settles every live hand and closes the sockets, so `fastify.close()`
-    // is not left waiting on connections that were upgraded out from under it; the subscriptions go
-    // next, so nothing publishes into a closing world; the database stays open until the last write
-    // has happened.
+    /**
+     * Draining the game first settles every live hand and closes the sockets, so `fastify.close()`
+     * is not left waiting on connections that were upgraded out from under it; the subscriptions go
+     * next, so nothing new is published into a closing world; the progression writes those sockets
+     * already triggered are drained before the pool goes.
+     *
+     * Every step is best-effort. A rejected `game.shutdown()` (its 10 s budget covers a hang, not a
+     * throw) or a rejected `fastify.close()` must not skip the ones after it — that would leave the
+     * listener up and the pool open — and because this promise is memoized, a rejection here could
+     * never be retried by a later caller. So each step logs and the sequence continues, and the memo
+     * always resolves.
+     */
     closing ??= (async () => {
-      await game.shutdown('server shutdown')
-      await fastify.close()
+      const step = async (what: string, fn: () => Promise<void>): Promise<void> => {
+        try {
+          await fn()
+        } catch (err) {
+          log.error('shutdown step failed', { step: what, err: String(err) })
+        }
+      }
+      await step('game', () => game.shutdown('server shutdown'))
+      await step('fastify', () => fastify.close())
       for (const off of unsubscribes) off()
-      await deps.closeDb()
+      // Bounded: a subscriber that never settles must not hold a deploy open, and losing the last
+      // counter is better than a container that will not stop.
+      await step('events', () => withDeadline(bus.idle(), SHUTDOWN_DRAIN_MS, () => log.warn('progression writes still in flight at shutdown', { budgetMs: SHUTDOWN_DRAIN_MS })))
+      await step('db', () => deps.closeDb())
     })()
     return closing
   }
