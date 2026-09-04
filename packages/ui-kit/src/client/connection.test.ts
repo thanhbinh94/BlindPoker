@@ -82,4 +82,91 @@ describe('createConnection', () => {
     conn.disconnect(); conn.connect(); socket().open()
     expect(socket().sent[0]).toEqual({ t: 'HELLO', sessionToken: 'tok:b' })
   })
+
+  it('setToken on a live socket greets immediately, and only once', () => {
+    const { conn, socket } = make(null)
+    conn.connect(); socket().open()
+    expect(socket().sent).toEqual([])
+    conn.setToken('tok:b')
+    expect(socket().sent).toEqual([{ t: 'HELLO', sessionToken: 'tok:b' }])
+    conn.setToken('tok:b') // same token again: nothing to re-announce
+    expect(socket().sent).toHaveLength(1)
+    socket().receive({ t: 'WELCOME', playerId: 'p', displayName: 'P', balance: 0, serverTime: 0 })
+    conn.setToken('tok:c') // this socket already has a session; a second HELLO would replace it
+    expect(socket().sent).toHaveLength(1)
+  })
+
+  it('stops for good when the server rejects the token', () => {
+    const { conn, statuses, socket } = make()
+    conn.connect(); socket().open()
+    socket().serverClose(4001, 'bad token')
+    expect(statuses.at(-1)).toBe('closed')
+    vi.advanceTimersByTime(60_000)
+    expect(FakeSocket.instances).toHaveLength(1)
+  })
+
+  it('reports why it closed as unauthenticated, including after an UNAUTHENTICATED error frame', () => {
+    const reasons: (string | undefined)[] = []
+    const conn = createConnection({
+      url: 'ws://x/ws', token: 'tok:bad', socketFactory: fakeSocketFactory,
+      onMessage: () => {}, onStatus: (_s, reason) => reasons.push(reason),
+    })
+    conn.connect()
+    const sock = FakeSocket.instances.at(-1)!
+    sock.open()
+    sock.receive({ t: 'ERROR', code: 'UNAUTHENTICATED', message: 'no' })
+    sock.serverClose(1006) // a plain close, but this socket was already refused
+    expect(reasons.at(-1)).toBe('unauthenticated')
+    vi.advanceTimersByTime(60_000)
+    expect(FakeSocket.instances).toHaveLength(1)
+  })
+
+  it('keeps backing off when a server accepts the socket and then drops it without a WELCOME', () => {
+    const { conn, socket } = make()
+    conn.connect()
+    for (const delay of [1000, 2000, 4000]) {
+      socket().open() // the socket opens every time, so `onopen` must not be what resets the backoff
+      socket().serverClose(1006)
+      const before = FakeSocket.instances.length
+      vi.advanceTimersByTime(delay - 1)
+      expect(FakeSocket.instances).toHaveLength(before)
+      vi.advanceTimersByTime(1)
+      expect(FakeSocket.instances).toHaveLength(before + 1)
+    }
+    // A WELCOME is what proves the session works; only then does the ladder go back to the first rung.
+    socket().open()
+    socket().receive({ t: 'WELCOME', playerId: 'p', displayName: 'P', balance: 0, serverTime: 0 })
+    socket().serverClose(1006)
+    const before = FakeSocket.instances.length
+    vi.advanceTimersByTime(1000)
+    expect(FakeSocket.instances).toHaveLength(before + 1)
+  })
+
+  it('rejects an in-flight request when the socket closes under it', async () => {
+    const { conn, socket } = make()
+    conn.connect(); socket().open()
+    const pending = conn.request({ t: 'START_GAME' })
+    socket().serverClose(1006)
+    await expect(pending).rejects.toThrow(/closed/)
+    vi.advanceTimersByTime(60_000)
+  })
+
+  it('disconnect() during backoff cancels the pending retry', () => {
+    const { conn, socket } = make()
+    conn.connect(); socket().open()
+    socket().serverClose(1006)
+    conn.disconnect()
+    vi.advanceTimersByTime(60_000)
+    expect(FakeSocket.instances).toHaveLength(1)
+  })
+
+  it('connect() during backoff connects at once and cancels the pending retry', () => {
+    const { conn, socket } = make()
+    conn.connect(); socket().open()
+    socket().serverClose(1006)
+    conn.connect()
+    expect(FakeSocket.instances).toHaveLength(2)
+    vi.advanceTimersByTime(60_000)
+    expect(FakeSocket.instances).toHaveLength(2) // the queued retry did not fire on top of it
+  })
 })

@@ -32,6 +32,20 @@ describe('useGameClient', () => {
     expect(sock().closedWith?.code).toBe(1000)
   })
 
+  it('probes for the room with a RESYNC as soon as WELCOME lands, and stops probing once it is answered', () => {
+    const { result } = renderHook(() => useGameClient({ url: 'ws://x/ws', token: 'tok:a', socketFactory: fakeSocketFactory }))
+    const sock = () => FakeSocket.instances.at(-1)!
+    act(() => sock().open())
+    expect(sock().sent).toEqual([{ t: 'HELLO', sessionToken: 'tok:a' }])
+    act(() => sock().receive({ t: 'WELCOME', playerId: 'a', displayName: 'A', balance: 0, serverTime: 0 }))
+    expect(sock().sent.at(-1)).toEqual({ t: 'RESYNC' })
+    expect(result.current.state.roomStale).toBe(true)
+    act(() => sock().receive({ t: 'ERROR', code: 'NOT_IN_ROOM', message: 'not in a room' }))
+    expect(result.current.state.roomStale).toBe(false)
+    expect(result.current.state.lastError).toBeNull()
+    expect(sock().sent.filter((m) => (m as { t: string }).t === 'RESYNC')).toHaveLength(1)
+  })
+
   it('does not connect when autoConnect is false until connect() is called', () => {
     const { result } = renderHook(() => useGameClient({ url: 'ws://x/ws', token: null, autoConnect: false, socketFactory: fakeSocketFactory }))
     expect(FakeSocket.instances).toHaveLength(0)

@@ -75,6 +75,14 @@ export interface ClientState {
   serverTimeOffset: number
   lobby: RoomSummary[]
   room: RoomView | null
+  /**
+   * `true` while `room` has not been confirmed by the server on *this* session. It starts `true`, goes `true`
+   * again on every `WELCOME` (the socket may have been away long enough to be thrown out of the room), and only
+   * clears when the answer to the follow-up `RESYNC` arrives — a `ROOM_SNAPSHOT`, or `ERROR{NOT_IN_ROOM}`. A
+   * screen that acts on `room === null` must wait for this to be `false`, or a page refresh bounces the player
+   * out of the room they are still sitting in.
+   */
+  roomStale: boolean
   hand: ClientHand | null
   seq: number
   deadlineAt: number | null
@@ -100,6 +108,7 @@ export const initialClientState: ClientState = {
   serverTimeOffset: 0,
   lobby: [],
   room: null,
+  roomStale: true,
   hand: null,
   seq: 0,
   deadlineAt: null,

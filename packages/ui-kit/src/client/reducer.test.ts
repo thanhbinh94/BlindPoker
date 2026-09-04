@@ -260,3 +260,71 @@ describe('client reducer — snapshot, room events, errors', () => {
     expect(s.replaced).toBe(true)
   })
 })
+
+/** docs/server-kit.md, "Reconnecting and frame order": WELCOME first, a snapshot only if we are still in a room. */
+describe('session handshake', () => {
+  const welcome: ServerMessage = { t: 'WELCOME', playerId: 'p1', displayName: 'P1', balance: 5, serverTime: 0 }
+
+  it('starts with no confirmed room and asks for one as soon as WELCOME lands', () => {
+    expect(initialClientState.roomStale).toBe(true)
+    const s = reduceClient(initialClientState, { type: 'server', msg: welcome, now: 0 })
+    expect(s.roomStale).toBe(true)
+    expect(s.resyncNeeded).toBe(true)
+  })
+
+  it('WELCOME → RESYNC → snapshot restores the room we were already sitting in', () => {
+    const room = roomView('holdem', HOLDEM_RULES, [20000, 20000])
+    let s = reduceClient(initialClientState, { type: 'server', msg: welcome, now: 0 })
+    s = reduceClient(s, { type: 'resyncSent' })
+    expect(s.resyncNeeded).toBe(false)
+    expect(s.roomStale).toBe(true) // still unconfirmed: the answer has not arrived
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_SNAPSHOT', seq: 7, room, hand: null, deadlineAt: null }, now: 0 })
+    expect(s.roomStale).toBe(false)
+    expect(s.room?.roomId).toBe('r')
+  })
+
+  it('WELCOME → RESYNC → NOT_IN_ROOM clears the stale room without surfacing an error', () => {
+    const room = roomView('holdem', HOLDEM_RULES, [20000, 20000])
+    let s = reduceClient(initialClientState, { type: 'server', msg: { t: 'ROOM_SNAPSHOT', seq: 7, room, hand: null, deadlineAt: null }, now: 0 })
+    s = reduceClient(s, { type: 'server', msg: welcome, now: 0 })
+    expect(s.room).not.toBeNull() // the room stays on screen while the probe is in flight
+    s = reduceClient(s, { type: 'resyncSent' })
+    s = reduceClient(s, { type: 'server', msg: { t: 'ERROR', code: 'NOT_IN_ROOM', message: 'not in a room' }, now: 9 })
+    expect(s.room).toBeNull()
+    expect(s.hand).toBeNull()
+    expect(s.seq).toBe(0)
+    expect(s.deadlineAt).toBeNull()
+    expect(s.roomStale).toBe(false)
+    expect(s.lastError).toBeNull() // an expected probe answer, not a refusal to show the player
+  })
+})
+
+describe('frames with nothing to apply ask for a snapshot', () => {
+  const started: GameEvent = { type: 'HAND_STARTED', handId: 'h', mode: 'holdem', button: 0, seats: [0, 1], carryOverIn: 0 }
+
+  it('a game event with no hand advances seq and sets resyncNeeded', () => {
+    const room = roomView('holdem', HOLDEM_RULES, [20000, 20000])
+    let s = reduceClient(initialClientState, { type: 'server', msg: { t: 'ROOM_SNAPSHOT', seq: 7, room, hand: null, deadlineAt: null }, now: 0 })
+    expect(s.hand).toBeNull()
+    s = reduceClient(s, { type: 'server', msg: { t: 'GAME_EVENT', seq: 8, event: { type: 'POT_UPDATED', pot: 400 } }, now: 0 })
+    expect(s.seq).toBe(8)
+    expect(s.resyncNeeded).toBe(true)
+  })
+
+  it('HAND_STARTED with no room sets resyncNeeded', () => {
+    const s = reduceClient(initialClientState, { type: 'server', msg: { t: 'GAME_EVENT', seq: 3, event: started }, now: 0 })
+    expect(s.hand).toBeNull()
+    expect(s.seq).toBe(3)
+    expect(s.resyncNeeded).toBe(true)
+  })
+
+  it('a room event with no room sets resyncNeeded', () => {
+    const s = reduceClient(initialClientState, {
+      type: 'server',
+      msg: { t: 'ROOM_EVENT', seq: 4, event: { type: 'PLAYER_READY', playerId: 'p0', ready: true } },
+      now: 0,
+    })
+    expect(s.seq).toBe(4)
+    expect(s.resyncNeeded).toBe(true)
+  })
+})

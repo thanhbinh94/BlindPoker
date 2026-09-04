@@ -189,4 +189,26 @@ describe('RoomScreen', () => {
     view.rerender(screenFor(fakeClient(makeState({ room: null })), onLeft))
     expect(onLeft).toHaveBeenCalledTimes(1)
   })
+
+  // Fix #11: a refresh on `#/room` mounts with no room and none confirmed yet. Bouncing on that would throw the
+  // player out of the room they are still sitting in, half a second before the snapshot proves it.
+  it('waits for the reconnect answer before deciding the room is gone', () => {
+    const onLeft = vi.fn()
+    const view = render(screenFor(fakeClient(makeState({ room: null, roomStale: true })), onLeft))
+    expect(onLeft).not.toHaveBeenCalled()
+
+    // …the RESYNC comes back with a snapshot: the room was there all along.
+    view.rerender(screenFor(fakeClient(makeState({ room: standingRoom })), onLeft))
+    expect(onLeft).not.toHaveBeenCalled()
+    expect(screen.getByRole('heading', { name: 'T' })).toBeInTheDocument()
+  })
+
+  it('leaves once the reconnect answer says there is no room', () => {
+    const onLeft = vi.fn()
+    const view = render(screenFor(fakeClient(makeState({ room: null, roomStale: true })), onLeft))
+    expect(onLeft).not.toHaveBeenCalled()
+
+    view.rerender(screenFor(fakeClient(makeState({ room: null, roomStale: false })), onLeft))
+    expect(onLeft).toHaveBeenCalledTimes(1)
+  })
 })

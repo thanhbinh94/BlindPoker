@@ -86,11 +86,13 @@ export const holdemHand: ClientHand = {
 
 export const makeHand = (patch: Partial<ClientHand> = {}): ClientHand => ({ ...holdemHand, ...patch })
 
+/** A live, welcomed session: the handshake is over, so `roomStale` is false unless a test says otherwise. */
 export const makeState = (patch: Partial<ClientState> = {}): ClientState => ({
   ...initialClientState,
   status: 'open',
   me: { playerId: 'me', displayName: 'Mai' },
   balance: 100_000,
+  roomStale: false,
   ...patch,
 })
 

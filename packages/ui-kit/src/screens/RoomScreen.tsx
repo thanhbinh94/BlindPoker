@@ -57,8 +57,10 @@ export function RoomScreen({ client, lang, onLeft, avatarFor, header, layout }: 
   const [buyIn, setBuyIn] = useState('')
   const request = useRequest()
 
-  // Left, closed or kicked: the reducer drops the room and the host app takes it from here.
-  const gone = room === null
+  // Left, closed or kicked: the reducer drops the room and the host app takes it from here. A *stale* room is a
+  // different thing — a refresh on `#/room` starts with no room and none confirmed yet, and bouncing then would
+  // throw the player out of a room they are still sitting in. Wait for the answer to the reconnect `RESYNC`.
+  const gone = room === null && !state.roomStale
   useEffect(() => {
     if (gone) onLeftRef.current()
   }, [gone])

@@ -241,19 +241,52 @@ const notify = (state: ClientState, kind: string, payload: unknown, at: number):
 /** A backwards `seq` inside a room means we lost or reordered frames: apply anyway, but ask for a fresh snapshot. */
 const gap = (state: ClientState, seq: number): boolean => state.room !== null && seq <= state.seq
 
+/**
+ * A frame that lands on nothing: a hand event with no hand, or a `HAND_STARTED` with no room to seat it in. The
+ * server would not send one unless the client's view had already fallen behind, so take the `seq` and ask for a
+ * snapshot rather than silently dropping the frame.
+ */
+const orphan = (state: ClientState, type: GameEvent['type']): boolean =>
+  type === 'HAND_STARTED' ? state.room === null : state.hand === null
+
 function applyServerMessage(state: ClientState, msg: ServerMessage, now: number): ClientState {
   switch (msg.t) {
+    // `WELCOME` says who you are; per docs/server-kit.md "Reconnecting and frame order" a `ROOM_SNAPSHOT` follows
+    // only if the server still has you in a room. The room we are holding is therefore unconfirmed until the
+    // answer to the `RESYNC` the hook is about to send arrives — keep it on screen, but mark it stale.
     case 'WELCOME':
-      return { ...state, me: { playerId: msg.playerId, displayName: msg.displayName }, balance: msg.balance, serverTimeOffset: msg.serverTime - now, replaced: false }
+      return {
+        ...state,
+        me: { playerId: msg.playerId, displayName: msg.displayName },
+        balance: msg.balance,
+        serverTimeOffset: msg.serverTime - now,
+        replaced: false,
+        roomStale: true,
+        resyncNeeded: true,
+      }
     case 'ROOM_LIST':
       return { ...state, lobby: msg.rooms }
     case 'ROOM_SNAPSHOT':
-      return { ...state, room: msg.room, hand: msg.hand ? handFromView(msg.hand, msg.room) : null, seq: msg.seq, deadlineAt: msg.deadlineAt, resyncNeeded: false }
+      return { ...state, room: msg.room, roomStale: false, hand: msg.hand ? handFromView(msg.hand, msg.room) : null, seq: msg.seq, deadlineAt: msg.deadlineAt, resyncNeeded: false }
     case 'BALANCE':
       return { ...state, balance: msg.balance }
     case 'NOTIFICATION':
       return notify(state, msg.kind, msg.payload, now)
     case 'ERROR': {
+      // The other answer the reconnect probe can get: the server has no room for us. That is news to the state,
+      // not to the player — silence it while the room was unconfirmed, or when there was no room to lose.
+      if (msg.code === 'NOT_IN_ROOM') {
+        const expected = state.roomStale || state.room === null
+        return {
+          ...state,
+          room: null,
+          roomStale: false,
+          hand: null,
+          seq: 0,
+          deadlineAt: null,
+          lastError: expected ? state.lastError : { code: msg.code, message: msg.message, reqId: msg.reqId ?? null, at: now },
+        }
+      }
       const needsResync = msg.code === 'STALE_STATE' || (msg.code === 'INTERNAL' && msg.message.toLowerCase().includes('resync'))
       return { ...state, lastError: { code: msg.code, message: msg.message, reqId: msg.reqId ?? null, at: now }, resyncNeeded: state.resyncNeeded || needsResync }
     }
@@ -261,10 +294,10 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
       return { ...state, replaced: true }
     case 'GAME_EVENT': {
       const next = applyGameEvent(state, msg.event)
-      return { ...next, seq: msg.seq, resyncNeeded: next.resyncNeeded || gap(state, msg.seq) }
+      return { ...next, seq: msg.seq, resyncNeeded: next.resyncNeeded || orphan(state, msg.event.type) || gap(state, msg.seq) }
     }
     case 'ROOM_EVENT': {
-      const resyncNeeded = state.resyncNeeded || gap(state, msg.seq)
+      const resyncNeeded = state.resyncNeeded || state.room === null || gap(state, msg.seq)
       if (msg.event.type === 'ROOM_CLOSED') {
         return { ...notify(state, 'ROOM_CLOSED', { reason: msg.event.reason }, now), room: null, hand: null, seq: msg.seq, resyncNeeded }
       }
