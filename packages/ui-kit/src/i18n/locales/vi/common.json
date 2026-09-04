@@ -12,7 +12,7 @@
     "INSUFFICIENT_BALANCE": "Số dư không đủ",
     "NOT_YOUR_TURN": "Chưa đến lượt bạn",
     "ILLEGAL_ACTION": "Hành động không hợp lệ",
-    "INVALID_AMOUNT": "Số tiền không hợp lệ",
+    "INVALID_AMOUNT": "Mức cược không hợp lệ",
     "STALE_STATE": "Trạng thái đã cũ, vui lòng thử lại",
     "DUPLICATE_REQUEST": "Yêu cầu bị trùng",
     "NOT_IN_HAND": "Bạn không tham gia ván này",
@@ -31,7 +31,7 @@
   },
   "units": {
     "points": "điểm",
-    "pointsShort": "đ",
+    "pointsShort": "điểm",
     "seconds": "giây"
   },
   "time": {

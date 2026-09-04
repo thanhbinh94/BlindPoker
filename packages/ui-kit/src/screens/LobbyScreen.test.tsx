@@ -50,7 +50,7 @@ describe('LobbyScreen', () => {
 
     expect(client.listRooms).toHaveBeenCalledTimes(1)
     expect(screen.getByText('Mai')).toBeInTheDocument()
-    expect(screen.getByText('123,456')).toBeInTheDocument()
+    expect(screen.getByText('123,456 pts')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Đêm Sài Gòn' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Chiếu Bạc' })).toBeInTheDocument()
   })

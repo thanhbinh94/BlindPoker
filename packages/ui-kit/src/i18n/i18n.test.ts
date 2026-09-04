@@ -34,6 +34,19 @@ describe('locale resources', () => {
   it('has no empty strings', () => {
     for (const res of [en, vi, enCommon, viCommon]) for (const v of Object.values(flattenValues(res))) expect(String(v).trim()).not.toBe('')
   })
+  // Spec §26: the balance is points, not money. A dong sign — or the abbreviation "đ" standing in as a unit — turns
+  // a play-money score into a currency figure, which is exactly what this product must never imply.
+  it('never states an amount in currency', () => {
+    for (const res of [en, vi, enCommon, viCommon]) {
+      for (const [key, value] of Object.entries(flattenValues(res))) {
+        const text = String(value)
+        expect(text.trim(), key).not.toBe('đ')
+        expect(text, key).not.toMatch(/[₫]|VND/)
+      }
+    }
+    expect(viCommon.units.pointsShort).toBe('điểm')
+    expect(enCommon.units.pointsShort).toBe('pts')
+  })
 })
 
 function flattenValues(o: object): Record<string, unknown> {

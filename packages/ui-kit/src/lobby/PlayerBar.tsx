@@ -28,6 +28,9 @@ export function PlayerBar({ displayName, balance, status, lang, onLanguage, righ
   const { t } = useTranslation()
   const name = displayName ?? t('status.connecting')
   const initial = name.trim().slice(0, 1).toUpperCase()
+  // Amount and unit are one string on purpose: a balance is points, and "100.000" left alone beside a stray
+  // symbol is exactly how a points balance starts reading as money.
+  const pointsText = `${formatPoints(balance, lang)} ${t('common:units.pointsShort')}`
 
   return (
     <header className={s.bar}>
@@ -38,8 +41,7 @@ export function PlayerBar({ displayName, balance, status, lang, onLanguage, righ
         <span className={s.name}>{name}</span>
         <span className={s.balance}>
           <span>{t('labels.balance')}</span>
-          <strong className={s.points}>{formatPoints(balance, lang)}</strong>
-          <span>{t('common:units.pointsShort')}</span>
+          <strong className={s.points}>{pointsText}</strong>
         </span>
       </span>
       <span className={s.conn} data-status={status}>
