@@ -87,14 +87,48 @@ that already has a height.
 | `clearError()`, `dismissNotification(id)` | local state only |
 | `serverNow()` | `Date.now()` + the `WELCOME` clock offset — **always** compare deadlines against this |
 
-`ClientState` carries `status` (`idle`/`connecting`/`open`/`reconnecting`/`closed`), `me`, `rooms`, `room`, `hand`,
-`seq`, `deadlineAt`, `lastError`, `notifications`, `resyncNeeded`, `serverTimeOffset`.
+`ClientState` carries `status` (`idle`/`connecting`/`open`/`reconnecting`/`closed`), `closeReason`, `me`,
+`balance`, `lobby`, `room`, `roomStale`, `hand`, `seq`, `deadlineAt`, `lastError`, `notifications`, `resyncNeeded`,
+`replaced`, `serverTimeOffset`.
 
 The rules the client obeys — reconnect with exponential backoff 1 s → 30 s, auto-`HELLO`, auto-`PONG`, a `seq` that
 goes backwards or a `STALE_STATE` / `INTERNAL "resync required"` error setting `resyncNeeded` and triggering
 `RESYNC` — are the client half of **"Reconnecting and frame order"** in [`docs/server-kit.md`](./server-kit.md). A
 test drives real `@bp/core` hands through `reduceClient` and asserts its view equals the engine's `playerView`, so
 the reducer cannot drift from the server.
+
+### The reconnect handshake, and `roomStale`
+
+`WELCOME` comes first, and a `ROOM_SNAPSHOT` follows **only if the server still has you in a room**. So the room the
+client is holding when a socket comes up is unconfirmed, and `roomStale` says so:
+
+| Frame | Effect |
+| --- | --- |
+| (initial state) | `roomStale: true` — nothing is confirmed until a session exists |
+| `WELCOME` | `room`/`hand` are kept on screen, `roomStale = true`, `resyncNeeded = true` (the hook sends `RESYNC`) |
+| `ROOM_SNAPSHOT` | the room is confirmed: `roomStale = false` |
+| `ERROR{NOT_IN_ROOM}` | the probe's other answer: `room`/`hand` cleared, `seq = 0`, `roomStale = false`, and no `lastError` when the room was stale or already gone |
+
+**A screen must not act on `room === null` alone** — wait for `!roomStale`. `RoomScreen` does exactly that, which is
+why a refresh on `#/room` no longer bounces the player out of a room they are still sitting in.
+
+A frame the reducer cannot apply to anything — a game event with no hand, a `HAND_STARTED` or room event with no
+room — takes its `seq` and sets `resyncNeeded` rather than being dropped.
+
+### Authentication is terminal
+
+The backoff ladder resets on `WELCOME`, not on `onopen`: a server that accepts the socket and then drops the session
+would otherwise be hammered once a second forever. A close with code **4001**, or any `ERROR{UNAUTHENTICATED}`
+received on the socket, stops reconnecting for good and reports `state.closeReason === 'unauthenticated'` — the app's
+cue to send the player back to sign in. Nothing else in the kit distinguishes close reasons.
+
+### Handing over a token later (the Lite flow)
+
+Lite has no token until the player types a name. Either wait — `useGameClient({ autoConnect: false })`, then
+`connect()` once a token exists — or connect straight away and set the token when it arrives: `setToken` on a live
+socket sends `HELLO` on the spot rather than waiting out a reconnect. It greets once per socket, and never after
+that socket has been welcomed. Both routes are supported; `autoConnect: false` is the quieter one, since a socket
+that opens with no token sends nothing until it has one.
 
 ---
 
@@ -114,9 +148,13 @@ formatting; strings come from `useTranslation()`.
 `onLeft` fires the moment the room is gone — left, closed or kicked — and the app decides where that lands.
 
 Both screens already render `Toasts` from their own `client.state`; it is exported separately so an app can raise
-its own slips in the same stack. Errors are assertive (`role="alert"`, red edge) and clear themselves, notifications
-are polite (`role="status"`, gold edge) and wait to be read — each also carries its own glyph, so hue is never the
-only signal.
+its own slips in the same stack. Errors are assertive (`role="alert"`, red edge), notifications are polite
+(`role="status"`, gold edge) — each also carries its own glyph, so hue is never the only signal. **Every slip clears
+itself**: errors after 6 s, notifications after 8 s, and the reducer keeps at most **5** undismissed notifications,
+dropping the oldest, so a chatty server cannot stack slips off the top of the screen.
+
+`useRequest()` is exported too: it runs one `GameClientApi` call, exposes `busy` and the refusal as a
+`ClientError` that `Toasts` renders unchanged, and is what both screens use for their own buttons.
 
 ### Table
 
@@ -135,6 +173,17 @@ only signal.
 `ActionBar` offers only the kinds the server declared legal and clamps every preset into the legal range, so a click
 can never produce an illegal amount. Keyboard: `F` fold, `C` check/call, `R` focus the amount, `Enter` submit — all
 advertised through `aria-keyshortcuts`. Between turns it stays in place and says so rather than collapsing.
+
+`HandResult` reads `hand.result`. Alongside `payouts` (the same money summed per seat) it carries **`pots`** — the
+engine's layered pots straight from `SETTLEMENT.pots`, each with its `amount`, `eligibleSeats` and `winners` — and
+prints a main/side-pot ledger whenever there is more than one, which is the only way a hand with a short all-in
+reads as fair. `pots` is empty for a cancelled hand. A cancelled hand's `reason` is an operator-facing token, so it
+is normalised to a `cancel.*` key and translated; the raw token is never rendered. Pass `onDismiss` to make the card
+closable — `RoomScreen` does, and the between-hands countdown moves to the tray once it is waved off.
+
+Under 768 px the table becomes the vertical stack (spec §27.1): opponents, felt, your own seat. **The opponents'
+strip never scrolls inside itself** — it wraps, holds a floor of two plate rows, and from seven seats up the plates
+go compact (avatar, name, stack, then bet and state badge side by side) so a third row of three fits at 360 px.
 
 ### Lobby
 
@@ -259,16 +308,19 @@ budget here — it is what a browser actually downloads. Raw sizes are recorded 
 a regression, not because anything is measured against them.
 
 `pnpm --filter @bp/ui-kit build:playground` builds the playground (React 18 + i18next + the whole of `@bp/ui-kit`,
-plus `@bp/core`'s engine and bot, which only the harness needs). Measured on the commit that added this document:
+plus `@bp/core`'s engine and bot, which only the harness needs). Re-measured after the final-review fix wave:
 
 | Bundle | Raw (informational) | Gzip (**budgeted**) |
 | --- | --- | --- |
-| Playground JS (kit + React + i18next + core engine + bots) | 292.0 kB | **94.3 kB** of ≤ 250 kB |
-| Playground CSS (all of the kit's styles) | 39.2 kB | **8.9 kB** of ≤ 40 kB |
-| Kit only (barrel + React + i18next, no engine) | 272.8 kB | 88.6 kB |
+| Playground JS (kit + React + i18next + core engine + bots) | 296.2 kB | **95.9 kB** of ≤ 250 kB |
+| Playground CSS (all of the kit's styles) | 41.1 kB | **9.3 kB** of ≤ 40 kB |
+| Kit only (barrel + React + i18next, no engine) | 277.3 kB | 90.1 kB |
 
-The kit's stylesheets are 52.0 kB of CSS source (comments and formatting included), which minifies to the 39.2 kB
-shipped above and compresses to 8.9 kB on the wire. The source figure is informational only: it is not held to a
+Both packages declare `sideEffects` so a bundler may drop what an app does not import: `false` for `@bp/core`, and
+`["**/*.css"]` for `@bp/ui-kit`, whose stylesheet imports are the one thing that must survive tree-shaking.
+
+The kit's stylesheets are 56.8 kB of CSS source (comments and formatting included), which minifies to the 41.1 kB
+shipped above and compresses to 9.3 kB on the wire. The source figure is informational only: it is not held to a
 budget, and an earlier raw-size ceiling has been retired in favour of the gzip numbers.
 
 `src/index.ts` exports only ui-kit modules, and the kit imports just types and small helpers
@@ -283,8 +335,9 @@ only records the measurement.
 
 Exported for consumers' tests as well as the kit's own:
 
-- **`FakeSocket`** — a `SocketLike` with no network behind it. `open()`, `emit(msg)` to push a `ServerMessage`,
-  `close(code)`, and `sent` for the frames the client wrote.
+- **`FakeSocket`** — a `SocketLike` with no network behind it. `open()`, `receive(msg)` to push a `ServerMessage`,
+  `serverClose(code, reason)` for a close from the other end, `close(code)` for one from this side, and `sent` for
+  the frames the client wrote. `FakeSocket.instances` / `FakeSocket.reset()` track every socket a test opened.
 - **`fakeSocketFactory`** — pass it as `useGameClient({ socketFactory })` to drive a whole screen from a test
   without a server.
 - **`reduceClient(state, action)` / `initialClientState`** — the reducer is pure, so protocol behaviour can be

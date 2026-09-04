@@ -782,6 +782,7 @@ Biện pháp: delta events thay vì gửi lại snapshot; PlayerView tính một
 - Số và ngày: `Intl.NumberFormat`, `Intl.DateTimeFormat` theo ngôn ngữ.
 - Lint `react/jsx-no-literals` + test kiểm tra hai file locale có cùng tập key.
 - Thêm ngôn ngữ = thêm thư mục locale + mục trong `SUPPORTED_LANGUAGES`.
+- Đơn vị điểm không được hiển thị như tiền tệ (không dùng `đ`/`₫`/`VND`, không dùng từ "tiền"): số dư và stack luôn đọc là điểm.
 
 ## 27. Responsive Design
 
@@ -789,6 +790,7 @@ Biện pháp: delta events thay vì gửi lại snapshot; PlayerView tính một
 - `≥ 1024`: elip đầy đủ, ghế của mình ở đáy giữa, ActionBar dưới ghế mình.
 - `768–1023`: elip hẹp, chữ nhỏ hơn, ActionBar nổi.
 - `< 768` dọc: lưới đối thủ 2 hàng trên cùng; community + pot giữa; bài mình + ActionBar ghim đáy (`position: sticky`), nút ≥ 44 px; slider cược thay bằng nút preset + input.
+- Hàng đối thủ luôn hiển thị đủ mọi ghế (tối thiểu 2 hàng, không cuộn ẩn): lưới tự xuống dòng, và khi cần nhiều hàng hơn thì thu nhỏ plate (avatar + tên + stack + cược + trạng thái) trước, tuyệt đối không cuộn bên trong hàng đối thủ.
 - `< 768` ngang (điện thoại xoay): dùng bố cục elip thu nhỏ, ẩn header.
 - Lá bài: `clamp(36px, 8vw, 72px)` chiều rộng.
 

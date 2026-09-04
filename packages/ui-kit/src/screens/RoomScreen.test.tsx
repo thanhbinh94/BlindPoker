@@ -192,6 +192,26 @@ describe('RoomScreen', () => {
 
   // Fix #11: a refresh on `#/room` mounts with no room and none confirmed yet. Bouncing on that would throw the
   // player out of the room they are still sitting in, half a second before the snapshot proves it.
+  it('lets the finished hand’s result card be waved off the felt', async () => {
+    const room = makeRoom({
+      players: [
+        makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'IN_HAND', stack: 19_800 }),
+        makePlayer({ playerId: 'me', displayName: 'Mai', seat: 2, status: 'IN_HAND', stack: 20_400 }),
+      ],
+    })
+    const hand = makeHand({
+      phase: 'COMPLETE',
+      mySeat: 2,
+      actingSeat: null,
+      result: { payouts: [{ seat: 2, amount: 600 }], pots: [], fee: 0, showdown: null, carryOverOut: 0, uncalledReturned: null, cancelled: false, reason: null },
+    })
+    wrap(fakeClient(makeState({ room, hand })))
+
+    expect(screen.getByRole('heading', { name: 'Winner' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('heading', { name: 'Winner' })).toBeNull()
+  })
+
   it('waits for the reconnect answer before deciding the room is gone', () => {
     const onLeft = vi.fn()
     const view = render(screenFor(fakeClient(makeState({ room: null, roomStale: true })), onLeft))

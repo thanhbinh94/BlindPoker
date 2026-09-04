@@ -1,6 +1,8 @@
 node_modules/
 dist/
 packages/ui-kit/playground/dist
+# per-developer preview config: paths and ports are local, not project state
+.claude/launch.json
 release/
 coverage/
 *.sqlite

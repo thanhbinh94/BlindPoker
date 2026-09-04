@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { cx } from '../primitives/cx.js'
 import s from './table.module.css'
@@ -20,10 +20,19 @@ const TICK_MS = 250
  */
 export function TurnTimer({ deadlineAt, serverNow, totalMs, size = 44 }: TurnTimerProps) {
   const [, setTick] = useState(0)
+  // `serverNow` is a fresh closure on every render of the room; reading it through a ref keeps the schedule keyed
+  // on the deadline alone.
+  const nowRef = useRef(serverNow)
+  nowRef.current = serverNow
 
   useEffect(() => {
-    if (deadlineAt === null) return
-    const id = setInterval(() => setTick((n) => n + 1), TICK_MS)
+    // Nothing left to count: a ring frozen at zero does not need four re-renders a second until the seat is
+    // cleared, and a timed-out seat can sit there for a while.
+    if (deadlineAt === null || deadlineAt - nowRef.current() <= 0) return
+    const id = setInterval(() => {
+      setTick((n) => n + 1)
+      if (deadlineAt - nowRef.current() <= 0) clearInterval(id)
+    }, TICK_MS)
     return () => clearInterval(id)
   }, [deadlineAt])
 

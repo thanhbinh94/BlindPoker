@@ -32,9 +32,17 @@ const MIN_TO_START = 2
 /** Ticks once a second while a countdown is running; returns whole seconds left, or `null` when there is none. */
 function useCountdown(target: number | null, now: () => number): number | null {
   const [, tick] = useState(0)
+  // `now` is a fresh closure every render, so the schedule is keyed on the target and reads the clock from a ref.
+  const nowRef = useRef(now)
+  nowRef.current = now
   useEffect(() => {
-    if (target === null) return
-    const timer = setInterval(() => tick((n) => n + 1), 1000)
+    // A deadline already in the past has nothing left to count down: stop rather than re-render the whole room
+    // once a second for a number that will read "0" forever.
+    if (target === null || target - nowRef.current() <= 0) return
+    const timer = setInterval(() => {
+      tick((n) => n + 1)
+      if (target - nowRef.current() <= 0) clearInterval(timer)
+    }, 1000)
     return () => clearInterval(timer)
   }, [target])
   if (target === null) return null
@@ -55,6 +63,8 @@ export function RoomScreen({ client, lang, onLeft, avatarFor, header, layout }: 
   onLeftRef.current = onLeft
   const [buyInSeat, setBuyInSeat] = useState<number | null>(null)
   const [buyIn, setBuyIn] = useState('')
+  /** The hand whose result card the player has waved away; the next hand brings its own. */
+  const [dismissedHandId, setDismissedHandId] = useState<string | null>(null)
   const request = useRequest()
 
   // Left, closed or kicked: the reducer drops the room and the host app takes it from here. A *stale* room is a
@@ -114,6 +124,9 @@ export function RoomScreen({ client, lang, onLeft, avatarFor, header, layout }: 
   }
 
   const finished = hand !== null && hand.phase === 'COMPLETE' && hand.result !== null ? hand : null
+  // The result card sits over the felt, so it has to be closable: between hands a player may well want to look at
+  // the table underneath it rather than at the receipt.
+  const resultCard = finished !== null && finished.handId !== dismissedHandId ? finished : null
   /** Between hands: the room is taking seats rather than dealing. */
   const waiting = room.status === 'OPEN'
   const mySeated = me !== undefined && me.seat !== null
@@ -153,9 +166,15 @@ export function RoomScreen({ client, lang, onLeft, avatarFor, header, layout }: 
         />
 
         {/* the result card is dealt onto the felt, so it keeps the felt's night palette in either theme */}
-        {finished === null ? null : (
+        {resultCard === null ? null : (
           <div className={s.overlay} data-surface="night">
-            <HandResult hand={finished} room={room} myPlayerId={state.me?.playerId ?? null} lang={lang} />
+            <HandResult
+              hand={resultCard}
+              room={room}
+              myPlayerId={state.me?.playerId ?? null}
+              lang={lang}
+              onDismiss={() => setDismissedHandId(resultCard.handId)}
+            />
             {countdown}
           </div>
         )}
@@ -181,8 +200,8 @@ export function RoomScreen({ client, lang, onLeft, avatarFor, header, layout }: 
 
           {waiting ? (
             <span className={s.readyCount}>{t('room.readyCount', { ready: readyCount, total: seated.length })}</span>
-          ) : // While a hand is up the countdown lives on the result card; here it covers the gap after it is dismissed.
-          finished === null ? (
+          ) : // While the result card is up the countdown lives on it; here it covers the gap once it is dismissed.
+          resultCard === null ? (
             countdown
           ) : null}
 

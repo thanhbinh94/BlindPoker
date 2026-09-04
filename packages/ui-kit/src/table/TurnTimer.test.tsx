@@ -17,4 +17,21 @@ describe('TurnTimer', () => {
     rerender(<TurnTimer deadlineAt={null} serverNow={() => now} totalMs={30_000} />)
     expect(screen.queryByRole('timer')).toBeNull()
   })
+  it('stops ticking once the deadline has passed', () => {
+    let now = 10_000
+    render(<TurnTimer deadlineAt={now + 500} serverNow={() => now} totalMs={30_000} />)
+    expect(vi.getTimerCount()).toBe(1)
+    now += 600
+    act(() => {
+      vi.advanceTimersByTime(250)
+    })
+    expect(screen.getByRole('timer')).toHaveTextContent('0')
+    // A seat can sit timed out for a while; four re-renders a second for a ring frozen at zero is four too many.
+    expect(vi.getTimerCount()).toBe(0)
+  })
+  it('never starts a ticker for a deadline that is already gone', () => {
+    render(<TurnTimer deadlineAt={9_000} serverNow={() => 10_000} totalMs={30_000} />)
+    expect(screen.getByRole('timer')).toHaveTextContent('0')
+    expect(vi.getTimerCount()).toBe(0)
+  })
 })
