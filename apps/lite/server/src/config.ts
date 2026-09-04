@@ -1,30 +1,9 @@
 import { dirname } from 'node:path'
+import { parseDotenv } from '@bp/http-kit'
 
 export interface LiteConfig { port: number; host: string; sqlitePath: string; handLog: boolean; logLevel: 'debug' | 'info' | 'warn' | 'error'; timezone: string; reconnectWindowSec: number; allowedOrigins: string[] | 'same-host'; publicDir: string | null }
 
 export const DEFAULT_CONFIG: LiteConfig = { port: 8080, host: '0.0.0.0', sqlitePath: './bind-poker.sqlite', handLog: false, logLevel: 'info', timezone: 'Asia/Ho_Chi_Minh', reconnectWindowSec: 90, allowedOrigins: 'same-host', publicDir: null }
-
-export function parseDotenv(text: string): Record<string, string> {
-  const out: Record<string, string> = {}
-  for (const raw of text.split(/\r?\n/)) {
-    const line = raw.trim()
-    if (!line || line.startsWith('#')) continue
-    const eq = line.indexOf('=')
-    if (eq <= 0) continue
-    const key = line.slice(0, eq).trim()
-    let value = line.slice(eq + 1).trim()
-    const quote = value[0]
-    if (quote === '"' || quote === "'") {
-      const close = value.indexOf(quote, 1)
-      value = close > 0 ? value.slice(1, close) : value.slice(1)
-    } else {
-      const hash = value.indexOf(' #')
-      if (hash >= 0) value = value.slice(0, hash).trim()
-    }
-    out[key] = value
-  }
-  return out
-}
 
 const LEVELS = new Set(['debug', 'info', 'warn', 'error'])
 function validTimezone(tz: string): boolean { try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return true } catch { return false } }

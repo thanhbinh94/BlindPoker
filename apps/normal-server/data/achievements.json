@@ -1,0 +1,40 @@
+[
+  { "id": "login_days_7", "category": "login", "metric": "totalLoginDays", "threshold": 7, "reward": { "points": 5000 } },
+  { "id": "login_days_30", "category": "login", "metric": "totalLoginDays", "threshold": 30, "reward": { "points": 20000 } },
+  { "id": "login_days_100", "category": "login", "metric": "totalLoginDays", "threshold": 100, "reward": { "itemId": "hat_crown" } },
+  { "id": "login_streak_7", "category": "login", "metric": "bestLoginStreak", "threshold": 7, "reward": { "points": 5000 } },
+  { "id": "login_streak_28", "category": "login", "metric": "bestLoginStreak", "threshold": 28, "reward": { "itemId": "title_devoted" } },
+
+  { "id": "holdem_hands_10", "category": "holdem", "metric": "handsPlayedHoldem", "threshold": 10, "reward": { "points": 2000 } },
+  { "id": "holdem_hands_100", "category": "holdem", "metric": "handsPlayedHoldem", "threshold": 100, "reward": { "points": 10000 } },
+  { "id": "holdem_hands_1000", "category": "holdem", "metric": "handsPlayedHoldem", "threshold": 1000, "reward": { "points": 50000 } },
+  { "id": "holdem_wins_10", "category": "holdem", "metric": "handsWonHoldem", "threshold": 10, "reward": { "points": 5000 } },
+  { "id": "holdem_wins_100", "category": "holdem", "metric": "handsWonHoldem", "threshold": 100, "reward": { "points": 20000 } },
+  { "id": "holdem_wins_500", "category": "holdem", "metric": "handsWonHoldem", "threshold": 500, "reward": { "itemId": "jacket_champion" } },
+
+  { "id": "win_streak_3", "category": "holdem", "metric": "bestWinStreak", "threshold": 3, "reward": { "points": 5000 } },
+  { "id": "win_streak_5", "category": "holdem", "metric": "bestWinStreak", "threshold": 5, "reward": { "points": 15000 } },
+  { "id": "win_streak_10", "category": "holdem", "metric": "bestWinStreak", "threshold": 10, "reward": { "itemId": "title_hot_hand" } },
+  { "id": "lose_streak_10", "category": "holdem", "metric": "bestLoseStreak", "threshold": 10, "reward": { "points": 10000 } },
+
+  { "id": "hand_flush", "category": "holdem", "metric": "bestHandRank", "threshold": 5, "reward": { "points": 3000 } },
+  { "id": "hand_full_house", "category": "holdem", "metric": "bestHandRank", "threshold": 6, "reward": { "points": 5000 } },
+  { "id": "hand_quads", "category": "holdem", "metric": "bestHandRank", "threshold": 7, "reward": { "points": 20000 } },
+  { "id": "hand_straight_flush", "category": "holdem", "metric": "bestHandRank", "threshold": 8, "reward": { "points": 50000 } },
+  { "id": "hand_royal", "category": "holdem", "metric": "bestHandRank", "threshold": 9, "reward": { "itemId": "ring_royal" } },
+
+  { "id": "big_win_100k", "category": "holdem", "metric": "biggestWin", "threshold": 100000, "reward": { "points": 10000 } },
+  { "id": "big_win_500k", "category": "holdem", "metric": "biggestWin", "threshold": 500000, "reward": { "points": 30000 } },
+
+  { "id": "blind_hands_10", "category": "blind", "metric": "handsPlayedBlind", "threshold": 10, "reward": { "points": 2000 } },
+  { "id": "blind_hands_100", "category": "blind", "metric": "handsPlayedBlind", "threshold": 100, "reward": { "points": 10000 } },
+  { "id": "blind_hands_1000", "category": "blind", "metric": "handsPlayedBlind", "threshold": 1000, "reward": { "points": 50000 } },
+  { "id": "blind_wins_10", "category": "blind", "metric": "handsWonBlind", "threshold": 10, "reward": { "points": 5000 } },
+  { "id": "blind_wins_100", "category": "blind", "metric": "handsWonBlind", "threshold": 100, "reward": { "points": 20000 } },
+
+  { "id": "bot_hands_50", "category": "social", "metric": "botHands", "threshold": 50, "reward": { "points": 5000 } },
+  { "id": "rooms_10", "category": "social", "metric": "roomsJoined", "threshold": 10, "reward": { "points": 2000 } },
+  { "id": "rooms_100", "category": "social", "metric": "roomsJoined", "threshold": 100, "reward": { "points": 10000 } },
+  { "id": "games_50", "category": "social", "metric": "gamesCompleted", "threshold": 50, "reward": { "points": 5000 } },
+  { "id": "games_500", "category": "social", "metric": "gamesCompleted", "threshold": 500, "reward": { "itemId": "badge_veteran" } }
+]

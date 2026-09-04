@@ -1,0 +1,7 @@
+# Files that are read by Linux tools regardless of which platform edited them. A CRLF here is not a
+# cosmetic difference: `backup.sh` checked out with CRLF fails as `/usr/bin/env: 'bash\r'`, and the
+# same trailing byte breaks a Dockerfile `RUN` line and a Caddy directive.
+*.sh text eol=lf
+Dockerfile text eol=lf
+Dockerfile.dockerignore text eol=lf
+Caddyfile text eol=lf

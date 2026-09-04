@@ -47,6 +47,12 @@ export default tseslint.config(
     },
   },
   {
+    // `@bp/http-kit` is the HTTP plumbing both editions share. Node built-ins are its business, but it
+    // knows nothing about the game, the UI or either edition — so it imports no workspace package at all.
+    files: ['packages/http-kit/**/*.ts'],
+    rules: forbid(['@bp/*', 'react', '**/apps/**', '**/packages/core/**', '**/packages/server-kit/**', '**/packages/ui-kit/**'], '@bp/http-kit must not depend on any workspace package'),
+  },
+  {
     files: ['packages/server-kit/**/*.ts'],
     rules: forbid(['@bp/ui-kit', '@bp/normal-*', '@bp/lite', '**/apps/**', 'react'], '@bp/server-kit may only depend on @bp/core'),
   },
@@ -56,4 +62,11 @@ export default tseslint.config(
   },
   { files: ['apps/normal-*/**/*.{ts,tsx}'], rules: forbid(['@bp/lite', '**/apps/lite/**'], 'normal must not depend on lite') },
   { files: ['apps/lite/**/*.{ts,tsx}'], rules: forbid(['@bp/normal-*', '**/apps/normal-*/**'], 'lite must not depend on normal') },
+  {
+    // The Normal server is headless: it may reach for Node built-ins and for @bp/core, @bp/server-kit
+    // and @bp/http-kit, but nothing that draws a screen and no other app. (This block replaces the
+    // `apps/normal-*` one above for these files, so it repeats the no-lite rule.)
+    files: ['apps/normal-server/**/*.ts'],
+    rules: forbid(['@bp/ui-kit', 'react', 'react-dom', '@bp/lite', '@bp/normal-web', '**/apps/**'], '@bp/normal-server may only depend on @bp/core, @bp/server-kit and @bp/http-kit'),
+  },
 )

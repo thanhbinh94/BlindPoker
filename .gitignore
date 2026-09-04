@@ -23,3 +23,9 @@ apps/lite/e2e/screenshots/*
 
 # the run file a live Lite instance writes next to its database (see apps/lite/server/src/run-file.ts)
 bind-poker.run.json
+
+# Database dumps and the cron log backup.sh writes beside itself (deploy/normal/backup.sh). These are
+# complete copies of every account, password hash and ledger row, and the deployment guide has the
+# operator run the script from inside a git checkout — so nothing about them may ever be committable.
+deploy/normal/backups/
+deploy/normal/backup.log

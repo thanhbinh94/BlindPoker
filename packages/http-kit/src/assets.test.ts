@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { assetSourceFromDir, assetSourceFromSea, contentType } from './assets.js'
+import { assetSourceFromDir, assetSourceFromSea, contentType, normalizePath } from './assets.js'
 
 const dirs: string[] = []
 
@@ -22,7 +22,7 @@ afterEach(() => {
 })
 
 describe('contentType', () => {
-  it('maps the extensions the Lite bundle ships', () => {
+  it('maps the extensions a web bundle ships', () => {
     expect(contentType('index.html')).toBe('text/html; charset=utf-8')
     expect(contentType('assets/app-abc123.js')).toBe('text/javascript; charset=utf-8')
     expect(contentType('assets/app-abc123.css')).toBe('text/css; charset=utf-8')
@@ -38,6 +38,23 @@ describe('contentType', () => {
   it('falls back to an opaque type for anything unknown', () => {
     expect(contentType('data.bin')).toBe('application/octet-stream')
     expect(contentType('noextension')).toBe('application/octet-stream')
+  })
+})
+
+describe('normalizePath', () => {
+  it('drops the leading slash and the empty and `.` segments', () => {
+    expect(normalizePath('/index.html')).toBe('index.html')
+    expect(normalizePath('assets//./app.js')).toBe('assets/app.js')
+    expect(normalizePath('/')).toBe('')
+  })
+
+  it('rejects anything that could climb out of the root', () => {
+    expect(normalizePath('../secret')).toBeNull()
+    expect(normalizePath('assets/../../secret')).toBeNull()
+    expect(normalizePath('..%2Fsecret')).toBeNull()
+    expect(normalizePath('..\\secret')).toBeNull()
+    expect(normalizePath('a/%00b')).toBeNull()
+    expect(normalizePath('%ZZ')).toBeNull() // malformed percent-encoding
   })
 })
 

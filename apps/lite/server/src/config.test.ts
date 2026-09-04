@@ -1,18 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_CONFIG, loadConfig, parseDotenv } from './config.js'
+import { DEFAULT_CONFIG, loadConfig } from './config.js'
 
-describe('parseDotenv', () => {
-  it('parses keys, quotes, comments and blanks', () => {
-    expect(parseDotenv('# c\nPORT=9000\nHOST="127.0.0.1"\nSQLITE_PATH=\'./x.sqlite\'\n\nLOG_LEVEL=debug # trailing\n')).toEqual({ PORT: '9000', HOST: '127.0.0.1', SQLITE_PATH: './x.sqlite', LOG_LEVEL: 'debug' })
-  })
-  it('strips a trailing comment after a quoted value, and only comment-strips unquoted values', () => {
-    expect(parseDotenv('HOST="127.0.0.1" # note')).toEqual({ HOST: '127.0.0.1' })
-    expect(parseDotenv("A='x=y' # c")).toEqual({ A: 'x=y' })
-    expect(parseDotenv('B=plain#nohash')).toEqual({ B: 'plain#nohash' })
-    expect(parseDotenv('C="has # inside"')).toEqual({ C: 'has # inside' })
-  })
-})
-
+// `parseDotenv` itself is `@bp/http-kit`'s, and tested there; what matters here is that a `.env`
+// text reaches the config and loses to the process environment.
 describe('loadConfig', () => {
   it('uses defaults', () => {
     expect(loadConfig({})).toEqual(DEFAULT_CONFIG)

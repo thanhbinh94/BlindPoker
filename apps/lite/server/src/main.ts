@@ -7,11 +7,11 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
-import { consoleLogger, silentLogger, type Logger } from '@bp/server-kit'
+import { assetSourceFromDir, assetSourceFromSea, createJsonLogger, parseDotenv, type AssetSource } from '@bp/http-kit'
+import { silentLogger, type Logger } from '@bp/server-kit'
 import { buildApp } from './app.js'
-import { loadConfig, parseDotenv, resolveBaseDir, type LiteConfig } from './config.js'
+import { loadConfig, resolveBaseDir, type LiteConfig } from './config.js'
 import { openDatabase } from './db/sqlite.js'
-import { assetSourceFromDir, assetSourceFromSea, type AssetSource } from './http/assets.js'
 import { createSqliteRepositories } from './repos/sqlite-repos.js'
 import { liveInstanceAt, pidAlive, readRunFile, removeRunFile, resolveRunFilePath, RUN_FILE_NAME, type RunFile } from './run-file.js'
 
@@ -20,7 +20,6 @@ const SHUTDOWN_BUDGET_MS = 10_000
 /** How long `--stop` waits for the pid to go away after the server accepted the request. */
 const STOP_BUDGET_MS = 15_000
 const STOP_POLL_MS = 250
-const LEVELS = ['debug', 'info', 'warn', 'error'] as const
 /**
  * Signals that mean "stop". `SIGBREAK` (Ctrl+Break) and `SIGHUP` (the console window being closed)
  * are the Windows half: without them the only graceful stop on Windows is Ctrl+C, and everything
@@ -43,18 +42,6 @@ function filterSqliteWarning(): void {
     if (warning.name === 'ExperimentalWarning' && warning.message.includes('SQLite is an experimental feature')) return
     for (const handler of defaults) handler(warning)
   })
-}
-
-/** `consoleLogger` with everything below `level` dropped. */
-function levelLogger(level: LiteConfig['logLevel']): Logger {
-  const min = LEVELS.indexOf(level)
-  const at = (n: number, fn: Logger['info']): Logger['info'] => (n >= min ? fn : silentLogger.info)
-  return {
-    debug: at(0, (msg, data) => console.log(JSON.stringify({ level: 'debug', time: new Date().toISOString(), msg, ...(data ?? {}) }))),
-    info: at(1, consoleLogger.info),
-    warn: at(2, consoleLogger.warn),
-    error: at(3, consoleLogger.error),
-  }
 }
 
 function loadAssets(baseDir: string, config: LiteConfig, log: Logger): AssetSource | null {
@@ -213,7 +200,7 @@ async function main(): Promise<void> {
   }
 
   // Smoke mode's only output is the health JSON, so nothing else may reach the console.
-  const log = smoke ? silentLogger : levelLogger(config.logLevel)
+  const log = smoke ? silentLogger : createJsonLogger(config.logLevel)
 
   // A smoke run must not touch — or create — the database the operator actually runs on, so unless
   // `SQLITE_PATH` was configured on purpose it gets a throwaway file that is deleted on the way out.

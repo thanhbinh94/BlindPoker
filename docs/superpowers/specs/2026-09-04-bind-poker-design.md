@@ -398,7 +398,13 @@ Bất biến kiểm tra trong test: với mọi ván, `Σ balance trước = Σ 
 | 28 | 40.000 | Badge tháng (`badge_monthly`) + title `title_devoted` nếu chưa có |
 | 29–31 | 12.000 | |
 
-Tổng tối đa 376.000/tháng. Nếu không còn item chưa sở hữu ở bậc đó → thay bằng 10.000 điểm.
+Tổng tối đa 376.000/tháng.
+
+**Fallback 10.000 điểm chỉ áp dụng cho các bậc rút ngẫu nhiên** (ngày 7, 14, 21). Khi không còn item nào chưa sở hữu ở đúng rarity đó, lần nhận ghi thêm một dòng ledger `daily_item_fallback` cùng `refId` với lần nhận — một lần nhận, hai dòng, để §12.5 đo được catalogue đang cạn tới đâu. Ngày 28 là bậc **cố định**: nó cấp `badge_monthly` + `title_devoted`, và nếu người chơi đã có sẵn thì **không** trả thay bằng điểm — một phần thưởng cố định đã trao rồi không phải là catalogue cạn, trả 10.000 mỗi năm cho nó là một lỗ rò chậm.
+
+Bậc ngẫu nhiên **không bao giờ rút** hai nhóm sau, để phần thưởng cố định giữ được lời hứa của nó:
+- **category `title` và `badge`** — chúng là phần thưởng của achievement và của ngày 28, rút trúng bằng may rủi sẽ làm mất chỗ kiếm được.
+- **mọi item nằm trong `reward.itemId` của `achievements.json`, cộng `badge_monthly` và `title_devoted`** — nếu ngày 14 rút trúng `badge_monthly` thì ngày 28 của người đó không còn gì để cấp và (đúng theo luật trên) cũng không trả bù, nên chuỗi 28 ngày trọn vẹn sẽ âm thầm đáng giá ít hơn bảng thưởng nói.
 
 ### 13.3 Lite
 Cùng bảng, chỉ cột Điểm. Lưu `streak`, `last_daily_claim` trong `players`.
@@ -417,7 +423,7 @@ Cùng bảng, chỉ cột Điểm. Lưu `streak`, `last_daily_claim` trong `play
 - Module `achievement` lắng nghe `StatsUpdated{playerId, changedMetrics}`; với mỗi def có metric thay đổi và chưa unlock: nếu `stats[metric] ≥ threshold` → ghi `player_achievements`, cộng thưởng qua `apply([{ ..., reason: 'achievement' }])`, thêm item, phát `AchievementUnlocked` tới client qua WS message `NOTIFICATION` (lightweight).
 - `best_hand_rank` là metric số (category index 0–9) nên "special hand" dùng ngưỡng: flush=5, full house=6, quads=7, straight flush=8, royal=9.
 
-### 14.2 Danh mục khởi đầu (28)
+### 14.2 Danh mục khởi đầu (32)
 | id | metric ≥ | reward |
 |---|---|---|
 | login_days_7 / 30 / 100 | total_login_days 7/30/100 | 5k / 20k / item `hat_crown` |
@@ -433,6 +439,8 @@ Cùng bảng, chỉ cột Điểm. Lưu `streak`, `last_daily_claim` trong `play
 | bot_hands_50 | bot_hands | 5k |
 | rooms_10 / 100 | rooms_joined | 2k / 10k |
 | games_50 / 500 | games_completed | 5k / item `badge_veteran` |
+
+Đếm đủ các id liệt kê ở trên là **32** (`apps/normal-server/data/achievements.json`) — tiêu đề mục này từng ghi 28 khi bảng còn ít dòng hơn.
 
 Thêm achievement = thêm dòng JSON. Thêm metric = thêm cột `player_stats` + logic đếm trong module stats.
 
@@ -545,21 +553,37 @@ interface SessionResolver {
 ```
 
 ### 18.2 Normal — PostgreSQL 16, Drizzle ORM, migration SQL trong `apps/normal-server/drizzle/`
+Bảng đúng như đã triển khai (`apps/normal-server/src/db/schema.ts`, migration `drizzle/0000_init.sql`). Mọi mốc thời gian là `timestamptz` (server suy luận theo UTC, chỉ mốc ngày của kinh tế mới theo `ECONOMY_TIMEZONE`); mọi cột tiền là `bigint` map sang `number`.
 ```sql
-users(id uuid pk, email citext unique, password_hash text, created_at, last_login_at)
-players(id uuid pk fk users, display_name varchar(20) unique, balance bigint check>=0, avatar_config jsonb,
-        equipped_title text, equipped_badge text, last_relief_at, created_at)
-sessions(id text pk, user_id fk, expires_at, user_agent, created_at)
-point_transactions(id bigserial pk, player_id fk NULL, amount bigint, reason text, ref_id text, created_at) -- player_id NULL = dòng sink (table_fee, carry_over); index (player_id, created_at), (reason, created_at)
-games(id uuid pk, mode text, config jsonb, started_at, ended_at)
-game_players(game_id fk, player_id fk, seat int, net_result bigint, best_hand text, pk(game_id, player_id))
+users(id uuid pk, email text unique, password_hash text, created_at, last_login_at)
+      -- CHECK (email = lower(email)) — xem ghi chú (a) bên dưới
+players(id uuid pk fk users on delete cascade, display_name varchar(20), name_key text unique,
+        balance bigint default 0 CHECK (balance >= 0), avatar_config jsonb, equipped_title text,
+        equipped_badge text, last_relief_at, created_at)
+        -- name_key = dạng gấp của display_name (@bp/core `displayNameKey`) — "tên đã có người dùng" nghĩa là trùng cột này
+sessions(id text pk, user_id fk on delete cascade, expires_at, user_agent, created_at, last_seen_at)
+        -- id = hex(HMAC-SHA256(SESSION_SECRET, token)); index (user_id), (expires_at)
+point_transactions(id bigserial pk, player_id fk NULL on delete restrict, amount bigint, reason text,
+        ref_id text, kind text, created_at)
+        -- player_id NULL = dòng sink; CHECK (player_id is not null or kind is not null) — sink phải khai kind
+        -- index (player_id, created_at), (reason, created_at), (ref_id)
+games(id text pk, room_id text, mode text, config jsonb, started_at, ended_at,
+      fee bigint default 0, cancelled bool, settlement_error text)   -- id = handId của engine; index (room_id, started_at)
+game_players(game_id fk on delete cascade, seat int, player_id fk NULL on delete set null, label text,
+      is_bot bool, net bigint, won bool, best_category int, pk(game_id, seat))   -- index (player_id)
 items(id text pk, category text, rarity text, name_key text, asset_key text, is_default bool)
+      -- index (category, rarity); là projection của data/items.json, upsert lúc khởi động
 inventory(player_id fk, item_id fk, source text, acquired_at, pk(player_id, item_id))
 player_achievements(player_id fk, achievement_id text, progress bigint, unlocked_at, pk(player_id, achievement_id))
-daily_logins(player_id pk fk, month char(7), streak int, last_claim_date date, claimed_days int)
-player_stats(player_id pk fk, ...bộ đếm mục 10.3..., updated_at)
+daily_logins(player_id pk fk, streak int, last_claim_date date, claimed_days int, month text)
+player_stats(player_id pk fk, 16 bộ đếm mục 10.3, updated_at)
 ```
-`games`/`game_players` ghi một dòng mỗi ván đã settlement (không ghi ván bị hủy). Không có bảng rooms.
+Ba điểm khác bản phác thảo ban đầu, đều có lý do:
+- **(a) `email text` + CHECK lowercase** thay cho `citext`: cùng ngữ nghĩa unique không phân biệt hoa thường mà không phụ thuộc vào việc extension có được cài trong database đích hay không. CHECK nằm ở DB chứ không chỉ ở code, vì một đường ghi quên `lower()` là hai tài khoản cho một địa chỉ.
+- **(b) `games.id` là `handId` của engine (text)**, không phải uuid sinh mới. `games` ghi một dòng cho mỗi ván engine đã kết thúc, **kể cả ván bị hủy** (`cancelled`), và `settlement_error` giữ lại ván mà settlement bị từ chối để đối soát — im lặng bỏ qua sẽ làm mất chính những ván cần điều tra.
+- **(c) `game_players` khóa `(game_id, seat)`** với `player_id` cho phép NULL: bot ngồi ghế nhưng không có dòng `players`, nên `pk(game_id, player_id)` của bản phác thảo không biểu diễn được ghế bot. `label` giữ id phía engine (id người chơi với người, id bot với bot) và sống sót qua việc xóa tài khoản; `is_bot` phân biệt hai loại.
+
+`point_transactions` là `ON DELETE restrict` chứ không cascade: xóa một player còn dòng ledger sẽ biến toàn bộ lịch sử của họ — cả các dòng cộng — thành dòng sink và làm sai bất biến §18.4. Không có bảng rooms.
 
 ### 18.3 Lite — SQLite (`node:sqlite`), WAL mode, `PRAGMA user_version` để migrate
 File dữ liệu mở với `journal_mode = WAL` (trừ `:memory:`), `foreign_keys = ON`, `busy_timeout = 5000`. Migration là mảng append-only trong `db/migrations.ts`: phần tử `i` là version `i + 1`, mỗi lần khởi động chạy tiếp những version còn thiếu trong một transaction rồi đặt `PRAGMA user_version`.
@@ -595,25 +619,44 @@ Prefix `/api`. JSON. Lỗi: `{ error: { code, message } }`. Mutating request yê
 ### 19.1 Chung
 | Method | Path | Mô tả |
 |---|---|---|
-| GET | `/health` | `{ status, uptime, db: ok }` (Normal kiểm tra DB) |
+| GET | `/health` | `{ status, uptime, connections, rooms, db }` — cùng một shape ở cả hai edition; Normal thêm `edition`/`version` và thật sự ping DB |
 | GET | `/api/config` | Tham số công khai: bậc cược, giới hạn phòng, edition, ngôn ngữ hỗ trợ |
 
 ### 19.2 Normal
-| Method | Path | Mô tả |
-|---|---|---|
-| POST | `/api/auth/register` | `{email, password, displayName}` → tạo user + player + inventory mặc định, set cookie |
-| POST | `/api/auth/login` | `{email, password}` → cookie; rate-limit 5/phút/IP+email |
-| POST | `/api/auth/logout` | Hủy session |
-| GET | `/api/me` | Profile + balance + stats tóm tắt |
-| PATCH | `/api/me` | `{displayName}` |
-| PUT | `/api/me/avatar` | `avatar_config` (kiểm tra sở hữu) |
-| GET | `/api/me/stats` | `player_stats` |
-| GET | `/api/me/inventory` | Item sở hữu |
-| GET | `/api/me/achievements` | Định nghĩa + progress + unlocked |
-| GET | `/api/me/history?limit=` | 20 ván gần nhất |
-| GET | `/api/rewards/daily` | Streak, hôm nay đã nhận chưa, phần thưởng hôm nay/mai |
-| POST | `/api/rewards/daily/claim` | Nhận thưởng |
-| POST | `/api/economy/relief` | Cứu trợ |
+Đã triển khai trong `apps/normal-server/src/http/` (`routes.ts` + `routes-auth.ts`, `routes-me.ts`, `routes-rewards.ts`, `routes-catalog.ts`).
+
+Auth = cookie phiên `bp_session` (`HttpOnly`, `SameSite=Lax`, `Secure` khi `COOKIE_SECURE`); thiếu hoặc sai → `401 UNAUTHENTICATED`. **XRW** = mọi request mutating phải kèm `X-Requested-With: bind-poker`, thiếu → `403 FORBIDDEN` (kiểm ở `preHandler`, trước cả auth).
+
+| Method | Path | Auth | Thành công | Từ chối |
+|---|---|---|---|---|
+| GET | `/health` | — | `200 {status:"ok", uptime, connections, rooms, db:"ok", edition:"normal", version}` | `503` cùng shape với `status:"degraded", db:"error"` |
+| GET | `/api/config` | — | `200 {edition:"normal", wsPath:"/ws", economy{startingBalance, blindWagerTiers, holdemBlindTiers, reliefThreshold, reliefTarget}, languages:["vi","en"], reconnectWindowSec}` | `429 RATE_LIMITED` |
+| GET | `/api/catalog/items` | — | `200 {items: ItemDef[]}` | `429` |
+| GET | `/api/catalog/achievements` | — | `200 {achievements:[{id, category, metric, threshold, reward}]}` | `429` |
+| POST | `/api/auth/register` | XRW | `201 {playerId, displayName, balance}` + cookie; tạo `users` + `players` + inventory mặc định + `daily_logins` trong một transaction | `400 INVALID_EMAIL`/`INVALID_PASSWORD`/`INVALID_NAME` · `409 EMAIL_TAKEN`/`DISPLAY_NAME_TAKEN` · `429` (10/phút/IP) · `403` |
+| POST | `/api/auth/login` | XRW | `200` cùng shape + cookie **id mới** (xoay id, §23) | `400` · `401 BAD_CREDENTIALS` · `429` (5/phút/IP+email) · `403` |
+| POST | `/api/auth/logout` | XRW | `204`, xóa session và cookie | `403` |
+| GET | `/api/auth/me` | ✔ | `200 {playerId, displayName, balance}` | `401` · `429` |
+| GET | `/api/me` | ✔ | `200 {playerId, displayName, email, balance, avatar, stats{handsPlayed, handsWon}, daily{…}, relief{…}, createdAt, lastLoginAt}` | `401` · `429` |
+| PATCH | `/api/me` | ✔ XRW | `200 {playerId, displayName}` | `400 INVALID_NAME` · `409 DISPLAY_NAME_TAKEN` · `401` · `403` · `429` |
+| GET | `/api/me/stats` | ✔ | `200 PlayerStats` (đủ 16 bộ đếm §10.3) | `401` · `429` |
+| GET | `/api/me/history?limit=20` | ✔ | `200 HistoryEntry[]` (service kẹp 1…50, mặc định 20) | `401` · `429` |
+| GET | `/api/me/ledger?limit=50&before=<id>` | ✔ | `200 {entries:[{id, amount, reason, refId, createdAt}], nextBefore}` | `401` · `429` |
+| GET | `/api/me/inventory` | ✔ | `200 {items:[{itemId, category, rarity, nameKey, assetKey, source, acquiredAt}], avatar}` | `401` · `429` |
+| PUT | `/api/me/avatar` | ✔ XRW | `200 {config}` (`AvatarView`) | `400 MISSING_LAYER`/`INVALID_COLOR`/`INVALID_ITEM`/`WRONG_CATEGORY` · `403 NOT_OWNED` · `401` · `403` XRW · `429` |
+| GET | `/api/players/:id/avatar` | ✔ | `200 {playerId, displayName, avatar}`, `cache-control: private, max-age=60` | `404 NOT_FOUND` (id lạ **và** id sai định dạng — không phân biệt để không dò được id) · `401` · `429` |
+| GET | `/api/me/achievements` | ✔ | `200 [{id, category, metric, threshold, reward, progress, unlockedAt}]` | `401` · `429` |
+| GET | `/api/rewards/daily` | ✔ | `200 DailyStatus {claimable, day, streak, reward, item, nextResetAt, calendar[31]}` | `401` · `429` |
+| POST | `/api/rewards/daily/claim` | ✔ XRW | `200 {claimed:true, day, points, item, items, fallbackPoints, balance, streak}` | `409 ALREADY_CLAIMED` (kèm `claimed:false`) · `401` · `403` · `429` |
+| POST | `/api/economy/relief` | ✔ XRW | `200 {granted:true, amount, balance}` | `409 NOT_ELIGIBLE` (kèm `granted:false, reason:"balance"\|"cooldown", retryAt`) · `401` · `403` · `429` |
+| GET | `/*` | — | Static `PUBLIC_DIR` (đường dẫn không có phần mở rộng rơi về `index.html`) | `404 NOT_FOUND` (prefix giữ chỗ `api`/`ws`/`health`, đường dẫn có đuôi mà không có file, hoặc không cấu hình `PUBLIC_DIR`) |
+
+- Thân lỗi và quy ước header giống hệt §19.3 (`{ error: { code, message } }`, trường phụ nằm **cạnh** `error`), chỉ khác CSP: Normal thêm `https://fonts.googleapis.com` vào `style-src` và `font-src 'self' https://fonts.gstatic.com`.
+- Rate-limit: `/api/*` mutating phải qua **hai** rổ — 60/phút theo phiên (key = SHA-256 của cookie, không giữ token sống trong bộ nhớ) **và** 120/phút theo địa chỉ, vì người gửi mỗi request một giá trị `bp_session` mới sẽ tự sinh một rổ phiên mới mỗi lần và không bao giờ bị chặn. Đọc 240/phút theo IP. Chỉ `POST /api/auth/register` và `POST /api/auth/login` được miễn (chúng có limiter riêng, chặt hơn nhiều); `/health` và static không tính. `429` kèm header `Retry-After` và `retryAfterSec`.
+- `/health` không chờ vô hạn: `ping()` đua với deadline của chính nó và handler đua lại lần nữa, nên một probe không bao giờ treo — quá 2 giây là trả `db:"error"`.
+- Body của `/health` là **body của Lite** (§19.1) cộng thêm `edition` và `version`, để một check giám sát duy nhất dùng được cho cả hai edition. `status` là `"degraded"` (Lite ghi `"error"`) vì tiến trình trả lời thì theo định nghĩa là chưa chết; thứ một monitor nên đọc là mã trạng thái hoặc `db`, và hai thứ đó giống hệt nhau ở cả hai edition.
+- `PATCH /api/me` **không** đổi tên trên bàn đang chơi: RoomActor giữ định danh nhận lúc bind, tên mới xuất hiện ở lần vào phòng kế tiếp.
+- Upgrade WebSocket `/ws` xác thực bằng chính cookie đó; thiếu/sai → HTTP `401` ngay ở bước upgrade (không phải close code), `Origin` phải nằm trong `ALLOWED_ORIGINS`.
 
 ### 19.3 Lite
 Đã triển khai trong `apps/lite/server/src/http/routes.ts`; client `apps/lite/web/src/api.ts` phản chiếu đúng bảng này.
@@ -748,7 +791,11 @@ createGameServer({
 Server-kit không import gì từ apps. Normal thêm route REST và module riêng vào cùng Fastify instance.
 
 ### 22.4 Build
-- `pnpm build:normal`: `tsc -b` core, server-kit, normal-server; `vite build` normal-web → `apps/normal-server/public`; `docker build -f apps/normal-server/Dockerfile`.
+- `pnpm build:normal` = `node apps/normal-server/scripts/build.mjs`: (1) `tsc -p tsconfig.build.json` — **typecheck** đúng phần sẽ ship (bỏ test, bỏ `test-db.ts`/`test-harness.ts` vì chúng nạp PGlite); (2) esbuild bundle **hai** entry `src/main.ts` và `src/migrate-cli.ts` → `dist/main.js`, `dist/migrate-cli.js` (`platform=node`, `format=esm`, `target=node22`); (3) kiểm `drizzle/` và `data/` nằm cạnh `dist/`. Plan 6 sẽ nối thêm `vite build` của `normal-web` → `PUBLIC_DIR`.
+  - **Vì sao bundle chứ không phải `tsc --outDir dist`**: ba package workspace publish thẳng *source* TypeScript (`"exports": "./src/index.ts"`), nên một bản emit của `tsc` vẫn để lại `import … from '@bp/core'` trong `dist/` và `node dist/main.js` bên ngoài repo (tức là trong image) không resolve được. esbuild nội xạ đúng ba package đó.
+  - **External** là toàn bộ dependency bên thứ ba — `pg` (+`pg-native` tùy chọn), `argon2` (native addon), `fastify`, `@fastify/cookie`, `drizzle-orm`, `ws` — chúng đến từ `node_modules` mà image cài. Vì vậy build **bắt buộc** mọi specifier còn lại trong bundle phải là một entry `dependencies` của `@bp/normal-server`: một devDependency lọt vào code ship sẽ làm hỏng container chứ không làm hỏng build, nên nó bị chặn ngay ở đây. `ws` có trong manifest chính vì lý do này — không dòng code nào của normal-server import nó, nhưng gateway của `@bp/server-kit` (đã bị bundle vào) thì có. Guard phân biệt specifier **nạp ngay** (`from`, `import` trần, `require()`) với specifier **nạp trễ** (`import()`): PGlite bị cấm tuyệt đối ở nhóm nạp ngay, vì `drizzle-orm/pglite/*` là subpath của một dependency *có khai* nên luật "phải là entry `dependencies`" không nhìn thấy nó, trong khi bản thân `@electric-sql/pglite` là devDependency và không hề có trong `node_modules` production. Vì thế `runMigrations` nạp cả hai migrator bằng `import()` bên trong đúng nhánh của nó.
+  - `drizzle/` và `data/` **không** vào `dist/`: chúng được đọc từ đĩa lúc chạy, tìm bằng cách đi ngược từ `import.meta.url` tới thư mục có `package.json` tên `@bp/normal-server` (`src/db/migrate.ts` → `packageRoot()`). Từ `dist/main.js` đường đi đó dừng đúng ở package root, nơi cả hai đã sẵn sàng — nên image chỉ cần giữ nguyên bố cục `package.json` + `dist/` + `drizzle/` + `data/` cùng cấp.
+  - Kiểm tra sau build (`apps/normal-server/test/build.test.ts`, bỏ qua khi `CI_SKIP_BUILD`): hai entry tồn tại, không còn specifier `@bp/*` hay `../../packages/`, `drizzle/`+`data/` đúng chỗ, và chạy thật `node dist/main.js` — thiếu biến thì thoát khác `0` và liệt kê tên biến không kèm stack, `DATABASE_URL` chết thì thoát nhanh với lỗi database.
 - `pnpm build:lite` = `node apps/lite/scripts/build.mjs all --smoke`, ba bước theo thứ tự (`web`, `server`, `exe` cũng chạy riêng được):
   1. **web** — `vite build --config web/vite.config.ts` → `apps/lite/dist/public/**` (`index.html` + `assets/<tên>-<hash>.<ext>`, `base` tương đối, không source map).
   2. **server** — `esbuild server/src/main.ts --bundle --platform=node --target=node22 --format=cjs --external:node:* --define:process.env.NODE_ENV="production" --minify-syntax` → `dist/server.cjs`. Chỉ built-in `node:` được để external: trong exe không còn `node_modules` để resolve.
@@ -764,15 +811,33 @@ Server-kit không import gì từ apps. Normal thêm route REST và module riên
 |---|---|---|
 | `PORT` | 8080 | 8080 |
 | `HOST` | 0.0.0.0 | 0.0.0.0 |
-| `DATABASE_URL` | bắt buộc | — |
+| `DATABASE_URL` | **bắt buộc** — `postgres://` hoặc `postgresql://`; kiểm scheme lúc khởi động | — |
 | `SQLITE_PATH` | — | `./bind-poker.sqlite` |
-| `SESSION_SECRET` | bắt buộc (≥ 32 ký tự) | — |
+| `SESSION_SECRET` | **bắt buộc**, ≥ 32 ký tự — khóa HMAC sinh ra id phiên (`sessions.id = hex(HMAC-SHA256(secret, token))`). Đổi nó là đăng xuất toàn bộ; mật khẩu không bị ảnh hưởng (argon2 tự mang salt). Không bao giờ được ghi ra log | — |
 | `ALLOWED_ORIGINS` | bắt buộc (CSV) | *(trống)* → `'same-host'`: `Origin` phải trùng `host[:port]` của header `Host` (không phân biệt scheme), không có `Origin` (client không phải trình duyệt) thì cho qua, còn lại `403` ở bước upgrade. Khai CSV khi sau reverse proxy — khi đó thiếu `Origin` cũng bị từ chối |
 | `RECONNECT_WINDOW_SEC` | 90 | 90 (`roomOptions.reconnectWindowMs`) |
 | `ECONOMY_TIMEZONE` | Asia/Ho_Chi_Minh | Asia/Ho_Chi_Minh |
 | `LOG_LEVEL` | info | info |
 | `LITE_HAND_LOG` | — | `false` (`1`/`true`/`yes` để bật) |
-| `PUBLIC_DIR` | — | *(trống)* — thư mục giao diện thay bản nhúng trong exe |
+| `COOKIE_SECURE` | `true` | — (Lite không dùng cookie) |
+| `TRUST_PROXY` | `false` | — |
+| `MAX_CONNECTIONS` | 1.000 (§24) | — |
+| `AUTO_MIGRATE` | `true` | — |
+| `PUBLIC_DIR` | *(trống)* → chỉ API, log một cảnh báo | *(trống)* — thư mục giao diện thay bản nhúng trong exe |
+
+Chi tiết bốn biến chỉ Normal có:
+
+| Biến | Mặc định | Ý nghĩa |
+|---|---|---|
+| `COOKIE_SECURE` | `true` | Gắn `Secure` vào cookie phiên. Đặt `false` **chỉ** cho người dev chạy `http://localhost`; đặt `false` trên môi trường thật là gửi cookie phiên qua HTTP thuần |
+| `TRUST_PROXY` | `false` | **Danh sách hop được tin**, không phải bật/tắt: `false`, một trong `loopback` / `linklocal` / `uniquelocal`, hoặc danh sách địa chỉ/CIDR ngăn cách bằng dấu phẩy (`10.0.0.0/8,192.168.1.7`). Chuỗi này được đưa thẳng cho `trustProxy` của Fastify (Fastify tự tách dấu phẩy rồi compile bằng `proxy-addr`). **`TRUST_PROXY=true` bị `loadConfig` TỪ CHỐI**: nó nghĩa là "tin mọi hop", nên `req.ip` thành phần tử **trái nhất** của `X-Forwarded-For` — thứ do client tự ghi, vì proxy *nối thêm* chứ không thay thế — và mọi rate-limit theo IP (đăng ký, đăng nhập, rổ theo địa chỉ ở §19.2) bị vô hiệu chỉ bằng cách đổi một header mỗi request. Số hop cũng không phải lời giải: Fastify ≥ 5.12 làm một giá trị số **fail closed**, dồn mọi client vào đúng địa chỉ của proxy. Compose §28.1 đặt `uniquelocal` (Caddy nằm trên mạng bridge, địa chỉ RFC1918) |
+| `MAX_CONNECTIONS` | `1000` | Số kết nối WebSocket sống đồng thời tiến trình này nhận (mục tiêu §24); vượt qua thì upgrade bị trả `503`. Đi kèm là rổ 30 upgrade/phút/địa chỉ, tính **trước** khi tra session — mỗi upgrade bị từ chối trước đây vẫn tốn một lượt tra `sessions` trên pool 10 kết nối |
+| `AUTO_MIGRATE` | `true` | Chạy migration ngay lúc boot. Đặt `false` khi có job riêng (`node dist/migrate-cli.js`) áp migration — đúng thứ mà nhiều replica cần, và là cấu hình của compose §28.1. Giá trị không nhận ra thì **dừng**, không âm thầm lấy mặc định |
+| `PUBLIC_DIR` | *(trống)* | Thư mục bundle web để phục vụ ở `/`. Trống = chạy thuần API. Plan 6 (`normal-web`) là thứ đổ file vào đây |
+
+`AUTO_MIGRATE` được đọc trong `main.ts` chứ không nằm trong `NormalConfig`: nó là tính chất của *lần khởi động này*, `buildApp` không dùng tới.
+
+Normal đọc theo thứ tự: `.env` ở thư mục làm việc trước, **biến môi trường thật luôn thắng** — nên một deployment có thể đặt tất cả bằng biến container và không cần file. `loadConfig` báo **mọi** lỗi cùng lúc (một người điền `.env` mới nên biết hết trong một lần chạy, không phải mỗi lần restart một biến) rồi ném ra; `main.ts` in thông điệp đó ra stderr và thoát `1`, không kèm stack trace.
 
 Lite đọc theo thứ tự: biến môi trường thắng, sau đó `.env` **cạnh exe** (cwd khi chạy bằng `node dist/server.cjs`), cuối cùng là mặc định. Giá trị sai làm process dừng ngay lúc khởi động kèm lý do. `SQLITE_PATH=:memory:` được chấp nhận (test và e2e); mọi đường dẫn tương đối khác tính từ thư mục exe.
 
@@ -854,13 +919,27 @@ Người chơi (tên, stack, avatar/chữ cái, badge/title ở Normal), lá ri�
 ## 28. Deployment
 
 ### 28.1 Normal
-- `apps/normal-server/Dockerfile` đa stage: stage build cài toàn bộ workspace và build; stage runtime `node:22-alpine` chỉ copy `dist/`, `public/`, `drizzle/`, `node_modules` production của normal-server (dùng `pnpm deploy --prod`).
-- `deploy/normal/docker-compose.yml`: `app`, `postgres:16` (volume), `caddy` (HTTPS tự động, proxy HTTP + WS tới app). `.env` cho compose.
-- Migration: container `app` chạy `node dist/migrate.js` rồi `node dist/main.js` (entrypoint). Migration idempotent.
-- Health: `GET /health`; compose `healthcheck`.
-- Backup: `deploy/normal/backup.sh` (`pg_dump -Fc`) chạy cron hàng ngày, giữ 14 bản; hướng dẫn restore `pg_restore`.
-- Log: pino JSON ra stdout, gom bằng `docker logs`/driver.
-- Tài liệu `docs/deployment-normal.md`.
+- **`apps/normal-server/Dockerfile` hai stage.** Builder `node:22-alpine`: `npm i -g pnpm@9` (image không bật corepack), `apk add python3 make g++` (dự phòng khi `argon2` không có prebuild musl và phải biên dịch), copy manifest của **mọi** project trong workspace (`--frozen-lockfile` so lockfile với các project nó nhìn thấy, thiếu một cái là "lockfile cũ"), `pnpm install --frozen-lockfile --filter @bp/normal-server...`, `pnpm --filter @bp/normal-server build`, rồi `pnpm --filter @bp/normal-server deploy --prod /out`. Runtime `node:22-alpine`: `COPY --from=builder /out /app`, user `node` (không root), `NODE_ENV=production`, `EXPOSE 8080`, `HEALTHCHECK` bằng `node -e "fetch('http://127.0.0.1:8080/health')…"` (image không có curl), `CMD ["node","dist/main.js"]`.
+  - Build context là **thư mục gốc repo** (`docker build -f apps/normal-server/Dockerfile .`) — một package workspace không cài được nếu thiếu workspace của nó. Vì thế danh sách loại trừ nằm ở `apps/normal-server/Dockerfile.dockerignore` (BuildKit đọc `<dockerfile>.dockerignore` trước): một `.dockerignore` đặt trong thư mục app sẽ không bao giờ được đọc.
+  - `pnpm deploy --prod` là ngữ nghĩa **pnpm 9**: không có và không cần cờ `--legacy`. pnpm 10 hỏng ở **hai** chỗ, nên bản ghim 9 là ghim thật chứ không phải mặc định: `deploy` từ chối chạy nếu workspace không đặt `inject-workspace-packages=true` (rồi lại đòi `--legacy`), và pnpm 10 không chạy install script của dependency theo mặc định (`onlyBuiltDependencies`) nên bước `node-gyp-build` của argon2 bị bỏ qua âm thầm. `pnpm deploy --prod` đã được chạy thật trên pnpm 9.15.9: kết quả boot độc lập được, `node_modules` chỉ có sáu dependency production và không có devDependency nào. argon2 0.45.1 cũng có sẵn prebuild musl (`prebuilds/linux-x64/argon2.musl.node`), nên `python3 make g++` trong stage builder là dự phòng chứ không bắt buộc.
+- **`deploy/normal/docker-compose.yml`: bốn service, một luật thứ tự.**
+
+  | Service | Image | Vai trò |
+  |---|---|---|
+  | `db` | `postgres:16-alpine` | `POSTGRES_DB=bind_poker`, volume `pgdata`, healthcheck `pg_isready -U postgres -d bind_poker` (có `-d`: trong lúc initdb server đã nhận kết nối nhưng database ứng dụng chưa tồn tại) |
+  | `migrate` | image của app | `command: node dist/migrate-cli.js`, `depends_on: db (service_healthy)`, `restart: "no"` — job restart khi lỗi là job giấu lỗi |
+  | `app` | image của app | `depends_on: migrate (service_completed_successfully)`, `AUTO_MIGRATE=false`, `TRUST_PROXY=uniquelocal`, `COOKIE_SECURE=true`, `restart: unless-stopped`, **không publish port nào ra host** |
+  | `caddy` | `caddy:2-alpine` | Port 80/443 (+443/udp), `Caddyfile` mount read-only, volume `caddy_data` (khóa ACME + chứng chỉ) và `caddy_config`, `depends_on: app` |
+
+  `migrate` là service riêng chứ không phải một bước trong entrypoint của `app`: với `restart: unless-stopped`, migration chạy lúc boot sẽ chạy lại ở mỗi vòng crash-loop và ở mỗi replica thêm vào sau này. Migration vẫn idempotent (drizzle ghi bảng `drizzle.__drizzle_migrations`), nhưng thứ tự "db healthy → migrate xong → app khởi động" là thứ compose bảo đảm được còn entrypoint thì không.
+- **Caddyfile**: `{$DOMAIN} { encode gzip; header Strict-Transport-Security "max-age=31536000; includeSubDomains"; reverse_proxy app:8080 }`. Đặt tên site bằng hostname là đủ để bật HTTPS tự động (Let's Encrypt + tự gia hạn + redirect 80→443). Caddy 2 **không** tự thêm HSTS như v1, nên nó là một dòng ở đây (không thuộc `http-kit`: Lite chạy http thuần trên LAN). WebSocket không cần cấu hình gì thêm — `reverse_proxy` chuyển tiếp `Connection`/`Upgrade` sẵn — và chính nó **nối thêm** vào `X-Forwarded-For`, thứ mà `TRUST_PROXY=uniquelocal` tin đúng một hop.
+- **`.env`** (mẫu `deploy/normal/.env.example`): `DOMAIN`, `POSTGRES_PASSWORD`, `SESSION_SECRET` bắt buộc (compose dùng `${VAR:?…}` nên thiếu là dừng ngay lúc `docker compose config`, không phải lúc container chạy); `ECONOMY_TIMEZONE`, `LOG_LEVEL` tùy chọn. `DATABASE_URL` và `ALLOWED_ORIGINS` **được suy ra** trong compose (`postgres://postgres:${POSTGRES_PASSWORD}@db:5432/bind_poker`, `https://${DOMAIN}`) để không có hai chỗ khai cùng một sự thật.
+- **Health**: `GET /health` trả `503` khi database không trả lời, nên `HEALTHCHECK` là kiểm tra phụ thuộc thật chứ không chỉ "tiến trình còn sống".
+- **Backup**: `deploy/normal/backup.sh` — `docker compose exec -T db pg_dump -U postgres -Fc bind_poker`, cron hằng ngày, giữ 14 ngày, từ chối giữ file rỗng. Restore: `deploy/normal/restore.md` (`pg_restore --clean --if-exists --no-owner`, **dừng `app` trước**, chạy `migrate` sau khi restore nếu image đã mới hơn bản dump). `SESSION_SECRET` không nằm trong dump — chuyển host phải mang nó theo, nếu không mọi phiên mất hiệu lực.
+- **Nâng cấp**: `git pull` → `docker compose up -d --build`; `migrate` tự chạy lại trước `app`. Không có down-migration: đường lùi là restore bản dump lấy ngay trước khi nâng cấp rồi chạy image cũ.
+- **Log**: JSON một dòng ra stdout, gom bằng `docker logs`/log driver. Dòng khởi động không chứa `DATABASE_URL` hay `SESSION_SECRET`.
+- **Trạng thái kiểm chứng (tính tới Plan 5 / Task 7):** `docker compose config`, `pnpm deploy --prod` và việc chạy artefact đã deploy một cách độc lập đều đã làm thật. `docker build`, `pnpm install` trong Alpine, quy trình ACME của Caddy và `service_completed_successfully` lúc chạy thì **chưa** — máy làm ra bộ file này không có Docker daemon. Cảnh báo tương ứng nằm ở `docs/deployment-normal.md` §2 và trong README.
+- Tài liệu `docs/deployment-normal.md` (vận hành, tiếng Việt như mọi tài liệu vận hành khác) và `docs/normal-server.md` (bản đồ module cho người sửa code, tiếng Anh như mọi tài liệu phát triển khác).
 
 ### 28.2 Lite
 - `pnpm build:lite` trên máy Windows x64 dev (yêu cầu Node 22 + pnpm 9) → `apps/lite/release/lite/` gồm đúng ba file:
@@ -1019,6 +1098,11 @@ ESLint boundary; test đọc `package.json` từng package và kiểm graph mụ
 | Domain event bus nội bộ cho stats/achievement | Server-kit không biết Normal | Gọi trực tiếp | Event bus thêm một lớp gián tiếp nhỏ |
 | Lite trước Normal trong milestone | Chứng minh core/server-kit độc lập sớm | Normal trước | Trì hoãn UI đầy đủ vài tuần |
 | Không lưu ván qua restart | YAGNI, phức tạp cao | Event sourcing | Ván bị hủy khi deploy; hoàn tiền đầy đủ nên không mất điểm |
+| Normal chạy `node-postgres` + Drizzle, test chạy **PGlite** trong tiến trình | Cùng một `AppDb` (kiểu `PgDatabase` trung tính driver) cho cả hai, nên query của test là query của production; toàn bộ suite chạy được mà không cần một server Postgres nào | Testcontainers; một database Postgres dùng chung cho CI | Testcontainers cần Docker daemon trên mọi máy dev; DB dùng chung thì test không song song được. Đổi lại: đường `pg` thật chỉ được chạy khi có `TEST_DATABASE_URL`, và khác biệt PGlite ↔ Postgres (nếu có) chỉ lộ ra ở đó |
+| argon2id `m=64MiB, t=3, p=1` | Khuyến nghị OWASP cho argon2id; ~100 ms/lần trên phần cứng mục tiêu, đủ chậm để brute-force không kinh tế và đủ nhanh để không thành DoS tự gây | bcrypt; argon2 tham số nhẹ hơn | Native addon (phải biên dịch hoặc có prebuild musl trong image); một đợt đăng ký đồng thời tốn RAM đáng kể — nên test truyền tham số nhẹ qua `argon2Params` |
+| Tách `@bp/http-kit` khỏi hai edition | `.env`, JSON logger, rate limiter, static asset, security header, CSRF guard, error envelope là **giống hệt** ở Lite và Normal; hai bản sao sẽ trôi khỏi nhau đúng ở phần bảo mật | Để nguyên trong Lite rồi Normal copy sang | Thêm một package và một ranh giới phải giữ (ESLint chặn http-kit import bất kỳ package workspace nào) |
+| Id phiên = `hex(HMAC-SHA256(SESSION_SECRET, token))`, xoay id khi login | Bảng `sessions` không chứa thứ gì đăng nhập được: đọc trộm database không ra token, và người ghi được row cũng không tự chế được id cho một token họ chọn nếu không có secret. Xoay id khi login vô hiệu hóa session fixation | Lưu token băm SHA-256 như Lite; JWT không trạng thái | Đổi `SESSION_SECRET` là đăng xuất tất cả (đúng ý muốn, nhưng phải nói rõ trong tài liệu vận hành). JWT thì không revoke được |
+| Dòng sink trong `point_transactions` dùng `reason = kind` | Bất biến tiền §18.4 đọc được từ **một** bảng: `Σ balance + Σ dòng player_id NULL`. Lite tách bảng `sinks` vì nó không có ledger; Normal có rồi thì bảng thứ hai chỉ là một chỗ nữa để lệch | Bảng `sinks` riêng như Lite | `reason` mang hai nghĩa tùy theo `player_id` NULL hay không; bù lại có CHECK `player_id is not null or kind is not null` để không tồn tại dòng mồ côi bị đếm nhầm thành sink |
 
 ## Phụ lục B — Bảng kiểm chấp nhận (mục 40 & 66 requirement)
 

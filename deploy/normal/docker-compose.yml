@@ -1,0 +1,115 @@
+# Bind Poker — Normal edition, single-host deployment (spec §28.1).
+#
+#     cd deploy/normal && cp .env.example .env && $EDITOR .env
+#     docker compose up -d
+#
+# Four services and one ordering rule: `db` becomes healthy, `migrate` runs the committed migrations
+# to completion, and only then does `app` start. `caddy` terminates TLS and is the only thing with a
+# port on the host — `app` is reachable on the private network and nowhere else.
+#
+# Guide: ../../docs/deployment-normal.md
+
+name: bind-poker-normal
+
+# `migrate` and `app` are the same image with the same configuration; only the command and the two
+# process-level flags differ. Anchors keep that a fact of the file rather than a comment.
+x-app-build: &app-build
+  context: ../..
+  dockerfile: apps/normal-server/Dockerfile
+
+x-app-env: &app-env
+  # `db` is the service name; Compose's own DNS resolves it on the project network.
+  DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required — copy .env.example to .env}@db:5432/bind_poker
+  SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required — at least 32 random characters}
+  ALLOWED_ORIGINS: https://${DOMAIN:?DOMAIN is required — the public hostname Caddy gets a certificate for}
+  ECONOMY_TIMEZONE: ${ECONOMY_TIMEZONE:-Asia/Ho_Chi_Minh}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  # Migrations are the `migrate` service's job in this topology, never a side effect of a restart:
+  # with `restart: unless-stopped` on `app`, a boot-time migration would run again on every crash
+  # loop and on every replica added later.
+  AUTO_MIGRATE: "false"
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: bind_poker
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required — copy .env.example to .env}
+      # Postgres only reads the initdb variables the *first* time this volume is used. Changing the
+      # password here later changes nothing in the database; see docs/deployment-normal.md §8.
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # `-d bind_poker` matters: during initdb the server briefly accepts connections on a socket
+      # while the application database does not exist yet, and a bare `pg_isready` would call that
+      # healthy and let `migrate` start too early.
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bind_poker"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+  migrate:
+    build: *app-build
+    image: bind-poker-normal:latest
+    command: ["node", "dist/migrate-cli.js"]
+    environment: *app-env
+    depends_on:
+      db:
+        condition: service_healthy
+    # This container never listens on 8080, so the image's HEALTHCHECK would fail for the whole of
+    # its short life and paint `docker compose ps` red during the one minute an operator is most
+    # likely to be watching. Nothing reads it — `service_completed_successfully` reads the exit code.
+    healthcheck:
+      disable: true
+    # A migration job that restarts on failure hides the failure. It runs once; a non-zero exit
+    # leaves `app` unstarted and the reason in `docker compose logs migrate`.
+    restart: "no"
+
+  app:
+    build: *app-build
+    image: bind-poker-normal:latest
+    environment:
+      <<: *app-env
+      # Who may set `X-Forwarded-For`, not whether to believe it. Caddy reaches the app over the
+      # Compose bridge network, an RFC1918 address, so `uniquelocal` trusts exactly that hop and
+      # nothing else. `TRUST_PROXY=true` is refused at startup: it trusts *every* hop, which makes
+      # `req.ip` the client-written left-most entry of the header and voids every rate limit.
+      TRUST_PROXY: "uniquelocal"
+      COOKIE_SECURE: "true"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    # No `ports`. 8080 is published to the project network for Caddy and to nothing else.
+    expose:
+      - "8080"
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN is required — the public hostname Caddy gets a certificate for}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # `caddy_data` holds the ACME account key and the issued certificates. Losing it means
+      # re-issuing on the next start, which Let's Encrypt rate-limits — back it up, or at least
+      # never `docker compose down -v` casually.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      # Healthy, not merely started: the app image declares a HEALTHCHECK, and waiting for it closes
+      # the couple of seconds in which Caddy is serving and every request is a 502 because the pool
+      # is still opening.
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

@@ -19,9 +19,9 @@ const SWEEP_ABOVE = 1_000
 /**
  * A fixed-window counter, per key, held in memory.
  *
- * Lite is a single process on one host, so there is nothing to share the state with; a fixed window
- * is a few lines and its worst case (2 × `limit` across a window boundary) is irrelevant for the
- * one thing this guards — `POST /api/session` creating players in bulk.
+ * There is nothing to share the state with inside one process; a fixed window is a few lines and its
+ * worst case (2 × `limit` across a window boundary) is irrelevant for what this guards — cheap
+ * unauthenticated endpoints such as session creation or an admin stop.
  */
 export function createRateLimiter(opts: { limit: number; windowMs: number; now?: () => number }): RateLimiter {
   const now = opts.now ?? Date.now
