@@ -1,15 +1,13 @@
-import { timingSafeEqual } from 'node:crypto'
 import { ECONOMY, type PlayerIdentity } from '@bp/core'
+import { bearerToken, createRateLimiter, HttpError, isLoopbackAddress, secretEquals } from '@bp/http-kit'
 import type { GameServer, Logger } from '@bp/server-kit'
-import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 import type { LiteConfig } from '../config.js'
 import { reliefEligible } from '../economy/daily.js'
 import type { EconomyService } from '../economy/economy-service.js'
 import { NameTakenError, type LiteRepositories } from '../repos/sqlite-repos.js'
 import { RUN_FILE_NAME } from '../run-file.js'
 import { InvalidNameError, type SessionService } from '../session/session-service.js'
-import type { AssetSource } from './assets.js'
-import { createRateLimiter } from './rate-limit.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -25,128 +23,28 @@ export interface RouteDeps {
   game: GameServer
   config: LiteConfig
   log: Logger
-  assets?: AssetSource | null
   now?: () => number
   /** The loopback stop path: the run token this instance published, and the graceful shutdown it triggers. */
   admin: { token: string; requestShutdown: () => void }
 }
 
-/** Every REST failure is `{ error: { code, message } }` (spec §19); this is how a handler asks for one. */
-export class HttpError extends Error {
-  constructor(readonly status: number, readonly code: string, message: string, readonly extra?: Record<string, unknown>) {
-    super(message)
-    this.name = 'HttpError'
-  }
-}
-
-/**
- * `connect-src 'self'` alone covers the WebSocket too: a `ws://`/`wss://` URL on the page's own
- * origin matches `'self'` in CSP 3, which every browser Lite targets implements. The four directives
- * after it close what `default-src` does not reach — framing, `<base href>`, form posts and plugins.
- */
-const CSP = [
-  "default-src 'self'",
-  "img-src 'self' data:",
-  "style-src 'self' 'unsafe-inline'",
-  "connect-src 'self'",
-  "frame-ancestors 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "object-src 'none'",
-].join('; ')
-const REQUESTED_WITH = 'bind-poker'
 const SESSION_RATE_LIMIT = { limit: 10, windowMs: 60_000 }
 /** The stop endpoint is not a login: five attempts a minute is far more than an operator needs. */
 const ADMIN_RATE_LIMIT = { limit: 5, windowMs: 60_000 }
 const LANGUAGES = ['vi', 'en']
-const IMMUTABLE_CACHE = 'public, max-age=31536000, immutable'
-/** Paths the SPA fallback must never answer: a typo under them is a 404, not the index page. */
-const RESERVED = ['api', 'ws', 'health']
-/** Stable codes for the failures Fastify raises before a handler runs, so clients never see `FST_ERR_*`. */
-const FASTIFY_CODES: Record<number, string> = { 400: 'BAD_REQUEST', 404: 'NOT_FOUND', 413: 'PAYLOAD_TOO_LARGE', 415: 'UNSUPPORTED_MEDIA_TYPE', 429: 'RATE_LIMITED' }
-
-function isNoStore(url: string): boolean {
-  const path = url.split('?')[0] ?? ''
-  return path === '/health' || path === '/api' || path.startsWith('/api/')
-}
 
 /**
- * `Authorization: Bearer <token>`, with the scheme matched case-insensitively — RFC 7235 §2.1 makes
- * the scheme a case-insensitive token, and `bearer` from a hand-rolled client is not a 401.
+ * Lite's own endpoints. The generic HTTP plumbing they sit on — the security headers, the CSRF
+ * guard, the error envelope, the tolerant JSON parser and the static `/*` route — is `@bp/http-kit`,
+ * wired in `buildApp` around this call.
  */
-export function bearerToken(header: string | undefined): string {
-  if (header === undefined) return ''
-  const space = header.indexOf(' ')
-  if (space < 0) return ''
-  if (header.slice(0, space).toLowerCase() !== 'bearer') return ''
-  return header.slice(space + 1).trim()
-}
-
-/**
- * True for an address that can only belong to this machine: IPv6 `::1`, anything in `127.0.0.0/8`,
- * and the IPv4-mapped form Node reports on a dual-stack Windows listener (`::ffff:127.0.0.1`).
- */
-export function isLoopbackAddress(address: string | undefined): boolean {
-  if (address === undefined || address === '') return false
-  const addr = address.startsWith('::ffff:') ? address.slice(7) : address
-  return addr === '::1' || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(addr)
-}
-
-/** Constant-time comparison that does not leak the expected length through an early return. */
-function secretEquals(given: string, expected: string): boolean {
-  const a = Buffer.from(given, 'utf8')
-  const b = Buffer.from(expected, 'utf8')
-  return a.length === b.length && timingSafeEqual(a, b)
-}
-
 export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
   const now = deps.now ?? Date.now
   const startedAt = now()
-  const assets = deps.assets ?? null
   const sessionLimiter = createRateLimiter({ ...SESSION_RATE_LIMIT, now })
   const adminLimiter = createRateLimiter({ ...ADMIN_RATE_LIMIT, now })
 
   app.decorateRequest('identity', null)
-
-  // Headers first, so they are present on error and 404 responses too, not just on handled routes.
-  app.addHook('onRequest', async (req, reply) => {
-    reply.header('x-content-type-options', 'nosniff')
-    reply.header('referrer-policy', 'no-referrer')
-    reply.header('content-security-policy', CSP)
-    // `frame-ancestors` already says this, but it is CSP 3: the legacy header covers the browsers
-    // (and the embedded webviews on a LAN kiosk) that only understand X-Frame-Options.
-    reply.header('x-frame-options', 'DENY')
-    if (isNoStore(req.url)) reply.header('cache-control', 'no-store')
-  })
-
-  /**
-   * CSRF guard (spec §19): a mutating request must carry `X-Requested-With: bind-poker`. Only
-   * fetch/XHR can set a custom header, and doing so on a cross-origin request forces a preflight
-   * that this server never answers — so a form or an image tag on another site cannot reach these.
-   */
-  app.addHook('preHandler', async (req) => {
-    if (req.method !== 'POST' && req.method !== 'PUT' && req.method !== 'PATCH' && req.method !== 'DELETE') return
-    if (req.headers['x-requested-with'] !== REQUESTED_WITH) {
-      throw new HttpError(403, 'FORBIDDEN', `mutating requests require the X-Requested-With: ${REQUESTED_WITH} header`)
-    }
-  })
-
-  app.setErrorHandler((err: FastifyError, req, reply) => {
-    if (err instanceof HttpError) {
-      return reply.code(err.status).send({ ...(err.extra ?? {}), error: { code: err.code, message: err.message } })
-    }
-    const status = typeof err.statusCode === 'number' ? err.statusCode : 500
-    if (status >= 500) {
-      deps.log.error('request failed', { method: req.method, url: req.url, err: String(err) })
-      return reply.code(500).send({ error: { code: 'INTERNAL', message: 'internal server error' } })
-    }
-    // Fastify's own 4xx: unparseable JSON, an oversized body, an unsupported content type.
-    return reply.code(status).send({ error: { code: FASTIFY_CODES[status] ?? 'BAD_REQUEST', message: err.message } })
-  })
-
-  app.setNotFoundHandler((req, reply) => {
-    void reply.code(404).send({ error: { code: 'NOT_FOUND', message: `no route for ${req.method} ${req.url}` } })
-  })
 
   /** Resolves `Authorization: Bearer <token>` into `req.identity`, or fails the request with 401. */
   const requireSession = async (req: FastifyRequest): Promise<void> => {
@@ -281,33 +179,5 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
     reply.raw.once('finish', deps.admin.requestShutdown)
     reply.raw.once('close', deps.admin.requestShutdown)
     return reply.send({ ok: true })
-  })
-
-  // Registered last: `/*` matches everything the routes above did not claim.
-  app.get('/*', async (req, reply) => {
-    const requested = (req.params as { '*'?: string })['*'] ?? ''
-    const notFound = (): FastifyReply => reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'not found' } })
-    if (!assets) return notFound()
-
-    const first = requested.split('/')[0] ?? ''
-    if (RESERVED.includes(first)) return notFound()
-
-    const direct = requested === '' ? null : assets.get(requested)
-    if (direct) {
-      // Only content-hashed names may be cached: everything else (index.html, favicon.ico) keeps
-      // its name when the exe is replaced, so it has to be revalidated on every load.
-      reply.header('cache-control', direct.immutable ? IMMUTABLE_CACHE : 'no-cache')
-      return reply.type(direct.type).send(direct.body)
-    }
-
-    // SPA fallback: the client routes on the hash, but a hand-typed `/lobby` must still boot the app.
-    // A path with a file extension is a real asset request, so a miss there stays a miss.
-    const base = requested.slice(requested.lastIndexOf('/') + 1)
-    if (base.includes('.')) return notFound()
-
-    const index = assets.get('index.html')
-    if (!index) return notFound()
-    reply.header('cache-control', 'no-cache')
-    return reply.type(index.type).send(index.body)
   })
 }

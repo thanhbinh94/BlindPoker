@@ -18,6 +18,7 @@ pnpm lint
 
 - `packages/core` — pure game engine, bot, protocol (no I/O)
 - `packages/server-kit` — rooms, WebSocket gateway, timers, reconnect, bots (see docs/server-kit.md)
+- `packages/http-kit` — shared Fastify plumbing: `.env` reading, JSON logger, rate limiter, static assets, security headers, CSRF guard, error envelope
 - `packages/ui-kit` — shared React UI: game client, i18n (vi/en), theme, poker table, lobby, screens (see docs/ui-kit.md)
 - `apps/lite` — the Lite edition: Fastify + `node:sqlite` server, React web app, single-exe build
 - `apps/normal-server`, `apps/normal-web` (planned)

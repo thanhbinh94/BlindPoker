@@ -32,6 +32,9 @@ importers:
       '@bp/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@bp/http-kit':
+        specifier: workspace:*
+        version: link:../../packages/http-kit
       '@bp/server-kit':
         specifier: workspace:*
         version: link:../../packages/server-kit
@@ -96,6 +99,21 @@ importers:
 
   packages/core:
     devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(jsdom@25.0.1)
+
+  packages/http-kit:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      fastify:
+        specifier: ^5.1.0
+        version: 5.12.3
       typescript:
         specifier: ^5.6.3
         version: 5.9.3

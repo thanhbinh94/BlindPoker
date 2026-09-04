@@ -58,7 +58,7 @@ function isImmutable(normalized: string): boolean {
  * backslashes are folded to `/` (Windows treats both as separators), then any `..` segment rejects
  * the whole path outright. `.` and empty segments are dropped, so `/` normalises to `''`.
  */
-function normalizePath(path: string): string | null {
+export function normalizePath(path: string): string | null {
   let decoded = path
   try {
     decoded = decodeURIComponent(path)
@@ -93,9 +93,9 @@ function cached(load: (key: string) => Asset | null): AssetSource {
 /**
  * Serves the files under `dir` — the development and unpacked-release path.
  *
- * Everything read is held in memory for the life of the process: the Lite bundle is a handful of
- * files totalling a few hundred KB, and a long-lived cache keeps the exe's behaviour identical to
- * the SEA source below. It follows that replacing a file on disk needs a restart.
+ * Everything read is held in memory for the life of the process: a web bundle is a handful of files
+ * totalling a few hundred KB, and a long-lived cache keeps this source's behaviour identical to the
+ * SEA one below. It follows that replacing a file on disk needs a restart.
  */
 export function assetSourceFromDir(dir: string): AssetSource {
   const root = resolve(dir)

@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@bp/core": "workspace:*",
+    "@bp/http-kit": "workspace:*",
     "@bp/server-kit": "workspace:*",
     "@bp/ui-kit": "workspace:*",
     "fastify": "^5.1.0",

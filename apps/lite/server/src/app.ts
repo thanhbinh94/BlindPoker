@@ -2,11 +2,18 @@ import { randomBytes } from 'node:crypto'
 import type { IncomingMessage } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import type { Duplex } from 'node:stream'
+import {
+  registerCsrfGuard,
+  registerErrorHandler,
+  registerSecurityHeaders,
+  registerStaticRoute,
+  registerTolerantJsonParser,
+  type AssetSource,
+} from '@bp/http-kit'
 import { createGameServer, type GameServer, type GatewayOptions, type Logger, type RoomOptions } from '@bp/server-kit'
 import Fastify, { type FastifyInstance } from 'fastify'
 import type { LiteConfig } from './config.js'
 import { createEconomyService } from './economy/economy-service.js'
-import type { AssetSource } from './http/assets.js'
 import { registerRoutes } from './http/routes.js'
 import type { LiteRepositories } from './repos/sqlite-repos.js'
 import { removeRunFile, writeRunFile } from './run-file.js'
@@ -40,6 +47,8 @@ export interface BuildAppDeps {
 /** A request body larger than this is a mistake or an attack: the largest thing Lite accepts is a display name. */
 const BODY_LIMIT_BYTES = 16 * 1024
 const WS_PATH = '/ws'
+/** Paths the SPA fallback must never answer: a typo under them is a 404, not the index page. */
+const RESERVED_PREFIXES = ['api', 'ws', 'health']
 
 export function buildApp(deps: BuildAppDeps): LiteApp {
   const { config, repos, log } = deps
@@ -48,23 +57,13 @@ export function buildApp(deps: BuildAppDeps): LiteApp {
   // Fresh per boot: this is a handle on *this* process, not a password to be remembered.
   const runToken = randomBytes(32).toString('hex')
 
-  /**
-   * Every mutating Lite route takes its input from headers or the URL, so a `POST` that announces
-   * `application/json` and then sends nothing is a normal request — but Fastify's stock parser
-   * answers an empty body with `FST_ERR_CTP_EMPTY_JSON_BODY` (400). Treat it as "no body" instead,
-   * and keep the 400 for a body that is present but malformed.
-   */
-  fastify.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body, done) => {
-    const text = typeof body === 'string' ? body.trim() : ''
-    if (text === '') return done(null, undefined)
-    try {
-      done(null, JSON.parse(text) as unknown)
-    } catch (err) {
-      const failure = err instanceof Error ? err : new Error(String(err))
-      ;(failure as Error & { statusCode?: number }).statusCode = 400
-      done(failure, undefined)
-    }
-  })
+  // The shared HTTP plumbing, in the order a request meets it. Headers first, so they are on error
+  // and 404 responses too; the CSRF guard next; then the error handler that turns everything —
+  // including what those two throw — into the one `{ error: { code, message } }` envelope.
+  registerTolerantJsonParser(fastify)
+  registerSecurityHeaders(fastify)
+  registerCsrfGuard(fastify)
+  registerErrorHandler(fastify, log)
 
   const sessions = createSessionService(repos)
   const game = createGameServer({
@@ -121,10 +120,12 @@ export function buildApp(deps: BuildAppDeps): LiteApp {
     game,
     config,
     log,
-    assets: deps.assets,
     admin: { token: runToken, requestShutdown },
     ...(deps.now ? { now: deps.now } : {}),
   })
+
+  // Last: `/*` matches everything the routes above did not claim.
+  registerStaticRoute(fastify, deps.assets, { reserved: RESERVED_PREFIXES })
 
   /** Only `/ws` is a WebSocket endpoint; every other upgrade is refused rather than left half-open. */
   const onUpgrade = (req: IncomingMessage, socket: Duplex, head: Buffer): void => {

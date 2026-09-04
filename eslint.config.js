@@ -47,6 +47,12 @@ export default tseslint.config(
     },
   },
   {
+    // `@bp/http-kit` is the HTTP plumbing both editions share. Node built-ins are its business, but it
+    // knows nothing about the game, the UI or either edition — so it imports no workspace package at all.
+    files: ['packages/http-kit/**/*.ts'],
+    rules: forbid(['@bp/*', 'react', '**/apps/**', '**/packages/core/**', '**/packages/server-kit/**', '**/packages/ui-kit/**'], '@bp/http-kit must not depend on any workspace package'),
+  },
+  {
     files: ['packages/server-kit/**/*.ts'],
     rules: forbid(['@bp/ui-kit', '@bp/normal-*', '@bp/lite', '**/apps/**', 'react'], '@bp/server-kit may only depend on @bp/core'),
   },

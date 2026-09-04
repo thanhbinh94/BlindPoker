@@ -9,11 +9,12 @@ const ROOT = fileURLToPath(new URL('../..', import.meta.url))
 /** Allowed workspace dependencies per package (spec §22.2). Extend when packages are added. */
 const ALLOWED: Record<string, string[]> = {
   '@bp/core': [],
+  '@bp/http-kit': [],
   '@bp/server-kit': ['@bp/core'],
   '@bp/ui-kit': ['@bp/core'],
-  '@bp/normal-server': ['@bp/core', '@bp/server-kit'],
+  '@bp/normal-server': ['@bp/core', '@bp/server-kit', '@bp/http-kit'],
   '@bp/normal-web': ['@bp/core', '@bp/ui-kit'],
-  '@bp/lite': ['@bp/core', '@bp/server-kit', '@bp/ui-kit'],
+  '@bp/lite': ['@bp/core', '@bp/server-kit', '@bp/ui-kit', '@bp/http-kit'],
 }
 
 function workspacePackages(): { name: string; dir: string; json: Record<string, unknown> }[] {
