@@ -62,6 +62,7 @@
     "inHand": "In hand",
     "mode": "Mode",
     "name": "Name",
+    "notifications": "Notifications",
     "nextHandIn": "Next hand in",
     "password": "Password",
     "payout": "Payout",
@@ -200,7 +201,17 @@
     "leaveConfirm": "Leave this room?",
     "closed": "Room closed",
     "kicked": "You were kicked from the room",
-    "hostLeft": "The host left"
+    "hostLeft": "The host left",
+    "reconnecting": "Connection lost — reconnecting…",
+    "buyInTitle": "Choose your buy-in",
+    "controls": "Table controls",
+    "seatControls": "Your seat"
+  },
+  "notify": {
+    "KICKED": "You were removed from the room",
+    "ROOM_CLOSED": "The room was closed",
+    "DAILY_REWARD": "Daily reward: {{amount}} points",
+    "other": "New notification"
   },
   "presets": {
     "min": "Min",

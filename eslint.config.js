@@ -26,8 +26,9 @@ export default tseslint.config(
     },
   },
   {
-    // Test fixtures render throwaway markup; hoisting every literal into a constant only obscures the assertion.
-    files: ['packages/ui-kit/**/*.test.tsx', 'apps/**/*.test.tsx'],
+    // Test fixtures render throwaway markup, and the playground's control bar is a dev harness that never ships;
+    // hoisting either one's literals into i18n keys would only obscure them.
+    files: ['packages/ui-kit/**/*.test.tsx', 'apps/**/*.test.tsx', 'packages/ui-kit/playground/**/*.tsx'],
     rules: { 'react/jsx-no-literals': 'off' },
   },
   {

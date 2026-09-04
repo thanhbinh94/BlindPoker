@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="vi" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bind Poker — ui-kit playground</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* Playground chrome only — the ui-kit itself never sees these rules. */
+      .pg {
+        min-height: 100vh;
+      }
+      .pg-bar {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: end;
+        gap: 12px;
+        padding: 8px 16px;
+        border-bottom: 1px solid var(--line);
+        background: color-mix(in srgb, var(--bg) 88%, transparent);
+        backdrop-filter: blur(8px);
+        font-family: var(--font-body);
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ink-muted);
+      }
+      .pg-ctl {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .pg-check {
+        flex-direction: row;
+        align-items: center;
+        gap: 6px;
+      }
+      .pg-bar select,
+      .pg-btn {
+        min-height: 32px;
+        padding: 0 8px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--bg-elev);
+        color: var(--ink);
+        font-size: 13px;
+        text-transform: none;
+        letter-spacing: 0;
+      }
+      .pg-btn {
+        align-self: end;
+        border-color: color-mix(in srgb, var(--gold) 50%, transparent);
+        color: var(--gold);
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

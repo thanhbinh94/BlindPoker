@@ -1,0 +1,344 @@
+/* Screens: layout, not looks. The lobby is a night desk (tickets left, door card right); the room is a stage with the
+   table lit in the middle and a lacquered tray at the foot. Everything else comes from the components. */
+
+.lobby,
+.room {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 100vh;
+  padding: var(--space-4);
+}
+
+/* ── lobby ────────────────────────────────────────────────────────────────── */
+
+.lobbyMain {
+  display: grid;
+  gap: var(--space-6);
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .lobbyMain {
+    /* Deliberately off-centre: the board carries the weight, the door card is a stub beside it. */
+    grid-template-columns: minmax(0, 1.618fr) minmax(17rem, 0.85fr);
+  }
+}
+
+.rooms {
+  min-width: 0; /* grid children default to min-content: without this the ticket list pushes the page wide */
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.sectionTitle {
+  flex: none;
+  font-size: 1.5rem;
+}
+
+/* one hairline of lacquer, fading east */
+.rule {
+  flex: 1;
+  height: 1px;
+  min-width: var(--space-6);
+  background: linear-gradient(90deg, var(--gold) 0%, color-mix(in srgb, var(--gold) 30%, transparent) 45%, transparent 100%);
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  position: sticky;
+  top: var(--space-4);
+}
+
+.railCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.railCta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.block {
+  width: 100%;
+}
+
+.eyebrow {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+/* ── room ─────────────────────────────────────────────────────────────────── */
+
+.room {
+  gap: var(--space-3);
+}
+
+.roomMain {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  pointer-events: none;
+  background: radial-gradient(70% 60% at 50% 50%, rgba(4, 7, 18, 0.72), rgba(4, 7, 18, 0.32) 70%, transparent 100%);
+}
+
+.overlay > * {
+  pointer-events: auto;
+}
+
+.countdown {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  color: var(--ink-muted);
+}
+
+.countdown strong {
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--red) 45%, transparent);
+  border-radius: var(--radius-pill);
+  background: var(--red-soft);
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.bannerPulse {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--red);
+  animation: bpBeacon 1.4s var(--ease) infinite;
+}
+
+@keyframes bpBeacon {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.7);
+  }
+}
+
+.roomFoot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.readyCount,
+.hint {
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+}
+
+.readyCount {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.roster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rosterRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--bg-elev) 70%, transparent);
+  font-size: 0.85rem;
+}
+
+.rosterOffline {
+  opacity: 0.6;
+}
+
+.rosterName {
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rosterStack {
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── buy-in prompt ────────────────────────────────────────────────────────── */
+
+.buyIn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: min(20rem, 70vw);
+}
+
+.buyInInput {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.buyInFoot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+/* ── toasts ───────────────────────────────────────────────────────────────── */
+
+.toasts {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: var(--z-modal);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(24rem, calc(100vw - 2 * var(--space-4)));
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--gold);
+  border-radius: var(--radius-md);
+  background: var(--bg-elev);
+  box-shadow: var(--shadow-2);
+  pointer-events: auto;
+  animation: bpToastIn var(--dur-2) var(--ease) both;
+}
+
+.toastError {
+  border-left-color: var(--red);
+}
+
+@keyframes bpToastIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+.toastGlyph {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--gold-soft);
+  color: var(--gold);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+}
+
+.toastError .toastGlyph {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.toastText {
+  flex: 1;
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.toastClose {
+  flex: none;
+  width: var(--tap);
+  height: var(--tap);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-muted);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.toastClose:hover {
+  color: var(--ink);
+}
+
+@media (max-width: 480px) {
+  .lobby,
+  .room {
+    padding: var(--space-3) var(--space-2);
+  }
+
+  .toasts {
+    left: var(--space-2);
+    right: var(--space-2);
+    width: auto;
+  }
+}

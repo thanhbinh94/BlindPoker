@@ -62,6 +62,7 @@
     "inHand": "Đang chơi",
     "mode": "Chế độ",
     "name": "Tên",
+    "notifications": "Thông báo",
     "nextHandIn": "Ván tiếp theo sau",
     "password": "Mật khẩu",
     "payout": "Tiền thắng",
@@ -200,7 +201,17 @@
     "leaveConfirm": "Bạn có chắc muốn rời phòng?",
     "closed": "Phòng đã đóng",
     "kicked": "Bạn đã bị đuổi khỏi phòng",
-    "hostLeft": "Chủ phòng đã rời đi"
+    "hostLeft": "Chủ phòng đã rời đi",
+    "reconnecting": "Mất kết nối — đang kết nối lại…",
+    "buyInTitle": "Chọn mức mang vào",
+    "controls": "Điều khiển bàn",
+    "seatControls": "Ghế của bạn"
+  },
+  "notify": {
+    "KICKED": "Bạn đã bị mời khỏi phòng",
+    "ROOM_CLOSED": "Phòng đã đóng",
+    "DAILY_REWARD": "Thưởng hằng ngày: {{amount}} điểm",
+    "other": "Thông báo mới"
   },
   "presets": {
     "min": "Min",
