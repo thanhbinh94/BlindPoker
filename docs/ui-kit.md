@@ -109,8 +109,14 @@ formatting; strings come from `useTranslation()`.
 | --- | --- |
 | `LobbyScreen` | `client`, `lang`, `onLanguage`, `onEnteredRoom`, `extraNav?`, `header?` |
 | `RoomScreen` | `client`, `lang`, `onLeft`, `avatarFor?`, `header?`, `layout?` |
+| `Toasts` | `error`, `notifications`, `onClearError`, `onDismiss`, `lang` |
 
 `onLeft` fires the moment the room is gone — left, closed or kicked — and the app decides where that lands.
+
+Both screens already render `Toasts` from their own `client.state`; it is exported separately so an app can raise
+its own slips in the same stack. Errors are assertive (`role="alert"`, red edge) and clear themselves, notifications
+are polite (`role="status"`, gold edge) and wait to be read — each also carries its own glyph, so hue is never the
+only signal.
 
 ### Table
 
@@ -139,9 +145,15 @@ advertised through `aria-keyshortcuts`. Between turns it stays in place and says
 | `JoinByCode` | `onJoin`, `busy?`, `lang`, `error?` |
 | `PlayerBar` | `displayName`, `balance`, `status`, `lang`, `onLanguage`, `right?` |
 | `LanguageSwitch` | `lang`, `onChange` |
+| `HoldemFields` | `tierIndex`, `onTierIndex`, `minBuyInBB`, `maxBuyInBB`, `onMinBuyInBB`, `onMaxBuyInBB`, `disabled`, `lang` |
+| `BlindFields` | `holeCards`, `onHoleCards`, `decisionMode`, `onDecisionMode`, `fixedWager`, `onFixedWager`, `botCount`, `onBotCount`, `maxBots`, `disabled`, `lang` |
 
 `CreateRoomForm` only offers values from `ECONOMY` and still runs the draft through `validateRoomConfig`; it is the
 *validated* config that reaches `onSubmit`.
+
+`HoldemFields` (blind tier plus the buy-in window in big blinds) and `BlindFields` (hole cards, decision mode, fixed
+wager, bot filler) are the mode-specific building blocks `CreateRoomForm` swaps between; both are fully controlled,
+and an app only reaches for them directly when it builds its own room form.
 
 ### Primitives
 
@@ -242,20 +254,28 @@ Namespace names are taken from the `vi` map, so both languages must declare the 
 
 ## Footprint
 
+**The budgets are ≤ 250 kB gzip JS and ≤ 40 kB gzip CSS.** Gzip over the shipped bundle is the only figure held to a
+budget here — it is what a browser actually downloads. Raw sizes are recorded because they are useful when hunting
+a regression, not because anything is measured against them.
+
 `pnpm --filter @bp/ui-kit build:playground` builds the playground (React 18 + i18next + the whole of `@bp/ui-kit`,
 plus `@bp/core`'s engine and bot, which only the harness needs). Measured on the commit that added this document:
 
-| Bundle | Raw | Gzip |
+| Bundle | Raw (informational) | Gzip (**budgeted**) |
 | --- | --- | --- |
-| Playground JS (kit + React + i18next + core engine + bots) | 292.0 kB | **94.3 kB** |
-| Playground CSS (all of the kit's styles) | 39.2 kB | **8.9 kB** |
+| Playground JS (kit + React + i18next + core engine + bots) | 292.0 kB | **94.3 kB** of ≤ 250 kB |
+| Playground CSS (all of the kit's styles) | 39.2 kB | **8.9 kB** of ≤ 40 kB |
 | Kit only (barrel + React + i18next, no engine) | 272.8 kB | 88.6 kB |
 
-Budgets for this plan were ≤ 250 kB gzip JS and ≤ 40 kB gzip CSS; both have a wide margin. `src/index.ts` exports
-only ui-kit modules, and the kit imports just types and small helpers (`HAND_CATEGORY_KEYS`, `RANK_CHARS`,
-`SUIT_CHARS`, `rankOf`, `suitOf`, `validateRoomConfig`, `ECONOMY`) from `@bp/core` — no engine, no bot code. The
-~5.8 kB gzip difference between the two rows is the playground's own engine-driven mock server. Lite's hard bundle
-budget is enforced by a test in Plan 4; this section only records the measurement.
+The kit's stylesheets are 52.0 kB of CSS source (comments and formatting included), which minifies to the 39.2 kB
+shipped above and compresses to 8.9 kB on the wire. The source figure is informational only: it is not held to a
+budget, and an earlier raw-size ceiling has been retired in favour of the gzip numbers.
+
+`src/index.ts` exports only ui-kit modules, and the kit imports just types and small helpers
+(`HAND_CATEGORY_KEYS`, `RANK_CHARS`, `SUIT_CHARS`, `rankOf`, `suitOf`, `validateRoomConfig`, `ECONOMY`) from
+`@bp/core` — no engine, no bot code. The ~5.8 kB gzip difference between the first and last rows is the
+playground's own engine-driven mock server. Lite's hard bundle budget is enforced by a test in Plan 4; this section
+only records the measurement.
 
 ---
 
