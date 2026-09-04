@@ -25,7 +25,9 @@
   --gold-ink: #201607; /* text on a gold fill */
   --red: #c8323c;
   --red-soft: rgba(200, 50, 60, 0.16);
+  --red-ink: #fdf3f0; /* text on a red fill */
   --teal: #3f938a;
+  --teal-ink: #f2f7f5; /* text on a teal fill */
 
   /* table */
   --felt: #0f2a2e;
@@ -60,7 +62,9 @@
   --gold-ink: #fff8e8;
   --red: #a9242d;
   --red-soft: rgba(169, 36, 45, 0.12);
+  --red-ink: #fdf3f0;
   --teal: #15544c;
+  --teal-ink: #f2f7f5;
 
   /* the felt is a physical object: night-side in both themes */
   --felt: #0f2a2e;

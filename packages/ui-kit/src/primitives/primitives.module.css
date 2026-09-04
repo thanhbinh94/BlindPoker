@@ -69,7 +69,7 @@
 
 /* teal: the everyday affirmative */
 .btn.primary {
-  color: #f2f7f5;
+  color: var(--teal-ink);
   background-color: var(--teal);
 }
 
@@ -81,7 +81,7 @@
 
 /* red: fold, leave, kick */
 .btn.danger {
-  color: #fdf3f0;
+  color: var(--red-ink);
   background-color: var(--red);
 }
 
@@ -234,7 +234,9 @@
   --gold-ink: #201607;
   --red: #c8323c;
   --red-soft: rgba(200, 50, 60, 0.16);
-  --teal: #4aa79c;
+  --red-ink: #fdf3f0;
+  --teal: #3f938a;
+  --teal-ink: #f2f7f5;
 
   color: var(--ink);
   background:
