@@ -562,12 +562,26 @@ player_stats(player_id pk fk, ...bộ đếm mục 10.3..., updated_at)
 `games`/`game_players` ghi một dòng mỗi ván đã settlement (không ghi ván bị hủy). Không có bảng rooms.
 
 ### 18.3 Lite — SQLite (`node:sqlite`), WAL mode, `PRAGMA user_version` để migrate
+File dữ liệu mở với `journal_mode = WAL` (trừ `:memory:`), `foreign_keys = ON`, `busy_timeout = 5000`. Migration là mảng append-only trong `db/migrations.ts`: phần tử `i` là version `i + 1`, mỗi lần khởi động chạy tiếp những version còn thiếu trong một transaction rồi đặt `PRAGMA user_version`.
 ```sql
-players(id text pk, display_name text unique collate nocase, session_token_hash text unique, balance integer check>=0,
-        hands_played integer, hands_won integer, streak integer, last_daily_claim text, last_relief_at text, created_at text)
-hand_log(id integer pk, hand_id text, mode text, summary text, created_at text)  -- chỉ ghi khi LITE_HAND_LOG=1
+players(id text pk, display_name text not null unique collate nocase, token_hash text not null unique,
+        balance integer not null check (balance >= 0), hands_played integer, hands_won integer, streak integer,
+        last_daily_claim text, last_relief_at integer, created_at integer)
+sinks(id integer pk autoincrement, kind text, ref_id text, amount integer, created_at integer)
+hand_log(id integer pk autoincrement, hand_id text, room_id text, mode text, fee integer, cancelled integer,
+         summary text, created_at integer)   -- chỉ ghi khi LITE_HAND_LOG bật
+-- idx_sinks_ref(ref_id), idx_hand_log_hand(hand_id), idx_hand_log_room_created(room_id, created_at)
 ```
-`SessionResolver` của Lite: token = 32 byte ngẫu nhiên base64url; DB lưu SHA-256 của token; phiên không hết hạn (mạng nội bộ), có thể xóa bằng lệnh admin (roadmap).
+`sinks` là vế còn lại của bất biến tiền (§18.4): mỗi lần điểm rời khỏi tay người chơi mà không sang tay người khác thì có đúng một dòng ở đây, ghi **trong cùng transaction** với các dòng `balance` của lần settlement đó.
+
+| `kind` | `ref_id` | Ghi khi |
+|---|---|---|
+| `table_fee` | `handId` | Kết thúc mỗi ván có phí bàn (`fee > 0`), kể cả khi batch balance rỗng như Hold'em |
+| `carry_over` | `roomId` | Pot cộng dồn hết hạn mà không trả lại được cho ai (phần dư sau khi chia đều) |
+
+`hands_played` / `hands_won` là bộ đếm mỗi người chơi (§10.3 bản rút gọn), cập nhật cùng lúc với settlement.
+
+`SessionResolver` của Lite: token = 32 byte ngẫu nhiên base64url; DB lưu SHA-256 của token (`token_hash`), không lưu token gốc; phiên không hết hạn (mạng nội bộ), có thể xóa bằng lệnh admin (roadmap).
 
 ### 18.4 Bất biến dữ liệu
 - `balance ≥ 0` do DB ép; `apply` chạy trong transaction, cộng dồn theo người chơi rồi kiểm tra trước khi ghi.
@@ -602,12 +616,25 @@ Prefix `/api`. JSON. Lỗi: `{ error: { code, message } }`. Mutating request yê
 | POST | `/api/economy/relief` | Cứu trợ |
 
 ### 19.3 Lite
-| Method | Path | Mô tả |
-|---|---|---|
-| POST | `/api/session` | `{displayName}` → `{playerId, sessionToken}` (lần đầu) |
-| GET | `/api/me` | Header `Authorization: Bearer <token>` → profile, balance, stats tối giản |
-| GET | `/api/rewards/daily` · POST `/api/rewards/daily/claim` | Chỉ điểm |
-| POST | `/api/economy/relief` | Cứu trợ |
+Đã triển khai trong `apps/lite/server/src/http/routes.ts`; client `apps/lite/web/src/api.ts` phản chiếu đúng bảng này.
+
+| Method | Path | Auth | Thành công | Từ chối |
+|---|---|---|---|---|
+| GET | `/health` | — | `200 {status, uptime, connections, rooms, db}` | `503` cùng shape khi `db: "error"` |
+| GET | `/api/config` | — | `200 {edition:"lite", wsPath:"/ws", economy{startingBalance, blindWagerTiers, holdemBlindTiers, reliefThreshold, reliefTarget}, languages}` | — |
+| POST | `/api/session` | — | `201 {playerId, displayName, token, balance}` | `400 INVALID_NAME` · `409 DISPLAY_NAME_TAKEN` · `429 RATE_LIMITED` (10 lần/phút/IP, kèm header `Retry-After` và `retryAfterSec`) |
+| GET | `/api/me` | Bearer | `200 {playerId, displayName, balance, stats{handsPlayed, handsWon}, daily{…}, relief{…}}` | `401 UNAUTHENTICATED` |
+| GET | `/api/rewards/daily` | Bearer | `200 {allowed, alreadyClaimed, day, points, nextDay, nextPoints, streak, lastClaim}` | `401 UNAUTHENTICATED` |
+| POST | `/api/rewards/daily/claim` | Bearer | `200 {claimed:true, points, streak, balance}` | `409 ALREADY_CLAIMED` (kèm `claimed:false`) |
+| POST | `/api/economy/relief` | Bearer | `200 {granted:true, amount, balance}` | `409 NOT_ELIGIBLE` (kèm `granted:false, reason:"balance"\|"cooldown", retryAt`) |
+| GET | `/*` | — | Static `dist/public` (hoặc asset trong exe); đường dẫn không có phần mở rộng rơi về `index.html` | `404 NOT_FOUND` |
+
+- Thân lỗi luôn là `{ error: { code, message } }`; các trường phụ (`retryAfterSec`, `claimed`, `granted`, `reason`, `retryAt`) nằm cạnh `error`, không nằm trong nó.
+- Mọi request mutating (`POST`/`PUT`/`PATCH`/`DELETE`) thiếu `X-Requested-With: bind-poker` → `403 FORBIDDEN`, kiểm ngay ở `preHandler` trước cả auth.
+- Header trên **mọi** phản hồi (kể cả 404 và lỗi): `x-content-type-options: nosniff`, `referrer-policy: no-referrer`, `content-security-policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:`. `/health` và `/api/*` thêm `cache-control: no-store`.
+- Cache của static: `assets/<tên>-<hash>.<ext>` → `public, max-age=31536000, immutable`; mọi thứ còn lại (`index.html`, `favicon.ico`) → `no-cache`.
+- Prefix `api`, `ws`, `health` được giữ chỗ: gõ sai dưới các prefix đó là `404`, không bao giờ rơi về `index.html`.
+- Lỗi Fastify trước khi vào handler được đổi thành code ổn định: `400 BAD_REQUEST`, `404 NOT_FOUND`, `413 PAYLOAD_TOO_LARGE`, `415 UNSUPPORTED_MEDIA_TYPE`, `429 RATE_LIMITED`; mọi lỗi ≥ 500 trả `500 INTERNAL` và chỉ ghi chi tiết vào log.
 
 ## 20. WebSocket Protocol (`core/protocol`)
 
@@ -721,8 +748,15 @@ Server-kit không import gì từ apps. Normal thêm route REST và module riên
 
 ### 22.4 Build
 - `pnpm build:normal`: `tsc -b` core, server-kit, normal-server; `vite build` normal-web → `apps/normal-server/public`; `docker build -f apps/normal-server/Dockerfile`.
-- `pnpm build:lite`: `vite build apps/lite/web` → `apps/lite/dist/public`; `esbuild apps/lite/server/src/main.ts --bundle --platform=node --target=node22 --format=cjs --external:node:*` → `dist/server.cjs`; `node --experimental-sea-config apps/lite/sea/sea-config.json` (assets = toàn bộ `dist/public` + `locales`), copy `node.exe` (Node 22 LTS win-x64, tải và cache trong `tooling/node-bin/`, kiểm SHA-256), `postject` inject blob, → `release/lite/bind-poker-lite.exe`. Static được đọc bằng `sea.getAsset()`, fallback đọc thư mục `public/` cạnh exe nếu tồn tại (cho dev).
-- Kiểm tra sau build (test `lite-footprint.test.ts`): `server.cjs` không chứa `pg`, `drizzle`, `argon2`, `react-router`; tổng gzip `dist/public` ≤ 250 KB; exe ≤ 120 MB.
+- `pnpm build:lite` = `node apps/lite/scripts/build.mjs all --smoke`, ba bước theo thứ tự (`web`, `server`, `exe` cũng chạy riêng được):
+  1. **web** — `vite build --config web/vite.config.ts` → `apps/lite/dist/public/**` (`index.html` + `assets/<tên>-<hash>.<ext>`, `base` tương đối, không source map).
+  2. **server** — `esbuild server/src/main.ts --bundle --platform=node --target=node22 --format=cjs --external:node:* --define:process.env.NODE_ENV="production" --minify-syntax` → `dist/server.cjs`. Chỉ built-in `node:` được để external: trong exe không còn `node_modules` để resolve.
+  3. **exe** — liệt kê `dist/public` thành **manifest `dist/assets.json`**; sinh `dist/sea-config.json` từ `scripts/sea-config.template.json` với `assets` = manifest + **từng file** trong `dist/public`; `node --experimental-sea-config dist/sea-config.json` → `dist/sea-prep.blob`; copy **chính `process.execPath`** (Node 22 đang chạy build — không tải node.exe về) thành `release/lite/bind-poker-lite.exe`; `postject … NODE_SEA_BLOB --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2`; copy `release-src/README-lite.md` và `release-src/.env.example` sang cạnh exe.
+- `useCodeCache` được thử `true` trước rồi tự lùi về `false` nếu sinh blob hoặc smoke hỏng. Bước `exe` bị bỏ qua khi không phải Windows, và dừng hẳn nếu Node không phải dòng 22 (blob SEA chỉ nạp được bởi đúng bản Node đã tạo ra nó). postject in `The signature seems corrupted!` — đúng như vậy: chèn section làm hỏng chữ ký Authenticode của bản Node gốc.
+- Lúc chạy, `main.ts` phân biệt hai chế độ bằng `process.getBuiltinModule('node:sea')`: `sea.isSea()` → đọc `assets.json` rồi `sea.getAsset()`; ngược lại đọc thư mục (`PUBLIC_DIR`, mặc định `dist/public` theo cwd), không có thì API vẫn chạy và log một cảnh báo.
+- `--smoke` chạy chính exe vừa tạo: boot toàn bộ server trên cổng ephemeral, tự gọi `/health`, in JSON rồi thoát; khác `0` là build hỏng.
+- Kiểm tra sau build (`apps/lite/test/footprint.test.ts` + `smoke.test.ts`): `server.cjs` không chứa `pg`, `drizzle`, `argon2`, `react-router`; gzip JS trong `dist/public` ≤ 250 KB và CSS ≤ 40 KB; exe ≤ 120 MB.
+- Kiểm tra bằng trình duyệt thật (tuỳ chọn, không nằm trong `pnpm test`): `pnpm --filter @bp/lite e2e` — Playwright dựng `node dist/server.cjs` với `SQLITE_PATH=:memory:`, chơi trọn một ván Blind hai người + một bot, tải lại trang giữa ván, và đối chiếu số dư `/api/me` với phiếu kết quả trên màn hình. Cần `playwright install chromium` một lần (~150 MB).
 
 ### 22.5 Cấu hình runtime (env)
 | Biến | Normal | Lite |
@@ -733,11 +767,13 @@ Server-kit không import gì từ apps. Normal thêm route REST và module riên
 | `SQLITE_PATH` | — | `./bind-poker.sqlite` |
 | `SESSION_SECRET` | bắt buộc (≥ 32 ký tự) | — |
 | `ALLOWED_ORIGINS` | bắt buộc (CSV) | mặc định cùng host |
-| `RECONNECT_WINDOW_SEC` | 90 | 90 |
+| `RECONNECT_WINDOW_SEC` | 90 | — (Lite dùng mặc định `DEFAULT_ROOM_OPTIONS.reconnectWindowMs` = 90 s) |
 | `ECONOMY_TIMEZONE` | Asia/Ho_Chi_Minh | Asia/Ho_Chi_Minh |
 | `LOG_LEVEL` | info | info |
-| `LITE_HAND_LOG` | — | 0 |
-Lite đọc `.env` cạnh exe nếu có; không có thì dùng mặc định.
+| `LITE_HAND_LOG` | — | `false` (`1`/`true`/`yes` để bật) |
+| `PUBLIC_DIR` | — | *(trống)* — thư mục giao diện thay bản nhúng trong exe |
+
+Lite đọc theo thứ tự: biến môi trường thắng, sau đó `.env` **cạnh exe** (cwd khi chạy bằng `node dist/server.cjs`), cuối cùng là mặc định. Giá trị sai làm process dừng ngay lúc khởi động kèm lý do. `SQLITE_PATH=:memory:` được chấp nhận (test và e2e); mọi đường dẫn tương đối khác tính từ thư mục exe.
 
 ## 23. Security
 
@@ -826,11 +862,20 @@ Người chơi (tên, stack, avatar/chữ cái, badge/title ở Normal), lá ri�
 - Tài liệu `docs/deployment-normal.md`.
 
 ### 28.2 Lite
-- `pnpm build:lite` trên máy Windows dev (yêu cầu Node 22 + pnpm) → `release/lite/` gồm `bind-poker-lite.exe`, `.env.example`, `README-lite.md`.
-- Vận hành: copy thư mục vào host, (tùy chọn) đổi `.env`, chạy exe → console in `Listening on http://<ip>:8080`. Mở firewall cổng 8080 nếu cần.
-- Chạy nền: hướng dẫn `sc create BindPokerLite binPath= "C:\bind-poker\bind-poker-lite.exe"` hoặc Task Scheduler.
-- Nâng cấp: dừng exe, thay file, chạy lại; SQLite tự migrate theo `user_version`.
-- Tài liệu `docs/deployment-lite.md`, kèm troubleshooting (cổng bận, quyền ghi file sqlite, SmartScreen chặn exe chưa ký).
+- `pnpm build:lite` trên máy Windows x64 dev (yêu cầu Node 22 + pnpm 9) → `apps/lite/release/lite/` gồm đúng ba file:
+
+  | File | Vai trò |
+  |---|---|
+  | `bind-poker-lite.exe` | Node 22 + `dist/server.cjs` + toàn bộ `dist/public` nhúng qua SEA (~81 MB, trần 120 MB) |
+  | `.env.example` | Mọi biến §22.5 kèm mặc định và chú thích song ngữ; đổi tên thành `.env` để dùng |
+  | `README-lite.md` | Hướng dẫn vận hành tại chỗ (tiếng Việt + tóm tắt tiếng Anh), nguồn ở `apps/lite/release-src/` |
+
+- Database **không** đi kèm: `bind-poker.sqlite` (+ `-wal`, `-shm`) được tạo cạnh exe ở lần chạy đầu.
+- Vận hành: copy thư mục vào host (thư mục có quyền ghi, không phải `C:\Program Files`), (tùy chọn) đổi `.env`, chạy exe → console in `Listening on http://0.0.0.0:8080`. Mở firewall cổng 8080 ở profile `Private` nếu cần. `GET /health` là endpoint giám sát (`503` khi database hỏng).
+- Chạy nền: `schtasks /Create /TN "BindPokerLite" … /SC ONSTART /RU SYSTEM` (khuyến nghị) hoặc `sc.exe create BindPokerLite binPath= "D:\bind-poker\bind-poker-lite.exe"`. Exe không nói giao thức SCM nên Service Control Manager báo start timeout dù server vẫn chạy.
+- Sao lưu: dừng server rồi chép cả ba file `.sqlite*`; hoặc `sqlite3.exe <db> ".backup '<đích>'"` khi đang chạy (chép tay lúc WAL đang mở có thể ra bản không nhất quán).
+- Nâng cấp: dừng exe, thay file, chạy lại; SQLite tự migrate theo `user_version`. Migration chỉ thêm, không có đường hạ cấp tự động — sao lưu trước.
+- Tài liệu `docs/deployment-lite.md`, kèm troubleshooting (cổng bận, quyền ghi file sqlite, SmartScreen chặn exe chưa ký, `no web assets found` khi chạy sai thư mục).
 
 ## 29. Testing
 
@@ -854,7 +899,13 @@ Tạo/vào/rời phòng, mã phòng, mật khẩu, ready/start/autoStart, ván t
 Auth (đăng ký/đăng nhập/sai mật khẩu/rate-limit/cookie flags), economy (bảng daily từng ngày, reset tháng, bỏ ngày, cứu trợ cooldown, phí bàn), achievement (unlock từ event, không unlock hai lần), inventory/avatar (từ chối item không sở hữu), Postgres repository (Docker `postgres:16`, bỏ qua nếu không có Docker với cảnh báo).
 
 ### 29.5 Lite
-SQLite repository + migrate `user_version`; khởi động server bundle trên cổng ngẫu nhiên, tạo session, tạo phòng qua WS; `lite-footprint.test.ts` (chuỗi cấm, kích thước); smoke test exe: chạy `bind-poker-lite.exe --port 0 --smoke` in ra cổng, gọi `/health`, thoát.
+SQLite repository + migrate `user_version`; khởi động server bundle trên cổng ngẫu nhiên, tạo session, tạo phòng qua WS; `test/footprint.test.ts` (chuỗi cấm, gzip JS/CSS, kích thước exe); `test/smoke.test.ts`: chạy `bind-poker-lite.exe --smoke` (cổng ephemeral, database vào thư mục tạm), đọc JSON `/health` trên stdout, kiểm mã thoát.
+
+**E2E (tuỳ chọn, ngoài `pnpm test`)** — `apps/lite/e2e/` chạy bằng `pnpm --filter @bp/lite e2e`, cần bản build và `playwright install chromium`:
+- `webServer` = `node dist/server.cjs` (`PORT=8090`, `HOST=127.0.0.1`, `SQLITE_PATH=:memory:`, `PUBLIC_DIR=dist/public`); hai project `desktop` (1440×900) và `mobile` (375×812).
+- Kịch bản: hai context vào bằng tên → tạo phòng Blind (2 lá, chơi/bỏ, cược 1.000, 1 bot) → vào bằng mã phòng → ngồi, sẵn sàng, bắt đầu → **tải lại trang giữa ván** (kiểm reconnect + cổng `roomStale`) → chơi/bỏ → phiếu kết quả.
+- Bất biến tiền được kiểm bằng **hai nguồn độc lập**: số dư trước/sau từ `GET /api/me` (database) và phí bàn + tiền thắng đọc từ phiếu kết quả trên màn hình. `Σ delta người chơi + net của bot + phí = 0`, có tính phần cược dư được hoàn (`uncalledReturned`, §7.4), và `phí = ⌊2% pot⌋`.
+- Ảnh chụp màn hình (name prompt, sảnh, bàn, điểm danh, cài đặt — cả desktop lẫn 375×812) rơi vào `apps/lite/e2e/screenshots/`, không commit.
 
 ### 29.6 Tách biệt kiến trúc
 ESLint boundary; test đọc `package.json` từng package và kiểm graph mục 22.2; grep `edition` trong `packages/` phải rỗng.
@@ -916,6 +967,7 @@ ESLint boundary; test đọc `package.json` từng package và kiểm graph mụ
 13. Tên hiển thị duy nhất trong hệ thống (mỗi edition độc lập).
 14. Cứu trợ 1 lần/24 giờ, đưa về 5.000.
 15. Tiếng Việt là ngôn ngữ mặc định khi không xác định được.
+16. Lite: giao diện web được nhúng thẳng vào exe (SEA asset) và đọc bằng `sea.getAsset()`; khi dev thì server đọc thư mục `dist/public` (ghi đè bằng `PUBLIC_DIR`). Không có chế độ nào server tự đi tải asset.
 
 ## 33. MVP Scope
 
