@@ -74,7 +74,7 @@ describe('RoomManager', () => {
     expect(notified).toBe(before)
   })
 
-  it('shutdown closes every room', async () => {
+  it('shutdown closes every room and refuses new ones', async () => {
     const { manager } = setup()
     const r1 = manager.create(id('h'), PUBLIC)
     const r2 = manager.create(id('a'), PRIVATE)
@@ -82,5 +82,12 @@ describe('RoomManager', () => {
     expect(r1.status).toBe('CLOSED')
     expect(r2.status).toBe('CLOSED')
     expect(manager.size).toBe(0)
+    let code: string | null = null
+    try {
+      manager.create(id('b'), PUBLIC)
+    } catch (err) {
+      code = err instanceof RoomError ? err.code : String(err)
+    }
+    expect(code).toBe('SERVER_SHUTDOWN')
   })
 })

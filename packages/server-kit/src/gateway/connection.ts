@@ -11,8 +11,11 @@ export class ClientConnection {
   replaced = false
   lastPongAt: number
   invalidMessages = 0
+  /** Set once the close path has run for this socket, so it can be driven from the queue and be idempotent. */
+  closeHandled = false
   helloTimer: TimerHandle | null = null
-  private readonly recentReqIds: string[] = []
+  private readonly reqOutcomes = new Map<string, ServerMessage>()
+  private readonly reqOrder: string[] = []
   private queue: Promise<unknown> = Promise.resolve()
 
   constructor(
@@ -43,11 +46,16 @@ export class ClientConnection {
     return run
   }
 
-  seenReqId(reqId: string): boolean {
-    if (this.recentReqIds.includes(reqId)) return true
-    this.recentReqIds.push(reqId)
-    if (this.recentReqIds.length > REQ_ID_MEMORY) this.recentReqIds.shift()
-    return false
+  /** The exact frame a previously handled `reqId` produced (`ACK` or the `ERROR` that was sent), if still remembered. */
+  recallReq(reqId: string): ServerMessage | undefined {
+    return this.reqOutcomes.get(reqId)
+  }
+
+  /** Remembers the outcome of a `reqId` so a retransmission replays it instead of re-executing. */
+  rememberReq(reqId: string, outcome: ServerMessage): void {
+    if (!this.reqOutcomes.has(reqId)) this.reqOrder.push(reqId)
+    this.reqOutcomes.set(reqId, outcome)
+    while (this.reqOrder.length > REQ_ID_MEMORY) this.reqOutcomes.delete(this.reqOrder.shift()!)
   }
 
   close(code: number, reason: string): void {

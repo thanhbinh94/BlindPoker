@@ -7,6 +7,7 @@ export class RoomManager {
   private readonly rooms = new Map<string, Room>()
   private readonly byCode = new Map<string, Room>()
   private readonly listeners = new Set<() => void>()
+  private accepting = true
 
   constructor(private readonly deps: RoomDeps) {}
 
@@ -15,6 +16,7 @@ export class RoomManager {
   }
 
   create(host: PlayerIdentity, config: RoomConfig): Room {
+    if (!this.accepting) throw new RoomError('SERVER_SHUTDOWN', 'server is shutting down')
     if (this.roomOf(host.playerId)) throw new RoomError('ALREADY_IN_ROOM')
     const roomId = newId()
     const code = newRoomCode((c) => this.byCode.has(c))
@@ -61,6 +63,7 @@ export class RoomManager {
   }
 
   async shutdown(reason: string): Promise<void> {
+    this.accepting = false
     await Promise.all([...this.rooms.values()].map((r) => r.shutdown(reason)))
   }
 

@@ -123,6 +123,28 @@ describe('Room seats and buy-ins', () => {
   })
 })
 
+describe('Closed rooms', () => {
+  it('refuses every mutation once the room is closed, so nothing can move points into or out of it', async () => {
+    const h = createRoomHarness(HOLDEM)
+    await h.room.join(h.identity('a'))
+    await h.room.shutdown('maintenance')
+    expect(h.room.status).toBe('CLOSED')
+    const attempts: Promise<unknown>[] = [
+      h.room.join(h.identity('b')),
+      h.room.leave('a'),
+      h.room.sitDown('a', 0, 20_000),
+      h.room.standUp('a'),
+      h.room.setReady('a', true),
+      h.room.startGame('h'),
+      h.room.kick('h', 'a'),
+      h.room.action('a', { kind: 'call' }, 0),
+    ]
+    for (const attempt of attempts) expect(await code(attempt)).toBe('ROOM_NOT_FOUND')
+    expect(await h.repos.balances.get('a')).toBe(100_000) // the buy-in never happened
+    expect(h.repos.entries).toEqual([])
+  })
+})
+
 describe('Room snapshot', () => {
   it('describes players, seats, statuses and the hand for the viewer', async () => {
     const h = createRoomHarness(BLIND)

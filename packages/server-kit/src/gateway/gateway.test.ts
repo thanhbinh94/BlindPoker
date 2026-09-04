@@ -16,6 +16,14 @@ const connect = async (id: string) => {
 }
 let n = 0
 const rid = () => `r${n++}`
+/** Polls until `pred` holds; the alternative is sleeping on a guessed duration. */
+async function waitUntil(pred: () => boolean, timeoutMs = 2000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (!pred()) {
+    if (Date.now() > deadline) throw new Error('condition never became true')
+    await new Promise((r) => setTimeout(r, 5))
+  }
+}
 afterEach(async () => {
   for (const c of clients.splice(0)) await c.close().catch(() => undefined)
   await ts?.close()
@@ -175,6 +183,54 @@ describe('reconnect and duplicate sessions', () => {
   })
 })
 
+describe('bind and close races', () => {
+  it('a socket that dies mid-bind never leaves the player marked connected, and a reconnect sends WELCOME before ROOM_SNAPSHOT', async () => {
+    ts = await startTestServer()
+    const a = await connect('a')
+    a.send({ t: 'CREATE_ROOM', config: HOLDEM })
+    const snap = await a.next('ROOM_SNAPSHOT')
+    const room = ts.server.rooms.get(snap.room.roomId)!
+    expect(room.players.get('a')!.connected).toBe(true)
+
+    // Hold the balance lookup open so the socket is guaranteed to die while bind() is still awaiting.
+    const realGet = ts.repos.balances.get.bind(ts.repos.balances)
+    let slow = false
+    ts.repos.balances.get = async (playerId: string) => {
+      if (slow) await new Promise((r) => setTimeout(r, 120))
+      return realGet(playerId)
+    }
+    slow = true
+    const racer = await TestClient.connect(ts.url)
+    racer.send({ t: 'HELLO', sessionToken: 'tok:a' })
+    await racer.close()
+    await a.closed // the racing session replaced the first one
+    slow = false
+
+    // The player must end up disconnected: neither socket is alive to receive anything.
+    await waitUntil(() => room.players.get('a')!.connected === false)
+    expect(ts.server.connectionCount).toBe(0)
+
+    // A real reconnect resyncs, and its very first frames are WELCOME then ROOM_SNAPSHOT.
+    const back = await connect('a')
+    await back.next('ROOM_SNAPSHOT')
+    expect(back.received.map((m) => m.t).slice(0, 2)).toEqual(['WELCOME', 'ROOM_SNAPSHOT'])
+    expect(room.players.get('a')!.connected).toBe(true)
+  })
+
+  it('replays the original ERROR when a failed request is retransmitted with the same reqId', async () => {
+    ts = await startTestServer()
+    const a = await connect('a')
+    const b = await connect('b')
+    await seatTwo(a, b)
+    await a.next('GAME_EVENT', (m) => m.event.type === 'TURN_CHANGED')
+    const dup = rid()
+    const first = await a.request({ t: 'ACTION', reqId: dup, baseSeq: 0, action: { kind: 'call' } })
+    expect(first).toMatchObject({ t: 'ERROR', code: 'STALE_STATE' })
+    const again = await a.request({ t: 'ACTION', reqId: dup, baseSeq: 0, action: { kind: 'call' } })
+    expect(again).toEqual(first) // not an ACK: the retry must not look like success
+  }, 20_000)
+})
+
 describe('abuse protection', () => {
   it('rate-limits floods, closes after repeated invalid messages, and rejects oversized payloads', async () => {
     ts = await startTestServer()
@@ -212,6 +268,17 @@ describe('heartbeat', () => {
 })
 
 describe('shutdown', () => {
+  it('stops accepting before it drains: new sockets get 503 and CREATE_ROOM/JOIN_ROOM are refused', async () => {
+    ts = await startTestServer()
+    const a = await connect('a')
+    ts.server.gateway.stopAccepting()
+    expect(await a.request({ t: 'CREATE_ROOM', reqId: rid(), config: HOLDEM })).toMatchObject({ t: 'ERROR', code: 'SERVER_SHUTDOWN' })
+    expect(await a.request({ t: 'JOIN_ROOM', reqId: rid(), code: 'ZZZZZZ' })).toMatchObject({ t: 'ERROR', code: 'SERVER_SHUTDOWN' })
+    expect(ts.server.rooms.size).toBe(0)
+    await expect(TestClient.connect(ts.url)).rejects.toThrow(/503/)
+    expect(a.isOpen).toBe(true) // existing sessions keep playing while the server drains
+  })
+
   it('cancels hands, refunds, notifies and closes every socket', async () => {
     ts = await startTestServer()
     const a = await connect('a')
@@ -227,5 +294,6 @@ describe('shutdown', () => {
     expect(await ts.repos.balances.get('a')).toBe(100_000)
     expect(await ts.repos.balances.get('b')).toBe(100_000)
     expect(ts.server.rooms.size).toBe(0)
+    await expect(TestClient.connect(ts.url)).rejects.toThrow(/503/) // no new sockets after shutdown
   })
 })

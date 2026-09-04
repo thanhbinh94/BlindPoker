@@ -47,6 +47,7 @@ export class Gateway {
   private readonly bound = new Map<string, ClientConnection>()
   private readonly all = new Set<ClientConnection>()
   private heartbeat: TimerHandle | null = null
+  private accepting = true
   private readonly unsubscribeList: () => void
   readonly outbox: Outbox
 
@@ -62,6 +63,7 @@ export class Gateway {
   }
 
   handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
+    if (!this.accepting) return this.refuseUpgrade(socket)
     if (!this.originAllowed(req)) {
       socket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
       socket.destroy()
@@ -70,7 +72,8 @@ export class Gateway {
     void (async () => {
       let identity: PlayerIdentity | null = null
       try {
-        identity = this.deps.resolver.fromUpgrade ? await this.deps.resolver.fromUpgrade(req) : null
+        // A slow session store must not pin a half-open socket forever: bound it by helloTimeoutMs.
+        identity = this.deps.resolver.fromUpgrade ? await this.withTimeout(this.deps.resolver.fromUpgrade(req), 'fromUpgrade') : null
       } catch (err) {
         this.deps.log.warn('fromUpgrade failed', { err: String(err) })
       }
@@ -79,8 +82,33 @@ export class Gateway {
         socket.destroy()
         return
       }
+      if (!this.accepting) return this.refuseUpgrade(socket)
       this.wss.handleUpgrade(req, socket, head, (ws) => this.onConnection(ws, identity))
     })()
+  }
+
+  /** Phase 1 of a two-phase shutdown: refuse new sockets, new rooms and new joins while live rooms drain. */
+  stopAccepting(): void {
+    this.accepting = false
+  }
+
+  get isAccepting(): boolean {
+    return this.accepting
+  }
+
+  private refuseUpgrade(socket: Duplex): void {
+    socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n')
+    socket.destroy()
+  }
+
+  private withTimeout<T>(p: Promise<T>, what: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const timer = this.deps.clock.setTimeout(() => reject(new Error(what + ' timed out')), this.deps.options.helloTimeoutMs)
+      p.then(
+        (v) => { timer.cancel(); resolve(v) },
+        (err: unknown) => { timer.cancel(); reject(err instanceof Error ? err : new Error(String(err))) },
+      )
+    })
   }
 
   async closeAll(code: number, reason: string, message?: ServerMessage): Promise<void> {
@@ -96,6 +124,8 @@ export class Gateway {
     this.heartbeat?.cancel()
     this.heartbeat = null
     this.unsubscribeList()
+    this.all.clear()
+    this.bound.clear()
   }
 
   // ---------- connection lifecycle ----------
@@ -104,47 +134,75 @@ export class Gateway {
     const conn = new ClientConnection(newId(), ws, new TokenBucket(this.deps.options.rateLimitBurst, this.deps.options.rateLimitPerSec, this.deps.clock), this.deps.clock.now())
     this.all.add(conn)
     ws.on('message', (data) => this.onMessage(conn, data))
-    ws.on('close', () => this.onClose(conn))
+    ws.on('close', () => void conn.enqueue(() => this.closeConnection(conn)))
     ws.on('error', (err) => this.deps.log.warn('socket error', { conn: conn.id, err: String(err) }))
     if (identity) this.guard(conn.enqueue(() => this.bind(conn, identity)), 'bind', { playerId: identity.playerId })
     else conn.helloTimer = this.deps.clock.setTimeout(() => { if (!conn.identity) conn.close(4001, 'HELLO timeout') }, this.deps.options.helloTimeoutMs)
   }
 
+  /**
+   * Attaches an identity to a socket. Every step after an `await` re-checks that this connection is
+   * still the live one for the player: a socket that dies (or is replaced) mid-bind must not leave
+   * the player marked connected in their room, and its close path must still run.
+   *
+   * Frame order is part of the contract: `WELCOME` first, then `ROOM_SNAPSHOT`. The connection is
+   * published in `bound` — and so becomes reachable by the outbox — only once `WELCOME` has gone out.
+   */
   private async bind(conn: ClientConnection, identity: PlayerIdentity): Promise<void> {
     conn.helloTimer?.cancel()
     conn.helloTimer = null
     conn.identity = identity
-    const old = this.bound.get(identity.playerId)
+    const playerId = identity.playerId
+    // 1. this connection replaces any older one for the same player
+    const old = this.bound.get(playerId)
     if (old && old !== conn) {
       old.replaced = true
       old.send({ t: 'SESSION_REPLACED' })
       old.close(4000, 'replaced')
       this.all.delete(old)
+      this.bound.delete(playerId)
     }
-    this.bound.set(identity.playerId, conn)
     let balance = 0
     try {
-      balance = await this.deps.repos.balances.get(identity.playerId)
+      balance = await this.deps.repos.balances.get(playerId)
     } catch (err) {
-      this.deps.log.warn('balance lookup failed at bind', { playerId: identity.playerId, err: String(err) })
+      this.deps.log.warn('balance lookup failed at bind', { playerId, err: String(err) })
     }
-    conn.send({ t: 'WELCOME', playerId: identity.playerId, displayName: identity.displayName, balance, serverTime: this.deps.clock.now() })
-    const room = this.deps.rooms.roomOf(identity.playerId)
-    if (room) {
-      try {
-        await room.onReconnect(identity.playerId)
-        conn.send(room.snapshot(identity.playerId))
-      } catch (err) {
-        this.deps.log.error('onReconnect failed', { playerId: identity.playerId, err: String(err) })
-      }
+    if (this.abandoned(conn, playerId)) return
+    // 2. WELCOME, then 3. publish the connection
+    conn.send({ t: 'WELCOME', playerId, displayName: identity.displayName, balance, serverTime: this.deps.clock.now() })
+    this.bound.set(playerId, conn)
+    // 4. rejoin whatever room the player is still in
+    const room = this.deps.rooms.roomOf(playerId)
+    if (!room) return
+    try {
+      await room.onReconnect(playerId)
+      if (this.abandoned(conn, playerId)) return
+      conn.send(room.snapshot(playerId))
+    } catch (err) {
+      this.deps.log.error('resync failed at bind', { playerId, err: String(err) })
+      conn.send({ t: 'ERROR', code: 'INTERNAL', message: 'resync required' })
     }
   }
 
-  private onClose(conn: ClientConnection): void {
+  /** True when `conn` is no longer the live connection for `playerId`; runs the close path once if it has not run. */
+  private abandoned(conn: ClientConnection, playerId: string): boolean {
+    const bound = this.bound.get(playerId)
+    if (conn.isOpen && !conn.replaced && (bound === undefined || bound === conn)) return false
+    this.closeConnection(conn)
+    return true
+  }
+
+  /** Idempotent close path: reached from the socket's `close` event (via the connection queue) and from an abandoned bind. */
+  private closeConnection(conn: ClientConnection): void {
     conn.helloTimer?.cancel()
+    if (conn.closeHandled) return
+    conn.closeHandled = true
     this.all.delete(conn)
     const playerId = conn.identity?.playerId
-    if (!playerId || conn.replaced || this.bound.get(playerId) !== conn) return
+    if (!playerId || conn.replaced) return
+    const bound = this.bound.get(playerId)
+    if (bound !== undefined && bound !== conn) return // a newer connection already owns this player
     this.bound.delete(playerId)
     const room = this.deps.rooms.roomOf(playerId)
     if (room) this.guard(room.onDisconnect(playerId), 'onDisconnect', { playerId })
@@ -181,7 +239,12 @@ export class Gateway {
 
   private async dispatch(conn: ClientConnection, msg: ClientMessage): Promise<void> {
     const reqId = msg.reqId
-    const ack = () => { if (reqId !== undefined) conn.send({ t: 'ACK', reqId }) }
+    /** Sends a frame and, when the message carried a `reqId`, remembers it as that request's outcome. */
+    const reply = (out: ServerMessage): void => {
+      if (reqId !== undefined) conn.rememberReq(reqId, out)
+      conn.send(out)
+    }
+    const ack = () => { if (reqId !== undefined) reply({ t: 'ACK', reqId }) }
     try {
       if (msg.t === 'HELLO') {
         if (conn.identity) return ack()
@@ -203,7 +266,15 @@ export class Gateway {
         conn.lastPongAt = this.deps.clock.now()
         return
       }
-      if (reqId !== undefined && conn.seenReqId(reqId)) return ack()
+      if (reqId !== undefined) {
+        // A retransmission replays the exact frame the first attempt produced: an ACK stays an ACK,
+        // and a failure stays the same ERROR rather than being mistaken for success.
+        const cached = conn.recallReq(reqId)
+        if (cached !== undefined) {
+          conn.send(cached)
+          return
+        }
+      }
       const playerId = identity.playerId
       switch (msg.t) {
         case 'LIST_ROOMS':
@@ -211,6 +282,7 @@ export class Gateway {
           conn.send({ t: 'ROOM_LIST', rooms: this.deps.rooms.listPublic() })
           break
         case 'CREATE_ROOM': {
+          if (!this.accepting) throw new RoomError('SERVER_SHUTDOWN', 'server is shutting down')
           if (this.deps.rooms.roomOf(playerId)) throw new RoomError('ALREADY_IN_ROOM')
           const room = this.deps.rooms.create(identity, msg.config)
           conn.inLobby = false
@@ -218,6 +290,7 @@ export class Gateway {
           break
         }
         case 'JOIN_ROOM': {
+          if (!this.accepting) throw new RoomError('SERVER_SHUTDOWN', 'server is shutting down')
           if (this.deps.rooms.roomOf(playerId)) throw new RoomError('ALREADY_IN_ROOM')
           const room = msg.roomId !== undefined ? this.deps.rooms.get(msg.roomId) : msg.code !== undefined ? this.deps.rooms.getByCode(msg.code) : undefined
           if (!room) throw new RoomError('ROOM_NOT_FOUND')
@@ -254,11 +327,11 @@ export class Gateway {
       ack()
     } catch (err) {
       if (err instanceof RoomError) {
-        conn.send(reqId === undefined ? { t: 'ERROR', code: err.code, message: err.message } : { t: 'ERROR', reqId, code: err.code, message: err.message })
+        reply(reqId === undefined ? { t: 'ERROR', code: err.code, message: err.message } : { t: 'ERROR', reqId, code: err.code, message: err.message })
         return
       }
       this.deps.log.error('dispatch failed', { conn: conn.id, type: msg.t, err: err instanceof Error ? err.stack ?? err.message : String(err) })
-      conn.send(reqId === undefined ? { t: 'ERROR', code: 'INTERNAL', message: 'internal error' } : { t: 'ERROR', reqId, code: 'INTERNAL', message: 'internal error' })
+      reply(reqId === undefined ? { t: 'ERROR', code: 'INTERNAL', message: 'internal error' } : { t: 'ERROR', reqId, code: 'INTERNAL', message: 'internal error' })
     }
   }
 

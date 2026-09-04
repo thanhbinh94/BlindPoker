@@ -120,7 +120,7 @@ export class Room {
 
   join(identity: PlayerIdentity, password?: string): Promise<void> {
     return this.enqueue(() => {
-      if (this.status === 'CLOSED') throw new RoomError('ROOM_NOT_FOUND', 'room is closed')
+      this.assertOpen()
       const existing = this.players.get(identity.playerId)
       if (existing) {
         if (!existing.leaveAfterHand) throw new RoomError('ALREADY_IN_ROOM')
@@ -140,6 +140,7 @@ export class Room {
 
   leave(playerId: string): Promise<void> {
     return this.enqueue(() => {
+      this.assertOpen()
       const p = this.mustPlayer(playerId)
       if (this.inCurrentHand(p)) {
         p.leaveAfterHand = true
@@ -153,6 +154,7 @@ export class Room {
 
   kick(hostId: string, targetId: string): Promise<void> {
     return this.enqueue(() => {
+      this.assertOpen()
       if (hostId !== this.hostPlayerId) throw new RoomError('NOT_HOST')
       const target = this.mustPlayer(targetId)
       if (targetId === hostId || target.identity.isBot) throw new RoomError('ILLEGAL_ACTION', 'cannot kick this player')
@@ -166,6 +168,7 @@ export class Room {
 
   sitDown(playerId: string, seat: number, buyIn?: number): Promise<void> {
     return this.enqueue(async () => {
+      this.assertOpen()
       const p = this.mustPlayer(playerId)
       if (!Number.isInteger(seat) || seat < 0 || seat >= this.config.maxPlayers) throw new RoomError('ILLEGAL_ACTION', 'seat out of range')
       if (p.seat !== null) throw new RoomError('ILLEGAL_ACTION', 'already seated')
@@ -204,6 +207,7 @@ export class Room {
 
   standUp(playerId: string): Promise<void> {
     return this.enqueue(async () => {
+      this.assertOpen()
       const p = this.mustPlayer(playerId)
       if (p.seat === null) throw new RoomError('NOT_SEATED')
       if (this.inCurrentHand(p)) {
@@ -217,6 +221,7 @@ export class Room {
 
   setReady(playerId: string, ready: boolean): Promise<void> {
     return this.enqueue(() => {
+      this.assertOpen()
       const p = this.mustPlayer(playerId)
       if (p.seat === null) throw new RoomError('NOT_SEATED')
       if (this.status !== 'OPEN') throw new RoomError('GAME_IN_PROGRESS')
@@ -229,6 +234,7 @@ export class Room {
 
   startGame(playerId: string): Promise<void> {
     return this.enqueue(() => {
+      this.assertOpen()
       if (playerId !== this.hostPlayerId) throw new RoomError('NOT_HOST')
       if (this.status !== 'OPEN') throw new RoomError('GAME_IN_PROGRESS')
       if (this.readySeats().length < 2) throw new RoomError('NOT_ENOUGH_PLAYERS', 'need at least 2 ready players')
@@ -240,6 +246,7 @@ export class Room {
 
   action(playerId: string, action: PlayerAction, baseSeq: number): Promise<void> {
     return this.enqueue(() => {
+      this.assertOpen()
       const p = this.mustPlayer(playerId)
       if (!this.runner || this.runner.isComplete) throw new RoomError('NOT_IN_HAND', 'no hand in progress')
       if (p.seat === null) throw new RoomError('NOT_SEATED')
@@ -508,6 +515,11 @@ export class Room {
     }
     this.players.set(identity.playerId, p)
     return p
+  }
+
+  /** A closed room accepts no further mutation — nothing may move points into or out of it. */
+  private assertOpen(): void {
+    if (this.status === 'CLOSED') throw new RoomError('ROOM_NOT_FOUND', 'room is closed')
   }
 
   private mustPlayer(playerId: string): RoomPlayer {
