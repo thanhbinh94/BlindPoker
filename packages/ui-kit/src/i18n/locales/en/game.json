@@ -226,6 +226,7 @@
     "KICKED": "You were removed from the room",
     "ROOM_CLOSED": "The room was closed",
     "DAILY_REWARD": "Daily reward: {{amount}} points",
+    "ACHIEVEMENT_UNLOCKED": "Achievement unlocked: {{id}}",
     "other": "New notification"
   },
   "presets": {

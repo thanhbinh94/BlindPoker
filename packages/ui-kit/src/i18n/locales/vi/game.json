@@ -226,6 +226,7 @@
     "KICKED": "Bạn đã bị mời khỏi phòng",
     "ROOM_CLOSED": "Phòng đã đóng",
     "DAILY_REWARD": "Thưởng hằng ngày: {{amount}} điểm",
+    "ACHIEVEMENT_UNLOCKED": "Mở khóa thành tựu: {{id}}",
     "other": "Thông báo mới"
   },
   "presets": {

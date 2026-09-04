@@ -30,6 +30,12 @@ export interface SeatProps {
   /** Ring coordinates in percent; `null` lets the layout place the seat (stack layout). */
   position: { x: number; y: number } | null
   avatar?: ReactNode
+  /**
+   * One quiet line under the name — a title, a rank, whatever the app wants to say about this player. It is
+   * muted, single-line and truncated, because the plate's job is the name and the stack; anything longer than
+   * a couple of words belongs somewhere else on the screen.
+   */
+  caption?: ReactNode
 }
 
 /** One seat plaque: cards, name, stack, bet, state pill, dealer button, turn ring and winner glow. */
@@ -47,6 +53,7 @@ export function Seat({
   lang,
   position,
   avatar,
+  caption,
 }: SeatProps) {
   const { t } = useTranslation()
   const name = seat.displayName === '' ? (player?.displayName ?? '') : seat.displayName
@@ -100,6 +107,7 @@ export function Seat({
         </span>
         <span className={s.plateText}>
           <span className={s.seatName}>{name}</span>
+          {caption === undefined || caption === null ? null : <span className={s.seatCaption}>{caption}</span>}
           <span className={s.seatStack}>{formatPoints(seat.stack, lang)}</span>
         </span>
         {isActing ? <TurnTimer deadlineAt={deadlineAt} serverNow={serverNow} totalMs={turnTimerMs} size={38} /> : null}

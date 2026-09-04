@@ -325,6 +325,16 @@
   white-space: nowrap;
 }
 
+/* The app's line under the name — a title, a rank. It is deliberately the quietest thing on the plate: one line,
+   truncated, and never louder than the name it hangs under. */
+.seatCaption {
+  overflow: hidden;
+  font-size: 0.6875rem;
+  color: var(--ink-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .seatStack {
   font-family: var(--font-display);
   font-size: 0.8125rem;
@@ -674,6 +684,12 @@
 .othersChip .seatName,
 .othersChip .seatStack {
   font-size: 0.6875rem;
+}
+
+/* Seven opponents up, the plate is down to a name and a number. The app's caption is the one thing on it that is
+   decoration rather than state, so it is what gives up its line to keep the third row on screen. */
+.othersChip .seatCaption {
+  display: none;
 }
 
 .othersChip .cardSm {
