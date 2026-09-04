@@ -514,15 +514,19 @@ Reducer thuần, không đồng hồ: nhịp lật bài và timeout là lệnh d
 ### 18.1 Interface (server-kit)
 ```ts
 interface PlayerRepository {
-  findById(id: string): Promise<PlayerRecord | null>
-  updateProfile(id: string, patch: Partial<Pick<PlayerRecord,'displayName'>>): Promise<void>
+  findById(playerId: string): Promise<PlayerRecord | null>
 }
 interface BalanceRepository {
   get(playerId: string): Promise<number>
-  applySettlement(entries: { playerId: string; delta: number; reason: TxReason; refId?: string }[]): Promise<void> // 1 transaction, từ chối nếu balance âm
+  // Atomic: all entries or none. Throws InsufficientBalanceError nếu balance kết quả âm.
+  apply(entries: { playerId: string; delta: number; reason: TxReason; refId?: string }[], meta?: { refId: string; fee: number }): Promise<void>
 }
-interface SessionRepository { create(playerId): Promise<SessionRecord>; findValid(id): Promise<SessionRecord|null>; revoke(id): Promise<void> }
 interface GameHistoryRepository { recordHand(summary: HandSummary): Promise<void> }
+// Do edition cấp: biến một HTTP upgrade (cookie) và/hoặc token của HELLO thành PlayerIdentity.
+interface SessionResolver {
+  fromUpgrade?(req: IncomingMessage): Promise<PlayerIdentity | null>
+  fromToken?(token: string): Promise<PlayerIdentity | null>
+}
 ```
 
 ### 18.2 Normal — PostgreSQL 16, Drizzle ORM, migration SQL trong `apps/normal-server/drizzle/`

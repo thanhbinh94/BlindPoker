@@ -1,0 +1,181 @@
+# `@bp/server-kit`
+
+## Purpose
+
+`server-kit` turns the pure `@bp/core` game engine into a runnable multiplayer
+server: it owns rooms, seats, timers, bots, reconnection, and a WebSocket
+wire protocol, but it owns no persistence and no HTTP framework. An edition
+(Normal, Lite) supplies storage (`Repositories`) and identity
+(`SessionResolver`), hands `server-kit` a raw HTTP upgrade, and gets back a
+running game server. `server-kit`'s only `@bp/*` dependency is `@bp/core`.
+
+## Embedding
+
+```ts
+import { createGameServer } from '@bp/server-kit'
+
+const server = createGameServer({
+  repos,                     // Repositories — see below
+  resolver,                  // SessionResolver — see below
+  onDomainEvent: (e) => { ... }, // optional: ROOM_CREATED, ROOM_JOINED, HAND_SETTLED
+  roomOptions: { ... },       // optional: partial RoomOptions overrides
+  gatewayOptions: { ... },    // optional: partial GatewayOptions overrides
+})
+
+httpServer.on('upgrade', (req, socket, head) => server.handleUpgrade(req, socket, head))
+```
+
+`createGameServer` wires a `RoomManager` and a `Gateway` together and returns
+a `GameServer` exposing `rooms`, `gateway`, `handleUpgrade`, `shutdown`, and
+`connectionCount`. The edition never touches `Room` or `Gateway` internals
+directly — `handleUpgrade` and `shutdown` are the whole surface it needs for
+a working HTTP server.
+
+### `SessionResolver`
+
+Two independent, optional hooks turn a connection into a `PlayerIdentity`;
+an edition implements whichever fits its auth model (or both):
+
+- `fromUpgrade?(req)` — reads a cookie/header off the raw HTTP upgrade
+  request before the WebSocket handshake completes. Used by cookie-session
+  editions; if it resolves an identity, the gateway skips `HELLO` entirely.
+- `fromToken?(token)` — called when the client sends `HELLO { sessionToken }`
+  after connecting. Used by token-based auth (and by tests: `TestServer`'s
+  resolver treats `tok:<playerId>` as a valid token).
+
+If neither hook resolves an identity, the socket is closed
+(401 pre-handshake, or `UNAUTHENTICATED`/close 4001 post-handshake).
+
+### Repositories
+
+```ts
+interface PlayerRepository { findById(playerId): Promise<PlayerRecord | null> }
+interface BalanceRepository {
+  get(playerId): Promise<number>
+  apply(entries: BalanceEntry[], meta?: SettlementMeta): Promise<void>
+}
+interface GameHistoryRepository { recordHand(summary: HandSummary): Promise<void> }
+```
+
+`BalanceRepository.apply` is the one atomicity contract the edition must
+honor: all entries in the batch commit or none do, and it must reject
+(throw `InsufficientBalanceError`) if any player's resulting balance would
+go negative, before writing anything. `Room` relies on this to settle a
+hand's net results, buy-ins, cash-outs, and carry-over refunds as a single
+unit — a partial write would let points leak or be created.
+
+### `onDomainEvent`
+
+An optional sink for events an edition typically forwards to other
+subsystems (achievements, stats, analytics) without coupling `server-kit`
+to them: `ROOM_CREATED`, `ROOM_JOINED`, `HAND_SETTLED { summary }`.
+
+## Room lifecycle
+
+```
+OPEN ──(2+ ready seats, autoStart or START_GAME)──> IN_GAME
+IN_GAME ──(hand loop: HandRunner runs a hand to completion)──> onHandComplete
+  onHandComplete ──(another eligible hand)──> IN_GAME (next hand, after handIntervalMs)
+  onHandComplete ──(fewer than 2 eligible players)──> OPEN
+IN_GAME/OPEN ──(shutdown() or last human leaves + emptyRoomCloseMs)──> CLOSED
+```
+
+A room is created `OPEN` with its host seated. Each hand runs inside a
+`HandRunner` driven by `Room`'s own serialized queue (`enqueue`), so joins,
+seat changes, actions, disconnects and hand-completion callbacks never
+interleave. When a hand ends, `Room` settles balances, records history, then
+either starts the next hand after `handIntervalMs` or falls back to `OPEN`.
+
+## Timers and options
+
+`RoomOptions` (per `createGameServer({ roomOptions })`, defaults from
+`DEFAULT_ROOM_OPTIONS`):
+
+| Option | Default | Purpose |
+|---|---|---|
+| `handIntervalMs` | 5,000 | Pause between hands in a room |
+| `revealDelayMs` | 1,500 | Delay before revealing decisions/community cards |
+| `botDelayMs` | `[1000, 3000]` | Random think-time range for bot actions |
+| `reconnectWindowMs` | 90,000 | How long a disconnected seated player is held before auto-fold/stand |
+| `spectatorGraceMs` | 300,000 | After the reconnect window, how long before the player is removed from the room entirely |
+| `emptyRoomCloseMs` | 60,000 | How long an empty room stays open before closing |
+| `consecutiveTimeoutsToStand` | 3 | Timed-out actions in a row before a human is stood up automatically |
+| `botStartingBalance` | 1,000,000 | Virtual balance bots start (and top up) with in Blind mode |
+| `turnTimerMsOverride` | — | Test hook: overrides `config.turnTimerSec * 1000` when set |
+
+`GatewayOptions` (defaults from `DEFAULT_GATEWAY_OPTIONS`):
+
+| Option | Default | Purpose |
+|---|---|---|
+| `heartbeatIntervalMs` | 15,000 | How often `PING` is sent |
+| `heartbeatTimeoutMs` | 30,000 | No `PONG` within this window → connection terminated |
+| `rateLimitPerSec` / `rateLimitBurst` | 20 / 20 | Per-connection token-bucket for inbound messages |
+| `maxPayloadBytes` | 4,096 | WebSocket frame size cap |
+| `helloTimeoutMs` | 5,000 | Time to send `HELLO` before an unauthenticated socket is closed |
+| `allowedOrigins` | `null` (any) | Optional allowlist checked against the upgrade request's `Origin` header |
+| `maxInvalidMessages` | 3 | Malformed/unparseable messages before a connection is closed |
+
+## Wire contract
+
+- **`seq`**: every `ROOM_SNAPSHOT`, `GAME_EVENT`, and `ROOM_EVENT` carries
+  the room's monotonically increasing `seq`. Clients use it to detect
+  dropped or reordered messages and to `RESYNC` when a gap appears.
+- **`turnStartSeq` / `STALE_STATE`**: `Room` remembers the `seq` at which the
+  current turn began. An `ACTION` must supply `baseSeq >= turnStartSeq`; an
+  action submitted against a turn that has already moved on is rejected
+  with `STALE_STATE` rather than silently applied to the wrong turn.
+- **`reqId` / `ACK`**: any client message may carry a `reqId`; the gateway
+  replies with `ACK { reqId }` on success or `ERROR { reqId, code, message }`
+  on failure. Per connection, a small ring buffer of recent `reqId`s
+  (`ClientConnection.seenReqId`, last 32) makes a retransmitted duplicate
+  re-ACK instead of re-executing — the original result is not replayed, so
+  effects idempotent only through this dedupe (not through the domain
+  itself) should not rely on exact-once semantics.
+- **Per-viewer filtering**: nothing broadcasts a single shared payload.
+  `GAME_EVENT`s go through `filterEvent(event, viewerSeat)` so hole cards
+  belonging to other seats are stripped (only `cardCount` survives); `Room`
+  sends to each connected human individually via the `Outbox`, and only to
+  seats currently in the hand for turn-scoped events.
+
+## Shutdown
+
+`GameServer.shutdown(reason?)` stops accepting new game state changes and
+tears down cleanly:
+
+1. `RoomManager.shutdown(reason)` runs `Room.shutdown(reason)` on every room
+   in parallel. Each room cancels any in-flight hand (refunding what's live),
+   distributes its carry-over pot evenly across seated humans, cashes out
+   every seated human's stack back to their balance (Hold'em), marks the
+   room `CLOSED`, and broadcasts `ROOM_EVENT { type: 'ROOM_CLOSED', reason }`.
+2. `Gateway.closeAll(1001, reason, { t: 'ERROR', code: 'SERVER_SHUTDOWN', message: reason })`
+   sends every connected client a final `ERROR` and closes the socket.
+
+After `shutdown` resolves, every point that was ever in a stack or a
+carry-over pot has been returned to a `BalanceRepository` balance — nothing
+is left in RAM.
+
+## Testing utilities
+
+`@bp/server-kit/testing` (or the package's `testing/index.ts`) exports the
+harnesses used by `server-kit`'s own test suite and available to editions
+for integration tests:
+
+- **`startTestServer(opts)`** — spins up a real `createGameServer` behind a
+  real `http`/`ws` listener on a random port, backed by in-memory
+  repositories. Returns `{ url, repos, server, http, domainEvents, close() }`.
+  Accepts `players` (seed balances), `roomOptions`, `gatewayOptions`, and
+  `seed` (for the RNG). Use this for tests that exercise the real socket
+  and message-framing path end to end (see `soak.test.ts`).
+- **`TestClient`** — a thin WebSocket client for talking to a `TestServer`:
+  `connect(url)`, `hello(token)`, `next(t, pred?, timeoutMs?)` to await a
+  typed message, `request(msg)` to send-and-await its `ACK`/`ERROR`,
+  `drain(t)` to pull buffered messages of a type, `send(msg)`, `close()`,
+  and a `closed` promise that resolves with the socket's close code/reason.
+- **`createRoomHarness(config, opts)`** — builds a single `Room` directly
+  (no gateway, no sockets) against a `ManualClock` and in-memory
+  repositories, capturing every outbound message per player. Fastest way to
+  drive room/hand logic deterministically in unit tests.
+- **`ManualClock`** — a `Clock` whose time only advances on `advance(ms)`,
+  firing any due timers (in schedule order) as it passes them. Lets tests
+  fast-forward through `handIntervalMs`, reconnect windows, and turn timers
+  without waiting on a wall clock.
