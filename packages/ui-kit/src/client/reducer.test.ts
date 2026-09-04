@@ -1,6 +1,6 @@
 import {
   applyCommand, createHand, filterEvent, legalActions, playerView, seededRng,
-  type BlindRules, type GameEvent, type HandState, type HoldemRules, type PlayerAction, type RoomConfig, type RoomView, type ServerMessage,
+  type BlindRules, type GameEvent, type HandState, type HoldemRules, type PlayerAction, type Rng, type RoomConfig, type RoomView, type ServerMessage,
 } from '@bp/core'
 import { describe, expect, it } from 'vitest'
 import { initialClientState, reduceClient } from './reducer.js'
@@ -61,25 +61,30 @@ function expectMirror(client: ClientState, engine: HandState, me: number) {
   if (view.phase === 'DECISION' && !view.seats.find((s) => s.seat === me)?.hasDecided) expect(hand.legal?.kinds).toEqual(['play', 'fold'])
 }
 
+/** Picks a random legal command for whoever is on turn (or `ADVANCE` during a run-out). */
+function nextCommand(state: HandState, rng: Rng): Parameters<typeof applyCommand>[1] {
+  if (state.phase === 'REVEAL') return { type: 'ADVANCE' }
+  const seat = state.phase === 'DECISION' ? state.players.find((p) => p.decision === null)!.seat : state.actingSeat!
+  const legal = legalActions(state, seat)
+  const kind = legal.kinds[rng.int(legal.kinds.length)]!
+  const action: PlayerAction = kind === 'bet' ? { kind, amount: legal.minBet + rng.int(legal.maxBet - legal.minBet + 1) } : kind === 'raise' ? { kind, amount: legal.minRaiseTo + rng.int(legal.maxRaiseTo - legal.minRaiseTo + 1) } : { kind }
+  return { type: 'ACTION', seat, action }
+}
+
+function seatsOf(stacks: number[]) {
+  return stacks.map((stack, seat) => ({ seat, playerId: `p${seat}`, stack, isBot: false }))
+}
+
 function playThrough(mode: 'holdem' | 'blind', rules: HoldemRules | BlindRules, seed: number, me: number, stacks: number[]) {
   const rng = seededRng(seed)
   const seqRef = { seq: 10 }
   let client = start(mode, rules, stacks, me)
-  let { state, events } = createHand({ handId: `h${seed}`, rules, seats: stacks.map((stack, seat) => ({ seat, playerId: `p${seat}`, stack, isBot: false })), button: 0, carryOverIn: 0 }, rng)
+  let { state, events } = createHand({ handId: `h${seed}`, rules, seats: seatsOf(stacks), button: 0, carryOverIn: 0 }, rng)
   client = feed(client, events, me, seqRef)
   expectMirror(client, state, me)
   let guard = 0
   while (state.phase !== 'COMPLETE' && guard++ < 200) {
-    let cmd: Parameters<typeof applyCommand>[1]
-    if (state.phase === 'REVEAL') cmd = { type: 'ADVANCE' }
-    else {
-      const seat = state.phase === 'DECISION' ? state.players.find((p) => p.decision === null)!.seat : state.actingSeat!
-      const legal = legalActions(state, seat)
-      const kind = legal.kinds[rng.int(legal.kinds.length)]!
-      const action: PlayerAction = kind === 'bet' ? { kind, amount: legal.minBet + rng.int(legal.maxBet - legal.minBet + 1) } : kind === 'raise' ? { kind, amount: legal.minRaiseTo + rng.int(legal.maxRaiseTo - legal.minRaiseTo + 1) } : { kind }
-      cmd = { type: 'ACTION', seat, action }
-    }
-    ;({ state, events } = applyCommand(state, cmd, rng))
+    ;({ state, events } = applyCommand(state, nextCommand(state, rng), rng))
     client = feed(client, events, me, seqRef)
     expectMirror(client, state, me)
   }
@@ -110,6 +115,119 @@ describe('client reducer mirrors playerView through whole hands', () => {
     expect(client.hand!.legal).toBeNull()
     expect(client.hand!.seats.every((s) => s.holeCards === null && s.cardCount === 2)).toBe(true)
     expect(state.phase).toBe('BETTING')
+  })
+})
+
+describe('HAND_CANCELLED', () => {
+  it('hold’em: refunds every committed chip, zeroes the pot and marks the result cancelled', () => {
+    const rng = seededRng(5)
+    const seqRef = { seq: 10 }
+    const me = 1
+    const stacks = [20000, 20000, 20000]
+    let client = start('holdem', HOLDEM_RULES, stacks, me)
+    let { state, events } = createHand({ handId: 'c1', rules: HOLDEM_RULES, seats: seatsOf(stacks), button: 0 }, rng)
+    client = feed(client, events, me, seqRef)
+
+    const raiser = state.actingSeat!
+    ;({ state, events } = applyCommand(state, { type: 'ACTION', seat: raiser, action: { kind: 'raise', amount: legalActions(state, raiser).minRaiseTo } }, rng))
+    client = feed(client, events, me, seqRef)
+    const caller = state.actingSeat!
+    ;({ state, events } = applyCommand(state, { type: 'ACTION', seat: caller, action: { kind: 'call' } }, rng))
+    client = feed(client, events, me, seqRef)
+    expect(state.pot).toBeGreaterThan(0)
+    expect(client.hand!.pot).toBe(state.pot)
+    expectMirror(client, state, me)
+
+    ;({ state, events } = applyCommand(state, { type: 'CANCEL', reason: 'shutdown' }, rng))
+    client = feed(client, events, me, seqRef)
+
+    const hand = client.hand!
+    expect(hand.phase).toBe('COMPLETE')
+    expect(hand.result).toEqual({ cancelled: true, reason: 'shutdown', payouts: [], fee: 0, showdown: null, carryOverOut: 0, uncalledReturned: null })
+    expect(hand.pot).toBe(0)
+    expect(state.pot).toBe(0)
+    for (const p of state.players) {
+      const cs = hand.seats.find((s) => s.seat === p.seat)!
+      expect(cs.stack, `seat ${p.seat} stack`).toBe(p.stack)
+      expect(cs.stack).toBe(stacks[p.seat])
+      expect(cs.betThisStreet).toBe(0)
+      expect(cs.allIn).toBe(false)
+      expect(client.room!.players.find((rp) => rp.seat === p.seat)!.stack).toBe(p.stack)
+    }
+  })
+
+  it('blind: refunds the antes mid-decision and hands the carry-over back out', () => {
+    const rng = seededRng(7)
+    const seqRef = { seq: 10 }
+    const me = 1
+    const stacks = [50000, 50000, 50000]
+    let client = start('blind', BLIND_B, stacks, me)
+    let { state, events } = createHand({ handId: 'c2', rules: BLIND_B, seats: seatsOf(stacks), button: 0, carryOverIn: 1500 }, rng)
+    client = feed(client, events, me, seqRef)
+    expect(state.phase).toBe('DECISION')
+    expect(client.hand!.pot).toBe(1500 + 3 * BLIND_B.fixedWager)
+    expectMirror(client, state, me)
+
+    const first = state.players.find((p) => p.decision === null)!.seat
+    ;({ state, events } = applyCommand(state, { type: 'ACTION', seat: first, action: { kind: 'play' } }, rng))
+    client = feed(client, events, me, seqRef)
+    expect(client.hand!.seats.find((s) => s.seat === first)!.hasDecided).toBe(true)
+    expectMirror(client, state, me)
+
+    ;({ state, events } = applyCommand(state, { type: 'CANCEL', reason: 'room closed' }, rng))
+    client = feed(client, events, me, seqRef)
+
+    const hand = client.hand!
+    expect(hand.phase).toBe('COMPLETE')
+    expect(hand.result).toMatchObject({ cancelled: true, reason: 'room closed', carryOverOut: 1500, payouts: [], fee: 0 })
+    expect(hand.pot).toBe(0)
+    for (const p of state.players) {
+      const cs = hand.seats.find((s) => s.seat === p.seat)!
+      expect(cs.stack, `seat ${p.seat} ante refunded`).toBe(50000)
+      expect(cs.stack).toBe(p.stack)
+      expect(cs.betThisStreet).toBe(0)
+      expect(cs.allIn).toBe(false)
+      expect(client.room!.players.find((rp) => rp.seat === p.seat)!.stack).toBe(p.stack)
+    }
+  })
+})
+
+describe('mid-hand reconnect', () => {
+  it('rebuilds from a snapshot after the flop and keeps mirroring through the rest of the hand', () => {
+    const rng = seededRng(11)
+    const seqRef = { seq: 10 }
+    const me = 1
+    const stacks = [20000, 20000, 20000]
+    let client = start('holdem', HOLDEM_RULES, stacks, me)
+    let { state, events } = createHand({ handId: 'rc', rules: HOLDEM_RULES, seats: seatsOf(stacks), button: 0 }, rng)
+    client = feed(client, events, me, seqRef)
+
+    // Passive preflop so the flop is guaranteed to come out with the hand still live.
+    while (state.community.length === 0) {
+      const seat = state.actingSeat!
+      const kind = legalActions(state, seat).kinds.includes('check') ? 'check' : 'call'
+      ;({ state, events } = applyCommand(state, { type: 'ACTION', seat, action: { kind } }, rng))
+      client = feed(client, events, me, seqRef)
+    }
+    expect(state.phase).toBe('BETTING')
+    expect(state.community).toHaveLength(3)
+    expectMirror(client, state, me)
+
+    // Drop everything the event stream built and rebuild from a snapshot, the way a reconnect does.
+    seqRef.seq += 1
+    client = reduceClient({ ...client, hand: null }, { type: 'server', msg: { t: 'ROOM_SNAPSHOT', seq: seqRef.seq, room: client.room!, hand: playerView(state, me), deadlineAt: null }, now: 0 })
+    expect(client.resyncNeeded).toBe(false)
+    expectMirror(client, state, me)
+
+    let guard = 0
+    while (state.phase !== 'COMPLETE' && guard++ < 200) {
+      ;({ state, events } = applyCommand(state, nextCommand(state, rng), rng))
+      client = feed(client, events, me, seqRef)
+      expectMirror(client, state, me)
+    }
+    expect(state.phase).toBe('COMPLETE')
+    expect(client.hand!.phase).toBe('COMPLETE')
+    expect(client.room!.players.find((p) => p.seat === me)!.stack).toBe(state.players.find((p) => p.seat === me)!.stack)
   })
 })
 
