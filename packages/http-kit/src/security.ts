@@ -4,7 +4,11 @@ import { HttpError } from './http-errors.js'
 export interface SecurityHeadersOptions {
   /** The `Content-Security-Policy` value; `DEFAULT_CSP` unless an edition needs more sources. */
   csp: string
-  /** Path prefixes answered with `cache-control: no-store` — the dynamic half of the surface. */
+  /**
+   * Path prefixes answered with `cache-control: no-store` — the dynamic half of the surface. An
+   * entry matches the path itself and everything under it, so `'/health'` also covers
+   * `/health/ready`. Defaults to `['/api', '/health']`.
+   */
   noStorePrefixes?: string[]
 }
 

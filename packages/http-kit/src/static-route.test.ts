@@ -1,7 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Asset, AssetSource } from './assets.js'
-import { registerStaticRoute } from './static-route.js'
+import { DEFAULT_RESERVED, registerStaticRoute } from './static-route.js'
 
 const apps: FastifyInstance[] = []
 afterEach(async () => {
@@ -60,10 +60,10 @@ describe('registerStaticRoute', () => {
     }
   })
 
-  it('404s a missing path that looks like a file', async () => {
+  it('404s a missing path that looks like a file, with the same envelope a missing route gets', async () => {
     const res = await makeApp(fakeAssets()).inject('/missing.png')
     expect(res.statusCode).toBe(404)
-    expect(res.json()).toEqual({ error: { code: 'NOT_FOUND', message: 'not found' } })
+    expect(res.json()).toEqual({ error: { code: 'NOT_FOUND', message: 'no route for GET /missing.png' } })
   })
 
   it('never falls back under a reserved prefix', async () => {
@@ -73,6 +73,27 @@ describe('registerStaticRoute', () => {
       expect(res.statusCode, url).toBe(404)
       expect((res.json() as { error: { code: string } }).error.code).toBe('NOT_FOUND')
     }
+  })
+
+  it('reserves the same segments whether they are written with a leading slash or without', async () => {
+    // The neighbouring `noStorePrefixes` option is spelled '/api', so both spellings must work here
+    // — a `reserved` entry that silently never matches would hand `/api/typo` the index page.
+    for (const reserved of [['api'], ['/api'], ['/api/']]) {
+      const app = makeApp(fakeAssets(), { reserved })
+      const res = await app.inject('/api/typo')
+      expect(res.statusCode, JSON.stringify(reserved)).toBe(404)
+      expect((res.json() as { error: { code: string } }).error.code).toBe('NOT_FOUND')
+    }
+  })
+
+  it('reserves the server’s own surface by default', async () => {
+    expect(DEFAULT_RESERVED).toEqual(['api', 'ws', 'health'])
+    const app = makeApp(fakeAssets())
+    for (const url of ['/api/typo', '/ws', '/health/ready']) {
+      expect((await app.inject(url)).statusCode, url).toBe(404)
+    }
+    // An unreserved client route still boots the app.
+    expect((await app.inject('/lobby')).statusCode).toBe(200)
   })
 
   it('leaves the routes registered before it alone', async () => {

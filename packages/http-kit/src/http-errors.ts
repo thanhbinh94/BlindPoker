@@ -2,10 +2,23 @@ import type { FastifyError, FastifyInstance } from 'fastify'
 
 /** Every REST failure is `{ error: { code, message } }` (spec §19); this is how a handler asks for one. */
 export class HttpError extends Error {
+  /**
+   * Fastify's own convention for "this error already knows its status". `registerErrorHandler` reads
+   * `status` and never needs it, but the guards in this package can be registered without that
+   * handler — and then Fastify's default answers a thrown `HttpError` with this rather than a 500.
+   */
+  readonly statusCode: number
+
   constructor(readonly status: number, readonly code: string, message: string, readonly extra?: Record<string, unknown>) {
     super(message)
     this.name = 'HttpError'
+    this.statusCode = status
   }
+}
+
+/** The body behind every "there is nothing here", so one kind of miss never looks unlike another. */
+export function notFoundEnvelope(method: string, url: string): { error: { code: string; message: string } } {
+  return { error: { code: 'NOT_FOUND', message: `no route for ${method} ${url}` } }
 }
 
 /** Stable codes for the failures Fastify raises before a handler runs, so clients never see `FST_ERR_*`. */
@@ -37,6 +50,6 @@ export function registerErrorHandler(app: FastifyInstance, log: { error(msg: str
   })
 
   app.setNotFoundHandler((req, reply) => {
-    void reply.code(404).send({ error: { code: 'NOT_FOUND', message: `no route for ${req.method} ${req.url}` } })
+    void reply.code(404).send(notFoundEnvelope(req.method, req.url))
   })
 }

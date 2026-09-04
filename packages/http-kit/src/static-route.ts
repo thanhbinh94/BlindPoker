@@ -1,18 +1,29 @@
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import type { AssetSource } from './assets.js'
+import { notFoundEnvelope } from './http-errors.js'
 
 /** A content-hashed file name changes with its content, so the old one may be cached forever. */
 const IMMUTABLE_CACHE = 'public, max-age=31536000, immutable'
 
+/** The server's own surface: the API, the socket and the health probe are never the index page. */
+export const DEFAULT_RESERVED = ['api', 'ws', 'health']
+
 export interface StaticRouteOptions {
   /**
-   * First path segments the SPA fallback must never answer — `['api', 'ws', 'health']` and the like.
-   * A typo under one of them is a 404, not the index page.
+   * First path segments the SPA fallback must never answer — `DEFAULT_RESERVED` unless an edition
+   * mounts more. A typo under one of them is a 404, not the index page.
+   *
+   * Entries are matched as single path segments and may be written either way: `'api'` and `'/api/'`
+   * mean the same thing, so this reads the same as `noStorePrefixes` next door. Only the first
+   * segment is compared, so a multi-segment entry (`'api/v1'`) never matches — name `'api'`.
    */
   reserved?: string[]
   /** `cache-control` for content-hashed assets. */
   immutableCache?: string
 }
+
+/** `'/api/'` → `'api'`: what a caller writes, reduced to the segment the route compares. */
+const toSegment = (entry: string): string => entry.replace(/^\/+/, '').replace(/\/+$/, '')
 
 /**
  * The `/*` catch-all that serves a single-page app out of `assets`.
@@ -25,12 +36,12 @@ export interface StaticRouteOptions {
  * under this route is the same JSON 404.
  */
 export function registerStaticRoute(app: FastifyInstance, assets: AssetSource | null, opts: StaticRouteOptions = {}): void {
-  const reserved = opts.reserved ?? []
+  const reserved = (opts.reserved ?? DEFAULT_RESERVED).map(toSegment)
   const immutableCache = opts.immutableCache ?? IMMUTABLE_CACHE
 
   app.get('/*', async (req, reply) => {
     const requested = (req.params as { '*'?: string })['*'] ?? ''
-    const notFound = (): FastifyReply => reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'not found' } })
+    const notFound = (): FastifyReply => reply.code(404).send(notFoundEnvelope(req.method, req.url))
     if (!assets) return notFound()
 
     const first = requested.split('/')[0] ?? ''

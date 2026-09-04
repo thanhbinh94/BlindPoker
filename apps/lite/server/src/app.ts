@@ -3,6 +3,7 @@ import type { IncomingMessage } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import type { Duplex } from 'node:stream'
 import {
+  DEFAULT_RESERVED,
   registerCsrfGuard,
   registerErrorHandler,
   registerSecurityHeaders,
@@ -47,8 +48,6 @@ export interface BuildAppDeps {
 /** A request body larger than this is a mistake or an attack: the largest thing Lite accepts is a display name. */
 const BODY_LIMIT_BYTES = 16 * 1024
 const WS_PATH = '/ws'
-/** Paths the SPA fallback must never answer: a typo under them is a 404, not the index page. */
-const RESERVED_PREFIXES = ['api', 'ws', 'health']
 
 export function buildApp(deps: BuildAppDeps): LiteApp {
   const { config, repos, log } = deps
@@ -124,8 +123,9 @@ export function buildApp(deps: BuildAppDeps): LiteApp {
     ...(deps.now ? { now: deps.now } : {}),
   })
 
-  // Last: `/*` matches everything the routes above did not claim.
-  registerStaticRoute(fastify, deps.assets, { reserved: RESERVED_PREFIXES })
+  // Last: `/*` matches everything the routes above did not claim. Lite mounts exactly the surface
+  // `DEFAULT_RESERVED` names — `/api`, `/ws`, `/health` — so the default is the whole list.
+  registerStaticRoute(fastify, deps.assets, { reserved: DEFAULT_RESERVED })
 
   /** Only `/ws` is a WebSocket endpoint; every other upgrade is refused rather than left half-open. */
   const onUpgrade = (req: IncomingMessage, socket: Duplex, head: Buffer): void => {

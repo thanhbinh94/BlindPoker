@@ -88,4 +88,16 @@ describe('HttpError', () => {
     expect(err.message).toBe('a valid session token is required')
     expect(err.extra).toBeUndefined()
   })
+
+  it('also carries `statusCode`, so it degrades correctly without registerErrorHandler', async () => {
+    // The guards in this package throw `HttpError` and can be registered on their own; Fastify's
+    // stock handler reads `statusCode`, and without it a deliberate 403 would leave as a 500.
+    const app = Fastify({ logger: false })
+    app.get('/guarded', async () => {
+      throw new HttpError(403, 'FORBIDDEN', 'nope')
+    })
+    apps.push(app)
+    expect(new HttpError(403, 'FORBIDDEN', 'nope').statusCode).toBe(403)
+    expect((await app.inject('/guarded')).statusCode).toBe(403)
+  })
 })
