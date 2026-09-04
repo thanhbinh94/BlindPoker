@@ -7,7 +7,7 @@ export interface PlayerRecord {
   balance: number
 }
 
-export type TxReason = 'settlement' | 'buy_in' | 'cash_out' | 'refund' | 'daily_reward' | 'relief' | 'achievement'
+export type TxReason = 'starting_balance' | 'settlement' | 'buy_in' | 'cash_out' | 'refund' | 'daily_reward' | 'relief' | 'achievement'
 
 export interface BalanceEntry {
   playerId: string
