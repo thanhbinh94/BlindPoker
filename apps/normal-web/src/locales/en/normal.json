@@ -54,6 +54,9 @@
     "lead": "This screen arrives in the next update.",
     "signOut": "Sign out"
   },
+  "avatar": {
+    "mine": "Your avatar"
+  },
   "items": {
     "base_01": "Plain base",
     "base_02": "Tile base",

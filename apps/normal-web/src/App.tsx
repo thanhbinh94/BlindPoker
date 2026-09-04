@@ -9,10 +9,14 @@ import {
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { NormalApi } from './api.js'
+import { Avatar } from './avatar/Avatar.js'
+import a from './avatar/avatar.module.css'
+import { useAvatars } from './avatar/useAvatars.js'
 import { useLanguagePref } from './prefs.js'
 import { AuthScreen, type AuthMode } from './screens/AuthScreen.js'
 import { Placeholder } from './screens/Placeholder.js'
 import { Shell } from './screens/Shell.js'
+import { makeAvatarFor, makeCaptionFor } from './screens/TableChrome.js'
 import s from './screens/normal.module.css'
 import { clearLastEmail } from './session.js'
 import { useSessionGate } from './session-gate.js'
@@ -89,6 +93,20 @@ export function App({ api, socketFactory }: AppProps) {
 
   const onMode = useCallback((mode: AuthMode) => navigate(mode === 'register' ? '/register' : '/login'), [navigate])
 
+  // Whose face this app needs: everyone at the table, plus my own for the lobby bar. Bots are filtered out
+  // here rather than inside the cache — they have no account, so their id would be a guaranteed 404 apiece.
+  // `state.me` only exists after `WELCOME`; the boot probe already knows who I am, so the lobby does not wait.
+  const myId = client.state.me?.playerId ?? gate.me?.playerId ?? null
+  const seatedIds = client.state.room?.players
+  const watched = useMemo(() => {
+    const ids = (seatedIds ?? []).filter((p) => !p.isBot).map((p) => p.playerId)
+    return myId === null ? ids : [myId, ...ids]
+  }, [myId, seatedIds])
+  const { avatars } = useAvatars(api, watched)
+  const avatarFor = useMemo(() => makeAvatarFor(avatars), [avatars])
+  const captionFor = useMemo(() => makeCaptionFor(avatars, t), [avatars, t])
+  const myAvatar = myId === null ? null : (avatars.get(myId)?.avatar ?? null)
+
   const path = route.path
 
   if (gate.state === 'checking') {
@@ -128,7 +146,7 @@ export function App({ api, socketFactory }: AppProps) {
         onLanguage={setLang}
       >
         {inRoom ? (
-          <RoomScreen client={client} lang={lang} onLeft={() => navigate('/lobby')} />
+          <RoomScreen client={client} lang={lang} onLeft={() => navigate('/lobby')} avatarFor={avatarFor} captionFor={captionFor} />
         ) : PLACEHOLDER_ROUTES.includes(path) ? (
           // Tasks 3 and 4 replace each of these with the real screen; the routes exist now so the shell, the
           // rail and this gate can be tested end to end. Settings carries the one control a placeholder must
@@ -138,7 +156,28 @@ export function App({ api, socketFactory }: AppProps) {
             {...(path === '/settings' ? { action: { label: t('placeholder.signOut'), onClick: onSignedOut } } : {})}
           />
         ) : (
-          <LobbyScreen client={client} lang={lang} onLanguage={setLang} onEnteredRoom={() => navigate('/room')} />
+          <LobbyScreen
+            client={client}
+            lang={lang}
+            onLanguage={setLang}
+            onEnteredRoom={() => navigate('/room')}
+            // The lobby hides the shell's rail behind the kit's own `PlayerBar`, so the two routes a player
+            // reaches most from here — today's reward and their own profile — are re-hung on that bar, with
+            // the face they built as the way into it.
+            extraNav={
+              <span className={a.lobbyNav}>
+                <a className={a.lobbyLink} href="#/daily">
+                  {t('nav.daily')}
+                </a>
+                <a className={a.lobbyLink} href="#/profile">
+                  {t('nav.profile')}
+                </a>
+                <a href="#/avatar" aria-label={t('avatar.mine')}>
+                  <Avatar config={myAvatar} size="sm" className={a.lobbyAvatar} />
+                </a>
+              </span>
+            }
+          />
         )}
       </Shell>
     </GameClientProvider>

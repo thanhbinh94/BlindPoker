@@ -54,6 +54,9 @@
     "lead": "Màn hình này sẽ có ở bản cập nhật kế tiếp.",
     "signOut": "Đăng xuất"
   },
+  "avatar": {
+    "mine": "Ảnh đại diện của bạn"
+  },
   "items": {
     "base_01": "Nền mộc",
     "base_02": "Nền ngói",

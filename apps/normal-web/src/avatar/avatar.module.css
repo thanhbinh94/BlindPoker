@@ -1,0 +1,90 @@
+/* Bind Poker — Normal avatars. The renderer is all vector, so this file does only two things: fix the box
+   the SVG occupies, and publish the hair colour the parts fill from. */
+
+.avatar {
+  --avatar-hair: #2b2b2b;
+
+  display: block;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  /* A seat disc already clips to a circle; standing on its own (the lobby bar, the wardrobe) the avatar
+     draws its own edge so it does not float on the ground. */
+  overflow: hidden;
+}
+
+/* The three sizes the app asks for: a seat plate, a list row, and the wardrobe's subject. */
+.avatar[data-size='sm'] {
+  width: 32px;
+  height: 32px;
+}
+
+.avatar[data-size='md'] {
+  width: 48px;
+  height: 48px;
+}
+
+.avatar[data-size='lg'] {
+  width: 128px;
+  height: 128px;
+}
+
+/* ── the seat caption: a badge glyph and a title, on one line ─────────────── */
+
+.caption {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+}
+
+.badge {
+  flex: none;
+  font-size: 0.75em;
+  line-height: 1;
+  color: var(--ink-muted);
+}
+
+.badge[data-rarity='common'] {
+  color: #b08d6a;
+}
+
+.badge[data-rarity='rare'] {
+  color: var(--teal);
+}
+
+.badge[data-rarity='epic'] {
+  color: var(--gold);
+}
+
+.title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── the lobby bar's corner: two links and my own face ────────────────────── */
+
+.lobbyNav {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.lobbyLink {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.lobbyLink:hover {
+  color: var(--ink);
+}
+
+.lobbyAvatar {
+  border: 1px solid color-mix(in srgb, var(--gold) 42%, transparent);
+}
