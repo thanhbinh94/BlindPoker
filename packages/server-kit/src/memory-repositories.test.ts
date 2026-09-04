@@ -52,7 +52,7 @@ describe('memory repositories', () => {
   it('rejects unknown players and records hands', async () => {
     const repos = createMemoryRepositories()
     await expect(repos.balances.get('ghost')).rejects.toThrow(/unknown player/)
-    await repos.history.recordHand({ handId: 'h', roomId: 'r', mode: 'blind', config: { name: 'x', mode: 'blind', maxPlayers: 2, isPrivate: false, turnTimerSec: 15, autoStart: false }, startedAt: 1, endedAt: 2, fee: 0, cancelled: false, players: [] })
+    await repos.history.recordHand({ handId: 'h', roomId: 'r', mode: 'blind', config: { name: 'x', mode: 'blind', maxPlayers: 2, isPrivate: false, turnTimerSec: 15, autoStart: false, hasPassword: false }, startedAt: 1, endedAt: 2, fee: 0, cancelled: false, players: [] })
     expect(repos.hands).toHaveLength(1)
   })
 })

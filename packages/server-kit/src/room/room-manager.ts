@@ -29,7 +29,7 @@ export class RoomManager {
     this.rooms.set(roomId, room)
     this.byCode.set(code, room)
     this.deps.log.info('room created', { roomId, code, hostPlayerId: host.playerId, mode: config.mode })
-    this.deps.onDomainEvent?.({ type: 'ROOM_CREATED', roomId, hostPlayerId: host.playerId, config })
+    this.deps.onDomainEvent?.({ type: 'ROOM_CREATED', roomId, hostPlayerId: host.playerId, config: room.summary().config })
     this.notify()
     return room
   }

@@ -87,6 +87,21 @@ describe('Blind hands', () => {
     expect(events(h, 'h').filter((t) => t === 'HAND_STARTED')).toHaveLength(2)
   })
 
+  it('never records the room password in history or in the ROOM_CREATED-style config', async () => {
+    const h = createRoomHarness({ ...BLIND, isPrivate: true, password: 'pw12', blind: { ...BLIND.blind!, botCount: 1 } })
+    await h.room.sitDown('h', 0)
+    await h.room.setReady('h', true)
+    await h.room.startGame('h')
+    await playOut(h, () => ({ kind: 'fold' }))
+    const recorded = h.repos.hands[0]!.config
+    expect((recorded as { password?: string }).password).toBeUndefined()
+    expect(Object.hasOwn(recorded, 'password')).toBe(false)
+    expect(recorded.hasPassword).toBe(true)
+    expect(recorded.name).toBe('B') // the rest of the config survives
+    const summarised = h.room.summary().config
+    expect(summarised).toEqual(recorded)
+  })
+
   it('carries the pot over when everyone folds and pays it out in a later hand', async () => {
     const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 0 } })
     await seatAndStart(h, ['h', 'a'])

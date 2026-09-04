@@ -441,7 +441,7 @@ export class Room {
       handId: state.handId,
       roomId: this.roomId,
       mode: this.rules.mode,
-      config: this.config,
+      config: this.summary().config, // never the raw config: it would carry the room password
       startedAt: runner.startedAt,
       endedAt: this.deps.clock.now(),
       fee: result.fee,

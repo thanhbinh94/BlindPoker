@@ -38,6 +38,15 @@ describe('RoomManager', () => {
     expect(domainEvents.filter((e) => e.type === 'ROOM_CREATED')).toHaveLength(3)
   })
 
+  it('never puts the room password in the ROOM_CREATED domain event', () => {
+    const { manager, domainEvents } = setup()
+    manager.create(id('h'), { ...PRIVATE, password: 'pw12' })
+    const created = domainEvents.find((e) => e.type === 'ROOM_CREATED')!
+    expect(created.type === 'ROOM_CREATED' && created.config.hasPassword).toBe(true)
+    expect(created.type === 'ROOM_CREATED' && Object.hasOwn(created.config, 'password')).toBe(false)
+    expect(JSON.stringify(created)).not.toContain('pw12')
+  })
+
   it('refuses a second room for a player already in one', () => {
     const { manager } = setup()
     manager.create(id('h'), PUBLIC)

@@ -76,7 +76,8 @@ export interface HandSummary {
   handId: string
   roomId: string
   mode: GameMode
-  config: RoomConfig
+  /** Never carries the room password — see `PublicRoomConfig`. */
+  config: PublicRoomConfig
   startedAt: number
   endedAt: number
   fee: number
