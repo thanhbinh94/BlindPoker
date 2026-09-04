@@ -1,3 +1,4 @@
+import react from 'eslint-plugin-react'
 import tseslint from 'typescript-eslint'
 import { FORBIDDEN_GLOBALS, NODE_BUILTINS } from './tooling/arch/node-builtins.js'
 
@@ -8,12 +9,27 @@ const forbid = (patterns, message) => ({
 })
 
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/release/**', '**/node_modules/**'] },
+  { ignores: ['**/dist/**', '**/release/**', '**/node_modules/**', '**/playground/dist/**'] },
   ...tseslint.configs.recommended,
   {
     rules: {
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     },
+  },
+  {
+    files: ['packages/ui-kit/**/*.{ts,tsx}', 'apps/**/*.{ts,tsx}'],
+    plugins: { react },
+    settings: { react: { version: '18.3' } },
+    rules: {
+      'react/jsx-no-literals': ['error', { noStrings: true, ignoreProps: true, allowedStrings: ['•', '·', '—', '–', '/', ':', '%', '(', ')', '×', '+', '−', '#'] }],
+      'react/jsx-key': 'error',
+    },
+  },
+  {
+    // Test fixtures render throwaway markup, and the playground's control bar is a dev harness that never ships;
+    // hoisting either one's literals into i18n keys would only obscure them.
+    files: ['packages/ui-kit/**/*.test.tsx', 'apps/**/*.test.tsx', 'packages/ui-kit/playground/**/*.tsx'],
+    rules: { 'react/jsx-no-literals': 'off' },
   },
   {
     files: ['packages/core/**/*.ts'],

@@ -1,0 +1,367 @@
+# `@bp/ui-kit`
+
+## Purpose
+
+The React layer both web apps embed: a WebSocket game client, i18n (Vietnamese and English), the "Đêm Sài Gòn"
+design system, the poker table, the lobby, and the two shared screens. It knows the wire protocol and nothing about
+either edition — no routes, no fonts, no branding, no edition switches. Normal and Lite each supply their own shell
+and drop these screens into it.
+
+It depends on `@bp/core` only (types, `filterEvent`-shaped events, `validateRoomConfig`, `HAND_CATEGORY_KEYS`,
+`ECONOMY`), plus `react`, `react-dom`, `i18next` and `react-i18next`. It never imports `@bp/server-kit`, `ws` or a
+Node built-in, and never decides gameplay: it renders `ServerMessage`s and sends `ClientMessage`s.
+
+---
+
+## Embedding it in an app
+
+Five things, in this order.
+
+**1. Fonts are the app's job.** `ui-kit` only names them (`--font-display`, `--font-body`). Normal's `index.html`
+loads Fraunces and Be Vietnam Pro from Google Fonts; Lite ships offline and lets the fallbacks (Georgia,
+Segoe UI) stand. Never a runtime check — just a different `<head>`.
+
+**2. Styles.** One import, at the app entry, before your own CSS:
+
+```ts
+import '@bp/ui-kit/theme.css' // tokens + reset + atmosphere
+```
+
+**3. i18n.** One instance for the app; wrap the tree in `I18nextProvider`.
+
+```tsx
+import { I18nextProvider } from 'react-i18next'
+import { createI18n, setLanguage, type Language } from '@bp/ui-kit'
+
+const i18n = createI18n({ extraResources: { vi: { normal: viNormal }, en: { normal: enNormal } } })
+// later: await setLanguage(i18n, 'en', localStorage)
+```
+
+`createI18n({ language?, storage?, navigatorLanguage?, extraResources? })` picks the language from `storage`
+(`bp.lang`), then the navigator, then `vi`. `storage: null` disables persistence (tests, the playground).
+
+**4. Theme.** `applyTheme(document.documentElement, 'dark' | 'light')` sets `data-theme`. Dark is the default;
+the light theme repaints the page, never the felt (see [Theming](#theming)).
+
+**5. Client + screens.** `useGameClient` is the only place that owns a socket. Put it above the router and share
+it through `GameClientProvider`, or pass it down as the `client` prop.
+
+```tsx
+import { GameClientProvider, LobbyScreen, RoomScreen, useGameClient, useHashRoute } from '@bp/ui-kit'
+
+function App({ lang, onLanguage }: { lang: Language; onLanguage: (l: Language) => void }) {
+  const client = useGameClient({ url: 'wss://…/ws', token: sessionToken })
+  const { route, navigate } = useHashRoute()
+  return (
+    <GameClientProvider client={client}>
+      {route.path.startsWith('/room') ? (
+        <RoomScreen client={client} lang={lang} onLeft={() => navigate('/lobby')} />
+      ) : (
+        <LobbyScreen client={client} lang={lang} onLanguage={onLanguage} onEnteredRoom={() => navigate('/room')} />
+      )}
+    </GameClientProvider>
+  )
+}
+```
+
+`RoomScreen` fills the viewport by design (see [Responsive rules](#responsive-rules)). If the app draws its own bar
+above it, set `--bp-stage` on the room's container: `--bp-stage: calc(100dvh - 64px)`, or `100%` inside a flex column
+that already has a height.
+
+---
+
+## Client contract
+
+`useGameClient({ url, token?, autoConnect?, socketFactory? })` returns a `GameClientApi`:
+
+| Member | Sends / does |
+| --- | --- |
+| `state: ClientState` | everything the screens render |
+| `connect()` / `disconnect()` | opens or closes the socket (auto-connects by default) |
+| `listRooms()` | `LIST_ROOMS` |
+| `createRoom(config)` | `CREATE_ROOM`, resolves with the `ACK` or `ERROR` |
+| `joinRoom({ roomId?, code?, password? })` | `JOIN_ROOM` |
+| `leaveRoom()`, `sitDown(seat, buyIn?)`, `standUp()`, `setReady(r)`, `startGame()`, `kick(playerId)` | the matching frame |
+| `act(action)` | `ACTION` with `baseSeq` = the latest applied `seq` |
+| `resync()` | `RESYNC` |
+| `clearError()`, `dismissNotification(id)` | local state only |
+| `serverNow()` | `Date.now()` + the `WELCOME` clock offset — **always** compare deadlines against this |
+
+`ClientState` carries `status` (`idle`/`connecting`/`open`/`reconnecting`/`closed`), `closeReason`, `me`,
+`balance`, `lobby`, `room`, `roomStale`, `hand`, `seq`, `deadlineAt`, `lastError`, `notifications`, `resyncNeeded`,
+`replaced`, `serverTimeOffset`.
+
+The rules the client obeys — reconnect with exponential backoff 1 s → 30 s, auto-`HELLO`, auto-`PONG`, a `seq` that
+goes backwards or a `STALE_STATE` / `INTERNAL "resync required"` error setting `resyncNeeded` and triggering
+`RESYNC` — are the client half of **"Reconnecting and frame order"** in [`docs/server-kit.md`](./server-kit.md). A
+test drives real `@bp/core` hands through `reduceClient` and asserts its view equals the engine's `playerView`, so
+the reducer cannot drift from the server.
+
+### The reconnect handshake, and `roomStale`
+
+`WELCOME` comes first, and a `ROOM_SNAPSHOT` follows **only if the server still has you in a room**. So the room the
+client is holding when a socket comes up is unconfirmed, and `roomStale` says so:
+
+| Frame | Effect |
+| --- | --- |
+| (initial state) | `roomStale: true` — nothing is confirmed until a session exists |
+| `WELCOME` | `room`/`hand` are kept on screen, `roomStale = true`, `resyncNeeded = true` (the hook sends `RESYNC`) |
+| `ROOM_SNAPSHOT` | the room is confirmed: `roomStale = false` |
+| `ERROR{NOT_IN_ROOM}` | the probe's other answer: `room`/`hand` cleared, `seq = 0`, `roomStale = false`, and no `lastError` when the room was stale or already gone |
+
+**A screen must not act on `room === null` alone** — wait for `!roomStale`. `RoomScreen` does exactly that, which is
+why a refresh on `#/room` no longer bounces the player out of a room they are still sitting in.
+
+A frame the reducer cannot apply to anything — a game event with no hand, a `HAND_STARTED` or room event with no
+room — takes its `seq` and sets `resyncNeeded` rather than being dropped.
+
+### Authentication is terminal
+
+The backoff ladder resets on `WELCOME`, not on `onopen`: a server that accepts the socket and then drops the session
+would otherwise be hammered once a second forever. A close with code **4001**, or any `ERROR{UNAUTHENTICATED}`
+received on the socket, stops reconnecting for good and reports `state.closeReason === 'unauthenticated'` — the app's
+cue to send the player back to sign in. Nothing else in the kit distinguishes close reasons.
+
+### Handing over a token later (the Lite flow)
+
+Lite has no token until the player types a name. Either wait — `useGameClient({ autoConnect: false })`, then
+`connect()` once a token exists — or connect straight away and set the token when it arrives: `setToken` on a live
+socket sends `HELLO` on the spot rather than waiting out a reconnect. It greets once per socket, and never after
+that socket has been welcomed. Both routes are supported; `autoConnect: false` is the quieter one, since a socket
+that opens with no token sends nothing until it has one.
+
+---
+
+## Component catalogue
+
+Everything is presentational and takes state plus callbacks. `lang` is threaded as a prop for number and date
+formatting; strings come from `useTranslation()`.
+
+### Screens
+
+| Component | Props |
+| --- | --- |
+| `LobbyScreen` | `client`, `lang`, `onLanguage`, `onEnteredRoom`, `extraNav?`, `header?` |
+| `RoomScreen` | `client`, `lang`, `onLeft`, `avatarFor?`, `header?`, `layout?` |
+| `Toasts` | `error`, `notifications`, `onClearError`, `onDismiss`, `lang` |
+
+`onLeft` fires the moment the room is gone — left, closed or kicked — and the app decides where that lands.
+
+Both screens already render `Toasts` from their own `client.state`; it is exported separately so an app can raise
+its own slips in the same stack. Errors are assertive (`role="alert"`, red edge), notifications are polite
+(`role="status"`, gold edge) — each also carries its own glyph, so hue is never the only signal. **Every slip clears
+itself**: errors after 6 s, notifications after 8 s, and the reducer keeps at most **5** undismissed notifications,
+dropping the oldest, so a chatty server cannot stack slips off the top of the screen.
+
+`useRequest()` is exported too: it runs one `GameClientApi` call, exposes `busy` and the refusal as a
+`ClientError` that `Toasts` renders unchanged, and is what both screens use for their own buttons.
+
+### Table
+
+| Component | Props |
+| --- | --- |
+| `PokerTable` | `room`, `hand`, `myPlayerId`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `canSit`, `layout?`, `avatarFor?`, `onSeatClick?` |
+| `Seat` | `seat`, `player`, `isMe`, `isActing`, `isButton`, `winnerPayout`, `showdownLabel`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `position`, `avatar?` |
+| `Card` | `card?`, `faceDown?`, `size?` (`sm`/`md`/`lg`), `delayMs?`, `highlighted?`, `className?` |
+| `CommunityCards` | `cards`, `highlight?` |
+| `Pot` | `pot`, `carryOver`, `pulse`, `lang` |
+| `TurnTimer` | `deadlineAt`, `serverNow`, `totalMs`, `size?` |
+| `ActionBar` | `hand`, `room`, `onAct`, `disabled?`, `lang` |
+| `HandResult` | `hand`, `room`, `myPlayerId`, `lang`, `onDismiss?` |
+| `RoomHeader` | `room`, `status`, `onLeave`, `lang`, `right?` |
+
+`ActionBar` offers only the kinds the server declared legal and clamps every preset into the legal range, so a click
+can never produce an illegal amount. Keyboard: `F` fold, `C` check/call, `R` focus the amount, `Enter` submit — all
+advertised through `aria-keyshortcuts`. Between turns it stays in place and says so rather than collapsing.
+
+`HandResult` reads `hand.result`. Alongside `payouts` (the same money summed per seat) it carries **`pots`** — the
+engine's layered pots straight from `SETTLEMENT.pots`, each with its `amount`, `eligibleSeats` and `winners` — and
+prints a main/side-pot ledger whenever there is more than one, which is the only way a hand with a short all-in
+reads as fair. `pots` is empty for a cancelled hand. A cancelled hand's `reason` is an operator-facing token, so it
+is normalised to a `cancel.*` key and translated; the raw token is never rendered. Pass `onDismiss` to make the card
+closable — `RoomScreen` does, and the between-hands countdown moves to the tray once it is waved off.
+
+Under 768 px the table becomes the vertical stack (spec §27.1): opponents, felt, your own seat. **The opponents'
+strip never scrolls inside itself** — it wraps, holds a floor of two plate rows, and from seven seats up the plates
+go compact (avatar, name, stack, then bet and state badge side by side) so a third row of three fits at 360 px.
+
+### Lobby
+
+| Component | Props |
+| --- | --- |
+| `RoomList` | `rooms`, `onJoin`, `filter?`, `onFilter?`, `lang`, `busy?` |
+| `CreateRoomForm` | `onSubmit`, `busy?`, `initialMode?`, `lang` |
+| `JoinByCode` | `onJoin`, `busy?`, `lang`, `error?` |
+| `PlayerBar` | `displayName`, `balance`, `status`, `lang`, `onLanguage`, `right?` |
+| `LanguageSwitch` | `lang`, `onChange` |
+| `HoldemFields` | `tierIndex`, `onTierIndex`, `minBuyInBB`, `maxBuyInBB`, `onMinBuyInBB`, `onMaxBuyInBB`, `disabled`, `lang` |
+| `BlindFields` | `holeCards`, `onHoleCards`, `decisionMode`, `onDecisionMode`, `fixedWager`, `onFixedWager`, `botCount`, `onBotCount`, `maxBots`, `disabled`, `lang` |
+
+`CreateRoomForm` only offers values from `ECONOMY` and still runs the draft through `validateRoomConfig`; it is the
+*validated* config that reaches `onSubmit`.
+
+`HoldemFields` (blind tier plus the buy-in window in big blinds) and `BlindFields` (hole cards, decision mode, fixed
+wager, bot filler) are the mode-specific building blocks `CreateRoomForm` swaps between; both are fully controlled,
+and an app only reaches for them directly when it builds its own room form.
+
+### Primitives
+
+| Component | Props |
+| --- | --- |
+| `Button` | `variant?` (`primary`/`gold`/`danger`/`ghost`), `size?` (`sm`/`md`/`lg`), `loading?`, `icon?`, plus every `<button>` attribute |
+| `Field` | `label`, `hint?`, `error?`, `id?`, `children` (one control) |
+| `Select<T>` | `value`, `options`, `onChange`, plus `<select>` attributes |
+| `Panel` | `title?`, `tone?` (`ink`/`parchment`/`felt`), `className?` |
+| `Badge` | `tone` (`gold`/`red`/`teal`/`muted`) |
+| `Modal` | `open`, `title`, `onClose`, `closeLabel`, `children` |
+
+### Router
+
+`useHashRoute()` → `{ route: { path, segments, query }, navigate(path) }`. `parseHash(hash)` is the pure part. Deliberately
+tiny: `#/lobby`, `#/room/ABC234`. An app that wants a real router can ignore it.
+
+---
+
+## Theming
+
+Tokens live in `src/theme/tokens.css` and are all an app needs to restyle the kit.
+
+| Group | Tokens |
+| --- | --- |
+| Surfaces | `--bg`, `--bg-elev`, `--bg-mesh`, `--line` |
+| Ink | `--ink`, `--ink-muted` |
+| Accents | `--gold`, `--gold-soft`, `--gold-ink`, `--red`, `--red-soft`, `--red-ink`, `--teal`, `--teal-fill`, `--teal-ink` |
+| Table | `--felt`, `--felt-edge` |
+| Cards | `--card-face`, `--card-ink`, `--card-red` |
+| Type | `--font-display`, `--font-body` |
+| Space | `--space-1`…`--space-8` (4 px scale), `--radius-sm/md/lg/pill`, `--tap` (44 px) |
+| Motion | `--dur-1`, `--dur-2`, `--ease` |
+| Misc | `--focus`, `--shadow-1`, `--shadow-2`, `--z-modal` |
+
+**Dark is the default**; `data-theme="light"` on the root swaps the page to parchment. The felt does not follow it —
+a card table is a physical object and stays night-side in both themes. Anything printed on it therefore has to keep
+dark-theme contrast, which is what `data-surface="night"` does: put it on an element and the ink half of the palette
+is re-declared for that subtree. `PokerTable`, `ActionBar` and the hand-result overlay set it themselves; an app can
+put it on any panel it lays over the felt.
+
+The one layout knob is `--bp-stage` (see [Embedding](#embedding-it-in-an-app)).
+
+**Motion** is CSS only — dealt cards flip in on a 60 ms stagger, the turn ring is a conic-gradient countdown, the pot
+pulses once per `POT_UPDATED`, the winner seat glows. `prefers-reduced-motion: reduce` switches every animation and
+transition off in `global.css`; there is no JS animation loop to disable.
+
+---
+
+## Responsive rules
+
+Breakpoints 480 / 768 / 1024, per spec §27.1. No horizontal page scroll at any width.
+
+- **The room is a stage, not a document.** `RoomScreen` is exactly `--bp-stage` (default `100dvh`) tall: header at
+  the top, action tray at the foot, felt in between. The page itself never scrolls, so the tray is reachable
+  without scrolling on every size — which is the whole point of it being a tray.
+- **The ring table is height-led.** The oval takes the space between the header and the tray and derives its width
+  from it (2:1, capped at 980 × 490). Seats ride the rim at fixed percentages of that box, spaced by equal *arc
+  length* so a nine-handed table spreads evenly instead of bunching on the flanks; from seven seats up the plates
+  go compact. Standing alone in a box of unknown height, `PokerTable` falls back to its intrinsic size.
+- **Under 768 px wide *or* 620 px tall** the table switches to the vertical stack: opponents on top (that strip is
+  the part that scrolls), board in the middle, the viewer's own seat pinned above the tray. A short window has no
+  more to give than a narrow one, so both take the same layout. `layout="ring" | "stack"` overrides the choice.
+- Under 768 px the bet slider drops out (a thumb cannot hit a one-point step); the presets and the number input
+  take its place full-width, and the room header and tray tighten so the viewer's own cards stay on screen.
+- Touch targets are ≥ 44 px (`--tap`) wherever the pointer is coarse.
+
+---
+
+## i18n
+
+Two namespaces per language: `common` (units, time, generic words) and `game` (everything else; the default
+namespace). Keys are dotted and grouped by role — `game`: `app.*`, `nav.*`, `actions.*`, `labels.*`, `mode.*`,
+`blind.*`, `phase.*`, `street.*`, `card.*`, `hand.*`, `status.*`, `lobby.*`, `create.*`, `room.*`, `notify.*`,
+`presets.*`; `common`: `errors.*`, `language.*`, `units.*`, `time.*`.
+
+Rules:
+
+- **No literal strings in JSX.** `react/jsx-no-literals` enforces it for `packages/ui-kit/**` and `apps/**`.
+- **Every key exists in both languages.** A test asserts key parity between `en` and `vi`; adding one to a single
+  locale fails the build.
+- Numbers go through `formatPoints` / `formatCompactPoints`, never `toLocaleString` at the call site.
+- Hand categories translate through `handLabel(category, t)` off `HAND_CATEGORY_KEYS`; cards through
+  `cardLabel(card, t)`; protocol errors through `errorLabel(code, t)`.
+
+An app adds its own namespace without forking the resources:
+
+```ts
+const i18n = createI18n({
+  extraResources: { vi: { normal: viNormal }, en: { normal: enNormal } },
+})
+// in the app's own components: useTranslation('normal')
+```
+
+Namespace names are taken from the `vi` map, so both languages must declare the same set.
+
+---
+
+## Footprint
+
+**The budgets are ≤ 250 kB gzip JS and ≤ 40 kB gzip CSS.** Gzip over the shipped bundle is the only figure held to a
+budget here — it is what a browser actually downloads. Raw sizes are recorded because they are useful when hunting
+a regression, not because anything is measured against them.
+
+`pnpm --filter @bp/ui-kit build:playground` builds the playground (React 18 + i18next + the whole of `@bp/ui-kit`,
+plus `@bp/core`'s engine and bot, which only the harness needs). Re-measured after the final-review fix wave:
+
+| Bundle | Raw (informational) | Gzip (**budgeted**) |
+| --- | --- | --- |
+| Playground JS (kit + React + i18next + core engine + bots) | 296.2 kB | **95.9 kB** of ≤ 250 kB |
+| Playground CSS (all of the kit's styles) | 41.2 kB | **9.4 kB** of ≤ 40 kB |
+| Kit only (barrel + React + i18next, no engine) | 277.3 kB | 90.1 kB |
+
+Both packages declare `sideEffects` so a bundler may drop what an app does not import: `false` for `@bp/core`, and
+`["**/*.css"]` for `@bp/ui-kit`, whose stylesheet imports are the one thing that must survive tree-shaking.
+
+The kit's stylesheets are 56.8 kB of CSS source (comments and formatting included), which minifies to the 41.2 kB
+shipped above and compresses to 9.4 kB on the wire. The source figure is informational only: it is not held to a
+budget, and an earlier raw-size ceiling has been retired in favour of the gzip numbers.
+
+`src/index.ts` exports only ui-kit modules, and the kit imports just types and small helpers
+(`HAND_CATEGORY_KEYS`, `RANK_CHARS`, `SUIT_CHARS`, `rankOf`, `suitOf`, `validateRoomConfig`, `ECONOMY`) from
+`@bp/core` — no engine, no bot code. The ~5.8 kB gzip difference between the first and last rows is the
+playground's own engine-driven mock server. Lite's hard bundle budget is enforced by a test in Plan 4; this section
+only records the measurement.
+
+---
+
+## Testing utilities
+
+Exported for consumers' tests as well as the kit's own:
+
+- **`FakeSocket`** — a `SocketLike` with no network behind it. `open()`, `receive(msg)` to push a `ServerMessage`,
+  `serverClose(code, reason)` for a close from the other end, `close(code)` for one from this side, and `sent` for
+  the frames the client wrote. `FakeSocket.instances` / `FakeSocket.reset()` track every socket a test opened.
+- **`fakeSocketFactory`** — pass it as `useGameClient({ socketFactory })` to drive a whole screen from a test
+  without a server.
+- **`reduceClient(state, action)` / `initialClientState`** — the reducer is pure, so protocol behaviour can be
+  tested without React at all. This is how the engine-equivalence test works.
+- Inside the package, `src/test-fixtures.ts` has ready-made `RoomView` / `RoomPlayerView` / `ClientHand` fixtures
+  (not part of the public export map — copy what you need).
+
+The kit's own tests run under jsdom with `@testing-library/react`: `pnpm --filter @bp/ui-kit test`.
+
+For eyeballing changes, `pnpm --filter @bp/ui-kit playground` starts Vite on port 5175 with an engine-driven mock
+server — real `@bp/core` hands, real `filterEvent` hole-card hiding, real reducer. Controls: game mode, room/lobby
+view, seat count (4/6/9), theme, language, forced stack layout, and "next hand".
+
+---
+
+## Known gaps
+
+- **Spectators** see the table read-only; there are no spectator controls and no spectator chrome.
+- **No chat.** Nothing in the protocol carries it yet.
+- **No avatar renderer.** `PokerTable` and `RoomScreen` take an `avatarFor(player)` slot and draw an initial disc
+  when it is absent; Normal supplies a real one from its cosmetics.
+- **No top-up.** `TOP_UP` is not in the protocol, so a short stack has to stand up and sit back down.
+- **Sit-out is not exposed.** `SITTING_OUT` renders on a seat but there is no message to request it.
+- The felt resizes slightly between the ring and stack layouts when a window crosses a breakpoint; the tray's height
+  is reserved from 768 px up so it does not also move on every turn.
+- Playground screenshots are described in `packages/ui-kit/playground/screenshots/README.md` rather than committed
+  as images.

@@ -18,5 +18,5 @@ pnpm lint
 
 - `packages/core` — pure game engine, bot, protocol (no I/O)
 - `packages/server-kit` — rooms, WebSocket gateway, timers, reconnect, bots (see docs/server-kit.md)
-- `packages/ui-kit` — shared React components, i18n (planned)
+- `packages/ui-kit` — shared React UI: game client, i18n (vi/en), theme, poker table, lobby, screens (see docs/ui-kit.md)
 - `apps/normal-server`, `apps/normal-web`, `apps/lite` (planned)

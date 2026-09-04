@@ -1,0 +1,132 @@
+/* Bind Poker — "Đêm Sài Gòn" tokens. Ink-navy ground, gold = money/turn,
+   lacquer red = danger/fold/host, teal-black felt, ivory cards.
+   Dark is the default; data-theme="light" swaps the paper, never the felt. */
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* surfaces */
+  --bg: #0b1020;
+  --bg-elev: #141b33;
+  --bg-mesh:
+    radial-gradient(78% 52% at 8% -6%, rgba(200, 50, 60, 0.22), transparent 62%),
+    radial-gradient(64% 46% at 96% 2%, rgba(217, 164, 65, 0.16), transparent 60%),
+    radial-gradient(90% 70% at 50% 118%, rgba(15, 42, 46, 0.55), transparent 68%),
+    linear-gradient(168deg, #0b1020 0%, #141b33 54%, #0a0e1c 100%);
+  --line: rgba(237, 231, 216, 0.12);
+
+  /* ink */
+  --ink: #ede7d8;
+  --ink-muted: #9aa4c0;
+
+  /* accents */
+  --gold: #d9a441;
+  --gold-soft: rgba(217, 164, 65, 0.16);
+  --gold-ink: #201607; /* text on a gold fill */
+  --red: #c8323c;
+  --red-soft: rgba(200, 50, 60, 0.16);
+  --red-ink: #fdf3f0; /* text on a red fill */
+  --teal: #3f938a; /* teal as ink/hairline on a dark ground */
+  --teal-fill: #17594f; /* teal as a *fill*: dark enough for --teal-ink at 4.5:1 */
+  --teal-ink: #f2f7f5; /* text on a teal fill */
+
+  /* table */
+  --felt: #0f2a2e;
+  --felt-edge: #7a5c27; /* thin lacquered rail */
+
+  /* cards */
+  --card-face: #f6f1e4;
+  --card-ink: #16181d;
+  --card-red: #c8323c;
+
+  --focus: #e8b95a;
+  --shadow-1: 0 1px 2px rgba(3, 6, 16, 0.5), 0 2px 8px rgba(3, 6, 16, 0.32);
+  --shadow-2: 0 10px 30px rgba(3, 6, 16, 0.55), 0 2px 6px rgba(3, 6, 16, 0.4);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #f3eee2;
+  --bg-elev: #fbf7ee;
+  --bg-mesh:
+    radial-gradient(72% 48% at 6% -8%, rgba(169, 36, 45, 0.1), transparent 62%),
+    radial-gradient(60% 44% at 98% 0%, rgba(154, 110, 21, 0.12), transparent 60%),
+    linear-gradient(168deg, #f6f1e6 0%, #efe8d9 62%, #f3eee2 100%);
+  --line: rgba(27, 31, 46, 0.14);
+
+  --ink: #1b1f2e;
+  --ink-muted: #5c6076;
+
+  --gold: #9a6e15;
+  --gold-soft: rgba(154, 110, 21, 0.14);
+  --gold-ink: #fff8e8;
+  --red: #a9242d;
+  --red-soft: rgba(169, 36, 45, 0.12);
+  --red-ink: #fdf3f0;
+  --teal: #15544c;
+  --teal-fill: #124a43;
+  --teal-ink: #f2f7f5;
+
+  /* the felt is a physical object: night-side in both themes */
+  --felt: #0f2a2e;
+  --felt-edge: #b08d3e;
+
+  --card-face: #fffdf6;
+  --card-ink: #16181d;
+  --card-red: #b3252f;
+
+  --focus: #8a5b12;
+  --shadow-1: 0 1px 2px rgba(27, 31, 46, 0.12), 0 2px 8px rgba(27, 31, 46, 0.08);
+  --shadow-2: 0 10px 28px rgba(27, 31, 46, 0.18), 0 2px 6px rgba(27, 31, 46, 0.1);
+}
+
+/* The felt and the tray are physical objects in a night room: `--felt` stays dark in the light theme on purpose, and
+   so must everything printed on them. `data-surface="night"` re-declares the ink half of the palette on such a
+   surface. `PokerTable` and `ActionBar` set it themselves; an app can put it on any panel it lays over the felt. */
+[data-surface='night'] {
+  color-scheme: dark;
+  --line: rgba(237, 231, 216, 0.12);
+  --ink: #ede7d8;
+  --ink-muted: #9aa4c0;
+  --bg: #0b1020;
+  --bg-elev: #141b33;
+  --gold: #d9a441;
+  --gold-soft: rgba(217, 164, 65, 0.16);
+  --gold-ink: #201607;
+  --red: #c8323c;
+  --red-soft: rgba(200, 50, 60, 0.16);
+  --red-ink: #fdf3f0;
+  --teal: #3f938a;
+  --teal-fill: #17594f;
+  --teal-ink: #f2f7f5;
+  --focus: #e8b95a;
+}
+
+:root {
+  /* type — the app loads the web fonts; ui-kit only names them */
+  --font-display: 'Fraunces', 'Playfair Display', Georgia, serif;
+  --font-body: 'Be Vietnam Pro', 'Segoe UI', system-ui, sans-serif;
+
+  /* 4px scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  --tap: 44px;
+  --z-modal: 100;
+
+  --dur-1: 120ms;
+  --dur-2: 220ms;
+  --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+}

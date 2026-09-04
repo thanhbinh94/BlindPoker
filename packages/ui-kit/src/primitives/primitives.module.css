@@ -1,0 +1,365 @@
+/* Primitives — lacquered surfaces, hairline rules, gold for money. */
+
+/* ---------- Button ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  padding: 0 var(--space-5);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-align: center;
+  /* a label that breaks across two lines doubles the row it sits in; a crowded row wraps instead */
+  white-space: nowrap;
+  cursor: pointer;
+  background: transparent;
+  box-shadow: var(--shadow-1);
+  transition:
+    transform var(--dur-1) var(--ease),
+    filter var(--dur-1) var(--ease),
+    background-color var(--dur-1) var(--ease);
+}
+
+.btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.sm {
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  font-size: 0.875rem;
+}
+
+.md {
+  font-size: 0.9375rem;
+}
+
+.lg {
+  min-height: 52px;
+  padding: 0 var(--space-6);
+  font-size: 1.0625rem;
+}
+
+@media (pointer: coarse) {
+  .sm {
+    min-height: var(--tap);
+  }
+}
+
+/* filled variants: one lacquer sheen, three pigments */
+.btn.primary,
+.btn.gold,
+.btn.danger {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(0, 0, 0, 0.09) 100%);
+  border-color: rgba(0, 0, 0, 0.32);
+}
+
+/* teal: the everyday affirmative. `--teal-fill` is the darker sibling of `--teal`; the lighter
+   hairline teal only reaches 3.4:1 under --teal-ink, which is below the AA floor for button text. */
+.btn.primary {
+  color: var(--teal-ink);
+  background-color: var(--teal-fill);
+}
+
+/* gold: money moves */
+.btn.gold {
+  color: var(--gold-ink);
+  background-color: var(--gold);
+}
+
+/* red: fold, leave, kick */
+.btn.danger {
+  color: var(--red-ink);
+  background-color: var(--red);
+}
+
+.btn.ghost {
+  color: var(--ink);
+  background: transparent;
+  border-color: var(--line);
+  box-shadow: none;
+}
+
+.btn.ghost:hover:not(:disabled) {
+  background: var(--gold-soft);
+  border-color: var(--gold);
+}
+
+.spinner {
+  width: 1em;
+  height: 1em;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: spin 720ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+.icon {
+  display: inline-flex;
+  flex: none;
+}
+
+/* ---------- Field ---------- */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+
+.hint {
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+}
+
+.error {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--red);
+}
+
+/* ---------- Select ---------- */
+.select {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 var(--space-7) 0 var(--space-3);
+  color: var(--ink);
+  background-color: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  appearance: none;
+  cursor: pointer;
+}
+
+.select:hover:not(:disabled) {
+  border-color: var(--gold);
+}
+
+.select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.select[aria-invalid='true'] {
+  border-color: var(--red);
+  background-color: var(--red-soft);
+}
+
+.selectWrap {
+  position: relative;
+  display: block;
+}
+
+.selectWrap::after {
+  content: '';
+  position: absolute;
+  right: var(--space-4);
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin-top: -5px;
+  border-right: 2px solid var(--gold);
+  border-bottom: 2px solid var(--gold);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+/* ---------- Panel ---------- */
+.panel {
+  position: relative;
+  padding: var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+}
+
+.panel.ink {
+  color: var(--ink);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 42%),
+    var(--bg-elev);
+}
+
+/* light island: re-declares the paper tokens for everything nested */
+.panel.parchment {
+  --bg: #f7f1e4;
+  --ink: #1b1f2e;
+  --ink-muted: #5c6076;
+  --line: rgba(27, 31, 46, 0.16);
+  --gold: #9a6e15;
+  --gold-soft: rgba(154, 110, 21, 0.14);
+  --gold-ink: #fff8e8;
+  --red: #a9242d;
+  --red-soft: rgba(169, 36, 45, 0.12);
+  --teal: #15544c;
+  --teal-fill: #124a43;
+
+  color: var(--ink);
+  background: linear-gradient(172deg, #fbf7ee 0%, #f0e9d9 100%);
+  border-color: var(--line);
+}
+
+/* night island: keeps its own ink under the light theme */
+.panel.felt {
+  --bg: #0c2226;
+  --ink: #ede7d8;
+  --ink-muted: #a3bab5;
+  --line: rgba(237, 231, 216, 0.14);
+  --gold: #d9a441;
+  --gold-soft: rgba(217, 164, 65, 0.16);
+  --gold-ink: #201607;
+  --red: #c8323c;
+  --red-soft: rgba(200, 50, 60, 0.16);
+  --red-ink: #fdf3f0;
+  --teal: #3f938a;
+  --teal-fill: #17594f;
+  --teal-ink: #f2f7f5;
+
+  color: var(--ink);
+  background:
+    radial-gradient(120% 92% at 50% 8%, rgba(255, 255, 255, 0.06), transparent 62%),
+    var(--felt);
+  border-color: var(--felt-edge);
+  box-shadow: var(--shadow-2), inset 0 0 0 1px rgba(217, 164, 65, 0.14);
+}
+
+.panelTitle {
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-2);
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--gold);
+  border-bottom: 1px solid var(--line);
+}
+
+/* ---------- Badge ---------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border: 1px solid currentColor;
+  border-radius: var(--radius-pill);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.badge.gold {
+  color: var(--gold);
+  background: var(--gold-soft);
+}
+
+.badge.red {
+  color: var(--red);
+  background: var(--red-soft);
+}
+
+.badge.teal {
+  color: var(--teal);
+  background: color-mix(in srgb, var(--teal) 16%, transparent);
+}
+
+.badge.muted {
+  color: var(--ink-muted);
+  background: color-mix(in srgb, var(--ink-muted) 14%, transparent);
+}
+
+/* ---------- Modal ---------- */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: rgba(4, 7, 18, 0.62);
+  backdrop-filter: blur(3px);
+  animation: fade var(--dur-2) var(--ease);
+}
+
+.dialog {
+  width: min(30rem, 100%);
+  max-height: 86vh;
+  /* dvh, so a phone's collapsing address bar cannot push the dialog's own footer out of reach */
+  max-height: 86dvh;
+  overflow-y: auto;
+  padding: var(--space-5);
+  color: var(--ink);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, transparent 38%),
+    var(--bg-elev);
+  border: 1px solid var(--gold-soft);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  animation: rise var(--dur-2) var(--ease);
+}
+
+.dialogHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.dialogTitle {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  color: var(--gold);
+}
+
+.close {
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: 0;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "errors": {
+    "UNAUTHENTICATED": "Bạn chưa đăng nhập",
+    "INVALID_MESSAGE": "Yêu cầu không hợp lệ",
+    "RATE_LIMITED": "Bạn thao tác quá nhanh, vui lòng thử lại sau",
+    "ROOM_NOT_FOUND": "Không tìm thấy phòng",
+    "ROOM_FULL": "Phòng đã đầy",
+    "WRONG_PASSWORD": "Sai mật khẩu",
+    "INVALID_ROOM_CONFIG": "Cấu hình phòng không hợp lệ",
+    "NOT_HOST": "Bạn không phải chủ phòng",
+    "SEAT_TAKEN": "Ghế đã có người ngồi",
+    "INSUFFICIENT_BALANCE": "Số dư không đủ",
+    "NOT_YOUR_TURN": "Chưa đến lượt bạn",
+    "ILLEGAL_ACTION": "Hành động không hợp lệ",
+    "INVALID_AMOUNT": "Mức cược không hợp lệ",
+    "STALE_STATE": "Trạng thái đã cũ, vui lòng thử lại",
+    "DUPLICATE_REQUEST": "Yêu cầu bị trùng",
+    "NOT_IN_HAND": "Bạn không tham gia ván này",
+    "NOT_IN_ROOM": "Bạn không ở trong phòng",
+    "ALREADY_IN_ROOM": "Bạn đã ở trong một phòng khác",
+    "NOT_SEATED": "Bạn chưa ngồi vào bàn",
+    "GAME_IN_PROGRESS": "Ván đang diễn ra",
+    "NOT_ENOUGH_PLAYERS": "Không đủ người chơi",
+    "DISPLAY_NAME_TAKEN": "Tên hiển thị đã được dùng",
+    "SERVER_SHUTDOWN": "Máy chủ đang tắt",
+    "INTERNAL": "Đã xảy ra lỗi, vui lòng thử lại"
+  },
+  "language": {
+    "vi": "Tiếng Việt",
+    "en": "English"
+  },
+  "units": {
+    "points": "điểm",
+    "pointsShort": "điểm",
+    "seconds": "giây"
+  },
+  "time": {
+    "seconds": "{{count}} giây",
+    "minutes": "{{count}} phút"
+  }
+}

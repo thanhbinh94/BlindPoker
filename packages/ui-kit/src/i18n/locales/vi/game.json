@@ -1,0 +1,237 @@
+{
+  "app": {
+    "title": "Bind Poker"
+  },
+  "nav": {
+    "lobby": "Sảnh chờ",
+    "rooms": "Phòng chơi",
+    "profile": "Hồ sơ",
+    "settings": "Cài đặt",
+    "language": "Ngôn ngữ",
+    "logout": "Đăng xuất"
+  },
+  "actions": {
+    "fold": "Bỏ bài",
+    "check": "Xem",
+    "call": "Theo",
+    "bet": "Cược",
+    "raise": "Tố",
+    "allIn": "Tất tay",
+    "play": "Chơi",
+    "sitDown": "Ngồi vào bàn",
+    "standUp": "Đứng dậy",
+    "ready": "Sẵn sàng",
+    "notReady": "Chưa sẵn sàng",
+    "start": "Bắt đầu",
+    "leave": "Rời phòng",
+    "kick": "Đuổi",
+    "resync": "Đồng bộ lại",
+    "create": "Tạo phòng",
+    "join": "Vào phòng",
+    "cancel": "Hủy",
+    "confirm": "Xác nhận",
+    "close": "Đóng",
+    "back": "Quay lại",
+    "retry": "Thử lại"
+  },
+  "labels": {
+    "actions": "Hành động",
+    "allIn": "Tất tay",
+    "amount": "Mức cược",
+    "amountSlider": "Thanh trượt mức cược",
+    "autoStart": "Tự động bắt đầu",
+    "balance": "Số dư",
+    "betSize": "Mức cược",
+    "blinds": "Blind",
+    "bot": "Bot",
+    "buyIn": "Buy-in",
+    "carryOver": "Cộng dồn",
+    "code": "Mã phòng",
+    "community": "Bài chung",
+    "dealer": "Cái",
+    "decided": "Đã chọn",
+    "disconnected": "Mất kết nối",
+    "eligible": "Được chia",
+    "emptySeat": "Ghế trống",
+    "faceDown": "Lá úp",
+    "fee": "Phí bàn",
+    "folded": "Đã bỏ bài",
+    "handCancelled": "Ván bị hủy",
+    "handResult": "Kết quả ván",
+    "holeCards": "Số lá riêng",
+    "host": "Chủ phòng",
+    "inHand": "Đang chơi",
+    "mainPot": "Pot chính",
+    "mode": "Chế độ",
+    "name": "Tên",
+    "notifications": "Thông báo",
+    "nextHandIn": "Ván tiếp theo sau",
+    "password": "Mật khẩu",
+    "payout": "Điểm thắng",
+    "players": "Người chơi",
+    "pot": "Pot",
+    "private": "Riêng tư",
+    "public": "Công khai",
+    "ready": "Sẵn sàng",
+    "seat": "Ghế",
+    "seatNumber": "Ghế {{seat}}",
+    "sidePot": "Pot phụ {{n}}",
+    "sittingOut": "Tạm nghỉ",
+    "split": "Chia đều",
+    "stack": "Stack",
+    "table": "Bàn",
+    "tie": "Hòa",
+    "timer": "Thời gian",
+    "turn": "Lượt",
+    "uncalledReturned": "Hoàn lại phần cược dư",
+    "variant": "Biến thể",
+    "wager": "Mức cược",
+    "waiting": "Đang chờ",
+    "waitingForTurn": "Đang chờ đến lượt bạn",
+    "winner": "Người thắng",
+    "winners": "Những người thắng",
+    "you": "Bạn"
+  },
+  "mode": {
+    "holdem": "Texas Hold'em",
+    "blind": "Blind Poker"
+  },
+  "blind": {
+    "decision": {
+      "none": "Thuần may rủi",
+      "playOrFold": "Chơi hoặc bỏ"
+    },
+    "cards2": "2 lá",
+    "cards3": "3 lá"
+  },
+  "phase": {
+    "dealing": "Đang chia bài",
+    "betting": "Đang cược",
+    "decision": "Đang quyết định",
+    "reveal": "Đang lật bài",
+    "showdown": "So bài",
+    "complete": "Kết thúc"
+  },
+  "street": {
+    "preflop": "Preflop",
+    "flop": "Flop",
+    "turn": "Turn",
+    "river": "River"
+  },
+  "card": {
+    "rank": {
+      "2": "2",
+      "3": "3",
+      "4": "4",
+      "5": "5",
+      "6": "6",
+      "7": "7",
+      "8": "8",
+      "9": "9",
+      "T": "10",
+      "J": "Bồi",
+      "Q": "Đầm",
+      "K": "Già",
+      "A": "Át"
+    },
+    "suit": {
+      "c": "chuồn",
+      "d": "rô",
+      "h": "cơ",
+      "s": "bích"
+    },
+    "of": "{{rank}} {{suit}}"
+  },
+  "hand": {
+    "highCard": "Mậu thầu",
+    "pair": "Một đôi",
+    "twoPair": "Hai đôi",
+    "trips": "Sám",
+    "straight": "Sảnh",
+    "flush": "Thùng",
+    "fullHouse": "Cù lũ",
+    "quads": "Tứ quý",
+    "straightFlush": "Thùng phá sảnh",
+    "royalFlush": "Thùng phá sảnh vua"
+  },
+  "status": {
+    "connecting": "Đang kết nối",
+    "reconnecting": "Đang kết nối lại",
+    "offline": "Mất mạng",
+    "replaced": "Đã đăng nhập ở nơi khác",
+    "online": "Trực tuyến"
+  },
+  "lobby": {
+    "title": "Sảnh chờ",
+    "empty": "Chưa có phòng nào — hãy tạo một phòng.",
+    "create": "Tạo phòng",
+    "joinByCode": "Vào bằng mã phòng",
+    "codePlaceholder": "Nhập mã phòng",
+    "passwordPlaceholder": "Nhập mật khẩu",
+    "filters": {
+      "all": "Tất cả",
+      "holdem": "Hold'em",
+      "blind": "Blind"
+    },
+    "playersOf": "{{current}}/{{max}} người chơi"
+  },
+  "create": {
+    "title": "Tạo phòng mới",
+    "name": "Tên phòng",
+    "mode": "Chế độ chơi",
+    "maxPlayers": "Số người tối đa",
+    "turnTimer": "Thời gian mỗi lượt",
+    "private": "Phòng riêng tư",
+    "password": "Mật khẩu phòng",
+    "autoStart": "Tự động bắt đầu",
+    "smallBlind": "Blind nhỏ",
+    "bigBlind": "Blind lớn",
+    "blindTier": "Mức cược",
+    "buyIn": "Buy-in",
+    "minBuyIn": "Buy-in tối thiểu",
+    "maxBuyIn": "Buy-in tối đa",
+    "holeCards": "Số lá riêng",
+    "decisionMode": "Kiểu quyết định",
+    "wager": "Mức cược cố định",
+    "botCount": "Số lượng bot",
+    "submit": "Tạo phòng",
+    "hint": {
+      "name": "Tên phòng cần 1–30 ký tự.",
+      "password": "Mật khẩu cần 4–20 ký tự.",
+      "buyIn": "Buy-in tối thiểu phải nhỏ hơn hoặc bằng buy-in tối đa.",
+      "botCount": "Số bot phải ít hơn số ghế."
+    }
+  },
+  "room": {
+    "title": "Phòng chơi",
+    "waitingForHost": "Đang chờ chủ phòng bắt đầu",
+    "readyCount": "{{ready}}/{{total}} sẵn sàng",
+    "startHint": "Cần ít nhất 2 người sẵn sàng để bắt đầu",
+    "leaveConfirm": "Bạn có chắc muốn rời phòng?",
+    "closed": "Phòng đã đóng",
+    "kicked": "Bạn đã bị đuổi khỏi phòng",
+    "hostLeft": "Chủ phòng đã rời đi",
+    "reconnecting": "Mất kết nối — đang kết nối lại…",
+    "buyInTitle": "Chọn mức mang vào",
+    "controls": "Điều khiển bàn"
+  },
+  "cancel": {
+    "shutdown": "Máy chủ đang tắt",
+    "serverRestart": "Máy chủ khởi động lại",
+    "roomClosed": "Phòng đã đóng",
+    "maintenance": "Máy chủ đang bảo trì",
+    "other": "Không rõ lý do"
+  },
+  "notify": {
+    "KICKED": "Bạn đã bị mời khỏi phòng",
+    "ROOM_CLOSED": "Phòng đã đóng",
+    "DAILY_REWARD": "Thưởng hằng ngày: {{amount}} điểm",
+    "other": "Thông báo mới"
+  },
+  "presets": {
+    "min": "Min",
+    "half": "½",
+    "pot": "Pot",
+    "max": "Max"
+  }
+}

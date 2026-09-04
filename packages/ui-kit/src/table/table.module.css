@@ -1,0 +1,1193 @@
+/* Đêm Sài Gòn — the table. Teal-black felt under a gold rail, ivory cards, lacquer-red backs.
+   All motion is CSS: a dealt-card flip, a conic turn ring, one pot pulse, one winner glow. */
+
+/* ---------------- Card ---------------- */
+.card {
+  width: var(--card-w, 46px);
+  height: auto;
+  aspect-ratio: 60 / 84;
+  flex: none;
+  filter: drop-shadow(0 2px 3px rgba(3, 6, 16, 0.48));
+  animation: deal 340ms var(--ease) backwards;
+  animation-delay: var(--deal-delay, 0ms);
+  transform-origin: 50% 62%;
+}
+
+.cardSm {
+  --card-w: clamp(26px, 6.4vw, 34px);
+}
+
+.cardMd {
+  --card-w: clamp(32px, 8vw, 46px);
+}
+
+.cardLg {
+  --card-w: var(--card-lg, clamp(40px, 10.4vw, 62px));
+}
+
+.cardHi {
+  filter: drop-shadow(0 0 5px rgba(217, 164, 65, 0.9)) drop-shadow(0 2px 3px rgba(3, 6, 16, 0.48));
+}
+
+@keyframes deal {
+  from {
+    opacity: 0;
+    transform: perspective(420px) rotateY(-82deg) translateY(-8px);
+  }
+}
+
+.cFace {
+  fill: var(--card-face);
+  stroke: rgba(22, 24, 29, 0.3);
+  stroke-width: 0.75;
+}
+
+.cInk {
+  fill: var(--card-ink);
+}
+
+.cRed {
+  fill: var(--card-red);
+}
+
+.cRank {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+
+.cRankWide {
+  font-size: 10.5px;
+  letter-spacing: -0.6px;
+}
+
+.cAceRing {
+  fill: none;
+  stroke: rgba(176, 141, 62, 0.5);
+  stroke-width: 0.8;
+}
+
+.cCourt {
+  stroke: none;
+}
+
+.cCourtRed {
+  fill: rgba(200, 50, 60, 0.1);
+}
+
+.cCourtInk {
+  fill: rgba(22, 24, 29, 0.08);
+}
+
+.cCourtRail {
+  fill: none;
+  stroke: rgba(176, 141, 62, 0.55);
+  stroke-width: 0.7;
+}
+
+.cCourtLetter {
+  font-family: var(--font-display);
+  font-size: 25px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+
+.cardDown {
+  filter: drop-shadow(0 2px 4px rgba(3, 6, 16, 0.55));
+}
+
+.cBack {
+  fill: #8f2029;
+  stroke: rgba(3, 6, 16, 0.45);
+  stroke-width: 0.75;
+}
+
+.cLattice {
+  fill: none;
+  stroke: rgba(217, 164, 65, 0.3);
+  stroke-width: 0.9;
+}
+
+.cBackRail {
+  fill: none;
+  stroke: rgba(217, 164, 65, 0.55);
+  stroke-width: 1;
+}
+
+.cBackMark {
+  fill: rgba(217, 164, 65, 0.78);
+}
+
+.cBackDot {
+  fill: #8f2029;
+}
+
+/* ---------------- Community ---------------- */
+.community {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+}
+
+.slot {
+  width: var(--card-lg, clamp(40px, 10.4vw, 62px));
+  aspect-ratio: 60 / 84;
+  flex: none;
+  border: 1.5px dashed rgba(217, 164, 65, 0.26);
+  border-radius: 6px;
+  background: rgba(3, 10, 12, 0.22);
+}
+
+/* ---------------- Pot ---------------- */
+.pot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 3px var(--space-3) 3px var(--space-2);
+  border: 1px solid rgba(217, 164, 65, 0.34);
+  border-radius: var(--radius-pill);
+  background: rgba(4, 12, 14, 0.7);
+  box-shadow: 0 6px 20px rgba(3, 6, 16, 0.45);
+}
+
+.potChips {
+  display: flex;
+  animation: potPulse 640ms var(--ease);
+}
+
+.chipStack {
+  width: 30px;
+  height: auto;
+}
+
+.chipShadow {
+  fill: rgba(3, 6, 16, 0.4);
+}
+
+.chipA {
+  fill: var(--gold);
+}
+
+.chipB {
+  fill: #a97c25;
+}
+
+.chipTop {
+  fill: rgba(255, 255, 255, 0.42);
+}
+
+.potLabel {
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.potValue {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  animation: potPop 640ms var(--ease);
+}
+
+.potCarry {
+  padding-left: var(--space-2);
+  border-left: 1px solid rgba(217, 164, 65, 0.28);
+  font-size: 0.6875rem;
+  color: var(--gold);
+}
+
+@keyframes potPulse {
+  35% {
+    transform: translateY(-4px) scale(1.14);
+  }
+}
+
+@keyframes potPop {
+  30% {
+    transform: scale(1.12);
+  }
+}
+
+/* ---------------- Turn timer ---------------- */
+.timer {
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  z-index: 2;
+  width: var(--ring, 44px);
+  height: var(--ring, 44px);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+/* the sweep lives on a pseudo-element so the donut mask never clips the seconds pill */
+.timer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, var(--gold) var(--pct, 0%), rgba(237, 231, 216, 0.18) 0);
+  -webkit-mask: radial-gradient(closest-side, transparent 77%, #000 78%);
+  mask: radial-gradient(closest-side, transparent 77%, #000 78%);
+}
+
+.timerText {
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  padding: 0 5px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(217, 164, 65, 0.55);
+  border-radius: var(--radius-pill);
+  background: #0a1220;
+  font-family: var(--font-display);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.timerUrgent::before {
+  background: conic-gradient(from 0deg, var(--red) var(--pct, 0%), rgba(237, 231, 216, 0.18) 0);
+}
+
+.timerUrgent .timerText {
+  border-color: rgba(240, 146, 154, 0.7);
+  color: #f0929a;
+}
+
+/* ---------------- Seat ---------------- */
+.seat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.seatCards {
+  display: flex;
+  gap: 3px;
+}
+
+/* seats on the top rim read plate-first so their cards fall towards the felt */
+.seat[data-half='top'] .plate {
+  order: -1;
+}
+
+.plate {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, rgba(24, 32, 58, 0.96), rgba(8, 13, 26, 0.96));
+  box-shadow: var(--shadow-1);
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  overflow: hidden;
+  border-radius: 50%;
+  border: 1px solid rgba(217, 164, 65, 0.42);
+  background: radial-gradient(120% 120% at 30% 20%, #23304f, #10182c);
+  font-family: var(--font-display);
+  font-size: 0.9375rem;
+  color: var(--gold);
+}
+
+.plateText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+  line-height: 1.2;
+}
+
+.seatName {
+  overflow: hidden;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seatStack {
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  justify-content: center;
+}
+
+/* A seat's badges hang past the felt onto the page. Their default tint is translucent, which in the light theme
+   would leave gold ink floating on parchment, so on the table they mix their own tone into an opaque night ground. */
+.seat .tags > * {
+  background-color: color-mix(in srgb, currentColor 14%, var(--bg));
+}
+
+.dealer {
+  position: absolute;
+  right: -5px;
+  top: -7px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #fbf6e8, #ddd2b6);
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #1b1f2e;
+  box-shadow: 0 2px 5px rgba(3, 6, 16, 0.55);
+}
+
+.bet {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px var(--space-2);
+  border: 1px solid rgba(217, 164, 65, 0.4);
+  border-radius: var(--radius-pill);
+  background: #08171a;
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.bet::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: inset 0 0 0 1.5px rgba(4, 12, 14, 0.8);
+}
+
+.handTag {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--gold);
+}
+
+.payout {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--gold);
+  text-shadow: 0 0 10px rgba(217, 164, 65, 0.55);
+  animation: riseUp 420ms var(--ease) backwards;
+}
+
+@keyframes riseUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.seatMe .plate {
+  border-color: rgba(217, 164, 65, 0.5);
+}
+
+.seatActing .plate {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold-soft), 0 6px 22px rgba(217, 164, 65, 0.28);
+}
+
+.seatWin .plate {
+  border-color: var(--gold);
+  animation: winGlow 1.5s var(--ease) 2;
+}
+
+@keyframes winGlow {
+  50% {
+    box-shadow: 0 0 0 3px var(--gold-soft), 0 0 26px 6px rgba(217, 164, 65, 0.45);
+  }
+}
+
+.seatFolded {
+  opacity: 0.52;
+}
+
+.seatFolded .seatCards {
+  filter: grayscale(0.85);
+}
+
+.seatOffline .plate {
+  border-style: dashed;
+}
+
+/* empty seats */
+.emptyMark,
+.sitBtn {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-pill);
+  background: rgba(6, 14, 26, 0.45);
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+}
+
+.sitBtn {
+  font-family: var(--font-body);
+  font-weight: 600;
+  color: var(--gold);
+  border-color: rgba(217, 164, 65, 0.45);
+  cursor: pointer;
+  transition: background-color var(--dur-1) var(--ease);
+}
+
+.sitBtn:hover {
+  background: var(--gold-soft);
+  border-style: solid;
+}
+
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------------- Table ---------------- */
+.table {
+  color: var(--ink);
+}
+
+/* Height-led, not width-led: inside a stage of known height (`RoomScreen`) the oval takes the space between the room
+   header and the action tray and derives its width from it, so the tray is never pushed off screen. The margins
+   reserve the half seat-block that hangs outside the box at the top and bottom. Where the height is *unknown* the
+   percentage resolves to `auto`, `min-height` takes over and the ratio gives the width. */
+.ring {
+  position: relative;
+  container-type: size;
+  height: calc(100% - var(--space-7) - var(--space-8));
+  min-height: 15rem;
+  /* 980 x 490 is the oval at full size; past that the stage just gets more air around it */
+  max-height: 490px;
+  width: auto;
+  max-width: min(980px, 100%);
+  /* asymmetric on purpose: the viewer's own seat at the bottom carries an extra badge row */
+  margin: var(--space-7) auto var(--space-8);
+  aspect-ratio: 2 / 1;
+}
+
+.felt {
+  position: absolute;
+  inset: 6% 3%;
+  border-radius: 50%;
+  background:
+    radial-gradient(70% 76% at 50% 24%, rgba(255, 255, 255, 0.075), transparent 62%),
+    radial-gradient(122% 122% at 50% 50%, #15393e 0%, var(--felt) 56%, #07161a 100%);
+  box-shadow:
+    inset 0 0 0 3px rgba(217, 164, 65, 0.5),
+    inset 0 0 0 11px rgba(8, 18, 20, 0.92),
+    inset 0 14px 46px rgba(0, 0, 0, 0.5),
+    0 26px 60px rgba(3, 6, 16, 0.55);
+}
+
+/* 48 %, not 45 %: equidistant from the top and bottom seats is what keeps the board clear of them on a short stage.
+   The board is sized off the felt (`cqh`) rather than the viewport for the same reason; browsers without container
+   units keep the `vw` clamp on the line above. */
+.ring .centre {
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  transform: translate(-50%, -50%);
+  --card-lg: clamp(40px, 10.4vw, 62px);
+  --card-lg: clamp(30px, 11cqh, 62px);
+}
+
+.centre {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.ring {
+  --seat-w: 15%;
+}
+
+/* A full table seats nine blocks on a rim about fifteen name-plates long: at the default size two neighbours on the
+   short flanks sit on top of each other, so from seven seats up the plate goes compact. */
+.ring:is([data-seats='7'], [data-seats='8'], [data-seats='9']) {
+  --seat-w: 13%;
+  --seat-min: 94px;
+  --seat-gap: 2px;
+  --seat-disc: 24px;
+  --seat-name: 0.75rem;
+}
+
+.ring:is([data-seats='7'], [data-seats='8'], [data-seats='9']) .cardSm {
+  --card-w: clamp(20px, 5vw, 26px);
+}
+
+.ring .seat {
+  position: absolute;
+  width: var(--seat-w);
+  min-width: var(--seat-min, 104px);
+  gap: var(--seat-gap, 4px);
+  transform: translate(-50%, -50%);
+}
+
+.ring .avatar {
+  width: var(--seat-disc, 30px);
+  height: var(--seat-disc, 30px);
+  font-size: calc(var(--seat-disc, 30px) * 0.5);
+}
+
+.ring .plate {
+  gap: var(--seat-gap, 4px) 6px;
+  padding: 3px 6px;
+}
+
+.ring .seatName,
+.ring .seatStack {
+  font-size: var(--seat-name, 0.8125rem);
+}
+
+/* A ring squeezed into a short stage — a small window, or an app with a bar of its own above the room. The plates
+   keep their size because they carry the names; the cards and the gaps give, so a hand never lands on the board.
+   (`.ring` is a size container, so this asks about the felt, not the window.) */
+@container (max-height: 330px) {
+  .ring {
+    --seat-gap: 2px;
+  }
+
+  .ring .cardSm {
+    --card-w: clamp(20px, 5vw, 26px);
+  }
+
+  .ring .cardMd {
+    --card-w: clamp(24px, 6vw, 32px);
+  }
+}
+
+/* vertical layout under 768 px: opponents / board / me (spec §27.1 two-row grid, §27.3 "must show" list).
+   Every seat at the table has to be *visible*. An opponent parked behind an inner scrollbar is an opponent the
+   player does not know is at the table — so the strip never scrolls inside itself: it wraps as far as it needs to,
+   keeps a hard floor of two plate rows, and the felt is the row that gives instead. */
+/* Rows: opponents / felt / me. Two notes on the track sizes, both learned the hard way in the browser.
+   - `minmax(min-content, auto)` on the strip, not a bare `auto`: the two-row floor below is a `min-height`, and a
+     specified `min-height` *replaces* a grid item's automatic minimum size — so with a plain `auto` track a
+     squeezed stage shrinks the strip back to exactly those two rows and clips the third. Pinning the track's
+     minimum to the strip's own min-content height makes the floor a floor and never a ceiling.
+   - The felt is the only flexible row (`1fr`), so it is the one that takes or gives the slack — but its minimum is
+     `min-content`, not `0`. The board and the pot are on spec §27.3's must-show list; a `0` minimum collapses the
+     felt to its padding and drops the community cards behind the viewer's own seat. When even that does not fit,
+     `.roomMain` scrolls, which is a scrollbar the player can see. */
+.stack {
+  display: grid;
+  grid-template-rows: minmax(min-content, auto) minmax(min-content, 1fr) auto;
+  gap: var(--space-3);
+  align-self: stretch;
+  /* inside `.roomMain`, which centres its child: without this the strip would only be as wide as its plates */
+  width: 100%;
+  min-height: 0;
+  /* one opponent block in the strip = plate + its cards + its badge row; the two-row floor is measured in these */
+  --plate-h: 104px;
+}
+
+/* `auto-fill`, not `auto-fit`: an empty trailing track keeps three columns at 360 px instead of stretching two
+   plates across the whole strip once the seats run out. */
+.others {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--plate-min, 104px), 1fr));
+  gap: var(--space-2);
+  align-items: start;
+  align-content: start;
+}
+
+/* From four opponents up the strip is a two-row grid whatever the felt would rather have. Below that the seats fit
+   on one row anyway and reserving a second would only steal height from the board. */
+.othersTwoRow {
+  min-height: calc(2 * var(--plate-h) + var(--space-2));
+}
+
+/* Seven seats and up: three plates a row is already the floor at 360 px, so the block gives instead of the grid.
+   The opponent becomes a chip — avatar, name, stack, and a second line carrying the bet and the state badge side
+   by side instead of one under the other. What goes is the pair of face-down card backs: for an *opponent* they
+   only ever say "still holding two", which the badge row says in words. Everything spec §27.3 asks a seat to show
+   — name, stack, avatar, current bet, fold/all-in/sitting-out/disconnected — stays. Shrinking the block is what
+   keeps the third row on screen; hiding the ninth player is not an alternative. */
+.othersChip {
+  --plate-min: 96px;
+  --plate-h: 54px;
+}
+
+.othersChip .seat {
+  flex-flow: row wrap;
+  justify-content: center;
+  gap: 3px;
+}
+
+.othersChip .plate {
+  flex: 0 0 100%;
+}
+
+.othersChip .seatCards {
+  display: none;
+}
+
+.othersChip .plate {
+  gap: 5px;
+  padding: 3px 5px;
+}
+
+.othersChip .avatar {
+  width: 22px;
+  height: 22px;
+  font-size: 0.6875rem;
+}
+
+.othersChip .seatName,
+.othersChip .seatStack {
+  font-size: 0.6875rem;
+}
+
+.othersChip .cardSm {
+  --card-w: clamp(18px, 5.2vw, 24px);
+}
+
+/* The turn ring is meant to sit over the avatar disc, not over the name beside it: `Seat` asks for a 38 px ring,
+   which is taller than a compact plate, so the chip sizes it down to the disc it belongs to. (The size arrives as
+   an inline custom property, so this has to set the box directly rather than re-declare `--ring`.) */
+.othersChip .timer {
+  left: 4px;
+  width: 28px;
+  height: 28px;
+}
+
+.othersChip .timerText {
+  bottom: -5px;
+  padding: 0 4px;
+  font-size: 0.5625rem;
+}
+
+/* The badge row and the bet chip stay — a folded or all-in seat must say so in words, not in hue alone — they just
+   stop claiming a full line each. */
+.othersChip .tags {
+  gap: 2px;
+}
+
+.othersChip .tags > * {
+  padding: 0 5px;
+  font-size: 0.625rem;
+  letter-spacing: 0;
+}
+
+.othersChip .bet {
+  padding: 0 6px;
+  font-size: 0.625rem;
+}
+
+.othersChip .bet::before {
+  width: 6px;
+  height: 6px;
+}
+
+/* plate first keeps every opponent's name on the same baseline whatever their card count */
+.others .plate {
+  order: -1;
+}
+
+.stackFelt {
+  padding: var(--space-4) var(--space-3);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(80% 120% at 50% 0%, rgba(255, 255, 255, 0.06), transparent 60%),
+    linear-gradient(180deg, #14363b, #0a1f23);
+  box-shadow:
+    inset 0 0 0 2px rgba(217, 164, 65, 0.4),
+    inset 0 0 0 6px rgba(8, 18, 20, 0.9),
+    0 14px 34px rgba(3, 6, 16, 0.5);
+}
+
+.mine {
+  display: flex;
+  justify-content: center;
+}
+
+.mine .seat {
+  width: min(100%, 340px);
+}
+
+/* ---------------- Action tray ---------------- */
+.tray {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid rgba(217, 164, 65, 0.34);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: linear-gradient(180deg, rgba(22, 30, 56, 0.95), rgba(7, 11, 24, 0.98));
+  box-shadow: 0 -14px 40px rgba(3, 6, 16, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.trayRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Reserve the sizing tray's height, so the felt above keeps one size whether the tray is offering four buttons and a
+   slider or just saying it is not your turn yet. */
+@media (min-width: 768px) {
+  .tray {
+    min-height: 8.25rem;
+    justify-content: center;
+  }
+}
+
+.trayWait {
+  padding: var(--space-2) 0;
+  text-align: center;
+  font-size: 0.9rem;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+}
+
+.grow {
+  flex: 1 1 auto;
+}
+
+.sizer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.presets {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.preset {
+  min-width: 52px;
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--gold-soft);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  font-weight: 600;
+  color: var(--gold);
+  cursor: pointer;
+  transition: background-color var(--dur-1) var(--ease);
+}
+
+.preset:hover:not(:disabled) {
+  background: var(--gold-soft);
+  border-color: var(--gold);
+}
+
+.preset:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (pointer: coarse) {
+  .preset {
+    min-height: var(--tap);
+  }
+}
+
+.sizerRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Above the phone breakpoint the presets sit beside the amount, not above it: one row less of tray is ~52 px more
+   felt, which on an 800 px-tall laptop is the difference between a comfortable table and a cramped one. */
+@media (min-width: 768px) {
+  .sizer {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .sizerRow {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
+.amount {
+  width: 8.5rem;
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(5, 9, 20, 0.8);
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  color: var(--gold);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* the raise button owns the solid gold; all-in steps back to an outline when both are offered */
+.allInGhost {
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
+.slider {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: var(--tap);
+  accent-color: var(--gold);
+  background: transparent;
+}
+
+/* spec §27.1: under 768 px a thumb cannot hit a 1-point step, so the range control drops out and
+   sizing is done with the presets plus the number input, which stay full-width in its place.
+   The tray also tightens up: on a 375 px screen the four action buttons at full size push the felt — and the
+   viewer's own cards with it — off the bottom of the stage. */
+@media (max-width: 767px) {
+  .slider {
+    display: none;
+  }
+
+  .amount {
+    width: 100%;
+  }
+
+  .tray {
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3) calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .tray .trayRow > button {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0 var(--space-2);
+    font-size: 0.875rem;
+  }
+
+  .presets {
+    justify-content: space-between;
+  }
+
+  .preset {
+    flex: 1 1 0;
+  }
+}
+
+/* ---------------- Hand result ---------------- */
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid rgba(217, 164, 65, 0.42);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 40%),
+    var(--bg-elev);
+  box-shadow: var(--shadow-2), 0 0 34px rgba(217, 164, 65, 0.16);
+  animation: riseUp 320ms var(--ease) backwards;
+}
+
+.resultHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.resultTitle {
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-style: italic;
+  color: var(--gold);
+}
+
+.resultNote {
+  font-size: 0.875rem;
+  color: var(--ink-muted);
+}
+
+.resultRows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.resultRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.resultMine {
+  box-shadow: inset 0 0 0 1px rgba(217, 164, 65, 0.4);
+}
+
+.resultName {
+  font-weight: 600;
+}
+
+.resultHand {
+  font-family: var(--font-display);
+  font-style: italic;
+  color: var(--gold);
+}
+
+.resultCards {
+  display: flex;
+  gap: 3px;
+  margin-left: auto;
+}
+
+.resultPayout {
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The side-pot ledger: a hairline-ruled list under the winners' rows, read as a receipt rather than a table.
+   Name and amount hold the top line; who was eligible and who was paid sit under it in the quiet ink. */
+.pots {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) 0 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+
+.potRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px var(--space-3);
+  align-items: baseline;
+}
+
+.potName {
+  font-family: var(--font-display);
+  font-size: 0.9375rem;
+  font-style: italic;
+  color: var(--ink);
+}
+
+.potAmount {
+  font-family: var(--font-display);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.potEligible {
+  grid-column: 1;
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+}
+
+.potWinners {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  grid-column: 2;
+}
+
+.potWinner {
+  font-size: 0.75rem;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.resultFoot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.resultMeta {
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+}
+
+/* ---------------- Room header ---------------- */
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+
+/* On a phone the identity bar is competing with the felt for the same 800 px of screen: same information, less air. */
+@media (max-width: 767px) {
+  .header {
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .modeGlyph {
+    font-size: 1.375rem;
+  }
+
+  .roomName {
+    font-size: 1.0625rem;
+  }
+
+  .headMeta {
+    gap: 6px;
+    margin-top: 1px;
+    font-size: 0.75rem;
+  }
+
+  .conn {
+    padding: 2px var(--space-2);
+    font-size: 0.75rem;
+  }
+}
+
+.headMain {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.modeGlyph {
+  font-size: 1.75rem;
+  line-height: 1;
+  color: var(--gold);
+}
+
+.headText {
+  min-width: 0;
+}
+
+.roomName {
+  font-size: 1.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: 3px;
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+}
+
+.code {
+  font-family: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Menlo, monospace;
+  letter-spacing: 0.16em;
+  color: var(--gold);
+}
+
+.stakes,
+.players {
+  white-space: nowrap;
+}
+
+.headRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.conn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.connDot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--ink-muted);
+}
+
+.conn[data-status='open'] .connDot {
+  background: var(--teal);
+}
+
+.conn[data-status='connecting'] .connDot,
+.conn[data-status='reconnecting'] .connDot {
+  background: var(--gold);
+}
+
+.conn[data-status='closed'] .connDot,
+.conn[data-status='idle'] .connDot {
+  background: var(--red);
+}
+
+/* ---------------- Motion off ---------------- */
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .potChips,
+  .potValue,
+  .payout,
+  .result,
+  .seatWin .plate {
+    animation: none;
+  }
+}

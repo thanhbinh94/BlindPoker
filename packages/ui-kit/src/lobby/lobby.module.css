@@ -1,0 +1,471 @@
+/* Lobby — a room is a torn-off ticket: dark stub, perforated seam, printed body. */
+
+/* Segmented control */
+.segment {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.segBtn {
+  min-height: 36px;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+
+.segBtn[aria-pressed='true'] {
+  color: var(--gold-ink);
+  background: var(--gold);
+  box-shadow: var(--shadow-1);
+}
+
+@media (pointer: coarse) {
+  .segBtn {
+    min-height: var(--tap);
+  }
+}
+
+/* Room list */
+.filters {
+  margin-bottom: var(--space-4);
+}
+
+.list {
+  --ground: var(--bg);
+
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.empty {
+  padding: var(--space-8) var(--space-5);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-lg);
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  color: var(--ink-muted);
+  text-align: center;
+}
+
+/* printed paper: the parchment palette in either theme */
+.ticket {
+  --ink: #1b1f2e;
+  --ink-muted: #5c6076;
+  --line: rgba(27, 31, 46, 0.16);
+  --gold: #9a6e15;
+  --gold-soft: rgba(154, 110, 21, 0.14);
+  --red: #a9242d;
+  --teal: #15544c;
+  --teal-fill: #124a43;
+  --teal-ink: #f2f7f5;
+
+  position: relative;
+  display: flex;
+  min-height: 9.5rem;
+  overflow: hidden;
+  color: var(--ink);
+  background: linear-gradient(172deg, #fbf7ee 0%, #f0e9d9 100%);
+  border: 1px solid rgba(27, 31, 46, 0.18);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-2);
+  transition:
+    transform var(--dur-2) var(--ease),
+    box-shadow var(--dur-2) var(--ease);
+}
+
+.ticket:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2), 0 0 0 1px rgba(217, 164, 65, 0.5);
+}
+
+/* the stub: night side, big glyph, serial-number code */
+.stub {
+  position: relative;
+  flex: 0 0 5.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-2);
+  color: #ede7d8;
+  background-color: #101736;
+  background-image: radial-gradient(120% 90% at 50% 0%, rgba(255, 255, 255, 0.09), transparent 62%);
+}
+
+.blind .stub {
+  background-color: #3a1219;
+}
+
+/* perforation */
+.stub::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 3px;
+  height: 100%;
+  background: repeating-linear-gradient(to bottom, rgba(27, 31, 46, 0.6) 0 5px, transparent 5px 10px);
+}
+
+/* the bites that make it read as torn */
+.notch {
+  position: absolute;
+  left: 5.25rem;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  border-radius: 50%;
+  background: var(--ground);
+}
+
+.notchTop {
+  top: -7px;
+}
+
+.notchBottom {
+  bottom: -7px;
+}
+
+.glyph {
+  font-family: var(--font-display);
+  font-size: 2.75rem;
+  line-height: 1;
+  color: #d9a441;
+}
+
+.blind .glyph {
+  color: #eccf94;
+}
+
+.stubCode {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: rgba(237, 231, 216, 0.74);
+  font-variant-numeric: tabular-nums;
+}
+
+.body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+}
+
+.ticketHead,
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.roomName,
+.name {
+  margin: 0;
+  margin-right: auto;
+  font-family: var(--font-display);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.roomName {
+  font-size: 1.125rem;
+}
+
+.lock {
+  flex: none;
+  color: var(--ink-muted);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+}
+
+.metaItem,
+.balance {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.meta dt,
+.meta dd {
+  margin: 0;
+}
+
+.metaValue,
+.count,
+.points {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+}
+
+.metaValue {
+  font-size: 0.9375rem;
+  color: var(--ink);
+}
+
+.ticketFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: auto;
+  padding-top: var(--space-2);
+  border-top: 1px dashed var(--line);
+}
+
+.count {
+  font-size: 1.25rem;
+  color: var(--ink);
+}
+
+.countFull {
+  color: var(--red);
+}
+
+/* Forms. The alert keeps ink text: --red on its tint is 2.8:1; rule + tint carry the signal. */
+.form,
+.join,
+.grid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+/* caption for a button group: nothing to point at, so not a <label> */
+.label {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.grid {
+  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+.input {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  color: var(--ink);
+  background-color: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+
+.input[aria-invalid='true'] {
+  border-color: var(--red);
+  background-color: var(--red-soft);
+}
+
+.code {
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+/* the wide tracking is for a six-character code, not for a sentence: the hint would be cut off wearing it */
+.code::placeholder {
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--tap);
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.checkbox {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  accent-color: var(--gold);
+}
+
+/* The settings list is longer than a phone screen, so the dialog scrolls — but the button that finishes the job
+   rides along at the foot of it instead of hiding below the fold. */
+.formFoot {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-3) 0 var(--space-4);
+  background: linear-gradient(180deg, transparent, var(--bg-elev) 18px);
+}
+
+.alert {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3) var(--space-4);
+  font-size: 0.875rem;
+  color: var(--ink);
+  background: var(--red-soft);
+  border: 1px solid var(--red);
+  border-left-width: 4px;
+  border-radius: var(--radius-md);
+}
+
+.joinRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.joinField {
+  flex: 1 1 9rem;
+}
+
+/* Player bar */
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  color: var(--ink);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 60%),
+    var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  color: var(--gold-ink);
+  background: var(--gold);
+}
+
+.who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-right: auto;
+}
+
+.name {
+  font-size: 1rem;
+}
+
+.balance {
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+}
+
+/* Amount and unit are one run of text ("100.000 điểm"), so they must never break across two lines: half a balance
+   on its own line is how the eye starts reading the number as a currency figure. */
+.points {
+  font-size: 0.9375rem;
+  color: var(--gold);
+  white-space: nowrap;
+}
+
+/* the pill keeps high-contrast ink; the dot carries the hue */
+.conn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px var(--space-3);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+}
+
+.connDot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ink-muted);
+}
+
+.conn[data-status='open'] .connDot {
+  background: var(--teal);
+}
+
+.conn[data-status='connecting'] .connDot,
+.conn[data-status='reconnecting'] .connDot {
+  background: var(--gold);
+  animation: blip 1.1s var(--ease) infinite;
+}
+
+.conn[data-status='closed'] .connDot {
+  background: var(--red);
+}
+
+@keyframes blip {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .connDot {
+    animation: none;
+  }
+
+  .ticket,
+  .ticket:hover {
+    transition: none;
+    transform: none;
+  }
+}
