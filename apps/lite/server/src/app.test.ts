@@ -1,0 +1,389 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { ECONOMY } from '@bp/core'
+import { silentLogger } from '@bp/server-kit'
+import { TestClient } from '@bp/server-kit/testing'
+import { afterEach, describe, expect, it } from 'vitest'
+import { buildApp, type LiteApp } from './app.js'
+import { DEFAULT_CONFIG, type LiteConfig } from './config.js'
+import { openDatabase } from './db/sqlite.js'
+import { assetSourceFromDir, type AssetSource } from './http/assets.js'
+import { createSqliteRepositories, type LiteRepositories } from './repos/sqlite-repos.js'
+
+const XRW = { 'x-requested-with': 'bind-poker' }
+const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:"
+
+interface Harness {
+  app: LiteApp
+  repos: LiteRepositories
+  setNow(ms: number): void
+}
+
+const started: Harness[] = []
+const dirs: string[] = []
+const clients: TestClient[] = []
+
+function publicDir(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'bp-app-'))
+  dirs.push(dir)
+  mkdirSync(join(dir, 'assets'))
+  writeFileSync(join(dir, 'index.html'), '<!doctype html><title>Bind Poker</title><div id="root"></div>')
+  writeFileSync(join(dir, 'assets', 'app-abc123.js'), 'console.log(1)')
+  return dir
+}
+
+function makeApp(opts: { assets?: AssetSource | null; config?: Partial<LiteConfig>; now?: number } = {}): Harness {
+  let nowMs = opts.now ?? Date.UTC(2026, 8, 4, 3, 0) // 2026-09-04 10:00 ICT
+  const repos = createSqliteRepositories(openDatabase(':memory:'), { handLog: false, now: () => nowMs })
+  const config: LiteConfig = { ...DEFAULT_CONFIG, port: 0, host: '127.0.0.1', sqlitePath: ':memory:', ...opts.config }
+  const assets = opts.assets === undefined ? assetSourceFromDir(publicDir()) : opts.assets
+  const app = buildApp({
+    config,
+    repos,
+    assets,
+    log: silentLogger,
+    now: () => nowMs,
+    gatewayOptions: { heartbeatIntervalMs: 60_000, heartbeatTimeoutMs: 120_000 },
+  })
+  const harness: Harness = { app, repos, setNow: (ms) => { nowMs = ms } }
+  started.push(harness)
+  return harness
+}
+
+async function createSession(h: Harness, displayName: string): Promise<{ playerId: string; token: string; balance: number }> {
+  const res = await h.app.fastify.inject({ method: 'POST', url: '/api/session', headers: XRW, payload: { displayName } })
+  expect(res.statusCode).toBe(201)
+  return res.json() as { playerId: string; token: string; balance: number }
+}
+
+afterEach(async () => {
+  for (const c of clients.splice(0)) await c.close().catch(() => {})
+  for (const h of started.splice(0)) await h.app.close()
+  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+})
+
+describe('GET /health', () => {
+  it('reports the process, the game server and the database', async () => {
+    const h = makeApp()
+    const res = await h.app.fastify.inject('/health')
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ status: 'ok', uptime: expect.any(Number), connections: 0, rooms: 0, db: 'ok' })
+    expect(res.headers['cache-control']).toBe('no-store')
+  })
+})
+
+describe('GET /api/config', () => {
+  it('publishes the client-facing economy parameters', async () => {
+    const h = makeApp()
+    const res = await h.app.fastify.inject('/api/config')
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({
+      edition: 'lite',
+      wsPath: '/ws',
+      economy: {
+        startingBalance: ECONOMY.startingBalance,
+        blindWagerTiers: [...ECONOMY.blindWagerTiers],
+        holdemBlindTiers: ECONOMY.holdemBlindTiers.map((t) => ({ smallBlind: t.smallBlind, bigBlind: t.bigBlind })),
+        reliefThreshold: ECONOMY.reliefThreshold,
+        reliefTarget: ECONOMY.reliefTarget,
+      },
+      languages: ['vi', 'en'],
+    })
+    expect(res.headers['cache-control']).toBe('no-store')
+  })
+})
+
+describe('POST /api/session', () => {
+  it('creates a player and returns a usable token', async () => {
+    const h = makeApp()
+    const res = await h.app.fastify.inject({ method: 'POST', url: '/api/session', headers: XRW, payload: { displayName: 'Alice' } })
+    expect(res.statusCode).toBe(201)
+    const body = res.json() as { playerId: string; displayName: string; token: string; balance: number }
+    expect(body).toEqual({ playerId: expect.any(String), displayName: 'Alice', token: expect.any(String), balance: ECONOMY.startingBalance })
+    expect(h.repos.getLitePlayer(body.playerId)?.displayName).toBe('Alice')
+
+    const me = await h.app.fastify.inject({ url: '/api/me', headers: { authorization: `Bearer ${body.token}` } })
+    expect(me.statusCode).toBe(200)
+  })
+
+  it('rejects a malformed display name with INVALID_NAME', async () => {
+    const h = makeApp()
+    for (const displayName of ['a', ' Alice', 'x'.repeat(21), 'Al<b>ice']) {
+      const res = await h.app.fastify.inject({ method: 'POST', url: '/api/session', headers: XRW, payload: { displayName } })
+      expect(res.statusCode).toBe(400)
+      expect((res.json() as { error: { code: string } }).error.code).toBe('INVALID_NAME')
+    }
+  })
+
+  it('rejects a missing or non-string display name with INVALID_NAME', async () => {
+    const h = makeApp()
+    const missing = await h.app.fastify.inject({ method: 'POST', url: '/api/session', headers: XRW, payload: {} })
+    expect(missing.statusCode).toBe(400)
+    expect((missing.json() as { error: { code: string } }).error.code).toBe('INVALID_NAME')
+
+    const wrongType = await h.app.fastify.inject({ method: 'POST', url: '/api/session', headers: XRW, payload: { displayName: 42 } })
+    expect(wrongType.statusCode).toBe(400)
+    expect((wrongType.json() as { error: { code: string } }).error.code).toBe('INVALID_NAME')
+  })
+
+  it('rejects a name already in use with DISPLAY_NAME_TAKEN', async () => {
+    const h = makeApp()
+    await createSession(h, 'Alice')
+    const res = await h.app.fastify.inject({ method: 'POST', url: '/api/session', headers: XRW, payload: { displayName: 'alice' } })
+    expect(res.statusCode).toBe(409)
+    expect((res.json() as { error: { code: string } }).error.code).toBe('DISPLAY_NAME_TAKEN')
+  })
+
+  it('refuses a POST without X-Requested-With', async () => {
+    const h = makeApp()
+    const res = await h.app.fastify.inject({ method: 'POST', url: '/api/session', payload: { displayName: 'Alice' } })
+    expect(res.statusCode).toBe(403)
+    expect((res.json() as { error: { code: string } }).error.code).toBe('FORBIDDEN')
+    expect(h.repos.findByName('Alice')).toBeNull()
+  })
+
+  it('rate limits to 10 per minute per IP and recovers after the window', async () => {
+    const h = makeApp()
+    for (let i = 0; i < 10; i += 1) {
+      const ok = await h.app.fastify.inject({ method: 'POST', url: '/api/session', headers: XRW, payload: { displayName: `P${i}` } })
+      expect(ok.statusCode).toBe(201)
+    }
+    const limited = await h.app.fastify.inject({ method: 'POST', url: '/api/session', headers: XRW, payload: { displayName: 'P10' } })
+    expect(limited.statusCode).toBe(429)
+    expect((limited.json() as { error: { code: string } }).error.code).toBe('RATE_LIMITED')
+    expect(limited.headers['retry-after']).toBeDefined()
+
+    h.setNow(Date.UTC(2026, 8, 4, 3, 1, 1))
+    const after = await h.app.fastify.inject({ method: 'POST', url: '/api/session', headers: XRW, payload: { displayName: 'P11' } })
+    expect(after.statusCode).toBe(201)
+  })
+})
+
+describe('GET /api/me', () => {
+  it('returns the profile, stats, daily status and relief eligibility', async () => {
+    const h = makeApp()
+    const session = await createSession(h, 'Alice')
+    const res = await h.app.fastify.inject({ url: '/api/me', headers: { authorization: `Bearer ${session.token}` } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({
+      playerId: session.playerId,
+      displayName: 'Alice',
+      balance: ECONOMY.startingBalance,
+      stats: { handsPlayed: 0, handsWon: 0 },
+      daily: expect.objectContaining({ allowed: true, alreadyClaimed: false, day: 1, points: 5_000, streak: 1 }),
+      relief: { eligible: false, reason: 'balance', retryAt: null },
+    })
+  })
+
+  it('rejects a missing, malformed or unknown bearer token with UNAUTHENTICATED', async () => {
+    const h = makeApp()
+    for (const headers of [{}, { authorization: 'Bearer nope' }, { authorization: 'Basic abc' }, { authorization: 'Bearer' }]) {
+      const res = await h.app.fastify.inject({ url: '/api/me', headers })
+      expect(res.statusCode).toBe(401)
+      expect((res.json() as { error: { code: string } }).error.code).toBe('UNAUTHENTICATED')
+    }
+  })
+})
+
+describe('daily reward', () => {
+  it('reports the status, credits the claim once and refuses the second', async () => {
+    const h = makeApp()
+    const session = await createSession(h, 'Alice')
+    const auth = { authorization: `Bearer ${session.token}` }
+
+    const status = await h.app.fastify.inject({ url: '/api/rewards/daily', headers: auth })
+    expect(status.statusCode).toBe(200)
+    expect(status.json()).toMatchObject({ allowed: true, alreadyClaimed: false, day: 1, points: 5_000 })
+
+    const claim = await h.app.fastify.inject({ method: 'POST', url: '/api/rewards/daily/claim', headers: { ...auth, ...XRW } })
+    expect(claim.statusCode).toBe(200)
+    expect(claim.json()).toEqual({ claimed: true, points: 5_000, streak: 1, balance: ECONOMY.startingBalance + 5_000 })
+    expect(await h.repos.balances.get(session.playerId)).toBe(ECONOMY.startingBalance + 5_000)
+
+    const again = await h.app.fastify.inject({ method: 'POST', url: '/api/rewards/daily/claim', headers: { ...auth, ...XRW } })
+    expect(again.statusCode).toBe(409)
+    expect(again.json()).toMatchObject({ claimed: false, error: { code: 'ALREADY_CLAIMED' } })
+    expect(await h.repos.balances.get(session.playerId)).toBe(ECONOMY.startingBalance + 5_000)
+  })
+
+  it('requires a bearer token and X-Requested-With', async () => {
+    const h = makeApp()
+    const session = await createSession(h, 'Alice')
+    const noAuth = await h.app.fastify.inject({ method: 'POST', url: '/api/rewards/daily/claim', headers: XRW })
+    expect(noAuth.statusCode).toBe(401)
+    const noHeader = await h.app.fastify.inject({ method: 'POST', url: '/api/rewards/daily/claim', headers: { authorization: `Bearer ${session.token}` } })
+    expect(noHeader.statusCode).toBe(403)
+    expect(await h.repos.balances.get(session.playerId)).toBe(ECONOMY.startingBalance)
+  })
+})
+
+describe('POST /api/economy/relief', () => {
+  it('tops a poor player up to the relief target, then refuses while the cooldown runs', async () => {
+    const h = makeApp()
+    const session = await createSession(h, 'Alice')
+    const auth = { authorization: `Bearer ${session.token}`, ...XRW }
+    await h.repos.balances.apply([{ playerId: session.playerId, delta: -(ECONOMY.startingBalance - 4_000), reason: 'settlement', refId: 'test' }])
+
+    const granted = await h.app.fastify.inject({ method: 'POST', url: '/api/economy/relief', headers: auth })
+    expect(granted.statusCode).toBe(200)
+    expect(granted.json()).toEqual({ granted: true, amount: 1_000, balance: ECONOMY.reliefTarget })
+    expect(await h.repos.balances.get(session.playerId)).toBe(ECONOMY.reliefTarget)
+
+    await h.repos.balances.apply([{ playerId: session.playerId, delta: -1_000, reason: 'settlement', refId: 'test2' }])
+    const denied = await h.app.fastify.inject({ method: 'POST', url: '/api/economy/relief', headers: auth })
+    expect(denied.statusCode).toBe(409)
+    expect(denied.json()).toMatchObject({ granted: false, reason: 'cooldown', error: { code: 'NOT_ELIGIBLE' } })
+    expect((denied.json() as { retryAt: number }).retryAt).toBeGreaterThan(Date.UTC(2026, 8, 4, 3, 0))
+  })
+
+  it('refuses a player who is not poor enough', async () => {
+    const h = makeApp()
+    const session = await createSession(h, 'Alice')
+    const res = await h.app.fastify.inject({ method: 'POST', url: '/api/economy/relief', headers: { authorization: `Bearer ${session.token}`, ...XRW } })
+    expect(res.statusCode).toBe(409)
+    expect(res.json()).toMatchObject({ granted: false, reason: 'balance', error: { code: 'NOT_ELIGIBLE' } })
+  })
+})
+
+describe('static assets', () => {
+  it('serves index.html at the root, uncached', async () => {
+    const h = makeApp()
+    const res = await h.app.fastify.inject('/')
+    expect(res.statusCode).toBe(200)
+    expect(res.headers['content-type']).toBe('text/html; charset=utf-8')
+    expect(res.headers['cache-control']).toBe('no-cache')
+    expect(res.body).toContain('<div id="root">')
+  })
+
+  it('serves hashed build output immutably and unhashed output revalidated', async () => {
+    const h = makeApp()
+    const hashed = await h.app.fastify.inject('/assets/app-abc123.js')
+    expect(hashed.statusCode).toBe(200)
+    expect(hashed.headers['content-type']).toBe('text/javascript; charset=utf-8')
+    expect(hashed.headers['cache-control']).toBe('public, max-age=31536000, immutable')
+
+    const index = await h.app.fastify.inject('/index.html')
+    expect(index.statusCode).toBe(200)
+    expect(index.headers['cache-control']).toBe('no-cache')
+  })
+
+  it('falls back to index.html for extension-less SPA routes', async () => {
+    const h = makeApp()
+    for (const url of ['/lobby', '/room', '/settings']) {
+      const res = await h.app.fastify.inject(url)
+      expect(res.statusCode).toBe(200)
+      expect(res.headers['content-type']).toBe('text/html; charset=utf-8')
+      expect(res.body).toContain('<div id="root">')
+    }
+  })
+
+  it('404s a missing file that has an extension', async () => {
+    const h = makeApp()
+    const res = await h.app.fastify.inject('/missing.png')
+    expect(res.statusCode).toBe(404)
+    expect((res.json() as { error: { code: string } }).error.code).toBe('NOT_FOUND')
+  })
+
+  it('never falls back for API, ws or traversal paths', async () => {
+    const h = makeApp()
+    for (const url of ['/api/unknown', '/ws', '/..%2Findex.html']) {
+      const res = await h.app.fastify.inject(url)
+      expect(res.statusCode).toBe(404)
+      expect((res.json() as { error: { code: string } }).error.code).toBe('NOT_FOUND')
+    }
+  })
+
+  it('404s every path when no asset source is configured', async () => {
+    const h = makeApp({ assets: null })
+    const res = await h.app.fastify.inject('/')
+    expect(res.statusCode).toBe(404)
+    expect((res.json() as { error: { code: string } }).error.code).toBe('NOT_FOUND')
+  })
+
+  it('404s an unknown method with the error envelope', async () => {
+    const h = makeApp()
+    const res = await h.app.fastify.inject({ method: 'DELETE', url: '/api/me', headers: XRW })
+    expect(res.statusCode).toBe(404)
+    expect((res.json() as { error: { code: string } }).error.code).toBe('NOT_FOUND')
+  })
+})
+
+describe('security headers', () => {
+  it('are set on every response', async () => {
+    const h = makeApp()
+    for (const url of ['/health', '/api/config', '/', '/assets/app-abc123.js', '/missing.png']) {
+      const res = await h.app.fastify.inject(url)
+      expect(res.headers['x-content-type-options']).toBe('nosniff')
+      expect(res.headers['referrer-policy']).toBe('no-referrer')
+      expect(res.headers['content-security-policy']).toBe(CSP)
+    }
+  })
+})
+
+describe('websocket wiring', () => {
+  async function listen(h: Harness): Promise<string> {
+    const address = await h.app.listen()
+    return `ws://127.0.0.1:${new URL(address).port}/ws`
+  }
+
+  async function connect(url: string): Promise<TestClient> {
+    const client = await TestClient.connect(url)
+    clients.push(client)
+    return client
+  }
+
+  it('authenticates a session token over /ws and answers LIST_ROOMS', async () => {
+    const h = makeApp()
+    const session = await createSession(h, 'Alice')
+    const client = await connect(await listen(h))
+
+    const welcome = await client.hello(session.token)
+    expect(welcome).toMatchObject({ playerId: session.playerId, displayName: 'Alice', balance: ECONOMY.startingBalance })
+
+    client.send({ t: 'LIST_ROOMS' })
+    expect(await client.next('ROOM_LIST')).toMatchObject({ rooms: [] })
+  })
+
+  it('rejects an unknown token and closes the socket', async () => {
+    const h = makeApp()
+    const client = await connect(await listen(h))
+    client.send({ t: 'HELLO', sessionToken: 'not-a-token' })
+    expect(await client.next('ERROR')).toMatchObject({ code: 'UNAUTHENTICATED' })
+    expect((await client.closed).code).toBe(4001)
+  })
+
+  it('refuses an upgrade on any path other than /ws', async () => {
+    const h = makeApp()
+    const url = await listen(h)
+    await expect(TestClient.connect(url.replace('/ws', '/socket'))).rejects.toThrow()
+  })
+
+  it('pushes a BALANCE frame when a daily claim changes the balance', async () => {
+    const h = makeApp()
+    const session = await createSession(h, 'Alice')
+    const client = await connect(await listen(h))
+    await client.hello(session.token)
+
+    const claim = await h.app.fastify.inject({
+      method: 'POST',
+      url: '/api/rewards/daily/claim',
+      headers: { authorization: `Bearer ${session.token}`, ...XRW },
+    })
+    expect(claim.statusCode).toBe(200)
+    expect(await client.next('BALANCE')).toMatchObject({ balance: ECONOMY.startingBalance + 5_000 })
+  })
+
+  it('closes sockets with SERVER_SHUTDOWN and stops the listener', async () => {
+    const h = makeApp()
+    const session = await createSession(h, 'Alice')
+    const url = await listen(h)
+    const client = await connect(url)
+    await client.hello(session.token)
+
+    await h.app.close()
+    expect(await client.next('ERROR')).toMatchObject({ code: 'SERVER_SHUTDOWN' })
+    expect((await client.closed).code).toBe(1001)
+    await expect(TestClient.connect(url)).rejects.toThrow()
+  })
+})
