@@ -269,6 +269,7 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
     resync: () => {},
     clearError: () => publish(reduceClient(state, { type: 'clearError' })),
     dismissNotification: (id) => publish(reduceClient(state, { type: 'dismissNotification', id })),
+    reset: () => publish(reduceClient(state, { type: 'reset' })),
     serverNow: () => Date.now(),
   }
 

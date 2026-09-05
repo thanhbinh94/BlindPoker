@@ -21,6 +21,15 @@ export interface GameClientApi {
   resync(): void
   clearError(): void
   dismissNotification(id: number): void
+  /**
+   * Throw the whole client state away, back to its initial value.
+   *
+   * For a session ending: the reducer lives as long as the component that owns the hook, so after a sign-out
+   * `me`, `balance`, `room` and the notification stack are still the previous account's until a new
+   * `WELCOME` replaces them. Call it beside `disconnect()`, never on a live socket — nothing re-requests the
+   * state, so a reset connection would sit blank until the server next says something.
+   */
+  reset(): void
   /** Local clock corrected by the `WELCOME` offset — compare deadlines against this, never against `Date.now()`. */
   serverNow(): number
 }
@@ -90,6 +99,7 @@ export function useGameClient(opts: UseGameClientOptions): GameClientApi {
       resync: () => void connection.send({ t: 'RESYNC' }),
       clearError: () => dispatch({ type: 'clearError' }),
       dismissNotification: (id) => dispatch({ type: 'dismissNotification', id }),
+      reset: () => dispatch({ type: 'reset' }),
       serverNow: () => Date.now() + stateRef.current.serverTimeOffset,
     }),
     [state, connection, request],

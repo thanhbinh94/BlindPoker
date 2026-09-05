@@ -98,6 +98,7 @@ that already has a height.
 | `act(action)` | `ACTION` with `baseSeq` = the latest applied `seq` |
 | `resync()` | `RESYNC` |
 | `clearError()`, `dismissNotification(id)` | local state only |
+| `reset()` | local state only — back to `initialClientState`. For a session ending: the reducer outlives any number of sessions, so without it a sign-out leaves the previous account's `me`, `balance`, `room` and notifications in place until the next `WELCOME`. Call it beside `disconnect()`, never on a live socket. |
 | `serverNow()` | `Date.now()` + the `WELCOME` clock offset — **always** compare deadlines against this |
 
 `ClientState` carries `status` (`idle`/`connecting`/`open`/`reconnecting`/`closed`), `closeReason`, `me`,

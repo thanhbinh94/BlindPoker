@@ -1,7 +1,8 @@
 import type { GameEvent, HandView, LegalActions, RoomEvent, RoomView, ServerMessage } from '@bp/core'
+import { initialClientState } from './types.js'
 import type { ClientAction, ClientHand, ClientHandResult, ClientSeat, ClientState } from './types.js'
 
-export { initialClientState } from './types.js'
+export { initialClientState }
 
 const NO_RESULT: ClientHandResult = { payouts: [], pots: [], fee: 0, showdown: null, carryOverOut: 0, uncalledReturned: null, cancelled: false, reason: null }
 
@@ -328,5 +329,7 @@ export function reduceClient(state: ClientState, action: ClientAction): ClientSt
       return { ...state, resyncNeeded: false }
     case 'leftRoom':
       return { ...state, room: null, hand: null }
+    case 'reset':
+      return initialClientState
   }
 }
