@@ -212,6 +212,8 @@
     "kicked": "You were kicked from the room",
     "hostLeft": "The host left",
     "reconnecting": "Connection lost — reconnecting…",
+    "sitOut": "Sit out",
+    "sitIn": "Sit back in",
     "buyInTitle": "Choose your buy-in",
     "controls": "Table controls"
   },

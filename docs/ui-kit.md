@@ -95,6 +95,7 @@ that already has a height.
 | `createRoom(config)` | `CREATE_ROOM`, resolves with the `ACK` or `ERROR` |
 | `joinRoom({ roomId?, code?, password? })` | `JOIN_ROOM` |
 | `leaveRoom()`, `sitDown(seat, buyIn?)`, `standUp()`, `setReady(r)`, `startGame()`, `kick(playerId)` | the matching frame |
+| `sitOut()` / `sitIn()` | `SIT_OUT` / `SIT_IN` — keep the seat but skip the hands from the next one on, and take it back. The seat's `status` (`SITTING_OUT`) is the state; `ERROR{NOT_SEATED}` if there is no seat. |
 | `act(action)` | `ACTION` with `baseSeq` = the latest applied `seq` |
 | `resync()` | `RESYNC` |
 | `clearError()`, `dismissNotification(id)` | local state only |
@@ -160,6 +161,10 @@ formatting; strings come from `useTranslation()`.
 | `Toasts` | `error`, `notifications`, `onClearError`, `onDismiss`, `lang` |
 
 `onLeft` fires the moment the room is gone — left, closed or kicked — and the app decides where that lands.
+
+`RoomScreen`'s tray carries Ready, Stand up and one sit-out toggle (`room.sitOut` / `room.sitIn`), whose label and
+`aria-pressed` follow the seat's own `SITTING_OUT` status rather than anything the screen remembers. It is disabled
+while the viewer has no seat, so it keeps its place rather than appearing under the player's hand when they sit down.
 
 Both screens already render `Toasts` from their own `client.state`; it is exported separately so an app can raise
 its own slips in the same stack. Errors are assertive (`role="alert"`, red edge), notifications are polite

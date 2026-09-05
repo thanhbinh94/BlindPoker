@@ -21,6 +21,8 @@ function fakeClient(state: ClientState, overrides: Partial<GameClientApi> = {}):
     leaveRoom: vi.fn().mockResolvedValue(ACK),
     sitDown: vi.fn().mockResolvedValue(ACK),
     standUp: vi.fn().mockResolvedValue(ACK),
+    sitOut: vi.fn().mockResolvedValue(ACK),
+    sitIn: vi.fn().mockResolvedValue(ACK),
     setReady: vi.fn().mockResolvedValue(ACK),
     startGame: vi.fn().mockResolvedValue(ACK),
     kick: vi.fn().mockResolvedValue(ACK),

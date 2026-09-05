@@ -260,6 +260,26 @@ describe('client reducer — snapshot, room events, errors', () => {
     s = reduceClient(s, { type: 'server', msg: { t: 'SESSION_REPLACED' } as ServerMessage, now: 0 })
     expect(s.replaced).toBe(true)
   })
+
+  it('PLAYER_SIT_OUT moves the seat status both ways and leaves the seatless and the offline alone', () => {
+    let s = start('holdem', HOLDEM_RULES, [20000, 20000], 1)
+    const statusOf = (id: string) => s.room!.players.find((p) => p.playerId === id)!.status
+    const sitOut = (playerId: string, sittingOut: boolean, seq: number): ClientState =>
+      reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq, event: { type: 'PLAYER_SIT_OUT', playerId, sittingOut } }, now: 0 })
+
+    s = sitOut('p1', true, 11)
+    expect(statusOf('p1')).toBe('SITTING_OUT')
+    s = sitOut('p1', false, 12)
+    expect(statusOf('p1')).toBe('READY') // the fixture's seats are ready; an unready one goes back to SEATED
+
+    // A spectator has no seat to sit out of, and a seat that is offline keeps saying so.
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 13, event: { type: 'PLAYER_JOINED', player: { playerId: 'p9', displayName: 'P9', isBot: false, isHost: false, connected: true, seat: null, status: null, stack: 0, ready: false } } }, now: 0 })
+    s = sitOut('p9', true, 14)
+    expect(statusOf('p9')).toBeNull()
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 15, event: { type: 'PLAYER_DISCONNECTED', playerId: 'p0', deadline: 0 } }, now: 0 })
+    s = sitOut('p0', true, 16)
+    expect(statusOf('p0')).toBe('DISCONNECTED')
+  })
 })
 
 /** docs/server-kit.md, "Reconnecting and frame order": WELCOME first, a snapshot only if we are still in a room. */

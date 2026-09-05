@@ -110,6 +110,8 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
   let carryOver = 0
   let timer: ReturnType<typeof setTimeout> | null = null
   let waiting: ((action: PlayerAction) => void) | null = null
+  /** No server here to skip a hand, but the tray's toggle is a real one: it flips my seat's status. */
+  let sittingOut = false
   const stacks = new Map<number, number>(Array.from({ length: SEATS }, (_, i) => [i, START_STACK]))
 
   // Everything up to the first `await` runs while `createMockClient` is still returning, so the caller's very first
@@ -133,7 +135,7 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
       isHost: seat === MY_SEAT,
       connected: true,
       seat,
-      status: 'IN_HAND' as const,
+      status: seat === MY_SEAT && sittingOut ? ('SITTING_OUT' as const) : ('IN_HAND' as const),
       stack: stacks.get(seat) ?? 0,
       ready: true,
     }))
@@ -232,6 +234,12 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
     void runHand(gen)
   }
 
+  const setSittingOut = (out: boolean): AckOrError => {
+    sittingOut = out
+    push({ t: 'ROOM_EVENT', seq: (seq += 1), event: { type: 'PLAYER_SIT_OUT', playerId: MY_ID, sittingOut: out } })
+    return ACK
+  }
+
   const start = (): void => {
     generation += 1
     if (timer !== null) clearTimeout(timer)
@@ -256,6 +264,8 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
     leaveRoom: async () => ACK,
     sitDown: async () => ACK,
     standUp: async () => ACK,
+    sitOut: async () => setSittingOut(true),
+    sitIn: async () => setSittingOut(false),
     setReady: async () => ACK,
     startGame: async () => ACK,
     kick: async () => ACK,

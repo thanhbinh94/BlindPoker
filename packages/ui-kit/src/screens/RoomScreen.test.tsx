@@ -21,6 +21,8 @@ function fakeClient(state: ClientState, overrides: Partial<GameClientApi> = {}):
     leaveRoom: vi.fn().mockResolvedValue(ACK),
     sitDown: vi.fn().mockResolvedValue(ACK),
     standUp: vi.fn().mockResolvedValue(ACK),
+    sitOut: vi.fn().mockResolvedValue(ACK),
+    sitIn: vi.fn().mockResolvedValue(ACK),
     setReady: vi.fn().mockResolvedValue(ACK),
     startGame: vi.fn().mockResolvedValue(ACK),
     kick: vi.fn().mockResolvedValue(ACK),
@@ -156,6 +158,38 @@ describe('RoomScreen', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Stand up' }))
     expect(client.standUp).toHaveBeenCalledTimes(1)
+  })
+
+  it('toggles sitting out from the tray, and offers it to nobody who is not in a seat', async () => {
+    const seatedAs = (status: 'SEATED' | 'SITTING_OUT') =>
+      makeRoom({
+        status: 'OPEN',
+        playerCount: 2,
+        players: [
+          makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'SEATED', stack: 20_000 }),
+          makePlayer({ playerId: 'me', displayName: 'Mai', seat: 1, status, stack: 20_000 }),
+        ],
+      })
+
+    const standing = fakeClient(makeState({ room: standingRoom }))
+    const { view } = wrap(standing)
+    expect(screen.getByRole('button', { name: 'Sit out' })).toBeDisabled()
+
+    const seated = fakeClient(makeState({ room: seatedAs('SEATED') }))
+    view.rerender(screenFor(seated))
+    const out = screen.getByRole('button', { name: 'Sit out' })
+    expect(out).toHaveAttribute('aria-pressed', 'false')
+    await userEvent.click(out)
+    expect(seated.sitOut).toHaveBeenCalledTimes(1)
+    expect(seated.sitIn).not.toHaveBeenCalled()
+
+    // The server answers with PLAYER_SIT_OUT; the seat's status is what flips the control over.
+    const sitting = fakeClient(makeState({ room: seatedAs('SITTING_OUT') }))
+    view.rerender(screenFor(sitting))
+    const back = screen.getByRole('button', { name: 'Sit back in' })
+    expect(back).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(back)
+    expect(sitting.sitIn).toHaveBeenCalledTimes(1)
   })
 
   it('lets the host start once two players are ready, and kick the others', async () => {

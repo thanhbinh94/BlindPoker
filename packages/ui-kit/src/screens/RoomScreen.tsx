@@ -132,6 +132,7 @@ export function RoomScreen({ client, lang, onLeft, avatarFor, captionFor, header
   /** Between hands: the room is taking seats rather than dealing. */
   const waiting = room.status === 'OPEN'
   const mySeated = me !== undefined && me.seat !== null
+  const sittingOut = me?.status === 'SITTING_OUT'
 
   const countdown =
     nextHandIn === null ? null : (
@@ -200,6 +201,16 @@ export function RoomScreen({ client, lang, onLeft, avatarFor, captionFor, header
               {t('actions.standUp')}
             </Button>
           ) : null}
+          {/* Keep the seat, skip the hands. It stays put (disabled) while standing so the tray does not
+              reshuffle under the player the moment they take a seat. */}
+          <Button
+            variant="ghost"
+            disabled={request.busy || !mySeated}
+            aria-pressed={sittingOut}
+            onClick={() => void request.run(() => (sittingOut ? client.sitIn() : client.sitOut()))}
+          >
+            {t(sittingOut ? 'room.sitIn' : 'room.sitOut')}
+          </Button>
 
           {waiting ? (
             <span className={s.readyCount}>{t('room.readyCount', { ready: readyCount, total: seated.length })}</span>
