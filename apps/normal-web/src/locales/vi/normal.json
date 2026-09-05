@@ -49,10 +49,83 @@
     "expired": "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
     "checking": "Đang kiểm tra phiên đăng nhập…"
   },
-  "placeholder": {
-    "title": "Đang xây dựng",
-    "lead": "Màn hình này sẽ có ở bản cập nhật kế tiếp.",
-    "signOut": "Đăng xuất"
+  "daily": {
+    "title": "Điểm danh hằng ngày",
+    "lead": "Mỗi ngày một lần. Chuỗi càng dài thì phần thưởng càng lớn, và sang tháng mới chuỗi bắt đầu lại từ ngày 1.",
+    "error": "Không tải được lịch điểm danh",
+    "streak": "Chuỗi hiện tại: {{streak}} ngày",
+    "resetsAt": "Ngày mới bắt đầu lúc {{at}}",
+    "reward": "Phần thưởng hôm nay: {{amount}}",
+    "claim": "Nhận thưởng",
+    "claiming": "Đang nhận…",
+    "claimed": "Hôm nay bạn đã điểm danh rồi. Hẹn gặp lại ngày mai.",
+    "calendarTitle": "Lịch 31 ngày",
+    "dayLabel": "Ngày {{day}}",
+    "todayMark": "Hôm nay",
+    "claimedMark": "Đã nhận",
+    "marker": {
+      "common": "Vật phẩm thường",
+      "rare": "Vật phẩm hiếm",
+      "monthly": "Huy hiệu + danh hiệu tháng"
+    },
+    "receipt": {
+      "title": "Đã nhận thưởng ngày {{day}}",
+      "points": "Điểm",
+      "item": "Vật phẩm",
+      "fallback": "Bậc này đã hết vật phẩm mới cho bạn — nhận {{amount}} thay cho vật phẩm.",
+      "balance": "Số dư mới",
+      "streak": "Chuỗi sau khi nhận: {{streak}} ngày"
+    },
+    "errors": {
+      "ALREADY_CLAIMED": "Phần thưởng hôm nay đã được nhận rồi, có thể từ một thiết bị khác. Lịch vừa được tải lại."
+    },
+    "relief": {
+      "title": "Cứu trợ",
+      "lead": "Khi số dư xuống dưới {{threshold}}, bạn có thể xin nạp lại lên {{target}}.",
+      "error": "Không tải được trạng thái cứu trợ",
+      "eligible": "Bạn đủ điều kiện nhận cứu trợ ngay bây giờ.",
+      "claim": "Nhận cứu trợ",
+      "claiming": "Đang nhận…",
+      "granted": "Đã cộng {{amount}}. Số dư mới: {{balance}}.",
+      "reason": {
+        "balance": "Số dư của bạn vẫn trên mức cứu trợ, nên chưa cần đến nó.",
+        "cooldown": "Bạn vừa nhận cứu trợ. Thử lại lúc {{at}}.",
+        "other": "Chưa thể nhận cứu trợ lúc này."
+      }
+    }
+  },
+  "settings": {
+    "title": "Cài đặt",
+    "theme": {
+      "title": "Giao diện",
+      "lead": "Nền tối là mặc định của bàn chơi; nền sáng dành cho nơi nhiều ánh sáng.",
+      "dark": "Tối",
+      "light": "Sáng"
+    },
+    "language": {
+      "title": "Ngôn ngữ",
+      "lead": "Ngôn ngữ được nhớ trên thiết bị này."
+    },
+    "account": {
+      "title": "Tài khoản",
+      "email": "Email",
+      "noEmail": "Chưa liên kết",
+      "displayName": "Tên hiển thị",
+      "error": "Không tải được thông tin tài khoản",
+      "signOut": "Đăng xuất"
+    },
+    "signOut": {
+      "title": "Đăng xuất?",
+      "body": "Bạn sẽ rời khỏi bàn đang chơi và cần đăng nhập lại trên thiết bị này.",
+      "confirm": "Đăng xuất ngay",
+      "cancel": "Ở lại",
+      "close": "Đóng"
+    },
+    "about": {
+      "title": "Thông tin",
+      "edition": "Phiên bản phát hành",
+      "version": "Số hiệu bản dựng"
+    }
   },
   "screens": {
     "loading": "Đang tải…",

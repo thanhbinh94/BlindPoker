@@ -12,41 +12,41 @@ import type { NormalApi } from './api.js'
 import { Avatar } from './avatar/Avatar.js'
 import a from './avatar/avatar.module.css'
 import { useAvatars } from './avatar/useAvatars.js'
+import { mapNotifications } from './notifications.js'
 import { useLanguagePref } from './prefs.js'
 import { AuthScreen, type AuthMode } from './screens/AuthScreen.js'
-import { Placeholder } from './screens/Placeholder.js'
 import { Shell } from './screens/Shell.js'
 import { makeAvatarFor, makeCaptionFor } from './screens/TableChrome.js'
 import s from './screens/normal.module.css'
 import { clearLastEmail } from './session.js'
 import { useSessionGate } from './session-gate.js'
 
-/** Tracks `apps/normal-web/package.json`; the settings screen (Task 4) prints it so a bug report names a build. */
+/** Tracks `apps/normal-web/package.json`; the settings screen prints it so a bug report names a build. */
 export const NORMAL_VERSION = '0.1.0'
 
 /**
- * The four account screens, split out of the entry bundle.
+ * The six account screens, split out of the entry bundle.
  *
  * They are the right things to split and the lobby is not: a player reaches the lobby on every visit and the
- * wardrobe on some of them, and between them the four carry the whole item catalogue's vector library, the
- * stats tables and the ledger. Splitting them keeps the first paint — the sign-in card and the lobby — small
- * on the phone connection this game is mostly played on, and each screen then costs one request, once.
+ * wardrobe on some of them, and between them the six carry the whole item catalogue's vector library, the
+ * stats tables, the ledger and the month's calendar. Splitting them keeps the first paint — the sign-in card
+ * and the lobby — small on the phone connection this game is mostly played on, and each screen then costs one
+ * request, once.
  */
 const ProfileScreen = lazy(async () => ({ default: (await import('./screens/ProfileScreen.js')).ProfileScreen }))
 const AvatarScreen = lazy(async () => ({ default: (await import('./screens/AvatarScreen.js')).AvatarScreen }))
 const InventoryScreen = lazy(async () => ({ default: (await import('./screens/InventoryScreen.js')).InventoryScreen }))
 const AchievementsScreen = lazy(async () => ({ default: (await import('./screens/AchievementsScreen.js')).AchievementsScreen }))
+const DailyScreen = lazy(async () => ({ default: (await import('./screens/DailyScreen.js')).DailyScreen }))
+const SettingsScreen = lazy(async () => ({ default: (await import('./screens/SettingsScreen.js')).SettingsScreen }))
 
 /** The routes served by a lazy chunk rather than by the entry bundle. */
-export const ACCOUNT_ROUTES = ['/profile', '/avatar', '/inventory', '/achievements']
+export const ACCOUNT_ROUTES = ['/profile', '/avatar', '/inventory', '/achievements', '/daily', '/settings']
 
 /** Normal is served by the same origin as the socket, so the origin is never configured. */
 export function websocketUrl(loc: Pick<Location, 'protocol' | 'host'> = window.location): string {
   return `${loc.protocol === 'https:' ? 'wss:' : 'ws:'}//${loc.host}/ws`
 }
-
-/** Every route Task 4 still has to fill in. Anything not listed (and not `/room`) falls through to the lobby. */
-export const PLACEHOLDER_ROUTES = ['/daily', '/settings']
 
 /** `#/register` opens the register tab; every other route reached while signed out opens sign-in. */
 const modeOf = (path: string): AuthMode => (path === '/register' ? 'register' : 'signIn')
@@ -123,6 +123,16 @@ export function App({ api, socketFactory }: AppProps) {
   const captionFor = useMemo(() => makeCaptionFor(avatars, t), [avatars, t])
   const myAvatar = myId === null ? null : (avatars.get(myId)?.avatar ?? null)
 
+  // `ACHIEVEMENT_UNLOCKED` arrives naming an achievement *id*, and the kit's toast interpolates it verbatim
+  // because achievement names live in this app's namespace, not the kit's. The lobby and the room each render
+  // their own `Toasts` out of `client.state`, so the translation is done once here — on the list the client
+  // hands them — rather than twice, on two screens this app does not own.
+  const notifications = useMemo(() => mapNotifications(client.state.notifications, t), [client.state.notifications, t, lang])
+  const viewClient = useMemo(
+    () => (notifications === client.state.notifications ? client : { ...client, state: { ...client.state, notifications } }),
+    [client, notifications],
+  )
+
   const path = route.path
 
   if (gate.state === 'checking') {
@@ -153,7 +163,7 @@ export function App({ api, socketFactory }: AppProps) {
   const balance = state.me === null ? (gate.me?.balance ?? 0) : state.balance
 
   return (
-    <GameClientProvider client={client}>
+    <GameClientProvider client={viewClient}>
       <Shell
         path={path}
         bar={!inRoom}
@@ -162,9 +172,9 @@ export function App({ api, socketFactory }: AppProps) {
         onLanguage={setLang}
       >
         {inRoom ? (
-          <RoomScreen client={client} lang={lang} onLeft={() => navigate('/lobby')} avatarFor={avatarFor} captionFor={captionFor} />
+          <RoomScreen client={viewClient} lang={lang} onLeft={() => navigate('/lobby')} avatarFor={avatarFor} captionFor={captionFor} />
         ) : ACCOUNT_ROUTES.includes(path) ? (
-          // One fallback for all four: the chunk is a single request on a page the rail has already drawn, so
+          // One fallback for all six: the chunk is a single request on a page the rail has already drawn, so
           // what the player waits for is a line under the rail, not a blank screen with a spinner in the middle.
           <Suspense
             fallback={
@@ -179,20 +189,17 @@ export function App({ api, socketFactory }: AppProps) {
               <AvatarScreen api={api} playerId={myId} />
             ) : path === '/inventory' ? (
               <InventoryScreen api={api} lang={lang} />
+            ) : path === '/daily' ? (
+              <DailyScreen api={api} lang={lang} />
+            ) : path === '/settings' ? (
+              <SettingsScreen api={api} lang={lang} onLanguage={setLang} onSignedOut={onSignedOut} version={NORMAL_VERSION} />
             ) : (
               <AchievementsScreen api={api} lang={lang} />
             )}
           </Suspense>
-        ) : PLACEHOLDER_ROUTES.includes(path) ? (
-          // Daily and Settings are all that is left of the scaffolding; Task 4 replaces both. Settings
-          // carries the one control a placeholder must not swallow — the way back out of the account.
-          <Placeholder
-            route={path}
-            {...(path === '/settings' ? { action: { label: t('placeholder.signOut'), onClick: onSignedOut } } : {})}
-          />
         ) : (
           <LobbyScreen
-            client={client}
+            client={viewClient}
             lang={lang}
             onLanguage={setLang}
             onEnteredRoom={() => navigate('/room')}

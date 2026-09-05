@@ -2,7 +2,7 @@ import { FakeSocket, fakeSocketFactory } from '@bp/ui-kit'
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { App, PLACEHOLDER_ROUTES, websocketUrl } from './App.js'
+import { ACCOUNT_ROUTES, App, websocketUrl } from './App.js'
 import { ApiError, type AuthMeDto, type NormalApi } from './api.js'
 import viNormal from './locales/vi/normal.json'
 import { LAST_EMAIL_KEY } from './session.js'
@@ -22,7 +22,10 @@ function stubApi(overrides: Partial<NormalApi> = {}): NormalApi {
     login: vi.fn().mockResolvedValue(ME),
     register: vi.fn().mockResolvedValue(ME),
     logout: vi.fn().mockResolvedValue(undefined),
-    me: vi.fn(),
+    // The two screens the rail can reach without a click of their own. Left hanging by default: these tests
+    // are about the shell and the session, and a screen that never resolves still draws its own heading.
+    me: vi.fn(() => new Promise<never>(() => undefined)),
+    daily: vi.fn(() => new Promise<never>(() => undefined)),
     ...overrides,
   } as unknown as NormalApi
 }
@@ -124,7 +127,10 @@ describe('App — the session gate', () => {
     await waitFor(() => expect(FakeSocket.instances).toHaveLength(1))
     await welcome()
 
-    await user.click(await screen.findByRole('button', { name: viNormal.placeholder.signOut }))
+    // Settings asks first; the app is the only thing that ever tells the server, which is why one click on
+    // the confirmation is still exactly one `POST /api/auth/logout`.
+    await user.click(await screen.findByRole('button', { name: viNormal.settings.account.signOut }))
+    await user.click(await screen.findByRole('button', { name: viNormal.settings.signOut.confirm }))
 
     expect(api.logout).toHaveBeenCalledTimes(1)
     expect(await screen.findByRole('link', { name: viNormal.auth.signIn })).toBeInTheDocument()
@@ -264,18 +270,37 @@ describe('App — the shell', () => {
     // The chunk is fetched on arrival, so the rail is drawn before the screen under it is.
     expect(await screen.findByRole('heading', { name: viNormal.achievements.ui.title })).toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: viNormal.nav.main })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: viNormal.placeholder.title })).toBeNull()
   })
 
-  it.each(PLACEHOLDER_ROUTES)('routes #%s to its placeholder behind the rail', async (path) => {
+  /** Nothing is a placeholder any more: the last two routes are lazy screens like the other four. */
+  it.each([
+    ['/daily', viNormal.daily.title],
+    ['/settings', viNormal.settings.title],
+  ])('routes #%s to its own screen behind the rail', async (path, heading) => {
+    expect(ACCOUNT_ROUTES).toContain(path)
     window.history.replaceState(null, '', `/#${path}`)
     renderApp()
     await settled()
     await welcome()
 
-    expect(await screen.findByRole('heading', { name: viNormal.placeholder.title })).toBeInTheDocument()
-    expect(screen.getByText(path)).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: viNormal.nav.main })).toBeInTheDocument()
+  })
+
+  it('names the achievement in the toast, rather than printing the id the server sent', async () => {
+    renderApp()
+    await settled()
+    await welcome()
+    await screen.findByRole('heading', { name: ROOMS_HEADING })
+
+    await act(async () => {
+      socket().receive({ t: 'NOTIFICATION', kind: 'ACHIEVEMENT_UNLOCKED', payload: { id: 'login_days_7', reward: { points: 5_000 } } })
+    })
+
+    // The kit owns the sentence and this app owns the name inside it; only the id was ever this app's to supply.
+    const slip = await screen.findByText(new RegExp(viNormal.achievements.login_days_7.name))
+    expect(slip).toBeInTheDocument()
+    expect(screen.queryByText(/login_days_7/)).toBeNull()
   })
 
   it('shows the balance the boot probe read, rather than a zero, before WELCOME lands', async () => {

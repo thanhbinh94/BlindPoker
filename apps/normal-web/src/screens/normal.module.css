@@ -917,6 +917,77 @@
   background: var(--teal);
 }
 
+/* ── the daily calendar ───────────────────────────────────────────────────── */
+
+/* Not a seven-column month grid, and deliberately: this calendar is a *streak* of 31 tiers, not a picture of
+   September, so a row that breaks wherever the width allows is honest about it — and it is the only shape that
+   survives 375 px without either scrolling sideways or shrinking a tier to an unreadable box. */
+.calendar {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.calCell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  min-width: 0;
+}
+
+/* The kit's `Badge` is `white-space: nowrap`, which is right on a seat and wrong in a 7rem box: day 28's
+   marker names two things and would otherwise push a horizontal scrollbar onto a 375 px page. Every span in
+   a cell is a label the reader wants whole rather than cropped, so they all wrap here. */
+.calCell span {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.calCell[data-claimed='true'] {
+  border-style: dashed;
+  color: var(--ink-muted);
+}
+
+.calCell[aria-current='date'] {
+  border-color: var(--gold);
+  border-style: solid;
+  background: var(--gold-soft);
+  color: var(--ink);
+}
+
+.calDay {
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.calPoints {
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* ── settings ─────────────────────────────────────────────────────────────── */
+
+/* A row of controls that becomes a column when the width runs out; every child is a kit button or the kit's
+   language switch, so each one already carries `--tap` of its own. */
+.choices {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
 /* the boot probe: one quiet line, never a spinner over an empty page */
 .booting {
   display: grid;

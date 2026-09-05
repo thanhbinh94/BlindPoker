@@ -49,10 +49,83 @@
     "expired": "Your session has expired. Please sign in again.",
     "checking": "Checking your session…"
   },
-  "placeholder": {
-    "title": "Under construction",
-    "lead": "This screen arrives in the next update.",
-    "signOut": "Sign out"
+  "daily": {
+    "title": "Daily check-in",
+    "lead": "Once a day. The longer the streak the larger the reward, and a new month starts the streak again at day 1.",
+    "error": "Your check-in calendar could not be loaded",
+    "streak": "Current streak: {{streak}} days",
+    "resetsAt": "The next day begins at {{at}}",
+    "reward": "Today's reward: {{amount}}",
+    "claim": "Claim",
+    "claiming": "Claiming…",
+    "claimed": "You have already checked in today. See you tomorrow.",
+    "calendarTitle": "The 31-day calendar",
+    "dayLabel": "Day {{day}}",
+    "todayMark": "Today",
+    "claimedMark": "Claimed",
+    "marker": {
+      "common": "Common item",
+      "rare": "Rare item",
+      "monthly": "Monthly badge + title"
+    },
+    "receipt": {
+      "title": "Day {{day}} claimed",
+      "points": "Points",
+      "item": "Item",
+      "fallback": "This tier had no new item left for you — {{amount}} instead of an item.",
+      "balance": "New balance",
+      "streak": "Streak after this claim: {{streak}} days"
+    },
+    "errors": {
+      "ALREADY_CLAIMED": "Today's reward has already been claimed, possibly on another device. The calendar has been reloaded."
+    },
+    "relief": {
+      "title": "Relief",
+      "lead": "When your balance falls below {{threshold}} you may ask to be topped back up to {{target}}.",
+      "error": "Your relief status could not be loaded",
+      "eligible": "You are eligible for relief right now.",
+      "claim": "Claim relief",
+      "claiming": "Claiming…",
+      "granted": "{{amount}} added. New balance: {{balance}}.",
+      "reason": {
+        "balance": "Your balance is still above the relief line, so you do not need it yet.",
+        "cooldown": "You claimed relief recently. Try again at {{at}}.",
+        "other": "Relief is not available right now."
+      }
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "theme": {
+      "title": "Appearance",
+      "lead": "Dark is the table's own palette; light is for a bright room.",
+      "dark": "Dark",
+      "light": "Light"
+    },
+    "language": {
+      "title": "Language",
+      "lead": "Your language is remembered on this device."
+    },
+    "account": {
+      "title": "Account",
+      "email": "Email",
+      "noEmail": "Not linked",
+      "displayName": "Display name",
+      "error": "Your account details could not be loaded",
+      "signOut": "Sign out"
+    },
+    "signOut": {
+      "title": "Sign out?",
+      "body": "You will leave any table you are seated at and have to sign in again on this device.",
+      "confirm": "Yes, sign out",
+      "cancel": "Stay signed in",
+      "close": "Close"
+    },
+    "about": {
+      "title": "About",
+      "edition": "Edition",
+      "version": "Build"
+    }
   },
   "screens": {
     "loading": "Loading…",
