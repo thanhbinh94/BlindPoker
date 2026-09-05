@@ -90,14 +90,134 @@ export function removeRunFile(path: string, owner: RunFileOwner): void {
 }
 
 /**
- * The instance that owns `path` right now, or `null` when the file is missing, unreadable, or names
- * a pid that no longer exists (the wreckage of a hard kill, which the next start may overwrite).
- *
- * `isAlive` is injected so a test can describe a live process without having one.
+ * The address a run file points at. The file records the *configured* listen address; a wildcard
+ * bind (or an empty one) is reached over the loopback, and a bare IPv6 literal needs its brackets.
  */
-export function liveInstanceAt(path: string, isAlive: (pid: number) => boolean = pidAlive): RunFile | null {
+export function runFileUrl(info: Pick<RunFile, 'host' | 'port'>): string {
+  const host = info.host === '0.0.0.0' || info.host === '::' || info.host === '' ? '127.0.0.1' : info.host
+  return `http://${host.includes(':') ? `[${host}]` : host}:${info.port}`
+}
+
+/** How long the start-up probe waits for the recorded address to identify itself. */
+export const PROBE_TIMEOUT_MS = 1000
+
+/** What a run file found on disk turns out to be worth. */
+export type RunFileClaim =
+  /** No file, or nothing that parses as one: the directory is free. */
+  | { state: 'vacant' }
+  /** A Lite instance answered at the recorded address. Starting here would fight it. */
+  | { state: 'held'; info: RunFile }
+  /** A file, but nothing of ours behind it. `why` is the one line the operator gets. */
+  | { state: 'stale'; info: RunFile; why: string }
+  /**
+   * The pid is alive and the recorded address neither refused the connection nor answered, on two
+   * tries. That is not proof of anything — a live instance too busy to answer for a couple of
+   * seconds looks identical from here to nothing being there at all — so this is not `stale`
+   * (overwriting would risk fighting a live server on the port it already holds) and not `held`
+   * (nothing actually answered as Lite). `why` is the one line the operator gets.
+   */
+  | { state: 'unreachable'; info: RunFile; why: string }
+
+/**
+ * The `code` on a failed `fetch`, walking into `.cause` where undici nests the real `node:net`
+ * error (a rejected `fetch` is itself a generic `TypeError: fetch failed`).
+ */
+function errorCode(err: unknown): string | undefined {
+  const direct = err !== null && typeof err === 'object' ? (err as { code?: unknown }).code : undefined
+  if (typeof direct === 'string') return direct
+  const cause = err !== null && typeof err === 'object' ? (err as { cause?: unknown }).cause : undefined
+  const nested = cause !== null && typeof cause === 'object' ? (cause as { code?: unknown }).code : undefined
+  return typeof nested === 'string' ? nested : undefined
+}
+
+/**
+ * `true` only when the rejection *proves* nothing is listening at the address — a refused
+ * connection, or a host name that does not resolve. Every other failure (the probe's own
+ * `AbortSignal.timeout` firing, a reset mid-response, …) is silence, not evidence: a live instance
+ * whose event loop is busy for a moment looks exactly the same.
+ */
+function isConclusivelyGone(err: unknown): boolean {
+  const code = errorCode(err)
+  return code === 'ECONNREFUSED' || code === 'ENOTFOUND'
+}
+
+/**
+ * `inconclusive` is every failure that is not proof of absence — the probe's own timeout, but also
+ * `EHOSTUNREACH`, `ENETUNREACH` and `ECONNRESET`, which fail in microseconds and say nothing about
+ * whether a Lite is running at that address. It carries the error code that produced it precisely
+ * so the refusal message can name it: "no answer within 1000 ms" sends an operator whose laptop
+ * changed networks looking for a busy server instead of a dead interface.
+ */
+type ProbeOutcome = { kind: 'ok'; res: Response } | { kind: 'refused' } | { kind: 'inconclusive'; code: string | undefined }
+
+async function probeOnce(url: string, timeoutMs: number): Promise<ProbeOutcome> {
+  try {
+    return { kind: 'ok', res: await fetch(url, { signal: AbortSignal.timeout(timeoutMs) }) }
+  } catch (err) {
+    return isConclusivelyGone(err) ? { kind: 'refused' } : { kind: 'inconclusive', code: errorCode(err) }
+  }
+}
+
+/**
+ * Who owns `path` right now.
+ *
+ * A live pid used to be the whole answer, and it was wrong in the one case the run file exists for:
+ * after a hard kill (`taskkill`, `sc stop`, the window's X) the file survives, and the operating
+ * system is free to hand that pid to anything at all — a browser, a build, the operator's shell.
+ * Then the next start refuses with "another instance is already running" and names a pid that has
+ * never heard of Bind Poker. So the pid is only the cheap first question; the deciding one is
+ * whether the *recorded address* still answers as Lite, which `GET /api/config` says outright
+ * (`edition: 'lite'` — the same field Normal answers `'normal'` to).
+ *
+ * The probe's two failure shapes are not the same evidence. A refused connection (or a name that
+ * does not resolve) is conclusive — nothing is there, so the file is wreckage and gets overwritten.
+ * Anything else — the probe's own timeout, but equally `EHOSTUNREACH` or a reset — is only the
+ * absence of an answer, which a live instance can produce too if it is briefly too busy to reply or
+ * if the route to it went away; taken as proof, it would make the guard weaker than the pid-only
+ * check it replaced. So an inconclusive probe earns one retry with the same budget, and only if
+ * *that* is inconclusive too does this give up — not by overwriting, but by refusing to start at
+ * all, leaving the decision to the operator (`--stop`, or check what else is on the port). The
+ * refusal names the error code it saw, because a dead interface and a busy server want different
+ * things done about them.
+ *
+ * The two injectable seams keep the test honest: `isAlive` lets a test describe a live pid without
+ * having one, and the probe is the real `fetch` against a real listener.
+ */
+export async function claimRunFile(
+  path: string,
+  { isAlive = pidAlive, timeoutMs = PROBE_TIMEOUT_MS }: { isAlive?: (pid: number) => boolean; timeoutMs?: number } = {},
+): Promise<RunFileClaim> {
   const info = readRunFile(path)
-  return info !== null && isAlive(info.pid) ? info : null
+  if (info === null) return { state: 'vacant' }
+  if (!isAlive(info.pid)) return { state: 'stale', info, why: `pid ${info.pid} is gone` }
+
+  const url = `${runFileUrl(info)}/api/config`
+
+  let outcome = await probeOnce(url, timeoutMs)
+  if (outcome.kind === 'inconclusive') outcome = await probeOnce(url, timeoutMs)
+
+  if (outcome.kind === 'refused') return { state: 'stale', info, why: `connection refused at ${url} — nothing is listening there` }
+  if (outcome.kind === 'inconclusive') {
+    return {
+      state: 'unreachable',
+      info,
+      // The code, when there is one, is the whole diagnosis: EHOSTUNREACH is a network the operator
+      // can fix, and it did not take `timeoutMs` to happen.
+      why: `${url} did not identify itself, twice in a row (${outcome.code ?? `no answer within ${timeoutMs} ms`})`,
+    }
+  }
+
+  const res = outcome.res
+  if (!res.ok) return { state: 'stale', info, why: `${url} answered HTTP ${res.status}` }
+
+  let edition: unknown
+  try {
+    edition = ((await res.json()) as { edition?: unknown }).edition
+  } catch {
+    return { state: 'stale', info, why: `${url} did not answer JSON` }
+  }
+  if (edition !== 'lite') return { state: 'stale', info, why: `${url} is not a Bind Poker Lite instance` }
+  return { state: 'held', info }
 }
 
 /** True while the process exists. `EPERM` means it exists but belongs to somebody else. */

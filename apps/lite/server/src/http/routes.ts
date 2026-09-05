@@ -26,11 +26,49 @@ export interface RouteDeps {
   now?: () => number
   /** The loopback stop path: the run token this instance published, and the graceful shutdown it triggers. */
   admin: { token: string; requestShutdown: () => void }
+  /** Lowered by tests that need to reach the general write limit without sending sixty real requests. */
+  writeRateLimit?: { limit: number; windowMs: number }
 }
 
 const SESSION_RATE_LIMIT = { limit: 10, windowMs: 60_000 }
 /** The stop endpoint is not a login: five attempts a minute is far more than an operator needs. */
 const ADMIN_RATE_LIMIT = { limit: 5, windowMs: 60_000 }
+
+/**
+ * The ceiling every *other* mutating `/api` request is under, per address.
+ *
+ * Session creation and the admin stop each carry a much tighter limiter of their own; these are the
+ * two that had none — a daily claim and a relief grant, both of which open a SQLite write
+ * transaction, and both of which a holder of one valid token could ask for as fast as the loop
+ * could send them. Sixty a minute is orders of magnitude more than the endpoints can usefully
+ * answer (a claim succeeds once a day, relief once a cooldown) and far less than a loop.
+ *
+ * Keyed on the address rather than the bearer token, and that is only sound because Lite builds
+ * Fastify with `trustProxy: false`: `req.ip` is the socket peer, which a caller cannot write. A
+ * token key would be forgeable in the way that matters — a caller sending a fresh made-up token per
+ * request would mint a fresh bucket each time and never be limited, exactly the hole Normal needs
+ * its second, address-keyed bucket to close.
+ */
+export const WRITE_RATE_LIMIT = { limit: 60, windowMs: 60_000 }
+
+const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+
+/**
+ * The two requests with their own, much tighter limiter; metering them twice would only hide the
+ * tighter one.
+ *
+ * Exported, and asserted by name in `app.test.ts`, because this set is the one way a route can
+ * become unmetered without any test saying so in as many words: an entry added here with no limiter
+ * behind it fails the metering loop with "was never rate limited", which points at the route rather
+ * than at the exemption that caused it. The limit rides along with each entry so that loop can size
+ * its request budget from the loosest limiter actually in play, instead of from a constant that
+ * happens to be big enough today.
+ */
+export const OWN_LIMITER: ReadonlyMap<string, { limit: number; windowMs: number }> = new Map([
+  ['/api/session', SESSION_RATE_LIMIT],
+  ['/api/admin/shutdown', ADMIN_RATE_LIMIT],
+])
+
 const LANGUAGES = ['vi', 'en']
 
 /**
@@ -43,8 +81,33 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
   const startedAt = now()
   const sessionLimiter = createRateLimiter({ ...SESSION_RATE_LIMIT, now })
   const adminLimiter = createRateLimiter({ ...ADMIN_RATE_LIMIT, now })
+  const writeLimiter = createRateLimiter({ ...(deps.writeRateLimit ?? WRITE_RATE_LIMIT), now })
 
   app.decorateRequest('identity', null)
+
+  /**
+   * The general write limit, so that no mutating `/api` route is unmetered.
+   *
+   * Instance-wide and registered here, which puts it after `buildApp`'s CSRF guard and before every
+   * route's own `preHandler`: a request without `X-Requested-With` is refused before it can spend
+   * anyone's allowance, and a metered refusal costs a map lookup rather than a session resolve and
+   * a transaction. `/health` and the static bundle are never counted — the first is what a monitor
+   * polls, the second is files.
+   */
+  app.addHook('preHandler', async (req, reply) => {
+    // The *matched route* where there is one, so a query string or a trailing slash can never make
+    // a request look like a path other than the one Fastify routed, and `OWN_LIMITER` is a set of
+    // route patterns rather than of request strings. A request that matched nothing has no
+    // `routeOptions.url`; it falls back to the raw target so a flood of `POST /api/<nonsense>`
+    // stays metered rather than becoming the one unlimited thing under `/api`.
+    const path = req.routeOptions.url ?? req.url.split('?')[0] ?? ''
+    if (!path.startsWith('/api/') || !MUTATING.has(req.method) || OWN_LIMITER.has(path)) return
+    const verdict = writeLimiter.check(`ip:${req.ip}`)
+    if (verdict.allowed) return
+    deps.log.warn('rate limited', { ip: req.ip, method: req.method, url: req.url })
+    reply.header('retry-after', String(verdict.retryAfterSec))
+    throw new HttpError(429, 'RATE_LIMITED', 'too many requests', { retryAfterSec: verdict.retryAfterSec })
+  })
 
   /** Resolves `Authorization: Bearer <token>` into `req.identity`, or fails the request with 401. */
   const requireSession = async (req: FastifyRequest): Promise<void> => {

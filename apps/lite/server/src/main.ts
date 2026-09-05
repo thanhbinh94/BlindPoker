@@ -13,7 +13,7 @@ import { buildApp } from './app.js'
 import { loadConfig, resolveBaseDir, type LiteConfig } from './config.js'
 import { openDatabase } from './db/sqlite.js'
 import { createSqliteRepositories } from './repos/sqlite-repos.js'
-import { liveInstanceAt, pidAlive, readRunFile, removeRunFile, resolveRunFilePath, RUN_FILE_NAME, type RunFile } from './run-file.js'
+import { claimRunFile, pidAlive, readRunFile, removeRunFile, resolveRunFilePath, RUN_FILE_NAME, runFileUrl, type RunFile } from './run-file.js'
 
 /** Upper bound on a graceful stop; past it the process exits anyway rather than hanging a restart. */
 const SHUTDOWN_BUDGET_MS = 10_000
@@ -62,12 +62,6 @@ function loadAssets(baseDir: string, config: LiteConfig, log: Logger): AssetSour
 
 // ---------------------------------------------------------------------------- --stop / --status
 
-/** The run file records the configured listen address; a wildcard bind is reached over the loopback. */
-function baseUrl(info: RunFile): string {
-  const host = info.host === '0.0.0.0' || info.host === '::' || info.host === '' ? '127.0.0.1' : info.host
-  return `http://${host.includes(':') ? `[${host}]` : host}:${info.port}`
-}
-
 function reason(err: unknown): string {
   const cause = err instanceof Error && err.cause instanceof Error ? err.cause : null
   return cause ? `${err instanceof Error ? err.message : String(err)} (${cause.message})` : err instanceof Error ? err.message : String(err)
@@ -93,7 +87,7 @@ async function runStop(runFilePath: string): Promise<number> {
 
   let res: Response
   try {
-    res = await fetch(`${baseUrl(info)}/api/admin/shutdown`, {
+    res = await fetch(`${runFileUrl(info)}/api/admin/shutdown`, {
       method: 'POST',
       headers: { 'x-requested-with': 'bind-poker', authorization: `Bearer ${info.token}`, 'content-type': 'application/json' },
     })
@@ -105,7 +99,7 @@ async function runStop(runFilePath: string): Promise<number> {
       console.log(`nothing to stop: pid ${info.pid} is gone. Removed the stale ${RUN_FILE_NAME}.`)
       return 0
     }
-    console.error(`could not reach the server at ${baseUrl(info)}: ${reason(err)}`)
+    console.error(`could not reach the server at ${runFileUrl(info)}: ${reason(err)}`)
     return 1
   }
 
@@ -122,7 +116,7 @@ async function runStop(runFilePath: string): Promise<number> {
     console.error(`the server accepted the stop but pid ${info.pid} was still running ${STOP_BUDGET_MS / 1000} s later.`)
     return 1
   }
-  console.log(`stopped Bind Poker Lite gracefully (pid ${info.pid}, ${baseUrl(info)}).`)
+  console.log(`stopped Bind Poker Lite gracefully (pid ${info.pid}, ${runFileUrl(info)}).`)
   return 0
 }
 
@@ -131,11 +125,11 @@ async function runStatus(runFilePath: string): Promise<number> {
   const info = locateInstance(runFilePath)
   if (!info) return 1
   try {
-    const res = await fetch(`${baseUrl(info)}/health`)
+    const res = await fetch(`${runFileUrl(info)}/health`)
     console.log((await res.text()).trim())
     return res.ok ? 0 : 1
   } catch (err) {
-    console.error(`could not reach the server at ${baseUrl(info)}: ${reason(err)}`)
+    console.error(`could not reach the server at ${runFileUrl(info)}: ${reason(err)}`)
     if (!pidAlive(info.pid)) console.error(`pid ${info.pid} is gone — the ${RUN_FILE_NAME} beside the data file is stale.`)
     return 1
   }
@@ -159,6 +153,9 @@ function startupHint(err: unknown, config: LiteConfig | null): string | null {
   }
   if (message.startsWith('another instance is already running')) {
     return 'stop the running one first: bind-poker-lite.exe --stop (or point SQLITE_PATH at a folder of its own)'
+  }
+  if (message.startsWith('the recorded run-file instance')) {
+    return 'run bind-poker-lite.exe --stop, or check what else is listening on the port (netstat -ano | findstr :<port>) before starting again'
   }
   if (/^(PORT|LOG_LEVEL|ECONOMY_TIMEZONE|RECONNECT_WINDOW_SEC)\b/.test(message)) return 'fix the value in the .env file next to the executable, then start again'
   return null
@@ -220,11 +217,23 @@ async function main(): Promise<void> {
   const runFilePath = smoke ? null : resolveRunFilePath(baseDir, sqlitePath)
 
   // Two servers on one data directory would fight over the SQLite file and over this run file, and
-  // the second one silently winning is how the first becomes unstoppable. Refuse instead.
+  // the second one silently winning is how the first becomes unstoppable. Refuse instead — but only
+  // to an instance that is really there. A hard kill leaves the file behind and the operating system
+  // reuses the pid, so a live pid alone would lock the operator out of their own server; the address
+  // in the file has to answer as Lite too. See `claimRunFile`.
   if (runFilePath !== null) {
-    const running = liveInstanceAt(runFilePath)
-    if (running !== null) {
-      throw new Error(`another instance is already running (pid ${running.pid}, ${baseUrl(running)}) and owns ${runFilePath}`)
+    const claim = await claimRunFile(runFilePath)
+    if (claim.state === 'held') {
+      throw new Error(`another instance is already running (pid ${claim.info.pid}, ${runFileUrl(claim.info)}) and owns ${runFilePath}`)
+    }
+    if (claim.state === 'unreachable') {
+      // Neither `held` (nothing actually answered as Lite) nor `stale` (a timeout is not proof
+      // nothing is there) — refuse rather than guess, so a live-but-busy instance is never
+      // overwritten. Distinct wording from the `held` message above: `startupHint` matches on it.
+      throw new Error(`the recorded run-file instance (pid ${claim.info.pid}, ${runFileUrl(claim.info)}) ${claim.why}`)
+    }
+    if (claim.state === 'stale') {
+      log.warn(`overwriting a stale ${RUN_FILE_NAME}`, { path: runFilePath, pid: claim.info.pid, address: runFileUrl(claim.info), why: claim.why })
     }
   }
 

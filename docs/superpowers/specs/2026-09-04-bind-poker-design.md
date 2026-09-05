@@ -1,7 +1,7 @@
 # Bind Poker — Software Requirement Specification & Thiết kế hệ thống
 
-- Ngày: 2026-09-04
-- Trạng thái: Bản thiết kế đã được duyệt qua brainstorming, chờ duyệt spec
+- Ngày: 2026-09-04 (cập nhật 2026-09-05 sau M9: §32, §33, §34 và Phụ lục B)
+- Trạng thái: Đã duyệt và **đã hiện thực hóa hết phạm vi MVP** qua Plan 1–7. Bảng đối chiếu từng mục chấp nhận: `docs/acceptance-checklist.md`; hạn chế đã biết: `docs/known-limitations.md`
 - Nguồn yêu cầu gốc: `requirement.txt`
 - Ngôn ngữ tài liệu: tiếng Việt, thuật ngữ kỹ thuật và định danh mã giữ nguyên tiếng Anh
 
@@ -330,7 +330,11 @@ Server kiểm tra từng giá trị thuộc tập cho phép; sai → `ERROR INVA
 ### 11.3 Ghế và trạng thái người trong phòng
 - Vào phòng = là "người xem trong phòng" (không ghế). `SIT_DOWN{seat, buyIn?}` chiếm ghế (Hold'em kèm buy-in; Blind không). `STAND_UP` rời ghế.
 - Trạng thái ghế (`SeatStatus`, cấp phòng): `SEATED`, `READY`, `IN_HAND`, `SITTING_OUT`, `DISCONNECTED` (ghế trống = không có người, `seat: null`). `FOLDED`/`ALL_IN` **không** phải trạng thái phòng: chúng là cờ theo từng ván trong `HandView.seats` (`hasFolded`, `isAllIn`) và biến mất khi ván kết thúc.
-- `SITTING_OUT` được đặt lại mỗi lần phòng thử bắt đầu ván: người thật đang ngồi mà stack không đủ mức cược sẽ `sittingOut = true` (và trở lại `false` khi đủ).
+- `SIT_OUT` giữ ghế nhưng xin bỏ qua các ván sau; **ván đang chơi vẫn đánh hết** (cờ chỉ tác động lên lần bắt đầu ván kế tiếp). `SIT_IN` bỏ yêu cầu đó. Chưa có ghế → `NOT_SEATED`.
+- `SITTING_OUT` được tính lại mỗi lần phòng thử bắt đầu ván: `sittingOut = đã xin SIT_OUT || stack < mức tối thiểu`. Người thật đang ngồi mà stack không đủ mức cược sẽ `sittingOut = true` (và trở lại `false` khi đủ) — nên `SIT_IN` với stack vẫn thiếu thì ghế **vẫn** `SITTING_OUT`.
+- Mỗi lần cờ đổi, phòng phát `ROOM_EVENT PLAYER_SIT_OUT{playerId, sittingOut}` (cả khi nguyên nhân là stack ngắn). Ngoài ra `RoomPlayerView` mang thẳng trường `sittingOut` (= `đã xin SIT_OUT || cờ hiệu lực`): `status` chỉ có một giá trị và `IN_HAND` xếp trên `SITTING_OUT`, nên người xin sit-out giữa ván sẽ thấy `status: 'IN_HAND', sittingOut: true` — client đọc trường này (không đọc `status`) thì nút bật/tắt sit-out không bị `RESYNC` hay reconnect giữa ván lật ngược.
+- Ghế `SITTING_OUT` không được tính vào số ghế sẵn sàng: phòng chỉ bắt đầu khi có ≥ 2 ghế vừa `READY` vừa không sit-out (autoStart chờ, `START_GAME` → `NOT_ENOUGH_PLAYERS`); ngược lại phòng cũng không chờ người đang sit-out bấm ready.
+- Xin sit-out mà bị bỏ qua **5 ván liên tiếp** → tự đứng dậy, trả stack về số dư (cùng đường với luật 3 lần hết giờ), phát `PLAYER_STOOD`. Bộ đếm về 0 khi **yêu cầu đổi** (`SIT_IN` sau `SIT_OUT`), khi ngồi xuống lại hoặc khi đứng dậy; gửi lại `SIT_OUT` chỉ được `ACK` và không đổi gì, nên không thể nạp lại bộ đếm để chiếm ghế mãi. Bộ đếm chỉ tăng theo **ván thực sự được chia**: ở bàn không đủ người để bắt đầu (2 ghế, 1 người sit-out) sẽ không có ván nào, nên ghế được giữ cho tới khi người đó rời hoặc phòng đóng vì trống.
 - Ready chỉ có ý nghĩa ở `OPEN`; khi ván bắt đầu tất cả ghế `READY` vào ván.
 
 ### 11.4 Host
@@ -668,13 +672,14 @@ Auth = cookie phiên `bp_session` (`HttpOnly`, `SameSite=Lax`, `Secure` khi `COO
 | POST | `/api/session` | — | `201 {playerId, displayName, token, balance}` | `400 INVALID_NAME` · `409 DISPLAY_NAME_TAKEN` · `429 RATE_LIMITED` (10 lần/phút/IP, kèm header `Retry-After` và `retryAfterSec`) |
 | GET | `/api/me` | Bearer | `200 {playerId, displayName, balance, stats{handsPlayed, handsWon}, daily{…}, relief{…}}` | `401 UNAUTHENTICATED` |
 | GET | `/api/rewards/daily` | Bearer | `200 {allowed, alreadyClaimed, day, points, nextDay, nextPoints, streak, lastClaim}` | `401 UNAUTHENTICATED` |
-| POST | `/api/rewards/daily/claim` | Bearer | `200 {claimed:true, points, streak, balance}` | `409 ALREADY_CLAIMED` (kèm `claimed:false`) |
-| POST | `/api/economy/relief` | Bearer | `200 {granted:true, amount, balance}` | `409 NOT_ELIGIBLE` (kèm `granted:false, reason:"balance"\|"cooldown", retryAt`) |
+| POST | `/api/rewards/daily/claim` | Bearer | `200 {claimed:true, points, streak, balance}` | `409 ALREADY_CLAIMED` (kèm `claimed:false`) · `401 UNAUTHENTICATED` · `403 FORBIDDEN` (thiếu XRW) · `429 RATE_LIMITED` (60/phút/địa chỉ) |
+| POST | `/api/economy/relief` | Bearer | `200 {granted:true, amount, balance}` | `409 NOT_ELIGIBLE` (kèm `granted:false, reason:"balance"\|"cooldown", retryAt`) · `401 UNAUTHENTICATED` · `403 FORBIDDEN` (thiếu XRW) · `429 RATE_LIMITED` (60/phút/địa chỉ) |
 | POST | `/api/admin/shutdown` | Run token | `200 {ok:true}` rồi tắt êm (stopAccepting → hoàn cược/cash-out → đóng listener → đóng database) | `429 RATE_LIMITED` (5 lần/phút) · `403 FORBIDDEN` (socket không phải loopback) · `401 UNAUTHENTICATED` (sai run token) |
 | GET | `/*` | — | Static `dist/public` (hoặc asset trong exe); đường dẫn không có phần mở rộng rơi về `index.html` | `404 NOT_FOUND` |
 
 - Thân lỗi luôn là `{ error: { code, message } }`; các trường phụ (`retryAfterSec`, `claimed`, `granted`, `reason`, `retryAt`) nằm cạnh `error`, không nằm trong nó.
 - Mọi request mutating (`POST`/`PUT`/`PATCH`/`DELETE`) thiếu `X-Requested-With: bind-poker` → `403 FORBIDDEN`, kiểm ngay ở `preHandler` trước cả auth.
+- Rate-limit: mọi `/api/*` mutating đi qua một rổ chung **60/phút theo địa chỉ** (`WRITE_RATE_LIMIT` trong `http/routes.ts`), trừ `POST /api/session` (10/phút) và `POST /api/admin/shutdown` (5/phút) vốn đã có limiter riêng chặt hơn — tính hai lần chỉ làm cái chặt hơn vô hình. Khóa là địa chỉ chứ không phải bearer token, vì Lite dựng Fastify với `trustProxy: false` nên `req.ip` là peer của socket (không giả được), còn token thì người gọi tự bịa mỗi request một cái là có rổ mới. Đọc (`GET`) không tính: chúng chỉ đọc SQLite trong tiến trình, không mở transaction ghi. `429` kèm header `Retry-After` và `retryAfterSec`.
 - Header trên **mọi** phản hồi (kể cả 404 và lỗi): `x-content-type-options: nosniff`, `referrer-policy: no-referrer`, `x-frame-options: DENY`, và `content-security-policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'`. `connect-src 'self'` đủ cho cả WebSocket: `ws://`/`wss://` cùng origin khớp `'self'` theo CSP 3, nên hai nguồn `ws:`/`wss:` cũ đã bỏ. Bốn directive cuối bịt những chỗ `default-src` không với tới: nhúng iframe, `<base href>`, đích của form, và plugin. `/health` và `/api/*` thêm `cache-control: no-store`.
 - Cache của static: `assets/<tên>-<hash>.<ext>` → `public, max-age=31536000, immutable`; mọi thứ còn lại (`index.html`, `favicon.ico`) → `no-cache`.
 - Prefix `api`, `ws`, `health` được giữ chỗ: gõ sai dưới các prefix đó là `404`, không bao giờ rơi về `index.html`.
@@ -694,6 +699,8 @@ Mọi message: `{ t: string, ...payload }`. Client→server có `reqId?: string`
 | `LEAVE_ROOM` | — | |
 | `SIT_DOWN` | `{ seat, buyIn? }` | |
 | `STAND_UP` | — | |
+| `SIT_OUT` | — | Giữ ghế, bỏ qua từ ván sau (ván đang chơi vẫn đánh hết); chưa có ghế → `NOT_SEATED` |
+| `SIT_IN` | — | Trở lại từ ván sau; stack dưới mức tối thiểu thì vẫn `SITTING_OUT` |
 | `READY` | `{ ready: boolean }` | |
 | `START_GAME` | — | Host |
 | `KICK` | `{ playerId }` | Host, chỉ người chưa trong ván |
@@ -710,13 +717,15 @@ Mọi message client → server có thể mang `reqId?`; server trả lại nó 
 | `ROOM_LIST` | `{ rooms: RoomSummary[] }` |
 | `ROOM_SNAPSHOT` | `{ seq, room: RoomView, hand?: HandView, deadlineAt: number | null }` |
 | `GAME_EVENT` | `{ seq, event: GameEvent }` |
-| `ROOM_EVENT` | `{ seq, event: PLAYER_JOINED \| PLAYER_LEFT \| PLAYER_SAT \| PLAYER_STOOD \| PLAYER_READY \| HOST_CHANGED \| PLAYER_DISCONNECTED \| PLAYER_RECONNECTED \| ROOM_STATUS \| ROOM_CLOSED }` |
+| `ROOM_EVENT` | `{ seq, event: PLAYER_JOINED \| PLAYER_LEFT \| PLAYER_SAT \| PLAYER_STOOD \| PLAYER_READY \| PLAYER_SIT_OUT \| HOST_CHANGED \| PLAYER_DISCONNECTED \| PLAYER_RECONNECTED \| ROOM_STATUS \| ROOM_CLOSED }` |
 | `BALANCE` | `{ balance }` — sau settlement/daily/relief |
 | `NOTIFICATION` | `{ kind, payload }` — Normal dùng cho achievement; Lite chỉ gửi `NOTIFICATION{kind:'KICKED'}` khi host kick (cả hai edition đều gửi thông báo này) |
 | `ACK` | `{ reqId }` |
 | `ERROR` | `{ reqId?, code, message }` |
 | `SESSION_REPLACED` | — |
 | `PING` | — |
+
+`RoomView.players[]` (`RoomPlayerView`) = `{ playerId, displayName, isBot, isHost, connected, seat, status, sittingOut, stack, ready, cosmetics? }`. `status` là trạng thái ghế (mục 11.3, một giá trị, `IN_HAND` xếp trên `SITTING_OUT`); `sittingOut` là cờ sit-out riêng, độc lập với `status`, để client không phải suy ra yêu cầu sit-out từ một enum loại trừ nhau.
 
 ### 20.3 Mã lỗi
 `UNAUTHENTICATED, INVALID_MESSAGE, RATE_LIMITED, ROOM_NOT_FOUND, ROOM_FULL, WRONG_PASSWORD, INVALID_ROOM_CONFIG, NOT_HOST, SEAT_TAKEN, INSUFFICIENT_BALANCE, NOT_YOUR_TURN, ILLEGAL_ACTION, INVALID_AMOUNT, STALE_STATE, DUPLICATE_REQUEST, NOT_IN_HAND, NOT_IN_ROOM, ALREADY_IN_ROOM, NOT_SEATED, GAME_IN_PROGRESS, NOT_ENOUGH_PLAYERS, DISPLAY_NAME_TAKEN, SERVER_SHUTDOWN, INTERNAL`.
@@ -959,7 +968,8 @@ Người chơi (tên, stack, avatar/chữ cái, badge/title ở Normal), lá ri�
 - Chạy nền: `schtasks /Create /TN "BindPokerLite" … /SC ONSTART /RU SYSTEM` (khuyến nghị) hoặc NSSM với `AppStopMethodConsole` — công cụ bọc dịch vụ duy nhất được hỗ trợ, vì nó dừng bằng Ctrl+C. Không dùng `sc.exe create`: exe không nói giao thức SCM nên Service Control Manager vừa báo start timeout dù server vẫn chạy, vừa giết cứng khi `sc stop`.
 - **Dừng (Windows không có `kill -TERM`)** — chỉ ba đường sau là tắt êm: `bind-poker-lite.exe --stop`, `Ctrl`+`C`/`Ctrl`+`Break` trong console của server (`SIGINT`/`SIGBREAK`), và một service wrapper gửi Ctrl+C (NSSM). `taskkill`, `schtasks /End`, `sc stop` và đóng cửa sổ console là **tắt cứng**: số dư đã ghi vẫn an toàn (mọi bút toán trong transaction) nhưng **stack Hold'em đang trên bàn và pot cộng dồn Blind B thì mất**. `main.ts` bắt `SIGTERM`/`SIGINT`/`SIGBREAK`/`SIGHUP` và chạy cùng một `close()` (drain 10 s).
 - **`--stop` / `--status`**: lúc `listen()`, server ghi `bind-poker.run.json` cạnh file dữ liệu (giải như `SQLITE_PATH`) với `{ pid, port, host, token }` — `token` là 32 byte ngẫu nhiên hex, file mode `0600` ở nơi có — và xoá nó ở `close()`. `--stop` đọc file, `POST /api/admin/shutdown` qua loopback (`X-Requested-With` + `Authorization: Bearer <token>`), rồi poll `pid` tới 15 s và thoát `0`/`1`; `--status` in `/health` của tiến trình đang chạy. Endpoint chặn ba lớp theo thứ tự: rate-limit 5/phút → địa chỉ socket phải loopback (`127.0.0.0/8`, `::1`, `::ffff:127.0.0.1`), nếu không `403` → so token constant-time, sai `401`. Trả `{ ok: true }` rồi mới drain (stopAccepting → hoàn cược/cash-out → đóng listener → đóng database). Vì endpoint chỉ nghe loopback, `--stop` đòi `HOST` là `0.0.0.0` hoặc `127.0.0.1`; bind vào một IP LAN cụ thể thì chỉ còn Ctrl+C/NSSM.
-- **Run file là của đúng một tiến trình.** `--smoke` không ghi run file (nó là tiến trình thứ hai, thường dùng chung thư mục dữ liệu với server đang chạy); xóa run file luôn đọc lại và đối chiếu `pid` + `token` trước khi unlink; và khi khởi động mà run file đã tồn tại với `pid` còn sống thì process **từ chối chạy** ("another instance is already running …") thay vì chiếm file — chiếm file sẽ làm bản đang giữ stack của người chơi mất đường tắt êm.
+- **Run file là của đúng một tiến trình.** `--smoke` không ghi run file (nó là tiến trình thứ hai, thường dùng chung thư mục dữ liệu với server đang chạy); xóa run file luôn đọc lại và đối chiếu `pid` + `token` trước khi unlink; và khi khởi động mà run file mô tả một bản **thật sự đang chạy** thì process **từ chối chạy** ("another instance is already running …") thay vì chiếm file — chiếm file sẽ làm bản đang giữ stack của người chơi mất đường tắt êm.
+- **"Đang chạy" phải chứng minh được, không chỉ là `pid` còn sống.** Sau một lần tắt cứng run file vẫn nằm lại và hệ điều hành được phép cấp lại đúng `pid` đó cho một tiến trình bất kỳ, nên nếu chỉ hỏi `process.kill(pid, 0)` thì bản mới bị chặn oan bởi một trình duyệt tình cờ trùng pid. `claimRunFile` (`run-file.ts`) hỏi hai câu: `pid` còn sống **và** `GET /api/config` tại đúng địa chỉ ghi trong file (host `0.0.0.0`/`::`/rỗng → hỏi qua loopback) trả lời `edition: "lite"` trong vòng 1 giây → `held`, từ chối khởi động. Không có file, hoặc `pid` đã chết, là `vacant`/`stale` ngay — không cần hỏi mạng. Còn khi `pid` sống thì hai kết quả của lần hỏi mạng không nặng như nhau: kết nối bị **từ chối thẳng** (`ECONNREFUSED`/`ENOTFOUND`), hoặc trả lời HTTP lỗi/không phải JSON/`edition` khác, là bằng chứng chắc chắn — `stale`, server ghi một dòng `overwriting a stale bind-poker.run.json` kèm lý do rồi ghi đè; nhưng **hết 1 giây mà im lặng** chỉ là *chưa có bằng chứng* (một bản Lite sống nhưng bận đúng lúc đó im lặng y hệt), nên đây không tính là `stale` — server thử lại đúng một lần với cùng thời hạn, và nếu vẫn hết giờ thì kết quả là `unreachable`: process **từ chối khởi động hẳn**, với một thông báo lỗi riêng (khác câu "another instance is already running…" của `held`) bảo chạy `--stop` hoặc kiểm tra lại cổng — không bao giờ ghi đè chỉ vì im lặng, vì đó là hướng duy nhất mà cơ chế mới yếu hơn kiểm tra `pid`-only cũ nếu bỏ qua. Dùng `/api/config` chứ không phải `/health` vì nó đã mang sẵn `edition` (§19.3) nên không cần đổi shape của probe giám sát.
 - Khởi động hỏng: in một dòng gợi ý (cổng bận / thiếu quyền / giá trị `.env` sai / đã có bản đang chạy) và, khi `process.stdin.isTTY`, chờ một phím trước khi thoát để cửa sổ double-click còn đọc được.
 - Sao lưu: dừng server rồi chép cả ba file `.sqlite*`; hoặc `sqlite3.exe <db> ".backup '<đích>'"` khi đang chạy (chép tay lúc WAL đang mở có thể ra bản không nhất quán).
 - Nâng cấp: `--stop`, thay file, chạy lại; SQLite tự migrate theo `user_version`. Migration chỉ thêm, không có đường hạ cấp tự động — sao lưu trước.
@@ -1067,6 +1077,10 @@ ESLint boundary; test đọc `package.json` từng package và kiểm graph mụ
 14. Cứu trợ 1 lần/24 giờ, đưa về 5.000.
 15. Tiếng Việt là ngôn ngữ mặc định khi không xác định được.
 16. Lite: giao diện web được nhúng thẳng vào exe (SEA asset) và đọc bằng `sea.getAsset()`; khi dev thì server đọc thư mục `dist/public` (ghi đè bằng `PUBLIC_DIR`). Không có chế độ nào server tự đi tải asset.
+17. `SIT_OUT` có hiệu lực từ **ván kế tiếp**: ván đang chơi vẫn chơi hết. Bộ đếm đứng dậy tự động đếm **ván được chia**, không đếm thời gian thực — nên trên bàn hai ghế mà một người ngồi ngoài thì không ván nào bắt đầu, không ván nào bị bỏ, và ghế được giữ cho tới khi người đó rời hoặc phòng đóng vì trống (`emptyRoomCloseMs`). Trường hợp bỏ bàn do đó thuộc về đường đóng-phòng-trống, không thuộc bộ đếm sit-out (§11.3).
+18. Không đóng gói web font: `--font-display` **đặt tên** một face rồi rơi về Cambria / Constantia / Segoe UI. Giả định là mọi host mục tiêu (Windows với Lite; trình duyệt hiện đại với Normal) có ít nhất một trong ba, và cả ba đều đủ glyph tiền tổ hợp tiếng Việt. Việc đóng gói một bản subset nằm ở roadmap mục 9.
+19. Blind Poker **công khai số dư của mọi ghế**, vì ở Blind ghế *chính là* số dư (§8.1): ante trừ thẳng vào đó và không có stack bàn riêng. Đây là hạn chế thiết kế được chấp nhận, không phải lỗi; Hold'em không bị ảnh hưởng vì ở đó stack bàn tách khỏi balance và chỉ stack được công bố.
+20. Avatar SVG vẽ trong app (Phụ lục A) là bản **tạm**. Bản thay thế 3D có đặc tả riêng — `2026-09-05-avatar-3d-design.md` — và nằm ngoài phạm vi tài liệu này.
 
 ## 33. MVP Scope
 
@@ -1078,6 +1092,8 @@ ESLint boundary; test đọc `package.json` từng package và kiểm graph mụ
 
 **WON'T**: tiền thật, cash-out, marketplace, NFT, blockchain, ML AI, mạng xã hội.
 
+**Tình trạng sau M9 (Plan 7).** Toàn bộ MUST và toàn bộ SHOULD đã giao — bằng chứng từng mục ở `docs/acceptance-checklist.md`. Không mục COULD nào được làm; tất cả vẫn ở roadmap mục 4. `SIT_OUT`/`SIT_IN` là thứ duy nhất được thêm ngoài hai danh sách trên: nó không có trong MVP scope ban đầu nhưng cần cho §11.3 và cho chính bảng kiểm §30, nên được đưa vào M9.
+
 ## 34. Future Roadmap
 
 1. Shop đổi điểm lấy cosmetic (bể điểm bổ sung) khi số liệu cho thấy lạm phát.
@@ -1088,6 +1104,11 @@ ESLint boundary; test đọc `package.json` từng package và kiểm graph mụ
 6. Đa tiến trình Normal với sticky routing theo phòng.
 7. Bot Hold'em có mô hình đối thủ đơn giản.
 8. PIN tùy chọn cho phiên Lite.
+9. Đóng gói sẵn một web font tiếng Việt đã subset trong `@bp/ui-kit` (hiện chỉ *đặt tên* font và rơi về Cambria/Constantia/Segoe UI — đủ phủ tiếng Việt trên Windows, vốn là host duy nhất của Lite). Cần tải file font lúc build và một công cụ subset, nên để lại roadmap.
+10. Tách `--red` thành ink và fill như `--teal`/`--teal-fill`: một token không thể vừa đạt 4.5:1 làm chữ trên nền tối vừa đủ tối để `--red-ink` đọc được trên nó. Năm mục dưới chuẩn AA, phủ ba cặp token khác nhau — `--red` trên `--bg` (3.59:1) và trên `--bg-elev` (3.22:1) ở **cả** palette dark lẫn night (bốn mục), cộng cùng khuyết tật đó lặp lại trên nền felt riêng của `.panel.felt` (3.13:1) — được ghi nhận trong `tokens.test.ts` (`BELOW_AA`) và `docs/ui-kit.md` — Known gaps. Test đỏ nếu một cặp tệ đi, hoặc nếu một cặp được sửa mà dòng ghi nhận bị bỏ quên.
+11. Avatar 3D cho bản Normal, thay bộ SVG hiện tại: đặc tả riêng đã duyệt ở `2026-09-05-avatar-3d-design.md` (three.js, chân dung dựng phía client). Đây là lý do `Avatar` hiện bỏ qua `assetKey` mà bundle chưa biết vẽ thay vì ném lỗi — server có thể phát item trước khi client vẽ được nó.
+12. Nâng Vitest 2 → 3 và Vite 5 → 6 trên cả tám package, để dọn 7 advisory chỉ-dev còn lại. Không dùng override cho `vite` transitive dưới Vitest: làm thế là ghim một phiên bản Vitest 2 không được build cùng, đổi một advisory chỉ-dev lấy một test runner hỏng. Chi tiết và disposition từng advisory ở `docs/security.md` §2.
+13. Chạy một lần suite của `normal-server` với `TEST_DATABASE_URL` trỏ vào PostgreSQL thật, và build ảnh Docker của bản Normal — hai việc chưa làm được trên máy dev vì không có Docker daemon (`docs/known-limitations.md`, `docs/deployment-normal.md` §2).
 
 ---
 
@@ -1121,4 +1142,18 @@ ESLint boundary; test đọc `package.json` từng package và kiểm graph mụ
 
 ## Phụ lục B — Bảng kiểm chấp nhận (mục 40 & 66 requirement)
 
-Được sao chép vào `docs/acceptance-checklist.md` và tick khi M9 hoàn thành; mỗi mục gắn với test hoặc bước kiểm thủ công có ghi chú.
+Bảng kiểm sống ở **[`../../acceptance-checklist.md`](../../acceptance-checklist.md)**, không sao chép lại ở đây — hai bản sao của cùng một bảng sẽ lệch nhau đúng ở chỗ quan trọng nhất.
+
+**Đã hoàn thành ở M9 (Plan 7).** Cả 64 mục — 21 mục của requirement.txt §40 và 43 mục của §66 — đều đã được đối chiếu: **61 ✓, 3 partial, 0 ✗**. Mỗi dòng dẫn tới một test (đường dẫn tệp + tên `it()` nguyên văn), một bước e2e, hoặc một bước kiểm thủ công kèm kết quả mong đợi.
+
+Ba dòng `partial` và lý do:
+
+| Dòng | Lý do |
+|---|---|
+| 40.8 Normal builds successfully | Bản build Node được test chạy thật; **ảnh Docker chưa từng được build** vì máy dev không có Docker daemon. Tiền kiểm ở `docs/deployment-normal.md` §2 |
+| 66.21 Persistent database works | Toàn bộ suite chạy trên PGlite; đường `pg` thật và `SELECT … FOR UPDATE` chỉ thực thi khi có `TEST_DATABASE_URL` |
+| 66.40 Security checks pass | `pnpm audit --prod` sạch; `pnpm audit` đầy đủ còn 7 advisory, tất cả thuộc gói chỉ dùng khi build/test — `docs/security.md` §2 |
+
+Bảng kiểm không tự mục nát được: `tooling/arch/acceptance-links.test.ts` đọc chính tệp markdown đó và kiểm rằng mọi tệp test được trích dẫn có thật, mọi tên test được trích dẫn nằm trong tệp đó, mọi dòng có đúng một trong ba trạng thái, và đủ cả 21 + 43 mục. Đổi tên một test mà quên sửa bảng thì `pnpm test` đỏ.
+
+Danh sách hạn chế đã biết — gồm cả ba dòng trên — ở `docs/known-limitations.md`. Lịch sử theo từng plan ở `CHANGELOG.md`.

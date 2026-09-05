@@ -134,6 +134,20 @@ evenly among the seated humans (regardless of stack); the indivisible
 remainder — or the whole pot, when nobody is seated — is recorded as a
 `carry_over` sink row rather than being handed to an arbitrary player.
 
+### Sitting out (spec §11.3)
+
+`SIT_OUT` keeps the seat and asks to be skipped; `SIT_IN` takes it back.
+Both answer `ACK`, or `ERROR{NOT_SEATED}` from a player with no seat.
+
+| | |
+|---|---|
+| When it takes effect | The next hand. The hand already on the table is played out — a player who wants out of *this* hand folds. |
+| Effective flag | Recomputed at every `startHand`: `sittingOut = asked to sit out ‖ stack < the minimum to play`. So `SIT_IN` on a stack that still cannot cover the wager leaves the seat `SITTING_OUT` under the existing short-stack rule. |
+| What clients see | `ROOM_EVENT PLAYER_SIT_OUT { playerId, sittingOut }` on every change of that flag — including the short-stack one, which used to be visible only in a snapshot — plus `RoomPlayerView.sittingOut` (`sitOutRequested ‖ sittingOut`) in every snapshot. The flag has its own field because `status` holds one value and ranks `IN_HAND` above `SITTING_OUT`: a player who sits out mid-hand still finishes that hand, so a snapshot taken then reports `status: 'IN_HAND', sittingOut: true`. A client's toggle reads the field, never the status, so a `RESYNC` or a reconnect cannot flip it back. |
+| Starting a hand | A sitting-out seat is not a ready seat: the room needs two seats that are both ready and playing (`autoStart` waits, `START_GAME` answers `NOT_ENOUGH_PLAYERS`). It is not waited on either, so one sitter no longer holds up a table that is otherwise ready. |
+| Taking the seat back | After `handsSatOutToStand` hands have started without them, the player is stood up and their stack returned — the same `standUpNow` path as the three-timeout rule, emitting `PLAYER_STOOD`. The counter is reset by a **change** of the request — `SIT_IN` after a `SIT_OUT` — and by a fresh `SIT_DOWN` or a stand-up. A repeated `SIT_OUT` is answered `ACK` and changes nothing, so it cannot re-arm the rule. |
+| Where it does not fire | The counter ticks on hands that are actually dealt, not on wall-clock time. On a table with too few other players to start — two seats, one of them sitting out — no hand ever starts, so the sitter is never stood up and the seat is held until they leave or the room closes empty (`emptyRoomCloseMs`). |
+
 A room is created `OPEN` with its host seated. Each hand runs inside a
 `HandRunner` driven by `Room`'s own serialized queue (`enqueue`), so joins,
 seat changes, actions, disconnects and hand-completion callbacks never
@@ -155,6 +169,7 @@ either starts the next hand after `handIntervalMs` or falls back to `OPEN`.
 | `emptyRoomCloseMs` | 60,000 | How long an empty room stays open before closing |
 | `carryOverReleaseMs` | 60,000 | How long a room may sit unable to start a hand before its carry-over pot is released (spec §8.4) |
 | `consecutiveTimeoutsToStand` | 3 | Timed-out actions in a row before a human is stood up automatically |
+| `handsSatOutToStand` | 5 | Hands started without a player who asked to sit out before the seat is taken back (spec §11.3) |
 | `botStartingBalance` | 1,000,000 | Virtual balance bots start (and top up) with in Blind mode |
 | `turnTimerMsOverride` | — | Test hook: overrides `config.turnTimerSec * 1000` when set |
 
@@ -242,9 +257,16 @@ Rules for the client:
   with its old `baseSeq`: the turn has almost certainly moved and the
   server answers `STALE_STATE`. Re-send it with a fresh `baseSeq` taken
   from the new snapshot, only if the snapshot still shows it as your turn.
-  Re-sending with the *same* `reqId` is safe by construction — the gateway
-  replays the exact frame the first attempt produced, `ACK` or `ERROR`,
-  rather than executing it twice.
+  The `reqId` ring buffer is **per connection** (spec §16.4), so it does
+  not survive the reconnect: the new socket has no memory of the old
+  `reqId` and the retransmission is re-evaluated rather than replayed.
+  What keeps it from being applied twice is the `turnStartSeq` guard, not
+  the cache — an action for a turn that has moved on is refused with
+  `STALE_STATE`, and one for a seat that is no longer acting with
+  `NOT_YOUR_TURN`. So after a reconnect, expect an `ERROR` where the same
+  `reqId` on the *same* socket would have replayed its original `ACK`, and
+  treat the snapshot — not the answer to the retransmission — as the truth
+  about whether the action landed.
 - **Lobby.** `ROOM_LIST` broadcasts only go to connections that have asked
   for them; leaving a room does not re-subscribe you. Send `LIST_ROOMS`
   again after `LEAVE_ROOM` to start receiving the live list.
@@ -319,3 +341,76 @@ for integration tests:
   firing any due timers (in schedule order) as it passes them. Lets tests
   fast-forward through `handIntervalMs`, reconnect windows, and turn timers
   without waiting on a wall clock.
+- **`runSoak(server, opts)`** — the multiplayer soak driver (spec §29.3). See
+  below.
+
+### The soak driver
+
+```ts
+import { runSoak, startTestServer } from '@bp/server-kit/testing'
+
+const ts = await startTestServer({
+  players: Array.from({ length: 6 }, (_, i) => [`p${i}`, 200_000] as [string, number]),
+  gatewayOptions: { rateLimitPerSec: 500, rateLimitBurst: 500 },
+})
+const r = await runSoak(ts, { clients: 6, rooms: 3, handsPerRoom: 20, mode: 'holdem', seed: 1337 })
+```
+
+`runSoak` connects `clients` `TestClient`s, spreads them evenly over `rooms`
+rooms (`clients / rooms` seats each, so at least two humans per room; Blind
+rooms add one bot), seats and readies everyone, and plays until the *last*
+room has settled `handsPerRoom` hands — so `hands` is a floor, not a target.
+The policy is deliberately dull: it plays a legal action the server itself
+offered (`legal.kinds` on `TURN_CHANGED`, `play`/`fold` on `DECISION_PHASE`),
+never bets or raises, and folds a fixed share of the time, which keeps each
+hand's exposure to about one big blind so nobody busts mid-run. Pass
+`actionDelayMs: [min, max]` for a random think time.
+
+**What `seed` buys you.** Each seat gets its own stream, `seededRng(seed + i)`,
+so a seat facing its *n*-th decision always decides the same way for a given
+seed — the policy no longer depends on the order the sockets happened to be
+served in. It is *not* a promise of bit-for-bit reproducibility of the run:
+`startTestServer` hands the whole server one `seededRng`, so the deck each
+room shuffles depends on which room reached `startGame` first, and bots and
+`actionDelayMs` consume that same stream in timing order. Hand counts, fees
+and closing balances therefore still move a little between runs of the same
+seed, in Hold'em as well as Blind — the invariants the soak asserts (money
+exact, no `seq` gaps, ≥ 20 hands per room, zero fee on cancelled hands) hold
+on every run, which is what the test is for. Seed a failing run, and you
+replay the *clients*' decisions; you do not replay the cards.
+
+The run ends with `server.shutdown()`, so `endBalances` is read when every
+table stack and carry-over pot is back in a balance. `SoakResult` then reports:
+
+| Field | Meaning |
+|---|---|
+| `hands` / `cancelledHands` | Settled hands, from the `HAND_SETTLED` domain events |
+| `handsPerRoomSeen` | The same count broken out per room, so "20 hands *each*" is assertable |
+| `fees` | Σ `summary.fee` — the domain events are the fee source of truth |
+| `cancelledFees` | Σ `summary.fee` over the cancelled hands. A cancelled hand takes no rake, so assert `0` |
+| `sinks` | Σ every sink row the repositories recorded (`table_fee` + `carry_over`) |
+| `botNet` | Σ `net` of every bot seat: a bot's balance is virtual, so it is a term of its own |
+| `startBalances` / `endBalances` | Σ human balances, before the run and after the shutdown |
+| `latencySamples` | How many action → broadcast round trips were timed (a seat whose turn timer beat it contributes none) |
+| `seqGaps` / `resyncs` | Frames whose `seq` was not exactly one past the previous one, and the `RESYNC`s they cost |
+| `p95ActionToBroadcastMs` | p95 of `ACTION` sent → the `GAME_EVENT` carrying that seat's applied action (spec §24) |
+| `errors` / `tolerated` | `ERROR` frames, split into failures and the races the driver knowingly runs into |
+
+The money identity to assert is
+`endBalances + botNet + sinks === startBalances`; with no bots and no
+carry-over (a Hold'em run) it reduces to `endBalances + fees ===
+startBalances`. Assert `cancelledFees === 0` alongside it: a fee wrongly
+charged on a cancelled hand lands in `fees`, in `sinks` and in the balance
+deduction alike, so the identity above holds straight through it.
+
+To run something bigger than the committed 6 × 3 × 20 — say 40 clients over
+10 rooms playing 200 hands each — edit the constants at the top of
+`packages/server-kit/src/soak.test.ts` and run
+`pnpm --filter @bp/server-kit exec vitest run src/soak.test.ts`, raising the
+`it(...)` timeout to match. Two things scale with the numbers: the test
+server must seed at least `clients` players, and the per-connection rate limit
+must be lifted. `TEST_SERVER_ROOM_OPTIONS` compresses every room timer roughly
+a hundredfold, so a soak client legitimately acts far more often per
+wall-clock second than a human at a real table ever could; leave the default
+20 msg/s in place and the soak measures the flood protection instead of the
+game.

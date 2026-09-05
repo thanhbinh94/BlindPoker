@@ -43,6 +43,8 @@ export interface BuildAppDeps {
   gatewayOptions?: Partial<GatewayOptions>
   /** Absolute path of this instance's `bind-poker.run.json`. `null` (the default) writes none. */
   runFilePath?: string | null
+  /** Lowered by tests that need to reach the general write limit without sending sixty real requests. */
+  writeRateLimit?: { limit: number; windowMs: number }
 }
 
 /** A request body larger than this is a mistake or an attack: the largest thing Lite accepts is a display name. */
@@ -121,6 +123,7 @@ export function buildApp(deps: BuildAppDeps): LiteApp {
     log,
     admin: { token: runToken, requestShutdown },
     ...(deps.now ? { now: deps.now } : {}),
+    ...(deps.writeRateLimit ? { writeRateLimit: deps.writeRateLimit } : {}),
   })
 
   // Last: `/*` matches everything the routes above did not claim. Lite mounts exactly the surface

@@ -212,6 +212,8 @@
     "kicked": "Bạn đã bị đuổi khỏi phòng",
     "hostLeft": "Chủ phòng đã rời đi",
     "reconnecting": "Mất kết nối — đang kết nối lại…",
+    "sitOut": "Ngồi ngoài",
+    "sitIn": "Vào lại",
     "buyInTitle": "Chọn mức mang vào",
     "controls": "Điều khiển bàn"
   },

@@ -28,7 +28,7 @@ export function parseClientMessage(raw: unknown): ParseResult<ClientMessage> {
   switch (raw.t) {
     case 'HELLO':
       return isStr(raw.sessionToken) && raw.sessionToken.length > 0 ? { ok: true, value: withReq({ t: 'HELLO', sessionToken: raw.sessionToken }) } : fail('INVALID_MESSAGE', 'HELLO needs sessionToken')
-    case 'LIST_ROOMS': case 'LEAVE_ROOM': case 'STAND_UP': case 'START_GAME': case 'RESYNC': case 'PONG':
+    case 'LIST_ROOMS': case 'LEAVE_ROOM': case 'STAND_UP': case 'SIT_OUT': case 'SIT_IN': case 'START_GAME': case 'RESYNC': case 'PONG':
       return { ok: true, value: withReq({ t: raw.t }) }
     case 'CREATE_ROOM': {
       const cfg = validateRoomConfig(raw.config)

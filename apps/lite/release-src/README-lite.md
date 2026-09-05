@@ -71,7 +71,13 @@ chỉ còn `Ctrl`+`C` trong cửa sổ console (hoặc NSSM) là tắt êm đư�
 
 Chạy hai bản exe cùng một thư mục dữ liệu là không được: bản thứ hai sẽ báo "another instance is
 already running" và thoát, để không giật mất `bind-poker.run.json` của bản đang chạy. `--smoke`
-cũng không bao giờ đụng tới file đó, nên kiểm tra nhanh lúc server đang chạy là an toàn.
+cũng không bao giờ đụng tới file đó, nên kiểm tra nhanh lúc server đang chạy là an toàn. Bản mới
+chỉ dừng lại khi **hỏi đúng địa chỉ trong file và nhận được câu trả lời của một server Lite**; nếu
+file chỉ là dấu vết của một lần tắt cứng (không ai trả lời ở đó nữa) thì server ghi một dòng
+`overwriting a stale bind-poker.run.json` rồi chạy tiếp — bạn không bị chặn oan vì Windows tình cờ
+cấp lại pid cũ cho một chương trình khác. Nhưng nếu địa chỉ đó không trả lời gì trong 1 giây rồi thử
+lại vẫn vậy — có thể là một bản đang chạy nhưng bận, chứ không hẳn đã chết — bản mới sẽ **từ chối
+khởi động** thay vì đoán bừa, và báo bạn chạy `--stop` hoặc kiểm tra lại cổng đang dùng.
 
 Quy tắc vận hành: **luôn chạy `--stop` trước khi cập nhật, khởi động lại hoặc tắt máy.**
 
@@ -218,8 +224,10 @@ database. There is nothing to install.
   refuses anything that is not a local caller with that token — and waits up to 15 s for the process
   to exit. It therefore needs `HOST` to be `0.0.0.0` (the default) or `127.0.0.1`: a server bound to
   one specific LAN address is not listening locally and can only be stopped with Ctrl+C or NSSM.
-  A second instance on the same data directory refuses to start rather than take the run file over,
-  and `--smoke` never writes one. `bind-poker-lite.exe --status` prints the running instance's `/health`.
+  A second instance on the same data directory refuses to start rather than take the run file over —
+  but only after the recorded address answers as Lite, so a stale file left by a hard kill (whose pid
+  the OS has since reused) is overwritten instead of blocking you. `--smoke` never writes one.
+  `bind-poker-lite.exe --status` prints the running instance's `/health`.
 - **Configure it:** rename `.env.example` to `.env` next to the exe. Keys: `PORT` (8080), `HOST`
   (0.0.0.0), `SQLITE_PATH` (./bind-poker.sqlite), `LOG_LEVEL` (info), `ECONOMY_TIMEZONE`
   (Asia/Ho_Chi_Minh), `LITE_HAND_LOG` (false), `RECONNECT_WINDOW_SEC` (90), `ALLOWED_ORIGINS`,

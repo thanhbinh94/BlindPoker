@@ -99,7 +99,9 @@ export function RoomScreen({ client, lang, onLeft, avatarFor, captionFor, header
   const seated = room.players.filter((p) => p.seat !== null)
   const canSit = me !== undefined && me.seat === null
   const isHost = me !== undefined && me.isHost
-  const readyCount = seated.filter((p) => p.ready).length
+  // The same predicate the server counts with (`readySeats()`): a sitting-out seat is warm, not playing. Counting
+  // it would show the host "2/2 ready", an enabled Start and no hint, for a table that answers NOT_ENOUGH_PLAYERS.
+  const readyCount = seated.filter((p) => p.ready && !p.sittingOut).length
   const turnTimerMs = room.config.turnTimerSec * 1000
   const bb = holdem?.bigBlind ?? 0
   const minBuyIn = holdem === undefined ? 0 : holdem.minBuyInBB * bb
@@ -132,6 +134,9 @@ export function RoomScreen({ client, lang, onLeft, avatarFor, captionFor, header
   /** Between hands: the room is taking seats rather than dealing. */
   const waiting = room.status === 'OPEN'
   const mySeated = me !== undefined && me.seat !== null
+  // Not `status`: that reports `IN_HAND` for the hand a fresh sitter is still finishing, so a snapshot taken
+  // mid-hand (a RESYNC, a seq gap, a reconnect) would flip the toggle back and leave it unable to cancel.
+  const sittingOut = me?.sittingOut === true
 
   const countdown =
     nextHandIn === null ? null : (
@@ -200,6 +205,16 @@ export function RoomScreen({ client, lang, onLeft, avatarFor, captionFor, header
               {t('actions.standUp')}
             </Button>
           ) : null}
+          {/* Keep the seat, skip the hands. It stays put (disabled) while standing so the tray does not
+              reshuffle under the player the moment they take a seat. */}
+          <Button
+            variant="ghost"
+            disabled={request.busy || !mySeated}
+            aria-pressed={mySeated ? sittingOut : undefined}
+            onClick={() => void request.run(() => (sittingOut ? client.sitIn() : client.sitOut()))}
+          >
+            {t(sittingOut ? 'room.sitIn' : 'room.sitOut')}
+          </Button>
 
           {waiting ? (
             <span className={s.readyCount}>{t('room.readyCount', { ready: readyCount, total: seated.length })}</span>

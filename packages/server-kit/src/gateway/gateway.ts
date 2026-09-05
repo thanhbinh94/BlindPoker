@@ -341,6 +341,12 @@ export class Gateway {
         case 'STAND_UP':
           await this.roomOf(playerId).standUp(playerId)
           break
+        case 'SIT_OUT':
+          await this.roomOf(playerId).sitOut(playerId, true)
+          break
+        case 'SIT_IN':
+          await this.roomOf(playerId).sitOut(playerId, false)
+          break
         case 'READY':
           await this.roomOf(playerId).setReady(playerId, msg.ready)
           break

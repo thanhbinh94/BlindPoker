@@ -139,6 +139,25 @@ describe('lobby and rooms', () => {
     const list = await b.next('ROOM_LIST', (m) => m.rooms.length === 1)
     expect(list.rooms[0]).toMatchObject({ name: 'T', mode: 'holdem', playerCount: 1, status: 'OPEN' })
   })
+
+  it('SIT_OUT and SIT_IN need a seat, and tell the rest of the room', async () => {
+    ts = await startTestServer()
+    const a = await connect('a')
+    const b = await connect('b')
+    a.send({ t: 'CREATE_ROOM', config: HOLDEM })
+    const snap = await a.next('ROOM_SNAPSHOT')
+    b.send({ t: 'JOIN_ROOM', code: snap.room.code })
+    await b.next('ROOM_SNAPSHOT')
+    expect(await b.request({ t: 'SIT_OUT', reqId: rid() })).toMatchObject({ t: 'ERROR', code: 'NOT_SEATED' })
+    b.send({ t: 'SIT_DOWN', seat: 1, buyIn: 20_000 })
+    await a.next('ROOM_EVENT', (m) => m.event.type === 'PLAYER_SAT')
+    expect(await b.request({ t: 'SIT_OUT', reqId: rid() })).toMatchObject({ t: 'ACK' })
+    expect((await a.next('ROOM_EVENT', (m) => m.event.type === 'PLAYER_SIT_OUT')).event).toMatchObject({ type: 'PLAYER_SIT_OUT', playerId: 'b', sittingOut: true })
+    b.send({ t: 'RESYNC' })
+    expect((await b.next('ROOM_SNAPSHOT')).room.players.find((p) => p.playerId === 'b')?.status).toBe('SITTING_OUT')
+    expect(await b.request({ t: 'SIT_IN', reqId: rid() })).toMatchObject({ t: 'ACK' })
+    expect((await a.next('ROOM_EVENT', (m) => m.event.type === 'PLAYER_SIT_OUT')).event).toMatchObject({ sittingOut: false })
+  })
 })
 
 describe('blind hand against a bot over the wire', () => {
@@ -286,7 +305,7 @@ describe('bind and close races', () => {
 })
 
 describe('out-of-band pushes', () => {
-  it('notify reaches a live session, and balanceChanged refreshes a blind seat\u2019s mirrored stack', async () => {
+  it('notify reaches a live session, and balanceChanged refreshes a blind seat’s mirrored stack', async () => {
     ts = await startTestServer()
     const a = await connect('a')
     a.send({ t: 'CREATE_ROOM', config: { ...BLIND_BOT, blind: { ...BLIND_BOT.blind!, botCount: 0 } } })

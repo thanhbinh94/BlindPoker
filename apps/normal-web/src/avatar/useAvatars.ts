@@ -161,6 +161,7 @@ export function useAvatars(api: NormalApi, playerIds: string[]): AvatarsHandle {
     return out
     // `version` is the whole point of this dependency list: the cache is not React state, so a reply changes
     // nothing observable until a notification says it has.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` is a deliberate cache-buster, not a read value: the module-level `cache` is outside React, so this counter is the only thing that can tell the memo a reply has landed.
   }, [ids, version])
 
   const invalidate = useCallback((playerId: string) => {

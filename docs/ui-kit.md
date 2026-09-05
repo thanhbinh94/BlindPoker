@@ -95,6 +95,7 @@ that already has a height.
 | `createRoom(config)` | `CREATE_ROOM`, resolves with the `ACK` or `ERROR` |
 | `joinRoom({ roomId?, code?, password? })` | `JOIN_ROOM` |
 | `leaveRoom()`, `sitDown(seat, buyIn?)`, `standUp()`, `setReady(r)`, `startGame()`, `kick(playerId)` | the matching frame |
+| `sitOut()` / `sitIn()` | `SIT_OUT` / `SIT_IN` — keep the seat but skip the hands from the next one on, and take it back. The seat's own `sittingOut` flag is the state (`status` only shows `SITTING_OUT` once the hand on the table is over); `ERROR{NOT_SEATED}` if there is no seat. |
 | `act(action)` | `ACTION` with `baseSeq` = the latest applied `seq` |
 | `resync()` | `RESYNC` |
 | `clearError()`, `dismissNotification(id)` | local state only |
@@ -160,6 +161,14 @@ formatting; strings come from `useTranslation()`.
 | `Toasts` | `error`, `notifications`, `onClearError`, `onDismiss`, `lang` |
 
 `onLeft` fires the moment the room is gone — left, closed or kicked — and the app decides where that lands.
+
+`RoomScreen`'s tray carries Ready, Stand up and one sit-out toggle (`room.sitOut` / `room.sitIn`), whose label and
+`aria-pressed` follow `RoomPlayerView.sittingOut` rather than anything the screen remembers — and rather than the
+seat's `status`, which reports `IN_HAND` for the hand a fresh sitter is still finishing, so a snapshot taken mid-hand
+would otherwise flip the control back and leave it unable to cancel. It is disabled while the viewer has no seat (and
+announces no toggle state then), so it keeps its place rather than appearing under the player's hand when they sit
+down. The tray's ready count and the host's Start gate read the same flag, so they agree with the server's
+`readySeats()`: a sitting-out seat is not counted, however ready it is.
 
 Both screens already render `Toasts` from their own `client.state`; it is exported separately so an app can raise
 its own slips in the same stack. Errors are assertive (`role="alert"`, red edge), notifications are polite
@@ -263,6 +272,19 @@ a card table is a physical object and stays night-side in both themes. Anything 
 dark-theme contrast, which is what `data-surface="night"` does: put it on an element and the ink half of the palette
 is re-declared for that subtree. `PokerTable`, `ActionBar` and the hand-result overlay set it themselves; an app can
 put it on any panel it lays over the felt.
+
+**Contrast is a test, not a habit.** `src/theme/tokens.test.ts` parses the palettes back out of
+`tokens.css` and asserts WCAG AA (4.5:1) for every pair the kit prints text on — the three inks on
+`--bg` and `--bg-elev`, each `*-ink` on the fill it belongs to, the card ranks on the card face, and
+the night palette again over `--felt`. Adding an accent means adding its pair there. The light
+theme's `--gold` was darkened from `#9a6e15` to `#856011` (same 40° hue) because the lighter value
+reached only 3.93:1 as ink on parchment and 4.30:1 under `--gold-ink`; `--gold-soft` follows it.
+
+A few components are **parchment islands** — a room ticket, `.panel.parchment` — that re-declare the
+light inks locally so they stay printed paper whatever the page theme is (`.panel.felt` is the
+mirror image for the night side). They carry their own paper gradient rather than `--bg`, so the
+test checks them separately against its darker stop; a value copied there has to be one that clears
+AA on paper, not merely the one the theme happens to use today.
 
 The one layout knob is `--bp-stage` (see [Embedding](#embedding-it-in-an-app)).
 
@@ -385,8 +407,19 @@ view, seat count (4/6/9), theme, language, forced stack layout, and "next hand".
   when it is absent; Normal supplies a real one from its cosmetics. `captionFor(player)` is the same arrangement
   for the line under the name — the kit never invents a title of its own.
 - **No top-up.** `TOP_UP` is not in the protocol, so a short stack has to stand up and sit back down.
-- **Sit-out is not exposed.** `SITTING_OUT` renders on a seat but there is no message to request it.
 - The felt resizes slightly between the ring and stack layouts when a window crosses a breakpoint; the tray's height
   is reserved from 768 px up so it does not also move on every turn.
 - Playground screenshots are described in `packages/ui-kit/playground/screenshots/README.md` rather than committed
   as images.
+- **`--red` as ink on the dark ground is 3.6:1 (`--bg`) and 3.2:1 (`--bg-elev`)**, below AA — an error line or a
+  red badge in the dark theme. One token cannot fix it: on `#0b1020` an ink needs a luminance above ~0.20 to reach
+  4.5:1, while the same token used as a fill under `--red-ink` needs one below ~0.17. Closing it means splitting
+  the token the way `--teal` / `--teal-fill` already are, which is a palette change across `ui-kit`, `lite-web`
+  and `normal-web`. The same defect repeats on `.panel.felt`'s own `--bg` (`#0c2226`, darker than the theme's
+  `#0b1020`), at **3.13:1**. `tokens.test.ts` (`BELOW_AA`) records five entries covering those three distinct
+  token pairs — `--bg` and `--bg-elev` in *both* the dark and the night palette, plus the felt — and fails if any
+  of them gets worse, or if one is fixed and its line is left behind.
+- A badge is ink on its own tint (`--gold` on `--gold-soft`, and the same for red and teal), which lands near
+  4.1–4.4:1 rather than 4.5:1. The contrast test covers flat token pairs only; the composited tints are not
+  asserted. The alert in `lobby.module.css` already avoids the pattern by keeping `--ink` text and letting the
+  rule and the tint carry the signal.

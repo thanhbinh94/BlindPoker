@@ -15,7 +15,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AddressInfo } from 'node:net'
 import { ECONOMY, type RoomConfig } from '@bp/core'
-import { assetSourceFromDir, DEFAULT_CSP } from '@bp/http-kit'
+import { assetSourceFromDir, DEFAULT_CSP, type AssetSource } from '@bp/http-kit'
+import { enumerateRoutes, mutatingRoutes } from '@bp/http-kit/testing'
 import type { Logger } from '@bp/server-kit'
 import { TestClient } from '@bp/server-kit/testing'
 import { sql } from 'drizzle-orm'
@@ -25,7 +26,7 @@ import { CONFIG_DEFAULTS } from './config.js'
 import { rowsOf, type AppDb } from './db/client.js'
 import { sessions as sessionsTable, users } from './db/schema.js'
 import { createTestDb, type TestDb } from './db/test-db.js'
-import { HEALTH_PING_TIMEOUT_MS, READ_RATE_LIMIT, WRITE_IP_RATE_LIMIT, WRITE_RATE_LIMIT } from './http/routes.js'
+import { HEALTH_PING_TIMEOUT_MS, OWN_LIMITER, READ_RATE_LIMIT, WRITE_IP_RATE_LIMIT, WRITE_RATE_LIMIT } from './http/routes.js'
 import { buildTestApp, ORIGIN, resetDb, START, XRW, type Harness, type HarnessOptions } from './test-harness.js'
 
 /**
@@ -46,6 +47,18 @@ const BLIND_ROOM: RoomConfig = {
  */
 const FAST_ROOM = { handIntervalMs: 600_000, revealDelayMs: 10, botDelayMs: [0, 0] as [number, number] }
 const SECOND_ACCOUNT = { email: 'mai@example.com', password: 'another good password', displayName: 'Mai Lan' }
+
+/**
+ * A UI bundle that throws when it is read — the cheapest honest way to make a handler fail *after*
+ * the request has been accepted, which is the one path that produces a real 500. Everything else a
+ * test can arrange (a bad body, a missing session, an unreachable database) is answered deliberately
+ * with a 4xx or a 503, and would say nothing about what happens when the server is simply wrong.
+ */
+const EXPLODING_MESSAGE = 'the asset source is on fire'
+const EXPLODING_ASSETS: AssetSource = {
+  get() { throw new Error(EXPLODING_MESSAGE) },
+  has() { return true },
+}
 
 let test: TestDb
 let db: AppDb
@@ -220,6 +233,160 @@ describe('security headers', () => {
       expect(res.headers['referrer-policy']).toBe('no-referrer')
       expect(res.headers['x-frame-options']).toBe('DENY')
     }
+  })
+
+  /**
+   * The two answers a header hook is easiest to lose: a 404, which no handler produced, and a 500,
+   * which a handler abandoned halfway. `registerSecurityHeaders` hooks `onRequest` precisely so
+   * that neither can escape it — this is the test that says so, and it also pins the other half of
+   * §23's "lộ thông tin" row: an unexpected throw answers with a fixed envelope and the detail
+   * stays in the log.
+   */
+  it('sets them on a 404 and on a 500, and lets nothing of the error into the body', async () => {
+    const h = await harness({ assets: EXPLODING_ASSETS })
+    for (const [what, res] of [
+      ['404', await h.app.fastify.inject('/api/unknown')],
+      ['500', await h.app.fastify.inject('/anything')],
+    ] as const) {
+      expect(res.statusCode, what).toBe(what === '404' ? 404 : 500)
+      expect(res.headers['x-content-type-options'], what).toBe('nosniff')
+      expect(res.headers['referrer-policy'], what).toBe('no-referrer')
+      expect(res.headers['x-frame-options'], what).toBe('DENY')
+      expect(res.headers['content-security-policy'], what).toBe(normalCsp())
+    }
+    const failed = await h.app.fastify.inject('/anything')
+    expect(failed.json()).toEqual({ error: { code: 'INTERNAL', message: 'internal server error' } })
+    expect(failed.body).not.toContain(EXPLODING_MESSAGE)
+    expect(failed.body).not.toContain('at ')
+  })
+})
+
+/**
+ * The guards, asserted over the *whole* surface rather than route by route.
+ *
+ * The failure this is aimed at is not a guard that stopped working — the tests above cover those —
+ * but a route added later that never had one. `GET /api/…` is a read; a `POST`, `PUT`, `PATCH` or
+ * `DELETE` under `/api` changes something, and §19.2 says every one of them must carry the CSRF
+ * header and be metered. Enumerating the routes out of the finished app and then looping over them
+ * means the check covers a route the moment it exists, instead of the moment somebody remembers.
+ */
+describe('every mutating route is guarded', () => {
+  /** The general bucket, lowered so the metering loop reaches it in a handful of requests. */
+  const TEST_WRITE_LIMIT = { limit: 2, windowMs: 60_000 }
+  /**
+   * How many requests one route gets before the test gives up looking for a 429 — the loosest
+   * limiter any route under test carries, plus the one request that must be refused.
+   *
+   * Derived rather than written down, because a constant would silently encode "no route has a
+   * limiter looser than this": a route added later with a 20/min bucket is perfectly guarded and
+   * would fail a fixed budget of 12, and the next person would raise the number instead of thinking.
+   */
+  const BUDGET = Math.max(TEST_WRITE_LIMIT.limit, ...[...OWN_LIMITER.values()].map((l) => l.limit)) + 1
+  /** Long enough that a route's own window never overlaps the previous route's. */
+  const WINDOW_MS = 120_000
+
+  /**
+   * Mutating routes that are deliberately not metered. Empty, and asserted to be: the enumeration
+   * below covers *every* mutating route, not only the ones under `/api`, so a `POST` mounted
+   * anywhere else has to be answered for here rather than quietly falling outside the loop.
+   */
+  const UNMETERED_BY_DESIGN: readonly string[] = []
+
+  /**
+   * `POST /api/auth/login` rate-limits in a `preHandler` that reads the email first, so a request
+   * without one is a 400 that the limiter never sees. Everything else reaches its limiter on an
+   * empty body — and stopping there keeps the 400 in front of argon2 rather than behind it.
+   */
+  const PAYLOAD: Record<string, unknown> = { '/api/auth/login': { email: 'nobody@example.com' } }
+
+  const label = (r: { method: string; path: string }): string => `${r.method} ${r.path}`
+
+  it('answers exactly the surface §19.2 describes, and nothing else', async () => {
+    const h = await harness()
+    expect(enumerateRoutes(h.app.fastify).map(label).sort()).toEqual([
+      'GET *', // the static fallback: `/*` is printed as a bare `*`
+      'GET /api/auth/me',
+      'GET /api/catalog/achievements',
+      'GET /api/catalog/items',
+      'GET /api/config',
+      'GET /api/me',
+      'GET /api/me/achievements',
+      'GET /api/me/history',
+      'GET /api/me/inventory',
+      'GET /api/me/ledger',
+      'GET /api/me/stats',
+      'GET /api/players/:id/avatar',
+      'GET /api/rewards/daily',
+      'GET /health',
+      'PATCH /api/me',
+      'POST /api/auth/login',
+      'POST /api/auth/logout',
+      'POST /api/auth/register',
+      'POST /api/economy/relief',
+      'POST /api/rewards/daily/claim',
+      'PUT /api/me/avatar',
+    ].sort())
+  })
+
+  it('refuses each of them without X-Requested-With, before auth and before the limiter', async () => {
+    const h = await harness()
+    const routes = mutatingRoutes(h.app.fastify)
+    // A list that came back empty would make every assertion below vacuously true.
+    expect(routes.length).toBeGreaterThanOrEqual(7)
+    for (const route of routes) {
+      const res = await h.app.fastify.inject({ method: route.method, url: route.path, payload: {} })
+      expect(res.statusCode, label(route)).toBe(403)
+      expect(code(res), label(route)).toBe('FORBIDDEN')
+    }
+  })
+
+  /**
+   * One fresh window per route, because the general bucket is shared: without the clock moving, the
+   * first route would spend the whole allowance and every route after it would answer 429 without
+   * ever having been metered itself — a test that passes for an unguarded route, which is worse
+   * than none.
+   */
+  it('meters each of them, whether by the general bucket or by one of its own', async () => {
+    const h = await harness({ writeRateLimit: TEST_WRITE_LIMIT })
+    const routes = mutatingRoutes(h.app.fastify).filter((r) => !UNMETERED_BY_DESIGN.includes(label(r)))
+    expect(routes.length).toBeGreaterThanOrEqual(7)
+    let at = START
+    for (const route of routes) {
+      at += WINDOW_MS
+      h.setNow(at)
+      const seen: number[] = []
+      for (let i = 0; i < BUDGET && !seen.includes(429); i += 1) {
+        const res = await h.app.fastify.inject({ method: route.method, url: route.path, headers: XRW, payload: PAYLOAD[route.path] ?? {} })
+        seen.push(res.statusCode)
+        if (res.statusCode === 429) {
+          expect(code(res), label(route)).toBe('RATE_LIMITED')
+          expect(res.headers['retry-after'], label(route)).toBeDefined()
+        }
+      }
+      expect(seen, `${label(route)} was never rate limited in ${String(BUDGET)} requests`).toContain(429)
+    }
+  })
+
+  /**
+   * Which routes step over the general bucket, and what each carries instead — said out loud rather
+   * than left to be inferred. The metering loop above does cover a wrongly exempted route, but it
+   * fails with "was never rate limited", which points at the route rather than at the exemption
+   * that caused it.
+   */
+  it('leaves sign-in and sign-up to their own, tighter limiters', () => {
+    expect(Object.fromEntries(OWN_LIMITER)).toEqual({
+      '/api/auth/register': { limit: 10, windowMs: 60_000 },
+      '/api/auth/login': { limit: 5, windowMs: 60_000 },
+    })
+    // Every exemption is tighter than the bucket it steps over; otherwise it would be a loophole.
+    for (const [path, own] of OWN_LIMITER) expect(own.limit, path).toBeLessThan(WRITE_RATE_LIMIT.limit)
+  })
+
+  /** No mutating route is mounted outside `/api`, which is what the limiter hook keys on. */
+  it('mounts every mutating route under /api, where the limiter looks', async () => {
+    const h = await harness()
+    expect(mutatingRoutes(h.app.fastify).filter((r) => !r.path.startsWith('/api/')).map(label)).toEqual([])
+    expect(UNMETERED_BY_DESIGN).toEqual([])
   })
 })
 

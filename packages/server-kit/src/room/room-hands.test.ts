@@ -140,6 +140,121 @@ describe('Blind hands', () => {
     expect(h.room.players.get('poor')!.sittingOut).toBe(false)
   })
 
+  it('SIT_OUT plays the current hand out, skips the ones after it, and SIT_IN deals the player back in', async () => {
+    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 2 } }, { players: [['h', 100_000], ['a', 100_000]] })
+    await seatAndStart(h, ['h', 'a'])
+    const dealtIn = () => h.room.snapshot(null).hand!.seats.some((s) => s.playerId === 'h')
+    expect(dealtIn()).toBe(true)
+
+    await h.room.sitOut('h', true)
+    expect(dealtIn()).toBe(true) // the decision lands on the next hand, not the one on the table
+    // `status` belongs to the hand on the table; the request rides beside it, so a snapshot taken now — a
+    // RESYNC, a reconnect — still tells the client their sit-out stands.
+    expect(h.room.snapshot(null).room.players.find((p) => p.playerId === 'h')).toMatchObject({ status: 'IN_HAND', sittingOut: true })
+    await playOut(h, () => ({ kind: 'fold' }))
+    expect(h.room.snapshot(null).room.players.find((p) => p.playerId === 'h')!.status).toBe('SITTING_OUT')
+
+    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
+    await tick(h)
+    expect(h.room.handActive).toBe(true)
+    expect(dealtIn()).toBe(false)
+    expect(h.room.players.get('h')!.seat).toBe(0) // the seat is held, not given away
+    await playOut(h, () => ({ kind: 'fold' }))
+
+    await h.room.sitOut('h', false)
+    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
+    await tick(h)
+    expect(dealtIn()).toBe(true)
+  })
+
+  it('five hands skipped in a row take the seat back, stack returned, like the timeout stand-up', async () => {
+    const h = createRoomHarness(HOLDEM, { players: [['h', 100_000], ['a', 100_000], ['b', 100_000]] })
+    await seatAndStart(h, ['h', 'a', 'b'], 40_000)
+    await h.room.sitOut('h', true)
+    await playOut(h) // the hand h was already in
+    const held = h.room.players.get('h')!.stack
+
+    for (let i = 0; i < TEST_ROOM_OPTIONS.handsSatOutToStand; i++) {
+      h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
+      await tick(h)
+      expect(h.room.snapshot(null).hand?.seats.some((s) => s.playerId === 'h')).toBe(false)
+      if (h.room.players.get('h')!.seat === null) break
+      await playOut(h)
+    }
+
+    expect(h.room.players.get('h')!.seat).toBeNull()
+    expect(h.room.players.get('h')!.sitOutRequested).toBe(false) // and the flag goes with the seat
+    expect(h.ofType('a', 'ROOM_EVENT').map((m) => m.event).filter((e) => e.type === 'PLAYER_STOOD' && e.playerId === 'h')).toHaveLength(1)
+    const cashOut = h.repos.entries.filter((e) => e.entry.playerId === 'h' && e.entry.reason === 'cash_out')
+    expect(cashOut.map((e) => e.entry.delta)).toEqual([held]) // every chip they were sitting on, once
+    expect(await h.repos.balances.get('h')).toBe(60_000 + held)
+  })
+
+  it('a repeated SIT_OUT does not re-arm the counter, so a client cannot park on a seat it never plays', async () => {
+    const h = createRoomHarness(HOLDEM, { players: [['h', 100_000], ['a', 100_000], ['b', 100_000]] })
+    await seatAndStart(h, ['h', 'a', 'b'], 40_000)
+    await h.room.sitOut('h', true)
+    await playOut(h) // the hand h was already in
+
+    for (let i = 0; i < TEST_ROOM_OPTIONS.handsSatOutToStand; i++) {
+      await h.room.sitOut('h', true) // says nothing, changes nothing — and must not zero the counter
+      h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
+      await tick(h)
+      if (h.room.players.get('h')!.seat === null) break
+      await playOut(h)
+    }
+
+    expect(h.room.players.get('h')!.seat).toBeNull() // stood up on the fifth skipped hand all the same
+  })
+
+  it('a seat that is only short-stacked is never stood up, however many hands it misses', async () => {
+    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 2 } }, { players: [['h', 100_000], ['poor', 3_000]] })
+    await seatAndStart(h, ['h', 'poor'])
+    await playOut(h, () => ({ kind: 'fold' }))
+    h.repos.records.get('poor')!.balance = 1_500 // below the 2000 requirement, and they never asked to sit out
+
+    for (let i = 0; i < TEST_ROOM_OPTIONS.handsSatOutToStand + 1; i++) {
+      h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
+      await tick(h)
+      expect(h.room.handActive).toBe(true) // h and the bots keep playing without them
+      await playOut(h, () => ({ kind: 'fold' }))
+    }
+
+    // The counter is for people who asked to sit out. Standing this seat up would move real money off the
+    // table on nobody's request.
+    expect(h.room.players.get('poor')!.seat).toBe(1)
+    expect(h.room.players.get('poor')!.sittingOut).toBe(true)
+    expect(h.room.players.get('poor')!.handsSatOut).toBe(0)
+  })
+
+  it('a hand that never starts costs the sitter nothing, and the room does not wedge', async () => {
+    const h = createRoomHarness(HOLDEM, { players: [['h', 100_000], ['a', 100_000]] })
+    await seatAndStart(h, ['h', 'a'], 40_000)
+    await h.room.sitOut('a', true)
+    await playOut(h) // the hand 'a' was already in
+
+    // One seat left playing: the next-hand timer finds too few and falls back to OPEN rather than dealing.
+    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
+    await tick(h)
+    expect(h.room.status).toBe('OPEN')
+    expect(h.room.handActive).toBe(false)
+    expect(h.room.players.get('a')!.handsSatOut).toBe(0)
+
+    // Nor do refused starts count: the seat is still theirs after five of them.
+    await h.room.setReady('h', true)
+    await h.room.setReady('a', true)
+    for (let i = 0; i < TEST_ROOM_OPTIONS.handsSatOutToStand; i++) {
+      expect(await code(h.room.startGame('h'))).toBe('NOT_ENOUGH_PLAYERS')
+    }
+    expect(h.room.players.get('a')!.handsSatOut).toBe(0)
+    expect(h.room.players.get('a')!.seat).toBe(1)
+
+    // And sitting back in starts the hand the room has been waiting for.
+    await h.room.sitOut('a', false)
+    await h.room.startGame('h')
+    expect(h.room.handActive).toBe(true)
+  })
+
   it('records and emits a hand whose settlement failed, flagged, and pushes nothing to clients', async () => {
     const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 1 } })
     await seatAndStart(h, ['h', 'a'])

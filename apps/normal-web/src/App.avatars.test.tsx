@@ -64,6 +64,7 @@ const seated = (playerId: string, isBot = false): RoomPlayerView => ({
   connected: true,
   seat: 0,
   status: 'SEATED',
+  sittingOut: false,
   stack: 20_000,
   ready: false,
 })

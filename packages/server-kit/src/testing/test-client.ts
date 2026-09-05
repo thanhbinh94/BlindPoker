@@ -9,6 +9,7 @@ export class TestClient {
   readonly closed: Promise<{ code: number; reason: string }>
   private readonly buffer: ServerMessage[] = []
   private readonly waiters: Waiter[] = []
+  private readonly listeners = new Set<(m: ServerMessage) => void>()
 
   private constructor(private readonly ws: WebSocket) {
     this.closed = new Promise((resolve) => ws.on('close', (code, reason) => resolve({ code, reason: reason.toString() })))
@@ -16,6 +17,10 @@ export class TestClient {
       const msg = JSON.parse(String(data)) as ServerMessage
       this.received.push(msg)
       if (msg.t === 'PING') this.ws.send(JSON.stringify({ t: 'PONG' }))
+      // Listeners see *every* frame, in arrival order, whether or not a waiter or the buffer takes
+      // it. A driver that must follow the whole stream (seq continuity, latency) uses this; one-off
+      // assertions use next()/request().
+      for (const fn of this.listeners) fn(msg)
       const idx = this.waiters.findIndex((w) => w.match(msg))
       if (idx >= 0) this.waiters.splice(idx, 1)[0]!.resolve(msg)
       else this.buffer.push(msg)
@@ -35,6 +40,12 @@ export class TestClient {
     return this.ws.readyState === WebSocket.OPEN
   }
 
+  /** Subscribes to every inbound frame. Returns an unsubscribe function. */
+  onMessage(fn: (m: ServerMessage) => void): () => void {
+    this.listeners.add(fn)
+    return () => this.listeners.delete(fn)
+  }
+
   send(msg: object): void {
     this.ws.send(JSON.stringify(msg))
   }
@@ -51,8 +62,13 @@ export class TestClient {
 
   async request<M extends object & { reqId: string }>(msg: M): Promise<Msg<'ACK'> | Msg<'ERROR'>> {
     this.send(msg)
-    const match = (m: ServerMessage): m is Msg<'ACK'> | Msg<'ERROR'> => (m.t === 'ACK' || m.t === 'ERROR') && m.reqId === msg.reqId
-    return this.nextMatching(match, 3000, 'ACK/ERROR')
+    return this.answer(msg.reqId)
+  }
+
+  /** Awaits the `ACK`/`ERROR` for a request already in flight — for races that must be sent before either is read. */
+  answer(reqId: string, timeoutMs = 3000): Promise<Msg<'ACK'> | Msg<'ERROR'>> {
+    const match = (m: ServerMessage): m is Msg<'ACK'> | Msg<'ERROR'> => (m.t === 'ACK' || m.t === 'ERROR') && m.reqId === reqId
+    return this.nextMatching(match, timeoutMs, `ACK/ERROR for ${reqId}`)
   }
 
   drain<T extends ServerMessage['t']>(t: T): Msg<T>[] {

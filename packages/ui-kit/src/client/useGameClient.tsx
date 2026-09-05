@@ -14,6 +14,10 @@ export interface GameClientApi {
   leaveRoom(): Promise<AckOrError>
   sitDown(seat: number, buyIn?: number): Promise<AckOrError>
   standUp(): Promise<AckOrError>
+  /** Keep the seat, sit out from the next hand on; the hand already dealt is played out. */
+  sitOut(): Promise<AckOrError>
+  /** Take the seat back from the next hand on; too short a stack keeps it `SITTING_OUT`. */
+  sitIn(): Promise<AckOrError>
   setReady(ready: boolean): Promise<AckOrError>
   startGame(): Promise<AckOrError>
   kick(playerId: string): Promise<AckOrError>
@@ -58,6 +62,7 @@ export function useGameClient(opts: UseGameClientOptions): GameClientApi {
       }),
     // Deliberately not keyed on the token: it is pushed through `setToken` below so refreshing it never tears
     // down a live socket.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keying on `opts.token` would rebuild the connection, and with it drop a live socket, every time the session token is refreshed; the effect below pushes the new token into the existing connection instead.
     [opts.url, opts.socketFactory],
   )
 
@@ -91,6 +96,8 @@ export function useGameClient(opts: UseGameClientOptions): GameClientApi {
       },
       sitDown: (seat, buyIn) => request(buyIn === undefined ? { t: 'SIT_DOWN', seat } : { t: 'SIT_DOWN', seat, buyIn }),
       standUp: () => request({ t: 'STAND_UP' }),
+      sitOut: () => request({ t: 'SIT_OUT' }),
+      sitIn: () => request({ t: 'SIT_IN' }),
       setReady: (ready) => request({ t: 'READY', ready }),
       startGame: () => request({ t: 'START_GAME' }),
       kick: (playerId) => request({ t: 'KICK', playerId }),

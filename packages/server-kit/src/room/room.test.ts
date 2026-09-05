@@ -117,6 +117,59 @@ describe('Room seats and buy-ins', () => {
     expect(h.room.status).toBe('IN_GAME')
   })
 
+  it('sit-out needs a seat, is announced once per change, and holds autoStart until enough seats are playing', async () => {
+    const h = createRoomHarness({ ...HOLDEM, autoStart: true })
+    await h.room.join(h.identity('a'))
+    expect(await code(h.room.sitOut('a', true))).toBe('NOT_SEATED')
+    await h.room.sitDown('h', 0, 20_000)
+    await h.room.sitDown('a', 1, 20_000)
+
+    await h.room.sitOut('h', true)
+    expect(h.room.players.get('h')!.sittingOut).toBe(true)
+    expect(h.last('a', 'ROOM_EVENT')?.event).toMatchObject({ type: 'PLAYER_SIT_OUT', playerId: 'h', sittingOut: true })
+    const announced = () => h.ofType('a', 'ROOM_EVENT').map((m) => m.event).filter((e) => e.type === 'PLAYER_SIT_OUT')
+    expect(announced()).toHaveLength(1)
+
+    // The snapshot carries the flag on its own field, so a client never has to read it out of `status`.
+    const seatOf = (id: string) => h.room.snapshot(null).room.players.find((p) => p.playerId === id)!
+    expect(seatOf('h')).toMatchObject({ status: 'SITTING_OUT', sittingOut: true })
+    expect(seatOf('a').sittingOut).toBe(false)
+
+    // A repeat says nothing *and* must change nothing: zeroing the skip counter here would let a client
+    // re-arm the five-hand auto-stand once a hand and park on a seat it never plays.
+    h.room.players.get('h')!.handsSatOut = 3
+    await h.room.sitOut('h', true) // idempotent: nothing changed, so nothing is said
+    expect(announced()).toHaveLength(1)
+    expect(h.room.players.get('h')!.handsSatOut).toBe(3)
+
+    // 'a' is ready and 'h' is sitting out, so there is one seat playing: autoStart waits.
+    await h.room.setReady('a', true)
+    expect(h.room.status).toBe('OPEN')
+    await h.room.setReady('h', true)
+    expect(h.room.status).toBe('OPEN') // ready while sitting out still does not fill the table
+
+    // Sitting back in is the move that completes it, and does not need a ready toggle to be noticed.
+    await h.room.sitOut('h', false)
+    expect(announced()).toHaveLength(2)
+    expect(announced().at(-1)).toMatchObject({ type: 'PLAYER_SIT_OUT', playerId: 'h', sittingOut: false })
+    expect(h.room.players.get('h')!.handsSatOut).toBe(0) // a real change is what resets the counter
+    expect(h.room.status).toBe('IN_GAME')
+  })
+
+  it('a host who starts the game by hand cannot count a sitting-out seat towards the two it needs', async () => {
+    const h = createRoomHarness(HOLDEM)
+    await h.room.join(h.identity('a'))
+    await h.room.sitDown('h', 0, 20_000)
+    await h.room.sitDown('a', 1, 20_000)
+    await h.room.setReady('h', true)
+    await h.room.setReady('a', true)
+    await h.room.sitOut('a', true)
+    expect(await code(h.room.startGame('h'))).toBe('NOT_ENOUGH_PLAYERS')
+    await h.room.sitOut('a', false)
+    await h.room.startGame('h')
+    expect(h.room.status).toBe('IN_GAME')
+  })
+
   it('kick removes a non-playing member and notifies them', async () => {
     const h = createRoomHarness(HOLDEM)
     await h.room.join(h.identity('a'))
@@ -139,6 +192,7 @@ describe('Closed rooms', () => {
       h.room.leave('a'),
       h.room.sitDown('a', 0, 20_000),
       h.room.standUp('a'),
+      h.room.sitOut('a', true),
       h.room.setReady('a', true),
       h.room.startGame('h'),
       h.room.kick('h', 'a'),

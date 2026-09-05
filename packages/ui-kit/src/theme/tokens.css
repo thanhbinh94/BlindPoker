@@ -51,15 +51,18 @@
   --bg-elev: #fbf7ee;
   --bg-mesh:
     radial-gradient(72% 48% at 6% -8%, rgba(169, 36, 45, 0.1), transparent 62%),
-    radial-gradient(60% 44% at 98% 0%, rgba(154, 110, 21, 0.12), transparent 60%),
+    radial-gradient(60% 44% at 98% 0%, rgba(133, 96, 17, 0.12), transparent 60%),
     linear-gradient(168deg, #f6f1e6 0%, #efe8d9 62%, #f3eee2 100%);
   --line: rgba(27, 31, 46, 0.14);
 
   --ink: #1b1f2e;
   --ink-muted: #5c6076;
 
-  --gold: #9a6e15;
-  --gold-soft: rgba(154, 110, 21, 0.14);
+  /* Gold has to work twice on parchment: as ink (`color: var(--gold)` — headings, the pot, the
+     turn) and as a fill under `--gold-ink`. #9a6e15 reached only 3.93:1 on `--bg` and 4.26:1 under
+     its own ink, so it was darkened one step along the same hue (40°) until both clear AA. */
+  --gold: #856011;
+  --gold-soft: rgba(133, 96, 17, 0.14);
   --gold-ink: #fff8e8;
   --red: #a9242d;
   --red-soft: rgba(169, 36, 45, 0.12);

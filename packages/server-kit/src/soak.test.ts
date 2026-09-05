@@ -1,78 +1,105 @@
-import type { RoomConfig } from '@bp/core'
 import { afterEach, describe, expect, it } from 'vitest'
 import { startTestServer, type TestServer } from './testing/harness.js'
-import { TestClient } from './testing/test-client.js'
+import { runSoak, seqVerdict, type SoakResult } from './testing/soak.js'
 
-const BLIND: RoomConfig = { name: 'B', mode: 'blind', maxPlayers: 4, isPrivate: false, turnTimerSec: 10, autoStart: true, blind: { holeCards: 3, decisionMode: 'playOrFold', fixedWager: 1000, botCount: 1 } }
-const HOLDEM: RoomConfig = { name: 'H', mode: 'holdem', maxPlayers: 4, isPrivate: false, turnTimerSec: 15, autoStart: true, holdem: { smallBlind: 100, bigBlind: 200, minBuyInBB: 50, maxBuyInBB: 200 } }
+/**
+ * Spec §29.3: 6 clients × 3 rooms × 20 hands in parallel, over real WebSockets, checking that the
+ * points add up and that nobody's `seq` stream has a hole in it. §24 wants action → broadcast at
+ * p95 < 50 ms; the assertion here is the looser 200 ms so a busy CI box cannot make the suite lie,
+ * and the real number is printed either way.
+ */
+const CLIENTS = 6
+const ROOMS = 3
+const HANDS = 20
+
+/**
+ * `TEST_SERVER_ROOM_OPTIONS` compresses every room timer roughly a hundredfold (a 5 s pause between
+ * hands becomes 50 ms), so a soak client legitimately acts far more often per wall-clock second than
+ * any human at a real table ever could. The per-connection budget has to be scaled with the clock,
+ * or the flood protection — which `gateway.test.ts` covers on its own terms — is what the soak ends
+ * up measuring.
+ */
+const SOAK_GATEWAY = { rateLimitPerSec: 500, rateLimitBurst: 500 }
 
 let ts: TestServer
 afterEach(async () => { await ts?.close() })
 
-/**
- * Plays until `hands` HAND_COMPLETE events have been seen, following a simple policy.
- *
- * The `gaps` counter looks for seq *regressions* only. `seq` is room-wide and per-viewer filtering
- * means a client legitimately never sees some of it (another seat's hole cards, turn events for a
- * hand it is not in), so skips are expected; going backwards is not.
- */
-async function autoplay(c: TestClient, mySeat: number, hands: number, policy: (kinds: string[], i: number) => string): Promise<{ gaps: number; completed: number }> {
-  let completed = 0, gaps = 0, lastSeq = -1, i = 0
-  while (completed < hands) {
-    // Generous per-message budget: six clients share one event loop with two full rooms of bots.
-    const m = await c.next('GAME_EVENT', () => true, 15_000)
-    if (lastSeq >= 0 && m.seq !== lastSeq + 1 && m.seq <= lastSeq) gaps++
-    lastSeq = m.seq
-    const e = m.event
-    if (e.type === 'HAND_COMPLETE') completed++
-    const myTurn = (e.type === 'TURN_CHANGED' && e.seat === mySeat) || (e.type === 'DECISION_PHASE' && e.seats.includes(mySeat))
-    if (myTurn) {
-      const kinds = e.type === 'TURN_CHANGED' ? e.legal.kinds : ['play', 'fold']
-      c.send({ t: 'ACTION', reqId: `q${i++}`, baseSeq: m.seq, action: { kind: policy(kinds, i) } })
-    }
-  }
-  return { gaps, completed }
+const players = (): [string, number][] => Array.from({ length: CLIENTS }, (_, i) => [`p${i}`, 200_000])
+
+function report(label: string, r: SoakResult): void {
+  const line = [
+    `[soak/${label}] hands=${r.hands} [${r.handsPerRoomSeen.join('/')}] (cancelled ${r.cancelledHands}) samples=${r.latencySamples}`,
+    `fees=${r.fees} sinks=${r.sinks} botNet=${r.botNet}`,
+    `balances ${r.startBalances} → ${r.endBalances}`,
+    `seqGaps=${r.seqGaps} resyncs=${r.resyncs}`,
+    `p95=${r.p95ActionToBroadcastMs}ms max=${r.maxActionToBroadcastMs}ms`,
+    r.tolerated.length > 0 ? `tolerated=${r.tolerated.length}` : '',
+  ].filter(Boolean).join(' ')
+  console.info(line)
 }
 
-describe('multiplayer soak', () => {
-  it('two rooms, six clients, ten hands each: no seq regressions and points are conserved', async () => {
-    ts = await startTestServer({ players: [['a', 1e5], ['b', 1e5], ['c', 1e5], ['d', 1e5], ['e', 1e5], ['f', 1e5]], roomOptions: { turnTimerMsOverride: 4000 } })
-    const ids = ['a', 'b', 'c', 'd', 'e', 'f']
-    const clients = await Promise.all(ids.map(async (id) => { const c = await TestClient.connect(ts.url); await c.hello(`tok:${id}`); return c }))
-    const [a, b, c, d, e, f] = clients as [TestClient, TestClient, TestClient, TestClient, TestClient, TestClient]
+/** Assertions every soak makes, whatever the mode. */
+function expectHealthy(r: SoakResult): void {
+  expect(r.errors).toEqual([])
+  expect(r.seqGaps).toBe(0)
+  expect(r.resyncs).toBe(0)
+  expect(r.hands).toBeGreaterThanOrEqual(ROOMS * HANDS)
+  // §29.3 asks for 20 hands in *each* of the three rooms; the aggregate above would be satisfied by
+  // one room playing 60 and two stalling, so pin the distribution as well.
+  expect(r.handsPerRoomSeen).toHaveLength(ROOMS)
+  expect(Math.min(...r.handsPerRoomSeen)).toBeGreaterThanOrEqual(HANDS)
+  expect(r.latencySamples).toBeGreaterThan(0)
+  // §24 target is 50 ms; assert the CI-proof bound and let the log carry the measured value.
+  expect(r.p95ActionToBroadcastMs).toBeLessThan(200)
+  // A cancelled hand takes no rake. The totals identity cannot catch a violation on its own — a fee
+  // wrongly charged would land in `fees`, in `sinks` and in the balance deduction alike — so the
+  // cancelled hands (there are usually one or two, from the hand in flight at shutdown) are checked
+  // directly.
+  expect(r.cancelledFees).toBe(0)
+  // Every fee the engine took is a `table_fee` sink row, so the two independent money sources agree.
+  expect(ts.repos.sinks.filter((x) => x.kind === 'table_fee').reduce((s, x) => s + x.fee, 0)).toBe(r.fees)
+  // The driver knowingly races the room's state machine, but only a handful of times; a seating
+  // regression turning every re-buy into a `SEAT_TAKEN` must not be able to hide in here.
+  expect(r.tolerated.length).toBeLessThan(r.hands)
+  for (const room of ts.server.rooms.all()) expect(room.carryOverPot).toBe(0)
+}
 
-    a.send({ t: 'CREATE_ROOM', config: BLIND })
-    const r1 = await a.next('ROOM_SNAPSHOT')
-    d.send({ t: 'CREATE_ROOM', config: HOLDEM })
-    const r2 = await d.next('ROOM_SNAPSHOT')
-    for (const [cl, code] of [[b, r1.room.code], [c, r1.room.code], [e, r2.room.code], [f, r2.room.code]] as [TestClient, string][]) {
-      cl.send({ t: 'JOIN_ROOM', code })
-      await cl.next('ROOM_SNAPSHOT')
-    }
-    const seat = async (cl: TestClient, s: number, buyIn?: number) => { cl.send({ t: 'SIT_DOWN', seat: s, buyIn }); cl.send({ t: 'READY', ready: true }) }
-    await seat(a, 0); await seat(b, 1); await seat(c, 2)
-    await seat(d, 0, 10_000); await seat(e, 1, 10_000); await seat(f, 2, 10_000)
+describe('multiplayer soak (§29.3)', () => {
+  it("hold'em: 6 clients over 3 rooms play 20 hands each with no seq gaps and no points created or lost", async () => {
+    ts = await startTestServer({ players: players(), seed: 20_260_905, gatewayOptions: SOAK_GATEWAY })
+    const r = await runSoak(ts, { clients: CLIENTS, rooms: ROOMS, handsPerRoom: HANDS, mode: 'holdem', seed: 1_337 })
+    report('holdem', r)
+    expectHealthy(r)
+    // No bots in a hold'em room and no carry-over pots, so the identity is the plain one: whatever
+    // the players no longer hold, the table took as its fee.
+    expect(r.botNet).toBe(0)
+    expect(r.sinks).toBe(r.fees)
+    expect(r.endBalances + r.fees).toBe(r.startBalances)
+  }, 90_000)
 
-    const passive = (kinds: string[]) => (kinds.includes('check') ? 'check' : kinds.includes('call') ? 'call' : kinds.includes('play') ? 'play' : 'fold')
-    const mixed = (kinds: string[], i: number) => (i % 3 === 0 && kinds.includes('fold') ? 'fold' : passive(kinds))
-    const results = await Promise.all([
-      autoplay(a, 0, 10, passive), autoplay(b, 1, 10, mixed), autoplay(c, 2, 10, passive),
-      autoplay(d, 0, 10, passive), autoplay(e, 1, 10, mixed), autoplay(f, 2, 10, passive),
-    ])
-    for (const r of results) expect(r.gaps).toBe(0)
+  it('blind: the same run against one bot per room conserves points across balances, fees and bot nets', async () => {
+    ts = await startTestServer({ players: players(), seed: 20_260_905, gatewayOptions: SOAK_GATEWAY })
+    const r = await runSoak(ts, { clients: CLIENTS, rooms: ROOMS, handsPerRoom: HANDS, mode: 'blind', seed: 4_242, actionDelayMs: [0, 3] })
+    report('blind', r)
+    expectHealthy(r)
+    // Bots hold a virtual balance no repository ever sees, so their net is the third term; the
+    // sinks cover both the table fees and any indivisible carry-over remainder released at shutdown.
+    expect(r.endBalances + r.botNet + r.sinks).toBe(r.startBalances)
+    expect(r.sinks).toBeGreaterThanOrEqual(r.fees)
+  }, 90_000)
+})
 
-    await ts.server.shutdown('soak end') // cashes out hold'em stacks and settles carry-over
-    for (const cl of clients) await cl.closed
-    const balances = await Promise.all(ids.map((id) => ts.repos.balances.get(id)))
-    const fees = ts.repos.hands.reduce((s, h) => s + h.fee, 0)
-    const botNet = ts.repos.hands.flatMap((h) => h.players).filter((p) => p.isBot).reduce((s, p) => s + p.net, 0)
-    const sinks = ts.repos.sinks.reduce((s, x) => s + x.fee, 0)
-    // every fee the engine took is a table_fee sink row; carry_over sinks are pot remainders
-    expect(ts.repos.sinks.filter((x) => x.kind === 'table_fee').reduce((s, x) => s + x.fee, 0)).toBe(fees)
-    // Σ human balances + bot nets + Σ sinks === the points everyone started with (no live carry-over
-    // or table stacks remain: shutdown released both).
-    expect(balances.reduce((s, x) => s + x, 0) + sinks + botNet).toBe(600_000)
-    for (const room of ts.server.rooms.all()) expect(room.carryOverPot).toBe(0)
-    expect(ts.repos.hands.length).toBeGreaterThanOrEqual(20)
-  }, 60_000)
+/**
+ * A healthy soak never takes the gap branch, so `seqGaps === 0` alone would still pass if the
+ * detector stopped detecting. This is its positive control.
+ */
+describe('the seq rule the soak clients apply', () => {
+  it('accepts the next frame, ignores one the snapshot already covered, and calls a hole a gap', () => {
+    expect(seqVerdict(-1, 7)).toBe('apply') // the first frame: nothing to compare against
+    expect(seqVerdict(7, 8)).toBe('apply')
+    expect(seqVerdict(7, 7)).toBe('duplicate')
+    expect(seqVerdict(7, 5)).toBe('duplicate') // arrived behind a RESYNC snapshot
+    expect(seqVerdict(7, 9)).toBe('gap')
+    expect(seqVerdict(7, 99)).toBe('gap')
+  })
 })

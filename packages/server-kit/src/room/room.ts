@@ -226,6 +226,8 @@ export class Room {
       p.seat = seat
       p.ready = false
       p.sittingOut = false
+      p.sitOutRequested = false
+      p.handsSatOut = 0
       p.consecutiveTimeouts = 0
       this.broadcastRoomEvent({ type: 'PLAYER_SAT', playerId, seat, stack: p.stack })
       this.changed()
@@ -246,6 +248,29 @@ export class Room {
     })
   }
 
+  /**
+   * Keep the seat but skip the next hands (spec §11.3). The *current* hand is played out — a player who
+   * folds their way off the table is doing something else — so this only moves the flag the next
+   * `startHand` reads. `SIT_IN` clears the request, but a stack below the minimum to play keeps the seat
+   * `SITTING_OUT` under the existing short-stack rule.
+   *
+   * The skip counter is reset only by a *change* of the request. Zeroing it on every `SIT_OUT` would let a
+   * client re-arm the five-hand auto-stand once a hand and park on a seat it never plays (spec §11.3).
+   */
+  sitOut(playerId: string, out: boolean): Promise<void> {
+    return this.enqueue(() => {
+      this.assertOpen()
+      const p = this.mustPlayer(playerId)
+      if (p.seat === null) throw new RoomError('NOT_SEATED')
+      if (p.sitOutRequested !== out) p.handsSatOut = 0
+      p.sitOutRequested = out
+      this.setSittingOut(p, out || p.stack < this.requiredStack())
+      // Sitting back in can be the move that completes the table, so it gets the same look autoStart
+      // takes when someone readies up — otherwise the room waits for a ready toggle it does not need.
+      return out ? undefined : this.maybeAutoStart()
+    })
+  }
+
   setReady(playerId: string, ready: boolean): Promise<void> {
     return this.enqueue(() => {
       this.assertOpen()
@@ -254,8 +279,7 @@ export class Room {
       if (this.status !== 'OPEN') throw new RoomError('GAME_IN_PROGRESS')
       p.ready = ready
       this.broadcastRoomEvent({ type: 'PLAYER_READY', playerId, ready })
-      if (this.config.autoStart && ready && this.readySeats().length >= 2 && this.seatedHumans().every((h) => h.ready)) return this.startHand()
-      return undefined
+      return ready ? this.maybeAutoStart() : undefined
     })
   }
 
@@ -409,7 +433,7 @@ export class Room {
     this.nextHandTimer = null
     this.carryOverReleaseTimer?.cancel()
     this.carryOverReleaseTimer = null
-    const required = this.rules.mode === 'blind' ? blindRequiredStack(this.rules) : 1
+    const required = this.requiredStack()
     if (this.rules.mode === 'blind') {
       for (const p of this.seated()) {
         if (p.identity.isBot) {
@@ -419,11 +443,26 @@ export class Room {
     }
     // A seated human who cannot cover the requirement sits the hand out rather than silently
     // vanishing from the table: playerView reports SITTING_OUT until they can afford to play again.
-    for (const p of this.seated()) if (!p.identity.isBot) p.sittingOut = p.stack < required
+    // A player who *asked* to sit out stays out whatever their stack says.
+    for (const p of this.seated()) if (!p.identity.isBot) this.setSittingOut(p, p.sitOutRequested || p.stack < required)
     const eligible = this.eligibleForHand()
     if (eligible.length < 2 || eligible.every((p) => p.identity.isBot)) {
       this.toOpen()
       return
+    }
+    // This hand is going ahead without them, so every voluntary sitter has been skipped once more.
+    // Spec §11.3: after `handsSatOutToStand` in a row the seat goes back to the table, stack returned,
+    // down the same path as the timeout stand-up — nobody parks on a seat they are not using.
+    // A stand-up writes to the ledger; a ledger blip must not take the starting hand down with it, so the
+    // whole sweep is guarded the way `onHandComplete`'s settlement is. A missed stand-up retries next hand.
+    try {
+      for (const p of this.seated()) {
+        if (p.identity.isBot || !p.sitOutRequested) continue
+        p.handsSatOut += 1
+        if (p.handsSatOut >= this.deps.options.handsSatOutToStand) await this.standUpNow(p)
+      }
+    } catch (err) {
+      this.deps.log.error('sit-out stand-up failed', { roomId: this.roomId, err: String(err) })
     }
     const seats = eligible.map((p) => p.seat!)
     this.button = nextButton(this.button, seats, this.deps.rng)
@@ -544,6 +583,7 @@ export class Room {
   private addPlayer(identity: PlayerIdentity): RoomPlayer {
     const p: RoomPlayer = {
       identity, seat: null, stack: 0, ready: false, connected: true, joinedAt: this.deps.clock.now(), sittingOut: false,
+      sitOutRequested: false, handsSatOut: 0,
       consecutiveTimeouts: 0, disconnectDeadline: null, standAfterHand: false, leaveAfterHand: false,
     }
     this.players.set(identity.playerId, p)
@@ -578,8 +618,37 @@ export class Room {
     return this.seated().filter((p) => !p.identity.isBot)
   }
 
+  /** Seats that count towards starting a hand: a sitting-out seat is warm, not playing. */
   private readySeats(): RoomPlayer[] {
-    return this.seated().filter((p) => p.ready)
+    return this.seated().filter((p) => p.ready && !p.sittingOut)
+  }
+
+  private requiredStack(): number {
+    return this.rules.mode === 'blind' ? blindRequiredStack(this.rules) : 1
+  }
+
+  /**
+   * The only writer of the effective sit-out flag: it moves the flag, tells the room (so a client never has to
+   * diff a snapshot to see it) and tells the manager. Returns whether anything actually moved.
+   */
+  private setSittingOut(p: RoomPlayer, sittingOut: boolean): boolean {
+    if (p.sittingOut === sittingOut) return false
+    p.sittingOut = sittingOut
+    this.broadcastRoomEvent({ type: 'PLAYER_SIT_OUT', playerId: p.identity.playerId, sittingOut })
+    this.changed()
+    return true
+  }
+
+  /**
+   * `autoStart`'s one condition, in one place: two seats ready to play and nobody still deciding.
+   * Sitting-out humans are not waited on — they have said they are not playing — but they do not
+   * count towards the two either, so a table of one player and one sitter keeps waiting.
+   */
+  private maybeAutoStart(): Promise<void> | undefined {
+    if (!this.config.autoStart || this.status !== 'OPEN') return undefined
+    if (this.readySeats().length < 2) return undefined
+    if (!this.seatedHumans().every((p) => p.ready || p.sittingOut)) return undefined
+    return this.startHand()
   }
 
   private seatPlayer(seat: number): RoomPlayer | undefined {
@@ -591,7 +660,7 @@ export class Room {
   }
 
   private eligibleForHand(): RoomPlayer[] {
-    const required = this.rules.mode === 'blind' ? blindRequiredStack(this.rules) : 1
+    const required = this.requiredStack()
     return this.seated().filter((p) => !p.sittingOut && !p.standAfterHand && !p.leaveAfterHand && p.stack >= required && (p.identity.isBot || this.status !== 'OPEN' || p.ready))
   }
 
@@ -603,9 +672,12 @@ export class Room {
       else if (p.sittingOut) status = 'SITTING_OUT'
       else status = p.ready ? 'READY' : 'SEATED'
     }
+    // `status` is one value and `IN_HAND` outranks `SITTING_OUT`, so the flag travels on its own field:
+    // a player who sits out mid-hand must still read as sitting out after the next snapshot. The request
+    // is reported even before the next `startHand` folds it into the effective flag.
     const view: RoomPlayerView = {
       playerId: p.identity.playerId, displayName: p.identity.displayName, isBot: p.identity.isBot, isHost: p.identity.playerId === this.hostPlayerId,
-      connected: p.connected, seat: p.seat, status, stack: p.stack, ready: p.ready,
+      connected: p.connected, seat: p.seat, status, sittingOut: p.sitOutRequested || p.sittingOut, stack: p.stack, ready: p.ready,
     }
     if (p.cosmetics !== undefined) view.cosmetics = p.cosmetics
     return view
@@ -622,6 +694,9 @@ export class Room {
     p.stack = 0
     p.ready = false
     p.standAfterHand = false
+    p.sittingOut = false
+    p.sitOutRequested = false
+    p.handsSatOut = 0
     p.consecutiveTimeouts = 0
     this.broadcastRoomEvent({ type: 'PLAYER_STOOD', playerId: p.identity.playerId, seat })
     this.changed()

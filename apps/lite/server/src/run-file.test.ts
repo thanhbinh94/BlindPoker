@@ -1,8 +1,10 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { createServer, type Server } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { liveInstanceAt, pidAlive, readRunFile, removeRunFile, resolveRunFilePath, RUN_FILE_NAME, writeRunFile } from './run-file.js'
+import { claimRunFile, pidAlive, PROBE_TIMEOUT_MS, readRunFile, removeRunFile, resolveRunFilePath, RUN_FILE_NAME, runFileUrl, writeRunFile } from './run-file.js'
 
 const dirs: string[] = []
 function tempDir(): string {
@@ -11,8 +13,15 @@ function tempDir(): string {
   return dir
 }
 
-afterEach(() => {
+/** Stub listeners the start-up probe talks to; closed between tests so no port outlives its case. */
+const servers: Server[] = []
+
+afterEach(async () => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+  for (const server of servers.splice(0)) {
+    server.closeAllConnections()
+    await new Promise<void>((done) => server.close(() => done()))
+  }
 })
 
 const INFO = { pid: 4242, port: 8080, host: '0.0.0.0', token: 'a'.repeat(64) }
@@ -116,27 +125,145 @@ describe('removeRunFile', () => {
   })
 })
 
-describe('liveInstanceAt', () => {
-  it('reports the instance when its pid is alive', () => {
-    const path = join(tempDir(), RUN_FILE_NAME)
-    writeRunFile(path, INFO)
-    expect(liveInstanceAt(path, () => true)).toEqual(INFO)
+describe('runFileUrl', () => {
+  it('reaches a wildcard bind over the loopback and brackets an IPv6 literal', () => {
+    expect(runFileUrl({ host: '0.0.0.0', port: 8080 })).toBe('http://127.0.0.1:8080')
+    expect(runFileUrl({ host: '::', port: 8080 })).toBe('http://127.0.0.1:8080')
+    expect(runFileUrl({ host: '', port: 8080 })).toBe('http://127.0.0.1:8080')
+    expect(runFileUrl({ host: '192.168.1.9', port: 9000 })).toBe('http://192.168.1.9:9000')
+    expect(runFileUrl({ host: '::1', port: 9000 })).toBe('http://[::1]:9000')
+  })
+})
+
+describe('claimRunFile', () => {
+  /** A listener on the loopback that answers `/api/config` with whatever `body` is at the time. */
+  async function stubServer(handler: (url: string) => { status?: number; body: string }): Promise<{ port: number; hits: string[] }> {
+    const hits: string[] = []
+    const server = createServer((req, res) => {
+      hits.push(req.url ?? '')
+      const { status = 200, body } = handler(req.url ?? '')
+      res.writeHead(status, { 'content-type': 'application/json' })
+      res.end(body)
+    })
+    servers.push(server)
+    await new Promise<void>((done) => server.listen(0, '127.0.0.1', done))
+    return { port: (server.address() as AddressInfo).port, hits }
+  }
+
+  /** A port nothing is listening on: bind one, learn its number, give it back. */
+  async function deadPort(): Promise<number> {
+    const server = createServer()
+    await new Promise<void>((done) => server.listen(0, '127.0.0.1', done))
+    const { port } = server.address() as AddressInfo
+    await new Promise<void>((done) => server.close(() => done()))
+    return port
+  }
+
+  const alive = { isAlive: () => true, timeoutMs: 250 }
+
+  it('is vacant when there is no run file, or nothing that parses as one', async () => {
+    const dir = tempDir()
+    expect(await claimRunFile(join(dir, RUN_FILE_NAME), alive)).toEqual({ state: 'vacant' })
+    const broken = join(dir, 'broken.json')
+    writeFileSync(broken, '{ not json')
+    expect(await claimRunFile(broken, alive)).toEqual({ state: 'vacant' })
   })
 
-  it('reports nothing when the pid is gone — the wreckage of a hard kill is not an owner', () => {
+  it('is stale when the pid is gone, without asking the network', async () => {
     const path = join(tempDir(), RUN_FILE_NAME)
-    writeRunFile(path, INFO)
-    expect(liveInstanceAt(path, () => false)).toBeNull()
+    const stub = await stubServer(() => ({ body: JSON.stringify({ edition: 'lite' }) }))
+    writeRunFile(path, { ...INFO, port: stub.port })
+
+    const claim = await claimRunFile(path, { isAlive: () => false, timeoutMs: 250 })
+
+    expect(claim.state).toBe('stale')
+    expect(stub.hits).toEqual([])
   })
 
-  it('reports nothing when there is no run file at all', () => {
-    expect(liveInstanceAt(join(tempDir(), RUN_FILE_NAME), () => true)).toBeNull()
+  /**
+   * The case the probe exists for: a hard kill left the file behind and the operating system handed
+   * that pid to something else entirely. Nothing is listening where the file says a server was — a
+   * refused connection is conclusive, so no retry is spent on it — and the file is wreckage:
+   * refusing to start here would lock the operator out of their own machine.
+   */
+  it('is stale when the recorded pid is alive but the recorded address refuses the connection', async () => {
+    const path = join(tempDir(), RUN_FILE_NAME)
+    writeRunFile(path, { ...INFO, port: await deadPort() })
+
+    const claim = await claimRunFile(path, alive)
+
+    expect(claim.state).toBe('stale')
+    expect(claim.state === 'stale' && claim.why).toMatch(/connection refused/)
   })
 
-  it('defaults to asking the operating system', () => {
+  it('is held when the recorded address answers as Lite — a wildcard bind reached over the loopback', async () => {
     const path = join(tempDir(), RUN_FILE_NAME)
-    writeRunFile(path, { ...INFO, pid: process.pid })
-    expect(liveInstanceAt(path)?.pid).toBe(process.pid)
+    const stub = await stubServer(() => ({ body: JSON.stringify({ edition: 'lite', wsPath: '/ws', languages: ['vi', 'en'] }) }))
+    writeRunFile(path, { ...INFO, host: '0.0.0.0', port: stub.port })
+
+    expect(await claimRunFile(path, alive)).toEqual({ state: 'held', info: { ...INFO, host: '0.0.0.0', port: stub.port } })
+    expect(stub.hits).toEqual(['/api/config'])
+  })
+
+  it('is stale when the pid was reused by some other server on the same port', async () => {
+    const path = join(tempDir(), RUN_FILE_NAME)
+    const stub = await stubServer(() => ({ body: JSON.stringify({ edition: 'normal', version: '1.0.0' }) }))
+    writeRunFile(path, { ...INFO, port: stub.port })
+
+    const claim = await claimRunFile(path, alive)
+
+    expect(claim.state).toBe('stale')
+    expect(claim.state === 'stale' && claim.why).toMatch(/not a Bind Poker Lite instance/)
+  })
+
+  it('is stale when the address answers an error, or something that is not JSON at all', async () => {
+    const dirPath = join(tempDir(), RUN_FILE_NAME)
+    const broken = await stubServer(() => ({ status: 502, body: 'nginx says no' }))
+    writeRunFile(dirPath, { ...INFO, port: broken.port })
+    expect((await claimRunFile(dirPath, alive)).state).toBe('stale')
+
+    const html = await stubServer(() => ({ body: '<!doctype html><title>a router</title>' }))
+    writeRunFile(dirPath, { ...INFO, port: html.port })
+    const claim = await claimRunFile(dirPath, alive)
+    expect(claim.state).toBe('stale')
+    expect(claim.state === 'stale' && claim.why).toMatch(/did not answer JSON/)
+  })
+
+  /**
+   * A timeout is not proof of anything — a live instance too busy to answer for a moment looks the
+   * same as nothing being there — so one retry is spent before giving up, and giving up here means
+   * *refusing to start* rather than declaring the file stale and overwriting a possibly-live server.
+   */
+  it('refuses to start, rather than hanging or overwriting, when the address times out twice in a row', async () => {
+    const path = join(tempDir(), RUN_FILE_NAME)
+    let hits = 0
+    const server = createServer(() => {
+      hits += 1 // accept the request and say nothing at all — a wedged process, or a stranger on the port
+    })
+    servers.push(server)
+    await new Promise<void>((done) => server.listen(0, '127.0.0.1', done))
+    writeRunFile(path, { ...INFO, port: (server.address() as AddressInfo).port })
+
+    const started = Date.now()
+    const claim = await claimRunFile(path, { isAlive: () => true, timeoutMs: 150 })
+
+    expect(claim.state).toBe('unreachable')
+    expect(claim.state === 'unreachable' && claim.why).toMatch(/did not identify itself.*twice/)
+    // No error code behind this one, so the message says what actually happened: nothing, for 150 ms.
+    // A failure that *does* carry a code (EHOSTUNREACH, ECONNRESET) names it there instead, rather
+    // than claiming a budget that never elapsed.
+    expect(claim.state === 'unreachable' && claim.why).toContain('no answer within 150 ms')
+    expect(hits, 'the probe should have retried once after the first timeout').toBe(2)
+    expect(Date.now() - started).toBeLessThan(2000)
+  })
+
+  it('defaults to asking the operating system about the pid, and waits a second for the address', async () => {
+    expect(PROBE_TIMEOUT_MS).toBe(1000)
+    const path = join(tempDir(), RUN_FILE_NAME)
+    // This process is alive and is not Lite, so the default `isAlive` reaches the probe and the
+    // probe finds nothing: exactly the pid-reuse case, with a real pid.
+    writeRunFile(path, { ...INFO, pid: process.pid, port: await deadPort() })
+    expect((await claimRunFile(path)).state).toBe('stale')
   })
 })
 

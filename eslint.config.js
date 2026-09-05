@@ -1,4 +1,5 @@
 import react from 'eslint-plugin-react'
+import reactHooks from 'eslint-plugin-react-hooks'
 import tseslint from 'typescript-eslint'
 import { FORBIDDEN_GLOBALS, NODE_BUILTINS } from './tooling/arch/node-builtins.js'
 
@@ -33,6 +34,27 @@ export default tseslint.config(
     // hoisting either one's literals into i18n keys would only obscure them.
     files: ['packages/ui-kit/**/*.test.tsx', 'apps/**/*.test.tsx', 'packages/ui-kit/playground/**/*.tsx'],
     rules: { 'react/jsx-no-literals': 'off' },
+  },
+  {
+    /**
+     * The Rules of Hooks, over every file that may contain a component or a hook — the shared
+     * `ui-kit` and both editions' web apps. Exactly two of the plugin's rules are enabled rather
+     * than its `recommended` preset: v7 ships two dozen React-Compiler lints whose verdicts this
+     * codebase has never been held to, and turning them all on at once would bury the two that
+     * catch real defects.
+     *
+     * `rules-of-hooks` is an error because every one of its reports is a bug that only shows up as
+     * a corrupted hook order at runtime. `exhaustive-deps` is a warning because a *deliberately*
+     * omitted dependency is a legitimate pattern (a mount-only effect, a ref-stable callback), and
+     * the honest way to record one is an inline disable that says why — of which this tree has
+     * four, each carrying its reason.
+     */
+    files: ['packages/ui-kit/**/*.{ts,tsx}', 'apps/lite/web/**/*.{ts,tsx}', 'apps/normal-web/**/*.{ts,tsx}'],
+    plugins: { 'react-hooks': reactHooks },
+    rules: {
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
+    },
   },
   {
     files: ['packages/core/**/*.ts'],
