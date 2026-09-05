@@ -49,6 +49,13 @@ export interface RoomPlayerView {
   connected: boolean
   seat: number | null
   status: SeatStatus | null
+  /**
+   * The seat is sitting out — the player asked (`SIT_OUT`), or their stack is below the minimum to play.
+   * Carried beside `status` rather than inside it because the two are not exclusive: a player who sits out
+   * mid-hand still finishes that hand, so `status` reports `IN_HAND` while this is already `true`. A client's
+   * sit-out toggle reads this, so it survives a snapshot, a `RESYNC` or a reconnect taken mid-hand.
+   */
+  sittingOut: boolean
   stack: number
   ready: boolean
   /** Opaque, app-specific cosmetics (e.g. avatar config); core never interprets it. */
