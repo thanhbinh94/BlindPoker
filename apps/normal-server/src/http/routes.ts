@@ -34,7 +34,7 @@ import type { ItemCatalog } from '../inventory/items.js'
 import type { NormalRepositories } from '../repos/index.js'
 import type { StatsService } from '../stats/stats-service.js'
 import { createRequireUser, decorateRequestUser } from './auth-guard.js'
-import { registerAuthRoutes } from './routes-auth.js'
+import { LOGIN_RATE_LIMIT, REGISTER_RATE_LIMIT, registerAuthRoutes } from './routes-auth.js'
 import { registerCatalogRoutes } from './routes-catalog.js'
 import { registerMeRoutes } from './routes-me.js'
 import { registerRewardRoutes } from './routes-rewards.js'
@@ -89,8 +89,16 @@ const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
  * than anything here — five sign-ins a minute per address and account, ten sign-ups per address. The
  * exemption is those two requests, not the `/api/auth/` namespace: `GET /api/auth/me` and
  * `POST /api/auth/logout` each cost a session lookup and a query, and nothing else limits them.
+ *
+ * Exported, and asserted by name in `app.test.ts`, because this set is the one way a route can
+ * become unmetered without any test saying so in as many words. Each entry carries the limit that
+ * stands in for the general bucket, so the guard test can size its request budget from the loosest
+ * limiter actually in play rather than from a constant that happens to be big enough today.
  */
-const OWN_LIMITER = new Set(['/api/auth/register', '/api/auth/login'])
+export const OWN_LIMITER: ReadonlyMap<string, { limit: number; windowMs: number }> = new Map([
+  ['/api/auth/register', REGISTER_RATE_LIMIT],
+  ['/api/auth/login', LOGIN_RATE_LIMIT],
+])
 
 export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
   const now = deps.now ?? Date.now

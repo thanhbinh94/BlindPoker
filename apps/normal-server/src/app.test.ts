@@ -16,7 +16,7 @@ import { join } from 'node:path'
 import type { AddressInfo } from 'node:net'
 import { ECONOMY, type RoomConfig } from '@bp/core'
 import { assetSourceFromDir, DEFAULT_CSP, type AssetSource } from '@bp/http-kit'
-import { enumerateRoutes, mutatingApiRoutes } from '@bp/http-kit/testing'
+import { enumerateRoutes, mutatingRoutes } from '@bp/http-kit/testing'
 import type { Logger } from '@bp/server-kit'
 import { TestClient } from '@bp/server-kit/testing'
 import { sql } from 'drizzle-orm'
@@ -26,7 +26,7 @@ import { CONFIG_DEFAULTS } from './config.js'
 import { rowsOf, type AppDb } from './db/client.js'
 import { sessions as sessionsTable, users } from './db/schema.js'
 import { createTestDb, type TestDb } from './db/test-db.js'
-import { HEALTH_PING_TIMEOUT_MS, READ_RATE_LIMIT, WRITE_IP_RATE_LIMIT, WRITE_RATE_LIMIT } from './http/routes.js'
+import { HEALTH_PING_TIMEOUT_MS, OWN_LIMITER, READ_RATE_LIMIT, WRITE_IP_RATE_LIMIT, WRITE_RATE_LIMIT } from './http/routes.js'
 import { buildTestApp, ORIGIN, resetDb, START, XRW, type Harness, type HarnessOptions } from './test-harness.js'
 
 /**
@@ -270,11 +270,27 @@ describe('security headers', () => {
  * header and be metered. Enumerating the routes out of the finished app and then looping over them
  * means the check covers a route the moment it exists, instead of the moment somebody remembers.
  */
-describe('every mutating /api route is guarded', () => {
-  /** How many requests one route gets before the test gives up looking for a 429. */
-  const BUDGET = 12
+describe('every mutating route is guarded', () => {
+  /** The general bucket, lowered so the metering loop reaches it in a handful of requests. */
+  const TEST_WRITE_LIMIT = { limit: 2, windowMs: 60_000 }
+  /**
+   * How many requests one route gets before the test gives up looking for a 429 — the loosest
+   * limiter any route under test carries, plus the one request that must be refused.
+   *
+   * Derived rather than written down, because a constant would silently encode "no route has a
+   * limiter looser than this": a route added later with a 20/min bucket is perfectly guarded and
+   * would fail a fixed budget of 12, and the next person would raise the number instead of thinking.
+   */
+  const BUDGET = Math.max(TEST_WRITE_LIMIT.limit, ...[...OWN_LIMITER.values()].map((l) => l.limit)) + 1
   /** Long enough that a route's own window never overlaps the previous route's. */
   const WINDOW_MS = 120_000
+
+  /**
+   * Mutating routes that are deliberately not metered. Empty, and asserted to be: the enumeration
+   * below covers *every* mutating route, not only the ones under `/api`, so a `POST` mounted
+   * anywhere else has to be answered for here rather than quietly falling outside the loop.
+   */
+  const UNMETERED_BY_DESIGN: readonly string[] = []
 
   /**
    * `POST /api/auth/login` rate-limits in a `preHandler` that reads the email first, so a request
@@ -314,7 +330,7 @@ describe('every mutating /api route is guarded', () => {
 
   it('refuses each of them without X-Requested-With, before auth and before the limiter', async () => {
     const h = await harness()
-    const routes = mutatingApiRoutes(h.app.fastify)
+    const routes = mutatingRoutes(h.app.fastify)
     // A list that came back empty would make every assertion below vacuously true.
     expect(routes.length).toBeGreaterThanOrEqual(7)
     for (const route of routes) {
@@ -331,8 +347,9 @@ describe('every mutating /api route is guarded', () => {
    * than none.
    */
   it('meters each of them, whether by the general bucket or by one of its own', async () => {
-    const h = await harness({ writeRateLimit: { limit: 2, windowMs: 60_000 } })
-    const routes = mutatingApiRoutes(h.app.fastify)
+    const h = await harness({ writeRateLimit: TEST_WRITE_LIMIT })
+    const routes = mutatingRoutes(h.app.fastify).filter((r) => !UNMETERED_BY_DESIGN.includes(label(r)))
+    expect(routes.length).toBeGreaterThanOrEqual(7)
     let at = START
     for (const route of routes) {
       at += WINDOW_MS
@@ -348,6 +365,28 @@ describe('every mutating /api route is guarded', () => {
       }
       expect(seen, `${label(route)} was never rate limited in ${String(BUDGET)} requests`).toContain(429)
     }
+  })
+
+  /**
+   * Which routes step over the general bucket, and what each carries instead — said out loud rather
+   * than left to be inferred. The metering loop above does cover a wrongly exempted route, but it
+   * fails with "was never rate limited", which points at the route rather than at the exemption
+   * that caused it.
+   */
+  it('leaves sign-in and sign-up to their own, tighter limiters', () => {
+    expect(Object.fromEntries(OWN_LIMITER)).toEqual({
+      '/api/auth/register': { limit: 10, windowMs: 60_000 },
+      '/api/auth/login': { limit: 5, windowMs: 60_000 },
+    })
+    // Every exemption is tighter than the bucket it steps over; otherwise it would be a loophole.
+    for (const [path, own] of OWN_LIMITER) expect(own.limit, path).toBeLessThan(WRITE_RATE_LIMIT.limit)
+  })
+
+  /** No mutating route is mounted outside `/api`, which is what the limiter hook keys on. */
+  it('mounts every mutating route under /api, where the limiter looks', async () => {
+    const h = await harness()
+    expect(mutatingRoutes(h.app.fastify).filter((r) => !r.path.startsWith('/api/')).map(label)).toEqual([])
+    expect(UNMETERED_BY_DESIGN).toEqual([])
   })
 })
 

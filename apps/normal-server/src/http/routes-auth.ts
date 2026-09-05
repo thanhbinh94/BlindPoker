@@ -39,14 +39,14 @@ export interface AuthRouteDeps {
 }
 
 /** Spec §19.2: five sign-in attempts a minute for one address from one place. */
-const LOGIN_RATE_LIMIT = { limit: 5, windowMs: 60_000 }
+export const LOGIN_RATE_LIMIT = { limit: 5, windowMs: 60_000 }
 
 /**
  * Registration is the most expensive unauthenticated thing this server does - a 64 MiB argon2 hash
  * and a six-statement transaction, with no password to be wrong first - so it is capped per address
  * too. Ten a minute is far more than a person signs up, and far less than a machine would like.
  */
-const REGISTER_RATE_LIMIT = { limit: 10, windowMs: 60_000 }
+export const REGISTER_RATE_LIMIT = { limit: 10, windowMs: 60_000 }
 
 /** How an `AuthError` reaches the client. The codes are the client's; only the status is added here. */
 const STATUS: Record<AuthErrorCode, number> = {

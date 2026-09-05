@@ -23,6 +23,14 @@
  *
  * The wildcard the static fallback mounts appears as a bare `*`; it is returned like any other row,
  * and callers filter by path.
+ *
+ * **`printRoutes` is documented as debug output, not as an API.** That is a real risk and this is
+ * where a Fastify upgrade should look first — but it is a loud one rather than a quiet one: both
+ * editions assert the *exact* enumerated surface against a literal list, so a change to the tree
+ * drawing fails those assertions outright instead of silently shortening the list a guard loop
+ * runs over. The depth check below is the other half of that: an indent that jumps a level is a
+ * format this parser has not been taught, and it throws rather than joining segments into a
+ * plausible-looking path that no route has.
  */
 import type { FastifyInstance, HTTPMethods } from 'fastify'
 
@@ -67,13 +75,19 @@ const INDENT = 4
 export function enumerateRoutes(app: FastifyInstance): EnumeratedRoute[] {
   const out: EnumeratedRoute[] = []
   // `segments[d]` is the piece of path contributed at depth `d`; a line at depth `d` inherits
-  // everything above it and replaces everything below.
-  const segments: string[] = []
+  // everything above it and replaces everything below. Seeded with the root Fastify does not draw:
+  // every top-level route is already printed at one level of indent, so depth 0 is an empty string
+  // nobody writes to.
+  const segments: string[] = ['']
   for (const line of app.printRoutes({ commonPrefix: false }).split('\n')) {
     const match = LINE.exec(line)
     if (match === null) continue
     const [, indent = '', segment = '', methods] = match
     const depth = Math.floor(indent.length / INDENT)
+    // A line may go one level deeper than the one before it, never two: the tree has a node for
+    // every level. If it ever does, `segments.length = depth` would pad with holes and `join('')`
+    // would invent a path — so this fails instead.
+    if (depth > segments.length) throw new Error(`printRoutes indented by ${String(depth - segments.length)} levels at once; the format has changed: ${line}`)
     segments.length = depth
     segments.push(segment)
     if (methods === undefined) continue
@@ -87,12 +101,18 @@ export function enumerateRoutes(app: FastifyInstance): EnumeratedRoute[] {
 }
 
 /**
- * The mutating routes under `/api`, which is the set every mutating-request guard has to cover.
+ * Every mutating route the instance answers, wherever it is mounted.
  *
- * `/api` and not the whole surface because the static fallback answers `/*` for every method there
- * is — a `DELETE /favicon.ico` is a 404 from a file server, not a mutation — and `/health` is a
- * `GET` a load balancer polls.
+ * Deliberately **not** filtered to `/api/`, even though that is what both editions' CSRF guard and
+ * rate limiter key on. A filter here would give the guard and the test of the guard the same blind
+ * spot: a `POST /upload` or a `DELETE /admin/cache` mounted next month would be unmetered by the
+ * hook *and* absent from the loop, and the loop would report success. Returning the whole set makes
+ * a route outside `/api` a test failure that a person has to answer for — either by metering it or
+ * by adding it, by name and with a reason, to the caller's own exemption list.
+ *
+ * `/health` and the static fallback are not in this set at all: both editions register them as
+ * `GET` only (which the exact-surface assertions pin), and a `GET` is not a mutation.
  */
-export function mutatingApiRoutes(app: FastifyInstance): MutatingRoute[] {
-  return enumerateRoutes(app).filter((r): r is MutatingRoute => r.path.startsWith('/api/') && MUTATING_METHODS.includes(r.method as MutatingMethod))
+export function mutatingRoutes(app: FastifyInstance): MutatingRoute[] {
+  return enumerateRoutes(app).filter((r): r is MutatingRoute => MUTATING_METHODS.includes(r.method as MutatingMethod))
 }

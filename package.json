@@ -9,7 +9,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "pnpm -r run typecheck",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings=0",
     "build:normal": "pnpm --filter @bp/normal-web run build && pnpm --filter @bp/normal-server run build",
     "build:normal-web": "pnpm --filter @bp/normal-web run build",
     "e2e:normal": "pnpm --filter @bp/normal-web run e2e",

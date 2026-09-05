@@ -1,6 +1,6 @@
 import Fastify from 'fastify'
 import { describe, expect, it } from 'vitest'
-import { enumerateRoutes, mutatingApiRoutes } from './routes.js'
+import { enumerateRoutes, mutatingRoutes } from './routes.js'
 
 async function app() {
   const instance = Fastify({ logger: false })
@@ -48,8 +48,8 @@ describe('enumerateRoutes', () => {
     expect(routes.filter((r) => r.path === '/api/config')).toEqual([{ path: '/api/config', method: 'GET' }])
   })
 
-  it('finds the mutating API surface and nothing else', async () => {
-    const routes = await app().then(mutatingApiRoutes)
+  it('finds every mutating route, and no read', async () => {
+    const routes = await app().then(mutatingRoutes)
     expect(routes.map((r) => `${r.method} ${r.path}`).sort()).toEqual([
       'DELETE /api/me/thing',
       'PATCH /api/me',
@@ -59,13 +59,28 @@ describe('enumerateRoutes', () => {
   })
 
   /**
-   * The static fallback answers `/*` for every method there is, `DELETE` included. It is a file
-   * server, not a mutation, and folding it into the mutating set would make every guard test assert
+   * The point of not filtering by prefix. Both editions' rate limiter keys on `/api/`, so a
+   * mutating route mounted anywhere else would be unmetered — and if this helper filtered the same
+   * way, the loop that is supposed to catch that would not even see the route. It has to come back
+   * so the caller's exemption list is what answers for it.
+   */
+  it('returns a mutating route mounted outside /api, rather than hiding it', async () => {
+    const instance = Fastify({ logger: false })
+    instance.get('/health', async () => ({ ok: true }))
+    instance.post('/api/session', async () => ({}))
+    instance.post('/upload', async () => ({}))
+    await instance.ready()
+    expect(mutatingRoutes(instance).map((r) => `${r.method} ${r.path}`).sort()).toEqual(['POST /api/session', 'POST /upload'])
+  })
+
+  /**
+   * The static fallback is registered as a `GET` in both editions — it is a file server — so it is
+   * not in the mutating set to begin with. Folding a wildcard in would make every guard test assert
    * that a 404 on a missing image is rate limited.
    */
-  it('leaves the static wildcard out of the mutating set', async () => {
+  it('leaves the read-only static wildcard out of the mutating set', async () => {
     const instance = await app()
     expect(enumerateRoutes(instance).some((r) => r.path === '*')).toBe(true)
-    expect(mutatingApiRoutes(instance).some((r) => r.path === '*')).toBe(false)
+    expect(mutatingRoutes(instance).some((r) => r.path === '*')).toBe(false)
   })
 })

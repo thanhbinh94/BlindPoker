@@ -52,8 +52,22 @@ const ADMIN_RATE_LIMIT = { limit: 5, windowMs: 60_000 }
 export const WRITE_RATE_LIMIT = { limit: 60, windowMs: 60_000 }
 
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
-/** The two requests with their own, much tighter limiter; metering them twice would only hide the tighter one. */
-const OWN_LIMITER = new Set(['/api/session', '/api/admin/shutdown'])
+
+/**
+ * The two requests with their own, much tighter limiter; metering them twice would only hide the
+ * tighter one.
+ *
+ * Exported, and asserted by name in `app.test.ts`, because this set is the one way a route can
+ * become unmetered without any test saying so in as many words: an entry added here with no limiter
+ * behind it fails the metering loop with "was never rate limited", which points at the route rather
+ * than at the exemption that caused it. The limit rides along with each entry so that loop can size
+ * its request budget from the loosest limiter actually in play, instead of from a constant that
+ * happens to be big enough today.
+ */
+export const OWN_LIMITER: ReadonlyMap<string, { limit: number; windowMs: number }> = new Map([
+  ['/api/session', SESSION_RATE_LIMIT],
+  ['/api/admin/shutdown', ADMIN_RATE_LIMIT],
+])
 
 const LANGUAGES = ['vi', 'en']
 
@@ -81,7 +95,12 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
    * polls, the second is files.
    */
   app.addHook('preHandler', async (req, reply) => {
-    const path = req.url.split('?')[0] ?? ''
+    // The *matched route* where there is one, so a query string or a trailing slash can never make
+    // a request look like a path other than the one Fastify routed, and `OWN_LIMITER` is a set of
+    // route patterns rather than of request strings. A request that matched nothing has no
+    // `routeOptions.url`; it falls back to the raw target so a flood of `POST /api/<nonsense>`
+    // stays metered rather than becoming the one unlimited thing under `/api`.
+    const path = req.routeOptions.url ?? req.url.split('?')[0] ?? ''
     if (!path.startsWith('/api/') || !MUTATING.has(req.method) || OWN_LIMITER.has(path)) return
     const verdict = writeLimiter.check(`ip:${req.ip}`)
     if (verdict.allowed) return
