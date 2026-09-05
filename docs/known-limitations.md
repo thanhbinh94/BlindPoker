@@ -56,6 +56,17 @@ sit-out counter.
 *Why:* a wall-clock counter would stand people up during a legitimate pause between hands.
 *Tracked:* `docs/server-kit.md` ("Where it does not fire") and spec §11.3.
 
+**A carry-over pot released to the table also pays seats that asked to sit out.** When a Blind room
+cannot start a hand for `carryOverReleaseMs`, the accumulated pot is split across every seated human
+(`Room.seatedHumans()`), which since Plan 7 includes seats that have asked to sit out. Money is
+still exactly conserved — the `Σ balances + Σ sinks` identity is untouched, and the Blind soak
+asserts it every run — but a player who declined to play shares a pot they were never eligible for.
+*Why it stays:* spec §8.4 predates `SIT_OUT` and says "the seated humans" without qualification, so
+excluding sitters is a rule change rather than a bug fix, and it is a rule change in the direction
+of taking points away from somebody. Ruled a roadmap item rather than a fix in this milestone.
+*Tracked:* here; spec §8.4 needs either the exclusion or a sentence saying seated-but-sitting-out
+still counts.
+
 **History names opponents by their recorded label.** A hand's history row stores each seat's id and
 a label. When the account behind a seat is gone — or the seat was a bot, which has no account — the
 listing falls back to that recorded label rather than a live profile lookup
@@ -106,9 +117,28 @@ the project does not have.
 **Normal runs as a single process.** One process holds every room in memory; there is no horizontal
 scaling and no sticky routing.
 *Why:* spec §25 sizes the target at a scale one Node process handles comfortably, and the soak
-(6 clients × 3 rooms, p95 action → broadcast 4–10 ms against a 50 ms budget) says the headroom is
-real.
+(6 clients × 3 rooms) says the headroom is real — with the caveat that the figure moves with machine
+load. Nine runs on the development machine on 2026-09-05 (Windows 11 / Node 22.13 / pnpm 9.15.9)
+gave p95 action → broadcast of **3–14 ms for Hold'em** and **4–34 ms for Blind** against spec §24's
+50 ms budget, worst single sample 75 ms; the quiet end of that range (3–7 ms and 4–9 ms) came from
+runs of the soak file alone, the loud end from runs sharing the machine with the rest of the suite.
+Read it as a margin of roughly 1.5–15×, not the order of magnitude a single small number would
+suggest, and re-measure on the target hardware before sizing a deployment from it.
 *Tracked:* spec §25; roadmap §34 item 6.
+
+**The two editions' write limiters key their buckets on slightly different paths.** Lite's hook
+(`apps/lite/server/src/http/routes.ts`) keys on `req.routeOptions.url ?? req.url.split('?')[0]`;
+Normal's otherwise line-for-line sibling (`apps/normal-server/src/http/routes.ts`) keys on
+`req.url.split('?')[0]` alone. There is no behavioural difference today — neither edition has a
+parameterised mutating route, so the matched route and the raw target are the same string. One side
+effect is worth stating: because a `POST /api/<nonsense>` matches no route, Lite falls back to the
+raw target, so a stream of 404s from one address spends the same 60/min bucket as that address's
+legitimate daily claim. That is intended (it is the abuse case the bucket is for) but it is asserted
+nowhere.
+*Why it stays:* converging the two hooks is a refactor with no behaviour to verify against, which is
+the kind of change a hardening milestone should not be making at the end of it. Ruled a roadmap
+item.
+*Tracked:* here; `docs/security.md` §3 describes both limiters.
 
 **No email verification, no forgotten-password flow, no third-party sign-in.** Registration takes an
 address and a password and trusts the address is spelled right.
@@ -171,9 +201,10 @@ deterministic for the convenience of a test.
 
 ## UI
 
-**`--red` as ink is below WCAG AA on dark surfaces.** Four pairs on the dark palette are on record:
-`--red` on `--bg` (3.59:1), on `--bg-elev` (3.22:1), and the same defect repeated on the felt's own
-darker ground `.panel.felt` (3.1:1). One token cannot fix it — on `#0b1020` an ink needs a luminance
+**`--red` as ink is below WCAG AA on dark surfaces.** Five entries covering three distinct token
+pairs are on record: `--red` on `--bg` (3.59:1) and on `--bg-elev` (3.22:1) in **both** the dark and
+the night palette — that is four of the five — and the same defect repeated on the felt's own darker
+ground, `.panel.felt`'s `--red` on its local `--bg` (**3.13:1**). One token cannot fix it — on `#0b1020` an ink needs a luminance
 above ~0.20 to reach 4.5:1, while the same token used as a *fill* under `--red-ink` needs one below
 ~0.17. Everything else in all three palettes is at or above AA, including the light-theme gold that
 Plan 7 corrected (3.93 → 4.93 on `--bg`, 4.26 → 5.34 on `--bg-elev`, 4.30 → 5.39 for `--gold-ink`).
@@ -212,7 +243,22 @@ vẽ trong app").
 **The felt resizes slightly at the ring/stack breakpoint.** Crossing the breakpoint changes the table
 layout and the felt's height with it. The action tray's height is reserved from 768 px up so that it
 does not also move on every turn.
+*Why it stays:* the two layouts have genuinely different heights — a seat ring needs vertical room a
+two-row opponent strip does not — and freezing the felt to the taller of them would waste a phone's
+vertical space on every hand to spare a one-off jump at a breakpoint few sessions ever cross.
 *Tracked:* `docs/ui-kit.md` Known gaps.
+
+**The Lite parchment island has no contrast test of its own.**
+`apps/lite/web/src/screens/lite.module.css` re-declares `--ink`, `--ink-muted`, `--gold` and `--red`
+on the same printed-paper gradient as ui-kit's `.ticket` and `.panel.parchment`, and Plan 7 had to
+correct its `--gold` by hand. `packages/ui-kit/src/theme/tokens.test.ts` → "keeps the parchment
+islands at AA on the darker end of their paper" covers the two ui-kit islands, but it reads
+`ui-kit`'s own stylesheets and cannot reach an app's CSS, so a future edit to the Lite copy could
+regress AA with nothing turning red.
+*Why it stays:* the fix is a small contrast test under `apps/lite/web` (or exporting `contrast` /
+`tokensOf` from ui-kit so the app can reuse them rather than copy eight lines) — worth doing, and
+not worth doing in the last fix wave of a hardening milestone.
+*Tracked:* here, and `docs/ui-kit.md` Known gaps.
 
 **Playground and e2e screenshots are not committed.** `packages/ui-kit/playground/screenshots/README.md`
 describes what each shot should show; the e2e runs write real ones into

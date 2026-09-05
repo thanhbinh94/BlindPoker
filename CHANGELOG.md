@@ -15,9 +15,12 @@ acceptance record.
 
 - **A real multiplayer soak.** `runSoak` drives 6 clients over 3 rooms for 20 hands each (spec
   §29.3) through actual WebSockets, then asserts the invariants: money conserved, no `seq` gaps, no
-  resyncs, latency inside budget. Measured 2026-09-05 over four runs — 60–62 hands, 0 gaps, 0
-  resyncs, p95 action → broadcast 4–10 ms against §24's 50 ms, and not one point created or
-  destroyed across ~490 hands.
+  resyncs, latency inside budget. Measured 2026-09-05 over nine runs on the development machine
+  (Windows 11 / Node 22.13) — 60–62 hands, 0 gaps, 0 resyncs, not one point created or destroyed,
+  and p95 action → broadcast of 3–14 ms (Hold'em) / 4–34 ms (Blind) against §24's 50 ms, worst
+  single sample 75 ms. The spread is machine load: the low end is the soak file alone, the high end
+  the same runs sharing the machine with the rest of the suite. The test's own assertion is
+  `< 200 ms`.
 - **Edge-case coverage, written down.** `docs/test-matrix.md` maps every row of spec §29.2, §29.3
   and §30 to the test that holds it up — 42 rows, 11 of them new here, 1 partly covered with the
   reason stated, none skipped. The `reqId` replay contract was ruled on (it is per connection) and

@@ -70,7 +70,7 @@ production build (about 15 s); `CI_SKIP_BUILD=1` skips that file.
 Per package, when you want a shorter loop:
 
 ```bash
-pnpm --filter @bp/core test           # the engine — 168 tests
+pnpm --filter @bp/core test           # the engine — 166 tests
 pnpm --filter @bp/server-kit test     # rooms, gateway, soak — 92
 pnpm --filter @bp/ui-kit test         # the shared client — 129
 pnpm --filter @bp/http-kit test       # shared HTTP plumbing — 75
