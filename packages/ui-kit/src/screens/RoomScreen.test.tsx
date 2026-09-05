@@ -161,21 +161,23 @@ describe('RoomScreen', () => {
   })
 
   it('toggles sitting out from the tray, and offers it to nobody who is not in a seat', async () => {
-    const seatedAs = (status: 'SEATED' | 'SITTING_OUT') =>
+    const seatedAs = (sittingOut: boolean) =>
       makeRoom({
         status: 'OPEN',
         playerCount: 2,
         players: [
           makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'SEATED', stack: 20_000 }),
-          makePlayer({ playerId: 'me', displayName: 'Mai', seat: 1, status, stack: 20_000 }),
+          makePlayer({ playerId: 'me', displayName: 'Mai', seat: 1, status: sittingOut ? 'SITTING_OUT' : 'SEATED', sittingOut, stack: 20_000 }),
         ],
       })
 
     const standing = fakeClient(makeState({ room: standingRoom }))
     const { view } = wrap(standing)
-    expect(screen.getByRole('button', { name: 'Sit out' })).toBeDisabled()
+    const idle = screen.getByRole('button', { name: 'Sit out' })
+    expect(idle).toBeDisabled()
+    expect(idle).not.toHaveAttribute('aria-pressed') // no seat, so no toggle state to announce
 
-    const seated = fakeClient(makeState({ room: seatedAs('SEATED') }))
+    const seated = fakeClient(makeState({ room: seatedAs(false) }))
     view.rerender(screenFor(seated))
     const out = screen.getByRole('button', { name: 'Sit out' })
     expect(out).toHaveAttribute('aria-pressed', 'false')
@@ -183,13 +185,53 @@ describe('RoomScreen', () => {
     expect(seated.sitOut).toHaveBeenCalledTimes(1)
     expect(seated.sitIn).not.toHaveBeenCalled()
 
-    // The server answers with PLAYER_SIT_OUT; the seat's status is what flips the control over.
-    const sitting = fakeClient(makeState({ room: seatedAs('SITTING_OUT') }))
+    // The server answers with PLAYER_SIT_OUT; the seat's own `sittingOut` flag is what flips the control over.
+    const sitting = fakeClient(makeState({ room: seatedAs(true) }))
     view.rerender(screenFor(sitting))
     const back = screen.getByRole('button', { name: 'Sit back in' })
     expect(back).toHaveAttribute('aria-pressed', 'true')
     await userEvent.click(back)
     expect(sitting.sitIn).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the toggle pressed through a snapshot taken mid-hand, where the seat still reads IN_HAND', async () => {
+    // A RESYNC, a seq gap or a reconnect rebuilds the room from a snapshot, and `status` reports the hand the
+    // sitter is still finishing. Only the seat's own flag can keep the control honest — and cancellable.
+    const room = makeRoom({
+      status: 'IN_GAME',
+      playerCount: 2,
+      players: [
+        makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'IN_HAND', stack: 20_000 }),
+        makePlayer({ playerId: 'me', displayName: 'Mai', seat: 1, status: 'IN_HAND', sittingOut: true, stack: 20_000 }),
+      ],
+    })
+    const client = fakeClient(makeState({ room }))
+    wrap(client)
+
+    const back = screen.getByRole('button', { name: 'Sit back in' })
+    expect(back).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(back)
+    expect(client.sitIn).toHaveBeenCalledTimes(1)
+    expect(client.sitOut).not.toHaveBeenCalled()
+  })
+
+  it('counts only playing seats as ready, so the host cannot start a table one player is sitting out of', () => {
+    // The server's `readySeats()` drops sitters; the tray must agree, or the host gets "2/2 ready", a live Start
+    // and no hint for a table that answers NOT_ENOUGH_PLAYERS.
+    const room = makeRoom({
+      status: 'OPEN',
+      hostPlayerId: 'me',
+      playerCount: 2,
+      players: [
+        makePlayer({ playerId: 'a', displayName: 'Ann', seat: 0, status: 'SITTING_OUT', sittingOut: true, stack: 20_000, ready: true }),
+        makePlayer({ playerId: 'me', displayName: 'Mai', isHost: true, seat: 1, status: 'READY', stack: 20_000, ready: true }),
+      ],
+    })
+    wrap(fakeClient(makeState({ room })))
+
+    expect(screen.getByText('1/2 ready')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
+    expect(screen.getByText('At least 2 players must be ready to start')).toBeInTheDocument()
   })
 
   it('lets the host start once two players are ready, and kick the others', async () => {

@@ -136,6 +136,7 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
       connected: true,
       seat,
       status: seat === MY_SEAT && sittingOut ? ('SITTING_OUT' as const) : ('IN_HAND' as const),
+      sittingOut: seat === MY_SEAT && sittingOut,
       stack: stacks.get(seat) ?? 0,
       ready: true,
     }))

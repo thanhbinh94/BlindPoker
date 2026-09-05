@@ -17,7 +17,7 @@ function roomView(mode: 'holdem' | 'blind', rules: HoldemRules | BlindRules, sta
   return {
     roomId: 'r', code: 'ABC234', name: config.name, mode, config: { ...config, hasPassword: false }, playerCount: stacks.length, maxPlayers: 6, status: 'IN_GAME',
     hostPlayerId: 'p0', carryOverPot: 0, nextHandAt: null,
-    players: stacks.map((stack, seat) => ({ playerId: `p${seat}`, displayName: `P${seat}`, isBot: false, isHost: seat === 0, connected: true, seat, status: 'IN_HAND', stack, ready: true })),
+    players: stacks.map((stack, seat) => ({ playerId: `p${seat}`, displayName: `P${seat}`, isBot: false, isHost: seat === 0, connected: true, seat, status: 'IN_HAND', sittingOut: false, stack, ready: true })),
   }
 }
 
@@ -109,7 +109,7 @@ describe('client reducer mirrors playerView through whole hands', () => {
     const rng = seededRng(3)
     const seqRef = { seq: 10 }
     let client = start('holdem', HOLDEM_RULES, [20000, 20000], 5) // p5 is not in the room's seats
-    client = { ...client, room: { ...client.room!, players: [...client.room!.players, { playerId: 'p5', displayName: 'P5', isBot: false, isHost: false, connected: true, seat: null, status: null, stack: 0, ready: false }] } }
+    client = { ...client, room: { ...client.room!, players: [...client.room!.players, { playerId: 'p5', displayName: 'P5', isBot: false, isHost: false, connected: true, seat: null, status: null, sittingOut: false, stack: 0, ready: false }] } }
     const { state, events } = createHand({ handId: 'x', rules: HOLDEM_RULES, seats: [{ seat: 0, playerId: 'p0', stack: 20000, isBot: false }, { seat: 1, playerId: 'p1', stack: 20000, isBot: false }], button: 0 }, rng)
     client = feed(client, events, null, seqRef)
     expect(client.hand!.mySeat).toBeNull()
@@ -242,7 +242,7 @@ describe('client reducer — snapshot, room events, errors', () => {
     s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_SNAPSHOT', seq: 42, room, hand: playerView(state, 1), deadlineAt: 99 }, now: 0 })
     expectMirror(s, state, 1)
     expect(s.deadlineAt).toBe(99)
-    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 43, event: { type: 'PLAYER_JOINED', player: { playerId: 'p9', displayName: 'P9', isBot: false, isHost: false, connected: true, seat: null, status: null, stack: 0, ready: false } } }, now: 0 })
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 43, event: { type: 'PLAYER_JOINED', player: { playerId: 'p9', displayName: 'P9', isBot: false, isHost: false, connected: true, seat: null, status: null, sittingOut: false, stack: 0, ready: false } } }, now: 0 })
     expect(s.room!.players.map((p) => p.playerId)).toEqual(['p0', 'p1', 'p9'])
     s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 44, event: { type: 'HOST_CHANGED', hostPlayerId: 'p1' } }, now: 0 })
     expect(s.room!.hostPlayerId).toBe('p1')
@@ -264,21 +264,42 @@ describe('client reducer — snapshot, room events, errors', () => {
   it('PLAYER_SIT_OUT moves the seat status both ways and leaves the seatless and the offline alone', () => {
     let s = start('holdem', HOLDEM_RULES, [20000, 20000], 1)
     const statusOf = (id: string) => s.room!.players.find((p) => p.playerId === id)!.status
+    const flagOf = (id: string) => s.room!.players.find((p) => p.playerId === id)!.sittingOut
     const sitOut = (playerId: string, sittingOut: boolean, seq: number): ClientState =>
       reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq, event: { type: 'PLAYER_SIT_OUT', playerId, sittingOut } }, now: 0 })
 
     s = sitOut('p1', true, 11)
     expect(statusOf('p1')).toBe('SITTING_OUT')
+    expect(flagOf('p1')).toBe(true)
     s = sitOut('p1', false, 12)
     expect(statusOf('p1')).toBe('READY') // the fixture's seats are ready; an unready one goes back to SEATED
+    expect(flagOf('p1')).toBe(false)
 
     // A spectator has no seat to sit out of, and a seat that is offline keeps saying so.
-    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 13, event: { type: 'PLAYER_JOINED', player: { playerId: 'p9', displayName: 'P9', isBot: false, isHost: false, connected: true, seat: null, status: null, stack: 0, ready: false } } }, now: 0 })
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 13, event: { type: 'PLAYER_JOINED', player: { playerId: 'p9', displayName: 'P9', isBot: false, isHost: false, connected: true, seat: null, status: null, sittingOut: false, stack: 0, ready: false } } }, now: 0 })
     s = sitOut('p9', true, 14)
     expect(statusOf('p9')).toBeNull()
     s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 15, event: { type: 'PLAYER_DISCONNECTED', playerId: 'p0', deadline: 0 } }, now: 0 })
     s = sitOut('p0', true, 16)
     expect(statusOf('p0')).toBe('DISCONNECTED')
+    expect(flagOf('p0')).toBe(true) // the status yields to being offline; the request itself is still recorded
+  })
+
+  it('keeps a mid-hand sit-out across a snapshot, where the seat still reads IN_HAND', () => {
+    let s = start('holdem', HOLDEM_RULES, [20000, 20000], 1)
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 11, event: { type: 'PLAYER_SIT_OUT', playerId: 'p1', sittingOut: true } }, now: 0 })
+    const seat = () => s.room!.players.find((p) => p.playerId === 'p1')!
+
+    // A RESYNC answers with the room as the server holds it: still in the hand, and still sitting out.
+    const room = roomView('holdem', HOLDEM_RULES, [20000, 20000])
+    room.players = room.players.map((p) => (p.playerId === 'p1' ? { ...p, status: 'IN_HAND' as const, sittingOut: true } : p))
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_SNAPSHOT', seq: 20, room, hand: null, deadlineAt: null }, now: 0 })
+    expect(seat().status).toBe('IN_HAND')
+    expect(seat().sittingOut).toBe(true)
+
+    // And a seat given back forgets it, so a fresh sit-down never starts pre-pressed.
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 21, event: { type: 'PLAYER_STOOD', playerId: 'p1', seat: 1 } }, now: 0 })
+    expect(seat().sittingOut).toBe(false)
   })
 })
 

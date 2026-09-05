@@ -215,17 +215,22 @@ function applyRoomEvent(room: RoomView, event: RoomEvent): RoomView {
       return { ...room, players, playerCount: players.length }
     }
     case 'PLAYER_SAT':
-      return patch(event.playerId, (p) => ({ ...p, seat: event.seat, stack: event.stack, status: 'SEATED', ready: false }))
+      return patch(event.playerId, (p) => ({ ...p, seat: event.seat, stack: event.stack, status: 'SEATED', ready: false, sittingOut: false }))
     case 'PLAYER_STOOD':
-      return patch(event.playerId, (p) => ({ ...p, seat: null, stack: 0, status: null }))
+      return patch(event.playerId, (p) => ({ ...p, seat: null, stack: 0, status: null, sittingOut: false }))
     case 'PLAYER_READY':
       return patch(event.playerId, (p) => ({ ...p, ready: event.ready, status: event.ready ? 'READY' : 'SEATED' }))
     // The flag lands on the seat straight away — including mid-hand, where the server still deals the player
-    // out of the *current* hand — so the tray's toggle answers the click that caused it. A seat that is
-    // offline keeps saying so: being disconnected is the more urgent fact about it.
+    // out of the *current* hand — so the tray's toggle answers the click that caused it. It rides on its own
+    // field, which a later snapshot reproduces, rather than on `status`, which `IN_HAND` would overwrite.
+    // The *status* still yields: a seat that is offline keeps saying so, being the more urgent fact about it.
     case 'PLAYER_SIT_OUT':
       return patch(event.playerId, (p) =>
-        p.seat === null || !p.connected ? p : { ...p, status: event.sittingOut ? 'SITTING_OUT' : p.ready ? 'READY' : 'SEATED' },
+        p.seat === null ? p : {
+          ...p,
+          sittingOut: event.sittingOut,
+          status: !p.connected ? p.status : event.sittingOut ? 'SITTING_OUT' : p.ready ? 'READY' : 'SEATED',
+        },
       )
     case 'HOST_CHANGED':
       return { ...room, hostPlayerId: event.hostPlayerId, players: room.players.map((p) => ({ ...p, isHost: p.playerId === event.hostPlayerId })) }

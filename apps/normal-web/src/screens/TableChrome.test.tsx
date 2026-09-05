@@ -21,6 +21,7 @@ const player = (patch: Partial<RoomPlayerView> & Pick<RoomPlayerView, 'playerId'
   connected: true,
   seat: 0,
   status: null,
+  sittingOut: false,
   stack: 1000,
   ready: false,
   ...patch,

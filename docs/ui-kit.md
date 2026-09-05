@@ -95,7 +95,7 @@ that already has a height.
 | `createRoom(config)` | `CREATE_ROOM`, resolves with the `ACK` or `ERROR` |
 | `joinRoom({ roomId?, code?, password? })` | `JOIN_ROOM` |
 | `leaveRoom()`, `sitDown(seat, buyIn?)`, `standUp()`, `setReady(r)`, `startGame()`, `kick(playerId)` | the matching frame |
-| `sitOut()` / `sitIn()` | `SIT_OUT` / `SIT_IN` — keep the seat but skip the hands from the next one on, and take it back. The seat's `status` (`SITTING_OUT`) is the state; `ERROR{NOT_SEATED}` if there is no seat. |
+| `sitOut()` / `sitIn()` | `SIT_OUT` / `SIT_IN` — keep the seat but skip the hands from the next one on, and take it back. The seat's own `sittingOut` flag is the state (`status` only shows `SITTING_OUT` once the hand on the table is over); `ERROR{NOT_SEATED}` if there is no seat. |
 | `act(action)` | `ACTION` with `baseSeq` = the latest applied `seq` |
 | `resync()` | `RESYNC` |
 | `clearError()`, `dismissNotification(id)` | local state only |
@@ -163,8 +163,12 @@ formatting; strings come from `useTranslation()`.
 `onLeft` fires the moment the room is gone — left, closed or kicked — and the app decides where that lands.
 
 `RoomScreen`'s tray carries Ready, Stand up and one sit-out toggle (`room.sitOut` / `room.sitIn`), whose label and
-`aria-pressed` follow the seat's own `SITTING_OUT` status rather than anything the screen remembers. It is disabled
-while the viewer has no seat, so it keeps its place rather than appearing under the player's hand when they sit down.
+`aria-pressed` follow `RoomPlayerView.sittingOut` rather than anything the screen remembers — and rather than the
+seat's `status`, which reports `IN_HAND` for the hand a fresh sitter is still finishing, so a snapshot taken mid-hand
+would otherwise flip the control back and leave it unable to cancel. It is disabled while the viewer has no seat (and
+announces no toggle state then), so it keeps its place rather than appearing under the player's hand when they sit
+down. The tray's ready count and the host's Start gate read the same flag, so they agree with the server's
+`readySeats()`: a sitting-out seat is not counted, however ready it is.
 
 Both screens already render `Toasts` from their own `client.state`; it is exported separately so an app can raise
 its own slips in the same stack. Errors are assertive (`role="alert"`, red edge), notifications are polite
@@ -390,7 +394,6 @@ view, seat count (4/6/9), theme, language, forced stack layout, and "next hand".
   when it is absent; Normal supplies a real one from its cosmetics. `captionFor(player)` is the same arrangement
   for the line under the name — the kit never invents a title of its own.
 - **No top-up.** `TOP_UP` is not in the protocol, so a short stack has to stand up and sit back down.
-- **Sit-out is not exposed.** `SITTING_OUT` renders on a seat but there is no message to request it.
 - The felt resizes slightly between the ring and stack layouts when a window crosses a breakpoint; the tray's height
   is reserved from 768 px up so it does not also move on every turn.
 - Playground screenshots are described in `packages/ui-kit/playground/screenshots/README.md` rather than committed
