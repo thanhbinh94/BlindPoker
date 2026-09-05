@@ -141,13 +141,20 @@ function isConclusivelyGone(err: unknown): boolean {
   return code === 'ECONNREFUSED' || code === 'ENOTFOUND'
 }
 
-type ProbeOutcome = { kind: 'ok'; res: Response } | { kind: 'refused' } | { kind: 'timeout' }
+/**
+ * `inconclusive` is every failure that is not proof of absence — the probe's own timeout, but also
+ * `EHOSTUNREACH`, `ENETUNREACH` and `ECONNRESET`, which fail in microseconds and say nothing about
+ * whether a Lite is running at that address. It carries the error code that produced it precisely
+ * so the refusal message can name it: "no answer within 1000 ms" sends an operator whose laptop
+ * changed networks looking for a busy server instead of a dead interface.
+ */
+type ProbeOutcome = { kind: 'ok'; res: Response } | { kind: 'refused' } | { kind: 'inconclusive'; code: string | undefined }
 
 async function probeOnce(url: string, timeoutMs: number): Promise<ProbeOutcome> {
   try {
     return { kind: 'ok', res: await fetch(url, { signal: AbortSignal.timeout(timeoutMs) }) }
   } catch (err) {
-    return { kind: isConclusivelyGone(err) ? 'refused' : 'timeout' }
+    return isConclusivelyGone(err) ? { kind: 'refused' } : { kind: 'inconclusive', code: errorCode(err) }
   }
 }
 
@@ -164,11 +171,14 @@ async function probeOnce(url: string, timeoutMs: number): Promise<ProbeOutcome> 
  *
  * The probe's two failure shapes are not the same evidence. A refused connection (or a name that
  * does not resolve) is conclusive — nothing is there, so the file is wreckage and gets overwritten.
- * A timeout is only the absence of an answer within `PROBE_TIMEOUT_MS`, which a live instance can
- * produce too if it is briefly too busy to reply; taken as proof, it would make the guard weaker
- * than the pid-only check it replaced. So a timeout earns one retry with the same budget, and only
- * if *that* also times out does this give up — not by overwriting, but by refusing to start at all,
- * leaving the decision to the operator (`--stop`, or check what else is on the port).
+ * Anything else — the probe's own timeout, but equally `EHOSTUNREACH` or a reset — is only the
+ * absence of an answer, which a live instance can produce too if it is briefly too busy to reply or
+ * if the route to it went away; taken as proof, it would make the guard weaker than the pid-only
+ * check it replaced. So an inconclusive probe earns one retry with the same budget, and only if
+ * *that* is inconclusive too does this give up — not by overwriting, but by refusing to start at
+ * all, leaving the decision to the operator (`--stop`, or check what else is on the port). The
+ * refusal names the error code it saw, because a dead interface and a busy server want different
+ * things done about them.
  *
  * The two injectable seams keep the test honest: `isAlive` lets a test describe a live pid without
  * having one, and the probe is the real `fetch` against a real listener.
@@ -184,14 +194,16 @@ export async function claimRunFile(
   const url = `${runFileUrl(info)}/api/config`
 
   let outcome = await probeOnce(url, timeoutMs)
-  if (outcome.kind === 'timeout') outcome = await probeOnce(url, timeoutMs)
+  if (outcome.kind === 'inconclusive') outcome = await probeOnce(url, timeoutMs)
 
   if (outcome.kind === 'refused') return { state: 'stale', info, why: `connection refused at ${url} — nothing is listening there` }
-  if (outcome.kind === 'timeout') {
+  if (outcome.kind === 'inconclusive') {
     return {
       state: 'unreachable',
       info,
-      why: `${url} did not identify itself within ${timeoutMs} ms, twice in a row`,
+      // The code, when there is one, is the whole diagnosis: EHOSTUNREACH is a network the operator
+      // can fix, and it did not take `timeoutMs` to happen.
+      why: `${url} did not identify itself, twice in a row (${outcome.code ?? `no answer within ${timeoutMs} ms`})`,
     }
   }
 

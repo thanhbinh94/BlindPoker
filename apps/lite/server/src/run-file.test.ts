@@ -249,6 +249,10 @@ describe('claimRunFile', () => {
 
     expect(claim.state).toBe('unreachable')
     expect(claim.state === 'unreachable' && claim.why).toMatch(/did not identify itself.*twice/)
+    // No error code behind this one, so the message says what actually happened: nothing, for 150 ms.
+    // A failure that *does* carry a code (EHOSTUNREACH, ECONNRESET) names it there instead, rather
+    // than claiming a budget that never elapsed.
+    expect(claim.state === 'unreachable' && claim.why).toContain('no answer within 150 ms')
     expect(hits, 'the probe should have retried once after the first timeout').toBe(2)
     expect(Date.now() - started).toBeLessThan(2000)
   })

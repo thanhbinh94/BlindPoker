@@ -220,16 +220,20 @@ function applyRoomEvent(room: RoomView, event: RoomEvent): RoomView {
       return patch(event.playerId, (p) => ({ ...p, seat: null, stack: 0, status: null, sittingOut: false }))
     case 'PLAYER_READY':
       return patch(event.playerId, (p) => ({ ...p, ready: event.ready, status: event.ready ? 'READY' : 'SEATED' }))
-    // The flag lands on the seat straight away — including mid-hand, where the server still deals the player
+    // The flag lands on the seat straight away — including mid-hand, where the server still plays the player
     // out of the *current* hand — so the tray's toggle answers the click that caused it. It rides on its own
-    // field, which a later snapshot reproduces, rather than on `status`, which `IN_HAND` would overwrite.
-    // The *status* still yields: a seat that is offline keeps saying so, being the more urgent fact about it.
+    // field, which a later snapshot reproduces, rather than on `status`.
+    // The *status* yields to the more urgent facts about a seat, exactly as `Room.playerView` ranks them
+    // (`packages/server-kit/src/room/room.ts`, spec §11.3): a seat that is offline keeps saying so, and a seat
+    // that still holds cards keeps reading `IN_HAND`. Overwriting `IN_HAND` here would paint the muted
+    // "sitting out" pill on a seat the table is still waiting on, and the next snapshot would take it away
+    // again. Outside a hand there is nothing to outrank, so the status moves both ways as before.
     case 'PLAYER_SIT_OUT':
       return patch(event.playerId, (p) =>
         p.seat === null ? p : {
           ...p,
           sittingOut: event.sittingOut,
-          status: !p.connected ? p.status : event.sittingOut ? 'SITTING_OUT' : p.ready ? 'READY' : 'SEATED',
+          status: !p.connected || p.status === 'IN_HAND' ? p.status : event.sittingOut ? 'SITTING_OUT' : p.ready ? 'READY' : 'SEATED',
         },
       )
     case 'HOST_CHANGED':

@@ -305,7 +305,7 @@ describe('bind and close races', () => {
 })
 
 describe('out-of-band pushes', () => {
-  it('notify reaches a live session, and balanceChanged refreshes a blind seat\u2019s mirrored stack', async () => {
+  it('notify reaches a live session, and balanceChanged refreshes a blind seat’s mirrored stack', async () => {
     ts = await startTestServer()
     const a = await connect('a')
     a.send({ t: 'CREATE_ROOM', config: { ...BLIND_BOT, blind: { ...BLIND_BOT.blind!, botCount: 0 } } })

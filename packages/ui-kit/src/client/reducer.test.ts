@@ -261,44 +261,62 @@ describe('client reducer — snapshot, room events, errors', () => {
     expect(s.replaced).toBe(true)
   })
 
-  it('PLAYER_SIT_OUT moves the seat status both ways and leaves the seatless and the offline alone', () => {
+  it('PLAYER_SIT_OUT moves the seat status both ways between hands, and leaves the seatless and the offline alone', () => {
     let s = start('holdem', HOLDEM_RULES, [20000, 20000], 1)
     const statusOf = (id: string) => s.room!.players.find((p) => p.playerId === id)!.status
     const flagOf = (id: string) => s.room!.players.find((p) => p.playerId === id)!.sittingOut
     const sitOut = (playerId: string, sittingOut: boolean, seq: number): ClientState =>
       reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq, event: { type: 'PLAYER_SIT_OUT', playerId, sittingOut } }, now: 0 })
 
-    s = sitOut('p1', true, 11)
+    // The fixture's seats are dealt in; the hand has to be over before SITTING_OUT is the seat's whole story.
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 11, event: { type: 'PLAYER_READY', playerId: 'p1', ready: true } }, now: 0 })
+    expect(statusOf('p1')).toBe('READY')
+
+    s = sitOut('p1', true, 12)
     expect(statusOf('p1')).toBe('SITTING_OUT')
     expect(flagOf('p1')).toBe(true)
-    s = sitOut('p1', false, 12)
+    s = sitOut('p1', false, 13)
     expect(statusOf('p1')).toBe('READY') // the fixture's seats are ready; an unready one goes back to SEATED
     expect(flagOf('p1')).toBe(false)
 
     // A spectator has no seat to sit out of, and a seat that is offline keeps saying so.
-    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 13, event: { type: 'PLAYER_JOINED', player: { playerId: 'p9', displayName: 'P9', isBot: false, isHost: false, connected: true, seat: null, status: null, sittingOut: false, stack: 0, ready: false } } }, now: 0 })
-    s = sitOut('p9', true, 14)
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 14, event: { type: 'PLAYER_JOINED', player: { playerId: 'p9', displayName: 'P9', isBot: false, isHost: false, connected: true, seat: null, status: null, sittingOut: false, stack: 0, ready: false } } }, now: 0 })
+    s = sitOut('p9', true, 15)
     expect(statusOf('p9')).toBeNull()
-    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 15, event: { type: 'PLAYER_DISCONNECTED', playerId: 'p0', deadline: 0 } }, now: 0 })
-    s = sitOut('p0', true, 16)
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 16, event: { type: 'PLAYER_DISCONNECTED', playerId: 'p0', deadline: 0 } }, now: 0 })
+    s = sitOut('p0', true, 17)
     expect(statusOf('p0')).toBe('DISCONNECTED')
     expect(flagOf('p0')).toBe(true) // the status yields to being offline; the request itself is still recorded
   })
 
-  it('keeps a mid-hand sit-out across a snapshot, where the seat still reads IN_HAND', () => {
+  /**
+   * `Room.playerView` ranks IN_HAND above SITTING_OUT (spec §11.3, docs/server-kit.md), and the server plays the
+   * current hand out. So the event may not repaint a seat that still holds cards: it would put the muted pill on
+   * the seat the table is waiting on, and the next snapshot would silently take it away again.
+   */
+  it('leaves a seat that still holds cards reading IN_HAND, and a snapshot agrees', () => {
     let s = start('holdem', HOLDEM_RULES, [20000, 20000], 1)
     s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 11, event: { type: 'PLAYER_SIT_OUT', playerId: 'p1', sittingOut: true } }, now: 0 })
     const seat = () => s.room!.players.find((p) => p.playerId === 'p1')!
+    expect(seat().status).toBe('IN_HAND') // the flag moved; the status did not
+    expect(seat().sittingOut).toBe(true)
 
-    // A RESYNC answers with the room as the server holds it: still in the hand, and still sitting out.
+    // A RESYNC answers with the room as the server holds it: still in the hand, and still sitting out — the
+    // same two values the event left behind, so nothing flickers when the snapshot lands.
     const room = roomView('holdem', HOLDEM_RULES, [20000, 20000])
     room.players = room.players.map((p) => (p.playerId === 'p1' ? { ...p, status: 'IN_HAND' as const, sittingOut: true } : p))
     s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_SNAPSHOT', seq: 20, room, hand: null, deadlineAt: null }, now: 0 })
     expect(seat().status).toBe('IN_HAND')
     expect(seat().sittingOut).toBe(true)
 
+    // Sitting back in mid-hand is the same story from the other side: only the flag moves.
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 21, event: { type: 'PLAYER_SIT_OUT', playerId: 'p1', sittingOut: false } }, now: 0 })
+    expect(seat().status).toBe('IN_HAND')
+    expect(seat().sittingOut).toBe(false)
+
     // And a seat given back forgets it, so a fresh sit-down never starts pre-pressed.
-    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 21, event: { type: 'PLAYER_STOOD', playerId: 'p1', seat: 1 } }, now: 0 })
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 22, event: { type: 'PLAYER_SIT_OUT', playerId: 'p1', sittingOut: true } }, now: 0 })
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 23, event: { type: 'PLAYER_STOOD', playerId: 'p1', seat: 1 } }, now: 0 })
     expect(seat().sittingOut).toBe(false)
   })
 })
