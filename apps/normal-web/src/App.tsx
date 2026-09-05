@@ -6,7 +6,7 @@ import {
   useHashRoute,
   type SocketFactory,
 } from '@bp/ui-kit'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { NormalApi } from './api.js'
 import { Avatar } from './avatar/Avatar.js'
@@ -24,13 +24,29 @@ import { useSessionGate } from './session-gate.js'
 /** Tracks `apps/normal-web/package.json`; the settings screen (Task 4) prints it so a bug report names a build. */
 export const NORMAL_VERSION = '0.1.0'
 
+/**
+ * The four account screens, split out of the entry bundle.
+ *
+ * They are the right things to split and the lobby is not: a player reaches the lobby on every visit and the
+ * wardrobe on some of them, and between them the four carry the whole item catalogue's vector library, the
+ * stats tables and the ledger. Splitting them keeps the first paint — the sign-in card and the lobby — small
+ * on the phone connection this game is mostly played on, and each screen then costs one request, once.
+ */
+const ProfileScreen = lazy(async () => ({ default: (await import('./screens/ProfileScreen.js')).ProfileScreen }))
+const AvatarScreen = lazy(async () => ({ default: (await import('./screens/AvatarScreen.js')).AvatarScreen }))
+const InventoryScreen = lazy(async () => ({ default: (await import('./screens/InventoryScreen.js')).InventoryScreen }))
+const AchievementsScreen = lazy(async () => ({ default: (await import('./screens/AchievementsScreen.js')).AchievementsScreen }))
+
+/** The routes served by a lazy chunk rather than by the entry bundle. */
+export const ACCOUNT_ROUTES = ['/profile', '/avatar', '/inventory', '/achievements']
+
 /** Normal is served by the same origin as the socket, so the origin is never configured. */
 export function websocketUrl(loc: Pick<Location, 'protocol' | 'host'> = window.location): string {
   return `${loc.protocol === 'https:' ? 'wss:' : 'ws:'}//${loc.host}/ws`
 }
 
-/** Every route Tasks 3 and 4 fill in. Anything not listed (and not `/room`) falls through to the lobby. */
-export const PLACEHOLDER_ROUTES = ['/profile', '/avatar', '/inventory', '/achievements', '/daily', '/settings']
+/** Every route Task 4 still has to fill in. Anything not listed (and not `/room`) falls through to the lobby. */
+export const PLACEHOLDER_ROUTES = ['/daily', '/settings']
 
 /** `#/register` opens the register tab; every other route reached while signed out opens sign-in. */
 const modeOf = (path: string): AuthMode => (path === '/register' ? 'register' : 'signIn')
@@ -147,10 +163,29 @@ export function App({ api, socketFactory }: AppProps) {
       >
         {inRoom ? (
           <RoomScreen client={client} lang={lang} onLeft={() => navigate('/lobby')} avatarFor={avatarFor} captionFor={captionFor} />
+        ) : ACCOUNT_ROUTES.includes(path) ? (
+          // One fallback for all four: the chunk is a single request on a page the rail has already drawn, so
+          // what the player waits for is a line under the rail, not a blank screen with a spinner in the middle.
+          <Suspense
+            fallback={
+              <p className={s.booting} role="status">
+                {t('screens.loading')}
+              </p>
+            }
+          >
+            {path === '/profile' ? (
+              <ProfileScreen api={api} lang={lang} balance={balance} />
+            ) : path === '/avatar' ? (
+              <AvatarScreen api={api} playerId={myId} />
+            ) : path === '/inventory' ? (
+              <InventoryScreen api={api} lang={lang} />
+            ) : (
+              <AchievementsScreen api={api} lang={lang} />
+            )}
+          </Suspense>
         ) : PLACEHOLDER_ROUTES.includes(path) ? (
-          // Tasks 3 and 4 replace each of these with the real screen; the routes exist now so the shell, the
-          // rail and this gate can be tested end to end. Settings carries the one control a placeholder must
-          // not swallow — the way back out of the account.
+          // Daily and Settings are all that is left of the scaffolding; Task 4 replaces both. Settings
+          // carries the one control a placeholder must not swallow — the way back out of the account.
           <Placeholder
             route={path}
             {...(path === '/settings' ? { action: { label: t('placeholder.signOut'), onClick: onSignedOut } } : {})}

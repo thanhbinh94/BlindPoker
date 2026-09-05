@@ -54,8 +54,145 @@
     "lead": "This screen arrives in the next update.",
     "signOut": "Sign out"
   },
+  "screens": {
+    "loading": "Loading…",
+    "retry": "Try again"
+  },
+  "profile": {
+    "title": "Profile",
+    "memberSince": "Member since {{date}}",
+    "balance": "Balance",
+    "noTitle": "No title yet",
+    "toAvatar": "Avatar",
+    "toInventory": "Inventory",
+    "toAchievements": "Achievements",
+    "error": "Could not load your profile",
+    "rename": {
+      "title": "Display name",
+      "label": "New display name",
+      "submit": "Save name",
+      "saved": "Saved. The table keeps your old name until you next join a room.",
+      "same": "That is already your display name"
+    },
+    "stats": {
+      "title": "Statistics",
+      "none": "None yet",
+      "groups": {
+        "holdem": "Texas Hold'em",
+        "blind": "Blind Poker",
+        "streaks": "Streaks",
+        "login": "Check-in",
+        "social": "At the table"
+      },
+      "handsPlayedHoldem": "Hands played",
+      "handsWonHoldem": "Hands won",
+      "bestHandRank": "Best hand",
+      "biggestWin": "Biggest pot won",
+      "handsPlayedBlind": "Hands played",
+      "handsWonBlind": "Hands won",
+      "currentWinStreak": "Current winning streak",
+      "bestWinStreak": "Best winning streak",
+      "currentLoseStreak": "Current losing streak",
+      "bestLoseStreak": "Longest losing streak",
+      "totalLoginDays": "Days checked in",
+      "loginStreak": "Current check-in streak",
+      "bestLoginStreak": "Best check-in streak",
+      "botHands": "Hands with a bot",
+      "roomsJoined": "Rooms joined",
+      "gamesCompleted": "Hands seen through"
+    },
+    "history": {
+      "title": "Recent hands",
+      "empty": "No hands played yet.",
+      "won": "Won",
+      "lost": "Lost",
+      "cancelled": "Cancelled",
+      "bestHand": "Best hand",
+      "opponents": "At the table",
+      "bot": "bot"
+    },
+    "ledger": {
+      "title": "Points history",
+      "empty": "Nothing has moved yet.",
+      "loadMore": "Load more",
+      "ref": "ref {{id}}"
+    }
+  },
+  "ledger": {
+    "reason": {
+      "starting_balance": "Starting balance",
+      "settlement": "Hand settled",
+      "buy_in": "Buy-in",
+      "cash_out": "Cash out",
+      "refund": "Refund",
+      "daily_reward": "Daily reward",
+      "daily_login": "Daily check-in",
+      "daily_item_fallback": "Daily reward, no item left",
+      "relief": "Relief grant",
+      "achievement": "Achievement reward",
+      "other": "Other"
+    }
+  },
+  "inventory": {
+    "title": "Inventory",
+    "lead": "Everything this account owns. Equipped pieces are marked.",
+    "summary": "{{owned}} pieces owned",
+    "acquired": "Acquired {{date}}",
+    "equipped": "Equipped",
+    "empty": "Nothing here yet.",
+    "error": "Could not load your inventory",
+    "category": {
+      "base": "Bases",
+      "face": "Faces",
+      "clothing": "Clothing",
+      "hair": "Hair",
+      "accessory": "Accessories",
+      "jewelry": "Jewelry",
+      "title": "Titles",
+      "badge": "Badges"
+    },
+    "rarity": {
+      "common": "Common",
+      "rare": "Rare",
+      "epic": "Epic"
+    },
+    "source": {
+      "default": "Starter",
+      "daily": "Daily check-in",
+      "achievement": "Achievement",
+      "other": "Other"
+    }
+  },
   "avatar": {
-    "mine": "Your avatar"
+    "mine": "Your avatar",
+    "title": "Avatar",
+    "lead": "Only what you own is offered. New pieces arrive from the daily check-in and from achievements.",
+    "none": "None",
+    "empty": "You own nothing for this slot yet.",
+    "hairColor": "Hair colour",
+    "hairPreset": "Preset colour {{color}}",
+    "hairCustom": "Custom colour",
+    "hairHint": "Six hex digits, for example #2b2b2b.",
+    "hairInvalid": "A colour looks like #2b2b2b",
+    "titleSlot": "Title",
+    "badgeSlot": "Badge",
+    "save": "Save avatar",
+    "saved": "Your avatar is saved.",
+    "layer": {
+      "base": "Base",
+      "face": "Face",
+      "clothing": "Clothing",
+      "hair": "Hair",
+      "accessory": "Accessory",
+      "jewelry": "Jewelry"
+    },
+    "errors": {
+      "NOT_OWNED": "You do not own one of those pieces",
+      "WRONG_CATEGORY": "One of those pieces does not belong in that slot",
+      "INVALID_COLOR": "That hair colour is not a valid hex colour",
+      "MISSING_LAYER": "Every slot but accessory and jewelry needs a piece",
+      "INVALID_ITEM": "One of those pieces is not in the catalogue"
+    }
   },
   "items": {
     "base_01": "Plain base",
@@ -104,6 +241,22 @@
     "badge_veteran": "Veteran badge"
   },
   "achievements": {
+    "ui": {
+      "title": "Achievements",
+      "summary": "{{unlocked}} / {{total}} unlocked",
+      "progress": "{{progress}} of {{threshold}}",
+      "reward": "Reward",
+      "unlockedAt": "Unlocked {{date}}",
+      "locked": "Locked",
+      "empty": "Nothing here yet.",
+      "error": "Could not load your achievements",
+      "category": {
+        "login": "Check-in",
+        "holdem": "Texas Hold'em",
+        "blind": "Blind Poker",
+        "social": "At the table"
+      }
+    },
     "login_days_7": {
       "name": "Seven days in",
       "desc": "Sign in on 7 days."

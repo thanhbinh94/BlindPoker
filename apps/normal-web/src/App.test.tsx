@@ -255,6 +255,18 @@ describe('App — the shell', () => {
     expect(within(nav).getByText(viNormal.nav.daily)).toHaveAttribute('aria-current', 'page')
   })
 
+  it('serves the account routes from their own chunk, behind one loading line', async () => {
+    window.history.replaceState(null, '', '/#/achievements')
+    renderApp(stubApi({ achievements: vi.fn().mockResolvedValue([]) }))
+    await settled()
+    await welcome()
+
+    // The chunk is fetched on arrival, so the rail is drawn before the screen under it is.
+    expect(await screen.findByRole('heading', { name: viNormal.achievements.ui.title })).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: viNormal.nav.main })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: viNormal.placeholder.title })).toBeNull()
+  })
+
   it.each(PLACEHOLDER_ROUTES)('routes #%s to its placeholder behind the rail', async (path) => {
     window.history.replaceState(null, '', `/#${path}`)
     renderApp()

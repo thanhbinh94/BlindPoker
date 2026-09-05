@@ -54,8 +54,145 @@
     "lead": "Màn hình này sẽ có ở bản cập nhật kế tiếp.",
     "signOut": "Đăng xuất"
   },
+  "screens": {
+    "loading": "Đang tải…",
+    "retry": "Thử lại"
+  },
+  "profile": {
+    "title": "Hồ sơ",
+    "memberSince": "Thành viên từ {{date}}",
+    "balance": "Số điểm",
+    "noTitle": "Chưa có danh hiệu",
+    "toAvatar": "Ảnh đại diện",
+    "toInventory": "Tủ đồ",
+    "toAchievements": "Thành tựu",
+    "error": "Không tải được hồ sơ của bạn",
+    "rename": {
+      "title": "Tên hiển thị",
+      "label": "Tên hiển thị mới",
+      "submit": "Lưu tên",
+      "saved": "Đã lưu. Bàn chơi vẫn giữ tên cũ cho tới lần bạn vào phòng kế tiếp.",
+      "same": "Đó đã là tên hiển thị của bạn"
+    },
+    "stats": {
+      "title": "Thống kê",
+      "none": "Chưa có",
+      "groups": {
+        "holdem": "Texas Hold'em",
+        "blind": "Blind Poker",
+        "streaks": "Chuỗi",
+        "login": "Điểm danh",
+        "social": "Tại bàn"
+      },
+      "handsPlayedHoldem": "Số ván đã chơi",
+      "handsWonHoldem": "Số ván thắng",
+      "bestHandRank": "Bài mạnh nhất",
+      "biggestWin": "Ván thắng lớn nhất",
+      "handsPlayedBlind": "Số ván đã chơi",
+      "handsWonBlind": "Số ván thắng",
+      "currentWinStreak": "Chuỗi thắng hiện tại",
+      "bestWinStreak": "Chuỗi thắng dài nhất",
+      "currentLoseStreak": "Chuỗi thua hiện tại",
+      "bestLoseStreak": "Chuỗi thua dài nhất",
+      "totalLoginDays": "Số ngày điểm danh",
+      "loginStreak": "Chuỗi điểm danh hiện tại",
+      "bestLoginStreak": "Chuỗi điểm danh dài nhất",
+      "botHands": "Số ván có bot",
+      "roomsJoined": "Số phòng đã vào",
+      "gamesCompleted": "Số ván chơi trọn"
+    },
+    "history": {
+      "title": "Ván gần đây",
+      "empty": "Chưa có ván nào.",
+      "won": "Thắng",
+      "lost": "Thua",
+      "cancelled": "Đã hủy",
+      "bestHand": "Bài mạnh nhất",
+      "opponents": "Tại bàn",
+      "bot": "bot"
+    },
+    "ledger": {
+      "title": "Lịch sử điểm",
+      "empty": "Chưa có biến động nào.",
+      "loadMore": "Tải thêm",
+      "ref": "mã {{id}}"
+    }
+  },
+  "ledger": {
+    "reason": {
+      "starting_balance": "Điểm khởi đầu",
+      "settlement": "Chia điểm cuối ván",
+      "buy_in": "Vào bàn",
+      "cash_out": "Rời bàn",
+      "refund": "Hoàn điểm",
+      "daily_reward": "Thưởng hằng ngày",
+      "daily_login": "Điểm danh hằng ngày",
+      "daily_item_fallback": "Thưởng hằng ngày, hết món để tặng",
+      "relief": "Điểm cứu trợ",
+      "achievement": "Thưởng thành tựu",
+      "other": "Khác"
+    }
+  },
+  "inventory": {
+    "title": "Tủ đồ",
+    "lead": "Tất cả những gì tài khoản này sở hữu. Món đang mặc được đánh dấu.",
+    "summary": "Đang sở hữu {{owned}} món",
+    "acquired": "Nhận ngày {{date}}",
+    "equipped": "Đang dùng",
+    "empty": "Chưa có món nào.",
+    "error": "Không tải được tủ đồ của bạn",
+    "category": {
+      "base": "Nền",
+      "face": "Khuôn mặt",
+      "clothing": "Trang phục",
+      "hair": "Tóc",
+      "accessory": "Phụ kiện",
+      "jewelry": "Trang sức",
+      "title": "Danh hiệu",
+      "badge": "Huy hiệu"
+    },
+    "rarity": {
+      "common": "Thường",
+      "rare": "Hiếm",
+      "epic": "Cực hiếm"
+    },
+    "source": {
+      "default": "Khởi đầu",
+      "daily": "Điểm danh hằng ngày",
+      "achievement": "Thành tựu",
+      "other": "Khác"
+    }
+  },
   "avatar": {
-    "mine": "Ảnh đại diện của bạn"
+    "mine": "Ảnh đại diện của bạn",
+    "title": "Ảnh đại diện",
+    "lead": "Chỉ những món bạn đang sở hữu mới hiện ở đây. Món mới đến từ điểm danh hằng ngày và từ thành tựu.",
+    "none": "Không",
+    "empty": "Bạn chưa có món nào cho ô này.",
+    "hairColor": "Màu tóc",
+    "hairPreset": "Màu có sẵn {{color}}",
+    "hairCustom": "Màu tự chọn",
+    "hairHint": "Sáu chữ số hex, ví dụ #2b2b2b.",
+    "hairInvalid": "Màu phải có dạng #2b2b2b",
+    "titleSlot": "Danh hiệu",
+    "badgeSlot": "Huy hiệu",
+    "save": "Lưu ảnh đại diện",
+    "saved": "Đã lưu ảnh đại diện.",
+    "layer": {
+      "base": "Nền",
+      "face": "Khuôn mặt",
+      "clothing": "Trang phục",
+      "hair": "Tóc",
+      "accessory": "Phụ kiện",
+      "jewelry": "Trang sức"
+    },
+    "errors": {
+      "NOT_OWNED": "Bạn chưa sở hữu một trong các món đó",
+      "WRONG_CATEGORY": "Một món không thuộc ô bạn chọn",
+      "INVALID_COLOR": "Màu tóc không phải mã hex hợp lệ",
+      "MISSING_LAYER": "Mọi ô trừ phụ kiện và trang sức đều cần một món",
+      "INVALID_ITEM": "Một món không có trong danh mục"
+    }
   },
   "items": {
     "base_01": "Nền mộc",
@@ -104,6 +241,22 @@
     "badge_veteran": "Huy hiệu kỳ cựu"
   },
   "achievements": {
+    "ui": {
+      "title": "Thành tựu",
+      "summary": "Đã mở {{unlocked}} / {{total}}",
+      "progress": "{{progress}} trên {{threshold}}",
+      "reward": "Phần thưởng",
+      "unlockedAt": "Mở ngày {{date}}",
+      "locked": "Chưa mở",
+      "empty": "Chưa có gì ở đây.",
+      "error": "Không tải được thành tựu của bạn",
+      "category": {
+        "login": "Điểm danh",
+        "holdem": "Texas Hold'em",
+        "blind": "Blind Poker",
+        "social": "Tại bàn"
+      }
+    },
     "login_days_7": {
       "name": "Bảy ngày ghé bàn",
       "desc": "Đăng nhập đủ 7 ngày."

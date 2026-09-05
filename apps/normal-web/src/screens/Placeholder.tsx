@@ -10,11 +10,10 @@ export interface PlaceholderProps {
 }
 
 /**
- * **Temporary.** Every route in `App.tsx` exists from this task so the shell, the rail and the session gate
- * can be tested end to end, but the screens behind Profile, Avatar, Inventory, Achievements, Daily and
- * Settings arrive in Tasks 3 and 4. Each of those replaces one `<Placeholder />` with the real screen, and
- * when the last one lands this file goes with it — it is scaffolding, not a feature, and nothing outside
- * `App.tsx` should import it.
+ * **Temporary.** Every route in `App.tsx` exists so the shell, the rail and the session gate can be tested
+ * end to end; Profile, Avatar, Inventory and Achievements have since replaced their placeholders, and Daily
+ * and Settings arrive in Task 4. When the last one lands this file goes with it — it is scaffolding, not a
+ * feature, and nothing outside `App.tsx` should import it.
  */
 export function Placeholder({ route, action }: PlaceholderProps) {
   const { t } = useTranslation('normal')

@@ -43,6 +43,8 @@ describe('normal locales', () => {
       expect(named[def.id]?.name, `achievements.${def.id}.name`).toBeTypeOf('string')
       expect(named[def.id]?.desc, `achievements.${def.id}.desc`).toBeTypeOf('string')
     }
-    expect(Object.keys(named).sort()).toEqual(achievementDefs.map((d) => d.id).sort())
+    // `ui` is the achievements *screen*'s own chrome — headings, the summary line, the reward label — and is
+    // the one key under here that is not an achievement id. Everything else still has to be one.
+    expect(Object.keys(named).filter((key) => key !== 'ui').sort()).toEqual(achievementDefs.map((d) => d.id).sort())
   })
 })

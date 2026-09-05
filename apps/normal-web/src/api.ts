@@ -188,7 +188,8 @@ export interface HistoryEntryDto {
   /** The reading player's own net for the hand. */
   net: number
   won: boolean
-  bestCategory: string | null
+  /** A `HandCategory` ordinal (0 = high card … 9 = royal flush), or `null` when the hand never showed down. */
+  bestCategory: number | null
   cancelled: boolean
   players: HistorySeatDto[]
 }
