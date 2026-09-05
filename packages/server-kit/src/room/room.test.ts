@@ -129,8 +129,18 @@ describe('Room seats and buy-ins', () => {
     expect(h.last('a', 'ROOM_EVENT')?.event).toMatchObject({ type: 'PLAYER_SIT_OUT', playerId: 'h', sittingOut: true })
     const announced = () => h.ofType('a', 'ROOM_EVENT').map((m) => m.event).filter((e) => e.type === 'PLAYER_SIT_OUT')
     expect(announced()).toHaveLength(1)
+
+    // The snapshot carries the flag on its own field, so a client never has to read it out of `status`.
+    const seatOf = (id: string) => h.room.snapshot(null).room.players.find((p) => p.playerId === id)!
+    expect(seatOf('h')).toMatchObject({ status: 'SITTING_OUT', sittingOut: true })
+    expect(seatOf('a').sittingOut).toBe(false)
+
+    // A repeat says nothing *and* must change nothing: zeroing the skip counter here would let a client
+    // re-arm the five-hand auto-stand once a hand and park on a seat it never plays.
+    h.room.players.get('h')!.handsSatOut = 3
     await h.room.sitOut('h', true) // idempotent: nothing changed, so nothing is said
     expect(announced()).toHaveLength(1)
+    expect(h.room.players.get('h')!.handsSatOut).toBe(3)
 
     // 'a' is ready and 'h' is sitting out, so there is one seat playing: autoStart waits.
     await h.room.setReady('a', true)
@@ -142,6 +152,7 @@ describe('Room seats and buy-ins', () => {
     await h.room.sitOut('h', false)
     expect(announced()).toHaveLength(2)
     expect(announced().at(-1)).toMatchObject({ type: 'PLAYER_SIT_OUT', playerId: 'h', sittingOut: false })
+    expect(h.room.players.get('h')!.handsSatOut).toBe(0) // a real change is what resets the counter
     expect(h.room.status).toBe('IN_GAME')
   })
 

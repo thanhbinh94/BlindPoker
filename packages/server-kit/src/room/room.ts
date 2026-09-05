@@ -253,19 +253,18 @@ export class Room {
    * folds their way off the table is doing something else — so this only moves the flag the next
    * `startHand` reads. `SIT_IN` clears the request, but a stack below the minimum to play keeps the seat
    * `SITTING_OUT` under the existing short-stack rule.
+   *
+   * The skip counter is reset only by a *change* of the request. Zeroing it on every `SIT_OUT` would let a
+   * client re-arm the five-hand auto-stand once a hand and park on a seat it never plays (spec §11.3).
    */
   sitOut(playerId: string, out: boolean): Promise<void> {
     return this.enqueue(() => {
       this.assertOpen()
       const p = this.mustPlayer(playerId)
       if (p.seat === null) throw new RoomError('NOT_SEATED')
+      if (p.sitOutRequested !== out) p.handsSatOut = 0
       p.sitOutRequested = out
-      p.handsSatOut = 0
-      const sittingOut = out || p.stack < this.requiredStack()
-      if (sittingOut === p.sittingOut) return undefined
-      p.sittingOut = sittingOut
-      this.broadcastRoomEvent({ type: 'PLAYER_SIT_OUT', playerId, sittingOut })
-      this.changed()
+      this.setSittingOut(p, out || p.stack < this.requiredStack())
       // Sitting back in can be the move that completes the table, so it gets the same look autoStart
       // takes when someone readies up — otherwise the room waits for a ready toggle it does not need.
       return out ? undefined : this.maybeAutoStart()
@@ -454,10 +453,16 @@ export class Room {
     // This hand is going ahead without them, so every voluntary sitter has been skipped once more.
     // Spec §11.3: after `handsSatOutToStand` in a row the seat goes back to the table, stack returned,
     // down the same path as the timeout stand-up — nobody parks on a seat they are not using.
-    for (const p of this.seated()) {
-      if (p.identity.isBot || !p.sitOutRequested) continue
-      p.handsSatOut += 1
-      if (p.handsSatOut >= this.deps.options.handsSatOutToStand) await this.standUpNow(p)
+    // A stand-up writes to the ledger; a ledger blip must not take the starting hand down with it, so the
+    // whole sweep is guarded the way `onHandComplete`'s settlement is. A missed stand-up retries next hand.
+    try {
+      for (const p of this.seated()) {
+        if (p.identity.isBot || !p.sitOutRequested) continue
+        p.handsSatOut += 1
+        if (p.handsSatOut >= this.deps.options.handsSatOutToStand) await this.standUpNow(p)
+      }
+    } catch (err) {
+      this.deps.log.error('sit-out stand-up failed', { roomId: this.roomId, err: String(err) })
     }
     const seats = eligible.map((p) => p.seat!)
     this.button = nextButton(this.button, seats, this.deps.rng)
@@ -622,11 +627,16 @@ export class Room {
     return this.rules.mode === 'blind' ? blindRequiredStack(this.rules) : 1
   }
 
-  /** Moves the effective sit-out flag and tells the room, so a client never has to diff a snapshot to see it. */
-  private setSittingOut(p: RoomPlayer, sittingOut: boolean): void {
-    if (p.sittingOut === sittingOut) return
+  /**
+   * The only writer of the effective sit-out flag: it moves the flag, tells the room (so a client never has to
+   * diff a snapshot to see it) and tells the manager. Returns whether anything actually moved.
+   */
+  private setSittingOut(p: RoomPlayer, sittingOut: boolean): boolean {
+    if (p.sittingOut === sittingOut) return false
     p.sittingOut = sittingOut
     this.broadcastRoomEvent({ type: 'PLAYER_SIT_OUT', playerId: p.identity.playerId, sittingOut })
+    this.changed()
+    return true
   }
 
   /**
@@ -662,9 +672,12 @@ export class Room {
       else if (p.sittingOut) status = 'SITTING_OUT'
       else status = p.ready ? 'READY' : 'SEATED'
     }
+    // `status` is one value and `IN_HAND` outranks `SITTING_OUT`, so the flag travels on its own field:
+    // a player who sits out mid-hand must still read as sitting out after the next snapshot. The request
+    // is reported even before the next `startHand` folds it into the effective flag.
     const view: RoomPlayerView = {
       playerId: p.identity.playerId, displayName: p.identity.displayName, isBot: p.identity.isBot, isHost: p.identity.playerId === this.hostPlayerId,
-      connected: p.connected, seat: p.seat, status, stack: p.stack, ready: p.ready,
+      connected: p.connected, seat: p.seat, status, sittingOut: p.sitOutRequested || p.sittingOut, stack: p.stack, ready: p.ready,
     }
     if (p.cosmetics !== undefined) view.cosmetics = p.cosmetics
     return view

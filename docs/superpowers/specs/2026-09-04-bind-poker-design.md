@@ -332,9 +332,9 @@ Server kiểm tra từng giá trị thuộc tập cho phép; sai → `ERROR INVA
 - Trạng thái ghế (`SeatStatus`, cấp phòng): `SEATED`, `READY`, `IN_HAND`, `SITTING_OUT`, `DISCONNECTED` (ghế trống = không có người, `seat: null`). `FOLDED`/`ALL_IN` **không** phải trạng thái phòng: chúng là cờ theo từng ván trong `HandView.seats` (`hasFolded`, `isAllIn`) và biến mất khi ván kết thúc.
 - `SIT_OUT` giữ ghế nhưng xin bỏ qua các ván sau; **ván đang chơi vẫn đánh hết** (cờ chỉ tác động lên lần bắt đầu ván kế tiếp). `SIT_IN` bỏ yêu cầu đó. Chưa có ghế → `NOT_SEATED`.
 - `SITTING_OUT` được tính lại mỗi lần phòng thử bắt đầu ván: `sittingOut = đã xin SIT_OUT || stack < mức tối thiểu`. Người thật đang ngồi mà stack không đủ mức cược sẽ `sittingOut = true` (và trở lại `false` khi đủ) — nên `SIT_IN` với stack vẫn thiếu thì ghế **vẫn** `SITTING_OUT`.
-- Mỗi lần cờ đổi, phòng phát `ROOM_EVENT PLAYER_SIT_OUT{playerId, sittingOut}` (cả khi nguyên nhân là stack ngắn).
+- Mỗi lần cờ đổi, phòng phát `ROOM_EVENT PLAYER_SIT_OUT{playerId, sittingOut}` (cả khi nguyên nhân là stack ngắn). Ngoài ra `RoomPlayerView` mang thẳng trường `sittingOut` (= `đã xin SIT_OUT || cờ hiệu lực`): `status` chỉ có một giá trị và `IN_HAND` xếp trên `SITTING_OUT`, nên người xin sit-out giữa ván sẽ thấy `status: 'IN_HAND', sittingOut: true` — client đọc trường này (không đọc `status`) thì nút bật/tắt sit-out không bị `RESYNC` hay reconnect giữa ván lật ngược.
 - Ghế `SITTING_OUT` không được tính vào số ghế sẵn sàng: phòng chỉ bắt đầu khi có ≥ 2 ghế vừa `READY` vừa không sit-out (autoStart chờ, `START_GAME` → `NOT_ENOUGH_PLAYERS`); ngược lại phòng cũng không chờ người đang sit-out bấm ready.
-- Xin sit-out mà bị bỏ qua **5 ván liên tiếp** → tự đứng dậy, trả stack về số dư (cùng đường với luật 3 lần hết giờ), phát `PLAYER_STOOD`. `SIT_IN`, ngồi xuống lại hay đứng dậy đều đặt bộ đếm về 0.
+- Xin sit-out mà bị bỏ qua **5 ván liên tiếp** → tự đứng dậy, trả stack về số dư (cùng đường với luật 3 lần hết giờ), phát `PLAYER_STOOD`. Bộ đếm về 0 khi **yêu cầu đổi** (`SIT_IN` sau `SIT_OUT`), khi ngồi xuống lại hoặc khi đứng dậy; gửi lại `SIT_OUT` chỉ được `ACK` và không đổi gì, nên không thể nạp lại bộ đếm để chiếm ghế mãi. Bộ đếm chỉ tăng theo **ván thực sự được chia**: ở bàn không đủ người để bắt đầu (2 ghế, 1 người sit-out) sẽ không có ván nào, nên ghế được giữ cho tới khi người đó rời hoặc phòng đóng vì trống.
 - Ready chỉ có ý nghĩa ở `OPEN`; khi ván bắt đầu tất cả ghế `READY` vào ván.
 
 ### 11.4 Host
@@ -723,6 +723,8 @@ Mọi message client → server có thể mang `reqId?`; server trả lại nó 
 | `ERROR` | `{ reqId?, code, message }` |
 | `SESSION_REPLACED` | — |
 | `PING` | — |
+
+`RoomView.players[]` (`RoomPlayerView`) = `{ playerId, displayName, isBot, isHost, connected, seat, status, sittingOut, stack, ready, cosmetics? }`. `status` là trạng thái ghế (mục 11.3, một giá trị, `IN_HAND` xếp trên `SITTING_OUT`); `sittingOut` là cờ sit-out riêng, độc lập với `status`, để client không phải suy ra yêu cầu sit-out từ một enum loại trừ nhau.
 
 ### 20.3 Mã lỗi
 `UNAUTHENTICATED, INVALID_MESSAGE, RATE_LIMITED, ROOM_NOT_FOUND, ROOM_FULL, WRONG_PASSWORD, INVALID_ROOM_CONFIG, NOT_HOST, SEAT_TAKEN, INSUFFICIENT_BALANCE, NOT_YOUR_TURN, ILLEGAL_ACTION, INVALID_AMOUNT, STALE_STATE, DUPLICATE_REQUEST, NOT_IN_HAND, NOT_IN_ROOM, ALREADY_IN_ROOM, NOT_SEATED, GAME_IN_PROGRESS, NOT_ENOUGH_PLAYERS, DISPLAY_NAME_TAKEN, SERVER_SHUTDOWN, INTERNAL`.
