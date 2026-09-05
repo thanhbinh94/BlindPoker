@@ -14,6 +14,8 @@ const BASE_URL = `http://127.0.0.1:${PORT}`
 export default defineConfig({
   testDir: '.',
   outputDir: './test-results',
+  // The hard-killed server leaves its run file behind; see global-teardown.ts.
+  globalTeardown: './global-teardown.ts',
   // One worker, one server, one SQLite file: the tests share an economy, so they must not race each other.
   fullyParallel: false,
   workers: 1,
