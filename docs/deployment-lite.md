@@ -224,6 +224,14 @@ Một tiến trình thứ hai dùng chung thư mục dữ liệu sẽ **từ ch�
 already running …") thay vì chiếm file, và `--smoke` không bao giờ ghi run file — nếu không, một
 lần kiểm tra nhanh sẽ làm server đang chạy mất đường tắt êm.
 
+Nhưng "pid còn sống" **không** đủ để kết luận: sau một lần tắt cứng, run file vẫn nằm đó và hệ điều
+hành có thể cấp lại đúng pid đó cho một tiến trình hoàn toàn khác, khi ấy bản mới sẽ bị chặn oan.
+Nên lúc khởi động, ngoài việc kiểm tra pid, server còn gọi `GET /api/config` vào đúng địa chỉ ghi
+trong file (host `0.0.0.0` thì hỏi qua loopback) và chỉ từ chối khi nhận được `edition: "lite"`
+trong vòng 1 giây; mọi trường hợp khác — không ai trả lời, trả lời chậm, trả lời không phải JSON,
+hay là một server khác — được coi là run file cũ: server ghi một dòng log `overwriting a stale
+bind-poker.run.json` kèm lý do rồi chạy bình thường.
+
 ### 6.3 Task Scheduler (khuyến nghị)
 
 ```powershell

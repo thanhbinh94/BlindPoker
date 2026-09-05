@@ -90,14 +90,67 @@ export function removeRunFile(path: string, owner: RunFileOwner): void {
 }
 
 /**
- * The instance that owns `path` right now, or `null` when the file is missing, unreadable, or names
- * a pid that no longer exists (the wreckage of a hard kill, which the next start may overwrite).
- *
- * `isAlive` is injected so a test can describe a live process without having one.
+ * The address a run file points at. The file records the *configured* listen address; a wildcard
+ * bind (or an empty one) is reached over the loopback, and a bare IPv6 literal needs its brackets.
  */
-export function liveInstanceAt(path: string, isAlive: (pid: number) => boolean = pidAlive): RunFile | null {
+export function runFileUrl(info: Pick<RunFile, 'host' | 'port'>): string {
+  const host = info.host === '0.0.0.0' || info.host === '::' || info.host === '' ? '127.0.0.1' : info.host
+  return `http://${host.includes(':') ? `[${host}]` : host}:${info.port}`
+}
+
+/** How long the start-up probe waits for the recorded address to identify itself. */
+export const PROBE_TIMEOUT_MS = 1000
+
+/** What a run file found on disk turns out to be worth. */
+export type RunFileClaim =
+  /** No file, or nothing that parses as one: the directory is free. */
+  | { state: 'vacant' }
+  /** A Lite instance answered at the recorded address. Starting here would fight it. */
+  | { state: 'held'; info: RunFile }
+  /** A file, but nothing of ours behind it. `why` is the one line the operator gets. */
+  | { state: 'stale'; info: RunFile; why: string }
+
+/**
+ * Who owns `path` right now.
+ *
+ * A live pid used to be the whole answer, and it was wrong in the one case the run file exists for:
+ * after a hard kill (`taskkill`, `sc stop`, the window's X) the file survives, and the operating
+ * system is free to hand that pid to anything at all — a browser, a build, the operator's shell.
+ * Then the next start refuses with "another instance is already running" and names a pid that has
+ * never heard of Bind Poker. So the pid is only the cheap first question; the deciding one is
+ * whether the *recorded address* still answers as Lite, which `GET /api/config` says outright
+ * (`edition: 'lite'` — the same field Normal answers `'normal'` to). Anything else within
+ * `PROBE_TIMEOUT_MS` — nothing listening, a stranger on the port, a slow or unparseable answer —
+ * makes the file wreckage, and wreckage gets overwritten.
+ *
+ * The two injectable seams keep the test honest: `isAlive` lets a test describe a live pid without
+ * having one, and the probe is the real `fetch` against a real listener.
+ */
+export async function claimRunFile(
+  path: string,
+  { isAlive = pidAlive, timeoutMs = PROBE_TIMEOUT_MS }: { isAlive?: (pid: number) => boolean; timeoutMs?: number } = {},
+): Promise<RunFileClaim> {
   const info = readRunFile(path)
-  return info !== null && isAlive(info.pid) ? info : null
+  if (info === null) return { state: 'vacant' }
+  if (!isAlive(info.pid)) return { state: 'stale', info, why: `pid ${info.pid} is gone` }
+
+  const url = `${runFileUrl(info)}/api/config`
+  let res: Response
+  try {
+    res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) })
+  } catch {
+    return { state: 'stale', info, why: `nothing answered at ${url} within ${timeoutMs} ms` }
+  }
+  if (!res.ok) return { state: 'stale', info, why: `${url} answered HTTP ${res.status}` }
+
+  let edition: unknown
+  try {
+    edition = ((await res.json()) as { edition?: unknown }).edition
+  } catch {
+    return { state: 'stale', info, why: `${url} did not answer JSON` }
+  }
+  if (edition !== 'lite') return { state: 'stale', info, why: `${url} is not a Bind Poker Lite instance` }
+  return { state: 'held', info }
 }
 
 /** True while the process exists. `EPERM` means it exists but belongs to somebody else. */
