@@ -1,4 +1,4 @@
-import { seededRng, type ActionKind, type RoomConfig, type ServerMessage } from '@bp/core'
+import { seededRng, type ActionKind, type Rng, type RoomConfig, type ServerMessage } from '@bp/core'
 import type { HandSummary } from '../repositories.js'
 import type { TestServer } from './harness.js'
 import { TestClient } from './test-client.js'
@@ -18,6 +18,13 @@ export interface SoakOptions {
   /** A floor, not a cap: every room keeps playing until the *last* room reaches it. */
   handsPerRoom: number
   mode: 'holdem' | 'blind'
+  /**
+   * Seeds one RNG stream *per seat* (`seed + seatIndex`), so a seat's decision sequence depends only
+   * on how many turns it has been given — not on the order the sockets happened to be served in.
+   * That makes the *policy* reproducible; the hands themselves are not bit-for-bit reproducible,
+   * because the server's own deck consumption follows whichever room reaches `startGame` first and
+   * the delays are real `setTimeout`s.
+   */
   seed: number
   /** Random think time before an action, to spread the load out. Omitted = act immediately. */
   actionDelayMs?: [min: number, max: number]
@@ -26,9 +33,16 @@ export interface SoakOptions {
 export interface SoakResult {
   /** Hands settled across every room, cancelled ones included. */
   hands: number
+  /**
+   * `HAND_COMPLETE`s counted per room from that room's own client stream, so §29.3's "20 hands
+   * *each*" is assertable rather than an aggregate that one busy room could satisfy alone.
+   */
+  handsPerRoomSeen: number[]
   cancelledHands: number
   /** Σ `HAND_SETTLED.summary.fee` — the domain events are the fee source of truth here. */
   fees: number
+  /** Σ fee over the *cancelled* summaries. A cancelled hand takes no rake, so this must be 0. */
+  cancelledFees: number
   /** Σ every sink row the repositories recorded (`table_fee` + `carry_over`). */
   sinks: number
   /** Σ `net` of every bot seat across every settled hand: points bots took off (or gave to) the humans. */
@@ -36,7 +50,9 @@ export interface SoakResult {
   startBalances: number
   /** Read after `shutdown()`, so every table stack and carry-over pot is back in a balance. */
   endBalances: number
-  actions: number
+  /** How many action → broadcast round trips were timed. Fewer than the actions sent: a seat whose
+   * turn timer beat it contributes no sample (the timer acted, not the client). */
+  latencySamples: number
   /** A frame whose `seq` was not exactly one past the previous one. Each gap costs one `RESYNC`. */
   seqGaps: number
   resyncs: number
@@ -59,9 +75,23 @@ function roomConfig(mode: 'holdem' | 'blind', seats: number): RoomConfig {
 /** `ERROR` codes the driver can provoke by racing the room's own state machine; not failures. */
 const TOLERATED = new Set(['GAME_IN_PROGRESS', 'SEAT_TAKEN', 'NOT_ENOUGH_PLAYERS'])
 
+/**
+ * The `seq` rule a soak client applies to every frame. Pulled out of the listener because a healthy
+ * run never takes the `gap` branch, so this is the only way it can have a test of its own
+ * (`soak.test.ts`, "the seq rule"): otherwise a mutation that stopped detecting gaps would still
+ * make the soak pass.
+ */
+export function seqVerdict(lastSeq: number, seq: number): 'apply' | 'duplicate' | 'gap' {
+  if (lastSeq < 0) return 'apply' // the first frame this client has seen: nothing to compare against
+  if (seq <= lastSeq) return 'duplicate' // a frame the RESYNC snapshot already accounted for
+  return seq === lastSeq + 1 ? 'apply' : 'gap'
+}
+
 interface Seat {
   id: string
   client: TestClient
+  /** This seat's own decision stream, seeded `opts.seed + index`: independent of socket ordering. */
+  rng: Rng
   room: number
   seat: number
   leader: boolean
@@ -80,7 +110,6 @@ export async function runSoak(server: TestServer, opts: SoakOptions): Promise<So
   const ids = [...server.repos.records.keys()].slice(0, opts.clients)
   if (ids.length < opts.clients) throw new Error(`the server seeds ${ids.length} players but the soak asked for ${opts.clients}`)
 
-  const rng = seededRng(opts.seed)
   const errors: string[] = []
   const tolerated: string[] = []
   const latencies: number[] = []
@@ -98,7 +127,7 @@ export async function runSoak(server: TestServer, opts: SoakOptions): Promise<So
     const client = await TestClient.connect(server.url)
     const welcome = await client.hello(`tok:${id}`)
     seats.push({
-      id, client, room: Math.floor(i / perRoom), seat: i % perRoom, leader: i % perRoom === 0,
+      id, client, rng: seededRng(opts.seed + i), room: Math.floor(i / perRoom), seat: i % perRoom, leader: i % perRoom === 0,
       seated: false, ready: false, status: 'OPEN', balance: welcome.balance, lastSeq: -1, pending: null, timers: [],
     })
   }
@@ -117,23 +146,27 @@ export async function runSoak(server: TestServer, opts: SoakOptions): Promise<So
   const later = (s: Seat, fn: () => void) => {
     const [min, max] = opts.actionDelayMs ?? [0, 0]
     if (max <= 0) return fn()
-    const t = setTimeout(fn, min + rng.int(Math.max(1, max - min + 1)))
+    const t = setTimeout(fn, min + s.rng.int(Math.max(1, max - min + 1)))
     s.timers.push(t)
   }
 
-  /** Play the legal action the server offered: check/call by default, fold `foldPct` of the time. */
-  const choose = (kinds: readonly ActionKind[]): ActionKind => {
+  /**
+   * Play the legal action the server offered: check/call by default, fold `foldPct` of the time.
+   * Draws from the *seat's* stream, so seat `i` facing its `n`-th decision always decides the same
+   * way for a given seed, whatever order the six sockets were served in.
+   */
+  const choose = (s: Seat, kinds: readonly ActionKind[]): ActionKind => {
     const foldPct = opts.mode === 'blind' ? 30 : 20 // blind: "play ~70 %"
-    if (kinds.includes('fold') && rng.int(100) < foldPct) return 'fold'
+    if (kinds.includes('fold') && s.rng.int(100) < foldPct) return 'fold'
     if (kinds.includes('check')) return 'check'
     if (kinds.includes('call')) return 'call'
     if (kinds.includes('play')) return 'play'
-    return 'fold'
+    return kinds[0] ?? 'fold' // never invent an action the server did not offer
   }
 
   const act = (s: Seat, kinds: readonly ActionKind[], baseSeq: number) => {
     if (stopped) return
-    const kind = choose(kinds)
+    const kind = choose(s, kinds)
     const reqId = `${s.id}-${actions++}`
     later(s, () => {
       if (stopped || !s.client.isOpen) return
@@ -159,6 +192,9 @@ export async function runSoak(server: TestServer, opts: SoakOptions): Promise<So
     if (m.t === 'GAME_EVENT') {
       const e = m.event
       if (e.type === 'TURN_CHANGED' && e.seat === s.seat) act(s, e.legal.kinds, m.seq)
+      // Blind's legal set is a literal, unlike the branch above: `DECISION_PHASE` is
+      // `{ seats, turnSeq }` (`packages/core/src/hand/types.ts`) and carries no `legal`, so there is
+      // nothing server-advertised to read. play/fold is the whole of §8.2's decision.
       else if (e.type === 'DECISION_PHASE' && e.seats.includes(s.seat)) act(s, ['play', 'fold'], m.seq)
       else if ((e.type === 'DECISION_MADE' && e.seat === s.seat) || (e.type === 'PLAYER_ACTED' && e.seat === s.seat)) {
         // A timed-out seat's PLAYER_ACTED is the timer's work, not ours: it is not a latency sample.
@@ -214,9 +250,9 @@ export async function runSoak(server: TestServer, opts: SoakOptions): Promise<So
     }
     if (m.t !== 'GAME_EVENT' && m.t !== 'ROOM_EVENT') return
     if (stopped) return
-    if (s.lastSeq < 0) s.lastSeq = m.seq - 1
-    if (m.seq <= s.lastSeq) return // a frame the RESYNC snapshot already accounted for
-    if (m.seq !== s.lastSeq + 1) {
+    const verdict = seqVerdict(s.lastSeq, m.seq)
+    if (verdict === 'duplicate') return
+    if (verdict === 'gap') {
       // §29.3 / docs "Wire contract": the client rebuilds from a snapshot rather than guessing.
       seqGaps += 1
       resyncs += 1
@@ -257,15 +293,18 @@ export async function runSoak(server: TestServer, opts: SoakOptions): Promise<So
   const summaries: HandSummary[] = server.domainEvents.flatMap((e) => (e.type === 'HAND_SETTLED' ? [e.summary] : []))
   const endBalances = (await Promise.all(ids.map((id) => server.repos.balances.get(id)))).reduce((s, x) => s + x, 0)
   const sorted = [...latencies].sort((a, b) => a - b)
+  const cancelled = summaries.filter((h) => h.cancelled)
   return {
     hands: summaries.length,
-    cancelledHands: summaries.filter((h) => h.cancelled).length,
+    handsPerRoomSeen: [...handsSeen],
+    cancelledHands: cancelled.length,
     fees: summaries.reduce((s, h) => s + h.fee, 0),
+    cancelledFees: cancelled.reduce((s, h) => s + h.fee, 0),
     sinks: server.repos.sinks.reduce((s, x) => s + x.fee, 0),
     botNet: summaries.flatMap((h) => h.players).filter((p) => p.isBot).reduce((s, p) => s + p.net, 0),
     startBalances,
     endBalances,
-    actions: latencies.length,
+    latencySamples: latencies.length,
     seqGaps,
     resyncs,
     p95ActionToBroadcastMs: percentile(sorted, 0.95),

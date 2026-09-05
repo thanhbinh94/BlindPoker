@@ -256,9 +256,16 @@ Rules for the client:
   with its old `baseSeq`: the turn has almost certainly moved and the
   server answers `STALE_STATE`. Re-send it with a fresh `baseSeq` taken
   from the new snapshot, only if the snapshot still shows it as your turn.
-  Re-sending with the *same* `reqId` is safe by construction — the gateway
-  replays the exact frame the first attempt produced, `ACK` or `ERROR`,
-  rather than executing it twice.
+  The `reqId` ring buffer is **per connection** (spec §16.4), so it does
+  not survive the reconnect: the new socket has no memory of the old
+  `reqId` and the retransmission is re-evaluated rather than replayed.
+  What keeps it from being applied twice is the `turnStartSeq` guard, not
+  the cache — an action for a turn that has moved on is refused with
+  `STALE_STATE`, and one for a seat that is no longer acting with
+  `NOT_YOUR_TURN`. So after a reconnect, expect an `ERROR` where the same
+  `reqId` on the *same* socket would have replayed its original `ACK`, and
+  treat the snapshot — not the answer to the retransmission — as the truth
+  about whether the action landed.
 - **Lobby.** `ROOM_LIST` broadcasts only go to connections that have asked
   for them; leaving a room does not re-subscribe you. Send `LIST_ROOMS`
   again after `LEAVE_ROOM` to start receiving the live list.
@@ -358,16 +365,31 @@ never bets or raises, and folds a fixed share of the time, which keeps each
 hand's exposure to about one big blind so nobody busts mid-run. Pass
 `actionDelayMs: [min, max]` for a random think time.
 
+**What `seed` buys you.** Each seat gets its own stream, `seededRng(seed + i)`,
+so a seat facing its *n*-th decision always decides the same way for a given
+seed — the policy no longer depends on the order the sockets happened to be
+served in. That is enough to make the committed Hold'em run reproducible end
+to end (same seed → same hand count, same fees, same closing balances). It is
+*not* a promise of bit-for-bit reproducibility in general: with bots in the
+room, or with `actionDelayMs` set, the server's own RNG is consumed in
+whatever order the rooms and the bot delays reach it, so the Blind run's hand
+outcomes still move between runs even though every human seat's decision
+sequence is fixed. Seed a failing run, and you replay the *clients*; you do
+not necessarily replay the cards.
+
 The run ends with `server.shutdown()`, so `endBalances` is read when every
 table stack and carry-over pot is back in a balance. `SoakResult` then reports:
 
 | Field | Meaning |
 |---|---|
 | `hands` / `cancelledHands` | Settled hands, from the `HAND_SETTLED` domain events |
+| `handsPerRoomSeen` | The same count broken out per room, so "20 hands *each*" is assertable |
 | `fees` | Σ `summary.fee` — the domain events are the fee source of truth |
+| `cancelledFees` | Σ `summary.fee` over the cancelled hands. A cancelled hand takes no rake, so assert `0` |
 | `sinks` | Σ every sink row the repositories recorded (`table_fee` + `carry_over`) |
 | `botNet` | Σ `net` of every bot seat: a bot's balance is virtual, so it is a term of its own |
 | `startBalances` / `endBalances` | Σ human balances, before the run and after the shutdown |
+| `latencySamples` | How many action → broadcast round trips were timed (a seat whose turn timer beat it contributes none) |
 | `seqGaps` / `resyncs` | Frames whose `seq` was not exactly one past the previous one, and the `RESYNC`s they cost |
 | `p95ActionToBroadcastMs` | p95 of `ACTION` sent → the `GAME_EVENT` carrying that seat's applied action (spec §24) |
 | `errors` / `tolerated` | `ERROR` frames, split into failures and the races the driver knowingly runs into |
@@ -375,7 +397,9 @@ table stack and carry-over pot is back in a balance. `SoakResult` then reports:
 The money identity to assert is
 `endBalances + botNet + sinks === startBalances`; with no bots and no
 carry-over (a Hold'em run) it reduces to `endBalances + fees ===
-startBalances`.
+startBalances`. Assert `cancelledFees === 0` alongside it: a fee wrongly
+charged on a cancelled hand lands in `fees`, in `sinks` and in the balance
+deduction alike, so the identity above holds straight through it.
 
 To run something bigger than the committed 6 × 3 × 20 — say 40 clients over
 10 rooms playing 200 hands each — edit the constants at the top of

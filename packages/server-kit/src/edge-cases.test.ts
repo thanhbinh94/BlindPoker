@@ -90,7 +90,13 @@ describe('§30 — host leaves mid-hand', () => {
     expect(changed.event).toMatchObject({ type: 'HOST_CHANGED', hostPlayerId: 'b' }) // b joined before c
     expect(room.hasPlayer('a')).toBe(false)
     expect(ts.repos.hands).toHaveLength(1)
-    expect(ts.repos.hands[0]!.cancelled).toBe(false)
+    const summary = ts.repos.hands[0]!
+    expect(summary.cancelled).toBe(false)
+    // A settled hand plus a mid-hand cash-out is exactly the path where points could leak, so the
+    // plan's money invariant is asserted here too: nothing is created, and the fee is the only sink.
+    expect(summary.players.reduce((t, p) => t + p.net, 0) + summary.fee).toBe(0)
+    const hostNet = summary.players.find((p) => p.playerId === 'a')!.net
+    expect(await ts.repos.balances.get('a')).toBe(100_000 + hostNet)
   })
 })
 
@@ -247,7 +253,10 @@ describe('§30 — a balance that changes while the player is at a table', () =>
     const room = ts.server.rooms.get(snap.room.roomId)!
     expect(room.players.get('a')!.stack).toBe(20_000)
 
-    // A daily reward lands while they are sitting there (§30, "balance thay đổi ngoài ván").
+    // A daily reward lands while they are sitting there (§30, "balance thay đổi ngoài ván"). The
+    // record is moved directly rather than through the ledger `apply` path a real reward would take:
+    // the ledger lives above server-kit, so what this row can pin at this layer is the effect of the
+    // resulting `balanceChanged` on the seat, not the crediting itself.
     ts.repos.records.get('a')!.balance = 85_000
     await ts.server.balanceChanged('a')
     expect((await a.next('BALANCE')).balance).toBe(85_000)
@@ -256,16 +265,28 @@ describe('§30 — a balance that changes while the player is at a table', () =>
 })
 
 describe('§30 — bots do not stand in for people', () => {
-  it('a human leaving a blind room is not replaced: the table keeps exactly botCount bots', async () => {
+  it('the seat a human vacates mid-hand stays empty: the table keeps exactly botCount bots', async () => {
     ts = await startTestServer({ players: [['a', 100_000], ['b', 100_000]] })
     const a = await connect('a')
     const b = await connect('b')
     const snap = await openRoom(a, [b], BLIND_BOT)
     const room = ts.server.rooms.get(snap.room.roomId)!
+    // The room seats its bot at the far end (`maxPlayers - 1`), so seats 0 and 1 are the humans'.
     expect(room.seatedBotCount).toBe(1)
+    await seatAndStart(a, [{ client: a, id: 'a' }, { client: b, id: 'b' }])
+    await b.next('GAME_EVENT', (m) => m.event.type === 'HAND_STARTED')
+    expect(room.players.get('b')!.seat).toBe(1)
 
+    // b walks out of the seat mid-hand. The risk the row names is the room backfilling seat 1.
     expect(await b.request({ t: 'LEAVE_ROOM', reqId: rid() })).toMatchObject({ t: 'ACK' })
-    await a.next('ROOM_EVENT', (m) => m.event.type === 'PLAYER_LEFT' && m.event.playerId === 'b')
+    const phase = await a.next('GAME_EVENT', (m) => m.event.type === 'DECISION_PHASE', 8_000)
+    if (phase.event.type === 'DECISION_PHASE' && phase.event.seats.includes(0)) {
+      await a.request({ t: 'ACTION', reqId: rid(), baseSeq: phase.seq, action: { kind: 'play' } })
+    }
+    await a.next('ROOM_EVENT', (m) => m.event.type === 'PLAYER_LEFT' && m.event.playerId === 'b', 8_000)
+
+    expect(room.hasPlayer('b')).toBe(false)
+    expect([...room.players.values()].filter((p) => p.seat === 1)).toEqual([]) // nobody moved in
     expect(room.seatedBotCount).toBe(1)
     expect([...room.players.values()].filter((p) => p.identity.isBot)).toHaveLength(1)
     expect(room.view().players.filter((p) => p.isBot).map((p) => p.playerId)).toEqual([`bot:${room.roomId}:0`])
@@ -291,13 +312,17 @@ describe('§30 — a bet outside the legal range', () => {
   })
 })
 
-describe('§30 — the same reqId sent again on a fresh socket', () => {
+describe('§30 — the same reqId sent again, on the same socket and on a fresh one', () => {
   /**
-   * The replay cache is per connection (`ClientConnection.rememberReq`), so a reconnect starts with
-   * an empty one and the retransmission is judged on its merits. What stops it being applied twice
-   * is the turn guard, not the cache: the turn has moved, so the action is refused.
+   * Spec §16.4: "Server nhớ 32 `reqId` gần nhất **mỗi kết nối**" — the ring buffer is a property of
+   * the connection (`ClientConnection.rememberReq`), not of the player or the session. So the two
+   * halves of the contract differ, and this test pins both:
+   *
+   * - on the *same* socket the cache answers, and the retransmission replays the original frame;
+   * - on a *fresh* socket the cache is gone, so the request is re-evaluated on its merits and the
+   *   `turnStartSeq` / turn guard refuses it — which is what keeps it from being applied twice.
    */
-  it('is re-evaluated rather than replayed, and the turn guard keeps it from acting twice', async () => {
+  it('replays on the connection that remembers it, and is re-evaluated — never re-applied — on a new one', async () => {
     ts = await startTestServer({ players: [['a', 100_000], ['b', 100_000]], roomOptions: { turnTimerMsOverride: 10_000 } })
     const a = await connect('a')
     const b = await connect('b')
@@ -311,38 +336,20 @@ describe('§30 — the same reqId sent again on a fresh socket', () => {
     expect(await actor.request({ t: 'ACTION', reqId: dup, baseSeq: turn.seq, action: { kind: 'call' } })).toMatchObject({ t: 'ACK' })
     await other.next('GAME_EVENT', (m) => m.event.type === 'PLAYER_ACTED' && m.event.seat === seat)
 
-    const back = await connect(actorId) // a fresh socket for the same player replaces the old one
+    // Same connection: the ring buffer still holds the reqId, so the original ACK comes back rather
+    // than the action being run a second time against a turn that has moved on.
+    expect(await actor.request({ t: 'ACTION', reqId: dup, baseSeq: turn.seq, action: { kind: 'call' } })).toMatchObject({ t: 'ACK', reqId: dup })
+
+    // Fresh connection for the same player: the buffer belonged to the socket that is now gone, so
+    // there is nothing to replay and the retransmission is judged on its merits — and refused.
+    const back = await connect(actorId)
     await back.next('ROOM_SNAPSHOT')
     const again = await back.request({ t: 'ACTION', reqId: dup, baseSeq: turn.seq, action: { kind: 'call' } })
     expect(again.t).toBe('ERROR')
     expect(['STALE_STATE', 'NOT_YOUR_TURN']).toContain(again.t === 'ERROR' ? again.code : '')
 
-    // One action, applied once: nothing was replayed into the hand.
+    // One action, applied once, across all three sends: neither path let it into the hand twice.
     const applied = other.received.filter((m) => m.t === 'GAME_EVENT' && m.event.type === 'PLAYER_ACTED' && m.event.seat === seat)
     expect(applied).toHaveLength(1)
-  })
-
-  // BUG: docs/server-kit.md ("Reconnecting and frame order" → "In-flight actions") promises that
-  // re-sending an ACTION with the same reqId after a reconnect "is safe by construction — the
-  // gateway replays the exact frame the first attempt produced". It does not: the ring buffer lives
-  // on `ClientConnection`, so a new socket has no memory of the reqId and the request is executed
-  // again. Nothing is applied twice today (the turn guard catches it, see the test above), but a
-  // client that trusts the documented promise would read an ERROR where it was told to expect its
-  // original ACK. Either the docs are wrong or the cache belongs on the session — a controller call,
-  // so the test that would prove the documented behaviour is left here, skipped.
-  it.skip('replays the original ACK for a reqId first sent on the previous socket', async () => {
-    ts = await startTestServer({ players: [['a', 100_000], ['b', 100_000]], roomOptions: { turnTimerMsOverride: 10_000 } })
-    const a = await connect('a')
-    const b = await connect('b')
-    await openRoom(a, [b], HOLDEM)
-    await seatAndStart(a, [{ client: a, id: 'a' }, { client: b, id: 'b' }], 20_000)
-    const turn = await a.next('GAME_EVENT', (m) => m.event.type === 'TURN_CHANGED')
-    const seat = turn.event.type === 'TURN_CHANGED' ? turn.event.seat : -1
-    const [actor, actorId] = seat === 0 ? [a, 'a'] : [b, 'b']
-    const dup = rid()
-    expect(await actor.request({ t: 'ACTION', reqId: dup, baseSeq: turn.seq, action: { kind: 'call' } })).toMatchObject({ t: 'ACK' })
-    const back = await connect(actorId)
-    await back.next('ROOM_SNAPSHOT')
-    expect(await back.request({ t: 'ACTION', reqId: dup, baseSeq: turn.seq, action: { kind: 'call' } })).toMatchObject({ t: 'ACK', reqId: dup })
   })
 })

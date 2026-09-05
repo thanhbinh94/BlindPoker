@@ -40,7 +40,7 @@ Paths are relative to the repository root. Test names are the `it(...)` titles; 
 
 | Requirement (§29.3) | Test file | Test name | Status |
 |---|---|---|---|
-| 6 client × 3 phòng × 20 ván song song; tổng điểm và không có `seq` hụt | `packages/server-kit/src/soak.test.ts` | multiplayer soak (§29.3) › hold'em: 6 clients over 3 rooms play 20 hands each with no seq gaps and no points created or lost · blind: the same run against one bot per room conserves points across balances, fees and bot nets | added in Plan 7 |
+| 6 client × 3 phòng × 20 ván song song; tổng điểm và không có `seq` hụt | `packages/server-kit/src/soak.test.ts` | multiplayer soak (§29.3) › hold'em: 6 clients over 3 rooms play 20 hands each with no seq gaps and no points created or lost · blind: the same run against one bot per room conserves points across balances, fees and bot nets · the seq rule the soak clients apply › accepts the next frame, ignores one the snapshot already covered, and calls a hole a gap (the gap detector's positive control — a healthy run never takes that branch) | added in Plan 7 |
 
 ## §30 — Edge cases
 
@@ -51,7 +51,7 @@ Paths are relative to the repository root. Test names are the `it(...)` titles; 
 | Host rời → chuyển host người vào sớm nhất; nếu đang ván, ván tiếp tục | `packages/server-kit/src/edge-cases.test.ts` | §30 — host leaves mid-hand › the hand plays on without them, and the host passes to the earliest joiner once it ends | added in Plan 7 |
 | Phòng trống → xóa sau 60 giây; pot cộng dồn chia theo §8.4 | `packages/server-kit/src/room/room.test.ts`, `packages/server-kit/src/room/room-hands.test.ts` | join: password, capacity net of seated bots, duplicates; leave: host transfer and empty-room close · sinks the whole carry-over pot when the room closes with nobody seated · releases a carry-over pot to the seated humans once the room cannot start a hand for carryOverReleaseMs | covered |
 | Phòng đầy → `ROOM_FULL` | `packages/server-kit/src/room/room.test.ts` | join: password, capacity net of seated bots, duplicates; … | covered |
-| Action trùng → `reqId` trả lại kết quả cũ | `packages/server-kit/src/gateway/gateway.test.ts`, `packages/server-kit/src/edge-cases.test.ts` | hold'em between two clients › … duplicates … · replays the original ERROR when a failed request is retransmitted with the same reqId · §30 — the same reqId sent again on a fresh socket › is re-evaluated rather than replayed, and the turn guard keeps it from acting twice | covered + added in Plan 7 |
+| Action trùng → `reqId` trả lại kết quả cũ | `packages/server-kit/src/gateway/gateway.test.ts`, `packages/server-kit/src/edge-cases.test.ts` | hold'em between two clients › … duplicates … · replays the original ERROR when a failed request is retransmitted with the same reqId · §30 — the same reqId sent again, on the same socket and on a fresh one › replays on the connection that remembers it, and is re-evaluated — never re-applied — on a new one | covered + added in Plan 7 |
 | Action sai lượt → `NOT_YOUR_TURN` | `packages/server-kit/src/gateway/gateway.test.ts`, `packages/server-kit/src/room/room-hands.test.ts` | hold'em between two clients › enforces turn order … · rejects stale, out-of-turn, illegal and non-seated actions with the right codes | covered |
 | Cược sai → `INVALID_AMOUNT` kèm min/max hợp lệ | `packages/server-kit/src/edge-cases.test.ts` | §30 — a bet outside the legal range › is refused as INVALID_AMOUNT and the message names the bounds that would have worked | added in Plan 7 |
 | Timeout → check/fold (Hold'em), fold (Blind B); 3 lần liên tiếp → đứng dậy | `packages/core/src/hand/holdem.test.ts`, `packages/core/src/hand/blind.test.ts`, `packages/server-kit/src/room/room-hands.test.ts` | timeout checks when possible, otherwise folds · timeout counts as fold · three consecutive timeouts stand a player up after the hand; a lone seat returns the room to OPEN | covered |
@@ -64,7 +64,7 @@ Paths are relative to the repository root. Test names are the `it(...)` titles; 
 | Tiến trình thứ hai trên cùng thư mục dữ liệu | `apps/lite/test/smoke.test.ts`, `apps/lite/server/src/app.test.ts` | refuses to start, and leaves the running instance able to stop itself · is left completely alone by a smoke-style app, which is given no path | covered |
 | WS lỗi giữa gửi → client backoff reconnect, RESYNC | `packages/ui-kit/src/client/connection.test.ts`, `packages/ui-kit/src/client/reducer.test.ts` | reconnects with exponential backoff, re-sends HELLO, stops on SESSION_REPLACED and on disconnect() · WELCOME → RESYNC → snapshot restores the room we were already sitting in · a game event with no hand advances seq and sets resyncNeeded | covered |
 | Race giữa timer và action đến cùng lúc → hàng đợi tuần tự; timer kiểm `handId` + `turnSeq` | `packages/server-kit/src/edge-cases.test.ts`, `packages/server-kit/src/room/hand-runner.test.ts` | §30 — a timer and an action arriving together › applies exactly one of them, whichever reached the queue first, and drops the other · a stale decision timer is ignored once the phase resolved | added in Plan 7 |
-| Bot thay người → không thay; bot chỉ theo `botCount` | `packages/server-kit/src/edge-cases.test.ts` | §30 — bots do not stand in for people › a human leaving a blind room is not replaced: the table keeps exactly botCount bots | added in Plan 7 |
+| Bot thay người → không thay; bot chỉ theo `botCount` | `packages/server-kit/src/edge-cases.test.ts` | §30 — bots do not stand in for people › the seat a human vacates mid-hand stays empty: the table keeps exactly botCount bots | added in Plan 7 |
 | Người rời giữa ván Hold'em có cược trong pot → fold; cược ở lại pot | `packages/server-kit/src/edge-cases.test.ts` | §30 — leaving a hold'em hand with chips already in the pot › folds the seat and leaves the chips where they are: the leaver is never refunded | added in Plan 7 |
 | Người thiếu blind → all-in phần có | `packages/server-kit/src/edge-cases.test.ts` | §30 — a player who cannot cover the blind › posts what they have and is all-in for it, and the hand still balances | added in Plan 7 |
 | Tất cả fold ở Blind B → cộng dồn | `packages/core/src/hand/blind.test.ts`, `packages/server-kit/src/room/room-hands.test.ts` | everyone folds → pot carries over, no fee · carries the pot over when everyone folds and pays it out in a later hand | covered |
@@ -85,14 +85,26 @@ Paths are relative to the repository root. Test names are the `it(...)` titles; 
 Nothing is left with no test at all. The one *partly* covered row is the Lite hard kill,
 where the row's own subject is what happens when no code runs.
 
-## Known gap left for a ruling
+## Ruling recorded: the `reqId` cache is per connection
 
-`packages/server-kit/src/edge-cases.test.ts` carries one `it.skip` marked `BUG:`. It
-asserts what `docs/server-kit.md` promises under *Reconnecting and frame order →
-In-flight actions*: that re-sending an `ACTION` with the same `reqId` after a reconnect
-replays the exact frame the first attempt produced. It does not — the replay ring buffer
-lives on `ClientConnection`, so a fresh socket has no memory of the `reqId` and the
-request is executed again. Nothing is applied twice today (the `turnStartSeq` guard
-refuses it), which the sibling test pins; but a client that trusts the documented promise
-would read an `ERROR` where it expects its original `ACK`. Either the documentation or the
-cache's lifetime needs to change; that is not a test's call to make.
+Plan 7's first review round raised the `reqId` ring buffer as an open question, with a
+`BUG:`-skipped test attached. It has been ruled on, and the skip is gone.
+
+The **spec is the authority and the gateway already matches it**: §16.4 says the server
+remembers the last 32 `reqId`s *per connection* (`ClientConnection.rememberReq`). So
+
+- on the **same** socket, a retransmission replays the exact frame the first attempt
+  produced — an `ACK` stays an `ACK`, an `ERROR` stays the same `ERROR`;
+- on a **fresh** socket after a reconnect, the buffer is gone with the old connection, so
+  the retransmission is re-evaluated on its merits and the `turnStartSeq` / turn guard
+  refuses it (`STALE_STATE` or `NOT_YOUR_TURN`). It is never applied twice.
+
+What was wrong was `docs/server-kit.md`'s *Reconnecting and frame order → In-flight
+actions* paragraph, which promised the replay across the reconnect. That paragraph now
+states the per-connection contract, tells the client to expect an `ERROR` on the new
+socket, and points it at the snapshot rather than the answer to the retransmission for
+the truth about whether the action landed.
+
+Both halves are now pinned by one live test — `§30 — the same reqId sent again, on the
+same socket and on a fresh one` — which also asserts exactly one `PLAYER_ACTED` across all
+three sends. **No test in this matrix is skipped.**
