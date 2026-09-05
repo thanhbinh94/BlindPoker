@@ -415,8 +415,9 @@ view, seat count (4/6/9), theme, language, forced stack layout, and "next hand".
   red badge in the dark theme. One token cannot fix it: on `#0b1020` an ink needs a luminance above ~0.20 to reach
   4.5:1, while the same token used as a fill under `--red-ink` needs one below ~0.17. Closing it means splitting
   the token the way `--teal` / `--teal-fill` already are, which is a palette change across `ui-kit`, `lite-web`
-  and `normal-web`. The four pairs are on record in `tokens.test.ts` (`BELOW_AA`), which fails if any of them gets
-  worse — or if one is fixed and its line is left behind.
+  and `normal-web`. The same defect repeats on `.panel.felt`'s own `--bg` (`#0c2226`, darker than the theme's
+  `#0b1020`), at **3.1:1**. The five pairs are on record in `tokens.test.ts` (`BELOW_AA`), which fails if any of
+  them gets worse — or if one is fixed and its line is left behind.
 - A badge is ink on its own tint (`--gold` on `--gold-soft`, and the same for red and teal), which lands near
   4.1–4.4:1 rather than 4.5:1. The contrast test covers flat token pairs only; the composited tints are not
   asserted. The alert in `lobby.module.css` already avoids the pattern by keeping `--ink` text and letting the

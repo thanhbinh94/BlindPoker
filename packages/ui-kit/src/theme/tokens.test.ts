@@ -111,6 +111,9 @@ const FELT_PAIRS: readonly (readonly [string, string, string])[] = [
  * closing this means splitting the token the way `--teal` / `--teal-fill` already are, and that is a
  * palette change across three packages rather than a token tweak. Tracked in `docs/ui-kit.md`.
  *
+ * `.panel.felt` (`primitives.module.css`) re-declares its own `--bg` (`#0c2226`, not `#0b1020`) and
+ * is the same defect on a darker ground, which pushes it lower still — 3.13:1 rather than 3.59.
+ *
  * The entries are asserted in both directions: a pair that gets worse fails, and so does one that is
  * fixed — fix it and delete its line.
  */
@@ -119,6 +122,17 @@ const BELOW_AA: Record<string, number> = {
   'dark --red on --bg-elev': 3.22,
   'night --red on --bg': 3.59,
   'night --red on --bg-elev': 3.22,
+  '.panel.felt --red on --bg': 3.13,
+}
+
+/**
+ * The palettes `BELOW_AA` keys can point into: the three theme palettes by name, plus each island
+ * that re-declares its own tokens locally (keyed by its selector, exactly as `tokensOf` returns it —
+ * a plain space-split still isolates the selector as the first field, dots and all).
+ */
+const ALL_PALETTES: Record<string, Record<string, string>> = {
+  ...PALETTES,
+  '.panel.felt': tokensOf(PRIMITIVES_CSS, /^\.panel\.felt$/),
 }
 
 describe('theme contrast', () => {
@@ -148,8 +162,7 @@ describe('theme contrast', () => {
    * A handful of components are printed paper whatever the page is doing — a room ticket, a light
    * panel — and re-declare the light inks locally on a paper gradient of their own. The theme test
    * cannot see those blocks, but the ink on them is the same ink and has to clear AA on the darker
-   * end of the paper. (`.panel.felt` is the mirror image and repeats the night palette, which the
-   * pairs above already cover.)
+   * end of the paper.
    */
   it('keeps the parchment islands at AA on the darker end of their paper', () => {
     const PAPER = '#f0e9d9' // the last stop of `linear-gradient(172deg, #fbf7ee 0%, #f0e9d9 100%)`
@@ -168,10 +181,32 @@ describe('theme contrast', () => {
     }
   })
 
+  /**
+   * `.panel.felt` (`primitives.module.css`) is the night mirror of the parchment islands: it
+   * re-declares its own `--bg` (`#0c2226`, not the theme's `#0b1020`) and `--ink-muted`
+   * (`#a3bab5`, not `#9aa4c0`) so the felt stays night-side under either theme — but that means the
+   * `night` palette's pairs, asserted against `#0b1020` above, do not actually cover it. Same loop,
+   * against its own ground instead of a theme's.
+   */
+  it('keeps the night island at AA on its own felt', () => {
+    const tokens = tokensOf(PRIMITIVES_CSS, /^\.panel\.felt$/)
+    expect(Object.keys(tokens).length, '.panel.felt declares a palette').toBeGreaterThan(3)
+    const bg = tokens['--bg']!
+    for (const ink of ['--ink', '--ink-muted', '--gold', '--red', '--teal']) {
+      const hex = tokens[ink]
+      if (hex === undefined) continue // the island only re-declares what it actually spends
+      const key = `.panel.felt ${ink} on --bg`
+      if (key in BELOW_AA) continue
+      const ratio = contrast(hex, bg)
+      expect(ratio, `${key} — ${hex} on ${bg} is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA)
+    }
+  })
+
   it('still fails on exactly the pairs on record, and no worse than recorded', () => {
     for (const [key, recorded] of Object.entries(BELOW_AA)) {
-      const [name, fg, , bg] = key.split(' ') as [keyof typeof PALETTES, string, string, string]
-      const ratio = contrast(PALETTES[name][fg]!, PALETTES[name][bg]!)
+      const [name, fg, , bg] = key.split(' ') as [string, string, string, string]
+      const palette = ALL_PALETTES[name]!
+      const ratio = contrast(palette[fg]!, palette[bg]!)
       expect(ratio, `${key} reaches AA now — delete its line from BELOW_AA`).toBeLessThan(AA)
       expect(ratio, `${key} got worse than the ${recorded}:1 on record`).toBeGreaterThanOrEqual(recorded - 0.005)
     }

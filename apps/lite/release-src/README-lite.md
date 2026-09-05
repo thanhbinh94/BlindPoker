@@ -75,7 +75,9 @@ cũng không bao giờ đụng tới file đó, nên kiểm tra nhanh lúc serve
 chỉ dừng lại khi **hỏi đúng địa chỉ trong file và nhận được câu trả lời của một server Lite**; nếu
 file chỉ là dấu vết của một lần tắt cứng (không ai trả lời ở đó nữa) thì server ghi một dòng
 `overwriting a stale bind-poker.run.json` rồi chạy tiếp — bạn không bị chặn oan vì Windows tình cờ
-cấp lại pid cũ cho một chương trình khác.
+cấp lại pid cũ cho một chương trình khác. Nhưng nếu địa chỉ đó không trả lời gì trong 1 giây rồi thử
+lại vẫn vậy — có thể là một bản đang chạy nhưng bận, chứ không hẳn đã chết — bản mới sẽ **từ chối
+khởi động** thay vì đoán bừa, và báo bạn chạy `--stop` hoặc kiểm tra lại cổng đang dùng.
 
 Quy tắc vận hành: **luôn chạy `--stop` trước khi cập nhật, khởi động lại hoặc tắt máy.**
 

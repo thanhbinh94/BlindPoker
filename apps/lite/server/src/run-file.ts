@@ -109,6 +109,47 @@ export type RunFileClaim =
   | { state: 'held'; info: RunFile }
   /** A file, but nothing of ours behind it. `why` is the one line the operator gets. */
   | { state: 'stale'; info: RunFile; why: string }
+  /**
+   * The pid is alive and the recorded address neither refused the connection nor answered, on two
+   * tries. That is not proof of anything — a live instance too busy to answer for a couple of
+   * seconds looks identical from here to nothing being there at all — so this is not `stale`
+   * (overwriting would risk fighting a live server on the port it already holds) and not `held`
+   * (nothing actually answered as Lite). `why` is the one line the operator gets.
+   */
+  | { state: 'unreachable'; info: RunFile; why: string }
+
+/**
+ * The `code` on a failed `fetch`, walking into `.cause` where undici nests the real `node:net`
+ * error (a rejected `fetch` is itself a generic `TypeError: fetch failed`).
+ */
+function errorCode(err: unknown): string | undefined {
+  const direct = err !== null && typeof err === 'object' ? (err as { code?: unknown }).code : undefined
+  if (typeof direct === 'string') return direct
+  const cause = err !== null && typeof err === 'object' ? (err as { cause?: unknown }).cause : undefined
+  const nested = cause !== null && typeof cause === 'object' ? (cause as { code?: unknown }).code : undefined
+  return typeof nested === 'string' ? nested : undefined
+}
+
+/**
+ * `true` only when the rejection *proves* nothing is listening at the address — a refused
+ * connection, or a host name that does not resolve. Every other failure (the probe's own
+ * `AbortSignal.timeout` firing, a reset mid-response, …) is silence, not evidence: a live instance
+ * whose event loop is busy for a moment looks exactly the same.
+ */
+function isConclusivelyGone(err: unknown): boolean {
+  const code = errorCode(err)
+  return code === 'ECONNREFUSED' || code === 'ENOTFOUND'
+}
+
+type ProbeOutcome = { kind: 'ok'; res: Response } | { kind: 'refused' } | { kind: 'timeout' }
+
+async function probeOnce(url: string, timeoutMs: number): Promise<ProbeOutcome> {
+  try {
+    return { kind: 'ok', res: await fetch(url, { signal: AbortSignal.timeout(timeoutMs) }) }
+  } catch (err) {
+    return { kind: isConclusivelyGone(err) ? 'refused' : 'timeout' }
+  }
+}
 
 /**
  * Who owns `path` right now.
@@ -119,9 +160,15 @@ export type RunFileClaim =
  * Then the next start refuses with "another instance is already running" and names a pid that has
  * never heard of Bind Poker. So the pid is only the cheap first question; the deciding one is
  * whether the *recorded address* still answers as Lite, which `GET /api/config` says outright
- * (`edition: 'lite'` — the same field Normal answers `'normal'` to). Anything else within
- * `PROBE_TIMEOUT_MS` — nothing listening, a stranger on the port, a slow or unparseable answer —
- * makes the file wreckage, and wreckage gets overwritten.
+ * (`edition: 'lite'` — the same field Normal answers `'normal'` to).
+ *
+ * The probe's two failure shapes are not the same evidence. A refused connection (or a name that
+ * does not resolve) is conclusive — nothing is there, so the file is wreckage and gets overwritten.
+ * A timeout is only the absence of an answer within `PROBE_TIMEOUT_MS`, which a live instance can
+ * produce too if it is briefly too busy to reply; taken as proof, it would make the guard weaker
+ * than the pid-only check it replaced. So a timeout earns one retry with the same budget, and only
+ * if *that* also times out does this give up — not by overwriting, but by refusing to start at all,
+ * leaving the decision to the operator (`--stop`, or check what else is on the port).
  *
  * The two injectable seams keep the test honest: `isAlive` lets a test describe a live pid without
  * having one, and the probe is the real `fetch` against a real listener.
@@ -135,12 +182,20 @@ export async function claimRunFile(
   if (!isAlive(info.pid)) return { state: 'stale', info, why: `pid ${info.pid} is gone` }
 
   const url = `${runFileUrl(info)}/api/config`
-  let res: Response
-  try {
-    res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) })
-  } catch {
-    return { state: 'stale', info, why: `nothing answered at ${url} within ${timeoutMs} ms` }
+
+  let outcome = await probeOnce(url, timeoutMs)
+  if (outcome.kind === 'timeout') outcome = await probeOnce(url, timeoutMs)
+
+  if (outcome.kind === 'refused') return { state: 'stale', info, why: `connection refused at ${url} — nothing is listening there` }
+  if (outcome.kind === 'timeout') {
+    return {
+      state: 'unreachable',
+      info,
+      why: `${url} did not identify itself within ${timeoutMs} ms, twice in a row`,
+    }
   }
+
+  const res = outcome.res
   if (!res.ok) return { state: 'stale', info, why: `${url} answered HTTP ${res.status}` }
 
   let edition: unknown

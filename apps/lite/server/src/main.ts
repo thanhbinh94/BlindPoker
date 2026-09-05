@@ -154,6 +154,9 @@ function startupHint(err: unknown, config: LiteConfig | null): string | null {
   if (message.startsWith('another instance is already running')) {
     return 'stop the running one first: bind-poker-lite.exe --stop (or point SQLITE_PATH at a folder of its own)'
   }
+  if (message.startsWith('the recorded run-file instance')) {
+    return 'run bind-poker-lite.exe --stop, or check what else is listening on the port (netstat -ano | findstr :<port>) before starting again'
+  }
   if (/^(PORT|LOG_LEVEL|ECONOMY_TIMEZONE|RECONNECT_WINDOW_SEC)\b/.test(message)) return 'fix the value in the .env file next to the executable, then start again'
   return null
 }
@@ -222,6 +225,12 @@ async function main(): Promise<void> {
     const claim = await claimRunFile(runFilePath)
     if (claim.state === 'held') {
       throw new Error(`another instance is already running (pid ${claim.info.pid}, ${runFileUrl(claim.info)}) and owns ${runFilePath}`)
+    }
+    if (claim.state === 'unreachable') {
+      // Neither `held` (nothing actually answered as Lite) nor `stale` (a timeout is not proof
+      // nothing is there) — refuse rather than guess, so a live-but-busy instance is never
+      // overwritten. Distinct wording from the `held` message above: `startupHint` matches on it.
+      throw new Error(`the recorded run-file instance (pid ${claim.info.pid}, ${runFileUrl(claim.info)}) ${claim.why}`)
     }
     if (claim.state === 'stale') {
       log.warn(`overwriting a stale ${RUN_FILE_NAME}`, { path: runFilePath, pid: claim.info.pid, address: runFileUrl(claim.info), why: claim.why })

@@ -182,17 +182,18 @@ describe('claimRunFile', () => {
 
   /**
    * The case the probe exists for: a hard kill left the file behind and the operating system handed
-   * that pid to something else entirely. Nothing answers where the file says a server was, so the
-   * file is wreckage — refusing to start here would lock the operator out of their own machine.
+   * that pid to something else entirely. Nothing is listening where the file says a server was — a
+   * refused connection is conclusive, so no retry is spent on it — and the file is wreckage:
+   * refusing to start here would lock the operator out of their own machine.
    */
-  it('is stale when the recorded pid is alive but nothing answers at the recorded address', async () => {
+  it('is stale when the recorded pid is alive but the recorded address refuses the connection', async () => {
     const path = join(tempDir(), RUN_FILE_NAME)
     writeRunFile(path, { ...INFO, port: await deadPort() })
 
     const claim = await claimRunFile(path, alive)
 
     expect(claim.state).toBe('stale')
-    expect(claim.state === 'stale' && claim.why).toMatch(/nothing answered/)
+    expect(claim.state === 'stale' && claim.why).toMatch(/connection refused/)
   })
 
   it('is held when the recorded address answers as Lite — a wildcard bind reached over the loopback', async () => {
@@ -228,10 +229,16 @@ describe('claimRunFile', () => {
     expect(claim.state === 'stale' && claim.why).toMatch(/did not answer JSON/)
   })
 
-  it('gives up on a listener that never answers rather than hanging the start-up', async () => {
+  /**
+   * A timeout is not proof of anything — a live instance too busy to answer for a moment looks the
+   * same as nothing being there — so one retry is spent before giving up, and giving up here means
+   * *refusing to start* rather than declaring the file stale and overwriting a possibly-live server.
+   */
+  it('refuses to start, rather than hanging or overwriting, when the address times out twice in a row', async () => {
     const path = join(tempDir(), RUN_FILE_NAME)
+    let hits = 0
     const server = createServer(() => {
-      /* accept the request and say nothing at all — a wedged process, or a stranger on the port */
+      hits += 1 // accept the request and say nothing at all — a wedged process, or a stranger on the port
     })
     servers.push(server)
     await new Promise<void>((done) => server.listen(0, '127.0.0.1', done))
@@ -240,7 +247,9 @@ describe('claimRunFile', () => {
     const started = Date.now()
     const claim = await claimRunFile(path, { isAlive: () => true, timeoutMs: 150 })
 
-    expect(claim.state).toBe('stale')
+    expect(claim.state).toBe('unreachable')
+    expect(claim.state === 'unreachable' && claim.why).toMatch(/did not identify itself.*twice/)
+    expect(hits, 'the probe should have retried once after the first timeout').toBe(2)
     expect(Date.now() - started).toBeLessThan(2000)
   })
 
