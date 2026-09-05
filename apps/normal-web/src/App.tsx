@@ -12,7 +12,8 @@ import { useTranslation } from 'react-i18next'
 import type { NormalApi } from './api.js'
 import { Avatar } from './avatar/Avatar.js'
 import a from './avatar/avatar.module.css'
-import { useAvatars } from './avatar/useAvatars.js'
+import { resetAvatarCache, useAvatars } from './avatar/useAvatars.js'
+import { guardApi } from './guarded-api.js'
 import { mapNotifications } from './notifications.js'
 import { useLanguagePref } from './prefs.js'
 import { AuthScreen, type AuthMode } from './screens/AuthScreen.js'
@@ -31,11 +32,13 @@ export const NORMAL_VERSION = typeof __NORMAL_VERSION__ === 'string' ? __NORMAL_
 /**
  * The six account screens, split out of the entry bundle.
  *
- * They are the right things to split and the lobby is not: a player reaches the lobby on every visit and the
- * wardrobe on some of them, and between them the six carry the whole item catalogue's vector library, the
- * stats tables, the ledger and the month's calendar. Splitting them keeps the first paint — the sign-in card
- * and the lobby — small on the phone connection this game is mostly played on, and each screen then costs one
- * request, once.
+ * They are the right things to split and the lobby is not: a player reaches the lobby on every visit, these
+ * on some visits and several of them never. Between them they carry the stats tables, the ledger, the
+ * month's calendar, the achievement list and the wardrobe's thumbnail renderer — none of which the sign-in
+ * card or the lobby has any use for. (The avatar *parts* are not among them: the lobby bar and the seat
+ * plates draw faces, so `avatar/parts.tsx` belongs in the entry chunk and ships there.) Splitting these six
+ * keeps the first paint small on the phone connection this game is mostly played on, and each screen then
+ * costs one request, once.
  */
 const ProfileScreen = lazy(async () => ({ default: (await import('./screens/ProfileScreen.js')).ProfileScreen }))
 const AvatarScreen = lazy(async () => ({ default: (await import('./screens/AvatarScreen.js')).AvatarScreen }))
@@ -84,8 +87,26 @@ export function App({ api, socketFactory }: AppProps) {
   const clientRef = useRef(client)
   clientRef.current = client
 
-  const disconnect = useCallback(() => clientRef.current.disconnect(), [])
-  const gate = useSessionGate({ api, socketStatus: client.state.status, onEnded: disconnect })
+  // Everything a session leaves behind, dropped in one place — however the session ended (a sign-out, an
+  // expiry, a 401 from a screen). The socket first, then the state it filled: the reducer outlives the
+  // session, so without the reset the next player on this machine is greeted with the previous one's name
+  // and points. The avatar cache is module-level for the same reason and forgets the same way.
+  const endSession = useCallback(() => {
+    clientRef.current.disconnect()
+    clientRef.current.reset()
+    resetAvatarCache()
+  }, [])
+  const gate = useSessionGate({ api, socketStatus: client.state.status, onEnded: endSession })
+
+  // The api every signed-in screen gets: the same one, with "the session is gone" handled once (see
+  // `guarded-api.ts`). The gate itself and the sign-in card keep the raw `api` — the boot probe's 401 is an
+  // ordinary "no session yet", and the card's is a wrong password.
+  //
+  // Keyed on the account as well as on the callback: the wrapper signs the player out at most once, so the
+  // next session needs a wrapper of its own to be able to do it again.
+  const gateId = gate.me?.playerId ?? null
+  const { onUnauthenticated } = gate
+  const guarded = useMemo(() => guardApi(api, onUnauthenticated), [api, onUnauthenticated, gateId])
 
   // The socket follows the gate, and only the gate: one effect, whether the session arrived from the boot
   // probe or from the sign-in card. `autoConnect` is off precisely so this stays the only place it opens.
@@ -113,16 +134,22 @@ export function App({ api, socketFactory }: AppProps) {
 
   const onMode = useCallback((mode: AuthMode) => navigate(mode === 'register' ? '/register' : '/login'), [navigate])
 
+  // Who I am, and the order matters: the *gate* is the current session, the socket is whoever the last
+  // `WELCOME` named. They agree for all but a moment — the moment being a sign-out followed by a sign-in in
+  // the same tab, where the socket's answer is the account that just left.
+  const myId = gate.me?.playerId ?? client.state.me?.playerId ?? null
+
   // Whose face this app needs: everyone at the table, plus my own for the lobby bar. Bots are filtered out
   // here rather than inside the cache — they have no account, so their id would be a guaranteed 404 apiece.
-  // `state.me` only exists after `WELCOME`; the boot probe already knows who I am, so the lobby does not wait.
-  const myId = client.state.me?.playerId ?? gate.me?.playerId ?? null
+  // Signed out there is nobody to draw: an id left in this list would go on being re-fetched behind the
+  // sign-in card, once per TTL, every one of them a 401.
   const seatedIds = client.state.room?.players
   const watched = useMemo(() => {
+    if (!gate.signedIn || myId === null) return []
     const ids = (seatedIds ?? []).filter((p) => !p.isBot).map((p) => p.playerId)
-    return myId === null ? ids : [myId, ...ids]
-  }, [myId, seatedIds])
-  const { avatars } = useAvatars(api, watched)
+    return [myId, ...ids]
+  }, [gate.signedIn, myId, seatedIds])
+  const { avatars } = useAvatars(guarded, watched)
   const avatarFor = useMemo(() => makeAvatarFor(avatars), [avatars])
   const captionFor = useMemo(() => makeCaptionFor(avatars, t), [avatars, t])
   const myAvatar = myId === null ? null : (avatars.get(myId)?.avatar ?? null)
@@ -132,10 +159,28 @@ export function App({ api, socketFactory }: AppProps) {
   // their own `Toasts` out of `client.state`, so the translation is done once here — on the list the client
   // hands them — rather than twice, on two screens this app does not own.
   const notifications = useMemo(() => mapNotifications(client.state.notifications, t), [client.state.notifications, t, lang])
-  const viewClient = useMemo(
-    () => (notifications === client.state.notifications ? client : { ...client, state: { ...client.state, notifications } }),
-    [client, notifications],
+
+  // The socket's identity is usable only while it agrees with the gate's. It disagrees for exactly one
+  // window — a sign-out followed by a sign-in in the same tab, until the new socket's `WELCOME` — and in that
+  // window it is the *previous* account, so the lobby bar would greet the new player by the old player's name
+  // with the old player's points. Where the two disagree the gate wins, and the balance is the one the boot
+  // probe or the sign-in response read.
+  const socketMe = client.state.me
+  const gateMe = gate.me
+  const sameAccount = gateMe !== null && socketMe !== null && socketMe.playerId === gateMe.playerId
+  const viewMe = useMemo(
+    () => (sameAccount ? socketMe : gateMe === null ? null : { playerId: gateMe.playerId, displayName: gateMe.displayName }),
+    [sameAccount, socketMe, gateMe],
   )
+  // Until `WELCOME` lands the reducer's balance is 0, but the gate already read one — show that rather than a
+  // zero the player would read as "my points are gone".
+  const balance = sameAccount ? client.state.balance : (gateMe?.balance ?? 0)
+
+  const viewClient = useMemo(() => {
+    const live = client.state
+    if (notifications === live.notifications && viewMe === live.me && balance === live.balance) return client
+    return { ...client, state: { ...live, notifications, me: viewMe, balance } }
+  }, [client, notifications, viewMe, balance])
 
   const path = route.path
 
@@ -162,9 +207,6 @@ export function App({ api, socketFactory }: AppProps) {
   const inRoom = path === '/room' || path.startsWith('/room/')
   const inLobby = path === '/' || path === '/lobby' || path === '/login' || path === '/register'
   const { state } = client
-  // Until `WELCOME` lands the reducer's balance is 0, but the boot probe already read one — show that rather
-  // than a zero the player would read as "my points are gone".
-  const balance = state.me === null ? (gate.me?.balance ?? 0) : state.balance
 
   return (
     <GameClientProvider client={viewClient}>
@@ -189,17 +231,17 @@ export function App({ api, socketFactory }: AppProps) {
             }
           >
             {path === '/profile' ? (
-              <ProfileScreen api={api} lang={lang} balance={balance} />
+              <ProfileScreen api={guarded} lang={lang} balance={balance} onRenamed={gate.renamed} />
             ) : path === '/avatar' ? (
-              <AvatarScreen api={api} playerId={myId} />
+              <AvatarScreen api={guarded} playerId={myId} />
             ) : path === '/inventory' ? (
-              <InventoryScreen api={api} lang={lang} />
+              <InventoryScreen api={guarded} lang={lang} />
             ) : path === '/daily' ? (
-              <DailyScreen api={api} lang={lang} />
+              <DailyScreen api={guarded} lang={lang} />
             ) : path === '/settings' ? (
-              <SettingsScreen api={api} lang={lang} onLanguage={setLang} onSignedOut={onSignedOut} version={NORMAL_VERSION} />
+              <SettingsScreen api={guarded} lang={lang} onLanguage={setLang} onSignedOut={onSignedOut} version={NORMAL_VERSION} />
             ) : (
-              <AchievementsScreen api={api} lang={lang} />
+              <AchievementsScreen api={guarded} lang={lang} />
             )}
           </Suspense>
           {/* The lobby and the room bring their own stack; these six have none, and `/daily` is precisely

@@ -120,7 +120,7 @@ describe('App — avatars on the bar and at the table', () => {
       socket().receive({ t: 'ROOM_SNAPSHOT', seq: 1, room: ROOM, hand: null, deadlineAt: null })
     })
 
-    await waitFor(() => expect(playerAvatar).toHaveBeenCalledWith('p2'))
+    await waitFor(() => expect(playerAvatar.mock.calls.map(([id]) => id)).toContain('p2'))
     // A bot has no account: asking for one would be a 404 per bot, per table, forever.
     expect([...new Set(playerAvatar.mock.calls.map(([id]) => id))].sort()).toEqual(['p1', 'p2'])
   })

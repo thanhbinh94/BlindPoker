@@ -172,6 +172,15 @@ describe('useAvatars', () => {
     await waitFor(() => expect(result.current.avatars.get('a')?.avatar.hairColor).toBe('#d9a441'))
     expect(result.current.avatars.get('b')?.avatar.hairColor).toBe('#222222')
     expect(playerAvatar.mock.calls.filter(([id]) => id === 'b')).toHaveLength(1)
+
+    // Two caches sit between this hook and the server. Clearing the Map is half the job: the route is
+    // served `private, max-age=60`, so the refetch has to be told to skip the browser's copy as well — and
+    // only that refetch, since the other seats are exactly who the 60 s is for.
+    expect(playerAvatar.mock.calls.filter(([id]) => id === 'a')).toEqual([
+      ['a', { fresh: false }],
+      ['a', { fresh: true }],
+    ])
+    expect(playerAvatar.mock.calls.filter(([id]) => id === 'b')).toEqual([['b', { fresh: false }]])
   })
 
   it('throws away a reply that invalidate has already superseded, and fetches once more', async () => {

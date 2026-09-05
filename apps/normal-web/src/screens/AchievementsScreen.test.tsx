@@ -130,4 +130,25 @@ describe('AchievementsScreen', () => {
     const locked = screen.getByText(viNormal.achievements.login_days_30.name).closest('li')
     expect(within(locked as HTMLElement).getByText(viNormal.achievements.ui.locked)).toBeInTheDocument()
   })
+
+  it('falls back to the id for an achievement this bundle has never heard of', async () => {
+    const unknown: AchievementProgressDto = {
+      id: 'hand_royal_flush',
+      category: 'holdem',
+      metric: 'bestHandRank',
+      threshold: 1,
+      reward: { itemId: 'hat_lunar_2027' },
+      progress: 0,
+      unlockedAt: null,
+    }
+    renderScreen(stubApi({ achievements: vi.fn().mockResolvedValue([unknown]) }))
+
+    // The name carries the id, the reward names its item the same way — and the description, which would
+    // only repeat the line above it, says nothing at all rather than announcing a key to a screen reader.
+    expect(await screen.findByText('hand_royal_flush')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'hand_royal_flush' })).toBeInTheDocument()
+    expect(screen.getByText('hat_lunar_2027')).toBeInTheDocument()
+    expect(screen.queryByText(/^achievements\./)).toBeNull()
+    expect(screen.queryByText(/^items\./)).toBeNull()
+  })
 })

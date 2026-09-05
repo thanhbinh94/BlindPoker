@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ACCOUNT_ROUTES, App, websocketUrl } from './App.js'
 import { ApiError, type AuthMeDto, type NormalApi } from './api.js'
+import { resetAvatarCache } from './avatar/useAvatars.js'
 import viNormal from './locales/vi/normal.json'
 import { LAST_EMAIL_KEY } from './session.js'
 import { RECONNECT_PROBE_MS } from './session-gate.js'
@@ -358,6 +359,107 @@ describe('App — the shell', () => {
     await welcome()
 
     expect(screen.queryByRole('navigation', { name: viNormal.nav.main })).toBeNull()
+  })
+})
+
+describe('App — a session that ends under the player', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    FakeSocket.reset()
+    resetAvatarCache()
+    window.history.replaceState(null, '', '/')
+  })
+
+  it('sends a screen’s 401 back to the sign-in card, with the reason', async () => {
+    // The socket stays open — the Normal gateway binds identity once, at the upgrade — so nothing but the
+    // REST refusal can notice that the session died. Before `guardApi` this printed "something went wrong"
+    // on the profile and left the player in a signed-in-looking shell for good.
+    window.history.replaceState(null, '', '/#/profile')
+    const pending = vi.fn(() => new Promise<never>(() => undefined))
+    renderApp(stubApi({ me: vi.fn().mockRejectedValue(UNAUTHORIZED), stats: pending, history: pending, ledger: pending }))
+    await settled()
+    await welcome()
+
+    expect(await screen.findByRole('link', { name: viNormal.auth.signIn })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent(viNormal.session.expired)
+    expect(socket().closedWith).not.toBeNull()
+  })
+
+  it('does not mistake a wrong password for an expiry — BAD_CREDENTIALS is a 401 too', async () => {
+    const api = stubApi({
+      authMe: vi.fn().mockRejectedValue(UNAUTHORIZED),
+      login: vi.fn().mockRejectedValue(new ApiError(401, 'BAD_CREDENTIALS', 'email or password is wrong')),
+    })
+    window.history.replaceState(null, '', '/#/login')
+    const user = userEvent.setup()
+    renderApp(api)
+
+    await screen.findByRole('link', { name: viNormal.auth.signIn })
+    await user.type(screen.getByLabelText(viNormal.auth.email), 'binh@example.com')
+    await user.type(screen.getByLabelText(viNormal.auth.password), 'khong-dung-1')
+    await user.click(screen.getByRole('button', { name: viNormal.auth.submitSignIn }))
+
+    // The card blames the form, and only the form: no "your session expired" for a session that never was.
+    expect(await screen.findByText(viNormal.auth.errors.BAD_CREDENTIALS)).toBeInTheDocument()
+    expect(screen.queryByText(viNormal.session.expired)).toBeNull()
+  })
+
+  it('greets the second account on this machine, not the first, before WELCOME lands', async () => {
+    // A shared machine: A signs out, B signs in, and the socket has not greeted yet. Everything the bar
+    // draws — the name, the points — must already be B's, because the alternative is showing B the
+    // stranger's name and balance for as long as the new socket takes to open.
+    const other: AuthMeDto = { playerId: 'p2', displayName: 'Lan', balance: 7_000 }
+    const api = stubApi({ login: vi.fn().mockResolvedValue(other) })
+    window.history.replaceState(null, '', '/#/settings')
+    const user = userEvent.setup()
+    renderApp(api)
+    await waitFor(() => expect(FakeSocket.instances).toHaveLength(1))
+    await welcome()
+
+    await user.click(await screen.findByRole('button', { name: viNormal.settings.account.signOut }))
+    await user.click(await screen.findByRole('button', { name: viNormal.settings.signOut.confirm }))
+    await screen.findByRole('link', { name: viNormal.auth.signIn })
+
+    await user.type(screen.getByLabelText(viNormal.auth.email), 'lan@example.com')
+    await user.type(screen.getByLabelText(viNormal.auth.password), 'con-meo-den-1')
+    await user.click(screen.getByRole('button', { name: viNormal.auth.submitSignIn }))
+
+    expect(await screen.findByText(other.displayName)).toBeInTheDocument()
+    expect(screen.getByText(/7\.000/)).toBeInTheDocument()
+    // …and not a trace of the account that just left.
+    expect(screen.queryByText(ME.displayName)).toBeNull()
+    expect(screen.queryByText(/123\.000/)).toBeNull()
+  })
+
+  it('stops asking about the player who signed out, and forgets the face it held', async () => {
+    const avatar = { base: 'base_01', face: 'face_01', clothing: 'clothing_tee', hair: 'hair_short', hairColor: '#2b2b2b' }
+    const playerAvatar = vi.fn().mockResolvedValue({ playerId: 'p1', displayName: 'Bình', avatar })
+    window.history.replaceState(null, '', '/#/settings')
+    const user = userEvent.setup()
+    renderApp(stubApi({ playerAvatar }))
+    await waitFor(() => expect(FakeSocket.instances).toHaveLength(1))
+    await welcome()
+    await waitFor(() => expect(playerAvatar).toHaveBeenCalledTimes(1))
+
+    await user.click(await screen.findByRole('button', { name: viNormal.settings.account.signOut }))
+    await user.click(await screen.findByRole('button', { name: viNormal.settings.signOut.confirm }))
+    await screen.findByRole('link', { name: viNormal.auth.signIn })
+
+    playerAvatar.mockClear()
+    // The avatar effect is deliberately un-keyed — it runs after *every* render — so a re-render of the
+    // sign-in card is exactly the moment a still-watched id would ask again. It must not.
+    await user.click(screen.getByRole('link', { name: viNormal.auth.register }))
+    await screen.findByRole('button', { name: viNormal.auth.submitRegister })
+    expect(playerAvatar).not.toHaveBeenCalled()
+
+    // And the entry itself is gone, not merely unwatched: signing back in inside the TTL asks the server
+    // again rather than serving the previous session's name and face out of the module-level cache.
+    await user.click(screen.getByRole('link', { name: viNormal.auth.signIn }))
+    await user.type(screen.getByLabelText(viNormal.auth.email), 'binh@example.com')
+    await user.type(screen.getByLabelText(viNormal.auth.password), 'con-meo-den-1')
+    await user.click(screen.getByRole('button', { name: viNormal.auth.submitSignIn }))
+
+    await waitFor(() => expect(playerAvatar).toHaveBeenCalledTimes(1))
   })
 })
 

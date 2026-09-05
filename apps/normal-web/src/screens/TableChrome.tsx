@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import type { PlayerAvatarDto } from '../api.js'
 import { Avatar } from '../avatar/Avatar.js'
 import { BOT_MARK } from '../avatar/parts.js'
+import { itemName } from '../catalog-i18n.js'
 import a from '../avatar/avatar.module.css'
 
 /**
@@ -70,8 +71,8 @@ export function makeCaptionFor(avatars: AvatarCache, t: TFunction<'normal'>): (p
     // An item this bundle has no words for is dropped rather than printed as its own i18n key: the server can
     // publish an item before the browser bundle that names it, and `items.title_from_the_future` under a
     // player's name is worse than no title at all. (`Avatar` skips an unknown `assetKey` for the same reason.)
-    const title = config.title === undefined ? '' : t(`items.${config.title}`, { defaultValue: '' })
-    const markName = mark === null ? '' : t(`items.${mark.id}`, { defaultValue: '' })
+    const title = config.title === undefined ? '' : itemName(config.title, t, '')
+    const markName = mark === null ? '' : itemName(mark.id, t, '')
 
     if (mark === null && title === '') return null
 

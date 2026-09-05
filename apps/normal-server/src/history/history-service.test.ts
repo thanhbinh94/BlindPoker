@@ -1,6 +1,6 @@
 import { HandCategory } from '@bp/core'
 import type { HandSummary, PublicRoomConfig } from '@bp/server-kit'
-import { sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { AppDb } from '../db/client.js'
 import { players, users } from '../db/schema.js'
@@ -30,12 +30,12 @@ afterEach(async () => {
 })
 
 let seq = 0
-async function seedPlayer(): Promise<string> {
+async function seedPlayer(displayName?: string): Promise<string> {
   seq += 1
   const name = `p${seq}`
   const [user] = await db.insert(users).values({ email: `${name}@example.com`, passwordHash: 'argon2' }).returning({ id: users.id })
   const id = user!.id
-  await db.insert(players).values({ id, displayName: name, nameKey: name, balance: 0 })
+  await db.insert(players).values({ id, displayName: displayName ?? name, nameKey: name, balance: 0 })
   return id
 }
 
@@ -48,9 +48,9 @@ function summary(patch: Partial<HandSummary> & Pick<HandSummary, 'handId' | 'pla
 }
 
 describe('listForPlayer', () => {
-  it('returns the reading player’s own result alongside every other seat', async () => {
-    const me = await seedPlayer()
-    const rival = await seedPlayer()
+  it('returns the reading player’s own result alongside every other seat, named', async () => {
+    const me = await seedPlayer('Bình')
+    const rival = await seedPlayer('Lan')
     await repos.history.recordHand(
       summary({
         handId: 'h1',
@@ -75,11 +75,32 @@ describe('listForPlayer', () => {
       bestCategory: HandCategory.FULL_HOUSE,
       cancelled: false,
       players: [
-        { label: me, seat: 0, isBot: false, net: 5_880, won: true },
-        { label: rival, seat: 1, isBot: false, net: -4_000, won: false },
-        { label: 'bot-7', seat: 2, isBot: true, net: -2_000, won: false },
+        // A human seat carries both: the id the reader filters on, and the name the reader reads.
+        { playerId: me, label: 'Bình', seat: 0, isBot: false, net: 5_880, won: true },
+        { playerId: rival, label: 'Lan', seat: 1, isBot: false, net: -4_000, won: false },
+        // A bot has no account, so no id — and its label stays the engine-side one it was recorded under.
+        { playerId: null, label: 'bot-7', seat: 2, isBot: true, net: -2_000, won: false },
       ],
     })
+  })
+
+  it('falls back to the recorded id when the account behind a seat is gone', async () => {
+    const me = await seedPlayer('Bình')
+    const quitter = await seedPlayer('Lan')
+    await repos.history.recordHand(
+      summary({
+        handId: 'h1',
+        players: [
+          { playerId: me, seat: 0, isBot: false, net: 100, won: true, bestCategory: null },
+          { playerId: quitter, seat: 1, isBot: false, net: -100, won: false, bestCategory: null },
+        ],
+      }),
+    )
+    // `game_players.player_id` is `ON DELETE SET NULL`: the hand survives the account, and so must the seat.
+    await db.delete(users).where(eq(users.id, quitter))
+
+    const [entry] = await history.listForPlayer(me)
+    expect(entry!.players[1]).toEqual({ playerId: null, label: quitter, seat: 1, isBot: false, net: -100, won: false })
   })
 
   it('reads the same hand from the other seat’s point of view', async () => {

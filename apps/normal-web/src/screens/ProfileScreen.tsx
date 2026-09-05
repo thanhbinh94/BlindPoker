@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { HistoryEntryDto, LedgerEntryDto, MeDto, NormalApi, PlayerStatsDto } from '../api.js'
 import { Avatar } from '../avatar/Avatar.js'
+import { itemName } from '../catalog-i18n.js'
 import { formatDay, formatMoment, formatSigned } from './format.js'
 import s from './normal.module.css'
 import { refusalText } from './refusal.js'
@@ -82,6 +83,12 @@ export interface ProfileScreenProps {
    * in a way the player would read as points having gone missing.
    */
   balance: number
+  /**
+   * A successful rename, reported upwards. The rail and the lobby bar read the name from the session gate,
+   * not from this page's copy of `GET /api/me`, so a rename that stayed here would leave the old name
+   * everywhere else until the next reload.
+   */
+  onRenamed?: (displayName: string) => void
 }
 
 /* ── the rename form ───────────────────────────────────────────────────────── */
@@ -265,7 +272,7 @@ function LedgerPanel({ api, lang }: LedgerPanelProps) {
  * three and a page that fills in three times is worse than one that fills in once. The ledger is the
  * exception and loads on its own: it pages, and its "load more" must not be able to blank the header above it.
  */
-export function ProfileScreen({ api, lang, balance }: ProfileScreenProps) {
+export function ProfileScreen({ api, lang, balance, onRenamed }: ProfileScreenProps) {
   const { t } = useTranslation('normal')
   const bundle = useAsync<[MeDto, PlayerStatsDto, HistoryEntryDto[]]>(() =>
     Promise.all([api.me(), api.stats(), api.history(HISTORY_LIMIT)]),
@@ -320,9 +327,9 @@ export function ProfileScreen({ api, lang, balance }: ProfileScreenProps) {
             {titleId === undefined || titleId === '' ? (
               <span className={s.footnote}>{t('profile.noTitle')}</span>
             ) : (
-              <Badge tone="gold">{t(`items.${titleId}`)}</Badge>
+              <Badge tone="gold">{itemName(titleId, t)}</Badge>
             )}
-            {badgeId === undefined || badgeId === '' ? null : <Badge tone="teal">{t(`items.${badgeId}`)}</Badge>}
+            {badgeId === undefined || badgeId === '' ? null : <Badge tone="teal">{itemName(badgeId, t)}</Badge>}
           </p>
           <p className={s.footnote}>{t('profile.memberSince', { date: formatDay(me.createdAt, lang) })}</p>
           <p className={s.balanceLine}>
@@ -344,7 +351,14 @@ export function ProfileScreen({ api, lang, balance }: ProfileScreenProps) {
       </header>
 
       <Panel title={t('profile.rename.title')}>
-        <RenameForm api={api} current={displayName} onRenamed={setRenamed} />
+        <RenameForm
+          api={api}
+          current={displayName}
+          onRenamed={(name) => {
+            setRenamed(name)
+            onRenamed?.(name)
+          }}
+        />
       </Panel>
 
       <Panel title={t('profile.stats.title')}>
@@ -371,7 +385,10 @@ export function ProfileScreen({ api, lang, balance }: ProfileScreenProps) {
         ) : (
           <ul className={s.rows} aria-label={t('profile.history.title')}>
             {history.map((hand) => {
-              const others = hand.players.filter((seat) => seat.label !== me.playerId)
+              // On the id, never on the name: `label` is a display name for a human seat, and two accounts
+              // may share one — including with the reader, who would then vanish from their own opponents
+              // list, or appear in it.
+              const others = hand.players.filter((seat) => seat.playerId !== me.playerId)
               return (
                 <li className={s.handRow} key={hand.handId}>
                   <span className={s.rowMain}>

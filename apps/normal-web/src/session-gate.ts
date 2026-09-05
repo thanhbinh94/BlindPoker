@@ -34,6 +34,11 @@ export interface SessionGate {
   signIn: (me: AuthMeDto) => void
   /** A deliberate sign-out. The caller is expected to have told the server first. */
   signOut: () => void
+  /**
+   * `PATCH /api/me` succeeded. The gate is what the rail and the lobby bar read their name from, so a rename
+   * that only updated the profile page would leave the old name on every other screen until the next reload.
+   */
+  renamed: (displayName: string) => void
   /** Any screen's 401. The single place a session ends against the player's wishes. */
   onUnauthenticated: () => void
 }
@@ -81,6 +86,10 @@ export function useSessionGate({ api, socketStatus, onEnded }: SessionGateOption
     setMe(account)
     setExpired(false)
     setState('signedIn')
+  }, [])
+
+  const renamed = useCallback((displayName: string) => {
+    setMe((current) => (current === null ? null : { ...current, displayName }))
   }, [])
 
   // The boot probe. One request, and the answer decides which half of the app renders at all.
@@ -140,5 +149,5 @@ export function useSessionGate({ api, socketStatus, onEnded }: SessionGateOption
     }
   }, [signedIn, socketStatus, onUnauthenticated])
 
-  return { state, signedIn, me, expired, signIn, signOut, onUnauthenticated }
+  return { state, signedIn, me, expired, signIn, signOut, renamed, onUnauthenticated }
 }

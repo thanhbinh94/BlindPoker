@@ -56,9 +56,9 @@ const HAND: HistoryEntryDto = {
   bestCategory: 6,
   cancelled: false,
   players: [
-    { label: 'p1', seat: 0, isBot: false, net: 5_880, won: true },
-    { label: 'Lan', seat: 1, isBot: false, net: -4_000, won: false },
-    { label: 'bot-7', seat: 2, isBot: true, net: -1_880, won: false },
+    { playerId: 'p1', label: 'Binh', seat: 0, isBot: false, net: 5_880, won: true },
+    { playerId: 'p2', label: 'Lan', seat: 1, isBot: false, net: -4_000, won: false },
+    { playerId: null, label: 'bot-7', seat: 2, isBot: true, net: -1_880, won: false },
   ],
 }
 
@@ -145,7 +145,24 @@ describe('ProfileScreen', () => {
     expect(hands.getByText('Lan')).toBeInTheDocument()
     expect(hands.getByText('bot-7')).toBeInTheDocument()
     expect(hands.getByText(viNormal.profile.history.bot)).toBeInTheDocument()
-    expect(screen.queryByText('p1')).toBeNull()
+    expect(hands.queryByText('Binh')).toBeNull()
+  })
+
+  it('excludes my own seat by id, even when an opponent happens to share my name', async () => {
+    // Display names are not unique, and the server sends one per human seat. Filtering on the name would
+    // have dropped the namesake from the list — or, when the reader is the namesake, kept the reader in it.
+    const namesake: HistoryEntryDto = {
+      ...HAND,
+      players: [
+        { playerId: 'p1', label: 'Binh', seat: 0, isBot: false, net: 5_880, won: true },
+        { playerId: 'p9', label: 'Binh', seat: 1, isBot: false, net: -5_880, won: false },
+      ],
+    }
+    renderScreen(stubApi({ history: vi.fn().mockResolvedValue([namesake]) }))
+    await screen.findByRole('heading', { name: 'Bình', level: 1 })
+
+    const hands = within(screen.getByRole('list', { name: viNormal.profile.history.title }))
+    expect(hands.getAllByText('Binh')).toHaveLength(1)
   })
 
   it('says the profile could not be loaded, and asks again when told to', async () => {
@@ -271,5 +288,15 @@ describe('ProfileScreen', () => {
 
     expect(await screen.findByText(viNormal.ledger.reason.starting_balance)).toBeInTheDocument()
     expect(ledger).toHaveBeenLastCalledWith({ limit: 50, before: 41 })
+  })
+
+  it('prints a title and badge this bundle has never heard of as their ids, not as i18n keys', async () => {
+    const avatar = { ...AVATAR, title: 'title_from_the_future', badge: 'badge_lunar_2027' }
+    renderScreen(stubApi({ me: vi.fn().mockResolvedValue({ ...ME, avatar }) }))
+    await screen.findByRole('heading', { name: 'Bình', level: 1 })
+
+    expect(screen.getByText('title_from_the_future')).toBeInTheDocument()
+    expect(screen.getByText('badge_lunar_2027')).toBeInTheDocument()
+    expect(screen.queryByText(/^items\./)).toBeNull()
   })
 })

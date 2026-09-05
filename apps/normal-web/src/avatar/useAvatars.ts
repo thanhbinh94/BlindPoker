@@ -43,6 +43,16 @@ const inflight = new Map<string, Promise<void>>()
  */
 const generation = new Map<string, number>()
 
+/**
+ * Ids whose next fetch must skip the browser's HTTP cache.
+ *
+ * `GET /api/players/:id/avatar` is served `private, max-age=60`, so the re-fetch `invalidate` triggers would
+ * otherwise be answered out of the browser's memory cache with the very face the player just replaced —
+ * clearing *this* module's Map would have accomplished nothing. One id is marked per `invalidate` and the
+ * mark is spent by the request it caused; the other seven seats keep the cache they benefit from.
+ */
+const forceFresh = new Set<string>()
+
 /** Every mounted `useAvatars`, so a reply reaches all of them. */
 const listeners = new Set<() => void>()
 
@@ -63,12 +73,13 @@ function stale(id: string, now: number): boolean {
 function load(api: NormalApi, id: string): void {
   if (inflight.has(id)) return
   const gen = generation.get(id) ?? 0
+  const fresh = forceFresh.delete(id)
 
   // The `async` wrapper is what makes a synchronous throw (a stub with no `playerAvatar`, a bad base URL)
   // fail the same way a rejected request does. A failed avatar is a face nobody sees, never a broken table.
   const run = (async (): Promise<PlayerAvatarDto | null> => {
     try {
-      return await api.playerAvatar(id)
+      return await api.playerAvatar(id, { fresh })
     } catch {
       return null
     }
@@ -155,15 +166,25 @@ export function useAvatars(api: NormalApi, playerIds: string[]): AvatarsHandle {
   const invalidate = useCallback((playerId: string) => {
     generation.set(playerId, (generation.get(playerId) ?? 0) + 1)
     cache.delete(playerId)
+    // Two caches sit between this hook and the server, and both have to be told.
+    forceFresh.add(playerId)
     notify()
   }, [])
 
   return { avatars, invalidate }
 }
 
-/** Empties the shared cache. Tests only — nothing in the app should ever want all faces forgotten at once. */
+/**
+ * Empties the shared cache.
+ *
+ * One caller in the app, and it is the one case where forgetting *every* face is right: a session ending.
+ * The cache is keyed by player id and lives at module scope, so without this the entry for the account that
+ * just signed out — their display name and the cosmetics they wear — would sit behind the sign-in card, and
+ * be re-fetched once per TTL as a 401 nobody reads. (Tests use it to start from nothing.)
+ */
 export function resetAvatarCache(): void {
   cache.clear()
   inflight.clear()
   generation.clear()
+  forceFresh.clear()
 }

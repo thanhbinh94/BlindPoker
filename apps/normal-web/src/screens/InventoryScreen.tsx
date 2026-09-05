@@ -2,6 +2,7 @@ import { Badge, Button, Panel, type Language } from '@bp/ui-kit'
 import { useTranslation } from 'react-i18next'
 import type { AvatarConfigDto, InventoryDto, ItemCategory, NormalApi, OwnedItemDto } from '../api.js'
 import { PartThumb } from '../avatar/PartThumb.js'
+import { itemName } from '../catalog-i18n.js'
 import { CATEGORIES, RARITY_TONE } from './catalog.js'
 import { formatDay } from './format.js'
 import s from './normal.module.css'
@@ -88,7 +89,7 @@ export function InventoryScreen({ api, lang }: InventoryScreenProps) {
                           {...(category === 'hair' ? { hairColor: inventory.avatar.hairColor } : {})}
                         />
                       ) : null}
-                      <span className={s.cardName}>{t(`items.${item.itemId}`)}</span>
+                      <span className={s.cardName}>{itemName(item.itemId, t)}</span>
                       <span className={s.cardMarks}>
                         {item.rarity === null ? null : <Badge tone={RARITY_TONE[item.rarity]}>{t(`inventory.rarity.${item.rarity}`)}</Badge>}
                         {isEquipped(item, inventory.avatar) ? <Badge tone="gold">{t('inventory.equipped')}</Badge> : null}

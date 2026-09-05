@@ -18,7 +18,7 @@
  * checkout stays green and says what it had nothing to measure.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gzipSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
@@ -38,6 +38,9 @@ const INDEX = join(DIST, 'index.html')
 const MAX_ENTRY_GZIP = 500 * 1024
 const MAX_TOTAL_GZIP = 900 * 1024
 const MAX_CSS_GZIP = 60 * 1024
+
+/** `App.tsx`'s six `React.lazy` screens; vite names each chunk after the module it split. */
+const LAZY_SCREENS = ['ProfileScreen', 'AvatarScreen', 'InventoryScreen', 'AchievementsScreen', 'DailyScreen', 'SettingsScreen']
 
 const hasDist = existsSync(ASSETS) && existsSync(INDEX)
 if (!hasDist) {
@@ -93,8 +96,22 @@ describe.skipIf(!hasDist)('normal-web bundle', () => {
   })
 
   it('splits the account screens out of the entry chunk', () => {
-    // The six lazy screens are `App.tsx`'s only `import()`s, and the reason the entry stays small.
-    // A chunk count of one would mean something in the entry started importing them eagerly.
-    expect(assets('.js').length, 'the six lazily-loaded account screens must be chunks of their own').toBeGreaterThan(1)
+    // The six lazy screens are `App.tsx`'s only `import()`s, and the reason the entry stays small. Counting
+    // chunks is not enough — one stray lazy import satisfies "more than one" while five screens sit in the
+    // entry — so this names them. Vite derives a lazy chunk's name from the module it split, so a screen
+    // that rejoined the entry is a chunk that stopped being emitted under its own name.
+    //
+    // The entry is still identified the only reliable way, out of `index.html`; asserting its *name* on top
+    // of that is what lets the loop below tell an entry chunk from a screen chunk by name alone.
+    expect(basename(entryChunk()), 'the entry chunk is vite’s `index` input').toMatch(/^index-[\w-]+\.js$/)
+
+    const names = assets('.js').map((file) => basename(file))
+    for (const screen of LAZY_SCREENS) {
+      expect(
+        names.filter((name) => name.startsWith(`${screen}-`)),
+        `${screen} must be a chunk of its own — something in the entry has started importing it eagerly`,
+      ).toHaveLength(1)
+    }
+    expect(names.length, 'the entry plus the six screens, at least').toBeGreaterThanOrEqual(1 + LAZY_SCREENS.length)
   })
 })

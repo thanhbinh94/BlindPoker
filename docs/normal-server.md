@@ -307,7 +307,11 @@ while reading the code:
 - **`games.id` is the engine's `handId`** (text), and cancelled hands are recorded too, with
   `settlement_error` holding the reason settlement was refused.
 - **`game_players` is keyed `(game_id, seat)`** with a nullable `player_id`: a bot occupies a seat
-  and has no `players` row. Its engine-side id lives in `label`.
+  and has no `players` row. Its engine-side id lives in `label`, which also survives a deleted
+  account (`player_id` is `ON DELETE SET NULL`). `history-service` left-joins `players` on it, so a
+  `HistorySeat` carries **both** `playerId` (the join key — `null` for a bot or a gone account) and
+  `label` (the current display name for a human, the engine id otherwise). A client filtering its own
+  seat out of a hand must compare `playerId`: display names are not unique.
 - **`AUTO_MIGRATE` is read in `main.ts`, not in `loadConfig`** — it is a property of this startup,
   not of the server; `buildApp` could not use it.
 - **The mutating rate limiter keys on a hash of the session cookie, not on `playerId`.** Fastify

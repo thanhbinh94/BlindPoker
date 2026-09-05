@@ -1,5 +1,6 @@
 import type { ClientNotification } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
+import { achievementName } from './catalog-i18n.js'
 
 /** The one notification kind whose payload names something this edition has a name for. */
 export const ACHIEVEMENT_UNLOCKED = 'ACHIEVEMENT_UNLOCKED'
@@ -35,7 +36,7 @@ export function mapNotifications(notifications: ClientNotification[], t: TFuncti
   return notifications.map((n) => {
     const id = n.kind === ACHIEVEMENT_UNLOCKED ? payloadId(n.payload) : null
     if (id === null) return n
-    const named: AchievementPayload = { id: t(`achievements.${id}.name`, { defaultValue: id }) }
+    const named: AchievementPayload = { id: achievementName(id, t) }
     return { ...n, payload: { ...(n.payload as object), ...named } }
   })
 }

@@ -46,8 +46,11 @@
   color: var(--ink-muted);
 }
 
+/* Common has no accent of its own, in either theme: `RARITY_TONE.common` is the kit's `muted` badge
+   everywhere else in this app, and muted ink is what that is. Spelled out rather than left to the rule
+   above so the three rarities read as one set. */
 .badge[data-rarity='common'] {
-  color: #b08d6a;
+  color: var(--ink-muted);
 }
 
 .badge[data-rarity='rare'] {

@@ -179,6 +179,12 @@ bằng `docker compose exec app ls /app/public` — phải thấy `index.html` v
 khởi động cũng nói thẳng: `"publicDir":"/app/public"`, hoặc `no PUBLIC_DIR configured` nếu biến bị
 xoá mất.
 
+Danh sách loại trừ của build context nằm ở `apps/normal-server/Dockerfile.dockerignore`, và **chỉ
+BuildKit đọc quy ước `<Dockerfile>.dockerignore` đó**. Build với `DOCKER_BUILDKIT=0` (hoặc một
+`docker build` đủ cũ) sẽ bỏ qua nó hoàn toàn, nuốt cả `node_modules` của máy host vào context, và
+`pnpm --filter @bp/normal-web build` trong Alpine sẽ vấp phải binary esbuild sai nền tảng. Docker
+hiện đại bật BuildKit sẵn; nếu ai đó tắt nó, bật lại (`DOCKER_BUILDKIT=1`) chứ đừng dời file.
+
 ### Nếu chứng chỉ không xuất hiện
 
 `docker compose logs caddy`. Gần như luôn là một trong ba: DNS chưa trỏ về đây, cổng 80 bị firewall

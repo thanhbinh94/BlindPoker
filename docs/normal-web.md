@@ -31,6 +31,8 @@ apps/normal-web/
     main.tsx            theme → i18n → <App api={createApi()} />
     App.tsx             the session gate in front of the hash routes; lazy account screens
     api.ts              the REST client: one `call`, the DTOs, ApiError
+    guarded-api.ts      guardApi — one wrapper, so any screen's UNAUTHENTICATED ends the session once
+    catalog-i18n.ts     itemName / achievementName / achievementDesc — never print a raw i18n key
     session-gate.ts     useSessionGate — boot probe, 401 handling, the reconnect probe
     session.ts          the last email typed, remembered for the sign-in card only
     prefs.ts            theme and language, per device
@@ -47,7 +49,7 @@ apps/normal-web/
       TableChrome.tsx   makeAvatarFor / makeCaptionFor — the two slots RoomScreen takes from this app
       catalog.ts        rarity → kit tone, and the category order, shared by two separate chunks
       format.ts         dates, moments and signed amounts in the player's language
-      useAsync.ts       load once, expose { data, error, loading, reload } — every account screen's spine
+      useAsync.ts       load once, expose { data, loading, reload, set } — every account screen's spine
     locales/{vi,en}/normal.json
   test/footprint.test.ts   the download budget, measured on `dist/`
   e2e/                     Playwright against the real server
@@ -89,6 +91,20 @@ Two consequences worth knowing before changing anything here:
   failed connection. After `RECONNECT_PROBE_MS` (10 s) of uninterrupted reconnecting the gate asks
   `GET /api/auth/me`: a 401 signs the player out with `session.expired`; anything else means the
   network is merely bad.
+- **A live socket proves nothing.** Identity is bound once, at the upgrade, so a session that dies
+  under an established socket is invisible to it: only a REST call notices. `guardApi` (`src/guarded-api.ts`)
+  wraps the api handed to every signed-in screen, and an `ApiError` whose **code** is `UNAUTHENTICATED`
+  calls `gate.onUnauthenticated()` once — debounced, so three parallel 401s are one sign-out — and
+  rethrows. It guards on the code and not the status because `POST /api/auth/login` answers
+  `401 BAD_CREDENTIALS` for a wrong password, which is a form error; the sign-in card and the gate's
+  own probes therefore keep the **raw** api.
+
+Every session ending goes through one path (`endSession` in `App.tsx`): the socket is disconnected,
+the kit's client state is `reset()` (it outlives the session, so otherwise the next player on a shared
+machine is greeted with the previous one's name and points), and `resetAvatarCache()` drops the faces.
+While a session is live the app prefers the **gate's** identity over the socket's for the rail, the
+lobby bar and the avatar, and takes the live balance from the socket only while the two agree on the
+player id.
 
 ---
 
@@ -134,14 +150,15 @@ minute, in-flight requests collapsed, failures cached too (a failing endpoint mu
 request storm from a screen that redraws on every card). Bots are filtered out by the caller — they
 have no account, so their id would be a guaranteed 404 apiece.
 
-`invalidate(playerId)` drops an entry and refetches; the wardrobe calls it after a save.
+`invalidate(playerId)` drops an entry and refetches; the wardrobe calls it after a save. There are
+**two** caches in the way, and it clears both: this module's Map, and the browser's own — the route
+answers `Cache-Control: private, max-age=60`, so the refetch is issued as
+`api.playerAvatar(id, { fresh: true })`, which sets `cache: 'no-store'`. Only the invalidated id is
+marked; every other seat keeps the 60 s the header is there for.
 
-> **Known gap.** `GET /api/players/:id/avatar` answers `Cache-Control: private, max-age=60`, so the
-> refetch `invalidate` starts can be served from the *browser's* HTTP cache — which means the player
-> who just saved a new face keeps seeing the old one on the lobby bar for up to a minute. Every other
-> browser, and every other screen that reads the config directly (`GET /api/me/inventory`), is
-> correct immediately. The fix is for that one refetch to bypass the HTTP cache; the e2e works around
-> it by checking the saved face from a second context.
+`resetAvatarCache()` empties it. One caller in the app — a session ending — because the cache is
+module scope and keyed by player id, so the account that just signed out would otherwise sit there
+and be re-read as a 401 once per TTL.
 
 ---
 

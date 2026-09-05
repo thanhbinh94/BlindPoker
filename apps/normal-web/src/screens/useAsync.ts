@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 export interface AsyncHandle<T> {
-  /** What the last successful load returned, or `null` until one has. */
+  /**
+   * What the last successful load returned, or `null` until one has.
+   *
+   * `null` after `loading` has gone false is how every caller here says "this screen could not load": the
+   * cause is deliberately not exposed. There is exactly one refusal a screen could usefully tell apart, and
+   * `guardApi` handles it above them all — a dead session never reaches a screen's error branch, it takes
+   * the player back to the sign-in card. What is left is "the server said no" and "there was no server",
+   * which read the same and offer the same one button.
+   */
   data: T | null
-  /** The cause the last attempt failed with, or `null`. Cleared when a new attempt starts. */
-  error: unknown
   loading: boolean
   /** Ask again from the top — the "try again" button under a failure. */
   reload: () => void
@@ -25,23 +31,21 @@ export function useAsync<T>(load: () => Promise<T>): AsyncHandle<T> {
   loadRef.current = load
 
   const [data, setData] = useState<T | null>(null)
-  const [error, setError] = useState<unknown>(null)
   const [loading, setLoading] = useState(true)
   const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     let alive = true
     setLoading(true)
-    setError(null)
     void loadRef.current().then(
       (value) => {
         if (!alive) return
         setData(value)
         setLoading(false)
       },
-      (cause: unknown) => {
+      () => {
+        // The cause is dropped on purpose: see `data` above.
         if (!alive) return
-        setError(cause)
         setLoading(false)
       },
     )
@@ -53,5 +57,5 @@ export function useAsync<T>(load: () => Promise<T>): AsyncHandle<T> {
   const reload = useCallback(() => setAttempt((n) => n + 1), [])
   const set = useCallback((next: T) => setData(next), [])
 
-  return { data, error, loading, reload, set }
+  return { data, loading, reload, set }
 }

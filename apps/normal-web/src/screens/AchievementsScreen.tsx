@@ -2,6 +2,7 @@ import { Badge, Button, Panel, formatPoints, type Language } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import type { AchievementProgressDto, NormalApi } from '../api.js'
+import { achievementDesc, achievementName, itemName } from '../catalog-i18n.js'
 import { formatDay } from './format.js'
 import s from './normal.module.css'
 import { useAsync } from './useAsync.js'
@@ -13,7 +14,7 @@ export const CATEGORY_ORDER = ['login', 'holdem', 'blind', 'social']
 export function rewardText(row: AchievementProgressDto, lang: Language, t: TFunction): string {
   const parts: string[] = []
   if (row.reward.points !== undefined) parts.push(`${formatPoints(row.reward.points, lang)} ${t('common:units.pointsShort')}`)
-  if (row.reward.itemId !== undefined) parts.push(t(`items.${row.reward.itemId}`))
+  if (row.reward.itemId !== undefined) parts.push(itemName(row.reward.itemId, t))
   return parts.join(' · ')
 }
 
@@ -98,15 +99,15 @@ export function AchievementsScreen({ api, lang }: AchievementsScreenProps) {
                 return (
                   <li className={s.achievement} key={row.id} data-unlocked={String(row.unlockedAt !== null)}>
                     <span className={s.rowMain}>
-                      <span className={s.rowTitle}>{t(`achievements.${row.id}.name`)}</span>
-                      <span className={s.rowMeta}>{t(`achievements.${row.id}.desc`)}</span>
+                      <span className={s.rowTitle}>{achievementName(row.id, t)}</span>
+                      <span className={s.rowMeta}>{achievementDesc(row.id, t)}</span>
                     </span>
 
                     <span className={s.trackWrap}>
                       <span
                         className={s.track}
                         role="progressbar"
-                        aria-label={t(`achievements.${row.id}.name`)}
+                        aria-label={achievementName(row.id, t)}
                         aria-valuemin={0}
                         aria-valuemax={row.threshold}
                         aria-valuenow={done}

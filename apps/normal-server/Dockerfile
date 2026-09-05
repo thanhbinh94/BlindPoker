@@ -7,6 +7,11 @@
 #
 # (`deploy/normal/docker-compose.yml` does exactly that: `context: ../..`.)
 #
+# Build with BuildKit (the default in any current Docker). The context's exclusion list lives beside
+# this file as `Dockerfile.dockerignore`, and only BuildKit reads that per-Dockerfile convention: with
+# `DOCKER_BUILDKIT=0` the list is ignored, the host's `node_modules` is uploaded with the context, and
+# the web build inside Alpine then trips over a wrong-platform esbuild binary.
+#
 # Two stages. The builder holds pnpm, the TypeScript sources of every workspace package, and a C
 # toolchain for `argon2`; the runtime holds `dist/`, its production `node_modules`, the two
 # directories the server reads from disk, and the web bundle it serves. Nothing else crosses.

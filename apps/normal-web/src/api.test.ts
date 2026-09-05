@@ -89,6 +89,21 @@ describe('createApi — reads', () => {
     await apiOf(fetchImpl).playerAvatar('p 1/2')
     expect(url(fetchImpl)).toBe('/api/players/p%201%2F2/avatar')
   })
+
+  it('reads an avatar through the browser cache by default', async () => {
+    const fetchImpl = ok({})
+    await apiOf(fetchImpl).playerAvatar('p1')
+    // The route is `private, max-age=60`, and eight seat plates asking about each other is what that is for.
+    expect(init(fetchImpl).cache).toBeUndefined()
+  })
+
+  it('bypasses the browser cache when the caller knows the answer changed', async () => {
+    const fetchImpl = ok({})
+    await apiOf(fetchImpl).playerAvatar('p1', { fresh: true })
+    // Without this the re-read after `PUT /api/me/avatar` is served out of memory cache: the wardrobe shows
+    // the face the player just replaced, for up to a minute.
+    expect(init(fetchImpl).cache).toBe('no-store')
+  })
 })
 
 describe('createApi — writes', () => {

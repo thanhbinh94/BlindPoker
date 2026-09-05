@@ -114,4 +114,15 @@ describe('InventoryScreen', () => {
     expect(panelOf('badge').getByText(viNormal.inventory.empty)).toBeInTheDocument()
     expect(panelOf('base').queryByText(viNormal.inventory.empty)).toBeNull()
   })
+
+  it('names an item this bundle has never heard of by its id, never by an i18n key', async () => {
+    // The server publishes the catalogue and this bundle ships the names for it; the two are deployed
+    // separately, so a browser holding yesterday's bundle will meet ids it has no key for.
+    renderScreen(stubApi({
+      inventory: vi.fn().mockResolvedValue({ ...INVENTORY, items: [owned('hat_lunar_2027', 'accessory', 'epic', 'daily')] }),
+    }))
+
+    expect(await screen.findByText('hat_lunar_2027')).toBeInTheDocument()
+    expect(screen.queryByText('items.hat_lunar_2027')).toBeNull()
+  })
 })

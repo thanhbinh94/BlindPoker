@@ -11,6 +11,7 @@ import {
   type ReliefDto,
   type ReliefStatusDto,
 } from '../api.js'
+import { itemName } from '../catalog-i18n.js'
 import { RARITY_TONE } from './catalog.js'
 import { formatMoment } from './format.js'
 import s from './normal.module.css'
@@ -288,7 +289,7 @@ export function DailyScreen({ api, lang }: DailyScreenProps) {
                 {receipt.items.map((id) => (
                   <li className={s.ledgerRow} key={id}>
                     <span className={s.rowTitle}>{t('daily.receipt.item')}</span>
-                    <span className={s.rowValue}>{t(`items.${id}`, { defaultValue: id })}</span>
+                    <span className={s.rowValue}>{itemName(id, t)}</span>
                   </li>
                 ))}
                 {receipt.fallbackPoints > 0 ? (

@@ -195,5 +195,20 @@ describe('AvatarScreen', () => {
 
     // The cached entry is good for a minute; without the invalidation the seat would wear the old face for it.
     await waitFor(() => expect(playerAvatar).toHaveBeenCalledTimes(2))
+    // …and the second read must skip the browser's own copy, which is just as good for that same minute.
+    expect(playerAvatar).toHaveBeenLastCalledWith('p1', { fresh: true })
+  })
+
+  it('names a piece this bundle has never heard of by its id, in the label and on the tile', async () => {
+    const inventory = vi.fn().mockResolvedValue({
+      ...INVENTORY,
+      items: [...INVENTORY.items, owned('hat_lunar_2027', 'accessory', 'epic')],
+    })
+    renderScreen(stubApi({ inventory }))
+    await screen.findByText(viNormal.items.base_01)
+
+    // The radio's accessible name is the only name a screen reader gets for the tile.
+    expect(screen.getByRole('radio', { name: 'hat_lunar_2027' })).toBeInTheDocument()
+    expect(screen.queryByText('items.hat_lunar_2027')).toBeNull()
   })
 })

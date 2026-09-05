@@ -7,6 +7,7 @@ import { Avatar } from '../avatar/Avatar.js'
 import { PartThumb } from '../avatar/PartThumb.js'
 import { DEFAULT_HAIR_COLOR, HAIR_PRESETS, LAYER_ORDER, type AvatarLayer } from '../avatar/parts.js'
 import { useAvatars } from '../avatar/useAvatars.js'
+import { itemName } from '../catalog-i18n.js'
 import { RARITY_TONE } from './catalog.js'
 import s from './normal.module.css'
 import { useAsync } from './useAsync.js'
@@ -115,7 +116,7 @@ function LayerPicker({ layer, items, value, hairColor, onPick }: PickerProps) {
               className={s.tileInput}
               type="radio"
               name={`avatar-${layer}`}
-              aria-label={t(`items.${item.itemId}`)}
+              aria-label={itemName(item.itemId, t)}
               checked={value === item.itemId}
               onChange={() => onPick(item.itemId)}
             />
@@ -124,7 +125,7 @@ function LayerPicker({ layer, items, value, hairColor, onPick }: PickerProps) {
               assetKey={item.assetKey ?? `${layer}/${item.itemId}`}
               {...(layer === 'hair' ? { hairColor } : {})}
             />
-            <span className={s.tileName}>{t(`items.${item.itemId}`)}</span>
+            <span className={s.tileName}>{itemName(item.itemId, t)}</span>
             {item.rarity === null ? null : <Badge tone={RARITY_TONE[item.rarity]}>{t(`inventory.rarity.${item.rarity}`)}</Badge>}
           </label>
         ))}
@@ -248,7 +249,7 @@ export function AvatarScreen({ api, playerId }: AvatarScreenProps) {
 
   const slotOptions = (category: ItemCategory): { value: string; label: string }[] => [
     { value: '', label: t('avatar.none') },
-    ...ownedIn(byCategory, category).map((item) => ({ value: item.itemId, label: t(`items.${item.itemId}`) })),
+    ...ownedIn(byCategory, category).map((item) => ({ value: item.itemId, label: itemName(item.itemId, t) })),
   ]
 
   return (

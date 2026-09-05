@@ -170,7 +170,13 @@ export interface PlayerStatsDto {
 }
 
 export interface HistorySeatDto {
-  /** The engine-side id the seat was recorded under: a player id for humans, a bot id for bots. */
+  /**
+   * The account that sat here, or `null` for a bot (and for a human whose account has since been deleted).
+   * This is the join key — filtering the reader's own seat out of a hand compares *this*, never `label`,
+   * which two accounts may legitimately share and which the reader may even share with an opponent.
+   */
+  playerId: string | null
+  /** What to print: the account's display name for a human, the engine-side id for a bot. */
   label: string
   seat: number
   isBot: boolean
@@ -296,7 +302,15 @@ export interface NormalApi {
 
   inventory(): Promise<InventoryDto>
   setAvatar(config: AvatarConfigDto): Promise<{ config: AvatarConfigDto }>
-  playerAvatar(playerId: string): Promise<PlayerAvatarDto>
+  /**
+   * `fresh` bypasses the browser's HTTP cache for this one request.
+   *
+   * The server answers this route `Cache-Control: private, max-age=60`, which is right for eight seat plates
+   * asking about each other — and wrong for the one moment a client *knows* the answer changed: right after
+   * `PUT /api/me/avatar`. Without it the re-fetch is served from memory cache and the wardrobe shows the face
+   * the player just replaced, for up to a minute.
+   */
+  playerAvatar(playerId: string, opts?: { fresh?: boolean }): Promise<PlayerAvatarDto>
 
   achievements(): Promise<AchievementProgressDto[]>
 
@@ -309,6 +323,8 @@ interface Call {
   method: 'GET' | 'POST' | 'PATCH' | 'PUT'
   path: string
   body?: unknown
+  /** Set only where a stale answer would be wrong rather than merely old; see `playerAvatar`. */
+  cache?: RequestCache
 }
 
 /** The side fields the server sets next to `error`, copied onto the `ApiError` as `extra`. */
@@ -354,6 +370,7 @@ export function createApi(fetchImpl?: typeof fetch, base = ''): NormalApi {
     // `include`: the API is always served from this page's own origin, and `include` would additionally send
     // credentials to a cross-origin host if a base were ever misconfigured to one.
     const init: RequestInit = { method: spec.method, headers, credentials: 'same-origin' }
+    if (spec.cache !== undefined) init.cache = spec.cache
     if (spec.body !== undefined) {
       headers['content-type'] = 'application/json'
       init.body = JSON.stringify(spec.body)
@@ -393,7 +410,14 @@ export function createApi(fetchImpl?: typeof fetch, base = ''): NormalApi {
 
     inventory: () => call<InventoryDto>({ method: 'GET', path: '/api/me/inventory' }),
     setAvatar: (config) => call<{ config: AvatarConfigDto }>({ method: 'PUT', path: '/api/me/avatar', body: config }),
-    playerAvatar: (playerId) => call<PlayerAvatarDto>({ method: 'GET', path: `/api/players/${encodeURIComponent(playerId)}/avatar` }),
+    playerAvatar: (playerId, opts) =>
+      call<PlayerAvatarDto>({
+        method: 'GET',
+        path: `/api/players/${encodeURIComponent(playerId)}/avatar`,
+        // `no-store` rather than `reload`: the answer this request exists to replace is already known wrong,
+        // so there is nothing worth writing back into the cache either.
+        ...(opts?.fresh === true ? { cache: 'no-store' as const } : {}),
+      }),
 
     achievements: () => call<AchievementProgressDto[]>({ method: 'GET', path: '/api/me/achievements' }),
 

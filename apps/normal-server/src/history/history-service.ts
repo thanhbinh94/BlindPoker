@@ -12,14 +12,20 @@
  * it as an abandoned hand rather than as a loss.
  */
 import type { GameMode, HandCategory } from '@bp/core'
-import { asc, inArray } from 'drizzle-orm'
+import { asc, eq, inArray } from 'drizzle-orm'
 import type { AppDb } from '../db/client.js'
-import { gamePlayers } from '../db/schema.js'
+import { gamePlayers, players } from '../db/schema.js'
 import { clampLimit, type NormalRepositories } from '../repos/index.js'
 
 /** One seat of a recorded hand, from the outside. */
 export interface HistorySeat {
-  /** The engine-side id the seat was recorded under: a player id for humans, a bot id for bots. */
+  /**
+   * The account that sat here, or `null` for a bot (and for a human whose account has since been deleted —
+   * `game_players.player_id` is `ON DELETE SET NULL`). This is the join key: a reader filtering their own
+   * seat out of the list must compare *this*, never `label`, which two accounts may legitimately share.
+   */
+  playerId: string | null
+  /** What to print: the account's current display name for a human, the engine-side id for a bot. */
   label: string
   seat: number
   isBot: boolean
@@ -62,16 +68,22 @@ export function createHistoryService(deps: HistoryServiceDeps): HistoryService {
       const hands = await deps.repos.history.listForPlayer(playerId, clampLimit(limit, DEFAULT_LIMIT, MAX_LIMIT))
       if (hands.length === 0) return []
 
+      // The join is a left join and the fallback below is not decoration: `player_id` is null for every bot,
+      // and null again for a human whose account was deleted after the hand. Both keep the recorded `label` —
+      // an engine-side id — because a seat that printed nothing would read as a hand played against a ghost.
       const seats = await deps.db
         .select({
           gameId: gamePlayers.gameId,
           seat: gamePlayers.seat,
+          playerId: gamePlayers.playerId,
           label: gamePlayers.label,
+          displayName: players.displayName,
           isBot: gamePlayers.isBot,
           net: gamePlayers.net,
           won: gamePlayers.won,
         })
         .from(gamePlayers)
+        .leftJoin(players, eq(players.id, gamePlayers.playerId))
         .where(
           inArray(
             gamePlayers.gameId,
@@ -83,7 +95,14 @@ export function createHistoryService(deps: HistoryServiceDeps): HistoryService {
       const byHand = new Map<string, HistorySeat[]>()
       for (const s of seats) {
         const bucket = byHand.get(s.gameId)
-        const entry: HistorySeat = { label: s.label, seat: s.seat, isBot: s.isBot, net: Number(s.net), won: s.won }
+        const entry: HistorySeat = {
+          playerId: s.playerId,
+          label: s.displayName ?? s.label,
+          seat: s.seat,
+          isBot: s.isBot,
+          net: Number(s.net),
+          won: s.won,
+        }
         if (bucket === undefined) byHand.set(s.gameId, [entry])
         else bucket.push(entry)
       }
