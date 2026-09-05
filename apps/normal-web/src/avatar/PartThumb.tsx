@@ -22,8 +22,10 @@ export interface PartThumbProps {
  */
 export function PartThumb({ assetKey, hairColor, className }: PartThumbProps) {
   const part = PARTS[assetKey]
+  // `aria-hidden` and no role: the tile's own text names the item, and a role on a node that has been
+  // removed from the accessibility tree only contradicts itself.
   return (
-    <svg className={className} viewBox="0 0 64 64" role="img" aria-hidden="true" data-part={assetKey}>
+    <svg className={className} viewBox="0 0 64 64" aria-hidden="true" data-part={assetKey}>
       {part === undefined ? null : part(hairColor === undefined ? {} : { hairColor })}
     </svg>
   )

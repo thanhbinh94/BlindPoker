@@ -90,6 +90,9 @@ export function AchievementsScreen({ api, lang }: AchievementsScreenProps) {
               .filter((row) => row.category === category)
               .map((row) => {
                 const done = Math.min(row.progress, row.threshold)
+                // No shipped definition has a threshold of 0, but `NaN%` is what one would paint, so the
+                // degenerate case reads as "there was nothing to do" rather than as a broken bar.
+                const filled = row.threshold === 0 ? 100 : (done / row.threshold) * 100
                 const reward = rewardText(row, lang, t)
                 const counter = t('achievements.ui.progress', { progress: done, threshold: row.threshold })
                 return (
@@ -109,7 +112,7 @@ export function AchievementsScreen({ api, lang }: AchievementsScreenProps) {
                         aria-valuenow={done}
                         aria-valuetext={counter}
                       >
-                        <span className={s.fill} style={{ width: `${(done / row.threshold) * 100}%` }} />
+                        <span className={s.fill} style={{ width: `${filled}%` }} />
                       </span>
                       <span className={s.rowMeta}>{counter}</span>
                     </span>

@@ -226,10 +226,50 @@ describe('ProfileScreen', () => {
     await waitFor(() => expect(screen.queryByRole('button', { name: viNormal.profile.ledger.loadMore })).toBeNull())
   })
 
-  it('keeps the page when only the ledger fails', async () => {
+  it('keeps the page when only the ledger fails, and blames only the ledger', async () => {
     renderScreen(stubApi({ ledger: vi.fn().mockRejectedValue(new ApiError(500, 'INTERNAL', 'nope')) }))
 
     expect(await screen.findByRole('heading', { name: 'Bình', level: 1 })).toBeInTheDocument()
-    expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.profile.error)
+    // The profile above it rendered perfectly well, so saying it did not load would simply be untrue.
+    expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.profile.ledger.error)
+    expect(screen.queryByText(viNormal.profile.error)).toBeNull()
+  })
+
+  it('offers a way back after a first ledger page that failed', async () => {
+    // A failed first page leaves no cursor, which is also what the end of the history looks like — without a
+    // retry of its own the only way out would be reloading the whole page.
+    const ledger = vi.fn().mockRejectedValueOnce(new ApiError(500, 'INTERNAL', 'nope')).mockResolvedValue(PAGE_ONE)
+    const user = userEvent.setup()
+    renderScreen(stubApi({ ledger }))
+    await screen.findByRole('alert')
+
+    await user.click(screen.getByRole('button', { name: viNormal.screens.retry }))
+
+    expect(await screen.findByText(viNormal.ledger.reason.settlement)).toBeInTheDocument()
+    expect(ledger).toHaveBeenLastCalledWith({ limit: 50 })
+    expect(screen.queryByText(viNormal.profile.ledger.error)).toBeNull()
+    // …and the cursor from the page that did land takes over the button again.
+    expect(screen.getByRole('button', { name: viNormal.profile.ledger.loadMore })).toBeInTheDocument()
+  })
+
+  it('retries the same page, not the first one, when a later ledger page fails', async () => {
+    const ledger = vi
+      .fn()
+      .mockResolvedValueOnce(PAGE_ONE)
+      .mockRejectedValueOnce(new ApiError(500, 'INTERNAL', 'nope'))
+      .mockResolvedValue(PAGE_TWO)
+    const user = userEvent.setup()
+    renderScreen(stubApi({ ledger }))
+    await screen.findByText(viNormal.ledger.reason.settlement)
+
+    await user.click(screen.getByRole('button', { name: viNormal.profile.ledger.loadMore }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.profile.ledger.error)
+    // The rows already read stay put, so the button is still "load more" and still carries the cursor.
+    expect(screen.getByText(viNormal.ledger.reason.settlement)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: viNormal.profile.ledger.loadMore }))
+
+    expect(await screen.findByText(viNormal.ledger.reason.starting_balance)).toBeInTheDocument()
+    expect(ledger).toHaveBeenLastCalledWith({ limit: 50, before: 41 })
   })
 })

@@ -105,7 +105,6 @@
       "title": "Ván gần đây",
       "empty": "Chưa có ván nào.",
       "won": "Thắng",
-      "lost": "Thua",
       "cancelled": "Đã hủy",
       "bestHand": "Bài mạnh nhất",
       "opponents": "Tại bàn",
@@ -114,6 +113,7 @@
     "ledger": {
       "title": "Lịch sử điểm",
       "empty": "Chưa có biến động nào.",
+      "error": "Không tải được lịch sử điểm",
       "loadMore": "Tải thêm",
       "ref": "mã {{id}}"
     }
@@ -167,7 +167,7 @@
     "mine": "Ảnh đại diện của bạn",
     "title": "Ảnh đại diện",
     "lead": "Chỉ những món bạn đang sở hữu mới hiện ở đây. Món mới đến từ điểm danh hằng ngày và từ thành tựu.",
-    "none": "Không",
+    "none": "Bỏ trống",
     "empty": "Bạn chưa có món nào cho ô này.",
     "hairColor": "Màu tóc",
     "hairPreset": "Màu có sẵn {{color}}",

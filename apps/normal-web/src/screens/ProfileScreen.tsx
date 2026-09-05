@@ -211,9 +211,11 @@ function LedgerPanel({ api, lang }: LedgerPanelProps) {
 
   return (
     <Panel title={t('profile.ledger.title')}>
+      {/* The panel's own words, not the page's: this alert fires under a profile that rendered perfectly
+          well, and "could not load your profile" read out over one is simply untrue. */}
       {failed ? (
         <p className={s.alert} role="alert">
-          {t('profile.error')}
+          {t('profile.ledger.error')}
         </p>
       ) : null}
 
@@ -238,7 +240,14 @@ function LedgerPanel({ api, lang }: LedgerPanelProps) {
         </ul>
       )}
 
-      {nextBefore === null ? null : (
+      {/* A first page that failed leaves `nextBefore` at `null`, which is also how "you have read it all"
+          looks — so without this branch the only way out of a failed first page is a full page reload.
+          A *later* page that failed keeps its cursor, and "load more" retries that same page. */}
+      {failed && entries.length === 0 ? (
+        <Button variant="ghost" loading={loading} onClick={() => void pull(null)}>
+          {t('screens.retry')}
+        </Button>
+      ) : nextBefore === null ? null : (
         <Button variant="ghost" loading={loading} onClick={() => void pull(nextBefore)}>
           {t('profile.ledger.loadMore')}
         </Button>

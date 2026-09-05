@@ -105,7 +105,6 @@
       "title": "Recent hands",
       "empty": "No hands played yet.",
       "won": "Won",
-      "lost": "Lost",
       "cancelled": "Cancelled",
       "bestHand": "Best hand",
       "opponents": "At the table",
@@ -114,6 +113,7 @@
     "ledger": {
       "title": "Points history",
       "empty": "Nothing has moved yet.",
+      "error": "Could not load your points history",
       "loadMore": "Load more",
       "ref": "ref {{id}}"
     }
