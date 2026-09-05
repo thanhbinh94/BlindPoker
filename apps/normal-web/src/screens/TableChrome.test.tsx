@@ -89,12 +89,15 @@ describe('makeCaptionFor', () => {
     expect(draw(makeCaptionFor(avatars, t)(player({ playerId: 'a' })))).toHaveTextContent(viNormal.items.title_hot_hand)
   })
 
-  it('prints a badge as a glyph carrying the item name, and colours it by rarity', () => {
+  it('prints a badge as a glyph announced by name, and colours it by rarity', () => {
     const avatars: AvatarCache = new Map([['a', entry('a', { badge: 'badge_veteran' })]])
 
     const container = draw(makeCaptionFor(avatars, t)(player({ playerId: 'a' })))
     const glyph = container.querySelector('[data-rarity]')
 
+    // `title` alone is mouse-only, and a bare span has no role for it to become a name on.
+    expect(glyph).toHaveAttribute('role', 'img')
+    expect(glyph).toHaveAttribute('aria-label', viNormal.items.badge_veteran)
     expect(glyph).toHaveAttribute('title', viNormal.items.badge_veteran)
     expect(glyph).toHaveAttribute('data-rarity', 'epic')
     expect(glyph?.textContent).not.toBe('')
@@ -109,11 +112,32 @@ describe('makeCaptionFor', () => {
     expect(container.querySelector('[data-rarity]')).toHaveAttribute('data-rarity', 'rare')
   })
 
-  it('still marks a badge id this bundle has no glyph for', () => {
+  it('still marks a badge id this bundle has no glyph for, without naming it wrongly', () => {
     const avatars: AvatarCache = new Map([['a', entry('a', { badge: 'badge_from_the_future' })]])
 
     const container = draw(makeCaptionFor(avatars, t)(player({ playerId: 'a' })))
+    const glyph = container.querySelector('[data-rarity]')
 
-    expect(container.querySelector('[data-rarity]')).not.toBeNull()
+    expect(glyph).not.toBeNull()
+    // No words for it, so it is decoration rather than an image with a raw i18n key for a name.
+    expect(glyph).toHaveAttribute('aria-hidden', 'true')
+    expect(glyph).not.toHaveAttribute('aria-label')
+  })
+
+  it('drops a title this bundle has no words for, rather than printing its i18n key', () => {
+    // The server may publish an item before the bundle that names it; `items.title_from_the_future` under a
+    // player's name is worse than no title at all.
+    const avatars: AvatarCache = new Map([['a', entry('a', { title: 'title_from_the_future' })]])
+
+    expect(makeCaptionFor(avatars, t)(player({ playerId: 'a' }))).toBeNull()
+  })
+
+  it('keeps the badge when only the title is unknown', () => {
+    const avatars: AvatarCache = new Map([['a', entry('a', { title: 'title_from_the_future', badge: 'badge_gold' })]])
+
+    const container = draw(makeCaptionFor(avatars, t)(player({ playerId: 'a' })))
+
+    expect(container.textContent).not.toContain('items.')
+    expect(container.querySelector('[data-rarity]')).toHaveAttribute('aria-label', viNormal.items.badge_gold)
   })
 })

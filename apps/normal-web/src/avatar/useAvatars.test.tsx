@@ -87,8 +87,12 @@ describe('useAvatars', () => {
     await waitFor(() => expect(result.current.avatars.get('a')).toBeNull())
   })
 
-  it('asks again once the entry is older than the TTL', async () => {
-    const playerAvatar = vi.fn().mockImplementation((id: string) => Promise.resolve(avatarOf(id)))
+  it('keeps serving a stale entry while it fetches the replacement', async () => {
+    let release: ((value: PlayerAvatarDto) => void) | undefined
+    const playerAvatar = vi
+      .fn()
+      .mockImplementationOnce((id: string) => Promise.resolve(avatarOf(id, '#111111')))
+      .mockImplementationOnce(() => new Promise<PlayerAvatarDto>((resolve) => (release = resolve)))
     const api = stubApi(playerAvatar)
     const now = Date.now()
     const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
@@ -99,11 +103,58 @@ describe('useAvatars', () => {
     clock.mockReturnValue(now + AVATAR_TTL_MS + 1)
     const second = renderHook(() => useAvatars(api, ['a']))
 
-    // The stale entry is not served while the replacement is in flight: an expired face is no face.
-    expect(second.result.current.avatars.has('a')).toBe(false)
+    // Stale-while-revalidate: the old face is still on the plate while the new one is on the wire. Blinking to
+    // the grey silhouette for the length of a request reads as a glitch, not as a refresh.
     await waitFor(() => expect(playerAvatar).toHaveBeenCalledTimes(2))
-    await waitFor(() => expect(second.result.current.avatars.has('a')).toBe(true))
+    expect(second.result.current.avatars.get('a')?.avatar.hairColor).toBe('#111111')
+
+    await act(async () => {
+      release?.(avatarOf('a', '#d9a441'))
+    })
+    await waitFor(() => expect(second.result.current.avatars.get('a')?.avatar.hairColor).toBe('#d9a441'))
     clock.mockRestore()
+  })
+
+  it('refreshes an entry that went stale where it sits, with no other id answering to prompt it', async () => {
+    // The passage of time is not something React watches: keyed on its id set alone, the hook would only ever
+    // notice an expiry when some *other* request happened to land.
+    const playerAvatar = vi.fn().mockImplementation((id: string) => Promise.resolve(avatarOf(id)))
+    const api = stubApi(playerAvatar)
+    const now = Date.now()
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
+
+    const { result, rerender } = renderHook(() => useAvatars(api, ['a']))
+    await waitFor(() => expect(playerAvatar).toHaveBeenCalledTimes(1))
+
+    clock.mockReturnValue(now + AVATAR_TTL_MS + 1)
+    rerender()
+
+    await waitFor(() => expect(playerAvatar).toHaveBeenCalledTimes(2))
+    expect(result.current.avatars.has('a')).toBe(true)
+    clock.mockRestore()
+  })
+
+  it('lets a reply land after the last consumer unmounts, and serves it to the next one', async () => {
+    let release: ((value: PlayerAvatarDto) => void) | undefined
+    const playerAvatar = vi.fn().mockImplementation(() => new Promise<PlayerAvatarDto>((resolve) => (release = resolve)))
+    const api = stubApi(playerAvatar)
+    const warn = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    const { unmount } = renderHook(() => useAvatars(api, ['a']))
+    await waitFor(() => expect(playerAvatar).toHaveBeenCalledTimes(1))
+    unmount()
+
+    await act(async () => {
+      release?.(avatarOf('a', '#3f938a'))
+    })
+
+    // The cache outlives the hook, which is the point of putting it at module scope: nothing was set on an
+    // unmounted component (no act/update warning), and the answer is there for whoever asks next.
+    expect(warn).not.toHaveBeenCalled()
+    const next = renderHook(() => useAvatars(api, ['a']))
+    expect(next.result.current.avatars.get('a')?.avatar.hairColor).toBe('#3f938a')
+    expect(playerAvatar).toHaveBeenCalledTimes(1)
+    warn.mockRestore()
   })
 
   it('refetches one id on invalidate, and leaves the others alone', async () => {
