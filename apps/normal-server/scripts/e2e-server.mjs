@@ -62,22 +62,30 @@ if (!existsSync(PUBLIC_DIR)) {
 
 rmSync(OUT_DIR, { recursive: true, force: true })
 mkdirSync(OUT_DIR, { recursive: true })
-execFileSync(
-  process.execPath,
-  [
-    cli('esbuild'),
-    ENTRY,
-    '--bundle',
-    '--platform=node',
-    '--format=esm',
-    '--target=node22',
-    `--outfile=${OUT}`,
-    ...EXTERNAL.map((name) => `--external:${name}`),
-    `--banner:js=${BANNER}`,
-    '--legal-comments=none',
-  ],
-  { cwd: ROOT, stdio: 'inherit' },
-)
+try {
+  execFileSync(
+    process.execPath,
+    [
+      cli('esbuild'),
+      ENTRY,
+      '--bundle',
+      '--platform=node',
+      '--format=esm',
+      '--target=node22',
+      `--outfile=${OUT}`,
+      ...EXTERNAL.map((name) => `--external:${name}`),
+      `--banner:js=${BANNER}`,
+      '--legal-comments=none',
+    ],
+    { cwd: ROOT, stdio: 'inherit' },
+  )
+} catch {
+  // esbuild has already printed the file, the line and the reason through the inherited stdio.
+  // Re-throwing would bury all of that under an `execFileSync` stack that says nothing about it —
+  // the same reason `scripts/build.mjs` ends in a `catch` that only names the step. Playwright shows
+  // this as the last line of `[WebServer]` output before it gives up on the URL.
+  die(`esbuild failed to bundle ${ENTRY} — see the diagnostics above`)
+}
 
 const child = spawn(process.execPath, [OUT], {
   cwd: ROOT,

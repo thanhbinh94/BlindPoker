@@ -107,6 +107,18 @@ async function balanceWhen(page: Page, settled: (n: number) => boolean, timeoutM
   return balance
 }
 
+/**
+ * This account's point transactions, newest first. One default page (20) covers everything an account
+ * this young can have written — the opening credit and one settlement — and the assertions below say so.
+ */
+async function readLedger(page: Page): Promise<{ amount: number; reason: string }[]> {
+  const res = await page.request.get('/api/me/ledger')
+  expect(res.ok(), `GET /api/me/ledger returned ${res.status()}`).toBeTruthy()
+  const body = (await res.json()) as { entries: { amount: number; reason: string }[]; nextBefore: number | null }
+  expect(body.nextBefore, 'the whole history fits in one page at this point in the test').toBeNull()
+  return body.entries
+}
+
 /** Polls `/api/me/stats` until the blind hand counter has been written by the settlement's subscribers. */
 async function blindHandsPlayed(page: Page, atLeast: number, timeoutMs = 20_000): Promise<number> {
   const deadline = Date.now() + timeoutMs
@@ -282,18 +294,30 @@ test.describe('Bind Poker Normal', () => {
     // player. Playing costs the ante plus the play; anything won or handed back comes off that.
     expect(end - start, 'the balance is the stake, less the payout and anything returned').toBe(payout + returned - PLAY_COST)
 
-    // Conservation. The pot is what was paid out plus the fee skimmed off it; add back any uncalled return
-    // and this player's known stake gives the bot's, so the four numbers must cancel to the point.
+    // The card must also add up on its own. The pot is what was paid out plus the fee skimmed off it;
+    // add back any uncalled return and this player's known stake leaves the bot's — which the rules allow
+    // to be exactly two values, so a card that printed a payout or a fee the pot cannot account for lands
+    // outside the pair.
+    //
+    // (Lite reconciles a third number here — a second *human*'s balance, read from the database. With one
+    // human that sum reduces to `0 === 0`, because the bot's stake is derived from the same card figures
+    // rather than measured, so it is not written: an assertion that cannot fail is worse than none.)
     const paidOut = rows.reduce((sum, row) => {
       const hit = PAYOUT.exec(row)
       return hit === null ? sum : sum + parsePoints(hit[1]!)
     }, 0)
     const pot = paidOut + fee
-    const botStake = pot + uncalled.amount - PLAY_COST
-    expect([WAGER, PLAY_COST], 'the bot either folded after its ante or paid to play').toContain(botStake)
-    const botNet = payoutOf(rows, 'Bot 1') + (uncalled.who === 'Bot 1' ? uncalled.amount : 0) - botStake
-    expect(end - start + botNet + fee, 'no points are created or destroyed by a hand').toBe(0)
+    expect([WAGER, PLAY_COST], 'the bot either folded after its ante or paid to play').toContain(pot + uncalled.amount - PLAY_COST)
     expect(fee, 'the table fee is 2% of the pot').toBe(Math.floor(pot * 0.02))
+
+    // The third source, and the one that would catch a settlement crediting a balance it never wrote a row
+    // for (§18.4 rests on this): the ledger. Its rows must sum to the balance the account now holds, and
+    // its one settlement row must be the move the result card described.
+    const entries = await readLedger(page)
+    expect(entries.reduce((sum, e) => sum + e.amount, 0), 'the ledger sums to the balance').toBe(end)
+    const settlements = entries.filter((e) => e.reason === 'settlement')
+    expect(settlements, 'one hand writes exactly one settlement row').toHaveLength(1)
+    expect(settlements[0]!.amount, 'and it is the move the result card described').toBe(payout + returned - PLAY_COST)
 
     // --- 5. the hand reached the progression ---------------------------------------------------------
     expect(await blindHandsPlayed(page, 1), 'the settlement wrote the blind hand counter').toBe(1)

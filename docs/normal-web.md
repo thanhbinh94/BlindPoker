@@ -40,7 +40,14 @@ apps/normal-web/
       Avatar.tsx        the six layers, stacked, in a 64×64 box
       PartThumb.tsx     one part on its own, for a wardrobe tile
       useAvatars.ts     the shared avatar cache (module scope, 60 s, one request per id)
-    screens/            Shell, Auth, Profile, Avatar, Inventory, Achievements, Daily, Settings
+    screens/
+      Shell.tsx         the rail and the page under it; publishes --bp-stage for the table
+      AuthScreen.tsx    sign in and register, one card, two modes
+      {Profile,Avatar,Inventory,Achievements,Daily,Settings}Screen.tsx   the six lazy account screens
+      TableChrome.tsx   makeAvatarFor / makeCaptionFor — the two slots RoomScreen takes from this app
+      catalog.ts        rarity → kit tone, and the category order, shared by two separate chunks
+      format.ts         dates, moments and signed amounts in the player's language
+      useAsync.ts       load once, expose { data, error, loading, reload } — every account screen's spine
     locales/{vi,en}/normal.json
   test/footprint.test.ts   the download budget, measured on `dist/`
   e2e/                     Playwright against the real server

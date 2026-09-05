@@ -115,7 +115,19 @@ export default tseslint.config(
     // …and the two directories outside `src/` that Node runs too: `test/` measures the emitted bundle on
     // disk and `e2e/` drives a browser from outside it. Neither ships, and both need `node:` built-ins.
     // (Listed after the `*.test.{ts,tsx}` block above, which would otherwise still catch `test/*.test.ts`.)
+    //
+    // Only the Node-builtin half is lifted. Flat config is last-match-wins, so a bare
+    // `'no-restricted-imports': 'off'` here would also cancel the *dependency-direction* guard these files
+    // inherit — and an e2e helper could then reach into `../../normal-server/src/app.js` and start the
+    // server in-process instead of driving the one under test. Nothing else would catch that:
+    // `tooling/arch/boundaries.test.ts` reads the `package.json` graph, where a relative climb is invisible.
     files: ['apps/normal-web/test/**/*.ts', 'apps/normal-web/e2e/**/*.ts'],
-    rules: { 'no-restricted-imports': 'off' },
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [
+          { group: ['@bp/server-kit', '@bp/http-kit', '@bp/lite', '@bp/normal-server', '**/apps/**', '**/normal-server/src/**', '**/lite/**'], message: WEB_ONLY },
+        ],
+      }],
+    },
   },
 )

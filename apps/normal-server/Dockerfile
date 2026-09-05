@@ -46,27 +46,40 @@ COPY apps/normal-web/package.json apps/normal-web/
 
 # `--filter <pkg>...` (with the trailing dots) is that package *and its workspace dependencies*. Two
 # filters because this image is built from two projects: the server and the UI it serves. The Lite
-# app is in neither closure, so its React toolchain and its SEA tooling are still never installed.
+# app is in neither closure, so its SEA tooling is still never installed.
+#
+# This does install the web app's devDependencies — vitest, jsdom, @testing-library/*, and
+# `@playwright/test` alongside the `vite` the build actually needs — because a filtered install takes
+# a project's whole manifest. It is builder-stage weight only: none of it is copied into the runtime
+# stage, and the pinned Playwright has no install script, so no browser is downloaded here. If the
+# first real `docker build` turns out slow, this is the line to look at.
 RUN pnpm install --frozen-lockfile --filter @bp/normal-server... --filter @bp/normal-web...
 
-# Now the sources the install layer does not depend on.
+# Now the sources the install layer does not depend on — the server's closure first, and only that:
+# `@bp/normal-server` may not import `@bp/ui-kit` or React (ESLint enforces it), so nothing here needs
+# the UI's sources and they are deliberately not copied yet.
 COPY tsconfig.base.json ./
 COPY tooling/ tooling/
 COPY packages/core/ packages/core/
 COPY packages/http-kit/ packages/http-kit/
 COPY packages/server-kit/ packages/server-kit/
-COPY packages/ui-kit/ packages/ui-kit/
 COPY apps/normal-server/ apps/normal-server/
-COPY apps/normal-web/ apps/normal-web/
 
 # tsc over what ships, then esbuild: `dist/main.js` and `dist/migrate-cli.js` with the three
 # workspace packages inlined and every third-party dependency left as a run-time import.
 RUN pnpm --filter @bp/normal-server build
 
-# The UI, into `apps/normal-web/dist`. It is built *after* the server so that a change to the web
-# sources does not invalidate the server's build layer, and it is a separate step rather than
-# `pnpm build:normal` because that script is the developer's entry point and this stage has already
-# split the two.
+# The UI's sources, copied *after* the server build so that editing a screen does not invalidate that
+# layer — the whole reason the two builds are separate steps rather than one `pnpm build:normal`,
+# which is the developer's entry point and would tie them back together.
+#
+# (`pnpm deploy` below still re-runs on a web-only change: it is the last step, and moving it above
+# this line has not been tried in a real build. It packages `@bp/normal-server` alone either way.)
+COPY packages/ui-kit/ packages/ui-kit/
+COPY apps/normal-web/ apps/normal-web/
+
+# The UI, into `apps/normal-web/dist` — where `vite.config.ts` puts it, and where the runtime stage
+# below reads it from.
 RUN pnpm --filter @bp/normal-web build
 
 # `pnpm deploy` writes a self-contained package: the manifest, the package's own files (`dist/`,
