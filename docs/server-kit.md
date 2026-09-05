@@ -319,3 +319,58 @@ for integration tests:
   firing any due timers (in schedule order) as it passes them. Lets tests
   fast-forward through `handIntervalMs`, reconnect windows, and turn timers
   without waiting on a wall clock.
+- **`runSoak(server, opts)`** — the multiplayer soak driver (spec §29.3). See
+  below.
+
+### The soak driver
+
+```ts
+import { runSoak, startTestServer } from '@bp/server-kit/testing'
+
+const ts = await startTestServer({
+  players: Array.from({ length: 6 }, (_, i) => [`p${i}`, 200_000] as [string, number]),
+  gatewayOptions: { rateLimitPerSec: 500, rateLimitBurst: 500 },
+})
+const r = await runSoak(ts, { clients: 6, rooms: 3, handsPerRoom: 20, mode: 'holdem', seed: 1337 })
+```
+
+`runSoak` connects `clients` `TestClient`s, spreads them evenly over `rooms`
+rooms (`clients / rooms` seats each, so at least two humans per room; Blind
+rooms add one bot), seats and readies everyone, and plays until the *last*
+room has settled `handsPerRoom` hands — so `hands` is a floor, not a target.
+The policy is deliberately dull: it plays a legal action the server itself
+offered (`legal.kinds` on `TURN_CHANGED`, `play`/`fold` on `DECISION_PHASE`),
+never bets or raises, and folds a fixed share of the time, which keeps each
+hand's exposure to about one big blind so nobody busts mid-run. Pass
+`actionDelayMs: [min, max]` for a random think time.
+
+The run ends with `server.shutdown()`, so `endBalances` is read when every
+table stack and carry-over pot is back in a balance. `SoakResult` then reports:
+
+| Field | Meaning |
+|---|---|
+| `hands` / `cancelledHands` | Settled hands, from the `HAND_SETTLED` domain events |
+| `fees` | Σ `summary.fee` — the domain events are the fee source of truth |
+| `sinks` | Σ every sink row the repositories recorded (`table_fee` + `carry_over`) |
+| `botNet` | Σ `net` of every bot seat: a bot's balance is virtual, so it is a term of its own |
+| `startBalances` / `endBalances` | Σ human balances, before the run and after the shutdown |
+| `seqGaps` / `resyncs` | Frames whose `seq` was not exactly one past the previous one, and the `RESYNC`s they cost |
+| `p95ActionToBroadcastMs` | p95 of `ACTION` sent → the `GAME_EVENT` carrying that seat's applied action (spec §24) |
+| `errors` / `tolerated` | `ERROR` frames, split into failures and the races the driver knowingly runs into |
+
+The money identity to assert is
+`endBalances + botNet + sinks === startBalances`; with no bots and no
+carry-over (a Hold'em run) it reduces to `endBalances + fees ===
+startBalances`.
+
+To run something bigger than the committed 6 × 3 × 20 — say 40 clients over
+10 rooms playing 200 hands each — edit the constants at the top of
+`packages/server-kit/src/soak.test.ts` and run
+`pnpm --filter @bp/server-kit exec vitest run src/soak.test.ts`, raising the
+`it(...)` timeout to match. Two things scale with the numbers: the test
+server must seed at least `clients` players, and the per-connection rate limit
+must be lifted. `TEST_SERVER_ROOM_OPTIONS` compresses every room timer roughly
+a hundredfold, so a soak client legitimately acts far more often per
+wall-clock second than a human at a real table ever could; leave the default
+20 msg/s in place and the soak measures the flood protection instead of the
+game.

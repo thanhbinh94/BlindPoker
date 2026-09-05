@@ -17,6 +17,8 @@ Two editions from one codebase, sharing the engine, the room layer and the HTTP 
 Both are points-only: nothing here is purchasable and nothing converts to money.
 
 Design: `docs/superpowers/specs/2026-09-04-bind-poker-design.md`.
+Which test holds up which requirement of §29.2, §29.3 and §30:
+[`docs/test-matrix.md`](docs/test-matrix.md).
 
 ## Development
 
