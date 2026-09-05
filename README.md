@@ -19,6 +19,8 @@ Both are points-only: nothing here is purchasable and nothing converts to money.
 Design: `docs/superpowers/specs/2026-09-04-bind-poker-design.md`.
 Which test holds up which requirement of §29.2, §29.3 and §30:
 [`docs/test-matrix.md`](docs/test-matrix.md).
+What each threat is defended by, which test proves it, how secrets are handled and what an operator
+still has to do (TLS, `TRUST_PROXY`, backups): [`docs/security.md`](docs/security.md).
 
 ## Development
 
@@ -33,7 +35,7 @@ pnpm lint
 
 - `packages/core` — pure game engine, bot, protocol (no I/O)
 - `packages/server-kit` — rooms, WebSocket gateway, timers, reconnect, bots (see docs/server-kit.md)
-- `packages/http-kit` — shared Fastify plumbing: `.env` reading, JSON logger, rate limiter, static assets, security headers, CSRF guard, error envelope
+- `packages/http-kit` — shared Fastify plumbing: `.env` reading, JSON logger, rate limiter, static assets, security headers, CSRF guard, error envelope; `@bp/http-kit/testing` enumerates an assembled app's routes so a guard can be asserted over the whole surface
 - `packages/ui-kit` — shared React UI: game client, i18n (vi/en), theme, poker table, lobby, screens (see docs/ui-kit.md)
 - `apps/lite` — the Lite edition: Fastify + `node:sqlite` server, React web app, single-exe build
 - `apps/normal-server` — the Normal edition's backend: accounts, PostgreSQL, economy, cosmetics, achievements (see docs/normal-server.md)

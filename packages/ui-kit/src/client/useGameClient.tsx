@@ -62,6 +62,7 @@ export function useGameClient(opts: UseGameClientOptions): GameClientApi {
       }),
     // Deliberately not keyed on the token: it is pushed through `setToken` below so refreshing it never tears
     // down a live socket.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keying on `opts.token` would rebuild the connection, and with it drop a live socket, every time the session token is refreshed; the effect below pushes the new token into the existing connection instead.
     [opts.url, opts.socketFactory],
   )
 

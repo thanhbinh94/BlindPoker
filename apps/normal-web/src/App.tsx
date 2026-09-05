@@ -106,6 +106,7 @@ export function App({ api, socketFactory }: AppProps) {
   // next session needs a wrapper of its own to be able to do it again.
   const gateId = gate.me?.playerId ?? null
   const { onUnauthenticated } = gate
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `gateId` is a deliberate cache-buster, not a read value: `guardApi` fires `onUnauthenticated` at most once per wrapper, so a new session must get a new wrapper or its first 401 would be swallowed.
   const guarded = useMemo(() => guardApi(api, onUnauthenticated), [api, onUnauthenticated, gateId])
 
   // The socket follows the gate, and only the gate: one effect, whether the session arrived from the boot
@@ -158,6 +159,7 @@ export function App({ api, socketFactory }: AppProps) {
   // because achievement names live in this app's namespace, not the kit's. The lobby and the room each render
   // their own `Toasts` out of `client.state`, so the translation is done once here — on the list the client
   // hands them — rather than twice, on two screens this app does not own.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `lang` is a deliberate cache-buster: `t` is bound to the i18n instance and can keep its identity across a language switch, so without it a toast already on screen would stay in the language it was raised in.
   const notifications = useMemo(() => mapNotifications(client.state.notifications, t), [client.state.notifications, t, lang])
 
   // The socket's identity is usable only while it agrees with the gate's. It disagrees for exactly one
