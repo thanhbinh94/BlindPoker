@@ -79,6 +79,8 @@ export type RoomEvent =
   | { type: 'PLAYER_SAT'; playerId: string; seat: number; stack: number }
   | { type: 'PLAYER_STOOD'; playerId: string; seat: number }
   | { type: 'PLAYER_READY'; playerId: string; ready: boolean }
+  /** The seat's effective sit-out flag changed — asked for by `SIT_OUT`/`SIT_IN`, or forced by a stack too short to play. */
+  | { type: 'PLAYER_SIT_OUT'; playerId: string; sittingOut: boolean }
   | { type: 'HOST_CHANGED'; hostPlayerId: string }
   | { type: 'PLAYER_DISCONNECTED'; playerId: string; deadline: number }
   | { type: 'PLAYER_RECONNECTED'; playerId: string }
@@ -94,6 +96,10 @@ export type ClientMessage =
   | { t: 'LEAVE_ROOM'; reqId?: string }
   | { t: 'SIT_DOWN'; reqId?: string; seat: number; buyIn?: number }
   | { t: 'STAND_UP'; reqId?: string }
+  /** Keep the seat, but be skipped from the next hand onwards (the current hand is played out). */
+  | { t: 'SIT_OUT'; reqId?: string }
+  /** Take the seat back from the next hand onwards; a stack below the minimum keeps it `SITTING_OUT`. */
+  | { t: 'SIT_IN'; reqId?: string }
   | { t: 'READY'; reqId?: string; ready: boolean }
   | { t: 'START_GAME'; reqId?: string }
   | { t: 'KICK'; reqId?: string; playerId: string }

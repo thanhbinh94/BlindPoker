@@ -694,6 +694,8 @@ Mọi message: `{ t: string, ...payload }`. Client→server có `reqId?: string`
 | `LEAVE_ROOM` | — | |
 | `SIT_DOWN` | `{ seat, buyIn? }` | |
 | `STAND_UP` | — | |
+| `SIT_OUT` | — | Giữ ghế, bỏ qua từ ván sau (ván đang chơi vẫn đánh hết); chưa có ghế → `NOT_SEATED` |
+| `SIT_IN` | — | Trở lại từ ván sau; stack dưới mức tối thiểu thì vẫn `SITTING_OUT` |
 | `READY` | `{ ready: boolean }` | |
 | `START_GAME` | — | Host |
 | `KICK` | `{ playerId }` | Host, chỉ người chưa trong ván |
@@ -710,7 +712,7 @@ Mọi message client → server có thể mang `reqId?`; server trả lại nó 
 | `ROOM_LIST` | `{ rooms: RoomSummary[] }` |
 | `ROOM_SNAPSHOT` | `{ seq, room: RoomView, hand?: HandView, deadlineAt: number | null }` |
 | `GAME_EVENT` | `{ seq, event: GameEvent }` |
-| `ROOM_EVENT` | `{ seq, event: PLAYER_JOINED \| PLAYER_LEFT \| PLAYER_SAT \| PLAYER_STOOD \| PLAYER_READY \| HOST_CHANGED \| PLAYER_DISCONNECTED \| PLAYER_RECONNECTED \| ROOM_STATUS \| ROOM_CLOSED }` |
+| `ROOM_EVENT` | `{ seq, event: PLAYER_JOINED \| PLAYER_LEFT \| PLAYER_SAT \| PLAYER_STOOD \| PLAYER_READY \| PLAYER_SIT_OUT \| HOST_CHANGED \| PLAYER_DISCONNECTED \| PLAYER_RECONNECTED \| ROOM_STATUS \| ROOM_CLOSED }` |
 | `BALANCE` | `{ balance }` — sau settlement/daily/relief |
 | `NOTIFICATION` | `{ kind, payload }` — Normal dùng cho achievement; Lite chỉ gửi `NOTIFICATION{kind:'KICKED'}` khi host kick (cả hai edition đều gửi thông báo này) |
 | `ACK` | `{ reqId }` |

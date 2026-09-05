@@ -60,12 +60,17 @@ describe('parseClientMessage', () => {
     expect(parseClientMessage({ t: 'CREATE_ROOM', config: holdem }).ok).toBe(true)
     expect(parseClientMessage({ t: 'PONG' }).ok).toBe(true)
   })
+  it('parses the payload-free seat messages, ignoring anything bolted onto them', () => {
+    expect(parseClientMessage({ t: 'SIT_OUT' })).toEqual({ ok: true, value: { t: 'SIT_OUT' } })
+    expect(parseClientMessage({ t: 'SIT_IN' })).toEqual({ ok: true, value: { t: 'SIT_IN' } })
+    expect(parseClientMessage({ t: 'SIT_OUT', sittingOut: false })).toEqual({ ok: true, value: { t: 'SIT_OUT' } })
+  })
   it('preserves reqId on every message variant', () => {
     expect(parseClientMessage({ t: 'READY', ready: true, reqId: 'r9' })).toEqual({ ok: true, value: { t: 'READY', ready: true, reqId: 'r9' } })
     expect(parseClientMessage({ t: 'START_GAME', reqId: 'r9' })).toEqual({ ok: true, value: { t: 'START_GAME', reqId: 'r9' } })
     expect(parseClientMessage({ t: 'HELLO', sessionToken: 'tok', reqId: 'r9' })).toEqual({ ok: true, value: { t: 'HELLO', sessionToken: 'tok', reqId: 'r9' } })
     expect(parseClientMessage({ t: 'KICK', playerId: 'p1', reqId: 'r9' })).toEqual({ ok: true, value: { t: 'KICK', playerId: 'p1', reqId: 'r9' } })
-    for (const t of ['LIST_ROOMS', 'LEAVE_ROOM', 'STAND_UP', 'RESYNC', 'PONG']) {
+    for (const t of ['LIST_ROOMS', 'LEAVE_ROOM', 'STAND_UP', 'SIT_OUT', 'SIT_IN', 'RESYNC', 'PONG']) {
       expect(parseClientMessage({ t, reqId: 'r9' })).toEqual({ ok: true, value: { t, reqId: 'r9' } })
     }
     expect(parseClientMessage({ t: 'PONG' })).toEqual({ ok: true, value: { t: 'PONG' } }) // absent stays absent
