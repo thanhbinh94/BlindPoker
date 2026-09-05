@@ -1,7 +1,7 @@
 # Bind Poker — Software Requirement Specification & Thiết kế hệ thống
 
-- Ngày: 2026-09-04
-- Trạng thái: Bản thiết kế đã được duyệt qua brainstorming, chờ duyệt spec
+- Ngày: 2026-09-04 (cập nhật 2026-09-05 sau M9: §32, §33, §34 và Phụ lục B)
+- Trạng thái: Đã duyệt và **đã hiện thực hóa hết phạm vi MVP** qua Plan 1–7. Bảng đối chiếu từng mục chấp nhận: `docs/acceptance-checklist.md`; hạn chế đã biết: `docs/known-limitations.md`
 - Nguồn yêu cầu gốc: `requirement.txt`
 - Ngôn ngữ tài liệu: tiếng Việt, thuật ngữ kỹ thuật và định danh mã giữ nguyên tiếng Anh
 
@@ -1077,6 +1077,10 @@ ESLint boundary; test đọc `package.json` từng package và kiểm graph mụ
 14. Cứu trợ 1 lần/24 giờ, đưa về 5.000.
 15. Tiếng Việt là ngôn ngữ mặc định khi không xác định được.
 16. Lite: giao diện web được nhúng thẳng vào exe (SEA asset) và đọc bằng `sea.getAsset()`; khi dev thì server đọc thư mục `dist/public` (ghi đè bằng `PUBLIC_DIR`). Không có chế độ nào server tự đi tải asset.
+17. `SIT_OUT` có hiệu lực từ **ván kế tiếp**: ván đang chơi vẫn chơi hết. Bộ đếm đứng dậy tự động đếm **ván được chia**, không đếm thời gian thực — nên trên bàn hai ghế mà một người ngồi ngoài thì không ván nào bắt đầu, không ván nào bị bỏ, và ghế được giữ cho tới khi người đó rời hoặc phòng đóng vì trống (`emptyRoomCloseMs`). Trường hợp bỏ bàn do đó thuộc về đường đóng-phòng-trống, không thuộc bộ đếm sit-out (§11.3).
+18. Không đóng gói web font: `--font-display` **đặt tên** một face rồi rơi về Cambria / Constantia / Segoe UI. Giả định là mọi host mục tiêu (Windows với Lite; trình duyệt hiện đại với Normal) có ít nhất một trong ba, và cả ba đều đủ glyph tiền tổ hợp tiếng Việt. Việc đóng gói một bản subset nằm ở roadmap mục 9.
+19. Blind Poker **công khai số dư của mọi ghế**, vì ở Blind ghế *chính là* số dư (§8.1): ante trừ thẳng vào đó và không có stack bàn riêng. Đây là hạn chế thiết kế được chấp nhận, không phải lỗi; Hold'em không bị ảnh hưởng vì ở đó stack bàn tách khỏi balance và chỉ stack được công bố.
+20. Avatar SVG vẽ trong app (Phụ lục A) là bản **tạm**. Bản thay thế 3D có đặc tả riêng — `2026-09-05-avatar-3d-design.md` — và nằm ngoài phạm vi tài liệu này.
 
 ## 33. MVP Scope
 
@@ -1087,6 +1091,8 @@ ESLint boundary; test đọc `package.json` từng package và kiểm graph mụ
 **COULD** (roadmap): chat, emote, spectator, leaderboard, replay, shop đổi điểm, bot nâng cao.
 
 **WON'T**: tiền thật, cash-out, marketplace, NFT, blockchain, ML AI, mạng xã hội.
+
+**Tình trạng sau M9 (Plan 7).** Toàn bộ MUST và toàn bộ SHOULD đã giao — bằng chứng từng mục ở `docs/acceptance-checklist.md`. Không mục COULD nào được làm; tất cả vẫn ở roadmap mục 4. `SIT_OUT`/`SIT_IN` là thứ duy nhất được thêm ngoài hai danh sách trên: nó không có trong MVP scope ban đầu nhưng cần cho §11.3 và cho chính bảng kiểm §30, nên được đưa vào M9.
 
 ## 34. Future Roadmap
 
@@ -1099,7 +1105,10 @@ ESLint boundary; test đọc `package.json` từng package và kiểm graph mụ
 7. Bot Hold'em có mô hình đối thủ đơn giản.
 8. PIN tùy chọn cho phiên Lite.
 9. Đóng gói sẵn một web font tiếng Việt đã subset trong `@bp/ui-kit` (hiện chỉ *đặt tên* font và rơi về Cambria/Constantia/Segoe UI — đủ phủ tiếng Việt trên Windows, vốn là host duy nhất của Lite). Cần tải file font lúc build và một công cụ subset, nên để lại roadmap.
-10. Tách `--red` thành ink và fill như `--teal`/`--teal-fill`: một token không thể vừa đạt 4.5:1 làm chữ trên nền tối vừa đủ tối để `--red-ink` đọc được trên nó. Bốn cặp đang dưới chuẩn AA được ghi nhận trong `tokens.test.ts` (`BELOW_AA`) và `docs/ui-kit.md` — Known gaps.
+10. Tách `--red` thành ink và fill như `--teal`/`--teal-fill`: một token không thể vừa đạt 4.5:1 làm chữ trên nền tối vừa đủ tối để `--red-ink` đọc được trên nó. Các cặp đang dưới chuẩn AA — `--red` trên `--bg` (3.59:1), trên `--bg-elev` (3.22:1), và cùng khuyết tật đó lặp lại trên nền felt của `.panel.felt` (3.1:1) — được ghi nhận trong `tokens.test.ts` (`BELOW_AA`) và `docs/ui-kit.md` — Known gaps. Test đỏ nếu một cặp tệ đi, hoặc nếu một cặp được sửa mà dòng ghi nhận bị bỏ quên.
+11. Avatar 3D cho bản Normal, thay bộ SVG hiện tại: đặc tả riêng đã duyệt ở `2026-09-05-avatar-3d-design.md` (three.js, chân dung dựng phía client). Đây là lý do `Avatar` hiện bỏ qua `assetKey` mà bundle chưa biết vẽ thay vì ném lỗi — server có thể phát item trước khi client vẽ được nó.
+12. Nâng Vitest 2 → 3 và Vite 5 → 6 trên cả tám package, để dọn 7 advisory chỉ-dev còn lại. Không dùng override cho `vite` transitive dưới Vitest: làm thế là ghim một phiên bản Vitest 2 không được build cùng, đổi một advisory chỉ-dev lấy một test runner hỏng. Chi tiết và disposition từng advisory ở `docs/security.md` §2.
+13. Chạy một lần suite của `normal-server` với `TEST_DATABASE_URL` trỏ vào PostgreSQL thật, và build ảnh Docker của bản Normal — hai việc chưa làm được trên máy dev vì không có Docker daemon (`docs/known-limitations.md`, `docs/deployment-normal.md` §2).
 
 ---
 
@@ -1133,4 +1142,18 @@ ESLint boundary; test đọc `package.json` từng package và kiểm graph mụ
 
 ## Phụ lục B — Bảng kiểm chấp nhận (mục 40 & 66 requirement)
 
-Được sao chép vào `docs/acceptance-checklist.md` và tick khi M9 hoàn thành; mỗi mục gắn với test hoặc bước kiểm thủ công có ghi chú.
+Bảng kiểm sống ở **[`../../acceptance-checklist.md`](../../acceptance-checklist.md)**, không sao chép lại ở đây — hai bản sao của cùng một bảng sẽ lệch nhau đúng ở chỗ quan trọng nhất.
+
+**Đã hoàn thành ở M9 (Plan 7).** Cả 64 mục — 21 mục của requirement.txt §40 và 43 mục của §66 — đều đã được đối chiếu: **61 ✓, 3 partial, 0 ✗**. Mỗi dòng dẫn tới một test (đường dẫn tệp + tên `it()` nguyên văn), một bước e2e, hoặc một bước kiểm thủ công kèm kết quả mong đợi.
+
+Ba dòng `partial` và lý do:
+
+| Dòng | Lý do |
+|---|---|
+| 40.8 Normal builds successfully | Bản build Node được test chạy thật; **ảnh Docker chưa từng được build** vì máy dev không có Docker daemon. Tiền kiểm ở `docs/deployment-normal.md` §2 |
+| 66.21 Persistent database works | Toàn bộ suite chạy trên PGlite; đường `pg` thật và `SELECT … FOR UPDATE` chỉ thực thi khi có `TEST_DATABASE_URL` |
+| 66.40 Security checks pass | `pnpm audit --prod` sạch; `pnpm audit` đầy đủ còn 7 advisory, tất cả thuộc gói chỉ dùng khi build/test — `docs/security.md` §2 |
+
+Bảng kiểm không tự mục nát được: `tooling/arch/acceptance-links.test.ts` đọc chính tệp markdown đó và kiểm rằng mọi tệp test được trích dẫn có thật, mọi tên test được trích dẫn nằm trong tệp đó, mọi dòng có đúng một trong ba trạng thái, và đủ cả 21 + 43 mục. Đổi tên một test mà quên sửa bảng thì `pnpm test` đỏ.
+
+Danh sách hạn chế đã biết — gồm cả ba dòng trên — ở `docs/known-limitations.md`. Lịch sử theo từng plan ở `CHANGELOG.md`.

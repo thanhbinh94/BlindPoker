@@ -1,6 +1,9 @@
 # Bind Poker
 
 Real-time multiplayer poker (No-Limit Texas Hold'em + Blind Poker) with virtual points only.
+The server is the only authority: it shuffles, it decides what is legal, it settles the pot. A
+client displays state and sends actions, and never learns another player's cards.
+
 Two editions from one codebase, sharing the engine, the room layer and the HTTP plumbing:
 
 | | **Normal** | **Lite** |
@@ -14,33 +17,89 @@ Two editions from one codebase, sharing the engine, the room layer and the HTTP 
 | Needs | A host, a domain, TLS | A double-click |
 | Deploy guide | [`docs/deployment-normal.md`](docs/deployment-normal.md) | [`docs/deployment-lite.md`](docs/deployment-lite.md) |
 
-Both are points-only: nothing here is purchasable and nothing converts to money.
+Both are points-only: nothing here is purchasable and nothing converts to money. There are no
+deposits, no withdrawals, no payment gateway and no marketplace, by design and permanently.
 
-Design: `docs/superpowers/specs/2026-09-04-bind-poker-design.md`.
-Which test holds up which requirement of §29.2, §29.3 and §30:
-[`docs/test-matrix.md`](docs/test-matrix.md).
-What each threat is defended by, which test proves it, how secrets are handled and what an operator
-still has to do (TLS, `TRUST_PROXY`, backups): [`docs/security.md`](docs/security.md).
+## Documentation
+
+**Start here**
+
+- [`docs/superpowers/specs/2026-09-04-bind-poker-design.md`](docs/superpowers/specs/2026-09-04-bind-poker-design.md)
+  — the specification: rules, architecture, protocol, database, deployment, testing, risks,
+  assumptions, decision log. Vietnamese.
+- [`docs/acceptance-checklist.md`](docs/acceptance-checklist.md) — all 64 acceptance items of
+  `requirement.txt` §40 and §66, each with a test, an e2e step or a manual step with its expected
+  result, and a status. Every citation in it is machine-checked by `pnpm test`.
+- [`docs/known-limitations.md`](docs/known-limitations.md) — what this does not do, why, and where
+  each one is tracked.
+- [`CHANGELOG.md`](CHANGELOG.md) — one section per plan, with the merge commit.
+
+**Reference**
+
+- [`docs/test-matrix.md`](docs/test-matrix.md) — which test holds up which requirement of spec
+  §29.2, §29.3 and §30.
+- [`docs/security.md`](docs/security.md) — what each threat is defended by, which test proves it,
+  how secrets are handled, the dated dependency audit, and what an operator still has to do (TLS,
+  `TRUST_PROXY`, backups).
+- [`docs/server-kit.md`](docs/server-kit.md) — rooms, gateway, timers, reconnect, bots, the soak
+  driver.
+- [`docs/ui-kit.md`](docs/ui-kit.md) — the shared React client, theme tokens, i18n, and its known
+  gaps.
+- [`docs/normal-server.md`](docs/normal-server.md) — module map, event bus, ledger conventions,
+  adding an item or an achievement.
+- [`docs/normal-web.md`](docs/normal-web.md) — API client, session gate, avatar parts, footprint,
+  e2e.
+- [`deploy/normal/restore.md`](deploy/normal/restore.md) — the restore procedure.
+
+Developer docs are in English; the two deployment guides and the Lite operator README are in
+Vietnamese, because that is who runs them.
 
 ## Development
 
 ```bash
 pnpm install
-pnpm test        # all workspaces
+pnpm test        # every workspace, plus the architecture and acceptance checks in tooling/
 pnpm typecheck
 pnpm lint
 ```
 
+Node 22.13 or newer, pnpm 9. `pnpm test` needs no database, no Docker and no network: the Normal
+suite runs on in-process PGlite, the Lite suite on an in-memory SQLite. It does run the real Normal
+production build (about 15 s); `CI_SKIP_BUILD=1` skips that file.
+
+Per package, when you want a shorter loop:
+
+```bash
+pnpm --filter @bp/core test           # the engine — 168 tests
+pnpm --filter @bp/server-kit test     # rooms, gateway, soak — 92
+pnpm --filter @bp/ui-kit test         # the shared client — 129
+pnpm --filter @bp/http-kit test       # shared HTTP plumbing — 75
+pnpm --filter @bp/normal-server test  # 364, on in-process PGlite
+pnpm --filter @bp/normal-web test     # 219, jsdom
+pnpm --filter @bp/lite test           # 224, including footprint budgets and the exe smoke test
+```
+
+The end-to-end suites are **not** part of `pnpm test` — they need a build and a one-off Chromium
+download. Each edition's section below says how to run its own.
+
 ## Layout
 
-- `packages/core` — pure game engine, bot, protocol (no I/O)
-- `packages/server-kit` — rooms, WebSocket gateway, timers, reconnect, bots (see docs/server-kit.md)
-- `packages/http-kit` — shared Fastify plumbing: `.env` reading, JSON logger, rate limiter, static assets, security headers, CSRF guard, error envelope; `@bp/http-kit/testing` enumerates an assembled app's routes so a guard can be asserted over the whole surface
-- `packages/ui-kit` — shared React UI: game client, i18n (vi/en), theme, poker table, lobby, screens (see docs/ui-kit.md)
+- `packages/core` — pure game engine, bot, protocol (no I/O, no dependencies)
+- `packages/server-kit` — rooms, WebSocket gateway, timers, reconnect, bots (see `docs/server-kit.md`)
+- `packages/http-kit` — shared Fastify plumbing: `.env` reading, JSON logger, rate limiter, static
+  assets, security headers, CSRF guard, error envelope; `@bp/http-kit/testing` enumerates an
+  assembled app's routes so a guard can be asserted over the whole surface
+- `packages/ui-kit` — shared React UI: game client, i18n (vi/en), theme, poker table, lobby, screens
+  (see `docs/ui-kit.md`)
 - `apps/lite` — the Lite edition: Fastify + `node:sqlite` server, React web app, single-exe build
-- `apps/normal-server` — the Normal edition's backend: accounts, PostgreSQL, economy, cosmetics, achievements (see docs/normal-server.md)
-- `apps/normal-web` — the Normal edition's browser client: Vite/React on `@bp/ui-kit`, served by the server itself (see docs/normal-web.md)
-- `deploy/normal` — the Compose stack for the Normal edition: app + Postgres + Caddy, backup and restore
+- `apps/normal-server` — the Normal edition's backend: accounts, PostgreSQL, economy, cosmetics,
+  achievements (see `docs/normal-server.md`)
+- `apps/normal-web` — the Normal edition's browser client: Vite/React on `@bp/ui-kit`, served by the
+  server itself (see `docs/normal-web.md`)
+- `deploy/normal` — the Compose stack for the Normal edition: app + Postgres + Caddy, backup and
+  restore
+- `tooling/arch` — the checks that are about the repository rather than a package: the dependency
+  graph, the static security scan, and the acceptance-checklist link check
 
 ## Normal edition
 
@@ -65,12 +124,13 @@ becomes healthy, the `migrate` service applies the committed migrations and exit
 > **This image has never been built.** The Compose file is validated by `docker compose config`, and
 > the bundle has been run standalone against its production-only `node_modules` — but no
 > `docker build` has been executed for this stack. Treat the first deploy as a supervised trial and
-> read `docker compose logs migrate` before `app`. Details in the deployment guide, §2.
+> read `docker compose logs migrate` before `app`. Details in the deployment guide, §2, and in
+> [`docs/known-limitations.md`](docs/known-limitations.md).
 
 Without Docker, for development:
 
 ```bash
-pnpm --filter @bp/normal-server test        # 300+ tests, on in-process PGlite — no database needed
+pnpm --filter @bp/normal-server test        # on in-process PGlite — no database needed
 pnpm --filter @bp/normal-web test           # the web app's own suite, jsdom
 pnpm build:normal                           # web → apps/normal-web/dist, then server → dist/main.js
 pnpm --filter @bp/normal-server dev         # build, then run (needs a real DATABASE_URL)
@@ -88,14 +148,6 @@ node apps/normal-server/scripts/e2e-server.mjs   # http://127.0.0.1:8091, PGlite
 > Before deploying, run that suite once against a **real** PostgreSQL with `TEST_DATABASE_URL` set:
 > PGlite is single-connection, so the row-lock serialization tests (`SELECT … FOR UPDATE`, which the
 > whole money design rests on) only actually execute there. Exact commands: deployment guide §2.
-
-- Operations, backup, upgrade, security — Vietnamese, like every operator guide here:
-  [`docs/deployment-normal.md`](docs/deployment-normal.md)
-- Module map, event bus, ledger conventions, adding an item or achievement — English, like every
-  developer doc here: [`docs/normal-server.md`](docs/normal-server.md)
-- The browser client — API client, session gate, avatar parts, i18n, footprint, e2e:
-  [`docs/normal-web.md`](docs/normal-web.md)
-- Restore procedure: [`deploy/normal/restore.md`](deploy/normal/restore.md)
 
 ### End-to-end check (optional)
 
@@ -130,8 +182,12 @@ directory holds `bind-poker-lite.exe`, `.env.example` and `README-lite.md`.
 Configuration is environment variables, or a `.env` beside the exe: `PORT`, `HOST`, `SQLITE_PATH`,
 `LOG_LEVEL`, `ECONOMY_TIMEZONE`, `LITE_HAND_LOG`, `ALLOWED_ORIGINS`, `PUBLIC_DIR`.
 
+Shut it down with `--stop`, `Ctrl`+`C` / `Ctrl`+`Break`, or NSSM. A hard kill (`taskkill`, closing
+the window) leaves written balances correct but loses chips still on a table — see
+[`docs/known-limitations.md`](docs/known-limitations.md).
+
 - Operator guide (Vietnamese, ships with the exe): `apps/lite/release-src/README-lite.md`
-- Build and deployment guide: `docs/deployment-lite.md`
+- Build and deployment guide: [`docs/deployment-lite.md`](docs/deployment-lite.md)
 
 ### End-to-end check (optional)
 
@@ -146,3 +202,16 @@ pnpm --filter @bp/lite e2e
 ```
 
 Screenshots (desktop and 375×812) land in `apps/lite/e2e/screenshots/`, which is not committed.
+
+## Assets and licensing
+
+There are **no third-party art assets in this repository**. Every avatar is an SVG component drawn
+in `apps/normal-web/src/avatar/parts.tsx`, tinted from theme tokens; cards, chips and table are CSS
+and SVG written here. No font file is bundled either — `--font-display` names a face and falls back
+to Cambria / Constantia / Segoe UI, all of which carry the precomposed Vietnamese glyphs.
+
+A 3D avatar replacement is specified in
+[`docs/superpowers/specs/2026-09-05-avatar-3d-design.md`](docs/superpowers/specs/2026-09-05-avatar-3d-design.md)
+and would introduce externally-licensed models. Nothing from it has been implemented or vendored, so
+no third-party licence applies to this codebase today. When it lands, the licence and attribution
+for whatever it ships will be recorded here.
