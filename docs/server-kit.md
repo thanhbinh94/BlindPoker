@@ -368,14 +368,15 @@ hand's exposure to about one big blind so nobody busts mid-run. Pass
 **What `seed` buys you.** Each seat gets its own stream, `seededRng(seed + i)`,
 so a seat facing its *n*-th decision always decides the same way for a given
 seed — the policy no longer depends on the order the sockets happened to be
-served in. That is enough to make the committed Hold'em run reproducible end
-to end (same seed → same hand count, same fees, same closing balances). It is
-*not* a promise of bit-for-bit reproducibility in general: with bots in the
-room, or with `actionDelayMs` set, the server's own RNG is consumed in
-whatever order the rooms and the bot delays reach it, so the Blind run's hand
-outcomes still move between runs even though every human seat's decision
-sequence is fixed. Seed a failing run, and you replay the *clients*; you do
-not necessarily replay the cards.
+served in. It is *not* a promise of bit-for-bit reproducibility of the run:
+`startTestServer` hands the whole server one `seededRng`, so the deck each
+room shuffles depends on which room reached `startGame` first, and bots and
+`actionDelayMs` consume that same stream in timing order. Hand counts, fees
+and closing balances therefore still move a little between runs of the same
+seed, in Hold'em as well as Blind — the invariants the soak asserts (money
+exact, no `seq` gaps, ≥ 20 hands per room, zero fee on cancelled hands) hold
+on every run, which is what the test is for. Seed a failing run, and you
+replay the *clients*' decisions; you do not replay the cards.
 
 The run ends with `server.shutdown()`, so `endBalances` is read when every
 table stack and carry-over pot is back in a balance. `SoakResult` then reports:
