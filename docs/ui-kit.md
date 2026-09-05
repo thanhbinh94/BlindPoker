@@ -98,6 +98,7 @@ that already has a height.
 | `act(action)` | `ACTION` with `baseSeq` = the latest applied `seq` |
 | `resync()` | `RESYNC` |
 | `clearError()`, `dismissNotification(id)` | local state only |
+| `reset()` | local state only — back to `initialClientState`. For a session ending: the reducer outlives any number of sessions, so without it a sign-out leaves the previous account's `me`, `balance`, `room` and notifications in place until the next `WELCOME`. Call it beside `disconnect()`, never on a live socket. |
 | `serverNow()` | `Date.now()` + the `WELCOME` clock offset — **always** compare deadlines against this |
 
 `ClientState` carries `status` (`idle`/`connecting`/`open`/`reconnecting`/`closed`), `closeReason`, `me`,
@@ -155,7 +156,7 @@ formatting; strings come from `useTranslation()`.
 | Component | Props |
 | --- | --- |
 | `LobbyScreen` | `client`, `lang`, `onLanguage`, `onEnteredRoom`, `extraNav?`, `header?` |
-| `RoomScreen` | `client`, `lang`, `onLeft`, `avatarFor?`, `header?`, `layout?` |
+| `RoomScreen` | `client`, `lang`, `onLeft`, `avatarFor?`, `captionFor?`, `header?`, `layout?` |
 | `Toasts` | `error`, `notifications`, `onClearError`, `onDismiss`, `lang` |
 
 `onLeft` fires the moment the room is gone — left, closed or kicked — and the app decides where that lands.
@@ -173,8 +174,8 @@ dropping the oldest, so a chatty server cannot stack slips off the top of the sc
 
 | Component | Props |
 | --- | --- |
-| `PokerTable` | `room`, `hand`, `myPlayerId`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `canSit`, `layout?`, `avatarFor?`, `onSeatClick?` |
-| `Seat` | `seat`, `player`, `isMe`, `isActing`, `isButton`, `winnerPayout`, `showdownLabel`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `position`, `avatar?` |
+| `PokerTable` | `room`, `hand`, `myPlayerId`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `canSit`, `layout?`, `avatarFor?`, `captionFor?`, `onSeatClick?` |
+| `Seat` | `seat`, `player`, `isMe`, `isActing`, `isButton`, `winnerPayout`, `showdownLabel`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `position`, `avatar?`, `caption?` |
 | `Card` | `card?`, `faceDown?`, `size?` (`sm`/`md`/`lg`), `delayMs?`, `highlighted?`, `className?` |
 | `CommunityCards` | `cards`, `highlight?` |
 | `Pot` | `pot`, `carryOver`, `pulse`, `lang` |
@@ -193,6 +194,12 @@ prints a main/side-pot ledger whenever there is more than one, which is the only
 reads as fair. `pots` is empty for a cancelled hand. A cancelled hand's `reason` is an operator-facing token, so it
 is normalised to a `cancel.*` key and translated; the raw token is never rendered. Pass `onDismiss` to make the card
 closable — `RoomScreen` does, and the between-hands countdown moves to the tray once it is waved off.
+
+**Seat slots.** A seat has two places the host app may write into, and they are threaded identically —
+`RoomScreen` → `PokerTable` → `Seat`. `avatarFor(player)` replaces the initial disc; `captionFor(player)` adds one
+muted, single-line, truncated line under the name (a title, a rank), and returning `null`/`undefined` leaves the
+plate exactly as it was. The caption is the plate's only decoration rather than state, so the compact plates
+(seven opponents and up in the stack layout) drop it to keep the third row on screen.
 
 Under 768 px the table becomes the vertical stack (spec §27.1): opponents, felt, your own seat. **The opponents'
 strip never scrolls inside itself** — it wraps, holds a floor of two plate rows, and from seven seats up the plates
@@ -300,6 +307,10 @@ Rules:
 - Numbers go through `formatPoints` / `formatCompactPoints`, never `toLocaleString` at the call site.
 - Hand categories translate through `handLabel(category, t)` off `HAND_CATEGORY_KEYS`; cards through
   `cardLabel(card, t)`; protocol errors through `errorLabel(code, t)`.
+- `NOTIFICATION` slips look up `notify.<kind>` and fall back to `notify.other`. `Toasts` hands `t` exactly two
+  values off the payload — `amount` (already formatted) and `id` — so a string may use `{{amount}}` or `{{id}}`
+  and nothing else. An app wanting a *name* where the server sent an id (`ACHIEVEMENT_UNLOCKED`) rewrites the
+  notification before passing it in.
 
 An app adds its own namespace without forking the resources:
 
@@ -371,7 +382,8 @@ view, seat count (4/6/9), theme, language, forced stack layout, and "next hand".
 - **Spectators** see the table read-only; there are no spectator controls and no spectator chrome.
 - **No chat.** Nothing in the protocol carries it yet.
 - **No avatar renderer.** `PokerTable` and `RoomScreen` take an `avatarFor(player)` slot and draw an initial disc
-  when it is absent; Normal supplies a real one from its cosmetics.
+  when it is absent; Normal supplies a real one from its cosmetics. `captionFor(player)` is the same arrangement
+  for the line under the name — the kit never invents a title of its own.
 - **No top-up.** `TOP_UP` is not in the protocol, so a short stack has to stand up and sit back down.
 - **Sit-out is not exposed.** `SITTING_OUT` renders on a seat but there is no message to request it.
 - The felt resizes slightly between the ring and stack layouts when a window crosses a breakpoint; the tray's height

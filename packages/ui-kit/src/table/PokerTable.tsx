@@ -24,6 +24,8 @@ export interface PokerTableProps {
   /** Defaults to `stack` under 768 px wide or 620 px tall, and `ring` above both. */
   layout?: TableLayout
   avatarFor?: (player: RoomPlayerView) => ReactNode
+  /** One muted line under each seat's name — a title, a rank. Returning `null` leaves that plate as it was. */
+  captionFor?: (player: RoomPlayerView) => ReactNode
   onSeatClick?: (seat: number) => void
   canSit: boolean
 }
@@ -66,6 +68,7 @@ export function PokerTable({
   lang,
   layout,
   avatarFor,
+  captionFor,
   onSeatClick,
   canSit,
 }: PokerTableProps) {
@@ -135,6 +138,7 @@ export function PokerTable({
         lang={lang}
         position={mode === 'ring' ? position : null}
         avatar={avatarFor?.(player)}
+        caption={captionFor?.(player)}
       />
     )
   }

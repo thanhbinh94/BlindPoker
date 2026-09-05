@@ -31,6 +31,17 @@ const amountOf = (payload: unknown): number | null => {
 }
 
 /**
+ * The payload's `id` — an achievement, an item — passed through as `{{id}}`. Only the two fields the strings
+ * actually name are handed to `t`; spreading the whole payload would let a server-shaped key like `count`
+ * silently turn a message into a plural lookup.
+ */
+const idOf = (payload: unknown): string | null => {
+  if (typeof payload !== 'object' || payload === null || !('id' in payload)) return null
+  const { id } = payload as { id: unknown }
+  return typeof id === 'string' ? id : null
+}
+
+/**
  * The one place the screens speak up: a bottom-right stack of lacquered slips. Errors are assertive (`role="alert"`,
  * red edge), notifications are polite (`role="status"`, gold edge) — the colour is never the only signal, each slip
  * also carries its own icon glyph and its own dismissal affordance.
@@ -57,6 +68,7 @@ export function Toasts({ error, notifications, onClearError, onDismiss, lang }: 
     return t(`notify.${n.kind}`, {
       defaultValue: t('notify.other'),
       amount: amount === null ? '' : formatPoints(amount, lang),
+      id: idOf(n.payload) ?? '',
     })
   }
 

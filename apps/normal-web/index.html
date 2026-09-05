@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="vi" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="description" content="Bind Poker — bàn bài đêm Sài Gòn, chơi bằng điểm." />
+    <meta name="robots" content="noindex" />
+    <title>Bind Poker</title>
+    <!--
+      Normal is served over the network, so it may spend a request on type: the kit's tokens already name
+      Fraunces (display) and Be Vietnam Pro (body) ahead of their local fallbacks, and this is where those two
+      actually arrive. `display=swap` means the fallback stack paints immediately and is replaced when the file
+      lands — never a blank page waiting on a font. The server's CSP allows exactly these two origins
+      (spec §19.2): `style-src` gains fonts.googleapis.com, `font-src` gains fonts.gstatic.com.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600&family=Fraunces:wght@500;700&display=swap"
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b1020'/%3E%3Ctext x='16' y='24' font-family='Georgia,serif' font-size='22' text-anchor='middle' fill='%23d9a441'%3E%E2%99%A0%3C/text%3E%3C/svg%3E"
+    />
+    <style>
+      /* The ink ground for the frame before the bundle's CSS lands — never a white flash into a night room. */
+      html {
+        background: #0b1020;
+      }
+      html[data-theme='light'] {
+        background: #f3eee2;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

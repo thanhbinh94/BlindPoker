@@ -9,6 +9,7 @@ Two editions from one codebase, sharing the engine, the room layer and the HTTP 
 | Ships as | A Docker image, behind Caddy | One Windows `.exe` |
 | Database | PostgreSQL 16 (Drizzle) | SQLite (`node:sqlite`), beside the exe |
 | Identity | Email + password (argon2id), session cookie | A display name and a bearer token |
+| Web UI | Built into the image, served at `/` from the same origin | Embedded in the exe |
 | Has | Cosmetics, inventory, avatars, achievements, points ledger | Points, daily reward, relief |
 | Needs | A host, a domain, TLS | A double-click |
 | Deploy guide | [`docs/deployment-normal.md`](docs/deployment-normal.md) | [`docs/deployment-lite.md`](docs/deployment-lite.md) |
@@ -34,13 +35,16 @@ pnpm lint
 - `packages/ui-kit` — shared React UI: game client, i18n (vi/en), theme, poker table, lobby, screens (see docs/ui-kit.md)
 - `apps/lite` — the Lite edition: Fastify + `node:sqlite` server, React web app, single-exe build
 - `apps/normal-server` — the Normal edition's backend: accounts, PostgreSQL, economy, cosmetics, achievements (see docs/normal-server.md)
-- `apps/normal-web` (planned)
+- `apps/normal-web` — the Normal edition's browser client: Vite/React on `@bp/ui-kit`, served by the server itself (see docs/normal-web.md)
 - `deploy/normal` — the Compose stack for the Normal edition: app + Postgres + Caddy, backup and restore
 
 ## Normal edition
 
 A server for the open Internet: real accounts, PostgreSQL, HTTPS. It runs as a four-service Docker
-Compose stack — the app, `postgres:16`, a one-shot migration job, and Caddy terminating TLS.
+Compose stack — the app, `postgres:16`, a one-shot migration job, and Caddy terminating TLS. The
+image carries the web client too: the builder runs the Vite build and the runtime serves it from
+`/app/public`, so `https://$DOMAIN` is the app and `https://$DOMAIN/api/…` is its API — one origin,
+one cookie, nothing extra to deploy.
 
 ```bash
 cd deploy/normal
@@ -63,8 +67,18 @@ Without Docker, for development:
 
 ```bash
 pnpm --filter @bp/normal-server test        # 300+ tests, on in-process PGlite — no database needed
-pnpm build:normal                           # typecheck + esbuild → dist/main.js, dist/migrate-cli.js
+pnpm --filter @bp/normal-web test           # the web app's own suite, jsdom
+pnpm build:normal                           # web → apps/normal-web/dist, then server → dist/main.js
 pnpm --filter @bp/normal-server dev         # build, then run (needs a real DATABASE_URL)
+pnpm dev:normal-web                         # Vite on :5173, proxying /api and /ws to :8080
+```
+
+Or run the whole thing — real API, real web build, throwaway in-process database — with one command
+and no PostgreSQL at all:
+
+```bash
+pnpm build:normal
+node apps/normal-server/scripts/e2e-server.mjs   # http://127.0.0.1:8091, PGlite, serves the UI
 ```
 
 > Before deploying, run that suite once against a **real** PostgreSQL with `TEST_DATABASE_URL` set:
@@ -75,7 +89,24 @@ pnpm --filter @bp/normal-server dev         # build, then run (needs a real DATA
   [`docs/deployment-normal.md`](docs/deployment-normal.md)
 - Module map, event bus, ledger conventions, adding an item or achievement — English, like every
   developer doc here: [`docs/normal-server.md`](docs/normal-server.md)
+- The browser client — API client, session gate, avatar parts, i18n, footprint, e2e:
+  [`docs/normal-web.md`](docs/normal-web.md)
 - Restore procedure: [`deploy/normal/restore.md`](deploy/normal/restore.md)
+
+### End-to-end check (optional)
+
+A Playwright pass over the built app against the real server on an in-process PGlite: one account
+registers, signs out, signs back in, plays a Blind hand against a bot to settlement — and the balance
+in the database is reconciled against the payout and the table fee printed on the result card. It
+also claims the daily reward, saves an avatar, and checks the rail and the table at 375 px.
+
+```bash
+pnpm build:normal
+pnpm --filter @bp/normal-web exec playwright install chromium
+pnpm e2e:normal
+```
+
+Screenshots (desktop and 375×812) land in `apps/normal-web/e2e/screenshots/`, which is not committed.
 
 ## Lite edition
 

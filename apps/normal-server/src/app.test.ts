@@ -621,8 +621,12 @@ describe('a whole hand between two registered players', () => {
         expect(stats.gamesCompleted).toBe(1)
       }
     }, { timeout: 10_000 })
+    // A tied showdown has no winner at all (`won` is `net > 0`), so the counters are checked against
+    // what the history recorded for this hand rather than against "someone must have won".
     const winners = await Promise.all([alice, mai].map(async (p) => (await h.app.services.stats.get(p.playerId)).handsWonBlind))
-    expect(winners[0]! + winners[1]!).toBeGreaterThanOrEqual(1)
+    const recorded = rowsOf<{ n: string | number }>(await db.execute(sql`select count(*) as n from game_players where won = true`))
+    expect(winners[0]! + winners[1]!).toBe(Number(recorded[0]?.n ?? 0))
+    expect(winners[0]! + winners[1]!).toBeLessThanOrEqual(1)
   }, 40_000)
 })
 

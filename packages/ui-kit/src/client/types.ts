@@ -105,6 +105,15 @@ export type ClientAction =
   | { type: 'dismissNotification'; id: number }
   | { type: 'resyncSent' }
   | { type: 'leftRoom' }
+  /**
+   * Forget everything: back to `initialClientState`.
+   *
+   * The one thing that needs it is a session ending. The reducer is created once per app mount and outlives
+   * any number of sessions, so without this a sign-out leaves `me`, `balance`, `room` and the notification
+   * stack behind — and on a shared machine the next player is greeted by name with the previous player's
+   * points until a `WELCOME` overwrites them.
+   */
+  | { type: 'reset' }
 
 export const initialClientState: ClientState = {
   status: 'idle',

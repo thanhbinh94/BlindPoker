@@ -6,5 +6,7 @@
   // TypeScript sources that `tsc` would have emitted references to rather than code.
   "compilerOptions": { "noEmit": true },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/test-db.ts", "src/test-harness.ts"]
+  // `e2e-entry.ts` joins them for the same reason: it opens a PGlite database, and nothing that ships
+  // may so much as name a devDependency.
+  "exclude": ["src/**/*.test.ts", "src/**/test-db.ts", "src/test-harness.ts", "src/e2e-entry.ts"]
 }

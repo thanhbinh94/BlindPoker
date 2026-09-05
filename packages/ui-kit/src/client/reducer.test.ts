@@ -341,3 +341,18 @@ describe('frames with nothing to apply ask for a snapshot', () => {
     expect(s.resyncNeeded).toBe(true)
   })
 })
+
+describe('reset', () => {
+  it('forgets the session: identity, balance, room, hand and notifications all go back to nothing', () => {
+    const room = roomView('holdem', HOLDEM_RULES, [20000, 20000])
+    let s = reduceClient(initialClientState, { type: 'server', msg: { t: 'WELCOME', playerId: 'p1', displayName: 'P1', balance: 123_000, serverTime: 0 }, now: 0 })
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_SNAPSHOT', seq: 7, room, hand: null, deadlineAt: null }, now: 0 })
+    s = reduceClient(s, { type: 'server', msg: { t: 'NOTIFICATION', kind: 'ACHIEVEMENT_UNLOCKED', payload: { id: 'login_days_7' } }, now: 0 })
+    s = reduceClient(s, { type: 'status', status: 'open' })
+    expect(s.me).not.toBeNull()
+    expect(s.notifications).toHaveLength(1)
+
+    // The next player on this machine must not be greeted by the previous one's name, points or table.
+    expect(reduceClient(s, { type: 'reset' })).toEqual(initialClientState)
+  })
+})

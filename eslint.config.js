@@ -3,13 +3,16 @@ import tseslint from 'typescript-eslint'
 import { FORBIDDEN_GLOBALS, NODE_BUILTINS } from './tooling/arch/node-builtins.js'
 
 const CORE_PURITY = '@bp/core must be pure: no @bp packages, no Node built-ins, no host globals'
+const WEB_ONLY = '@bp/normal-web may only depend on @bp/core and @bp/ui-kit, and runs in a browser'
 
 const forbid = (patterns, message) => ({
   'no-restricted-imports': ['error', { patterns: patterns.map((group) => ({ group: [group], message })) }],
 })
 
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/release/**', '**/node_modules/**', '**/playground/dist/**'] },
+  // `.e2e/` is `scripts/e2e-server.mjs`'s esbuild output — a build artefact like `dist/`, and linting a
+  // bundle only ever reports on the bundler's own bookkeeping.
+  { ignores: ['**/dist/**', '**/release/**', '**/node_modules/**', '**/playground/dist/**', '**/.e2e/**'] },
   ...tseslint.configs.recommended,
   {
     rules: {
@@ -68,5 +71,63 @@ export default tseslint.config(
     // `apps/normal-*` one above for these files, so it repeats the no-lite rule.)
     files: ['apps/normal-server/**/*.ts'],
     rules: forbid(['@bp/ui-kit', 'react', 'react-dom', '@bp/lite', '@bp/normal-web', '**/apps/**'], '@bp/normal-server may only depend on @bp/core, @bp/server-kit and @bp/http-kit'),
+  },
+  {
+    // The Normal web app is a browser bundle: @bp/core and @bp/ui-kit, and nothing else in the workspace —
+    // no server package, no other app, and no Node built-in, which would not survive the bundle anyway.
+    // (This block replaces the `apps/normal-*` one above for these files, so it repeats the no-lite rule.)
+    files: ['apps/normal-web/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        paths: NODE_BUILTINS.filter((m) => !m.endsWith('*')).map((name) => ({ name, message: WEB_ONLY })),
+        patterns: [
+          // Package specifiers, and the relative ones that climb out of this app into another. The relative
+          // half matters: `**/apps/**` alone never fires on `'../../../normal-server/…'`, which is how a
+          // browser bundle would quietly acquire a dependency on a Postgres server.
+          { group: ['@bp/server-kit', '@bp/http-kit', '@bp/lite', '@bp/normal-server', '**/apps/**', '**/normal-server/**', '**/lite/**'], message: WEB_ONLY },
+          { group: NODE_BUILTINS.filter((m) => m.endsWith('*')), message: WEB_ONLY },
+        ],
+      }],
+    },
+  },
+  {
+    // The single exception, and it is a narrow one: a *test* may read the server's catalogue JSON, so that a
+    // new item or achievement cannot ship as a raw key on a wardrobe tile. Only `data/` is opened up —
+    // `**/normal-server/src/**` stays shut, so this can never become a door into the server's code, and
+    // nothing that ships in the bundle is covered by it at all.
+    files: ['apps/normal-web/**/*.test.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        paths: NODE_BUILTINS.filter((m) => !m.endsWith('*')).map((name) => ({ name, message: WEB_ONLY })),
+        patterns: [
+          { group: ['@bp/server-kit', '@bp/http-kit', '@bp/lite', '@bp/normal-server', '**/apps/**', '**/normal-server/src/**', '**/lite/**'], message: WEB_ONLY },
+          { group: NODE_BUILTINS.filter((m) => m.endsWith('*')), message: WEB_ONLY },
+        ],
+      }],
+    },
+  },
+  {
+    // …and `vite.config.ts` / `vitest.config.ts`, which Node runs rather than the browser.
+    files: ['apps/normal-web/*.config.ts'],
+    rules: { 'no-restricted-imports': 'off' },
+  },
+  {
+    // …and the two directories outside `src/` that Node runs too: `test/` measures the emitted bundle on
+    // disk and `e2e/` drives a browser from outside it. Neither ships, and both need `node:` built-ins.
+    // (Listed after the `*.test.{ts,tsx}` block above, which would otherwise still catch `test/*.test.ts`.)
+    //
+    // Only the Node-builtin half is lifted. Flat config is last-match-wins, so a bare
+    // `'no-restricted-imports': 'off'` here would also cancel the *dependency-direction* guard these files
+    // inherit — and an e2e helper could then reach into `../../normal-server/src/app.js` and start the
+    // server in-process instead of driving the one under test. Nothing else would catch that:
+    // `tooling/arch/boundaries.test.ts` reads the `package.json` graph, where a relative climb is invisible.
+    files: ['apps/normal-web/test/**/*.ts', 'apps/normal-web/e2e/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [
+          { group: ['@bp/server-kit', '@bp/http-kit', '@bp/lite', '@bp/normal-server', '**/apps/**', '**/normal-server/src/**', '**/lite/**'], message: WEB_ONLY },
+        ],
+      }],
+    },
   },
 )

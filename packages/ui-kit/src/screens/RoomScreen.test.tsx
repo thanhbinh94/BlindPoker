@@ -28,6 +28,7 @@ function fakeClient(state: ClientState, overrides: Partial<GameClientApi> = {}):
     resync: vi.fn(),
     clearError: vi.fn(),
     dismissNotification: vi.fn(),
+    reset: vi.fn(),
     serverNow: () => 1_000_000,
     ...overrides,
   }
@@ -104,6 +105,37 @@ describe('RoomScreen', () => {
 
     await confirm('5') // below 50 BB
     expect(client.sitDown).toHaveBeenLastCalledWith(1, 10_000)
+  })
+
+  it('threads the app slots down to the seats', () => {
+    // Ann hosts, so the viewer sees no kick roster and every "Ann" on screen is her seat plate.
+    const room = makeRoom({
+      status: 'OPEN',
+      playerCount: 2,
+      players: [
+        makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'SEATED', stack: 20_000 }),
+        makePlayer({ playerId: 'me', displayName: 'Mai', seat: 1, status: 'SEATED', stack: 20_000 }),
+      ],
+    })
+    const client = fakeClient(makeState({ room }))
+    render(
+      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+        <RoomScreen
+          client={client}
+          lang="en"
+          onLeft={vi.fn()}
+          avatarFor={(p) => <span>{`av:${p.playerId}`}</span>}
+          captionFor={(p) => (p.playerId === 'a' ? 'Hot Hand' : null)}
+        />
+      </I18nextProvider>,
+    )
+
+    expect(screen.getByText('av:a')).toBeInTheDocument()
+    const ann = screen.getByText('Ann').parentElement
+    expect(within(ann!).getByText('Hot Hand')).toBeInTheDocument()
+    // Mai answered `null`, so her plate keeps the two lines it always had.
+    const mai = screen.getByText('Mai').parentElement
+    expect(within(mai!).queryByText('Hot Hand')).toBeNull()
   })
 
   it('offers ready and stand-up once seated', async () => {

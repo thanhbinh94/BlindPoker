@@ -640,7 +640,7 @@ Auth = cookie phiên `bp_session` (`HttpOnly`, `SameSite=Lax`, `Secure` khi `COO
 | GET | `/api/me` | ✔ | `200 {playerId, displayName, email, balance, avatar, stats{handsPlayed, handsWon}, daily{…}, relief{…}, createdAt, lastLoginAt}` | `401` · `429` |
 | PATCH | `/api/me` | ✔ XRW | `200 {playerId, displayName}` | `400 INVALID_NAME` · `409 DISPLAY_NAME_TAKEN` · `401` · `403` · `429` |
 | GET | `/api/me/stats` | ✔ | `200 PlayerStats` (đủ 16 bộ đếm §10.3) | `401` · `429` |
-| GET | `/api/me/history?limit=20` | ✔ | `200 HistoryEntry[]` (service kẹp 1…50, mặc định 20) | `401` · `429` |
+| GET | `/api/me/history?limit=20` | ✔ | `200 HistoryEntry[]` = `[{handId, roomId, mode, startedAt, endedAt, net, won, bestCategory, cancelled, players:[{playerId, label, seat, isBot, net, won}]}]` (service kẹp 1…50, mặc định 20). Mỗi ghế mang **cả hai**: `playerId` (uuid, `null` với bot và với tài khoản đã xóa — đây là khóa để client lọc ghế của chính mình) và `label` (tên hiển thị đã join từ `players` với người, id engine với bot; rơi về id engine khi tài khoản không còn) | `401` · `429` |
 | GET | `/api/me/ledger?limit=50&before=<id>` | ✔ | `200 {entries:[{id, amount, reason, refId, createdAt}], nextBefore}` | `401` · `429` |
 | GET | `/api/me/inventory` | ✔ | `200 {items:[{itemId, category, rarity, nameKey, assetKey, source, acquiredAt}], avatar}` | `401` · `429` |
 | PUT | `/api/me/avatar` | ✔ XRW | `200 {config}` (`AvatarView`) | `400 MISSING_LAYER`/`INVALID_COLOR`/`INVALID_ITEM`/`WRONG_CATEGORY` · `403 NOT_OWNED` · `401` · `403` XRW · `429` |
@@ -897,21 +897,24 @@ Biện pháp: delta events thay vì gửi lại snapshot; PlayerView tính một
 - Lá bài: `clamp(36px, 8vw, 72px)` chiều rộng.
 
 ### 27.2 Màn hình
-| # | Màn | Normal | Lite |
-|---|---|---|---|
-| 1 | Landing/Login/Register | ✓ | Nhập tên |
-| 2 | Home/Lobby | ✓ | ✓ |
-| 3 | Room list | ✓ | ✓ |
-| 4 | Create room | ✓ | ✓ |
-| 5 | Join room (mã/mật khẩu) | ✓ | ✓ |
-| 6 | Poker table | ✓ | ✓ |
-| 7 | Player profile | ✓ | Rút gọn |
-| 8 | Avatar customization | ✓ | ✗ |
-| 9 | Inventory | ✓ | ✗ |
-| 10 | Achievements | ✓ | ✗ |
-| 11 | Daily reward | ✓ | ✓ (điểm) |
-| 12 | Settings | ✓ | ✓ |
-| 13 | Language selection (trong Settings và header) | ✓ | ✓ |
+Cột cuối ghi nơi màn hình của **bản Normal** thực sự nằm sau Plan 6 (`apps/normal-web`); màn nào đến
+từ `@bp/ui-kit` thì dùng nguyên component của kit chứ không viết lại.
+
+| # | Màn | Normal | Lite | Trạng thái bản Normal |
+|---|---|---|---|---|
+| 1 | Landing/Login/Register | ✓ | Nhập tên | Đã triển khai (Plan 6) — `screens/AuthScreen.tsx`, route `#/login` và `#/register` |
+| 2 | Home/Lobby | ✓ | ✓ | Đã triển khai (Plan 6) — `LobbyScreen` của ui-kit, thêm `extraNav` (điểm danh, hồ sơ, ảnh đại diện) |
+| 3 | Room list | ✓ | ✓ | Đã triển khai (Plan 6) — trong `LobbyScreen` của ui-kit |
+| 4 | Create room | ✓ | ✓ | Đã triển khai (Plan 6) — dialog tạo phòng của ui-kit |
+| 5 | Join room (mã/mật khẩu) | ✓ | ✓ | Đã triển khai (Plan 6) — trong `LobbyScreen` của ui-kit |
+| 6 | Poker table | ✓ | ✓ | Đã triển khai (Plan 6) — `RoomScreen` của ui-kit + `avatarFor`/`captionFor` của app |
+| 7 | Player profile | ✓ | Rút gọn | Đã triển khai (Plan 6) — `screens/ProfileScreen.tsx` (thống kê, ván gần đây, lịch sử điểm, đổi tên) |
+| 8 | Avatar customization | ✓ | ✗ | Đã triển khai (Plan 6) — `screens/AvatarScreen.tsx` + thư viện vector `avatar/parts.tsx` |
+| 9 | Inventory | ✓ | ✗ | Đã triển khai (Plan 6) — `screens/InventoryScreen.tsx` |
+| 10 | Achievements | ✓ | ✗ | Đã triển khai (Plan 6) — `screens/AchievementsScreen.tsx` |
+| 11 | Daily reward | ✓ | ✓ (điểm) | Đã triển khai (Plan 6) — `screens/DailyScreen.tsx` (lịch 31 ngày, biên nhận, cứu trợ) |
+| 12 | Settings | ✓ | ✓ | Đã triển khai (Plan 6) — `screens/SettingsScreen.tsx` |
+| 13 | Language selection (trong Settings và header) | ✓ | ✓ | Đã triển khai (Plan 6) — `LanguageSwitch` của ui-kit, trong rail của `Shell` và trong Settings |
 
 ### 27.3 Bàn chơi phải hiển thị
 Người chơi (tên, stack, avatar/chữ cái, badge/title ở Normal), lá riêng, lá chung, pot (+ side pot, + pot cộng dồn), cược hiện tại của từng người, lượt (viền sáng + timer vòng tròn), trạng thái fold/all-in/sitting-out/disconnected, người thắng + bài thắng + số điểm nhận, mode và variant, mã phòng.
@@ -920,6 +923,7 @@ Người chơi (tên, stack, avatar/chữ cái, badge/title ở Normal), lá ri�
 
 ### 28.1 Normal
 - **`apps/normal-server/Dockerfile` hai stage.** Builder `node:22-alpine`: `npm i -g pnpm@9` (image không bật corepack), `apk add python3 make g++` (dự phòng khi `argon2` không có prebuild musl và phải biên dịch), copy manifest của **mọi** project trong workspace (`--frozen-lockfile` so lockfile với các project nó nhìn thấy, thiếu một cái là "lockfile cũ"), `pnpm install --frozen-lockfile --filter @bp/normal-server...`, `pnpm --filter @bp/normal-server build`, rồi `pnpm --filter @bp/normal-server deploy --prod /out`. Runtime `node:22-alpine`: `COPY --from=builder /out /app`, user `node` (không root), `NODE_ENV=production`, `EXPOSE 8080`, `HEALTHCHECK` bằng `node -e "fetch('http://127.0.0.1:8080/health')…"` (image không có curl), `CMD ["node","dist/main.js"]`.
+  - **Image phục vụ luôn UI (Plan 6).** Builder cài với hai filter (`--filter @bp/normal-server... --filter @bp/normal-web...`), build server rồi build web (`pnpm --filter @bp/normal-web build`); runtime `COPY --from=builder /build/apps/normal-web/dist /app/public` và `ENV PUBLIC_DIR=/app/public`. Web bundle **không** nằm trong `/out`: `pnpm deploy` viết ra một *package*, và bundle web không phải file của `@bp/normal-server`. Mặc định của `config.ts` vẫn là `publicDir: null` (chỉ API) cho triển khai phục vụ web ở nơi khác; image mới là chỗ đặt giá trị.
   - Build context là **thư mục gốc repo** (`docker build -f apps/normal-server/Dockerfile .`) — một package workspace không cài được nếu thiếu workspace của nó. Vì thế danh sách loại trừ nằm ở `apps/normal-server/Dockerfile.dockerignore` (BuildKit đọc `<dockerfile>.dockerignore` trước): một `.dockerignore` đặt trong thư mục app sẽ không bao giờ được đọc.
   - `pnpm deploy --prod` là ngữ nghĩa **pnpm 9**: không có và không cần cờ `--legacy`. pnpm 10 hỏng ở **hai** chỗ, nên bản ghim 9 là ghim thật chứ không phải mặc định: `deploy` từ chối chạy nếu workspace không đặt `inject-workspace-packages=true` (rồi lại đòi `--legacy`), và pnpm 10 không chạy install script của dependency theo mặc định (`onlyBuiltDependencies`) nên bước `node-gyp-build` của argon2 bị bỏ qua âm thầm. `pnpm deploy --prod` đã được chạy thật trên pnpm 9.15.9: kết quả boot độc lập được, `node_modules` chỉ có sáu dependency production và không có devDependency nào. argon2 0.45.1 cũng có sẵn prebuild musl (`prebuilds/linux-x64/argon2.musl.node`), nên `python3 make g++` trong stage builder là dự phòng chứ không bắt buộc.
 - **`deploy/normal/docker-compose.yml`: bốn service, một luật thứ tự.**
@@ -981,6 +985,14 @@ Tạo/vào/rời phòng, mã phòng, mật khẩu, ready/start/autoStart, ván t
 
 ### 29.4 Normal
 Auth (đăng ký/đăng nhập/sai mật khẩu/rate-limit/cookie flags), economy (bảng daily từng ngày, reset tháng, bỏ ngày, cứu trợ cooldown, phí bàn), achievement (unlock từ event, không unlock hai lần), inventory/avatar (từ chối item không sở hữu), Postgres repository (Docker `postgres:16`, bỏ qua nếu không có Docker với cảnh báo).
+
+**`apps/normal-web`** — mỗi màn render thật với một `NormalApi` giả và được điều khiển qua `user-event`, mọi truy vấn bằng role + accessible name (test hành vi *và* test khả năng tiếp cận cùng lúc); `locales.test.ts` đối chiếu hai bundle ngôn ngữ với `data/items.json` + `data/achievements.json` của server; `test/footprint.test.ts` đo gzip của `dist/assets/*` (entry ≤ 500 KB, tổng ≤ 900 KB, CSS ≤ 60 KB) và **bỏ qua kèm cảnh báo** khi chưa build.
+
+**E2E bản Normal (tuỳ chọn, ngoài `pnpm test`)** — `apps/normal-web/e2e/` chạy bằng `pnpm e2e:normal`, cần `pnpm build:normal` và `playwright install chromium`:
+- `webServer` = `node apps/normal-server/scripts/e2e-server.mjs`: esbuild bundle `src/e2e-entry.ts` (chính `buildApp` production) ra `apps/normal-server/.e2e/server.mjs` — **không** phải `dist/`, vì bundle production bị chặn không được chứa PGlite — rồi chạy nó trên `127.0.0.1:8091` với PGlite trong tiến trình và `PUBLIC_DIR` trỏ vào `apps/normal-web/dist`. Hai project `desktop` (1440×900) và `mobile` (375×812), một worker, `vi-VN` + `Asia/Ho_Chi_Minh`.
+- Kịch bản: đăng ký → sảnh → **đăng xuất rồi đăng nhập lại** (phiên chỉ là cookie) → tạo phòng Blind (2 lá, chơi/bỏ, cược 1.000, 1 bot) → ngồi, sẵn sàng, bắt đầu → chơi → phiếu kết quả; rồi tiến độ `blind_hands_10` phải là 1/10. Test thứ hai: điểm danh (biên nhận khớp `GET /api/me`), đổi màu tóc → lưu → tải lại → mở bằng **context khác** để thấy khuôn mặt đã lưu. Test `@mobile`: rail đủ bốn tab trong 375 px và không cuộn ngang, bàn ở bố cục stack, trang hồ sơ không cuộn ngang.
+- Bất biến tiền kiểm bằng **ba nguồn độc lập**: số dư trước/sau từ `GET /api/me`, phí + tiền thắng đọc trên phiếu kết quả, và sổ điểm `GET /api/me/ledger`. Ràng buộc được viết ra: `Δ số dư = tiền thắng + phần cược dư hoàn lại − tiền đã bỏ ra`; `pot = Σ tiền thắng + phí` phải rơi vào đúng hai giá trị luật cho phép (bot bỏ bài sau ante, hoặc bot theo); `phí = ⌊2% pot⌋`; tổng mọi dòng sổ = số dư hiện tại và đúng **một** dòng `settlement` khớp phiếu kết quả. (Không viết `Σ delta người + net bot + phí = 0` như Lite: chỉ có một người thật nên net của bot phải suy ra từ chính phiếu kết quả, và đẳng thức rút về `0 = 0` — một assertion không bao giờ hỏng còn tệ hơn không có.)
+- Ảnh chụp màn hình (đăng nhập, sảnh, bàn, phiếu kết quả, điểm danh, ảnh đại diện, thành tựu, hồ sơ — cả desktop lẫn 375×812) rơi vào `apps/normal-web/e2e/screenshots/`, không commit.
 
 ### 29.5 Lite
 SQLite repository + migrate `user_version`; khởi động server bundle trên cổng ngẫu nhiên, tạo session, tạo phòng qua WS; `test/footprint.test.ts` (chuỗi cấm, gzip JS/CSS, kích thước exe); `test/smoke.test.ts`: chạy `bind-poker-lite.exe --smoke` (cổng ephemeral, database vào thư mục tạm), đọc JSON `/health` trên stdout, kiểm mã thoát.
@@ -1103,6 +1115,9 @@ ESLint boundary; test đọc `package.json` từng package và kiểm graph mụ
 | Tách `@bp/http-kit` khỏi hai edition | `.env`, JSON logger, rate limiter, static asset, security header, CSRF guard, error envelope là **giống hệt** ở Lite và Normal; hai bản sao sẽ trôi khỏi nhau đúng ở phần bảo mật | Để nguyên trong Lite rồi Normal copy sang | Thêm một package và một ranh giới phải giữ (ESLint chặn http-kit import bất kỳ package workspace nào) |
 | Id phiên = `hex(HMAC-SHA256(SESSION_SECRET, token))`, xoay id khi login | Bảng `sessions` không chứa thứ gì đăng nhập được: đọc trộm database không ra token, và người ghi được row cũng không tự chế được id cho một token họ chọn nếu không có secret. Xoay id khi login vô hiệu hóa session fixation | Lưu token băm SHA-256 như Lite; JWT không trạng thái | Đổi `SESSION_SECRET` là đăng xuất tất cả (đúng ý muốn, nhưng phải nói rõ trong tài liệu vận hành). JWT thì không revoke được |
 | Dòng sink trong `point_transactions` dùng `reason = kind` | Bất biến tiền §18.4 đọc được từ **một** bảng: `Σ balance + Σ dòng player_id NULL`. Lite tách bảng `sinks` vì nó không có ledger; Normal có rồi thì bảng thứ hai chỉ là một chỗ nữa để lệch | Bảng `sinks` riêng như Lite | `reason` mang hai nghĩa tùy theo `player_id` NULL hay không; bù lại có CHECK `player_id is not null or kind is not null` để không tồn tại dòng mồ côi bị đếm nhầm thành sink |
+| Phiên của web Normal **chỉ** là cookie, không token | Cookie `HttpOnly` không đọc được bằng JS nên XSS không mang phiên đi được; WebSocket dùng chính cookie đó lúc upgrade nên không có credential thứ hai, không có token trên query string, và không có khoảng thời gian socket mở mà chưa biết là ai. Đổi lại client phải hỏi `GET /api/auth/me` một lần lúc boot, vì nó không tự đọc được phiên của mình | Bearer token trong `localStorage` như Lite; token riêng cho WebSocket | Cần CSRF guard (`X-Requested-With`) cho mọi request thay đổi dữ liệu, và phiên chết trên socket trông y hệt mạng kém — nên gate phải dò lại bằng REST sau 10 s reconnect (`RECONNECT_PROBE_MS`) |
+| Avatar là SVG vẽ trong app, không phải file ảnh | Mỗi part là vài path trong `avatar/parts.tsx`, khóa bằng đúng `assetKey` của catalogue, tô màu bằng token của theme và đổi màu tóc bằng một CSS custom property. Không có request ảnh nào cho tám ghế, không có thư mục asset phải triển khai kèm, và một item mới chỉ là một hàng JSON ở server + một renderer ở client | PNG/SVG tĩnh phục vụ từ `PUBLIC_DIR`; dịch vụ avatar bên ngoài | Item mới cần **hai** artefact deploy đúng thứ tự — nên `Avatar` bỏ qua `assetKey` không có renderer thay vì ném lỗi, và server có thể phát item trước khi bundle biết vẽ nó |
+| `captionFor` là một slot của ui-kit, không phải logic trong kit | Danh hiệu và huy hiệu là khái niệm **chỉ** bản Normal có; kit không được biết đến `items.json` hay namespace i18n của app. Slot giữ ranh giới "kit chỉ phụ thuộc `@bp/core`" nguyên vẹn, và Lite truyền `undefined` là xong | Kit tự đọc title/badge từ state phòng; hard-code chuỗi trong kit | Mỗi edition tự lo dịch chuỗi của mình; app phải nhớ truyền cả `avatarFor` lẫn `captionFor` cho `RoomScreen` |
 
 ## Phụ lục B — Bảng kiểm chấp nhận (mục 40 & 66 requirement)
 

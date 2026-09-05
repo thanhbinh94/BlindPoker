@@ -21,6 +21,8 @@ export interface RoomScreenProps {
   /** Fired the moment the room is gone — left, closed or kicked. The host app decides where to go next. */
   onLeft: () => void
   avatarFor?: (p: RoomPlayerView) => ReactNode
+  /** One muted line under each seat's name — a title, a rank. Threaded straight to `PokerTable`. */
+  captionFor?: (p: RoomPlayerView) => ReactNode
   /** App-specific banner above the room (edition branding, announcements…). */
   header?: ReactNode
   /** Forces the table layout; by default the table picks ring or stack from the viewport. */
@@ -55,7 +57,7 @@ function useCountdown(target: number | null, now: () => number): number | null {
  * Everything shown is derived from `client.state`; every button is one `GameClientApi` call. The screen decides
  * nothing about the game — not whose turn it is, not what a legal bet is, not who may start.
  */
-export function RoomScreen({ client, lang, onLeft, avatarFor, header, layout }: RoomScreenProps) {
+export function RoomScreen({ client, lang, onLeft, avatarFor, captionFor, header, layout }: RoomScreenProps) {
   const { t } = useTranslation()
   const { state } = client
   const room = state.room
@@ -163,6 +165,7 @@ export function RoomScreen({ client, lang, onLeft, avatarFor, header, layout }: 
           onSeatClick={onSeatClick}
           layout={layout}
           avatarFor={avatarFor}
+          captionFor={captionFor}
         />
 
         {/* the result card is dealt onto the felt, so it keeps the felt's night palette in either theme */}

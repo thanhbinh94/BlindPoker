@@ -1,0 +1,1018 @@
+/* Bind Poker — Normal shell. The same "đêm Sài Gòn" lacquer rail Lite hangs its rooms in, widened by one
+   tab: an account edition has a profile, and the profile is where avatar, inventory and achievements live.
+   The kit draws the game; this file draws only the room it hangs in. */
+
+.shell {
+  --bp-bar: 52px;
+  --bp-stage: calc(100dvh - var(--bp-bar));
+
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.shell[data-bar='false'] {
+  --bp-stage: 100dvh;
+}
+
+/* ── the rail ─────────────────────────────────────────────────────────────── */
+
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: var(--bp-bar);
+  padding: 0 var(--space-4);
+  background: color-mix(in srgb, var(--bg-elev) 88%, #04060f);
+  backdrop-filter: blur(8px);
+}
+
+/* one hairline of lacquer under the rail, fading east */
+.bar::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold) 0%, color-mix(in srgb, var(--gold) 26%, transparent) 42%, transparent 100%);
+}
+
+.mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+  min-width: 0;
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.markGlyph {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  color: var(--gold-ink);
+  background: var(--gold);
+  box-shadow: var(--shadow-1);
+  font-family: var(--font-display);
+  font-size: 0.9375rem;
+  line-height: 1;
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.edition {
+  flex: none;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.nav {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.nav::-webkit-scrollbar {
+  display: none;
+}
+
+.navLink {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  color: var(--ink-muted);
+  transition: color var(--dur-1) var(--ease);
+}
+
+.navLink:hover {
+  color: var(--ink);
+}
+
+/* the lacquer underline: it grows from the middle, so the active tab reads as struck rather than boxed */
+.navLink::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  right: 50%;
+  bottom: 2px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--gold);
+  transition:
+    left var(--dur-2) var(--ease),
+    right var(--dur-2) var(--ease);
+}
+
+.navLink[aria-current='page'] {
+  color: var(--ink);
+}
+
+.navLink[aria-current='page']::after {
+  left: var(--space-3);
+  right: var(--space-3);
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  /* Shrinkable, never growing: the nav is what the rail is for, so if something has to give up
+     width at a narrow viewport it is this side and not the fourth tab. */
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.balance {
+  font-family: var(--font-display);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.connDot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink-muted);
+}
+
+.conn[data-status='open'] .connDot {
+  background: var(--teal);
+}
+
+.conn[data-status='reconnecting'] .connDot,
+.conn[data-status='connecting'] .connDot {
+  background: var(--gold);
+}
+
+.conn[data-status='closed'] .connDot {
+  background: var(--red);
+}
+
+.main {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Under 640px the rail keeps only what a thumb needs on every screen: the mark, the four tabs and the
+   connection dot. Normal carries one tab more than Lite, so the squeeze is tighter — the wordmark, the
+   edition pill and the language switch all go, and the tabs lose a step of padding. The language switch
+   stays reachable on Settings and on the sign-in page, which is where a player changes it once. */
+@media (max-width: 640px) {
+  .bar {
+    gap: var(--space-1);
+    padding: 0 var(--space-2);
+  }
+
+  .edition,
+  .wordmark,
+  .railLang {
+    display: none;
+  }
+
+  /* The spacer exists to push the identity to the far edge on a wide rail. At this width there is no slack
+     to distribute and it competes with the nav for it, so it stops being a flex item at all. */
+  .spacer {
+    display: none;
+  }
+
+  /* The balance is written compactly here (`Shell.tsx`'s `NARROW_RAIL`), so it can also be written smaller:
+     between the two, `123.000 điểm` becomes `123K điểm` in roughly a third of the width, which is what buys
+     the fourth tab its place on a 375 px rail. */
+  .identity {
+    gap: var(--space-2);
+  }
+
+  .balance {
+    font-size: 0.8125rem;
+  }
+
+  /* On /profile — the one page that prints the balance itself — the rail's copy is the first thing to go:
+     without it the four tabs fit at 375 px instead of scrolling the last one away. Everywhere else the rail
+     keeps it, because nothing else on those pages shows it. */
+  .identity[data-balance-in-page='true'] .balance {
+    display: none;
+  }
+
+  /* The tabs are struck with an underline rather than boxed, so they can sit close together: at 375 px the
+     four Vietnamese labels plus the compact balance need every pixel the padding is not using. */
+  .navLink {
+    padding: 0 var(--space-1);
+    font-size: 0.8125rem;
+  }
+
+  /* …and the underline follows the padding in, or it would sit narrower than the word it strikes. */
+  .navLink[aria-current='page']::after {
+    left: var(--space-1);
+    right: var(--space-1);
+  }
+}
+
+@media (pointer: coarse) {
+  .navLink {
+    height: var(--tap);
+  }
+
+  /* On `.shell`, not on `.bar`: `--bp-stage` is computed from `--bp-bar` up here, and a redeclaration on the
+     bar itself would raise the rail without the stage below it ever hearing about it. */
+  .shell {
+    --bp-bar: 56px;
+  }
+}
+
+/* ── the sign-in card ─────────────────────────────────────────────────────── */
+
+.authStage {
+  --ground: var(--bg);
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-5);
+  min-height: 100dvh;
+  padding: var(--space-6) var(--space-4);
+}
+
+.authLang {
+  display: flex;
+  justify-content: center;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: min(26rem, 100%);
+  padding: var(--space-6) var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-elev);
+  box-shadow: var(--shadow-2);
+}
+
+.cardHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.eyebrow {
+  font-family: var(--font-display);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.authTitle {
+  margin: 0;
+  font-size: 1.75rem;
+}
+
+.lead {
+  font-size: 0.9375rem;
+  color: var(--ink-muted);
+  text-wrap: pretty;
+}
+
+/* two tabs on one lacquer rule; the chosen one is struck, never boxed */
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--line);
+}
+
+.tab {
+  position: relative;
+  display: inline-flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--ink-muted);
+  transition: color var(--dur-1) var(--ease);
+}
+
+.tab:hover {
+  color: var(--ink);
+}
+
+.tab::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  right: 50%;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--gold);
+  transition:
+    left var(--dur-2) var(--ease),
+    right var(--dur-2) var(--ease);
+}
+
+.tab[aria-current='page'] {
+  color: var(--ink);
+}
+
+.tab[aria-current='page']::after {
+  left: var(--space-3);
+  right: var(--space-3);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.notice,
+.alert {
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--gold);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--gold-soft);
+  font-size: 0.875rem;
+}
+
+.alert {
+  border-left-color: var(--red);
+  background: var(--red-soft);
+}
+
+.input {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 1rem;
+}
+
+.input::placeholder {
+  color: color-mix(in srgb, var(--ink-muted) 76%, transparent);
+}
+
+.input:focus-visible {
+  border-color: var(--gold);
+}
+
+/* The password field is hand-wired rather than wrapped in the kit's `Field`: the reveal button has to sit
+   beside the input, and `Field` clones its single child to carry the label's `id`, so a wrapper element there
+   would take the id the input needs. Label, hint and `aria-describedby` are the same three parts `Field`
+   draws, spelled out here — matching its type scale so the two fields above and below read alike. */
+.secretField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+
+.hint {
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+}
+
+.fieldError {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--red);
+}
+
+.secret {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+
+.secret .input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.reveal {
+  flex: none;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-muted);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.reveal:hover {
+  color: var(--ink);
+}
+
+.submit {
+  width: 100%;
+  margin-top: var(--space-1);
+}
+
+.switcher {
+  align-self: center;
+  padding: var(--space-2);
+  color: var(--ink-muted);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.switcher:hover {
+  color: var(--ink);
+}
+
+/* ── document pages ───────────────────────────────────────────────────────── */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  width: 100%;
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4) var(--space-8);
+}
+
+.pageHead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.rule {
+  flex: 1;
+  height: 1px;
+  min-width: var(--space-6);
+  background: linear-gradient(90deg, var(--gold) 0%, color-mix(in srgb, var(--gold) 30%, transparent) 45%, transparent 100%);
+}
+
+.footnote {
+  font-size: 0.9375rem;
+  color: var(--ink-muted);
+}
+
+/* ── the account screens: profile, wardrobe, inventory, achievements ──────── */
+
+/* Everything below is one column and stays one column. `.page` is already capped at 46rem and centred, so
+   the only rules a phone needs are the ones that stop a *row* from being wider than it: every grid is
+   `auto-fit`/`minmax`, every long string can wrap, and nothing has a fixed width in px. */
+
+.identityCard {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-elev);
+  box-shadow: var(--shadow-1);
+}
+
+.identityText {
+  display: flex;
+  flex: 1 1 14rem;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.identityName {
+  margin: 0;
+  font-size: 1.5rem;
+  overflow-wrap: anywhere;
+}
+
+.marks {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+.balanceLine {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.quickNav {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.quickLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--ink-muted);
+}
+
+.quickLink:hover {
+  border-color: var(--gold);
+  color: var(--ink);
+}
+
+.summary {
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── statistics ───────────────────────────────────────────────────────────── */
+
+.statGroups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.groupTitle {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stat dd {
+  margin: 0;
+}
+
+.statValue {
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* ── list rows: hands, ledger movements, achievements ─────────────────────── */
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ledgerRow,
+.handRow,
+.achievement {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.rows > li:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.rowMain {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rowTitle {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.rowMeta {
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+}
+
+.rowValue {
+  margin: 0;
+  font-weight: 600;
+}
+
+.rowRef {
+  font-family: ui-monospace, 'Cascadia Mono', 'Consolas', monospace;
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+
+/* A movement reads by colour *and* by sign: the sign is in the text, so a red-green blindness costs nothing. */
+.amount {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.amount[data-sign='up'] {
+  color: var(--teal);
+}
+
+.amount[data-sign='down'] {
+  color: var(--red);
+}
+
+.handMarks {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.handDetail {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+}
+
+.handDetail dd {
+  margin: 0;
+}
+
+.seats {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.seatChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8125rem;
+}
+
+.seatName {
+  overflow-wrap: anywhere;
+}
+
+/* ── the wardrobe ─────────────────────────────────────────────────────────── */
+
+.previewCard {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-elev);
+}
+
+.previewSide {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.swatches {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+
+.swatch {
+  width: var(--tap);
+  height: var(--tap);
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.swatch[aria-pressed='true'] {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px var(--gold-soft);
+}
+
+.picker {
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-elev);
+}
+
+.picker legend {
+  padding: 0 var(--space-2);
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+  gap: var(--space-2);
+}
+
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--tap);
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: center;
+}
+
+.tile:hover {
+  border-color: color-mix(in srgb, var(--gold) 50%, transparent);
+}
+
+/* The radio itself is the focus target and the checked state, so it stays in the accessibility tree and in
+   the tab order — only its box is out of the way of the thumbnail it names. */
+.tileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.tile:has(.tileInput:checked) {
+  border-color: var(--gold);
+  background: var(--gold-soft);
+}
+
+.tile:has(.tileInput:focus-visible) {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.thumb,
+.thumbEmpty {
+  display: block;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+}
+
+.thumbEmpty {
+  border: 1px dashed var(--line);
+}
+
+.tileName {
+  font-size: 0.75rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-3);
+}
+
+/* ── the inventory grid ───────────────────────────────────────────────────── */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  text-align: center;
+  min-width: 0;
+}
+
+.card[data-equipped='true'] {
+  border-color: var(--gold);
+  background: var(--gold-soft);
+}
+
+.cardName {
+  font-size: 0.875rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.cardMarks {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* ── achievements ─────────────────────────────────────────────────────────── */
+
+.trackWrap {
+  display: flex;
+  flex: 1 1 10rem;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.track {
+  display: block;
+  overflow: hidden;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--ink-muted) 26%, transparent);
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--gold);
+}
+
+.achievement[data-unlocked='false'] .fill {
+  background: var(--teal);
+}
+
+/* ── the daily calendar ───────────────────────────────────────────────────── */
+
+/* Not a seven-column month grid, and deliberately: this calendar is a *streak* of 31 tiers, not a picture of
+   September, so a row that breaks wherever the width allows is honest about it — and it is the only shape that
+   survives 375 px without either scrolling sideways or shrinking a tier to an unreadable box. */
+.calendar {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.calCell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  min-width: 0;
+}
+
+/* The kit's `Badge` is `white-space: nowrap`, which is right on a seat and wrong in a 7rem box: day 28's
+   marker names two things and would otherwise push a horizontal scrollbar onto a 375 px page. Every span in
+   a cell is a label the reader wants whole rather than cropped, so they all wrap here. */
+.calCell span {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.calCell[data-claimed='true'] {
+  border-style: dashed;
+  color: var(--ink-muted);
+}
+
+.calCell[aria-current='date'] {
+  border-color: var(--gold);
+  border-style: solid;
+  background: var(--gold-soft);
+  color: var(--ink);
+}
+
+.calDay {
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.calPoints {
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* ── settings ─────────────────────────────────────────────────────────────── */
+
+/* A row of controls that becomes a column when the width runs out; every child is a kit button or the kit's
+   language switch, so each one already carries `--tap` of its own. */
+.choices {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* the boot probe: one quiet line, never a spinner over an empty page */
+.booting {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: var(--space-6);
+  color: var(--ink-muted);
+}

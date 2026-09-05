@@ -7,9 +7,19 @@
 #
 # (`deploy/normal/docker-compose.yml` does exactly that: `context: ../..`.)
 #
+# Build with BuildKit (the default in any current Docker). The context's exclusion list lives beside
+# this file as `Dockerfile.dockerignore`, and only BuildKit reads that per-Dockerfile convention: with
+# `DOCKER_BUILDKIT=0` the list is ignored, the host's `node_modules` is uploaded with the context, and
+# the web build inside Alpine then trips over a wrong-platform esbuild binary.
+#
 # Two stages. The builder holds pnpm, the TypeScript sources of every workspace package, and a C
-# toolchain for `argon2`; the runtime holds `dist/`, its production `node_modules`, and the two
-# directories the server reads from disk. Nothing else crosses.
+# toolchain for `argon2`; the runtime holds `dist/`, its production `node_modules`, the two
+# directories the server reads from disk, and the web bundle it serves. Nothing else crosses.
+#
+# The image serves the UI as well as the API (spec §28.1): the builder runs `@bp/normal-web`'s vite
+# build and the runtime copies the result to `/app/public`, with `PUBLIC_DIR` pointing at it. One
+# image, one origin, one cookie — which is also what makes `ALLOWED_ORIGINS` a single entry and the
+# session cookie `SameSite` without exception.
 
 # ---------------------------------------------------------------------------- builder
 
@@ -37,12 +47,22 @@ COPY packages/server-kit/package.json packages/server-kit/
 COPY packages/ui-kit/package.json packages/ui-kit/
 COPY apps/lite/package.json apps/lite/
 COPY apps/normal-server/package.json apps/normal-server/
+COPY apps/normal-web/package.json apps/normal-web/
 
-# `--filter @bp/normal-server...` (with the trailing dots) is this package *and its workspace
-# dependencies* — the Lite app, its React toolchain and Playwright are never installed.
-RUN pnpm install --frozen-lockfile --filter @bp/normal-server...
+# `--filter <pkg>...` (with the trailing dots) is that package *and its workspace dependencies*. Two
+# filters because this image is built from two projects: the server and the UI it serves. The Lite
+# app is in neither closure, so its SEA tooling is still never installed.
+#
+# This does install the web app's devDependencies — vitest, jsdom, @testing-library/*, and
+# `@playwright/test` alongside the `vite` the build actually needs — because a filtered install takes
+# a project's whole manifest. It is builder-stage weight only: none of it is copied into the runtime
+# stage, and the pinned Playwright has no install script, so no browser is downloaded here. If the
+# first real `docker build` turns out slow, this is the line to look at.
+RUN pnpm install --frozen-lockfile --filter @bp/normal-server... --filter @bp/normal-web...
 
-# Now the sources the install layer does not depend on.
+# Now the sources the install layer does not depend on — the server's closure first, and only that:
+# `@bp/normal-server` may not import `@bp/ui-kit` or React (ESLint enforces it), so nothing here needs
+# the UI's sources and they are deliberately not copied yet.
 COPY tsconfig.base.json ./
 COPY tooling/ tooling/
 COPY packages/core/ packages/core/
@@ -53,6 +73,19 @@ COPY apps/normal-server/ apps/normal-server/
 # tsc over what ships, then esbuild: `dist/main.js` and `dist/migrate-cli.js` with the three
 # workspace packages inlined and every third-party dependency left as a run-time import.
 RUN pnpm --filter @bp/normal-server build
+
+# The UI's sources, copied *after* the server build so that editing a screen does not invalidate that
+# layer — the whole reason the two builds are separate steps rather than one `pnpm build:normal`,
+# which is the developer's entry point and would tie them back together.
+#
+# (`pnpm deploy` below still re-runs on a web-only change: it is the last step, and moving it above
+# this line has not been tried in a real build. It packages `@bp/normal-server` alone either way.)
+COPY packages/ui-kit/ packages/ui-kit/
+COPY apps/normal-web/ apps/normal-web/
+
+# The UI, into `apps/normal-web/dist` — where `vite.config.ts` puts it, and where the runtime stage
+# below reads it from.
+RUN pnpm --filter @bp/normal-web build
 
 # `pnpm deploy` writes a self-contained package: the manifest, the package's own files (`dist/`,
 # `drizzle/`, `data/`) and a `node_modules` whose symlinks all point inside `/out`, which is what
@@ -80,6 +113,12 @@ WORKDIR /app
 # The image's own `node` user (uid 1000). Nothing here is ever written to: the database holds the
 # state, and a read-only application directory is one less thing an exploit can use.
 COPY --from=builder --chown=node:node /out /app
+
+# The UI, beside the server rather than inside `/out`: `pnpm deploy` writes a *package*, and the web
+# bundle is not part of `@bp/normal-server`'s files. `PUBLIC_DIR` is absolute, so it does not depend
+# on the working directory a `docker run --entrypoint` might change.
+COPY --from=builder --chown=node:node /build/apps/normal-web/dist /app/public
+ENV PUBLIC_DIR=/app/public
 
 USER node
 EXPOSE 8080

@@ -115,6 +115,35 @@ describe('Toasts', () => {
     expect(onDismiss).toHaveBeenCalledWith(2)
   })
 
+  it('interpolates the payload id, so an achievement slip names what was unlocked', () => {
+    wrap(
+      <Toasts
+        error={null}
+        notifications={[
+          { id: 1, kind: 'ACHIEVEMENT_UNLOCKED', payload: { id: 'hand_royal', reward: { itemId: 'ring_royal' } }, at: 0 },
+        ]}
+        onClearError={vi.fn()}
+        onDismiss={vi.fn()}
+        lang="en"
+      />,
+    )
+    expect(screen.getByRole('status')).toHaveTextContent('Achievement unlocked: hand_royal')
+  })
+
+  it('leaves the placeholder empty rather than printing "undefined" when the payload carries no id', () => {
+    wrap(
+      <Toasts
+        error={null}
+        notifications={[{ id: 1, kind: 'ACHIEVEMENT_UNLOCKED', payload: null, at: 0 }]}
+        onClearError={vi.fn()}
+        onDismiss={vi.fn()}
+        lang="en"
+      />,
+    )
+    expect(screen.getByRole('status')).toHaveTextContent('Achievement unlocked:')
+    expect(screen.getByRole('status')).not.toHaveTextContent('undefined')
+  })
+
   it('falls back to a generic line for a notification kind it does not know', () => {
     wrap(
       <Toasts

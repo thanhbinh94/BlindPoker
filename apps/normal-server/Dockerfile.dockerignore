@@ -41,6 +41,9 @@ playwright-report
 test-results
 apps/lite/e2e
 apps/normal-server/test
+apps/normal-server/.e2e
+apps/normal-web/e2e
+apps/normal-web/test
 
 # Never: real secrets, local databases, local editor state.
 .env

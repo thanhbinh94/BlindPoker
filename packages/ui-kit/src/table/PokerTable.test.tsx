@@ -1,3 +1,4 @@
+import type { RoomPlayerView } from '@bp/core'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -90,5 +91,51 @@ describe('PokerTable', () => {
     // The viewer's own seat is pinned below the felt, never in the opponents' strip.
     expect(within(strip).queryByText('Ann')).toBeNull()
     expect(screen.getByText('Ann')).toBeInTheDocument()
+  })
+
+  it('hangs the app caption under each seated player, and asks about that player alone', () => {
+    const captionFor = vi.fn((p: RoomPlayerView) => (p.playerId === 'a' ? 'Tay nóng' : null))
+    wrap(
+      <PokerTable
+        room={room}
+        hand={hand}
+        myPlayerId="a"
+        deadlineAt={null}
+        serverNow={() => 0}
+        turnTimerMs={30000}
+        lang="en"
+        layout="ring"
+        canSit={false}
+        captionFor={captionFor}
+      />,
+    )
+
+    const ann = screen.getByText('Ann').parentElement
+    expect(ann).not.toBeNull()
+    expect(within(ann!).getByText('Tay nóng')).toBeInTheDocument()
+    // The name is still the plate's first line; the caption sits under it.
+    expect(within(ann!).getByText('Ann').nextElementSibling).toHaveTextContent('Tay nóng')
+
+    // Only seated players are asked about, and a `null` answer leaves that plate alone.
+    expect(captionFor.mock.calls.map(([p]) => p.playerId)).toEqual(['a', 'b'])
+    const bob = screen.getByText('Bob').parentElement
+    expect(within(bob!).queryByText('Tay nóng')).toBeNull()
+  })
+
+  it('draws no caption line at all when the app supplies no slot', () => {
+    wrap(
+      <PokerTable
+        room={room}
+        hand={hand}
+        myPlayerId="a"
+        deadlineAt={null}
+        serverNow={() => 0}
+        turnTimerMs={30000}
+        lang="en"
+        layout="ring"
+        canSit={false}
+      />,
+    )
+    expect(document.querySelectorAll(`.${s.seatCaption}`)).toHaveLength(0)
   })
 })
