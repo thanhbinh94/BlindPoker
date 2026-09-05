@@ -56,8 +56,11 @@ export function Avatar({ config, size = 'md', label, className }: AvatarProps) {
             if (itemId === undefined || itemId === '') return null
             const part = PARTS[`${layer}/${itemId}`]
             if (part === undefined) return null
+            // `data-part` is the catalogue's own `assetKey`. It costs one attribute and it is the only
+            // way for an end-to-end test to say "the face on that seat is wearing the item I equipped"
+            // — a vector has no accessible name, and the whole avatar carries at most one label.
             return (
-              <g key={layer} data-layer={layer}>
+              <g key={layer} data-layer={layer} data-part={`${layer}/${itemId}`}>
                 {part({})}
               </g>
             )

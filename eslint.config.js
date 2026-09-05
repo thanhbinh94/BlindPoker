@@ -10,7 +10,9 @@ const forbid = (patterns, message) => ({
 })
 
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/release/**', '**/node_modules/**', '**/playground/dist/**'] },
+  // `.e2e/` is `scripts/e2e-server.mjs`'s esbuild output — a build artefact like `dist/`, and linting a
+  // bundle only ever reports on the bundler's own bookkeeping.
+  { ignores: ['**/dist/**', '**/release/**', '**/node_modules/**', '**/playground/dist/**', '**/.e2e/**'] },
   ...tseslint.configs.recommended,
   {
     rules: {
@@ -107,6 +109,13 @@ export default tseslint.config(
   {
     // …and `vite.config.ts` / `vitest.config.ts`, which Node runs rather than the browser.
     files: ['apps/normal-web/*.config.ts'],
+    rules: { 'no-restricted-imports': 'off' },
+  },
+  {
+    // …and the two directories outside `src/` that Node runs too: `test/` measures the emitted bundle on
+    // disk and `e2e/` drives a browser from outside it. Neither ships, and both need `node:` built-ins.
+    // (Listed after the `*.test.{ts,tsx}` block above, which would otherwise still catch `test/*.test.ts`.)
+    files: ['apps/normal-web/test/**/*.ts', 'apps/normal-web/e2e/**/*.ts'],
     rules: { 'no-restricted-imports': 'off' },
   },
 )

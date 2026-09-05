@@ -3,6 +3,11 @@
 Tài liệu này dành cho **người vận hành** bản Normal: một stack Docker Compose trên một máy chủ —
 ứng dụng, PostgreSQL 16, và Caddy đứng trước lo TLS.
 
+Từ Plan 6, image **phục vụ luôn giao diện web**: builder build cả `@bp/normal-web`, runtime chép kết
+quả vào `/app/public` và đặt sẵn `PUBLIC_DIR=/app/public`. Nghĩa là một image, một origin, một
+cookie — `https://$DOMAIN` mở ra trang đăng nhập, `https://$DOMAIN/api/...` là API của chính nó, và
+`ALLOWED_ORIGINS` chỉ có đúng một giá trị. Bạn không phải triển khai gì thêm cho phần web.
+
 Bản còn lại — một file exe Windows cho mạng LAN — xem [`deployment-lite.md`](deployment-lite.md).
 Muốn *sửa code* của server này thì đọc [`normal-server.md`](normal-server.md) (tiếng Anh, dành cho
 người phát triển).
@@ -82,6 +87,9 @@ Nói thẳng, vì lần triển khai thật đầu tiên rất có thể là **l
   được. Nói cách khác: **bố cục runtime đã được chứng minh**, chỉ là chưa từng nằm trong một image.
 - argon2 0.45.1 có sẵn prebuild musl (`prebuilds/linux-x64/argon2.musl.node`) nên bước cài trên
   Alpine không phải biên dịch từ mã nguồn.
+- `pnpm --filter @bp/normal-web build` chạy thật ngoài image, và server thật đọc kết quả đó qua
+  `PUBLIC_DIR`: `GET /` trả `index.html`, `GET /lobby` (deep link) cũng trả `index.html`. Đó chính
+  là hai dòng `COPY` + `ENV PUBLIC_DIR` của runtime stage, chỉ khác là chạy ngoài container.
 
 **Chưa từng chạy:** bản thân `docker build`, `pnpm install` bên trong Alpine, quy trình xin chứng chỉ
 ACME của Caddy, và `service_completed_successfully` lúc chạy thật.
@@ -150,6 +158,27 @@ database không trả lời: `503` với `status:"degraded"` và `db:"error"`.
 Endpoint đó trả `503` khi tiến trình còn sống nhưng database không trả lời — đúng công dụng của nó,
 và cũng là thứ `HEALTHCHECK` của container dùng.
 
+### Mở trang và tạo tài khoản đầu tiên
+
+Image phục vụ cả giao diện, nên bước cuối của lần triển khai đầu là mở nó bằng trình duyệt:
+
+```bash
+curl -fsS -o /dev/null -w '%{http_code} %{content_type}\n' https://$DOMAIN/
+# 200 text/html; charset=utf-8   ← đây là index.html của bundle web, không phải API
+```
+
+1. Mở `https://$DOMAIN` — ra thẳng thẻ **Đăng nhập**.
+2. Bấm **Chưa có tài khoản? Đăng ký**, điền email, mật khẩu (8–128 ký tự, khác email) và tên hiển
+   thị (2–20 ký tự), rồi **Tạo tài khoản**. Tài khoản mới được cấp 100.000 điểm khởi đầu.
+3. Vào được sảnh là xong: cookie phiên đã được set với `Secure` + `HttpOnly`, và WebSocket
+   (`wss://$DOMAIN/ws`) xác thực bằng chính cookie đó chứ không bằng token nào khác.
+4. Thử một vòng: **Điểm danh** → **Nhận thưởng**, rồi **Tạo phòng** với một bot và chơi một ván.
+
+Nếu trang trắng hoặc `GET /` trả `404`: `PUBLIC_DIR` không trỏ tới thư mục nào có thật. Kiểm tra
+bằng `docker compose exec app ls /app/public` — phải thấy `index.html` và `assets/`. Dòng log lúc
+khởi động cũng nói thẳng: `"publicDir":"/app/public"`, hoặc `no PUBLIC_DIR configured` nếu biến bị
+xoá mất.
+
 ### Nếu chứng chỉ không xuất hiện
 
 `docker compose logs caddy`. Gần như luôn là một trong ba: DNS chưa trỏ về đây, cổng 80 bị firewall
@@ -197,7 +226,7 @@ một giá trị sai không bao giờ bị âm thầm thay bằng mặc định.
 | `ECONOMY_TIMEZONE` | `.env` | `Asia/Ho_Chi_Minh` | Múi giờ IANA quyết định mốc "ngày mới" của thưởng hằng ngày. |
 | `LOG_LEVEL` | `.env` | `info` | `debug` \| `info` \| `warn` \| `error`. |
 | `RECONNECT_WINDOW_SEC` | — | `90` | Cửa sổ kết nối lại cho người đang ngồi ghế trước khi bàn tự fold hộ (0–3600). |
-| `PUBLIC_DIR` | — | *(trống)* | Bundle web để phục vụ ở `/`. Trống = chỉ API, đúng hiện trạng của stack này cho tới khi Plan 6 giao `normal-web`. |
+| `PUBLIC_DIR` | image (`ENV` trong Dockerfile) | *(trống)* | Bundle web phục vụ ở `/`. Image đặt sẵn `/app/public`; mặc định của server vẫn là trống (= chỉ API) cho một triển khai tự phục vụ web ở nơi khác. Thư mục không tồn tại chỉ là **cảnh báo** trong log, không phải lỗi khởi động. |
 
 `.env` cũng được đọc từ thư mục làm việc của app, nhưng **biến môi trường thật luôn thắng** — một
 deployment có thể đặt tất cả bằng biến container và không cần file nào.
