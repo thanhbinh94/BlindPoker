@@ -134,6 +134,19 @@ evenly among the seated humans (regardless of stack); the indivisible
 remainder — or the whole pot, when nobody is seated — is recorded as a
 `carry_over` sink row rather than being handed to an arbitrary player.
 
+### Sitting out (spec §11.3)
+
+`SIT_OUT` keeps the seat and asks to be skipped; `SIT_IN` takes it back.
+Both answer `ACK`, or `ERROR{NOT_SEATED}` from a player with no seat.
+
+| | |
+|---|---|
+| When it takes effect | The next hand. The hand already on the table is played out — a player who wants out of *this* hand folds. |
+| Effective flag | Recomputed at every `startHand`: `sittingOut = asked to sit out ‖ stack < the minimum to play`. So `SIT_IN` on a stack that still cannot cover the wager leaves the seat `SITTING_OUT` under the existing short-stack rule. |
+| What clients see | `ROOM_EVENT PLAYER_SIT_OUT { playerId, sittingOut }` on every change of that flag — including the short-stack one, which used to be visible only in a snapshot — and `status: 'SITTING_OUT'` in `RoomPlayerView`. |
+| Starting a hand | A sitting-out seat is not a ready seat: the room needs two seats that are both ready and playing (`autoStart` waits, `START_GAME` answers `NOT_ENOUGH_PLAYERS`). It is not waited on either, so one sitter no longer holds up a table that is otherwise ready. |
+| Taking the seat back | After `handsSatOutToStand` hands have started without them, the player is stood up and their stack returned — the same `standUpNow` path as the three-timeout rule, emitting `PLAYER_STOOD`. `SIT_IN`, a fresh `SIT_DOWN` and a stand-up all reset the counter. |
+
 A room is created `OPEN` with its host seated. Each hand runs inside a
 `HandRunner` driven by `Room`'s own serialized queue (`enqueue`), so joins,
 seat changes, actions, disconnects and hand-completion callbacks never
@@ -155,6 +168,7 @@ either starts the next hand after `handIntervalMs` or falls back to `OPEN`.
 | `emptyRoomCloseMs` | 60,000 | How long an empty room stays open before closing |
 | `carryOverReleaseMs` | 60,000 | How long a room may sit unable to start a hand before its carry-over pot is released (spec §8.4) |
 | `consecutiveTimeoutsToStand` | 3 | Timed-out actions in a row before a human is stood up automatically |
+| `handsSatOutToStand` | 5 | Hands started without a player who asked to sit out before the seat is taken back (spec §11.3) |
 | `botStartingBalance` | 1,000,000 | Virtual balance bots start (and top up) with in Blind mode |
 | `turnTimerMsOverride` | — | Test hook: overrides `config.turnTimerSec * 1000` when set |
 

@@ -12,7 +12,12 @@ export interface RoomPlayer {
   ready: boolean
   connected: boolean
   joinedAt: number
+  /** Effective: skipped by the next hand. Either asked for (`sitOutRequested`) or forced by a stack too short to play. */
   sittingOut: boolean
+  /** Asked for by `SIT_OUT`; survives the per-hand recompute of `sittingOut` until `SIT_IN` or a stand-up clears it. */
+  sitOutRequested: boolean
+  /** Hands that have started without this player since they asked to sit out; `handsSatOutToStand` of them frees the seat. */
+  handsSatOut: number
   consecutiveTimeouts: number
   disconnectDeadline: number | null
   /** Stand up (Hold'em: cash out) as soon as the current hand ends. */
@@ -32,6 +37,8 @@ export interface RoomOptions {
   /** How long a room may sit unable to start a hand before its carry-over pot is released to the seated humans. */
   carryOverReleaseMs: number
   consecutiveTimeoutsToStand: number
+  /** Hands started without a player who asked to sit out before the seat is taken back (spec §11.3). */
+  handsSatOutToStand: number
   botStartingBalance: number
   /** Test hook: overrides `config.turnTimerSec * 1000` when set. */
   turnTimerMsOverride?: number
@@ -46,6 +53,7 @@ export const DEFAULT_ROOM_OPTIONS: RoomOptions = {
   emptyRoomCloseMs: 60_000,
   carryOverReleaseMs: 60_000,
   consecutiveTimeoutsToStand: 3,
+  handsSatOutToStand: 5,
   botStartingBalance: 1_000_000,
 }
 

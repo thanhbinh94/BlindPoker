@@ -330,7 +330,11 @@ Server kiểm tra từng giá trị thuộc tập cho phép; sai → `ERROR INVA
 ### 11.3 Ghế và trạng thái người trong phòng
 - Vào phòng = là "người xem trong phòng" (không ghế). `SIT_DOWN{seat, buyIn?}` chiếm ghế (Hold'em kèm buy-in; Blind không). `STAND_UP` rời ghế.
 - Trạng thái ghế (`SeatStatus`, cấp phòng): `SEATED`, `READY`, `IN_HAND`, `SITTING_OUT`, `DISCONNECTED` (ghế trống = không có người, `seat: null`). `FOLDED`/`ALL_IN` **không** phải trạng thái phòng: chúng là cờ theo từng ván trong `HandView.seats` (`hasFolded`, `isAllIn`) và biến mất khi ván kết thúc.
-- `SITTING_OUT` được đặt lại mỗi lần phòng thử bắt đầu ván: người thật đang ngồi mà stack không đủ mức cược sẽ `sittingOut = true` (và trở lại `false` khi đủ).
+- `SIT_OUT` giữ ghế nhưng xin bỏ qua các ván sau; **ván đang chơi vẫn đánh hết** (cờ chỉ tác động lên lần bắt đầu ván kế tiếp). `SIT_IN` bỏ yêu cầu đó. Chưa có ghế → `NOT_SEATED`.
+- `SITTING_OUT` được tính lại mỗi lần phòng thử bắt đầu ván: `sittingOut = đã xin SIT_OUT || stack < mức tối thiểu`. Người thật đang ngồi mà stack không đủ mức cược sẽ `sittingOut = true` (và trở lại `false` khi đủ) — nên `SIT_IN` với stack vẫn thiếu thì ghế **vẫn** `SITTING_OUT`.
+- Mỗi lần cờ đổi, phòng phát `ROOM_EVENT PLAYER_SIT_OUT{playerId, sittingOut}` (cả khi nguyên nhân là stack ngắn).
+- Ghế `SITTING_OUT` không được tính vào số ghế sẵn sàng: phòng chỉ bắt đầu khi có ≥ 2 ghế vừa `READY` vừa không sit-out (autoStart chờ, `START_GAME` → `NOT_ENOUGH_PLAYERS`); ngược lại phòng cũng không chờ người đang sit-out bấm ready.
+- Xin sit-out mà bị bỏ qua **5 ván liên tiếp** → tự đứng dậy, trả stack về số dư (cùng đường với luật 3 lần hết giờ), phát `PLAYER_STOOD`. `SIT_IN`, ngồi xuống lại hay đứng dậy đều đặt bộ đếm về 0.
 - Ready chỉ có ý nghĩa ở `OPEN`; khi ván bắt đầu tất cả ghế `READY` vào ván.
 
 ### 11.4 Host
