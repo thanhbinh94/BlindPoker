@@ -39,6 +39,8 @@ describe('SettingsScreen', () => {
   it('paints the theme, remembers it on the device and marks which one is on', async () => {
     const user = userEvent.setup()
     renderScreen()
+    // The account request settles a moment after mount; waiting for it here keeps that update inside `act`.
+    await screen.findByText(ME.displayName)
 
     const light = screen.getByRole('button', { name: viNormal.settings.theme.light })
     expect(screen.getByRole('button', { name: viNormal.settings.theme.dark })).toHaveAttribute('aria-pressed', 'true')
@@ -53,14 +55,16 @@ describe('SettingsScreen', () => {
   it('hands the language change up to the app, which owns it', async () => {
     const user = userEvent.setup()
     const { onLanguage, i18n } = renderScreen()
+    await screen.findByText(ME.displayName)
 
     await user.click(screen.getByRole('button', { name: i18n.t('common:language.en') }))
 
     expect(onLanguage).toHaveBeenCalledWith('en')
   })
 
-  it('renders in the language it is given', () => {
+  it('renders in the language it is given', async () => {
     renderScreen({ lang: 'en' })
+    await screen.findByText(ME.displayName)
 
     expect(screen.getByRole('heading', { name: enNormal.settings.title, level: 1 })).toBeInTheDocument()
   })
@@ -95,6 +99,7 @@ describe('SettingsScreen', () => {
   it('asks before signing out, and does nothing at all when the answer is no', async () => {
     const user = userEvent.setup()
     const { onSignedOut } = renderScreen()
+    await screen.findByText(ME.displayName)
 
     await user.click(screen.getByRole('button', { name: viNormal.settings.account.signOut }))
     expect(screen.getByRole('dialog')).toBeInTheDocument()
@@ -108,6 +113,7 @@ describe('SettingsScreen', () => {
   it('hands the sign-out to the app once the player confirms it', async () => {
     const user = userEvent.setup()
     const { onSignedOut, api } = renderScreen()
+    await screen.findByText(ME.displayName)
 
     await user.click(screen.getByRole('button', { name: viNormal.settings.account.signOut }))
     await user.click(screen.getByRole('button', { name: viNormal.settings.signOut.confirm }))

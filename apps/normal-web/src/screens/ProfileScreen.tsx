@@ -5,9 +5,9 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { HistoryEntryDto, LedgerEntryDto, MeDto, NormalApi, PlayerStatsDto } from '../api.js'
 import { Avatar } from '../avatar/Avatar.js'
-import { refusalText } from './AuthScreen.js'
 import { formatDay, formatMoment, formatSigned } from './format.js'
 import s from './normal.module.css'
+import { refusalText } from './refusal.js'
 import { useAsync } from './useAsync.js'
 
 /** §19.2 serves the last twenty hands by default, and twenty is what a profile page is for. */

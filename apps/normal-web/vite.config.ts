@@ -1,8 +1,18 @@
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
 const DEV_SERVER = 'http://localhost:8080'
+
+/**
+ * The build's own version number, read from `package.json` rather than retyped.
+ *
+ * The settings screen prints it so that a bug report names a build, which only works if it cannot drift: a
+ * hand-maintained constant beside a `package.json` that moves is a version string that lies exactly when it
+ * matters. Vitest does not apply this define, so the app falls back to a marker (see `src/globals.d.ts`).
+ */
+const { version } = JSON.parse(readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8')) as { version: string }
 
 /**
  * The Normal web build: static files under `apps/normal-web/dist`, which the Normal server serves as its
@@ -19,6 +29,7 @@ export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
   base: '/',
   plugins: [react()],
+  define: { __NORMAL_VERSION__: JSON.stringify(version) },
   build: {
     outDir: 'dist',
     emptyOutDir: true,

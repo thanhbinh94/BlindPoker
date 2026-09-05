@@ -196,7 +196,7 @@
    stays reachable on Settings and on the sign-in page, which is where a player changes it once. */
 @media (max-width: 640px) {
   .bar {
-    gap: var(--space-2);
+    gap: var(--space-1);
     padding: 0 var(--space-2);
   }
 
@@ -206,15 +206,41 @@
     display: none;
   }
 
-  /* On /daily, /profile and /settings the page prints the balance itself, so the rail's copy is the
-     first thing to go: without it the four tabs fit at 375 px instead of scrolling the last one away. */
+  /* The spacer exists to push the identity to the far edge on a wide rail. At this width there is no slack
+     to distribute and it competes with the nav for it, so it stops being a flex item at all. */
+  .spacer {
+    display: none;
+  }
+
+  /* The balance is written compactly here (`Shell.tsx`'s `NARROW_RAIL`), so it can also be written smaller:
+     between the two, `123.000 điểm` becomes `123K điểm` in roughly a third of the width, which is what buys
+     the fourth tab its place on a 375 px rail. */
+  .identity {
+    gap: var(--space-2);
+  }
+
+  .balance {
+    font-size: 0.8125rem;
+  }
+
+  /* On /profile — the one page that prints the balance itself — the rail's copy is the first thing to go:
+     without it the four tabs fit at 375 px instead of scrolling the last one away. Everywhere else the rail
+     keeps it, because nothing else on those pages shows it. */
   .identity[data-balance-in-page='true'] .balance {
     display: none;
   }
 
+  /* The tabs are struck with an underline rather than boxed, so they can sit close together: at 375 px the
+     four Vietnamese labels plus the compact balance need every pixel the padding is not using. */
   .navLink {
-    padding: 0 var(--space-2);
+    padding: 0 var(--space-1);
     font-size: 0.8125rem;
+  }
+
+  /* …and the underline follows the padding in, or it would sit narrower than the word it strikes. */
+  .navLink[aria-current='page']::after {
+    left: var(--space-1);
+    right: var(--space-1);
   }
 }
 
@@ -481,12 +507,6 @@
 
 .footnote {
   font-size: 0.9375rem;
-  color: var(--ink-muted);
-}
-
-.route {
-  font-family: ui-monospace, 'Cascadia Mono', 'Consolas', monospace;
-  font-size: 0.8125rem;
   color: var(--ink-muted);
 }
 

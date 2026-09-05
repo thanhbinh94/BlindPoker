@@ -2,6 +2,7 @@ import {
   GameClientProvider,
   LobbyScreen,
   RoomScreen,
+  Toasts,
   useGameClient,
   useHashRoute,
   type SocketFactory,
@@ -21,8 +22,11 @@ import s from './screens/normal.module.css'
 import { clearLastEmail } from './session.js'
 import { useSessionGate } from './session-gate.js'
 
-/** Tracks `apps/normal-web/package.json`; the settings screen prints it so a bug report names a build. */
-export const NORMAL_VERSION = '0.1.0'
+/**
+ * `apps/normal-web/package.json`'s version, substituted at build time; the settings screen prints it so a bug
+ * report names a build. Vitest applies no `define`, so a test run reads the marker instead of a wrong number.
+ */
+export const NORMAL_VERSION = typeof __NORMAL_VERSION__ === 'string' ? __NORMAL_VERSION__ : 'dev'
 
 /**
  * The six account screens, split out of the entry bundle.
@@ -174,8 +178,9 @@ export function App({ api, socketFactory }: AppProps) {
         {inRoom ? (
           <RoomScreen client={viewClient} lang={lang} onLeft={() => navigate('/lobby')} avatarFor={avatarFor} captionFor={captionFor} />
         ) : ACCOUNT_ROUTES.includes(path) ? (
-          // One fallback for all six: the chunk is a single request on a page the rail has already drawn, so
-          // what the player waits for is a line under the rail, not a blank screen with a spinner in the middle.
+          <>
+          {/* One fallback for all six: the chunk is a single request on a page the rail has already drawn, so
+              what the player waits for is a line under the rail, not a blank screen with a spinner in the middle. */}
           <Suspense
             fallback={
               <p className={s.booting} role="status">
@@ -197,6 +202,18 @@ export function App({ api, socketFactory }: AppProps) {
               <AchievementsScreen api={api} lang={lang} />
             )}
           </Suspense>
+          {/* The lobby and the room bring their own stack; these six have none, and `/daily` is precisely
+              where the login-day achievements unlock. Without this the slip would sit undelivered in the state
+              until the player wandered back to the lobby, and then fire there, out of context. It sits outside
+              the `Suspense` so a frame that lands while the chunk is still in flight is not swallowed. */}
+          <Toasts
+            error={state.lastError}
+            notifications={notifications}
+            onClearError={viewClient.clearError}
+            onDismiss={viewClient.dismissNotification}
+            lang={lang}
+          />
+          </>
         ) : (
           <LobbyScreen
             client={viewClient}

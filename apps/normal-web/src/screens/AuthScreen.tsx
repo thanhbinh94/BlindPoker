@@ -3,10 +3,11 @@ import { Button, Field, LanguageSwitch } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
 import { useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ApiError, NETWORK_ERROR_CODE, type AuthMeDto, type NormalApi } from '../api.js'
+import { ApiError, type AuthMeDto, type NormalApi } from '../api.js'
 import { useLanguagePref } from '../prefs.js'
 import { loadLastEmail, saveLastEmail } from '../session.js'
 import s from './normal.module.css'
+import { refusalText } from './refusal.js'
 
 const SPADE = '♠'
 const EYE_OPEN = '◉'
@@ -22,18 +23,6 @@ export type AuthMode = 'signIn' | 'register'
 /** The server's rule (`auth-service.ts`): 8–128 characters, and not the email address. */
 export const MIN_PASSWORD_LENGTH = 8
 const MAX_PASSWORD_LENGTH = 128
-
-/** Refusals this screen has words for; anything else falls back to the kit's generic error. */
-const KNOWN_CODES = new Set([
-  'INVALID_EMAIL',
-  'INVALID_PASSWORD',
-  'INVALID_NAME',
-  'EMAIL_TAKEN',
-  'DISPLAY_NAME_TAKEN',
-  'BAD_CREDENTIALS',
-  'RATE_LIMITED',
-  'FORBIDDEN',
-])
 
 export type AuthField = 'email' | 'password' | 'displayName'
 
@@ -60,22 +49,6 @@ export interface AuthRefusal {
   text: string
   /** The control at fault, or `null` when the refusal is about the request rather than a field. */
   field: AuthField | null
-}
-
-/**
- * A refusal in the player's language.
- *
- * `RATE_LIMITED` is the one code that carries a number: the server puts `retryAfterSec` beside the envelope,
- * `ApiError` keeps it, and the message says how long rather than merely that it was too often. The fallback
- * when the server sent no number is one minute, which is the width of every limiter's window (§19.2).
- */
-export function refusalText(cause: unknown, t: TFunction): string {
-  if (cause instanceof ApiError) {
-    if (cause.code === NETWORK_ERROR_CODE) return t('auth.errors.NETWORK')
-    if (cause.code === 'RATE_LIMITED') return t('auth.errors.RATE_LIMITED', { seconds: cause.retryAfterSec ?? 60 })
-    if (KNOWN_CODES.has(cause.code)) return t(`auth.errors.${cause.code}`)
-  }
-  return t('common:errors.INTERNAL')
 }
 
 /** The same refusal, routed: `refusalText` for the words, `FIELD_OF` for where they go. */

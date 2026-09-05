@@ -123,8 +123,8 @@
     },
     "about": {
       "title": "Thông tin",
-      "edition": "Phiên bản phát hành",
-      "version": "Số hiệu bản dựng"
+      "edition": "Phiên bản",
+      "version": "Bản dựng"
     }
   },
   "screens": {

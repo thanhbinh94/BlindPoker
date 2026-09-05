@@ -11,11 +11,20 @@ import {
   type ReliefDto,
   type ReliefStatusDto,
 } from '../api.js'
-import { refusalText } from './AuthScreen.js'
 import { RARITY_TONE } from './catalog.js'
 import { formatMoment } from './format.js'
 import s from './normal.module.css'
+import { refusalText } from './refusal.js'
 import { useAsync, type AsyncHandle } from './useAsync.js'
+
+/**
+ * The line explaining a disabled claim button, so the button can point at it.
+ *
+ * A fixed id rather than `useId`: this screen renders once per visit and there is exactly one claim button on
+ * it. A natively `disabled` button is not focusable, so few readers will ever hear the description — but the
+ * wiring is what makes an `aria-disabled` button later a one-line change rather than a bug.
+ */
+const CLAIMED_NOTE_ID = 'bp-daily-claimed'
 
 /** An amount with the unit the whole app writes after one. */
 const pointsText = (amount: number, lang: Language, t: TFunction): string =>
@@ -28,11 +37,20 @@ const pointsText = (amount: number, lang: Language, t: TFunction): string =>
  * the claim — so days 7, 14 and 21 advertise a *rarity* and get the wardrobe's own tone for it. Day 28 is the
  * only fixed one, and it grants two things (the month's badge and its title), so it is named as the pair
  * rather than by the single id the server puts in the column.
+ *
+ * The mapping is exhaustive rather than open-ended: a marker this bundle predates draws nothing at all, which
+ * is honest, where a catch-all would confidently promise a monthly badge for an `epic` tier that grants
+ * something else entirely. The points on that day still show — only the promise this app cannot keep is
+ * withheld.
  */
+const MARKERS: Record<string, { tone: BadgeTone; key: string }> = {
+  common: { tone: RARITY_TONE.common, key: 'daily.marker.common' },
+  rare: { tone: RARITY_TONE.rare, key: 'daily.marker.rare' },
+  badge_monthly: { tone: 'gold', key: 'daily.marker.monthly' },
+}
+
 export function markerOf(entry: CalendarEntryDto): { tone: BadgeTone; key: string } | null {
-  if (entry.item === null) return null
-  if (entry.item === 'common' || entry.item === 'rare') return { tone: RARITY_TONE[entry.item], key: `daily.marker.${entry.item}` }
-  return { tone: 'gold', key: 'daily.marker.monthly' }
+  return entry.item === null ? null : (MARKERS[entry.item] ?? null)
 }
 
 /**
@@ -223,7 +241,11 @@ export function DailyScreen({ api, lang }: DailyScreenProps) {
         )
       ) : (
         <>
-          <p className={s.summary}>{t('daily.streak', { streak: status.streak })}</p>
+          {/* Not `status.streak`. While the day is claimable the server sends the streak the claim *would*
+              reach, so printing it raw would say "5 days" over a calendar marking four — and would greet a
+              player who has never claimed with a streak of one. `streak - 1` is exact on that branch, because
+              `nextStreak` returns `previous + 1` there, and a broken or first-ever streak lands on 0. */}
+          <p className={s.summary}>{t('daily.streak', { streak: status.claimable ? status.streak - 1 : status.streak })}</p>
           <p className={s.footnote}>{t('daily.reward', { amount: pointsText(status.reward, lang, t) })}</p>
           <p className={s.footnote}>
             <time dateTime={new Date(status.nextResetAt).toISOString()}>
@@ -232,18 +254,31 @@ export function DailyScreen({ api, lang }: DailyScreenProps) {
           </p>
 
           <p>
-            <Button variant="gold" disabled={!status.claimable || busy} onClick={() => void claim()}>
+            <Button
+              variant="gold"
+              disabled={!status.claimable || busy}
+              onClick={() => void claim()}
+              {...(status.claimable ? {} : { 'aria-describedby': CLAIMED_NOTE_ID })}
+            >
               {busy ? t('daily.claiming') : t('daily.claim')}
             </Button>
           </p>
-          {status.claimable ? null : <p className={s.footnote}>{t('daily.claimed')}</p>}
+          {status.claimable ? null : (
+            <p className={s.footnote} id={CLAIMED_NOTE_ID}>
+              {t('daily.claimed')}
+            </p>
+          )}
           {note === null ? null : (
             <p className={s.alert} role="alert">
               {note}
             </p>
           )}
 
+          {/* A live region around the whole receipt, matching the relief panel's: the button label flips back
+              from "claiming" and nothing else about the page announces itself, so without this a screen-reader
+              user hears silence where the points, the item and the new balance are. */}
           {receipt === null ? null : (
+            <div role="status">
             <Panel title={t('daily.receipt.title', { day: receipt.day })}>
               <ul className={s.rows}>
                 <li className={s.ledgerRow}>
@@ -272,6 +307,7 @@ export function DailyScreen({ api, lang }: DailyScreenProps) {
                 </li>
               </ul>
             </Panel>
+            </div>
           )}
 
           <Panel title={t('daily.calendarTitle')}>

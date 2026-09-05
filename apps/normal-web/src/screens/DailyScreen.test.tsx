@@ -65,11 +65,17 @@ const calendar = () => within(screen.getByRole('list', { name: viNormal.daily.ca
 const interpolate = (template: string, values: Record<string, string>): string =>
   Object.entries(values).reduce((text, [key, value]) => text.replace(`{{${key}}}`, value), template)
 
-describe('DailyScreen — the calendar', () => {
-  it('shows a status line while the day is in flight', () => {
-    renderScreen(stubApi({ daily: vi.fn(() => new Promise<DailyStatusDto>(() => undefined)) }))
+/** The fallback line up to its first placeholder — enough to spot the sentence, whatever amount it names. */
+const FALLBACK_PREFIX = viNormal.daily.receipt.fallback.split('{{')[0] as string
 
-    expect(screen.getAllByRole('status')[0]).toHaveTextContent(viNormal.screens.loading)
+describe('DailyScreen — the calendar', () => {
+  it('shows a status line while the day is in flight', async () => {
+    renderScreen(stubApi({ daily: vi.fn(() => new Promise<DailyStatusDto>(() => undefined)) }))
+    // The relief panel settles a moment after mount; waiting for it keeps that update inside `act`, and
+    // leaves the day's own line as the only status on the page.
+    await screen.findByText(viNormal.daily.relief.reason.balance)
+
+    expect(screen.getByRole('status')).toHaveTextContent(viNormal.screens.loading)
   })
 
   it('says so when the day cannot be read, and asks again when told to', async () => {
@@ -120,12 +126,41 @@ describe('DailyScreen — the calendar', () => {
     expect(calendar().getAllByText(viNormal.daily.claimedMark)).toHaveLength(5)
   })
 
-  it('prints the streak and the instant the next day begins', async () => {
+  it('prints the streak already earned, not the one today would reach', async () => {
     renderScreen()
     await screen.findByRole('list', { name: viNormal.daily.calendarTitle })
 
-    expect(screen.getByText(interpolate(viNormal.daily.streak, { streak: '5' }))).toBeInTheDocument()
+    // The server sends `streak: 5` for a player who has claimed four days and not yet claimed today. Five is
+    // what the claim *would* make it; four is what the calendar beside this line is marking.
+    expect(screen.getByText(interpolate(viNormal.daily.streak, { streak: '4' }))).toBeInTheDocument()
     expect(screen.getByText(interpolate(viNormal.daily.resetsAt, { at: formatMoment(RESET_AT, 'vi') }))).toBeInTheDocument()
+  })
+
+  it('greets a player who has never claimed with no streak at all', async () => {
+    const fresh = { ...STATUS, claimable: true, day: 1, streak: 1 }
+    renderScreen(stubApi({ daily: vi.fn().mockResolvedValue(fresh) }))
+    await screen.findByRole('list', { name: viNormal.daily.calendarTitle })
+
+    expect(screen.getByText(interpolate(viNormal.daily.streak, { streak: '0' }))).toBeInTheDocument()
+    expect(calendar().queryAllByText(viNormal.daily.claimedMark)).toHaveLength(0)
+  })
+
+  it('counts the streak whole once today has been taken', async () => {
+    renderScreen(stubApi({ daily: vi.fn().mockResolvedValue({ ...STATUS, claimable: false }) }))
+    await screen.findByRole('list', { name: viNormal.daily.calendarTitle })
+
+    expect(screen.getByText(interpolate(viNormal.daily.streak, { streak: '5' }))).toBeInTheDocument()
+  })
+
+  it('draws no marker for an item tier this bundle has no words for', async () => {
+    const odd = { ...STATUS, calendar: CALENDAR.map((e) => (e.day === 7 ? { ...e, item: 'epic' } : e)) }
+    renderScreen(stubApi({ daily: vi.fn().mockResolvedValue(odd) }))
+    await screen.findByRole('list', { name: viNormal.daily.calendarTitle })
+
+    // Silence beats a confident promise of the wrong prize; the tier's points still show.
+    expect(calendar().queryAllByText(viNormal.daily.marker.common)).toHaveLength(0)
+    expect(calendar().queryAllByText(viNormal.daily.marker.monthly)).toHaveLength(1)
+    expect(calendar().getByText(/^7\.000/)).toBeInTheDocument()
   })
 })
 
@@ -139,12 +174,17 @@ describe('DailyScreen — claiming', () => {
     await user.click(screen.getByRole('button', { name: viNormal.daily.claim }))
 
     const head = await screen.findByRole('heading', { name: interpolate(viNormal.daily.receipt.title, { day: '5' }) })
-    // Scoped to the receipt: day 5 of the calendar is worth 5.000 too, and that is the wrong 5.000.
-    const receipt = within(head.closest('section') as HTMLElement)
+    // Scoped to the receipt: day 5 of the calendar is worth 5.000 too, and that is the wrong 5.000. The scope
+    // is the live region, which is also the assertion that the whole receipt gets announced on insertion.
+    const region = head.closest('[role="status"]') as HTMLElement
+    expect(region).not.toBeNull()
+    const receipt = within(region)
     const unit = i18n.t('common:units.pointsShort')
     expect(receipt.getByText(`5.000 ${unit}`)).toBeInTheDocument()
     expect(receipt.getByText(viNormal.items.hat_crown)).toBeInTheDocument()
     expect(receipt.getByText(`128.000 ${unit}`)).toBeInTheDocument()
+    // The fallback line is gated on `fallbackPoints > 0`, and this claim granted a real item.
+    expect(receipt.queryByText(new RegExp(FALLBACK_PREFIX))).toBeNull()
 
     // A claim moved the streak and the balance, so both panels are asked again.
     await waitFor(() => expect(api.daily).toHaveBeenCalledTimes(2))

@@ -287,6 +287,46 @@ describe('App — the shell', () => {
     expect(screen.getByRole('navigation', { name: viNormal.nav.main })).toBeInTheDocument()
   })
 
+  it('keeps the rail balance on the routes that print none of their own', async () => {
+    window.history.replaceState(null, '', '/#/daily')
+    const { container } = renderApp()
+    await settled()
+    await welcome()
+
+    // The narrow-viewport rule that hides the rail's copy keys on this attribute, and only `/profile` earns
+    // it: everywhere else the rail is the only place the balance appears at all.
+    const rail = container.querySelector('[data-balance-in-page]') as HTMLElement
+    expect(rail).toHaveAttribute('data-balance-in-page', 'false')
+    expect(within(rail).getByText(/123\.000/)).toBeInTheDocument()
+  })
+
+  it('yields the rail balance on /profile, which carries one in its own header', async () => {
+    window.history.replaceState(null, '', '/#/profile')
+    const pending = vi.fn(() => new Promise<never>(() => undefined))
+    const { container } = renderApp(stubApi({ stats: pending, history: pending, ledger: pending }))
+    await settled()
+    await welcome()
+
+    expect(container.querySelector('[data-balance-in-page]')).toHaveAttribute('data-balance-in-page', 'true')
+  })
+
+  it('shows the named achievement toast on /daily, where the login achievements unlock', async () => {
+    window.history.replaceState(null, '', '/#/daily')
+    renderApp()
+    await settled()
+    await welcome()
+    await screen.findByRole('heading', { name: viNormal.daily.title })
+
+    await act(async () => {
+      socket().receive({ t: 'NOTIFICATION', kind: 'ACHIEVEMENT_UNLOCKED', payload: { id: 'login_days_7', reward: { points: 5_000 } } })
+    })
+
+    // Claiming is what unlocks these, so the slip has to be visible here — not waiting in the state for the
+    // next visit to the lobby, where it would fire with no idea what caused it.
+    expect(await screen.findByText(new RegExp(viNormal.achievements.login_days_7.name))).toBeInTheDocument()
+    expect(screen.queryByText(/login_days_7/)).toBeNull()
+  })
+
   it('names the achievement in the toast, rather than printing the id the server sent', async () => {
     renderApp()
     await settled()
