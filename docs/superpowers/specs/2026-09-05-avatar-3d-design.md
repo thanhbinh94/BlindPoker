@@ -60,9 +60,8 @@ interface ItemDefV2 {
   nameKey: string           // items.<id>
   isDefault: boolean
   variants?: { male?: AssetRef; female?: AssetRef }   // bắt buộc với slot hình học; không có với title/badge
-  recolor?: 'cloth' | 'metal' | null                  // vật liệu cho phép tint theo hairColor/skin? Không — chỉ tint cố định trong manifest
 }
-interface AssetRef { file: string; node: string; tint?: string }   // file trong /avatar3d/, node theo quy ước "<slot>/<itemId>/<body>"
+interface AssetRef { file: string; node: string; tint?: string }   // file trong /avatar3d/, node theo quy ước "<slot>/<itemId>/<body>"; `tint` là màu cố định của vật liệu cloth_primary — màu da/mắt/tóc đến từ cấu hình người chơi, không phải từ item
 ```
 - Cột `items.category` trong DB được **đổi tên/ý nghĩa thành `slot`** qua migration (giá trị cũ map: `hair→hair`, `clothing→top`, `accessory→accessory` hoặc `hat` theo bảng map trong migration, `jewelry→jewelry`, `title`, `badge`; `base`/`face` bị xoá khỏi catalog và khỏi `inventory`).
 - Id giữ nguyên: `hat_crown` (slot `hat`), `jacket_champion` (`top`), `ring_royal` (`jewelry`), `badge_veteran`, `badge_monthly`, `title_devoted`, `title_hot_hand`, các `hair_*`, `clothing_*` (→ `top`), `accessory_*` (kính/mặt nạ → `accessory`; nón lá/headband → `hat`), `jewelry_*`. Thêm mới: `bottom_*` (≥ 4), `shoes_*` (≥ 3), `hair_none`, mỗi slot bắt buộc có đúng một `isDefault`.
