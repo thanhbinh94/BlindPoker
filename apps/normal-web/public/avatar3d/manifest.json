@@ -1,0 +1,305 @@
+{
+  "version": 1,
+  "generatedAt": "2026-09-06T04:22:01.344Z",
+  "placeholder": false,
+  "files": {
+    "accessories.glb": {
+      "bytes": 121200,
+      "sha256": "9a8639c72942de820429aceb784d67a5bc40b8130ba0af348f83014f9c60ec1e"
+    },
+    "body-female.glb": {
+      "bytes": 183456,
+      "sha256": "411466bc44af707938e99d663433dc7112f06e171be2b519eee05aeb08dc1bc9"
+    },
+    "body-male.glb": {
+      "bytes": 176280,
+      "sha256": "7c6cdb50c6b19ec8121f588da1fa92a6cbcd7ceef2e8ff04ad7a5b8615ec8b0c"
+    },
+    "hair.glb": {
+      "bytes": 196164,
+      "sha256": "7d6bfdcbf9fef92404fdb0b728b12b5b7819772f58d6d5c42313778a9e7e7800"
+    },
+    "outfits.glb": {
+      "bytes": 1139052,
+      "sha256": "7260a274969fe36c2aacfe3ad0e208079cfbcf7ea7a747bd5888fc372cf07152"
+    }
+  },
+  "nodes": {
+    "accessory/accessory_glasses/female": {
+      "file": "accessories.glb",
+      "bytes": 4091
+    },
+    "accessory/accessory_glasses/male": {
+      "file": "accessories.glb",
+      "bytes": 4091
+    },
+    "accessory/accessory_mask/female": {
+      "file": "accessories.glb",
+      "bytes": 5867
+    },
+    "accessory/accessory_mask/male": {
+      "file": "accessories.glb",
+      "bytes": 5867
+    },
+    "accessory/accessory_sunglasses/female": {
+      "file": "accessories.glb",
+      "bytes": 729
+    },
+    "accessory/accessory_sunglasses/male": {
+      "file": "accessories.glb",
+      "bytes": 729
+    },
+    "body/female": {
+      "file": "body-female.glb",
+      "bytes": 158256
+    },
+    "body/male": {
+      "file": "body-male.glb",
+      "bytes": 151779
+    },
+    "bottom/bottom_jeans/female": {
+      "file": "outfits.glb",
+      "bytes": 6465
+    },
+    "bottom/bottom_jeans/male": {
+      "file": "outfits.glb",
+      "bytes": 6066
+    },
+    "bottom/bottom_shorts/female": {
+      "file": "outfits.glb",
+      "bytes": 14877
+    },
+    "bottom/bottom_shorts/male": {
+      "file": "outfits.glb",
+      "bytes": 8565
+    },
+    "bottom/bottom_skirt/female": {
+      "file": "outfits.glb",
+      "bytes": 14877
+    },
+    "bottom/bottom_skirt/male": {
+      "file": "outfits.glb",
+      "bytes": 8565
+    },
+    "bottom/bottom_trousers/female": {
+      "file": "outfits.glb",
+      "bytes": 6465
+    },
+    "bottom/bottom_trousers/male": {
+      "file": "outfits.glb",
+      "bytes": 6066
+    },
+    "hair/hair_bun/female": {
+      "file": "hair.glb",
+      "bytes": 25539
+    },
+    "hair/hair_bun/male": {
+      "file": "hair.glb",
+      "bytes": 25539
+    },
+    "hair/hair_curly/female": {
+      "file": "hair.glb",
+      "bytes": 7031
+    },
+    "hair/hair_curly/male": {
+      "file": "hair.glb",
+      "bytes": 7031
+    },
+    "hair/hair_long/female": {
+      "file": "hair.glb",
+      "bytes": 18057
+    },
+    "hair/hair_long/male": {
+      "file": "hair.glb",
+      "bytes": 18057
+    },
+    "hair/hair_mohawk/female": {
+      "file": "hair.glb",
+      "bytes": 3342
+    },
+    "hair/hair_mohawk/male": {
+      "file": "hair.glb",
+      "bytes": 3342
+    },
+    "hair/hair_none/female": {
+      "file": "hair.glb",
+      "bytes": 0
+    },
+    "hair/hair_none/male": {
+      "file": "hair.glb",
+      "bytes": 0
+    },
+    "hair/hair_ponytail/female": {
+      "file": "hair.glb",
+      "bytes": 18057
+    },
+    "hair/hair_ponytail/male": {
+      "file": "hair.glb",
+      "bytes": 18057
+    },
+    "hair/hair_short/female": {
+      "file": "hair.glb",
+      "bytes": 5439
+    },
+    "hair/hair_short/male": {
+      "file": "hair.glb",
+      "bytes": 5439
+    },
+    "hat/accessory_conical_hat/female": {
+      "file": "accessories.glb",
+      "bytes": 2484
+    },
+    "hat/accessory_conical_hat/male": {
+      "file": "accessories.glb",
+      "bytes": 2484
+    },
+    "hat/accessory_headband/female": {
+      "file": "accessories.glb",
+      "bytes": 1897
+    },
+    "hat/accessory_headband/male": {
+      "file": "accessories.glb",
+      "bytes": 1897
+    },
+    "hat/hat_crown/female": {
+      "file": "accessories.glb",
+      "bytes": 3926
+    },
+    "hat/hat_crown/male": {
+      "file": "accessories.glb",
+      "bytes": 3926
+    },
+    "jewelry/jewelry_chain/female": {
+      "file": "accessories.glb",
+      "bytes": 1897
+    },
+    "jewelry/jewelry_chain/male": {
+      "file": "accessories.glb",
+      "bytes": 1897
+    },
+    "jewelry/jewelry_pendant/female": {
+      "file": "accessories.glb",
+      "bytes": 4217
+    },
+    "jewelry/jewelry_pendant/male": {
+      "file": "accessories.glb",
+      "bytes": 4217
+    },
+    "jewelry/jewelry_ring/female": {
+      "file": "accessories.glb",
+      "bytes": 1897
+    },
+    "jewelry/jewelry_ring/male": {
+      "file": "accessories.glb",
+      "bytes": 1897
+    },
+    "jewelry/jewelry_stud/female": {
+      "file": "accessories.glb",
+      "bytes": 3122
+    },
+    "jewelry/jewelry_stud/male": {
+      "file": "accessories.glb",
+      "bytes": 3122
+    },
+    "jewelry/ring_royal/female": {
+      "file": "accessories.glb",
+      "bytes": 3645
+    },
+    "jewelry/ring_royal/male": {
+      "file": "accessories.glb",
+      "bytes": 3645
+    },
+    "shoes/shoes_boots/female": {
+      "file": "outfits.glb",
+      "bytes": 63924
+    },
+    "shoes/shoes_boots/male": {
+      "file": "outfits.glb",
+      "bytes": 64014
+    },
+    "shoes/shoes_sandals/female": {
+      "file": "outfits.glb",
+      "bytes": 24252
+    },
+    "shoes/shoes_sandals/male": {
+      "file": "outfits.glb",
+      "bytes": 23766
+    },
+    "shoes/shoes_sneakers/female": {
+      "file": "outfits.glb",
+      "bytes": 24252
+    },
+    "shoes/shoes_sneakers/male": {
+      "file": "outfits.glb",
+      "bytes": 23766
+    },
+    "top/clothing_aodai/female": {
+      "file": "outfits.glb",
+      "bytes": 74651
+    },
+    "top/clothing_aodai/male": {
+      "file": "outfits.glb",
+      "bytes": 65361
+    },
+    "top/clothing_hoodie/female": {
+      "file": "outfits.glb",
+      "bytes": 65324
+    },
+    "top/clothing_hoodie/male": {
+      "file": "outfits.glb",
+      "bytes": 57185
+    },
+    "top/clothing_kimono/female": {
+      "file": "outfits.glb",
+      "bytes": 42086
+    },
+    "top/clothing_kimono/male": {
+      "file": "outfits.glb",
+      "bytes": 33947
+    },
+    "top/clothing_polo/female": {
+      "file": "outfits.glb",
+      "bytes": 6025
+    },
+    "top/clothing_polo/male": {
+      "file": "outfits.glb",
+      "bytes": 11013
+    },
+    "top/clothing_suit/female": {
+      "file": "outfits.glb",
+      "bytes": 55434
+    },
+    "top/clothing_suit/male": {
+      "file": "outfits.glb",
+      "bytes": 56048
+    },
+    "top/jacket_champion/female": {
+      "file": "outfits.glb",
+      "bytes": 67752
+    },
+    "top/jacket_champion/male": {
+      "file": "outfits.glb",
+      "bytes": 68366
+    },
+    "top/top_tee/female": {
+      "file": "outfits.glb",
+      "bytes": 6025
+    },
+    "top/top_tee/male": {
+      "file": "outfits.glb",
+      "bytes": 11013
+    }
+  },
+  "materials": [
+    "cloth_primary",
+    "cloth_secondary",
+    "eyes",
+    "hair",
+    "metal",
+    "skin"
+  ],
+  "budget": {
+    "totalBytes": 6291456,
+    "maxFileBytes": 1572864
+  }
+}
