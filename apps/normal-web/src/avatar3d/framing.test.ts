@@ -1,7 +1,16 @@
 import { PerspectiveCamera, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import type { ManifestBounds, Triple } from './assets.js'
-import { HEADROOM, HEAD_FRAME, MIN_HEAD_HEIGHT, PORTRAIT_FIELD_OF_VIEW, portraitFraming } from './framing.js'
+import {
+  FULL_EYE_LEVEL,
+  FULL_MARGIN,
+  HEADROOM,
+  HEAD_FRAME,
+  MIN_HEAD_HEIGHT,
+  PORTRAIT_FIELD_OF_VIEW,
+  portraitFraming,
+  type PortraitFrame,
+} from './framing.js'
 
 /**
  * The portrait crop, checked the way `stage.test.ts` checks the full-body one: build three's own
@@ -35,9 +44,9 @@ const FEMALE = {
   } as Record<string, Triple>,
 }
 
-/** The camera `portraits.ts` builds, aimed the way `frame()` aims it. Square, because a portrait is. */
-function cameraFor(anchors: Record<string, Triple>, bounds: ManifestBounds | null): PerspectiveCamera {
-  const view = portraitFraming(anchors, bounds)
+/** The camera `portraits.ts` builds, aimed the way `aim()` aims it. Square, because a portrait is. */
+function cameraFor(anchors: Record<string, Triple>, bounds: ManifestBounds | null, frame: PortraitFrame = 'portrait'): PerspectiveCamera {
+  const view = portraitFraming(anchors, bounds, frame)
   const camera = new PerspectiveCamera(PORTRAIT_FIELD_OF_VIEW, 1, 0.05, 20)
   camera.position.set(...view.position)
   camera.lookAt(...view.target)
@@ -115,6 +124,54 @@ describe('portraitFraming', () => {
     expect(Number.isFinite(view.centre)).toBe(true)
     expect(view.height).toBeGreaterThan(0)
     expect(view.distance).toBeGreaterThan(0)
+  })
+
+  it('frames the whole figure when asked for the full-body crop', () => {
+    // The crop the wardrobe's trouser and shoe tiles are drawn by: everything from the soles to the
+    // crown inside the picture, with air at both ends — which is the difference between four bottoms
+    // that look like four bottoms and four copies of one face.
+    for (const body of [MALE, FEMALE]) {
+      const camera = cameraFor(body.anchors, body.bounds, 'full')
+      const view = portraitFraming(body.anchors, body.bounds, 'full')
+
+      const crown = heightIn(camera, [0, body.bounds.max[1], 0])
+      const soles = heightIn(camera, [0, body.bounds.min[1], 0])
+      expect(crown, 'the crown is inside the picture').toBeLessThan(1)
+      expect(soles, 'the feet are inside the picture').toBeGreaterThan(-1)
+      // The margin is shared between the two ends, so neither is against an edge.
+      expect(crown).toBeGreaterThan(0.7)
+      expect(soles).toBeLessThan(-0.7)
+      // And the pelvis — which the head-and-shoulders crop puts below the bottom edge — is in shot.
+      expect(Math.abs(heightIn(camera, body.anchors['pelvis']!))).toBeLessThan(1)
+
+      const span = body.bounds.max[1] - body.bounds.min[1]
+      expect(view.height).toBeCloseTo(span * (1 + FULL_MARGIN), 10)
+      expect(view.centre).toBeCloseTo((body.bounds.max[1] + body.bounds.min[1]) / 2, 10)
+      // Above the middle and aimed at it: the slight downward tilt the full-body stage has.
+      expect(view.position[1]).toBeCloseTo(body.bounds.min[1] + span * FULL_EYE_LEVEL, 10)
+      expect(view.position[1]).toBeGreaterThan(view.centre)
+      expect(view.position[2] - body.bounds.max[2]).toBeCloseTo(view.distance, 10)
+    }
+  })
+
+  it('stands further back for the whole figure than for the head', () => {
+    // Same lens, two distances — which is all `portraits.ts` has to do differently between the crops,
+    // and the reason the full-body one needs no second camera.
+    const head = portraitFraming(MALE.anchors, MALE.bounds, 'portrait')
+    const whole = portraitFraming(MALE.anchors, MALE.bounds, 'full')
+
+    expect(whole.height).toBeGreaterThan(head.height * 3)
+    expect(whole.distance).toBeGreaterThan(head.distance * 3)
+    // The default is the face: every caller that says nothing gets the crop the app is made of.
+    expect(portraitFraming(MALE.anchors, MALE.bounds)).toEqual(head)
+  })
+
+  it('still frames a whole figure when the body node never loaded', () => {
+    const view = portraitFraming({}, null, 'full')
+
+    expect(view.height).toBeGreaterThan(1)
+    expect(view.distance).toBeGreaterThan(0)
+    expect(Number.isFinite(view.position[1])).toBe(true)
   })
 
   it('refuses to collapse the frame when the bounds are implausible', () => {

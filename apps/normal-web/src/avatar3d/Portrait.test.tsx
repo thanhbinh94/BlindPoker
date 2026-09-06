@@ -136,6 +136,36 @@ describe('PartPortrait', () => {
     expect(renderer.rendered).toEqual([hashConfig(tried)])
   })
 
+  it('previews a bottom and a pair of shoes on the whole figure, each as its own picture', async () => {
+    const renderer = fakeRenderer()
+    setPortraitRendererForTests(renderer)
+
+    // Two different bottoms. Framed on the head they are one picture — which is what shipped before
+    // this crop existed, and made the four tiles of the "Quần" group identical.
+    const jeans = render(<PartPortrait config={CONFIG} slot="bottom" itemId="bottom_jeans" />)
+    const wearingJeans = portraitRelevant(withSlot(CONFIG, 'bottom', 'bottom_jeans'), 'full')
+    await waitFor(() => expect(renderer.rendered).toEqual([hashConfig(wearingJeans, 'full')]))
+    // The item being previewed survives the narrowing rather than being stripped as out of shot…
+    expect(wearingJeans.bottom).toBe('bottom_jeans')
+    // …and so does the rest of what is worn below the chest, because it is in the picture too.
+    expect(wearingJeans.shoes).toBe(CONFIG.shoes)
+    jeans.unmount()
+
+    const shorts = render(<PartPortrait config={CONFIG} slot="bottom" itemId="bottom_shorts" />)
+    const wearingShorts = portraitRelevant(withSlot(CONFIG, 'bottom', 'bottom_shorts'), 'full')
+    await waitFor(() => expect(renderer.rendered).toHaveLength(2))
+    expect(renderer.rendered[1]).toBe(hashConfig(wearingShorts, 'full'))
+    expect(renderer.rendered[0]).not.toBe(renderer.rendered[1])
+    shorts.unmount()
+
+    // A pair of shoes is the other slot the head-and-shoulders crop cannot contain.
+    render(<PartPortrait config={CONFIG} slot="shoes" itemId="shoes_boots" />)
+    const shod = portraitRelevant(withSlot(CONFIG, 'shoes', 'shoes_boots'), 'full')
+    await waitFor(() => expect(disc().querySelector('img')).toHaveAttribute('data-hash', hashConfig(shod, 'full')))
+    // And the key is the full-body one, not the face's: the two crops are two cache entries.
+    expect(hashConfig(shod, 'full')).not.toBe(hashConfig(shod))
+  })
+
   it('empties an optional slot rather than sending an empty id', async () => {
     render(<PartPortrait config={{ ...CONFIG, hat: 'hat_crown' }} slot="hat" itemId="" />)
 

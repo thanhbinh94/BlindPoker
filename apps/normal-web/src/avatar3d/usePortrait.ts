@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AvatarConfigDto } from '../api.js'
 import { isAbortError } from './abort.js'
+import type { PortraitFrame } from './framing.js'
 import { hashConfig } from './hash.js'
 import { cachedPortrait, lookupPortrait, peekPortrait, storePortrait } from './portrait-cache.js'
 
@@ -39,7 +40,16 @@ export interface PortraitState {
 /** The half of `portraits.ts` this hook uses — and all a test double has to provide. */
 export interface PortraitRenderer {
   supported(): boolean
-  render(config: AvatarConfigDto, options?: { signal?: AbortSignal }): Promise<Blob>
+  render(config: AvatarConfigDto, options?: { signal?: AbortSignal; frame?: PortraitFrame }): Promise<Blob>
+}
+
+/** What a caller may ask of a portrait beyond the configuration itself. */
+export interface PortraitOptions {
+  /**
+   * The crop: head and shoulders by default, or the whole figure for the two slots that crop cannot
+   * contain. It is part of the cache key — see `hashConfig` — because it is part of the picture.
+   */
+  frame?: PortraitFrame
 }
 
 /** How the real renderer is fetched. A parameter only so that a test can make the fetch fail. */
@@ -151,7 +161,7 @@ const UNSUPPORTED: Outcome = { status: 'unsupported' }
  * because a rejection nobody handles is reported by the browser as a bug even when the fallback worked
  * perfectly.
  */
-async function produce(hash: string, config: AvatarConfigDto, signal: AbortSignal): Promise<Outcome> {
+async function produce(hash: string, config: AvatarConfigDto, frame: PortraitFrame, signal: AbortSignal): Promise<Outcome> {
   try {
     const stored = await lookupPortrait(hash)
     if (stored !== null) return { status: 'ready', url: stored }
@@ -161,7 +171,7 @@ async function produce(hash: string, config: AvatarConfigDto, signal: AbortSigna
       warnOnce(renderer === null ? 'the portrait renderer failed to load' : 'this browser has no WebGL2')
       return UNSUPPORTED
     }
-    const blob = await renderer.render(config, { signal })
+    const blob = await renderer.render(config, { signal, frame })
     return { status: 'ready', url: await storePortrait(hash, blob) }
   } catch (cause) {
     if (isAbortError(cause)) return CANCELLED
@@ -185,12 +195,12 @@ interface Held {
  * and then quietly discards the thirty-nine that the next click made stale, instead of drawing all
  * eighty pictures in turn.
  */
-function ensurePortrait(hash: string, config: AvatarConfigDto): Held {
+function ensurePortrait(hash: string, config: AvatarConfigDto, frame: PortraitFrame): Held {
   let entry = inflight.get(hash)
   if (entry === undefined) {
     const controller = new AbortController()
     const created: Inflight = { controller, waiting: 0, promise: Promise.resolve(CANCELLED) }
-    created.promise = produce(hash, config, controller.signal).finally(() => {
+    created.promise = produce(hash, config, frame, controller.signal).finally(() => {
       // Only if it is still *this* entry: an aborted one is replaced the moment somebody asks again.
       if (inflight.get(hash) === created) inflight.delete(hash)
     })
@@ -230,8 +240,11 @@ function seed(hash: string | null): PortraitState {
   return hot === null ? { url: null, status: 'loading', hash } : { url: hot, status: 'ready', hash }
 }
 
-export function usePortrait(config: AvatarConfigDto | null): PortraitState {
-  const hash = config === null ? null : hashConfig(config)
+export function usePortrait(config: AvatarConfigDto | null, options: PortraitOptions = {}): PortraitState {
+  const frame = options.frame ?? 'portrait'
+  // The crop is part of the identity, not a detail of the drawing: two crops of one outfit are two
+  // keys, two cache entries and two renders, which is what they are.
+  const hash = config === null ? null : hashConfig(config, frame)
   const [state, setState] = useState<PortraitState>(() => seed(hash))
 
   // The configuration reaches the render effect through a ref because the *hash* is its identity: a
@@ -260,7 +273,7 @@ export function usePortrait(config: AvatarConfigDto | null): PortraitState {
 
     let live = true
     setState({ url: null, status: 'loading', hash })
-    const held = ensurePortrait(hash, current)
+    const held = ensurePortrait(hash, current, frame)
     void held.promise.then((outcome) => {
       if (!live) return
       // A cancelled render is one nobody is waiting for any more, so this branch is all but
@@ -279,7 +292,9 @@ export function usePortrait(config: AvatarConfigDto | null): PortraitState {
       // picture. If the render has not started, it never will.
       held.release()
     }
-  }, [hash])
+    // `frame` is declared alongside `hash` and can never move on its own: it is one of the things
+    // `hash` is computed from, so a change of crop is already a change of key.
+  }, [hash, frame])
 
   return state
 }

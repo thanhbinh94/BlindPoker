@@ -1,4 +1,5 @@
 import type { AvatarConfigDto } from '../api.js'
+import type { PortraitFrame } from './framing.js'
 
 /**
  * The identity of a portrait: one short string per configuration (avatar-3d design §5).
@@ -48,9 +49,16 @@ const PRIME = 0x01000193
 /**
  * The exact text that gets hashed, exposed because a test that only compares digests cannot say
  * *why* two configs disagreed. It is JSON, so it is readable in a failure message.
+ *
+ * The **crop** is part of the identity as much as the outfit is: the same person framed on the head and
+ * framed head to feet are two different pictures, kept in the same memory map and the same IndexedDB
+ * store, so one key for both would serve a wardrobe's trouser tiles whichever of the two was drawn
+ * first. It is written only when it is not the default, so every hash this app had before the full-body
+ * crop existed is the hash it still has — a cache of faces survives the deploy that added this.
  */
-export function canonicalConfig(config: AvatarConfigDto): string {
+export function canonicalConfig(config: AvatarConfigDto, frame: PortraitFrame = 'portrait'): string {
   const parts: string[] = []
+  if (frame !== 'portrait') parts.push(`${JSON.stringify('frame')}:${JSON.stringify(frame)}`)
   for (const field of FIELDS) {
     const value = config[field]
     // An absent optional slot and a slot explicitly set to `undefined` are the same thing — an empty
@@ -64,8 +72,8 @@ export function canonicalConfig(config: AvatarConfigDto): string {
 }
 
 /** Eight lower-case hex digits, stable across browsers and across runs. */
-export function hashConfig(config: AvatarConfigDto): string {
-  const text = canonicalConfig(config)
+export function hashConfig(config: AvatarConfigDto, frame: PortraitFrame = 'portrait'): string {
+  const text = canonicalConfig(config, frame)
   let hash = OFFSET_BASIS
   for (let i = 0; i < text.length; i += 1) {
     hash ^= text.charCodeAt(i)

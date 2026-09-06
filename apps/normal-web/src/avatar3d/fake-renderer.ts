@@ -1,5 +1,6 @@
 import type { AvatarConfigDto } from '../api.js'
 import { abortError } from './abort.js'
+import type { PortraitFrame } from './framing.js'
 import { hashConfig } from './hash.js'
 import type { PortraitRenderer } from './usePortrait.js'
 
@@ -47,8 +48,11 @@ export function fakeRenderer(options: FakeRendererOptions = {}): FakeRenderer {
   return {
     rendered,
     supported: () => supported,
-    render(config: AvatarConfigDto, renderOptions?: { signal?: AbortSignal }): Promise<Blob> {
-      const hash = hashConfig(config)
+    render(config: AvatarConfigDto, renderOptions?: { signal?: AbortSignal; frame?: PortraitFrame }): Promise<Blob> {
+      // Keyed by the crop as well as the configuration, exactly as the real renderer's caller is: a
+      // double that ignored the frame would report one render where the app does two, and a test of the
+      // wardrobe's full-body tiles would pass on a bug that served them a face.
+      const hash = hashConfig(config, renderOptions?.frame ?? 'portrait')
       const start = async (): Promise<Blob> => {
         // The signal is read here — at the head of the queue — and not when `render` was called.
         if (renderOptions?.signal?.aborted === true) throw abortError()

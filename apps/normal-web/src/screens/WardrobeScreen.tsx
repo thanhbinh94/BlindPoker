@@ -21,6 +21,7 @@ import {
   BODIES,
   DEFAULT_HAIR_COLOR,
   EYE_COLORS,
+  frameForSlot,
   HAIR_PRESETS,
   HEX_COLOR,
   portraitRelevant,
@@ -106,11 +107,13 @@ function SlotPicker({ slot, items, config, onPick }: SlotPickerProps) {
   const { t } = useTranslation('normal')
   const optional = (OPTIONAL_SLOTS as readonly string[]).includes(slot)
   const value = config[slot] ?? ''
-  // What the tiles are drawn from: the configuration with everything the head-and-shoulders crop cannot
-  // show taken out of it, so picking a pair of shoes does not change the cache key of every tile on the
+  // What the tiles are drawn from: the configuration with everything this group's crop cannot show
+  // taken out of it, so picking a pair of shoes does not change the cache key of every tile on the
   // screen. `PartPortrait` narrows what it is given anyway; doing it once here is what keeps the memo
-  // inside each of forty tiles from being invalidated in the first place.
-  const preview = useMemo(() => portraitRelevant(config), [config])
+  // inside each of forty tiles from being invalidated in the first place. The crop is the slot's
+  // (`frameForSlot`): the trouser and shoe groups are previewed on the whole figure, so for those two
+  // the narrowing has to keep what is worn below the chest rather than strip it.
+  const preview = useMemo(() => portraitRelevant(config, frameForSlot(slot)), [config, slot])
 
   return (
     <fieldset className={s.picker}>

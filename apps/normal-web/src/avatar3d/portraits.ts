@@ -4,7 +4,7 @@ import { abortError } from './abort.js'
 import { assemble, disposeAssembled, type Assembled } from './assemble.js'
 import { assetLoader } from './assets.js'
 import { applyEnvironment } from './environment.js'
-import { portraitFraming, PORTRAIT_FIELD_OF_VIEW } from './framing.js'
+import { portraitFraming, PORTRAIT_FIELD_OF_VIEW, type PortraitFrame } from './framing.js'
 import { CONTEXT_LOST, contextLost, watchContext, type ContextWatch } from './gl-context.js'
 
 /**
@@ -141,14 +141,15 @@ function ensureOutput(): { canvas: HTMLCanvasElement; context: CanvasRenderingCo
 }
 
 /**
- * Point the camera at the head, and move the light rig up to meet it.
+ * Point the camera at the figure — at its head, or at the whole of it — and move the light rig to meet it.
  *
  * The arithmetic itself is `framing.ts` — a pure function, so the crop every avatar picture in the app
  * is made by has a test (`framing.test.ts`) rather than only a look in a browser. What is left here is
- * putting its answer on three's objects.
+ * putting its answer on three's objects. Both crops are the same lens, so the projection needs nothing
+ * but the camera's new position.
  */
-function frame(camera: PerspectiveCamera, rig: Object3D, built: Assembled): void {
-  const view = portraitFraming(built.anchors, built.bounds)
+function aim(camera: PerspectiveCamera, rig: Object3D, built: Assembled, frame: PortraitFrame): void {
+  const view = portraitFraming(built.anchors, built.bounds, frame)
 
   camera.position.set(...view.position)
   camera.lookAt(...view.target)
@@ -169,7 +170,7 @@ function toBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   })
 }
 
-async function draw(config: AvatarConfigDto): Promise<Blob> {
+async function draw(config: AvatarConfigDto, frame: PortraitFrame): Promise<Blob> {
   if (!supported()) throw new Error('this browser has no WebGL2 context to render a portrait with')
   const current = ensureStage()
   // Before the assets are even fetched: a context that is gone will still be gone in 40 ms, and the
@@ -178,7 +179,7 @@ async function draw(config: AvatarConfigDto): Promise<Blob> {
   const built = await assemble(config, assetLoader)
   current.scene.add(built.group)
   try {
-    frame(current.camera, current.rig, built)
+    aim(current.camera, current.rig, built, frame)
     current.renderer.render(current.scene, current.camera)
     // And again with the pixels about to be read: the loss may have happened during the await above, or
     // during the render itself, and a blank drawing buffer is indistinguishable from a good one. This
@@ -209,6 +210,13 @@ export interface RenderOptions {
    * and the picture they *are* looking at. The signal is how a caller says "not any more".
    */
   signal?: AbortSignal
+  /**
+   * Which crop to draw: head and shoulders (the default, and every face in the app), or the whole
+   * standing figure — which is what a tile for a pair of trousers or a pair of shoes needs, since
+   * neither is inside a head-and-shoulders picture. The caller must key its cache by this as well as by
+   * the configuration; `hashConfig(config, frame)` is how.
+   */
+  frame?: PortraitFrame
 }
 
 /**
@@ -225,7 +233,7 @@ export interface RenderOptions {
 export function render(config: AvatarConfigDto, options: RenderOptions = {}): Promise<Blob> {
   const start = (): Promise<Blob> => {
     if (options.signal?.aborted === true) return Promise.reject(abortError())
-    return draw(config)
+    return draw(config, options.frame ?? 'portrait')
   }
   const next = queue.then(start, start)
   // The queue itself must never hold a rejection, or one failed portrait would reject every portrait

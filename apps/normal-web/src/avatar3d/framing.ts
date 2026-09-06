@@ -12,7 +12,17 @@ import type { ManifestBounds, Triple } from './assets.js'
  *
  * The figure faces **+Z** (it is where the pipeline puts a pair of glasses' lenses), so the camera
  * stands in front of the chest and looks back along −Z at the head's own depth.
+ *
+ * There are two crops, not one. The head-and-shoulders one is what a face is: a seat plate, the lobby
+ * bar, a profile row, and every wardrobe tile of something worn above the chest. The **full-body** one
+ * exists for the two slots that crop cannot contain — a pair of trousers and a pair of shoes are below
+ * it by construction, so four bottoms framed on the head are four identical pictures. Both are computed
+ * for the *same* camera (`PORTRAIT_FIELD_OF_VIEW`), because `portraits.ts` builds one and only changes
+ * where it stands.
  */
+
+/** Which of the two crops a picture is made by. */
+export type PortraitFrame = 'portrait' | 'full'
 
 /** A narrow lens: a portrait wants the flattening of a short telephoto, not a phone camera's nose. */
 export const PORTRAIT_FIELD_OF_VIEW = 28
@@ -43,11 +53,32 @@ export const HEAD_FRAME = 1.75
 /** A floor under the measured head height, so a body with implausible bounds cannot produce a zero frame. */
 export const MIN_HEAD_HEIGHT = 0.12
 
+/**
+ * Empty space above the crown and below the feet, together, as a fraction of the figure's height.
+ *
+ * The same number `stage.ts` frames the on-screen figure by, and deliberately: a full-body *tile* and
+ * the full-body *stage* are the same picture at two sizes, and a tile framed tighter than the stage
+ * would read as a different figure the moment a player looked from one to the other.
+ */
+export const FULL_MARGIN = 0.14
+
+/** Where the full-body camera stands, as a fraction of the figure's height off the ground — `stage.ts`'s. */
+export const FULL_EYE_LEVEL = 0.62
+
+/** A floor under the measured figure height, for the same reason `MIN_HEAD_HEIGHT` is one. */
+export const MIN_FULL_HEIGHT = 0.5
+
+/** A person-shaped box, for a figure whose body node never loaded — `stage.ts`'s `FALLBACK_BOUNDS`. */
+const FALLBACK_BOUNDS: ManifestBounds = { min: [-0.5, 0, -0.25], max: [0.5, 1.8, 0.25] }
+
 /** Where the camera goes and what it aims at — everything `portraits.ts` has to tell three.js. */
 export interface PortraitFraming {
-  /** The camera's world position: on the axis, at `centre`, in front of the chest. */
+  /**
+   * The camera's world position, on the axis and in front of the figure: level with `centre` in the
+   * head crop, a little above the middle of the body in the full one.
+   */
   position: Triple
-  /** What the camera looks at, and where the light rig is moved to: the head, at `centre`. */
+  /** What the camera looks at, and where the light rig is moved to — the head, or the figure's middle. */
   target: Triple
   /** The height of the window in metres, at the plane of `front`. */
   height: number
@@ -58,13 +89,48 @@ export interface PortraitFraming {
 }
 
 /**
- * Point a `PORTRAIT_FIELD_OF_VIEW` camera at the head of an assembled figure.
+ * Point a `PORTRAIT_FIELD_OF_VIEW` camera at an assembled figure, at the crop `frame` asks for.
  *
  * `anchors` and `bounds` are `Assembled`'s two geometric facts. Both have fallbacks: a body whose node
  * failed to load has no bounds at all, and a manifest may one day ship a rig without `neck_01`. A
  * portrait of a figure that is missing pieces is better than no portrait, so nothing here throws.
  */
-export function portraitFraming(anchors: Record<string, Triple>, bounds: ManifestBounds | null): PortraitFraming {
+export function portraitFraming(
+  anchors: Record<string, Triple>,
+  bounds: ManifestBounds | null,
+  frame: PortraitFrame = 'portrait',
+): PortraitFraming {
+  return frame === 'full' ? fullFraming(bounds) : headFraming(anchors, bounds)
+}
+
+/**
+ * The whole figure, head to feet — the crop a pair of trousers and a pair of shoes are visible in.
+ *
+ * It is `stage.ts`'s arithmetic, at this module's field of view: fit the *height* (the bounds are the
+ * T-pose's, so their width is two outstretched arms the assembler has since brought down), centre the
+ * window on the middle of the figure, and stand a little above the middle looking at it — the slight
+ * downward tilt design §6 asks for. Only the lens differs, because `portraits.ts` builds one camera and
+ * this crop may not rebuild its projection.
+ */
+function fullFraming(bounds: ManifestBounds | null): PortraitFraming {
+  const min = bounds === null ? FALLBACK_BOUNDS.min : bounds.min
+  const max = bounds === null ? FALLBACK_BOUNDS.max : bounds.max
+  const span = Math.max(max[1] - min[1], MIN_FULL_HEIGHT)
+  const height = span * (1 + FULL_MARGIN)
+  const centre = (max[1] + min[1]) / 2
+  const distance = height / 2 / Math.tan((PORTRAIT_FIELD_OF_VIEW * Math.PI) / 360)
+
+  return {
+    position: [0, min[1] + span * FULL_EYE_LEVEL, max[2] + distance],
+    target: [0, centre, 0],
+    height,
+    centre,
+    distance,
+  }
+}
+
+/** Head and shoulders: from a little above the crown down to about mid-chest. */
+function headFraming(anchors: Record<string, Triple>, bounds: ManifestBounds | null): PortraitFraming {
   const head = anchors['Head'] ?? [0, 1.6, 0]
   const neck = anchors['neck_01'] ?? [head[0], head[1] - 0.08, head[2]]
   const crown = bounds === null ? head[1] + 0.22 : bounds.max[1]

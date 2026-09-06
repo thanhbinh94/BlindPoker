@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import type { AvatarConfigDto, GeometricSlot } from '../api.js'
-import { portraitRelevant, withSlot } from './config.js'
+import { frameForSlot, portraitRelevant, withSlot } from './config.js'
+import type { PortraitFrame } from './framing.js'
 import { usePortrait } from './usePortrait.js'
 import s from './portrait.module.css'
 
@@ -33,6 +34,11 @@ export interface PortraitProps {
    * unnamed `role="img"` is worse than no image at all.
    */
   label?: string
+  /**
+   * The crop: `portrait` (head and shoulders) everywhere a *face* is wanted, which is everywhere but a
+   * wardrobe tile for something worn below the chest. See `framing.ts`.
+   */
+  frame?: PortraitFrame
   className?: string
 }
 
@@ -42,11 +48,11 @@ function initialOf(name: string | undefined): string {
   return trimmed === '' ? '' : trimmed.slice(0, 1).toUpperCase()
 }
 
-export function Portrait({ config, name, size = 'md', label, className }: PortraitProps) {
+export function Portrait({ config, name, size = 'md', label, frame = 'portrait', className }: PortraitProps) {
   // The hash comes back from the hook rather than being computed again here: it is the identity of the
   // picture `url` actually holds, so the attribute cannot drift from the image beside it while a new
   // configuration is still being drawn.
-  const { url, status, hash } = usePortrait(config)
+  const { url, status, hash } = usePortrait(config, { frame })
   const naming = label === undefined ? { 'aria-hidden': true } : { role: 'img', 'aria-label': label }
 
   return (
@@ -113,20 +119,28 @@ export interface PartPortraitProps {
  * It is a `Portrait` of the current configuration with this item swapped in, which means a hoodie is
  * shown on the body, hair and skin tone that will actually wear it.
  *
- * The configuration is then narrowed by `portraitRelevant` to the slots the head-and-shoulders crop can
- * contain. This is what stops one click on a pair of shoes from changing the cache key of every tile on
- * the screen and re-rendering forty identical pictures through a sequential queue — and it is also why
- * the tiles of a slot the crop cannot show (bottoms, shoes) share a single cache entry instead of
- * drawing the same face once per item.
+ * **The crop follows the slot** (`frameForSlot`). A hat, a top or a hairstyle is previewed head-and-
+ * shoulders; a pair of trousers and a pair of shoes are previewed on the whole standing figure, because
+ * they are below a head-and-shoulders crop by construction and framing them on the head would give
+ * every bottom in the wardrobe the same picture.
+ *
+ * The configuration is then narrowed by `portraitRelevant` to the slots that crop can contain. This is
+ * what stops one click on a pair of shoes from changing the cache key of every tile on the screen and
+ * re-rendering forty identical pictures through a sequential queue.
+ *
+ * The full-body tiles cost one cache entry each rather than one between them, which is at most seven
+ * more renders — and they are the tiles furthest down the wardrobe, so `useNearViewport` below means
+ * they are drawn when they are scrolled to rather than when the screen opens.
  */
 export function PartPortrait({ config, slot, itemId, size = 'md', className }: PartPortraitProps) {
   const box = useRef<HTMLSpanElement>(null)
   const near = useNearViewport(box)
-  const worn = useMemo(() => portraitRelevant(withSlot(config, slot, itemId)), [config, slot, itemId])
+  const frame = frameForSlot(slot)
+  const worn = useMemo(() => portraitRelevant(withSlot(config, slot, itemId), frame), [config, slot, itemId, frame])
 
   return (
     <span className={className === undefined ? s.part : `${s.part} ${className}`} ref={box}>
-      <Portrait config={near ? worn : null} size={size} />
+      <Portrait config={near ? worn : null} size={size} frame={frame} />
     </span>
   )
 }

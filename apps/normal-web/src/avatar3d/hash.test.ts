@@ -77,6 +77,26 @@ describe('hashConfig', () => {
     expect(hashConfig({ ...CONFIG, hair: 'HAIR_SHORT' })).not.toBe(hashConfig(CONFIG))
   })
 
+  it('is a different key for a different crop of the same outfit', () => {
+    // The memory map and the IndexedDB store hold both crops, so one key for both would hand a wardrobe
+    // tile for a pair of trousers whichever picture happened to be drawn first — a face, most of the time.
+    expect(hashConfig(CONFIG, 'full')).not.toBe(hashConfig(CONFIG, 'portrait'))
+    expect(hashConfig(CONFIG, 'full')).toMatch(/^[0-9a-f]{8}$/)
+    expect(canonicalConfig(CONFIG, 'full')).toContain('"frame":"full"')
+    // Two outfits that differ only below the chest are one picture cropped at the head and two framed
+    // on the whole figure. Both facts have to be true of the key.
+    const other = { ...CONFIG, bottom: 'bottom_skirt' }
+    expect(hashConfig(other, 'full')).not.toBe(hashConfig(CONFIG, 'full'))
+  })
+
+  it('leaves the face crop keyed exactly as it was before there were two', () => {
+    // Every portrait in every browser's IndexedDB was keyed without a frame; naming the default would
+    // have invalidated all of them for a picture that is byte-for-byte the same.
+    expect(hashConfig(CONFIG, 'portrait')).toBe(hashConfig(CONFIG))
+    expect(canonicalConfig(CONFIG, 'portrait')).toBe(canonicalConfig(CONFIG))
+    expect(canonicalConfig(CONFIG)).not.toContain('frame')
+  })
+
   it('writes the fields in a fixed order, whatever order they arrive in', () => {
     expect(canonicalConfig(CONFIG)).toBe(
       '{"v":2,"body":"male","skin":"#e0ac81","eyes":"#3b2415","hairColor":"#2b2b2b","hair":"hair_short","top":"top_tee","bottom":"bottom_jeans","shoes":"shoes_sneakers"}',

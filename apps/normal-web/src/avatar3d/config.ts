@@ -1,4 +1,5 @@
 import { GEOMETRIC_SLOTS, type AvatarConfigDto, type Body, type GeometricSlot, type ItemSlot } from '../api.js'
+import type { PortraitFrame } from './framing.js'
 
 /**
  * The two closed palettes, in the server's order — `apps/normal-server/data/palettes.json`.
@@ -125,12 +126,25 @@ export function switchBody(config: AvatarConfigDto, body: Body, fit: BodyFit): B
 }
 
 /**
- * A configuration reduced to what a portrait would draw of it — body, colours, hair, top, hat,
- * accessory, jewelry.
+ * Which crop previews this slot (`framing.ts`).
  *
- * The crop is head-and-shoulders (`framing.ts`: from a little above the crown down to about mid-chest),
- * so a pair of shoes, a skirt, a title and a badge are outside it by construction. `title` and `badge`
- * are outside *every* picture: they are words, and `nodeKeysOf` never asks for geometry for them.
+ * A head-and-shoulders picture is the right preview for everything worn above the chest, and no
+ * preview at all for the two slots worn below it: framed on the head, four pairs of trousers are four
+ * copies of one face. So `bottom` and `shoes` are previewed on the whole figure, and nothing else is —
+ * a full-body tile is a 128 px picture in which a hat is a dozen pixels.
+ */
+export function frameForSlot(slot: ItemSlot): PortraitFrame {
+  return slot === 'bottom' || slot === 'shoes' ? 'full' : 'portrait'
+}
+
+/**
+ * A configuration reduced to what a portrait would draw of it — body, colours, hair, top, hat,
+ * accessory, jewelry, and in the full-body crop the bottom and the shoes as well.
+ *
+ * The default crop is head-and-shoulders (`framing.ts`: from a little above the crown down to about
+ * mid-chest), so a pair of shoes, a skirt, a title and a badge are outside it by construction. `title`
+ * and `badge` are outside *every* picture: they are words, and `nodeKeysOf` never asks for geometry for
+ * them.
  *
  * This exists for the wardrobe. Every tile is a `PartPortrait` of the *whole* current configuration
  * with one item swapped in, and the portrait cache is keyed by the configuration's hash — so with the
@@ -142,8 +156,12 @@ export function switchBody(config: AvatarConfigDto, body: Body, fit: BodyFit): B
  * The dropped required slots become `''` rather than disappearing: `AvatarConfigDto` says they are
  * strings, and `''` is what both `canonicalConfig` and `nodeKeysOf` already read as "nothing here" —
  * so the reduced config hashes stably and assembles without asking for a node that is not in shot.
+ *
+ * In the full-body crop both of them are in shot, so both are kept — which is the whole point of that
+ * crop, and costs one cache entry per owned bottom or pair of shoes (at most seven).
  */
-export function portraitRelevant(config: AvatarConfigDto): AvatarConfigDto {
+export function portraitRelevant(config: AvatarConfigDto, frame: PortraitFrame = 'portrait'): AvatarConfigDto {
+  const below = frame === 'full'
   return {
     v: 2,
     body: config.body,
@@ -152,8 +170,8 @@ export function portraitRelevant(config: AvatarConfigDto): AvatarConfigDto {
     hairColor: config.hairColor,
     hair: config.hair,
     top: config.top,
-    bottom: '',
-    shoes: '',
+    bottom: below ? config.bottom : '',
+    shoes: below ? config.shoes : '',
     hat: config.hat,
     accessory: config.accessory,
     jewelry: config.jewelry,

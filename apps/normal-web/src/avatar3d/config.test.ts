@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AvatarConfigDto } from '../api.js'
-import { avatarPayload, portraitRelevant, withSlot } from './config.js'
+import { avatarPayload, frameForSlot, portraitRelevant, withSlot } from './config.js'
 import { hashConfig } from './hash.js'
 import { nodeKeysOf } from './assemble.js'
 
@@ -83,6 +83,35 @@ describe('portraitRelevant', () => {
       'accessory/accessory_glasses/female',
       'jewelry/jewelry_earrings/female',
     ])
+  })
+
+  it('keeps what is worn below the chest for the full-body crop', () => {
+    // The crop the trouser and shoe tiles are drawn by. Stripping `bottom` and `shoes` there would give
+    // every tile in those two groups the same picture, which is the defect this frame exists to fix.
+    const whole = portraitRelevant(DRESSED, 'full')
+
+    expect(whole.bottom).toBe('bottom_skirt')
+    expect(whole.shoes).toBe('shoes_sandals')
+    // The two words are outside *every* picture, in both crops.
+    expect(whole.title).toBeUndefined()
+    expect(whole.badge).toBeUndefined()
+    expect(nodeKeysOf(whole)).toContain('bottom/bottom_skirt/female')
+    expect(nodeKeysOf(whole)).toContain('shoes/shoes_sandals/female')
+
+    // And two bottoms are two pictures, where in the face crop they were one.
+    const jeans = portraitRelevant(withSlot(DRESSED, 'bottom', 'bottom_jeans'), 'full')
+    expect(hashConfig(jeans, 'full')).not.toBe(hashConfig(whole, 'full'))
+    expect(hashConfig(portraitRelevant(withSlot(DRESSED, 'bottom', 'bottom_jeans')))).toBe(hashConfig(portraitRelevant(DRESSED)))
+  })
+
+  it('picks the crop from the slot being previewed', () => {
+    // The one rule the wardrobe, the inventory and `PartPortrait` all read, so a tile and the
+    // configuration it is drawn from cannot disagree about which picture is being made.
+    expect(frameForSlot('bottom')).toBe('full')
+    expect(frameForSlot('shoes')).toBe('full')
+    for (const slot of ['hair', 'top', 'hat', 'accessory', 'jewelry', 'title', 'badge'] as const) {
+      expect(frameForSlot(slot), slot).toBe('portrait')
+    }
   })
 
   it('is never what gets saved', () => {
