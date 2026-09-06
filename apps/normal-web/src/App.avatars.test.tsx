@@ -4,6 +4,10 @@ import { act, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App.js'
 import type { AuthMeDto, AvatarConfigDto, NormalApi } from './api.js'
+import { fakeRenderer } from './avatar3d/fake-renderer.js'
+import { hashConfig } from './avatar3d/hash.js'
+import { resetPortraitMemory } from './avatar3d/portrait-cache.js'
+import { setPortraitRendererForTests } from './avatar3d/usePortrait.js'
 import { resetAvatarCache } from './avatar/useAvatars.js'
 import viNormal from './locales/vi/normal.json'
 import { makeI18n, renderWithI18n } from './test-i18n.js'
@@ -19,11 +23,15 @@ import { makeI18n, renderWithI18n } from './test-i18n.js'
 const ME: AuthMeDto = { playerId: 'p1', displayName: 'Bình', balance: 123_000 }
 
 const AVATAR: AvatarConfigDto = {
-  base: 'base_01',
-  face: 'face_02',
-  clothing: 'clothing_aodai',
-  hair: 'hair_bun',
+  v: 2,
+  body: 'female',
+  skin: '#efc9a4',
+  eyes: '#6b4a2f',
   hairColor: '#d9a441',
+  hair: 'hair_bun',
+  top: 'clothing_aodai',
+  bottom: 'bottom_skirt',
+  shoes: 'shoes_sandals',
   title: 'title_hot_hand',
   badge: 'badge_gold',
 }
@@ -89,6 +97,8 @@ describe('App — avatars on the bar and at the table', () => {
     localStorage.clear()
     FakeSocket.reset()
     resetAvatarCache()
+    resetPortraitMemory()
+    setPortraitRendererForTests(fakeRenderer())
     window.history.replaceState(null, '', '/')
   })
 
@@ -106,8 +116,9 @@ describe('App — avatars on the bar and at the table', () => {
       '#/profile',
       '#/avatar',
     ])
-    // The boot probe named me before `WELCOME` did, so the face is fetched once and drawn from the config.
-    await waitFor(() => expect(mine.querySelector('svg')).toHaveAttribute('data-avatar', 'config'))
+    // The boot probe named me before `WELCOME` did, so the face is fetched once and rendered from the
+    // config — `data-hash` is that config's identity, and the only thing an image can be asserted on.
+    await waitFor(() => expect(mine.querySelector('img')).toHaveAttribute('data-hash', hashConfig(AVATAR)))
     expect(playerAvatar.mock.calls.map(([id]) => id)).toEqual(['p1'])
   })
 

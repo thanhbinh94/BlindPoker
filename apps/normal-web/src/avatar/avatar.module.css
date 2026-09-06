@@ -1,33 +1,23 @@
-/* Bind Poker — Normal avatars. The renderer is all vector, so this file does only two things: fix the box
-   the SVG occupies, and publish the hair colour the parts fill from. */
+/* Bind Poker — Normal avatars. Since Plan 8 a player's face is a rendered picture and lives in
+   `avatar3d/portrait.module.css`; what is left here is everything around it — the bot's vector mark, the
+   seat caption, and the lobby bar's corner. */
 
+/* The bot mark. It is a vector rather than a portrait because a bot has no account to draw, and it is
+   only ever asked for at seat size. */
 .avatar {
-  --avatar-hair: #2b2b2b;
-
   display: block;
   flex: none;
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  /* A seat disc already clips to a circle; standing on its own (the lobby bar, the wardrobe) the avatar
-     draws its own edge so it does not float on the ground. */
+  /* A seat disc already clips to a circle; standing on its own the mark draws its own edge so it does
+     not float on the ground. */
   overflow: hidden;
 }
 
-/* The three sizes the app asks for: a seat plate, a list row, and the wardrobe's subject. */
 .avatar[data-size='sm'] {
   width: 32px;
   height: 32px;
-}
-
-.avatar[data-size='md'] {
-  width: 48px;
-  height: 48px;
-}
-
-.avatar[data-size='lg'] {
-  width: 128px;
-  height: 128px;
 }
 
 /* ── the seat caption: a badge glyph and a title, on one line ─────────────── */

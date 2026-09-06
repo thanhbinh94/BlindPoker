@@ -10,7 +10,8 @@ import {
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { NormalApi } from './api.js'
-import { Avatar } from './avatar/Avatar.js'
+import { Portrait } from './avatar3d/Portrait.js'
+import { resetPortraitMemory } from './avatar3d/portrait-cache.js'
 import a from './avatar/avatar.module.css'
 import { resetAvatarCache, useAvatars } from './avatar/useAvatars.js'
 import { guardApi } from './guarded-api.js'
@@ -35,8 +36,9 @@ export const NORMAL_VERSION = typeof __NORMAL_VERSION__ === 'string' ? __NORMAL_
  * They are the right things to split and the lobby is not: a player reaches the lobby on every visit, these
  * on some visits and several of them never. Between them they carry the stats tables, the ledger, the
  * month's calendar, the achievement list and the wardrobe's thumbnail renderer — none of which the sign-in
- * card or the lobby has any use for. (The avatar *parts* are not among them: the lobby bar and the seat
- * plates draw faces, so `avatar/parts.tsx` belongs in the entry chunk and ships there.) Splitting these six
+ * card or the lobby has any use for. (`Portrait` is not among them: the lobby bar and the seat plates draw
+ * faces, so it belongs in the entry chunk and ships there — three.js does not, and reaches the browser
+ * only through `usePortrait`'s own dynamic import.) Splitting these six
  * keeps the first paint small on the phone connection this game is mostly played on, and each screen then
  * costs one request, once.
  */
@@ -90,11 +92,14 @@ export function App({ api, socketFactory }: AppProps) {
   // Everything a session leaves behind, dropped in one place — however the session ended (a sign-out, an
   // expiry, a 401 from a screen). The socket first, then the state it filled: the reducer outlives the
   // session, so without the reset the next player on this machine is greeted with the previous one's name
-  // and points. The avatar cache is module-level for the same reason and forgets the same way.
+  // and points. The avatar cache is module-level for the same reason and forgets the same way, and so are
+  // the rendered portraits — the face of the account that just signed out is exactly what should not sit
+  // behind the sign-in card, and every one of its object URLs is a blob held open until it is revoked.
   const endSession = useCallback(() => {
     clientRef.current.disconnect()
     clientRef.current.reset()
     resetAvatarCache()
+    resetPortraitMemory()
   }, [])
   const gate = useSessionGate({ api, socketStatus: client.state.status, onEnded: endSession })
 
@@ -276,7 +281,7 @@ export function App({ api, socketFactory }: AppProps) {
                   {t('nav.profile')}
                 </a>
                 <a href="#/avatar" aria-label={t('avatar.mine')}>
-                  <Avatar config={myAvatar} size="sm" className={a.lobbyAvatar} />
+                  <Portrait config={myAvatar} name={gate.me?.displayName} size="sm" className={a.lobbyAvatar} />
                 </a>
               </span>
             }

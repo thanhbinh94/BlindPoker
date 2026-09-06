@@ -1,17 +1,25 @@
 import type { RoomPlayerView } from '@bp/core'
-import { render } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { render, waitFor } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AvatarConfigDto, PlayerAvatarDto } from '../api.js'
+import { fakeRenderer } from '../avatar3d/fake-renderer.js'
+import { hashConfig } from '../avatar3d/hash.js'
+import { resetPortraitMemory } from '../avatar3d/portrait-cache.js'
+import { setPortraitRendererForTests } from '../avatar3d/usePortrait.js'
 import viNormal from '../locales/vi/normal.json'
 import { makeI18n } from '../test-i18n.js'
 import { makeAvatarFor, makeCaptionFor, type AvatarCache } from './TableChrome.js'
 
 const CONFIG: AvatarConfigDto = {
-  base: 'base_01',
-  face: 'face_01',
-  clothing: 'clothing_tee',
-  hair: 'hair_short',
+  v: 2,
+  body: 'male',
+  skin: '#e0ac81',
+  eyes: '#3b2415',
   hairColor: '#2b2b2b',
+  hair: 'hair_short',
+  top: 'top_tee',
+  bottom: 'bottom_jeans',
+  shoes: 'shoes_sneakers',
 }
 
 const player = (patch: Partial<RoomPlayerView> & Pick<RoomPlayerView, 'playerId'>): RoomPlayerView => ({
@@ -38,6 +46,11 @@ const t = makeI18n('vi').getFixedT(null, 'normal')
 const draw = (node: ReturnType<ReturnType<typeof makeCaptionFor>>): HTMLElement => render(<>{node}</>).container
 
 describe('makeAvatarFor', () => {
+  beforeEach(() => {
+    resetPortraitMemory()
+    setPortraitRendererForTests(fakeRenderer())
+  })
+
   it('gives a bot a mark of its own, and never looks one up', () => {
     const avatars: AvatarCache = new Map()
     const get = vi.spyOn(avatars, 'get')
@@ -48,24 +61,27 @@ describe('makeAvatarFor', () => {
     expect(get).not.toHaveBeenCalled()
   })
 
-  it('draws the equipped avatar for a human the cache knows', () => {
-    const avatars: AvatarCache = new Map([['a', entry('a', { hair: 'hair_bun', hairColor: '#d9a441' })]])
+  it('draws the equipped avatar for a human the cache knows', async () => {
+    const worn = { ...CONFIG, hair: 'hair_bun', hairColor: '#d9a441' }
+    const avatars: AvatarCache = new Map([['a', entry('a', worn)]])
 
-    const { container } = render(<>{makeAvatarFor(avatars)(player({ playerId: 'a' }))}</>)
-    const svg = container.querySelector('svg')
+    const { container } = render(<>{makeAvatarFor(avatars)(player({ playerId: 'a', displayName: 'Bình' }))}</>)
 
-    expect(svg).toHaveAttribute('data-avatar', 'config')
-    expect(svg).toHaveAttribute('data-size', 'sm')
-    expect(svg?.style.getPropertyValue('--avatar-hair')).toBe('#d9a441')
+    // The picture is the whole configuration's hash, which is what an end-to-end test reads to say
+    // "that seat is wearing what I equipped".
+    await waitFor(() => expect(container.querySelector('img')).toHaveAttribute('data-hash', hashConfig(worn)))
+    expect(container.querySelector('[data-portrait]')).toHaveAttribute('data-size', 'sm')
   })
 
-  it('draws the silhouette while an avatar has not arrived, and when there is none', () => {
+  it('draws the initial while an avatar has not arrived, and when there is none', () => {
     const avatars: AvatarCache = new Map([['gone', null]])
     const avatarFor = makeAvatarFor(avatars)
 
     for (const id of ['gone', 'pending']) {
-      const { container } = render(<>{avatarFor(player({ playerId: id }))}</>)
-      expect(container.querySelector('svg'), id).toHaveAttribute('data-avatar', 'none')
+      const { container } = render(<>{avatarFor(player({ playerId: id, displayName: 'Bình' }))}</>)
+      const disc = container.querySelector('[data-portrait]')
+      expect(disc, id).toHaveAttribute('data-portrait', 'idle')
+      expect(disc, id).toHaveTextContent('B')
     }
   })
 })

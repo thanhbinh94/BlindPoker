@@ -4,7 +4,7 @@ import type { TFunction } from 'i18next'
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { HistoryEntryDto, LedgerEntryDto, MeDto, NormalApi, PlayerStatsDto } from '../api.js'
-import { Avatar } from '../avatar/Avatar.js'
+import { Portrait } from '../avatar3d/Portrait.js'
 import { itemName } from '../catalog-i18n.js'
 import { formatDay, formatMoment, formatSigned } from './format.js'
 import s from './normal.module.css'
@@ -319,7 +319,7 @@ export function ProfileScreen({ api, lang, balance, onRenamed }: ProfileScreenPr
   return (
     <main className={s.page}>
       <header className={s.identityCard}>
-        <Avatar config={me.avatar} size="lg" label={t('avatar.mine')} />
+        <Portrait config={me.avatar} name={displayName} size="lg" label={t('avatar.mine')} />
         <div className={s.identityText}>
           <span className={s.eyebrow}>{t('profile.title')}</span>
           <h1 className={s.identityName}>{displayName}</h1>

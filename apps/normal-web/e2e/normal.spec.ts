@@ -221,9 +221,9 @@ async function expectNoSidewaysScroll(page: Page): Promise<void> {
   expect(await page.evaluate(() => document.documentElement.scrollWidth), 'the page does not scroll sideways').toBeLessThanOrEqual(width)
 }
 
-/** The avatar hung on the lobby's player bar — the same face the seat plates draw. */
+/** The portrait hung on the lobby's player bar — the same face the seat plates draw. */
 function lobbyAvatar(page: Page): Locator {
-  return page.locator('a[href="#/avatar"] svg')
+  return page.locator('a[href="#/avatar"] [data-portrait]')
 }
 
 /** Register on a fresh page, capturing the sign-in card and the lobby on the way. */
@@ -233,7 +233,9 @@ async function tourStart(context: BrowserContext, who: Account, suffix: string):
   await expect(page.getByLabel('Tên hiển thị', { exact: true })).toBeVisible()
   await shot(page, `auth-${suffix}`)
   await register(page, who)
-  await expect(lobbyAvatar(page)).toHaveAttribute('data-avatar', 'config')
+  // The disc is there from the first paint — it carries the player's initial until the picture their own
+  // browser is drawing arrives, and on a machine with no WebGL it carries it for good.
+  await expect(lobbyAvatar(page)).toBeVisible()
   await shot(page, `lobby-${suffix}`)
   return page
 }
@@ -362,16 +364,15 @@ test.describe('Bind Poker Normal', () => {
     // --- 2. the wardrobe -----------------------------------------------------------------------------
     //
     // Only the hair *colour* is changed, and that is a fact about the economy rather than a shortcut: a new
-    // account owns exactly one item per layer (the four `isDefault` rows of `data/items.json`), and the
+    // account owns exactly one item per required slot (the four `isDefault` rows of `data/items.json`), and the
     // first item a player can win arrives on day 7 of the calendar. So the colour is the one thing this
     // account can actually change — and it is enough to prove the round trip: PUT, reload, and the same
     // face on the lobby bar, which is the face the seat plates draw.
     const RED = '#c8323c'
     await page.goto('/#/avatar')
     await expect(page.getByRole('heading', { name: 'Ảnh đại diện', exact: true })).toBeVisible()
-    const preview = page.locator('svg[data-size="lg"]')
-    // The catalogue's `assetKey` on the rendered layer: the wardrobe is drawing the item the account owns.
-    await expect(preview.locator('g[data-part="hair/hair_short"]')).toHaveCount(1)
+    const preview = page.locator('[data-portrait][data-size="lg"]')
+    await expect(preview).toBeVisible()
 
     await page.getByRole('button', { name: `Màu có sẵn ${RED}` }).click()
     await shot(page, 'avatar-desktop')
@@ -381,7 +382,11 @@ test.describe('Bind Poker Normal', () => {
     await page.reload()
     await expect(page.getByRole('heading', { name: 'Ảnh đại diện', exact: true })).toBeVisible()
     await expect(page.getByLabel('Màu tự chọn'), 'the saved colour is what the editor loads').toHaveValue(RED)
-    await expect(preview).toHaveAttribute('style', new RegExp(`--avatar-hair:\\s*${RED}`))
+    // `data-hash` is the whole configuration's identity — the key the rendered portrait is cached under,
+    // and the only thing a picture can be asserted on. Whatever it is here is what every other screen, in
+    // every other browser, must arrive at for this account.
+    await expect(preview.locator('img')).toHaveAttribute('data-hash', /^[0-9a-f]{8}$/)
+    const saved = await preview.locator('img').getAttribute('data-hash')
 
     // …and on the lobby bar of a *second device*, which is this edition's whole premise: the face follows
     // the account, not the browser. A fresh context is also the only honest way to check it today —
@@ -391,10 +396,9 @@ test.describe('Bind Poker Normal', () => {
     const elsewhere = await second.newPage()
     await signIn(elsewhere, who)
     const face = lobbyAvatar(elsewhere)
-    await expect(face).toHaveAttribute('style', new RegExp(`--avatar-hair:\\s*${RED}`))
-    // The catalogue's `assetKey` per layer: the same face the seat plates draw at a table.
-    await expect(face.locator('g[data-part="hair/hair_short"]')).toHaveCount(1)
-    await expect(face.locator('g[data-part]')).toHaveCount(4)
+    // The same hash, which is the same picture: the second device fetched the saved config and rendered
+    // it for itself. (It is the same face the seat plates draw at a table, from the same cache.)
+    await expect(face.locator('img'), 'the second device draws what was just saved').toHaveAttribute('data-hash', String(saved))
 
     await second.close()
     await context.close()

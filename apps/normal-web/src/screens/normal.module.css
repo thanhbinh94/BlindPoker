@@ -841,9 +841,14 @@
   outline-offset: 2px;
 }
 
+/* `inline-flex` rather than `block`: since Plan 8 a thumbnail is a `Portrait` inside a wrapper, and the
+   wrapper has to centre it. An empty slot's tile is the same disc with nothing in it. */
 .thumb,
 .thumbEmpty {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
   width: 48px;
   height: 48px;
   border-radius: 50%;

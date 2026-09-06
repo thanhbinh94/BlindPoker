@@ -7,11 +7,15 @@ import { makeI18n, renderWithI18n } from '../test-i18n.js'
 import { ProfileScreen } from './ProfileScreen.js'
 
 const AVATAR: AvatarConfigDto = {
-  base: 'base_01',
-  face: 'face_02',
-  clothing: 'clothing_aodai',
-  hair: 'hair_bun',
+  v: 2,
+  body: 'female',
+  skin: '#efc9a4',
+  eyes: '#6b4a2f',
   hairColor: '#d9a441',
+  hair: 'hair_bun',
+  top: 'clothing_aodai',
+  bottom: 'bottom_skirt',
+  shoes: 'shoes_sandals',
   title: 'title_hot_hand',
   badge: 'badge_gold',
 }

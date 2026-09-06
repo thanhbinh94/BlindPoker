@@ -2,8 +2,7 @@ import type { RoomPlayerView } from '@bp/core'
 import type { TFunction } from 'i18next'
 import type { ReactNode } from 'react'
 import type { PlayerAvatarDto } from '../api.js'
-import { Avatar } from '../avatar/Avatar.js'
-import { BOT_MARK } from '../avatar/parts.js'
+import { Portrait } from '../avatar3d/Portrait.js'
 import { itemName } from '../catalog-i18n.js'
 import a from '../avatar/avatar.module.css'
 
@@ -30,12 +29,32 @@ const UNKNOWN_BADGE = { glyph: '●', rarity: 'common' } as const
 export type AvatarCache = Map<string, PlayerAvatarDto | null>
 
 /**
+ * The mark a bot wears instead of a portrait.
+ *
+ * Bots have no account, so there is nothing to fetch, nothing to equip and nothing to render — the seat
+ * says "machine" and stops there. It is a vector rather than a picture for the same reason: the whole
+ * portrait pipeline exists to draw a *person*, and a bot is not one.
+ */
+const BOT_MARK: ReactNode = (
+  <>
+    <circle cx="32" cy="32" r="32" fill="#14203a" />
+    <path d="M32 10 L32 16" stroke="var(--teal, #3f938a)" strokeWidth="2" strokeLinecap="round" />
+    <circle cx="32" cy="9" r="2.6" fill="var(--teal, #3f938a)" />
+    <rect x="16" y="17" width="32" height="28" rx="8" fill="#26314f" stroke="var(--teal, #3f938a)" strokeWidth="1.6" />
+    <circle cx="25" cy="29" r="3.2" fill="var(--teal, #3f938a)" />
+    <circle cx="39" cy="29" r="3.2" fill="var(--teal, #3f938a)" />
+    <rect x="24" y="37" width="16" height="2.6" rx="1.3" fill="var(--teal, #3f938a)" opacity="0.8" />
+    <path d="M10 60 C 13 51 21 47 32 47 C 43 47 51 51 54 60 Z" fill="#26314f" />
+  </>
+)
+
+/**
  * The seat's face.
  *
- * A bot gets a mark rather than an avatar and — the point of the branch — is never looked up: bots have no
+ * A bot gets a mark rather than a portrait and — the point of the branch — is never looked up: bots have no
  * account, so `GET /api/players/<botId>/avatar` is a 404 for every bot at every table, forever. A human whose
- * avatar has not arrived (or has none) gets the neutral silhouette, which is also what the kit's own initial
- * disc would have shown.
+ * avatar has not arrived (or has none) gets the initial of their name, which is what the kit's own seat disc
+ * would have shown and what the portrait falls back to on a machine with no WebGL.
  */
 export function makeAvatarFor(avatars: AvatarCache): (player: RoomPlayerView) => ReactNode {
   return (player) => {
@@ -46,7 +65,7 @@ export function makeAvatarFor(avatars: AvatarCache): (player: RoomPlayerView) =>
         </svg>
       )
     }
-    return <Avatar config={avatars.get(player.playerId)?.avatar ?? null} size="sm" />
+    return <Portrait config={avatars.get(player.playerId)?.avatar ?? null} name={player.displayName} size="sm" />
   }
 }
 

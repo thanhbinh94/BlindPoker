@@ -2,21 +2,24 @@ import { Badge, Button, Field, Panel, Select } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ApiError, type AvatarConfigDto, type InventoryDto, type ItemCategory, type NormalApi, type OwnedItemDto } from '../api.js'
-import { Avatar } from '../avatar/Avatar.js'
-import { PartThumb } from '../avatar/PartThumb.js'
-import { DEFAULT_HAIR_COLOR, HAIR_PRESETS, LAYER_ORDER, type AvatarLayer } from '../avatar/parts.js'
+import {
+  ApiError,
+  GEOMETRIC_SLOTS,
+  OPTIONAL_SLOTS,
+  type AvatarConfigDto,
+  type GeometricSlot,
+  type InventoryDto,
+  type ItemSlot,
+  type NormalApi,
+  type OwnedItemDto,
+} from '../api.js'
+import { PartPortrait, Portrait } from '../avatar3d/Portrait.js'
+import { avatarPayload, DEFAULT_HAIR_COLOR, HAIR_PRESETS, HEX_COLOR, withSlot } from '../avatar3d/config.js'
 import { useAvatars } from '../avatar/useAvatars.js'
 import { itemName } from '../catalog-i18n.js'
 import { RARITY_TONE } from './catalog.js'
 import s from './normal.module.css'
 import { useAsync } from './useAsync.js'
-
-/** The two layers a player may leave empty; the other four always carry an item. */
-export const OPTIONAL_LAYERS: AvatarLayer[] = ['accessory', 'jewelry']
-
-/** The colour the free field will accept, and the same shape the server's `HAIR_COLOR` demands. */
-export const HEX_COLOR = /^#[0-9a-f]{6}$/i
 
 /** Refusals this screen has words for; anything else is the kit's generic failure. */
 const KNOWN_CODES = new Set(['NOT_OWNED', 'WRONG_CATEGORY', 'INVALID_COLOR', 'MISSING_LAYER', 'INVALID_ITEM'])
@@ -26,34 +29,9 @@ export function avatarRefusal(cause: unknown, t: TFunction): string {
   return t('common:errors.INTERNAL')
 }
 
-/** The owned items of one category, in catalogue order (which is the order the server sent them). */
-function ownedIn(items: OwnedItemDto[], category: ItemCategory): OwnedItemDto[] {
-  return items.filter((item) => item.category === category)
-}
-
-/**
- * One layer replaced, spelled out per slot.
- *
- * The obvious `{ ...config, [layer]: id }` is a computed key over a union, which types as a string index and
- * loses exactly the distinction this function exists to keep: the four required layers cannot hold
- * `undefined`, and the two optional ones must, because that is how an empty slot is sent.
- */
-function withLayer(config: AvatarConfigDto, layer: AvatarLayer, itemId: string): AvatarConfigDto {
-  const optional = itemId === '' ? undefined : itemId
-  switch (layer) {
-    case 'base':
-      return { ...config, base: itemId }
-    case 'face':
-      return { ...config, face: itemId }
-    case 'clothing':
-      return { ...config, clothing: itemId }
-    case 'hair':
-      return { ...config, hair: itemId }
-    case 'accessory':
-      return { ...config, accessory: optional }
-    default:
-      return { ...config, jewelry: optional }
-  }
+/** The owned items of one slot, in catalogue order (which is the order the server sent them). */
+function ownedIn(items: OwnedItemDto[], slot: ItemSlot): OwnedItemDto[] {
+  return items.filter((item) => item.slot === slot)
 }
 
 /** `useAvatars` wants an array it can key on; a fresh `[]` per render would restart its effect forever. */
@@ -70,29 +48,29 @@ export interface AvatarScreenProps {
 }
 
 interface PickerProps {
-  layer: AvatarLayer
+  slot: GeometricSlot
   items: OwnedItemDto[]
-  /** The equipped item, or `''` for an empty optional slot. */
-  value: string
-  hairColor: string
+  /** The whole configuration, because a tile previews this item *on the figure that will wear it*. */
+  config: AvatarConfigDto
   onPick: (itemId: string) => void
 }
 
 /**
- * One layer's worth of choices, as a radio group.
+ * One slot's worth of choices, as a radio group.
  *
  * Radios rather than a listbox because that is what this is — one of n, all visible, changeable with the
  * arrow keys — and because a tile that is a `<label>` around its own input gives the whole 44 px square to
  * the thumb without any of the pointer wiring a div would need. The name is on the input rather than in the
  * label text so a screen reader hears "Áo dài", not "Áo dài, rare, epic".
  */
-function LayerPicker({ layer, items, value, hairColor, onPick }: PickerProps) {
+function SlotPicker({ slot, items, config, onPick }: PickerProps) {
   const { t } = useTranslation('normal')
-  const optional = OPTIONAL_LAYERS.includes(layer)
+  const optional = (OPTIONAL_SLOTS as readonly string[]).includes(slot)
+  const value = config[slot] ?? ''
 
   return (
     <fieldset className={s.picker}>
-      <legend className={s.groupTitle}>{t(`avatar.layer.${layer}`)}</legend>
+      <legend className={s.groupTitle}>{t(`avatar.slot.${slot}`)}</legend>
       {items.length === 0 && !optional ? <p className={s.footnote}>{t('avatar.empty')}</p> : null}
       <div className={s.tiles}>
         {optional ? (
@@ -100,7 +78,7 @@ function LayerPicker({ layer, items, value, hairColor, onPick }: PickerProps) {
             <input
               className={s.tileInput}
               type="radio"
-              name={`avatar-${layer}`}
+              name={`avatar-${slot}`}
               aria-label={t('avatar.none')}
               checked={value === ''}
               onChange={() => onPick('')}
@@ -115,16 +93,12 @@ function LayerPicker({ layer, items, value, hairColor, onPick }: PickerProps) {
             <input
               className={s.tileInput}
               type="radio"
-              name={`avatar-${layer}`}
+              name={`avatar-${slot}`}
               aria-label={itemName(item.itemId, t)}
               checked={value === item.itemId}
               onChange={() => onPick(item.itemId)}
             />
-            <PartThumb
-              className={s.thumb}
-              assetKey={item.assetKey ?? `${layer}/${item.itemId}`}
-              {...(layer === 'hair' ? { hairColor } : {})}
-            />
+            <PartPortrait className={s.thumb} config={config} slot={slot} itemId={item.itemId} />
             <span className={s.tileName}>{itemName(item.itemId, t)}</span>
             {item.rarity === null ? null : <Badge tone={RARITY_TONE[item.rarity]}>{t(`inventory.rarity.${item.rarity}`)}</Badge>}
           </label>
@@ -135,14 +109,19 @@ function LayerPicker({ layer, items, value, hairColor, onPick }: PickerProps) {
 }
 
 /**
- * The wardrobe: pick a piece per layer, a colour for the hair, a title and a badge, and save the lot.
+ * The wardrobe: pick a piece per slot, a colour for the hair, a title and a badge, and save the lot.
+ *
+ * This is the **interim** v2 screen. Plan 8's Task 4 replaces it with a `AvatarStage` and the body, skin and
+ * eye pickers design §6 asks for; what is here is the Plan 6 wardrobe carried across to the v2 slots so the
+ * `/avatar` route keeps working in between — which matters, because everything else in this task (the
+ * portraits, the cache, the item tiles) is only observable through a screen that can equip something.
  *
  * Everything offered here is owned — the picker lists `GET /api/me/inventory`, never the catalogue — so the
- * only refusal a correct client can provoke is a race with a grant, and the server's four codes are mapped
- * anyway because a `PUT` that says no with no words is a save button that appears to do nothing.
+ * only refusal a correct client can provoke is a race with a grant, and the server's codes are mapped anyway
+ * because a `PUT` that says no with no words is a save button that appears to do nothing.
  *
- * There is no dirty-state guard on navigation: leaving with unsaved changes loses them silently. That is a
- * deliberate omission for this task, noted so the next one can decide whether it is worth a dialog.
+ * There is no dirty-state guard on navigation: leaving with unsaved changes loses them silently. Design §6
+ * asks for one; it belongs with the screen that replaces this.
  */
 export function AvatarScreen({ api, playerId }: AvatarScreenProps) {
   const { t } = useTranslation('normal')
@@ -159,7 +138,7 @@ export function AvatarScreen({ api, playerId }: AvatarScreenProps) {
 
   const inventory = wardrobe.data
   const config = draft ?? inventory?.avatar ?? null
-  const byCategory = useMemo(() => inventory?.items ?? [], [inventory])
+  const owned = useMemo(() => inventory?.items ?? [], [inventory])
 
   if (wardrobe.loading && inventory === null) {
     return (
@@ -192,9 +171,9 @@ export function AvatarScreen({ api, playerId }: AvatarScreenProps) {
     setError(null)
   }
 
-  const pick = (layer: AvatarLayer, itemId: string): void => commit(withLayer(config, layer, itemId))
-  const setTitle = (id: string): void => commit({ ...config, title: id === '' ? undefined : id })
-  const setBadgeItem = (id: string): void => commit({ ...config, badge: id === '' ? undefined : id })
+  const pick = (slot: GeometricSlot, itemId: string): void => commit(withSlot(config, slot, itemId))
+  const setTitle = (id: string): void => commit(withSlot(config, 'title', id))
+  const setBadgeItem = (id: string): void => commit(withSlot(config, 'badge', id))
 
   const hairColor = config.hairColor || DEFAULT_HAIR_COLOR
   const typed = colorText ?? hairColor
@@ -212,19 +191,6 @@ export function AvatarScreen({ api, playerId }: AvatarScreenProps) {
     commit({ ...config, hairColor: preset })
   }
 
-  /** The full config, with the optional slots *omitted* rather than emptied — the server reads `''` as a bad id. */
-  const payload = (): AvatarConfigDto => ({
-    base: config.base,
-    face: config.face,
-    clothing: config.clothing,
-    hair: config.hair,
-    hairColor,
-    ...(config.accessory === undefined ? {} : { accessory: config.accessory }),
-    ...(config.jewelry === undefined ? {} : { jewelry: config.jewelry }),
-    ...(config.title === undefined ? {} : { title: config.title }),
-    ...(config.badge === undefined ? {} : { badge: config.badge }),
-  })
-
   const save = async (): Promise<void> => {
     if (busy) return
     if (!colorValid) {
@@ -233,7 +199,7 @@ export function AvatarScreen({ api, playerId }: AvatarScreenProps) {
     }
     setBusy(true)
     try {
-      const answer = await api.setAvatar(payload())
+      const answer = await api.setAvatar(avatarPayload({ ...config, hairColor }))
       setDraft(answer.config)
       setColorText(null)
       setError(null)
@@ -247,9 +213,9 @@ export function AvatarScreen({ api, playerId }: AvatarScreenProps) {
     }
   }
 
-  const slotOptions = (category: ItemCategory): { value: string; label: string }[] => [
+  const slotOptions = (slot: ItemSlot): { value: string; label: string }[] => [
     { value: '', label: t('avatar.none') },
-    ...ownedIn(byCategory, category).map((item) => ({ value: item.itemId, label: itemName(item.itemId, t) })),
+    ...ownedIn(owned, slot).map((item) => ({ value: item.itemId, label: itemName(item.itemId, t) })),
   ]
 
   return (
@@ -261,7 +227,7 @@ export function AvatarScreen({ api, playerId }: AvatarScreenProps) {
       <p className={s.footnote}>{t('avatar.lead')}</p>
 
       <div className={s.previewCard}>
-        <Avatar config={config} size="lg" label={t('avatar.mine')} />
+        <Portrait config={config} size="lg" label={t('avatar.mine')} />
         <div className={s.previewSide}>
           {error === null ? null : (
             <p className={s.alert} role="alert">
@@ -293,11 +259,7 @@ export function AvatarScreen({ api, playerId }: AvatarScreenProps) {
             />
           ))}
         </div>
-        <Field
-          label={t('avatar.hairCustom')}
-          hint={t('avatar.hairHint')}
-          error={colorValid ? undefined : t('avatar.hairInvalid')}
-        >
+        <Field label={t('avatar.hairCustom')} hint={t('avatar.hairHint')} error={colorValid ? undefined : t('avatar.hairInvalid')}>
           <input
             className={s.input}
             type="text"
@@ -310,15 +272,8 @@ export function AvatarScreen({ api, playerId }: AvatarScreenProps) {
         </Field>
       </Panel>
 
-      {LAYER_ORDER.map((layer) => (
-        <LayerPicker
-          key={layer}
-          layer={layer}
-          items={ownedIn(byCategory, layer)}
-          value={config[layer] ?? ''}
-          hairColor={hairColor}
-          onPick={(itemId) => pick(layer, itemId)}
-        />
+      {GEOMETRIC_SLOTS.map((slot) => (
+        <SlotPicker key={slot} slot={slot} items={ownedIn(owned, slot)} config={config} onPick={(itemId) => pick(slot, itemId)} />
       ))}
 
       <Panel>

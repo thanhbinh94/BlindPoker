@@ -8,11 +8,12 @@
  *
  * The numbers measured are gzip, because that is what the wire carries: Caddy compresses this
  * directory in front of the server, and the raw byte counts vite prints are not what anyone
- * downloads. Three budgets, and the split between the first two is the point:
+ * downloads. Four budgets, and the split between the first two is the point:
  *
- *   entry  what the browser must have before the sign-in card or the lobby can paint
- *   total  the entry plus all six lazy account screens — the whole app, eventually
- *   css    one stylesheet, loaded with the entry
+ *   entry     what the browser must have before the sign-in card or the lobby can paint
+ *   total     the entry plus every lazy chunk — the whole app, eventually
+ *   css       one stylesheet, loaded with the entry
+ *   avatar3d  three.js and the portrait renderer, downloaded only by a browser that draws one
  *
  * Like Lite's, every block skips with a warning when `dist/` is missing, so `pnpm test` on a fresh
  * checkout stays green and says what it had nothing to measure.
@@ -38,6 +39,27 @@ const INDEX = join(DIST, 'index.html')
 const MAX_ENTRY_GZIP = 500 * 1024
 const MAX_TOTAL_GZIP = 900 * 1024
 const MAX_CSS_GZIP = 60 * 1024
+
+/**
+ * three.js, `GLTFLoader`, the meshopt decoder and the portrait renderer, together (avatar-3d §7).
+ *
+ * This one *is* a target rather than headroom: it is roughly 25 % over what the graph costs today, and
+ * the thing it is guarding against is somebody importing a control, a post-processing pass or a loader
+ * for a format nothing uses. Everything under it is downloaded only by a browser that actually draws a
+ * portrait, which is why it is allowed to be larger than the entry chunk at all.
+ */
+const MAX_AVATAR3D_GZIP = 200 * 1024
+
+/**
+ * A string that survives minification and cannot come from anywhere but three.
+ *
+ * `THREE.REVISION` does not survive — it is a `const` and the minifier inlines it — but three prefixes
+ * every one of its own console messages with `THREE.<Class>:`, and those are string literals.
+ */
+const THREE_MARKER = 'THREE.WebGLRenderer'
+
+/** vite names a dynamic chunk after the module that was split; `portraits.ts` is the avatar3d entry. */
+const AVATAR3D_CHUNK = /^portraits-[\w-]+\.js$/
 
 /** `App.tsx`'s six `React.lazy` screens; vite names each chunk after the module it split. */
 const LAZY_SCREENS = ['ProfileScreen', 'AvatarScreen', 'InventoryScreen', 'AchievementsScreen', 'DailyScreen', 'SettingsScreen']
@@ -113,5 +135,28 @@ describe.skipIf(!hasDist)('normal-web bundle', () => {
       ).toHaveLength(1)
     }
     expect(names.length, 'the entry plus the six screens, at least').toBeGreaterThanOrEqual(1 + LAZY_SCREENS.length)
+  })
+
+  it('keeps three.js out of the entry chunk entirely', () => {
+    // The whole shape of `avatar3d/` — one dynamic `import()` in `usePortrait`, and the three.js graph
+    // reachable through nothing else — exists for this assertion. A static import anywhere in
+    // `Portrait`, `usePortrait`, `hash` or `portrait-cache` would put 150 KB gzip in front of the
+    // sign-in card, and the entry budget above is four times too loose to notice.
+    const entry = readFileSync(entryChunk(), 'utf8')
+    expect(entry, `the entry chunk contains ${THREE_MARKER} — something outside avatar3d/ imports three`).not.toContain(THREE_MARKER)
+  })
+
+  it('keeps the whole 3D graph in one lazy chunk, inside its own budget', () => {
+    const chunks = assets('.js').filter((file) => AVATAR3D_CHUNK.test(basename(file)))
+    expect(chunks, 'the portrait renderer must be split out under its own name').toHaveLength(1)
+
+    const chunk = chunks[0]!
+    // Named after `portraits.ts`, and holding the thing that module exists to drive — so this cannot
+    // quietly start measuring some other chunk that happens to match the name.
+    expect(readFileSync(chunk, 'utf8')).toContain(THREE_MARKER)
+
+    const size = gzipOf(chunk)
+    console.log(`[footprint] avatar3d chunk ${kb(size)} gzip (budget ${kb(MAX_AVATAR3D_GZIP)})`)
+    expect(size).toBeLessThanOrEqual(MAX_AVATAR3D_GZIP)
   })
 })

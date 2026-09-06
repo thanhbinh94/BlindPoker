@@ -26,11 +26,15 @@ const ok = (body: unknown = {}): Mock => vi.fn().mockResolvedValue(jsonResponse(
 const apiOf = (mock: Mock, base?: string) => createApi(mock as unknown as typeof fetch, base)
 
 const AVATAR: AvatarConfigDto = {
-  base: 'base_01',
-  face: 'face_01',
-  clothing: 'clothing_tee',
-  hair: 'hair_short',
+  v: 2,
+  body: 'male',
+  skin: '#e0ac81',
+  eyes: '#3b2415',
   hairColor: '#1b1f2e',
+  hair: 'hair_short',
+  top: 'top_tee',
+  bottom: 'bottom_jeans',
+  shoes: 'shoes_sneakers',
   title: 'title_rookie',
 }
 
