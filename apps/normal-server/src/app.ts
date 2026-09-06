@@ -134,9 +134,14 @@ export const FONTS_FILE_HOST = 'https://fonts.gstatic.com'
  * browser. `'wasm-unsafe-eval'` allows WebAssembly only; it does not reopen `eval()`.
  */
 export const SCRIPT_SRC = "script-src 'self' 'wasm-unsafe-eval'"
+/** Portraits are rendered in the browser and shown from object URLs, which are `blob:` sources. */
+export const IMG_SRC_EXTRA = 'blob:'
 
 export function normalCsp(base: string = DEFAULT_CSP): string {
-  const directives = base.split('; ').map((d) => (d.startsWith('style-src ') ? `${d} ${FONTS_STYLESHEET_HOST}` : d))
+  const directives = base
+    .split('; ')
+    .map((d) => (d.startsWith('style-src ') ? `${d} ${FONTS_STYLESHEET_HOST}` : d))
+    .map((d) => (d.startsWith('img-src ') ? `${d} ${IMG_SRC_EXTRA}` : d))
   if (!directives.some((d) => d.startsWith('font-src '))) directives.push(`font-src 'self' ${FONTS_FILE_HOST}`)
   if (!directives.some((d) => d.startsWith('script-src '))) directives.push(SCRIPT_SRC)
   return directives.join('; ')
