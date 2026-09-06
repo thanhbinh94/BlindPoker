@@ -83,9 +83,25 @@ const MAX_ASSET_FILE = Math.round(1.5 * 1024 * 1024)
 /** `App.tsx`'s six `React.lazy` screens; vite names each chunk after the module it split. */
 const LAZY_SCREENS = ['ProfileScreen', 'WardrobeScreen', 'InventoryScreen', 'AchievementsScreen', 'DailyScreen', 'SettingsScreen']
 
+/**
+ * Whether there is a build to measure — and, when there is not, a warning nobody can mistake for green.
+ *
+ * Every budget in this file is measured off `dist/`, so a checkout that has not built skips *all* of
+ * them: the entry, the total, the CSS, the 200 KB avatar3d chunk and the two asset ceilings. That is the
+ * repository's established pattern (Lite's footprint suite skips the same way, and `docs/normal-web.md`
+ * says so), because failing would fail every fresh clone. What it must not do is skip *quietly* — a
+ * `pnpm test` that measured nothing looks exactly like one that measured everything, and the numbers
+ * these tests guard are the kind somebody reads off a green run. So the warning names each budget it is
+ * not checking, and the command that would.
+ */
 const hasDist = existsSync(ASSETS) && existsSync(INDEX)
 if (!hasDist) {
-  console.warn(`[footprint] skipping web-bundle checks: ${DIST} is missing — run \`pnpm --filter @bp/normal-web build\` first`)
+  console.warn(
+    `[footprint] ⚠ NOT MEASURED: ${DIST} is missing, so every bundle budget in this file is skipped —\n` +
+      '[footprint]   the entry chunk, all JS together, the stylesheet, the avatar3d chunk and the `dist/avatar3d/` assets.\n' +
+      '[footprint]   Nothing here is green; it is unmeasured. Run `pnpm --filter @bp/normal-web build` first.\n' +
+      '[footprint]   (`test/avatar-assets.test.ts` does hold the committed `public/avatar3d/` to its budgets, and does not skip.)',
+  )
 }
 
 const gzipOf = (file: string): number => gzipSync(readFileSync(file), { level: 9 }).length

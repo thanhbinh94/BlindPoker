@@ -55,6 +55,10 @@ describe.skipIf(!present)('the catalogue against the built avatar manifest', () 
   })
 
   it('puts every variant in the file the manifest says holds it', () => {
+    // Counted, because the loop below is a `continue` away from asserting nothing: a manifest whose
+    // nodes lost their `file` key would skip every variant and still be green, which is the one thing
+    // a test about files must not do.
+    let checked = 0
     for (const def of catalog.all()) {
       for (const body of BODIES) {
         const ref = def.variants?.[body]
@@ -63,7 +67,9 @@ describe.skipIf(!present)('the catalogue against the built avatar manifest', () 
         if (node?.file === undefined) continue
         expect(ref.file, `${def.id}/${body}`).toBe(node.file)
         expect(Object.keys(files), ref.file).toContain(ref.file)
+        checked++
       }
     }
+    expect(checked, 'no catalogue variant was checked against the manifest — the manifest has no node files').toBeGreaterThan(0)
   })
 })

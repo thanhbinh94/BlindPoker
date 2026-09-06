@@ -37,7 +37,8 @@ in front of you is that person. Design: `docs/superpowers/specs/2026-09-05-avata
 - **A stage, and a wardrobe built around it.** The profile header and `/avatar` show the figure
   itself: a `role="img"` frame you can drag or arrow-key through ±60°, drawn only when something
   changes. The wardrobe offers only what the player owns, previews every tile as a portrait of *that
-  outfit*, re-dresses what a change of body would have invalidated and says which, and guards an
+  outfit* — head and shoulders for what is worn above the chest, the whole figure for trousers and
+  shoes — re-dresses what a change of body would have invalidated and says which, and guards an
   unsaved change on the way out.
 - **Tested on a real GPU.** `e2e/avatar3d.spec.ts` asserts that portraits have pixels, that three
   configurations give three hashes, that a saved outfit survives a reload and reaches a second

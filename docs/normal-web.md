@@ -43,7 +43,7 @@ apps/normal-web/
     avatar/
       useAvatars.ts     the shared avatar cache (module scope, 60 s, one request per id)
     avatar3d/          the 3D avatar; everything that imports three is behind one dynamic import()
-      config.ts         the palettes, withSlot/switchBody/avatarPayload, portraitRelevant
+      config.ts         the palettes, withSlot/switchBody/avatarPayload, portraitRelevant, frameForSlot
       hash.ts           canonicalConfig + hashConfig — the 8-hex identity of a configuration
       Portrait.tsx      <img> around a blob: URL, initial-letter fallback; PartPortrait for tiles
       usePortrait.ts    the hook: cache → queue → render, with an AbortSignal per caller
@@ -51,7 +51,7 @@ apps/normal-web/
       portraits.ts      *the* three.js entry: one hidden renderer, the render queue, re-exports the stage
       assets.ts         the manifest and loadNode(key); wires MeshoptDecoder
       assemble.ts       a config → a posed, recoloured Group
-      framing.ts        the head-and-shoulders crop, as a pure function
+      framing.ts        the two crops (head-and-shoulders, full-body), as pure functions
       stage.ts          the full-body stage: scene, camera, yaw, event-driven drawing
       AvatarStage.tsx   the component around it; LazyStage.tsx is its one React.lazy
       description.ts    the configuration as one sentence, for the stage's accessible name
@@ -182,9 +182,13 @@ around its input, so the whole 44 px square is the target.
 Three things there are not obvious from the markup:
 
 - **A tile's thumbnail is a portrait of the whole figure with that one item swapped in** (`PartPortrait`),
-  not a picture of the item. `portraitRelevant()` first strips everything the head-and-shoulders crop
-  cannot show — `bottom`, `shoes`, `title`, `badge` — so choosing a hair colour does not change the cache
-  key of forty tiles, and every bottom and shoe tile collapses onto one cache entry.
+  not a picture of the item. The crop follows the slot (`frameForSlot()`): head-and-shoulders for
+  everything worn above the chest, and the **whole standing figure** for the two slots that crop cannot
+  contain — a pair of trousers and a pair of shoes, which framed on the head would give every tile in
+  those two groups the same face. `portraitRelevant()` then strips everything the tile's own crop cannot
+  show (`title` and `badge` in both; `bottom` and `shoes` in the head one), so choosing a hair colour
+  does not change the cache key of forty tiles. The crop is part of the portrait hash, so the two are
+  two cache entries rather than one picture served for both.
 - **Changing body is a migration.** The server refuses a configuration wearing an item that was never
   modelled for that body, so `switchBody` re-dresses the slots that would have become invalid and says in
   a `role="status"` *which* — a top that silently became the default tee is a top the player thinks they
@@ -272,7 +276,7 @@ and holds five budgets:
 | every JS chunk together | 900 KB | 270 KB |
 | the stylesheet | 60 KB | 12 KB |
 | the `avatar3d` chunk (three.js + the renderer, lazy) | 200 KB | 150 KB |
-| `dist/avatar3d/` — the `.glb` bundles, raw bytes | 6 MB total, 1.5 MB per file | 900 KB / 516 KB |
+| `dist/avatar3d/` — the `.glb` bundles, raw bytes | 6 MB total, 1.5 MB per file | 910 KB / 505 KB |
 
 The first three are roughly four times what is spent: their job is to catch a *step change* (a chart
 library, a locale bundle that stopped being split), not to fail on the kilobyte a feature costs. The

@@ -179,6 +179,12 @@ Neither is visible in a hash or a byte count, and both have been wrong in this p
   triangles then stretch across the fork and open a skin-coloured hole — so the residual stays and the
   tolerance is set where the residual is. What the guard is for is the other order of magnitude: an
   unfitted garment is 25–54 mm inside over a whole limb.
+
+  What the committed artefact actually measures, since it is the number a later reader will judge a
+  drift by: **14 of the 30 fitted nodes are at exactly 0.0 mm** and the other 16 are spread between
+  0.1 mm and 11.0 mm — both ponytails 0.1–0.2 mm, both pairs of shorts 0.7–2.3 mm, ten top variants
+  4.4–6.8 mm, the two skirts 10.2–11.0 mm. Half the set, not most of it, and the worst of it is the one
+  garment the paragraph above is about.
 - **A node's published bounds must be the bounds of the accessors written for it.** Two nodes that share
   one mesh are one mesh, so bounds that differ between them cannot both be true. That is what a vertex
   cache missing the body produced: `hair/hair_ponytail/male` and `…/female` pointing at a single mesh

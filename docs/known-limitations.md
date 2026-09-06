@@ -280,7 +280,7 @@ rather than no figure.
 
 **A cold browser takes about three seconds to draw its first face.** The design's budget is ≤ 80 ms per
 portrait *after the assets are loaded* and ≤ 2 s to fill a nine-seat table; both hold — the e2e measures
-~60–100 ms per re-render and ~0.2 s from joining a room to every seat portrait drawn. The first one is
+~60–100 ms per re-render and ~0.3 s from joining a room to every seat portrait drawn. The first one is
 different: it pays for the 150 KB gzip three.js chunk, the manifest and up to five `.glb` files before it
 can render anything, and `avatar3d.spec.ts` measures ~3.0–3.5 s for it on a headless SwiftShader machine.
 Until then every face is the player's initial on a disc, which is the designed fallback. That number is

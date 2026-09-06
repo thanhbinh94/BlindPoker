@@ -251,8 +251,11 @@ test.describe('Bind Poker Normal — nhân vật 3D', () => {
 
     // Every tile that finished drawing drew something: the wardrobe is the one screen that renders many
     // portraits at once, and it is where an exhausted context or a stuck queue would show first.
+    // Retrying, like every other assertion in this file: a tile reaches `ready` only after the lazy
+    // chunk, the manifest, the `.glb` bundles and its turn in the render queue, so a one-shot `count()`
+    // here would go red on a cold runner that was still drawing — a flake, not a regression.
     const tiles = readyPortraits(page)
-    expect(await tiles.count(), 'the wardrobe previews the items it offers').toBeGreaterThan(0)
+    await expect(tiles, 'the wardrobe previews the items it offers').not.toHaveCount(0, { timeout: 30_000 })
     for (const tile of await tiles.all()) {
       expect(await tile.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
     }

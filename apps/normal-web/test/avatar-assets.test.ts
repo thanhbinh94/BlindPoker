@@ -76,15 +76,31 @@ const map = JSON.parse(readFileSync(MAP_FILE, 'utf8')) as {
  * Small enough to restate, and restating it is the point: this file is what says the *map* and the
  * committed artefact agree, so reading the answer out of the artefact would test nothing.
  */
+type MapItem = (typeof map.items)[number]
+type MapVariant = NonNullable<NonNullable<MapItem['variants']>[string]>
+
+/**
+ * How far off the skin one variant is fitted, or `null` for one that is not fitted at all.
+ *
+ * `null` and `0` are different answers and the difference is load-bearing: a margin of zero is a legal
+ * map value meaning "conform to contact", and it is a **fit** — one whose penetration has to be measured
+ * and published like any other. A truthiness test here (and the script had one, in `readVariant`) reads
+ * it as "not fitted", which publishes no measurement for a node every other guard still calls fitted.
+ */
+function fitMarginOf(item: MapItem, variant: MapVariant): number | null {
+  const own = variant.fit ?? item.fit
+  if (own === false) return null
+  if (typeof own === 'number') return own
+  return map.fit.margin[item.slot] ?? null
+}
+
 function fittedKeys(): Set<string> {
   const keys = new Set<string>()
   for (const item of map.items) {
     for (const body of ['male', 'female']) {
       const variant = item.variants?.[body]
       if (!variant || variant.empty || variant.primitive) continue
-      const own = variant.fit ?? item.fit
-      const margin = own === false ? null : typeof own === 'number' ? own : (map.fit.margin[item.slot] ?? null)
-      if (margin !== null) keys.add(`${item.slot}/${item.id}/${body}`)
+      if (fitMarginOf(item, variant) !== null) keys.add(`${item.slot}/${item.id}/${body}`)
     }
   }
   return keys
@@ -269,6 +285,31 @@ describe('avatar asset fitting', () => {
     for (const [key, deep] of Object.entries(manifest.fit.penetration)) {
       expect(deep, `${key} leaves a shrinkwrapped vertex ${(deep * 1000).toFixed(1)} mm inside the body`).toBeLessThanOrEqual(FIT_TOLERANCE)
     }
+  })
+
+  it('publishes a measured number for every fitted node, never a null', () => {
+    // The hole this closes: a `NaN` — a fit whose shrinkwrap was skipped — is `null` once it has been
+    // through `JSON.stringify`, and `null > 0.012` is `false`, as is `expect(null).toBeLessThanOrEqual`.
+    // So the tolerance assertion above would pass on a node nothing had measured. Paired with the test
+    // below (the published set is exactly the set the map fits), this is what makes "every fitted
+    // garment was measured" true rather than only "every number published is small".
+    for (const [key, deep] of Object.entries(manifest.fit.penetration)) {
+      expect(Number.isFinite(deep), `${key} publishes ${JSON.stringify(deep)} rather than a measured penetration`).toBe(true)
+      expect(deep, `${key} publishes a negative penetration`).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  it('counts a margin of exactly zero as a fit, because the pipeline does', () => {
+    // `0` means "conform to contact" and is a legal margin. It is the value the two sides of this guard
+    // used to disagree about: the build skipped the shrinkwrap for it (a falsy test) while still
+    // publishing a penetration key for it, and `--check` still expected one. Everything that decides
+    // *whether* a variant is fitted has to test against `null`, here and in the script.
+    const item = { id: 'x', slot: 'top', variants: {} } as MapItem
+    expect(fitMarginOf(item, { fit: 0 })).toBe(0)
+    expect(fitMarginOf(item, { fit: false })).toBeNull()
+    expect(fitMarginOf({ ...item, fit: 0 }, {})).toBe(0)
+    // …and a slot with no default margin and no override is the genuinely unfitted case.
+    expect(fitMarginOf({ ...item, slot: 'hair' }, {})).toBeNull()
   })
 
   it('measures the fit of exactly the garments the map fits', () => {

@@ -171,6 +171,16 @@ describe('loadManifest', () => {
 
     await expect(loadManifest()).rejects.toThrow('draco')
   })
+
+  it('refuses a manifest with no pose or anchors, which the assembler would have read blindly', async () => {
+    // `assemble` reaches straight into `manifest.pose.armsDown` — every figure in the app is posed —
+    // so a manifest from an older deploy fails there as a `TypeError` about `undefined`, in a module
+    // nobody reading the console would connect to the file that is actually wrong.
+    for (const broken of [{ ...MANIFEST, pose: undefined }, { ...MANIFEST, anchors: undefined }]) {
+      vi.stubGlobal('fetch', () => Promise.resolve({ ok: true, json: () => Promise.resolve(broken) } as unknown as Response))
+      await expect(loadManifest()).rejects.toThrow(/pose\.armsDown or anchors/)
+    }
+  })
 })
 
 describe('assetLoader.loadNode', () => {

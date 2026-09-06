@@ -728,7 +728,11 @@ function signedDistance(surface, cells, p) {
  * cloth margin to correct it towards.
  *
  * Returns the worst residual penetration it leaves behind, in metres, which the build publishes per node
- * and refuses to ship over `FIT_TOLERANCE`. Most garments come out at 0.0 mm.
+ * and refuses to ship over `FIT_TOLERANCE`. In the committed artefact 14 of the 30 fitted nodes come out
+ * at exactly 0.0 mm and the other 16 spread from 0.1 mm to 11.0 mm — the two ponytails at 0.1–0.2 mm,
+ * the two pairs of shorts at 0.7–2.3 mm, ten top variants at 4.4–6.8 mm, the two skirts at
+ * 10.2–11.0 mm. Half, not most: a garment that hugs a limb
+ * closely leaves a residual wherever the surface is concave, and the tolerance is set where that is.
  */
 function conformParts(parts, surface, cells, margin) {
   const cache = new Map()
@@ -1140,7 +1144,11 @@ async function readVariant(map, variant, defaultFile, fit = null) {
   }
   if (fit?.skeleton) retargetParts(parts, fit.skeleton, fit.key)
   if (variant.scale) applyScale(parts, variant.scale, variant.scaleAnchor ?? 'bottom')
-  if (fit?.margin) fit.penetration = conformParts(parts, fit.surface, fit.cells, fit.margin)
+  // `margin !== null`, not a truthiness test: `0` is a legal margin in the map — "conform to contact" —
+  // and it is a *fit*. Skipping it here while `fitMargin` (and therefore `fittedKeys`, `--check` and the
+  // build's own publishing) went on calling the node fitted would publish `null` where a measured
+  // penetration belongs, and `null > FIT_TOLERANCE` is false in every guard that reads it.
+  if (fit !== null && fit.margin !== null) fit.penetration = conformParts(parts, fit.surface, fit.cells, fit.margin)
   if (variant.simplify) await simplifyParts(parts, variant.simplify)
   return parts
 }
@@ -1307,7 +1315,14 @@ async function build({ useMeshopt }) {
       const fit = variant.primitive ? null : { ...fits[body], margin, key }
       const parts = variant.primitive ? buildPrimitive(variant.primitive, jointTables[body], variant.tint) : await readVariant(map, variant, variant.file, fit)
       details[key] = { bounds: boundsOf(parts), tint: bakedTint(map, parts) }
-      if (margin !== null) penetration[key] = Math.round(fit.penetration * 1e4) / 1e4
+      if (margin !== null) {
+        // A fitted node must publish a *measured* number. Anything else — a shrinkwrap that was skipped,
+        // an out-parameter that was never written — arrives here as `undefined`, becomes `NaN`, and is
+        // serialised as `null`, which every downstream comparison (`> FIT_TOLERANCE`, and the test's
+        // `toBeLessThanOrEqual`) answers "fine" to. So it fails the build instead.
+        if (!Number.isFinite(fit.penetration)) fail(`${key} is fitted at ${margin} m but the shrinkwrap measured no penetration for it`)
+        penetration[key] = Math.round(fit.penetration * 1e4) / 1e4
+      }
       // Two items that are the same mesh in different colours share one copy of the vertex data. The
       // fit belongs in the key as much as the scale does — the same source mesh fitted at two margins
       // is two different sets of vertices — and so does the **body**, whenever the geometry is a
@@ -1325,7 +1340,10 @@ async function build({ useMeshopt }) {
             variant.scale ?? [],
             variant.scaleAnchor ?? '',
             variant.simplify ?? 0,
-            margin ?? 0,
+            // `margin` itself, not `margin ?? 0`: a variant fitted at exactly 0 (conform to contact) and
+            // one that is not fitted at all are different geometry, and `0` for both would fold them
+            // onto one mesh.
+            margin,
             bodyDependent ? body : '',
           ])
       assertPublishedBounds(key, addNode(bundleFor(file), map, key, parts, cacheKey, body), details[key].bounds)
@@ -1627,7 +1645,11 @@ async function check() {
   }
   for (const key of fitted) {
     if (!(key in published)) problems.push(`the map fits ${key} to the body, the manifest publishes no penetration for it — run \`pnpm avatar:assets\``)
-    else if (published[key] > FIT_TOLERANCE) {
+    // A `null` (a `NaN` that went through `JSON.stringify`) is not a small penetration, it is no
+    // measurement at all — and it would pass the comparison below, which is the point of saying so here.
+    else if (!Number.isFinite(published[key])) {
+      problems.push(`the manifest publishes ${JSON.stringify(published[key])} as the fit penetration of ${key} rather than a measured number`)
+    } else if (published[key] > FIT_TOLERANCE) {
       problems.push(`${key} leaves a vertex ${(published[key] * 1000).toFixed(1)} mm inside the body, over the ${(FIT_TOLERANCE * 1000).toFixed(1)} mm tolerance`)
     }
   }

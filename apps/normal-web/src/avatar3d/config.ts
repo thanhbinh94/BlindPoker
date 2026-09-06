@@ -1,4 +1,4 @@
-import { GEOMETRIC_SLOTS, type AvatarConfigDto, type Body, type GeometricSlot, type ItemSlot } from '../api.js'
+import { GEOMETRIC_SLOTS, OPTIONAL_SLOTS, type AvatarConfigDto, type Body, type GeometricSlot, type ItemSlot } from '../api.js'
 import type { PortraitFrame } from './framing.js'
 
 /**
@@ -88,6 +88,9 @@ export interface BodyFit {
   fallback(slot: GeometricSlot, body: Body): string | undefined
 }
 
+/** The three slots that may legally hold nothing — the only ones a fallback is allowed to empty. */
+const OPTIONAL = new Set<string>(OPTIONAL_SLOTS)
+
 export interface BodySwitch {
   config: AvatarConfigDto
   /** The slots that had to be changed, in `GEOMETRIC_SLOTS` order. Empty when the outfit came across whole. */
@@ -118,8 +121,21 @@ export function switchBody(config: AvatarConfigDto, body: Body, fit: BodyFit): B
     // An empty optional slot stays empty: there is nothing to lose and nothing to report.
     if (itemId === undefined || itemId === '') continue
     if (fit.fits(itemId, body)) continue
+    const replacement = fit.fallback(slot, body)
+    if (replacement === undefined) {
+      // Nothing owned fits the new body. Emptying is a real answer for the three optional slots and
+      // only for those: a *required* slot cannot hold `''` — the server reads that as a malformed item
+      // id and refuses with `MISSING_LAYER`, naming a slot the player never emptied — so the piece that
+      // does not fit stays where it is, and the refusal, if the save is attempted, at least names it.
+      // Unreachable with the shipped catalogue, where every geometric item is modelled for both bodies
+      // (`apps/normal-server/src/inventory/items.test.ts`), and written for the day one is not.
+      if (!OPTIONAL.has(slot)) continue
+      changed.push(slot)
+      next = withSlot(next, slot, '')
+      continue
+    }
     changed.push(slot)
-    next = withSlot(next, slot, fit.fallback(slot, body) ?? '')
+    next = withSlot(next, slot, replacement)
   }
 
   return { config: next, changed }

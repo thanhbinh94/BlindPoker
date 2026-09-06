@@ -110,6 +110,13 @@ async function fetchManifest(): Promise<AvatarManifest> {
   if (!READABLE.has(manifest.compression)) {
     throw new Error(`avatar manifest declares compression ${manifest.compression}, which this loader cannot read`)
   }
+  // `assemble` reads `manifest.pose.armsDown` and `manifest.anchors[body]` unconditionally — the arms
+  // are brought down on every figure in the app. An older deploy's manifest, or a hand-edited one,
+  // without them throws a `TypeError` from inside the assembler instead; the fallback is the same
+  // initial letter either way, but the console line should name the file that is wrong.
+  if (manifest.pose?.armsDown === undefined || manifest.anchors === undefined) {
+    throw new Error(`avatar manifest ${base}manifest.json has no pose.armsDown or anchors, which this loader needs to stand a figure up`)
+  }
   return manifest
 }
 
