@@ -21,7 +21,7 @@ import type { Logger } from '@bp/server-kit'
 import { TestClient } from '@bp/server-kit/testing'
 import { sql } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { FONTS_FILE_HOST, FONTS_STYLESHEET_HOST, logSettlementFailure, normalCsp, SESSION_SWEEP_INTERVAL_MS, UPGRADE_RATE_LIMIT } from './app.js'
+import { FONTS_FILE_HOST, FONTS_STYLESHEET_HOST, logSettlementFailure, normalCsp, SCRIPT_SRC, SESSION_SWEEP_INTERVAL_MS, UPGRADE_RATE_LIMIT } from './app.js'
 import { CONFIG_DEFAULTS } from './config.js'
 import { rowsOf, type AppDb } from './db/client.js'
 import { sessions as sessionsTable, users } from './db/schema.js'
@@ -218,6 +218,9 @@ describe('security headers', () => {
     const directives = new Map(csp.split('; ').map((d) => [d.split(' ')[0], d]))
     expect(directives.get('style-src')).toBe(`style-src 'self' 'unsafe-inline' ${FONTS_STYLESHEET_HOST}`)
     expect(directives.get('font-src')).toBe(`font-src 'self' ${FONTS_FILE_HOST}`)
+    // The meshopt decoder is WebAssembly: allowed explicitly, and only that — no 'unsafe-eval'.
+    expect(directives.get('script-src')).toBe(SCRIPT_SRC)
+    expect(csp).not.toContain("'unsafe-eval'")
     // Everything the shared default said is still said.
     for (const directive of DEFAULT_CSP.split('; ')) {
       if (directive.startsWith('style-src ')) continue

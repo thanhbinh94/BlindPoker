@@ -128,10 +128,17 @@ async function withDeadline(promise: Promise<void>, budgetMs: number, onTimeout:
  */
 export const FONTS_STYLESHEET_HOST = 'https://fonts.googleapis.com'
 export const FONTS_FILE_HOST = 'https://fonts.gstatic.com'
+/**
+ * The 3D avatar's meshopt decoder is WebAssembly (`docs/avatar-assets.md`), and `default-src 'self'`
+ * alone forbids `WebAssembly.instantiate` — the portrait would silently fall back to initials on every
+ * browser. `'wasm-unsafe-eval'` allows WebAssembly only; it does not reopen `eval()`.
+ */
+export const SCRIPT_SRC = "script-src 'self' 'wasm-unsafe-eval'"
 
 export function normalCsp(base: string = DEFAULT_CSP): string {
   const directives = base.split('; ').map((d) => (d.startsWith('style-src ') ? `${d} ${FONTS_STYLESHEET_HOST}` : d))
   if (!directives.some((d) => d.startsWith('font-src '))) directives.push(`font-src 'self' ${FONTS_FILE_HOST}`)
+  if (!directives.some((d) => d.startsWith('script-src '))) directives.push(SCRIPT_SRC)
   return directives.join('; ')
 }
 
