@@ -47,8 +47,10 @@ deposits, no withdrawals, no payment gateway and no marketplace, by design and p
   gaps.
 - [`docs/normal-server.md`](docs/normal-server.md) — module map, event bus, ledger conventions,
   adding an item or an achievement.
-- [`docs/normal-web.md`](docs/normal-web.md) — API client, session gate, avatar parts, footprint,
-  e2e.
+- [`docs/normal-web.md`](docs/normal-web.md) — API client, session gate, the 3D avatar and the
+  wardrobe, footprint, e2e.
+- [`docs/avatar-assets.md`](docs/avatar-assets.md) — the avatar asset pipeline: what is in the five
+  `.glb` files, how to add an item, and how a map change is judged.
 - [`deploy/normal/restore.md`](deploy/normal/restore.md) — the restore procedure.
 
 Developer docs are in English; the two deployment guides and the Lite operator README are in
@@ -154,7 +156,9 @@ node apps/normal-server/scripts/e2e-server.mjs   # http://127.0.0.1:8091, PGlite
 A Playwright pass over the built app against the real server on an in-process PGlite: one account
 registers, signs out, signs back in, plays a Blind hand against a bot to settlement — and the balance
 in the database is reconciled against the payout and the table fee printed on the result card. It
-also claims the daily reward, saves an avatar, and checks the rail and the table at 375 px.
+also claims the daily reward and checks the rail and the table at 375 px. A second spec drives the 3D
+avatar on a real WebGL context: portraits with pixels in the lobby and on a seat, the wardrobe's save →
+reload → second-browser round trip, and the editor at 375 px.
 
 ```bash
 pnpm build:normal
@@ -205,13 +209,19 @@ Screenshots (desktop and 375×812) land in `apps/lite/e2e/screenshots/`, which i
 
 ## Assets and licensing
 
-There are **no third-party art assets in this repository**. Every avatar is an SVG component drawn
-in `apps/normal-web/src/avatar/parts.tsx`, tinted from theme tokens; cards, chips and table are CSS
-and SVG written here. No font file is bundled either — `--font-display` names a face and falls back
-to Cambria / Constantia / Segoe UI, all of which carry the precomposed Vietnamese glyphs.
+One kind of third-party art asset is in this repository, and it is **CC0**: the Normal edition's 3D
+avatar geometry. `apps/normal-web/public/avatar3d/` holds five `.glb` files and a `manifest.json`
+built from two [Quaternius](https://quaternius.com/) packs —
+[Universal Base Characters](https://quaternius.itch.io/universal-base-characters) and
+[Modular Character Outfits – Fantasy](https://quaternius.itch.io/modular-character-outfits-fantasy),
+both **CC0 1.0 / public domain**. CC0 places no condition on use, modification or redistribution and
+requires no attribution; the credit here is courtesy. The source archives themselves are *not*
+committed (400 MB) — `assets/avatar-src/README.md` records their URLs, download date and SHA-256, and
+[`docs/avatar-assets.md`](docs/avatar-assets.md) describes the pipeline that produced the committed
+output from them.
 
-A 3D avatar replacement is specified in
-[`docs/superpowers/specs/2026-09-05-avatar-3d-design.md`](docs/superpowers/specs/2026-09-05-avatar-3d-design.md)
-and would introduce externally-licensed models. Nothing from it has been implemented or vendored, so
-no third-party licence applies to this codebase today. When it lands, the licence and attribution
-for whatever it ships will be recorded here.
+Everything else is drawn here: cards, chips and the table are CSS and SVG written in this repository,
+and the eleven hats, glasses and pieces of jewellery in the wardrobe are generated from primitives by
+the asset script rather than taken from either pack. No font file is bundled either — `--font-display`
+names a face and falls back to Cambria / Constantia / Segoe UI, all of which carry the precomposed
+Vietnamese glyphs.

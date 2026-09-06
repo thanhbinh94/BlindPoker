@@ -8,8 +8,9 @@ The Normal edition's browser client: a Vite/React bundle that talks to
 `PUBLIC_DIR` at it — so the app, the API and the socket share one origin and one cookie.
 
 What it owns, and nothing else owns: the account screens (sign-in, profile, wardrobe, inventory,
-achievements, daily reward, settings), the REST client, the session gate, and the in-app SVG avatar
-part library. The lobby and the table come from the kit unchanged.
+achievements, daily reward, settings), the REST client, the session gate, and the 3D avatar — the
+portrait renderer every screen draws faces with, and the stage the profile and the wardrobe turn. The
+lobby and the table come from the kit unchanged.
 
 Its counterpart is `apps/lite/web`, which solves the same problem for a LAN executable and a bearer
 token. Neither may import the other, and neither may import a server package; ESLint enforces both.
@@ -17,7 +18,9 @@ token. Neither may import the other, and neither may import a server package; ES
 To *deploy* this, read [`deployment-normal.md`](deployment-normal.md) (Vietnamese, like every
 operator guide here). This page is for changing the code, and is English, like every developer doc.
 
-Spec: §15 avatars, §19.2 API, §24 footprint, §27.2 screens, §29 end-to-end.
+Spec: §15 avatars, §19.2 API, §24 footprint, §27.2 screens, §29 end-to-end; and
+`docs/superpowers/specs/2026-09-05-avatar-3d-design.md` §5–§8 for the avatar. The assets themselves are
+[`avatar-assets.md`](avatar-assets.md).
 
 ---
 
@@ -38,10 +41,20 @@ apps/normal-web/
     prefs.ts            theme and language, per device
     notifications.ts    the kit's notification list, with achievement ids translated
     avatar/
-      parts.tsx         the vector library: one renderer per catalogue assetKey
-      Avatar.tsx        the six layers, stacked, in a 64×64 box
-      PartThumb.tsx     one part on its own, for a wardrobe tile
       useAvatars.ts     the shared avatar cache (module scope, 60 s, one request per id)
+    avatar3d/          the 3D avatar; everything that imports three is behind one dynamic import()
+      config.ts         the palettes, withSlot/switchBody/avatarPayload, portraitRelevant
+      hash.ts           canonicalConfig + hashConfig — the 8-hex identity of a configuration
+      Portrait.tsx      <img> around a blob: URL, initial-letter fallback; PartPortrait for tiles
+      usePortrait.ts    the hook: cache → queue → render, with an AbortSignal per caller
+      portrait-cache.ts memory Map + IndexedDB (bp.portraits, 200 entries, LRU)
+      portraits.ts      *the* three.js entry: one hidden renderer, the render queue, re-exports the stage
+      assets.ts         the manifest and loadNode(key); wires MeshoptDecoder
+      assemble.ts       a config → a posed, recoloured Group
+      framing.ts        the head-and-shoulders crop, as a pure function
+      stage.ts          the full-body stage: scene, camera, yaw, event-driven drawing
+      AvatarStage.tsx   the component around it; LazyStage.tsx is its one React.lazy
+      description.ts    the configuration as one sentence, for the stage's accessible name
     screens/
       Shell.tsx         the rail and the page under it; publishes --bp-stage for the table
       AuthScreen.tsx    sign in and register, one card, two modes
@@ -51,8 +64,10 @@ apps/normal-web/
       format.ts         dates, moments and signed amounts in the player's language
       useAsync.ts       load once, expose { data, loading, reload, set } — every account screen's spine
     locales/{vi,en}/normal.json
+  public/avatar3d/         the built .glb bundles + manifest.json (committed; see avatar-assets.md)
+  scripts/avatar-assets.mjs  the asset pipeline; avatar-shots.mjs renders a contact sheet of it
   test/footprint.test.ts   the download budget, measured on `dist/`
-  e2e/                     Playwright against the real server
+  e2e/                     Playwright against the real server (support.ts is shared, not a test)
 ```
 
 ---
@@ -110,38 +125,96 @@ player id.
 
 ## Avatars
 
-An avatar is a stack of at most six vectors drawn into the same 64×64 box, in `LAYER_ORDER`
-(`base, face, clothing, hair, accessory, jewelry` — top layer last, spec §15.1). `title` and `badge`
-are text, not layers.
+An avatar is a **3D character**, and every place one appears except two is a *picture of it* rendered by
+the player's own browser. Nothing is uploaded and nothing is rendered on the server (avatar-3d design
+§2, §5).
 
-Each layer is looked up in `PARTS` by the item's **`assetKey`** — `<category>/<id>`, exactly the
-string `apps/normal-server/data/items.json` carries — and the rendered group carries it back as
-`data-part`, beside `data-layer`. A key with no part is *skipped*, never thrown on: the server can
-ship an item before the browser bundle that draws it (a deploy is two artefacts and they do not land
-at the same instant), and the answer to that is a player missing a hat for a few minutes, not a table
-that fails to render.
+```
+AvatarConfigDto (v2)      body + skin + eyes + hairColor + 7 item slots + title/badge
+   │
+   ├─ hashConfig()  ──►   '1aa20c85'   the identity of a configuration, and the cache key
+   │
+   ├─ Portrait  ──►  <img data-hash> 128 px      seat plates, the lobby bar, rows, wardrobe tiles
+   └─ AvatarStage ──►  <canvas> in a role="img"  the profile header and the wardrobe, only
+```
 
-Hair colour is a free hex string rather than an item, so it arrives as the CSS custom property
-`--avatar-hair` on the `<svg>` and every hair path fills from it.
+**The portrait path.** `usePortrait(config)` answers `{ url, status, hash }`. It looks the hash up in a
+memory `Map`, then in IndexedDB (`bp.portraits`, 200 entries, LRU by `lastUsed`), and only then queues a
+render. `portraits.ts` owns **one** hidden 256×256 `WebGLRenderer` for the whole app and a sequential
+queue in front of it: nine seats asking at once is nine renders through one canvas, not nine canvases.
+The output is drawn down to 128 px through a 2D canvas (that supersampling is most of why a 32 px seat
+plate reads at all) and saved as a WebP `Blob`, published as an object URL.
 
-### Adding an item's vector
+`Portrait` renders that as `<img data-hash>` inside a `<span data-portrait={status} data-size>`. Given no
+`label` it is `aria-hidden` decoration — a seat plate prints the name beside it — and until the picture
+arrives, or forever on a machine with no WebGL2, it draws the first letter of the name. **Nothing in this
+path may break a screen**: no context, a `.glb` that 404s, a `toBlob` that returns nothing and a lost
+context all end at that letter.
 
-The catalogue is the server's (`data/items.json`); this app only draws it. To add one:
+**The stage.** `AvatarStage` is the live figure: a `role="img"` frame with `aria-roledescription`, an
+`aria-label` that describes the outfit in words (`description.ts`), a drag/arrow-key yaw of ±60°, and a
+`<canvas>` inside it. It is the app's **second and last** WebGL context, and it is event-driven — a frame
+is drawn when something changes, so a stage nobody is touching costs what a static image costs. It is
+reached only through `LazyStage.tsx`'s one `React.lazy`, whose fallback is a `Portrait`, and that is also
+what a browser with no WebGL gets for good.
 
-1. **Server first.** Add the row to `apps/normal-server/data/items.json` — see "Adding a cosmetic
-   item" in [`normal-server.md`](normal-server.md). Its `assetKey` must be `<category>/<id>`.
-2. **Name it in both languages.** `items.<id>` in `src/locales/vi/normal.json` *and*
-   `src/locales/en/normal.json`. `locales.test.ts` fails the build if either is missing, if one
-   language has a key the other does not, or if a name exists for an id the server does not serve.
-3. **Draw it** in `src/avatar/parts.tsx`, under the key `'<category>/<id>'`, using the skeleton
-   documented at the top of that file: head at `cx 32`, eye line `y 25`, chin `y 39`, shoulders
-   `y 44`. Hair parts fill with `hairFill(hairColor)`; everything else uses the kit's colour tokens
-   with a literal fallback, or the fixed skin/cloth tones for the things that must not follow the
-   theme (a face is not a theme colour).
-4. **Keep it to a few paths.** A seat disc is 30 px across on a phone. What has to survive that size
-   is *which* item is equipped, so variants differ in silhouette, not in detail.
-5. `Avatar.test.tsx` walks the catalogue and asserts every `assetKey` has a renderer, so a row added
-   without a vector fails there rather than in front of a player.
+**One dynamic import.** `usePortrait` and `AvatarStage` both reach three.js through the single specifier
+`import('./portraits.js')` — which is why `portraits.ts` re-exports `createStage` rather than letting
+`stage.ts` import three on its own. One specifier is one chunk, and one chunk is what the footprint
+budget can name. A static import of anything under `avatar3d/` that pulls three would put ~150 KB gzip in
+front of the sign-in card; `test/footprint.test.ts` fails on the string `THREE.WebGLRenderer` appearing
+in the entry.
+
+**Where the geometry comes from** is [`avatar-assets.md`](avatar-assets.md): five `.glb` files and a
+`manifest.json` under `public/avatar3d/`, built from CC0 packs by `scripts/avatar-assets.mjs`, loaded by
+`assets.ts` (which must wire `MeshoptDecoder` first), turned into a scene by `assemble.ts`. `skin`, `eyes`
+and `hair` materials are recoloured from the player's configuration; `cloth_primary` takes the item's
+published tint; the rest keeps what the build baked.
+
+### The wardrobe
+
+`/avatar` — `WardrobeScreen.tsx`. A stage on the left, and on the right, one group per thing that can
+change: body (two radios), skin (8 named swatches), eyes (6), hair colour (8 presets plus a free hex box),
+then a tile group per geometric slot listing **only what the player owns**, then title and badge as
+selects. Every group is a `fieldset`/`legend` of radios named `wardrobe-<group>`; every tile is a `label`
+around its input, so the whole 44 px square is the target.
+
+Three things there are not obvious from the markup:
+
+- **A tile's thumbnail is a portrait of the whole figure with that one item swapped in** (`PartPortrait`),
+  not a picture of the item. `portraitRelevant()` first strips everything the head-and-shoulders crop
+  cannot show — `bottom`, `shoes`, `title`, `badge` — so choosing a hair colour does not change the cache
+  key of forty tiles, and every bottom and shoe tile collapses onto one cache entry.
+- **Changing body is a migration.** The server refuses a configuration wearing an item that was never
+  modelled for that body, so `switchBody` re-dresses the slots that would have become invalid and says in
+  a `role="status"` *which* — a top that silently became the default tee is a top the player thinks they
+  lost. It needs `GET /api/catalog/items` for the variants, which is fetched beside the inventory and is
+  allowed to fail on its own (a failed catalogue answers "everything fits").
+- **Leaving with unsaved changes is guarded twice**: `beforeunload` for a reload or a closed tab, and a
+  capture-phase click on any `a[href^="#"]` for the rail, which is how every other route here is reached.
+  Both armed only while there is something to lose.
+
+Saving is `PUT /api/me/avatar` with the full v2 payload (an empty optional slot is *absent*, not `''`),
+then `invalidate(myId)` so the lobby bar and the seat plates pick the new face up.
+
+### Adding an item, end to end
+
+1. **The mesh.** Add it to `apps/normal-web/scripts/avatar-map.json`, run `pnpm avatar:assets`, and look
+   at it on both bodies with `node scripts/avatar-shots.mjs new <id>` — see "Add an item" and "Judging a
+   map change" in [`avatar-assets.md`](avatar-assets.md).
+2. **The catalogue.** Add the row to `apps/normal-server/data/items.json` with its `slot`, `rarity`,
+   `isDefault` and `variants.<body>.{file,node}` pointing at the manifest's key — see
+   [`normal-server.md`](normal-server.md). `apps/normal-server/test/catalog-manifest.test.ts` checks the
+   two agree.
+3. **The name, in both languages.** `items.<id>` in `src/locales/vi/normal.json` *and*
+   `src/locales/en/normal.json`. `locales.test.ts` fails if either is missing, if one language has a key
+   the other does not, or if a name exists for an id the server does not serve.
+4. **How it is won.** A grant in `data/achievements.json` or the daily calendar, or nothing — an item
+   nobody owns is an item nobody sees, because the wardrobe lists the inventory and not the catalogue.
+5. **Commit the map, the changed `.glb` files, `manifest.json` and the catalogue together.** The assets
+   are a committed build artefact and `avatar-assets.test.ts` re-hashes them against the manifest.
+
+There is no drawing step and no per-item code: the renderer is generic over `<slot>/<itemId>/<body>`.
 
 ### The avatar cache
 
@@ -191,16 +264,30 @@ for a class name is a screen a keyboard cannot use.
 ### Footprint
 
 `test/footprint.test.ts` measures the emitted bundle — gzip, because that is what the wire carries —
-and holds three budgets: the entry chunk ≤ 500 KB, every chunk together ≤ 900 KB, the stylesheet
-≤ 60 KB. At the time of writing the entry is ~109 KB and the whole app ~119 KB, so the budgets are
-roughly four times what is spent: the job of the test is to catch a *step change* (a chart library, a
-locale bundle that stopped being split), not to fail on the kilobyte a feature costs.
+and holds five budgets:
 
-The entry chunk is read off `dist/index.html`'s module script rather than guessed from a file name,
-and a fourth assertion keeps the six account screens in chunks of their own — they are `App.tsx`'s
-only `import()`s and the reason the first paint stays small. Every block **skips with a warning** when
-`dist/` is missing, so `pnpm test` on a fresh checkout stays green and says what it had nothing to
-measure. Run `pnpm build:normal` (or `pnpm --filter @bp/normal-web build`) first to make it measure.
+| | Budget | Today |
+|---|---:|---:|
+| entry chunk (first paint) | 500 KB | 107 KB |
+| every JS chunk together | 900 KB | 270 KB |
+| the stylesheet | 60 KB | 12 KB |
+| the `avatar3d` chunk (three.js + the renderer, lazy) | 200 KB | 150 KB |
+| `dist/avatar3d/` — the `.glb` bundles, raw bytes | 6 MB total, 1.5 MB per file | 900 KB / 516 KB |
+
+The first three are roughly four times what is spent: their job is to catch a *step change* (a chart
+library, a locale bundle that stopped being split), not to fail on the kilobyte a feature costs. The
+avatar3d chunk is a real target rather than headroom — it is ~25 % over what the graph costs, and what it
+guards against is somebody importing a control, a post-processing pass or a loader for a format nothing
+uses. The asset budget is the same one `scripts/avatar-assets.mjs` enforces at build time and
+`test/avatar-assets.test.ts` holds against `public/`; measuring `dist/` too is what would catch a build
+config that stopped copying those files verbatim.
+
+Three structural assertions sit beside the numbers. The entry chunk is read off `dist/index.html`'s module
+script rather than guessed from a file name; the six account screens must each still be a chunk of their
+own; and the entry must not contain the string `THREE.WebGLRenderer`, which is how a static import of
+three.js from outside `avatar3d/` is caught. Every block **skips with a warning** when `dist/` is missing,
+so `pnpm test` on a fresh checkout stays green and says what it had nothing to measure. Run
+`pnpm build:normal` (or `pnpm --filter @bp/normal-web build`) first to make it measure.
 
 ---
 
@@ -223,7 +310,11 @@ pnpm e2e:normal
 `apps/normal-server/.e2e/server.mjs` — deliberately not `dist/`, which the server's own build guards
 against ever containing PGlite — and runs it on `127.0.0.1:8091`.
 
-What the three tests are for:
+`normal.spec.ts` and `avatar3d.spec.ts` share `e2e/support.ts` — the account, the cookie session, the
+lobby, the create-room dialog and the two viewport assertions. It is a module the specs import, not a
+test file; Playwright only collects `*.spec.ts`.
+
+What the five tests are for:
 
 - **The money.** One account plays a Blind hand against a bot to settlement, and the balance from
   `GET /api/me` (the database's own answer) is reconciled against the payout, the uncalled return and
@@ -232,6 +323,15 @@ What the three tests are for:
 - **The session.** Register, sign out, sign back in — the only credential involved is the cookie.
 - **The chrome on a phone.** The rail's four tabs must fit inside 375 px with nothing scrolling
   sideways, and the table must come up in the stack layout.
+- **The avatar, on a GPU** (`avatar3d.spec.ts`). Every other test of `src/avatar3d/` replaces the
+  renderer with a double, which says nothing about whether a picture comes out. This one asserts that a
+  portrait is an `<img data-hash>` with `naturalWidth > 0` on the lobby bar and on a seat plate, that a
+  stage (`role="img"` with a `<canvas>`) is on the profile and in the wardrobe, that three configurations
+  give three different hashes, that a save survives a reload and reaches a *second browser* at the same
+  hash, and — `@mobile` — that the wardrobe at 375 px does not scroll sideways and its save button is
+  reachable and 44 px tall. Two timings are logged: how long from joining a room until every seat
+  portrait is drawn (asserted ≤ 2 s, design §7; ~0.3 s with one bot and warm caches) and how long a cold
+  browser takes to draw its first face (~3.4 s, most of it the lazy chunk and the `.glb` files).
 
 Every selector is a user-visible one: a role and its accessible name, in Vietnamese. It fails when
 the thing a player reaches for stops being reachable, not when a class name changes. Screenshots

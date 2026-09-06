@@ -15,10 +15,13 @@
  *   css       one stylesheet, loaded with the entry
  *   avatar3d  three.js and the portrait renderer, downloaded only by a browser that draws one
  *
+ * …and a fifth that is not JavaScript at all: the `.glb` bundles under `dist/avatar3d/`, which are the
+ * largest thing this app ever sends and the one a new outfit pack would grow (avatar-3d design §7).
+ *
  * Like Lite's, every block skips with a warning when `dist/` is missing, so `pnpm test` on a fresh
  * checkout stays green and says what it had nothing to measure.
  */
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gzipSync } from 'node:zlib'
@@ -60,6 +63,22 @@ const THREE_MARKER = 'THREE.WebGLRenderer'
 
 /** vite names a dynamic chunk after the module that was split; `portraits.ts` is the avatar3d entry. */
 const AVATAR3D_CHUNK = /^portraits-[\w-]+\.js$/
+
+/**
+ * The 3D assets, as they are actually served (avatar-3d design §7).
+ *
+ * `test/avatar-assets.test.ts` holds the same two numbers against `public/avatar3d/` — the artefact the
+ * pipeline commits. This holds them against `dist/avatar3d/`, which is what a browser downloads, and the
+ * difference is the point: `public/` is copied verbatim by vite today, and a build config that started
+ * rewriting, duplicating or failing to copy those files would leave the committed artefact perfect and
+ * the shipped one wrong.
+ *
+ * Raw bytes, not gzip. A `.glb` here is meshopt-compressed geometry — quantized, then entropy-coded —
+ * and Caddy's gzip takes low single-digit percentages off it. The budget is the download.
+ */
+const AVATAR_DIR = join(DIST, 'avatar3d')
+const MAX_ASSET_TOTAL = 6 * 1024 * 1024
+const MAX_ASSET_FILE = Math.round(1.5 * 1024 * 1024)
 
 /** `App.tsx`'s six `React.lazy` screens; vite names each chunk after the module it split. */
 const LAZY_SCREENS = ['ProfileScreen', 'WardrobeScreen', 'InventoryScreen', 'AchievementsScreen', 'DailyScreen', 'SettingsScreen']
@@ -158,5 +177,36 @@ describe.skipIf(!hasDist)('normal-web bundle', () => {
     const size = gzipOf(chunk)
     console.log(`[footprint] avatar3d chunk ${kb(size)} gzip (budget ${kb(MAX_AVATAR3D_GZIP)})`)
     expect(size).toBeLessThanOrEqual(MAX_AVATAR3D_GZIP)
+  })
+
+  it('ships the 3D assets the manifest names, each and all inside the download budget', () => {
+    const manifestFile = join(AVATAR_DIR, 'manifest.json')
+    expect(existsSync(manifestFile), `${manifestFile} was not copied into the build`).toBe(true)
+    const manifest = JSON.parse(readFileSync(manifestFile, 'utf8')) as {
+      files: Record<string, { bytes: number; sha256: string }>
+      budget: { totalBytes: number; maxFileBytes: number }
+    }
+
+    // The manifest publishes the budget it was built under; if the pipeline's numbers and this test's
+    // ever drift apart, one of the two is measuring something nobody agreed to.
+    expect(manifest.budget.totalBytes, 'the pipeline and this test must budget the same total').toBe(MAX_ASSET_TOTAL)
+    expect(manifest.budget.maxFileBytes, 'the pipeline and this test must budget the same per file').toBe(MAX_ASSET_FILE)
+
+    const names = Object.keys(manifest.files)
+    expect(names.length, 'the manifest must name at least one bundle').toBeGreaterThan(0)
+
+    let total = 0
+    for (const [name, info] of Object.entries(manifest.files)) {
+      const file = join(AVATAR_DIR, name)
+      expect(existsSync(file), `${name} is in the manifest but was not copied into the build`).toBe(true)
+      // Measured off the served file rather than trusted from the manifest: a copy step that truncated,
+      // rewrote or re-encoded one would otherwise be invisible here.
+      const bytes = statSync(file).size
+      expect(bytes, `${name} in dist/ is not the size the manifest recorded`).toBe(info.bytes)
+      expect(bytes, `${name} is over the per-file budget`).toBeLessThanOrEqual(MAX_ASSET_FILE)
+      total += bytes
+    }
+    console.log(`[footprint] avatar3d assets ${kb(total)} across ${names.length} files (budget ${kb(MAX_ASSET_TOTAL)})`)
+    expect(total).toBeLessThanOrEqual(MAX_ASSET_TOTAL)
   })
 })

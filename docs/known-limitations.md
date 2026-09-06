@@ -231,14 +231,62 @@ build-pipeline change of its own.
 *Tracked:* `packages/ui-kit/src/theme/tokens.test.ts` → "reaches a Windows face with full Vietnamese
 coverage before the generic serif"; roadmap §34 item 9.
 
-**The avatar is an interim SVG.** Each part is a handful of paths in `avatar/parts.tsx`, keyed by the
-catalogue's `assetKey`, tinted from theme tokens. It is deliberately not a file-backed asset: eight
-seats cost zero image requests and a new item is one JSON row plus one renderer.
-*Why it is interim:* a 3D replacement has its own approved specification and is Plan 8's work, not a
-gap in this one. Until then `Avatar` skips an `assetKey` this bundle has no renderer for rather than
-throwing, so the server may ship an item before the client can draw it.
-*Tracked:* `docs/superpowers/specs/2026-09-05-avatar-3d-design.md`; spec Appendix A ("Avatar là SVG
-vẽ trong app").
+**Most of the wardrobe is an approximation of a mesh that does not exist.** The 3D avatar is built from
+the **free tier** of two CC0 Quaternius packs, which between them ship five hairstyles and two outfits
+per body — against a catalogue of six hairstyles, seven tops, four bottoms, three pairs of shoes, three
+hats, three accessories and five pieces of jewellery. So `hair_curly` is the parted cut puffed out,
+`bottom_skirt` is the peasant leggings cut short and flared, and eleven items (every hat, accessory and
+piece of jewellery) are **generated from boxes, spheres, cones and tori** by the asset script itself,
+because a fantasy hood is not a nón lá and a pauldron is not a wedding ring. The mask and the sunglasses
+are honestly placeholder-grade.
+*Why it stays:* the paid tiers have eight bodies, twenty hairstyles and more outfits; buying one, or
+adding a Casual pack, is what replaces these, and each item is one map entry away from being swapped.
+*Tracked:* the full table is in `docs/avatar-assets.md` → "Approximations and known limitations"; the
+avatar-3d design §9 lists it as the plan's first risk.
+
+**The bodies and the clothes come from packs that were not modelled for each other.** The bodies are the
+base pack's muscular *Superhero* build; every garment is cut for the outfit pack's slimmer *Regular*
+body, which no free download contains. The build closes the gap by retargeting each garment onto the
+body's rig and then **shrinkwrapping it onto the skin** plus a per-slot margin (`docs/avatar-assets.md`
+→ "Fitting a garment"), so what a player sees is close-cut clothes rather than a shirt with a chest
+coming through it. Two consequences to know about: a fitted garment takes the body's silhouette, so
+nothing drapes or hangs; and a garment whose mesh is coarse enough — or has been stretched far enough —
+that a flat triangle spans a limb can still show a patch of skin through it, which is why three items
+carry a larger `fit` margin of their own.
+*Why it stays:* the alternative is redrawing meshes, which avatar-3d design §2.2 puts out of scope.
+*Tracked:* `docs/avatar-assets.md`; `apps/normal-web/scripts/avatar-shots.mjs` is how a regression here
+is seen.
+
+**The avatar does not move, and never has more than two poses.** The `.glb` files ship the packs' bind
+pose (a T-pose) and one published recipe for standing it up (`manifest.pose.armsDown`, four arm joints);
+the portrait camera crops that to head and shoulders and the stage frames the whole of it. There is no
+idle animation, no expression, no gesture, and no walk — every animation track is stripped by the asset
+pipeline, deliberately, because they are 400 MB of the source packs and nothing in the product plays one.
+The stage turns, and that is the extent of the motion.
+*Why it stays:* avatar-3d design §2.2 puts animation out of Plan 8 and §10 lists idle animation as the
+first thing after it.
+*Tracked:* avatar-3d design §10.
+
+**The metals are lit by a procedural environment, not a real one.** `metal` materials (the crown, the
+glasses' rims, the earrings, the pauldron) have `metalness = 0.9` and therefore almost no diffuse
+response, so under directional lights alone they render as black silhouettes however bright the lights
+are. What lights them is three.js' own `RoomEnvironment` prefiltered by `PMREMGenerator` — a procedural
+box of area lights, ~2 KB gzip of code and no HDR file to download — at `environmentIntensity = 0.55`.
+It reads as a plausible interior and not as jewellery photographed in a studio; gold looks slightly flat
+and there are no sharp reflections. A driver that cannot build a PMREM gets `null` back and dull metal
+rather than no figure.
+*Why it stays:* an HDR environment map is a download nobody has budgeted, for jewellery seen at 128 px.
+*Tracked:* `apps/normal-web/src/avatar3d/environment.ts`.
+
+**A cold browser takes about three and a half seconds to draw its first face.** The design's budget is
+≤ 80 ms per portrait *after the assets are loaded* and ≤ 2 s to fill a nine-seat table; both hold — the
+e2e measures ~60–100 ms per re-render and ~0.3 s from joining a room to every seat portrait drawn. The
+first one is different: it pays for the 150 KB gzip three.js chunk, the manifest and up to five `.glb`
+files before it can render anything, and `avatar3d.spec.ts` logs ~3.4 s for it on a headless SwiftShader
+machine. Until then every face is the player's initial on a disc, which is the designed fallback.
+*Why it stays:* it is one cold start per browser — everything after it is cached in IndexedDB by
+configuration hash — and the alternative is server-rendered images, which avatar-3d design §2.2 rules out.
+*Tracked:* avatar-3d design §5, §7; `apps/normal-web/e2e/avatar3d.spec.ts` logs the number every run.
 
 **The felt resizes slightly at the ring/stack breakpoint.** Crossing the breakpoint changes the table
 layout and the felt's height with it. The action tray's height is reserved from 768 px up so that it
