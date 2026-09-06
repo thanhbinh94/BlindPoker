@@ -370,17 +370,17 @@ test.describe('Bind Poker Normal', () => {
     // face on the lobby bar, which is the face the seat plates draw.
     const RED = '#c8323c'
     await page.goto('/#/avatar')
-    await expect(page.getByRole('heading', { name: 'Ảnh đại diện', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Trang phục', exact: true })).toBeVisible()
     const preview = page.locator('[data-portrait][data-size="lg"]')
     await expect(preview).toBeVisible()
 
     await page.getByRole('button', { name: `Màu có sẵn ${RED}` }).click()
     await shot(page, 'avatar-desktop')
-    await page.getByRole('button', { name: 'Lưu ảnh đại diện' }).click()
-    await expect(page.getByText('Đã lưu ảnh đại diện.')).toBeVisible()
+    await page.getByRole('button', { name: 'Lưu trang phục' }).click()
+    await expect(page.getByText('Đã lưu trang phục.')).toBeVisible()
 
     await page.reload()
-    await expect(page.getByRole('heading', { name: 'Ảnh đại diện', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Trang phục', exact: true })).toBeVisible()
     await expect(page.getByLabel('Màu tự chọn'), 'the saved colour is what the editor loads').toHaveValue(RED)
     // `data-hash` is the whole configuration's identity — the key the rendered portrait is cached under,
     // and the only thing a picture can be asserted on. Whatever it is here is what every other screen, in
@@ -422,7 +422,7 @@ test.describe('Bind Poker Normal', () => {
     await shot(page, 'profile-mobile')
 
     await page.goto('/#/avatar')
-    await expect(page.getByRole('heading', { name: 'Ảnh đại diện', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Trang phục', exact: true })).toBeVisible()
     await expectNoSidewaysScroll(page)
     await shot(page, 'avatar-mobile')
 

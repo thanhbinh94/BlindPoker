@@ -1,5 +1,7 @@
 import '@testing-library/jest-dom/vitest'
+import { setStageFactoryForTests } from './avatar3d/AvatarStage.js'
 import { fakeRenderer } from './avatar3d/fake-renderer.js'
+import { fakeStageFactory } from './avatar3d/fake-stage.js'
 import { setPortraitRendererForTests } from './avatar3d/usePortrait.js'
 
 /**
@@ -35,3 +37,13 @@ if (typeof URL.createObjectURL !== 'function') {
  * calls `setPortraitRendererForTests(fakeRenderer())` itself and gets pictures.
  */
 setPortraitRendererForTests(fakeRenderer({ supported: false }))
+
+/**
+ * And no stage either, for the same reason and with a sharper edge.
+ *
+ * `AvatarStage` reaches `createStage` through the *same* dynamic `import('./portraits.js')`, so a
+ * profile header rendered under jsdom would evaluate three.js and then try to build a `WebGLRenderer`
+ * on a canvas that has no context of any kind. Saying "unsupported" up front is both what such a
+ * browser would answer and what the tests of those screens want to see: the portrait fallback.
+ */
+setStageFactoryForTests(fakeStageFactory({ supported: false }))

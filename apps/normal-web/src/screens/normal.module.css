@@ -528,6 +528,13 @@
   box-shadow: var(--shadow-1);
 }
 
+/* The profile's own figure: a column of its own beside the name, and never wider than the card. */
+.identityStage {
+  flex: none;
+  width: 12rem;
+  max-width: 100%;
+}
+
 .identityText {
   display: flex;
   flex: 1 1 14rem;
@@ -869,6 +876,91 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
   gap: var(--space-3);
+}
+
+/* ── the wardrobe: a figure on the left, everything that goes on it on the right ─── */
+
+/* The one page in this app that is two columns, so the one that is allowed to be wider than 46rem: a
+   stage narrow enough to fit beside a column of tiles is a stage too narrow to see a figure in. */
+.wide {
+  max-width: 64rem;
+}
+
+.wardrobe {
+  display: grid;
+  grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+/* Sticky rather than fixed: the figure stays in view while the groups scroll past it, and still scrolls
+   away with the page head above it. `top` clears the shell's own bar. */
+.stageColumn {
+  position: sticky;
+  top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.stageActions {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* A palette swatch is a radio whose whole 44 px square is the target — the input itself is off-screen
+   (`.tileInput`), exactly as in the item tiles above. */
+.swatchTile {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap);
+  height: var(--tap);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.swatchDot {
+  width: 2rem;
+  height: 2rem;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+}
+
+.swatchTile:has(.tileInput:checked) .swatchDot {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px var(--gold-soft);
+}
+
+.swatchTile:has(.tileInput:focus-visible) .swatchDot {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* The phone layout design §6 asks for: the stage pinned at the top (the 40 vh is the stage's own, in
+   `stage.module.css`) with the groups scrolling underneath it. */
+@media (max-width: 720px) {
+  .wardrobe {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .stageColumn {
+    top: 0;
+    z-index: 1;
+    padding-bottom: var(--space-2);
+    background: var(--bg);
+  }
 }
 
 /* ── the inventory grid ───────────────────────────────────────────────────── */

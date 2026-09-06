@@ -110,7 +110,11 @@ describe('ProfileScreen', () => {
     expect(screen.getByText(/Thành viên từ/)).toBeInTheDocument()
     // 123.000 in `vi`: the assertion is on the digits, not on the separator the locale picked.
     expect(screen.getByText(/123/)).toBeInTheDocument()
-    expect(screen.getByRole('img', { name: viNormal.avatar.mine })).toHaveAttribute('data-size', 'lg')
+    // The header's figure is a stage, and its accessible name is the configuration in words — the same
+    // sentence the portrait fallback carries, which is what jsdom (no WebGL) renders here.
+    // `waitFor` rather than `findByRole`: the empty stage carries the same name while its chunk is still
+    // in flight, so the assertion has to be on the thing that tells the two apart.
+    await waitFor(() => expect(screen.getByRole('img', { name: /Nhân vật nữ.*Áo dài/ })).toHaveAttribute('data-size', 'lg'))
   })
 
   it('groups all sixteen counters, prints points with their unit and names the best hand', async () => {

@@ -45,7 +45,7 @@ apps/normal-web/
     screens/
       Shell.tsx         the rail and the page under it; publishes --bp-stage for the table
       AuthScreen.tsx    sign in and register, one card, two modes
-      {Profile,Avatar,Inventory,Achievements,Daily,Settings}Screen.tsx   the six lazy account screens
+      {Profile,Wardrobe,Inventory,Achievements,Daily,Settings}Screen.tsx   the six lazy account screens
       TableChrome.tsx   makeAvatarFor / makeCaptionFor — the two slots RoomScreen takes from this app
       catalog.ts        rarity → kit tone, and the category order, shared by two separate chunks
       format.ts         dates, moments and signed amounts in the player's language

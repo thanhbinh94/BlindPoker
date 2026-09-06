@@ -43,7 +43,7 @@ export const NORMAL_VERSION = typeof __NORMAL_VERSION__ === 'string' ? __NORMAL_
  * costs one request, once.
  */
 const ProfileScreen = lazy(async () => ({ default: (await import('./screens/ProfileScreen.js')).ProfileScreen }))
-const AvatarScreen = lazy(async () => ({ default: (await import('./screens/AvatarScreen.js')).AvatarScreen }))
+const WardrobeScreen = lazy(async () => ({ default: (await import('./screens/WardrobeScreen.js')).WardrobeScreen }))
 const InventoryScreen = lazy(async () => ({ default: (await import('./screens/InventoryScreen.js')).InventoryScreen }))
 const AchievementsScreen = lazy(async () => ({ default: (await import('./screens/AchievementsScreen.js')).AchievementsScreen }))
 const DailyScreen = lazy(async () => ({ default: (await import('./screens/DailyScreen.js')).DailyScreen }))
@@ -240,7 +240,7 @@ export function App({ api, socketFactory }: AppProps) {
             {path === '/profile' ? (
               <ProfileScreen api={guarded} lang={lang} balance={balance} onRenamed={gate.renamed} />
             ) : path === '/avatar' ? (
-              <AvatarScreen api={guarded} playerId={myId} />
+              <WardrobeScreen api={guarded} playerId={myId} />
             ) : path === '/inventory' ? (
               <InventoryScreen api={guarded} lang={lang} />
             ) : path === '/daily' ? (

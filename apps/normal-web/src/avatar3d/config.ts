@@ -1,4 +1,24 @@
-import type { AvatarConfigDto, ItemSlot } from '../api.js'
+import { GEOMETRIC_SLOTS, type AvatarConfigDto, type Body, type GeometricSlot, type ItemSlot } from '../api.js'
+
+/**
+ * The two closed palettes, in the server's order — `apps/normal-server/data/palettes.json`.
+ *
+ * They are copied rather than imported because a browser bundle may not reach into the server
+ * package. What keeps the copy honest is `palettes.test.ts`, which reads that JSON file (the same
+ * way the locale parity test reads `items.json`) and fails the build if these two arrays and it ever
+ * disagree — which they otherwise would silently, as a swatch the wardrobe paints and the server
+ * answers `INVALID_COLOR` to.
+ *
+ * The *order* is part of the contract too, not just the set: the names in the locale bundles are
+ * indexed by position (`wardrobe.skinTone.0` … `.7`), so a reordering would rename every tone.
+ */
+export const SKIN_TONES = ['#f7dcc3', '#efc9a4', '#e0ac81', '#c98d62', '#a9714b', '#8a563a', '#66402c', '#452b1e'] as const
+
+/** Dark brown, brown, amber, green, blue, grey — the server's `EYE_COLORS`, in its order. */
+export const EYE_COLORS = ['#3b2415', '#6b4a2f', '#8c6239', '#2f5d50', '#33608c', '#5b5b66'] as const
+
+/** The two figures, in the order the wardrobe offers them. */
+export const BODIES: readonly Body[] = ['male', 'female']
 
 /**
  * Hair colour: free, unlike skin and eyes.
@@ -46,6 +66,62 @@ export function withSlot(config: AvatarConfigDto, slot: ItemSlot, itemId: string
     default:
       return { ...config, badge: optional }
   }
+}
+
+/**
+ * What the wardrobe knows about geometry, narrowed to the two questions changing body asks.
+ *
+ * A port rather than the catalogue itself, because the answers come from two places at once — the
+ * catalogue says which bodies an item was modelled for, the player's inventory says which pieces are
+ * theirs to fall back on — and because it makes `switchBody` a function a test can drive without a
+ * fixture of `ItemDto`s.
+ */
+export interface BodyFit {
+  /** Whether that item has geometry for that body (`ItemDto.variants[body]`). */
+  fits(itemId: string, body: Body): boolean
+  /**
+   * What to wear instead when the equipped piece has no variant for the new body: the slot's default
+   * where there is one, otherwise any owned piece that fits, otherwise nothing — which is a valid
+   * answer for the three optional slots and only for those.
+   */
+  fallback(slot: GeometricSlot, body: Body): string | undefined
+}
+
+export interface BodySwitch {
+  config: AvatarConfigDto
+  /** The slots that had to be changed, in `GEOMETRIC_SLOTS` order. Empty when the outfit came across whole. */
+  changed: GeometricSlot[]
+}
+
+/**
+ * Change the figure, keeping as much of the outfit as has been modelled for it (design §6, §A3).
+ *
+ * The source packs are not symmetric, so "one item, two bodies" is an aspiration rather than a fact:
+ * a hat exists for both, a particular jacket may exist for one. The server *refuses* a configuration
+ * that wears an item on a body it has no variant for (`INVALID_ITEM`), so a wardrobe that simply set
+ * `body` and left the rest alone would produce a figure that renders with holes in it and then cannot
+ * be saved — with the refusal naming an item the player never touched.
+ *
+ * So the swap is done here, and it reports what it had to change: the screen turns `changed` into a
+ * sentence, because a top that silently became the default tee is a top the player will think they
+ * lost.
+ */
+export function switchBody(config: AvatarConfigDto, body: Body, fit: BodyFit): BodySwitch {
+  if (config.body === body) return { config, changed: [] }
+
+  let next: AvatarConfigDto = { ...config, body }
+  const changed: GeometricSlot[] = []
+
+  for (const slot of GEOMETRIC_SLOTS) {
+    const itemId = config[slot]
+    // An empty optional slot stays empty: there is nothing to lose and nothing to report.
+    if (itemId === undefined || itemId === '') continue
+    if (fit.fits(itemId, body)) continue
+    changed.push(slot)
+    next = withSlot(next, slot, fit.fallback(slot, body) ?? '')
+  }
+
+  return { config: next, changed }
 }
 
 /**

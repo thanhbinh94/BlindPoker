@@ -62,7 +62,7 @@ const THREE_MARKER = 'THREE.WebGLRenderer'
 const AVATAR3D_CHUNK = /^portraits-[\w-]+\.js$/
 
 /** `App.tsx`'s six `React.lazy` screens; vite names each chunk after the module it split. */
-const LAZY_SCREENS = ['ProfileScreen', 'AvatarScreen', 'InventoryScreen', 'AchievementsScreen', 'DailyScreen', 'SettingsScreen']
+const LAZY_SCREENS = ['ProfileScreen', 'WardrobeScreen', 'InventoryScreen', 'AchievementsScreen', 'DailyScreen', 'SettingsScreen']
 
 const hasDist = existsSync(ASSETS) && existsSync(INDEX)
 if (!hasDist) {

@@ -3,7 +3,19 @@ import type { AvatarConfigDto } from '../api.js'
 import { abortError } from './abort.js'
 import { assemble, disposeAssembled, type Assembled } from './assemble.js'
 import { assetLoader } from './assets.js'
+import { applyEnvironment } from './environment.js'
 import { CONTEXT_LOST, contextLost, watchContext, type ContextWatch } from './gl-context.js'
+
+/**
+ * The stage travels in this chunk too, and is re-exported from here on purpose.
+ *
+ * Everything three.js is behind exactly **one** dynamic `import()` specifier — `./portraits.js` — so
+ * the bundler emits exactly one chunk for the whole graph. Giving `stage.ts` a dynamic import of its
+ * own would split three between a shared chunk and two small ones, which is two extra requests for
+ * the same bytes and a footprint budget (`test/footprint.test.ts`) that can no longer name the thing
+ * it measures. `usePortrait` asks this module for `render`; `AvatarStage` asks it for `createStage`.
+ */
+export { createStage, type Stage, type StageDeps, type StageRenderer } from './stage.js'
 
 /**
  * The one hidden renderer that draws every portrait in the app (avatar-3d design §5, §7).
@@ -31,10 +43,17 @@ export const PORTRAIT_PX = 128
 /** A narrow lens: a portrait wants the flattening of a short telephoto, not a phone camera's nose. */
 const FIELD_OF_VIEW = 28
 
-/** How much empty space sits above the head, as a fraction of the framed height. */
-const HEADROOM = 0.06
+/**
+ * How much empty space sits above the head, as a fraction of the framed height.
+ *
+ * It was 0.06 until a look in a real browser: the crop sat high, with the shoulders barely inside the
+ * frame and a head that read as floating. Ten percent of the frame height, added here, lowers the
+ * window by the same ten percent — the head moves up towards the top of the disc and the shoulders
+ * come in underneath it, which is what "head and shoulders" means.
+ */
+const HEADROOM = 0.16
 
-interface Stage {
+interface PortraitStage {
   renderer: WebGLRenderer
   scene: Scene
   camera: PerspectiveCamera
@@ -44,7 +63,7 @@ interface Stage {
   watch: ContextWatch
 }
 
-let stage: Stage | null = null
+let stage: PortraitStage | null = null
 let output: { canvas: HTMLCanvasElement; context: CanvasRenderingContext2D } | null = null
 let support: boolean | null = null
 let queue: Promise<unknown> = Promise.resolve()
@@ -78,7 +97,7 @@ function probe(): boolean {
   }
 }
 
-function ensureStage(): Stage {
+function ensureStage(): PortraitStage {
   if (stage !== null) return stage
 
   const canvas = document.createElement('canvas')
@@ -110,7 +129,11 @@ function ensureStage(): Stage {
   rim.position.set(-0.25, 0.8, -1.2)
   rim.target = aim
   rig.add(key, fill, rim)
-  scene.add(rig, new AmbientLight(0xffffff, 1.1))
+  // The ambient term used to be 1.1 and is now mostly the environment map below — a `metalness = 1`
+  // material has no diffuse response at all, so glasses rims, earrings and the crown's edge render
+  // black under lights alone however bright they are. See `environment.ts`.
+  scene.add(rig, new AmbientLight(0xffffff, 0.4))
+  applyEnvironment(scene, renderer)
 
   // A context can be taken away at any moment, and everything afterwards still *looks* like it worked.
   // The watch is what turns that into a rejection instead of a transparent picture in IndexedDB.
@@ -244,6 +267,9 @@ export function render(config: AvatarConfigDto, options: RenderOptions = {}): Pr
 export function disposePortraitRenderer(): void {
   if (stage !== null) {
     stage.watch.stop()
+    // The prefiltered environment lives in this context and nothing else will free it.
+    stage.scene.environment?.dispose()
+    stage.scene.environment = null
     // `dispose()` frees three's own objects but leaves the GL context alive until the canvas is
     // collected, which may be never; `forceContextLoss` hands it back now. It matters for the budget of
     // one context for portraits plus one for Task 4's stage.

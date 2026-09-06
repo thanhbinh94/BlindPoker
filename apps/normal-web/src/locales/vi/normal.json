@@ -136,7 +136,7 @@
     "memberSince": "Thành viên từ {{date}}",
     "balance": "Số điểm",
     "noTitle": "Chưa có danh hiệu",
-    "toAvatar": "Ảnh đại diện",
+    "toAvatar": "Chỉnh trang phục",
     "toInventory": "Tủ đồ",
     "toAchievements": "Thành tựu",
     "error": "Không tải được hồ sơ của bạn",
@@ -268,6 +268,57 @@
       "accessory": "Phụ kiện",
       "jewelry": "Trang sức"
     }
+  },
+  "wardrobe": {
+    "title": "Trang phục",
+    "lead": "Kéo nhân vật để xoay. Chỉ những món bạn đang sở hữu mới hiện ở đây.",
+    "figure": "Nhân vật {{body}}, da {{skin}}, mắt {{eyes}}. Đang mặc: {{items}}.",
+    "figurePiece": "{{slot}} {{item}}",
+    "figureBare": "Nhân vật {{body}}, da {{skin}}, mắt {{eyes}}.",
+    "rotateHint": "Kéo để xoay, hoặc dùng phím mũi tên trái/phải.",
+    "resetView": "Xoay lại mặt trước",
+    "body": "Thân hình",
+    "words": "Danh hiệu và huy hiệu",
+    "bodyName": {
+      "male": "Nam",
+      "female": "Nữ"
+    },
+    "bodyWord": {
+      "male": "nam",
+      "female": "nữ"
+    },
+    "bodyChanged": "Đổi thân hình nên các ô sau về món mặc định: {{slots}}.",
+    "skin": "Màu da",
+    "skinTone": {
+      "0": "Ngà",
+      "1": "Sáng",
+      "2": "Trung bình",
+      "3": "Rám nắng",
+      "4": "Nâu nhạt",
+      "5": "Nâu",
+      "6": "Nâu đậm",
+      "7": "Nâu sẫm"
+    },
+    "eyes": "Màu mắt",
+    "eyeColor": {
+      "0": "Nâu sẫm",
+      "1": "Nâu",
+      "2": "Hổ phách",
+      "3": "Xanh lá",
+      "4": "Xanh dương",
+      "5": "Xám"
+    },
+    "swatch": "{{name}} ({{color}})",
+    "save": "Lưu trang phục",
+    "saved": "Đã lưu trang phục.",
+    "reset": "Hoàn tác",
+    "resetDone": "Đã trở về trang phục đã lưu.",
+    "dirty": "Bạn có thay đổi chưa lưu.",
+    "leaveTitle": "Rời trang phục?",
+    "leaveBody": "Thay đổi chưa lưu sẽ mất nếu bạn rời trang này.",
+    "leaveStay": "Ở lại",
+    "leaveGo": "Rời đi",
+    "close": "Đóng"
   },
   "items": {
     "hair_none": "Đầu trọc",
