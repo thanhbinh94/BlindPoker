@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import type { AvatarConfigDto, GeometricSlot } from '../api.js'
-import { withSlot } from './config.js'
+import { portraitRelevant, withSlot } from './config.js'
 import { usePortrait } from './usePortrait.js'
 import s from './portrait.module.css'
 
@@ -111,14 +111,18 @@ export interface PartPortraitProps {
  * One item, previewed on the player's own figure.
  *
  * It is a `Portrait` of the current configuration with this item swapped in, which means a hoodie is
- * shown on the body, hair and skin tone that will actually wear it — and, because the cache is keyed by
- * the whole configuration, that the tile the player picks and the face they end up with are the same
- * picture from the same cache entry.
+ * shown on the body, hair and skin tone that will actually wear it.
+ *
+ * The configuration is then narrowed by `portraitRelevant` to the slots the head-and-shoulders crop can
+ * contain. This is what stops one click on a pair of shoes from changing the cache key of every tile on
+ * the screen and re-rendering forty identical pictures through a sequential queue — and it is also why
+ * the tiles of a slot the crop cannot show (bottoms, shoes) share a single cache entry instead of
+ * drawing the same face once per item.
  */
 export function PartPortrait({ config, slot, itemId, size = 'md', className }: PartPortraitProps) {
   const box = useRef<HTMLSpanElement>(null)
   const near = useNearViewport(box)
-  const worn = useMemo(() => withSlot(config, slot, itemId), [config, slot, itemId])
+  const worn = useMemo(() => portraitRelevant(withSlot(config, slot, itemId)), [config, slot, itemId])
 
   return (
     <span className={className === undefined ? s.part : `${s.part} ${className}`} ref={box}>

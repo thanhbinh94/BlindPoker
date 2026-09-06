@@ -239,8 +239,6 @@
   },
   "avatar": {
     "mine": "Your avatar",
-    "title": "Avatar",
-    "lead": "Only what you own is offered. New pieces arrive from the daily check-in and from achievements.",
     "none": "None",
     "empty": "You own nothing for this slot yet.",
     "hairColor": "Hair colour",
@@ -250,8 +248,6 @@
     "hairInvalid": "A colour looks like #2b2b2b",
     "titleSlot": "Title",
     "badgeSlot": "Badge",
-    "save": "Save avatar",
-    "saved": "Your avatar is saved.",
     "errors": {
       "NOT_OWNED": "You do not own one of those pieces",
       "WRONG_CATEGORY": "One of those pieces does not belong in that slot",
@@ -276,6 +272,7 @@
     "figurePiece": "{{slot}} {{item}}",
     "figureBare": "A {{body}} figure, {{skin}} skin, {{eyes}} eyes.",
     "rotateHint": "Drag to turn, or use the left and right arrow keys.",
+    "figureRole": "turnable figure",
     "resetView": "Face the front again",
     "body": "Body",
     "words": "Titles and badges",
@@ -287,7 +284,7 @@
       "male": "male",
       "female": "female"
     },
-    "bodyChanged": "Changing body reset these slots to their default piece: {{slots}}.",
+    "bodyChanged": "Changing body had to change these slots (to another piece, or to nothing): {{slots}}.",
     "skin": "Skin tone",
     "skinTone": {
       "0": "Ivory",

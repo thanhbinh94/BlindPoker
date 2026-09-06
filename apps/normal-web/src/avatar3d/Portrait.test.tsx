@@ -2,7 +2,7 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AvatarConfigDto } from '../api.js'
 import { PartPortrait, Portrait } from './Portrait.js'
-import { withSlot } from './config.js'
+import { portraitRelevant, withSlot } from './config.js'
 import { fakeRenderer } from './fake-renderer.js'
 import { hashConfig } from './hash.js'
 import { resetPortraitMemory } from './portrait-cache.js'
@@ -107,17 +107,39 @@ describe('PartPortrait', () => {
 
     render(<PartPortrait config={CONFIG} slot="top" itemId="clothing_kimono" />)
 
-    const tried = withSlot(CONFIG, 'top', 'clothing_kimono')
+    const tried = portraitRelevant(withSlot(CONFIG, 'top', 'clothing_kimono'))
     await waitFor(() => expect(disc().querySelector('img')).toHaveAttribute('data-hash', hashConfig(tried)))
-    // Everything but the previewed slot is the player's own configuration, so the tile and the face they
-    // end up with are the same cache entry.
+    // Everything but the previewed slot is the player's own configuration — the body, the skin, the hair
+    // this top will actually be worn with — narrowed to what the head-and-shoulders crop can hold.
+    expect(renderer.rendered).toEqual([hashConfig(tried)])
+  })
+
+  it('ignores the slots its crop cannot show, so a change below the chest costs nothing', async () => {
+    const renderer = fakeRenderer()
+    setPortraitRendererForTests(renderer)
+
+    const view = render(<PartPortrait config={CONFIG} slot="top" itemId="clothing_kimono" />)
+    const tried = portraitRelevant(withSlot(CONFIG, 'top', 'clothing_kimono'))
+    await waitFor(() => expect(renderer.rendered).toEqual([hashConfig(tried)]))
+
+    // A different pair of shoes, a different skirt, a title and a badge: none of them are inside a
+    // head-and-shoulders picture, so the tile keeps the picture it has rather than queueing another.
+    view.rerender(
+      <PartPortrait
+        config={{ ...CONFIG, bottom: 'bottom_jeans', shoes: 'shoes_sneakers', title: 'title_rookie', badge: 'badge_bronze' }}
+        slot="top"
+        itemId="clothing_kimono"
+      />,
+    )
+
+    await waitFor(() => expect(disc().querySelector('img')).toHaveAttribute('data-hash', hashConfig(tried)))
     expect(renderer.rendered).toEqual([hashConfig(tried)])
   })
 
   it('empties an optional slot rather than sending an empty id', async () => {
     render(<PartPortrait config={{ ...CONFIG, hat: 'hat_crown' }} slot="hat" itemId="" />)
 
-    await waitFor(() => expect(disc().querySelector('img')).toHaveAttribute('data-hash', hashConfig(CONFIG)))
+    await waitFor(() => expect(disc().querySelector('img')).toHaveAttribute('data-hash', hashConfig(portraitRelevant(CONFIG))))
   })
 
   /**
@@ -182,7 +204,7 @@ describe('PartPortrait', () => {
 
       act(() => stubs[0]?.callback([{ isIntersecting: true }]))
 
-      const tried = withSlot(CONFIG, 'top', 'clothing_kimono')
+      const tried = portraitRelevant(withSlot(CONFIG, 'top', 'clothing_kimono'))
       await waitFor(() => expect(disc().querySelector('img')).toHaveAttribute('data-hash', hashConfig(tried)))
       expect(renderer.rendered).toEqual([hashConfig(tried)])
       // Once seen, always seen: there is nothing left to watch for.

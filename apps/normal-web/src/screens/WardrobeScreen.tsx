@@ -23,6 +23,7 @@ import {
   EYE_COLORS,
   HAIR_PRESETS,
   HEX_COLOR,
+  portraitRelevant,
   SKIN_TONES,
   switchBody,
   withSlot,
@@ -105,6 +106,11 @@ function SlotPicker({ slot, items, config, onPick }: SlotPickerProps) {
   const { t } = useTranslation('normal')
   const optional = (OPTIONAL_SLOTS as readonly string[]).includes(slot)
   const value = config[slot] ?? ''
+  // What the tiles are drawn from: the configuration with everything the head-and-shoulders crop cannot
+  // show taken out of it, so picking a pair of shoes does not change the cache key of every tile on the
+  // screen. `PartPortrait` narrows what it is given anyway; doing it once here is what keeps the memo
+  // inside each of forty tiles from being invalidated in the first place.
+  const preview = useMemo(() => portraitRelevant(config), [config])
 
   return (
     <fieldset className={s.picker}>
@@ -136,7 +142,7 @@ function SlotPicker({ slot, items, config, onPick }: SlotPickerProps) {
               checked={value === item.itemId}
               onChange={() => onPick(item.itemId)}
             />
-            <PartPortrait className={s.thumb} config={config} slot={slot} itemId={item.itemId} />
+            <PartPortrait className={s.thumb} config={preview} slot={slot} itemId={item.itemId} />
             <span className={s.tileName}>{itemName(item.itemId, t)}</span>
             {item.rarity === null ? null : <Badge tone={RARITY_TONE[item.rarity]}>{t(`inventory.rarity.${item.rarity}`)}</Badge>}
           </label>
@@ -319,8 +325,17 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
     )
   }
 
+  /**
+   * Take an edit, and clear everything the *previous* action left on screen.
+   *
+   * `changedSlots` goes with `note` and `error`: the "these slots had to change" line is a statement
+   * about one body switch, and left standing it would read as a statement about whatever the player did
+   * next. `onBody` sets it again after calling this, so the one action that has something to say still
+   * says it.
+   */
   const commit = (next: AvatarConfigDto): void => {
     setDraft(next)
+    setChangedSlots([])
     setNote(null)
     setError(null)
   }
@@ -339,6 +354,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
 
   const onColorText = (next: string): void => {
     setColorText(next)
+    setChangedSlots([])
     setNote(null)
     setError(null)
     if (HEX_COLOR.test(next)) setDraft({ ...config, hairColor: next })

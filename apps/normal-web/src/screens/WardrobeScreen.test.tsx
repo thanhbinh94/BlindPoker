@@ -183,7 +183,10 @@ describe('WardrobeScreen', () => {
     // Hair fits both figures and is left alone. The tee and the glasses do not: the tee is replaced by
     // the only owned top that *does* fit (the slot's default does not, so the fallback goes on down the
     // shelf), and the optional accessory slot is emptied because nothing owned fits it.
-    expect(await screen.findByText(/Áo, Phụ kiện/)).toBeInTheDocument()
+    //
+    // The words matter as much as the list: neither of those two slots went to "the default piece", so
+    // the note has to describe what the fallback actually does — another piece, or nothing.
+    expect(await screen.findByText(viNormal.wardrobe.bodyChanged.replace('{{slots}}', 'Áo, Phụ kiện'))).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: viNormal.items.hair_short }), 'hair fits both bodies').toBeChecked()
     expect(screen.getByRole('radio', { name: viNormal.items.top_tee }), 'the tee has no female variant').not.toBeChecked()
     expect(screen.getByRole('radio', { name: viNormal.items.clothing_aodai }), 'the áo dài does').toBeChecked()
@@ -203,6 +206,31 @@ describe('WardrobeScreen', () => {
       bottom: 'bottom_jeans',
       shoes: 'shoes_sneakers',
     })
+  })
+
+  it('takes the body-switch note down again as soon as something else is picked', async () => {
+    const user = userEvent.setup()
+    renderScreen()
+    await settled()
+
+    await user.click(screen.getByRole('radio', { name: viNormal.wardrobe.bodyName.female }))
+    const note = viNormal.wardrobe.bodyChanged.replace('{{slots}}', 'Áo, Phụ kiện')
+    expect(await screen.findByText(note)).toBeInTheDocument()
+
+    // The note is a statement about the body switch. Left standing through every later pick it would
+    // read as a statement about the pick just made — "changing body had to change your top", about a
+    // top the player chose themselves a moment ago.
+    await user.click(screen.getByRole('radio', { name: viNormal.items.hair_curly }))
+    expect(screen.queryByText(note)).toBeNull()
+
+    // And again for the free colour box, which writes the draft itself rather than going through the
+    // same path. Undo first, so the switch has the same outfit to migrate as it had the first time.
+    await user.click(screen.getByRole('button', { name: viNormal.wardrobe.reset }))
+    await user.click(screen.getByRole('radio', { name: viNormal.wardrobe.bodyName.female }))
+    expect(await screen.findByText(note)).toBeInTheDocument()
+
+    await user.clear(screen.getByLabelText(viNormal.avatar.hairCustom))
+    expect(screen.queryByText(note)).toBeNull()
   })
 
   it('sends the whole config on save, invalidates my face, and says it is done', async () => {

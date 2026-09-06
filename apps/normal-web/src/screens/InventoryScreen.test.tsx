@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, type AvatarConfigDto, type InventoryDto, type ItemSlot, type NormalApi, type OwnedItemDto, type Rarity } from '../api.js'
-import { withSlot } from '../avatar3d/config.js'
+import { portraitRelevant, withSlot } from '../avatar3d/config.js'
 import { fakeRenderer } from '../avatar3d/fake-renderer.js'
 import { hashConfig } from '../avatar3d/hash.js'
 import { resetPortraitMemory } from '../avatar3d/portrait-cache.js'
@@ -115,8 +115,9 @@ describe('InventoryScreen', () => {
     await screen.findByText(viNormal.items.hair_short)
 
     // The tile for a hairstyle the player is *not* wearing is a portrait of them wearing it — the same
-    // configuration with one slot swapped, so it is cached under that configuration's own hash.
-    const tried = withSlot(EQUIPPED, 'hair', 'hair_bun')
+    // configuration with one slot swapped, narrowed to what a head-and-shoulders crop can hold, and
+    // cached under that configuration's own hash.
+    const tried = portraitRelevant(withSlot(EQUIPPED, 'hair', 'hair_bun'))
     await waitFor(() => {
       expect(panelOf('hair').getByText(viNormal.items.hair_bun).closest('li')?.querySelector('img')).toHaveAttribute(
         'data-hash',

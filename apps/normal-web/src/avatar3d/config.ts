@@ -125,6 +125,42 @@ export function switchBody(config: AvatarConfigDto, body: Body, fit: BodyFit): B
 }
 
 /**
+ * A configuration reduced to what a portrait would draw of it — body, colours, hair, top, hat,
+ * accessory, jewelry.
+ *
+ * The crop is head-and-shoulders (`framing.ts`: from a little above the crown down to about mid-chest),
+ * so a pair of shoes, a skirt, a title and a badge are outside it by construction. `title` and `badge`
+ * are outside *every* picture: they are words, and `nodeKeysOf` never asks for geometry for them.
+ *
+ * This exists for the wardrobe. Every tile is a `PartPortrait` of the *whole* current configuration
+ * with one item swapped in, and the portrait cache is keyed by the configuration's hash — so with the
+ * full config, one click on a pair of shoes changes the key of all forty tiles at once and queues forty
+ * re-renders of pictures that are pixel-for-pixel what they already were. Dropping the slots the crop
+ * cannot show is what makes "no render when nothing changed" (design §7) true on the one screen that
+ * changes things most often.
+ *
+ * The dropped required slots become `''` rather than disappearing: `AvatarConfigDto` says they are
+ * strings, and `''` is what both `canonicalConfig` and `nodeKeysOf` already read as "nothing here" —
+ * so the reduced config hashes stably and assembles without asking for a node that is not in shot.
+ */
+export function portraitRelevant(config: AvatarConfigDto): AvatarConfigDto {
+  return {
+    v: 2,
+    body: config.body,
+    skin: config.skin,
+    eyes: config.eyes,
+    hairColor: config.hairColor,
+    hair: config.hair,
+    top: config.top,
+    bottom: '',
+    shoes: '',
+    hat: config.hat,
+    accessory: config.accessory,
+    jewelry: config.jewelry,
+  }
+}
+
+/**
  * The configuration as it goes on the wire: optional slots *omitted* rather than emptied.
  *
  * `PUT /api/me/avatar` is a full replace, so the body is the whole truth — and a key carrying

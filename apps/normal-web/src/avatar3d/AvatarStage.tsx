@@ -1,5 +1,5 @@
 import { Button } from '@bp/ui-kit'
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AvatarConfigDto } from '../api.js'
 import { Portrait } from './Portrait.js'
@@ -103,6 +103,8 @@ export function AvatarStage({ config, mode, className, description, name }: Avat
   const frameRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<Stage | null>(null)
   const [status, setStatus] = useState<StageStatus>('loading')
+  /** Ties the frame to the sentence that says what the arrow keys do. Two stages on one page, two ids. */
+  const hintId = useId()
 
   /** Where the figure is turned to, and where a drag started. Neither is state: nothing renders on them. */
   const yaw = useRef(0)
@@ -227,12 +229,20 @@ export function AvatarStage({ config, mode, className, description, name }: Avat
     <div className={box} data-mode={mode} data-stage={status}>
       {/* `role="img"` on the frame and not on the whole component: an image is a leaf in the
           accessibility tree, so a button inside one is a button nobody can reach. The description is the
-          picture's alternative text, and the hint below describes what the keys do. */}
+          picture's alternative text.
+
+          The frame is also focusable, and `img` is not an interactive role — so tabbing onto it would
+          otherwise announce the figure and nothing about the arrow keys that turn it. `aria-describedby`
+          points at the hint below (which is why the hint is rendered in *both* modes, merely hidden in
+          `view` where the layout has no line to spare), and `aria-roledescription` says what kind of
+          picture this is before the description of what is in it. */}
       <div
         className={s.frame}
         ref={frameRef}
         role="img"
         aria-label={description}
+        aria-roledescription={t('wardrobe.figureRole')}
+        aria-describedby={hintId}
         tabIndex={0}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -247,7 +257,9 @@ export function AvatarStage({ config, mode, className, description, name }: Avat
           {t('wardrobe.resetView')}
         </Button>
       </div>
-      {mode === 'edit' ? <p className={s.hint}>{t('wardrobe.rotateHint')}</p> : null}
+      <p className={mode === 'edit' ? s.hint : 'visually-hidden'} id={hintId}>
+        {t('wardrobe.rotateHint')}
+      </p>
     </div>
   )
 }

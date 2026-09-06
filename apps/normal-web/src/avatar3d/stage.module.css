@@ -70,12 +70,18 @@
 
 /* The phone layout design §6 asks for: the stage pinned at 40 vh with the groups scrolling under it. The
    height is the only thing that changes — the column itself is `position: sticky` in `normal.module.css`,
-   because that is the screen's layout rather than the stage's. */
-@media (max-width: 640px) {
+   because that is the screen's layout rather than the stage's.
+
+   720 px, not 640, because that is where `normal.module.css` collapses the wardrobe to one column: two
+   breakpoints for one layout left a 641–720 px band in which the stage was a full-width 26 rem block. */
+@media (max-width: 720px) {
   .stage[data-mode='edit'] .frame {
     height: 40vh;
   }
+}
 
+/* The profile header is a different layout on a different breakpoint, so `view` keeps its own. */
+@media (max-width: 640px) {
   .stage[data-mode='view'] .frame {
     height: 11rem;
   }

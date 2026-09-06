@@ -1,9 +1,10 @@
-import { AmbientLight, DirectionalLight, MathUtils, Object3D, PerspectiveCamera, Scene, WebGLRenderer } from 'three'
+import { AmbientLight, DirectionalLight, Object3D, PerspectiveCamera, Scene, WebGLRenderer } from 'three'
 import type { AvatarConfigDto } from '../api.js'
 import { abortError } from './abort.js'
 import { assemble, disposeAssembled, type Assembled } from './assemble.js'
 import { assetLoader } from './assets.js'
 import { applyEnvironment } from './environment.js'
+import { portraitFraming, PORTRAIT_FIELD_OF_VIEW } from './framing.js'
 import { CONTEXT_LOST, contextLost, watchContext, type ContextWatch } from './gl-context.js'
 
 /**
@@ -39,19 +40,6 @@ export { createStage, type Stage, type StageDeps, type StageRenderer } from './s
 /** What the scene is rendered at, and what the image is saved at. The ratio is the anti-aliasing. */
 export const PORTRAIT_SOURCE_PX = 256
 export const PORTRAIT_PX = 128
-
-/** A narrow lens: a portrait wants the flattening of a short telephoto, not a phone camera's nose. */
-const FIELD_OF_VIEW = 28
-
-/**
- * How much empty space sits above the head, as a fraction of the framed height.
- *
- * It was 0.06 until a look in a real browser: the crop sat high, with the shoulders barely inside the
- * frame and a head that read as floating. Ten percent of the frame height, added here, lowers the
- * window by the same ten percent — the head moves up towards the top of the disc and the shoulders
- * come in underneath it, which is what "head and shoulders" means.
- */
-const HEADROOM = 0.16
 
 interface PortraitStage {
   renderer: WebGLRenderer
@@ -112,7 +100,7 @@ function ensureStage(): PortraitStage {
   renderer.setClearColor(0x000000, 0)
 
   const scene = new Scene()
-  const camera = new PerspectiveCamera(FIELD_OF_VIEW, 1, 0.05, 20)
+  const camera = new PerspectiveCamera(PORTRAIT_FIELD_OF_VIEW, 1, 0.05, 20)
 
   // The rig is aimed at its own origin and then moved to the head, so the three lights keep the same
   // relationship to the face whether the body is the male one (head at 1.60 m) or the female (1.55 m).
@@ -153,33 +141,19 @@ function ensureOutput(): { canvas: HTMLCanvasElement; context: CanvasRenderingCo
 }
 
 /**
- * Point the camera at the head.
+ * Point the camera at the head, and move the light rig up to meet it.
  *
- * The frame runs from a little above the crown — `bounds.max.y` of the body node, which is the top of
- * the skull in metres — down to somewhere around mid-chest, sized as a multiple of the head's own
- * height (`crown - neck_01`). Reading it off the anchors rather than hard-coding metres is what makes
- * one camera correct for both bodies, and what would make it correct for a third.
- *
- * The figure faces **+Z** (it is where the pipeline puts a pair of glasses' lenses), so the camera
- * stands in front of the chest at `bounds.max.z` plus whatever distance the lens needs.
+ * The arithmetic itself is `framing.ts` — a pure function, so the crop every avatar picture in the app
+ * is made by has a test (`framing.test.ts`) rather than only a look in a browser. What is left here is
+ * putting its answer on three's objects.
  */
 function frame(camera: PerspectiveCamera, rig: Object3D, built: Assembled): void {
-  const head = built.anchors['Head'] ?? [0, 1.6, 0]
-  const neck = built.anchors['neck_01'] ?? [head[0], head[1] - 0.08, head[2]]
-  const crown = built.bounds === null ? head[1] + 0.22 : built.bounds.max[1]
-  const front = built.bounds === null ? 0.15 : built.bounds.max[2]
+  const view = portraitFraming(built.anchors, built.bounds)
 
-  // A head is about 0.29 m from neck joint to crown on these rigs; a head-and-shoulders shot is a
-  // little under twice that. `max` keeps a body with implausible bounds from producing a zero frame.
-  const headHeight = Math.max(crown - neck[1], 0.12)
-  const height = headHeight * 1.75
-  const centre = crown + height * HEADROOM - height / 2
-  const distance = height / 2 / Math.tan(MathUtils.degToRad(FIELD_OF_VIEW) / 2)
-
-  camera.position.set(0, centre, front + distance)
-  camera.lookAt(0, centre, head[2])
+  camera.position.set(...view.position)
+  camera.lookAt(...view.target)
   camera.updateProjectionMatrix()
-  rig.position.set(0, centre, head[2])
+  rig.position.set(...view.target)
 }
 
 /** `toBlob` with a WebP-then-PNG fallback: Safari before 14 has the callback but not the format. */

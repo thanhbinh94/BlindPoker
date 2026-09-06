@@ -201,7 +201,17 @@ export function createStage(canvas: HTMLCanvasElement, deps: StageDeps = {}): St
   const unschedule = deps.unschedule ?? ((handle: number) => cancelAnimationFrame(handle))
 
   const renderer = build(canvas)
-  renderer.setPixelRatio(Math.min(typeof window === 'undefined' ? 1 : (window.devicePixelRatio || 1), MAX_PIXEL_RATIO))
+
+  /**
+   * How many device pixels one CSS pixel buys, capped.
+   *
+   * Read afresh on every resize rather than once at construction: a window dragged from a 3× phone
+   * screen to a 1× monitor fires a resize, and a stage that kept the old ratio would go on rendering
+   * three times the pixels it needs (or a third of them). It costs a property read.
+   */
+  const pixelRatio = (): number => Math.min(typeof window === 'undefined' ? 1 : (window.devicePixelRatio || 1), MAX_PIXEL_RATIO)
+
+  renderer.setPixelRatio(pixelRatio())
 
   const scene = new Scene()
   const camera = new PerspectiveCamera(FIELD_OF_VIEW, 1, 0.05, 40)
@@ -251,7 +261,11 @@ export function createStage(canvas: HTMLCanvasElement, deps: StageDeps = {}): St
   }
 
   const onRestored = (): void => {
-    // The PMREM cube map lived in the context that just went away; the next frame builds another.
+    // The PMREM cube map lived in the context that just went away; the next frame builds another. The
+    // old one's GPU side went with the context, but three still holds its JavaScript object — freeing it
+    // here is what keeps this file's rule (nothing three owns is dropped, everything is disposed) true
+    // in the one place a restore could quietly break it.
+    env?.dispose()
     env = null
     envTried = false
     invalidate()
@@ -275,6 +289,7 @@ export function createStage(canvas: HTMLCanvasElement, deps: StageDeps = {}): St
   function resize(): void {
     if (disposed) return
     const { width, height } = measure()
+    renderer.setPixelRatio(pixelRatio())
     renderer.setSize(width, height, false)
     camera.aspect = width / height
     camera.updateProjectionMatrix()

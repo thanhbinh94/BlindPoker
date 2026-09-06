@@ -239,8 +239,6 @@
   },
   "avatar": {
     "mine": "Ảnh đại diện của bạn",
-    "title": "Ảnh đại diện",
-    "lead": "Chỉ những món bạn đang sở hữu mới hiện ở đây. Món mới đến từ điểm danh hằng ngày và từ thành tựu.",
     "none": "Bỏ trống",
     "empty": "Bạn chưa có món nào cho ô này.",
     "hairColor": "Màu tóc",
@@ -250,8 +248,6 @@
     "hairInvalid": "Màu phải có dạng #2b2b2b",
     "titleSlot": "Danh hiệu",
     "badgeSlot": "Huy hiệu",
-    "save": "Lưu ảnh đại diện",
-    "saved": "Đã lưu ảnh đại diện.",
     "errors": {
       "NOT_OWNED": "Bạn chưa sở hữu một trong các món đó",
       "WRONG_CATEGORY": "Một món không thuộc ô bạn chọn",
@@ -276,6 +272,7 @@
     "figurePiece": "{{slot}} {{item}}",
     "figureBare": "Nhân vật {{body}}, da {{skin}}, mắt {{eyes}}.",
     "rotateHint": "Kéo để xoay, hoặc dùng phím mũi tên trái/phải.",
+    "figureRole": "nhân vật xoay được",
     "resetView": "Xoay lại mặt trước",
     "body": "Thân hình",
     "words": "Danh hiệu và huy hiệu",
@@ -287,7 +284,7 @@
       "male": "nam",
       "female": "nữ"
     },
-    "bodyChanged": "Đổi thân hình nên các ô sau về món mặc định: {{slots}}.",
+    "bodyChanged": "Đổi thân hình nên các ô sau phải thay (sang món khác, hoặc để trống): {{slots}}.",
     "skin": "Màu da",
     "skinTone": {
       "0": "Ngà",

@@ -165,6 +165,7 @@ describe('createStage', () => {
 
     const slow = stage.setConfig(CONFIG)
     await stage.setConfig({ ...CONFIG, body: 'female' })
+    const freed = vi.spyOn(materialOf(stale), 'dispose')
     releaseStale()
     await slow
     h.flush()
@@ -172,6 +173,9 @@ describe('createStage', () => {
     const scene = h.renderer.frames.at(-1)!.scene
     expect(scene.getObjectByName('fresh')).toBe(fresh.group)
     expect(scene.getObjectByName('stale')).toBeUndefined()
+    // Not merely never added: it holds a cloned material and a copied skeleton, so a figure nobody will
+    // ever see has to be freed rather than dropped on the floor for the collector.
+    expect(freed).toHaveBeenCalled()
     stage.dispose()
   })
 

@@ -46,6 +46,15 @@ const pointer = (type: string, clientX: number): MouseEvent => new MouseEvent(ty
 /** The turnable frame: `role="img"`, named by the description. */
 const frame = (): HTMLElement => screen.getByRole('img', { name: DESCRIPTION })
 
+/** What `aria-describedby` on the frame points at — the sentence about the arrow keys, or nothing. */
+function describedBy(): HTMLElement {
+  const id = frame().getAttribute('aria-describedby')
+  if (id === null) throw new Error('the frame describes itself with nothing')
+  const found = document.getElementById(id)
+  if (found === null) throw new Error(`the frame points aria-describedby at ${id}, which is not on the page`)
+  return found
+}
+
 afterEach(() => setStageFactoryForTests(fakeStageFactory({ supported: false })))
 
 describe('AvatarStage', () => {
@@ -60,6 +69,31 @@ describe('AvatarStage', () => {
     // screen reader gets, so it is on the element that claims to be an image.
     expect(frame().querySelector('canvas')).toHaveAttribute('aria-hidden', 'true')
     await waitFor(() => expect(factory.last().shown).toEqual([hashConfig(CONFIG)]))
+  })
+
+  it('tells whoever tabs onto it what the arrow keys do, and what kind of picture it is', async () => {
+    const factory = fakeStageFactory()
+    setStageFactoryForTests(factory)
+    mount()
+    await waitFor(() => expect(factory.stages).toHaveLength(1))
+
+    // `img` is a non-interactive role, so a frame that is focusable and turnable has to say so itself:
+    // without these two, tabbing onto it announces the outfit and nothing about how to turn it.
+    expect(frame()).toHaveAttribute('aria-roledescription', viNormal.wardrobe.figureRole)
+    expect(describedBy()).toHaveTextContent(viNormal.wardrobe.rotateHint)
+    // In the wardrobe the hint is on screen as well as in the tree.
+    expect(describedBy().className).not.toBe('visually-hidden')
+  })
+
+  it('keeps the hint for a screen reader on the profile, where there is no line to spare for it', async () => {
+    const factory = fakeStageFactory()
+    setStageFactoryForTests(factory)
+    mount({ mode: 'view' })
+    await waitFor(() => expect(factory.stages).toHaveLength(1))
+
+    expect(describedBy()).toHaveTextContent(viNormal.wardrobe.rotateHint)
+    // The profile header is a figure beside a name and a balance; the sentence is announced, not drawn.
+    expect(describedBy().className).toBe('visually-hidden')
   })
 
   it('turns the figure while a pointer is dragged across it, and stops at ±60°', async () => {
