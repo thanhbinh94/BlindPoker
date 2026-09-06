@@ -13,6 +13,7 @@ import type { AppDb } from '../db/client.js'
 import { items, sessions } from '../db/schema.js'
 import type { TestDb } from '../db/test-db.js'
 import { createTestDb } from '../db/test-db.js'
+import { DEFAULT_EYE_COLOR, DEFAULT_HAIR_COLOR, DEFAULT_SKIN_TONE } from '../inventory/avatar.js'
 import { createRepositories } from '../repos/index.js'
 import { registerAuthRoutes } from './routes-auth.js'
 
@@ -23,7 +24,7 @@ const START = Date.UTC(2026, 8, 4, 3, 0)
 const XRW = { 'x-requested-with': REQUESTED_WITH }
 const GOOD = { email: 'binh@example.com', password: 'a good password', displayName: 'Bình An' }
 const DEFAULT_ITEMS = ['avatar_default']
-const DEFAULT_AVATAR = { base: 'avatar_default', face: 'face_x', clothing: 'shirt_x', hair: 'hair_x', hairColor: '#2b2b2b' }
+const DEFAULT_AVATAR = { v: 2 as const, body: 'male' as const, skin: DEFAULT_SKIN_TONE, eyes: DEFAULT_EYE_COLOR, hairColor: DEFAULT_HAIR_COLOR, hair: 'hair_x', top: 'shirt_x', bottom: 'jeans_x', shoes: 'shoes_x' }
 
 let test: TestDb
 let db: AppDb
@@ -89,7 +90,7 @@ afterAll(async () => {
 })
 beforeEach(async () => {
   nowMs = START
-  await db.insert(items).values(DEFAULT_ITEMS.map((id) => ({ id, category: 'avatar', rarity: 'common', nameKey: id, assetKey: id, isDefault: true })))
+  await db.insert(items).values(DEFAULT_ITEMS.map((id) => ({ id, slot: 'top', rarity: 'common', nameKey: id, assetKey: id, isDefault: true })))
   app = await buildTestApp()
 })
 afterEach(async () => {

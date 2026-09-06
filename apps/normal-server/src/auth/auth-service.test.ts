@@ -5,6 +5,7 @@ import type { AppDb } from '../db/client.js'
 import { dailyLogins, inventory, items, playerStats, pointTransactions, sessions, users } from '../db/schema.js'
 import type { TestDb } from '../db/test-db.js'
 import { createTestDb } from '../db/test-db.js'
+import { DEFAULT_EYE_COLOR, DEFAULT_HAIR_COLOR, DEFAULT_SKIN_TONE } from '../inventory/avatar.js'
 import type { NormalRepositories } from '../repos/index.js'
 import { createRepositories } from '../repos/index.js'
 import type { AuthService } from './auth-service.js'
@@ -28,7 +29,7 @@ const SECRET = 's'.repeat(32)
 const START = Date.UTC(2026, 8, 4, 3, 0)
 const DEFAULT_ITEMS = ['avatar_default', 'title_rookie']
 /** The catalogue stub's avatar: what `register` must store in `avatar_config`. */
-const DEFAULT_AVATAR = { base: 'avatar_default', face: 'face_x', clothing: 'shirt_x', hair: 'hair_x', hairColor: '#2b2b2b' }
+const DEFAULT_AVATAR = { v: 2 as const, body: 'male' as const, skin: DEFAULT_SKIN_TONE, eyes: DEFAULT_EYE_COLOR, hairColor: DEFAULT_HAIR_COLOR, hair: 'hair_x', top: 'shirt_x', bottom: 'jeans_x', shoes: 'shoes_x' }
 
 let test: TestDb
 let db: AppDb
@@ -64,7 +65,7 @@ beforeEach(async () => {
   logins = []
   defaults = DEFAULT_ITEMS
   vi.mocked(verifyPassword).mockClear()
-  await db.insert(items).values(DEFAULT_ITEMS.map((id) => ({ id, category: 'avatar', rarity: 'common', nameKey: id, assetKey: id, isDefault: true })))
+  await db.insert(items).values(DEFAULT_ITEMS.map((id) => ({ id, slot: 'top', rarity: 'common', nameKey: id, assetKey: id, isDefault: true })))
 })
 afterEach(async () => {
   await db.execute(sql`truncate table sessions, inventory, items, daily_logins, player_stats, point_transactions, players, users restart identity cascade`)

@@ -143,16 +143,27 @@ export const gamePlayers = pgTable('game_players', {
   index('game_players_player_idx').on(t.playerId),
 ])
 
-/** The cosmetic catalogue, seeded from `data/items.json` on start-up. */
+/**
+ * The cosmetic catalogue, seeded from `data/items.json` on start-up.
+ *
+ * `slot` is stored in the column still called `category`. Plan 8 renamed the concept — a v2 item
+ * fills a slot of a 3D figure (`hair`, `top`, `bottom`, `shoes`, `hat`, `accessory`, `jewelry`,
+ * `title`, `badge`) rather than naming an SVG category — but renaming the column would have been a
+ * table rewrite and an index rebuild to buy nothing: the values are what changed, and
+ * `0001_avatar_v2.sql` changed those. The mapping is here so that no query has to remember it.
+ *
+ * `asset_key` is likewise kept, now holding the manifest node prefix `<slot>/<id>`. The geometry
+ * itself lives in `data/items.json` under `variants` and is never projected into this table.
+ */
 export const items = pgTable('items', {
   id: text('id').primaryKey(),
-  category: text('category').notNull(),
+  slot: text('category').notNull(),
   rarity: text('rarity').notNull(),
   nameKey: text('name_key').notNull(),
   assetKey: text('asset_key').notNull(),
   isDefault: boolean('is_default').notNull().default(false),
 }, (t) => [
-  index('items_category_rarity_idx').on(t.category, t.rarity),
+  index('items_category_rarity_idx').on(t.slot, t.rarity),
 ])
 
 /** What a player owns. `source` records how they got it (default, reward, achievement, …). */

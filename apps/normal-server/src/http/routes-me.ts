@@ -22,7 +22,8 @@ import { users } from '../db/schema.js'
 import type { EconomyService } from '../economy/economy-service.js'
 import { ServiceError } from '../errors.js'
 import type { HistoryService } from '../history/history-service.js'
-import { applyAvatarConfig, readAvatarConfig, validateAvatarConfig } from '../inventory/avatar.js'
+import { applyAvatarConfig, validateAvatarConfig } from '../inventory/avatar.js'
+import { readAvatarConfig } from '../inventory/avatar-migrate.js'
 import type { InventoryService } from '../inventory/inventory-service.js'
 import type { ItemCatalog } from '../inventory/items.js'
 import { clampLimit, cursorOf, DisplayNameTakenError, type NormalRepositories } from '../repos/index.js'
@@ -172,14 +173,15 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
     const playerId = playerIdOf(req)
     const [owned, player] = await Promise.all([deps.inventory.list(playerId), profile(playerId)])
     return reply.send({
-      // Joined against the catalogue here rather than in the client: the category and rarity of an
+      // Joined against the catalogue here rather than in the client: the slot and rarity of an
       // owned item are what the wardrobe groups by, and the client should not have to fetch the
-      // whole catalogue to draw its own inventory.
+      // whole catalogue to draw its own inventory. The geometry is not joined in — an item's
+      // `variants` are the same for everyone and are served whole by `/api/catalog/items`.
       items: owned.map((item) => {
         const def = deps.catalog.get(item.itemId)
         return {
           itemId: item.itemId,
-          category: def?.category ?? null,
+          slot: def?.slot ?? null,
           rarity: def?.rarity ?? null,
           nameKey: def?.nameKey ?? null,
           assetKey: def?.assetKey ?? null,

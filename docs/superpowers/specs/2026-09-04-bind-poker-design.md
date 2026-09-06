@@ -451,12 +451,14 @@ Thêm achievement = thêm dòng JSON. Thêm metric = thêm cột `player_stats` 
 ## 15. Avatar / Inventory (Normal-only)
 
 ### 15.1 Mô hình
-- Avatar = tổ hợp lớp SVG theo category, thứ tự vẽ: `base` → `face` → `clothing` → `hair` → `accessory` → `jewelry`. `hairColor` là thuộc tính của lớp hair (CSS variable).
-- `items` seed từ `items.json`: `{ id, category, rarity: 'common'|'rare'|'epic', nameKey, assetKey, isDefault }`. Khoảng 40 item khởi đầu; item `isDefault` cấp cho mọi tài khoản mới.
-- `title` và `badge` cũng là item (category `title`, `badge`), hiển thị cạnh tên trên bàn.
-- `avatar_config`: `{ base, face, clothing, hair, hairColor, accessory?, jewelry?, title?, badge? }`, server kiểm tra mọi id trong inventory trước khi lưu.
+- Avatar = **nhân vật 3D** (Plan 8, đặc tả riêng `2026-09-05-avatar-3d-design.md`): thân `male`/`female`, màu da (8 tông) / mắt (6) / tóc (`#rrggbb` tự do), cộng một item cho mỗi **slot**.
+- `slot` ∈ `hair` `top` `bottom` `shoes` `hat` `accessory` `jewelry` `title` `badge`; bốn slot đầu bắt buộc, mỗi slot bắt buộc có đúng một item `isDefault`. Các slot v1 `base`/`face` đã bỏ (thân được chọn, khuôn mặt là màu).
+- `items` seed từ `items.json`: `{ id, slot, rarity: 'common'|'rare'|'epic', nameKey, assetKey, isDefault, variants? }`; `variants` là `{ male?, female?: { file, node, tint? } }`, bắt buộc với slot hình học, không có với `title`/`badge`. 42 item khởi đầu; item `isDefault` cấp cho mọi tài khoản mới. Cột DB vẫn tên `items.category` nhưng chứa `slot`.
+- `title` và `badge` cũng là item (slot `title`, `badge`), hiển thị cạnh tên trên bàn.
+- `avatar_config`: `{ v: 2, body, skin, eyes, hairColor, hair, top, bottom, shoes, hat?, accessory?, jewelry?, title?, badge? }`; server kiểm tra mọi id thuộc inventory, đúng slot và có `variants[body]` trước khi lưu.
+- Cấu hình v1 (Plan 6) được **migrate khi đọc** (`clothing_*` → `top`, mũ nón rời khỏi `accessory` sang `hat`, id đã gỡ → mặc định của slot); `PUT /api/me/avatar` chỉ nhận v2, thân/thiếu slot sai → `MISSING_LAYER`.
 - Nguồn item: daily (7/14/21/28), achievement. Không có shop ở MVP.
-- Trên bàn, người khác nhận `avatarConfig` (≈ 100 byte); `normal-web` render bằng component `Avatar`. Lite không có component này, `Seat` hiển thị chữ cái đầu tên.
+- Trên bàn, người khác nhận `avatarConfig` (≈ 100–150 byte); `normal-web` dựng ảnh chân dung ở máy người chơi. Lite không có phần này, `Seat` hiển thị chữ cái đầu tên.
 
 ## 16. Realtime Architecture
 
@@ -646,9 +648,9 @@ Auth = cookie phiên `bp_session` (`HttpOnly`, `SameSite=Lax`, `Secure` khi `COO
 | GET | `/api/me/stats` | ✔ | `200 PlayerStats` (đủ 16 bộ đếm §10.3) | `401` · `429` |
 | GET | `/api/me/history?limit=20` | ✔ | `200 HistoryEntry[]` = `[{handId, roomId, mode, startedAt, endedAt, net, won, bestCategory, cancelled, players:[{playerId, label, seat, isBot, net, won}]}]` (service kẹp 1…50, mặc định 20). Mỗi ghế mang **cả hai**: `playerId` (uuid, `null` với bot và với tài khoản đã xóa — đây là khóa để client lọc ghế của chính mình) và `label` (tên hiển thị đã join từ `players` với người, id engine với bot; rơi về id engine khi tài khoản không còn) | `401` · `429` |
 | GET | `/api/me/ledger?limit=50&before=<id>` | ✔ | `200 {entries:[{id, amount, reason, refId, createdAt}], nextBefore}` | `401` · `429` |
-| GET | `/api/me/inventory` | ✔ | `200 {items:[{itemId, category, rarity, nameKey, assetKey, source, acquiredAt}], avatar}` | `401` · `429` |
-| PUT | `/api/me/avatar` | ✔ XRW | `200 {config}` (`AvatarView`) | `400 MISSING_LAYER`/`INVALID_COLOR`/`INVALID_ITEM`/`WRONG_CATEGORY` · `403 NOT_OWNED` · `401` · `403` XRW · `429` |
-| GET | `/api/players/:id/avatar` | ✔ | `200 {playerId, displayName, avatar}`, `cache-control: private, max-age=60` | `404 NOT_FOUND` (id lạ **và** id sai định dạng — không phân biệt để không dò được id) · `401` · `429` |
+| GET | `/api/me/inventory` | ✔ | `200 {items:[{itemId, slot, rarity, nameKey, assetKey, source, acquiredAt}], avatar}` (`avatar` luôn là cấu hình v2, đã migrate khi đọc) | `401` · `429` |
+| PUT | `/api/me/avatar` | ✔ XRW | `200 {config}` (`AvatarView`); chỉ nhận cấu hình v2 | `400 MISSING_LAYER` (không phải v2, thiếu slot bắt buộc, `body` lạ) / `INVALID_COLOR` (`skin`/`eyes` ngoài bảng, `hairColor` sai) / `INVALID_ITEM` (id lạ hoặc không có `variants[body]`) / `WRONG_CATEGORY` (sai slot) · `403 NOT_OWNED` · `401` · `403` XRW · `429` |
+| GET | `/api/players/:id/avatar` | ✔ | `200 {playerId, displayName, avatar}` (v2), `cache-control: private, max-age=60` | `404 NOT_FOUND` (id lạ **và** id sai định dạng — không phân biệt để không dò được id) · `401` · `429` |
 | GET | `/api/me/achievements` | ✔ | `200 [{id, category, metric, threshold, reward, progress, unlockedAt}]` | `401` · `429` |
 | GET | `/api/rewards/daily` | ✔ | `200 DailyStatus {claimable, day, streak, reward, item, nextResetAt, calendar[31]}` | `401` · `429` |
 | POST | `/api/rewards/daily/claim` | ✔ XRW | `200 {claimed:true, day, points, item, items, fallbackPoints, balance, streak}` | `409 ALREADY_CLAIMED` (kèm `claimed:false`) · `401` · `403` · `429` |

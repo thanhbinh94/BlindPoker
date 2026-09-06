@@ -111,7 +111,7 @@ async function own(playerId: string, itemIds: string[]): Promise<void> {
 function drawable(rarity: 'common' | 'rare'): string[] {
   return catalog
     .byRarity(rarity)
-    .filter((d) => d.category !== 'title' && d.category !== 'badge' && !reserved.has(d.id))
+    .filter((d) => d.slot !== 'title' && d.slot !== 'badge' && !reserved.has(d.id))
     .map((d) => d.id)
     .sort()
 }
@@ -357,7 +357,7 @@ describe('claimDaily', () => {
       expect(await economy.claimDaily(playerId, OCT(28))).toMatchObject({ items: ['badge_monthly', 'title_devoted'] })
     })
 
-    it('never draws an id the caller reserved, even one of a drawable category', async () => {
+    it('never draws an id the caller reserved, even one in a drawable slot', async () => {
       const playerId = await seedPlayer()
       // `jewelry_chain` is a rare piece of jewelry — drawable in every respect but this one.
       const withReservation = createEconomyService({

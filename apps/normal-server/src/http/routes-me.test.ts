@@ -9,9 +9,10 @@ import { ECONOMY } from '@bp/core'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { AppDb } from '../db/client.js'
 import { createTestDb, type TestDb } from '../db/test-db.js'
+import { DEFAULT_EYE_COLOR, DEFAULT_SKIN_TONE } from '../inventory/avatar.js'
 import { buildTestApp, resetDb, XRW, type Account, type Harness } from '../test-harness.js'
 
-const DEFAULT_AVATAR = { base: 'base_01', face: 'face_01', clothing: 'clothing_tee', hair: 'hair_short', hairColor: '#2b2b2b' }
+const DEFAULT_AVATAR = { v: 2, body: 'male', skin: DEFAULT_SKIN_TONE, eyes: DEFAULT_EYE_COLOR, hairColor: '#2b2b2b', hair: 'hair_none', top: 'top_tee', bottom: 'bottom_jeans', shoes: 'shoes_sneakers' }
 const SECOND = { email: 'mai@example.com', password: 'another good password', displayName: 'Mai Lan' }
 
 let test: TestDb
@@ -157,10 +158,11 @@ describe('inventory and avatars', () => {
   it('lists what a new account owns, joined against the catalogue, with the avatar it is wearing', async () => {
     const res = await h.app.fastify.inject({ url: '/api/me/inventory', headers: { cookie: me.cookie } })
     expect(res.statusCode).toBe(200)
-    const body = res.json() as { items: { itemId: string; category: string; source: string }[]; avatar: unknown }
-    expect(body.items.map((i) => i.itemId).sort()).toEqual(['base_01', 'clothing_tee', 'face_01', 'hair_short'])
+    const body = res.json() as { items: { itemId: string; slot: string; source: string }[]; avatar: unknown }
+    expect(body.items.map((i) => i.itemId).sort()).toEqual(['bottom_jeans', 'hair_none', 'shoes_sneakers', 'top_tee'])
     expect(body.items.every((i) => i.source === 'default')).toBe(true)
-    expect(body.items.find((i) => i.itemId === 'base_01')).toMatchObject({ category: 'base', rarity: 'common', assetKey: 'base/base_01' })
+    // Joined against the catalogue, and by slot rather than by the v1 `category`.
+    expect(body.items.find((i) => i.itemId === 'top_tee')).toMatchObject({ slot: 'top', rarity: 'common', assetKey: 'top/top_tee' })
     expect(body.avatar).toEqual(DEFAULT_AVATAR)
   })
 
@@ -175,10 +177,14 @@ describe('inventory and avatars', () => {
 
   it('refuses a malformed configuration with the code that says what was wrong', async () => {
     const cases: [Record<string, unknown>, string][] = [
-      [{ ...DEFAULT_AVATAR, base: undefined }, 'MISSING_LAYER'],
+      [{ ...DEFAULT_AVATAR, top: undefined }, 'MISSING_LAYER'],
+      // A v1 body: the one shape this route used to accept and now refuses outright.
+      [{ base: 'base_01', face: 'face_01', clothing: 'clothing_tee', hair: 'hair_short', hairColor: '#2b2b2b' }, 'MISSING_LAYER'],
+      [{ ...DEFAULT_AVATAR, body: 'robot' }, 'MISSING_LAYER'],
       [{ ...DEFAULT_AVATAR, hairColor: 'red' }, 'INVALID_COLOR'],
-      [{ ...DEFAULT_AVATAR, base: 'no_such_item' }, 'INVALID_ITEM'],
-      [{ ...DEFAULT_AVATAR, base: 'face_01' }, 'WRONG_CATEGORY'],
+      [{ ...DEFAULT_AVATAR, skin: '#00ff00' }, 'INVALID_COLOR'],
+      [{ ...DEFAULT_AVATAR, top: 'no_such_item' }, 'INVALID_ITEM'],
+      [{ ...DEFAULT_AVATAR, top: 'hair_none' }, 'WRONG_CATEGORY'],
     ]
     for (const [payload, expected] of cases) {
       const res = await h.app.fastify.inject({ method: 'PUT', url: '/api/me/avatar', headers: h.auth(me), payload })
@@ -188,11 +194,11 @@ describe('inventory and avatars', () => {
   })
 
   it('refuses an item the player does not own with 403 NOT_OWNED', async () => {
-    const res = await h.app.fastify.inject({ method: 'PUT', url: '/api/me/avatar', headers: h.auth(me), payload: { ...DEFAULT_AVATAR, base: 'base_02' } })
+    const res = await h.app.fastify.inject({ method: 'PUT', url: '/api/me/avatar', headers: h.auth(me), payload: { ...DEFAULT_AVATAR, top: 'clothing_hoodie' } })
     expect(res.statusCode).toBe(403)
     expect(code(res)).toBe('NOT_OWNED')
     const after = await h.app.fastify.inject({ url: '/api/me', headers: { cookie: me.cookie } })
-    expect((after.json() as { avatar: { base: string } }).avatar.base).toBe('base_01')
+    expect((after.json() as { avatar: { top: string } }).avatar.top).toBe('top_tee')
   })
 })
 
