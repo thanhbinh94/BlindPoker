@@ -5,3 +5,8 @@
 Dockerfile text eol=lf
 Dockerfile.dockerignore text eol=lf
 Caddyfile text eol=lf
+
+# The built avatar meshes (apps/normal-web/public/avatar3d). Committed on purpose — see
+# docs/avatar-assets.md — and binary, so git never tries to normalise a line ending inside one
+# or to show a diff of a hundred kilobytes of quantised vertices.
+*.glb binary

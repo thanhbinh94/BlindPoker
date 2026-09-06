@@ -8,6 +8,43 @@ below are the real history.
 
 ---
 
+## Plan 8 — 3D avatar (Normal) — *unreleased (branch `feat/plan8-avatar-3d`)*
+
+The Normal edition's flat six-layer SVG avatar is gone, and in its place is a 3D character: pick a
+body, a skin tone, an eye colour, a hair colour and a piece for each of seven slots, and the figure
+in front of you is that person. Design: `docs/superpowers/specs/2026-09-05-avatar-3d-design.md`.
+
+- **An asset pipeline, and its output committed.** `scripts/avatar-assets.mjs` turns 400 MB of CC0
+  Quaternius packs into five `.glb` bundles and a `manifest.json` — 0.9 MB against a 6 MB budget —
+  renaming every node to `<slot>/<itemId>/<body>` and every material to one of six names the
+  renderer can recolour. Textures are dropped on purpose: the body's base-colour map bakes in one
+  skin tone and the player picks from eight. `--check` re-verifies the committed artefact against
+  the map that describes it, and a build that would exceed a budget writes nothing.
+- **Clothes fitted to the bodies they are worn on.** The two packs were not modelled for each other,
+  so every garment is retargeted onto the body's own rig and shrinkwrapped onto its skin at build
+  time. Without it a garment sinks up to 5 cm into the body: trousers were a few ragged patches on a
+  bare thigh and a t-shirt read as a crop top. `scripts/avatar-shots.mjs` renders the contact sheet
+  that is the only way to see any of this.
+- **Catalog v2, migrated in place.** `category` became `slot`, `clothing` split into `top`/`bottom`/
+  `shoes`, `hat` was added, `base`/`face` were dropped, and every item now names the mesh it was
+  modelled from for each body. A v1 configuration is migrated when it is read, so nobody loses an
+  outfit; every account was granted the new default pieces.
+- **Portraits rendered by the player's own browser.** One hidden WebGL context, one sequential
+  queue, 128 px WebP cached in memory and IndexedDB by a hash of the configuration. Nothing is
+  uploaded, nothing is rendered on the server, and a machine without WebGL gets the initial-letter
+  disc it always had. three.js and everything under it sit behind one dynamic import — 150 KB gzip,
+  downloaded only by a browser that actually draws a face.
+- **A stage, and a wardrobe built around it.** The profile header and `/avatar` show the figure
+  itself: a `role="img"` frame you can drag or arrow-key through ±60°, drawn only when something
+  changes. The wardrobe offers only what the player owns, previews every tile as a portrait of *that
+  outfit* — head and shoulders for what is worn above the chest, the whole figure for trousers and
+  shoes — re-dresses what a change of body would have invalidated and says which, and guards an
+  unsaved change on the way out.
+- **Tested on a real GPU.** `e2e/avatar3d.spec.ts` asserts that portraits have pixels, that three
+  configurations give three hashes, that a saved outfit survives a reload and reaches a second
+  browser identically, and that the wardrobe works at 375 px — and logs how long a face takes to
+  appear. Budgets are held by `test/footprint.test.ts` and by the pipeline itself.
+
 ## Plan 7 — Hardening — *unreleased (branch `feat/plan7-hardening`)*
 
 The M9 milestone: prove what was built, close what the earlier plans left open, and write the

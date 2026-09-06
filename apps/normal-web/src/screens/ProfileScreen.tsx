@@ -4,7 +4,8 @@ import type { TFunction } from 'i18next'
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { HistoryEntryDto, LedgerEntryDto, MeDto, NormalApi, PlayerStatsDto } from '../api.js'
-import { Avatar } from '../avatar/Avatar.js'
+import { LazyAvatarStage } from '../avatar3d/LazyStage.js'
+import { figureDescription } from '../avatar3d/description.js'
 import { itemName } from '../catalog-i18n.js'
 import { formatDay, formatMoment, formatSigned } from './format.js'
 import s from './normal.module.css'
@@ -319,7 +320,16 @@ export function ProfileScreen({ api, lang, balance, onRenamed }: ProfileScreenPr
   return (
     <main className={s.page}>
       <header className={s.identityCard}>
-        <Avatar config={me.avatar} size="lg" label={t('avatar.mine')} />
+        {/* The one place in the app that shows a *live* figure rather than a rendered picture of one
+            (avatar-3d design §6), and the wardrobe is the other. It arrives in its own chunk with a
+            portrait standing in meanwhile, and a portrait is also what a machine with no WebGL keeps. */}
+        <LazyAvatarStage
+          className={s.identityStage}
+          config={me.avatar}
+          mode="view"
+          name={displayName}
+          description={figureDescription(me.avatar, t)}
+        />
         <div className={s.identityText}>
           <span className={s.eyebrow}>{t('profile.title')}</span>
           <h1 className={s.identityName}>{displayName}</h1>

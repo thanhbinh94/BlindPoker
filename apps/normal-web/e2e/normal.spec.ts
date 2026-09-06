@@ -1,6 +1,18 @@
-import { mkdirSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
 import { expect, test, type BrowserContext, type Locator, type Page } from '@playwright/test'
+import {
+  account,
+  createBlindRoom,
+  expectLobby,
+  expectNoSidewaysScroll,
+  lobbyAvatar,
+  parsePoints,
+  register,
+  shot,
+  signIn,
+  sit,
+  unique,
+  type Account,
+} from './support.js'
 
 /**
  * The Normal edition, driven through a real browser against the real server (`src/e2e-entry.ts`: the
@@ -20,56 +32,16 @@ import { expect, test, type BrowserContext, type Locator, type Page } from '@pla
  * **The session.** There is no token in this edition: `credentials: 'same-origin'` and an `HttpOnly` cookie
  * are the whole story, which is why registering, signing out and signing back in is the first test and why
  * `page.request` (which shares the context's cookie jar) is what reads the API.
+ *
+ * The avatar has a file of its own — `avatar3d.spec.ts` — because it needs a GPU and says so.
  */
-
-const SHOTS = fileURLToPath(new URL('./screenshots/', import.meta.url))
-mkdirSync(SHOTS, { recursive: true })
 
 /** The lowest `blindWagerTiers` entry (`@bp/core`'s `ECONOMY`), and the one the create dialog offers first. */
 const WAGER = 1_000
 /** The ante plus the play: what a hand costs a player who does not fold. */
 const PLAY_COST = WAGER * 2
 
-/** Display names and emails must be unique for the life of the server, and this file creates several per run. */
-let seq = 0
-const unique = (stem: string): string => `${stem}${(Date.now() % 100_000).toString(36)}${seq++}`
-
-interface Account {
-  email: string
-  password: string
-  displayName: string
-}
-
-function account(stem: string): Account {
-  const displayName = unique(stem)
-  return { email: `${displayName.toLowerCase().replace(/[^a-z0-9]/g, '')}@e2e.test`, password: 'a good e2e password', displayName }
-}
-
-/** `formatPoints` prints `1.000` in Vietnamese; every digit group is one number. */
-const parsePoints = (text: string): number => Number(text.replace(/\D/g, ''))
-
-const shot = (page: Page, name: string): Promise<Buffer> => page.screenshot({ path: `${SHOTS}${name}.png`, fullPage: false })
-
 /* ── the session ─────────────────────────────────────────────────────────────────────────────────── */
-
-/** Registers `who` and waits for the lobby. The cookie the server sets is the only credential involved. */
-async function register(page: Page, who: Account): Promise<void> {
-  await page.goto('/#/register')
-  await expect(page.getByRole('heading', { name: 'Bind Poker' })).toBeVisible()
-  await page.getByLabel('Email', { exact: true }).fill(who.email)
-  await page.getByLabel('Mật khẩu', { exact: true }).fill(who.password)
-  await page.getByLabel('Tên hiển thị', { exact: true }).fill(who.displayName)
-  await page.getByRole('button', { name: 'Tạo tài khoản' }).click()
-  await expectLobby(page)
-}
-
-async function signIn(page: Page, who: Account): Promise<void> {
-  await page.goto('/#/login')
-  await page.getByLabel('Email', { exact: true }).fill(who.email)
-  await page.getByLabel('Mật khẩu', { exact: true }).fill(who.password)
-  await page.getByRole('button', { name: 'Vào sảnh' }).click()
-  await expectLobby(page)
-}
 
 /** Settings → sign out → confirm. The dialog is the kit's, so Escape and the focus trap come with it. */
 async function signOut(page: Page): Promise<void> {
@@ -78,11 +50,6 @@ async function signOut(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Đăng xuất', exact: true }).click()
   await page.getByRole('button', { name: 'Đăng xuất ngay' }).click()
   await expect(page.getByRole('button', { name: 'Vào sảnh' })).toBeVisible()
-}
-
-/** The lobby is "signed in": it only renders once the gate's probe has come back with an account. */
-async function expectLobby(page: Page): Promise<void> {
-  await expect(page.getByRole('button', { name: 'Tạo phòng' })).toBeVisible()
 }
 
 /* ── the API, as this browser sees it ────────────────────────────────────────────────────────────── */
@@ -132,33 +99,6 @@ async function blindHandsPlayed(page: Page, atLeast: number, timeoutMs = 20_000)
 }
 
 /* ── the table ───────────────────────────────────────────────────────────────────────────────────── */
-
-/** Fills the create-room dialog for a Blind table and returns the join code from the room header. */
-async function createBlindRoom(page: Page, roomName: string, bots: number): Promise<string> {
-  await page.getByRole('button', { name: 'Tạo phòng' }).click()
-  const dialog = page.getByRole('dialog')
-  await expect(dialog).toBeVisible()
-
-  await dialog.getByRole('button', { name: 'Blind Poker' }).click()
-  await dialog.getByLabel('Tên phòng').fill(roomName)
-  await dialog.getByLabel('Thời gian mỗi lượt').selectOption({ label: '30 giây' })
-  await dialog.getByLabel('Số lá riêng').selectOption({ label: '2 lá' })
-  await dialog.getByLabel('Kiểu quyết định').selectOption({ label: 'Chơi hoặc bỏ' })
-  await dialog.getByLabel('Mức cược cố định').selectOption({ label: '1.000' })
-  await dialog.getByLabel('Số lượng bot').selectOption({ label: String(bots) })
-  await dialog.getByRole('button', { name: 'Tạo phòng' }).click()
-
-  await expect(page).toHaveURL(/#\/room$/)
-  const code = (await page.locator('header').getByLabel('Mã phòng').innerText()).trim()
-  expect(code, 'the room header must show a join code').toMatch(/^[A-Z0-9]{4,8}$/)
-  return code
-}
-
-/** Takes the given seat; the index is explicit so nothing ever races the bot for one. */
-async function sit(page: Page, seat: number): Promise<void> {
-  await page.locator(`[data-seat="${seat}"]`).getByRole('button', { name: 'Ngồi vào bàn' }).click()
-  await expect(page.getByRole('button', { name: 'Đứng dậy', exact: true })).toBeVisible()
-}
 
 /** The result card dealt over the felt once a hand completes. */
 function resultCard(page: Page): Locator {
@@ -216,16 +156,6 @@ async function expectRailFits(page: Page): Promise<void> {
   await expectNoSidewaysScroll(page)
 }
 
-async function expectNoSidewaysScroll(page: Page): Promise<void> {
-  const width = page.viewportSize()?.width ?? 0
-  expect(await page.evaluate(() => document.documentElement.scrollWidth), 'the page does not scroll sideways').toBeLessThanOrEqual(width)
-}
-
-/** The avatar hung on the lobby's player bar — the same face the seat plates draw. */
-function lobbyAvatar(page: Page): Locator {
-  return page.locator('a[href="#/avatar"] svg')
-}
-
 /** Register on a fresh page, capturing the sign-in card and the lobby on the way. */
 async function tourStart(context: BrowserContext, who: Account, suffix: string): Promise<Page> {
   const page = await context.newPage()
@@ -233,7 +163,9 @@ async function tourStart(context: BrowserContext, who: Account, suffix: string):
   await expect(page.getByLabel('Tên hiển thị', { exact: true })).toBeVisible()
   await shot(page, `auth-${suffix}`)
   await register(page, who)
-  await expect(lobbyAvatar(page)).toHaveAttribute('data-avatar', 'config')
+  // The disc is there from the first paint — it carries the player's initial until the picture their own
+  // browser is drawing arrives, and on a machine with no WebGL it carries it for good.
+  await expect(lobbyAvatar(page)).toBeVisible()
   await shot(page, `lobby-${suffix}`)
   return page
 }
@@ -329,9 +261,8 @@ test.describe('Bind Poker Normal', () => {
     await shot(page, 'achievements-desktop')
   })
 
-  test('điểm danh và ảnh đại diện', async ({ browser }) => {
+  test('điểm danh hằng ngày', async ({ context }) => {
     const who = account('Binh')
-    const context = await browser.newContext()
     const page = await tourStart(context, who, 'daily')
 
     // --- 1. the daily claim, and what it paid --------------------------------------------------------
@@ -358,46 +289,6 @@ test.describe('Bind Poker Normal', () => {
     expect(valueAfter('Số dư mới'), 'the receipt agrees with itself').toBe(before + points)
     expect(await readBalance(page), 'the claim credited exactly what the receipt promised').toBe(before + points)
     await expect(page.getByText('Hôm nay bạn đã điểm danh rồi. Hẹn gặp lại ngày mai.')).toBeVisible()
-
-    // --- 2. the wardrobe -----------------------------------------------------------------------------
-    //
-    // Only the hair *colour* is changed, and that is a fact about the economy rather than a shortcut: a new
-    // account owns exactly one item per layer (the four `isDefault` rows of `data/items.json`), and the
-    // first item a player can win arrives on day 7 of the calendar. So the colour is the one thing this
-    // account can actually change — and it is enough to prove the round trip: PUT, reload, and the same
-    // face on the lobby bar, which is the face the seat plates draw.
-    const RED = '#c8323c'
-    await page.goto('/#/avatar')
-    await expect(page.getByRole('heading', { name: 'Ảnh đại diện', exact: true })).toBeVisible()
-    const preview = page.locator('svg[data-size="lg"]')
-    // The catalogue's `assetKey` on the rendered layer: the wardrobe is drawing the item the account owns.
-    await expect(preview.locator('g[data-part="hair/hair_short"]')).toHaveCount(1)
-
-    await page.getByRole('button', { name: `Màu có sẵn ${RED}` }).click()
-    await shot(page, 'avatar-desktop')
-    await page.getByRole('button', { name: 'Lưu ảnh đại diện' }).click()
-    await expect(page.getByText('Đã lưu ảnh đại diện.')).toBeVisible()
-
-    await page.reload()
-    await expect(page.getByRole('heading', { name: 'Ảnh đại diện', exact: true })).toBeVisible()
-    await expect(page.getByLabel('Màu tự chọn'), 'the saved colour is what the editor loads').toHaveValue(RED)
-    await expect(preview).toHaveAttribute('style', new RegExp(`--avatar-hair:\\s*${RED}`))
-
-    // …and on the lobby bar of a *second device*, which is this edition's whole premise: the face follows
-    // the account, not the browser. A fresh context is also the only honest way to check it today —
-    // `GET /api/players/:id/avatar` answers `private, max-age=60`, so the browser that did the saving keeps
-    // serving its own stale copy to the lobby bar for up to a minute (see docs/normal-web.md).
-    const second = await browser.newContext()
-    const elsewhere = await second.newPage()
-    await signIn(elsewhere, who)
-    const face = lobbyAvatar(elsewhere)
-    await expect(face).toHaveAttribute('style', new RegExp(`--avatar-hair:\\s*${RED}`))
-    // The catalogue's `assetKey` per layer: the same face the seat plates draw at a table.
-    await expect(face.locator('g[data-part="hair/hair_short"]')).toHaveCount(1)
-    await expect(face.locator('g[data-part]')).toHaveCount(4)
-
-    await second.close()
-    await context.close()
   })
 
   test('@mobile sảnh, bàn chơi và hồ sơ trên màn hình điện thoại', async ({ context }) => {
@@ -417,10 +308,8 @@ test.describe('Bind Poker Normal', () => {
     await expectRailFits(page)
     await shot(page, 'profile-mobile')
 
-    await page.goto('/#/avatar')
-    await expect(page.getByRole('heading', { name: 'Ảnh đại diện', exact: true })).toBeVisible()
-    await expectNoSidewaysScroll(page)
-    await shot(page, 'avatar-mobile')
+    // (The wardrobe at this width is `avatar3d.spec.ts`'s `@mobile` test, which also has to wait for a
+    // WebGL context before it can say anything about the layout around it.)
 
     // The table on a phone is the stack layout: opponents in a strip, my own plate under the felt. The
     // `Người chơi` group is what the ring layout does not have.

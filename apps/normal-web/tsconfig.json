@@ -11,6 +11,7 @@
     "src",
     "../../packages/ui-kit/src/css-modules.d.ts",
     "../normal-server/data/items.json",
-    "../normal-server/data/achievements.json"
+    "../normal-server/data/achievements.json",
+    "../normal-server/data/palettes.json"
   ]
 }

@@ -14,21 +14,21 @@ import { and, asc, eq, inArray, notExists, notInArray } from 'drizzle-orm'
 import type { AppDb, AppTx } from '../db/client.js'
 import { inventory, items } from '../db/schema.js'
 import { isUuid } from '../repos/util.js'
-import type { ItemCategory, Rarity } from './items.js'
+import type { ItemSlot, Rarity } from './items.js'
 
 /**
  * What a draw must not reach.
  *
  * A pool is "every item of this rarity the player does not own", and that is one query — but not
  * every item of a rarity is *drawable*. Some are promised elsewhere as fixed rewards, and some
- * belong to categories the draw is not about. Expressing both as one exclusion keeps the decision
- * at the caller, where the reasons live, rather than hard-coding a policy into the query.
+ * belong to slots the draw is not about. Expressing both as one exclusion keeps the decision at the
+ * caller, where the reasons live, rather than hard-coding a policy into the query.
  */
 export interface ItemExclusion {
   /** Ids that are spoken for — a fixed daily reward, an achievement's item. */
   ids?: readonly string[]
-  /** Whole categories the draw does not cover. */
-  categories?: readonly ItemCategory[]
+  /** Whole slots the draw does not cover. */
+  slots?: readonly ItemSlot[]
 }
 
 export interface OwnedItem {
@@ -109,7 +109,7 @@ export function createInventoryService(db: AppDb): InventoryService {
             // Guarded on length: `notInArray(col, [])` is `col <> all('{}')`, which Postgres reads
             // as unknown for every row and would empty the pool rather than exclude nothing.
             exclude?.ids !== undefined && exclude.ids.length > 0 ? notInArray(items.id, [...exclude.ids]) : undefined,
-            exclude?.categories !== undefined && exclude.categories.length > 0 ? notInArray(items.category, [...exclude.categories]) : undefined,
+            exclude?.slots !== undefined && exclude.slots.length > 0 ? notInArray(items.slot, [...exclude.slots]) : undefined,
           ),
         )
         .orderBy(asc(items.id))

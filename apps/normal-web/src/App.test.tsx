@@ -432,7 +432,7 @@ describe('App — a session that ends under the player', () => {
   })
 
   it('stops asking about the player who signed out, and forgets the face it held', async () => {
-    const avatar = { base: 'base_01', face: 'face_01', clothing: 'clothing_tee', hair: 'hair_short', hairColor: '#2b2b2b' }
+    const avatar = { v: 2, body: 'male', skin: '#e0ac81', eyes: '#3b2415', hairColor: '#2b2b2b', hair: 'hair_short', top: 'top_tee', bottom: 'bottom_jeans', shoes: 'shoes_sneakers' }
     const playerAvatar = vi.fn().mockResolvedValue({ playerId: 'p1', displayName: 'Bình', avatar })
     window.history.replaceState(null, '', '/#/settings')
     const user = userEvent.setup()

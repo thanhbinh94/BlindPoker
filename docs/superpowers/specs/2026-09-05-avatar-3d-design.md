@@ -1,6 +1,6 @@
 # Bind Poker — Avatar 3D (bản Normal): thiết kế
 
-Ngày: 2026-09-05. Trạng thái: **đã duyệt qua brainstorming**, chờ người dùng xem lại trước khi lên plan (Plan 8).
+Ngày: 2026-09-05. Trạng thái: **đã triển khai** (Plan 8, nhánh `feat/plan8-avatar-3d`) — xem §2.3.
 Liên quan: spec chính `2026-09-04-bind-poker-design.md` (§10.2, §13, §14, §15, §19.2, §24, §26, §27), Plan 6 (avatar SVG hiện tại — sẽ bị thay thế).
 
 ## 1. Mục tiêu
@@ -27,6 +27,14 @@ Thay hệ avatar SVG phẳng 6 lớp của bản Normal bằng **nhân vật 3D*
 
 ### 2.3 Cách xử lý và thứ tự
 Plan 8 chạy **sau khi Plan 7 gộp**, theo quy trình SDD như các plan trước (một nhánh, 5 task, review từng task, review toàn nhánh, một đợt sửa, gộp). Thứ tự task: T1 pipeline tài sản (S1) → T2 server catalog v2 + migration (S2) → T3 chân dung + cache, gỡ SVG (S3, S5) → T4 `AvatarStage` + trình chỉnh (S4) → T5 kiểm thử/ngân sách/tài liệu (S6, S7). Mỗi task có thể gộp vào master độc lập vì: T1 chỉ thêm file; T2 tương thích ngược (đọc v1); T3 giữ `Avatar` cũ làm fallback cho đến khi T4 xong nếu cần.
+
+**Trạng thái (2026-09-06):** cả năm task đã xong trên `feat/plan8-avatar-3d`. Những chỗ đã làm khác đặc tả, hoặc đặc tả không lường trước:
+- **Không có texture nào** (§4 nói "texture ≤ 512 px WebP"). Không cài được resizer (`sharp` là native), và quan trọng hơn: base-colour map của thân **nướng cứng một tông da** trong khi người chơi chọn từ tám. Vật liệu PBR phẳng với `baseColorFactor` mới là thứ mà tint lúc chạy nói chuyện được. Xem `docs/avatar-assets.md`.
+- **Chỉ một tư thế tĩnh**, không phải hai (§4 nói "giữ 2 tư thế: đứng, chân dung"). Tệp `.glb` giữ đúng bind pose (T-pose) của bộ nguồn, còn `manifest.pose.armsDown` công bố *công thức* xoay bốn khớp tay để đứng lên; "chân dung" chỉ là một khung hình khác của cùng tư thế đó, nên nó là việc của camera chứ không phải của geometry.
+- **Quần áo phải được nắn và bọc lên thân lúc build** (§4 không lường trước). Hai bộ nguồn không được dựng cho nhau; xem §15.2 của spec chính và `docs/avatar-assets.md` → "Fitting a garment".
+- **`AvatarStage` không có prop `onReady`** (§6 nêu nó): không có màn nào cần biết, và một prop không ai gọi là một prop sẽ trôi. `description` (bắt buộc) thay cho "`aria-label` mô tả cấu hình".
+- **CSP phải mở thêm hai directive** (§19.2 của spec chính không lường trước): `script-src 'self' 'wasm-unsafe-eval'` cho bộ giải nén meshopt và `blob:` trong `img-src` cho object URL của ảnh chân dung.
+- **Ngân sách §7 đạt hết**, đo trong e2e: chunk 150 KB gzip / 200, tài sản 0,9 MB / 6 MB, ~60–100 ms mỗi ảnh sau khi nạp, ~0,3 s từ lúc vào bàn tới khi đủ ảnh. Lần đầu trên máy lạnh ~3,4 s — xem `docs/known-limitations.md`.
 
 ## 3. Mô hình dữ liệu
 
@@ -65,7 +73,7 @@ interface AssetRef { file: string; node: string; tint?: string }   // file trong
 ```
 - Cột `items.category` trong DB được **đổi tên/ý nghĩa thành `slot`** qua migration (giá trị cũ map: `hair→hair`, `clothing→top`, `accessory→accessory` hoặc `hat` theo bảng map trong migration, `jewelry→jewelry`, `title`, `badge`; `base`/`face` bị xoá khỏi catalog và khỏi `inventory`).
 - Id giữ nguyên: `hat_crown` (slot `hat`), `jacket_champion` (`top`), `ring_royal` (`jewelry`), `badge_veteran`, `badge_monthly`, `title_devoted`, `title_hot_hand`, các `hair_*`, `clothing_*` (→ `top`), `accessory_*` (kính/mặt nạ → `accessory`; nón lá/headband → `hat`), `jewelry_*`. Thêm mới: `bottom_*` (≥ 4), `shoes_*` (≥ 3), `hair_none`, mỗi slot bắt buộc có đúng một `isDefault`.
-- Ràng buộc catalog (test): mọi `variants.*` trỏ tới node có trong `manifest.json`; mọi slot hình học có ≥ 1 item mặc định có đủ hai biến thể; các id được thưởng bởi `achievements.json` và điểm danh tồn tại.
+- Ràng buộc catalog (test): mọi `variants.*` trỏ tới node có trong `manifest.json`; mỗi slot **bắt buộc** (`hair`/`top`/`bottom`/`shoes`) có đúng một item mặc định, đủ hai biến thể (`hair_none`, `top_tee`, `bottom_jeans`, `shoes_sneakers`); slot tùy chọn (kể cả các slot hình học `hat`/`accessory`/`jewelry`) không có item mặc định — loader từ chối cả catalog thiếu mặc định ở slot bắt buộc lẫn catalog có mặc định ở slot tùy chọn; các id được thưởng bởi `achievements.json` và điểm danh tồn tại.
 
 ### 3.3 Migration v1 → v2 (server)
 - Đọc: cấu hình không có `v` hoặc `v: 1` → `body: 'male'`, `skin`/`eyes` mặc định, `hairColor` giữ, `hair` giữ nếu còn trong catalog (else mặc định), `top` = `clothing` cũ nếu còn, `bottom`/`shoes` mặc định, `hat`/`accessory` từ `accessory` cũ theo bảng map, `jewelry`/`title`/`badge` giữ. Kết quả luôn hợp lệ với kho hiện tại (item mặc định được cấp cho mọi tài khoản khi migration chạy).

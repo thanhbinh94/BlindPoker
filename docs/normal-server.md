@@ -44,14 +44,15 @@ src/
 
   auth/              password.ts (argon2id) · session-service.ts · cookie.ts · auth-service.ts
   economy/           daily-rules.ts (pure) · economy-service.ts (daily claim, relief)
-  inventory/         items.ts (catalogue) · inventory-service.ts (ownership) · avatar.ts (validation)
+  inventory/         slots.ts (the slot/body vocabulary) · items.ts (catalogue) · inventory-service.ts (ownership)
+                     avatar.ts (config v2 + validation) · avatar-migrate.ts (reads a v1 config back as v2)
   achievements/      definitions.ts (loader) · achievement-service.ts (listens, grants)
   stats/             player-stats.ts (the 16 counters) · stats-service.ts (listens, counts)
   history/           history-service.ts (writes a settled hand, reads a player's last N)
   http/              routes.ts + routes-auth/-me/-rewards/-catalog.ts · auth-guard.ts · types.ts
 
 data/                items.json, achievements.json — content, not code
-drizzle/             generated, committed migration SQL
+drizzle/             committed migration SQL (0000 generated; 0001_avatar_v2 hand-written, data only)
 test/build.test.ts   the build itself, as a test
 ```
 
@@ -176,31 +177,53 @@ first, not a `DELETE`.
 `data/items.json` is the source of truth; the `items` table is a projection of it, upserted on every
 boot so that foreign keys have something to point at. Nothing writes items at run time.
 
+Since Plan 8 an item is 3D geometry, so a definition names a **slot** and one **variant per body**:
+
 1. Add an object to `data/items.json`:
 
    ```json
-   { "id": "hair_braid", "category": "hair", "rarity": "rare",
-     "nameKey": "items.hair_braid", "assetKey": "hair/hair_braid", "isDefault": false }
+   { "id": "hair_braid", "slot": "hair", "rarity": "rare",
+     "nameKey": "items.hair_braid", "assetKey": "hair/hair_braid", "isDefault": false,
+     "variants": { "male":   { "file": "hair.glb", "node": "hair/hair_braid/male" },
+                   "female": { "file": "hair.glb", "node": "hair/hair_braid/female" } } }
    ```
 
-   `category` ∈ `base` `face` `clothing` `hair` `accessory` `jewelry` `title` `badge`;
-   `rarity` ∈ `common` `rare` `epic`.
+   `slot` ∈ `hair` `top` `bottom` `shoes` `hat` `accessory` `jewelry` `title` `badge`;
+   `rarity` ∈ `common` `rare` `epic`. The first seven are *geometric* and must carry `variants`;
+   `title` and `badge` are text beside a name and must not. `file` is fixed by the slot
+   (`hair.glb` · `outfits.glb` for `top`/`bottom`/`shoes` · `accessories.glb` for the rest) and
+   `node` is always `<slot>/<id>/<body>`, which is how the asset build names what it emits. An
+   optional `tint` (`#rrggbb`) fixes the item's `cloth_primary` colour; skin, eyes and hair colour
+   come from the player's configuration, never from an item.
 
-2. Add the SVG layer under `assetKey` in `normal-web` (Plan 6) and the `nameKey` string to the vi and
-   en bundles.
+2. Emit those nodes from the asset build (`docs/avatar-assets.md`) so they appear in
+   `normal-web/public/avatar3d/manifest.json`, and add the `nameKey` string to the vi and en bundles.
 
 3. Restart. `loadItemCatalog` validates the file and **refuses to start** on a duplicate id, an
-   unknown category or rarity, a missing default for a required avatar layer, or an absent
-   `badge_monthly` / `title_devoted` — each of those would otherwise surface much later and much
-   worse (a day-28 claim failing on a foreign key, on the 28th).
+   unknown slot or rarity, geometry that breaks the file/node convention, a geometric item with no
+   variants (or a title with some), a required slot with no default or with two, a default in an
+   optional slot, or an absent `badge_monthly` / `title_devoted` — each of those would otherwise
+   surface much later and much worse (a day-28 claim failing on a foreign key, on the 28th).
+   `test/catalog-manifest.test.ts` then holds every variant against the built manifest; it skips
+   with a warning when the assets have not been built.
 
 Things worth knowing before you pick a rarity:
 
-- The **daily random draw** (days 7, 14, 21) picks an unowned item of that rarity, excluding
-  `title` and `badge` categories entirely and excluding every item named as an achievement reward.
-  A new `common` or `rare` in a normal category enlarges that pool; an `epic` never enters it.
+- The **daily random draw** (days 7, 14, 21) picks an unowned item of that rarity, excluding the
+  `title` and `badge` slots entirely and excluding every item named as an achievement reward.
+  A new `common` or `rare` in any other slot enlarges that pool; an `epic` never enters it.
 - Making an item `isDefault: true` grants it to every **new** account. Existing players do not get
-  it retroactively.
+  it retroactively — that is what a data migration is for, and `drizzle/0001_avatar_v2.sql` is the
+  worked example: it inserts the four v2 defaults and grants them to every `players` row, because
+  `hair`, `top`, `bottom` and `shoes` are required and nobody may be left without one.
+
+### The v1 → v2 avatar migration
+
+`items.category` is still the column name; it holds the v2 slot. `players.avatar_config` is **not**
+rewritten: `readAvatarConfig` (`inventory/avatar-migrate.ts`) repairs anything that does not
+validate on the way out — `clothing_*` → `top` (`clothing_tee` → `top_tee`), the v1 headwear out of
+`accessory` and into `hat`, withdrawn ids to the slot's default, `body`/`skin`/`eyes` to their
+defaults — while `PUT /api/me/avatar` accepts v2 only and answers `MISSING_LAYER` to anything else.
 
 ## Adding an achievement
 

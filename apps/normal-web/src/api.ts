@@ -19,7 +19,30 @@ export const UNAUTHENTICATED_CODE = 'UNAUTHENTICATED'
 
 /* ── catalogue and configuration (no session required) ─────────────────────── */
 
-export type ItemCategory = 'base' | 'face' | 'clothing' | 'hair' | 'accessory' | 'jewelry' | 'title' | 'badge'
+/**
+ * The slots an item can occupy — `apps/normal-server/src/inventory/slots.ts`, verbatim (avatar-3d
+ * design §3.2). Plan 8 replaced v1's `category`: `base` and `face` are gone (a body is chosen, not
+ * worn), `clothing` split into `top`/`bottom`/`shoes`, and `hat` was lifted out of `accessory`.
+ */
+export type ItemSlot = 'hair' | 'top' | 'bottom' | 'shoes' | 'hat' | 'accessory' | 'jewelry' | 'title' | 'badge'
+
+/** The two figures every geometric item is modelled for (or, where a pack was asymmetric, one of). */
+export type Body = 'male' | 'female'
+
+/** Every slot that has geometry, in the order the assembler stacks it — `title` and `badge` are words. */
+export const GEOMETRIC_SLOTS = ['hair', 'top', 'bottom', 'shoes', 'hat', 'accessory', 'jewelry'] as const
+
+export type GeometricSlot = (typeof GEOMETRIC_SLOTS)[number]
+
+/** The four slots a configuration must fill; a figure with no top is not a figure. */
+export const REQUIRED_SLOTS = ['hair', 'top', 'bottom', 'shoes'] as const
+
+/** The three geometric slots that may be left empty, and are empty on a new account. */
+export const OPTIONAL_SLOTS = ['hat', 'accessory', 'jewelry'] as const
+
+/** Every slot, in the order the wardrobe and the inventory offer them: worn first, words last. */
+export const SLOTS: ItemSlot[] = [...GEOMETRIC_SLOTS, 'title', 'badge']
+
 export type Rarity = 'common' | 'rare' | 'epic'
 
 export interface ConfigDto {
@@ -37,16 +60,28 @@ export interface ConfigDto {
   reconnectWindowSec: number
 }
 
+/** Where one body's geometry for an item lives inside `/avatar3d/` — the catalogue's `variants` entry. */
+export interface AssetRefDto {
+  /** One of the `.glb` bundles the asset build emits. */
+  file: string
+  /** The node inside it, by the build's convention `<slot>/<itemId>/<body>`. */
+  node: string
+  /** A fixed colour for the item's `cloth_primary` material; skin, eyes and hair are the player's. */
+  tint?: string
+}
+
 /** `apps/normal-server/src/inventory/items.ts` — the catalogue row, verbatim. */
 export interface ItemDto {
   id: string
-  category: ItemCategory
+  slot: ItemSlot
   rarity: Rarity
   /** An i18n key of the form `items.<id>`, resolved in the `normal` namespace. */
   nameKey: string
-  /** `<category>/<id>` — which SVG layer the avatar renderer draws. */
+  /** `<slot>/<id>` — the manifest node *prefix*; the geometry itself is named by `variants`. */
   assetKey: string
   isDefault: boolean
+  /** One entry per body this item has been modelled for. Absent for `title` and `badge`. */
+  variants?: { [body in Body]?: AssetRefDto }
 }
 
 export interface AchievementRewardDto {
@@ -71,13 +106,27 @@ export interface AuthMeDto {
   balance: number
 }
 
+/**
+ * One player's figure — `AvatarConfigV2` on the server, and the portrait cache's whole key.
+ *
+ * `v` is stored and sent so a future shape can tell itself apart from this one; the server refuses a
+ * `PUT` that does not carry it. Everything the renderer needs is here and nothing else is: a body, three
+ * colours the player chose, and one item id per slot.
+ */
 export interface AvatarConfigDto {
-  base: string
-  face: string
-  clothing: string
-  hair: string
-  /** A hex colour applied to the hair layer, not an item id. */
+  v: 2
+  body: Body
+  /** One of the server's eight `SKIN_TONES`, `#rrggbb`. */
+  skin: string
+  /** One of the server's six `EYE_COLORS`, `#rrggbb`. */
+  eyes: string
+  /** Any `#rrggbb`, applied to the `hair` material rather than naming an item. */
   hairColor: string
+  hair: string
+  top: string
+  bottom: string
+  shoes: string
+  hat?: string
   accessory?: string
   jewelry?: string
   title?: string
@@ -218,7 +267,7 @@ export interface LedgerPageDto {
 /** One owned item, already joined against the catalogue by the server. */
 export interface OwnedItemDto {
   itemId: string
-  category: ItemCategory | null
+  slot: ItemSlot | null
   rarity: Rarity | null
   nameKey: string | null
   assetKey: string | null

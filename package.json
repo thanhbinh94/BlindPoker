@@ -15,7 +15,8 @@
     "e2e:normal": "pnpm --filter @bp/normal-web run e2e",
     "dev:normal-web": "pnpm --filter @bp/normal-web run dev",
     "db:generate": "pnpm --filter @bp/normal-server db:generate",
-    "build:lite": "pnpm --filter @bp/lite run build"
+    "build:lite": "pnpm --filter @bp/lite run build",
+    "avatar:assets": "pnpm --filter @bp/normal-web run avatar:assets"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

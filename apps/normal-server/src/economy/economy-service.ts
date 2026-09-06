@@ -21,7 +21,7 @@ import type { AppDb, AppTx } from '../db/client.js'
 import type { AppEventBus } from '../events.js'
 import { dailyLogins, players } from '../db/schema.js'
 import type { InventoryService } from '../inventory/inventory-service.js'
-import type { ItemCatalog, ItemCategory } from '../inventory/items.js'
+import type { ItemCatalog, ItemSlot } from '../inventory/items.js'
 import { UnknownPlayerError, type NormalRepositories } from '../repos/index.js'
 import { isUuid } from '../repos/util.js'
 import {
@@ -114,13 +114,13 @@ export interface EconomyServiceDeps {
 const DAILY_SOURCE = 'daily'
 
 /**
- * Categories a random draw does not cover.
+ * Slots a random draw does not cover.
  *
- * §13.2's item column is about the avatar, and a title or a badge is not a layer of one: they are
- * name decorations, earned by doing something. Leaving them in the pool would both dilute it and
- * hand out — by chance, on day 14 — the very things day 28 and `login_streak_28` exist to award.
+ * §13.2's item column is about the avatar, and a title or a badge is not part of one: they are name
+ * decorations, earned by doing something. Leaving them in the pool would both dilute it and hand
+ * out — by chance, on day 14 — the very things day 28 and `login_streak_28` exist to award.
  */
-const UNDRAWABLE_CATEGORIES = ['title', 'badge'] as const satisfies readonly ItemCategory[]
+const UNDRAWABLE_SLOTS = ['title', 'badge'] as const satisfies readonly ItemSlot[]
 
 export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
   const now = deps.now ?? Date.now
@@ -136,7 +136,7 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
    * can no longer earn.
    */
   const excludedIds: readonly string[] = [...new Set([...DAILY_FIXED_ITEM_IDS, ...(deps.reservedItemIds ?? [])])]
-  const drawExclusion = { ids: excludedIds, categories: UNDRAWABLE_CATEGORIES }
+  const drawExclusion = { ids: excludedIds, slots: UNDRAWABLE_SLOTS }
 
   /** The `daily_logins` row, locked for the duration of the caller's transaction. */
   async function lockDaily(tx: AppTx, playerId: string): Promise<{ streak: number; lastClaimDate: string | null; month: string; claimedDays: number }> {

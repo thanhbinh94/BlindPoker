@@ -1,0 +1,10 @@
+# The source packs are 400 MB of CC0 archives and their unpacked contents. They are *inputs* to
+# `apps/normal-web/scripts/avatar-assets.mjs`, not project state: the committed artefacts are the
+# five `.glb` files and the manifest the script emits under `apps/normal-web/public/avatar3d/`.
+# Anyone can reproduce this directory from the URLs and checksums in README.md.
+#
+# `!.gitignore` is not decoration: without it this file would ignore itself and could not be
+# committed, which would leave the 400 MB one `git add -A` away from the history.
+*
+!.gitignore
+!README.md
