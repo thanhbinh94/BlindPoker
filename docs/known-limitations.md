@@ -278,15 +278,31 @@ rather than no figure.
 *Why it stays:* an HDR environment map is a download nobody has budgeted, for jewellery seen at 128 px.
 *Tracked:* `apps/normal-web/src/avatar3d/environment.ts`.
 
-**A cold browser takes about three and a half seconds to draw its first face.** The design's budget is
-≤ 80 ms per portrait *after the assets are loaded* and ≤ 2 s to fill a nine-seat table; both hold — the
-e2e measures ~60–100 ms per re-render and ~0.3 s from joining a room to every seat portrait drawn. The
-first one is different: it pays for the 150 KB gzip three.js chunk, the manifest and up to five `.glb`
-files before it can render anything, and `avatar3d.spec.ts` logs ~3.4 s for it on a headless SwiftShader
-machine. Until then every face is the player's initial on a disc, which is the designed fallback.
+**A cold browser takes about three seconds to draw its first face.** The design's budget is ≤ 80 ms per
+portrait *after the assets are loaded* and ≤ 2 s to fill a nine-seat table; both hold — the e2e measures
+~60–100 ms per re-render and ~0.2 s from joining a room to every seat portrait drawn. The first one is
+different: it pays for the 150 KB gzip three.js chunk, the manifest and up to five `.glb` files before it
+can render anything, and `avatar3d.spec.ts` measures ~3.0–3.5 s for it on a headless SwiftShader machine.
+Until then every face is the player's initial on a disc, which is the designed fallback. That number is
+now **asserted** against a 5 s ceiling from a fresh browser context, so a cold regression turns the suite
+red rather than only making it slower; the 5 s is a guard rail set clear of the measurement, not a target.
 *Why it stays:* it is one cold start per browser — everything after it is cached in IndexedDB by
 configuration hash — and the alternative is server-rendered images, which avatar-3d design §2.2 rules out.
-*Tracked:* avatar-3d design §5, §7; `apps/normal-web/e2e/avatar3d.spec.ts` logs the number every run.
+*Tracked:* avatar-3d design §5, §7; `apps/normal-web/e2e/avatar3d.spec.ts` asserts and logs both numbers
+every run.
+
+**Nothing tests nine cold seats at once.** Design §7's budget is *nine* faces inside two seconds, and the
+e2e's table is one human and one bot. The two timings it does assert bracket that case rather than cover
+it: the warm one measures a table reached through the lobby, where the player's own face is already a blob
+in IndexedDB, and the cold one measures a single first face from an empty browser. Nine cold portraits
+would queue behind one shared asset download and one renderer, and nothing here would notice if that
+queue started serialising badly.
+*Why it stays:* nine seats means eight more accounts, each registered, dressed and seated, in one test —
+several minutes of an e2e suite that runs on every change, to defend a case (nine strangers, all
+first-seen, all at once, on a cold browser) that the lobby's own portraits usually warm up first. The
+per-portrait cost is covered instead: `avatar-shots.mjs` renders 68 of them through the real pipeline and
+reports a median of ~69 ms.
+*Tracked:* here; avatar-3d design §7.
 
 **The felt resizes slightly at the ring/stack breakpoint.** Crossing the breakpoint changes the table
 layout and the felt's height with it. The action tray's height is reserved from 768 px up so that it

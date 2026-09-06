@@ -16,6 +16,9 @@ import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { NodeIO, type Accessor } from '@gltf-transform/core'
+import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
+import { MeshoptDecoder } from 'meshoptimizer'
 import { describe, expect, it } from 'vitest'
 
 const PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url))
@@ -35,6 +38,7 @@ interface AvatarManifest {
   files: Record<string, { bytes: number; sha256: string; skins: number }>
   nodes: Record<string, { file: string; bytes: number; bounds: { min: number[]; max: number[] }; tint?: string }>
   materials: string[]
+  fit: { tolerance: number; penetration: Record<string, number> }
   anchors: Record<string, Record<string, number[]>>
   pose: { armsDown: Record<string, number[]> }
   budget: { totalBytes: number; maxFileBytes: number; maxBodyBytes: number }
@@ -50,6 +54,9 @@ const MAX_BODY_BYTES = 400 * 1024
 
 const CANONICAL_MATERIALS = ['cloth_primary', 'cloth_secondary', 'eyes', 'hair', 'metal', 'skin']
 
+/** `FIT_TOLERANCE` in `scripts/avatar-assets.mjs`: how far inside the body a fitted vertex may be left. */
+const FIT_TOLERANCE = 0.012
+
 /** The joints Task 3 frames a portrait by and Task 4 stands the avatar on. */
 const ANCHOR_JOINTS = ['Head', 'neck_01', 'upperarm_l', 'upperarm_r', 'hand_l', 'hand_r', 'pelvis']
 /** The joints the standing pose rotates: the arms, and only the arms. */
@@ -59,7 +66,28 @@ const manifest = JSON.parse(readFileSync(join(OUT_DIR, 'manifest.json'), 'utf8')
 const map = JSON.parse(readFileSync(MAP_FILE, 'utf8')) as {
   bodies: Record<string, { out: string }>
   outputs: Record<string, string>
-  items: { id: string; slot: string; variants?: Record<string, unknown> }[]
+  fit: { margin: Record<string, number> }
+  items: { id: string; slot: string; fit?: number | boolean; variants?: Record<string, { empty?: boolean; primitive?: unknown; fit?: number | boolean } | undefined> }[]
+}
+
+/**
+ * The node keys the map says are shrinkwrapped onto a body — `fitMargin` in the script, in TypeScript.
+ *
+ * Small enough to restate, and restating it is the point: this file is what says the *map* and the
+ * committed artefact agree, so reading the answer out of the artefact would test nothing.
+ */
+function fittedKeys(): Set<string> {
+  const keys = new Set<string>()
+  for (const item of map.items) {
+    for (const body of ['male', 'female']) {
+      const variant = item.variants?.[body]
+      if (!variant || variant.empty || variant.primitive) continue
+      const own = variant.fit ?? item.fit
+      const margin = own === false ? null : typeof own === 'number' ? own : (map.fit.margin[item.slot] ?? null)
+      if (margin !== null) keys.add(`${item.slot}/${item.id}/${body}`)
+    }
+  }
+  return keys
 }
 const catalog = JSON.parse(readFileSync(CATALOG_FILE, 'utf8')) as {
   id: string
@@ -227,6 +255,67 @@ describe('avatar asset manifest', () => {
       if (slot === 'body' || slot === 'hair') expect(entry.tint, key).toBeUndefined()
       else expect(entry.tint, key).toMatch(/^#[0-9a-f]{6}$/)
     }
+  })
+})
+
+describe('avatar asset fitting', () => {
+  // Two invariants that the fitting pass of Plan 8 Task 5 broke, both silently: a shrinkwrap that left
+  // vertices inside the body would show as skin through a garment, and a vertex cache that was not keyed
+  // by the body shipped one body's fitted mesh to both while the manifest described the other. Neither
+  // is visible in a hash, a byte count or a budget, and the only other way to see them is a render.
+
+  it('leaves no fitted garment inside the body it was fitted to', () => {
+    expect(manifest.fit?.tolerance, 'the manifest must publish the tolerance it was built against').toBe(FIT_TOLERANCE)
+    for (const [key, deep] of Object.entries(manifest.fit.penetration)) {
+      expect(deep, `${key} leaves a shrinkwrapped vertex ${(deep * 1000).toFixed(1)} mm inside the body`).toBeLessThanOrEqual(FIT_TOLERANCE)
+    }
+  })
+
+  it('measures the fit of exactly the garments the map fits', () => {
+    // A slot dropped from `fit.margin`, or an item given `fit: false`, stops being fitted — and the
+    // number the manifest still carried for it would go on saying the garment was fine.
+    expect(Object.keys(manifest.fit.penetration).sort()).toEqual([...fittedKeys()].sort())
+  })
+
+  it('publishes, for each node, the bounds of the geometry that node actually carries', async () => {
+    // The defect this is aimed at: two nodes that share one set of accessors are one mesh, so bounds
+    // that differ between them cannot both describe what is in the file. That is exactly what a cache
+    // key missing the body produced — `hair/hair_ponytail/male` and `…/female` pointing at one mesh,
+    // with two different sets of bounds published for it.
+    await MeshoptDecoder.ready
+    const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.decoder': MeshoptDecoder })
+    let shared = 0
+    for (const name of Object.keys(manifest.files)) {
+      const doc = await io.read(join(OUT_DIR, name))
+      const byGeometry = new Map<string, string[]>()
+      for (const node of doc.getRoot().listNodes()) {
+        const key = node.getName()
+        if (manifest.nodes[key]?.file !== name) continue
+        const accessors = new Set<Accessor>()
+        for (const primitive of node.getMesh()?.listPrimitives() ?? []) {
+          for (const attribute of ['POSITION', 'NORMAL', 'JOINTS_0', 'WEIGHTS_0']) {
+            const accessor = primitive.getAttribute(attribute)
+            if (accessor) accessors.add(accessor)
+          }
+          const indices = primitive.getIndices()
+          if (indices) accessors.add(indices)
+        }
+        if (accessors.size === 0) continue
+        const identity = [...accessors].map((accessor) => doc.getRoot().listAccessors().indexOf(accessor)).sort((a, b) => a - b).join(',')
+        byGeometry.set(identity, [...(byGeometry.get(identity) ?? []), key])
+      }
+      for (const keys of byGeometry.values()) {
+        if (keys.length < 2) continue
+        shared++
+        const [first, ...rest] = keys
+        for (const other of rest) {
+          expect(manifest.nodes[other]!.bounds, `${other} and ${first} are one mesh in ${name} but publish different bounds`).toEqual(manifest.nodes[first!]!.bounds)
+        }
+      }
+    }
+    // Five of the seven tops are the same tunic in different colours; if nothing shares geometry any
+    // more the assertion above has stopped meaning anything and this file has grown by a third.
+    expect(shared, 'no two nodes share a mesh any more — the vertex cache has stopped working').toBeGreaterThan(0)
   })
 })
 

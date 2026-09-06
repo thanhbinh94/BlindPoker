@@ -24,7 +24,8 @@
   "fit": {
     "$comment": [
       "How far off the skin a garment of each slot is fitted, in metres — and, by which slots appear",
-      "here at all, *which* garments are fitted. See `fitParts` in scripts/avatar-assets.mjs: the two",
+      "here at all, *which* garments are fitted. See `retargetParts` and `conformParts` in",
+      "scripts/avatar-assets.mjs: the two",
       "packs were not modelled for each other (the bodies are the base pack's muscular Superhero build,",
       "every garment is cut for the outfit pack's slimmer Regular one and rigged 2 cm narrower), so a",
       "garment dropped on unchanged sinks up to 5 cm into the body and renders as ragged patches on bare",
@@ -137,11 +138,10 @@
     {
       "id": "hair_ponytail",
       "slot": "hair",
-      "note": "approximation: the long cut, gathered in — the free tier ships no ponytail. The 2 mm fit is what keeps the narrowing outside the skull: pulled in by more than the scalp is deep, the sides of the cut would otherwise disappear into the head and speckle it with dark patches",
-      "fit": 0.002,
+      "note": "approximation: the long cut, gathered in — the free tier ships no ponytail. The fit is what keeps the narrowing outside the skull: pulled in by more than the scalp is deep, the sides of the cut would otherwise disappear into the head and speckle it with dark patches. It is a margin, not a contact: the cap's triangles span 4-5 cm of a 9 cm skull, and the sagitta of that chord is ~3 mm, so a 2 mm margin left the crown showing through between two vertices that were both pushed clear of it. The male skull is the larger of the two and needs the larger margin",
       "variants": {
-        "male": { "file": "@hair/Hair_Long.gltf", "node": "Hair_Long", "scale": [0.84, 1.0, 0.94] },
-        "female": { "file": "@hair/Hair_Long.gltf", "node": "Hair_Long", "scale": [0.84, 1.0, 0.94] }
+        "male": { "file": "@hair/Hair_Long.gltf", "node": "Hair_Long", "scale": [0.84, 1.0, 0.94], "fit": 0.008 },
+        "female": { "file": "@hair/Hair_Long.gltf", "node": "Hair_Long", "scale": [0.84, 1.0, 0.94], "fit": 0.006 }
       }
     },
     {

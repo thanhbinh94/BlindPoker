@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-06T12:35:03.121Z",
+  "generatedAt": "2026-09-06T13:49:08.182Z",
   "placeholder": false,
   "compression": "meshopt",
-  "mapSha256": "8773335c96d27e806d0152d7b8cb0f3cb2b2e2faeb95f487268ff8b73d442b8d",
+  "mapSha256": "fa1b7915b3dfa9554279a2f714bc9510b366dd104598de1b0dd2ea33cc07885f",
   "files": {
     "accessories.glb": {
       "bytes": 86808,
@@ -21,13 +21,13 @@
       "skins": 1
     },
     "hair.glb": {
-      "bytes": 96608,
-      "sha256": "1186a7cb7df35c9b5364e74cbfca91f9fcc77ecb1a9d32a82da5d3fbb0076317",
+      "bytes": 117216,
+      "sha256": "1098a7a40410f82636255039c7b6d46b75138ef973723085c5688de02f22e4c2",
       "skins": 0
     },
     "outfits.glb": {
-      "bytes": 528144,
-      "sha256": "4c3eed619d1ee685c9498ebcfce4918f9ff5c96019965b63b367bc47c4446a47",
+      "bytes": 517416,
+      "sha256": "417b96af1c716f0a6ee66945f5fd16f08716cf30780c11d3661350570c4eae35",
       "skins": 2
     }
   },
@@ -464,7 +464,7 @@
     },
     "hair/hair_ponytail/female": {
       "file": "hair.glb",
-      "bytes": 28383,
+      "bytes": 62040,
       "bounds": {
         "min": [
           -0.103,
@@ -480,16 +480,16 @@
     },
     "hair/hair_ponytail/male": {
       "file": "hair.glb",
-      "bytes": 28383,
+      "bytes": 54408,
       "bounds": {
         "min": [
-          -0.115,
-          1.508,
+          -0.118,
+          1.51,
           -0.153
         ],
         "max": [
-          0.115,
-          1.811,
+          0.118,
+          1.817,
           0.101
         ]
       }
@@ -902,15 +902,15 @@
     },
     "top/clothing_aodai/female": {
       "file": "outfits.glb",
-      "bytes": 74696,
+      "bytes": 69954,
       "bounds": {
         "min": [
-          -0.862,
+          -0.832,
           0.85,
           -0.192
         ],
         "max": [
-          0.862,
+          0.832,
           1.521,
           0.169
         ]
@@ -919,15 +919,15 @@
     },
     "top/clothing_aodai/male": {
       "file": "outfits.glb",
-      "bytes": 107100,
+      "bytes": 102338,
       "bounds": {
         "min": [
-          -0.951,
+          -0.926,
           0.73,
           -0.189
         ],
         "max": [
-          0.951,
+          0.926,
           1.581,
           0.15
         ]
@@ -936,15 +936,15 @@
     },
     "top/clothing_hoodie/female": {
       "file": "outfits.glb",
-      "bytes": 73571,
+      "bytes": 73275,
       "bounds": {
         "min": [
-          -0.858,
+          -0.832,
           0.986,
           -0.21
         ],
         "max": [
-          0.858,
+          0.832,
           1.794,
           0.165
         ]
@@ -953,15 +953,15 @@
     },
     "top/clothing_hoodie/male": {
       "file": "outfits.glb",
-      "bytes": 82066,
+      "bytes": 81769,
       "bounds": {
         "min": [
-          -0.948,
+          -0.926,
           0.917,
           -0.194
         ],
         "max": [
-          0.948,
+          0.926,
           1.865,
           0.149
         ]
@@ -970,15 +970,15 @@
     },
     "top/clothing_kimono/female": {
       "file": "outfits.glb",
-      "bytes": 30673,
+      "bytes": 30377,
       "bounds": {
         "min": [
-          -0.858,
+          -0.832,
           0.986,
           -0.156
         ],
         "max": [
-          0.858,
+          0.832,
           1.52,
           0.165
         ]
@@ -987,15 +987,15 @@
     },
     "top/clothing_kimono/male": {
       "file": "outfits.glb",
-      "bytes": 39324,
+      "bytes": 39027,
       "bounds": {
         "min": [
-          -0.948,
+          -0.926,
           0.917,
           -0.187
         ],
         "max": [
-          0.948,
+          0.926,
           1.577,
           0.149
         ]
@@ -1038,15 +1038,15 @@
     },
     "top/clothing_suit/female": {
       "file": "outfits.glb",
-      "bytes": 72697,
+      "bytes": 72401,
       "bounds": {
         "min": [
-          -0.858,
+          -0.832,
           0.919,
           -0.185
         ],
         "max": [
-          0.858,
+          0.832,
           1.543,
           0.165
         ]
@@ -1055,15 +1055,15 @@
     },
     "top/clothing_suit/male": {
       "file": "outfits.glb",
-      "bytes": 66150,
+      "bytes": 65852,
       "bounds": {
         "min": [
-          -0.948,
+          -0.926,
           0.909,
           -0.206
         ],
         "max": [
-          0.948,
+          0.926,
           1.615,
           0.151
         ]
@@ -1072,15 +1072,15 @@
     },
     "top/jacket_champion/female": {
       "file": "outfits.glb",
-      "bytes": 106225,
+      "bytes": 105929,
       "bounds": {
         "min": [
-          -0.858,
+          -0.832,
           0.919,
           -0.185
         ],
         "max": [
-          0.858,
+          0.832,
           1.543,
           0.165
         ]
@@ -1089,15 +1089,15 @@
     },
     "top/jacket_champion/male": {
       "file": "outfits.glb",
-      "bytes": 97130,
+      "bytes": 96832,
       "bounds": {
         "min": [
-          -0.948,
+          -0.926,
           0.909,
           -0.206
         ],
         "max": [
-          0.948,
+          0.926,
           1.615,
           0.151
         ]
@@ -1147,6 +1147,41 @@
     "metal",
     "skin"
   ],
+  "fit": {
+    "tolerance": 0.012,
+    "penetration": {
+      "bottom/bottom_jeans/female": 0,
+      "bottom/bottom_jeans/male": 0,
+      "bottom/bottom_shorts/female": 0.0007,
+      "bottom/bottom_shorts/male": 0.0023,
+      "bottom/bottom_skirt/female": 0.0102,
+      "bottom/bottom_skirt/male": 0.011,
+      "bottom/bottom_trousers/female": 0,
+      "bottom/bottom_trousers/male": 0,
+      "hair/hair_ponytail/female": 0.0001,
+      "hair/hair_ponytail/male": 0.0002,
+      "shoes/shoes_boots/female": 0,
+      "shoes/shoes_boots/male": 0,
+      "shoes/shoes_sandals/female": 0,
+      "shoes/shoes_sandals/male": 0,
+      "shoes/shoes_sneakers/female": 0,
+      "shoes/shoes_sneakers/male": 0,
+      "top/clothing_aodai/female": 0.0049,
+      "top/clothing_aodai/male": 0.0068,
+      "top/clothing_hoodie/female": 0.0044,
+      "top/clothing_hoodie/male": 0.0061,
+      "top/clothing_kimono/female": 0.0044,
+      "top/clothing_kimono/male": 0.0061,
+      "top/clothing_polo/female": 0,
+      "top/clothing_polo/male": 0,
+      "top/clothing_suit/female": 0.0044,
+      "top/clothing_suit/male": 0.0061,
+      "top/jacket_champion/female": 0.0044,
+      "top/jacket_champion/male": 0.0061,
+      "top/top_tee/female": 0,
+      "top/top_tee/male": 0
+    }
+  },
   "anchors": {
     "male": {
       "Head": [

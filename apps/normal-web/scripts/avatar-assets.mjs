@@ -316,7 +316,7 @@ function readSkeleton(skin, path) {
  * A *skinned* node's transform is ignored, exactly as glTF requires: the vertices are already in its
  * own skeleton's bind space. That space is **not** shared between the packs — the outfit rig stands its
  * thighs 2.3 cm and its shoulders 2 cm closer to the centre line than the base rig does — which is what
- * `fitParts` below exists to correct. An unskinned node (the hairstyles) gets its world matrix baked in
+ * `retargetParts` below exists to correct. An unskinned node (the hairstyles) gets its world matrix baked in
  * instead. Skinned nodes also carry their joint indices and weights through, so the output can be posed;
  * see the file header for why that is worth its bytes.
  */
@@ -687,27 +687,67 @@ function project(surface, cells, p) {
 }
 
 /**
+ * How far a vertex the shrinkwrap moved may end up back inside the body before the build refuses it.
+ *
+ * Not zero, and the reason is geometric rather than a fudge. A vertex is moved to the nearest point on
+ * the body plus `margin`, and "nearest" is not the same point afterwards: in a concave crease — an
+ * armpit, the fork of the legs — a vertex pushed 26 mm clear of the torso can land inside the arm folded
+ * against it. Measured across the catalogue that is 8 to 30 vertices of a three-thousand-vertex garment,
+ * and 11.0 mm at the worst (six vertices of `bottom_skirt`, between the legs, under the skirt).
+ *
+ * A second sweep that re-pushes those vertices does drive the number down — and makes the *picture*
+ * worse: a vertex wedged between two thighs is pushed onto the far one, its triangles stretch across the
+ * fork, and `bottom_skirt` opens a skin-coloured hole that one sweep does not have. Tried, rendered,
+ * reverted. So the residual stays and the tolerance is where the residual is.
+ *
+ * What the guard is *for* is the other order of magnitude: a garment that is not fitted, fitted at the
+ * wrong margin, or built for the wrong body is 25–54 mm inside over a whole limb — the defect this pass
+ * exists to remove, and one nobody would notice again until they looked at a render.
+ */
+const FIT_TOLERANCE = 0.012
+
+/** How far outside the surface `p` lies, along the interpolated normal of the point nearest it. */
+function signedDistance(surface, cells, p) {
+  const hit = project(surface, cells, p)
+  if (hit === null) return { hit: null, outside: Infinity }
+  return { hit, outside: (p[0] - hit.point[0]) * hit.normal[0] + (p[1] - hit.point[1]) * hit.normal[1] + (p[2] - hit.point[2]) * hit.normal[2] }
+}
+
+/**
  * Push every vertex that is inside the body — or nearer than `margin` — out onto the body's surface.
  *
  * Results are cached by position: the seams of a low-poly garment duplicate a vertex two or three
  * times over (one per hard edge) and every copy has to move identically or the mesh tears open.
+ *
+ * **A part whose canonical material is `skin` is not touched.** `*_Ranger_Arms` is not only cloth: it
+ * carries an `MI_Regular_*` mesh, which is a copy of the body's own bare forearm and hand, and is why
+ * that sleeve was chosen over the peasant one. That copy is *coincident with the body surface* by
+ * construction, so every one of its vertices reads as "inside or within margin" and a shrinkwrap would
+ * push the whole hand out by the top margin — 26 mm of it — turning it into a fingerless mitten twice
+ * its real thickness on every sleeved top. A skin primitive duplicates the body; there is nothing for a
+ * cloth margin to correct it towards.
+ *
+ * Returns the worst residual penetration it leaves behind, in metres, which the build publishes per node
+ * and refuses to ship over `FIT_TOLERANCE`. Most garments come out at 0.0 mm.
  */
 function conformParts(parts, surface, cells, margin) {
   const cache = new Map()
+  const landed = []
   for (const part of parts) {
+    if (part.canonical === 'skin') continue
     for (let v = 0; v < part.positions.length / 3; v++) {
       const at = v * 3
       const p = [part.positions[at], part.positions[at + 1], part.positions[at + 2]]
       const key = `${Math.round(p[0] * 1e5)},${Math.round(p[1] * 1e5)},${Math.round(p[2] * 1e5)}`
       let moved = cache.get(key)
       if (moved === undefined) {
-        const hit = project(surface, cells, p)
-        const outside = hit === null ? Infinity : (p[0] - hit.point[0]) * hit.normal[0] + (p[1] - hit.point[1]) * hit.normal[1] + (p[2] - hit.point[2]) * hit.normal[2]
+        const { hit, outside } = signedDistance(surface, cells, p)
         moved =
           hit === null || outside >= margin
             ? null
             : { position: [0, 1, 2].map((a) => hit.point[a] + hit.normal[a] * margin), normal: hit.normal }
         cache.set(key, moved)
+        if (moved !== null) landed.push(moved.position)
       }
       if (moved === null) continue
       part.positions.set(moved.position, at)
@@ -716,6 +756,14 @@ function conformParts(parts, surface, cells, margin) {
       part.normals.set(moved.normal, at)
     }
   }
+  // Only a vertex that moved can have ended up on the wrong side: one left alone was already at least
+  // `margin` outside, and nothing here moves it.
+  let worst = 0
+  for (const position of landed) {
+    const { outside } = signedDistance(surface, cells, position)
+    if (-outside > worst) worst = -outside
+  }
+  return worst
 }
 
 /**
@@ -1006,6 +1054,47 @@ function addNode(bundle, map, key, parts, cacheKey, body) {
   return node
 }
 
+/** The extent of the POSITION accessors a node actually ended up with, from their own min/max. */
+function accessorBounds(node) {
+  const min = [Infinity, Infinity, Infinity]
+  const max = [-Infinity, -Infinity, -Infinity]
+  for (const primitive of node.getMesh()?.listPrimitives() ?? []) {
+    const position = primitive.getAttribute('POSITION')
+    if (!position) continue
+    const lo = position.getMin([0, 0, 0])
+    const hi = position.getMax([0, 0, 0])
+    for (let a = 0; a < 3; a++) {
+      min[a] = Math.min(min[a], lo[a])
+      max[a] = Math.max(max[a], hi[a])
+    }
+  }
+  return { min, max }
+}
+
+/**
+ * The bounds the manifest is about to publish for a node must be the bounds of the vertices that were
+ * written for it.
+ *
+ * These are two independent paths — `details[key].bounds` comes from the arrays `readVariant` produced,
+ * the accessors come out of the vertex cache — and they can disagree: a cache key that leaves out
+ * something the geometry depends on hands one node another node's mesh while the manifest goes on
+ * describing the geometry that node *would* have had. That shipped once (the ponytail, fitted to the
+ * male skull, served to both bodies), and it is invisible in every other check: the file is valid, the
+ * budgets hold, `--check` re-hashes bytes that really are what was written. So it is checked here, where
+ * both numbers exist in metres and before quantization has touched either.
+ */
+function assertPublishedBounds(key, node, expected) {
+  const actual = accessorBounds(node)
+  for (let a = 0; a < 3; a++) {
+    if (Math.abs(actual.min[a] - expected.min[a]) > 1e-4 || Math.abs(actual.max[a] - expected.max[a]) > 1e-4) {
+      fail(
+        `${key} would publish bounds [${expected.min.map(round)}]…[${expected.max.map(round)}] but the accessors written for it span ` +
+          `[${actual.min.map(round)}]…[${actual.max.map(round)}] — the vertex cache handed it geometry built for something else`,
+      )
+    }
+  }
+}
+
 /**
  * The colour a node reads as, for `manifest.nodes[key].tint`.
  *
@@ -1033,6 +1122,10 @@ function bakedTint(map, parts) {
  * `bottom_shorts` is cut off at the knee *and then* fitted rather than fitted and then cut; and
  * `simplify` is last, because decimating a mesh and then moving its vertices about would put the
  * simplifier's error budget somewhere other than where it was spent.
+ *
+ * `fit` is an out-parameter as well as an in one: the shrinkwrap's worst residual penetration is written
+ * back onto it as `fit.penetration`, because the build publishes that per node and refuses to ship a
+ * garment that ends up back inside the body it was fitted to.
  */
 async function readVariant(map, variant, defaultFile, fit = null) {
   const entries = [{ ...variant, file: variant.file ?? defaultFile }, ...(variant.merge ?? [])]
@@ -1047,7 +1140,7 @@ async function readVariant(map, variant, defaultFile, fit = null) {
   }
   if (fit?.skeleton) retargetParts(parts, fit.skeleton, fit.key)
   if (variant.scale) applyScale(parts, variant.scale, variant.scaleAnchor ?? 'bottom')
-  if (fit?.margin) conformParts(parts, fit.surface, fit.cells, fit.margin)
+  if (fit?.margin) fit.penetration = conformParts(parts, fit.surface, fit.cells, fit.margin)
   if (variant.simplify) await simplifyParts(parts, variant.simplify)
   return parts
 }
@@ -1185,7 +1278,7 @@ async function build({ useMeshopt }) {
     )
     const parts = await readVariant(map, spec, spec.file)
     details[`body/${body}`] = { bounds: boundsOf(parts), tint: bakedTint(map, parts) }
-    addNode(bundleFor(spec.out), map, `body/${body}`, parts, null, body)
+    assertPublishedBounds(`body/${body}`, addNode(bundleFor(spec.out), map, `body/${body}`, parts, null, body), details[`body/${body}`].bounds)
 
     // The *skin* only, not the eyes and eyebrows merged into the body node beside it: a hood or a
     // collar projected onto the nearest surface must not find an eyebrow and snap to that.
@@ -1196,6 +1289,8 @@ async function build({ useMeshopt }) {
   }
 
   const emptyNodes = []
+  /** Per fitted node: how far the worst shrinkwrapped vertex ended up back inside the body. */
+  const penetration = {}
   for (const item of map.items) {
     const file = map.outputs[item.slot]
     if (!file) fail(`item ${item.id} has slot "${item.slot}", which no output file covers`)
@@ -1209,18 +1304,44 @@ async function build({ useMeshopt }) {
         continue
       }
       const margin = variant.primitive ? null : fitMargin(map, item, variant)
-      const parts = variant.primitive
-        ? buildPrimitive(variant.primitive, jointTables[body], variant.tint)
-        : await readVariant(map, variant, variant.file, { ...fits[body], margin, key })
+      const fit = variant.primitive ? null : { ...fits[body], margin, key }
+      const parts = variant.primitive ? buildPrimitive(variant.primitive, jointTables[body], variant.tint) : await readVariant(map, variant, variant.file, fit)
       details[key] = { bounds: boundsOf(parts), tint: bakedTint(map, parts) }
+      if (margin !== null) penetration[key] = Math.round(fit.penetration * 1e4) / 1e4
       // Two items that are the same mesh in different colours share one copy of the vertex data. The
-      // fit belongs in the key as much as the scale does: the same source mesh fitted at two margins
-      // is two different sets of vertices.
+      // fit belongs in the key as much as the scale does — the same source mesh fitted at two margins
+      // is two different sets of vertices — and so does the **body**, whenever the geometry is a
+      // function of one: a shrinkwrap is against that body's skin, and a retarget is onto its rig.
+      // Without it, an item whose two variants are written identically in the map (every hairstyle)
+      // ships whichever body was built first to both, and the manifest goes on describing geometry that
+      // is not in the file. `dedup` folds back anything that really did come out identical.
+      const bodyDependent = margin !== null || parts.some((part) => part.skeleton)
       const cacheKey = variant.primitive
         ? null
-        : JSON.stringify([variant.file, variant.node, variant.merge ?? [], variant.scale ?? [], variant.scaleAnchor ?? '', variant.simplify ?? 0, margin ?? 0])
-      addNode(bundleFor(file), map, key, parts, cacheKey, body)
+        : JSON.stringify([
+            variant.file,
+            variant.node,
+            variant.merge ?? [],
+            variant.scale ?? [],
+            variant.scaleAnchor ?? '',
+            variant.simplify ?? 0,
+            margin ?? 0,
+            bodyDependent ? body : '',
+          ])
+      assertPublishedBounds(key, addNode(bundleFor(file), map, key, parts, cacheKey, body), details[key].bounds)
     }
+  }
+  // Every vertex the shrinkwrap moved has to end up *outside* the body, or the garment shows skin
+  // through it — which is the whole defect the fitting pass exists to remove, and it is a number, so it
+  // is checked rather than looked for in a render. All of them at once: a margin change moves several
+  // items and one failure at a time is a slow way to find that out.
+  const overFitted = Object.entries(penetration).filter(([, deep]) => deep > FIT_TOLERANCE)
+  if (overFitted.length > 0) {
+    for (const [key, deep] of overFitted) console.error(`[avatar-assets] ${key} leaves a fitted vertex ${(deep * 1000).toFixed(1)} mm inside the body`)
+    fail(
+      `${overFitted.length} fitted node(s) end up back inside the body by more than the ${(FIT_TOLERANCE * 1000).toFixed(1)} mm tolerance — ` +
+        `raise that item's \`fit\` margin in scripts/avatar-map.json`,
+    )
   }
   // Everything is written into a scratch directory and only moved over `public/avatar3d/` once the
   // budgets have held, so a build that is too big — or that dies halfway through — leaves the committed
@@ -1271,6 +1392,12 @@ async function build({ useMeshopt }) {
     files: Object.fromEntries(Object.entries(files).sort(([a], [b]) => a.localeCompare(b))),
     nodes: Object.fromEntries(Object.entries(nodes).sort(([a], [b]) => a.localeCompare(b))),
     materials: [...materials].sort(),
+    // What the shrinkwrap left behind, per fitted node, in metres: the deepest a vertex it moved ended
+    // up back inside the body. The build already refused to write anything over `tolerance`; publishing
+    // it is what lets `--check` and `test/avatar-assets.test.ts` re-assert that on a clone that has
+    // never downloaded a source pack, and what makes a slow drift towards the tolerance visible in a
+    // diff instead of only in a render.
+    fit: { tolerance: FIT_TOLERANCE, penetration: Object.fromEntries(Object.entries(penetration).sort(([a], [b]) => a.localeCompare(b))) },
     anchors,
     pose: { armsDown: ARMS_DOWN },
     budget: { totalBytes: MAX_TOTAL_BYTES, maxFileBytes: MAX_FILE_BYTES, maxBodyBytes: MAX_BODY_BYTES },
@@ -1283,6 +1410,10 @@ async function build({ useMeshopt }) {
   const total = Object.values(manifest.files).reduce((sum, f) => sum + f.bytes, 0)
   console.log(
     `[avatar-assets] ${Object.keys(manifest.nodes).length} nodes, ${manifest.materials.length} materials, ${(total / 1024).toFixed(1)} KB total, ${manifest.compression}`,
+  )
+  const [worstNode, worstFit] = Object.entries(penetration).sort(([, a], [, b]) => b - a)[0] ?? ['—', 0]
+  console.log(
+    `[avatar-assets] ${Object.keys(penetration).length} fitted nodes, worst residual penetration ${(worstFit * 1000).toFixed(2)} mm (${worstNode}) of ${(FIT_TOLERANCE * 1000).toFixed(1)} mm allowed`,
   )
   try {
     enforceBudgets(manifest, bodyFilesOf(map))
@@ -1345,6 +1476,82 @@ function expectedKeys(map) {
     }
   }
   return keys
+}
+
+/** Every node key the map says is shrinkwrapped onto a body, without touching the source packs. */
+function fittedKeys(map) {
+  const keys = new Set()
+  for (const item of map.items) {
+    for (const body of BODIES) {
+      const variant = item.variants?.[body]
+      if (!variant || variant.empty || variant.primitive) continue
+      if (fitMargin(map, item, variant) !== null) keys.add(`${item.slot}/${item.id}/${body}`)
+    }
+  }
+  return keys
+}
+
+/**
+ * How far a published bound may sit off the geometry that is actually in a committed file.
+ *
+ * The manifest rounds to a millimetre, and the affine below is anchored on two of those rounded numbers,
+ * so a bound in the middle of the range inherits about ¾ mm of that. Quantization itself is worth a
+ * thirtieth of a millimetre at 14 bits over a two-metre volume, and is not what this is for: the defect
+ * it exists to catch is a node served another node's mesh, which is centimetres out.
+ */
+const BOUNDS_TOLERANCE = 0.002
+
+/**
+ * Check that each node of a committed file really spans what the manifest says it spans.
+ *
+ * The catch is that positions in a shipped file are **quantized integers**, and the transform back to
+ * metres lives either on the node (unskinned meshes) or inside the skin's inverse bind matrices (skinned
+ * ones), where it is not recoverable on its own. But quantization is affine and, with
+ * `quantizationVolume: 'scene'`, one affine for the whole file — so it can be recovered *from the
+ * manifest*: two extreme bounds fix the scale and offset per axis, and every other node's bounds then
+ * have to fall on the same line. Two nodes sharing one set of accessors is the case this is aimed at:
+ * their raw bounds are identical, so bounds that differ in the manifest cannot both be right.
+ */
+function checkPublishedBounds(doc, name, manifest, problems) {
+  const points = [[], [], []]
+  for (const node of doc.getRoot().listNodes()) {
+    const key = node.getName()
+    const entry = manifest.nodes[key]
+    if (!entry || entry.file !== name || !node.getMesh()) continue
+    const raw = accessorBounds(node)
+    if (!Number.isFinite(raw.min[0])) continue
+    const world = [...node.getWorldMatrix()]
+    const lo = [Infinity, Infinity, Infinity]
+    const hi = [-Infinity, -Infinity, -Infinity]
+    for (let corner = 0; corner < 8; corner++) {
+      const p = transformPoint(world, [corner & 1 ? raw.max[0] : raw.min[0], corner & 2 ? raw.max[1] : raw.min[1], corner & 4 ? raw.max[2] : raw.min[2]])
+      for (let a = 0; a < 3; a++) {
+        lo[a] = Math.min(lo[a], p[a])
+        hi[a] = Math.max(hi[a], p[a])
+      }
+    }
+    for (let a = 0; a < 3; a++) {
+      points[a].push({ key, raw: lo[a], metres: entry.bounds.min[a], edge: 'min' }, { key, raw: hi[a], metres: entry.bounds.max[a], edge: 'max' })
+    }
+  }
+  for (let a = 0; a < 3; a++) {
+    const sorted = [...points[a]].sort((x, y) => x.raw - y.raw)
+    const first = sorted[0]
+    const last = sorted[sorted.length - 1]
+    // One node in a file (each body) pins the line through its own two ends and has nothing left to
+    // say; the check is only meaningful where several nodes share a quantization volume.
+    if (!first || last.raw - first.raw < 1e-9) continue
+    const scale = (last.metres - first.metres) / (last.raw - first.raw)
+    for (const point of sorted) {
+      const expected = first.metres + (point.raw - first.raw) * scale
+      if (Math.abs(expected - point.metres) > BOUNDS_TOLERANCE) {
+        problems.push(
+          `${point.key} publishes ${point.edge} ${point.metres} on axis ${a}, but the vertices ${name} carries for it reach ${round(expected)} — ` +
+            `the manifest is describing geometry that is not in the file`,
+        )
+      }
+    }
+  }
 }
 
 async function check() {
@@ -1410,6 +1617,24 @@ async function check() {
     }
   }
 
+  // The shrinkwrap's guard, re-asserted from what the build published. Measuring it needs the source
+  // packs, which a clone does not have; what is checkable here is that the map still asks for exactly
+  // the fits the manifest reports, and that every one of them came out inside the tolerance.
+  const fitted = fittedKeys(map)
+  const published = manifest.fit?.penetration ?? {}
+  if (manifest.fit?.tolerance !== FIT_TOLERANCE) {
+    problems.push(`the manifest allows a fit penetration of ${manifest.fit?.tolerance}, this script allows ${FIT_TOLERANCE}`)
+  }
+  for (const key of fitted) {
+    if (!(key in published)) problems.push(`the map fits ${key} to the body, the manifest publishes no penetration for it — run \`pnpm avatar:assets\``)
+    else if (published[key] > FIT_TOLERANCE) {
+      problems.push(`${key} leaves a vertex ${(published[key] * 1000).toFixed(1)} mm inside the body, over the ${(FIT_TOLERANCE * 1000).toFixed(1)} mm tolerance`)
+    }
+  }
+  for (const key of Object.keys(published)) {
+    if (!fitted.has(key)) problems.push(`the manifest publishes a fit penetration for ${key}, which the map does not fit`)
+  }
+
   for (const body of BODIES) {
     for (const joint of ANCHOR_JOINTS) {
       if (manifest.anchors?.[body]?.[joint]?.length !== 3) problems.push(`the manifest has no ${body} anchor for ${joint}`)
@@ -1445,6 +1670,7 @@ async function check() {
     }
     if (doc.getRoot().listAnimations().length > 0) problems.push(`${name} still carries an animation`)
     if (doc.getRoot().listTextures().length > 0) problems.push(`${name} still carries a texture`)
+    checkPublishedBounds(doc, name, manifest, problems)
   }
 
   if (problems.length > 0) {

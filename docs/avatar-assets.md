@@ -121,7 +121,8 @@ surface, a garment dropped on unchanged sinks up to 5 cm into it, and what that 
 `bottom_jeans` was a few ragged blue patches on an otherwise bare thigh, and `top_tee` read as a crop top
 because the chest came through the front of it.
 
-So the build fits a garment to its body, in two steps, both in `fitParts` in `avatar-assets.mjs`:
+So the build fits a garment to its body, in two steps — `retargetParts` and `conformParts` in
+`avatar-assets.mjs`:
 
 1. **Retarget.** Push every vertex through `W_body(joint) · IBM_source(joint)`, blended by its own skin
    weights, and re-bind the mesh to the body's rig with joint indices remapped by name. The trouser legs
@@ -135,11 +136,19 @@ So the build fits a garment to its body, in two steps, both in `fitParts` in `av
    body — a hood, a pauldron, a skirt's flare, a boot sole — is further out than `margin` and is not
    touched.
 
+   **A part whose canonical material is `skin` is left alone.** `*_Ranger_Arms` is not only cloth: it
+   carries an `MI_Regular_*` mesh, a copy of the body's own bare forearm and hand, which is the whole
+   reason that sleeve was chosen over the peasant one. That copy sits *on* the body surface by
+   construction, so every vertex of it reads as "inside or within margin" — and shrinkwrapping it pushed
+   the hand out by the top margin and turned it into a fingerless mitten twice its real thickness, on all
+   five sleeved tops and both bodies. A skin primitive duplicates the body; there is nothing for a cloth
+   margin to correct it towards.
+
 `fit.margin` in the map names the margins, in metres, **per slot** — and, by which slots appear in it at
 all, which garments are fitted:
 
 ```jsonc
-"fit": { "margin": { "top": 0.026, "bottom": 0.018, "shoes": 0.011 } }
+"fit": { "margin": { "top": 0.026, "bottom": 0.018, "shoes": 0.024 } }
 ```
 
 They are ordered the way the layers overlap: a top over the waist of a bottom, a shoe over its ragged
@@ -157,6 +166,26 @@ A fitted garment ends up hugging the body — cloth on skin, not cloth over a ga
 ever seen (a 128 px portrait, a stage a few hundred pixels tall) that reads correctly, and it is the
 right trade against the alternative, which is a garment that is not there.
 
+#### The two things the build checks about a fit
+
+Neither is visible in a hash or a byte count, and both have been wrong in this pipeline:
+
+- **Every vertex the shrinkwrap moved must end up outside the body**, to within `FIT_TOLERANCE` (12 mm).
+  The build measures it per node, refuses to write anything over it, and publishes what it measured as
+  `manifest.fit.penetration` so `--check` and `test/avatar-assets.test.ts` can re-assert it on a clone
+  with no source packs. The tolerance is not zero because "the nearest point on the body" is not the same
+  point after a vertex has moved 26 mm: in the fork of the legs under `bottom_skirt`, six vertices land
+  inside the far thigh, 11 mm deep. Re-pushing them was tried and makes the picture *worse* — their
+  triangles then stretch across the fork and open a skin-coloured hole — so the residual stays and the
+  tolerance is set where the residual is. What the guard is for is the other order of magnitude: an
+  unfitted garment is 25–54 mm inside over a whole limb.
+- **A node's published bounds must be the bounds of the accessors written for it.** Two nodes that share
+  one mesh are one mesh, so bounds that differ between them cannot both be true. That is what a vertex
+  cache missing the body produced: `hair/hair_ponytail/male` and `…/female` pointing at a single mesh
+  fitted to the male skull, with two different sets of bounds in the manifest. The build compares the two
+  in metres before quantization; `--check` recovers the quantization affine from the file and compares
+  again; the test asserts the shared-mesh half of it independently.
+
 ### What the manifest publishes
 
 ```jsonc
@@ -164,12 +193,14 @@ right trade against the alternative, which is a garment that is not there.
   "version": 1, "placeholder": false,
   "compression": "meshopt",              // the loader must wire MeshoptDecoder — see below
   "mapSha256": "…",                      // fingerprint of avatar-map.json; --check fails on drift
-  "files":  { "outfits.glb": { "bytes": 528140, "sha256": "…", "skins": 2 } },
+  "files":  { "outfits.glb": { "bytes": 517416, "sha256": "…", "skins": 2 } },
   "nodes":  { "top/clothing_aodai/female": {
-                "file": "outfits.glb", "bytes": 116835,
-                "bounds": { "min": [-0.862, 0.85, -0.192], "max": [0.862, 1.521, 0.169] },
+                "file": "outfits.glb", "bytes": 69954,
+                "bounds": { "min": [-0.832, 0.85, -0.192], "max": [0.832, 1.521, 0.169] },
                 "tint": "#f2d7bd" } },
   "materials": ["cloth_primary", "…"],
+  "fit": { "tolerance": 0.012,          // metres a fitted vertex may end up inside the body
+           "penetration": { "top/clothing_suit/male": 0.0061, "…": 0 } },   // what it actually was
   "anchors": { "male": { "Head": [0, 1.6, -0.017], "neck_01": […], "upperarm_l": […],
                          "upperarm_r": […], "hand_l": […], "hand_r": […], "pelvis": […] } },
   "pose": { "armsDown": { "upperarm_l": [0, 0, -1.134], "…": [] } },
@@ -231,9 +262,9 @@ change from the first cut of this pipeline, which shipped plain quantized geomet
 
 | | `--no-meshopt` | default (meshopt) | budget |
 |---|---:|---:|---|
-| `outfits.glb` | 1 496 KB | 516 KB | 1 536 KB per file |
+| `outfits.glb` | 1 496 KB | 505 KB | 1 536 KB per file |
 | `body-male.glb` / `body-female.glb` | 247 / 256 KB | 101 / 104 KB | 400 KB per body |
-| all five files | 2 309 KB | 901 KB | 6 144 KB |
+| all five files | 2 309 KB | 910 KB | 6 144 KB |
 
 (The `--no-meshopt` column is the measurement taken before the fitting pass, when `outfits.glb` still
 carried the peasant sleeves; it is quoted as the order of magnitude it was, not re-measured.)
@@ -254,10 +285,10 @@ problem, at the price of the table above.
 |---|---:|---|
 | `body-male.glb` | 101.5 KB | `body/male` (body + eyes + eyebrows), 1 skeleton |
 | `body-female.glb` | 104.1 KB | `body/female`, 1 skeleton |
-| `hair.glb` | 96.0 KB | 7 hair items × 2 bodies, unskinned (`hair_none` is an empty node) |
-| `outfits.glb` | 515.8 KB | 7 tops, 4 bottoms, 3 shoes × 2 bodies, 2 skeletons (the bodies' own) |
+| `hair.glb` | 114.5 KB | 7 hair items × 2 bodies, unskinned (`hair_none` is an empty node) |
+| `outfits.glb` | 505.3 KB | 7 tops, 4 bottoms, 3 shoes × 2 bodies, 2 skeletons (the bodies' own) |
 | `accessories.glb` | 84.8 KB | 3 hats, 3 accessories, 5 jewellery × 2 bodies (unskinned) |
-| **total** | **900.5 KB** | 66 nodes, of a 6 144 KB budget |
+| **total** | **910.1 KB** | 66 nodes, of a 6 144 KB budget |
 
 Budgets **the script enforces**, in `enforceBudgets` at build time and again in `--check`: **6 MB total**,
 **1.5 MB per file**, and the design's tighter **400 KB per body file** (`body-male.glb` and
@@ -285,7 +316,7 @@ bought (design §9).
 | Item | What it actually is |
 |---|---|
 | `hair_curly` | the parted cut, puffed out 14 % — no curly hair in the free tier |
-| `hair_ponytail` | the long cut, gathered in to 84 % and fitted 2 mm clear of the scalp — no ponytail in the free tier |
+| `hair_ponytail` | the long cut, gathered in to 84 % and fitted 8 mm (male) / 6 mm (female) clear of the scalp — no ponytail in the free tier |
 | `hair_mohawk` | the buzzed cut, narrowed to 32 % and raised 45 % into a crest |
 | `top_tee`, `clothing_polo` | the peasant tunic, tinted; no modern shirt exists in either pack. Sleeveless, because it merges no arm mesh |
 | `clothing_kimono` | the peasant tunic and the ranger sleeves in deep red |

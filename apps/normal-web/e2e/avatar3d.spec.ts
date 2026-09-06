@@ -21,8 +21,11 @@ import { account, createBlindRoom, expectLobby, expectNoSidewaysScroll, lobbyAva
  * - **The stage is a stage.** A `role="img"` frame with a live `<canvas>` inside it, on the profile and
  *   in the wardrobe, on a phone as well as on a desktop.
  *
- * Timings are logged rather than only asserted: the budget (§7, ≤ 2 s to a full table) is a ceiling, and
- * the number underneath it is the thing worth watching from run to run.
+ * Two timings are asserted, and they are different claims. The **warm** one (§7, ≤ 2 s from joining a
+ * room to every seat's face) is the ordinary path, with the chunk and the bundles already in hand. The
+ * **cold** one (≤ 5 s to a fresh browser's first face) is the one a player waiting on a download feels,
+ * and without it §7's ceiling would go on passing however slow a cold start became. Both are also logged,
+ * because the number underneath a ceiling is what is worth watching from run to run.
  */
 
 /** The eight `SKIN_TONES`/`HAIR_PRESETS`/six `EYE_COLORS` of `src/avatar3d/config.ts`, by position. */
@@ -52,15 +55,16 @@ async function renderedHash(portrait: Locator, what: string): Promise<string> {
 }
 
 /** Waits for the lobby bar's face to be something other than `was`, and says how long it took. */
-async function lobbyHashAfter(page: Page, was: string | null, what: string): Promise<string> {
+async function lobbyHashAfter(page: Page, was: string | null, what: string): Promise<{ hash: string; ms: number }> {
   const started = Date.now()
   const face = lobbyAvatar(page)
   if (was !== null) {
     await expect(face.locator('img'), `${what} must not still be the previous face`).not.toHaveAttribute('data-hash', was, { timeout: 30_000 })
   }
   const hash = await renderedHash(face, what)
-  console.log(`[avatar3d] ${what}: ${hash} in ${Date.now() - started} ms`)
-  return hash
+  const ms = Date.now() - started
+  console.log(`[avatar3d] ${what}: ${hash} in ${ms} ms`)
+  return { hash, ms }
 }
 
 /** The radio inputs of one wardrobe group, in the order the screen lays them out. */
@@ -98,7 +102,7 @@ test.describe('Bind Poker Normal — nhân vật 3D', () => {
     await register(page, who)
 
     // --- 1. the lobby draws a picture, not a letter ---------------------------------------------------
-    const first = await lobbyHashAfter(page, null, 'lobby portrait, straight after registering')
+    const { hash: first } = await lobbyHashAfter(page, null, 'lobby portrait, straight after registering')
     await shot(page, 'avatar3d-lobby-desktop')
 
     // --- 2. the stage, on the profile ------------------------------------------------------------------
@@ -128,14 +132,14 @@ test.describe('Bind Poker Normal — nhân vật 3D', () => {
     // wardrobe's `invalidate` is what makes the very next fetch skip the browser's own cache. A reload
     // throws that away and would be reading a minute-old face (see docs/normal-web.md).
     await toLobby(page)
-    const second = await lobbyHashAfter(page, first, 'lobby portrait after switching body, skin and hair colour')
+    const { hash: second } = await lobbyHashAfter(page, first, 'lobby portrait after switching body, skin and hair colour')
 
     // --- 4. a third outfit, so three configurations have three hashes -----------------------------------
     await openWardrobe(page)
     await group(page, 'eyeColor').nth(EYE_AT).check()
     await save(page)
     await toLobby(page)
-    const third = await lobbyHashAfter(page, second, 'lobby portrait after changing eye colour')
+    const { hash: third } = await lobbyHashAfter(page, second, 'lobby portrait after changing eye colour')
     expect(new Set([first, second, third]).size, 'three configurations must be three pictures').toBe(3)
 
     // --- 5. a seat at a table shows the same face -------------------------------------------------------
@@ -156,7 +160,12 @@ test.describe('Bind Poker Normal — nhân vật 3D', () => {
     const mine = await renderedHash(seats.first(), 'the seat plate')
     const ready = Date.now() - joinedAt
     console.log(`[avatar3d] room join → every seat portrait ready: ${ready} ms (1 human, 1 bot)`)
-    // Design §7: nine faces inside two seconds. One of them had better be well under it.
+    // Design §7: nine faces inside two seconds. **This is the warm path** — the lazy chunk, the five
+    // `.glb` bundles and this face's own blob in IndexedDB are all in hand by now, so what it measures
+    // is a blob lookup plus a seat round-trip, not a portrait pipeline. It is the ordinary case and it
+    // is worth a ceiling, but a green tick here is not coverage of §7's cold nine-seat claim: the cold
+    // number is asserted separately at the end, and the nine-seat case is not covered at all
+    // (docs/known-limitations.md).
     expect(ready, 'the table must not sit faceless while the assets arrive').toBeLessThanOrEqual(2_000)
     expect(mine, 'the seat draws the same face as the lobby bar').toBe(third)
     await shot(page, 'avatar3d-seat-desktop')
@@ -189,9 +198,24 @@ test.describe('Bind Poker Normal — nhân vật 3D', () => {
     // drops the first page's socket. Everything that needs a connected lobby has happened by now.
     const elsewhere = await browser.newContext()
     const other = await elsewhere.newPage()
+    // A fresh context starts with empty storage, and this asserts it rather than assuming it: if a future
+    // Playwright reused a profile the number below would quietly become a second warm measurement.
+    await other.goto('/')
+    const held = await other.evaluate(async () => {
+      const databases = await indexedDB.databases()
+      for (const { name } of databases) if (name) indexedDB.deleteDatabase(name)
+      return databases.length
+    })
+    expect(held, 'a fresh browser context must have no portrait cache to start from').toBe(0)
     await signIn(other, who)
-    const away = await lobbyHashAfter(other, null, 'lobby portrait on a second device, cold')
+    const { hash: away, ms: cold } = await lobbyHashAfter(other, null, 'lobby portrait on a second device, cold')
     expect(away, 'the second device draws exactly what was saved').toBe(third)
+    // The cold path, asserted as well as logged: three.js' 150 KB gzip chunk, the manifest, up to five
+    // `.glb` bundles and a first render, from nothing, on a software rasteriser. It measures 3.0–3.5 s
+    // here, so the ceiling is 5 s — loose enough not to flake on a slow runner, tight enough that
+    // doubling the download or losing the IndexedDB cache turns this red instead of only slow. Until it
+    // finishes, the face is the player's initial on a disc, which is the designed fallback.
+    expect(cold, 'a cold browser must reach its first drawn face inside five seconds').toBeLessThanOrEqual(5_000)
     await elsewhere.close()
   })
 
