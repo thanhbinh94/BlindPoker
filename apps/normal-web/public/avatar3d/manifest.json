@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-06T07:33:15.320Z",
+  "generatedAt": "2026-09-06T12:35:03.121Z",
   "placeholder": false,
   "compression": "meshopt",
-  "mapSha256": "746647857edc97de107f909eedcd164b11cfda2fca8827c53091793816a0cab5",
+  "mapSha256": "8773335c96d27e806d0152d7b8cb0f3cb2b2e2faeb95f487268ff8b73d442b8d",
   "files": {
     "accessories.glb": {
       "bytes": 86808,
@@ -21,13 +21,13 @@
       "skins": 1
     },
     "hair.glb": {
-      "bytes": 98288,
-      "sha256": "86f080e67a187ab7f728b4df5a15c08f70ce6ec6c13148c616f64c4995d31815",
+      "bytes": 96608,
+      "sha256": "1186a7cb7df35c9b5364e74cbfca91f9fcc77ecb1a9d32a82da5d3fbb0076317",
       "skins": 0
     },
     "outfits.glb": {
-      "bytes": 645336,
-      "sha256": "470d94f3ebb9110c133669f53471e0038606389425f4498850fb1e3f9e073498",
+      "bytes": 528144,
+      "sha256": "4c3eed619d1ee685c9498ebcfce4918f9ff5c96019965b63b367bc47c4446a47",
       "skins": 2
     }
   },
@@ -168,34 +168,34 @@
     },
     "bottom/bottom_jeans/female": {
       "file": "outfits.glb",
-      "bytes": 11854,
+      "bytes": 11802,
       "bounds": {
         "min": [
-          -0.206,
-          0.411,
-          -0.155
+          -0.22,
+          0.195,
+          -0.18
         ],
         "max": [
-          0.206,
-          1.062,
-          0.085
+          0.22,
+          1.078,
+          0.104
         ]
       },
       "tint": "#3b4a63"
     },
     "bottom/bottom_jeans/male": {
       "file": "outfits.glb",
-      "bytes": 11132,
+      "bytes": 11080,
       "bounds": {
         "min": [
-          -0.182,
-          0.423,
-          -0.154
+          -0.213,
+          0.196,
+          -0.175
         ],
         "max": [
-          0.182,
-          1.051,
-          0.073
+          0.213,
+          1.064,
+          0.117
         ]
       },
       "tint": "#3b4a63"
@@ -205,14 +205,14 @@
       "bytes": 27942,
       "bounds": {
         "min": [
-          -0.199,
-          0.75,
-          -0.149
+          -0.223,
+          0.735,
+          -0.18
         ],
         "max": [
-          0.199,
-          1.091,
-          0.094
+          0.223,
+          1.105,
+          0.11
         ]
       },
       "tint": "#6b7a8f"
@@ -222,14 +222,14 @@
       "bytes": 16118,
       "bounds": {
         "min": [
-          -0.224,
-          0.715,
-          -0.159
+          -0.249,
+          0.699,
+          -0.168
         ],
         "max": [
-          0.224,
-          1.054,
-          0.084
+          0.249,
+          1.062,
+          0.122
         ]
       },
       "tint": "#6b7a8f"
@@ -240,12 +240,12 @@
       "bounds": {
         "min": [
           -0.282,
-          0.685,
+          0.667,
           -0.2
         ],
         "max": [
           0.282,
-          1.091,
+          1.097,
           0.144
         ]
       },
@@ -256,13 +256,13 @@
       "bytes": 16118,
       "bounds": {
         "min": [
-          -0.317,
-          0.65,
+          -0.353,
+          0.624,
           -0.209
         ],
         "max": [
-          0.317,
-          1.054,
+          0.353,
+          1.053,
           0.134
         ]
       },
@@ -270,34 +270,34 @@
     },
     "bottom/bottom_trousers/female": {
       "file": "outfits.glb",
-      "bytes": 11854,
+      "bytes": 11802,
       "bounds": {
         "min": [
-          -0.206,
-          0.411,
-          -0.155
+          -0.22,
+          0.195,
+          -0.18
         ],
         "max": [
-          0.206,
-          1.062,
-          0.085
+          0.22,
+          1.078,
+          0.104
         ]
       },
       "tint": "#2b2b30"
     },
     "bottom/bottom_trousers/male": {
       "file": "outfits.glb",
-      "bytes": 11132,
+      "bytes": 11080,
       "bounds": {
         "min": [
-          -0.182,
-          0.423,
-          -0.154
+          -0.213,
+          0.196,
+          -0.175
         ],
         "max": [
-          0.182,
-          1.051,
-          0.073
+          0.213,
+          1.064,
+          0.117
         ]
       },
       "tint": "#2b2b30"
@@ -368,7 +368,7 @@
     },
     "hair/hair_long/female": {
       "file": "hair.glb",
-      "bytes": 31755,
+      "bytes": 36114,
       "bounds": {
         "min": [
           -0.122,
@@ -384,7 +384,7 @@
     },
     "hair/hair_long/male": {
       "file": "hair.glb",
-      "bytes": 31755,
+      "bytes": 36114,
       "bounds": {
         "min": [
           -0.122,
@@ -464,33 +464,33 @@
     },
     "hair/hair_ponytail/female": {
       "file": "hair.glb",
-      "bytes": 31755,
+      "bytes": 28383,
       "bounds": {
         "min": [
-          -0.088,
+          -0.103,
           1.501,
-          -0.148
+          -0.153
         ],
         "max": [
-          0.088,
+          0.103,
           1.777,
-          0.095
+          0.101
         ]
       }
     },
     "hair/hair_ponytail/male": {
       "file": "hair.glb",
-      "bytes": 31755,
+      "bytes": 28383,
       "bounds": {
         "min": [
-          -0.088,
-          1.501,
-          -0.148
+          -0.115,
+          1.508,
+          -0.153
         ],
         "max": [
-          0.088,
-          1.777,
-          0.095
+          0.115,
+          1.811,
+          0.101
         ]
       }
     },
@@ -800,15 +800,15 @@
     },
     "shoes/shoes_boots/female": {
       "file": "outfits.glb",
-      "bytes": 151576,
+      "bytes": 124646,
       "bounds": {
         "min": [
-          -0.201,
-          -0.003,
-          -0.169
+          -0.205,
+          -0.029,
+          -0.183
         ],
         "max": [
-          0.201,
+          0.205,
           0.556,
           0.165
         ]
@@ -817,16 +817,16 @@
     },
     "shoes/shoes_boots/male": {
       "file": "outfits.glb",
-      "bytes": 151768,
+      "bytes": 119750,
       "bounds": {
         "min": [
-          -0.178,
-          -0.003,
-          -0.169
+          -0.214,
+          -0.03,
+          -0.182
         ],
         "max": [
-          0.178,
-          0.556,
+          0.214,
+          0.558,
           0.165
         ]
       },
@@ -834,11 +834,11 @@
     },
     "shoes/shoes_sandals/female": {
       "file": "outfits.glb",
-      "bytes": 48068,
+      "bytes": 55672,
       "bounds": {
         "min": [
           -0.206,
-          -0.007,
+          -0.03,
           -0.167
         ],
         "max": [
@@ -851,15 +851,15 @@
     },
     "shoes/shoes_sandals/male": {
       "file": "outfits.glb",
-      "bytes": 46880,
+      "bytes": 54216,
       "bounds": {
         "min": [
-          -0.179,
-          -0.004,
-          -0.162
+          -0.209,
+          -0.03,
+          -0.164
         ],
         "max": [
-          0.179,
+          0.209,
           0.15,
           0.168
         ]
@@ -868,11 +868,11 @@
     },
     "shoes/shoes_sneakers/female": {
       "file": "outfits.glb",
-      "bytes": 48068,
+      "bytes": 58688,
       "bounds": {
         "min": [
           -0.21,
-          -0.007,
+          -0.029,
           -0.171
         ],
         "max": [
@@ -885,15 +885,15 @@
     },
     "shoes/shoes_sneakers/male": {
       "file": "outfits.glb",
-      "bytes": 46880,
+      "bytes": 57492,
       "bounds": {
         "min": [
-          -0.182,
-          -0.004,
+          -0.208,
+          -0.03,
           -0.166
         ],
         "max": [
-          0.182,
+          0.208,
           0.267,
           0.171
         ]
@@ -902,238 +902,238 @@
     },
     "top/clothing_aodai/female": {
       "file": "outfits.glb",
-      "bytes": 148651,
+      "bytes": 74696,
       "bounds": {
         "min": [
-          -0.832,
+          -0.862,
           0.85,
-          -0.142
+          -0.192
         ],
         "max": [
-          0.832,
-          1.518,
-          0.135
+          0.862,
+          1.521,
+          0.169
         ]
       },
       "tint": "#f2d7bd"
     },
     "top/clothing_aodai/male": {
       "file": "outfits.glb",
-      "bytes": 127224,
+      "bytes": 107100,
       "bounds": {
         "min": [
-          -0.899,
-          0.756,
-          -0.184
+          -0.951,
+          0.73,
+          -0.189
         ],
         "max": [
-          0.899,
-          1.559,
-          0.125
+          0.951,
+          1.581,
+          0.15
         ]
       },
       "tint": "#f2d7bd"
     },
     "top/clothing_hoodie/female": {
       "file": "outfits.glb",
-      "bytes": 120038,
+      "bytes": 73571,
       "bounds": {
         "min": [
-          -0.832,
-          0.988,
+          -0.858,
+          0.986,
           -0.21
         ],
         "max": [
-          0.832,
+          0.858,
           1.794,
-          0.135
+          0.165
         ]
       },
       "tint": "#59616e"
     },
     "top/clothing_hoodie/male": {
       "file": "outfits.glb",
-      "bytes": 100911,
+      "bytes": 82066,
       "bounds": {
         "min": [
-          -0.899,
-          0.921,
-          -0.193
+          -0.948,
+          0.917,
+          -0.194
         ],
         "max": [
-          0.899,
+          0.948,
           1.865,
-          0.141
+          0.149
         ]
       },
       "tint": "#59616e"
     },
     "top/clothing_kimono/female": {
       "file": "outfits.glb",
-      "bytes": 83522,
+      "bytes": 30673,
       "bounds": {
         "min": [
-          -0.832,
-          0.988,
-          -0.142
+          -0.858,
+          0.986,
+          -0.156
         ],
         "max": [
-          0.832,
-          1.518,
-          0.135
+          0.858,
+          1.52,
+          0.165
         ]
       },
       "tint": "#8c1f2f"
     },
     "top/clothing_kimono/male": {
       "file": "outfits.glb",
-      "bytes": 64395,
+      "bytes": 39324,
       "bounds": {
         "min": [
-          -0.899,
-          0.921,
-          -0.184
+          -0.948,
+          0.917,
+          -0.187
         ],
         "max": [
-          0.899,
-          1.559,
-          0.125
+          0.948,
+          1.577,
+          0.149
         ]
       },
       "tint": "#8c1f2f"
     },
     "top/clothing_polo/female": {
       "file": "outfits.glb",
-      "bytes": 11843,
+      "bytes": 10868,
       "bounds": {
         "min": [
-          -0.172,
-          0.988,
-          -0.142
+          -0.191,
+          0.986,
+          -0.156
         ],
         "max": [
-          0.172,
-          1.518,
-          0.135
+          0.191,
+          1.52,
+          0.165
         ]
       },
       "tint": "#2f6f8f"
     },
     "top/clothing_polo/male": {
       "file": "outfits.glb",
-      "bytes": 21939,
+      "bytes": 19298,
       "bounds": {
         "min": [
-          -0.373,
-          0.921,
-          -0.184
+          -0.394,
+          0.917,
+          -0.187
         ],
         "max": [
-          0.373,
-          1.559,
-          0.125
+          0.394,
+          1.577,
+          0.149
         ]
       },
       "tint": "#2f6f8f"
     },
     "top/clothing_suit/female": {
       "file": "outfits.glb",
-      "bytes": 109169,
+      "bytes": 72697,
       "bounds": {
         "min": [
-          -0.832,
+          -0.858,
           0.919,
-          -0.182
+          -0.185
         ],
         "max": [
-          0.832,
-          1.541,
-          0.164
+          0.858,
+          1.543,
+          0.165
         ]
       },
       "tint": "#232a3c"
     },
     "top/clothing_suit/male": {
       "file": "outfits.glb",
-      "bytes": 110420,
+      "bytes": 66150,
       "bounds": {
         "min": [
-          -0.899,
+          -0.948,
           0.909,
           -0.206
         ],
         "max": [
-          0.899,
-          1.6,
-          0.137
+          0.948,
+          1.615,
+          0.151
         ]
       },
       "tint": "#232a3c"
     },
     "top/jacket_champion/female": {
       "file": "outfits.glb",
-      "bytes": 137321,
+      "bytes": 106225,
       "bounds": {
         "min": [
-          -0.832,
+          -0.858,
           0.919,
-          -0.182
+          -0.185
         ],
         "max": [
-          0.832,
-          1.541,
-          0.164
+          0.858,
+          1.543,
+          0.165
         ]
       },
       "tint": "#c8a038"
     },
     "top/jacket_champion/male": {
       "file": "outfits.glb",
-      "bytes": 138572,
+      "bytes": 97130,
       "bounds": {
         "min": [
-          -0.899,
+          -0.948,
           0.909,
           -0.206
         ],
         "max": [
-          0.899,
-          1.6,
-          0.137
+          0.948,
+          1.615,
+          0.151
         ]
       },
       "tint": "#c8a038"
     },
     "top/top_tee/female": {
       "file": "outfits.glb",
-      "bytes": 11843,
+      "bytes": 10868,
       "bounds": {
         "min": [
-          -0.172,
-          0.988,
-          -0.142
+          -0.191,
+          0.986,
+          -0.156
         ],
         "max": [
-          0.172,
-          1.518,
-          0.135
+          0.191,
+          1.52,
+          0.165
         ]
       },
       "tint": "#e6e2d8"
     },
     "top/top_tee/male": {
       "file": "outfits.glb",
-      "bytes": 21939,
+      "bytes": 19298,
       "bounds": {
         "min": [
-          -0.373,
-          0.921,
-          -0.184
+          -0.394,
+          0.917,
+          -0.187
         ],
         "max": [
-          0.373,
-          1.559,
-          0.125
+          0.394,
+          1.577,
+          0.149
         ]
       },
       "tint": "#e6e2d8"

@@ -313,10 +313,12 @@ function readSkeleton(skin, path) {
 /**
  * Pull one node's primitives out of a source document as plain arrays.
  *
- * A *skinned* node's transform is ignored, exactly as glTF requires: the vertices are already in the
- * skeleton's bind space, which is the space every part of both packs shares. An unskinned node (the
- * hairstyles) gets its world matrix baked in instead. Skinned nodes also carry their joint indices and
- * weights through, so the output can be posed; see the file header for why that is worth its bytes.
+ * A *skinned* node's transform is ignored, exactly as glTF requires: the vertices are already in its
+ * own skeleton's bind space. That space is **not** shared between the packs — the outfit rig stands its
+ * thighs 2.3 cm and its shoulders 2 cm closer to the centre line than the base rig does — which is what
+ * `fitParts` below exists to correct. An unskinned node (the hairstyles) gets its world matrix baked in
+ * instead. Skinned nodes also carry their joint indices and weights through, so the output can be posed;
+ * see the file header for why that is worth its bytes.
  */
 function readParts(doc, node, path) {
   const mesh = node.getMesh()
@@ -410,8 +412,14 @@ function boundsOf(parts) {
  * bottom edge* (so the crest grows out of the skull, not through it). The anchor is what makes the
  * result attach in the right place; without it a scale about the origin would send the part to the floor,
  * two metres below where it belongs.
+ *
+ * A `merge` entry marked `unscaled` is left out of both the bounding box and the transform. It is what
+ * lets `clothing_aodai` lengthen the *tunic* to the knee without dragging the sleeves merged beside it
+ * two thirds of the way down the arms with it.
  */
-function applyScale(parts, scale, anchor) {
+function applyScale(allParts, scale, anchor) {
+  const parts = allParts.filter((part) => !part.unscaled)
+  if (parts.length === 0) return
   const { min, max } = boundsOf(parts)
   const centre = [(min[0] + max[0]) / 2, 0, (min[2] + max[2]) / 2]
   centre[1] = anchor === 'top' ? max[1] : anchor === 'center' ? (min[1] + max[1]) / 2 : min[1]
@@ -471,6 +479,259 @@ async function simplifyParts(parts, ratio) {
     if (part.weights) part.weights = Float32Array.from(weights)
     part.indices = indices
   }
+}
+
+// ───────────────────────────────────────────────────────── fitting to a body ──
+/**
+ * Why a garment has to be *fitted* to a body at build time.
+ *
+ * The two CC0 packs were not modelled for each other. The bodies are the base pack's **Superhero**
+ * build; every garment is cut for the outfit pack's own **Regular** body, which is both slimmer and
+ * differently rigged — its thighs sit at x = ±0.091 against the base rig's ±0.114, its shoulders at
+ * ±0.192 against ±0.212. Dropped onto a Superhero body unchanged, a garment is *inside* it: measured
+ * against the nearest body surface, the ranger legs sink up to 40 mm and the ranger jerkin up to 54 mm.
+ * What that renders as is the bug this pass fixes — a trouser leg that shows as a few ragged blue
+ * patches on an otherwise bare thigh, a tunic that reads as a crop top because the chest comes through
+ * it, sleeves floating an inch off the arms.
+ *
+ * Two operations, in this order, and both are geometry the *build* does so the renderer never has to:
+ *
+ * 1. **Retarget** (`retargetParts`). Re-express the mesh in the body's bind pose by pushing every
+ *    vertex through `W_body(joint) · IBM_source(joint)`, blended by its skin weights, and re-bind it to
+ *    the body's skeleton with the joint indices remapped by name. This is what puts the trouser legs
+ *    over the body's legs and the sleeves on the body's arms, and it is a *correctness* fix as much as
+ *    a cosmetic one: afterwards a garment and the body turn about the same joints, so
+ *    `manifest.pose.armsDown` moves them together instead of 2 cm apart. It also collapses every rig in
+ *    `outfits.glb` onto the two the bodies use, which is what keeps that file at one skin per body.
+ * 2. **Shrinkwrap** (`conformParts`). Project every vertex that is inside the body — or within
+ *    `margin` of it — onto the body's surface plus `margin` along the surface normal there. The
+ *    silhouette becomes the body's, which for a stylised figure seen at 128 px is exactly right: cloth
+ *    on skin. Anything genuinely standing off the body (a hood, a pauldron, a skirt's flare, a boot
+ *    sole) is further out than `margin` and is not touched at all.
+ *
+ * The margin is per slot (`fit.margin` in the map) so a top can sit *over* a bottom rather than
+ * z-fighting it at the waist. An item may override with its own `fit`, or opt out with `fit: false`.
+ */
+
+/** One joint's 4×4 out of a packed inverse-bind-matrix table. */
+const matAt = (array, index) => Array.from(array.subarray(index * 16, index * 16 + 16))
+
+/**
+ * Move a mesh from the rig it was modelled on to the body's, and re-bind it there.
+ *
+ * A no-op for anything already on the body's skeleton (the body itself) or not skinned at all (hair,
+ * and the generated accessories, which are placed against the body's own joint table to begin with).
+ */
+function retargetParts(parts, target, key) {
+  const index = new Map(target.names.map((name, at) => [name, at]))
+  for (const part of parts) {
+    const source = part.skeleton
+    if (!source || source.id === target.id) continue
+    const remap = source.names.map((name) => {
+      const at = index.get(name)
+      if (at === undefined) fail(`${key} is rigged to a joint "${name}" the body's rig has not got`)
+      return at
+    })
+    const transforms = source.names.map((_, i) => multiply(invert(matAt(target.ibm, remap[i])), matAt(source.ibm, i)))
+    const blended = new Array(16)
+    for (let v = 0; v < part.positions.length / 3; v++) {
+      blended.fill(0)
+      let total = 0
+      for (let c = 0; c < 4; c++) {
+        const weight = part.weights[v * 4 + c]
+        if (weight === 0) continue
+        const transform = transforms[part.joints[v * 4 + c]]
+        for (let e = 0; e < 16; e++) blended[e] += transform[e] * weight
+        total += weight
+      }
+      // A vertex with no weights at all is left where it is rather than collapsed onto the origin.
+      if (total === 0) continue
+      for (let e = 0; e < 16; e++) blended[e] /= total
+      const at = v * 3
+      part.positions.set(transformPoint(blended, [part.positions[at], part.positions[at + 1], part.positions[at + 2]]), at)
+      const n3 = normalMatrix(blended)
+      part.normals.set(transformNormal(n3, [part.normals[at], part.normals[at + 1], part.normals[at + 2]]), at)
+    }
+    for (let i = 0; i < part.joints.length; i++) part.joints[i] = remap[part.joints[i]]
+    part.skeleton = target
+  }
+}
+
+/** The body's own triangles, as one indexed soup — what a garment is projected onto. */
+function surfaceOf(parts) {
+  const positions = []
+  const normals = []
+  const indices = []
+  for (const part of parts) {
+    const base = positions.length / 3
+    for (const value of part.positions) positions.push(value)
+    for (const value of part.normals) normals.push(value)
+    for (const value of part.indices) indices.push(base + value)
+  }
+  return { positions: Float32Array.from(positions), normals: Float32Array.from(normals), indices: Uint32Array.from(indices) }
+}
+
+/** Side of a cell in the uniform grid the projection searches. Roughly a hand's breadth. */
+const GRID_CELL = 0.04
+
+/** Every triangle of a surface, bucketed by the cells its bounding box touches. */
+function buildGrid(surface) {
+  const cells = new Map()
+  for (let t = 0; t < surface.indices.length / 3; t++) {
+    const min = [Infinity, Infinity, Infinity]
+    const max = [-Infinity, -Infinity, -Infinity]
+    for (let corner = 0; corner < 3; corner++) {
+      const at = surface.indices[t * 3 + corner] * 3
+      for (let a = 0; a < 3; a++) {
+        min[a] = Math.min(min[a], surface.positions[at + a])
+        max[a] = Math.max(max[a], surface.positions[at + a])
+      }
+    }
+    for (let i = Math.floor(min[0] / GRID_CELL); i <= Math.floor(max[0] / GRID_CELL); i++) {
+      for (let j = Math.floor(min[1] / GRID_CELL); j <= Math.floor(max[1] / GRID_CELL); j++) {
+        for (let k = Math.floor(min[2] / GRID_CELL); k <= Math.floor(max[2] / GRID_CELL); k++) {
+          const key = `${i},${j},${k}`
+          const bucket = cells.get(key)
+          if (bucket) bucket.push(t)
+          else cells.set(key, [t])
+        }
+      }
+    }
+  }
+  return cells
+}
+
+/**
+ * The point of triangle `abc` nearest `p`, as barycentric weights — Ericson's region test.
+ *
+ * Barycentric rather than the point itself because the *normal* there has to be interpolated from the
+ * three vertex normals: a face normal would shade the fitted garment as flat facets of the body.
+ */
+function closestOnTriangle(p, a, b, c) {
+  const sub = (u, v) => [u[0] - v[0], u[1] - v[1], u[2] - v[2]]
+  const dot = (u, v) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2]
+  const ab = sub(b, a)
+  const ac = sub(c, a)
+  const ap = sub(p, a)
+  const d1 = dot(ab, ap)
+  const d2 = dot(ac, ap)
+  if (d1 <= 0 && d2 <= 0) return [1, 0, 0]
+  const bp = sub(p, b)
+  const d3 = dot(ab, bp)
+  const d4 = dot(ac, bp)
+  if (d3 >= 0 && d4 <= d3) return [0, 1, 0]
+  const vc = d1 * d4 - d3 * d2
+  if (vc <= 0 && d1 >= 0 && d3 <= 0) {
+    const v = d1 / (d1 - d3)
+    return [1 - v, v, 0]
+  }
+  const cp = sub(p, c)
+  const d5 = dot(ab, cp)
+  const d6 = dot(ac, cp)
+  if (d6 >= 0 && d5 <= d6) return [0, 0, 1]
+  const vb = d5 * d2 - d1 * d6
+  if (vb <= 0 && d2 >= 0 && d6 <= 0) {
+    const w = d2 / (d2 - d6)
+    return [1 - w, 0, w]
+  }
+  const va = d3 * d6 - d5 * d4
+  if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) {
+    const w = (d4 - d3) / (d4 - d3 + (d5 - d6))
+    return [0, 1 - w, w]
+  }
+  const denom = 1 / (va + vb + vc)
+  const v = vb * denom
+  const w = vc * denom
+  return [1 - v - w, v, w]
+}
+
+/** Where `p` lands on the surface, and the interpolated normal there — or `null` if nothing is near. */
+function project(surface, cells, p) {
+  const base = [Math.floor(p[0] / GRID_CELL), Math.floor(p[1] / GRID_CELL), Math.floor(p[2] / GRID_CELL)]
+  const seen = new Set()
+  let best = null
+  let distance = Infinity
+  for (let ring = 0; ring <= 8; ring++) {
+    for (let i = base[0] - ring; i <= base[0] + ring; i++) {
+      for (let j = base[1] - ring; j <= base[1] + ring; j++) {
+        for (let k = base[2] - ring; k <= base[2] + ring; k++) {
+          // Only the shell of the cube is new on each ring; its interior was searched already.
+          const onShell = Math.abs(i - base[0]) === ring || Math.abs(j - base[1]) === ring || Math.abs(k - base[2]) === ring
+          if (ring > 0 && !onShell) continue
+          const bucket = cells.get(`${i},${j},${k}`)
+          if (!bucket) continue
+          for (const t of bucket) {
+            if (seen.has(t)) continue
+            seen.add(t)
+            const corners = [0, 1, 2].map((corner) => surface.indices[t * 3 + corner] * 3)
+            const vertices = corners.map((at) => [surface.positions[at], surface.positions[at + 1], surface.positions[at + 2]])
+            const bary = closestOnTriangle(p, ...vertices)
+            const point = [0, 1, 2].map((a) => bary[0] * vertices[0][a] + bary[1] * vertices[1][a] + bary[2] * vertices[2][a])
+            const d = Math.hypot(p[0] - point[0], p[1] - point[1], p[2] - point[2])
+            if (d >= distance) continue
+            distance = d
+            const normal = [0, 1, 2].map(
+              (a) => bary[0] * surface.normals[corners[0] + a] + bary[1] * surface.normals[corners[1] + a] + bary[2] * surface.normals[corners[2] + a],
+            )
+            const length = Math.hypot(...normal) || 1
+            best = { point, normal: normal.map((v) => v / length) }
+          }
+        }
+      }
+    }
+    // A triangle inside the cube searched so far is only *the* nearest once the cube's inradius covers
+    // it; anything closer would have to be in a cell this ring has not reached.
+    if (best !== null && distance <= ring * GRID_CELL) break
+  }
+  return best
+}
+
+/**
+ * Push every vertex that is inside the body — or nearer than `margin` — out onto the body's surface.
+ *
+ * Results are cached by position: the seams of a low-poly garment duplicate a vertex two or three
+ * times over (one per hard edge) and every copy has to move identically or the mesh tears open.
+ */
+function conformParts(parts, surface, cells, margin) {
+  const cache = new Map()
+  for (const part of parts) {
+    for (let v = 0; v < part.positions.length / 3; v++) {
+      const at = v * 3
+      const p = [part.positions[at], part.positions[at + 1], part.positions[at + 2]]
+      const key = `${Math.round(p[0] * 1e5)},${Math.round(p[1] * 1e5)},${Math.round(p[2] * 1e5)}`
+      let moved = cache.get(key)
+      if (moved === undefined) {
+        const hit = project(surface, cells, p)
+        const outside = hit === null ? Infinity : (p[0] - hit.point[0]) * hit.normal[0] + (p[1] - hit.point[1]) * hit.normal[1] + (p[2] - hit.point[2]) * hit.normal[2]
+        moved =
+          hit === null || outside >= margin
+            ? null
+            : { position: [0, 1, 2].map((a) => hit.point[a] + hit.normal[a] * margin), normal: hit.normal }
+        cache.set(key, moved)
+      }
+      if (moved === null) continue
+      part.positions.set(moved.position, at)
+      // The garment now *is* the body's surface offset outwards, so the body's own interpolated normal
+      // is the honest one — the mesh's own would shade a shape it no longer has.
+      part.normals.set(moved.normal, at)
+    }
+  }
+}
+
+/**
+ * How far off the skin this variant sits, in metres, or `null` for a variant that is not fitted.
+ *
+ * The default is the slot's entry in `fit.margin`, which is how the map says *which* slots are fitted
+ * at all: hair comes from the base pack and already belongs to these bodies, so `hair` is not listed
+ * and no hairstyle is touched. An item may name its own margin, or `false` to be left alone.
+ */
+function fitMargin(map, item, variant) {
+  const bySlot = map.fit?.margin?.[item.slot]
+  const own = variant.fit ?? item.fit
+  if (own === false) return null
+  if (typeof own === 'number') return own
+  if (own === true && bySlot === undefined) fail(`item ${item.id} asks to be fitted, but fit.margin has no entry for slot "${item.slot}"`)
+  return bySlot ?? null
 }
 
 // ──────────────────────────────────────────────────────── generated shapes ──
@@ -763,8 +1024,17 @@ function bakedTint(map, parts) {
   return null
 }
 
-/** Read a variant (or a body) from the packs: primary node plus every `merge` entry, then any scale. */
-async function readVariant(map, variant, defaultFile) {
+/**
+ * Read a variant (or a body) from the packs: primary node plus every `merge` entry, then the four
+ * things that can be done to it — retarget, scale, shrinkwrap, decimate, in that order.
+ *
+ * The order is the whole of it. Retargeting first puts the mesh in the body's own space, so a `scale`
+ * is written against the proportions the item will actually have; the shrinkwrap runs after, so
+ * `bottom_shorts` is cut off at the knee *and then* fitted rather than fitted and then cut; and
+ * `simplify` is last, because decimating a mesh and then moving its vertices about would put the
+ * simplifier's error budget somewhere other than where it was spent.
+ */
+async function readVariant(map, variant, defaultFile, fit = null) {
   const entries = [{ ...variant, file: variant.file ?? defaultFile }, ...(variant.merge ?? [])]
   const parts = []
   for (const entry of entries) {
@@ -772,10 +1042,12 @@ async function readVariant(map, variant, defaultFile) {
     const doc = await sourceDoc(path)
     for (const part of readParts(doc, findNode(doc, entry.node, path), path)) {
       const canonical = entry.material ?? map.materials.bySourceName[part.sourceMaterial] ?? map.materials.default
-      parts.push({ ...part, canonical, tint: entry.tint ?? variant.tint })
+      parts.push({ ...part, canonical, tint: entry.tint ?? variant.tint, unscaled: entry.unscaled === true })
     }
   }
+  if (fit?.skeleton) retargetParts(parts, fit.skeleton, fit.key)
   if (variant.scale) applyScale(parts, variant.scale, variant.scaleAnchor ?? 'bottom')
+  if (fit?.margin) conformParts(parts, fit.surface, fit.cells, fit.margin)
   if (variant.simplify) await simplifyParts(parts, variant.simplify)
   return parts
 }
@@ -900,6 +1172,8 @@ async function build({ useMeshopt }) {
   const anchors = {}
   /** The whole joint table per body — the generated accessories are placed against any joint of it. */
   const jointTables = {}
+  /** Per body: the rig every garment is retargeted onto, and the skin every garment is fitted to. */
+  const fits = {}
   for (const body of BODIES) {
     const spec = map.bodies[body]
     jointTables[body] = await readAnchors(map, spec)
@@ -912,6 +1186,13 @@ async function build({ useMeshopt }) {
     const parts = await readVariant(map, spec, spec.file)
     details[`body/${body}`] = { bounds: boundsOf(parts), tint: bakedTint(map, parts) }
     addNode(bundleFor(spec.out), map, `body/${body}`, parts, null, body)
+
+    // The *skin* only, not the eyes and eyebrows merged into the body node beside it: a hood or a
+    // collar projected onto the nearest surface must not find an eyebrow and snap to that.
+    const path = resolveSource(map, spec.file)
+    const doc = await sourceDoc(path)
+    const surface = surfaceOf(readParts(doc, findNode(doc, spec.node, path), path))
+    fits[body] = { skeleton: sharedSkeleton(parts, `body/${body}`), surface, cells: buildGrid(surface) }
   }
 
   const emptyNodes = []
@@ -927,14 +1208,17 @@ async function build({ useMeshopt }) {
         emptyNodes.push({ file, key })
         continue
       }
+      const margin = variant.primitive ? null : fitMargin(map, item, variant)
       const parts = variant.primitive
         ? buildPrimitive(variant.primitive, jointTables[body], variant.tint)
-        : await readVariant(map, variant, variant.file)
+        : await readVariant(map, variant, variant.file, { ...fits[body], margin, key })
       details[key] = { bounds: boundsOf(parts), tint: bakedTint(map, parts) }
-      // Two items that are the same mesh in different colours share one copy of the vertex data.
+      // Two items that are the same mesh in different colours share one copy of the vertex data. The
+      // fit belongs in the key as much as the scale does: the same source mesh fitted at two margins
+      // is two different sets of vertices.
       const cacheKey = variant.primitive
         ? null
-        : JSON.stringify([variant.file, variant.node, variant.merge ?? [], variant.scale ?? [], variant.scaleAnchor ?? '', variant.simplify ?? 0])
+        : JSON.stringify([variant.file, variant.node, variant.merge ?? [], variant.scale ?? [], variant.scaleAnchor ?? '', variant.simplify ?? 0, margin ?? 0])
       addNode(bundleFor(file), map, key, parts, cacheKey, body)
     }
   }

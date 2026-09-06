@@ -1,7 +1,7 @@
 import { Bone, BufferGeometry, DataTexture, Euler, Group, Mesh, MeshStandardMaterial, Object3D, Quaternion, Skeleton, SkinnedMesh } from 'three'
 import { describe, expect, it } from 'vitest'
 import type { AvatarConfigDto } from '../api.js'
-import { assemble, disposeAssembled, nodeKeysOf } from './assemble.js'
+import { assemble, disposeAssembled, nodeKeysOf, poseArmsDown } from './assemble.js'
 import type { AvatarManifest, ManifestNode, NodeLoader } from './assets.js'
 
 /**
@@ -243,6 +243,29 @@ describe('assemble', () => {
       // `root` is not in the pose table, so it keeps the bind orientation.
       expect(boneNamed(root, 'root').quaternion.angleTo(new Quaternion())).toBe(0)
     }
+  })
+
+  it('stands up a rig whose joints three.js renamed to keep them unique in their file', () => {
+    // `outfits.glb` holds a skeleton per body and both name their joints identically, so `GLTFLoader`
+    // hands the second one back as `root_1`, `upperarm_l_1`, … A pose matched on the manifest's names
+    // alone therefore posed every male garment and left every female one with its sleeves out sideways.
+    const group = new Group()
+    const root = new Bone()
+    root.name = 'root_1'
+    const left = new Bone()
+    left.name = 'upperarm_l_1'
+    root.add(left)
+    group.add(root)
+    const mesh = new SkinnedMesh(new BufferGeometry())
+    mesh.bind(new Skeleton([root, left]))
+    group.add(mesh)
+
+    poseArmsDown(group, POSE)
+
+    expect(left.quaternion.angleTo(new Quaternion().setFromEuler(new Euler(0, 0, -1.134, 'XYZ')))).toBeLessThan(1e-6)
+    // `root_1` strips to `root`, which the pose table has never named; the suffix is not a licence to
+    // turn joints the pose says nothing about.
+    expect(root.quaternion.angleTo(new Quaternion())).toBe(0)
   })
 
   it('leaves an unskinned node — hair, an accessory — where the build baked it', async () => {

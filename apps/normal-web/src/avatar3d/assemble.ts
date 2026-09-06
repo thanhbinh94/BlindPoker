@@ -110,6 +110,26 @@ function recolour(node: Object3D, config: AvatarConfigDto, tint: string | undefi
 }
 
 /**
+ * The suffix `GLTFLoader` appends to a node name it has already seen in the same file.
+ *
+ * `GLTFParser.createUniqueName` makes every node name unique within a document, because an animation
+ * track path addresses nodes by name. `outfits.glb` carries **one skeleton per body** and both rigs
+ * name their joints identically, so the second one to be parsed arrives as `root_1`, `upperarm_l_1`, …
+ * — and a pose looked up by the manifest's own joint names then stands the male garments up and leaves
+ * every female one in the T-pose the packs ship. That is precisely what it looked like: sleeves out
+ * sideways while the arms inside them hung down.
+ */
+const UNIQUE_SUFFIX = /_\d+$/
+
+/**
+ * The pose entry for a bone, under its own name or under the one the file gave it before three.js
+ * uniquified it. The raw name is tried first, so a rig that genuinely has a joint called `upperarm_l_1`
+ * keeps its own entry rather than inheriting `upperarm_l`'s.
+ */
+const poseFor = (pose: Record<string, Triple>, name: string): Triple | undefined =>
+  pose[name] ?? pose[name.replace(UNIQUE_SUFFIX, '')]
+
+/**
  * Stand the figure up.
  *
  * The angles are *relative* rotations in each joint's own bind frame — the packs' bind pose is a
@@ -130,7 +150,7 @@ export function poseArmsDown(root: Object3D, pose: Record<string, Triple>): void
     if (!isSkinnedMesh(node) || done.has(node.skeleton)) return
     done.add(node.skeleton)
     for (const bone of node.skeleton.bones) {
-      const rotation = pose[bone.name]
+      const rotation = poseFor(pose, bone.name)
       if (rotation === undefined) continue
       angles.set(rotation[0], rotation[1], rotation[2], 'XYZ')
       bone.quaternion.multiply(turn.setFromEuler(angles))
