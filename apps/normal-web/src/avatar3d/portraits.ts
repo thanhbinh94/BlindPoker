@@ -1,7 +1,9 @@
 import { AmbientLight, DirectionalLight, MathUtils, Object3D, PerspectiveCamera, Scene, WebGLRenderer } from 'three'
 import type { AvatarConfigDto } from '../api.js'
+import { abortError } from './abort.js'
 import { assemble, disposeAssembled, type Assembled } from './assemble.js'
 import { assetLoader } from './assets.js'
+import { CONTEXT_LOST, contextLost, watchContext, type ContextWatch } from './gl-context.js'
 
 /**
  * The one hidden renderer that draws every portrait in the app (avatar-3d design §5, §7).
@@ -38,6 +40,8 @@ interface Stage {
   camera: PerspectiveCamera
   /** The lights and their aim, moved as one to whatever height the head is at. */
   rig: Object3D
+  /** Whether the GPU is still behind the canvas. See `gl-context.ts`. */
+  watch: ContextWatch
 }
 
 let stage: Stage | null = null
@@ -108,7 +112,9 @@ function ensureStage(): Stage {
   rig.add(key, fill, rim)
   scene.add(rig, new AmbientLight(0xffffff, 1.1))
 
-  stage = { renderer, scene, camera, rig }
+  // A context can be taken away at any moment, and everything afterwards still *looks* like it worked.
+  // The watch is what turns that into a rejection instead of a transparent picture in IndexedDB.
+  stage = { renderer, scene, camera, rig, watch: watchContext(canvas) }
   return stage
 }
 
@@ -169,11 +175,18 @@ function toBlob(canvas: HTMLCanvasElement): Promise<Blob> {
 async function draw(config: AvatarConfigDto): Promise<Blob> {
   if (!supported()) throw new Error('this browser has no WebGL2 context to render a portrait with')
   const current = ensureStage()
+  // Before the assets are even fetched: a context that is gone will still be gone in 40 ms, and the
+  // cheapest failure is the one that does no work.
+  if (contextLost(current.watch, current.renderer)) throw new Error(CONTEXT_LOST)
   const built = await assemble(config, assetLoader)
   current.scene.add(built.group)
   try {
     frame(current.camera, current.rig, built)
     current.renderer.render(current.scene, current.camera)
+    // And again with the pixels about to be read: the loss may have happened during the await above, or
+    // during the render itself, and a blank drawing buffer is indistinguishable from a good one. This
+    // check is the whole reason a lost context cannot cache a transparent portrait.
+    if (contextLost(current.watch, current.renderer)) throw new Error(CONTEXT_LOST)
     const out = ensureOutput()
     out.context.clearRect(0, 0, PORTRAIT_PX, PORTRAIT_PX)
     // Same task as the `render` above, which is what makes reading the drawing buffer legal without
@@ -188,18 +201,36 @@ async function draw(config: AvatarConfigDto): Promise<Blob> {
   }
 }
 
+export interface RenderOptions {
+  /**
+   * Drops the job if it aborts before its turn comes up.
+   *
+   * A wardrobe tile is a portrait of *the whole current configuration* with one item swapped in, so one
+   * click on a hair colour changes the hash of all forty tiles at once and queues forty renders. Two
+   * clicks later, thirty-nine of those are pictures of a configuration nobody is looking at any more —
+   * and the queue is sequential, so they are also thirty-nine assemblies standing between the player
+   * and the picture they *are* looking at. The signal is how a caller says "not any more".
+   */
+  signal?: AbortSignal
+}
+
 /**
  * One portrait, 128×128, transparent background.
  *
  * Calls are serialised: the second one starts when the first has its blob, whether that one succeeded
  * or not. The queue is what stops nine seat plates from interleaving nine `render` calls into one
  * canvas and reading each other's pixels.
+ *
+ * The signal is checked when the job reaches the head of the queue rather than during it: a render is
+ * tens of milliseconds and it has the canvas, so there is nothing useful to interrupt half way. What
+ * matters is that the *waiting* ones evaporate.
  */
-export function render(config: AvatarConfigDto): Promise<Blob> {
-  const next = queue.then(
-    () => draw(config),
-    () => draw(config),
-  )
+export function render(config: AvatarConfigDto, options: RenderOptions = {}): Promise<Blob> {
+  const start = (): Promise<Blob> => {
+    if (options.signal?.aborted === true) return Promise.reject(abortError())
+    return draw(config)
+  }
+  const next = queue.then(start, start)
   // The queue itself must never hold a rejection, or one failed portrait would reject every portrait
   // queued behind it. The caller still gets `next`, rejection and all.
   queue = next.then(
@@ -211,7 +242,14 @@ export function render(config: AvatarConfigDto): Promise<Blob> {
 
 /** Releases the context and the canvases. Nothing in the app calls it; a test harness might. */
 export function disposePortraitRenderer(): void {
-  stage?.renderer.dispose()
+  if (stage !== null) {
+    stage.watch.stop()
+    // `dispose()` frees three's own objects but leaves the GL context alive until the canvas is
+    // collected, which may be never; `forceContextLoss` hands it back now. It matters for the budget of
+    // one context for portraits plus one for Task 4's stage.
+    stage.renderer.forceContextLoss()
+    stage.renderer.dispose()
+  }
   stage = null
   output = null
   support = null

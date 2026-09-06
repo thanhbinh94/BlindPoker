@@ -81,6 +81,18 @@ let manifestPromise: Promise<AvatarManifest> | null = null
 let loaderInstance: GLTFLoader | null = null
 const fileNodes = new Map<string, Promise<Map<string, Object3D>>>()
 
+/**
+ * Claim the decoder's own start-up rejection.
+ *
+ * `MeshoptDecoder` calls `WebAssembly.instantiate` at module scope and attaches no rejection handler to
+ * the promise it keeps. Under a Content-Security-Policy without `wasm-unsafe-eval` that instantiation
+ * rejects, and the browser reports an `Uncaught (in promise)` in the console — even though every
+ * portrait then falls back to its initial letter exactly as designed. The decode still fails and
+ * `loadNode` still rejects; what this removes is a console error that says the app is broken when the
+ * only thing that happened is that this browser will not run the pictures.
+ */
+void Promise.resolve(MeshoptDecoder.ready).catch(() => undefined)
+
 function loader(): GLTFLoader {
   if (loaderInstance === null) {
     loaderInstance = new GLTFLoader()
@@ -101,8 +113,21 @@ async function fetchManifest(): Promise<AvatarManifest> {
   return manifest
 }
 
+/**
+ * The manifest, fetched once — but **only a success is remembered**.
+ *
+ * Memoising the promise is what makes eight seat plates cost one request. Memoising a *rejected* one
+ * would make a single 503, or one aborted request while a phone changes network, poison the page: every
+ * later `assemble` would settle on the same failure and every portrait everywhere would be the initial
+ * letter until a reload. So the entry is cleared on the way out of a rejection, and the next portrait
+ * anybody actually asks for is the retry. No budget and no backoff: a browser that keeps failing keeps
+ * showing letters, which is the designed fallback, and each attempt is one small `GET`.
+ */
 export function loadManifest(): Promise<AvatarManifest> {
-  manifestPromise ??= fetchManifest()
+  manifestPromise ??= fetchManifest().catch((cause: unknown) => {
+    manifestPromise = null
+    throw cause
+  })
   return manifestPromise
 }
 
@@ -188,6 +213,7 @@ function detach(source: Object3D): Object3D {
  */
 const sceneName = (key: string): string => PropertyBinding.sanitizeNodeName(key)
 
+/** One bundle's top-level nodes, read once — and, as with the manifest, only a success is kept. */
 async function nodesOf(file: string): Promise<Map<string, Object3D>> {
   const cached = fileNodes.get(file)
   if (cached !== undefined) return cached
@@ -201,7 +227,11 @@ async function nodesOf(file: string): Promise<Map<string, Object3D>> {
       if (node.name !== '' && !isBone(node)) out.set(node.name, node)
     }
     return out
-  })()
+  })().catch((cause: unknown) => {
+    // A `.glb` that failed to arrive must not be a permanent verdict on the items inside it.
+    if (fileNodes.get(file) === pending) fileNodes.delete(file)
+    throw cause
+  })
   fileNodes.set(file, pending)
   return pending
 }

@@ -146,11 +146,22 @@ export function poseArmsDown(root: Object3D, pose: Record<string, Triple>): void
  *
  * Every node is requested at once and added in `nodeKeysOf` order, so the shared per-file cache is hit
  * once per bundle rather than once per item and the resulting graph is still deterministic.
+ *
+ * A node that fails to load is treated exactly like a node the manifest does not carry: wear nothing
+ * there. `Promise.all` would instead let one 404 on `accessories.glb` drop the whole person to an
+ * initial letter, which is a worse answer than a player without their hat — the module already
+ * tolerates a *missing* node and this is the same situation arriving by a different route. The body is
+ * the exception: there is no picture without it, so its failure is the assembly's.
  */
 export async function assemble(config: AvatarConfigDto, loader: NodeLoader): Promise<Assembled> {
   const manifest: AvatarManifest = await loader.manifest()
   const wanted = nodeKeysOf(config)
-  const loaded = await Promise.all(wanted.map((key) => loader.loadNode(key)))
+  const settled = await Promise.allSettled(wanted.map((key) => loader.loadNode(key)))
+  const loaded = settled.map((result, at) => {
+    if (result.status === 'fulfilled') return result.value
+    if (at === 0) throw result.reason as Error
+    return null
+  })
 
   const group = new Group()
   group.name = `avatar/${config.body}`
@@ -178,13 +189,28 @@ export async function assemble(config: AvatarConfigDto, loader: NodeLoader): Pro
 /**
  * Release what an assembly allocated on the GPU.
  *
- * Materials only. The geometry belongs to the per-file cache and is shared by every assembly made from
- * that bundle, so disposing it here would empty the cache under the next portrait's feet.
+ * Two things, and only two:
+ *
+ * - **The cloned materials.** `recolour` gave this assembly its own copies; each one that has been
+ *   drawn owns a shader program.
+ * - **The copied skeletons.** `assets.ts` gives every node its own `Skeleton`, and the first time the
+ *   renderer draws one it builds a bone `DataTexture` for it and never frees it on its own: three's
+ *   GPU bookkeeping is a `WeakMap` with no finaliser, so a skeleton collected without a `dispose`
+ *   leaves its texture allocated for the life of the context. A portrait is a body plus three or four
+ *   garments, and the renderer is a singleton that outlives every screen — four or five leaked
+ *   textures *per portrait*, forever, is what this loop exists to prevent. Disposing is safe precisely
+ *   because the skeleton is this assembly's own copy and never the cached file's.
+ *
+ * The geometry is *not* disposed: it belongs to the per-file cache and is shared by every assembly
+ * made from that bundle, so freeing it here would empty the cache under the next portrait's feet.
  */
 export function disposeAssembled(root: Object3D): void {
+  const skeletons = new Set<Skeleton>()
   root.traverse((node) => {
+    if (isSkinnedMesh(node)) skeletons.add(node.skeleton)
     if (!isMesh(node)) return
     const materials = Array.isArray(node.material) ? node.material : [node.material]
     for (const material of materials) material.dispose()
   })
+  for (const skeleton of skeletons) skeleton.dispose()
 }

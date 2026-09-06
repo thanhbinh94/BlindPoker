@@ -105,10 +105,24 @@ function remember(hash: string, blob: Blob): string {
 }
 
 /**
- * The portrait for this hash if it is already in memory — no promise, no work.
+ * The portrait for this hash if it is already in memory — no promise, no work, and **no trace**.
  *
- * `usePortrait` calls this during render so that a face already drawn once does not go back through
- * `loading`. A miss here says nothing about IndexedDB; it says only "not without awaiting".
+ * `usePortrait` reads this while React is rendering, so that a face already drawn once does not go back
+ * through `loading`. A render pass has to be free of side effects: React may run it twice under
+ * StrictMode, or throw the result away entirely, and an LRU that recorded a use for a render nobody
+ * kept would slowly reorder itself around work that never happened. So the peek does not touch
+ * `lastUsed`; the effect that follows calls `cachedPortrait` and that is what counts as a use.
+ */
+export function peekPortrait(hash: string): string | null {
+  return memory.get(hash)?.url ?? null
+}
+
+/**
+ * The portrait for this hash if it is already in memory, counted as a use.
+ *
+ * Same answer as `peekPortrait`, and it moves the entry to the young end of the LRU. Called from
+ * effects and from `lookupPortrait`. A miss here says nothing about IndexedDB; it says only "not
+ * without awaiting".
  */
 export function cachedPortrait(hash: string): string | null {
   const entry = memory.get(hash)

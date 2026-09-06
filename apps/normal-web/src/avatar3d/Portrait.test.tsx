@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AvatarConfigDto } from '../api.js'
 import { PartPortrait, Portrait } from './Portrait.js'
@@ -118,5 +118,86 @@ describe('PartPortrait', () => {
     render(<PartPortrait config={{ ...CONFIG, hat: 'hat_crown' }} slot="hat" itemId="" />)
 
     await waitFor(() => expect(disc().querySelector('img')).toHaveAttribute('data-hash', hashConfig(CONFIG)))
+  })
+
+  /**
+   * The laziness itself.
+   *
+   * jsdom has no `IntersectionObserver`, and `useNearViewport` reads that as "assume visible" — which
+   * is the right answer for a browser too old to have the API, and means every other test in this file
+   * takes the eager path. So the observed path has never run anywhere but a real browser, even though
+   * it is what keeps a wardrobe of forty tiles from queueing forty renders on open. A stub is enough:
+   * what is being asserted is when the component asks for a picture, not what the viewport is doing.
+   */
+  describe('with an IntersectionObserver', () => {
+    interface Stub {
+      callback: (entries: { isIntersecting: boolean }[]) => void
+      observed: Element[]
+      disconnected: number
+    }
+    let stubs: Stub[] = []
+
+    beforeEach(() => {
+      stubs = []
+      class StubObserver {
+        private readonly stub: Stub
+
+        constructor(callback: (entries: { isIntersecting: boolean }[]) => void) {
+          this.stub = { callback, observed: [], disconnected: 0 }
+          stubs.push(this.stub)
+        }
+
+        observe(node: Element): void {
+          this.stub.observed.push(node)
+        }
+
+        disconnect(): void {
+          this.stub.disconnected += 1
+        }
+
+        unobserve(): void {}
+      }
+      vi.stubGlobal('IntersectionObserver', StubObserver)
+    })
+
+    afterEach(() => {
+      vi.unstubAllGlobals()
+    })
+
+    it('draws nothing until the tile comes near the viewport', async () => {
+      const renderer = fakeRenderer()
+      setPortraitRendererForTests(renderer)
+
+      render(<PartPortrait config={CONFIG} slot="top" itemId="clothing_kimono" />)
+
+      // Below the fold: observed, and costing the render queue nothing.
+      expect(stubs).toHaveLength(1)
+      expect(stubs[0]?.observed).toHaveLength(1)
+      expect(disc()).toHaveAttribute('data-portrait', 'idle')
+      expect(renderer.rendered).toEqual([])
+
+      // An entry that is not intersecting is not an arrival either.
+      act(() => stubs[0]?.callback([{ isIntersecting: false }]))
+      expect(renderer.rendered).toEqual([])
+
+      act(() => stubs[0]?.callback([{ isIntersecting: true }]))
+
+      const tried = withSlot(CONFIG, 'top', 'clothing_kimono')
+      await waitFor(() => expect(disc().querySelector('img')).toHaveAttribute('data-hash', hashConfig(tried)))
+      expect(renderer.rendered).toEqual([hashConfig(tried)])
+      // Once seen, always seen: there is nothing left to watch for.
+      expect(stubs[0]?.disconnected).toBeGreaterThan(0)
+    })
+
+    it('stops observing when the tile unmounts, so a scrolled-past grid leaks nothing', () => {
+      setPortraitRendererForTests(fakeRenderer())
+
+      const view = render(<PartPortrait config={CONFIG} slot="hat" itemId="hat_crown" />)
+      expect(stubs[0]?.disconnected).toBe(0)
+
+      view.unmount()
+
+      expect(stubs[0]?.disconnected).toBe(1)
+    })
   })
 })

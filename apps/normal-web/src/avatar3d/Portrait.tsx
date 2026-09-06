@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import type { AvatarConfigDto, GeometricSlot } from '../api.js'
 import { withSlot } from './config.js'
-import { hashConfig } from './hash.js'
 import { usePortrait } from './usePortrait.js'
 import s from './portrait.module.css'
 
@@ -44,8 +43,10 @@ function initialOf(name: string | undefined): string {
 }
 
 export function Portrait({ config, name, size = 'md', label, className }: PortraitProps) {
-  const { url, status } = usePortrait(config)
-  const hash = config === null ? null : hashConfig(config)
+  // The hash comes back from the hook rather than being computed again here: it is the identity of the
+  // picture `url` actually holds, so the attribute cannot drift from the image beside it while a new
+  // configuration is still being drawn.
+  const { url, status, hash } = usePortrait(config)
   const naming = label === undefined ? { 'aria-hidden': true } : { role: 'img', 'aria-label': label }
 
   return (

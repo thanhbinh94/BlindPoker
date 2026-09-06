@@ -32,6 +32,15 @@ import type { AvatarConfigDto } from '../api.js'
  */
 const FIELDS = ['v', 'body', 'skin', 'eyes', 'hairColor', 'hair', 'top', 'bottom', 'shoes', 'hat', 'accessory', 'jewelry', 'title', 'badge'] as const
 
+/**
+ * The fields whose value is a colour, and which therefore hash case-insensitively.
+ *
+ * `HEX_COLOR` accepts either case, so the wardrobe's free colour box can hold `#C8323C` while the
+ * server — which lower-cases what it stores — hands the same picture back as `#c8323c`. Folding here
+ * is what stops one save from costing a second cache entry and a second render of an identical face.
+ */
+const COLOURS = new Set<string>(['skin', 'eyes', 'hairColor'])
+
 /** FNV-1a's 32-bit offset basis and prime. */
 const OFFSET_BASIS = 0x811c9dc5
 const PRIME = 0x01000193
@@ -48,7 +57,8 @@ export function canonicalConfig(config: AvatarConfigDto): string {
     // slot — and must not hash differently. `null` and `''` reach here from a client that emptied a
     // slot the loose way; they mean the same and are dropped the same.
     if (value === undefined || value === null || value === '') continue
-    parts.push(`${JSON.stringify(field)}:${JSON.stringify(value)}`)
+    const canonical = typeof value === 'string' && COLOURS.has(field) ? value.toLowerCase() : value
+    parts.push(`${JSON.stringify(field)}:${JSON.stringify(canonical)}`)
   }
   return `{${parts.join(',')}}`
 }

@@ -66,6 +66,17 @@ describe('hashConfig', () => {
     expect(hashes.has(hashConfig(CONFIG))).toBe(false)
   })
 
+  it('folds the case of a colour, because the server does', () => {
+    // The free colour box accepts `#C8323C`; the server lower-cases what it saves. Without the fold the
+    // same face is two cache entries and one wasted render on either side of a save.
+    const shouted = { ...CONFIG, skin: '#E0AC81', eyes: '#3B2415', hairColor: '#2B2B2B' }
+
+    expect(hashConfig(shouted)).toBe(hashConfig(CONFIG))
+    expect(canonicalConfig(shouted)).toBe(canonicalConfig(CONFIG))
+    // Item ids are not colours and are not folded: they are matched against the server's own catalogue.
+    expect(hashConfig({ ...CONFIG, hair: 'HAIR_SHORT' })).not.toBe(hashConfig(CONFIG))
+  })
+
   it('writes the fields in a fixed order, whatever order they arrive in', () => {
     expect(canonicalConfig(CONFIG)).toBe(
       '{"v":2,"body":"male","skin":"#e0ac81","eyes":"#3b2415","hairColor":"#2b2b2b","hair":"hair_short","top":"top_tee","bottom":"bottom_jeans","shoes":"shoes_sneakers"}',

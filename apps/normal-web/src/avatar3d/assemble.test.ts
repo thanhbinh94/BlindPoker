@@ -1,7 +1,7 @@
-import { Bone, BufferGeometry, Euler, Group, Mesh, MeshStandardMaterial, Object3D, Quaternion, Skeleton, SkinnedMesh } from 'three'
+import { Bone, BufferGeometry, DataTexture, Euler, Group, Mesh, MeshStandardMaterial, Object3D, Quaternion, Skeleton, SkinnedMesh } from 'three'
 import { describe, expect, it } from 'vitest'
 import type { AvatarConfigDto } from '../api.js'
-import { assemble, nodeKeysOf } from './assemble.js'
+import { assemble, disposeAssembled, nodeKeysOf } from './assemble.js'
 import type { AvatarManifest, ManifestNode, NodeLoader } from './assets.js'
 
 /**
@@ -251,5 +251,105 @@ describe('assemble', () => {
     const hair = built.group.getObjectByName('hair/hair_short/male')
     expect(hair).toBeDefined()
     expect((hair as Object3D).getObjectByName('root')).toBeUndefined()
+  })
+
+  it('drops an item whose bundle would not load, rather than losing the whole person to it', async () => {
+    const loader = stubLoader()
+    const inner = loader.loadNode.bind(loader)
+    loader.loadNode = (key) =>
+      key.startsWith('shoes/') ? Promise.reject(new Error('accessories.glb answered 404')) : inner(key)
+
+    const built = await assemble(CONFIG, loader)
+
+    // The same answer as for an item the manifest does not carry: wear nothing there.
+    expect(built.keys).toEqual(['body/male', 'hair/hair_short/male', 'top/top_tee/male', 'bottom/bottom_jeans/male'])
+    expect(built.group.children).toHaveLength(4)
+  })
+
+  it('fails when the body itself will not load, because there is no picture without it', async () => {
+    const loader = stubLoader()
+    loader.loadNode = (key) => (key === 'body/male' ? Promise.reject(new Error('body-male.glb answered 503')) : Promise.resolve(null))
+
+    await expect(assemble(CONFIG, loader)).rejects.toThrow('503')
+  })
+})
+
+/**
+ * What a finished portrait gives back.
+ *
+ * Both halves matter for the same reason: the renderer is a singleton that outlives every screen, so
+ * anything an assembly leaves on the GPU is leaked for the life of the page — and neither three nor the
+ * browser will collect it, because three's GPU bookkeeping is a `WeakMap` with no finaliser.
+ */
+describe('disposeAssembled', () => {
+  const skeletonsOf = (root: Object3D): Set<Skeleton> => {
+    const found = new Set<Skeleton>()
+    root.traverse((node) => {
+      const mesh = node as SkinnedMesh
+      if (mesh.isSkinnedMesh === true) found.add(mesh.skeleton)
+    })
+    return found
+  }
+
+  it('releases the bone texture of every skeleton in the assembly', async () => {
+    const built = await assemble(CONFIG, stubLoader())
+
+    // Four skinned nodes, four copies of the rig — and three r170 gives each of them its own bone
+    // `DataTexture` the first time it draws it. Standing one in for the renderer here is what lets the
+    // release be observed at all: `Skeleton.dispose()` is exactly "dispose the bone texture".
+    const skeletons = skeletonsOf(built.group)
+    expect(skeletons.size).toBe(4)
+    const released: string[] = []
+    let at = 0
+    for (const skeleton of skeletons) {
+      const texture = new DataTexture()
+      texture.name = `bones-${(at += 1)}`
+      texture.addEventListener('dispose', () => released.push(texture.name))
+      skeleton.boneTexture = texture
+    }
+
+    disposeAssembled(built.group)
+
+    expect(released.sort()).toEqual(['bones-1', 'bones-2', 'bones-3', 'bones-4'])
+    for (const skeleton of skeletons) expect(skeleton.boneTexture).toBeNull()
+  })
+
+  it('disposes the assembly’s own materials and not the loader’s shared originals', async () => {
+    const loader = stubLoader()
+    const built = await assemble(CONFIG, loader)
+
+    const disposed: string[] = []
+    for (const [name, material] of loader.shared) {
+      material.addEventListener('dispose', () => disposed.push(`shared:${name}`))
+    }
+    let clones = 0
+    built.group.traverse((node) => {
+      const mesh = node as Mesh
+      if (mesh.isMesh !== true) return
+      clones += 1
+      ;(mesh.material as MeshStandardMaterial).addEventListener('dispose', () => disposed.push('clone'))
+    })
+
+    disposeAssembled(built.group)
+
+    expect(disposed).toEqual(Array.from({ length: clones }, () => 'clone'))
+  })
+
+  it('leaves the geometry alone, because the per-file cache still owns it', async () => {
+    const built = await assemble(CONFIG, stubLoader())
+
+    const geometries: BufferGeometry[] = []
+    const disposed: BufferGeometry[] = []
+    built.group.traverse((node) => {
+      const mesh = node as Mesh
+      if (mesh.isMesh !== true) return
+      geometries.push(mesh.geometry)
+      mesh.geometry.addEventListener('dispose', () => disposed.push(mesh.geometry))
+    })
+
+    disposeAssembled(built.group)
+
+    expect(geometries.length).toBeGreaterThan(0)
+    expect(disposed).toEqual([])
   })
 })
