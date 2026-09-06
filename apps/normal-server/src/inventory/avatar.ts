@@ -30,6 +30,7 @@ import { ServiceError } from '../errors.js'
 import { players } from '../db/schema.js'
 import type { InventoryService } from './inventory-service.js'
 import type { ItemCatalog } from './items.js'
+import { PALETTES } from './palettes.js'
 import type { Body, RequiredSlot } from './slots.js'
 import { isBody, isGeometricSlot, OPTIONAL_SLOTS, REQUIRED_SLOTS, SLOTS } from './slots.js'
 
@@ -45,11 +46,15 @@ export const AVATAR_CONFIG_VERSION = 2
  * A closed palette rather than a free colour: skin is a material on a shared mesh, the eight are
  * lit and named (`normal-web` holds the names), and an arbitrary hex would let a figure be bright
  * green. Hair is the opposite case and stays free — it is dyed on purpose.
+ *
+ * The values themselves live in `data/palettes.json` rather than here, because the wardrobe has to
+ * offer exactly what this module will accept and `normal-web` cannot import this file. See
+ * `palettes.ts`.
  */
-export const SKIN_TONES: readonly string[] = ['#f7dcc3', '#efc9a4', '#e0ac81', '#c98d62', '#a9714b', '#8a563a', '#66402c', '#452b1e']
+export const SKIN_TONES: readonly string[] = PALETTES.skin
 
 /** The six eye colours, in the same spirit: dark brown, brown, amber, green, blue, grey. */
-export const EYE_COLORS: readonly string[] = ['#3b2415', '#6b4a2f', '#8c6239', '#2f5d50', '#33608c', '#5b5b66']
+export const EYE_COLORS: readonly string[] = PALETTES.eyes
 
 /** `#rrggbb`, and nothing else: the value reaches the client as a material colour. */
 export const HEX_COLOR = /^#[0-9a-f]{6}$/i
