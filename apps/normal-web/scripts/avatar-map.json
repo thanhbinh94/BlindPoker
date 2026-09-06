@@ -248,7 +248,7 @@
           "merge": [{ "file": "@parts/Male_Peasant_Arms.gltf", "node": "Male_Peasant_Arms" }],
           "scale": [1.0, 1.26, 1.0],
           "scaleAnchor": "top",
-          "tint": "#f4f1ea"
+          "tint": "#f2d7bd"
         },
         "female": {
           "file": "@parts/Female_Peasant_Body.gltf",
@@ -256,7 +256,7 @@
           "merge": [{ "file": "@parts/Female_Peasant_Arms.gltf", "node": "Female_Peasant_Arms" }],
           "scale": [1.0, 1.26, 1.0],
           "scaleAnchor": "top",
-          "tint": "#f4f1ea"
+          "tint": "#f2d7bd"
         }
       }
     },
@@ -371,7 +371,7 @@
           "primitive": {
             "anchor": "Head",
             "parts": [
-              { "shape": "cone", "offset": [0, 0.23, 0.005], "radius": 0.27, "height": 0.17, "axis": "y", "material": "cloth_primary", "tint": "#dcbc7c" },
+              { "shape": "cone", "offset": [0, 0.23, 0.005], "radius": 0.27, "height": 0.17, "axis": "y", "material": "cloth_primary", "tint": "#d8b878" },
               { "shape": "torus", "offset": [0, 0.135, 0.005], "radius": 0.1, "tube": 0.008, "axis": "y", "material": "cloth_secondary", "tint": "#8a6a34" }
             ]
           }
@@ -380,7 +380,7 @@
           "primitive": {
             "anchor": "Head",
             "parts": [
-              { "shape": "cone", "offset": [0, 0.235, -0.001], "radius": 0.26, "height": 0.17, "axis": "y", "material": "cloth_primary", "tint": "#dcbc7c" },
+              { "shape": "cone", "offset": [0, 0.235, -0.001], "radius": 0.26, "height": 0.17, "axis": "y", "material": "cloth_primary", "tint": "#d8b878" },
               { "shape": "torus", "offset": [0, 0.14, -0.001], "radius": 0.098, "tube": 0.008, "axis": "y", "material": "cloth_secondary", "tint": "#8a6a34" }
             ]
           }

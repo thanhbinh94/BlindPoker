@@ -7,7 +7,7 @@
  *   node scripts/avatar-assets.mjs --list <path>   print the node, material and joint names of a source
  *                                                  glTF (or every glTF under a directory), which is how
  *                                                  a new `avatar-map.json` entry gets its `node` name
- *   …--meshopt                                     also apply EXT_meshopt_compression (see below)
+ *   …--no-meshopt                                  write plain KHR_mesh_quantization instead (see below)
  *
  * Why a build step at all (design §4). The packs are ~400 MB of rigged FBX/glTF with 2K textures, split
  * across a dozen files whose mesh names mean something to a Blender file and nothing to this app. What
@@ -16,24 +16,36 @@
  * the six things a player can recolour. That renaming is the whole point — after this script runs, no
  * other file in the repository needs to know a source mesh exists.
  *
- * What each node loses on the way through: its skin and every animation (the avatar is static — the bind
- * pose is the T-pose the packs ship, and glTF defines skinned geometry in bind space, so dropping the
- * skin keeps exactly the shape you see in Blender), its texture coordinates, and its textures. Textures
- * go because they cannot survive the budget without a resizer — `sharp` is not installed and the packs'
- * base-colour maps are 1.3–4 MB each — and, more importantly, because they would fight the feature: the
- * body's base colour map bakes in *one* skin tone, and the player picks from eight. Flat PBR materials
- * with a `baseColorFactor` are what a runtime tint can actually address. See `docs/avatar-assets.md`.
+ * What each node loses on the way through: every animation, its texture coordinates, and its textures.
+ * Textures go because they cannot survive the budget without a resizer — `sharp` is not installed and
+ * the packs' base-colour maps are 1.3–4 MB each — and, more importantly, because they would fight the
+ * feature: the body's base colour map bakes in *one* skin tone, and the player picks from eight. Flat
+ * PBR materials with a `baseColorFactor` are what a runtime tint can actually address.
  *
- * Compression: `weld` → `quantize` (KHR_mesh_quantization, positions at 14 bits and normals at 8) →
- * `dedup` → `prune`. Quantization, not meshopt, is the default *even though `meshoptimizer` is
- * installed*: three.js reads KHR_mesh_quantization with no help, but EXT_meshopt_compression throws in
- * `GLTFLoader` unless the caller has wired `setMeshoptDecoder` first — a WASM decoder in the lazy avatar
- * chunk, and a silent black stage the day someone forgets it. The output sits at a third of the budget
- * without it. `--meshopt` turns it on for anyone who later decides the trade is worth making.
+ * What each node *keeps* is its skin. Bodies and outfit parts come out with `JOINTS_0`/`WEIGHTS_0` and a
+ * skeleton, so the renderer can pose the arms at load time (design §4 wants a standing pose, and the
+ * bind pose the packs ship is a T-pose). Hair and the generated accessories stay unskinned at the bind
+ * position: only the arms are ever rotated, and nothing that sits on the head moves when they are. The
+ * angles to rotate by are published in the manifest as `pose.armsDown` — see `ARMS_DOWN` below.
+ *
+ * `outfits.glb` carries **one skeleton per body**, shared by all fourteen garments of that body rather
+ * than one skin each: 28 copies of a 65-joint inverse-bind-matrix accessor would be 116 KB of the file's
+ * 1.5 MB budget. The two bodies keep their own (the base pack's rig is 2 cm wider at the shoulder than
+ * the outfit pack's, so they are genuinely different skeletons — but a *pose* is a relative rotation, so
+ * turning `upperarm_l` by the same angle in both keeps garment and body together).
+ *
+ * Compression: `weld` → `meshopt` (EXT_meshopt_compression, which is `reorder` + `quantize` — positions
+ * at 14 bits and normals at 8 — plus the extension) → skin dedupe → `dedup` → `prune`. Meshopt is **on by
+ * default** because of what the skins cost: measured, `--no-meshopt` gives 1496 KB for `outfits.glb`
+ * against a 1536 KB per-file budget (97 % of it, no room for another garment) and 2309 KB across the five
+ * files; meshopt gives 630 KB and 1017 KB. The manifest records `compression: 'meshopt'` so the loader
+ * knows it must wire `MeshoptDecoder` before reading these files — three.js' `GLTFLoader` throws
+ * otherwise, where it reads plain KHR_mesh_quantization unaided. `--no-meshopt` is the escape hatch if
+ * that decoder ever becomes a problem; it still builds, with nothing left over for the next item.
  */
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, extname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Document, NodeIO } from '@gltf-transform/core'
@@ -45,16 +57,51 @@ const REPO_ROOT = resolve(PACKAGE_ROOT, '../..')
 const SRC_DIR = resolve(REPO_ROOT, 'assets/avatar-src')
 const EXTRACT_DIR = join(SRC_DIR, 'extracted')
 const OUT_DIR = resolve(PACKAGE_ROOT, 'public/avatar3d')
+/**
+ * Everything is written here first and only becomes `public/avatar3d/` once the budgets have held.
+ * Under `node_modules/` rather than beside the output so a half-finished build is never served by the
+ * dev server, never shows up in `git status`, and never has to be cleaned up by hand.
+ */
+const TMP_DIR = resolve(PACKAGE_ROOT, 'node_modules/.cache/avatar-assets')
 const MAP_FILE = resolve(PACKAGE_ROOT, 'scripts/avatar-map.json')
 const MANIFEST_FILE = join(OUT_DIR, 'manifest.json')
 
-/** Spec §7: everything the avatar downloads, and the largest single file inside that. */
+/** Spec §7: everything the avatar downloads, the largest single file, and the tighter body limit (§4). */
 const MAX_TOTAL_BYTES = 6 * 1024 * 1024
 const MAX_FILE_BYTES = Math.round(1.5 * 1024 * 1024)
+const MAX_BODY_BYTES = 400 * 1024
 
 /** The two bodies, and the node key each item variant is written under. */
 const BODIES = ['male', 'female']
 const KEY_RE = /^(body\/(male|female)|(hair|top|bottom|shoes|hat|accessory|jewelry)\/[a-z0-9_]+\/(male|female))$/
+
+/** The joints a camera wants: `manifest.anchors[body][joint]` is that joint's bind position, in metres. */
+const ANCHOR_JOINTS = ['Head', 'neck_01', 'upperarm_l', 'upperarm_r', 'hand_l', 'hand_r', 'pelvis']
+
+/**
+ * The standing pose, published as `manifest.pose.armsDown`.
+ *
+ * Read it as: rotate this joint by these radians **in its own bind frame**, i.e. compose the rotation
+ * *after* the bind rotation — `bone.rotation.set(x, y, z)` on a bone whose rotation is still the bind
+ * one is wrong; `bone.quaternion.multiply(new Quaternion().setFromEuler(new Euler(x, y, z)))` (which is
+ * what three.js' `bone.rotateX/Y/Z` do) is right. The same four numbers work on the body skeleton and on
+ * the outfit skeleton because a pose is relative and both rigs orient their arm joints identically.
+ *
+ * Where the numbers come from, since there is no renderer in this pipeline to look at: in every rig in
+ * both packs an arm joint's local **+Y** is the bone axis (`lowerarm_l` sits at local `[0, 0.251, 0]` of
+ * `upperarm_l`) and its local +Z is world +Z, the direction the avatar faces. `upperarm_l`'s world basis
+ * is columns X=(0,−1,0), Y=(1,0,0), Z=(0,0,1), so a rotation of θ about its local Z sends the bone
+ * direction to world (cos θ, sin θ, 0): θ = −65° drops the left arm to 65° below horizontal, ~25° off
+ * the body. `upperarm_r` mirrors (its local X is world +Y), hence the opposite sign. The forearms add a
+ * ~10° bend about local X, which is forward for both arms, so the hands come slightly in front of the
+ * hips instead of clipping into them. Task 4 should treat these as a starting point and tune by eye.
+ */
+const ARMS_DOWN = {
+  upperarm_l: [0, 0, -1.134],
+  upperarm_r: [0, 0, 1.134],
+  lowerarm_l: [0.17, 0, -0.09],
+  lowerarm_r: [0.17, 0, 0.09],
+}
 
 const fail = (message) => {
   console.error(`[avatar-assets] ${message}`)
@@ -115,13 +162,18 @@ function verifySources(sources) {
   }
 }
 
-/** `@parts/Male_Ranger_Body.gltf` → an absolute path under `extracted/`. */
+/**
+ * `@parts/Male_Ranger_Body.gltf` → an absolute path under `extracted/`.
+ *
+ * A bare alias (`@parts`, `@parts/`) resolves to the directory itself, which is what `--list` wants when
+ * you are looking for a mesh name and do not yet know which file it is in.
+ */
 function resolveSource(map, spec) {
-  const hit = /^@([a-z]+)\/(.+)$/.exec(spec)
+  const hit = /^@([a-z]+)(?:\/(.*))?$/.exec(spec)
   if (!hit) return resolve(EXTRACT_DIR, spec)
   const dir = map.dirs[hit[1]]
   if (!dir) fail(`unknown source directory alias @${hit[1]} in ${spec}`)
-  return join(EXTRACT_DIR, dir, hit[2])
+  return join(EXTRACT_DIR, dir, hit[2] || '.')
 }
 
 const docCache = new Map()
@@ -185,6 +237,30 @@ function transformNormal(n3, v) {
   return [x / len, y / len, z / len]
 }
 
+/** Full 4×4 inverse (column-major), for turning a joint's world matrix into a parent-relative one. */
+function invert(m) {
+  const inv = new Array(16)
+  inv[0] = m[5] * m[10] * m[15] - m[5] * m[11] * m[14] - m[9] * m[6] * m[15] + m[9] * m[7] * m[14] + m[13] * m[6] * m[11] - m[13] * m[7] * m[10]
+  inv[4] = -m[4] * m[10] * m[15] + m[4] * m[11] * m[14] + m[8] * m[6] * m[15] - m[8] * m[7] * m[14] - m[12] * m[6] * m[11] + m[12] * m[7] * m[10]
+  inv[8] = m[4] * m[9] * m[15] - m[4] * m[11] * m[13] - m[8] * m[5] * m[15] + m[8] * m[7] * m[13] + m[12] * m[5] * m[11] - m[12] * m[7] * m[9]
+  inv[12] = -m[4] * m[9] * m[14] + m[4] * m[10] * m[13] + m[8] * m[5] * m[14] - m[8] * m[6] * m[13] - m[12] * m[5] * m[10] + m[12] * m[6] * m[9]
+  inv[1] = -m[1] * m[10] * m[15] + m[1] * m[11] * m[14] + m[9] * m[2] * m[15] - m[9] * m[3] * m[14] - m[13] * m[2] * m[11] + m[13] * m[3] * m[10]
+  inv[5] = m[0] * m[10] * m[15] - m[0] * m[11] * m[14] - m[8] * m[2] * m[15] + m[8] * m[3] * m[14] + m[12] * m[2] * m[11] - m[12] * m[3] * m[10]
+  inv[9] = -m[0] * m[9] * m[15] + m[0] * m[11] * m[13] + m[8] * m[1] * m[15] - m[8] * m[3] * m[13] - m[12] * m[1] * m[11] + m[12] * m[3] * m[9]
+  inv[13] = m[0] * m[9] * m[14] - m[0] * m[10] * m[13] - m[8] * m[1] * m[14] + m[8] * m[2] * m[13] + m[12] * m[1] * m[10] - m[12] * m[2] * m[9]
+  inv[2] = m[1] * m[6] * m[15] - m[1] * m[7] * m[14] - m[5] * m[2] * m[15] + m[5] * m[3] * m[14] + m[13] * m[2] * m[7] - m[13] * m[3] * m[6]
+  inv[6] = -m[0] * m[6] * m[15] + m[0] * m[7] * m[14] + m[4] * m[2] * m[15] - m[4] * m[3] * m[14] - m[12] * m[2] * m[7] + m[12] * m[3] * m[6]
+  inv[10] = m[0] * m[5] * m[15] - m[0] * m[7] * m[13] - m[4] * m[1] * m[15] + m[4] * m[3] * m[13] + m[12] * m[1] * m[7] - m[12] * m[3] * m[5]
+  inv[14] = -m[0] * m[5] * m[14] + m[0] * m[6] * m[13] + m[4] * m[1] * m[14] - m[4] * m[2] * m[13] - m[12] * m[1] * m[6] + m[12] * m[2] * m[5]
+  inv[3] = -m[1] * m[6] * m[11] + m[1] * m[7] * m[10] + m[5] * m[2] * m[11] - m[5] * m[3] * m[10] - m[9] * m[2] * m[7] + m[9] * m[3] * m[6]
+  inv[7] = m[0] * m[6] * m[11] - m[0] * m[7] * m[10] - m[4] * m[2] * m[11] + m[4] * m[3] * m[10] + m[8] * m[2] * m[7] - m[8] * m[3] * m[6]
+  inv[11] = -m[0] * m[5] * m[11] + m[0] * m[7] * m[9] + m[4] * m[1] * m[11] - m[4] * m[3] * m[9] - m[8] * m[1] * m[7] + m[8] * m[3] * m[5]
+  inv[15] = m[0] * m[5] * m[10] - m[0] * m[6] * m[9] - m[4] * m[1] * m[10] + m[4] * m[2] * m[9] + m[8] * m[1] * m[6] - m[8] * m[2] * m[5]
+  const det = m[0] * inv[0] + m[1] * inv[4] + m[2] * inv[8] + m[3] * inv[12]
+  if (Math.abs(det) < 1e-12) fail('a joint matrix is not invertible')
+  return inv.map((v) => v / det)
+}
+
 /** Bind-pose world position of a joint: the translation of inverse(inverseBindMatrix). */
 function inverseTranslation(m) {
   const n = normalMatrix(m) // = transpose(inverse(R)); inverse(R) = transpose(n)
@@ -208,16 +284,46 @@ function findNode(doc, name, path) {
 }
 
 /**
+ * The skeleton behind a skinned node, as plain arrays: joint names, each joint's parent-relative bind
+ * matrix, and the inverse bind matrices the vertices were weighted against.
+ *
+ * Locals are derived from *world* matrices (`inverse(parentWorld) · world`) rather than copied from the
+ * source nodes' own TRS, because the packs park their skeletons under an `Armature` node whose transform
+ * is part of the bind pose the inverse bind matrices were baked against. Rebuilding from worlds keeps
+ * `jointWorld · inverseBind = identity` at rest — which is what makes the output render, unposed,
+ * exactly as it did when the skin was thrown away.
+ */
+function readSkeleton(skin, path) {
+  const joints = skin.listJoints()
+  const ibmAccessor = skin.getInverseBindMatrices()
+  if (!ibmAccessor) fail(`skin "${skin.getName()}" in ${relative(REPO_ROOT, path)} has no inverse bind matrices`)
+  const index = new Map(joints.map((joint, i) => [joint, i]))
+  const worlds = joints.map((joint) => [...joint.getWorldMatrix()])
+  const parents = joints.map((joint) => {
+    const parent = joint.getParentNode()
+    return parent && index.has(parent) ? index.get(parent) : -1
+  })
+  const locals = joints.map((_, i) => (parents[i] >= 0 ? multiply(invert(worlds[parents[i]]), worlds[i]) : worlds[i]))
+  const ibm = new Float32Array(joints.length * 16)
+  for (let i = 0; i < joints.length; i++) ibm.set(ibmAccessor.getElement(i, new Array(16)), i * 16)
+  const names = joints.map((joint) => joint.getName())
+  return { names, parents, locals, ibm, id: createHash('sha256').update(`${names.join('|')}#${ibm.join(',')}`).digest('hex').slice(0, 16) }
+}
+
+/**
  * Pull one node's primitives out of a source document as plain arrays.
  *
  * A *skinned* node's transform is ignored, exactly as glTF requires: the vertices are already in the
  * skeleton's bind space, which is the space every part of both packs shares. An unskinned node (the
- * hairstyles) gets its world matrix baked in instead.
+ * hairstyles) gets its world matrix baked in instead. Skinned nodes also carry their joint indices and
+ * weights through, so the output can be posed; see the file header for why that is worth its bytes.
  */
 function readParts(doc, node, path) {
   const mesh = node.getMesh()
   if (!mesh) fail(`node "${node.getName()}" in ${relative(REPO_ROOT, path)} has no mesh`)
-  const world = node.getSkin() ? identity() : [...node.getWorldMatrix()]
+  const skin = node.getSkin()
+  const skeleton = skin ? readSkeleton(skin, path) : null
+  const world = skin ? identity() : [...node.getWorldMatrix()]
   const n3 = normalMatrix(world)
   const parts = []
   for (const prim of mesh.listPrimitives()) {
@@ -238,10 +344,46 @@ function readParts(doc, node, path) {
     const indices = indexAccessor
       ? Uint32Array.from(indexAccessor.getArray())
       : Uint32Array.from({ length: count }, (_, i) => i)
-    parts.push({ positions, normals, indices, sourceMaterial: prim.getMaterial()?.getName() ?? '' })
+    const jointAccessor = skeleton ? prim.getAttribute('JOINTS_0') : null
+    const weightAccessor = skeleton ? prim.getAttribute('WEIGHTS_0') : null
+    let joints = null
+    let weights = null
+    if (jointAccessor && weightAccessor) {
+      joints = new Uint16Array(count * 4)
+      weights = new Float32Array(count * 4)
+      const quad = [0, 0, 0, 0]
+      for (let i = 0; i < count; i++) {
+        joints.set(jointAccessor.getElement(i, quad), i * 4)
+        weights.set(weightAccessor.getElement(i, quad), i * 4)
+      }
+    } else if (skeleton) {
+      fail(`node "${node.getName()}" in ${relative(REPO_ROOT, path)} is skinned but has no JOINTS_0/WEIGHTS_0`)
+    }
+    parts.push({ positions, normals, indices, joints, weights, skeleton, sourceMaterial: prim.getMaterial()?.getName() ?? '' })
   }
   if (parts.length === 0) fail(`node "${node.getName()}" in ${relative(REPO_ROOT, path)} has no positions`)
   return parts
+}
+
+/**
+ * The one skeleton a set of parts share, or `null` if none of them are skinned.
+ *
+ * Every rig in both packs is the same 65 joints in the same order — only the bind *positions* differ,
+ * between the two bodies and between a body and the outfit pack. So an output file can hold one skeleton
+ * per body and hang every garment off it. This is where that assumption is checked: parts whose rigs
+ * disagree would render deformed at rest, and the fix would be a skin per part, not a warning.
+ */
+function sharedSkeleton(parts, key) {
+  const skinned = parts.filter((part) => part.skeleton)
+  if (skinned.length === 0) return null
+  if (skinned.length !== parts.length) fail(`${key} merges skinned and unskinned meshes, which cannot share one node`)
+  const first = skinned[0].skeleton
+  for (const part of skinned) {
+    if (part.skeleton.id !== first.id) {
+      fail(`${key} merges meshes rigged to different skeletons (${first.id} vs ${part.skeleton.id}) — they cannot share one skin`)
+    }
+  }
+  return first
 }
 
 /** Axis-aligned bounds over a set of parts. */
@@ -306,6 +448,8 @@ async function simplifyParts(parts, ratio) {
     const remap = new Map()
     const positions = []
     const normals = []
+    const joints = []
+    const weights = []
     const indices = new Uint32Array(kept.length)
     for (let i = 0; i < kept.length; i++) {
       const source = kept[i]
@@ -315,11 +459,16 @@ async function simplifyParts(parts, ratio) {
         remap.set(source, index)
         positions.push(part.positions[source * 3], part.positions[source * 3 + 1], part.positions[source * 3 + 2])
         normals.push(part.normals[source * 3], part.normals[source * 3 + 1], part.normals[source * 3 + 2])
+        // Skinning travels with the vertex it belongs to, or a decimated boot would fall off the leg.
+        for (let c = 0; c < 4 && part.joints; c++) joints.push(part.joints[source * 4 + c])
+        for (let c = 0; c < 4 && part.weights; c++) weights.push(part.weights[source * 4 + c])
       }
       indices[i] = index
     }
     part.positions = Float32Array.from(positions)
     part.normals = Float32Array.from(normals)
+    if (part.joints) part.joints = Uint16Array.from(joints)
+    if (part.weights) part.weights = Float32Array.from(weights)
     part.indices = indices
   }
 }
@@ -509,7 +658,28 @@ function newBundle() {
   const buffer = doc.createBuffer()
   const scene = doc.createScene('avatar')
   doc.getRoot().setDefaultScene(scene)
-  return { doc, buffer, scene, materials: new Map(), accessors: new Map(), nodes: [] }
+  return { doc, buffer, scene, materials: new Map(), accessors: new Map(), skins: new Map(), nodes: [] }
+}
+
+/**
+ * Emit a skeleton into a bundle once, and hand back the `Skin` every part rigged to it shares.
+ *
+ * The joint nodes are real scene nodes named exactly as the packs name them (`upperarm_l`, `Head`, …),
+ * which is the whole contract with the renderer: `manifest.pose.armsDown` names joints, the renderer
+ * looks them up by name and rotates them.
+ */
+function skinFor(bundle, skeleton, name) {
+  if (bundle.skins.has(skeleton.id)) return bundle.skins.get(skeleton.id)
+  const joints = skeleton.names.map((name, i) => bundle.doc.createNode(name).setMatrix(skeleton.locals[i]))
+  skeleton.parents.forEach((parent, i) => {
+    if (parent >= 0) joints[parent].addChild(joints[i])
+    else bundle.scene.addChild(joints[i])
+  })
+  const inverseBind = bundle.doc.createAccessor().setType('MAT4').setArray(skeleton.ibm).setBuffer(bundle.buffer)
+  const skin = bundle.doc.createSkin(name).setInverseBindMatrices(inverseBind)
+  for (const joint of joints) skin.addJoint(joint)
+  bundle.skins.set(skeleton.id, skin)
+  return skin
 }
 
 const hexToLinear = (hex) => {
@@ -541,8 +711,9 @@ function materialFor(bundle, map, canonical, tint) {
  * Add one node to a bundle. `parts` carry geometry; `cacheKey` lets two items that are the same mesh in
  * different colours (five of the seven tops are) share one copy of the vertex data.
  */
-function addNode(bundle, map, key, parts, cacheKey) {
+function addNode(bundle, map, key, parts, cacheKey, body) {
   const mesh = bundle.doc.createMesh(key)
+  const skeleton = sharedSkeleton(parts, key)
   parts.forEach((part, index) => {
     const id = cacheKey ? `${cacheKey}#${index}` : null
     let accessors = id ? bundle.accessors.get(id) : null
@@ -551,22 +722,45 @@ function addNode(bundle, map, key, parts, cacheKey) {
         position: bundle.doc.createAccessor().setType('VEC3').setArray(part.positions).setBuffer(bundle.buffer),
         normal: bundle.doc.createAccessor().setType('VEC3').setArray(part.normals).setBuffer(bundle.buffer),
         indices: bundle.doc.createAccessor().setType('SCALAR').setArray(part.indices).setBuffer(bundle.buffer),
+        joints: part.joints ? bundle.doc.createAccessor().setType('VEC4').setArray(part.joints).setBuffer(bundle.buffer) : null,
+        weights: part.weights ? bundle.doc.createAccessor().setType('VEC4').setArray(part.weights).setBuffer(bundle.buffer) : null,
       }
       if (id) bundle.accessors.set(id, accessors)
     }
-    mesh.addPrimitive(
-      bundle.doc
-        .createPrimitive()
-        .setAttribute('POSITION', accessors.position)
-        .setAttribute('NORMAL', accessors.normal)
-        .setIndices(accessors.indices)
-        .setMaterial(materialFor(bundle, map, part.canonical, part.tint)),
-    )
+    const primitive = bundle.doc
+      .createPrimitive()
+      .setAttribute('POSITION', accessors.position)
+      .setAttribute('NORMAL', accessors.normal)
+      .setIndices(accessors.indices)
+      .setMaterial(materialFor(bundle, map, part.canonical, part.tint))
+    if (accessors.joints && accessors.weights) {
+      primitive.setAttribute('JOINTS_0', accessors.joints).setAttribute('WEIGHTS_0', accessors.weights)
+    }
+    mesh.addPrimitive(primitive)
   })
   const node = bundle.doc.createNode(key).setMesh(mesh)
+  if (skeleton) node.setSkin(skinFor(bundle, skeleton, `skeleton/${body}`))
   bundle.scene.addChild(node)
   bundle.nodes.push(key)
   return node
+}
+
+/**
+ * The colour a node reads as, for `manifest.nodes[key].tint`.
+ *
+ * The item catalogue (`apps/normal-server/data/items.json`) carries a `tint` on a couple of items and
+ * the renderer is told to honour it, so the two have to agree; publishing what was actually baked is how
+ * the pipeline stays the single source of truth and how the test can compare. `skin`, `eyes` and `hair`
+ * are recoloured from the player's configuration and have no item colour at all, so a body or a
+ * hairstyle has no tint — the first cloth or metal material a node carries is what a player sees as
+ * "the colour of this item".
+ */
+function bakedTint(map, parts) {
+  for (const canonical of ['cloth_primary', 'metal', 'cloth_secondary']) {
+    const part = parts.find((candidate) => candidate.canonical === canonical)
+    if (part) return (part.tint ?? map.materials.canonical[canonical].baseColor).toLowerCase()
+  }
+  return null
 }
 
 /** Read a variant (or a body) from the packs: primary node plus every `merge` entry, then any scale. */
@@ -603,21 +797,58 @@ async function readAnchors(map, body) {
 
 // ──────────────────────────────────────────────────────────────────── build ──
 
+/**
+ * Fold the skins `quantize` cloned back into one per skeleton.
+ *
+ * `quantize` rewrites every skinned node's inverse bind matrices to compensate for the quantization
+ * volume, and does it by *cloning* the skin — so a file that went in with two skins comes out with one
+ * per garment, each carrying its own 65 × 64 B matrix accessor. `dedup` will not put them back together
+ * (it only dedupes accessors reachable from mesh primitives), so this does: identical joints and
+ * identical matrices mean identical skeletons, whatever the graph says.
+ */
+function dedupeSkins(doc) {
+  const byContent = new Map()
+  const used = new Set()
+  for (const node of doc.getRoot().listNodes()) {
+    const skin = node.getSkin()
+    if (!skin) continue
+    const array = skin.getInverseBindMatrices().getArray()
+    const digest = createHash('sha256')
+      .update(skin.listJoints().map((joint) => joint.getName()).join('|'))
+      .update(Buffer.from(array.buffer, array.byteOffset, array.byteLength))
+      .digest('hex')
+    if (!byContent.has(digest)) byContent.set(digest, skin)
+    node.setSkin(byContent.get(digest))
+    used.add(byContent.get(digest))
+  }
+  for (const skin of doc.getRoot().listSkins()) if (!used.has(skin)) skin.dispose()
+}
+
 async function optimise(bundle, useMeshopt) {
   // `quantizationVolume: 'scene'` and not the default `'mesh'`: nodes that are the same garment in a
   // different colour share their vertex accessors, and a per-mesh volume would want to quantize one
   // shared accessor two different ways. One volume for the file keeps the sharing (and `dedup`'s ability
-  // to find it again after `weld` has copied things around) intact.
+  // to find it again after `weld` has copied things around) intact — and, since a per-mesh volume also
+  // rewrites the inverse bind matrices per mesh, it is what lets the garments share a skeleton at all.
   //
   // Normals at 8 bits rather than the default 10: it costs about a degree of precision on a shape that
   // is never seen larger than a browser tab, and takes a fifth off every file.
-  await bundle.doc.transform(weld(), quantize({ quantizationVolume: 'scene', quantizeNormal: 8 }), dedup(), prune({ keepLeaves: true }))
+  await bundle.doc.transform(weld())
   if (useMeshopt) {
+    // `meshopt()` *is* `reorder` + `quantize` + the extension, so it replaces the quantize above rather
+    // than running after it — quantizing twice would apply the compensating node transform twice and
+    // leave the avatar a hundredth of its size. Its own quantize defaults to a per-mesh volume, which
+    // would give every garment its own inverse bind matrices and defeat the shared skeleton, hence the
+    // explicit `quantizationVolume`.
     const [{ meshopt }, { MeshoptEncoder }] = await Promise.all([import('@gltf-transform/functions'), import('meshoptimizer')])
     await MeshoptEncoder.ready
     io.registerDependencies({ 'meshopt.encoder': MeshoptEncoder })
-    await bundle.doc.transform(meshopt({ encoder: MeshoptEncoder, level: 'high' }))
+    await bundle.doc.transform(meshopt({ encoder: MeshoptEncoder, level: 'high', quantizationVolume: 'scene', quantizeNormal: 8 }))
+  } else {
+    await bundle.doc.transform(quantize({ quantizationVolume: 'scene', quantizeNormal: 8 }))
   }
+  dedupeSkins(bundle.doc)
+  await bundle.doc.transform(dedup(), prune({ keepLeaves: true }))
 }
 
 /**
@@ -635,7 +866,8 @@ function nodeBytes(bundle) {
     perNode.set(node.getName(), new Set())
     if (!mesh) continue
     for (const prim of mesh.listPrimitives()) {
-      for (const accessor of [prim.getAttribute('POSITION'), prim.getAttribute('NORMAL'), prim.getIndices()]) {
+      const attributes = ['POSITION', 'NORMAL', 'JOINTS_0', 'WEIGHTS_0'].map((name) => prim.getAttribute(name))
+      for (const accessor of [...attributes, prim.getIndices()]) {
         if (!accessor) continue
         perNode.get(node.getName()).add(accessor)
         users.set(accessor, (users.get(accessor) ?? 0) + 1)
@@ -663,11 +895,23 @@ async function build({ useMeshopt }) {
     return bundles.get(file)
   }
 
+  /** Per node: the bounds a camera frames it by, and the colour it was baked in. Both pre-quantization. */
+  const details = {}
   const anchors = {}
+  /** The whole joint table per body — the generated accessories are placed against any joint of it. */
+  const jointTables = {}
   for (const body of BODIES) {
     const spec = map.bodies[body]
-    anchors[body] = await readAnchors(map, spec)
-    addNode(bundleFor(spec.out), map, `body/${body}`, await readVariant(map, spec, spec.file), null)
+    jointTables[body] = await readAnchors(map, spec)
+    anchors[body] = Object.fromEntries(
+      ANCHOR_JOINTS.map((joint) => {
+        if (!jointTables[body][joint]) fail(`the ${body} rig has no joint "${joint}" — --list a body to see the joint names`)
+        return [joint, jointTables[body][joint].map(round)]
+      }),
+    )
+    const parts = await readVariant(map, spec, spec.file)
+    details[`body/${body}`] = { bounds: boundsOf(parts), tint: bakedTint(map, parts) }
+    addNode(bundleFor(spec.out), map, `body/${body}`, parts, null, body)
   }
 
   const emptyNodes = []
@@ -684,18 +928,21 @@ async function build({ useMeshopt }) {
         continue
       }
       const parts = variant.primitive
-        ? buildPrimitive(variant.primitive, anchors[body], variant.tint)
+        ? buildPrimitive(variant.primitive, jointTables[body], variant.tint)
         : await readVariant(map, variant, variant.file)
+      details[key] = { bounds: boundsOf(parts), tint: bakedTint(map, parts) }
       // Two items that are the same mesh in different colours share one copy of the vertex data.
       const cacheKey = variant.primitive
         ? null
         : JSON.stringify([variant.file, variant.node, variant.merge ?? [], variant.scale ?? [], variant.scaleAnchor ?? '', variant.simplify ?? 0])
-      addNode(bundleFor(file), map, key, parts, cacheKey)
+      addNode(bundleFor(file), map, key, parts, cacheKey, body)
     }
   }
-
-  mkdirSync(OUT_DIR, { recursive: true })
-  for (const name of readdirSync(OUT_DIR)) rmSync(join(OUT_DIR, name), { force: true })
+  // Everything is written into a scratch directory and only moved over `public/avatar3d/` once the
+  // budgets have held, so a build that is too big — or that dies halfway through — leaves the committed
+  // assets exactly as they were. `docs/avatar-assets.md` promises this; it is cheap to actually do.
+  rmSync(TMP_DIR, { recursive: true, force: true })
+  mkdirSync(TMP_DIR, { recursive: true })
 
   const files = {}
   const nodes = {}
@@ -707,12 +954,27 @@ async function build({ useMeshopt }) {
       if (file !== name) continue
       bundle.scene.addChild(bundle.doc.createNode(key))
       bundle.nodes.push(key)
+      details[key] = { bounds: { min: [0, 0, 0], max: [0, 0, 0] }, tint: null }
     }
     const bytesByNode = nodeBytes(bundle)
     const binary = Buffer.from(await io.writeBinary(bundle.doc))
-    writeFileSync(join(OUT_DIR, name), binary)
-    files[name] = { bytes: binary.length, sha256: createHash('sha256').update(binary).digest('hex') }
-    for (const key of bundle.nodes) nodes[key] = { file: name, bytes: bytesByNode[key] ?? 0 }
+    writeFileSync(join(TMP_DIR, name), binary)
+    files[name] = {
+      bytes: binary.length,
+      sha256: createHash('sha256').update(binary).digest('hex'),
+      skins: bundle.doc.getRoot().listSkins().length,
+    }
+    for (const key of bundle.nodes) {
+      nodes[key] = {
+        file: name,
+        bytes: bytesByNode[key] ?? 0,
+        bounds: {
+          min: details[key].bounds.min.map(round),
+          max: details[key].bounds.max.map(round),
+        },
+        ...(details[key].tint ? { tint: details[key].tint } : {}),
+      }
+    }
     for (const material of bundle.doc.getRoot().listMaterials()) materials.add(material.getName())
   }
 
@@ -720,30 +982,74 @@ async function build({ useMeshopt }) {
     version: 1,
     generatedAt: new Date().toISOString(),
     placeholder: false,
+    compression: useMeshopt ? 'meshopt' : 'quantize',
+    mapSha256: mapDigest(map),
     files: Object.fromEntries(Object.entries(files).sort(([a], [b]) => a.localeCompare(b))),
     nodes: Object.fromEntries(Object.entries(nodes).sort(([a], [b]) => a.localeCompare(b))),
     materials: [...materials].sort(),
-    budget: { totalBytes: MAX_TOTAL_BYTES, maxFileBytes: MAX_FILE_BYTES },
+    anchors,
+    pose: { armsDown: ARMS_DOWN },
+    budget: { totalBytes: MAX_TOTAL_BYTES, maxFileBytes: MAX_FILE_BYTES, maxBodyBytes: MAX_BODY_BYTES },
   }
-  writeFileSync(MANIFEST_FILE, `${JSON.stringify(manifest, null, 2)}\n`)
+  writeFileSync(join(TMP_DIR, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
 
   for (const [name, info] of Object.entries(manifest.files)) {
     console.log(`[avatar-assets] ${name.padEnd(18)} ${(info.bytes / 1024).toFixed(1).padStart(8)} KB`)
   }
   const total = Object.values(manifest.files).reduce((sum, f) => sum + f.bytes, 0)
-  console.log(`[avatar-assets] ${Object.keys(manifest.nodes).length} nodes, ${manifest.materials.length} materials, ${(total / 1024).toFixed(1)} KB total`)
-  enforceBudgets(manifest)
+  console.log(
+    `[avatar-assets] ${Object.keys(manifest.nodes).length} nodes, ${manifest.materials.length} materials, ${(total / 1024).toFixed(1)} KB total, ${manifest.compression}`,
+  )
+  try {
+    enforceBudgets(manifest, bodyFilesOf(map))
+    mkdirSync(OUT_DIR, { recursive: true })
+    for (const name of readdirSync(OUT_DIR)) rmSync(join(OUT_DIR, name), { recursive: true, force: true })
+    for (const name of readdirSync(TMP_DIR)) renameSync(join(TMP_DIR, name), join(OUT_DIR, name))
+  } finally {
+    rmSync(TMP_DIR, { recursive: true, force: true })
+  }
 }
 
-function enforceBudgets(manifest) {
+/** Millimetre precision is plenty for a bounding box or a joint, and keeps the manifest readable. */
+const round = (value) => Math.round(value * 1000) / 1000
+
+/** Which files hold a body, for the tighter body budget — from the map, so it survives a rename. */
+const bodyFilesOf = (map) => new Set(BODIES.map((body) => map.bodies[body].out))
+
+function enforceBudgets(manifest, bodyFiles) {
   const total = Object.values(manifest.files).reduce((sum, f) => sum + f.bytes, 0)
   for (const [name, info] of Object.entries(manifest.files)) {
     if (info.bytes > MAX_FILE_BYTES) fail(`${name} is ${info.bytes} bytes, over the ${MAX_FILE_BYTES} byte per-file budget`)
+    if (bodyFiles.has(name) && info.bytes > MAX_BODY_BYTES) {
+      fail(`${name} is ${info.bytes} bytes, over the ${MAX_BODY_BYTES} byte per-body budget`)
+    }
   }
   if (total > MAX_TOTAL_BYTES) fail(`the avatar assets are ${total} bytes, over the ${MAX_TOTAL_BYTES} byte budget`)
 }
 
 // ──────────────────────────────────────────────────────────────────── check ──
+
+/**
+ * The map's fingerprint, published as `manifest.mapSha256`.
+ *
+ * Over the map's *meaning*, not its bytes: keys are sorted and whitespace and comment formatting are
+ * gone, so reflowing the JSON or editing `$comment` does not force a rebuild, while changing a tint, a
+ * scale, a `merge` or a `simplify` ratio does — and `--check` then says so instead of letting a committed
+ * `.glb` quietly stop matching the map that claims to describe it.
+ */
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value)
+      .sort()
+      .filter((key) => key !== '$comment')
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .join(',')}}`
+  }
+  return JSON.stringify(value)
+}
+
+const mapDigest = (map) => createHash('sha256').update(canonicalJson(map)).digest('hex')
 
 /** Every node key the map says must exist, without touching the source packs. */
 function expectedKeys(map) {
@@ -762,13 +1068,29 @@ async function check() {
   const problems = []
   if (!existsSync(MANIFEST_FILE)) fail(`${relative(REPO_ROOT, MANIFEST_FILE)} is missing — run \`pnpm avatar:assets\``)
   const manifest = JSON.parse(readFileSync(MANIFEST_FILE, 'utf8'))
+  // Reading a meshopt-compressed file needs the decoder, in this script exactly as in the browser.
+  if (manifest.compression === 'meshopt') {
+    const { MeshoptDecoder } = await import('meshoptimizer')
+    await MeshoptDecoder.ready
+    io.registerDependencies({ 'meshopt.decoder': MeshoptDecoder })
+  }
 
   if (manifest.version !== 1) problems.push(`manifest version is ${manifest.version}, expected 1`)
+
+  // The map is the input; if it has moved on, the committed `.glb` files are describing yesterday's map.
+  const digest = mapDigest(map)
+  if (manifest.mapSha256 !== digest) {
+    problems.push(`scripts/avatar-map.json hashes to ${digest}, the manifest was built from ${manifest.mapSha256} — run \`pnpm avatar:assets\``)
+  }
+  if (manifest.budget?.maxBodyBytes !== MAX_BODY_BYTES) {
+    problems.push(`the manifest budget says maxBodyBytes ${manifest.budget?.maxBodyBytes}, this script enforces ${MAX_BODY_BYTES}`)
+  }
 
   const onDisk = readdirSync(OUT_DIR).filter((name) => name.endsWith('.glb')).sort()
   const named = Object.keys(manifest.files).sort()
   if (onDisk.join() !== named.join()) problems.push(`public/avatar3d holds [${onDisk}] but the manifest names [${named}]`)
 
+  const bodyFiles = bodyFilesOf(map)
   for (const [name, info] of Object.entries(manifest.files)) {
     const path = join(OUT_DIR, name)
     if (!existsSync(path)) {
@@ -780,6 +1102,9 @@ async function check() {
     const sha256 = createHash('sha256').update(binary).digest('hex')
     if (sha256 !== info.sha256) problems.push(`${name} hashes to ${sha256}, the manifest says ${info.sha256}`)
     if (info.bytes > MAX_FILE_BYTES) problems.push(`${name} is over the per-file budget (${info.bytes} > ${MAX_FILE_BYTES})`)
+    if (bodyFiles.has(name) && info.bytes > MAX_BODY_BYTES) {
+      problems.push(`${name} is over the per-body budget (${info.bytes} > ${MAX_BODY_BYTES})`)
+    }
   }
 
   const total = Object.values(manifest.files).reduce((sum, f) => sum + f.bytes, 0)
@@ -791,9 +1116,23 @@ async function check() {
     if (!entry) problems.push(`the map declares ${key}, the manifest does not`)
     else if (entry.file !== file) problems.push(`${key} should live in ${file}, the manifest says ${entry.file}`)
   }
-  for (const key of Object.keys(manifest.nodes)) {
+  for (const [key, entry] of Object.entries(manifest.nodes)) {
     if (!expected.has(key)) problems.push(`the manifest declares ${key}, the map does not`)
     if (!KEY_RE.test(key)) problems.push(`"${key}" is not a legal node key`)
+    // Task 3 frames a camera on these and Task 4 stands the avatar in them; a node without them is a
+    // node the renderer cannot place.
+    if (!entry.bounds || entry.bounds.min?.length !== 3 || entry.bounds.max?.length !== 3) {
+      problems.push(`${key} has no bounds`)
+    }
+  }
+
+  for (const body of BODIES) {
+    for (const joint of ANCHOR_JOINTS) {
+      if (manifest.anchors?.[body]?.[joint]?.length !== 3) problems.push(`the manifest has no ${body} anchor for ${joint}`)
+    }
+  }
+  for (const joint of Object.keys(ARMS_DOWN)) {
+    if (manifest.pose?.armsDown?.[joint]?.length !== 3) problems.push(`the manifest has no pose.armsDown rotation for ${joint}`)
   }
 
   // …and the files really do contain those nodes under those names, with only canonical materials.
@@ -807,7 +1146,19 @@ async function check() {
     for (const material of doc.getRoot().listMaterials()) {
       if (!canonical.has(material.getName())) problems.push(`${name} has a material named "${material.getName()}", which is not canonical`)
     }
-    if (doc.getRoot().listSkins().length > 0) problems.push(`${name} still carries a skin`)
+    // Skins are kept now, but exactly as many as the manifest claims — one per body, not one per
+    // garment, which is the difference between 4 KB of inverse bind matrices in this file and 120 KB.
+    const skins = doc.getRoot().listSkins().length
+    if (skins !== manifest.files[name].skins) problems.push(`${name} carries ${skins} skin(s), the manifest says ${manifest.files[name].skins}`)
+    for (const [key, entry] of Object.entries(manifest.nodes)) {
+      if (entry.file !== name || !present.has(key)) continue
+      const node = doc.getRoot().listNodes().find((candidate) => candidate.getName() === key)
+      if (skins > 0 && node.getMesh() && !node.getSkin()) problems.push(`${key} is in a skinned file but has no skin`)
+    }
+    const meshopt = doc.getRoot().listExtensionsUsed().some((extension) => extension.extensionName === 'EXT_meshopt_compression')
+    if (meshopt !== (manifest.compression === 'meshopt')) {
+      problems.push(`${name} ${meshopt ? 'uses' : 'does not use'} EXT_meshopt_compression, the manifest says compression is ${manifest.compression}`)
+    }
     if (doc.getRoot().listAnimations().length > 0) problems.push(`${name} still carries an animation`)
     if (doc.getRoot().listTextures().length > 0) problems.push(`${name} still carries a texture`)
   }
@@ -853,7 +1204,7 @@ async function list(target) {
 // ───────────────────────────────────────────────────────────────────── main ──
 
 const args = process.argv.slice(2)
-const useMeshopt = args.includes('--meshopt')
+const useMeshopt = !args.includes('--no-meshopt')
 const listAt = args.indexOf('--list')
 
 try {
