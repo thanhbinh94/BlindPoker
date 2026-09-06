@@ -52,7 +52,7 @@ export const SKIN_TONES: readonly string[] = ['#f7dcc3', '#efc9a4', '#e0ac81', '
 export const EYE_COLORS: readonly string[] = ['#3b2415', '#6b4a2f', '#8c6239', '#2f5d50', '#33608c', '#5b5b66']
 
 /** `#rrggbb`, and nothing else: the value reaches the client as a material colour. */
-const HEX_COLOR = /^#[0-9a-f]{6}$/i
+export const HEX_COLOR = /^#[0-9a-f]{6}$/i
 
 /** What a player's hair is coloured before they choose otherwise. */
 export const DEFAULT_HAIR_COLOR = '#2b2b2b'
@@ -69,7 +69,7 @@ export interface AvatarConfigV2 {
   skin: string
   /** One of `EYE_COLORS`. */
   eyes: string
-  /** Any `#rrggbb`; applied to the hair material, not an item id. */
+  /** Any `#rrggbb`, stored lower-cased; applied to the hair material, not an item id. */
   hairColor: string
   hair: string
   top: string
@@ -91,7 +91,7 @@ export type AvatarErrorCode = 'INVALID_ITEM' | 'WRONG_CATEGORY' | 'INVALID_COLOR
 export type AvatarValidation = { ok: true; value: AvatarConfigV2 } | { ok: false; code: AvatarErrorCode }
 
 /** The palette entry `value` is, case folded — or undefined when it is not in the palette at all. */
-function paletteEntry(palette: readonly string[], value: unknown): string | undefined {
+export function paletteEntry(palette: readonly string[], value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined
   const folded = value.toLowerCase()
   return palette.find((entry) => entry === folded)
@@ -127,8 +127,10 @@ export function validateAvatarConfig(input: unknown, catalog: ItemCatalog): Avat
   if (skin === undefined) return { ok: false, code: 'INVALID_COLOR' }
   const eyes = paletteEntry(EYE_COLORS, raw['eyes'])
   if (eyes === undefined) return { ok: false, code: 'INVALID_COLOR' }
-  const hairColor = raw['hairColor']
-  if (typeof hairColor !== 'string' || !HEX_COLOR.test(hairColor)) return { ok: false, code: 'INVALID_COLOR' }
+  const hairColorRaw = raw['hairColor']
+  if (typeof hairColorRaw !== 'string' || !HEX_COLOR.test(hairColorRaw)) return { ok: false, code: 'INVALID_COLOR' }
+  // Folded like skin and eyes, so the client's config hash — the portrait cache key — is stable.
+  const hairColor = hairColorRaw.toLowerCase()
 
   const value: AvatarConfigV2 = {
     v: AVATAR_CONFIG_VERSION,

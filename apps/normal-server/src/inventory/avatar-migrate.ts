@@ -26,15 +26,14 @@ import {
   defaultAvatar,
   defaultItemId,
   EYE_COLORS,
+  HEX_COLOR,
+  paletteEntry,
   SKIN_TONES,
   validateAvatarConfig,
 } from './avatar.js'
 import type { ItemCatalog } from './items.js'
 import type { Body, ItemSlot } from './slots.js'
 import { isBody, isGeometricSlot } from './slots.js'
-
-/** `#rrggbb` — the same syntax `validateAvatarConfig` accepts for a hair colour. */
-const HEX_COLOR = /^#[0-9a-f]{6}$/i
 
 /**
  * v1 ids that were renamed rather than withdrawn.
@@ -69,12 +68,6 @@ function pick(slot: ItemSlot, body: Body, catalog: ItemCatalog, ...candidates: u
   return undefined
 }
 
-function palette(entries: readonly string[], raw: unknown, fallback: string): string {
-  if (typeof raw !== 'string') return fallback
-  const folded = raw.toLowerCase()
-  return entries.includes(folded) ? folded : fallback
-}
-
 /**
  * The closest valid v2 configuration to whatever is stored.
  *
@@ -90,13 +83,16 @@ export function migrateAvatarConfig(stored: Record<string, unknown> | null | und
   const raw = stored as Record<string, unknown>
 
   const body: Body = isBody(raw['body']) ? raw['body'] : DEFAULT_BODY
-  const hairColor = typeof raw['hairColor'] === 'string' && HEX_COLOR.test(raw['hairColor']) ? raw['hairColor'] : DEFAULT_HAIR_COLOR
+  const hairColorRaw = raw['hairColor']
+  // Folded like `validateAvatarConfig` folds it, so a v1 config's upper-case hex does not mint a
+  // second cache key for the same figure the moment it is re-saved.
+  const hairColor = typeof hairColorRaw === 'string' && HEX_COLOR.test(hairColorRaw) ? hairColorRaw.toLowerCase() : DEFAULT_HAIR_COLOR
 
   const config: AvatarConfigV2 = {
     v: AVATAR_CONFIG_VERSION,
     body,
-    skin: palette(SKIN_TONES, raw['skin'], DEFAULT_SKIN_TONE),
-    eyes: palette(EYE_COLORS, raw['eyes'], DEFAULT_EYE_COLOR),
+    skin: paletteEntry(SKIN_TONES, raw['skin']) ?? DEFAULT_SKIN_TONE,
+    eyes: paletteEntry(EYE_COLORS, raw['eyes']) ?? DEFAULT_EYE_COLOR,
     hairColor,
     hair: pick('hair', body, catalog, raw['hair']) ?? defaultItemId(catalog, 'hair'),
     // v1's `clothing` is v2's `top`; `bottom` and `shoes` did not exist and start at their defaults.

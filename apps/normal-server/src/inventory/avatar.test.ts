@@ -116,11 +116,13 @@ describe('validateAvatarConfig', () => {
     expect(validateAvatarConfig({ ...BASIC, body: 'female' }, catalog)).toMatchObject({ ok: true })
   })
 
-  it('refuses a hair colour that is not #rrggbb', () => {
+  it('refuses a hair colour that is not #rrggbb, and folds the case of one that is', () => {
     for (const hairColor of ['2b2b2b', '#2b2b2', '#2b2b2bff', 'red', '']) {
       expect(validateAvatarConfig({ ...BASIC, hairColor }, catalog), hairColor).toEqual({ ok: false, code: 'INVALID_COLOR' })
     }
-    expect(validateAvatarConfig({ ...BASIC, hairColor: '#AABBCC' }, catalog)).toMatchObject({ ok: true })
+    // Stored folded, like skin and eyes, so the client's config hash — the portrait cache key — is
+    // stable: `#ABCDEF` and `#abcdef` are the same figure and must be the same stored value.
+    expect(validateAvatarConfig({ ...BASIC, hairColor: '#AABBCC' }, catalog)).toEqual({ ok: true, value: { ...BASIC, hairColor: '#aabbcc' } })
   })
 
   it('refuses a skin or eye colour outside its palette, and folds the case of one inside it', () => {

@@ -59,9 +59,9 @@ const MINIMAL: ItemDef[] = [
 describe('the shipped catalogue', () => {
   const catalog = loadItemCatalog()
 
-  it('has around forty items spread across all nine slots', () => {
+  it('has exactly forty-two items spread across all nine slots', () => {
     const all = catalog.all()
-    expect(all.length).toBeGreaterThanOrEqual(40)
+    expect(all.length).toBe(42)
     for (const slot of SLOTS) expect(all.some((d) => d.slot === slot), slot).toBe(true)
     // The v1 slots are gone, ids included: a body is chosen rather than worn, and a face is colour.
     expect(all.some((d) => d.id.startsWith('base_') || d.id.startsWith('face_'))).toBe(false)
@@ -164,6 +164,11 @@ describe('loadItemCatalog', () => {
   it('refuses an unknown slot or rarity', () => {
     expect(() => loadItemCatalog(fixture([...MINIMAL, { ...MINIMAL[0], id: 'x', slot: 'cape' }]))).toThrow(/unknown slot cape/)
     expect(() => loadItemCatalog(fixture([...MINIMAL, { ...MINIMAL[0], id: 'x', rarity: 'mythic' }]))).toThrow(/unknown rarity mythic/)
+  })
+
+  it('refuses an assetKey that does not follow the <slot>/<id> convention', () => {
+    const wrongAssetKey = MINIMAL.map((d) => (d.id === 'top_tee' ? { ...d, assetKey: 'top/shirt' } : d))
+    expect(() => loadItemCatalog(fixture(wrongAssetKey))).toThrow(/top_tee has assetKey top\/shirt rather than top\/top_tee/)
   })
 
   it('refuses geometry that does not exist, and geometry where there is nothing to model', () => {

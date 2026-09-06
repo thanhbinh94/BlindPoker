@@ -75,8 +75,9 @@ describe('migrateAvatarConfig', () => {
     expect(read({ ...V1, hair: 'jewelry_ring' })).toMatchObject({ hair: 'hair_none' })
   })
 
-  it('keeps a hair colour it can use and replaces one it cannot', () => {
-    expect(read({ ...V1, hairColor: '#ABCDEF' })).toMatchObject({ hairColor: '#ABCDEF' })
+  it('keeps a hair colour it can use, case folded, and replaces one it cannot', () => {
+    // Folded like `validateAvatarConfig` folds it, so `#ABCDEF` and `#abcdef` read back as one value.
+    expect(read({ ...V1, hairColor: '#ABCDEF' })).toMatchObject({ hairColor: '#abcdef' })
     for (const hairColor of ['red', '#fff', 42, undefined]) {
       expect(read({ ...V1, hairColor })).toMatchObject({ hairColor: DEFAULT_HAIR_COLOR })
     }

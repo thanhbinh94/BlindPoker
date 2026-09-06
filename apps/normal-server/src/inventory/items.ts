@@ -168,7 +168,11 @@ function parseItem(path: string, raw: unknown, at: number): ItemDef {
   const isDefault = r['isDefault']
   if (typeof isDefault !== 'boolean') fail(path, `item ${id} has no boolean isDefault`)
   const variants = parseVariants(path, id, slot, r['variants'])
-  const def: ItemDef = { id, slot, rarity: rarity as Rarity, nameKey: str('nameKey'), assetKey: str('assetKey'), isDefault }
+  const assetKey = str('assetKey')
+  // The manifest node prefix is derived from `slot`/`id`, not free text: `0001_avatar_v2.sql` rebuilds
+  // it the same way, and a hand-built catalogue should not be able to drift from that convention.
+  if (assetKey !== `${slot}/${id}`) fail(path, `item ${id} has assetKey ${assetKey} rather than ${slot}/${id}`)
+  const def: ItemDef = { id, slot, rarity: rarity as Rarity, nameKey: str('nameKey'), assetKey, isDefault }
   return variants === undefined ? def : { ...def, variants }
 }
 
