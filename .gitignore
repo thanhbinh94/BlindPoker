@@ -35,3 +35,9 @@ bind-poker.run.json
 # operator run the script from inside a git checkout — so nothing about them may ever be committable.
 deploy/normal/backups/
 deploy/normal/backup.log
+
+# What a LAN test run leaves beside deploy/normal-windows/run.ps1: the pid stop.ps1 reads back, and
+# the server's stdout and stderr logs. Both are per-machine and per-run. (The kit's own `.env` needs
+# no rule here — `.env` / `.env.*` above already cover it.)
+deploy/normal-windows/normal.pid
+deploy/normal-windows/*.log

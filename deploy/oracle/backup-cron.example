@@ -1,0 +1,69 @@
+# Bind Poker — sao lưu database hằng đêm trên VM Oracle.
+#
+# `deploy/normal/backup.sh` là một quy trình hoàn chỉnh; thứ duy nhất nó không tự làm là hẹn giờ,
+# vì lịch, nơi lưu và thời hạn giữ là quyết định của từng chỗ. File này là bản mẫu của quyết định đó.
+#
+# ---------------------------------------------------------------------------- cài
+#
+# Chạy với user `ubuntu` — cùng user sở hữu /opt/bind-poker và nằm trong nhóm `docker`, vì backup.sh
+# gọi `docker compose exec`. Đừng cài vào crontab của root: root cũng chạy được, nhưng lúc đó dump
+# thuộc về root và bạn sẽ vấp quyền ở lần đầu tiên cần tới nó.
+#
+#     # thư mục dump và file log, thuộc về ubuntu, nằm NGOÀI cây git
+#     sudo install -d -o ubuntu -g ubuntu /var/backups/bind-poker
+#     sudo install -o ubuntu -g ubuntu /dev/null /var/log/bind-poker-backup.log
+#
+#     crontab -e          # dán phần dưới dòng kẻ, rồi lưu
+#     crontab -l          # kiểm lại
+#
+# Chạy thử một lần ngay, đừng chờ tới 3 giờ sáng mới biết là sai:
+#
+#     cd /opt/bind-poker/deploy/normal && BACKUP_DIR=/var/backups/bind-poker ./backup.sh
+#     ls -lh /var/backups/bind-poker
+#
+# ---------------------------------------------------------------------------- vì sao từng thứ
+#
+# * 03:00 — giờ của **máy chủ**. Instance Oracle mặc định chạy UTC, nên 03:00 UTC là 10:00 sáng giờ
+#   Việt Nam. Muốn nó thật sự chạy lúc 3 giờ sáng ở Việt Nam thì hoặc đổi giờ máy
+#   (`sudo timedatectl set-timezone Asia/Ho_Chi_Minh`, cron sẽ theo) hoặc đặt `0 20 * * *` (20:00 UTC).
+#   Chọn cái nào cũng được, nhưng phải biết mình đang chọn cái nào.
+#
+# * `cd` trước — backup.sh dùng compose file **nằm cạnh nó**, và tự `cd` về thư mục của chính mình,
+#   nhưng `docker compose` cần đúng project đó. `cd` cho tường minh.
+#
+# * `BACKUP_DIR` tuyệt đối, ngoài cây git. Mặc định của script là `backups/` ngay trong checkout:
+#   gitignored, nhưng vẫn nằm trong thư mục mà `git clean` hoặc một lần archive sẽ cuốn theo — và mỗi
+#   file là bản sao đầy đủ của mọi tài khoản, hash mật khẩu và dòng ledger.
+#
+# * `RETENTION_DAYS=14` — 14 ngày, đúng mặc định của script; ghi ra đây để thấy được. Ổ Always Free
+#   50 GB phải chứa cả image Docker lẫn database, nên đừng để con số này lớn mà không nhìn
+#   `du -sh /var/backups/bind-poker` bao giờ.
+#
+# * `MAILTO=""` — không có MTA trên máy này, nên cron gửi mail thất bại sẽ chỉ đẻ ra rác trong
+#   syslog. Output đi vào file log bên dưới; đó mới là chỗ để đọc.
+#
+# ---------------------------------------------------------------------------- và rồi chép nó đi
+#
+# **Bản sao nằm cùng máy với bản gốc thì không phải bản sao lưu.** Nếu instance bị thu hồi vì idle
+# (README.md mục 11), bị xoá, hoặc bạn mất quyền vào tài khoản Oracle, đống dump đi cùng nó. Từ máy
+# của bạn, kéo về mỗi ngày:
+#
+#     rsync -az -e "ssh -i ~/.ssh/bind-poker" \
+#       ubuntu@<IP>:/var/backups/bind-poker/ ~/backups/bind-poker/
+#
+# Hai thứ KHÔNG nằm trong dump nhưng phải giữ cùng nó, nếu không bản khôi phục sẽ khập khiễng:
+#   * `deploy/normal/.env` — `SESSION_SECRET` là khoá đã ký mọi id phiên trong database.
+#   * volume `caddy_data` — tài khoản ACME và chứng chỉ (mất thì chỉ tốn một lần xin lại, nhưng
+#     Let's Encrypt có rate limit).
+#
+# Kiểm tra bản sao lưu bằng cách **khôi phục thử** một lần, theo `deploy/normal/restore.md`. Một bản
+# dump chưa từng được restore là một giả thuyết, không phải một bản sao lưu.
+#
+# ------------------------------------------------------------------------------------------------
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=""
+
+# phút giờ ngày tháng thứ
+0 3 * * * cd /opt/bind-poker/deploy/normal && BACKUP_DIR=/var/backups/bind-poker RETENTION_DAYS=14 ./backup.sh >> /var/log/bind-poker-backup.log 2>&1

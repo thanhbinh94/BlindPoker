@@ -159,6 +159,63 @@ server bundle has been run standalone against its production-only `node_modules`
 `docker compose logs migrate` before `app`.
 *Tracked:* acceptance checklist row 40.8; README's Normal-edition warning; `docs/deployment-normal.md` §2.
 
+**…and the first build the project's own runbook recommends is an `arm64` one.** `deploy/oracle`
+targets an Oracle Always Free `VM.Standard.A1.Flex`, which is ARM, so the first `docker build` is
+likely to be both the image's first build anywhere *and* its first build off x86. `argon2` 0.45.1
+ships musl prebuilds for **both** `linux-x64` and `linux-arm64`
+(`prebuilds/linux-arm64/argon2.armv8.musl.node`), so `node-gyp-build` unpacks a binary on arm64 the
+same way it does on x86 — there is no known source-compile step at this point. The builder stage's
+`python3 make g++` toolchain is a fallback for a rejected prebuild (Node ABI or libc mismatch), not
+the expected path. No other difference between the ARM and x86 build is known in advance; this is
+still the image's first build on this architecture, and "should build the same way" is a reading of
+`node-gyp-build`'s prebuild matching, not an observation.
+*Why:* the same missing Docker daemon, plus no ARM machine of any kind here.
+*What to do:* build it with `docker compose build --progress=plain 2>&1 | tee /tmp/build.log` the
+first time, and read the log rather than the summary. `deploy/oracle/README.md` §8 has a symptom
+table for this build specifically.
+*Tracked:* `deploy/oracle/README.md` §8; the free-tier deployment design §6 lists it as risk 1.
+
+**A free-tier PostgreSQL goes to sleep, and the Windows LAN kit runs on one.**
+`deploy/normal-windows` points `DATABASE_URL` at a free hosted PostgreSQL (Neon is the one the
+runbook names), whose free plan suspends a project's compute after a few minutes of no connections.
+The first query after that wakes it, which takes roughly 1–2 seconds — so the first sign-in of a
+session is slow, and the pool's very first connection can time out on an unlucky cold start rather
+than merely being slow. Everything after it is normal.
+*Why:* that is the free plan, and the kit exists to be free. The alternative — a PostgreSQL
+installed on the Windows machine — is documented in the same runbook for anyone who would rather not
+have this.
+*What to do:* nothing, for a LAN trial; open the page once before inviting anyone. Do not deploy the
+Normal edition publicly against a sleeping database — the Oracle kit runs `postgres:16-alpine` in
+the stack itself and has no such pause.
+*Tracked:* `deploy/normal-windows/README.md`; the free-tier deployment design §6.
+
+**Oracle Cloud Always Free can reclaim an idle VM.** For accounts that have *not* upgraded to Pay As
+You Go, Oracle's published policy stops instances judged idle over seven days — CPU, network and (on
+an A1 shape) memory all below 20 % at the 95th percentile. A poker server with a handful of players
+sits comfortably inside that window, so the deployment `deploy/oracle` produces can be stopped for
+being quiet. The boot volume is not deleted and the instance can be started again, but a site that
+goes down at a moment nobody is watching is down.
+*Why:* it is the free tier's own rule, and neither the script nor the stack can opt out of it.
+*What to do:* upgrade the account to PAYG — the policy does not apply to PAYG accounts and the
+Always Free resources stay free — or accept it and put an external uptime check on
+`https://$DOMAIN/health` so you learn about it in minutes rather than days. Artificially loading the
+CPU to look busy is not a workaround and is not recommended. `deploy/oracle/README.md` §11.
+*Tracked:* `deploy/oracle/README.md` §11; the free-tier deployment design §6.
+
+**Stopping the Normal server on the Windows LAN kit is a hard kill.** `deploy/normal-windows/stop.ps1`
+ends the process with `Stop-Process`. Windows has no way to deliver the Ctrl+C the server's graceful
+path is written for, and — unlike Lite — the Normal edition has no `--stop` and no run file to ask
+one instance to shut the other down. So the same thing is lost as in a hard kill of Lite: balances
+already written to PostgreSQL stay correct, because every entry is inside a transaction, but chips
+sitting on a Hold'em table and a carried-over Blind pot are gone.
+*Why it stays:* the kit is for an internal LAN trial, where the answer is to close the rooms first;
+building a graceful stop for it means adding a run file and a stop protocol to the Normal server for
+the sake of a test harness. Recorded as decision D3 of the free-tier deployment design.
+*What to do:* wait for tables to empty before running `stop.ps1`. On a real deployment this does not
+arise — `docker compose stop app` is a graceful stop, and the server refunds every committed chip and
+cashes table stacks back into balances before it exits.
+*Tracked:* `deploy/normal-windows/README.md`; the free-tier deployment design §3 and Appendix D3.
+
 **The suite has never been run against a real PostgreSQL.** Every `apps/normal-server` test runs on
 in-process **PGlite** through the same driver-neutral `AppDb` the production code uses, so the
 queries under test are the production queries. PGlite is single-connection, though, which means the

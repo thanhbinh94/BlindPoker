@@ -14,6 +14,19 @@ người phát triển).
 
 Xem thêm: spec §22.4 (build), §22.5 (env), §28.1 (deployment), §23 (security).
 
+### Hai runbook "không tốn tiền" đi kèm
+
+Trang này giả định bạn đã có một máy chủ Linux có Docker và một tên miền. Chưa có thì hai bộ file
+dưới đây dẫn từng bước, và cả hai đều dùng lại đúng phần mềm mô tả ở đây:
+
+- [`../deploy/normal-windows/README.md`](../deploy/normal-windows/README.md) — **test nội bộ trong
+  LAN**, trên một máy Windows, bằng Node 22 và một PostgreSQL miễn phí. Không Docker, không HTTPS,
+  không ra Internet. Dùng để xem thử và để mời vài người trong nhà chơi.
+- [`../deploy/oracle/README.md`](../deploy/oracle/README.md) — **public lâu dài, 0 đ**, trên một VM
+  ARM của Oracle Cloud Always Free: một script bootstrap idempotent chuẩn bị máy, rồi chính stack
+  Compose của trang này chạy trên đó với HTTPS thật. Kèm bảng sự cố cho lần build image ARM đầu
+  tiên và cho hai lớp firewall của Oracle.
+
 ---
 
 ## 1. Cần những gì

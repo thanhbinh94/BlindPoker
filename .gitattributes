@@ -5,6 +5,9 @@
 Dockerfile text eol=lf
 Dockerfile.dockerignore text eol=lf
 Caddyfile text eol=lf
+# Pasted into `crontab -e` on the Oracle VM, or copied there whole. cron reads a trailing \r as part
+# of the command and the line then fails nightly, silently, in a log nobody is reading.
+deploy/oracle/backup-cron.example text eol=lf
 
 # The built avatar meshes (apps/normal-web/public/avatar3d). Committed on purpose — see
 # docs/avatar-assets.md — and binary, so git never tries to normalise a line ending inside one
