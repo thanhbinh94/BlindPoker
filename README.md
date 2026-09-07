@@ -100,6 +100,8 @@ download. Each edition's section below says how to run its own.
   server itself (see `docs/normal-web.md`)
 - `deploy/normal` — the Compose stack for the Normal edition: app + Postgres + Caddy, backup and
   restore
+- `deploy/normal-windows`, `deploy/oracle` — the two free-tier kits: a Windows LAN trial and an
+  Oracle Cloud Always Free deployment (see **Chạy thử miễn phí** below)
 - `tooling/arch` — the checks that are about the repository rather than a package: the dependency
   graph, the static security scan, and the acceptance-checklist link check
 
@@ -167,6 +169,33 @@ pnpm e2e:normal
 ```
 
 Screenshots (desktop and 375×812) land in `apps/normal-web/e2e/screenshots/`, which is not committed.
+
+## Chạy thử miễn phí
+
+Two runbooks for running the Normal edition at **no monthly cost**, in the order you would use them.
+Both are Vietnamese, because they are operator documents; both reuse what is already in the repo
+rather than adding an alternative build.
+
+| | [`deploy/normal-windows`](deploy/normal-windows/README.md) | [`deploy/oracle`](deploy/oracle/README.md) |
+| --- | --- | --- |
+| For | A first look, and a few people on one LAN | A public server, indefinitely |
+| Runs on | A Windows machine you already have | An ARM VM on Oracle Cloud **Always Free** |
+| Needs | Node 22, `pnpm build:normal`, a free PostgreSQL (Neon) | An Oracle account, an SSH key, ~20 minutes |
+| Ships as | `run.ps1` / `stop.ps1` + `.env.example` | An idempotent `bootstrap.sh` + a cron example |
+| Gets you | `http://<LAN IP>:8080`, no TLS | `https://<your domain>`, Let's Encrypt via Caddy |
+| Cost | 0 | 0 |
+
+The Oracle kit's `bootstrap.sh` prepares the machine only — iptables above Oracle's default REJECT,
+swap, Docker Engine + Compose v2 for the architecture `dpkg` reports, unattended-upgrades, and the
+checkout in `/opt/bind-poker` — and then hands over to the ordinary
+[`deploy/normal`](docs/deployment-normal.md) stack. Re-running it is safe: every step checks before
+it acts and prints what it did or skipped. It is syntax-checked and its idempotency guards are
+asserted by `pnpm test`; it has never been *executed*, because there is no ARM Ubuntu machine here.
+Its runbook's §8 is written for that first ARM build.
+
+What each of them costs you in limitations — a sleeping free database, Oracle's idle reclaim, a
+Windows stop that is a hard kill — is in
+[`docs/known-limitations.md`](docs/known-limitations.md) under **Operations**.
 
 ## Lite edition
 
