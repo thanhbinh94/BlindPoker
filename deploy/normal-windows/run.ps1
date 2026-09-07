@@ -10,10 +10,13 @@
 
     Two decisions are worth knowing up front.
 
-    **Nothing is ever written into `apps/normal-server`.** The server reads `.env` from its working
-    directory, so dropping one there would silently outrank this kit's own file and survive long
-    after the test. Instead every variable is set into `$env:` of this PowerShell session and
-    inherited by the child process. The checkout stays exactly as `git status` found it.
+    **Nothing is ever written into `apps/normal-server`.** `main.ts` builds its config as
+    `{ ...readDotenv('.env'), ...process.env }` — `process.env` spreads last and wins, so a stray
+    `.env` left in that directory would only ever be *outranked* by this kit's variables, never the
+    other way round. That is not why we avoid it: a file dropped into a git working tree survives the
+    test and can be committed by accident. Simpler to never write one — every variable is set into
+    `$env:` of this PowerShell session and inherited by the child process. The checkout stays exactly
+    as `git status` found it.
 
     **`PUBLIC_DIR` is made absolute here.** `apps/normal-server/src/app.ts` resolves a relative
     `PUBLIC_DIR` against `process.cwd()`, which is fine when the operator can see what the cwd is
@@ -33,18 +36,28 @@
 .PARAMETER Port
     Override `PORT` from the environment file, for a one-off run on a different port.
 
+.PARAMETER LanIp
+    Skip network-adapter detection and use this address as the LAN URL and as the substitution for
+    `<IP-LAN>` in `ALLOWED_ORIGINS`. Use it when the automatic pick is wrong — a Hyper-V default
+    switch, WSL or a VPN adapter can end up with a lower interface metric than the real Wi-Fi/Ethernet
+    card. Find the right address with `ipconfig` or `Get-NetIPAddress -AddressFamily IPv4`.
+
 .EXAMPLE
     .\run.ps1 -DryRun
 
 .EXAMPLE
     .\run.ps1 -Port 9090
+
+.EXAMPLE
+    .\run.ps1 -LanIp 192.168.1.50
 #>
 [CmdletBinding()]
 param(
     [string] $EnvFile,
     [switch] $DryRun,
     [switch] $NoMigrate,
-    [string] $Port
+    [string] $Port,
+    [string] $LanIp
 )
 
 Set-StrictMode -Version 2.0
@@ -88,11 +101,11 @@ function Read-EnvFile([string] $Path) {
         if ($line.Length -eq 0 -or $line.StartsWith('#')) { continue }
         $split = $line.IndexOf('=')
         if ($split -lt 1) {
-            Stop-WithError "$Path dòng $($lineNumber): không phải dạng KEY=VALUE — '$line'"
+            Stop-WithError "$Path dòng $($lineNumber): không phải dạng KEY=VALUE — '$(Get-SafeLinePreview $line)'"
         }
         $key = $line.Substring(0, $split).Trim()
         if ($key -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') {
-            Stop-WithError "$Path dòng $($lineNumber): tên biến không hợp lệ — '$key'"
+            Stop-WithError "$Path dòng $($lineNumber): tên biến không hợp lệ — '$(Get-SafeLinePreview $key)'"
         }
         $value = $line.Substring($split + 1).Trim()
         if ($value.Length -ge 2) {
@@ -109,22 +122,34 @@ function Read-EnvFile([string] $Path) {
 <#
     The LAN address to print and to substitute into `ALLOWED_ORIGINS`.
 
-    Adapters are taken in interface-metric order — Windows' own idea of which route is primary — and
-    the first non-loopback, non-APIPA IPv4 on one that is Up wins. `169.254.*` is excluded because an
-    APIPA address means DHCP failed: it is an address no other machine can reach, and printing it
-    would send the operator hunting a firewall problem that is not there.
+    The metric that decides "which route is primary" lives on `Get-NetIPInterface`, not on
+    `Get-NetAdapter` — `Get-NetAdapter`'s own `InterfaceMetric` property is always `$null`, so sorting
+    on it is a no-op that silently falls back to whatever order the adapters happened to enumerate in.
+    This walks `Up` adapters' IPv4 interfaces sorted by their real `InterfaceMetric` (lowest = most
+    preferred — Windows' own idea of the default route) and returns the first non-loopback, non-APIPA
+    `Preferred` address found. `169.254.*` is excluded because an APIPA address means DHCP failed: it
+    is an address no other machine can reach, and printing it would send the operator hunting a
+    firewall problem that is not there.
+
+    A machine with a Hyper-V default switch, WSL, VirtualBox host-only network or a VPN adapter can
+    still end up with a virtual adapter at a lower metric than the real one — `-LanIp` exists for
+    exactly that case; see `README.md`.
 #>
 function Get-LanIPv4 {
     try {
-        $adapters = @(Get-NetAdapter -ErrorAction Stop | Where-Object { $_.Status -eq 'Up' } | Sort-Object InterfaceMetric)
-        foreach ($adapter in $adapters) {
-            $addresses = @(Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $adapter.InterfaceIndex -ErrorAction SilentlyContinue |
-                Where-Object { $_.IPAddress -ne '127.0.0.1' -and -not $_.IPAddress.StartsWith('169.254.') })
+        $upIndexes = @(Get-NetAdapter -ErrorAction Stop | Where-Object { $_.Status -eq 'Up' } | Select-Object -ExpandProperty InterfaceIndex)
+        if ($upIndexes.Count -eq 0) { return $null }
+        $ordered = @(Get-NetIPInterface -AddressFamily IPv4 -ErrorAction Stop |
+            Where-Object { $upIndexes -contains $_.InterfaceIndex -and $_.ConnectionState -eq 'Connected' } |
+            Sort-Object InterfaceMetric)
+        foreach ($iface in $ordered) {
+            $addresses = @(Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $iface.InterfaceIndex -ErrorAction SilentlyContinue |
+                Where-Object { $_.IPAddress -ne '127.0.0.1' -and -not $_.IPAddress.StartsWith('169.254.') -and $_.AddressState -eq 'Preferred' })
             if ($addresses.Count -gt 0) { return $addresses[0].IPAddress }
         }
     } catch {
-        # Get-NetAdapter is absent on Windows Server Core installs without the NetAdapter module, and
-        # on anything older than Windows 8. Not a reason to refuse to start.
+        # Get-NetAdapter/Get-NetIPInterface are absent on Windows Server Core installs without the
+        # NetAdapter module, and on anything older than Windows 8. Not a reason to refuse to start.
     }
     return $null
 }
@@ -133,6 +158,55 @@ function Get-LanIPv4 {
 # operator can confirm they pasted the right *host*; the password is never part of that question.
 function Format-DatabaseUrl([string] $Value) {
     return [System.Text.RegularExpressions.Regex]::Replace($Value, '(?<=://[^:/@]{1,200}:)[^@]*(?=@)', '***')
+}
+
+# A malformed `.env` line is the likeliest place a mis-pasted Neon connection string — password and
+# all — would otherwise land on the console verbatim. Mask anything that looks like `user:pass@` and
+# then cut it well short of where a password would sit; the line number already tells the operator
+# where to look, and the content should never be worth more than that.
+function Get-SafeLinePreview([string] $Text) {
+    $masked = Format-DatabaseUrl $Text
+    $limit = 24
+    if ($masked.Length -le $limit) { return $masked }
+    return "$($masked.Substring(0, $limit))…"
+}
+
+# `http(s)://host[:port]` and nothing else — no path, no query, no trailing slash, no userinfo.
+# Mirrors `isAbsoluteOrigin` in apps/normal-server/src/config.ts (`url.origin === value`): reconstruct
+# the origin from the parsed URI and require it to match the text verbatim.
+function Test-AbsoluteOrigin([string] $Value) {
+    $uri = $null
+    try { $uri = [uri] $Value } catch { return $false }
+    if ($null -eq $uri -or -not $uri.IsAbsoluteUri) { return $false }
+    if ($uri.Scheme -ne 'http' -and $uri.Scheme -ne 'https') { return $false }
+    $isDefaultPort = ($uri.Scheme -eq 'http' -and $uri.Port -eq 80) -or ($uri.Scheme -eq 'https' -and $uri.Port -eq 443)
+    $expected = if ($isDefaultPort) { "$($uri.Scheme)://$($uri.Host)" } else { "$($uri.Scheme)://$($uri.Host):$($uri.Port)" }
+    return $Value -ceq $expected
+}
+
+# Polls `GET /health` instead of grepping the log for the `listening` line `main.ts` writes with
+# `log.info`: `createJsonLogger` drops `info` when `LOG_LEVEL` is `warn` or `error`, which made the
+# old grep hang the full 30 s and print a false "server chưa báo listening" for a server that was
+# already serving. Any HTTP response — including the 503 `/health` itself returns while the database
+# is still unreachable — means the port is open and the process is answering; only a refused or timed
+# out connection means it is not.
+function Test-ServerListening([int] $Port) {
+    $request = [System.Net.WebRequest]::Create("http://127.0.0.1:$Port/health")
+    $request.Method = 'GET'
+    $request.Timeout = 250
+    try {
+        $response = $request.GetResponse()
+        $response.Close()
+        return $true
+    } catch [System.Net.WebException] {
+        if ($null -ne $_.Exception.Response) {
+            $_.Exception.Response.Close()
+            return $true
+        }
+        return $false
+    } catch {
+        return $false
+    }
 }
 
 function Read-FileShared([string] $Path) {
@@ -209,10 +283,14 @@ if ($problems.Count -gt 0) {
 
 # --- 4. The LAN address -----------------------------------------------------------------------
 
-$lanIp = Get-LanIPv4
-if ($null -eq $lanIp) {
-    $lanIp = 'localhost'
-    Write-Note "Không xác định được địa chỉ IPv4 LAN (không có card mạng nào Up, hoặc chỉ có địa chỉ 169.254.*). Dùng tạm 'localhost' — máy khác trong mạng sẽ không vào được cho tới khi bạn sửa ALLOWED_ORIGINS bằng tay."
+if (-not [string]::IsNullOrWhiteSpace($LanIp)) {
+    $lanIp = $LanIp
+} else {
+    $lanIp = Get-LanIPv4
+    if ($null -eq $lanIp) {
+        $lanIp = 'localhost'
+        Write-Note "Không xác định được địa chỉ IPv4 LAN (không có card mạng nào Up, hoặc chỉ có địa chỉ 169.254.*). Dùng tạm 'localhost' — máy khác trong mạng sẽ không vào được cho tới khi bạn sửa ALLOWED_ORIGINS bằng tay, hoặc chạy lại với -LanIp <địa chỉ thật>."
+    }
 }
 foreach ($key in @($settings.Keys | ForEach-Object { $_ })) {
     if ($settings[$key] -is [string] -and $settings[$key].Contains($LAN_TOKEN)) {
@@ -242,25 +320,38 @@ if (-not (Test-Path -LiteralPath (Join-Path $publicDir 'index.html'))) {
 }
 
 # --- 6. Port, origins -------------------------------------------------------------------------
+# Both are validated here, before section 8's dry run and before anything in sections 9-11 runs, so
+# `-DryRun` catches exactly the class of mistake it exists for: a config the server would refuse.
 
 if (-not [string]::IsNullOrWhiteSpace($Port)) {
     $parsedPort = 0
-    if (-not [int]::TryParse($Port, [ref] $parsedPort) -or $parsedPort -lt 0 -or $parsedPort -gt 65535) {
-        Stop-WithError "-Port phải là số nguyên 0–65535, nhận được '$Port'."
+    if (-not [int]::TryParse($Port, [ref] $parsedPort) -or $parsedPort -lt 1 -or $parsedPort -gt 65535) {
+        Stop-WithError "-Port phải là số nguyên 1–65535, nhận được '$Port'. Cổng 0 (ngẫu nhiên) không dùng được với bộ kit này vì ALLOWED_ORIGINS cần một cổng cố định."
     }
     $settings['PORT'] = "$parsedPort"
 }
 if (-not $settings.Contains('PORT') -or [string]::IsNullOrWhiteSpace($settings['PORT'])) { $settings['PORT'] = '8080' }
 if (-not $settings.Contains('HOST') -or [string]::IsNullOrWhiteSpace($settings['HOST'])) { $settings['HOST'] = '0.0.0.0' }
 $effectivePort = $settings['PORT']
+$effectivePortNum = 0
+if (-not [int]::TryParse($effectivePort, [ref] $effectivePortNum) -or $effectivePortNum -lt 1 -or $effectivePortNum -gt 65535) {
+    Stop-WithError "PORT phải là số nguyên 1–65535, nhận được '$effectivePort' trong $EnvFile."
+}
 
 $origins = @()
 if ($settings.Contains('ALLOWED_ORIGINS')) { $origins = @($settings['ALLOWED_ORIGINS'] -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
-if ($origins.Count -gt 0 -and $effectivePort -ne '0') {
-    $matching = @($origins | Where-Object { $_.EndsWith(":$effectivePort") })
-    if ($matching.Count -eq 0) {
-        Write-Note "ALLOWED_ORIGINS không có origin nào ở cổng $effectivePort — trình duyệt sẽ bị từ chối kết nối. Sửa ALLOWED_ORIGINS trong $EnvFile cho khớp cổng."
-    }
+if ($origins.Count -eq 0) {
+    Stop-WithError "ALLOWED_ORIGINS chưa được đặt trong $EnvFile — cần ít nhất một origin, ví dụ http://localhost:$effectivePort (danh sách cách nhau bằng dấu phẩy)."
+}
+$badOrigins = @($origins | Where-Object { -not (Test-AbsoluteOrigin $_) })
+if ($badOrigins.Count -gt 0) {
+    Stop-WithError ("ALLOWED_ORIGINS có origin không hợp lệ trong $($EnvFile):`n" +
+        (($badOrigins | ForEach-Object { "  - '$_'" }) -join "`n") +
+        "`nMỗi origin phải đúng dạng http(s)://host[:port] — không có path, không có dấu / ở cuối, không có tên đăng nhập.")
+}
+$matching = @($origins | Where-Object { ([uri] $_).Port -eq $effectivePortNum })
+if ($matching.Count -eq 0) {
+    Stop-WithError "ALLOWED_ORIGINS không có origin nào ở cổng $effectivePortNum trong $EnvFile — trình duyệt sẽ bị server từ chối (CORS). Sửa ALLOWED_ORIGINS cho khớp cổng, hoặc chạy lại với -Port đúng cổng đã cấu hình."
 }
 
 # --- 7. Into this session's environment, and nowhere else -------------------------------------
@@ -309,12 +400,31 @@ if (Test-Path -LiteralPath $pidFile) {
 if (-not $NoMigrate) {
     Write-Info "Đang áp migrations (node dist/migrate-cli.js)…"
     Push-Location $serverDir
+    # Captured (not streamed live) so a failure can be inspected before deciding which hint to print —
+    # see below. Still printed in full either way. `$ErrorActionPreference` has to drop to 'Continue'
+    # for the call: with it at 'Stop', merging a native command's stderr into the pipeline via `2>&1`
+    # turns the *first* stderr line into a terminating exception instead of a captured string — which
+    # would abort the script on the very output this is trying to read.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     try {
-        & $nodeExe 'dist/migrate-cli.js'
+        $migrateOutput = @(& $nodeExe 'dist/migrate-cli.js' 2>&1 | ForEach-Object { "$_" })
         $migrateExit = $LASTEXITCODE
-    } finally { Pop-Location }
+    } finally {
+        $ErrorActionPreference = $prevEap
+        Pop-Location
+    }
+    foreach ($line in $migrateOutput) { Write-Info $line }
     if ($migrateExit -ne 0) {
-        Stop-WithError "migrate-cli thoát với mã $migrateExit. Kiểm tra DATABASE_URL (Neon free ngủ sau ~5 phút — thử lại lần nữa) rồi chạy lại."
+        # The Neon/DATABASE_URL hint used to appear for *every* migrate-cli failure, including a bad
+        # migration file or an ALLOWED_ORIGINS-shaped typo elsewhere — actively misleading for anything
+        # that is not a connection problem. Only show it when the output actually looks like one.
+        $combined = $migrateOutput -join "`n"
+        $hint = ''
+        if ($combined -match 'ECONNREFUSED|ETIMEDOUT|ENOTFOUND|ECONNRESET|EHOSTUNREACH|Connection terminated|timeout expired|self[- ]signed certificate|certificate has expired|password authentication failed') {
+            $hint = ' Kiểm tra DATABASE_URL (Neon free ngủ sau ~5 phút không dùng — thử chạy lại lần nữa).'
+        }
+        Stop-WithError "migrate-cli thoát với mã $migrateExit.$hint"
     }
     Write-Info "Migrations xong."
 }
@@ -327,14 +437,17 @@ $process = Start-Process -FilePath $nodeExe -ArgumentList 'dist/main.js' -Workin
     -NoNewWindow -PassThru -RedirectStandardOutput $outLog -RedirectStandardError $errLog
 Set-Content -LiteralPath $pidFile -Value $process.Id -Encoding ASCII
 
-# The server logs `bind poker normal server listening` once the port is open. Waiting for it — rather
-# than printing a URL the moment Start-Process returns — is what turns a bad DATABASE_URL from "the
-# browser shows nothing and no one knows why" into the actual error, here, on this console.
+# Waiting for the port to answer — rather than printing a URL the moment Start-Process returns — is
+# what turns a bad DATABASE_URL from "the browser shows nothing and no one knows why" into the actual
+# error, here, on this console. This polls `GET /health` rather than grepping the log for the
+# `listening` line `main.ts` writes with `log.info`: `LOG_LEVEL=warn` or `error` drops `info`-level
+# logs entirely, which used to make a perfectly healthy start wait the full 30 s and then print a
+# false "chưa báo listening" warning.
 $deadline = (Get-Date).AddSeconds(30)
 $listening = $false
 while ((Get-Date) -lt $deadline) {
     if ($process.HasExited) { break }
-    if ((Read-FileShared $outLog).Contains('listening')) { $listening = $true; break }
+    if (Test-ServerListening $effectivePortNum) { $listening = $true; break }
     Start-Sleep -Milliseconds 250
 }
 

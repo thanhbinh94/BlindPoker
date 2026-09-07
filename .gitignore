@@ -36,9 +36,8 @@ bind-poker.run.json
 deploy/normal/backups/
 deploy/normal/backup.log
 
-# What a LAN test run leaves beside deploy/normal-windows/run.ps1: the operator's own `.env` (their
-# Neon password and the session-signing key), the pid stop.ps1 reads back, and the server's stdout
-# and stderr logs. All four are per-machine and per-run; `.env.example` is the committed half.
-deploy/normal-windows/.env
+# What a LAN test run leaves beside deploy/normal-windows/run.ps1: the pid stop.ps1 reads back, and
+# the server's stdout and stderr logs. Both are per-machine and per-run. (The kit's own `.env` needs
+# no rule here — `.env` / `.env.*` above already cover it.)
 deploy/normal-windows/normal.pid
 deploy/normal-windows/*.log

@@ -177,16 +177,52 @@ describe.skipIf(!HAVE_POWERSHELL)('deploy/normal-windows/run.ps1 -DryRun', () =>
     expect(run.output).toContain(join(root, 'apps', 'normal-server'))
   }, 60_000)
 
-  it('lets -Port override the file, and says so when the origins no longer match', () => {
-    const run = dryRun('port.env', GOOD_ENV, '-Port', '9090', '-NoMigrate')
+  it('lets -Port override the file when an origin already matches, and honours -NoMigrate', () => {
+    // GOOD_ENV's ALLOWED_ORIGINS already has an entry at :8080, same as its own PORT — this just
+    // exercises that -Port and -NoMigrate both reach the normalised config.
+    const run = dryRun('port-ok.env', GOOD_ENV, '-Port', '8080', '-NoMigrate')
     expect(run.status).toBe(0)
-    expect(run.output).toContain('PORT=9090')
-    expect(run.output).toContain('[warn]')
-    expect(run.output).toContain('ALLOWED_ORIGINS')
-    // -NoMigrate is honoured in what the dry run promises to run. Only the ASCII tail of the line is
-    // asserted: the prose around it is Vietnamese, and pinning diacritics here would make this test a
-    // check of PowerShell 5.1's console encoding rather than of the script's behaviour.
+    expect(run.output).toContain('PORT=8080')
+    // Only the ASCII tail of the line is asserted: the prose around it is Vietnamese, and pinning
+    // diacritics here would make this test a check of PowerShell 5.1's console encoding rather than
+    // of the script's behaviour.
     expect(run.output).toContain('-NoMigrate) node dist/migrate-cli.js')
+  }, 60_000)
+
+  it('refuses -Port 0', () => {
+    const run = dryRun('port-zero.env', GOOD_ENV, '-Port', '0')
+    expect(run.status).not.toBe(0)
+    expect(run.output).toContain('-Port')
+  }, 60_000)
+
+  it('refuses -Port when no ALLOWED_ORIGINS entry matches the new port, with an actionable message, and exits non-zero even under -DryRun', () => {
+    const run = dryRun('port-bad.env', GOOD_ENV, '-Port', '9090')
+    expect(run.status).not.toBe(0)
+    expect(run.output).toContain('ALLOWED_ORIGINS')
+    expect(run.output).toContain('9090')
+  }, 60_000)
+
+  it('refuses a missing ALLOWED_ORIGINS', () => {
+    const noOrigins = GOOD_ENV.split('\n').filter((line) => !line.startsWith('ALLOWED_ORIGINS=')).join('\n')
+    const run = dryRun('no-origins.env', noOrigins)
+    expect(run.status).not.toBe(0)
+    expect(run.output).toContain('ALLOWED_ORIGINS')
+  }, 60_000)
+
+  it('refuses an ALLOWED_ORIGINS entry with a trailing slash instead of silently accepting it', () => {
+    // The likely mistake: pasting an address-bar URL, trailing slash and all. `config.ts` rejects
+    // this at server boot (`url.origin === value`); the dry run must catch it too.
+    const bad = GOOD_ENV.replace('ALLOWED_ORIGINS=http://localhost:8080,http://<IP-LAN>:8080', 'ALLOWED_ORIGINS=http://localhost:8080,http://<IP-LAN>:8080/')
+    const run = dryRun('trailing-slash.env', bad)
+    expect(run.status).not.toBe(0)
+    expect(run.output).toContain('ALLOWED_ORIGINS')
+  }, 60_000)
+
+  it('refuses an ALLOWED_ORIGINS entry with a path', () => {
+    const bad = GOOD_ENV.replace('ALLOWED_ORIGINS=http://localhost:8080,http://<IP-LAN>:8080', 'ALLOWED_ORIGINS=http://localhost:8080/app')
+    const run = dryRun('with-path.env', bad)
+    expect(run.status).not.toBe(0)
+    expect(run.output).toContain('ALLOWED_ORIGINS')
   }, 60_000)
 })
 
