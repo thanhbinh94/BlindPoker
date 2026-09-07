@@ -233,6 +233,11 @@ Vì sao ba dòng:
 URL của tunnel miễn phí đổi mỗi lần chạy `cloudflared`, nên mỗi lần lại phải sửa `ALLOWED_ORIGINS`.
 Đóng `cloudflared` là URL biến mất.
 
+Lưu ý: `PORT` vẫn là `8080` (đó là cổng `cloudflared` nối vào) trong khi origin ở trên là cổng `443` —
+`run.ps1` không coi đây là lỗi khi có `https://` trong `ALLOWED_ORIGINS` hoặc `TRUST_PROXY` khác
+`false`, vì đó chính là dấu hiệu có proxy/tunnel đứng trước. Việc **cổng phải khớp** ở mục 9 chỉ áp
+dụng cho trường hợp chạy LAN trực tiếp, không có proxy.
+
 ---
 
 ## 9. Sự cố thường gặp
@@ -248,7 +253,7 @@ URL của tunnel miễn phí đổi mỗi lần chạy `cloudflared`, nên mỗi
 | `[error] Server thoát ngay khi khởi động` kèm `EADDRINUSE` | Cổng 8080 đang bị chương trình khác chiếm. Tìm bằng `netstat -ano \| findstr :8080`, rồi tắt chương trình đó, hoặc chạy `.\run.ps1 -Port 9090` **và** sửa cổng trong `ALLOWED_ORIGINS`. |
 | `[error] ALLOWED_ORIGINS chưa được đặt` | Điền `ALLOWED_ORIGINS` trong `.env` — xem mẫu ở `.env.example`. |
 | `[error] ALLOWED_ORIGINS có origin không hợp lệ` | Một origin không đúng dạng `http(s)://host:port` — thường là dấu `/` thừa ở cuối (dán từ thanh địa chỉ trình duyệt) hoặc có thêm đường dẫn. Sửa lại, không path, không dấu `/` cuối. |
-| `[error] ALLOWED_ORIGINS không có origin nào ở cổng N` | Cổng hiệu lực (mặc định hoặc `-Port`) không khớp origin nào trong `ALLOWED_ORIGINS`. Sửa `ALLOWED_ORIGINS` cho khớp, hoặc chạy `-Port` đúng cổng đã có trong đó. |
+| `[error] ALLOWED_ORIGINS không có origin nào ở cổng N` | Chỉ xảy ra ở chạy LAN trực tiếp (không proxy): cổng hiệu lực (mặc định hoặc `-Port`) không khớp origin nào trong `ALLOWED_ORIGINS`. Sửa `ALLOWED_ORIGINS` cho khớp, hoặc chạy `-Port` đúng cổng đã có trong đó. Chạy sau Cloudflare Tunnel (mục 8) không gặp lỗi này — `https://` hoặc `TRUST_PROXY` khác `false` bỏ qua kiểm tra. |
 | `[warn] PUBLIC_DIR=... không có index.html` | Giao diện chưa được build. `pnpm build:normal` ở thư mục gốc repo. Server vẫn chạy nhưng mở trình duyệt chỉ thấy lỗi. |
 | `[warn] Không xác định được địa chỉ IPv4 LAN` | Máy không có card mạng nào đang hoạt động, hoặc chỉ có địa chỉ `169.254.*` (Wi-Fi/LAN chưa nhận được IP). Nối mạng lại rồi chạy lại; hoặc điền tay IP vào `ALLOWED_ORIGINS` thay cho `<IP-LAN>`, hoặc dùng `-LanIp`. |
 | IP LAN script in ra không giống dải mạng thật (ví dụ `172.x`, `192.168.56.x`) | Máy có card ảo (Hyper-V/WSL/VPN/VirtualBox) với metric thấp hơn card thật. Xem mục 5 ("IP LAN tự dò sai?") và dùng `-LanIp`. |

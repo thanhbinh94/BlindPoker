@@ -134,6 +134,25 @@ describe.skipIf(!HAVE_POWERSHELL)('deploy/normal-windows/run.ps1 -DryRun', () =>
     expect(run.output).toContain('32')
   }, 60_000)
 
+  it('never echoes a mis-pasted connection string with its password in it (KEY=VALUE line, invalid key)', () => {
+    // A bare Neon connection string pasted as its own line still contains an `=` (`sslmode=require`),
+    // so it is read as KEY=VALUE with an invalid key — the other branch through Get-SafeLinePreview,
+    // masking the *key* text rather than the whole line. Either way the password must never surface.
+    const run = dryRun('paste.env', `postgresql://neondb_owner:npg_TOPSECRET@ep-x.aws.neon.tech/neondb?sslmode=require\n${GOOD_ENV}`)
+    expect(run.status).not.toBe(0)
+    expect(run.output).not.toContain('npg_TOPSECRET')
+    expect(run.output).toContain('1') // the line number is what the operator needs to find it
+  }, 60_000)
+
+  it('never echoes a mis-pasted connection string with its password in it (no "=" at all)', () => {
+    // No `=` anywhere means Read-EnvFile refuses it as not KEY=VALUE at all, previewing the whole
+    // line through Get-SafeLinePreview — the masked line is short enough here to appear untruncated.
+    const run = dryRun('paste-noeq.env', `postgres://u:TOPSECRET@h/db\n${GOOD_ENV}`)
+    expect(run.status).not.toBe(0)
+    expect(run.output).not.toContain('TOPSECRET')
+    expect(run.output).toContain('postgres://u:***@h/db')
+  }, 60_000)
+
   it('refuses a missing environment file instead of starting on defaults', () => {
     const run = runScript(script, '-DryRun', '-EnvFile', join(dir, 'nope.env'))
     expect(run.status).not.toBe(0)
@@ -196,10 +215,27 @@ describe.skipIf(!HAVE_POWERSHELL)('deploy/normal-windows/run.ps1 -DryRun', () =>
   }, 60_000)
 
   it('refuses -Port when no ALLOWED_ORIGINS entry matches the new port, with an actionable message, and exits non-zero even under -DryRun', () => {
+    // The plain-LAN case (no proxy signalled: every origin is http://, TRUST_PROXY=false, as in
+    // GOOD_ENV) is exactly where the port-match hard-fail is right — this is what must keep failing.
     const run = dryRun('port-bad.env', GOOD_ENV, '-Port', '9090')
     expect(run.status).not.toBe(0)
     expect(run.output).toContain('ALLOWED_ORIGINS')
     expect(run.output).toContain('9090')
+  }, 60_000)
+
+  it('accepts the README §8 Cloudflare Tunnel configuration although the origin port never matches PORT', () => {
+    // README §8, verbatim: PORT stays 8080 (cloudflared connects to localhost:8080), but the
+    // browser's origin is the tunnel URL cloudflared prints — https://…trycloudflare.com on 443,
+    // never 8080. The port-match hard-fail exists for the direct-LAN case; TRUST_PROXY=loopback (and
+    // independently, the https:// scheme) must be enough to let this through instead of tripping it.
+    const tunnelEnv = GOOD_ENV
+      .replace('ALLOWED_ORIGINS=http://localhost:8080,http://<IP-LAN>:8080', 'ALLOWED_ORIGINS=https://random-words-1234.trycloudflare.com')
+      .replace('COOKIE_SECURE=false', 'COOKIE_SECURE=true')
+      .replace('TRUST_PROXY=false', 'TRUST_PROXY=loopback')
+    const run = dryRun('tunnel.env', tunnelEnv)
+    expect(run.status).toBe(0)
+    expect(run.output).toContain('ALLOWED_ORIGINS=https://random-words-1234.trycloudflare.com')
+    expect(run.output).toContain('PORT=8080')
   }, 60_000)
 
   it('refuses a missing ALLOWED_ORIGINS', () => {

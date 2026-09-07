@@ -349,9 +349,21 @@ if ($badOrigins.Count -gt 0) {
         (($badOrigins | ForEach-Object { "  - '$_'" }) -join "`n") +
         "`nMỗi origin phải đúng dạng http(s)://host[:port] — không có path, không có dấu / ở cuối, không có tên đăng nhập.")
 }
-$matching = @($origins | Where-Object { ([uri] $_).Port -eq $effectivePortNum })
-if ($matching.Count -eq 0) {
-    Stop-WithError "ALLOWED_ORIGINS không có origin nào ở cổng $effectivePortNum trong $EnvFile — trình duyệt sẽ bị server từ chối (CORS). Sửa ALLOWED_ORIGINS cho khớp cổng, hoặc chạy lại với -Port đúng cổng đã cấu hình."
+# A reverse proxy or tunnel — Cloudflare Tunnel, README §8 — puts a different origin between the
+# browser and this process: the browser's origin is the tunnel's `https://…trycloudflare.com` on
+# 443 while the server itself keeps listening on $effectivePortNum. That is not a misconfiguration,
+# it is what fronting the server looks like, so the port-match requirement below only makes sense
+# for the direct-LAN case it was written for. Either signal that something is in front is enough to
+# skip it: an `https://` origin (this kit never terminates TLS itself, so that origin can only be a
+# proxy's), or `TRUST_PROXY` set to anything but `false` (its direct-LAN default, matching
+# `config.ts`'s own default).
+$trustProxyValue = if ($settings.Contains('TRUST_PROXY')) { $settings['TRUST_PROXY'] } else { 'false' }
+$behindProxy = ($trustProxyValue -ne 'false') -or (@($origins | Where-Object { ([uri] $_).Scheme -eq 'https' })).Count -gt 0
+if (-not $behindProxy) {
+    $matching = @($origins | Where-Object { ([uri] $_).Port -eq $effectivePortNum })
+    if ($matching.Count -eq 0) {
+        Stop-WithError "ALLOWED_ORIGINS không có origin nào ở cổng $effectivePortNum trong $EnvFile — trình duyệt sẽ bị server từ chối (CORS). Sửa ALLOWED_ORIGINS cho khớp cổng đang chạy, hoặc chạy lại với -Port đúng cổng đã có trong ALLOWED_ORIGINS. (Chạy sau reverse proxy/tunnel như Cloudflare Tunnel — xem README mục 8 — thì đặt origin https:// hoặc TRUST_PROXY khác false để bỏ qua kiểm tra này.)"
+    }
 }
 
 # --- 7. Into this session's environment, and nowhere else -------------------------------------

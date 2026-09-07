@@ -180,7 +180,7 @@ rather than adding an alternative build.
 | --- | --- | --- |
 | For | A first look, and a few people on one LAN | A public server, indefinitely |
 | Runs on | A Windows machine you already have | An ARM VM on Oracle Cloud **Always Free** |
-| Needs | Node 22, `pnpm build:normal`, a free PostgreSQL (Neon) | An Oracle account, an SSH key, ~20 minutes |
+| Needs | Node 22, `pnpm build:normal`, a free PostgreSQL (Neon) | An Oracle account (a card, for identity verification only — ~$1 held and refunded), an SSH key, ~20 minutes |
 | Ships as | `run.ps1` / `stop.ps1` + `.env.example` | An idempotent `bootstrap.sh` + a cron example |
 | Gets you | `http://<LAN IP>:8080`, no TLS | `https://<your domain>`, Let's Encrypt via Caddy |
 | Cost | 0 | 0 |
