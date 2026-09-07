@@ -161,12 +161,14 @@ server bundle has been run standalone against its production-only `node_modules`
 
 **…and the first build the project's own runbook recommends is an `arm64` one.** `deploy/oracle`
 targets an Oracle Always Free `VM.Standard.A1.Flex`, which is ARM, so the first `docker build` is
-likely to be both the image's first build anywhere *and* its first build off x86. One difference is
-known in advance and named in the runbook: `argon2` 0.45.1 ships a musl prebuild for **linux-x64**
-only (`prebuilds/linux-x64/argon2.musl.node`), so on `arm64` its install step compiles from source
-instead of unpacking a binary. The builder stage already carries `python3 make g++` for exactly that
-path, which is why it is a slower build rather than a failed one — but "should compile" is a
-reading of the Dockerfile, not an observation.
+likely to be both the image's first build anywhere *and* its first build off x86. `argon2` 0.45.1
+ships musl prebuilds for **both** `linux-x64` and `linux-arm64`
+(`prebuilds/linux-arm64/argon2.armv8.musl.node`), so `node-gyp-build` unpacks a binary on arm64 the
+same way it does on x86 — there is no known source-compile step at this point. The builder stage's
+`python3 make g++` toolchain is a fallback for a rejected prebuild (Node ABI or libc mismatch), not
+the expected path. No other difference between the ARM and x86 build is known in advance; this is
+still the image's first build on this architecture, and "should build the same way" is a reading of
+`node-gyp-build`'s prebuild matching, not an observation.
 *Why:* the same missing Docker daemon, plus no ARM machine of any kind here.
 *What to do:* build it with `docker compose build --progress=plain 2>&1 | tee /tmp/build.log` the
 first time, and read the log rather than the summary. `deploy/oracle/README.md` §8 has a symptom

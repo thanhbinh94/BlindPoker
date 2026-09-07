@@ -328,7 +328,7 @@ issue.
 | Triệu chứng | Nguyên nhân và cách xử lý |
 | --- | --- |
 | Build chết ở `pnpm install`, thông báo bị cắt ngang / `Killed` / exit 137 | Hết RAM. Kiểm `swapon --show` phải thấy `/swapfile 2G`. Chưa có thì chạy lại `bootstrap.sh`. Vẫn hỏng thì `docker compose build --progress=plain` từng bước và tạm nâng swap lên 4 GB. |
-| Build dừng ở bước cài `argon2` với `node-gyp` / `gyp ERR!` | argon2 0.45.1 có prebuild musl cho **linux-x64** (`prebuilds/linux-x64/argon2.musl.node`). Trên **arm64** thì `node-gyp-build` phải **biên dịch từ mã nguồn** — đây là khác biệt lớn nhất giữa ARM và x86 với image này. Builder stage đã có sẵn `python3 make g++` cho đúng đường đó, nên nó *nên* chạy được; cái nó cần là RAM và thời gian (vài phút cho riêng argon2). Nếu vẫn hỏng, đọc dòng log ngay **trên** chỗ hỏng: thiếu header thì `apk add --no-cache linux-headers` trong builder stage là thứ phải thêm. |
+| Build dừng ở bước cài `argon2` với `node-gyp` / `gyp ERR!` | argon2 0.45.1 có prebuild musl cho **cả linux-x64 lẫn linux-arm64** (`prebuilds/linux-arm64/argon2.armv8.musl.node`), nên bình thường arm64 cũng unpack sẵn binary như x86 — không có bước biên dịch nào ở đây. Nếu vẫn thấy `gyp ERR!`, nghĩa là `node-gyp-build` đã từ chối prebuild (lệch Node ABI hoặc lệch libc) và rơi về builder stage's `python3 make g++` như đường dự phòng; đọc dòng log ngay **trên** chỗ hỏng — thiếu header thì `apk add --no-cache linux-headers` trong builder stage là thứ phải thêm. |
 | `pnpm deploy --prod /out` báo lỗi lạ, hoặc `/out/node_modules` rỗng | Phiên bản pnpm. Dockerfile ghim `pnpm@9` có lý do: trên pnpm 10, `deploy` từ chối chạy nếu workspace không đặt `inject-workspace-packages=true`, và install script của dependency không chạy mặc định (`onlyBuiltDependencies`) nên bước `node-gyp-build` của argon2 bị bỏ qua **im lặng**. Đừng đổi dòng `npm i -g pnpm@9`. |
 | `esbuild: Incompatible host architecture` hoặc lỗi platform trong bước vite | BuildKit bị tắt, nên `Dockerfile.dockerignore` không được đọc và `node_modules` của host bị nuốt vào context. Bật lại: `DOCKER_BUILDKIT=1 docker compose build`. Trên máy này không nên xảy ra — bootstrap cài Docker mới, mặc định đã bật BuildKit. |
 | Build xong, `migrate` thoát khác 0 | `docker compose logs migrate`. Thường là sai `POSTGRES_PASSWORD` (`password authentication failed`) hoặc `DATABASE_URL is not a valid URL` (mật khẩu có `/ ? # @` — xem mục 7). `app` **không** khởi động khi `migrate` hỏng, và đó là chủ ý. |
@@ -340,6 +340,13 @@ chứng chỉ), sửa, rồi `up -d --build` lại. Layer đã build được gi
 ---
 
 ## 9. Kiểm tra
+
+`$DOMAIN` chỉ nằm trong `.env` — Compose đọc được nhưng shell của bạn thì không, nên nạp nó vào
+session trước khi dán mấy lệnh `curl` dưới đây (đang đứng ở `deploy/normal` từ mục 8):
+
+```bash
+set -a; . ./.env; set +a
+```
 
 ```bash
 docker compose ps                              # bốn service; app phải "healthy"
@@ -372,8 +379,11 @@ minh được gì cả. Những test đó **chỉ thực thi khi có `TEST_DATAB
 Có hai cách. **Cách A gọn hơn và an toàn hơn** — chạy ngay trên VM, không mở cổng nào:
 
 ```bash
-# trên VM
-sudo apt-get install -y nodejs npm && sudo npm i -g pnpm@9    # hoặc nvm, nếu bạn quen hơn
+# trên VM — apt's `nodejs` trên Ubuntu 24.04 là bản 18; repo này khai `engines.node >= 22.13`
+# (image cũng build trên node:22-alpine), nên cài bằng NodeSource:
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs                                 # hoặc nvm install 22, nếu bạn quen hơn
+sudo npm i -g pnpm@9
 cd /opt/bind-poker
 pnpm install --frozen-lockfile
 
@@ -466,7 +476,7 @@ Tóm tắt:
 
 ```bash
 sudo install -d -o ubuntu -g ubuntu /var/backups/bind-poker
-sudo install -o ubuntu -g ubuntu /dev/null /var/log/bind-poker-backup.log
+sudo touch /var/log/bind-poker-backup.log && sudo chown ubuntu:ubuntu /var/log/bind-poker-backup.log
 crontab -e          # dán dòng cron trong backup-cron.example
 crontab -l          # kiểm lại
 

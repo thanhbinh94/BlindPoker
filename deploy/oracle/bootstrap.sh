@@ -93,6 +93,15 @@ step "Firewall — accept tcp/80 and tcp/443"
 # nothing at all: the packet was already rejected. That is the single most common reason a fresh
 # Oracle VM answers ssh and drops every request to Caddy, even with the Security List wide open.
 # So: find the first REJECT/DROP in the chain and insert above it.
+RULES_V4=/etc/iptables/rules.v4
+# Set by `open_port` when it actually inserts or appends a rule. Only a run that changed something
+# — or one where the saved file does not exist yet — should re-save: `netfilter-persistent save`
+# snapshots whatever is in the live `iptables` tables *right now*, and by the second run of this
+# script that includes Docker's own `nat`/`DOCKER`/`DOCKER-USER` chains. Saving those into
+# `/etc/iptables/rules.v4` means `netfilter-persistent.service` — which runs at boot before `dockerd`
+# starts — restores a stale copy of Docker's chains, and `dockerd` then layers its real ones on top.
+RULES_CHANGED=0
+
 open_port() {
   local port="$1" at
   # One array, used for both `-C` (does this rule exist?) and `-I` (add it). They have to be the
@@ -104,7 +113,10 @@ open_port() {
     return 0
   fi
 
-  at="$(iptables -L INPUT --line-numbers -n | awk '$2 == "REJECT" || $2 == "DROP" { print $1; exit }')"
+  # No `exit` in the awk program: under `pipefail`, an awk that quits early while `iptables` still
+  # has output queued can turn the pipeline's exit status into 141 (SIGPIPE) and abort the script
+  # under `set -e`. `!found` keeps only the first match without stopping the read.
+  at="$(iptables -L INPUT --line-numbers -n | awk '!found && ($2 == "REJECT" || $2 == "DROP") { print $1; found=1 }')"
   if [ -n "$at" ]; then
     iptables -I INPUT "$at" "${rule[@]}"
     did "tcp/$port accepted — inserted as INPUT rule $at, above the default REJECT"
@@ -112,29 +124,35 @@ open_port() {
     iptables -A INPUT "${rule[@]}"
     did "tcp/$port accepted — appended (this chain has no REJECT/DROP to get above)"
   fi
+  RULES_CHANGED=1
 }
 
 open_port 80
 open_port 443
 
 # Persistence. Without this the rules are gone at the next reboot and the site is unreachable in a
-# way that looks like a DNS or a Caddy problem.
-#
-# The two debconf answers are pre-seeded because the package asks "save current IPv4 rules?" on
-# install. Under `curl … | sudo bash` there is no terminal to ask on. `false` for both, deliberately:
-# the explicit `netfilter-persistent save` below runs after the rules are in place, whereas the
-# install-time question would fire mid-way through.
-if pkg_installed iptables-persistent; then
-  skip "iptables-persistent is already installed"
-else
-  echo 'iptables-persistent iptables-persistent/autosave_v4 boolean false' | debconf-set-selections
-  echo 'iptables-persistent iptables-persistent/autosave_v6 boolean false' | debconf-set-selections
-  apt_install iptables-persistent
-  did "installed iptables-persistent"
-fi
+# way that looks like a DNS or a Caddy problem. But only when this run actually changed something —
+# or `rules.v4` does not exist yet, e.g. the rules were added by hand before the first bootstrap run
+# — see the comment on `RULES_CHANGED` above for why an unconditional save is unsafe on a re-run.
+if [ "$RULES_CHANGED" -eq 1 ] || [ ! -s "$RULES_V4" ]; then
+  # The two debconf answers are pre-seeded because the package asks "save current IPv4 rules?" on
+  # install. Under `curl … | sudo bash` there is no terminal to ask on. `false` for both,
+  # deliberately: the explicit `netfilter-persistent save` below runs after the rules are in place,
+  # whereas the install-time question would fire mid-way through.
+  if pkg_installed iptables-persistent; then
+    skip "iptables-persistent is already installed"
+  else
+    echo 'iptables-persistent iptables-persistent/autosave_v4 boolean false' | debconf-set-selections
+    echo 'iptables-persistent iptables-persistent/autosave_v6 boolean false' | debconf-set-selections
+    apt_install iptables-persistent
+    did "installed iptables-persistent"
+  fi
 
-netfilter-persistent save >/dev/null
-did "saved the rules to /etc/iptables/rules.v4 (they survive a reboot)"
+  netfilter-persistent save >/dev/null
+  did "saved the rules to $RULES_V4 (they survive a reboot)"
+else
+  skip "no firewall rule changed and $RULES_V4 already exists — not re-saving (that would also snapshot Docker's live chains)"
+fi
 
 # IPv6 is left alone on purpose: an Oracle subnet has no IPv6 unless you assign one, and writing an
 # ip6tables ACCEPT for an address family the VM does not have would be a rule nobody can test.
@@ -181,7 +199,7 @@ else
   # `arm64` on an A1.Flex, `amd64` on the x86 Always Free shapes. Asking dpkg is the only way to be
   # right on both without a uname-to-Debian-arch table of one's own.
   ARCH="$(dpkg --print-architecture)"
-  CODENAME="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+  CODENAME="$(. /etc/os-release && echo "${VERSION_CODENAME:-}")"
   [ -n "$CODENAME" ] || die "could not read VERSION_CODENAME from /etc/os-release"
 
   apt_install ca-certificates curl gnupg
@@ -211,7 +229,7 @@ fi
 if systemctl is-enabled --quiet docker 2>/dev/null && systemctl is-active --quiet docker; then
   skip "the docker service is enabled and running"
 else
-  systemctl enable --now docker >/dev/null 2>&1
+  systemctl enable --now docker >/dev/null
   did "enabled and started the docker service"
 fi
 
@@ -219,7 +237,9 @@ fi
 
 step "Group membership"
 
-if id -nG "$DEPLOY_USER" | tr ' ' '\n' | grep -qx docker; then
+DEPLOY_USER_GROUPS="$(id -nG "$DEPLOY_USER")"   # captured first, so the pipeline below never has a
+                                                 # `grep -q` that can exit before `id` finishes writing
+if printf '%s\n' "$DEPLOY_USER_GROUPS" | tr ' ' '\n' | grep -qx docker; then
   skip "$DEPLOY_USER is already in the docker group"
 else
   usermod -aG docker "$DEPLOY_USER"
@@ -308,12 +328,16 @@ up at login — and then:
          play.<your-domain>            → <public IP>
          play.<ip-with-dashes>.sslip.io   needs no record at all
 
-  2. Configuration.
+  2. Configuration. Compose does NOT run commands inside .env — generate the
+     two secrets first, then paste the values in:
+         openssl rand -hex 24        → POSTGRES_PASSWORD (hex: never has '/')
+         openssl rand -base64 48     → SESSION_SECRET
+
          cd $CHECKOUT_DIR/deploy/normal
          cp .env.example .env && nano .env
          DOMAIN=…                        the name from step 1
-         POSTGRES_PASSWORD=\$(openssl rand -hex 24)     # hex: never contains '/'
-         SESSION_SECRET=\$(openssl rand -base64 48)
+         POSTGRES_PASSWORD=…             paste the hex value above
+         SESSION_SECRET=…                paste the base64 value above
          chmod 600 .env
 
   3. Build and start. The FIRST build is an ARM build of an image that has never
@@ -321,7 +345,8 @@ up at login — and then:
          docker compose up -d --build
          docker compose logs -f migrate       # this one first, then app, then caddy
 
-  4. Check.
+  4. Check. \$DOMAIN is only in .env, not your shell — load it first:
+         set -a; . ./.env; set +a
          curl -fsS https://\$DOMAIN/health
 
   5. Backups: deploy/oracle/backup-cron.example.
