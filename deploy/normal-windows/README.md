@@ -140,11 +140,26 @@ Tham số có thể dùng:
 | --- | --- |
 | `-DryRun` | Chỉ in cấu hình và lệnh sẽ chạy, không đụng vào database lẫn cổng mạng. |
 | `-NoMigrate` | Bỏ qua bước migration (schema đã có sẵn từ lần chạy trước). |
-| `-Port 9090` | Chạy tạm ở cổng khác. Nhớ sửa cổng trong `ALLOWED_ORIGINS` cho khớp, nếu không script sẽ cảnh báo và trình duyệt sẽ bị từ chối. |
+| `-Port 9090` | Chạy tạm ở cổng khác. **Phải** sửa cổng trong `ALLOWED_ORIGINS` cho khớp trước — nếu không script sẽ từ chối chạy (kể cả `-DryRun`), không chỉ cảnh báo. |
 | `-EnvFile ..\a.env` | Dùng một file cấu hình khác. |
+| `-LanIp 192.168.1.50` | Bỏ qua bước tự dò card mạng, dùng thẳng địa chỉ này. Xem mục "IP LAN tự dò sai" ngay dưới. |
 
 Log của server nằm ở `normal.log` và `normal.err.log` cạnh script. Cửa sổ PowerShell đóng lại thì
 server **vẫn chạy** — dừng nó bằng `.\stop.ps1` (mục 7).
+
+**IP LAN tự dò sai?** `run.ps1` chọn card mạng theo `InterfaceMetric` thấp nhất trong các card đang
+`Up` — đúng ý Windows trên máy bình thường, nhưng máy có Hyper-V (WSL bật tính năng ảo hoá), VPN, hay
+VirtualBox host-only network đôi khi có một card ảo với metric thấp hơn card Wi-Fi/Ethernet thật. Nếu
+IP script in ra không giống dải mạng nhà bạn (ví dụ `172.x` hay `192.168.56.x` trong khi router nhà
+dùng `192.168.1.x`), tìm địa chỉ đúng bằng:
+
+```powershell
+ipconfig
+# hoặc, đầy đủ hơn:
+Get-NetIPAddress -AddressFamily IPv4 | Select-Object InterfaceAlias, IPAddress
+```
+
+rồi chạy lại với `-LanIp`, ví dụ `.\run.ps1 -LanIp 192.168.1.10`.
 
 ---
 
@@ -231,8 +246,12 @@ URL của tunnel miễn phí đổi mỗi lần chạy `cloudflared`, nên mỗi
 | `[error] migrate-cli thoát với mã 1` kèm `ECONNREFUSED` / `ETIMEDOUT` | Database không trả lời. Neon vừa ngủ dậy — **chạy lại lệnh một lần nữa**. Nếu vẫn lỗi: kiểm tra `DATABASE_URL` đã dán đủ cả `?sslmode=require`, và máy có Internet. |
 | `[error] ... DATABASE_URL is not a valid URL` | Mật khẩu chứa ký tự `/ ? # @` chưa được percent-encode. Ở Neon, bấm **Reset password** để lấy mật khẩu mới. |
 | `[error] Server thoát ngay khi khởi động` kèm `EADDRINUSE` | Cổng 8080 đang bị chương trình khác chiếm. Tìm bằng `netstat -ano \| findstr :8080`, rồi tắt chương trình đó, hoặc chạy `.\run.ps1 -Port 9090` **và** sửa cổng trong `ALLOWED_ORIGINS`. |
+| `[error] ALLOWED_ORIGINS chưa được đặt` | Điền `ALLOWED_ORIGINS` trong `.env` — xem mẫu ở `.env.example`. |
+| `[error] ALLOWED_ORIGINS có origin không hợp lệ` | Một origin không đúng dạng `http(s)://host:port` — thường là dấu `/` thừa ở cuối (dán từ thanh địa chỉ trình duyệt) hoặc có thêm đường dẫn. Sửa lại, không path, không dấu `/` cuối. |
+| `[error] ALLOWED_ORIGINS không có origin nào ở cổng N` | Cổng hiệu lực (mặc định hoặc `-Port`) không khớp origin nào trong `ALLOWED_ORIGINS`. Sửa `ALLOWED_ORIGINS` cho khớp, hoặc chạy `-Port` đúng cổng đã có trong đó. |
 | `[warn] PUBLIC_DIR=... không có index.html` | Giao diện chưa được build. `pnpm build:normal` ở thư mục gốc repo. Server vẫn chạy nhưng mở trình duyệt chỉ thấy lỗi. |
-| `[warn] Không xác định được địa chỉ IPv4 LAN` | Máy không có card mạng nào đang hoạt động, hoặc chỉ có địa chỉ `169.254.*` (Wi-Fi/LAN chưa nhận được IP). Nối mạng lại rồi chạy lại; hoặc điền tay IP vào `ALLOWED_ORIGINS` thay cho `<IP-LAN>`. |
+| `[warn] Không xác định được địa chỉ IPv4 LAN` | Máy không có card mạng nào đang hoạt động, hoặc chỉ có địa chỉ `169.254.*` (Wi-Fi/LAN chưa nhận được IP). Nối mạng lại rồi chạy lại; hoặc điền tay IP vào `ALLOWED_ORIGINS` thay cho `<IP-LAN>`, hoặc dùng `-LanIp`. |
+| IP LAN script in ra không giống dải mạng thật (ví dụ `172.x`, `192.168.56.x`) | Máy có card ảo (Hyper-V/WSL/VPN/VirtualBox) với metric thấp hơn card thật. Xem mục 5 ("IP LAN tự dò sai?") và dùng `-LanIp`. |
 | `[error] Đã có một server đang chạy (pid N)` | Lần chạy trước chưa dừng. `.\stop.ps1` rồi chạy lại. |
 | Máy khác không vào được | Kiểm tra theo thứ tự: tường lửa (mục 6); `HOST=0.0.0.0` trong `.env`; hai máy cùng một mạng; dùng đúng IP script đã in, không phải `localhost`. |
 | Vào được trang nhưng đăng nhập xong lại bị đăng xuất | `COOKIE_SECURE` đang là `true` mà bạn đang dùng `http://`. Đặt lại `COOKIE_SECURE=false` cho mạng LAN. |
