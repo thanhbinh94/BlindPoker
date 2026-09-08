@@ -34,6 +34,13 @@
     "back": "Back",
     "retry": "Retry"
   },
+  "preActions": {
+    "label": "Before your turn",
+    "checkFold": "Check/Fold",
+    "callAny": "Call any",
+    "fold": "Fold",
+    "autoPlay": "Auto play"
+  },
   "labels": {
     "actions": "Actions",
     "allIn": "All-in",

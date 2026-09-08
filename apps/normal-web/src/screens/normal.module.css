@@ -132,6 +132,18 @@
     right var(--dur-2) var(--ease);
 }
 
+/* The reward dot: a gold point at the tab's shoulder, there only while today's reward is unclaimed. */
+.navDot {
+  position: absolute;
+  top: 6px;
+  right: 2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 0 2px rgba(8, 13, 26, 0.9);
+}
+
 .navLink[aria-current='page'] {
   color: var(--ink);
 }

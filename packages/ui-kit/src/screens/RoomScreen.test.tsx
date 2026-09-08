@@ -30,6 +30,8 @@ function fakeClient(state: ClientState, overrides: Partial<GameClientApi> = {}):
     resync: vi.fn(),
     clearError: vi.fn(),
     dismissNotification: vi.fn(),
+    setPreAction: vi.fn(),
+    setAutoPlay: vi.fn(),
     reset: vi.fn(),
     serverNow: () => 1_000_000,
     ...overrides,

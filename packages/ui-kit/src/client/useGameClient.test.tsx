@@ -88,3 +88,75 @@ describe('useGameClient', () => {
     expect(result.current.state.hand).toBeNull()
   })
 })
+
+describe('useGameClient pre-actions', () => {
+  beforeEach(() => { vi.useFakeTimers(); FakeSocket.reset() })
+  afterEach(() => { vi.useRealTimers() })
+
+  const room = {
+    roomId: 'r', code: 'C', name: 'n', mode: 'holdem' as const,
+    config: { name: 'n', mode: 'holdem' as const, maxPlayers: 3, isPrivate: false, turnTimerSec: 30, autoStart: false, hasPassword: false, holdem: { smallBlind: 100, bigBlind: 200, minBuyInBB: 50, maxBuyInBB: 200 } },
+    playerCount: 2, maxPlayers: 3, status: 'IN_GAME' as const, hostPlayerId: 'a', carryOverPot: 0, nextHandAt: null,
+    players: [
+      { playerId: 'a', displayName: 'A', isBot: false, isHost: true, connected: true, seat: 0, status: 'IN_HAND' as const, sittingOut: false, stack: 20000, ready: true },
+      { playerId: 'b', displayName: 'B', isBot: false, isHost: false, connected: true, seat: 1, status: 'IN_HAND' as const, sittingOut: false, stack: 20000, ready: true },
+    ],
+  }
+  const legal = (kinds: ('fold' | 'check' | 'call' | 'bet' | 'raise' | 'allIn' | 'play')[], callAmount = 0) =>
+    ({ seat: 0, kinds, callAmount, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 })
+
+  function seatedInHand() {
+    const rendered = renderHook(() => useGameClient({ url: 'ws://x/ws', token: 'tok:a', socketFactory: fakeSocketFactory }))
+    const sock = () => FakeSocket.instances.at(-1)!
+    act(() => sock().open())
+    act(() => sock().receive({ t: 'WELCOME', playerId: 'a', displayName: 'A', balance: 100, serverTime: Date.now() }))
+    act(() => sock().receive({ t: 'ROOM_SNAPSHOT', seq: 7, room, hand: null, deadlineAt: null }))
+    act(() => sock().receive({ t: 'GAME_EVENT', seq: 8, event: { type: 'HAND_STARTED', handId: 'h1', mode: 'holdem', seats: [0, 1], button: 1, carryOverIn: 0 } }))
+    return { ...rendered, sock }
+  }
+  const actions = (sock: () => FakeSocket) => sock().sent.filter((m) => (m as { t: string }).t === 'ACTION')
+
+  it('sends the ticked action the moment the turn arrives, once, and clears the tick', () => {
+    const { result, sock } = seatedInHand()
+    act(() => result.current.setPreAction('checkFold'))
+    expect(result.current.state.preAction).toEqual({ kind: 'checkFold', handId: 'h1' })
+    expect(actions(sock)).toHaveLength(0)
+
+    act(() => sock().receive({ t: 'GAME_EVENT', seq: 9, event: { type: 'TURN_CHANGED', seat: 0, turnSeq: 1, legal: legal(['fold', 'call', 'raise', 'allIn'], 200) } }))
+    expect(actions(sock)).toHaveLength(1)
+    expect(actions(sock)[0]).toMatchObject({ t: 'ACTION', baseSeq: 9, action: { kind: 'fold' } })
+    expect(result.current.state.preAction).toBeNull()
+  })
+
+  it('does nothing on a turn frame for another seat, and nothing when no tick is set', () => {
+    const { result, sock } = seatedInHand()
+    act(() => result.current.setPreAction('callAny'))
+    act(() => sock().receive({ t: 'GAME_EVENT', seq: 9, event: { type: 'TURN_CHANGED', seat: 1, turnSeq: 1, legal: legal(['fold', 'call'], 200) } }))
+    expect(actions(sock)).toHaveLength(0)
+    act(() => result.current.setPreAction(null))
+    act(() => sock().receive({ t: 'GAME_EVENT', seq: 10, event: { type: 'TURN_CHANGED', seat: 0, turnSeq: 1, legal: legal(['fold', 'call'], 200) } }))
+    expect(actions(sock)).toHaveLength(0)
+  })
+
+  it('lets a tick lapse rather than send something the server did not list', () => {
+    const { result, sock } = seatedInHand()
+    act(() => result.current.setPreAction('callAny'))
+    act(() => sock().receive({ t: 'GAME_EVENT', seq: 9, event: { type: 'TURN_CHANGED', seat: 0, turnSeq: 1, legal: legal(['fold', 'allIn'], 30000) } }))
+    expect(actions(sock)).toHaveLength(0)
+    expect(result.current.state.preAction).toBeNull()
+  })
+
+  it('auto-play answers every blind decision with play until it is switched off', () => {
+    const { result, sock } = seatedInHand()
+    act(() => result.current.setAutoPlay(true))
+    act(() => sock().receive({ t: 'GAME_EVENT', seq: 9, event: { type: 'DECISION_PHASE', seats: [0, 1], turnSeq: 1 } }))
+    expect(actions(sock)).toHaveLength(1)
+    expect(actions(sock)[0]).toMatchObject({ action: { kind: 'play' } })
+    expect(result.current.state.autoPlay).toBe(true)
+
+    act(() => result.current.setAutoPlay(false))
+    act(() => sock().receive({ t: 'GAME_EVENT', seq: 10, event: { type: 'HAND_STARTED', handId: 'h2', mode: 'holdem', seats: [0, 1], button: 0, carryOverIn: 0 } }))
+    act(() => sock().receive({ t: 'GAME_EVENT', seq: 11, event: { type: 'DECISION_PHASE', seats: [0, 1], turnSeq: 1 } }))
+    expect(actions(sock)).toHaveLength(1)
+  })
+})

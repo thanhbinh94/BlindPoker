@@ -19,7 +19,8 @@ import s from './portrait.module.css'
  * whole portrait carries at most one accessible name.
  */
 
-export type PortraitSize = 'sm' | 'md' | 'lg'
+/** `seat` fills whatever frame holds it — the kit's seat disc sets the size, so the picture and the frame never disagree. */
+export type PortraitSize = 'sm' | 'md' | 'lg' | 'seat'
 
 export interface PortraitProps {
   /** The equipped configuration, or `null` while it is unknown (no account, fetch in flight). */

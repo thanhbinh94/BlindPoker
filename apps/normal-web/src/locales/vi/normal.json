@@ -8,7 +8,8 @@
     "lobby": "Sảnh chờ",
     "daily": "Điểm danh",
     "profile": "Hồ sơ",
-    "settings": "Cài đặt"
+    "settings": "Cài đặt",
+    "dailyReady": "Có quà chưa nhận"
   },
   "auth": {
     "title": "Just a Normal Poker",

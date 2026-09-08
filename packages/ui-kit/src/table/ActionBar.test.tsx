@@ -133,3 +133,72 @@ describe('ActionBar', () => {
     expect(onAct).toHaveBeenLastCalledWith({ kind: 'play' })
   })
 })
+
+describe('ActionBar pre-actions', () => {
+  const seated = (extra: Partial<ClientHand> = {}) =>
+    hand(null, { actingSeat: 0, seats: [{ seat: 1, playerId: 'me', displayName: 'Me', isBot: false, stack: 5000, betThisStreet: 0, folded: false, allIn: false, cardCount: 2, holeCards: null, hasDecided: false, decision: null, lastAction: null, timedOut: false }], ...extra })
+
+  it('offers check/fold, call any and fold between turns, one lit at a time, and clears on a second press', async () => {
+    const onPreAction = vi.fn()
+    const { rerender } = wrap(<ActionBar hand={seated()} room={room} onAct={() => {}} lang="en" preAction={null} onPreAction={onPreAction} />)
+    const group = screen.getByRole('group', { name: 'Before your turn' })
+    expect(screen.getByRole('status')).toHaveTextContent('Waiting for your turn')
+    const buttons = ['Check/Fold', 'Call any', 'Fold'].map((name) => screen.getByRole('button', { name }))
+    for (const b of buttons) expect(b).toHaveAttribute('aria-pressed', 'false')
+    expect(group).toContainElement(buttons[0]!)
+
+    await userEvent.click(buttons[1]!)
+    expect(onPreAction).toHaveBeenLastCalledWith('callAny')
+
+    rerender(
+      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+        <ActionBar hand={seated()} room={room} onAct={() => {}} lang="en" preAction="callAny" onPreAction={onPreAction} />
+      </I18nextProvider>,
+    )
+    expect(screen.getByRole('button', { name: 'Call any' })).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(screen.getByRole('button', { name: 'Call any' }))
+    expect(onPreAction).toHaveBeenLastCalledWith(null)
+  })
+
+  it('offers nothing to a spectator, a folded seat, an all-in seat, or a hand that is over', () => {
+    const cases: ClientHand[] = [
+      seated({ mySeat: null }),
+      seated({ seats: [{ ...seated().seats[0]!, folded: true }] }),
+      seated({ seats: [{ ...seated().seats[0]!, allIn: true }] }),
+      seated({ phase: 'COMPLETE' }),
+    ]
+    for (const h of cases) {
+      const { unmount } = wrap(<ActionBar hand={h} room={room} onAct={() => {}} lang="en" preAction={null} onPreAction={() => {}} />)
+      expect(screen.queryByRole('group', { name: 'Before your turn' })).toBeNull()
+      unmount()
+    }
+  })
+
+  it('says only that it is waiting when the app wires no pre-actions', () => {
+    wrap(<ActionBar hand={seated()} room={room} onAct={() => {}} lang="en" />)
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  it('blind play-or-fold rooms get an auto-play toggle, while waiting and while deciding', async () => {
+    const onAutoPlay = vi.fn()
+    const blindRoom = { config: { mode: 'blind', blind: { fixedWager: 2000, decisionMode: 'playOrFold' } } } as unknown as RoomView
+    const { unmount } = wrap(
+      <ActionBar hand={seated({ mode: 'blind', phase: 'DEALING' })} room={blindRoom} onAct={() => {}} lang="en" autoPlay={false} onAutoPlay={onAutoPlay} />,
+    )
+    expect(screen.queryByRole('button', { name: 'Check/Fold' })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Auto play' }))
+    expect(onAutoPlay).toHaveBeenLastCalledWith(true)
+    unmount()
+
+    const deciding = seated({ mode: 'blind', phase: 'DECISION', legal: { seat: 1, kinds: ['play', 'fold'], callAmount: 2000, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 } })
+    wrap(<ActionBar hand={deciding} room={blindRoom} onAct={() => {}} lang="en" autoPlay onAutoPlay={onAutoPlay} />)
+    expect(screen.getByRole('button', { name: 'Auto play' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /^play/i })).toBeInTheDocument()
+  })
+
+  it('offers no auto-play in a pure-luck blind room, where there is nothing to decide', () => {
+    const blindRoom = { config: { mode: 'blind', blind: { fixedWager: 2000, decisionMode: 'none' } } } as unknown as RoomView
+    wrap(<ActionBar hand={seated({ mode: 'blind', phase: 'REVEAL' })} room={blindRoom} onAct={() => {}} lang="en" autoPlay={false} onAutoPlay={() => {}} />)
+    expect(screen.queryByRole('button', { name: 'Auto play' })).toBeNull()
+  })
+})

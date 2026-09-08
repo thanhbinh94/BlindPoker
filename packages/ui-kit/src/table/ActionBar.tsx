@@ -2,6 +2,7 @@ import type { PlayerAction, RoomView } from '@bp/core'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { PreActionKind } from '../client/preaction.js'
 import type { ClientHand } from '../client/types.js'
 import { formatPoints, type Language } from '../i18n/index.js'
 import { Button } from '../primitives/Button.js'
@@ -14,7 +15,18 @@ export interface ActionBarProps {
   onAct: (action: PlayerAction) => void
   disabled?: boolean
   lang: Language
+  /**
+   * Hold'em, between turns: the ticked pre-action, and the setter the toggles call. Omit both and the tray only
+   * says it is waiting. The tick is one of three, exclusive; ticking the lit one again clears it.
+   */
+  preAction?: PreActionKind | null
+  onPreAction?: (kind: PreActionKind | null) => void
+  /** Blind Poker: the standing "play every decision" preference and its setter. */
+  autoPlay?: boolean
+  onAutoPlay?: (on: boolean) => void
 }
+
+const PRE_ACTIONS: readonly PreActionKind[] = ['checkFold', 'callAny', 'fold']
 
 const SLIDER_STEPS = 50
 
@@ -28,7 +40,7 @@ const SLIDER_STEPS = 50
  * Between turns the tray stays put and says so: it is a fixture of the room, not a popup, and a tray that came and
  * went would resize the felt above it on every turn.
  */
-export function ActionBar({ hand, room, onAct, disabled = false, lang }: ActionBarProps) {
+export function ActionBar({ hand, room, onAct, disabled = false, lang, preAction = null, onPreAction, autoPlay = false, onAutoPlay }: ActionBarProps) {
   const { t } = useTranslation()
   const legal = hand.legal
   const amountRef = useRef<HTMLInputElement>(null)
@@ -86,12 +98,52 @@ export function ActionBar({ hand, room, onAct, disabled = false, lang }: ActionB
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [legal, disabled, sizing, kinds, emit, submit])
 
+  // The pre-action row is offered only to a seat that can still act this hand: not folded, not all-in, cards on
+  // the table. Anyone else — a spectator, a seat waiting for the next deal — gets the plain waiting line.
+  const mine = hand.mySeat === null ? undefined : hand.seats.find((seat) => seat.seat === hand.mySeat)
+  const live = mine !== undefined && !mine.folded && !mine.allIn && hand.phase !== 'COMPLETE'
+  const offersPreActions = hand.mode === 'holdem' && live && onPreAction !== undefined
+  const offersAutoPlay = hand.mode === 'blind' && mine !== undefined && onAutoPlay !== undefined && room.config.blind?.decisionMode === 'playOrFold'
+
+  const autoPlayToggle = offersAutoPlay ? (
+    <button
+      type="button"
+      className={cx(s.preset, s.preToggle)}
+      aria-pressed={autoPlay}
+      disabled={disabled}
+      onClick={() => onAutoPlay(!autoPlay)}
+    >
+      {t('preActions.autoPlay')}
+    </button>
+  ) : null
+
   if (legal === null) {
     return (
       <div className={s.tray} data-surface="night" role="group" aria-label={t('labels.actions')}>
         <p className={s.trayWait} role="status">
           {t('labels.waitingForTurn')}
         </p>
+        {offersPreActions ? (
+          <div className={s.preRow} role="group" aria-label={t('preActions.label')}>
+            {PRE_ACTIONS.map((kind) => (
+              <button
+                key={kind}
+                type="button"
+                className={cx(s.preset, s.preToggle)}
+                aria-pressed={preAction === kind}
+                disabled={disabled}
+                onClick={() => onPreAction(preAction === kind ? null : kind)}
+              >
+                {t(`preActions.${kind}`)}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {autoPlayToggle === null ? null : (
+          <div className={s.preRow} role="group" aria-label={t('preActions.label')}>
+            {autoPlayToggle}
+          </div>
+        )}
       </div>
     )
   }
@@ -117,6 +169,11 @@ export function ActionBar({ hand, room, onAct, disabled = false, lang }: ActionB
             {playText}
           </Button>
         </div>
+        {autoPlayToggle === null ? null : (
+          <div className={s.preRow} role="group" aria-label={t('preActions.label')}>
+            {autoPlayToggle}
+          </div>
+        )}
       </div>
     )
   }

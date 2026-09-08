@@ -1,5 +1,5 @@
 import {
-  applyCommand, createHand, filterEvent, legalActions, playerView, seededRng,
+  applyCommand, createHand, filterEvent, legalActions, parseCards, playerView, seededRng,
   type BlindRules, type GameEvent, type HandState, type HoldemRules, type PlayerAction, type Rng, type RoomConfig, type RoomView, type ServerMessage,
 } from '@bp/core'
 import { describe, expect, it } from 'vitest'
@@ -413,5 +413,79 @@ describe('reset', () => {
 
     // The next player on this machine must not be greeted by the previous one's name, points or table.
     expect(reduceClient(s, { type: 'reset' })).toEqual(initialClientState)
+  })
+})
+
+describe('pre-actions', () => {
+  /** Deals a three-handed hold'em hand seen from `me` and hands back the engine and client side by side. */
+  function dealt(me: number, seed = 11) {
+    const rng = seededRng(seed)
+    const seqRef = { seq: 10 }
+    const stacks = [20000, 20000, 20000]
+    let client = start('holdem', HOLDEM_RULES, stacks, me)
+    const created = createHand({ handId: `pa${seed}`, rules: HOLDEM_RULES, seats: seatsOf(stacks), button: 0 }, rng)
+    client = feed(client, created.events, me, seqRef)
+    return { client, state: created.state, rng, seqRef, me }
+  }
+  const tick = (client: ClientState, kind: 'checkFold' | 'callAny' | 'fold') => reduceClient(client, { type: 'preAction', kind })
+
+  it('pins a tick to the hand it was made in, and refuses one outside a hand', () => {
+    const { client } = dealt(1)
+    expect(tick(client, 'callAny').preAction).toEqual({ kind: 'callAny', handId: client.hand!.handId })
+    expect(reduceClient(tick(client, 'callAny'), { type: 'preAction', kind: null }).preAction).toBeNull()
+    expect(tick(initialClientState, 'fold').preAction).toBeNull()
+  })
+
+  it('clears the tick when I act, and keeps it while others act', () => {
+    const { seqRef, me } = dealt(1)
+    let client = tick(dealt(1).client, 'checkFold')
+    // Someone else acting leaves the tick standing; my own action — by hand or by the tick — closes it.
+    const other = (me + 1) % 3
+    client = feed(client, [{ type: 'PLAYER_ACTED', seat: other, action: { kind: 'call' }, amount: 200, stack: 19800, allIn: false, timedOut: false }], me, seqRef)
+    expect(client.preAction?.kind).toBe('checkFold')
+    client = feed(client, [{ type: 'PLAYER_ACTED', seat: me, action: { kind: 'fold' }, amount: 0, stack: 20000, allIn: false, timedOut: false }], me, seqRef)
+    expect(client.preAction).toBeNull()
+  })
+
+  it('clears the tick on a new street, at the end of the hand, and when a new hand starts', () => {
+    const { client, me, seqRef } = dealt(1)
+    const flop = feed(tick(client, 'callAny'), [{ type: 'COMMUNITY_REVEALED', street: 'FLOP', cards: parseCards('Ah Kd 2c'), community: parseCards('Ah Kd 2c') }], me, seqRef)
+    expect(flop.preAction).toBeNull()
+
+    const over = feed(tick(client, 'callAny'), [{ type: 'HAND_COMPLETE' }], me, seqRef)
+    expect(over.preAction).toBeNull()
+
+    const rng = seededRng(12)
+    const next = createHand({ handId: 'pa-next', rules: HOLDEM_RULES, seats: seatsOf([20000, 20000, 20000]), button: 1 }, rng)
+    const restarted = feed(tick(client, 'fold'), next.events, me, seqRef)
+    expect(restarted.preAction).toBeNull()
+  })
+
+  it('keeps the tick through a run-out reveal, where no betting resumes', () => {
+    const { client: dealtClient, me, seqRef } = dealt(1)
+    let client: ClientState = { ...dealtClient, hand: { ...dealtClient.hand!, seats: dealtClient.hand!.seats.map((s) => (s.seat === me ? s : { ...s, allIn: true })) } }
+    client = feed(tick(client, 'callAny'), [{ type: 'COMMUNITY_REVEALED', street: 'FLOP', cards: parseCards('Ah Kd 2c'), community: parseCards('Ah Kd 2c') }], me, seqRef)
+    expect(client.preAction?.kind).toBe('callAny')
+  })
+
+  it('drops the tick and auto-play on leaving, on a snapshot, and when I stand or sit out', () => {
+    const { client, me, seqRef } = dealt(1)
+    const s = reduceClient(tick(client, 'fold'), { type: 'autoPlay', on: true })
+    expect(s.autoPlay).toBe(true)
+
+    expect(reduceClient(s, { type: 'leftRoom' })).toMatchObject({ preAction: null, autoPlay: false })
+    expect(reduceClient(s, { type: 'server', msg: { t: 'ROOM_SNAPSHOT', seq: 99, room: s.room!, hand: null, deadlineAt: null }, now: 0 }).preAction).toBeNull()
+
+    seqRef.seq += 1
+    const stood = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: seqRef.seq, event: { type: 'PLAYER_STOOD', playerId: `p${me}`, seat: me } }, now: 0 })
+    expect(stood).toMatchObject({ preAction: null, autoPlay: false })
+
+    seqRef.seq += 1
+    const out = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: seqRef.seq, event: { type: 'PLAYER_SIT_OUT', playerId: `p${me}`, sittingOut: true } }, now: 0 })
+    expect(out.autoPlay).toBe(false)
+
+    seqRef.seq += 1
+    const someoneElse = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: seqRef.seq, event: { type: 'PLAYER_STOOD', playerId: 'p0', seat: 0 } }, now: 0 })
+    expect(someoneElse).toMatchObject({ preAction: { kind: 'fold' }, autoPlay: true })
   })
 })

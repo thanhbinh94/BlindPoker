@@ -265,6 +265,10 @@ test.describe('Just a Normal Poker Normal', () => {
     const who = account('Binh')
     const page = await tourStart(context, who, 'daily')
 
+    // --- 0. the reminder: registering opened /daily once on its own (checked in `register`); the tab keeps the dot
+    const rail = page.getByRole('navigation', { name: 'Điều hướng chính' })
+    await expect(rail.getByText('Có quà chưa nhận'), 'the Daily tab carries the dot while the reward waits').toBeAttached()
+
     // --- 1. the daily claim, and what it paid --------------------------------------------------------
     const before = await readBalance(page)
     await page.goto('/#/daily')
@@ -289,6 +293,10 @@ test.describe('Just a Normal Poker Normal', () => {
     expect(valueAfter('Số dư mới'), 'the receipt agrees with itself').toBe(before + points)
     expect(await readBalance(page), 'the claim credited exactly what the receipt promised').toBe(before + points)
     await expect(page.getByText('Hôm nay bạn đã điểm danh rồi. Hẹn gặp lại ngày mai.')).toBeVisible()
+    // Claimed: leaving the page re-reads the status and the dot goes with it.
+    await page.goto('/#/lobby')
+    await expectLobby(page)
+    await expect(rail.getByText('Có quà chưa nhận')).toHaveCount(0)
   })
 
   test('@mobile sảnh, bàn chơi và hồ sơ trên màn hình điện thoại', async ({ context }) => {
