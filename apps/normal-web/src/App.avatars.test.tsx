@@ -41,6 +41,8 @@ function stubApi(overrides: Partial<NormalApi> = {}): NormalApi {
     config: vi.fn().mockResolvedValue({ edition: 'normal', wsPath: '/ws', languages: ['vi', 'en'] }),
     authMe: vi.fn().mockResolvedValue(ME),
     logout: vi.fn().mockResolvedValue(undefined),
+    // The daily reminder asks once per sign-in; left hanging, it neither redirects nor draws its dot here.
+    daily: vi.fn(() => new Promise<never>(() => undefined)),
     ...overrides,
   } as unknown as NormalApi
 }
