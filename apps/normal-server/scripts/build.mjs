@@ -3,7 +3,8 @@
  * The Normal server's build: `node scripts/build.mjs [--no-typecheck]`.
  *
  *   typecheck  `tsc -p tsconfig.build.json` over exactly the files that ship (no tests, no PGlite).
- *   bundle     esbuild → `dist/main.js` and `dist/migrate-cli.js`, two self-contained ESM entries.
+ *   bundle     esbuild → `dist/main.js`, `dist/migrate-cli.js` and `dist/grant-wardrobe-cli.js`, three
+ *              self-contained ESM entries.
  *   verify     the sidecars `packageRoot()` resolves at run time are where the image expects them.
  *
  * **Why a bundler and not `tsc --outDir dist`.** The workspace packages publish their *sources*
@@ -36,9 +37,9 @@ const require = createRequire(import.meta.url)
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const DIST = resolve(ROOT, 'dist')
 
-/** The two entry points, and the file each becomes. `outdir` derives the names from `src/`. */
-const ENTRIES = ['src/main.ts', 'src/migrate-cli.ts']
-const OUTPUTS = ['dist/main.js', 'dist/migrate-cli.js']
+/** The entry points, and the file each becomes. `outdir` derives the names from `src/`. */
+const ENTRIES = ['src/main.ts', 'src/migrate-cli.ts', 'src/grant-wardrobe-cli.ts']
+const OUTPUTS = ['dist/main.js', 'dist/migrate-cli.js', 'dist/grant-wardrobe-cli.js']
 
 /**
  * Third-party packages left as run-time imports. Every one of them is a direct dependency of

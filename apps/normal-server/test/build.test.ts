@@ -22,6 +22,8 @@ const execFileAsync = promisify(execFile)
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const DIST = join(ROOT, 'dist')
+/** The bundles `scripts/build.mjs` emits: the server, the migrate job, and the wardrobe grant tool. */
+const ENTRY_FILES = ['main.js', 'migrate-cli.js', 'grant-wardrobe-cli.js']
 
 /** Long enough for a cold `tsc` on a loaded machine; a build that needs more than this is broken. */
 const BUILD_TIMEOUT_MS = 240_000
@@ -94,8 +96,8 @@ describe.skipIf(SKIP)('the production build', () => {
     await execFileAsync(process.execPath, [join(ROOT, 'scripts', 'build.mjs')], { cwd: ROOT, timeout: BUILD_TIMEOUT_MS, maxBuffer: 8 * 1024 * 1024 })
   }, BUILD_TIMEOUT_MS)
 
-  it('produces both entry points', async () => {
-    for (const name of ['main.js', 'migrate-cli.js']) {
+  it('produces every entry point', async () => {
+    for (const name of ENTRY_FILES) {
       const info = await stat(join(DIST, name))
       expect(info.isFile(), `dist/${name}`).toBe(true)
       expect(info.size).toBeGreaterThan(1024)
@@ -103,7 +105,7 @@ describe.skipIf(SKIP)('the production build', () => {
   })
 
   it('inlines the workspace packages instead of importing them', async () => {
-    for (const name of ['main.js', 'migrate-cli.js']) {
+    for (const name of ENTRY_FILES) {
       const { eager, deferred } = await specifiersOf(name)
       for (const list of [eager, deferred]) {
         expect(list.filter((s) => s.startsWith('@bp/')), `${name} @bp imports`).toEqual([])
@@ -115,7 +117,7 @@ describe.skipIf(SKIP)('the production build', () => {
   })
 
   it('never loads PGlite at module scope', async () => {
-    for (const name of ['main.js', 'migrate-cli.js']) {
+    for (const name of ENTRY_FILES) {
       const { eager } = await specifiersOf(name)
       // PGlite is a devDependency and is genuinely absent from the production install, and
       // `drizzle-orm/pglite/*` is a subpath of a declared dependency whose own needs are not
