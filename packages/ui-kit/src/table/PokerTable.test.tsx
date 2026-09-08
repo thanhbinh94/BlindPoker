@@ -138,4 +138,32 @@ describe('PokerTable', () => {
     )
     expect(document.querySelectorAll(`.${s.seatCaption}`)).toHaveLength(0)
   })
+
+  it("keeps a bot's virtual bankroll off its plate: the Bot badge says what it is, and the figure would only mislead", () => {
+    const withBot = makeRoom({
+      players: [
+        makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'SEATED', stack: 20_000 }),
+        makePlayer({ playerId: 'bot-1', displayName: 'Bot 1', isBot: true, seat: 1, status: 'SEATED', stack: 1_000_000 }),
+      ],
+    })
+    wrap(
+      <PokerTable
+        room={withBot}
+        hand={null}
+        myPlayerId="a"
+        deadlineAt={null}
+        serverNow={() => 0}
+        turnTimerMs={30000}
+        lang="en"
+        layout="ring"
+        canSit={false}
+      />,
+    )
+    const bot = screen.getByRole('group', { name: 'Seat 2' })
+    expect(within(bot).getByText('Bot')).toBeInTheDocument()
+    expect(within(bot).queryByText('1,000,000')).toBeNull()
+    expect(bot.querySelector(`.${s.seatStack}`)).toBeNull()
+    // A human's stack is still the plate's job.
+    expect(within(screen.getByRole('group', { name: 'Seat 1' })).getByText('20,000')).toBeInTheDocument()
+  })
 })
