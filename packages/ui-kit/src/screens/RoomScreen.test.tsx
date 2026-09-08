@@ -246,6 +246,21 @@ describe('RoomScreen', () => {
     expect(client.kick).toHaveBeenCalledWith('a')
   })
 
+  it("lists a bot in the kick roster without its virtual bankroll", () => {
+    const withBot = makeRoom({
+      status: 'OPEN',
+      players: [
+        ...readyRoom.players,
+        makePlayer({ playerId: 'bot-1', displayName: 'Bot 1', isBot: true, seat: 2, status: 'READY', stack: 1_000_000, ready: true }),
+      ],
+    })
+    wrap(fakeClient(makeState({ room: withBot })))
+    const roster = screen.getByRole('list', { name: 'Players' })
+    expect(within(roster).getByText('Bot 1')).toBeInTheDocument()
+    expect(within(roster).queryByText('1,000,000')).toBeNull()
+    expect(within(roster).getByText('20,000')).toBeInTheDocument()
+  })
+
   it('hides the start button from non-hosts and while fewer than two are ready', () => {
     const guest = makeRoom({
       status: 'OPEN',

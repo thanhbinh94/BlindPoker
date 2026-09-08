@@ -247,7 +247,7 @@ export function RoomScreen({ client, lang, onLeft, avatarFor, captionFor, header
               .map((p) => (
                 <li key={p.playerId} className={cx(s.rosterRow, !p.connected && s.rosterOffline)}>
                   <span className={s.rosterName}>{p.displayName}</span>
-                  {p.seat === null ? null : <span className={s.rosterStack}>{formatPoints(p.stack, lang)}</span>}
+                  {p.seat === null || p.isBot ? null : <span className={s.rosterStack}>{formatPoints(p.stack, lang)}</span>}
                   <Button
                     variant="danger"
                     size="sm"
