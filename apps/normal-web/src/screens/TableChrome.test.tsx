@@ -51,13 +51,11 @@ describe('makeAvatarFor', () => {
     setPortraitRendererForTests(fakeRenderer())
   })
 
-  it('gives a bot a mark of its own, and never looks one up', () => {
+  it("leaves a bot to the kit's own face, and never looks one up", () => {
     const avatars: AvatarCache = new Map()
     const get = vi.spyOn(avatars, 'get')
 
-    const { container } = render(<>{makeAvatarFor(avatars)(player({ playerId: 'bot-1', isBot: true }))}</>)
-
-    expect(container.querySelector('svg')).toHaveAttribute('data-avatar', 'bot')
+    expect(makeAvatarFor(avatars)(player({ playerId: 'bot-1', isBot: true }))).toBeNull()
     expect(get).not.toHaveBeenCalled()
   })
 
@@ -70,7 +68,7 @@ describe('makeAvatarFor', () => {
     // The picture is the whole configuration's hash, which is what an end-to-end test reads to say
     // "that seat is wearing what I equipped".
     await waitFor(() => expect(container.querySelector('img')).toHaveAttribute('data-hash', hashConfig(worn)))
-    expect(container.querySelector('[data-portrait]')).toHaveAttribute('data-size', 'sm')
+    expect(container.querySelector('[data-portrait]')).toHaveAttribute('data-size', 'seat')
   })
 
   it('draws the initial while an avatar has not arrived, and when there is none', () => {

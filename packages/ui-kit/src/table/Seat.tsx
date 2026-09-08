@@ -6,6 +6,7 @@ import type { ClientSeat } from '../client/types.js'
 import { formatPoints, type Language } from '../i18n/index.js'
 import { Badge, type BadgeTone } from '../primitives/Badge.js'
 import { cx } from '../primitives/cx.js'
+import { BotFace } from './BotFace.js'
 import { Card } from './Card.js'
 import { TurnTimer } from './TurnTimer.js'
 import s from './table.module.css'
@@ -102,8 +103,10 @@ export function Seat({
       ) : null}
 
       <div className={s.plate}>
-        <span className={s.avatar} aria-hidden="true">
-          {avatar ?? initial}
+        {/* Every seat gets the same framed disc: a bot's 2D face chosen by its id, the app's picture for a human,
+            and the initial when the app has none. The frame is what makes a table of six read as six faces. */}
+        <span className={s.avatar} data-face={seat.isBot ? 'bot' : avatar === undefined || avatar === null ? 'initial' : 'app'} aria-hidden="true">
+          {seat.isBot ? <BotFace seed={seat.playerId} /> : (avatar ?? initial)}
         </span>
         <span className={s.plateText}>
           <span className={s.seatName}>{name}</span>

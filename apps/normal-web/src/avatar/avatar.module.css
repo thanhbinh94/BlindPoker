@@ -1,24 +1,6 @@
 /* Just a Normal Poker — Normal avatars. Since Plan 8 a player's face is a rendered picture and lives in
-   `avatar3d/portrait.module.css`; what is left here is everything around it — the bot's vector mark, the
-   seat caption, and the lobby bar's corner. */
-
-/* The bot mark. It is a vector rather than a portrait because a bot has no account to draw, and it is
-   only ever asked for at seat size. */
-.avatar {
-  display: block;
-  flex: none;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  /* A seat disc already clips to a circle; standing on its own the mark draws its own edge so it does
-     not float on the ground. */
-  overflow: hidden;
-}
-
-.avatar[data-size='sm'] {
-  width: 32px;
-  height: 32px;
-}
+   `avatar3d/portrait.module.css`, and a bot's face is the kit's own; what is left here is everything around
+   them — the seat caption, and the lobby bar's corner. */
 
 /* ── the seat caption: a badge glyph and a title, on one line ─────────────── */
 
