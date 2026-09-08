@@ -58,3 +58,10 @@ Ghi nhận từ 2026-09-08. Chỉ sửa khi người dùng báo "fix". Trạng t
 | # | Nội dung | Ghi chú |
 |---|---|---|
 | R1 | Người chơi tự đăng ảnh đại diện (Normal) | Hệ con mới: giới hạn cỡ/loại, cắt và nén phía client (≈128×128 WebP < 40 KB), lưu Postgres, phục vụ qua API có cache, CSP, xoá khi xoá tài khoản, cơ chế báo cáo/ẩn ảnh. Cần spec riêng. |
+
+## 4. Yêu cầu thay đổi (change requests)
+
+| # | Ngày | Nội dung | Quyết định đã chốt | Trạng thái |
+|---|---|---|---|---|
+| CR1 | 2026-09-08 | Xây lại avatar theo hướng **chibi**. Khảo sát: không có bộ 3D chibi CC0 nào tách bộ phận (KayKit Adventurers, Kenney Mini là nhân vật nguyên khối; gói modular đều trả phí); 2D: DiceBear chỉ có mặt, Chibi-Character-Generator đã chết. Khuyến nghị và được chọn: **A+ — chibi 2D vẽ SVG lớp, tự xây**. | (1) 2D SVG lớp, một sprite dùng chung, tô màu bằng biến CSS, băm theo cấu hình; không WebGL, gỡ pipeline 3D. (2) Đặc điểm cơ thể miễn phí: thân, màu da, hình mặt, mắt, lông mày, mũi, miệng, má/tàn nhang; các kiểu mắt/miệng đặc biệt là **món sưu tầm** (cách thứ 2). (3) Đồ mặc qua inventory như hiện nay; vẽ lại 45 món + ~15 món mới. (4) **Outfit**: lưu tối đa 5 bộ có tên, bảng `avatar_outfits`. (5) Biểu cảm theo ván (6 mặt), chớp mắt, nhún; bot cũng chibi. (6) Tủ đồ xem trước trực tiếp, tab theo slot, độ hiếm. (7) Bước đầu: nhân vật mẫu + 5 món cho người dùng duyệt phong cách. (8) **Tài khoản admin/test phải có đầy đủ tủ đồ** để kiểm thử. | đã chốt hướng; tiếp theo: thiết kế từng phần → spec → plan |
+
