@@ -116,7 +116,7 @@ async function runStop(runFilePath: string): Promise<number> {
     console.error(`the server accepted the stop but pid ${info.pid} was still running ${STOP_BUDGET_MS / 1000} s later.`)
     return 1
   }
-  console.log(`stopped Bind Poker Lite gracefully (pid ${info.pid}, ${runFileUrl(info)}).`)
+  console.log(`stopped Just a Normal Poker Lite gracefully (pid ${info.pid}, ${runFileUrl(info)}).`)
   return 0
 }
 

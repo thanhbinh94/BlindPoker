@@ -54,7 +54,7 @@ function tempDir(prefix: string): string {
 function publicDir(): string {
   const dir = tempDir('bp-app-')
   mkdirSync(join(dir, 'assets'))
-  writeFileSync(join(dir, 'index.html'), '<!doctype html><title>Bind Poker</title><div id="root"></div>')
+  writeFileSync(join(dir, 'index.html'), '<!doctype html><title>Just a Normal Poker</title><div id="root"></div>')
   writeFileSync(join(dir, 'assets', 'app-abc123.js'), 'console.log(1)')
   return dir
 }

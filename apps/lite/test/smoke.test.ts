@@ -146,7 +146,7 @@ describe.skipIf(!hasBundle)('a second instance on the same data directory', () =
       // The refusal must be inert: the first instance's file is untouched, so `--stop` still works.
       const stop = await run(process.execPath, [SERVER_BUNDLE, '--stop'], env)
       expect(stop.code, `stderr: ${stop.stderr}`).toBe(0)
-      expect(stop.stdout).toContain('stopped Bind Poker Lite gracefully')
+      expect(stop.stdout).toContain('stopped Just a Normal Poker Lite gracefully')
       expect(existsSync(runFile)).toBe(false)
     } finally {
       first.kill()

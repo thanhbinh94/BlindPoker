@@ -1,4 +1,4 @@
-# Bind Poker Lite
+# Just a Normal Poker Lite
 
 Một file `bind-poker-lite.exe` duy nhất. Không cần cài Node.js, không cần database server, không
 cần Internet. Chạy trên một máy Windows trong mạng LAN, mọi người trong nhà/quán mở trình duyệt là
@@ -54,7 +54,7 @@ Số dư đã ghi vào database thì luôn an toàn — chỉ phần điểm đa
 
 ```powershell
 cd D:\bind-poker
-.\bind-poker-lite.exe --stop      # in "stopped Bind Poker Lite gracefully (pid …)"; mã thoát 0
+.\bind-poker-lite.exe --stop      # in "stopped Just a Normal Poker Lite gracefully (pid …)"; mã thoát 0
 .\bind-poker-lite.exe --status    # in JSON /health của tiến trình đang chạy
 ```
 
@@ -122,7 +122,7 @@ Lần chạy đầu, Windows Defender Firewall thường hỏi có cho phép kh�
 rồi **Allow access**. Nếu lỡ bấm nhầm, mở PowerShell **với quyền Administrator** và chạy:
 
 ```powershell
-New-NetFirewallRule -DisplayName "Bind Poker Lite" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -Profile Private
+New-NetFirewallRule -DisplayName "Just a Normal Poker Lite" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -Profile Private
 ```
 
 Chỉ mở ở profile `Private`. Đừng mở cổng này ra Internet: xem mục Giới hạn ở cuối.
@@ -206,7 +206,7 @@ Nên sao lưu file `.sqlite` trước khi nâng cấp — hạ cấp về bản 
 
 ## English summary
 
-Bind Poker Lite is a single Windows x64 executable containing the server, the web UI and its
+Just a Normal Poker Lite is a single Windows x64 executable containing the server, the web UI and its
 database. There is nothing to install.
 
 - **Run it:** put `bind-poker-lite.exe` in a writable folder (not `C:\Program Files`), double-click

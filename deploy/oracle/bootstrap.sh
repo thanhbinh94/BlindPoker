@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Bind Poker — one-time preparation of an Oracle Cloud Always Free VM (Ubuntu 24.04 on an ARM
+# Just a Normal Poker — one-time preparation of an Oracle Cloud Always Free VM (Ubuntu 24.04 on an ARM
 # `VM.Standard.A1.Flex`) for the Normal edition's Compose stack.
 #
 #     sudo ./bootstrap.sh <REPO_URL> [BRANCH]

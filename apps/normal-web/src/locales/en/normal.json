@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "Bind Poker",
+    "name": "Just a Normal Poker",
     "edition": "Normal edition"
   },
   "nav": {
@@ -11,7 +11,7 @@
     "settings": "Settings"
   },
   "auth": {
-    "title": "Bind Poker",
+    "title": "Just a Normal Poker",
     "lead": "One account, every device. Your points, wardrobe and achievements follow the account, not the machine.",
     "signIn": "Sign in",
     "register": "Register",

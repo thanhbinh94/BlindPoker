@@ -153,7 +153,7 @@ async function tourStart(context: BrowserContext, name: string, suffix: string):
   return { page, token }
 }
 
-test.describe('Bind Poker Lite', () => {
+test.describe('Just a Normal Poker Lite', () => {
   test('hai người chơi và một bot chơi trọn một ván Blind', async ({ browser }) => {
     const nameA = unique('An')
     const nameB = unique('Bình')

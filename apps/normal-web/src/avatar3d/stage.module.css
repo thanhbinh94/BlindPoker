@@ -1,4 +1,4 @@
-/* Bind Poker — the full-body stage. A canvas the player can turn, and the box it stands in.
+/* Just a Normal Poker — the full-body stage. A canvas the player can turn, and the box it stands in.
 
    The canvas is sized by CSS alone and the renderer follows it (`resize()` reads `clientWidth`), so
    every rule about how big a figure is lives here rather than in `stage.ts`. */

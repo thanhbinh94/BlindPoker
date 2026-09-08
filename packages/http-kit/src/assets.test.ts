@@ -10,7 +10,7 @@ function fixtureDir(): string {
   const dir = mkdtempSync(join(tmpdir(), 'bp-assets-'))
   dirs.push(dir)
   mkdirSync(join(dir, 'assets'))
-  writeFileSync(join(dir, 'index.html'), '<!doctype html><title>Bind Poker</title>')
+  writeFileSync(join(dir, 'index.html'), '<!doctype html><title>Just a Normal Poker</title>')
   writeFileSync(join(dir, 'assets', 'app-abc123.js'), 'console.log(1)')
   writeFileSync(join(dir, 'assets', 'app-abc123.css'), ':root{--x:1}')
   writeFileSync(join(dir, 'favicon.ico'), 'icon')
@@ -62,7 +62,7 @@ describe('assetSourceFromDir', () => {
   it('serves a file at the root', () => {
     const src = assetSourceFromDir(fixtureDir())
     const asset = src.get('index.html')
-    expect(asset?.body.toString()).toBe('<!doctype html><title>Bind Poker</title>')
+    expect(asset?.body.toString()).toBe('<!doctype html><title>Just a Normal Poker</title>')
     expect(asset?.type).toBe('text/html; charset=utf-8')
     expect(asset?.immutable).toBe(false)
     expect(src.has('index.html')).toBe(true)
@@ -108,9 +108,9 @@ describe('assetSourceFromDir', () => {
   it('caches what it reads, hits and misses alike', () => {
     const dir = fixtureDir()
     const src = assetSourceFromDir(dir)
-    expect(src.get('index.html')?.body.toString()).toContain('Bind Poker')
+    expect(src.get('index.html')?.body.toString()).toContain('Just a Normal Poker')
     rmSync(join(dir, 'index.html'))
-    expect(src.get('index.html')?.body.toString()).toContain('Bind Poker')
+    expect(src.get('index.html')?.body.toString()).toContain('Just a Normal Poker')
 
     expect(src.get('later.js')).toBeNull()
     writeFileSync(join(dir, 'later.js'), 'later')

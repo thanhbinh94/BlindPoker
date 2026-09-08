@@ -1,4 +1,4 @@
-# Triển khai Bind Poker Lite
+# Triển khai Just a Normal Poker Lite
 
 Tài liệu này dành cho **người build và người vận hành** bản Lite: từ máy dev có mã nguồn cho tới một
 máy Windows trong mạng LAN đang chạy exe. Người dùng cuối chỉ cần `release/lite/README-lite.md` —
@@ -109,7 +109,7 @@ Database **không** nằm trong đó: `bind-poker.sqlite` được tạo cạnh 
 5. Mở firewall nếu Windows chưa hỏi:
 
    ```powershell
-   New-NetFirewallRule -DisplayName "Bind Poker Lite" -Direction Inbound -Protocol TCP `
+   New-NetFirewallRule -DisplayName "Just a Normal Poker Lite" -Direction Inbound -Protocol TCP `
      -LocalPort 8080 -Action Allow -Profile Private
    ```
 

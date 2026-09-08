@@ -95,7 +95,7 @@ async function save(page: Page): Promise<void> {
   await expect(page.getByText('Đã lưu trang phục.')).toBeVisible()
 }
 
-test.describe('Bind Poker Normal — nhân vật 3D', () => {
+test.describe('Just a Normal Poker Normal — nhân vật 3D', () => {
   test('chân dung dựng ở máy người chơi, và vòng đời của trình chỉnh trang phục', async ({ context, browser }) => {
     const who = account('Cuong')
     const page = await context.newPage()

@@ -1,6 +1,6 @@
 # Changelog
 
-Bind Poker is built one plan at a time; each plan lands on `master` as a single merge commit. This
+Just a Normal Poker is built one plan at a time; each plan lands on `master` as a single merge commit. This
 file has one section per plan, newest first, with the merge commit that carried it.
 
 Nothing here has been released. Versions in `package.json` are `0.1.0` throughout; the sections

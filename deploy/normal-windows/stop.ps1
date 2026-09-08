@@ -3,7 +3,7 @@
     Stops the Normal server started by run.ps1. This is a hard stop.
 
 .DESCRIPTION
-    Bind Poker Lite has `--stop`: a loopback request the server answers by cancelling live hands and
+    Just a Normal Poker Lite has `--stop`: a loopback request the server answers by cancelling live hands and
     refunding every wagered point before it exits. The Normal server has no such thing — it stops
     gracefully on SIGTERM under Docker, and Windows has no way to send one to a detached process.
 

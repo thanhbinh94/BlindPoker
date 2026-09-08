@@ -1,4 +1,4 @@
-# Chạy thử Bind Poker Normal trong mạng LAN (Windows, không Docker, miễn phí)
+# Chạy thử Just a Normal Poker Normal trong mạng LAN (Windows, không Docker, miễn phí)
 
 Bộ script này chạy **bản Normal** — bản có tài khoản, avatar, kho đồ, thành tựu — trên **một máy
 Windows** trong mạng nội bộ, dùng một database PostgreSQL miễn phí trên mây. Không cần Docker,
@@ -14,7 +14,7 @@ tắt cứng (mục 7). Muốn chạy thật, public, lâu dài thì xem [`docs/
 (Docker Compose + Caddy + HTTPS) hoặc [`deploy/oracle/`](../oracle/) (máy ảo miễn phí của Oracle).
 
 Bản đơn giản hơn nhiều — một file `.exe`, không cần database, không có tài khoản — là
-[Bind Poker Lite](../../docs/deployment-lite.md). Nếu bạn chỉ muốn cả nhà chơi bài với nhau, hãy
+[Just a Normal Poker Lite](../../docs/deployment-lite.md). Nếu bạn chỉ muốn cả nhà chơi bài với nhau, hãy
 dùng Lite; bộ script này tồn tại để thử **bản Normal**.
 
 ---
@@ -126,7 +126,7 @@ Script sẽ: kiểm Node và bản build → đọc `.env` → tìm IP LAN → c
 mở cổng, rồi in ra:
 
 ```text
-Bind Poker Normal đang chạy — pid 12345, log ở D:\bind-poker\deploy\normal-windows\normal.log
+Just a Normal Poker Normal đang chạy — pid 12345, log ở D:\bind-poker\deploy\normal-windows\normal.log
   Máy này:        http://localhost:8080
   Máy khác trong LAN: http://192.168.1.10:8080
 ```
@@ -170,7 +170,7 @@ Lần đầu chạy, Windows Defender Firewall thường hỏi có cho phép `no
 PowerShell **với quyền Administrator** và chạy một lần:
 
 ```powershell
-New-NetFirewallRule -DisplayName "Bind Poker Normal" -Direction Inbound -Protocol TCP -LocalPort 8080 -Profile Private -Action Allow
+New-NetFirewallRule -DisplayName "Just a Normal Poker Normal" -Direction Inbound -Protocol TCP -LocalPort 8080 -Profile Private -Action Allow
 ```
 
 Chỉ mở ở profile `Private`. **Đừng** mở cổng này ra Internet: không có HTTPS, mật khẩu người chơi sẽ

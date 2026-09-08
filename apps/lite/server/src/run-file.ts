@@ -165,7 +165,7 @@ async function probeOnce(url: string, timeoutMs: number): Promise<ProbeOutcome> 
  * after a hard kill (`taskkill`, `sc stop`, the window's X) the file survives, and the operating
  * system is free to hand that pid to anything at all — a browser, a build, the operator's shell.
  * Then the next start refuses with "another instance is already running" and names a pid that has
- * never heard of Bind Poker. So the pid is only the cheap first question; the deciding one is
+ * never heard of Just a Normal Poker. So the pid is only the cheap first question; the deciding one is
  * whether the *recorded address* still answers as Lite, which `GET /api/config` says outright
  * (`edition: 'lite'` — the same field Normal answers `'normal'` to).
  *
@@ -216,7 +216,7 @@ export async function claimRunFile(
   } catch {
     return { state: 'stale', info, why: `${url} did not answer JSON` }
   }
-  if (edition !== 'lite') return { state: 'stale', info, why: `${url} is not a Bind Poker Lite instance` }
+  if (edition !== 'lite') return { state: 'stale', info, why: `${url} is not a Just a Normal Poker Lite instance` }
   return { state: 'held', info }
 }
 

@@ -1,4 +1,4 @@
-# Bind Poker — Normal edition, single-host deployment (spec §28.1).
+# Just a Normal Poker — Normal edition, single-host deployment (spec §28.1).
 #
 #     cd deploy/normal && cp .env.example .env && $EDITOR .env
 #     docker compose up -d

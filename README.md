@@ -1,4 +1,4 @@
-# Bind Poker
+# Just a Normal Poker
 
 Real-time multiplayer poker (No-Limit Texas Hold'em + Blind Poker) with virtual points only.
 The server is the only authority: it shuffles, it decides what is legal, it settles the pot. A
