@@ -843,6 +843,25 @@
   cursor: not-allowed;
 }
 
+/* Pre-action toggles: the same pill as a bet preset, lit gold while ticked. They sit under the waiting line so
+   the tray keeps one height whether or not the seat is offered any. */
+.preRow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.preToggle[aria-pressed='true'] {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #0b1020;
+}
+
+.preToggle[aria-pressed='true']:hover:not(:disabled) {
+  background: var(--gold);
+}
+
 @media (pointer: coarse) {
   .preset {
     min-height: var(--tap);

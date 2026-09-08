@@ -265,7 +265,17 @@ export function RoomScreen({ client, lang, onLeft, avatarFor, captionFor, header
         {/* The tray belongs to a seated player in a live hand — it holds its place between turns rather than
             appearing and disappearing under the felt. */}
         {hand === null || hand.mySeat === null ? null : (
-          <ActionBar hand={hand} room={room} onAct={act} disabled={request.busy || state.status !== 'open'} lang={lang} />
+          <ActionBar
+            hand={hand}
+            room={room}
+            onAct={act}
+            disabled={request.busy || state.status !== 'open'}
+            lang={lang}
+            preAction={state.preAction?.kind ?? null}
+            onPreAction={client.setPreAction}
+            autoPlay={state.autoPlay}
+            onAutoPlay={client.setAutoPlay}
+          />
         )}
       </footer>
 

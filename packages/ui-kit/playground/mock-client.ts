@@ -277,6 +277,8 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
       resolve(action)
       return ACK
     },
+    setPreAction: (kind) => publish(reduceClient(state, { type: 'preAction', kind })),
+    setAutoPlay: (on) => publish(reduceClient(state, { type: 'autoPlay', on })),
     resync: () => {},
     clearError: () => publish(reduceClient(state, { type: 'clearError' })),
     dismissNotification: (id) => publish(reduceClient(state, { type: 'dismissNotification', id })),

@@ -1,6 +1,7 @@
 import type { ClientMessage, PlayerAction, RoomConfig } from '@bp/core'
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react'
 import { createConnection, type AckOrError, type SocketFactory } from './connection.js'
+import { resolvePreAction, type PreActionKind } from './preaction.js'
 import { initialClientState, reduceClient } from './reducer.js'
 import type { ClientState } from './types.js'
 
@@ -22,6 +23,14 @@ export interface GameClientApi {
   startGame(): Promise<AckOrError>
   kick(playerId: string): Promise<AckOrError>
   act(action: PlayerAction): Promise<AckOrError>
+  /**
+   * Tick (or clear, with `null`) what to do when the turn comes: the hook sends the matching legal action the
+   * moment the server says it is this seat's turn, exactly as if the player had pressed the button then. Only
+   * kinds the server lists are ever sent; a tick nothing legal matches simply lapses.
+   */
+  setPreAction(kind: PreActionKind | null): void
+  /** Blind Poker: answer every play-or-fold decision with "play" until the seat is left. */
+  setAutoPlay(on: boolean): void
   resync(): void
   clearError(): void
   dismissNotification(id: number): void
@@ -81,6 +90,32 @@ export function useGameClient(opts: UseGameClientOptions): GameClientApi {
 
   const request = useCallback((msg: ClientMessage) => connection.request(msg), [connection])
 
+  // The tick fires here, not in the reducer: a reducer cannot send. `legal` is a fresh object on every turn frame,
+  // so its identity is the "have I answered this turn yet" key — one send per turn, however often React re-runs
+  // the effect around it (a re-render, StrictMode's double invoke) and whatever the reducer does after.
+  const answered = useRef<object | null>(null)
+  const legal = state.hand?.legal ?? null
+  const preAction = state.preAction
+  const autoPlay = state.autoPlay
+  useEffect(() => {
+    const hand = stateRef.current.hand
+    if (hand === null || legal === null || legal.seat !== hand.mySeat || answered.current === legal) return
+    const ticked = preAction !== null && preAction.handId === hand.handId ? preAction.kind : null
+    const action = legal.kinds.includes('play')
+      ? autoPlay ? { kind: 'play' as const } : null
+      : ticked === null ? null : resolvePreAction(ticked, legal)
+    if (action === null) {
+      // Nothing the tick meant is legal here: let it lapse so the tray shows the real choice.
+      if (ticked !== null) dispatch({ type: 'preAction', kind: null })
+      return
+    }
+    answered.current = legal
+    dispatch({ type: 'preAction', kind: null })
+    // A refusal arrives through the reducer as `lastError` like any other; the one thing to swallow is the
+    // rejection a socket closing mid-request produces, which has no one to report to and nothing to undo.
+    request({ t: 'ACTION', reqId: '', baseSeq: stateRef.current.seq, action }).catch(() => undefined)
+  }, [legal, preAction, autoPlay, request])
+
   return useMemo<GameClientApi>(
     () => ({
       state,
@@ -103,6 +138,8 @@ export function useGameClient(opts: UseGameClientOptions): GameClientApi {
       kick: (playerId) => request({ t: 'KICK', playerId }),
       // `reqId` is a placeholder: `connection.request` always overwrites it with the id it correlates on.
       act: (action) => request({ t: 'ACTION', reqId: '', baseSeq: stateRef.current.seq, action }),
+      setPreAction: (kind) => dispatch({ type: 'preAction', kind }),
+      setAutoPlay: (on) => dispatch({ type: 'autoPlay', on }),
       resync: () => void connection.send({ t: 'RESYNC' }),
       clearError: () => dispatch({ type: 'clearError' }),
       dismissNotification: (id) => dispatch({ type: 'dismissNotification', id }),

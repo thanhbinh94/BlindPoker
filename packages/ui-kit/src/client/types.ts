@@ -1,6 +1,7 @@
 import type {
   Card, Decision, ErrorCode, GameMode, LegalActions, PlayerAction, RoomSummary, RoomView, ServerMessage, ShowdownHand,
 } from '@bp/core'
+import type { PreActionKind } from './preaction.js'
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed'
 
@@ -96,6 +97,17 @@ export interface ClientState {
   notifications: ClientNotification[]
   resyncNeeded: boolean
   replaced: boolean
+  /**
+   * What the player ticked while waiting for their turn, pinned to the hand it was ticked in. The reducer clears
+   * it the moment it stops applying — a new street, the player's own action, the end of the hand, leaving the
+   * room — so a stale tick can never fire into a spot the player did not see.
+   */
+  preAction: { kind: PreActionKind; handId: string } | null
+  /**
+   * Blind Poker: answer every play-or-fold decision with "play" until the player stands, sits out or leaves.
+   * A standing preference rather than a one-hand tick, because a Blind hand asks exactly one question.
+   */
+  autoPlay: boolean
 }
 
 export type ClientAction =
@@ -105,6 +117,8 @@ export type ClientAction =
   | { type: 'dismissNotification'; id: number }
   | { type: 'resyncSent' }
   | { type: 'leftRoom' }
+  | { type: 'preAction'; kind: PreActionKind | null }
+  | { type: 'autoPlay'; on: boolean }
   /**
    * Forget everything: back to `initialClientState`.
    *
@@ -131,4 +145,6 @@ export const initialClientState: ClientState = {
   notifications: [],
   resyncNeeded: false,
   replaced: false,
+  preAction: null,
+  autoPlay: false,
 }

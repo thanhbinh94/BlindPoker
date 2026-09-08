@@ -67,7 +67,7 @@ function startHand(state: ClientState, event: Extract<GameEvent, { type: 'HAND_S
     handId: event.handId, mode: event.mode, phase, community: [], pot: event.carryOverIn, carryOverIn: event.carryOverIn,
     button: event.button, actingSeat: null, seats, mySeat, legal: null, result: null, potPulse: 0,
   }
-  return { ...state, hand, deadlineAt: null }
+  return { ...state, hand, deadlineAt: null, preAction: null }
 }
 
 /**
@@ -120,10 +120,35 @@ function cancel(state: ClientState, hand: ClientHand, event: Extract<GameEvent, 
   }
 }
 
+/**
+ * Whether this frame ends the spot a pre-action was ticked for. A tick means "when my turn comes in *this* spot":
+ * a new street, my own action (by hand or by the tick itself), and the end of the hand all close it; a tick that
+ * outlived them would fire into a bet the player never saw.
+ */
+function closesPreAction(hand: ClientHand, event: GameEvent): boolean {
+  switch (event.type) {
+    case 'PLAYER_ACTED':
+      return event.seat === hand.mySeat
+    case 'COMMUNITY_REVEALED':
+      return bettingResumes(hand)
+    case 'SETTLEMENT':
+    case 'HAND_CANCELLED':
+    case 'HAND_COMPLETE':
+      return true
+    default:
+      return false
+  }
+}
+
 function applyGameEvent(state: ClientState, event: GameEvent & { deadlineAt?: number }): ClientState {
   if (event.type === 'HAND_STARTED') return startHand(state, event)
   const hand = state.hand
   if (!hand) return state
+  const next = applyHandEvent(state, hand, event)
+  return state.preAction !== null && (state.preAction.handId !== hand.handId || closesPreAction(hand, event)) ? { ...next, preAction: null } : next
+}
+
+function applyHandEvent(state: ClientState, hand: ClientHand, event: GameEvent & { deadlineAt?: number }): ClientState {
   switch (event.type) {
     case 'BLINDS_POSTED': {
       const posted = new Map<number, number>()
@@ -196,6 +221,8 @@ function applyGameEvent(state: ClientState, event: GameEvent & { deadlineAt?: nu
       return cancel(state, hand, event)
     case 'HAND_COMPLETE':
       return { ...state, deadlineAt: null, hand: { ...hand, phase: 'COMPLETE', legal: null, actingSeat: null } }
+    case 'HAND_STARTED':
+      return state
   }
 }
 
@@ -290,7 +317,8 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
     case 'ROOM_LIST':
       return { ...state, lobby: msg.rooms }
     case 'ROOM_SNAPSHOT':
-      return { ...state, room: msg.room, roomStale: false, hand: msg.hand ? handFromView(msg.hand, msg.room) : null, seq: msg.seq, deadlineAt: msg.deadlineAt, resyncNeeded: false }
+      // A snapshot is a fresh view of the hand, possibly a different spot from the one the tick was made in.
+      return { ...state, room: msg.room, roomStale: false, hand: msg.hand ? handFromView(msg.hand, msg.room) : null, seq: msg.seq, deadlineAt: msg.deadlineAt, resyncNeeded: false, preAction: null }
     case 'BALANCE':
       return { ...state, balance: msg.balance }
     case 'NOTIFICATION':
@@ -307,6 +335,8 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
           hand: null,
           seq: 0,
           deadlineAt: null,
+          preAction: null,
+          autoPlay: false,
           lastError: expected ? state.lastError : { code: msg.code, message: msg.message, reqId: msg.reqId ?? null, at: now },
         }
       }
@@ -322,9 +352,20 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
     case 'ROOM_EVENT': {
       const resyncNeeded = state.resyncNeeded || state.room === null || gap(state, msg.seq)
       if (msg.event.type === 'ROOM_CLOSED') {
-        return { ...notify(state, 'ROOM_CLOSED', { reason: msg.event.reason }, now), room: null, hand: null, seq: msg.seq, resyncNeeded }
+        return { ...notify(state, 'ROOM_CLOSED', { reason: msg.event.reason }, now), room: null, hand: null, seq: msg.seq, resyncNeeded, preAction: null, autoPlay: false }
       }
-      return { ...state, room: state.room ? applyRoomEvent(state.room, msg.event) : null, seq: msg.seq, resyncNeeded }
+      const event = msg.event
+      // Standing, leaving or sitting out ends the seat's standing preferences with it.
+      const mine = state.me !== null && 'playerId' in event && event.playerId === state.me.playerId
+      const stopsAutoPlay = mine && (event.type === 'PLAYER_STOOD' || event.type === 'PLAYER_LEFT' || (event.type === 'PLAYER_SIT_OUT' && event.sittingOut))
+      return {
+        ...state,
+        room: state.room ? applyRoomEvent(state.room, event) : null,
+        seq: msg.seq,
+        resyncNeeded,
+        autoPlay: stopsAutoPlay ? false : state.autoPlay,
+        preAction: mine && event.type === 'PLAYER_STOOD' ? null : state.preAction,
+      }
     }
     default:
       return state
@@ -344,7 +385,12 @@ export function reduceClient(state: ClientState, action: ClientAction): ClientSt
     case 'resyncSent':
       return { ...state, resyncNeeded: false }
     case 'leftRoom':
-      return { ...state, room: null, hand: null }
+      return { ...state, room: null, hand: null, preAction: null, autoPlay: false }
+    case 'preAction':
+      // A tick needs a hand to belong to; outside one there is nothing it could mean.
+      return { ...state, preAction: action.kind === null || state.hand === null ? null : { kind: action.kind, handId: state.hand.handId } }
+    case 'autoPlay':
+      return { ...state, autoPlay: action.on }
     case 'reset':
       return initialClientState
   }

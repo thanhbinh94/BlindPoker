@@ -34,6 +34,13 @@
     "back": "Quay lại",
     "retry": "Thử lại"
   },
+  "preActions": {
+    "label": "Trước lượt của bạn",
+    "checkFold": "Xem/Bỏ",
+    "callAny": "Theo mọi mức",
+    "fold": "Bỏ bài",
+    "autoPlay": "Tự động chơi"
+  },
   "labels": {
     "actions": "Hành động",
     "allIn": "Tất tay",
