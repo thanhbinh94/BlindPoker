@@ -323,3 +323,34 @@ describe('Rejoin mid-hand', () => {
     expect(h.repos.entries.some((e) => e.entry.playerId === 'h' && e.entry.reason === 'cash_out')).toBe(false)
   })
 })
+
+describe('Start with nobody but bots able to play', () => {
+  it('refuses when the only ready seats are bots, and the room stays OPEN', async () => {
+    const h = createRoomHarness(BLIND)
+    await h.room.sitDown('h', 0)
+    // Two bots are ready from the start; the host is seated but has not pressed Ready.
+    expect(await code(h.room.startGame('h'))).toBe('NOT_ENOUGH_PLAYERS')
+    expect(h.room.handActive).toBe(false)
+    expect(h.room.status).toBe('OPEN')
+  })
+
+  it('refuses when the one ready human cannot cover the wager, rather than acknowledging and doing nothing', async () => {
+    const h = createRoomHarness(BLIND)
+    await h.room.sitDown('h', 0)
+    await h.room.setReady('h', true)
+    // The balance is re-read when the hand is dealt: the host lost their points elsewhere since sitting down.
+    const balance = await h.repos.balances.get('h')
+    await h.repos.balances.apply([{ playerId: 'h', delta: -(balance - 500), reason: 'settlement' }])
+    expect(await code(h.room.startGame('h'))).toBe('NOT_ENOUGH_PLAYERS')
+    expect(h.room.handActive).toBe(false)
+    expect(h.room.status).toBe('OPEN')
+  })
+
+  it('starts as soon as one ready human joins the ready bots', async () => {
+    const h = createRoomHarness(BLIND)
+    await h.room.sitDown('h', 0)
+    await h.room.setReady('h', true)
+    await h.room.startGame('h')
+    expect(h.room.handActive).toBe(true)
+  })
+})

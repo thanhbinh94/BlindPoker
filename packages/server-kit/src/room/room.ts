@@ -289,7 +289,12 @@ export class Room {
       if (playerId !== this.hostPlayerId) throw new RoomError('NOT_HOST')
       if (this.status !== 'OPEN') throw new RoomError('GAME_IN_PROGRESS')
       if (this.readySeats().length < 2) throw new RoomError('NOT_ENOUGH_PLAYERS', 'need at least 2 ready players')
-      return this.startHand()
+      // Bots are always ready, so two ready seats can be two bots: a hand needs a human in it (§8.5), and a
+      // Start that quietly does nothing reads as a broken button, so the refusal is spelled out here.
+      if (!this.readySeats().some((p) => !p.identity.isBot)) throw new RoomError('NOT_ENOUGH_PLAYERS', 'need at least one ready player who is not a bot')
+      return this.startHand().then((started) => {
+        if (!started) throw new RoomError('NOT_ENOUGH_PLAYERS', 'nobody at the table can play this hand')
+      })
     })
   }
 
@@ -427,8 +432,9 @@ export class Room {
 
   // ---------- hand lifecycle ----------
 
-  private async startHand(): Promise<void> {
-    if (this.status === 'CLOSED' || (this.runner && !this.runner.isComplete)) return
+  /** Deals the next hand if the table can play one; `false` when it cannot (too few eligible seats, or only bots). */
+  private async startHand(): Promise<boolean> {
+    if (this.status === 'CLOSED' || (this.runner && !this.runner.isComplete)) return false
     this.nextHandTimer?.cancel()
     this.nextHandTimer = null
     this.carryOverReleaseTimer?.cancel()
@@ -448,7 +454,7 @@ export class Room {
     const eligible = this.eligibleForHand()
     if (eligible.length < 2 || eligible.every((p) => p.identity.isBot)) {
       this.toOpen()
-      return
+      return false
     }
     // This hand is going ahead without them, so every voluntary sitter has been skipped once more.
     // Spec §11.3: after `handsSatOutToStand` in a row the seat goes back to the table, stack returned,
@@ -490,6 +496,7 @@ export class Room {
     this.broadcastRoomEvent({ type: 'ROOM_STATUS', status: 'IN_GAME', nextHandAt: null })
     this.changed()
     runner.start()
+    return true
   }
 
   private onHandEvents(events: GameEvent[], deadlineAt: number | null): void {
@@ -648,7 +655,7 @@ export class Room {
     if (!this.config.autoStart || this.status !== 'OPEN') return undefined
     if (this.readySeats().length < 2) return undefined
     if (!this.seatedHumans().every((p) => p.ready || p.sittingOut)) return undefined
-    return this.startHand()
+    return this.startHand().then(() => undefined)
   }
 
   private seatPlayer(seat: number): RoomPlayer | undefined {

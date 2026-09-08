@@ -214,6 +214,7 @@
     "waitingForHost": "Waiting for the host to start",
     "readyCount": "{{ready}}/{{total}} ready",
     "startHint": "At least 2 players must be ready to start",
+    "startNeedsYou": "Press Ready first — a hand needs at least one player who is not a bot",
     "leaveConfirm": "Leave this room?",
     "closed": "Room closed",
     "kicked": "You were kicked from the room",
