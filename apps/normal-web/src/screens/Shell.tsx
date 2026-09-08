@@ -63,6 +63,8 @@ export interface ShellProps {
   onLanguage: (lang: Language) => void
   /** `false` on the room route: `RoomScreen` is a stage and takes the whole viewport. */
   bar?: boolean
+  /** Today's reward is still unclaimed: the Daily tab carries a dot. */
+  dailyReady?: boolean
   children: ReactNode
 }
 
@@ -72,7 +74,7 @@ export interface ShellProps {
  * It also publishes `--bp-stage` — the height `RoomScreen` sizes itself to — so the table knows whether it is
  * sharing the viewport with the rail or has it all.
  */
-export function Shell({ path, identity, lang, onLanguage, bar = true, children }: ShellProps) {
+export function Shell({ path, identity, lang, onLanguage, bar = true, dailyReady = false, children }: ShellProps) {
   const { t } = useTranslation('normal')
   const narrow = useMediaQuery(NARROW_RAIL)
   const active = (item: string): boolean => path === item || (item === '/lobby' && path === '/')
@@ -104,6 +106,11 @@ export function Shell({ path, identity, lang, onLanguage, bar = true, children }
                 aria-current={active(item.path) ? 'page' : undefined}
               >
                 {t(item.key)}
+                {item.path === '/daily' && dailyReady ? (
+                  <span className={s.navDot}>
+                    <span className="visually-hidden">{t('nav.dailyReady')}</span>
+                  </span>
+                ) : null}
               </a>
             ))}
           </nav>

@@ -8,7 +8,8 @@
     "lobby": "Lobby",
     "daily": "Daily",
     "profile": "Profile",
-    "settings": "Settings"
+    "settings": "Settings",
+    "dailyReady": "Reward ready"
   },
   "auth": {
     "title": "Just a Normal Poker",

@@ -82,3 +82,15 @@
 .lobbyAvatar {
   border: 1px solid color-mix(in srgb, var(--gold) 42%, transparent);
 }
+
+/* The same reward dot on the lobby bar's Daily link, which sits outside the rail. */
+.navDot {
+  position: absolute;
+  top: -2px;
+  right: -6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 0 2px rgba(8, 13, 26, 0.9);
+}

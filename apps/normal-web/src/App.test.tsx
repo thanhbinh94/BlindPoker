@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ACCOUNT_ROUTES, App, websocketUrl } from './App.js'
 import { ApiError, type AuthMeDto, type NormalApi } from './api.js'
+import { DAILY_NUDGE_KEY } from './daily-nudge.js'
 import { resetAvatarCache } from './avatar/useAvatars.js'
 import viNormal from './locales/vi/normal.json'
 import { LAST_EMAIL_KEY } from './session.js'
@@ -460,6 +461,67 @@ describe('App — a session that ends under the player', () => {
     await user.click(screen.getByRole('button', { name: viNormal.auth.submitSignIn }))
 
     await waitFor(() => expect(playerAvatar).toHaveBeenCalledTimes(1))
+  })
+})
+
+describe('App — the daily reminder', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    FakeSocket.reset()
+    window.history.replaceState(null, '', '/')
+  })
+
+  const status = (claimable: boolean) => ({ claimable, day: 3, streak: 2, reward: 7000, item: null, nextResetAt: 1_800_000_000_000, calendar: [] })
+  /** `/daily` itself asks for the same status and hangs on it; only the reminder's answer matters here. */
+  const apiWith = (claimable: boolean) => stubApi({ daily: vi.fn().mockResolvedValue(status(claimable)) })
+
+  it('opens the reward page once a day when a session lands on the lobby with a reward waiting', async () => {
+    const api = apiWith(true)
+    renderApp(api)
+    await settled()
+    await welcome()
+
+    await waitFor(() => expect(window.location.hash).toBe('#/daily'))
+    expect(await screen.findByRole('heading', { name: viNormal.daily.title })).toBeInTheDocument()
+    expect(localStorage.getItem(DAILY_NUDGE_KEY)).toBe(String(status(true).nextResetAt))
+    // The tab says so too, in words a screen reader can carry.
+    const nav = screen.getByRole('navigation', { name: viNormal.nav.main })
+    expect(within(nav).getByText(viNormal.nav.dailyReady)).toBeInTheDocument()
+  })
+
+  it('does not drag the player back once this day has been shown, but keeps the dot until the claim', async () => {
+    localStorage.setItem(DAILY_NUDGE_KEY, String(status(true).nextResetAt))
+    renderApp(apiWith(true))
+    await settled()
+    await welcome()
+
+    expect(await screen.findByRole('heading', { name: ROOMS_HEADING })).toBeInTheDocument()
+    expect(window.location.hash).not.toBe('#/daily')
+    // The lobby draws the Daily link twice — on the rail and on its own bar — and both carry the dot.
+    expect(await screen.findAllByText(viNormal.nav.dailyReady)).toHaveLength(2)
+  })
+
+  it('leaves a deep link alone and shows no dot when today is already claimed', async () => {
+    window.history.replaceState(null, '', '/#/achievements')
+    renderApp(stubApi({ daily: vi.fn().mockResolvedValue(status(false)), achievements: vi.fn().mockResolvedValue([]) }))
+    await settled()
+    await welcome()
+
+    expect(await screen.findByRole('heading', { name: viNormal.achievements.ui.title })).toBeInTheDocument()
+    expect(window.location.hash).toBe('#/achievements')
+    expect(screen.queryByText(viNormal.nav.dailyReady)).toBeNull()
+  })
+
+  it('keeps a deep link even with a reward waiting, and only marks the tab', async () => {
+    window.history.replaceState(null, '', '/#/settings')
+    renderApp(apiWith(true))
+    await settled()
+    await welcome()
+
+    expect(await screen.findByRole('heading', { name: viNormal.settings.title })).toBeInTheDocument()
+    expect(window.location.hash).toBe('#/settings')
+    expect(await screen.findByText(viNormal.nav.dailyReady)).toBeInTheDocument()
+    expect(localStorage.getItem(DAILY_NUDGE_KEY)).toBeNull()
   })
 })
 

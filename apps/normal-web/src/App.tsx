@@ -19,6 +19,7 @@ import { mapNotifications } from './notifications.js'
 import { useLanguagePref } from './prefs.js'
 import { AuthScreen, type AuthMode } from './screens/AuthScreen.js'
 import { Shell } from './screens/Shell.js'
+import { useDailyNudge } from './daily-nudge.js'
 import { makeAvatarFor, makeCaptionFor } from './screens/TableChrome.js'
 import s from './screens/normal.module.css'
 import { clearLastEmail } from './session.js'
@@ -191,6 +192,10 @@ export function App({ api, socketFactory }: AppProps) {
 
   const path = route.path
 
+  // Today's reward, as a reminder rather than a claim: a sign-in that lands on the lobby with a reward waiting
+  // opens `/daily` once a day, and the rail's tab carries a dot while the reward is still there.
+  const { ready: dailyReady } = useDailyNudge({ api: guarded, playerId: gate.signedIn ? gateId : null, path, navigate })
+
   if (gate.state === 'checking') {
     return (
       <p className={s.booting} role="status">
@@ -221,6 +226,7 @@ export function App({ api, socketFactory }: AppProps) {
         path={path}
         bar={!inRoom}
         identity={inLobby ? null : { balance, status: state.status }}
+        dailyReady={dailyReady}
         lang={lang}
         onLanguage={setLang}
       >
@@ -276,6 +282,11 @@ export function App({ api, socketFactory }: AppProps) {
               <span className={a.lobbyNav}>
                 <a className={a.lobbyLink} href="#/daily">
                   {t('nav.daily')}
+                  {dailyReady ? (
+                    <span className={a.navDot}>
+                      <span className="visually-hidden">{t('nav.dailyReady')}</span>
+                    </span>
+                  ) : null}
                 </a>
                 <a className={a.lobbyLink} href="#/profile">
                   {t('nav.profile')}
