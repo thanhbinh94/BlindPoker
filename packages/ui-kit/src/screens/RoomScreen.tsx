@@ -102,6 +102,11 @@ export function RoomScreen({ client, lang, onLeft, avatarFor, captionFor, header
   // The same predicate the server counts with (`readySeats()`): a sitting-out seat is warm, not playing. Counting
   // it would show the host "2/2 ready", an enabled Start and no hint, for a table that answers NOT_ENOUGH_PLAYERS.
   const readyCount = seated.filter((p) => p.ready && !p.sittingOut).length
+  // Bots are always ready, so the count alone can be all bots: the server refuses a hand with no human in it,
+  // and the button says so before the click rather than after.
+  const readyHumans = seated.filter((p) => p.ready && !p.sittingOut && !p.isBot).length
+  const canStart = readyCount >= MIN_TO_START && readyHumans >= 1
+  const startHint = canStart ? null : readyHumans === 0 && readyCount >= MIN_TO_START ? t('room.startNeedsYou') : t('room.startHint')
   const turnTimerMs = room.config.turnTimerSec * 1000
   const bb = holdem?.bigBlind ?? 0
   const minBuyIn = holdem === undefined ? 0 : holdem.minBuyInBB * bb
@@ -225,14 +230,10 @@ export function RoomScreen({ client, lang, onLeft, avatarFor, captionFor, header
 
           {!waiting ? null : isHost ? (
             <>
-              <Button
-                variant="gold"
-                disabled={request.busy || readyCount < MIN_TO_START}
-                onClick={() => void request.run(() => client.startGame())}
-              >
+              <Button variant="gold" disabled={request.busy || !canStart} onClick={() => void request.run(() => client.startGame())}>
                 {t('actions.start')}
               </Button>
-              {readyCount < MIN_TO_START ? <span className={s.hint}>{t('room.startHint')}</span> : null}
+              {startHint === null ? null : <span className={s.hint}>{startHint}</span>}
             </>
           ) : (
             <span className={s.hint}>{t('room.waitingForHost')}</span>

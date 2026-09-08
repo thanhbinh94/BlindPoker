@@ -266,6 +266,22 @@ dụng cho trường hợp chạy LAN trực tiếp, không có proxy.
 
 ---
 
+## 9b. Tài khoản test có đầy đủ tủ đồ
+
+Để kiểm tra tủ đồ, mặc đồ và chân dung trên ghế mà không phải cày 40 món, cấp toàn bộ catalogue
+cho một tài khoản đã đăng ký (chỉ ghi vào `inventory`, không đụng tới điểm):
+
+```powershell
+$env:DATABASE_URL = ((Get-Content .env) -match '^DATABASE_URL=' | Select-Object -First 1) -replace '^DATABASE_URL=', ''
+node ..\..\apps\normal-server\dist\grant-wardrobe-cli.js neon.test@example.com
+```
+
+Thêm `--dry-run` để chỉ xem sẽ cấp gì. Chạy lại lần nữa không cấp trùng. Sau khi đổi catalogue
+(thêm món mới) chạy lại để tài khoản test nhận đủ. Mỗi món cấp kiểu này mang nguồn `dev-grant`
+để phân biệt với món kiếm được thật.
+
+---
+
 ## 10. Giới hạn
 
 - **Không có HTTPS.** Mật khẩu đi qua mạng ở dạng rõ. Chỉ dùng trong mạng bạn tin được.

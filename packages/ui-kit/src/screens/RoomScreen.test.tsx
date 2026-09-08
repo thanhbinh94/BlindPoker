@@ -263,6 +263,23 @@ describe('RoomScreen', () => {
     expect(within(roster).getByText('20,000')).toBeInTheDocument()
   })
 
+  it('keeps Start off while the only ready seats are bots, and says what the host must do', async () => {
+    const bots = [1, 2, 3].map((i) => makePlayer({ playerId: `bot-${i}`, displayName: `Bot ${i}`, isBot: true, seat: i, status: 'READY', stack: 1_000_000, ready: true }))
+    const host = makePlayer({ playerId: 'me', displayName: 'Mai', isHost: true, seat: 0, status: 'SEATED', stack: 20_000, ready: false })
+    const client = fakeClient(makeState({ room: makeRoom({ status: 'OPEN', hostPlayerId: 'me', playerCount: 4, players: [host, ...bots] }) }))
+    const { view } = wrap(client)
+
+    expect(screen.getByText('3/4 ready')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
+    expect(screen.getByText('Press Ready first — a hand needs at least one player who is not a bot')).toBeInTheDocument()
+
+    // The host presses Ready: the same table can now deal, and the hint goes away.
+    view.rerender(screenFor(fakeClient(makeState({ room: makeRoom({ status: 'OPEN', hostPlayerId: 'me', playerCount: 4, players: [{ ...host, ready: true, status: 'READY' }, ...bots] }) }))))
+    expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
+    expect(screen.queryByText(/Press Ready first/)).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Start' }))
+  })
+
   it('hides the start button from non-hosts and while fewer than two are ready', () => {
     const guest = makeRoom({
       status: 'OPEN',

@@ -23,6 +23,7 @@ Spec: §10 accounts, §12–15 economy/daily/achievements/avatar, §18.2 schema,
 src/
   main.ts            entry point: env → config → pool → migrate → buildApp → listen → SIGTERM
   migrate-cli.ts     the same config load, then migrations only, then exit
+  grant-wardrobe-cli.ts  operator tool: give one account every catalogue item (DATABASE_URL only)
   app.ts             buildApp(): wiring, in the one order that works (below)
   config.ts          loadConfig(env) — reports every problem at once, then throws
   trust-proxy.ts     TRUST_PROXY parsing, and the client address for the WS upgrade Fastify never sees
