@@ -45,6 +45,28 @@ export async function expectLobby(page: Page): Promise<void> {
   await expect(page.getByRole('button', { name: 'Tạo phòng' })).toBeVisible()
 }
 
+/**
+ * Where a sign-in lands: the lobby — or, once a day while today's reward is unclaimed, the daily page the app
+ * opens on its own. A fresh account always has a reward waiting, so the first sign-in of every test goes there;
+ * this walks back to the lobby, which is what every caller is about to use.
+ */
+async function settleAfterSignIn(page: Page, submit: () => Promise<void>): Promise<void> {
+  // The reminder asks `/api/rewards/daily` once per sign-in and only then decides where to send the player;
+  // the lobby is on screen while it waits, so "lobby visible" alone would be a race the reminder then loses.
+  const shownBefore = await page.evaluate(() => localStorage.getItem('bp.dailyNudge'))
+  const asked = page.waitForResponse((r) => r.url().includes('/api/rewards/daily') && r.request().method() === 'GET')
+  await submit()
+  const status = (await (await asked).json()) as { claimable: boolean; nextResetAt: number }
+  // Once per day per browser: a second sign-in on the same day stays in the lobby even with the reward unclaimed.
+  if (status.claimable && shownBefore !== String(status.nextResetAt)) {
+    await expect(page).toHaveURL(/#\/daily$/)
+    await expect(page.getByRole('heading', { name: 'Điểm danh hằng ngày' })).toBeVisible()
+    expect(await page.evaluate(() => localStorage.getItem('bp.dailyNudge')), 'the reminder recorded the day it opened').toBe(String(status.nextResetAt))
+    await page.goto('/#/lobby')
+  }
+  await expectLobby(page)
+}
+
 /** Registers `who` and waits for the lobby. The cookie the server sets is the only credential involved. */
 export async function register(page: Page, who: Account): Promise<void> {
   await page.goto('/#/register')
@@ -52,16 +74,14 @@ export async function register(page: Page, who: Account): Promise<void> {
   await page.getByLabel('Email', { exact: true }).fill(who.email)
   await page.getByLabel('Mật khẩu', { exact: true }).fill(who.password)
   await page.getByLabel('Tên hiển thị', { exact: true }).fill(who.displayName)
-  await page.getByRole('button', { name: 'Tạo tài khoản' }).click()
-  await expectLobby(page)
+  await settleAfterSignIn(page, () => page.getByRole('button', { name: 'Tạo tài khoản' }).click())
 }
 
 export async function signIn(page: Page, who: Account): Promise<void> {
   await page.goto('/#/login')
   await page.getByLabel('Email', { exact: true }).fill(who.email)
   await page.getByLabel('Mật khẩu', { exact: true }).fill(who.password)
-  await page.getByRole('button', { name: 'Vào sảnh' }).click()
-  await expectLobby(page)
+  await settleAfterSignIn(page, () => page.getByRole('button', { name: 'Vào sảnh' }).click())
 }
 
 /** The portrait hung on the lobby's player bar — the same face the seat plates draw. */
