@@ -44,3 +44,4 @@ deploy/normal-windows/*.log
 
 # Plan worktrees (superpowers:using-git-worktrees)
 .worktrees/
+.superpowers/
