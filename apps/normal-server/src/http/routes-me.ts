@@ -40,6 +40,8 @@ export interface MeRouteDeps {
   inventory: InventoryService
   history: HistoryService
   catalog: ItemCatalog
+  /** Old wardrobe ids, kept readable — see `inventory/aliases.ts`. */
+  aliases: ReadonlyMap<string, string>
   /** The loaded definitions, so `/api/me/achievements` can answer definition *and* progress at once. */
   defs: AchievementDef[]
   requireUser: RequireUser
@@ -104,7 +106,7 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
       displayName: player.displayName,
       email: account?.email ?? null,
       balance: player.balance,
-      avatar: readAvatarConfig(player.avatarConfig, deps.catalog),
+      avatar: readAvatarConfig(player.avatarConfig, deps.catalog, deps.aliases),
       // The summary Lite publishes under the same key: both modes folded into one pair, because
       // that is what the shared player bar draws. The per-mode counters are `/api/me/stats`.
       stats: {
@@ -176,7 +178,7 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
       // Joined against the catalogue here rather than in the client: the slot and rarity of an
       // owned item are what the wardrobe groups by, and the client should not have to fetch the
       // whole catalogue to draw its own inventory. The geometry is not joined in — an item's
-      // `variants` are the same for everyone and are served whole by `/api/catalog/items`.
+      // `asset` is the same for everyone and is served whole by `/api/catalog/items`.
       items: owned.map((item) => {
         const def = deps.catalog.get(item.itemId)
         return {
@@ -189,7 +191,7 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
           acquiredAt: item.acquiredAt,
         }
       }),
-      avatar: readAvatarConfig(player.avatarConfig, deps.catalog),
+      avatar: readAvatarConfig(player.avatarConfig, deps.catalog, deps.aliases),
     })
   })
 
@@ -218,7 +220,7 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
     return reply.send({
       playerId: player.playerId,
       displayName: player.displayName,
-      avatar: readAvatarConfig(player.avatarConfig, deps.catalog),
+      avatar: readAvatarConfig(player.avatarConfig, deps.catalog, deps.aliases),
     })
   })
 

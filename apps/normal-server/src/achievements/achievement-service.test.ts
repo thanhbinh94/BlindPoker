@@ -120,13 +120,18 @@ const find = (playerId: string, id: string) => achievements.list(playerId).then(
 
 describe('loadAchievements', () => {
   it('reads the shipped catalogue, whose every metric is a counter and every item reward a real item', () => {
-    expect(defs.length).toBeGreaterThanOrEqual(28)
+    expect(defs.length).toBe(34)
     expect(new Set(defs.map((d) => d.id)).size).toBe(defs.length)
-    for (const id of ['login_days_7', 'login_streak_7', 'holdem_hands_10', 'win_streak_3', 'lose_streak_10', 'hand_royal', 'big_win_100k', 'blind_hands_10', 'bot_hands_50', 'rooms_10', 'games_500']) {
+    for (const id of [
+      'login_days_7', 'login_streak_7', 'holdem_hands_10', 'win_streak_3', 'lose_streak_10', 'hand_royal',
+      'big_win_100k', 'blind_hands_10', 'bot_hands_50', 'rooms_10', 'games_500', 'login_days_365', 'games_1000',
+    ]) {
       expect(defs.find((d) => d.id === id), id).toBeDefined()
     }
-    expect(defs.find((d) => d.id === 'hand_royal')).toMatchObject({ metric: 'bestHandRank', threshold: 9, reward: { itemId: 'ring_royal' } })
+    expect(defs.find((d) => d.id === 'hand_royal')).toMatchObject({ metric: 'bestHandRank', threshold: 9, reward: { itemId: 'aura_gold_cards01' } })
     expect(defs.find((d) => d.id === 'games_500')).toMatchObject({ metric: 'gamesCompleted', threshold: 500, reward: { itemId: 'badge_veteran' } })
+    expect(defs.find((d) => d.id === 'login_days_365')).toMatchObject({ metric: 'totalLoginDays', threshold: 365, reward: { itemId: 'frame_founder' } })
+    expect(defs.find((d) => d.id === 'games_1000')).toMatchObject({ metric: 'gamesCompleted', threshold: 1000, reward: { itemId: 'frame_veteran' } })
   })
 
   it('maps §14.1’s special-hand thresholds onto the category ranks', () => {
@@ -210,7 +215,7 @@ describe('unlocking', () => {
     await settle([seat(playerId, { won: true, net: 100, bestCategory: HandCategory.ROYAL_FLUSH })])
 
     expect(await find(playerId, 'hand_royal')).toMatchObject({ progress: 9, unlockedAt: NOW })
-    expect(await inv.list(playerId)).toEqual([{ itemId: 'ring_royal', source: 'achievement', acquiredAt: expect.any(Number) }])
+    expect(await inv.list(playerId)).toEqual([{ itemId: 'aura_gold_cards01', source: 'achievement', acquiredAt: expect.any(Number) }])
     // A royal flush clears every lower special-hand tier on the way past, and those pay points —
     // but `hand_royal` itself rewards an item, so it writes no ledger row and announces no balance.
     expect((await ledger(playerId)).map((r) => r.refId)).toEqual([
@@ -220,7 +225,7 @@ describe('unlocking', () => {
       `ach:${playerId}:hand_straight_flush`,
     ])
     expect(balanceCalls).toHaveLength(4)
-    expect(notified.at(-1)!.msg).toMatchObject({ kind: 'ACHIEVEMENT_UNLOCKED', payload: { id: 'hand_royal', reward: { itemId: 'ring_royal' } } })
+    expect(notified.at(-1)!.msg).toMatchObject({ kind: 'ACHIEVEMENT_UNLOCKED', payload: { id: 'hand_royal', reward: { itemId: 'aura_gold_cards01' } } })
   })
 
   it('unlocks the lower tiers of the same metric alongside the one that was crossed', async () => {
@@ -278,7 +283,7 @@ describe('list', () => {
 describe('an item reward already owned', () => {
   it('still unlocks, and does not fail on the duplicate grant', async () => {
     const playerId = await seedPlayer()
-    await db.transaction((tx) => inv.grant(tx, playerId, 'ring_royal', 'daily'))
+    await db.transaction((tx) => inv.grant(tx, playerId, 'aura_gold_cards01', 'daily'))
 
     await settle([seat(playerId, { won: true, net: 10, bestCategory: HandCategory.ROYAL_FLUSH })])
 

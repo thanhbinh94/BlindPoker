@@ -16,7 +16,9 @@ import { join } from 'node:path'
 import { PGlite } from '@electric-sql/pglite'
 import { drizzle } from 'drizzle-orm/pglite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { loadAliases } from '../inventory/aliases.js'
 import { readAvatarConfig } from '../inventory/avatar-migrate.js'
+import { createInventoryService } from '../inventory/inventory-service.js'
 import { loadItemCatalog } from '../inventory/items.js'
 import type { AppDb } from './client.js'
 import { packageRoot } from './migrate.js'
@@ -133,25 +135,29 @@ describe('0001_avatar_v2', () => {
     expect(await rows(`SELECT * FROM "inventory" ORDER BY "item_id"`)).toEqual(before.owned)
   })
 
-  it('leaves the player wearing an avatar they still own, once the boot seed has run', async () => {
+  it('leaves the player wearing a v3 avatar built from what they still own, once the boot seed has run', async () => {
     await apply('0001_avatar_v2')
     // What `app.ts` does next on every boot: upsert the shipped catalogue over whatever is there.
     const catalog = loadItemCatalog()
     await catalog.seed(db)
+    const aliases = loadAliases()
+    const inventory = createInventoryService(db, aliases)
 
     const [player] = await db.select({ config: schema.players.avatarConfig }).from(schema.players)
-    const avatar = readAvatarConfig(player!.config, catalog)
-    // The v1 layers, migrated: the shirt renamed, the conical hat moved to its own slot, the hair
-    // colour they picked kept, and the two slots v1 never had filled from the defaults.
-    expect(avatar).toMatchObject({ v: 2, body: 'male', hair: 'hair_short', top: 'top_tee', bottom: 'bottom_jeans', shoes: 'shoes_sneakers', hat: 'accessory_conical_hat', hairColor: '#7a3b1f', title: 'title_devoted' })
+    const avatar = readAvatarConfig(player!.config, catalog, aliases)
+    // The v1 layers, migrated all the way to v3: no body at all (falls to the default base), the
+    // conical hat resolved through its alias into `head`, the title kept, and the outfit — nothing
+    // v1 wore maps to one — at its default.
+    expect(avatar).toMatchObject({ v: 3, base: catalog.defaultAvatar().base, outfit: 'outfit_casual01', head: 'head_conical_hat01', title: 'title_devoted' })
 
-    // …and every id in it is one this player owns, which is the whole point of granting the new
-    // defaults in the migration rather than leaving them to `isDefault`.
-    const worn = [avatar.hair, avatar.top, avatar.bottom, avatar.shoes, avatar.hat, avatar.accessory, avatar.jewelry, avatar.title, avatar.badge].filter(
-      (id): id is string => id !== undefined,
-    )
-    const owned = new Set(await ownedIds())
-    expect(worn.filter((id) => !owned.has(id))).toEqual([])
+    // …and every *item* slot in it is one this player owns — through the alias, since their
+    // inventory row is still the v2 id `0001` never rewrote. `outfit` is the one exception: `0002`,
+    // not `0001`, is what backfills every existing player into the new required slot's default, and
+    // this test applies only `0001`.
+    const { head, face, aura, frame, title, badge } = avatar
+    for (const id of [head, face, aura, frame, title, badge].filter((x): x is string => x !== undefined)) {
+      expect(await inventory.owns(PLAYER, id), id).toBe(true)
+    }
     // The stored jsonb is untouched: the migration is on the read path, not in the column.
     expect(player!.config).toMatchObject({ clothing: 'clothing_tee' })
   })

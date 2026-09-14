@@ -1,5 +1,5 @@
 /**
- * The cosmetic catalogue (spec §15.1, avatar-3d design §3.2).
+ * The cosmetic catalogue (design §4.4, §5.2).
  *
  * `data/items.json` is the source of truth and it is read once, at start-up, into an immutable
  * in-memory catalogue; the `items` table is a *projection* of it, upserted by `seed()` so that the
@@ -7,18 +7,16 @@
  * at run time, and no code path decides an item's slot by querying: a JSON edit plus a restart is
  * the whole of "add a hat".
  *
- * Since Plan 8 an item is a piece of 3D geometry rather than an SVG layer, so a definition carries
- * `variants`: one `{ file, node }` per body it has been modelled for. That is what makes "one item,
- * two bodies" (design §A3) expressible — a player switching to the female body keeps everything
- * they are wearing that has a female variant. `assetKey` survives as the manifest node *prefix*
- * (`<slot>/<id>`) so the column keeps meaning something, but the geometry is named by `variants`.
+ * Since Plan 11 an item is a PNG layer on a fixed frame rather than a piece of 3D geometry, so a
+ * definition carries `asset` — one `{ layer, file, fitsAvatarCrop }` shared by every base, because a
+ * head or an outfit is drawn once and worn by both `f01` and `m01` alike (design §4.4: "món dùng
+ * chung mọi thân"). `title` and `badge` have no asset at all: text beside a name, nothing to draw.
  *
- * `loadItemCatalog` refuses a file rather than degrading. Every failure it checks for is one that
- * would otherwise surface much later and much worse: a duplicate id silently shadowing an item, a
- * missing default leaving new accounts with nothing to wear, an absent `badge_monthly` turning the
- * day-28 reward into a foreign-key violation on the 28th of the month. The node convention is
- * checked here for the same reason — `test/catalog-manifest.test.ts` then holds the catalogue
- * against the manifest the asset build actually produced, which is a file this server never reads.
+ * `loadItemCatalog` refuses a file rather than degrading, the same reasons as before: a duplicate id
+ * silently shadowing an item, a missing default leaving new accounts with nothing to wear, an absent
+ * `badge_monthly` turning the day-28 reward into a foreign-key violation on the 28th of the month —
+ * and now, an `asset.file` the manifest never produced, which is a catalogue entry the wardrobe would
+ * offer and the stage could never draw.
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -27,27 +25,32 @@ import type { AppDb } from '../db/client.js'
 import { packageRoot } from '../db/migrate.js'
 import { items } from '../db/schema.js'
 import { DAILY_FIXED_ITEM_IDS } from '../economy/daily-rules.js'
-import type { AvatarConfigV2 } from './avatar.js'
+import type { AvatarConfigV3 } from './avatar.js'
 import { defaultAvatar } from './avatar.js'
-import type { Body, ItemSlot } from './slots.js'
-import { BODIES, isGeometricSlot, isItemSlot, REQUIRED_SLOTS } from './slots.js'
+import type { AvatarManifest } from './manifest.js'
+import { loadAvatarManifest } from './manifest.js'
+import type { ItemSlot } from './slots.js'
+import { DRAWN_SLOTS, isItemSlot, REQUIRED_SLOTS } from './slots.js'
 
-export type { Body, ItemSlot } from './slots.js'
+export type { ItemSlot } from './slots.js'
 
 export type Rarity = 'common' | 'rare' | 'epic'
 export const RARITIES: readonly Rarity[] = ['common', 'rare', 'epic']
 
-/** Where one body's version of an item lives inside the built assets (`normal-web/public/avatar3d/`). */
-export interface AssetRef {
-  /** One of the glb bundles the asset build emits. */
-  file: string
-  /** The node inside it, by the build's convention `<slot>/<itemId>/<body>`. */
-  node: string
-  /** A fixed colour for the item's `cloth_primary` material; skin, eyes and hair are the player's. */
-  tint?: string
-}
+/** The layer a slot's asset must sit on (design §3) — one half of the manifest cross-check. */
+const SLOT_LAYER: Partial<Record<ItemSlot, number>> = { head: 80, face: 70, outfit: 40, aura: 10, frame: 90 }
 
-export type ItemVariants = { [body in Body]?: AssetRef }
+/** One PNG layer, shared by every base. */
+export interface AssetRef {
+  layer: 5 | 10 | 40 | 70 | 80 | 90
+  /** A name in `data/avatar-manifest.json`'s `files`, without the `@1x`/`@2x` density suffix. */
+  file: string
+  /** A head that hides the base's hair layers (design §3). */
+  hidesHairFront?: boolean
+  hidesHairBack?: boolean
+  /** Whether this layer falls inside the 160×160 avatar crop the portrait is cut from. */
+  fitsAvatarCrop: boolean
+}
 
 export interface ItemDef {
   id: string
@@ -55,12 +58,13 @@ export interface ItemDef {
   rarity: Rarity
   /** An i18n key (`items.<id>`); the strings themselves live in `normal-web`'s locale bundles. */
   nameKey: string
-  /** The manifest node prefix, `<slot>/<id>` — what `variants[body].node` is built from. */
+  /** The manifest node prefix, `<slot>/<id>` — kept as a stable identifier for the item, even though
+   *  the actual drawable file now lives in `asset.file`. */
   assetKey: string
   /** Granted to every new account at registration. */
   isDefault: boolean
-  /** The geometry per body. Required for a geometric slot, absent for `title` and `badge`. */
-  variants?: ItemVariants
+  /** The PNG layer to draw. Required for `DRAWN_SLOTS`, absent for `title` and `badge`. */
+  asset?: AssetRef
 }
 
 export interface ItemCatalog {
@@ -72,33 +76,12 @@ export interface ItemCatalog {
   /** The one `isDefault` item of a slot, or undefined for a slot that has none. */
   defaultOf(slot: ItemSlot): ItemDef | undefined
   /** The avatar a new account is created wearing, built from the `isDefault` items. */
-  defaultAvatar(): AvatarConfigV2
+  defaultAvatar(): AvatarConfigV3
   /** Upserts the catalogue into the `items` table. Idempotent: safe on every boot. */
   seed(db: AppDb): Promise<void>
 }
 
 const RARITY_SET = new Set<string>(RARITIES)
-
-/**
- * Which bundle a slot's geometry is packed into — the asset build's own grouping (design §4).
- *
- * A `null` is a slot with no geometry at all, which is how `title` and `badge` are told apart from
- * "a geometric slot whose variants were forgotten".
- */
-const SLOT_FILE: Record<ItemSlot, string | null> = {
-  hair: 'hair.glb',
-  top: 'outfits.glb',
-  bottom: 'outfits.glb',
-  shoes: 'outfits.glb',
-  hat: 'accessories.glb',
-  accessory: 'accessories.glb',
-  jewelry: 'accessories.glb',
-  title: null,
-  badge: null,
-}
-
-/** `#rrggbb` — the only colour syntax the client's material tinting understands. */
-const TINT = /^#[0-9a-f]{6}$/i
 
 /** `excluded.<column>` — the row the insert would have written, for an `ON CONFLICT DO UPDATE`. */
 function sqlExcluded(column: string): ReturnType<typeof sql.raw> {
@@ -113,46 +96,50 @@ function fail(path: string, problem: string): never {
   throw new Error(`invalid item catalogue ${path}: ${problem}`)
 }
 
-/** The node a variant *must* name, so the catalogue and the asset build cannot drift apart. */
-export function variantNode(slot: ItemSlot, id: string, body: Body): string {
-  return `${slot}/${id}/${body}`
-}
-
-function parseVariants(path: string, id: string, slot: ItemSlot, raw: unknown): ItemVariants | undefined {
-  const geometric = isGeometricSlot(slot)
+function parseAsset(path: string, id: string, slot: ItemSlot, manifest: AvatarManifest, raw: unknown): AssetRef | undefined {
+  const drawn = (DRAWN_SLOTS as readonly ItemSlot[]).includes(slot)
   if (raw === undefined || raw === null) {
-    // A `title` has nothing to model; a hat that forgot its geometry would be an item the wardrobe
+    // A `title` has nothing to draw; a hat that forgot its asset would be an item the wardrobe
     // offers and the stage cannot draw, which is the failure this catches at boot.
-    if (geometric) fail(path, `item ${id} is in the geometric slot ${slot} but has no variants`)
+    if (drawn) fail(path, `item ${id} is in the drawn slot ${slot} but has no asset`)
     return undefined
   }
-  if (!geometric) fail(path, `item ${id} is in the slot ${slot}, which has no geometry, but has variants`)
-  if (typeof raw !== 'object' || Array.isArray(raw)) fail(path, `item ${id} has malformed variants`)
-  const expectedFile = SLOT_FILE[slot]
-  // `GEOMETRIC_SLOTS` and `SLOT_FILE` are two halves of one table; this is the line that would fire
-  // if somebody added a slot to the first and forgot the second.
-  if (expectedFile === null) fail(path, `the geometric slot ${slot} names no asset bundle`)
+  if (!drawn) fail(path, `item ${id} is in the slot ${slot}, which is never drawn, but has an asset`)
+  if (typeof raw !== 'object' || Array.isArray(raw)) fail(path, `item ${id} has a malformed asset`)
+  const r = raw as Record<string, unknown>
 
-  const variants: ItemVariants = {}
-  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (!(BODIES as readonly string[]).includes(key)) fail(path, `item ${id} has a variant for the unknown body ${key}`)
-    const body = key as Body
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) fail(path, `item ${id} has a malformed ${body} variant`)
-    const ref = value as Record<string, unknown>
-    if (ref['file'] !== expectedFile) fail(path, `item ${id}'s ${body} variant is in ${String(ref['file'])} rather than ${String(expectedFile)}`)
-    const node = variantNode(slot, id, body)
-    if (ref['node'] !== node) fail(path, `item ${id}'s ${body} variant names the node ${String(ref['node'])} rather than ${node}`)
-    const tint = ref['tint']
-    if (tint !== undefined && (typeof tint !== 'string' || !TINT.test(tint))) fail(path, `item ${id}'s ${body} variant has a tint that is not #rrggbb`)
-    variants[body] = tint === undefined ? { file: expectedFile, node } : { file: expectedFile, node, tint }
+  const expectedLayer = SLOT_LAYER[slot]
+  // `DRAWN_SLOTS` and `SLOT_LAYER` are two halves of one table; this is the line that would fire if
+  // somebody added a slot to the first and forgot the second.
+  if (expectedLayer === undefined) fail(path, `the drawn slot ${slot} names no canonical layer`)
+
+  const layer = r['layer']
+  if (layer !== expectedLayer) fail(path, `item ${id} has layer ${JSON.stringify(layer)} rather than ${String(expectedLayer)}`)
+
+  const file = r['file']
+  if (typeof file !== 'string' || file === '') fail(path, `item ${id} has no asset file`)
+  const manifestEntry = manifest.files[file]
+  if (manifestEntry === undefined) fail(path, `item ${id} names the asset file ${file}, which is not in the avatar manifest`)
+  if (manifestEntry.layer !== expectedLayer) {
+    fail(path, `item ${id}'s asset file ${file} is manifest layer ${String(manifestEntry.layer)} rather than ${String(expectedLayer)}`)
   }
-  // One body is enough to be wearable — the wardrobe hides an item the chosen body cannot wear and
-  // `validateAvatarConfig` refuses it — but zero is a definition that means nothing.
-  if (Object.keys(variants).length === 0) fail(path, `item ${id} has variants for no body at all`)
-  return variants
+
+  const fitsAvatarCrop = r['fitsAvatarCrop']
+  if (typeof fitsAvatarCrop !== 'boolean') fail(path, `item ${id} has no boolean fitsAvatarCrop`)
+
+  const asset: AssetRef = { layer: expectedLayer as AssetRef['layer'], file, fitsAvatarCrop }
+  if (r['hidesHairFront'] !== undefined) {
+    if (typeof r['hidesHairFront'] !== 'boolean') fail(path, `item ${id} has a non-boolean hidesHairFront`)
+    asset.hidesHairFront = r['hidesHairFront']
+  }
+  if (r['hidesHairBack'] !== undefined) {
+    if (typeof r['hidesHairBack'] !== 'boolean') fail(path, `item ${id} has a non-boolean hidesHairBack`)
+    asset.hidesHairBack = r['hidesHairBack']
+  }
+  return asset
 }
 
-function parseItem(path: string, raw: unknown, at: number): ItemDef {
+function parseItem(path: string, manifest: AvatarManifest, raw: unknown, at: number): ItemDef {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) fail(path, `entry ${at} is not an object`)
   const r = raw as Record<string, unknown>
   const str = (key: string): string => {
@@ -167,16 +154,16 @@ function parseItem(path: string, raw: unknown, at: number): ItemDef {
   if (!RARITY_SET.has(rarity)) fail(path, `item ${id} has unknown rarity ${rarity}`)
   const isDefault = r['isDefault']
   if (typeof isDefault !== 'boolean') fail(path, `item ${id} has no boolean isDefault`)
-  const variants = parseVariants(path, id, slot, r['variants'])
+  const asset = parseAsset(path, id, slot, manifest, r['asset'])
   const assetKey = str('assetKey')
-  // The manifest node prefix is derived from `slot`/`id`, not free text: `0001_avatar_v2.sql` rebuilds
-  // it the same way, and a hand-built catalogue should not be able to drift from that convention.
+  // The manifest node prefix is derived from `slot`/`id`, not free text: a hand-built catalogue
+  // should not be able to drift from that convention.
   if (assetKey !== `${slot}/${id}`) fail(path, `item ${id} has assetKey ${assetKey} rather than ${slot}/${id}`)
   const def: ItemDef = { id, slot, rarity: rarity as Rarity, nameKey: str('nameKey'), assetKey, isDefault }
-  return variants === undefined ? def : { ...def, variants }
+  return asset === undefined ? def : { ...def, asset }
 }
 
-export function loadItemCatalog(path: string = defaultItemsPath()): ItemCatalog {
+export function loadItemCatalog(path: string = defaultItemsPath(), manifest: AvatarManifest = loadAvatarManifest()): ItemCatalog {
   let parsed: unknown
   try {
     parsed = JSON.parse(readFileSync(path, 'utf8'))
@@ -185,7 +172,7 @@ export function loadItemCatalog(path: string = defaultItemsPath()): ItemCatalog 
   }
   if (!Array.isArray(parsed)) fail(path, 'the file is not a JSON array')
 
-  const defs = parsed.map((raw, at) => parseItem(path, raw, at))
+  const defs = parsed.map((raw, at) => parseItem(path, manifest, raw, at))
 
   const byId = new Map<string, ItemDef>()
   for (const def of defs) {
@@ -204,7 +191,7 @@ export function loadItemCatalog(path: string = defaultItemsPath()): ItemCatalog 
   }
   for (const def of defs) {
     // A default in an optional slot would be granted to every new account and worn by none of them:
-    // `defaultAvatar` fills the required slots only, on purpose (§15.1).
+    // `defaultAvatar` fills the required slot only, on purpose.
     if (def.isDefault && !(REQUIRED_SLOTS as readonly string[]).includes(def.slot)) fail(path, `item ${def.id} is a default in the optional slot ${def.slot}`)
   }
   for (const id of DAILY_FIXED_ITEM_IDS) {
@@ -223,10 +210,9 @@ export function loadItemCatalog(path: string = defaultItemsPath()): ItemCatalog 
       // An upsert rather than an insert: `seed` runs on every boot, and an edit to `nameKey` or a
       // re-tiered rarity has to reach a database that already holds the old row. Nothing is ever
       // deleted here — an item withdrawn from the JSON is still owned by whoever owns it, and its
-      // row has to stay for `inventory.item_id` to remain valid. (`0001_avatar_v2.sql` is where the
-      // v1 slots were deleted, inventory rows first, deliberately and once.)
+      // row has to stay for `inventory.item_id` to remain valid.
       //
-      // `variants` is not among the columns: the geometry is content the client resolves through
+      // `asset` is not among the columns: the layer is content the client resolves through
       // `/api/catalog/items`, and a jsonb copy of it in the database would be a second truth that
       // only `seed` ever wrote and nothing ever read.
       await db

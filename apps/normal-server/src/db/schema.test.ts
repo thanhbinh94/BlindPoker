@@ -48,7 +48,7 @@ describe('schema', () => {
   it('applies the committed migrations, creating every table', async () => {
     const rows = rowsOf<{ table_name: string }>(await db.execute(sql`select table_name from information_schema.tables where table_schema = current_schema()`))
     const names = rows.map((r) => r.table_name)
-    for (const table of ['users', 'players', 'sessions', 'point_transactions', 'games', 'game_players', 'items', 'inventory', 'player_achievements', 'daily_logins', 'player_stats']) {
+    for (const table of ['users', 'players', 'sessions', 'point_transactions', 'games', 'game_players', 'items', 'inventory', 'player_achievements', 'daily_logins', 'player_stats', 'avatar_outfits']) {
       expect(names, table).toContain(table)
     }
   })
@@ -182,5 +182,22 @@ describe('schema', () => {
     const failure = await failureOf(() => db.insert(schema.players).values({ id: randomUUID(), displayName: 'ghost', nameKey: 'ghost' }))
     expect(failure.code).toBe('23503')
     expect(failure.text).toMatch(/players_id_users_id_fk/)
+  })
+
+  it('refuses a saved outfit outside slots 1..5', async () => {
+    const id = await seedPlayer(db, { email: 'outfit@example.com', nameKey: 'outfit' })
+    const failure = await failureOf(() =>
+      db.insert(schema.avatarOutfits).values({ playerId: id, slot: 6, name: 'Bad', config: { v: 3, base: 'f01', outfit: 'outfit_casual01' } }),
+    )
+    expect(failure.code).toBe('23514')
+    expect(failure.text).toMatch(/avatar_outfits_slot_range/)
+    await db.insert(schema.avatarOutfits).values({ playerId: id, slot: 5, name: 'Fine', config: { v: 3, base: 'f01', outfit: 'outfit_casual01' } })
+  })
+
+  it('cascades a deleted account through its saved outfits', async () => {
+    const id = await seedPlayer(db, { email: 'outfit-gone@example.com', nameKey: 'outfit-gone' })
+    await db.insert(schema.avatarOutfits).values({ playerId: id, slot: 1, name: 'Gone', config: { v: 3, base: 'f01', outfit: 'outfit_casual01' } })
+    await db.delete(schema.users).where(sql`${schema.users.id} = ${id}`)
+    expect(await db.select().from(schema.avatarOutfits).where(sql`${schema.avatarOutfits.playerId} = ${id}`)).toHaveLength(0)
   })
 })

@@ -1,0 +1,37 @@
+{
+  "hat_crown": "head_crown_gold01",
+  "accessory_conical_hat": "head_conical_hat01",
+  "accessory_headband": null,
+
+  "accessory_glasses": "face_glasses_round_gold01",
+  "accessory_sunglasses": "face_sunglasses01",
+  "accessory_mask": "face_masquerade01",
+
+  "ring_royal": "aura_gold_cards01",
+  "jewelry_stud": null,
+  "jewelry_ring": null,
+  "jewelry_chain": null,
+  "jewelry_pendant": null,
+
+  "clothing_suit": "outfit_tuxedo01",
+  "clothing_aodai": "outfit_tet_red01",
+  "clothing_kimono": "outfit_royal_robe01",
+  "jacket_champion": "outfit_champion01",
+
+  "hair_none": null,
+  "hair_short": null,
+  "hair_curly": null,
+  "hair_ponytail": null,
+  "hair_long": null,
+  "hair_bun": null,
+  "hair_mohawk": null,
+
+  "bottom_jeans": null,
+  "bottom_shorts": null,
+  "bottom_trousers": null,
+  "bottom_skirt": null,
+
+  "shoes_sneakers": null,
+  "shoes_sandals": null,
+  "shoes_boots": null
+}

@@ -9,26 +9,45 @@
  * `grant` answers "was this newly granted" from the database rather than from a prior `SELECT`.
  * `ON CONFLICT DO NOTHING … RETURNING` is one statement whose result *is* the answer, so two claims
  * racing for the same item cannot both be told they were the first.
+ *
+ * **Aliases run both ways here.** `inventory.item_id` rows are never rewritten (Plan 11's `aliases.ts`
+ * comment), so a player who owns `hat_crown` from before this plan already owns `head_crown_gold01`
+ * in every sense that matters — `owns` and `missingOf` widen every id they are asked about to its
+ * whole alias *class* (itself, plus every old id `item-aliases.json` renamed to it) before touching
+ * the database, so an avatar or an outfit naming the new id is satisfied by the old row.
  */
 import { and, asc, eq, inArray, notExists, notInArray } from 'drizzle-orm'
 import type { AppDb, AppTx } from '../db/client.js'
 import { inventory, items } from '../db/schema.js'
 import { isUuid } from '../repos/util.js'
-import type { ItemSlot, Rarity } from './items.js'
+import { loadAliases } from './aliases.js'
+import type { Rarity } from './items.js'
+import type { ItemSlot } from './slots.js'
 
 /**
  * What a draw must not reach.
  *
  * A pool is "every item of this rarity the player does not own", and that is one query — but not
- * every item of a rarity is *drawable*. Some are promised elsewhere as fixed rewards, and some
- * belong to slots the draw is not about. Expressing both as one exclusion keeps the decision at the
- * caller, where the reasons live, rather than hard-coding a policy into the query.
+ * every item of a rarity is *drawable*. Some are promised elsewhere as fixed rewards, some belong to
+ * slots the draw is not about, and — `withinSlots` — a caller may want *only* a known, current set
+ * of slots. Expressing all three as one exclusion keeps the decision at the caller, where the
+ * reasons live, rather than hard-coding a policy into the query.
  */
 export interface ItemExclusion {
   /** Ids that are spoken for — a fixed daily reward, an achievement's item. */
   ids?: readonly string[]
   /** Whole slots the draw does not cover. */
   slots?: readonly ItemSlot[]
+  /**
+   * An allow-list rather than a deny-list: when given, only these slots are considered at all.
+   *
+   * `items` still carries rows a withdrawn v2 slot left behind (`0001_avatar_v2.sql` always inserts
+   * four of them; `inventory.player_id`'s foreign key needs the rows to exist forever) — a value
+   * that is not even a current `ItemSlot`, so `slots` above can never name it to exclude it. The
+   * daily draw passes `DAILY_DRAW_SLOTS` here for exactly that reason: it is the one caller that
+   * must never surface a row belonging to a slot the current catalogue no longer offers.
+   */
+  withinSlots?: readonly ItemSlot[]
 }
 
 export interface OwnedItem {
@@ -62,7 +81,22 @@ export interface InventoryService {
   missingOf(playerId: string, itemIds: string[]): Promise<string[]>
 }
 
-export function createInventoryService(db: AppDb): InventoryService {
+/** `newId -> every old id that now means it`, the mirror of `loadAliases`'s old-to-new map. */
+function reverseAliases(aliases: ReadonlyMap<string, string>): Map<string, string[]> {
+  const reverse = new Map<string, string[]>()
+  for (const [oldId, newId] of aliases) {
+    const list = reverse.get(newId)
+    if (list === undefined) reverse.set(newId, [oldId])
+    else list.push(oldId)
+  }
+  return reverse
+}
+
+export function createInventoryService(db: AppDb, aliases: ReadonlyMap<string, string> = loadAliases()): InventoryService {
+  const reverse = reverseAliases(aliases)
+  /** `id` and every old id that aliases to it — what a caller asking about `id` is really asking about. */
+  const classOf = (id: string): string[] => [id, ...(reverse.get(id) ?? [])]
+
   return {
     async list(playerId) {
       if (!isUuid(playerId)) return []
@@ -88,7 +122,7 @@ export function createInventoryService(db: AppDb): InventoryService {
       const rows = await db
         .select({ itemId: inventory.itemId })
         .from(inventory)
-        .where(and(eq(inventory.playerId, playerId), eq(inventory.itemId, itemId)))
+        .where(and(eq(inventory.playerId, playerId), inArray(inventory.itemId, classOf(itemId))))
       return rows.length > 0
     },
 
@@ -107,9 +141,13 @@ export function createInventoryService(db: AppDb): InventoryService {
                 .where(and(eq(inventory.playerId, playerId), eq(inventory.itemId, items.id))),
             ),
             // Guarded on length: `notInArray(col, [])` is `col <> all('{}')`, which Postgres reads
-            // as unknown for every row and would empty the pool rather than exclude nothing.
+            // as unknown for every row and would empty the pool rather than exclude nothing. The
+            // same guard applies to `withinSlots`, the other way round: `inArray(col, [])` is
+            // `col = any('{}')`, always false, which would empty the pool rather than allow nothing
+            // — so an empty (or absent) `withinSlots` means "every slot", not "no slot".
             exclude?.ids !== undefined && exclude.ids.length > 0 ? notInArray(items.id, [...exclude.ids]) : undefined,
             exclude?.slots !== undefined && exclude.slots.length > 0 ? notInArray(items.slot, [...exclude.slots]) : undefined,
+            exclude?.withinSlots !== undefined && exclude.withinSlots.length > 0 ? inArray(items.slot, [...exclude.withinSlots]) : undefined,
           ),
         )
         .orderBy(asc(items.id))
@@ -122,12 +160,13 @@ export function createInventoryService(db: AppDb): InventoryService {
       // An id that is not a uuid owns nothing, so every requested item is missing — the caller gets
       // a `NOT_OWNED` rather than the driver's `22P02` for a malformed uuid.
       if (!isUuid(playerId)) return wanted
+      const candidates = [...new Set(wanted.flatMap(classOf))]
       const rows = await db
         .select({ itemId: inventory.itemId })
         .from(inventory)
-        .where(and(eq(inventory.playerId, playerId), inArray(inventory.itemId, wanted)))
+        .where(and(eq(inventory.playerId, playerId), inArray(inventory.itemId, candidates)))
       const owned = new Set(rows.map((r) => r.itemId))
-      return wanted.filter((id) => !owned.has(id))
+      return wanted.filter((id) => !classOf(id).some((candidate) => owned.has(candidate)))
     },
   }
 }

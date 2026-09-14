@@ -12,6 +12,7 @@ import type { InventoryService } from '../inventory/inventory-service.js'
 import { createInventoryService } from '../inventory/inventory-service.js'
 import type { ItemCatalog } from '../inventory/items.js'
 import { loadItemCatalog } from '../inventory/items.js'
+import { DAILY_DRAW_SLOTS } from '../inventory/slots.js'
 import { loadAchievements } from '../achievements/definitions.js'
 import type { NormalRepositories } from '../repos/index.js'
 import { createRepositories } from '../repos/index.js'
@@ -107,11 +108,11 @@ async function own(playerId: string, itemIds: string[]): Promise<void> {
   })
 }
 
-/** The items a random draw of `rarity` is actually allowed to reach. */
+/** The items a random draw of `rarity` is actually allowed to reach — `head`/`face`/`aura`/`frame` only. */
 function drawable(rarity: 'common' | 'rare'): string[] {
   return catalog
     .byRarity(rarity)
-    .filter((d) => d.slot !== 'title' && d.slot !== 'badge' && !reserved.has(d.id))
+    .filter((d) => (DAILY_DRAW_SLOTS as readonly string[]).includes(d.slot) && !reserved.has(d.id))
     .map((d) => d.id)
     .sort()
 }
@@ -317,7 +318,7 @@ describe('claimDaily', () => {
 
       const owned = new Set((await inv.list(playerId)).map((o) => o.itemId))
       for (const id of undrawable('common')) expect(owned.has(id), id).toBe(false)
-      expect(undrawable('common')).toEqual(['badge_bronze', 'badge_silver', 'title_regular', 'title_rookie'])
+      expect(undrawable('common')).toEqual(['badge_bronze', 'badge_silver', 'outfit_casual01', 'title_regular', 'title_rookie'])
     })
 
     it('exhausts the rare tier without ever handing out a reserved id, then pays the fallback', async () => {
@@ -359,7 +360,7 @@ describe('claimDaily', () => {
 
     it('never draws an id the caller reserved, even one in a drawable slot', async () => {
       const playerId = await seedPlayer()
-      // `jewelry_chain` is a rare piece of jewelry — drawable in every respect but this one.
+      // `aura_ice01` is a rare aura — drawable in every respect but this one.
       const withReservation = createEconomyService({
         db,
         repos,
@@ -369,9 +370,9 @@ describe('claimDaily', () => {
         timezone: 'UTC',
         onBalanceChanged: () => {},
         rng: () => 0,
-        reservedItemIds: ['jewelry_chain'],
+        reservedItemIds: ['aura_ice01'],
       })
-      const pool = drawable('rare').filter((id) => id !== 'jewelry_chain')
+      const pool = drawable('rare').filter((id) => id !== 'aura_ice01')
 
       for (let i = 0; i < pool.length; i += 1) {
         await seedStreak(playerId, 13, 13)
@@ -379,7 +380,7 @@ describe('claimDaily', () => {
       }
 
       const owned = new Set((await inv.list(playerId)).map((o) => o.itemId))
-      expect(owned.has('jewelry_chain')).toBe(false)
+      expect(owned.has('aura_ice01')).toBe(false)
       expect([...owned].sort()).toEqual(pool)
 
       await seedStreak(playerId, 13, 13)
