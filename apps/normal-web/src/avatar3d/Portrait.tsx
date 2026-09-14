@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import type { AvatarConfigDto, GeometricSlot } from '../api.js'
+import type { AvatarConfigDto, GeometricSlot } from './legacy-avatar.js'
 import { frameForSlot, portraitRelevant, withSlot } from './config.js'
 import type { PortraitFrame } from './framing.js'
 import { usePortrait } from './usePortrait.js'

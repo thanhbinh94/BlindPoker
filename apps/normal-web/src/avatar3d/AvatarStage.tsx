@@ -1,7 +1,7 @@
 import { Button } from '@bp/ui-kit'
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { AvatarConfigDto } from '../api.js'
+import type { AvatarConfigDto } from './legacy-avatar.js'
 import { Portrait } from './Portrait.js'
 import { hashConfig } from './hash.js'
 import type { Stage } from './stage.js'

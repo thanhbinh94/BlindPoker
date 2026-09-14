@@ -1,6 +1,6 @@
 import { Bone, BufferGeometry, DataTexture, Euler, Group, Mesh, MeshStandardMaterial, Object3D, Quaternion, Skeleton, SkinnedMesh } from 'three'
 import { describe, expect, it } from 'vitest'
-import type { AvatarConfigDto } from '../api.js'
+import type { AvatarConfigDto } from './legacy-avatar.js'
 import { assemble, disposeAssembled, nodeKeysOf, poseArmsDown } from './assemble.js'
 import type { AvatarManifest, ManifestNode, NodeLoader } from './assets.js'
 

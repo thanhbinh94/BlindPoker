@@ -3,20 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, type NormalApi, type PlayerAvatarDto } from '../api.js'
 import { AVATAR_TTL_MS, resetAvatarCache, useAvatars } from './useAvatars.js'
 
-const avatarOf = (playerId: string, hairColor = '#2b2b2b'): PlayerAvatarDto => ({
+const avatarOf = (playerId: string, outfit = 'outfit_casual01'): PlayerAvatarDto => ({
   playerId,
   displayName: playerId.toUpperCase(),
-  avatar: {
-    v: 2,
-    body: 'male',
-    skin: '#e0ac81',
-    eyes: '#3b2415',
-    hairColor,
-    hair: 'hair_short',
-    top: 'top_tee',
-    bottom: 'bottom_jeans',
-    shoes: 'shoes_sneakers',
-  },
+  avatar: { v: 3, base: 'f01', outfit },
 })
 
 const NOT_FOUND = new ApiError(404, 'NOT_FOUND', 'no such player')
@@ -116,12 +106,12 @@ describe('useAvatars', () => {
     // Stale-while-revalidate: the old face is still on the plate while the new one is on the wire. Blinking to
     // the grey silhouette for the length of a request reads as a glitch, not as a refresh.
     await waitFor(() => expect(playerAvatar).toHaveBeenCalledTimes(2))
-    expect(second.result.current.avatars.get('a')?.avatar.hairColor).toBe('#111111')
+    expect(second.result.current.avatars.get('a')?.avatar.outfit).toBe('#111111')
 
     await act(async () => {
       release?.(avatarOf('a', '#d9a441'))
     })
-    await waitFor(() => expect(second.result.current.avatars.get('a')?.avatar.hairColor).toBe('#d9a441'))
+    await waitFor(() => expect(second.result.current.avatars.get('a')?.avatar.outfit).toBe('#d9a441'))
     clock.mockRestore()
   })
 
@@ -162,7 +152,7 @@ describe('useAvatars', () => {
     // unmounted component (no act/update warning), and the answer is there for whoever asks next.
     expect(warn).not.toHaveBeenCalled()
     const next = renderHook(() => useAvatars(api, ['a']))
-    expect(next.result.current.avatars.get('a')?.avatar.hairColor).toBe('#3f938a')
+    expect(next.result.current.avatars.get('a')?.avatar.outfit).toBe('#3f938a')
     expect(playerAvatar).toHaveBeenCalledTimes(1)
     warn.mockRestore()
   })
@@ -179,8 +169,8 @@ describe('useAvatars', () => {
       result.current.invalidate('a')
     })
 
-    await waitFor(() => expect(result.current.avatars.get('a')?.avatar.hairColor).toBe('#d9a441'))
-    expect(result.current.avatars.get('b')?.avatar.hairColor).toBe('#222222')
+    await waitFor(() => expect(result.current.avatars.get('a')?.avatar.outfit).toBe('#d9a441'))
+    expect(result.current.avatars.get('b')?.avatar.outfit).toBe('#222222')
     expect(playerAvatar.mock.calls.filter(([id]) => id === 'b')).toHaveLength(1)
 
     // Two caches sit between this hook and the server. Clearing the Map is half the job: the route is
@@ -209,7 +199,7 @@ describe('useAvatars', () => {
       release?.(avatarOf('a', '#stale'))
     })
 
-    await waitFor(() => expect(result.current.avatars.get('a')?.avatar.hairColor).toBe('#d9a441'))
+    await waitFor(() => expect(result.current.avatars.get('a')?.avatar.outfit).toBe('#d9a441'))
     expect(playerAvatar).toHaveBeenCalledTimes(2)
   })
 

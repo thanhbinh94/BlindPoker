@@ -1,6 +1,6 @@
 import { render, renderHook, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AvatarConfigDto } from '../api.js'
+import type { AvatarConfigDto } from './legacy-avatar.js'
 import { abortError } from './abort.js'
 import { fakeRenderer } from './fake-renderer.js'
 import { CONTEXT_LOST } from './gl-context.js'

@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AvatarConfigDto } from '../api.js'
+import type { AvatarConfigDto } from './legacy-avatar.js'
 import { PartPortrait, Portrait } from './Portrait.js'
 import { portraitRelevant, withSlot } from './config.js'
 import { fakeRenderer } from './fake-renderer.js'

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { AvatarConfigDto } from '../api.js'
+import type { AvatarConfigDto } from './legacy-avatar.js'
 import { isAbortError } from './abort.js'
 import type { PortraitFrame } from './framing.js'
 import { hashConfig } from './hash.js'

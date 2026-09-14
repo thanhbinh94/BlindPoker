@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AvatarConfigDto } from '../api.js'
+import type { AvatarConfigDto } from './legacy-avatar.js'
 import { canonicalConfig, hashConfig } from './hash.js'
 
 const CONFIG: AvatarConfigDto = {

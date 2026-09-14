@@ -227,34 +227,23 @@
       "other": "Other"
     },
     "slot": {
-      "hair": "Hair",
-      "top": "Top",
-      "bottom": "Bottom",
-      "shoes": "Shoes",
-      "hat": "Hats",
-      "accessory": "Accessories",
-      "jewelry": "Jewelry",
+      "head": "Hats",
+      "face": "Face accessories",
+      "outfit": "Outfits",
+      "aura": "Auras",
+      "frame": "Frames",
       "title": "Titles",
       "badge": "Badges"
     }
   },
   "avatar": {
     "mine": "Your avatar",
-    "none": "None",
-    "empty": "You own nothing for this slot yet.",
-    "hairColor": "Hair colour",
-    "hairPreset": "Preset colour {{color}}",
-    "hairCustom": "Custom colour",
-    "hairHint": "Six hex digits, for example #2b2b2b.",
-    "hairInvalid": "A colour looks like #2b2b2b",
-    "titleSlot": "Title",
-    "badgeSlot": "Badge",
     "errors": {
       "NOT_OWNED": "You do not own one of those pieces",
       "WRONG_CATEGORY": "One of those pieces does not belong in that slot",
-      "INVALID_COLOR": "That hair colour is not a valid hex colour",
-      "MISSING_LAYER": "Hair, top, bottom and shoes each need a piece",
-      "INVALID_ITEM": "One of those pieces is not in the catalogue"
+      "MISSING_LAYER": "An outfit needs a piece",
+      "INVALID_ITEM": "One of those pieces is not in the catalogue",
+      "INVALID_BASE": "That base is not valid"
     },
     "slot": {
       "hair": "Hair",
@@ -268,25 +257,17 @@
   },
   "wardrobe": {
     "title": "Wardrobe",
-    "lead": "Drag the figure to turn it. Only what you own is offered here.",
+    "lead": "Only what you own can be worn.",
     "figure": "A {{body}} figure, {{skin}} skin, {{eyes}} eyes. Wearing: {{items}}.",
     "figurePiece": "{{slot}} {{item}}",
     "figureBare": "A {{body}} figure, {{skin}} skin, {{eyes}} eyes.",
     "rotateHint": "Drag to turn, or use the left and right arrow keys.",
     "figureRole": "turnable figure",
     "resetView": "Face the front again",
-    "body": "Body",
-    "words": "Titles and badges",
-    "bodyName": {
-      "male": "Male",
-      "female": "Female"
-    },
     "bodyWord": {
       "male": "male",
       "female": "female"
     },
-    "bodyChanged": "Changing body had to change these slots (to another piece, or to nothing): {{slots}}.",
-    "skin": "Skin tone",
     "skinTone": {
       "0": "Ivory",
       "1": "Light",
@@ -297,7 +278,6 @@
       "6": "Deep brown",
       "7": "Dark brown"
     },
-    "eyes": "Eye colour",
     "eyeColor": {
       "0": "Dark brown",
       "1": "Brown",
@@ -306,51 +286,81 @@
       "4": "Blue",
       "5": "Grey"
     },
-    "swatch": "{{name}} ({{color}})",
+    "tabs": {
+      "base": "Base",
+      "head": "Head",
+      "face": "Face",
+      "outfit": "Outfit",
+      "aura": "Aura",
+      "frame": "Frame",
+      "words": "Title & Badge"
+    },
+    "expression": {
+      "legend": "Preview expression",
+      "neutral": "Neutral",
+      "happy": "Happy",
+      "sad": "Sad",
+      "surprised": "Surprised",
+      "closed": "Eyes closed",
+      "sleep": "Asleep"
+    },
+    "hint": {
+      "daily": {
+        "common": "May be drawn from the daily check-in (common)",
+        "rare": "May be drawn from the daily check-in (rare)",
+        "epic": "May be drawn from the daily check-in (epic)"
+      },
+      "unavailable": "No way to earn this yet"
+    },
     "save": "Save wardrobe",
     "saved": "Your wardrobe is saved.",
-    "reset": "Undo changes",
-    "resetDone": "Back to the wardrobe you saved.",
-    "dirty": "You have unsaved changes.",
-    "leaveTitle": "Leave the wardrobe?",
-    "leaveBody": "Unsaved changes are lost if you leave this page.",
-    "leaveStay": "Stay",
-    "leaveGo": "Leave",
     "close": "Close"
   },
+  "outfits": {
+    "title": "Outfit bar",
+    "empty": "Empty",
+    "emptySlot": "Slot {{n}} is empty",
+    "defaultName": "Outfit {{n}}",
+    "nameLabel": "Outfit name",
+    "apply": "Apply",
+    "saveHere": "Save here",
+    "rename": "Rename",
+    "delete": "Delete",
+    "error": "Could not complete that action — please try again"
+  },
   "items": {
-    "hair_none": "No hair",
-    "hair_short": "Short hair",
-    "hair_curly": "Curly hair",
-    "hair_ponytail": "Ponytail",
-    "hair_long": "Long hair",
-    "hair_bun": "Hair bun",
-    "hair_mohawk": "Mohawk",
-    "top_tee": "Tee",
-    "clothing_hoodie": "Hoodie",
-    "clothing_polo": "Polo shirt",
-    "clothing_aodai": "Áo dài",
-    "clothing_suit": "Suit",
-    "clothing_kimono": "Kimono",
-    "jacket_champion": "Champion jacket",
-    "bottom_jeans": "Jeans",
-    "bottom_shorts": "Shorts",
-    "bottom_trousers": "Trousers",
-    "bottom_skirt": "Skirt",
-    "shoes_sneakers": "Sneakers",
-    "shoes_sandals": "Sandals",
-    "shoes_boots": "Boots",
-    "accessory_headband": "Headband",
-    "accessory_conical_hat": "Conical hat",
-    "hat_crown": "Crown",
-    "accessory_glasses": "Glasses",
-    "accessory_mask": "Face mask",
-    "accessory_sunglasses": "Sunglasses",
-    "jewelry_stud": "Stud earring",
-    "jewelry_ring": "Silver ring",
-    "jewelry_chain": "Chain",
-    "jewelry_pendant": "Pendant",
-    "ring_royal": "Royal ring",
+    "head_beanie01": "Beanie",
+    "head_dealer_visor01": "Dealer's visor",
+    "head_beret_red01": "Red beret",
+    "head_conical_hat01": "Conical hat",
+    "head_party_cone01": "Party cone hat",
+    "head_tophat01": "Gentleman's top hat",
+    "head_crown_gold01": "Golden crown",
+    "head_hood_black01": "Black hood",
+    "face_glasses_round_gold01": "Round gold-frame glasses",
+    "face_sunglasses01": "Sunglasses",
+    "face_masquerade01": "Masquerade mask",
+    "face_eyepatch01": "Eyepatch",
+    "outfit_casual01": "Casual outfit",
+    "outfit_dealer01": "Dealer's outfit",
+    "outfit_tet_red01": "Red Tet áo dài",
+    "outfit_tuxedo01": "Tuxedo",
+    "outfit_royal_robe01": "Royal robe",
+    "outfit_champion01": "Champion's outfit",
+    "aura_water01": "Water aura",
+    "aura_wind01": "Wind aura",
+    "aura_fire01": "Fire aura",
+    "aura_earth01": "Earth aura",
+    "aura_sakura01": "Sakura aura",
+    "aura_ice01": "Ice aura",
+    "aura_lightning01": "Lightning aura",
+    "aura_gold_cards01": "Golden cards aura",
+    "frame_bronze": "Bronze frame",
+    "frame_silver": "Silver frame",
+    "frame_monthly": "Monthly frame",
+    "frame_gold": "Gold frame",
+    "frame_veteran": "Veteran frame",
+    "frame_founder": "Founder frame",
     "title_rookie": "Rookie",
     "title_regular": "Regular",
     "title_night_owl": "Night Owl",
@@ -361,6 +371,10 @@
     "badge_gold": "Gold badge",
     "badge_monthly": "Monthly badge",
     "badge_veteran": "Veteran badge"
+  },
+  "bases": {
+    "f01": "Female base F01",
+    "m01": "Male base M01"
   },
   "achievements": {
     "ui": {
@@ -398,6 +412,10 @@
     "login_streak_28": {
       "name": "Twenty-eight-day streak",
       "desc": "Check in 28 days in a row."
+    },
+    "login_days_365": {
+      "name": "A year in",
+      "desc": "Sign in on 365 days."
     },
     "holdem_hands_10": {
       "name": "Ten Hold'em hands",
@@ -506,6 +524,10 @@
     "games_500": {
       "name": "Five hundred hands through",
       "desc": "See 500 hands through from deal to settlement."
+    },
+    "games_1000": {
+      "name": "A thousand hands through",
+      "desc": "See 1,000 hands through from deal to settlement."
     }
   }
 }

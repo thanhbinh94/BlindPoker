@@ -1,6 +1,6 @@
 import { Group, Mesh, MeshStandardMaterial, PerspectiveCamera, SphereGeometry, Vector3, type Camera, type Scene } from 'three'
 import { describe, expect, it, vi } from 'vitest'
-import type { AvatarConfigDto } from '../api.js'
+import type { AvatarConfigDto } from './legacy-avatar.js'
 import type { Assembled } from './assemble.js'
 import type { NodeLoader } from './assets.js'
 import { createStage, type StageDeps, type StageRenderer } from './stage.js'

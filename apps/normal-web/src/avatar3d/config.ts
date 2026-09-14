@@ -1,4 +1,4 @@
-import { GEOMETRIC_SLOTS, OPTIONAL_SLOTS, type AvatarConfigDto, type Body, type GeometricSlot, type ItemSlot } from '../api.js'
+import { GEOMETRIC_SLOTS, OPTIONAL_SLOTS, type AvatarConfigDto, type Body, type GeometricSlot, type ItemSlot } from './legacy-avatar.js'
 import type { PortraitFrame } from './framing.js'
 
 /**

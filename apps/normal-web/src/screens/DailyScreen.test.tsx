@@ -41,7 +41,7 @@ const CLAIM: DailyClaimDto = {
   day: 5,
   points: 5_000,
   item: null,
-  items: ['hat_crown'],
+  items: ['head_crown_gold01'],
   fallbackPoints: 0,
   balance: 128_000,
   streak: 5,
@@ -181,7 +181,7 @@ describe('DailyScreen — claiming', () => {
     const receipt = within(region)
     const unit = i18n.t('common:units.pointsShort')
     expect(receipt.getByText(`5.000 ${unit}`)).toBeInTheDocument()
-    expect(receipt.getByText(viNormal.items.hat_crown)).toBeInTheDocument()
+    expect(receipt.getByText(viNormal.items.head_crown_gold01)).toBeInTheDocument()
     expect(receipt.getByText(`128.000 ${unit}`)).toBeInTheDocument()
     // The fallback line is gated on `fallbackPoints > 0`, and this claim granted a real item.
     expect(receipt.queryByText(new RegExp(FALLBACK_PREFIX))).toBeNull()
@@ -201,7 +201,7 @@ describe('DailyScreen — claiming', () => {
 
     const line = interpolate(viNormal.daily.receipt.fallback, { amount: `10.000 ${i18n.t('common:units.pointsShort')}` })
     expect(await screen.findByText(line)).toBeInTheDocument()
-    expect(screen.queryByText(viNormal.items.hat_crown)).toBeNull()
+    expect(screen.queryByText(viNormal.items.head_crown_gold01)).toBeNull()
   })
 
   it('says the day is already gone on a 409, and reloads the calendar', async () => {

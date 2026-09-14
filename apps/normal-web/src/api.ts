@@ -20,28 +20,33 @@ export const UNAUTHENTICATED_CODE = 'UNAUTHENTICATED'
 /* ── catalogue and configuration (no session required) ─────────────────────── */
 
 /**
- * The slots an item can occupy — `apps/normal-server/src/inventory/slots.ts`, verbatim (avatar-3d
- * design §3.2). Plan 8 replaced v1's `category`: `base` and `face` are gone (a body is chosen, not
- * worn), `clothing` split into `top`/`bottom`/`shoes`, and `hat` was lifted out of `accessory`.
+ * The slots an item can occupy — `apps/normal-server/src/inventory/slots.ts`, verbatim (design §5.1).
+ * Plan 11 replaces the 3D figure with a base plus PNG layers: `hair`/`top`/`bottom`/`shoes` are gone
+ * (a body is a fixed `base`, chosen rather than dressed piece by piece), `hat`/`accessory`/`jewelry`
+ * become `head`/`face`/`aura`, and `frame` (the profile border) is new. `title` and `badge` are
+ * unchanged: text beside a name, nothing to draw.
  */
-export type ItemSlot = 'hair' | 'top' | 'bottom' | 'shoes' | 'hat' | 'accessory' | 'jewelry' | 'title' | 'badge'
+export type ItemSlot = 'head' | 'face' | 'outfit' | 'aura' | 'frame' | 'title' | 'badge'
 
-/** The two figures every geometric item is modelled for (or, where a pack was asymmetric, one of). */
-export type Body = 'male' | 'female'
+/** The two fixed figures a chibi is drawn on — chosen, never owned (design §4.2, §5.1). */
+export type BaseId = 'f01' | 'm01'
+export const BASES: readonly BaseId[] = ['f01', 'm01']
 
-/** Every slot that has geometry, in the order the assembler stacks it — `title` and `badge` are words. */
-export const GEOMETRIC_SLOTS = ['hair', 'top', 'bottom', 'shoes', 'hat', 'accessory', 'jewelry'] as const
+/** The one slot every configuration must fill; a figure with no outfit is not a figure. */
+export const REQUIRED_SLOTS = ['outfit'] as const
 
-export type GeometricSlot = (typeof GEOMETRIC_SLOTS)[number]
+/** Everything else may be left empty: four cosmetic layers and the two name decorations. */
+export const OPTIONAL_SLOTS = ['head', 'face', 'aura', 'frame', 'title', 'badge'] as const
 
-/** The four slots a configuration must fill; a figure with no top is not a figure. */
-export const REQUIRED_SLOTS = ['hair', 'top', 'bottom', 'shoes'] as const
+/** The slots drawn as a PNG layer — exactly the items that carry `asset` (`title`/`badge` are words). */
+export const DRAWN_SLOTS = ['head', 'face', 'outfit', 'aura', 'frame'] as const
 
-/** The three geometric slots that may be left empty, and are empty on a new account. */
-export const OPTIONAL_SLOTS = ['hat', 'accessory', 'jewelry'] as const
+/** The slots a daily-reward draw may land on (§13.2, design §5.2): `outfit` is drawable but chosen
+ * deliberately, not handed out alongside a hat or an aura. */
+export const DAILY_DRAW_SLOTS = ['head', 'face', 'aura', 'frame'] as const
 
-/** Every slot, in the order the wardrobe and the inventory offer them: worn first, words last. */
-export const SLOTS: ItemSlot[] = [...GEOMETRIC_SLOTS, 'title', 'badge']
+/** Every slot, in the order a configuration lists them: the one required slot, then the rest. */
+export const SLOTS: readonly ItemSlot[] = [...REQUIRED_SLOTS, ...OPTIONAL_SLOTS]
 
 export type Rarity = 'common' | 'rare' | 'epic'
 
@@ -60,14 +65,17 @@ export interface ConfigDto {
   reconnectWindowSec: number
 }
 
-/** Where one body's geometry for an item lives inside `/avatar3d/` — the catalogue's `variants` entry. */
+/** One PNG layer, shared by every base (design §3, §4.4) — `apps/normal-server/src/inventory/items.ts`'s
+ * `AssetRef`, verbatim. */
 export interface AssetRefDto {
-  /** One of the `.glb` bundles the asset build emits. */
+  layer: number
+  /** A name in the avatar manifest's `files`, without the `@1x`/`@2x` density suffix. */
   file: string
-  /** The node inside it, by the build's convention `<slot>/<itemId>/<body>`. */
-  node: string
-  /** A fixed colour for the item's `cloth_primary` material; skin, eyes and hair are the player's. */
-  tint?: string
+  /** A head that hides the base's hair layers. */
+  hidesHairFront?: boolean
+  hidesHairBack?: boolean
+  /** Whether this layer falls inside the 160×160 avatar crop the portrait is cut from. */
+  fitsAvatarCrop: boolean
 }
 
 /** `apps/normal-server/src/inventory/items.ts` — the catalogue row, verbatim. */
@@ -77,11 +85,30 @@ export interface ItemDto {
   rarity: Rarity
   /** An i18n key of the form `items.<id>`, resolved in the `normal` namespace. */
   nameKey: string
-  /** `<slot>/<id>` — the manifest node *prefix*; the geometry itself is named by `variants`. */
+  /** `<slot>/<id>` — a stable identifier for the item; the drawable file itself is `asset.file`. */
   assetKey: string
   isDefault: boolean
-  /** One entry per body this item has been modelled for. Absent for `title` and `badge`. */
-  variants?: { [body in Body]?: AssetRefDto }
+  /** The PNG layer to draw. Present for `DRAWN_SLOTS`, absent for `title` and `badge`. */
+  asset?: AssetRefDto
+}
+
+/** The rig every chibi is drawn on (design §5.1) — `apps/normal-server/src/inventory/bases.ts`'s
+ * `BaseDef`, verbatim. */
+export interface BaseDto {
+  id: string
+  nameKey: string
+  layers: { hairBack: string; body: string; hairFront: string }
+  /** One face per expression (`neutral`, `happy`, `sad`, `surprised`, `closed`, `sleep`). */
+  faces: Record<string, string>
+}
+
+/** `GET /api/catalog/avatar`: the frame, crop and both bases — public, like `/api/catalog/items`, because a
+ * base is chosen rather than owned and the wardrobe needs it before it needs a session. */
+export interface AvatarCatalogDto {
+  frame: { w: number; h: number }
+  crop: { x: number; y: number; size: number }
+  bases: BaseDto[]
+  manifestVersion: number
 }
 
 export interface AchievementRewardDto {
@@ -107,28 +134,21 @@ export interface AuthMeDto {
 }
 
 /**
- * One player's figure — `AvatarConfigV2` on the server, and the portrait cache's whole key.
+ * One player's figure — `AvatarConfigV3` on the server, and the avatar cache's whole key (design §5.1).
  *
  * `v` is stored and sent so a future shape can tell itself apart from this one; the server refuses a
- * `PUT` that does not carry it. Everything the renderer needs is here and nothing else is: a body, three
- * colours the player chose, and one item id per slot.
+ * `PUT` that does not carry it. A figure is a fixed `base` plus whatever is equipped: `outfit` is the
+ * one slot that must be filled, everything else is an optional PNG layer or a word.
  */
 export interface AvatarConfigDto {
-  v: 2
-  body: Body
-  /** One of the server's eight `SKIN_TONES`, `#rrggbb`. */
-  skin: string
-  /** One of the server's six `EYE_COLORS`, `#rrggbb`. */
-  eyes: string
-  /** Any `#rrggbb`, applied to the `hair` material rather than naming an item. */
-  hairColor: string
-  hair: string
-  top: string
-  bottom: string
-  shoes: string
-  hat?: string
-  accessory?: string
-  jewelry?: string
+  v: 3
+  /** Chosen, not owned. */
+  base: BaseId
+  outfit: string
+  head?: string
+  face?: string
+  aura?: string
+  frame?: string
   title?: string
   badge?: string
 }
@@ -288,6 +308,14 @@ export interface PlayerAvatarDto {
   avatar: AvatarConfigDto
 }
 
+/** One saved outfit slot (design §5.3) — `apps/normal-server/src/inventory/outfits-service.ts`'s row. */
+export interface OutfitDto {
+  slot: number
+  name: string
+  config: AvatarConfigDto
+  updatedAt: number
+}
+
 /** `GET /api/me/achievements`: definition and this player's progress in one row. */
 export interface AchievementProgressDto {
   id: string
@@ -336,6 +364,8 @@ export interface NormalApi {
   config(): Promise<ConfigDto>
   catalogItems(): Promise<{ items: ItemDto[] }>
   catalogAchievements(): Promise<{ achievements: AchievementDefDto[] }>
+  /** The rig every chibi is drawn on: the frame, the avatar crop and both bases (design §5.1). */
+  avatarCatalog(): Promise<AvatarCatalogDto>
 
   register(input: { email: string; password: string; displayName: string }): Promise<AuthMeDto>
   login(input: { email: string; password: string }): Promise<AuthMeDto>
@@ -366,10 +396,18 @@ export interface NormalApi {
   daily(): Promise<DailyStatusDto>
   claimDaily(): Promise<DailyClaimDto>
   relief(): Promise<ReliefDto>
+
+  /** The five saved-outfit slots (design §5.3); a `null` entry is an empty slot. */
+  outfits(): Promise<{ outfits: (OutfitDto | null)[] }>
+  /** Saves the current draft into one slot, replacing whatever was there. */
+  saveOutfit(slot: number, name: string, config: AvatarConfigDto): Promise<OutfitDto>
+  deleteOutfit(slot: number): Promise<{ removed: boolean }>
+  /** Wears a saved outfit — the server's answer is the config now equipped, mirroring `setAvatar`'s reply. */
+  applyOutfit(slot: number): Promise<{ config: AvatarConfigDto }>
 }
 
 interface Call {
-  method: 'GET' | 'POST' | 'PATCH' | 'PUT'
+  method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
   path: string
   body?: unknown
   /** Set only where a stale answer would be wrong rather than merely old; see `playerAvatar`. */
@@ -442,6 +480,7 @@ export function createApi(fetchImpl?: typeof fetch, base = ''): NormalApi {
     config: () => call<ConfigDto>({ method: 'GET', path: '/api/config' }),
     catalogItems: () => call<{ items: ItemDto[] }>({ method: 'GET', path: '/api/catalog/items' }),
     catalogAchievements: () => call<{ achievements: AchievementDefDto[] }>({ method: 'GET', path: '/api/catalog/achievements' }),
+    avatarCatalog: () => call<AvatarCatalogDto>({ method: 'GET', path: '/api/catalog/avatar' }),
 
     register: (input) => call<AuthMeDto>({ method: 'POST', path: '/api/auth/register', body: input }),
     login: (input) => call<AuthMeDto>({ method: 'POST', path: '/api/auth/login', body: input }),
@@ -473,5 +512,11 @@ export function createApi(fetchImpl?: typeof fetch, base = ''): NormalApi {
     daily: () => call<DailyStatusDto>({ method: 'GET', path: '/api/rewards/daily' }),
     claimDaily: () => call<DailyClaimDto>({ method: 'POST', path: '/api/rewards/daily/claim' }),
     relief: () => call<ReliefDto>({ method: 'POST', path: '/api/economy/relief' }),
+
+    outfits: () => call<{ outfits: (OutfitDto | null)[] }>({ method: 'GET', path: '/api/me/outfits' }),
+    saveOutfit: (slot, name, config) =>
+      call<OutfitDto>({ method: 'PUT', path: `/api/me/outfits/${slot}`, body: { name, config } }),
+    deleteOutfit: (slot) => call<{ removed: boolean }>({ method: 'DELETE', path: `/api/me/outfits/${slot}` }),
+    applyOutfit: (slot) => call<{ config: AvatarConfigDto }>({ method: 'POST', path: `/api/me/outfits/${slot}/apply` }),
   }
 }

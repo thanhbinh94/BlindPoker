@@ -1,22 +1,28 @@
 import { Badge, Button, Panel, type Language } from '@bp/ui-kit'
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { GEOMETRIC_SLOTS, type AvatarConfigDto, type GeometricSlot, type InventoryDto, type NormalApi, type OwnedItemDto } from '../api.js'
-import { PartPortrait } from '../avatar3d/Portrait.js'
+import type { AvatarCatalogDto, AvatarConfigDto, ItemDto, ItemSlot, NormalApi, OwnedItemDto } from '../api.js'
 import { itemName } from '../catalog-i18n.js'
 import { RARITY_TONE, SLOT_ORDER } from './catalog.js'
 import { formatDay } from './format.js'
 import s from './normal.module.css'
 import { useAsync } from './useAsync.js'
+import { ItemPreview } from './wardrobe/ItemTab.js'
 
 /** How an item was acquired, as the server records it. Anything else still gets words rather than a raw key. */
 const SOURCES = new Set(['default', 'daily', 'achievement'])
 
-/** `title` and `badge` are words rather than geometry, so there is no figure to draw for them. */
-const isGeometric = (slot: string): slot is GeometricSlot => (GEOMETRIC_SLOTS as readonly string[]).includes(slot)
+interface InventoryData {
+  items: OwnedItemDto[]
+  avatar: AvatarConfigDto
+  catalog: ItemDto[]
+  avatarCatalog: AvatarCatalogDto
+}
 
 /** Which slot of the equipped config an item would sit in, so "equipped" can be read off the avatar. */
-export function isEquipped(item: OwnedItemDto, avatar: AvatarConfigDto): boolean {
-  return item.slot !== null && avatar[item.slot] === item.itemId
+export function isEquipped(itemId: string, slot: ItemSlot | null, avatar: AvatarConfigDto): boolean {
+  if (slot === null) return false
+  return (avatar as unknown as Record<ItemSlot, string | undefined>)[slot] === itemId
 }
 
 export interface InventoryScreenProps {
@@ -31,18 +37,31 @@ export interface InventoryScreenProps {
  * "equipped" needs no second request: the equipped config arrives in the same body as the items, so the mark
  * can never disagree with what the avatar is actually wearing.
  *
- * Every tile is a **portrait of the player wearing that item** rather than a picture of the item on its own.
- * That is more expensive (each one is a render) and it is the right trade: a garment's colour and cut only
- * mean anything on the body, hair and skin tone that will actually wear them. The cost is paid lazily — a
- * tile below the fold does not render until it comes near the viewport — and each distinct configuration is
- * drawn once and then cached by hash, so scrolling back up costs nothing.
+ * Every drawn tile is an `ItemPreview` — the wardrobe's own picture, in read-only chrome here — of the
+ * player wearing that item on top of their actual equipped configuration. `title` and `badge` have no
+ * layer at all, so their tiles carry words and nothing else, the same as they always have.
  */
 export function InventoryScreen({ api, lang }: InventoryScreenProps) {
   const { t } = useTranslation('normal')
-  const wardrobe = useAsync<InventoryDto>(() => api.inventory())
-  const inventory = wardrobe.data
+  const wardrobe = useAsync<InventoryData>(async () => {
+    const [inventory, catalogAnswer, avatarCatalog] = await Promise.all([
+      api.inventory(),
+      api.catalogItems().then(
+        (answer) => answer.items,
+        () => [] as ItemDto[],
+      ),
+      api.avatarCatalog().catch(
+        () => ({ frame: { w: 0, h: 0 }, crop: { x: 0, y: 0, size: 0 }, bases: [], manifestVersion: 0 }) as AvatarCatalogDto,
+      ),
+    ])
+    return { items: inventory.items, avatar: inventory.avatar, catalog: catalogAnswer, avatarCatalog }
+  })
+  const data = wardrobe.data
 
-  if (wardrobe.loading && inventory === null) {
+  const items = useMemo(() => new Map((data?.catalog ?? []).map((item) => [item.id, item])), [data])
+  const bases = useMemo(() => new Map((data?.avatarCatalog.bases ?? []).map((base) => [base.id, base])), [data])
+
+  if (wardrobe.loading && data === null) {
     return (
       <main className={s.page}>
         <p className={s.footnote} role="status">
@@ -52,7 +71,7 @@ export function InventoryScreen({ api, lang }: InventoryScreenProps) {
     )
   }
 
-  if (inventory === null) {
+  if (data === null) {
     return (
       <main className={s.page}>
         <p className={s.alert} role="alert">
@@ -67,7 +86,7 @@ export function InventoryScreen({ api, lang }: InventoryScreenProps) {
     )
   }
 
-  const avatar = inventory.avatar
+  const avatar = data.avatar
 
   return (
     <main className={s.page}>
@@ -76,10 +95,10 @@ export function InventoryScreen({ api, lang }: InventoryScreenProps) {
         <span className={s.rule} aria-hidden="true" />
       </div>
       <p className={s.footnote}>{t('inventory.lead')}</p>
-      <p className={s.footnote}>{t('inventory.summary', { owned: inventory.items.length })}</p>
+      <p className={s.footnote}>{t('inventory.summary', { owned: data.items.length })}</p>
 
       {SLOT_ORDER.map((slot) => {
-        const owned = inventory.items.filter((item) => item.slot === slot)
+        const owned = data.items.filter((item) => item.slot === slot)
         return (
           <Panel title={t(`inventory.slot.${slot}`)} key={slot}>
             {owned.length === 0 ? (
@@ -88,13 +107,15 @@ export function InventoryScreen({ api, lang }: InventoryScreenProps) {
               <ul className={s.grid}>
                 {owned.map((item) => {
                   const source = SOURCES.has(item.source) ? item.source : 'other'
+                  const def = items.get(item.itemId)
+                  const equipped = isEquipped(item.itemId, item.slot, avatar)
                   return (
-                    <li className={s.card} key={item.itemId} data-equipped={String(isEquipped(item, avatar))}>
-                      {isGeometric(slot) ? <PartPortrait className={s.thumb} config={avatar} slot={slot} itemId={item.itemId} /> : null}
+                    <li className={s.card} key={item.itemId} data-equipped={String(equipped)}>
+                      {def === undefined ? null : <ItemPreview item={def} config={avatar} items={items} bases={bases} />}
                       <span className={s.cardName}>{itemName(item.itemId, t)}</span>
                       <span className={s.cardMarks}>
                         {item.rarity === null ? null : <Badge tone={RARITY_TONE[item.rarity]}>{t(`inventory.rarity.${item.rarity}`)}</Badge>}
-                        {isEquipped(item, avatar) ? <Badge tone="gold">{t('inventory.equipped')}</Badge> : null}
+                        {equipped ? <Badge tone="gold">{t('inventory.equipped')}</Badge> : null}
                       </span>
                       <span className={s.rowMeta}>{t(`inventory.source.${source}`)}</span>
                       <time className={s.rowMeta} dateTime={new Date(item.acquiredAt).toISOString()}>

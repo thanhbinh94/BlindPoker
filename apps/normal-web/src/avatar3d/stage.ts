@@ -10,7 +10,7 @@ import {
   type Camera,
   type Texture,
 } from 'three'
-import type { AvatarConfigDto } from '../api.js'
+import type { AvatarConfigDto } from './legacy-avatar.js'
 import { assemble as assembleConfig, disposeAssembled, type Assembled } from './assemble.js'
 import { assetLoader, type NodeLoader } from './assets.js'
 import { applyEnvironment } from './environment.js'

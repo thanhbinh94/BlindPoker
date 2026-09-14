@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AvatarConfigDto } from '../api.js'
+import type { AvatarConfigDto } from './legacy-avatar.js'
 import { avatarPayload, frameForSlot, portraitRelevant, withSlot } from './config.js'
 import { hashConfig } from './hash.js'
 import { nodeKeysOf } from './assemble.js'

@@ -1,4 +1,7 @@
 import {
+  AvatarAssets,
+  Chibi,
+  defaultChibi,
   GameClientProvider,
   LobbyScreen,
   RoomScreen,
@@ -9,10 +12,9 @@ import {
 } from '@bp/ui-kit'
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { NormalApi } from './api.js'
-import { Portrait } from './avatar3d/Portrait.js'
-import { resetPortraitMemory } from './avatar3d/portrait-cache.js'
+import type { AvatarCatalogDto, ItemDto, NormalApi } from './api.js'
 import a from './avatar/avatar.module.css'
+import { chibiFromApi } from './avatar/chibi.js'
 import { resetAvatarCache, useAvatars } from './avatar/useAvatars.js'
 import { guardApi } from './guarded-api.js'
 import { mapNotifications } from './notifications.js'
@@ -20,10 +22,16 @@ import { useLanguagePref } from './prefs.js'
 import { AuthScreen, type AuthMode } from './screens/AuthScreen.js'
 import { Shell } from './screens/Shell.js'
 import { useDailyNudge } from './daily-nudge.js'
-import { makeAvatarFor, makeCaptionFor } from './screens/TableChrome.js'
+import { makeCaptionFor, makeChibiFor } from './screens/TableChrome.js'
 import s from './screens/normal.module.css'
 import { clearLastEmail } from './session.js'
 import { useSessionGate } from './session-gate.js'
+import { useAsync } from './screens/useAsync.js'
+
+/** `/avatar/<file>@1x.png` / `@2x.png` — the PNG layers this build served alongside the bundle. */
+const AVATAR_ASSET_BASE = '/avatar/'
+
+const NO_ITEMS: ItemDto[] = []
 
 /**
  * `apps/normal-web/package.json`'s version, substituted at build time; the settings screen prints it so a bug
@@ -36,15 +44,13 @@ export const NORMAL_VERSION = typeof __NORMAL_VERSION__ === 'string' ? __NORMAL_
  *
  * They are the right things to split and the lobby is not: a player reaches the lobby on every visit, these
  * on some visits and several of them never. Between them they carry the stats tables, the ledger, the
- * month's calendar, the achievement list and the wardrobe's thumbnail renderer — none of which the sign-in
- * card or the lobby has any use for. (`Portrait` is not among them: the lobby bar and the seat plates draw
- * faces, so it belongs in the entry chunk and ships there — three.js does not, and reaches the browser
- * only through `usePortrait`'s own dynamic import.) Splitting these six
- * keeps the first paint small on the phone connection this game is mostly played on, and each screen then
- * costs one request, once.
+ * month's calendar and the achievement list — none of which the sign-in card or the lobby has any use for.
+ * (`Chibi` is not among them: the lobby bar and the seat plates draw faces, so it belongs in the entry
+ * chunk and ships there.) Splitting these six keeps the first paint small on the phone connection this game
+ * is mostly played on, and each screen then costs one request, once.
  */
 const ProfileScreen = lazy(async () => ({ default: (await import('./screens/ProfileScreen.js')).ProfileScreen }))
-const WardrobeScreen = lazy(async () => ({ default: (await import('./screens/WardrobeScreen.js')).WardrobeScreen }))
+const WardrobeScreen = lazy(async () => ({ default: (await import('./screens/wardrobe/WardrobeScreen.js')).WardrobeScreen }))
 const InventoryScreen = lazy(async () => ({ default: (await import('./screens/InventoryScreen.js')).InventoryScreen }))
 const AchievementsScreen = lazy(async () => ({ default: (await import('./screens/AchievementsScreen.js')).AchievementsScreen }))
 const DailyScreen = lazy(async () => ({ default: (await import('./screens/DailyScreen.js')).DailyScreen }))
@@ -93,14 +99,12 @@ export function App({ api, socketFactory }: AppProps) {
   // Everything a session leaves behind, dropped in one place — however the session ended (a sign-out, an
   // expiry, a 401 from a screen). The socket first, then the state it filled: the reducer outlives the
   // session, so without the reset the next player on this machine is greeted with the previous one's name
-  // and points. The avatar cache is module-level for the same reason and forgets the same way, and so are
-  // the rendered portraits — the face of the account that just signed out is exactly what should not sit
-  // behind the sign-in card, and every one of its object URLs is a blob held open until it is revoked.
+  // and points. The avatar cache is module-level for the same reason and forgets the same way — the face of
+  // the account that just signed out is exactly what should not sit behind the sign-in card.
   const endSession = useCallback(() => {
     clientRef.current.disconnect()
     clientRef.current.reset()
     resetAvatarCache()
-    resetPortraitMemory()
   }, [])
   const gate = useSessionGate({ api, socketStatus: client.state.status, onEnded: endSession })
 
@@ -157,9 +161,24 @@ export function App({ api, socketFactory }: AppProps) {
     return [myId, ...ids]
   }, [gate.signedIn, myId, seatedIds])
   const { avatars } = useAvatars(guarded, watched)
-  const avatarFor = useMemo(() => makeAvatarFor(avatars), [avatars])
   const captionFor = useMemo(() => makeCaptionFor(avatars, t), [avatars, t])
   const myAvatar = myId === null ? null : (avatars.get(myId)?.avatar ?? null)
+
+  // The rig every chibi is drawn on: fetched once, for the app's whole lifetime, from the two public
+  // catalogue routes — a chibi is never anyone's secret, so this needs no session and never re-fetches on
+  // sign-in or sign-out. A load that has not landed yet (or failed) answers empty maps, and every chibi
+  // built from them is `null` until it has: the table and the bar fall back to the same initial or default
+  // chibi they would show for an id they have not heard back about yet.
+  const catalog = useAsync<[AvatarCatalogDto, ItemDto[]]>(
+    useCallback(
+      () => Promise.all([api.avatarCatalog(), api.catalogItems().then((answer) => answer.items)]),
+      [api],
+    ),
+  )
+  const items = useMemo(() => new Map((catalog.data?.[1] ?? NO_ITEMS).map((item) => [item.id, item])), [catalog.data])
+  const bases = useMemo(() => new Map((catalog.data?.[0].bases ?? []).map((base) => [base.id, base])), [catalog.data])
+  const chibiFor = useMemo(() => makeChibiFor(avatars, items, bases), [avatars, items, bases])
+  const myChibi = useMemo(() => (myAvatar === null ? null : chibiFromApi(myAvatar, items, bases)), [myAvatar, items, bases])
 
   // `ACHIEVEMENT_UNLOCKED` arrives naming an achievement *id*, and the kit's toast interpolates it verbatim
   // because achievement names live in this app's namespace, not the kit's. The lobby and the room each render
@@ -221,84 +240,86 @@ export function App({ api, socketFactory }: AppProps) {
   const { state } = client
 
   return (
-    <GameClientProvider client={viewClient}>
-      <Shell
-        path={path}
-        bar={!inRoom}
-        identity={inLobby ? null : { balance, status: state.status }}
-        dailyReady={dailyReady}
-        lang={lang}
-        onLanguage={setLang}
-      >
-        {inRoom ? (
-          <RoomScreen client={viewClient} lang={lang} onLeft={() => navigate('/lobby')} avatarFor={avatarFor} captionFor={captionFor} />
-        ) : ACCOUNT_ROUTES.includes(path) ? (
-          <>
-          {/* One fallback for all six: the chunk is a single request on a page the rail has already drawn, so
-              what the player waits for is a line under the rail, not a blank screen with a spinner in the middle. */}
-          <Suspense
-            fallback={
-              <p className={s.booting} role="status">
-                {t('screens.loading')}
-              </p>
-            }
-          >
-            {path === '/profile' ? (
-              <ProfileScreen api={guarded} lang={lang} balance={balance} onRenamed={gate.renamed} />
-            ) : path === '/avatar' ? (
-              <WardrobeScreen api={guarded} playerId={myId} />
-            ) : path === '/inventory' ? (
-              <InventoryScreen api={guarded} lang={lang} />
-            ) : path === '/daily' ? (
-              <DailyScreen api={guarded} lang={lang} />
-            ) : path === '/settings' ? (
-              <SettingsScreen api={guarded} lang={lang} onLanguage={setLang} onSignedOut={onSignedOut} version={NORMAL_VERSION} />
-            ) : (
-              <AchievementsScreen api={guarded} lang={lang} />
-            )}
-          </Suspense>
-          {/* The lobby and the room bring their own stack; these six have none, and `/daily` is precisely
-              where the login-day achievements unlock. Without this the slip would sit undelivered in the state
-              until the player wandered back to the lobby, and then fire there, out of context. It sits outside
-              the `Suspense` so a frame that lands while the chunk is still in flight is not swallowed. */}
-          <Toasts
-            error={state.lastError}
-            notifications={notifications}
-            onClearError={viewClient.clearError}
-            onDismiss={viewClient.dismissNotification}
-            lang={lang}
-          />
-          </>
-        ) : (
-          <LobbyScreen
-            client={viewClient}
-            lang={lang}
-            onLanguage={setLang}
-            onEnteredRoom={() => navigate('/room')}
-            // The lobby hides the shell's rail behind the kit's own `PlayerBar`, so the two routes a player
-            // reaches most from here — today's reward and their own profile — are re-hung on that bar, with
-            // the face they built as the way into it.
-            extraNav={
-              <span className={a.lobbyNav}>
-                <a className={a.lobbyLink} href="#/daily">
-                  {t('nav.daily')}
-                  {dailyReady ? (
-                    <span className={a.navDot}>
-                      <span className="visually-hidden">{t('nav.dailyReady')}</span>
-                    </span>
-                  ) : null}
-                </a>
-                <a className={a.lobbyLink} href="#/profile">
-                  {t('nav.profile')}
-                </a>
-                <a href="#/avatar" aria-label={t('avatar.mine')}>
-                  <Portrait config={myAvatar} name={gate.me?.displayName} size="sm" className={a.lobbyAvatar} />
-                </a>
-              </span>
-            }
-          />
-        )}
-      </Shell>
-    </GameClientProvider>
+    <AvatarAssets base={AVATAR_ASSET_BASE}>
+      <GameClientProvider client={viewClient}>
+        <Shell
+          path={path}
+          bar={!inRoom}
+          identity={inLobby ? null : { balance, status: state.status }}
+          dailyReady={dailyReady}
+          lang={lang}
+          onLanguage={setLang}
+        >
+          {inRoom ? (
+            <RoomScreen client={viewClient} lang={lang} onLeft={() => navigate('/lobby')} chibiFor={chibiFor} captionFor={captionFor} />
+          ) : ACCOUNT_ROUTES.includes(path) ? (
+            <>
+              {/* One fallback for all six: the chunk is a single request on a page the rail has already drawn, so
+                  what the player waits for is a line under the rail, not a blank screen with a spinner in the middle. */}
+              <Suspense
+                fallback={
+                  <p className={s.booting} role="status">
+                    {t('screens.loading')}
+                  </p>
+                }
+              >
+                {path === '/profile' ? (
+                  <ProfileScreen api={guarded} lang={lang} balance={balance} onRenamed={gate.renamed} />
+                ) : path === '/avatar' ? (
+                  <WardrobeScreen api={guarded} playerId={myId} />
+                ) : path === '/inventory' ? (
+                  <InventoryScreen api={guarded} lang={lang} />
+                ) : path === '/daily' ? (
+                  <DailyScreen api={guarded} lang={lang} />
+                ) : path === '/settings' ? (
+                  <SettingsScreen api={guarded} lang={lang} onLanguage={setLang} onSignedOut={onSignedOut} version={NORMAL_VERSION} />
+                ) : (
+                  <AchievementsScreen api={guarded} lang={lang} />
+                )}
+              </Suspense>
+              {/* The lobby and the room bring their own stack; these six have none, and `/daily` is precisely
+                  where the login-day achievements unlock. Without this the slip would sit undelivered in the state
+                  until the player wandered back to the lobby, and then fire there, out of context. It sits outside
+                  the `Suspense` so a frame that lands while the chunk is still in flight is not swallowed. */}
+              <Toasts
+                error={state.lastError}
+                notifications={notifications}
+                onClearError={viewClient.clearError}
+                onDismiss={viewClient.dismissNotification}
+                lang={lang}
+              />
+            </>
+          ) : (
+            <LobbyScreen
+              client={viewClient}
+              lang={lang}
+              onLanguage={setLang}
+              onEnteredRoom={() => navigate('/room')}
+              // The lobby hides the shell's rail behind the kit's own `PlayerBar`, so the two routes a player
+              // reaches most from here — today's reward and their own profile — are re-hung on that bar, with
+              // the face they built as the way into it.
+              extraNav={
+                <span className={a.lobbyNav}>
+                  <a className={a.lobbyLink} href="#/daily">
+                    {t('nav.daily')}
+                    {dailyReady ? (
+                      <span className={a.navDot}>
+                        <span className="visually-hidden">{t('nav.dailyReady')}</span>
+                      </span>
+                    ) : null}
+                  </a>
+                  <a className={a.lobbyLink} href="#/profile">
+                    {t('nav.profile')}
+                  </a>
+                  <a href="#/avatar" aria-label={t('avatar.mine')}>
+                    <Chibi subject={myChibi ?? defaultChibi(gate.me?.displayName ?? '')} frame="head" size={32} className={a.lobbyAvatar} />
+                  </a>
+                </span>
+              }
+            />
+          )}
+        </Shell>
+      </GameClientProvider>
+    </AvatarAssets>
   )
 }

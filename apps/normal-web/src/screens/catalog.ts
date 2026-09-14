@@ -1,34 +1,40 @@
 import type { BadgeTone } from '@bp/ui-kit'
-import { GEOMETRIC_SLOTS, SLOTS, type GeometricSlot, type ItemSlot, type Rarity } from '../api.js'
+import type { TFunction } from 'i18next'
+import type { AchievementDefDto, ItemDto, ItemSlot, Rarity } from '../api.js'
+import { achievementName } from '../catalog-i18n.js'
 
 /**
  * The catalogue vocabulary two lazily-loaded screens share.
  *
  * It is its own module rather than an export off either of them precisely *because* they are separate
- * chunks: an import across the two would drag the whole wardrobe into the inventory route's download for the
- * sake of a three-entry table.
+ * chunks: an import across the two would drag the whole wardrobe into the inventory route's download for
+ * the sake of a three-entry table.
  */
 
 /** Rarity, as the kit paints it: muted → teal → gold, so rarer reads as warmer. */
 export const RARITY_TONE: Record<Rarity, BadgeTone> = { common: 'muted', rare: 'teal', epic: 'gold' }
 
 /**
- * Every slot, in the order a player thinks about them: what is worn first, the words last.
+ * Every slot, in the order the inventory offers its panels: what is drawn first, the words last.
  *
- * The order is `api.ts`'s, which is the assembler's, which is the manifest's — one sequence, so the
- * wardrobe's groups, the inventory's panels and the scene graph cannot drift into three orders.
+ * `base` is not here — it is chosen, not owned, and has no inventory row of its own.
  */
-export const SLOT_ORDER: ItemSlot[] = SLOTS
+export const SLOT_ORDER: ItemSlot[] = ['head', 'face', 'outfit', 'aura', 'frame', 'title', 'badge']
+
+/** The slots a daily-reward draw may land on (design §5.2) — mirrors the server's `DAILY_DRAW_SLOTS`. */
+const DAILY_DRAW_SLOTS = new Set<ItemSlot>(['head', 'face', 'aura', 'frame'])
 
 /**
- * The slots the wardrobe offers as tiles: everything with geometry, in the order it is worn.
+ * Why a locked tile is locked, in one line: how a player would come to own it.
  *
- * Hair leads because it is the piece that is never absent and the one the colour box beside it dyes;
- * the three optional slots (hat, accessory, jewelry) come last, which is also where their "none" tile
- * belongs. It is `GEOMETRIC_SLOTS` unchanged, and named here so the screen reads as a list of groups
- * rather than as an import from `api.ts` that happens to be in the right order.
+ * An achievement that rewards this exact item wins over the generic line, because it is the more useful
+ * answer — "win a royal flush" beats "comes from a daily draw" when both happen to be true. Everything
+ * that is never handed out at random (an outfit, a title, a badge) falls back to `unavailable` rather
+ * than naming a source that does not exist.
  */
-export const WARDROBE_SLOTS: readonly GeometricSlot[] = GEOMETRIC_SLOTS
-
-/** The two slots that are words rather than geometry, and are therefore chosen from a menu. */
-export const WORD_SLOTS = ['title', 'badge'] as const
+export function hintFor(item: ItemDto, achievements: readonly AchievementDefDto[], t: TFunction<'normal'>): string {
+  const rewarding = achievements.find((def) => def.reward.itemId === item.id)
+  if (rewarding !== undefined) return achievementName(rewarding.id, t)
+  if (DAILY_DRAW_SLOTS.has(item.slot)) return t(`wardrobe.hint.daily.${item.rarity}`)
+  return t('wardrobe.hint.unavailable')
+}

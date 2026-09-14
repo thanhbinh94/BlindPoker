@@ -1,5 +1,5 @@
 import { Euler, Group, Mesh, Object3D, Quaternion, Skeleton, SkinnedMesh, type Material, type MeshStandardMaterial } from 'three'
-import { GEOMETRIC_SLOTS, type AvatarConfigDto, type Body } from '../api.js'
+import { GEOMETRIC_SLOTS, type AvatarConfigDto, type Body } from './legacy-avatar.js'
 import type { AvatarManifest, ManifestBounds, NodeLoader, Triple } from './assets.js'
 
 /**

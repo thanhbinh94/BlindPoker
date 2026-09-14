@@ -1,5 +1,5 @@
 import type { TFunction } from 'i18next'
-import { GEOMETRIC_SLOTS, type AvatarConfigDto } from '../api.js'
+import { GEOMETRIC_SLOTS, type AvatarConfigDto } from './legacy-avatar.js'
 import { itemName } from '../catalog-i18n.js'
 import { EYE_COLORS, SKIN_TONES } from './config.js'
 

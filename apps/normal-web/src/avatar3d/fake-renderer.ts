@@ -1,4 +1,4 @@
-import type { AvatarConfigDto } from '../api.js'
+import type { AvatarConfigDto } from './legacy-avatar.js'
 import { abortError } from './abort.js'
 import type { PortraitFrame } from './framing.js'
 import { hashConfig } from './hash.js'

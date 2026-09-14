@@ -26,15 +26,9 @@ const ok = (body: unknown = {}): Mock => vi.fn().mockResolvedValue(jsonResponse(
 const apiOf = (mock: Mock, base?: string) => createApi(mock as unknown as typeof fetch, base)
 
 const AVATAR: AvatarConfigDto = {
-  v: 2,
-  body: 'male',
-  skin: '#e0ac81',
-  eyes: '#3b2415',
-  hairColor: '#1b1f2e',
-  hair: 'hair_short',
-  top: 'top_tee',
-  bottom: 'bottom_jeans',
-  shoes: 'shoes_sneakers',
+  v: 3,
+  base: 'f01',
+  outfit: 'outfit_casual01',
   title: 'title_rookie',
 }
 
@@ -43,12 +37,14 @@ describe('createApi — reads', () => {
     ['config', '/api/config'],
     ['catalogItems', '/api/catalog/items'],
     ['catalogAchievements', '/api/catalog/achievements'],
+    ['avatarCatalog', '/api/catalog/avatar'],
     ['authMe', '/api/auth/me'],
     ['me', '/api/me'],
     ['stats', '/api/me/stats'],
     ['inventory', '/api/me/inventory'],
     ['achievements', '/api/me/achievements'],
     ['daily', '/api/rewards/daily'],
+    ['outfits', '/api/me/outfits'],
   ])('GETs %s from %s with the session cookie and no CSRF header', async (method, path) => {
     const fetchImpl = ok({})
     await (apiOf(fetchImpl) as unknown as Record<string, () => Promise<unknown>>)[method]!()
@@ -177,6 +173,35 @@ describe('createApi — writes', () => {
     expect(init(fetchImpl).body).toBeUndefined()
     expect(headers(fetchImpl)['x-requested-with']).toBe(REQUESTED_WITH)
     expect(init(fetchImpl).credentials).toBe('same-origin')
+  })
+
+  it('PUTs a name and a config into one outfit slot', async () => {
+    const fetchImpl = ok({ slot: 2, name: 'Bộ 2', config: AVATAR, updatedAt: 0 })
+    await apiOf(fetchImpl).saveOutfit(2, 'Bộ 2', AVATAR)
+
+    expect(url(fetchImpl)).toBe('/api/me/outfits/2')
+    expect(init(fetchImpl).method).toBe('PUT')
+    expect(init(fetchImpl).body).toBe(JSON.stringify({ name: 'Bộ 2', config: AVATAR }))
+    expect(headers(fetchImpl)['x-requested-with']).toBe(REQUESTED_WITH)
+  })
+
+  it('DELETEs an outfit slot', async () => {
+    const fetchImpl = ok({ removed: true })
+    await apiOf(fetchImpl).deleteOutfit(3)
+
+    expect(url(fetchImpl)).toBe('/api/me/outfits/3')
+    expect(init(fetchImpl).method).toBe('DELETE')
+    expect(headers(fetchImpl)['x-requested-with']).toBe(REQUESTED_WITH)
+  })
+
+  it('POSTs to apply a saved outfit slot', async () => {
+    const fetchImpl = ok({ config: AVATAR })
+    await apiOf(fetchImpl).applyOutfit(1)
+
+    expect(url(fetchImpl)).toBe('/api/me/outfits/1/apply')
+    expect(init(fetchImpl).method).toBe('POST')
+    expect(init(fetchImpl).body).toBeUndefined()
+    expect(headers(fetchImpl)['x-requested-with']).toBe(REQUESTED_WITH)
   })
 })
 

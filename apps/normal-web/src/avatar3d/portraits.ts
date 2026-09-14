@@ -1,5 +1,5 @@
 import { AmbientLight, DirectionalLight, Object3D, PerspectiveCamera, Scene, WebGLRenderer } from 'three'
-import type { AvatarConfigDto } from '../api.js'
+import type { AvatarConfigDto } from './legacy-avatar.js'
 import { abortError } from './abort.js'
 import { assemble, disposeAssembled, type Assembled } from './assemble.js'
 import { assetLoader } from './assets.js'

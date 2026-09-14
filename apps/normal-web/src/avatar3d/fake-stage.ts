@@ -1,4 +1,4 @@
-import type { AvatarConfigDto } from '../api.js'
+import type { AvatarConfigDto } from './legacy-avatar.js'
 import type { StageFactory } from './AvatarStage.js'
 import { hashConfig } from './hash.js'
 import type { Stage } from './stage.js'

@@ -227,34 +227,23 @@
       "other": "Khác"
     },
     "slot": {
-      "hair": "Tóc",
-      "top": "Áo",
-      "bottom": "Quần / váy",
-      "shoes": "Giày",
-      "hat": "Mũ nón",
-      "accessory": "Phụ kiện",
-      "jewelry": "Trang sức",
+      "head": "Mũ",
+      "face": "Phụ kiện mặt",
+      "outfit": "Trang phục",
+      "aura": "Aura",
+      "frame": "Khung viền",
       "title": "Danh hiệu",
       "badge": "Huy hiệu"
     }
   },
   "avatar": {
     "mine": "Ảnh đại diện của bạn",
-    "none": "Bỏ trống",
-    "empty": "Bạn chưa có món nào cho ô này.",
-    "hairColor": "Màu tóc",
-    "hairPreset": "Màu có sẵn {{color}}",
-    "hairCustom": "Màu tự chọn",
-    "hairHint": "Sáu chữ số hex, ví dụ #2b2b2b.",
-    "hairInvalid": "Màu phải có dạng #2b2b2b",
-    "titleSlot": "Danh hiệu",
-    "badgeSlot": "Huy hiệu",
     "errors": {
       "NOT_OWNED": "Bạn chưa sở hữu một trong các món đó",
       "WRONG_CATEGORY": "Một món không thuộc ô bạn chọn",
-      "INVALID_COLOR": "Màu tóc không phải mã hex hợp lệ",
-      "MISSING_LAYER": "Tóc, áo, quần và giày đều cần một món",
-      "INVALID_ITEM": "Một món không có trong danh mục"
+      "MISSING_LAYER": "Trang phục cần một món",
+      "INVALID_ITEM": "Một món không có trong danh mục",
+      "INVALID_BASE": "Thân nền không hợp lệ"
     },
     "slot": {
       "hair": "Tóc",
@@ -267,26 +256,18 @@
     }
   },
   "wardrobe": {
-    "title": "Trang phục",
-    "lead": "Kéo nhân vật để xoay. Chỉ những món bạn đang sở hữu mới hiện ở đây.",
+    "title": "Tủ đồ",
+    "lead": "Chỉ những món bạn đang sở hữu mới có thể mặc.",
     "figure": "Nhân vật {{body}}, da {{skin}}, mắt {{eyes}}. Đang mặc: {{items}}.",
     "figurePiece": "{{slot}} {{item}}",
     "figureBare": "Nhân vật {{body}}, da {{skin}}, mắt {{eyes}}.",
     "rotateHint": "Kéo để xoay, hoặc dùng phím mũi tên trái/phải.",
     "figureRole": "nhân vật xoay được",
     "resetView": "Xoay lại mặt trước",
-    "body": "Thân hình",
-    "words": "Danh hiệu và huy hiệu",
-    "bodyName": {
-      "male": "Nam",
-      "female": "Nữ"
-    },
     "bodyWord": {
       "male": "nam",
       "female": "nữ"
     },
-    "bodyChanged": "Đổi thân hình nên các ô sau phải thay (sang món khác, hoặc để trống): {{slots}}.",
-    "skin": "Màu da",
     "skinTone": {
       "0": "Ngà",
       "1": "Sáng",
@@ -297,7 +278,6 @@
       "6": "Nâu đậm",
       "7": "Nâu sẫm"
     },
-    "eyes": "Màu mắt",
     "eyeColor": {
       "0": "Nâu sẫm",
       "1": "Nâu",
@@ -306,51 +286,81 @@
       "4": "Xanh dương",
       "5": "Xám"
     },
-    "swatch": "{{name}} ({{color}})",
-    "save": "Lưu trang phục",
-    "saved": "Đã lưu trang phục.",
-    "reset": "Hoàn tác",
-    "resetDone": "Đã trở về trang phục đã lưu.",
-    "dirty": "Bạn có thay đổi chưa lưu.",
-    "leaveTitle": "Rời trang phục?",
-    "leaveBody": "Thay đổi chưa lưu sẽ mất nếu bạn rời trang này.",
-    "leaveStay": "Ở lại",
-    "leaveGo": "Rời đi",
+    "tabs": {
+      "base": "Thân nền",
+      "head": "Mũ",
+      "face": "Mặt",
+      "outfit": "Trang phục",
+      "aura": "Aura",
+      "frame": "Khung",
+      "words": "Danh hiệu & Huy hiệu"
+    },
+    "expression": {
+      "legend": "Biểu cảm xem trước",
+      "neutral": "Bình thường",
+      "happy": "Vui",
+      "sad": "Buồn",
+      "surprised": "Ngạc nhiên",
+      "closed": "Nhắm mắt",
+      "sleep": "Ngủ"
+    },
+    "hint": {
+      "daily": {
+        "common": "Có thể rút từ điểm danh hằng ngày (thường)",
+        "rare": "Có thể rút từ điểm danh hằng ngày (hiếm)",
+        "epic": "Có thể rút từ điểm danh hằng ngày (cực hiếm)"
+      },
+      "unavailable": "Chưa có cách nhận món này"
+    },
+    "save": "Lưu tủ đồ",
+    "saved": "Đã lưu tủ đồ.",
     "close": "Đóng"
   },
+  "outfits": {
+    "title": "Thanh outfit",
+    "empty": "Trống",
+    "emptySlot": "Ô {{n}} còn trống",
+    "defaultName": "Bộ {{n}}",
+    "nameLabel": "Tên outfit",
+    "apply": "Áp dụng",
+    "saveHere": "Lưu vào đây",
+    "rename": "Đổi tên",
+    "delete": "Xoá",
+    "error": "Không thực hiện được thao tác, vui lòng thử lại"
+  },
   "items": {
-    "hair_none": "Đầu trọc",
-    "hair_short": "Tóc ngắn",
-    "hair_curly": "Tóc xoăn",
-    "hair_ponytail": "Tóc đuôi ngựa",
-    "hair_long": "Tóc dài",
-    "hair_bun": "Tóc búi",
-    "hair_mohawk": "Tóc mohawk",
-    "top_tee": "Áo thun",
-    "clothing_hoodie": "Áo hoodie",
-    "clothing_polo": "Áo polo",
-    "clothing_aodai": "Áo dài",
-    "clothing_suit": "Áo vest",
-    "clothing_kimono": "Kimono",
-    "jacket_champion": "Áo khoác quán quân",
-    "bottom_jeans": "Quần jean",
-    "bottom_shorts": "Quần đùi",
-    "bottom_trousers": "Quần âu",
-    "bottom_skirt": "Chân váy",
-    "shoes_sneakers": "Giày thể thao",
-    "shoes_sandals": "Dép quai hậu",
-    "shoes_boots": "Bốt da",
-    "accessory_headband": "Băng đô",
-    "accessory_conical_hat": "Nón lá",
-    "hat_crown": "Vương miện",
-    "accessory_glasses": "Kính cận",
-    "accessory_mask": "Khẩu trang",
-    "accessory_sunglasses": "Kính râm",
-    "jewelry_stud": "Khuyên tai nụ",
-    "jewelry_ring": "Nhẫn bạc",
-    "jewelry_chain": "Dây chuyền",
-    "jewelry_pendant": "Mặt dây chuyền",
-    "ring_royal": "Nhẫn hoàng gia",
+    "head_beanie01": "Mũ len",
+    "head_dealer_visor01": "Chắn nắng người chia bài",
+    "head_beret_red01": "Mũ nồi đỏ",
+    "head_conical_hat01": "Nón lá",
+    "head_party_cone01": "Mũ chóp tiệc",
+    "head_tophat01": "Mũ chóp quý ông",
+    "head_crown_gold01": "Vương miện vàng",
+    "head_hood_black01": "Mũ trùm đen",
+    "face_glasses_round_gold01": "Kính tròn gọng vàng",
+    "face_sunglasses01": "Kính râm",
+    "face_masquerade01": "Mặt nạ dạ hội",
+    "face_eyepatch01": "Bịt mắt cướp biển",
+    "outfit_casual01": "Bộ thường ngày",
+    "outfit_dealer01": "Bộ người chia bài",
+    "outfit_tet_red01": "Áo dài Tết đỏ",
+    "outfit_tuxedo01": "Bộ tuxedo",
+    "outfit_royal_robe01": "Long bào hoàng gia",
+    "outfit_champion01": "Bộ nhà vô địch",
+    "aura_water01": "Vòng nguyên tố nước",
+    "aura_wind01": "Vòng nguyên tố gió",
+    "aura_fire01": "Vòng nguyên tố lửa",
+    "aura_earth01": "Vòng nguyên tố đất",
+    "aura_sakura01": "Vòng hoa anh đào",
+    "aura_ice01": "Vòng băng giá",
+    "aura_lightning01": "Vòng sét",
+    "aura_gold_cards01": "Vòng bài vàng",
+    "frame_bronze": "Khung đồng",
+    "frame_silver": "Khung bạc",
+    "frame_monthly": "Khung tháng",
+    "frame_gold": "Khung vàng",
+    "frame_veteran": "Khung kỳ cựu",
+    "frame_founder": "Khung sáng lập",
     "title_rookie": "Tân binh",
     "title_regular": "Khách quen",
     "title_night_owl": "Cú đêm",
@@ -361,6 +371,10 @@
     "badge_gold": "Huy hiệu vàng",
     "badge_monthly": "Huy hiệu tháng",
     "badge_veteran": "Huy hiệu kỳ cựu"
+  },
+  "bases": {
+    "f01": "Thân nữ F01",
+    "m01": "Thân nam M01"
   },
   "achievements": {
     "ui": {
@@ -398,6 +412,10 @@
     "login_streak_28": {
       "name": "Chuỗi hai tám ngày",
       "desc": "Điểm danh liên tục 28 ngày."
+    },
+    "login_days_365": {
+      "name": "Một năm ghé bàn",
+      "desc": "Đăng nhập đủ 365 ngày."
     },
     "holdem_hands_10": {
       "name": "Mười ván Hold'em",
@@ -506,6 +524,10 @@
     "games_500": {
       "name": "Năm trăm ván trọn vẹn",
       "desc": "Chơi hết 500 ván từ đầu đến cuối."
+    },
+    "games_1000": {
+      "name": "Nghìn ván trọn vẹn",
+      "desc": "Chơi hết 1.000 ván từ đầu đến cuối."
     }
   }
 }

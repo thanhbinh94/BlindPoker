@@ -1,11 +1,10 @@
 import { validateDisplayName, type HandCategory } from '@bp/core'
-import { Badge, Button, Field, Panel, formatPoints, handLabel, type Language } from '@bp/ui-kit'
+import { Badge, Button, Chibi, Field, Panel, defaultChibi, formatPoints, handLabel, type Language } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { HistoryEntryDto, LedgerEntryDto, MeDto, NormalApi, PlayerStatsDto } from '../api.js'
-import { LazyAvatarStage } from '../avatar3d/LazyStage.js'
-import { figureDescription } from '../avatar3d/description.js'
+import type { AvatarCatalogDto, HistoryEntryDto, ItemDto, LedgerEntryDto, MeDto, NormalApi, PlayerStatsDto } from '../api.js'
+import { chibiFromApi } from '../avatar/chibi.js'
 import { itemName } from '../catalog-i18n.js'
 import { formatDay, formatMoment, formatSigned } from './format.js'
 import s from './normal.module.css'
@@ -275,16 +274,28 @@ function LedgerPanel({ api, lang }: LedgerPanelProps) {
  */
 export function ProfileScreen({ api, lang, balance, onRenamed }: ProfileScreenProps) {
   const { t } = useTranslation('normal')
-  const bundle = useAsync<[MeDto, PlayerStatsDto, HistoryEntryDto[]]>(() =>
-    Promise.all([api.me(), api.stats(), api.history(HISTORY_LIMIT)]),
+  const bundle = useAsync<[MeDto, PlayerStatsDto, HistoryEntryDto[], ItemDto[], AvatarCatalogDto]>(() =>
+    Promise.all([
+      api.me(),
+      api.stats(),
+      api.history(HISTORY_LIMIT),
+      // The rig every chibi is drawn on — needed once, to turn `me.avatar` into the picture at the top of
+      // this page. A failed fetch here still leaves the rest of the profile readable: the stage just falls
+      // back to the seed-based default chibi, the same way a table seat does for a face it never got.
+      api.catalogItems().then(
+        (answer) => answer.items,
+        () => [] as ItemDto[],
+      ),
+      api.avatarCatalog(),
+    ]),
   )
   /** A rename answers with the new name; the rest of `me` is unchanged, so only this is overlaid. */
   const [renamed, setRenamed] = useState<string | null>(null)
 
   const loaded = bundle.data
-  const me = loaded?.[0]
-  const stats = loaded?.[1]
-  const history = loaded?.[2]
+  const [me, stats, history, catalogItems, avatarCatalog] = loaded ?? [undefined, undefined, undefined, undefined, undefined]
+  const items = useMemo(() => new Map((catalogItems ?? []).map((item) => [item.id, item])), [catalogItems])
+  const bases = useMemo(() => new Map((avatarCatalog?.bases ?? []).map((base) => [base.id, base])), [avatarCatalog])
 
   if (bundle.loading && loaded === null) {
     return (
@@ -316,20 +327,18 @@ export function ProfileScreen({ api, lang, balance, onRenamed }: ProfileScreenPr
   const badgeId = me.avatar.badge
   // Amount and unit stay one string, exactly as the rail and the kit's `PlayerBar` print it.
   const balanceText = `${formatPoints(balance, lang)} ${t('common:units.pointsShort')}`
+  const chibi = chibiFromApi(me.avatar, items, bases) ?? defaultChibi(displayName)
 
   return (
     <main className={s.page}>
       <header className={s.identityCard}>
-        {/* The one place in the app that shows a *live* figure rather than a rendered picture of one
-            (avatar-3d design §6), and the wardrobe is the other. It arrives in its own chunk with a
-            portrait standing in meanwhile, and a portrait is also what a machine with no WebGL keeps. */}
-        <LazyAvatarStage
-          className={s.identityStage}
-          config={me.avatar}
-          mode="view"
-          name={displayName}
-          description={figureDescription(me.avatar, t)}
-        />
+        {/* The backdrop is CSS, keyed on `data-title` — five gradient/glow variants, one per title, in
+            `normal.module.css`. `full` shows the aura behind the figure; the head crop beside it is what
+            makes the frame ring (a `head`-only layer) visible at all. */}
+        <div className={s.identityStage} data-title={titleId ?? ''}>
+          <Chibi subject={chibi} frame="full" size={240} label={displayName} />
+          <Chibi subject={chibi} frame="head" size={192} />
+        </div>
         <div className={s.identityText}>
           <span className={s.eyebrow}>{t('profile.title')}</span>
           <h1 className={s.identityName}>{displayName}</h1>
