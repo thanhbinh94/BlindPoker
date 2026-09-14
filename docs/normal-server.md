@@ -234,7 +234,9 @@ outright (a headband, a ring, a pair of jeans); `inventory/aliases.ts` loads it 
 `resolveItemId(id, aliases)` is `aliases.get(id) ?? id` and is applied everywhere an id might be one
 of the old ones: `validateAvatarConfig`'s inputs, `inventory-service.ts`'s `owns`/`missingOf` (which
 widen every id they are asked about to its whole alias class, so an inventory row under the old id
-satisfies the new one), and `grant`, which always writes the current id.
+satisfies the new one), `grant`, which always writes the current id, and `GET /api/me/inventory`
+(`http/routes-me.ts`), which resolves each row before joining the catalogue and collapses a player who
+somehow holds both the old and the new row into one entry, keeping the old id as `acquiredAs`.
 
 ### The v1/v2 → v3 avatar migration
 
@@ -265,6 +267,21 @@ counted hand — not retroactively at boot.
 **Adding a new *metric* is a schema change**: a column on `player_stats`, a migration
 (`pnpm --filter @bp/normal-server db:generate`, then commit the generated SQL), and the counting
 logic in `stats/stats-service.ts`.
+
+**A migration that also has to move data — `0001_avatar_v2.sql`, `0002_outfits.sql` — is hand-written**
+rather than generated, in `0001`'s own style (its header comment says so), because `db:generate` diffs
+`schema.ts` against `drizzle/meta/<n>_snapshot.json` and produces schema DDL only; it has no way to know
+that existing rows need granting, remapping or backfilling. The snapshot still has to move, though:
+`drizzle-kit` reads the latest `meta/<n>_snapshot.json` as "what the database already looks like" the
+*next* time `db:generate` runs, and a hand-written migration that changes `schema.ts` (a new table, a
+new column) without a matching snapshot leaves that file lying about the schema's real shape — the next
+`generate` would then diff against the wrong baseline and emit DDL for changes that already shipped by
+hand. `0002_snapshot.json` was produced by generating against a temporarily-reverted journal (so
+`drizzle-kit` computed the real diff — one new table, `avatar_outfits` — from `0001`), then keeping only
+the resulting snapshot and restoring the hand-written `0002_outfits.sql` (with its `INSERT`s intact) and
+the original journal entry. The rule going forward: after a hand-written migration lands, generate a
+throwaway migration once to capture the snapshot it implies, keep the snapshot, and discard the SQL file
+`generate` wrote (the hand-written one already covers the DDL, plus the data move `generate` cannot see).
 
 ---
 

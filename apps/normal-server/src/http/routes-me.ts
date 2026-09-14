@@ -22,6 +22,7 @@ import { users } from '../db/schema.js'
 import type { EconomyService } from '../economy/economy-service.js'
 import { ServiceError } from '../errors.js'
 import type { HistoryService } from '../history/history-service.js'
+import { resolveItemId } from '../inventory/aliases.js'
 import { applyAvatarConfig, validateAvatarConfig } from '../inventory/avatar.js'
 import { readAvatarConfig } from '../inventory/avatar-migrate.js'
 import type { InventoryService } from '../inventory/inventory-service.js'
@@ -174,15 +175,30 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
   app.get('/api/me/inventory', authed, async (req, reply) => {
     const playerId = playerIdOf(req)
     const [owned, player] = await Promise.all([deps.inventory.list(playerId), profile(playerId)])
+    // `inventory.item_id` rows are never rewritten (`inventory/aliases.ts`), so a legacy row still names
+    // its old id — joining the catalogue against that raw id would miss it entirely (`catalog.get` only
+    // knows current ids) and leave the wardrobe unable to tell the row apart from an item nobody owns.
+    // Resolved here, once, the same way `owns`/`missingOf` already widen an id to its alias class: every
+    // row is reported under its *current* id, with the id it was actually acquired as kept in
+    // `acquiredAs` for anyone who cares which one it was. `owned` is oldest-first (`InventoryService.list`),
+    // so a player who somehow holds both the old and the new row for one item collapses to a single entry
+    // at the earlier of the two `acquiredAt`s — the first `resolved` wins and every later duplicate is
+    // dropped, rather than the wardrobe (and any summary derived from `items.length`) counting one item twice.
+    const collapsed = new Map<string, { itemId: string; acquiredAs: string; source: string; acquiredAt: number }>()
+    for (const item of owned) {
+      const resolved = resolveItemId(item.itemId, deps.aliases)
+      if (!collapsed.has(resolved)) collapsed.set(resolved, { itemId: resolved, acquiredAs: item.itemId, source: item.source, acquiredAt: item.acquiredAt })
+    }
     return reply.send({
       // Joined against the catalogue here rather than in the client: the slot and rarity of an
       // owned item are what the wardrobe groups by, and the client should not have to fetch the
       // whole catalogue to draw its own inventory. The geometry is not joined in — an item's
       // `asset` is the same for everyone and is served whole by `/api/catalog/items`.
-      items: owned.map((item) => {
+      items: [...collapsed.values()].map((item) => {
         const def = deps.catalog.get(item.itemId)
         return {
           itemId: item.itemId,
+          acquiredAs: item.acquiredAs,
           slot: def?.slot ?? null,
           rarity: def?.rarity ?? null,
           nameKey: def?.nameKey ?? null,

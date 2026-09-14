@@ -42,7 +42,7 @@ const SLOT_LAYER: Partial<Record<ItemSlot, number>> = { head: 80, face: 70, outf
 
 /** One PNG layer, shared by every base. */
 export interface AssetRef {
-  layer: 5 | 10 | 40 | 70 | 80 | 90
+  layer: 10 | 40 | 70 | 80 | 90
   /** A name in `data/avatar-manifest.json`'s `files`, without the `@1x`/`@2x` density suffix. */
   file: string
   /** A head that hides the base's hair layers (design §3). */

@@ -9,6 +9,7 @@ import { ECONOMY } from '@bp/core'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { AppDb } from '../db/client.js'
 import { createTestDb, type TestDb } from '../db/test-db.js'
+import { inventory, items } from '../db/schema.js'
 import { buildTestApp, resetDb, XRW, type Account, type Harness } from '../test-harness.js'
 
 /** What a fresh account is wearing: the `f01` base and the one default outfit (design §5.1). */
@@ -164,6 +165,35 @@ describe('inventory and avatars', () => {
     // Joined against the catalogue.
     expect(body.items.find((i) => i.itemId === 'outfit_casual01')).toMatchObject({ slot: 'outfit', rarity: 'common', assetKey: 'outfit/outfit_casual01' })
     expect(body.avatar).toEqual(DEFAULT_AVATAR)
+  })
+
+  it('resolves a legacy row through the alias map, joins the catalogue against its current id, and keeps the old id as acquiredAs', async () => {
+    // `inventory.item_id` rows are never rewritten — a player who owns this from before Plan 11 is
+    // exactly as real as one who owns `head_crown_gold01` outright, and the route must say so. `hat_crown`
+    // is no longer in `items.json` (nothing seeds it), so a legacy row like this only exists because the
+    // `items` row itself already existed before Plan 11 dropped the id from the catalogue — reproduced
+    // here by inserting it directly, the way a pre-existing production row would already be there.
+    await db.insert(items).values({ id: 'hat_crown', slot: 'hat', rarity: 'epic', nameKey: 'items.hat_crown', assetKey: 'hat/hat_crown' })
+    await db.insert(inventory).values({ playerId: me.playerId, itemId: 'hat_crown', source: 'grant' })
+    const res = await h.app.fastify.inject({ url: '/api/me/inventory', headers: { cookie: me.cookie } })
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as { items: { itemId: string; acquiredAs: string; slot: string | null; rarity: string | null }[] }
+    const row = body.items.find((i) => i.acquiredAs === 'hat_crown')
+    expect(row).toMatchObject({ itemId: 'head_crown_gold01', slot: 'head', rarity: 'epic' })
+    // Not left under the raw, un-resolved id — a wardrobe joining on `itemId` alone must find it.
+    expect(body.items.find((i) => i.itemId === 'hat_crown')).toBeUndefined()
+  })
+
+  it('collapses a player who owns both the old and the new id into one entry', async () => {
+    await db.insert(items).values({ id: 'hat_crown', slot: 'hat', rarity: 'epic', nameKey: 'items.hat_crown', assetKey: 'hat/hat_crown' })
+    await db.insert(inventory).values([
+      { playerId: me.playerId, itemId: 'hat_crown', source: 'grant' },
+      { playerId: me.playerId, itemId: 'head_crown_gold01', source: 'grant' },
+    ])
+    const res = await h.app.fastify.inject({ url: '/api/me/inventory', headers: { cookie: me.cookie } })
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as { items: { itemId: string }[] }
+    expect(body.items.filter((i) => i.itemId === 'head_crown_gold01')).toHaveLength(1)
   })
 
   it('stores a full replacement and reads it back', async () => {
