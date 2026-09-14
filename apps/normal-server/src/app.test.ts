@@ -312,6 +312,7 @@ describe('every mutating route is guarded', () => {
       'GET *', // the static fallback: `/*` is printed as a bare `*`
       'GET /api/auth/me',
       'GET /api/catalog/achievements',
+      'GET /api/catalog/avatar',
       'GET /api/catalog/items',
       'GET /api/config',
       'GET /api/me',
@@ -319,6 +320,7 @@ describe('every mutating route is guarded', () => {
       'GET /api/me/history',
       'GET /api/me/inventory',
       'GET /api/me/ledger',
+      'GET /api/me/outfits',
       'GET /api/me/stats',
       'GET /api/players/:id/avatar',
       'GET /api/rewards/daily',
@@ -328,8 +330,11 @@ describe('every mutating route is guarded', () => {
       'POST /api/auth/logout',
       'POST /api/auth/register',
       'POST /api/economy/relief',
+      'POST /api/me/outfits/:slot/apply',
       'POST /api/rewards/daily/claim',
       'PUT /api/me/avatar',
+      'PUT /api/me/outfits/:slot',
+      'DELETE /api/me/outfits/:slot',
     ].sort())
   })
 

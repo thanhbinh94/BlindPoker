@@ -29,14 +29,18 @@ import type { NormalConfig } from '../config.js'
 import type { AppDb } from '../db/client.js'
 import type { EconomyService } from '../economy/economy-service.js'
 import type { HistoryService } from '../history/history-service.js'
+import type { BaseDef } from '../inventory/bases.js'
 import type { InventoryService } from '../inventory/inventory-service.js'
 import type { ItemCatalog } from '../inventory/items.js'
+import type { AvatarManifest } from '../inventory/manifest.js'
+import type { OutfitsService } from '../inventory/outfits-service.js'
 import type { NormalRepositories } from '../repos/index.js'
 import type { StatsService } from '../stats/stats-service.js'
 import { createRequireUser, decorateRequestUser } from './auth-guard.js'
 import { LOGIN_RATE_LIMIT, REGISTER_RATE_LIMIT, registerAuthRoutes } from './routes-auth.js'
 import { registerCatalogRoutes } from './routes-catalog.js'
 import { registerMeRoutes } from './routes-me.js'
+import { registerOutfitRoutes } from './routes-outfits.js'
 import { registerRewardRoutes } from './routes-rewards.js'
 import './types.js'
 
@@ -50,9 +54,14 @@ export interface RouteDeps {
   stats: StatsService
   achievements: AchievementService
   inventory: InventoryService
+  outfits: OutfitsService
   history: HistoryService
   catalog: ItemCatalog
   defs: AchievementDef[]
+  /** Old wardrobe ids, kept readable — see `inventory/aliases.ts`. */
+  aliases: ReadonlyMap<string, string>
+  manifest: AvatarManifest
+  bases: Record<string, BaseDef>
   log: Logger
   /** Live socket and room counts for `/health` — the same two numbers Lite's probe reports. */
   game: Pick<GameServer, 'connectionCount'> & { rooms: { size: number } }
@@ -174,5 +183,6 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
   })
   registerMeRoutes(app, { ...deps, requireUser })
   registerRewardRoutes(app, { economy: deps.economy, requireUser })
-  registerCatalogRoutes(app, { config: deps.config, catalog: deps.catalog, defs: deps.defs })
+  registerOutfitRoutes(app, { outfits: deps.outfits, catalog: deps.catalog, requireUser })
+  registerCatalogRoutes(app, { config: deps.config, catalog: deps.catalog, defs: deps.defs, manifest: deps.manifest, bases: deps.bases })
 }
