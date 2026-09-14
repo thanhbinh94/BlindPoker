@@ -335,8 +335,18 @@ export function overPicture(dst, src) {
   return dst
 }
 
-/** Cut a rectangle out of a picture. */
+/**
+ * Cut a rectangle out of a picture.
+ *
+ * `x`/`y` must be non-negative: the row copy below already clips `sy >= pic.height` at the bottom and
+ * folds a negative `x` into its source offset via `Math.max(0, x)`, but never shifts the *destination*
+ * to match — so a negative `x` silently pastes the crop's right-hand columns into its left-hand ones
+ * instead of refusing, and a negative `y` silently pastes row 0 into every row up to `-y`. Both are a
+ * caller bug (every caller in this pipeline crops with fixed, non-negative constants), and refusing it
+ * beats shipping a misplaced picture that only shows up by eye, later, in the contact sheet.
+ */
 export function cropPicture(pic, x, y, width, height) {
+  if (x < 0 || y < 0) throw new Error(`cropPicture: x and y must be non-negative, got (${x}, ${y})`)
   const out = blankPicture(width, height)
   for (let row = 0; row < height; row++) {
     const sy = y + row

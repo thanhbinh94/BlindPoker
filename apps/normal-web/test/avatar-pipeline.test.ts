@@ -25,7 +25,7 @@ import { runChecks } from '../scripts/avatar-pipeline/checks.mjs'
 import { diffAgainstBase, measure } from '../scripts/avatar-pipeline/extract.mjs'
 import { AXIS_X, BASELINE_Y, BODY, CROP, DENSITIES, FRAME, LAYERS, anchorBase, applyTransform, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
 import { MANIFEST_NAME, stageOneFiles } from '../scripts/avatar-pipeline/manifest.mjs'
-import { alphaBBox, blankPicture, readPicture, removeChroma, renderSvg, writeDensities, writePicture } from '../scripts/avatar-pipeline/png.mjs'
+import { alphaBBox, blankPicture, cropPicture, readPicture, removeChroma, renderSvg, writeDensities, writePicture } from '../scripts/avatar-pipeline/png.mjs'
 
 const PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url))
 const SCRIPT = resolve(PACKAGE_ROOT, 'scripts/avatar-pipeline.mjs')
@@ -255,6 +255,32 @@ describe('measure', () => {
     const report = measure(shifted)
     expect(Math.abs(report.centreOffset)).toBeGreaterThan(100)
     expect(report.ok).toBe(false)
+  })
+})
+
+describe('cropPicture', () => {
+  it('cuts the requested rectangle out, mapped to (0, 0) of the result', () => {
+    const pic = blankPicture(4, 4)
+    // One opaque red pixel at source (2, 1).
+    const at = (1 * 4 + 2) * 4
+    pic.data[at] = 255
+    pic.data[at + 3] = 255
+    const cropped = cropPicture(pic, 1, 1, 2, 2)
+    expect(cropped.width).toBe(2)
+    expect(cropped.height).toBe(2)
+    // (2, 1) in the source lands at (1, 0) in a crop starting at (1, 1).
+    const outAt = (0 * 2 + 1) * 4
+    expect(cropped.data[outAt]).toBe(255)
+    expect(cropped.data[outAt + 3]).toBe(255)
+  })
+
+  // The regression this guards: a negative offset used to fold silently into `Math.max(0, x)` on the
+  // source side with no matching shift on the destination side, pasting the crop's far edge into its
+  // near one instead of refusing — a misplaced picture nobody would notice until the contact sheet.
+  it('refuses a negative x or y rather than silently misplacing the picture', () => {
+    const pic = blankPicture(4, 4)
+    expect(() => cropPicture(pic, -1, 0, 2, 2)).toThrow(/non-negative/)
+    expect(() => cropPicture(pic, 0, -1, 2, 2)).toThrow(/non-negative/)
   })
 })
 

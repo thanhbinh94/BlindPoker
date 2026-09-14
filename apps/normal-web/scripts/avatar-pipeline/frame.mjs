@@ -25,9 +25,9 @@ export const RING = 208
 /** Spec §3, D5: @3x is gone — the web wants two densities and a third of the bytes back. */
 export const DENSITIES = [1, 2]
 
-/** D01 §4.2, plus the two layers spec §3 adds: 5 behind the aura and 90 over everything. */
+/** D01 §4.2, plus the layer spec §3 adds on top: 90, over everything. Stage 2 dropped the `backdrop`
+ * layer (5) spec §3 had also reserved — nothing ever drew it, so it never shipped a file or an item. */
 export const LAYERS = {
-  backdrop: 5,
   aura: 10,
   hairBack: 20,
   body: 30,
