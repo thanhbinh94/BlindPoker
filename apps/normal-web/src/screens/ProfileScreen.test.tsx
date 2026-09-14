@@ -151,6 +151,26 @@ describe('ProfileScreen', () => {
     expect(stage?.querySelectorAll('[data-chibi-hash]')).toHaveLength(2)
   })
 
+  it('stages exactly one full-body chibi and one head-crop chibi, side by side in their own row', async () => {
+    renderScreen()
+    await screen.findByRole('heading', { name: 'Bình', level: 1 })
+
+    const stage = document.querySelector('[data-title]') as HTMLElement
+    const chibis = [...stage.querySelectorAll('[data-chibi-hash]')]
+    expect(chibis).toHaveLength(2)
+    expect(chibis.map((el) => el.getAttribute('data-frame')).sort()).toEqual(['full', 'head'])
+  })
+
+  it('still draws the header, stats and history when the avatar catalogue fails — the stage falls back to a default chibi', async () => {
+    renderScreen(stubApi({ avatarCatalog: vi.fn().mockRejectedValue(new ApiError(500, 'INTERNAL', 'nope')) }))
+
+    expect(await screen.findByRole('heading', { name: 'Bình', level: 1 })).toBeInTheDocument()
+    expect(screen.getByText(viNormal.profile.stats.title)).toBeInTheDocument()
+    const stage = document.querySelector('[data-title]')
+    expect(stage?.querySelectorAll('[data-chibi-hash]')).toHaveLength(2)
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
   it('groups all sixteen counters, prints points with their unit and names the best hand', async () => {
     const { i18n } = renderScreen()
     await screen.findByRole('heading', { name: 'Bình', level: 1 })

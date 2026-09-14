@@ -530,9 +530,8 @@
 
 .identityCard {
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
   gap: var(--space-4);
-  flex-wrap: wrap;
   padding: var(--space-4);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
@@ -541,18 +540,28 @@
 }
 
 /* The profile's own figure: the full-body chibi (its aura visible) beside the head crop (its frame ring
-   visible), on a backdrop keyed by the equipped title — five gradient/glow variants, no animation. */
+   visible), on a backdrop keyed by the equipped title — five gradient/glow variants, no animation.
+   `Chibi`'s root is `flex: none` (ui-kit 595810e) — a flex parent can no longer shrink either chibi below its
+   own `size`, so this row gets the identity card's *full* width and wraps rather than fighting them for a
+   288 px-wide column, which is what used to squeeze a 192 px chibi down to 114 px. Under 640 px there still
+   is not room for 240 + 192 px side by side, so the two stack instead. */
 .identityStage {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   justify-content: center;
-  flex: none;
-  gap: var(--space-2);
-  width: 18rem;
-  max-width: 100%;
+  gap: var(--space-4);
+  width: 100%;
   padding: var(--space-3);
   border-radius: var(--radius-md);
   background: var(--bg-elev);
+}
+
+@media (max-width: 640px) {
+  .identityStage {
+    flex-direction: column;
+    align-items: center;
+  }
 }
 
 .identityStage[data-title='title_rookie'] {
@@ -578,7 +587,6 @@
 
 .identityText {
   display: flex;
-  flex: 1 1 14rem;
   flex-direction: column;
   gap: var(--space-2);
   min-width: 0;

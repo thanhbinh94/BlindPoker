@@ -281,12 +281,15 @@ export function ProfileScreen({ api, lang, balance, onRenamed }: ProfileScreenPr
       api.history(HISTORY_LIMIT),
       // The rig every chibi is drawn on — needed once, to turn `me.avatar` into the picture at the top of
       // this page. A failed fetch here still leaves the rest of the profile readable: the stage just falls
-      // back to the seed-based default chibi, the same way a table seat does for a face it never got.
+      // back to the seed-based default chibi, the same way a table seat does for a face it never got — so
+      // both catalogue calls are caught here rather than left to fail the whole `Promise.all`.
       api.catalogItems().then(
         (answer) => answer.items,
         () => [] as ItemDto[],
       ),
-      api.avatarCatalog(),
+      api.avatarCatalog().catch(
+        () => ({ frame: { w: 0, h: 0 }, crop: { x: 0, y: 0, size: 0 }, bases: [], manifestVersion: 0 }) as AvatarCatalogDto,
+      ),
     ]),
   )
   /** A rename answers with the new name; the rest of `me` is unchanged, so only this is overlaid. */
