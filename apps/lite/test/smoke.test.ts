@@ -168,7 +168,7 @@ describe.skipIf(!hasExe)('bind-poker-lite.exe', () => {
  * for the address it bound, makes one request, and kills it.
  */
 describe.skipIf(!hasExe)('bind-poker-lite.exe serving the bundled avatar assets', () => {
-  it('answers GET /avatar/base_f01_L30@1x.png with 200', async () => {
+  it('answers GET /avatar/base_f01_L30@1x.png and the default outfit with 200', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'bp-lite-avatar-'))
     const env = { ...process.env, PORT: '0', HOST: '127.0.0.1', SQLITE_PATH: join(dir, 'bp.sqlite'), LOG_LEVEL: 'info' }
     const child = spawn(EXE, [], { cwd: dirname(EXE), env, stdio: ['ignore', 'pipe', 'pipe'] })
@@ -211,6 +211,12 @@ describe.skipIf(!hasExe)('bind-poker-lite.exe serving the bundled avatar assets'
       const res = await fetch(`${address}/avatar/base_f01_L30@1x.png`)
       expect(res.status).toBe(200)
       await res.arrayBuffer()
+
+      // The default outfit `defaultChibi` equips every human with — without it, every Lite seat 404s on
+      // its outfit layer and renders undressed (`apps/lite/scripts/build.mjs`'s `isLiteAvatarFile`).
+      const outfitRes = await fetch(`${address}/avatar/item_outfit_casual01_L40@1x.png`)
+      expect(outfitRes.status).toBe(200)
+      await outfitRes.arrayBuffer()
     } finally {
       child.kill()
       // On Windows the SQLite file stays locked for a moment after `kill()` — the signal is delivered
