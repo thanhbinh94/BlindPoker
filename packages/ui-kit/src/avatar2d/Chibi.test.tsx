@@ -1,0 +1,86 @@
+import { render } from '@testing-library/react'
+import { describe, expect, it } from 'vitest'
+import { AvatarAssets } from './AvatarAssets.js'
+import { Chibi } from './Chibi.js'
+import { defaultChibi } from './defaults.js'
+import { hashChibi, layersFor } from './layers.js'
+import type { BotChibi } from './types.js'
+
+const SUBJECT = defaultChibi('ann')
+
+describe('Chibi', () => {
+  it('draws one img per layer, in ascending layer order', () => {
+    const { container } = render(<Chibi subject={SUBJECT} />)
+    const imgs = [...container.querySelectorAll('img')]
+    const expected = layersFor(SUBJECT, 'neutral', 'full')
+    expect(imgs).toHaveLength(expected.length)
+    // DOM order matches ascending `order`…
+    expect(imgs.map((img) => img.getAttribute('src'))).toEqual(expected.map((l) => `/avatar/${l.file}@1x.png`))
+    // …and so does the inline z-index each layer carries, so overlap is correct even if DOM order ever changes.
+    expect(imgs.map((img) => img.style.zIndex)).toEqual(expected.map((l) => String(l.order)))
+  })
+
+  it('gives every layer both densities in `srcset`, resolved against the asset base', () => {
+    const { container } = render(
+      <AvatarAssets base="https://cdn.example/avatar/">
+        <Chibi subject={SUBJECT} />
+      </AvatarAssets>,
+    )
+    const img = container.querySelector('img')!
+    const file = layersFor(SUBJECT, 'neutral', 'full')[0]!.file
+    expect(img.getAttribute('srcset')).toBe(
+      `https://cdn.example/avatar/${file}@1x.png 1x, https://cdn.example/avatar/${file}@2x.png 2x`,
+    )
+    expect(img.getAttribute('src')).toBe(`https://cdn.example/avatar/${file}@1x.png`)
+    expect(img).toHaveAttribute('loading', 'lazy')
+    expect(img).toHaveAttribute('decoding', 'async')
+    expect(img).toHaveAttribute('alt', '')
+    expect(img).toHaveAttribute('draggable', 'false')
+  })
+
+  it('falls back to /avatar/ with no provider in the tree', () => {
+    const { container } = render(<Chibi subject={SUBJECT} />)
+    expect(container.querySelector('img')!.getAttribute('src')).toMatch(/^\/avatar\//)
+  })
+
+  it('stamps a stable data-chibi-hash, and data-expression / data-frame from props', () => {
+    const { container } = render(<Chibi subject={SUBJECT} expression="happy" frame="head" />)
+    const root = container.firstElementChild!
+    expect(root).toHaveAttribute('data-chibi-hash', hashChibi(SUBJECT))
+    expect(root).toHaveAttribute('data-expression', 'happy')
+    expect(root).toHaveAttribute('data-frame', 'head')
+  })
+
+  it('a bot gets its own hash and its own two-layer stack', () => {
+    const bot: BotChibi = { kind: 'bot', index: 2 }
+    const { container } = render(<Chibi subject={bot} expression="sleep" />)
+    expect(container.querySelectorAll('img')).toHaveLength(2)
+    expect(container.firstElementChild).toHaveAttribute('data-chibi-hash', hashChibi(bot))
+  })
+
+  it('the head crop transforms the layer stack, not the full frame', () => {
+    const { container: full } = render(<Chibi subject={SUBJECT} frame="full" />)
+    const { container: head } = render(<Chibi subject={SUBJECT} frame="head" />)
+    const fullCrop = full.querySelector('[class*="crop"]') as HTMLElement
+    const headCrop = head.querySelector('[class*="crop"]') as HTMLElement
+    expect(fullCrop.style.transform).toBe('')
+    expect(headCrop.className).not.toBe(fullCrop.className) // the `cropped` modifier only applies to `head`
+  })
+
+  it('is decorative with no label, and an announced role="img" with one', () => {
+    const { container: bare } = render(<Chibi subject={SUBJECT} />)
+    expect(bare.firstElementChild).toHaveAttribute('aria-hidden', 'true')
+    expect(bare.firstElementChild).not.toHaveAttribute('role')
+
+    const { container: labelled } = render(<Chibi subject={SUBJECT} label="Ann" />)
+    expect(labelled.firstElementChild).toHaveAttribute('role', 'img')
+    expect(labelled.firstElementChild).toHaveAttribute('aria-label', 'Ann')
+    expect(labelled.firstElementChild).not.toHaveAttribute('aria-hidden')
+  })
+
+  it('applies the bounce class only when asked', () => {
+    const { container: still } = render(<Chibi subject={SUBJECT} />)
+    const { container: bouncing } = render(<Chibi subject={SUBJECT} bounce />)
+    expect(bouncing.firstElementChild!.className).not.toBe(still.firstElementChild!.className)
+  })
+})

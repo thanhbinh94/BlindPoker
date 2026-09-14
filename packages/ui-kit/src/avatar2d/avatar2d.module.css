@@ -1,0 +1,65 @@
+/* One chibi: a stack of absolutely-positioned PNG layers on the 384×448 frame (spec §3). `full` shows the whole
+   frame at its native 6:7 ratio; `head` clips a square viewport over the 160×160 avatar crop at (112, 48) — the
+   `.crop` box below carries the frame at its native proportions and the transform slides+scales it so that exact
+   square fills the viewport. Both variants share the same layer markup; only the outer shape and the transform
+   differ. */
+.chibi {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  width: 100%;
+  background: transparent;
+}
+
+.full {
+  aspect-ratio: 6 / 7;
+}
+
+.head {
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+}
+
+.crop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  aspect-ratio: 384 / 448;
+  transform-origin: 0 0;
+}
+
+/* 160×160 crop at (112, 48) inside the 384×448 frame: shift by the offset (as a fraction of the frame's own
+   width/height) then scale up by 384/160 so the crop square fills the head viewport exactly. */
+.cropped {
+  transform: translate(-29.1667%, -10.7143%) scale(2.4);
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+}
+
+@keyframes chibiBounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6%);
+  }
+}
+
+.bounce {
+  animation: chibiBounce 0.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bounce {
+    animation: none;
+  }
+}

@@ -1,12 +1,11 @@
 import type { RoomPlayerView } from '@bp/core'
-import type { ReactNode } from 'react'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Chibi, type ChibiSubject, type Expression } from '../avatar2d/index.js'
 import type { ClientSeat } from '../client/types.js'
 import { formatPoints, type Language } from '../i18n/index.js'
 import { Badge, type BadgeTone } from '../primitives/Badge.js'
 import { cx } from '../primitives/cx.js'
-import { BotFace } from './BotFace.js'
 import { Card } from './Card.js'
 import { TurnTimer } from './TurnTimer.js'
 import s from './table.module.css'
@@ -30,7 +29,12 @@ export interface SeatProps {
   lang: Language
   /** Ring coordinates in percent; `null` lets the layout place the seat (stack layout). */
   position: { x: number; y: number } | null
-  avatar?: ReactNode
+  /** `null` when the seat has no chibi to draw — a bot always has one, a human player only when the app's
+   * `chibiFor` answers one; the plate falls back to the name's initial. */
+  chibi: ChibiSubject | null
+  expression: Expression
+  /** The 0.5 s turn bounce (spec 08 §3.4) — true for the seat whose turn it is. */
+  bounce: boolean
   /**
    * One quiet line under the name — a title, a rank, whatever the app wants to say about this player. It is
    * muted, single-line and truncated, because the plate's job is the name and the stack; anything longer than
@@ -53,7 +57,9 @@ export function Seat({
   turnTimerMs,
   lang,
   position,
-  avatar,
+  chibi,
+  expression,
+  bounce,
   caption,
 }: SeatProps) {
   const { t } = useTranslation()
@@ -103,10 +109,10 @@ export function Seat({
       ) : null}
 
       <div className={s.plate}>
-        {/* Every seat gets the same framed disc: a bot's 2D face chosen by its id, the app's picture for a human,
-            and the initial when the app has none. The frame is what makes a table of six read as six faces. */}
-        <span className={s.avatar} data-face={seat.isBot ? 'bot' : avatar === undefined || avatar === null ? 'initial' : 'app'} aria-hidden="true">
-          {seat.isBot ? <BotFace seed={seat.playerId} /> : (avatar ?? initial)}
+        {/* Every seat gets the same framed disc: a bot's chibi chosen by its id, the app's chibi for a human, and
+            the initial when the app has none. The frame is what makes a table of six read as six faces. */}
+        <span className={s.avatar} data-face={seat.isBot ? 'bot' : chibi === null ? 'default' : 'app'} aria-hidden="true">
+          {chibi === null ? initial : <Chibi subject={chibi} expression={expression} frame="head" bounce={bounce} />}
         </span>
         <span className={s.plateText}>
           <span className={s.seatName}>{name}</span>

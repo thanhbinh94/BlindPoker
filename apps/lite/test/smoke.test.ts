@@ -9,7 +9,7 @@
 import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { RUN_FILE_NAME } from '../server/src/run-file.js'
 import { EXE, PACKAGE_ROOT, SERVER_BUNDLE } from './paths.js'
@@ -159,5 +159,61 @@ describe.skipIf(!hasExe)('bind-poker-lite.exe', () => {
   it('boots, answers /health and exits 0', async () => {
     expectHealthy(await runSmoke(EXE, [], 'exe'), 'bind-poker-lite.exe --smoke')
     expectNoRunFile()
+  }, BUDGET_MS + 5_000)
+})
+
+/**
+ * `--smoke` only ever proves `/health`; the avatar PNGs `build.mjs` copies into `dist/public/avatar` (and the SEA
+ * step embeds from there) need the exe actually *listening*, so this boots it for real, reads its own JSON log
+ * for the address it bound, makes one request, and kills it.
+ */
+describe.skipIf(!hasExe)('bind-poker-lite.exe serving the bundled avatar assets', () => {
+  it('answers GET /avatar/base_f01_L30@1x.png with 200', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bp-lite-avatar-'))
+    const env = { ...process.env, PORT: '0', HOST: '127.0.0.1', SQLITE_PATH: join(dir, 'bp.sqlite'), LOG_LEVEL: 'info' }
+    const child = spawn(EXE, [], { cwd: dirname(EXE), env, stdio: ['ignore', 'pipe', 'pipe'] })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()))
+    child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString()))
+    try {
+      const address = await new Promise<string>((resolvePromise, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error(`exe did not report a listen address within ${BUDGET_MS} ms\nstdout: ${stdout}\nstderr: ${stderr}`)),
+          BUDGET_MS,
+        )
+        const tryParse = (): void => {
+          for (const line of stdout.split('\n')) {
+            if (!line.trim().startsWith('{')) continue
+            try {
+              const entry = JSON.parse(line) as { msg?: string }
+              if (typeof entry.msg === 'string' && entry.msg.startsWith('Listening on ')) {
+                clearTimeout(timer)
+                resolvePromise(entry.msg.slice('Listening on '.length))
+                return
+              }
+            } catch {
+              // an incomplete line mid-write — wait for more data
+            }
+          }
+        }
+        child.stdout.on('data', tryParse)
+        child.on('error', (err) => {
+          clearTimeout(timer)
+          reject(err)
+        })
+        child.on('exit', (code) => {
+          clearTimeout(timer)
+          reject(new Error(`exe exited (${code}) before it started listening\nstdout: ${stdout}\nstderr: ${stderr}`))
+        })
+      })
+
+      const res = await fetch(`${address}/avatar/base_f01_L30@1x.png`)
+      expect(res.status).toBe(200)
+      await res.arrayBuffer()
+    } finally {
+      child.kill()
+      rmSync(dir, { recursive: true, force: true })
+    }
   }, BUDGET_MS + 5_000)
 })

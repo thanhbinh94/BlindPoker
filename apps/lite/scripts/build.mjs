@@ -31,6 +31,12 @@ const RELEASE_DIR = resolve(ROOT, 'release/lite')
 const RELEASE_SRC = resolve(ROOT, 'release-src')
 const EXE = join(RELEASE_DIR, 'bind-poker-lite.exe')
 
+/** Normal's placeholder chibi PNGs are the only art Lite ships: T1 generated `base_*` (the two bodies) and
+ * `bot_*` (the eight bots) once, under Normal's public dir, and every edition draws from the same files rather
+ * than each carrying its own copy. */
+const AVATAR_SRC = resolve(ROOT, '../normal-web/public/avatar')
+const AVATAR_DEST = join(PUBLIC_DIR, 'avatar')
+
 /** The exe is a copy of `node.exe` plus our blob; 120 MB leaves headroom over that without hiding a regression. */
 const MAX_EXE_BYTES = 120 * 1024 * 1024
 /** postject writes the blob at the offset this fuse marks inside the Node binary. Node's own constant — do not change. */
@@ -86,6 +92,20 @@ function buildWeb() {
   const files = walk(PUBLIC_DIR)
   const total = files.reduce((sum, rel) => sum + statSync(join(PUBLIC_DIR, rel)).size, 0)
   log(`web: ${files.length} files, ${kb(total)} raw → dist/public`)
+  copyAvatarAssets()
+}
+
+/**
+ * Copies the placeholder chibi bases and bots into `dist/public/avatar`, after the web build (which would
+ * otherwise wipe `dist/public`) and before the SEA step (which embeds whatever `dist/public` holds). Only
+ * `base_*`/`bot_*` — the wardrobe items are Normal-only for now, Lite ships no store to buy them from.
+ */
+function copyAvatarAssets() {
+  if (!existsSync(AVATAR_SRC)) die(`avatar: source directory missing — ${AVATAR_SRC} (build apps/normal-web first)`)
+  mkdirSync(AVATAR_DEST, { recursive: true })
+  const files = readdirSync(AVATAR_SRC).filter((name) => name.startsWith('base_') || name.startsWith('bot_'))
+  for (const name of files) copyFileSync(join(AVATAR_SRC, name), join(AVATAR_DEST, name))
+  log(`avatar: copied ${files.length} files from normal-web`)
 }
 
 // ---------------------------------------------------------------------------- server

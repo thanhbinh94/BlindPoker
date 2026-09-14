@@ -163,8 +163,9 @@ describe('PokerTable', () => {
     expect(within(bot).getByText('Bot')).toBeInTheDocument()
     // The frame holds a 2D face for the bot, whatever the app's avatar slot would say.
     expect(bot.querySelector(`.${s.avatar}`)).toHaveAttribute('data-face', 'bot')
-    expect(bot.querySelector('svg[data-bot-face]')).not.toBeNull()
-    expect(screen.getByRole('group', { name: 'Seat 1' }).querySelector(`.${s.avatar}`)).toHaveAttribute('data-face', 'initial')
+    // The frame draws the bot's own chibi — same PNG layers a human would get, chosen by its id.
+    expect(bot.querySelector('[data-chibi-hash]')).not.toBeNull()
+    expect(screen.getByRole('group', { name: 'Seat 1' }).querySelector(`.${s.avatar}`)).toHaveAttribute('data-face', 'default')
     expect(within(bot).queryByText('1,000,000')).toBeNull()
     expect(bot.querySelector(`.${s.seatStack}`)).toBeNull()
     // A human's stack is still the plate's job.

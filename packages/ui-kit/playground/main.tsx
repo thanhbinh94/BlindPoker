@@ -5,6 +5,7 @@ import { SUPPORTED_LANGUAGES, createI18n, setLanguage, type Language } from '../
 import { LobbyScreen } from '../src/screens/LobbyScreen.js'
 import { RoomScreen } from '../src/screens/RoomScreen.js'
 import { THEME_MODES, applyTheme, type ThemeMode } from '../src/theme/index.js'
+import { Avatar2dPage } from './avatar2d.js'
 import { PLAYGROUND_MODES, PLAYGROUND_SEAT_COUNTS, createMockClient, type PlaygroundMode, type PlaygroundSeats } from './mock-client.js'
 import '../src/theme/index.css'
 
@@ -100,5 +101,8 @@ function App() {
   )
 }
 
+// `#avatar2d` is a static gallery of every placeholder PNG layer T1 produced — no mock client, no rooms, nothing
+// the rest of this harness sets up. A plain hash check is enough: it is a dev-only page reached by typing the
+// URL, not a route `useHashRoute` needs to know about.
 // No <StrictMode>: its double-invoked render would spin up a second engine driver behind the first.
-createRoot(document.getElementById('root')!).render(<App />)
+createRoot(document.getElementById('root')!).render(window.location.hash === '#avatar2d' ? <Avatar2dPage /> : <App />)

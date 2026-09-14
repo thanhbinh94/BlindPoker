@@ -1,6 +1,7 @@
 import type { PlayerAction, RoomPlayerView } from '@bp/core'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useTableExpressions, type ChibiSubject } from '../avatar2d/index.js'
 import type { GameClientApi } from '../client/useGameClient.js'
 import { formatPoints, type Language } from '../i18n/index.js'
 import { Button } from '../primitives/Button.js'
@@ -20,7 +21,9 @@ export interface RoomScreenProps {
   lang: Language
   /** Fired the moment the room is gone — left, closed or kicked. The host app decides where to go next. */
   onLeft: () => void
-  avatarFor?: (p: RoomPlayerView) => ReactNode
+  /** A human seat's chibi; `null` (or no answer) falls back to the name's initial. Threaded straight to
+   * `PokerTable`, which draws bots' chibis on its own. */
+  chibiFor?: (p: RoomPlayerView) => ChibiSubject | null
   /** One muted line under each seat's name — a title, a rank. Threaded straight to `PokerTable`. */
   captionFor?: (p: RoomPlayerView) => ReactNode
   /** App-specific banner above the room (edition branding, announcements…). */
@@ -57,10 +60,11 @@ function useCountdown(target: number | null, now: () => number): number | null {
  * Everything shown is derived from `client.state`; every button is one `GameClientApi` call. The screen decides
  * nothing about the game — not whose turn it is, not what a legal bet is, not who may start.
  */
-export function RoomScreen({ client, lang, onLeft, avatarFor, captionFor, header, layout }: RoomScreenProps) {
+export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header, layout }: RoomScreenProps) {
   const { t } = useTranslation()
   const { state } = client
   const room = state.room
+  const expressionFor = useTableExpressions(state, client.serverNow)
   const onLeftRef = useRef(onLeft)
   onLeftRef.current = onLeft
   const [buyInSeat, setBuyInSeat] = useState<number | null>(null)
@@ -174,7 +178,8 @@ export function RoomScreen({ client, lang, onLeft, avatarFor, captionFor, header
           canSit={canSit}
           onSeatClick={onSeatClick}
           layout={layout}
-          avatarFor={avatarFor}
+          chibiFor={chibiFor}
+          expressionFor={expressionFor}
           captionFor={captionFor}
         />
 

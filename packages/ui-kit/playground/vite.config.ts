@@ -8,6 +8,9 @@ import { defineConfig } from 'vite'
  */
 export default defineConfig({
   root: 'playground',
+  // The avatar2d page needs real PNGs to draw its `Chibi`s and Normal is the only place T1 put any — pointing
+  // the playground's own static dir at Normal's `public/` makes `/avatar/...` resolve without copying a byte.
+  publicDir: '../../apps/normal-web/public',
   plugins: [react()],
   css: { modules: { localsConvention: 'camelCase' } },
   build: { outDir: 'dist', emptyOutDir: true },

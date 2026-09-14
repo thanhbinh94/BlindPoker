@@ -2,10 +2,12 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import { describe, expect, it, vi } from 'vitest'
+import { defaultChibi } from '../avatar2d/index.js'
 import type { ClientState } from '../client/types.js'
 import type { GameClientApi } from '../client/useGameClient.js'
 import { createI18n } from '../i18n/index.js'
 import { makeHand, makePlayer, makeRoom, makeState } from '../test-fixtures.js'
+import s from '../table/table.module.css'
 import { RoomScreen } from './RoomScreen.js'
 
 const ACK = { t: 'ACK' as const, reqId: 'x' }
@@ -128,18 +130,21 @@ describe('RoomScreen', () => {
           client={client}
           lang="en"
           onLeft={vi.fn()}
-          avatarFor={(p) => <span>{`av:${p.playerId}`}</span>}
+          chibiFor={(p) => (p.playerId === 'a' ? defaultChibi(p.playerId) : null)}
           captionFor={(p) => (p.playerId === 'a' ? 'Hot Hand' : null)}
         />
       </I18nextProvider>,
     )
 
-    expect(screen.getByText('av:a')).toBeInTheDocument()
+    // Ann's plate draws the app's chibi (data-face="app"); Mai's answered `null`, so hers falls back to her
+    // initial the way a seat with no `chibiFor` at all would.
     const ann = screen.getByText('Ann').parentElement
     expect(within(ann!).getByText('Hot Hand')).toBeInTheDocument()
-    // Mai answered `null`, so her plate keeps the two lines it always had.
+    expect(screen.getByText('Ann').closest(`.${s.plate}`)!.querySelector(`.${s.avatar}`)).toHaveAttribute('data-face', 'app')
+    // Mai answered `null`, so her plate keeps the two lines it always had and falls back to her initial.
     const mai = screen.getByText('Mai').parentElement
     expect(within(mai!).queryByText('Hot Hand')).toBeNull()
+    expect(screen.getByText('Mai').closest(`.${s.plate}`)!.querySelector(`.${s.avatar}`)).toHaveAttribute('data-face', 'default')
   })
 
   it('offers ready and stand-up once seated', async () => {

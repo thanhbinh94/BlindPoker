@@ -1,4 +1,4 @@
-import { GameClientProvider, LobbyScreen, RoomScreen, useGameClient, useHashRoute, type SocketFactory } from '@bp/ui-kit'
+import { AvatarAssets, GameClientProvider, LobbyScreen, RoomScreen, useGameClient, useHashRoute, type SocketFactory } from '@bp/ui-kit'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { LiteApi, SessionDto } from './api.js'
@@ -87,24 +87,28 @@ export function App({ api, socketFactory, version = LITE_VERSION }: AppProps) {
   const { state } = client
 
   return (
-    <GameClientProvider client={client}>
-      <Shell
-        path={path}
-        bar={!inRoom}
-        identity={inLobby ? null : { balance: state.balance, status: state.status }}
-        lang={lang}
-        onLanguage={setLang}
-      >
-        {inRoom ? (
-          <RoomScreen client={client} lang={lang} onLeft={() => navigate('/lobby')} />
-        ) : path === '/daily' ? (
-          <DailyScreen api={api} token={token} lang={lang} />
-        ) : path === '/settings' ? (
-          <SettingsScreen me={state.me} balance={state.balance} onSignedOut={onSignedOut} version={version} />
-        ) : (
-          <LobbyScreen client={client} lang={lang} onLanguage={setLang} onEnteredRoom={() => navigate('/room')} />
-        )}
-      </Shell>
-    </GameClientProvider>
+    // Lite packs its own `base_*`/`bot_*` PNGs next to the app shell rather than serving `/avatar/` from a
+    // server root the way Normal does — see `apps/lite/scripts/build.mjs`.
+    <AvatarAssets base="./avatar/">
+      <GameClientProvider client={client}>
+        <Shell
+          path={path}
+          bar={!inRoom}
+          identity={inLobby ? null : { balance: state.balance, status: state.status }}
+          lang={lang}
+          onLanguage={setLang}
+        >
+          {inRoom ? (
+            <RoomScreen client={client} lang={lang} onLeft={() => navigate('/lobby')} />
+          ) : path === '/daily' ? (
+            <DailyScreen api={api} token={token} lang={lang} />
+          ) : path === '/settings' ? (
+            <SettingsScreen me={state.me} balance={state.balance} onSignedOut={onSignedOut} version={version} />
+          ) : (
+            <LobbyScreen client={client} lang={lang} onLanguage={setLang} onEnteredRoom={() => navigate('/room')} />
+          )}
+        </Shell>
+      </GameClientProvider>
+    </AvatarAssets>
   )
 }
