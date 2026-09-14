@@ -81,6 +81,7 @@
 
 .lobbyAvatar {
   border: 1px solid color-mix(in srgb, var(--gold) 42%, transparent);
+  border-radius: 50%;
 }
 
 /* The same reward dot on the lobby bar's Daily link, which sits outside the rail. */

@@ -1,21 +1,52 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { ApiError, type AvatarConfigDto, type HistoryEntryDto, type LedgerPageDto, type MeDto, type NormalApi, type PlayerStatsDto } from '../api.js'
+import {
+  ApiError,
+  type AvatarCatalogDto,
+  type AvatarConfigDto,
+  type BaseDto,
+  type HistoryEntryDto,
+  type ItemDto,
+  type LedgerPageDto,
+  type MeDto,
+  type NormalApi,
+  type PlayerStatsDto,
+} from '../api.js'
 import viNormal from '../locales/vi/normal.json'
 import { makeI18n, renderWithI18n } from '../test-i18n.js'
 import { ProfileScreen } from './ProfileScreen.js'
 
+const BASE_F01: BaseDto = {
+  id: 'f01',
+  nameKey: 'bases.f01',
+  layers: { hairBack: 'base_f01_L20', body: 'base_f01_L30', hairFront: 'base_f01_L60' },
+  faces: {
+    neutral: 'base_f01_face_neutral_L50',
+    happy: 'base_f01_face_happy_L50',
+    sad: 'base_f01_face_sad_L50',
+    surprised: 'base_f01_face_surprised_L50',
+    closed: 'base_f01_face_closed_L50',
+    sleep: 'base_f01_face_sleep_L50',
+  },
+}
+
+const OUTFIT: ItemDto = {
+  id: 'outfit_royal_robe01',
+  slot: 'outfit',
+  rarity: 'epic',
+  nameKey: 'items.outfit_royal_robe01',
+  assetKey: 'outfit/outfit_royal_robe01',
+  isDefault: false,
+  asset: { layer: 40, file: 'item_outfit_royal_robe01_L40', fitsAvatarCrop: false },
+}
+
+const AVATAR_CATALOG: AvatarCatalogDto = { frame: { w: 384, h: 448 }, crop: { x: 112, y: 48, size: 160 }, bases: [BASE_F01], manifestVersion: 1 }
+
 const AVATAR: AvatarConfigDto = {
-  v: 2,
-  body: 'female',
-  skin: '#efc9a4',
-  eyes: '#6b4a2f',
-  hairColor: '#d9a441',
-  hair: 'hair_bun',
-  top: 'clothing_aodai',
-  bottom: 'bottom_skirt',
-  shoes: 'shoes_sandals',
+  v: 3,
+  base: 'f01',
+  outfit: 'outfit_royal_robe01',
   title: 'title_hot_hand',
   badge: 'badge_gold',
 }
@@ -86,6 +117,8 @@ function stubApi(overrides: Partial<NormalApi> = {}): NormalApi {
     history: vi.fn().mockResolvedValue([HAND]),
     ledger: vi.fn().mockResolvedValue(PAGE_ONE),
     rename: vi.fn(),
+    catalogItems: vi.fn().mockResolvedValue({ items: [OUTFIT] }),
+    avatarCatalog: vi.fn().mockResolvedValue(AVATAR_CATALOG),
     ...overrides,
   } as unknown as NormalApi
 }
@@ -110,11 +143,32 @@ describe('ProfileScreen', () => {
     expect(screen.getByText(/Thành viên từ/)).toBeInTheDocument()
     // 123.000 in `vi`: the assertion is on the digits, not on the separator the locale picked.
     expect(screen.getByText(/123/)).toBeInTheDocument()
-    // The header's figure is a stage, and its accessible name is the configuration in words — the same
-    // sentence the portrait fallback carries, which is what jsdom (no WebGL) renders here.
-    // `waitFor` rather than `findByRole`: the empty stage carries the same name while its chunk is still
-    // in flight, so the assertion has to be on the thing that tells the two apart.
-    await waitFor(() => expect(screen.getByRole('img', { name: /Nhân vật nữ.*Áo dài/ })).toHaveAttribute('data-size', 'lg'))
+    // The stage carries two chibis — the full body (its aura visible) and the head crop (its frame ring
+    // visible) — on a backdrop keyed by the equipped title.
+    const stage = document.querySelector('[data-title]')
+    expect(stage).toHaveAttribute('data-title', 'title_hot_hand')
+    await waitFor(() => expect(within(stage as HTMLElement).getByRole('img', { name: 'Bình' })).toBeInTheDocument())
+    expect(stage?.querySelectorAll('[data-chibi-hash]')).toHaveLength(2)
+  })
+
+  it('stages exactly one full-body chibi and one head-crop chibi, side by side in their own row', async () => {
+    renderScreen()
+    await screen.findByRole('heading', { name: 'Bình', level: 1 })
+
+    const stage = document.querySelector('[data-title]') as HTMLElement
+    const chibis = [...stage.querySelectorAll('[data-chibi-hash]')]
+    expect(chibis).toHaveLength(2)
+    expect(chibis.map((el) => el.getAttribute('data-frame')).sort()).toEqual(['full', 'head'])
+  })
+
+  it('still draws the header, stats and history when the avatar catalogue fails — the stage falls back to a default chibi', async () => {
+    renderScreen(stubApi({ avatarCatalog: vi.fn().mockRejectedValue(new ApiError(500, 'INTERNAL', 'nope')) }))
+
+    expect(await screen.findByRole('heading', { name: 'Bình', level: 1 })).toBeInTheDocument()
+    expect(screen.getByText(viNormal.profile.stats.title)).toBeInTheDocument()
+    const stage = document.querySelector('[data-title]')
+    expect(stage?.querySelectorAll('[data-chibi-hash]')).toHaveLength(2)
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('groups all sixteen counters, prints points with their unit and names the best hand', async () => {
@@ -157,8 +211,6 @@ describe('ProfileScreen', () => {
   })
 
   it('excludes my own seat by id, even when an opponent happens to share my name', async () => {
-    // Display names are not unique, and the server sends one per human seat. Filtering on the name would
-    // have dropped the namesake from the list — or, when the reader is the namesake, kept the reader in it.
     const namesake: HistoryEntryDto = {
       ...HAND,
       players: [
@@ -261,8 +313,6 @@ describe('ProfileScreen', () => {
   })
 
   it('offers a way back after a first ledger page that failed', async () => {
-    // A failed first page leaves no cursor, which is also what the end of the history looks like — without a
-    // retry of its own the only way out would be reloading the whole page.
     const ledger = vi.fn().mockRejectedValueOnce(new ApiError(500, 'INTERNAL', 'nope')).mockResolvedValue(PAGE_ONE)
     const user = userEvent.setup()
     renderScreen(stubApi({ ledger }))
@@ -273,7 +323,6 @@ describe('ProfileScreen', () => {
     expect(await screen.findByText(viNormal.ledger.reason.settlement)).toBeInTheDocument()
     expect(ledger).toHaveBeenLastCalledWith({ limit: 50 })
     expect(screen.queryByText(viNormal.profile.ledger.error)).toBeNull()
-    // …and the cursor from the page that did land takes over the button again.
     expect(screen.getByRole('button', { name: viNormal.profile.ledger.loadMore })).toBeInTheDocument()
   })
 
@@ -289,7 +338,6 @@ describe('ProfileScreen', () => {
 
     await user.click(screen.getByRole('button', { name: viNormal.profile.ledger.loadMore }))
     expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.profile.ledger.error)
-    // The rows already read stay put, so the button is still "load more" and still carries the cursor.
     expect(screen.getByText(viNormal.ledger.reason.settlement)).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: viNormal.profile.ledger.loadMore }))

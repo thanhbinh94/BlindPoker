@@ -1,6 +1,7 @@
 import type { Card as CardId, RoomPlayerView, RoomView, ShowdownHand } from '@bp/core'
 import type { CSSProperties, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { botChibi, type ChibiSubject, type Expression } from '../avatar2d/index.js'
 import type { ClientHand, ClientSeat } from '../client/types.js'
 import { handLabel, type Language } from '../i18n/index.js'
 import { cx } from '../primitives/cx.js'
@@ -23,7 +24,12 @@ export interface PokerTableProps {
   lang: Language
   /** Defaults to `stack` under 768 px wide or 620 px tall, and `ring` above both. */
   layout?: TableLayout
-  avatarFor?: (player: RoomPlayerView) => ReactNode
+  /** A human seat's chibi; `null` (or no answer) falls back to the name's initial. Bots always draw their own
+   * `botChibi` and never ask this — a bot has no wardrobe for the app to answer for. */
+  chibiFor?: (player: RoomPlayerView) => ChibiSubject | null
+  /** Per-seat expression, usually `useTableExpressions(state, serverNow)` from the room's `ClientState`. Missing
+   * seats — and every seat when this is not given at all — draw `neutral`. */
+  expressionFor?: (seat: number) => Expression
   /** One muted line under each seat's name — a title, a rank. Returning `null` leaves that plate as it was. */
   captionFor?: (player: RoomPlayerView) => ReactNode
   onSeatClick?: (seat: number) => void
@@ -67,7 +73,8 @@ export function PokerTable({
   turnTimerMs,
   lang,
   layout,
-  avatarFor,
+  chibiFor,
+  expressionFor,
   captionFor,
   onSeatClick,
   canSit,
@@ -122,6 +129,10 @@ export function PokerTable({
     const clientSeat = handSeats.get(index) ?? seatFromPlayer(index, player)
     const acting = hand !== null && hand.actingSeat === index
     const hit = showdown.get(index)
+    const chibi = player.isBot ? botChibi(player.playerId) : (chibiFor?.(player) ?? null)
+    // The turn bounce (spec 08 §3.4): only the seat whose turn it is *and* only when that seat is the viewer's
+    // own — an opponent's chibi does not bounce for the viewer, since it is not their decision to make.
+    const bounce = hand !== null && hand.actingSeat === index && index === hand.mySeat
     return (
       <Seat
         key={index}
@@ -137,7 +148,9 @@ export function PokerTable({
         turnTimerMs={turnTimerMs}
         lang={lang}
         position={mode === 'ring' ? position : null}
-        avatar={avatarFor?.(player)}
+        chibi={chibi}
+        expression={expressionFor?.(index) ?? 'neutral'}
+        bounce={bounce}
         caption={captionFor?.(player)}
       />
     )

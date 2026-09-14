@@ -45,15 +45,19 @@ src/
 
   auth/              password.ts (argon2id) · session-service.ts · cookie.ts · auth-service.ts
   economy/           daily-rules.ts (pure) · economy-service.ts (daily claim, relief)
-  inventory/         slots.ts (the slot/body vocabulary) · items.ts (catalogue) · inventory-service.ts (ownership)
-                     avatar.ts (config v2 + validation) · avatar-migrate.ts (reads a v1 config back as v2)
+  inventory/         slots.ts (the slot/base vocabulary) · manifest.ts (loads avatar-manifest.json)
+                     bases.ts (the two fixed figures, held against the manifest) · items.ts (catalogue)
+                     aliases.ts (old wardrobe ids → current ones, or null when dropped)
+                     inventory-service.ts (ownership, alias-aware) · outfits-service.ts (five saved outfits)
+                     avatar.ts (config v3 + validation) · avatar-migrate.ts (reads a v1/v2 config back as v3)
   achievements/      definitions.ts (loader) · achievement-service.ts (listens, grants)
   stats/             player-stats.ts (the 16 counters) · stats-service.ts (listens, counts)
   history/           history-service.ts (writes a settled hand, reads a player's last N)
-  http/              routes.ts + routes-auth/-me/-rewards/-catalog.ts · auth-guard.ts · types.ts
+  http/              routes.ts + routes-auth/-me/-rewards/-catalog/-outfits.ts · auth-guard.ts · types.ts
 
-data/                items.json, achievements.json — content, not code
-drizzle/             committed migration SQL (0000 generated; 0001_avatar_v2 hand-written, data only)
+data/                items.json, item-aliases.json, avatar-bases.json, achievements.json — content, not code
+                      avatar-manifest.json — Task 1's asset pipeline output, mirrored from normal-web
+drizzle/             committed migration SQL (0000 generated; 0001_avatar_v2, 0002_outfits hand-written, data only)
 test/build.test.ts   the build itself, as a test
 ```
 
@@ -178,53 +182,70 @@ first, not a `DELETE`.
 `data/items.json` is the source of truth; the `items` table is a projection of it, upserted on every
 boot so that foreign keys have something to point at. Nothing writes items at run time.
 
-Since Plan 8 an item is 3D geometry, so a definition names a **slot** and one **variant per body**:
+Since Plan 11 a figure is a fixed base (`f01`/`m01`) with PNG layers stacked on it, so an item names
+a **slot** and one **asset**, shared by every base — a hat drawn once is worn by both:
 
 1. Add an object to `data/items.json`:
 
    ```json
-   { "id": "hair_braid", "slot": "hair", "rarity": "rare",
-     "nameKey": "items.hair_braid", "assetKey": "hair/hair_braid", "isDefault": false,
-     "variants": { "male":   { "file": "hair.glb", "node": "hair/hair_braid/male" },
-                   "female": { "file": "hair.glb", "node": "hair/hair_braid/female" } } }
+   { "id": "head_visor_neon01", "slot": "head", "rarity": "rare",
+     "nameKey": "items.head_visor_neon01", "assetKey": "head/head_visor_neon01", "isDefault": false,
+     "asset": { "layer": 80, "file": "item_head_visor_neon01_L80", "fitsAvatarCrop": true } }
    ```
 
-   `slot` ∈ `hair` `top` `bottom` `shoes` `hat` `accessory` `jewelry` `title` `badge`;
-   `rarity` ∈ `common` `rare` `epic`. The first seven are *geometric* and must carry `variants`;
-   `title` and `badge` are text beside a name and must not. `file` is fixed by the slot
-   (`hair.glb` · `outfits.glb` for `top`/`bottom`/`shoes` · `accessories.glb` for the rest) and
-   `node` is always `<slot>/<id>/<body>`, which is how the asset build names what it emits. An
-   optional `tint` (`#rrggbb`) fixes the item's `cloth_primary` colour; skin, eyes and hair colour
-   come from the player's configuration, never from an item.
+   `slot` ∈ `head` `face` `outfit` `aura` `frame` `title` `badge`; `rarity` ∈ `common` `rare` `epic`.
+   `head`/`face`/`outfit`/`aura`/`frame` are `DRAWN_SLOTS` (`inventory/slots.ts`) and must carry
+   `asset`; `title` and `badge` are text beside a name and must not. `asset.layer` is fixed by the
+   slot (10 aura · 40 outfit · 70 face · 80 head · 90 frame — `SLOT_LAYER` in `inventory/items.ts`)
+   and `asset.file` must name an entry in `data/avatar-manifest.json` (Task 1's asset pipeline
+   output, mirrored from `normal-web`) whose own `layer` agrees. A `head` may set
+   `hidesHairFront`/`hidesHairBack` when it should cover the base's hair layers.
 
-2. Emit those nodes from the asset build (`docs/avatar-assets.md`) so they appear in
-   `normal-web/public/avatar3d/manifest.json`, and add the `nameKey` string to the vi and en bundles.
+2. Run the asset pipeline (`apps/normal-web/scripts/avatar-pipeline.mjs ingest`, then `check`) so the
+   file exists at both densities and is listed in the manifest, and add the `nameKey` string to the
+   vi and en bundles.
 
-3. Restart. `loadItemCatalog` validates the file and **refuses to start** on a duplicate id, an
-   unknown slot or rarity, geometry that breaks the file/node convention, a geometric item with no
-   variants (or a title with some), a required slot with no default or with two, a default in an
-   optional slot, or an absent `badge_monthly` / `title_devoted` — each of those would otherwise
-   surface much later and much worse (a day-28 claim failing on a foreign key, on the 28th).
-   `test/catalog-manifest.test.ts` then holds every variant against the built manifest; it skips
-   with a warning when the assets have not been built.
+3. Restart. `loadItemCatalog` validates the file against the manifest and **refuses to start** on a
+   duplicate id, an unknown slot or rarity, a drawn slot with no asset (or a `title`/`badge` with
+   one), an asset naming a file the manifest does not have or whose layer disagrees, a required slot
+   with no default or with two, a default in an optional slot, or an absent `badge_monthly` /
+   `title_devoted` — each of those would otherwise surface much later and much worse (a day-28 claim
+   failing on a foreign key, on the 28th). `inventory/items.test.ts` holds every asset against a
+   fixture manifest the same way.
 
 Things worth knowing before you pick a rarity:
 
-- The **daily random draw** (days 7, 14, 21) picks an unowned item of that rarity, excluding the
-  `title` and `badge` slots entirely and excluding every item named as an achievement reward.
-  A new `common` or `rare` in any other slot enlarges that pool; an `epic` never enters it.
+- The **daily random draw** (days 7, 14, 21) picks an unowned item of that rarity, restricted to
+  `DAILY_DRAW_SLOTS` (`head`/`face`/`aura`/`frame` — `outfit` is drawable geometry but chosen
+  deliberately, not handed out at random) and excluding every item named as an achievement reward.
+  A new `common` or `rare` in one of those four slots enlarges that pool; an `epic` never enters it.
 - Making an item `isDefault: true` grants it to every **new** account. Existing players do not get
-  it retroactively — that is what a data migration is for, and `drizzle/0001_avatar_v2.sql` is the
-  worked example: it inserts the four v2 defaults and grants them to every `players` row, because
-  `hair`, `top`, `bottom` and `shoes` are required and nobody may be left without one.
+  it retroactively — that is what a data migration is for, and `drizzle/0002_outfits.sql` is the
+  worked example: it inserts `outfit_casual01` and grants it to every `players` row, because
+  `outfit` is required and nobody may be left without one.
 
-### The v1 → v2 avatar migration
+### Old wardrobe ids: `item-aliases.json`
 
-`items.category` is still the column name; it holds the v2 slot. `players.avatar_config` is **not**
-rewritten: `readAvatarConfig` (`inventory/avatar-migrate.ts`) repairs anything that does not
-validate on the way out — `clothing_*` → `top` (`clothing_tee` → `top_tee`), the v1 headwear out of
-`accessory` and into `hat`, withdrawn ids to the slot's default, `body`/`skin`/`eyes` to their
-defaults — while `PUT /api/me/avatar` accepts v2 only and answers `MISSING_LAYER` to anything else.
+Plan 11 replaced the whole slot vocabulary (`hair`/`top`/`bottom`/`shoes`/`hat`/`accessory`/`jewelry`
+became `head`/`face`/`outfit`/`aura`/`frame`), but `inventory.item_id` rows are never rewritten — an
+old id like `hat_crown` still means something, forever, to whoever already owns it.
+`data/item-aliases.json` is old id → current id, or `null` for an id the new wardrobe dropped
+outright (a headband, a ring, a pair of jeans); `inventory/aliases.ts` loads it and refuses a cycle.
+`resolveItemId(id, aliases)` is `aliases.get(id) ?? id` and is applied everywhere an id might be one
+of the old ones: `validateAvatarConfig`'s inputs, `inventory-service.ts`'s `owns`/`missingOf` (which
+widen every id they are asked about to its whole alias class, so an inventory row under the old id
+satisfies the new one), `grant`, which always writes the current id, and `GET /api/me/inventory`
+(`http/routes-me.ts`), which resolves each row before joining the catalogue and collapses a player who
+somehow holds both the old and the new row into one entry, keeping the old id as `acquiredAs`.
+
+### The v1/v2 → v3 avatar migration
+
+`items.category` is still the column name; it holds the current slot. `players.avatar_config` is
+**not** rewritten: `readAvatarConfig` (`inventory/avatar-migrate.ts`) repairs anything that does not
+validate on the way out — `body` → a chosen `base`, `hat`/`accessory`/`jewelry` resolved through the
+alias map into `head`/`face`/`aura`, `top`/`bottom`/`shoes`/`clothing` collapsed into one `outfit`
+(a v2 `clothing_suit` becomes `outfit_tuxedo01`; anything else falls back to the default outfit) —
+while `PUT /api/me/avatar` accepts v3 only and answers `MISSING_LAYER` to anything else.
 
 ## Adding an achievement
 
@@ -246,6 +267,21 @@ counted hand — not retroactively at boot.
 **Adding a new *metric* is a schema change**: a column on `player_stats`, a migration
 (`pnpm --filter @bp/normal-server db:generate`, then commit the generated SQL), and the counting
 logic in `stats/stats-service.ts`.
+
+**A migration that also has to move data — `0001_avatar_v2.sql`, `0002_outfits.sql` — is hand-written**
+rather than generated, in `0001`'s own style (its header comment says so), because `db:generate` diffs
+`schema.ts` against `drizzle/meta/<n>_snapshot.json` and produces schema DDL only; it has no way to know
+that existing rows need granting, remapping or backfilling. The snapshot still has to move, though:
+`drizzle-kit` reads the latest `meta/<n>_snapshot.json` as "what the database already looks like" the
+*next* time `db:generate` runs, and a hand-written migration that changes `schema.ts` (a new table, a
+new column) without a matching snapshot leaves that file lying about the schema's real shape — the next
+`generate` would then diff against the wrong baseline and emit DDL for changes that already shipped by
+hand. `0002_snapshot.json` was produced by generating against a temporarily-reverted journal (so
+`drizzle-kit` computed the real diff — one new table, `avatar_outfits` — from `0001`), then keeping only
+the resulting snapshot and restoring the hand-written `0002_outfits.sql` (with its `INSERT`s intact) and
+the original journal entry. The rule going forward: after a hand-written migration lands, generate a
+throwaway migration once to capture the snapshot it implies, keep the snapshot, and discard the SQL file
+`generate` wrote (the hand-written one already covers the DDL, plus the data move `generate` cannot see).
 
 ---
 

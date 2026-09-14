@@ -1,0 +1,373 @@
+/**
+ * The ten acceptance criteria of D01 §10, as code.
+ *
+ * The document's list is written for a person holding a file: "size exactly right", "no white fringe",
+ * "the outfit leaves no underwear showing". Each one below is that sentence turned into a number, and
+ * the numbers are the interesting part of this file — they are the difference between a criterion that
+ * catches bad art and one that only catches files nobody would have shipped anyway.
+ *
+ *   C1  the frame, exactly, at both densities (D01 §10.1 — one pixel out is a fail)
+ *   C2  nothing opaque on the outermost row or column (§10.3)
+ *   C3  the empty part really is empty: no alpha at all more than 3 px outside the solid shape (§10.4)
+ *   C4  no white fringe: the soft rim is the shape's colour, not white bled in (§10.5, §8.3)
+ *   C5  head and face items fit inside the portrait crop (§10.6, §5)
+ *   C6  an outfit covers the base's underwear (§10.7)
+ *   C7  the @1x really is the @2x scaled down (§8.2 — "never enlarge from a smaller size")
+ *   C8  the file name follows §9.1, with a layer number that matches its slot
+ *   C9  the manifest lists it, at that layer and that frame (§10.10)
+ *   C10 the @2x is inside the per-file budget, and the manifest says what is on disk
+ *
+ * Two of them are judgement calls that the document leaves to a person and this file has to pin down.
+ * C4 compares the *rim* to the *interior*: white-on-white art is legitimate and would otherwise fail
+ * every time, so a near-white rim is only a fault when the inside of the shape is not near-white too.
+ * C6 has no coordinates in D01 at all — see `UNDERWEAR_BAND` in `frame.mjs` for how the region is found,
+ * and note that `--skip C6` exists for the genuinely awkward outfit, because a gate with no override
+ * is a gate people route around by deleting it.
+ */
+import { existsSync, statSync } from 'node:fs'
+import { join } from 'node:path'
+import {
+  ALPHA_INK,
+  ALPHA_SOLID,
+  alphaBBox,
+  colourDistance,
+  readPicture,
+  resizePicture,
+} from './png.mjs'
+import { CROP, DENSITIES, FRAME, LAYERS, UNDERWEAR_BAND, UNDERWEAR_COVERAGE, UNDERWEAR_TOLERANCE } from './frame.mjs'
+import { NAME_PATTERN, parseName } from './manifest.mjs'
+
+/** C10, and spec §8's 6 MB stage-1 footprint divided by the files that have to fit in it. */
+export const MAX_BYTES_2X = 400 * 1024
+/** C3: how far outside the ink a stray pixel still counts as inside the shape's own soft edge. */
+export const STRAY_MARGIN = 3
+/** C5: the same slack, around the portrait crop. */
+export const CROP_MARGIN = 4
+/** C4: how close to white a mean colour has to be before it is called a fringe. */
+export const WHITE_TOLERANCE = 24
+/** C7: how alike the two densities have to be. */
+export const DENSITY_CORRELATION = 0.97
+export const DENSITY_ALPHA_DRIFT = 12
+
+const ok = (detail) => ({ ok: true, detail })
+const bad = (detail) => ({ ok: false, detail })
+
+const CHECKS = [
+  { id: 'C1', run: frameSize },
+  { id: 'C2', run: insideTheFrame },
+  { id: 'C3', run: noStrayPixels },
+  { id: 'C4', run: noWhiteFringe },
+  { id: 'C5', run: fitsThePortrait },
+  { id: 'C6', run: coversTheUnderwear },
+  { id: 'C7', run: densitiesAgree },
+  { id: 'C8', run: legalName },
+  { id: 'C9', run: listedInTheManifest },
+  { id: 'C10', run: insideTheBudget },
+]
+
+export const CHECK_IDS = CHECKS.map((check) => check.id)
+
+/**
+ * Run every check over every named file (or over everything the manifest lists).
+ *
+ * Returns one row per file, each with a result per check. Nothing here exits or prints: `formatChecks`
+ * turns the rows into the table, and the CLI decides what a failure costs.
+ *
+ * @param {{ dir: string, manifest: { files: Record<string, any> }, names?: string[], skip?: string[] }} options
+ */
+export async function runChecks({ dir, manifest, names, skip = [] }) {
+  const wanted = names?.length ? names : Object.keys(manifest.files)
+  const bases = await loadBases(dir, manifest)
+  const rows = []
+  for (const name of wanted) {
+    const context = await load(dir, manifest, name, bases)
+    const results = CHECKS.map((check) => ({
+      id: check.id,
+      ...(skip.includes(check.id) ? ok('skipped') : check.run(context)),
+    }))
+    rows.push({ name, results })
+  }
+  return rows
+}
+
+/** The `base_*_L30` layers at @1x, which C6 measures every outfit against. */
+async function loadBases(dir, manifest) {
+  const bases = []
+  for (const name of Object.keys(manifest.files)) {
+    const parsed = parseName(name)
+    if (parsed?.kind !== 'base' || parsed.layer !== LAYERS.body) continue
+    const file = join(dir, `${name}@1x.png`)
+    if (!existsSync(file)) continue
+    bases.push({ name: parsed.base, picture: await readPicture(file) })
+  }
+  return bases
+}
+
+async function load(dir, manifest, name, bases) {
+  const pictures = {}
+  const bytes = {}
+  for (const density of DENSITIES) {
+    const file = join(dir, `${name}@${density}x.png`)
+    if (!existsSync(file)) continue
+    pictures[density] = await readPicture(file)
+    bytes[density] = statSync(file).size
+  }
+  const halved = pictures[2] ? await resizePicture(pictures[2], Math.round(pictures[2].width / 2), Math.round(pictures[2].height / 2)) : null
+  return { name, dir, manifest, entry: manifest.files[name], parsed: parseName(name), pictures, bytes, halved, bases }
+}
+
+// ───────────────────────────────────────────────────────────── the criteria ──
+
+function frameSize({ pictures }) {
+  const wrong = []
+  for (const density of DENSITIES) {
+    const picture = pictures[density]
+    if (!picture) {
+      wrong.push(`@${density}x missing`)
+      continue
+    }
+    if (picture.width !== FRAME.w * density || picture.height !== FRAME.h * density) {
+      wrong.push(`@${density}x is ${picture.width} × ${picture.height}`)
+    }
+  }
+  return wrong.length ? bad(wrong.join(', ')) : ok(`${FRAME.w} × ${FRAME.h} at both densities`)
+}
+
+function insideTheFrame({ pictures }) {
+  for (const density of DENSITIES) {
+    const picture = pictures[density]
+    if (!picture) continue
+    const { width, height, data } = picture
+    for (let x = 0; x < width; x++) {
+      for (const y of [0, height - 1]) {
+        if (data[(y * width + x) * 4 + 3] > ALPHA_INK) return bad(`@${density}x touches the frame at ${x},${y}`)
+      }
+    }
+    for (let y = 0; y < height; y++) {
+      for (const x of [0, width - 1]) {
+        if (data[(y * width + x) * 4 + 3] > ALPHA_INK) return bad(`@${density}x touches the frame at ${x},${y}`)
+      }
+    }
+  }
+  return ok('clear of every edge')
+}
+
+function noStrayPixels({ pictures }) {
+  for (const density of DENSITIES) {
+    const picture = pictures[density]
+    if (!picture) continue
+    // The box is taken over the *solid* pixels, not over every pixel with any alpha at all. Taken over
+    // every pixel it would move to enclose the very rubbish it is meant to find — one alpha-40 pixel in
+    // a corner and the box is the whole frame, with nothing outside it to complain about. The shape is
+    // where the opaque pixels are; a faint pixel more than `STRAY_MARGIN` away from that is not the
+    // shape's soft edge, it is what D01 §8.3 calls rác bán trong suốt.
+    const box = alphaBBox(picture, ALPHA_SOLID) ?? alphaBBox(picture)
+    if (!box) continue
+    const margin = STRAY_MARGIN * density
+    const { width, height, data } = picture
+    let strays = 0
+    let worst = 0
+    for (let y = 0; y < height; y++) {
+      const outsideRow = y < box.y - margin || y >= box.y + box.h + margin
+      for (let x = 0; x < width; x++) {
+        if (!outsideRow && x >= box.x - margin && x < box.x + box.w + margin) continue
+        const alpha = data[(y * width + x) * 4 + 3]
+        if (alpha === 0) continue
+        strays++
+        worst = Math.max(worst, alpha)
+      }
+    }
+    if (strays) return bad(`@${density}x has ${strays} pixels outside the shape, up to alpha ${worst}`)
+  }
+  return ok('empty where it should be')
+}
+
+function noWhiteFringe({ pictures }) {
+  const picture = pictures[2]
+  if (!picture) return ok('n/a — no @2x to judge')
+  const rim = meanColour(picture, (alpha) => alpha >= ALPHA_INK && alpha <= 200)
+  if (!rim) return ok('n/a — no soft edge to judge')
+  const distance = colourDistance(rim[0], rim[1], rim[2], 255, 255, 255)
+  if (distance >= WHITE_TOLERANCE) return ok(`rim is ${Math.round(distance)} from white`)
+  const inside = meanColour(picture, (alpha) => alpha > 200)
+  const insideDistance = inside ? colourDistance(inside[0], inside[1], inside[2], 255, 255, 255) : 255
+  if (insideDistance < WHITE_TOLERANCE) return ok('white rim on white art, which is the art')
+  return bad(`rim is ${Math.round(distance)} from white but the shape is ${Math.round(insideDistance)} — a white fringe`)
+}
+
+function meanColour(picture, accept) {
+  let r = 0
+  let g = 0
+  let b = 0
+  let n = 0
+  for (let p = 0; p < picture.width * picture.height; p++) {
+    const at = p * 4
+    if (!accept(picture.data[at + 3])) continue
+    r += picture.data[at]
+    g += picture.data[at + 1]
+    b += picture.data[at + 2]
+    n++
+  }
+  return n < 50 ? null : [r / n, g / n, b / n]
+}
+
+function fitsThePortrait({ parsed, pictures }) {
+  if (parsed?.layer !== LAYERS.head && parsed?.layer !== LAYERS.faceAcc) return ok('n/a — not a head or face item')
+  const picture = pictures[1]
+  if (!picture) return ok('n/a — no @1x to judge')
+  const box = alphaBBox(picture)
+  if (!box) return bad('the layer is empty')
+  const inside =
+    box.x >= CROP.x - CROP_MARGIN &&
+    box.y >= CROP.y - CROP_MARGIN &&
+    box.x + box.w <= CROP.x + CROP.size + CROP_MARGIN &&
+    box.y + box.h <= CROP.y + CROP.size + CROP_MARGIN
+  const where = `${box.x},${box.y} ${box.w} × ${box.h}`
+  return inside ? ok(`inside the crop (${where})`) : bad(`spills out of the ${CROP.size} × ${CROP.size} crop (${where})`)
+}
+
+function coversTheUnderwear({ parsed, pictures, bases }) {
+  if (parsed?.layer !== LAYERS.outfit) return ok('n/a — not an outfit')
+  const outfit = pictures[1]
+  if (!outfit) return ok('n/a — no @1x to judge')
+  if (!bases.length) return bad('no base layer to measure against')
+  let worst = { name: '', coverage: 1 }
+  for (const candidate of bases) {
+    const region = underwearRegion(candidate.picture)
+    if (!region.pixels.length) return bad(`${candidate.name} has no underwear region to cover`)
+    let covered = 0
+    for (const p of region.pixels) if (outfit.data[p * 4 + 3] > ALPHA_SOLID) covered++
+    const coverage = covered / region.pixels.length
+    if (coverage < worst.coverage) worst = { name: candidate.name, coverage }
+  }
+  const percent = `${(worst.coverage * 100).toFixed(1)} %`
+  return worst.coverage >= UNDERWEAR_COVERAGE
+    ? ok(`covers ${percent} of every base`)
+    : bad(`leaves ${worst.name}'s underwear showing — covers only ${percent}`)
+}
+
+/**
+ * The base's underwear: the pixels in the waist band whose colour is the band's dominant one.
+ *
+ * "Dominant" is a modal colour over 32-level buckets rather than a mean — a mean of skin and cloth is a
+ * colour that appears nowhere in the picture — and the tolerance around it is what lets line art,
+ * shading and the odd highlight sit inside the region without being counted as underwear an outfit has
+ * failed to cover.
+ */
+export function underwearRegion(picture, density = 1) {
+  const { width, data } = picture
+  const top = UNDERWEAR_BAND.y0 * density
+  const bottom = Math.min(picture.height, UNDERWEAR_BAND.y1 * density)
+  const buckets = new Map()
+  for (let y = top; y < bottom; y++) {
+    for (let x = 0; x < width; x++) {
+      const at = (y * width + x) * 4
+      if (data[at + 3] <= ALPHA_SOLID) continue
+      const key = `${data[at] >> 5}:${data[at + 1] >> 5}:${data[at + 2] >> 5}`
+      const bucket = buckets.get(key) ?? { n: 0, r: 0, g: 0, b: 0 }
+      bucket.n++
+      bucket.r += data[at]
+      bucket.g += data[at + 1]
+      bucket.b += data[at + 2]
+      buckets.set(key, bucket)
+    }
+  }
+  let modal = null
+  for (const bucket of buckets.values()) if (!modal || bucket.n > modal.n) modal = bucket
+  if (!modal) return { pixels: [], dominant: null }
+  const dominant = [modal.r / modal.n, modal.g / modal.n, modal.b / modal.n]
+  const pixels = []
+  for (let y = top; y < bottom; y++) {
+    for (let x = 0; x < width; x++) {
+      const p = y * width + x
+      const at = p * 4
+      if (data[at + 3] <= ALPHA_SOLID) continue
+      if (colourDistance(data[at], data[at + 1], data[at + 2], dominant[0], dominant[1], dominant[2]) <= UNDERWEAR_TOLERANCE) pixels.push(p)
+    }
+  }
+  return { pixels, dominant }
+}
+
+function densitiesAgree({ pictures, halved }) {
+  const small = pictures[1]
+  if (!small || !halved) return bad('one of the two densities is missing')
+  if (small.width !== halved.width || small.height !== halved.height) return bad(`@1x is ${small.width} × ${small.height}, the halved @2x is ${halved.width} × ${halved.height}`)
+  let drift = 0
+  // Premultiplied, so that the colour of a fully transparent pixel — which nobody will ever see and
+  // which the two encoders need not agree about — cannot drag the coefficient down.
+  const sums = { n: 0, a: 0, b: 0, aa: 0, bb: 0, ab: 0 }
+  for (let p = 0; p < small.width * small.height; p++) {
+    const at = p * 4
+    drift += Math.abs(small.data[at + 3] - halved.data[at + 3])
+    const sa = small.data[at + 3] / 255
+    const ha = halved.data[at + 3] / 255
+    for (let c = 0; c < 4; c++) {
+      const left = c === 3 ? small.data[at + 3] : small.data[at + c] * sa
+      const right = c === 3 ? halved.data[at + 3] : halved.data[at + c] * ha
+      sums.n++
+      sums.a += left
+      sums.b += right
+      sums.aa += left * left
+      sums.bb += right * right
+      sums.ab += left * right
+    }
+  }
+  const meanDrift = drift / (small.width * small.height)
+  const r = correlation(sums)
+  if (meanDrift > DENSITY_ALPHA_DRIFT) return bad(`@1x differs from the halved @2x by ${meanDrift.toFixed(1)} of alpha`)
+  if (r !== null && r < DENSITY_CORRELATION) return bad(`@1x correlates with the halved @2x at only ${r.toFixed(3)}`)
+  return ok(`@1x is the @2x halved (drift ${meanDrift.toFixed(2)})`)
+}
+
+/** Pearson's r, or `null` when one side is flat and the coefficient is undefined rather than low. */
+function correlation({ n, a, b, aa, bb, ab }) {
+  const va = n * aa - a * a
+  const vb = n * bb - b * b
+  if (va <= 0 || vb <= 0) return null
+  return (n * ab - a * b) / Math.sqrt(va * vb)
+}
+
+function legalName({ name }) {
+  return NAME_PATTERN.test(name) ? ok('follows D01 §9.1') : bad('does not follow D01 §9.1, or its layer does not match its slot')
+}
+
+function listedInTheManifest({ name, entry, parsed }) {
+  if (!entry) return bad('not in the manifest')
+  if (!parsed) return bad('cannot be read as a name, so the manifest cannot be checked against it')
+  if (entry.layer !== parsed.layer) return bad(`the manifest says layer ${entry.layer}, the name says ${parsed.layer}`)
+  if (entry.w !== FRAME.w || entry.h !== FRAME.h) return bad(`the manifest says ${entry.w} × ${entry.h}`)
+  return ok(`layer ${entry.layer}, ${name.length} characters`)
+}
+
+function insideTheBudget({ entry, bytes }) {
+  const onDisk = bytes[2]
+  if (onDisk === undefined) return bad('no @2x on disk to weigh')
+  if (entry && entry.bytes2x !== onDisk) return bad(`the manifest says ${entry.bytes2x} bytes, the file is ${onDisk}`)
+  if (onDisk > MAX_BYTES_2X) return bad(`${(onDisk / 1024).toFixed(1)} KB is over the ${(MAX_BYTES_2X / 1024).toFixed(0)} KB budget`)
+  return ok(`${(onDisk / 1024).toFixed(1)} KB`)
+}
+
+// ────────────────────────────────────────────────────────────────── the table ──
+
+/** The table `check` prints: one line per file, then the detail of everything that failed. */
+export function formatChecks(rows) {
+  const width = Math.max(4, ...rows.map((row) => row.name.length))
+  const lines = [`${'file'.padEnd(width)}  ${CHECK_IDS.map((id) => id.padStart(4)).join('')}`]
+  const failures = []
+  for (const row of rows) {
+    const cells = row.results.map((result) => {
+      if (!result.ok) {
+        failures.push(`${row.name} ${result.id}: ${result.detail}`)
+        return 'FAIL'.padStart(4)
+      }
+      return (result.detail.startsWith('n/a') ? '-' : result.detail === 'skipped' ? 'skip' : 'ok').padStart(4)
+    })
+    lines.push(`${row.name.padEnd(width)}  ${cells.join('')}`)
+  }
+  const total = rows.reduce((sum, row) => sum + row.results.length, 0)
+  lines.push('', `${rows.length} files, ${total} checks, ${failures.length} failures`)
+  if (failures.length) lines.push('', ...failures)
+  return lines.join('\n')
+}
+
+export const anyFailed = (rows) => rows.some((row) => row.results.some((result) => !result.ok))

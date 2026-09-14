@@ -1,6 +1,6 @@
 /**
- * The three reads that are the same for everybody: the client's boot configuration, the item
- * catalogue and the achievement definitions.
+ * The reads that are the same for everybody: the client's boot configuration, the item catalogue,
+ * the avatar frame/bases and the achievement definitions.
  *
  * None of them is behind `requireUser`, and that is deliberate rather than an oversight. The sign-in
  * screen needs `/api/config` before it has a session, and the wardrobe and achievement screens are
@@ -14,12 +14,17 @@ import { ECONOMY } from '@bp/core'
 import type { FastifyInstance } from 'fastify'
 import type { AchievementDef } from '../achievements/definitions.js'
 import type { NormalConfig } from '../config.js'
+import type { AvatarManifest } from '../inventory/manifest.js'
+import type { BaseDef } from '../inventory/bases.js'
 import type { ItemCatalog } from '../inventory/items.js'
+import { BASES } from '../inventory/slots.js'
 
 export interface CatalogRouteDeps {
   config: NormalConfig
   catalog: ItemCatalog
   defs: AchievementDef[]
+  manifest: AvatarManifest
+  bases: Record<string, BaseDef>
 }
 
 /** The languages `normal-web` ships strings for (spec §21). */
@@ -44,6 +49,19 @@ export function registerCatalogRoutes(app: FastifyInstance, deps: CatalogRouteDe
     }))
 
   app.get('/api/catalog/items', async (_req, reply) => reply.send({ items: deps.catalog.all() }))
+
+  /**
+   * The rig every chibi is drawn on (design §5.1): the frame and profile crop the pipeline built to,
+   * and the two bases — public, like `/api/catalog/items`, because a base is chosen rather than
+   * owned and the wardrobe needs it before it needs a session.
+   */
+  app.get('/api/catalog/avatar', async (_req, reply) =>
+    reply.send({
+      frame: deps.manifest.frame,
+      crop: deps.manifest.crop,
+      bases: BASES.map((id) => deps.bases[id]),
+      manifestVersion: deps.manifest.version,
+    }))
 
   /**
    * The definitions without anyone's progress. `/api/me/achievements` answers both together for the

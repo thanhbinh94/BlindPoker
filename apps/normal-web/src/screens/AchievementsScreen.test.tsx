@@ -30,7 +30,7 @@ const ROWS: AchievementProgressDto[] = [
     category: 'login',
     metric: 'totalLoginDays',
     threshold: 100,
-    reward: { itemId: 'hat_crown' },
+    reward: { itemId: 'head_crown_gold01' },
     progress: 12,
     unlockedAt: null,
   },
@@ -121,7 +121,7 @@ describe('AchievementsScreen', () => {
 
     const points = `5.000 ${i18n.t('common:units.pointsShort')}`
     expect(screen.getByText(points)).toBeInTheDocument()
-    expect(screen.getByText(viNormal.items.hat_crown)).toBeInTheDocument()
+    expect(screen.getByText(viNormal.items.head_crown_gold01)).toBeInTheDocument()
     expect(screen.getByText(`3.000 ${i18n.t('common:units.pointsShort')} · ${viNormal.items.badge_bronze}`)).toBeInTheDocument()
 
     const done = screen.getByText(viNormal.achievements.login_days_7.name).closest('li')

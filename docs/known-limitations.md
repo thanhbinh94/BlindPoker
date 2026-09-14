@@ -145,6 +145,16 @@ address and a password and trusts the address is spelled right.
 *Why:* every one of them needs outbound mail, which the MVP deliberately does not have.
 *Tracked:* spec §32 assumption 12; roadmap §34 item 2.
 
+**Lite's dev server has no avatar files until the app has been built at least once.** The chibi's PNG
+layers live at `apps/normal-web/public/avatar/`; `apps/lite/scripts/build.mjs` copies the `base_*`/
+`bot_*` files it needs into `dist/public/avatar` as one step of a full build. `pnpm --filter @bp/lite
+dev` runs Vite's own dev server against `apps/lite/web` directly and proxies only `/api` and `/ws`
+(`apps/lite/web/vite.config.ts`) — nothing serves `/avatar/` on that port, so every chibi 404s until
+`apps/normal-web` has been built at least once and a full `pnpm build:lite` has copied its output over.
+*Why it stays:* wiring a second dev-only proxy for a handful of PNGs is more machinery than the problem
+is worth; building once before a session of Lite UI work is a one-line fix.
+*Tracked:* `docs/avatar-2d.md`.
+
 ---
 
 ## Operations
@@ -288,78 +298,34 @@ build-pipeline change of its own.
 *Tracked:* `packages/ui-kit/src/theme/tokens.test.ts` → "reaches a Windows face with full Vietnamese
 coverage before the generic serif"; roadmap §34 item 9.
 
-**Most of the wardrobe is an approximation of a mesh that does not exist.** The 3D avatar is built from
-the **free tier** of two CC0 Quaternius packs, which between them ship five hairstyles and two outfits
-per body — against a catalogue of six hairstyles, seven tops, four bottoms, three pairs of shoes, three
-hats, three accessories and five pieces of jewellery. So `hair_curly` is the parted cut puffed out,
-`bottom_skirt` is the peasant leggings cut short and flared, and eleven items (every hat, accessory and
-piece of jewellery) are **generated from boxes, spheres, cones and tori** by the asset script itself,
-because a fantasy hood is not a nón lá and a pauldron is not a wedding ring. The mask and the sunglasses
-are honestly placeholder-grade.
-*Why it stays:* the paid tiers have eight bodies, twenty hairstyles and more outfits; buying one, or
-adding a Casual pack, is what replaces these, and each item is one map entry away from being swapped.
-*Tracked:* the full table is in `docs/avatar-assets.md` → "Approximations and known limitations"; the
-avatar-3d design §9 lists it as the plan's first risk.
+**Most of the wardrobe is placeholder art until the real pictures land.** `apps/normal-web/public/avatar/`
+ships whatever `scripts/avatar-pipeline.mjs placeholder` last generated — flat shapes on the right frame
+and crop, not the chibi the design describes — until each item is drawn or AI-generated, ingested and
+passes `avatar:check` (avatar-chibi-ai design §6, §9 step 6). The catalogue, the server and every test run against
+these exactly as they will against the real thing: nothing here is mocked, only undrawn.
+*Why it stays:* the app, the pipeline and every screen had to work before a single real picture existed,
+so the plan builds and tests on synthetic layers first and swaps them file by file afterwards.
+*Tracked:* `docs/avatar-2d.md`; avatar-chibi-ai design §9 lays out the ingest order.
 
-**The bodies and the clothes come from packs that were not modelled for each other.** The bodies are the
-base pack's muscular *Superhero* build; every garment is cut for the outfit pack's slimmer *Regular*
-body, which no free download contains. The build closes the gap by retargeting each garment onto the
-body's rig and then **shrinkwrapping it onto the skin** plus a per-slot margin (`docs/avatar-assets.md`
-→ "Fitting a garment"), so what a player sees is close-cut clothes rather than a shirt with a chest
-coming through it. Two consequences to know about: a fitted garment takes the body's silhouette, so
-nothing drapes or hangs; and a garment whose mesh is coarse enough — or has been stretched far enough —
-that a flat triangle spans a limb can still show a patch of skin through it, which is why three items
-carry a larger `fit` margin of their own.
-*Why it stays:* the alternative is redrawing meshes, which avatar-3d design §2.2 puts out of scope.
-*Tracked:* `docs/avatar-assets.md`; `apps/normal-web/scripts/avatar-shots.mjs` is how a regression here
-is seen.
+**The art is AI-generated, and that carries a licensing question this repository does not resolve.**
+Every base, expression and item picture starts from a prompt against the character's locked block
+(`docs/avatar/02-mo-ta-nhan-vat-khoa-va-yeu-cau-sinh-anh.md`) run through a third-party image generator.
+No named character or artist's name is ever put in a prompt, but the commercial terms of whichever tool
+generates the final art are the operator's to read and accept — this codebase does not vendor a licence
+and cannot vouch for one on the operator's behalf.
+*Why it stays:* it is a legal question about a tool's terms of service, not an engineering one this
+repository can settle by writing code.
+*Tracked:* avatar-chibi-ai design §10 (risk table, "Pháp lý ảnh AI"); originals are kept at `assets/avatar-src/`
+(gitignored, with a README recording the tool, the seed and the date) rather than committed.
 
-**The avatar does not move, and never has more than two poses.** The `.glb` files ship the packs' bind
-pose (a T-pose) and one published recipe for standing it up (`manifest.pose.armsDown`, four arm joints);
-the portrait camera crops that to head and shoulders and the stage frames the whole of it. There is no
-idle animation, no expression, no gesture, and no walk — every animation track is stripped by the asset
-pipeline, deliberately, because they are 400 MB of the source packs and nothing in the product plays one.
-The stage turns, and that is the extent of the motion.
-*Why it stays:* avatar-3d design §2.2 puts animation out of Plan 8 and §10 lists idle animation as the
-first thing after it.
-*Tracked:* avatar-3d design §10.
-
-**The metals are lit by a procedural environment, not a real one.** `metal` materials (the crown, the
-glasses' rims, the earrings, the pauldron) have `metalness = 0.9` and therefore almost no diffuse
-response, so under directional lights alone they render as black silhouettes however bright the lights
-are. What lights them is three.js' own `RoomEnvironment` prefiltered by `PMREMGenerator` — a procedural
-box of area lights, ~2 KB gzip of code and no HDR file to download — at `environmentIntensity = 0.55`.
-It reads as a plausible interior and not as jewellery photographed in a studio; gold looks slightly flat
-and there are no sharp reflections. A driver that cannot build a PMREM gets `null` back and dull metal
-rather than no figure.
-*Why it stays:* an HDR environment map is a download nobody has budgeted, for jewellery seen at 128 px.
-*Tracked:* `apps/normal-web/src/avatar3d/environment.ts`.
-
-**A cold browser takes about three seconds to draw its first face.** The design's budget is ≤ 80 ms per
-portrait *after the assets are loaded* and ≤ 2 s to fill a nine-seat table; both hold — the e2e measures
-~60–100 ms per re-render and ~0.3 s from joining a room to every seat portrait drawn. The first one is
-different: it pays for the 150 KB gzip three.js chunk, the manifest and up to five `.glb` files before it
-can render anything, and `avatar3d.spec.ts` measures ~3.0–3.5 s for it on a headless SwiftShader machine.
-Until then every face is the player's initial on a disc, which is the designed fallback. That number is
-now **asserted** against a 5 s ceiling from a fresh browser context, so a cold regression turns the suite
-red rather than only making it slower; the 5 s is a guard rail set clear of the measurement, not a target.
-*Why it stays:* it is one cold start per browser — everything after it is cached in IndexedDB by
-configuration hash — and the alternative is server-rendered images, which avatar-3d design §2.2 rules out.
-*Tracked:* avatar-3d design §5, §7; `apps/normal-web/e2e/avatar3d.spec.ts` asserts and logs both numbers
-every run.
-
-**Nothing tests nine cold seats at once.** Design §7's budget is *nine* faces inside two seconds, and the
-e2e's table is one human and one bot. The two timings it does assert bracket that case rather than cover
-it: the warm one measures a table reached through the lobby, where the player's own face is already a blob
-in IndexedDB, and the cold one measures a single first face from an empty browser. Nine cold portraits
-would queue behind one shared asset download and one renderer, and nothing here would notice if that
-queue started serialising badly.
-*Why it stays:* nine seats means eight more accounts, each registered, dressed and seated, in one test —
-several minutes of an e2e suite that runs on every change, to defend a case (nine strangers, all
-first-seen, all at once, on a cold browser) that the lobby's own portraits usually warm up first. The
-per-portrait cost is covered instead: `avatar-shots.mjs` renders 68 of them through the real pipeline and
-reports a median of ~69 ms.
-*Tracked:* here; avatar-3d design §7.
+**The chibi has one view, and does not turn.** Unlike the 3D avatar it replaced, a chibi is a flat stack
+of `<img>` layers on a fixed 384×448 frame — there is no camera, no yaw, and nothing to drag or
+arrow-key around. The profile and the wardrobe show the same front-on figure the seat plates do, just
+larger.
+*Why it stays:* avatar-chibi-ai design §1 ruled out WebGL and model loading entirely in favour of PNG
+layers that render instantly on both editions; a second angle would mean a second full set of art per
+item.
+*Tracked:* avatar-chibi-ai design §1, §2.
 
 **The felt resizes slightly at the ring/stack breakpoint.** Crossing the breakpoint changes the table
 layout and the felt's height with it. The action tray's height is reserved from 768 px up so that it

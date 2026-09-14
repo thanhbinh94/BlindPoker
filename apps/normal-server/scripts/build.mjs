@@ -64,7 +64,7 @@ const OPTIONAL_EXTERNAL = new Set(['pg-native'])
 const BANNER = "import { createRequire as __bpCreateRequire } from 'node:module'; const require = __bpCreateRequire(import.meta.url);"
 
 /** Read at run time from `<package root>/…`. Missing any of these is a broken deployment, not a warning. */
-const SIDECARS = ['drizzle/meta/_journal.json', 'data/items.json', 'data/achievements.json', 'data/palettes.json']
+const SIDECARS = ['drizzle/meta/_journal.json', 'data/items.json', 'data/achievements.json']
 
 /**
  * Module specifiers in the output, split by *when* the module they name is loaded.
@@ -210,7 +210,7 @@ function verifySidecars() {
   }
   const migrations = readdirSync(join(ROOT, 'drizzle')).filter((name) => name.endsWith('.sql'))
   if (migrations.length === 0) die('drizzle/ holds no .sql migration — run `pnpm db:generate`')
-  log(`sidecars: drizzle/ (${migrations.length} migration${migrations.length === 1 ? '' : 's'}), data/items.json, data/achievements.json, data/palettes.json`)
+  log(`sidecars: drizzle/ (${migrations.length} migration${migrations.length === 1 ? '' : 's'}), data/items.json, data/achievements.json`)
   log('sidecars: ship `package.json`, `dist/`, `drizzle/` and `data/` as siblings — that is what packageRoot() walks up to')
 }
 

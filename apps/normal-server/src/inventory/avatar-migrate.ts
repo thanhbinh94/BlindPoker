@@ -1,115 +1,87 @@
 /**
- * Reading an `avatar_config` that was written by an older version of this server (design §3.3).
+ * Reading an `avatar_config` that was written by an older version of this server (design §5.2).
  *
- * Plan 8 replaced the six SVG layers with a 3D figure, and the two shapes do not line up: `base` and
- * `face` are gone (a body is chosen, a face is colour), `clothing` became `top` and brought
- * `bottom` and `shoes` with it, and the headwear that lived in `accessory` moved to `hat`. Rather
- * than rewrite every row in a migration — a jsonb `UPDATE` that has to be right the first time, on
- * data nobody can look at afterwards — the stored value is left alone and repaired on the way out.
+ * Plan 11 replaced the 3D figure with layered PNGs on a fixed frame, and the shapes do not line up:
+ * `body` becomes a chosen `base`, `hair`/`top`/`bottom`/`shoes` collapse into one required `outfit`,
+ * and `hat`/`accessory`/`jewelry` become `head`/`face`/`aura` — sometimes several old slots folding
+ * into one new one, since an `accessory` used to mean either a face piece or a hat. Rather than
+ * rewrite every row in a migration — a jsonb `UPDATE` that has to be right the first time, on data
+ * nobody can look at afterwards — the stored value is left alone and repaired on the way out.
  *
- * The repair is deliberately not "v1 only". It runs over anything `validateAvatarConfig` refused,
- * including a v2 config that names an item the catalogue has since withdrawn, and answers with the
- * closest valid figure: what still means something is kept, everything else falls back to the slot's
- * default. Those defaults are the four items `0001_avatar_v2.sql` granted to every existing player,
- * so the result is always something its owner can actually wear.
+ * The repair is deliberately not "v2 only". It runs over anything `validateAvatarConfig` refused,
+ * including a v1 config from before Plan 8 (`base`/`face`/`clothing`, no `body` at all) and a v3
+ * config that names an item the catalogue has since withdrawn, and answers with the closest valid
+ * figure: what still means something is kept — through `data/item-aliases.json`'s old-to-new map —
+ * and everything else falls back to the default outfit.
  *
- * Writes never come through here. `PUT /api/me/avatar` refuses anything but v2 (`MISSING_LAYER`),
+ * Every candidate field is resolved the same way regardless of which old shape it came from:
+ * `resolveItemId` turns an old id into its current one (or leaves an id nobody renamed alone), and
+ * the *catalogue's own slot* for the resolved id decides which v3 slot it lands in — which is what
+ * lets one `accessory` value become a `head` for `hat_crown` and a `face` for `accessory_glasses`
+ * without a second list here to keep in step with `items.json`.
+ *
+ * Writes never come through here. `PUT /api/me/avatar` refuses anything but v3 (`MISSING_LAYER`),
  * so the only way a repaired config becomes the stored one is the player saving it themselves.
  */
-import type { AvatarConfigV2 } from './avatar.js'
-import {
-  AVATAR_CONFIG_VERSION,
-  DEFAULT_BODY,
-  DEFAULT_EYE_COLOR,
-  DEFAULT_HAIR_COLOR,
-  DEFAULT_SKIN_TONE,
-  defaultAvatar,
-  defaultItemId,
-  EYE_COLORS,
-  HEX_COLOR,
-  paletteEntry,
-  SKIN_TONES,
-  validateAvatarConfig,
-} from './avatar.js'
+import { resolveItemId } from './aliases.js'
+import type { AvatarConfigV3 } from './avatar.js'
+import { AVATAR_CONFIG_VERSION, DEFAULT_BASE, defaultAvatar, validateAvatarConfig } from './avatar.js'
 import type { ItemCatalog } from './items.js'
-import type { Body, ItemSlot } from './slots.js'
-import { isBody, isGeometricSlot } from './slots.js'
+import type { BaseId, ItemSlot } from './slots.js'
+import { isBaseId } from './slots.js'
 
-/**
- * v1 ids that were renamed rather than withdrawn.
- *
- * `clothing_tee` was the default shirt every account was registered wearing, so it is the one id
- * whose disappearance would have been visible to everybody; it is `top_tee` now, which every
- * account owns for the same reason.
- */
-const RENAMED: Record<string, string> = { clothing_tee: 'top_tee' }
-
-/**
- * The id `raw` holds, if it is a string naming a catalogue item that belongs in `slot` and has been
- * modelled for `body`.
- *
- * The variant check is here rather than only in the validator so that an item the chosen body
- * cannot wear costs its own slot and not the whole figure.
- */
-function itemFor(raw: unknown, slot: ItemSlot, body: Body, catalog: ItemCatalog): string | undefined {
+/** `raw[key]`, resolved through the alias map, if it names a catalogue item that belongs in `slot`. */
+function candidateFor(raw: unknown, slot: ItemSlot, catalog: ItemCatalog, aliases: ReadonlyMap<string, string>): string | undefined {
   if (typeof raw !== 'string' || raw === '') return undefined
-  const id = RENAMED[raw] ?? raw
+  const id = resolveItemId(raw, aliases)
   const def = catalog.get(id)
-  if (def === undefined || def.slot !== slot) return undefined
-  return isGeometricSlot(slot) && def.variants?.[body] === undefined ? undefined : id
+  return def !== undefined && def.slot === slot ? id : undefined
 }
 
-/** The first of `candidates` that names a wearable item of `slot`. */
-function pick(slot: ItemSlot, body: Body, catalog: ItemCatalog, ...candidates: unknown[]): string | undefined {
+/** The first of `candidates` that resolves to a wearable item of `slot`. */
+function pick(slot: ItemSlot, catalog: ItemCatalog, aliases: ReadonlyMap<string, string>, ...candidates: unknown[]): string | undefined {
   for (const candidate of candidates) {
-    const id = itemFor(candidate, slot, body, catalog)
+    const id = candidateFor(candidate, slot, catalog, aliases)
     if (id !== undefined) return id
   }
   return undefined
 }
 
+/** The base a stored config names, however it named it: `base` itself, or v1/v2's `body`. */
+function baseOf(raw: Record<string, unknown>): BaseId {
+  if (isBaseId(raw['base'])) return raw['base']
+  if (raw['body'] === 'female') return 'f01'
+  if (raw['body'] === 'male') return 'm01'
+  return DEFAULT_BASE
+}
+
 /**
- * The closest valid v2 configuration to whatever is stored.
+ * The closest valid v3 configuration to whatever is stored.
  *
- * Every slot is resolved the same way: take the value that is already in it, fall back to the v1
- * key that used to hold it, and fall back again to the slot's default (for a required slot) or to
- * nothing (for an optional one). A v1 `accessory` therefore lands in `hat` or in `accessory`
- * according to the *catalogue's* own slot for that id — which is what makes `accessory_conical_hat`
- * and `hat_crown` become hats while `accessory_glasses` stays an accessory, without a second list
- * here to keep in step with `items.json`.
+ * `outfit` tries, in order: the config's own `outfit` (a v3 config invalidated by something else),
+ * the v2 `top`, and the v1 `clothing` — each resolved through the alias map, so `clothing_suit`
+ * lands on `outfit_tuxedo01` and a plain `top_tee` finds nothing and falls through to the default.
+ * `head` and `face` both try the v2 `accessory` in addition to their own field and (for `head`) the
+ * v2 `hat`, because that one old field used to mean either.
  */
-export function migrateAvatarConfig(stored: Record<string, unknown> | null | undefined, catalog: ItemCatalog): AvatarConfigV2 {
+export function migrateAvatarConfig(stored: Record<string, unknown> | null | undefined, catalog: ItemCatalog, aliases: ReadonlyMap<string, string>): AvatarConfigV3 {
   if (typeof stored !== 'object' || stored === null || Array.isArray(stored)) return defaultAvatar(catalog)
   const raw = stored as Record<string, unknown>
 
-  const body: Body = isBody(raw['body']) ? raw['body'] : DEFAULT_BODY
-  const hairColorRaw = raw['hairColor']
-  // Folded like `validateAvatarConfig` folds it, so a v1 config's upper-case hex does not mint a
-  // second cache key for the same figure the moment it is re-saved.
-  const hairColor = typeof hairColorRaw === 'string' && HEX_COLOR.test(hairColorRaw) ? hairColorRaw.toLowerCase() : DEFAULT_HAIR_COLOR
+  const outfit = pick('outfit', catalog, aliases, raw['outfit'], raw['top'], raw['clothing']) ?? defaultAvatar(catalog).outfit
+  const config: AvatarConfigV3 = { v: AVATAR_CONFIG_VERSION, base: baseOf(raw), outfit }
 
-  const config: AvatarConfigV2 = {
-    v: AVATAR_CONFIG_VERSION,
-    body,
-    skin: paletteEntry(SKIN_TONES, raw['skin']) ?? DEFAULT_SKIN_TONE,
-    eyes: paletteEntry(EYE_COLORS, raw['eyes']) ?? DEFAULT_EYE_COLOR,
-    hairColor,
-    hair: pick('hair', body, catalog, raw['hair']) ?? defaultItemId(catalog, 'hair'),
-    // v1's `clothing` is v2's `top`; `bottom` and `shoes` did not exist and start at their defaults.
-    top: pick('top', body, catalog, raw['top'], raw['clothing']) ?? defaultItemId(catalog, 'top'),
-    bottom: pick('bottom', body, catalog, raw['bottom']) ?? defaultItemId(catalog, 'bottom'),
-    shoes: pick('shoes', body, catalog, raw['shoes']) ?? defaultItemId(catalog, 'shoes'),
-  }
-
-  const hat = pick('hat', body, catalog, raw['hat'], raw['accessory'])
-  if (hat !== undefined) config.hat = hat
-  const accessory = pick('accessory', body, catalog, raw['accessory'])
-  if (accessory !== undefined) config.accessory = accessory
-  const jewelry = pick('jewelry', body, catalog, raw['jewelry'])
-  if (jewelry !== undefined) config.jewelry = jewelry
-  const title = pick('title', body, catalog, raw['title'])
+  const head = pick('head', catalog, aliases, raw['head'], raw['hat'], raw['accessory'])
+  if (head !== undefined) config.head = head
+  const face = pick('face', catalog, aliases, raw['face'], raw['accessory'])
+  if (face !== undefined) config.face = face
+  const aura = pick('aura', catalog, aliases, raw['aura'], raw['jewelry'])
+  if (aura !== undefined) config.aura = aura
+  const frame = pick('frame', catalog, aliases, raw['frame'])
+  if (frame !== undefined) config.frame = frame
+  const title = pick('title', catalog, aliases, raw['title'])
   if (title !== undefined) config.title = title
-  const badge = pick('badge', body, catalog, raw['badge'])
+  const badge = pick('badge', catalog, aliases, raw['badge'])
   if (badge !== undefined) config.badge = badge
 
   // The last word belongs to the validator, not to the repair. Nothing above should be able to
@@ -120,14 +92,18 @@ export function migrateAvatarConfig(stored: Record<string, unknown> | null | und
 }
 
 /**
- * Reads a stored `avatar_config` back as a v2 configuration, whatever shape it was written in.
+ * Reads a stored `avatar_config` back as a v3 configuration, whatever shape it was written in.
  *
  * The column is `jsonb` with a `{}` default, so "an account that predates avatars", "an account
- * written by v1" and "an account wearing an item Plan 8 withdrew" all have to render as *something*.
- * Answering with a repaired figure is better than answering with a partial one the client would
- * draw with holes.
+ * written by v1 or v2" and "an account wearing an item Plan 11 withdrew" all have to render as
+ * *something*. Answering with a repaired figure is better than answering with a partial one the
+ * client would draw with holes.
+ *
+ * `aliases` is a parameter rather than a hidden default so a caller never pays for a second parse of
+ * `item-aliases.json`: `app.ts` loads it once, alongside the catalogue, and passes the same map
+ * everywhere a config is read.
  */
-export function readAvatarConfig(stored: Record<string, unknown> | null | undefined, catalog: ItemCatalog): AvatarConfigV2 {
+export function readAvatarConfig(stored: Record<string, unknown> | null | undefined, catalog: ItemCatalog, aliases: ReadonlyMap<string, string>): AvatarConfigV3 {
   const checked = validateAvatarConfig(stored ?? {}, catalog)
-  return checked.ok ? checked.value : migrateAvatarConfig(stored, catalog)
+  return checked.ok ? checked.value : migrateAvatarConfig(stored, catalog, aliases)
 }

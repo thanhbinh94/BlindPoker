@@ -9,10 +9,11 @@ import { ECONOMY } from '@bp/core'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { AppDb } from '../db/client.js'
 import { createTestDb, type TestDb } from '../db/test-db.js'
-import { DEFAULT_EYE_COLOR, DEFAULT_SKIN_TONE } from '../inventory/avatar.js'
+import { inventory, items } from '../db/schema.js'
 import { buildTestApp, resetDb, XRW, type Account, type Harness } from '../test-harness.js'
 
-const DEFAULT_AVATAR = { v: 2, body: 'male', skin: DEFAULT_SKIN_TONE, eyes: DEFAULT_EYE_COLOR, hairColor: '#2b2b2b', hair: 'hair_none', top: 'top_tee', bottom: 'bottom_jeans', shoes: 'shoes_sneakers' }
+/** What a fresh account is wearing: the `f01` base and the one default outfit (design §5.1). */
+const DEFAULT_AVATAR = { v: 3, base: 'f01', outfit: 'outfit_casual01' }
 const SECOND = { email: 'mai@example.com', password: 'another good password', displayName: 'Mai Lan' }
 
 let test: TestDb
@@ -159,15 +160,46 @@ describe('inventory and avatars', () => {
     const res = await h.app.fastify.inject({ url: '/api/me/inventory', headers: { cookie: me.cookie } })
     expect(res.statusCode).toBe(200)
     const body = res.json() as { items: { itemId: string; slot: string; source: string }[]; avatar: unknown }
-    expect(body.items.map((i) => i.itemId).sort()).toEqual(['bottom_jeans', 'hair_none', 'shoes_sneakers', 'top_tee'])
+    expect(body.items.map((i) => i.itemId).sort()).toEqual(['outfit_casual01'])
     expect(body.items.every((i) => i.source === 'default')).toBe(true)
-    // Joined against the catalogue, and by slot rather than by the v1 `category`.
-    expect(body.items.find((i) => i.itemId === 'top_tee')).toMatchObject({ slot: 'top', rarity: 'common', assetKey: 'top/top_tee' })
+    // Joined against the catalogue.
+    expect(body.items.find((i) => i.itemId === 'outfit_casual01')).toMatchObject({ slot: 'outfit', rarity: 'common', assetKey: 'outfit/outfit_casual01' })
     expect(body.avatar).toEqual(DEFAULT_AVATAR)
   })
 
+  it('resolves a legacy row through the alias map, joins the catalogue against its current id, and keeps the old id as acquiredAs', async () => {
+    // `inventory.item_id` rows are never rewritten — a player who owns this from before Plan 11 is
+    // exactly as real as one who owns `head_crown_gold01` outright, and the route must say so. `hat_crown`
+    // is no longer in `items.json` (nothing seeds it), so a legacy row like this only exists because the
+    // `items` row itself already existed before Plan 11 dropped the id from the catalogue — reproduced
+    // here by inserting it directly, the way a pre-existing production row would already be there.
+    await db.insert(items).values({ id: 'hat_crown', slot: 'hat', rarity: 'epic', nameKey: 'items.hat_crown', assetKey: 'hat/hat_crown' })
+    await db.insert(inventory).values({ playerId: me.playerId, itemId: 'hat_crown', source: 'grant' })
+    const res = await h.app.fastify.inject({ url: '/api/me/inventory', headers: { cookie: me.cookie } })
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as { items: { itemId: string; acquiredAs: string; slot: string | null; rarity: string | null }[] }
+    const row = body.items.find((i) => i.acquiredAs === 'hat_crown')
+    expect(row).toMatchObject({ itemId: 'head_crown_gold01', slot: 'head', rarity: 'epic' })
+    // Not left under the raw, un-resolved id — a wardrobe joining on `itemId` alone must find it.
+    expect(body.items.find((i) => i.itemId === 'hat_crown')).toBeUndefined()
+  })
+
+  it('collapses a player who owns both the old and the new id into one entry', async () => {
+    await db.insert(items).values({ id: 'hat_crown', slot: 'hat', rarity: 'epic', nameKey: 'items.hat_crown', assetKey: 'hat/hat_crown' })
+    await db.insert(inventory).values([
+      { playerId: me.playerId, itemId: 'hat_crown', source: 'grant' },
+      { playerId: me.playerId, itemId: 'head_crown_gold01', source: 'grant' },
+    ])
+    const res = await h.app.fastify.inject({ url: '/api/me/inventory', headers: { cookie: me.cookie } })
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as { items: { itemId: string }[] }
+    expect(body.items.filter((i) => i.itemId === 'head_crown_gold01')).toHaveLength(1)
+  })
+
   it('stores a full replacement and reads it back', async () => {
-    const config = { ...DEFAULT_AVATAR, hairColor: '#ff0000' }
+    // `base` is chosen, not owned (design §5.1), so switching it needs no grant — a real change the
+    // player can always make, which is what distinguishes "stored" from "nothing moved".
+    const config = { ...DEFAULT_AVATAR, base: 'm01' }
     const res = await h.app.fastify.inject({ method: 'PUT', url: '/api/me/avatar', headers: h.auth(me), payload: config })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ config })
@@ -177,14 +209,12 @@ describe('inventory and avatars', () => {
 
   it('refuses a malformed configuration with the code that says what was wrong', async () => {
     const cases: [Record<string, unknown>, string][] = [
-      [{ ...DEFAULT_AVATAR, top: undefined }, 'MISSING_LAYER'],
-      // A v1 body: the one shape this route used to accept and now refuses outright.
+      [{ ...DEFAULT_AVATAR, outfit: undefined }, 'MISSING_LAYER'],
+      // A v1/v2 body: the shapes this route used to accept and now refuses outright.
       [{ base: 'base_01', face: 'face_01', clothing: 'clothing_tee', hair: 'hair_short', hairColor: '#2b2b2b' }, 'MISSING_LAYER'],
-      [{ ...DEFAULT_AVATAR, body: 'robot' }, 'MISSING_LAYER'],
-      [{ ...DEFAULT_AVATAR, hairColor: 'red' }, 'INVALID_COLOR'],
-      [{ ...DEFAULT_AVATAR, skin: '#00ff00' }, 'INVALID_COLOR'],
-      [{ ...DEFAULT_AVATAR, top: 'no_such_item' }, 'INVALID_ITEM'],
-      [{ ...DEFAULT_AVATAR, top: 'hair_none' }, 'WRONG_CATEGORY'],
+      [{ ...DEFAULT_AVATAR, base: 'robot' }, 'INVALID_BASE'],
+      [{ ...DEFAULT_AVATAR, outfit: 'no_such_item' }, 'INVALID_ITEM'],
+      [{ ...DEFAULT_AVATAR, outfit: 'title_rookie' }, 'WRONG_CATEGORY'],
     ]
     for (const [payload, expected] of cases) {
       const res = await h.app.fastify.inject({ method: 'PUT', url: '/api/me/avatar', headers: h.auth(me), payload })
@@ -194,11 +224,11 @@ describe('inventory and avatars', () => {
   })
 
   it('refuses an item the player does not own with 403 NOT_OWNED', async () => {
-    const res = await h.app.fastify.inject({ method: 'PUT', url: '/api/me/avatar', headers: h.auth(me), payload: { ...DEFAULT_AVATAR, top: 'clothing_hoodie' } })
+    const res = await h.app.fastify.inject({ method: 'PUT', url: '/api/me/avatar', headers: h.auth(me), payload: { ...DEFAULT_AVATAR, outfit: 'outfit_dealer01' } })
     expect(res.statusCode).toBe(403)
     expect(code(res)).toBe('NOT_OWNED')
     const after = await h.app.fastify.inject({ url: '/api/me', headers: { cookie: me.cookie } })
-    expect((after.json() as { avatar: { top: string } }).avatar.top).toBe('top_tee')
+    expect((after.json() as { avatar: { outfit: string } }).avatar.outfit).toBe('outfit_casual01')
   })
 })
 

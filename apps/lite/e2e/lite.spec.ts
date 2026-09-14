@@ -179,6 +179,9 @@ test.describe('Just a Normal Poker Lite', () => {
 
     await sit(pageA, 0)
     await sit(pageB, 1)
+    // The chibi Lite bundles for itself (`base_*`/`bot_*` copied into the build, design §7) draws from the
+    // same seat plate as Normal's — this is the one place Lite checks it does not ship faceless.
+    await expect(pageA.locator('[data-seat="0"] [data-chibi-hash]')).toBeVisible()
     await pageA.getByRole('button', { name: 'Sẵn sàng', exact: true }).click()
     await pageB.getByRole('button', { name: 'Sẵn sàng', exact: true }).click()
     // Three ready of three seated: the bot holds a seat of its own and is ready from the moment the room exists.

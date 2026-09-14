@@ -530,9 +530,8 @@
 
 .identityCard {
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
   gap: var(--space-4);
-  flex-wrap: wrap;
   padding: var(--space-4);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
@@ -540,16 +539,54 @@
   box-shadow: var(--shadow-1);
 }
 
-/* The profile's own figure: a column of its own beside the name, and never wider than the card. */
+/* The profile's own figure: the full-body chibi (its aura visible) beside the head crop (its frame ring
+   visible), on a backdrop keyed by the equipped title — five gradient/glow variants, no animation.
+   `Chibi`'s root is `flex: none` (ui-kit 595810e) — a flex parent can no longer shrink either chibi below its
+   own `size`, so this row gets the identity card's *full* width and wraps rather than fighting them for a
+   288 px-wide column, which is what used to squeeze a 192 px chibi down to 114 px. Under 640 px there still
+   is not room for 240 + 192 px side by side, so the two stack instead. */
 .identityStage {
-  flex: none;
-  width: 12rem;
-  max-width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: center;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-elev);
+}
+
+@media (max-width: 640px) {
+  .identityStage {
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
+.identityStage[data-title='title_rookie'] {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--teal, #2f8f86) 22%, var(--bg-elev)), var(--bg-elev));
+}
+
+.identityStage[data-title='title_regular'] {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--line) 40%, var(--bg-elev)), var(--bg-elev));
+}
+
+.identityStage[data-title='title_night_owl'] {
+  background: radial-gradient(circle at 50% 20%, color-mix(in srgb, #5b5b9c 30%, var(--bg-elev)), var(--bg-elev));
+}
+
+.identityStage[data-title='title_devoted'] {
+  background: radial-gradient(circle at 50% 20%, color-mix(in srgb, var(--gold) 22%, var(--bg-elev)), var(--bg-elev));
+}
+
+.identityStage[data-title='title_hot_hand'] {
+  background: radial-gradient(circle at 50% 15%, color-mix(in srgb, #d9432b 30%, var(--bg-elev)), var(--bg-elev));
+  box-shadow: 0 0 1.5rem color-mix(in srgb, #d9432b 25%, transparent);
 }
 
 .identityText {
   display: flex;
-  flex: 1 1 14rem;
   flex-direction: column;
   gap: var(--space-2);
   min-width: 0;

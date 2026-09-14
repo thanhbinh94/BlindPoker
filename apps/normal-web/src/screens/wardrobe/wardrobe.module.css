@@ -1,0 +1,160 @@
+/* The wardrobe: a preview column and a tabbed picker beside it, same shell as the other account pages
+   (`normal.module.css`'s `.page`/`.wide`). Everything here is this screen's own — tiles, tabs, the outfit
+   bar — so a change to one wardrobe layout detail never touches the inventory or the profile. */
+
+.layout {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+}
+
+.previewColumn {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  width: 15rem;
+  max-width: 100%;
+}
+
+.previewFigures {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: var(--space-3);
+}
+
+.expressionRow {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.expressionBtn {
+  min-width: var(--tap);
+  min-height: var(--tap);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+  color: var(--ink-muted);
+  cursor: pointer;
+  font-size: 1.1rem;
+}
+
+.expressionBtn[aria-pressed='true'] {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.picker {
+  flex: 1 1 20rem;
+  min-width: 0;
+}
+
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--space-4);
+}
+
+.tab {
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--ink-muted);
+  cursor: pointer;
+  font: inherit;
+}
+
+.tab[aria-selected='true'] {
+  border-bottom-color: var(--gold);
+  color: var(--ink);
+}
+
+.tileGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr));
+  gap: var(--space-3);
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-elev);
+  cursor: pointer;
+  text-align: center;
+}
+
+.tile[aria-pressed='true'] {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold);
+}
+
+.tile[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.tile[data-rarity='rare'] {
+  background: color-mix(in srgb, var(--teal, #2f8f86) 12%, var(--bg-elev));
+}
+
+.tile[data-rarity='epic'] {
+  background: color-mix(in srgb, var(--gold) 14%, var(--bg-elev));
+}
+
+.tileName {
+  font-size: 0.8125rem;
+}
+
+.tileHint {
+  font-size: 0.6875rem;
+  color: var(--ink-muted);
+}
+
+.baseGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+  gap: var(--space-3);
+}
+
+.outfitBar {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.outfitSlot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-md);
+}
+
+.outfitSlot[data-filled='true'] {
+  border-style: solid;
+}
+
+.outfitActions {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+

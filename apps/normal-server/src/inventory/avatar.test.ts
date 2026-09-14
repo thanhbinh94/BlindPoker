@@ -1,15 +1,15 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { AppDb } from '../db/client.js'
-import { inventory, players, users } from '../db/schema.js'
+import { inventory, items, players, users } from '../db/schema.js'
 import type { TestDb } from '../db/test-db.js'
 import { createTestDb } from '../db/test-db.js'
 import { ServiceError } from '../errors.js'
-import type { AvatarConfigV2 } from './avatar.js'
-import { applyAvatarConfig, defaultAvatar, DEFAULT_EYE_COLOR, DEFAULT_SKIN_TONE, EYE_COLORS, SKIN_TONES, validateAvatarConfig } from './avatar.js'
+import type { AvatarConfigV3 } from './avatar.js'
+import { applyAvatarConfig, defaultAvatar, validateAvatarConfig } from './avatar.js'
 import type { InventoryService } from './inventory-service.js'
 import { createInventoryService } from './inventory-service.js'
 import type { ItemCatalog } from './items.js'
@@ -54,36 +54,40 @@ async function own(playerId: string, ...itemIds: string[]): Promise<void> {
   })
 }
 
-const BASIC: AvatarConfigV2 = {
-  v: 2,
-  body: 'male',
-  skin: DEFAULT_SKIN_TONE,
-  eyes: DEFAULT_EYE_COLOR,
-  hairColor: '#2b2b2b',
-  hair: 'hair_none',
-  top: 'top_tee',
-  bottom: 'bottom_jeans',
-  shoes: 'shoes_sneakers',
+/**
+ * Inserts a v2 item row directly, the way a database that has run `0001_avatar_v2.sql` and its own
+ * `catalog.seed()` under the *old* `items.json` would already have one — Plan 11's catalogue does
+ * not renew it, so nothing in this server would ever insert it again.
+ */
+async function ensureLegacyItem(id: string, slot: string, rarity: string): Promise<void> {
+  await db
+    .insert(items)
+    .values({ id, slot, rarity, nameKey: `items.${id}`, assetKey: `${slot}/${id}`, isDefault: false })
+    .onConflictDoNothing({ target: items.id })
 }
-const DRESSED: AvatarConfigV2 = {
-  ...BASIC,
-  hat: 'hat_crown',
-  accessory: 'accessory_glasses',
-  jewelry: 'jewelry_ring',
+
+const CASUAL: AvatarConfigV3 = { v: 3, base: 'f01', outfit: 'outfit_casual01' }
+const DRESSED: AvatarConfigV3 = {
+  ...CASUAL,
+  base: 'm01',
+  head: 'head_crown_gold01',
+  face: 'face_glasses_round_gold01',
+  aura: 'aura_gold_cards01',
+  frame: 'frame_founder',
   title: 'title_devoted',
   badge: 'badge_monthly',
 }
 
 /** Every item id in a config — what a player has to own to wear it. */
-const worn = (config: AvatarConfigV2): string[] => [config.hair, config.top, config.bottom, config.shoes, config.hat, config.accessory, config.jewelry, config.title, config.badge].filter((id): id is string => id !== undefined)
+const worn = (config: AvatarConfigV3): string[] => [config.outfit, config.head, config.face, config.aura, config.frame, config.title, config.badge].filter((id): id is string => id !== undefined)
 
 describe('defaultAvatar', () => {
-  it('dresses a new account in the catalogue’s default of each required slot, and nothing else', () => {
-    expect(defaultAvatar(catalog)).toEqual(BASIC)
+  it('dresses a new account in the f01 base wearing only the default outfit', () => {
+    expect(defaultAvatar(catalog)).toEqual(CASUAL)
   })
 
   it('is itself a valid configuration', () => {
-    expect(validateAvatarConfig(defaultAvatar(catalog), catalog)).toEqual({ ok: true, value: BASIC })
+    expect(validateAvatarConfig(defaultAvatar(catalog), catalog)).toEqual({ ok: true, value: CASUAL })
   })
 })
 
@@ -92,87 +96,45 @@ describe('validateAvatarConfig', () => {
     expect(validateAvatarConfig({ ...DRESSED, somethingElse: 'ignored' }, catalog)).toEqual({ ok: true, value: DRESSED })
   })
 
-  it('refuses a missing required slot', () => {
-    const { hair: _hair, ...noHair } = BASIC
-    expect(validateAvatarConfig(noHair, catalog)).toEqual({ ok: false, code: 'MISSING_LAYER' })
-    expect(validateAvatarConfig({ ...BASIC, top: '' }, catalog)).toEqual({ ok: false, code: 'MISSING_LAYER' })
+  it('refuses a missing outfit — the one required slot', () => {
+    const { outfit: _outfit, ...noOutfit } = CASUAL
+    expect(validateAvatarConfig(noOutfit, catalog)).toEqual({ ok: false, code: 'MISSING_LAYER' })
+    expect(validateAvatarConfig({ ...CASUAL, outfit: '' }, catalog)).toEqual({ ok: false, code: 'MISSING_LAYER' })
     expect(validateAvatarConfig(null, catalog)).toEqual({ ok: false, code: 'MISSING_LAYER' })
-    expect(validateAvatarConfig([BASIC], catalog)).toEqual({ ok: false, code: 'MISSING_LAYER' })
+    expect(validateAvatarConfig([CASUAL], catalog)).toEqual({ ok: false, code: 'MISSING_LAYER' })
   })
 
-  it('refuses anything that is not v2 — a v1 config is readable, but not writable', () => {
-    const { v: _v, ...noVersion } = BASIC
+  it('refuses anything that is not v3 — a v1 or v2 config is readable, but not writable', () => {
+    const { v: _v, ...noVersion } = CASUAL
     expect(validateAvatarConfig(noVersion, catalog)).toEqual({ ok: false, code: 'MISSING_LAYER' })
-    expect(validateAvatarConfig({ ...BASIC, v: 1 }, catalog)).toEqual({ ok: false, code: 'MISSING_LAYER' })
-    expect(validateAvatarConfig({ ...BASIC, v: '2' }, catalog)).toEqual({ ok: false, code: 'MISSING_LAYER' })
-    expect(validateAvatarConfig({ base: 'base_01', face: 'face_01', clothing: 'clothing_tee', hair: 'hair_short', hairColor: '#2b2b2b' }, catalog))
+    expect(validateAvatarConfig({ ...CASUAL, v: 2 }, catalog)).toEqual({ ok: false, code: 'MISSING_LAYER' })
+    expect(validateAvatarConfig({ ...CASUAL, v: '3' }, catalog)).toEqual({ ok: false, code: 'MISSING_LAYER' })
+    expect(validateAvatarConfig({ v: 2, body: 'male', hair: 'hair_none', top: 'top_tee', bottom: 'bottom_jeans', shoes: 'shoes_sneakers', skin: '#000', eyes: '#000', hairColor: '#000' }, catalog))
       .toEqual({ ok: false, code: 'MISSING_LAYER' })
   })
 
-  it('refuses a body that is not one of the two', () => {
-    for (const body of [undefined, null, 'other', 42]) {
-      expect(validateAvatarConfig({ ...BASIC, body }, catalog), String(body)).toEqual({ ok: false, code: 'MISSING_LAYER' })
+  it('refuses a missing base with MISSING_LAYER and an unknown one with INVALID_BASE', () => {
+    expect(validateAvatarConfig({ ...CASUAL, base: undefined }, catalog)).toEqual({ ok: false, code: 'MISSING_LAYER' })
+    const { base: _base, ...noBase } = CASUAL
+    expect(validateAvatarConfig(noBase, catalog)).toEqual({ ok: false, code: 'MISSING_LAYER' })
+    for (const base of ['robot', 'f02', 42, null]) {
+      expect(validateAvatarConfig({ ...CASUAL, base }, catalog), String(base)).toEqual({ ok: false, code: base === null ? 'MISSING_LAYER' : 'INVALID_BASE' })
     }
-    expect(validateAvatarConfig({ ...BASIC, body: 'female' }, catalog)).toMatchObject({ ok: true })
-  })
-
-  it('refuses a hair colour that is not #rrggbb, and folds the case of one that is', () => {
-    for (const hairColor of ['2b2b2b', '#2b2b2', '#2b2b2bff', 'red', '']) {
-      expect(validateAvatarConfig({ ...BASIC, hairColor }, catalog), hairColor).toEqual({ ok: false, code: 'INVALID_COLOR' })
-    }
-    // Stored folded, like skin and eyes, so the client's config hash — the portrait cache key — is
-    // stable: `#ABCDEF` and `#abcdef` are the same figure and must be the same stored value.
-    expect(validateAvatarConfig({ ...BASIC, hairColor: '#AABBCC' }, catalog)).toEqual({ ok: true, value: { ...BASIC, hairColor: '#aabbcc' } })
-  })
-
-  it('refuses a skin or eye colour outside its palette, and folds the case of one inside it', () => {
-    expect(validateAvatarConfig({ ...BASIC, skin: '#00ff00' }, catalog)).toEqual({ ok: false, code: 'INVALID_COLOR' })
-    expect(validateAvatarConfig({ ...BASIC, eyes: '#00ff00' }, catalog)).toEqual({ ok: false, code: 'INVALID_COLOR' })
-    expect(validateAvatarConfig({ ...BASIC, skin: undefined }, catalog)).toEqual({ ok: false, code: 'INVALID_COLOR' })
-    expect(SKIN_TONES).toHaveLength(8)
-    expect(EYE_COLORS).toHaveLength(6)
-    for (const skin of SKIN_TONES) expect(validateAvatarConfig({ ...BASIC, skin }, catalog), skin).toMatchObject({ ok: true })
-    for (const eyes of EYE_COLORS) expect(validateAvatarConfig({ ...BASIC, eyes }, catalog), eyes).toMatchObject({ ok: true })
-    // Stored folded, so the client's config hash — the portrait cache key — is stable.
-    expect(validateAvatarConfig({ ...BASIC, skin: SKIN_TONES[4]!.toUpperCase() }, catalog)).toEqual({ ok: true, value: { ...BASIC, skin: SKIN_TONES[4] } })
+    expect(validateAvatarConfig({ ...CASUAL, base: 'm01' }, catalog)).toMatchObject({ ok: true })
   })
 
   it('refuses an id that is not in the catalogue', () => {
-    expect(validateAvatarConfig({ ...BASIC, hair: 'hair_imaginary' }, catalog)).toEqual({ ok: false, code: 'INVALID_ITEM' })
-    expect(validateAvatarConfig({ ...BASIC, title: 42 }, catalog)).toEqual({ ok: false, code: 'INVALID_ITEM' })
-    // The withdrawn v1 ids are exactly that: not in the catalogue any more.
-    expect(validateAvatarConfig({ ...BASIC, top: 'clothing_tee' }, catalog)).toEqual({ ok: false, code: 'INVALID_ITEM' })
+    expect(validateAvatarConfig({ ...CASUAL, outfit: 'outfit_imaginary' }, catalog)).toEqual({ ok: false, code: 'INVALID_ITEM' })
+    expect(validateAvatarConfig({ ...CASUAL, title: 42 }, catalog)).toEqual({ ok: false, code: 'INVALID_ITEM' })
+    // The withdrawn v2 ids are exactly that: not in the catalogue any more.
+    expect(validateAvatarConfig({ ...CASUAL, outfit: 'clothing_tee' }, catalog)).toEqual({ ok: false, code: 'INVALID_ITEM' })
   })
 
   it('refuses an id worn in the wrong slot', () => {
-    expect(validateAvatarConfig({ ...BASIC, hair: 'top_tee' }, catalog)).toEqual({ ok: false, code: 'WRONG_CATEGORY' })
+    expect(validateAvatarConfig({ ...CASUAL, outfit: 'head_beanie01' }, catalog)).toEqual({ ok: false, code: 'WRONG_CATEGORY' })
     expect(validateAvatarConfig({ ...DRESSED, badge: 'title_devoted' }, catalog)).toEqual({ ok: false, code: 'WRONG_CATEGORY' })
-    // A hat is its own slot now: the v1 configs that carried it under `accessory` are migrated, not accepted.
-    expect(validateAvatarConfig({ ...BASIC, accessory: 'hat_crown' }, catalog)).toEqual({ ok: false, code: 'WRONG_CATEGORY' })
-  })
-
-  it('refuses an item that has not been modelled for the chosen body', () => {
-    // The shipped catalogue models everything for both bodies, so this needs one that does not.
-    const path = join(scratch, 'one-body.json')
-    writeFileSync(path, JSON.stringify([
-      { id: 'hair_none', slot: 'hair', rarity: 'common', nameKey: 'items.hair_none', assetKey: 'hair/hair_none', isDefault: true,
-        variants: { male: { file: 'hair.glb', node: 'hair/hair_none/male' }, female: { file: 'hair.glb', node: 'hair/hair_none/female' } } },
-      // Modelled for the male body only — a real case: the source sets are not symmetric.
-      { id: 'top_tee', slot: 'top', rarity: 'common', nameKey: 'items.top_tee', assetKey: 'top/top_tee', isDefault: true,
-        variants: { male: { file: 'outfits.glb', node: 'top/top_tee/male' } } },
-      { id: 'bottom_jeans', slot: 'bottom', rarity: 'common', nameKey: 'items.bottom_jeans', assetKey: 'bottom/bottom_jeans', isDefault: true,
-        variants: { male: { file: 'outfits.glb', node: 'bottom/bottom_jeans/male' }, female: { file: 'outfits.glb', node: 'bottom/bottom_jeans/female' } } },
-      { id: 'shoes_sneakers', slot: 'shoes', rarity: 'common', nameKey: 'items.shoes_sneakers', assetKey: 'shoes/shoes_sneakers', isDefault: true,
-        variants: { male: { file: 'outfits.glb', node: 'shoes/shoes_sneakers/male' }, female: { file: 'outfits.glb', node: 'shoes/shoes_sneakers/female' } } },
-      { id: 'badge_monthly', slot: 'badge', rarity: 'rare', nameKey: 'items.badge_monthly', assetKey: 'badge/badge_monthly', isDefault: false },
-      { id: 'title_devoted', slot: 'title', rarity: 'rare', nameKey: 'items.title_devoted', assetKey: 'title/title_devoted', isDefault: false },
-    ]), 'utf8')
-    const lopsided = loadItemCatalog(path)
-
-    expect(validateAvatarConfig(BASIC, lopsided)).toMatchObject({ ok: true })
-    expect(validateAvatarConfig({ ...BASIC, body: 'female' }, lopsided)).toEqual({ ok: false, code: 'INVALID_ITEM' })
-    // A title has no geometry to be missing, so it stays wearable whichever body is chosen.
-    expect(validateAvatarConfig({ ...BASIC, title: 'title_devoted' }, lopsided)).toMatchObject({ ok: true })
+    // A face item in the head slot: two slots that used to share `accessory` are not interchangeable now.
+    expect(validateAvatarConfig({ ...CASUAL, head: 'face_glasses_round_gold01' }, catalog)).toEqual({ ok: false, code: 'WRONG_CATEGORY' })
   })
 
   it('treats an omitted or null optional slot as empty', () => {
@@ -183,12 +145,12 @@ describe('validateAvatarConfig', () => {
 describe('applyAvatarConfig', () => {
   it('refuses a configuration referencing an item the player does not own, naming it', async () => {
     const playerId = await seedPlayer()
-    await own(playerId, ...worn(BASIC))
+    await own(playerId, ...worn(CASUAL))
 
-    const err = await applyAvatarConfig(db, inv, playerId, { ...BASIC, hat: 'hat_crown' }).catch((e: unknown) => e)
+    const err = await applyAvatarConfig(db, inv, playerId, { ...CASUAL, head: 'head_crown_gold01' }).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(ServiceError)
     expect((err as ServiceError).code).toBe('NOT_OWNED')
-    expect((err as ServiceError).message).toContain('hat_crown')
+    expect((err as ServiceError).message).toContain('head_crown_gold01')
   })
 
   it('stores the config and mirrors the title and badge into their own columns', async () => {
@@ -206,19 +168,24 @@ describe('applyAvatarConfig', () => {
     await own(playerId, ...worn(DRESSED))
     await applyAvatarConfig(db, inv, playerId, DRESSED)
 
-    await applyAvatarConfig(db, inv, playerId, BASIC)
+    await applyAvatarConfig(db, inv, playerId, CASUAL)
     const [row] = await db.select().from(players).where(eq(players.id, playerId))
-    expect(row!.avatarConfig).toEqual(BASIC)
+    expect(row!.avatarConfig).toEqual(CASUAL)
     expect(row).toMatchObject({ equippedTitle: null, equippedBadge: null })
   })
 
   it('refuses a player who is not there — through ownership, the only check it needs', async () => {
-    // Owning an item implies the `players` row exists (`inventory.player_id` cascades on delete),
-    // and every config names at least four items, so a missing player is refused before the write.
-    // There is no second, separate "no such player" answer to give.
-    const err = await applyAvatarConfig(db, inv, '00000000-0000-4000-8000-000000000000', BASIC).catch((e: unknown) => e)
+    const err = await applyAvatarConfig(db, inv, '00000000-0000-4000-8000-000000000000', CASUAL).catch((e: unknown) => e)
     expect((err as ServiceError).code).toBe('NOT_OWNED')
     expect(await db.select().from(players)).toHaveLength(0)
+  })
+
+  it('is satisfied by an old alias id already owned — an old inventory row was never rewritten', async () => {
+    await ensureLegacyItem('hat_crown', 'hat', 'epic')
+    const playerId = await seedPlayer()
+    await own(playerId, 'outfit_casual01', 'hat_crown')
+    // `hat_crown` (v2) aliases to `head_crown_gold01` (v3): owning the old row must satisfy the new id.
+    await expect(applyAvatarConfig(db, inv, playerId, { ...CASUAL, head: 'head_crown_gold01' })).resolves.toMatchObject({ config: { head: 'head_crown_gold01' } })
   })
 })
 
@@ -226,47 +193,74 @@ describe('InventoryService', () => {
   it('grants once and says so', async () => {
     const playerId = await seedPlayer()
     await db.transaction(async (tx) => {
-      expect(await inv.grant(tx, playerId, 'hat_crown', 'achievement')).toBe(true)
-      expect(await inv.grant(tx, playerId, 'hat_crown', 'daily')).toBe(false)
+      expect(await inv.grant(tx, playerId, 'head_crown_gold01', 'achievement')).toBe(true)
+      expect(await inv.grant(tx, playerId, 'head_crown_gold01', 'daily')).toBe(false)
     })
 
     const rows = await db.select().from(inventory).where(eq(inventory.playerId, playerId))
     expect(rows).toHaveLength(1)
     // The first grant's source is kept: how a player *got* an item does not change afterwards.
-    expect(rows[0]).toMatchObject({ itemId: 'hat_crown', source: 'achievement' })
+    expect(rows[0]).toMatchObject({ itemId: 'head_crown_gold01', source: 'achievement' })
   })
 
   it('lists what a player owns, oldest first', async () => {
     const playerId = await seedPlayer()
-    await own(playerId, 'top_tee', 'hat_crown')
+    await own(playerId, 'outfit_casual01', 'head_crown_gold01')
     const owned = await inv.list(playerId)
-    expect(owned.map((o) => o.itemId).sort()).toEqual(['hat_crown', 'top_tee'])
+    expect(owned.map((o) => o.itemId).sort()).toEqual(['head_crown_gold01', 'outfit_casual01'])
     expect(owned[0]!.acquiredAt).toBeGreaterThan(0)
     expect(await inv.list('not-a-uuid')).toEqual([])
   })
 
   it('answers owns and missingOf without tripping over a malformed id', async () => {
     const playerId = await seedPlayer()
-    await own(playerId, 'top_tee')
-    expect(await inv.owns(playerId, 'top_tee')).toBe(true)
-    expect(await inv.owns(playerId, 'hat_crown')).toBe(false)
-    expect(await inv.owns('not-a-uuid', 'top_tee')).toBe(false)
-    expect(await inv.missingOf(playerId, ['top_tee'])).toEqual([])
-    expect(await inv.missingOf(playerId, ['top_tee', 'hat_crown', 'hat_crown'])).toEqual(['hat_crown'])
-    expect(await inv.missingOf('not-a-uuid', ['top_tee'])).toEqual(['top_tee'])
+    await own(playerId, 'outfit_casual01')
+    expect(await inv.owns(playerId, 'outfit_casual01')).toBe(true)
+    expect(await inv.owns(playerId, 'head_crown_gold01')).toBe(false)
+    expect(await inv.owns('not-a-uuid', 'outfit_casual01')).toBe(false)
+    expect(await inv.missingOf(playerId, ['outfit_casual01'])).toEqual([])
+    expect(await inv.missingOf(playerId, ['outfit_casual01', 'head_crown_gold01', 'head_crown_gold01'])).toEqual(['head_crown_gold01'])
+    expect(await inv.missingOf('not-a-uuid', ['outfit_casual01'])).toEqual(['outfit_casual01'])
     expect(await inv.missingOf(playerId, [])).toEqual([])
   })
 
-  it('lists the unowned items of one rarity, in id order', async () => {
+  it('resolves aliases both ways: an old row satisfies the new id it aliases to', async () => {
+    await ensureLegacyItem('accessory_glasses', 'accessory', 'common')
+    const playerId = await seedPlayer()
+    await own(playerId, 'accessory_glasses') // v2 id, aliases to face_glasses_round_gold01
+    expect(await inv.owns(playerId, 'face_glasses_round_gold01')).toBe(true)
+    expect(await inv.missingOf(playerId, ['face_glasses_round_gold01'])).toEqual([])
+  })
+
+  it('lists the unowned items of one rarity, in id order — every catalogue slot, unless narrowed', async () => {
     const playerId = await seedPlayer()
     const allCommon = catalog.byRarity('common').map((d) => d.id).sort()
     await own(playerId, allCommon[0]!)
 
     const unowned = await db.transaction((tx) => inv.unownedOfRarity(tx, playerId, 'common'))
-    expect(unowned).toEqual(allCommon.slice(1))
+    // A superset check rather than exact equality: other tests in this file plant v2 rows straight
+    // into `items` (`ensureLegacyItem`) to exercise the alias path, and this function's whole point
+    // is that it does *not* filter those out on its own — see `withinSlots`, below.
+    expect(unowned).toEqual(expect.arrayContaining(allCommon.slice(1)))
+    expect(unowned).not.toContain(allCommon[0])
+    // Nothing is excluded by default: a `title`/`badge` common is still a catalogue item of that
+    // rarity, and it is the caller's job (the daily draw) to say it does not want those.
+    expect(unowned.some((id) => catalog.get(id)?.slot === 'title')).toBe(true)
+    expect(unowned.some((id) => catalog.get(id)?.slot === 'badge')).toBe(true)
     // Ordered, so a seeded rng picks the same item every run.
     expect([...unowned].sort()).toEqual(unowned)
-    expect(await db.transaction((tx) => inv.unownedOfRarity(tx, playerId, 'epic'))).toEqual(catalog.byRarity('epic').map((d) => d.id).sort())
+    expect(await db.transaction((tx) => inv.unownedOfRarity(tx, playerId, 'epic'))).toEqual(expect.arrayContaining(catalog.byRarity('epic').map((d) => d.id).sort()))
+  })
+
+  it('is alias-aware: owning only the old row keeps the new id out of the pool too', async () => {
+    await ensureLegacyItem('hat_crown', 'hat', 'epic')
+    const playerId = await seedPlayer()
+    await own(playerId, 'hat_crown') // v2 id, aliases to head_crown_gold01 — never re-inserted by Plan 11's catalogue
+    const unowned = await db.transaction((tx) => inv.unownedOfRarity(tx, playerId, 'epic'))
+    // Without the widening this would still list `head_crown_gold01`: the daily draw would then be
+    // able to "grant" a legacy player, under its current id, a cosmetic they already own.
+    expect(unowned).not.toContain('head_crown_gold01')
+    expect(unowned).toEqual(expect.arrayContaining(catalog.byRarity('epic').map((d) => d.id).filter((id) => id !== 'head_crown_gold01')))
   })
 
   it('drops the excluded ids and slots from the pool, and an empty exclusion excludes nothing', async () => {
@@ -274,18 +268,35 @@ describe('InventoryService', () => {
     const allRare = catalog.byRarity('rare').map((d) => d.id).sort()
 
     const filtered = await db.transaction((tx) =>
-      inv.unownedOfRarity(tx, playerId, 'rare', { ids: ['jewelry_chain'], slots: ['title', 'badge'] }),
+      inv.unownedOfRarity(tx, playerId, 'rare', { ids: ['aura_fire01'], slots: ['title', 'badge'] }),
     )
-    expect(filtered).not.toContain('jewelry_chain')
-    expect(filtered).not.toContain('badge_monthly')
-    expect(filtered).not.toContain('title_devoted')
-    expect(filtered).toEqual(
-      allRare.filter((id) => id !== 'jewelry_chain' && catalog.get(id)!.slot !== 'title' && catalog.get(id)!.slot !== 'badge'),
-    )
+    expect(filtered).not.toContain('aura_fire01')
+    expect(filtered.some((id) => catalog.get(id)?.slot === 'title')).toBe(false)
+    expect(filtered.some((id) => catalog.get(id)?.slot === 'badge')).toBe(false)
+    expect(filtered).toEqual(allRare.filter((id) => id !== 'aura_fire01' && catalog.get(id)!.slot !== 'title' && catalog.get(id)!.slot !== 'badge'))
 
     // `notInArray(col, [])` is `col <> all('{}')`, which Postgres reads as unknown for every row —
-    // an empty exclusion must mean "exclude nothing", not "exclude everything".
+    // an empty exclusion must mean "exclude nothing".
     expect(await db.transaction((tx) => inv.unownedOfRarity(tx, playerId, 'rare', { ids: [], slots: [] }))).toEqual(allRare)
     expect(await db.transaction((tx) => inv.unownedOfRarity(tx, playerId, 'rare', {}))).toEqual(allRare)
+  })
+
+  it('restricts to withinSlots as an allow-list, which also keeps out a row a withdrawn v2 slot left behind', async () => {
+    // `0001_avatar_v2.sql` always inserts these four v2 rows, whatever `items.json` currently says —
+    // and Plan 11's catalogue does not renew them, so they sit in the table as pure FK anchors. A
+    // deny-list could never name them (they are not even a current `ItemSlot`); the daily draw's
+    // `withinSlots: DAILY_DRAW_SLOTS` keeps them out precisely because it names what *is* allowed.
+    const playerId = await seedPlayer()
+    const commonPool = await db.transaction((tx) => inv.unownedOfRarity(tx, playerId, 'common', { withinSlots: ['head', 'face', 'aura', 'frame'] }))
+    for (const legacy of ['hair_none', 'top_tee', 'bottom_jeans', 'shoes_sneakers']) {
+      expect(commonPool, legacy).not.toContain(legacy)
+    }
+    expect(commonPool.every((id) => ['head', 'face', 'aura', 'frame'].includes(catalog.get(id)!.slot))).toBe(true)
+    expect(commonPool.length).toBeGreaterThan(0)
+
+    // An empty or absent `withinSlots` means every slot, the same guard as `slots`/`ids`.
+    expect(await db.transaction((tx) => inv.unownedOfRarity(tx, playerId, 'common', { withinSlots: [] }))).toEqual(
+      await db.transaction((tx) => inv.unownedOfRarity(tx, playerId, 'common')),
+    )
   })
 })

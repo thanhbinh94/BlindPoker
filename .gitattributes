@@ -13,3 +13,10 @@ deploy/oracle/backup-cron.example text eol=lf
 # docs/avatar-assets.md — and binary, so git never tries to normalise a line ending inside one
 # or to show a diff of a hundred kilobytes of quantised vertices.
 *.glb binary
+
+# The avatar manifest, which `apps/normal-web/scripts/avatar-pipeline.mjs` writes twice — once for the
+# web build and once for the server's catalogue — and which its tests compare byte for byte. The script
+# writes LF; a checkout that turned those into CRLF would leave every re-run of `placeholder` rewriting
+# the file, so the committed artefact and the regenerated one could never agree on Windows.
+apps/normal-web/public/avatar/avatar-manifest.json text eol=lf
+apps/normal-server/data/avatar-manifest.json text eol=lf

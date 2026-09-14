@@ -38,7 +38,7 @@ describe('normal locales', () => {
 
   it.each(bundles)('names and describes every achievement in %s', (_lang, bundle) => {
     const named = bundle.achievements as Record<string, { name?: string; desc?: string } | undefined>
-    expect(achievementDefs.length).toBe(32)
+    expect(achievementDefs.length).toBe(34)
     for (const def of achievementDefs) {
       expect(named[def.id]?.name, `achievements.${def.id}.name`).toBeTypeOf('string')
       expect(named[def.id]?.desc, `achievements.${def.id}.desc`).toBeTypeOf('string')

@@ -1,0 +1,26 @@
+{
+  "f01": {
+    "nameKey": "bases.f01",
+    "layers": { "hairBack": "base_f01_L20", "body": "base_f01_L30", "hairFront": "base_f01_L60" },
+    "faces": {
+      "neutral": "base_f01_face_neutral_L50",
+      "happy": "base_f01_face_happy_L50",
+      "sad": "base_f01_face_sad_L50",
+      "surprised": "base_f01_face_surprised_L50",
+      "closed": "base_f01_face_closed_L50",
+      "sleep": "base_f01_face_sleep_L50"
+    }
+  },
+  "m01": {
+    "nameKey": "bases.m01",
+    "layers": { "hairBack": "base_m01_L20", "body": "base_m01_L30", "hairFront": "base_m01_L60" },
+    "faces": {
+      "neutral": "base_m01_face_neutral_L50",
+      "happy": "base_m01_face_happy_L50",
+      "sad": "base_m01_face_sad_L50",
+      "surprised": "base_m01_face_surprised_L50",
+      "closed": "base_m01_face_closed_L50",
+      "sleep": "base_m01_face_sleep_L50"
+    }
+  }
+}

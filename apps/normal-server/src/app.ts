@@ -61,8 +61,12 @@ import { packageRoot } from './db/migrate.js'
 import { createEconomyService, type EconomyService } from './economy/economy-service.js'
 import { createEventBus, type AppEventBus } from './events.js'
 import { createHistoryService, type HistoryService } from './history/history-service.js'
+import { loadAliases } from './inventory/aliases.js'
+import { loadBases, type BaseDef } from './inventory/bases.js'
 import { createInventoryService, type InventoryService } from './inventory/inventory-service.js'
 import { loadItemCatalog, type ItemCatalog } from './inventory/items.js'
+import { loadAvatarManifest, type AvatarManifest } from './inventory/manifest.js'
+import { createOutfitsService, type OutfitsService } from './inventory/outfits-service.js'
 import { WS_PATH } from './http/routes-catalog.js'
 import { registerRoutes } from './http/routes.js'
 import { createRepositories, type NormalRepositories } from './repos/index.js'
@@ -129,19 +133,15 @@ async function withDeadline(promise: Promise<void>, budgetMs: number, onTimeout:
 export const FONTS_STYLESHEET_HOST = 'https://fonts.googleapis.com'
 export const FONTS_FILE_HOST = 'https://fonts.gstatic.com'
 /**
- * The 3D avatar's meshopt decoder is WebAssembly (`docs/avatar-assets.md`), and `default-src 'self'`
- * alone forbids `WebAssembly.instantiate` — the portrait would silently fall back to initials on every
- * browser. `'wasm-unsafe-eval'` allows WebAssembly only; it does not reopen `eval()`.
+ * Since Plan 11 the avatar is same-origin PNG layers (`docs/avatar-2d.md`) — no WebAssembly, no `blob:`
+ * object URL, nothing `default-src 'self'` does not already allow on its own. This is written out
+ * anyway, `'self'` and nothing more, so a directive added here later narrows a policy that already
+ * named `script-src` rather than falling back to `default-src` silently.
  */
-export const SCRIPT_SRC = "script-src 'self' 'wasm-unsafe-eval'"
-/** Portraits are rendered in the browser and shown from object URLs, which are `blob:` sources. */
-export const IMG_SRC_EXTRA = 'blob:'
+export const SCRIPT_SRC = "script-src 'self'"
 
 export function normalCsp(base: string = DEFAULT_CSP): string {
-  const directives = base
-    .split('; ')
-    .map((d) => (d.startsWith('style-src ') ? `${d} ${FONTS_STYLESHEET_HOST}` : d))
-    .map((d) => (d.startsWith('img-src ') ? `${d} ${IMG_SRC_EXTRA}` : d))
+  const directives = base.split('; ').map((d) => (d.startsWith('style-src ') ? `${d} ${FONTS_STYLESHEET_HOST}` : d))
   if (!directives.some((d) => d.startsWith('font-src '))) directives.push(`font-src 'self' ${FONTS_FILE_HOST}`)
   if (!directives.some((d) => d.startsWith('script-src '))) directives.push(SCRIPT_SRC)
   return directives.join('; ')
@@ -188,10 +188,15 @@ export interface AppServices {
   sessions: SessionService
   auth: AuthService
   inventory: InventoryService
+  outfits: OutfitsService
   stats: StatsService
   achievements: AchievementService
   economy: EconomyService
   history: HistoryService
+  /** Old wardrobe ids, kept readable — see `inventory/aliases.ts`. */
+  aliases: ReadonlyMap<string, string>
+  manifest: AvatarManifest
+  bases: Record<string, BaseDef>
 }
 
 export interface NormalApp {
@@ -228,7 +233,10 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
   const { config, db, log } = deps
 
   const bus = createEventBus(log)
-  const catalog = loadItemCatalog()
+  const manifest = loadAvatarManifest()
+  const bases = loadBases(undefined, manifest)
+  const aliases = loadAliases()
+  const catalog = loadItemCatalog(undefined, manifest)
   const defs = loadAchievements(catalog)
   // Before anything reads or grants an item: every reward is a foreign key into this table.
   await catalog.seed(db)
@@ -269,7 +277,8 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     },
   })
 
-  const inventory = createInventoryService(db)
+  const inventory = createInventoryService(db, aliases)
+  const outfits = createOutfitsService(db, inventory)
   const stats = createStatsService({ db, bus })
   const economy = createEconomyService({
     db,
@@ -326,9 +335,13 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     stats,
     achievements,
     inventory,
+    outfits,
     history,
     catalog,
     defs,
+    aliases,
+    manifest,
+    bases,
     log,
     game,
     version: packageVersion(),
@@ -442,7 +455,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
   return {
     fastify,
     game,
-    services: { bus, catalog, defs, repos, sessions, auth, inventory, stats, achievements, economy, history },
+    services: { bus, catalog, defs, repos, sessions, auth, inventory, outfits, stats, achievements, economy, history, aliases, manifest, bases },
     close,
   }
 }

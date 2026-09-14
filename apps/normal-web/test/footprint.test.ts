@@ -8,15 +8,14 @@
  *
  * The numbers measured are gzip, because that is what the wire carries: Caddy compresses this
  * directory in front of the server, and the raw byte counts vite prints are not what anyone
- * downloads. Four budgets, and the split between the first two is the point:
+ * downloads. Three budgets:
  *
- *   entry     what the browser must have before the sign-in card or the lobby can paint
- *   total     the entry plus every lazy chunk — the whole app, eventually
- *   css       one stylesheet, loaded with the entry
- *   avatar3d  three.js and the portrait renderer, downloaded only by a browser that draws one
+ *   entry   what the browser must have before the sign-in card or the lobby can paint
+ *   total   the entry plus every lazy chunk — the whole app, eventually
+ *   css     one stylesheet, loaded with the entry
  *
- * …and a fifth that is not JavaScript at all: the `.glb` bundles under `dist/avatar3d/`, which are the
- * largest thing this app ever sends and the one a new outfit pack would grow (avatar-3d design §7).
+ * …and a fourth that is not JavaScript, and not gzip either: the chibi's own PNG layers under
+ * `public/avatar/`, which ship as-is (§8).
  *
  * Like Lite's, every block skips with a warning when `dist/` is missing, so `pnpm test` on a fresh
  * checkout stays green and says what it had nothing to measure.
@@ -34,51 +33,30 @@ const ASSETS = join(DIST, 'assets')
 const INDEX = join(DIST, 'index.html')
 
 /**
- * Headroom, not targets. At the time of writing the entry is ~109 KB and the whole app ~119 KB gzip,
- * so these are roughly four times what is spent — deliberately, because the job of this test is to
- * catch a *step change* (a chart library, a moment.js, a locale bundle that stopped being split) and
- * not to fail on the kilobyte a feature legitimately costs.
+ * Headroom, not targets. Re-measured after Plan 11 deleted `src/avatar3d/`: the entry is unchanged by
+ * the cut — three.js was already behind a dynamic `import()` and no longer reachable from the entry
+ * even before this plan, so removing the module tree removed dead weight from the repository, not
+ * from this chunk — at 107.9 KB gzip (110443 bytes), `MAX_ENTRY_GZIP` is that measurement plus 20 %
+ * headroom, rounded up. The whole app is ~119 KB gzip, so `MAX_TOTAL_GZIP` stays roughly four times
+ * that: loose enough not to fail on the kilobyte a feature legitimately costs, tight enough to catch a
+ * *step change* (a chart library, a moment.js, a locale bundle that stopped being split) rather than
+ * let one slide in unnoticed.
  */
-const MAX_ENTRY_GZIP = 500 * 1024
+const MAX_ENTRY_GZIP = 130 * 1024
 const MAX_TOTAL_GZIP = 900 * 1024
 const MAX_CSS_GZIP = 60 * 1024
 
 /**
- * three.js, `GLTFLoader`, the meshopt decoder and the portrait renderer, together (avatar-3d §7).
+ * The chibi's stage-1 PNG layers, as they are actually served (design §8): `public/avatar/` is copied
+ * into `dist/avatar/` verbatim by vite, so this is also what a browser downloads.
  *
- * This one *is* a target rather than headroom: it is roughly 25 % over what the graph costs today, and
- * the thing it is guarding against is somebody importing a control, a post-processing pass or a loader
- * for a format nothing uses. Everything under it is downloaded only by a browser that actually draws a
- * portrait, which is why it is allowed to be larger than the entry chunk at all.
+ * Raw bytes, not gzip — PNG is already compressed, and gzipping one again buys a percent or two for
+ * the cost of pretending the wire cost is smaller than it is. Only the `@2x` files are budgeted: `@1x`
+ * is the same pictures at a quarter the pixels and never dominates the total, and the design's own
+ * ceiling (§8: "tổng PNG @2x giai đoạn 1 ≤ 6 MB") is written against `@2x` specifically.
  */
-const MAX_AVATAR3D_GZIP = 200 * 1024
-
-/**
- * A string that survives minification and cannot come from anywhere but three.
- *
- * `THREE.REVISION` does not survive — it is a `const` and the minifier inlines it — but three prefixes
- * every one of its own console messages with `THREE.<Class>:`, and those are string literals.
- */
-const THREE_MARKER = 'THREE.WebGLRenderer'
-
-/** vite names a dynamic chunk after the module that was split; `portraits.ts` is the avatar3d entry. */
-const AVATAR3D_CHUNK = /^portraits-[\w-]+\.js$/
-
-/**
- * The 3D assets, as they are actually served (avatar-3d design §7).
- *
- * `test/avatar-assets.test.ts` holds the same two numbers against `public/avatar3d/` — the artefact the
- * pipeline commits. This holds them against `dist/avatar3d/`, which is what a browser downloads, and the
- * difference is the point: `public/` is copied verbatim by vite today, and a build config that started
- * rewriting, duplicating or failing to copy those files would leave the committed artefact perfect and
- * the shipped one wrong.
- *
- * Raw bytes, not gzip. A `.glb` here is meshopt-compressed geometry — quantized, then entropy-coded —
- * and Caddy's gzip takes low single-digit percentages off it. The budget is the download.
- */
-const AVATAR_DIR = join(DIST, 'avatar3d')
-const MAX_ASSET_TOTAL = 6 * 1024 * 1024
-const MAX_ASSET_FILE = Math.round(1.5 * 1024 * 1024)
+const AVATAR_DIR = join(PACKAGE_ROOT, 'public', 'avatar')
+const MAX_AVATAR_2X_TOTAL = 6 * 1024 * 1024
 
 /** `App.tsx`'s six `React.lazy` screens; vite names each chunk after the module it split. */
 const LAZY_SCREENS = ['ProfileScreen', 'WardrobeScreen', 'InventoryScreen', 'AchievementsScreen', 'DailyScreen', 'SettingsScreen']
@@ -86,21 +64,21 @@ const LAZY_SCREENS = ['ProfileScreen', 'WardrobeScreen', 'InventoryScreen', 'Ach
 /**
  * Whether there is a build to measure — and, when there is not, a warning nobody can mistake for green.
  *
- * Every budget in this file is measured off `dist/`, so a checkout that has not built skips *all* of
- * them: the entry, the total, the CSS, the 200 KB avatar3d chunk and the two asset ceilings. That is the
- * repository's established pattern (Lite's footprint suite skips the same way, and `docs/normal-web.md`
- * says so), because failing would fail every fresh clone. What it must not do is skip *quietly* — a
- * `pnpm test` that measured nothing looks exactly like one that measured everything, and the numbers
- * these tests guard are the kind somebody reads off a green run. So the warning names each budget it is
- * not checking, and the command that would.
+ * The entry, the total and the CSS are measured off `dist/`, so a checkout that has not built skips
+ * those three: that is the repository's established pattern (Lite's footprint suite skips the same
+ * way, and `docs/normal-web.md` says so), because failing would fail every fresh clone. The avatar
+ * layer budget reads `public/avatar/` directly and does not skip — those files are committed, not
+ * built. What the build-dependent half must not do is skip *quietly* — a `pnpm test` that measured
+ * nothing looks exactly like one that measured everything, and the numbers these tests guard are the
+ * kind somebody reads off a green run. So the warning names each budget it is not checking, and the
+ * command that would.
  */
 const hasDist = existsSync(ASSETS) && existsSync(INDEX)
 if (!hasDist) {
   console.warn(
-    `[footprint] ⚠ NOT MEASURED: ${DIST} is missing, so every bundle budget in this file is skipped —\n` +
-      '[footprint]   the entry chunk, all JS together, the stylesheet, the avatar3d chunk and the `dist/avatar3d/` assets.\n' +
-      '[footprint]   Nothing here is green; it is unmeasured. Run `pnpm --filter @bp/normal-web build` first.\n' +
-      '[footprint]   (`test/avatar-assets.test.ts` does hold the committed `public/avatar3d/` to its budgets, and does not skip.)',
+    `[footprint] ⚠ NOT MEASURED: ${DIST} is missing, so the entry chunk, all JS together and the stylesheet\n` +
+      '[footprint]   are skipped. Run `pnpm --filter @bp/normal-web build` first.\n' +
+      '[footprint]   (the avatar layer budget below reads `public/avatar/` directly and does not skip.)',
   )
 }
 
@@ -171,58 +149,20 @@ describe.skipIf(!hasDist)('normal-web bundle', () => {
     }
     expect(names.length, 'the entry plus the six screens, at least').toBeGreaterThanOrEqual(1 + LAZY_SCREENS.length)
   })
+})
 
-  it('keeps three.js out of the entry chunk entirely', () => {
-    // The whole shape of `avatar3d/` — one dynamic `import()` in `usePortrait`, and the three.js graph
-    // reachable through nothing else — exists for this assertion. A static import anywhere in
-    // `Portrait`, `usePortrait`, `hash` or `portrait-cache` would put 150 KB gzip in front of the
-    // sign-in card, and the entry budget above is four times too loose to notice.
-    const entry = readFileSync(entryChunk(), 'utf8')
-    expect(entry, `the entry chunk contains ${THREE_MARKER} — something outside avatar3d/ imports three`).not.toContain(THREE_MARKER)
-  })
+/**
+ * The avatar layer budget does not skip on a missing `dist/` — it reads `public/avatar/` directly, the
+ * same directory `test/avatar-pipeline.test.ts` writes placeholders into and the pipeline's `ingest`
+ * will later fill with real art, file by file.
+ */
+it('ships the stage-1 avatar layers under 6 MB at @2x', () => {
+  expect(existsSync(AVATAR_DIR), `${AVATAR_DIR} must exist — run \`pnpm --filter @bp/normal-web avatar:placeholder\``).toBe(true)
+  const files = readdirSync(AVATAR_DIR).filter((name) => name.endsWith('@2x.png'))
+  expect(files.length, 'the avatar directory must ship at least one @2x layer').toBeGreaterThan(0)
 
-  it('keeps the whole 3D graph in one lazy chunk, inside its own budget', () => {
-    const chunks = assets('.js').filter((file) => AVATAR3D_CHUNK.test(basename(file)))
-    expect(chunks, 'the portrait renderer must be split out under its own name').toHaveLength(1)
-
-    const chunk = chunks[0]!
-    // Named after `portraits.ts`, and holding the thing that module exists to drive — so this cannot
-    // quietly start measuring some other chunk that happens to match the name.
-    expect(readFileSync(chunk, 'utf8')).toContain(THREE_MARKER)
-
-    const size = gzipOf(chunk)
-    console.log(`[footprint] avatar3d chunk ${kb(size)} gzip (budget ${kb(MAX_AVATAR3D_GZIP)})`)
-    expect(size).toBeLessThanOrEqual(MAX_AVATAR3D_GZIP)
-  })
-
-  it('ships the 3D assets the manifest names, each and all inside the download budget', () => {
-    const manifestFile = join(AVATAR_DIR, 'manifest.json')
-    expect(existsSync(manifestFile), `${manifestFile} was not copied into the build`).toBe(true)
-    const manifest = JSON.parse(readFileSync(manifestFile, 'utf8')) as {
-      files: Record<string, { bytes: number; sha256: string }>
-      budget: { totalBytes: number; maxFileBytes: number }
-    }
-
-    // The manifest publishes the budget it was built under; if the pipeline's numbers and this test's
-    // ever drift apart, one of the two is measuring something nobody agreed to.
-    expect(manifest.budget.totalBytes, 'the pipeline and this test must budget the same total').toBe(MAX_ASSET_TOTAL)
-    expect(manifest.budget.maxFileBytes, 'the pipeline and this test must budget the same per file').toBe(MAX_ASSET_FILE)
-
-    const names = Object.keys(manifest.files)
-    expect(names.length, 'the manifest must name at least one bundle').toBeGreaterThan(0)
-
-    let total = 0
-    for (const [name, info] of Object.entries(manifest.files)) {
-      const file = join(AVATAR_DIR, name)
-      expect(existsSync(file), `${name} is in the manifest but was not copied into the build`).toBe(true)
-      // Measured off the served file rather than trusted from the manifest: a copy step that truncated,
-      // rewrote or re-encoded one would otherwise be invisible here.
-      const bytes = statSync(file).size
-      expect(bytes, `${name} in dist/ is not the size the manifest recorded`).toBe(info.bytes)
-      expect(bytes, `${name} is over the per-file budget`).toBeLessThanOrEqual(MAX_ASSET_FILE)
-      total += bytes
-    }
-    console.log(`[footprint] avatar3d assets ${kb(total)} across ${names.length} files (budget ${kb(MAX_ASSET_TOTAL)})`)
-    expect(total).toBeLessThanOrEqual(MAX_ASSET_TOTAL)
-  })
+  let total = 0
+  for (const name of files) total += statSync(join(AVATAR_DIR, name)).size
+  console.log(`[footprint] avatar @2x layers ${kb(total)} across ${files.length} files (budget ${kb(MAX_AVATAR_2X_TOTAL)})`)
+  expect(total).toBeLessThanOrEqual(MAX_AVATAR_2X_TOTAL)
 })

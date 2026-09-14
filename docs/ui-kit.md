@@ -157,7 +157,7 @@ formatting; strings come from `useTranslation()`.
 | Component | Props |
 | --- | --- |
 | `LobbyScreen` | `client`, `lang`, `onLanguage`, `onEnteredRoom`, `extraNav?`, `header?` |
-| `RoomScreen` | `client`, `lang`, `onLeft`, `avatarFor?`, `captionFor?`, `header?`, `layout?` |
+| `RoomScreen` | `client`, `lang`, `onLeft`, `chibiFor?`, `captionFor?`, `header?`, `layout?` |
 | `Toasts` | `error`, `notifications`, `onClearError`, `onDismiss`, `lang` |
 
 `onLeft` fires the moment the room is gone — left, closed or kicked — and the app decides where that lands.
@@ -183,8 +183,8 @@ dropping the oldest, so a chatty server cannot stack slips off the top of the sc
 
 | Component | Props |
 | --- | --- |
-| `PokerTable` | `room`, `hand`, `myPlayerId`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `canSit`, `layout?`, `avatarFor?`, `captionFor?`, `onSeatClick?` |
-| `Seat` | `seat`, `player`, `isMe`, `isActing`, `isButton`, `winnerPayout`, `showdownLabel`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `position`, `avatar?`, `caption?` |
+| `PokerTable` | `room`, `hand`, `myPlayerId`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `canSit`, `layout?`, `chibiFor?`, `expressionFor?`, `captionFor?`, `onSeatClick?` |
+| `Seat` | `seat`, `player`, `isMe`, `isActing`, `isButton`, `winnerPayout`, `showdownLabel`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `position`, `chibi`, `expression`, `bounce`, `caption?` |
 | `Card` | `card?`, `faceDown?`, `size?` (`sm`/`md`/`lg`), `delayMs?`, `highlighted?`, `className?` |
 | `CommunityCards` | `cards`, `highlight?` |
 | `Pot` | `pot`, `carryOver`, `pulse`, `lang` |
@@ -205,7 +205,7 @@ is normalised to a `cancel.*` key and translated; the raw token is never rendere
 closable — `RoomScreen` does, and the between-hands countdown moves to the tray once it is waved off.
 
 **Seat slots.** A seat has two places the host app may write into, and they are threaded identically —
-`RoomScreen` → `PokerTable` → `Seat`. `avatarFor(player)` replaces the initial disc; `captionFor(player)` adds one
+`RoomScreen` → `PokerTable` → `Seat`. `chibiFor(player)` replaces the initial disc; `captionFor(player)` adds one
 muted, single-line, truncated line under the name (a title, a rank), and returning `null`/`undefined` leaves the
 plate exactly as it was. The caption is the plate's only decoration rather than state, so the compact plates
 (seven opponents and up in the stack layout) drop it to keep the third row on screen.
@@ -213,6 +213,21 @@ plate exactly as it was. The caption is the plate's only decoration rather than 
 Under 768 px the table becomes the vertical stack (spec §27.1): opponents, felt, your own seat. **The opponents'
 strip never scrolls inside itself** — it wraps, holds a floor of two plate rows, and from seven seats up the plates
 go compact (avatar, name, stack, then bet and state badge side by side) so a third row of three fits at 360 px.
+
+### Avatars (`src/avatar2d/`)
+
+The kit does render an avatar — a **chibi**: pre-rendered PNG layers on a shared frame, not a 3D rig or anything
+drawn at runtime. `Chibi` (`Chibi.tsx`) takes a `ChibiSubject` (a `ChibiConfig` — base plus equipped wearables — or
+a bot's `BotChibi`), an `expression` and a `frame` (`'full'` the whole body, `'head'` the round 160×160 crop), and
+stacks one `<img>` per layer `layersFor` (`layers.ts`) returns, z-ordered by layer number. `AvatarAssets`
+(`AvatarAssets.tsx`) is the context provider that resolves a layer name to a URL — `assetUrl(base, file, density)`
+— so a host app points the whole tree at wherever its avatar files are served from. `expressions.ts` exports
+`useTableExpressions`, the per-seat expression schedule `RoomScreen` feeds `PokerTable`. `defaults.ts` builds a
+brand-new human's `ChibiConfig` (`defaultChibi(seed)`) with no wardrobe and no request involved — what Lite draws,
+having no cosmetics of its own — and `bot.ts` builds a bot's two-layer `BotChibi` (`botChibi(seed)`) the same
+deterministic way. `chibiFor(player)` (on `RoomScreen` and `PokerTable`) is how a host app supplies a *human*
+seat's `ChibiConfig`; a bot never asks it — `PokerTable` draws `botChibi` for a bot seat on its own. Full design:
+`docs/avatar-2d.md`.
 
 ### Lobby
 
@@ -403,9 +418,6 @@ view, seat count (4/6/9), theme, language, forced stack layout, and "next hand".
 
 - **Spectators** see the table read-only; there are no spectator controls and no spectator chrome.
 - **No chat.** Nothing in the protocol carries it yet.
-- **No avatar renderer.** `PokerTable` and `RoomScreen` take an `avatarFor(player)` slot and draw an initial disc
-  when it is absent; Normal supplies a real one from its cosmetics. `captionFor(player)` is the same arrangement
-  for the line under the name — the kit never invents a title of its own.
 - **No top-up.** `TOP_UP` is not in the protocol, so a short stack has to stand up and sit back down.
 - The felt resizes slightly between the ring and stack layouts when a window crosses a breakpoint; the tray's height
   is reserved from 768 px up so it does not also move on every turn.

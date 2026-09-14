@@ -1,5 +1,14 @@
 {
   "extends": "../../../tsconfig.base.json",
-  "compilerOptions": { "noEmit": true, "types": ["node", "vitest/globals"], "lib": ["ES2022"] },
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node", "vitest/globals"],
+    "lib": ["ES2022"],
+    // `avatar-pipeline.test.ts` imports the pipeline's own `.mjs` modules to drive `removeChroma`,
+    // `anchorBase` and the ten checks over synthetic pictures. Without this they are unresolvable
+    // specifiers; with it (and `checkJs` left off) their types are inferred and nothing in them is
+    // type-checked, which is the right trade for a build script written in plain Node ESM.
+    "allowJs": true
+  },
   "include": ["."]
 }

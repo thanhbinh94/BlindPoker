@@ -21,7 +21,8 @@ import type { AppDb, AppTx } from '../db/client.js'
 import type { AppEventBus } from '../events.js'
 import { dailyLogins, players } from '../db/schema.js'
 import type { InventoryService } from '../inventory/inventory-service.js'
-import type { ItemCatalog, ItemSlot } from '../inventory/items.js'
+import type { ItemCatalog } from '../inventory/items.js'
+import { DAILY_DRAW_SLOTS } from '../inventory/slots.js'
 import { UnknownPlayerError, type NormalRepositories } from '../repos/index.js'
 import { isUuid } from '../repos/util.js'
 import {
@@ -113,15 +114,6 @@ export interface EconomyServiceDeps {
 /** The `source` recorded in `inventory` for anything the check-in hands out. */
 const DAILY_SOURCE = 'daily'
 
-/**
- * Slots a random draw does not cover.
- *
- * §13.2's item column is about the avatar, and a title or a badge is not part of one: they are name
- * decorations, earned by doing something. Leaving them in the pool would both dilute it and hand
- * out — by chance, on day 14 — the very things day 28 and `login_streak_28` exist to award.
- */
-const UNDRAWABLE_SLOTS = ['title', 'badge'] as const satisfies readonly ItemSlot[]
-
 export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
   const now = deps.now ?? Date.now
   const rng = deps.rng ?? Math.random
@@ -136,7 +128,13 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
    * can no longer earn.
    */
   const excludedIds: readonly string[] = [...new Set([...DAILY_FIXED_ITEM_IDS, ...(deps.reservedItemIds ?? [])])]
-  const drawExclusion = { ids: excludedIds, slots: UNDRAWABLE_SLOTS }
+  /**
+   * `withinSlots: DAILY_DRAW_SLOTS` rather than excluding `title`/`badge`/`outfit` by name: an
+   * allow-list also keeps out anything `items` still carries for a slot the current catalogue no
+   * longer offers (`0001_avatar_v2.sql`'s four v2 rows, kept forever for `inventory`'s foreign key)
+   * — a deny-list could never name those, because they are not even a current `ItemSlot`.
+   */
+  const drawExclusion = { ids: excludedIds, withinSlots: DAILY_DRAW_SLOTS }
 
   /** The `daily_logins` row, locked for the duration of the caller's transaction. */
   async function lockDaily(tx: AppTx, playerId: string): Promise<{ streak: number; lastClaimDate: string | null; month: string; claimedDays: number }> {

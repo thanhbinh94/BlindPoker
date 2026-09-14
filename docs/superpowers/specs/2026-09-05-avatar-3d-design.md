@@ -1,5 +1,7 @@
 # Bind Poker — Avatar 3D (bản Normal): thiết kế
 
+Đã thay thế bởi `2026-09-14-avatar-chibi-ai-design.md`.
+
 Ngày: 2026-09-05. Trạng thái: **đã triển khai** (Plan 8, nhánh `feat/plan8-avatar-3d`) — xem §2.3.
 Liên quan: spec chính `2026-09-04-bind-poker-design.md` (§10.2, §13, §14, §15, §19.2, §24, §26, §27), Plan 6 (avatar SVG hiện tại — sẽ bị thay thế).
 

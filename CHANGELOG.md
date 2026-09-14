@@ -8,6 +8,39 @@ below are the real history.
 
 ---
 
+## Plan 11 — Chibi avatar from AI-generated art (Normal + Lite) — *unreleased (branch `plan11/avatar-chibi-ai`)*
+
+Plan 8's 3D character is gone. In its place: a chibi assembled from PNG layers on a fixed 384×448
+frame — two locked bases (F01/M01), six hand-driven expressions, wardrobe slots head/face/outfit/aura/
+frame, five saved outfits — fed by a pipeline that turns AI-generated pictures into validated layers.
+Design: `docs/superpowers/specs/2026-09-14-avatar-chibi-ai-design.md` (supersedes the Plan 8 and
+Plan 10 designs, both marked so).
+
+- **An asset pipeline that runs before the art exists.** `apps/normal-web/scripts/avatar-pipeline.mjs`
+  (Node + `sharp`) has four commands: `placeholder` draws the whole stage-1 set as labelled stand-ins
+  so every screen and every test runs on synthetic layers from day one; `ingest` turns one generated
+  picture into `@1x`/`@2x` layers, removing the green-screen background and, for a wardrobe item,
+  extracting it by diffing against the aligned base rather than by any manual selection; `check` runs
+  ten acceptance criteria (frame size, no stray alpha, no white fringe, the crop, the manifest, the
+  budget); `sheet` composites everything for an eyeballed style gate. A manifest entry is marked
+  `placeholder` or `real`, and `placeholder` never overwrites a `real` one — ingesting is a one-way door.
+- **Server config v3.** `base`/`outfit`/`head?`/`face?`/`aura?`/`frame?`/`title?`/`badge?` replaces the
+  3D config's body/skin/eyes/hair and seven geometric slots; old item ids remap through
+  `data/item-aliases.json` so nobody's wardrobe goes empty on upgrade. Five saved outfits (a snapshot
+  of a whole configuration, not of one item) get their own table and routes.
+- **`@bp/ui-kit/src/avatar2d/`**: `Chibi` stacks one `<img>` per layer inside a 6:7 box or a round
+  160×160 head-crop, both densities in `srcset`, lazy-loaded; `hashChibi` is the configuration's
+  identity, stamped as `data-chibi-hash` for every test and every outfit-bar tile to key off. Bots draw
+  their own two-layer art, never a wardrobe. Lite copies only the base and bot layers into its build and
+  seeds every human seat from `defaultChibi(displayName)` — no wardrobe, no per-account config, the same
+  figure on every device that ever reads that name.
+- **The 3D system removed, end to end.** `src/avatar3d/` (three.js, the hidden WebGL renderer, the
+  portrait cache, the turnable stage), the old asset pipeline and its `.glb` bundles, and the CSP
+  directives they needed (`'wasm-unsafe-eval'`, `blob:` in `img-src`) are gone; the avatar is same-origin
+  PNG `<img>`s and needs nothing wider than `default-src 'self'`. `test/footprint.test.ts` drops every
+  three.js budget and adds one for the chibi's own `@2x` layers (≤ 6 MB, design §8); `e2e/avatar2d.spec.ts`
+  replaces `avatar3d.spec.ts` and asserts the wardrobe, a seat and the outfit bar all agree on one hash.
+
 ## Plan 8 — 3D avatar (Normal) — *unreleased (branch `feat/plan8-avatar-3d`)*
 
 The Normal edition's flat six-layer SVG avatar is gone, and in its place is a 3D character: pick a

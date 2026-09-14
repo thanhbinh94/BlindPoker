@@ -1,0 +1,100 @@
+/* One chibi: a stack of absolutely-positioned PNG layers on the 384×448 frame (spec §3). `full` shows the whole
+   frame at its native 6:7 ratio, clipped by the box itself. `head` clips a *round* viewport over the 160×160
+   avatar crop at (112, 48) — but only layers 10–80: the frame-border item (layer 90, D01 §5) is drawn 208×208
+   around the crop's own centre, meant to ring the round avatar from *outside* it, so `Chibi` renders it as a
+   sibling of the clipped `.clip` box rather than a member of it, and this root stays `overflow: visible` in head
+   mode so that ring is not cut off. `flex: none` on the root: a `Chibi` sitting in a flex row (a profile page next
+   to a full-body one, say) must not have its box silently squeezed by the flex algorithm — `size` sets a width a
+   caller can still see honoured, not a suggestion.
+
+   `.crop` carries the un-cropped layer stack at its native 384:448 proportions; for `full` that is all of it
+   (top/left/width/height below fill the box exactly, since it shares the outer box's own 6:7 ratio). For `head`,
+   `.headCrop` overrides top/left/width/height — on both `.crop` and the unclipped frame-border `<img>` — with
+   *percentages of the root's own box* (112/160, 48/160, 384/160, 448/160), not a fixed pixel size computed from
+   the `size` prop: an ancestor can still constrain the root's rendered size below `size` (a narrow flex column, a
+   `max-width`) even with `flex: none`, and pixels sized for the prop rather than the box actually painted showed
+   the wrong window — a fixed geometry computed once for `size=192` kept describing a 192 px box's crop even once
+   the root had shrunk to 114 px, cropping into the hair and one cheek instead of the head. A percentage always
+   describes *whatever the root turns out to be*, so it is correct at every size, requested or not. Also why this
+   is a `transform`-free `left`/`top`/`width`/`height` override rather than a `transform: translate(...)
+   scale(...)`: `scale` never magnifies a same-list `translate`'s own offset, landing the crop off-centre. */
+.chibi {
+  position: relative;
+  display: block;
+  flex: none;
+  width: 100%;
+  background: transparent;
+}
+
+.full {
+  aspect-ratio: 6 / 7;
+  overflow: hidden;
+}
+
+.head {
+  aspect-ratio: 1 / 1;
+  overflow: visible;
+}
+
+.clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 50%;
+}
+
+.crop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  aspect-ratio: 384 / 448;
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* `global.css` sets `img, svg { max-width: 100% }` for ordinary responsive images. `max-width`/`max-height`
+     are never overridden by a competing `width`/`height` — inline or not, same specificity or higher — they clamp
+     the *result* of whatever set width/height, so that rule alone silently shrank the unclipped frame-border
+     overlay (below) to its size×size wrapper's width while its inline height stood at the un-cropped 448-ratio
+     figure: a tall, left-shifted sliver instead of a ring. The clipped layers never showed it because their own
+     100% already resolves against the (already crop-scaled) `.crop` box, so the cap and the value coincide. */
+  max-width: none;
+  max-height: none;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* The head-crop geometry itself: applied alongside `.crop` (the clipped inner box) and alongside `.layer` (the
+   unclipped frame-border overlay) — declared after both so it wins the properties they share, at equal
+   specificity, by source order. Percentages of the root's own (`position: relative`) box, exact because
+   112/160 = 0.7, 48/160 = 0.3, 384/160 = 2.4, 448/160 = 2.8. */
+.headCrop {
+  left: -70%;
+  top: -30%;
+  width: 240%;
+  height: 280%;
+}
+
+@keyframes chibiBounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6%);
+  }
+}
+
+.bounce {
+  animation: chibiBounce 0.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bounce {
+    animation: none;
+  }
+}

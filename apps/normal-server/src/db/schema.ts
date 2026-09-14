@@ -19,7 +19,7 @@
  *     hold a bot seat, because a bot has no `players` row at all.
  */
 import { sql } from 'drizzle-orm'
-import { bigint, bigserial, boolean, check, date, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
+import { bigint, bigserial, boolean, check, date, index, integer, jsonb, pgTable, primaryKey, smallint, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 
 /** `timestamptz not null default now()` — the shape every "when did this happen" column wants. */
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
@@ -153,7 +153,7 @@ export const gamePlayers = pgTable('game_players', {
  * `0001_avatar_v2.sql` changed those. The mapping is here so that no query has to remember it.
  *
  * `asset_key` is likewise kept, now holding the manifest node prefix `<slot>/<id>`. The geometry
- * itself lives in `data/items.json` under `variants` and is never projected into this table.
+ * itself lives in `data/items.json` under `asset` and is never projected into this table.
  */
 export const items = pgTable('items', {
   id: text('id').primaryKey(),
@@ -222,3 +222,22 @@ export const playerStats = pgTable('player_stats', {
   bestLoginStreak: integer('best_login_streak').notNull().default(0),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+/**
+ * Five saved outfits per player (design §5.3, same contract as the outfits Plan 10 already speced).
+ *
+ * Keyed by `(player_id, slot)` rather than a surrogate id: a player has at most five, `slot` is the
+ * position in the bar the client draws, and there is never a reason to address a saved outfit any
+ * other way. `config` is the same `AvatarConfigV3` jsonb shape `players.avatar_config` stores — an
+ * outfit is a config a player set aside, not a different kind of thing.
+ */
+export const avatarOutfits = pgTable('avatar_outfits', {
+  playerId: uuid('player_id').notNull().references(() => players.id, { onDelete: 'cascade' }),
+  slot: smallint('slot').notNull(),
+  name: varchar('name', { length: 24 }).notNull(),
+  config: jsonb('config').$type<Record<string, unknown>>().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  primaryKey({ columns: [t.playerId, t.slot] }),
+  check('avatar_outfits_slot_range', sql`${t.slot} BETWEEN 1 AND 5`),
+])

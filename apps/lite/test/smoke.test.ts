@@ -9,7 +9,7 @@
 import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { RUN_FILE_NAME } from '../server/src/run-file.js'
 import { EXE, PACKAGE_ROOT, SERVER_BUNDLE } from './paths.js'
@@ -161,3 +161,83 @@ describe.skipIf(!hasExe)('bind-poker-lite.exe', () => {
     expectNoRunFile()
   }, BUDGET_MS + 5_000)
 })
+
+/**
+ * `--smoke` only ever proves `/health`; the avatar PNGs `build.mjs` copies into `dist/public/avatar` (and the SEA
+ * step embeds from there) need the exe actually *listening*, so this boots it for real, reads its own JSON log
+ * for the address it bound, makes one request, and kills it.
+ */
+describe.skipIf(!hasExe)('bind-poker-lite.exe serving the bundled avatar assets', () => {
+  it('answers GET /avatar/base_f01_L30@1x.png and the default outfit with 200', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bp-lite-avatar-'))
+    const env = { ...process.env, PORT: '0', HOST: '127.0.0.1', SQLITE_PATH: join(dir, 'bp.sqlite'), LOG_LEVEL: 'info' }
+    const child = spawn(EXE, [], { cwd: dirname(EXE), env, stdio: ['ignore', 'pipe', 'pipe'] })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()))
+    child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString()))
+    try {
+      const address = await new Promise<string>((resolvePromise, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error(`exe did not report a listen address within ${BUDGET_MS} ms\nstdout: ${stdout}\nstderr: ${stderr}`)),
+          BUDGET_MS,
+        )
+        const tryParse = (): void => {
+          for (const line of stdout.split('\n')) {
+            if (!line.trim().startsWith('{')) continue
+            try {
+              const entry = JSON.parse(line) as { msg?: string }
+              if (typeof entry.msg === 'string' && entry.msg.startsWith('Listening on ')) {
+                clearTimeout(timer)
+                resolvePromise(entry.msg.slice('Listening on '.length))
+                return
+              }
+            } catch {
+              // an incomplete line mid-write — wait for more data
+            }
+          }
+        }
+        child.stdout.on('data', tryParse)
+        child.on('error', (err) => {
+          clearTimeout(timer)
+          reject(err)
+        })
+        child.on('exit', (code) => {
+          clearTimeout(timer)
+          reject(new Error(`exe exited (${code}) before it started listening\nstdout: ${stdout}\nstderr: ${stderr}`))
+        })
+      })
+
+      const res = await fetch(`${address}/avatar/base_f01_L30@1x.png`)
+      expect(res.status).toBe(200)
+      await res.arrayBuffer()
+
+      // The default outfit `defaultChibi` equips every human with — without it, every Lite seat 404s on
+      // its outfit layer and renders undressed (`apps/lite/scripts/build.mjs`'s `isLiteAvatarFile`).
+      const outfitRes = await fetch(`${address}/avatar/item_outfit_casual01_L40@1x.png`)
+      expect(outfitRes.status).toBe(200)
+      await outfitRes.arrayBuffer()
+    } finally {
+      child.kill()
+      // On Windows the SQLite file stays locked for a moment after `kill()` — the signal is delivered
+      // asynchronously, and the OS does not release the process's open handles until it has actually exited.
+      // Retrying past that race beats making every run of this test wait out a fixed delay.
+      await rmDirWhenUnlocked(dir)
+    }
+  }, BUDGET_MS + 5_000)
+})
+
+/** `rmSync` retried past a transient `EBUSY`/`EPERM` (Windows holding a just-killed process's file open a beat
+ * longer than `child.kill()` takes to return) — up to ~1 s, which the process teardown never approaches in
+ * practice. */
+async function rmDirWhenUnlocked(dir: string, attempts = 10): Promise<void> {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      rmSync(dir, { recursive: true, force: true })
+      return
+    } catch (err) {
+      if (attempt === attempts) throw err
+      await new Promise((r) => setTimeout(r, 100))
+    }
+  }
+}

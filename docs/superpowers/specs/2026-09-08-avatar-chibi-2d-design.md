@@ -1,5 +1,7 @@
 # Just a Normal Poker — Avatar chibi 2D (thay thế avatar 3D)
 
+Đã thay thế bởi `2026-09-14-avatar-chibi-ai-design.md`.
+
 Ngày: 2026-09-08. Trạng thái: đã duyệt qua brainstorming (CR1 trong `docs/bug-log.md`); chờ người dùng xem lần cuối rồi lập Plan 10.
 Thay thế: `docs/superpowers/specs/2026-09-05-avatar-3d-design.md` (đánh dấu "đã thay thế" khi Plan 10 gộp).
 Liên quan: spec chính §15 (Avatar / Inventory), §13 (Daily), §14 (Achievement); `docs/avatar-assets.md` (sẽ thay bằng `docs/avatar-2d.md`).
