@@ -1,8 +1,10 @@
 /* One chibi: a stack of absolutely-positioned PNG layers on the 384×448 frame (spec §3). `full` shows the whole
-   frame at its native 6:7 ratio; `head` clips a square viewport over the 160×160 avatar crop at (112, 48) — the
-   `.crop` box below carries the frame at its native proportions and the transform slides+scales it so that exact
-   square fills the viewport. Both variants share the same layer markup; only the outer shape and the transform
-   differ. */
+   frame at its native 6:7 ratio; `head` clips a square viewport over the 160×160 avatar crop at (112, 48). The
+   `.crop` box below carries the un-cropped layer stack at its native 384:448 proportions; for `full` that is all
+   of it (top/left/width/height below fill the box exactly, since it shares the outer box's own 6:7 ratio). For
+   `head`, `Chibi` overrides top/left/width/height with an inline style computed by `frame.ts`'s
+   `headCropGeometry` — plain box geometry rather than a `transform`, whose `scale` would otherwise never magnify
+   a same-list `translate`'s offset and land the crop off-centre. */
 .chibi {
   position: relative;
   display: block;
@@ -26,13 +28,6 @@
   left: 0;
   width: 100%;
   aspect-ratio: 384 / 448;
-  transform-origin: 0 0;
-}
-
-/* 160×160 crop at (112, 48) inside the 384×448 frame: shift by the offset (as a fraction of the frame's own
-   width/height) then scale up by 384/160 so the crop square fills the head viewport exactly. */
-.cropped {
-  transform: translate(-29.1667%, -10.7143%) scale(2.4);
 }
 
 .layer {

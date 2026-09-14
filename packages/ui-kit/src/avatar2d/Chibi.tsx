@@ -1,5 +1,7 @@
+import type { CSSProperties } from 'react'
 import { cx } from '../primitives/cx.js'
 import { assetUrl, useAvatarAssetsBase } from './AvatarAssets.js'
+import { headCropGeometry } from './frame.js'
 import { hashChibi, layersFor } from './layers.js'
 import type { ChibiFrame, ChibiSubject, Expression } from './types.js'
 import s from './avatar2d.module.css'
@@ -31,6 +33,19 @@ export function Chibi({ subject, expression = 'neutral', frame = 'full', size, l
   const hash = hashChibi(subject)
   const style = size === undefined ? undefined : { width: `${size}px` }
 
+  // The head crop, as explicit left/top/width/height rather than a CSS transform: a transform's `scale` never
+  // magnifies a same-list `translate`'s offset, so `translate(...) scale(...)` lands the crop off-centre (see
+  // `frame.ts`). Pixels when `size` is known; percent-of-container (reading the same ratios back at `outputSize
+  // = 100`) when it is not — `Chibi`'s usual mode, filling whatever box the caller (a seat disc, a lobby bar) set.
+  const cropStyle: CSSProperties | undefined =
+    frame !== 'head'
+      ? undefined
+      : (() => {
+          const unit = size === undefined ? '%' : 'px'
+          const g = headCropGeometry(size ?? 100)
+          return { left: `${g.left}${unit}`, top: `${g.top}${unit}`, width: `${g.width}${unit}`, height: `${g.height}${unit}` }
+        })()
+
   return (
     <div
       className={cx(s.chibi, frame === 'head' ? s.head : s.full, bounce && s.bounce, className)}
@@ -42,7 +57,7 @@ export function Chibi({ subject, expression = 'neutral', frame = 'full', size, l
       aria-label={label}
       aria-hidden={label === undefined ? true : undefined}
     >
-      <div className={cx(s.crop, frame === 'head' && s.cropped)}>
+      <div className={s.crop} style={cropStyle}>
         {layers.map((layer) => (
           <img
             key={layer.file}

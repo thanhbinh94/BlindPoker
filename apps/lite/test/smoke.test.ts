@@ -213,7 +213,25 @@ describe.skipIf(!hasExe)('bind-poker-lite.exe serving the bundled avatar assets'
       await res.arrayBuffer()
     } finally {
       child.kill()
-      rmSync(dir, { recursive: true, force: true })
+      // On Windows the SQLite file stays locked for a moment after `kill()` — the signal is delivered
+      // asynchronously, and the OS does not release the process's open handles until it has actually exited.
+      // Retrying past that race beats making every run of this test wait out a fixed delay.
+      await rmDirWhenUnlocked(dir)
     }
   }, BUDGET_MS + 5_000)
 })
+
+/** `rmSync` retried past a transient `EBUSY`/`EPERM` (Windows holding a just-killed process's file open a beat
+ * longer than `child.kill()` takes to return) — up to ~1 s, which the process teardown never approaches in
+ * practice. */
+async function rmDirWhenUnlocked(dir: string, attempts = 10): Promise<void> {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      rmSync(dir, { recursive: true, force: true })
+      return
+    } catch (err) {
+      if (attempt === attempts) throw err
+      await new Promise((r) => setTimeout(r, 100))
+    }
+  }
+}

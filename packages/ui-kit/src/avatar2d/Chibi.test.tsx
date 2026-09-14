@@ -58,13 +58,43 @@ describe('Chibi', () => {
     expect(container.firstElementChild).toHaveAttribute('data-chibi-hash', hashChibi(bot))
   })
 
-  it('the head crop transforms the layer stack, not the full frame', () => {
-    const { container: full } = render(<Chibi subject={SUBJECT} frame="full" />)
-    const { container: head } = render(<Chibi subject={SUBJECT} frame="head" />)
-    const fullCrop = full.querySelector('[class*="crop"]') as HTMLElement
-    const headCrop = head.querySelector('[class*="crop"]') as HTMLElement
-    expect(fullCrop.style.transform).toBe('')
-    expect(headCrop.className).not.toBe(fullCrop.className) // the `cropped` modifier only applies to `head`
+  it('the full frame draws the crop box at its native, un-cropped size', () => {
+    const { container } = render(<Chibi subject={SUBJECT} frame="full" />)
+    const crop = container.querySelector('[class*="crop"]') as HTMLElement
+    expect(crop.style.left).toBe('')
+    expect(crop.style.width).toBe('')
+    expect(crop.style.transform).toBe('')
+  })
+
+  // The regression this guards: a `transform: translate(...) scale(...)` never magnifies the translate's own
+  // offset (`scale`, being rightmost, applies to the point first), which left every `frame="head"` chibi showing
+  // only its top-left quadrant. Plain left/top/width/height has no such ordering trap, and — unlike a transform
+  // string — is asserted directly here rather than trusted by eye.
+  it('at size=160 (the crops own native size), the head crop sits the un-cropped frame at (-112, -48), 384×448', () => {
+    const { container } = render(<Chibi subject={SUBJECT} frame="head" size={160} />)
+    const crop = container.querySelector('[class*="crop"]') as HTMLElement
+    expect(crop.style.left).toBe('-112px')
+    expect(crop.style.top).toBe('-48px')
+    expect(crop.style.width).toBe('384px')
+    expect(crop.style.height).toBe('448px')
+  })
+
+  it('the head crop geometry scales linearly with size — 40px is exactly a quarter of 160px', () => {
+    const { container } = render(<Chibi subject={SUBJECT} frame="head" size={40} />)
+    const crop = container.querySelector('[class*="crop"]') as HTMLElement
+    expect(crop.style.left).toBe('-28px')
+    expect(crop.style.top).toBe('-12px')
+    expect(crop.style.width).toBe('96px')
+    expect(crop.style.height).toBe('112px')
+  })
+
+  it('with no explicit size, the head crop falls back to the equivalent percentages of its container', () => {
+    const { container } = render(<Chibi subject={SUBJECT} frame="head" />)
+    const crop = container.querySelector('[class*="crop"]') as HTMLElement
+    expect(crop.style.left).toBe('-70%')
+    expect(crop.style.top).toBe('-30%')
+    expect(crop.style.width).toBe('240%')
+    expect(crop.style.height).toBe('280%')
   })
 
   it('is decorative with no label, and an announced role="img" with one', () => {

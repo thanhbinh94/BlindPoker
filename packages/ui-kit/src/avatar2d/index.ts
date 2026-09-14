@@ -1,4 +1,5 @@
 export * from './types.js'
+export * from './frame.js'
 export * from './layers.js'
 export * from './bot.js'
 export * from './defaults.js'
