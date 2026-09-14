@@ -6,7 +6,7 @@ import { expect, type Locator, type Page } from '@playwright/test'
  * What both Normal specs need: an account, the cookie session, the lobby, a room, and the two chrome
  * assertions that are about the *viewport* rather than about any one screen.
  *
- * It lives here rather than in `normal.spec.ts` because `avatar3d.spec.ts` drives the same app through
+ * It lives here rather than in `normal.spec.ts` because `avatar2d.spec.ts` drives the same app through
  * the same door — registering, signing in, sitting down — and two copies of `register()` are two things
  * to update when the sign-in card changes its words. Everything that is about the *money* stays in
  * `normal.spec.ts`, because nothing else has any business reading a ledger.
@@ -84,9 +84,15 @@ export async function signIn(page: Page, who: Account): Promise<void> {
   await settleAfterSignIn(page, () => page.getByRole('button', { name: 'Vào sảnh' }).click())
 }
 
-/** The portrait hung on the lobby's player bar — the same face the seat plates draw. */
+/** The chibi hung on the lobby's player bar — the same face the seat plates draw. */
 export function lobbyAvatar(page: Page): Locator {
-  return page.locator('a[href="#/avatar"] [data-portrait]')
+  return page.locator('a[href="#/avatar"] [data-chibi-hash]')
+}
+
+/** The `data-chibi-hash` of a chibi that has actually reached the DOM — a stable identity for its configuration. */
+export async function chibiHash(chibi: Locator): Promise<string> {
+  await expect(chibi).toHaveAttribute('data-chibi-hash', /^[0-9a-f]+$/)
+  return String(await chibi.getAttribute('data-chibi-hash'))
 }
 
 /** Fills the create-room dialog for a Blind table and returns the join code from the room header. */

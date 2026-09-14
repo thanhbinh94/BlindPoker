@@ -1,4 +1,5 @@
-import { AvatarAssets, GameClientProvider, LobbyScreen, RoomScreen, useGameClient, useHashRoute, type SocketFactory } from '@bp/ui-kit'
+import type { RoomPlayerView } from '@bp/core'
+import { AvatarAssets, defaultChibi, GameClientProvider, LobbyScreen, RoomScreen, useGameClient, useHashRoute, type ChibiSubject, type SocketFactory } from '@bp/ui-kit'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { LiteApi, SessionDto } from './api.js'
@@ -11,6 +12,15 @@ import { clearToken, loadToken, saveToken } from './session.js'
 
 /** Tracks `apps/lite/package.json`; shown on the settings page so a bug report can name a build. */
 export const LITE_VERSION = '0.1.0'
+
+/**
+ * Every human seat draws a chibi seeded from their own display name (design 08 §6.4) — Lite has no
+ * wardrobe and no per-account config to fetch, so `defaultChibi` is the whole story: the same name
+ * always seeds the same figure, on this device and on every other one at the table.
+ */
+function chibiForLite(player: RoomPlayerView): ChibiSubject {
+  return defaultChibi(player.displayName)
+}
 
 /** Lite is served by the same process as the socket, so the origin is never configured — it is wherever this page came from. */
 export function websocketUrl(loc: Pick<Location, 'protocol' | 'host'> = window.location): string {
@@ -99,7 +109,7 @@ export function App({ api, socketFactory, version = LITE_VERSION }: AppProps) {
           onLanguage={setLang}
         >
           {inRoom ? (
-            <RoomScreen client={client} lang={lang} onLeft={() => navigate('/lobby')} />
+            <RoomScreen client={client} lang={lang} onLeft={() => navigate('/lobby')} chibiFor={chibiForLite} />
           ) : path === '/daily' ? (
             <DailyScreen api={api} token={token} lang={lang} />
           ) : path === '/settings' ? (

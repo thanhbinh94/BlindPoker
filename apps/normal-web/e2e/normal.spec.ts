@@ -33,7 +33,8 @@ import {
  * are the whole story, which is why registering, signing out and signing back in is the first test and why
  * `page.request` (which shares the context's cookie jar) is what reads the API.
  *
- * The avatar has a file of its own — `avatar3d.spec.ts` — because it needs a GPU and says so.
+ * The avatar has a file of its own — `avatar2d.spec.ts` — because the wardrobe's flow (base, locked
+ * items, saved outfits) is a story with several steps, not one more assertion to fold in here.
  */
 
 /** The lowest `blindWagerTiers` entry (`@bp/core`'s `ECONOMY`), and the one the create dialog offers first. */
@@ -163,8 +164,8 @@ async function tourStart(context: BrowserContext, who: Account, suffix: string):
   await expect(page.getByLabel('Tên hiển thị', { exact: true })).toBeVisible()
   await shot(page, `auth-${suffix}`)
   await register(page, who)
-  // The disc is there from the first paint — it carries the player's initial until the picture their own
-  // browser is drawing arrives, and on a machine with no WebGL it carries it for good.
+  // The chibi is there from the first paint — it is a stack of same-origin PNGs, not a render, so there is
+  // no fallback state to race.
   await expect(lobbyAvatar(page)).toBeVisible()
   await shot(page, `lobby-${suffix}`)
   return page
@@ -316,8 +317,7 @@ test.describe('Just a Normal Poker Normal', () => {
     await expectRailFits(page)
     await shot(page, 'profile-mobile')
 
-    // (The wardrobe at this width is `avatar3d.spec.ts`'s `@mobile` test, which also has to wait for a
-    // WebGL context before it can say anything about the layout around it.)
+    // (The wardrobe at this width is `avatar2d.spec.ts`'s `@mobile` test.)
 
     // The table on a phone is the stack layout: opponents in a strip, my own plate under the felt. The
     // `Người chơi` group is what the ring layout does not have.
