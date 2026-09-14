@@ -21,7 +21,7 @@ import type { Logger } from '@bp/server-kit'
 import { TestClient } from '@bp/server-kit/testing'
 import { sql } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { FONTS_FILE_HOST, FONTS_STYLESHEET_HOST, IMG_SRC_EXTRA, logSettlementFailure, normalCsp, SCRIPT_SRC, SESSION_SWEEP_INTERVAL_MS, UPGRADE_RATE_LIMIT } from './app.js'
+import { FONTS_FILE_HOST, FONTS_STYLESHEET_HOST, logSettlementFailure, normalCsp, SCRIPT_SRC, SESSION_SWEEP_INTERVAL_MS, UPGRADE_RATE_LIMIT } from './app.js'
 import { CONFIG_DEFAULTS } from './config.js'
 import { rowsOf, type AppDb } from './db/client.js'
 import { sessions as sessionsTable, users } from './db/schema.js'
@@ -218,14 +218,12 @@ describe('security headers', () => {
     const directives = new Map(csp.split('; ').map((d) => [d.split(' ')[0], d]))
     expect(directives.get('style-src')).toBe(`style-src 'self' 'unsafe-inline' ${FONTS_STYLESHEET_HOST}`)
     expect(directives.get('font-src')).toBe(`font-src 'self' ${FONTS_FILE_HOST}`)
-    // The meshopt decoder is WebAssembly: allowed explicitly, and only that — no 'unsafe-eval'.
+    // Written out explicitly, and equal to what default-src already said — the avatar is same-origin
+    // PNG layers since Plan 11 and needs nothing wider than that.
     expect(directives.get('script-src')).toBe(SCRIPT_SRC)
-    expect(csp).not.toContain("'unsafe-eval'")
-    // Portraits are object URLs: `blob:` joins img-src, and nothing else does.
-    expect(directives.get('img-src')).toBe(`img-src 'self' data: ${IMG_SRC_EXTRA}`)
-    // Everything the shared default said is still said.
+    // Everything the shared default said is still said, img-src included: nothing widens it any more.
     for (const directive of DEFAULT_CSP.split('; ')) {
-      if (directive.startsWith('style-src ') || directive.startsWith('img-src ')) continue
+      if (directive.startsWith('style-src ')) continue
       expect(csp).toContain(directive)
     }
   })
