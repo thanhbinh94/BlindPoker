@@ -257,35 +257,6 @@
   },
   "wardrobe": {
     "title": "Tủ đồ",
-    "lead": "Chỉ những món bạn đang sở hữu mới có thể mặc.",
-    "figure": "Nhân vật {{body}}, da {{skin}}, mắt {{eyes}}. Đang mặc: {{items}}.",
-    "figurePiece": "{{slot}} {{item}}",
-    "figureBare": "Nhân vật {{body}}, da {{skin}}, mắt {{eyes}}.",
-    "rotateHint": "Kéo để xoay, hoặc dùng phím mũi tên trái/phải.",
-    "figureRole": "nhân vật xoay được",
-    "resetView": "Xoay lại mặt trước",
-    "bodyWord": {
-      "male": "nam",
-      "female": "nữ"
-    },
-    "skinTone": {
-      "0": "Ngà",
-      "1": "Sáng",
-      "2": "Trung bình",
-      "3": "Rám nắng",
-      "4": "Nâu nhạt",
-      "5": "Nâu",
-      "6": "Nâu đậm",
-      "7": "Nâu sẫm"
-    },
-    "eyeColor": {
-      "0": "Nâu sẫm",
-      "1": "Nâu",
-      "2": "Hổ phách",
-      "3": "Xanh lá",
-      "4": "Xanh dương",
-      "5": "Xám"
-    },
     "tabs": {
       "base": "Thân nền",
       "head": "Mũ",
@@ -314,7 +285,11 @@
     },
     "save": "Lưu tủ đồ",
     "saved": "Đã lưu tủ đồ.",
-    "close": "Đóng"
+    "close": "Đóng",
+    "leaveTitle": "Rời đi mà không lưu?",
+    "leaveBody": "Bạn có thay đổi trong tủ đồ chưa được lưu.",
+    "leaveStay": "Ở lại",
+    "leaveDiscard": "Bỏ qua và rời đi"
   },
   "outfits": {
     "title": "Thanh outfit",

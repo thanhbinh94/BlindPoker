@@ -76,8 +76,8 @@ const AVATAR: AvatarConfigDto = { v: 3, base: 'f01', outfit: 'outfit_casual01', 
 
 const INVENTORY: InventoryDto = {
   items: [
-    { itemId: 'outfit_casual01', slot: 'outfit', rarity: 'common', nameKey: 'items.outfit_casual01', assetKey: 'outfit/outfit_casual01', source: 'default', acquiredAt: 0 },
-    { itemId: 'head_beanie01', slot: 'head', rarity: 'common', nameKey: 'items.head_beanie01', assetKey: 'head/head_beanie01', source: 'default', acquiredAt: 0 },
+    { itemId: 'outfit_casual01', acquiredAs: 'outfit_casual01', slot: 'outfit', rarity: 'common', nameKey: 'items.outfit_casual01', assetKey: 'outfit/outfit_casual01', source: 'default', acquiredAt: 0 },
+    { itemId: 'head_beanie01', acquiredAs: 'head_beanie01', slot: 'head', rarity: 'common', nameKey: 'items.head_beanie01', assetKey: 'head/head_beanie01', source: 'default', acquiredAt: 0 },
   ],
   avatar: AVATAR,
 }
@@ -235,5 +235,64 @@ describe('WardrobeScreen', () => {
     await user.click(screen.getByRole('button', { name: viNormal.outfits.delete }))
 
     await waitFor(() => expect(deleteOutfit).toHaveBeenCalledWith(1))
+  })
+
+  describe('leaving with unsaved changes', () => {
+    // The guard is document-level (any `#/…` link anywhere counts, matching how every route in the app is
+    // reached), so a plain link stands in for the rail here rather than mounting the whole app shell.
+    const renderWithLink = () =>
+      renderWithI18n(
+        <>
+          <a href="#/profile">profile link</a>
+          <WardrobeScreen api={stubApi()} playerId="p1" />
+        </>,
+        makeI18n('vi'),
+      )
+
+    it('asks before leaving a dirty draft, and does not navigate until the player says so', async () => {
+      const user = userEvent.setup()
+      window.location.hash = '#/wardrobe'
+      renderWithLink()
+      await screen.findByText(viNormal.bases.f01)
+
+      await user.click(screen.getByText(viNormal.bases.m01)) // dirties the draft
+      expect(screen.getByText(viNormal.bases.m01).closest('button')).toHaveAttribute('aria-pressed', 'true')
+
+      await user.click(screen.getByRole('link', { name: 'profile link' }))
+
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+      expect(screen.getByText(viNormal.wardrobe.leaveBody)).toBeInTheDocument()
+      // The click was intercepted before the browser acted on it.
+      expect(window.location.hash).toBe('#/wardrobe')
+    })
+
+    it('stays on the wardrobe, draft intact, when the player chooses to stay', async () => {
+      const user = userEvent.setup()
+      window.location.hash = '#/wardrobe'
+      renderWithLink()
+      await screen.findByText(viNormal.bases.f01)
+      await user.click(screen.getByText(viNormal.bases.m01))
+      await user.click(screen.getByRole('link', { name: 'profile link' }))
+
+      await user.click(screen.getByRole('button', { name: viNormal.wardrobe.leaveStay }))
+
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(window.location.hash).toBe('#/wardrobe')
+      expect(screen.getByText(viNormal.bases.m01).closest('button')).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it('navigates away and drops the draft when the player chooses to discard it', async () => {
+      const user = userEvent.setup()
+      window.location.hash = '#/wardrobe'
+      renderWithLink()
+      await screen.findByText(viNormal.bases.f01)
+      await user.click(screen.getByText(viNormal.bases.m01))
+      await user.click(screen.getByRole('link', { name: 'profile link' }))
+
+      await user.click(screen.getByRole('button', { name: viNormal.wardrobe.leaveDiscard }))
+
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(window.location.hash).toBe('#/profile')
+    })
   })
 })

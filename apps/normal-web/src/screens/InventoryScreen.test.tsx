@@ -17,6 +17,7 @@ import { InventoryScreen } from './InventoryScreen.js'
 
 const owned = (itemId: string, slot: OwnedItemDto['slot'], rarity: OwnedItemDto['rarity'], source: string): OwnedItemDto => ({
   itemId,
+  acquiredAs: itemId,
   slot,
   rarity,
   nameKey: `items.${itemId}`,

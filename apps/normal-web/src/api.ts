@@ -286,7 +286,10 @@ export interface LedgerPageDto {
 
 /** One owned item, already joined against the catalogue by the server. */
 export interface OwnedItemDto {
+  /** The item's current id — a legacy row is resolved through the server's alias map before this is set. */
   itemId: string
+  /** The id this row was actually acquired under; equal to `itemId` unless that id has since been renamed. */
+  acquiredAs: string
   slot: ItemSlot | null
   rarity: Rarity | null
   nameKey: string | null

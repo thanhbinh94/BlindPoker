@@ -30,11 +30,11 @@ export function ItemPreview({ item, config, items, bases }: ItemPreviewProps) {
   if (!PICTURED.has(item.slot)) return null
   const subject = chibiFromApi({ ...config, [item.slot]: item.id }, items, bases)
   if (subject === null) return null
-  return item.slot === 'outfit' || item.slot === 'aura' ? (
-    <Chibi subject={subject} frame="full" size={72} />
-  ) : (
-    <Chibi subject={subject} frame="head" size={64} />
-  )
+  if (item.slot === 'outfit' || item.slot === 'aura') return <Chibi subject={subject} frame="full" size={72} />
+  // The frame item's own ring is 130 % of the head crop (D01 §5) and draws outside it, unclipped — a 64 px crop
+  // would put a ~83 px ring inside this 64 px tile, spilling past its edge. 48 px keeps the ring (~62 px) inside.
+  if (item.slot === 'frame') return <Chibi subject={subject} frame="head" size={48} />
+  return <Chibi subject={subject} frame="head" size={64} />
 }
 
 export interface ItemTabProps {

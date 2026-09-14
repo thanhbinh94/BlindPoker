@@ -1,6 +1,6 @@
-import { Button, Chibi, defaultChibi, type Expression } from '@bp/ui-kit'
+import { Button, Chibi, defaultChibi, Modal, type Expression } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ApiError,
@@ -82,6 +82,9 @@ type Note = 'saved' | null
  * in the player's inventory — so the only refusal a correct client can provoke is a race with a grant, and
  * `avatarRefusal` still maps the server's codes because a save that says no with no words is a button that
  * appears to do nothing.
+ *
+ * Leaving with unsaved changes is guarded twice — `beforeunload` for a reload or a closed tab, an in-app
+ * confirmation for a `#/…` link elsewhere in the app — both wired up where `dirty` is computed, below.
  */
 export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
   const { t } = useTranslation('normal')
@@ -110,10 +113,54 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<Note>(null)
   const [busy, setBusy] = useState(false)
+  /** The `#/…` a guarded click was heading for, while the confirmation is up. */
+  const [leavingTo, setLeavingTo] = useState<string | null>(null)
 
   const loaded = wardrobe.data
   const saved = committed ?? loaded?.inventory.avatar ?? null
   const config = draft ?? saved
+  const dirty = draft !== null && saved !== null && !sameConfig(draft, saved)
+
+  // Leaving with an unsaved draft is guarded twice. `beforeunload` covers a reload or a closed tab; a
+  // capture-phase click on any `#/…` link covers the rail, the profile's quick nav and the lobby bar —
+  // every route in this app is one of those, and a hash that has already changed cannot be un-changed
+  // without pushing a second history entry, so the click is caught *before* the browser acts on it and
+  // the destination is held until the player says what to do with it. Both are armed only while `dirty`.
+  useEffect(() => {
+    if (!dirty) return
+    const onBeforeUnload = (event: BeforeUnloadEvent): void => {
+      // Two lines for one behaviour: `preventDefault` is the modern spelling, `returnValue` the one
+      // several browsers still require. Neither lets us choose the words — the browser's own are used.
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    const onClick = (event: MouseEvent): void => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey) return
+      const target = event.target
+      if (!(target instanceof Element)) return
+      const link = target.closest('a[href^="#"]')
+      if (link === null) return
+      const href = link.getAttribute('href')
+      if (href === null || href === '' || href === window.location.hash) return
+      event.preventDefault()
+      event.stopPropagation()
+      setLeavingTo(href)
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    document.addEventListener('click', onClick, true)
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload)
+      document.removeEventListener('click', onClick, true)
+    }
+  }, [dirty])
+
+  /** Go where the guarded click was going. The guard is not in the way: this is not a click. */
+  const leave = (): void => {
+    const target = leavingTo
+    setLeavingTo(null)
+    setDraft(null)
+    if (target !== null) window.location.hash = target
+  }
 
   const items = useMemo(() => new Map((loaded?.catalog ?? []).map((item) => [item.id, item])), [loaded])
   const bases = useMemo(() => new Map((loaded?.avatarCatalog.bases ?? []).map((base) => [base.id, base])), [loaded])
@@ -185,7 +232,6 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
   }
 
   const preview = chibiFromApi(config, items, bases) ?? defaultChibi('preview')
-  const dirty = draft !== null && !sameConfig(draft, saved ?? draft)
 
   return (
     <main className={`${s.page} ${s.wide}`}>
@@ -298,6 +344,18 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
         onOutfitsChanged={(next) => wardrobe.set({ ...loaded, outfits: next })}
         onApplied={onOutfitApplied}
       />
+
+      <Modal open={leavingTo !== null} title={t('wardrobe.leaveTitle')} closeLabel={t('wardrobe.close')} onClose={() => setLeavingTo(null)}>
+        <p>{t('wardrobe.leaveBody')}</p>
+        <div className={s.stageActions}>
+          <Button variant="gold" onClick={() => setLeavingTo(null)}>
+            {t('wardrobe.leaveStay')}
+          </Button>
+          <Button variant="ghost" onClick={leave}>
+            {t('wardrobe.leaveDiscard')}
+          </Button>
+        </div>
+      </Modal>
     </main>
   )
 }
