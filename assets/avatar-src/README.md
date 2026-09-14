@@ -64,39 +64,3 @@ node scripts/avatar-pipeline.mjs sheet
 
 Lớp nào chưa có ảnh thật thì `placeholder` giữ một hình tạm có dán mã món, nên ứng dụng luôn dựng
 được. `ingest` lật lớp đó sang `real: true` trong manifest và từ đó `placeholder` không đụng vào nữa.
-
----
-
-## Kho 3D cũ (Plan 8) — sẽ gỡ cùng pipeline 3D
-
-Phần dưới đây thuộc về `apps/normal-web/scripts/avatar-assets.mjs`, thứ mà Plan 11 thay thế. Giữ lại
-cho tới khi pipeline 3D được xoá.
-
-The 3D avatar of the Normal edition (Plan 8, `docs/superpowers/specs/2026-09-05-avatar-3d-design.md`)
-is built from two **CC0** modular character packs by Quaternius.
-
-| Archive | Pack | Downloaded | SHA-256 |
-|---|---|---|---|
-| `Universal Base Characters[Standard].zip` | [Universal Base Characters](https://quaternius.itch.io/universal-base-characters) — 2 base bodies, 5 hairstyles, eyebrows, beard | 2026-09-06 | `fdbf1804c90dfc1ea03e992bff7da2dfd1a79318e13270a660180f9308455f40` |
-| `Modular Character Outfits - Fantasy[Standard].zip` | [Modular Character Outfits – Fantasy](https://quaternius.com/packs/modularcharacteroutfitsfantasy.html) → [itch.io](https://quaternius.itch.io/modular-character-outfits-fantasy) — Peasant and Ranger outfits, male and female, as separate body/arms/legs/feet/hood/pauldron parts | 2026-09-06 | `c3468b18871cc8c8f05ab14df7712baf22cb9f389cbd870babf130e595187f70` |
-
-Sizes as downloaded: 128,968,391 and 294,347,394 bytes. Both packs are released under
-[CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) — usable commercially with no
-attribution required; we credit Quaternius in `docs/avatar-assets.md` anyway.
-
-The itch.io free-download flow, which is what was used on 2026-09-06:
-
-```
-POST https://quaternius.itch.io/<slug>/download_url        (form field csrf_token, may be empty)
-  -> { "url": "https://quaternius.itch.io/<slug>/download/<signed key>" }
-GET  <that url>                                            -> HTML listing the uploads
-POST https://quaternius.itch.io/<slug>/file/<upload id>?source=game_download   (form field csrf_token)
-  -> { "url": "<expiring CDN url>" }
-GET  <that url>                                            -> the zip
-```
-
-The `csrf_token` comes from the `<input name="csrf_token">` on the download page. Slugs are
-`universal-base-characters` and `modular-character-outfits-fantasy`. Cloudflare in front of itch.io
-returns an intermittent `403` interstitial to command-line clients; retrying the same request a few
-seconds later succeeds, so the fetch loop just retries. **Do not** try to defeat the interstitial —
-if retries stop working, download the two archives in a browser and drop them here by hand.

@@ -1,9 +1,7 @@
-# The generated source images (Plan 11) and, until it is removed, the 3D pipeline's 400 MB of CC0
-# archives and their unpacked contents. Both are *inputs* — to
-# `apps/normal-web/scripts/avatar-pipeline.mjs` and `…/avatar-assets.mjs` — and neither is project
-# state: what is committed is the layers those scripts emit under `apps/normal-web/public/avatar/`
-# and `…/public/avatar3d/`. README.md says where each input comes from and, for the generated ones,
-# what tool and seed made it.
+# The AI-generated (or hand-drawn) source images (Plan 11) fed into
+# `apps/normal-web/scripts/avatar-pipeline.mjs`. They are *inputs*, not project state: what is
+# committed is the layers that script emits under `apps/normal-web/public/avatar/`. README.md says
+# where each one comes from and what tool and seed made it.
 #
 # `!.gitignore` is not decoration: without it this file would ignore itself and could not be
 # committed, which would leave every original one `git add -A` away from the history.

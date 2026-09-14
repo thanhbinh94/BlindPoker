@@ -9,11 +9,10 @@
  * file in `public/` is involved, so these pass on a checkout that has never run the pipeline and they
  * fail for exactly one reason: the arithmetic is wrong.
  *
- * The **artefact** half reads what is committed under `public/avatar/`, the way `avatar-assets.test.ts`
- * reads `public/avatar3d/`: the placeholder set is a build artefact that is committed, because the app
- * has to build before the generated art exists. What it defends is that the committed set is the set
- * the stage-1 list names, at both densities, that both copies of the manifest agree byte for byte, and
- * that `check` still passes on them.
+ * The **artefact** half reads what is committed under `public/avatar/`: the placeholder set is a build
+ * artefact that is committed, because the app has to build before the generated art exists. What it
+ * defends is that the committed set is the set the stage-1 list names, at both densities, that both
+ * copies of the manifest agree byte for byte, and that `check` still passes on them.
  */
 import { execFileSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
