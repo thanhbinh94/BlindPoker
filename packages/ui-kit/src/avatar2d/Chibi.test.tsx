@@ -69,42 +69,50 @@ describe('Chibi', () => {
     expect(crop.style.transform).toBe('')
   })
 
-  // The regression this guards: a `transform: translate(...) scale(...)` never magnifies the translate's own
-  // offset (`scale`, being rightmost, applies to the point first), which left every `frame="head"` chibi showing
-  // only its top-left quadrant. Plain left/top/width/height has no such ordering trap, and — unlike a transform
-  // string — is asserted directly here rather than trusted by eye.
-  it('at size=160 (the crops own native size), the head crop sits the un-cropped frame at (-112, -48), 384×448', () => {
-    const { container } = render(<Chibi subject={SUBJECT} frame="head" size={160} />)
+  // The regression this guards, across two rounds: a `transform: translate(...) scale(...)` never magnifies the
+  // translate's own offset (round 1); then a *fixed-pixel* geometry computed once from the `size` prop kept
+  // describing a box that size no longer was, the moment anything external (a flex parent, a `max-width`)
+  // rendered the root smaller than `size` asked for (round 4 — a profile page 192 px chibi squeezed to 114 px by
+  // a narrow flex column showed the hairline and one cheek instead of the head). Both are why the geometry below
+  // is a *static, size-independent percentage* of the root's own box (112/160, 48/160, 384/160, 448/160) rather
+  // than anything computed per render: it is correct for whatever the root turns out to be, not just for the
+  // `size` it was asked to be.
+  it.each([undefined, 40, 96, 160, 512])('the head crop is -70%%/-30%%/240%%/280%% of the root box regardless of size=%s', (size) => {
+    const { container } = render(<Chibi subject={SUBJECT} frame="head" size={size} />)
     const crop = container.querySelector('[class*="crop"]') as HTMLElement
-    expect(crop.style.left).toBe('-112px')
-    expect(crop.style.top).toBe('-48px')
-    expect(crop.style.width).toBe('384px')
-    expect(crop.style.height).toBe('448px')
+    const computed = getComputedStyle(crop)
+    expect(computed.left).toBe('-70%')
+    expect(computed.top).toBe('-30%')
+    expect(computed.width).toBe('240%')
+    expect(computed.height).toBe('280%')
+    // Not inline, either: a static class rule, so nothing here is computed from `size` at all.
+    expect(crop.style.left).toBe('')
+    expect(crop.style.width).toBe('')
   })
 
-  it('the head crop geometry scales linearly with size — 40px is exactly a quarter of 160px', () => {
-    const { container } = render(<Chibi subject={SUBJECT} frame="head" size={40} />)
-    const crop = container.querySelector('[class*="crop"]') as HTMLElement
-    expect(crop.style.left).toBe('-28px')
-    expect(crop.style.top).toBe('-12px')
-    expect(crop.style.width).toBe('96px')
-    expect(crop.style.height).toBe('112px')
+  it('sets the root to size×size px and flex: none, so a flex parent does not shrink it below that on its own', () => {
+    const { container } = render(<Chibi subject={SUBJECT} frame="head" size={192} />)
+    const root = container.firstElementChild as HTMLElement
+    const computed = getComputedStyle(root)
+    expect(computed.width).toBe('192px')
+    expect(computed.height).toBe('192px')
+    // `flex: none` == `flex: 0 0 auto` — `flex-shrink: 0` is the half of that which actually matters here.
+    expect(computed.flexShrink).toBe('0')
+    expect(computed.flexGrow).toBe('0')
   })
 
-  it('with no explicit size, the head crop falls back to the equivalent percentages of its container', () => {
-    const { container } = render(<Chibi subject={SUBJECT} frame="head" />)
-    const crop = container.querySelector('[class*="crop"]') as HTMLElement
-    expect(crop.style.left).toBe('-70%')
-    expect(crop.style.top).toBe('-30%')
-    expect(crop.style.width).toBe('240%')
-    expect(crop.style.height).toBe('280%')
+  it('full frame only sets a width — its own aspect-ratio derives the 6:7 height, not a forced square', () => {
+    const { container } = render(<Chibi subject={SUBJECT} frame="full" size={180} />)
+    const root = container.firstElementChild as HTMLElement
+    expect(root.style.width).toBe('180px')
+    expect(root.style.height).toBe('')
   })
 
   // D01 §5: the frame border (layer 90) is a 208×208 ring around the crop's centre — outside the 160×160 crop
   // window, so clipping it with the rest of the head-crop stack cuts it off entirely (the regression this guards:
   // the FRAME rows on the playground showed a plain head crop with no ring at all).
-  it('draws the frame-border layer unclipped, outside the round crop box, with the same geometry as the clipped layers', () => {
-    const { container } = render(<Chibi subject={FRAMED_SUBJECT} frame="head" size={160} />)
+  it.each([undefined, 96, 160])('draws the frame-border layer unclipped, outside the round crop box, with the same geometry as the clipped layers (size=%s)', (size) => {
+    const { container } = render(<Chibi subject={FRAMED_SUBJECT} frame="head" size={size} />)
     const clip = container.querySelector('[class*="clip"]') as HTMLElement
     const clippedLayers = layersFor(FRAMED_SUBJECT, 'neutral', 'head').filter((l) => l.order !== 90)
 
@@ -117,15 +125,17 @@ describe('Chibi', () => {
     expect(frameImg).not.toBeNull()
     expect(clip.contains(frameImg)).toBe(false)
 
-    // …and carries the exact same left/top/width/height as the clipped inner box, so it lines up with everything
-    // else even though nothing is clipping it.
+    // …and computes to the exact same left/top/width/height as the clipped inner box — both from the same
+    // `.headCrop` class, so they line up regardless of `size`, even though nothing is clipping the overlay.
     const crop = clip.querySelector('[class*="crop"]') as HTMLElement
-    expect(frameImg.style.left).toBe(crop.style.left)
-    expect(frameImg.style.top).toBe(crop.style.top)
-    expect(frameImg.style.width).toBe(crop.style.width)
-    expect(frameImg.style.height).toBe(crop.style.height)
-    expect(frameImg.style.left).toBe('-112px')
-    expect(frameImg.style.width).toBe('384px')
+    const cropStyle = getComputedStyle(crop)
+    const frameStyle = getComputedStyle(frameImg)
+    expect(frameStyle.left).toBe(cropStyle.left)
+    expect(frameStyle.top).toBe(cropStyle.top)
+    expect(frameStyle.width).toBe(cropStyle.width)
+    expect(frameStyle.height).toBe(cropStyle.height)
+    expect(frameStyle.left).toBe('-70%')
+    expect(frameStyle.width).toBe('240%')
   })
 
   it('drops the frame-border layer entirely in full frame — nothing left to un-clip', () => {
@@ -135,29 +145,13 @@ describe('Chibi', () => {
 
   // The regression this guards: `global.css` sets `img, svg { max-width: 100% }` for ordinary responsive images.
   // `max-width` clamps whatever `width` a *replaced* element ends up with — inline or not, it is a separate
-  // property, not something the cascade lets a same-property override win against — so at size=96 the overlay's
-  // intended 230.4 px width was silently capped to its 96 px wrapper while its 268.8 px height stood uncapped: a
-  // narrow, left-shifted sliver rather than a ring around the head. `.layer`'s own `max-width: none` (below) is
-  // what stops that.
-  it('at size=96, the frame-border overlay still gets its full un-clipped width and height, not the 96 px wrapper', () => {
+  // property, not something the cascade lets a same-property override win against. `.layer`'s own
+  // `max-width: none` (asserted below via the CSS source, since jsdom does no layout to clamp) is what stops
+  // that from ever mattering, on top of the crop now being percentage-based rather than a fixed pixel figure a
+  // percentage cap could still have clashed with.
+  it('the frame-border overlay is exempt from the img/svg max-width/max-height reset', () => {
     const { container } = render(<Chibi subject={FRAMED_SUBJECT} frame="head" size={96} />)
     const frameImg = container.querySelector('img[src*="item_frame_gold_L90"]') as HTMLImageElement
-    const crop = container.querySelector('[class*="clip"] [class*="crop"]') as HTMLElement
-
-    expect(crop.style.left).toBe('-67.2px')
-    expect(crop.style.top).toBe('-28.8px')
-    expect(crop.style.width).toBe('230.4px')
-    expect(crop.style.height).toBe('268.8px')
-
-    // Same geometry as the clipped box — a ring centred on, and slightly larger than, the 96 px head, not a
-    // sliver clamped to it.
-    expect(frameImg.style.left).toBe(crop.style.left)
-    expect(frameImg.style.top).toBe(crop.style.top)
-    expect(frameImg.style.width).toBe(crop.style.width)
-    expect(frameImg.style.height).toBe(crop.style.height)
-
-    // jsdom does not run layout, so this only ever proves the *value* a real browser would then apply — not that
-    // the 230.4 px width survives layout. The CSS-source assertion below is the one that actually pins the fix.
     expect(getComputedStyle(frameImg).maxWidth).toBe('none')
     expect(getComputedStyle(frameImg).maxHeight).toBe('none')
   })
