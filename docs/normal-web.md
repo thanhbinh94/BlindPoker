@@ -8,9 +8,9 @@ The Normal edition's browser client: a Vite/React bundle that talks to
 `PUBLIC_DIR` at it — so the app, the API and the socket share one origin and one cookie.
 
 What it owns, and nothing else owns: the account screens (sign-in, profile, wardrobe, inventory,
-achievements, daily reward, settings), the REST client, the session gate, and the 3D avatar — the
-portrait renderer every screen draws faces with, and the stage the profile and the wardrobe turn. The
-lobby and the table come from the kit unchanged.
+achievements, daily reward, settings), the REST client, the session gate, and the mapping from the
+server's avatar config to the kit's chibi — the wardrobe screen and the profile figure both go through
+it. The lobby and the table come from the kit unchanged.
 
 Its counterpart is `apps/lite/web`, which solves the same problem for a LAN executable and a bearer
 token. Neither may import the other, and neither may import a server package; ESLint enforces both.
@@ -19,8 +19,8 @@ To *deploy* this, read [`deployment-normal.md`](deployment-normal.md) (Vietnames
 operator guide here). This page is for changing the code, and is English, like every developer doc.
 
 Spec: §15 avatars, §19.2 API, §24 footprint, §27.2 screens, §29 end-to-end; and
-`docs/superpowers/specs/2026-09-05-avatar-3d-design.md` §5–§8 for the avatar. The assets themselves are
-[`avatar-assets.md`](avatar-assets.md).
+`docs/superpowers/specs/2026-09-14-avatar-chibi-ai-design.md` §5–§8 for the avatar. The pipeline, the
+layer files and how to add an item are [`avatar-2d.md`](avatar-2d.md).
 
 ---
 
@@ -42,31 +42,24 @@ apps/normal-web/
     notifications.ts    the kit's notification list, with achievement ids translated
     avatar/
       useAvatars.ts     the shared avatar cache (module scope, 60 s, one request per id)
-    avatar3d/          the 3D avatar; everything that imports three is behind one dynamic import()
-      config.ts         the palettes, withSlot/switchBody/avatarPayload, portraitRelevant, frameForSlot
-      hash.ts           canonicalConfig + hashConfig — the 8-hex identity of a configuration
-      Portrait.tsx      <img> around a blob: URL, initial-letter fallback; PartPortrait for tiles
-      usePortrait.ts    the hook: cache → queue → render, with an AbortSignal per caller
-      portrait-cache.ts memory Map + IndexedDB (bp.portraits, 200 entries, LRU)
-      portraits.ts      *the* three.js entry: one hidden renderer, the render queue, re-exports the stage
-      assets.ts         the manifest and loadNode(key); wires MeshoptDecoder
-      assemble.ts       a config → a posed, recoloured Group
-      framing.ts        the two crops (head-and-shoulders, full-body), as pure functions
-      stage.ts          the full-body stage: scene, camera, yaw, event-driven drawing
-      AvatarStage.tsx   the component around it; LazyStage.tsx is its one React.lazy
-      description.ts    the configuration as one sentence, for the stage's accessible name
+      chibi.ts          chibiFromApi — an AvatarConfigDto (v3) + the catalogue → the kit's ChibiConfig
     screens/
       Shell.tsx         the rail and the page under it; publishes --bp-stage for the table
       AuthScreen.tsx    sign in and register, one card, two modes
-      {Profile,Wardrobe,Inventory,Achievements,Daily,Settings}Screen.tsx   the six lazy account screens
-      TableChrome.tsx   makeAvatarFor / makeCaptionFor — the two slots RoomScreen takes from this app
+      {Profile,Inventory,Achievements,Daily,Settings}Screen.tsx   five of the six lazy account screens
+      wardrobe/
+        WardrobeScreen.tsx   the sixth — preview + expression picker + seven tabs + the outfit bar
+        BaseTab.tsx          the two fixed bases (f01/m01) — chosen, never locked
+        ItemTab.tsx          one slot's tiles: owned and clickable, or locked with a reason
+        OutfitBar.tsx        five saved snapshots — apply / save here / rename / delete
+      TableChrome.tsx   makeChibiFor / makeCaptionFor — the two slots RoomScreen takes from this app
       catalog.ts        rarity → kit tone, and the category order, shared by two separate chunks
       format.ts         dates, moments and signed amounts in the player's language
       useAsync.ts       load once, expose { data, loading, reload, set } — every account screen's spine
     locales/{vi,en}/normal.json
-  public/avatar3d/         the built .glb bundles + manifest.json (committed; see avatar-assets.md)
-  scripts/avatar-assets.mjs  the asset pipeline; avatar-shots.mjs renders a contact sheet of it
-  test/footprint.test.ts   the download budget, measured on `dist/`
+  public/avatar/             the chibi's PNG layers + avatar-manifest.json (committed; see avatar-2d.md)
+  scripts/avatar-pipeline.mjs  the asset pipeline: placeholder | ingest | check | sheet
+  test/footprint.test.ts   the download budget, measured on `dist/` and on `public/avatar/`
   e2e/                     Playwright against the real server (support.ts is shared, not a test)
 ```
 
@@ -125,100 +118,101 @@ player id.
 
 ## Avatars
 
-An avatar is a **3D character**, and every place one appears except two is a *picture of it* rendered by
-the player's own browser. Nothing is uploaded and nothing is rendered on the server (avatar-3d design
-§2, §5).
+An avatar is a **chibi**, drawn as a stack of same-origin PNG `<img>`s — a fixed base (`f01`/`m01`,
+chosen rather than owned) plus whatever is equipped in each slot, on a 384×448 frame (design §3, §5).
+Nothing is rendered on the server and nothing is rendered by this app either: every picture is the
+browser laying out `<img>` tags, and `@bp/ui-kit`'s `Chibi` (`packages/ui-kit/src/avatar2d/`) is the one
+component that does it. This app's own job is smaller than the 3D system's was — turn the server's
+config into the shape `Chibi` draws, and wire a save back to every place a face is shown.
 
 ```
-AvatarConfigDto (v2)      body + skin + eyes + hairColor + 7 item slots + title/badge
+AvatarConfigDto (v3)      base + outfit + head?/face?/aura?/frame? + title?/badge?
    │
-   ├─ hashConfig()  ──►   '1aa20c85'   the identity of a configuration, and the cache key
+   ├─ chibiFromApi()  ──►   ChibiConfig                the kit's own shape: a BaseRef + WearRefs
+   │                          │
+   │                          └─ hashChibi()  ──►  '1aa20c85'   the configuration's identity
    │
-   ├─ Portrait  ──►  <img data-hash> 128 px      seat plates, the lobby bar, rows, wardrobe tiles
-   └─ AvatarStage ──►  <canvas> in a role="img"  the profile header and the wardrobe, only
+   └─ <Chibi subject frame expression>  ──►  a stack of <img>   seat plates, the lobby bar, wardrobe
+                                                                  tiles, the profile figure
 ```
 
-**The portrait path.** `usePortrait(config)` answers `{ url, status, hash }`. It looks the hash up in a
-memory `Map`, then in IndexedDB (`bp.portraits`, 200 entries, LRU by `lastUsed`), and only then queues a
-render. `portraits.ts` owns **one** hidden 256×256 `WebGLRenderer` for the whole app and a sequential
-queue in front of it: nine seats asking at once is nine renders through one canvas, not nine canvases.
-The output is drawn down to 128 px through a 2D canvas (that supersampling is most of why a 32 px seat
-plate reads at all) and saved as a WebP `Blob`, published as an object URL.
+**`chibiFromApi`** (`src/avatar/chibi.ts`) is the whole bridge: it resolves `base` against the
+catalogue's two bases and every optional slot against `items.json`, and it is written to never throw at
+an id it does not recognise — a browser holding yesterday's bundle can meet ids the server added since.
+An unknown base answers `null` for the whole chibi (there is no body to draw it on); an unknown optional
+item is simply omitted, the same way an unknown badge drops from a seat caption rather than printing a
+raw key; an unknown `outfit` falls back to the catalogue's default outfit, and only if that is *also*
+missing does the whole function give up.
 
-`Portrait` renders that as `<img data-hash>` inside a `<span data-portrait={status} data-size>`. Given no
-`label` it is `aria-hidden` decoration — a seat plate prints the name beside it — and until the picture
-arrives, or forever on a machine with no WebGL2, it draws the first letter of the name. **Nothing in this
-path may break a screen**: no context, a `.glb` that 404s, a `toBlob` that returns nothing and a lost
-context all end at that letter.
+**`data-chibi-hash`** (`hashChibi`, in the kit) is the configuration's identity — two different
+configurations must not share one, and the same configuration must arrive at the same one wherever it
+is drawn. `test/footprint.test.ts` and `e2e/avatar2d.spec.ts` both key off it, and so does the wardrobe's
+own outfit bar, which is a snapshot of a whole `AvatarConfigDto` rather than of any one item.
 
-**The stage.** `AvatarStage` is the live figure: a `role="img"` frame with `aria-roledescription`, an
-`aria-label` that describes the outfit in words (`description.ts`), a drag/arrow-key yaw of ±60°, and a
-`<canvas>` inside it. It is the app's **second and last** WebGL context, and it is event-driven — a frame
-is drawn when something changes, so a stage nobody is touching costs what a static image costs. It is
-reached only through `LazyStage.tsx`'s one `React.lazy`, whose fallback is a `Portrait`, and that is also
-what a browser with no WebGL gets for good.
+**Bots never go through this path.** A bot has no account and no `GET /api/players/<id>/avatar` to
+answer for it (`TableChrome.makeChibiFor` never asks); `PokerTable` draws `botChibi(player.playerId)`
+instead — the kit's own robot art, unaffected by any wardrobe.
 
-**One dynamic import.** `usePortrait` and `AvatarStage` both reach three.js through the single specifier
-`import('./portraits.js')` — which is why `portraits.ts` re-exports `createStage` rather than letting
-`stage.ts` import three on its own. One specifier is one chunk, and one chunk is what the footprint
-budget can name. A static import of anything under `avatar3d/` that pulls three would put ~150 KB gzip in
-front of the sign-in card; `test/footprint.test.ts` fails on the string `THREE.WebGLRenderer` appearing
-in the entry.
-
-**Where the geometry comes from** is [`avatar-assets.md`](avatar-assets.md): five `.glb` files and a
-`manifest.json` under `public/avatar3d/`, built from CC0 packs by `scripts/avatar-assets.mjs`, loaded by
-`assets.ts` (which must wire `MeshoptDecoder` first), turned into a scene by `assemble.ts`. `skin`, `eyes`
-and `hair` materials are recoloured from the player's configuration; `cloth_primary` takes the item's
-published tint; the rest keeps what the build baked.
+**Where the layer files come from** is [`avatar-2d.md`](avatar-2d.md): `scripts/avatar-pipeline.mjs`
+turns a green-screened AI-generated picture into `@1x`/`@2x` PNGs under `public/avatar/`, validates the
+result against ten acceptance criteria, and writes `avatar-manifest.json`. Until the real art lands,
+`avatar:placeholder` writes synthetic layers so every screen and every test here runs against something
+(`docs/known-limitations.md`).
 
 ### The wardrobe
 
-`/avatar` — `WardrobeScreen.tsx`. A stage on the left, and on the right, one group per thing that can
-change: body (two radios), skin (8 named swatches), eyes (6), hair colour (8 presets plus a free hex box),
-then a tile group per geometric slot listing **only what the player owns**, then title and badge as
-selects. Every group is a `fieldset`/`legend` of radios named `wardrobe-<group>`; every tile is a `label`
-around its input, so the whole 44 px square is the target.
+`/avatar` — `wardrobe/WardrobeScreen.tsx`. A `Chibi` preview on the left, sized 192 px, with an
+expression row to try each of the six faces and the save button below it; seven tabs on the right —
+**Thân nền** (base), then a tile grid per equipped slot (**Mũ**, **Mặt**, **Trang phục**, **Aura**,
+**Khung**), then **Danh hiệu & Huy hiệu** (title and badge together, the two slots with no picture).
+The outfit bar sits under both columns, five slots wide.
 
-Three things there are not obvious from the markup:
+- **`BaseTab`** is the one tab with nothing locked — the two bases are chosen, not owned (design §5.1) —
+  and each tile previews that base wearing the draft's *current* outfit, so the choice reads as a
+  silhouette rather than a wardrobe.
+- **`ItemTab`** lists the whole catalogue for its slot and locks anything the player does not own
+  (`aria-disabled`, with a hint: the achievement that grants it, or a daily-calendar rarity, or "chưa
+  mở"). A tile's own picture (`ItemPreview`) is the item drawn on the figure that would actually wear it
+  — head-and-shoulders for `head`/`face`/`frame`, the whole figure for `outfit`/`aura`, because a crop
+  framed on the head would give every outfit tile the same face.
+- **`OutfitBar`** is a bookmark of a *whole* `AvatarConfigDto`, not of one item — "Áp dụng" replaces the
+  draft outright, "Lưu vào đây" snapshots whatever is currently equipped into that slot under a name up
+  to 24 characters. Both round-trip the server (`PUT /api/me/outfits/:slot`, `POST
+  /api/me/outfits/:slot/apply`) rather than only touching local state, so a saved outfit survives a
+  reload.
 
-- **A tile's thumbnail is a portrait of the whole figure with that one item swapped in** (`PartPortrait`),
-  not a picture of the item. The crop follows the slot (`frameForSlot()`): head-and-shoulders for
-  everything worn above the chest, and the **whole standing figure** for the two slots that crop cannot
-  contain — a pair of trousers and a pair of shoes, which framed on the head would give every tile in
-  those two groups the same face. `portraitRelevant()` then strips everything the tile's own crop cannot
-  show (`title` and `badge` in both; `bottom` and `shoes` in the head one), so choosing a hair colour
-  does not change the cache key of forty tiles. The crop is part of the portrait hash, so the two are
-  two cache entries rather than one picture served for both.
-- **Changing body is a migration.** The server refuses a configuration wearing an item that was never
-  modelled for that body, so `switchBody` re-dresses the slots that would have become invalid and says in
-  a `role="status"` *which* — a top that silently became the default tee is a top the player thinks they
-  lost. It needs `GET /api/catalog/items` for the variants, which is fetched beside the inventory and is
-  allowed to fail on its own (a failed catalogue answers "everything fits").
-- **Leaving with unsaved changes is guarded twice**: `beforeunload` for a reload or a closed tab, and a
-  capture-phase click on any `a[href^="#"]` for the rail, which is how every other route here is reached.
-  Both armed only while there is something to lose.
-
-Saving is `PUT /api/me/avatar` with the full v2 payload (an empty optional slot is *absent*, not `''`),
-then `invalidate(myId)` so the lobby bar and the seat plates pick the new face up.
+Picking a tile only ever changes the in-memory draft (`withSlot`/`pickBase`); nothing reaches the
+server until **Lưu tủ đồ** is pressed. Saving is `PUT /api/me/avatar` with the full v3 payload (an empty
+optional slot is *absent* from the object, not `''`), and on success `invalidate(myId)` so the lobby bar
+and every seat plate pick the new face up without a reload.
 
 ### Adding an item, end to end
 
-1. **The mesh.** Add it to `apps/normal-web/scripts/avatar-map.json`, run `pnpm avatar:assets`, and look
-   at it on both bodies with `node scripts/avatar-shots.mjs new <id>` — see "Add an item" and "Judging a
-   map change" in [`avatar-assets.md`](avatar-assets.md).
+1. **The picture.** Generate (or draw) it on F01 per `docs/avatar/02-mo-ta-nhan-vat-khoa-va-yeu-cau-sinh-anh.md`,
+   then `pnpm --filter @bp/normal-web avatar:ingest <file> --as item:<slot>:<id>` — see
+   [`avatar-2d.md`](avatar-2d.md) for the exact command and the ten checks `avatar:check` runs against it.
 2. **The catalogue.** Add the row to `apps/normal-server/data/items.json` with its `slot`, `rarity`,
-   `isDefault` and `variants.<body>.{file,node}` pointing at the manifest's key — see
-   [`normal-server.md`](normal-server.md). `apps/normal-server/test/catalog-manifest.test.ts` checks the
-   two agree.
+   `isDefault` and `asset.{layer,file}` naming the file the pipeline just wrote — see
+   [`normal-server.md`](normal-server.md). The server validates the catalogue against the committed
+   manifest at boot, so a row naming a file that was never ingested fails fast rather than 404ing per
+   request.
 3. **The name, in both languages.** `items.<id>` in `src/locales/vi/normal.json` *and*
    `src/locales/en/normal.json`. `locales.test.ts` fails if either is missing, if one language has a key
-   the other does not, or if a name exists for an id the server does not serve.
-4. **How it is won.** A grant in `data/achievements.json` or the daily calendar, or nothing — an item
-   nobody owns is an item nobody sees, because the wardrobe lists the inventory and not the catalogue.
-5. **Commit the map, the changed `.glb` files, `manifest.json` and the catalogue together.** The assets
-   are a committed build artefact and `avatar-assets.test.ts` re-hashes them against the manifest.
+   the other does not, or if a name exists for an id the server does not serve. Renaming an id that ships
+   already needs a row in `apps/normal-server/data/item-aliases.json` too, so an account that equipped the
+   old id keeps wearing something rather than losing the slot.
+4. **How it is won.** A grant in `data/achievements.json` or the daily calendar (`head`/`face`/`aura`/
+   `frame` only — design §5.2), or nothing — an item nobody owns is an item nobody sees, because the
+   wardrobe lists the inventory and not the catalogue.
+5. **The contact sheet.** `pnpm --filter @bp/normal-web avatar:sheet` re-composites every item on both
+   bases and all six expressions into `docs/avatar-2d-sheet.png` — the eyeballed gate before a picture is
+   committed.
+6. **Commit the new PNGs, `avatar-manifest.json` and the catalogue together.** The layers are a committed
+   build artefact; nothing under `public/avatar/` may be generated at build time, because no CI runner has
+   the AI tool or the `assets/avatar-src/` originals (gitignored).
 
-There is no drawing step and no per-item code: the renderer is generic over `<slot>/<itemId>/<body>`.
+There is no drawing step and no per-item code in this app: `Chibi` is generic over whatever layers
+`chibiFromApi` hands it.
 
 ### The avatar cache
 
@@ -268,30 +262,28 @@ for a class name is a screen a keyboard cannot use.
 ### Footprint
 
 `test/footprint.test.ts` measures the emitted bundle — gzip, because that is what the wire carries —
-and holds five budgets:
+and holds four budgets:
 
 | | Budget | Today |
 |---|---:|---:|
-| entry chunk (first paint) | 500 KB | 107 KB |
-| every JS chunk together | 900 KB | 270 KB |
-| the stylesheet | 60 KB | 12 KB |
-| the `avatar3d` chunk (three.js + the renderer, lazy) | 200 KB | 150 KB |
-| `dist/avatar3d/` — the `.glb` bundles, raw bytes | 6 MB total, 1.5 MB per file | 910 KB / 505 KB |
+| entry chunk (first paint) | 130 KB | 108 KB |
+| every JS chunk together | 900 KB | 119 KB |
+| the stylesheet | 60 KB | 13 KB |
+| `public/avatar/*@2x.png`, raw bytes (design §8) | 6 MB total | ~1.2 MB (placeholders) |
 
-The first three are roughly four times what is spent: their job is to catch a *step change* (a chart
+The first three are headroom rather than targets: their job is to catch a *step change* (a chart
 library, a locale bundle that stopped being split), not to fail on the kilobyte a feature costs. The
-avatar3d chunk is a real target rather than headroom — it is ~25 % over what the graph costs, and what it
-guards against is somebody importing a control, a post-processing pass or a loader for a format nothing
-uses. The asset budget is the same one `scripts/avatar-assets.mjs` enforces at build time and
-`test/avatar-assets.test.ts` holds against `public/`; measuring `dist/` too is what would catch a build
-config that stopped copying those files verbatim.
+avatar budget is the one design §8 actually sets a ceiling on — `@2x` only, since `@1x` is the same
+pictures at a quarter the pixels and never dominates the total — and it does not skip on a missing
+`dist/`: it reads `public/avatar/` directly, the committed layers rather than a build output, so it is
+live on a fresh checkout that has not built anything.
 
-Three structural assertions sit beside the numbers. The entry chunk is read off `dist/index.html`'s module
-script rather than guessed from a file name; the six account screens must each still be a chunk of their
-own; and the entry must not contain the string `THREE.WebGLRenderer`, which is how a static import of
-three.js from outside `avatar3d/` is caught. Every block **skips with a warning** when `dist/` is missing,
-so `pnpm test` on a fresh checkout stays green and says what it had nothing to measure. Run
-`pnpm build:normal` (or `pnpm --filter @bp/normal-web build`) first to make it measure.
+One structural assertion sits beside the numbers: the entry chunk is read off `dist/index.html`'s module
+script rather than guessed from a file name, and the six account screens must each still be a chunk of
+their own — a screen that rejoined the entry is a chunk that stopped being emitted under its own name.
+The three build-dependent blocks **skip with a warning** when `dist/` is missing, so `pnpm test` on a
+fresh checkout stays green and says what it had nothing to measure. Run `pnpm build:normal` (or
+`pnpm --filter @bp/normal-web build`) first to make them measure too.
 
 ---
 
@@ -314,7 +306,7 @@ pnpm e2e:normal
 `apps/normal-server/.e2e/server.mjs` — deliberately not `dist/`, which the server's own build guards
 against ever containing PGlite — and runs it on `127.0.0.1:8091`.
 
-`normal.spec.ts` and `avatar3d.spec.ts` share `e2e/support.ts` — the account, the cookie session, the
+`normal.spec.ts` and `avatar2d.spec.ts` share `e2e/support.ts` — the account, the cookie session, the
 lobby, the create-room dialog and the two viewport assertions. It is a module the specs import, not a
 test file; Playwright only collects `*.spec.ts`.
 
@@ -327,15 +319,16 @@ What the five tests are for:
 - **The session.** Register, sign out, sign back in — the only credential involved is the cookie.
 - **The chrome on a phone.** The rail's four tabs must fit inside 375 px with nothing scrolling
   sideways, and the table must come up in the stack layout.
-- **The avatar, on a GPU** (`avatar3d.spec.ts`). Every other test of `src/avatar3d/` replaces the
-  renderer with a double, which says nothing about whether a picture comes out. This one asserts that a
-  portrait is an `<img data-hash>` with `naturalWidth > 0` on the lobby bar and on a seat plate, that a
-  stage (`role="img"` with a `<canvas>`) is on the profile and in the wardrobe, that three configurations
-  give three different hashes, that a save survives a reload and reaches a *second browser* at the same
-  hash, and — `@mobile` — that the wardrobe at 375 px does not scroll sideways and its save button is
-  reachable and 44 px tall. Two timings are logged: how long from joining a room until every seat
-  portrait is drawn (asserted ≤ 2 s, design §7; ~0.3 s with one bot and warm caches) and how long a cold
-  browser takes to draw its first face (~3.4 s, most of it the lazy chunk and the `.glb` files).
+- **The wardrobe, end to end** (`avatar2d.spec.ts`). `Chibi.test.tsx` proves the layering and the hide
+  rules under jsdom against a hand-built config; this file is the other half — that the *app* wires a
+  saved choice back into the lobby bar, a seat plate and a second wardrobe visit consistently, on the
+  placeholder layers `avatar:placeholder` writes. It switches base to m01 and saves, checks that a
+  locked epic tile (`aria-disabled`) does not equip on click, sits at a table and asserts the seat's
+  `data-chibi-hash` matches the bar's and its `<img>` names `base_m01_L30` while both bots' name
+  `bot_`, then saves an outfit-bar snapshot, changes base again and applies the snapshot back — three
+  hashes belonging to two configurations, since f01 with nothing else equipped is exactly what the
+  account started as. Nothing here needs a GPU: a chibi is a stack of same-origin `<img>`s, unlike the
+  3D `avatar3d.spec.ts` this file replaced.
 
 Every selector is a user-visible one: a role and its accessible name, in Vietnamese. It fails when
 the thing a player reaches for stops being reachable, not when a class name changes. Screenshots

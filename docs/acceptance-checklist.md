@@ -28,16 +28,17 @@ vào — qua `tooling/arch/acceptance-links.test.ts` → `cites only test names 
 
 ## Kết quả chạy thật
 
-`pnpm test` tại gốc kho, Windows 11 / Node 22.13 / pnpm 9.15.9, ngày **2026-09-05**:
+`pnpm test` tại gốc kho, Windows 11 / Node 22.13 / pnpm 9.15.9, ngày **2026-09-14** (sau khi gỡ
+avatar 3D — Plan 11 Task 5):
 
 ```
-Test Files  115 passed (115)
-Tests       1310 passed | 1 skipped (1311)
-Duration    162 s
+Test Files  133 passed (133)
+Tests       1564 passed | 1 skipped (1565)
+Duration    242 s
 ```
 
-Theo package: `@bp/core` 166 · `@bp/server-kit` 92 · `@bp/ui-kit` 129 · `@bp/http-kit` 75 ·
-`@bp/normal-server` 364 (+1 bỏ qua) · `@bp/normal-web` 219 · `@bp/lite` 224 · `tooling` 41.
+Theo package: `@bp/core` 166 · `@bp/server-kit` 95 · `@bp/ui-kit` 199 · `@bp/http-kit` 75 ·
+`@bp/normal-server` 465 (+1 bỏ qua) · `@bp/normal-web` 264 · `@bp/lite` 225 · `deploy` 35 · `tooling` 41.
 
 Test duy nhất bị bỏ qua là `apps/normal-server/src/economy/economy-service.test.ts` →
 `credits exactly once when two claims race (real Postgres only)`: PGlite chỉ có một kết nối, hai
@@ -62,12 +63,12 @@ Từng dòng ấy nay đều tự ghi điều kiện build của nó.
 
 E2E (`pnpm --filter @bp/lite e2e`, `pnpm --filter @bp/normal-web e2e`, cũng là `pnpm e2e:normal`)
 không nằm trong `pnpm test`: chúng cần bản build và một lần tải Chromium. **Đã chạy thật** ngày
-**2026-09-05** (Lite) và **2026-09-06** (Normal, sau Plan 8), trên cùng máy, ngay sau `pnpm build:lite`
-và `pnpm build:normal`:
+**2026-09-14** (cả hai, sau Plan 11 Task 5 — avatar 3D đã gỡ, thay bằng chibi lớp PNG), trên cùng
+máy, ngay sau `pnpm build:lite` và `pnpm build:normal`:
 
 ```
-@bp/lite        3 passed (20.2 s)   desktop ×2 + mobile ×1
-@bp/normal-web  5 passed (1.3 m)    desktop ×3 + mobile ×2 — hai bài mới là avatar 3D dựng thật
+@bp/lite        3 passed (28.3 s)   desktop ×2 + mobile ×1
+@bp/normal-web  5 passed (49.5 s)   desktop ×3 + mobile ×2 — hai bài mới là avatar2d.spec.ts, trên chibi PNG thật
 ```
 
 Sáu dòng dẫn e2e (40.13, 40.14, 66.2, 66.18, 66.35, 66.36) trỏ vào đúng lần chạy này và ghi lại kết
@@ -116,7 +117,7 @@ Tổng kết trạng thái: **61 ✓ · 3 partial · 0 ✗** trên 64 mục (21 
 | # | Yêu cầu | Bằng chứng (evidence) | Trạng thái |
 |---|---|---|---|
 | 40.18 | Luật poker mới chỉ cần sửa một chỗ trong Core.<br>_New poker rules require one Core change._ | No edition holds any rule: `tooling/arch/boundaries.test.ts` → `@bp/core source never mentions editions or imports other workspaces / node built-ins`, and an edition only ever sees a `HandView` handed to it by server-kit. Manual: `grep -rn "export function computePots" apps` and `grep -rn "export function legalActions" apps` are both empty — the editions call, they do not redefine. Worked example: Plan 7's `SIT_OUT` / `SIT_IN` changed `packages/core` and `packages/server-kit` once and took effect in both editions. | ✓ |
-| 40.19 | Tính năng avatar mới chỉ ảnh hưởng Normal.<br>_New Avatar features affect Normal only._ | `@bp/ui-kit` knows nothing about cosmetics; it takes a slot: `packages/ui-kit/src/table/PokerTable.test.tsx` → `draws no caption line at all when the app supplies no slot`. The catalogue and every renderer live in Normal: `apps/normal-web/src/avatar3d/assemble.test.ts` → `paints skin, eyes and hair from the player and cloth_primary from the item`. Lite passes `undefined` and changes not a line. | ✓ |
+| 40.19 | Tính năng avatar mới chỉ ảnh hưởng Normal.<br>_New Avatar features affect Normal only._ | `@bp/ui-kit`'s `Chibi` draws whatever layers it is handed and knows nothing about a wardrobe or a catalogue: `packages/ui-kit/src/table/PokerTable.test.tsx` → `draws no caption line at all when the app supplies no slot`. The catalogue and the config-to-chibi mapping live in Normal: `apps/normal-web/src/avatar/chibi.test.ts` → `maps every optional slot when equipped`. Lite ships no wardrobe and no catalogue — every human seat draws the same deterministic `defaultChibi(displayName)` the kit itself exports, not a config Lite reads or writes. | ✓ |
 | 40.20 | Thay PostgreSQL không đụng tới Game Engine.<br>_PostgreSQL replacement does not affect Game Engine._ | Core has no runtime dependency at all: `tooling/arch/boundaries.test.ts` → `@bp/core has no runtime dependencies`. Live proof: the same engine already runs on SQLite in Lite, through the same server-kit repository interface — `apps/lite/server/src/repos/sqlite-repos.test.ts` → `applies a multi-player batch and reports balances through get()`, against `apps/normal-server/src/repos/balance-repo.test.ts` → `nets a player’s deltas before judging solvency`. | ✓ |
 | 40.21 | Tối ưu Lite không làm hỏng Normal.<br>_Lite optimization does not break Normal._ | One `pnpm test` runs both suites in the same pass, so a change in Lite that breaks Normal is red immediately; and the dependency direction is one-way by construction: `tooling/arch/boundaries.test.ts` → `packages only depend on allowed @bp packages`. Lite's footprint budgets read only Lite's own artefacts: `apps/lite/test/footprint.test.ts` → `fits the JavaScript download budget` — that test reads a built artefact and skips without one (`describe.skipIf(!hasPublic)`): as 40.9, run `pnpm build:lite` first — the run above did. | ✓ |
 
@@ -160,7 +161,7 @@ Tổng kết trạng thái: **61 ✓ · 3 partial · 0 ✗** trên 64 mục (21 
 | # | Yêu cầu | Bằng chứng (evidence) | Trạng thái |
 |---|---|---|---|
 | 66.17 | Hồ sơ người chơi đầy đủ hoạt động.<br>_Full player profile works._ | `apps/normal-server/src/http/routes-me.test.ts` → `answers the profile, the cosmetics and both reward statuses in one body`; statistics and hand history: `apps/normal-web/src/screens/ProfileScreen.test.tsx` → `groups all sixteen counters, prints points with their unit and names the best hand`; `apps/normal-server/src/history/history-service.test.ts` → `returns the reading player’s own result alongside every other seat, named`. | ✓ |
-| 66.18 | Avatar hoạt động.<br>_Avatar works._ | Server: `apps/normal-server/src/inventory/avatar.test.ts` → `stores the config and mirrors the title and badge into their own columns`; `apps/normal-server/src/inventory/avatar.test.ts` → `refuses a configuration referencing an item the player does not own, naming it`. Web: `apps/normal-web/src/screens/WardrobeScreen.test.tsx` → `sends the whole config on save, invalidates my face, and says it is done`. E2E drives the wardrobe on a real WebGL context — switch body, skin, eye and hair colour, save, reload, and the same face on a *second* browser — and asserts the seat plate and the lobby bar draw an `<img>` with pixels: `apps/normal-web/e2e/avatar3d.spec.ts` → `chân dung dựng ở máy người chơi, và vòng đời của trình chỉnh trang phục` — **run 2026-09-06, passed in 28.6 s**. | ✓ |
+| 66.18 | Avatar hoạt động.<br>_Avatar works._ | Server: `apps/normal-server/src/inventory/avatar.test.ts` → `stores the config and mirrors the title and badge into their own columns`; `apps/normal-server/src/inventory/avatar.test.ts` → `refuses a configuration referencing an item the player does not own, naming it`. Web: `apps/normal-web/src/screens/wardrobe/WardrobeScreen.test.tsx` → `sends the v3 draft to setAvatar on save`. E2E drives the wardrobe on the real layered PNGs — switch base, save, sit at a table and assert the seat's `data-chibi-hash` matches the lobby bar's and its `<img>` names the m01 body layer, then save an outfit-bar snapshot, switch base again and apply the snapshot back: `apps/normal-web/e2e/avatar2d.spec.ts` → `tủ đồ, ghế và bộ outfit đều khớp một băm cấu hình` — **run 2026-09-14, passed in 8.5 s**. | ✓ |
 | 66.19 | Kho đồ hoạt động.<br>_Inventory works._ | `apps/normal-server/src/inventory/avatar.test.ts` → `lists what a player owns, oldest first`; `apps/normal-server/src/inventory/items.test.ts` → `contains every id the daily reward and the achievements promise`; the screen: `apps/normal-web/src/screens/InventoryScreen.test.tsx` → `groups every slot and counts what is owned`. | ✓ |
 | 66.20 | Thành tựu hoạt động.<br>_Achievement works._ | `apps/normal-server/src/achievements/achievement-service.test.ts` → `unlocks holdem_hands_10 on the tenth settled hand and credits the reward once`; never paid twice: `apps/normal-server/src/achievements/achievement-service.test.ts` → `does not pay twice when the same STATS_UPDATED is delivered again`; the screen: `apps/normal-web/src/screens/AchievementsScreen.test.tsx` → `counts what is unlocked and groups the rest by category`. | ✓ |
 | 66.21 | Cơ sở dữ liệu lâu dài hoạt động.<br>_Persistent database works._ | The committed migrations apply cleanly and idempotently: `apps/normal-server/src/db/schema.test.ts` → `applies the committed migrations, creating every table`; `apps/normal-server/src/db/schema.test.ts` → `is idempotent: running the migrations again applies nothing`. Row locking under a race: `apps/normal-server/src/repos/balance-repo.test.ts` → `serialises two applies racing for the same balance`. | partial — the whole suite runs on in-process **PGlite**. The real `pg` path and the `SELECT … FOR UPDATE` lock only genuinely execute with `TEST_DATABASE_URL` set, and **that run has not happened on the development machine** (no Docker daemon). It is also the repository's one skipped test, named at the top of this document. Exact commands: `docs/deployment-normal.md` §2. |

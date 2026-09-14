@@ -450,6 +450,10 @@ Thêm achievement = thêm dòng JSON. Thêm metric = thêm cột `player_stats` 
 
 ## 15. Avatar / Inventory (Normal-only)
 
+> **Đã thay thế (Plan 11):** §15.1–§15.2 dưới đây tả nhân vật 3D của Plan 8, đã bị gỡ. Thiết kế hiện hành
+> là `docs/superpowers/specs/2026-09-14-avatar-chibi-ai-design.md` — chibi 2D xếp lớp PNG, hai thân cố định
+> F01/M01, sinh bằng AI; tài liệu triển khai: `docs/avatar-2d.md`. Giữ nguyên phần dưới làm lịch sử.
+
 ### 15.1 Mô hình
 - Avatar = **nhân vật 3D** (Plan 8, đặc tả riêng `2026-09-05-avatar-3d-design.md`): thân `male`/`female`, màu da (8 tông) / mắt (6) / tóc (`#rrggbb` tự do), cộng một item cho mỗi **slot**.
 - `slot` ∈ `hair` `top` `bottom` `shoes` `hat` `accessory` `jewelry` `title` `badge`; bốn slot đầu bắt buộc, mỗi slot bắt buộc có đúng một item `isDefault`. Các slot v1 `base`/`face` đã bỏ (thân được chọn, khuôn mặt là màu).

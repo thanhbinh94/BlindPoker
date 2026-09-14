@@ -47,10 +47,10 @@ deposits, no withdrawals, no payment gateway and no marketplace, by design and p
   gaps.
 - [`docs/normal-server.md`](docs/normal-server.md) — module map, event bus, ledger conventions,
   adding an item or an achievement.
-- [`docs/normal-web.md`](docs/normal-web.md) — API client, session gate, the 3D avatar and the
+- [`docs/normal-web.md`](docs/normal-web.md) — API client, session gate, the chibi avatar and the
   wardrobe, footprint, e2e.
-- [`docs/avatar-assets.md`](docs/avatar-assets.md) — the avatar asset pipeline: what is in the five
-  `.glb` files, how to add an item, and how a map change is judged.
+- [`docs/avatar-2d.md`](docs/avatar-2d.md) — the chibi asset pipeline: the frame and layer rules, the
+  `placeholder`/`ingest`/`check`/`sheet` commands, and how to add an item.
 - [`deploy/normal/restore.md`](deploy/normal/restore.md) — the restore procedure.
 
 Developer docs are in English; the two deployment guides and the Lite operator README are in
@@ -238,19 +238,15 @@ Screenshots (desktop and 375×812) land in `apps/lite/e2e/screenshots/`, which i
 
 ## Assets and licensing
 
-One kind of third-party art asset is in this repository, and it is **CC0**: the Normal edition's 3D
-avatar geometry. `apps/normal-web/public/avatar3d/` holds five `.glb` files and a `manifest.json`
-built from two [Quaternius](https://quaternius.com/) packs —
-[Universal Base Characters](https://quaternius.itch.io/universal-base-characters) and
-[Modular Character Outfits – Fantasy](https://quaternius.itch.io/modular-character-outfits-fantasy),
-both **CC0 1.0 / public domain**. CC0 places no condition on use, modification or redistribution and
-requires no attribution; the credit here is courtesy. The source archives themselves are *not*
-committed (400 MB) — `assets/avatar-src/README.md` records their URLs, download date and SHA-256, and
-[`docs/avatar-assets.md`](docs/avatar-assets.md) describes the pipeline that produced the committed
-output from them.
+The Normal edition's avatar is a chibi assembled from PNG layers under
+`apps/normal-web/public/avatar/`, each either a stand-in `avatar:placeholder` drew (no art at all — a
+labelled shape) or a real picture generated against a locked character description by a third-party AI
+image tool (`docs/avatar-2d.md`). The originals that art was generated from are not committed
+(`assets/avatar-src/`, gitignored) — its `README.md` records the tool, seed and date behind each one
+that is currently real rather than a placeholder. Whether that generated art can be used commercially is
+a question of the generating tool's own terms of service, which this repository does not vendor and
+cannot answer on an operator's behalf — see `docs/known-limitations.md`.
 
-Everything else is drawn here: cards, chips and the table are CSS and SVG written in this repository,
-and the eleven hats, glasses and pieces of jewellery in the wardrobe are generated from primitives by
-the asset script rather than taken from either pack. No font file is bundled either — `--font-display`
-names a face and falls back to Cambria / Constantia / Segoe UI, all of which carry the precomposed
-Vietnamese glyphs.
+Everything else is drawn here: cards, chips and the table are CSS and SVG written in this repository.
+No font file is bundled either — `--font-display` names a face and falls back to Cambria / Constantia /
+Segoe UI, all of which carry the precomposed Vietnamese glyphs.
