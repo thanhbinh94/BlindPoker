@@ -62,6 +62,11 @@ that needs both (`apps/normal-server/data/items.json`).
 Bots draw only two of these layers — `body` (30) and their own expression `face` (50) — because a bot
 has no wardrobe at all (`packages/ui-kit/src/avatar2d/layers.ts`, `layersFor`).
 
+Stage 2 dropped the `backdrop` layer (order 5, behind everything) that an earlier draft of this table
+reserved: nothing ever drew it, no item or base ever shipped a file for it, and it is gone from `LAYERS`
+(`apps/normal-web/scripts/avatar-pipeline/frame.mjs`) and from `AssetRef['layer']`
+(`apps/normal-server/src/inventory/items.ts`) alike.
+
 ## 3. File names
 
 ```
@@ -154,7 +159,10 @@ placeholder is exactly as valid a layer as a real one, just not the picture the 
 `@bp/ui-kit`'s `Chibi` (`packages/ui-kit/src/avatar2d/Chibi.tsx`) takes a `ChibiConfig` — a `BaseRef`
 plus a `WearRef` per equipped slot — and stacks one `<img>` per layer `layersFor` returns (§2 above),
 positioned by CSS `z-index` rather than draw order, inside a box that is either the full 6:7 frame
-(`frame="full"`) or the round head-crop (`frame="head"`, `object-position` cut to the 160×160 window).
+(`frame="full"`) or the round head-crop (`frame="head"`, cut to the 160×160 window by a percentage
+`left`/`top`/`width`/`height` on the layer stack, not `object-position` — a fixed geometry computed once
+from the `size` prop stayed wrong once an ancestor shrank the rendered box below `size`; a percentage of
+the root's own box is correct at whatever size it actually renders).
 Each layer ships `srcset` at both densities and loads lazily; a table can hold up to nine seats' worth
 at once (up to 72 `<img>` elements), which stage 1 accepts and a canvas-based seat composite is left for
 later (design §7).
@@ -174,12 +182,13 @@ runs.
 Lite has no wardrobe and no per-account cosmetic config (design §7 — "Không tủ đồ, không profile"), so
 every human at a Lite table draws the same deterministic figure the kit itself can produce with nothing
 from the server: `defaultChibi(displayName)` seeds a chibi from the player's own name, the same way on
-every device, with no request involved. `apps/lite/scripts/build.mjs`'s `copyAvatarAssets()` copies only
-the `base_*` and `bot_*` files out of `apps/normal-web/public/avatar/` into `dist/public/avatar` — never
-the wardrobe items, because Lite ships no store to buy them from — as one step of a full build, after the
-web bundle and before the SEA blob is assembled. There is no dev-time equivalent of that copy
-(`docs/known-limitations.md`): `pnpm --filter @bp/lite dev` needs `apps/normal-web` built at least once
-first, or every chibi 404s.
+every device, with no request involved — always wearing `item_outfit_casual01_L40`, the one default
+outfit (`packages/ui-kit/src/avatar2d/defaults.ts`). `apps/lite/scripts/build.mjs`'s `copyAvatarAssets()`
+(`isLiteAvatarFile`) copies the `base_*` and `bot_*` files, plus that one outfit's `@1x`/`@2x` pair, out of
+`apps/normal-web/public/avatar/` into `dist/public/avatar` — never any *other* wardrobe item, because Lite
+ships no store to buy them from — as one step of a full build, after the web bundle and before the SEA
+blob is assembled. There is no dev-time equivalent of that copy (`docs/known-limitations.md`):
+`pnpm --filter @bp/lite dev` needs `apps/normal-web` built at least once first, or every chibi 404s.
 
 ## 9. Adding an item, end to end
 
@@ -199,8 +208,9 @@ first, or every chibi 404s.
    `.../en/normal.json` — `locales.test.ts` fails if either is missing, if one language has a key the
    other does not, or if a name exists for an id the server does not serve.
 5. **How it is won.** A grant in `apps/normal-server/data/achievements.json`, or a slot in the daily
-   calendar (`head`/`face`/`aura`/`frame` only — design §5.2), or nothing at all — an item nobody owns is
-   an item nobody sees, because the wardrobe lists the inventory, not the catalogue.
+   calendar (`head`/`face`/`aura`/`frame` only — design §5.2), or nothing at all — the wardrobe lists the
+   whole catalogue for every tab and locks whatever a player does not own, so an item nobody owns is an
+   item nobody can equip, not an item nobody sees.
 6. **The contact sheet.** `avatar:sheet` re-composites everything, item included, into
    `docs/avatar-2d-sheet.png` — look at the new piece beside every other one before committing it.
 7. **Commit the PNGs, the manifest and the catalogue together.** The layers are a committed build
