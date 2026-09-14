@@ -4,9 +4,11 @@ import { AvatarAssets } from './AvatarAssets.js'
 import { Chibi } from './Chibi.js'
 import { defaultChibi } from './defaults.js'
 import { hashChibi, layersFor } from './layers.js'
-import type { BotChibi } from './types.js'
+import type { BotChibi, ChibiConfig, WearRef } from './types.js'
 
 const SUBJECT = defaultChibi('ann')
+const FRAME_ITEM: WearRef = { id: 'frame_gold', order: 90, file: 'item_frame_gold_L90' }
+const FRAMED_SUBJECT: ChibiConfig = { ...SUBJECT, frame: FRAME_ITEM }
 
 describe('Chibi', () => {
   it('draws one img per layer, in ascending layer order', () => {
@@ -95,6 +97,39 @@ describe('Chibi', () => {
     expect(crop.style.top).toBe('-30%')
     expect(crop.style.width).toBe('240%')
     expect(crop.style.height).toBe('280%')
+  })
+
+  // D01 §5: the frame border (layer 90) is a 208×208 ring around the crop's centre — outside the 160×160 crop
+  // window, so clipping it with the rest of the head-crop stack cuts it off entirely (the regression this guards:
+  // the FRAME rows on the playground showed a plain head crop with no ring at all).
+  it('draws the frame-border layer unclipped, outside the round crop box, with the same geometry as the clipped layers', () => {
+    const { container } = render(<Chibi subject={FRAMED_SUBJECT} frame="head" size={160} />)
+    const clip = container.querySelector('[class*="clip"]') as HTMLElement
+    const clippedLayers = layersFor(FRAMED_SUBJECT, 'neutral', 'head').filter((l) => l.order !== 90)
+
+    // Inside the clipped box: every layer except the frame border.
+    expect([...clip.querySelectorAll('img')]).toHaveLength(clippedLayers.length)
+    expect(clip.querySelector('img[src*="item_frame_gold_L90"]')).toBeNull()
+
+    // The frame-border img exists, but is not a descendant of the clipped box…
+    const frameImg = container.querySelector('img[src*="item_frame_gold_L90"]') as HTMLImageElement
+    expect(frameImg).not.toBeNull()
+    expect(clip.contains(frameImg)).toBe(false)
+
+    // …and carries the exact same left/top/width/height as the clipped inner box, so it lines up with everything
+    // else even though nothing is clipping it.
+    const crop = clip.querySelector('[class*="crop"]') as HTMLElement
+    expect(frameImg.style.left).toBe(crop.style.left)
+    expect(frameImg.style.top).toBe(crop.style.top)
+    expect(frameImg.style.width).toBe(crop.style.width)
+    expect(frameImg.style.height).toBe(crop.style.height)
+    expect(frameImg.style.left).toBe('-112px')
+    expect(frameImg.style.width).toBe('384px')
+  })
+
+  it('drops the frame-border layer entirely in full frame — nothing left to un-clip', () => {
+    const { container } = render(<Chibi subject={FRAMED_SUBJECT} frame="full" />)
+    expect(container.querySelector('img[src*="item_frame_gold_L90"]')).toBeNull()
   })
 
   it('is decorative with no label, and an announced role="img" with one', () => {

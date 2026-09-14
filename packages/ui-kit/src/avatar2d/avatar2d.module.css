@@ -1,24 +1,35 @@
 /* One chibi: a stack of absolutely-positioned PNG layers on the 384×448 frame (spec §3). `full` shows the whole
-   frame at its native 6:7 ratio; `head` clips a square viewport over the 160×160 avatar crop at (112, 48). The
-   `.crop` box below carries the un-cropped layer stack at its native 384:448 proportions; for `full` that is all
-   of it (top/left/width/height below fill the box exactly, since it shares the outer box's own 6:7 ratio). For
-   `head`, `Chibi` overrides top/left/width/height with an inline style computed by `frame.ts`'s
-   `headCropGeometry` — plain box geometry rather than a `transform`, whose `scale` would otherwise never magnify
-   a same-list `translate`'s offset and land the crop off-centre. */
+   frame at its native 6:7 ratio, clipped by the box itself. `head` clips a *round* viewport over the 160×160
+   avatar crop at (112, 48) — but only layers 10–80: the frame-border item (layer 90, D01 §5) is drawn 208×208
+   around the crop's own centre, meant to ring the round avatar from *outside* it, so `Chibi` renders it as a
+   sibling of the clipped `.clip` box rather than a member of it, and this root stays `overflow: visible` in head
+   mode so that ring is not cut off. The `.crop` box carries the un-cropped layer stack at its native 384:448
+   proportions; for `full` that is all of it (top/left/width/height below fill the box exactly, since it shares
+   the outer box's own 6:7 ratio). For `head`, `Chibi` overrides top/left/width/height — on both `.crop` and the
+   unclipped frame-border `<img>` — with an inline style computed by `frame.ts`'s `headCropGeometry`: plain box
+   geometry rather than a `transform`, whose `scale` would otherwise never magnify a same-list `translate`'s
+   offset and land the crop off-centre. */
 .chibi {
   position: relative;
   display: block;
-  overflow: hidden;
   width: 100%;
   background: transparent;
 }
 
 .full {
   aspect-ratio: 6 / 7;
+  overflow: hidden;
 }
 
 .head {
   aspect-ratio: 1 / 1;
+  overflow: visible;
+}
+
+.clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
   border-radius: 50%;
 }
 
