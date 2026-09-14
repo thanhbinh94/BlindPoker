@@ -252,6 +252,17 @@ describe('InventoryService', () => {
     expect(await db.transaction((tx) => inv.unownedOfRarity(tx, playerId, 'epic'))).toEqual(expect.arrayContaining(catalog.byRarity('epic').map((d) => d.id).sort()))
   })
 
+  it('is alias-aware: owning only the old row keeps the new id out of the pool too', async () => {
+    await ensureLegacyItem('hat_crown', 'hat', 'epic')
+    const playerId = await seedPlayer()
+    await own(playerId, 'hat_crown') // v2 id, aliases to head_crown_gold01 — never re-inserted by Plan 11's catalogue
+    const unowned = await db.transaction((tx) => inv.unownedOfRarity(tx, playerId, 'epic'))
+    // Without the widening this would still list `head_crown_gold01`: the daily draw would then be
+    // able to "grant" a legacy player, under its current id, a cosmetic they already own.
+    expect(unowned).not.toContain('head_crown_gold01')
+    expect(unowned).toEqual(expect.arrayContaining(catalog.byRarity('epic').map((d) => d.id).filter((id) => id !== 'head_crown_gold01')))
+  })
+
   it('drops the excluded ids and slots from the pool, and an empty exclusion excludes nothing', async () => {
     const playerId = await seedPlayer()
     const allRare = catalog.byRarity('rare').map((d) => d.id).sort()

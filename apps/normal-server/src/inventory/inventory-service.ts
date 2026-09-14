@@ -12,11 +12,13 @@
  *
  * **Aliases run both ways here.** `inventory.item_id` rows are never rewritten (Plan 11's `aliases.ts`
  * comment), so a player who owns `hat_crown` from before this plan already owns `head_crown_gold01`
- * in every sense that matters — `owns` and `missingOf` widen every id they are asked about to its
- * whole alias *class* (itself, plus every old id `item-aliases.json` renamed to it) before touching
- * the database, so an avatar or an outfit naming the new id is satisfied by the old row.
+ * in every sense that matters — `owns`, `missingOf` and `unownedOfRarity` all widen every id they
+ * touch to its whole alias *class* (itself, plus every old id `item-aliases.json` renamed to it)
+ * before comparing against the database, so an avatar or an outfit naming the new id is satisfied by
+ * the old row, and the daily draw's unowned pool never re-offers, under its current id, a cosmetic a
+ * legacy player already owns under its old one.
  */
-import { and, asc, eq, inArray, notExists, notInArray } from 'drizzle-orm'
+import { and, asc, eq, inArray, notInArray } from 'drizzle-orm'
 import type { AppDb, AppTx } from '../db/client.js'
 import { inventory, items } from '../db/schema.js'
 import { isUuid } from '../repos/util.js'
@@ -134,12 +136,6 @@ export function createInventoryService(db: AppDb, aliases: ReadonlyMap<string, s
         .where(
           and(
             eq(items.rarity, rarity),
-            notExists(
-              tx
-                .select({ one: inventory.itemId })
-                .from(inventory)
-                .where(and(eq(inventory.playerId, playerId), eq(inventory.itemId, items.id))),
-            ),
             // Guarded on length: `notInArray(col, [])` is `col <> all('{}')`, which Postgres reads
             // as unknown for every row and would empty the pool rather than exclude nothing. The
             // same guard applies to `withinSlots`, the other way round: `inArray(col, [])` is
@@ -151,7 +147,16 @@ export function createInventoryService(db: AppDb, aliases: ReadonlyMap<string, s
           ),
         )
         .orderBy(asc(items.id))
-      return rows.map((r) => r.id)
+      if (rows.length === 0) return []
+      // Alias-aware, the same widening `owns`/`missingOf` do below: an inventory row under an old id
+      // already satisfies the new id it resolves to, so it must keep that new id out of the draw
+      // pool too — otherwise a legacy player could be "re-offered", under its current id, a cosmetic
+      // they already own under its old one. Fetched separately (rather than folded into the query
+      // above as a correlated `notExists`) because the widening is per-row through a JS map, not
+      // something a single SQL predicate can express without recompiling one per call.
+      const owned = await tx.select({ itemId: inventory.itemId }).from(inventory).where(eq(inventory.playerId, playerId))
+      const ownedIds = new Set(owned.map((r) => r.itemId))
+      return rows.map((r) => r.id).filter((id) => !classOf(id).some((candidate) => ownedIds.has(candidate)))
     },
 
     async missingOf(playerId, itemIds) {
