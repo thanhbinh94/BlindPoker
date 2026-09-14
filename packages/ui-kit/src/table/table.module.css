@@ -295,14 +295,19 @@
 
 /* The avatar frame: one disc, one size per layout, for every seat — bot, portrait or initial — with a gold rim and
    a dark well behind it. Whatever the app hands over is clipped to the circle and stretched to fill it, so a picture
-   sized for a 32 px bar and a face drawn on a 64-unit grid both land on the same rim. */
+   sized for a 32 px bar and a face drawn on a 64-unit grid both land on the same rim.
+
+   `overflow: visible`, not `hidden`: D01 §7 has the `frame` item's ring sit *outside* the 160×160 avatar crop, on
+   purpose, so it always shows at the table (§7, "luôn hiển thị tại bàn chơi") — clipping this box would cut that
+   ring off before it ever left the seat plate. The circle itself still comes from `Chibi`'s own `.clip`, which
+   crops the head layers to round from *inside* this box, so nothing square ever shows here regardless. */
 .avatar {
   display: grid;
   place-items: center;
   flex: none;
   width: var(--seat-disc, 40px);
   height: var(--seat-disc, 40px);
-  overflow: hidden;
+  overflow: visible;
   border-radius: 50%;
   border: 2px solid rgba(217, 164, 65, 0.78);
   box-shadow:
@@ -317,10 +322,6 @@
 .avatar > * {
   width: 100%;
   height: 100%;
-}
-
-.botFace {
-  display: block;
 }
 
 .plateText {

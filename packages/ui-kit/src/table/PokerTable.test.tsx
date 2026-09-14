@@ -3,6 +3,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { I18nextProvider } from 'react-i18next'
+import { defaultChibi, type ChibiConfig, type ChibiSubject, type WearRef } from '../avatar2d/index.js'
 import { createI18n } from '../i18n/index.js'
 import { holdemHand as hand, holdemRoom as room, makePlayer, makeRoom } from '../test-fixtures.js'
 import { PokerTable } from './PokerTable.js'
@@ -170,5 +171,35 @@ describe('PokerTable', () => {
     expect(bot.querySelector(`.${s.seatStack}`)).toBeNull()
     // A human's stack is still the plate's job.
     expect(within(screen.getByRole('group', { name: 'Seat 1' })).getByText('20,000')).toBeInTheDocument()
+  })
+
+  // D01 §7: the frame item's own ring is meant to show at the table, always — `.avatar` must not clip it off.
+  // This cannot see the CSS clip itself (jsdom does no layout), but it pins the wiring the clip depends on: a
+  // `chibiFor` config wearing a `frame` item reaches the seat as a real `<img>` for that layer.
+  it("draws a seat's equipped frame ring", () => {
+    const withFrame = makeRoom({
+      players: [makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'SEATED', stack: 20_000 })],
+    })
+    const frameItem: WearRef = { id: 'frame_gold', order: 90, file: 'item_frame_gold_L90' }
+    const chibiFor = (player: RoomPlayerView): ChibiSubject | null => {
+      const base = defaultChibi(player.playerId) as ChibiConfig
+      return { ...base, frame: frameItem }
+    }
+    wrap(
+      <PokerTable
+        room={withFrame}
+        hand={null}
+        myPlayerId="a"
+        deadlineAt={null}
+        serverNow={() => 0}
+        turnTimerMs={30000}
+        lang="en"
+        layout="ring"
+        canSit={false}
+        chibiFor={chibiFor}
+      />,
+    )
+    const seat = screen.getByRole('group', { name: 'Seat 1' })
+    expect(seat.querySelector('img[src*="item_frame_gold_L90"]')).not.toBeNull()
   })
 })
