@@ -46,6 +46,14 @@
   inset: 0;
   width: 100%;
   height: 100%;
+  /* `global.css` sets `img, svg { max-width: 100% }` for ordinary responsive images. `max-width`/`max-height`
+     are never overridden by a competing `width`/`height` — inline or not, same specificity or higher — they clamp
+     the *result* of whatever set width/height, so that rule alone silently shrank the unclipped frame-border
+     overlay (below) to its size×size wrapper's width while its inline height stood at the un-cropped 448-ratio
+     figure: a tall, left-shifted sliver instead of a ring. The clipped layers never showed it because their own
+     100% already resolves against the (already crop-scaled) `.crop` box, so the cap and the value coincide. */
+  max-width: none;
+  max-height: none;
   pointer-events: none;
   user-select: none;
 }

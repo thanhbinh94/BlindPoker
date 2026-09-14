@@ -24,11 +24,15 @@ export interface CropGeometry {
  * off-centre; plain left/top/width/height on an absolutely positioned box has no such ordering trap.
  */
 export function headCropGeometry(outputSize: number): CropGeometry {
-  const ratio = outputSize / CHIBI_CROP.size
+  // Multiply by the (integer) crop numbers first and divide once, rather than computing `outputSize / 160` as its
+  // own intermediate ratio: `160` does not divide every `outputSize` (96, notably) into a binary float that
+  // round-trips cleanly, so `-112 * (96 / 160)` prints `-67.19999999999999` while `-(112 * 96) / 160` prints the
+  // exact `-67.2` — cosmetic in a browser (both resolve to the same pixel), but not in a test that pins the
+  // number, or in a CSS string a reviewer or another test is going to read.
   return {
-    left: -CHIBI_CROP.x * ratio,
-    top: -CHIBI_CROP.y * ratio,
-    width: CHIBI_FRAME.w * ratio,
-    height: CHIBI_FRAME.h * ratio,
+    left: -(CHIBI_CROP.x * outputSize) / CHIBI_CROP.size,
+    top: -(CHIBI_CROP.y * outputSize) / CHIBI_CROP.size,
+    width: (CHIBI_FRAME.w * outputSize) / CHIBI_CROP.size,
+    height: (CHIBI_FRAME.h * outputSize) / CHIBI_CROP.size,
   }
 }

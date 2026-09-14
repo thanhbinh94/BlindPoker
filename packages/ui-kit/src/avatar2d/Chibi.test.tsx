@@ -1,6 +1,7 @@
 import { render } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { AvatarAssets } from './AvatarAssets.js'
+import AVATAR2D_CSS from './avatar2d.module.css?raw'
 import { Chibi } from './Chibi.js'
 import { defaultChibi } from './defaults.js'
 import { hashChibi, layersFor } from './layers.js'
@@ -130,6 +131,45 @@ describe('Chibi', () => {
   it('drops the frame-border layer entirely in full frame — nothing left to un-clip', () => {
     const { container } = render(<Chibi subject={FRAMED_SUBJECT} frame="full" />)
     expect(container.querySelector('img[src*="item_frame_gold_L90"]')).toBeNull()
+  })
+
+  // The regression this guards: `global.css` sets `img, svg { max-width: 100% }` for ordinary responsive images.
+  // `max-width` clamps whatever `width` a *replaced* element ends up with — inline or not, it is a separate
+  // property, not something the cascade lets a same-property override win against — so at size=96 the overlay's
+  // intended 230.4 px width was silently capped to its 96 px wrapper while its 268.8 px height stood uncapped: a
+  // narrow, left-shifted sliver rather than a ring around the head. `.layer`'s own `max-width: none` (below) is
+  // what stops that.
+  it('at size=96, the frame-border overlay still gets its full un-clipped width and height, not the 96 px wrapper', () => {
+    const { container } = render(<Chibi subject={FRAMED_SUBJECT} frame="head" size={96} />)
+    const frameImg = container.querySelector('img[src*="item_frame_gold_L90"]') as HTMLImageElement
+    const crop = container.querySelector('[class*="clip"] [class*="crop"]') as HTMLElement
+
+    expect(crop.style.left).toBe('-67.2px')
+    expect(crop.style.top).toBe('-28.8px')
+    expect(crop.style.width).toBe('230.4px')
+    expect(crop.style.height).toBe('268.8px')
+
+    // Same geometry as the clipped box — a ring centred on, and slightly larger than, the 96 px head, not a
+    // sliver clamped to it.
+    expect(frameImg.style.left).toBe(crop.style.left)
+    expect(frameImg.style.top).toBe(crop.style.top)
+    expect(frameImg.style.width).toBe(crop.style.width)
+    expect(frameImg.style.height).toBe(crop.style.height)
+
+    // jsdom does not run layout, so this only ever proves the *value* a real browser would then apply — not that
+    // the 230.4 px width survives layout. The CSS-source assertion below is the one that actually pins the fix.
+    expect(getComputedStyle(frameImg).maxWidth).toBe('none')
+    expect(getComputedStyle(frameImg).maxHeight).toBe('none')
+  })
+
+  it('the .layer rule — every stacked img, clipped or not — sets max-width/max-height: none, overriding the img/svg reset', () => {
+    // Strip comments first: this file's own comment on `.layer` quotes `img, svg { max-width: 100% }` as an
+    // example, and a naive "up to the next `}`" match would stop right there instead of at the rule's actual end.
+    const withoutComments = AVATAR2D_CSS.replace(/\/\*[\s\S]*?\*\//g, '')
+    const layerRule = withoutComments.match(/\.layer\s*\{[^}]*\}/)?.[0] ?? ''
+    expect(layerRule).not.toBe('')
+    expect(layerRule).toMatch(/max-width:\s*none/)
+    expect(layerRule).toMatch(/max-height:\s*none/)
   })
 
   it('is decorative with no label, and an announced role="img" with one', () => {

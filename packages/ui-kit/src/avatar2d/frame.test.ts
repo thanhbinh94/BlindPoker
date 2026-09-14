@@ -14,4 +14,11 @@ describe('headCropGeometry', () => {
   it('at outputSize 100, gives the percentage-of-container numbers Chibi uses with no explicit size', () => {
     expect(headCropGeometry(100)).toEqual({ left: -70, top: -30, width: 240, height: 280 })
   })
+
+  // 96 (the playground's item-grid tile size) does not divide 160 into a binary float that round-trips: naively
+  // computing `outputSize / 160` as its own ratio first prints `top: -28.799999999999997` and
+  // `width: 230.39999999999998`. Multiplying by the integer crop numbers before dividing avoids it.
+  it('at outputSize 96, lands on exact decimals rather than floating-point noise', () => {
+    expect(headCropGeometry(96)).toEqual({ left: -67.2, top: -28.8, width: 230.4, height: 268.8 })
+  })
 })
