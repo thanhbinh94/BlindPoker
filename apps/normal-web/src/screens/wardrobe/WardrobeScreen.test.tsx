@@ -82,7 +82,7 @@ const INVENTORY: InventoryDto = {
   avatar: AVATAR,
 }
 
-const AVATAR_CATALOG: AvatarCatalogDto = { frame: { w: 384, h: 448 }, crop: { x: 112, y: 48, size: 160 }, bases: [BASE_F01, BASE_M01], manifestVersion: 1 }
+const AVATAR_CATALOG: AvatarCatalogDto = { frame: { w: 384, h: 448 }, crop: { x: 88, y: 40, size: 208 }, bases: [BASE_F01, BASE_M01], manifestVersion: 1 }
 
 const ACHIEVEMENTS: AchievementDefDto[] = [
   { id: 'login_days_100', category: 'login', metric: 'totalLoginDays', threshold: 100, reward: { itemId: 'head_tophat01' } },

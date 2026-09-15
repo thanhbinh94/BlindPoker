@@ -39,7 +39,7 @@ const BASE_F01: BaseDto = {
     sleep: 'base_f01_face_sleep_L50',
   },
 }
-const AVATAR_CATALOG: AvatarCatalogDto = { frame: { w: 384, h: 448 }, crop: { x: 112, y: 48, size: 160 }, bases: [BASE_F01], manifestVersion: 1 }
+const AVATAR_CATALOG: AvatarCatalogDto = { frame: { w: 384, h: 448 }, crop: { x: 88, y: 40, size: 208 }, bases: [BASE_F01], manifestVersion: 1 }
 
 const OUTFIT_CASUAL: ItemDto = {
   id: 'outfit_casual01',

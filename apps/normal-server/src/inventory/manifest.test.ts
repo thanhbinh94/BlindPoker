@@ -22,7 +22,7 @@ afterAll(() => {
 const VALID = {
   version: 1,
   frame: { w: 384, h: 448 },
-  crop: { x: 112, y: 48, size: 160 },
+  crop: { x: 88, y: 40, size: 208 },
   files: {
     base_f01_L30: { layer: 30, w: 384, h: 448, bytes2x: 15716, placeholder: true },
     item_head_tophat01_L80: { layer: 80, w: 384, h: 448, bytes2x: 4000, real: true },
@@ -34,7 +34,7 @@ describe('loadAvatarManifest', () => {
     const manifest = loadAvatarManifest()
     expect(manifest.version).toBe(1)
     expect(manifest.frame).toEqual({ w: 384, h: 448 })
-    expect(manifest.crop).toEqual({ x: 112, y: 48, size: 160 })
+    expect(manifest.crop).toEqual({ x: 88, y: 40, size: 208 })
     expect(Object.keys(manifest.files).length).toBeGreaterThan(0)
     expect(manifest.files['base_f01_L30']).toMatchObject({ layer: 30 })
   })
@@ -60,7 +60,7 @@ describe('loadAvatarManifest', () => {
 
   it('refuses a malformed frame or crop', () => {
     expect(() => loadAvatarManifest(fixture({ ...VALID, frame: { w: 384 } }))).toThrow(/frame\.h must be a positive number/)
-    expect(() => loadAvatarManifest(fixture({ ...VALID, crop: { x: 112, y: 48, size: 0 } }))).toThrow(/crop\.size must be a positive number/)
+    expect(() => loadAvatarManifest(fixture({ ...VALID, crop: { x: 88, y: 40, size: 0 } }))).toThrow(/crop\.size must be a positive number/)
     // Zero is a legitimate pixel coordinate for x/y.
     expect(loadAvatarManifest(fixture({ ...VALID, crop: { x: 0, y: 0, size: 160 } })).crop).toEqual({ x: 0, y: 0, size: 160 })
   })

@@ -7,7 +7,7 @@
 /** The six faces every base and bot ships; `neutral` is the resting state everything else expires back to. */
 export type Expression = 'neutral' | 'happy' | 'sad' | 'surprised' | 'closed' | 'sleep'
 
-/** `head` crops the 160×160 avatar square out of the frame; `full` shows the whole 384×448 body. */
+/** `head` crops the 208×208 avatar square out of the frame; `full` shows the whole 384×448 body. */
 export type ChibiFrame = 'head' | 'full'
 
 /** One stacked layer: `order` is the z-index (10 aura … 90 frame), `file` the filename stem without `@Nx.png`. */

@@ -30,7 +30,7 @@ function stubApi(overrides: Partial<NormalApi> = {}): NormalApi {
     daily: vi.fn(() => new Promise<never>(() => undefined)),
     // The rig every chibi is drawn on: fetched once for the app's whole lifetime, and irrelevant to every
     // case in this file — none of them ever look at a face.
-    avatarCatalog: vi.fn().mockResolvedValue({ frame: { w: 384, h: 448 }, crop: { x: 112, y: 48, size: 160 }, bases: [], manifestVersion: 1 }),
+    avatarCatalog: vi.fn().mockResolvedValue({ frame: { w: 384, h: 448 }, crop: { x: 88, y: 40, size: 208 }, bases: [], manifestVersion: 1 }),
     catalogItems: vi.fn().mockResolvedValue({ items: [] }),
     ...overrides,
   } as unknown as NormalApi
