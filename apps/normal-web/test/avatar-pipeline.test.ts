@@ -22,9 +22,9 @@ import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { runChecks } from '../scripts/avatar-pipeline/checks.mjs'
-import { diffAgainstBase, measure } from '../scripts/avatar-pipeline/extract.mjs'
-import { AXIS_X, BASELINE_Y, BODY, CROP, DENSITIES, FRAME, LAYERS, anchorBase, applyTransform, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
-import { MANIFEST_NAME, stageOneFiles } from '../scripts/avatar-pipeline/manifest.mjs'
+import { diffAgainstBase, ingest, measure } from '../scripts/avatar-pipeline/extract.mjs'
+import { AXIS_X, BASELINE_Y, BODY, CROP, DENSITIES, FACE_LIMIT_Y, FRAME, LAYERS, anchorBase, applyTransform, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
+import { MANIFEST_NAME, buildPlaceholders, stageOneFiles } from '../scripts/avatar-pipeline/manifest.mjs'
 import { alphaBBox, blankPicture, cropPicture, readPicture, removeChroma, renderSvg, writeDensities, writePicture } from '../scripts/avatar-pipeline/png.mjs'
 
 const PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url))
@@ -56,6 +56,8 @@ interface ManifestEntry {
   bytes2x: number
   placeholder?: boolean
   real?: boolean
+  /** A real layer with nothing on it, on purpose: an AI base's hair layers (its hair is baked into L30/L50). */
+  empty?: boolean
   hidesHairFront?: boolean
   hidesHairBack?: boolean
 }
@@ -90,6 +92,20 @@ const sourceSvg = (extra = ''): string =>
 const HAT = `<rect x="${SRC_HAT.x0}" y="${SRC_HAT.y0}" width="${SRC_HAT.x1 - SRC_HAT.x0}" height="${SRC_HAT.y1 - SRC_HAT.y0}" rx="18" fill="#cc2222"/>`
 const SMUDGE = `<rect x="${SRC_SMUDGE.x0}" y="${SRC_SMUDGE.y0}" width="${SRC_SMUDGE.x1 - SRC_SMUDGE.x0}" height="${SRC_SMUDGE.y1 - SRC_SMUDGE.y0}" fill="#cc2222"/>`
 const CLOTHES = `<rect x="416" y="640" width="320" height="568" rx="24" fill="#2244cc"/>`
+
+/** A bob-haired figure: hair curtains to y = 760 on either side of a face that ends at y ≈ 670. */
+const BOB = `
+  <ellipse cx="576" cy="420" rx="300" ry="240" fill="#a07050"/>
+  <rect x="276" y="420" width="144" height="340" rx="20" fill="#a07050"/>
+  <rect x="732" y="420" width="144" height="340" rx="20" fill="#a07050"/>
+  <ellipse cx="576" cy="470" rx="180" ry="200" fill="#e0c0a0"/>
+  <ellipse cx="506" cy="500" rx="30" ry="40" fill="#202020"/>
+  <ellipse cx="646" cy="500" rx="30" ry="40" fill="#202020"/>
+  <rect x="536" y="640" width="80" height="90" fill="#e0c0a0"/>
+  <rect x="456" y="720" width="240" height="300" rx="24" fill="#808080"/>
+  <rect x="480" y="1000" width="80" height="300" rx="24" fill="#808080"/>
+  <rect x="592" y="1000" width="80" height="300" rx="24" fill="#808080"/>
+`
 
 // ──────────────────────────────────────────────────────────────── test state ──
 
@@ -248,6 +264,35 @@ describe('measure', () => {
     // The figure is drawn on the canvas axis, so it is not off centre.
     expect(Math.abs(report.centreOffset)).toBeLessThanOrEqual(2)
     expect(report.ok).toBe(true)
+  })
+
+  it('finds the chin inside a bob rather than at the ends of the hair', async () => {
+    // A bob seen front-on: a wide head of hair whose two side curtains hang past the chin to y = 760,
+    // a narrower face ending at y ≈ 670, the neck between the curtains, then the body. The outline's
+    // narrowest row after the hair is the torso under the curtains' ends — reading that as the chin
+    // makes this a 1.9-head figure. The chin is where the face meets the neck, at y ≈ 665.
+    const bob = removeChroma(await renderSvg(`<svg xmlns="http://www.w3.org/2000/svg" width="${SRC.w}" height="${SRC.h}">` +
+      `<rect width="${SRC.w}" height="${SRC.h}" fill="#00ff00"/>${BOB}</svg>`, SRC.w, SRC.h), { tolerance: 40 })
+    const report = measure(bob)
+    expect(Math.abs(report.chin - 665), `chin at y = ${report.chin}`).toBeLessThanOrEqual(12)
+    expect(report.headHeight).toBe(report.chin - report.top)
+    expect(report.heads).toBeGreaterThan(2.1)
+    expect(report.heads).toBeLessThan(2.5)
+    expect(report.eyeRatio, 'eye line').not.toBeNull()
+    expect(report.ok).toBe(true)
+  })
+
+  it('does not count a thin strand above the head as head', async () => {
+    // An ahoge: 14 px wide, 125 px tall, on top of the plain figure. Counted as head it turns a
+    // 2.26-head figure into a 1.99-head one; the head starts where the hair gets wide.
+    const strand = `<rect x="569" y="80" width="14" height="140" fill="#808080"/>`
+    const report = measure(removeChroma(await renderSvg(sourceSvg(strand), SRC.w, SRC.h), { tolerance: 40 }))
+    expect(report.bbox.y).toBeLessThanOrEqual(82)
+    expect(Math.abs(report.top - 200), `head top at y = ${report.top}`).toBeLessThanOrEqual(10)
+    expect(report.heads).toBeGreaterThan(2.1)
+    expect(report.heads).toBeLessThan(2.4)
+    expect(report.ok).toBe(true)
+    expect(report.notes.join(' ')).toMatch(/strand/)
   })
 
   it('fails a figure that is off the axis', async () => {
@@ -581,9 +626,9 @@ describe('the committed placeholder set', () => {
       expect(entry.w, name).toBe(FRAME.w)
       expect(entry.h, name).toBe(FRAME.h)
       expect(entry.bytes2x, name).toBe(statSync(join(OUT_DIR, `${name}@2x.png`)).size)
-      // Nothing here is real art yet, and the renderer, the catalogue and the style gate all read this.
-      expect(entry.placeholder, name).toBe(true)
-      expect(entry.real, name).toBeUndefined()
+      // Exactly one of the two flags (docs/avatar-2d.md §6): a stand-in, or art `ingest` wrote.
+      expect(entry.placeholder === true !== (entry.real === true), `${name} must be placeholder or real, not both or neither`).toBe(true)
+      if (entry.empty) expect(entry.real, `${name} is marked empty, which only ingest writes`).toBe(true)
     }
   })
 
@@ -595,7 +640,14 @@ describe('the committed placeholder set', () => {
   })
 
   it('passes its own acceptance checks', () => {
-    const stdout = execFileSync(process.execPath, [SCRIPT, 'check'], { cwd: PACKAGE_ROOT, encoding: 'utf8' })
+    // C6 measures outfits against each base's real body. While a base is real art and the outfits are
+    // still stand-ins drawn for the stand-in body, they cannot cover it, and that is expected rather
+    // than a fault — so C6 is skipped exactly for that mix, and runs again once real outfits land.
+    const entries = Object.entries(manifest.files)
+    const realBase = entries.some(([name, entry]) => /^base_[a-z0-9]+_L30$/.test(name) && entry.real)
+    const standInOutfit = entries.some(([name, entry]) => name.startsWith('item_outfit_') && entry.placeholder)
+    const skip = realBase && standInOutfit ? ['--skip', 'C6'] : []
+    const stdout = execFileSync(process.execPath, [SCRIPT, 'check', ...skip], { cwd: PACKAGE_ROOT, encoding: 'utf8' })
     expect(stdout).toMatch(/C1/)
     expect(stdout).not.toMatch(/FAIL/)
   }, 300_000)
@@ -650,6 +702,137 @@ describe('the ingest command', () => {
     const stdout = run(['check', 'base_f01_L30', 'item_head_tophat01_L80', '--dir', dir])
     expect(stdout, stdout).not.toMatch(/FAIL/)
   }, 120_000)
+})
+
+// ──────────────────────────────────────────────────────────── flat AI bases ──
+
+/** Every pixel with any alpha, as `x,y`, that lies outside the head region at this density. */
+function inkOutsideHead(pic: Picture, density: number): string[] {
+  const left = CROP.x * density
+  const right = (CROP.x + CROP.size) * density
+  const top = CROP.y * density
+  const bottom = Math.min(CROP.y + CROP.size, FACE_LIMIT_Y) * density
+  const found: string[] = []
+  for (let y = 0; y < pic.height; y++) {
+    for (let x = 0; x < pic.width; x++) {
+      if (x >= left && x < right && y >= top && y < bottom) continue
+      if (pic.data[(y * pic.width + x) * 4 + 3]! > 0) found.push(`${x},${y}`)
+    }
+  }
+  return found
+}
+
+const fullyTransparent = (pic: Picture): boolean => {
+  for (let i = 3; i < pic.data.length; i += 4) if (pic.data[i] !== 0) return false
+  return true
+}
+
+describe('a flat AI base', () => {
+  // An AI picture is one image with hair, face and body baked together, not three layers.
+  const ingestBase = async (dir: string): Promise<Manifest> => {
+    const file = join(dir, 'base.png')
+    await writePicture(await renderSvg(sourceSvg(), SRC.w, SRC.h), file)
+    await ingest({ file, target: { kind: 'base', base: 'f01' }, dir, targets: [join(dir, MANIFEST_NAME)] })
+    return JSON.parse(readFileSync(join(dir, MANIFEST_NAME), 'utf8')) as Manifest
+  }
+
+  it('writes the body, the head region as the neutral face, and empty hair layers', async () => {
+    const dir = caseDir('flat-base')
+    const manifest = await ingestBase(dir)
+    expect(manifest.files.base_f01_L30).toMatchObject({ layer: 30, real: true })
+    expect(manifest.files.base_f01_L30!.empty).toBeUndefined()
+
+    const face = manifest.files.base_f01_face_neutral_L50
+    expect(face).toMatchObject({ layer: 50, real: true })
+    expect(face!.empty).toBeUndefined()
+    for (const density of DENSITIES) {
+      const pic = await readPicture(join(dir, `base_f01_face_neutral_L50@${density}x.png`))
+      expect(alphaBBox(pic), `@${density}x face has no head in it`).not.toBeNull()
+      const outside = inkOutsideHead(pic, density)
+      expect(outside.length, `@${density}x face has ink outside the head region, e.g. ${outside.slice(0, 3).join(' ')}`).toBe(0)
+    }
+    // Inside the head region the face is the body's own pixels: layer 50 repeats the head on purpose.
+    const body2x = await readPicture(join(dir, 'base_f01_L30@2x.png'))
+    const face2x = await readPicture(join(dir, 'base_f01_face_neutral_L50@2x.png'))
+    const at = (144 * 2 * body2x.width + 192 * 2) * 4
+    expect([...face2x.data.subarray(at, at + 4)]).toEqual([...body2x.data.subarray(at, at + 4)])
+
+    for (const name of ['base_f01_L20', 'base_f01_L60']) {
+      expect(manifest.files[name], name).toMatchObject({ real: true, empty: true })
+      expect(manifest.files[name]!.placeholder).toBeUndefined()
+      for (const density of DENSITIES) {
+        const pic = await readPicture(join(dir, `${name}@${density}x.png`))
+        expect([pic.width, pic.height]).toEqual([FRAME.w * density, FRAME.h * density])
+        expect(fullyTransparent(pic), `${name}@${density}x is not empty`).toBe(true)
+      }
+    }
+
+    const rows = await runChecks({ dir, manifest, names: ['base_f01_L20', 'base_f01_L30', 'base_f01_face_neutral_L50', 'base_f01_L60'] })
+    for (const row of rows) {
+      for (const result of row.results) expect(result.ok, `${row.name} ${result.id}: ${result.detail}`).toBe(true)
+    }
+  }, 120_000)
+
+  it('masks an expression to the head region', async () => {
+    const dir = caseDir('flat-expr')
+    await ingestBase(dir)
+    const file = join(dir, 'happy.png')
+    // The same figure with a red smile and a red smudge on the chest: only the smile is head.
+    await writePicture(await renderSvg(sourceSvg(`<rect x="500" y="560" width="152" height="30" fill="#cc2222"/>${SMUDGE}`), SRC.w, SRC.h), file)
+    await ingest({ file, target: { kind: 'expr', base: 'f01', expr: 'happy' }, dir, targets: [join(dir, MANIFEST_NAME)] })
+    const manifest = JSON.parse(readFileSync(join(dir, MANIFEST_NAME), 'utf8')) as Manifest
+    expect(manifest.files.base_f01_face_happy_L50).toMatchObject({ layer: 50, real: true })
+    for (const density of DENSITIES) {
+      const pic = await readPicture(join(dir, `base_f01_face_happy_L50@${density}x.png`))
+      expect(alphaBBox(pic)).not.toBeNull()
+      const outside = inkOutsideHead(pic, density)
+      expect(outside.length, `@${density}x has ink outside the head region, e.g. ${outside.slice(0, 3).join(' ')}`).toBe(0)
+    }
+  }, 120_000)
+
+  it('check passes a layer marked empty and fails an unmarked empty one', async () => {
+    const dir = caseDir('empty-check')
+    for (const name of ['base_f01_L20', 'base_f01_L60']) {
+      for (const density of DENSITIES) await writePicture(blankPicture(FRAME.w * density, FRAME.h * density), join(dir, `${name}@${density}x.png`))
+    }
+    const bytes = (name: string): number => statSync(join(dir, `${name}@2x.png`)).size
+    const manifest = manifestFor(dir, {
+      base_f01_L20: { layer: 20, w: FRAME.w, h: FRAME.h, bytes2x: bytes('base_f01_L20'), real: true, empty: true },
+      base_f01_L60: { layer: 60, w: FRAME.w, h: FRAME.h, bytes2x: bytes('base_f01_L60'), real: true },
+    })
+    const marked = await checkOne(dir, 'base_f01_L20', manifest)
+    for (const [id, result] of marked) expect(result.ok, `${id}: ${result.detail}`).toBe(true)
+    const unmarked = await checkOne(dir, 'base_f01_L60', manifest)
+    expect([...unmarked.values()].some((result) => !result.ok), 'an unmarked empty layer passed every check').toBe(true)
+  }, 30_000)
+
+  it('check fails a layer marked empty that is not', async () => {
+    const dir = caseDir('empty-not')
+    const entry = await writePlaceholder(dir, 'base_f01_L20')
+    const manifest = manifestFor(dir, { base_f01_L20: { layer: entry.layer, w: entry.w, h: entry.h, bytes2x: entry.bytes2x, real: true, empty: true } })
+    const results = await checkOne(dir, 'base_f01_L20', manifest)
+    expect([...results.values()].some((result) => !result.ok), 'a drawn layer marked empty passed every check').toBe(true)
+  }, 30_000)
+
+  it('placeholder leaves the empty real layers alone', async () => {
+    const dir = caseDir('empty-placeholder')
+    const blank = { layer: 0, w: FRAME.w, h: FRAME.h, bytes2x: 0, real: true, empty: true }
+    const files: Record<string, ManifestEntry> = {}
+    for (const [name, layer] of [['base_f01_L20', 20], ['base_f01_L60', 60]] as const) {
+      for (const density of DENSITIES) await writePicture(blankPicture(FRAME.w * density, FRAME.h * density), join(dir, `${name}@${density}x.png`))
+      files[name] = { ...blank, layer, bytes2x: statSync(join(dir, `${name}@2x.png`)).size }
+    }
+    manifestFor(dir, files)
+    await buildPlaceholders({ dir, targets: [join(dir, MANIFEST_NAME)] })
+    const after = JSON.parse(readFileSync(join(dir, MANIFEST_NAME), 'utf8')) as Manifest
+    expect(Object.keys(after.files)).toHaveLength(stageOneFiles().length)
+    for (const name of Object.keys(files)) {
+      expect(after.files[name], name).toEqual(files[name])
+      for (const density of DENSITIES) {
+        expect(fullyTransparent(await readPicture(join(dir, `${name}@${density}x.png`))), `${name}@${density}x was redrawn`).toBe(true)
+      }
+    }
+  }, 600_000)
 })
 
 describe('the placeholder command', () => {

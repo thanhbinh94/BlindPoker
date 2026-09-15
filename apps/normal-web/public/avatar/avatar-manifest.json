@@ -14,22 +14,24 @@
       "layer": 20,
       "w": 384,
       "h": 448,
-      "bytes2x": 13024,
-      "placeholder": true
+      "bytes2x": 2769,
+      "real": true,
+      "empty": true
     },
     "base_f01_L30": {
       "layer": 30,
       "w": 384,
       "h": 448,
-      "bytes2x": 15716,
-      "placeholder": true
+      "bytes2x": 280983,
+      "real": true
     },
     "base_f01_L60": {
       "layer": 60,
       "w": 384,
       "h": 448,
-      "bytes2x": 9797,
-      "placeholder": true
+      "bytes2x": 2769,
+      "real": true,
+      "empty": true
     },
     "base_f01_face_closed_L50": {
       "layer": 50,
@@ -49,8 +51,8 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 9635,
-      "placeholder": true
+      "bytes2x": 274174,
+      "real": true
     },
     "base_f01_face_sad_L50": {
       "layer": 50,
@@ -753,6 +755,15 @@
       "h": 448,
       "bytes2x": 9417,
       "placeholder": true
+    }
+  },
+  "bases": {
+    "f01": {
+      "transform": {
+        "scale": 0.24669603524229075,
+        "offsetX": 65.568281938326,
+        "offsetY": 52.01762114537445
+      }
     }
   }
 }

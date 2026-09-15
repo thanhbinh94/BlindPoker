@@ -30,6 +30,8 @@ Nhân vật chibi đẹp ở mức minh hoạ chuyên nghiệp, sinh bằng côn
 
 **2026-09-15: crop moved to 208×208 at (88,40), ring 260, after the first real F01 picture.** Ảnh F01 thật đầu tiên cho thấy ô cắt cũ (160 × 160 tại (112, 48)) cắt cụt khuôn mặt ngay tại mắt; trục dọc x = 192 và tâm dọc y = 144 giữ nguyên.
 
+**2026-09-15 amendment: AI bases are flat; L20/L60 are empty; the face layer is the whole head region; hood-style items that hide hair can only cover what their own picture covers.** Ảnh thân sinh bằng AI là một ảnh phẳng (tóc, mặt, thân dính liền), nên `ingest --as base` ghi L30 là cả hình, mặt `neutral` L50 là vùng đầu (ô cắt ∩ y < 250), L20/L60 là khung trong suốt đánh dấu `empty: true`; `hides_hair_front/back` không thể gỡ phần tóc đã nằm trong L30/L50.
+
 ## 4. Phong cách và khối khoá nhân vật
 ### 4.1 Phong cách (rút từ ảnh tham khảo, áp cho mọi ảnh sinh)
 Chibi 2,25 đầu; đầu rộng hơn cao; mắt cực to đặt thấp, tròng hai tông chuyển màu, 2–3 đốm sáng, mi trên dày; má ửng hồng; mũi chấm; nét viền **màu** (nâu cam quanh da, đậm hơn màu tóc quanh tóc, xanh đen quanh trang phục); tô **bán hoạ**: da và tóc được phép gradient mềm và một bậc bóng mềm; trang phục và mũ **cel hai bậc, cạnh rõ** (để cắt lớp). Nền sinh: xanh `#00FF00` phẳng.
