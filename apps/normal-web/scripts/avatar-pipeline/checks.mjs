@@ -23,6 +23,11 @@
  * C6 has no coordinates in D01 at all — see `UNDERWEAR_BAND` in `frame.mjs` for how the region is found,
  * and note that `--skip C6` exists for the genuinely awkward outfit, because a gate with no override
  * is a gate people route around by deleting it.
+ *
+ * One kind of layer is blank on purpose: an AI base is a flat picture, so its hair layers L20/L60 ship as
+ * empty frames and the manifest marks them `empty: true` (2026-09-15). C3 holds such a layer to being
+ * fully transparent at both densities, and fails any layer *not* so marked that is fully transparent;
+ * C4, C5 and C6, which judge what is drawn, report `-` for it.
  */
 import { existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -152,7 +157,28 @@ function insideTheFrame({ pictures }) {
   return ok('clear of every edge')
 }
 
-function noStrayPixels({ pictures }) {
+/** A layer the manifest marks `empty: true` — an AI base's hair layers — which has to stay that way. */
+const markedEmpty = ({ entry }) => entry?.empty === true
+const EMPTY_NA = ok('n/a — marked empty')
+
+/** Every alpha byte zero. */
+function fullyTransparent(picture) {
+  for (let i = 3; i < picture.data.length; i += 4) if (picture.data[i] !== 0) return false
+  return true
+}
+
+function noStrayPixels(context) {
+  const { pictures } = context
+  // Emptiness is judged here because this is the check about "the empty part really is empty": a layer
+  // marked empty must be empty everywhere, and a layer not marked so must have something on it — an
+  // unmarked blank file is a failed export, not a choice.
+  const present = DENSITIES.filter((density) => pictures[density])
+  if (markedEmpty(context)) {
+    const drawn = present.filter((density) => !fullyTransparent(pictures[density]))
+    return drawn.length ? bad(`marked empty, but @${drawn.join('x and @')}x has pixels on it`) : ok('empty, as marked')
+  }
+  const blank = present.filter((density) => !alphaBBox(pictures[density], 0))
+  if (blank.length) return bad(`@${blank.join('x and @')}x is fully transparent but the manifest does not mark it empty`)
   for (const density of DENSITIES) {
     const picture = pictures[density]
     if (!picture) continue
@@ -182,8 +208,9 @@ function noStrayPixels({ pictures }) {
   return ok('empty where it should be')
 }
 
-function noWhiteFringe({ pictures }) {
-  const picture = pictures[2]
+function noWhiteFringe(context) {
+  if (markedEmpty(context)) return EMPTY_NA
+  const picture = context.pictures[2]
   if (!picture) return ok('n/a — no @2x to judge')
   const rim = meanColour(picture, (alpha) => alpha >= ALPHA_INK && alpha <= 200)
   if (!rim) return ok('n/a — no soft edge to judge')
@@ -211,7 +238,9 @@ function meanColour(picture, accept) {
   return n < 50 ? null : [r / n, g / n, b / n]
 }
 
-function fitsThePortrait({ parsed, pictures }) {
+function fitsThePortrait(context) {
+  const { parsed, pictures } = context
+  if (markedEmpty(context)) return EMPTY_NA
   if (parsed?.layer !== LAYERS.head && parsed?.layer !== LAYERS.faceAcc) return ok('n/a — not a head or face item')
   const picture = pictures[1]
   if (!picture) return ok('n/a — no @1x to judge')
@@ -226,7 +255,9 @@ function fitsThePortrait({ parsed, pictures }) {
   return inside ? ok(`inside the crop (${where})`) : bad(`spills out of the ${CROP.size} × ${CROP.size} crop (${where})`)
 }
 
-function coversTheUnderwear({ parsed, pictures, bases }) {
+function coversTheUnderwear(context) {
+  const { parsed, pictures, bases } = context
+  if (markedEmpty(context)) return EMPTY_NA
   if (parsed?.layer !== LAYERS.outfit) return ok('n/a — not an outfit')
   const outfit = pictures[1]
   if (!outfit) return ok('n/a — no @1x to judge')

@@ -59,6 +59,14 @@ export const UNDERWEAR_COVERAGE = 0.98
 /** A hat never reaches the waist: what the `head` extraction rule drops (spec §6). */
 export const HEAD_LIMIT_Y = 260
 
+/**
+ * The bottom of the *head region*: just below the chin, above the tank-top straps of the first real F01
+ * picture (chin y ≈ 240, hair ends y ≈ 251, straps from y ≈ 256). The head region is the portrait crop
+ * *and* `y < FACE_LIMIT_Y`, and it is what a base's face layer (50) holds — see `ingest` in `extract.mjs`.
+ * 2026-09-15: added when the first AI base arrived as one flat picture rather than separate layers.
+ */
+export const FACE_LIMIT_Y = 250
+
 // ─────────────────────────────────────────────────────────────── the anchors ──
 
 /**

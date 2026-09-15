@@ -70,9 +70,14 @@ export async function resizePicture(pic, width, height) {
  * D01 §8.2: a small render and a downscale of a large one are different images, and the small one is
  * always the worse of the two. Returns the byte count of the @2x file, which is what the manifest
  * publishes and C10 budgets.
+ *
+ * `clip`, when given, is applied to the halved picture before it is written: `(pic, density) => pic`. A
+ * layer masked to a hard-edged region at @2x needs it, because the downscale's filter reaches a few
+ * pixels past that edge and would hand the @1x a faint row of alpha just outside the region.
  */
-export async function writeDensities(pic2x, dir, name) {
-  const half = await resizePicture(pic2x, Math.round(pic2x.width / 2), Math.round(pic2x.height / 2))
+export async function writeDensities(pic2x, dir, name, clip = null) {
+  const resized = await resizePicture(pic2x, Math.round(pic2x.width / 2), Math.round(pic2x.height / 2))
+  const half = clip ? clip(resized, 1) : resized
   await writePicture(pic2x, join(dir, `${name}@2x.png`))
   await writePicture(half, join(dir, `${name}@1x.png`))
   return statSync(join(dir, `${name}@2x.png`)).size

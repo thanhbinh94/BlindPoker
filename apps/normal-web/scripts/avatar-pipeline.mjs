@@ -8,7 +8,9 @@
  *       in the hand-over from stand-ins to art. Idempotent.
  *
  *   node scripts/avatar-pipeline.mjs ingest <png> --as base:f01 | expr:f01:happy | item:head:tophat01
- *       One generated picture in, one layer at @1x and @2x out, plus its manifest entry. Options:
+ *       One generated picture in, its layers at @1x and @2x out, plus their manifest entries. A base is a
+ *       flat AI picture and writes four: L30 (the figure), face_neutral L50 (its head region), and empty
+ *       L20/L60 marked `empty: true`. An expression keeps only the head region (crop, above y 250). Options:
  *         --dry-run             measure the picture against D02 §8 and print a verdict; write nothing
  *         --base <id>           which base an item or expression belongs to (default f01)
  *         --tolerance <n>       how wide the background key is (default 40)
