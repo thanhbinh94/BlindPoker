@@ -59,7 +59,7 @@ const OUTFIT_DEALER: ItemDto = {
   asset: { layer: 40, file: 'item_outfit_dealer01_L40', fitsAvatarCrop: false },
 }
 
-const CATALOG: AvatarCatalogDto = { frame: { w: 384, h: 448 }, crop: { x: 112, y: 48, size: 160 }, bases: [BASE_F01, BASE_M01], manifestVersion: 1 }
+const CATALOG: AvatarCatalogDto = { frame: { w: 384, h: 448 }, crop: { x: 88, y: 40, size: 208 }, bases: [BASE_F01, BASE_M01], manifestVersion: 1 }
 const ITEMS = { items: [OUTFIT_CASUAL, OUTFIT_DEALER] }
 
 const AVATAR: AvatarConfigDto = { v: 3, base: 'm01', outfit: 'outfit_dealer01', title: 'title_hot_hand', badge: 'badge_gold' }

@@ -18,10 +18,13 @@ export const FRAME = { w: 384, h: 448 }
 export const BODY = { x: 80, y: 72, w: 224, h: 336 }
 export const AXIS_X = 192
 export const BASELINE_Y = 408
-/** D01 §5: the portrait is cut from the composed figure, never drawn. */
-export const CROP = { x: 112, y: 48, size: 160 }
-/** D01 §7: the avatar frame ring, drawn around the 192 px portrait. */
-export const RING = 208
+/** D01 §5: the portrait is cut from the composed figure, never drawn.
+ * 2026-09-15: moved from { x: 112, y: 48, size: 160 } — the first real F01 picture showed the old crop cutting
+ * the face at the eyes; the new box keeps the same axis x=192 and centre y=144, just bigger. */
+export const CROP = { x: 88, y: 40, size: 208 }
+/** D01 §7: the avatar frame ring, drawn around the 208 px portrait. 2026-09-15: scaled from 208 to 260, the
+ * same 208/160 = 1.3 factor the crop itself grew by, so the ring keeps its proportion to the portrait. */
+export const RING = 260
 /** Spec §3, D5: @3x is gone — the web wants two densities and a third of the bytes back. */
 export const DENSITIES = [1, 2]
 
@@ -238,8 +241,9 @@ function itemShapes(entry, tint) {
     case 'aura':
       return `<circle cx="192" cy="240" r="140" fill="none" stroke="${tint}" stroke-width="26"/>${plate(120, 350, 144, 26, entry.code)}`
     case 'frame':
-      // D01 §7: a 208 × 208 ring around the portrait, its middle left empty.
-      return `<circle cx="192" cy="128" r="100" fill="none" stroke="${tint}" stroke-width="8"/>${plate(120, 240, 144, 26, entry.code)}`
+      // D01 §7: a 260 × 260 ring around the portrait, its middle left empty. Centred on the crop centre
+      // (192, 144); 2026-09-15 moved from cx=192 cy=128 r=100 stroke 8 to match the 208 crop.
+      return `<circle cx="192" cy="144" r="130" fill="none" stroke="${tint}" stroke-width="10"/>${plate(120, 240, 144, 26, entry.code)}`
     default:
       throw new Error(`no placeholder shape for ${entry.name}`)
   }

@@ -1,6 +1,6 @@
 /* One chibi: a stack of absolutely-positioned PNG layers on the 384×448 frame (spec §3). `full` shows the whole
-   frame at its native 6:7 ratio, clipped by the box itself. `head` clips a *round* viewport over the 160×160
-   avatar crop at (112, 48) — but only layers 10–80: the frame-border item (layer 90, D01 §5) is drawn 208×208
+   frame at its native 6:7 ratio, clipped by the box itself. `head` clips a *round* viewport over the 208×208
+   avatar crop at (88, 40) — but only layers 10–80: the frame-border item (layer 90, D01 §5) is drawn 260×260
    around the crop's own centre, meant to ring the round avatar from *outside* it, so `Chibi` renders it as a
    sibling of the clipped `.clip` box rather than a member of it, and this root stays `overflow: visible` in head
    mode so that ring is not cut off. `flex: none` on the root: a `Chibi` sitting in a flex row (a profile page next
@@ -10,7 +10,7 @@
    `.crop` carries the un-cropped layer stack at its native 384:448 proportions; for `full` that is all of it
    (top/left/width/height below fill the box exactly, since it shares the outer box's own 6:7 ratio). For `head`,
    `.headCrop` overrides top/left/width/height — on both `.crop` and the unclipped frame-border `<img>` — with
-   *percentages of the root's own box* (112/160, 48/160, 384/160, 448/160), not a fixed pixel size computed from
+   *percentages of the root's own box* (88/208, 40/208, 384/208, 448/208), not a fixed pixel size computed from
    the `size` prop: an ancestor can still constrain the root's rendered size below `size` (a narrow flex column, a
    `max-width`) even with `flex: none`, and pixels sized for the prop rather than the box actually painted showed
    the wrong window — a fixed geometry computed once for `size=192` kept describing a 192 px box's crop even once
@@ -70,13 +70,15 @@
 
 /* The head-crop geometry itself: applied alongside `.crop` (the clipped inner box) and alongside `.layer` (the
    unclipped frame-border overlay) — declared after both so it wins the properties they share, at equal
-   specificity, by source order. Percentages of the root's own (`position: relative`) box, exact because
-   112/160 = 0.7, 48/160 = 0.3, 384/160 = 2.4, 448/160 = 2.8. */
+   specificity, by source order. Percentages of the root's own (`position: relative`) box: 88/208 = 42.3077%,
+   40/208 = 19.2308%, 384/208 = 184.6154%, 448/208 = 215.3846%.
+   2026-09-15: moved from -70%/-30%/240%/280% (the 112/48/160/384/448 crop) after the first real F01 picture
+   showed that crop cutting the face at the eyes. */
 .headCrop {
-  left: -70%;
-  top: -30%;
-  width: 240%;
-  height: 280%;
+  left: -42.3077%;
+  top: -19.2308%;
+  width: 184.6154%;
+  height: 215.3846%;
 }
 
 @keyframes chibiBounce {

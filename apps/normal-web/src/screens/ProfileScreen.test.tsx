@@ -41,7 +41,7 @@ const OUTFIT: ItemDto = {
   asset: { layer: 40, file: 'item_outfit_royal_robe01_L40', fitsAvatarCrop: false },
 }
 
-const AVATAR_CATALOG: AvatarCatalogDto = { frame: { w: 384, h: 448 }, crop: { x: 112, y: 48, size: 160 }, bases: [BASE_F01], manifestVersion: 1 }
+const AVATAR_CATALOG: AvatarCatalogDto = { frame: { w: 384, h: 448 }, crop: { x: 88, y: 40, size: 208 }, bases: [BASE_F01], manifestVersion: 1 }
 
 const AVATAR: AvatarConfigDto = {
   v: 3,

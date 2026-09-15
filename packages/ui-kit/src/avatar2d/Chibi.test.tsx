@@ -74,17 +74,17 @@ describe('Chibi', () => {
   // describing a box that size no longer was, the moment anything external (a flex parent, a `max-width`)
   // rendered the root smaller than `size` asked for (round 4 — a profile page 192 px chibi squeezed to 114 px by
   // a narrow flex column showed the hairline and one cheek instead of the head). Both are why the geometry below
-  // is a *static, size-independent percentage* of the root's own box (112/160, 48/160, 384/160, 448/160) rather
+  // is a *static, size-independent percentage* of the root's own box (88/208, 40/208, 384/208, 448/208) rather
   // than anything computed per render: it is correct for whatever the root turns out to be, not just for the
   // `size` it was asked to be.
-  it.each([undefined, 40, 96, 160, 512])('the head crop is -70%%/-30%%/240%%/280%% of the root box regardless of size=%s', (size) => {
+  it.each([undefined, 40, 96, 160, 512])('the head crop is -42.3077%%/-19.2308%%/184.6154%%/215.3846%% of the root box regardless of size=%s', (size) => {
     const { container } = render(<Chibi subject={SUBJECT} frame="head" size={size} />)
     const crop = container.querySelector('[class*="crop"]') as HTMLElement
     const computed = getComputedStyle(crop)
-    expect(computed.left).toBe('-70%')
-    expect(computed.top).toBe('-30%')
-    expect(computed.width).toBe('240%')
-    expect(computed.height).toBe('280%')
+    expect(computed.left).toBe('-42.3077%')
+    expect(computed.top).toBe('-19.2308%')
+    expect(computed.width).toBe('184.6154%')
+    expect(computed.height).toBe('215.3846%')
     // Not inline, either: a static class rule, so nothing here is computed from `size` at all.
     expect(crop.style.left).toBe('')
     expect(crop.style.width).toBe('')
@@ -108,7 +108,7 @@ describe('Chibi', () => {
     expect(root.style.height).toBe('')
   })
 
-  // D01 §5: the frame border (layer 90) is a 208×208 ring around the crop's centre — outside the 160×160 crop
+  // D01 §5: the frame border (layer 90) is a 260×260 ring around the crop's centre — outside the 208×208 crop
   // window, so clipping it with the rest of the head-crop stack cuts it off entirely (the regression this guards:
   // the FRAME rows on the playground showed a plain head crop with no ring at all).
   it.each([undefined, 96, 160])('draws the frame-border layer unclipped, outside the round crop box, with the same geometry as the clipped layers (size=%s)', (size) => {
@@ -134,8 +134,8 @@ describe('Chibi', () => {
     expect(frameStyle.top).toBe(cropStyle.top)
     expect(frameStyle.width).toBe(cropStyle.width)
     expect(frameStyle.height).toBe(cropStyle.height)
-    expect(frameStyle.left).toBe('-70%')
-    expect(frameStyle.width).toBe('240%')
+    expect(frameStyle.left).toBe('-42.3077%')
+    expect(frameStyle.width).toBe('184.6154%')
   })
 
   it('drops the frame-border layer entirely in full frame — nothing left to un-clip', () => {

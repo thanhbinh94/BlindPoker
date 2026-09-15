@@ -74,7 +74,7 @@ export interface AssetRefDto {
   /** A head that hides the base's hair layers. */
   hidesHairFront?: boolean
   hidesHairBack?: boolean
-  /** Whether this layer falls inside the 160×160 avatar crop the portrait is cut from. */
+  /** Whether this layer falls inside the 208×208 avatar crop the portrait is cut from. */
   fitsAvatarCrop: boolean
 }
 

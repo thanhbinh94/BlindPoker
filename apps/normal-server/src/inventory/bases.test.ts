@@ -23,7 +23,7 @@ afterAll(() => {
 const manifest: AvatarManifest = {
   version: 1,
   frame: { w: 384, h: 448 },
-  crop: { x: 112, y: 48, size: 160 },
+  crop: { x: 88, y: 40, size: 208 },
   files: {
     base_f01_L20: { layer: 20, w: 384, h: 448, bytes2x: 1 },
     base_f01_L30: { layer: 30, w: 384, h: 448, bytes2x: 1 },

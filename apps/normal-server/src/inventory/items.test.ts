@@ -44,7 +44,7 @@ const LAYER_OF: Partial<Record<ItemSlot, AssetRef['layer']>> = { head: 80, face:
 const MANIFEST: AvatarManifest = {
   version: 1,
   frame: { w: 384, h: 448 },
-  crop: { x: 112, y: 48, size: 160 },
+  crop: { x: 88, y: 40, size: 208 },
   files: {
     item_outfit_casual01_L40: { layer: 40, w: 1, h: 1, bytes2x: 1 },
     item_head_beanie01_L80: { layer: 80, w: 1, h: 1, bytes2x: 1 },

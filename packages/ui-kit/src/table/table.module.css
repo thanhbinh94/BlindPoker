@@ -297,7 +297,7 @@
    a dark well behind it. Whatever the app hands over is clipped to the circle and stretched to fill it, so a picture
    sized for a 32 px bar and a face drawn on a 64-unit grid both land on the same rim.
 
-   `overflow: visible`, not `hidden`: D01 §7 has the `frame` item's ring sit *outside* the 160×160 avatar crop, on
+   `overflow: visible`, not `hidden`: D01 §7 has the `frame` item's ring sit *outside* the 208×208 avatar crop, on
    purpose, so it always shows at the table (§7, "luôn hiển thị tại bàn chơi") — clipping this box would cut that
    ring off before it ever left the seat plate. The circle itself still comes from `Chibi`'s own `.clip`, which
    crops the head layers to round from *inside* this box, so nothing square ever shows here regardless. */
