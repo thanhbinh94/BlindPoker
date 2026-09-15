@@ -63,6 +63,12 @@ layer 60, `hidesHairBack` drops layer 20. A hood covers the hair from every angl
 so it sets both; a beret sits on top of it and sets neither. `head_hood_black01` is the one stage-1 item
 that needs both (`apps/normal-server/data/items.json`).
 
+2026-09-15: AI bases are flat — one picture with hair, face and body baked together — so `ingest --as base`
+writes L30 as the whole figure, the neutral face L50 as the whole head region (the portrait crop above
+`FACE_LIMIT_Y` = 250), and L20/L60 as empty frames marked `"empty": true`; a hood-style item that hides
+hair can therefore only cover what its own picture covers, because the hide rules have no separate hair
+layer left to drop.
+
 Bots draw only two of these layers — `body` (30) and their own expression `face` (50) — because a bot
 has no wardrobe at all (`packages/ui-kit/src/avatar2d/layers.ts`, `layersFor`).
 
@@ -153,6 +159,10 @@ Every manifest entry carries exactly one of two flags, never both: `"placeholder
 so running it again after some art has landed cannot silently overwrite that art with a shape. There is
 no path back from `real` to `placeholder`: ingesting is the one-way door design §9's roadmap describes,
 walked one item at a time as pictures are produced.
+
+A real entry may also carry `"empty": true`: an AI base's hair layers, which ship as fully transparent
+frames (§2). `avatar:check` holds such a layer to being fully transparent at both densities (C3) and
+reports C4–C6 as `-` for it; a fully transparent layer *without* the mark fails C3.
 
 `apps/normal-web/public/avatar/` ships whatever mix of the two the repository is currently at. Nothing
 downstream — the server's catalogue, the kit's `Chibi`, any test — treats the two differently; a
