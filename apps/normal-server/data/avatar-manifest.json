@@ -5,9 +5,9 @@
     "h": 448
   },
   "crop": {
-    "x": 112,
-    "y": 48,
-    "size": 160
+    "x": 88,
+    "y": 40,
+    "size": 208
   },
   "files": {
     "base_f01_L20": {
@@ -616,42 +616,42 @@
       "layer": 90,
       "w": 384,
       "h": 448,
-      "bytes2x": 18665,
+      "bytes2x": 21433,
       "placeholder": true
     },
     "item_frame_founder_L90": {
       "layer": 90,
       "w": 384,
       "h": 448,
-      "bytes2x": 18867,
+      "bytes2x": 21633,
       "placeholder": true
     },
     "item_frame_gold_L90": {
       "layer": 90,
       "w": 384,
       "h": 448,
-      "bytes2x": 18259,
+      "bytes2x": 21038,
       "placeholder": true
     },
     "item_frame_monthly_L90": {
       "layer": 90,
       "w": 384,
       "h": 448,
-      "bytes2x": 18624,
+      "bytes2x": 21366,
       "placeholder": true
     },
     "item_frame_silver_L90": {
       "layer": 90,
       "w": 384,
       "h": 448,
-      "bytes2x": 18355,
+      "bytes2x": 21142,
       "placeholder": true
     },
     "item_frame_veteran_L90": {
       "layer": 90,
       "w": 384,
       "h": 448,
-      "bytes2x": 18961,
+      "bytes2x": 21761,
       "placeholder": true
     },
     "item_head_beanie01_L80": {
