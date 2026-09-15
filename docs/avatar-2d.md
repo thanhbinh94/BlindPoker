@@ -32,13 +32,17 @@ invalidates every picture that exists (design §3, D01 §3):
 | Body box | 224 × 336 at (80, 72) |
 | Vertical axis | x = 192 |
 | Baseline | y = 408 |
-| Avatar crop (the round portrait) | 160 × 160 at (112, 48) |
-| Frame ring (the `frame` item's own decoration) | 208 × 208, centred on the crop |
+| Avatar crop (the round portrait) | 208 × 208 at (88, 40) |
+| Frame ring (the `frame` item's own decoration) | 260 × 260, centred on the crop |
 
 The **crop** is what a seat plate, the lobby bar and a wardrobe tile actually show — `Chibi frame="head"`
 in the kit crops to it with `object-position`, so a "head" item only has to sit inside that box, not be
 drawn to it. The **frame ring** sits *outside* the crop on purpose (D01 §5): a `frame` item decorates the
-round portrait's rim, and drawing it inside the crop's own 160×160 would clip it.
+round portrait's rim, and drawing it inside the crop's own 208×208 would clip it.
+
+2026-09-15: the crop moved from 160 × 160 at (112, 48) and the ring from 208 × 208 — the first real F01
+picture showed the old crop cutting the face at the eyes. The axis (x = 192) and the crop's centre y = 144
+are unchanged.
 
 ## 2. Layers, bottom to top, and the hide rules
 
@@ -134,7 +138,7 @@ testable without disturbing the committed artefact.
 | C2 | Nothing opaque on the outermost row or column |
 | C3 | The empty part really is empty: no alpha at all more than 3 px outside the solid shape |
 | C4 | No white fringe — the soft rim is the shape's own colour, not white bled in from the key |
-| C5 | `head`/`face` items fit inside the 160×160 crop |
+| C5 | `head`/`face` items fit inside the 208×208 crop |
 | C6 | An outfit covers the base's underwear (no coordinates in the design; `--skip C6` exists for it) |
 | C7 | The `@1x` is really the `@2x` scaled down, not redrawn separately |
 | C8 | The file name follows §3 above, with a layer that matches its slot |
@@ -159,7 +163,7 @@ placeholder is exactly as valid a layer as a real one, just not the picture the 
 `@bp/ui-kit`'s `Chibi` (`packages/ui-kit/src/avatar2d/Chibi.tsx`) takes a `ChibiConfig` — a `BaseRef`
 plus a `WearRef` per equipped slot — and stacks one `<img>` per layer `layersFor` returns (§2 above),
 positioned by CSS `z-index` rather than draw order, inside a box that is either the full 6:7 frame
-(`frame="full"`) or the round head-crop (`frame="head"`, cut to the 160×160 window by a percentage
+(`frame="full"`) or the round head-crop (`frame="head"`, cut to the 208×208 window by a percentage
 `left`/`top`/`width`/`height` on the layer stack, not `object-position` — a fixed geometry computed once
 from the `size` prop stayed wrong once an ancestor shrank the rendered box below `size`; a percentage of
 the root's own box is correct at whatever size it actually renders).

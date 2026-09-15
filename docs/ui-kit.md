@@ -218,7 +218,7 @@ go compact (avatar, name, stack, then bet and state badge side by side) so a thi
 
 The kit does render an avatar — a **chibi**: pre-rendered PNG layers on a shared frame, not a 3D rig or anything
 drawn at runtime. `Chibi` (`Chibi.tsx`) takes a `ChibiSubject` (a `ChibiConfig` — base plus equipped wearables — or
-a bot's `BotChibi`), an `expression` and a `frame` (`'full'` the whole body, `'head'` the round 160×160 crop), and
+a bot's `BotChibi`), an `expression` and a `frame` (`'full'` the whole body, `'head'` the round 208×208 crop), and
 stacks one `<img>` per layer `layersFor` (`layers.ts`) returns, z-ordered by layer number. `AvatarAssets`
 (`AvatarAssets.tsx`) is the context provider that resolves a layer name to a URL — `assetUrl(base, file, density)`
 — so a host app points the whole tree at wherever its avatar files are served from. `expressions.ts` exports

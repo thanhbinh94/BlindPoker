@@ -23,10 +23,12 @@ Nhân vật chibi đẹp ở mức minh hoạ chuyên nghiệp, sinh bằng côn
 - Khung ảnh 384 × 448; khung cơ thể 224 × 336 tại (80, 72); trục dọc x = 192; đường chân đế y = 408; đầu ≈ 149 px, thân 2,25 đầu; mắt ở 60–65 % chiều cao đầu. Bất biến sau món đầu tiên.
 - Lớp (dưới lên): 10 aura · 20 tóc sau · 30 thân nền · 40 outfit · 50 mặt (**6 biến thể biểu cảm**) · 60 tóc trước · 70 phụ kiện mặt · 80 mũ. **Thêm lớp 5 nền tròn của khung viền (phía sau aura) và lớp 90 khung viền (chỉ ở ảnh đại diện).**
 - Luật ẩn: `hides_hair_front`, `hides_hair_back` trên món `head`; `hides_eyes` chỉ vẽ đè.
-- Ảnh đại diện: cắt ô 160 × 160 tại (112, 48) từ ảnh đã ghép; hiển thị tròn; **ghế 40 px, thanh sảnh 32 px, profile 192 px** đều cắt từ ô này; khung viền 208 × 208 đè ngoài cùng.
+- Ảnh đại diện: cắt ô 208 × 208 tại (88, 40) từ ảnh đã ghép; hiển thị tròn; **ghế 40 px, thanh sảnh 32 px, profile 192 px** đều cắt từ ô này; khung viền 260 × 260 đè ngoài cùng.
 - Định dạng: PNG 32 bit sRGB; **hai mật độ @1x (384 × 448) và @2x (768 × 896)** (bỏ @3x: web không cần, giảm 1/3 dung lượng); sinh ở ≥ 1152 px cao rồi thu nhỏ. Mép có ≥ 1 px chuyển mềm, không viền trắng, không rác bán trong suốt.
 - Tên tệp: `[loại]_[slot]_[mã]_L[lớp]@[mật độ].png`; **thân nền có tiền tố mã thân**: `base_f01_L30@2x.png`, `base_f01_face_happy_L50@2x.png`; món dùng chung mọi thân: `item_head_tophat01_L80@2x.png`.
 - Nghiệm thu: 10 tiêu chí của tài liệu 01 §10, kiểm tự động bởi script §6 (kích thước, khung, trong suốt, viền trắng, vùng cắt) và bằng mắt (phong cách, nhận ra ở 3 cỡ).
+
+**2026-09-15: crop moved to 208×208 at (88,40), ring 260, after the first real F01 picture.** Ảnh F01 thật đầu tiên cho thấy ô cắt cũ (160 × 160 tại (112, 48)) cắt cụt khuôn mặt ngay tại mắt; trục dọc x = 192 và tâm dọc y = 144 giữ nguyên.
 
 ## 4. Phong cách và khối khoá nhân vật
 ### 4.1 Phong cách (rút từ ảnh tham khảo, áp cho mọi ảnh sinh)
@@ -59,7 +61,7 @@ Khối chung (dán sau khối khoá): POSE AND FRAMING, OUTFIT (thân nền: áo
 - `face` (4): glasses_round_gold01 (thay `accessory_glasses`), sunglasses01 (thay `accessory_sunglasses`), masquerade01 (thay `accessory_mask`), eyepatch01.
 - `outfit` (6): casual01 (mặc định: áo thun + jeans + sneakers), dealer01, tuxedo01, royal_robe01, tet_red01, champion01 (thay `jacket_champion`).
 - `aura` (8, sinh riêng không nhân vật, được phép bán hoạ, tài liệu 02 §5.5): water01, fire01, wind01, earth01, lightning01, sakura01, gold_cards01 (thay `ring_royal`), ice01.
-- `frame` (6, sinh riêng, vòng 208 × 208 tâm rỗng 192): theo độ hiếm bronze, silver, gold, monthly, veteran, founder.
+- `frame` (6, sinh riêng, vòng 260 × 260 tâm rỗng 250): theo độ hiếm bronze, silver, gold, monthly, veteran, founder.
 - `title` (5) và `badge` (5): giữ nguyên id, không hình.
 
 ## 5. Mô hình dữ liệu
@@ -84,7 +86,7 @@ Trường mới `asset: { layer: number; file: string; hidesHairFront?: boolean;
 - Ảnh gốc AI lưu ở `assets/avatar-src/` (gitignore, kèm README ghi công cụ, seed, ngày).
 
 ## 7. Client
-- ui-kit `avatar2d`: `ChibiConfig` → danh sách lớp `{ order, url }`; `Chibi` vẽ chồng `<img>` trong một hộp tỉ lệ 6:7 (hoặc một `<canvas>` ghép sẵn cho ghế để giảm số phần tử: 9 ghế × 8 lớp = 72 ảnh là chấp nhận được, canvas để giai đoạn 2); `frame='head'` dùng `object-position` theo ô cắt 160 × 160; `expression` chọn lớp 50; ảnh tải lười, `srcset` @1x/@2x; băm theo cấu hình. Biểu cảm theo ván giữ nguyên luật spec 08 §3.4. Tài sản do app cung cấp qua `assetBase` (Normal: `/avatar/`), Lite: gói sẵn thân nền `f01`/`m01` + bot.
+- ui-kit `avatar2d`: `ChibiConfig` → danh sách lớp `{ order, url }`; `Chibi` vẽ chồng `<img>` trong một hộp tỉ lệ 6:7 (hoặc một `<canvas>` ghép sẵn cho ghế để giảm số phần tử: 9 ghế × 8 lớp = 72 ảnh là chấp nhận được, canvas để giai đoạn 2); `frame='head'` dùng `object-position` theo ô cắt 208 × 208; `expression` chọn lớp 50; ảnh tải lười, `srcset` @1x/@2x; băm theo cấu hình. Biểu cảm theo ván giữ nguyên luật spec 08 §3.4. Tài sản do app cung cấp qua `assetBase` (Normal: `/avatar/`), Lite: gói sẵn thân nền `f01`/`m01` + bot.
 - Bot: 8 bot **sinh AI theo cùng khối khoá tỉ lệ nhưng là robot** (2 ảnh mỗi bot: thường, vui; các biểu cảm khác dùng thường) — người dùng sinh; tạm thời dùng bot SVG hiện có tới khi có ảnh.
 - Tủ đồ: tab Thân nền (2 ô), Mũ, Mặt, Trang phục, Aura, Khung, Danh hiệu & Huy hiệu; xem trước 192 px + chọn biểu cảm; ô món = ảnh món cắt theo hộp bao trên nền độ hiếm; khoá kèm cách nhận; thanh Outfit 5 ô. Profile: ảnh đại diện 192 px trong khung viền + aura, nền tối. Gỡ 3D và CSP như spec 08 §6.2.
 

@@ -122,13 +122,15 @@ Mũ đội hờ lên đỉnh đầu, như mũ nồi hay băng đô, không ẩn 
 
 | Hạng mục | Giá trị |
 |---|---|
-| Vùng cắt trên khung toàn thân | Ô vuông 160 nhân 160 điểm ảnh, góc trên trái tại ngang 112, dọc 48 |
-| Kích thước hiển thị | 192 nhân 192 điểm ảnh, tức phóng to 1,2 lần |
-| Hình dạng hiển thị | Tròn, đường kính 192, bo bằng mặt nạ tròn ở phía ứng dụng |
+| Vùng cắt trên khung toàn thân | Ô vuông 208 nhân 208 điểm ảnh, góc trên trái tại ngang 88, dọc 40 |
+| Kích thước hiển thị | 250 nhân 250 điểm ảnh, tức phóng to khoảng 1,2 lần |
+| Hình dạng hiển thị | Tròn, đường kính 250, bo bằng mặt nạ tròn ở phía ứng dụng |
 | Lớp được ghép vào ảnh đại diện | Tất cả các lớp từ 10 đến 80 |
-| Khung viền | Vẽ riêng thành lớp tròn 208 nhân 208 điểm ảnh, đặt đè lên ngoài cùng |
+| Khung viền | Vẽ riêng thành lớp tròn 260 nhân 260 điểm ảnh, đặt đè lên ngoài cùng |
 
 Vùng cắt được đặt để chứa trọn mũ, khuôn mặt, phụ kiện mặt và phần vai của bộ trang phục. Mọi món thuộc SLOT_HEAD và SLOT_FACE phải nằm trọn trong vùng cắt này. Món nào tràn ra ngoài vùng cắt sẽ bị cắt cụt tại bàn chơi, và đây là lỗi thiết kế món, không phải lỗi hệ thống.
+
+**2026-09-15**: vùng cắt dời từ ô vuông 160 nhân 160, góc trên trái tại ngang 112, dọc 48, sang các con số ở bảng trên. Bức ảnh F01 thật đầu tiên cho thấy vùng cắt cũ cắt cụt khuôn mặt ngay tại mắt; trục dọc giữa thân (ngang 192) không đổi.
 
 ---
 
@@ -154,7 +156,7 @@ Với bộ trang phục trọn gói, biểu tượng là hình bộ đồ gấp 
 |---|---|
 | Kích thước lớp hiệu ứng nền | 384 nhân 448, cùng khung toàn thân |
 | Vùng được phép vẽ | Toàn bộ khung, nhưng phần nằm sau khung cơ thể sẽ bị nhân vật che |
-| Kích thước khung viền ảnh đại diện | 208 nhân 208, tâm tại giữa, phần trong đường kính 192 để trống |
+| Kích thước khung viền ảnh đại diện | 260 nhân 260, tâm tại giữa, phần trong đường kính 250 để trống |
 | Độ trong suốt | Được phép dùng độ trong một phần, ví dụ vòng sáng mờ 50 phần trăm |
 
 Đây là loại phần thưởng rẻ nhất để sản xuất và luôn hiển thị tại bàn chơi, nên được ưu tiên trong lộ trình phần thưởng đăng nhập liên tục.
