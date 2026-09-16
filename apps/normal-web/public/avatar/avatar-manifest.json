@@ -37,15 +37,15 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 9139,
-      "placeholder": true
+      "bytes2x": 272603,
+      "real": true
     },
     "base_f01_face_happy_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 9586,
-      "placeholder": true
+      "bytes2x": 268107,
+      "real": true
     },
     "base_f01_face_neutral_L50": {
       "layer": 50,
@@ -58,15 +58,15 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 9600,
-      "placeholder": true
+      "bytes2x": 273801,
+      "real": true
     },
     "base_f01_face_sleep_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 9150,
-      "placeholder": true
+      "bytes2x": 278111,
+      "real": true
     },
     "base_f01_face_surprised_L50": {
       "layer": 50,
