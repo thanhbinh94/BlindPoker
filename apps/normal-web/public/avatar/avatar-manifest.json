@@ -72,8 +72,8 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 10101,
-      "placeholder": true
+      "bytes2x": 283460,
+      "real": true
     },
     "base_m01_L20": {
       "layer": 20,
@@ -597,8 +597,8 @@
       "layer": 70,
       "w": 384,
       "h": 448,
-      "bytes2x": 7520,
-      "placeholder": true
+      "bytes2x": 289684,
+      "real": true
     },
     "item_face_masquerade01_L70": {
       "layer": 70,
@@ -711,8 +711,8 @@
       "layer": 80,
       "w": 384,
       "h": 448,
-      "bytes2x": 7465,
-      "placeholder": true
+      "bytes2x": 298050,
+      "real": true
     },
     "item_outfit_casual01_L40": {
       "layer": 40,
@@ -732,8 +732,8 @@
       "layer": 40,
       "w": 384,
       "h": 448,
-      "bytes2x": 9245,
-      "placeholder": true
+      "bytes2x": 296205,
+      "real": true
     },
     "item_outfit_royal_robe01_L40": {
       "layer": 40,
