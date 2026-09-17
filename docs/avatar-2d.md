@@ -1,6 +1,7 @@
 # The chibi avatar: assets and pipeline
 
-The Normal edition's avatar is a **chibi**: two locked bases (`f01`, `m01`), each drawn as a stack of
+The Normal edition's avatar is a **chibi**: a base — `f01` and `m01` today, and whatever
+`apps/normal-server/data/avatar-bases.json` names tomorrow (§9.1) — drawn as a stack of
 PNG layers on a fixed frame, dressed from a wardrobe of items that are themselves PNG layers. Nothing
 is 3D, nothing is rendered on the server, and nothing is rendered by the browser either beyond laying
 out `<img>` tags — every picture that reaches a screen was drawn (or generated) ahead of time and
@@ -124,8 +125,8 @@ pnpm --filter @bp/normal-web avatar:ingest -- <picture.png> --as expr:f01:happy
 pnpm --filter @bp/normal-web avatar:ingest -- <picture.png> --as item:head:tophat01
 # One generated (or hand-drawn) picture in, one layer at @1x and @2x out, plus its manifest entry.
 # `base:` and `expr:` ingest a base's own body or one of its six expressions; `item:<slot>:<code>`
-# ingests a wardrobe piece, always drawn on F01 (D02 §5) and shared with M01 automatically — the two
-# bases are built to the same silhouette. Background removal keys off #00FF00 by default (`--white`
+# ingests a wardrobe piece, always drawn on F01 (D02 §5) and shared with every other base automatically —
+# they are built to the same silhouette, and an item layer carries no skin (§4.1.1). Background removal keys off #00FF00 by default (`--white`
 # for a white background instead) and, for an item, the layer is found by *diffing against the base's
 # own body* rather than by any manual selection (§4.1), and written together with its inventory icon
 # (§4.2). `--dry-run` prints what would happen and writes nothing. `--color-tol`, `--min-region` and
@@ -138,7 +139,7 @@ pnpm --filter @bp/normal-web avatar:check
 # design and occasionally needs a human override.
 
 pnpm --filter @bp/normal-web avatar:sheet
-# Composes every item on both bases, across all six expressions, into docs/avatar-2d-sheet.png — the
+# Composes every item on every base, across all six expressions, into docs/avatar-2d-sheet.png — the
 # eyeballed style gate before a picture is ever committed (design §6, §9).
 ```
 
@@ -168,22 +169,55 @@ or head above a collar is a visible defect even where F01's own layers would hid
    `shadowTol`). For an outfit the window reaches 4 px (@1x) in the 4 rows under the chin line
    (`CHIN_BAND`), where the picture's own chin sits a little off the base's once the body is registered.
 4. **Slot limits**: `head` y < 260; `face` inside the crop and y < 250; `outfit` nothing above the chin line
-   y = 236 (`OUTFIT_TOP_Y`), plus the base's own body below it except inside the head region, which the
-   base's face layer paints anyway (D01 §10.7's underwear coverage).
+   y = 236 (`OUTFIT_TOP_Y`), plus as much of the base as the underwear rule needs — see §4.1.1.
 5. **Clean-up**: regions under `minRegion` dropped; for `head`/`face` also regions under 5 % of the
    largest; a small closing (`closeRadius`) and hole fill (`maxHole`) so a hat's crown is not cracked where
    the base's hair outline runs under it.
 6. **Cover the base's limbs** (outfits only, fix round 2): below y 236, outside the head region, every
-   pixel the base inks that the outfit layer does not cover solidly, within 5 px (`coverReach`) of a solid
-   outfit pixel, joins the layer with the base's alpha and the outfit's own edge colour bled outward — so a
-   generated figure whose arms and legs are a little narrower than the base's does not leave the base's
-   outline beside them. Farther than that nothing is added.
+   *non-skin* pixel the base inks that the outfit layer does not cover solidly, within 5 px (`coverReach`)
+   of a solid **clothing** pixel of the layer, joins the layer with the base's alpha and the outfit's own
+   edge colour bled outward — so a generated figure whose sleeves are a little narrower than the base's
+   arms does not leave the base's outline beside them. Farther than that nothing is added.
 7. **Edge** (`cutItem`): 1 px dilation and a 1 px feather, with the soft edge taking its colour from the
-   item's own pixels next to it rather than from the hair or skin it was drawn over.
+   item's own pixels next to it rather than from the hair or skin it was drawn over. The two places the
+   layer takes the *base's* alpha — the underwear union and the limb cover — are re-applied after the
+   feather, so where the layer ends because the base ends, its edge is the base's own edge rather than a
+   second, softer one with the base's outline showing through it.
 
-The defaults (`DIFF_DEFAULTS` in `extract.mjs`: `colorTol` 36, `shadowTol` 14, `minRegion` 100 px @1x,
-`closeRadius` 1.5 px @1x, `maxHole` 400 px @1x) were tuned by eye on the first three real items
+The defaults (`DIFF_DEFAULTS` in `extract.mjs`: `colorTol` 36, `shadowTol` 14, `skinTol` 24, `minRegion`
+100 px @1x, `closeRadius` 1.5 px @1x, `maxHole` 400 px @1x) were tuned by eye on the first three real items
 (`tophat01`, `glasses_round_gold01`, `dealer01`), rendering each layer alone and on F01.
+
+### 4.1.1 An outfit layer holds clothing only (2026-09-17)
+
+Items are shared by every base, and the bases after F01 share her body and pose but **not her skin tone**.
+An outfit layer that carried F01's bare thighs would put cream legs on a darker figure, so the rule is flat:
+**no pixel of the base's skin is ever part of an outfit layer.**
+
+"The base's skin" is measured from the base being ingested on, not from a constant. `baseSkinColour`
+(`frame.mjs`) takes the dominant colour of `SKIN_WINDOW` — x ∈ [140, 244], y ∈ [124, 250], the middle of
+that base's own face, narrow enough that the hair beside it does not get a vote — and `skinTol` (24, RGB
+distance) is how near a pixel has to be. A pixel of the *outfit picture* is skin when it matches the base
+at the same registered position to within `skinTol`, or when it is that skin colour anywhere the base inks;
+either way the difference (step 3) drops it.
+
+Two things used to put it back, and both are now narrowed:
+
+- **The union with the base.** It used to take the base's whole body below the chin. It now takes only the
+  **underwear band** (`UNDERWEAR_BAND`, y 176–300 at full width — the band has no `x`), outside the head
+  region, and only where the outfit picture *changed* that pixel by more than `colorTol` **or** the base's
+  own pixel there is not skin. So the grey tank top and shorts are covered by whatever the picture shows
+  over them — even a skin-coloured swimsuit cut — while a bare arm or thigh outside the band is never
+  copied, and the base draws its own.
+- **The limb cover.** It bleeds only from the layer's *clothing* pixels, and only onto the base's *non-skin*
+  pixels: it hides the base's line art standing beside a narrow sleeve, which is the double outline it was
+  written for, and leaves the limb itself alone.
+
+C6 was re-cut to match (`underwearRegion` in `checks.mjs`). The band's dominant colour on a real base is
+her *face* — the band starts at y 176 and half of it is cheek — so the region now excludes the head region
+and the base's own skin first, and the modal colour of what is left is the underwear. An outfit is measured
+against the bases whose body layer the manifest marks `real`, because holding real art to a stand-in's
+square shoulders reports a fault in neither.
 
 ### 4.2 Inventory icons
 
@@ -211,7 +245,7 @@ preview's job: picking an owned tile puts it on the character there, and saving 
 | C3 | The empty part really is empty: no alpha at all more than 3 px outside the solid shape |
 | C4 | No white fringe — the soft rim is the shape's own colour, not white bled in from the key |
 | C5 | `head`/`face` items fit inside the 208×208 crop |
-| C6 | An outfit covers the base's underwear (no coordinates in the design; `--skip C6` exists for it) |
+| C6 | An outfit covers the base's underwear — the band's non-skin pixels, on the bases whose body is real art (§4.1.1); `--skip C6` exists for it |
 | C7 | The `@1x` is really the `@2x` scaled down, not redrawn separately |
 | C8 | The file name follows §3 above, with a layer that matches its slot |
 | C9 | The manifest lists it, at that layer and that frame size |
@@ -272,8 +306,9 @@ blob is assembled. There is no dev-time equivalent of that copy (`docs/known-lim
 
 ## 9. Adding an item, end to end
 
-1. **The picture.** Draw it, or generate it against the locked block (D02, always **on F01** — the two
-   bases share a silhouette, so one picture serves both) and green-screen or white-background it per
+1. **The picture.** Draw it, or generate it against the locked block (D02, always **on F01** — every base
+   shares her silhouette, and the layer carries no skin, so one picture serves them all: §4.1.1) and
+   green-screen or white-background it per
    D01 §8. Then `avatar:ingest <file> --as item:<slot>:<code>` (§4 above); `--dry-run` first if unsure,
    and `avatar:check <name>` after, since ingest does not run the acceptance criteria itself.
 2. **The catalogue.** Add the row to `apps/normal-server/data/items.json`: `id`, `slot`, `rarity`,
@@ -300,3 +335,37 @@ blob is assembled. There is no dev-time equivalent of that copy (`docs/known-lim
 
 There is no drawing step and no per-item code on the client: `Chibi` is generic over whatever layers the
 manifest and the catalogue hand it.
+
+## 9.1 Adding a base, end to end
+
+Since 2026-09-17 a base is **data**: `BaseId` is `string` on the server (`inventory/slots.ts`), in the web
+app (`src/api.ts`) and in the kit (`makeBase`), and what makes a given string a base is the registry,
+`apps/normal-server/data/avatar-bases.json`. Adding `f02` is art, one JSON entry and one name per language —
+no union to widen in three packages, and no tile to add to the wardrobe.
+
+Two lists say what exists, and they are not interchangeable:
+
+| | |
+|---|---|
+| `BASES` (`scripts/avatar-pipeline/manifest.mjs`) | **the source of truth.** It is what `placeholder` draws a full stand-in set for, what `stageOneFiles` names, what `check` walks and what `sheet` composes. Art first. |
+| `data/avatar-bases.json` | the server's registry, which *mirrors* it. Every entry names seven manifest files and `loadBases` refuses at boot any name the committed manifest does not list, so a base added here before its layers exist fails fast. |
+
+The order, therefore:
+
+1. **The list.** Add the id to `BASES` and run `avatar:placeholder`. Nine stand-in files appear — `L20`,
+   `L30`, `L60` and six expressions — in their own skin, hair and underwear tones, so a sheet of three bases
+   reads as three characters rather than one drawn three times. The app builds and runs from here.
+2. **The pictures.** Seven of them: the figure (`--as base:f02`) and five more expressions
+   (`--as expr:f02:happy`, …; the base's own ingest writes `neutral`). Generate them against D02's locked
+   block, on the same canvas as F01 — same body, same pose, its own head, hair and skin. Then
+   `avatar:check`, and `avatar:sheet` to look at it beside the others.
+3. **The registry entry.** A `bases.f02` `nameKey`, the three `layers` and the six `faces`, named exactly as
+   `ingest` wrote them. `loadBases` validates every one against the manifest, requires `DEFAULT_BASE` to be
+   present, and holds an id to `[a-z][a-z0-9]*` because it ends up inside a file name.
+4. **The name, in both languages.** `bases.f02` in `apps/normal-web/src/locales/vi/normal.json` *and*
+   `.../en/normal.json`. `locales.test.ts` fails if the registry names a base neither language does;
+   `bases.f02` and `bases.f03` are already written, ahead of any art.
+5. **Nothing else.** `/api/catalog/avatar` answers with every registry entry in the file's own order, the
+   wardrobe's base tab renders one tile per entry, an item layer is worn unchanged (§4.1.1 is what makes
+   that true across skin tones), and a stored config naming a base the registry has since dropped falls back
+   to `DEFAULT_BASE` on read while `PUT` refuses it with `INVALID_BASE`.

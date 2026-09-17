@@ -11,7 +11,7 @@
  * exists. They are exported rather than repeated because four other files need them: the extraction
  * rules, the ten checks, the review sheet and — through the manifest — the renderer.
  */
-import { alphaBBox, placeOnCanvas, resizePicture } from './png.mjs'
+import { alphaBBox, colourDistance, modalColour, placeOnCanvas, resizePicture } from './png.mjs'
 
 /** D01 §3.1. */
 export const FRAME = { w: 384, h: 448 }
@@ -47,9 +47,13 @@ export const LAYERS = {
  *
  * D01 §10.7 asks that an outfit leave none of the base's underwear showing, and gives no coordinates
  * for it, because a person looking at the picture does not need any. The pipeline does: the band is the
- * body between the chin and the hips, and *within* it the underwear is whatever colour covers most of
- * it — the base's own dominant tone there — to a tolerance of `UNDERWEAR_TOLERANCE`. Skin, line art and
- * the odd stray highlight fall outside that tolerance and are not held against the outfit.
+ * body between the chin and the hips, and *within* it the underwear is the dominant colour of everything
+ * that is neither the head region nor the base's own skin (`underwearRegion` in checks.mjs, and
+ * `baseSkinColour` below), to a tolerance of `UNDERWEAR_TOLERANCE`. Line art and the odd stray highlight
+ * fall outside that tolerance and are not held against the outfit.
+ *
+ * The band is a full-width rectangle: it has a `y0` and a `y1` and no `x` at all, which is also exactly
+ * how much of the base an outfit layer is allowed to absorb (`underwearUnion` in extract.mjs).
  */
 export const UNDERWEAR_BAND = { y0: 176, y1: 300 }
 export const UNDERWEAR_TOLERANCE = 24
@@ -80,6 +84,32 @@ export const TORSO_COLUMN = { x0: 150, x1: 234, y0: 236 }
  * exactly at the head top it would leave a stub standing beside a hat.
  */
 export const STRAND_MARGIN = 6
+
+/**
+ * Where a base's own skin colour is measured (2026-09-17, phase 2): the middle of the face, from below
+ * the eye line down to the end of the head region.
+ *
+ * The bases about to be added share F01's body and pose but not her skin, so "is this pixel skin?" has
+ * to be asked of *each base* rather than of one hard-coded tone. The window is the one part of every
+ * base that is skin by construction — cheeks, chin and the neck under them — narrow enough (x ∈ [140,
+ * 244], a quarter of the crop either side of the axis) that the hair hanging beside the face does not
+ * get a vote. `modalColour` over it is the base's skin; `isSkin` is every other pixel's distance to it.
+ */
+export const SKIN_WINDOW = { x0: 140, x1: 244, y0: 124, y1: FACE_LIMIT_Y }
+/** How far (RGB distance) a pixel may be from that colour and still be the base's own skin. */
+export const SKIN_TOLERANCE = 24
+
+/** The base's skin colour, in the frame's own units at `density`, or `null` on an empty window. */
+export function baseSkinColour(pic, density = 1) {
+  return modalColour(pic, (x, y) =>
+    x >= SKIN_WINDOW.x0 * density && x < SKIN_WINDOW.x1 * density &&
+    y >= SKIN_WINDOW.y0 * density && y < SKIN_WINDOW.y1 * density)
+}
+
+/** Whether an RGB triple is that base's skin. A base with no measurable skin calls nothing skin. */
+export function isSkin(r, g, b, skin, tolerance = SKIN_TOLERANCE) {
+  return skin !== null && colourDistance(r, g, b, skin[0], skin[1], skin[2]) <= tolerance
+}
 
 // ─────────────────────────────────────────────────────────────── the anchors ──
 
@@ -125,9 +155,18 @@ export async function applyTransform(pic, transform, density) {
  * its own file code written across it, so a screen full of them reads as "the art is not here yet" and
  * still exercises every layer, hide rule and crop the renderer has.
  */
+/**
+ * The two bases that existed when the stand-ins were drawn keep their exact tones, so re-running
+ * `placeholder` never rewrites a committed file. Any base added to `BASES` later — which is all it takes
+ * to get a full set of stand-ins for it (§4, R5) — is given its own skin, underwear and hair by the same
+ * stable hue jitter the items use, so three bases are three figures and not one drawn three times.
+ */
 const SKIN = { f01: '#dcc4a6', m01: '#c9ac86' }
 const UNDERWEAR = { f01: '#9aa3ad', m01: '#8f99a4' }
 const HAIR = { f01: '#5b4a6b', m01: '#6b5540' }
+const skinOf = (base) => SKIN[base] ?? hsl(10 + (jitter(base) % 40), 0.42, 0.40 + ((jitter(base) >> 3) % 5) * 0.11)
+const underwearOf = (base) => UNDERWEAR[base] ?? hsl(200 + (jitter(base) % 40), 0.12, 0.64)
+const hairOf = (base) => HAIR[base] ?? hsl(jitter(`hair ${base}`), 0.26, 0.34)
 const SLOT_HUE = { head: 14, face: 205, outfit: 232, aura: 172, frame: 45 }
 const BOT_HUE = 190
 
@@ -217,9 +256,9 @@ function shapesFor(entry) {
   const tint = hsl(hue + (jitter(entry.name) % 48) - 24, 0.44, 0.54)
   switch (entry.kind) {
     case 'base': {
-      const skin = SKIN[entry.base]
-      const cloth = UNDERWEAR[entry.base]
-      const hair = HAIR[entry.base]
+      const skin = skinOf(entry.base)
+      const cloth = underwearOf(entry.base)
+      const hair = hairOf(entry.base)
       if (entry.layer === LAYERS.hairBack) {
         return `<ellipse cx="192" cy="150" rx="94" ry="84" fill="${hair}"/>${plate(132, 190, 120, 24, `${entry.base} hair back`)}`
       }
@@ -231,7 +270,7 @@ function shapesFor(entry) {
       return `${figure(skin, cloth)}${plate(150, 244, 84, 24, entry.base)}`
     }
     case 'baseFace':
-      return `<ellipse cx="192" cy="162" rx="56" ry="44" fill="${SKIN[entry.base]}"/>` +
+      return `<ellipse cx="192" cy="162" rx="56" ry="44" fill="${skinOf(entry.base)}"/>` +
         `<g transform="translate(0 -9)">${eyesAndMouth(entry.expr, '#33272b')}</g>` +
         plate(150, 188, 84, 16, `${entry.base} ${entry.expr}`)
     case 'bot':

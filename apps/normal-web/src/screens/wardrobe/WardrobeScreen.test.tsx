@@ -115,6 +115,24 @@ describe('WardrobeScreen', () => {
     expect(screen.getByText(viNormal.bases.m01)).toBeInTheDocument()
   })
 
+  it('offers a tile per base the catalogue answers with, however many that is', async () => {
+    // The base list is data (2026-09-17): a third figure must reach the wardrobe with no change here
+    // and no change in `BaseTab`. The name comes from its `nameKey`, which already exists in both
+    // languages so the tile never shows a raw key.
+    const BASE_F02: BaseDto = {
+      id: 'f02',
+      nameKey: 'bases.f02',
+      layers: { hairBack: 'base_f02_L20', body: 'base_f02_L30', hairFront: 'base_f02_L60' },
+      faces: { ...FACES, neutral: 'base_f02_face_neutral_L50' },
+    }
+    renderScreen(stubApi({ avatarCatalog: vi.fn().mockResolvedValue({ ...AVATAR_CATALOG, bases: [BASE_F01, BASE_M01, BASE_F02] }) }))
+
+    await screen.findByText(viNormal.bases.f01)
+    const tiles = screen.getAllByRole('tabpanel')[0]!.querySelectorAll('button')
+    expect(tiles).toHaveLength(3)
+    expect(screen.getByText(viNormal.bases.f02)).toBeInTheDocument()
+  })
+
   it('switches tabs on click', async () => {
     const user = userEvent.setup()
     renderScreen()

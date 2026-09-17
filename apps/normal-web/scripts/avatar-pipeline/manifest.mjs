@@ -31,7 +31,18 @@ export const SHEET_FILE = resolve(PACKAGE_ROOT, '../../docs/avatar-2d-sheet.png'
 
 // ──────────────────────────────────────────────────────── the stage-1 set ──
 
-/** Spec §4: two bases now, six in stage 2. */
+/**
+ * Every base the app has art for — the **source of truth** for the base list (2026-09-17, phase 2).
+ *
+ * A base cannot exist before its layers do: the server's registry (`apps/normal-server/data/avatar-bases.json`)
+ * names files and refuses at boot any name the committed manifest does not list, so the order of operations
+ * for adding a base is always *this list first* (which gives `placeholder` a full stand-in set to draw and
+ * `ingest` a place to put the real pictures), then the registry entry that points at them, then the i18n key.
+ * `stageOneFiles` and `buildPlaceholders` take the list as an argument so a test can add a third base
+ * without touching the committed artefact; nothing else should pass anything but this.
+ *
+ * Spec §4: two bases now, six in stage 2. `f02`/`f03` have i18n names waiting for them and no art yet.
+ */
 export const BASES = ['f01', 'm01']
 /** Spec §4.3: six per base, and — a decision of this plan — six per bot as well. */
 export const EXPRESSIONS = ['neutral', 'happy', 'sad', 'surprised', 'closed', 'sleep']
@@ -73,9 +84,9 @@ export const botFaceFile = (bot, expression) => `bot_${bot}_face_${expression}_L
  * This list is the contract: `placeholder` writes exactly it, `check` walks exactly it, and the tests
  * assert it against spec §4.4 so that a name added here without being added there is caught.
  */
-export function stageOneFiles() {
+export function stageOneFiles(bases = BASES) {
   const files = []
-  for (const base of BASES) {
+  for (const base of bases) {
     for (const layer of BASE_LAYERS) files.push({ name: baseFile(base, layer), kind: 'base', layer, base })
     for (const expr of EXPRESSIONS) files.push({ name: faceFile(base, expr), kind: 'baseFace', layer: LAYERS.face, base, expr })
   }
@@ -206,17 +217,20 @@ export function entryFor(file, bytes2x, extra = {}) {
 /**
  * Fill a directory with the whole stage-1 set as labelled stand-ins, and write the manifest for it.
  *
+ * `bases` is `BASES` for every real run — adding an id to that constant is all it takes for the next
+ * `placeholder` to draw a complete stand-in set (body, hair, six faces) for a base nobody has drawn yet.
+ *
  * Idempotent twice over. A name the manifest already marks `real: true` is left alone — ingesting art is
  * the one-way door from stand-in to art, and re-running this must never undo it — and every write goes
  * through a compare-first path, so a second run leaves a clean tree.
  */
-export async function buildPlaceholders({ dir, targets, log = () => {} }) {
+export async function buildPlaceholders({ dir, targets, bases = BASES, log = () => {} }) {
   await mkdir(dir, { recursive: true })
   const previous = readManifest(join(dir, MANIFEST_NAME))
   const manifest = { ...emptyManifest(), bases: previous.bases ?? {} }
   let drawn = 0
   let kept = 0
-  for (const file of stageOneFiles()) {
+  for (const file of stageOneFiles(bases)) {
     const before = previous.files?.[file.name]
     if (before?.real) {
       manifest.files[file.name] = before

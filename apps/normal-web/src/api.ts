@@ -28,9 +28,14 @@ export const UNAUTHENTICATED_CODE = 'UNAUTHENTICATED'
  */
 export type ItemSlot = 'head' | 'face' | 'outfit' | 'aura' | 'frame' | 'title' | 'badge'
 
-/** The two fixed figures a chibi is drawn on — chosen, never owned (design §4.2, §5.1). */
-export type BaseId = 'f01' | 'm01'
-export const BASES: readonly BaseId[] = ['f01', 'm01']
+/**
+ * A fixed figure a chibi is drawn on — chosen, never owned (design §4.2, §5.1).
+ *
+ * 2026-09-17: an open id, matching the server's (`apps/normal-server/src/inventory/slots.ts`). The list
+ * of bases is `data/avatar-bases.json` and reaches the client through `/api/catalog/avatar`, so the
+ * wardrobe renders a tile per `BaseDto` it is given and never checks an id against a union of its own.
+ */
+export type BaseId = string
 
 /** The one slot every configuration must fill; a figure with no outfit is not a figure. */
 export const REQUIRED_SLOTS = ['outfit'] as const

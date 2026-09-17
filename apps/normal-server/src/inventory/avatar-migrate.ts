@@ -27,7 +27,7 @@ import { resolveItemId } from './aliases.js'
 import type { AvatarConfigV3 } from './avatar.js'
 import { AVATAR_CONFIG_VERSION, DEFAULT_BASE, defaultAvatar, validateAvatarConfig } from './avatar.js'
 import type { ItemCatalog } from './items.js'
-import type { BaseId, ItemSlot } from './slots.js'
+import type { BaseId, BaseIds, ItemSlot } from './slots.js'
 import { isBaseId } from './slots.js'
 
 /** `raw[key]`, resolved through the alias map, if it names a catalogue item that belongs in `slot`. */
@@ -47,11 +47,19 @@ function pick(slot: ItemSlot, catalog: ItemCatalog, aliases: ReadonlyMap<string,
   return undefined
 }
 
-/** The base a stored config names, however it named it: `base` itself, or v1/v2's `body`. */
-function baseOf(raw: Record<string, unknown>): BaseId {
-  if (isBaseId(raw['base'])) return raw['base']
-  if (raw['body'] === 'female') return 'f01'
-  if (raw['body'] === 'male') return 'm01'
+/**
+ * The base a stored config names, however it named it: `base` itself, or v1/v2's `body`.
+ *
+ * 2026-09-17: "however it named it" now includes *a base this server no longer has*. The registry is
+ * data, so an id that was valid when the config was written may not be in `data/avatar-bases.json` any
+ * more — that config still has to render, so it falls back to `DEFAULT_BASE` here on the way out while
+ * `validateAvatarConfig` goes on refusing it on the way in. The v1/v2 `body` words map to the two ids
+ * Plan 11 shipped with, and fall back too if either has since been withdrawn.
+ */
+function baseOf(raw: Record<string, unknown>, bases: BaseIds): BaseId {
+  if (isBaseId(raw['base'], bases)) return raw['base']
+  const fromBody = raw['body'] === 'female' ? 'f01' : raw['body'] === 'male' ? 'm01' : null
+  if (fromBody !== null && bases.has(fromBody)) return fromBody
   return DEFAULT_BASE
 }
 
@@ -64,12 +72,12 @@ function baseOf(raw: Record<string, unknown>): BaseId {
  * `head` and `face` both try the v2 `accessory` in addition to their own field and (for `head`) the
  * v2 `hat`, because that one old field used to mean either.
  */
-export function migrateAvatarConfig(stored: Record<string, unknown> | null | undefined, catalog: ItemCatalog, aliases: ReadonlyMap<string, string>): AvatarConfigV3 {
+export function migrateAvatarConfig(stored: Record<string, unknown> | null | undefined, catalog: ItemCatalog, aliases: ReadonlyMap<string, string>, bases: BaseIds): AvatarConfigV3 {
   if (typeof stored !== 'object' || stored === null || Array.isArray(stored)) return defaultAvatar(catalog)
   const raw = stored as Record<string, unknown>
 
   const outfit = pick('outfit', catalog, aliases, raw['outfit'], raw['top'], raw['clothing']) ?? defaultAvatar(catalog).outfit
-  const config: AvatarConfigV3 = { v: AVATAR_CONFIG_VERSION, base: baseOf(raw), outfit }
+  const config: AvatarConfigV3 = { v: AVATAR_CONFIG_VERSION, base: baseOf(raw, bases), outfit }
 
   const head = pick('head', catalog, aliases, raw['head'], raw['hat'], raw['accessory'])
   if (head !== undefined) config.head = head
@@ -87,7 +95,7 @@ export function migrateAvatarConfig(stored: Record<string, unknown> | null | und
   // The last word belongs to the validator, not to the repair. Nothing above should be able to
   // produce an invalid figure — but this function's whole job is to be the thing that never hands
   // the client something it cannot draw, and one check is cheaper than that promise is to keep.
-  const checked = validateAvatarConfig(config, catalog)
+  const checked = validateAvatarConfig(config, catalog, bases)
   return checked.ok ? checked.value : defaultAvatar(catalog)
 }
 
@@ -99,11 +107,11 @@ export function migrateAvatarConfig(stored: Record<string, unknown> | null | und
  * *something*. Answering with a repaired figure is better than answering with a partial one the
  * client would draw with holes.
  *
- * `aliases` is a parameter rather than a hidden default so a caller never pays for a second parse of
- * `item-aliases.json`: `app.ts` loads it once, alongside the catalogue, and passes the same map
- * everywhere a config is read.
+ * `aliases` and `bases` are parameters rather than hidden defaults so a caller never pays for a second
+ * parse of `item-aliases.json` or `avatar-bases.json`: `app.ts` loads both once, alongside the
+ * catalogue, and passes the same map and the same id set everywhere a config is read.
  */
-export function readAvatarConfig(stored: Record<string, unknown> | null | undefined, catalog: ItemCatalog, aliases: ReadonlyMap<string, string>): AvatarConfigV3 {
-  const checked = validateAvatarConfig(stored ?? {}, catalog)
-  return checked.ok ? checked.value : migrateAvatarConfig(stored, catalog, aliases)
+export function readAvatarConfig(stored: Record<string, unknown> | null | undefined, catalog: ItemCatalog, aliases: ReadonlyMap<string, string>, bases: BaseIds): AvatarConfigV3 {
+  const checked = validateAvatarConfig(stored ?? {}, catalog, bases)
+  return checked.ok ? checked.value : migrateAvatarConfig(stored, catalog, aliases, bases)
 }

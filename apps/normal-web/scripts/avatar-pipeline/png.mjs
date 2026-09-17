@@ -129,6 +129,41 @@ export function colourDistance(r1, g1, b1, r2, g2, b2) {
   return Math.sqrt((r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2)
 }
 
+/**
+ * The colour a region of a picture is *made of*: the mean of its largest 32-level bucket, over the solid
+ * pixels `inside` accepts, or `null` when there are none.
+ *
+ * A mean over the whole region would be a colour that appears nowhere in it — half skin and half cloth
+ * averages to neither. The modal bucket is the one the eye would name, and a `colourDistance` to it is
+ * what "the same colour" means wherever the pipeline asks the question: the base's own skin
+ * (`baseSkinColour`, frame.mjs) and the base's underwear (`underwearRegion`, checks.mjs).
+ *
+ * @param {{ data: Buffer, width: number, height: number }} pic
+ * @param {(x: number, y: number, p: number) => boolean} [inside]
+ */
+export function modalColour(pic, inside = () => true) {
+  const { width, height, data } = pic
+  const buckets = new Map()
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const p = y * width + x
+      const at = p * 4
+      if (data[at + 3] <= ALPHA_SOLID) continue
+      if (!inside(x, y, p)) continue
+      const key = ((data[at] >> 5) << 10) | ((data[at + 1] >> 5) << 5) | (data[at + 2] >> 5)
+      const bucket = buckets.get(key) ?? { n: 0, r: 0, g: 0, b: 0 }
+      bucket.n++
+      bucket.r += data[at]
+      bucket.g += data[at + 1]
+      bucket.b += data[at + 2]
+      buckets.set(key, bucket)
+    }
+  }
+  let modal = null
+  for (const bucket of buckets.values()) if (modal === null || bucket.n > modal.n) modal = bucket
+  return modal === null ? null : [modal.r / modal.n, modal.g / modal.n, modal.b / modal.n]
+}
+
 // ──────────────────────────────────────────────────────────────── the matte ──
 
 /**

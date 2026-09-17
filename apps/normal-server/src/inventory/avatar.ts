@@ -1,7 +1,8 @@
 /**
  * Avatars: what a configuration must look like, and what it takes to wear one (design §5.1).
  *
- * Since Plan 11 an avatar is a fixed base (`f01`/`m01`, chosen rather than owned) with PNG layers
+ * Since Plan 11 an avatar is a fixed base (chosen rather than owned; the ids are whatever
+ * `data/avatar-bases.json` defines, and `validateAvatarConfig` is handed that set) with PNG layers
  * stacked on it: one required `outfit` and up to five optional slots — `head`, `face`, `aura`,
  * `frame`, plus the two name decorations `title` and `badge`. There is no colour to choose any more;
  * every layer is either worn or it is not. `v: 3` is stored with it so a future shape can tell itself
@@ -18,7 +19,7 @@
  * place. This module stays the one that decides what *valid* means, and does not import that one.
  *
  * Three checks are deliberately separate. *Validation* is about the catalogue — does this id exist,
- * does it belong in this slot, is the base one of the two that exist — and is a 400, the same answer
+ * does it belong in this slot, is the base one the registry defines — and is a 400, the same answer
  * for every player. *Ownership* is about this player's inventory and is a 403; it needs the
  * database, so it lives in `applyAvatarConfig` rather than here.
  */
@@ -28,17 +29,14 @@ import { ServiceError } from '../errors.js'
 import { players } from '../db/schema.js'
 import type { InventoryService } from './inventory-service.js'
 import type { ItemCatalog } from './items.js'
-import type { BaseId, RequiredSlot } from './slots.js'
-import { isBaseId, OPTIONAL_SLOTS, REQUIRED_SLOTS, SLOTS } from './slots.js'
+import type { BaseId, BaseIds, RequiredSlot } from './slots.js'
+import { DEFAULT_BASE, isBaseId, OPTIONAL_SLOTS, REQUIRED_SLOTS, SLOTS } from './slots.js'
 
-export type { BaseId, ItemSlot } from './slots.js'
-export { OPTIONAL_SLOTS, REQUIRED_SLOTS, SLOTS } from './slots.js'
+export type { BaseId, BaseIds, ItemSlot } from './slots.js'
+export { DEFAULT_BASE, OPTIONAL_SLOTS, REQUIRED_SLOTS, SLOTS } from './slots.js'
 
 /** The version stored with every configuration this server writes. */
 export const AVATAR_CONFIG_VERSION = 3
-
-/** The base a v3 config falls back to when nothing better is known — `defaultAvatar`'s own choice. */
-export const DEFAULT_BASE: BaseId = 'f01'
 
 export interface AvatarConfigV3 {
   v: typeof AVATAR_CONFIG_VERSION
@@ -69,10 +67,12 @@ export type AvatarValidation = { ok: true; value: AvatarConfigV3 } | { ok: false
  * the individual items, so the first complaint is always the structural one.
  *
  * `MISSING_LAYER` is a structural refusal — not v3, no base at all, or no `outfit`. `INVALID_BASE` is
- * a base that is neither `f01` nor `m01`. `INVALID_ITEM` and `WRONG_CATEGORY` are §19.2's, unchanged
- * in meaning: an id the catalogue does not have, or one that belongs to a different slot.
+ * a base the loaded registry does not define (2026-09-17: `bases` is that registry's id set, passed in
+ * rather than compared against a union in the code, so a base added to `data/avatar-bases.json` is
+ * writable the moment the server has read it). `INVALID_ITEM` and `WRONG_CATEGORY` are §19.2's,
+ * unchanged in meaning: an id the catalogue does not have, or one that belongs to a different slot.
  */
-export function validateAvatarConfig(input: unknown, catalog: ItemCatalog): AvatarValidation {
+export function validateAvatarConfig(input: unknown, catalog: ItemCatalog, bases: BaseIds): AvatarValidation {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) return { ok: false, code: 'MISSING_LAYER' }
   const raw = input as Record<string, unknown>
 
@@ -82,7 +82,7 @@ export function validateAvatarConfig(input: unknown, catalog: ItemCatalog): Avat
 
   const base = raw['base']
   if (base === undefined || base === null) return { ok: false, code: 'MISSING_LAYER' }
-  if (!isBaseId(base)) return { ok: false, code: 'INVALID_BASE' }
+  if (!isBaseId(base, bases)) return { ok: false, code: 'INVALID_BASE' }
 
   for (const slot of REQUIRED_SLOTS) {
     const value = raw[slot]
@@ -166,7 +166,7 @@ export function defaultItemId(catalog: ItemCatalog, slot: RequiredSlot): string 
 }
 
 /**
- * The avatar a new account is created wearing: the `f01` base and the default outfit.
+ * The avatar a new account is created wearing: `DEFAULT_BASE` and the default outfit.
  *
  * Nothing else is filled in. A new player should look like the plainest possible figure, and
  * anything they are wearing on day one is something they never chose.

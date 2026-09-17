@@ -36,10 +36,11 @@ import {
   ALPHA_SOLID,
   alphaBBox,
   colourDistance,
+  modalColour,
   readPicture,
   resizePicture,
 } from './png.mjs'
-import { CROP, DENSITIES, FRAME, LAYERS, UNDERWEAR_BAND, UNDERWEAR_COVERAGE, UNDERWEAR_TOLERANCE } from './frame.mjs'
+import { CROP, DENSITIES, FACE_LIMIT_Y, FRAME, LAYERS, SKIN_TOLERANCE, UNDERWEAR_BAND, UNDERWEAR_COVERAGE, UNDERWEAR_TOLERANCE, baseSkinColour, isSkin } from './frame.mjs'
 import { NAME_PATTERN, parseName } from './manifest.mjs'
 
 /** C10, and spec §8's 6 MB stage-1 footprint divided by the files that have to fit in it. */
@@ -103,7 +104,7 @@ async function loadBases(dir, manifest) {
     if (parsed?.kind !== 'base' || parsed.layer !== LAYERS.body) continue
     const file = join(dir, `${name}@1x.png`)
     if (!existsSync(file)) continue
-    bases.push({ name: parsed.base, picture: await readPicture(file) })
+    bases.push({ name: parsed.base, real: manifest.files[name]?.real === true, picture: await readPicture(file) })
   }
   return bases
 }
@@ -262,8 +263,13 @@ function coversTheUnderwear(context) {
   const outfit = pictures[1]
   if (!outfit) return ok('n/a — no @1x to judge')
   if (!bases.length) return bad('no base layer to measure against')
+  // Real art is measured against real art. While one base is a photograph-grade picture and another is
+  // still the labelled rectangle `placeholder` drew, holding a real dress to the stand-in's square
+  // shoulders reports a fault in neither of them — the same reason the reverse mix (a real base under a
+  // stand-in outfit) is the documented use of `--skip C6`. Once every base is real, every base is measured.
+  const real = bases.filter((candidate) => candidate.real)
   let worst = { name: '', coverage: 1 }
-  for (const candidate of bases) {
+  for (const candidate of (real.length ? real : bases)) {
     const region = underwearRegion(candidate.picture)
     if (!region.pixels.length) return bad(`${candidate.name} has no underwear region to cover`)
     let covered = 0
@@ -278,45 +284,50 @@ function coversTheUnderwear(context) {
 }
 
 /**
- * The base's underwear: the pixels in the waist band whose colour is the band's dominant one.
+ * The base's underwear: the pixels in the waist band that are *cloth* and the band's dominant cloth colour.
  *
- * "Dominant" is a modal colour over 32-level buckets rather than a mean — a mean of skin and cloth is a
- * colour that appears nowhere in the picture — and the tolerance around it is what lets line art,
- * shading and the odd highlight sit inside the region without being counted as underwear an outfit has
- * failed to cover.
+ * Two exclusions before anything is measured, both added on 2026-09-17 (phase 2) when this was run against
+ * a real base for the first time and reported 34.7 % for an outfit that covers every thread of underwear
+ * F01 has:
+ *
+ * - **The head region.** The band starts at y 176 and an outfit layer holds nothing above y 236 or inside
+ *   the portrait crop, by rule (`OUTFIT_TOP_Y`, and the base's own face layer draws over it). Rows of the
+ *   face counted as underwear are rows no outfit can ever cover.
+ * - **Skin.** The dominant colour of F01's band, unfiltered, is her *face*: the modal colour of a band that
+ *   is mostly cheek is a skin tone, and the check then asks an outfit to cover her chin. So the base's own
+ *   skin (`baseSkinColour`, ± `SKIN_TOLERANCE`) is dropped first, and the modal colour of what is left is
+ *   the tank top and shorts — which is what D01 §10.7 means by underwear.
+ *
+ * "Dominant" is a modal colour over 32-level buckets rather than a mean — a mean of two cloths is a colour
+ * that appears nowhere in the picture — and `UNDERWEAR_TOLERANCE` around it is what lets line art, shading
+ * and the odd highlight sit inside the region without being counted as underwear an outfit failed to cover.
  */
 export function underwearRegion(picture, density = 1) {
   const { width, data } = picture
   const top = UNDERWEAR_BAND.y0 * density
   const bottom = Math.min(picture.height, UNDERWEAR_BAND.y1 * density)
-  const buckets = new Map()
-  for (let y = top; y < bottom; y++) {
-    for (let x = 0; x < width; x++) {
-      const at = (y * width + x) * 4
-      if (data[at + 3] <= ALPHA_SOLID) continue
-      const key = `${data[at] >> 5}:${data[at + 1] >> 5}:${data[at + 2] >> 5}`
-      const bucket = buckets.get(key) ?? { n: 0, r: 0, g: 0, b: 0 }
-      bucket.n++
-      bucket.r += data[at]
-      bucket.g += data[at + 1]
-      bucket.b += data[at + 2]
-      buckets.set(key, bucket)
-    }
+  const headLeft = CROP.x * density
+  const headRight = (CROP.x + CROP.size) * density
+  const headBottom = FACE_LIMIT_Y * density
+  const skin = baseSkinColour(picture, density)
+  const cloth = (x, y, p) => {
+    if (y < top || y >= bottom) return false
+    if (y < headBottom && x >= headLeft && x < headRight) return false
+    const at = p * 4
+    return !isSkin(data[at], data[at + 1], data[at + 2], skin, SKIN_TOLERANCE)
   }
-  let modal = null
-  for (const bucket of buckets.values()) if (!modal || bucket.n > modal.n) modal = bucket
-  if (!modal) return { pixels: [], dominant: null }
-  const dominant = [modal.r / modal.n, modal.g / modal.n, modal.b / modal.n]
+  const dominant = modalColour(picture, cloth)
+  if (dominant === null) return { pixels: [], dominant: null, skin }
   const pixels = []
   for (let y = top; y < bottom; y++) {
     for (let x = 0; x < width; x++) {
       const p = y * width + x
       const at = p * 4
-      if (data[at + 3] <= ALPHA_SOLID) continue
+      if (data[at + 3] <= ALPHA_SOLID || !cloth(x, y, p)) continue
       if (colourDistance(data[at], data[at + 1], data[at + 2], dominant[0], dominant[1], dominant[2]) <= UNDERWEAR_TOLERANCE) pixels.push(p)
     }
   }
-  return { pixels, dominant }
+  return { pixels, dominant, skin }
 }
 
 function densitiesAgree({ pictures, halved }) {

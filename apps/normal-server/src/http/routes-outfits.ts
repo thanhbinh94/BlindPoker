@@ -10,6 +10,7 @@
 import { HttpError } from '@bp/http-kit'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { validateAvatarConfig } from '../inventory/avatar.js'
+import type { BaseIds } from '../inventory/slots.js'
 import type { ItemCatalog } from '../inventory/items.js'
 import type { OutfitsService } from '../inventory/outfits-service.js'
 import { ServiceError } from '../errors.js'
@@ -19,6 +20,8 @@ import './types.js'
 export interface OutfitRouteDeps {
   outfits: OutfitsService
   catalog: ItemCatalog
+  /** The ids `data/avatar-bases.json` defines — what `INVALID_BASE` is measured against. */
+  baseIds: BaseIds
   requireUser: RequireUser
 }
 
@@ -47,7 +50,7 @@ export function registerOutfitRoutes(app: FastifyInstance, deps: OutfitRouteDeps
     const name = body?.name
     if (typeof name !== 'string') throw new HttpError(400, 'INVALID_NAME', 'name must be a string')
 
-    const checked = validateAvatarConfig(body?.config, deps.catalog)
+    const checked = validateAvatarConfig(body?.config, deps.catalog, deps.baseIds)
     if (!checked.ok) throw new HttpError(400, checked.code, `avatar refused: ${checked.code}`)
 
     try {
