@@ -67,6 +67,20 @@ export const HEAD_LIMIT_Y = 260
  */
 export const FACE_LIMIT_Y = 250
 
+/**
+ * The part of the head region a base's face layer (50) gives up (2026-09-17, fix round 1): the torso column
+ * x ∈ [150, 234] from y 236 down. Layer 50 sits above the outfit, so whatever of the base it holds there —
+ * the tank top's straps beside a collar — shows on top of every outfit; the hair tips either side of it stay.
+ */
+export const TORSO_COLUMN = { x0: 150, x1: 234, y0: 236 }
+
+/**
+ * How far below the head top `measure` finds (frame units) an AI base's strand of hair — its ahoge — is cut
+ * off into layer 60 (2026-09-17, fix round 1). The strand's root runs down into the hair a few pixels; cut
+ * exactly at the head top it would leave a stub standing beside a hat.
+ */
+export const STRAND_MARGIN = 6
+
 // ─────────────────────────────────────────────────────────────── the anchors ──
 
 /**

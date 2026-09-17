@@ -22,8 +22,8 @@ import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { runChecks } from '../scripts/avatar-pipeline/checks.mjs'
-import { OUTFIT_TOP_Y, cutItem, diffAgainstBase, ingest, measure, registerToBase } from '../scripts/avatar-pipeline/extract.mjs'
-import { AXIS_X, BASELINE_Y, BODY, CROP, DENSITIES, FACE_LIMIT_Y, FRAME, LAYERS, anchorBase, applyTransform, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
+import { OUTFIT_TOP_Y, cutItem, diffAgainstBase, ingest, measure, registerBySilhouette, registerToBase } from '../scripts/avatar-pipeline/extract.mjs'
+import { AXIS_X, BASELINE_Y, BODY, CROP, DENSITIES, FACE_LIMIT_Y, FRAME, LAYERS, TORSO_COLUMN, anchorBase, applyTransform, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
 import { ICON, MANIFEST_NAME, buildPlaceholders, iconName, stageOneFiles, writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
 import { alphaBBox, blankPicture, cropPicture, readPicture, removeChroma, renderSvg, writeDensities, writePicture } from '../scripts/avatar-pipeline/png.mjs'
 
@@ -488,6 +488,14 @@ describe('a redrawn item picture', () => {
   /** Registration is the slow step; the three hat cases share one. */
   const hatRegistered = (): ReturnType<typeof registerToBase> => (registeredHat ??= registerToBase(hatPicture, base, { slot: 'head', density: 2 }))
 
+  it('an outfit registers on the body silhouette below the chin line', () => {
+    // The body moved by the drift while its head and every colour changed: only the outline is left to go by.
+    const outfit = redrawn(base, (pic) => fill(fill(pic, { x0: 250, y0: 470, x1: 520, y1: 820 }, [30, 40, 150]), { x0: 250, y0: 80, x1: 520, y1: 470 }, [230, 200, 60]))
+    const { dx, dy, scale, iou } = registerBySilhouette(outfit, base, { density: 2 })
+    expect({ dx, dy, scale }).toEqual({ dx: -DRIFT.dx, dy: -DRIFT.dy, scale: 1 })
+    expect(iou).toBeGreaterThan(0.99)
+  }, 60_000)
+
   it('registration recovers the drift', () => {
     const { dx, dy, scale } = hatRegistered()
     expect({ dx, dy, scale }).toEqual({ dx: -DRIFT.dx, dy: -DRIFT.dy, scale: 1 })
@@ -900,7 +908,9 @@ function inkOutsideHead(pic: Picture, density: number): string[] {
   const found: string[] = []
   for (let y = 0; y < pic.height; y++) {
     for (let x = 0; x < pic.width; x++) {
-      if (x >= left && x < right && y >= top && y < bottom) continue
+      // The torso column below y 236 is not the face layer's either (2026-09-17): a strap there shows over every outfit.
+      const torso = y >= TORSO_COLUMN.y0 * density && x >= TORSO_COLUMN.x0 * density && x < (TORSO_COLUMN.x1 + 1) * density
+      if (x >= left && x < right && y >= top && y < bottom && !torso) continue
       if (pic.data[(y * pic.width + x) * 4 + 3]! > 0) found.push(`${x},${y}`)
     }
   }
@@ -935,6 +945,12 @@ describe('a flat AI base', () => {
       expect(alphaBBox(pic), `@${density}x face has no head in it`).not.toBeNull()
       const outside = inkOutsideHead(pic, density)
       expect(outside.length, `@${density}x face has ink outside the head region, e.g. ${outside.slice(0, 3).join(' ')}`).toBe(0)
+      // …but beside the torso column, under y 236, the head region is still the face layer's: the arm there.
+      let beside = 0
+      for (let y = TORSO_COLUMN.y0 * density; y < FACE_LIMIT_Y * density; y++) {
+        for (let x = CROP.x * density; x < TORSO_COLUMN.x0 * density; x++) if (pic.data[(y * pic.width + x) * 4 + 3]! > 0) beside++
+      }
+      expect(beside, `@${density}x lost the head region beside the torso column`).toBeGreaterThan(0)
     }
     // Inside the head region the face is the body's own pixels: layer 50 repeats the head on purpose.
     const body2x = await readPicture(join(dir, 'base_f01_L30@2x.png'))
@@ -957,6 +973,51 @@ describe('a flat AI base', () => {
       for (const result of row.results) expect(result.ok, `${row.name} ${result.id}: ${result.detail}`).toBe(true)
     }
   }, 120_000)
+
+  it('moves a strand of hair above the head top into the front hair, and out of the body and every face', async () => {
+    const dir = caseDir('flat-strand')
+    // The ahoge of `measure`'s own test: 14 px wide, standing 120 px above the head.
+    const strand = `<rect x="569" y="80" width="14" height="140" fill="#808080"/>`
+    const baseFile = join(dir, 'base.png')
+    await writePicture(await renderSvg(sourceSvg(strand), SRC.w, SRC.h), baseFile)
+    await ingest({ file: baseFile, target: { kind: 'base', base: 'f01' }, dir, targets: [join(dir, MANIFEST_NAME)] })
+    const exprFile = join(dir, 'happy.png')
+    await writePicture(await renderSvg(sourceSvg(strand + `<rect x="500" y="560" width="152" height="30" fill="#cc2222"/>`), SRC.w, SRC.h), exprFile)
+    await ingest({ file: exprFile, target: { kind: 'expr', base: 'f01', expr: 'happy' }, dir, targets: [join(dir, MANIFEST_NAME)] })
+    const manifest = JSON.parse(readFileSync(join(dir, MANIFEST_NAME), 'utf8')) as Manifest & { bases: Record<string, { strandY?: number }> }
+    const strandY = manifest.bases.f01!.strandY!
+    // The head top is at source y 200; the cut sits a few frame pixels under where that lands.
+    const headTop = 200 * manifest.bases.f01!.transform.scale + manifest.bases.f01!.transform.offsetY
+    expect(strandY).toBeGreaterThan(headTop)
+    expect(strandY).toBeLessThan(headTop + 10)
+    expect(manifest.files.base_f01_L60, 'the front hair now holds the strand').toMatchObject({ layer: 60, real: true })
+    expect(manifest.files.base_f01_L60!.empty).toBeUndefined()
+    expect(manifest.files.base_f01_L20).toMatchObject({ real: true, empty: true })
+    const inkRows = (pic: Picture): { above: number; below: number } => {
+      let above = 0
+      let below = 0
+      for (let p = 0; p < pic.width * pic.height; p++) {
+        if (pic.data[p * 4 + 3] === 0) continue
+        if (Math.floor(p / pic.width) < strandY * (pic.width / FRAME.w)) above++
+        else below++
+      }
+      return { above, below }
+    }
+    for (const density of DENSITIES) {
+      const hair = inkRows(await readPicture(join(dir, `base_f01_L60@${density}x.png`)))
+      expect(hair.above, `@${density}x front hair has no strand`).toBeGreaterThan(0)
+      expect(hair.below, `@${density}x front hair reaches below the cut`).toBe(0)
+      for (const name of ['base_f01_L30', 'base_f01_face_neutral_L50', 'base_f01_face_happy_L50']) {
+        const layer = inkRows(await readPicture(join(dir, `${name}@${density}x.png`)))
+        expect(layer.above, `@${density}x ${name} still holds the strand`).toBe(0)
+        expect(layer.below, `@${density}x ${name} is empty`).toBeGreaterThan(0)
+      }
+    }
+    const rows = await runChecks({ dir, manifest, names: ['base_f01_L30', 'base_f01_L60', 'base_f01_face_neutral_L50', 'base_f01_face_happy_L50'] })
+    for (const row of rows) {
+      for (const result of row.results) expect(result.ok, `${row.name} ${result.id}: ${result.detail}`).toBe(true)
+    }
+  }, 180_000)
 
   it('masks an expression to the head region', async () => {
     const dir = caseDir('flat-expr')

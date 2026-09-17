@@ -35,12 +35,13 @@ import {
   featherMask,
   keepLargeRegions,
   maskBBox,
+  overPicture,
   placeOnCanvas,
   readPicture,
   removeChroma,
   writeDensities,
 } from './png.mjs'
-import { AXIS_X, BASELINE_Y, CROP, FACE_LIMIT_Y, FRAME, HEAD_LIMIT_Y, LAYERS, UNDERWEAR_BAND, anchorBase, applyTransform } from './frame.mjs'
+import { AXIS_X, BASELINE_Y, CROP, FACE_LIMIT_Y, FRAME, HEAD_LIMIT_Y, LAYERS, STRAND_MARGIN, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform } from './frame.mjs'
 import { ICON, MANIFEST_NAME, SLOT_LAYER, baseFile, entryFor, faceFile, itemFile, readManifest, writeIcon, writeManifest } from './manifest.mjs'
 
 /** D02 §8.3: a chibi is between two and two and a half heads tall, or it is not this character. */
@@ -61,11 +62,15 @@ export const STRAND_RATIO = 0.2
  * M01 wears too.
  */
 export const OUTFIT_TOP_Y = 236
+/** `diffAgainstBase`, outfits only: the rows (@1x) under the chin line where the window reaches `radius` (@1x) instead. */
+export const CHIN_BAND = { rows: 4, radius: 4 }
 
 /** `registerToBase`: how far, in pixels at the density being registered, the search looks each way. */
 export const REGISTER_RANGE = 12
 /** …and the scale factors it tries about the axis and the baseline. */
 export const REGISTER_SCALES = [0.99, 0.995, 1, 1.005, 1.01]
+/** `registerBySilhouette`: how many times a pixel near the base's outline counts, and how wide (@1x) that band is. */
+export const SILHOUETTE_EDGE = { weight: 8, band: 2 }
 
 /**
  * The defaults `diffAgainstBase` was tuned to on the first three real items (2026-09-17). Areas are in
@@ -76,17 +81,11 @@ export const DIFF_DEFAULTS = { colorTol: 36, shadowTol: 14, minRegion: 100, rela
 export const SHADOW_RANGE = [0.45, 0.92]
 
 /**
- * Where registration measures a picture against the base: the part of the figure the slot does *not*
- * change. A hat or a pair of glasses leaves the body alone; an outfit leaves the head alone.
+ * Where colour registration measures a picture against the base: the part of the figure the slot does
+ * *not* change. A hat or a pair of glasses leaves the body alone. (An outfit changes the body's colours
+ * everywhere, so it is registered by silhouette instead — see `registerBySilhouette`.)
  */
 function registrationRegion(slot, density) {
-  if (slot === 'outfit') {
-    const left = CROP.x * density
-    const right = (CROP.x + CROP.size) * density
-    const top = CROP.y * density
-    const bottom = FACE_LIMIT_Y * density
-    return (x, y) => x >= left && x < right && y >= top && y < bottom
-  }
   if (slot === 'head' || slot === 'face') {
     const top = HEAD_LIMIT_Y * density
     return (_x, y) => y >= top
@@ -162,6 +161,7 @@ export function shiftPicture(pic, dx, dy) {
  * @param {{ slot?: string, density?: number, range?: number, scales?: number[] }} [options]
  */
 export function registerToBase(itemPic, basePic, { slot, density = 1, range = REGISTER_RANGE, scales = REGISTER_SCALES } = {}) {
+  if (slot === 'outfit') return registerBySilhouette(itemPic, basePic, { density, range, scales })
   const { width, height } = itemPic
   const inside = registrationRegion(slot, density)
   const samples = []
@@ -212,6 +212,83 @@ export function registerToBase(itemPic, basePic, { slot, density = 1, range = RE
 }
 
 /**
+ * An outfit's registration (2026-09-17, fix round 1): line the *body* up, not the head.
+ *
+ * An outfit keeps the base's own body alpha below the chin (D01 §10.7), so wherever the generated figure's
+ * arms and legs sit a pixel or two off the base's, the base's outline shows beside them. And a generated
+ * figure's body does not line up with its own head — on dealer01 the head fits at dy +8, scale 1.01 and the
+ * limbs then miss. So: the same search as `registerToBase`, maximising the intersection-over-union of the
+ * two *silhouettes* (pixels solid in each) over the rows at and below the chin line, `OUTFIT_TOP_Y`. Colour
+ * is useless here — the outfit changed every colour of the body.
+ *
+ * Returns what `registerToBase` returns, with `error` as 1 − IoU and `iou` itself.
+ */
+export function registerBySilhouette(itemPic, basePic, { density = 1, range = REGISTER_RANGE, scales = REGISTER_SCALES, edgeWeight = SILHOUETTE_EDGE.weight, edgeBand = SILHOUETTE_EDGE.band } = {}) {
+  const { width, height } = itemPic
+  const top = OUTFIT_TOP_Y * density
+  const baseSolid = new Uint8Array(width * height)
+  for (let y = top; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (basePic.data[(y * width + x) * 4 + 3] > ALPHA_SOLID) baseSolid[y * width + x] = 1
+    }
+  }
+  // Weights: a band either side of the base's outline counts `edgeWeight` times, so the fit is decided by
+  // where the limbs' edges fall rather than by how much wider a skirt is than the legs under it.
+  const edge = new Uint8Array(width * height)
+  for (let y = top; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const p = y * width + x
+      const here = baseSolid[p]
+      if ((x > 0 && baseSolid[p - 1] !== here) || (x < width - 1 && baseSolid[p + 1] !== here) || (y > top && baseSolid[p - width] !== here) || (y < height - 1 && baseSolid[p + width] !== here)) edge[p] = 255
+    }
+  }
+  const band = dilateMask(edge, width, height, Math.max(1, Math.round(edgeBand * density)))
+  const weight = new Float32Array(width * height)
+  let baseWeight = 0
+  for (let y = top; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const p = y * width + x
+      weight[p] = band[p] ? edgeWeight : 1
+      if (baseSolid[p]) baseWeight += weight[p]
+    }
+  }
+  const pivotX = AXIS_X * density
+  const pivotY = BASELINE_Y * density
+  let best = { dx: 0, dy: 0, scale: 1, iou: -1 }
+  for (const scale of scales) {
+    const scaled = scaleAbout(itemPic, scale, pivotX, pivotY)
+    const xs = []
+    const ys = []
+    for (let y = Math.max(0, top - range); y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (scaled.data[(y * width + x) * 4 + 3] <= ALPHA_SOLID) continue
+        xs.push(x)
+        ys.push(y)
+      }
+    }
+    for (let dy = -range; dy <= range; dy++) {
+      for (let dx = -range; dx <= range; dx++) {
+        let inside = 0
+        let both = 0
+        for (let i = 0; i < xs.length; i++) {
+          const ty = ys[i] + dy
+          const tx = xs[i] + dx
+          if (ty < top || ty >= height || tx < 0 || tx >= width) continue
+          const p = ty * width + tx
+          inside += weight[p]
+          if (baseSolid[p]) both += weight[p]
+        }
+        const iou = both / (baseWeight + inside - both || 1)
+        const nearer = Math.abs(dx) + Math.abs(dy) + Math.abs(scale - 1) * 1000 < Math.abs(best.dx) + Math.abs(best.dy) + Math.abs(best.scale - 1) * 1000
+        if (iou > best.iou + 1e-9 || (Math.abs(iou - best.iou) <= 1e-9 && nearer)) best = { dx, dy, scale, iou }
+      }
+    }
+  }
+  const picture = shiftPicture(scaleAbout(itemPic, best.scale, pivotX, pivotY), best.dx, best.dy)
+  return { picture, dx: best.dx, dy: best.dy, scale: best.scale, error: 1 - best.iou, iou: best.iou }
+}
+
+/**
  * The item, as a mask over the item picture.
  *
  * Both pictures must already be background-free and on the same frame — `ingest` anchors the item with
@@ -254,6 +331,10 @@ export function diffAgainstBase(itemPic, basePic, options = {}) {
     throw new Error(`the base is ${basePic.width} × ${basePic.height} and the item is ${width} × ${height} — they must share a frame`)
   }
   const radius = Math.max(1, Math.round(density))
+  // Just under the chin line an outfit picture still holds the character's own chin, a few pixels off the
+  // base's once the body is registered rather than the head: there the window reaches further.
+  const chinTop = slot === 'outfit' ? OUTFIT_TOP_Y * density : -1
+  const chinBottom = slot === 'outfit' ? (OUTFIT_TOP_Y + CHIN_BAND.rows) * density : -1
   const tolSquared = colorTol * colorTol
   const shadowSquared = shadowTol * shadowTol
   const different = new Uint8Array(width * height)
@@ -267,8 +348,9 @@ export function diffAgainstBase(itemPic, basePic, options = {}) {
       const b = itemPic.data[at + 2]
       let anySolid = false
       let close = false
-      for (let wy = Math.max(0, y - radius); wy <= Math.min(height - 1, y + radius) && !close; wy++) {
-        for (let wx = Math.max(0, x - radius); wx <= Math.min(width - 1, x + radius); wx++) {
+      const reach = y >= chinTop && y < chinBottom ? CHIN_BAND.radius * density : radius
+      for (let wy = Math.max(0, y - reach); wy <= Math.min(height - 1, y + reach) && !close; wy++) {
+        for (let wx = Math.max(0, x - reach); wx <= Math.min(width - 1, x + reach); wx++) {
           const near = (wy * width + wx) * 4
           if (basePic.data[near + 3] <= ALPHA_SOLID) continue
           anySolid = true
@@ -480,9 +562,48 @@ export function keepOnlyHead(mask, width, height, density) {
   return mask
 }
 
-/** A picture cut down to the head region; the `clip` `writeDensities` applies again after halving. */
-export function clipToHead(pic, density) {
-  return applyMask(pic, keepOnlyHead(new Uint8Array(pic.width * pic.height).fill(255), pic.width, pic.height, density))
+/**
+ * What a base's face layer (50) holds: the head region, less the torso column below y 236 (`TORSO_COLUMN`),
+ * less the rows above `strandY` (frame units, or `null`) that an AI base's strand of hair went to layer 60 in.
+ */
+export function keepOnlyFace(mask, width, height, density, strandY = null) {
+  keepOnlyHead(mask, width, height, density)
+  const left = TORSO_COLUMN.x0 * density
+  const right = (TORSO_COLUMN.x1 + 1) * density
+  for (let y = TORSO_COLUMN.y0 * density; y < height; y++) mask.fill(0, y * width + left, y * width + right)
+  if (strandY !== null) mask.fill(0, 0, Math.min(mask.length, Math.round(strandY * density) * width))
+  return mask
+}
+
+/** A clip (`(pic, density) => pic`, as `writeDensities` takes) down to a base's face layer; see `keepOnlyFace`. */
+export function clipToFace(strandY = null) {
+  return (pic, density) => applyMask(pic, keepOnlyFace(new Uint8Array(pic.width * pic.height).fill(255), pic.width, pic.height, density, strandY))
+}
+
+/** A clip keeping only the rows `from ≤ y < to` (frame units; `null` for no bound). */
+export function clipToRows(from, to) {
+  return (pic, density) => {
+    const mask = new Uint8Array(pic.width * pic.height).fill(255)
+    if (from !== null) mask.fill(0, 0, Math.min(mask.length, Math.round(from * density) * pic.width))
+    if (to !== null) mask.fill(0, Math.min(mask.length, Math.round(to * density) * pic.width))
+    return applyMask(pic, mask)
+  }
+}
+
+/** Every pixel under `ALPHA_INK` made fully transparent black, in place. */
+export function dropFaint(pic) {
+  for (let at = 0; at < pic.data.length; at += 4) if (pic.data[at + 3] < ALPHA_INK) pic.data.fill(0, at, at + 4)
+  return pic
+}
+
+/**
+ * Where an AI base's strand of hair ends, in frame units, or `null` when it has none (2026-09-17, fix
+ * round 1). `measure` finds the head top below any thin strand above it; the cut sits `STRAND_MARGIN` below
+ * that, on a whole frame unit so both densities cut on the same row.
+ */
+export function strandCut(report, transform) {
+  if (!report.strand) return null
+  return Math.round(report.top * transform.scale + transform.offsetY + STRAND_MARGIN)
 }
 
 // ─────────────────────────────────────────────────────────── the style gate ──
@@ -511,7 +632,7 @@ export function clipToHead(pic, density) {
  * a note saying so — when there are too few of them to mean anything, because a picture with closed eyes
  * or a heavy fringe is not thereby a bad picture.
  *
- * `top` and `chin` are rows of the picture; `headHeight` is `chin - top` and `heads` is the figure from
+ * `strand` says whether thin strands were found above `top` (the ones the note reports). `top` and `chin` are rows of the picture; `headHeight` is `chin - top` and `heads` is the figure from
  * `top` to its feet over that.
  */
 export function measure(pic) {
@@ -603,7 +724,7 @@ export function measure(pic) {
     heads >= HEADS_RANGE[0] && heads <= HEADS_RANGE[1] &&
     Math.abs(centreOffset) <= pic.width * CENTRE_TOLERANCE &&
     (eyeRatio === null || (eyeRatio >= EYE_RANGE[0] && eyeRatio <= EYE_RANGE[1]))
-  return { bbox, top: bbox.y + top, chin: bbox.y + chin, headHeight, figureHeight, heads, eyeRatio, centreOffset, ok, notes }
+  return { bbox, top: bbox.y + top, strand: top >= settle, chin: bbox.y + chin, headHeight, figureHeight, heads, eyeRatio, centreOffset, ok, notes }
 }
 
 /** The `--dry-run` report, as the lines the style gate reads. */
@@ -629,9 +750,11 @@ export function describeMeasurement(report, width) {
  * transform and stores it; everything after it reads that transform back, so an expression and a hat
  * generated from the same character lock land on the same pixels as the body they belong to.
  *
- * An item and an expression write one layer each; an expression keeps only the head region (the crop,
- * above `FACE_LIMIT_Y`). A base writes four (2026-09-15, AI bases are flat): L30 the whole figure, the
- * neutral face L50 as its head region, and L20/L60 as empty frames marked `empty: true`. Re-ingesting a
+ * An item and an expression write one layer each; an expression keeps only the face region (`keepOnlyFace`).
+ * A base writes four (2026-09-15, AI bases are flat): L30 the whole figure, the neutral face L50 as its face
+ * region, and L20/L60 as empty frames marked `empty: true` — except that since 2026-09-17 a strand of hair
+ * above the head top (`measure`'s `strand`) is cut off at `strandY` (stored beside the transform) into L60,
+ * and out of L30 and every face layer; items are then measured against L30 with L60 over it. Re-ingesting a
  * base therefore resets the neutral face to the base's own; ingest `expr:<base>:neutral` after it to
  * override that.
  */
@@ -650,12 +773,15 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', toler
   const owner = target.kind === 'base' ? target.base : target.base ?? baseId
 
   let transform
+  let strandY = null
   if (target.kind === 'base') {
     const anchored = anchorBase(keyed)
     transform = { scale: anchored.scale, offsetX: anchored.offsetX, offsetY: anchored.offsetY }
-    manifest.bases[owner] = { transform }
+    strandY = strandCut(report, transform)
+    manifest.bases[owner] = { transform, ...(strandY === null ? {} : { strandY }) }
   } else {
     transform = manifest.bases[owner]?.transform
+    strandY = manifest.bases[owner]?.strandY ?? null
     if (!transform) throw new Error(`no transform stored for base ${owner} — ingest it with --as base:${owner} first`)
   }
   if (lockScale !== null) transform = { ...transform, scale: lockScale }
@@ -664,21 +790,38 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', toler
   /** What this picture becomes: `{ file, picture, clip?, extra? }`, one per layer written. */
   const layers = []
   if (target.kind === 'base') {
-    // An AI base is one flat picture — hair, face and body baked together — so it is cut three ways:
+    // An AI base is one flat picture — hair, face and body baked together — so it is cut up by region:
     // the whole figure as the body; its head region again as the neutral face, because layer 50 sits
-    // above the outfit and the hair ends and chin have to stay above a collar; and the two hair layers
-    // as empty frames, since there is no separate hair to put in them.
-    layers.push({ file: { name: baseFile(owner, LAYERS.body), layer: LAYERS.body }, picture: anchored })
-    layers.push({ file: { name: faceFile(owner, 'neutral'), layer: LAYERS.face }, picture: clipToHead(anchored, 2), clip: clipToHead })
-    for (const layer of [LAYERS.hairBack, LAYERS.hairFront]) {
-      layers.push({ file: { name: baseFile(owner, layer), layer }, picture: blankPicture(FRAME.w * 2, FRAME.h * 2), extra: { empty: true } })
+    // above the outfit and the hair ends and chin have to stay above a collar; the strand of hair above
+    // the head top (an ahoge), if there is one, as the front hair (60), so a hat can hide it; and the back
+    // hair (20) as an empty frame, since there is no separate hair to put in it.
+    const body = clipToRows(strandY, null)
+    layers.push({ file: { name: baseFile(owner, LAYERS.body), layer: LAYERS.body }, picture: body(anchored, 2), clip: body })
+    const face = clipToFace(strandY)
+    layers.push({ file: { name: faceFile(owner, 'neutral'), layer: LAYERS.face }, picture: face(anchored, 2), clip: face })
+    layers.push({ file: { name: baseFile(owner, LAYERS.hairBack), layer: LAYERS.hairBack }, picture: blankPicture(FRAME.w * 2, FRAME.h * 2), extra: { empty: true } })
+    if (strandY === null) {
+      layers.push({ file: { name: baseFile(owner, LAYERS.hairFront), layer: LAYERS.hairFront }, picture: blankPicture(FRAME.w * 2, FRAME.h * 2), extra: { empty: true } })
+    } else {
+      // Faint key noise above the head would be a stray pixel far outside a shape this small (C3), and the
+      // colour a transparent pixel keeps is bytes nobody sees.
+      const rows = clipToRows(null, strandY)
+      const strand = (pic, density) => dropFaint(rows(pic, density))
+      layers.push({ file: { name: baseFile(owner, LAYERS.hairFront), layer: LAYERS.hairFront }, picture: strand(anchored, 2), clip: strand })
+      log(`strand above y ${strandY} moved to ${baseFile(owner, LAYERS.hairFront)}`)
     }
   } else if (target.kind === 'expr') {
-    layers.push({ file: { name: faceFile(owner, target.expr), layer: LAYERS.face }, picture: clipToHead(anchored, 2), clip: clipToHead })
+    const face = clipToFace(strandY)
+    layers.push({ file: { name: faceFile(owner, target.expr), layer: LAYERS.face }, picture: face(anchored, 2), clip: face })
   } else {
+    // The item is measured against the whole base as it is drawn: its body, and its front hair when that
+    // holds a strand — otherwise a strand the item picture still shows would read as part of the item.
     const basePicture = await readPicture(join(dir, `${baseFile(owner, LAYERS.body)}@2x.png`))
+    const hairFront = baseFile(owner, LAYERS.hairFront)
+    if (manifest.files[hairFront] && !manifest.files[hairFront].empty) overPicture(basePicture, await readPicture(join(dir, `${hairFront}@2x.png`)))
     const registered = registerToBase(anchored, basePicture, { slot: target.slot, density: 2 })
-    log(`registered on ${owner}: dx ${registered.dx}, dy ${registered.dy} px @2x, scale ${registered.scale} (mean difference ${registered.error.toFixed(1)})`)
+    const fit = registered.iou === undefined ? `mean difference ${registered.error.toFixed(1)}` : `silhouette IoU ${registered.iou.toFixed(3)}`
+    log(`registered on ${owner}: dx ${registered.dx}, dy ${registered.dy} px @2x, scale ${registered.scale} (${fit})`)
     const cut = diffAgainstBase(registered.picture, basePicture, { ...diff, slot: target.slot, density: 2 })
     const layer = SLOT_LAYER[target.slot]
     layers.push({ file: { name: itemFile(target.slot, target.code, layer), layer, ...hides }, picture: cutItem(registered.picture, cut), icon: true })
