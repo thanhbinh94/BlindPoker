@@ -173,7 +173,12 @@ or head above a collar is a visible defect even where F01's own layers would hid
 5. **Clean-up**: regions under `minRegion` dropped; for `head`/`face` also regions under 5 % of the
    largest; a small closing (`closeRadius`) and hole fill (`maxHole`) so a hat's crown is not cracked where
    the base's hair outline runs under it.
-6. **Edge** (`cutItem`): 1 px dilation and a 1 px feather, with the soft edge taking its colour from the
+6. **Cover the base's limbs** (outfits only, fix round 2): below y 236, outside the head region, every
+   pixel the base inks that the outfit layer does not cover solidly, within 5 px (`coverReach`) of a solid
+   outfit pixel, joins the layer with the base's alpha and the outfit's own edge colour bled outward — so a
+   generated figure whose arms and legs are a little narrower than the base's does not leave the base's
+   outline beside them. Farther than that nothing is added.
+7. **Edge** (`cutItem`): 1 px dilation and a 1 px feather, with the soft edge taking its colour from the
    item's own pixels next to it rather than from the hair or skin it was drawn over.
 
 The defaults (`DIFF_DEFAULTS` in `extract.mjs`: `colorTol` 36, `shadowTol` 14, `minRegion` 100 px @1x,
