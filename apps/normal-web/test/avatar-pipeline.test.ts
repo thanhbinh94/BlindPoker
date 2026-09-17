@@ -22,9 +22,9 @@ import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { runChecks } from '../scripts/avatar-pipeline/checks.mjs'
-import { diffAgainstBase, ingest, measure } from '../scripts/avatar-pipeline/extract.mjs'
+import { OUTFIT_TOP_Y, cutItem, diffAgainstBase, ingest, measure, registerToBase } from '../scripts/avatar-pipeline/extract.mjs'
 import { AXIS_X, BASELINE_Y, BODY, CROP, DENSITIES, FACE_LIMIT_Y, FRAME, LAYERS, anchorBase, applyTransform, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
-import { MANIFEST_NAME, buildPlaceholders, stageOneFiles } from '../scripts/avatar-pipeline/manifest.mjs'
+import { ICON, MANIFEST_NAME, buildPlaceholders, iconName, stageOneFiles, writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
 import { alphaBBox, blankPicture, cropPicture, readPicture, removeChroma, renderSvg, writeDensities, writePicture } from '../scripts/avatar-pipeline/png.mjs'
 
 const PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url))
@@ -67,6 +67,8 @@ interface Manifest {
   frame: { w: number; h: number }
   crop: { x: number; y: number; size: number }
   files: Record<string, ManifestEntry>
+  /** One inventory icon per item layer (2026-09-17), named `<layer without _L<n>>_icon`. */
+  icons?: Record<string, { kind: 'icon'; of: string; w: number; h: number; bytes2x: number; placeholder?: boolean; real?: boolean }>
   bases?: Record<string, { transform: { scale: number; offsetX: number; offsetY: number } }>
 }
 
@@ -335,10 +337,10 @@ describe('diffAgainstBase', () => {
   it('cuts out the hat and nothing else', () => {
     const { bbox } = diffAgainstBase(framedItem, framedBase, { slot: 'head', density: 1 })
     expect(bbox, 'the hat was not found at all').not.toBeNull()
-    // The mask is deliberately 3 px larger than the difference on every side — the 2 px dilation that
+    // The mask is deliberately 2 px larger than the difference on every side — the 1 px dilation that
     // recovers the item's own antialiased rim, plus the 1 px feather — so that is what it is measured
     // against. Anything beyond this is the difference finding something that is not the hat.
-    const GROWTH = 3
+    const GROWTH = 2
     const expected = {
       x0: SRC_HAT.x0 * transform.scale + transform.offsetX - GROWTH,
       y0: SRC_HAT.y0 * transform.scale + transform.offsetY - GROWTH,
@@ -370,16 +372,23 @@ describe('diffAgainstBase', () => {
   })
 
   it('makes an outfit cover the body it is worn over', () => {
-    // D01 §10.7: the outfit must leave no underwear showing, so the mask absorbs the base below y = 176
-    // whatever the difference says.
+    // D01 §10.7: the outfit must leave no underwear showing, so the mask absorbs the base below the chin
+    // line whatever the difference says — outside the head region, which the base's own face layer paints.
     const { mask } = diffAgainstBase(framedOutfit, framedBase, { slot: 'outfit', density: 1 })
     let uncovered = 0
-    for (let y = 176; y < FRAME.h; y++) {
+    for (let y = OUTFIT_TOP_Y; y < FRAME.h; y++) {
       for (let x = 0; x < FRAME.w; x++) {
+        if (y < FACE_LIMIT_Y && x >= CROP.x && x < CROP.x + CROP.size) continue
         if (framedBase.data[(y * FRAME.w + x) * 4 + 3]! > 8 && mask[y * FRAME.w + x] === 0) uncovered++
       }
     }
     expect(uncovered, 'pixels of the base the outfit layer does not cover').toBe(0)
+  })
+
+  it('keeps nothing of an outfit above the chin line', () => {
+    // The picture's head has changed too (a generator redraws it every time): none of it may ride along.
+    const { mask } = diffAgainstBase(framedItem, framedBase, { slot: 'outfit', density: 1 })
+    for (let p = 0; p < OUTFIT_TOP_Y * FRAME.w; p++) expect(mask[p], `mask at ${p % FRAME.w},${Math.floor(p / FRAME.w)}`).toBe(0)
   })
 
   it('keeps a face accessory inside the portrait crop', () => {
@@ -397,10 +406,160 @@ describe('diffAgainstBase', () => {
     const speck = `<rect x="900" y="300" width="30" height="30" fill="#cc2222"/>`
     const keyed = removeChroma(await renderSvg(sourceSvg(HAT + speck), SRC.w, SRC.h), { tolerance: 40 })
     const framed = await applyTransform(keyed, transform, 1)
-    const { mask } = diffAgainstBase(framed, framedBase, { slot: 'outfit', density: 1, minRegion: 400 })
+    // No slot, so no slot rule can be what removes it.
+    const { mask } = diffAgainstBase(framed, framedBase, { density: 1, minRegion: 400 })
     const x = Math.round(915 * transform.scale + transform.offsetX)
     const y = Math.round(315 * transform.scale + transform.offsetY)
     expect(mask[y * FRAME.w + x], 'the speck survived the minimum-region filter').toBe(0)
+  }, 60_000)
+})
+
+// ──────────────────────────────────────── a redrawn picture, at @2x (2026-09-17) ──
+
+/**
+ * What a generator actually hands back: the base *redrawn* — every pixel a little different, the figure a
+ * few pixels off — with one change. Built straight on the @2x frame, no key and no transform involved.
+ */
+describe('a redrawn item picture', () => {
+  const W = FRAME.w * 2
+  const H = FRAME.h * 2
+  /** The item picture is the base moved by this much, before registration puts it back. */
+  const DRIFT = { dx: 3, dy: -2 }
+  /** The hat, in base (registered) coordinates. */
+  const HAT_BLOCK = { x0: 300, y0: 100, x1: 460, y1: 200 }
+  /** A clothes block below the chin, for the outfit case. */
+  const CLOTHES_BLOCK = { x0: 300, y0: 520, x1: 470, y1: 760 }
+
+  /** A deterministic pseudo-random sequence, so the texture and the noise are the same on every run. */
+  function lcg(seed: number): () => number {
+    let state = seed >>> 0
+    return () => {
+      state = (Math.imul(state, 1664525) + 1013904223) >>> 0
+      return state / 0x1_0000_0000
+    }
+  }
+
+  /** A figure tiled with 12 px blocks of unrelated colours: edges everywhere, and no period to lock onto. */
+  function texturedBase(): Picture {
+    const pic = blankPicture(W, H)
+    const random = lcg(7)
+    const tiles = new Map<string, number[]>()
+    for (let y = 80; y < 820; y++) {
+      for (let x = 250; x < 520; x++) {
+        const key = `${Math.floor(x / 12)},${Math.floor(y / 12)}`
+        if (!tiles.has(key)) tiles.set(key, [40 + random() * 170, 40 + random() * 170, 40 + random() * 170])
+        const [r, g, b] = tiles.get(key)!
+        pic.data.set([Math.round(r!), Math.round(g!), Math.round(b!), 255], (y * W + x) * 4)
+      }
+    }
+    return pic
+  }
+
+  function fill(pic: Picture, block: { x0: number; y0: number; x1: number; y1: number }, rgb: [number, number, number]): Picture {
+    for (let y = block.y0; y < block.y1; y++) {
+      for (let x = block.x0; x < block.x1; x++) pic.data.set([...rgb, 255], (y * W + x) * 4)
+    }
+    return pic
+  }
+
+  /** The base with `change` applied, moved by `DRIFT`, with ±6 of noise on every channel of every solid pixel. */
+  function redrawn(base: Picture, change: (pic: Picture) => Picture): Picture {
+    const changed = change({ data: Buffer.from(base.data), width: W, height: H })
+    const moved = blankPicture(W, H)
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const sx = x - DRIFT.dx
+        const sy = y - DRIFT.dy
+        if (sx < 0 || sy < 0 || sx >= W || sy >= H) continue
+        moved.data.set(changed.data.subarray((sy * W + sx) * 4, (sy * W + sx) * 4 + 4), (y * W + x) * 4)
+      }
+    }
+    const random = lcg(11)
+    for (let i = 0; i < moved.data.length; i += 4) {
+      if (moved.data[i + 3] === 0) continue
+      for (let c = 0; c < 3; c++) moved.data[i + c] = Math.max(0, Math.min(255, moved.data[i + c]! + Math.round(random() * 12 - 6)))
+    }
+    return moved
+  }
+
+  const base = texturedBase()
+  const hatPicture = redrawn(base, (pic) => fill(pic, HAT_BLOCK, [200, 30, 30]))
+  let registeredHat: ReturnType<typeof registerToBase> | null = null
+  /** Registration is the slow step; the three hat cases share one. */
+  const hatRegistered = (): ReturnType<typeof registerToBase> => (registeredHat ??= registerToBase(hatPicture, base, { slot: 'head', density: 2 }))
+
+  it('registration recovers the drift', () => {
+    const { dx, dy, scale } = hatRegistered()
+    expect({ dx, dy, scale }).toEqual({ dx: -DRIFT.dx, dy: -DRIFT.dy, scale: 1 })
+  }, 60_000)
+
+  it('cuts a head layer with ink only inside the hat', () => {
+    const registered = hatRegistered()
+    const layer = cutItem(registered.picture, diffAgainstBase(registered.picture, base, { slot: 'head', density: 2 }))
+    const SLACK = 2
+    const strays: string[] = []
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        if (layer.data[(y * W + x) * 4 + 3] === 0) continue
+        const inside = x >= HAT_BLOCK.x0 - SLACK && x < HAT_BLOCK.x1 + SLACK && y >= HAT_BLOCK.y0 - SLACK && y < HAT_BLOCK.y1 + SLACK
+        if (!inside) strays.push(`${x},${y}`)
+      }
+    }
+    expect(strays.length, `ink outside the hat, e.g. ${strays.slice(0, 5).join(' ')}`).toBe(0)
+    const box = alphaBBox(layer, 128)!
+    expect(box, 'the hat itself is missing').not.toBeNull()
+    expect(Math.abs(box.x - HAT_BLOCK.x0)).toBeLessThanOrEqual(SLACK)
+    expect(Math.abs(box.y - HAT_BLOCK.y0)).toBeLessThanOrEqual(SLACK)
+    expect(Math.abs(box.x + box.w - HAT_BLOCK.x1)).toBeLessThanOrEqual(SLACK)
+    expect(Math.abs(box.y + box.h - HAT_BLOCK.y1)).toBeLessThanOrEqual(SLACK)
+  }, 60_000)
+
+  it('without registration the same picture leaks the figure', () => {
+    // The control for the two cases above: a 3 px drift on a textured figure is change along every edge.
+    const layer = cutItem(hatPicture, diffAgainstBase(hatPicture, base, { slot: 'head', density: 2 }))
+    let outside = 0
+    for (let y = HAT_BLOCK.y1 + 10; y < 520; y++) {
+      for (let x = 0; x < W; x++) if (layer.data[(y * W + x) * 4 + 3]! > 0) outside++
+    }
+    expect(outside).toBeGreaterThan(100)
+  }, 60_000)
+
+  it('keeps nothing of an outfit above the chin line, even when the head changed too', () => {
+    const outfitPicture = redrawn(base, (pic) => fill(fill(pic, CLOTHES_BLOCK, [30, 40, 150]), { x0: 280, y0: 90, x1: 500, y1: 470 }, [230, 200, 60]))
+    const registered = registerToBase(outfitPicture, base, { slot: 'outfit', density: 2 })
+    const { mask } = diffAgainstBase(registered.picture, base, { slot: 'outfit', density: 2 })
+    let above = 0
+    for (let p = 0; p < OUTFIT_TOP_Y * 2 * W; p++) if (mask[p]! > 0) above++
+    expect(above, 'mask pixels above y 236 @1x').toBe(0)
+    expect(mask[650 * W + 380], 'the clothes themselves').toBeGreaterThan(0)
+  }, 60_000)
+
+  it('writes a square icon at both densities with the ink centred', async () => {
+    const dir = caseDir('icon')
+    const registered = hatRegistered()
+    const layer = cutItem(registered.picture, diffAgainstBase(registered.picture, base, { slot: 'head', density: 2 }))
+    const manifest = { files: {}, icons: {} as Record<string, { kind: string; of: string; w: number; h: number; bytes2x: number; real?: boolean }> }
+    const name = await writeIcon(layer, dir, 'item_head_tophat01_L80', manifest, { real: true })
+    expect(name).toBe('item_head_tophat01_icon')
+    expect(iconName('item_face_glasses_round_gold01_L70')).toBe('item_face_glasses_round_gold01_icon')
+    expect(manifest.icons[name]).toEqual({
+      kind: 'icon',
+      of: 'item_head_tophat01_L80',
+      w: ICON.w,
+      h: ICON.h,
+      bytes2x: statSync(join(dir, `${name}@2x.png`)).size,
+      real: true,
+    })
+    for (const density of DENSITIES) {
+      const icon = await readPicture(join(dir, `${name}@${density}x.png`))
+      expect([icon.width, icon.height]).toEqual([ICON.w * density, ICON.h * density])
+      const box = alphaBBox(icon)!
+      expect(box, `@${density}x icon is empty`).not.toBeNull()
+      // Fitted into 84 % of the square along its longer side, and centred on both axes.
+      expect(Math.abs(Math.max(box.w, box.h) - ICON.w * density * ICON.fill)).toBeLessThanOrEqual(2 * density)
+      expect(Math.abs(box.x + box.w / 2 - (ICON.w * density) / 2)).toBeLessThanOrEqual(density)
+      expect(Math.abs(box.y + box.h / 2 - (ICON.h * density) / 2)).toBeLessThanOrEqual(density)
+    }
   }, 60_000)
 })
 
@@ -576,6 +735,13 @@ async function sharpDownscale(pic: Picture): Promise<Picture> {
 
 // ──────────────────────────────────────────────────────── the committed set ──
 
+/** Every PNG the stage-1 set puts on disk: each layer, and each item's icon, at both densities. */
+function stageOnePngs(): string[] {
+  const files = stageOneFiles() as { name: string; kind: string }[]
+  const names = [...files.map((file) => file.name), ...files.filter((file) => file.kind === 'item').map((file) => iconName(file.name))]
+  return names.flatMap((name) => DENSITIES.map((density: number) => `${name}@${density}x.png`))
+}
+
 describe('the stage-1 name list', () => {
   const files = stageOneFiles()
 
@@ -610,11 +776,27 @@ describe('the stage-1 name list', () => {
 describe('the committed placeholder set', () => {
   const manifest = JSON.parse(readFileSync(WEB_MANIFEST, 'utf8')) as Manifest
 
-  it('holds every stage-1 name at both densities, and nothing else', () => {
-    const expected = stageOneFiles().flatMap((file: { name: string }) => DENSITIES.map((density: number) => `${file.name}@${density}x.png`))
+  it('holds every stage-1 name and every item icon at both densities, and nothing else', () => {
     const onDisk = readdirSync(OUT_DIR).filter((name) => name.endsWith('.png'))
-    expect(onDisk.sort()).toEqual(expected.sort())
+    expect(onDisk.sort()).toEqual(stageOnePngs().sort())
   })
+
+  it('lists an icon for every item layer, flagged the way the layer is', async () => {
+    const items = (stageOneFiles() as { name: string; kind: string }[]).filter((file) => file.kind === 'item')
+    expect(Object.keys(manifest.icons ?? {}).sort()).toEqual(items.map((file) => iconName(file.name)).sort())
+    for (const { name } of items) {
+      const icon = iconName(name)
+      const entry = manifest.icons![icon]!
+      expect(entry, icon).toMatchObject({ kind: 'icon', of: name, w: ICON.w, h: ICON.h })
+      expect(entry.bytes2x, icon).toBe(statSync(join(OUT_DIR, `${icon}@2x.png`)).size)
+      expect(entry.real === true, `${icon} is real exactly when ${name} is`).toBe(manifest.files[name]!.real === true)
+      expect(entry.placeholder === true, `${icon} is a stand-in exactly when ${name} is`).toBe(manifest.files[name]!.placeholder === true)
+      for (const density of DENSITIES) {
+        const meta = await sharp(join(OUT_DIR, `${icon}@${density}x.png`)).metadata()
+        expect([meta.width, meta.height], `${icon}@${density}x`).toEqual([ICON.w * density, ICON.h * density])
+      }
+    }
+  }, 60_000)
 
   it('describes each of them in the manifest', () => {
     expect(manifest.version).toBe(1)
@@ -701,6 +883,9 @@ describe('the ingest command', () => {
     }
     const stdout = run(['check', 'base_f01_L30', 'item_head_tophat01_L80', '--dir', dir])
     expect(stdout, stdout).not.toMatch(/FAIL/)
+    // …and the item's inventory icon comes with it.
+    expect(manifest.icons?.item_head_tophat01_icon).toMatchObject({ kind: 'icon', of: 'item_head_tophat01_L80', w: ICON.w, h: ICON.h, real: true })
+    for (const density of DENSITIES) expect(existsSync(join(dir, `item_head_tophat01_icon@${density}x.png`))).toBe(true)
   }, 120_000)
 })
 
@@ -814,7 +999,7 @@ describe('a flat AI base', () => {
     expect([...results.values()].some((result) => !result.ok), 'a drawn layer marked empty passed every check').toBe(true)
   }, 30_000)
 
-  it('placeholder leaves the empty real layers alone', async () => {
+  it('placeholder leaves the empty real layers and a real item alone, and gives the item its icon', async () => {
     const dir = caseDir('empty-placeholder')
     const blank = { layer: 0, w: FRAME.w, h: FRAME.h, bytes2x: 0, real: true, empty: true }
     const files: Record<string, ManifestEntry> = {}
@@ -822,16 +1007,33 @@ describe('a flat AI base', () => {
       for (const density of DENSITIES) await writePicture(blankPicture(FRAME.w * density, FRAME.h * density), join(dir, `${name}@${density}x.png`))
       files[name] = { ...blank, layer, bytes2x: statSync(join(dir, `${name}@2x.png`)).size }
     }
+    // A real hat ingested before icons existed: its layer must stay byte for byte, and its icon appear.
+    const hat = 'item_head_tophat01_L80'
+    for (const density of DENSITIES) {
+      const pic = blankPicture(FRAME.w * density, FRAME.h * density)
+      for (let y = 60 * density; y < 120 * density; y++) {
+        for (let x = 140 * density; x < 240 * density; x++) pic.data.set([30, 30, 40, 255], (y * pic.width + x) * 4)
+      }
+      await writePicture(pic, join(dir, `${hat}@${density}x.png`))
+    }
+    const hatBytes = DENSITIES.map((density: number) => readFileSync(join(dir, `${hat}@${density}x.png`)))
+    files[hat] = { layer: 80, w: FRAME.w, h: FRAME.h, bytes2x: hatBytes[1]!.length, real: true }
     manifestFor(dir, files)
     await buildPlaceholders({ dir, targets: [join(dir, MANIFEST_NAME)] })
     const after = JSON.parse(readFileSync(join(dir, MANIFEST_NAME), 'utf8')) as Manifest
     expect(Object.keys(after.files)).toHaveLength(stageOneFiles().length)
-    for (const name of Object.keys(files)) {
-      expect(after.files[name], name).toEqual(files[name])
+    for (const name of Object.keys(files)) expect(after.files[name], name).toEqual(files[name])
+    for (const name of ['base_f01_L20', 'base_f01_L60']) {
       for (const density of DENSITIES) {
         expect(fullyTransparent(await readPicture(join(dir, `${name}@${density}x.png`))), `${name}@${density}x was redrawn`).toBe(true)
       }
     }
+    DENSITIES.forEach((density: number, index: number) => {
+      expect(readFileSync(join(dir, `${hat}@${density}x.png`)).equals(hatBytes[index]!), `${hat}@${density}x was redrawn`).toBe(true)
+    })
+    expect(after.icons?.item_head_tophat01_icon).toMatchObject({ kind: 'icon', of: hat, real: true })
+    expect(after.icons?.item_head_tophat01_icon?.placeholder).toBeUndefined()
+    expect(alphaBBox(await readPicture(join(dir, 'item_head_tophat01_icon@2x.png'))), 'the real hat icon is empty').not.toBeNull()
   }, 600_000)
 })
 
@@ -841,8 +1043,9 @@ describe('the placeholder command', () => {
     const run = (): string => execFileSync(process.execPath, [SCRIPT, 'placeholder', '--out', dir], { cwd: PACKAGE_ROOT, encoding: 'utf8' })
     run()
     const first = readFileSync(join(dir, MANIFEST_NAME))
-    const expected = stageOneFiles().flatMap((file: { name: string }) => DENSITIES.map((density: number) => `${file.name}@${density}x.png`))
-    expect(readdirSync(dir).filter((name) => name.endsWith('.png')).sort()).toEqual(expected.sort())
+    expect(readdirSync(dir).filter((name) => name.endsWith('.png')).sort()).toEqual(stageOnePngs().sort())
+    const written = JSON.parse(first.toString('utf8')) as Manifest
+    expect(written.icons?.item_frame_gold_icon).toMatchObject({ kind: 'icon', of: 'item_frame_gold_L90', placeholder: true })
     // Idempotent: the artefact is committed, so a second run that changed a byte would be a dirty tree.
     run()
     expect(readFileSync(join(dir, MANIFEST_NAME)).equals(first)).toBe(true)

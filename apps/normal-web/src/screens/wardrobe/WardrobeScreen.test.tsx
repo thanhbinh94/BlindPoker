@@ -126,6 +126,23 @@ describe('WardrobeScreen', () => {
     expect(screen.getByText(viNormal.items.head_tophat01)).toBeInTheDocument()
   })
 
+  it('draws a head tile as the item icon, not as a figure wearing it', async () => {
+    const user = userEvent.setup()
+    renderScreen()
+    await screen.findByText(viNormal.bases.f01)
+    await user.click(screen.getByRole('tab', { name: viNormal.wardrobe.tabs.head }))
+
+    const tile = screen.getByText(viNormal.items.head_tophat01).closest('button') as HTMLElement
+    const icon = tile.querySelector('img')
+    expect(icon).not.toBeNull()
+    // Named after the layer (`item_head_tophat01_L80`) without its `_L80`, at both densities, from the asset base.
+    expect(icon).toHaveAttribute('src', '/avatar/item_head_tophat01_icon@1x.png')
+    expect(icon).toHaveAttribute('srcset', '/avatar/item_head_tophat01_icon@1x.png 1x, /avatar/item_head_tophat01_icon@2x.png 2x')
+    expect(icon).toHaveAttribute('alt', '')
+    expect(tile.querySelectorAll('img')).toHaveLength(1)
+    expect(tile.querySelector('[data-chibi-hash]')).toBeNull()
+  })
+
   it('locks an unowned tile, and a click on it does not equip anything', async () => {
     const user = userEvent.setup()
     renderScreen()

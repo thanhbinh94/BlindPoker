@@ -18,7 +18,7 @@ import { mkdir } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { CROP, DENSITIES, FRAME, LAYERS, placeholderSvg } from './frame.mjs'
-import { renderSvg, writeDensities, writeIfChanged } from './png.mjs'
+import { iconPicture, readPicture, renderSvg, writeDensities, writeIfChanged } from './png.mjs'
 
 export const MANIFEST_NAME = 'avatar-manifest.json'
 export const MANIFEST_VERSION = 1
@@ -122,7 +122,30 @@ export function parseName(name) {
 // ──────────────────────────────────────────────────────────────── the file ──
 
 export function emptyManifest() {
-  return { version: MANIFEST_VERSION, frame: FRAME, crop: CROP, files: {}, bases: {} }
+  return { version: MANIFEST_VERSION, frame: FRAME, crop: CROP, files: {}, icons: {}, bases: {} }
+}
+
+// ───────────────────────────────────────────────────────────────── the icons ──
+
+/**
+ * An item's inventory icon (2026-09-17): the item layer on its own, cut to its ink, fitted into `FILL` of a
+ * square and centred. Named after the layer without its `_L<n>` — `item_head_tophat01_icon` — so the client
+ * derives it from `asset.file` and the API does not change. The manifest lists icons under their own
+ * `icons` key rather than `files`: `files` is the set of frame-sized layers that `check`, the renderer and
+ * the server's loader all read, and an icon is none of those.
+ */
+export const ICON = { w: 96, h: 96, fill: 0.84 }
+
+export const iconName = (layerName) => `${layerName.replace(/_L\d+$/, '')}_icon`
+
+/** Write both densities of one item's icon from its @2x layer, and record it in `manifest.icons`. */
+export async function writeIcon(layer2x, dir, layerName, manifest, flags) {
+  const name = iconName(layerName)
+  const picture = await iconPicture(layer2x, ICON.w * 2, ICON.fill)
+  const bytes2x = await writeDensities(picture, dir, name)
+  manifest.icons ??= {}
+  manifest.icons[name] = { kind: 'icon', of: layerName, w: ICON.w, h: ICON.h, bytes2x, ...flags }
+  return name
 }
 
 export function readManifest(file) {
@@ -140,9 +163,18 @@ export function readManifest(file) {
 export function serialiseManifest(manifest) {
   const files = {}
   for (const name of Object.keys(manifest.files).sort()) files[name] = manifest.files[name]
+  const icons = {}
+  for (const name of Object.keys(manifest.icons ?? {}).sort()) icons[name] = manifest.icons[name]
   const bases = {}
   for (const base of Object.keys(manifest.bases ?? {}).sort()) bases[base] = manifest.bases[base]
-  const ordered = { version: manifest.version, frame: manifest.frame, crop: manifest.crop, files, ...(Object.keys(bases).length ? { bases } : {}) }
+  const ordered = {
+    version: manifest.version,
+    frame: manifest.frame,
+    crop: manifest.crop,
+    files,
+    ...(Object.keys(icons).length ? { icons } : {}),
+    ...(Object.keys(bases).length ? { bases } : {}),
+  }
   return Buffer.from(`${JSON.stringify(ordered, null, 2)}\n`)
 }
 
@@ -189,11 +221,20 @@ export async function buildPlaceholders({ dir, targets, log = () => {} }) {
     if (before?.real) {
       manifest.files[file.name] = before
       kept++
+      // A real item keeps the icon `ingest` wrote; one ingested before icons existed gets it now, read from
+      // the layer on disk, which is left exactly as it is.
+      if (file.kind === 'item') {
+        const icon = iconName(file.name)
+        const had = previous.icons?.[icon]
+        if (had && existsSync(join(dir, `${icon}@2x.png`))) manifest.icons[icon] = had
+        else await writeIcon(await readPicture(join(dir, `${file.name}@2x.png`)), dir, file.name, manifest, { real: true })
+      }
       continue
     }
     const picture = await renderSvg(placeholderSvg(file, 2), FRAME.w * 2, FRAME.h * 2)
     const bytes2x = await writeDensities(picture, dir, file.name)
     manifest.files[file.name] = entryFor(file, bytes2x, { placeholder: true })
+    if (file.kind === 'item') await writeIcon(picture, dir, file.name, manifest, { placeholder: true })
     drawn++
   }
   await writeManifest(manifest, targets)

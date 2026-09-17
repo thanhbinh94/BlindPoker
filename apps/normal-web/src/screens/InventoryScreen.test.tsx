@@ -141,17 +141,18 @@ describe('InventoryScreen', () => {
     expect(head.getAllByText(/2026/).length).toBeGreaterThan(0)
   })
 
-  it('previews each drawn item on the figure that would wear it, and draws nothing for a word', async () => {
+  it('shows each drawn item as its own icon, and draws nothing for a word', async () => {
     renderScreen()
     await screen.findByText(viNormal.items.head_beanie01)
 
-    // The tile for a head piece the player is *not* wearing is a picture of them wearing it — the same
-    // avatar with that one slot swapped in.
+    // The card for a head piece is the item on its own — the pipeline's icon, not a figure wearing it.
+    const card = panelOf('head').getByText(viNormal.items.head_tophat01).closest('li')
     await waitFor(() => {
-      expect(panelOf('head').getByText(viNormal.items.head_tophat01).closest('li')?.querySelector('[data-chibi-hash]')).not.toBeNull()
+      expect(card?.querySelector('img[data-item-icon]')?.getAttribute('src')).toBe('/avatar/item_head_tophat01_icon@1x.png')
     })
+    expect(card?.querySelector('[data-chibi-hash]')).toBeNull()
     // `title` has no geometry, so its tile carries words and nothing else.
-    expect(panelOf('title').getByText(viNormal.items.title_rookie).closest('li')?.querySelector('[data-chibi-hash]')).toBeNull()
+    expect(panelOf('title').getByText(viNormal.items.title_rookie).closest('li')?.querySelector('img')).toBeNull()
   })
 
   it('marks what the avatar is actually wearing, worn pieces and words alike', async () => {

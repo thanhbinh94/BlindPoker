@@ -1,7 +1,6 @@
-import { Chibi } from '@bp/ui-kit'
+import { assetUrl, useAvatarAssetsBase } from '@bp/ui-kit'
 import { useTranslation } from 'react-i18next'
-import type { AchievementDefDto, AvatarConfigDto, BaseDto, ItemDto, ItemSlot } from '../../api.js'
-import { chibiFromApi } from '../../avatar/chibi.js'
+import type { AchievementDefDto, AvatarConfigDto, ItemDto, ItemSlot } from '../../api.js'
 import { itemName } from '../../catalog-i18n.js'
 import { hintFor } from '../catalog.js'
 import s from './wardrobe.module.css'
@@ -9,32 +8,47 @@ import s from './wardrobe.module.css'
 /** The slots that draw a picture; `title` and `badge` are words and preview as nothing. */
 const PICTURED: ReadonlySet<ItemSlot> = new Set(['head', 'face', 'outfit', 'aura', 'frame'])
 
+/** The icon's size on screen, in CSS pixels. The files are 96 px (@1x) and 192 px (@2x), so both only ever shrink. */
+const ICON_SIZE = 64
+
+/**
+ * The inventory icon the asset pipeline writes beside every item layer (docs/avatar-2d.md §4): the layer's
+ * own name without its `_L<n>`, plus `_icon` — `item_head_tophat01_L80` → `item_head_tophat01_icon`. Derived
+ * here rather than carried by the API, so the catalogue DTO did not have to change.
+ */
+function iconFile(layerFile: string): string {
+  return `${layerFile.replace(/_L\d+$/, '')}_icon`
+}
+
 export interface ItemPreviewProps {
   item: ItemDto
-  /** The configuration the item is previewed *on* — usually the current draft with this item's slot set to
-   * `item.id`, so a hat is shown on the figure that would actually wear it. */
-  config: AvatarConfigDto
-  items: ReadonlyMap<string, ItemDto>
-  bases: ReadonlyMap<string, BaseDto>
 }
 
 /**
- * The picture half of a tile: the item, drawn on the figure that would wear it, cropped the way the design
- * calls for per slot — head-and-shoulders for `head`/`face`/`frame`, full body for `outfit`/`aura` — or
- * nothing at all for `title`/`badge`, which have no layer to draw.
+ * The picture half of a tile: the item on its own, as the pipeline's icon — cut to the item and centred in a
+ * square, so a hat reads as a hat whatever figure it will end up on — or nothing at all for `title`/`badge`,
+ * which have no layer to draw. Seeing it *worn* is the big preview's job: picking a tile puts it there.
  *
- * Shared between the wardrobe's own tiles (`ItemTab` below) and the inventory's read-only cards, the same
- * way `PartPortrait` once was: one picture, two chrome styles around it.
+ * Shared between the wardrobe's own tiles (`ItemTab` below) and the inventory's read-only cards: one picture,
+ * two chrome styles around it. Served from the same asset base as every `Chibi` layer, so it is `img-src 'self'`.
  */
-export function ItemPreview({ item, config, items, bases }: ItemPreviewProps) {
-  if (!PICTURED.has(item.slot)) return null
-  const subject = chibiFromApi({ ...config, [item.slot]: item.id }, items, bases)
-  if (subject === null) return null
-  if (item.slot === 'outfit' || item.slot === 'aura') return <Chibi subject={subject} frame="full" size={72} />
-  // The frame item's own ring is 130 % of the head crop (D01 §5) and draws outside it, unclipped — a 64 px crop
-  // would put a ~83 px ring inside this 64 px tile, spilling past its edge. 48 px keeps the ring (~62 px) inside.
-  if (item.slot === 'frame') return <Chibi subject={subject} frame="head" size={48} />
-  return <Chibi subject={subject} frame="head" size={64} />
+export function ItemPreview({ item }: ItemPreviewProps) {
+  const base = useAvatarAssetsBase()
+  if (!PICTURED.has(item.slot) || item.asset === undefined) return null
+  const file = iconFile(item.asset.file)
+  return (
+    <img
+      className={s.tileIcon}
+      src={assetUrl(base, file, 1)}
+      srcSet={`${assetUrl(base, file, 1)} 1x, ${assetUrl(base, file, 2)} 2x`}
+      width={ICON_SIZE}
+      height={ICON_SIZE}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      data-item-icon={item.id}
+    />
+  )
 }
 
 export interface ItemTabProps {
@@ -43,8 +57,6 @@ export interface ItemTabProps {
   owned: ReadonlySet<string>
   achievements: readonly AchievementDefDto[]
   draft: AvatarConfigDto
-  items: ReadonlyMap<string, ItemDto>
-  bases: ReadonlyMap<string, BaseDto>
   onPick: (itemId: string) => void
 }
 
@@ -54,7 +66,7 @@ export interface ItemTabProps {
  * every account starts with the default outfit owned — but the lock logic here does not know that; it just
  * asks `owned`.
  */
-export function ItemTab({ slot, catalog, owned, achievements, draft, items, bases, onPick }: ItemTabProps) {
+export function ItemTab({ slot, catalog, owned, achievements, draft, onPick }: ItemTabProps) {
   const { t } = useTranslation('normal')
   const rows = catalog.filter((item) => item.slot === slot)
 
@@ -75,7 +87,7 @@ export function ItemTab({ slot, catalog, owned, achievements, draft, items, base
               if (isOwned) onPick(item.id)
             }}
           >
-            <ItemPreview item={item} config={draft} items={items} bases={bases} />
+            <ItemPreview item={item} />
             <span className={s.tileName}>{itemName(item.id, t)}</span>
             {isOwned ? null : <span className={s.tileHint}>{hintFor(item, achievements, t)}</span>}
           </button>
