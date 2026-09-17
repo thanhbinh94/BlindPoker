@@ -488,6 +488,37 @@ describe('a redrawn item picture', () => {
   /** Registration is the slow step; the three hat cases share one. */
   const hatRegistered = (): ReturnType<typeof registerToBase> => (registeredHat ??= registerToBase(hatPicture, base, { slot: 'head', density: 2 }))
 
+  it('an outfit covers a base limb wider than its own, and leaves a far base limb alone', () => {
+    // A base leg 4 px (@1x) wider than the outfit's on each side, with a dark outline, and a base arm far
+    // from any outfit pixel.
+    const W2 = FRAME.w * 2
+    const limbBase = blankPicture(W2, FRAME.h * 2)
+    const paint = (pic: Picture, x0: number, y0: number, x1: number, y1: number, rgb: [number, number, number]): void => {
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) pic.data.set([...rgb, 255], (y * W2 + x) * 4)
+    }
+    paint(limbBase, 300, 600, 340, 800, [90, 40, 30])
+    paint(limbBase, 302, 600, 338, 800, [230, 200, 180])
+    paint(limbBase, 600, 600, 640, 700, [230, 200, 180])
+    const outfit = blankPicture(W2, FRAME.h * 2)
+    paint(outfit, 308, 600, 332, 800, [30, 40, 150])
+    const cut = diffAgainstBase(outfit, limbBase, { slot: 'outfit', density: 2 })
+    const layer = cutItem(outfit, cut)
+    const shows: string[] = []
+    for (let y = 600; y < 800; y++) {
+      for (let x = 280; x < 360; x++) {
+        const p = (y * W2 + x) * 4
+        if (layer.data[p + 3]! < limbBase.data[p + 3]!) shows.push(`${x},${y}`)
+        // Nothing grows past the base's own silhouette.
+        if (limbBase.data[p + 3] === 0) expect(layer.data[p + 3], `outfit outside the base leg at ${x},${y}`).toBe(0)
+      }
+    }
+    expect(shows.length, `base pixels showing beside the outfit leg, e.g. ${shows.slice(0, 4).join(' ')}`).toBe(0)
+    // The cover is the outfit's colour bled outward, not the base's skin or outline.
+    const at = (700 * W2 + 301) * 4
+    expect(layer.data[at + 2]! - layer.data[at]!, 'the cover takes the outfit colour').toBeGreaterThan(60)
+    expect(layer.data[(650 * W2 + 620) * 4 + 3], 'a base arm with no outfit arm near it').toBe(0)
+  }, 60_000)
+
   it('an outfit registers on the body silhouette below the chin line', () => {
     // The body moved by the drift while its head and every colour changed: only the outline is left to go by.
     const outfit = redrawn(base, (pic) => fill(fill(pic, { x0: 250, y0: 470, x1: 520, y1: 820 }, [30, 40, 150]), { x0: 250, y0: 80, x1: 520, y1: 470 }, [230, 200, 60]))

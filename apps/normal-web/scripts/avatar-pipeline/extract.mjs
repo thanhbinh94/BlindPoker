@@ -76,7 +76,7 @@ export const SILHOUETTE_EDGE = { weight: 8, band: 2 }
  * The defaults `diffAgainstBase` was tuned to on the first three real items (2026-09-17). Areas are in
  * frame units (pixels at @1x) and grow with the square of the density; `colorTol` is an RGB distance.
  */
-export const DIFF_DEFAULTS = { colorTol: 36, shadowTol: 14, minRegion: 100, relativeRegion: 0.05, closeRadius: 1.5, maxHole: 400 }
+export const DIFF_DEFAULTS = { colorTol: 36, shadowTol: 14, minRegion: 100, relativeRegion: 0.05, closeRadius: 1.5, maxHole: 400, coverReach: 5 }
 /** How much darker than the base a pixel may be and still be read as the item's shadow on it. */
 export const SHADOW_RANGE = [0.45, 0.92]
 
@@ -325,7 +325,7 @@ export function registerBySilhouette(itemPic, basePic, { density = 1, range = RE
  */
 export function diffAgainstBase(itemPic, basePic, options = {}) {
   const { slot, density = 1 } = options
-  const { colorTol, shadowTol, minRegion, relativeRegion, closeRadius, maxHole } = { ...DIFF_DEFAULTS, ...stripUndefined(options) }
+  const { colorTol, shadowTol, minRegion, relativeRegion, closeRadius, maxHole, coverReach } = { ...DIFF_DEFAULTS, ...stripUndefined(options) }
   const { width, height } = itemPic
   if (basePic.width !== width || basePic.height !== height) {
     throw new Error(`the base is ${basePic.width} × ${basePic.height} and the item is ${width} × ${height} — they must share a frame`)
@@ -386,6 +386,7 @@ export function diffAgainstBase(itemPic, basePic, options = {}) {
   const filled = fillHoles(closed, width, height, Math.round(maxHole * area))
   const grown = dilateMask(filled, width, height, Math.max(1, Math.ceil(density / 2)))
   for (let p = 0; p < grown.length; p++) grown[p] = Math.min(grown[p], itemPic.data[p * 4 + 3])
+  const cover = slot === 'outfit' ? coverBaseLimbs(grown, itemPic, basePic, { width, height, density, reach: coverReach }) : null
   const mask = featherMask(grown, width, height)
   const core = slotLimits(filled, { slot, width, height, density })
   applySlotRule(mask, basePic, { slot, width, height, density, core })
@@ -393,7 +394,109 @@ export function diffAgainstBase(itemPic, basePic, options = {}) {
   // head region — so the same minimum region is held once more on the finished mask.
   const final = keepLargeRegions(mask, width, height, Math.round(minRegion * area))
   for (let p = 0; p < core.length; p++) if (!final[p]) core[p] = 0
-  return { mask: final, core, bbox: maskBBox(final, width, height) }
+  return { mask: final, core, cover, bbox: maskBBox(final, width, height) }
+}
+
+/**
+ * An outfit covers the base's limbs where its own stop short (2026-09-17, fix round 2).
+ *
+ * A generated figure's arms and legs are not the base's: on dealer01 they are a few pixels narrower, so the
+ * base's outline showed beside every limb. Below the chin line, every pixel the base inks and the outfit
+ * layer does not cover solidly, within `reach` (frame units) of a solid outfit pixel, joins the layer: its alpha is the
+ * base's there, its colour that of the nearest solid outfit pixel — the outfit's own edge, outline colour and
+ * all, bled outward over the base's. Farther than `reach` nothing is added, so a base arm with no outfit arm
+ * near it is not smeared. The head region (the crop above `FACE_LIMIT_Y`) is left alone, as the outfit's
+ * union with the base leaves it: the base's face layer paints it, and filling it would close the neck under
+ * a collar.
+ *
+ * Writes the alpha into `grown` (the mask before its feather) and returns `{ at, rgb }`: which pixels were
+ * added, and the colour each takes.
+ */
+function coverBaseLimbs(grown, itemPic, basePic, { width, height, density, reach }) {
+  const top = OUTFIT_TOP_Y * density
+  const headLeft = CROP.x * density
+  const headRight = (CROP.x + CROP.size) * density
+  const headBottom = FACE_LIMIT_Y * density
+  const unionTop = Math.max(UNDERWEAR_BAND.y0, OUTFIT_TOP_Y) * density
+  const inHead = (x, y) => y < headBottom && x >= headLeft && x < headRight
+  // The outfit layer's own alpha, as it will be: the mask (with the base's body where the union adds it),
+  // under the item picture's alpha.
+  const inked = new Uint8Array(width * height)
+  for (let y = top; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const p = y * width + x
+      const union = y >= unionTop && !inHead(x, y) ? basePic.data[p * 4 + 3] : 0
+      // Solid, not merely inked: the outfit's own soft rim is see-through, and the base's outline shows through it.
+      if (Math.min(Math.max(grown[p], union), itemPic.data[p * 4 + 3]) > ALPHA_SOLID) inked[p] = 1
+    }
+  }
+  const distance = new Uint16Array(width * height).fill(0xffff)
+  const rgb = new Uint8Array(width * height * 3)
+  let frontier = []
+  for (let y = top; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const p = y * width + x
+      if (!inked[p]) continue
+      distance[p] = 0
+      rgb.set(itemPic.data.subarray(p * 4, p * 4 + 3), p * 3)
+      frontier.push(p)
+    }
+  }
+  const limit = Math.round(reach * density)
+  // Bleed outward one ring at a time (8-connected), out to `limit`. Each new pixel takes the mean colour of
+  // its neighbours in the rings before it — nearest-neighbour, but without the streaks a single arbitrary
+  // nearest pixel leaves along an antialiased outline.
+  for (let step = 1; step <= limit && frontier.length; step++) {
+    const ring = []
+    for (const p of frontier) {
+      const x = p % width
+      const y = (p - x) / width
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx
+          const ny = y + dy
+          if (nx < 0 || ny < top || nx >= width || ny >= height) continue
+          const q = ny * width + nx
+          if (distance[q] <= step) continue
+          if (inked[q] || basePic.data[q * 4 + 3] <= ALPHA_INK || inHead(nx, ny)) continue
+          distance[q] = step
+          ring.push(q)
+        }
+      }
+    }
+    for (const q of ring) {
+      const x = q % width
+      const y = (q - x) / width
+      let r = 0
+      let g = 0
+      let b = 0
+      let n = 0
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx
+          const ny = y + dy
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue
+          const o = ny * width + nx
+          if (distance[o] >= step) continue
+          r += rgb[o * 3]
+          g += rgb[o * 3 + 1]
+          b += rgb[o * 3 + 2]
+          n++
+        }
+      }
+      rgb[q * 3] = Math.round(r / n)
+      rgb[q * 3 + 1] = Math.round(g / n)
+      rgb[q * 3 + 2] = Math.round(b / n)
+    }
+    frontier = ring
+  }
+  const at = new Uint8Array(width * height)
+  for (let p = top * width; p < width * height; p++) {
+    if (distance[p] === 0 || distance[p] === 0xffff) continue
+    at[p] = 1
+    grown[p] = basePic.data[p * 4 + 3]
+  }
+  return { at, rgb }
 }
 
 /**
@@ -403,11 +506,24 @@ export function diffAgainstBase(itemPic, basePic, options = {}) {
  * *character* the item was drawn on — a ring of hair under a brim, of skin round a rim. Those pixels keep
  * the alpha the edge needs and take the colour of the nearest pixels of the item itself (the `core` of
  * `diffAgainstBase`), which is `removeChroma`'s colour bleed applied to a mask instead of a key.
+ *
+ * @param {{ data: Buffer, width: number, height: number }} itemPic
+ * @param {{ mask: Uint8Array, core: Uint8Array, cover?: { at: Uint8Array, rgb: Uint8Array } | null }} cut
  */
-export function cutItem(itemPic, { mask, core }) {
+export function cutItem(itemPic, { mask, core, cover = null }) {
   const out = applyMask(itemPic, mask)
   const { width, height } = out
   let edge = new Uint8Array(core)
+  if (cover) {
+    // An outfit's cover over the base's limbs (`coverBaseLimbs`): the mask's alpha, the bled colour, and left
+    // alone by the rim pass below.
+    for (let p = 0; p < cover.at.length; p++) {
+      if (!cover.at[p] || mask[p] === 0) continue
+      out.data.set(cover.rgb.subarray(p * 3, p * 3 + 3), p * 4)
+      out.data[p * 4 + 3] = mask[p]
+      edge[p] = 255
+    }
+  }
   for (let pass = 0; pass < 3; pass++) {
     const next = Uint8Array.from(edge)
     let changed = false
