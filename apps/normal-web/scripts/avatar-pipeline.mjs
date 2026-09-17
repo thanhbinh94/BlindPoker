@@ -5,12 +5,15 @@
  *   node scripts/avatar-pipeline.mjs placeholder
  *       Draw the whole stage-1 set as labelled stand-ins and write both copies of the manifest. Names
  *       the manifest already marks `real: true` are left alone, so this is safe to re-run at any point
- *       in the hand-over from stand-ins to art. Idempotent.
+ *       in the hand-over from stand-ins to art. Every item also gets its inventory icon: a stand-in's is
+ *       redrawn, a real item's is kept (or, if it has none yet, cut from its layer on disk). Idempotent.
  *
  *   node scripts/avatar-pipeline.mjs ingest <png> --as base:f01 | expr:f01:happy | item:head:tophat01
  *       One generated picture in, its layers at @1x and @2x out, plus their manifest entries. A base is a
- *       flat AI picture and writes four: L30 (the figure), face_neutral L50 (its head region), and empty
- *       L20/L60 marked `empty: true`. An expression keeps only the head region (crop, above y 250). Options:
+ *       flat AI picture and writes four: L30 (the figure), face_neutral L50 (its head region, less the torso
+ *       column under y 236), L60 (a strand of hair above the head top, if the picture has one, else empty) and
+ *       an empty L20, the empty ones marked `empty: true`. The strand's rows go to L60 only. An expression
+ *       keeps only the face region (as face_neutral). Options:
  *         --dry-run             measure the picture against D02 §8 and print a verdict; write nothing
  *         --base <id>           which base an item or expression belongs to (default f01)
  *         --tolerance <n>       how wide the background key is (default 40)
@@ -18,6 +21,12 @@
  *         --lock-scale <n>      force a scale instead of reading the base's stored one
  *         --hides-hair-front    record D01 §4.3's hide rules on a head item
  *         --hides-hair-back
+ *         --color-tol <n>       an item: how far (RGB distance) a pixel must be from every base pixel near it
+ *                               to count as the item (default: DIFF_DEFAULTS in extract.mjs)
+ *         --min-region <n>      an item: the smallest connected region kept, in @1x pixels
+ *         --max-hole <n>        an item: the largest enclosed hole filled, in @1x pixels
+ *       An item is registered on its base first (the offset is logged), cut down to only itself, and written
+ *       with its inventory icon, item_<slot>_<code>_icon (96 × 96 at @1x, 192 × 192 at @2x).
  *
  *   node scripts/avatar-pipeline.mjs check [<name>...] [--skip C6]
  *       Run D01 §10's ten criteria over every layer (or the named ones), print the table, exit 1 on any
@@ -134,6 +143,11 @@ try {
       dryRun: flag('dry-run'),
       lockScale: lockScale === null ? null : Number(lockScale),
       hides: { ...(flag('hides-hair-front') ? { hidesHairFront: true } : {}), ...(flag('hides-hair-back') ? { hidesHairBack: true } : {}) },
+      diff: {
+        ...(option('color-tol') === null ? {} : { colorTol: Number(option('color-tol')) }),
+        ...(option('min-region') === null ? {} : { minRegion: Number(option('min-region')) }),
+        ...(option('max-hole') === null ? {} : { maxHole: Number(option('max-hole')) }),
+      },
       log,
     })
     if (flag('dry-run') && !report.ok) process.exitCode = 1

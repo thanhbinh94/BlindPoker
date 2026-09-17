@@ -264,6 +264,13 @@ export function dilateMask(mask, width, height, radius) {
   return current
 }
 
+/** Shrink a mask by `radius` pixels, square-kernel; outside the picture counts as empty. */
+export function erodeMask(mask, width, height, radius) {
+  let current = mask
+  for (let step = 0; step < radius; step++) current = filterPlane(current, width, height, Math.min)
+  return current
+}
+
 /** One pixel of soft edge on a mask, matching what `featherAlpha` does to a picture. */
 export function featherMask(mask, width, height) {
   return blur3(mask, width, height)
@@ -306,6 +313,21 @@ export function applyMask(pic, mask) {
   const out = clonePicture(pic)
   for (let p = 0; p < mask.length; p++) out.data[p * 4 + 3] = Math.min(out.data[p * 4 + 3], mask[p])
   return out
+}
+
+/**
+ * A picture cut to its ink (`alpha > ALPHA_INK`) and fitted, aspect kept, into `fill` of a `size` × `size`
+ * transparent square, centred. An empty picture gives an empty square.
+ */
+export async function iconPicture(pic, size, fill) {
+  const box = alphaBBox(pic)
+  if (!box) return blankPicture(size, size)
+  const inner = Math.round(size * fill)
+  const factor = inner / Math.max(box.w, box.h)
+  const width = Math.max(1, Math.round(box.w * factor))
+  const height = Math.max(1, Math.round(box.h * factor))
+  const fitted = await resizePicture(cropPicture(pic, box.x, box.y, box.w, box.h), width, height)
+  return placeOnCanvas(fitted, size, size, Math.floor((size - width) / 2), Math.floor((size - height) / 2))
 }
 
 // ───────────────────────────────────────────────────────────── the compositor ──

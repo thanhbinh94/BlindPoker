@@ -305,8 +305,6 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
                 owned={owned}
                 achievements={loaded.achievements}
                 draft={config}
-                items={items}
-                bases={bases}
                 onPick={(id) => pick('title', id)}
               />
               <ItemTab
@@ -315,8 +313,6 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
                 owned={owned}
                 achievements={loaded.achievements}
                 draft={config}
-                items={items}
-                bases={bases}
                 onPick={(id) => pick('badge', id)}
               />
             </>
@@ -327,8 +323,6 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
               owned={owned}
               achievements={loaded.achievements}
               draft={config}
-              items={items}
-              bases={bases}
               onPick={(id) => pick(tab, id)}
             />
           )}

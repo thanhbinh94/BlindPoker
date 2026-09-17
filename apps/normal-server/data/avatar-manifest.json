@@ -22,57 +22,56 @@
       "layer": 30,
       "w": 384,
       "h": 448,
-      "bytes2x": 280983,
+      "bytes2x": 280066,
       "real": true
     },
     "base_f01_L60": {
       "layer": 60,
       "w": 384,
       "h": 448,
-      "bytes2x": 2769,
-      "real": true,
-      "empty": true
+      "bytes2x": 8445,
+      "real": true
     },
     "base_f01_face_closed_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 272603,
+      "bytes2x": 271157,
       "real": true
     },
     "base_f01_face_happy_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 268107,
+      "bytes2x": 266331,
       "real": true
     },
     "base_f01_face_neutral_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 274174,
+      "bytes2x": 272458,
       "real": true
     },
     "base_f01_face_sad_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 273801,
+      "bytes2x": 272083,
       "real": true
     },
     "base_f01_face_sleep_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 278111,
+      "bytes2x": 276200,
       "real": true
     },
     "base_f01_face_surprised_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 283460,
+      "bytes2x": 281978,
       "real": true
     },
     "base_m01_L20": {
@@ -597,7 +596,7 @@
       "layer": 70,
       "w": 384,
       "h": 448,
-      "bytes2x": 289684,
+      "bytes2x": 287198,
       "real": true
     },
     "item_face_masquerade01_L70": {
@@ -711,7 +710,8 @@
       "layer": 80,
       "w": 384,
       "h": 448,
-      "bytes2x": 298050,
+      "bytes2x": 297382,
+      "hidesHairFront": true,
       "real": true
     },
     "item_outfit_casual01_L40": {
@@ -732,7 +732,7 @@
       "layer": 40,
       "w": 384,
       "h": 448,
-      "bytes2x": 296205,
+      "bytes2x": 284497,
       "real": true
     },
     "item_outfit_royal_robe01_L40": {
@@ -757,13 +757,272 @@
       "placeholder": true
     }
   },
+  "icons": {
+    "item_aura_earth01_icon": {
+      "kind": "icon",
+      "of": "item_aura_earth01_L10",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 9276,
+      "placeholder": true
+    },
+    "item_aura_fire01_icon": {
+      "kind": "icon",
+      "of": "item_aura_fire01_L10",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 8990,
+      "placeholder": true
+    },
+    "item_aura_gold_cards01_icon": {
+      "kind": "icon",
+      "of": "item_aura_gold_cards01_L10",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 9920,
+      "placeholder": true
+    },
+    "item_aura_ice01_icon": {
+      "kind": "icon",
+      "of": "item_aura_ice01_L10",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 8975,
+      "placeholder": true
+    },
+    "item_aura_lightning01_icon": {
+      "kind": "icon",
+      "of": "item_aura_lightning01_L10",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 9712,
+      "placeholder": true
+    },
+    "item_aura_sakura01_icon": {
+      "kind": "icon",
+      "of": "item_aura_sakura01_L10",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 9432,
+      "placeholder": true
+    },
+    "item_aura_water01_icon": {
+      "kind": "icon",
+      "of": "item_aura_water01_L10",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 9336,
+      "placeholder": true
+    },
+    "item_aura_wind01_icon": {
+      "kind": "icon",
+      "of": "item_aura_wind01_L10",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 9234,
+      "placeholder": true
+    },
+    "item_face_eyepatch01_icon": {
+      "kind": "icon",
+      "of": "item_face_eyepatch01_L70",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 6550,
+      "placeholder": true
+    },
+    "item_face_glasses_round_gold01_icon": {
+      "kind": "icon",
+      "of": "item_face_glasses_round_gold01_L70",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 11809,
+      "real": true
+    },
+    "item_face_masquerade01_icon": {
+      "kind": "icon",
+      "of": "item_face_masquerade01_L70",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 6817,
+      "placeholder": true
+    },
+    "item_face_sunglasses01_icon": {
+      "kind": "icon",
+      "of": "item_face_sunglasses01_L70",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 6518,
+      "placeholder": true
+    },
+    "item_frame_bronze_icon": {
+      "kind": "icon",
+      "of": "item_frame_bronze_L90",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 9649,
+      "placeholder": true
+    },
+    "item_frame_founder_icon": {
+      "kind": "icon",
+      "of": "item_frame_founder_L90",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 9882,
+      "placeholder": true
+    },
+    "item_frame_gold_icon": {
+      "kind": "icon",
+      "of": "item_frame_gold_L90",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 9375,
+      "placeholder": true
+    },
+    "item_frame_monthly_icon": {
+      "kind": "icon",
+      "of": "item_frame_monthly_L90",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 10034,
+      "placeholder": true
+    },
+    "item_frame_silver_icon": {
+      "kind": "icon",
+      "of": "item_frame_silver_L90",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 9637,
+      "placeholder": true
+    },
+    "item_frame_veteran_icon": {
+      "kind": "icon",
+      "of": "item_frame_veteran_L90",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 9764,
+      "placeholder": true
+    },
+    "item_head_beanie01_icon": {
+      "kind": "icon",
+      "of": "item_head_beanie01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 4730,
+      "placeholder": true
+    },
+    "item_head_beret_red01_icon": {
+      "kind": "icon",
+      "of": "item_head_beret_red01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5292,
+      "placeholder": true
+    },
+    "item_head_conical_hat01_icon": {
+      "kind": "icon",
+      "of": "item_head_conical_hat01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5607,
+      "placeholder": true
+    },
+    "item_head_crown_gold01_icon": {
+      "kind": "icon",
+      "of": "item_head_crown_gold01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5600,
+      "placeholder": true
+    },
+    "item_head_dealer_visor01_icon": {
+      "kind": "icon",
+      "of": "item_head_dealer_visor01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5810,
+      "placeholder": true
+    },
+    "item_head_hood_black01_icon": {
+      "kind": "icon",
+      "of": "item_head_hood_black01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5494,
+      "placeholder": true
+    },
+    "item_head_party_cone01_icon": {
+      "kind": "icon",
+      "of": "item_head_party_cone01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5562,
+      "placeholder": true
+    },
+    "item_head_tophat01_icon": {
+      "kind": "icon",
+      "of": "item_head_tophat01_L80",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 26018,
+      "real": true
+    },
+    "item_outfit_casual01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_casual01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 4738,
+      "placeholder": true
+    },
+    "item_outfit_champion01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_champion01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5336,
+      "placeholder": true
+    },
+    "item_outfit_dealer01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_dealer01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 25860,
+      "real": true
+    },
+    "item_outfit_royal_robe01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_royal_robe01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 5457,
+      "placeholder": true
+    },
+    "item_outfit_tet_red01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_tet_red01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 4869,
+      "placeholder": true
+    },
+    "item_outfit_tuxedo01_icon": {
+      "kind": "icon",
+      "of": "item_outfit_tuxedo01_L40",
+      "w": 96,
+      "h": 96,
+      "bytes2x": 4930,
+      "placeholder": true
+    }
+  },
   "bases": {
     "f01": {
       "transform": {
         "scale": 0.24669603524229075,
         "offsetX": 65.568281938326,
         "offsetY": 52.01762114537445
-      }
+      },
+      "strandY": 97
     }
   }
 }
