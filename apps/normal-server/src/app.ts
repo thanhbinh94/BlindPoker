@@ -62,7 +62,7 @@ import { createEconomyService, type EconomyService } from './economy/economy-ser
 import { createEventBus, type AppEventBus } from './events.js'
 import { createHistoryService, type HistoryService } from './history/history-service.js'
 import { loadAliases } from './inventory/aliases.js'
-import { loadBases, type BaseDef } from './inventory/bases.js'
+import { baseIdsOf, loadBases, type BaseDef } from './inventory/bases.js'
 import { createInventoryService, type InventoryService } from './inventory/inventory-service.js'
 import { loadItemCatalog, type ItemCatalog } from './inventory/items.js'
 import { loadAvatarManifest, type AvatarManifest } from './inventory/manifest.js'
@@ -235,6 +235,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
   const bus = createEventBus(log)
   const manifest = loadAvatarManifest()
   const bases = loadBases(undefined, manifest)
+  const baseIds = baseIdsOf(bases)
   const aliases = loadAliases()
   const catalog = loadItemCatalog(undefined, manifest)
   const defs = loadAchievements(catalog)
@@ -342,6 +343,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     aliases,
     manifest,
     bases,
+    baseIds,
     log,
     game,
     version: packageVersion(),

@@ -30,6 +30,7 @@ import type { AppDb } from '../db/client.js'
 import type { EconomyService } from '../economy/economy-service.js'
 import type { HistoryService } from '../history/history-service.js'
 import type { BaseDef } from '../inventory/bases.js'
+import type { BaseIds } from '../inventory/slots.js'
 import type { InventoryService } from '../inventory/inventory-service.js'
 import type { ItemCatalog } from '../inventory/items.js'
 import type { AvatarManifest } from '../inventory/manifest.js'
@@ -62,6 +63,8 @@ export interface RouteDeps {
   aliases: ReadonlyMap<string, string>
   manifest: AvatarManifest
   bases: Record<string, BaseDef>
+  /** `bases`' key set, built once — see `baseIdsOf` in `inventory/bases.ts`. */
+  baseIds: BaseIds
   log: Logger
   /** Live socket and room counts for `/health` — the same two numbers Lite's probe reports. */
   game: Pick<GameServer, 'connectionCount'> & { rooms: { size: number } }
@@ -183,6 +186,6 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
   })
   registerMeRoutes(app, { ...deps, requireUser })
   registerRewardRoutes(app, { economy: deps.economy, requireUser })
-  registerOutfitRoutes(app, { outfits: deps.outfits, catalog: deps.catalog, requireUser })
+  registerOutfitRoutes(app, { outfits: deps.outfits, catalog: deps.catalog, baseIds: deps.baseIds, requireUser })
   registerCatalogRoutes(app, { config: deps.config, catalog: deps.catalog, defs: deps.defs, manifest: deps.manifest, bases: deps.bases })
 }

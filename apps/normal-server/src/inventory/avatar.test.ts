@@ -10,6 +10,7 @@ import { createTestDb } from '../db/test-db.js'
 import { ServiceError } from '../errors.js'
 import type { AvatarConfigV3 } from './avatar.js'
 import { applyAvatarConfig, defaultAvatar, validateAvatarConfig } from './avatar.js'
+import { baseIdsOf, loadBases } from './bases.js'
 import type { InventoryService } from './inventory-service.js'
 import { createInventoryService } from './inventory-service.js'
 import type { ItemCatalog } from './items.js'
@@ -20,6 +21,9 @@ let db: AppDb
 let inv: InventoryService
 let catalog: ItemCatalog
 let scratch: string
+
+/** The real registry's ids: what `INVALID_BASE` is measured against since the base list became data. */
+const baseIds = baseIdsOf(loadBases())
 
 beforeAll(async () => {
   test = await createTestDb()
@@ -87,58 +91,67 @@ describe('defaultAvatar', () => {
   })
 
   it('is itself a valid configuration', () => {
-    expect(validateAvatarConfig(defaultAvatar(catalog), catalog)).toEqual({ ok: true, value: CASUAL })
+    expect(validateAvatarConfig(defaultAvatar(catalog), catalog, baseIds)).toEqual({ ok: true, value: CASUAL })
   })
 })
 
 describe('validateAvatarConfig', () => {
   it('accepts a full configuration and returns exactly what is to be stored', () => {
-    expect(validateAvatarConfig({ ...DRESSED, somethingElse: 'ignored' }, catalog)).toEqual({ ok: true, value: DRESSED })
+    expect(validateAvatarConfig({ ...DRESSED, somethingElse: 'ignored' }, catalog, baseIds)).toEqual({ ok: true, value: DRESSED })
   })
 
   it('refuses a missing outfit — the one required slot', () => {
     const { outfit: _outfit, ...noOutfit } = CASUAL
-    expect(validateAvatarConfig(noOutfit, catalog)).toEqual({ ok: false, code: 'MISSING_LAYER' })
-    expect(validateAvatarConfig({ ...CASUAL, outfit: '' }, catalog)).toEqual({ ok: false, code: 'MISSING_LAYER' })
-    expect(validateAvatarConfig(null, catalog)).toEqual({ ok: false, code: 'MISSING_LAYER' })
-    expect(validateAvatarConfig([CASUAL], catalog)).toEqual({ ok: false, code: 'MISSING_LAYER' })
+    expect(validateAvatarConfig(noOutfit, catalog, baseIds)).toEqual({ ok: false, code: 'MISSING_LAYER' })
+    expect(validateAvatarConfig({ ...CASUAL, outfit: '' }, catalog, baseIds)).toEqual({ ok: false, code: 'MISSING_LAYER' })
+    expect(validateAvatarConfig(null, catalog, baseIds)).toEqual({ ok: false, code: 'MISSING_LAYER' })
+    expect(validateAvatarConfig([CASUAL], catalog, baseIds)).toEqual({ ok: false, code: 'MISSING_LAYER' })
   })
 
   it('refuses anything that is not v3 — a v1 or v2 config is readable, but not writable', () => {
     const { v: _v, ...noVersion } = CASUAL
-    expect(validateAvatarConfig(noVersion, catalog)).toEqual({ ok: false, code: 'MISSING_LAYER' })
-    expect(validateAvatarConfig({ ...CASUAL, v: 2 }, catalog)).toEqual({ ok: false, code: 'MISSING_LAYER' })
-    expect(validateAvatarConfig({ ...CASUAL, v: '3' }, catalog)).toEqual({ ok: false, code: 'MISSING_LAYER' })
-    expect(validateAvatarConfig({ v: 2, body: 'male', hair: 'hair_none', top: 'top_tee', bottom: 'bottom_jeans', shoes: 'shoes_sneakers', skin: '#000', eyes: '#000', hairColor: '#000' }, catalog))
+    expect(validateAvatarConfig(noVersion, catalog, baseIds)).toEqual({ ok: false, code: 'MISSING_LAYER' })
+    expect(validateAvatarConfig({ ...CASUAL, v: 2 }, catalog, baseIds)).toEqual({ ok: false, code: 'MISSING_LAYER' })
+    expect(validateAvatarConfig({ ...CASUAL, v: '3' }, catalog, baseIds)).toEqual({ ok: false, code: 'MISSING_LAYER' })
+    expect(validateAvatarConfig({ v: 2, body: 'male', hair: 'hair_none', top: 'top_tee', bottom: 'bottom_jeans', shoes: 'shoes_sneakers', skin: '#000', eyes: '#000', hairColor: '#000' }, catalog, baseIds))
       .toEqual({ ok: false, code: 'MISSING_LAYER' })
   })
 
   it('refuses a missing base with MISSING_LAYER and an unknown one with INVALID_BASE', () => {
-    expect(validateAvatarConfig({ ...CASUAL, base: undefined }, catalog)).toEqual({ ok: false, code: 'MISSING_LAYER' })
+    expect(validateAvatarConfig({ ...CASUAL, base: undefined }, catalog, baseIds)).toEqual({ ok: false, code: 'MISSING_LAYER' })
     const { base: _base, ...noBase } = CASUAL
-    expect(validateAvatarConfig(noBase, catalog)).toEqual({ ok: false, code: 'MISSING_LAYER' })
+    expect(validateAvatarConfig(noBase, catalog, baseIds)).toEqual({ ok: false, code: 'MISSING_LAYER' })
     for (const base of ['robot', 'f02', 42, null]) {
-      expect(validateAvatarConfig({ ...CASUAL, base }, catalog), String(base)).toEqual({ ok: false, code: base === null ? 'MISSING_LAYER' : 'INVALID_BASE' })
+      expect(validateAvatarConfig({ ...CASUAL, base }, catalog, baseIds), String(base)).toEqual({ ok: false, code: base === null ? 'MISSING_LAYER' : 'INVALID_BASE' })
     }
-    expect(validateAvatarConfig({ ...CASUAL, base: 'm01' }, catalog)).toMatchObject({ ok: true })
+    expect(validateAvatarConfig({ ...CASUAL, base: 'm01' }, catalog, baseIds)).toMatchObject({ ok: true })
+  })
+
+  it('takes the base list from the registry it is handed, not from a union in the code', () => {
+    // The point of the open id (2026-09-17): `f02` is refused above because nothing defines it, and
+    // accepted here because something does — with no type widened and no constant edited between the two.
+    const withF02 = new Set([...baseIds, 'f02'])
+    expect(validateAvatarConfig({ ...CASUAL, base: 'f02' }, catalog, withF02)).toEqual({ ok: true, value: { ...CASUAL, base: 'f02' } })
+    // …and a base the server has dropped stops being writable the moment its registry entry is gone.
+    expect(validateAvatarConfig({ ...CASUAL, base: 'm01' }, catalog, new Set(['f01']))).toEqual({ ok: false, code: 'INVALID_BASE' })
   })
 
   it('refuses an id that is not in the catalogue', () => {
-    expect(validateAvatarConfig({ ...CASUAL, outfit: 'outfit_imaginary' }, catalog)).toEqual({ ok: false, code: 'INVALID_ITEM' })
-    expect(validateAvatarConfig({ ...CASUAL, title: 42 }, catalog)).toEqual({ ok: false, code: 'INVALID_ITEM' })
+    expect(validateAvatarConfig({ ...CASUAL, outfit: 'outfit_imaginary' }, catalog, baseIds)).toEqual({ ok: false, code: 'INVALID_ITEM' })
+    expect(validateAvatarConfig({ ...CASUAL, title: 42 }, catalog, baseIds)).toEqual({ ok: false, code: 'INVALID_ITEM' })
     // The withdrawn v2 ids are exactly that: not in the catalogue any more.
-    expect(validateAvatarConfig({ ...CASUAL, outfit: 'clothing_tee' }, catalog)).toEqual({ ok: false, code: 'INVALID_ITEM' })
+    expect(validateAvatarConfig({ ...CASUAL, outfit: 'clothing_tee' }, catalog, baseIds)).toEqual({ ok: false, code: 'INVALID_ITEM' })
   })
 
   it('refuses an id worn in the wrong slot', () => {
-    expect(validateAvatarConfig({ ...CASUAL, outfit: 'head_beanie01' }, catalog)).toEqual({ ok: false, code: 'WRONG_CATEGORY' })
-    expect(validateAvatarConfig({ ...DRESSED, badge: 'title_devoted' }, catalog)).toEqual({ ok: false, code: 'WRONG_CATEGORY' })
+    expect(validateAvatarConfig({ ...CASUAL, outfit: 'head_beanie01' }, catalog, baseIds)).toEqual({ ok: false, code: 'WRONG_CATEGORY' })
+    expect(validateAvatarConfig({ ...DRESSED, badge: 'title_devoted' }, catalog, baseIds)).toEqual({ ok: false, code: 'WRONG_CATEGORY' })
     // A face item in the head slot: two slots that used to share `accessory` are not interchangeable now.
-    expect(validateAvatarConfig({ ...CASUAL, head: 'face_glasses_round_gold01' }, catalog)).toEqual({ ok: false, code: 'WRONG_CATEGORY' })
+    expect(validateAvatarConfig({ ...CASUAL, head: 'face_glasses_round_gold01' }, catalog, baseIds)).toEqual({ ok: false, code: 'WRONG_CATEGORY' })
   })
 
   it('treats an omitted or null optional slot as empty', () => {
-    expect(validateAvatarConfig({ ...DRESSED, title: undefined, badge: null }, catalog)).toEqual({ ok: true, value: { ...DRESSED, title: undefined, badge: undefined } })
+    expect(validateAvatarConfig({ ...DRESSED, title: undefined, badge: null }, catalog, baseIds)).toEqual({ ok: true, value: { ...DRESSED, title: undefined, badge: undefined } })
   })
 })
 

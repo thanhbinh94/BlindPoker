@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import { EXPRESSIONS, loadBases } from './bases.js'
+import { EXPRESSIONS, baseIdsOf, loadBases } from './bases.js'
 import type { AvatarManifest } from './manifest.js'
 
 let scratch: string
@@ -69,12 +69,21 @@ describe('loadBases', () => {
   it('reads the shipped bases against the shipped manifest', () => {
     const bases = loadBases()
     expect(Object.keys(bases).sort()).toEqual(['f01', 'm01'])
-    expect(bases.f01).toMatchObject({ id: 'f01', nameKey: 'bases.f01' })
-    expect(bases.m01).toMatchObject({ id: 'm01', nameKey: 'bases.m01' })
-    for (const expr of EXPRESSIONS) {
-      expect(bases.f01.faces[expr]).toBeTruthy()
-      expect(bases.m01.faces[expr]).toBeTruthy()
+    for (const [id, base] of Object.entries(bases)) {
+      expect(base).toMatchObject({ id, nameKey: `bases.${id}` })
+      for (const expr of EXPRESSIONS) expect(base.faces[expr]).toBeTruthy()
     }
+  })
+
+  it('answers with whatever ids the file names, so a third base is data and nothing else', () => {
+    // The point of the open list (2026-09-17): `f03` here is a complete figure because it names seven
+    // manifest entries, not because any constant in the code was widened to admit it. The layers it
+    // borrows are f01's — a registry is checked against the manifest, not against who drew what.
+    const three = { ...VALID, f03: { ...VALID.f01, nameKey: 'bases.f03' } }
+    const bases = loadBases(fixture(three), manifest)
+    expect(Object.keys(bases)).toEqual(['f01', 'm01', 'f03'])
+    expect(bases.f03).toMatchObject({ id: 'f03', nameKey: 'bases.f03' })
+    expect(baseIdsOf(bases).has('f03')).toBe(true)
   })
 
   it('parses a well-formed fixture and stamps the id onto each entry', () => {
@@ -93,13 +102,18 @@ describe('loadBases', () => {
     expect(() => loadBases(fixture(wrongLayer), manifest)).toThrow(/layer 20 rather than 30/)
   })
 
-  it('refuses a missing base', () => {
+  it('accepts a registry with one base, as long as it is the one avatars fall back to', () => {
     const { m01: _m01, ...onlyF01 } = VALID
-    expect(() => loadBases(fixture(onlyF01), manifest)).toThrow(/is missing the base m01/)
+    expect(Object.keys(loadBases(fixture(onlyF01), manifest))).toEqual(['f01'])
   })
 
-  it('refuses an unknown base id', () => {
-    expect(() => loadBases(fixture({ ...VALID, f02: VALID.f01 }), manifest)).toThrow(/unknown base f02/)
+  it('refuses a registry without the base every avatar falls back to', () => {
+    const { f01: _f01, ...noF01 } = VALID
+    expect(() => loadBases(fixture(noF01), manifest)).toThrow(/is missing the base f01, which every avatar falls back to/)
+  })
+
+  it('refuses an id that could not be spelled into a file name', () => {
+    expect(() => loadBases(fixture({ ...VALID, 'F 02': VALID.f01 }), manifest)).toThrow(/names F 02, which is not a legal base id/)
   })
 
   it('refuses a face record missing or misnaming an expression', () => {

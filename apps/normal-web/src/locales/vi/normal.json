@@ -349,7 +349,9 @@
   },
   "bases": {
     "f01": "Thân nữ F01",
-    "m01": "Thân nam M01"
+    "m01": "Thân nam M01",
+    "f02": "Thân nữ F02",
+    "f03": "Thân nữ F03"
   },
   "achievements": {
     "ui": {

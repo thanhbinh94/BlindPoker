@@ -23,9 +23,9 @@ import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { runChecks } from '../scripts/avatar-pipeline/checks.mjs'
 import { OUTFIT_TOP_Y, cutItem, diffAgainstBase, ingest, measure, registerBySilhouette, registerToBase } from '../scripts/avatar-pipeline/extract.mjs'
-import { AXIS_X, BASELINE_Y, BODY, CROP, DENSITIES, FACE_LIMIT_Y, FRAME, LAYERS, TORSO_COLUMN, anchorBase, applyTransform, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
-import { ICON, MANIFEST_NAME, buildPlaceholders, iconName, stageOneFiles, writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
-import { alphaBBox, blankPicture, cropPicture, readPicture, removeChroma, renderSvg, writeDensities, writePicture } from '../scripts/avatar-pipeline/png.mjs'
+import { AXIS_X, BASELINE_Y, BODY, CROP, DENSITIES, FACE_LIMIT_Y, FRAME, LAYERS, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
+import { BASES, ICON, MANIFEST_NAME, NAME_PATTERN, buildPlaceholders, iconName, stageOneFiles, writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
+import { alphaBBox, blankPicture, cropPicture, overPicture, readPicture, removeChroma, renderSvg, writeDensities, writePicture } from '../scripts/avatar-pipeline/png.mjs'
 
 const PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url))
 const SCRIPT = resolve(PACKAGE_ROOT, 'scripts/avatar-pipeline.mjs')
@@ -371,18 +371,33 @@ describe('diffAgainstBase', () => {
     expect(mask[midY * FRAME.w + midX], 'the waist blob').toBeGreaterThan(0)
   })
 
-  it('makes an outfit cover the body it is worn over', () => {
-    // D01 §10.7: the outfit must leave no underwear showing, so the mask absorbs the base below the chin
-    // line whatever the difference says — outside the head region, which the base's own face layer paints.
+  it('makes an outfit cover the underwear band of the body it is worn over, and only that', () => {
+    // D01 §10.7: the outfit must leave no underwear showing, so inside `UNDERWEAR_BAND` the mask absorbs
+    // the base whatever the difference says — outside the head region, which the base's own face layer
+    // paints. 2026-09-17 (R1): *only* inside that band. Below it the base's own limbs are the base's to
+    // draw, or an outfit layer could never be worn by a figure with a different skin tone.
     const { mask } = diffAgainstBase(framedOutfit, framedBase, { slot: 'outfit', density: 1 })
+    const inHead = (x: number, y: number): boolean => y < FACE_LIMIT_Y && x >= CROP.x && x < CROP.x + CROP.size
+    const inked = (x: number, y: number): boolean => framedBase.data[(y * FRAME.w + x) * 4 + 3]! > 8
+    // This fixture's base is one flat grey with no underwear on it at all, so what the band absorbs here is
+    // everything the clothes block changed — the torso, edge to edge, with no gap left by the difference.
     let uncovered = 0
-    for (let y = OUTFIT_TOP_Y; y < FRAME.h; y++) {
+    for (let y = Math.max(OUTFIT_TOP_Y, UNDERWEAR_BAND.y0); y < UNDERWEAR_BAND.y1; y++) {
       for (let x = 0; x < FRAME.w; x++) {
-        if (y < FACE_LIMIT_Y && x >= CROP.x && x < CROP.x + CROP.size) continue
-        if (framedBase.data[(y * FRAME.w + x) * 4 + 3]! > 8 && mask[y * FRAME.w + x] === 0) uncovered++
+        if (inHead(x, y) || !inked(x, y)) continue
+        const at = (y * FRAME.w + x) * 4
+        if (framedOutfit.data[at] === framedBase.data[at]) continue
+        if (mask[y * FRAME.w + x] === 0) uncovered++
       }
     }
-    expect(uncovered, 'pixels of the base the outfit layer does not cover').toBe(0)
+    expect(uncovered, 'pixels of the base inside the band the outfit layer does not cover').toBe(0)
+
+    // The arms this figure holds away from its body are outside the clothes block and unchanged by it:
+    // below the band they are not in the layer at all, where the old union would have taken every one.
+    const armY = UNDERWEAR_BAND.y1 + 8
+    const arms = [...Array(FRAME.w).keys()].filter((x) => inked(x, armY) && framedOutfit.data[(armY * FRAME.w + x) * 4] === framedBase.data[(armY * FRAME.w + x) * 4])
+    expect(arms.length, 'the fixture has base pixels below the band that the outfit picture left alone').toBeGreaterThan(8)
+    for (const x of arms) expect(mask[armY * FRAME.w + x], `base at ${x},${armY}, which the picture did not change`).toBe(0)
   })
 
   it('keeps nothing of an outfit above the chin line', () => {
@@ -504,7 +519,10 @@ describe('a redrawn item picture', () => {
     const cut = diffAgainstBase(outfit, limbBase, { slot: 'outfit', density: 2 })
     const layer = cutItem(outfit, cut)
     const shows: string[] = []
-    for (let y = 600; y < 800; y++) {
+    // Two rows in at each end: this fixture's outfit leg begins and ends on the same rows its base leg
+    // does, so the layer's own feathered rim sits on the base's, which no drawn figure does. What is being
+    // measured is the *side* of the leg — where a base outline beside a narrower sleeve is the double outline.
+    for (let y = 604; y < 796; y++) {
       for (let x = 280; x < 360; x++) {
         const p = (y * W2 + x) * 4
         if (layer.data[p + 3]! < limbBase.data[p + 3]!) shows.push(`${x},${y}`)
@@ -600,6 +618,137 @@ describe('a redrawn item picture', () => {
       expect(Math.abs(box.y + box.h / 2 - (ICON.h * density) / 2)).toBeLessThanOrEqual(density)
     }
   }, 60_000)
+})
+
+// ─────────────────────────────────────────────── an outfit layer holds no skin ──
+
+/**
+ * R1, 2026-09-17: an outfit layer is clothing only, so that bases which share F01's body but not her
+ * skin tone can wear the same one. Two figures are built at @2x — the same body, one in its grey
+ * underwear and one in a dress with bare arms and legs — and the layer cut between them is held to
+ * three things: no pixel of the base's skin outside the underwear band, the band covered (which is what
+ * C6 then measures), and a *recoloured* body showing its own legs through it.
+ */
+describe('an outfit layer cut from a base with skin and underwear', () => {
+  const W = FRAME.w * 2
+  const H = FRAME.h * 2
+  /** The base's skin, the base's underwear, the dress, and the darker skin the same layer is worn over. */
+  const S1: [number, number, number] = [236, 202, 176]
+  const UNDER: [number, number, number] = [158, 164, 176]
+  const DRESS: [number, number, number] = [36, 46, 128]
+  const S2: [number, number, number] = [124, 88, 62]
+  const OUTLINE: [number, number, number] = [62, 44, 36]
+  /** In @2x pixels. The head fills the window `baseSkinColour` measures, the torso fills the band. */
+  const HEAD = { x0: 268, y0: 110, x1: 516, y1: 470 }
+  const TORSO = { x0: 300, y0: 474, x1: 470, y1: 598 }
+  const ARMS = [{ x0: 256, y0: 480, x1: 298, y1: 640 }, { x0: 472, y0: 480, x1: 514, y1: 640 }]
+  const LEGS = [{ x0: 316, y0: 598, x1: 376, y1: 800 }, { x0: 394, y0: 598, x1: 454, y1: 800 }]
+  /** The dress: wider than the torso, and stopping well above the legs so bare skin is left below it. */
+  const SKIRT = { x0: 288, y0: 470, x1: 482, y1: 660 }
+  /**
+   * The dress's sleeves: drawn to the base's arm *inside its line art*, which is what a generator does —
+   * the sleeve stops where the colour stops and the base's own 3 px outline is left standing beside it.
+   * That outline is the double outline, and covering it is the whole job of `coverBaseLimbs`.
+   */
+  const SLEEVES = [{ x0: 259, y0: 480, x1: 295, y1: 620 }, { x0: 475, y0: 480, x1: 511, y1: 620 }]
+
+  type Box = { x0: number; y0: number; x1: number; y1: number }
+  const paint = (pic: Picture, box: Box, rgb: [number, number, number]): void => {
+    for (let y = box.y0; y < box.y1; y++) {
+      for (let x = box.x0; x < box.x1; x++) pic.data.set([...rgb, 255], (y * W + x) * 4)
+    }
+  }
+  /** A box with a 3 px rim of line art, which is the thing a double outline would be made of. */
+  const paintInked = (pic: Picture, box: Box, rgb: [number, number, number]): void => {
+    paint(pic, box, OUTLINE)
+    paint(pic, { x0: box.x0 + 3, y0: box.y0, x1: box.x1 - 3, y1: box.y1 }, rgb)
+  }
+
+  function figure(skin: [number, number, number], torso: [number, number, number] | null, extra: (pic: Picture) => void = () => {}): Picture {
+    const pic = blankPicture(W, H)
+    paint(pic, HEAD, skin)
+    if (torso) paint(pic, TORSO, torso)
+    for (const arm of ARMS) paintInked(pic, arm, skin)
+    for (const leg of LEGS) paintInked(pic, leg, skin)
+    extra(pic)
+    return pic
+  }
+
+  const base = figure(S1, UNDER)
+  const dressed = figure(S1, null, (pic) => {
+    paint(pic, SKIRT, DRESS)
+    for (const sleeve of SLEEVES) paint(pic, sleeve, DRESS)
+  })
+  const cut = diffAgainstBase(dressed, base, { slot: 'outfit', density: 2 })
+  const layer = cutItem(dressed, cut)
+  const alphaAt = (pic: Picture, x: number, y: number): number => pic.data[(y * W + x) * 4 + 3]!
+  const rgbAt = (pic: Picture, x: number, y: number): number[] => [...pic.data.subarray((y * W + x) * 4, (y * W + x) * 4 + 3)]
+
+  it('measures the base own skin from its face, not from a constant', () => {
+    expect(baseSkinColour(base, 2)!.map(Math.round)).toEqual(S1)
+  })
+
+  it('keeps no pixel of the base skin below the underwear band', () => {
+    const strays: string[] = []
+    for (let y = UNDERWEAR_BAND.y1 * 2; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        if (alphaAt(layer, x, y) <= 128) continue
+        const [r, g, b] = rgbAt(layer, x, y)
+        if (Math.hypot(r! - S1[0], g! - S1[1], b! - S1[2]) <= 24) strays.push(`${x},${y}`)
+      }
+    }
+    expect(strays.length, `skin in the layer below the band, e.g. ${strays.slice(0, 5).join(' ')}`).toBe(0)
+    // The bare leg is not in the layer at all — not even as alpha the base would show through.
+    expect(alphaAt(layer, 346, 740), 'the middle of a bare leg').toBe(0)
+  })
+
+  it('covers every thread of the underwear, which is what C6 measures', () => {
+    for (let y = TORSO.y0; y < TORSO.y1; y += 8) {
+      for (let x = TORSO.x0; x < TORSO.x1; x += 8) {
+        expect(alphaAt(layer, x, y), `underwear at ${x},${y}`).toBeGreaterThan(128)
+      }
+    }
+  })
+
+  it('passes C6 against the base it was cut from', async () => {
+    const dir = caseDir('skin-free')
+    const bytes = {
+      base_f01_L30: await writeDensities(base, dir, 'base_f01_L30'),
+      item_outfit_dealer01_L40: await writeDensities(layer, dir, 'item_outfit_dealer01_L40'),
+    }
+    const manifest = manifestFor(dir, {
+      base_f01_L30: { layer: LAYERS.body, w: FRAME.w, h: FRAME.h, bytes2x: bytes.base_f01_L30, real: true },
+      item_outfit_dealer01_L40: { layer: LAYERS.outfit, w: FRAME.w, h: FRAME.h, bytes2x: bytes.item_outfit_dealer01_L40, real: true },
+    })
+    const c6 = (await checkOne(dir, 'item_outfit_dealer01_L40', manifest)).get('C6')!
+    expect(c6.ok, c6.detail).toBe(true)
+    expect(c6.detail).toContain('100.0 %')
+  }, 30_000)
+
+  it('still bridges a sleeve that is narrower than the base arm, with no base outline beside it', () => {
+    // The sleeve stops at the arm's line art; the cover carries the layer over it to the base's own
+    // silhouette in the dress's colour, so the outline is under the layer rather than beside it.
+    // Below the band, where the underwear rule adds nothing at all and the cover is the only thing there is.
+    for (let y = UNDERWEAR_BAND.y1 * 2 + 4; y < 616; y += 4) {
+      for (let x = ARMS[0]!.x0; x < SLEEVES[0]!.x0; x++) {
+        expect(alphaAt(layer, x, y), `base arm showing beside the sleeve at ${x},${y}`).toBeGreaterThan(128)
+      }
+      const [r, , b] = rgbAt(layer, ARMS[0]!.x0 + 1, y)
+      expect(b! - r!, `the cover takes the dress colour at ${ARMS[0]!.x0 + 1},${y}`).toBeGreaterThan(40)
+    }
+  })
+
+  it('shows a differently-skinned body own legs, arms and neck through the same layer', () => {
+    const other = figure(S2, UNDER)
+    const composite = blankPicture(W, H)
+    overPicture(composite, other)
+    overPicture(composite, layer)
+    // A leg, an arm below the sleeve, and the skin just under the hem: all of them S2, none of them S1.
+    for (const [x, y] of [[346, 740], [424, 700], [346, 670], [270, 632]] as [number, number][]) {
+      const [r, g, b] = rgbAt(composite, x, y)
+      expect([r, g, b], `at ${x},${y}`).toEqual(S2)
+    }
+  })
 })
 
 // ────────────────────────────────────────────────────────────────── the gate ──
@@ -801,6 +950,21 @@ describe('the stage-1 name list', () => {
     expect(files.map((file: { name: string }) => file.name)).toContain('item_head_tophat01_L80')
     expect(files.map((file: { name: string }) => file.name)).toContain('item_frame_founder_L90')
     expect(files.map((file: { name: string }) => file.name)).toContain('bot_7_face_sleep_L50')
+  })
+
+  it('grows by a whole figure when a base is added to the list, and by nothing else', () => {
+    // R5, 2026-09-17: `BASES` in `manifest.mjs` is the source of truth for which bases exist, and adding
+    // one there is what gives the next `placeholder` run a full stand-in set to draw for it — nine files,
+    // the three layers and the six expressions, exactly as `f01` and `m01` have.
+    const three = stageOneFiles([...BASES, 'f03']) as { name: string; kind: string }[]
+    const added = three.filter((file) => !files.some((had: { name: string }) => had.name === file.name))
+    expect(added.map((file) => file.name).sort()).toEqual([
+      'base_f03_L20', 'base_f03_L30', 'base_f03_L60',
+      'base_f03_face_closed_L50', 'base_f03_face_happy_L50', 'base_f03_face_neutral_L50',
+      'base_f03_face_sad_L50', 'base_f03_face_sleep_L50', 'base_f03_face_surprised_L50',
+    ].sort())
+    // …and a name the placeholder set has never seen still has to be a legal one (C8).
+    for (const file of added) expect(NAME_PATTERN.test(file.name), file.name).toBe(true)
   })
 
   it('gives every entry the layer its name ends in', () => {
@@ -1142,5 +1306,26 @@ describe('the placeholder command', () => {
     run()
     expect(readFileSync(join(dir, MANIFEST_NAME)).equals(first)).toBe(true)
     await Promise.resolve()
+  }, 600_000)
+
+  it('draws a full stand-in figure for a base the list has just gained', async () => {
+    // R5: the whole cost of adding `f03` is adding it to `BASES`. Nine files appear — body, both hair
+    // layers, six expressions — each a legal name at the right layer, each listed in the manifest, and
+    // each a *different* figure from f01's, so a sheet of three bases reads as three characters.
+    const dir = caseDir('placeholder-three')
+    const manifest = await buildPlaceholders({ dir, targets: [join(dir, MANIFEST_NAME)], bases: [...BASES, 'f03'] }) as unknown as Manifest
+    const names = ['base_f03_L20', 'base_f03_L30', 'base_f03_L60', ...['neutral', 'happy', 'sad', 'surprised', 'closed', 'sleep'].map((expr) => `base_f03_face_${expr}_L50`)]
+    for (const name of names) {
+      expect(manifest.files[name], name).toMatchObject({ w: FRAME.w, h: FRAME.h, placeholder: true })
+      for (const density of DENSITIES) expect(existsSync(join(dir, `${name}@${density}x.png`)), `${name}@${density}x`).toBe(true)
+    }
+    const rows = await runChecks({ dir, manifest, names })
+    for (const row of rows as { name: string; results: { id: string; ok: boolean; detail: string }[] }[]) {
+      for (const result of row.results) expect(result.ok, `${row.name} ${result.id}: ${result.detail}`).toBe(true)
+    }
+    // Its own skin, not f01's: `baseSkinColour` is what every outfit's extraction asks the base about.
+    const f01 = baseSkinColour(await readPicture(join(dir, 'base_f01_L30@2x.png')), 2)!
+    const f03 = baseSkinColour(await readPicture(join(dir, 'base_f03_L30@2x.png')), 2)!
+    expect(Math.hypot(f01[0]! - f03[0]!, f01[1]! - f03[1]!, f01[2]! - f03[2]!)).toBeGreaterThan(24)
   }, 600_000)
 })

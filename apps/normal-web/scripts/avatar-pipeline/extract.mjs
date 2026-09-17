@@ -13,15 +13,21 @@
  *
  * The three slot rules exist because the difference is honest but not clever. `head` drops everything
  * below `HEAD_LIMIT_Y` — no hat reaches the waist. `face` keeps only the head region (the portrait crop
- * above `FACE_LIMIT_Y`). `outfit` drops everything above the chin line `OUTFIT_TOP_Y` and then *adds* the
- * base's own body below it, because D01 §10.7 asks that an outfit leave no underwear showing and an outfit
- * that merely differs from the base would leave exactly the pixels where the two happened to agree.
+ * above `FACE_LIMIT_Y`). `outfit` drops everything above the chin line `OUTFIT_TOP_Y` and then adds back
+ * exactly as much of the base as D01 §10.7 needs — see `underwearUnion`.
  *
  * 2026-09-17: an item layer holds only the item. Items are worn by M01 too and shown alone as inventory
  * icons, so the hair under a brim, the skin round a rim and the head above a collar — all of which the
  * generator redraws a little differently in every picture — have to stay out: `registerToBase` lines the
  * picture up first, `diffAgainstBase` compares neighbourhoods rather than pixels, and `cutItem` takes the
  * soft edge's colour from the item rather than from whatever it was drawn over.
+ *
+ * 2026-09-17, phase 2: an **outfit layer holds clothing only**, no skin at all. More bases are coming that
+ * share F01's body and pose but not her skin tone, and the two places an outfit layer still picked skin up
+ * were the union with the base below the underwear band (now `underwearUnion`: the band itself, and only
+ * over the base's own clothing or where the picture changed something) and the limb cover (now seeded from
+ * the layer's *clothing* pixels only). Skin is defined against the base being ingested on, not against a
+ * constant: `baseSkinColour` (frame.mjs) measures it in the middle of that base's own face.
  */
 import { join } from 'node:path'
 import {
@@ -30,6 +36,7 @@ import {
   applyMask,
   alphaBBox,
   blankPicture,
+  colourDistance,
   dilateMask,
   erodeMask,
   featherMask,
@@ -41,7 +48,7 @@ import {
   removeChroma,
   writeDensities,
 } from './png.mjs'
-import { AXIS_X, BASELINE_Y, CROP, FACE_LIMIT_Y, FRAME, HEAD_LIMIT_Y, LAYERS, STRAND_MARGIN, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform } from './frame.mjs'
+import { AXIS_X, BASELINE_Y, CROP, FACE_LIMIT_Y, FRAME, HEAD_LIMIT_Y, LAYERS, SKIN_TOLERANCE, STRAND_MARGIN, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, isSkin } from './frame.mjs'
 import { ICON, MANIFEST_NAME, SLOT_LAYER, baseFile, entryFor, faceFile, itemFile, readManifest, writeIcon, writeManifest } from './manifest.mjs'
 
 /** D02 §8.3: a chibi is between two and two and a half heads tall, or it is not this character. */
@@ -76,7 +83,7 @@ export const SILHOUETTE_EDGE = { weight: 8, band: 2 }
  * The defaults `diffAgainstBase` was tuned to on the first three real items (2026-09-17). Areas are in
  * frame units (pixels at @1x) and grow with the square of the density; `colorTol` is an RGB distance.
  */
-export const DIFF_DEFAULTS = { colorTol: 36, shadowTol: 14, minRegion: 100, relativeRegion: 0.05, closeRadius: 1.5, maxHole: 400, coverReach: 5 }
+export const DIFF_DEFAULTS = { colorTol: 36, shadowTol: 14, skinTol: SKIN_TOLERANCE, minRegion: 100, relativeRegion: 0.05, closeRadius: 1.5, maxHole: 400, coverReach: 5 }
 /** How much darker than the base a pixel may be and still be read as the item's shadow on it. */
 export const SHADOW_RANGE = [0.45, 0.92]
 
@@ -313,8 +320,8 @@ export function registerBySilhouette(itemPic, basePic, { density = 1, range = RE
  *    larger and stays open.
  * 4. **Edge.** One pixel of dilation at @2x (half a pixel's worth at @1x, rounded up), clamped to the item
  *    picture's own alpha, then a one-pixel feather — antialiasing kept, no halo grown.
- * 5. **Slot rules** once more after the feather, and for `outfit` the base's body below the chin line
- *    (see `applySlotRule`); then `minRegion` once more over the finished mask.
+ * 5. **Slot rules** once more after the feather, and for `outfit` the part of the base the underwear rule
+ *    absorbs (`underwearUnion`, through `applySlotRule`); then `minRegion` once more over the finished mask.
  *
  * Returns the `mask`, its `bbox`, and the `core` — the pixels that are the item itself rather than its soft
  * edge — which `cutItem` takes the edge's colour from.
@@ -325,7 +332,7 @@ export function registerBySilhouette(itemPic, basePic, { density = 1, range = RE
  */
 export function diffAgainstBase(itemPic, basePic, options = {}) {
   const { slot, density = 1 } = options
-  const { colorTol, shadowTol, minRegion, relativeRegion, closeRadius, maxHole, coverReach } = { ...DIFF_DEFAULTS, ...stripUndefined(options) }
+  const { colorTol, shadowTol, skinTol, minRegion, relativeRegion, closeRadius, maxHole, coverReach } = { ...DIFF_DEFAULTS, ...stripUndefined(options) }
   const { width, height } = itemPic
   if (basePic.width !== width || basePic.height !== height) {
     throw new Error(`the base is ${basePic.width} × ${basePic.height} and the item is ${width} × ${height} — they must share a frame`)
@@ -337,6 +344,8 @@ export function diffAgainstBase(itemPic, basePic, options = {}) {
   const chinBottom = slot === 'outfit' ? (OUTFIT_TOP_Y + CHIN_BAND.rows) * density : -1
   const tolSquared = colorTol * colorTol
   const shadowSquared = shadowTol * shadowTol
+  // The base's own skin, and with it what counts as clothing on either picture (2026-09-17, phase 2).
+  const skin = slot === 'outfit' ? baseSkinColour(basePic, density) : null
   const different = new Uint8Array(width * height)
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -373,7 +382,9 @@ export function diffAgainstBase(itemPic, basePic, options = {}) {
         const k = energy === 0 ? 0 : (r * br + g * bg + b * bb) / energy
         if (k >= SHADOW_RANGE[0] && k <= SHADOW_RANGE[1] && (r - k * br) ** 2 + (g - k * bg) ** 2 + (b - k * bb) ** 2 <= shadowSquared) close = true
       }
-      if (!anySolid || !close) different[p] = 255
+      // R1: an outfit layer holds clothing only, so the base's skin never enters it however far the
+      // picture's shading of it has drifted from the base's own (`skinOfBase`).
+      if ((!anySolid || !close) && !(slot === 'outfit' && skinOfBase(itemPic, basePic, p, skin, skinTol))) different[p] = 255
     }
   }
   slotLimits(different, { slot, width, height, density })
@@ -386,15 +397,97 @@ export function diffAgainstBase(itemPic, basePic, options = {}) {
   const filled = fillHoles(closed, width, height, Math.round(maxHole * area))
   const grown = dilateMask(filled, width, height, Math.max(1, Math.ceil(density / 2)))
   for (let p = 0; p < grown.length; p++) grown[p] = Math.min(grown[p], itemPic.data[p * 4 + 3])
-  const cover = slot === 'outfit' ? coverBaseLimbs(grown, itemPic, basePic, { width, height, density, reach: coverReach }) : null
+  const union = slot === 'outfit' ? underwearUnion(itemPic, basePic, { width, height, density, colorTol, skinTol, skin }) : null
+  const cover = slot === 'outfit' ? coverBaseLimbs(grown, itemPic, basePic, { width, height, density, reach: coverReach, union, skinTol, skin }) : null
   const mask = featherMask(grown, width, height)
   const core = slotLimits(filled, { slot, width, height, density })
-  applySlotRule(mask, basePic, { slot, width, height, density, core })
+  applySlotRule(mask, basePic, { slot, width, height, density, core, union, cover })
   // The outfit's union with the base can leave slivers of its own — the tips of the hair just under the
   // head region — so the same minimum region is held once more on the finished mask.
   const final = keepLargeRegions(mask, width, height, Math.round(minRegion * area))
   for (let p = 0; p < core.length; p++) if (!final[p]) core[p] = 0
   return { mask: final, core, cover, bbox: maskBBox(final, width, height) }
+}
+
+/**
+ * The head region: the portrait crop, cut off at `FACE_LIMIT_Y`, which the base's own face layer paints.
+ */
+function headRegion(density) {
+  const left = CROP.x * density
+  const right = (CROP.x + CROP.size) * density
+  const bottom = FACE_LIMIT_Y * density
+  return (x, y) => y < bottom && x >= left && x < right
+}
+
+/**
+ * Whether the outfit picture's pixel at `p` is the base's own skin showing through (2026-09-17, phase 2).
+ *
+ * The definition R1 fixes is *within `skinTol` of the base body's colour at the same registered position,
+ * where the base is solid* — a bare thigh in a generated picture is the base's thigh redrawn, so it lands
+ * within a few units of it once the body is registered, while a sleeve, a hem or a sock does not.
+ *
+ * With one addition the real dealer01 needed. The base's own thigh is *shaded* where a skirt would fall on
+ * it; the generated picture put the skirt somewhere slightly else and painted plain skin there, so the two
+ * disagree by 30–50 while the picture's pixel is the base's flat skin tone to within 3. A pixel that *is*
+ * the base's skin colour is the base's skin wherever on the body it sits, so the second clause is exactly
+ * that: `baseSkinColour ± skinTol`, over anything the base inks.
+ *
+ * Where the base has nothing under the pixel there is no skin to be — that is new silhouette, and it is the
+ * item. A garment the same colour as the base's skin, to within `skinTol`, is indistinguishable from the
+ * body underneath it and is lost on purpose; what it would have hidden is put back by `underwearUnion`.
+ */
+function skinOfBase(itemPic, basePic, p, skin, skinTol) {
+  const at = p * 4
+  if (basePic.data[at + 3] <= ALPHA_SOLID) return false
+  if (colourDistance(itemPic.data[at], itemPic.data[at + 1], itemPic.data[at + 2], basePic.data[at], basePic.data[at + 1], basePic.data[at + 2]) <= skinTol) return true
+  return isSkin(itemPic.data[at], itemPic.data[at + 1], itemPic.data[at + 2], skin, skinTol)
+}
+
+/**
+ * The part of the base an outfit layer absorbs: the underwear band, and only what has to be hidden
+ * (2026-09-17, phase 2 — R1).
+ *
+ * D01 §10.7 asks that an outfit leave no underwear showing, and until now the layer took the base's whole
+ * body below the chin to guarantee it. That put the *generated picture's* bare thighs, hands and neck into
+ * the layer — F01's skin, in a file M01 and every base after him wears too, and the reason a darker-skinned
+ * base would have shown cream legs under a dealer's skirt.
+ *
+ * So the union is cut back to what the rule is actually for. Only inside `UNDERWEAR_BAND` itself
+ * (`y0`–`y1`, the whole width — the band has no `x`), never in the head region, and only where one of two
+ * things is true of the pixel:
+ *
+ * - the outfit picture *changed* it — further than `colorTol` from the base at the same position — so it is
+ *   the outfit's own cloth, or
+ * - the base's pixel under it is **not skin** (`baseSkinColour` ± `skinTol`), so it is the grey tank top or
+ *   shorts, which must be covered by whatever the picture shows there *even if that is skin-coloured*: a
+ *   swimsuit-cut outfit still has to hide the underwear, and what hides it is the picture's own pixel.
+ *
+ * Outside the band, and on skin the picture left alone, nothing is added: the base's limbs show, in the
+ * base's own colour, which is the whole point.
+ *
+ * Returns the alpha to add, per pixel — the base's, wherever it is added at all.
+ */
+export function underwearUnion(itemPic, basePic, { width, height, density = 1, colorTol = DIFF_DEFAULTS.colorTol, skinTol = DIFF_DEFAULTS.skinTol, skin = null }) {
+  const union = new Uint8Array(width * height)
+  const top = Math.max(UNDERWEAR_BAND.y0, OUTFIT_TOP_Y) * density
+  const bottom = Math.min(height, UNDERWEAR_BAND.y1 * density)
+  const inHead = headRegion(density)
+  for (let y = top; y < bottom; y++) {
+    for (let x = 0; x < width; x++) {
+      if (inHead(x, y)) continue
+      const p = y * width + x
+      const at = p * 4
+      const alpha = basePic.data[at + 3]
+      if (alpha === 0) continue
+      const changed = itemPic.data[at + 3] > ALPHA_SOLID && (
+        alpha <= ALPHA_SOLID ||
+        colourDistance(itemPic.data[at], itemPic.data[at + 1], itemPic.data[at + 2], basePic.data[at], basePic.data[at + 1], basePic.data[at + 2]) > colorTol
+      )
+      const clothing = alpha > ALPHA_SOLID && !isSkin(basePic.data[at], basePic.data[at + 1], basePic.data[at + 2], skin, skinTol)
+      if (changed || clothing) union[p] = alpha
+    }
+  }
+  return union
 }
 
 /**
@@ -409,34 +502,37 @@ export function diffAgainstBase(itemPic, basePic, options = {}) {
  * union with the base leaves it: the base's face layer paints it, and filling it would close the neck under
  * a collar.
  *
+ * 2026-09-17, phase 2 (R1): the cover is now clothing-to-outline only, at both ends.
+ *
+ * - Only a *clothing* pixel of the layer bleeds. A pixel of the layer that is the base's own skin showing
+ *   through (`skinOfBase`) is neither a source of colour nor a seed, so a bare thigh covers nothing.
+ * - Only a *non-skin* pixel of the base is covered. What the cover was invented to hide is the base's own
+ *   **outline** standing beside a sleeve the generator drew a little narrow; the base's bare limb beside it
+ *   is not a defect any more, it is the point — it is the limb a darker base must be free to draw itself.
+ *
+ * So a cuff still bridges to the base's hand across the outline between them, a sock's rim still meets the
+ * leg's, and the thigh above a hem keeps the base's own colour rather than a ten-pixel band of skirt.
+ *
  * Writes the alpha into `grown` (the mask before its feather) and returns `{ at, rgb }`: which pixels were
  * added, and the colour each takes.
  */
-function coverBaseLimbs(grown, itemPic, basePic, { width, height, density, reach }) {
+function coverBaseLimbs(grown, itemPic, basePic, { width, height, density, reach, union = null, skinTol = DIFF_DEFAULTS.skinTol, skin = null }) {
   const top = OUTFIT_TOP_Y * density
-  const headLeft = CROP.x * density
-  const headRight = (CROP.x + CROP.size) * density
-  const headBottom = FACE_LIMIT_Y * density
-  const unionTop = Math.max(UNDERWEAR_BAND.y0, OUTFIT_TOP_Y) * density
-  const inHead = (x, y) => y < headBottom && x >= headLeft && x < headRight
-  // The outfit layer's own alpha, as it will be: the mask (with the base's body where the union adds it),
-  // under the item picture's alpha.
-  const inked = new Uint8Array(width * height)
-  for (let y = top; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const p = y * width + x
-      const union = y >= unionTop && !inHead(x, y) ? basePic.data[p * 4 + 3] : 0
-      // Solid, not merely inked: the outfit's own soft rim is see-through, and the base's outline shows through it.
-      if (Math.min(Math.max(grown[p], union), itemPic.data[p * 4 + 3]) > ALPHA_SOLID) inked[p] = 1
-    }
-  }
+  const inHead = headRegion(density)
+  // The layer's *clothing*: solidly covered (the outfit's own soft rim is see-through, and the base's
+  // outline shows through it) and not the base showing through. That is at once where the bleed starts and
+  // where it stops — a pixel of the layer that is the base redrawn is neither a source of colour nor a wall,
+  // because the line art the cover exists to hide is exactly a pixel the picture left as the base had it.
+  const clothing = new Uint8Array(width * height)
   const distance = new Uint16Array(width * height).fill(0xffff)
   const rgb = new Uint8Array(width * height * 3)
   let frontier = []
   for (let y = top; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const p = y * width + x
-      if (!inked[p]) continue
+      if (Math.min(Math.max(grown[p], union === null ? 0 : union[p]), itemPic.data[p * 4 + 3]) <= ALPHA_SOLID) continue
+      if (skinOfBase(itemPic, basePic, p, skin, skinTol)) continue
+      clothing[p] = 1
       distance[p] = 0
       rgb.set(itemPic.data.subarray(p * 4, p * 4 + 3), p * 3)
       frontier.push(p)
@@ -458,7 +554,12 @@ function coverBaseLimbs(grown, itemPic, basePic, { width, height, density, reach
           if (nx < 0 || ny < top || nx >= width || ny >= height) continue
           const q = ny * width + nx
           if (distance[q] <= step) continue
-          if (inked[q] || basePic.data[q * 4 + 3] <= ALPHA_INK || inHead(nx, ny)) continue
+          if (clothing[q] || basePic.data[q * 4 + 3] <= ALPHA_INK || inHead(nx, ny)) continue
+          // The base's own skin is left to the base: only its line art (and its own clothing) is covered.
+          if (isSkin(basePic.data[q * 4], basePic.data[q * 4 + 1], basePic.data[q * 4 + 2], skin, skinTol)) continue
+          // Inside the band the underwear rule has already said what the layer holds, in the picture's own
+          // colours; the cover must not paint over a swimsuit-cut outfit there.
+          if (union !== null && union[q] > 0) continue
           distance[q] = step
           ring.push(q)
         }
@@ -578,24 +679,24 @@ function slotLimits(mask, { slot, width, height, density }) {
   return mask
 }
 
-function applySlotRule(mask, basePic, { slot, width, height, density, core = null }) {
+function applySlotRule(mask, basePic, { slot, width, height, density, core = null, union = null, cover = null }) {
   slotLimits(mask, { slot, width, height, density })
-  if (slot === 'outfit') {
-    // D01 §10.7: no underwear showing, so the base's own body below the band's top is part of the layer —
-    // but never above the chin line, and never inside the head region, which the base's own face layer
-    // (50, above the outfit) paints anyway: taken from the item picture, those rows are the character's
-    // own hair ends and neck.
-    const headLeft = CROP.x * density
-    const headRight = (CROP.x + CROP.size) * density
-    const headBottom = FACE_LIMIT_Y * density
-    for (let y = Math.max(UNDERWEAR_BAND.y0, OUTFIT_TOP_Y) * density; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        if (y < headBottom && x >= headLeft && x < headRight) continue
-        const p = y * width + x
-        mask[p] = Math.max(mask[p], basePic.data[p * 4 + 3])
-        if (core && basePic.data[p * 4 + 3] > ALPHA_SOLID) core[p] = 255
-      }
+  if (slot !== 'outfit') return
+  // D01 §10.7: no underwear showing. What that costs the layer is `underwearUnion`'s decision now —
+  // the band, the base's own clothing and the pixels the picture changed, and nothing else.
+  if (union !== null) {
+    for (let p = 0; p < union.length; p++) {
+      if (union[p] === 0) continue
+      mask[p] = Math.max(mask[p], union[p])
+      if (core && union[p] > ALPHA_SOLID) core[p] = 255
     }
+  }
+  // Both of those take the *base's* alpha, and both are applied after the feather on purpose: where the
+  // layer ends because the base ends, its edge should be the base's own edge — soften it a second time and
+  // the base's outline shows through the half-transparent ring, which is the double outline all this is
+  // about avoiding.
+  if (cover !== null) {
+    for (let p = 0; p < cover.at.length; p++) if (cover.at[p]) mask[p] = Math.max(mask[p], basePic.data[p * 4 + 3])
   }
 }
 
@@ -940,7 +1041,9 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', toler
     log(`registered on ${owner}: dx ${registered.dx}, dy ${registered.dy} px @2x, scale ${registered.scale} (${fit})`)
     const cut = diffAgainstBase(registered.picture, basePicture, { ...diff, slot: target.slot, density: 2 })
     const layer = SLOT_LAYER[target.slot]
-    layers.push({ file: { name: itemFile(target.slot, target.code, layer), layer, ...hides }, picture: cutItem(registered.picture, cut), icon: true })
+    // Below `ALPHA_INK` nothing is visible, and the halved copy of a mask edge can land a stray alpha-1
+    // pixel a few pixels outside the shape — which is C3's `rác bán trong suốt`, not a soft edge.
+    layers.push({ file: { name: itemFile(target.slot, target.code, layer), layer, ...hides }, picture: dropFaint(cutItem(registered.picture, cut)), clip: dropFaint, icon: true })
   }
 
   for (const { file: layerFile, picture, clip = null, extra = {}, icon = false } of layers) {

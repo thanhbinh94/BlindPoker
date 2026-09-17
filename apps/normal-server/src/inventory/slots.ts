@@ -1,6 +1,6 @@
 /**
- * The vocabulary the wardrobe is written in: the slots an item can fill, and the two bases a figure
- * can be built on (design §4.4, §5.1).
+ * The vocabulary the wardrobe is written in: the slots an item can fill, and what a base id is
+ * (design §4.4, §5.1).
  *
  * A leaf module on purpose. `items.ts` needs the slot list to validate the catalogue and `avatar.ts`
  * needs it to validate a configuration, while `items.ts` already imports `defaultAvatar` from
@@ -46,16 +46,33 @@ export const DRAWN_SLOTS: readonly ItemSlot[] = ['head', 'face', 'outfit', 'aura
  */
 export const DAILY_DRAW_SLOTS: readonly ItemSlot[] = ['head', 'face', 'aura', 'frame']
 
-/** Which fixed figure a chibi is drawn on. Not an item: a player picks it, they do not own it. */
-export type BaseId = 'f01' | 'm01'
-export const BASES: readonly BaseId[] = ['f01', 'm01']
+/**
+ * Which fixed figure a chibi is drawn on. Not an item: a player picks it, they do not own it.
+ *
+ * 2026-09-17: an **open** id, not a union of the two that happen to exist. More bases are coming — they
+ * share F01's body and pose and differ in head, hair and skin tone — and the list of them is data:
+ * `data/avatar-bases.json`, which `loadBases` reads and validates against the asset manifest. A union
+ * here would have made every new base a code change in three packages, so the type is `string` and the
+ * *registry* is what says whether a given string is a base (`isBaseId`, below, takes one).
+ */
+export type BaseId = string
+
+/** The ids a loaded registry defines — `new Set(Object.keys(bases))`, `BaseRegistry`'s own key set. */
+export type BaseIds = ReadonlySet<BaseId>
+
+/** The base a config falls back to when nothing better is known; the registry must define it. */
+export const DEFAULT_BASE: BaseId = 'f01'
+
+/** How a base id may be spelled at all, before any registry is consulted: D01 §9.1's `base_<id>_L30`. */
+export const BASE_ID_PATTERN = /^[a-z][a-z0-9]*$/
 
 export function isItemSlot(value: string): value is ItemSlot {
   return (SLOTS as readonly string[]).includes(value)
 }
 
-export function isBaseId(value: unknown): value is BaseId {
-  return typeof value === 'string' && (BASES as readonly string[]).includes(value)
+/** Whether `value` is a base **this server has**: a string the loaded registry defines. */
+export function isBaseId(value: unknown, bases: BaseIds): value is BaseId {
+  return typeof value === 'string' && bases.has(value)
 }
 
 export function isDrawnSlot(slot: ItemSlot): boolean {

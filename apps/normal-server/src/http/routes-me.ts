@@ -27,6 +27,7 @@ import { applyAvatarConfig, validateAvatarConfig } from '../inventory/avatar.js'
 import { readAvatarConfig } from '../inventory/avatar-migrate.js'
 import type { InventoryService } from '../inventory/inventory-service.js'
 import type { ItemCatalog } from '../inventory/items.js'
+import type { BaseIds } from '../inventory/slots.js'
 import { clampLimit, cursorOf, DisplayNameTakenError, type NormalRepositories } from '../repos/index.js'
 import type { StatsService } from '../stats/stats-service.js'
 import { currentUser, type RequireUser } from './auth-guard.js'
@@ -43,6 +44,8 @@ export interface MeRouteDeps {
   catalog: ItemCatalog
   /** Old wardrobe ids, kept readable — see `inventory/aliases.ts`. */
   aliases: ReadonlyMap<string, string>
+  /** The ids `data/avatar-bases.json` defines: an avatar is validated, and repaired, against them. */
+  baseIds: BaseIds
   /** The loaded definitions, so `/api/me/achievements` can answer definition *and* progress at once. */
   defs: AchievementDef[]
   requireUser: RequireUser
@@ -107,7 +110,7 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
       displayName: player.displayName,
       email: account?.email ?? null,
       balance: player.balance,
-      avatar: readAvatarConfig(player.avatarConfig, deps.catalog, deps.aliases),
+      avatar: readAvatarConfig(player.avatarConfig, deps.catalog, deps.aliases, deps.baseIds),
       // The summary Lite publishes under the same key: both modes folded into one pair, because
       // that is what the shared player bar draws. The per-mode counters are `/api/me/stats`.
       stats: {
@@ -207,13 +210,13 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
           acquiredAt: item.acquiredAt,
         }
       }),
-      avatar: readAvatarConfig(player.avatarConfig, deps.catalog, deps.aliases),
+      avatar: readAvatarConfig(player.avatarConfig, deps.catalog, deps.aliases, deps.baseIds),
     })
   })
 
   /** A full replace, not a patch: omitting `title` is how a player takes their title off. */
   app.put('/api/me/avatar', authed, async (req, reply) => {
-    const checked = validateAvatarConfig(req.body, deps.catalog)
+    const checked = validateAvatarConfig(req.body, deps.catalog, deps.baseIds)
     if (!checked.ok) throw new HttpError(400, checked.code, `avatar refused: ${checked.code}`)
     try {
       return reply.send(await applyAvatarConfig(deps.db, deps.inventory, playerIdOf(req), checked.value))
@@ -236,7 +239,7 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
     return reply.send({
       playerId: player.playerId,
       displayName: player.displayName,
-      avatar: readAvatarConfig(player.avatarConfig, deps.catalog, deps.aliases),
+      avatar: readAvatarConfig(player.avatarConfig, deps.catalog, deps.aliases, deps.baseIds),
     })
   })
 

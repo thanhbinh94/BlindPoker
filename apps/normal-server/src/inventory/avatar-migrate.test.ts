@@ -6,14 +6,16 @@
  */
 import { describe, expect, it } from 'vitest'
 import { loadAliases } from './aliases.js'
-import { defaultAvatar, validateAvatarConfig } from './avatar.js'
+import { DEFAULT_BASE, defaultAvatar, validateAvatarConfig } from './avatar.js'
 import { migrateAvatarConfig, readAvatarConfig } from './avatar-migrate.js'
+import { baseIdsOf, loadBases } from './bases.js'
 import { loadItemCatalog } from './items.js'
 
 const catalog = loadItemCatalog()
 const aliases = loadAliases()
+const baseIds = baseIdsOf(loadBases())
 
-const read = (stored: Record<string, unknown>): ReturnType<typeof migrateAvatarConfig> => readAvatarConfig(stored, catalog, aliases)
+const read = (stored: Record<string, unknown>): ReturnType<typeof migrateAvatarConfig> => readAvatarConfig(stored, catalog, aliases, baseIds)
 
 /** What a Plan 6 account had in `players.avatar_config`: no `v`, six SVG layers (pre-Plan 8, v1). */
 const V1 = {
@@ -71,7 +73,7 @@ describe('migrateAvatarConfig — v1 to v3', () => {
   })
 
   it('is itself a valid v3 configuration', () => {
-    expect(validateAvatarConfig(read(V1), catalog)).toMatchObject({ ok: true })
+    expect(validateAvatarConfig(read(V1), catalog, baseIds)).toMatchObject({ ok: true })
   })
 })
 
@@ -117,7 +119,7 @@ describe('migrateAvatarConfig — v2 to v3', () => {
 
   it('is itself a valid v3 configuration, with nothing left from v2 at all', () => {
     const migrated = read(V2)
-    expect(validateAvatarConfig(migrated, catalog)).toMatchObject({ ok: true })
+    expect(validateAvatarConfig(migrated, catalog, baseIds)).toMatchObject({ ok: true })
     expect(migrated).not.toHaveProperty('body')
     expect(migrated).not.toHaveProperty('hair')
     expect(migrated).not.toHaveProperty('top')
@@ -127,17 +129,17 @@ describe('migrateAvatarConfig — v2 to v3', () => {
 
 describe('readAvatarConfig', () => {
   it('answers an empty, absent or nonsense config with the default avatar', () => {
-    expect(readAvatarConfig({}, catalog, aliases)).toEqual(defaultAvatar(catalog))
-    expect(readAvatarConfig(null, catalog, aliases)).toEqual(defaultAvatar(catalog))
-    expect(readAvatarConfig(undefined, catalog, aliases)).toEqual(defaultAvatar(catalog))
-    expect(migrateAvatarConfig([V1] as unknown as Record<string, unknown>, catalog, aliases)).toEqual(defaultAvatar(catalog))
+    expect(readAvatarConfig({}, catalog, aliases, baseIds)).toEqual(defaultAvatar(catalog))
+    expect(readAvatarConfig(null, catalog, aliases, baseIds)).toEqual(defaultAvatar(catalog))
+    expect(readAvatarConfig(undefined, catalog, aliases, baseIds)).toEqual(defaultAvatar(catalog))
+    expect(migrateAvatarConfig([V1] as unknown as Record<string, unknown>, catalog, aliases, baseIds)).toEqual(defaultAvatar(catalog))
     // A single leftover key is not half an avatar: it is an avatar with one thing kept.
-    expect(readAvatarConfig({ base: 'base_01' }, catalog, aliases)).toEqual(defaultAvatar(catalog))
+    expect(readAvatarConfig({ base: 'base_01' }, catalog, aliases, baseIds)).toEqual(defaultAvatar(catalog))
   })
 
   it('reads a v3 configuration straight through, without migrating anything', () => {
     const stored = { ...defaultAvatar(catalog), base: 'm01' as const, head: 'head_crown_gold01' }
-    expect(readAvatarConfig(stored, catalog, aliases)).toEqual(stored)
+    expect(readAvatarConfig(stored, catalog, aliases, baseIds)).toEqual(stored)
   })
 
   it('repairs a v3 configuration that has gone stale rather than throwing it away', () => {
@@ -145,14 +147,25 @@ describe('readAvatarConfig', () => {
     // invalidated slot is treated as v3's own candidate — resolving to nothing, since `outfit_gone`
     // aliases to nothing and is not itself in the catalogue.
     const stale = { ...defaultAvatar(catalog), outfit: 'outfit_gone', head: 'head_crown_gold01' }
-    expect(readAvatarConfig(stale, catalog, aliases)).toMatchObject({ v: 3, outfit: 'outfit_casual01', head: 'head_crown_gold01' })
+    expect(readAvatarConfig(stale, catalog, aliases, baseIds)).toMatchObject({ v: 3, outfit: 'outfit_casual01', head: 'head_crown_gold01' })
   })
 
   it('reads a v1 config all the way through readAvatarConfig, exactly as migrateAvatarConfig would', () => {
-    expect(readAvatarConfig(V1, catalog, aliases)).toEqual(migrateAvatarConfig(V1, catalog, aliases))
+    expect(readAvatarConfig(V1, catalog, aliases, baseIds)).toEqual(migrateAvatarConfig(V1, catalog, aliases, baseIds))
   })
 
   it('reads a v2 config all the way through readAvatarConfig, exactly as migrateAvatarConfig would', () => {
-    expect(readAvatarConfig(V2, catalog, aliases)).toEqual(migrateAvatarConfig(V2, catalog, aliases))
+    expect(readAvatarConfig(V2, catalog, aliases, baseIds)).toEqual(migrateAvatarConfig(V2, catalog, aliases, baseIds))
+  })
+
+  it('falls back to the default base when the registry no longer defines the stored one', () => {
+    // The base list is data now (2026-09-17), so a config can name a base this server has since
+    // dropped. Reads are forgiving: the rest of the figure is kept and only the base moves.
+    const stored = { ...defaultAvatar(catalog), base: 'm01' as const, head: 'head_crown_gold01' }
+    const withoutM01 = new Set(['f01'])
+    expect(readAvatarConfig(stored, catalog, aliases, withoutM01)).toEqual({ ...stored, base: DEFAULT_BASE })
+    // …and a base the registry *has* added is read straight through, with nothing else to change.
+    const f02 = { ...defaultAvatar(catalog), base: 'f02' }
+    expect(readAvatarConfig(f02, catalog, aliases, new Set([...baseIds, 'f02']))).toEqual(f02)
   })
 })

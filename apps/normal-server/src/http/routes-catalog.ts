@@ -17,7 +17,6 @@ import type { NormalConfig } from '../config.js'
 import type { AvatarManifest } from '../inventory/manifest.js'
 import type { BaseDef } from '../inventory/bases.js'
 import type { ItemCatalog } from '../inventory/items.js'
-import { BASES } from '../inventory/slots.js'
 
 export interface CatalogRouteDeps {
   config: NormalConfig
@@ -52,14 +51,18 @@ export function registerCatalogRoutes(app: FastifyInstance, deps: CatalogRouteDe
 
   /**
    * The rig every chibi is drawn on (design §5.1): the frame and profile crop the pipeline built to,
-   * and the two bases — public, like `/api/catalog/items`, because a base is chosen rather than
-   * owned and the wardrobe needs it before it needs a session.
+   * and every base the registry defines — public, like `/api/catalog/items`, because a base is chosen
+   * rather than owned and the wardrobe needs it before it needs a session.
+   *
+   * 2026-09-17: the list is `deps.bases` itself, in `data/avatar-bases.json`'s own key order, rather
+   * than a constant naming two ids. Adding a figure is a registry entry and its art; the wardrobe's
+   * base tab draws one tile per entry it is sent, so nothing downstream counts them either.
    */
   app.get('/api/catalog/avatar', async (_req, reply) =>
     reply.send({
       frame: deps.manifest.frame,
       crop: deps.manifest.crop,
-      bases: BASES.map((id) => deps.bases[id]),
+      bases: Object.values(deps.bases),
       manifestVersion: deps.manifest.version,
     }))
 

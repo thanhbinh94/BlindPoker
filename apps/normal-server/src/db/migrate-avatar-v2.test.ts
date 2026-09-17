@@ -18,6 +18,7 @@ import { drizzle } from 'drizzle-orm/pglite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { loadAliases } from '../inventory/aliases.js'
 import { readAvatarConfig } from '../inventory/avatar-migrate.js'
+import { baseIdsOf, loadBases } from '../inventory/bases.js'
 import { createInventoryService } from '../inventory/inventory-service.js'
 import { loadItemCatalog } from '../inventory/items.js'
 import type { AppDb } from './client.js'
@@ -144,7 +145,7 @@ describe('0001_avatar_v2', () => {
     const inventory = createInventoryService(db, aliases)
 
     const [player] = await db.select({ config: schema.players.avatarConfig }).from(schema.players)
-    const avatar = readAvatarConfig(player!.config, catalog, aliases)
+    const avatar = readAvatarConfig(player!.config, catalog, aliases, baseIdsOf(loadBases()))
     // The v1 layers, migrated all the way to v3: no body at all (falls to the default base), the
     // conical hat resolved through its alias into `head`, the title kept, and the outfit — nothing
     // v1 wore maps to one — at its default.

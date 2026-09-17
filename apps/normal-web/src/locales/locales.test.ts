@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 // raw key on a wardrobe tile. It is the only thing `normal-web` ever reads out of `normal-server`, it is data
 // rather than code, and it never reaches the bundle — this file is a test.
 import achievementDefs from '../../../normal-server/data/achievements.json'
+import baseDefs from '../../../normal-server/data/avatar-bases.json'
 import itemDefs from '../../../normal-server/data/items.json'
 import en from './en/normal.json'
 import vi from './vi/normal.json'
@@ -26,6 +27,14 @@ describe('normal locales', () => {
 
   it('leaves no value empty', () => {
     for (const [, bundle] of bundles) expect(JSON.stringify(bundle)).not.toContain('""')
+  })
+
+  it.each(bundles)('names every base the registry defines in %s', (_lang, bundle) => {
+    // A base's display name comes from its `nameKey`, which `loadBases` holds to `bases.<id>`. Names
+    // ahead of the registry are allowed and are the point (2026-09-17): `f02`/`f03` are written here now
+    // so that adding either is art plus a registry entry, with no string to translate under pressure.
+    const named = bundle.bases as Record<string, string | undefined>
+    for (const id of Object.keys(baseDefs)) expect(named[id], `bases.${id}`).toBeTypeOf('string')
   })
 
   it.each(bundles)('names every catalogue item in %s', (_lang, bundle) => {

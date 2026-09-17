@@ -4,8 +4,9 @@ import type { BaseRef, ChibiConfig, Expression } from './types.js'
 const EXPRESSIONS: readonly Expression[] = ['neutral', 'happy', 'sad', 'surprised', 'closed', 'sleep']
 
 /** Builds a `BaseRef` from a base id by the T1 naming convention: `base_<id>_L20|L30|L60` and
- * `base_<id>_face_<expression>_L50`. */
-function makeBase(id: 'f01' | 'm01'): BaseRef {
+ * `base_<id>_face_<expression>_L50`. The id is any string the server's registry defines (2026-09-17):
+ * this is a naming rule, and it has never needed to know which figures exist. */
+function makeBase(id: string): BaseRef {
   const faces = {} as Record<Expression, string>
   for (const expression of EXPRESSIONS) faces[expression] = `base_${id}_face_${expression}_L50`
   return { id, hairBack: `base_${id}_L20`, body: `base_${id}_L30`, hairFront: `base_${id}_L60`, faces }
