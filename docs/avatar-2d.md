@@ -69,6 +69,14 @@ writes L30 as the whole figure, the neutral face L50 as the whole head region (t
 hair can therefore only cover what its own picture covers, because the hide rules have no separate hair
 layer left to drop.
 
+2026-09-17: two refinements. **The face layer gives up the torso column**: below y 236 it holds nothing in
+x ∈ [150, 234] (`TORSO_COLUMN`), because layer 50 sits above the outfit and the base's tank-top straps there
+showed over every collar; hair tips either side stay. **A strand of hair above the head top goes to L60**:
+`ingest --as base` cuts the rows above `measure`'s head top plus `STRAND_MARGIN` (6 px) — F01's ahoge —
+out of L30 and every face layer into L60 (no longer `empty` for F01; the cut row is stored as `strandY` in
+the manifest's `bases`), so a hat that sets `hidesHairFront` (`head_tophat01`) hides it instead of the
+strand standing up behind the crown.
+
 Bots draw only two of these layers — `body` (30) and their own expression `face` (50) — because a bot
 has no wardrobe at all (`packages/ui-kit/src/avatar2d/layers.ts`, `layersFor`).
 
@@ -150,12 +158,15 @@ or head above a collar is a visible defect even where F01's own layers would hid
 2. **Register** (`registerToBase`): every whole-pixel shift within ±12 px and each scale in
    {0.99, 0.995, 1, 1.005, 1.01} about the axis and baseline is tried; the one with the lowest mean absolute
    RGB difference over pixels solid in both pictures wins, measured only where the slot changes nothing —
-   the body (y ≥ 260) for `head`/`face`, the head (the crop above y 250) for `outfit`. `ingest` logs the
-   chosen offset.
+   the body (y ≥ 260) for `head`/`face`. An `outfit` is registered on the body instead (fix round 1): the
+   same search maximises the intersection-over-union of the two silhouettes below the chin line, with pixels
+   within 2 px of the base's outline counting 8 × (`SILHOUETTE_EDGE`), because the base's own limbs show
+   wherever the outfit picture's limbs miss them. `ingest` logs the chosen offset.
 3. **Neighbourhood difference** (`diffAgainstBase`): a pixel is the item only if its colour is more than
    `colorTol` away from *every* solid base pixel in the 5 × 5 window around it (or that whole window is
    transparent in the base), and it is not simply the base pixel under it darkened (a cast shadow,
-   `shadowTol`).
+   `shadowTol`). For an outfit the window reaches 4 px (@1x) in the 4 rows under the chin line
+   (`CHIN_BAND`), where the picture's own chin sits a little off the base's once the body is registered.
 4. **Slot limits**: `head` y < 260; `face` inside the crop and y < 250; `outfit` nothing above the chin line
    y = 236 (`OUTFIT_TOP_Y`), plus the base's own body below it except inside the head region, which the
    base's face layer paints anyway (D01 §10.7's underwear coverage).
