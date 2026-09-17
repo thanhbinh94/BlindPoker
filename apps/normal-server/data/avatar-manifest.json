@@ -22,57 +22,56 @@
       "layer": 30,
       "w": 384,
       "h": 448,
-      "bytes2x": 280983,
+      "bytes2x": 280066,
       "real": true
     },
     "base_f01_L60": {
       "layer": 60,
       "w": 384,
       "h": 448,
-      "bytes2x": 2769,
-      "real": true,
-      "empty": true
+      "bytes2x": 8445,
+      "real": true
     },
     "base_f01_face_closed_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 272603,
+      "bytes2x": 271157,
       "real": true
     },
     "base_f01_face_happy_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 268107,
+      "bytes2x": 266331,
       "real": true
     },
     "base_f01_face_neutral_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 274174,
+      "bytes2x": 272458,
       "real": true
     },
     "base_f01_face_sad_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 273801,
+      "bytes2x": 272083,
       "real": true
     },
     "base_f01_face_sleep_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 278111,
+      "bytes2x": 276200,
       "real": true
     },
     "base_f01_face_surprised_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 283460,
+      "bytes2x": 281978,
       "real": true
     },
     "base_m01_L20": {
@@ -712,6 +711,7 @@
       "w": 384,
       "h": 448,
       "bytes2x": 297382,
+      "hidesHairFront": true,
       "real": true
     },
     "item_outfit_casual01_L40": {
@@ -732,7 +732,7 @@
       "layer": 40,
       "w": 384,
       "h": 448,
-      "bytes2x": 292004,
+      "bytes2x": 282174,
       "real": true
     },
     "item_outfit_royal_robe01_L40": {
@@ -987,7 +987,7 @@
       "of": "item_outfit_dealer01_L40",
       "w": 96,
       "h": 96,
-      "bytes2x": 25765,
+      "bytes2x": 24890,
       "real": true
     },
     "item_outfit_royal_robe01_icon": {
@@ -1021,7 +1021,8 @@
         "scale": 0.24669603524229075,
         "offsetX": 65.568281938326,
         "offsetY": 52.01762114537445
-      }
+      },
+      "strandY": 97
     }
   }
 }
