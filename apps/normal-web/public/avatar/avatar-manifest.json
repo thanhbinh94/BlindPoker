@@ -732,7 +732,7 @@
       "layer": 40,
       "w": 384,
       "h": 448,
-      "bytes2x": 284497,
+      "bytes2x": 87004,
       "real": true
     },
     "item_outfit_royal_robe01_L40": {
@@ -987,7 +987,7 @@
       "of": "item_outfit_dealer01_L40",
       "w": 96,
       "h": 96,
-      "bytes2x": 25860,
+      "bytes2x": 22665,
       "real": true
     },
     "item_outfit_royal_robe01_icon": {
