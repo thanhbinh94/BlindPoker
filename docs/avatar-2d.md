@@ -83,6 +83,7 @@ reserved: nothing ever drew it, no item or base ever shipped a file for it, and 
 base_<baseId>_L<layer>                       the base's own body/hair layers — no density suffix here
 base_<baseId>_face_<expression>_L50          one of the base's six expression layers
 item_<slot>_<code>_L<layer>                  a wardrobe item — <layer> is the slot's own fixed number
+item_<slot>_<code>_icon                      that item's 96 × 96 inventory icon (§4.2) — not a layer
 bot_<index>_L30                              a bot's body
 bot_<index>_face_<expression>_L50            a bot's expression
 ```
@@ -107,7 +108,8 @@ pnpm --filter @bp/normal-web avatar:placeholder
 # Draws the whole stage-1 set as labelled stand-ins (a shape plus the file's own name, so a wrong
 # ingest is obvious at a glance) and writes both copies of the manifest. Idempotent: an entry the
 # manifest already marks real (see §6 below) is left exactly alone, so re-running this after some
-# real art has landed only re-draws what is still a stand-in.
+# real art has landed only re-draws what is still a stand-in. Every item's icon (§4.2) is refreshed
+# with it: redrawn for a stand-in, kept for real art (or cut from the real layer on disk if missing).
 
 pnpm --filter @bp/normal-web avatar:ingest -- <picture.png> --as base:f01
 pnpm --filter @bp/normal-web avatar:ingest -- <picture.png> --as expr:f01:happy
@@ -117,8 +119,9 @@ pnpm --filter @bp/normal-web avatar:ingest -- <picture.png> --as item:head:topha
 # ingests a wardrobe piece, always drawn on F01 (D02 §5) and shared with M01 automatically — the two
 # bases are built to the same silhouette. Background removal keys off #00FF00 by default (`--white`
 # for a white background instead) and, for an item, the layer is found by *diffing against the base's
-# own body* rather than by any manual selection — the largest connected region that differs from the
-# aligned base, edge-softened by 1 px. `--dry-run` prints what would happen and writes nothing.
+# own body* rather than by any manual selection (§4.1), and written together with its inventory icon
+# (§4.2). `--dry-run` prints what would happen and writes nothing. `--color-tol`, `--min-region` and
+# `--max-hole` override the extraction defaults for one awkward picture.
 
 pnpm --filter @bp/normal-web avatar:check
 # Runs the ten acceptance criteria (D01 §10) over every committed layer and prints a pass/fail table;
@@ -135,6 +138,53 @@ pnpm --filter @bp/normal-web avatar:sheet
 directory (as the pipeline's own tests do) also stops the server's copy of the manifest
 (`apps/normal-server/data/avatar-manifest.json`) from being touched — the only way the whole pipeline is
 testable without disturbing the committed artefact.
+
+### 4.1 Cutting an item out (`extract.mjs`, 2026-09-17)
+
+An item picture is the base *redrawn* by the generator with one change, so every pixel differs a little
+and the figure drifts a few pixels. An item layer must still hold **only the item**: items are shared with
+M01 (different hair and skin) and are shown alone as icons, so F01's hair under a brim, skin around a rim
+or head above a collar is a visible defect even where F01's own layers would hide it. The steps, at @2x:
+
+1. **Anchor** with the base's stored transform (as before).
+2. **Register** (`registerToBase`): every whole-pixel shift within ±12 px and each scale in
+   {0.99, 0.995, 1, 1.005, 1.01} about the axis and baseline is tried; the one with the lowest mean absolute
+   RGB difference over pixels solid in both pictures wins, measured only where the slot changes nothing —
+   the body (y ≥ 260) for `head`/`face`, the head (the crop above y 250) for `outfit`. `ingest` logs the
+   chosen offset.
+3. **Neighbourhood difference** (`diffAgainstBase`): a pixel is the item only if its colour is more than
+   `colorTol` away from *every* solid base pixel in the 5 × 5 window around it (or that whole window is
+   transparent in the base), and it is not simply the base pixel under it darkened (a cast shadow,
+   `shadowTol`).
+4. **Slot limits**: `head` y < 260; `face` inside the crop and y < 250; `outfit` nothing above the chin line
+   y = 236 (`OUTFIT_TOP_Y`), plus the base's own body below it except inside the head region, which the
+   base's face layer paints anyway (D01 §10.7's underwear coverage).
+5. **Clean-up**: regions under `minRegion` dropped; for `head`/`face` also regions under 5 % of the
+   largest; a small closing (`closeRadius`) and hole fill (`maxHole`) so a hat's crown is not cracked where
+   the base's hair outline runs under it.
+6. **Edge** (`cutItem`): 1 px dilation and a 1 px feather, with the soft edge taking its colour from the
+   item's own pixels next to it rather than from the hair or skin it was drawn over.
+
+The defaults (`DIFF_DEFAULTS` in `extract.mjs`: `colorTol` 36, `shadowTol` 14, `minRegion` 100 px @1x,
+`closeRadius` 1.5 px @1x, `maxHole` 400 px @1x) were tuned by eye on the first three real items
+(`tophat01`, `glasses_round_gold01`, `dealer01`), rendering each layer alone and on F01.
+
+### 4.2 Inventory icons
+
+For every item layer — head, face, outfit, aura, frame, real or stand-in — the pipeline also writes
+`item_<slot>_<code>_icon@1x.png` (96 × 96) and `@2x.png` (192 × 192): the layer's @2x cut to its ink,
+fitted with its aspect kept into 84 % of the square, centred on transparency; @1x is the @2x scaled down.
+A frame's icon is its ring; an aura's is the aura. `ingest` writes the icon with the layer, `placeholder`
+refreshes the stand-ins' icons. The manifest lists them under a separate `icons` key —
+`{ kind: 'icon', of: '<layer name>', w: 96, h: 96, bytes2x, real | placeholder }` — so `files` stays the
+set of frame-sized layers that `check`, the renderer and the server's loader read (the server ignores
+`icons`).
+
+The wardrobe tiles and the inventory cards show the icon (`ItemPreview` in
+`apps/normal-web/src/screens/wardrobe/ItemTab.tsx`), deriving the name from the item's `asset.file` —
+`item_head_tophat01_L80` → `item_head_tophat01_icon` — so the API carries nothing new; the URL is built
+with the same `AvatarAssets` base and `srcset` as a `Chibi` layer. Seeing an item *worn* is the big
+preview's job: picking an owned tile puts it on the character there, and saving equips it.
 
 ## 5. The ten acceptance criteria (`avatar:check`)
 
