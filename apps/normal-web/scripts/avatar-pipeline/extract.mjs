@@ -1012,9 +1012,13 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', toler
     // above the outfit and the hair ends and chin have to stay above a collar; the strand of hair above
     // the head top (an ahoge), if there is one, as the front hair (60), so a hat can hide it; and the back
     // hair (20) as an empty frame, since there is no separate hair to put in it.
-    const body = clipToRows(strandY, null)
+    // `dropFaint` on every cut, as for items: a base whose key left a stray alpha-1 pixel a few pixels off
+    // the figure (m01 did) fails C3 at @1x, and nothing under `ALPHA_INK` is visible anyway.
+    const rowsBody = clipToRows(strandY, null)
+    const body = (pic, density) => dropFaint(rowsBody(pic, density))
     layers.push({ file: { name: baseFile(owner, LAYERS.body), layer: LAYERS.body }, picture: body(anchored, 2), clip: body })
-    const face = clipToFace(strandY)
+    const faceRows = clipToFace(strandY)
+    const face = (pic, density) => dropFaint(faceRows(pic, density))
     layers.push({ file: { name: faceFile(owner, 'neutral'), layer: LAYERS.face }, picture: face(anchored, 2), clip: face })
     layers.push({ file: { name: baseFile(owner, LAYERS.hairBack), layer: LAYERS.hairBack }, picture: blankPicture(FRAME.w * 2, FRAME.h * 2), extra: { empty: true } })
     if (strandY === null) {
@@ -1028,7 +1032,8 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', toler
       log(`strand above y ${strandY} moved to ${baseFile(owner, LAYERS.hairFront)}`)
     }
   } else if (target.kind === 'expr') {
-    const face = clipToFace(strandY)
+    const faceRows = clipToFace(strandY)
+    const face = (pic, density) => dropFaint(faceRows(pic, density))
     layers.push({ file: { name: faceFile(owner, target.expr), layer: LAYERS.face }, picture: face(anchored, 2), clip: face })
   } else {
     // The item is measured against the whole base as it is drawn: its body, and its front hair when that
