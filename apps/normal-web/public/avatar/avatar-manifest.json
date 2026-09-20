@@ -719,28 +719,28 @@
       "layer": 40,
       "w": 384,
       "h": 448,
-      "bytes2x": 88700,
+      "bytes2x": 89855,
       "real": true
     },
     "item_outfit_champion01_L40": {
       "layer": 40,
       "w": 384,
       "h": 448,
-      "bytes2x": 118270,
+      "bytes2x": 122277,
       "real": true
     },
     "item_outfit_dealer01_L40": {
       "layer": 40,
       "w": 384,
       "h": 448,
-      "bytes2x": 90967,
+      "bytes2x": 93208,
       "real": true
     },
     "item_outfit_dealer01_m_L40": {
       "layer": 40,
       "w": 384,
       "h": 448,
-      "bytes2x": 89630,
+      "bytes2x": 90301,
       "real": true,
       "variantOf": "item_outfit_dealer01_L40",
       "wear": "m"
@@ -749,21 +749,21 @@
       "layer": 40,
       "w": 384,
       "h": 448,
-      "bytes2x": 119522,
+      "bytes2x": 120025,
       "real": true
     },
     "item_outfit_tet_red01_L40": {
       "layer": 40,
       "w": 384,
       "h": 448,
-      "bytes2x": 109952,
+      "bytes2x": 110604,
       "real": true
     },
     "item_outfit_tet_red01_m_L40": {
       "layer": 40,
       "w": 384,
       "h": 448,
-      "bytes2x": 104280,
+      "bytes2x": 104840,
       "real": true,
       "variantOf": "item_outfit_tet_red01_L40",
       "wear": "m"
@@ -772,7 +772,7 @@
       "layer": 40,
       "w": 384,
       "h": 448,
-      "bytes2x": 93910,
+      "bytes2x": 94456,
       "real": true
     }
   },
@@ -990,7 +990,7 @@
       "of": "item_outfit_casual01_L40",
       "w": 96,
       "h": 96,
-      "bytes2x": 24103,
+      "bytes2x": 24156,
       "real": true
     },
     "item_outfit_champion01_icon": {
@@ -998,7 +998,7 @@
       "of": "item_outfit_champion01_L40",
       "w": 96,
       "h": 96,
-      "bytes2x": 30277,
+      "bytes2x": 30423,
       "real": true
     },
     "item_outfit_dealer01_icon": {
@@ -1006,7 +1006,7 @@
       "of": "item_outfit_dealer01_L40",
       "w": 96,
       "h": 96,
-      "bytes2x": 24210,
+      "bytes2x": 24730,
       "real": true
     },
     "item_outfit_dealer01_m_icon": {
@@ -1014,7 +1014,7 @@
       "of": "item_outfit_dealer01_m_L40",
       "w": 96,
       "h": 96,
-      "bytes2x": 23461,
+      "bytes2x": 23576,
       "real": true
     },
     "item_outfit_royal_robe01_icon": {
@@ -1022,7 +1022,7 @@
       "of": "item_outfit_royal_robe01_L40",
       "w": 96,
       "h": 96,
-      "bytes2x": 29954,
+      "bytes2x": 30057,
       "real": true
     },
     "item_outfit_tet_red01_icon": {
@@ -1030,7 +1030,7 @@
       "of": "item_outfit_tet_red01_L40",
       "w": 96,
       "h": 96,
-      "bytes2x": 26606,
+      "bytes2x": 26849,
       "real": true
     },
     "item_outfit_tet_red01_m_icon": {
@@ -1038,7 +1038,7 @@
       "of": "item_outfit_tet_red01_m_L40",
       "w": 96,
       "h": 96,
-      "bytes2x": 26495,
+      "bytes2x": 26491,
       "real": true
     },
     "item_outfit_tuxedo01_icon": {
@@ -1046,7 +1046,7 @@
       "of": "item_outfit_tuxedo01_L40",
       "w": 96,
       "h": 96,
-      "bytes2x": 23216,
+      "bytes2x": 23265,
       "real": true
     }
   },
