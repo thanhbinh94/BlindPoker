@@ -227,20 +227,25 @@ or head above a collar is a visible defect even where F01's own layers would hid
    y = 236 (`OUTFIT_TOP_Y`), plus as much of the base as the underwear rule needs — see §4.1.1.
 5. **Clean-up**: regions under `minRegion` dropped; for `head`/`face` also regions under 5 % of the
    largest; a small closing (`closeRadius`) and hole fill (`maxHole`) so a hat's crown is not cracked where
-   the base's hair outline runs under it.
+   the base's hair outline runs under it. An **outfit** fills its holes by where they lead instead of by how
+   big they are — the region rule of §4.1.2.
 6. **Cover the base's limbs** (outfits only, fix round 2): below y 236, outside the head region, every
-   *non-skin* pixel the base inks that the outfit layer does not cover solidly, within 5 px (`coverReach`)
-   of a solid **clothing** pixel of the layer, joins the layer with the base's alpha and the outfit's own
-   edge colour bled outward — so a generated figure whose sleeves are a little narrower than the base's
-   arms does not leave the base's outline beside them. Farther than that nothing is added.
+   *non-skin* pixel the base inks that the outfit layer does not cover solidly joins the layer with the
+   base's alpha and the outfit's own edge colour bled outward from the nearest **clothing** pixel of the
+   layer — so a generated figure whose sleeves are a little narrower than the base's arms does not leave the
+   base's outline beside them. The bleed once stopped at 5 px; since 2026-09-21 it does not stop at all
+   (§4.1.3), because what it walks is the base's own clothing and line art, which may not show at any
+   distance. It never walks onto the base's skin — a second, `coverReach`-limited pass does that, and only
+   where the picture is transparent and the nearest thing it draws is cloth (§4.1.4).
 7. **Edge** (`cutItem`): 1 px dilation and a 1 px feather, with the soft edge taking its colour from the
    item's own pixels next to it rather than from the hair or skin it was drawn over. The two places the
-   layer takes the *base's* alpha — the underwear union and the limb cover — are re-applied after the
+   layer takes the *base's* alpha — the union with the base and the limb cover — are re-applied after the
    feather, so where the layer ends because the base ends, its edge is the base's own edge rather than a
    second, softer one with the base's outline showing through it.
 
 The defaults (`DIFF_DEFAULTS` in `extract.mjs`: `colorTol` 36, `shadowTol` 14, `skinTol` 24, `minRegion`
-100 px @1x, `closeRadius` 1.5 px @1x, `maxHole` 400 px @1x) were tuned by eye on the first three real items
+100 px @1x, `closeRadius` 1.5 px @1x, `maxHole` 400 px @1x, `gapOpening` 3 px @1x, `coverReach` 6 px @1x)
+were tuned by eye on the first three real items
 (`tophat01`, `glasses_round_gold01`, `dealer01`), rendering each layer alone and on F01.
 
 ### 4.1.1 An outfit layer holds clothing only (2026-09-17)
@@ -258,12 +263,8 @@ either way the difference (step 3) drops it.
 
 Two things used to put it back, and both are now narrowed:
 
-- **The union with the base.** It used to take the base's whole body below the chin. It now takes only the
-  **underwear band** (`UNDERWEAR_BAND`, y 176–300 at full width — the band has no `x`), outside the head
-  region, and only where the outfit picture *changed* that pixel by more than `colorTol` **or** the base's
-  own pixel there is not skin. So the grey tank top and shorts are covered by whatever the picture shows
-  over them — even a skin-coloured swimsuit cut — while a bare arm or thigh outside the band is never
-  copied, and the base draws its own.
+- **The union with the base** (`baseClothingUnion`). It used to take the base's whole body below the chin,
+  then only the underwear band, and now takes the base's own **clothing** wherever it is — see §4.1.3.
 - **The limb cover.** It bleeds only from the layer's *clothing* pixels, and only onto the base's *non-skin*
   pixels: it hides the base's line art standing beside a narrow sleeve, which is the double outline it was
   written for, and leaves the limb itself alone.
@@ -273,6 +274,90 @@ her *face* — the band starts at y 176 and half of it is cheek — so the regio
 and the base's own skin first, and the modal colour of what is left is the underwear. An outfit is measured
 against the bases whose body layer the manifest marks `real`, because holding real art to a stand-in's
 square shoulders reports a fault in neither.
+
+### 4.1.2 An outfit's skin is a region, not a pixel (2026-09-21)
+
+The first eight real outfits made the pixel-at-a-time test above fail in both directions. `tet_red01`'s
+white silk trousers and `champion01`'s white ones are *shaded* down into F01's own skin tone, so
+"is this pixel the base's skin colour?" said yes and punched cream blotches through both legs; on a darker
+base they would have been tan blotches through white cloth. The same arithmetic the other way round dropped
+pixels of a white t-shirt that happened to sit within `colorTol` of the tank-top strap five pixels away.
+
+Colour cannot tell cloth from skin, but topology can. The only thing that may show through an outfit is the
+**body**, and the body is not inside the clothes — a bare thigh, a hand and the neck all reach the outside
+of the figure or the chin line the layer is cut at. So, after the difference and the clean-up
+(`fillEnclosedGaps`):
+
+> Take every region below `OUTFIT_TOP_Y` that the clothing mask does not hold — the "gaps", candidate skin
+> and "unchanged" pixels alike. A gap stays a gap only if it is **connected** (4-connected through gap
+> pixels) to the outside of the combined silhouette (the frame's own border, which C2 and C3 keep clear of
+> the figure) or to the top cut line, **and thick** — it survives a morphological opening by `gapOpening`
+> (3 px @1x). Every other gap is cloth: it is filled with the registered picture's own pixels.
+
+There is **no size limit** for an outfit; `maxHole` goes on guarding `head` and `face`, where a glasses lens
+is an enclosed hole that has to stay open. And the pixel test is narrowed to match (`skinOfBase`): the
+positional clause stays as it was — a pixel that equals the base at the same registered position is the base
+redrawn — but the *colour* clause now applies only where the base draws skin underneath. Colour alone never
+removes a pixel the region rule calls cloth.
+
+The thickness half was added on 2026-09-21 (round 2) because connectivity alone lets a gap **drain**: the
+strip of shading down `casual01`'s shoulder runs into the neck opening, the fringe down `champion01`'s
+inner trouser seam into the hem, the dashes round `tet_red01`'s cuff into the hand. Every one of those is
+one to three pixels thick and every piece of body that is meant to show is tens of pixels across, so the
+opening separates them cleanly. Two things about it are load-bearing and were each found the hard way:
+
+- **Thickness is measured inside the combined silhouette only.** Measured over the whole gap mask an
+  opening removes nothing, because every one of these strips runs *alongside* the exterior of the figure:
+  the structuring element sits in the exterior with its rim over the strip and the dilation hands the strip
+  straight back. So the erosion treats everything outside the figure as solid, and the exterior is used for
+  connectivity alone.
+- **The base's own hair is exempt from it** (inside the head region, over a non-skin base pixel, grown by
+  `HAIR_MARGIN` so the ends of the strands are exempt too). The picture's hair is the base's hair redrawn a
+  strand out of place, so the difference leaves a lattice of one-pixel gaps between the strands; filling
+  those put 1 300–1 700 px of F01's purple into every shared layer and M01 wore it on his shoulders.
+
+`r = 3` is the radius, chosen by sweeping 1.5–4 over the real pictures: 2 leaves about twice as much of the
+fringe, and 4 closes `champion01`'s hands.
+
+### 4.1.4 A limb wider than the outfit drawn over it (2026-09-21)
+
+§4.1.3's cover never touches the base's skin, on the principle that a bare limb is the base's to draw.
+`tuxedo01` showed what that costs: the base's legs are a pixel or two wider than the picture's trousers, so
+a dashed line of the base's own skin — cream on F01, tan on M01 — ran down the outer edge of both trouser
+legs and read as a leg poking out of them. What decides it is what the *picture* has nearest, not what the
+base has (`coverBaseLimbsOutside`):
+
+> A solid base pixel the picture leaves transparent, whose nearest pixel of the figure is **cloth**, is a
+> limb the garment was drawn too narrow for: it is covered with that cloth's colour and the base's alpha,
+> skin or not, out to `coverReach` (6 px @1x). One whose nearest pixel of the figure is an **open gap** — a
+> bare thigh, a hand, the neck, drawn a little narrower than the base draws it — is left alone.
+
+The line art *around* a bare limb counts as part of the limb (`OUTLINE_SPAN`, 2 px @1x): it is not the
+base's colour anywhere, so the difference keeps it and in the layer it looks exactly like cloth, and left as
+cloth it would win every race along a thigh.
+
+### 4.1.3 The base's clothing never shows (2026-09-21)
+
+D01 §10.7 asks that an outfit leave no underwear showing, and the union with the base was cut back to
+`UNDERWEAR_BAND` (y 176–300) in 2026-09-17 to stop it carrying skin. The band turned out to be the wrong
+shape for the job: the base's shorts flare past y 300 at the hip, and `tuxedo01`'s trousers left two grey
+notches there. So the rule is stated by what it is about rather than by a rectangle:
+
+> Every solid base pixel below `OUTFIT_TOP_Y`, outside the head region, that is **not the base's skin** —
+> the grey tank top, the shorts and their outlines — is covered by the layer: by the registered picture's
+> own pixel where it has one (with the base's alpha, *even where that pixel is skin-coloured* — a
+> swimsuit-cut outfit still has to hide the underwear, and what hides it is the picture's pixel), and where
+> the picture is transparent there, by the nearest clothing pixel's colour bled outward, at any distance.
+
+The band's own second clause survives inside it: a pixel the picture *changed* by more than `colorTol` is
+the outfit's cloth and joins the layer even over skin. `UNDERWEAR_COVERAGE` (C6's bar) went from 0.98 to
+**0.995** with it; all eight real outfits report 100.0 % on both real bases.
+
+The head region stays excluded, and it has to. Layer 50 gave up `TORSO_COLUMN` in 2026-09-17, so it is
+tempting to let the union have that column back — but what the base inks there between y 236 and y 250 is
+not its tank top (whose straps start at y ≈ 256), it is F01's *hair* beside her neck. Tried on 2026-09-21,
+it put 1 300–1 700 px of purple into every shared layer and M01 wore it on his shoulders; the note in
+`extract.mjs` says so, so that nobody tries it twice.
 
 ### 4.2 Inventory icons
 
