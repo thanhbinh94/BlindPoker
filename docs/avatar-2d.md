@@ -235,7 +235,8 @@ or head above a collar is a visible defect even where F01's own layers would hid
    layer — so a generated figure whose sleeves are a little narrower than the base's arms does not leave the
    base's outline beside them. The bleed once stopped at 5 px; since 2026-09-21 it does not stop at all
    (§4.1.3), because what it walks is the base's own clothing and line art, which may not show at any
-   distance. It never walks onto the base's skin, so a bare limb is reached only along its outline.
+   distance. It never walks onto the base's skin — a second, `coverReach`-limited pass does that, and only
+   where the picture is transparent and the nearest thing it draws is cloth (§4.1.4).
 7. **Edge** (`cutItem`): 1 px dilation and a 1 px feather, with the soft edge taking its colour from the
    item's own pixels next to it rather than from the hair or skin it was drawn over. The two places the
    layer takes the *base's* alpha — the union with the base and the limb cover — are re-applied after the
@@ -243,7 +244,8 @@ or head above a collar is a visible defect even where F01's own layers would hid
    second, softer one with the base's outline showing through it.
 
 The defaults (`DIFF_DEFAULTS` in `extract.mjs`: `colorTol` 36, `shadowTol` 14, `skinTol` 24, `minRegion`
-100 px @1x, `closeRadius` 1.5 px @1x, `maxHole` 400 px @1x) were tuned by eye on the first three real items
+100 px @1x, `closeRadius` 1.5 px @1x, `maxHole` 400 px @1x, `gapOpening` 3 px @1x, `coverReach` 6 px @1x)
+were tuned by eye on the first three real items
 (`tophat01`, `glasses_round_gold01`, `dealer01`), rendering each layer alone and on F01.
 
 ### 4.1.1 An outfit layer holds clothing only (2026-09-17)
@@ -287,22 +289,52 @@ of the figure or the chin line the layer is cut at. So, after the difference and
 (`fillEnclosedGaps`):
 
 > Take every region below `OUTFIT_TOP_Y` that the clothing mask does not hold — the "gaps", candidate skin
-> and "unchanged" pixels alike. A gap stays a gap only if it is connected, **4-connected through gap
-> pixels**, to the outside of the combined silhouette (the frame's own border, which C2 and C3 keep clear of
-> the figure) or to the top cut line. Every other gap is sealed in by cloth and is therefore cloth: it is
-> filled with the registered picture's own pixels.
+> and "unchanged" pixels alike. A gap stays a gap only if it is **connected** (4-connected through gap
+> pixels) to the outside of the combined silhouette (the frame's own border, which C2 and C3 keep clear of
+> the figure) or to the top cut line, **and thick** — it survives a morphological opening by `gapOpening`
+> (3 px @1x). Every other gap is cloth: it is filled with the registered picture's own pixels.
 
 There is **no size limit** for an outfit; `maxHole` goes on guarding `head` and `face`, where a glasses lens
 is an enclosed hole that has to stay open. And the pixel test is narrowed to match (`skinOfBase`): the
 positional clause stays as it was — a pixel that equals the base at the same registered position is the base
 redrawn — but the *colour* clause now applies only where the base draws skin underneath. Colour alone never
-removes a pixel the region rule calls enclosed.
+removes a pixel the region rule calls cloth.
 
-What the rule cannot reach is a gap that drains: a strip of shading that touches the neck opening or a hem.
-`casual01` keeps a dotted line along its collar and a strip down one shoulder for exactly that reason, and
-`champion01` a one-to-three-pixel fringe down each inner trouser seam. Both are the picture's own shading
-read as skin, both were there before the rule and neither is a hole in the middle of cloth; closing them
-needs a better picture or a different test, not a bigger flood.
+The thickness half was added on 2026-09-21 (round 2) because connectivity alone lets a gap **drain**: the
+strip of shading down `casual01`'s shoulder runs into the neck opening, the fringe down `champion01`'s
+inner trouser seam into the hem, the dashes round `tet_red01`'s cuff into the hand. Every one of those is
+one to three pixels thick and every piece of body that is meant to show is tens of pixels across, so the
+opening separates them cleanly. Two things about it are load-bearing and were each found the hard way:
+
+- **Thickness is measured inside the combined silhouette only.** Measured over the whole gap mask an
+  opening removes nothing, because every one of these strips runs *alongside* the exterior of the figure:
+  the structuring element sits in the exterior with its rim over the strip and the dilation hands the strip
+  straight back. So the erosion treats everything outside the figure as solid, and the exterior is used for
+  connectivity alone.
+- **The base's own hair is exempt from it** (inside the head region, over a non-skin base pixel, grown by
+  `HAIR_MARGIN` so the ends of the strands are exempt too). The picture's hair is the base's hair redrawn a
+  strand out of place, so the difference leaves a lattice of one-pixel gaps between the strands; filling
+  those put 1 300–1 700 px of F01's purple into every shared layer and M01 wore it on his shoulders.
+
+`r = 3` is the radius, chosen by sweeping 1.5–4 over the real pictures: 2 leaves about twice as much of the
+fringe, and 4 closes `champion01`'s hands.
+
+### 4.1.4 A limb wider than the outfit drawn over it (2026-09-21)
+
+§4.1.3's cover never touches the base's skin, on the principle that a bare limb is the base's to draw.
+`tuxedo01` showed what that costs: the base's legs are a pixel or two wider than the picture's trousers, so
+a dashed line of the base's own skin — cream on F01, tan on M01 — ran down the outer edge of both trouser
+legs and read as a leg poking out of them. What decides it is what the *picture* has nearest, not what the
+base has (`coverBaseLimbsOutside`):
+
+> A solid base pixel the picture leaves transparent, whose nearest pixel of the figure is **cloth**, is a
+> limb the garment was drawn too narrow for: it is covered with that cloth's colour and the base's alpha,
+> skin or not, out to `coverReach` (6 px @1x). One whose nearest pixel of the figure is an **open gap** — a
+> bare thigh, a hand, the neck, drawn a little narrower than the base draws it — is left alone.
+
+The line art *around* a bare limb counts as part of the limb (`OUTLINE_SPAN`, 2 px @1x): it is not the
+base's colour anywhere, so the difference keeps it and in the layer it looks exactly like cloth, and left as
+cloth it would win every race along a thigh.
 
 ### 4.1.3 The base's clothing never shows (2026-09-21)
 
