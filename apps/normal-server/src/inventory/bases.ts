@@ -11,6 +11,13 @@
  * 2026-09-17: the registry is also the *list* of bases rather than being checked against one, so
  * adding a figure that shares F01's body with its own head, hair and skin is art plus a JSON entry
  * plus an i18n key, with no type to widen. See `loadBases`.
+ *
+ * 2026-09-20: every base also declares the body it wears clothes on, `"wear": "f" | "m"`. One inventory
+ * item stays one item — ownership, achievements and the outfits table all key on its id — and only the
+ * *layer drawn* differs, so what picks between an outfit's cuts is this field on whichever base is
+ * wearing it (`asset.variants` in `items.ts`, `toWearRef` in the web app's `avatar/chibi.ts`). The art
+ * side says the same thing in `BASE_WEAR` (`apps/normal-web/scripts/avatar-pipeline/manifest.mjs`), and
+ * the pipeline's own test holds the two files against each other.
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -29,9 +36,15 @@ const BODY_LAYER = 30
 const HAIR_FRONT_LAYER = 60
 const FACE_LAYER = 50
 
+/** The body a base wears its clothes on, and so which cut of a gendered item it is drawn in. */
+export type Wear = 'f' | 'm'
+export const WEARS: readonly Wear[] = ['f', 'm']
+
 export interface BaseDef {
   id: BaseId
   nameKey: string
+  /** Which cut of a per-wear item this base wears (`asset.variants` in `items.ts`). */
+  wear: Wear
   layers: { hairBack: string; body: string; hairFront: string }
   faces: Record<Expression, string>
 }
@@ -61,6 +74,13 @@ function parseBase(path: string, manifest: AvatarManifest, id: BaseId, raw: unkn
   if (typeof nameKey !== 'string' || nameKey === '') fail(path, `${id} has no nameKey`)
   if (nameKey !== `bases.${id}`) fail(path, `${id} has nameKey ${nameKey} rather than bases.${id}`)
 
+  // Required rather than defaulted: a base with no wear would silently be drawn in whichever cut the
+  // default happens to be, which for a skirted uniform is a visible mistake on half the roster.
+  const wear = r['wear']
+  if (typeof wear !== 'string' || !(WEARS as readonly string[]).includes(wear)) {
+    fail(path, `${id} has wear ${JSON.stringify(wear)} rather than one of ${WEARS.join(', ')}`)
+  }
+
   const layersRaw = r['layers']
   if (typeof layersRaw !== 'object' || layersRaw === null || Array.isArray(layersRaw)) fail(path, `${id}.layers is not an object`)
   const l = layersRaw as Record<string, unknown>
@@ -83,7 +103,7 @@ function parseBase(path: string, manifest: AvatarManifest, id: BaseId, raw: unkn
     EXPRESSIONS.map((expr) => [expr, checkedFile(path, manifest, id, `faces.${expr}`, f[expr], FACE_LAYER)]),
   ) as Record<Expression, string>
 
-  return { id, nameKey, layers, faces }
+  return { id, nameKey, wear: wear as Wear, layers, faces }
 }
 
 /**

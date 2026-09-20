@@ -49,7 +49,7 @@ import {
   writeDensities,
 } from './png.mjs'
 import { AXIS_X, BASELINE_Y, CROP, FACE_LIMIT_Y, FRAME, HEAD_LIMIT_Y, LAYERS, SKIN_TOLERANCE, STRAND_MARGIN, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, isSkin } from './frame.mjs'
-import { ICON, MANIFEST_NAME, SLOT_LAYER, baseFile, entryFor, faceFile, itemFile, readManifest, writeIcon, writeManifest } from './manifest.mjs'
+import { ICON, MANIFEST_NAME, SLOT_LAYER, WEARS, baseFile, entryFor, faceFile, itemFile, readManifest, wearOf, writeIcon, writeManifest } from './manifest.mjs'
 
 /** D02 §8.3: a chibi is between two and two and a half heads tall, or it is not this character. */
 export const HEADS_RANGE = [2, 2.5]
@@ -974,8 +974,21 @@ export function describeMeasurement(report, width) {
  * and out of L30 and every face layer; items are then measured against L30 with L60 over it. Re-ingesting a
  * base therefore resets the neutral face to the base's own; ingest `expr:<base>:neutral` after it to
  * override that.
+ *
+ * `variant` (2026-09-20) makes an item the per-wear layer of an item that already exists rather than the
+ * item itself: the same cut, against the base named by `--base`, written as `item_<slot>_<code>_<wear>_L<n>`
+ * with `variantOf` and `wear` in its manifest entry. It has to agree with that base — a `m` variant is cut
+ * on a base that wears `m`, or the layer would be the wrong shape for every figure that will wear it.
  */
-export async function ingest({ file, target, dir, targets, baseId = 'f01', tolerance = 40, white = false, dryRun = false, lockScale = null, hides = {}, diff = {}, log = () => {} }) {
+export async function ingest({ file, target, dir, targets, baseId = 'f01', variant = null, tolerance = 40, white = false, dryRun = false, lockScale = null, hides = {}, diff = {}, log = () => {} }) {
+  if (variant !== null) {
+    if (!WEARS.includes(variant)) throw new Error(`--variant ${variant} is not one of ${WEARS.join(', ')}`)
+    if (target.kind !== 'item') throw new Error('--variant belongs to an item — only a wardrobe layer has per-wear variants')
+    const wear = wearOf(target.base ?? baseId)
+    if (wear !== variant) {
+      throw new Error(`--variant ${variant} does not match base ${target.base ?? baseId}, which wears ${wear ?? 'nothing the pipeline knows'} — cut a ${variant} variant on a ${variant} base`)
+    }
+  }
   const source = await readPicture(file)
   const keyed = removeChroma(source, { key: white ? [255, 255, 255] : [0, 255, 0], tolerance, despill: !white })
   const report = measure(keyed)
@@ -1046,9 +1059,12 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', toler
     log(`registered on ${owner}: dx ${registered.dx}, dy ${registered.dy} px @2x, scale ${registered.scale} (${fit})`)
     const cut = diffAgainstBase(registered.picture, basePicture, { ...diff, slot: target.slot, density: 2 })
     const layer = SLOT_LAYER[target.slot]
+    // A variant carries the default layer's name so that everything downstream — the catalogue's
+    // `asset.variants`, C6's routing, `placeholder`'s carry-over — can say which item it belongs to.
+    const extra = variant === null ? {} : { variantOf: itemFile(target.slot, target.code, layer), wear: variant }
     // Below `ALPHA_INK` nothing is visible, and the halved copy of a mask edge can land a stray alpha-1
     // pixel a few pixels outside the shape — which is C3's `rác bán trong suốt`, not a soft edge.
-    layers.push({ file: { name: itemFile(target.slot, target.code, layer), layer, ...hides }, picture: dropFaint(cutItem(registered.picture, cut)), clip: dropFaint, icon: true })
+    layers.push({ file: { name: itemFile(target.slot, target.code, layer, variant), layer, ...hides }, picture: dropFaint(cutItem(registered.picture, cut)), clip: dropFaint, extra, icon: true })
   }
 
   for (const { file: layerFile, picture, clip = null, extra = {}, icon = false } of layers) {

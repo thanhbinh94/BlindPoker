@@ -26,12 +26,14 @@ const FACES = {
 const BASE_F01: BaseDto = {
   id: 'f01',
   nameKey: 'bases.f01',
+  wear: 'f',
   layers: { hairBack: 'base_f01_L20', body: 'base_f01_L30', hairFront: 'base_f01_L60' },
   faces: FACES,
 }
 const BASE_M01: BaseDto = {
   id: 'm01',
   nameKey: 'bases.m01',
+  wear: 'm',
   layers: { hairBack: 'base_m01_L20', body: 'base_m01_L30', hairFront: 'base_m01_L60' },
   faces: { ...FACES, neutral: 'base_m01_face_neutral_L50' },
 }
@@ -68,9 +70,16 @@ const HEAD_BEANIE = item({
   rarity: 'common',
   asset: { layer: 80, file: 'item_head_beanie01_L80', fitsAvatarCrop: true },
 })
+/** A gendered outfit: one item, one id, a layer per wear (2026-09-20). */
+const OUTFIT_DEALER = item({
+  id: 'outfit_dealer01',
+  slot: 'outfit',
+  rarity: 'rare',
+  asset: { layer: 40, file: 'item_outfit_dealer01_L40', variants: { m: 'item_outfit_dealer01_m_L40' }, fitsAvatarCrop: false },
+})
 const TITLE_ROOKIE = item({ id: 'title_rookie', slot: 'title', rarity: 'common' })
 
-const CATALOG = [OUTFIT_CASUAL, OUTFIT_TUXEDO, HEAD_TOPHAT, HEAD_BEANIE, TITLE_ROOKIE]
+const CATALOG = [OUTFIT_CASUAL, OUTFIT_TUXEDO, OUTFIT_DEALER, HEAD_TOPHAT, HEAD_BEANIE, TITLE_ROOKIE]
 
 const AVATAR: AvatarConfigDto = { v: 3, base: 'f01', outfit: 'outfit_casual01', head: 'head_beanie01' }
 
@@ -122,6 +131,7 @@ describe('WardrobeScreen', () => {
     const BASE_F02: BaseDto = {
       id: 'f02',
       nameKey: 'bases.f02',
+      wear: 'f',
       layers: { hairBack: 'base_f02_L20', body: 'base_f02_L30', hairFront: 'base_f02_L60' },
       faces: { ...FACES, neutral: 'base_f02_face_neutral_L50' },
     }
@@ -159,6 +169,30 @@ describe('WardrobeScreen', () => {
     expect(icon).toHaveAttribute('alt', '')
     expect(tile.querySelectorAll('img')).toHaveLength(1)
     expect(tile.querySelector('[data-chibi-hash]')).toBeNull()
+  })
+
+  it('switches a gendered outfit’s tile icon when the draft base changes', async () => {
+    // 2026-09-20: one item, two cuts. The tile has to show the cut the figure on the stage beside it is
+    // wearing, so it follows the *draft* base rather than the saved one — before anything is saved.
+    const user = userEvent.setup()
+    renderScreen()
+    await screen.findByText(viNormal.bases.f01)
+
+    const dealerIcon = async (): Promise<Element | null> => {
+      await user.click(screen.getByRole('tab', { name: viNormal.wardrobe.tabs.outfit }))
+      return screen.getByText(viNormal.items.outfit_dealer01).closest('button')!.querySelector('img')
+    }
+    expect(await dealerIcon()).toHaveAttribute('src', '/avatar/item_outfit_dealer01_icon@1x.png')
+
+    await user.click(screen.getByRole('tab', { name: viNormal.wardrobe.tabs.base }))
+    await user.click(screen.getByText(viNormal.bases.m01).closest('button') as HTMLElement)
+
+    const icon = await dealerIcon()
+    expect(icon).toHaveAttribute('src', '/avatar/item_outfit_dealer01_m_icon@1x.png')
+    expect(icon).toHaveAttribute('srcset', '/avatar/item_outfit_dealer01_m_icon@1x.png 1x, /avatar/item_outfit_dealer01_m_icon@2x.png 2x')
+    // An item with no cut for this wear is untouched: the tuxedo is one layer for everybody.
+    const tuxedo = screen.getByText(viNormal.items.outfit_tuxedo01).closest('button')!.querySelector('img')
+    expect(tuxedo).toHaveAttribute('src', '/avatar/item_outfit_tuxedo01_icon@1x.png')
   })
 
   it('locks an unowned tile, and a click on it does not equip anything', async () => {

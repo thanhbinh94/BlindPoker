@@ -16,6 +16,10 @@
  *       keeps only the face region (as face_neutral). Options:
  *         --dry-run             measure the picture against D02 §8 and print a verdict; write nothing
  *         --base <id>           which base an item or expression belongs to (default f01)
+ *         --variant <f|m>       cut this picture as the per-wear variant of an item that already exists,
+ *                               `item_<slot>_<code>_<wear>_L<n>` — e.g. a male dealer01:
+ *                                 --as item:outfit:dealer01 --base m01 --variant m
+ *                               The wear must be the wear of `--base`, or the cut is refused.
  *         --tolerance <n>       how wide the background key is (default 40)
  *         --white               the background is white rather than #00FF00; no despill
  *         --lock-scale <n>      force a scale instead of reading the base's stored one
@@ -138,6 +142,7 @@ try {
       dir,
       targets,
       baseId: option('base', 'f01'),
+      variant: option('variant'),
       tolerance: Number(option('tolerance', '40')),
       white: flag('white'),
       dryRun: flag('dry-run'),

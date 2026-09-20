@@ -208,6 +208,17 @@ describe('GET /api/config', () => {
     expect(achievements.statusCode).toBe(200)
     expect((achievements.json() as { achievements: unknown[] }).achievements).toHaveLength(h.app.services.defs.length)
   })
+
+  it('tells the client which body each base wears its clothes on', async () => {
+    // 2026-09-20: the DTO is the registry entry verbatim, so `wear` reaches the client the moment the
+    // registry has it — which is what `toWearRef` needs to pick between an outfit's per-wear cuts.
+    const h = await harness()
+    const answer = await h.app.fastify.inject('/api/catalog/avatar')
+    expect(answer.statusCode).toBe(200)
+    const bases = (answer.json() as { bases: { id: string; wear: string }[] }).bases
+    expect(bases.length).toBeGreaterThan(0)
+    expect(new Map(bases.map((base) => [base.id, base.wear]))).toEqual(new Map([['f01', 'f'], ['m01', 'm']]))
+  })
 })
 
 describe('security headers', () => {

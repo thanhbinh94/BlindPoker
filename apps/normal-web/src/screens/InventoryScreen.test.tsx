@@ -29,6 +29,7 @@ const owned = (itemId: string, slot: OwnedItemDto['slot'], rarity: OwnedItemDto[
 const BASE_F01: BaseDto = {
   id: 'f01',
   nameKey: 'bases.f01',
+  wear: 'f',
   layers: { hairBack: 'base_f01_L20', body: 'base_f01_L30', hairFront: 'base_f01_L60' },
   faces: {
     neutral: 'base_f01_face_neutral_L50',

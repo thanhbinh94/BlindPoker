@@ -14,6 +14,7 @@ const FACES = {
 const BASE_F01: BaseDto = {
   id: 'f01',
   nameKey: 'bases.f01',
+  wear: 'f',
   layers: { hairBack: 'base_f01_L20', body: 'base_f01_L30', hairFront: 'base_f01_L60' },
   faces: FACES,
 }
@@ -21,6 +22,7 @@ const BASE_F01: BaseDto = {
 const BASE_M01: BaseDto = {
   id: 'm01',
   nameKey: 'bases.m01',
+  wear: 'm',
   layers: { hairBack: 'base_m01_L20', body: 'base_m01_L30', hairFront: 'base_m01_L60' },
   faces: { ...FACES, neutral: 'base_m01_face_neutral_L50' },
 }
@@ -47,7 +49,13 @@ const OUTFIT_CASUAL = item({
 const OUTFIT_DEALER = item({
   id: 'outfit_dealer01',
   slot: 'outfit',
-  asset: { layer: 40, file: 'item_outfit_dealer01_L40', fitsAvatarCrop: false },
+  asset: { layer: 40, file: 'item_outfit_dealer01_L40', variants: { m: 'item_outfit_dealer01_m_L40' }, fitsAvatarCrop: false },
+})
+/** The other gendered outfit, still drawn once: no `m` cut exists for it yet. */
+const OUTFIT_TET = item({
+  id: 'outfit_tet_red01',
+  slot: 'outfit',
+  asset: { layer: 40, file: 'item_outfit_tet_red01_L40', fitsAvatarCrop: false },
 })
 const HEAD_HOOD = item({
   id: 'head_hood_black01',
@@ -72,7 +80,7 @@ const FRAME_GOLD = item({
 const TITLE_ROOKIE = item({ id: 'title_rookie', slot: 'title' })
 
 const items = new Map(
-  [OUTFIT_CASUAL, OUTFIT_DEALER, HEAD_HOOD, FACE_GLASSES, AURA_FIRE, FRAME_GOLD, TITLE_ROOKIE].map((i) => [i.id, i]),
+  [OUTFIT_CASUAL, OUTFIT_DEALER, OUTFIT_TET, HEAD_HOOD, FACE_GLASSES, AURA_FIRE, FRAME_GOLD, TITLE_ROOKIE].map((i) => [i.id, i]),
 )
 
 const config = (patch: Partial<AvatarConfigDto> = {}): AvatarConfigDto => ({
@@ -108,7 +116,8 @@ describe('chibiFromApi', () => {
     )
 
     expect(chibi?.base.id).toBe('m01')
-    expect(chibi?.outfit).toEqual({ id: 'outfit_dealer01', order: 40, file: 'item_outfit_dealer01_L40' })
+    // dealer01 has an `m` cut, and m01 wears `m` — same item id, the other layer.
+    expect(chibi?.outfit).toEqual({ id: 'outfit_dealer01', order: 40, file: 'item_outfit_dealer01_m_L40' })
     expect(chibi?.head).toEqual({ id: 'head_hood_black01', order: 80, file: 'item_head_hood_black01_L80', hidesHairFront: true, hidesHairBack: true })
     expect(chibi?.face).toEqual({ id: 'face_glasses_round_gold01', order: 70, file: 'item_face_glasses_round_gold01_L70' })
     expect(chibi?.aura).toEqual({ id: 'aura_fire01', order: 10, file: 'item_aura_fire01_L10' })
@@ -147,6 +156,39 @@ describe('chibiFromApi', () => {
     const chibi = chibiFromApi(config({ head: 'title_rookie' }), items, bases)
 
     expect(chibi?.head).toBeUndefined()
+  })
+
+  /**
+   * One item, two cuts (2026-09-20). The id in the config never changes — ownership, achievements and
+   * the outfits table all key on it — so what the variant table decides is only which PNG is stacked.
+   */
+  describe('a per-wear item', () => {
+    it('draws the m cut on an m base and the shared one on an f base', () => {
+      expect(chibiFromApi(config({ base: 'm01', outfit: 'outfit_dealer01' }), items, bases)?.outfit)
+        .toEqual({ id: 'outfit_dealer01', order: 40, file: 'item_outfit_dealer01_m_L40' })
+      expect(chibiFromApi(config({ base: 'f01', outfit: 'outfit_dealer01' }), items, bases)?.outfit)
+        .toEqual({ id: 'outfit_dealer01', order: 40, file: 'item_outfit_dealer01_L40' })
+    })
+
+    it('draws the shared layer on an m base when the item has no m cut', () => {
+      // tet_red01 is gendered too, and its male picture has not been generated: until it is, m01 wears
+      // the one layer there is rather than nothing at all.
+      for (const base of ['f01', 'm01']) {
+        expect(chibiFromApi(config({ base, outfit: 'outfit_tet_red01' }), items, bases)?.outfit)
+          .toEqual({ id: 'outfit_tet_red01', order: 40, file: 'item_outfit_tet_red01_L40' })
+      }
+    })
+
+    it('picks the cut for the fallback default outfit too', () => {
+      // An unknown id falls back to the catalogue's default, and that fallback is dressed by the same rule.
+      const withVariant = new Map(items)
+      withVariant.set('outfit_casual01', {
+        ...OUTFIT_CASUAL,
+        asset: { ...OUTFIT_CASUAL.asset!, variants: { m: 'item_outfit_casual01_m_L40' } },
+      })
+      const chibi = chibiFromApi(config({ base: 'm01', outfit: 'outfit_from_the_future' }), withVariant, bases)
+      expect(chibi?.outfit).toEqual({ id: 'outfit_casual01', order: 40, file: 'item_outfit_casual01_m_L40' })
+    })
   })
 
   it('drops title and badge — they are words, not layers', () => {

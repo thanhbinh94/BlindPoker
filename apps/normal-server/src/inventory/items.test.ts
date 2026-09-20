@@ -47,6 +47,8 @@ const MANIFEST: AvatarManifest = {
   crop: { x: 88, y: 40, size: 208 },
   files: {
     item_outfit_casual01_L40: { layer: 40, w: 1, h: 1, bytes2x: 1 },
+    item_outfit_dealer01_L40: { layer: 40, w: 1, h: 1, bytes2x: 1 },
+    item_outfit_dealer01_m_L40: { layer: 40, w: 1, h: 1, bytes2x: 1 },
     item_head_beanie01_L80: { layer: 80, w: 1, h: 1, bytes2x: 1 },
     item_head_wrong_layer: { layer: 70, w: 1, h: 1, bytes2x: 1 },
   },
@@ -221,6 +223,48 @@ describe('loadItemCatalog', () => {
   it('refuses a malformed file', () => {
     expect(() => loadItemCatalog(fixture({ items: MINIMAL }), MANIFEST)).toThrow(/not a JSON array/)
     expect(() => loadItemCatalog(join(scratch, 'nope.json'), MANIFEST)).toThrow(/could not read item catalogue/)
+  })
+})
+
+/**
+ * Per-wear cuts (2026-09-20). Two stage-1 outfits are gendered — a dealer's skirt, an áo dài — and the
+ * ruling is that they stay **one item**: ownership, achievements, the daily calendar and the outfits
+ * table all key on the id, and only the drawn layer differs. `items.json` carries no variant yet (no art),
+ * so the shape is proved on fixtures; adding one later has to be data and nothing else.
+ */
+describe('asset.variants', () => {
+  const withVariants = (variants: unknown): string =>
+    fixtureWith({ ...drawable('outfit_dealer01', 'outfit', false, 'item_outfit_dealer01_L40'), asset: { ...asset('outfit', 'item_outfit_dealer01_L40'), variants } as unknown as AssetRef })
+
+  it('passes a per-wear cut through to the item, beside the file every other base wears', () => {
+    const catalog = loadItemCatalog(withVariants({ m: 'item_outfit_dealer01_m_L40' }), MANIFEST)
+    expect(catalog.get('outfit_dealer01')?.asset).toEqual({
+      layer: 40,
+      file: 'item_outfit_dealer01_L40',
+      fitsAvatarCrop: true,
+      variants: { m: 'item_outfit_dealer01_m_L40' },
+    })
+    // One item, not two: nothing about ownership or the catalogue's shape has gained a row.
+    expect(catalog.all().filter((def) => def.id.startsWith('outfit_dealer01'))).toHaveLength(1)
+  })
+
+  it('leaves an asset with no variants exactly as it was', () => {
+    const catalog = loadItemCatalog(fixtureWith(), MANIFEST)
+    expect(catalog.get('outfit_casual01')?.asset).toEqual({ layer: 40, file: 'item_outfit_casual01_L40', fitsAvatarCrop: true })
+    expect(catalog.get('outfit_casual01')?.asset?.variants).toBeUndefined()
+  })
+
+  it('holds every cut to the manifest and the slot’s layer, exactly as it holds `file`', () => {
+    expect(() => loadItemCatalog(withVariants({ m: 'item_outfit_ghost_m_L40' }), MANIFEST))
+      .toThrow(/the m asset variant item_outfit_ghost_m_L40, which is not in the avatar manifest/)
+    expect(() => loadItemCatalog(withVariants({ m: 'item_head_beanie01_L80' }), MANIFEST))
+      .toThrow(/m asset variant item_head_beanie01_L80 is manifest layer 80 rather than 40/)
+  })
+
+  it('refuses a wear nobody has, and a malformed map', () => {
+    expect(() => loadItemCatalog(withVariants({ x: 'item_outfit_dealer01_m_L40' }), MANIFEST)).toThrow(/the asset variant x, which is not one of f, m/)
+    expect(() => loadItemCatalog(withVariants({ m: '' }), MANIFEST)).toThrow(/m asset variant has no file name/)
+    expect(() => loadItemCatalog(withVariants(['item_outfit_dealer01_m_L40']), MANIFEST)).toThrow(/malformed asset.variants/)
   })
 })
 
