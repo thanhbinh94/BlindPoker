@@ -915,6 +915,96 @@ describe('an outfit of pale cloth over a base with skin and underwear', () => {
   })
 })
 
+// ───────────────────────────────────────────── a limb wider than what covers it ──
+
+/**
+ * G2, 2026-09-21: the generator draws the figure a pixel or two slimmer than the base, so the base's own
+ * limb sticks out past the garment. Whether that is a defect depends on what the *picture* has nearest:
+ * past a trouser leg it is a leg poking out of the trousers and the layer covers it; past a bare thigh the
+ * picture drew, it is simply the base's own silhouette and the layer leaves it alone.
+ */
+describe('a base limb wider than the picture drawn over it', () => {
+  const W = FRAME.w * 2
+  const H = FRAME.h * 2
+  type RGB = [number, number, number]
+  const S1: RGB = [236, 202, 176]
+  const S2: RGB = [124, 88, 62]
+  const OUTLINE: RGB = [62, 44, 36]
+  const TROUSER: RGB = [24, 26, 34]
+  const HEAD = { x0: 268, y0: 110, x1: 516, y1: 470 }
+  /** The trousered leg: the base's is 8 px @2x (4 @1x) wider on each side than the picture's trousers. */
+  const LEG = { x0: 292, y0: 600, x1: 372, y1: 830 }
+  const TROUSERS = { x0: 300, y0: 600, x1: 364, y1: 830 }
+  /** The bare leg: the base's is 8 px @2x wider each side than the *bare* leg the picture draws. */
+  const BARE = { x0: 420, y0: 600, x1: 500, y1: 830 }
+  const BARE_PICTURE = { x0: 428, y0: 600, x1: 492, y1: 830 }
+  /** A torso, so that the cut has a garment at all and the figure is not two floating legs. */
+  const TORSO = { x0: 292, y0: 474, x1: 500, y1: 600 }
+
+  type Box = { x0: number; y0: number; x1: number; y1: number }
+  const paint = (pic: Picture, box: Box, rgb: RGB): void => {
+    for (let y = box.y0; y < box.y1; y++) {
+      for (let x = box.x0; x < box.x1; x++) pic.data.set([...rgb, 255], (y * W + x) * 4)
+    }
+  }
+  const paintInked = (pic: Picture, box: Box, rgb: RGB): void => {
+    paint(pic, box, OUTLINE)
+    paint(pic, { x0: box.x0 + 3, y0: box.y0, x1: box.x1 - 3, y1: box.y1 }, rgb)
+  }
+
+  const body = (skin: RGB): Picture => {
+    const pic = blankPicture(W, H)
+    paint(pic, HEAD, skin)
+    paint(pic, TORSO, skin)
+    paintInked(pic, LEG, skin)
+    paintInked(pic, BARE, skin)
+    return pic
+  }
+  const base = body(S1)
+  const dressed = ((): Picture => {
+    const pic = blankPicture(W, H)
+    paint(pic, HEAD, S1)
+    paint(pic, TORSO, TROUSER)
+    paintInked(pic, TROUSERS, TROUSER)
+    paintInked(pic, BARE_PICTURE, S1)
+    return pic
+  })()
+  const layer = cutItem(dressed, diffAgainstBase(dressed, base, { slot: 'outfit', density: 2 }))
+  const rgbAt = (pic: Picture, x: number, y: number): RGB => [...pic.data.subarray((y * W + x) * 4, (y * W + x) * 4 + 3)] as RGB
+  const alphaAt = (pic: Picture, x: number, y: number): number => pic.data[(y * W + x) * 4 + 3]!
+
+  it('covers the leg that pokes out of the trousers, on either skin tone', () => {
+    for (const [name, skin] of [['f', S1], ['m', S2]] as [string, RGB][]) {
+      const composite = blankPicture(W, H)
+      overPicture(composite, body(skin))
+      overPicture(composite, layer)
+      const showing: string[] = []
+      for (let y = 620; y < 810; y += 4) {
+        for (let x = LEG.x0; x < TROUSERS.x0; x++) {
+          const rgb = rgbAt(composite, x, y)
+          if (Math.hypot(rgb[0] - skin[0], rgb[1] - skin[1], rgb[2] - skin[2]) <= 24) showing.push(`${x},${y}`)
+        }
+        for (let x = TROUSERS.x1; x < LEG.x1; x++) {
+          const rgb = rgbAt(composite, x, y)
+          if (Math.hypot(rgb[0] - skin[0], rgb[1] - skin[1], rgb[2] - skin[2]) <= 24) showing.push(`${x},${y}`)
+        }
+      }
+      expect(showing.length, `${name}: base skin beside the trousers, e.g. ${showing.slice(0, 6).join(' ')}`).toBe(0)
+    }
+  })
+
+  it('leaves the bare leg the picture drew narrower alone', () => {
+    // The nearest thing the picture has beside it is its own bare leg's line art, not cloth, so the skin
+    // between the two silhouettes is the base's to draw. (Its *outline* — `BARE.x0`..`+3` — is the base's
+    // own line art and R3 covers that at any distance, which is the double outline rule, not this one.)
+    for (let y = 620; y < 810; y += 8) {
+      for (const x of [BARE.x0 + 4, BARE.x0 + 6, BARE.x1 - 5, BARE.x1 - 7]) {
+        expect(alphaAt(layer, x, y), `the layer over a bare leg at ${x},${y}`).toBe(0)
+      }
+    }
+  })
+})
+
 // ────────────────────────────────────────────────────────────────── the gate ──
 
 describe('the ten acceptance checks', () => {

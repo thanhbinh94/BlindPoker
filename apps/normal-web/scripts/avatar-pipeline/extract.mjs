@@ -80,6 +80,19 @@ export const STRAND_RATIO = 0.2
 export const OUTFIT_TOP_Y = 236
 /** `diffAgainstBase`, outfits only: the rows (@1x) under the chin line where the window reaches `radius` (@1x) instead. */
 export const CHIN_BAND = { rows: 4, radius: 4 }
+/**
+ * How wide the line art around a limb is, in frame units (`coverBaseLimbsOutside`, G2). A bare thigh in a
+ * generated picture is drawn inside its own 1–2 px outline, and that outline is not the base's colour
+ * anywhere, so the difference keeps it: in the layer it looks exactly like cloth. This is how far the
+ * "that is a limb, not a garment" label is grown over the layer before the two race.
+ */
+export const OUTLINE_SPAN = 2
+/**
+ * How far (frame units) past the base's own hair `fillEnclosedGaps` keeps treating a gap as hair. The ends
+ * of F01's bob hang over her shoulders, so the last few pixels of a strand sit over skin rather than over
+ * hair, and without the margin those tips are the one part of her hair a shared layer still picks up.
+ */
+export const HAIR_MARGIN = 4
 
 /** `registerToBase`: how far, in pixels at the density being registered, the search looks each way. */
 export const REGISTER_RANGE = 12
@@ -92,7 +105,7 @@ export const SILHOUETTE_EDGE = { weight: 8, band: 2 }
  * The defaults `diffAgainstBase` was tuned to on the first three real items (2026-09-17). Areas are in
  * frame units (pixels at @1x) and grow with the square of the density; `colorTol` is an RGB distance.
  */
-export const DIFF_DEFAULTS = { colorTol: 36, shadowTol: 14, skinTol: SKIN_TOLERANCE, minRegion: 100, relativeRegion: 0.05, closeRadius: 1.5, maxHole: 400 }
+export const DIFF_DEFAULTS = { colorTol: 36, shadowTol: 14, skinTol: SKIN_TOLERANCE, minRegion: 100, relativeRegion: 0.05, closeRadius: 1.5, maxHole: 400, gapOpening: 3, coverReach: 6 }
 /** How much darker than the base a pixel may be and still be read as the item's shadow on it. */
 export const SHADOW_RANGE = [0.45, 0.92]
 
@@ -343,7 +356,7 @@ export function registerBySilhouette(itemPic, basePic, { density = 1, range = RE
  */
 export function diffAgainstBase(itemPic, basePic, options = {}) {
   const { slot, density = 1 } = options
-  const { colorTol, shadowTol, skinTol, minRegion, relativeRegion, closeRadius, maxHole } = { ...DIFF_DEFAULTS, ...stripUndefined(options) }
+  const { colorTol, shadowTol, skinTol, minRegion, relativeRegion, closeRadius, maxHole, gapOpening, coverReach } = { ...DIFF_DEFAULTS, ...stripUndefined(options) }
   const { width, height } = itemPic
   if (basePic.width !== width || basePic.height !== height) {
     throw new Error(`the base is ${basePic.width} × ${basePic.height} and the item is ${width} × ${height} — they must share a frame`)
@@ -408,12 +421,12 @@ export function diffAgainstBase(itemPic, basePic, options = {}) {
   // An outfit's holes are decided by where they lead, not by how big they are (R1); every other slot keeps
   // the size limit, because a pair of glasses is a frame around a lens that has to stay open.
   const filled = slot === 'outfit'
-    ? fillEnclosedGaps(closed, width, height, density)
+    ? fillEnclosedGaps(closed, itemPic, basePic, { width, height, density, gapOpening, skin, skinTol })
     : fillHoles(closed, width, height, Math.round(maxHole * area))
   const grown = dilateMask(filled, width, height, Math.max(1, Math.ceil(density / 2)))
   for (let p = 0; p < grown.length; p++) grown[p] = Math.min(grown[p], itemPic.data[p * 4 + 3])
   const union = slot === 'outfit' ? baseClothingUnion(itemPic, basePic, { width, height, density, colorTol, skinTol, skin }) : null
-  const cover = slot === 'outfit' ? coverBaseLimbs(grown, itemPic, basePic, { width, height, density, union, skinTol, skin }) : null
+  const cover = slot === 'outfit' ? coverBaseLimbs(grown, itemPic, basePic, { width, height, density, union, skinTol, skin, reach: coverReach }) : null
   const mask = featherMask(grown, width, height)
   const core = slotLimits(filled, { slot, width, height, density })
   applySlotRule(mask, basePic, { slot, width, height, density, core, union, cover })
@@ -485,26 +498,78 @@ function skinOfBase(itemPic, basePic, p, skin, skinTol) {
  * the layer has a hole in it, which the body then shows through. On the real `tet_red01` and `champion01`
  * that was both trouser legs full of cream blotches.
  *
- * What separates the two cases is not colour, it is topology. The only thing that may show through an
- * outfit is the *body*, and the body is not inside the clothes: a bare thigh, a hand, the neck all reach
- * the outside of the figure or the chin line the layer is cut at. So take every gap in the clothing below
- * `OUTFIT_TOP_Y` and keep it only if it is connected — 4-connected, through gap pixels — to the frame's
- * own border (which is outside the combined silhouette, since C2 and C3 keep the figure off it) or to the
- * top cut line. Everything else is sealed in by cloth, and cloth is what it is filled with: the mask is set
- * and `diffAgainstBase` then clamps it to the registered picture's own alpha, so a filled gap is the
- * picture's own pixels and nothing is invented.
+ * What separates the two cases is not colour, it is topology — and thickness. The only thing that may show
+ * through an outfit is the *body*, and the body is not inside the clothes: a bare thigh, a hand, the neck
+ * all reach the outside of the figure or the chin line the layer is cut at. So take every gap in the
+ * clothing below `OUTFIT_TOP_Y` and keep it only if it is connected — 4-connected, through gap pixels — to
+ * the frame's own border (which is outside the combined silhouette, since C2 and C3 keep the figure off it)
+ * or to the top cut line. Everything else is sealed in by cloth, and cloth is what it is filled with: the
+ * mask is set and `diffAgainstBase` then clamps it to the registered picture's own alpha, so a filled gap
+ * is the picture's own pixels and nothing is invented.
+ *
+ * 2026-09-21, round 2 (G1): connectivity alone is not enough, because a gap can *drain*. The strip of
+ * shading down `casual01`'s shoulder runs into the neck opening, the fringe down `champion01`'s inner
+ * trouser seam runs into the hem, the dashes round `tet_red01`'s cuff run into the hand — every one of them
+ * reaches an opening, and every one of them is one to three pixels thick, while each piece of body that is
+ * genuinely meant to show is a blob tens of pixels across. So a gap now has to be **thick** as well as
+ * connected: it survives a morphological opening by `gapOpening` (frame units) — erode, then dilate the
+ * same radius back and clip to the gaps it came from. A strip thinner than twice the radius vanishes in
+ * the erosion and never comes back; a hand, a thigh and the neck are restored whole.
+ *
+ * Thickness is measured on the gap **inside the combined silhouette**, and that is the one thing about
+ * this worth remembering. Measured on the whole gap mask — the exterior of the figure included — an
+ * opening removes nothing at all, because every one of these strips runs *alongside* the exterior (the
+ * inner trouser seam beside the crotch, the shoulder beside the neck): the structuring element sits in the
+ * exterior with its rim over the strip, and the dilation hands the strip straight back. So the erosion
+ * treats everything outside the figure, off the frame and above the cut line as solid, and the exterior is
+ * used only for connectivity, never as something to grow back from.
  *
  * There is no size limit, which is the other half of the ruling: `maxHole` goes on guarding the head and
  * face slots, where a glasses lens is an enclosed hole that has to stay open.
  */
-export function fillEnclosedGaps(mask, width, height, density = 1) {
+export function fillEnclosedGaps(mask, itemPic, basePic, { width, height, density = 1, gapOpening = DIFF_DEFAULTS.gapOpening, skin = null, skinTol = DIFF_DEFAULTS.skinTol }) {
   const out = Uint8Array.from(mask)
   const top = OUTFIT_TOP_Y * density
   if (top >= height) return out
-  const open = new Uint8Array(width * height)
+  const total = width * height
+  // The gaps, split into the ones inside the figure (which have to be thick to stay open) and the exterior
+  // (which is how they reach the outside in the first place).
+  const inside = new Uint8Array(total)
+  const gap = new Uint8Array(total)
+  for (let p = top * width; p < total; p++) {
+    if (mask[p] !== 0) continue
+    gap[p] = 1
+    if (itemPic.data[p * 4 + 3] > ALPHA_SOLID || basePic.data[p * 4 + 3] > ALPHA_SOLID) inside[p] = 1
+  }
+  const radius = Math.max(0, Math.round(gapOpening * density))
+  let eroded = inside
+  for (let step = 0; step < radius; step++) {
+    const next = new Uint8Array(total)
+    for (let y = top; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const p = y * width + x
+        if (!eroded[p]) continue
+        let keep = true
+        for (let dy = -1; dy <= 1 && keep; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = x + dx
+            const ny = y + dy
+            if (nx < 0 || nx >= width || ny >= height || ny < top || !eroded[ny * width + nx]) {
+              keep = false
+              break
+            }
+          }
+        }
+        if (keep) next[p] = 1
+      }
+    }
+    eroded = next
+  }
+  const thick = radius > 0 ? dilateMask(eroded, width, height, radius) : eroded
+  const open = new Uint8Array(total)
   const stack = []
   const reach = (p) => {
-    if (open[p] || mask[p] !== 0) return
+    if (open[p] || !gap[p]) return
     open[p] = 1
     stack.push(p)
   }
@@ -526,7 +591,32 @@ export function fillEnclosedGaps(mask, width, height, density = 1) {
     if (y > top) reach(p - width)
     if (y < height - 1) reach(p + width)
   }
-  for (let p = top * width; p < width * height; p++) if (mask[p] === 0 && !open[p]) out[p] = 255
+  // A gap inside the figure stays a gap only if it is both reached and thick. The exterior is left as it
+  // is: there is nothing there for the layer to hold in the first place.
+  //
+  // The base's own **hair** is exempt from the *thickness* half, and only it: inside the head region, where
+  // the base draws something that is not its skin — grown by `HAIR_MARGIN` so that the ends of the strands,
+  // which hang over the shoulder's skin, are exempt with the rest of the hair. The picture's hair is the
+  // base's hair redrawn a strand or two out of place, so the difference leaves a lattice of one-pixel gaps
+  // between the strands: thin by this rule's measure, and filling them hands F01's purple hair to every
+  // base that wears the layer. Connectivity alone decides there, as it did before this rule existed. The
+  // middle of a neckline is nowhere near the hair, so a collar's dotted line is judged like everything else.
+  const inHead = headRegion(density)
+  const hair = new Uint8Array(total)
+  for (let y = top; y < Math.min(height, FACE_LIMIT_Y * density); y++) {
+    for (let x = 0; x < width; x++) {
+      const p = y * width + x
+      const at = p * 4
+      if (!inHead(x, y) || basePic.data[at + 3] <= ALPHA_SOLID) continue
+      if (!isSkin(basePic.data[at], basePic.data[at + 1], basePic.data[at + 2], skin, skinTol)) hair[p] = 1
+    }
+  }
+  const nearHair = dilateMask(hair, width, height, Math.max(1, Math.round(HAIR_MARGIN * density)))
+  for (let p = top * width; p < total; p++) {
+    if (!inside[p]) continue
+    if (open[p] && (thick[p] || nearHair[p])) continue
+    out[p] = 255
+  }
   return out
 }
 
@@ -614,10 +704,13 @@ export function baseClothingUnion(itemPic, basePic, { width, height, density = 1
  * ruling is about. The walk is still confined to pixels the base inks and does not call skin, so a bare
  * limb is reached only along its outline, and only from a cuff or a hem that actually meets it.
  *
+ * 2026-09-21, round 2 (G2): a second, reach-limited pass follows it — `coverBaseLimbsOutside` — for the
+ * base's *skin* where the picture is transparent and the nearest thing the picture does draw is cloth.
+ *
  * Writes the alpha into `grown` (the mask before its feather) and returns `{ at, rgb }`: which pixels were
  * added, and the colour each takes.
  */
-function coverBaseLimbs(grown, itemPic, basePic, { width, height, density, union = null, skinTol = DIFF_DEFAULTS.skinTol, skin = null }) {
+function coverBaseLimbs(grown, itemPic, basePic, { width, height, density, union = null, skinTol = DIFF_DEFAULTS.skinTol, skin = null, reach = DIFF_DEFAULTS.coverReach }) {
   const top = OUTFIT_TOP_Y * density
   const inHead = headRegion(density)
   // The layer's *clothing*: solidly covered (the outfit's own soft rim is see-through, and the base's
@@ -698,7 +791,138 @@ function coverBaseLimbs(grown, itemPic, basePic, { width, height, density, union
     at[p] = 1
     grown[p] = basePic.data[p * 4 + 3]
   }
+  coverBaseLimbsOutside(grown, at, rgb, distance, clothing, itemPic, basePic, { width, height, density, top, inHead, reach })
   return { at, rgb }
+}
+
+/**
+ * A limb that pokes out of its sleeve (2026-09-21, round 2 — G2).
+ *
+ * The pass above never touches the base's skin, on the principle that a bare limb is the base's to draw.
+ * `tuxedo01` showed the cost: the base's legs are a pixel or two wider than the picture's trousers, so a
+ * dashed line of the base's own skin — cream on F01, tan on M01 — ran down the outer edge of both trouser
+ * legs, reading as a leg poking out of the trousers rather than as a leg.
+ *
+ * The distinction that decides it is what the *picture* has nearest, not what the base has:
+ *
+ * - a base pixel the picture does not reach at all, whose nearest pixel of the figure is **cloth**, is a
+ *   limb the garment was drawn too narrow for. It is covered — with that cloth's colour bled outward and
+ *   the base's alpha, skin or not — out to `reach` (frame units).
+ * - a base pixel whose nearest pixel of the figure is an **open gap** — a bare thigh, a hand, the neck,
+ *   drawn a little narrower than the base draws it — is left alone. It is the base's limb, and the base's
+ *   own silhouette is what should show there.
+ *
+ * So the two race: the layer's cloth (and everything the unlimited pass has already covered, which is cloth
+ * in the layer by now) starts at distance 0 against every pixel of the picture the layer does not hold, and
+ * the walk runs only over pixels the base inks and the picture leaves transparent. Whichever reaches a
+ * pixel first says what it is.
+ */
+function coverBaseLimbsOutside(grown, at, rgb, covered, clothing, itemPic, basePic, { width, height, density, top, inHead, reach = DIFF_DEFAULTS.coverReach }) {
+  const total = width * height
+  const CLOTH = 1
+  const GAP = 2
+  const label = new Uint8Array(total)
+  const distance = new Uint16Array(total).fill(0xffff)
+  // A bare limb the picture draws is a gap — and so is the **line art around it**, which is not the base's
+  // colour anywhere and therefore rides into the layer as if it were the garment. Left as cloth it would
+  // win every race along a bare thigh and paint the base's own edge over. So the gap label is grown over
+  // the layer by `OUTLINE_SPAN` first: a limb's outline belongs to the limb.
+  // Only the layer's own cloth is cloth here. What the unlimited pass has already covered is the *base's*
+  // line art painted over — including the outline round a bare limb, which it reaches from the far side —
+  // and letting that start a race would carry the garment two more pixels into every thigh.
+  const inLayer = new Uint8Array(total)
+  let gapish = new Uint8Array(total)
+  for (let p = top * width; p < total; p++) {
+    if (clothing[p]) inLayer[p] = 1
+    else if (itemPic.data[p * 4 + 3] > ALPHA_SOLID) gapish[p] = 1
+  }
+  for (let step = 0; step < Math.max(1, Math.round(OUTLINE_SPAN * density)); step++) {
+    const next = Uint8Array.from(gapish)
+    for (let y = top; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const p = y * width + x
+        if (!gapish[p]) continue
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = x + dx
+            const ny = y + dy
+            if (nx < 0 || ny < top || nx >= width || ny >= height) continue
+            if (inLayer[ny * width + nx]) next[ny * width + nx] = 1
+          }
+        }
+      }
+    }
+    gapish = next
+  }
+  let frontier = []
+  for (let p = top * width; p < total; p++) {
+    if (gapish[p]) {
+      label[p] = GAP
+      distance[p] = 0
+      frontier.push(p)
+    } else if (inLayer[p]) {
+      label[p] = CLOTH
+      distance[p] = 0
+      frontier.push(p)
+    }
+  }
+  const limit = Math.max(1, Math.round(reach * density))
+  for (let step = 1; step <= limit && frontier.length; step++) {
+    const ring = []
+    for (const p of frontier) {
+      const x = p % width
+      const y = (p - x) / width
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx
+          const ny = y + dy
+          if (nx < 0 || ny < top || nx >= width || ny >= height) continue
+          const q = ny * width + nx
+          if (distance[q] !== 0xffff) continue
+          // Only outside the picture's own figure, only where the base inks, and never where the base's
+          // face layer draws over the outfit anyway.
+          if (itemPic.data[q * 4 + 3] > ALPHA_SOLID) continue
+          if (basePic.data[q * 4 + 3] <= ALPHA_INK || inHead(nx, ny)) continue
+          if (covered[q] !== 0xffff) continue
+          distance[q] = step
+          label[q] = label[p]
+          ring.push(q)
+        }
+      }
+    }
+    for (const q of ring) {
+      if (label[q] !== CLOTH) continue
+      const x = q % width
+      const y = (q - x) / width
+      let r = 0
+      let g = 0
+      let b = 0
+      let n = 0
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx
+          const ny = y + dy
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue
+          const o = ny * width + nx
+          if (distance[o] >= step || label[o] !== CLOTH) continue
+          r += rgb[o * 3]
+          g += rgb[o * 3 + 1]
+          b += rgb[o * 3 + 2]
+          n++
+        }
+      }
+      if (n === 0) continue
+      rgb[q * 3] = Math.round(r / n)
+      rgb[q * 3 + 1] = Math.round(g / n)
+      rgb[q * 3 + 2] = Math.round(b / n)
+    }
+    frontier = ring
+  }
+  for (let p = top * width; p < total; p++) {
+    if (distance[p] === 0 || distance[p] === 0xffff || label[p] !== CLOTH) continue
+    at[p] = 1
+    grown[p] = basePic.data[p * 4 + 3]
+  }
 }
 
 /**
