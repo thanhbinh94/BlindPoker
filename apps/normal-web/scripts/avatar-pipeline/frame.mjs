@@ -57,8 +57,12 @@ export const LAYERS = {
  */
 export const UNDERWEAR_BAND = { y0: 176, y1: 300 }
 export const UNDERWEAR_TOLERANCE = 24
-/** …and the fraction of it an outfit has to cover to pass C6. */
-export const UNDERWEAR_COVERAGE = 0.98
+/**
+ * …and the fraction of it an outfit has to cover to pass C6. 2026-09-21 (R3): 0.995, up from 0.98. The
+ * base's own clothing is now absorbed by the layer wherever it is rather than only inside the band, so a
+ * real outfit covers every pixel of it; what is left of the margin is the antialiased rim of the region.
+ */
+export const UNDERWEAR_COVERAGE = 0.995
 
 /** A hat never reaches the waist: what the `head` extraction rule drops (spec §6). */
 export const HEAD_LIMIT_Y = 260

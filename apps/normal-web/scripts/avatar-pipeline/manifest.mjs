@@ -62,6 +62,7 @@ export const WEARS = ['f', 'm']
  * The server's registry mirrors both (`docs/avatar-2d.md` §9.1); the pipeline's own test holds the
  * two files against each other.
  */
+/** @type {Record<string, string>} */
 export const BASE_WEAR = { f01: 'f', m01: 'm' }
 
 for (const base of BASES) {
@@ -109,6 +110,7 @@ export const faceFile = (baseId, expression) => `base_${baseId}_face_${expressio
  * here decides which slot is allowed one. The wear is the one place a single-character segment is
  * legal (`CODE` below), which is what keeps `dealer01_m` unambiguous.
  */
+/** @type {(slot: string, code: string, layer: number, wear?: string | null) => string} */
 export const itemFile = (slot, code, layer, wear = null) => `item_${slot}_${code}${wear === null ? '' : `_${wear}`}_L${layer}`
 /** The variant of an item layer for one wear: `item_outfit_dealer01_L40` + `m` → `item_outfit_dealer01_m_L40`. */
 export function variantFile(layerName, wear) {

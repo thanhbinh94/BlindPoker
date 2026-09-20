@@ -729,15 +729,18 @@ describe('an outfit layer cut from a base with skin and underwear', () => {
   }, 30_000)
 
   it('still bridges a sleeve that is narrower than the base arm, with no base outline beside it', () => {
-    // The sleeve stops at the arm's line art; the cover carries the layer over it to the base's own
-    // silhouette in the dress's colour, so the outline is under the layer rather than beside it.
-    // Below the band, where the underwear rule adds nothing at all and the cover is the only thing there is.
+    // The sleeve stops at the arm's line art; the layer carries over it to the base's own silhouette, so
+    // the outline is under the layer rather than beside it. Below the band, where the old union added
+    // nothing at all and the cover was the only thing there was.
+    // 2026-09-21 (R3): what the layer takes there is the *picture's* own pixel — the arm's outline, which
+    // the picture draws too — rather than a bleed of the dress's colour, which is only used where the
+    // picture has nothing. Either way the base's outline does not stand beside the sleeve.
     for (let y = UNDERWEAR_BAND.y1 * 2 + 4; y < 616; y += 4) {
       for (let x = ARMS[0]!.x0; x < SLEEVES[0]!.x0; x++) {
         expect(alphaAt(layer, x, y), `base arm showing beside the sleeve at ${x},${y}`).toBeGreaterThan(128)
       }
-      const [r, , b] = rgbAt(layer, ARMS[0]!.x0 + 1, y)
-      expect(b! - r!, `the cover takes the dress colour at ${ARMS[0]!.x0 + 1},${y}`).toBeGreaterThan(40)
+      const rgb = rgbAt(layer, ARMS[0]!.x0 + 1, y)
+      expect(rgb, `the layer takes the picture own outline at ${ARMS[0]!.x0 + 1},${y}`).toEqual(OUTLINE)
     }
   })
 
@@ -750,6 +753,164 @@ describe('an outfit layer cut from a base with skin and underwear', () => {
     for (const [x, y] of [[346, 740], [424, 700], [346, 670], [270, 632]] as [number, number][]) {
       const [r, g, b] = rgbAt(composite, x, y)
       expect([r, g, b], `at ${x},${y}`).toEqual(S2)
+    }
+  })
+})
+
+// ───────────────────────── pale cloth is not skin, and the underwear never shows ──
+
+/**
+ * R1–R3, 2026-09-21. Three faults the first eight real outfits showed, each as a synthetic figure.
+ *
+ * The base is the shape the real ones are: a head (which is where `baseSkinColour` reads the skin), a
+ * light tank top, **darker shorts that flare 6 px (@1x) wider than the outfit's trousers at the hip**, and
+ * bare arms and legs inside their own line art. Two outfits are cut from it — trousers and a skirt — and
+ * the trousers carry the two things that used to punch holes in a layer: a fold of white cloth shaded to
+ * exactly the base's skin colour, and a patch the colour of the base's tank top, both fully inside cloth.
+ */
+describe('an outfit of pale cloth over a base with skin and underwear', () => {
+  const W = FRAME.w * 2
+  const H = FRAME.h * 2
+  type RGB = [number, number, number]
+  /** The base's own skin, and the skin of the second base the same layer is worn by. */
+  const S1: RGB = [236, 202, 176]
+  const S2: RGB = [124, 88, 62]
+  /** The base's underwear: a light tank top and darker shorts, each with the figure's line art. */
+  const TANK: RGB = [206, 204, 214]
+  const SHORTS: RGB = [101, 91, 104]
+  const OUTLINE: RGB = [62, 44, 36]
+  /** The outfit: white cloth, and the fold of it shaded to the base's skin colour to the byte. */
+  const WHITE: RGB = [250, 249, 246]
+  const SHADE: RGB = S1
+
+  type Box = { x0: number; y0: number; x1: number; y1: number }
+  const HEAD: Box = { x0: 268, y0: 110, x1: 516, y1: 470 }
+  const TORSO: Box = { x0: 300, y0: 474, x1: 470, y1: 598 }
+  /** The shorts, 12 px @2x wider than the trousers on each side: D2's grey notch at the hip. */
+  const HIPS: Box = { x0: 298, y0: 598, x1: 472, y1: 660 }
+  const ARMS: Box[] = [{ x0: 256, y0: 480, x1: 298, y1: 640 }, { x0: 472, y0: 480, x1: 514, y1: 640 }]
+  const LEGS: Box[] = [{ x0: 320, y0: 660, x1: 378, y1: 830 }, { x0: 392, y0: 660, x1: 450, y1: 830 }]
+  /** The outfit's own blocks: a top, a hip the shorts stick out of, and two trouser legs. */
+  const TOP: Box = { x0: 300, y0: 470, x1: 470, y1: 600 }
+  const HIP_CLOTH: Box = { x0: 310, y0: 600, x1: 460, y1: 664 }
+  const TROUSERS: Box[] = [{ x0: 312, y0: 664, x1: 384, y1: 830 }, { x0: 386, y0: 664, x1: 458, y1: 830 }]
+  /** Inside the left trouser leg, nowhere near its edge: the shaded fold. */
+  const FOLD: Box = { x0: 332, y0: 690, x1: 356, y1: 800 }
+  /** Inside the top, nowhere near its edge: a patch the colour of the tank top underneath it. */
+  const PATCH: Box = { x0: 350, y0: 500, x1: 392, y1: 546 }
+  /** The skirt of the second outfit, which leaves the legs bare from y 700 down. */
+  const SKIRT: Box = { x0: 288, y0: 470, x1: 482, y1: 700 }
+
+  const paint = (pic: Picture, box: Box, rgb: RGB): void => {
+    for (let y = box.y0; y < box.y1; y++) {
+      for (let x = box.x0; x < box.x1; x++) pic.data.set([...rgb, 255], (y * W + x) * 4)
+    }
+  }
+  /** A box with a 3 px rim of line art — the base's own outline, which is not skin and not cloth. */
+  const paintInked = (pic: Picture, box: Box, rgb: RGB): void => {
+    paint(pic, box, OUTLINE)
+    paint(pic, { x0: box.x0 + 3, y0: box.y0, x1: box.x1 - 3, y1: box.y1 }, rgb)
+  }
+
+  /** The base: head, tank, shorts, inked arms and legs. `dressed` swaps the underwear for an outfit. */
+  function figure(skin: RGB, underwear: boolean, extra: (pic: Picture) => void = () => {}): Picture {
+    const pic = blankPicture(W, H)
+    paint(pic, HEAD, skin)
+    for (const arm of ARMS) paintInked(pic, arm, skin)
+    for (const leg of LEGS) paintInked(pic, leg, skin)
+    paint(pic, { ...TORSO, y1: HIPS.y1 }, skin)
+    if (underwear) {
+      paintInked(pic, TORSO, TANK)
+      paintInked(pic, HIPS, SHORTS)
+    }
+    extra(pic)
+    return pic
+  }
+
+  const base = figure(S1, true)
+  const otherBase = figure(S2, true)
+  const trousered = figure(S1, false, (pic) => {
+    paint(pic, TOP, WHITE)
+    paint(pic, PATCH, TANK)
+    paint(pic, HIP_CLOTH, WHITE)
+    for (const leg of TROUSERS) paint(pic, leg, WHITE)
+    paint(pic, FOLD, SHADE)
+  })
+  const skirted = figure(S1, false, (pic) => {
+    paint(pic, TOP, WHITE)
+    paint(pic, SKIRT, WHITE)
+  })
+
+  const trousers = cutItem(trousered, diffAgainstBase(trousered, base, { slot: 'outfit', density: 2 }))
+  const skirt = cutItem(skirted, diffAgainstBase(skirted, base, { slot: 'outfit', density: 2 }))
+  const alphaAt = (pic: Picture, x: number, y: number): number => pic.data[(y * W + x) * 4 + 3]!
+  const rgbAt = (pic: Picture, x: number, y: number): RGB => [...pic.data.subarray((y * W + x) * 4, (y * W + x) * 4 + 3)] as RGB
+  const compose = (body: Picture, layer: Picture): Picture => {
+    const out = blankPicture(W, H)
+    overPicture(out, body)
+    overPicture(out, layer)
+    return out
+  }
+  const scan = (box: Box, visit: (x: number, y: number) => void): void => {
+    for (let y = box.y0; y < box.y1; y++) for (let x = box.x0; x < box.x1; x++) visit(x, y)
+  }
+
+  it('keeps a fold of white cloth shaded to the base own skin colour', () => {
+    // D1: the fold is within `skinTol` of the base's skin *and* sits over the base's bare leg, so the
+    // difference drops every pixel of it. R1 puts it back: a gap enclosed by cloth is cloth.
+    const holes: string[] = []
+    scan(FOLD, (x, y) => {
+      if (alphaAt(trousers, x, y) <= 128) holes.push(`${x},${y}`)
+    })
+    expect(holes.length, `holes in the shaded fold, e.g. ${holes.slice(0, 5).join(' ')}`).toBe(0)
+  })
+
+  it('leaves that fold cloth on a base of a different skin', () => {
+    const composite = compose(otherBase, trousers)
+    scan(FOLD, (x, y) => {
+      const rgb = rgbAt(composite, x, y)
+      expect(rgb, `the fold at ${x},${y} shows the body through it`).not.toEqual(S2)
+    })
+    expect(rgbAt(composite, (FOLD.x0 + FOLD.x1) >> 1, (FOLD.y0 + FOLD.y1) >> 1)).toEqual(SHADE)
+  })
+
+  it('fills an enclosed patch the colour of the base tank top', () => {
+    // D2's shoulder strap: the picture's own pixel happened to match the base's underwear under it, so the
+    // difference called it unchanged. Enclosed by cloth, it is cloth.
+    scan(PATCH, (x, y) => {
+      expect(alphaAt(trousers, x, y), `the enclosed patch at ${x},${y}`).toBeGreaterThan(128)
+    })
+  })
+
+  it('leaves the thighs under a skirt open for the body to draw', () => {
+    // The counterpart of the two above: a gap that reaches the outside of the silhouette is a gap.
+    const composite = compose(otherBase, skirt)
+    for (const leg of LEGS) {
+      for (let y = 740; y < 820; y += 8) {
+        const x = (leg.x0 + leg.x1) >> 1
+        expect(alphaAt(skirt, x, y), `the layer over a bare thigh at ${x},${y}`).toBe(0)
+        expect(rgbAt(composite, x, y), `the bare thigh at ${x},${y}`).toEqual(S2)
+      }
+    }
+  })
+
+  it('shows no pixel of the base underwear through an outfit narrower than its shorts', () => {
+    // R3: the shorts flare 6 px (@1x) past the trousers at the hip, and the picture has nothing there at
+    // all — the cover has to reach them however far they are from the nearest cloth.
+    for (const [name, body] of [['f', base], ['m', otherBase]] as [string, Picture][]) {
+      const composite = compose(body, trousers)
+      const showing: string[] = []
+      const inPatch = (x: number, y: number): boolean => x >= PATCH.x0 && x < PATCH.x1 && y >= PATCH.y0 && y < PATCH.y1
+      scan({ x0: 0, y0: OUTFIT_TOP_Y * 2, x1: W, y1: H }, (x, y) => {
+        // The patch above is the *outfit's* own cloth, painted the tank top's colour on purpose.
+        if (inPatch(x, y)) return
+        const rgb = rgbAt(composite, x, y)
+        if (alphaAt(composite, x, y) <= 128) return
+        for (const cloth of [TANK, SHORTS]) {
+          if (Math.hypot(rgb[0] - cloth[0], rgb[1] - cloth[1], rgb[2] - cloth[2]) <= 24) showing.push(`${x},${y}`)
+        }
+      })
+      expect(showing.length, `${name}: base underwear showing, e.g. ${showing.slice(0, 6).join(' ')}`).toBe(0)
     }
   })
 })
@@ -927,9 +1088,11 @@ async function sharpDownscale(pic: Picture): Promise<Picture> {
 // ──────────────────────────────────────────────────────── the committed set ──
 
 /** Every PNG the stage-1 set puts on disk: each layer, and each item's icon, at both densities. */
-function stageOnePngs(): string[] {
-  const files = stageOneFiles() as { name: string; kind: string }[]
-  const names = [...files.map((file) => file.name), ...files.filter((file) => file.kind === 'item').map((file) => iconName(file.name))]
+function stageOnePngs(
+  layers: string[] = (stageOneFiles() as { name: string }[]).map((file) => file.name),
+  items: string[] = (stageOneFiles() as { name: string; kind: string }[]).filter((file) => file.kind === 'item').map((file) => file.name),
+): string[] {
+  const names = [...layers, ...items.map((name) => iconName(name))]
   return names.flatMap((name) => DENSITIES.map((density: number) => `${name}@${density}x.png`))
 }
 
@@ -981,16 +1144,38 @@ describe('the stage-1 name list', () => {
 
 describe('the committed placeholder set', () => {
   const manifest = JSON.parse(readFileSync(WEB_MANIFEST, 'utf8')) as Manifest
+  /**
+   * The per-wear cuts the manifest carries (§3.1). `placeholder` never invents one — a variant is not part
+   * of the stage-1 set at all — so the manifest is what says which exist, and the set on disk is the
+   * stage-1 list plus these. What is held about them here is that each is real, wears a wear the pipeline
+   * knows, and is a cut of a layer that *is* on the list.
+   */
+  const variants = Object.entries(manifest.files).filter(([, entry]) => entry.variantOf !== undefined)
+  const variantLayers = variants.map(([name]) => name)
+  const committedLayers = [...(stageOneFiles() as { name: string }[]).map((file) => file.name), ...variantLayers]
+  const committedItems = [
+    ...(stageOneFiles() as { name: string; kind: string }[]).filter((file) => file.kind === 'item').map((file) => file.name),
+    ...variantLayers,
+  ]
+
+  it('cuts every per-wear variant from a stage-1 layer, for a wear the pipeline knows', () => {
+    const stageOne = new Set((stageOneFiles() as { name: string }[]).map((file) => file.name))
+    for (const [name, entry] of variants) {
+      expect(entry.real, `${name} is a variant, which only ingest writes`).toBe(true)
+      expect(WEARS, `${name} wears ${entry.wear}`).toContain(entry.wear)
+      expect(stageOne.has(entry.variantOf!), `${name} is a cut of ${entry.variantOf}, which is not a stage-1 layer`).toBe(true)
+      expect(name, `${name} does not name ${entry.variantOf} and its wear`).toBe(variantFile(entry.variantOf!, entry.wear!))
+    }
+  })
 
   it('holds every stage-1 name and every item icon at both densities, and nothing else', () => {
     const onDisk = readdirSync(OUT_DIR).filter((name) => name.endsWith('.png'))
-    expect(onDisk.sort()).toEqual(stageOnePngs().sort())
+    expect(onDisk.sort()).toEqual(stageOnePngs(committedLayers, committedItems).sort())
   })
 
   it('lists an icon for every item layer, flagged the way the layer is', async () => {
-    const items = (stageOneFiles() as { name: string; kind: string }[]).filter((file) => file.kind === 'item')
-    expect(Object.keys(manifest.icons ?? {}).sort()).toEqual(items.map((file) => iconName(file.name)).sort())
-    for (const { name } of items) {
+    expect(Object.keys(manifest.icons ?? {}).sort()).toEqual(committedItems.map((name) => iconName(name)).sort())
+    for (const name of committedItems) {
       const icon = iconName(name)
       const entry = manifest.icons![icon]!
       expect(entry, icon).toMatchObject({ kind: 'icon', of: name, w: ICON.w, h: ICON.h })
@@ -1008,8 +1193,7 @@ describe('the committed placeholder set', () => {
     expect(manifest.version).toBe(1)
     expect(manifest.frame).toEqual(FRAME)
     expect(manifest.crop).toEqual(CROP)
-    const names = stageOneFiles().map((file: { name: string }) => file.name)
-    expect(Object.keys(manifest.files).sort()).toEqual([...names].sort())
+    expect(Object.keys(manifest.files).sort()).toEqual([...committedLayers].sort())
     for (const [name, entry] of Object.entries(manifest.files)) {
       expect(entry.w, name).toBe(FRAME.w)
       expect(entry.h, name).toBe(FRAME.h)
