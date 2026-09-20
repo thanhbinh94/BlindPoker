@@ -49,6 +49,7 @@ const manifest: AvatarManifest = {
 const VALID = {
   f01: {
     nameKey: 'bases.f01',
+    wear: 'f',
     layers: { hairBack: 'base_f01_L20', body: 'base_f01_L30', hairFront: 'base_f01_L60' },
     faces: {
       neutral: 'base_f01_face_neutral_L50', happy: 'base_f01_face_happy_L50', sad: 'base_f01_face_sad_L50',
@@ -57,6 +58,7 @@ const VALID = {
   },
   m01: {
     nameKey: 'bases.m01',
+    wear: 'm',
     layers: { hairBack: 'base_m01_L20', body: 'base_m01_L30', hairFront: 'base_m01_L60' },
     faces: {
       neutral: 'base_m01_face_neutral_L50', happy: 'base_m01_face_happy_L50', sad: 'base_m01_face_sad_L50',
@@ -73,6 +75,18 @@ describe('loadBases', () => {
       expect(base).toMatchObject({ id, nameKey: `bases.${id}` })
       for (const expr of EXPRESSIONS) expect(base.faces[expr]).toBeTruthy()
     }
+    // 2026-09-20: which body each figure wears its clothes on, which is what picks between an outfit's
+    // cuts. The art side says the same thing in the pipeline's `BASE_WEAR`.
+    expect(bases.f01?.wear).toBe('f')
+    expect(bases.m01?.wear).toBe('m')
+  })
+
+  it('requires a wear, and one of the two the pipeline draws', () => {
+    // Not defaulted: a base with no wear would be drawn in whichever cut happens to be the shared one,
+    // which for a skirted uniform is a visible mistake on half the roster and on nothing that fails loudly.
+    const { wear: _wear, ...noWear } = VALID.m01
+    expect(() => loadBases(fixture({ ...VALID, m01: noWear }), manifest)).toThrow(/m01 has wear undefined rather than one of f, m/)
+    expect(() => loadBases(fixture({ ...VALID, m01: { ...VALID.m01, wear: 'male' } }), manifest)).toThrow(/m01 has wear "male" rather than one of f, m/)
   })
 
   it('answers with whatever ids the file names, so a third base is data and nothing else', () => {

@@ -15,30 +15,43 @@ import type { AvatarConfigDto, BaseDto, ItemDto } from '../api.js'
  * `outfit` is the one exception: every base must wear something, so an unknown outfit id falls back to
  * the catalogue's default outfit (`isDefault`), and only if that is *also* missing does the whole
  * function give up and answer `null`.
+ *
+ * 2026-09-20: which *file* an equipped item draws depends on the base, because one item may carry a cut
+ * per wear (`asset.variants`). The resolved base is threaded through `toWearRef` for that; everything
+ * below it in the kit is unchanged, and `hashChibi` already folds the base id in, so two bases wearing
+ * one item id still hash apart.
  */
 export function chibiFromApi(
   config: AvatarConfigDto,
   items: ReadonlyMap<string, ItemDto>,
   bases: ReadonlyMap<string, BaseDto>,
 ): ChibiConfig | null {
-  const base = toBaseRef(bases.get(config.base))
-  if (base === null) return null
+  const baseDto = bases.get(config.base)
+  const base = toBaseRef(baseDto)
+  if (base === null || baseDto === undefined) return null
 
-  const outfit = toWearRef(items.get(config.outfit), 'outfit') ?? toDefaultOutfit(items)
+  const outfit = toWearRef(items.get(config.outfit), 'outfit', baseDto) ?? toDefaultOutfit(items, baseDto)
   if (outfit === null) return null
 
   const chibi: ChibiConfig = { kind: 'human', base, outfit }
 
-  const head = toWearRef(items.get(config.head ?? ''), 'head')
+  const head = toWearRef(items.get(config.head ?? ''), 'head', baseDto)
   if (head !== null) chibi.head = head
-  const face = toWearRef(items.get(config.face ?? ''), 'face')
+  const face = toWearRef(items.get(config.face ?? ''), 'face', baseDto)
   if (face !== null) chibi.face = face
-  const aura = toWearRef(items.get(config.aura ?? ''), 'aura')
+  const aura = toWearRef(items.get(config.aura ?? ''), 'aura', baseDto)
   if (aura !== null) chibi.aura = aura
-  const frame = toWearRef(items.get(config.frame ?? ''), 'frame')
+  const frame = toWearRef(items.get(config.frame ?? ''), 'frame', baseDto)
   if (frame !== null) chibi.frame = frame
 
   return chibi
+}
+
+/** The layer an item draws on this base: its cut for the base's wear, or the one everybody shares. */
+export function layerFileFor(asset: ItemDto['asset'], base: Pick<BaseDto, 'wear'> | undefined): string | undefined {
+  if (asset === undefined) return undefined
+  const variant = base === undefined ? undefined : asset.variants?.[base.wear]
+  return variant ?? asset.file
 }
 
 function toBaseRef(base: BaseDto | undefined): BaseRef | null {
@@ -56,18 +69,18 @@ function toBaseRef(base: BaseDto | undefined): BaseRef | null {
 
 /** `undefined` for an id the catalogue has no row for, or one that belongs to a different slot — both read
  * as "not equipped" rather than as an error. */
-function toWearRef(item: ItemDto | undefined, slot: ItemDto['slot']): WearRef | null {
+function toWearRef(item: ItemDto | undefined, slot: ItemDto['slot'], base: BaseDto): WearRef | null {
   if (item === undefined || item.slot !== slot || item.asset === undefined) return null
-  const { layer: order, file, hidesHairFront, hidesHairBack } = item.asset
-  const wear: WearRef = { id: item.id, order, file }
+  const { layer: order, hidesHairFront, hidesHairBack } = item.asset
+  const wear: WearRef = { id: item.id, order, file: layerFileFor(item.asset, base)! }
   if (hidesHairFront !== undefined) wear.hidesHairFront = hidesHairFront
   if (hidesHairBack !== undefined) wear.hidesHairBack = hidesHairBack
   return wear
 }
 
-function toDefaultOutfit(items: ReadonlyMap<string, ItemDto>): WearRef | null {
+function toDefaultOutfit(items: ReadonlyMap<string, ItemDto>, base: BaseDto): WearRef | null {
   for (const item of items.values()) {
-    if (item.slot === 'outfit' && item.isDefault) return toWearRef(item, 'outfit')
+    if (item.slot === 'outfit' && item.isDefault) return toWearRef(item, 'outfit', base)
   }
   return null
 }

@@ -22,7 +22,8 @@
  * every time, so a near-white rim is only a fault when the inside of the shape is not near-white too.
  * C6 has no coordinates in D01 at all — see `UNDERWEAR_BAND` in `frame.mjs` for how the region is found,
  * and note that `--skip C6` exists for the genuinely awkward outfit, because a gate with no override
- * is a gate people route around by deleting it.
+ * is a gate people route around by deleting it. Since 2026-09-20 it also has to know *which* bases an
+ * outfit layer is worn by, because one item may ship a layer per wear — see `wornBy`.
  *
  * One kind of layer is blank on purpose: an AI base is a flat picture, so its hair layers L20/L60 ship as
  * empty frames and the manifest marks them `empty: true` (2026-09-15). C3 holds such a layer to being
@@ -41,7 +42,7 @@ import {
   resizePicture,
 } from './png.mjs'
 import { CROP, DENSITIES, FACE_LIMIT_Y, FRAME, LAYERS, SKIN_TOLERANCE, UNDERWEAR_BAND, UNDERWEAR_COVERAGE, UNDERWEAR_TOLERANCE, baseSkinColour, isSkin } from './frame.mjs'
-import { NAME_PATTERN, parseName } from './manifest.mjs'
+import { NAME_PATTERN, itemFile, parseName, wearOf } from './manifest.mjs'
 
 /** C10, and spec §8's 6 MB stage-1 footprint divided by the files that have to fit in it. */
 export const MAX_BYTES_2X = 400 * 1024
@@ -96,7 +97,7 @@ export async function runChecks({ dir, manifest, names, skip = [] }) {
   return rows
 }
 
-/** The `base_*_L30` layers at @1x, which C6 measures every outfit against. */
+/** The `base_*_L30` layers at @1x, which C6 measures every outfit against — each with the wear it dresses in. */
 async function loadBases(dir, manifest) {
   const bases = []
   for (const name of Object.keys(manifest.files)) {
@@ -104,7 +105,7 @@ async function loadBases(dir, manifest) {
     if (parsed?.kind !== 'base' || parsed.layer !== LAYERS.body) continue
     const file = join(dir, `${name}@1x.png`)
     if (!existsSync(file)) continue
-    bases.push({ name: parsed.base, real: manifest.files[name]?.real === true, picture: await readPicture(file) })
+    bases.push({ name: parsed.base, wear: wearOf(parsed.base), real: manifest.files[name]?.real === true, picture: await readPicture(file) })
   }
   return bases
 }
@@ -256,6 +257,24 @@ function fitsThePortrait(context) {
   return inside ? ok(`inside the crop (${where})`) : bad(`spills out of the ${CROP.size} × ${CROP.size} crop (${where})`)
 }
 
+/**
+ * Which bases this outfit layer is the one worn by (2026-09-20, per-wear variants).
+ *
+ * A **variant** (`item_outfit_dealer01_m_L40`) is worn only by the bases of its own wear: holding the male
+ * cut to a female base measures a garment against a figure that will never wear it. A **default** layer is
+ * worn by every base whose wear has no variant of this item — the moment a male dealer01 exists, the
+ * default layer stops being what m01 wears and stops being measured against him, which is what lets a
+ * skirt keep covering f01 while trousers cover m01.
+ */
+function wornBy(context, candidates) {
+  const { parsed, manifest } = context
+  if (parsed?.wear) return candidates.filter((candidate) => candidate.wear === parsed.wear)
+  return candidates.filter((candidate) => {
+    if (candidate.wear === null) return true
+    return manifest.files[itemFile(parsed.slot, parsed.code, parsed.layer, candidate.wear)] === undefined
+  })
+}
+
 function coversTheUnderwear(context) {
   const { parsed, pictures, bases } = context
   if (markedEmpty(context)) return EMPTY_NA
@@ -268,8 +287,10 @@ function coversTheUnderwear(context) {
   // shoulders reports a fault in neither of them — the same reason the reverse mix (a real base under a
   // stand-in outfit) is the documented use of `--skip C6`. Once every base is real, every base is measured.
   const real = bases.filter((candidate) => candidate.real)
+  const worn = wornBy(context, real.length ? real : bases)
+  if (!worn.length) return ok(`n/a — no base wears ${parsed.wear ? `the ${parsed.wear} cut` : 'this layer'}`)
   let worst = { name: '', coverage: 1 }
-  for (const candidate of (real.length ? real : bases)) {
+  for (const candidate of worn) {
     const region = underwearRegion(candidate.picture)
     if (!region.pixels.length) return bad(`${candidate.name} has no underwear region to cover`)
     let covered = 0

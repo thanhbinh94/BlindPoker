@@ -1,5 +1,13 @@
 {
   "extends": "../../../tsconfig.base.json",
-  "compilerOptions": { "noEmit": true, "types": ["node"], "lib": ["ES2022"] },
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"],
+    "lib": ["ES2022"],
+    // `avatar-files.test.ts` drives the build's own copy rule, which is plain Node ESM beside
+    // `build.mjs`. Without this the specifier is unresolvable; with it (and `checkJs` left off) its
+    // types are inferred and nothing in it is type-checked — the same trade `normal-web/test` makes.
+    "allowJs": true
+  },
   "include": ["."]
 }

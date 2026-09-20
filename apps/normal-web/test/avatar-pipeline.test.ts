@@ -24,7 +24,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { runChecks } from '../scripts/avatar-pipeline/checks.mjs'
 import { OUTFIT_TOP_Y, cutItem, diffAgainstBase, ingest, measure, registerBySilhouette, registerToBase } from '../scripts/avatar-pipeline/extract.mjs'
 import { AXIS_X, BASELINE_Y, BODY, CROP, DENSITIES, FACE_LIMIT_Y, FRAME, LAYERS, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
-import { BASES, ICON, MANIFEST_NAME, NAME_PATTERN, buildPlaceholders, iconName, stageOneFiles, writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
+import { BASES, BASE_WEAR, ICON, MANIFEST_NAME, NAME_PATTERN, WEARS, buildPlaceholders, iconName, itemFile, parseName, stageOneFiles, variantFile, wearOf, writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
 import { alphaBBox, blankPicture, cropPicture, overPicture, readPicture, removeChroma, renderSvg, writeDensities, writePicture } from '../scripts/avatar-pipeline/png.mjs'
 
 const PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url))
@@ -60,6 +60,9 @@ interface ManifestEntry {
   empty?: boolean
   hidesHairFront?: boolean
   hidesHairBack?: boolean
+  /** A per-wear cut of another item layer (2026-09-20): the layer it is a cut of, and which wear wears it. */
+  variantOf?: string
+  wear?: string
 }
 
 interface Manifest {
@@ -1090,6 +1093,199 @@ describe('the ingest command', () => {
     expect(manifest.icons?.item_head_tophat01_icon).toMatchObject({ kind: 'icon', of: 'item_head_tophat01_L80', w: ICON.w, h: ICON.h, real: true })
     for (const density of DENSITIES) expect(existsSync(join(dir, `item_head_tophat01_icon@${density}x.png`))).toBe(true)
   }, 120_000)
+})
+
+// ─────────────────────────────────────────── one item, a layer per wear (2026-09-20) ──
+
+/**
+ * Per-wear variants: two of the stage-1 outfits are gendered (a dealer's skirt, an áo dài), and the
+ * ruling is that they stay **one item** — ownership, achievements, the daily calendar and the outfits
+ * table all key on the id — with only the drawn layer differing by the wear of the base wearing it.
+ *
+ * What that costs the pipeline is a name (`item_<slot>_<code>_<wear>_L<n>`), an `ingest` flag, a rule
+ * about what `placeholder` may touch, and a routing question for C6: *which bases is this layer the one
+ * worn by?* Each of those is a case below.
+ */
+describe('per-wear variants', () => {
+  it('names a variant between the code and the layer, and reads it back', () => {
+    expect(itemFile('outfit', 'dealer01', LAYERS.outfit, 'm')).toBe('item_outfit_dealer01_m_L40')
+    expect(itemFile('outfit', 'dealer01', LAYERS.outfit)).toBe('item_outfit_dealer01_L40')
+    // The slot is a parameter, not a rule: only `outfit` needs this today and nothing here says so.
+    expect(itemFile('head', 'tophat01', LAYERS.head, 'f')).toBe('item_head_tophat01_f_L80')
+    expect(variantFile('item_outfit_tet_red01_L40', 'm')).toBe('item_outfit_tet_red01_m_L40')
+
+    for (const name of ['item_outfit_dealer01_m_L40', 'item_outfit_tet_red01_f_L40', 'item_head_tophat01_f_L80']) {
+      expect(NAME_PATTERN.test(name), name).toBe(true)
+    }
+    // A code's own segments are two characters or more, so the one-letter tail is unambiguously the wear.
+    expect(parseName('item_outfit_dealer01_m_L40')).toEqual({ kind: 'item', layer: 40, slot: 'outfit', code: 'dealer01', wear: 'm' })
+    expect(parseName('item_outfit_tet_red01_f_L40')).toEqual({ kind: 'item', layer: 40, slot: 'outfit', code: 'tet_red01', wear: 'f' })
+    expect(parseName('item_outfit_dealer01_L40')).toEqual({ kind: 'item', layer: 40, slot: 'outfit', code: 'dealer01' })
+    // …and a letter that is not a wear is not a name at all.
+    expect(NAME_PATTERN.test('item_outfit_dealer01_x_L40')).toBe(false)
+    expect(parseName('item_outfit_dealer01_x_L40')).toBeNull()
+  })
+
+  it('says which body each base wears, and the server registry says the same', () => {
+    // `BASES`/`BASE_WEAR` here is the art side's source of truth; `data/avatar-bases.json` mirrors it
+    // (docs/avatar-2d.md §9.1). Two files that disagree would put m01 in a skirt on one side of the app
+    // and in trousers on the other, so they are held against each other here.
+    expect(WEARS).toEqual(['f', 'm'])
+    for (const base of BASES) expect(WEARS, `${base} wears ${String(wearOf(base))}`).toContain(wearOf(base))
+    const registry = JSON.parse(readFileSync(resolve(PACKAGE_ROOT, '../normal-server/data/avatar-bases.json'), 'utf8')) as Record<string, { wear?: string }>
+    expect(Object.keys(registry).sort()).toEqual([...BASES].sort())
+    for (const [id, entry] of Object.entries(registry)) expect(entry.wear, `registry ${id}`).toBe(BASE_WEAR[id])
+  })
+
+  it('refuses a variant whose wear is not the wear of the base it is cut on', async () => {
+    // The layer is the shape of the figure it was diffed against, so cutting an `m` variant on f01 would
+    // ship a female silhouette under a male name — a mistake nothing downstream could see.
+    const dir = caseDir('variant-mismatch')
+    const file = join(dir, 'clothes.png')
+    await writePicture(await renderSvg(sourceSvg(CLOTHES), SRC.w, SRC.h), file)
+    const run = (baseId: string, variant: string): Promise<unknown> =>
+      ingest({ file, target: { kind: 'item', slot: 'outfit', code: 'dealer01' }, dir, targets: [join(dir, MANIFEST_NAME)], baseId, variant })
+    await expect(run('f01', 'm')).rejects.toThrow(/--variant m does not match base f01, which wears f/)
+    await expect(run('m01', 'f')).rejects.toThrow(/--variant f does not match base m01, which wears m/)
+    await expect(run('m01', 'x')).rejects.toThrow(/--variant x is not one of f, m/)
+    // …and nothing is written on the way to refusing.
+    expect(existsSync(join(dir, MANIFEST_NAME))).toBe(false)
+  }, 60_000)
+
+  it('cuts a male variant on m01: its own name, its own icon, and the item it belongs to', async () => {
+    const dir = caseDir('variant-ingest')
+    const base = join(dir, 'base.png')
+    const clothes = join(dir, 'clothes.png')
+    await writePicture(await renderSvg(sourceSvg(), SRC.w, SRC.h), base)
+    await writePicture(await renderSvg(sourceSvg(CLOTHES), SRC.w, SRC.h), clothes)
+    const run = (args: string[]): string => execFileSync(process.execPath, [SCRIPT, ...args], { cwd: PACKAGE_ROOT, encoding: 'utf8' })
+    run(['ingest', base, '--as', 'base:m01', '--out', dir])
+    // The exact line docs/avatar-2d.md §3.1 gives for a male dealer01.
+    run(['ingest', clothes, '--as', 'item:outfit:dealer01', '--base', 'm01', '--variant', 'm', '--out', dir])
+
+    const manifest = JSON.parse(readFileSync(join(dir, MANIFEST_NAME), 'utf8')) as Manifest
+    const name = 'item_outfit_dealer01_m_L40'
+    expect(manifest.files[name]).toMatchObject({
+      layer: LAYERS.outfit,
+      w: FRAME.w,
+      h: FRAME.h,
+      real: true,
+      variantOf: 'item_outfit_dealer01_L40',
+      wear: 'm',
+    })
+    expect(manifest.files[name]!.placeholder).toBeUndefined()
+    // The default layer is *not* written by a variant ingest: it is another picture, on another base.
+    expect(manifest.files.item_outfit_dealer01_L40).toBeUndefined()
+    for (const density of DENSITIES) expect(existsSync(join(dir, `${name}@${density}x.png`)), `${name}@${density}x`).toBe(true)
+    // Its own icon, under the manifest's `icons` key like every other item's.
+    expect(manifest.icons?.item_outfit_dealer01_m_icon).toMatchObject({ kind: 'icon', of: name, w: ICON.w, h: ICON.h, real: true })
+    for (const density of DENSITIES) expect(existsSync(join(dir, `item_outfit_dealer01_m_icon@${density}x.png`))).toBe(true)
+    // The whole gate, bar C6: this synthetic base is one flat grey with no underwear on it at all, so
+    // there is no band for an outfit to cover and no verdict to give. C6's own routing is two cases below.
+    expect(run(['check', name, '--dir', dir, '--skip', 'C6'])).not.toMatch(/FAIL/)
+  }, 300_000)
+
+  it('placeholder draws no variant and leaves a real one exactly as it is', async () => {
+    // A variant is not in the stage-1 list at all — it exists only once a picture of it has been
+    // generated — so `placeholder` must neither invent one nor drop the one it finds for not being listed.
+    const dir = caseDir('variant-placeholder')
+    const name = 'item_outfit_dealer01_m_L40'
+    const pic = blankPicture(FRAME.w * 2, FRAME.h * 2)
+    for (let y = 500; y < 700; y++) {
+      for (let x = 300; x < 460; x++) pic.data.set([30, 40, 150, 255], (y * pic.width + x) * 4)
+    }
+    const bytes2x = await writeDensities(pic, dir, name)
+    const before = DENSITIES.map((density: number) => readFileSync(join(dir, `${name}@${density}x.png`)))
+    manifestFor(dir, { [name]: { layer: LAYERS.outfit, w: FRAME.w, h: FRAME.h, bytes2x, real: true, variantOf: 'item_outfit_dealer01_L40', wear: 'm' } })
+
+    const after = await buildPlaceholders({ dir, targets: [join(dir, MANIFEST_NAME)] }) as unknown as Manifest
+    expect(after.files[name], 'the real variant was dropped for not being on the stage-1 list').toEqual({
+      layer: LAYERS.outfit, w: FRAME.w, h: FRAME.h, bytes2x, real: true, variantOf: 'item_outfit_dealer01_L40', wear: 'm',
+    })
+    DENSITIES.forEach((density: number, index: number) => {
+      expect(readFileSync(join(dir, `${name}@${density}x.png`)).equals(before[index]!), `${name}@${density}x was redrawn`).toBe(true)
+    })
+    // The icon it had never been given is cut from the layer on disk, exactly as for any other real item…
+    expect(after.icons?.item_outfit_dealer01_m_icon).toMatchObject({ kind: 'icon', of: name, real: true })
+    // …and no stand-in variant was invented for anything else.
+    const invented = Object.keys(after.files).filter((file) => parseName(file)?.wear && file !== name)
+    expect(invented, `placeholder drew variants: ${invented.join(', ')}`).toEqual([])
+  }, 600_000)
+
+  // ── C6, routed by wear (R3) ──
+
+  /** A figure with a skin-coloured head filling `SKIN_WINDOW` and an underwear band of the given width. */
+  function baseWithUnderwear(x0: number, x1: number): Picture {
+    const pic = blankPicture(FRAME.w, FRAME.h)
+    const paint = (bx0: number, by0: number, bx1: number, by1: number, rgb: [number, number, number]): void => {
+      for (let y = by0; y < by1; y++) {
+        for (let x = bx0; x < bx1; x++) pic.data.set([...rgb, 255], (y * FRAME.w + x) * 4)
+      }
+    }
+    paint(140, 124, 244, 250, [230, 200, 180])
+    // Below `FACE_LIMIT_Y`, so it is underwear rather than a face the head-region rule drops.
+    paint(x0, 250, x1, 300, [90, 100, 120])
+    return pic
+  }
+
+  /** A solid outfit layer over the rows the band occupies, `x0`–`x1` wide. */
+  function outfitCovering(x0: number, x1: number): Picture {
+    const pic = blankPicture(FRAME.w, FRAME.h)
+    for (let y = 248; y < 302; y++) {
+      for (let x = x0; x < x1; x++) pic.data.set([30, 40, 150, 255], (y * FRAME.w + x) * 4)
+    }
+    return pic
+  }
+
+  /** f01's band is narrow, m01's is wide; the skirt covers only the first. */
+  const F_BAND = [150, 230] as const
+  const M_BAND = [120, 260] as const
+
+  async function c6Fixture(dir: string, files: Record<string, Picture>): Promise<Record<string, ManifestEntry>> {
+    const entries: Record<string, ManifestEntry> = {}
+    for (const [name, picture] of Object.entries(files)) {
+      await writePicture(picture, join(dir, `${name}@1x.png`))
+      entries[name] = { layer: parseName(name)!.layer, w: FRAME.w, h: FRAME.h, bytes2x: 1, real: true }
+    }
+    return entries
+  }
+
+  it('measures a variant only against the bases that wear it', async () => {
+    const dir = caseDir('c6-variant')
+    const entries = await c6Fixture(dir, {
+      base_f01_L30: baseWithUnderwear(...F_BAND),
+      base_m01_L30: baseWithUnderwear(...M_BAND),
+      item_outfit_dealer01_L40: outfitCovering(148, 232),
+      item_outfit_dealer01_m_L40: outfitCovering(118, 262),
+    })
+    entries.item_outfit_dealer01_m_L40 = { ...entries.item_outfit_dealer01_m_L40!, variantOf: 'item_outfit_dealer01_L40', wear: 'm' }
+    const manifest = manifestFor(dir, entries)
+
+    // The male cut covers m01 and would leave f01's narrower band over-covered rather than bare, but the
+    // point is that it is never held to a figure that will not wear it.
+    const variant = (await checkOne(dir, 'item_outfit_dealer01_m_L40', manifest)).get('C6')!
+    expect(variant.ok, variant.detail).toBe(true)
+
+    // The default layer stops being what m01 wears the moment the male cut exists, so it is measured
+    // against f01 alone — where it covers every thread — and not against the wide band it never sees.
+    const shared = (await checkOne(dir, 'item_outfit_dealer01_L40', manifest)).get('C6')!
+    expect(shared.ok, shared.detail).toBe(true)
+    expect(shared.detail).toContain('100.0 %')
+  }, 60_000)
+
+  it('still measures a default layer against every wear that has no variant of it', async () => {
+    // The control for the case above: with no male cut in the manifest, m01 wears the shared layer and
+    // C6 says so — the routing is a consequence of the variant existing, not of the name of the base.
+    const dir = caseDir('c6-no-variant')
+    const manifest = manifestFor(dir, await c6Fixture(dir, {
+      base_f01_L30: baseWithUnderwear(...F_BAND),
+      base_m01_L30: baseWithUnderwear(...M_BAND),
+      item_outfit_dealer01_L40: outfitCovering(148, 232),
+    }))
+    const shared = (await checkOne(dir, 'item_outfit_dealer01_L40', manifest)).get('C6')!
+    expect(shared.ok, shared.detail).toBe(false)
+    expect(shared.detail).toContain('m01')
+  }, 60_000)
 })
 
 // ──────────────────────────────────────────────────────────── flat AI bases ──

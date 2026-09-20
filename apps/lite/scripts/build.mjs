@@ -21,6 +21,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { isLiteAvatarFile, readDefaultOutfitLayers } from './avatar-files.mjs'
 
 const require = createRequire(import.meta.url)
 
@@ -36,13 +37,8 @@ const EXE = join(RELEASE_DIR, 'bind-poker-lite.exe')
  * dir, and every edition draws from the same files rather than each carrying its own copy. */
 const AVATAR_SRC = resolve(ROOT, '../normal-web/public/avatar')
 const AVATAR_DEST = join(PUBLIC_DIR, 'avatar')
-/** `defaultChibi` (`packages/ui-kit/src/avatar2d/defaults.ts`) equips every human chibi with this outfit —
- * the only wardrobe item Lite needs regardless of edition, since a fresh Lite player has no cosmetics of
- * their own to fall back to and would 404 without it. Lite ships no store to buy any *other* item from
- * (design §7, "Không tủ đồ, không profile"), so nothing past this one file is copied from the wardrobe. */
-const DEFAULT_OUTFIT_FILE = 'item_outfit_casual01_L40'
-/** Whether an entry of `AVATAR_SRC` is one of the files Lite ships. */
-const isLiteAvatarFile = (name) => name.startsWith('base_') || name.startsWith('bot_') || name.startsWith(`${DEFAULT_OUTFIT_FILE}@`)
+/** The catalogue the copy rule reads: which outfit is the default, and which cuts of it exist. */
+const ITEMS_JSON = resolve(ROOT, '../normal-server/data/items.json')
 
 /** The exe is a copy of `node.exe` plus our blob; 120 MB leaves headroom over that without hiding a regression. */
 const MAX_EXE_BYTES = 120 * 1024 * 1024
@@ -107,13 +103,18 @@ function buildWeb() {
  * build (which would otherwise wipe `dist/public`) and before the SEA step (which embeds whatever
  * `dist/public` holds). `isLiteAvatarFile` is the whole of what that is — every other wardrobe item is
  * Normal-only for now, Lite ships no store to buy them from.
+ *
+ * "The default outfit" is read out of `items.json` (`scripts/avatar-files.mjs`), cuts and all: if that
+ * outfit ever gains a per-wear variant, Lite's `m` bases must get it too, and that has to follow from
+ * the catalogue rather than from somebody remembering this file.
  */
 function copyAvatarAssets() {
   if (!existsSync(AVATAR_SRC)) die(`avatar: source directory missing — ${AVATAR_SRC} (build apps/normal-web first)`)
   mkdirSync(AVATAR_DEST, { recursive: true })
-  const files = readdirSync(AVATAR_SRC).filter(isLiteAvatarFile)
+  const layers = readDefaultOutfitLayers(ITEMS_JSON)
+  const files = readdirSync(AVATAR_SRC).filter((name) => isLiteAvatarFile(name, layers))
   for (const name of files) copyFileSync(join(AVATAR_SRC, name), join(AVATAR_DEST, name))
-  log(`avatar: copied ${files.length} files from normal-web`)
+  log(`avatar: copied ${files.length} files from normal-web (default outfit: ${layers.join(', ')})`)
 }
 
 // ---------------------------------------------------------------------------- server

@@ -12,7 +12,7 @@
  * wrong is telling you about the assets or the rules, not about the sheet.
  */
 import { CROP, FRAME, LAYERS } from './frame.mjs'
-import { BASES, BOTS, EXPRESSIONS, STAGE_ONE_ITEMS, baseFile, botFaceFile, botFile, faceFile, itemFile, parseName } from './manifest.mjs'
+import { BASES, BOTS, EXPRESSIONS, STAGE_ONE_ITEMS, baseFile, botFaceFile, botFile, faceFile, itemFile, parseName, wearOf } from './manifest.mjs'
 import { blankPicture, cropPicture, overPicture, readPicture, renderSvg, resizePicture, writePicture } from './png.mjs'
 
 const TILE = { w: 192, h: 224 }
@@ -32,12 +32,23 @@ function layersOf(manifest, names) {
     .sort((a, b) => a.layer - b.layer)
 }
 
+/**
+ * The outfit layer a given base actually wears (2026-09-20): its wear's variant when the manifest lists
+ * one, the shared default otherwise. The sheet is the style gate, so it has to show m01 in the male cut
+ * of a skirted uniform rather than in the skirt nobody will see him in.
+ */
+function outfitFor(manifest, base, code) {
+  const wear = wearOf(base)
+  const variant = wear === null ? null : itemFile('outfit', code, LAYERS.outfit, wear)
+  return variant !== null && manifest.files[variant] ? variant : itemFile('outfit', code, LAYERS.outfit)
+}
+
 /** The base's own five layers, dressed in one outfit and wearing one expression. */
-function dressed(base, outfit, expression, extras = []) {
+function dressed(manifest, base, outfit, expression, extras = []) {
   return [
     baseFile(base, LAYERS.hairBack),
     baseFile(base, LAYERS.body),
-    itemFile('outfit', outfit, LAYERS.outfit),
+    outfitFor(manifest, base, outfit),
     faceFile(base, expression),
     baseFile(base, LAYERS.hairFront),
     ...extras,
@@ -62,17 +73,17 @@ function applyHideRules(manifest, names) {
 function cards(manifest) {
   const list = []
   for (const base of BASES) {
-    for (const expression of EXPRESSIONS) list.push({ caption: `${base} ${expression}`, names: dressed(base, 'casual01', expression) })
-    for (const code of STAGE_ONE_ITEMS.outfit) list.push({ caption: `${base} ${code}`, names: dressed(base, code, 'neutral') })
+    for (const expression of EXPRESSIONS) list.push({ caption: `${base} ${expression}`, names: dressed(manifest, base, 'casual01', expression) })
+    for (const code of STAGE_ONE_ITEMS.outfit) list.push({ caption: `${base} ${code}`, names: dressed(manifest, base, code, 'neutral') })
     for (const code of STAGE_ONE_ITEMS.head) {
-      list.push({ caption: `${base} ${code}`, names: applyHideRules(manifest, dressed(base, 'casual01', 'neutral', [itemFile('head', code, LAYERS.head)])) })
+      list.push({ caption: `${base} ${code}`, names: applyHideRules(manifest, dressed(manifest, base, 'casual01', 'neutral', [itemFile('head', code, LAYERS.head)])) })
     }
-    for (const code of STAGE_ONE_ITEMS.face) list.push({ caption: `${base} ${code}`, names: dressed(base, 'casual01', 'neutral', [itemFile('face', code, LAYERS.faceAcc)]) })
-    for (const code of STAGE_ONE_ITEMS.aura) list.push({ caption: `${base} ${code}`, names: [itemFile('aura', code, LAYERS.aura), ...dressed(base, 'casual01', 'neutral')] })
-    for (const code of STAGE_ONE_ITEMS.frame) list.push({ caption: `${base} ${code}`, names: dressed(base, 'casual01', 'neutral', [itemFile('frame', code, LAYERS.frame)]) })
+    for (const code of STAGE_ONE_ITEMS.face) list.push({ caption: `${base} ${code}`, names: dressed(manifest, base, 'casual01', 'neutral', [itemFile('face', code, LAYERS.faceAcc)]) })
+    for (const code of STAGE_ONE_ITEMS.aura) list.push({ caption: `${base} ${code}`, names: [itemFile('aura', code, LAYERS.aura), ...dressed(manifest, base, 'casual01', 'neutral')] })
+    for (const code of STAGE_ONE_ITEMS.frame) list.push({ caption: `${base} ${code}`, names: dressed(manifest, base, 'casual01', 'neutral', [itemFile('frame', code, LAYERS.frame)]) })
   }
   for (const bot of BOTS) list.push({ caption: `bot ${bot}`, names: [botFile(bot), botFaceFile(bot, 'neutral')] })
-  const portrait = dressed('f01', 'tuxedo01', 'happy', [itemFile('head', 'tophat01', LAYERS.head), itemFile('frame', 'gold', LAYERS.frame)])
+  const portrait = dressed(manifest, 'f01', 'tuxedo01', 'happy', [itemFile('head', 'tophat01', LAYERS.head), itemFile('frame', 'gold', LAYERS.frame)])
   for (const size of PORTRAIT_SIZES) list.push({ caption: portraitCaption(size), names: portrait, portrait: size })
   return list
 }

@@ -201,6 +201,20 @@ a **slot** and one **asset**, shared by every base — a hat drawn once is worn 
    output, mirrored from `normal-web`) whose own `layer` agrees. A `head` may set
    `hidesHairFront`/`hidesHairBack` when it should cover the base's hair layers.
 
+   An item that is drawn differently on a male and a female figure adds `asset.variants` — a file per
+   `wear`, still **one item** with one id (2026-09-20):
+
+   ```json
+   "asset": { "layer": 40, "file": "item_outfit_dealer01_L40",
+              "variants": { "m": "item_outfit_dealer01_m_L40" }, "fitsAvatarCrop": true }
+   ```
+
+   Keys are `f` and `m` — the `wear` every base declares in `data/avatar-bases.json` — and each file
+   is held to the manifest exactly as `file` is. A base whose wear is not listed wears `file`. The
+   catalogue row, ownership, achievements, the daily calendar and the outfits table are all unchanged
+   by this: only the layer `/api/catalog/items` hands the client differs, and the client picks between
+   them with the `wear` of the base it is drawing (`docs/avatar-2d.md` §3.1).
+
 2. Run the asset pipeline (`apps/normal-web/scripts/avatar-pipeline.mjs ingest`, then `check`) so the
    file exists at both densities and is listed in the manifest, and add the `nameKey` string to the
    vi and en bundles.

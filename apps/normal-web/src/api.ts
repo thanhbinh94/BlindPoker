@@ -76,6 +76,9 @@ export interface AssetRefDto {
   layer: number
   /** A name in the avatar manifest's `files`, without the `@1x`/`@2x` density suffix. */
   file: string
+  /** The layer to draw instead of `file` on a base of that `wear` — one item, one id, two cuts
+   * (2026-09-20). A wear with no entry wears `file`. */
+  variants?: Record<string, string>
   /** A head that hides the base's hair layers. */
   hidesHairFront?: boolean
   hidesHairBack?: boolean
@@ -102,6 +105,8 @@ export interface ItemDto {
 export interface BaseDto {
   id: string
   nameKey: string
+  /** The body this base wears its clothes on, `f` or `m`: which cut of `AssetRefDto.variants` it draws. */
+  wear: string
   layers: { hairBack: string; body: string; hairFront: string }
   /** One face per expression (`neutral`, `happy`, `sad`, `surprised`, `closed`, `sleep`). */
   faces: Record<string, string>

@@ -12,6 +12,10 @@
  * head or an outfit is drawn once and worn by both `f01` and `m01` alike (design §4.4: "món dùng
  * chung mọi thân"). `title` and `badge` have no asset at all: text beside a name, nothing to draw.
  *
+ * 2026-09-20: `asset.variants` is the one exception, and it is deliberately *not* a second item. Two
+ * outfits are gendered (a dealer's skirt, an áo dài), so the asset may name one layer per `wear`; the
+ * item is still one row with one id, and the base being drawn picks the cut.
+ *
  * `loadItemCatalog` refuses a file rather than degrading, the same reasons as before: a duplicate id
  * silently shadowing an item, a missing default leaving new accounts with nothing to wear, an absent
  * `badge_monthly` turning the day-28 reward into a foreign-key violation on the 28th of the month —
@@ -27,6 +31,8 @@ import { items } from '../db/schema.js'
 import { DAILY_FIXED_ITEM_IDS } from '../economy/daily-rules.js'
 import type { AvatarConfigV3 } from './avatar.js'
 import { defaultAvatar } from './avatar.js'
+import type { Wear } from './bases.js'
+import { WEARS } from './bases.js'
 import type { AvatarManifest } from './manifest.js'
 import { loadAvatarManifest } from './manifest.js'
 import type { ItemSlot } from './slots.js'
@@ -45,6 +51,15 @@ export interface AssetRef {
   layer: 10 | 40 | 70 | 80 | 90
   /** A name in `data/avatar-manifest.json`'s `files`, without the `@1x`/`@2x` density suffix. */
   file: string
+  /**
+   * The layer to draw instead of `file` on a base of a given wear (2026-09-20).
+   *
+   * A dealer's uniform is a skirt on `f` and trousers on `m`, but it stays **one item**: ownership,
+   * achievements, the daily calendar and the outfits table all key on the id, and only the picture
+   * differs. A wear with no entry here wears `file`, so this map is added one cut at a time as the
+   * art arrives — see `docs/avatar-2d.md` §3.1.
+   */
+  variants?: Partial<Record<Wear, string>>
   /** A head that hides the base's hair layers (design §3). */
   hidesHairFront?: boolean
   hidesHairBack?: boolean
@@ -128,6 +143,27 @@ function parseAsset(path: string, id: string, slot: ItemSlot, manifest: AvatarMa
   if (typeof fitsAvatarCrop !== 'boolean') fail(path, `item ${id} has no boolean fitsAvatarCrop`)
 
   const asset: AssetRef = { layer: expectedLayer as AssetRef['layer'], file, fitsAvatarCrop }
+
+  // Per-wear cuts (2026-09-20). Each one is held to exactly what `file` is held to — in the manifest,
+  // at the slot's own layer — because a variant that resolves to nothing is a base that renders a hole
+  // where its outfit should be, and only for the half of the roster that wears that cut.
+  const variantsRaw = r['variants']
+  if (variantsRaw !== undefined) {
+    if (typeof variantsRaw !== 'object' || variantsRaw === null || Array.isArray(variantsRaw)) fail(path, `item ${id} has a malformed asset.variants`)
+    const variants: Partial<Record<Wear, string>> = {}
+    for (const [wear, name] of Object.entries(variantsRaw as Record<string, unknown>)) {
+      if (!(WEARS as readonly string[]).includes(wear)) fail(path, `item ${id} has the asset variant ${wear}, which is not one of ${WEARS.join(', ')}`)
+      if (typeof name !== 'string' || name === '') fail(path, `item ${id}'s ${wear} asset variant has no file name`)
+      const entry = manifest.files[name]
+      if (entry === undefined) fail(path, `item ${id} names the ${wear} asset variant ${name}, which is not in the avatar manifest`)
+      if (entry.layer !== expectedLayer) {
+        fail(path, `item ${id}'s ${wear} asset variant ${name} is manifest layer ${String(entry.layer)} rather than ${String(expectedLayer)}`)
+      }
+      variants[wear as Wear] = name
+    }
+    if (Object.keys(variants).length > 0) asset.variants = variants
+  }
+
   if (r['hidesHairFront'] !== undefined) {
     if (typeof r['hidesHairFront'] !== 'boolean') fail(path, `item ${id} has a non-boolean hidesHairFront`)
     asset.hidesHairFront = r['hidesHairFront']

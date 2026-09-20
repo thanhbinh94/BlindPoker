@@ -22,6 +22,9 @@ function iconFile(layerFile: string): string {
 
 export interface ItemPreviewProps {
   item: ItemDto
+  /** The wear of the base this tile is about — the wardrobe's draft base, the inventory's saved one. An
+   * item with a cut for it shows that cut's icon; everything else shows the shared one. */
+  wear?: string
 }
 
 /**
@@ -31,11 +34,16 @@ export interface ItemPreviewProps {
  *
  * Shared between the wardrobe's own tiles (`ItemTab` below) and the inventory's read-only cards: one picture,
  * two chrome styles around it. Served from the same asset base as every `Chibi` layer, so it is `img-src 'self'`.
+ *
+ * 2026-09-20: a gendered item has one icon per cut, because the tile has to show the skirt or the trousers
+ * the figure on the stage beside it would actually be wearing. The icon is still derived from the layer's
+ * name rather than carried by the API — only *which* layer is now a question.
  */
-export function ItemPreview({ item }: ItemPreviewProps) {
+export function ItemPreview({ item, wear }: ItemPreviewProps) {
   const base = useAvatarAssetsBase()
   if (!PICTURED.has(item.slot) || item.asset === undefined) return null
-  const file = iconFile(item.asset.file)
+  const layer = (wear === undefined ? undefined : item.asset.variants?.[wear]) ?? item.asset.file
+  const file = iconFile(layer)
   return (
     <img
       className={s.tileIcon}
@@ -57,6 +65,8 @@ export interface ItemTabProps {
   owned: ReadonlySet<string>
   achievements: readonly AchievementDefDto[]
   draft: AvatarConfigDto
+  /** The draft base's wear, so a gendered item's tile shows the cut the preview is wearing. */
+  wear?: string
   onPick: (itemId: string) => void
 }
 
@@ -66,7 +76,7 @@ export interface ItemTabProps {
  * every account starts with the default outfit owned — but the lock logic here does not know that; it just
  * asks `owned`.
  */
-export function ItemTab({ slot, catalog, owned, achievements, draft, onPick }: ItemTabProps) {
+export function ItemTab({ slot, catalog, owned, achievements, draft, wear, onPick }: ItemTabProps) {
   const { t } = useTranslation('normal')
   const rows = catalog.filter((item) => item.slot === slot)
 
@@ -87,7 +97,7 @@ export function ItemTab({ slot, catalog, owned, achievements, draft, onPick }: I
               if (isOwned) onPick(item.id)
             }}
           >
-            <ItemPreview item={item} />
+            <ItemPreview item={item} wear={wear} />
             <span className={s.tileName}>{itemName(item.id, t)}</span>
             {isOwned ? null : <span className={s.tileHint}>{hintFor(item, achievements, t)}</span>}
           </button>

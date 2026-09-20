@@ -232,6 +232,9 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
   }
 
   const preview = chibiFromApi(config, items, bases) ?? defaultChibi('preview')
+  // Which cut of a gendered item the tiles show: the *draft* base's, so picking a male figure switches
+  // the dealer uniform's tile to the trousers the preview beside it is now wearing.
+  const wear = bases.get(config.base)?.wear
 
   return (
     <main className={`${s.page} ${s.wide}`}>
@@ -305,6 +308,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
                 owned={owned}
                 achievements={loaded.achievements}
                 draft={config}
+                wear={wear}
                 onPick={(id) => pick('title', id)}
               />
               <ItemTab
@@ -313,6 +317,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
                 owned={owned}
                 achievements={loaded.achievements}
                 draft={config}
+                wear={wear}
                 onPick={(id) => pick('badge', id)}
               />
             </>
@@ -323,6 +328,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
               owned={owned}
               achievements={loaded.achievements}
               draft={config}
+              wear={wear}
               onPick={(id) => pick(tab, id)}
             />
           )}

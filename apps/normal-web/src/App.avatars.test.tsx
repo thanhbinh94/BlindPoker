@@ -30,12 +30,14 @@ const FACES = {
 const BASE_F01: BaseDto = {
   id: 'f01',
   nameKey: 'bases.f01',
+  wear: 'f',
   layers: { hairBack: 'base_f01_L20', body: 'base_f01_L30', hairFront: 'base_f01_L60' },
   faces: FACES,
 }
 const BASE_M01: BaseDto = {
   id: 'm01',
   nameKey: 'bases.m01',
+  wear: 'm',
   layers: { hairBack: 'base_m01_L20', body: 'base_m01_L30', hairFront: 'base_m01_L60' },
   faces: { ...FACES, neutral: 'base_m01_face_neutral_L50' },
 }

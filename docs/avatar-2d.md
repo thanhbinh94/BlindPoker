@@ -92,7 +92,9 @@ reserved: nothing ever drew it, no item or base ever shipped a file for it, and 
 base_<baseId>_L<layer>                       the base's own body/hair layers — no density suffix here
 base_<baseId>_face_<expression>_L50          one of the base's six expression layers
 item_<slot>_<code>_L<layer>                  a wardrobe item — <layer> is the slot's own fixed number
+item_<slot>_<code>_<wear>_L<layer>           that item's cut for one wear, f or m (§3.1)
 item_<slot>_<code>_icon                      that item's 96 × 96 inventory icon (§4.2) — not a layer
+item_<slot>_<code>_<wear>_icon               a variant's own icon
 bot_<index>_L30                              a bot's body
 bot_<index>_face_<expression>_L50            a bot's expression
 ```
@@ -107,6 +109,53 @@ URL, so one stored name always resolves to both files.
 `apps/normal-web/scripts/avatar-pipeline/manifest.mjs`), and both the server's catalogue loader and the
 pipeline's own `check` command (`C8`) refuse a name whose layer disagrees with its slot.
 
+A `<code>`'s own segments are **two characters or more**. That is what makes the one-letter wear in
+`item_outfit_dealer01_m_L40` readable as a wear rather than as part of the code `dealer01_m`.
+
+## 3.1 One item, a layer per wear (2026-09-20)
+
+Two stage-1 outfits are gendered — `dealer01` has a skirt, `tet_red01` is an áo dài — and neither reads
+as the same garment on a male figure. The ruling is that they stay **one inventory item**: ownership,
+achievements, the daily calendar and the `avatar_outfits` table all key on the item id, and a second id
+would fork every one of them. What differs is only the layer that gets drawn.
+
+So three things say "wear", and they say the same thing:
+
+| | |
+|---|---|
+| `BASE_WEAR` (`scripts/avatar-pipeline/manifest.mjs`) | the art side's source of truth: `f01 → f`, `m01 → m`. The module refuses to load with a base in `BASES` that has no wear. |
+| `"wear"` in `apps/normal-server/data/avatar-bases.json` | the registry's mirror of it, required on every base and validated by `loadBases`. `test/avatar-pipeline.test.ts` holds the two files against each other. |
+| `asset.variants` in `apps/normal-server/data/items.json` | which layer an item draws for a given wear. Optional, keys ⊂ {`f`, `m`}, each name validated against the manifest exactly as `asset.file` is. |
+
+A base whose wear the item has no entry for wears `asset.file` — the shared layer — so the second cut
+of an item is added the day its picture exists and not before. `tet_red01` has none yet and every base
+wears the one layer there is.
+
+**Adding a variant**, end to end, is two steps:
+
+1. Generate the picture on the base of that wear (D02, the same locked block as any other item, but on
+   M01 rather than F01) and ingest it:
+
+   ```bash
+   pnpm --filter @bp/normal-web avatar:ingest -- <picture.png> \
+     --as item:outfit:dealer01 --base m01 --variant m
+   ```
+
+   That writes `item_outfit_dealer01_m_L40` at both densities, its own
+   `item_outfit_dealer01_m_icon`, and a manifest entry carrying `variantOf` (the default layer) and
+   `wear`. The wear must be the wear of `--base`, or the ingest is refused: the layer is the shape of
+   the figure it was diffed against.
+
+2. Add **one line** to the item's asset in `apps/normal-server/data/items.json`:
+
+   ```json
+   "variants": { "m": "item_outfit_dealer01_m_L40" }
+   ```
+
+Nothing else. No new item id, no catalogue row, no grant, no i18n key, no client change — the wardrobe
+tile, the inventory card, the table seat and the lobby bar all resolve the layer from the base they are
+drawing (`toWearRef` in `apps/normal-web/src/avatar/chibi.ts`).
+
 ## 4. The pipeline (`apps/normal-web/scripts/avatar-pipeline.mjs`, Node + `sharp`)
 
 Four commands, each documented at length in the script's own header comment — read that first for every
@@ -119,18 +168,23 @@ pnpm --filter @bp/normal-web avatar:placeholder
 # manifest already marks real (see §6 below) is left exactly alone, so re-running this after some
 # real art has landed only re-draws what is still a stand-in. Every item's icon (§4.2) is refreshed
 # with it: redrawn for a stand-in, kept for real art (or cut from the real layer on disk if missing).
+# A per-wear variant (§3.1) is never invented here — it is not part of the stage-1 set at all — and a
+# real one is carried through untouched rather than dropped for not being on the list.
 
 pnpm --filter @bp/normal-web avatar:ingest -- <picture.png> --as base:f01
 pnpm --filter @bp/normal-web avatar:ingest -- <picture.png> --as expr:f01:happy
 pnpm --filter @bp/normal-web avatar:ingest -- <picture.png> --as item:head:tophat01
+pnpm --filter @bp/normal-web avatar:ingest -- <picture.png> --as item:outfit:dealer01 --base m01 --variant m
 # One generated (or hand-drawn) picture in, one layer at @1x and @2x out, plus its manifest entry.
 # `base:` and `expr:` ingest a base's own body or one of its six expressions; `item:<slot>:<code>`
-# ingests a wardrobe piece, always drawn on F01 (D02 §5) and shared with every other base automatically —
+# ingests a wardrobe piece, drawn on F01 (D02 §5) and shared with every other base automatically —
 # they are built to the same silhouette, and an item layer carries no skin (§4.1.1). Background removal keys off #00FF00 by default (`--white`
 # for a white background instead) and, for an item, the layer is found by *diffing against the base's
 # own body* rather than by any manual selection (§4.1), and written together with its inventory icon
 # (§4.2). `--dry-run` prints what would happen and writes nothing. `--color-tol`, `--min-region` and
-# `--max-hole` override the extraction defaults for one awkward picture.
+# `--max-hole` override the extraction defaults for one awkward picture. `--variant <f|m>` makes the
+# cut the per-wear layer of an item that already exists (§3.1) rather than the item itself; the wear
+# has to be the wear of `--base`, or the ingest is refused.
 
 pnpm --filter @bp/normal-web avatar:check
 # Runs the ten acceptance criteria (D01 §10) over every committed layer and prints a pass/fail table;
@@ -140,7 +194,8 @@ pnpm --filter @bp/normal-web avatar:check
 
 pnpm --filter @bp/normal-web avatar:sheet
 # Composes every item on every base, across all six expressions, into docs/avatar-2d-sheet.png — the
-# eyeballed style gate before a picture is ever committed (design §6, §9).
+# eyeballed style gate before a picture is ever committed (design §6, §9). A base whose wear has a
+# real variant of an outfit is drawn wearing that variant, not the shared layer (§3.1).
 ```
 
 `placeholder` and `ingest` write into `public/avatar/` by default; pointing either at a different `--out`
@@ -245,7 +300,7 @@ preview's job: picking an owned tile puts it on the character there, and saving 
 | C3 | The empty part really is empty: no alpha at all more than 3 px outside the solid shape |
 | C4 | No white fringe — the soft rim is the shape's own colour, not white bled in from the key |
 | C5 | `head`/`face` items fit inside the 208×208 crop |
-| C6 | An outfit covers the base's underwear — the band's non-skin pixels, on the bases whose body is real art (§4.1.1); `--skip C6` exists for it |
+| C6 | An outfit covers the base's underwear — the band's non-skin pixels, on the bases whose body is real art (§4.1.1) **and that wear this layer** (§3.1: a variant is measured only against bases of its own wear; a default layer against every real base whose wear has no variant of that item); `--skip C6` exists for it |
 | C7 | The `@1x` is really the `@2x` scaled down, not redrawn separately |
 | C8 | The file name follows §3 above, with a layer that matches its slot |
 | C9 | The manifest lists it, at that layer and that frame size |
@@ -259,6 +314,10 @@ Every manifest entry carries exactly one of two flags, never both: `"placeholder
 so running it again after some art has landed cannot silently overwrite that art with a shape. There is
 no path back from `real` to `placeholder`: ingesting is the one-way door design §9's roadmap describes,
 walked one item at a time as pictures are produced.
+
+A real entry may also carry `"variantOf"` and `"wear"`: a per-wear cut of another item's layer (§3.1),
+which is always real — `placeholder` never draws one — and which `variantOf` ties back to the item it
+belongs to.
 
 A real entry may also carry `"empty": true`: an AI base's hair layers, which ship as fully transparent
 frames (§2). `avatar:check` holds such a layer to being fully transparent at both densities (C3) and
@@ -298,10 +357,13 @@ every human at a Lite table draws the same deterministic figure the kit itself c
 from the server: `defaultChibi(displayName)` seeds a chibi from the player's own name, the same way on
 every device, with no request involved — always wearing `item_outfit_casual01_L40`, the one default
 outfit (`packages/ui-kit/src/avatar2d/defaults.ts`). `apps/lite/scripts/build.mjs`'s `copyAvatarAssets()`
-(`isLiteAvatarFile`) copies the `base_*` and `bot_*` files, plus that one outfit's `@1x`/`@2x` pair, out of
+copies the `base_*` and `bot_*` files, plus the default outfit's, out of
 `apps/normal-web/public/avatar/` into `dist/public/avatar` — never any *other* wardrobe item, because Lite
 ships no store to buy them from — as one step of a full build, after the web bundle and before the SEA
-blob is assembled. There is no dev-time equivalent of that copy (`docs/known-limitations.md`):
+blob is assembled. Which files are "the default outfit's" is **read out of `items.json`**
+(`scripts/avatar-files.mjs`, 2026-09-20): its `asset.file` *and every variant of it the catalogue lists*
+(§3.1), because a Lite `m` base drawn in a cut Lite did not copy renders undressed. Adding a cut to the
+default outfit therefore stays one line of data. There is no dev-time equivalent of that copy (`docs/known-limitations.md`):
 `pnpm --filter @bp/lite dev` needs `apps/normal-web` built at least once first, or every chibi 404s.
 
 ## 9. Adding an item, end to end
@@ -313,7 +375,8 @@ blob is assembled. There is no dev-time equivalent of that copy (`docs/known-lim
    and `avatar:check <name>` after, since ingest does not run the acceptance criteria itself.
 2. **The catalogue.** Add the row to `apps/normal-server/data/items.json`: `id`, `slot`, `rarity`,
    `isDefault`, and `asset.{layer, file}` — `file` is the manifest name `ingest` just wrote, with no
-   density suffix. The server validates every row against the committed manifest at boot
+   density suffix. An item that needs a second cut for male figures gains `asset.variants` later, and
+   stays this one row when it does (§3.1). The server validates every row against the committed manifest at boot
    (`apps/normal-server/src/inventory/items.ts`), so a row naming a file that was never ingested — or
    naming the wrong layer for its slot — fails fast rather than 404ing per request.
 3. **An alias, if the id is renamed.** `apps/normal-server/data/item-aliases.json` maps an old id to its
@@ -347,19 +410,21 @@ Two lists say what exists, and they are not interchangeable:
 
 | | |
 |---|---|
-| `BASES` (`scripts/avatar-pipeline/manifest.mjs`) | **the source of truth.** It is what `placeholder` draws a full stand-in set for, what `stageOneFiles` names, what `check` walks and what `sheet` composes. Art first. |
-| `data/avatar-bases.json` | the server's registry, which *mirrors* it. Every entry names seven manifest files and `loadBases` refuses at boot any name the committed manifest does not list, so a base added here before its layers exist fails fast. |
+| `BASES` + `BASE_WEAR` (`scripts/avatar-pipeline/manifest.mjs`) | **the source of truth.** It is what `placeholder` draws a full stand-in set for, what `stageOneFiles` names, what `check` walks and what `sheet` composes — and which body each one wears its clothes on (§3.1). Art first. |
+| `data/avatar-bases.json` | the server's registry, which *mirrors* it. Every entry names seven manifest files and declares its `wear`; `loadBases` refuses at boot any name the committed manifest does not list and any entry without a wear, so a base added here before its layers exist fails fast. The two files are held against each other by `apps/normal-web/test/avatar-pipeline.test.ts`. |
 
 The order, therefore:
 
-1. **The list.** Add the id to `BASES` and run `avatar:placeholder`. Nine stand-in files appear — `L20`,
+1. **The list.** Add the id to `BASES` *and its wear to `BASE_WEAR`* (the module refuses to load
+   otherwise), then run `avatar:placeholder`. Nine stand-in files appear — `L20`,
    `L30`, `L60` and six expressions — in their own skin, hair and underwear tones, so a sheet of three bases
    reads as three characters rather than one drawn three times. The app builds and runs from here.
 2. **The pictures.** Seven of them: the figure (`--as base:f02`) and five more expressions
    (`--as expr:f02:happy`, …; the base's own ingest writes `neutral`). Generate them against D02's locked
    block, on the same canvas as F01 — same body, same pose, its own head, hair and skin. Then
    `avatar:check`, and `avatar:sheet` to look at it beside the others.
-3. **The registry entry.** A `bases.f02` `nameKey`, the three `layers` and the six `faces`, named exactly as
+3. **The registry entry.** A `bases.f02` `nameKey`, its `wear` (the same letter `BASE_WEAR` gave it), the
+   three `layers` and the six `faces`, named exactly as
    `ingest` wrote them. `loadBases` validates every one against the manifest, requires `DEFAULT_BASE` to be
    present, and holds an id to `[a-z][a-z0-9]*` because it ends up inside a file name.
 4. **The name, in both languages.** `bases.f02` in `apps/normal-web/src/locales/vi/normal.json` *and*

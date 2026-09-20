@@ -1,7 +1,7 @@
 import { Badge, Button, Panel, type Language } from '@bp/ui-kit'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { AvatarConfigDto, ItemDto, ItemSlot, NormalApi, OwnedItemDto } from '../api.js'
+import type { AvatarConfigDto, BaseDto, ItemDto, ItemSlot, NormalApi, OwnedItemDto } from '../api.js'
 import { itemName } from '../catalog-i18n.js'
 import { RARITY_TONE, SLOT_ORDER } from './catalog.js'
 import { formatDay } from './format.js'
@@ -16,6 +16,9 @@ interface InventoryData {
   items: OwnedItemDto[]
   avatar: AvatarConfigDto
   catalog: ItemDto[]
+  /** Only ever read for the equipped base's `wear`, which decides which cut of a gendered item the
+   * cards show. A failed fetch is not worth an error page here: the shared cut is drawn instead. */
+  bases: BaseDto[]
 }
 
 /** Which slot of the equipped config an item would sit in, so "equipped" can be read off the avatar. */
@@ -39,22 +42,30 @@ export interface InventoryScreenProps {
  * Every drawn tile is an `ItemPreview` — the wardrobe's own picture, in read-only chrome here — the item's
  * inventory icon, the item on its own. `title` and `badge` have no layer at all, so their tiles carry words
  * and nothing else, the same as they always have.
+ *
+ * 2026-09-20: a third request, for the base registry, and only to read the equipped base's `wear` — a
+ * gendered item shows the cut this account's own figure wears. It fails soft: no registry, shared cut.
  */
 export function InventoryScreen({ api, lang }: InventoryScreenProps) {
   const { t } = useTranslation('normal')
   const wardrobe = useAsync<InventoryData>(async () => {
-    const [inventory, catalogAnswer] = await Promise.all([
+    const [inventory, catalogAnswer, basesAnswer] = await Promise.all([
       api.inventory(),
       api.catalogItems().then(
         (answer) => answer.items,
         () => [] as ItemDto[],
       ),
+      api.avatarCatalog().then(
+        (answer) => answer.bases,
+        () => [] as BaseDto[],
+      ),
     ])
-    return { items: inventory.items, avatar: inventory.avatar, catalog: catalogAnswer }
+    return { items: inventory.items, avatar: inventory.avatar, catalog: catalogAnswer, bases: basesAnswer }
   })
   const data = wardrobe.data
 
   const items = useMemo(() => new Map((data?.catalog ?? []).map((item) => [item.id, item])), [data])
+  const wear = useMemo(() => data?.bases.find((base) => base.id === data.avatar.base)?.wear, [data])
 
   if (wardrobe.loading && data === null) {
     return (
@@ -106,7 +117,7 @@ export function InventoryScreen({ api, lang }: InventoryScreenProps) {
                   const equipped = isEquipped(item.itemId, item.slot, avatar)
                   return (
                     <li className={s.card} key={item.itemId} data-equipped={String(equipped)}>
-                      {def === undefined ? null : <ItemPreview item={def} />}
+                      {def === undefined ? null : <ItemPreview item={def} wear={wear} />}
                       <span className={s.cardName}>{itemName(item.itemId, t)}</span>
                       <span className={s.cardMarks}>
                         {item.rarity === null ? null : <Badge tone={RARITY_TONE[item.rarity]}>{t(`inventory.rarity.${item.rarity}`)}</Badge>}
