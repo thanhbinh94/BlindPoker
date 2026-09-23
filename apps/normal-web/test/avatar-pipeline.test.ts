@@ -1435,7 +1435,14 @@ describe('per-wear variants', () => {
     const clothes = join(dir, 'clothes.png')
     await writePicture(await renderSvg(sourceSvg(), SRC.w, SRC.h), base)
     await writePicture(await renderSvg(sourceSvg(CLOTHES), SRC.w, SRC.h), clothes)
-    const run = (args: string[]): string => execFileSync(process.execPath, [SCRIPT, ...args], { cwd: PACKAGE_ROOT, encoding: 'utf8' })
+    const run = (args: string[]): string => {
+      try {
+        return execFileSync(process.execPath, [SCRIPT, ...args], { cwd: PACKAGE_ROOT, encoding: 'utf8' })
+      } catch (error) {
+        // The pipeline's own table is the diagnosis; the exit code alone says nothing.
+        throw new Error(`${(error as { stdout?: string }).stdout ?? ''}\n${(error as { stderr?: string }).stderr ?? ''}\n${(error as Error).message}`)
+      }
+    }
     run(['ingest', base, '--as', 'base:m01', '--out', dir])
     // The exact line docs/avatar-2d.md §3.1 gives for a male dealer01.
     run(['ingest', clothes, '--as', 'item:outfit:dealer01', '--base', 'm01', '--variant', 'm', '--out', dir])

@@ -1407,7 +1407,7 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', varia
     const extra = variant === null ? {} : { variantOf: itemFile(target.slot, target.code, layer), wear: variant }
     // Below `ALPHA_INK` nothing is visible, and the halved copy of a mask edge can land a stray alpha-1
     // pixel a few pixels outside the shape — which is C3's `rác bán trong suốt`, not a soft edge.
-    layers.push({ file: { name: itemFile(target.slot, target.code, layer, variant), layer, ...hides }, picture: dropFaint(cutItem(registered.picture, cut)), clip: dropFaint, extra, icon: true })
+    layers.push({ file: { name: itemFile(target.slot, target.code, layer, variant), layer, ...hides }, picture: dropFaint(cutItem(registered.picture, cut)), clip: (pic) => dropFaint(pic), extra, icon: true })
   }
 
   for (const { file: layerFile, picture, clip = null, extra = {}, icon = false } of layers) {
