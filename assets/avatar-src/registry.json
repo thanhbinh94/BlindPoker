@@ -2003,8 +2003,45 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T20:34:40.489Z",
+          "chat": "https://chatgpt.com/c/6ab436e3-dfa0-83ec-99b7-2f24bc65c7c4",
+          "file": "m02_closed.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.999,
+            "widthRatio": 1.002,
+            "drift": {
+              "left": 0,
+              "top": -1,
+              "right": 2,
+              "bottom": 0
+            },
+            "heads": 2.085,
+            "hairDelta": 5.177,
+            "scope": 0.001,
+            "checks": {
+              "base_m02_face_closed_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "m02:sleep",
