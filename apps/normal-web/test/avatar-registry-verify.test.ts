@@ -174,6 +174,18 @@ describe('verify: drift and redrawn', () => {
     expect(compareBoxes({ x: 160, y: 172, w: 700, h: 1170 }, ref).reason).toBeNull()
   })
 
+  it('lets an outfit shoe lower the bottom edge by up to 24 px, and nothing else', () => {
+    const ref = { x: 162, y: 170, w: 700, h: 1170 }
+    const shoes = (lower: number): { x: number; y: number; w: number; h: number } => ({ ...ref, h: ref.h + lower })
+    expect(compareBoxes(shoes(19), ref, { kind: 'item', slot: 'outfit' })).toMatchObject({ reason: null, edges: { bottom: 19 } })
+    expect(compareBoxes(shoes(24), ref, { kind: 'item', slot: 'outfit' }).reason).toBeNull()
+    expect(compareBoxes(shoes(25), ref, { kind: 'item', slot: 'outfit' }).reason).toBe('drift')
+    // Raised feet, a face item, or an outfit's side edge get no such allowance.
+    expect(compareBoxes({ ...ref, h: ref.h - 13 }, ref, { kind: 'item', slot: 'outfit' }).reason).toBe('drift')
+    expect(compareBoxes(shoes(19), ref, { kind: 'item', slot: 'face' }).reason).toBe('drift')
+    expect(compareBoxes({ ...ref, x: ref.x + 13 }, ref, { kind: 'item', slot: 'outfit' }).reason).toBe('drift')
+  })
+
   it('measures the top below the strand, and a head item not at all', () => {
     // The 2026-09-24 visor: the hat hides the ahoge, and the box top drops from 82 to 159.
     const ref = { x: 164, y: 82, w: 694, h: 1360, top: 160 }
@@ -213,10 +225,12 @@ describe('verify: scope', () => {
     expect((await score(files.torso, { kind: 'item', slot: 'head' })).reason).toBe('scope')
   })
 
-  it('lets an outfit change the body, and not the head', async () => {
+  it('does not ask it of an outfit, whose cut discards the head a generator redrew', async () => {
     const shirt = await score(files.shirt, { kind: 'item', slot: 'outfit' })
     expect(shirt.verdict, shirt.reason).toBe('ok')
-    expect((await score(files.face, { kind: 'item', slot: 'outfit' })).reason).toBe('scope')
+    const redrawnHead = await score(files.face, { kind: 'item', slot: 'outfit' })
+    expect(redrawnHead.verdict, redrawnHead.reason).toBe('ok')
+    expect(redrawnHead.measure.scope).toBeUndefined()
   })
 })
 

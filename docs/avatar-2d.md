@@ -621,10 +621,10 @@ has the exact definitions).
 | `size` | a figure: not portrait, height under 1152, or an aspect more than 5 % off both 2:3 and 3:4 — the image model answers a 1024 × 1536 edit with **1086 × 1448**, and that picture is usable; an aura or frame: more than 5 % off square, or a side under 1024 |
 | `background` | a corner is not fully transparent, or more than 5 % of the outer 8 px band is opaque near-white or near-grey (a painted checkerboard) |
 | `redrawn` | against the reference: the scale (reference height over picture height, head top to feet) is outside 0.90–1.10, or the width ratio after that scaling is outside 0.96–1.04 — a figure redrawn wider at the same height, which the pipeline could only register at IoU 0.645 |
-| `drift` | an edge of the box is more than 12 px off the reference's. A base: all four edges of the raw box. An expression, a face or an outfit: all four, the top taken at `measure()`'s head top (below the strand of hair, which a generator redraws differently every time) unless the raw box tops agree better. A head item: left, right and bottom only — a hat hides the strand and moves the top (a visor dropped it 77 px) |
+| `drift` | an edge of the box is more than 12 px off the reference's. A base: all four edges of the raw box. An expression, a face or an outfit: all four, the top taken at `measure()`'s head top (below the strand of hair, which a generator redraws differently every time) unless the raw box tops agree better. A head item: left, right and bottom only — a hat hides the strand and moves the top (a visor dropped it 77 px). An outfit's bottom edge may sit up to 24 px *lower* (shoes) |
 | `heads` | outside 2.0–2.5 heads (`measure()` after `removeChroma`); not asked of a head item, whose hat counts as head |
 | `hair_colour` | the mean colour of the top-of-head band (x 330–700, y 250–330 of the reference) moved by more than 12 — expressions, face and outfit items (not a head item: the hat covers the band) |
-| `scope` | 1 % or more of the figure changed outside what the asset may change: an expression, below the head region (`FACE_LIMIT_Y`); a head or face item, below `HEAD_LIMIT_Y` and outside the crop; an outfit, above `OUTFIT_TOP_Y`. "Changed" is asked the way `diffAgainstBase` asks it: no reference pixel within 2 px is within RGB distance 40 |
+| `scope` | 1 % or more of the figure changed outside what the asset may change: an expression, below the head region (`FACE_LIMIT_Y`); a head or face item, below `HEAD_LIMIT_Y` and outside the crop. Not an outfit, whose cut discards everything above the chin line anyway. "Changed" is asked the way `diffAgainstBase` asks it: no reference pixel within 2 px is within RGB distance 40 |
 | `check:<Cn>` | the ten criteria (§5) on the layers an ingest into a **copy** of `public/avatar/` wrote; a new base's expression gets its base ingested into the copy first, from the reference. `pipeline` if the ingest itself threw |
 | `hollow` | an aura or a frame: mean alpha inside 40 % of the half-width is 0.05 or more |
 
@@ -634,10 +634,13 @@ head item's feet and centre line — and the pipeline is given that aligned copy
 is cut with its base's stored transform, measured on the reference's canvas. A bot has no pipeline target yet:
 it skips `check`, with the note `pipeline: skipped (bot)`.
 
-Measured on the real pictures of Plan 11 (2026-09-24): all ten real expressions, `dealer01_m`, `champion01`,
-`tophat01` and `glasses_round_gold01` pass. `tuxedo01` (4.4 %), `royal_robe01` (1.5 %), `tet_red01` (15.9 %),
-`tet_red01_m` (6.0 %) and `dealer01` (8.9 %) fail `scope`: in each the generator redrew the whole head, which the
-outfit cut then discarded, so the layer was fine — the rule reports a real redraw, not noise.
+Measured on the real pictures of Plan 11 (2026-09-24), every accepted picture passes: all ten real expressions,
+`tophat01`, `glasses_round_gold01`, and all eight outfits and cuts (`casual01` as regenerated, `tuxedo01`,
+`champion01`, `royal_robe01`, `dealer01`, `tet_red01`, `dealer01_m`, `tet_red01_m`). Two rulings of that day
+made the outfits pass. **An outfit has no `scope` rule**: five of them had their whole head redrawn
+(`tet_red01` 15.9 % of it changed, `tuxedo01` 4.4 %), and the outfit cut discards everything above the chin, so
+none of it reached a layer. **An outfit's feet may sit up to 24 px lower** than the base's: `casual01`'s
+sneakers put its bottom edge 19 px down.
 
 ### 10.5 What `ingest` does
 

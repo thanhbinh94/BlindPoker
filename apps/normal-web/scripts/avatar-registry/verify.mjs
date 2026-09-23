@@ -14,13 +14,15 @@
  *                height over the picture's, head top to feet — is outside 0.90–1.10, or its box's width
  *                ratio after that scaling is outside 0.96–1.04 (a figure drawn wider at the same height —
  *                the ChatGPT edit that the pipeline could only register at IoU 0.645)
- *   drift        …or an edge of the box is more than 12 px off the reference's (which edges, and where the
- *                picture stands when they are measured: `compareBoxes`)
+ *   drift        …or an edge of the box is more than 12 px off the reference's — an outfit's bottom edge may
+ *                sit up to 24 px lower, for shoes (which edges, and where the picture stands when they are
+ *                measured: `compareBoxes`)
  *   heads        2.0–2.5 heads (`measure` after `removeChroma`, as the pipeline's `--dry-run` does)
  *   hair_colour  the mean colour of the top-of-head band (x 330–700, y 250–330 of the reference) moved more
  *                than 12 (RGB distance) — expressions and face/outfit items
  *   scope        ≥ 1 % of the figure changed outside the area the asset may change (`scopeFraction`: RGB
- *                distance > 40 from everything within 2 px, or opaque where the other has nothing near)
+ *                distance > 40 from everything within 2 px, or opaque where the other has nothing near) —
+ *                expressions, head and face items; not an outfit (`allowedArea`)
  *   check:<Cn>   the pipeline's own acceptance criteria, on a copy: public/avatar/ is copied to a temporary
  *                directory, the picture is ingested there with the asset's `ingest` spec (`--out`), and
  *                `runChecks` runs over the layers that wrote (`pipeline` if the ingest itself throws)
@@ -37,7 +39,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runChecks } from '../avatar-pipeline/checks.mjs'
-import { OUTFIT_TOP_Y, ingest, measure as measureFigure } from '../avatar-pipeline/extract.mjs'
+import { ingest, measure as measureFigure } from '../avatar-pipeline/extract.mjs'
 import { CROP, FACE_LIMIT_Y, HEAD_LIMIT_Y, LAYERS, anchorBase } from '../avatar-pipeline/frame.mjs'
 import { MANIFEST_NAME, PUBLIC_DIR, SLOT_LAYER, baseFile, faceFile, itemFile, readManifest } from '../avatar-pipeline/manifest.mjs'
 import { ALPHA_SOLID, alphaBBox, colourDistance, placeOnCanvas, readPicture, removeChroma, resizePicture, writePicture } from '../avatar-pipeline/png.mjs'
@@ -50,6 +52,8 @@ export const CHECKER_LIMIT = 0.05
 export const SCALE_RANGE = [0.9, 1.1]
 export const WIDTH_RANGE = [0.96, 1.04]
 export const DRIFT_LIMIT = 12
+/** How far (source px) an outfit's bottom edge may sit *below* the reference's: shoes add height (ruling 2026-09-24). */
+export const OUTFIT_SHOES = 24
 export const HEADS_RANGE = [2, 2.5]
 export const HAIR_BAND = { x0: 330, x1: 700, y0: 250, y1: 330 }
 export const HAIR_LIMIT = 12
@@ -161,10 +165,13 @@ export function compareBoxes(box, ref, { kind = 'expression', slot = null, ancho
     bottom: Math.round(at(bottom(box), placement.top) - bottom(ref)),
   }
   const drift = Math.max(...Object.values(edges).filter((edge) => edge !== null).map(Math.abs))
+  // An outfit's shoes may put its feet lower than the base's bare ones (casual01's sneakers: 19 px).
+  const lowest = kind === 'item' && slot === 'outfit' ? OUTFIT_SHOES : DRIFT_LIMIT
+  const off = (name, edge) => edge !== null && (name === 'bottom' ? edge < -DRIFT_LIMIT || edge > lowest : Math.abs(edge) > DRIFT_LIMIT)
   let reason = null
   if (scale < SCALE_RANGE[0] || scale > SCALE_RANGE[1]) reason = 'redrawn'
   else if (widthRatio < WIDTH_RANGE[0] || widthRatio > WIDTH_RANGE[1]) reason = 'redrawn'
-  else if (drift > DRIFT_LIMIT) reason = 'drift'
+  else if (Object.entries(edges).some(([name, edge]) => off(name, edge))) reason = 'drift'
   return { scale, widthRatio, edges, drift, placement, reason }
 }
 
@@ -198,8 +205,12 @@ export function hairColour(pic) {
 
 /**
  * Where an asset may change the picture, as a test on a reference pixel `(x, y)`, or null when the asset
- * has no such limit. The frame's rows (`FACE_LIMIT_Y`, `HEAD_LIMIT_Y`, `CROP`, `OUTFIT_TOP_Y`) are mapped back
- * onto the reference with the transform the pipeline would anchor it by.
+ * has no such limit — and then `scope` is not measured. The frame's rows (`FACE_LIMIT_Y`, `HEAD_LIMIT_Y`,
+ * `CROP`) are mapped back onto the reference with the transform the pipeline would anchor it by.
+ *
+ * An outfit has none (ruling 2026-09-24): the outfit cut discards everything above the chin line, so a head
+ * the generator redrew never reaches the layer — and five of the eight accepted real outfits redrew theirs
+ * (tuxedo01 4.4 %, tet_red01 15.9 % of the head changed).
  */
 export function allowedArea(kind, slot, transform) {
   const fx = (x) => x * transform.scale + transform.offsetX
@@ -207,7 +218,6 @@ export function allowedArea(kind, slot, transform) {
   const inCrop = (x, y) => fx(x) >= CROP.x && fx(x) < CROP.x + CROP.size && fy(y) >= CROP.y && fy(y) < CROP.y + CROP.size
   if (kind === 'expression') return (_x, y) => fy(y) < FACE_LIMIT_Y
   if (kind === 'item' && (slot === 'head' || slot === 'face')) return (x, y) => fy(y) < HEAD_LIMIT_Y || inCrop(x, y)
-  if (kind === 'item' && slot === 'outfit') return (_x, y) => fy(y) >= OUTFIT_TOP_Y
   return null
 }
 
