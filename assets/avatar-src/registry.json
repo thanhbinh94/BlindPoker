@@ -2394,8 +2394,45 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T22:48:55.368Z",
+          "chat": "https://chatgpt.com/c/6ab455c4-8884-83ec-870f-d664de49c632",
+          "file": "m03_sleep.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.998,
+            "widthRatio": 1,
+            "drift": {
+              "left": -1,
+              "top": 0,
+              "right": 0,
+              "bottom": 2
+            },
+            "heads": 2.122,
+            "hairDelta": 6.674,
+            "scope": 0.001,
+            "checks": {
+              "base_m03_face_sleep_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "bot_0",
