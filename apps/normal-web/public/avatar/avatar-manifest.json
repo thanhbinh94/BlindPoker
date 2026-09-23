@@ -812,8 +812,8 @@
       "layer": 10,
       "w": 384,
       "h": 448,
-      "bytes2x": 23159,
-      "placeholder": true
+      "bytes2x": 233665,
+      "real": true
     },
     "item_aura_lightning01_L10": {
       "layer": 10,
@@ -882,8 +882,8 @@
       "layer": 90,
       "w": 384,
       "h": 448,
-      "bytes2x": 21633,
-      "placeholder": true
+      "bytes2x": 260812,
+      "real": true
     },
     "item_frame_gold_L90": {
       "layer": 90,
@@ -896,8 +896,8 @@
       "layer": 90,
       "w": 384,
       "h": 448,
-      "bytes2x": 21366,
-      "placeholder": true
+      "bytes2x": 206309,
+      "real": true
     },
     "item_frame_silver_L90": {
       "layer": 90,
@@ -910,8 +910,8 @@
       "layer": 90,
       "w": 384,
       "h": 448,
-      "bytes2x": 21761,
-      "placeholder": true
+      "bytes2x": 236456,
+      "real": true
     },
     "item_head_beanie01_L80": {
       "layer": 80,
@@ -1069,8 +1069,8 @@
       "of": "item_aura_ice01_L10",
       "w": 96,
       "h": 96,
-      "bytes2x": 8975,
-      "placeholder": true
+      "bytes2x": 46877,
+      "real": true
     },
     "item_aura_lightning01_icon": {
       "kind": "icon",
@@ -1149,8 +1149,8 @@
       "of": "item_frame_founder_L90",
       "w": 96,
       "h": 96,
-      "bytes2x": 9882,
-      "placeholder": true
+      "bytes2x": 30288,
+      "real": true
     },
     "item_frame_gold_icon": {
       "kind": "icon",
@@ -1165,8 +1165,8 @@
       "of": "item_frame_monthly_L90",
       "w": 96,
       "h": 96,
-      "bytes2x": 10034,
-      "placeholder": true
+      "bytes2x": 25146,
+      "real": true
     },
     "item_frame_silver_icon": {
       "kind": "icon",
@@ -1181,8 +1181,8 @@
       "of": "item_frame_veteran_L90",
       "w": 96,
       "h": 96,
-      "bytes2x": 9764,
-      "placeholder": true
+      "bytes2x": 27336,
+      "real": true
     },
     "item_head_beanie01_icon": {
       "kind": "icon",

@@ -1005,8 +1005,35 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T23:33:27.719Z",
+          "chat": "https://chatgpt.com/c/6ab45d11-0d60-83ec-a3ce-55307cb737cf",
+          "file": "aura_ice01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1254×1254",
+            "width": 1254,
+            "height": 1254,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "hollow": 0,
+            "checks": {
+              "item_aura_ice01_L10": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "item_frame_bronze",
@@ -1170,8 +1197,35 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T23:30:53.606Z",
+          "chat": "https://chatgpt.com/c/6ab45fd7-ec7c-83ec-b9a1-7d08b2e76f04",
+          "file": "frame_monthly.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1254×1254",
+            "width": 1254,
+            "height": 1254,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "hollow": 0,
+            "checks": {
+              "item_frame_monthly_L90": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "item_frame_veteran",
@@ -1191,8 +1245,35 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T23:33:26.573Z",
+          "chat": "https://chatgpt.com/c/6ab4610a-2514-83ec-9787-c6060d410125",
+          "file": "frame_veteran.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1254×1254",
+            "width": 1254,
+            "height": 1254,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "hollow": 0,
+            "checks": {
+              "item_frame_veteran_L90": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "item_frame_founder",
@@ -1212,8 +1293,35 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T23:35:55.288Z",
+          "chat": "https://chatgpt.com/c/6ab4619c-1f3c-83ec-9645-3d818ca3bf1c",
+          "file": "frame_founder.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1254×1254",
+            "width": 1254,
+            "height": 1254,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "hollow": 0,
+            "checks": {
+              "item_frame_founder_L90": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "f02",
