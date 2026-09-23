@@ -35,8 +35,11 @@
  * `scripts/avatar-registry/`; this file only reads the command line.
  */
 import { dirname, resolve } from 'node:path'
+import { DEFAULT_DOWNLOADS, collect } from './avatar-registry/collect.mjs'
+import { ingestAssets } from './avatar-registry/ingest.mjs'
 import { approve, describeNext, formatNext, formatStatus, nextAssets, reject } from './avatar-registry/queue.mjs'
-import { REGISTRY_FILE, readRegistry, writeRegistry } from './avatar-registry/registry.mjs'
+import { REGISTRY_FILE, parseSpec, readRegistry, writeRegistry } from './avatar-registry/registry.mjs'
+import { kindOfSpec, scorePicture, verifyAssets } from './avatar-registry/verify.mjs'
 
 const argv = process.argv.slice(2)
 const command = argv[0]
@@ -71,6 +74,14 @@ function positionals() {
   return values
 }
 
+/** One scored picture: the verdict line, then every number and note. */
+function formatScore(label, { verdict, reason, measure, notes }) {
+  const lines = [`${label}: ${verdict}${reason ? ` (${reason})` : ''}`]
+  for (const [key, value] of Object.entries(measure)) lines.push(`  ${key.padEnd(13)} ${typeof value === 'object' && value !== null ? JSON.stringify(value) : value}`)
+  for (const note of notes) lines.push(`  note          ${note}`)
+  return lines.join('\n')
+}
+
 const registryFile = option('registry') ? resolve(process.cwd(), option('registry')) : REGISTRY_FILE
 const srcDir = dirname(registryFile)
 
@@ -100,6 +111,54 @@ try {
     const changed = reject(registry, ids, { reason: option('reason', 'style') })
     writeRegistry(registryFile, registry)
     for (const id of changed) console.log(`${id} → ${registry.assets.find((asset) => asset.id === id).status}`)
+  } else if (command === 'collect') {
+    const [id] = positionals()
+    if (!id) die('collect needs an asset id')
+    const chat = option('chat')
+    if (!chat) die('collect needs --chat <url> — the conversation the picture came from')
+    const file = option('file')
+    const result = collect(registry, id, {
+      chat,
+      downloads: option('downloads') ? resolve(process.cwd(), option('downloads')) : DEFAULT_DOWNLOADS,
+      file: file ? resolve(process.cwd(), file) : null,
+      srcDir,
+    })
+    writeRegistry(registryFile, registry)
+    if (result.kept) console.log(`kept the previous picture as ${result.kept}`)
+    console.log(`${id}: ${result.from} → ${result.to} (attempt ${result.attempt.n}, generated)`)
+  } else if (command === 'verify') {
+    const log = (line) => console.log(line)
+    if (option('picture')) {
+      // Dry mode: score one file against a spec, without the registry.
+      const spec = option('as')
+      if (!spec) die('verify --picture needs --as <spec>')
+      const { kind, slot } = kindOfSpec(spec)
+      const target = parseSpec(spec)
+      const base = option('base') ?? (target.kind === 'expr' ? target.base : 'f01')
+      const reference = option('reference') ?? (kind === 'aura' || kind === 'frame' ? null : `${kind === 'base' ? 'f01' : base}_candidate_1.png`)
+      const flags = [...(flag('hides-hair-front') ? ['--hides-hair-front'] : []), ...(flag('hides-hair-back') ? ['--hides-hair-back'] : []), ...(flag('white') ? ['--white'] : [])]
+      const result = await scorePicture({
+        file: resolve(process.cwd(), option('picture')),
+        kind,
+        slot,
+        referenceFile: reference === null ? null : resolve(srcDir, reference),
+        ingest: { as: spec, base: option('base'), variant: option('variant'), flags },
+        keepTmp: flag('keep-tmp'),
+        log,
+      })
+      console.log(formatScore(option('picture'), result))
+      if (result.verdict !== 'ok') process.exitCode = 1
+    } else {
+      const results = await verifyAssets(registry, positionals(), { srcDir, keepTmp: flag('keep-tmp'), log })
+      writeRegistry(registryFile, registry)
+      if (results.length === 0) console.log('nothing is generated')
+      for (const result of results) console.log(formatScore(result.id, result))
+    }
+  } else if (command === 'ingest') {
+    const results = await ingestAssets(registry, positionals(), { srcDir, log: (line) => console.log(line) })
+    writeRegistry(registryFile, registry)
+    const done = results.filter((result) => result.done)
+    console.log(done.length ? `ingested ${done.map((result) => result.id).join(', ')}` : 'nothing to ingest')
   } else {
     die(`unknown command ${command ?? '(none)'} — one of next, status, approve, reject, collect, verify, ingest`)
   }
