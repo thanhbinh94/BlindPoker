@@ -13,7 +13,8 @@
     "avatar:placeholder": "node scripts/avatar-pipeline.mjs placeholder",
     "avatar:ingest": "node scripts/avatar-pipeline.mjs ingest",
     "avatar:check": "node scripts/avatar-pipeline.mjs check",
-    "avatar:sheet": "node scripts/avatar-pipeline.mjs sheet"
+    "avatar:sheet": "node scripts/avatar-pipeline.mjs sheet",
+    "avatar:registry": "node scripts/avatar-registry.mjs"
   },
   "dependencies": {
     "@bp/core": "workspace:*",

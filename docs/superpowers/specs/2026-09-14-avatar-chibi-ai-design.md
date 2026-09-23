@@ -117,6 +117,7 @@ Script: test đơn vị cho xoá nền, cắt khác biệt, căn khung, `check` 
 4. ui-kit PNG layers + biểu cảm + Seat + Lite.
 5. Normal web tủ đồ, profile, bàn, sảnh; gỡ 3D.
 6. Người dùng sinh nốt món (8 head, 4 face, 6 outfit, 8 aura, 6 frame, 8 bot) theo đợt; ingest; nghiệm thu.
+   Từ 24/09 bước này do Claude chạy theo sổ tài sản và vòng lặp sinh ảnh qua ChatGPT — Plan 12, spec `2026-09-24-avatar-asset-registry-design.md`, `docs/avatar-2d.md` §10.
 7. Docs, e2e, cấp lại tủ đồ test, build, host.
 
 ## 10. Rủi ro

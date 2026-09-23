@@ -1,0 +1,1452 @@
+{
+  "version": 1,
+  "meta": {
+    "pausedUntil": null
+  },
+  "templates": {
+    "base": "Keep this exact image: same body shape, same pose, same size and position in the frame, same gray tank top and shorts, same transparent background, same semi-painterly anime rendering. Same head size and shape, same eye size and eye placement, similar hair volume on top of the head. Change only the hair, the eye colour, the expression and the skin tone:\nHair: {{look.hair}}\nEyes: {{look.eyes}}\nExpression: {{look.expression}}\nSkin: {{look.skin}}\nHair must not cover the tank top or the arms: long hair falls behind the back. Skin tone applies to the face, neck, arms and legs. Do not move, zoom, crop or redraw the body, arms, legs, clothing or framing.",
+    "expression": "Keep this exact image: same character, same pose, same size and position in the frame, same image size, same hair and hair colour, same skin tone, same tank top and shorts, same transparent background. Change only the eyes and mouth to this expression: {{look.expression}}. Do not move, zoom, crop, recolour or redraw anything else.",
+    "head": "Keep this exact image: same character, same pose, same size and position in the frame, same neutral face with open eyes, same hair colour, same tank top and shorts, same transparent background. Add only this: {{look.description}}, sitting naturally on top of the head, fully inside the image. The small hair strand on top of the head is hidden under it. The hat is at most slightly wider than the hair. Face and the rest of the hair unchanged. No glasses. Do not move, zoom, crop, recolour or redraw anything else.",
+    "face": "Keep this exact image: same character, same pose, same size and position in the frame, same neutral face with open eyes, same hair and hair colour, same tank top and shorts, same transparent background. Add only this: {{look.description}}. No hat. Do not move, zoom, crop, recolour or redraw anything else.",
+    "outfit": "Keep this exact image: same character, same pose, same size and position in the frame, same neutral face with open eyes, same hair and hair colour, same skin tone, same transparent background. Replace the gray tank top and shorts completely with: {{look.description}}. The tank top must be completely gone: no straps, no gray fabric visible anywhere. Simple shapes, few folds, no small patterns, no logos, nothing in the hands. No hat, no glasses. Do not move, zoom, crop, recolour or redraw anything else.",
+    "aura": "A decorative circular aura effect for a character portrait: {{look.description}}. Centered in a square image, the center area is completely empty and transparent, effect concentrated in a ring around the center, soft glowing painterly style allowed, transparent background outside the effect, no character, no text, no watermark.",
+    "frame": "A circular decorative frame ring for a player avatar: {{look.description}}. Perfectly round, the inside of the ring is completely empty and transparent, ring thickness about 8 percent of the image width, centered in a square image, clean cel-shaded style with colored outlines, transparent background inside and outside the ring, no character, no text, no watermark.",
+    "bot": "Keep this exact image's proportions, pose, size and position in the frame, and the transparent background, but redraw the character as a cute chibi robot: {{look.description}}. Same 2.25-heads-tall proportions with an oversized round head, same standing pose with arms slightly away from the body, no hair, no clothing, smooth rounded metal body, cel-shaded with colored outlines, semi-painterly anime rendering. Face: {{look.expression}}. Do not move, zoom or crop."
+  },
+  "assets": [
+    {
+      "id": "item_outfit_casual01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_casual01",
+      "look": {
+        "description": "a plain white short-sleeved t-shirt with a round crew neck that fully covers both shoulders and the chest, blue jeans down to the ankles, white sneakers. Unisex cut",
+        "color": "white/blue",
+        "style": "casual"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "item_outfit_casual01.png",
+      "ingest": {
+        "as": "item:outfit:casual01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "rework-1",
+      "attempts": [
+        {
+          "n": 1,
+          "verdict": "ng",
+          "reason": "strap",
+          "by": "claude",
+          "file": "item_outfit_casual01.png"
+        }
+      ]
+    },
+    {
+      "id": "item_head_dealer_visor01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_dealer_visor01",
+      "look": {
+        "description": "a green dealer visor cap with a translucent green brim"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "item_head_dealer_visor01.png",
+      "ingest": {
+        "as": "item:head:dealer_visor01",
+        "base": null,
+        "variant": null,
+        "flags": [
+          "--hides-hair-front"
+        ]
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_head_beret_red01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_beret_red01",
+      "look": {
+        "description": "a red beret tilted to the right"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "item_head_beret_red01.png",
+      "ingest": {
+        "as": "item:head:beret_red01",
+        "base": null,
+        "variant": null,
+        "flags": [
+          "--hides-hair-front"
+        ]
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_head_crown_gold01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_crown_gold01",
+      "look": {
+        "description": "a small golden crown with small red gems"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "item_head_crown_gold01.png",
+      "ingest": {
+        "as": "item:head:crown_gold01",
+        "base": null,
+        "variant": null,
+        "flags": [
+          "--hides-hair-front"
+        ]
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_head_conical_hat01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_conical_hat01",
+      "look": {
+        "description": "a Vietnamese conical palm-leaf hat with a thin chin strap"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "item_head_conical_hat01.png",
+      "ingest": {
+        "as": "item:head:conical_hat01",
+        "base": null,
+        "variant": null,
+        "flags": [
+          "--hides-hair-front"
+        ]
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_head_beanie01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_beanie01",
+      "look": {
+        "description": "a soft knitted dark teal beanie"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "item_head_beanie01.png",
+      "ingest": {
+        "as": "item:head:beanie01",
+        "base": null,
+        "variant": null,
+        "flags": [
+          "--hides-hair-front"
+        ]
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_head_party_cone01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_party_cone01",
+      "look": {
+        "description": "a short striped party cone hat with a small pom-pom, about one third of the head height"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "item_head_party_cone01.png",
+      "ingest": {
+        "as": "item:head:party_cone01",
+        "base": null,
+        "variant": null,
+        "flags": [
+          "--hides-hair-front"
+        ]
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_head_hood_black01",
+      "kind": "item",
+      "slot": "head",
+      "wear": null,
+      "catalog": "head_hood_black01",
+      "look": {
+        "description": "a black cloak hood covering the top and back of the head, the side hair stays visible as in the reference"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "item_head_hood_black01.png",
+      "ingest": {
+        "as": "item:head:hood_black01",
+        "base": null,
+        "variant": null,
+        "flags": [
+          "--hides-hair-front",
+          "--hides-hair-back"
+        ]
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_face_sunglasses01",
+      "kind": "item",
+      "slot": "face",
+      "wear": null,
+      "catalog": "face_sunglasses01",
+      "look": {
+        "description": "black sunglasses over the eyes with slightly transparent lenses, eyes faintly visible"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "item_face_sunglasses01.png",
+      "ingest": {
+        "as": "item:face:sunglasses01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_face_masquerade01",
+      "kind": "item",
+      "slot": "face",
+      "wear": null,
+      "catalog": "face_masquerade01",
+      "look": {
+        "description": "a small black masquerade mask with gold trim covering only the area around the eyes, with cut-outs showing the eyes"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "item_face_masquerade01.png",
+      "ingest": {
+        "as": "item:face:masquerade01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_face_eyepatch01",
+      "kind": "item",
+      "slot": "face",
+      "wear": null,
+      "catalog": "face_eyepatch01",
+      "look": {
+        "description": "a black eyepatch over the left eye with a thin strap, the other eye unchanged"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "item_face_eyepatch01.png",
+      "ingest": {
+        "as": "item:face:eyepatch01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_aura_water01",
+      "kind": "aura",
+      "slot": "aura",
+      "wear": null,
+      "catalog": "aura_water01",
+      "look": {
+        "description": "blue flowing water ripples with white sparkles"
+      },
+      "reference": null,
+      "prompt": null,
+      "file": "aura_water01.png",
+      "ingest": {
+        "as": "item:aura:water01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_aura_fire01",
+      "kind": "aura",
+      "slot": "aura",
+      "wear": null,
+      "catalog": "aura_fire01",
+      "look": {
+        "description": "warm orange and red flame ring"
+      },
+      "reference": null,
+      "prompt": null,
+      "file": "aura_fire01.png",
+      "ingest": {
+        "as": "item:aura:fire01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_aura_wind01",
+      "kind": "aura",
+      "slot": "aura",
+      "wear": null,
+      "catalog": "aura_wind01",
+      "look": {
+        "description": "pale green swirling wind streaks with small leaves"
+      },
+      "reference": null,
+      "prompt": null,
+      "file": "aura_wind01.png",
+      "ingest": {
+        "as": "item:aura:wind01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_aura_earth01",
+      "kind": "aura",
+      "slot": "aura",
+      "wear": null,
+      "catalog": "aura_earth01",
+      "look": {
+        "description": "floating brown rock fragments with green moss and tiny glowing crystals"
+      },
+      "reference": null,
+      "prompt": null,
+      "file": "aura_earth01.png",
+      "ingest": {
+        "as": "item:aura:earth01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_aura_lightning01",
+      "kind": "aura",
+      "slot": "aura",
+      "wear": null,
+      "catalog": "aura_lightning01",
+      "look": {
+        "description": "crackling blue-white lightning arcs"
+      },
+      "reference": null,
+      "prompt": null,
+      "file": "aura_lightning01.png",
+      "ingest": {
+        "as": "item:aura:lightning01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_aura_sakura01",
+      "kind": "aura",
+      "slot": "aura",
+      "wear": null,
+      "catalog": "aura_sakura01",
+      "look": {
+        "description": "pink cherry blossom petals floating in a ring"
+      },
+      "reference": null,
+      "prompt": null,
+      "file": "aura_sakura01.png",
+      "ingest": {
+        "as": "item:aura:sakura01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_aura_gold_cards01",
+      "kind": "aura",
+      "slot": "aura",
+      "wear": null,
+      "catalog": "aura_gold_cards01",
+      "look": {
+        "description": "swirling golden light ribbons with small floating playing card suit symbols, spade heart club diamond"
+      },
+      "reference": null,
+      "prompt": null,
+      "file": "aura_gold_cards01.png",
+      "ingest": {
+        "as": "item:aura:gold_cards01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_aura_ice01",
+      "kind": "aura",
+      "slot": "aura",
+      "wear": null,
+      "catalog": "aura_ice01",
+      "look": {
+        "description": "pale blue ice crystals and frost sparkles"
+      },
+      "reference": null,
+      "prompt": null,
+      "file": "aura_ice01.png",
+      "ingest": {
+        "as": "item:aura:ice01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_frame_bronze",
+      "kind": "frame",
+      "slot": "frame",
+      "wear": null,
+      "catalog": "frame_bronze",
+      "look": {
+        "description": "a simple bronze metal ring"
+      },
+      "reference": null,
+      "prompt": null,
+      "file": "frame_bronze.png",
+      "ingest": {
+        "as": "item:frame:bronze",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_frame_silver",
+      "kind": "frame",
+      "slot": "frame",
+      "wear": null,
+      "catalog": "frame_silver",
+      "look": {
+        "description": "a polished silver ring with small engraved lines"
+      },
+      "reference": null,
+      "prompt": null,
+      "file": "frame_silver.png",
+      "ingest": {
+        "as": "item:frame:silver",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_frame_gold",
+      "kind": "frame",
+      "slot": "frame",
+      "wear": null,
+      "catalog": "frame_gold",
+      "look": {
+        "description": "a shiny gold ring with tiny gems"
+      },
+      "reference": null,
+      "prompt": null,
+      "file": "frame_gold.png",
+      "ingest": {
+        "as": "item:frame:gold",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_frame_monthly",
+      "kind": "frame",
+      "slot": "frame",
+      "wear": null,
+      "catalog": "frame_monthly",
+      "look": {
+        "description": "a blue and white ring with a small calendar star emblem at the top"
+      },
+      "reference": null,
+      "prompt": null,
+      "file": "frame_monthly.png",
+      "ingest": {
+        "as": "item:frame:monthly",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_frame_veteran",
+      "kind": "frame",
+      "slot": "frame",
+      "wear": null,
+      "catalog": "frame_veteran",
+      "look": {
+        "description": "a dark steel ring with laurel leaves on both sides"
+      },
+      "reference": null,
+      "prompt": null,
+      "file": "frame_veteran.png",
+      "ingest": {
+        "as": "item:frame:veteran",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_frame_founder",
+      "kind": "frame",
+      "slot": "frame",
+      "wear": null,
+      "catalog": "frame_founder",
+      "look": {
+        "description": "an ornate gold and crimson ring with a small crown emblem at the top"
+      },
+      "reference": null,
+      "prompt": null,
+      "file": "frame_founder.png",
+      "ingest": {
+        "as": "item:frame:founder",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "f02",
+      "kind": "base",
+      "slot": null,
+      "wear": "f",
+      "catalog": "f02",
+      "look": {
+        "hair": "long straight black hair falling behind the back, blunt straight bangs, two straight side locks ending at the chin, one soft highlight band, navy-black outlines",
+        "eyes": "iris gradient from deep violet to soft gray",
+        "expression": "calm gentle closed smile",
+        "skin": "very fair porcelain with a soft pink blush",
+        "hair_style": "long_straight",
+        "hair_color": "black",
+        "eye_color": "violet_gray",
+        "skin_tone": "porcelain"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "f02_candidate_1.png",
+      "ingest": {
+        "as": "base:f02",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "f03",
+      "kind": "base",
+      "slot": null,
+      "wear": "f",
+      "catalog": "f03",
+      "look": {
+        "hair": "short wavy platinum blonde hair above the shoulders, side-swept bangs, one small braid resting above the left shoulder, warm gray outlines",
+        "eyes": "iris gradient from deep green to bright lime",
+        "expression": "playful open grin",
+        "skin": "warm tan brown with a soft gradient on the cheeks",
+        "hair_style": "short_wavy",
+        "hair_color": "platinum",
+        "eye_color": "green",
+        "skin_tone": "tan"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "f03_candidate_1.png",
+      "ingest": {
+        "as": "base:f03",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "m02",
+      "kind": "base",
+      "slot": null,
+      "wear": "m",
+      "catalog": "m02",
+      "look": {
+        "hair": "short neat black hair, fringe swept to the left showing part of the forehead, one soft highlight band, navy-black outlines",
+        "eyes": "iris gradient from dark slate to pale blue-gray, straight thin eyebrows",
+        "expression": "cool composed look, small straight closed mouth",
+        "skin": "light fair with a faint blush",
+        "hair_style": "short_neat",
+        "hair_color": "black",
+        "eye_color": "slate",
+        "skin_tone": "fair"
+      },
+      "reference": "m01_candidate_1.png",
+      "prompt": null,
+      "file": "m02_candidate_1.png",
+      "ingest": {
+        "as": "base:m02",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "m03",
+      "kind": "base",
+      "slot": null,
+      "wear": "m",
+      "catalog": "m03",
+      "look": {
+        "hair": "short curly black hair with tight round curls, tidy sides, dark outlines",
+        "eyes": "iris gradient from deep brown to warm chestnut, thick friendly eyebrows",
+        "expression": "wide friendly open smile",
+        "skin": "deep brown with a soft warm gradient on the cheeks",
+        "hair_style": "short_curly",
+        "hair_color": "black",
+        "eye_color": "brown",
+        "skin_tone": "deep_brown"
+      },
+      "reference": "m01_candidate_1.png",
+      "prompt": null,
+      "file": "m03_candidate_1.png",
+      "ingest": {
+        "as": "base:m03",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "f02:happy",
+      "kind": "expression",
+      "slot": null,
+      "wear": null,
+      "catalog": "f02",
+      "look": {
+        "expression": "a happy expression: eyes curved into happy arcs, wide open smile"
+      },
+      "reference": "@f02",
+      "prompt": null,
+      "file": "f02_happy.png",
+      "ingest": {
+        "as": "expr:f02:happy",
+        "base": "f02",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "f02:sad",
+      "kind": "expression",
+      "slot": null,
+      "wear": null,
+      "catalog": "f02",
+      "look": {
+        "expression": "a sad expression: drooping eyes with a small tear highlight, downturned mouth"
+      },
+      "reference": "@f02",
+      "prompt": null,
+      "file": "f02_sad.png",
+      "ingest": {
+        "as": "expr:f02:sad",
+        "base": "f02",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "f02:surprised",
+      "kind": "expression",
+      "slot": null,
+      "wear": null,
+      "catalog": "f02",
+      "look": {
+        "expression": "a surprised expression: eyes fully round and wider, small round open mouth. No tears"
+      },
+      "reference": "@f02",
+      "prompt": null,
+      "file": "f02_surprised.png",
+      "ingest": {
+        "as": "expr:f02:surprised",
+        "base": "f02",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "f02:closed",
+      "kind": "expression",
+      "slot": null,
+      "wear": null,
+      "catalog": "f02",
+      "look": {
+        "expression": "eyes gently closed, calm small smile"
+      },
+      "reference": "@f02",
+      "prompt": null,
+      "file": "f02_closed.png",
+      "ingest": {
+        "as": "expr:f02:closed",
+        "base": "f02",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "f02:sleep",
+      "kind": "expression",
+      "slot": null,
+      "wear": null,
+      "catalog": "f02",
+      "look": {
+        "expression": "sleeping: eyes closed, mouth slightly open, and add one small \"z\" letter floating just beside the head near the temple"
+      },
+      "reference": "@f02",
+      "prompt": null,
+      "file": "f02_sleep.png",
+      "ingest": {
+        "as": "expr:f02:sleep",
+        "base": "f02",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "f03:happy",
+      "kind": "expression",
+      "slot": null,
+      "wear": null,
+      "catalog": "f03",
+      "look": {
+        "expression": "a happy expression: eyes curved into happy arcs, wide open smile"
+      },
+      "reference": "@f03",
+      "prompt": null,
+      "file": "f03_happy.png",
+      "ingest": {
+        "as": "expr:f03:happy",
+        "base": "f03",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "f03:sad",
+      "kind": "expression",
+      "slot": null,
+      "wear": null,
+      "catalog": "f03",
+      "look": {
+        "expression": "a sad expression: drooping eyes with a small tear highlight, downturned mouth"
+      },
+      "reference": "@f03",
+      "prompt": null,
+      "file": "f03_sad.png",
+      "ingest": {
+        "as": "expr:f03:sad",
+        "base": "f03",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "f03:surprised",
+      "kind": "expression",
+      "slot": null,
+      "wear": null,
+      "catalog": "f03",
+      "look": {
+        "expression": "a surprised expression: eyes fully round and wider, small round open mouth. No tears"
+      },
+      "reference": "@f03",
+      "prompt": null,
+      "file": "f03_surprised.png",
+      "ingest": {
+        "as": "expr:f03:surprised",
+        "base": "f03",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "f03:closed",
+      "kind": "expression",
+      "slot": null,
+      "wear": null,
+      "catalog": "f03",
+      "look": {
+        "expression": "eyes gently closed, calm small smile"
+      },
+      "reference": "@f03",
+      "prompt": null,
+      "file": "f03_closed.png",
+      "ingest": {
+        "as": "expr:f03:closed",
+        "base": "f03",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "f03:sleep",
+      "kind": "expression",
+      "slot": null,
+      "wear": null,
+      "catalog": "f03",
+      "look": {
+        "expression": "sleeping: eyes closed, mouth slightly open, and add one small \"z\" letter floating just beside the head near the temple"
+      },
+      "reference": "@f03",
+      "prompt": null,
+      "file": "f03_sleep.png",
+      "ingest": {
+        "as": "expr:f03:sleep",
+        "base": "f03",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "m02:happy",
+      "kind": "expression",
+      "slot": null,
+      "wear": null,
+      "catalog": "m02",
+      "look": {
+        "expression": "a happy expression: eyes curved into happy arcs, wide open smile"
+      },
+      "reference": "@m02",
+      "prompt": null,
+      "file": "m02_happy.png",
+      "ingest": {
+        "as": "expr:m02:happy",
+        "base": "m02",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "m02:sad",
+      "kind": "expression",
+      "slot": null,
+      "wear": null,
+      "catalog": "m02",
+      "look": {
+        "expression": "a sad expression: drooping eyes with a small tear highlight, downturned mouth"
+      },
+      "reference": "@m02",
+      "prompt": null,
+      "file": "m02_sad.png",
+      "ingest": {
+        "as": "expr:m02:sad",
+        "base": "m02",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "m02:surprised",
+      "kind": "expression",
+      "slot": null,
+      "wear": null,
+      "catalog": "m02",
+      "look": {
+        "expression": "a surprised expression: eyes fully round and wider, small round open mouth. No tears"
+      },
+      "reference": "@m02",
+      "prompt": null,
+      "file": "m02_surprised.png",
+      "ingest": {
+        "as": "expr:m02:surprised",
+        "base": "m02",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "m02:closed",
+      "kind": "expression",
+      "slot": null,
+      "wear": null,
+      "catalog": "m02",
+      "look": {
+        "expression": "eyes gently closed, calm small smile"
+      },
+      "reference": "@m02",
+      "prompt": null,
+      "file": "m02_closed.png",
+      "ingest": {
+        "as": "expr:m02:closed",
+        "base": "m02",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "m02:sleep",
+      "kind": "expression",
+      "slot": null,
+      "wear": null,
+      "catalog": "m02",
+      "look": {
+        "expression": "sleeping: eyes closed, mouth slightly open, and add one small \"z\" letter floating just beside the head near the temple"
+      },
+      "reference": "@m02",
+      "prompt": null,
+      "file": "m02_sleep.png",
+      "ingest": {
+        "as": "expr:m02:sleep",
+        "base": "m02",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "m03:happy",
+      "kind": "expression",
+      "slot": null,
+      "wear": null,
+      "catalog": "m03",
+      "look": {
+        "expression": "a happy expression: eyes curved into happy arcs, wide open smile"
+      },
+      "reference": "@m03",
+      "prompt": null,
+      "file": "m03_happy.png",
+      "ingest": {
+        "as": "expr:m03:happy",
+        "base": "m03",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "m03:sad",
+      "kind": "expression",
+      "slot": null,
+      "wear": null,
+      "catalog": "m03",
+      "look": {
+        "expression": "a sad expression: drooping eyes with a small tear highlight, downturned mouth"
+      },
+      "reference": "@m03",
+      "prompt": null,
+      "file": "m03_sad.png",
+      "ingest": {
+        "as": "expr:m03:sad",
+        "base": "m03",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "m03:surprised",
+      "kind": "expression",
+      "slot": null,
+      "wear": null,
+      "catalog": "m03",
+      "look": {
+        "expression": "a surprised expression: eyes fully round and wider, small round open mouth. No tears"
+      },
+      "reference": "@m03",
+      "prompt": null,
+      "file": "m03_surprised.png",
+      "ingest": {
+        "as": "expr:m03:surprised",
+        "base": "m03",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "m03:closed",
+      "kind": "expression",
+      "slot": null,
+      "wear": null,
+      "catalog": "m03",
+      "look": {
+        "expression": "eyes gently closed, calm small smile"
+      },
+      "reference": "@m03",
+      "prompt": null,
+      "file": "m03_closed.png",
+      "ingest": {
+        "as": "expr:m03:closed",
+        "base": "m03",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "m03:sleep",
+      "kind": "expression",
+      "slot": null,
+      "wear": null,
+      "catalog": "m03",
+      "look": {
+        "expression": "sleeping: eyes closed, mouth slightly open, and add one small \"z\" letter floating just beside the head near the temple"
+      },
+      "reference": "@m03",
+      "prompt": null,
+      "file": "m03_sleep.png",
+      "ingest": {
+        "as": "expr:m03:sleep",
+        "base": "m03",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "bot_0",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_0",
+      "look": {
+        "description": "white and sky-blue casing, round LED eyes",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "bot_0.png",
+      "ingest": {
+        "as": "bot:0",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "bot_1",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_1",
+      "look": {
+        "description": "black and orange casing, visor-shaped LED eyes",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "bot_1.png",
+      "ingest": {
+        "as": "bot:1",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "bot_2",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_2",
+      "look": {
+        "description": "mint green casing, small antenna, round LED eyes",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "bot_2.png",
+      "ingest": {
+        "as": "bot:2",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "bot_3",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_3",
+      "look": {
+        "description": "pink and white casing, heart-shaped LED eyes",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "bot_3.png",
+      "ingest": {
+        "as": "bot:3",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "bot_4",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_4",
+      "look": {
+        "description": "gold casing with a small crown-shaped crest, round LED eyes",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "bot_4.png",
+      "ingest": {
+        "as": "bot:4",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "bot_5",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_5",
+      "look": {
+        "description": "red and cream casing, square LED eyes",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "bot_5.png",
+      "ingest": {
+        "as": "bot:5",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "bot_6",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_6",
+      "look": {
+        "description": "purple casing with a single wide visor LED eye",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "bot_6.png",
+      "ingest": {
+        "as": "bot:6",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "bot_7",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_7",
+      "look": {
+        "description": "teal and white casing, two antennae, round LED eyes",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "bot_7.png",
+      "ingest": {
+        "as": "bot:7",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "bot_0:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_0",
+      "look": {
+        "description": "white and sky-blue casing, round LED eyes",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@bot_0",
+      "prompt": null,
+      "file": "bot_0_happy.png",
+      "ingest": {
+        "as": "bot:0:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "bot_1:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_1",
+      "look": {
+        "description": "black and orange casing, visor-shaped LED eyes",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@bot_1",
+      "prompt": null,
+      "file": "bot_1_happy.png",
+      "ingest": {
+        "as": "bot:1:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "bot_2:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_2",
+      "look": {
+        "description": "mint green casing, small antenna, round LED eyes",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@bot_2",
+      "prompt": null,
+      "file": "bot_2_happy.png",
+      "ingest": {
+        "as": "bot:2:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "bot_3:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_3",
+      "look": {
+        "description": "pink and white casing, heart-shaped LED eyes",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@bot_3",
+      "prompt": null,
+      "file": "bot_3_happy.png",
+      "ingest": {
+        "as": "bot:3:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "bot_4:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_4",
+      "look": {
+        "description": "gold casing with a small crown-shaped crest, round LED eyes",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@bot_4",
+      "prompt": null,
+      "file": "bot_4_happy.png",
+      "ingest": {
+        "as": "bot:4:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "bot_5:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_5",
+      "look": {
+        "description": "red and cream casing, square LED eyes",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@bot_5",
+      "prompt": null,
+      "file": "bot_5_happy.png",
+      "ingest": {
+        "as": "bot:5:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "bot_6:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_6",
+      "look": {
+        "description": "purple casing with a single wide visor LED eye",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@bot_6",
+      "prompt": null,
+      "file": "bot_6_happy.png",
+      "ingest": {
+        "as": "bot:6:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "bot_7:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_7",
+      "look": {
+        "description": "teal and white casing, two antennae, round LED eyes",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@bot_7",
+      "prompt": null,
+      "file": "bot_7_happy.png",
+      "ingest": {
+        "as": "bot:7:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    }
+  ]
+}

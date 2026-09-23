@@ -519,3 +519,148 @@ The order, therefore:
    wardrobe's base tab renders one tile per entry, an item layer is worn unchanged (§4.1.1 is what makes
    that true across skin tones), and a stored config naming a base the registry has since dropped falls back
    to `DEFAULT_BASE` on read while `PUT` refuses it with `INVALID_BASE`.
+
+## 10. Sổ tài sản và vòng lặp sinh ảnh — the asset registry and the generation loop (2026-09-24)
+
+Plan 12, spec `docs/superpowers/specs/2026-09-24-avatar-asset-registry-design.md`. The pictures still to
+generate are no longer a list in a chat: they are `assets/avatar-src/registry.json`, committed (the folder's
+`.gitignore` carries `!registry.json`; the pictures themselves stay ignored), and
+`apps/normal-web/scripts/avatar-registry.mjs` (`pnpm --filter @bp/normal-web avatar:registry <command>`)
+drives it. Claude generates the pictures in ChatGPT in the user's Chrome, with the Claude in Chrome tools,
+following §10.3; the script does everything either side of that.
+
+### 10.1 The registry
+
+One file: `{ version: 1, meta, templates, assets }`. It never repeats what another file owns — rarity,
+achievements, frame geometry and catalogue names stay in `items.json`, `avatar-bases.json` and the pipeline —
+and points at them by `catalog` id.
+
+| Field | |
+|---|---|
+| `id` | the layer name without `_L<n>` (`item_head_beret_red01`, `f02`, `bot_3`); a second face of an owner is `<owner>:<expression>` (`f02:happy`, `bot_3:happy`) |
+| `kind` / `slot` / `wear` | `base`, `expression`, `item` (slot `head`/`face`/`outfit`), `aura`, `frame`, `bot`; `wear` is `f`/`m` for a base or an item's per-wear cut |
+| `catalog` | the id in `avatar-bases.json` / `items.json` (`bot_<n>` for a bot) |
+| `look` | what `{{look.<key>}}` in the template reads |
+| `reference` | the picture attached in ChatGPT: a file in `assets/avatar-src/`, `@<id>` of another asset (its `file`), or null (aura, frame) |
+| `prompt` | null: rendered from `templates[kind]` (an item: `templates[slot]`) on every read, so editing a template edits every prompt; a string: a manual override |
+| `file` | the generated picture's name in `assets/avatar-src/` |
+| `ingest` | `{ as, base, variant, flags }` — the pipeline's `--as`, `--base`, `--variant` and extra flags (`--hides-hair-front`, …) |
+| `status` | `todo` → `generated` → `ok` / `ng` → `approved`; `rework-<n>` (sent back by the user or by Claude's eye); `blocked` |
+| `attempts` | one per picture: `{ n, at, chat, file, measure, verdict, reason, by }` |
+| `ingested` | true once `ingest` has put it into `public/avatar/` |
+
+The rules:
+
+- **Ready** means: status `todo`, `ng` or `rework-<n>`; fewer than three attempts; and the reference resolves —
+  the file exists, or the `@<id>` asset is `ok` or `approved` (so a base's expressions wait for the base).
+- **Order** (`next`): head items, face items, outfits (all on F01), then new bases, expressions, auras, frames,
+  bots; within a group, the file's own order.
+- **Fix lines.** After a failure the next prompt is the prompt plus one line per *distinct* reason the earlier
+  attempts failed for: `redrawn` → "same image size, same hair, same clothing", `tears` → "No tears",
+  `hair_colour` → "same hair colour", `background` → "transparent background, no checkerboard", `cropped` →
+  "whole figure inside the image", `strap` → "The tank top must be completely gone: no straps, no gray
+  fabric anywhere", `scope` → "Change nothing outside the requested area". `style` (the user's taste) and
+  every other reason add nothing.
+- **Three attempts.** The third `ng` sets `blocked`; the loop skips it and Claude tells the user.
+- **Only the user approves.** `approve <id…>` or `approve --batch` (every `ok`) after the user answers a
+  sheet; the user's "<id> ng" is `reject <id> [--reason style]`, which re-judges the last attempt (`verdict:
+  'ng'`, `by: 'user'`) without spending an attempt and sets `rework-<n>` — or `blocked` after the third.
+
+### 10.2 The commands
+
+```bash
+avatar:registry next [--limit n] [--json]    # ready assets: id, file, reference path, attempt n, the prompt
+avatar:registry collect <id> --chat <url> [--downloads <dir>] [--file <png>]
+avatar:registry verify [<id…>] [--keep-tmp]  # every generated asset, or these
+avatar:registry verify --picture <png> --as <spec> [--reference <png>] [--base <id>] [--variant <f|m>]
+avatar:registry ingest [<id…>]
+avatar:registry approve <id…> | --batch
+avatar:registry reject <id…> [--reason style]
+avatar:registry status                       # counts per status, the blocked ones with their reasons
+```
+
+`collect` takes the newest `*.png` in the downloads folder (`%USERPROFILE%\Downloads` unless `--downloads`;
+ChatGPT names them `ChatGPT Image Sep 24, 2026, 12_42_45 AM.png`) that is newer than the asset's last attempt
+— or at most 30 minutes old for a first attempt — and refuses, saying what it found, when there is none.
+The picture replaced in `assets/avatar-src/` is kept as `<name>.prev<k>.png`. `verify --picture` scores one
+file without touching the registry — the way to try a rule on a picture by hand.
+
+### 10.3 Generating in ChatGPT (Claude, with Claude in Chrome)
+
+There is no script for this step; it is a fixed procedure. The user approved the downloads for the whole loop
+(2026-09-24).
+
+1. `avatar:registry next --limit 10`. Each entry gives the asset id, its file, the **absolute path** of the
+   reference picture (or "none") and the prompt, fixes included.
+2. For each asset, in order:
+   1. Open `https://chatgpt.com/` in a new tab — a new chat for every asset, so nothing of the last picture
+      carries over.
+   2. Attach the reference picture through the page's hidden `input[type=file]` (Claude in Chrome's file
+      upload, with the absolute path from step 1). An aura or a frame has none; skip this.
+   3. Paste the prompt exactly as `next` printed it, and send.
+   4. Wait for the assistant's image to finish (up to 4 minutes). The chat URL is now
+      `https://chatgpt.com/c/<id>`; note it.
+   5. Click the image's download button.
+   6. `avatar:registry collect <id> --chat <url>`.
+3. A message that the image limit is reached, or a CAPTCHA: **stop**. Claude does not solve a CAPTCHA. Set
+   `meta.pausedUntil` in `registry.json` to when the limit lifts (ISO time — `next` hands nothing out
+   before it), and tell the user.
+4. `avatar:registry verify`, then — for each `ng` still under three attempts — back to step 2 with the new
+   prompt `next` prints.
+
+When ChatGPT's page changes, this procedure changes; the registry does not.
+
+### 10.4 What `verify` measures
+
+`verify` never writes into `public/avatar/`. The rules run in order, the first failure is the `reason`, and
+every number computed up to it is stored on the attempt as `measure` (`scripts/avatar-registry/verify.mjs`
+has the exact definitions).
+
+| Reason | Fails when |
+|---|---|
+| `size` | a figure: not portrait, height under 1152, or an aspect more than 5 % off both 2:3 and 3:4 — the image model answers a 1024 × 1536 edit with **1086 × 1448**, and that picture is usable; an aura or frame: more than 5 % off square, or a side under 1024 |
+| `background` | a corner is not fully transparent, or more than 5 % of the outer 8 px band is opaque near-white or near-grey (a painted checkerboard) |
+| `redrawn` | against the reference: the scale (reference height over picture height, head top to feet) is outside 0.90–1.10, or the width ratio after that scaling is outside 0.96–1.04 — a figure redrawn wider at the same height, which the pipeline could only register at IoU 0.645 |
+| `drift` | an edge of the box is more than 12 px off the reference's. A base: all four edges of the raw box. An expression, a face or an outfit: all four, the top taken at `measure()`'s head top (below the strand of hair, which a generator redraws differently every time) unless the raw box tops agree better. A head item: left, right and bottom only — a hat hides the strand and moves the top (a visor dropped it 77 px). An outfit's bottom edge may sit up to 24 px *lower* (shoes) |
+| `heads` | outside 2.0–2.5 heads (`measure()` after `removeChroma`); not asked of a head item, whose hat counts as head |
+| `hair_colour` | the mean colour of the top-of-head band (x 330–700, y 250–330 of the reference) moved by more than 12 — expressions, face and outfit items (not a head item: the hat covers the band) |
+| `scope` | 1 % or more of the figure changed outside what the asset may change: an expression, below the head region (`FACE_LIMIT_Y`); a head or face item, below `HEAD_LIMIT_Y` and outside the crop. Not an outfit, whose cut discards everything above the chin line anyway. "Changed" is asked the way `diffAgainstBase` asks it: no reference pixel within 2 px is within RGB distance 40 |
+| `check:<Cn>` | the ten criteria (§5) on the layers an ingest into a **copy** of `public/avatar/` wrote; a new base's expression gets its base ingested into the copy first, from the reference. `pipeline` if the ingest itself threw |
+| `hollow` | an aura or a frame: mean alpha inside 40 % of the half-width is 0.05 or more |
+
+A picture on the reference's own canvas is compared where it stands, since the pipeline will cut it there. A
+picture on another canvas is scaled and anchored onto the reference's first — head top and centre line, or a
+head item's feet and centre line — and the pipeline is given that aligned copy, because an expression or item
+is cut with its base's stored transform, measured on the reference's canvas. A bot has no pipeline target yet:
+it skips `check`, with the note `pipeline: skipped (bot)`.
+
+Measured on the real pictures of Plan 11 (2026-09-24), every accepted picture passes: all ten real expressions,
+`tophat01`, `glasses_round_gold01`, and all eight outfits and cuts (`casual01` as regenerated, `tuxedo01`,
+`champion01`, `royal_robe01`, `dealer01`, `tet_red01`, `dealer01_m`, `tet_red01_m`). Two rulings of that day
+made the outfits pass. **An outfit has no `scope` rule**: five of them had their whole head redrawn
+(`tet_red01` 15.9 % of it changed, `tuxedo01` 4.4 %), and the outfit cut discards everything above the chin, so
+none of it reached a layer. **An outfit's feet may sit up to 24 px lower** than the base's: `casual01`'s
+sneakers put its bottom edge 19 px down.
+
+### 10.5 What `ingest` does
+
+For every `ok` or `approved` asset not yet `ingested`: the real pipeline `ingest()` into `public/avatar/`
+(both manifests), with the asset's `ingest` spec, the registration line printed. Then:
+
+- a **new base** is checked and not registered: it prints what `BASES`/`BASE_WEAR` (`manifest.mjs`),
+  `avatar-bases.json` and `bases.<id>` in both locales still lack; adding it stays the hand edit of §9.1;
+- an item's **per-wear cut** gains `asset.variants.<wear>` in `items.json`, if it is not there, in the file's own
+  formatting (§3.1);
+- a **bot, an aura or a frame** is left `ok` with "not supported yet": the pipeline has no bot target, and its
+  item cut diffs a picture against the base's body, which a square aura or ring picture is not.
+
+### 10.6 A batch
+
+A batch is ten assets:
+
+1. `next --limit 10`; generate and `collect` each (§10.3).
+2. `verify`; regenerate each `ng` (at most three attempts in all); `ingest`.
+3. `avatar:check`, `avatar:sheet`, then one commit, "art: batch n": `registry.json`, the layers and both
+   manifests, and `items.json` if a variant landed.
+4. Send the user the sheet. "<id> ng" → `reject <id>`, and the asset goes back into the queue with its reason;
+   an answer of "ok", or silence, → `approve --batch`.
