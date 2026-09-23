@@ -23,6 +23,7 @@
  *         --tolerance <n>       how wide the background key is (default 40)
  *         --white               the background is white rather than #00FF00; no despill
  *         --lock-scale <n>      force a scale instead of reading the base's stored one
+ *         --transform-from <id> a new base drawn from base <id> (same body, same canvas) takes <id>'s transform
  *         --hides-hair-front    record D01 §4.3's hide rules on a head item
  *         --hides-hair-back
  *         --color-tol <n>       an item: how far (RGB distance) a pixel must be from every base pixel near it
@@ -147,6 +148,7 @@ try {
       white: flag('white'),
       dryRun: flag('dry-run'),
       lockScale: lockScale === null ? null : Number(lockScale),
+      transformFrom: option('transform-from'),
       hides: { ...(flag('hides-hair-front') ? { hidesHairFront: true } : {}), ...(flag('hides-hair-back') ? { hidesHairBack: true } : {}) },
       diff: {
         ...(option('color-tol') === null ? {} : { colorTol: Number(option('color-tol')) }),

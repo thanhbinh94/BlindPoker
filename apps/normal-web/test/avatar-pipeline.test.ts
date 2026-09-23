@@ -1191,10 +1191,13 @@ describe('the stage-1 name list', () => {
 
   it('is the list the design names in §4.4, and nothing else', () => {
     const byKind = (kind: string): string[] => files.filter((file: { kind: string }) => file.kind === kind).map((file: { name: string }) => file.name)
+    // 2026-09-24: four more bases (f02, f03, m02, m03 — phase 2 of the design, §5.1) joined the list.
     expect(byKind('base').sort()).toEqual([
-      'base_f01_L20', 'base_f01_L30', 'base_f01_L60', 'base_m01_L20', 'base_m01_L30', 'base_m01_L60',
+      'base_f01_L20', 'base_f01_L30', 'base_f01_L60', 'base_f02_L20', 'base_f02_L30', 'base_f02_L60',
+      'base_f03_L20', 'base_f03_L30', 'base_f03_L60', 'base_m01_L20', 'base_m01_L30', 'base_m01_L60',
+      'base_m02_L20', 'base_m02_L30', 'base_m02_L60', 'base_m03_L20', 'base_m03_L30', 'base_m03_L60',
     ])
-    expect(byKind('baseFace')).toHaveLength(12)
+    expect(byKind('baseFace')).toHaveLength(36)
     expect(byKind('item').filter((name) => name.startsWith('item_head_'))).toHaveLength(8)
     expect(byKind('item').filter((name) => name.startsWith('item_face_'))).toHaveLength(4)
     expect(byKind('item').filter((name) => name.startsWith('item_outfit_'))).toHaveLength(6)
@@ -1202,7 +1205,7 @@ describe('the stage-1 name list', () => {
     expect(byKind('item').filter((name) => name.startsWith('item_frame_'))).toHaveLength(6)
     expect(byKind('bot')).toHaveLength(8)
     expect(byKind('botFace')).toHaveLength(48)
-    expect(files).toHaveLength(106)
+    expect(files).toHaveLength(142)
     expect(files.map((file: { name: string }) => file.name)).toContain('item_head_tophat01_L80')
     expect(files.map((file: { name: string }) => file.name)).toContain('item_frame_founder_L90')
     expect(files.map((file: { name: string }) => file.name)).toContain('bot_7_face_sleep_L50')
@@ -1212,12 +1215,12 @@ describe('the stage-1 name list', () => {
     // R5, 2026-09-17: `BASES` in `manifest.mjs` is the source of truth for which bases exist, and adding
     // one there is what gives the next `placeholder` run a full stand-in set to draw for it — nine files,
     // the three layers and the six expressions, exactly as `f01` and `m01` have.
-    const three = stageOneFiles([...BASES, 'f03']) as { name: string; kind: string }[]
+    const three = stageOneFiles([...BASES, 'f09']) as { name: string; kind: string }[]
     const added = three.filter((file) => !files.some((had: { name: string }) => had.name === file.name))
     expect(added.map((file) => file.name).sort()).toEqual([
-      'base_f03_L20', 'base_f03_L30', 'base_f03_L60',
-      'base_f03_face_closed_L50', 'base_f03_face_happy_L50', 'base_f03_face_neutral_L50',
-      'base_f03_face_sad_L50', 'base_f03_face_sleep_L50', 'base_f03_face_surprised_L50',
+      'base_f09_L20', 'base_f09_L30', 'base_f09_L60',
+      'base_f09_face_closed_L50', 'base_f09_face_happy_L50', 'base_f09_face_neutral_L50',
+      'base_f09_face_sad_L50', 'base_f09_face_sleep_L50', 'base_f09_face_surprised_L50',
     ].sort())
     // …and a name the placeholder set has never seen still has to be a legal one (C8).
     for (const file of added) expect(NAME_PATTERN.test(file.name), file.name).toBe(true)

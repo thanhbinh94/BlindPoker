@@ -430,16 +430,17 @@ describe('addVariant', () => {
 describe('baseGaps', () => {
   it('names every place a new base still has to be added by hand, and nothing that is already there', () => {
     const basesFile = join(temp, 'avatar-bases.json')
-    writeFileSync(basesFile, JSON.stringify({ f01: {}, f02: {} }))
+    // f09 is a base nothing knows yet (f02–m03 joined BASES on 2026-09-24).
+    writeFileSync(basesFile, JSON.stringify({ f01: {}, f09: {} }))
     const vi = join(temp, 'vi.json')
     const en = join(temp, 'en.json')
-    writeFileSync(vi, JSON.stringify({ bases: { f01: 'a', f02: 'b' } }))
+    writeFileSync(vi, JSON.stringify({ bases: { f01: 'a', f09: 'b' } }))
     writeFileSync(en, JSON.stringify({ bases: { f01: 'a' } }))
-    const gaps = baseGaps('f02', 'f', { basesFile, localeFiles: [vi, en] })
+    const gaps = baseGaps('f09', 'f', { basesFile, localeFiles: [vi, en] })
     expect(gaps).toHaveLength(3)
-    expect(gaps[0]).toMatch(/BASES .*f02/)
-    expect(gaps[1]).toMatch(/BASE_WEAR .*f02.*'f'/)
-    expect(gaps[2]).toContain(`${en}: bases.f02`)
+    expect(gaps[0]).toMatch(/BASES .*f09/)
+    expect(gaps[1]).toMatch(/BASE_WEAR .*f09.*'f'/)
+    expect(gaps[2]).toContain(`${en}: bases.f09`)
     expect(baseGaps('f01', 'f', { basesFile, localeFiles: [vi, en] })).toEqual([])
     expect(baseGaps('m03', 'm', { basesFile, localeFiles: [vi] }).join('\n')).toMatch(/avatar-bases\.json.*m03/)
   })

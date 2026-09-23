@@ -80,6 +80,22 @@ export function baseGaps(id, wear, { basesFile = BASES_FILE, localeFiles = LOCAL
  * @param {string[]} [ids]
  * @param {{ srcDir?: string, publicDir?: string, targets?: string[], itemsFile?: string, basesFile?: string, localeFiles?: string[], log?: (line: string) => void }} [options]
  */
+/**
+ * The base whose transform a new base takes (2026-09-24): a base drawn from another base's picture — its
+ * `reference` is that base's file (`f01_candidate_1.png`) or `@<id>` — shares that base's body and canvas,
+ * so the pipeline anchors it exactly as it anchored the reference (`--transform-from`). Null for anything
+ * else, and for a base with no base reference, which the pipeline then anchors by its own box.
+ */
+export function transformSource(asset, registry) {
+  if (asset.kind !== 'base' || !asset.reference) return null
+  if (asset.reference.startsWith('@')) {
+    const other = registry.assets.find((entry) => entry.id === asset.reference.slice(1))
+    return other?.kind === 'base' ? other.id : null
+  }
+  const match = /^([fm]\d\d)_candidate_\d+\.png$/.exec(asset.reference)
+  return match ? match[1] : null
+}
+
 export async function ingestAssets(registry, ids = [], { srcDir = SRC_DIR, publicDir = PUBLIC_DIR, targets, itemsFile = ITEMS_FILE, basesFile = BASES_FILE, localeFiles = LOCALE_FILES, log = () => {} } = {}) {
   const manifests = targets ?? (publicDir === PUBLIC_DIR ? [join(PUBLIC_DIR, MANIFEST_NAME), SERVER_MANIFEST] : [join(publicDir, MANIFEST_NAME)])
   const wanted = (asset) => (asset.status === 'ok' || asset.status === 'approved') && asset.ingested !== true
@@ -107,7 +123,7 @@ export async function ingestAssets(registry, ids = [], { srcDir = SRC_DIR, publi
       if (input.aligned) log(`${asset.id}: aligned onto the reference canvas before the cut`)
       ;({ name } = await ingest({
         file: input.file, target, dir: publicDir, targets: manifests, baseId: owner, variant,
-        tolerance: flags.tolerance, white: flags.white, lockScale: flags.lockScale ?? null, hides: flags.hides, diff: flags.diff, log,
+        tolerance: flags.tolerance, white: flags.white, lockScale: flags.lockScale ?? null, transformFrom: transformSource(asset, registry), hides: flags.hides, diff: flags.diff, log,
       }))
     } finally {
       rmSync(tmp, { recursive: true, force: true })

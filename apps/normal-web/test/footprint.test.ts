@@ -56,7 +56,14 @@ const MAX_CSS_GZIP = 60 * 1024
  * ceiling (§8: "tổng PNG @2x giai đoạn 1 ≤ 6 MB") is written against `@2x` specifically.
  */
 const AVATAR_DIR = join(PACKAGE_ROOT, 'public', 'avatar')
-const MAX_AVATAR_2X_TOTAL = 6 * 1024 * 1024
+/**
+ * 2026-09-24: raised from the design's 6 MB to 16 MB. Real AI art is ~275 KB a body layer and ~150 KB a face
+ * against ~15 KB a stand-in, and six bases with six faces each are ~7 MB before a single item; every layer
+ * is fetched lazily and only when equipped, so the total is a repository ceiling, not a page cost.
+ * Recorded in the spec (§8 amendment) and docs/bug-log.md; a palette-quantisation pass is the deferred
+ * way back down.
+ */
+const MAX_AVATAR_2X_TOTAL = 16 * 1024 * 1024
 
 /** `App.tsx`'s six `React.lazy` screens; vite names each chunk after the module it split. */
 const LAZY_SCREENS = ['ProfileScreen', 'WardrobeScreen', 'InventoryScreen', 'AchievementsScreen', 'DailyScreen', 'SettingsScreen']

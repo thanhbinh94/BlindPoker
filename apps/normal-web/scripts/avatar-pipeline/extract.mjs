@@ -1307,7 +1307,7 @@ export function describeMeasurement(report, width) {
  *
  * @param {{ file: string, target: { kind: string, slot?: string, code?: string, base?: string, expr?: string }, dir: string, targets?: string[], baseId?: string, variant?: string | null, tolerance?: number, white?: boolean, dryRun?: boolean, lockScale?: number | null, hides?: object, diff?: object, log?: (line: string) => void }} options
  */
-export async function ingest({ file, target, dir, targets, baseId = 'f01', variant = null, tolerance = 40, white = false, dryRun = false, lockScale = null, hides = {}, diff = {}, log = () => {} }) {
+export async function ingest({ file, target, dir, targets, baseId = 'f01', variant = null, tolerance = 40, white = false, dryRun = false, lockScale = null, transformFrom = null, hides = {}, diff = {}, log = () => {} }) {
   if (variant !== null) {
     if (!WEARS.includes(variant)) throw new Error(`--variant ${variant} is not one of ${WEARS.join(', ')}`)
     if (target.kind !== 'item') throw new Error('--variant belongs to an item — only a wardrobe layer has per-wear variants')
@@ -1332,8 +1332,18 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', varia
   let transform
   let strandY = null
   if (target.kind === 'base') {
-    const anchored = anchorBase(keyed)
-    transform = { scale: anchored.scale, offsetX: anchored.offsetX, offsetY: anchored.offsetY }
+    if (transformFrom !== null) {
+      // 2026-09-24: a base drawn *from* another base (F02 from F01: same body, same pose, same canvas)
+      // shares that base's body, so it takes that base's transform verbatim — anchoring it by its own box
+      // would scale it by its own hair (no ahoge: 5.8 % taller a box) and every shared item would miss.
+      const from = manifest.bases[transformFrom]?.transform
+      if (!from) throw new Error(`no transform stored for base ${transformFrom} — ingest it with --as base:${transformFrom} first`)
+      transform = { ...from }
+      log(`transform taken from ${transformFrom}: scale ${from.scale.toFixed(4)}, offset ${from.offsetX.toFixed(1)}, ${from.offsetY.toFixed(1)}`)
+    } else {
+      const anchored = anchorBase(keyed)
+      transform = { scale: anchored.scale, offsetX: anchored.offsetX, offsetY: anchored.offsetY }
+    }
     strandY = strandCut(report, transform)
     manifest.bases[owner] = { transform, ...(strandY === null ? {} : { strandY }) }
   } else {

@@ -43,7 +43,7 @@ export const SHEET_FILE = resolve(PACKAGE_ROOT, '../../docs/avatar-2d-sheet.png'
  *
  * Spec §4: two bases now, six in stage 2. `f02`/`f03` have i18n names waiting for them and no art yet.
  */
-export const BASES = ['f01', 'm01']
+export const BASES = ['f01', 'm01', 'f02', 'f03', 'm02', 'm03']
 
 /**
  * The two bodies an item layer can be cut for (2026-09-20, phase 2 variants).
@@ -63,7 +63,7 @@ export const WEARS = ['f', 'm']
  * two files against each other.
  */
 /** @type {Record<string, string>} */
-export const BASE_WEAR = { f01: 'f', m01: 'm' }
+export const BASE_WEAR = { f01: 'f', m01: 'm', f02: 'f', f03: 'f', m02: 'm', m03: 'm' }
 
 for (const base of BASES) {
   if (!WEARS.includes(BASE_WEAR[base])) throw new Error(`base ${base} has no wear in BASE_WEAR — one of ${WEARS.join(', ')}`)

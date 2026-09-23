@@ -351,7 +351,9 @@
     "f01": "Female base F01",
     "m01": "Male base M01",
     "f02": "Female base F02",
-    "f03": "Female base F03"
+    "f03": "Female base F03",
+    "m02": "Male base M02",
+    "m03": "Male base M03"
   },
   "achievements": {
     "ui": {

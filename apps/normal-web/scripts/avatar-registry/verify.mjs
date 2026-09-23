@@ -37,7 +37,7 @@
  */
 import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { runChecks } from '../avatar-pipeline/checks.mjs'
 import { ingest, measure as measureFigure } from '../avatar-pipeline/extract.mjs'
 import { CROP, FACE_LIMIT_Y, HEAD_LIMIT_Y, LAYERS, anchorBase } from '../avatar-pipeline/frame.mjs'
@@ -185,19 +185,24 @@ export async function alignPicture(pic, ref, { scale, left, top }) {
 /** Compare a picture with its reference: both boxes, the rules, and the placement onto the reference's canvas. */
 export function comparePictures(pic, ref, kind, slot) {
   const anchored = pic.width !== ref.width || pic.height !== ref.height
-  if (kind === 'item' && slot === 'head') {
+  if ((kind === 'item' && slot === 'head') || kind === 'base') {
     // A hat may be far wider than the hair (the conical hat: 1.15× the figure) — that is the item, not a
     // redraw. So a head item is held to its *body*: the ink below the reference's mid-height, where no hat
-    // reaches, compared left, right and bottom.
+    // reaches, compared left, right and bottom. A new base is the same case from the other side: its head
+    // is *meant* to differ (F02's straight hair is 78 px narrower than F01's bob and has no ahoge), and what
+    // it must share with the reference is the body.
+    // A base's hair may fall to the waist (F02), so a base is held to its legs, lower still.
     const refBox = figureBox(ref)
-    const fromY = refBox.y + Math.floor(refBox.h * HEAD_ITEM_BODY_FROM)
-    return compareBoxes(bodyBox(pic, fromY), bodyBox(ref, fromY), { kind, slot, anchored })
+    const fromY = refBox.y + Math.floor(refBox.h * (kind === 'base' ? BASE_LEGS_FROM : HEAD_ITEM_BODY_FROM))
+    return compareBoxes(bodyBox(pic, fromY), bodyBox(ref, fromY), { kind, slot: kind === 'base' ? 'head' : slot, anchored })
   }
   return compareBoxes(figureBox(pic), figureBox(ref), { kind, slot, anchored })
 }
 
 /** The share of the reference's height above which a head item's ink is ignored by `comparePictures`. */
 export const HEAD_ITEM_BODY_FROM = 0.5
+/** …and a new base's: the legs alone (F02's hair reaches her hips, about 0.67 of the figure). */
+export const BASE_LEGS_FROM = 0.8
 
 /**
  * The *solid* ink box of the rows at or below `fromY` — a figure's body, when `fromY` is under its head.
@@ -370,9 +375,11 @@ async function pipelineChecks({ file, kind, slot, referenceFile, spec, publicDir
     }
     const input = await pipelineInput({ file, kind, slot, referenceFile, tmp: join(tmp, 'input') })
     const flags = parseFlags(spec.flags)
+    // A base drawn from another base's picture takes that base's transform (see `transformSource` in ingest.mjs).
+    const fromBase = target.kind === 'base' && referenceFile ? /^([fm]\d\d)_candidate_\d+\.png$/.exec(basename(referenceFile))?.[1] ?? null : null
     await ingest({
       file: input.file, target, dir, targets, baseId: owner, variant: spec.variant ?? null,
-      tolerance: flags.tolerance, white: flags.white, lockScale: flags.lockScale ?? null, hides: flags.hides, diff: flags.diff, log: quiet,
+      tolerance: flags.tolerance, white: flags.white, lockScale: flags.lockScale ?? null, transformFrom: fromBase, hides: flags.hides, diff: flags.diff, log: quiet,
     })
     const names = layerNames(target, owner, spec.variant ?? null)
     const rows = await runChecks({ dir, manifest: readManifest(targets[0]), names })

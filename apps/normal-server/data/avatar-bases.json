@@ -2,7 +2,11 @@
   "f01": {
     "nameKey": "bases.f01",
     "wear": "f",
-    "layers": { "hairBack": "base_f01_L20", "body": "base_f01_L30", "hairFront": "base_f01_L60" },
+    "layers": {
+      "hairBack": "base_f01_L20",
+      "body": "base_f01_L30",
+      "hairFront": "base_f01_L60"
+    },
     "faces": {
       "neutral": "base_f01_face_neutral_L50",
       "happy": "base_f01_face_happy_L50",
@@ -15,7 +19,11 @@
   "m01": {
     "nameKey": "bases.m01",
     "wear": "m",
-    "layers": { "hairBack": "base_m01_L20", "body": "base_m01_L30", "hairFront": "base_m01_L60" },
+    "layers": {
+      "hairBack": "base_m01_L20",
+      "body": "base_m01_L30",
+      "hairFront": "base_m01_L60"
+    },
     "faces": {
       "neutral": "base_m01_face_neutral_L50",
       "happy": "base_m01_face_happy_L50",
@@ -23,6 +31,74 @@
       "surprised": "base_m01_face_surprised_L50",
       "closed": "base_m01_face_closed_L50",
       "sleep": "base_m01_face_sleep_L50"
+    }
+  },
+  "f02": {
+    "nameKey": "bases.f02",
+    "wear": "f",
+    "layers": {
+      "hairBack": "base_f02_L20",
+      "body": "base_f02_L30",
+      "hairFront": "base_f02_L60"
+    },
+    "faces": {
+      "neutral": "base_f02_face_neutral_L50",
+      "happy": "base_f02_face_happy_L50",
+      "sad": "base_f02_face_sad_L50",
+      "surprised": "base_f02_face_surprised_L50",
+      "closed": "base_f02_face_closed_L50",
+      "sleep": "base_f02_face_sleep_L50"
+    }
+  },
+  "f03": {
+    "nameKey": "bases.f03",
+    "wear": "f",
+    "layers": {
+      "hairBack": "base_f03_L20",
+      "body": "base_f03_L30",
+      "hairFront": "base_f03_L60"
+    },
+    "faces": {
+      "neutral": "base_f03_face_neutral_L50",
+      "happy": "base_f03_face_happy_L50",
+      "sad": "base_f03_face_sad_L50",
+      "surprised": "base_f03_face_surprised_L50",
+      "closed": "base_f03_face_closed_L50",
+      "sleep": "base_f03_face_sleep_L50"
+    }
+  },
+  "m02": {
+    "nameKey": "bases.m02",
+    "wear": "m",
+    "layers": {
+      "hairBack": "base_m02_L20",
+      "body": "base_m02_L30",
+      "hairFront": "base_m02_L60"
+    },
+    "faces": {
+      "neutral": "base_m02_face_neutral_L50",
+      "happy": "base_m02_face_happy_L50",
+      "sad": "base_m02_face_sad_L50",
+      "surprised": "base_m02_face_surprised_L50",
+      "closed": "base_m02_face_closed_L50",
+      "sleep": "base_m02_face_sleep_L50"
+    }
+  },
+  "m03": {
+    "nameKey": "bases.m03",
+    "wear": "m",
+    "layers": {
+      "hairBack": "base_m03_L20",
+      "body": "base_m03_L30",
+      "hairFront": "base_m03_L60"
+    },
+    "faces": {
+      "neutral": "base_m03_face_neutral_L50",
+      "happy": "base_m03_face_happy_L50",
+      "sad": "base_m03_face_sad_L50",
+      "surprised": "base_m03_face_surprised_L50",
+      "closed": "base_m03_face_closed_L50",
+      "sleep": "base_m03_face_sleep_L50"
     }
   }
 }
