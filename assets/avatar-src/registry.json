@@ -574,8 +574,45 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T18:58:07.725Z",
+          "chat": "https://chatgpt.com/c/6ab42024-b8b0-83ec-a980-3e83c544154d",
+          "file": "item_face_masquerade01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.999,
+            "widthRatio": 1.006,
+            "drift": {
+              "left": -2,
+              "top": 0,
+              "right": 3,
+              "bottom": 1
+            },
+            "heads": 2.051,
+            "hairDelta": 1.511,
+            "scope": 0.002,
+            "checks": {
+              "item_face_masquerade01_L70": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "item_face_eyepatch01",
@@ -595,8 +632,45 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T19:02:25.691Z",
+          "chat": "https://chatgpt.com/c/6ab42154-f038-83ec-ad1e-cf76d6ea4a37",
+          "file": "item_face_eyepatch01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.999,
+            "widthRatio": 1.006,
+            "drift": {
+              "left": -2,
+              "top": 0,
+              "right": 3,
+              "bottom": 1
+            },
+            "heads": 2.054,
+            "hairDelta": 1.848,
+            "scope": 0.002,
+            "checks": {
+              "item_face_eyepatch01_L70": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "item_aura_water01",

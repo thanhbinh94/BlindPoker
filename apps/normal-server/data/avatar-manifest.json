@@ -590,8 +590,8 @@
       "layer": 70,
       "w": 384,
       "h": 448,
-      "bytes2x": 7968,
-      "placeholder": true
+      "bytes2x": 13892,
+      "real": true
     },
     "item_face_glasses_round_gold01_L70": {
       "layer": 70,
@@ -604,8 +604,8 @@
       "layer": 70,
       "w": 384,
       "h": 448,
-      "bytes2x": 8249,
-      "placeholder": true
+      "bytes2x": 32721,
+      "real": true
     },
     "item_face_sunglasses01_L70": {
       "layer": 70,
@@ -852,8 +852,8 @@
       "of": "item_face_eyepatch01_L70",
       "w": 96,
       "h": 96,
-      "bytes2x": 6550,
-      "placeholder": true
+      "bytes2x": 25456,
+      "real": true
     },
     "item_face_glasses_round_gold01_icon": {
       "kind": "icon",
@@ -868,8 +868,8 @@
       "of": "item_face_masquerade01_L70",
       "w": 96,
       "h": 96,
-      "bytes2x": 6817,
-      "placeholder": true
+      "bytes2x": 20853,
+      "real": true
     },
     "item_face_sunglasses01_icon": {
       "kind": "icon",
