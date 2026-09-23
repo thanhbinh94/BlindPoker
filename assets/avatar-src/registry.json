@@ -1189,7 +1189,7 @@
         "variant": null,
         "flags": []
       },
-      "status": "ng",
+      "status": "ok",
       "attempts": [
         {
           "n": 1,
@@ -1219,8 +1219,48 @@
           },
           "reason": "redrawn",
           "by": "verify"
+        },
+        {
+          "n": 2,
+          "at": "2026-09-23T20:43:02.079Z",
+          "chat": "https://chatgpt.com/c/6ab438bc-6ac8-83ec-82de-d6611ef7c9e1",
+          "file": "m03_candidate_1.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.996,
+            "widthRatio": 1.003,
+            "drift": {
+              "left": -1,
+              "top": 0,
+              "right": 1,
+              "bottom": 1
+            },
+            "heads": 2.124,
+            "checks": {
+              "base_m03_L30": [],
+              "base_m03_face_neutral_L50": [],
+              "base_m03_L20": [],
+              "base_m03_L60": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "base_m03_L60 C3: @2x has 1 pixels outside the shape, up to alpha 13"
+          ]
         }
-      ]
+      ],
+      "ingested": true
     },
     {
       "id": "f02:happy",

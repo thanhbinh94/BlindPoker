@@ -335,22 +335,23 @@
       "layer": 20,
       "w": 384,
       "h": 448,
-      "bytes2x": 13382,
-      "placeholder": true
+      "bytes2x": 2769,
+      "real": true,
+      "empty": true
     },
     "base_m03_L30": {
       "layer": 30,
       "w": 384,
       "h": 448,
-      "bytes2x": 16408,
-      "placeholder": true
+      "bytes2x": 249164,
+      "real": true
     },
     "base_m03_L60": {
       "layer": 60,
       "w": 384,
       "h": 448,
-      "bytes2x": 10201,
-      "placeholder": true
+      "bytes2x": 5587,
+      "real": true
     },
     "base_m03_face_closed_L50": {
       "layer": 50,
@@ -370,8 +371,8 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 9859,
-      "placeholder": true
+      "bytes2x": 160443,
+      "real": true
     },
     "base_m03_face_sad_L50": {
       "layer": 50,
@@ -1351,6 +1352,14 @@
         "offsetY": 52.29325513196481
       },
       "strandY": 89
+    },
+    "m03": {
+      "transform": {
+        "scale": 0.24633431085043989,
+        "offsetX": 66,
+        "offsetY": 52.29325513196481
+      },
+      "strandY": 93
     }
   }
 }
