@@ -1829,8 +1829,45 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T20:22:34.842Z",
+          "chat": "https://chatgpt.com/c/6ab433f9-5f3c-83ec-b881-1f13f49aa953",
+          "file": "m02_happy.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.999,
+            "widthRatio": 1.002,
+            "drift": {
+              "left": 0,
+              "top": 0,
+              "right": 2,
+              "bottom": 1
+            },
+            "heads": 2.075,
+            "hairDelta": 4.074,
+            "scope": 0.001,
+            "checks": {
+              "base_m02_face_happy_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "m02:sad",
