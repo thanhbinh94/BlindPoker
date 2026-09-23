@@ -1478,8 +1478,48 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T19:57:38.916Z",
+          "chat": "https://chatgpt.com/c/6ab42e38-70e0-83ec-bad8-195f21fbc5d6",
+          "file": "f02_sleep.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.998,
+            "widthRatio": 0.999,
+            "drift": {
+              "left": 0,
+              "top": -1,
+              "right": 1,
+              "bottom": 2
+            },
+            "heads": 1.953,
+            "hairDelta": 3.879,
+            "scope": 0.002,
+            "checks": {
+              "base_f02_face_sleep_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "heads 1.953 outside 2–2.5 — advisory for an expression (its proportions are the base's)"
+          ]
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "f03:happy",
