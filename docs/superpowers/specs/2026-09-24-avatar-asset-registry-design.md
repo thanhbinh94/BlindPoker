@@ -74,6 +74,7 @@ Chạy trên mọi mục `generated`. Kết luận `ok`/`ng` + `reason` (mã c�
 ## 6. Nạp và đợt
 
 - `avatar-registry.mjs ingest [<id…>]`: với mục `ok`/`approved` chưa nạp, chạy `avatar-pipeline.mjs ingest` thật với `ingest.as/base/variant/flags`; base mới → thêm mục vào `BASES`/`BASE_WEAR` (manifest.mjs) và `avatar-bases.json` + khoá i18n nếu chưa có (script chỉ kiểm tra và báo, sửa tay ba chỗ đó là việc của implementer/Claude); item bản `m` → thêm `variants.m` vào `items.json`. Ghi `ingested: true`.
+- Sửa đổi 24/09 (Plan 12, đích vuông): pipeline có đích nạp cho aura (`item:aura:<code>`, vừa 400 @1x, tâm (192, 240)), frame (`item:frame:<code>`, vừa `RING` 260, tâm (192, 144), từ chối nếu giữa không rỗng) và bot (`bot:<n>` theo transform của f01 → L30 + mặt neutral, năm mặt còn lại là bản sao `copyOf`; `bot:<n>:happy` chỉ thay mặt happy). `ingest` nạp cả ba loại, không còn "not supported yet"; luật `pipeline` của `verify` chạy cho aura/frame (sau `hollow`) và cho bot. Chi tiết: `docs/avatar-2d.md` §4.3.
 - `avatar-registry.mjs status`: bảng đếm theo trạng thái và danh sách `blocked`.
 - Đợt = 10 mục. Sau mỗi đợt: `check`, `sheet`, commit "art: batch n", gửi bảng ghép. Người dùng trả lời `<id> ng` hoặc im lặng.
 

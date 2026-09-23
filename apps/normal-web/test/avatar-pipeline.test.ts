@@ -23,8 +23,8 @@ import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { runChecks } from '../scripts/avatar-pipeline/checks.mjs'
 import { OUTFIT_TOP_Y, cutItem, diffAgainstBase, ingest, measure, registerBySilhouette, registerToBase } from '../scripts/avatar-pipeline/extract.mjs'
-import { AXIS_X, BASELINE_Y, BODY, CROP, DENSITIES, FACE_LIMIT_Y, FRAME, LAYERS, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
-import { BASES, BASE_WEAR, ICON, MANIFEST_NAME, NAME_PATTERN, WEARS, buildPlaceholders, iconName, itemFile, parseName, stageOneFiles, variantFile, wearOf, writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
+import { AURA_CY, AURA_SIZE, AXIS_X, BASELINE_Y, BODY, CROP, DENSITIES, FACE_LIMIT_Y, FRAME, LAYERS, RING, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
+import { BASES, BASE_WEAR, EXPRESSIONS, ICON, MANIFEST_NAME, NAME_PATTERN, WEARS, buildPlaceholders, iconName, itemFile, parseName, stageOneFiles, variantFile, wearOf, writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
 import { alphaBBox, blankPicture, cropPicture, overPicture, readPicture, removeChroma, renderSvg, writeDensities, writePicture } from '../scripts/avatar-pipeline/png.mjs'
 
 const PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url))
@@ -74,6 +74,9 @@ interface Manifest {
   icons?: Record<string, { kind: 'icon'; of: string; w: number; h: number; bytes2x: number; placeholder?: boolean; real?: boolean }>
   bases?: Record<string, { transform: { scale: number; offsetX: number; offsetY: number } }>
 }
+
+/** A bot's face written as a copy of its neutral face at ingest (2026-09-24): the layer it copies. */
+type BotManifest = Manifest & { files: Record<string, ManifestEntry & { copyOf?: string }> }
 
 // ───────────────────────────────────────────────────────── synthetic sources ──
 
@@ -1807,5 +1810,221 @@ describe('the placeholder command', () => {
     const f01 = baseSkinColour(await readPicture(join(dir, 'base_f01_L30@2x.png')), 2)!
     const f03 = baseSkinColour(await readPicture(join(dir, 'base_f03_L30@2x.png')), 2)!
     expect(Math.hypot(f01[0]! - f03[0]!, f01[1]! - f03[1]!, f01[2]! - f03[2]!)).toBeGreaterThan(24)
+  }, 600_000)
+})
+
+// ─────────────────────────────────── auras, frames and bots (2026-09-24, Plan 12) ──
+
+/**
+ * The three targets the registry loop needed next. An aura and a frame are *square* pictures — an effect in
+ * a ring on transparency, nothing to diff against a base — placed on the frame by their ink box alone. A bot
+ * is a figure drawn from F01's own picture, so it is cut like a base on F01's stored transform.
+ */
+describe('auras, frames and bots', () => {
+  /** A ring on a transparent square, what the image model returns for an aura or a frame. */
+  const ringSvg = (side: number, r: number, stroke: number, inner = ''): string =>
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${side}" height="${side}">` +
+    `<circle cx="${side / 2}" cy="${side / 2}" r="${r}" fill="none" stroke="#3a7fd0" stroke-width="${stroke}"/>${inner}</svg>`
+  /** A robot drawn from F01's picture: the same body, with an antenna standing above the head. */
+  const ANTENNA = '<rect x="569" y="120" width="14" height="100" fill="#606060"/>'
+  const SMILE = '<rect x="500" y="560" width="152" height="30" fill="#cc2222"/>'
+  const botFaces = (bot: number): string[] => EXPRESSIONS.map((expr: string) => `bot_${bot}_face_${expr}_L50`)
+
+  const targetsOf = (dir: string): string[] => [join(dir, MANIFEST_NAME)]
+  const manifestIn = (dir: string): BotManifest => JSON.parse(readFileSync(join(dir, MANIFEST_NAME), 'utf8')) as BotManifest
+  const alphaAt = (pic: Picture, x: number, y: number): number => pic.data[(Math.round(y) * pic.width + Math.round(x)) * 4 + 3]!
+  const bytesOf = (dir: string, name: string): Buffer[] => DENSITIES.map((density: number) => readFileSync(join(dir, `${name}@${density}x.png`)))
+  async function draw(dir: string, name: string, svg: string, width: number, height: number): Promise<string> {
+    const file = join(dir, name)
+    await writePicture(await renderSvg(svg, width, height), file)
+    return file
+  }
+  async function allPass(dir: string, names: string[]): Promise<void> {
+    const rows = await runChecks({ dir, manifest: manifestIn(dir), names })
+    expect(rows.map((row: { name: string }) => row.name)).toEqual(names)
+    for (const row of rows as { name: string; results: { id: string; ok: boolean; detail: string }[] }[]) {
+      for (const result of row.results) expect(result.ok, `${row.name} ${result.id}: ${result.detail}`).toBe(true)
+    }
+  }
+  async function ingestF01(dir: string): Promise<void> {
+    const file = await draw(dir, 'base.png', sourceSvg(), SRC.w, SRC.h)
+    await ingest({ file, target: { kind: 'base', base: 'f01' }, dir, targets: targetsOf(dir) })
+  }
+
+  it('fits an aura to AURA_SIZE on the axis at AURA_CY, lets it run off the frame, and passes check', async () => {
+    const dir = caseDir('square-aura')
+    // 1200 × 1200 with an outer radius of 550: an ink box of 1100, which becomes 400 @1x — wider than the frame.
+    const file = await draw(dir, 'aura.png', ringSvg(1200, 500, 100), 1200, 1200)
+    await ingest({ file, target: { kind: 'item', slot: 'aura', code: 'water01' }, dir, targets: targetsOf(dir) })
+    const manifest = manifestIn(dir)
+    expect(manifest.files.item_aura_water01_L10).toMatchObject({ layer: LAYERS.aura, w: FRAME.w, h: FRAME.h, real: true })
+    expect(manifest.files.item_aura_water01_L10!.placeholder).toBeUndefined()
+    expect(manifest.icons?.item_aura_water01_icon).toMatchObject({ kind: 'icon', of: 'item_aura_water01_L10', w: ICON.w, h: ICON.h, real: true })
+    for (const density of DENSITIES) {
+      const pic = await readPicture(join(dir, `item_aura_water01_L10@${density}x.png`))
+      const box = alphaBBox(pic)!
+      // Vertically the whole 400 fits the 448 frame, centred on AURA_CY…
+      expect(Math.abs(box.h / density - AURA_SIZE), `@${density}x height ${box.h}`).toBeLessThanOrEqual(3)
+      expect(Math.abs((box.y + box.h / 2) / density - AURA_CY), `@${density}x centre y`).toBeLessThanOrEqual(1.5)
+      // …and horizontally it is wider than the frame, cut at both edges.
+      expect([box.x, box.x + box.w], `@${density}x`).toEqual([0, pic.width])
+      // The middle is empty and the ring (mid-radius 500/550 of 200) is solid.
+      expect(alphaAt(pic, AXIS_X * density, AURA_CY * density)).toBe(0)
+      expect(alphaAt(pic, AXIS_X * density, (AURA_CY - (AURA_SIZE / 2) * (500 / 550)) * density)).toBeGreaterThan(200)
+    }
+    // The icon is the picture fitted into the square, not the cut layer: a whole ring, as wide as it is tall.
+    const icon = alphaBBox(await readPicture(join(dir, 'item_aura_water01_icon@2x.png')))!
+    expect(Math.abs(icon.w - icon.h), `icon ${icon.w} × ${icon.h}`).toBeLessThanOrEqual(2)
+    await allPass(dir, ['item_aura_water01_L10'])
+  }, 120_000)
+
+  it('fits a frame to RING centred on the crop, passes check, and refuses a filled disc', async () => {
+    const dir = caseDir('square-frame')
+    // 1024 × 1024 with an outer radius of 480: an ink box of 960, which becomes 260 @1x.
+    const file = await draw(dir, 'frame.png', ringSvg(1024, 440, 80), 1024, 1024)
+    await ingest({ file, target: { kind: 'item', slot: 'frame', code: 'gold' }, dir, targets: targetsOf(dir) })
+    const manifest = manifestIn(dir)
+    expect(manifest.files.item_frame_gold_L90).toMatchObject({ layer: LAYERS.frame, w: FRAME.w, h: FRAME.h, real: true })
+    expect(manifest.icons?.item_frame_gold_icon).toMatchObject({ kind: 'icon', of: 'item_frame_gold_L90', real: true })
+    const centreY = CROP.y + CROP.size / 2
+    for (const density of DENSITIES) {
+      const pic = await readPicture(join(dir, `item_frame_gold_L90@${density}x.png`))
+      const box = alphaBBox(pic)!
+      expect(Math.abs(box.w / density - RING), `@${density}x width ${box.w}`).toBeLessThanOrEqual(3)
+      expect(Math.abs(box.h / density - RING), `@${density}x height ${box.h}`).toBeLessThanOrEqual(3)
+      expect(Math.abs((box.x + box.w / 2) / density - AXIS_X), `@${density}x centre x`).toBeLessThanOrEqual(1.5)
+      expect(Math.abs((box.y + box.h / 2) / density - centreY), `@${density}x centre y`).toBeLessThanOrEqual(1.5)
+      expect(alphaAt(pic, AXIS_X * density, centreY * density)).toBe(0)
+    }
+    await allPass(dir, ['item_frame_gold_L90'])
+
+    // A disc is not a ring: the portrait would be painted over. Refused, and nothing written on the way.
+    const discDir = caseDir('square-frame-disc')
+    const disc = await draw(discDir, 'disc.png', ringSvg(1024, 440, 80, '<circle cx="512" cy="512" r="400" fill="#3a7fd0"/>'), 1024, 1024)
+    await expect(ingest({ file: disc, target: { kind: 'item', slot: 'frame', code: 'gold' }, dir: discDir, targets: targetsOf(discDir) })).rejects.toThrow(/hollow/)
+    expect(existsSync(join(discDir, MANIFEST_NAME))).toBe(false)
+    expect(existsSync(join(discDir, 'item_frame_gold_L90@2x.png'))).toBe(false)
+  }, 120_000)
+
+  it('cuts a bot on f01 transform: its body, its neutral face and the other five as marked copies', async () => {
+    const dir = caseDir('bot-neutral')
+    await ingestF01(dir)
+    const file = await draw(dir, 'bot.png', sourceSvg(ANTENNA), SRC.w, SRC.h)
+    await ingest({ file, target: { kind: 'bot', bot: 3, expr: 'neutral' }, dir, targets: targetsOf(dir) })
+    const manifest = manifestIn(dir)
+    expect(manifest.files.bot_3_L30).toMatchObject({ layer: LAYERS.body, w: FRAME.w, h: FRAME.h, real: true })
+    expect(manifest.files.bot_3_face_neutral_L50).toMatchObject({ layer: LAYERS.face, real: true })
+    expect(manifest.files.bot_3_face_neutral_L50!.copyOf).toBeUndefined()
+    const neutral = bytesOf(dir, 'bot_3_face_neutral_L50')
+    for (const expr of EXPRESSIONS.filter((expr: string) => expr !== 'neutral')) {
+      const name = `bot_3_face_${expr}_L50`
+      expect(manifest.files[name], name).toMatchObject({ layer: LAYERS.face, w: FRAME.w, h: FRAME.h, real: true, copyOf: 'bot_3_face_neutral_L50' })
+      bytesOf(dir, name).forEach((bytes, index) => expect(bytes.equals(neutral[index]!), `${name} is not the neutral face`).toBe(true))
+    }
+    // Exactly what the kit draws for a bot (`layersFor`): a body and six faces — no hair layers, no icon.
+    expect(Object.keys(manifest.files).filter((name) => name.startsWith('bot_')).sort()).toEqual(['bot_3_L30', ...botFaces(3)].sort())
+    expect(Object.keys(manifest.icons ?? {})).toEqual([])
+    expect(Object.keys(manifest.bases ?? {})).toEqual(['f01'])
+    // F01's transform, not its own box: the antenna makes the bot's box taller, yet its feet and its width land
+    // on f01's pixels — and the antenna stays, since a bot has no front-hair layer to move it to.
+    const f01 = alphaBBox(await readPicture(join(dir, 'base_f01_L30@1x.png')))!
+    const bot = alphaBBox(await readPicture(join(dir, 'bot_3_L30@1x.png')))!
+    expect([bot.x, bot.w, bot.y + bot.h]).toEqual([f01.x, f01.w, f01.y + f01.h])
+    expect(bot.y).toBeLessThan(f01.y - 20)
+    await allPass(dir, ['bot_3_L30', ...botFaces(3)])
+    // Eight bots, 0–7: a ninth has nowhere to go.
+    await expect(ingest({ file, target: { kind: 'bot', bot: 9, expr: 'neutral' }, dir, targets: targetsOf(dir) })).rejects.toThrow(/bot 9/)
+  }, 180_000)
+
+  it('replaces only the happy face with a happy picture, and a later neutral ingest keeps it', async () => {
+    const dir = caseDir('bot-happy')
+    await ingestF01(dir)
+    const neutralFile = await draw(dir, 'bot.png', sourceSvg(ANTENNA), SRC.w, SRC.h)
+    await ingest({ file: neutralFile, target: { kind: 'bot', bot: 3, expr: 'neutral' }, dir, targets: targetsOf(dir) })
+    const others = ['bot_3_L30', ...botFaces(3).filter((name) => name !== 'bot_3_face_happy_L50')]
+    const before = manifestIn(dir)
+    const beforeBytes = Object.fromEntries(others.map((name) => [name, bytesOf(dir, name)]))
+
+    const happyFile = await draw(dir, 'bot-happy.png', sourceSvg(ANTENNA + SMILE), SRC.w, SRC.h)
+    await ingest({ file: happyFile, target: { kind: 'bot', bot: 3, expr: 'happy' }, dir, targets: targetsOf(dir) })
+    const after = manifestIn(dir)
+    expect(after.files.bot_3_face_happy_L50).toMatchObject({ layer: LAYERS.face, real: true })
+    expect(after.files.bot_3_face_happy_L50!.copyOf).toBeUndefined()
+    expect(bytesOf(dir, 'bot_3_face_happy_L50')[1]!.equals(beforeBytes.bot_3_face_neutral_L50![1]!), 'the happy face is still the neutral one').toBe(false)
+    for (const name of others) {
+      expect(after.files[name], name).toEqual(before.files[name])
+      bytesOf(dir, name).forEach((bytes, index) => expect(bytes.equals(beforeBytes[name]![index]!), `${name} was rewritten`).toBe(true))
+    }
+    // A cut of the head region only, like an expression's.
+    for (const density of DENSITIES) {
+      const outside = inkOutsideHead(await readPicture(join(dir, `bot_3_face_happy_L50@${density}x.png`)), density)
+      expect(outside.length, `@${density}x happy face has ink outside the head region`).toBe(0)
+    }
+
+    // The neutral picture again (a regenerated one, say): every copy is refreshed, the real happy face is not.
+    const happy = bytesOf(dir, 'bot_3_face_happy_L50')
+    await ingest({ file: neutralFile, target: { kind: 'bot', bot: 3, expr: 'neutral' }, dir, targets: targetsOf(dir) })
+    expect(manifestIn(dir).files.bot_3_face_happy_L50).toEqual(after.files.bot_3_face_happy_L50)
+    bytesOf(dir, 'bot_3_face_happy_L50').forEach((bytes, index) => expect(bytes.equals(happy[index]!), 'the real happy face was overwritten').toBe(true))
+    expect(manifestIn(dir).files.bot_3_face_sad_L50).toMatchObject({ copyOf: 'bot_3_face_neutral_L50' })
+    await allPass(dir, ['bot_3_L30', ...botFaces(3)])
+  }, 240_000)
+
+  it('C2 lets an aura run to the frame edge, and holds every other layer to it', async () => {
+    const dir = caseDir('c2-aura')
+    const entries: Record<string, ManifestEntry> = {}
+    for (const name of ['item_aura_water01_L10', 'item_frame_gold_L90']) {
+      for (const density of DENSITIES) {
+        const pic = blankPicture(FRAME.w * density, FRAME.h * density)
+        for (let y = 200 * density; y < 260 * density; y++) {
+          for (let x = 0; x < pic.width; x++) pic.data.set([40, 90, 200, 255], (y * pic.width + x) * 4)
+        }
+        await writePicture(pic, join(dir, `${name}@${density}x.png`))
+      }
+      entries[name] = { layer: parseName(name)!.layer, w: FRAME.w, h: FRAME.h, bytes2x: statSync(join(dir, `${name}@2x.png`)).size, real: true }
+    }
+    const manifest = manifestFor(dir, entries)
+    const aura = (await checkOne(dir, 'item_aura_water01_L10', manifest)).get('C2')!
+    expect(aura.ok, aura.detail).toBe(true)
+    expect(aura.detail).toMatch(/^n\/a/)
+    expect((await checkOne(dir, 'item_frame_gold_L90', manifest)).get('C2')!.ok).toBe(false)
+  }, 30_000)
+
+  it('reads all three targets on the command line, and placeholder leaves what they wrote alone', async () => {
+    const dir = caseDir('square-cli')
+    const run = (args: string[]): string => {
+      try {
+        return execFileSync(process.execPath, [SCRIPT, ...args], { cwd: PACKAGE_ROOT, encoding: 'utf8' })
+      } catch (error) {
+        throw new Error(`${(error as { stdout?: string }).stdout ?? ''}\n${(error as { stderr?: string }).stderr ?? ''}\n${(error as Error).message}`)
+      }
+    }
+    const base = await draw(dir, 'base.png', sourceSvg(), SRC.w, SRC.h)
+    const aura = await draw(dir, 'aura.png', ringSvg(1200, 500, 100), 1200, 1200)
+    const frame = await draw(dir, 'frame.png', ringSvg(1024, 440, 80), 1024, 1024)
+    const bot = await draw(dir, 'bot.png', sourceSvg(ANTENNA), SRC.w, SRC.h)
+    const happy = await draw(dir, 'bot-happy.png', sourceSvg(ANTENNA + SMILE), SRC.w, SRC.h)
+    run(['ingest', base, '--as', 'base:f01', '--out', dir])
+    // The exact lines docs/avatar-2d.md §4 gives.
+    run(['ingest', aura, '--as', 'item:aura:fire01', '--out', dir])
+    run(['ingest', frame, '--as', 'item:frame:silver', '--out', dir])
+    run(['ingest', bot, '--as', 'bot:5', '--out', dir])
+    run(['ingest', happy, '--as', 'bot:5:happy', '--out', dir])
+    const layers = ['item_aura_fire01_L10', 'item_frame_silver_L90', 'bot_5_L30', ...botFaces(5)]
+    expect(run(['check', ...layers, '--dir', dir])).not.toMatch(/FAIL/)
+
+    const before = manifestIn(dir)
+    const icons = ['item_aura_fire01_icon', 'item_frame_silver_icon']
+    const bytes = Object.fromEntries([...layers, ...icons].map((name) => [name, bytesOf(dir, name)]))
+    await buildPlaceholders({ dir, targets: targetsOf(dir) })
+    const after = manifestIn(dir)
+    for (const name of layers) {
+      expect(after.files[name], name).toEqual(before.files[name])
+      expect(after.files[name]!.placeholder, `${name} became a stand-in`).toBeUndefined()
+    }
+    for (const name of icons) expect(after.icons?.[name], name).toEqual(before.icons?.[name])
+    for (const [name, was] of Object.entries(bytes)) {
+      bytesOf(dir, name).forEach((now, index) => expect(now.equals(was[index]!), `${name} was redrawn`).toBe(true))
+    }
   }, 600_000)
 })

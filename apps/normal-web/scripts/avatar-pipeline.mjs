@@ -9,11 +9,18 @@
  *       redrawn, a real item's is kept (or, if it has none yet, cut from its layer on disk). Idempotent.
  *
  *   node scripts/avatar-pipeline.mjs ingest <png> --as base:f01 | expr:f01:happy | item:head:tophat01
+ *                                              | item:aura:fire01 | item:frame:gold | bot:3 | bot:3:happy
  *       One generated picture in, its layers at @1x and @2x out, plus their manifest entries. A base is a
  *       flat AI picture and writes four: L30 (the figure), face_neutral L50 (its head region, less the torso
  *       column under y 236), L60 (a strand of hair above the head top, if the picture has one, else empty) and
  *       an empty L20, the empty ones marked `empty: true`. The strand's rows go to L60 only. An expression
- *       keeps only the face region (as face_neutral). Options:
+ *       keeps only the face region (as face_neutral).
+ *       An aura or a frame is a square picture, the effect in a ring: placed by its ink box — an aura fitted to
+ *       400 and centred on (192, 240), running off the frame's sides; a frame fitted to the 260 ring round the
+ *       crop centre (192, 144), and refused unless its middle is empty — and written with its icon.
+ *       A bot (`bot:<n>`, n 0–7) is cut like a base on f01's stored transform: bot_<n>_L30 (the whole figure)
+ *       and bot_<n>_face_neutral_L50, with the other five faces written as copies of it (`copyOf`); a face
+ *       already real is kept. `bot:<n>:happy` cuts only that face from its own picture. Options:
  *         --dry-run             measure the picture against D02 §8 and print a verdict; write nothing
  *         --base <id>           which base an item or expression belongs to (default f01)
  *         --variant <f|m>       cut this picture as the per-wear variant of an item that already exists,
@@ -23,7 +30,8 @@
  *         --tolerance <n>       how wide the background key is (default 40)
  *         --white               the background is white rather than #00FF00; no despill
  *         --lock-scale <n>      force a scale instead of reading the base's stored one
- *         --transform-from <id> a new base drawn from base <id> (same body, same canvas) takes <id>'s transform
+ *         --transform-from <id> a new base drawn from base <id> (same body, same canvas) takes <id>'s transform;
+ *                               a bot takes f01's unless this names another base
  *         --hides-hair-front    record D01 §4.3's hide rules on a head item
  *         --hides-hair-back
  *         --color-tol <n>       an item: how far (RGB distance) a pixel must be from every base pixel near it
@@ -114,9 +122,9 @@ function destinations(name) {
   return { dir, targets }
 }
 
-/** `base:f01`, `expr:f01:happy`, `item:head:tophat01`. */
+/** `base:f01`, `expr:f01:happy`, `item:head:tophat01`, `item:aura:fire01`, `item:frame:gold`, `bot:3`, `bot:3:happy`. */
 function parseTarget(spec) {
-  if (!spec) die('ingest needs --as base:f01 | expr:f01:happy | item:head:tophat01')
+  if (!spec) die('ingest needs --as base:f01 | expr:f01:happy | item:head:tophat01 | bot:3 | bot:3:happy')
   const [kind, first, second] = spec.split(':')
   if (kind === 'base' && first) return { kind: 'base', base: first }
   if (kind === 'expr' && first && second) return { kind: 'expr', base: first, expr: second }
@@ -124,6 +132,7 @@ function parseTarget(spec) {
     if (!STAGE_ONE_ITEMS[first]) die(`unknown slot ${first} — one of ${Object.keys(STAGE_ONE_ITEMS).join(', ')}`)
     return { kind: 'item', slot: first, code: second }
   }
+  if (kind === 'bot' && /^\d+$/.test(first ?? '')) return { kind: 'bot', bot: Number(first), expr: second ?? 'neutral' }
   return die(`cannot read --as ${spec}`)
 }
 

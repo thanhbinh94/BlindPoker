@@ -35,6 +35,7 @@ invalidates every picture that exists (design §3, D01 §3):
 | Baseline | y = 408 |
 | Avatar crop (the round portrait) | 208 × 208 at (88, 40) |
 | Frame ring (the `frame` item's own decoration) | 260 × 260, centred on the crop |
+| Aura (the `aura` item's effect, 2026-09-24) | 400 across, centred on (192, 240) — wider than the frame |
 
 The **crop** is what a seat plate, the lobby bar and a wardrobe tile actually show — `Chibi frame="head"`
 in the kit crops to it with `object-position`, so a "head" item only has to sit inside that box, not be
@@ -175,6 +176,10 @@ pnpm --filter @bp/normal-web avatar:ingest -- <picture.png> --as base:f01
 pnpm --filter @bp/normal-web avatar:ingest -- <picture.png> --as expr:f01:happy
 pnpm --filter @bp/normal-web avatar:ingest -- <picture.png> --as item:head:tophat01
 pnpm --filter @bp/normal-web avatar:ingest -- <picture.png> --as item:outfit:dealer01 --base m01 --variant m
+pnpm --filter @bp/normal-web avatar:ingest -- <picture.png> --as item:aura:fire01
+pnpm --filter @bp/normal-web avatar:ingest -- <picture.png> --as item:frame:gold
+pnpm --filter @bp/normal-web avatar:ingest -- <picture.png> --as bot:3
+pnpm --filter @bp/normal-web avatar:ingest -- <picture.png> --as bot:3:happy
 # One generated (or hand-drawn) picture in, one layer at @1x and @2x out, plus its manifest entry.
 # `base:` and `expr:` ingest a base's own body or one of its six expressions; `item:<slot>:<code>`
 # ingests a wardrobe piece, drawn on F01 (D02 §5) and shared with every other base automatically —
@@ -184,7 +189,8 @@ pnpm --filter @bp/normal-web avatar:ingest -- <picture.png> --as item:outfit:dea
 # (§4.2). `--dry-run` prints what would happen and writes nothing. `--color-tol`, `--min-region` and
 # `--max-hole` override the extraction defaults for one awkward picture. `--variant <f|m>` makes the
 # cut the per-wear layer of an item that already exists (§3.1) rather than the item itself; the wear
-# has to be the wear of `--base`, or the ingest is refused.
+# has to be the wear of `--base`, or the ingest is refused. An aura, a frame and a bot are placed differently
+# again — see §4.3.
 
 pnpm --filter @bp/normal-web avatar:check
 # Runs the ten acceptance criteria (D01 §10) over every committed layer and prints a pass/fail table;
@@ -364,7 +370,9 @@ it put 1 300–1 700 px of purple into every shared layer and M01 wore it on his
 For every item layer — head, face, outfit, aura, frame, real or stand-in — the pipeline also writes
 `item_<slot>_<code>_icon@1x.png` (96 × 96) and `@2x.png` (192 × 192): the layer's @2x cut to its ink,
 fitted with its aspect kept into 84 % of the square, centred on transparency; @1x is the @2x scaled down.
-A frame's icon is its ring; an aura's is the aura. `ingest` writes the icon with the layer, `placeholder`
+A frame's icon is its ring; an aura's is the aura — and since 2026-09-24 a real aura's or frame's icon is
+cut from the ingested *picture* rather than from the layer (§4.3), so an aura that runs off the frame's sides
+still shows as a whole ring. `ingest` writes the icon with the layer, `placeholder`
 refreshes the stand-ins' icons. The manifest lists them under a separate `icons` key —
 `{ kind: 'icon', of: '<layer name>', w: 96, h: 96, bytes2x, real | placeholder }` — so `files` stays the
 set of frame-sized layers that `check`, the renderer and the server's loader read (the server ignores
@@ -376,12 +384,47 @@ The wardrobe tiles and the inventory cards show the icon (`ItemPreview` in
 with the same `AvatarAssets` base and `srcset` as a `Chibi` layer. Seeing an item *worn* is the big
 preview's job: picking an owned tile puts it on the character there, and saving equips it.
 
+### 4.3 Auras, frames and bots (2026-09-24, Plan 12)
+
+The registry loop generates these three last, and none of them is cut the way §4.1 cuts an item: an aura
+and a frame are **square** pictures (≥ 1024, transparent, the effect in a ring with its middle empty) with no
+figure in them to diff against a base, and a bot is a whole figure of its own. The shapes they are placed to
+are the stand-ins' (`frame.mjs`, `itemShapes`), at full size.
+
+**An aura** — `--as item:aura:<code>` — is placed by its ink box (`placeByInk`): scaled, aspect kept, until
+the box's larger side is `AURA_SIZE` (400) frame units, and centred on (`AXIS_X`, `AURA_CY`) = (192, 240), the
+effect spread round the whole body. 400 is wider than the 384 frame, so an aura is cut off at both sides —
+expected, and the reason C2 exempts layer 10 (§5); C3 still holds the rows and columns where nothing is drawn.
+It is written as `item_aura_<code>_L10` (`real: true`) with its icon, which is the *picture* fitted into the
+square (§4.2), so the icon shows the whole ring rather than the frame-cut layer. A picture that carries its own
+transparency (four transparent corners, which `verify` requires) is not colour-keyed at all — the green-screen
+despill would turn a wind or earth aura's greens grey; one on a flat green (or `--white`) background is keyed
+as usual.
+
+**A frame** — `--as item:frame:<code>` — is placed the same way, fitted to `RING` (260) and centred on the
+crop's centre (192, `CROP.y + CROP.size / 2` = 144), which keeps it 14 px inside the top of the frame. It must
+leave the portrait showing: the mean alpha of the placed layer inside `RING_HOLLOW.radius` (40 %) of the
+ring's half-width has to stay under `RING_HOLLOW.limit` (0.05), or the ingest is refused with the number
+before anything is written. `item_frame_<code>_L90`, `real: true`, and its icon.
+
+**A bot** — `--as bot:<n>` (n 0–7) — is drawn from F01's own picture (`f01_candidate_1.png`: same canvas,
+proportions and pose, a robot body, no hair), so it is cut like a base but on **f01's stored transform**
+(`--transform-from` semantics by default; the flag names another base), never anchored by its own box. It
+writes exactly what the kit draws for a bot (`layersFor`): `bot_<n>_L30`, the whole figure — no strand cut,
+since a bot has no L60 to move a strand (or an antenna) into and wears nothing to hide it under — and
+`bot_<n>_face_neutral_L50`, its head region as a base's neutral face is cut. The registry generates only a
+neutral and a happy picture, so the other five faces are written as **copies** of the neutral one, each
+`real: true, copyOf: 'bot_<n>_face_neutral_L50'`, and `check` and the app see a complete set; a face that is
+already real in its own right (a happy face ingested earlier) is left alone by a later neutral picture.
+`--as bot:<n>:happy` cuts `bot_<n>_face_happy_L50` from the second picture's head region on the same
+transform and replaces the copy; nothing else is touched. Bots have no icons and no entry under `bases`.
+
 ## 5. The ten acceptance criteria (`avatar:check`)
 
 | | Checks (D01 §10) |
 |---|---|
 | C1 | The frame, exactly, at both densities — one pixel out is a fail |
-| C2 | Nothing opaque on the outermost row or column |
+| C2 | Nothing opaque on the outermost row or column — except an aura (layer 10), which is 400 wide by design and reported `-` (2026-09-24, §4.3) |
 | C3 | The empty part really is empty: no alpha at all more than 3 px outside the solid shape |
 | C4 | No white fringe — the soft rim is the shape's own colour, not white bled in from the key |
 | C5 | `head`/`face` items fit inside the 208×208 crop |
@@ -403,6 +446,11 @@ walked one item at a time as pictures are produced.
 A real entry may also carry `"variantOf"` and `"wear"`: a per-wear cut of another item's layer (§3.1),
 which is always real — `placeholder` never draws one — and which `variantOf` ties back to the item it
 belongs to.
+
+A real entry may also carry `"copyOf"` (2026-09-24): a bot's face written at the ingest of its neutral
+picture as a byte copy of `bot_<n>_face_neutral_L50`, because the registry generates only a neutral and a happy
+face per bot (§4.3). It is real — `placeholder` leaves it alone — and a later picture of that face replaces it
+with an entry that has no `copyOf`.
 
 A real entry may also carry `"empty": true`: an AI base's hair layers, which ship as fully transparent
 frames (§2). `avatar:check` holds such a layer to being fully transparent at both densities (C3) and
@@ -626,13 +674,15 @@ has the exact definitions).
 | `hair_colour` | the mean colour of the top-of-head band (x 330–700, y 250–330 of the reference) moved by more than 12 — expressions, face and outfit items (not a head item: the hat covers the band) |
 | `scope` | 1 % or more of the figure changed outside what the asset may change: an expression, below the head region (`FACE_LIMIT_Y`); a head or face item, below `HEAD_LIMIT_Y` and outside the crop. Not an outfit, whose cut discards everything above the chin line anyway. "Changed" is asked the way `diffAgainstBase` asks it: no reference pixel within 2 px is within RGB distance 40 |
 | `check:<Cn>` | the ten criteria (§5) on the layers an ingest into a **copy** of `public/avatar/` wrote; a new base's expression gets its base ingested into the copy first, from the reference. `pipeline` if the ingest itself threw |
-| `hollow` | an aura or a frame: mean alpha inside 40 % of the half-width is 0.05 or more |
+| `hollow` | an aura or a frame: mean alpha inside 40 % of the half-width is 0.05 or more — asked right after `background`; an aura or a frame that passes goes on to the `check:<Cn>` / `pipeline` rule and nothing else (2026-09-24) |
 
 A picture on the reference's own canvas is compared where it stands, since the pipeline will cut it there. A
 picture on another canvas is scaled and anchored onto the reference's first — head top and centre line, or a
 head item's feet and centre line — and the pipeline is given that aligned copy, because an expression or item
-is cut with its base's stored transform, measured on the reference's canvas. A bot has no pipeline target yet:
-it skips `check`, with the note `pipeline: skipped (bot)`.
+is cut with its base's stored transform, measured on the reference's canvas. Since 2026-09-24 (§4.3) a bot runs
+the pipeline rule too, on f01's transform: `bot:<n>` is checked on its body and all six faces, `bot:<n>:happy`
+on that one face. A bot's picture is handed to the pipeline as it is, not aligned: it is taken to be on
+F01's own canvas (§4.3), like a base drawn with `--transform-from`.
 
 Measured on the real pictures of Plan 11 (2026-09-24), every accepted picture passes: all ten real expressions,
 `tophat01`, `glasses_round_gold01`, and all eight outfits and cuts (`casual01` as regenerated, `tuxedo01`,
@@ -651,8 +701,10 @@ For every `ok` or `approved` asset not yet `ingested`: the real pipeline `ingest
   `avatar-bases.json` and `bases.<id>` in both locales still lack; adding it stays the hand edit of §9.1;
 - an item's **per-wear cut** gains `asset.variants.<wear>` in `items.json`, if it is not there, in the file's own
   formatting (§3.1);
-- a **bot, an aura or a frame** is left `ok` with "not supported yet": the pipeline has no bot target, and its
-  item cut diffs a picture against the base's body, which a square aura or ring picture is not.
+- a **bot, an aura or a frame** goes in like everything else (2026-09-24 — the "not supported yet" set is gone):
+  `item:aura:<code>`, `item:frame:<code>`, `bot:<n>` and `bot:<n>:happy` are the pipeline's own targets
+  (§4.3), passed straight through, and a bot is given f01's transform — the base at the root of its reference
+  chain (`f01_candidate_1.png`, or `@bot_<n>` → that).
 
 ### 10.6 A batch
 
