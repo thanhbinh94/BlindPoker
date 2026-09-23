@@ -1132,11 +1132,17 @@ export function clipToRows(from, to) {
   }
 }
 
-/** Every pixel under `ALPHA_INK` made fully transparent black, in place. */
-export function dropFaint(pic) {
-  for (let at = 0; at < pic.data.length; at += 4) if (pic.data[at + 3] < ALPHA_INK) pic.data.fill(0, at, at + 4)
+/** Every pixel under `threshold` (default `ALPHA_INK`) made fully transparent black, in place. */
+export function dropFaint(pic, threshold = ALPHA_INK) {
+  for (let at = 0; at < pic.data.length; at += 4) if (pic.data[at + 3] < threshold) pic.data.fill(0, at, at + 4)
   return pic
 }
+
+/**
+ * The faint threshold for a strand layer (L60): a strand is solid ink, and what the key leaves around it at
+ * alpha 8–30 is noise that C3 counts as litter (M03's second picture: one alpha-13 pixel off the strand).
+ */
+export const STRAND_FAINT = 32
 
 /**
  * Where an AI base's strand of hair ends, in frame units, or `null` when it has none (2026-09-17, fix
@@ -1377,7 +1383,7 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', varia
       // Faint key noise above the head would be a stray pixel far outside a shape this small (C3), and the
       // colour a transparent pixel keeps is bytes nobody sees.
       const rows = clipToRows(null, strandY)
-      const strand = (pic, density) => dropFaint(rows(pic, density))
+      const strand = (pic, density) => dropFaint(rows(pic, density), STRAND_FAINT)
       layers.push({ file: { name: baseFile(owner, LAYERS.hairFront), layer: LAYERS.hairFront }, picture: strand(anchored, 2), clip: strand })
       log(`strand above y ${strandY} moved to ${baseFile(owner, LAYERS.hairFront)}`)
     }
