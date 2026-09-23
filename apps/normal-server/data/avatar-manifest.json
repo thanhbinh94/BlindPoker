@@ -791,22 +791,22 @@
       "layer": 10,
       "w": 384,
       "h": 448,
-      "bytes2x": 23700,
-      "placeholder": true
+      "bytes2x": 240784,
+      "real": true
     },
     "item_aura_fire01_L10": {
       "layer": 10,
       "w": 384,
       "h": 448,
-      "bytes2x": 23062,
-      "placeholder": true
+      "bytes2x": 243257,
+      "real": true
     },
     "item_aura_gold_cards01_L10": {
       "layer": 10,
       "w": 384,
       "h": 448,
-      "bytes2x": 25081,
-      "placeholder": true
+      "bytes2x": 226590,
+      "real": true
     },
     "item_aura_ice01_L10": {
       "layer": 10,
@@ -819,29 +819,29 @@
       "layer": 10,
       "w": 384,
       "h": 448,
-      "bytes2x": 24204,
-      "placeholder": true
+      "bytes2x": 188530,
+      "real": true
     },
     "item_aura_sakura01_L10": {
       "layer": 10,
       "w": 384,
       "h": 448,
-      "bytes2x": 24163,
-      "placeholder": true
+      "bytes2x": 194896,
+      "real": true
     },
     "item_aura_water01_L10": {
       "layer": 10,
       "w": 384,
       "h": 448,
-      "bytes2x": 23757,
-      "placeholder": true
+      "bytes2x": 216165,
+      "real": true
     },
     "item_aura_wind01_L10": {
       "layer": 10,
       "w": 384,
       "h": 448,
-      "bytes2x": 23642,
-      "placeholder": true
+      "bytes2x": 153175,
+      "real": true
     },
     "item_face_eyepatch01_L70": {
       "layer": 70,
@@ -875,8 +875,8 @@
       "layer": 90,
       "w": 384,
       "h": 448,
-      "bytes2x": 21433,
-      "placeholder": true
+      "bytes2x": 201236,
+      "real": true
     },
     "item_frame_founder_L90": {
       "layer": 90,
@@ -889,8 +889,8 @@
       "layer": 90,
       "w": 384,
       "h": 448,
-      "bytes2x": 21038,
-      "placeholder": true
+      "bytes2x": 219454,
+      "real": true
     },
     "item_frame_monthly_L90": {
       "layer": 90,
@@ -903,8 +903,8 @@
       "layer": 90,
       "w": 384,
       "h": 448,
-      "bytes2x": 21142,
-      "placeholder": true
+      "bytes2x": 231255,
+      "real": true
     },
     "item_frame_veteran_L90": {
       "layer": 90,
@@ -1045,24 +1045,24 @@
       "of": "item_aura_earth01_L10",
       "w": 96,
       "h": 96,
-      "bytes2x": 9276,
-      "placeholder": true
+      "bytes2x": 53671,
+      "real": true
     },
     "item_aura_fire01_icon": {
       "kind": "icon",
       "of": "item_aura_fire01_L10",
       "w": 96,
       "h": 96,
-      "bytes2x": 8990,
-      "placeholder": true
+      "bytes2x": 52044,
+      "real": true
     },
     "item_aura_gold_cards01_icon": {
       "kind": "icon",
       "of": "item_aura_gold_cards01_L10",
       "w": 96,
       "h": 96,
-      "bytes2x": 9920,
-      "placeholder": true
+      "bytes2x": 55901,
+      "real": true
     },
     "item_aura_ice01_icon": {
       "kind": "icon",
@@ -1077,32 +1077,32 @@
       "of": "item_aura_lightning01_L10",
       "w": 96,
       "h": 96,
-      "bytes2x": 9712,
-      "placeholder": true
+      "bytes2x": 45867,
+      "real": true
     },
     "item_aura_sakura01_icon": {
       "kind": "icon",
       "of": "item_aura_sakura01_L10",
       "w": 96,
       "h": 96,
-      "bytes2x": 9432,
-      "placeholder": true
+      "bytes2x": 46371,
+      "real": true
     },
     "item_aura_water01_icon": {
       "kind": "icon",
       "of": "item_aura_water01_L10",
       "w": 96,
       "h": 96,
-      "bytes2x": 9336,
-      "placeholder": true
+      "bytes2x": 45988,
+      "real": true
     },
     "item_aura_wind01_icon": {
       "kind": "icon",
       "of": "item_aura_wind01_L10",
       "w": 96,
       "h": 96,
-      "bytes2x": 9234,
-      "placeholder": true
+      "bytes2x": 44413,
+      "real": true
     },
     "item_face_eyepatch01_icon": {
       "kind": "icon",
@@ -1141,8 +1141,8 @@
       "of": "item_frame_bronze_L90",
       "w": 96,
       "h": 96,
-      "bytes2x": 9649,
-      "placeholder": true
+      "bytes2x": 25245,
+      "real": true
     },
     "item_frame_founder_icon": {
       "kind": "icon",
@@ -1157,8 +1157,8 @@
       "of": "item_frame_gold_L90",
       "w": 96,
       "h": 96,
-      "bytes2x": 9375,
-      "placeholder": true
+      "bytes2x": 25314,
+      "real": true
     },
     "item_frame_monthly_icon": {
       "kind": "icon",
@@ -1173,8 +1173,8 @@
       "of": "item_frame_silver_L90",
       "w": 96,
       "h": 96,
-      "bytes2x": 9637,
-      "placeholder": true
+      "bytes2x": 26992,
+      "real": true
     },
     "item_frame_veteran_icon": {
       "kind": "icon",

@@ -714,7 +714,8 @@
           "reason": null,
           "by": "verify"
         }
-      ]
+      ],
+      "ingested": true
     },
     {
       "id": "item_aura_fire01",
@@ -758,7 +759,8 @@
           "reason": null,
           "by": "verify"
         }
-      ]
+      ],
+      "ingested": true
     },
     {
       "id": "item_aura_wind01",
@@ -802,7 +804,8 @@
           "reason": null,
           "by": "verify"
         }
-      ]
+      ],
+      "ingested": true
     },
     {
       "id": "item_aura_earth01",
@@ -846,7 +849,8 @@
           "reason": null,
           "by": "verify"
         }
-      ]
+      ],
+      "ingested": true
     },
     {
       "id": "item_aura_lightning01",
@@ -890,7 +894,8 @@
           "reason": null,
           "by": "verify"
         }
-      ]
+      ],
+      "ingested": true
     },
     {
       "id": "item_aura_sakura01",
@@ -934,7 +939,8 @@
           "reason": null,
           "by": "verify"
         }
-      ]
+      ],
+      "ingested": true
     },
     {
       "id": "item_aura_gold_cards01",
@@ -954,8 +960,32 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T23:13:56.586Z",
+          "chat": "https://chatgpt.com/c/6ab45c3a-0888-83ec-92ac-3fd7b9238bf8",
+          "file": "aura_gold_cards01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1254×1254",
+            "width": 1254,
+            "height": 1254,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "hollow": 0
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "item_aura_ice01",
@@ -996,8 +1026,35 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T23:19:54.852Z",
+          "chat": "https://chatgpt.com/c/6ab45dac-7320-83ec-9850-069c4c687661",
+          "file": "frame_bronze.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1254×1254",
+            "width": 1254,
+            "height": 1254,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "hollow": 0,
+            "checks": {
+              "item_frame_bronze_L90": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "item_frame_silver",
@@ -1017,8 +1074,35 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T23:23:15.632Z",
+          "chat": "https://chatgpt.com/c/6ab45e70-8dfc-83ec-a040-334ea6144ed0",
+          "file": "frame_silver.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1254×1254",
+            "width": 1254,
+            "height": 1254,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "hollow": 0,
+            "checks": {
+              "item_frame_silver_L90": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "item_frame_gold",
@@ -1038,8 +1122,35 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T23:25:51.672Z",
+          "chat": "https://chatgpt.com/c/6ab45f3c-e62c-83ec-8938-b017e1719808",
+          "file": "frame_gold.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1254×1254",
+            "width": 1254,
+            "height": 1254,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "hollow": 0,
+            "checks": {
+              "item_frame_gold_L90": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "item_frame_monthly",
