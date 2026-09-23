@@ -611,8 +611,8 @@
       "layer": 70,
       "w": 384,
       "h": 448,
-      "bytes2x": 8128,
-      "placeholder": true
+      "bytes2x": 28594,
+      "real": true
     },
     "item_frame_bronze_L90": {
       "layer": 90,
@@ -709,8 +709,9 @@
       "layer": 80,
       "w": 384,
       "h": 448,
-      "bytes2x": 8298,
-      "placeholder": true
+      "bytes2x": 21656,
+      "hidesHairFront": true,
+      "real": true
     },
     "item_head_tophat01_L80": {
       "layer": 80,
@@ -875,8 +876,8 @@
       "of": "item_face_sunglasses01_L70",
       "w": 96,
       "h": 96,
-      "bytes2x": 6518,
-      "placeholder": true
+      "bytes2x": 18251,
+      "real": true
     },
     "item_frame_bronze_icon": {
       "kind": "icon",
@@ -979,8 +980,8 @@
       "of": "item_head_party_cone01_L80",
       "w": 96,
       "h": 96,
-      "bytes2x": 5562,
-      "placeholder": true
+      "bytes2x": 32774,
+      "real": true
     },
     "item_head_tophat01_icon": {
       "kind": "icon",

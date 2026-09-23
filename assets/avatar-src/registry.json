@@ -390,8 +390,47 @@
           "--hides-hair-front"
         ]
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T18:44:01.330Z",
+          "chat": "https://chatgpt.com/c/6ab41d35-38b4-83ec-a7f8-f0d1d7e936f2",
+          "file": "item_head_party_cone01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.107,
+            "drift": {
+              "left": -39,
+              "top": null,
+              "right": 20,
+              "bottom": 13
+            },
+            "scope": 0.12,
+            "checks": {
+              "item_head_party_cone01_L80": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "body box redrawn (width ratio 1.107, edges {\"left\":-39,\"top\":null,\"right\":20,\"bottom\":13}) — advisory for a head item",
+            "scope 0.12 outside the head — advisory for a head item"
+          ]
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "item_head_hood_black01",
@@ -414,8 +453,50 @@
           "--hides-hair-back"
         ]
       },
-      "status": "todo",
-      "attempts": []
+      "status": "blocked",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T18:47:39.040Z",
+          "chat": "https://chatgpt.com/c/6ab41ddb-fc68-83ec-b478-b176d8c92ed3",
+          "file": "item_head_hood_black01.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.135,
+            "drift": {
+              "left": -34,
+              "top": null,
+              "right": 40,
+              "bottom": 1
+            },
+            "scope": 0.001,
+            "checks": {
+              "item_head_hood_black01_L80": [
+                "C5"
+              ]
+            }
+          },
+          "reason": "style",
+          "by": "user",
+          "notes": [
+            "body box redrawn (width ratio 1.135, edges {\"left\":-34,\"top\":null,\"right\":40,\"bottom\":1}) — advisory for a head item",
+            "item_head_hood_black01_L80 C5: spills out of the 208 × 208 crop (100,80 183 × 180)"
+          ],
+          "judgedAt": "2026-09-23T18:51:12.885Z",
+          "note": "a hood cannot hide hair that is baked into the body layer: the cut keeps F01 hair round the hood and M01 wears it — item withdrawn from stage 1"
+        }
+      ]
     },
     {
       "id": "item_face_sunglasses01",
@@ -435,8 +516,45 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T18:53:50.973Z",
+          "chat": "https://chatgpt.com/c/6ab41eb3-7688-83ec-abca-b33433f1582a",
+          "file": "item_face_sunglasses01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.998,
+            "widthRatio": 1.004,
+            "drift": {
+              "left": -2,
+              "top": -1,
+              "right": 2,
+              "bottom": 1
+            },
+            "heads": 2.049,
+            "hairDelta": 2.231,
+            "scope": 0.002,
+            "checks": {
+              "item_face_sunglasses01_L70": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "item_face_masquerade01",
