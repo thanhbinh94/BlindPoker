@@ -667,8 +667,9 @@
       "layer": 80,
       "w": 384,
       "h": 448,
-      "bytes2x": 7891,
-      "placeholder": true
+      "bytes2x": 45928,
+      "hidesHairFront": true,
+      "real": true
     },
     "item_head_conical_hat01_L80": {
       "layer": 80,
@@ -681,15 +682,17 @@
       "layer": 80,
       "w": 384,
       "h": 448,
-      "bytes2x": 8429,
-      "placeholder": true
+      "bytes2x": 23561,
+      "hidesHairFront": true,
+      "real": true
     },
     "item_head_dealer_visor01_L80": {
       "layer": 80,
       "w": 384,
       "h": 448,
-      "bytes2x": 8506,
-      "placeholder": true
+      "bytes2x": 62630,
+      "hidesHairFront": true,
+      "real": true
     },
     "item_head_hood_black01_L80": {
       "layer": 80,
@@ -934,8 +937,8 @@
       "of": "item_head_beret_red01_L80",
       "w": 96,
       "h": 96,
-      "bytes2x": 5292,
-      "placeholder": true
+      "bytes2x": 16550,
+      "real": true
     },
     "item_head_conical_hat01_icon": {
       "kind": "icon",
@@ -950,16 +953,16 @@
       "of": "item_head_crown_gold01_L80",
       "w": 96,
       "h": 96,
-      "bytes2x": 5600,
-      "placeholder": true
+      "bytes2x": 19583,
+      "real": true
     },
     "item_head_dealer_visor01_icon": {
       "kind": "icon",
       "of": "item_head_dealer_visor01_L80",
       "w": 96,
       "h": 96,
-      "bytes2x": 5810,
-      "placeholder": true
+      "bytes2x": 21055,
+      "real": true
     },
     "item_head_hood_black01_icon": {
       "kind": "icon",

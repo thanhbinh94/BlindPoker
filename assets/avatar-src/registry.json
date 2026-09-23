@@ -34,7 +34,7 @@
         "variant": null,
         "flags": []
       },
-      "status": "rework-1",
+      "status": "ok",
       "attempts": [
         {
           "n": 1,
@@ -42,8 +42,43 @@
           "reason": "strap",
           "by": "claude",
           "file": "item_outfit_casual01.png"
+        },
+        {
+          "n": 2,
+          "at": "2026-09-23T18:24:39.077Z",
+          "chat": "https://chatgpt.com/c/6ab40fe2-5418-83ec-8a67-3dac8d977d4f",
+          "file": "item_outfit_casual01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.985,
+            "widthRatio": 0.991,
+            "drift": {
+              "left": -2,
+              "top": 0,
+              "right": 2,
+              "bottom": 19
+            },
+            "heads": 2.08,
+            "hairDelta": 5.248,
+            "checks": {
+              "item_outfit_casual01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
         }
-      ]
+      ],
+      "ingested": true
     },
     {
       "id": "item_head_dealer_visor01",
@@ -65,8 +100,43 @@
           "--hides-hair-front"
         ]
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T18:24:39.854Z",
+          "chat": "https://chatgpt.com/c/6ab4120f-f338-83ec-bb17-7e5ff86ca494",
+          "file": "item_head_dealer_visor01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.006,
+            "drift": {
+              "left": -2,
+              "top": null,
+              "right": 2,
+              "bottom": 1
+            },
+            "scope": 0.002,
+            "checks": {
+              "item_head_dealer_visor01_L80": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "item_head_beret_red01",
@@ -88,8 +158,43 @@
           "--hides-hair-front"
         ]
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T18:24:40.566Z",
+          "chat": "https://chatgpt.com/c/6ab4147b-884c-83ec-aaf5-40805f211848",
+          "file": "item_head_beret_red01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.004,
+            "drift": {
+              "left": -1,
+              "top": null,
+              "right": 2,
+              "bottom": 1
+            },
+            "scope": 0.002,
+            "checks": {
+              "item_head_beret_red01_L80": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "item_head_crown_gold01",
@@ -111,8 +216,43 @@
           "--hides-hair-front"
         ]
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T18:24:41.393Z",
+          "chat": "https://chatgpt.com/c/6ab416f8-e1c4-83ec-9c8b-a28f6b326981",
+          "file": "item_head_crown_gold01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.006,
+            "drift": {
+              "left": -2,
+              "top": null,
+              "right": 2,
+              "bottom": 1
+            },
+            "scope": 0.002,
+            "checks": {
+              "item_head_crown_gold01_L80": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "item_head_conical_hat01",
