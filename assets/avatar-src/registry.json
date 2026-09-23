@@ -2810,8 +2810,49 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T23:40:15.001Z",
+          "chat": "https://chatgpt.com/c/6ab4623c-bc60-83ec-8110-07bcccf05fa6",
+          "file": "bot_0.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.082,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": -2,
+              "centre": 0
+            },
+            "checks": {
+              "bot_0_L30": [],
+              "bot_0_face_neutral_L50": [],
+              "bot_0_face_happy_L50": [],
+              "bot_0_face_sad_L50": [],
+              "bot_0_face_surprised_L50": [],
+              "bot_0_face_closed_L50": [],
+              "bot_0_face_sleep_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "bot_1",
@@ -2832,8 +2873,49 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T23:43:50.206Z",
+          "chat": "https://chatgpt.com/c/6ab46341-b0d8-83ec-a0b9-52cf73cafb08",
+          "file": "bot_1.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.096,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 6,
+              "centre": -1
+            },
+            "checks": {
+              "bot_1_L30": [],
+              "bot_1_face_neutral_L50": [],
+              "bot_1_face_happy_L50": [],
+              "bot_1_face_sad_L50": [],
+              "bot_1_face_surprised_L50": [],
+              "bot_1_face_closed_L50": [],
+              "bot_1_face_sleep_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "bot_2",
