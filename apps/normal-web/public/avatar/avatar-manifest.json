@@ -200,8 +200,8 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 10066,
-      "placeholder": true
+      "bytes2x": 211846,
+      "real": true
     },
     "base_m01_L20": {
       "layer": 20,
