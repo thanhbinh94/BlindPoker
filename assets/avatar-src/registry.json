@@ -2278,8 +2278,45 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T22:36:06.731Z",
+          "chat": "https://chatgpt.com/c/6ab452e8-9194-83ec-9dec-c926f6f6135a",
+          "file": "m03_surprised.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.999,
+            "widthRatio": 0.999,
+            "drift": {
+              "left": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 1
+            },
+            "heads": 2.122,
+            "hairDelta": 8.777,
+            "scope": 0.001,
+            "checks": {
+              "base_m03_face_surprised_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "m03:closed",
