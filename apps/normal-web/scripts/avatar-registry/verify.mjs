@@ -42,7 +42,7 @@ import { runChecks } from '../avatar-pipeline/checks.mjs'
 import { ingest, measure as measureFigure } from '../avatar-pipeline/extract.mjs'
 import { CROP, FACE_LIMIT_Y, HEAD_LIMIT_Y, LAYERS, anchorBase } from '../avatar-pipeline/frame.mjs'
 import { MANIFEST_NAME, PUBLIC_DIR, SLOT_LAYER, baseFile, faceFile, itemFile, readManifest } from '../avatar-pipeline/manifest.mjs'
-import { ALPHA_INK, ALPHA_SOLID, alphaBBox, colourDistance, placeOnCanvas, readPicture, removeChroma, resizePicture, writePicture } from '../avatar-pipeline/png.mjs'
+import { ALPHA_SOLID, alphaBBox, colourDistance, placeOnCanvas, readPicture, removeChroma, resizePicture, writePicture } from '../avatar-pipeline/png.mjs'
 import { MAX_ATTEMPTS, SRC_DIR, parseFlags, parseSpec, referencePath, requireAsset } from './registry.mjs'
 
 export const PORTRAIT = { aspects: [2 / 3, 3 / 4], tolerance: 0.05, minHeight: 1152 }
@@ -199,7 +199,11 @@ export function comparePictures(pic, ref, kind, slot) {
 /** The share of the reference's height above which a head item's ink is ignored by `comparePictures`. */
 export const HEAD_ITEM_BODY_FROM = 0.5
 
-/** The ink box of the rows at or below `fromY` — a figure's body, when `fromY` is under its head. */
+/**
+ * The *solid* ink box of the rows at or below `fromY` — a figure's body, when `fromY` is under its head.
+ * Solid, not merely inked: the generator sometimes leaves a faint glow round the figure (the party hat
+ * picture: 39 px of it left of the arm) which the pipeline's key drops and which is not a redraw.
+ */
 export function bodyBox(pic, fromY) {
   const { width, height, data } = pic
   let x0 = width
@@ -208,7 +212,7 @@ export function bodyBox(pic, fromY) {
   let y1 = -1
   for (let y = Math.max(0, fromY); y < height; y++) {
     for (let x = 0; x < width; x++) {
-      if (data[(y * width + x) * 4 + 3] <= ALPHA_INK) continue
+      if (data[(y * width + x) * 4 + 3] <= ALPHA_SOLID) continue
       if (x < x0) x0 = x
       if (x > x1) x1 = x
       if (y < y0) y0 = y
@@ -425,7 +429,12 @@ export async function scorePicture({ file, kind, slot = null, referenceFile = nu
     if (compared.placement.scale !== 1 || compared.placement.left !== 0 || compared.placement.top !== 0) {
       notes.push(`another canvas than the reference's: scaled by ${round2(compared.placement.scale)} and anchored before drift, hair colour and scope`)
     }
-    if (compared.reason) return done(compared.reason)
+    // A head item is cut from the head rows alone (`HEAD_LIMIT_Y`), so a body the generator drew a little
+    // wider or narrower never reaches the layer; the pipeline's own registration and checks below are what
+    // decide it. The box numbers stay in `measure` and as a note. (The party hat: body 1.107× wide, arms
+    // held out, mean difference 2.9 on registration, a clean layer.)
+    if (compared.reason && headItem) notes.push(`body box ${compared.reason} (width ratio ${round2(compared.widthRatio)}, edges ${JSON.stringify(compared.edges)}) — advisory for a head item`)
+    else if (compared.reason) return done(compared.reason)
   } else {
     notes.push('no reference: drift, hair colour and scope not measured')
   }
@@ -449,7 +458,9 @@ export async function scorePicture({ file, kind, slot = null, referenceFile = nu
     const allowed = allowedArea(kind, slot, anchorBase(removeChroma(ref)))
     if (allowed) {
       measure.scope = round2(scopeFraction(aligned, ref, allowed))
-      if (measure.scope >= SCOPE_LIMIT) return done('scope')
+      // For a head item the body is outside the cut as well as outside the allowed area: advisory (see above).
+      if (measure.scope >= SCOPE_LIMIT && headItem) notes.push(`scope ${measure.scope} outside the head — advisory for a head item`)
+      else if (measure.scope >= SCOPE_LIMIT) return done('scope')
     }
   }
 

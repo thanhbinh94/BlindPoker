@@ -230,10 +230,14 @@ describe('verify: scope', () => {
     expect(result.measure.scope).toBeGreaterThan(0.01)
   })
 
-  it('lets a head item change the head, and not the body', async () => {
+  it('lets a head item change the head, and only notes a changed body (the cut keeps the head rows alone)', async () => {
     const hat = await score(files.hat, { kind: 'item', slot: 'head' })
     expect(hat.verdict, hat.reason).toBe('ok')
-    expect((await score(files.torso, { kind: 'item', slot: 'head' })).reason).toBe('scope')
+    // The 2026-09-24 party hat: arms held out, body 1.107× wide, a clean layer all the same.
+    const torso = await score(files.torso, { kind: 'item', slot: 'head' })
+    expect(torso.verdict, torso.reason).toBe('ok')
+    expect(torso.measure.scope).toBeGreaterThanOrEqual(0.01)
+    expect(torso.notes.join(' ')).toMatch(/advisory for a head item/)
   })
 
   it('does not ask it of an outfit, whose cut discards the head a generator redrew', async () => {
