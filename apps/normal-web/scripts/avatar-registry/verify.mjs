@@ -449,7 +449,12 @@ export async function scorePicture({ file, kind, slot = null, referenceFile = nu
   if (kind === 'base' || kind === 'expression' || (kind === 'item' && !headItem)) {
     const figure = measureFigure(removeChroma(pic))
     measure.heads = round2(figure.heads)
-    if (figure.heads < HEADS_RANGE[0] || figure.heads > HEADS_RANGE[1]) return done('heads')
+    // An expression is its base's own picture with the eyes and mouth redrawn: its proportions are the
+    // base's, and `measure()`'s chin-finding is what moves (F02's long hair, a rounder eye). Advisory there.
+    if (figure.heads < HEADS_RANGE[0] || figure.heads > HEADS_RANGE[1]) {
+      if (kind === 'expression') notes.push(`heads ${measure.heads} outside ${HEADS_RANGE.join('–')} — advisory for an expression (its proportions are the base's)`)
+      else return done('heads')
+    }
   }
 
   if (ref) {
