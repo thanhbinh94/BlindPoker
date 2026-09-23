@@ -314,8 +314,8 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 9688,
-      "placeholder": true
+      "bytes2x": 158764,
+      "real": true
     },
     "base_m02_face_sleep_L50": {
       "layer": 50,
