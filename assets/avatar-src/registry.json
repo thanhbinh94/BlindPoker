@@ -1945,8 +1945,45 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T20:30:48.585Z",
+          "chat": "https://chatgpt.com/c/6ab435e8-e524-83ec-8aa0-2d361fdbb29a",
+          "file": "m02_surprised.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.999,
+            "widthRatio": 1.003,
+            "drift": {
+              "left": 0,
+              "top": -1,
+              "right": 3,
+              "bottom": 1
+            },
+            "heads": 2.077,
+            "hairDelta": 6.096,
+            "scope": 0.002,
+            "checks": {
+              "base_m02_face_surprised_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "m02:closed",
