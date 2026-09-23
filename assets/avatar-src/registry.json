@@ -274,8 +274,43 @@
           "--hides-hair-front"
         ]
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T18:32:42.487Z",
+          "chat": "https://chatgpt.com/c/6ab419fc-b7f8-83ec-b535-fc7adf2028f7",
+          "file": "item_head_conical_hat01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.004,
+            "drift": {
+              "left": -1,
+              "top": null,
+              "right": 1,
+              "bottom": 1
+            },
+            "scope": 0.002,
+            "checks": {
+              "item_head_conical_hat01_L80": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "item_head_beanie01",
@@ -297,8 +332,43 @@
           "--hides-hair-front"
         ]
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T18:39:04.822Z",
+          "chat": "https://chatgpt.com/c/6ab41b60-c18c-83ec-8be4-ba7530d0ef40",
+          "file": "item_head_beanie01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.004,
+            "drift": {
+              "left": -1,
+              "top": null,
+              "right": 1,
+              "bottom": 1
+            },
+            "scope": 0.002,
+            "checks": {
+              "item_head_beanie01_L80": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "item_head_party_cone01",

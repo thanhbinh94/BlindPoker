@@ -660,8 +660,9 @@
       "layer": 80,
       "w": 384,
       "h": 448,
-      "bytes2x": 7468,
-      "placeholder": true
+      "bytes2x": 83368,
+      "hidesHairFront": true,
+      "real": true
     },
     "item_head_beret_red01_L80": {
       "layer": 80,
@@ -675,8 +676,9 @@
       "layer": 80,
       "w": 384,
       "h": 448,
-      "bytes2x": 8052,
-      "placeholder": true
+      "bytes2x": 82263,
+      "hidesHairFront": true,
+      "real": true
     },
     "item_head_crown_gold01_L80": {
       "layer": 80,
@@ -929,8 +931,8 @@
       "of": "item_head_beanie01_L80",
       "w": 96,
       "h": 96,
-      "bytes2x": 4730,
-      "placeholder": true
+      "bytes2x": 20888,
+      "real": true
     },
     "item_head_beret_red01_icon": {
       "kind": "icon",
@@ -945,8 +947,8 @@
       "of": "item_head_conical_hat01_L80",
       "w": 96,
       "h": 96,
-      "bytes2x": 5607,
-      "placeholder": true
+      "bytes2x": 16469,
+      "real": true
     },
     "item_head_crown_gold01_icon": {
       "kind": "icon",
