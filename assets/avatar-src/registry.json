@@ -1713,8 +1713,45 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T20:14:23.409Z",
+          "chat": "https://chatgpt.com/c/6ab43210-bf70-83ec-b624-436b86a2494f",
+          "file": "f03_closed.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.999,
+            "widthRatio": 0.998,
+            "drift": {
+              "left": 1,
+              "top": 0,
+              "right": 0,
+              "bottom": 1
+            },
+            "heads": 2.12,
+            "hairDelta": 0.929,
+            "scope": 0.001,
+            "checks": {
+              "base_f03_face_closed_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "f03:sleep",
