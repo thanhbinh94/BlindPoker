@@ -719,7 +719,7 @@
       "layer": 40,
       "w": 384,
       "h": 448,
-      "bytes2x": 89855,
+      "bytes2x": 98872,
       "real": true
     },
     "item_outfit_champion01_L40": {
@@ -990,7 +990,7 @@
       "of": "item_outfit_casual01_L40",
       "w": 96,
       "h": 96,
-      "bytes2x": 24156,
+      "bytes2x": 25213,
       "real": true
     },
     "item_outfit_champion01_icon": {
