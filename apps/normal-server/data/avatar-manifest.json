@@ -101,8 +101,8 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 9190,
-      "placeholder": true
+      "bytes2x": 158348,
+      "real": true
     },
     "base_f02_face_happy_L50": {
       "layer": 50,
