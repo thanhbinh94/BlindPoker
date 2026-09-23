@@ -190,6 +190,19 @@ export async function alignPicture(pic, ref, { scale, left, top }) {
 /** Compare a picture with its reference: both boxes, the rules, and the placement onto the reference's canvas. */
 export function comparePictures(pic, ref, kind, slot) {
   const anchored = pic.width !== ref.width || pic.height !== ref.height
+  if (kind === 'bot') {
+    // A bot is its own figure — a robot has no hair (box top 88 px lower than F01's) and ear discs (1.16× as
+    // wide) — drawn on F01's canvas and cut on F01's transform. What must agree is where it stands: its feet
+    // and its centre line. Another canvas is a redraw, since the transform is F01's.
+    const box = figureBox(pic)
+    const refBox = figureBox(ref)
+    const placement = { scale: 1, left: 0, top: 0 }
+    if (anchored) return { scale: 1, widthRatio: box.w / refBox.w, edges: { left: null, top: null, right: null, bottom: null }, drift: Infinity, placement, reason: 'redrawn' }
+    const bottom = Math.round(box.y + box.h - (refBox.y + refBox.h))
+    const centre = Math.round(box.x + box.w / 2 - (refBox.x + refBox.w / 2))
+    const drift = Math.max(Math.abs(bottom), Math.abs(centre))
+    return { scale: 1, widthRatio: box.w / refBox.w, edges: { left: null, top: null, right: null, bottom, centre }, drift, placement, reason: drift > DRIFT_LIMIT ? 'drift' : null }
+  }
   if ((kind === 'item' && slot === 'head') || kind === 'base') {
     // A hat may be far wider than the hair (the conical hat: 1.15× the figure) — that is the item, not a
     // redraw. So a head item is held to its *body*: the ink below the reference's mid-height, where no hat
