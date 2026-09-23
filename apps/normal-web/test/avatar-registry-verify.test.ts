@@ -14,10 +14,10 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { ingest as pipelineIngest } from '../scripts/avatar-pipeline/extract.mjs'
 import { MANIFEST_NAME } from '../scripts/avatar-pipeline/manifest.mjs'
-import { renderSvg, writePicture } from '../scripts/avatar-pipeline/png.mjs'
+import { alphaBBox, renderSvg, writePicture } from '../scripts/avatar-pipeline/png.mjs'
 import { collect } from '../scripts/avatar-registry/collect.mjs'
 import { addVariant, baseGaps, ingestAssets } from '../scripts/avatar-registry/ingest.mjs'
-import { compareBoxes, scorePicture, verifyAssets } from '../scripts/avatar-registry/verify.mjs'
+import { bodyBox, compareBoxes, comparePictures, scorePicture, verifyAssets } from '../scripts/avatar-registry/verify.mjs'
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- the registry and the score are plain JSON */
 type Asset = any
@@ -201,6 +201,17 @@ describe('verify: drift and redrawn', () => {
     expect(compareBoxes(sad, m01, { kind: 'expression' })).toMatchObject({ reason: null, edges: { top: -1 } })
     // …and a new base, whose hair is its own, is held to the raw box.
     expect(compareBoxes({ ...strand, y: 60, h: 1382 }, ref, { kind: 'base' }).edges.top).toBe(-22)
+  })
+
+  it('holds a head item to its body, so a hat wider than the hair is not a redraw', async () => {
+    // The 2026-09-24 conical hat: the figure's box grew 1.149× wide because of the brim, with the body untouched.
+    const base = await renderSvg(svg(figure()), W, H)
+    const hatted = await renderSvg(svg(`${figure()}<ellipse cx="512" cy="200" rx="400" ry="90" fill="#c8a860"/>`), W, H)
+    expect(comparePictures(hatted, base, 'item', 'head').reason).toBeNull()
+    expect(comparePictures(hatted, base, 'item', 'face').reason).toBe('redrawn')
+    const box = alphaBBox(base)!
+    const from = box.y + Math.floor(box.h * 0.5)
+    expect(bodyBox(hatted, from)).toEqual(bodyBox(base, from))
   })
 })
 

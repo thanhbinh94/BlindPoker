@@ -42,7 +42,7 @@ import { runChecks } from '../avatar-pipeline/checks.mjs'
 import { ingest, measure as measureFigure } from '../avatar-pipeline/extract.mjs'
 import { CROP, FACE_LIMIT_Y, HEAD_LIMIT_Y, LAYERS, anchorBase } from '../avatar-pipeline/frame.mjs'
 import { MANIFEST_NAME, PUBLIC_DIR, SLOT_LAYER, baseFile, faceFile, itemFile, readManifest } from '../avatar-pipeline/manifest.mjs'
-import { ALPHA_SOLID, alphaBBox, colourDistance, placeOnCanvas, readPicture, removeChroma, resizePicture, writePicture } from '../avatar-pipeline/png.mjs'
+import { ALPHA_INK, ALPHA_SOLID, alphaBBox, colourDistance, placeOnCanvas, readPicture, removeChroma, resizePicture, writePicture } from '../avatar-pipeline/png.mjs'
 import { MAX_ATTEMPTS, SRC_DIR, parseFlags, parseSpec, referencePath, requireAsset } from './registry.mjs'
 
 export const PORTRAIT = { aspects: [2 / 3, 3 / 4], tolerance: 0.05, minHeight: 1152 }
@@ -185,7 +185,37 @@ export async function alignPicture(pic, ref, { scale, left, top }) {
 /** Compare a picture with its reference: both boxes, the rules, and the placement onto the reference's canvas. */
 export function comparePictures(pic, ref, kind, slot) {
   const anchored = pic.width !== ref.width || pic.height !== ref.height
+  if (kind === 'item' && slot === 'head') {
+    // A hat may be far wider than the hair (the conical hat: 1.15× the figure) — that is the item, not a
+    // redraw. So a head item is held to its *body*: the ink below the reference's mid-height, where no hat
+    // reaches, compared left, right and bottom.
+    const refBox = figureBox(ref)
+    const fromY = refBox.y + Math.floor(refBox.h * HEAD_ITEM_BODY_FROM)
+    return compareBoxes(bodyBox(pic, fromY), bodyBox(ref, fromY), { kind, slot, anchored })
+  }
   return compareBoxes(figureBox(pic), figureBox(ref), { kind, slot, anchored })
+}
+
+/** The share of the reference's height above which a head item's ink is ignored by `comparePictures`. */
+export const HEAD_ITEM_BODY_FROM = 0.5
+
+/** The ink box of the rows at or below `fromY` — a figure's body, when `fromY` is under its head. */
+export function bodyBox(pic, fromY) {
+  const { width, height, data } = pic
+  let x0 = width
+  let y0 = height
+  let x1 = -1
+  let y1 = -1
+  for (let y = Math.max(0, fromY); y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (data[(y * width + x) * 4 + 3] <= ALPHA_INK) continue
+      if (x < x0) x0 = x
+      if (x > x1) x1 = x
+      if (y < y0) y0 = y
+      if (y > y1) y1 = y
+    }
+  }
+  return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 }
 }
 
 /** The mean colour of the solid pixels in the top-of-head band, or null when there are none. */
