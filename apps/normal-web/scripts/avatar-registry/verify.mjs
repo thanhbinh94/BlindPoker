@@ -26,12 +26,15 @@
  *   check:<Cn>   the pipeline's own acceptance criteria, on a copy: public/avatar/ is copied to a temporary
  *                directory, the picture is ingested there with the asset's `ingest` spec (`--out`), and
  *                `runChecks` runs over the layers that wrote (`pipeline` if the ingest itself throws)
- *   hollow       an aura or a frame: mean alpha inside 40 % of the half-width ≥ 0.05
+ *   hollow       an aura or a frame: mean alpha inside 40 % of the half-width ≥ 0.05 — asked right after
+ *                `background`, and followed by the pipeline rule alone (2026-09-24: the pipeline has aura and
+ *                frame targets now)
  *
  * A picture on another canvas than its reference's (the model's 1086 × 1448) is scaled and anchored onto the
  * reference's canvas before drift, hair colour and scope are measured, and before the pipeline cuts it. A
- * head item's hat covers the top of the head, so `heads` and `hair_colour` are not asked of it. A bot has no
- * pipeline target yet and skips that rule (`pipeline: skipped (bot)`).
+ * head item's hat covers the top of the head, so `heads` and `hair_colour` are not asked of it. A bot goes
+ * through the pipeline like everything else since 2026-09-24 (`bot:<n>` checks its body and six faces,
+ * `bot:<n>:happy` that one face), cut on f01's transform.
  *
  * Nothing here writes into public/avatar/.
  */
@@ -39,9 +42,9 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { runChecks } from '../avatar-pipeline/checks.mjs'
-import { ingest, measure as measureFigure } from '../avatar-pipeline/extract.mjs'
+import { BOT_TRANSFORM_FROM, ingest, measure as measureFigure } from '../avatar-pipeline/extract.mjs'
 import { CROP, FACE_LIMIT_Y, HEAD_LIMIT_Y, LAYERS, anchorBase } from '../avatar-pipeline/frame.mjs'
-import { MANIFEST_NAME, PUBLIC_DIR, SLOT_LAYER, baseFile, faceFile, itemFile, readManifest } from '../avatar-pipeline/manifest.mjs'
+import { EXPRESSIONS, MANIFEST_NAME, PUBLIC_DIR, SLOT_LAYER, baseFile, botFaceFile, botFile, faceFile, itemFile, readManifest } from '../avatar-pipeline/manifest.mjs'
 import { ALPHA_SOLID, alphaBBox, colourDistance, placeOnCanvas, readPicture, removeChroma, resizePicture, writePicture } from '../avatar-pipeline/png.mjs'
 import { MAX_ATTEMPTS, SRC_DIR, parseFlags, parseSpec, referencePath, requireAsset } from './registry.mjs'
 
@@ -329,10 +332,18 @@ export function hollowness(pic) {
 
 // ─────────────────────────────────────────────────────────── the pipeline ──
 
-/** The layers an ingest of `target` writes, which are the ones `runChecks` is run over. */
+/**
+ * The layers an ingest of `target` writes, which are the ones `runChecks` is run over. An aura or a frame is
+ * its one item layer; a bot's neutral picture is its body and all six faces (the five besides neutral written
+ * as copies of it, or kept where already real); a bot's second face is that face alone.
+ */
 export function layerNames(target, owner, variant = null) {
   if (target.kind === 'base') return [baseFile(owner, LAYERS.body), faceFile(owner, 'neutral'), baseFile(owner, LAYERS.hairBack), baseFile(owner, LAYERS.hairFront)]
   if (target.kind === 'expr') return [faceFile(owner, target.expr)]
+  if (target.kind === 'bot') {
+    const expr = target.expr ?? 'neutral'
+    return expr === 'neutral' ? [botFile(target.bot), ...EXPRESSIONS.map((face) => botFaceFile(target.bot, face))] : [botFaceFile(target.bot, expr)]
+  }
   return [itemFile(target.slot, target.code, SLOT_LAYER[target.slot], variant)]
 }
 
@@ -371,14 +382,21 @@ async function pipelineChecks({ file, kind, slot, referenceFile, spec, publicDir
     const target = parseSpec(spec.as)
     const owner = ownerOf(target, spec)
     const quiet = () => {}
-    if (target.kind !== 'base' && !readManifest(targets[0]).bases?.[owner]) {
-      if (!referenceFile) throw new Error(`no base ${owner} in ${publicDir} and no reference to ingest it from`)
-      await ingest({ file: referenceFile, target: { kind: 'base', base: owner }, dir, targets, log: quiet })
+    // A base drawn from another base's picture takes that base's transform (see `transformSource` in ingest.mjs),
+    // and a bot always does — f01's, unless its reference is another base's picture.
+    const candidate = referenceFile ? /^([fm]\d\d)_candidate_\d+\.png$/.exec(basename(referenceFile))?.[1] ?? null : null
+    const fromBase = target.kind === 'base' ? candidate : target.kind === 'bot' ? candidate ?? BOT_TRANSFORM_FROM : null
+    // The base whose stored transform the cut needs: an expression's or an item's own base, a bot's transform
+    // source. An aura or a frame is placed by its ink box and needs none.
+    const square = target.kind === 'item' && SQUARE_KINDS.has(target.slot)
+    const needed = target.kind === 'bot' ? fromBase : target.kind === 'base' || square ? null : owner
+    if (needed !== null && !readManifest(targets[0]).bases?.[needed]) {
+      // Only a picture of that base can stand in for it: an expression's reference, or a bot's F01 reference.
+      if (!referenceFile || (target.kind === 'bot' && candidate !== needed)) throw new Error(`no base ${needed} in ${publicDir} and no reference to ingest it from`)
+      await ingest({ file: referenceFile, target: { kind: 'base', base: needed }, dir, targets, log: quiet })
     }
     const input = await pipelineInput({ file, kind, slot, referenceFile, tmp: join(tmp, 'input') })
     const flags = parseFlags(spec.flags)
-    // A base drawn from another base's picture takes that base's transform (see `transformSource` in ingest.mjs).
-    const fromBase = target.kind === 'base' && referenceFile ? /^([fm]\d\d)_candidate_\d+\.png$/.exec(basename(referenceFile))?.[1] ?? null : null
     await ingest({
       file: input.file, target, dir, targets, baseId: owner, variant: spec.variant ?? null,
       tolerance: flags.tolerance, white: flags.white, lockScale: flags.lockScale ?? null, transformFrom: fromBase, hides: flags.hides, diff: flags.diff, log: quiet,
@@ -423,9 +441,37 @@ export async function scorePicture({ file, kind, slot = null, referenceFile = nu
     return done('background')
   }
 
+  /** The last rule, `pipeline` / `check:<Cn>`: a trial ingest into a copy of `publicDir`, then `check`. */
+  const pipelineRule = async () => {
+    if (!pipeline) {
+      notes.push('pipeline: not run')
+      return done(null)
+    }
+    if (!spec) {
+      notes.push('pipeline: not run (no ingest spec)')
+      return done(null)
+    }
+    try {
+      const result = await pipelineChecks({ file, kind, slot, referenceFile, spec, publicDir, keepTmp, log })
+      measure.checks = result.checks
+      if (result.aligned) notes.push('pipeline: fed the picture aligned onto the reference canvas')
+      if (result.failed.length) {
+        for (const { name, id, detail } of result.failed) notes.push(`${name} ${id}: ${detail ?? 'failed'}`)
+        return done(`check:${result.failed[0].id}`)
+      }
+    } catch (error) {
+      measure.pipelineError = error instanceof Error ? error.message : String(error)
+      return done('pipeline')
+    }
+    return done(null)
+  }
+
+  // An aura or a frame has no figure and no reference: `hollow`, then straight to the pipeline (2026-09-24 —
+  // until Plan 12's square targets it stopped at `hollow`, having nowhere to ingest to).
   if (SQUARE_KINDS.has(kind)) {
     measure.hollow = round2(hollowness(pic))
-    return done(measure.hollow < HOLLOW.limit ? null : 'hollow')
+    if (measure.hollow >= HOLLOW.limit) return done('hollow')
+    return pipelineRule()
   }
 
   const headItem = kind === 'item' && slot === 'head'
@@ -484,31 +530,7 @@ export async function scorePicture({ file, kind, slot = null, referenceFile = nu
     }
   }
 
-  if (!pipeline) {
-    notes.push('pipeline: not run')
-    return done(null)
-  }
-  if (kind === 'bot') {
-    notes.push('pipeline: skipped (bot)')
-    return done(null)
-  }
-  if (!spec) {
-    notes.push('pipeline: not run (no ingest spec)')
-    return done(null)
-  }
-  try {
-    const result = await pipelineChecks({ file, kind, slot, referenceFile, spec, publicDir, keepTmp, log })
-    measure.checks = result.checks
-    if (result.aligned) notes.push('pipeline: fed the picture aligned onto the reference canvas')
-    if (result.failed.length) {
-      for (const { name, id, detail } of result.failed) notes.push(`${name} ${id}: ${detail ?? 'failed'}`)
-      return done(`check:${result.failed[0].id}`)
-    }
-  } catch (error) {
-    measure.pipelineError = error instanceof Error ? error.message : String(error)
-    return done('pipeline')
-  }
-  return done(null)
+  return pipelineRule()
 }
 
 /** What kind of asset an `--as` spec describes, for `verify --picture` (no registry entry to ask). */

@@ -7,7 +7,7 @@
  * catches bad art and one that only catches files nobody would have shipped anyway.
  *
  *   C1  the frame, exactly, at both densities (D01 §10.1 — one pixel out is a fail)
- *   C2  nothing opaque on the outermost row or column (§10.3)
+ *   C2  nothing opaque on the outermost row or column (§10.3) — except an aura, which may run off the frame
  *   C3  the empty part really is empty: no alpha at all more than 3 px outside the solid shape (§10.4)
  *   C4  no white fringe: the soft rim is the shape's colour, not white bled in (§10.5, §8.3)
  *   C5  head and face items fit inside the portrait crop (§10.6, §5)
@@ -140,7 +140,13 @@ function frameSize({ pictures }) {
   return wrong.length ? bad(wrong.join(', ')) : ok(`${FRAME.w} × ${FRAME.h} at both densities`)
 }
 
-function insideTheFrame({ pictures }) {
+/**
+ * C2. An aura (layer 10) is exempt (2026-09-24, Plan 12): it is an effect spread round the whole figure,
+ * `AURA_SIZE` (400) wide on a 384 frame, so a real one touches the edge by design. C3 still holds it to having
+ * nothing stray where nothing is drawn.
+ */
+function insideTheFrame({ pictures, parsed }) {
+  if (parsed?.layer === LAYERS.aura) return ok('n/a — an aura may run to the frame edge')
   for (const density of DENSITIES) {
     const picture = pictures[density]
     if (!picture) continue

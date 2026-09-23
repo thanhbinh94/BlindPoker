@@ -45,6 +45,8 @@ import {
   applyMask,
   alphaBBox,
   blankPicture,
+  bleedColour,
+  clonePicture,
   colourDistance,
   dilateMask,
   erodeMask,
@@ -57,8 +59,8 @@ import {
   removeChroma,
   writeDensities,
 } from './png.mjs'
-import { AXIS_X, BASELINE_Y, CROP, FACE_LIMIT_Y, FRAME, HEAD_LIMIT_Y, LAYERS, SKIN_TOLERANCE, STRAND_MARGIN, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, isSkin } from './frame.mjs'
-import { ICON, MANIFEST_NAME, SLOT_LAYER, WEARS, baseFile, entryFor, faceFile, itemFile, readManifest, wearOf, writeIcon, writeManifest } from './manifest.mjs'
+import { AURA_CY, AURA_SIZE, AXIS_X, BASELINE_Y, CROP, FACE_LIMIT_Y, FRAME, HEAD_LIMIT_Y, LAYERS, RING, RING_HOLLOW, SKIN_TOLERANCE, STRAND_MARGIN, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, isSkin, placeByInk } from './frame.mjs'
+import { BOTS, EXPRESSIONS, ICON, MANIFEST_NAME, SLOT_LAYER, WEARS, baseFile, botFaceFile, botFile, entryFor, faceFile, itemFile, readManifest, wearOf, writeIcon, writeManifest } from './manifest.mjs'
 
 /** D02 §8.3: a chibi is between two and two and a half heads tall, or it is not this character. */
 export const HEADS_RANGE = [2, 2.5]
@@ -1311,18 +1313,38 @@ export function describeMeasurement(report, width) {
  * with `variantOf` and `wear` in its manifest entry. It has to agree with that base — a `m` variant is cut
  * on a base that wears `m`, or the layer would be the wrong shape for every figure that will wear it.
  *
- * @param {{ file: string, target: { kind: string, slot?: string, code?: string, base?: string, expr?: string }, dir: string, targets?: string[], baseId?: string, variant?: string | null, tolerance?: number, white?: boolean, dryRun?: boolean, lockScale?: number | null, hides?: object, diff?: object, log?: (line: string) => void }} options
+ * 2026-09-24 (Plan 12), three more targets:
+ *
+ * - **An aura or a frame** (`item:aura:<code>`, `item:frame:<code>`) is a square picture with the effect in a
+ *   ring and nothing to diff against a base — see `ingestSquare`.
+ * - **A bot** (`bot:<n>`) is a figure drawn from F01's own picture, same canvas and pose, so it is cut like a
+ *   base on the transform of `transformFrom` (default `BOT_TRANSFORM_FROM`, f01) rather than anchored by its
+ *   own box: the whole figure as `bot_<n>_L30` — no strand cut, since a bot has no L60 to move it to and
+ *   wears nothing that could hide it — and its head region as `bot_<n>_face_neutral_L50`. The other five
+ *   faces are written as copies of the neutral one, marked `copyOf`, so `check` and the app see a complete
+ *   set — except a face already real in its own right, which a new neutral picture leaves alone.
+ * - **A bot's second face** (`bot:<n>:<expression>`, `bot:<n>:happy` in practice) cuts that one face from
+ *   its picture's head region, on the same transform, and replaces the copy.
+ *
+ * @param {{ file: string, target: { kind: string, slot?: string, code?: string, base?: string, expr?: string, bot?: number }, dir: string, targets?: string[], baseId?: string, variant?: string | null, tolerance?: number, white?: boolean, dryRun?: boolean, lockScale?: number | null, transformFrom?: string | null, hides?: object, diff?: object, log?: (line: string) => void }} options
  */
 export async function ingest({ file, target, dir, targets, baseId = 'f01', variant = null, tolerance = 40, white = false, dryRun = false, lockScale = null, transformFrom = null, hides = {}, diff = {}, log = () => {} }) {
+  const square = target.kind === 'item' && SQUARE_SLOTS.has(target.slot)
   if (variant !== null) {
     if (!WEARS.includes(variant)) throw new Error(`--variant ${variant} is not one of ${WEARS.join(', ')}`)
     if (target.kind !== 'item') throw new Error('--variant belongs to an item — only a wardrobe layer has per-wear variants')
+    if (square) throw new Error(`--variant belongs to a worn item — an ${target.slot} is one picture for every base`)
     const wear = wearOf(target.base ?? baseId)
     if (wear !== variant) {
       throw new Error(`--variant ${variant} does not match base ${target.base ?? baseId}, which wears ${wear ?? 'nothing the pipeline knows'} — cut a ${variant} variant on a ${variant} base`)
     }
   }
+  if (target.kind === 'bot') {
+    if (!BOTS.includes(target.bot)) throw new Error(`there is no bot ${target.bot} — the bots are ${BOTS.join(', ')}`)
+    if (!EXPRESSIONS.includes(target.expr ?? 'neutral')) throw new Error(`bot ${target.bot} has no expression ${target.expr} — one of ${EXPRESSIONS.join(', ')}`)
+  }
   const source = await readPicture(file)
+  if (square) return ingestSquare({ source, target, dir, targets, tolerance, white, dryRun, log })
   const keyed = removeChroma(source, { key: white ? [255, 255, 255] : [0, 255, 0], tolerance, despill: !white })
   const report = measure(keyed)
   if (dryRun) {
@@ -1352,6 +1374,14 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', varia
     }
     strandY = strandCut(report, transform)
     manifest.bases[owner] = { transform, ...(strandY === null ? {} : { strandY }) }
+  } else if (target.kind === 'bot') {
+    // A bot is drawn from F01's picture (the registry's `f01_candidate_1.png`): same canvas, same pose, so
+    // F01's transform places it — its own box would scale it by whatever it has instead of an ahoge.
+    const from = transformFrom ?? BOT_TRANSFORM_FROM
+    const stored = manifest.bases[from]?.transform
+    if (!stored) throw new Error(`no transform stored for base ${from} — a bot is cut on it; ingest it with --as base:${from} first`)
+    transform = { ...stored }
+    log(`transform taken from ${from}: scale ${stored.scale.toFixed(4)}, offset ${stored.offsetX.toFixed(1)}, ${stored.offsetY.toFixed(1)}`)
   } else {
     transform = manifest.bases[owner]?.transform
     strandY = manifest.bases[owner]?.strandY ?? null
@@ -1391,6 +1421,31 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', varia
     const faceRows = clipToFace(strandY)
     const face = (pic, density) => dropFaint(faceRows(pic, density))
     layers.push({ file: { name: faceFile(owner, target.expr), layer: LAYERS.face }, picture: face(anchored, 2), clip: face })
+  } else if (target.kind === 'bot') {
+    // The kit draws a bot as two layers (`layersFor` in packages/ui-kit/src/avatar2d/layers.ts): L30 and one
+    // L50 face per expression — no hair layers, no wardrobe, so no strand cut and no icon.
+    const body = (pic) => dropFaint(pic)
+    const faceRows = clipToFace(null)
+    const face = (pic, density) => dropFaint(faceRows(pic, density))
+    const expr = target.expr ?? 'neutral'
+    if (expr === 'neutral') {
+      layers.push({ file: { name: botFile(target.bot), layer: LAYERS.body }, picture: body(anchored), clip: body })
+      const neutral = botFaceFile(target.bot, 'neutral')
+      const neutralPicture = face(anchored, 2)
+      layers.push({ file: { name: neutral, layer: LAYERS.face }, picture: neutralPicture, clip: face })
+      for (const other of EXPRESSIONS) {
+        if (other === 'neutral') continue
+        const name = botFaceFile(target.bot, other)
+        const before = manifest.files[name]
+        if (before?.real && !before.copyOf) {
+          log(`${name} — real, left as it is`)
+          continue
+        }
+        layers.push({ file: { name, layer: LAYERS.face }, picture: neutralPicture, clip: face, extra: { copyOf: neutral } })
+      }
+    } else {
+      layers.push({ file: { name: botFaceFile(target.bot, expr), layer: LAYERS.face }, picture: face(anchored, 2), clip: face })
+    }
   } else {
     // The item is measured against the whole base as it is drawn: its body, and its front hair when that
     // holds a strand — otherwise a strand the item picture still shows would read as part of the item.
@@ -1413,7 +1468,7 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', varia
   for (const { file: layerFile, picture, clip = null, extra = {}, icon = false } of layers) {
     const bytes2x = await writeDensities(picture, dir, layerFile.name, clip)
     manifest.files[layerFile.name] = entryFor(layerFile, bytes2x, { real: true, ...extra })
-    log(`${layerFile.name} — ${(bytes2x / 1024).toFixed(1)} KB at @2x${extra.empty ? ', empty' : ''}`)
+    log(`${layerFile.name} — ${(bytes2x / 1024).toFixed(1)} KB at @2x${extra.empty ? ', empty' : ''}${extra.copyOf ? `, a copy of ${extra.copyOf}` : ''}`)
     if (icon) {
       const name = await writeIcon(picture, dir, layerFile.name, manifest, { real: true })
       log(`${name} — ${ICON.w} × ${ICON.h}`)
@@ -1422,4 +1477,96 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', varia
   await writeManifest(manifest, targets)
   log(`${report.heads.toFixed(2)} heads`)
   return { report, name: layers[0].file.name }
+}
+
+/** The item slots whose picture is a square with the effect in a ring, placed by `ingestSquare` (2026-09-24). */
+export const SQUARE_SLOTS = new Set(['aura', 'frame'])
+/** The base whose stored transform a bot is cut on, unless `transformFrom` says otherwise (2026-09-24). */
+export const BOT_TRANSFORM_FROM = 'f01'
+
+/** Where each square slot's ink box goes, in frame units: its larger side, and its centre. */
+const SQUARE_PLACEMENT = {
+  aura: { size: AURA_SIZE, cx: AXIS_X, cy: AURA_CY },
+  frame: { size: RING, cx: AXIS_X, cy: CROP.y + CROP.size / 2 },
+}
+
+/**
+ * An aura or a frame, in (2026-09-24, Plan 12).
+ *
+ * The picture is a square — at least 1024, transparent, the effect in a ring with its middle empty — and there
+ * is no figure in it, so there is nothing to diff against a base and no transform to take: it is placed by
+ * its ink box alone (`placeByInk`). An **aura** (layer 10) is fitted to `AURA_SIZE` and centred on
+ * (`AXIS_X`, `AURA_CY`), the effect spread round the whole body; it is wider than the frame and is cut off at
+ * both sides, which C2 allows for layer 10 alone. A **frame** (layer 90) is fitted to `RING` and centred on
+ * the crop's centre, and must leave the portrait showing: the mean alpha inside `RING_HOLLOW.radius` of its
+ * half-width is held under `RING_HOLLOW.limit`, or the ingest is refused before anything is written.
+ *
+ * The background: a picture with its own transparency (all four corners alpha 0, which `verify` requires) is
+ * not keyed at all — `removeChroma`'s despill would pull every green in a wind or earth aura down to grey —
+ * only its colour is bled under the transparent rim so the resize cannot darken it. A picture on a flat
+ * green (or `--white`) background is keyed as usual. The icon is the picture itself fitted into the square
+ * (`writeIcon`), so an aura's is the whole ring rather than the frame-cut layer.
+ */
+async function ingestSquare({ source, target, dir, targets, tolerance, white, dryRun, log }) {
+  const keyed = hasOwnTransparency(source)
+    ? bleedUnder(source)
+    : removeChroma(source, { key: white ? [255, 255, 255] : [0, 255, 0], tolerance, despill: !white })
+  const placement = SQUARE_PLACEMENT[target.slot]
+  const picture = dropFaint(await placeByInk(keyed, placement, 2))
+  const box = alphaBBox(keyed)
+  const hollow = target.slot === 'frame' ? ringHollowness(picture, 2) : null
+  const report = { ok: hollow === null || hollow < RING_HOLLOW.limit, box, hollow }
+  const layer = SLOT_LAYER[target.slot]
+  const name = itemFile(target.slot, target.code, layer)
+  const lines = [
+    `ink box          ${box.w} × ${box.h} at ${box.x},${box.y} of ${source.width} × ${source.height}`,
+    `placed           ${placement.size} px across, centred on ${placement.cx},${placement.cy} (frame units)`,
+    ...(hollow === null ? [] : [`hollow           mean alpha ${hollow.toFixed(3)} inside ${RING_HOLLOW.radius * 100} % of the ring's radius (want under ${RING_HOLLOW.limit})`]),
+  ]
+  if (dryRun) {
+    for (const line of [...lines, `verdict          ${report.ok ? 'PASS' : 'FAIL'}`]) log(line)
+    return { report, name: null }
+  }
+  if (!report.ok) {
+    throw new Error(`${name}: the ring is not hollow — mean alpha ${hollow.toFixed(3)} inside ${RING_HOLLOW.radius * 100} % of its radius, want under ${RING_HOLLOW.limit}; a frame that fills its middle paints over the portrait`)
+  }
+  for (const line of lines) log(line)
+  const manifest = readManifest(join(dir, MANIFEST_NAME))
+  const bytes2x = await writeDensities(picture, dir, name, (pic) => dropFaint(pic))
+  manifest.files[name] = entryFor({ name, layer }, bytes2x, { real: true })
+  log(`${name} — ${(bytes2x / 1024).toFixed(1)} KB at @2x`)
+  const icon = await writeIcon(keyed, dir, name, manifest, { real: true })
+  log(`${icon} — ${ICON.w} × ${ICON.h}`)
+  await writeManifest(manifest, targets)
+  return { report, name }
+}
+
+/** Whether a picture carries its own transparency: all four corners fully transparent. */
+function hasOwnTransparency(pic) {
+  const { width, height, data } = pic
+  return [[0, 0], [width - 1, 0], [0, height - 1], [width - 1, height - 1]].every(([x, y]) => data[(y * width + x) * 4 + 3] === 0)
+}
+
+/** A copy of a picture with its colour bled under the transparent pixels next to it, alpha untouched. */
+function bleedUnder(pic) {
+  const out = clonePicture(pic)
+  bleedColour(out, 2)
+  return out
+}
+
+/** The mean alpha (0–1) of a placed frame layer inside `RING_HOLLOW.radius` of the ring's half-width, round the crop centre. */
+export function ringHollowness(pic, density = 1) {
+  const cx = AXIS_X * density
+  const cy = (CROP.y + CROP.size / 2) * density
+  const r = RING_HOLLOW.radius * (RING / 2) * density
+  let n = 0
+  let sum = 0
+  for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++) {
+    for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) {
+      if ((x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2 > r * r) continue
+      n++
+      sum += pic.data[(y * pic.width + x) * 4 + 3]
+    }
+  }
+  return sum / n / 255
 }

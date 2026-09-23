@@ -8,14 +8,16 @@
  * - an item's per-wear cut gains its one line in `items.json` — `asset.variants.<wear>` — when it is not
  *   there yet (docs/avatar-2d.md §3.1), written into the file's own formatting;
  * - a new base is **checked, not registered**: what `BASES`/`BASE_WEAR` (manifest.mjs), `avatar-bases.json`
- *   and the two locales' `bases.<id>` still lack is printed, and adding it stays a hand edit (§9.1);
- * - a bot, an aura and a frame are left `ok` with "not supported yet": the pipeline has no bot target, and
- *   its item cut diffs a picture against the base's body, which a square aura or ring picture is not.
+ *   and the two locales' `bases.<id>` still lack is printed, and adding it stays a hand edit (§9.1).
+ *
+ * An aura, a frame and a bot go through like everything else (2026-09-24, Plan 12): `item:aura:<code>`,
+ * `item:frame:<code>`, `bot:<n>` and `bot:<n>:happy` are the pipeline's own targets, passed straight through,
+ * and a bot is cut on f01's transform (`transformSource`).
  */
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { ingest } from '../avatar-pipeline/extract.mjs'
+import { BOT_TRANSFORM_FROM, ingest } from '../avatar-pipeline/extract.mjs'
 import { BASES, BASE_WEAR, MANIFEST_NAME, PACKAGE_ROOT, PUBLIC_DIR, SERVER_MANIFEST, SLOT_LAYER, itemFile } from '../avatar-pipeline/manifest.mjs'
 import { SRC_DIR, parseFlags, parseSpec, referencePath, requireAsset } from './registry.mjs'
 import { ownerOf, pipelineInput } from './verify.mjs'
@@ -23,8 +25,6 @@ import { ownerOf, pipelineInput } from './verify.mjs'
 export const ITEMS_FILE = resolve(PACKAGE_ROOT, '../normal-server/data/items.json')
 export const BASES_FILE = resolve(PACKAGE_ROOT, '../normal-server/data/avatar-bases.json')
 export const LOCALE_FILES = ['vi', 'en'].map((language) => resolve(PACKAGE_ROOT, `src/locales/${language}/normal.json`))
-
-const UNSUPPORTED = new Set(['bot', 'aura', 'frame'])
 
 /**
  * `items.json`'s text with `asset.variants.<wear> = layer` added to the item `catalogId`, in place and in
@@ -73,20 +73,27 @@ export function baseGaps(id, wear, { basesFile = BASES_FILE, localeFiles = LOCAL
 }
 
 /**
- * Ingest every `ok`/`approved` asset with `ingested !== true` — or only the named ones — into `publicDir`.
- * Returns one `{ id, done, name?, gaps? }` per asset considered.
- *
- * @param {any} registry
- * @param {string[]} [ids]
- * @param {{ srcDir?: string, publicDir?: string, targets?: string[], itemsFile?: string, basesFile?: string, localeFiles?: string[], log?: (line: string) => void }} [options]
- */
-/**
  * The base whose transform a new base takes (2026-09-24): a base drawn from another base's picture — its
  * `reference` is that base's file (`f01_candidate_1.png`) or `@<id>` — shares that base's body and canvas,
  * so the pipeline anchors it exactly as it anchored the reference (`--transform-from`). Null for anything
  * else, and for a base with no base reference, which the pipeline then anchors by its own box.
+ *
+ * A **bot** always has one (2026-09-24): its neutral picture is drawn from `f01_candidate_1.png` and its happy
+ * one from `@bot_<n>`, so the chain of references is followed to the base picture at its root — f01, unless
+ * that chain names another base's picture.
  */
 export function transformSource(asset, registry) {
+  if (asset.kind === 'bot') {
+    const seen = new Set()
+    let at = asset
+    while (at?.reference && !seen.has(at.id)) {
+      seen.add(at.id)
+      if (!at.reference.startsWith('@')) return /^([fm]\d\d)_candidate_\d+\.png$/.exec(at.reference)?.[1] ?? BOT_TRANSFORM_FROM
+      const next = at.reference.slice(1)
+      at = registry.assets.find((entry) => entry.id === next)
+    }
+    return BOT_TRANSFORM_FROM
+  }
   if (asset.kind !== 'base' || !asset.reference) return null
   if (asset.reference.startsWith('@')) {
     const other = registry.assets.find((entry) => entry.id === asset.reference.slice(1))
@@ -96,6 +103,14 @@ export function transformSource(asset, registry) {
   return match ? match[1] : null
 }
 
+/**
+ * Ingest every `ok`/`approved` asset with `ingested !== true` — or only the named ones — into `publicDir`.
+ * Returns one `{ id, done, name?, gaps? }` per asset considered.
+ *
+ * @param {any} registry
+ * @param {string[]} [ids]
+ * @param {{ srcDir?: string, publicDir?: string, targets?: string[], itemsFile?: string, basesFile?: string, localeFiles?: string[], log?: (line: string) => void }} [options]
+ */
 export async function ingestAssets(registry, ids = [], { srcDir = SRC_DIR, publicDir = PUBLIC_DIR, targets, itemsFile = ITEMS_FILE, basesFile = BASES_FILE, localeFiles = LOCALE_FILES, log = () => {} } = {}) {
   const manifests = targets ?? (publicDir === PUBLIC_DIR ? [join(PUBLIC_DIR, MANIFEST_NAME), SERVER_MANIFEST] : [join(publicDir, MANIFEST_NAME)])
   const wanted = (asset) => (asset.status === 'ok' || asset.status === 'approved') && asset.ingested !== true
@@ -104,11 +119,6 @@ export async function ingestAssets(registry, ids = [], { srcDir = SRC_DIR, publi
   for (const asset of candidates) {
     if (!wanted(asset)) {
       log(`${asset.id}: ${asset.ingested ? 'already ingested' : `is ${asset.status}, not ok or approved`} — skipped`)
-      results.push({ id: asset.id, done: false })
-      continue
-    }
-    if (UNSUPPORTED.has(asset.kind)) {
-      log(`${asset.id}: not supported yet — the pipeline has no ${asset.kind} target; left ${asset.status}`)
       results.push({ id: asset.id, done: false })
       continue
     }

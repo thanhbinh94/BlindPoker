@@ -17,7 +17,8 @@ import { MANIFEST_NAME } from '../scripts/avatar-pipeline/manifest.mjs'
 import { alphaBBox, renderSvg, writePicture } from '../scripts/avatar-pipeline/png.mjs'
 import { collect } from '../scripts/avatar-registry/collect.mjs'
 import { addVariant, baseGaps, ingestAssets } from '../scripts/avatar-registry/ingest.mjs'
-import { bodyBox, compareBoxes, comparePictures, scorePicture, verifyAssets } from '../scripts/avatar-registry/verify.mjs'
+import { parseSpec } from '../scripts/avatar-registry/registry.mjs'
+import { bodyBox, compareBoxes, comparePictures, layerNames, scorePicture, verifyAssets } from '../scripts/avatar-registry/verify.mjs'
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- the registry and the score are plain JSON */
 type Asset = any
@@ -283,12 +284,43 @@ describe('verify: the pipeline', () => {
     expect(Object.keys(result.measure.checks)).toEqual(['base_f09_face_happy_L50'])
   }, 120_000)
 
-  it('skips a bot, which the pipeline has no target for yet', async () => {
+  it('runs a bot through the pipeline on f01 transform, and checks its body and all six faces', async () => {
     const result = await scorePicture({ file: files.ref, referenceFile: files.ref, kind: 'bot', ingest: { as: 'bot:0', base: null, variant: null, flags: [] }, publicDir })
-    expect(result.verdict, result.reason).toBe('ok')
-    expect(result.reason).toBeNull()
-    expect(result.notes).toContain('pipeline: skipped (bot)')
-  }, 60_000)
+    expect(result.verdict, JSON.stringify(result.measure)).toBe('ok')
+    expect(result.notes).not.toContain('pipeline: skipped (bot)')
+    expect(Object.keys(result.measure.checks).sort()).toEqual(['bot_0_L30', ...['neutral', 'happy', 'sad', 'surprised', 'closed', 'sleep'].map((expr) => `bot_0_face_${expr}_L50`)].sort())
+    for (const failed of Object.values(result.measure.checks)) expect(failed).toEqual([])
+  }, 120_000)
+
+  it('checks only the face a bot happy picture writes', async () => {
+    const result = await scorePicture({ file: files.happy, referenceFile: files.ref, kind: 'bot', ingest: { as: 'bot:0:happy', base: null, variant: null, flags: [] }, publicDir })
+    expect(result.verdict, JSON.stringify(result.measure)).toBe('ok')
+    expect(result.measure.checks).toEqual({ bot_0_face_happy_L50: [] })
+  }, 120_000)
+
+  it('runs an aura and a frame through the pipeline once they pass hollow, and leaves public/avatar alone', async () => {
+    const before = readFileSync(join(publicDir, MANIFEST_NAME), 'utf8')
+    const aura = await scorePicture({ file: files.ring, kind: 'aura', slot: 'aura', ingest: { as: 'item:aura:water01', base: null, variant: null, flags: [] }, publicDir })
+    expect(aura.verdict, JSON.stringify(aura)).toBe('ok')
+    expect(aura.measure.hollow).toBeLessThan(0.05)
+    expect(aura.measure.checks).toEqual({ item_aura_water01_L10: [] })
+    const frame = await scorePicture({ file: files.ring, kind: 'frame', slot: 'frame', ingest: { as: 'item:frame:gold', base: null, variant: null, flags: [] }, publicDir })
+    expect(frame.verdict, JSON.stringify(frame)).toBe('ok')
+    expect(frame.measure.checks).toEqual({ item_frame_gold_L90: [] })
+    // hollow still comes first: a disc never reaches the pipeline.
+    const disc = await scorePicture({ file: files.disc, kind: 'frame', slot: 'frame', ingest: { as: 'item:frame:gold', base: null, variant: null, flags: [] }, publicDir })
+    expect(disc).toMatchObject({ verdict: 'ng', reason: 'hollow' })
+    expect(disc.measure.checks).toBeUndefined()
+    expect(readFileSync(join(publicDir, MANIFEST_NAME), 'utf8')).toBe(before)
+  }, 120_000)
+
+  it('names the layers each ingest target writes', () => {
+    const faces = (bot: number): string[] => ['neutral', 'happy', 'sad', 'surprised', 'closed', 'sleep'].map((expr) => `bot_${bot}_face_${expr}_L50`)
+    expect(layerNames({ kind: 'item', slot: 'aura', code: 'water01' }, 'f01')).toEqual(['item_aura_water01_L10'])
+    expect(layerNames({ kind: 'item', slot: 'frame', code: 'gold' }, 'f01')).toEqual(['item_frame_gold_L90'])
+    expect(layerNames(parseSpec('bot:3'), 'f01')).toEqual(['bot_3_L30', ...faces(3)])
+    expect(layerNames(parseSpec('bot:3:happy'), 'f01')).toEqual(['bot_3_face_happy_L50'])
+  })
 })
 
 // ─────────────────────────────────────────────────── verify on the registry ──
@@ -447,7 +479,7 @@ describe('baseGaps', () => {
 })
 
 describe('ingestAssets', () => {
-  it('ingests a per-wear outfit, adds variants.m to the catalogue, marks it ingested, and leaves a bot for later', async () => {
+  it('ingests a per-wear outfit, adds variants.m to the catalogue, and marks it ingested', async () => {
     const publicDir = join(temp, 'public-ingest')
     mkdirSync(publicDir, { recursive: true })
     const targets = [join(publicDir, MANIFEST_NAME)]
@@ -459,20 +491,50 @@ describe('ingestAssets', () => {
       reference: 'ref.png', prompt: null, file: 'shirt.png',
       ingest: { as: 'item:outfit:casual01', base: 'm01', variant: 'm', flags: [] }, status: 'approved', attempts: [{ n: 1, verdict: 'ok' }],
     }
-    const bot: Asset = {
-      id: 'bot_0', kind: 'bot', slot: null, wear: null, catalog: 'bot_0', look: { description: 'x', expression: 'y' },
-      reference: 'ref.png', prompt: null, file: 'ref.png',
-      ingest: { as: 'bot:0', base: null, variant: null, flags: [] }, status: 'ok', attempts: [{ n: 1, verdict: 'ok' }],
-    }
     const lines: string[] = []
-    await ingestAssets(registryOf([outfit, bot]), [], { srcDir, publicDir, targets, itemsFile, log: (line: string) => lines.push(line) })
+    await ingestAssets(registryOf([outfit]), [], { srcDir, publicDir, targets, itemsFile, log: (line: string) => lines.push(line) })
     expect(outfit.ingested).toBe(true)
     expect(JSON.parse(readFileSync(itemsFile, 'utf8'))[0].asset.variants).toEqual({ m: 'item_outfit_casual01_m_L40' })
     const manifest = JSON.parse(readFileSync(targets[0]!, 'utf8'))
     expect(manifest.files.item_outfit_casual01_m_L40).toMatchObject({ real: true, wear: 'm', variantOf: 'item_outfit_casual01_L40' })
     expect(lines.join('\n')).toMatch(/registered on m01/)
-    expect(bot.ingested).toBeUndefined()
-    expect(bot.status).toBe('ok')
-    expect(lines.join('\n')).toMatch(/bot_0: not supported yet/)
   }, 120_000)
+
+  it('ingests an aura, a frame, a bot and its happy face, and marks each ingested', async () => {
+    const publicDir = join(temp, 'public-ingest-square')
+    mkdirSync(publicDir, { recursive: true })
+    const targets = [join(publicDir, MANIFEST_NAME)]
+    await pipelineIngest({ file: files.ref, target: { kind: 'base', base: 'f01' }, dir: publicDir, targets })
+    const square = (kind: string, code: string): Asset => ({
+      id: `item_${kind}_${code}`, kind, slot: kind, wear: null, catalog: `${kind}_${code}`, look: { description: 'x' }, reference: null, prompt: null, file: 'ring.png',
+      ingest: { as: `item:${kind}:${code}`, base: null, variant: null, flags: [] }, status: 'ok', attempts: [{ n: 1, verdict: 'ok' }],
+    })
+    const aura = square('aura', 'water01')
+    const frame = square('frame', 'gold')
+    // As the committed registry seeds them: the neutral picture drawn from F01's, the happy one from the bot's own.
+    const bot: Asset = {
+      id: 'bot_4', kind: 'bot', slot: null, wear: null, catalog: 'bot_4', look: { description: 'x', expression: 'y' },
+      reference: 'ref.png', prompt: null, file: 'ref.png',
+      ingest: { as: 'bot:4', base: null, variant: null, flags: [] }, status: 'approved', attempts: [{ n: 1, verdict: 'ok' }],
+    }
+    const happy: Asset = { ...bot, id: 'bot_4:happy', reference: '@bot_4', file: 'happy.png', ingest: { ...bot.ingest, as: 'bot:4:happy' } }
+    const lines: string[] = []
+    const results = await ingestAssets(registryOf([aura, frame, bot, happy]), [], { srcDir, publicDir, targets, log: (line: string) => lines.push(line) })
+    expect(results.map((result: { id: string; done: boolean; name?: string | null }) => [result.id, result.done, result.name])).toEqual([
+      ['item_aura_water01', true, 'item_aura_water01_L10'],
+      ['item_frame_gold', true, 'item_frame_gold_L90'],
+      ['bot_4', true, 'bot_4_L30'],
+      ['bot_4:happy', true, 'bot_4_face_happy_L50'],
+    ])
+    for (const asset of [aura, frame, bot, happy]) expect(asset.ingested, asset.id).toBe(true)
+    expect(lines.join('\n')).not.toMatch(/not supported/)
+    expect(lines.join('\n')).toMatch(/transform taken from f01/)
+    const manifest = JSON.parse(readFileSync(targets[0]!, 'utf8'))
+    expect(manifest.files.item_aura_water01_L10).toMatchObject({ layer: 10, real: true })
+    expect(manifest.files.item_frame_gold_L90).toMatchObject({ layer: 90, real: true })
+    expect(manifest.files.bot_4_L30).toMatchObject({ layer: 30, real: true })
+    expect(manifest.files.bot_4_face_sad_L50).toMatchObject({ real: true, copyOf: 'bot_4_face_neutral_L50' })
+    expect(manifest.files.bot_4_face_happy_L50).toMatchObject({ real: true })
+    expect(manifest.files.bot_4_face_happy_L50.copyOf).toBeUndefined()
+  }, 180_000)
 })

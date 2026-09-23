@@ -11,7 +11,7 @@
  * exists. They are exported rather than repeated because four other files need them: the extraction
  * rules, the ten checks, the review sheet and — through the manifest — the renderer.
  */
-import { alphaBBox, colourDistance, modalColour, placeOnCanvas, resizePicture } from './png.mjs'
+import { alphaBBox, colourDistance, cropPicture, modalColour, placeOnCanvas, resizePicture } from './png.mjs'
 
 /** D01 §3.1. */
 export const FRAME = { w: 384, h: 448 }
@@ -25,6 +25,20 @@ export const CROP = { x: 88, y: 40, size: 208 }
 /** D01 §7: the avatar frame ring, drawn around the 208 px portrait. 2026-09-15: scaled from 208 to 260, the
  * same 208/160 = 1.3 factor the crop itself grew by, so the ring keeps its proportion to the portrait. */
 export const RING = 260
+/**
+ * A frame item (layer 90) must leave the portrait showing (2026-09-24): the mean alpha inside `radius` of
+ * `RING / 2` around the crop centre stays under `limit`. The same numbers `verify` holds the square picture
+ * to before it gets here (`HOLLOW` in `avatar-registry/verify.mjs`), asked again of the layer itself.
+ */
+export const RING_HOLLOW = { radius: 0.4, limit: 0.05 }
+/**
+ * An aura (layer 10) is an effect *around* the figure (2026-09-24, Plan 12): its picture is a square with the
+ * effect in a ring, fitted so its ink box's larger side is `AURA_SIZE` and centred on (`AXIS_X`, `AURA_CY`) —
+ * the placeholder's circle (cy 240, r 140 + a 26 px stroke) at full size. 400 is wider than the 384 frame, so
+ * an aura runs off both sides; that is the one layer C2 lets touch the frame edge.
+ */
+export const AURA_SIZE = 400
+export const AURA_CY = 240
 /** Spec §3, D5: @3x is gone — the web wants two densities and a third of the bytes back. */
 export const DENSITIES = [1, 2]
 
@@ -149,6 +163,21 @@ export async function applyTransform(pic, transform, density) {
     Math.max(1, Math.round(pic.height * transform.scale * density)),
   )
   return placeOnCanvas(scaled, FRAME.w * density, FRAME.h * density, Math.round(transform.offsetX * density), Math.round(transform.offsetY * density))
+}
+
+/**
+ * Put a *square* picture — an aura or a frame ring, which has no figure to anchor on — on the frame at the
+ * given density by its ink box alone (2026-09-24): the box is scaled, aspect kept, until its larger side is
+ * `size` frame units, and its centre lands on (`cx`, `cy`). Whatever then falls outside the frame is cut off.
+ */
+export async function placeByInk(pic, { size, cx, cy }, density) {
+  const box = alphaBBox(pic)
+  if (!box) throw new Error('the picture is empty — nothing survived the background removal')
+  const factor = (size * density) / Math.max(box.w, box.h)
+  const width = Math.max(1, Math.round(box.w * factor))
+  const height = Math.max(1, Math.round(box.h * factor))
+  const fitted = await resizePicture(cropPicture(pic, box.x, box.y, box.w, box.h), width, height)
+  return placeOnCanvas(fitted, FRAME.w * density, FRAME.h * density, Math.round(cx * density - width / 2), Math.round(cy * density - height / 2))
 }
 
 // ────────────────────────────────────────────────────────────── the stand-ins ──
