@@ -690,8 +690,31 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T22:54:18.328Z",
+          "chat": "https://chatgpt.com/c/6ab4577f-be7c-83ec-a40e-ae243b3b2c25",
+          "file": "aura_water01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1254×1254",
+            "width": 1254,
+            "height": 1254,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "hollow": 0
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ]
     },
     {
       "id": "item_aura_fire01",
@@ -711,8 +734,31 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T22:56:36.911Z",
+          "chat": "https://chatgpt.com/c/6ab45858-f51c-83ec-ad7a-20700c0dc491",
+          "file": "aura_fire01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1254×1254",
+            "width": 1254,
+            "height": 1254,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "hollow": 0
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ]
     },
     {
       "id": "item_aura_wind01",
@@ -732,8 +778,31 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T22:59:05.203Z",
+          "chat": "https://chatgpt.com/c/6ab45906-ca0c-83ec-837d-5086fa241d6a",
+          "file": "aura_wind01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1254×1254",
+            "width": 1254,
+            "height": 1254,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "hollow": 0
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ]
     },
     {
       "id": "item_aura_earth01",
@@ -753,8 +822,31 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T23:01:27.892Z",
+          "chat": "https://chatgpt.com/c/6ab4599c-6dd8-83ec-9f5c-f2815ea28c9c",
+          "file": "aura_earth01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1254×1254",
+            "width": 1254,
+            "height": 1254,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "hollow": 0
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ]
     },
     {
       "id": "item_aura_lightning01",
@@ -774,8 +866,31 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T23:04:01.457Z",
+          "chat": "https://chatgpt.com/c/6ab45a2c-fe00-83ec-9643-2f7ca88e8883",
+          "file": "aura_lightning01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1254×1254",
+            "width": 1254,
+            "height": 1254,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "hollow": 0
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ]
     },
     {
       "id": "item_aura_sakura01",
@@ -795,8 +910,31 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T23:06:41.490Z",
+          "chat": "https://chatgpt.com/c/6ab45abf-6eb0-83ec-8768-144bd318247f",
+          "file": "aura_sakura01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1254×1254",
+            "width": 1254,
+            "height": 1254,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "hollow": 0
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ]
     },
     {
       "id": "item_aura_gold_cards01",
