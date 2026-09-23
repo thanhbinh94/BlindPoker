@@ -2061,14 +2061,14 @@
         "variant": null,
         "flags": []
       },
-      "status": "ng",
+      "status": "ok",
       "attempts": [
         {
           "n": 1,
           "at": "2026-09-23T20:38:40.215Z",
           "chat": "https://chatgpt.com/c/6ab437c9-d2f0-83ec-85cc-2e886b2695bd",
           "file": "m02_sleep.png",
-          "verdict": "ng",
+          "verdict": "ok",
           "measure": {
             "size": "1024×1536",
             "width": 1024,
@@ -2087,12 +2087,22 @@
               "top": -1,
               "right": 20,
               "bottom": 1
+            },
+            "heads": 2.079,
+            "hairDelta": 3.874,
+            "scope": 0.002,
+            "checks": {
+              "base_m02_face_sleep_L50": []
             }
           },
-          "reason": "drift",
-          "by": "verify"
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "side edge {\"left\":-1,\"top\":-1,\"right\":20,\"bottom\":1} — a sleeping face's \"z\" glyph"
+          ]
         }
-      ]
+      ],
+      "ingested": true
     },
     {
       "id": "m03:happy",

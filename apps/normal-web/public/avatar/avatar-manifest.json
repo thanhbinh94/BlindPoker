@@ -321,8 +321,8 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 9243,
-      "placeholder": true
+      "bytes2x": 153092,
+      "real": true
     },
     "base_m02_face_surprised_L50": {
       "layer": 50,
