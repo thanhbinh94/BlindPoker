@@ -1597,8 +1597,45 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T20:06:09.643Z",
+          "chat": "https://chatgpt.com/c/6ab43066-4c50-83ec-b4eb-88a163657458",
+          "file": "f03_sad.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.999,
+            "widthRatio": 0.997,
+            "drift": {
+              "left": 1,
+              "top": 0,
+              "right": -1,
+              "bottom": 1
+            },
+            "heads": 2.12,
+            "hairDelta": 0.752,
+            "scope": 0.001,
+            "checks": {
+              "base_f03_face_sad_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "f03:surprised",
