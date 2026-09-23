@@ -364,8 +364,8 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 9747,
-      "placeholder": true
+      "bytes2x": 154081,
+      "real": true
     },
     "base_m03_face_neutral_L50": {
       "layer": 50,
