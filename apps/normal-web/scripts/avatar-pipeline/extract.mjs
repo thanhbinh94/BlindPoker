@@ -1145,6 +1145,8 @@ export function dropFaint(pic, threshold = ALPHA_INK) {
  * alpha 8–30 is noise that C3 counts as litter (M03's second picture: one alpha-13 pixel off the strand).
  */
 export const STRAND_FAINT = 32
+/** The faint threshold for an aura (layer 10): its painterly glow trails into alpha ≤ 30 far from the ring. */
+export const GLOW_FAINT = 32
 
 /**
  * Where an AI base's strand of hair ends, in frame units, or `null` when it has none (2026-09-17, fix
@@ -1512,7 +1514,10 @@ async function ingestSquare({ source, target, dir, targets, tolerance, white, dr
     ? bleedUnder(source)
     : removeChroma(source, { key: white ? [255, 255, 255] : [0, 255, 0], tolerance, despill: !white })
   const placement = SQUARE_PLACEMENT[target.slot]
-  const picture = dropFaint(await placeByInk(keyed, placement, 2))
+  // An aura's glow trails off into alpha 10–30 far from the ring (wind01: 72 such pixels at @1x), which is
+  // C3's litter and not a visible edge; a frame is hard-edged and keeps the usual threshold.
+  const faint = target.slot === 'aura' ? GLOW_FAINT : undefined
+  const picture = dropFaint(await placeByInk(keyed, placement, 2), faint)
   const box = alphaBBox(keyed)
   const hollow = target.slot === 'frame' ? ringHollowness(picture, 2) : null
   const report = { ok: hollow === null || hollow < RING_HOLLOW.limit, box, hollow }
@@ -1532,7 +1537,7 @@ async function ingestSquare({ source, target, dir, targets, tolerance, white, dr
   }
   for (const line of lines) log(line)
   const manifest = readManifest(join(dir, MANIFEST_NAME))
-  const bytes2x = await writeDensities(picture, dir, name, (pic) => dropFaint(pic))
+  const bytes2x = await writeDensities(picture, dir, name, (pic) => dropFaint(pic, faint), { palette: target.slot === 'aura' })
   manifest.files[name] = entryFor({ name, layer }, bytes2x, { real: true })
   log(`${name} — ${(bytes2x / 1024).toFixed(1)} KB at @2x`)
   const icon = await writeIcon(keyed, dir, name, manifest, { real: true })

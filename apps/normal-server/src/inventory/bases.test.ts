@@ -70,7 +70,7 @@ const VALID = {
 describe('loadBases', () => {
   it('reads the shipped bases against the shipped manifest', () => {
     const bases = loadBases()
-    expect(Object.keys(bases).sort()).toEqual(['f01', 'm01'])
+    expect(Object.keys(bases).sort()).toEqual(['f01', 'f02', 'f03', 'm01', 'm02', 'm03'])
     for (const [id, base] of Object.entries(bases)) {
       expect(base).toMatchObject({ id, nameKey: `bases.${id}` })
       for (const expr of EXPRESSIONS) expect(base.faces[expr]).toBeTruthy()

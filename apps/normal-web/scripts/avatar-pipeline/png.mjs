@@ -39,9 +39,11 @@ export async function readPicture(file) {
   return { data, width: info.width, height: info.height }
 }
 
-export async function writePicture(pic, file) {
+export async function writePicture(pic, file, { palette = false } = {}) {
   await sharp(pic.data, { raw: { width: pic.width, height: pic.height, channels: 4 } })
-    .png({ compressionLevel: 9 })
+    // `palette`: 256-colour quantisation with dithering (2026-09-24) — an aura's soft glow is ~1 MB @2x as
+    // true colour and a third of that quantised, with nothing a 400 × 400 layer would show; C10's budget.
+    .png(palette ? { compressionLevel: 9, palette: true, colours: 256, dither: 1 } : { compressionLevel: 9 })
     .toFile(file)
 }
 
@@ -75,11 +77,11 @@ export async function resizePicture(pic, width, height) {
  * layer masked to a hard-edged region at @2x needs it, because the downscale's filter reaches a few
  * pixels past that edge and would hand the @1x a faint row of alpha just outside the region.
  */
-export async function writeDensities(pic2x, dir, name, clip = null) {
+export async function writeDensities(pic2x, dir, name, clip = null, { palette = false } = {}) {
   const resized = await resizePicture(pic2x, Math.round(pic2x.width / 2), Math.round(pic2x.height / 2))
   const half = clip ? clip(resized, 1) : resized
-  await writePicture(pic2x, join(dir, `${name}@2x.png`))
-  await writePicture(half, join(dir, `${name}@1x.png`))
+  await writePicture(pic2x, join(dir, `${name}@2x.png`), { palette })
+  await writePicture(half, join(dir, `${name}@1x.png`), { palette })
   return statSync(join(dir, `${name}@2x.png`)).size
 }
 

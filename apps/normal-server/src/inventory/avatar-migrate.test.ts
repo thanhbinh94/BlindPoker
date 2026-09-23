@@ -165,7 +165,7 @@ describe('readAvatarConfig', () => {
     const withoutM01 = new Set(['f01'])
     expect(readAvatarConfig(stored, catalog, aliases, withoutM01)).toEqual({ ...stored, base: DEFAULT_BASE })
     // …and a base the registry *has* added is read straight through, with nothing else to change.
-    const f02 = { ...defaultAvatar(catalog), base: 'f02' }
-    expect(readAvatarConfig(f02, catalog, aliases, new Set([...baseIds, 'f02']))).toEqual(f02)
+    const f09 = { ...defaultAvatar(catalog), base: 'f09' }
+    expect(readAvatarConfig(f09, catalog, aliases, new Set([...baseIds, 'f09']))).toEqual(f09)
   })
 })

@@ -217,7 +217,7 @@ describe('GET /api/config', () => {
     expect(answer.statusCode).toBe(200)
     const bases = (answer.json() as { bases: { id: string; wear: string }[] }).bases
     expect(bases.length).toBeGreaterThan(0)
-    expect(new Map(bases.map((base) => [base.id, base.wear]))).toEqual(new Map([['f01', 'f'], ['m01', 'm']]))
+    expect(new Map(bases.map((base) => [base.id, base.wear]))).toEqual(new Map([['f01', 'f'], ['m01', 'm'], ['f02', 'f'], ['f03', 'f'], ['m02', 'm'], ['m03', 'm']]))
   })
 })
 

@@ -121,7 +121,7 @@ describe('validateAvatarConfig', () => {
     expect(validateAvatarConfig({ ...CASUAL, base: undefined }, catalog, baseIds)).toEqual({ ok: false, code: 'MISSING_LAYER' })
     const { base: _base, ...noBase } = CASUAL
     expect(validateAvatarConfig(noBase, catalog, baseIds)).toEqual({ ok: false, code: 'MISSING_LAYER' })
-    for (const base of ['robot', 'f02', 42, null]) {
+    for (const base of ['robot', 'f09', 42, null]) {
       expect(validateAvatarConfig({ ...CASUAL, base }, catalog, baseIds), String(base)).toEqual({ ok: false, code: base === null ? 'MISSING_LAYER' : 'INVALID_BASE' })
     }
     expect(validateAvatarConfig({ ...CASUAL, base: 'm01' }, catalog, baseIds)).toMatchObject({ ok: true })
@@ -130,8 +130,8 @@ describe('validateAvatarConfig', () => {
   it('takes the base list from the registry it is handed, not from a union in the code', () => {
     // The point of the open id (2026-09-17): `f02` is refused above because nothing defines it, and
     // accepted here because something does — with no type widened and no constant edited between the two.
-    const withF02 = new Set([...baseIds, 'f02'])
-    expect(validateAvatarConfig({ ...CASUAL, base: 'f02' }, catalog, withF02)).toEqual({ ok: true, value: { ...CASUAL, base: 'f02' } })
+    const withF09 = new Set([...baseIds, 'f09'])
+    expect(validateAvatarConfig({ ...CASUAL, base: 'f09' }, catalog, withF09)).toEqual({ ok: true, value: { ...CASUAL, base: 'f09' } })
     // …and a base the server has dropped stops being writable the moment its registry entry is gone.
     expect(validateAvatarConfig({ ...CASUAL, base: 'm01' }, catalog, new Set(['f01']))).toEqual({ ok: false, code: 'INVALID_BASE' })
   })

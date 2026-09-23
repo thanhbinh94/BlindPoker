@@ -187,6 +187,9 @@ function noStrayPixels(context) {
   }
   const blank = present.filter((density) => !alphaBBox(pictures[density], 0))
   if (blank.length) return bad(`@${blank.join('x and @')}x is fully transparent but the manifest does not mark it empty`)
+  // An aura (layer 10) is scattered by design — sparks off a lightning arc, petals, drops — so a solid pixel
+  // well away from the ring is the art, not litter (2026-09-24: lightning01 had five, alpha up to 72).
+  if (context.parsed?.layer === LAYERS.aura) return ok('n/a — an aura is scattered particles by design')
   for (const density of DENSITIES) {
     const picture = pictures[density]
     if (!picture) continue
