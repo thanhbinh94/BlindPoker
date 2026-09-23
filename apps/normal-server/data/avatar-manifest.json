@@ -136,8 +136,8 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 10055,
-      "placeholder": true
+      "bytes2x": 168231,
+      "real": true
     },
     "base_f03_L20": {
       "layer": 20,
