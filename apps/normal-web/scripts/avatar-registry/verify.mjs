@@ -52,6 +52,8 @@ export const CHECKER_LIMIT = 0.05
 export const SCALE_RANGE = [0.9, 1.1]
 export const WIDTH_RANGE = [0.96, 1.04]
 export const DRIFT_LIMIT = 12
+/** …except a sleeping face's "z" glyph, which may widen one side of the box by this much (M02: 20). */
+export const SLEEP_GLYPH = 40
 /** How far (source px) an outfit's bottom edge may sit *below* the reference's: shoes add height (ruling 2026-09-24). */
 export const OUTFIT_SHOES = 24
 export const HEADS_RANGE = [2, 2.5]
@@ -440,7 +442,13 @@ export async function scorePicture({ file, kind, slot = null, referenceFile = nu
     // wider or narrower never reaches the layer; the pipeline's own registration and checks below are what
     // decide it. The box numbers stay in `measure` and as a note. (The party hat: body 1.107× wide, arms
     // held out, mean difference 2.9 on registration, a clean layer.)
+    // A sleeping face floats a "z" glyph beside the head, which widens the box on that side alone (M02's: right
+    // edge +20 px); the face cut keeps it — that is the expression — so a side edge up to `SLEEP_GLYPH` is fine.
+    const sleepy = kind === 'expression' && /:sleep$/.test(spec?.as ?? '')
+    const sideOnly = compared.reason === 'drift' && sleepy && (compared.edges.top === null || Math.abs(compared.edges.top) <= DRIFT_LIMIT) &&
+      Math.abs(compared.edges.bottom) <= DRIFT_LIMIT && Math.abs(compared.edges.left) <= SLEEP_GLYPH && Math.abs(compared.edges.right) <= SLEEP_GLYPH
     if (compared.reason && headItem) notes.push(`body box ${compared.reason} (width ratio ${round2(compared.widthRatio)}, edges ${JSON.stringify(compared.edges)}) — advisory for a head item`)
+    else if (sideOnly) notes.push(`side edge ${JSON.stringify(compared.edges)} — a sleeping face's "z" glyph`)
     else if (compared.reason) return done(compared.reason)
   } else {
     notes.push('no reference: drift, hair colour and scope not measured')
