@@ -74,6 +74,135 @@
       "bytes2x": 281978,
       "real": true
     },
+    "base_f02_L20": {
+      "layer": 20,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 2769,
+      "real": true,
+      "empty": true
+    },
+    "base_f02_L30": {
+      "layer": 30,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 283631,
+      "real": true
+    },
+    "base_f02_L60": {
+      "layer": 60,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 2769,
+      "real": true,
+      "empty": true
+    },
+    "base_f02_face_closed_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9190,
+      "placeholder": true
+    },
+    "base_f02_face_happy_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9553,
+      "placeholder": true
+    },
+    "base_f02_face_neutral_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 164112,
+      "real": true
+    },
+    "base_f02_face_sad_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9587,
+      "placeholder": true
+    },
+    "base_f02_face_sleep_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9194,
+      "placeholder": true
+    },
+    "base_f02_face_surprised_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 10055,
+      "placeholder": true
+    },
+    "base_f03_L20": {
+      "layer": 20,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 2769,
+      "real": true,
+      "empty": true
+    },
+    "base_f03_L30": {
+      "layer": 30,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 293661,
+      "real": true
+    },
+    "base_f03_L60": {
+      "layer": 60,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9930,
+      "real": true
+    },
+    "base_f03_face_closed_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9206,
+      "placeholder": true
+    },
+    "base_f03_face_happy_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9579,
+      "placeholder": true
+    },
+    "base_f03_face_neutral_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 203889,
+      "real": true
+    },
+    "base_f03_face_sad_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9634,
+      "placeholder": true
+    },
+    "base_f03_face_sleep_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9238,
+      "placeholder": true
+    },
+    "base_f03_face_surprised_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 10066,
+      "placeholder": true
+    },
     "base_m01_L20": {
       "layer": 20,
       "w": 384,
@@ -137,6 +266,133 @@
       "h": 448,
       "bytes2x": 170721,
       "real": true
+    },
+    "base_m02_L20": {
+      "layer": 20,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 2769,
+      "real": true,
+      "empty": true
+    },
+    "base_m02_L30": {
+      "layer": 30,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 245837,
+      "real": true
+    },
+    "base_m02_L60": {
+      "layer": 60,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 6414,
+      "real": true
+    },
+    "base_m02_face_closed_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9261,
+      "placeholder": true
+    },
+    "base_m02_face_happy_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9590,
+      "placeholder": true
+    },
+    "base_m02_face_neutral_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 157238,
+      "real": true
+    },
+    "base_m02_face_sad_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9688,
+      "placeholder": true
+    },
+    "base_m02_face_sleep_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9243,
+      "placeholder": true
+    },
+    "base_m02_face_surprised_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 10111,
+      "placeholder": true
+    },
+    "base_m03_L20": {
+      "layer": 20,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 13382,
+      "placeholder": true
+    },
+    "base_m03_L30": {
+      "layer": 30,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 16408,
+      "placeholder": true
+    },
+    "base_m03_L60": {
+      "layer": 60,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 10201,
+      "placeholder": true
+    },
+    "base_m03_face_closed_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9355,
+      "placeholder": true
+    },
+    "base_m03_face_happy_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9747,
+      "placeholder": true
+    },
+    "base_m03_face_neutral_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9859,
+      "placeholder": true
+    },
+    "base_m03_face_sad_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9847,
+      "placeholder": true
+    },
+    "base_m03_face_sleep_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 9347,
+      "placeholder": true
+    },
+    "base_m03_face_surprised_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 10255,
+      "placeholder": true
     },
     "bot_0_L30": {
       "layer": 30,
@@ -1065,6 +1321,21 @@
       },
       "strandY": 97
     },
+    "f02": {
+      "transform": {
+        "scale": 0.24669603524229075,
+        "offsetX": 65.568281938326,
+        "offsetY": 52.01762114537445
+      }
+    },
+    "f03": {
+      "transform": {
+        "scale": 0.24669603524229075,
+        "offsetX": 65.568281938326,
+        "offsetY": 52.01762114537445
+      },
+      "strandY": 97
+    },
     "m01": {
       "transform": {
         "scale": 0.24633431085043989,
@@ -1072,6 +1343,14 @@
         "offsetY": 52.29325513196481
       },
       "strandY": 96
+    },
+    "m02": {
+      "transform": {
+        "scale": 0.24633431085043989,
+        "offsetX": 66,
+        "offsetY": 52.29325513196481
+      },
+      "strandY": 89
     }
   }
 }

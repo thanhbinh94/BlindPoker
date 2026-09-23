@@ -991,8 +991,46 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T19:16:51.398Z",
+          "chat": "https://chatgpt.com/c/6ab4222b-2a9c-83ec-ba11-7f982ce7dbf8",
+          "file": "f02_candidate_1.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.996,
+            "widthRatio": 1,
+            "drift": {
+              "left": 0,
+              "top": 0,
+              "right": 1,
+              "bottom": 1
+            },
+            "heads": 2.041,
+            "checks": {
+              "base_f02_L30": [],
+              "base_f02_face_neutral_L50": [],
+              "base_f02_L20": [],
+              "base_f02_L60": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "f03",
@@ -1019,8 +1057,46 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T19:22:15.874Z",
+          "chat": "https://chatgpt.com/c/6ab425af-3f38-83ec-a6ce-a20c60f76cb7",
+          "file": "f03_candidate_1.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.998,
+            "widthRatio": 0.998,
+            "drift": {
+              "left": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 1
+            },
+            "heads": 2.119,
+            "checks": {
+              "base_f03_L30": [],
+              "base_f03_face_neutral_L50": [],
+              "base_f03_L20": [],
+              "base_f03_L60": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "m02",
@@ -1047,8 +1123,46 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-23T19:30:05.609Z",
+          "chat": "https://chatgpt.com/c/6ab4276d-59f0-83ec-ba06-60feda0cf410",
+          "file": "m02_candidate_1.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.996,
+            "widthRatio": 1,
+            "drift": {
+              "left": 0,
+              "top": 0,
+              "right": 1,
+              "bottom": 1
+            },
+            "heads": 2.079,
+            "checks": {
+              "base_m02_L30": [],
+              "base_m02_face_neutral_L50": [],
+              "base_m02_L20": [],
+              "base_m02_L60": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "m03",
