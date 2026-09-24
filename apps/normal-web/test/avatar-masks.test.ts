@@ -30,21 +30,37 @@ const IRIS = '#2f7fd6'
 const PUPIL = '#101010'
 const TANK = '#f4f4f4'
 
+/** The two eyes' centres in the synthetic base's own coordinates — shared with `irisRingPixels` below. */
+const EYE_CENTRES: [number, number][] = [[320, 350], [448, 350]]
+const IRIS_R = 24
+const PUPIL_R = 9
+
 /**
- * A flat chibi head and torso: a skin circle with a hair cap over its top 45 % and two side locks running
+ * A flat chibi head and torso: a skin circle with a hair cap over its top 35 % and two side locks running
  * down to y 520, two eyes (white + iris + pupil, or — `closedEyes` — a bare 4 px lash line with none of
- * that), a skin body and a white tank top.
+ * that), a skin body and a white tank top. `irisColour` is IRIS by default; Task 2b's own tests reuse this
+ * with the iris set to the hair or the skin colour, to prove the eye mask no longer depends on the iris
+ * being a colour nothing else on the head has.
+ *
+ * The cap fraction is 35 %, not the original 45 %: at 45 % the bangs ran down to y 315, 5 px *into* the
+ * white of the eye (which starts at y 310) — no forehead between them at all. That was harmless for the
+ * old "not-hair, not-skin" blob, but Task 2b's ellipse is anchored on the white and padded 15 % outward,
+ * so with no gap to pad into it grew straight into the bangs and read a chunk of the hair cap as eye. A
+ * real base has a forehead; this fixture now does too — but not so much of one that the cap (down to y
+ * 285) stops overlapping the side locks (from y 280): the two are meant to be one hair mass, and cutting
+ * them fully apart left the locks disconnected from the seed patch and unclassified.
  */
-async function syntheticBase({ closedEyes = false } = {}) {
+async function syntheticBase({ closedEyes = false, irisColour = IRIS } = {}) {
   const cx = 384
   const cy = 330
   const r = 150
-  const capBottom = cy - r + 0.45 * (2 * r) // 315: the circle's top 45 %
+  const capBottom = cy - r + 0.35 * (2 * r) // 285: the circle's top 35 %
   const eyes = closedEyes
     ? `<path d="M296 350 Q320 358 344 350" stroke="${PUPIL}" stroke-width="4" fill="none" stroke-linecap="round"/>` +
       `<path d="M424 350 Q448 358 472 350" stroke="${PUPIL}" stroke-width="4" fill="none" stroke-linecap="round"/>`
-    : `<ellipse cx="320" cy="350" rx="34" ry="40" fill="${WHITE}"/><circle cx="320" cy="350" r="24" fill="${IRIS}"/><circle cx="320" cy="350" r="9" fill="${PUPIL}"/>` +
-      `<ellipse cx="448" cy="350" rx="34" ry="40" fill="${WHITE}"/><circle cx="448" cy="350" r="24" fill="${IRIS}"/><circle cx="448" cy="350" r="9" fill="${PUPIL}"/>`
+    : EYE_CENTRES.map(([ex, ey]) =>
+        `<ellipse cx="${ex}" cy="${ey}" rx="34" ry="40" fill="${WHITE}"/><circle cx="${ex}" cy="${ey}" r="${IRIS_R}" fill="${irisColour}"/><circle cx="${ex}" cy="${ey}" r="${PUPIL_R}" fill="${PUPIL}"/>`,
+      ).join('')
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="${SKIN}"/>
     <clipPath id="cap"><rect x="${cx - r - 20}" y="${cy - r}" width="${2 * r + 40}" height="${capBottom - (cy - r)}"/></clipPath>
@@ -96,6 +112,25 @@ function colourPixels(pic: Picture, hex: string, tolerance = 20): Uint8Array {
 const capPixels = (pic: Picture) => colourPixels(pic, HAIR)
 const skinPixels = (pic: Picture) => colourPixels(pic, SKIN)
 const irisPixels = (pic: Picture) => colourPixels(pic, IRIS)
+
+/**
+ * The iris ring by geometry, not by colour: `EYE_CENTRES` at `IRIS_R`, minus the `PUPIL_R` hole in the
+ * middle. Task 2b's hair/skin-coloured-iris tests reuse the iris colour for something else already drawn
+ * on the head (the hair, the skin), so `colourPixels` can no longer tell the iris apart from that — this
+ * finds it from the SVG's own geometry instead, independent of what colour it was drawn.
+ */
+function irisRingPixels(pic: Picture): Uint8Array {
+  const out = new Uint8Array(pic.width * pic.height)
+  for (let y = 0; y < pic.height; y++) {
+    for (let x = 0; x < pic.width; x++) {
+      for (const [ex, ey] of EYE_CENTRES) {
+        const d = Math.hypot(x - ex, y - ey)
+        if (d <= IRIS_R && d > PUPIL_R) { out[y * pic.width + x] = 1; break }
+      }
+    }
+  }
+  return out
+}
 
 /** The share of `pixelSet` that `mask` (≥ 128) also covers. `NaN`-safe: an empty set counts as full coverage. */
 function coverage(mask: Uint8Array, pixelSet: Uint8Array): number {
@@ -167,6 +202,28 @@ describe('hairMask / eyeMask (synthetic base)', () => {
     const pic = await syntheticBase({ closedEyes: true })
     const hair = hairMask(pic, { neverVisible: null })
     expect(sum(eyeMask(pic, hair))).toBe(0)
+  })
+
+  // Task 2b (spec §4.1 ruling): the real bases showed the spike's "not-hair, not-skin" blob swallowing a
+  // dark or skin-coloured iris into the hair mask, because the region it searched already excluded
+  // whatever `hairMask` had claimed. The sclera-anchored ellipse below does not have that dependency —
+  // it finds the eye from the white around the iris, so the iris's own colour cannot hide it any more.
+
+  it('keeps an iris the same colour as the hair in the eye mask, and out of the hair mask', async () => {
+    const pic = await syntheticBase({ irisColour: HAIR })
+    const hair = hairMask(pic, { neverVisible: null })
+    const eyes = eyeMask(pic, hair)
+    const ring = irisRingPixels(pic)
+    expect(coverage(eyes, ring)).toBeGreaterThan(0.8)
+    expect(coverage(hair, ring)).toBe(0)
+  })
+
+  it('keeps an iris the same colour as the skin, enclosed by the white of the eye, in the eye mask', async () => {
+    const pic = await syntheticBase({ irisColour: SKIN })
+    const hair = hairMask(pic, { neverVisible: null })
+    const eyes = eyeMask(pic, hair)
+    const ring = irisRingPixels(pic)
+    expect(coverage(eyes, ring)).toBeGreaterThan(0.8)
   })
 })
 
@@ -382,6 +439,45 @@ describe('C11 (checks.mjs, spec §4.3)', () => {
     const c11 = await c11Of(manifest, name)
     expect(c11.ok).toBe(true)
     expect(c11.detail).toContain('n/a')
+  })
+
+  it('counts an iris split by a pupil and a highlight as one eye (Task 2b: merge before counting)', async () => {
+    const name = 'base_fc7_face_neutral_L50'
+    await writePicture(await syntheticBase(), join(dir, `${name}@2x.png`))
+    const manifest: Manifest = { files: { [name]: { real: true } } }
+    await writeMasks({ dir, manifest, names: [name], overridesDir })
+
+    // Cut two 3 px gaps through the left eye's own mask, splitting the one blob C11 saw into three — a
+    // pupil and a highlight cutting up an iris, not a change in how many eyes are there.
+    const maskFile = join(dir, `${name}_eyemask@2x.png`)
+    const mask = await readPicture(maskFile)
+    const mid = Math.floor(mask.width / 2)
+    let x0 = mask.width
+    let x1 = -1
+    let y0 = mask.height
+    let y1 = -1
+    for (let y = 0; y < mask.height; y++) {
+      for (let x = 0; x < mid; x++) {
+        if (mask.data[(y * mask.width + x) * 4 + 3]! < 128) continue
+        if (x < x0) x0 = x
+        if (x > x1) x1 = x
+        if (y < y0) y0 = y
+        if (y > y1) y1 = y
+      }
+    }
+    expect(x1).toBeGreaterThan(x0) // the left eye actually has a blob to cut up
+    const cuts = [x0 + Math.round((x1 - x0) / 3), x0 + Math.round((2 * (x1 - x0)) / 3)]
+    for (let y = y0; y <= y1; y++) {
+      for (const cut of cuts) {
+        for (let dx = 0; dx < 3; dx++) {
+          mask.data[(y * mask.width + cut + dx) * 4 + 3] = 0
+        }
+      }
+    }
+    await writePicture(mask, maskFile)
+
+    const c11 = await c11Of(manifest, name)
+    expect(c11.ok).toBe(true)
   })
 })
 

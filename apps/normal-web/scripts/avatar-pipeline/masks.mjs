@@ -80,9 +80,13 @@ function countAssignments(points, centres) {
 // ─────────────────────────────────────────────────────────────── morphology ──
 
 const NEIGHBOURS8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]
+/** Task 2b's own connectivity for the eye-mask skin-leak flood (spec §4.1 ruling): a skin-like pixel joins
+ * the flood only edge-to-edge, not corner-to-corner, so a single diagonal pixel of iris outline still blocks it. */
+const NEIGHBOURS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]]
 
-/** 8-connected components, iterative (a recursive flood fill overflows the stack on a 768 × 896 mask). */
-function components(mask, width, height) {
+/** Connected components, iterative (a recursive flood fill overflows the stack on a 768 × 896 mask).
+ * 8-connected by default; pass `NEIGHBOURS4` for a stricter, edge-only flood. */
+function components(mask, width, height, neighbours = NEIGHBOURS8) {
   const label = new Int32Array(width * height).fill(-1)
   const sizes = []
   const stack = []
@@ -97,7 +101,7 @@ function components(mask, width, height) {
       sizes[id]++
       const x = p % width
       const y = (p - x) / width
-      for (const [dx, dy] of NEIGHBOURS8) {
+      for (const [dx, dy] of neighbours) {
         const nx = x + dx
         const ny = y + dy
         if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue
@@ -268,19 +272,38 @@ export function hairMask(pic, { neverVisible = null } = {}) {
     if (grownEdge[i] && !hair[i] && opaqueAt(pic, i) && LAB[i * 3] < 28 && !nearSkin[i] && !never[i]) hair[i] = 1
   }
 
-  // light pockets: a small enclosed pocket of highlight (not skin) joins the hair round it
+  // light pockets: a small enclosed pocket of highlight (not skin) joins the hair round it. Two shapes of
+  // pocket qualify (Task 2b ruling, spec §4.1): a bright one (the original rule, ≤ 2500 px @2x scaled,
+  // every pixel L ≥ 55) or a grey shine band (≤ 8000 px @2x scaled, every pixel chroma < 12 — f02/m02's
+  // grey highlight streaks are duller than 55 but still read as hair, not as a second colour). A pocket
+  // is judged as a whole (its *least* bright / *most* chromatic pixel), not pixel by pixel, so one stray
+  // dark or saturated pixel does not let the rest of an otherwise-uniform pocket through.
   {
     const inv = new Uint8Array(width * height)
     for (let i = 0; i < width * height; i++) inv[i] = hair[i] ? 0 : 1
     const hc = components(inv, width, height)
-    const bad = new Set()
-    const maxPocket = Math.round(2500 * scale * scale)
+    const maxBrightPocket = Math.round(2500 * scale * scale)
+    const maxShinePocket = Math.round(8000 * scale * scale)
+    const excluded = new Uint8Array(hc.sizes.length) // opaque-but-not / skin: never a light pocket
+    const minL = new Float32Array(hc.sizes.length).fill(Infinity)
+    const maxChroma = new Float32Array(hc.sizes.length).fill(0)
     for (let i = 0; i < width * height; i++) {
       const l = hc.label[i]
       if (l < 0) continue
-      if (!opaqueAt(pic, i) || skinMask[i] || hc.sizes[l] > maxPocket || LAB[i * 3] < 55) bad.add(l)
+      if (!opaqueAt(pic, i) || skinMask[i]) { excluded[l] = 1; continue }
+      if (LAB[i * 3] < minL[l]) minL[l] = LAB[i * 3]
+      const chroma = Math.hypot(LAB[i * 3 + 1], LAB[i * 3 + 2])
+      if (chroma > maxChroma[l]) maxChroma[l] = chroma
     }
-    for (let i = 0; i < width * height; i++) if (hc.label[i] >= 0 && !bad.has(hc.label[i])) hair[i] = 1
+    const good = new Set()
+    for (let l = 0; l < hc.sizes.length; l++) {
+      if (excluded[l]) continue
+      const size = hc.sizes[l]
+      const bright = size <= maxBrightPocket && minL[l] >= 55
+      const greyShine = size <= maxShinePocket && maxChroma[l] < 12
+      if (bright || greyShine) good.add(l)
+    }
+    for (let i = 0; i < width * height; i++) if (hc.label[i] >= 0 && good.has(hc.label[i])) hair[i] = 1
   }
 
   const out = new Uint8Array(width * height)
@@ -289,121 +312,201 @@ export function hairMask(pic, { neverVisible = null } = {}) {
 }
 
 /**
- * Eyes (spike step 9): the not-hair, not-skin blob per side of the centre line in the eye band — iris,
- * pupil, white and lashes together — with the brow eroded off, enclosed pockets filled and each row
- * span-filled between the outline's two ends (an eye is convex).
+ * Eyes (Task 2b, spec §4.1 ruling — replaces the spike's step 9). The spike's "not-hair, not-skin" blob
+ * failed on the real bases: a dark or skin-coloured iris is neither hair nor skin by colour, but it *is*
+ * whatever `hairMask` already swallowed it into (the region excluded anything `hairAt`), so it could never
+ * be told apart from hair at all. This is sclera-anchored instead — it finds the *white of the eye*, which
+ * is unambiguous, and reads everything the white encloses as the eye, whatever colour that turns out to be:
  *
- * Clears its own pixels out of `hair` in place: whatever `hairMask` mistook for hair at the eye is not.
+ * 1. Per side of the face centre line, in the eye band: the eye-white components (opaque, L > 88,
+ *    chroma < 10; a component whose box straddles the centre line — teeth — is ignored, and so is one
+ *    under 20 px @2x scaled). Their boxes union per side.
+ * 2. That box is expanded 15 % each way (top/bottom/left/right), and the eye is the ellipse inscribed in
+ *    the expanded box — a side with no whites (closed eyes, a wink) gets no ellipse and stays empty.
+ * 3. Inside the ellipse: opaque, not white, L > 12 is a candidate. A candidate that is skin-like *and*
+ *    4-connected, through other skin-like pixels inside the ellipse, out to a skin-like pixel on or
+ *    outside the ellipse boundary is dropped — a corner of the ellipse that leaked into the cheek or brow.
+ *    An iris the colour of skin stays exactly when the white (or a dark outline) around it blocks that
+ *    path, so the leak never reaches it. "Skin-like" here excludes the eye white itself (see `skinlike`
+ *    below) — otherwise the sclera can act as the very bridge this step exists to block. The same leak
+ *    construction runs a second time for hair-coloured pixels (`hairlike`): on f02's real art the bangs
+ *    sit close enough to the eye that the padded box reaches into them, and hair is neither white nor
+ *    skin, so nothing else in step 3 would have caught it.
+ * 4. What is left, per side, is trimmed to the single group that shares a 3 px dilation (C11's own merge
+ *    radius) with that side's largest piece — an eyebrow or a stray filament of hair sitting fully inside
+ *    the ellipse never touches its boundary, so step 3's leak cannot catch it either, but it is reliably
+ *    a dozen-odd px from the iris, further than a pupil, highlight or lash gap ever is.
+ *
+ * A small closing (2 px @2x scaled) mops up the odd antialiased pixel the rasteriser leaves out — never
+ * enough to bridge the pupil hole in the middle of a real iris, which is far wider than that. Last, a side
+ * left with a plausible white box but almost nothing surviving all of the above — a squint's outline
+ * catching one stray shaded pixel, say — is dropped to empty (under 100 px @2x scaled) rather than kept as
+ * a sliver too small to be a real eye.
+ *
+ * Clears its own pixels out of `hair` in place: whatever `hairMask` mistook for hair at the eye is not —
+ * this is what actually fixes the swallowed-iris bug, because it no longer matters what `hairMask` did.
  */
 export function eyeMask(pic, hair) {
-  const { width, height, scale, density, labAt, top, cx, skinOnly } = analysePicture(pic)
-  const hairAt = (i) => hair[i] >= 128
-  const skinlike = (i) => skinOnly.length > 0 && Math.min(...skinOnly.map((c) => labDist(c, labAt(i)))) < 14
+  const { width, height, scale, density, labAt, top, cx, skinOnly, hairPal } = analysePicture(pic)
+  const isWhite = (i) => { const p = labAt(i); return p[0] > 88 && Math.hypot(p[1], p[2]) < 10 }
+  // The white of the eye is never "skin-like", whatever `skinOnly` (a plain top-2-by-population clustering
+  // over a window that has no idea where the eyes are) happens to have picked up — without this guard, the
+  // sclera can act as a bridge in the leak flood below, connecting the cheek to an iris right through the
+  // eye white that is supposed to wall it off.
+  const skinlike = (i) => !isWhite(i) && skinOnly.length > 0 && Math.min(...skinOnly.map((c) => labDist(c, labAt(i)))) < 14
+  // Bangs sit close enough to the eyes on some real bases (f02) that the box padded 15 % reaches into the
+  // hair beside it — hair is neither white nor skin, so nothing above stops it. The same leak-and-block
+  // construction that keeps a skin corner out of the ellipse keeps a hair corner out too: a hair-coloured
+  // pixel is only dropped when a path of hair-coloured pixels connects it out of the ellipse into the
+  // actual hair mass, so a hair-coloured *iris*, fully enclosed by the white or an outline, is unaffected.
+  const hairlike = (i) => !isWhite(i) && hairPal.length > 0 && Math.min(...hairPal.map((c) => labDist(c, labAt(i)))) < 14
   const headH = FACE_LIMIT_Y * density - top
-  const region = new Uint8Array(width * height)
   const yStart = Math.max(0, Math.floor(top + headH * 0.3))
   const yEnd = Math.min(height, Math.ceil(top + headH * 0.75))
+
+  // 1. eye-white components in the band, unioned into one box per side
+  const whiteMask = new Uint8Array(width * height)
   for (let y = yStart; y < yEnd; y++) {
     for (let x = 0; x < width; x++) {
       const i = y * width + x
-      if (opaqueAt(pic, i) && !hairAt(i) && !skinlike(i)) region[i] = 1
+      if (opaqueAt(pic, i) && isWhite(i)) whiteMask[i] = 1
     }
   }
-  const rc = components(close(region, width, height, Math.max(1, Math.round(1 * scale))), width, height)
-  const boxes = rc.sizes.map((s, id) => ({ s, id, x0: width, x1: 0 }))
+  const wc = components(whiteMask, width, height)
+  const boxes = wc.sizes.map(() => ({ x0: width, x1: -1, y0: height, y1: -1 }))
   for (let i = 0; i < width * height; i++) {
-    const l = rc.label[i]
+    const l = wc.label[i]
     if (l < 0) continue
     const x = i % width
-    boxes[l].x0 = Math.min(boxes[l].x0, x)
-    boxes[l].x1 = Math.max(boxes[l].x1, x)
+    const y = (i - x) / width
+    const b = boxes[l]
+    if (x < b.x0) b.x0 = x
+    if (x > b.x1) b.x1 = x
+    if (y < b.y0) b.y0 = y
+    if (y > b.y1) b.y1 = y
   }
-  const side = (b) => (b.x1 < cx ? 'L' : b.x0 > cx ? 'R' : 'C')
-  const minBlob = Math.round(150 * scale * scale)
-  const maxBlob = Math.round(12000 * scale * scale)
-  const pick = ['L', 'R']
-    .map((sd) => boxes.filter((b) => side(b) === sd && b.s > minBlob && b.s < maxBlob).sort((a, b) => b.s - a.s)[0])
-    .filter(Boolean)
-  let blob = new Uint8Array(width * height)
-  for (let i = 0; i < width * height; i++) if (rc.label[i] >= 0 && pick.some((b) => b.id === rc.label[i])) blob[i] = 1
+  const minWhite = Math.max(1, Math.round(20 * scale * scale))
+  const boxOf = { L: null, R: null }
+  for (let l = 0; l < wc.sizes.length; l++) {
+    if (wc.sizes[l] < minWhite) continue
+    const b = boxes[l]
+    if (b.x0 < cx && b.x1 > cx) continue // straddles the centre line — teeth, not an eye
+    const sd = b.x1 <= cx ? 'L' : 'R'
+    const box = boxOf[sd]
+    boxOf[sd] = box
+      ? { x0: Math.min(box.x0, b.x0), x1: Math.max(box.x1, b.x1), y0: Math.min(box.y0, b.y0), y1: Math.max(box.y1, b.y1) }
+      : { ...b }
+  }
 
-  // shut the small gaps in the lid line, fill the pockets the outline encloses
-  {
-    const inv = new Uint8Array(width * height)
-    for (let i = 0; i < width * height; i++) inv[i] = blob[i] ? 0 : 1
-    const hc = components(inv, width, height)
-    const bad = new Set()
-    const maxPocket = Math.round(4000 * scale * scale)
-    for (let i = 0; i < width * height; i++) {
-      const l = hc.label[i]
-      if (l >= 0 && (hc.sizes[l] > maxPocket || !opaqueAt(pic, i))) bad.add(l)
-    }
-    for (let i = 0; i < width * height; i++) if (hc.label[i] >= 0 && !bad.has(hc.label[i])) blob[i] = 1
+  // 2. expand 15 % each way, the eye is the ellipse inscribed in the result
+  const ellipses = []
+  for (const sd of ['L', 'R']) {
+    const box = boxOf[sd]
+    if (!box) continue
+    const padX = (box.x1 - box.x0 + 1) * 0.15
+    const padY = (box.y1 - box.y0 + 1) * 0.15
+    const ex0 = box.x0 - padX
+    const ex1 = box.x1 + padX
+    const ey0 = box.y0 - padY
+    const ey1 = box.y1 + padY
+    ellipses.push({ cx: (ex0 + ex1) / 2, cy: (ey0 + ey1) / 2, a: (ex1 - ex0) / 2, b: (ey1 - ey0) / 2 })
   }
-  // shave the brow off: erode, keep the largest core per side, grow back
-  {
-    const core = erode(blob, width, height, Math.round(4 * scale))
-    const cc = components(core, width, height)
-    const keep = ['L', 'R'].map((sd) => {
-      let best = -1
-      for (let i = 0; i < width * height; i++) {
-        const l = cc.label[i]
-        if (l < 0) continue
-        const x = i % width
-        if ((sd === 'L') !== (x < cx)) continue
-        if (best < 0 || cc.sizes[l] > cc.sizes[best]) best = l
-      }
-      return best
-    })
-    const kept = new Uint8Array(width * height)
-    for (let i = 0; i < width * height; i++) if (cc.label[i] >= 0 && keep.includes(cc.label[i])) kept[i] = 1
-    const back = dilate(kept, width, height, Math.round(5 * scale))
-    for (let i = 0; i < width * height; i++) blob[i] = blob[i] && back[i] ? 1 : 0
-  }
-  // an eye is convex: whatever lies between the outline's two ends on a row is eye
-  {
-    const span = new Uint8Array(width * height)
-    for (const sd of ['L', 'R']) {
-      const xStart = sd === 'L' ? 0 : cx
-      const xEnd = sd === 'L' ? cx : width
-      for (let y = 0; y < height; y++) {
-        let x0 = -1
-        let x1 = -1
-        for (let x = xStart; x < xEnd; x++) {
-          if (blob[y * width + x]) { if (x0 < 0) x0 = x; x1 = x }
-        }
-        if (x0 < 0) continue
-        for (let x = x0; x <= x1; x++) {
-          const i = y * width + x
-          if (opaqueAt(pic, i) && !hairAt(i)) span[i] = 1
+  const ellipseMask = new Uint8Array(width * height)
+  if (ellipses.length) {
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        for (const e of ellipses) {
+          const dx = (x - e.cx) / e.a
+          const dy = (y - e.cy) / e.b
+          if (dx * dx + dy * dy <= 1) { ellipseMask[y * width + x] = 1; break }
         }
       }
     }
-    blob = span
   }
-  const eyes = new Uint8Array(width * height)
+
+  // 3. inside the ellipse, opaque, not white, not too dark: the candidate eye
+  const candidate = new Uint8Array(width * height)
   for (let i = 0; i < width * height; i++) {
-    if (!blob[i]) continue
-    const p = labAt(i)
-    const isWhite = p[0] > 88 && Math.hypot(p[1], p[2]) < 10
-    if (!isWhite && p[0] > 15) eyes[i] = 1
+    if (!ellipseMask[i] || !opaqueAt(pic, i) || isWhite(i)) continue
+    if (labAt(i)[0] <= 12) continue
+    candidate[i] = 1
   }
-  // closed eyes: a side with too little left over is dropped, not a sliver of a lash line
+
+  // skin-like pixels 4-connected out of the ellipse are a leaked corner, not an iris; an iris the colour
+  // of skin that the flood never reaches (blocked by the white, or a darker outline) is left alone.
+  const skinlikeMask = new Uint8Array(width * height)
+  for (let i = 0; i < width * height; i++) if (opaqueAt(pic, i) && skinlike(i)) skinlikeMask[i] = 1
+  const sc = components(skinlikeMask, width, height, NEIGHBOURS4)
+  const leaks = new Uint8Array(sc.sizes.length)
+  for (let i = 0; i < width * height; i++) if (sc.label[i] >= 0 && !ellipseMask[i]) leaks[sc.label[i]] = 1
+
+  // …and the same for hair-coloured pixels leaking in from the bangs (see `hairlike` above). Closed first
+  // (2 px @2x scaled, the same gap `hairMask` itself bridges for its own candidate pixels): a strand of
+  // hair right beside the eye often has a glossy highlight running across it, and an un-closed flood would
+  // read that thin, brighter interruption as a wall and leave the far side of the strand — still hair, just
+  // on the near side of the ellipse boundary rather than genuinely enclosed — behind as a stray island.
+  const hairlikeMask = new Uint8Array(width * height)
+  for (let i = 0; i < width * height; i++) if (opaqueAt(pic, i) && hairlike(i)) hairlikeMask[i] = 1
+  const closedHairlike = close(hairlikeMask, width, height, Math.max(1, Math.round(2 * scale)))
+  const hc = components(closedHairlike, width, height, NEIGHBOURS4)
+  const hairLeaks = new Uint8Array(hc.sizes.length)
+  for (let i = 0; i < width * height; i++) if (hc.label[i] >= 0 && !ellipseMask[i]) hairLeaks[hc.label[i]] = 1
+
+  let eyes = new Uint8Array(width * height)
+  for (let i = 0; i < width * height; i++) {
+    if (!candidate[i]) continue
+    const l = sc.label[i]
+    if (l >= 0 && leaks[l]) continue
+    const hl = hc.label[i]
+    if (hl >= 0 && hairLeaks[hl]) continue
+    eyes[i] = 1
+  }
+  // A hair-coloured eyebrow, or a filament of hair, can sit fully inside the padded ellipse without ever
+  // touching its boundary — no leak catches that. What tells it apart from the eye is distance: keep only
+  // the piece on each side that shares a group with the *largest* piece there once the whole side is
+  // dilated by the same 3 px C11 merges blobs with (a pupil/highlight/lash gap closes at that radius; the
+  // 10–25 px gap to a brow or a stray strand does not), and drop every other group entirely.
+  {
+    const dilated = dilate(eyes, width, height, Math.round(3 * scale))
+    const dc = components(dilated, width, height)
+    const groupRawSize = new Map()
+    const groupSide = new Map()
+    for (let i = 0; i < width * height; i++) {
+      if (!eyes[i]) continue
+      const g = dc.label[i]
+      groupRawSize.set(g, (groupRawSize.get(g) ?? 0) + 1)
+      if (!groupSide.has(g)) groupSide.set(g, i % width < cx ? 'L' : 'R')
+    }
+    const primary = { L: -1, R: -1 }
+    const primarySize = { L: 0, R: 0 }
+    for (const [g, size] of groupRawSize) {
+      const sd = groupSide.get(g)
+      if (size > primarySize[sd]) { primarySize[sd] = size; primary[sd] = g }
+    }
+    for (let i = 0; i < width * height; i++) {
+      if (!eyes[i]) continue
+      const sd = groupSide.get(dc.label[i])
+      if (dc.label[i] !== primary[sd]) eyes[i] = 0
+    }
+  }
+  // close the odd antialiased pixel the rasteriser leaves under 128 alpha or just outside `isWhite`'s own
+  // threshold — small enough (a couple of px) that it cannot bridge into the pupil hole above, which is a
+  // good 9–20 px across on every real eye, or back into a leaked corner well outside the closing radius.
+  eyes = close(eyes, width, height, Math.max(1, Math.round(2 * scale)))
+  for (let i = 0; i < width * height; i++) if (!ellipseMask[i] || !opaqueAt(pic, i)) eyes[i] = 0
+
+  // A side with a sliver too small to be a plausible eye (a squint's outline catching one stray pixel of
+  // shading) is dropped to empty rather than left as a fragment nothing downstream can use — the same
+  // floor C11 itself measures a real blob against (spec §4.3).
   const minSide = Math.round(100 * scale * scale)
   for (const sd of ['L', 'R']) {
     let count = 0
-    for (let i = 0; i < width * height; i++) {
-      if (!eyes[i]) continue
-      const x = i % width
-      if ((sd === 'L') === (x < cx)) count++
-    }
-    if (count < minSide) {
-      for (let i = 0; i < width * height; i++) {
-        const x = i % width
-        if (eyes[i] && (sd === 'L') === (x < cx)) eyes[i] = 0
-      }
+    for (let i = 0; i < width * height; i++) if (eyes[i] && (i % width < cx) === (sd === 'L')) count++
+    if (count > 0 && count < minSide) {
+      for (let i = 0; i < width * height; i++) if (eyes[i] && (i % width < cx) === (sd === 'L')) eyes[i] = 0
     }
   }
+
   for (let i = 0; i < width * height; i++) if (eyes[i]) hair[i] = 0
   const out = new Uint8Array(width * height)
   for (let i = 0; i < width * height; i++) out[i] = eyes[i] ? 255 : 0

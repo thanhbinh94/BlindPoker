@@ -457,30 +457,44 @@ function insideTheBudget({ entry, bytes }) {
 }
 
 const EYE_NEIGHBOURS8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]
+/** C11's own merge radius (Task 2b ruling, spec §4.3): a pupil, highlight or lash split of one eye is
+ * still one eye once the mask is grown this far, in either direction, across the gap between the pieces. */
+const EYE_MERGE_RADIUS = 3
 
-/** 8-connected components of a mask picture (≥ 128), each with its size and its x-span. C11's own — the
- * eye rule needs which *side* a blob sits on, which `alphaBBox`'s single box for the whole mask cannot say. */
-function eyeBlobs(maskPic) {
-  const { width, height, data } = maskPic
-  const bin = new Uint8Array(width * height)
-  for (let i = 0; i < bin.length; i++) bin[i] = data[i * 4 + 3] >= 128 ? 1 : 0
+/** Circular dilate by `r` px, local to this file so `checks.mjs` stays independent of `masks.mjs`'s own
+ * morphology — this one exists only to merge blob fragments before counting them, not to cut a mask. */
+function dilateBin(bin, width, height, r) {
+  const out = new Uint8Array(bin)
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (!bin[y * width + x]) continue
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          const nx = x + dx
+          const ny = y + dy
+          if (nx >= 0 && ny >= 0 && nx < width && ny < height && dx * dx + dy * dy <= r * r) out[ny * width + nx] = 1
+        }
+      }
+    }
+  }
+  return out
+}
+
+/** 8-connected components of a plain 0/1 mask (as opposed to a `readPicture` result — `eyeBlobs` below
+ * runs this on the dilated mask, not the picture's own alpha). */
+function componentsOf(bin, width, height) {
   const label = new Int32Array(bin.length).fill(-1)
-  const blobs = []
   const stack = []
+  let nextId = 0
   for (let start = 0; start < bin.length; start++) {
     if (!bin[start] || label[start] >= 0) continue
-    const blob = { size: 0, x0: width, x1: -1 }
-    const id = blobs.length
-    blobs.push(blob)
+    const id = nextId++
     stack.push(start)
     label[start] = id
     while (stack.length) {
       const p = stack.pop()
-      blob.size++
       const x = p % width
       const y = (p - x) / width
-      if (x < blob.x0) blob.x0 = x
-      if (x > blob.x1) blob.x1 = x
       for (const [dx, dy] of EYE_NEIGHBOURS8) {
         const nx = x + dx
         const ny = y + dy
@@ -490,7 +504,32 @@ function eyeBlobs(maskPic) {
       }
     }
   }
-  return blobs
+  return { label, count: nextId }
+}
+
+/**
+ * Eye blobs, merged (Task 2b ruling, spec §4.3): a pupil, a highlight or a lash bit that splits one iris
+ * into pieces should count as one blob, not several — components are found on the mask dilated by
+ * `EYE_MERGE_RADIUS`, so a small gap between two pieces of the same eye closes and they share a label; but
+ * each merged blob's `size` and x-span are measured on the *undilated* mask pixels, so the 100–8000 px
+ * bounds still mean the eye's own area, not the dilated footprint. C11's own — the eye rule needs which
+ * *side* a blob sits on, which `alphaBBox`'s single box for the whole mask cannot say. */
+function eyeBlobs(maskPic) {
+  const { width, height, data } = maskPic
+  const bin = new Uint8Array(width * height)
+  for (let i = 0; i < bin.length; i++) bin[i] = data[i * 4 + 3] >= 128 ? 1 : 0
+  const dilated = dilateBin(bin, width, height, EYE_MERGE_RADIUS)
+  const { label, count } = componentsOf(dilated, width, height)
+  const blobs = Array.from({ length: count }, () => ({ size: 0, x0: width, x1: -1 }))
+  for (let i = 0; i < bin.length; i++) {
+    if (!bin[i]) continue
+    const blob = blobs[label[i]]
+    blob.size++
+    const x = i % width
+    if (x < blob.x0) blob.x0 = x
+    if (x > blob.x1) blob.x1 = x
+  }
+  return blobs.filter((b) => b.size > 0)
 }
 
 /**
