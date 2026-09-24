@@ -414,9 +414,8 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 153075,
-      "real": true,
-      "copyOf": "bot_0_face_neutral_L50"
+      "bytes2x": 150678,
+      "real": true
     },
     "bot_0_face_neutral_L50": {
       "layer": 50,
