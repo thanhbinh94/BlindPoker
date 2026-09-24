@@ -24,6 +24,15 @@ import { meanLightness } from '../../../../packages/ui-kit/src/avatar2d/recolour
 /** Where a hand-drawn mask overrides the automatic one (spec §4.1). Committed — see `.gitignore` there. */
 export const MASK_OVERRIDE_DIR = join(PACKAGE_ROOT, '../../assets/avatar-src/masks')
 
+/**
+ * The merge radius `eyeMask`'s largest-group trim and C11's own blob count (`checks.mjs`) both use, in
+ * @2x px — one exported constant rather than two literals that only claimed to agree: `eyeMask` dilates by
+ * `Math.round(EYE_GROUP_MERGE_RADIUS * scale)` before deciding which pieces belong with an eye's largest
+ * piece, and C11's `eyeBlobs` dilates a written mask by the same radius before counting blobs, so a pupil,
+ * highlight or lash split of one eye is exactly what both agree still counts as one eye.
+ */
+export const EYE_GROUP_MERGE_RADIUS = 3
+
 // ─────────────────────────────────────────────────────────────────── colour ──
 
 /** sRGB (0–255) to CIE Lab, D65. Verbatim from the spike. */
@@ -487,10 +496,11 @@ export function eyeMask(pic, hair) {
   // A hair-coloured eyebrow, or a filament of hair, can sit fully inside the padded ellipse without ever
   // touching its boundary — no leak catches that. What tells it apart from the eye is distance: keep only
   // the piece on each side that shares a group with the *largest* piece there once the whole side is
-  // dilated by the same 3 px C11 merges blobs with (a pupil/highlight/lash gap closes at that radius; the
-  // 10–25 px gap to a brow or a stray strand does not), and drop every other group entirely.
+  // dilated by `EYE_GROUP_MERGE_RADIUS` — the same radius C11 merges blobs with (a pupil/highlight/lash
+  // gap closes at that radius; the 10–25 px gap to a brow or a stray strand does not) — and drop every
+  // other group entirely.
   {
-    const dilated = dilate(eyes, width, height, Math.round(3 * scale))
+    const dilated = dilate(eyes, width, height, Math.round(EYE_GROUP_MERGE_RADIUS * scale))
     const dc = components(dilated, width, height)
     const groupRawSize = new Map()
     const groupSide = new Map()

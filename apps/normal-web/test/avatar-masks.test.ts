@@ -54,12 +54,37 @@ const PUPIL_R = 9
  * coloured rect, leaving the sclera visible only on that eye's outer edge — the real-base shape the round
  * 2 ruling's mirroring exists for — while the other side keeps its ordinary full white ellipse, standing
  * in for the "mirror eye" the ruling borrows a box from.
+ *
+ * `capFraction` (Task 2b review) overrides the 35 % default: at the *original* 45 % (bangs to y 315, 5 px
+ * into the white at y 310 — the geometry that motivated `eyeMask`'s `hairlike` leak in the first place)
+ * the largest-group trim alone already discards the small leak that reaches the ellipse, so a regression
+ * test for the `hairlike` leak specifically needs a heavier fringe: 60 % (bangs to y 360, past the eyes'
+ * own centre line) grows the leaked-in patch past the iris's own size, which — without the `hairlike`
+ * leak — the trim then keeps *instead of* the iris, exactly the failure the guard exists to prevent.
+ *
+ * `filament` (Task 2b review) draws a small hair-coloured blob — a brow tip — near the top of one eye's
+ * padded ellipse: inside it, but with a gap to both the hair cap/locks (so the `hairlike` leak's flood
+ * never reaches it — it is not connected to the rest of the hair at all) and the iris (so it is not just
+ * part of the iris rendering). This is what the largest-group trim exists to drop.
  */
-async function syntheticBase({ closedEyes = false, irisColour = IRIS, outerWhiteOnly = null as 'L' | 'R' | null } = {}) {
+async function syntheticBase({
+  closedEyes = false,
+  irisColour = IRIS,
+  outerWhiteOnly = null as 'L' | 'R' | null,
+  capFraction = 0.35,
+  filament = null as 'L' | 'R' | null,
+} = {}) {
   const cx = 384
   const cy = 330
   const r = 150
-  const capBottom = cy - r + 0.35 * (2 * r) // 285: the circle's top 35 %
+  const capBottom = cy - r + capFraction * (2 * r)
+  const filamentShape = filament
+    ? (() => {
+        const [ex] = EYE_CENTRES[filament === 'L' ? 0 : 1]!
+        const fx = filament === 'L' ? ex - 15 : ex + 15
+        return `<ellipse cx="${fx}" cy="304" rx="9" ry="3" fill="${HAIR}"/>`
+      })()
+    : ''
   const eyes = closedEyes
     ? `<path d="M296 350 Q320 358 344 350" stroke="${PUPIL}" stroke-width="4" fill="none" stroke-linecap="round"/>` +
       `<path d="M424 350 Q448 358 472 350" stroke="${PUPIL}" stroke-width="4" fill="none" stroke-linecap="round"/>`
@@ -84,6 +109,7 @@ async function syntheticBase({ closedEyes = false, irisColour = IRIS, outerWhite
     <rect x="300" y="480" width="168" height="120" fill="${TANK}"/>
     <rect x="234" y="280" width="40" height="240" rx="20" fill="${HAIR}"/>
     <rect x="494" y="280" width="40" height="240" rx="20" fill="${HAIR}"/>
+    ${filamentShape}
     ${eyes}
   </svg>`
   return renderSvg(svg, W, H)
@@ -142,6 +168,25 @@ function irisRingPixels(pic: Picture, centres: [number, number][] = EYE_CENTRES)
         const d = Math.hypot(x - ex, y - ey)
         if (d <= IRIS_R && d > PUPIL_R) { out[y * pic.width + x] = 1; break }
       }
+    }
+  }
+  return out
+}
+
+/** The `filament` brow-tip ellipse by geometry (Task 2b review), matching `syntheticBase`'s own shape —
+ * `colourPixels(pic, HAIR)` alone cannot isolate it from the hair cap and locks, which are the same colour. */
+function filamentPixels(pic: Picture, side: 'L' | 'R'): Uint8Array {
+  const out = new Uint8Array(pic.width * pic.height)
+  const [ex] = EYE_CENTRES[side === 'L' ? 0 : 1]!
+  const fx = side === 'L' ? ex - 15 : ex + 15
+  const fy = 304
+  const rx = 9
+  const ry = 3
+  for (let y = 0; y < pic.height; y++) {
+    for (let x = 0; x < pic.width; x++) {
+      const dx = (x - fx) / rx
+      const dy = (y - fy) / ry
+      if (dx * dx + dy * dy <= 1) out[y * pic.width + x] = 1
     }
   }
   return out
@@ -253,6 +298,31 @@ describe('hairMask / eyeMask (synthetic base)', () => {
     const [leftCentre, rightCentre] = EYE_CENTRES
     expect(coverage(eyes, irisRingPixels(pic, [leftCentre!]))).toBeGreaterThanOrEqual(0.8)
     expect(coverage(eyes, irisRingPixels(pic, [rightCentre!]))).toBeGreaterThanOrEqual(0.8)
+  })
+
+  // Task 2b review: `eyeMask`'s `hairlike` leak/closing and its largest-group trim each exist only
+  // because of a real-art failure (f02's bangs, a stray brow/filament) that no synthetic case exercised —
+  // both were verified by a one-off `masks`/`check` run against art that is not in CI. These two cover
+  // them directly, each confirmed to fail with its guard disabled and pass with it restored (see the round
+  // 3 fix report for the disable/re-enable output).
+
+  it('keeps a hair cap that overlaps the padded ellipse out of the eye mask, iris still covered (hairlike leak)', async () => {
+    // capFraction 0.6 (see syntheticBase's own doc comment): a heavy fringe reaching past the eyes' own
+    // centre line, so the leaked-in patch grows past the iris's own size — without the `hairlike` leak,
+    // the largest-group trim then keeps the hair patch *instead of* the iris.
+    const pic = await syntheticBase({ capFraction: 0.6 })
+    const hair = hairMask(pic, { neverVisible: null })
+    const eyes = eyeMask(pic, hair)
+    expect(coverage(eyes, capPixels(pic))).toBe(0)
+    expect(coverage(eyes, irisPixels(pic))).toBeGreaterThan(0.8)
+  })
+
+  it('drops a hair-coloured filament fully inside the padded ellipse, separate from the iris (largest-group trim)', async () => {
+    const pic = await syntheticBase({ filament: 'L' })
+    const hair = hairMask(pic, { neverVisible: null })
+    const eyes = eyeMask(pic, hair)
+    expect(coverage(eyes, filamentPixels(pic, 'L'))).toBe(0)
+    expect(coverage(eyes, irisRingPixels(pic, [EYE_CENTRES[0]!]))).toBeGreaterThan(0.8)
   })
 })
 

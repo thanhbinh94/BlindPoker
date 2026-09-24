@@ -42,7 +42,7 @@ import {
   resizePicture,
 } from './png.mjs'
 import { CROP, DENSITIES, FACE_LIMIT_Y, FRAME, LAYERS, SKIN_TOLERANCE, UNDERWEAR_BAND, UNDERWEAR_COVERAGE, UNDERWEAR_TOLERANCE, baseSkinColour, isSkin } from './frame.mjs'
-import { MASK_FILE_KIND } from './masks.mjs'
+import { EYE_GROUP_MERGE_RADIUS, MASK_FILE_KIND } from './masks.mjs'
 import { NAME_PATTERN, faceFile, itemFile, parseName, wearOf } from './manifest.mjs'
 
 /** C10, and spec §8's 6 MB stage-1 footprint divided by the files that have to fit in it. */
@@ -457,9 +457,6 @@ function insideTheBudget({ entry, bytes }) {
 }
 
 const EYE_NEIGHBOURS8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]
-/** C11's own merge radius (Task 2b ruling, spec §4.3): a pupil, highlight or lash split of one eye is
- * still one eye once the mask is grown this far, in either direction, across the gap between the pieces. */
-const EYE_MERGE_RADIUS = 3
 
 /** Circular dilate by `r` px, local to this file so `checks.mjs` stays independent of `masks.mjs`'s own
  * morphology — this one exists only to merge blob fragments before counting them, not to cut a mask. */
@@ -510,15 +507,17 @@ function componentsOf(bin, width, height) {
 /**
  * Eye blobs, merged (Task 2b ruling, spec §4.3): a pupil, a highlight or a lash bit that splits one iris
  * into pieces should count as one blob, not several — components are found on the mask dilated by
- * `EYE_MERGE_RADIUS`, so a small gap between two pieces of the same eye closes and they share a label; but
- * each merged blob's `size` and x-span are measured on the *undilated* mask pixels, so the 100–8000 px
- * bounds still mean the eye's own area, not the dilated footprint. C11's own — the eye rule needs which
- * *side* a blob sits on, which `alphaBBox`'s single box for the whole mask cannot say. */
+ * `EYE_GROUP_MERGE_RADIUS` (imported from `masks.mjs`, which `eyeMask`'s own largest-group trim dilates
+ * by too — one constant, not two literals that only claimed to agree), so a small gap between two pieces
+ * of the same eye closes and they share a label; but each merged blob's `size` and x-span are measured on
+ * the *undilated* mask pixels, so the 100–8000 px bounds still mean the eye's own area, not the dilated
+ * footprint. C11's own — the eye rule needs which *side* a blob sits on, which `alphaBBox`'s single box
+ * for the whole mask cannot say. */
 function eyeBlobs(maskPic) {
   const { width, height, data } = maskPic
   const bin = new Uint8Array(width * height)
   for (let i = 0; i < bin.length; i++) bin[i] = data[i * 4 + 3] >= 128 ? 1 : 0
-  const dilated = dilateBin(bin, width, height, EYE_MERGE_RADIUS)
+  const dilated = dilateBin(bin, width, height, EYE_GROUP_MERGE_RADIUS)
   const { label, count } = componentsOf(dilated, width, height)
   const blobs = Array.from({ length: count }, () => ({ size: 0, x0: width, x1: -1 }))
   for (let i = 0; i < bin.length; i++) {
