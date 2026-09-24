@@ -669,50 +669,55 @@
       "layer": 30,
       "w": 384,
       "h": 448,
-      "bytes2x": 16267,
-      "placeholder": true
+      "bytes2x": 314855,
+      "real": true
     },
     "bot_5_face_closed_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 8213,
-      "placeholder": true
+      "bytes2x": 176588,
+      "real": true,
+      "copyOf": "bot_5_face_neutral_L50"
     },
     "bot_5_face_happy_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 8668,
-      "placeholder": true
+      "bytes2x": 176588,
+      "real": true,
+      "copyOf": "bot_5_face_neutral_L50"
     },
     "bot_5_face_neutral_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 8687,
-      "placeholder": true
+      "bytes2x": 176588,
+      "real": true
     },
     "bot_5_face_sad_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 8693,
-      "placeholder": true
+      "bytes2x": 176588,
+      "real": true,
+      "copyOf": "bot_5_face_neutral_L50"
     },
     "bot_5_face_sleep_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 8174,
-      "placeholder": true
+      "bytes2x": 176588,
+      "real": true,
+      "copyOf": "bot_5_face_neutral_L50"
     },
     "bot_5_face_surprised_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 9132,
-      "placeholder": true
+      "bytes2x": 176588,
+      "real": true,
+      "copyOf": "bot_5_face_neutral_L50"
     },
     "bot_6_L30": {
       "layer": 30,
