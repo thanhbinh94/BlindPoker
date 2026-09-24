@@ -194,6 +194,15 @@ function parseAsset(path: string, id: string, slot: ItemSlot, manifest: AvatarMa
       if (entry.layer !== expectedLayer) {
         fail(path, `item ${id}'s ${wear} asset variant ${name} is manifest layer ${String(entry.layer)} rather than ${String(expectedLayer)}`)
       }
+      // `asset.tint` holds `file` to a non-empty `masks.tint` above; a per-wear cut is the same
+      // drawable at the same layer, so a base that resolves to a cut rather than `file` needs its own
+      // tint mask too, or `recolour` would have no region to paint on the cut a male base actually draws.
+      if (asset.tint !== undefined) {
+        const variantTintMask = entry.masks?.tint
+        if (variantTintMask === undefined || variantTintMask.empty === true) {
+          fail(path, `item ${id}'s ${wear} asset variant ${name} has no tint mask to paint`)
+        }
+      }
       variants[wear as Wear] = name
     }
     if (Object.keys(variants).length > 0) asset.variants = variants

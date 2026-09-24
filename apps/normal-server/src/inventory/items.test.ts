@@ -59,6 +59,11 @@ const MANIFEST: AvatarManifest = {
     item_head_beanie01_L80: { layer: 80, w: 1, h: 1, bytes2x: 1, masks: { tint: { bytes2x: 1, meanL: 0.5 } } },
     item_head_beret_red01_L80: { layer: 80, w: 1, h: 1, bytes2x: 1 },
     item_head_wrong_layer: { layer: 70, w: 1, h: 1, bytes2x: 1 },
+    // A tintable outfit's own `file`, plus one per-wear cut that carries a tint mask and one that
+    // doesn't — the asymmetry the `asset.tint` + `asset.variants` test below needs.
+    item_outfit_dealer01_tinted_L40: { layer: 40, w: 1, h: 1, bytes2x: 1, masks: { tint: { bytes2x: 1, meanL: 0.5 } } },
+    item_outfit_dealer01_tinted_m_L40: { layer: 40, w: 1, h: 1, bytes2x: 1 },
+    item_outfit_dealer01_tinted_m_masked_L40: { layer: 40, w: 1, h: 1, bytes2x: 1, masks: { tint: { bytes2x: 1, meanL: 0.4 } } },
   },
 }
 
@@ -328,6 +333,30 @@ describe('colour items, free items and asset.tint', () => {
     const catalog = loadItemCatalog(fixtureWith({ ...withMask, asset: { ...withMask.asset!, tint: '#b83a32' } }), MANIFEST)
     expect(catalog.get('head_beanie_red01')?.asset).toEqual({
       layer: 80, file: 'item_head_beanie01_L80', fitsAvatarCrop: true, tint: '#b83a32', tintMeanL: 0.5,
+    })
+  })
+
+  it('requires a tint mask on every per-wear variant too, not only on file', () => {
+    // `file` itself carries a tint mask (`item_outfit_dealer01_tinted_L40`); the `m` cut a male base
+    // would actually draw does not — a future tintable item with a variant this shape would 404 its
+    // tint mask on every male base, and the loader has to refuse it at boot instead.
+    const tintedWithVariant = (variantFile: string): string =>
+      fixtureWith({
+        ...drawable('outfit_dealer_tinted01', 'outfit', false, 'item_outfit_dealer01_tinted_L40'),
+        asset: { ...asset('outfit', 'item_outfit_dealer01_tinted_L40'), tint: '#b83a32', variants: { m: variantFile } },
+      })
+
+    expect(() => loadItemCatalog(tintedWithVariant('item_outfit_dealer01_tinted_m_L40'), MANIFEST))
+      .toThrow(/outfit_dealer_tinted01's m asset variant item_outfit_dealer01_tinted_m_L40 has no tint mask to paint/)
+
+    const catalog = loadItemCatalog(tintedWithVariant('item_outfit_dealer01_tinted_m_masked_L40'), MANIFEST)
+    expect(catalog.get('outfit_dealer_tinted01')?.asset).toEqual({
+      layer: 40,
+      file: 'item_outfit_dealer01_tinted_L40',
+      fitsAvatarCrop: true,
+      tint: '#b83a32',
+      tintMeanL: 0.5,
+      variants: { m: 'item_outfit_dealer01_tinted_m_masked_L40' },
     })
   })
 
