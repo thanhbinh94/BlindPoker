@@ -63,6 +63,8 @@ interface ManifestEntry {
   /** A per-wear cut of another item layer (2026-09-20): the layer it is a cut of, and which wear wears it. */
   variantOf?: string
   wear?: string
+  /** Hair, eye and tint masks (Plan 13 Task 2). */
+  masks?: Record<string, { bytes2x: number; meanL?: number; empty?: boolean; override?: boolean }>
 }
 
 interface Manifest {
@@ -1184,9 +1186,28 @@ async function sharpDownscale(pic: Picture): Promise<Picture> {
 function stageOnePngs(
   layers: string[] = (stageOneFiles() as { name: string }[]).map((file) => file.name),
   items: string[] = (stageOneFiles() as { name: string; kind: string }[]).filter((file) => file.kind === 'item').map((file) => file.name),
+  manifest?: Manifest,
 ): string[] {
   const names = [...layers, ...items.map((name) => iconName(name))]
-  return names.flatMap((name) => DENSITIES.map((density: number) => `${name}@${density}x.png`))
+  const pngs = names.flatMap((name) => DENSITIES.map((density: number) => `${name}@${density}x.png`))
+
+  // Add mask files for each layer that has masks in the manifest.
+  if (manifest) {
+    const maskFileKind = { hair: 'hair', eyes: 'eye', tint: 'tint' }
+    for (const layerName of layers) {
+      const entry = manifest.files[layerName]
+      if (entry?.masks) {
+        for (const kind of Object.keys(entry.masks)) {
+          const fileKind = maskFileKind[kind as keyof typeof maskFileKind]
+          if (fileKind) {
+            pngs.push(...DENSITIES.map((density: number) => `${layerName}_${fileKind}mask@${density}x.png`))
+          }
+        }
+      }
+    }
+  }
+
+  return pngs
 }
 
 describe('the stage-1 name list', () => {
@@ -1266,7 +1287,7 @@ describe('the committed placeholder set', () => {
 
   it('holds every stage-1 name and every item icon at both densities, and nothing else', () => {
     const onDisk = readdirSync(OUT_DIR).filter((name) => name.endsWith('.png'))
-    expect(onDisk.sort()).toEqual(stageOnePngs(committedLayers, committedItems).sort())
+    expect(onDisk.sort()).toEqual(stageOnePngs(committedLayers, committedItems, manifest).sort())
   })
 
   it('lists an icon for every item layer, flagged the way the layer is', async () => {
