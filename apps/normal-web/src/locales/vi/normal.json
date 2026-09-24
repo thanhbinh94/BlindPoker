@@ -224,6 +224,7 @@
       "default": "Khởi đầu",
       "daily": "Điểm danh hằng ngày",
       "achievement": "Thành tựu",
+      "free": "Miễn phí",
       "other": "Khác"
     },
     "slot": {
@@ -232,6 +233,8 @@
       "outfit": "Trang phục",
       "aura": "Aura",
       "frame": "Khung viền",
+      "hairColor": "Màu tóc",
+      "eyeColor": "Màu mắt",
       "title": "Danh hiệu",
       "badge": "Huy hiệu"
     }

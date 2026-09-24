@@ -69,7 +69,30 @@ const HEAD_TOPHAT: ItemDto = {
   isDefault: false,
   asset: { layer: 80, file: 'item_head_tophat01_L80', fitsAvatarCrop: true },
 }
-const CATALOG: ItemDto[] = [OUTFIT_CASUAL, HEAD_BEANIE, HEAD_TOPHAT]
+/** Plan 13 (design §6): a rare hair colour won from the daily draw, and a free eye colour — every
+ * account owns every `free` colour with no inventory row of its own reason to exist, but the server
+ * still lists it in `/api/me/inventory` with `source: "free"` (design §3.2). */
+const HAIRCOLOR_BLUE: ItemDto = {
+  id: 'haircolor_blue01',
+  slot: 'hairColor',
+  rarity: 'rare',
+  nameKey: 'items.haircolor_blue01',
+  assetKey: 'hairColor/haircolor_blue01',
+  isDefault: false,
+  colour: '#3f6fd8',
+}
+const EYECOLOR_BROWN: ItemDto = {
+  id: 'eyecolor_brown01',
+  slot: 'eyeColor',
+  rarity: 'common',
+  nameKey: 'items.eyecolor_brown01',
+  assetKey: 'eyeColor/eyecolor_brown01',
+  isDefault: false,
+  free: true,
+  colour: '#6b3b1f',
+}
+
+const CATALOG: ItemDto[] = [OUTFIT_CASUAL, HEAD_BEANIE, HEAD_TOPHAT, HAIRCOLOR_BLUE, EYECOLOR_BROWN]
 
 const EQUIPPED: AvatarConfigDto = { v: 3, base: 'f01', outfit: 'outfit_casual01', head: 'head_beanie01', title: 'title_rookie' }
 
@@ -79,6 +102,8 @@ const INVENTORY: InventoryDto = {
     owned('head_beanie01', 'head', 'common', 'default'),
     owned('head_tophat01', 'head', 'epic', 'achievement'),
     owned('title_rookie', 'title', 'common', 'achievement'),
+    owned('haircolor_blue01', 'hairColor', 'rare', 'daily'),
+    owned('eyecolor_brown01', 'eyeColor', 'common', 'free'),
   ],
   avatar: EQUIPPED,
 }
@@ -128,7 +153,7 @@ describe('InventoryScreen', () => {
     for (const label of Object.values(viNormal.inventory.slot)) {
       expect(screen.getByRole('heading', { name: label })).toBeInTheDocument()
     }
-    expect(screen.getByText(viNormal.inventory.summary.replace('{{owned}}', '4'))).toBeInTheDocument()
+    expect(screen.getByText(viNormal.inventory.summary.replace('{{owned}}', '6'))).toBeInTheDocument()
   })
 
   it('gives each piece its rarity, its source and the day it arrived', async () => {
@@ -172,6 +197,23 @@ describe('InventoryScreen', () => {
     expect(panelOf('face').getByText(viNormal.inventory.empty)).toBeInTheDocument()
     expect(panelOf('badge').getByText(viNormal.inventory.empty)).toBeInTheDocument()
     expect(panelOf('head').queryByText(viNormal.inventory.empty)).toBeNull()
+  })
+
+  it('shows an owned rare hair colour and a free eye colour in their own panels, as colour swatches', async () => {
+    renderScreen()
+    await screen.findByText(viNormal.items.head_beanie01)
+
+    const hairCard = panelOf('hairColor').getByText(viNormal.items.haircolor_blue01).closest('li') as HTMLElement
+    expect(hairCard.querySelector('[data-colour-swatch]')).toHaveStyle({ background: '#3f6fd8' })
+    expect(within(hairCard).getByText(viNormal.inventory.rarity.rare)).toBeInTheDocument()
+    // A colour item has no picture — swatch or nothing, never the drawn-item icon.
+    expect(hairCard.querySelector('img')).toBeNull()
+
+    const eyeCard = panelOf('eyeColor').getByText(viNormal.items.eyecolor_brown01).closest('li') as HTMLElement
+    expect(eyeCard.querySelector('[data-colour-swatch]')).toHaveStyle({ background: '#6b3b1f' })
+    // Free items are owned by every account with no inventory row reason of their own — the server
+    // still reports them with `source: "free"`, and that is what the card should say.
+    expect(within(eyeCard).getByText(viNormal.inventory.source.free)).toBeInTheDocument()
   })
 
   it('names an item this bundle has never heard of by its id, never by an i18n key', async () => {

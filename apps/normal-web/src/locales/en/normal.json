@@ -224,6 +224,7 @@
       "default": "Starter",
       "daily": "Daily check-in",
       "achievement": "Achievement",
+      "free": "Free",
       "other": "Other"
     },
     "slot": {
@@ -232,6 +233,8 @@
       "outfit": "Outfits",
       "aura": "Auras",
       "frame": "Frames",
+      "hairColor": "Hair colours",
+      "eyeColor": "Eye colours",
       "title": "Titles",
       "badge": "Badges"
     }

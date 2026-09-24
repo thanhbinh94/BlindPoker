@@ -9,8 +9,10 @@ import s from './normal.module.css'
 import { useAsync } from './useAsync.js'
 import { ItemPreview } from './wardrobe/ItemTab.js'
 
-/** How an item was acquired, as the server records it. Anything else still gets words rather than a raw key. */
-const SOURCES = new Set(['default', 'daily', 'achievement'])
+/** How an item was acquired, as the server records it. Anything else still gets words rather than a raw key.
+ * `free` (Plan 13, design §3.2) is every colour item with no inventory row of its own — the server still
+ * reports one with `source: "free"` so this screen never has to special-case "owned but no row". */
+const SOURCES = new Set(['default', 'daily', 'achievement', 'free'])
 
 interface InventoryData {
   items: OwnedItemDto[]
@@ -41,7 +43,9 @@ export interface InventoryScreenProps {
  *
  * Every drawn tile is an `ItemPreview` — the wardrobe's own picture, in read-only chrome here — the item's
  * inventory icon, the item on its own. `title` and `badge` have no layer at all, so their tiles carry words
- * and nothing else, the same as they always have.
+ * and nothing else, the same as they always have. `hairColor`/`eyeColor` (Plan 13) have no layer either —
+ * a colour paints an existing region rather than drawing a new one — so their tiles show a round swatch of
+ * `item.colour` instead.
  *
  * 2026-09-20: a third request, for the base registry, and only to read the equipped base's `wear` — a
  * gendered item shows the cut this account's own figure wears. It fails soft: no registry, shared cut.
@@ -117,7 +121,11 @@ export function InventoryScreen({ api, lang }: InventoryScreenProps) {
                   const equipped = isEquipped(item.itemId, item.slot, avatar)
                   return (
                     <li className={s.card} key={item.itemId} data-equipped={String(equipped)}>
-                      {def === undefined ? null : <ItemPreview item={def} wear={wear} />}
+                      {def === undefined ? null : def.colour !== undefined ? (
+                        <span className={s.cardSwatch} style={{ background: def.colour }} data-colour-swatch aria-hidden="true" />
+                      ) : (
+                        <ItemPreview item={def} wear={wear} />
+                      )}
                       <span className={s.cardName}>{itemName(item.itemId, t)}</span>
                       <span className={s.cardMarks}>
                         {item.rarity === null ? null : <Badge tone={RARITY_TONE[item.rarity]}>{t(`inventory.rarity.${item.rarity}`)}</Badge>}

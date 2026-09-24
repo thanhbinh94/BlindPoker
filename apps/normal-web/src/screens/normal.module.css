@@ -1054,6 +1054,16 @@
   justify-content: center;
 }
 
+/* A hairColor/eyeColor card's picture (Plan 13): a round swatch of the item's own colour, sized like the
+   drawn slots' icon (`ItemPreview`'s 4rem square) so the grid reads evenly across every panel. */
+.cardSwatch {
+  display: block;
+  width: 4rem;
+  height: 4rem;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+}
+
 /* ── achievements ─────────────────────────────────────────────────────────── */
 
 .trackWrap {
