@@ -1,16 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { assetUrl } from './AvatarAssets.js'
 import { recolour } from './recolour.mjs'
 import type { LayerRef, TintRef } from './types.js'
 
-/** How many rendered blob URLs to keep alive at once (spec §5.2). Past this, the oldest *inserted* entry is
+/** How many rendered blob URLs to keep alive at once (spec §5.2). Past this, the oldest *settled* entry is
  * evicted and its object URL revoked — a chibi only ever shows a handful of tinted layers at a time, so a plain
- * insertion-order cap is plenty and needs no recency bookkeeping. */
+ * insertion-order cap is plenty and needs no recency bookkeeping. A still-pending entry is never evicted: revoking
+ * a blob URL the instant it resolves — before the consumer that just received it has had a chance to commit an
+ * `<img src>` for it — would flash that layer blank, so eviction only ever touches work that has already finished. */
 const CACHE_LIMIT = 96
 
-/** file|density|mask:colour,mask:colour… → a promise for that exact paint job's blob URL (or `null` if it could
- * not be rendered). Module-level so every `Chibi` on a page — and every re-render of the same one — shares it. */
-const cache = new Map<string, Promise<string | null>>()
+interface CacheEntry {
+  promise: Promise<string | null>
+  settled: boolean
+  url: string | null
+}
+
+/** file|density|mask:colour,mask:colour… → the entry for that exact paint job. Module-level so every `Chibi` on a
+ * page — and every re-render of the same one — shares it. */
+const cache = new Map<string, CacheEntry>()
 
 /** The cache key for one layer's tinted render: same file, same density, same tints (in order and by colour) →
  * same key, so two chibis wearing the same coloured hair only ever pay for the canvas work once. */
@@ -66,55 +74,83 @@ async function renderTintedLayer(prefix: string, layer: LayerRef, density: 1 | 2
   }
 }
 
-/** Runs `factory` for `key` at most once, caching the in-flight/settled promise; evicts the oldest entry (by
- * insertion, not by recency) past `CACHE_LIMIT`, revoking its object URL if it resolved to one. */
+/** Evicts the oldest *settled* cache entry once the cache is over `CACHE_LIMIT`, revoking its blob URL. Walking
+ * the map in insertion order and skipping anything not yet settled means a run of unlucky-timed pending jobs
+ * never gets evicted out from under itself — if nothing has settled yet, the cache is simply allowed to grow past
+ * the cap until the next distinct key's insertion finds something it can evict. */
+function evictIfNeeded(): void {
+  if (cache.size <= CACHE_LIMIT) return
+  for (const [key, entry] of cache) {
+    if (!entry.settled) continue
+    cache.delete(key)
+    if (entry.url !== null) URL.revokeObjectURL(entry.url)
+    return
+  }
+}
+
+/** Runs `factory` for `key` at most once, caching its entry until it settles (and after). */
 function cachedRender(key: string, factory: () => Promise<string | null>): Promise<string | null> {
   const existing = cache.get(key)
-  if (existing !== undefined) return existing
+  if (existing !== undefined) return existing.promise
 
-  const job = factory()
-  cache.set(key, job)
+  const promise = factory()
+  const entry: CacheEntry = { promise, settled: false, url: null }
+  cache.set(key, entry)
+  evictIfNeeded()
 
-  if (cache.size > CACHE_LIMIT) {
-    const oldestKey = cache.keys().next().value as string | undefined
-    if (oldestKey !== undefined) {
-      const oldest = cache.get(oldestKey)
-      cache.delete(oldestKey)
-      void oldest?.then((url) => {
-        if (url !== null) URL.revokeObjectURL(url)
-      })
-    }
-  }
+  promise.then((url) => {
+    entry.settled = true
+    entry.url = url
+  })
 
-  return job
+  return promise
 }
 
 /**
- * The blob URL for a layer's tinted render, once ready — `null` before it resolves, when the layer has no
- * `tints`, or whenever rendering was not possible (no 2D canvas context, a failed image load). `Chibi` renders
+ * The blob URL for a layer's tinted render — `null` before the first one resolves, when the layer has no
+ * `tints`, or whenever rendering was not possible (no 2D canvas context, a failed image load); `Chibi` renders
  * the plain, untinted `src` for exactly as long as this returns `null`, so nothing here ever needs to throw into
- * render: every failure path already resolves to `null` instead.
+ * render — every failure path already resolves to `null` instead.
+ *
+ * A *colour* change on the same layer file keeps returning the previous render's URL until the new one is ready
+ * (spec §5.2) — a wardrobe click swaps hair colours one tap at a time, and flashing back to the base colour
+ * between each tap would read as broken rather than as loading. A *file* change (a different layer altogether)
+ * gets no such grace: it drops straight back to `null` so a stale render from the old file is never shown under
+ * the new one's name.
  */
 export function useTintedLayer(prefix: string, layer: LayerRef): string | null {
   const [url, setUrl] = useState<string | null>(null)
+  // Identifies the file (and asset prefix) the currently-shown `url`, if any, was rendered from — not necessarily
+  // this render's `layer.file`, which may already have moved on to a new colour or a wholly different layer.
+  const shownRef = useRef<string | null>(null)
   const tints = layer.tints
   const density: 1 | 2 = typeof window !== 'undefined' && window.devicePixelRatio > 1 ? 2 : 1
   const key = tints === undefined || tints.length === 0 ? null : tintKey(layer.file, density, tints)
+  const identity = `${prefix}|${layer.file}`
 
   useEffect(() => {
     if (key === null) {
+      shownRef.current = null
       setUrl(null)
       return
     }
+
+    if (shownRef.current !== identity) setUrl(null)
+
     let cancelled = false
     cachedRender(key, () => renderTintedLayer(prefix, layer, density)).then((result) => {
-      if (!cancelled) setUrl(result)
+      if (cancelled) return
+      shownRef.current = result === null ? null : identity
+      setUrl(result)
     })
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` already encodes file, density and every tint.
-  }, [key, prefix])
+    // `key` already encodes file, density and every tint; `identity` and `density` are both derived from
+    // `prefix`/`layer.file`, already listed — re-running on `layer`'s own (fresh-every-render) object identity
+    // or on those derived values would defeat the point of the cache.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, prefix, layer.file])
 
   return url
 }
