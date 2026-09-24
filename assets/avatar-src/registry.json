@@ -3371,8 +3371,43 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-09-24T00:12:36.352Z",
+          "chat": "https://chatgpt.com/c/6ab46a8a-e6b4-83ec-ab72-c639a2292246",
+          "file": "bot_1_happy.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.004,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 2,
+              "centre": 1
+            },
+            "checks": {
+              "bot_1_face_happy_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "bot_2:happy",
