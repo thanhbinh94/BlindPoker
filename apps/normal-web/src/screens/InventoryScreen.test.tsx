@@ -208,12 +208,17 @@ describe('InventoryScreen', () => {
     expect(within(hairCard).getByText(viNormal.inventory.rarity.rare)).toBeInTheDocument()
     // A colour item has no picture — swatch or nothing, never the drawn-item icon.
     expect(hairCard.querySelector('img')).toBeNull()
+    // Owned (non-free) items still show the day they arrived.
+    expect(hairCard.querySelector('time')).not.toBeNull()
 
     const eyeCard = panelOf('eyeColor').getByText(viNormal.items.eyecolor_brown01).closest('li') as HTMLElement
     expect(eyeCard.querySelector('[data-colour-swatch]')).toHaveStyle({ background: '#6b3b1f' })
     // Free items are owned by every account with no inventory row reason of their own — the server
     // still reports them with `source: "free"`, and that is what the card should say.
     expect(within(eyeCard).getByText(viNormal.inventory.source.free)).toBeInTheDocument()
+    // A free item's `acquiredAt: 0` (1 Jan 1970) is not a real acquisition date — the card must not
+    // show a date row for one.
+    expect(eyeCard.querySelector('time')).toBeNull()
   })
 
   it('names an item this bundle has never heard of by its id, never by an i18n key', async () => {

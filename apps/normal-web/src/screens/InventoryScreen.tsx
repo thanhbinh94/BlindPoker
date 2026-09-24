@@ -132,9 +132,13 @@ export function InventoryScreen({ api, lang }: InventoryScreenProps) {
                         {equipped ? <Badge tone="gold">{t('inventory.equipped')}</Badge> : null}
                       </span>
                       <span className={s.rowMeta}>{t(`inventory.source.${source}`)}</span>
-                      <time className={s.rowMeta} dateTime={new Date(item.acquiredAt).toISOString()}>
-                        {t('inventory.acquired', { date: formatDay(item.acquiredAt, lang) })}
-                      </time>
+                      {/* A free item was never "acquired" at any particular time — the server reports it with
+                       * `acquiredAt: 0` (design §3.2) purely so the row shape stays uniform, not as a real date. */}
+                      {item.source === 'free' ? null : (
+                        <time className={s.rowMeta} dateTime={new Date(item.acquiredAt).toISOString()}>
+                          {t('inventory.acquired', { date: formatDay(item.acquiredAt, lang) })}
+                        </time>
+                      )}
                     </li>
                   )
                 })}
