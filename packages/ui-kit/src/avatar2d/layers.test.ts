@@ -1,13 +1,25 @@
 import { describe, expect, it } from 'vitest'
+import { fnv1a } from './bot.js'
 import { defaultChibi } from './defaults.js'
 import { hashChibi, layersFor } from './layers.js'
-import type { BotChibi, ChibiConfig, WearRef } from './types.js'
+import type { BaseRef, BotChibi, ChibiConfig, Expression, WearRef } from './types.js'
 
 const AURA: WearRef = { id: 'aura_fire01', order: 10, file: 'item_aura_fire01_L10' }
 const FRAME: WearRef = { id: 'frame_gold', order: 90, file: 'item_frame_gold_L90' }
 const BERET: WearRef = { id: 'head_beret_red01', order: 80, file: 'item_head_beret_red01_L80' }
 const HOOD: WearRef = { id: 'head_hood_black01', order: 80, file: 'item_head_hood_black01_L80', hidesHairFront: true, hidesHairBack: true }
 const FACE_ACC: WearRef = { id: 'face_sunglasses01', order: 70, file: 'item_face_sunglasses01_L70' }
+const DEFAULT_OUTFIT: WearRef = { id: 'outfit_casual01', order: 40, file: 'item_outfit_casual01_L40' }
+
+const EXPRESSIONS: readonly Expression[] = ['neutral', 'happy', 'sad', 'surprised', 'closed', 'sleep']
+
+/** Same naming convention as `defaults.ts`'s private `makeBase`, but exposed here so tests can control which
+ * layers carry a mask (`tint`) directly, instead of going through the server registry. */
+function makeBase(id: string, tint?: BaseRef['tint']): BaseRef {
+  const faces = {} as Record<Expression, string>
+  for (const expression of EXPRESSIONS) faces[expression] = `base_${id}_face_${expression}_L50`
+  return { id, hairBack: `base_${id}_L20`, body: `base_${id}_L30`, hairFront: `base_${id}_L60`, faces, tint }
+}
 
 const bare = (): ChibiConfig => defaultChibi('ann')
 
@@ -96,5 +108,87 @@ describe('hashChibi', () => {
   it('is unaffected by expression or frame — those are not part of the configuration', () => {
     const config = bare()
     expect(hashChibi(config)).toBe(hashChibi(config))
+  })
+
+  it('matches today\'s canonical string exactly when no colours or item tints are set', () => {
+    const config = bare()
+    // The pre-tint format, reproduced verbatim: `human:<base>:<outfit>:<head>:<face>:<aura>:<frame>`.
+    const expected = fnv1a(['human', config.base.id, config.outfit.id, '', '', '', ''].join(':')).toString(16)
+    expect(hashChibi(config)).toBe(expected)
+  })
+})
+
+describe('layersFor — tints (spec 2026-09-24-avatar-tint-design.md §5.2)', () => {
+  const TINTED_BASE = makeBase('f01', {
+    hair: {
+      meanL: 0.42,
+      files: [
+        'base_f01_L30',
+        'base_f01_L60',
+        'base_f01_face_neutral_L50',
+        'base_f01_face_happy_L50',
+        'base_f01_face_sad_L50',
+        'base_f01_face_surprised_L50',
+        'base_f01_face_closed_L50',
+        'base_f01_face_sleep_L50',
+      ],
+    },
+    // Only `neutral` carries a non-empty eye mask here, so a face missing from this list is exercised below.
+    eyes: { meanL: 0.31, files: ['base_f01_face_neutral_L50'] },
+  })
+
+  const tintedConfig = (): ChibiConfig => ({ kind: 'human', base: TINTED_BASE, outfit: { ...DEFAULT_OUTFIT } })
+
+  it('tints body and hair-front with the hair colour, and leaves hair-back untouched', () => {
+    const layers = layersFor({ ...tintedConfig(), hairColor: '#b3261e' }, 'neutral', 'full')
+    expect(layers.find((l) => l.order === 30)?.tints).toEqual([{ mask: 'base_f01_L30_hairmask', colour: '#b3261e', meanL: 0.42 }])
+    expect(layers.find((l) => l.order === 60)?.tints).toEqual([{ mask: 'base_f01_L60_hairmask', colour: '#b3261e', meanL: 0.42 }])
+    expect(layers.find((l) => l.order === 20)?.tints).toBeUndefined()
+  })
+
+  it('carries hair then eye tint, in that order, on a face with both masks', () => {
+    const layers = layersFor({ ...tintedConfig(), hairColor: '#b3261e', eyeColor: '#2f7fd6' }, 'neutral', 'full')
+    expect(layers.find((l) => l.order === 50)?.tints).toEqual([
+      { mask: 'base_f01_face_neutral_L50_hairmask', colour: '#b3261e', meanL: 0.42 },
+      { mask: 'base_f01_face_neutral_L50_eyemask', colour: '#2f7fd6', meanL: 0.31 },
+    ])
+  })
+
+  it('a face missing from eyes.files gets no eye tint even with eyeColor set', () => {
+    const layers = layersFor({ ...tintedConfig(), eyeColor: '#2f7fd6' }, 'happy', 'full')
+    expect(layers.find((l) => l.order === 50)?.tints).toBeUndefined()
+  })
+
+  it('a base without tint ignores the colours entirely', () => {
+    const plainBase = makeBase('m01')
+    const config: ChibiConfig = { kind: 'human', base: plainBase, outfit: { ...DEFAULT_OUTFIT }, hairColor: '#b3261e', eyeColor: '#2f7fd6' }
+    const layers = layersFor(config, 'neutral', 'full')
+    expect(layers.every((l) => l.tints === undefined)).toBe(true)
+  })
+
+  it('an item with tint gets its own tintmask', () => {
+    const tintedHead: WearRef = { id: 'head_beret_blue01', order: 80, file: 'item_head_beret_red01_L80', tint: { colour: '#3f6fd8', meanL: 0.5 } }
+    const layers = layersFor({ ...tintedConfig(), head: tintedHead }, 'neutral', 'full')
+    expect(layers.find((l) => l.order === 80)?.tints).toEqual([{ mask: 'item_head_beret_red01_L80_tintmask', colour: '#3f6fd8', meanL: 0.5 }])
+  })
+
+  it('bots never carry tints', () => {
+    const layers = layersFor({ kind: 'bot', index: 2 }, 'neutral', 'full')
+    expect(layers.every((l) => l.tints === undefined)).toBe(true)
+  })
+})
+
+describe('hashChibi — tints', () => {
+  it('differs when hairColor, eyeColor or an item tint differs from the base configuration', () => {
+    const config = bare()
+    const withHair: ChibiConfig = { ...config, hairColor: '#b3261e' }
+    const withEye: ChibiConfig = { ...config, eyeColor: '#2f7fd6' }
+    const tintedOutfit: WearRef = { ...config.outfit, tint: { colour: '#c0392b', meanL: 0.5 } }
+    const withItemTint: ChibiConfig = { ...config, outfit: tintedOutfit }
+
+    expect(hashChibi(withHair)).not.toBe(hashChibi(config))
+    expect(hashChibi(withEye)).not.toBe(hashChibi(config))
+    expect(hashChibi(withItemTint)).not.toBe(hashChibi(config))
+    expect(hashChibi(withHair)).not.toBe(hashChibi(withEye))
   })
 })
