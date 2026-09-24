@@ -28,21 +28,38 @@ export function tintKey(file: string, density: 1 | 2, tints: TintRef[]): string 
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   const img = new Image()
+  // The avatar asset base can be a CDN origin different from the page's; without this, drawing that
+  // image onto the canvas below taints it, and `getImageData`/`toBlob` throw a SecurityError instead
+  // of the plain layer's own failure path.
+  img.crossOrigin = 'anonymous'
   img.src = src
   return img.decode().then(() => img)
+}
+
+/** The outcome of one render attempt: `cacheable` says whether `cachedRender` may keep a `null` result cached
+ * for the rest of the session (spec §5.2's "no canvas" fallback, e.g. jsdom) or must drop it so the next mount
+ * retries instead (a 2D context existed but something downstream — an image load, a decode — failed once). */
+interface RenderOutcome {
+  url: string | null
+  cacheable: boolean
 }
 
 /** Paints every tint in `layer.tints` onto an offscreen canvas and resolves the resulting PNG's blob URL — or
  * `null`, never a throw, whenever a 2D context is unavailable (jsdom, a browser that refuses one) or anything
  * else in the pipeline fails, so the caller's only job is to fall back to the plain layer. */
-async function renderTintedLayer(prefix: string, layer: LayerRef, density: 1 | 2): Promise<string | null> {
+async function renderTintedLayer(prefix: string, layer: LayerRef, density: 1 | 2): Promise<RenderOutcome> {
   const tints = layer.tints
-  if (tints === undefined || tints.length === 0) return null
+  if (tints === undefined || tints.length === 0) return { url: null, cacheable: true }
 
+  // Set once a 2D context is actually in hand — everything that can fail after that point (a flaky
+  // image load, a decode error, `toBlob` returning null) is a transient failure of *this* attempt, not
+  // a fact about the environment, so its `null` must not be cached the way "no canvas at all" is.
+  let hadContext = false
   try {
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d')
-    if (ctx === null) return null
+    if (ctx === null) return { url: null, cacheable: true }
+    hadContext = true
 
     const layerImg = await loadImage(assetUrl(prefix, layer.file, density))
     canvas.width = layerImg.naturalWidth
@@ -54,7 +71,7 @@ async function renderTintedLayer(prefix: string, layer: LayerRef, density: 1 | 2
     maskCanvas.width = canvas.width
     maskCanvas.height = canvas.height
     const maskCtx = maskCanvas.getContext('2d')
-    if (maskCtx === null) return null
+    if (maskCtx === null) return { url: null, cacheable: true }
 
     for (const tint of tints) {
       const maskImg = await loadImage(assetUrl(prefix, tint.mask, density))
@@ -68,9 +85,9 @@ async function renderTintedLayer(prefix: string, layer: LayerRef, density: 1 | 2
 
     ctx.putImageData(imageData, 0, 0)
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve))
-    return blob === null ? null : URL.createObjectURL(blob)
+    return { url: blob === null ? null : URL.createObjectURL(blob), cacheable: true }
   } catch {
-    return null
+    return { url: null, cacheable: !hadContext }
   }
 }
 
@@ -88,19 +105,23 @@ function evictIfNeeded(): void {
   }
 }
 
-/** Runs `factory` for `key` at most once, caching its entry until it settles (and after). */
-function cachedRender(key: string, factory: () => Promise<string | null>): Promise<string | null> {
+/** Runs `factory` for `key` at most once, caching its entry until it settles (and after) — unless the outcome
+ * says `cacheable: false`, in which case the entry is dropped the moment it settles so the next caller for the
+ * same key gets a fresh attempt instead of the one transient failure replayed for the rest of the session. */
+function cachedRender(key: string, factory: () => Promise<RenderOutcome>): Promise<string | null> {
   const existing = cache.get(key)
   if (existing !== undefined) return existing.promise
 
-  const promise = factory()
+  const outcome = factory()
+  const promise = outcome.then((result) => result.url)
   const entry: CacheEntry = { promise, settled: false, url: null }
   cache.set(key, entry)
   evictIfNeeded()
 
-  promise.then((url) => {
+  outcome.then(({ url, cacheable }) => {
     entry.settled = true
     entry.url = url
+    if (!cacheable) cache.delete(key)
   })
 
   return promise

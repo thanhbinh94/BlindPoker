@@ -146,6 +146,30 @@ describe('useTintedLayer — with a faked canvas pipeline', () => {
     rerender({ layer: { order: 30, file: 'tint_stub_c' } })
     expect(result.current).toBeNull()
   })
+
+  it('retries a render whose mask failed to load after a 2D context was available, instead of caching the failure', async () => {
+    // Distinct file from every other test in this describe block, so this test's cache entry cannot
+    // collide with (or be short-circuited by) one another test already settled.
+    const layer: LayerRef = { order: 30, file: 'tint_stub_retry', tints: [RED] }
+    const decodeMock = HTMLImageElement.prototype.decode as unknown as ReturnType<typeof vi.fn>
+    // First `loadImage` call (the layer file) succeeds; the second (the mask) fails once — a transient
+    // error with a 2D context already in hand, the case that must not be cached as if the environment
+    // simply has no canvas.
+    decodeMock.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('mask decode failed'))
+
+    const first = renderHook(() => useTintedLayer('/avatar/', layer))
+    await waitFor(() => expect(decodeMock).toHaveBeenCalledTimes(2))
+    // Let the rejection propagate through `renderTintedLayer`'s catch and `cachedRender`'s `.then`,
+    // which drops the (uncacheable) failed entry from the module cache, before mounting again.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(first.result.current).toBeNull()
+
+    const second = renderHook(() => useTintedLayer('/avatar/', layer))
+    await waitFor(() => expect(second.result.current).not.toBeNull())
+    // A cached failure would have short-circuited this second mount straight to `null` with no further
+    // `decode` calls; retrying means the whole pipeline — layer image and mask alike — runs again.
+    expect(decodeMock).toHaveBeenCalledTimes(4)
+  })
 })
 
 // A dedicated module instance (`vi.resetModules()` + a fresh dynamic `import`), rather than the file's shared
