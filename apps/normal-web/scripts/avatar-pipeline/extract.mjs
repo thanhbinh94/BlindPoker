@@ -39,6 +39,7 @@
  * (`baseClothingUnion`, `coverBaseLimbs`).
  */
 import { join } from 'node:path'
+import { maskTargets, writeMasks } from './masks.mjs'
 import {
   ALPHA_INK,
   ALPHA_SOLID,
@@ -1330,7 +1331,7 @@ export function describeMeasurement(report, width) {
  *
  * @param {{ file: string, target: { kind: string, slot?: string, code?: string, base?: string, expr?: string, bot?: number }, dir: string, targets?: string[], baseId?: string, variant?: string | null, tolerance?: number, white?: boolean, dryRun?: boolean, lockScale?: number | null, transformFrom?: string | null, hides?: object, diff?: object, log?: (line: string) => void }} options
  */
-export async function ingest({ file, target, dir, targets, baseId = 'f01', variant = null, tolerance = 40, white = false, dryRun = false, lockScale = null, transformFrom = null, hides = {}, diff = {}, log = () => {} }) {
+export async function ingest({ file, target, dir, targets, baseId = 'f01', variant = null, tolerance = 40, white = false, dryRun = false, lockScale = null, transformFrom = null, hides = {}, diff = {}, tintSeed = null, log = () => {} }) {
   const square = target.kind === 'item' && SQUARE_SLOTS.has(target.slot)
   if (variant !== null) {
     if (!WEARS.includes(variant)) throw new Error(`--variant ${variant} is not one of ${WEARS.join(', ')}`)
@@ -1470,6 +1471,7 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', varia
   for (const { file: layerFile, picture, clip = null, extra = {}, icon = false } of layers) {
     const bytes2x = await writeDensities(picture, dir, layerFile.name, clip)
     manifest.files[layerFile.name] = entryFor(layerFile, bytes2x, { real: true, ...extra })
+    if (target.kind === 'item' && tintSeed) manifest.files[layerFile.name].tintSeed = tintSeed
     log(`${layerFile.name} — ${(bytes2x / 1024).toFixed(1)} KB at @2x${extra.empty ? ', empty' : ''}${extra.copyOf ? `, a copy of ${extra.copyOf}` : ''}`)
     if (icon) {
       const name = await writeIcon(picture, dir, layerFile.name, manifest, { real: true })
@@ -1477,6 +1479,14 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', varia
     }
   }
   await writeManifest(manifest, targets)
+  // Spec §4.1: whatever this ingest just wrote that `masks` would also cut gets its masks now, so a base or
+  // item is tintable the moment it lands rather than only after a separate `masks` run.
+  const targetable = maskTargets(manifest)
+  const maskNames = layers.map(({ file: layerFile }) => layerFile.name).filter((name) => targetable.includes(name))
+  if (maskNames.length) {
+    await writeMasks({ dir, manifest, names: maskNames, log })
+    await writeManifest(manifest, targets)
+  }
   log(`${report.heads.toFixed(2)} heads`)
   return { report, name: layers[0].file.name }
 }

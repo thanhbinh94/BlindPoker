@@ -38,8 +38,17 @@
  *                               to count as the item (default: DIFF_DEFAULTS in extract.mjs)
  *         --min-region <n>      an item: the smallest connected region kept, in @1x pixels
  *         --max-hole <n>        an item: the largest enclosed hole filled, in @1x pixels
+ *         --tint-seed <x,y>     a tintable item: the point (1x frame coords) `masks`/tint-sheet later cuts
+ *                               its colour region from; stored on the item's manifest entry
  *       An item is registered on its base first (the offset is logged), cut down to only itself, and written
- *       with its inventory icon, item_<slot>_<code>_icon (96 × 96 at @1x, 192 × 192 at @2x).
+ *       with its inventory icon, item_<slot>_<code>_icon (96 × 96 at @1x, 192 × 192 at @2x). `ingest` masks
+ *       whatever it just wrote that `masks` would (spec §4.1), so art ingested after this needs no separate
+ *       `masks` run.
+ *
+ *   node scripts/avatar-pipeline.mjs masks [<name>...] [--tint-seed <x,y> --as item:<slot>:<code>]
+ *       Cut hair, eye and tint masks (spec §4.1) for the named layers, or — with none named — every real
+ *       base L30/L60, base face and tintable item. `--tint-seed` (with `--as`) records a tint seed on an
+ *       item already in the manifest before masking it.
  *
  *   node scripts/avatar-pipeline.mjs check [<name>...] [--skip C6]
  *       Run D01 §10's ten criteria over every layer (or the named ones), print the table, exit 1 on any
@@ -48,17 +57,18 @@
  *   node scripts/avatar-pipeline.mjs sheet [--dir <layers>] [--out <png>]
  *       Compose every item on both bases into docs/avatar-2d-sheet.png — the style gate of spec §9.
  *
- * `placeholder` and `ingest` take `--out <dir>`; `check` and `sheet` read `--dir <dir>`. Pointing either
- * at a directory that is not `public/avatar/` also stops the server's copy of the manifest from being
+ * `placeholder`, `ingest` and `masks` take `--out <dir>`; `check` and `sheet` read `--dir <dir>`. Pointing
+ * either at a directory that is not `public/avatar/` also stops the server's copy of the manifest from being
  * written, which is what makes the whole pipeline testable without touching the committed artefact.
  *
  * The work is in `scripts/avatar-pipeline/`, one module per stage — `png` (pixels), `frame` (the frame
- * and the stand-in art), `extract` (cutting a layer out of a picture), `checks` (D01 §10), `sheet`,
- * `manifest` (names and the file). This file only reads the command line.
+ * and the stand-in art), `extract` (cutting a layer out of a picture), `masks` (spec §4.1's hair/eye/tint
+ * cuts), `checks` (D01 §10), `sheet`, `manifest` (names and the file). This file only reads the command line.
  */
 import { resolve } from 'node:path'
 import { anyFailed, formatChecks, runChecks } from './avatar-pipeline/checks.mjs'
 import { ingest } from './avatar-pipeline/extract.mjs'
+import { maskTargets, writeMasks } from './avatar-pipeline/masks.mjs'
 import { buildSheet } from './avatar-pipeline/sheet.mjs'
 import {
   MANIFEST_NAME,
@@ -66,8 +76,11 @@ import {
   SERVER_MANIFEST,
   SHEET_FILE,
   STAGE_ONE_ITEMS,
+  SLOT_LAYER,
   buildPlaceholders,
+  itemFile,
   readManifest,
+  writeManifest,
 } from './avatar-pipeline/manifest.mjs'
 
 const log = (message) => console.log(`[avatar-pipeline] ${message}`)
@@ -136,6 +149,15 @@ function parseTarget(spec) {
   return die(`cannot read --as ${spec}`)
 }
 
+/** `--tint-seed x,y` (1x frame coords), or `null` when the option is absent. */
+function tintSeedOption() {
+  const value = option('tint-seed')
+  if (value === null) return null
+  const [x, y] = value.split(',').map(Number)
+  if (!Number.isFinite(x) || !Number.isFinite(y)) die(`--tint-seed needs x,y, got ${value}`)
+  return { x, y }
+}
+
 try {
   if (command === 'placeholder') {
     const { dir, targets } = destinations('out')
@@ -164,9 +186,25 @@ try {
         ...(option('min-region') === null ? {} : { minRegion: Number(option('min-region')) }),
         ...(option('max-hole') === null ? {} : { maxHole: Number(option('max-hole')) }),
       },
+      tintSeed: tintSeedOption(),
       log,
     })
     if (flag('dry-run') && !report.ok) process.exitCode = 1
+  } else if (command === 'masks') {
+    const { dir, targets } = destinations('out')
+    const manifest = readManifest(resolve(dir, MANIFEST_NAME))
+    const seed = tintSeedOption()
+    if (seed) {
+      const target = parseTarget(option('as'))
+      if (target.kind !== 'item') die('--tint-seed needs --as item:<slot>:<code>')
+      const name = itemFile(target.slot, target.code, SLOT_LAYER[target.slot])
+      if (!manifest.files[name]) die(`no layer ${name} in the manifest — ingest it first`)
+      manifest.files[name].tintSeed = seed
+    }
+    const names = positionals().length ? positionals() : maskTargets(manifest)
+    await writeMasks({ dir, manifest, names, log })
+    await writeManifest(manifest, targets)
+    log(`${names.length} layer${names.length === 1 ? '' : 's'} masked`)
   } else if (command === 'check') {
     const { dir } = destinations('dir')
     const manifest = readManifest(resolve(dir, MANIFEST_NAME))
@@ -179,7 +217,7 @@ try {
     const out = option('out') ? resolve(process.cwd(), option('out')) : SHEET_FILE
     await buildSheet({ dir, manifest, out, log })
   } else {
-    die(`unknown command ${command ?? '(none)'} — one of placeholder, ingest, check, sheet`)
+    die(`unknown command ${command ?? '(none)'} — one of placeholder, ingest, check, sheet, masks, tint-sheet`)
   }
 } catch (error) {
   die(error instanceof Error ? error.message : String(error))
