@@ -49,8 +49,13 @@ const PUPIL_R = 9
  * real base has a forehead; this fixture now does too — but not so much of one that the cap (down to y
  * 285) stops overlapping the side locks (from y 280): the two are meant to be one hair mass, and cutting
  * them fully apart left the locks disconnected from the seed patch and unclassified.
+ *
+ * `outerWhiteOnly` (Task 2b round 2) hides the inner 60 % of one side's white ellipse behind a skin-
+ * coloured rect, leaving the sclera visible only on that eye's outer edge — the real-base shape the round
+ * 2 ruling's mirroring exists for — while the other side keeps its ordinary full white ellipse, standing
+ * in for the "mirror eye" the ruling borrows a box from.
  */
-async function syntheticBase({ closedEyes = false, irisColour = IRIS } = {}) {
+async function syntheticBase({ closedEyes = false, irisColour = IRIS, outerWhiteOnly = null as 'L' | 'R' | null } = {}) {
   const cx = 384
   const cy = 330
   const r = 150
@@ -58,9 +63,19 @@ async function syntheticBase({ closedEyes = false, irisColour = IRIS } = {}) {
   const eyes = closedEyes
     ? `<path d="M296 350 Q320 358 344 350" stroke="${PUPIL}" stroke-width="4" fill="none" stroke-linecap="round"/>` +
       `<path d="M424 350 Q448 358 472 350" stroke="${PUPIL}" stroke-width="4" fill="none" stroke-linecap="round"/>`
-    : EYE_CENTRES.map(([ex, ey]) =>
-        `<ellipse cx="${ex}" cy="${ey}" rx="34" ry="40" fill="${WHITE}"/><circle cx="${ex}" cy="${ey}" r="${IRIS_R}" fill="${irisColour}"/><circle cx="${ex}" cy="${ey}" r="${PUPIL_R}" fill="${PUPIL}"/>`,
-      ).join('')
+    : EYE_CENTRES.map(([ex, ey], i) => {
+        const side = i === 0 ? 'L' : 'R'
+        const rx = 34
+        const ry = 40
+        const hideFrac = 0.6
+        const innerW = 2 * rx * hideFrac
+        const hide =
+          side === outerWhiteOnly
+            ? `<rect x="${side === 'L' ? ex + rx - innerW : ex - rx}" y="${ey - ry}" width="${innerW}" height="${2 * ry}" fill="${SKIN}"/>`
+            : ''
+        return `<ellipse cx="${ex}" cy="${ey}" rx="${rx}" ry="${ry}" fill="${WHITE}"/>${hide}` +
+          `<circle cx="${ex}" cy="${ey}" r="${IRIS_R}" fill="${irisColour}"/><circle cx="${ex}" cy="${ey}" r="${PUPIL_R}" fill="${PUPIL}"/>`
+      }).join('')
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="${SKIN}"/>
     <clipPath id="cap"><rect x="${cx - r - 20}" y="${cy - r}" width="${2 * r + 40}" height="${capBottom - (cy - r)}"/></clipPath>
@@ -119,11 +134,11 @@ const irisPixels = (pic: Picture) => colourPixels(pic, IRIS)
  * on the head (the hair, the skin), so `colourPixels` can no longer tell the iris apart from that — this
  * finds it from the SVG's own geometry instead, independent of what colour it was drawn.
  */
-function irisRingPixels(pic: Picture): Uint8Array {
+function irisRingPixels(pic: Picture, centres: [number, number][] = EYE_CENTRES): Uint8Array {
   const out = new Uint8Array(pic.width * pic.height)
   for (let y = 0; y < pic.height; y++) {
     for (let x = 0; x < pic.width; x++) {
-      for (const [ex, ey] of EYE_CENTRES) {
+      for (const [ex, ey] of centres) {
         const d = Math.hypot(x - ex, y - ey)
         if (d <= IRIS_R && d > PUPIL_R) { out[y * pic.width + x] = 1; break }
       }
@@ -224,6 +239,20 @@ describe('hairMask / eyeMask (synthetic base)', () => {
     const eyes = eyeMask(pic, hair)
     const ring = irisRingPixels(pic)
     expect(coverage(eyes, ring)).toBeGreaterThan(0.8)
+  })
+
+  // Task 2b round 2 (spec §4.1 ruling): the real bases showed the box built from one side's own whites
+  // missing the inner half of that eye, because the sclera there shows mostly on the iris's outer side —
+  // asymmetric per eye, so no single-side fix can catch it. With whites on both sides, each side's box is
+  // unioned with the *mirror* of the other side's box about the face's own eye axis; a side whose own box
+  // is thin borrows the fuller shape of the other eye, reflected into place.
+  it('covers both irises when one eye shows white only on its outer side, paired with a normal eye', async () => {
+    const pic = await syntheticBase({ outerWhiteOnly: 'L' })
+    const hair = hairMask(pic, { neverVisible: null })
+    const eyes = eyeMask(pic, hair)
+    const [leftCentre, rightCentre] = EYE_CENTRES
+    expect(coverage(eyes, irisRingPixels(pic, [leftCentre!]))).toBeGreaterThanOrEqual(0.8)
+    expect(coverage(eyes, irisRingPixels(pic, [rightCentre!]))).toBeGreaterThanOrEqual(0.8)
   })
 })
 

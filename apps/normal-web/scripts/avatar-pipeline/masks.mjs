@@ -320,7 +320,11 @@ export function hairMask(pic, { neverVisible = null } = {}) {
  *
  * 1. Per side of the face centre line, in the eye band: the eye-white components (opaque, L > 88,
  *    chroma < 10; a component whose box straddles the centre line — teeth — is ignored, and so is one
- *    under 20 px @2x scaled). Their boxes union per side.
+ *    under 20 px @2x scaled). Their boxes union per side. When both sides have whites, each side's box is
+ *    then unioned with the *mirror* of the other side's box about the face's own eye axis (Task 2b round
+ *    2 — the sclera often shows only on the iris's outer side, so a side's own box alone can miss its
+ *    inner half; the other eye, mirrored, is what fills it back in). A wink (whites on one side only) is
+ *    not mirrored.
  * 2. That box is expanded 15 % each way (top/bottom/left/right), and the eye is the ellipse inscribed in
  *    the expanded box — a side with no whites (closed eyes, a wink) gets no ellipse and stays empty.
  * 3. Inside the ellipse: opaque, not white, L > 12 is a candidate. A candidate that is skin-like *and*
@@ -396,6 +400,25 @@ export function eyeMask(pic, hair) {
     boxOf[sd] = box
       ? { x0: Math.min(box.x0, b.x0), x1: Math.max(box.x1, b.x1), y0: Math.min(box.y0, b.y0), y1: Math.max(box.y1, b.y1) }
       : { ...b }
+  }
+
+  // 1b. Task 2b round 2 (spec §4.1 ruling): the sclera often shows only on the *outer* side of the iris,
+  // so one side's own whites box can miss the inner half of that eye entirely, while the other side's own
+  // box is fine (or missing a different half) — asymmetric per eye, not something a per-side box alone can
+  // fix. With whites on both sides, each side's box is unioned with the *mirror* of the other side's box
+  // about the face's own eye axis: the midpoint between the left side's leftmost white pixel and the right
+  // side's rightmost white pixel, i.e. the two outer eye corners — reliably symmetric even when the whites
+  // in between are not. A side whose own box is already good gains nothing (the union is near-idempotent);
+  // a side whose box is thin borrows the other eye's shape, mirrored into place. A wink (whites on only one
+  // side) is not mirrored — the closed side has no whites and stays empty, on purpose.
+  if (boxOf.L && boxOf.R) {
+    const axis = (boxOf.L.x0 + boxOf.R.x1) / 2
+    const mirror = (box) => ({ x0: 2 * axis - box.x1, x1: 2 * axis - box.x0, y0: box.y0, y1: box.y1 })
+    const union = (a, b) => ({ x0: Math.min(a.x0, b.x0), x1: Math.max(a.x1, b.x1), y0: Math.min(a.y0, b.y0), y1: Math.max(a.y1, b.y1) })
+    const mirroredR = mirror(boxOf.R)
+    const mirroredL = mirror(boxOf.L)
+    boxOf.L = union(boxOf.L, mirroredR)
+    boxOf.R = union(boxOf.R, mirroredL)
   }
 
   // 2. expand 15 % each way, the eye is the ellipse inscribed in the result
