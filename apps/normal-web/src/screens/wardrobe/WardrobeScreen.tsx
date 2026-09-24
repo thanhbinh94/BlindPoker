@@ -19,6 +19,7 @@ import { useAvatars } from '../../avatar/useAvatars.js'
 import s from '../normal.module.css'
 import { useAsync } from '../useAsync.js'
 import { BaseTab } from './BaseTab.js'
+import { ColourTab } from './ColourTab.js'
 import { ItemTab } from './ItemTab.js'
 import { OutfitBar } from './OutfitBar.js'
 import w from './wardrobe.module.css'
@@ -33,8 +34,9 @@ export function avatarRefusal(cause: unknown, t: TFunction): string {
 
 const EXPRESSIONS: readonly Expression[] = ['neutral', 'happy', 'sad', 'surprised', 'closed', 'sleep']
 
-/** The seven tabs of design §7, in the order the spec lists them: the base first, the words last. */
-const TABS = ['base', 'head', 'face', 'outfit', 'aura', 'frame', 'words'] as const
+/** The tabs of design §7/§6, in the order the spec lists them: the base first, the two colour tabs
+ * after the drawn slots, the words last. */
+const TABS = ['base', 'head', 'face', 'outfit', 'aura', 'frame', 'hairColor', 'eyeColor', 'words'] as const
 type Tab = (typeof TABS)[number]
 
 /** `useAvatars` wants an array it can key on; a fresh `[]` per render would restart its effect forever. */
@@ -321,6 +323,15 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
                 onPick={(id) => pick('badge', id)}
               />
             </>
+          ) : tab === 'hairColor' || tab === 'eyeColor' ? (
+            <ColourTab
+              slot={tab}
+              catalog={loaded.catalog}
+              owned={owned}
+              achievements={loaded.achievements}
+              draft={config}
+              onPick={(id) => commit(withSlot(config, tab, id))}
+            />
           ) : (
             <ItemTab
               slot={tab}

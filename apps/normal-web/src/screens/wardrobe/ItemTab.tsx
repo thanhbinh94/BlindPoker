@@ -71,36 +71,87 @@ export interface ItemTabProps {
 }
 
 /**
+ * Every row of a slot's colour variants (design §6): items that share `asset.file` with another item
+ * but carry their own `asset.tint` are not separate cards — they are dots under the item whose file
+ * they share. The original the variants vary has no `tint` at all, which is exactly what tells a card
+ * apart from a dot.
+ */
+function variantsByFile(rows: readonly ItemDto[]): Map<string, ItemDto[]> {
+  const map = new Map<string, ItemDto[]>()
+  for (const row of rows) {
+    if (row.asset?.tint === undefined) continue
+    const file = row.asset.file
+    const list = map.get(file)
+    if (list === undefined) map.set(file, [row])
+    else list.push(row)
+  }
+  return map
+}
+
+/**
  * One wardrobe slot's tiles (design §7): everything the catalogue lists for this slot, owned pieces
  * clickable and the rest locked with a reason. `outfit`'s tiles are never locked-*and*-equipped at once —
  * every account starts with the default outfit owned — but the lock logic here does not know that; it just
  * asks `owned`.
+ *
+ * A colour variant of a slot's item (design §6) is never one of these tiles — it hangs off its card as
+ * a small dot instead, via `variantsByFile`.
  */
 export function ItemTab({ slot, catalog, owned, achievements, draft, wear, onPick }: ItemTabProps) {
   const { t } = useTranslation('normal')
   const rows = catalog.filter((item) => item.slot === slot)
+  const variants = variantsByFile(rows)
+  // A card is anything that is not itself a colour variant — including `title`/`badge`, which have no
+  // `asset` and so no `asset.tint` either.
+  const cards = rows.filter((item) => item.asset?.tint === undefined)
 
   return (
     <div className={s.tileGrid} role="tabpanel">
-      {rows.map((item) => {
+      {cards.map((item) => {
         const isOwned = owned.has(item.id)
         const equipped = draft[slot] === item.id
+        const dots = item.asset === undefined ? undefined : variants.get(item.asset.file)
         return (
-          <button
-            key={item.id}
-            type="button"
-            className={s.tile}
-            data-rarity={item.rarity}
-            aria-pressed={equipped}
-            aria-disabled={!isOwned}
-            onClick={() => {
-              if (isOwned) onPick(item.id)
-            }}
-          >
-            <ItemPreview item={item} wear={wear} />
-            <span className={s.tileName}>{itemName(item.id, t)}</span>
-            {isOwned ? null : <span className={s.tileHint}>{hintFor(item, achievements, t)}</span>}
-          </button>
+          <div key={item.id} className={s.itemCard}>
+            <button
+              type="button"
+              className={s.tile}
+              data-rarity={item.rarity}
+              aria-pressed={equipped}
+              aria-disabled={!isOwned}
+              onClick={() => {
+                if (isOwned) onPick(item.id)
+              }}
+            >
+              <ItemPreview item={item} wear={wear} />
+              <span className={s.tileName}>{itemName(item.id, t)}</span>
+              {isOwned ? null : <span className={s.tileHint}>{hintFor(item, achievements, t)}</span>}
+            </button>
+            {dots === undefined || dots.length === 0 ? null : (
+              <div className={s.colourDots} role="group" aria-label={itemName(item.id, t)}>
+                {dots.map((variant) => {
+                  const variantOwned = owned.has(variant.id)
+                  const variantEquipped = draft[slot] === variant.id
+                  return (
+                    <button
+                      key={variant.id}
+                      type="button"
+                      className={s.colourDot}
+                      style={{ background: variant.asset!.tint }}
+                      aria-label={itemName(variant.id, t)}
+                      aria-pressed={variantEquipped}
+                      aria-disabled={!variantOwned}
+                      onClick={() => {
+                        if (variantOwned) onPick(variant.id)
+                      }}
+                    >
+                      {variantOwned ? null : <span className={s.lock} aria-hidden="true" />}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         )
       })}
     </div>

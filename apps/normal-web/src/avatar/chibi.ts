@@ -44,7 +44,19 @@ export function chibiFromApi(
   const frame = toWearRef(items.get(config.frame ?? ''), 'frame', baseDto)
   if (frame !== null) chibi.frame = frame
 
+  const hairColor = toColour(items.get(config.hairColor ?? ''), 'hairColor')
+  if (hairColor !== undefined) chibi.hairColor = hairColor
+  const eyeColor = toColour(items.get(config.eyeColor ?? ''), 'eyeColor')
+  if (eyeColor !== undefined) chibi.eyeColor = eyeColor
+
   return chibi
+}
+
+/** The hex a `hairColor`/`eyeColor` id resolves to, or `undefined` for an id the catalogue has no row
+ * for, one that belongs to the other colour slot, or one with no `colour` at all (design §5.2). */
+function toColour(item: ItemDto | undefined, slot: ItemDto['slot']): string | undefined {
+  if (item === undefined || item.slot !== slot) return undefined
+  return item.colour
 }
 
 /** The layer an item draws on this base: its cut for the base's wear, or the one everybody shares. */
@@ -56,7 +68,7 @@ export function layerFileFor(asset: ItemDto['asset'], base: Pick<BaseDto, 'wear'
 
 function toBaseRef(base: BaseDto | undefined): BaseRef | null {
   if (base === undefined) return null
-  return {
+  const ref: BaseRef = {
     id: base.id,
     hairBack: base.layers.hairBack,
     body: base.layers.body,
@@ -65,16 +77,21 @@ function toBaseRef(base: BaseDto | undefined): BaseRef | null {
     // of the six expressions, and re-checking that here on every render would cost more than it catches.
     faces: base.faces as Record<Expression, string>,
   }
+  if (base.tint !== undefined) ref.tint = base.tint
+  return ref
 }
 
 /** `undefined` for an id the catalogue has no row for, or one that belongs to a different slot — both read
  * as "not equipped" rather than as an error. */
 function toWearRef(item: ItemDto | undefined, slot: ItemDto['slot'], base: BaseDto): WearRef | null {
   if (item === undefined || item.slot !== slot || item.asset === undefined) return null
-  const { layer: order, hidesHairFront, hidesHairBack } = item.asset
+  const { layer: order, hidesHairFront, hidesHairBack, tint, tintMeanL } = item.asset
   const wear: WearRef = { id: item.id, order, file: layerFileFor(item.asset, base)! }
   if (hidesHairFront !== undefined) wear.hidesHairFront = hidesHairFront
   if (hidesHairBack !== undefined) wear.hidesHairBack = hidesHairBack
+  // `tintMeanL` is always set alongside `tint` — the server's `parseAsset` refuses one without the
+  // other — so it is trusted here the same way `faces` is trusted above.
+  if (tint !== undefined) wear.tint = { colour: tint, meanL: tintMeanL! }
   return wear
 }
 

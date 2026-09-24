@@ -167,3 +167,86 @@
   justify-content: center;
 }
 
+/* A tile plus the row of colour dots under it (design §6) — one grid cell of `.tileGrid`. */
+.itemCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.colourDots {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.colourDot {
+  position: relative;
+  width: 1.5rem;
+  height: 1.5rem;
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.colourDot[aria-pressed='true'] {
+  box-shadow: 0 0 0 2px var(--gold);
+}
+
+.colourDot[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* The hair-colour / eye-colour tabs: round swatches, "Natural" first, no picture (design §6). */
+.colourGrid {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.colourSwatch {
+  position: relative;
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--bg-elev);
+  cursor: pointer;
+}
+
+.colourSwatch[aria-pressed='true'] {
+  box-shadow: 0 0 0 2px var(--gold);
+}
+
+.colourSwatch[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.naturalMark {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: repeating-conic-gradient(var(--line) 0% 25%, transparent 0% 50%);
+}
+
+.lock {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.625rem;
+}
+
+.lock::before {
+  content: '🔒';
+}
+

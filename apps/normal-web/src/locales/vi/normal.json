@@ -264,8 +264,11 @@
       "outfit": "Trang phục",
       "aura": "Aura",
       "frame": "Khung",
+      "hairColor": "Màu tóc",
+      "eyeColor": "Màu mắt",
       "words": "Danh hiệu & Huy hiệu"
     },
+    "natural": "Tự nhiên",
     "expression": {
       "legend": "Biểu cảm xem trước",
       "neutral": "Bình thường",

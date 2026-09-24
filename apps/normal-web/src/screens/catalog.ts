@@ -22,7 +22,7 @@ export const RARITY_TONE: Record<Rarity, BadgeTone> = { common: 'muted', rare: '
 export const SLOT_ORDER: ItemSlot[] = ['head', 'face', 'outfit', 'aura', 'frame', 'title', 'badge']
 
 /** The slots a daily-reward draw may land on (design §5.2) — mirrors the server's `DAILY_DRAW_SLOTS`. */
-const DAILY_DRAW_SLOTS = new Set<ItemSlot>(['head', 'face', 'aura', 'frame'])
+const DAILY_DRAW_SLOTS = new Set<ItemSlot>(['head', 'face', 'aura', 'frame', 'hairColor', 'eyeColor'])
 
 /**
  * Why a locked tile is locked, in one line: how a player would come to own it.

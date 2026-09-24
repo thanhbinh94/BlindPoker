@@ -25,8 +25,13 @@ export const UNAUTHENTICATED_CODE = 'UNAUTHENTICATED'
  * (a body is a fixed `base`, chosen rather than dressed piece by piece), `hat`/`accessory`/`jewelry`
  * become `head`/`face`/`aura`, and `frame` (the profile border) is new. `title` and `badge` are
  * unchanged: text beside a name, nothing to draw.
+ *
+ * 2026-09-24 (Plan 13): `hairColor` and `eyeColor` are two more optional slots. Unlike every other
+ * one they draw nothing of their own — recolouring the base's own hair or eye pixels is not a PNG
+ * layer — but a colour is still an item, which is what buys it validation, ownership and a place in
+ * the daily draw for free (`apps/normal-server/src/inventory/slots.ts`, verbatim).
  */
-export type ItemSlot = 'head' | 'face' | 'outfit' | 'aura' | 'frame' | 'title' | 'badge'
+export type ItemSlot = 'head' | 'face' | 'outfit' | 'aura' | 'frame' | 'hairColor' | 'eyeColor' | 'title' | 'badge'
 
 /**
  * A fixed figure a chibi is drawn on — chosen, never owned (design §4.2, §5.1).
@@ -40,15 +45,19 @@ export type BaseId = string
 /** The one slot every configuration must fill; a figure with no outfit is not a figure. */
 export const REQUIRED_SLOTS = ['outfit'] as const
 
-/** Everything else may be left empty: four cosmetic layers and the two name decorations. */
-export const OPTIONAL_SLOTS = ['head', 'face', 'aura', 'frame', 'title', 'badge'] as const
+/** Everything else may be left empty: six cosmetic slots and the two name decorations. */
+export const OPTIONAL_SLOTS = ['head', 'face', 'aura', 'frame', 'hairColor', 'eyeColor', 'title', 'badge'] as const
+
+/** The two colour slots (design §3.1, §5.2) — every id in either one names a `colour` item, not a layer. */
+export const COLOUR_SLOTS = ['hairColor', 'eyeColor'] as const
 
 /** The slots drawn as a PNG layer — exactly the items that carry `asset` (`title`/`badge` are words). */
 export const DRAWN_SLOTS = ['head', 'face', 'outfit', 'aura', 'frame'] as const
 
 /** The slots a daily-reward draw may land on (§13.2, design §5.2): `outfit` is drawable but chosen
- * deliberately, not handed out alongside a hat or an aura. */
-export const DAILY_DRAW_SLOTS = ['head', 'face', 'aura', 'frame'] as const
+ * deliberately, not handed out alongside a hat or an aura. `hairColor`/`eyeColor` are here even
+ * though they draw nothing — a rare colour is exactly as much a prize as a rare hat. */
+export const DAILY_DRAW_SLOTS = ['head', 'face', 'aura', 'frame', 'hairColor', 'eyeColor'] as const
 
 /** Every slot, in the order a configuration lists them: the one required slot, then the rest. */
 export const SLOTS: readonly ItemSlot[] = [...REQUIRED_SLOTS, ...OPTIONAL_SLOTS]
@@ -84,6 +93,11 @@ export interface AssetRefDto {
   hidesHairBack?: boolean
   /** Whether this layer falls inside the 208×208 avatar crop the portrait is cut from. */
   fitsAvatarCrop: boolean
+  /** A colour variant (design §3.3): draw `file`, then tint the `<file>_tintmask` region with this hex.
+   *  The original item this varies has no `tint` at all — only its variants do. */
+  tint?: string
+  /** `masks.tint.meanL` off the manifest entry for `file`, copied in at load time (design §5.2). */
+  tintMeanL?: number
 }
 
 /** `apps/normal-server/src/inventory/items.ts` — the catalogue row, verbatim. */
@@ -98,6 +112,11 @@ export interface ItemDto {
   isDefault: boolean
   /** The PNG layer to draw. Present for `DRAWN_SLOTS`, absent for `title` and `badge`. */
   asset?: AssetRefDto
+  /** The hex a `hairColor`/`eyeColor` item paints with (design §3.2). Present there, absent elsewhere. */
+  colour?: string
+  /** Owned by every player without an `inventory` row (design §3.2); `/api/me/inventory` reports it with
+   *  `source: "free"`. */
+  free?: true
 }
 
 /** The rig every chibi is drawn on (design §5.1) — `apps/normal-server/src/inventory/bases.ts`'s
@@ -110,6 +129,10 @@ export interface BaseDto {
   layers: { hairBack: string; body: string; hairFront: string }
   /** One face per expression (`neutral`, `happy`, `sad`, `surprised`, `closed`, `sleep`). */
   faces: Record<string, string>
+  /** Where this base can be recoloured (design §4.1, §5.2), absent until the pipeline has cut masks
+   *  for it. `files` are the layer file stems that carry a non-empty mask for that region; `meanL` is
+   *  the whole base's reference lightness for it, shared by every layer so no seam shows. */
+  tint?: { hair?: { meanL: number; files: string[] }; eyes?: { meanL: number; files: string[] } }
 }
 
 /** `GET /api/catalog/avatar`: the frame, crop and both bases — public, like `/api/catalog/items`, because a
@@ -159,6 +182,9 @@ export interface AvatarConfigDto {
   face?: string
   aura?: string
   frame?: string
+  /** Item ids, not hex — `chibiFromApi` resolves them through the catalogue (design §5.2). */
+  hairColor?: string
+  eyeColor?: string
   title?: string
   badge?: string
 }

@@ -264,8 +264,11 @@
       "outfit": "Outfit",
       "aura": "Aura",
       "frame": "Frame",
+      "hairColor": "Hair colour",
+      "eyeColor": "Eye colour",
       "words": "Title & Badge"
     },
+    "natural": "Natural",
     "expression": {
       "legend": "Preview expression",
       "neutral": "Neutral",
