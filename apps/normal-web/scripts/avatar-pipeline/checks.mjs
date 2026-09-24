@@ -42,7 +42,8 @@ import {
   resizePicture,
 } from './png.mjs'
 import { CROP, DENSITIES, FACE_LIMIT_Y, FRAME, LAYERS, SKIN_TOLERANCE, UNDERWEAR_BAND, UNDERWEAR_COVERAGE, UNDERWEAR_TOLERANCE, baseSkinColour, isSkin } from './frame.mjs'
-import { NAME_PATTERN, itemFile, parseName, wearOf } from './manifest.mjs'
+import { MASK_FILE_KIND } from './masks.mjs'
+import { NAME_PATTERN, faceFile, itemFile, parseName, wearOf } from './manifest.mjs'
 
 /** C10, and spec §8's 6 MB stage-1 footprint divided by the files that have to fit in it. */
 export const MAX_BYTES_2X = 400 * 1024
@@ -70,6 +71,7 @@ const CHECKS = [
   { id: 'C8', run: legalName },
   { id: 'C9', run: listedInTheManifest },
   { id: 'C10', run: insideTheBudget },
+  { id: 'C11', run: maskChecks },
 ]
 
 export const CHECK_IDS = CHECKS.map((check) => check.id)
@@ -120,7 +122,42 @@ async function load(dir, manifest, name, bases) {
     bytes[density] = statSync(file).size
   }
   const halved = pictures[2] ? await resizePicture(pictures[2], Math.round(pictures[2].width / 2), Math.round(pictures[2].height / 2)) : null
-  return { name, dir, manifest, entry: manifest.files[name], parsed: parseName(name), pictures, bytes, halved, bases }
+  const entry = manifest.files[name]
+  const parsed = parseName(name)
+
+  // C11: every mask this file's manifest entry lists, at @2x — the density everything above is measured
+  // and drawn at (spec §4.3's pixel counts are "@2x").
+  const masks = {}
+  if (entry?.masks) {
+    for (const kind of Object.keys(entry.masks)) {
+      const file = join(dir, `${name}_${MASK_FILE_KIND[kind]}mask@2x.png`)
+      masks[kind] = existsSync(file) ? await readPicture(file) : null
+    }
+  }
+  // C11's hair-on-a-face rule measures against the same base's `face_neutral` hair mask — read once here,
+  // the one place `load` may look outside its own file, because the check itself has to stay synchronous.
+  let neutralHairArea = null
+  if (parsed?.kind === 'baseFace' && entry?.masks?.hair) {
+    const neutralName = faceFile(parsed.base, 'neutral')
+    if (neutralName === name) {
+      neutralHairArea = masks.hair ? maskArea(masks.hair) : null
+    } else {
+      const neutralInfo = manifest.files[neutralName]?.masks?.hair
+      if (neutralInfo && !neutralInfo.empty) {
+        const neutralFile = join(dir, `${neutralName}_hairmask@2x.png`)
+        neutralHairArea = existsSync(neutralFile) ? maskArea(await readPicture(neutralFile)) : null
+      }
+    }
+  }
+
+  return { name, dir, manifest, entry, parsed, pictures, bytes, halved, bases, masks, neutralHairArea }
+}
+
+/** Pixels of a mask (as a `readPicture` result: white RGB, coverage in alpha) at ≥ 128 — spec §4.3's areas. */
+function maskArea(pic) {
+  let n = 0
+  for (let i = 3; i < pic.data.length; i += 4) if (pic.data[i] >= 128) n++
+  return n
 }
 
 // ───────────────────────────────────────────────────────────── the criteria ──
@@ -417,6 +454,115 @@ function insideTheBudget({ entry, bytes }) {
   if (entry && entry.bytes2x !== onDisk) return bad(`the manifest says ${entry.bytes2x} bytes, the file is ${onDisk}`)
   if (onDisk > MAX_BYTES_2X) return bad(`${(onDisk / 1024).toFixed(1)} KB is over the ${(MAX_BYTES_2X / 1024).toFixed(0)} KB budget`)
   return ok(`${(onDisk / 1024).toFixed(1)} KB`)
+}
+
+const EYE_NEIGHBOURS8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]
+
+/** 8-connected components of a mask picture (≥ 128), each with its size and its x-span. C11's own — the
+ * eye rule needs which *side* a blob sits on, which `alphaBBox`'s single box for the whole mask cannot say. */
+function eyeBlobs(maskPic) {
+  const { width, height, data } = maskPic
+  const bin = new Uint8Array(width * height)
+  for (let i = 0; i < bin.length; i++) bin[i] = data[i * 4 + 3] >= 128 ? 1 : 0
+  const label = new Int32Array(bin.length).fill(-1)
+  const blobs = []
+  const stack = []
+  for (let start = 0; start < bin.length; start++) {
+    if (!bin[start] || label[start] >= 0) continue
+    const blob = { size: 0, x0: width, x1: -1 }
+    const id = blobs.length
+    blobs.push(blob)
+    stack.push(start)
+    label[start] = id
+    while (stack.length) {
+      const p = stack.pop()
+      blob.size++
+      const x = p % width
+      const y = (p - x) / width
+      if (x < blob.x0) blob.x0 = x
+      if (x > blob.x1) blob.x1 = x
+      for (const [dx, dy] of EYE_NEIGHBOURS8) {
+        const nx = x + dx
+        const ny = y + dy
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue
+        const q = ny * width + nx
+        if (bin[q] && label[q] < 0) { label[q] = id; stack.push(q) }
+      }
+    }
+  }
+  return blobs
+}
+
+/**
+ * C11 (spec §4.3): every mask a layer's manifest entry lists — hair, eyes, tint — sits on the layer's own
+ * ink, at the layer's own size, and, unless it is a hand-drawn `override`, has a plausible shape:
+ *
+ * - hair on `L30`: 3–20 % of the frame area;
+ * - hair on a face: 0.7–1.3 × the same base's `face_neutral` hair mask (skipped when that is empty — an
+ *   AI base whose neutral face has no hair to compare against);
+ * - eyes on `neutral`: exactly two 8-connected blobs, 100–8000 px each, one each side of the mask's own
+ *   centre column; on another open-eyed expression, that or none; on `closed`/`sleep`, always none;
+ * - tint: at least 2 % of the layer's own ink.
+ *
+ * A file the manifest lists no `masks` for (nothing has been through `masks`/`ingest` for it yet) reports
+ * `n/a`, same as every other check that has nothing to judge.
+ */
+function maskChecks(context) {
+  const { entry, parsed, pictures, masks, neutralHairArea } = context
+  if (!entry?.masks) return ok('n/a — no masks cut for this layer')
+  const layer = pictures[2]
+  if (!layer) return ok('n/a — no @2x to judge')
+
+  const problems = []
+  for (const [kind, info] of Object.entries(entry.masks)) {
+    const maskPic = masks[kind]
+    if (!maskPic) { problems.push(`${kind} mask file is missing from disk`); continue }
+    if (maskPic.width !== layer.width || maskPic.height !== layer.height) {
+      problems.push(`${kind} mask is ${maskPic.width} × ${maskPic.height}, the layer is ${layer.width} × ${layer.height}`)
+      continue
+    }
+
+    let area = 0
+    let outside = 0
+    for (let i = 0; i < maskPic.width * maskPic.height; i++) {
+      if (maskPic.data[i * 4 + 3] < 128) continue
+      area++
+      if (layer.data[i * 4 + 3] <= ALPHA_INK) outside++
+    }
+    if (outside) { problems.push(`${kind} mask outside the layer at ${outside} pixel${outside === 1 ? '' : 's'}`); continue }
+    if (info.override) continue // a hand-drawn mask is trusted for its shape — size and coverage still hold.
+
+    if (kind === 'hair' && parsed?.kind === 'base' && parsed.layer === LAYERS.body) {
+      const pct = (area / (layer.width * layer.height)) * 100
+      if (pct < 3 || pct > 20) problems.push(`hair area is ${pct.toFixed(1)} % of the frame, want 3–20 %`)
+    } else if (kind === 'hair' && parsed?.kind === 'baseFace' && neutralHairArea !== null) {
+      const ratio = neutralHairArea === 0 ? 1 : area / neutralHairArea
+      if (ratio < 0.7 || ratio > 1.3) problems.push(`hair area is ${ratio.toFixed(2)} × the neutral face's, want 0.7–1.3 ×`)
+    } else if (kind === 'eyes' && parsed?.kind === 'baseFace') {
+      const wantsEmpty = parsed.expr === 'closed' || parsed.expr === 'sleep'
+      const emptyAllowed = !wantsEmpty && parsed.expr !== 'neutral'
+      if (wantsEmpty) {
+        if (area > 0) problems.push(`${parsed.expr} face needs an empty eye mask, found ${area} px`)
+      } else if (area === 0 && !emptyAllowed) {
+        problems.push('neutral face needs two eyes, found none')
+      } else if (area > 0) {
+        const mid = maskPic.width / 2
+        const valid = eyeBlobs(maskPic).filter((b) => b.size >= 100 && b.size <= 8000 && (b.x1 < mid || b.x0 >= mid))
+        const left = valid.filter((b) => b.x1 < mid).length
+        const right = valid.filter((b) => b.x0 >= mid).length
+        if (left !== 1 || right !== 1) {
+          const label = parsed.expr === 'neutral' ? 'neutral face needs two eyes' : `${parsed.expr} face needs two eyes or none`
+          problems.push(`${label}, found ${left} left and ${right} right`)
+        }
+      }
+    } else if (kind === 'tint') {
+      let ink = 0
+      for (let i = 3; i < layer.data.length; i += 4) if (layer.data[i] > ALPHA_INK) ink++
+      const pct = ink === 0 ? 0 : (area / ink) * 100
+      if (pct < 2) problems.push(`tint area is ${pct.toFixed(1)} % of the item's own ink, want ≥ 2 %`)
+    }
+  }
+  return problems.length ? bad(problems.join('; ')) : ok(`${Object.keys(entry.masks).length} mask${Object.keys(entry.masks).length === 1 ? '' : 's'} check out`)
 }
 
 // ────────────────────────────────────────────────────────────────── the table ──

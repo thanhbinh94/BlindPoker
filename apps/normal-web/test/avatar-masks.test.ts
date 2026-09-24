@@ -10,8 +10,10 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { runChecks } from '../scripts/avatar-pipeline/checks.mjs'
 import { eyeMask, hairMask, maskTargets, tintMask, writeMasks } from '../scripts/avatar-pipeline/masks.mjs'
-import { readPicture, renderSvg, writePicture } from '../scripts/avatar-pipeline/png.mjs'
+import { readPicture, renderSvg, resizePicture, writePicture } from '../scripts/avatar-pipeline/png.mjs'
+import { buildTintSheet } from '../scripts/avatar-pipeline/tint-sheet.mjs'
 
 // Every case renders a synthetic 768 × 896 picture and runs the real mask algorithm on it — a few seconds
 // each once k-means and the morphology are counted, and past vitest's 5 s default when the suite shares
@@ -258,5 +260,192 @@ describe('maskTargets', () => {
     expect(targets).not.toContain('item_outfit_casual01_L40') // no tintSeed
     expect(targets).toContain('item_outfit_dealer01_L40')
     expect(targets).not.toContain('item_head_tophat01_L80') // placeholder, not real
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────── C11 ──
+
+describe('C11 (checks.mjs, spec §4.3)', () => {
+  let temp = ''
+  let dir = ''
+  let overridesDir = ''
+
+  beforeAll(() => {
+    temp = mkdtempSync(join(tmpdir(), 'avatar-c11-'))
+    dir = join(temp, 'out')
+    overridesDir = join(temp, 'overrides')
+    mkdirSync(dir, { recursive: true })
+    mkdirSync(overridesDir, { recursive: true })
+  })
+  afterAll(() => rmSync(temp, { recursive: true, force: true }))
+
+  /** A picture that is opaque everywhere, one flat colour — so any mask cut from it stays inside its ink
+   * however big it is drawn, which is what lets the area-rule tests control the percentage directly. */
+  function solidPicture(): Picture {
+    const data = Buffer.alloc(W * H * 4)
+    for (let i = 0; i < W * H; i++) {
+      const o = i * 4
+      data[o] = 200; data[o + 1] = 160; data[o + 2] = 120; data[o + 3] = 255
+    }
+    return { data, width: W, height: H }
+  }
+
+  async function c11Of(manifest: Manifest, name: string) {
+    const [row] = await runChecks({ dir, manifest, names: [name] })
+    return row!.results.find((r) => r.id === 'C11')!
+  }
+
+  it('is ok when the masks are untouched', async () => {
+    const name = 'base_fc1_face_neutral_L50'
+    await writePicture(await syntheticBase(), join(dir, `${name}@2x.png`))
+    const manifest: Manifest = { files: { [name]: { real: true } } }
+    await writeMasks({ dir, manifest, names: [name], overridesDir })
+
+    const c11 = await c11Of(manifest, name)
+    expect(c11.ok).toBe(true)
+  })
+
+  it('fails when a mask covers a pixel the layer leaves transparent', async () => {
+    const name = 'base_fc2_face_neutral_L50'
+    await writePicture(await syntheticBase(), join(dir, `${name}@2x.png`))
+    const manifest: Manifest = { files: { [name]: { real: true } } }
+    await writeMasks({ dir, manifest, names: [name], overridesDir })
+
+    // (4, 4) is the canvas corner — nothing is drawn there in the synthetic base.
+    const maskFile = join(dir, `${name}_hairmask@2x.png`)
+    const mask = await readPicture(maskFile)
+    const i = (4 * mask.width + 4) * 4
+    mask.data[i] = 255; mask.data[i + 1] = 255; mask.data[i + 2] = 255; mask.data[i + 3] = 255
+    await writePicture(mask, maskFile)
+
+    const c11 = await c11Of(manifest, name)
+    expect(c11.ok).toBe(false)
+    expect(c11.detail).toContain('mask outside the layer')
+  })
+
+  it('fails a neutral face whose eye mask has one blob', async () => {
+    const name = 'base_fc3_face_neutral_L50'
+    await writePicture(await syntheticBase(), join(dir, `${name}@2x.png`))
+    const manifest: Manifest = { files: { [name]: { real: true } } }
+    await writeMasks({ dir, manifest, names: [name], overridesDir })
+
+    const maskFile = join(dir, `${name}_eyemask@2x.png`)
+    const mask = await readPicture(maskFile)
+    for (let y = 0; y < mask.height; y++) {
+      for (let x = Math.floor(mask.width / 2); x < mask.width; x++) mask.data[(y * mask.width + x) * 4 + 3] = 0
+    }
+    await writePicture(mask, maskFile)
+
+    const c11 = await c11Of(manifest, name)
+    expect(c11.ok).toBe(false)
+    expect(c11.detail).toContain('neutral face needs two eyes')
+  })
+
+  it('fails an L30 hair mask covering 40 % of the frame', async () => {
+    const name = 'base_fc4_L30'
+    await writePicture(solidPicture(), join(dir, `${name}@2x.png`))
+    const manifest: Manifest = { files: { [name]: { real: true } } }
+    await writeMasks({ dir, manifest, names: [name], overridesDir })
+
+    const maskFile = join(dir, `${name}_hairmask@2x.png`)
+    const mask = await readPicture(maskFile)
+    const target = Math.round(0.4 * W * H)
+    for (let i = 0; i < target; i++) {
+      const o = i * 4
+      mask.data[o] = 255; mask.data[o + 1] = 255; mask.data[o + 2] = 255; mask.data[o + 3] = 255
+    }
+    await writePicture(mask, maskFile)
+
+    const c11 = await c11Of(manifest, name)
+    expect(c11.ok).toBe(false)
+    expect(c11.detail).toContain('hair area')
+  })
+
+  it('is ok for an override whose area is out of range', async () => {
+    const name = 'base_fc5_L30'
+    await writePicture(solidPicture(), join(dir, `${name}@2x.png`))
+    const manifest: Manifest = { files: { [name]: { real: true } } }
+    await writePicture(solidPicture(), join(overridesDir, `${name}_hairmask.png`))
+
+    await writeMasks({ dir, manifest, names: [name], overridesDir })
+    expect(manifest.files[name]!.masks!.hair!.override).toBe(true)
+
+    const c11 = await c11Of(manifest, name)
+    expect(c11.ok).toBe(true)
+  })
+
+  it('is n/a for a layer with no masks', async () => {
+    const name = 'base_fc6_L30'
+    await writePicture(solidPicture(), join(dir, `${name}@2x.png`))
+    const manifest: Manifest = { files: { [name]: { real: true } } }
+
+    const c11 = await c11Of(manifest, name)
+    expect(c11.ok).toBe(true)
+    expect(c11.detail).toContain('n/a')
+  })
+})
+
+// ───────────────────────────────────────────────────────────── tint-sheet ──
+
+describe('buildTintSheet', () => {
+  let temp = ''
+  let dir = ''
+  let overridesDir = ''
+  let manifest: Manifest = { files: {} }
+
+  beforeAll(async () => {
+    temp = mkdtempSync(join(tmpdir(), 'avatar-tint-sheet-'))
+    dir = join(temp, 'out')
+    overridesDir = join(temp, 'overrides')
+    mkdirSync(dir, { recursive: true })
+    mkdirSync(overridesDir, { recursive: true })
+
+    manifest = { files: {} }
+
+    // f01, masked: L30 (hair) and face_neutral (hair + eyes) — enough for baseTintMeans to find both meanLs.
+    const l30 = 'base_f01_L30'
+    await writePicture(await syntheticBase(), join(dir, `${l30}@2x.png`))
+    manifest.files[l30] = { real: true }
+    await writeMasks({ dir, manifest, names: [l30], overridesDir })
+
+    const face = 'base_f01_face_neutral_L50'
+    await writePicture(await syntheticBase(), join(dir, `${face}@2x.png`))
+    manifest.files[face] = { real: true }
+    await writeMasks({ dir, manifest, names: [face], overridesDir })
+
+    // The outfit every card dresses in — plain, untinted.
+    const outfit = 'item_outfit_casual01_L40'
+    const outfitPic = await syntheticBase()
+    await writePicture(outfitPic, join(dir, `${outfit}@2x.png`))
+    await writePicture(await resizePicture(outfitPic, W / 2, H / 2), join(dir, `${outfit}@1x.png`))
+    manifest.files[outfit] = { real: true }
+
+    // A base with no masks at all — must not contribute any cards.
+    const bare = 'base_fbare_L30'
+    await writePicture(await syntheticBase(), join(dir, `${bare}@2x.png`))
+    await writePicture(await resizePicture(await syntheticBase(), W / 2, H / 2), join(dir, `${bare}@1x.png`))
+    manifest.files[bare] = { real: true }
+
+    // A tintable item.
+    const item = 'item_head_test01_L80'
+    await writePicture(await syntheticItem(), join(dir, `${item}@2x.png`))
+    manifest.files[item] = { real: true, tintSeed: { x: 150, y: 200 } }
+    await writeMasks({ dir, manifest, names: [item], overridesDir })
+  })
+  afterAll(() => rmSync(temp, { recursive: true, force: true }))
+
+  it('draws one card per base per hair × eye pair, and none for a base with no masks or an untinted item', async () => {
+    const out = join(temp, 'sheet-no-items.png')
+    const result = await buildTintSheet({ dir, manifest, items: [], out })
+    expect(result.cards).toBe(9) // 3 hair colours × 3 eye colours, one base only
+    expect(existsSync(out)).toBe(true)
+  })
+
+  it('adds one card per items.json entry with asset.tint set', async () => {
+    const out = join(temp, 'sheet-with-item.png')
+    const items = [{ id: 'head_test01', asset: { file: 'item_head_test01_L80', layer: 80, tint: '#c0392b' } }]
+    const result = await buildTintSheet({ dir, manifest, items, out })
+    expect(result.cards).toBe(10) // 9 base cards + 1 item card
+    expect(existsSync(out)).toBe(true)
   })
 })

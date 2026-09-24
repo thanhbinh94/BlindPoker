@@ -419,9 +419,56 @@ already real in its own right (a happy face ingested earlier) is left alone by a
 `--as bot:<n>:happy` cuts `bot_<n>_face_happy_L50` from the second picture's head region on the same
 transform and replaces the copy; nothing else is touched. Bots have no icons and no entry under `bases`.
 
-## 5. The ten acceptance criteria (`avatar:check`)
+### 4.4 Tint masks (2026-09-24, Plan 13)
 
-| | Checks (D01 §10) |
+A base is drawn once, flat, in one hair colour and one eye colour. Recolouring it needs to know *which*
+pixels are hair and which are iris — that boundary is not stored anywhere the generator produced, so the
+pipeline cuts it out after the fact (design `2026-09-24-plan13-avatar-tint-design.md` §4.1, §4.3):
+
+1. Every real base `L30`, every real base face (all six expressions), `L60` when it is not empty, and every
+   tintable item (one with a `tintSeed`) gets a **hair**, **eyes** or **tint** mask — a `Uint8Array` cut by
+   k-means over CIE Lab (hair: close to the scalp palette, far from skin; eyes: the not-hair not-skin blob
+   in the eye band, brow eroded off; tint: a flood fill from a seeded point).
+2. Each mask is written both densities as `<layer>_hairmask@1x/@2x.png`, `<layer>_eyemask@1x/@2x.png` or
+   `<layer>_tintmask@1x/@2x.png` — white RGB, the coverage in alpha, hard-edged at `@2x` (the `@1x` copy's
+   own downscale gives the soft rim) — beside the layer itself in `public/avatar/`.
+3. The manifest entry gains a `masks` object, keyed `hair`/`eyes`/`tint`: `{ bytes2x, meanL, empty?,
+   override? }`. `meanL` (`meanLightness`, `packages/ui-kit/src/avatar2d/recolour.mjs`) is the mask's own
+   mean HSL lightness of the layer under it — what `recolour` (§5.1 of the design) shifts every tinted
+   pixel's lightness relative to, so a base's `L30` and every one of its own layers can be tinted to the
+   *same* target lightness without a seam between them.
+4. `check`'s C11 (§5 below) holds every mask to its layer's own ink and a plausible shape; a mask that fails
+   it is either bad art or a bad cut, and the review sheet (below) is where a person decides which.
+
+A cut the algorithm gets wrong is fixed by hand, not by tuning the algorithm for one picture: drop a PNG at
+`assets/avatar-src/masks/<layer>_hairmask.png` (or `_eyemask`/`_tintmask`), white on transparent (or plain
+white-on-black, if it carries no alpha channel) at either density, and the next `masks`/`ingest` run uses it
+in place of the computed one and marks the manifest entry `override: true` — which is also what tells C11 to
+trust its shape and check only that it still fits the layer.
+
+```bash
+pnpm --filter @bp/normal-web exec node scripts/avatar-pipeline.mjs masks
+# Cuts hair/eye/tint masks for every real base L30/L60, every real base face, and every item with a
+# tintSeed — the default target list (`maskTargets`). `ingest` already calls this on whatever it just
+# wrote, so a fresh base or item needs no separate run; `masks` is for re-cutting after an override lands,
+# or after the algorithm itself changes. Pass names to mask only those.
+
+pnpm --filter @bp/normal-web exec node scripts/avatar-pipeline.mjs masks --tint-seed 150,200 --as item:head:tophat01
+# Records the tint seed (1x frame coordinates, inside the item's own colour region) on an item already in
+# the manifest, then cuts its tint mask from it. A seed only has to be set once; every later `masks` or
+# `ingest` run re-cuts from it.
+
+pnpm --filter @bp/normal-web avatar:tint-sheet
+# Composes docs/avatar-2d-tint-sheet.png: every base that has both a hair and an eye mask, in the three
+# hair colours × three eye colours of design §4.2, dressed in casual01 and tinted with the shared
+# `recolour` at the base's own meanLs — plus one card per items.json entry whose asset.tint is set, drawn
+# on f01 with the item itself recoloured by its own tint mask. The eyeballed check before a colour or a
+# tinted item ships, the same role avatar:sheet plays for the plain layer set.
+```
+
+## 5. The eleven acceptance criteria (`avatar:check`)
+
+| | Checks (D01 §10, plan 13 §4.3) |
 |---|---|
 | C1 | The frame, exactly, at both densities — one pixel out is a fail |
 | C2 | Nothing opaque on the outermost row or column — except an aura (layer 10), which is 400 wide by design and reported `-` (2026-09-24, §4.3) |

@@ -88,8 +88,8 @@ function cards(manifest) {
   return list
 }
 
-/** Alpha-over one picture onto another at an offset, clipping what falls outside. */
-function blit(canvas, picture, left, top) {
+/** Alpha-over one picture onto another at an offset, clipping what falls outside. Shared with `tint-sheet.mjs`. */
+export function blit(canvas, picture, left, top) {
   for (let y = 0; y < picture.height; y++) {
     const dy = y + top
     if (dy < 0 || dy >= canvas.height) continue

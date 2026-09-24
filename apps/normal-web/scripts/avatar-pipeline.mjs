@@ -57,7 +57,12 @@
  *   node scripts/avatar-pipeline.mjs sheet [--dir <layers>] [--out <png>]
  *       Compose every item on both bases into docs/avatar-2d-sheet.png — the style gate of spec §9.
  *
- * `placeholder`, `ingest` and `masks` take `--out <dir>`; `check` and `sheet` read `--dir <dir>`. Pointing
+ *   node scripts/avatar-pipeline.mjs tint-sheet [--dir <layers>] [--out <png>]
+ *       Compose docs/avatar-2d-tint-sheet.png (Plan 13 spec §4.2): every masked base in three hair × three
+ *       eye colours, plus one card per `items.json` entry with `asset.tint` set — the eyeballed check for
+ *       recolouring before C11 or the client ever draws one.
+ *
+ * `placeholder`, `ingest` and `masks` take `--out <dir>`; `check`, `sheet` and `tint-sheet` read `--dir <dir>`. Pointing
  * either at a directory that is not `public/avatar/` also stops the server's copy of the manifest from being
  * written, which is what makes the whole pipeline testable without touching the committed artefact.
  *
@@ -65,18 +70,22 @@
  * and the stand-in art), `extract` (cutting a layer out of a picture), `masks` (spec §4.1's hair/eye/tint
  * cuts), `checks` (D01 §10), `sheet`, `manifest` (names and the file). This file only reads the command line.
  */
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { anyFailed, formatChecks, runChecks } from './avatar-pipeline/checks.mjs'
 import { ingest } from './avatar-pipeline/extract.mjs'
 import { maskTargets, writeMasks } from './avatar-pipeline/masks.mjs'
 import { buildSheet } from './avatar-pipeline/sheet.mjs'
+import { buildTintSheet } from './avatar-pipeline/tint-sheet.mjs'
 import {
+  ITEMS_FILE,
   MANIFEST_NAME,
   PUBLIC_DIR,
   SERVER_MANIFEST,
   SHEET_FILE,
   STAGE_ONE_ITEMS,
   SLOT_LAYER,
+  TINT_SHEET_FILE,
   buildPlaceholders,
   itemFile,
   readManifest,
@@ -216,6 +225,12 @@ try {
     const manifest = readManifest(resolve(dir, MANIFEST_NAME))
     const out = option('out') ? resolve(process.cwd(), option('out')) : SHEET_FILE
     await buildSheet({ dir, manifest, out, log })
+  } else if (command === 'tint-sheet') {
+    const { dir } = destinations('dir')
+    const manifest = readManifest(resolve(dir, MANIFEST_NAME))
+    const out = option('out') ? resolve(process.cwd(), option('out')) : TINT_SHEET_FILE
+    const items = existsSync(ITEMS_FILE) ? JSON.parse(readFileSync(ITEMS_FILE, 'utf8')) : []
+    await buildTintSheet({ dir, manifest, items, out, log })
   } else {
     die(`unknown command ${command ?? '(none)'} — one of placeholder, ingest, check, sheet, masks, tint-sheet`)
   }

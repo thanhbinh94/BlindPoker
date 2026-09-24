@@ -1016,7 +1016,7 @@ describe('the ten acceptance checks', () => {
     const entry = await writePlaceholder(dir, 'item_head_tophat01_L80')
     const manifest = manifestFor(dir, { item_head_tophat01_L80: entry })
     const results = await checkOne(dir, 'item_head_tophat01_L80', manifest)
-    expect([...results.keys()].sort()).toEqual(['C1', 'C10', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9'])
+    expect([...results.keys()].sort()).toEqual(['C1', 'C10', 'C11', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9'])
     for (const [id, result] of results) expect(result.ok, `${id}: ${result.detail}`).toBe(true)
   }, 30_000)
 
@@ -1646,7 +1646,10 @@ describe('a flat AI base', () => {
       }
     }
 
-    const rows = await runChecks({ dir, manifest, names: ['base_f01_L20', 'base_f01_L30', 'base_f01_face_neutral_L50', 'base_f01_L60'] })
+    // C11 skipped: FIGURE's eyes are flat #202020 ellipses with no iris/white to tell from a pupil — fine
+    // for the extraction geometry this test is about, but below the L15 floor the colour heuristic (spec
+    // §4.3) needs to call something an eye. `syntheticBase` in avatar-masks.test.ts draws real ones.
+    const rows = await runChecks({ dir, manifest, names: ['base_f01_L20', 'base_f01_L30', 'base_f01_face_neutral_L50', 'base_f01_L60'], skip: ['C11'] })
     for (const row of rows) {
       for (const result of row.results) expect(result.ok, `${row.name} ${result.id}: ${result.detail}`).toBe(true)
     }
@@ -1691,7 +1694,8 @@ describe('a flat AI base', () => {
         expect(layer.below, `@${density}x ${name} is empty`).toBeGreaterThan(0)
       }
     }
-    const rows = await runChecks({ dir, manifest, names: ['base_f01_L30', 'base_f01_L60', 'base_f01_face_neutral_L50', 'base_f01_face_happy_L50'] })
+    // C11 skipped: see the note above — FIGURE's eyes have no colour the hair/eye heuristic can find.
+    const rows = await runChecks({ dir, manifest, names: ['base_f01_L30', 'base_f01_L60', 'base_f01_face_neutral_L50', 'base_f01_face_happy_L50'], skip: ['C11'] })
     for (const row of rows) {
       for (const result of row.results) expect(result.ok, `${row.name} ${result.id}: ${result.detail}`).toBe(true)
     }

@@ -512,7 +512,7 @@ function hasRealAlpha(pic) {
  * `hair`/`eyes`/`tint` in the manifest (`entry.masks`) are `hairmask`/`eyemask`/`tintmask` on disk (spec
  * §4.1: file names say "eye", the manifest says "eyes") — the one place the two spellings have to meet.
  */
-const MASK_FILE_KIND = { hair: 'hair', eyes: 'eye', tint: 'tint' }
+export const MASK_FILE_KIND = { hair: 'hair', eyes: 'eye', tint: 'tint' }
 
 /**
  * The mask to write for one `<name>_<kind>` (`kind` a manifest key: `hair`, `eyes` or `tint`): a hand-drawn
