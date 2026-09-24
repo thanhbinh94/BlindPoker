@@ -94,7 +94,17 @@ function reverseAliases(aliases: ReadonlyMap<string, string>): Map<string, strin
   return reverse
 }
 
-export function createInventoryService(db: AppDb, aliases: ReadonlyMap<string, string> = loadAliases()): InventoryService {
+/**
+ * `freeIds` (design §3.2): ids every player owns without a row. Aliases and free ids are two
+ * independent kinds of "owned without asking the database" — an alias still needs *some* row (the
+ * old one), a free id needs none at all — so they are checked separately rather than folded into one
+ * table, and a free id is never itself given an alias.
+ */
+export function createInventoryService(
+  db: AppDb,
+  aliases: ReadonlyMap<string, string> = loadAliases(),
+  freeIds: ReadonlySet<string> = new Set(),
+): InventoryService {
   const reverse = reverseAliases(aliases)
   /** `id` and every old id that aliases to it — what a caller asking about `id` is really asking about. */
   const classOf = (id: string): string[] => [id, ...(reverse.get(id) ?? [])]
@@ -107,7 +117,13 @@ export function createInventoryService(db: AppDb, aliases: ReadonlyMap<string, s
         .from(inventory)
         .where(eq(inventory.playerId, playerId))
         .orderBy(asc(inventory.acquiredAt), asc(inventory.itemId))
-      return rows.map((r) => ({ itemId: r.itemId, source: r.source, acquiredAt: r.acquiredAt.getTime() }))
+      const owned = rows.map((r) => ({ itemId: r.itemId, source: r.source, acquiredAt: r.acquiredAt.getTime() }))
+      // Free items were never written to `inventory` (design §3.2: "không ghi hàng inventory nào"),
+      // so they are appended here rather than found by the query above — after every owned row, since
+      // `list` is otherwise oldest-first and a free item was never "acquired" at any particular time.
+      const ownedIds = new Set(owned.map((o) => o.itemId))
+      const free = [...freeIds].filter((id) => !ownedIds.has(id)).map((itemId) => ({ itemId, source: 'free', acquiredAt: 0 }))
+      return [...owned, ...free]
     },
 
     async grant(tx, playerId, itemId, source) {
@@ -120,6 +136,9 @@ export function createInventoryService(db: AppDb, aliases: ReadonlyMap<string, s
     },
 
     async owns(playerId, itemId) {
+      // Free before the uuid check: "every player owns a free item" holds for the id itself, not
+      // for any particular player row.
+      if (freeIds.has(itemId)) return true
       if (!isUuid(playerId)) return false
       const rows = await db
         .select({ itemId: inventory.itemId })
@@ -156,11 +175,19 @@ export function createInventoryService(db: AppDb, aliases: ReadonlyMap<string, s
       // something a single SQL predicate can express without recompiling one per call.
       const owned = await tx.select({ itemId: inventory.itemId }).from(inventory).where(eq(inventory.playerId, playerId))
       const ownedIds = new Set(owned.map((r) => r.itemId))
-      return rows.map((r) => r.id).filter((id) => !classOf(id).some((candidate) => ownedIds.has(candidate)))
+      return rows
+        .map((r) => r.id)
+        .filter((id) => !classOf(id).some((candidate) => ownedIds.has(candidate)))
+        // A `free` colour is drawable geometry-wise (it is in `items` at `rarity`), but design §3.2
+        // is explicit: "món free không bao giờ vào bể quà hằng ngày" — it is never a prize because
+        // nobody ever has to earn it.
+        .filter((id) => !freeIds.has(id))
     },
 
     async missingOf(playerId, itemIds) {
-      const wanted = [...new Set(itemIds)]
+      // Free ids are dropped before anything else: `missingOf` must never report one, for any
+      // player — including one whose id is not even a valid uuid, below.
+      const wanted = [...new Set(itemIds)].filter((id) => !freeIds.has(id))
       if (wanted.length === 0) return []
       // An id that is not a uuid owns nothing, so every requested item is missing — the caller gets
       // a `NOT_OWNED` rather than the driver's `22P02` for a malformed uuid.

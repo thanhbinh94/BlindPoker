@@ -3,10 +3,15 @@
  *
  * Since Plan 11 an avatar is a fixed base (chosen rather than owned; the ids are whatever
  * `data/avatar-bases.json` defines, and `validateAvatarConfig` is handed that set) with PNG layers
- * stacked on it: one required `outfit` and up to five optional slots — `head`, `face`, `aura`,
- * `frame`, plus the two name decorations `title` and `badge`. There is no colour to choose any more;
- * every layer is either worn or it is not. `v: 3` is stored with it so a future shape can tell itself
- * apart from this one, and so `PUT` can refuse a v1 or v2 body outright instead of half-reading it.
+ * stacked on it: one required `outfit` and up to seven optional slots — `head`, `face`, `aura`,
+ * `frame`, plus the two name decorations `title` and `badge`. Every layer is either worn or it is
+ * not. `v: 3` is stored with it so a future shape can tell itself apart from this one, and so `PUT`
+ * can refuse a v1 or v2 body outright instead of half-reading it.
+ *
+ * 2026-09-24 (Plan 13): colour is back, but as two more items rather than a free-text hex. `hairColor`
+ * and `eyeColor` are ordinary optional slots — an id a player owns, validated and stored exactly the
+ * way `head` or `aura` are — that happen to draw no layer of their own (`slots.ts`'s `DRAWN_SLOTS`
+ * leaves them out); a colour item's `colour` hex is what the client tints the base's own pixels with.
  *
  * `PUT /api/me/avatar` is a **full replace**, which is the whole reason `validateAvatarConfig`
  * rebuilds the value rather than patching the caller's object: omitting `title` is how a player
@@ -47,6 +52,8 @@ export interface AvatarConfigV3 {
   face?: string
   aura?: string
   frame?: string
+  hairColor?: string
+  eyeColor?: string
   title?: string
   badge?: string
 }

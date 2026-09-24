@@ -44,8 +44,9 @@ beforeAll(async () => {
   test = await createTestDb()
   db = test.db
   repos = createRepositories(db)
-  inv = createInventoryService(db)
   catalog = loadItemCatalog()
+  // `freeIds` wired the way `app.ts` wires it: a free colour must never surface as a drawable prize.
+  inv = createInventoryService(db, undefined, catalog.freeIds())
   await catalog.seed(db)
   // Wired the way Task 6 wires it: the reward ids come from the loaded definitions, so
   // `achievements.json` stays the only place one is written down.
@@ -108,11 +109,24 @@ async function own(playerId: string, itemIds: string[]): Promise<void> {
   })
 }
 
-/** The items a random draw of `rarity` is actually allowed to reach — `head`/`face`/`aura`/`frame` only. */
+/**
+ * What a claim actually *granted* this player — `inv.list` now also reports every free item
+ * (design §3.2), which was never a row a draw wrote, so the "what did this draw give me" checks
+ * below read this instead of `inv.list` directly.
+ */
+async function grantedOf(playerId: string): Promise<string[]> {
+  return (await inv.list(playerId)).filter((o) => o.source !== 'free').map((o) => o.itemId)
+}
+
+/**
+ * The items a random draw of `rarity` is actually allowed to reach — `head`/`face`/`aura`/`frame`/
+ * `hairColor`/`eyeColor`, minus whatever is reserved, minus every `free` item (design §3.2: a free
+ * item is never a prize because nobody has to earn it).
+ */
 function drawable(rarity: 'common' | 'rare'): string[] {
   return catalog
     .byRarity(rarity)
-    .filter((d) => (DAILY_DRAW_SLOTS as readonly string[]).includes(d.slot) && !reserved.has(d.id))
+    .filter((d) => (DAILY_DRAW_SLOTS as readonly string[]).includes(d.slot) && !reserved.has(d.id) && !d.free)
     .map((d) => d.id)
     .sort()
 }
@@ -281,7 +295,7 @@ describe('claimDaily', () => {
         items: ['badge_monthly', 'title_devoted'],
         fallbackPoints: 0,
       })
-      expect((await inv.list(playerId)).map((o) => o.itemId).sort()).toEqual(['badge_monthly', 'title_devoted'])
+      expect((await grantedOf(playerId)).sort()).toEqual(['badge_monthly', 'title_devoted'])
 
       // A month later, already owning both: nothing is granted and — unlike the random tiers —
       // nothing is paid in their place.
@@ -316,9 +330,20 @@ describe('claimDaily', () => {
 
       expect(await economy.claimDaily(playerId, OCT(7))).toMatchObject({ day: 7, item: last, fallbackPoints: 0 })
 
-      const owned = new Set((await inv.list(playerId)).map((o) => o.itemId))
+      const owned = new Set(await grantedOf(playerId))
       for (const id of undrawable('common')) expect(owned.has(id), id).toBe(false)
-      expect(undrawable('common')).toEqual(['badge_bronze', 'badge_silver', 'outfit_casual01', 'title_regular', 'title_rookie'])
+      // The commons outside `DAILY_DRAW_SLOTS` (outfit/title/badge) are always undrawable…
+      for (const id of ['badge_bronze', 'badge_silver', 'outfit_casual01', 'title_regular', 'title_rookie']) {
+        expect(undrawable('common'), id).toContain(id)
+      }
+      // …and so is every free common, colour or otherwise, whatever slot it is in (design §3.2, §3.4).
+      for (const id of catalog.all().filter((d) => d.free).map((d) => d.id)) expect(undrawable('common'), id).toContain(id)
+    })
+
+    it('includes rare colours and rare head variants in the rare pool, and excludes every free id from the common pool (design §3.4)', () => {
+      expect(drawable('rare')).toContain('haircolor_pink01')
+      expect(drawable('rare')).toContain('head_beret_blue01')
+      for (const id of catalog.freeIds()) expect(drawable('common')).not.toContain(id)
     })
 
     it('exhausts the rare tier without ever handing out a reserved id, then pays the fallback', async () => {
@@ -341,7 +366,7 @@ describe('claimDaily', () => {
       }
 
       expect([...drawn].sort()).toEqual(pool)
-      const owned = new Set((await inv.list(playerId)).map((o) => o.itemId))
+      const owned = new Set(await grantedOf(playerId))
       for (const id of undrawable('rare')) expect(owned.has(id), id).toBe(false)
       // The two the schedule and the achievements have already promised are among them.
       expect(owned.has('badge_monthly')).toBe(false)
@@ -379,7 +404,7 @@ describe('claimDaily', () => {
         await withReservation.claimDaily(playerId, OCT(14))
       }
 
-      const owned = new Set((await inv.list(playerId)).map((o) => o.itemId))
+      const owned = new Set(await grantedOf(playerId))
       expect(owned.has('aura_ice01')).toBe(false)
       expect([...owned].sort()).toEqual(pool)
 

@@ -9,7 +9,7 @@ import type { TestDb } from '../db/test-db.js'
 import { createTestDb } from '../db/test-db.js'
 import { ServiceError } from '../errors.js'
 import type { AvatarConfigV3 } from './avatar.js'
-import { applyAvatarConfig, defaultAvatar, validateAvatarConfig } from './avatar.js'
+import { applyAvatarConfig, defaultAvatar, itemIdsOf, validateAvatarConfig } from './avatar.js'
 import { baseIdsOf, loadBases } from './bases.js'
 import type { InventoryService } from './inventory-service.js'
 import { createInventoryService } from './inventory-service.js'
@@ -78,12 +78,17 @@ const DRESSED: AvatarConfigV3 = {
   face: 'face_glasses_round_gold01',
   aura: 'aura_gold_cards01',
   frame: 'frame_founder',
+  // Rare colours, deliberately not `free`, so `applyAvatarConfig`'s ownership tests below exercise
+  // them exactly like every other slot: nothing owns them until `own()` grants them.
+  hairColor: 'haircolor_pink01',
+  eyeColor: 'eyecolor_violet01',
   title: 'title_devoted',
   badge: 'badge_monthly',
 }
 
 /** Every item id in a config — what a player has to own to wear it. */
-const worn = (config: AvatarConfigV3): string[] => [config.outfit, config.head, config.face, config.aura, config.frame, config.title, config.badge].filter((id): id is string => id !== undefined)
+const worn = (config: AvatarConfigV3): string[] =>
+  [config.outfit, config.head, config.face, config.aura, config.frame, config.hairColor, config.eyeColor, config.title, config.badge].filter((id): id is string => id !== undefined)
 
 describe('defaultAvatar', () => {
   it('dresses a new account in the f01 base wearing only the default outfit', () => {
@@ -152,6 +157,21 @@ describe('validateAvatarConfig', () => {
 
   it('treats an omitted or null optional slot as empty', () => {
     expect(validateAvatarConfig({ ...DRESSED, title: undefined, badge: null }, catalog, baseIds)).toEqual({ ok: true, value: { ...DRESSED, title: undefined, badge: undefined } })
+  })
+
+  it('validates hairColor and eyeColor exactly like any other optional slot (design §3.1)', () => {
+    expect(validateAvatarConfig({ ...CASUAL, hairColor: 'haircolor_red01' }, catalog, baseIds)).toEqual({ ok: true, value: { ...CASUAL, hairColor: 'haircolor_red01' } })
+    // An eye colour worn in the hair slot is the wrong category, not an unknown item.
+    expect(validateAvatarConfig({ ...CASUAL, hairColor: 'eyecolor_green01' }, catalog, baseIds)).toEqual({ ok: false, code: 'WRONG_CATEGORY' })
+    expect(validateAvatarConfig({ ...CASUAL, hairColor: 'nope' }, catalog, baseIds)).toEqual({ ok: false, code: 'INVALID_ITEM' })
+  })
+})
+
+describe('itemIdsOf', () => {
+  it('includes both colour slots alongside every other worn item', () => {
+    expect(itemIdsOf(DRESSED)).toEqual(worn(DRESSED))
+    expect(itemIdsOf(DRESSED)).toContain('haircolor_pink01')
+    expect(itemIdsOf(DRESSED)).toContain('eyecolor_violet01')
   })
 })
 
@@ -311,5 +331,45 @@ describe('InventoryService', () => {
     expect(await db.transaction((tx) => inv.unownedOfRarity(tx, playerId, 'common', { withinSlots: [] }))).toEqual(
       await db.transaction((tx) => inv.unownedOfRarity(tx, playerId, 'common')),
     )
+  })
+
+  describe('free items (design §3.2)', () => {
+    // A second service over the same database, told that one real catalogue id is free — the point
+    // being that nothing here ever grants it a row, and every query still has to say "owned". Built
+    // in `beforeAll` rather than at describe-body time: `db` is not assigned until the outer suite's
+    // own `beforeAll` has run.
+    const FREE_ID = 'haircolor_red01'
+    let freeInv: InventoryService
+    beforeAll(() => {
+      freeInv = createInventoryService(db, undefined, new Set([FREE_ID]))
+    })
+
+    it('owns a free item without any inventory row', async () => {
+      const playerId = await seedPlayer()
+      expect(await freeInv.owns(playerId, FREE_ID)).toBe(true)
+    })
+
+    it('omits a free item from missingOf, whatever else is asked for', async () => {
+      const playerId = await seedPlayer()
+      await own(playerId, 'outfit_casual01')
+      expect(await freeInv.missingOf(playerId, ['outfit_casual01', FREE_ID])).toEqual([])
+      // A player owning nothing else still isn't missing the free id.
+      const bare = await seedPlayer()
+      expect(await freeInv.missingOf(bare, [FREE_ID])).toEqual([])
+    })
+
+    it('lists a free item after the owned rows, with source free and acquiredAt 0', async () => {
+      const playerId = await seedPlayer()
+      await own(playerId, 'outfit_casual01')
+      const owned = await freeInv.list(playerId)
+      expect(owned.map((o) => o.itemId)).toEqual(['outfit_casual01', FREE_ID])
+      expect(owned[1]).toEqual({ itemId: FREE_ID, source: 'free', acquiredAt: 0 })
+    })
+
+    it('never offers a free item out of unownedOfRarity', async () => {
+      const playerId = await seedPlayer()
+      const unowned = await db.transaction((tx) => freeInv.unownedOfRarity(tx, playerId, 'common'))
+      expect(unowned).not.toContain(FREE_ID)
+    })
   })
 })

@@ -12,6 +12,21 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { packageRoot } from '../db/migrate.js'
 
+/**
+ * One cut-out mask on a layer (design §4.1): how much of the layer it covers, and the original
+ * pixels' mean lightness under it, so `recolour` (client and pipeline alike) never has to re-measure
+ * a base's own hair or eyes before tinting them.
+ */
+export interface MaskInfo {
+  bytes2x: number
+  /** HSL lightness, 0–1, averaged over the masked region of the *undyed* layer. */
+  meanL: number
+  /** The pipeline cut a mask but found nothing to tint — a closed-eye face, an empty L60. */
+  empty?: boolean
+  /** A hand-drawn mask (`assets/avatar-src/masks/…`) stands in for the automatic cut. */
+  override?: boolean
+}
+
 export interface AvatarManifestFile {
   layer: number
   w: number
@@ -20,6 +35,8 @@ export interface AvatarManifestFile {
   /** True while the pipeline has not ingested a real asset for this name yet (Task 1's placeholders). */
   placeholder?: boolean
   real?: boolean
+  /** The tint masks this layer carries, if any (design §4.1): at most one of each kind. */
+  masks?: { hair?: MaskInfo; eyes?: MaskInfo; tint?: MaskInfo }
 }
 
 export interface AvatarManifest {
@@ -48,6 +65,43 @@ function nonNegativeInt(path: string, value: unknown, what: string): number {
   return value
 }
 
+/** `meanL` is an HSL lightness fraction — the one field here that is not a byte count or a flag. */
+function unitInterval(path: string, value: unknown, what: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1) fail(path, `${what} must be a number between 0 and 1`)
+  return value
+}
+
+const MASK_KINDS = ['hair', 'eyes', 'tint'] as const
+type MaskKind = (typeof MASK_KINDS)[number]
+
+function parseMaskInfo(path: string, name: string, kind: MaskKind, raw: unknown): MaskInfo {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) fail(path, `files.${name}.masks.${kind} is not an object`)
+  const r = raw as Record<string, unknown>
+  const info: MaskInfo = {
+    bytes2x: positiveInt(path, r['bytes2x'], `files.${name}.masks.${kind}.bytes2x`),
+    meanL: unitInterval(path, r['meanL'], `files.${name}.masks.${kind}.meanL`),
+  }
+  if (r['empty'] !== undefined) {
+    if (typeof r['empty'] !== 'boolean') fail(path, `files.${name}.masks.${kind}.empty must be a boolean`)
+    info.empty = r['empty']
+  }
+  if (r['override'] !== undefined) {
+    if (typeof r['override'] !== 'boolean') fail(path, `files.${name}.masks.${kind}.override must be a boolean`)
+    info.override = r['override']
+  }
+  return info
+}
+
+function parseMasks(path: string, name: string, raw: unknown): AvatarManifestFile['masks'] {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) fail(path, `files.${name}.masks is not an object`)
+  const r = raw as Record<string, unknown>
+  const masks: NonNullable<AvatarManifestFile['masks']> = {}
+  for (const kind of MASK_KINDS) {
+    if (r[kind] !== undefined) masks[kind] = parseMaskInfo(path, name, kind, r[kind])
+  }
+  return masks
+}
+
 function parseFile(path: string, name: string, raw: unknown): AvatarManifestFile {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) fail(path, `files.${name} is not an object`)
   const r = raw as Record<string, unknown>
@@ -66,6 +120,9 @@ function parseFile(path: string, name: string, raw: unknown): AvatarManifestFile
   if (r['real'] !== undefined) {
     if (typeof r['real'] !== 'boolean') fail(path, `files.${name}.real must be a boolean`)
     file.real = r['real']
+  }
+  if (r['masks'] !== undefined) {
+    file.masks = parseMasks(path, name, r['masks'])
   }
   return file
 }

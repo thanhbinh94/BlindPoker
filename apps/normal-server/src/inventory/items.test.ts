@@ -15,6 +15,11 @@ import { loadItemCatalog } from './items.js'
 import { DRAWN_SLOTS, SLOTS } from './slots.js'
 import type { ItemSlot } from './slots.js'
 
+/** A `hairColor`/`eyeColor` item: no `asset`, a required `colour`. */
+function colourItem(id: string, slot: 'hairColor' | 'eyeColor', colour: string, extra: Partial<ItemDef> = {}): ItemDef {
+  return { id, slot, rarity: 'common', nameKey: `items.${id}`, assetKey: `${slot}/${id}`, isDefault: false, colour, ...extra }
+}
+
 let test: TestDb
 let db: AppDb
 let scratch: string
@@ -49,7 +54,10 @@ const MANIFEST: AvatarManifest = {
     item_outfit_casual01_L40: { layer: 40, w: 1, h: 1, bytes2x: 1 },
     item_outfit_dealer01_L40: { layer: 40, w: 1, h: 1, bytes2x: 1 },
     item_outfit_dealer01_m_L40: { layer: 40, w: 1, h: 1, bytes2x: 1 },
-    item_head_beanie01_L80: { layer: 80, w: 1, h: 1, bytes2x: 1 },
+    // Carries a tint mask, unlike `item_head_beret_red01_L80` below — the deliberate asymmetry the
+    // `asset.tint` tests need: one file that has what a variant requires, one that does not.
+    item_head_beanie01_L80: { layer: 80, w: 1, h: 1, bytes2x: 1, masks: { tint: { bytes2x: 1, meanL: 0.5 } } },
+    item_head_beret_red01_L80: { layer: 80, w: 1, h: 1, bytes2x: 1 },
     item_head_wrong_layer: { layer: 70, w: 1, h: 1, bytes2x: 1 },
   },
 }
@@ -75,9 +83,9 @@ function fixtureWith(...defs: ItemDef[]): string {
 describe('the shipped catalogue', () => {
   const catalog = loadItemCatalog()
 
-  it('has forty-two items spread across all seven slots', () => {
+  it('has seventy-six items spread across all nine slots', () => {
     const all = catalog.all()
-    expect(all.length).toBe(42)
+    expect(all.length).toBe(76)
     for (const slot of SLOTS) expect(all.some((d) => d.slot === slot), slot).toBe(true)
     // The v2 slots are gone: a wardrobe piece is one PNG layer now, not a body part it dresses.
     expect(all.some((d) => ['hair', 'top', 'bottom', 'shoes', 'hat', 'accessory', 'jewelry'].includes(d.slot))).toBe(false)
@@ -265,6 +273,94 @@ describe('asset.variants', () => {
     expect(() => loadItemCatalog(withVariants({ x: 'item_outfit_dealer01_m_L40' }), MANIFEST)).toThrow(/the asset variant x, which is not one of f, m/)
     expect(() => loadItemCatalog(withVariants({ m: '' }), MANIFEST)).toThrow(/m asset variant has no file name/)
     expect(() => loadItemCatalog(withVariants(['item_outfit_dealer01_m_L40']), MANIFEST)).toThrow(/malformed asset.variants/)
+  })
+})
+
+/**
+ * Colour items (design §3.2) and `free` (design §3.2), plus `asset.tint` on a variant (design §3.3).
+ */
+describe('colour items, free items and asset.tint', () => {
+  it('requires colour on a colour slot, and refuses it everywhere else', () => {
+    const noColour = fixtureWith({ ...colourItem('haircolor_red01', 'hairColor', '#b3261e'), colour: undefined })
+    expect(() => loadItemCatalog(noColour, MANIFEST)).toThrow(/haircolor_red01 .*colour/)
+
+    const wrongSlot = fixtureWith(colourItem('haircolor_red01', 'hairColor', '#b3261e', { slot: 'head' as 'hairColor' }))
+    expect(() => loadItemCatalog(wrongSlot, MANIFEST)).toThrow(/haircolor_red01 .*colour/)
+  })
+
+  it('refuses a colour that is not a lowercase 6-digit hex', () => {
+    for (const bad of ['red', '#FFF', '#zzzzzz', '#12345', 'b3261e']) {
+      const bogus = fixtureWith(colourItem('haircolor_red01', 'hairColor', bad))
+      expect(() => loadItemCatalog(bogus, MANIFEST), bad).toThrow(/haircolor_red01 .*colour/)
+    }
+  })
+
+  it('accepts a valid colour item and exposes it, with no asset at all', () => {
+    const catalog = loadItemCatalog(fixtureWith(colourItem('haircolor_red01', 'hairColor', '#b3261e', { free: true })), MANIFEST)
+    expect(catalog.get('haircolor_red01')).toEqual({
+      id: 'haircolor_red01', slot: 'hairColor', rarity: 'common', nameKey: 'items.haircolor_red01',
+      assetKey: 'hairColor/haircolor_red01', isDefault: false, colour: '#b3261e', free: true,
+    })
+  })
+
+  it('refuses free on anything but a common item, and free together with isDefault', () => {
+    const rareFree = fixtureWith(colourItem('haircolor_pink01', 'hairColor', '#f08bb4', { rarity: 'rare', free: true }))
+    expect(() => loadItemCatalog(rareFree, MANIFEST)).toThrow(/haircolor_pink01 .*free/)
+
+    const defaultFree = fixtureWith(colourItem('haircolor_red01', 'hairColor', '#b3261e', { free: true, isDefault: true }))
+    expect(() => loadItemCatalog(defaultFree, MANIFEST)).toThrow(/haircolor_red01 .*free/)
+
+    // `free: false` is not a shape the catalogue writes, but nothing here says it must be `true` or
+    // absent only by convention — the loader itself refuses anything but those two.
+    const falseFree = fixtureWith({ ...colourItem('haircolor_red01', 'hairColor', '#b3261e'), free: false as unknown as true })
+    expect(() => loadItemCatalog(falseFree, MANIFEST)).toThrow(/haircolor_red01 .*free/)
+  })
+
+  it('refuses asset.tint on a file with no tint mask, and accepts it where one exists', () => {
+    const noMask = fixtureWith(drawable('head_beret_blue01', 'head', false, 'item_head_beret_red01_L80'))
+    // Swap in a `tint` after the fact: `drawable` builds a plain asset, and the manifest entry for
+    // this file (`item_head_beret_red01_L80`) carries no `masks.tint` at all.
+    const parsed = JSON.parse(readFileSync(noMask, 'utf8')) as Record<string, unknown>[]
+    const withTint = parsed.map((d) => (d['id'] === 'head_beret_blue01' ? { ...d, asset: { ...(d['asset'] as object), tint: '#3f6fd8' } } : d))
+    expect(() => loadItemCatalog(fixture(withTint), MANIFEST)).toThrow(/head_beret_blue01.*tint/)
+
+    const withMask = drawable('head_beanie_red01', 'head', false, 'item_head_beanie01_L80')
+    const catalog = loadItemCatalog(fixtureWith({ ...withMask, asset: { ...withMask.asset!, tint: '#b83a32' } }), MANIFEST)
+    expect(catalog.get('head_beanie_red01')?.asset).toEqual({
+      layer: 80, file: 'item_head_beanie01_L80', fitsAvatarCrop: true, tint: '#b83a32', tintMeanL: 0.5,
+    })
+  })
+
+  it('lists exactly the free ids through freeIds()', () => {
+    const catalog = loadItemCatalog(
+      fixtureWith(
+        colourItem('haircolor_red01', 'hairColor', '#b3261e', { free: true }),
+        colourItem('haircolor_pink01', 'hairColor', '#f08bb4', { rarity: 'rare' }),
+      ),
+      MANIFEST,
+    )
+    expect(catalog.freeIds()).toEqual(new Set(['haircolor_red01']))
+  })
+})
+
+describe('the shipped catalogue’s free items and tints', () => {
+  const catalog = loadItemCatalog()
+
+  it('freeIds() names exactly the free ids the design lists (18: 8 hair + 6 eye colours + 4 casual variants)', () => {
+    const ids = catalog.freeIds()
+    expect(ids.size).toBe(18)
+    for (const id of ['haircolor_black01', 'eyecolor_brown01', 'outfit_casual_red01']) expect(ids.has(id), id).toBe(true)
+    for (const id of ['haircolor_pink01', 'head_beret_blue01', 'head_party_cone_blue01']) expect(ids.has(id), id).toBe(false)
+    for (const id of ids) expect(catalog.get(id)?.rarity, id).toBe('common')
+  })
+
+  it('gives every variant an asset.tint and a tintMeanL taken from the manifest', () => {
+    for (const id of ['outfit_casual_red01', 'head_beret_blue01', 'head_beanie_red01', 'head_party_cone_blue01']) {
+      const def = catalog.get(id)
+      expect(def?.asset?.tint, id).toMatch(/^#[0-9a-f]{6}$/)
+      expect(def?.asset?.tintMeanL, id).toBeGreaterThanOrEqual(0)
+      expect(def?.asset?.tintMeanL, id).toBeLessThanOrEqual(1)
+    }
   })
 })
 

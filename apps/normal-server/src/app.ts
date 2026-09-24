@@ -278,7 +278,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     },
   })
 
-  const inventory = createInventoryService(db, aliases)
+  const inventory = createInventoryService(db, aliases, catalog.freeIds())
   const outfits = createOutfitsService(db, inventory)
   const stats = createStatsService({ db, bus })
   const economy = createEconomyService({

@@ -160,10 +160,16 @@ describe('inventory and avatars', () => {
     const res = await h.app.fastify.inject({ url: '/api/me/inventory', headers: { cookie: me.cookie } })
     expect(res.statusCode).toBe(200)
     const body = res.json() as { items: { itemId: string; slot: string; source: string }[]; avatar: unknown }
-    expect(body.items.map((i) => i.itemId).sort()).toEqual(['outfit_casual01'])
-    expect(body.items.every((i) => i.source === 'default')).toBe(true)
+    // A fresh account: the one granted default plus every `free` colour and variant (design §3.2) —
+    // owned by everyone without a row, and always listed.
+    const granted = body.items.filter((i) => i.source !== 'free')
+    expect(granted.map((i) => i.itemId)).toEqual(['outfit_casual01'])
+    const free = body.items.filter((i) => i.source === 'free')
+    expect(free.length).toBe(18)
+    expect(free.map((i) => i.itemId)).toContain('haircolor_black01')
     // Joined against the catalogue.
     expect(body.items.find((i) => i.itemId === 'outfit_casual01')).toMatchObject({ slot: 'outfit', rarity: 'common', assetKey: 'outfit/outfit_casual01' })
+    expect(body.items.find((i) => i.itemId === 'haircolor_black01')).toMatchObject({ slot: 'hairColor', rarity: 'common', source: 'free' })
     expect(body.avatar).toEqual(DEFAULT_AVATAR)
   })
 
@@ -229,6 +235,19 @@ describe('inventory and avatars', () => {
     expect(code(res)).toBe('NOT_OWNED')
     const after = await h.app.fastify.inject({ url: '/api/me', headers: { cookie: me.cookie } })
     expect((after.json() as { avatar: { outfit: string } }).avatar.outfit).toBe('outfit_casual01')
+  })
+
+  it('wears a free colour on a fresh account with no grant needed (design §3.2)', async () => {
+    const config = { ...DEFAULT_AVATAR, hairColor: 'haircolor_black01', eyeColor: 'eyecolor_brown01' }
+    const res = await h.app.fastify.inject({ method: 'PUT', url: '/api/me/avatar', headers: h.auth(me), payload: config })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ config })
+  })
+
+  it('refuses a rare colour the player does not own with 403 NOT_OWNED', async () => {
+    const res = await h.app.fastify.inject({ method: 'PUT', url: '/api/me/avatar', headers: h.auth(me), payload: { ...DEFAULT_AVATAR, hairColor: 'haircolor_pink01' } })
+    expect(res.statusCode).toBe(403)
+    expect(code(res)).toBe('NOT_OWNED')
   })
 })
 

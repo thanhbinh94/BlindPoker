@@ -43,8 +43,13 @@ export async function grantWardrobe(db: AppDb, catalog: ItemCatalog, email: stri
     .where(eq(users.email, normalised))
   if (!account) throw new UnknownAccountError(normalised)
 
-  const inventory = createInventoryService(db)
-  const all = catalog.all().map((d) => d.id)
+  const inventory = createInventoryService(db, undefined, catalog.freeIds())
+  // Free items (design §3.2) are owned by everyone already and never get an `inventory` row — "every
+  // catalogue item" here means every item a grant can actually give.
+  const all = catalog
+    .all()
+    .filter((d) => !d.free)
+    .map((d) => d.id)
   const missing = await inventory.missingOf(account.id, all)
   const granted = all.filter((id) => missing.includes(id))
   if (opts.dryRun !== true && granted.length > 0) {

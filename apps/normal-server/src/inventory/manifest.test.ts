@@ -70,4 +70,43 @@ describe('loadAvatarManifest', () => {
     expect(() => loadAvatarManifest(fixture({ ...VALID, files: { x: { layer: 0, w: 1, h: 1, bytes2x: 1 } } }))).toThrow(/files\.x has no positive layer/)
     expect(() => loadAvatarManifest(fixture({ ...VALID, files: { x: { layer: 30, w: 1, h: 1, bytes2x: 1, placeholder: 'yes' } } }))).toThrow(/files\.x\.placeholder must be a boolean/)
   })
+
+  it('parses masks, each kind optional and independently shaped', () => {
+    const withMasks = {
+      ...VALID,
+      files: {
+        ...VALID.files,
+        base_f01_L30: {
+          ...VALID.files.base_f01_L30,
+          masks: {
+            hair: { bytes2x: 6532, meanL: 0.3416 },
+            eyes: { bytes2x: 4547, meanL: 0.4086, empty: true },
+            tint: { bytes2x: 4516, meanL: 0.9546, override: true },
+          },
+        },
+      },
+    }
+    const manifest = loadAvatarManifest(fixture(withMasks))
+    expect(manifest.files['base_f01_L30']?.masks).toEqual({
+      hair: { bytes2x: 6532, meanL: 0.3416 },
+      eyes: { bytes2x: 4547, meanL: 0.4086, empty: true },
+      tint: { bytes2x: 4516, meanL: 0.9546, override: true },
+    })
+    // A file with no `masks` at all keeps the key absent, exactly like every other optional field.
+    expect(manifest.files['item_head_tophat01_L80']?.masks).toBeUndefined()
+  })
+
+  it('refuses a mask whose meanL is out of the 0–1 range, or a malformed mask entry', () => {
+    const badMeanL = { ...VALID, files: { ...VALID.files, base_f01_L30: { ...VALID.files.base_f01_L30, masks: { hair: { bytes2x: 1, meanL: 1.2 } } } } }
+    expect(() => loadAvatarManifest(fixture(badMeanL))).toThrow(/files\.base_f01_L30\.masks\.hair\.meanL must be a number between 0 and 1/)
+
+    const negativeMeanL = { ...VALID, files: { ...VALID.files, base_f01_L30: { ...VALID.files.base_f01_L30, masks: { hair: { bytes2x: 1, meanL: -0.1 } } } } }
+    expect(() => loadAvatarManifest(fixture(negativeMeanL))).toThrow(/files\.base_f01_L30\.masks\.hair\.meanL must be a number between 0 and 1/)
+
+    const noBytes = { ...VALID, files: { ...VALID.files, base_f01_L30: { ...VALID.files.base_f01_L30, masks: { hair: { meanL: 0.5 } } } } }
+    expect(() => loadAvatarManifest(fixture(noBytes))).toThrow(/files\.base_f01_L30\.masks\.hair\.bytes2x must be a positive number/)
+
+    const badEmpty = { ...VALID, files: { ...VALID.files, base_f01_L30: { ...VALID.files.base_f01_L30, masks: { hair: { bytes2x: 1, meanL: 0.5, empty: 'yes' } } } } }
+    expect(() => loadAvatarManifest(fixture(badEmpty))).toThrow(/files\.base_f01_L30\.masks\.hair\.empty must be a boolean/)
+  })
 })
