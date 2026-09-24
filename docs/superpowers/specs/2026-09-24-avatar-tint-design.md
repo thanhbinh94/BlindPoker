@@ -99,7 +99,7 @@ Với mỗi lớp có mặt nạ:
 ### 5.2 Client
 
 - `BaseRef` thêm tên mặt nạ; `ChibiConfig` thêm `hairColor?` và `eyeColor?` (hex); `WearRef` thêm `tint?` (hex). `LayerRef` thêm `tints?: { mask: string; colour: string; meanL: number }[]` do `layersFor` điền (lớp thân, L60 và lớp mặt nhận tóc và mắt; món nhận `tint`).
-- `Chibi` vẽ lớp có `tints` qua hook `useTintedLayer`: tải ảnh lớp và mặt nạ ở mật độ màn hình, tô trên canvas ngoài màn hình, trả URL blob. Bộ đệm LRU 96 mục theo khoá `file|density|mask:colour…`. Trong lúc chờ và khi không có canvas (jsdom, trình duyệt lỗi), vẽ lớp gốc.
+- `Chibi` vẽ lớp có `tints` qua hook `useTintedLayer`: tải ảnh lớp và mặt nạ ở mật độ màn hình, tô trên canvas ngoài màn hình, trả URL blob. Bộ đệm LRU 96 mục theo khoá `file|density|mask:colour…`. Trong lúc chờ lần tô đầu tiên, khi lớp không còn màu nào, và khi không có canvas (jsdom, trình duyệt lỗi), vẽ lớp gốc. Khi chỉ đổi từ màu này sang màu khác trên cùng một lớp, giữ ảnh đã tô trước đó cho tới khi ảnh mới sẵn sàng, để tủ đồ không nhấp nháy về màu gốc giữa hai lần bấm.
 - `hashChibi` tính cả `hairColor`, `eyeColor` và `tint` của từng món.
 - `normal-web` `chibiFromApi` đọc `hairColor`/`eyeColor` qua catalogue (id → `colour`), đọc `asset.tint` của món; id lạ bị bỏ qua như slot tuỳ chọn khác.
 - Server trả `ItemDto` có `colour?`, `free?`, `asset.tint?` và `asset.tintMeanL?` (từ manifest). `BaseDef`/`BaseDto` có `tint?: { hair?: { meanL, files }, eyes?: { meanL, files } }`: `files` là các lớp của thân có mặt nạ không rỗng, `meanL` tóc lấy từ mặt nạ tóc của L30, `meanL` mắt từ mặt nạ mắt của `face_neutral`. Mọi lớp của một thân tô theo cùng `meanL` để không lộ đường nối giữa lớp thân và lớp mặt.
