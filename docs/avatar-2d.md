@@ -458,7 +458,7 @@ pnpm --filter @bp/normal-web exec node scripts/avatar-pipeline.mjs masks --tint-
 # the manifest, then cuts its tint mask from it. A seed only has to be set once; every later `masks` or
 # `ingest` run re-cuts from it.
 
-pnpm --filter @bp/normal-web avatar:tint-sheet
+pnpm --filter @bp/normal-web exec node scripts/avatar-pipeline.mjs tint-sheet
 # Composes docs/avatar-2d-tint-sheet.png: every base that has both a hair and an eye mask, in the three
 # hair colours × three eye colours of design §4.2, dressed in casual01 and tinted with the shared
 # `recolour` at the base's own meanLs — plus one card per items.json entry whose asset.tint is set, drawn
@@ -480,6 +480,7 @@ pnpm --filter @bp/normal-web avatar:tint-sheet
 | C8 | The file name follows §3 above, with a layer that matches its slot |
 | C9 | The manifest lists it, at that layer and that frame size |
 | C10 | The `@2x` is inside the per-file share of the stage-1 budget (6 MB in the design; 32 MB since 2026-09-24 for real AI art, see `test/footprint.test.ts`), and the manifest's byte count matches the file on disk |
+| C11 | Every mask a layer's manifest entry lists (§4.4, Plan 13) is the layer's own `@2x` size and covers none of its transparency; unless hand-drawn (`override`, which skips the area/shape rules below): hair is 3–20 % of the frame on `L30` and 0.7–1.3 × the same base's `face_neutral` hair mask on a face (skipped when that reference is empty); eyes on `neutral` are exactly two 8-connected blobs, 100–8000 px `@2x` each, one each side of centre — another open-eyed expression allows that or none, `closed`/`sleep` always none; tint is at least 2 % of the layer's own ink. A layer with no masks cut for it yet reports `-` |
 
 ## 6. Placeholder vs. real
 
