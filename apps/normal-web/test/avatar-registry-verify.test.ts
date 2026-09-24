@@ -11,7 +11,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { ingest as pipelineIngest } from '../scripts/avatar-pipeline/extract.mjs'
 import { MANIFEST_NAME } from '../scripts/avatar-pipeline/manifest.mjs'
 import { alphaBBox, renderSvg, writePicture } from '../scripts/avatar-pipeline/png.mjs'
@@ -19,6 +19,11 @@ import { collect } from '../scripts/avatar-registry/collect.mjs'
 import { addVariant, baseGaps, ingestAssets } from '../scripts/avatar-registry/ingest.mjs'
 import { parseSpec } from '../scripts/avatar-registry/registry.mjs'
 import { bodyBox, compareBoxes, comparePictures, layerNames, scorePicture, verifyAssets } from '../scripts/avatar-registry/verify.mjs'
+
+// Every case here renders synthetic pictures and runs the real pipeline on them: 3–6 s each on this machine, and
+// past vitest's 5 s default when the suite shares the CPU with typecheck or a build. The budget is the work, not a
+// hang, so the ceiling is generous.
+vi.setConfig({ testTimeout: 60_000 })
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- the registry and the score are plain JSON */
 type Asset = any

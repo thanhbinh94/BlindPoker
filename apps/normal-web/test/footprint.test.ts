@@ -62,8 +62,13 @@ const AVATAR_DIR = join(PACKAGE_ROOT, 'public', 'avatar')
  * is fetched lazily and only when equipped, so the total is a repository ceiling, not a page cost.
  * Recorded in the spec (§8 amendment) and docs/bug-log.md; a palette-quantisation pass is the deferred
  * way back down.
+ * 2026-09-24 (later): raised again to 32 MB once the eight bots landed. A bot is a ~275 KB body plus six ~150 KB faces,
+ * four of which are byte-for-byte copies of its neutral face (`copyOf` in the manifest — the kit names a face per
+ * expression and a bot only ever draws neutral and happy). The measured total is 24.2 MB; the copies are ~4.7 MB of
+ * it. The way back down is to stop writing them and let `layersFor` fold a bot's other expressions onto neutral —
+ * a kit change with its own tests, deferred (docs/bug-log.md).
  */
-const MAX_AVATAR_2X_TOTAL = 16 * 1024 * 1024
+const MAX_AVATAR_2X_TOTAL = 32 * 1024 * 1024
 
 /** `App.tsx`'s six `React.lazy` screens; vite names each chunk after the module it split. */
 const LAZY_SCREENS = ['ProfileScreen', 'WardrobeScreen', 'InventoryScreen', 'AchievementsScreen', 'DailyScreen', 'SettingsScreen']

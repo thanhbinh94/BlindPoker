@@ -432,7 +432,7 @@ transform and replaces the copy; nothing else is touched. Bots have no icons and
 | C7 | The `@1x` is really the `@2x` scaled down, not redrawn separately |
 | C8 | The file name follows §3 above, with a layer that matches its slot |
 | C9 | The manifest lists it, at that layer and that frame size |
-| C10 | The `@2x` is inside the per-file share of the 6 MB stage-1 budget, and the manifest's byte count matches the file on disk |
+| C10 | The `@2x` is inside the per-file share of the stage-1 budget (6 MB in the design; 32 MB since 2026-09-24 for real AI art, see `test/footprint.test.ts`), and the manifest's byte count matches the file on disk |
 
 ## 6. Placeholder vs. real
 
