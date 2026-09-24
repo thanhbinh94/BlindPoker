@@ -67,10 +67,10 @@ Biến thể mũ vào bể quà hằng ngày như mọi món `head` cùng độ 
 ### 4.1 Mặt nạ
 
 - Tên tệp: `<layer>_hairmask`, `<layer>_eyemask`, `<layer>_tintmask`, mỗi cái ở `@1x` và `@2x`, cùng khung 384×448 với lớp. PNG trắng, độ phủ nằm trong kênh alpha (0 là không tô, 255 là tô hết, giữa là mép mềm).
-- Lớp có mặt nạ tóc: `base_<id>_L30`, `base_<id>_L60` (khi không rỗng), và 6 lớp `base_<id>_face_<expr>_L50`. Lớp có mặt nạ mắt: 6 lớp mặt. Mặt `closed` và `sleep` ghi mặt nạ mắt rỗng.
+- Lớp có mặt nạ tóc: `base_<id>_L30`, `base_<id>_L60` (khi không rỗng), và 6 lớp `base_<id>_face_<expr>_L50`. Lớp có mặt nạ mắt: 6 lớp mặt. Mặt `closed` và `sleep` ghi mặt nạ mắt rỗng; mặt khác có mắt nhắm (khối dưới 100 px @2x) cũng rỗng.
 - Món khai `tintable` (qua `ingest --tint-seed x,y` hoặc lệnh `masks`) có mặt nạ `tintmask`: vùng màu liền nhau chứa điểm hạt giống (toạ độ khung 1x), cùng cụm màu trong Lab. Hạt giống được lưu trong manifest (`tintSeed`) để cắt lại được.
 - Manifest ghi cho mỗi lớp: `masks: { hair?: { bytes2x, meanL }, eyes?: {…}, tint?: {…} }`. `meanL` là độ sáng HSL trung bình của vùng mặt nạ trên lớp gốc, để client khỏi đo lại.
-- Thuật toán tóc và mắt là thuật toán của spike, chuyển thành module có test: bảng màu tóc gom từ đỉnh đầu, bảng màu da từ `SKIN_WINDOW` (bỏ cụm có L ≤ 30), ứng viên tóc loại điểm có sắc độ cao hơn mọi sắc tóc, loại vùng bị trang phục phủ, loang từ đỉnh đầu, lấp lỗ sáng, nuốt viền tối không sát da. Mắt: khối không-da-không-tóc mỗi bên trục giữa trong dải mắt, lấp túi kín, gọt lông mày, lấp theo hàng; mặt nạ mắt được trừ khỏi mặt nạ tóc.
+- Thuật toán tóc và mắt là thuật toán của spike, chuyển thành module có test: bảng màu tóc gom từ đỉnh đầu, bảng màu da từ `SKIN_WINDOW` (bỏ cụm có L ≤ 30), ứng viên tóc loại điểm có sắc độ cao hơn mọi sắc tóc, loại vùng không bao giờ lộ ra (giao của alpha > 200 của mọi trang phục thân đó mặc được, kể cả bản theo giới), trên L60 thì mặt nạ là toàn bộ alpha của lớp, loang từ đỉnh đầu, lấp lỗ sáng, nuốt viền tối không sát da. Mắt: khối không-da-không-tóc mỗi bên trục giữa trong dải mắt, lấp túi kín, gọt lông mày, lấp theo hàng; mặt nạ mắt được trừ khỏi mặt nạ tóc.
 - **Mặt nạ vẽ tay:** tệp `assets/avatar-src/masks/<layer>_<kind>mask.png` (1x hoặc 2x, khung chuẩn) thay cho mặt nạ tự động. Thư mục này được commit (`!masks/` trong `.gitignore` của `assets/avatar-src`).
 
 ### 4.2 Lệnh
@@ -84,7 +84,7 @@ Biến thể mũ vào bể quà hằng ngày như mọi món `head` cùng độ 
 Với mỗi lớp có mặt nạ:
 - Mặt nạ cùng kích thước với lớp, chỉ phủ lên điểm ảnh có alpha của lớp.
 - Tóc: diện tích trong khoảng 3–20 % khung trên L30; trên lớp mặt, tỉ lệ so với mặt nạ tóc của `face_neutral` cùng thân trong 0,7–1,3.
-- Mắt: mặt `neutral`, `happy`, `sad`, `surprised` có đúng hai khối, mỗi khối 100–8000 px @2x, một khối mỗi bên trục giữa; `closed`, `sleep` rỗng.
+- Mắt: mặt `neutral` có đúng hai khối, mỗi khối 100–8000 px @2x, một khối mỗi bên trục giữa. Các mặt khác có hai khối như vậy hoặc rỗng (mặt vui của f02, m03 nhắm mắt cười); `closed`, `sleep` luôn rỗng.
 - Tint: diện tích ≥ 2 % diện tích alpha của món.
 - Mặt nạ vẽ tay bỏ qua kiểm diện tích (vẫn kiểm kích thước và phủ).
 
@@ -102,7 +102,7 @@ Với mỗi lớp có mặt nạ:
 - `Chibi` vẽ lớp có `tints` qua hook `useTintedLayer`: tải ảnh lớp và mặt nạ ở mật độ màn hình, tô trên canvas ngoài màn hình, trả URL blob. Bộ đệm LRU 96 mục theo khoá `file|density|mask:colour…`. Trong lúc chờ và khi không có canvas (jsdom, trình duyệt lỗi), vẽ lớp gốc.
 - `hashChibi` tính cả `hairColor`, `eyeColor` và `tint` của từng món.
 - `normal-web` `chibiFromApi` đọc `hairColor`/`eyeColor` qua catalogue (id → `colour`), đọc `asset.tint` của món; id lạ bị bỏ qua như slot tuỳ chọn khác.
-- Server trả `ItemDto` có `colour?`, `free?`, `asset.tint?`; `BaseDto` trả `meanL` của mặt nạ lấy từ manifest.
+- Server trả `ItemDto` có `colour?`, `free?`, `asset.tint?` và `asset.tintMeanL?` (từ manifest). `BaseDef`/`BaseDto` có `tint?: { hair?: { meanL, files }, eyes?: { meanL, files } }`: `files` là các lớp của thân có mặt nạ không rỗng, `meanL` tóc lấy từ mặt nạ tóc của L30, `meanL` mắt từ mặt nạ mắt của `face_neutral`. Mọi lớp của một thân tô theo cùng `meanL` để không lộ đường nối giữa lớp thân và lớp mặt.
 
 ## 6. Tủ đồ
 
