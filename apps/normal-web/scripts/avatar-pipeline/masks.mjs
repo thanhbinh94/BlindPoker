@@ -232,17 +232,119 @@ function analysePicture(pic) {
   return { width, height, scale, density, LAB, labAt, top, cx, hairPal, skinOnly, hairWindow: { hx0, hx1, hy0, hy1 } }
 }
 
+// ────────────────────────────────────────────────────────────────── eyes ──
+
+/**
+ * The eye ellipses (Task 2b round 3, spec §4.1): per side of the face centre line, the padded box —
+ * unioned with its mirror across the face's eye axis when both sides have whites (round 2) — inscribed as
+ * an ellipse (round 1). Steps 1–2 of `eyeMask`'s own algorithm, factored out because `hairMask` now needs
+ * the same ellipses too: an eye white enclosed by hair-coloured lashes/iris used to read as a hair "shine
+ * pocket", and a bang reaching into an eye's own territory from outside needs to be told apart from hair
+ * that merely sits near an eye without ever having a reason to be there. `eyeMask` no longer computes its
+ * own boxes; it calls this and carries on from the ellipse.
+ *
+ * Returns one ellipse per side that found eye-white to anchor on (`{ side, cx, cy, a, b }`, in this
+ * picture's own pixel coordinates) and the union of both as a `width × height` `Uint8Array` mask.
+ */
+export function eyeEllipses(pic) {
+  const { width, height, scale, density, labAt, top, cx } = analysePicture(pic)
+  const isWhite = (i) => { const p = labAt(i); return p[0] > 88 && Math.hypot(p[1], p[2]) < 10 }
+  const headH = FACE_LIMIT_Y * density - top
+  const yStart = Math.max(0, Math.floor(top + headH * 0.3))
+  const yEnd = Math.min(height, Math.ceil(top + headH * 0.75))
+
+  // eye-white components in the band, unioned into one box per side
+  const whiteMask = new Uint8Array(width * height)
+  for (let y = yStart; y < yEnd; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = y * width + x
+      if (opaqueAt(pic, i) && isWhite(i)) whiteMask[i] = 1
+    }
+  }
+  const wc = components(whiteMask, width, height)
+  const boxes = wc.sizes.map(() => ({ x0: width, x1: -1, y0: height, y1: -1 }))
+  for (let i = 0; i < width * height; i++) {
+    const l = wc.label[i]
+    if (l < 0) continue
+    const x = i % width
+    const y = (i - x) / width
+    const b = boxes[l]
+    if (x < b.x0) b.x0 = x
+    if (x > b.x1) b.x1 = x
+    if (y < b.y0) b.y0 = y
+    if (y > b.y1) b.y1 = y
+  }
+  const minWhite = Math.max(1, Math.round(20 * scale * scale))
+  const boxOf = { L: null, R: null }
+  for (let l = 0; l < wc.sizes.length; l++) {
+    if (wc.sizes[l] < minWhite) continue
+    const b = boxes[l]
+    if (b.x0 < cx && b.x1 > cx) continue // straddles the centre line — teeth, not an eye
+    const sd = b.x1 <= cx ? 'L' : 'R'
+    const box = boxOf[sd]
+    boxOf[sd] = box
+      ? { x0: Math.min(box.x0, b.x0), x1: Math.max(box.x1, b.x1), y0: Math.min(box.y0, b.y0), y1: Math.max(box.y1, b.y1) }
+      : { ...b }
+  }
+
+  // when both sides have whites, each side's box is unioned with the mirror of the other side's box
+  // about the face's own eye axis (round 2) — see `eyeMask`'s own doc comment for why.
+  if (boxOf.L && boxOf.R) {
+    const axis = (boxOf.L.x0 + boxOf.R.x1) / 2
+    const mirror = (box) => ({ x0: 2 * axis - box.x1, x1: 2 * axis - box.x0, y0: box.y0, y1: box.y1 })
+    const union = (a, b) => ({ x0: Math.min(a.x0, b.x0), x1: Math.max(a.x1, b.x1), y0: Math.min(a.y0, b.y0), y1: Math.max(a.y1, b.y1) })
+    const mirroredR = mirror(boxOf.R)
+    const mirroredL = mirror(boxOf.L)
+    boxOf.L = union(boxOf.L, mirroredR)
+    boxOf.R = union(boxOf.R, mirroredL)
+  }
+
+  // expand 15 % each way, the eye is the ellipse inscribed in the result
+  const ellipses = []
+  for (const sd of ['L', 'R']) {
+    const box = boxOf[sd]
+    if (!box) continue
+    const padX = (box.x1 - box.x0 + 1) * 0.15
+    const padY = (box.y1 - box.y0 + 1) * 0.15
+    const ex0 = box.x0 - padX
+    const ex1 = box.x1 + padX
+    const ey0 = box.y0 - padY
+    const ey1 = box.y1 + padY
+    ellipses.push({ side: sd, cx: (ex0 + ex1) / 2, cy: (ey0 + ey1) / 2, a: (ex1 - ex0) / 2, b: (ey1 - ey0) / 2 })
+  }
+  const mask = new Uint8Array(width * height)
+  if (ellipses.length) {
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        for (const e of ellipses) {
+          const dx = (x - e.cx) / e.a
+          const dy = (y - e.cy) / e.b
+          if (dx * dx + dy * dy <= 1) { mask[y * width + x] = 1; break }
+        }
+      }
+    }
+  }
+  return { ellipses, mask }
+}
+
 // ────────────────────────────────────────────────────────────────── masks ──
 
 /**
  * Hair (spike steps 5–8): candidates close in Lab to the hair palette and far from skin, grown from the
- * seed patch, with the outline round it swallowed and light highlight pockets filled back in.
+ * seed patch, with the outline round it swallowed and light highlight pockets filled back in — then, as
+ * of Task 2b round 3, checked against `eyeEllipses(pic)`: a light/shine pocket that touches an eye is
+ * never a hair pocket, and a hair pixel inside an eye's own ellipse is trimmed back out unless a path of
+ * hair pixels reaches it out to hair genuinely outside every eye. The real bases showed both directions
+ * of this going wrong — an eye white enclosed by hair-coloured lashes read as a "shine pocket" (m03), and
+ * a bluish-grey shine band across the hair stayed unmasked because a fixed chroma ceiling can't tell "this
+ * hair's own shine" from "a different colour" once the hair itself is anything but neutral (f02, m02).
  *
  * `neverVisible`, when given, is the intersection of every outfit layer the base can wear (`writeMasks`) —
  * a pixel under permanent clothing is never candidate hair, whatever colour it happens to be.
  */
 export function hairMask(pic, { neverVisible = null } = {}) {
   const { width, height, scale, LAB, labAt, hairPal, skinOnly, hairWindow } = analysePicture(pic)
+  const { mask: eyeEllipseMask } = eyeEllipses(pic)
   const never = neverVisible ?? new Uint8Array(width * height)
   const hairChroma = Math.max(...hairPal.map((c) => Math.hypot(c[1], c[2]))) + 12
   const HAIR_T = 14
@@ -282,37 +384,63 @@ export function hairMask(pic, { neverVisible = null } = {}) {
   }
 
   // light pockets: a small enclosed pocket of highlight (not skin) joins the hair round it. Two shapes of
-  // pocket qualify (Task 2b ruling, spec §4.1): a bright one (the original rule, ≤ 2500 px @2x scaled,
-  // every pixel L ≥ 55) or a grey shine band (≤ 8000 px @2x scaled, every pixel chroma < 12 — f02/m02's
-  // grey highlight streaks are duller than 55 but still read as hair, not as a second colour). A pocket
-  // is judged as a whole (its *least* bright / *most* chromatic pixel), not pixel by pixel, so one stray
-  // dark or saturated pixel does not let the rest of an otherwise-uniform pocket through.
+  // pocket qualify: a bright one (the original rule, ≤ 2500 px @2x scaled, every pixel L ≥ 55) or a shine
+  // pocket (≤ 8000 px @2x scaled, no colour restriction at all as of Task 2b round 3 — f02/m02's grey-blue
+  // shine bands have chroma up to ~18-20, since f02's own hair palette is itself bluish, so a fixed chroma
+  // ceiling could never separate "a shine band on this hair" from "a different colour" for every base).
+  // Both shapes are now gated on the same two things: not skin-like (unchanged), and not touching any eye
+  // ellipse (round 3) — without that second gate, an eye white enclosed by hair-coloured lashes or iris
+  // qualifies as a shine pocket too, exactly the m03 defect this round exists to fix. A pocket is judged as
+  // a whole (its *least* bright pixel, whether it touches an eye at all), not pixel by pixel, so one stray
+  // dark pixel does not let the rest of an otherwise-uniform pocket through.
   {
     const inv = new Uint8Array(width * height)
     for (let i = 0; i < width * height; i++) inv[i] = hair[i] ? 0 : 1
     const hc = components(inv, width, height)
     const maxBrightPocket = Math.round(2500 * scale * scale)
     const maxShinePocket = Math.round(8000 * scale * scale)
-    const excluded = new Uint8Array(hc.sizes.length) // opaque-but-not / skin: never a light pocket
+    const excluded = new Uint8Array(hc.sizes.length) // opaque-but-not / skin / touches an eye: never a pocket
     const minL = new Float32Array(hc.sizes.length).fill(Infinity)
-    const maxChroma = new Float32Array(hc.sizes.length).fill(0)
     for (let i = 0; i < width * height; i++) {
       const l = hc.label[i]
       if (l < 0) continue
-      if (!opaqueAt(pic, i) || skinMask[i]) { excluded[l] = 1; continue }
+      if (!opaqueAt(pic, i) || skinMask[i] || eyeEllipseMask[i]) { excluded[l] = 1; continue }
       if (LAB[i * 3] < minL[l]) minL[l] = LAB[i * 3]
-      const chroma = Math.hypot(LAB[i * 3 + 1], LAB[i * 3 + 2])
-      if (chroma > maxChroma[l]) maxChroma[l] = chroma
     }
     const good = new Set()
     for (let l = 0; l < hc.sizes.length; l++) {
       if (excluded[l]) continue
       const size = hc.sizes[l]
       const bright = size <= maxBrightPocket && minL[l] >= 55
-      const greyShine = size <= maxShinePocket && maxChroma[l] < 12
-      if (bright || greyShine) good.add(l)
+      const shine = size <= maxShinePocket
+      if (bright || shine) good.add(l)
     }
     for (let i = 0; i < width * height; i++) if (hc.label[i] >= 0 && good.has(hc.label[i])) hair[i] = 1
+  }
+
+  // Task 2b round 3 (spec §4.1 ruling): whatever grew `hair` into an eye's own territory above — a shine
+  // pocket, the outline swallow, even the seed growth itself — is trimmed back here, once, as the final
+  // word on it. The eye white (L > 88, chroma < 10) is never hair. Past that, a hair pixel inside an eye's
+  // padded ellipse stays hair only if a path of hair pixels (4-connected, the same stricter connectivity
+  // `eyeMask`'s own leaks use) reaches it out to hair *outside* every ellipse — a bang that genuinely
+  // crosses into an eye's territory from the cap stays (its component reaches outside), but a pocket of
+  // lash- or iris-coloured pixels around the sclera, enclosed and never touching outside hair, does not.
+  {
+    for (let i = 0; i < width * height; i++) {
+      if (!hair[i]) continue
+      const p = labAt(i)
+      if (p[0] > 88 && Math.hypot(p[1], p[2]) < 10) hair[i] = 0
+    }
+    const ec = components(hair, width, height, NEIGHBOURS4)
+    const reachesOutside = new Uint8Array(ec.sizes.length)
+    for (let i = 0; i < width * height; i++) {
+      const l = ec.label[i]
+      if (l >= 0 && !eyeEllipseMask[i]) reachesOutside[l] = 1
+    }
+    for (let i = 0; i < width * height; i++) {
+      const l = ec.label[i]
+      if (l >= 0 && eyeEllipseMask[i] && !reachesOutside[l]) hair[i] = 0
+    }
   }
 
   const out = new Uint8Array(width * height)
@@ -327,15 +455,15 @@ export function hairMask(pic, { neverVisible = null } = {}) {
  * be told apart from hair at all. This is sclera-anchored instead — it finds the *white of the eye*, which
  * is unambiguous, and reads everything the white encloses as the eye, whatever colour that turns out to be:
  *
- * 1. Per side of the face centre line, in the eye band: the eye-white components (opaque, L > 88,
- *    chroma < 10; a component whose box straddles the centre line — teeth — is ignored, and so is one
- *    under 20 px @2x scaled). Their boxes union per side. When both sides have whites, each side's box is
- *    then unioned with the *mirror* of the other side's box about the face's own eye axis (Task 2b round
- *    2 — the sclera often shows only on the iris's outer side, so a side's own box alone can miss its
- *    inner half; the other eye, mirrored, is what fills it back in). A wink (whites on one side only) is
- *    not mirrored.
- * 2. That box is expanded 15 % each way (top/bottom/left/right), and the eye is the ellipse inscribed in
- *    the expanded box — a side with no whites (closed eyes, a wink) gets no ellipse and stays empty.
+ * 1–2. `eyeEllipses(pic)` (Task 2b round 3: factored out so `hairMask` can use the same ellipses) finds,
+ *    per side of the face centre line in the eye band, the eye-white components (opaque, L > 88, chroma
+ *    < 10; a component whose box straddles the centre line — teeth — is ignored, and so is one under
+ *    20 px @2x scaled), unions their boxes per side, and — when both sides have whites — unions each
+ *    side's box with the *mirror* of the other side's box about the face's own eye axis (round 2: the
+ *    sclera often shows only on the iris's outer side, so a side's own box alone can miss its inner half;
+ *    the other eye, mirrored, is what fills it back in; a wink, whites on one side only, is not mirrored).
+ *    The result is expanded 15 % each way and the eye is the ellipse inscribed in it — a side with no
+ *    whites gets no ellipse and stays empty.
  * 3. Inside the ellipse: opaque, not white, L > 12 is a candidate. A candidate that is skin-like *and*
  *    4-connected, through other skin-like pixels inside the ellipse, out to a skin-like pixel on or
  *    outside the ellipse boundary is dropped — a corner of the ellipse that leaked into the cheek or brow.
@@ -360,7 +488,7 @@ export function hairMask(pic, { neverVisible = null } = {}) {
  * this is what actually fixes the swallowed-iris bug, because it no longer matters what `hairMask` did.
  */
 export function eyeMask(pic, hair) {
-  const { width, height, scale, density, labAt, top, cx, skinOnly, hairPal } = analysePicture(pic)
+  const { width, height, scale, labAt, cx, skinOnly, hairPal } = analysePicture(pic)
   const isWhite = (i) => { const p = labAt(i); return p[0] > 88 && Math.hypot(p[1], p[2]) < 10 }
   // The white of the eye is never "skin-like", whatever `skinOnly` (a plain top-2-by-population clustering
   // over a window that has no idea where the eyes are) happens to have picked up — without this guard, the
@@ -373,88 +501,10 @@ export function eyeMask(pic, hair) {
   // pixel is only dropped when a path of hair-coloured pixels connects it out of the ellipse into the
   // actual hair mass, so a hair-coloured *iris*, fully enclosed by the white or an outline, is unaffected.
   const hairlike = (i) => !isWhite(i) && hairPal.length > 0 && Math.min(...hairPal.map((c) => labDist(c, labAt(i)))) < 14
-  const headH = FACE_LIMIT_Y * density - top
-  const yStart = Math.max(0, Math.floor(top + headH * 0.3))
-  const yEnd = Math.min(height, Math.ceil(top + headH * 0.75))
 
-  // 1. eye-white components in the band, unioned into one box per side
-  const whiteMask = new Uint8Array(width * height)
-  for (let y = yStart; y < yEnd; y++) {
-    for (let x = 0; x < width; x++) {
-      const i = y * width + x
-      if (opaqueAt(pic, i) && isWhite(i)) whiteMask[i] = 1
-    }
-  }
-  const wc = components(whiteMask, width, height)
-  const boxes = wc.sizes.map(() => ({ x0: width, x1: -1, y0: height, y1: -1 }))
-  for (let i = 0; i < width * height; i++) {
-    const l = wc.label[i]
-    if (l < 0) continue
-    const x = i % width
-    const y = (i - x) / width
-    const b = boxes[l]
-    if (x < b.x0) b.x0 = x
-    if (x > b.x1) b.x1 = x
-    if (y < b.y0) b.y0 = y
-    if (y > b.y1) b.y1 = y
-  }
-  const minWhite = Math.max(1, Math.round(20 * scale * scale))
-  const boxOf = { L: null, R: null }
-  for (let l = 0; l < wc.sizes.length; l++) {
-    if (wc.sizes[l] < minWhite) continue
-    const b = boxes[l]
-    if (b.x0 < cx && b.x1 > cx) continue // straddles the centre line — teeth, not an eye
-    const sd = b.x1 <= cx ? 'L' : 'R'
-    const box = boxOf[sd]
-    boxOf[sd] = box
-      ? { x0: Math.min(box.x0, b.x0), x1: Math.max(box.x1, b.x1), y0: Math.min(box.y0, b.y0), y1: Math.max(box.y1, b.y1) }
-      : { ...b }
-  }
-
-  // 1b. Task 2b round 2 (spec §4.1 ruling): the sclera often shows only on the *outer* side of the iris,
-  // so one side's own whites box can miss the inner half of that eye entirely, while the other side's own
-  // box is fine (or missing a different half) — asymmetric per eye, not something a per-side box alone can
-  // fix. With whites on both sides, each side's box is unioned with the *mirror* of the other side's box
-  // about the face's own eye axis: the midpoint between the left side's leftmost white pixel and the right
-  // side's rightmost white pixel, i.e. the two outer eye corners — reliably symmetric even when the whites
-  // in between are not. A side whose own box is already good gains nothing (the union is near-idempotent);
-  // a side whose box is thin borrows the other eye's shape, mirrored into place. A wink (whites on only one
-  // side) is not mirrored — the closed side has no whites and stays empty, on purpose.
-  if (boxOf.L && boxOf.R) {
-    const axis = (boxOf.L.x0 + boxOf.R.x1) / 2
-    const mirror = (box) => ({ x0: 2 * axis - box.x1, x1: 2 * axis - box.x0, y0: box.y0, y1: box.y1 })
-    const union = (a, b) => ({ x0: Math.min(a.x0, b.x0), x1: Math.max(a.x1, b.x1), y0: Math.min(a.y0, b.y0), y1: Math.max(a.y1, b.y1) })
-    const mirroredR = mirror(boxOf.R)
-    const mirroredL = mirror(boxOf.L)
-    boxOf.L = union(boxOf.L, mirroredR)
-    boxOf.R = union(boxOf.R, mirroredL)
-  }
-
-  // 2. expand 15 % each way, the eye is the ellipse inscribed in the result
-  const ellipses = []
-  for (const sd of ['L', 'R']) {
-    const box = boxOf[sd]
-    if (!box) continue
-    const padX = (box.x1 - box.x0 + 1) * 0.15
-    const padY = (box.y1 - box.y0 + 1) * 0.15
-    const ex0 = box.x0 - padX
-    const ex1 = box.x1 + padX
-    const ey0 = box.y0 - padY
-    const ey1 = box.y1 + padY
-    ellipses.push({ cx: (ex0 + ex1) / 2, cy: (ey0 + ey1) / 2, a: (ex1 - ex0) / 2, b: (ey1 - ey0) / 2 })
-  }
-  const ellipseMask = new Uint8Array(width * height)
-  if (ellipses.length) {
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        for (const e of ellipses) {
-          const dx = (x - e.cx) / e.a
-          const dy = (y - e.cy) / e.b
-          if (dx * dx + dy * dy <= 1) { ellipseMask[y * width + x] = 1; break }
-        }
-      }
-    }
-  }
+  // 1–2. the ellipses: `eyeEllipses` builds the per-side box from eye-white components in the band,
+  // mirrors it across the face's own eye axis when both sides have whites (round 2), and expands 15 %.
+  const { mask: ellipseMask } = eyeEllipses(pic)
 
   // 3. inside the ellipse, opaque, not white, not too dark: the candidate eye
   const candidate = new Uint8Array(width * height)

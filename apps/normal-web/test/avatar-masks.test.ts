@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { runChecks } from '../scripts/avatar-pipeline/checks.mjs'
-import { eyeMask, hairMask, maskTargets, tintMask, writeMasks } from '../scripts/avatar-pipeline/masks.mjs'
+import { eyeEllipses, eyeMask, hairMask, maskTargets, tintMask, writeMasks } from '../scripts/avatar-pipeline/masks.mjs'
 import { readPicture, renderSvg, resizePicture, writePicture } from '../scripts/avatar-pipeline/png.mjs'
 import { buildTintSheet } from '../scripts/avatar-pipeline/tint-sheet.mjs'
 
@@ -29,6 +29,14 @@ const WHITE = '#ffffff'
 const IRIS = '#2f7fd6'
 const PUPIL = '#101010'
 const TANK = '#f4f4f4'
+/** A bluish-black hair, for the round 3 shine-band case — f02's own real hair palette is bluish (b ≈ −18
+ * in Lab), which a fixed chroma ceiling on the shine-pocket rule could never tell from "a different
+ * colour" for a warm `HAIR` base. Lab ≈ (11, 5, −12), chroma ≈ 13. */
+const HAIR_BLUE = '#1c1c2e'
+/** The shine band itself: Lab ≈ (46, 6, −14), chroma ≈ 15 — past the old chroma < 12 ceiling, and its Lab
+ * distance to `HAIR_BLUE` (≈ 35) is well past `HAIR_T` (14), so it is not hair-palette candidate on its
+ * own; only the shine-pocket rule can bring it in. */
+const SHINE_BAND = '#6b6b85'
 
 /** The two eyes' centres in the synthetic base's own coordinates — shared with `irisRingPixels` below. */
 const EYE_CENTRES: [number, number][] = [[320, 350], [448, 350]]
@@ -66,6 +74,23 @@ const PUPIL_R = 9
  * padded ellipse: inside it, but with a gap to both the hair cap/locks (so the `hairlike` leak's flood
  * never reaches it — it is not connected to the rest of the hair at all) and the iris (so it is not just
  * part of the iris rendering). This is what the largest-group trim exists to drop.
+ *
+ * `hairColour` (Task 2b round 3) overrides the hair everywhere it is drawn (cap, locks, filament, lash
+ * ring) — the round's own `shineBand` case needs a bluish-black hair to match the real base it is modelled
+ * on, and a fixed `HAIR` would make that band's chroma indistinguishable from the hair around it.
+ *
+ * `lashRing` (Task 2b round 3) draws a hair-coloured ellipse well outside one eye's own white — overlapping
+ * the cap so it is genuinely part of the same hair mass, not just near it — leaving the white (and
+ * whatever iris colour sits inside it) as a hole *enclosed by hair on every side*, the shape a thick ring
+ * of lashes and liner makes around a real eye. This is the shape that used to read as a hair "shine
+ * pocket": the eye white and the enclosed iris/pupil disc together, however large, sat inside a component
+ * fully surrounded by hair and under the old 8000 px cap.
+ *
+ * `shineBand` (Task 2b round 3) draws a small patch — chroma ≈ 15, well within the cap, clear of the
+ * `hairPal` sampling patch just under the head top (y 186–250 at this scale — a band placed inside *that*
+ * becomes one of the k-means centroids that *define* the hair colour, testing nothing) and nowhere near
+ * either eye — of a colour distinct enough from `hairColour` that candidate/seed growth never reaches it
+ * on its own; only the shine-pocket rule can bring it in.
  */
 async function syntheticBase({
   closedEyes = false,
@@ -73,6 +98,9 @@ async function syntheticBase({
   outerWhiteOnly = null as 'L' | 'R' | null,
   capFraction = 0.35,
   filament = null as 'L' | 'R' | null,
+  hairColour = HAIR,
+  lashRing = null as 'L' | 'R' | null,
+  shineBand = false,
 } = {}) {
   const cx = 384
   const cy = 330
@@ -82,9 +110,19 @@ async function syntheticBase({
     ? (() => {
         const [ex] = EYE_CENTRES[filament === 'L' ? 0 : 1]!
         const fx = filament === 'L' ? ex - 15 : ex + 15
-        return `<ellipse cx="${fx}" cy="304" rx="9" ry="3" fill="${HAIR}"/>`
+        return `<ellipse cx="${fx}" cy="304" rx="9" ry="3" fill="${hairColour}"/>`
       })()
     : ''
+  const lashRingShape = lashRing
+    ? (() => {
+        const [ex, ey] = EYE_CENTRES[lashRing === 'L' ? 0 : 1]!
+        return `<ellipse cx="${ex}" cy="${ey}" rx="50" ry="70" fill="${hairColour}"/>`
+      })()
+    : ''
+  // y 270, not the more central y 220 first tried: `hairPal` is itself sampled from a patch just under
+  // the head top (y 186–250 at this scale), and a band placed inside that patch becomes one of the four
+  // k-means centroids that *define* the hair colour — trivially "hair" by construction, testing nothing.
+  const shineBandShape = shineBand ? `<ellipse cx="${cx}" cy="270" rx="30" ry="14" fill="${SHINE_BAND}"/>` : ''
   const eyes = closedEyes
     ? `<path d="M296 350 Q320 358 344 350" stroke="${PUPIL}" stroke-width="4" fill="none" stroke-linecap="round"/>` +
       `<path d="M424 350 Q448 358 472 350" stroke="${PUPIL}" stroke-width="4" fill="none" stroke-linecap="round"/>`
@@ -104,12 +142,14 @@ async function syntheticBase({
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="${SKIN}"/>
     <clipPath id="cap"><rect x="${cx - r - 20}" y="${cy - r}" width="${2 * r + 40}" height="${capBottom - (cy - r)}"/></clipPath>
-    <circle cx="${cx}" cy="${cy}" r="${r}" fill="${HAIR}" clip-path="url(#cap)"/>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="${hairColour}" clip-path="url(#cap)"/>
     <rect x="300" y="480" width="168" height="320" fill="${SKIN}"/>
     <rect x="300" y="480" width="168" height="120" fill="${TANK}"/>
-    <rect x="234" y="280" width="40" height="240" rx="20" fill="${HAIR}"/>
-    <rect x="494" y="280" width="40" height="240" rx="20" fill="${HAIR}"/>
+    <rect x="234" y="280" width="40" height="240" rx="20" fill="${hairColour}"/>
+    <rect x="494" y="280" width="40" height="240" rx="20" fill="${hairColour}"/>
     ${filamentShape}
+    ${shineBandShape}
+    ${lashRingShape}
     ${eyes}
   </svg>`
   return renderSvg(svg, W, H)
@@ -186,6 +226,41 @@ function filamentPixels(pic: Picture, side: 'L' | 'R'): Uint8Array {
     for (let x = 0; x < pic.width; x++) {
       const dx = (x - fx) / rx
       const dy = (y - fy) / ry
+      if (dx * dx + dy * dy <= 1) out[y * pic.width + x] = 1
+    }
+  }
+  return out
+}
+
+/** The full white-ellipse disc by geometry (Task 2b round 3) — `EYE_CENTRES` at rx 34, ry 40, the same
+ * shape `syntheticBase` draws the eye white as. Covers the iris/pupil disc it encloses too: none of that
+ * should be hair either, whatever colour `lashRing`'s test draws it in. */
+function eyeWhiteDiscPixels(pic: Picture, side: 'L' | 'R'): Uint8Array {
+  const out = new Uint8Array(pic.width * pic.height)
+  const [ex, ey] = EYE_CENTRES[side === 'L' ? 0 : 1]!
+  const rx = 34
+  const ry = 40
+  for (let y = 0; y < pic.height; y++) {
+    for (let x = 0; x < pic.width; x++) {
+      const dx = (x - ex) / rx
+      const dy = (y - ey) / ry
+      if (dx * dx + dy * dy <= 1) out[y * pic.width + x] = 1
+    }
+  }
+  return out
+}
+
+/** The `shineBand` patch by geometry (Task 2b round 3), matching `syntheticBase`'s own shape. */
+function shineBandPixels(pic: Picture): Uint8Array {
+  const out = new Uint8Array(pic.width * pic.height)
+  const cx = 384
+  const cy = 270
+  const rx = 30
+  const ry = 14
+  for (let y = 0; y < pic.height; y++) {
+    for (let x = 0; x < pic.width; x++) {
+      const dx = (x - cx) / rx
+      const dy = (y - cy) / ry
       if (dx * dx + dy * dy <= 1) out[y * pic.width + x] = 1
     }
   }
@@ -323,6 +398,45 @@ describe('hairMask / eyeMask (synthetic base)', () => {
     const eyes = eyeMask(pic, hair)
     expect(coverage(eyes, filamentPixels(pic, 'L'))).toBe(0)
     expect(coverage(eyes, irisRingPixels(pic, [EYE_CENTRES[0]!]))).toBeGreaterThan(0.8)
+  })
+
+  // Task 2b round 3 (spec §4.1 ruling): the real tint sheet showed `hairMask` itself going wrong in both
+  // directions on the shine-pocket rule — an eye white enclosed by hair-coloured lashes read as a "shine
+  // pocket" (m03), and a bluish-grey shine band on bluish hair did not (f02, m02), because the rule's own
+  // chroma < 12 ceiling can only ever describe *one* hair's shine. Both are now judged by whether the
+  // pocket touches an eye's own ellipse (`eyeEllipses`, factored out of `eyeMask` this round) rather than
+  // by colour.
+
+  it('keeps an eye white enclosed by hair-coloured lashes out of the hair mask', async () => {
+    const pic = await syntheticBase({ lashRing: 'L' })
+    const hair = hairMask(pic, { neverVisible: null })
+    // < 2 %, not exactly 0: the same antialiasing tolerance the very first case in this file gives
+    // `skinPixels` — a soft edge between the white and the ring round it, a pixel or two wide.
+    expect(coverage(hair, eyeWhiteDiscPixels(pic, 'L'))).toBeLessThan(0.02)
+  })
+
+  it('puts a bluish-grey shine band (chroma ≈ 15) enclosed by bluish-black hair in the hair mask', async () => {
+    const pic = await syntheticBase({ hairColour: HAIR_BLUE, shineBand: true })
+    const hair = hairMask(pic, { neverVisible: null })
+    expect(coverage(hair, shineBandPixels(pic))).toBeGreaterThan(0.9)
+  })
+
+  it('keeps a bang that connects into an eye\'s own ellipse from outside as hair', async () => {
+    // capFraction 0.6, the same heavy fringe the `hairlike` leak test uses: it genuinely reaches down
+    // across the left eye's own padded ellipse, connected the whole way back to the cap.
+    const pic = await syntheticBase({ capFraction: 0.6 })
+    const hair = hairMask(pic, { neverVisible: null })
+    const { mask: ellipseMask } = eyeEllipses(pic)
+    const cap = capPixels(pic)
+    let insideEllipse = 0
+    let keptHair = 0
+    for (let i = 0; i < cap.length; i++) {
+      if (!cap[i] || !ellipseMask[i]) continue
+      insideEllipse++
+      if (hair[i]! >= 128) keptHair++
+    }
+    expect(insideEllipse, 'the fixture should actually put some cap colour inside an eye ellipse').toBeGreaterThan(0)
+    expect(keptHair / insideEllipse).toBeGreaterThan(0.8)
   })
 })
 
