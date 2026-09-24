@@ -9,3 +9,6 @@
 !.gitignore
 !README.md
 !registry.json
+!masks/
+!masks/*.png
+!masks/.gitkeep

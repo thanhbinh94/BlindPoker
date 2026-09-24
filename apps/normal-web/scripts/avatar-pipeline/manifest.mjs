@@ -28,6 +28,10 @@ export const PACKAGE_ROOT = fileURLToPath(new URL('../../', import.meta.url))
 export const PUBLIC_DIR = resolve(PACKAGE_ROOT, 'public/avatar')
 export const SERVER_MANIFEST = resolve(PACKAGE_ROOT, '../normal-server/data/avatar-manifest.json')
 export const SHEET_FILE = resolve(PACKAGE_ROOT, '../../docs/avatar-2d-sheet.png')
+/** Plan 13 spec §4.2: the tint review sheet — every base's three hair × three eye colours, every tintable item. */
+export const TINT_SHEET_FILE = resolve(PACKAGE_ROOT, '../../docs/avatar-2d-tint-sheet.png')
+/** The catalogue `tint-sheet` reads its tintable items from (spec §4.2's "mọi món `tintable`"). */
+export const ITEMS_FILE = resolve(PACKAGE_ROOT, '../normal-server/data/items.json')
 
 // ──────────────────────────────────────────────────────── the stage-1 set ──
 

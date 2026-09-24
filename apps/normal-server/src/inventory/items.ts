@@ -36,7 +36,7 @@ import { WEARS } from './bases.js'
 import type { AvatarManifest } from './manifest.js'
 import { loadAvatarManifest } from './manifest.js'
 import type { ItemSlot } from './slots.js'
-import { DRAWN_SLOTS, isItemSlot, REQUIRED_SLOTS } from './slots.js'
+import { COLOUR_SLOTS, DRAWN_SLOTS, isItemSlot, REQUIRED_SLOTS } from './slots.js'
 
 export type { ItemSlot } from './slots.js'
 
@@ -65,6 +65,14 @@ export interface AssetRef {
   hidesHairBack?: boolean
   /** Whether this layer falls inside the 208×208 avatar crop the portrait is cut from. */
   fitsAvatarCrop: boolean
+  /**
+   * A colour variant (design §3.3): draw `file`, then tint the `<file>_tintmask` region with this
+   * hex. The original item this varies has no `tint` at all — only its variants do.
+   */
+  tint?: string
+  /** `masks.tint.meanL` off the manifest entry for `file`, copied in at load time so the client and
+   *  the pipeline's `recolour` never have to re-measure the original artwork's lightness. */
+  tintMeanL?: number
 }
 
 export interface ItemDef {
@@ -80,6 +88,16 @@ export interface ItemDef {
   isDefault: boolean
   /** The PNG layer to draw. Required for `DRAWN_SLOTS`, absent for `title` and `badge`. */
   asset?: AssetRef
+  /** The hex a `hairColor`/`eyeColor` item paints with (design §3.2). Required there, forbidden elsewhere. */
+  colour?: string
+  /**
+   * Owned by every player without an `inventory` row (design §3.2) — `owns`/`missingOf` say so, and
+   * `/api/me/inventory` reports it with `source: "free"`. Only ever `true`: a catalogue never writes
+   * `free: false`, the same way it never writes `isDefault: false` for most items. Restricted to a
+   * `common`, non-default item — a free rare would make "rare" a lie, and a free default is simply
+   * what `isDefault` already means.
+   */
+  free?: true
 }
 
 export interface ItemCatalog {
@@ -92,11 +110,16 @@ export interface ItemCatalog {
   defaultOf(slot: ItemSlot): ItemDef | undefined
   /** The avatar a new account is created wearing, built from the `isDefault` items. */
   defaultAvatar(): AvatarConfigV3
+  /** Every `free` item's id (design §3.2) — what `InventoryService` and the daily draw are built from. */
+  freeIds(): ReadonlySet<string>
   /** Upserts the catalogue into the `items` table. Idempotent: safe on every boot. */
   seed(db: AppDb): Promise<void>
 }
 
 const RARITY_SET = new Set<string>(RARITIES)
+
+/** A colour is always a lowercase 6-digit hex (design §3.2, §3.3) — never `#FFF`, never uppercase. */
+const HEX_COLOUR = /^#[0-9a-f]{6}$/
 
 /** `excluded.<column>` — the row the insert would have written, for an `ON CONFLICT DO UPDATE`. */
 function sqlExcluded(column: string): ReturnType<typeof sql.raw> {
@@ -144,6 +167,18 @@ function parseAsset(path: string, id: string, slot: ItemSlot, manifest: AvatarMa
 
   const asset: AssetRef = { layer: expectedLayer as AssetRef['layer'], file, fitsAvatarCrop }
 
+  // A colour variant (design §3.3): the manifest has to carry a non-empty `masks.tint` for `file`,
+  // or there is no region for `recolour` to paint — a variant whose art has no tint mask is a rare
+  // hat that would silently render as its own original colour.
+  const tintRaw = r['tint']
+  if (tintRaw !== undefined) {
+    if (typeof tintRaw !== 'string' || !HEX_COLOUR.test(tintRaw)) fail(path, `item ${id} has a malformed asset.tint`)
+    const tintMask = manifestEntry.masks?.tint
+    if (tintMask === undefined || tintMask.empty === true) fail(path, `item ${id}'s asset file ${file} has no tint mask to paint`)
+    asset.tint = tintRaw
+    asset.tintMeanL = tintMask.meanL
+  }
+
   // Per-wear cuts (2026-09-20). Each one is held to exactly what `file` is held to — in the manifest,
   // at the slot's own layer — because a variant that resolves to nothing is a base that renders a hole
   // where its outfit should be, and only for the half of the roster that wears that cut.
@@ -158,6 +193,15 @@ function parseAsset(path: string, id: string, slot: ItemSlot, manifest: AvatarMa
       if (entry === undefined) fail(path, `item ${id} names the ${wear} asset variant ${name}, which is not in the avatar manifest`)
       if (entry.layer !== expectedLayer) {
         fail(path, `item ${id}'s ${wear} asset variant ${name} is manifest layer ${String(entry.layer)} rather than ${String(expectedLayer)}`)
+      }
+      // `asset.tint` holds `file` to a non-empty `masks.tint` above; a per-wear cut is the same
+      // drawable at the same layer, so a base that resolves to a cut rather than `file` needs its own
+      // tint mask too, or `recolour` would have no region to paint on the cut a male base actually draws.
+      if (asset.tint !== undefined) {
+        const variantTintMask = entry.masks?.tint
+        if (variantTintMask === undefined || variantTintMask.empty === true) {
+          fail(path, `item ${id}'s ${wear} asset variant ${name} has no tint mask to paint`)
+        }
       }
       variants[wear as Wear] = name
     }
@@ -190,12 +234,32 @@ function parseItem(path: string, manifest: AvatarManifest, raw: unknown, at: num
   if (!RARITY_SET.has(rarity)) fail(path, `item ${id} has unknown rarity ${rarity}`)
   const isDefault = r['isDefault']
   if (typeof isDefault !== 'boolean') fail(path, `item ${id} has no boolean isDefault`)
+
+  // `colour` (design §3.2): mandatory hex on the two colour slots, forbidden everywhere else — a
+  // `head` item with a stray `colour` field would be dead data nothing ever reads, and a colour item
+  // without one would have nothing for the wardrobe's swatch to paint.
+  const colourSlot = (COLOUR_SLOTS as readonly string[]).includes(slot)
+  const colourRaw = r['colour']
+  if (colourSlot) {
+    if (typeof colourRaw !== 'string' || !HEX_COLOUR.test(colourRaw)) fail(path, `item ${id} needs a 6-digit hex colour (slot ${slot})`)
+  } else if (colourRaw !== undefined) {
+    fail(path, `item ${id} has a colour but is not in a colour slot (${slot})`)
+  }
+
+  // `free` (design §3.2): only ever the literal `true`, and only on a common, non-default item —
+  // "free" and "rare" contradict each other, and a default is already granted to everyone another way.
+  const freeRaw = r['free']
+  if (freeRaw !== undefined && freeRaw !== true) fail(path, `item ${id} has a non-true free`)
+  if (freeRaw === true && (rarity !== 'common' || isDefault)) fail(path, `item ${id} is free but is not a plain common item`)
+
   const asset = parseAsset(path, id, slot, manifest, r['asset'])
   const assetKey = str('assetKey')
   // The manifest node prefix is derived from `slot`/`id`, not free text: a hand-built catalogue
   // should not be able to drift from that convention.
   if (assetKey !== `${slot}/${id}`) fail(path, `item ${id} has assetKey ${assetKey} rather than ${slot}/${id}`)
   const def: ItemDef = { id, slot, rarity: rarity as Rarity, nameKey: str('nameKey'), assetKey, isDefault }
+  if (colourSlot) def.colour = colourRaw as string
+  if (freeRaw === true) def.free = true
   return asset === undefined ? def : { ...def, asset }
 }
 
@@ -234,6 +298,8 @@ export function loadItemCatalog(path: string = defaultItemsPath(), manifest: Ava
     if (!byId.has(id)) fail(path, `the day-28 daily reward grants ${id}, which is not in the catalogue`)
   }
 
+  const freeIds = new Set(defs.filter((d) => d.free).map((d) => d.id))
+
   const catalog: ItemCatalog = {
     all: () => [...defs],
     get: (id) => byId.get(id),
@@ -241,6 +307,7 @@ export function loadItemCatalog(path: string = defaultItemsPath(), manifest: Ava
     byRarity: (r) => defs.filter((d) => d.rarity === r),
     defaultOf: (slot) => defs.find((d) => d.slot === slot && d.isDefault),
     defaultAvatar: () => defaultAvatar(catalog),
+    freeIds: () => freeIds,
     async seed(db) {
       if (defs.length === 0) return
       // An upsert rather than an insert: `seed` runs on every boot, and an edit to `nameKey` or a

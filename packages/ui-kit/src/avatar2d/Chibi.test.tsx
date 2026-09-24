@@ -5,7 +5,7 @@ import AVATAR2D_CSS from './avatar2d.module.css?raw'
 import { Chibi } from './Chibi.js'
 import { defaultChibi } from './defaults.js'
 import { hashChibi, layersFor } from './layers.js'
-import type { BotChibi, ChibiConfig, WearRef } from './types.js'
+import type { BaseRef, BotChibi, ChibiConfig, WearRef } from './types.js'
 
 const SUBJECT = defaultChibi('ann')
 const FRAME_ITEM: WearRef = { id: 'frame_gold', order: 90, file: 'item_frame_gold_L90' }
@@ -181,5 +181,17 @@ describe('Chibi', () => {
     const { container: still } = render(<Chibi subject={SUBJECT} />)
     const { container: bouncing } = render(<Chibi subject={SUBJECT} bounce />)
     expect(bouncing.firstElementChild!.className).not.toBe(still.firstElementChild!.className)
+  })
+
+  it('a tinted layer renders the plain layer src while no tinted URL exists yet (no canvas in jsdom)', () => {
+    const tintedBase: BaseRef = { ...SUBJECT.base, tint: { hair: { meanL: 0.4, files: [SUBJECT.base.body] } } }
+    const subject: ChibiConfig = { ...SUBJECT, base: tintedBase, hairColor: '#b3261e' }
+    const bodyLayer = layersFor(subject, 'neutral', 'full').find((l) => l.order === 30)!
+    expect(bodyLayer.tints).toEqual([{ mask: `${SUBJECT.base.body}_hairmask`, colour: '#b3261e', meanL: 0.4 }])
+
+    const { container } = render(<Chibi subject={subject} />)
+    const img = [...container.querySelectorAll('img')].find((el) => el.getAttribute('src')?.includes(bodyLayer.file))
+    expect(img).not.toBeUndefined()
+    expect(img!.getAttribute('src')).toBe(`/avatar/${bodyLayer.file}@1x.png`)
   })
 })

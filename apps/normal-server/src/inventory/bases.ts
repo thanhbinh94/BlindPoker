@@ -47,6 +47,17 @@ export interface BaseDef {
   wear: Wear
   layers: { hairBack: string; body: string; hairFront: string }
   faces: Record<Expression, string>
+  /**
+   * Where this base can be recoloured (design §3.1, §4.1, §5.2), derived from the manifest's own
+   * `masks` rather than written by hand — a base is never half-tintable by someone editing JSON.
+   * Absent entirely until the pipeline has cut masks for it; `hair`/`eyes` independently, since a
+   * base could in principle get one before the other.
+   */
+  tint?: {
+    /** `files`: every layer whose mask is non-empty, in the order recolour has to draw them. */
+    hair?: { meanL: number; files: string[] }
+    eyes?: { meanL: number; files: string[] }
+  }
 }
 
 function defaultBasesPath(): string {
@@ -103,7 +114,41 @@ function parseBase(path: string, manifest: AvatarManifest, id: BaseId, raw: unkn
     EXPRESSIONS.map((expr) => [expr, checkedFile(path, manifest, id, `faces.${expr}`, f[expr], FACE_LAYER)]),
   ) as Record<Expression, string>
 
-  return { id, nameKey, wear: wear as Wear, layers, faces }
+  const tint = deriveTint(manifest, layers, faces)
+  return tint === undefined ? { id, nameKey, wear: wear as Wear, layers, faces } : { id, nameKey, wear: wear as Wear, layers, faces, tint }
+}
+
+/**
+ * `BaseDef.tint` (design §4.1, §5.2): which of this base's layers can be recoloured, read straight
+ * off the manifest's `masks` rather than declared in `avatar-bases.json` — a base becomes tintable
+ * the moment the pipeline has cut its masks, with no second place to say so.
+ *
+ * Hair candidates are the body, the hair-front layer (only when it actually carries hair — an empty
+ * L60 means the front is bald, e.g. a bun that lives entirely in L20) and all six faces, since every
+ * one of them redraws a sliver of hair at the hairline. Eye candidates are the six faces alone. The
+ * *whole-base* `meanL` for each kind comes from one canonical layer — L30 for hair, `face_neutral`
+ * for eyes — so every layer is tinted against the same reference lightness and no seam shows where a
+ * face layer overlaps the body (design §5.2's "mọi lớp của một thân tô theo cùng meanL").
+ */
+function deriveTint(manifest: AvatarManifest, layers: BaseDef['layers'], faces: Record<Expression, string>): BaseDef['tint'] {
+  const hasMask = (file: string, kind: 'hair' | 'eyes'): boolean => {
+    const mask = manifest.files[file]?.masks?.[kind]
+    return mask !== undefined && mask.empty !== true
+  }
+
+  const hairCandidates = [layers.body, layers.hairFront, ...EXPRESSIONS.map((expr) => faces[expr])]
+  const hairFiles = hairCandidates.filter((file) => hasMask(file, 'hair'))
+  const eyeFiles = EXPRESSIONS.map((expr) => faces[expr]).filter((file) => hasMask(file, 'eyes'))
+
+  const tint: NonNullable<BaseDef['tint']> = {}
+  // The body must itself be a hair candidate for `hairFiles` to have a meanL to report — which is
+  // also why the filter above and this reference are read off the same layer.
+  const bodyHairMeanL = manifest.files[layers.body]?.masks?.hair?.meanL
+  if (hairFiles.length > 0 && bodyHairMeanL !== undefined) tint.hair = { meanL: bodyHairMeanL, files: hairFiles }
+  const neutralEyeMeanL = manifest.files[faces.neutral]?.masks?.eyes?.meanL
+  if (eyeFiles.length > 0 && neutralEyeMeanL !== undefined) tint.eyes = { meanL: neutralEyeMeanL, files: eyeFiles }
+
+  return Object.keys(tint).length > 0 ? tint : undefined
 }
 
 /**

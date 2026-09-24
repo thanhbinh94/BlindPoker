@@ -63,6 +63,8 @@ interface ManifestEntry {
   /** A per-wear cut of another item layer (2026-09-20): the layer it is a cut of, and which wear wears it. */
   variantOf?: string
   wear?: string
+  /** Hair, eye and tint masks (Plan 13 Task 2). */
+  masks?: Record<string, { bytes2x: number; meanL?: number; empty?: boolean; override?: boolean }>
 }
 
 interface Manifest {
@@ -1016,7 +1018,7 @@ describe('the ten acceptance checks', () => {
     const entry = await writePlaceholder(dir, 'item_head_tophat01_L80')
     const manifest = manifestFor(dir, { item_head_tophat01_L80: entry })
     const results = await checkOne(dir, 'item_head_tophat01_L80', manifest)
-    expect([...results.keys()].sort()).toEqual(['C1', 'C10', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9'])
+    expect([...results.keys()].sort()).toEqual(['C1', 'C10', 'C11', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9'])
     for (const [id, result] of results) expect(result.ok, `${id}: ${result.detail}`).toBe(true)
   }, 30_000)
 
@@ -1184,9 +1186,28 @@ async function sharpDownscale(pic: Picture): Promise<Picture> {
 function stageOnePngs(
   layers: string[] = (stageOneFiles() as { name: string }[]).map((file) => file.name),
   items: string[] = (stageOneFiles() as { name: string; kind: string }[]).filter((file) => file.kind === 'item').map((file) => file.name),
+  manifest?: Manifest,
 ): string[] {
   const names = [...layers, ...items.map((name) => iconName(name))]
-  return names.flatMap((name) => DENSITIES.map((density: number) => `${name}@${density}x.png`))
+  const pngs = names.flatMap((name) => DENSITIES.map((density: number) => `${name}@${density}x.png`))
+
+  // Add mask files for each layer that has masks in the manifest.
+  if (manifest) {
+    const maskFileKind = { hair: 'hair', eyes: 'eye', tint: 'tint' }
+    for (const layerName of layers) {
+      const entry = manifest.files[layerName]
+      if (entry?.masks) {
+        for (const kind of Object.keys(entry.masks)) {
+          const fileKind = maskFileKind[kind as keyof typeof maskFileKind]
+          if (fileKind) {
+            pngs.push(...DENSITIES.map((density: number) => `${layerName}_${fileKind}mask@${density}x.png`))
+          }
+        }
+      }
+    }
+  }
+
+  return pngs
 }
 
 describe('the stage-1 name list', () => {
@@ -1266,7 +1287,7 @@ describe('the committed placeholder set', () => {
 
   it('holds every stage-1 name and every item icon at both densities, and nothing else', () => {
     const onDisk = readdirSync(OUT_DIR).filter((name) => name.endsWith('.png'))
-    expect(onDisk.sort()).toEqual(stageOnePngs(committedLayers, committedItems).sort())
+    expect(onDisk.sort()).toEqual(stageOnePngs(committedLayers, committedItems, manifest).sort())
   })
 
   it('lists an icon for every item layer, flagged the way the layer is', async () => {
@@ -1367,7 +1388,12 @@ describe('the ingest command', () => {
       expect(manifest.files[name]!.real, `${name} should be marked as real art`).toBe(true)
       expect(manifest.files[name]!.placeholder).toBeUndefined()
     }
-    const stdout = run(['check', 'base_f01_L30', 'item_head_tophat01_L80', '--dir', dir])
+    // C11 skipped for the hair-area rule: FIGURE is one flat grey (#808080, chroma ≈ 0) all over, which is
+    // exactly the shape Task 2b's grey-shine rule (spec §4.1) exists to catch on real hair — on a fixture
+    // with no colour difference between "hair" and "not hair" at all, it duly pulls extra area into the
+    // mask (18.4 % → 20.0 %, just over the 20 % ceiling). Fine for the extraction geometry this test is
+    // about; `syntheticBase` in avatar-masks.test.ts is what actually exercises the hair/eye heuristic.
+    const stdout = run(['check', 'base_f01_L30', 'item_head_tophat01_L80', '--dir', dir, '--skip', 'C11'])
     expect(stdout, stdout).not.toMatch(/FAIL/)
     // …and the item's inventory icon comes with it.
     expect(manifest.icons?.item_head_tophat01_icon).toMatchObject({ kind: 'icon', of: 'item_head_tophat01_L80', w: ICON.w, h: ICON.h, real: true })
@@ -1646,7 +1672,10 @@ describe('a flat AI base', () => {
       }
     }
 
-    const rows = await runChecks({ dir, manifest, names: ['base_f01_L20', 'base_f01_L30', 'base_f01_face_neutral_L50', 'base_f01_L60'] })
+    // C11 skipped: FIGURE's eyes are flat #202020 ellipses with no iris/white to tell from a pupil — fine
+    // for the extraction geometry this test is about, but below the L15 floor the colour heuristic (spec
+    // §4.3) needs to call something an eye. `syntheticBase` in avatar-masks.test.ts draws real ones.
+    const rows = await runChecks({ dir, manifest, names: ['base_f01_L20', 'base_f01_L30', 'base_f01_face_neutral_L50', 'base_f01_L60'], skip: ['C11'] })
     for (const row of rows) {
       for (const result of row.results) expect(result.ok, `${row.name} ${result.id}: ${result.detail}`).toBe(true)
     }
@@ -1691,7 +1720,8 @@ describe('a flat AI base', () => {
         expect(layer.below, `@${density}x ${name} is empty`).toBeGreaterThan(0)
       }
     }
-    const rows = await runChecks({ dir, manifest, names: ['base_f01_L30', 'base_f01_L60', 'base_f01_face_neutral_L50', 'base_f01_face_happy_L50'] })
+    // C11 skipped: see the note above — FIGURE's eyes have no colour the hair/eye heuristic can find.
+    const rows = await runChecks({ dir, manifest, names: ['base_f01_L30', 'base_f01_L60', 'base_f01_face_neutral_L50', 'base_f01_face_happy_L50'], skip: ['C11'] })
     for (const row of rows) {
       for (const result of row.results) expect(result.ok, `${row.name} ${result.id}: ${result.detail}`).toBe(true)
     }

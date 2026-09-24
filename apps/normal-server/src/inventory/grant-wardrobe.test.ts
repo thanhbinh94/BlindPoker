@@ -11,6 +11,8 @@ import { loadItemCatalog } from './items.js'
 let test: TestDb
 let db: AppDb
 const catalog = loadItemCatalog()
+/** What `grantWardrobe` actually grants rows for: `free` items never get one (design §3.2). */
+const nonFreeCount = catalog.all().filter((d) => !d.free).length
 
 beforeAll(async () => {
   test = await createTestDb()
@@ -37,23 +39,25 @@ describe('grantWardrobe', () => {
     await db.transaction((tx) => createInventoryService(db).grant(tx, id, catalog.defaults()[0]!, 'default'))
 
     const first = await grantWardrobe(db, catalog, 'Full@Example.com')
-    expect(first).toMatchObject({ playerId: id, displayName: 'Full', total: catalog.all().length, alreadyOwned: 1 })
-    expect(first.granted).toHaveLength(catalog.all().length - 1)
+    expect(first).toMatchObject({ playerId: id, displayName: 'Full', total: nonFreeCount, alreadyOwned: 1 })
+    expect(first.granted).toHaveLength(nonFreeCount - 1)
 
     const rows = await owned(id)
-    expect(rows).toHaveLength(catalog.all().length)
-    expect(rows.filter((r) => r.source === GRANT_SOURCE)).toHaveLength(catalog.all().length - 1)
+    // Free items are never in `granted` and never get a row — `total`/`rows` both count non-free only.
+    expect(rows).toHaveLength(nonFreeCount)
+    expect(rows.every((r) => !catalog.get(r.itemId)?.free)).toBe(true)
+    expect(rows.filter((r) => r.source === GRANT_SOURCE)).toHaveLength(nonFreeCount - 1)
     expect(rows.find((r) => r.itemId === catalog.defaults()[0])?.source).toBe('default')
 
     const second = await grantWardrobe(db, catalog, 'full@example.com')
     expect(second.granted).toEqual([])
-    expect(second.alreadyOwned).toBe(catalog.all().length)
+    expect(second.alreadyOwned).toBe(nonFreeCount)
   })
 
   it('reports without writing on a dry run', async () => {
     const id = await account('dry@example.com', 'Dry')
     const result = await grantWardrobe(db, catalog, 'dry@example.com', { dryRun: true })
-    expect(result.granted).toHaveLength(catalog.all().length)
+    expect(result.granted).toHaveLength(nonFreeCount)
     expect(await owned(id)).toHaveLength(0)
   })
 

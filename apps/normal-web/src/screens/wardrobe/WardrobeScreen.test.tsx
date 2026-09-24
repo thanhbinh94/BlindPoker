@@ -79,7 +79,36 @@ const OUTFIT_DEALER = item({
 })
 const TITLE_ROOKIE = item({ id: 'title_rookie', slot: 'title', rarity: 'common' })
 
-const CATALOG = [OUTFIT_CASUAL, OUTFIT_TUXEDO, OUTFIT_DEALER, HEAD_TOPHAT, HEAD_BEANIE, TITLE_ROOKIE]
+/** Plan 13 (design §6): a hair colour the player owns, one they don't, and a head card whose colour
+ * variant they own even though the card itself (the original, untinted item) is locked — the case
+ * the task brief calls out by name. */
+const HAIRCOLOR_RED = item({ id: 'haircolor_red01', slot: 'hairColor', rarity: 'common', colour: '#b3261e' })
+const HAIRCOLOR_BLUE = item({ id: 'haircolor_blue01', slot: 'hairColor', rarity: 'rare', colour: '#3355aa' })
+const HEAD_BERET_RED = item({
+  id: 'head_beret_red01',
+  slot: 'head',
+  rarity: 'rare',
+  asset: { layer: 80, file: 'item_head_beret_red01_L80', fitsAvatarCrop: true },
+})
+const HEAD_BERET_BLUE = item({
+  id: 'head_beret_blue01',
+  slot: 'head',
+  rarity: 'rare',
+  asset: { layer: 80, file: 'item_head_beret_red01_L80', fitsAvatarCrop: true, tint: '#3f6fd8', tintMeanL: 0.5 },
+})
+
+const CATALOG = [
+  OUTFIT_CASUAL,
+  OUTFIT_TUXEDO,
+  OUTFIT_DEALER,
+  HEAD_TOPHAT,
+  HEAD_BEANIE,
+  TITLE_ROOKIE,
+  HAIRCOLOR_RED,
+  HAIRCOLOR_BLUE,
+  HEAD_BERET_RED,
+  HEAD_BERET_BLUE,
+]
 
 const AVATAR: AvatarConfigDto = { v: 3, base: 'f01', outfit: 'outfit_casual01', head: 'head_beanie01' }
 
@@ -87,6 +116,8 @@ const INVENTORY: InventoryDto = {
   items: [
     { itemId: 'outfit_casual01', acquiredAs: 'outfit_casual01', slot: 'outfit', rarity: 'common', nameKey: 'items.outfit_casual01', assetKey: 'outfit/outfit_casual01', source: 'default', acquiredAt: 0 },
     { itemId: 'head_beanie01', acquiredAs: 'head_beanie01', slot: 'head', rarity: 'common', nameKey: 'items.head_beanie01', assetKey: 'head/head_beanie01', source: 'default', acquiredAt: 0 },
+    { itemId: 'haircolor_red01', acquiredAs: 'haircolor_red01', slot: 'hairColor', rarity: 'common', nameKey: 'items.haircolor_red01', assetKey: 'hairColor/haircolor_red01', source: 'default', acquiredAt: 0 },
+    { itemId: 'head_beret_blue01', acquiredAs: 'head_beret_blue01', slot: 'head', rarity: 'rare', nameKey: 'items.head_beret_blue01', assetKey: 'head/head_beret_blue01', source: 'default', acquiredAt: 0 },
   ],
   avatar: AVATAR,
 }
@@ -304,6 +335,86 @@ describe('WardrobeScreen', () => {
     await user.click(screen.getByRole('button', { name: viNormal.outfits.delete }))
 
     await waitFor(() => expect(deleteOutfit).toHaveBeenCalledWith(1))
+  })
+
+  describe('colour tabs (Plan 13)', () => {
+    it('lists a Natural swatch plus owned and locked colour swatches in the hair colour tab', async () => {
+      const user = userEvent.setup()
+      renderScreen()
+      await screen.findByText(viNormal.bases.f01)
+
+      await user.click(screen.getByRole('tab', { name: viNormal.wardrobe.tabs.hairColor }))
+
+      expect(screen.getByRole('button', { name: viNormal.wardrobe.natural })).toBeInTheDocument()
+      const owned = screen.getByRole('button', { name: viNormal.items.haircolor_red01 })
+      expect(owned).toHaveAttribute('aria-disabled', 'false')
+      const locked = screen.getByRole('button', { name: viNormal.items.haircolor_blue01 })
+      expect(locked).toHaveAttribute('aria-disabled', 'true')
+    })
+
+    it('a click on a locked swatch does not equip anything', async () => {
+      const user = userEvent.setup()
+      renderScreen()
+      await screen.findByText(viNormal.bases.f01)
+      await user.click(screen.getByRole('tab', { name: viNormal.wardrobe.tabs.hairColor }))
+
+      const locked = screen.getByRole('button', { name: viNormal.items.haircolor_blue01 })
+      await user.click(locked)
+
+      expect(locked).toHaveAttribute('aria-pressed', 'false')
+    })
+
+    it('picks an owned hair colour, changes the preview hash, sends it to setAvatar, and Natural clears it back', async () => {
+      const setAvatar = vi.fn().mockResolvedValue({ config: { ...AVATAR, hairColor: 'haircolor_red01' } })
+      const user = userEvent.setup()
+      renderScreen(stubApi({ setAvatar }))
+      await screen.findByText(viNormal.bases.f01)
+      const chibi = document.querySelector('[data-chibi-hash]') as HTMLElement
+      const before = chibi.getAttribute('data-chibi-hash')
+
+      await user.click(screen.getByRole('tab', { name: viNormal.wardrobe.tabs.hairColor }))
+      const natural = screen.getByRole('button', { name: viNormal.wardrobe.natural })
+      expect(natural).toHaveAttribute('aria-pressed', 'true')
+
+      const red = screen.getByRole('button', { name: viNormal.items.haircolor_red01 })
+      await user.click(red)
+
+      expect(red).toHaveAttribute('aria-pressed', 'true')
+      expect(natural).toHaveAttribute('aria-pressed', 'false')
+      expect(chibi.getAttribute('data-chibi-hash')).not.toBe(before)
+
+      await user.click(screen.getByRole('button', { name: viNormal.wardrobe.save }))
+      await waitFor(() => expect(setAvatar).toHaveBeenCalledWith(expect.objectContaining({ hairColor: 'haircolor_red01' })))
+
+      await user.click(natural)
+
+      expect(natural).toHaveAttribute('aria-pressed', 'true')
+      expect(red).toHaveAttribute('aria-pressed', 'false')
+    })
+
+    it('shows the colour dots on the beret card — locked even though an owned variant hangs off it — equips a variant by its dot, and never lists the variant as its own card', async () => {
+      const setAvatar = vi.fn().mockResolvedValue({ config: { ...AVATAR, head: 'head_beret_blue01' } })
+      const user = userEvent.setup()
+      renderScreen(stubApi({ setAvatar }))
+      await screen.findByText(viNormal.bases.f01)
+      await user.click(screen.getByRole('tab', { name: viNormal.wardrobe.tabs.head }))
+
+      // The variant is not its own card in the tile grid.
+      expect(screen.queryByText(viNormal.items.head_beret_blue01)).toBeNull()
+
+      const card = screen.getByText(viNormal.items.head_beret_red01).closest('button') as HTMLElement
+      expect(card).toHaveAttribute('aria-disabled', 'true')
+
+      const dot = screen.getByRole('button', { name: viNormal.items.head_beret_blue01 })
+      expect(dot).toHaveAttribute('aria-disabled', 'false')
+
+      await user.click(dot)
+      expect(dot).toHaveAttribute('aria-pressed', 'true')
+
+      await user.click(screen.getByRole('button', { name: viNormal.wardrobe.save }))
+
+      await waitFor(() => expect(setAvatar).toHaveBeenCalledWith(expect.objectContaining({ head: 'head_beret_blue01' })))
+    })
   })
 
   describe('leaving with unsaved changes', () => {

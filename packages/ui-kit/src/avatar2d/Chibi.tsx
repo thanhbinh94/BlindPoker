@@ -2,12 +2,36 @@ import type { CSSProperties } from 'react'
 import { cx } from '../primitives/cx.js'
 import { assetUrl, useAvatarAssetsBase } from './AvatarAssets.js'
 import { hashChibi, layersFor } from './layers.js'
+import { useTintedLayer } from './tinted.js'
 import type { ChibiFrame, ChibiSubject, Expression, LayerRef } from './types.js'
 import s from './avatar2d.module.css'
 
 /** D01 §5: the frame border is drawn 260×260 around the crop's centre, outside the 208×208 crop window itself —
  * it is meant to ring the round avatar, not sit inside it. Everything else on layer order 90 and below. */
 const FRAME_BORDER_ORDER = 90
+
+/**
+ * One layer's `<img>`. A layer with `tints` (spec §5.2) asks `useTintedLayer` for its recoloured blob URL and
+ * renders that — with no `srcSet`, since the hook already picked the screen's own density — the instant it is
+ * ready; until then, and for a layer with no tints at all, it renders the plain two-density layer exactly as
+ * before. Split out from `Chibi` itself because calling a hook inside `layers.map(...)` there would vary the
+ * hook count across renders (equipping or removing an item changes how many layers there are).
+ */
+function ChibiLayer({ base, layer, className }: { base: string; layer: LayerRef; className?: string }) {
+  const tinted = useTintedLayer(base, layer)
+  const common = {
+    className: cx(s.layer, className),
+    style: { zIndex: layer.order },
+    loading: 'lazy' as const,
+    decoding: 'async' as const,
+    alt: '',
+    draggable: false,
+  }
+
+  if (tinted !== null) return <img {...common} src={tinted} />
+
+  return <img {...common} src={assetUrl(base, layer.file, 1)} srcSet={`${assetUrl(base, layer.file, 1)} 1x, ${assetUrl(base, layer.file, 2)} 2x`} />
+}
 
 export interface ChibiProps {
   subject: ChibiSubject
@@ -43,19 +67,7 @@ export function Chibi({ subject, expression = 'neutral', frame = 'full', size, l
   // size, not the head crop's geometry, which is a fixed percentage of whatever the root ends up rendered at.
   const style: CSSProperties | undefined = size === undefined ? undefined : frame === 'head' ? { width: `${size}px`, height: `${size}px` } : { width: `${size}px` }
 
-  const renderLayer = (layer: LayerRef, extraClassName?: string) => (
-    <img
-      key={layer.file}
-      className={cx(s.layer, extraClassName)}
-      style={{ zIndex: layer.order }}
-      src={assetUrl(base, layer.file, 1)}
-      srcSet={`${assetUrl(base, layer.file, 1)} 1x, ${assetUrl(base, layer.file, 2)} 2x`}
-      loading="lazy"
-      decoding="async"
-      alt=""
-      draggable={false}
-    />
-  )
+  const renderLayer = (layer: LayerRef, extraClassName?: string) => <ChibiLayer key={layer.file} base={base} layer={layer} className={extraClassName} />
 
   const rootProps = {
     className: cx(s.chibi, frame === 'head' ? s.head : s.full, bounce && s.bounce, className),

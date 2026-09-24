@@ -17,12 +17,15 @@ export const RARITY_TONE: Record<Rarity, BadgeTone> = { common: 'muted', rare: '
 /**
  * Every slot, in the order the inventory offers its panels: what is drawn first, the words last.
  *
- * `base` is not here — it is chosen, not owned, and has no inventory row of its own.
+ * `base` is not here — it is chosen, not owned, and has no inventory row of its own. `hairColor`/
+ * `eyeColor` (Plan 13) sit right after the drawn slots, matching the wardrobe's own tab order —
+ * they draw nothing, but they are owned exactly like everything above them, so a rare dye a player
+ * won from the daily draw has to show up here too.
  */
-export const SLOT_ORDER: ItemSlot[] = ['head', 'face', 'outfit', 'aura', 'frame', 'title', 'badge']
+export const SLOT_ORDER: ItemSlot[] = ['head', 'face', 'outfit', 'aura', 'frame', 'hairColor', 'eyeColor', 'title', 'badge']
 
 /** The slots a daily-reward draw may land on (design §5.2) — mirrors the server's `DAILY_DRAW_SLOTS`. */
-const DAILY_DRAW_SLOTS = new Set<ItemSlot>(['head', 'face', 'aura', 'frame'])
+const DAILY_DRAW_SLOTS = new Set<ItemSlot>(['head', 'face', 'aura', 'frame', 'hairColor', 'eyeColor'])
 
 /**
  * Why a locked tile is locked, in one line: how a player would come to own it.

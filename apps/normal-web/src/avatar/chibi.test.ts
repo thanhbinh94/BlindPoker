@@ -197,4 +197,74 @@ describe('chibiFromApi', () => {
     expect(chibi).not.toHaveProperty('title')
     expect(chibi).not.toHaveProperty('badge')
   })
+
+  /** Plan 13 (design §5.2): `hairColor`/`eyeColor` name catalogue *items*, not hex strings — this is the
+   * one place that turns the id into the colour `ChibiConfig` actually wants. */
+  describe('colour', () => {
+    const HAIRCOLOR_RED = item({ id: 'haircolor_red01', slot: 'hairColor', colour: '#b3261e' })
+    const EYECOLOR_BLUE = item({ id: 'eyecolor_blue01', slot: 'eyeColor', colour: '#2c3e70' })
+    const OUTFIT_CASUAL_RED = item({
+      id: 'outfit_casual_red01',
+      slot: 'outfit',
+      asset: { layer: 40, file: 'item_outfit_casual01_L40', fitsAvatarCrop: false, tint: '#c0392b', tintMeanL: 0.5 },
+    })
+    const colourItems = new Map([
+      ...items,
+      [HAIRCOLOR_RED.id, HAIRCOLOR_RED],
+      [EYECOLOR_BLUE.id, EYECOLOR_BLUE],
+      [OUTFIT_CASUAL_RED.id, OUTFIT_CASUAL_RED],
+    ])
+
+    it('resolves hairColor and eyeColor ids through the catalogue', () => {
+      const chibi = chibiFromApi(config({ hairColor: 'haircolor_red01', eyeColor: 'eyecolor_blue01' }), colourItems, bases)
+
+      expect(chibi?.hairColor).toBe('#b3261e')
+      expect(chibi?.eyeColor).toBe('#2c3e70')
+    })
+
+    it('omits hairColor naming an eye colour item — the wrong slot', () => {
+      const chibi = chibiFromApi(config({ hairColor: 'eyecolor_blue01' }), colourItems, bases)
+
+      expect(chibi?.hairColor).toBeUndefined()
+    })
+
+    it('omits hairColor and eyeColor naming an unknown id, rather than throwing', () => {
+      const chibi = chibiFromApi(config({ hairColor: 'haircolor_from_the_future', eyeColor: 'eyecolor_from_the_future' }), colourItems, bases)
+
+      expect(chibi?.hairColor).toBeUndefined()
+      expect(chibi?.eyeColor).toBeUndefined()
+    })
+
+    it("copies the base's tint straight from the BaseDto", () => {
+      const tintedBase = {
+        ...BASE_F01,
+        tint: { hair: { meanL: 0.42, files: ['base_f01_L30'] }, eyes: { meanL: 0.55, files: ['base_f01_face_neutral_L50'] } },
+      }
+      const tintedBases = new Map([['f01', tintedBase], ['m01', BASE_M01]])
+
+      const chibi = chibiFromApi(config(), colourItems, tintedBases)
+
+      expect(chibi?.base.tint).toEqual({
+        hair: { meanL: 0.42, files: ['base_f01_L30'] },
+        eyes: { meanL: 0.55, files: ['base_f01_face_neutral_L50'] },
+      })
+    })
+
+    it('leaves base.tint absent when the BaseDto has none', () => {
+      const chibi = chibiFromApi(config(), colourItems, bases)
+
+      expect(chibi?.base).not.toHaveProperty('tint')
+    })
+
+    it("carries an item's asset.tint and asset.tintMeanL into WearRef.tint", () => {
+      const chibi = chibiFromApi(config({ outfit: 'outfit_casual_red01' }), colourItems, bases)
+
+      expect(chibi?.outfit).toEqual({
+        id: 'outfit_casual_red01',
+        order: 40,
+        file: 'item_outfit_casual01_L40',
+        tint: { colour: '#c0392b', meanL: 0.5 },
+      })
+    })
+  })
 })

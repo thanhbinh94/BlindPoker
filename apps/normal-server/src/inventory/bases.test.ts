@@ -146,4 +146,72 @@ describe('loadBases', () => {
     expect(() => loadBases(fixture([]), manifest)).toThrow(/not a JSON object/)
     expect(() => loadBases(join(tmpdir(), 'bp-bases-missing', 'nope.json'), manifest)).toThrow(/could not read avatar bases/)
   })
+
+  describe('tint', () => {
+    /**
+     * f01's L30 (body) and L60 (hair front) carry hair masks, and every face carries both a hair and
+     * an eye mask — except `happy`, whose eyes are closed and so its eye mask is `empty` — the same
+     * shape the real manifest is in (design §4.1). m01 stays maskless, the way a base not yet run
+     * through the `masks` pipeline command would be.
+     */
+    const withMasks: AvatarManifest = {
+      ...manifest,
+      files: {
+        ...manifest.files,
+        base_f01_L30: { ...manifest.files['base_f01_L30']!, masks: { hair: { bytes2x: 6532, meanL: 0.34 } } },
+        base_f01_L60: { ...manifest.files['base_f01_L60']!, masks: { hair: { bytes2x: 4193, meanL: 0.28 } } },
+        base_f01_face_neutral_L50: {
+          ...manifest.files['base_f01_face_neutral_L50']!,
+          masks: { hair: { bytes2x: 6321, meanL: 0.345 }, eyes: { bytes2x: 4547, meanL: 0.41 } },
+        },
+        base_f01_face_happy_L50: {
+          ...manifest.files['base_f01_face_happy_L50']!,
+          masks: { hair: { bytes2x: 6356, meanL: 0.34 }, eyes: { bytes2x: 4015, meanL: 0, empty: true } },
+        },
+        base_f01_face_sad_L50: {
+          ...manifest.files['base_f01_face_sad_L50']!,
+          masks: { hair: { bytes2x: 6405, meanL: 0.341 }, eyes: { bytes2x: 5439, meanL: 0.486 } },
+        },
+        base_f01_face_surprised_L50: {
+          ...manifest.files['base_f01_face_surprised_L50']!,
+          masks: { hair: { bytes2x: 6481, meanL: 0.344 }, eyes: { bytes2x: 4726, meanL: 0.437 } },
+        },
+        base_f01_face_closed_L50: {
+          ...manifest.files['base_f01_face_closed_L50']!,
+          masks: { hair: { bytes2x: 6398, meanL: 0.323 }, eyes: { bytes2x: 4015, meanL: 0, empty: true } },
+        },
+        base_f01_face_sleep_L50: {
+          ...manifest.files['base_f01_face_sleep_L50']!,
+          masks: { hair: { bytes2x: 6474, meanL: 0.334 }, eyes: { bytes2x: 4015, meanL: 0, empty: true } },
+        },
+      },
+    }
+
+    it('derives tint.hair from the body, hair-front and every face with a non-empty hair mask', () => {
+      const bases = loadBases(fixture(VALID), withMasks)
+      expect(bases.f01?.tint?.hair).toEqual({
+        meanL: 0.34, // f01 L30's own mask, not any face's
+        files: [
+          'base_f01_L30', 'base_f01_L60',
+          'base_f01_face_neutral_L50', 'base_f01_face_happy_L50', 'base_f01_face_sad_L50',
+          'base_f01_face_surprised_L50', 'base_f01_face_closed_L50', 'base_f01_face_sleep_L50',
+        ],
+      })
+    })
+
+    it('derives tint.eyes from face_neutral’s meanL, and drops the faces whose eye mask is empty', () => {
+      const bases = loadBases(fixture(VALID), withMasks)
+      expect(bases.f01?.tint?.eyes).toEqual({
+        meanL: 0.41, // face_neutral's own mask
+        files: ['base_f01_face_neutral_L50', 'base_f01_face_sad_L50', 'base_f01_face_surprised_L50'],
+      })
+    })
+
+    it('gives a base with no masks at all no tint key', () => {
+      const bases = loadBases(fixture(VALID), withMasks)
+      expect(bases.m01?.tint).toBeUndefined()
+      // And against the plain manifest (no masks anywhere), neither base gets one.
+      expect(loadBases(fixture(VALID), manifest).f01?.tint).toBeUndefined()
+    })
+  })
 })
