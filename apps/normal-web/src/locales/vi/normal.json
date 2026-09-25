@@ -231,7 +231,7 @@
       "head": "Mũ",
       "face": "Phụ kiện mặt",
       "outfit": "Trang phục",
-      "aura": "Aura",
+      "aura": "Hào quang",
       "frame": "Khung viền",
       "hairColor": "Màu tóc",
       "eyeColor": "Màu mắt",
@@ -265,7 +265,7 @@
       "head": "Mũ",
       "face": "Mặt",
       "outfit": "Trang phục",
-      "aura": "Aura",
+      "aura": "Hào quang",
       "frame": "Khung",
       "hairColor": "Màu tóc",
       "eyeColor": "Màu mắt",
@@ -298,11 +298,11 @@
     "leaveDiscard": "Bỏ qua và rời đi"
   },
   "outfits": {
-    "title": "Thanh outfit",
+    "title": "Bộ đồ đã lưu",
     "empty": "Trống",
-    "emptySlot": "Ô {{n}} còn trống",
+    "emptySlot": "Ô {{n}}",
     "defaultName": "Bộ {{n}}",
-    "nameLabel": "Tên outfit",
+    "nameLabel": "Tên bộ đồ",
     "apply": "Áp dụng",
     "saveHere": "Lưu vào đây",
     "rename": "Đổi tên",
@@ -388,12 +388,12 @@
     "head_party_cone_green01": "Mũ chóp tiệc xanh lá"
   },
   "bases": {
-    "f01": "Thân nữ F01",
-    "m01": "Thân nam M01",
-    "f02": "Thân nữ F02",
-    "f03": "Thân nữ F03",
-    "m02": "Thân nam M02",
-    "m03": "Thân nam M03"
+    "f01": "Tóc bob",
+    "m01": "Tóc rối",
+    "f02": "Tóc dài mái bằng",
+    "f03": "Tóc gợn sóng",
+    "m02": "Tóc gọn",
+    "m03": "Tóc xoăn"
   },
   "achievements": {
     "ui": {
