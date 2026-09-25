@@ -59,7 +59,7 @@ test.describe('Just a Normal Poker Normal — nhân vật chibi', () => {
     const previewBeforeBase = await chibiHash(preview(page))
 
     const tabpanel = page.getByRole('tabpanel')
-    const m01Tile = tabpanel.getByRole('button', { name: 'Thân nam M01' })
+    const m01Tile = tabpanel.getByRole('button', { name: 'Tóc rối' })
     await m01Tile.click()
     await expect(m01Tile, 'the tile it just picked reflects the choice').toHaveAttribute('aria-pressed', 'true')
     expect(await chibiHash(preview(page)), 'picking a base redraws the preview').not.toBe(previewBeforeBase)
@@ -108,11 +108,11 @@ test.describe('Just a Normal Poker Normal — nhân vật chibi', () => {
     await page.getByRole('button', { name: 'Lưu vào đây' }).first().click()
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
-    await dialog.getByLabel('Tên outfit').fill('Đi làm')
+    await dialog.getByLabel('Tên bộ đồ').fill('Đi làm')
     await dialog.getByRole('button', { name: 'Lưu vào đây' }).click()
     await expect(dialog).toBeHidden()
 
-    await tabpanel.getByRole('button', { name: 'Thân nữ F01' }).click()
+    await tabpanel.getByRole('button', { name: 'Tóc bob' }).click()
     await save(page)
     await toLobby(page)
     const third = await barHashAfter(page, second)

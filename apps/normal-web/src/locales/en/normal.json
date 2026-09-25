@@ -298,9 +298,9 @@
     "leaveDiscard": "Discard and leave"
   },
   "outfits": {
-    "title": "Outfit bar",
+    "title": "Saved outfits",
     "empty": "Empty",
-    "emptySlot": "Slot {{n}} is empty",
+    "emptySlot": "Slot {{n}}",
     "defaultName": "Outfit {{n}}",
     "nameLabel": "Outfit name",
     "apply": "Apply",
@@ -388,12 +388,12 @@
     "head_party_cone_green01": "Green party cone"
   },
   "bases": {
-    "f01": "Female base F01",
-    "m01": "Male base M01",
-    "f02": "Female base F02",
-    "f03": "Female base F03",
-    "m02": "Male base M02",
-    "m03": "Male base M03"
+    "f01": "Bob cut",
+    "m01": "Tousled",
+    "f02": "Long with bangs",
+    "f03": "Wavy bob",
+    "m02": "Neat crop",
+    "m03": "Curly"
   },
   "achievements": {
     "ui": {
