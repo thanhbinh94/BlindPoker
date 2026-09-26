@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { account, chibiHash, createBlindRoom, expectLobby, register, sit, unique } from './support.js'
+import { account, chibiHash, createBlindRoom, expectLobby, goToWardrobeTab, register, sit, unique } from './support.js'
 
 /**
  * Hair-colour tinting end to end (avatar-tint design §7): picking a colour swatch in the wardrobe
@@ -33,7 +33,7 @@ test.describe('Just a Normal Poker Normal — màu tóc, màu mắt', () => {
     await openWardrobe(page)
     const beforePick = await chibiHash(preview(page))
 
-    await page.getByRole('tab', { name: 'Màu tóc', exact: true }).click()
+    await goToWardrobeTab(page, 'Ngoại hình', 'Màu tóc')
     const tabpanel = page.getByRole('tabpanel')
     // haircolor_red01 is `free`+`common` (design §3.2) — every account owns it without a grant.
     const redSwatch = tabpanel.getByRole('button', { name: 'Tóc đỏ' })

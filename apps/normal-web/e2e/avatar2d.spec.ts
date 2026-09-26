@@ -1,5 +1,17 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { account, chibiHash, createBlindRoom, expectLobby, expectNoSidewaysScroll, lobbyAvatar, register, shot, sit, unique } from './support.js'
+import {
+  account,
+  chibiHash,
+  createBlindRoom,
+  expectLobby,
+  expectNoSidewaysScroll,
+  goToWardrobeTab,
+  lobbyAvatar,
+  register,
+  shot,
+  sit,
+  unique,
+} from './support.js'
 
 /**
  * The chibi wardrobe and its faces around the app, driven for real (avatar-chibi-ai design §7, §8).
@@ -76,7 +88,10 @@ test.describe('Just a Normal Poker Normal — nhân vật chibi', () => {
     // locked. `head_tophat01` is `epic`, never a starting grant, so it is locked on every account this
     // test could ever create.
     await openWardrobe(page)
-    await page.getByRole('tab', { name: 'Mũ', exact: true }).click()
+    // "Mũ" is the "wear" group's own first tab (design §3.1), so this also proves the group tab alone
+    // lands on it (`CategoryNav`'s group click selects the group's `tabs[0]`) — the `goToWardrobeTab`
+    // helper still names the sub-tab explicitly, matching how every other jump in this file reads.
+    await goToWardrobeTab(page, 'Trang phục', 'Mũ')
     const lockedTile = tabpanel.locator('button').filter({ hasText: 'Mũ chóp quý ông' })
     await expect(lockedTile).toHaveAttribute('aria-disabled', 'true')
     const previewBeforeClick = await chibiHash(preview(page))
@@ -105,7 +120,9 @@ test.describe('Just a Normal Poker Normal — nhân vật chibi', () => {
 
     // --- 5. the outfit bar: a snapshot saved, another base tried, and the snapshot restored -------------
     await openWardrobe(page)
-    await page.getByRole('button', { name: 'Lưu vào đây' }).first().click()
+    // A fresh account's five saved-outfit slots are all empty; an empty slot's portrait opens the naming
+    // dialog straight away, no menu in between (design §3.1 item 4) — unlike a filled slot, see "Áp dụng" below.
+    await page.getByRole('button', { name: 'Ô 1 trống' }).click()
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
     await dialog.getByLabel('Tên bộ đồ').fill('Đi làm')
@@ -122,7 +139,10 @@ test.describe('Just a Normal Poker Normal — nhân vật chibi', () => {
     expect(third, 'f01 with only the default outfit is the account it started as').toBe(first)
 
     await openWardrobe(page)
-    await page.getByRole('button', { name: 'Áp dụng' }).first().click()
+    // A filled slot's portrait opens a small menu instead (design §3.1 item 4: Áp dụng · Lưu đè vào đây ·
+    // Đổi tên · Xoá) — the button's own accessible name is "Bộ đồ <name>" (`outfits.menu`).
+    await page.getByRole('button', { name: 'Bộ đồ Đi làm' }).click()
+    await page.getByRole('button', { name: 'Áp dụng' }).click()
     await toLobby(page)
     const restored = await barHashAfter(page, third)
     expect(restored, 'applying the saved slot returns exactly the m01 configuration').toBe(second)
@@ -141,7 +161,9 @@ test.describe('Just a Normal Poker Normal — nhân vật chibi', () => {
     await expectNoSidewaysScroll(page)
     await shot(page, 'avatar2d-wardrobe-mobile')
 
-    const saveButton = page.getByRole('button', { name: 'Lưu tủ đồ' })
+    // The phone header shortens "Lưu tủ đồ" to "Lưu" (design §3.2) — "Hoàn tác" becomes an icon-only
+    // button beside it, but this test only cares about the save action.
+    const saveButton = page.getByRole('button', { name: 'Lưu', exact: true })
     await saveButton.scrollIntoViewIfNeeded()
     await expect(saveButton).toBeInViewport()
     const tap = await saveButton.boundingBox()
@@ -149,7 +171,7 @@ test.describe('Just a Normal Poker Normal — nhân vật chibi', () => {
     expect(tap!.height, 'the save button is a 44 px target').toBeGreaterThanOrEqual(44)
 
     // The head tab renders every tile at once — the screen most likely to overflow sideways.
-    await page.getByRole('tab', { name: 'Mũ', exact: true }).click()
+    await goToWardrobeTab(page, 'Trang phục', 'Mũ')
     await expectNoSidewaysScroll(page)
     const tiles = page.getByRole('tabpanel').locator('img')
     await expect(tiles.first()).toBeVisible()

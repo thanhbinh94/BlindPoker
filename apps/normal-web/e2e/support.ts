@@ -122,6 +122,23 @@ export async function sit(page: Page, seat: number): Promise<void> {
   await expect(page.getByRole('button', { name: 'Đứng dậy', exact: true })).toBeVisible()
 }
 
+/**
+ * The wardrobe's two nested `tablist`s (design §3.1, §7): the three groups, then the active group's own
+ * sub-tabs. A sub-tab's accessible name carries an "owned/total" count right after the label with no
+ * separating space (`CategoryNav`'s `.tabCount`), so a caller can no longer match most of them with a
+ * bare exact label — this clicks the group by its own tablist (labelled "Tủ đồ"), then, if given, the
+ * sub-tab by a name *prefix* within that group's own tablist (labelled with the group's name), mirroring
+ * `WardrobeScreen.test.tsx`'s own `goTo` helper under jsdom. Shared by every spec that drives the
+ * wardrobe, so a markup change here is one update rather than three.
+ */
+export async function goToWardrobeTab(page: Page, group: 'Ngoại hình' | 'Trang phục' | 'Trang trí', subTab?: string): Promise<void> {
+  const groupList = page.getByRole('tablist', { name: 'Tủ đồ' })
+  await groupList.getByRole('tab', { name: group }).click()
+  if (subTab === undefined) return
+  const subList = page.getByRole('tablist', { name: group })
+  await subList.getByRole('tab', { name: new RegExp(`^${subTab}`) }).click()
+}
+
 export async function expectNoSidewaysScroll(page: Page): Promise<void> {
   const width = page.viewportSize()?.width ?? 0
   expect(await page.evaluate(() => document.documentElement.scrollWidth), 'the page does not scroll sideways').toBeLessThanOrEqual(width)
