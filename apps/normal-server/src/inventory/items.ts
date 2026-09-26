@@ -216,6 +216,14 @@ function parseAsset(path: string, id: string, slot: ItemSlot, manifest: AvatarMa
     if (typeof r['hidesHairBack'] !== 'boolean') fail(path, `item ${id} has a non-boolean hidesHairBack`)
     asset.hidesHairBack = r['hidesHairBack']
   }
+  // Bug 7: the art side records which layers hide the hair (the manifest) and the catalogue says it again
+  // here; the client draws from the catalogue, so a hat whose flag was left out let the base's hair strand
+  // poke through it. Two statements of one fact must agree, and the manifest is the one the art was cut to.
+  for (const flag of ['hidesHairFront', 'hidesHairBack'] as const) {
+    if ((asset[flag] ?? false) !== (manifestEntry[flag] ?? false)) {
+      fail(path, `item ${id} has ${flag} ${String(asset[flag] ?? false)} but its layer ${file} has ${String(manifestEntry[flag] ?? false)} in the avatar manifest`)
+    }
+  }
   return asset
 }
 

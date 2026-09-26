@@ -1,18 +1,18 @@
 [
   { "id": "head_beanie01", "slot": "head", "rarity": "common", "nameKey": "items.head_beanie01", "assetKey": "head/head_beanie01", "isDefault": false,
-    "asset": { "layer": 80, "file": "item_head_beanie01_L80", "fitsAvatarCrop": true } },
+    "asset": { "layer": 80, "file": "item_head_beanie01_L80", "hidesHairFront": true, "fitsAvatarCrop": true } },
   { "id": "head_dealer_visor01", "slot": "head", "rarity": "common", "nameKey": "items.head_dealer_visor01", "assetKey": "head/head_dealer_visor01", "isDefault": false,
     "asset": { "layer": 80, "file": "item_head_dealer_visor01_L80", "fitsAvatarCrop": true } },
   { "id": "head_beret_red01", "slot": "head", "rarity": "rare", "nameKey": "items.head_beret_red01", "assetKey": "head/head_beret_red01", "isDefault": false,
-    "asset": { "layer": 80, "file": "item_head_beret_red01_L80", "fitsAvatarCrop": true } },
+    "asset": { "layer": 80, "file": "item_head_beret_red01_L80", "hidesHairFront": true, "fitsAvatarCrop": true } },
   { "id": "head_conical_hat01", "slot": "head", "rarity": "rare", "nameKey": "items.head_conical_hat01", "assetKey": "head/head_conical_hat01", "isDefault": false,
-    "asset": { "layer": 80, "file": "item_head_conical_hat01_L80", "fitsAvatarCrop": true } },
+    "asset": { "layer": 80, "file": "item_head_conical_hat01_L80", "hidesHairFront": true, "fitsAvatarCrop": true } },
   { "id": "head_party_cone01", "slot": "head", "rarity": "rare", "nameKey": "items.head_party_cone01", "assetKey": "head/head_party_cone01", "isDefault": false,
-    "asset": { "layer": 80, "file": "item_head_party_cone01_L80", "fitsAvatarCrop": true } },
+    "asset": { "layer": 80, "file": "item_head_party_cone01_L80", "hidesHairFront": true, "fitsAvatarCrop": true } },
   { "id": "head_tophat01", "slot": "head", "rarity": "epic", "nameKey": "items.head_tophat01", "assetKey": "head/head_tophat01", "isDefault": false,
     "asset": { "layer": 80, "file": "item_head_tophat01_L80", "hidesHairFront": true, "fitsAvatarCrop": true } },
   { "id": "head_crown_gold01", "slot": "head", "rarity": "epic", "nameKey": "items.head_crown_gold01", "assetKey": "head/head_crown_gold01", "isDefault": false,
-    "asset": { "layer": 80, "file": "item_head_crown_gold01_L80", "fitsAvatarCrop": true } },
+    "asset": { "layer": 80, "file": "item_head_crown_gold01_L80", "hidesHairFront": true, "fitsAvatarCrop": true } },
 
   { "id": "face_glasses_round_gold01", "slot": "face", "rarity": "common", "nameKey": "items.face_glasses_round_gold01", "assetKey": "face/face_glasses_round_gold01", "isDefault": false,
     "asset": { "layer": 70, "file": "item_face_glasses_round_gold01_L70", "fitsAvatarCrop": true } },
@@ -112,21 +112,21 @@
     "asset": { "layer": 40, "file": "item_outfit_casual01_L40", "fitsAvatarCrop": false, "tint": "#e1b12c" } },
 
   { "id": "head_beret_blue01", "slot": "head", "rarity": "rare", "nameKey": "items.head_beret_blue01", "assetKey": "head/head_beret_blue01", "isDefault": false,
-    "asset": { "layer": 80, "file": "item_head_beret_red01_L80", "fitsAvatarCrop": true, "tint": "#3f6fd8" } },
+    "asset": { "layer": 80, "file": "item_head_beret_red01_L80", "hidesHairFront": true, "fitsAvatarCrop": true, "tint": "#3f6fd8" } },
   { "id": "head_beret_green01", "slot": "head", "rarity": "rare", "nameKey": "items.head_beret_green01", "assetKey": "head/head_beret_green01", "isDefault": false,
-    "asset": { "layer": 80, "file": "item_head_beret_red01_L80", "fitsAvatarCrop": true, "tint": "#2e7d4f" } },
+    "asset": { "layer": 80, "file": "item_head_beret_red01_L80", "hidesHairFront": true, "fitsAvatarCrop": true, "tint": "#2e7d4f" } },
   { "id": "head_beret_black01", "slot": "head", "rarity": "rare", "nameKey": "items.head_beret_black01", "assetKey": "head/head_beret_black01", "isDefault": false,
-    "asset": { "layer": 80, "file": "item_head_beret_red01_L80", "fitsAvatarCrop": true, "tint": "#2b2b2e" } },
+    "asset": { "layer": 80, "file": "item_head_beret_red01_L80", "hidesHairFront": true, "fitsAvatarCrop": true, "tint": "#2b2b2e" } },
 
   { "id": "head_beanie_red01", "slot": "head", "rarity": "rare", "nameKey": "items.head_beanie_red01", "assetKey": "head/head_beanie_red01", "isDefault": false,
-    "asset": { "layer": 80, "file": "item_head_beanie01_L80", "fitsAvatarCrop": true, "tint": "#b83a32" } },
+    "asset": { "layer": 80, "file": "item_head_beanie01_L80", "hidesHairFront": true, "fitsAvatarCrop": true, "tint": "#b83a32" } },
   { "id": "head_beanie_grey01", "slot": "head", "rarity": "rare", "nameKey": "items.head_beanie_grey01", "assetKey": "head/head_beanie_grey01", "isDefault": false,
-    "asset": { "layer": 80, "file": "item_head_beanie01_L80", "fitsAvatarCrop": true, "tint": "#8d8f94" } },
+    "asset": { "layer": 80, "file": "item_head_beanie01_L80", "hidesHairFront": true, "fitsAvatarCrop": true, "tint": "#8d8f94" } },
   { "id": "head_beanie_mustard01", "slot": "head", "rarity": "rare", "nameKey": "items.head_beanie_mustard01", "assetKey": "head/head_beanie_mustard01", "isDefault": false,
-    "asset": { "layer": 80, "file": "item_head_beanie01_L80", "fitsAvatarCrop": true, "tint": "#c9a227" } },
+    "asset": { "layer": 80, "file": "item_head_beanie01_L80", "hidesHairFront": true, "fitsAvatarCrop": true, "tint": "#c9a227" } },
 
   { "id": "head_party_cone_blue01", "slot": "head", "rarity": "common", "nameKey": "items.head_party_cone_blue01", "assetKey": "head/head_party_cone_blue01", "isDefault": false,
-    "asset": { "layer": 80, "file": "item_head_party_cone01_L80", "fitsAvatarCrop": true, "tint": "#4a8fe0" } },
+    "asset": { "layer": 80, "file": "item_head_party_cone01_L80", "hidesHairFront": true, "fitsAvatarCrop": true, "tint": "#4a8fe0" } },
   { "id": "head_party_cone_green01", "slot": "head", "rarity": "common", "nameKey": "items.head_party_cone_green01", "assetKey": "head/head_party_cone_green01", "isDefault": false,
-    "asset": { "layer": 80, "file": "item_head_party_cone01_L80", "fitsAvatarCrop": true, "tint": "#4fb86a" } }
+    "asset": { "layer": 80, "file": "item_head_party_cone01_L80", "hidesHairFront": true, "fitsAvatarCrop": true, "tint": "#4fb86a" } }
 ]
