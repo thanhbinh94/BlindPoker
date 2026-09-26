@@ -290,6 +290,7 @@
     "natural": "Tự nhiên",
     "equipped": {
       "title": "Đang mặc",
+      "count": "Đang mặc ({{n}})",
       "none": "Không có",
       "remove": "Bỏ {{item}}"
     },
@@ -311,7 +312,10 @@
       "unavailable": "Chưa có cách nhận món này"
     },
     "save": "Lưu tủ đồ",
+    "saveShort": "Lưu",
     "saved": "Đã lưu tủ đồ.",
+    "dirty": "● Có thay đổi chưa lưu",
+    "undo": "Hoàn tác",
     "close": "Đóng",
     "leaveTitle": "Rời đi mà không lưu?",
     "leaveBody": "Bạn có thay đổi trong tủ đồ chưa được lưu.",
@@ -321,6 +325,7 @@
   "outfits": {
     "title": "Bộ đồ đã lưu",
     "empty": "Trống",
+    "emptySlot": "Ô {{n}} trống",
     "defaultName": "Bộ {{n}}",
     "nameLabel": "Tên bộ đồ",
     "apply": "Áp dụng",

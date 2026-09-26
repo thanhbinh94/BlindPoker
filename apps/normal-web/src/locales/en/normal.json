@@ -290,6 +290,7 @@
     "natural": "Natural",
     "equipped": {
       "title": "Wearing",
+      "count": "Wearing ({{n}})",
       "none": "None",
       "remove": "Remove {{item}}"
     },
@@ -311,7 +312,10 @@
       "unavailable": "No way to earn this yet"
     },
     "save": "Save wardrobe",
+    "saveShort": "Save",
     "saved": "Your wardrobe is saved.",
+    "dirty": "● Unsaved changes",
+    "undo": "Undo",
     "close": "Close",
     "leaveTitle": "Leave without saving?",
     "leaveBody": "You have changes to your wardrobe that have not been saved yet.",
@@ -321,6 +325,7 @@
   "outfits": {
     "title": "Saved outfits",
     "empty": "Empty",
+    "emptySlot": "Slot {{n}} empty",
     "defaultName": "Outfit {{n}}",
     "nameLabel": "Outfit name",
     "apply": "Apply",

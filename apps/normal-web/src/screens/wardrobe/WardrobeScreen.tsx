@@ -1,4 +1,4 @@
-import { Button, defaultChibi, Modal, type Expression } from '@bp/ui-kit'
+import { Button, defaultChibi, Modal, useMediaQuery, type Expression } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -19,7 +19,10 @@ import { useAvatars } from '../../avatar/useAvatars.js'
 import s from '../normal.module.css'
 import { useAsync } from '../useAsync.js'
 import { BaseTab } from './BaseTab.js'
+import { counts, GROUPS, type OwnershipFilter, type TabId } from './categories.js'
+import { CategoryNav } from './CategoryNav.js'
 import { ColourTab } from './ColourTab.js'
+import { EquippedList } from './EquippedList.js'
 import { ItemTab } from './ItemTab.js'
 import { SavedOutfits } from './SavedOutfits.js'
 import { StagePanel } from './StagePanel.js'
@@ -33,13 +36,27 @@ export function avatarRefusal(cause: unknown, t: TFunction): string {
   return t('common:errors.INTERNAL')
 }
 
-/** The tabs of design §7/§6, in the order the spec lists them: the base first, the two colour tabs
- * after the drawn slots, the words last. */
-const TABS = ['base', 'head', 'face', 'outfit', 'aura', 'frame', 'hairColor', 'eyeColor', 'words'] as const
-type Tab = (typeof TABS)[number]
+/** Every tab, flattened out of `GROUPS` (design §3.1) rather than re-listed here, so a tab added to a
+ * group is automatically one this screen counts and offers a panel for. */
+const ALL_TABS: readonly TabId[] = GROUPS.flatMap((group) => group.tabs)
+
+/** The optional slots `EquippedList` can show as filled (design §3.1 item 3) — `base` and `outfit` are
+ * always filled (a figure always has a body and a required outfit) so the phone summary's count below
+ * always adds them on top of this list. */
+const OPTIONAL_SLOTS: readonly ItemSlot[] = ['hairColor', 'eyeColor', 'head', 'face', 'aura', 'frame', 'title', 'badge']
 
 /** `useAvatars` wants an array it can key on; a fresh `[]` per render would restart its effect forever. */
 const NO_IDS: string[] = []
+
+/** Plain-glyph icons (aria-hidden, matching `EquippedList`/`SavedOutfits`'s own convention): the phone
+ * header's icon-only "Hoàn tác" (design §3.2). */
+const UNDO_GLYPH = '↺'
+
+/** Breakpoints (Global Constraints): phone is anything under the tablet floor; desktop is the point the
+ * stage stops being `compact` (design §3.1–§3.3). Tablet has no query of its own — it is "not phone, not
+ * desktop", the same branch as desktop for markup, told apart only by CSS. */
+const PHONE_QUERY = '(max-width: 767px)'
+const DESKTOP_QUERY = '(min-width: 1024px)'
 
 export interface WardrobeScreenProps {
   api: NormalApi
@@ -76,8 +93,10 @@ function sameConfig(a: AvatarConfigDto, b: AvatarConfigDto): boolean {
 type Note = 'saved' | null
 
 /**
- * The wardrobe: a chibi on a stage, an expression picker, seven tabs of tiles, and the outfit bar
- * (design §7).
+ * The wardrobe (design §3.1–§3.3): a header with the dirty label, undo and save; a left column of the
+ * stage, the expression row, the wearing list and the saved outfits; a right column of `CategoryNav`'s
+ * groups/tabs/filter and the active tab's cards. Phones fold the same pieces into one column, the wearing
+ * list and saved outfits collapsed under `<details>`.
  *
  * Only what is owned can be equipped — the tabs list the whole catalogue, but `ItemTab` locks anything not
  * in the player's inventory — so the only refusal a correct client can provoke is a race with a grant, and
@@ -109,13 +128,17 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
 
   const [draft, setDraft] = useState<AvatarConfigDto | null>(null)
   const [committed, setCommitted] = useState<AvatarConfigDto | null>(null)
-  const [tab, setTab] = useState<Tab>('base')
+  const [tab, setTab] = useState<TabId>('base')
+  const [filter, setFilter] = useState<OwnershipFilter>('all')
   const [expression, setExpression] = useState<Expression>('neutral')
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<Note>(null)
   const [busy, setBusy] = useState(false)
   /** The `#/…` a guarded click was heading for, while the confirmation is up. */
   const [leavingTo, setLeavingTo] = useState<string | null>(null)
+
+  const phone = useMediaQuery(PHONE_QUERY)
+  const desktop = useMediaQuery(DESKTOP_QUERY)
 
   const loaded = wardrobe.data
   const saved = committed ?? loaded?.inventory.avatar ?? null
@@ -166,6 +189,17 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
   const items = useMemo(() => new Map((loaded?.catalog ?? []).map((item) => [item.id, item])), [loaded])
   const bases = useMemo(() => new Map((loaded?.avatarCatalog.bases ?? []).map((base) => [base.id, base])), [loaded])
   const owned = useMemo(() => new Set((loaded?.inventory.items ?? []).map((item) => item.itemId)), [loaded])
+  /** Every tab's "n/m đã có" (design §3.1) — computed for all of them up front so `CategoryNav` has a
+   * count ready the moment its active group changes, not just for whichever group is showing now. */
+  const tabCounts = useMemo(() => {
+    const catalog = loaded?.catalog ?? []
+    const map: Partial<Record<TabId, { owned: number; total: number }>> = {}
+    for (const id of ALL_TABS) {
+      const count = counts(id, catalog, owned)
+      if (count !== null) map[id] = count
+    }
+    return map
+  }, [loaded, owned])
 
   if (wardrobe.loading && loaded === null) {
     return (
@@ -206,6 +240,22 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
 
   const pickBase = (base: BaseId): void => commit({ ...config, base })
 
+  /** Design §5.5: the ownership filter always resets to "all" the moment the tab changes, whether that
+   * change came from `CategoryNav` itself or from a jump off the wearing list. */
+  const changeTab = (next: TabId): void => {
+    setTab(next)
+    setFilter('all')
+  }
+
+  /** "Hoàn tác" (design §5.1): the draft goes back to the last saved config, no server round trip — the
+   * same "clear the draft" `leave()` does, plus dropping whatever error/notice was on screen, since both
+   * were about the draft this just threw away. */
+  const undo = (): void => {
+    setDraft(null)
+    setError(null)
+    setNote(null)
+  }
+
   const save = async (): Promise<void> => {
     if (busy) return
     setBusy(true)
@@ -236,109 +286,145 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
   // Which cut of a gendered item the tiles show: the *draft* base's, so picking a male figure switches
   // the dealer uniform's tile to the trousers the preview beside it is now wearing.
   const wear = bases.get(config.base)?.wear
+  // The phone header's collapsible "Đang mặc (n)" summary (design §3.2): the two always-filled rows
+  // (Thân, Trang phục) plus however many of the optional slots the draft currently fills.
+  const equippedCount = 2 + OPTIONAL_SLOTS.filter((slot) => config[slot] !== undefined).length
+
+  const stageNode = (
+    <StagePanel subject={preview} expression={expression} onExpression={setExpression} portrait={tab === 'frame'} compact={!desktop} />
+  )
+
+  const equippedNode = (
+    <EquippedList
+      config={config}
+      items={items}
+      bases={bases}
+      onRemove={(slot) => commit(withSlot(config, slot, undefined))}
+      onJump={changeTab}
+    />
+  )
+
+  const savedNode = (
+    <SavedOutfits
+      api={api}
+      outfits={loaded.outfits}
+      draft={config}
+      items={items}
+      bases={bases}
+      onOutfitsChanged={(next) => wardrobe.set({ ...loaded, outfits: next })}
+      onApplied={onOutfitApplied}
+    />
+  )
+
+  const pickerNode = (
+    <div className={w.picker}>
+      <CategoryNav tab={tab} onTab={changeTab} counts={tabCounts} filter={filter} onFilter={setFilter} showFilter={tab !== 'base'} />
+
+      {tab === 'base' ? (
+        <BaseTab bases={loaded.avatarCatalog.bases} draft={config} items={items} onPick={pickBase} />
+      ) : tab === 'words' ? (
+        <>
+          <ItemTab
+            slot="title"
+            catalog={loaded.catalog}
+            owned={owned}
+            achievements={loaded.achievements}
+            draft={config}
+            wear={wear}
+            filter={filter}
+            onPick={(id) => pick('title', id)}
+          />
+          <ItemTab
+            slot="badge"
+            catalog={loaded.catalog}
+            owned={owned}
+            achievements={loaded.achievements}
+            draft={config}
+            wear={wear}
+            filter={filter}
+            onPick={(id) => pick('badge', id)}
+          />
+        </>
+      ) : tab === 'hairColor' || tab === 'eyeColor' ? (
+        <ColourTab
+          slot={tab}
+          catalog={loaded.catalog}
+          owned={owned}
+          achievements={loaded.achievements}
+          draft={config}
+          filter={filter}
+          onPick={(id) => commit(withSlot(config, tab, id))}
+        />
+      ) : (
+        <ItemTab
+          slot={tab}
+          catalog={loaded.catalog}
+          owned={owned}
+          achievements={loaded.achievements}
+          draft={config}
+          wear={wear}
+          filter={filter}
+          onPick={(id) => pick(tab, id)}
+        />
+      )}
+    </div>
+  )
 
   return (
     <main className={`${s.page} ${s.wide}`}>
-      <div className={s.pageHead}>
-        <h1>{t('wardrobe.title')}</h1>
-        <span className={s.rule} aria-hidden="true" />
-      </div>
-
-      <div className={w.layout}>
-        <div className={w.previewColumn}>
-          <StagePanel subject={preview} expression={expression} onExpression={setExpression} portrait={tab === 'frame'} />
-
-          {error === null ? null : (
-            <p className={s.alert} role="alert">
-              {error}
-            </p>
+      <div className={w.header}>
+        <div className={w.headerTitle}>
+          <h1 className={w.title}>{t('wardrobe.title')}</h1>
+          {!dirty ? null : (
+            <span className={w.dirtyLabel} role="status">
+              {t('wardrobe.dirty')}
+            </span>
           )}
-          {note === null ? null : (
-            <p className={s.notice} role="status">
-              {t('wardrobe.saved')}
-            </p>
-          )}
-
-          <Button variant="gold" size="lg" loading={busy} onClick={() => void save()} disabled={!dirty && draft === null}>
-            {t('wardrobe.save')}
+        </div>
+        <div className={w.headerActions}>
+          <Button variant="ghost" onClick={undo} disabled={!dirty} aria-label={phone ? t('wardrobe.undo') : undefined}>
+            {phone ? <span aria-hidden="true">{UNDO_GLYPH}</span> : t('wardrobe.undo')}
+          </Button>
+          <Button variant="gold" loading={busy} onClick={() => void save()} disabled={!dirty && draft === null}>
+            {phone ? t('wardrobe.saveShort') : t('wardrobe.save')}
           </Button>
         </div>
-
-        <div className={w.picker}>
-          <div className={w.tabs} role="tablist" aria-label={t('wardrobe.title')}>
-            {TABS.map((key) => (
-              <button
-                key={key}
-                type="button"
-                className={w.tab}
-                role="tab"
-                aria-selected={tab === key}
-                onClick={() => setTab(key)}
-              >
-                {t(`wardrobe.tabs.${key}`)}
-              </button>
-            ))}
-          </div>
-
-          {tab === 'base' ? (
-            <BaseTab bases={loaded.avatarCatalog.bases} draft={config} items={items} onPick={pickBase} />
-          ) : tab === 'words' ? (
-            <>
-              <ItemTab
-                slot="title"
-                catalog={loaded.catalog}
-                owned={owned}
-                achievements={loaded.achievements}
-                draft={config}
-                wear={wear}
-                filter="all"
-                onPick={(id) => pick('title', id)}
-              />
-              <ItemTab
-                slot="badge"
-                catalog={loaded.catalog}
-                owned={owned}
-                achievements={loaded.achievements}
-                draft={config}
-                wear={wear}
-                filter="all"
-                onPick={(id) => pick('badge', id)}
-              />
-            </>
-          ) : tab === 'hairColor' || tab === 'eyeColor' ? (
-            <ColourTab
-              slot={tab}
-              catalog={loaded.catalog}
-              owned={owned}
-              achievements={loaded.achievements}
-              draft={config}
-              filter="all"
-              onPick={(id) => commit(withSlot(config, tab, id))}
-            />
-          ) : (
-            <ItemTab
-              slot={tab}
-              catalog={loaded.catalog}
-              owned={owned}
-              achievements={loaded.achievements}
-              draft={config}
-              wear={wear}
-              filter="all"
-              onPick={(id) => pick(tab, id)}
-            />
-          )}
-        </div>
       </div>
 
-      <SavedOutfits
-        api={api}
-        outfits={loaded.outfits}
-        draft={config}
-        items={items}
-        bases={bases}
-        onOutfitsChanged={(next) => wardrobe.set({ ...loaded, outfits: next })}
-        onApplied={onOutfitApplied}
-      />
+      {error === null ? null : (
+        <p className={s.alert} role="alert">
+          {error}
+        </p>
+      )}
+      {note === null ? null : (
+        <p className={s.notice} role="status">
+          {t('wardrobe.saved')}
+        </p>
+      )}
+
+      {!phone ? (
+        <div className={w.layout}>
+          <div className={w.previewColumn}>
+            {stageNode}
+            {equippedNode}
+            {savedNode}
+          </div>
+          {pickerNode}
+        </div>
+      ) : (
+        <div className={w.layout} data-phone="true">
+          {stageNode}
+          {pickerNode}
+          <details className={w.mobileSection}>
+            <summary className={w.mobileSummary}>{t('wardrobe.equipped.count', { n: equippedCount })}</summary>
+            {equippedNode}
+          </details>
+          <details className={w.mobileSection}>
+            <summary className={w.mobileSummary}>{t('outfits.title')}</summary>
+            {savedNode}
+          </details>
+        </div>
+      )}
 
       <Modal open={leavingTo !== null} title={t('wardrobe.leaveTitle')} closeLabel={t('wardrobe.close')} onClose={() => setLeavingTo(null)}>
         <p>{t('wardrobe.leaveBody')}</p>

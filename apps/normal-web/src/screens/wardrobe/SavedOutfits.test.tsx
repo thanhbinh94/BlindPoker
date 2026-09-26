@@ -68,6 +68,17 @@ describe('SavedOutfits', () => {
     expect(screen.getAllByText(viNormal.outfits.empty)).toHaveLength(5)
   })
 
+  it('gives each empty slot its own numbered accessible name, while the caption still reads "Trống"', () => {
+    renderBar()
+
+    for (let slot = 1; slot <= 5; slot += 1) {
+      expect(screen.getByRole('button', { name: viNormal.outfits.emptySlot.replace('{{n}}', String(slot)) })).toBeInTheDocument()
+    }
+    // The visible caption every empty slot shows is still the plain, un-numbered "Trống" (design §3.1
+    // item 4) — only the accessible name tells the slots apart.
+    expect(screen.getAllByText(viNormal.outfits.empty)).toHaveLength(5)
+  })
+
   it('saves the current draft into an empty slot with the default name', async () => {
     const saved: OutfitDto = { slot: 1, name: 'Bộ 1', config: DRAFT, updatedAt: 0 }
     const saveOutfit = vi.fn().mockResolvedValue(saved)
@@ -75,7 +86,7 @@ describe('SavedOutfits', () => {
     renderBar({ api: stubApi({ saveOutfit }) })
 
     // Empty slots have no menu — clicking one opens the naming dialog directly.
-    await user.click(screen.getAllByRole('button', { name: viNormal.outfits.empty })[0] as HTMLElement)
+    await user.click(screen.getByRole('button', { name: viNormal.outfits.emptySlot.replace('{{n}}', '1') }))
     const dialog = within(screen.getByRole('dialog'))
     expect(dialog.getByDisplayValue(viNormal.outfits.defaultName.replace('{{n}}', '1'))).toBeInTheDocument()
 

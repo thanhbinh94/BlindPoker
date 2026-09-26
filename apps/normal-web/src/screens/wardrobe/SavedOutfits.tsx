@@ -41,6 +41,10 @@ export interface OutfitBarProps {
  * the menu and opens the naming dialog straight away, the same one the menu's "Lưu đè vào đây" and
  * "Đổi tên" reuse — moved here from `OutfitBar` verbatim (dialogs, api calls, error handling), which this
  * component replaces.
+ *
+ * Every empty slot's visible caption is the same plain "Trống" (design §3.1 item 4), but its accessible
+ * name is numbered ("Ô {{n}} trống") — otherwise a screen reader announces five identical buttons with no
+ * way to tell them apart.
  */
 export function SavedOutfits({ api, outfits, draft, items, bases, onOutfitsChanged, onApplied }: OutfitBarProps) {
   const { t } = useTranslation('normal')
@@ -166,7 +170,7 @@ export function SavedOutfits({ api, outfits, draft, items, bases, onOutfitsChang
                 data-filled={outfit !== null}
                 aria-haspopup={outfit === null ? undefined : 'true'}
                 aria-expanded={outfit === null ? undefined : menuOpen}
-                aria-label={outfit === null ? t('outfits.empty') : t('outfits.menu', { name: outfit.name })}
+                aria-label={outfit === null ? t('outfits.emptySlot', { n: slot }) : t('outfits.menu', { name: outfit.name })}
                 disabled={busy}
                 onClick={() => (outfit === null ? openSave(slot, null) : setOpenMenu(menuOpen ? null : slot))}
               >
