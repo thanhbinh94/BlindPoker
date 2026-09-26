@@ -85,19 +85,24 @@ describe('CategoryNav', () => {
     expect(onTab).toHaveBeenCalledWith('outfit')
   })
 
-  it('moves to the next sub-tab on ArrowRight and calls onTab', async () => {
+  it('moves through the sub-tabs on repeated ArrowRight, moving DOM focus each time so the second press advances again', async () => {
     const user = userEvent.setup()
     const onTab = vi.fn()
     renderNav({ tab: 'head', onTab })
 
     const { subList } = navLists()
     within(subList).getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.head}`) }).focus()
+
+    await user.keyboard('{ArrowRight}')
     await user.keyboard('{ArrowRight}')
 
-    expect(onTab).toHaveBeenCalledWith('face')
+    expect(onTab).toHaveBeenNthCalledWith(1, 'face')
+    expect(onTab).toHaveBeenNthCalledWith(2, 'outfit')
+    const outfit = within(subList).getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.outfit}`) })
+    expect(outfit).toHaveFocus()
   })
 
-  it('moves to the previous sub-tab on ArrowLeft, wrapping to the last one from the first', async () => {
+  it('moves to the previous sub-tab on ArrowLeft, wrapping to the last one from the first, and focuses it', async () => {
     const user = userEvent.setup()
     const onTab = vi.fn()
     renderNav({ tab: 'head', onTab })
@@ -107,6 +112,41 @@ describe('CategoryNav', () => {
     await user.keyboard('{ArrowLeft}')
 
     expect(onTab).toHaveBeenCalledWith('outfit')
+    const outfit = within(subList).getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.outfit}`) })
+    expect(outfit).toHaveFocus()
+  })
+
+  it("moves through the groups on repeated ArrowRight, moving DOM focus and selecting each group's first tab", async () => {
+    const user = userEvent.setup()
+    const onTab = vi.fn()
+    renderNav({ tab: 'head', onTab })
+
+    const { groupList } = navLists()
+    within(groupList).getByRole('tab', { name: viNormal.wardrobe.groups.look }).focus()
+
+    await user.keyboard('{ArrowRight}')
+    await user.keyboard('{ArrowRight}')
+
+    // look -> wear (first tab `head`) -> decor (first tab `aura`), per categories.ts GROUPS.
+    expect(onTab).toHaveBeenNthCalledWith(1, 'head')
+    expect(onTab).toHaveBeenNthCalledWith(2, 'aura')
+    const decor = within(groupList).getByRole('tab', { name: viNormal.wardrobe.groups.decor })
+    expect(decor).toHaveFocus()
+  })
+
+  it('wraps ArrowLeft from the first group to the last, focuses it, and selects its first tab', async () => {
+    const user = userEvent.setup()
+    const onTab = vi.fn()
+    renderNav({ tab: 'head', onTab })
+
+    const { groupList } = navLists()
+    within(groupList).getByRole('tab', { name: viNormal.wardrobe.groups.look }).focus()
+
+    await user.keyboard('{ArrowLeft}')
+
+    expect(onTab).toHaveBeenCalledWith('aura')
+    const decor = within(groupList).getByRole('tab', { name: viNormal.wardrobe.groups.decor })
+    expect(decor).toHaveFocus()
   })
 
   it('shows the three ownership filters as aria-pressed buttons, the active one pressed', () => {

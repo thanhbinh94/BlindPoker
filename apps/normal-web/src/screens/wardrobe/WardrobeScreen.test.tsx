@@ -348,10 +348,10 @@ describe('WardrobeScreen', () => {
       expect(screen.getByRole('button', { name: viNormal.wardrobe.natural })).toBeInTheDocument()
       // A card's accessible name is "<name>, <rarity>[, wearing|, locked: <hint>]" (design §7) — the redesign's
       // `cardLabel`, not the bare item name Plan 13 queried by.
-      const owned = screen.getByRole('button', { name: `${viNormal.items.haircolor_red01}, ${viNormal.wardrobe.rarity.common}` })
+      const owned = screen.getByRole('button', { name: `${viNormal.items.haircolor_red01}, ${viNormal.inventory.rarity.common}` })
       expect(owned).toHaveAttribute('aria-disabled', 'false')
       const locked = screen.getByRole('button', {
-        name: `${viNormal.items.haircolor_blue01}, ${viNormal.wardrobe.rarity.rare}, ${viNormal.wardrobe.filter.locked}: ${viNormal.wardrobe.hint.daily.rare}`,
+        name: `${viNormal.items.haircolor_blue01}, ${viNormal.inventory.rarity.rare}, ${viNormal.wardrobe.filter.locked}: ${viNormal.wardrobe.hint.daily.rare}`,
       })
       expect(locked).toHaveAttribute('aria-disabled', 'true')
     })
@@ -363,7 +363,7 @@ describe('WardrobeScreen', () => {
       await user.click(screen.getByRole('tab', { name: viNormal.wardrobe.tabs.hairColor }))
 
       const locked = screen.getByRole('button', {
-        name: `${viNormal.items.haircolor_blue01}, ${viNormal.wardrobe.rarity.rare}, ${viNormal.wardrobe.filter.locked}: ${viNormal.wardrobe.hint.daily.rare}`,
+        name: `${viNormal.items.haircolor_blue01}, ${viNormal.inventory.rarity.rare}, ${viNormal.wardrobe.filter.locked}: ${viNormal.wardrobe.hint.daily.rare}`,
       })
       await user.click(locked)
 
@@ -382,7 +382,7 @@ describe('WardrobeScreen', () => {
       const natural = screen.getByRole('button', { name: viNormal.wardrobe.natural })
       expect(natural).toHaveAttribute('aria-pressed', 'true')
 
-      const red = screen.getByRole('button', { name: `${viNormal.items.haircolor_red01}, ${viNormal.wardrobe.rarity.common}` })
+      const red = screen.getByRole('button', { name: `${viNormal.items.haircolor_red01}, ${viNormal.inventory.rarity.common}` })
       await user.click(red)
 
       expect(red).toHaveAttribute('aria-pressed', 'true')

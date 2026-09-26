@@ -17,10 +17,11 @@ import s from './wardrobe.module.css'
  * caller's decision (`WardrobeScreen.pick`), not this file's, exactly as `ItemTab` already worked.
  */
 
-/** "<name>, <rarity>[, wearing|, locked: <hint>]" (design §7). `locked`/`wearing` reuse the filter and
- * wearing-pill strings rather than a third copy of the same two words. */
+/** "<name>, <rarity>[, wearing|, locked: <hint>]" (design §7). Rarity reuses the Inventory screen's own
+ * `inventory.rarity.*` keys rather than a second Vietnamese vocabulary for the same three words; `locked`/
+ * `wearing` reuse the filter and wearing-pill strings for the same reason. */
 function cardLabel(name: string, rarity: Rarity, owned: boolean, wearing: boolean, hint: string, t: TFunction<'normal'>): string {
-  const rarityLabel = t(`wardrobe.rarity.${rarity}`)
+  const rarityLabel = t(`inventory.rarity.${rarity}`)
   if (!owned) return `${name}, ${rarityLabel}, ${t('wardrobe.filter.locked')}: ${hint}`
   if (wearing) return `${name}, ${rarityLabel}, ${t('wardrobe.wearingBadge')}`
   return `${name}, ${rarityLabel}`
@@ -60,7 +61,7 @@ function RarityLabel({ rarity }: { rarity: Rarity }) {
   const { t } = useTranslation('normal')
   return (
     <span className={s.cardRarity} aria-hidden="true">
-      {t(`wardrobe.rarity.${rarity}`)}
+      {t(`inventory.rarity.${rarity}`)}
     </span>
   )
 }

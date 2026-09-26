@@ -287,11 +287,6 @@
       "titles": "Titles",
       "badges": "Badges"
     },
-    "rarity": {
-      "common": "Common",
-      "rare": "Rare",
-      "epic": "Epic"
-    },
     "natural": "Natural",
     "expression": {
       "legend": "Preview expression",

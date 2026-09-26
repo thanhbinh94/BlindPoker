@@ -42,14 +42,14 @@ describe('cards', () => {
     it('names an owned, unworn card "<name>, <rarity>"', () => {
       render(<ItemCard item={HEAD_BERET} owned wearing={false} hint="" onPick={vi.fn()} />)
 
-      expect(screen.getByRole('button', { name: `${viNormal.items.head_beret_red01}, ${viNormal.wardrobe.rarity.rare}` })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: `${viNormal.items.head_beret_red01}, ${viNormal.inventory.rarity.rare}` })).toBeInTheDocument()
     })
 
     it('shows the wearing pill and names the card as wearing, with aria-pressed true', () => {
       render(<ItemCard item={HEAD_BERET} owned wearing hint="" onPick={vi.fn()} />)
 
       const card = screen.getByRole('button', {
-        name: `${viNormal.items.head_beret_red01}, ${viNormal.wardrobe.rarity.rare}, ${viNormal.wardrobe.wearingBadge}`,
+        name: `${viNormal.items.head_beret_red01}, ${viNormal.inventory.rarity.rare}, ${viNormal.wardrobe.wearingBadge}`,
       })
       expect(card).toHaveAttribute('aria-pressed', 'true')
       expect(screen.getByText(viNormal.wardrobe.wearingBadge)).toBeInTheDocument()
@@ -61,7 +61,7 @@ describe('cards', () => {
       render(<ItemCard item={HEAD_TOPHAT} owned={false} wearing={false} hint="Điểm danh hằng ngày" onPick={onPick} />)
 
       const card = screen.getByRole('button', {
-        name: `${viNormal.items.head_tophat01}, ${viNormal.wardrobe.rarity.epic}, ${viNormal.wardrobe.filter.locked}: Điểm danh hằng ngày`,
+        name: `${viNormal.items.head_tophat01}, ${viNormal.inventory.rarity.epic}, ${viNormal.wardrobe.filter.locked}: Điểm danh hằng ngày`,
       })
       expect(card).toHaveAttribute('aria-disabled', 'true')
       expect(screen.getByText('Điểm danh hằng ngày')).toBeInTheDocument()
@@ -143,7 +143,7 @@ describe('cards', () => {
       const onPick = vi.fn()
       render(<ColourCard item={HAIRCOLOR_RED} owned wearing={false} hint="" onPick={onPick} />)
 
-      const card = screen.getByRole('button', { name: `${viNormal.items.haircolor_red01}, ${viNormal.wardrobe.rarity.common}` })
+      const card = screen.getByRole('button', { name: `${viNormal.items.haircolor_red01}, ${viNormal.inventory.rarity.common}` })
       await user.click(card)
 
       expect(onPick).toHaveBeenCalledWith('haircolor_red01')
@@ -155,7 +155,7 @@ describe('cards', () => {
       render(<ColourCard item={HAIRCOLOR_RED} owned={false} wearing={false} hint="daily hint" onPick={onPick} />)
 
       const card = screen.getByRole('button', {
-        name: `${viNormal.items.haircolor_red01}, ${viNormal.wardrobe.rarity.common}, ${viNormal.wardrobe.filter.locked}: daily hint`,
+        name: `${viNormal.items.haircolor_red01}, ${viNormal.inventory.rarity.common}, ${viNormal.wardrobe.filter.locked}: daily hint`,
       })
       expect(card).toHaveAttribute('aria-disabled', 'true')
 
@@ -171,7 +171,7 @@ describe('cards', () => {
       const onPick = vi.fn()
       render(<WordCard item={TITLE_ROOKIE} owned wearing={false} hint="" onPick={onPick} />)
 
-      const card = screen.getByRole('button', { name: `${viNormal.items.title_rookie}, ${viNormal.wardrobe.rarity.common}` })
+      const card = screen.getByRole('button', { name: `${viNormal.items.title_rookie}, ${viNormal.inventory.rarity.common}` })
       await user.click(card)
 
       expect(onPick).toHaveBeenCalledWith('title_rookie')
@@ -184,7 +184,7 @@ describe('cards', () => {
 
       expect(screen.getByText('how to get it')).toBeInTheDocument()
       const card = screen.getByRole('button', {
-        name: `${viNormal.items.title_rookie}, ${viNormal.wardrobe.rarity.common}, ${viNormal.wardrobe.filter.locked}: how to get it`,
+        name: `${viNormal.items.title_rookie}, ${viNormal.inventory.rarity.common}, ${viNormal.wardrobe.filter.locked}: how to get it`,
       })
 
       await user.click(card)
@@ -197,7 +197,7 @@ describe('cards', () => {
 
       expect(screen.getByText(viNormal.wardrobe.wearingBadge)).toBeInTheDocument()
       expect(
-        screen.getByRole('button', { name: `${viNormal.items.title_rookie}, ${viNormal.wardrobe.rarity.common}, ${viNormal.wardrobe.wearingBadge}` }),
+        screen.getByRole('button', { name: `${viNormal.items.title_rookie}, ${viNormal.inventory.rarity.common}, ${viNormal.wardrobe.wearingBadge}` }),
       ).toHaveAttribute('aria-pressed', 'true')
     })
   })

@@ -287,11 +287,6 @@
       "titles": "Danh hiệu",
       "badges": "Huy hiệu"
     },
-    "rarity": {
-      "common": "Thường",
-      "rare": "Hiếm",
-      "epic": "Sử thi"
-    },
     "natural": "Tự nhiên",
     "expression": {
       "legend": "Biểu cảm xem trước",

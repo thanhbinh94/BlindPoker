@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from 'react'
+import { useRef, type KeyboardEvent, type MutableRefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { GROUPS, groupOf, type OwnershipFilter, type TabId } from './categories.js'
 import s from './wardrobe.module.css'
@@ -19,13 +19,36 @@ export interface CategoryNavProps {
 const FILTERS: readonly OwnershipFilter[] = ['all', 'owned', 'locked']
 
 /**
+ * Roving-tabindex arrow keys for one `tablist` (WAI-ARIA's tabs pattern): ArrowRight/ArrowLeft pick the
+ * neighbour — wrapping at either end — call `select` with it, and move DOM focus onto its own button.
+ * Moving focus matters, not just cosmetically: the *next* key press reads its target tab off the
+ * `index` closed over by whichever button is actually focused, so without an explicit `.focus()` here a
+ * second press in the same direction re-fires the first button's handler and never advances past its
+ * immediate neighbour (`head` → `face` → `face` …) instead of reaching `outfit`.
+ */
+function onArrowKey<T>(
+  event: KeyboardEvent<HTMLButtonElement>,
+  index: number,
+  items: readonly T[],
+  refs: MutableRefObject<(HTMLButtonElement | null)[]>,
+  select: (next: T, nextIndex: number) => void,
+): void {
+  if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return
+  event.preventDefault()
+  const delta = event.key === 'ArrowRight' ? 1 : -1
+  const nextIndex = (index + delta + items.length) % items.length
+  select(items[nextIndex]!, nextIndex)
+  refs.current[nextIndex]?.focus()
+}
+
+/**
  * The right column's header (design §3.1): the three groups, the active group's sub-tabs (each with its
  * "owned/total" count), and the ownership filter — everything above the card grid itself.
  *
  * Two nested `tablist`s rather than one flat one, matching the two-level structure the mockup draws: a
  * group's own label can legitimately repeat a sub-tab's (`wear`'s "Trang phục" names both the clothing
  * group and its `outfit` tab), so callers — and this component's own keyboard handling — always work
- * with ids, never with the rendered label.
+ * with ids, never with the rendered label. Both tablists share `onArrowKey` above.
  */
 export function CategoryNav({ tab, onTab, counts, filter, onFilter, showFilter }: CategoryNavProps) {
   const { t } = useTranslation('normal')
@@ -33,25 +56,24 @@ export function CategoryNav({ tab, onTab, counts, filter, onFilter, showFilter }
   const subTabs = GROUPS.find((group) => group.id === activeGroup)!.tabs
   const activeCount = counts[tab] ?? null
 
-  const onSubTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number): void => {
-    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return
-    event.preventDefault()
-    const delta = event.key === 'ArrowRight' ? 1 : -1
-    const next = subTabs[(index + delta + subTabs.length) % subTabs.length]!
-    onTab(next)
-  }
+  const groupRefs = useRef<(HTMLButtonElement | null)[]>([])
+  const subTabRefs = useRef<(HTMLButtonElement | null)[]>([])
 
   return (
     <div className={s.categoryNav}>
       <div className={s.groupTabs} role="tablist" aria-label={t('wardrobe.title')}>
-        {GROUPS.map((group) => (
+        {GROUPS.map((group, index) => (
           <button
             key={group.id}
+            ref={(el) => {
+              groupRefs.current[index] = el
+            }}
             type="button"
             role="tab"
             className={s.groupTab}
             aria-selected={group.id === activeGroup}
             onClick={() => onTab(group.tabs[0]!)}
+            onKeyDown={(event) => onArrowKey(event, index, GROUPS, groupRefs, (next) => onTab(next.tabs[0]!))}
           >
             <span aria-hidden="true" className={s.groupIcon}>
               {GROUP_ICON[group.id]}
@@ -67,12 +89,15 @@ export function CategoryNav({ tab, onTab, counts, filter, onFilter, showFilter }
           return (
             <button
               key={subTab}
+              ref={(el) => {
+                subTabRefs.current[index] = el
+              }}
               type="button"
               role="tab"
               className={s.subTab}
               aria-selected={subTab === tab}
               onClick={() => onTab(subTab)}
-              onKeyDown={(event) => onSubTabKeyDown(event, index)}
+              onKeyDown={(event) => onArrowKey(event, index, subTabs, subTabRefs, (next) => onTab(next))}
             >
               {t(`wardrobe.tabs.${subTab}`)}
               {count === null || count === undefined ? null : (
