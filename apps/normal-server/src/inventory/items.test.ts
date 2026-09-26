@@ -161,6 +161,14 @@ describe('the shipped catalogue', () => {
     for (const def of catalog.all()) expect(def.asset?.hidesHairBack, def.id).toBeUndefined()
   })
 
+  it('hides the hair strand under every hat but the open-topped visor (bug 7)', () => {
+    const strand = (id: string): boolean => catalog.get(id)?.asset?.hidesHairFront === true
+    for (const id of ['head_tophat01', 'head_beret_red01', 'head_crown_gold01', 'head_conical_hat01', 'head_beanie01', 'head_party_cone01', 'head_beret_blue01', 'head_beanie_grey01', 'head_party_cone_green01']) {
+      expect(strand(id), id).toBe(true)
+    }
+    expect(strand('head_dealer_visor01')).toBe(false)
+  })
+
   it('leaves enough unowned commons and rares for the daily tiers to draw several before running dry', () => {
     expect(catalog.byRarity('common').length).toBeGreaterThanOrEqual(5)
     expect(catalog.byRarity('rare').length).toBeGreaterThanOrEqual(5)
@@ -233,6 +241,18 @@ describe('loadItemCatalog', () => {
     const parsed = JSON.parse(readFileSync(badHide, 'utf8')) as Record<string, unknown>[]
     const withBadHide = parsed.map((d) => (d['id'] === 'head_bad_hide' ? { ...d, asset: { ...(d['asset'] as object), hidesHairFront: 'yes' } } : d))
     expect(() => loadItemCatalog(fixture(withBadHide), MANIFEST)).toThrow(/head_bad_hide has a non-boolean hidesHairFront/)
+  })
+
+  it('refuses a hide flag that disagrees with the manifest entry of its layer (bug 7)', () => {
+    // The fixture manifest records no hide rule for the beanie, so a catalogue saying it hides the strand lies.
+    const hides = fixtureWith(drawable('head_hides', 'head', false, 'item_head_beanie01_L80'))
+    const parsed = JSON.parse(readFileSync(hides, 'utf8')) as Record<string, unknown>[]
+    const withHide = parsed.map((d) => (d['id'] === 'head_hides' ? { ...d, asset: { ...(d['asset'] as object), hidesHairFront: true } } : d))
+    expect(() => loadItemCatalog(fixture(withHide), MANIFEST)).toThrow(/head_hides has hidesHairFront true but its layer item_head_beanie01_L80 has false in the avatar manifest/)
+
+    // …and the other way round: a manifest that hides, a catalogue that forgot to say so.
+    const manifest = { ...MANIFEST, files: { ...MANIFEST.files, item_head_beanie01_L80: { ...MANIFEST.files['item_head_beanie01_L80']!, hidesHairFront: true } } }
+    expect(() => loadItemCatalog(hides, manifest)).toThrow(/head_hides has hidesHairFront false but its layer item_head_beanie01_L80 has true/)
   })
 
   it('refuses a malformed file', () => {

@@ -35,6 +35,10 @@ export interface AvatarManifestFile {
   /** True while the pipeline has not ingested a real asset for this name yet (Task 1's placeholders). */
   placeholder?: boolean
   real?: boolean
+  /** The hide rules the pipeline recorded for a head layer (`ingest --hides-hair-front/back`) — the
+   *  catalogue's own flags must agree (bug 7). */
+  hidesHairFront?: boolean
+  hidesHairBack?: boolean
   /** The tint masks this layer carries, if any (design §4.1): at most one of each kind. */
   masks?: { hair?: MaskInfo; eyes?: MaskInfo; tint?: MaskInfo }
 }
@@ -120,6 +124,11 @@ function parseFile(path: string, name: string, raw: unknown): AvatarManifestFile
   if (r['real'] !== undefined) {
     if (typeof r['real'] !== 'boolean') fail(path, `files.${name}.real must be a boolean`)
     file.real = r['real']
+  }
+  for (const flag of ['hidesHairFront', 'hidesHairBack'] as const) {
+    if (r[flag] === undefined) continue
+    if (typeof r[flag] !== 'boolean') fail(path, `files.${name}.${flag} must be a boolean`)
+    file[flag] = r[flag]
   }
   if (r['masks'] !== undefined) {
     file.masks = parseMasks(path, name, r['masks'])

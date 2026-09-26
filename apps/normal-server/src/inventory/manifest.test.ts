@@ -69,6 +69,13 @@ describe('loadAvatarManifest', () => {
     expect(() => loadAvatarManifest(fixture({ ...VALID, files: { x: { layer: 30, w: 1, h: 1 } } }))).toThrow(/files\.x\.bytes2x must be a positive number/)
     expect(() => loadAvatarManifest(fixture({ ...VALID, files: { x: { layer: 0, w: 1, h: 1, bytes2x: 1 } } }))).toThrow(/files\.x has no positive layer/)
     expect(() => loadAvatarManifest(fixture({ ...VALID, files: { x: { layer: 30, w: 1, h: 1, bytes2x: 1, placeholder: 'yes' } } }))).toThrow(/files\.x\.placeholder must be a boolean/)
+    expect(() => loadAvatarManifest(fixture({ ...VALID, files: { x: { layer: 80, w: 1, h: 1, bytes2x: 1, hidesHairFront: 'yes' } } }))).toThrow(/files\.x\.hidesHairFront must be a boolean/)
+  })
+
+  it('keeps the hide rules a head layer records (bug 7)', () => {
+    const files = loadAvatarManifest(fixture({ ...VALID, files: { x: { layer: 80, w: 1, h: 1, bytes2x: 1, hidesHairFront: true } } })).files
+    expect(files['x']).toMatchObject({ hidesHairFront: true })
+    expect(files['x']?.hidesHairBack).toBeUndefined()
   })
 
   it('parses masks, each kind optional and independently shaped', () => {
