@@ -35,6 +35,19 @@ export function tabOfSlot(slot: ItemSlot): TabId {
   return slot
 }
 
+/** Phone is anything under the tablet floor (design §3.1–§3.3, Global Constraints) — the one breakpoint
+ * both `WardrobeScreen` (the two-column-vs-one-column switch) and `BaseTab` (the base portrait's own
+ * smaller size) need, so it lives here once rather than as two copies of the same literal string. */
+export const PHONE_QUERY = '(max-width: 767px)'
+
+/** Stable DOM ids linking `CategoryNav`'s two `tablist`s to the panels they control (design §7): a tab's
+ * `id` is what its panel's `aria-labelledby` names, and `panelId` is what the tab's own `aria-controls`
+ * names. Kept here, not in `CategoryNav` or `WardrobeScreen`, because both ends of every relationship —
+ * the tab that points at a panel and the panel that points back — have to agree on the same string. */
+export const groupTabId = (group: GroupId): string => `wardrobe-grouptab-${group}`
+export const subTabId = (tab: TabId): string => `wardrobe-subtab-${tab}`
+export const panelId = (tab: TabId): string => `wardrobe-panel-${tab}`
+
 export type OwnershipFilter = 'all' | 'owned' | 'locked'
 
 /** The slot(s) a tab's cards come from — every drawn/coloured tab is one slot; `words` is two, `base`

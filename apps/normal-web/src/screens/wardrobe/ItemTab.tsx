@@ -10,7 +10,11 @@ import s from './wardrobe.module.css'
 /** The slots that draw a picture; `title` and `badge` are words and preview as nothing. */
 const PICTURED: ReadonlySet<ItemSlot> = new Set(['head', 'face', 'outfit', 'aura', 'frame'])
 
-/** The icon's size on screen, in CSS pixels. The files are 96 px (@1x) and 192 px (@2x), so both only ever shrink. */
+/** The `<img>`'s own intrinsic `width`/`height` (decoding hint, not layout): the files are 96 px (@1x) and
+ * 192 px (@2x), so 64 only ever shrinks either density. The size it actually renders at on screen is CSS's
+ * call, not this attribute's — `.tileIcon` (`wardrobe.module.css`) now draws two different ones off the
+ * one `<img>`: a fixed 64 px (4rem) in the inventory grid, and a larger, breakpoint-driven size scoped to
+ * the wardrobe's own `.cardThumb` (V-fix, 2026-09-27 — see that class's own comment). */
 const ICON_SIZE = 64
 
 /**
@@ -71,6 +75,11 @@ export interface ItemTabProps {
   wear?: string
   filter: OwnershipFilter
   onPick: (itemId: string) => void
+  /** This tab's own panel id and the tab that labels it (design §7) — omitted for `title`/`badge`, whose
+   * two calls share one `words` panel rendered one level up instead (`WardrobeScreen`): a `role="tabpanel"`
+   * has to appear exactly once per tab, and `words` is the one tab two `ItemTab` calls draw between them. */
+  panelId?: string
+  labelledBy?: string
 }
 
 /**
@@ -104,17 +113,21 @@ const WORD_HEADING: Partial<Record<ItemSlot, string>> = { title: 'wardrobe.words
  * their own sub-heading instead of `ItemCard`; every other slot draws pictured `ItemCard`s, each with its
  * colour variants as a dot row (design §4.1) — a variant is never one of these cards itself.
  */
-export function ItemTab({ slot, catalog, owned, achievements, draft, wear, filter, onPick }: ItemTabProps) {
+export function ItemTab({ slot, catalog, owned, achievements, draft, wear, filter, onPick, panelId, labelledBy }: ItemTabProps) {
   const { t } = useTranslation('normal')
   const rows = tabItems(tabOfSlot(slot), catalog).filter((item) => item.slot === slot)
   const variants = variantsByFile(catalog.filter((item) => item.slot === slot))
   const cards = applyFilter(rows, owned, filter)
   const heading = WORD_HEADING[slot]
+  // `title`/`badge` render inside the caller's own shared `tabpanel` (see `panelId`'s own comment above),
+  // so this `<div>` carries no panel role of its own then; every other slot is its own tab and carries the
+  // role itself, exactly as before.
+  const isOwnPanel = heading === undefined
 
   return (
     <>
       {heading === undefined ? null : <h3 className={shared.groupTitle}>{t(heading)}</h3>}
-      <div className={s.cardGrid} role="tabpanel">
+      <div className={s.cardGrid} role={isOwnPanel ? 'tabpanel' : undefined} id={isOwnPanel ? panelId : undefined} aria-labelledby={isOwnPanel ? labelledBy : undefined}>
         {cards.map((item) => {
           const isOwned = owned.has(item.id)
           const wearing = draft[slot] === item.id

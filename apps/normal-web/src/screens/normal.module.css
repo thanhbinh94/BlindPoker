@@ -854,79 +854,6 @@
   padding: 0 var(--space-2);
 }
 
-.tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
-  gap: var(--space-2);
-}
-
-.tile {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  min-height: var(--tap);
-  padding: var(--space-2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  text-align: center;
-}
-
-.tile:hover {
-  border-color: color-mix(in srgb, var(--gold) 50%, transparent);
-}
-
-/* The radio itself is the focus target and the checked state, so it stays in the accessibility tree and in
-   the tab order — only its box is out of the way of the thumbnail it names. */
-.tileInput {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-}
-
-.tile:has(.tileInput:checked) {
-  border-color: var(--gold);
-  background: var(--gold-soft);
-}
-
-.tile:has(.tileInput:focus-visible) {
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
-}
-
-/* `inline-flex` rather than `block`: since Plan 8 a thumbnail is a `Portrait` inside a wrapper, and the
-   wrapper has to centre it. An empty slot's tile is the same disc with nothing in it. */
-.thumb,
-.thumbEmpty {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--bg) 70%, transparent);
-}
-
-.thumbEmpty {
-  border: 1px dashed var(--line);
-}
-
-.tileName {
-  font-size: 0.75rem;
-  line-height: 1.2;
-  overflow-wrap: anywhere;
-}
-
-.slots {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-  gap: var(--space-3);
-}
-
 /* ── the wardrobe: a figure on the left, everything that goes on it on the right ─── */
 
 /* The one page in this app that is two columns, so the one that is allowed to be wider than 46rem: a
@@ -940,36 +867,6 @@
   gap: var(--space-3);
   flex-wrap: wrap;
   align-items: center;
-}
-
-/* A palette swatch is a radio whose whole 44 px square is the target — the input itself is off-screen
-   (`.tileInput`), exactly as in the item tiles above. */
-.swatchTile {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--tap);
-  height: var(--tap);
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-.swatchDot {
-  width: 2rem;
-  height: 2rem;
-  border: 2px solid var(--line);
-  border-radius: 50%;
-}
-
-.swatchTile:has(.tileInput:checked) .swatchDot {
-  border-color: var(--gold);
-  box-shadow: 0 0 0 2px var(--gold-soft);
-}
-
-.swatchTile:has(.tileInput:focus-visible) .swatchDot {
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
 }
 
 /* ── the inventory grid ───────────────────────────────────────────────────── */

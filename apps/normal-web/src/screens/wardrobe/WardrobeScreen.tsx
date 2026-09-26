@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ApiError,
+  OPTIONAL_SLOTS,
+  SLOTS,
   type AchievementDefDto,
   type AvatarCatalogDto,
   type AvatarConfigDto,
@@ -19,7 +21,7 @@ import { useAvatars } from '../../avatar/useAvatars.js'
 import s from '../normal.module.css'
 import { useAsync } from '../useAsync.js'
 import { BaseTab } from './BaseTab.js'
-import { counts, GROUPS, type OwnershipFilter, type TabId } from './categories.js'
+import { counts, GROUPS, PHONE_QUERY, panelId, subTabId, type OwnershipFilter, type TabId } from './categories.js'
 import { CategoryNav } from './CategoryNav.js'
 import { ColourTab } from './ColourTab.js'
 import { EquippedList } from './EquippedList.js'
@@ -40,11 +42,6 @@ export function avatarRefusal(cause: unknown, t: TFunction): string {
  * group is automatically one this screen counts and offers a panel for. */
 const ALL_TABS: readonly TabId[] = GROUPS.flatMap((group) => group.tabs)
 
-/** The optional slots `EquippedList` can show as filled (design §3.1 item 3) — `base` and `outfit` are
- * always filled (a figure always has a body and a required outfit) so the phone summary's count below
- * always adds them on top of this list. */
-const OPTIONAL_SLOTS: readonly ItemSlot[] = ['hairColor', 'eyeColor', 'head', 'face', 'aura', 'frame', 'title', 'badge']
-
 /** `useAvatars` wants an array it can key on; a fresh `[]` per render would restart its effect forever. */
 const NO_IDS: string[] = []
 
@@ -52,10 +49,10 @@ const NO_IDS: string[] = []
  * header's icon-only "Hoàn tác" (design §3.2). */
 const UNDO_GLYPH = '↺'
 
-/** Breakpoints (Global Constraints): phone is anything under the tablet floor; desktop is the point the
- * stage stops being `compact` (design §3.1–§3.3). Tablet has no query of its own — it is "not phone, not
- * desktop", the same branch as desktop for markup, told apart only by CSS. */
-const PHONE_QUERY = '(max-width: 767px)'
+/** Breakpoints (Global Constraints): phone (`PHONE_QUERY`, `./categories.js` — shared with `BaseTab`, which
+ * used to carry its own copy of the same literal string) is anything under the tablet floor; desktop is
+ * the point the stage stops being `compact` (design §3.1–§3.3). Tablet has no query of its own — it is
+ * "not phone, not desktop", the same branch as desktop for markup, told apart only by CSS. */
 const DESKTOP_QUERY = '(min-width: 1024px)'
 
 export interface WardrobeScreenProps {
@@ -85,9 +82,16 @@ function withSlot(config: AvatarConfigDto, slot: ItemSlot, itemId: string | unde
   return { ...config, [slot]: itemId }
 }
 
-/** Two configurations are the same outfit when they name the same slots. */
+/** Two configurations are the same outfit when they name the same slots — read off both objects key by
+ * key (`v`, `base`, then every item slot) rather than via `JSON.stringify`, which used to make this
+ * comparison sensitive to *key order*: removing an optional slot and then re-adding it moves that key to
+ * the end of the spread object (`withSlot`'s `{ ...config, [slot]: itemId }`), so two configs naming the
+ * exact same outfit could stringify to two different strings and show a false "Có thay đổi chưa lưu". A
+ * slot absent from one side and one explicitly `undefined` on the other now compare equal either way,
+ * exactly as `withSlot`'s own "an omitted key is an empty slot" rule already treats them. */
 function sameConfig(a: AvatarConfigDto, b: AvatarConfigDto): boolean {
-  return JSON.stringify(a) === JSON.stringify(b)
+  if (a.v !== b.v || a.base !== b.base) return false
+  return SLOTS.every((slot) => a[slot] === b[slot])
 }
 
 type Note = 'saved' | null
@@ -287,7 +291,9 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
   // the dealer uniform's tile to the trousers the preview beside it is now wearing.
   const wear = bases.get(config.base)?.wear
   // The phone header's collapsible "Đang mặc (n)" summary (design §3.2): the two always-filled rows
-  // (Thân, Trang phục) plus however many of the optional slots the draft currently fills.
+  // (Thân, Trang phục) plus however many of `api.ts`'s own `OPTIONAL_SLOTS` the draft currently fills —
+  // the same eight slots `EquippedList`'s `ROWS` lists past `base`/`outfit`, read off the one source
+  // rather than a second copy of the list kept here.
   const equippedCount = 2 + OPTIONAL_SLOTS.filter((slot) => config[slot] !== undefined).length
   // The full-body figure's own width (V5 fix): `Chibi`'s "full" frame is a fixed 6:7 box, so a width of
   // `stage_height * 6/7` is exactly the width whose height equals the stage around it — the figure then
@@ -334,9 +340,13 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
       <CategoryNav tab={tab} onTab={changeTab} counts={tabCounts} filter={filter} onFilter={setFilter} showFilter={tab !== 'base'} />
 
       {tab === 'base' ? (
-        <BaseTab bases={loaded.avatarCatalog.bases} draft={config} items={items} onPick={pickBase} />
+        <BaseTab bases={loaded.avatarCatalog.bases} draft={config} items={items} onPick={pickBase} panelId={panelId('base')} labelledBy={subTabId('base')} />
       ) : tab === 'words' ? (
-        <>
+        // One `tabpanel` for the whole tab (design §7) — `title` and `badge` are two `ItemTab` calls, not
+        // two tabs, and a `role="tabpanel"` has to appear exactly once for the sub-tab that names it;
+        // wrapping both calls here (rather than letting each draw its own, as it used to) is what keeps
+        // their headings *inside* the one panel too, instead of sitting outside any panel at all.
+        <div role="tabpanel" id={panelId('words')} aria-labelledby={subTabId('words')}>
           <ItemTab
             slot="title"
             catalog={loaded.catalog}
@@ -357,7 +367,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
             filter={filter}
             onPick={(id) => pick('badge', id)}
           />
-        </>
+        </div>
       ) : tab === 'hairColor' || tab === 'eyeColor' ? (
         <ColourTab
           slot={tab}
@@ -367,6 +377,8 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
           draft={config}
           filter={filter}
           onPick={(id) => commit(withSlot(config, tab, id))}
+          panelId={panelId(tab)}
+          labelledBy={subTabId(tab)}
         />
       ) : (
         <ItemTab
@@ -378,6 +390,8 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
           wear={wear}
           filter={filter}
           onPick={(id) => pick(tab, id)}
+          panelId={panelId(tab)}
+          labelledBy={subTabId(tab)}
         />
       )}
     </div>

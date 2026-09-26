@@ -14,6 +14,10 @@ export interface ColourTabProps {
   filter: OwnershipFilter
   /** `undefined` equips nothing — the base's own colour — which is what the "Natural" swatch sends. */
   onPick: (itemId: string | undefined) => void
+  /** This tab's panel id and the tab that labels it (design §7) — set by `CategoryNav`'s own id scheme,
+   * carried down through `WardrobeScreen` so the two ends of the relationship never drift apart. */
+  panelId?: string
+  labelledBy?: string
 }
 
 /**
@@ -23,14 +27,14 @@ export interface ColourTabProps {
  * by the ownership filter — it is not a catalogue row `applyFilter` has an opinion about. Every other
  * card locks exactly like `ItemTab`'s.
  */
-export function ColourTab({ slot, catalog, owned, achievements, draft, filter, onPick }: ColourTabProps) {
+export function ColourTab({ slot, catalog, owned, achievements, draft, filter, onPick, panelId, labelledBy }: ColourTabProps) {
   const { t } = useTranslation('normal')
   const rows = tabItems(slot, catalog)
   const shown = applyFilter(rows, owned, filter)
   const natural = draft[slot] === undefined
 
   return (
-    <div className={s.cardGrid} role="tabpanel">
+    <div className={s.cardGrid} role="tabpanel" id={panelId} aria-labelledby={labelledBy}>
       <ColourCard item={null} owned wearing={natural} hint="" onPick={onPick} />
       {shown.map((item) => {
         const isOwned = owned.has(item.id)

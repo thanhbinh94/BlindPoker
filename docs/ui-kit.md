@@ -288,6 +288,16 @@ dark-theme contrast, which is what `data-surface="night"` does: put it on an ele
 is re-declared for that subtree. `PokerTable`, `ActionBar` and the hand-result overlay set it themselves; an app can
 put it on any panel it lays over the felt.
 
+**The atmosphere covers the whole page, not one screenful.** `body` carries the mesh background and two
+pseudo-element layers (grain, vignette); `background-attachment: fixed` used to pin all three to the
+*viewport*, so on a page taller than one screen (a long account screen such as the wardrobe) the gradient
+only ever painted the first ~900 px and the rest of the page fell back to a flat, seam-edged `--bg`.
+`body` is now `position: relative` and the two pseudo-elements are `absolute` rather than `fixed`, which
+ties them to `body`'s own document-height box instead of the viewport — the atmosphere now always covers
+exactly as much page as there is, and scrolls with the content instead of staying pinned in place. No
+visual change on any page short enough to fit one screen; a page longer than that no longer goes flat past
+its first screenful.
+
 **Contrast is a test, not a habit.** `src/theme/tokens.test.ts` parses the palettes back out of
 `tokens.css` and asserts WCAG AA (4.5:1) for every pair the kit prints text on — the three inks on
 `--bg` and `--bg-elev`, each `*-ink` on the fill it belongs to, the card ranks on the card face, and

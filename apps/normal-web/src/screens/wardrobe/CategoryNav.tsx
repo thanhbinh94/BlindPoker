@@ -1,6 +1,6 @@
 import { useRef, type KeyboardEvent, type MutableRefObject } from 'react'
 import { useTranslation } from 'react-i18next'
-import { GROUPS, groupOf, type OwnershipFilter, type TabId } from './categories.js'
+import { groupTabId, GROUPS, groupOf, panelId, subTabId, type OwnershipFilter, type TabId } from './categories.js'
 import { Icon, type IconName } from './icons.js'
 import s from './wardrobe.module.css'
 
@@ -63,30 +63,43 @@ export function CategoryNav({ tab, onTab, counts, filter, onFilter, showFilter }
   return (
     <div className={s.categoryNav}>
       <div className={s.groupTabs} role="tablist" aria-label={t('wardrobe.title')}>
-        {GROUPS.map((group, index) => (
-          <button
-            key={group.id}
-            ref={(el) => {
-              groupRefs.current[index] = el
-            }}
-            type="button"
-            role="tab"
-            className={s.groupTab}
-            aria-selected={group.id === activeGroup}
-            onClick={() => onTab(group.tabs[0]!)}
-            onKeyDown={(event) => onArrowKey(event, index, GROUPS, groupRefs, (next) => onTab(next.tabs[0]!))}
-          >
-            <span aria-hidden="true" className={s.groupIcon}>
-              <Icon name={GROUP_ICON[group.id]} />
-            </span>
-            {t(`wardrobe.groups.${group.id}`)}
-          </button>
-        ))}
+        {GROUPS.map((group, index) => {
+          const selected = group.id === activeGroup
+          // A group tab has no panel of its own — choosing one jumps to its first sub-tab (`onTab` above)
+          // — so its `aria-controls` names whichever panel is actually on screen for it: the active tab's,
+          // while this is the active group, or the panel its own first tab would show otherwise.
+          const controls = selected ? tab : group.tabs[0]!
+          return (
+            <button
+              key={group.id}
+              ref={(el) => {
+                groupRefs.current[index] = el
+              }}
+              type="button"
+              role="tab"
+              id={groupTabId(group.id)}
+              className={s.groupTab}
+              aria-selected={selected}
+              aria-controls={panelId(controls)}
+              // Roving tabindex (WAI-ARIA's tabs pattern): only the selected tab sits in the page's own Tab
+              // order; arrow keys (`onArrowKey` below) move both focus and this attribute together.
+              tabIndex={selected ? 0 : -1}
+              onClick={() => onTab(group.tabs[0]!)}
+              onKeyDown={(event) => onArrowKey(event, index, GROUPS, groupRefs, (next) => onTab(next.tabs[0]!))}
+            >
+              <span aria-hidden="true" className={s.groupIcon}>
+                <Icon name={GROUP_ICON[group.id]} />
+              </span>
+              {t(`wardrobe.groups.${group.id}`)}
+            </button>
+          )
+        })}
       </div>
 
       <div className={s.subTabs} role="tablist" aria-label={t(`wardrobe.groups.${activeGroup}`)}>
         {subTabs.map((subTab, index) => {
           const count = counts[subTab]
+          const selected = subTab === tab
           return (
             <button
               key={subTab}
@@ -95,8 +108,11 @@ export function CategoryNav({ tab, onTab, counts, filter, onFilter, showFilter }
               }}
               type="button"
               role="tab"
+              id={subTabId(subTab)}
               className={s.subTab}
-              aria-selected={subTab === tab}
+              aria-selected={selected}
+              aria-controls={panelId(subTab)}
+              tabIndex={selected ? 0 : -1}
               onClick={() => onTab(subTab)}
               onKeyDown={(event) => onArrowKey(event, index, subTabs, subTabRefs, (next) => onTab(next))}
             >

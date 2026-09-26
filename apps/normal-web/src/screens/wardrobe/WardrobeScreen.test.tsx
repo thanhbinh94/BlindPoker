@@ -278,6 +278,29 @@ describe('WardrobeScreen', () => {
     expect(owned).toHaveAttribute('aria-pressed', 'false')
   })
 
+  it('shows no false "unsaved changes" after unequipping and re-equipping the same slot, key order and all', async () => {
+    // `sameConfig` used to compare drafts via `JSON.stringify`, which is sensitive to *key order* — and
+    // `withSlot`'s `{ ...config, [slot]: itemId }` always appends a re-added key at the *end* of the
+    // object, wherever it used to sit. Two optional slots (`head`, then `hairColor`) are what expose the
+    // reorder: unequipping `head` and equipping it again moves it from before `hairColor` to after it, so
+    // a config with the exact same slots and values as the saved one used to still read as "changed".
+    const withHairColor: AvatarConfigDto = { ...AVATAR, hairColor: 'haircolor_red01' }
+    const user = userEvent.setup()
+    renderScreen(stubApi({ inventory: vi.fn().mockResolvedValue({ ...INVENTORY, avatar: withHairColor }) }))
+    await screen.findAllByText(viNormal.bases.f01)
+    await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
+
+    // Scoped to the tile grid: "Mũ len" is also the wearing-list row's value, since it is the default
+    // equipped head.
+    const owned = within(screen.getByRole('tabpanel')).getByText(viNormal.items.head_beanie01).closest('button') as HTMLElement
+    await user.click(owned)
+    expect(screen.getByText(viNormal.wardrobe.dirty)).toBeInTheDocument()
+
+    await user.click(owned)
+
+    expect(screen.queryByText(viNormal.wardrobe.dirty)).toBeNull()
+  })
+
   it('cannot unequip the required outfit — a second click on it stays equipped', async () => {
     const user = userEvent.setup()
     renderScreen()
@@ -506,6 +529,68 @@ describe('WardrobeScreen', () => {
 
       const chibi = document.querySelector('[data-chibi-hash]') as HTMLElement
       expect(chibi).toHaveAttribute('data-frame', 'head')
+    })
+
+    it('draws the words tab (title/badge) as one tabpanel wrapping both headings and grids, correctly labelled', async () => {
+      const user = userEvent.setup()
+      renderScreen()
+      await screen.findAllByText(viNormal.bases.f01)
+
+      await goTo(user, 'decor', viNormal.wardrobe.tabs.words)
+
+      // Two `ItemTab` calls (title, badge) used to each draw their own `role="tabpanel"`, with the heading
+      // sitting outside either one — exactly one tabpanel, wrapping both headings and both grids, is the fix.
+      const panels = screen.getAllByRole('tabpanel')
+      expect(panels).toHaveLength(1)
+      const panel = within(panels[0]!)
+      expect(panel.getByRole('heading', { name: viNormal.wardrobe.words.titles })).toBeInTheDocument()
+      expect(panel.getByRole('heading', { name: viNormal.wardrobe.words.badges })).toBeInTheDocument()
+      expect(panel.getByText(viNormal.items.title_rookie)).toBeInTheDocument()
+
+      // The panel and its tab name each other (design §7): the tab's `aria-controls` is the panel's own
+      // `id`, and the panel's `aria-labelledby` is the tab's own `id`.
+      const wordsTab = screen.getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.words}`) })
+      expect(wordsTab.id).not.toBe('')
+      expect(panels[0]).toHaveAttribute('id', wordsTab.getAttribute('aria-controls'))
+      expect(panels[0]).toHaveAttribute('aria-labelledby', wordsTab.id)
+    })
+
+    it('gives every tab a roving tabindex: only the selected one sits in the page Tab order', async () => {
+      renderScreen()
+      await screen.findAllByText(viNormal.bases.f01)
+
+      const groupList = screen.getByRole('tablist', { name: viNormal.wardrobe.title })
+      expect(within(groupList).getByRole('tab', { name: viNormal.wardrobe.groups.look })).toHaveAttribute('tabindex', '0')
+      expect(within(groupList).getByRole('tab', { name: viNormal.wardrobe.groups.wear })).toHaveAttribute('tabindex', '-1')
+      expect(within(groupList).getByRole('tab', { name: viNormal.wardrobe.groups.decor })).toHaveAttribute('tabindex', '-1')
+
+      const subList = screen.getByRole('tablist', { name: viNormal.wardrobe.groups.look })
+      expect(within(subList).getByRole('tab', { name: viNormal.wardrobe.tabs.base })).toHaveAttribute('tabindex', '0')
+      expect(within(subList).getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.hairColor}`) })).toHaveAttribute('tabindex', '-1')
+    })
+
+    it("every sub-tab's aria-controls names its own panel's id, for every one of the three panel shapes", async () => {
+      const user = userEvent.setup()
+      renderScreen()
+      await screen.findAllByText(viNormal.bases.f01)
+
+      // `base` (`BaseTab`) is the tab this screen opens on — no navigation needed for it.
+      const baseTab = screen.getByRole('tab', { name: viNormal.wardrobe.tabs.base })
+      expect(screen.getByRole('tabpanel')).toHaveAttribute('id', baseTab.getAttribute('aria-controls'))
+      expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', baseTab.id)
+
+      await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
+      const headTab = screen.getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.head}`) })
+      let panel = screen.getByRole('tabpanel')
+      expect(panel).toHaveAttribute('id', headTab.getAttribute('aria-controls'))
+      expect(panel).toHaveAttribute('aria-labelledby', headTab.id)
+
+      // `hairColor` (`ColourTab`) — the third of the three shapes.
+      await goTo(user, 'look', viNormal.wardrobe.tabs.hairColor)
+      const hairTab = screen.getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.hairColor}`) })
+      panel = screen.getByRole('tabpanel')
+      expect(panel).toHaveAttribute('id', hairTab.getAttribute('aria-controls'))
+      expect(panel).toHaveAttribute('aria-labelledby', hairTab.id)
     })
   })
 

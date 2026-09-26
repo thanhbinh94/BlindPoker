@@ -1,6 +1,6 @@
 /* The wardrobe: a preview column and a tabbed picker beside it, same shell as the other account pages
-   (`normal.module.css`'s `.page`/`.wide`). Everything here is this screen's own — tiles, tabs, the outfit
-   bar — so a change to one wardrobe layout detail never touches the inventory or the profile. */
+   (`normal.module.css`'s `.page`/`.wide`). Everything here is this screen's own — cards, tabs, the saved-
+   outfit grid — so a change to one wardrobe layout detail never touches the inventory or the profile. */
 
 /* The header row (design §3.1): title + dirty label on the left, Hoàn tác/Lưu tủ đồ on the right. Phones
    show a short "Lưu" and turn "Hoàn tác" into an icon-only button (`WardrobeScreen`'s own `phone` switch) —
@@ -90,6 +90,15 @@
     background: var(--bg-elev);
     position: sticky;
     top: var(--space-4);
+    /* The column's own content — stage, wearing list, five saved-outfit portraits — runs close to 1000 px
+       tall; pinned at `top: var(--space-4)` with no cap of its own, an 800–900 px window left the saved-
+       outfit row (the *bottom* of the column) unreachable until the page's own end, since a sticky element
+       taller than the viewport just sits there running off the bottom edge. Capping it at the viewport's
+       own height (minus the same gap top and bottom) and scrolling the overflow internally keeps every row
+       reachable without leaving `position: sticky` at all. Phone never sticks (see `.previewColumn` above,
+       unscoped by this query), so it never needs this either — the whole page scrolls there instead. */
+    max-height: calc(100vh - 2 * var(--space-4));
+    overflow-y: auto;
   }
 }
 
@@ -149,9 +158,14 @@
   max-width: 100%;
 }
 
+/* `min-width: 40px` (V-fix, 2026-09-27): with none at all, a chip's own tap target was only as wide as its
+   short label plus 3px of padding — measured 24–35 px on phones, well under a thumb's own width. The row
+   already scrolls (`.expressionRow`'s `overflow-x: auto`) if six chips at 40 px each cannot all fit, so a
+   wider floor here costs nothing it did not already have a fallback for. */
 .expressionBtn {
   flex: none;
   padding: 0 3px;
+  min-width: 40px;
   min-height: 40px;
   border-radius: var(--radius-md);
   border: 1px solid var(--line);
@@ -162,8 +176,12 @@
   white-space: nowrap;
 }
 
+/* Desktop keeps the compact chip the V1 fix tuned (see `.expressionRow`'s own comment): no tap-target
+   floor to hold onto with a pointer, and this is what buys the row its fit inside the 360 px column
+   without ever touching the phone-only scroll fallback above. */
 @media (min-width: 768px) {
   .expressionBtn {
+    min-width: 0;
     min-height: 30px;
   }
 }
@@ -256,11 +274,21 @@
 /* Wearing wins over rarity for the border colour (design §4.1) — declared after the `data-rarity` rules
    above so the cascade, not specificity, decides. `aria-pressed` is `.card` itself for `ColourCard`/
    `WordCard`; `data-wearing` is `ItemCard`'s own outer `<div>`, which has no `aria-pressed` of its own to
-   set (see the block comment above). */
+   set (see the block comment above).
+   V-fix, 2026-09-27: this used to also set `border: 2px solid …`, the shorthand, which resets every side's
+   *width* along with its colour — 1 px top/left/right and 3 px bottom (`.card` above) both became a flat
+   2 px. `box-sizing: border-box` (`global.css`) keeps the card's own outer box the same size either way,
+   but the border eats into that fixed box by a different amount once it does, so the content inside (the
+   thumb, the name) visibly shifted by a pixel or two on every equip/unequip. `border-color` alone leaves
+   every width exactly as `.card`/`.card[data-rarity]` already set it — the 3 px rarity accent survives
+   being worn — and the inset shadow below adds back the bolder ring the flat 2 px border was going for,
+   with no width of its own to shift anything. */
 .card[aria-pressed='true'],
 .card[data-wearing='true'] {
-  border: 2px solid var(--gold);
-  box-shadow: 0 0 0 1px var(--gold);
+  border-color: var(--gold);
+  box-shadow:
+    0 0 0 1px var(--gold),
+    inset 0 0 0 1px var(--gold);
 }
 
 .card[aria-disabled='true'] {
@@ -403,21 +431,36 @@
   box-shadow: 0 0 0 1px var(--gold);
 }
 
-/* An item's inventory icon: square, transparent, already centred and padded by the pipeline. */
-/* V3 fix: was a flat 88 px regardless of the thumb around it — about half of the 118 px desktop thumb,
-   and wider than the 70 px phone one (spilling past it, `.cardThumb` clips nothing of its own). Sized to
-   each breakpoint's thumb instead, `height` the driving dimension (`width: auto` + `object-fit: contain`
-   keeps every icon's own aspect ratio) so it reads as close to full as it can without touching the glow. */
+/* An item's own icon: square, transparent, already centred and padded by the pipeline. Fixed 4rem — the
+   *inventory* grid's own size (Plan 13's `.cardSwatch`, `normal.module.css`, still sized "like the drawn
+   slots' icon" to match it) — because `ItemPreview` (`ItemTab.tsx`) is shared between the wardrobe's own
+   cards and `InventoryScreen`'s read-only ones, and only one of the two owns this class.
+   V-fix, 2026-09-27: the V3 fix below used to resize *this* rule itself (58 px phone / 100 px desktop, for
+   the wardrobe's own `.cardThumb`), which — since `ItemPreview` renders this one class regardless of which
+   screen it is on — resized the inventory's icon right along with it, past `.cardSwatch`'s own comment.
+   `.cardThumb .tileIcon` below carries that breakpoint-driven size instead, scoped so it only ever wins
+   inside the wardrobe's own thumb. */
 .tileIcon {
   display: block;
-  width: auto;
-  height: 58px;
-  max-width: 90%;
+  width: 4rem;
+  height: 4rem;
+  max-width: 100%;
   object-fit: contain;
 }
 
+/* `.cardThumb`'s own icon size (the V3 fix's original intent, now scoped here instead of on `.tileIcon`
+   itself — see that class's own comment): 70 px tall on phones, ~half the 118 px desktop thumb (`height`
+   the driving dimension; `width: auto` + `object-fit: contain` keeps every icon's own aspect ratio), 100 px
+   from the tablet floor up — never the flat 88 px `.tileIcon` alone drew before the V3 fix, and never
+   spilling past the phone thumb the way that flat size did (`.cardThumb` clips nothing of its own). */
+.cardThumb .tileIcon {
+  width: auto;
+  height: 58px;
+  max-width: 90%;
+}
+
 @media (min-width: 768px) {
-  .tileIcon {
+  .cardThumb .tileIcon {
     height: 100px;
   }
 }
@@ -709,6 +752,25 @@
   white-space: nowrap;
 }
 
+/* Slot 1's and slot 5's menus (V-fix, 2026-09-27, design §3.1 item 4): centred like every other slot's
+   (`left: 50%` + `translateX(-50%)` above), this flyout is wider than one of five `.outfitGrid` columns,
+   so a centred one spills off both sides by roughly half that difference — at 400 px wide, measured 24 px
+   past the left edge on slot 1, 34 px past the right on slot 5, both of them sideways scroll. Anchoring
+   each end slot's menu flush to its own *inside* edge instead — slot 1 flush left, slot 5 flush right —
+   keeps the whole flyout inside `.outfitGrid`, and so inside the viewport, since the grid itself never
+   overflows. The three middle slots sit far enough from either edge that the centred anchor still fits
+   them and stays untouched. */
+.outfitItem:first-child .outfitMenu {
+  left: 0;
+  transform: none;
+}
+
+.outfitItem:last-child .outfitMenu {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
 .colourDots {
   display: flex;
   gap: var(--space-1);
@@ -789,10 +851,26 @@
   color: var(--gold-ink);
 }
 
+/* V-fix, 2026-09-27: a flex item's default `min-width: auto` (and `flex-shrink: 1`, the default) let this
+   wrapper shrink along with `.groupTab` once three group tabs' labels + icons ran out of room on a narrow
+   phone — down to a measured 7 px wide for "Trang phục"'s icon, past `global.css`'s `svg{max-width:100%}`
+   guard, which only clamps the icon *down*, never back up. `flex: none` keeps this wrapper at its own
+   natural size regardless of how tight `.groupTab` around it gets — the label text (`white-space: nowrap`)
+   gives way first instead, which is the one of the two that degrades gracefully. */
 .groupIcon {
   display: inline-flex;
+  flex: none;
   align-items: center;
-  font-size: 1.1rem;
+}
+
+/* The icon's own fixed box, expressed directly on the `<svg>` rather than via this wrapper's `font-size` +
+   the icon's own `1em` (`Icon`, `icons.tsx`) — `max-width: none` here is the one line that actually stops
+   the squash above, the same guard `avatar2d.module.css`'s `.layer` needs against that same global rule,
+   for the same reason: a fixed box a competing `max-width: 100%` must never claw back down. */
+.groupIcon svg {
+  width: 1.1em;
+  height: 1.1em;
+  max-width: none;
 }
 
 /* One row, never two (V5 fix): `flex-wrap: wrap` let three sub-tabs plus their "n/m" counts break onto a

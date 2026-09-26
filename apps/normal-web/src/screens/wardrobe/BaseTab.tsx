@@ -2,6 +2,7 @@ import { useMediaQuery } from '@bp/ui-kit'
 import type { AvatarConfigDto, BaseDto, BaseId, ItemDto } from '../../api.js'
 import { chibiFromApi } from '../../avatar/chibi.js'
 import { BaseCard } from './cards.js'
+import { PHONE_QUERY } from './categories.js'
 import s from './wardrobe.module.css'
 
 export interface BaseTabProps {
@@ -9,6 +10,9 @@ export interface BaseTabProps {
   draft: AvatarConfigDto
   items: ReadonlyMap<string, ItemDto>
   onPick: (base: BaseId) => void
+  /** This tab's panel id and the tab that labels it (design §7) — same convention as `ColourTab`/`ItemTab`. */
+  panelId?: string
+  labelledBy?: string
 }
 
 /**
@@ -24,14 +28,14 @@ export interface BaseTabProps {
  * catalogue with no default outfit) — a base that fails to preview is skipped rather than rendered
  * without one, since `BaseCard.portrait` is not optional.
  */
-export function BaseTab({ bases, draft, items, onPick }: BaseTabProps) {
+export function BaseTab({ bases, draft, items, onPick, panelId, labelledBy }: BaseTabProps) {
   // V5 fix: a fixed 96 px portrait overflowed a phone's 3-column grid (`.baseCard`'s minimum content
   // width, padding plus that fixed-width chibi, exceeded the column's own share) — 72 px fits it instead.
-  const phone = useMediaQuery('(max-width: 767px)')
+  const phone = useMediaQuery(PHONE_QUERY)
   const portraitSize = phone ? 72 : 96
 
   return (
-    <div className={s.cardGrid} role="tabpanel">
+    <div className={s.cardGrid} role="tabpanel" id={panelId} aria-labelledby={labelledBy}>
       {bases.map((base) => {
         const preview = chibiFromApi({ ...draft, head: undefined, face: undefined, aura: undefined, frame: undefined, base: base.id }, items, baseMapOf(base))
         if (preview === null) return null

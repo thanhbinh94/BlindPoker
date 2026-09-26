@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import viNormal from '../../locales/vi/normal.json'
 import { makeI18n, renderWithI18n } from '../../test-i18n.js'
+import { groupTabId, panelId, subTabId } from './categories.js'
 import { CategoryNav, type CategoryNavProps } from './CategoryNav.js'
 
 const COUNTS: CategoryNavProps['counts'] = {
@@ -173,5 +174,35 @@ describe('CategoryNav', () => {
     expect(screen.queryByRole('button', { name: viNormal.wardrobe.filter.all })).toBeNull()
     expect(screen.queryByRole('button', { name: viNormal.wardrobe.filter.owned })).toBeNull()
     expect(screen.queryByRole('button', { name: viNormal.wardrobe.filter.locked })).toBeNull()
+  })
+
+  it("gives every tab an id and an aria-controls naming its panel's own id (design §7)", () => {
+    renderNav({ tab: 'head' })
+
+    const { groupList, subList } = navLists()
+    const wearGroup = within(groupList).getByRole('tab', { name: viNormal.wardrobe.groups.wear })
+    expect(wearGroup).toHaveAttribute('id', groupTabId('wear'))
+    // The active group's own tab is what it controls; "wear"'s first tab is `head` (categories.ts GROUPS).
+    expect(wearGroup).toHaveAttribute('aria-controls', panelId('head'))
+
+    const lookGroup = within(groupList).getByRole('tab', { name: viNormal.wardrobe.groups.look })
+    // Not the active group: it controls the panel its own first tab would show, `base` (GROUPS again).
+    expect(lookGroup).toHaveAttribute('aria-controls', panelId('base'))
+
+    const headTab = within(subList).getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.head}`) })
+    expect(headTab).toHaveAttribute('id', subTabId('head'))
+    expect(headTab).toHaveAttribute('aria-controls', panelId('head'))
+  })
+
+  it('gives only the selected tab a tabindex of 0 in each tablist — every other tab is -1 (roving tabindex)', () => {
+    renderNav({ tab: 'head' })
+
+    const { groupList, subList } = navLists()
+    expect(within(groupList).getByRole('tab', { name: viNormal.wardrobe.groups.wear })).toHaveAttribute('tabindex', '0')
+    expect(within(groupList).getByRole('tab', { name: viNormal.wardrobe.groups.look })).toHaveAttribute('tabindex', '-1')
+    expect(within(groupList).getByRole('tab', { name: viNormal.wardrobe.groups.decor })).toHaveAttribute('tabindex', '-1')
+
+    expect(within(subList).getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.head}`) })).toHaveAttribute('tabindex', '0')
+    expect(within(subList).getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.face}`) })).toHaveAttribute('tabindex', '-1')
   })
 })

@@ -14,7 +14,8 @@ export interface StagePanelProps {
    * 240 px framed head portrait rather than showing both. */
   portrait: boolean
   /** Tablet/phone stages are shorter — 250/280 px instead of 330 px (design §3.2, §3.3) — and the caller
-   * is the one that knows which; this only widens the podium glow, see `.stage[data-compact]`. */
+   * is the one that knows which; this sets `.stage[data-compact]`'s own height, and the podium glow
+   * (`.stage::before`/`::after`, both sized in percentages of `.stage` itself) follows it for free. */
   compact?: boolean
   /** The full-body figure's own width (V5 fix, 2026-09-27): a fixed 320 px regardless of the stage's own
    * height used to run the figure's head straight into the stage's `overflow: hidden` top edge once that
