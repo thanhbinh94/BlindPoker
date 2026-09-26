@@ -297,44 +297,22 @@ describe('WardrobeScreen', () => {
     expect(await screen.findByText(viNormal.wardrobe.saved)).toBeInTheDocument()
   })
 
-  it('saves the current draft into an outfit slot with the default name', async () => {
-    const saved: OutfitDto = { slot: 1, name: 'Bộ 1', config: AVATAR, updatedAt: 0 }
-    const saveOutfit = vi.fn().mockResolvedValue(saved)
-    const user = userEvent.setup()
-    renderScreen(stubApi({ saveOutfit }))
-    await screen.findByText(viNormal.bases.f01)
-
-    await user.click(screen.getAllByRole('button', { name: viNormal.outfits.saveHere })[0] as HTMLElement)
-    const dialog = within(screen.getByRole('dialog'))
-    expect(dialog.getByDisplayValue(viNormal.outfits.defaultName.replace('{{n}}', '1'))).toBeInTheDocument()
-
-    await user.click(dialog.getByRole('button', { name: viNormal.outfits.saveHere }))
-
-    await waitFor(() => expect(saveOutfit).toHaveBeenCalledWith(1, 'Bộ 1', expect.objectContaining({ v: 3 })))
-  })
-
-  it('applies a saved outfit and pushes its config into the draft', async () => {
+  // The saved-outfit portraits' own behaviour (menu, save/overwrite/rename/delete, empty-slot save) now
+  // lives entirely in `SavedOutfits.test.tsx` — this is only the wiring: `WardrobeScreen` passes the
+  // right props through and reacts to `onApplied` by pushing the config into the draft and showing
+  // "saved", same as a direct `save()` (design §5.3, §3.1 item 4).
+  it('wires the saved-outfit portraits in: applying one updates the draft and shows the saved notice', async () => {
     const outfitOne: OutfitDto = { slot: 1, name: 'Đi làm', config: { v: 3, base: 'm01', outfit: 'outfit_tuxedo01' }, updatedAt: 0 }
     const applyOutfit = vi.fn().mockResolvedValue({ config: outfitOne.config })
     const user = userEvent.setup()
     renderScreen(stubApi({ outfits: vi.fn().mockResolvedValue({ outfits: [outfitOne, null, null, null, null] }), applyOutfit }))
-    const filledSlot = (await screen.findByText('Đi làm')).closest('div') as HTMLElement
+    await screen.findByText(viNormal.bases.f01)
 
-    await user.click(within(filledSlot).getByRole('button', { name: viNormal.outfits.apply }))
+    await user.click(screen.getByRole('button', { name: viNormal.outfits.menu.replace('{{name}}', 'Đi làm') }))
+    await user.click(screen.getByRole('button', { name: viNormal.outfits.apply }))
 
     await waitFor(() => expect(applyOutfit).toHaveBeenCalledWith(1))
-  })
-
-  it('deletes a saved outfit', async () => {
-    const outfitOne: OutfitDto = { slot: 1, name: 'Đi làm', config: AVATAR, updatedAt: 0 }
-    const deleteOutfit = vi.fn().mockResolvedValue({ removed: true })
-    const user = userEvent.setup()
-    renderScreen(stubApi({ outfits: vi.fn().mockResolvedValue({ outfits: [outfitOne, null, null, null, null] }), deleteOutfit }))
-    await screen.findByText('Đi làm')
-
-    await user.click(screen.getByRole('button', { name: viNormal.outfits.delete }))
-
-    await waitFor(() => expect(deleteOutfit).toHaveBeenCalledWith(1))
+    expect(await screen.findByText(viNormal.wardrobe.saved)).toBeInTheDocument()
   })
 
   describe('colour tabs (Plan 13)', () => {

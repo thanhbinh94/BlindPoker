@@ -288,6 +288,11 @@
       "badges": "Badges"
     },
     "natural": "Natural",
+    "equipped": {
+      "title": "Wearing",
+      "none": "None",
+      "remove": "Remove {{item}}"
+    },
     "expression": {
       "legend": "Preview expression",
       "neutral": "Neutral",
@@ -316,11 +321,12 @@
   "outfits": {
     "title": "Saved outfits",
     "empty": "Empty",
-    "emptySlot": "Slot {{n}}",
     "defaultName": "Outfit {{n}}",
     "nameLabel": "Outfit name",
     "apply": "Apply",
     "saveHere": "Save here",
+    "overwrite": "Overwrite",
+    "menu": "Outfit {{name}}",
     "rename": "Rename",
     "delete": "Delete",
     "error": "Could not complete that action — please try again"

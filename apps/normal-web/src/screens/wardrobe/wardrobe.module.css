@@ -19,18 +19,17 @@
   max-width: 100%;
 }
 
-.previewFigures {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: var(--space-3);
-}
-
+/* One segmented row of six (design §3.1 item 2): never wraps, scrolls horizontally instead once the
+   column is too narrow for all six at once. `flex-start` rather than `center` — centring a row that can
+   overflow clips its start behind the scrollport in most browsers (no `justify-content: safe center` yet
+   everywhere), which would strand the first button unreachable. */
 .expressionRow {
   display: flex;
   gap: var(--space-2);
-  flex-wrap: wrap;
-  justify-content: center;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  overflow-x: auto;
+  max-width: 100%;
 }
 
 .expressionBtn {
@@ -247,32 +246,273 @@
   object-fit: contain;
 }
 
-.outfitBar {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
-  gap: var(--space-3);
-  margin-top: var(--space-5);
-}
-
-.outfitSlot {
+/* The left column's stage (design §3.1 item 1): a lit podium the chibi stands on. The glow and podium
+   are both decorative pseudo-elements so the figure itself — `.stageFigure`, the only real content — can
+   sit centred above them without fighting for stacking order. */
+.stagePanel {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border: 1px dashed var(--line);
-  border-radius: var(--radius-md);
+  gap: var(--space-3);
+  width: 100%;
 }
 
-.outfitSlot[data-filled='true'] {
-  border-style: solid;
-}
-
-.outfitActions {
+.stage {
+  position: relative;
   display: flex;
-  gap: var(--space-1);
-  flex-wrap: wrap;
+  align-items: flex-end;
   justify-content: center;
+  overflow: hidden;
+  width: 100%;
+  height: 330px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 85%, black) 0%, var(--bg) 100%);
+}
+
+/* Tablet/phone stages (design §3.2, §3.3) are shorter; the figure inside keeps its own fixed size. */
+.stage[data-compact='true'] {
+  height: 250px;
+}
+
+/* The gold glow behind the figure. */
+.stage::before {
+  content: '';
+  position: absolute;
+  top: 10%;
+  left: 50%;
+  width: 70%;
+  height: 70%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--gold) 30%, transparent) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* The podium ellipse under the figure's feet. */
+.stage::after {
+  content: '';
+  position: absolute;
+  bottom: 6%;
+  left: 50%;
+  width: 55%;
+  height: 14px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--gold) 25%, transparent);
+  filter: blur(2px);
+  pointer-events: none;
+}
+
+.stageFigure {
+  position: relative;
+  z-index: 1;
+}
+
+/* The left column's "Đang mặc" list (design §3.1 item 3): one row per slot. */
+.equippedList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.equippedTitle {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.equippedRows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.equippedRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.equippedRowMain {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.equippedRowMain:hover {
+  background: var(--bg-elev);
+}
+
+.equippedIcon {
+  flex: none;
+  font-size: 0.9rem;
+}
+
+.equippedLabel {
+  flex: none;
+  width: 5.5rem;
+  color: var(--ink-muted);
+  font-size: 0.8125rem;
+}
+
+.equippedValue {
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.equippedValue[data-rarity='common'] {
+  color: var(--rarity-common);
+}
+.equippedValue[data-rarity='rare'] {
+  color: var(--rarity-rare);
+}
+.equippedValue[data-rarity='epic'] {
+  color: var(--rarity-epic);
+}
+
+.equippedSwatch {
+  flex: none;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+}
+
+.equippedRemove {
+  flex: none;
+  width: var(--tap);
+  height: var(--tap);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.equippedRemove:hover {
+  color: var(--ink);
+  background: var(--bg-elev);
+}
+
+/* The left column's "Bộ đồ đã lưu" (design §3.1 item 4): five 54 px round portraits. */
+.savedOutfits {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.savedOutfitsTitle {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.savedOutfitsError {
+  margin: 0;
+  color: var(--danger, #e5484d);
+  font-size: 0.8125rem;
+}
+
+.outfitGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--space-2);
+}
+
+.outfitItem {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.outfitPortrait {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  padding: 0;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  background: var(--bg-elev);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.outfitPortrait[data-filled='true'] {
+  border-color: color-mix(in srgb, var(--gold) 60%, transparent);
+}
+
+.outfitPortrait[data-filled='false'] {
+  border-style: dashed;
+}
+
+.outfitPlus {
+  color: var(--ink-muted);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.outfitName {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--ink-muted);
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.6875rem;
+}
+
+.outfitMenu {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: var(--space-1);
+  padding: var(--space-1);
+  transform: translateX(-50%);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-elev);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
 }
 
 .colourDots {

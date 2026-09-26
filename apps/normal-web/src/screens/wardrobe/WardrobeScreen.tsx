@@ -1,4 +1,4 @@
-import { Button, Chibi, defaultChibi, Modal, type Expression } from '@bp/ui-kit'
+import { Button, defaultChibi, Modal, type Expression } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -21,7 +21,8 @@ import { useAsync } from '../useAsync.js'
 import { BaseTab } from './BaseTab.js'
 import { ColourTab } from './ColourTab.js'
 import { ItemTab } from './ItemTab.js'
-import { OutfitBar } from './OutfitBar.js'
+import { SavedOutfits } from './SavedOutfits.js'
+import { StagePanel } from './StagePanel.js'
 import w from './wardrobe.module.css'
 
 /** Refusals this screen has words for; anything else is the kit's generic failure. */
@@ -31,8 +32,6 @@ export function avatarRefusal(cause: unknown, t: TFunction): string {
   if (cause instanceof ApiError && KNOWN_CODES.has(cause.code)) return t(`avatar.errors.${cause.code}`)
   return t('common:errors.INTERNAL')
 }
-
-const EXPRESSIONS: readonly Expression[] = ['neutral', 'happy', 'sad', 'surprised', 'closed', 'sleep']
 
 /** The tabs of design §7/§6, in the order the spec lists them: the base first, the two colour tabs
  * after the drawn slots, the words last. */
@@ -247,25 +246,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
 
       <div className={w.layout}>
         <div className={w.previewColumn}>
-          <div className={w.previewFigures}>
-            <Chibi subject={preview} frame="full" size={192} expression={expression} label={t('wardrobe.title')} />
-            {tab === 'frame' ? <Chibi subject={preview} frame="head" size={96} expression={expression} /> : null}
-          </div>
-
-          <div className={w.expressionRow} role="group" aria-label={t('wardrobe.expression.legend')}>
-            {EXPRESSIONS.map((expr) => (
-              <button
-                key={expr}
-                type="button"
-                className={w.expressionBtn}
-                aria-pressed={expression === expr}
-                aria-label={t(`wardrobe.expression.${expr}`)}
-                onClick={() => setExpression(expr)}
-              >
-                {t(`wardrobe.expression.${expr}`)}
-              </button>
-            ))}
-          </div>
+          <StagePanel subject={preview} expression={expression} onExpression={setExpression} portrait={tab === 'frame'} />
 
           {error === null ? null : (
             <p className={s.alert} role="alert">
@@ -349,7 +330,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
         </div>
       </div>
 
-      <OutfitBar
+      <SavedOutfits
         api={api}
         outfits={loaded.outfits}
         draft={config}

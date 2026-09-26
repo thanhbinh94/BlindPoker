@@ -288,6 +288,11 @@
       "badges": "Huy hiệu"
     },
     "natural": "Tự nhiên",
+    "equipped": {
+      "title": "Đang mặc",
+      "none": "Không có",
+      "remove": "Bỏ {{item}}"
+    },
     "expression": {
       "legend": "Biểu cảm xem trước",
       "neutral": "Bình thường",
@@ -316,11 +321,12 @@
   "outfits": {
     "title": "Bộ đồ đã lưu",
     "empty": "Trống",
-    "emptySlot": "Ô {{n}}",
     "defaultName": "Bộ {{n}}",
     "nameLabel": "Tên bộ đồ",
     "apply": "Áp dụng",
     "saveHere": "Lưu vào đây",
+    "overwrite": "Lưu đè vào đây",
+    "menu": "Bộ đồ {{name}}",
     "rename": "Đổi tên",
     "delete": "Xoá",
     "error": "Không thực hiện được thao tác, vui lòng thử lại"
