@@ -10,7 +10,16 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+/* `position: relative` here is what makes `body` — not the viewport — the containing block the two
+   `fixed`-turned-`absolute` atmosphere layers below size themselves against (see `body::before/::after`):
+   on a page taller than one screenful, `background-attachment: fixed`'s positioning area is the viewport,
+   so `--bg-mesh`'s own percentage-based gradients only ever painted the first ~900px (a typical viewport
+   height) and left a flat, seam-edged `--bg` for the rest of a long page (the wardrobe screen, full length,
+   was the one that showed it). Dropping `fixed` ties the mesh to `body`'s own (document-height) box instead,
+   so it now always covers exactly as much page as there is — unchanged for every screen short enough to
+   never need the difference. */
 body {
+  position: relative;
   margin: 0;
   min-height: 100vh;
   isolation: isolate;
@@ -20,15 +29,17 @@ body {
   color: var(--ink);
   background-color: var(--bg);
   background-image: var(--bg-mesh);
-  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
 }
 
-/* grain: one 120px feTurbulence tile at 6% — the ground is never flat */
+/* grain: one 120px feTurbulence tile at 6% — the ground is never flat. `absolute`, not `fixed`, for the
+   same reason `body` itself dropped `background-attachment: fixed` above — `body` is now this pair's
+   `position: relative` containing block, so `inset: 0` covers the whole document rather than one
+   viewport's worth of it. */
 body::before {
   content: '';
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: -1;
   pointer-events: none;
@@ -39,7 +50,7 @@ body::before {
 /* vignette: a lamp over the middle of the room */
 body::after {
   content: '';
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: -1;
   pointer-events: none;

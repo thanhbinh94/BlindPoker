@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { AvatarConfigDto, BaseDto, ItemDto, ItemSlot, Rarity } from '../../api.js'
 import { itemName } from '../../catalog-i18n.js'
 import { tabOfSlot, type TabId } from './categories.js'
+import { Icon, type IconName } from './icons.js'
 import s from './wardrobe.module.css'
 
 export interface EquippedListProps {
@@ -38,19 +39,19 @@ const ROW_LABEL_KEY: Record<RowId, string> = {
   badge: 'wardrobe.words.badges',
 }
 
-/** Decorative row glyphs (aria-hidden — the row's own label already names the slot), one identifier per
- * row so no raw emoji sits in the JSX text (`react/jsx-no-literals`, matching `cards.tsx`'s convention). */
-const ROW_ICON: Record<RowId, string> = {
-  base: '\u{1F464}',
-  hairColor: '\u{1F4A7}',
-  eyeColor: '\u{1F441}\u{FE0F}',
-  head: '\u{1F452}',
-  face: '\u{1F453}',
-  outfit: '\u{1F455}',
-  aura: '\u{2728}',
-  frame: '\u{1F5BC}\u{FE0F}',
-  title: '\u{1F3F7}\u{FE0F}',
-  badge: '\u{1F396}\u{FE0F}',
+/** Small monochrome line icons (V2 fix, `./icons.js`) — aria-hidden, the row's own label already names
+ * the slot. */
+const ROW_ICON: Record<RowId, IconName> = {
+  base: 'person',
+  hairColor: 'drop',
+  eyeColor: 'eye',
+  head: 'hat',
+  face: 'glasses',
+  outfit: 'shirt',
+  aura: 'sparkle',
+  frame: 'frame',
+  title: 'tag',
+  badge: 'medal',
 }
 const REMOVE_GLYPH = '×'
 
@@ -114,7 +115,7 @@ export function EquippedList({ config, items, bases, onRemove, onJump }: Equippe
             <li className={s.equippedRow} key={row}>
               <button type="button" className={s.equippedRowMain} onClick={() => onJump(jumpTarget(row))}>
                 <span aria-hidden="true" className={s.equippedIcon}>
-                  {ROW_ICON[row]}
+                  <Icon name={ROW_ICON[row]} />
                 </span>
                 <span className={s.equippedLabel}>{t(ROW_LABEL_KEY[row])}</span>
                 <span className={s.equippedValue} data-rarity={content.rarity}>

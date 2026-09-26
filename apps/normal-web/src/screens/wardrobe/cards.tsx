@@ -79,54 +79,64 @@ export interface ItemCardProps {
   onPick: (id: string) => void
 }
 
-/** A pictured item (Mũ, Phụ kiện mặt, Trang phục, Hào quang, Khung — design §4.1). */
+/**
+ * A pictured item (Mũ, Phụ kiện mặt, Trang phục, Hào quang, Khung — design §4.1).
+ *
+ * Two elements, not one (V3 fix, 2026-09-27): a colour-variant dot is its own `<button>`, and a `<button>`
+ * cannot contain another, so the card's visual chrome — border, background, `data-rarity` — lives on a
+ * plain outer `<div>`, and everything that used to be the *whole* clickable card (picture, name, rarity,
+ * lock hint) moves into an inner `.cardPick` button beside the dot row, both now inside the same bordered
+ * box instead of the dots sitting below/outside it.
+ */
 export function ItemCard({ item, wear, owned, wearing, hint, variants, onPick }: ItemCardProps) {
   const { t } = useTranslation('normal')
   const name = itemName(item.id, t)
+  const hasVariants = variants !== undefined && variants.length > 0
 
   return (
     <div className={s.cardCell}>
-      <button
-        type="button"
-        className={s.card}
-        data-rarity={item.rarity}
-        aria-pressed={wearing}
-        aria-disabled={!owned}
-        aria-label={cardLabel(name, item.rarity, owned, wearing, hint, t)}
-        onClick={() => {
-          if (owned) onPick(item.id)
-        }}
-      >
-        {wearing ? <WearingPill /> : null}
-        <span className={s.cardThumb} data-locked={!owned}>
-          <ItemPreview item={item} wear={wear} />
-        </span>
-        <span className={s.cardName} data-locked={!owned}>
-          {name}
-        </span>
-        <RarityLabel rarity={item.rarity} />
-        {owned ? null : <LockHint hint={hint} />}
-      </button>
-      {variants === undefined || variants.length === 0 ? null : (
-        <div className={s.colourDots} role="group" aria-label={name}>
-          {variants.map(({ item: variant, owned: variantOwned, wearing: variantWearing }) => (
-            <button
-              key={variant.id}
-              type="button"
-              className={s.colourDot}
-              style={{ background: variant.asset!.tint }}
-              aria-label={itemName(variant.id, t)}
-              aria-pressed={variantWearing}
-              aria-disabled={!variantOwned}
-              onClick={() => {
-                if (variantOwned) onPick(variant.id)
-              }}
-            >
-              {variantOwned ? null : <span className={s.lock} aria-hidden="true" />}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className={s.card} data-rarity={item.rarity} data-wearing={wearing}>
+        <button
+          type="button"
+          className={s.cardPick}
+          aria-pressed={wearing}
+          aria-disabled={!owned}
+          aria-label={cardLabel(name, item.rarity, owned, wearing, hint, t)}
+          onClick={() => {
+            if (owned) onPick(item.id)
+          }}
+        >
+          {wearing ? <WearingPill /> : null}
+          <span className={s.cardThumb} data-locked={!owned}>
+            <ItemPreview item={item} wear={wear} />
+          </span>
+          <span className={s.cardName} data-locked={!owned}>
+            {name}
+          </span>
+          <RarityLabel rarity={item.rarity} />
+          {owned ? null : <LockHint hint={hint} />}
+        </button>
+        {!hasVariants ? null : (
+          <div className={s.colourDots} role="group" aria-label={name}>
+            {variants!.map(({ item: variant, owned: variantOwned, wearing: variantWearing }) => (
+              <button
+                key={variant.id}
+                type="button"
+                className={s.colourDot}
+                style={{ background: variant.asset!.tint }}
+                aria-label={itemName(variant.id, t)}
+                aria-pressed={variantWearing}
+                aria-disabled={!variantOwned}
+                onClick={() => {
+                  if (variantOwned) onPick(variant.id)
+                }}
+              >
+                {variantOwned ? null : <span className={s.lock} aria-hidden="true" />}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -218,15 +228,20 @@ export interface BaseCardProps {
   portrait: ChibiConfig
   selected: boolean
   onPick: (id: BaseId) => void
+  /** The portrait's own width (V5 fix, 2026-09-27): a fixed 96 px overflowed a phone's 3-column grid —
+   * `.baseCard`'s minimum content width (padding plus this fixed-width chibi) exceeded the column's own
+   * share, so the grid — the whole page — scrolled sideways. Defaults to 96, the desktop/tablet value;
+   * `BaseTab` passes a smaller one on phone. */
+  portraitSize?: number
 }
 
 /** A figure tile (tab Thân — design §4.2): chosen, not owned, so it has neither a rarity nor a lock —
  * only ever a gold border when it is the draft's current base. */
-export function BaseCard({ base, portrait, selected, onPick }: BaseCardProps) {
+export function BaseCard({ base, portrait, selected, onPick, portraitSize = 96 }: BaseCardProps) {
   const { t } = useTranslation('normal')
   return (
     <button type="button" className={s.baseCard} aria-pressed={selected} onClick={() => onPick(base.id)}>
-      <Chibi subject={portrait} frame="head" size={96} />
+      <Chibi subject={portrait} frame="head" size={portraitSize} />
       <span className={s.cardName}>{t(base.nameKey)}</span>
     </button>
   )

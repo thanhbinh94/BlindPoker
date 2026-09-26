@@ -289,9 +289,22 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
   // The phone header's collapsible "Đang mặc (n)" summary (design §3.2): the two always-filled rows
   // (Thân, Trang phục) plus however many of the optional slots the draft currently fills.
   const equippedCount = 2 + OPTIONAL_SLOTS.filter((slot) => config[slot] !== undefined).length
+  // The full-body figure's own width (V5 fix): `Chibi`'s "full" frame is a fixed 6:7 box, so a width of
+  // `stage_height * 6/7` is exactly the width whose height equals the stage around it — the figure then
+  // fits with no clip at all. Desktop keeps its already-tuned 320 (a deliberate, verified-safe ~43 px
+  // clip off a 373 px figure into the 330 px stage, for a tighter frame); the 280/250 px tablet/phone
+  // stages get the zero-clip number instead, since there is no verified-safe amount to reproduce for them.
+  const stageFullSize = phone ? 214 : desktop ? 320 : 240
 
   const stageNode = (
-    <StagePanel subject={preview} expression={expression} onExpression={setExpression} portrait={tab === 'frame'} compact={!desktop} />
+    <StagePanel
+      subject={preview}
+      expression={expression}
+      onExpression={setExpression}
+      portrait={tab === 'frame'}
+      compact={!desktop}
+      fullSize={stageFullSize}
+    />
   )
 
   const equippedNode = (
@@ -412,7 +425,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
           {pickerNode}
         </div>
       ) : (
-        <div className={w.layout} data-phone="true">
+        <div className={w.layout}>
           {stageNode}
           {pickerNode}
           <details className={w.mobileSection}>

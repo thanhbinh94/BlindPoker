@@ -1,6 +1,7 @@
 import { useRef, type KeyboardEvent, type MutableRefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { GROUPS, groupOf, type OwnershipFilter, type TabId } from './categories.js'
+import { Icon, type IconName } from './icons.js'
 import s from './wardrobe.module.css'
 
 export interface CategoryNavProps {
@@ -76,7 +77,7 @@ export function CategoryNav({ tab, onTab, counts, filter, onFilter, showFilter }
             onKeyDown={(event) => onArrowKey(event, index, GROUPS, groupRefs, (next) => onTab(next.tabs[0]!))}
           >
             <span aria-hidden="true" className={s.groupIcon}>
-              {GROUP_ICON[group.id]}
+              <Icon name={GROUP_ICON[group.id]} />
             </span>
             {t(`wardrobe.groups.${group.id}`)}
           </button>
@@ -128,11 +129,9 @@ export function CategoryNav({ tab, onTab, counts, filter, onFilter, showFilter }
   )
 }
 
-/** Decorative glyphs (aria-hidden — the label already names the group), matching the mockup's icon set
- * with the codebase's existing convention of plain characters rather than an icon library (`TableChrome`'s
- * badge glyphs). */
-const GROUP_ICON: Record<(typeof GROUPS)[number]['id'], string> = {
-  look: '\u{1F464}',
-  wear: '\u{1F455}',
-  decor: '✦',
+/** Small monochrome line icons (V2 fix, `./icons.js`), aria-hidden — the label already names the group. */
+const GROUP_ICON: Record<(typeof GROUPS)[number]['id'], IconName> = {
+  look: 'person',
+  wear: 'shirt',
+  decor: 'sparkle',
 }
