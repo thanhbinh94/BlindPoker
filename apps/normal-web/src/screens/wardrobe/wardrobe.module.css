@@ -78,65 +78,173 @@
   color: var(--ink);
 }
 
-.tileGrid {
+/* The right column's card grid (design §3.1): every card shape below — `ItemCard`, `ColourCard`,
+   `WordCard`, `BaseCard` — sits in one of these. */
+.cardGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
 }
 
-.tile {
+/* An item card plus its colour-dot row (design §4.1) — one grid cell of `.cardGrid`. */
+.cardCell {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: var(--space-1);
-  padding: var(--space-2);
+}
+
+/* The one card chrome `ItemCard`, `ColourCard` and `WordCard` all share (design §4.1–§4.4): the
+   `data-rarity` border/glow, the gold "wearing" border `aria-pressed` sets, the muted+not-allowed look
+   `aria-disabled` sets. `BaseCard` does not use this class — it has neither a rarity nor a lock. */
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  width: 100%;
+  padding: var(--space-3);
   border: 1px solid var(--line);
+  border-bottom-width: 3px;
   border-radius: var(--radius-md);
   background: var(--bg-elev);
   cursor: pointer;
-  text-align: center;
+  text-align: left;
+  font: inherit;
+  color: inherit;
 }
 
-.tile[aria-pressed='true'] {
-  border-color: var(--gold);
+.card[data-rarity='common'] {
+  --card-glow: color-mix(in srgb, var(--rarity-common) 35%, transparent);
+  border-bottom-color: var(--rarity-common);
+}
+.card[data-rarity='rare'] {
+  --card-glow: color-mix(in srgb, var(--rarity-rare) 35%, transparent);
+  border-bottom-color: var(--rarity-rare);
+}
+.card[data-rarity='epic'] {
+  --card-glow: color-mix(in srgb, var(--rarity-epic) 35%, transparent);
+  border-bottom-color: var(--rarity-epic);
+}
+
+/* Wearing wins over rarity for the border colour (design §4.1) — declared after the `data-rarity` rules
+   above so the cascade, not specificity, decides. */
+.card[aria-pressed='true'] {
+  border: 2px solid var(--gold);
   box-shadow: 0 0 0 1px var(--gold);
 }
 
-.tile[aria-disabled='true'] {
+.card[aria-disabled='true'] {
   cursor: not-allowed;
-  opacity: 0.6;
 }
 
-.tile[data-rarity='rare'] {
-  background: color-mix(in srgb, var(--teal, #2f8f86) 12%, var(--bg-elev));
+/* The gold "✓ Đang mặc" pill (design §4.1), pinned to the card's own corner — `.card` is always its
+   `position: relative` parent. */
+.wearingPill {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--gold);
+  color: var(--gold-ink);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
-.tile[data-rarity='epic'] {
-  background: color-mix(in srgb, var(--gold) 14%, var(--bg-elev));
+/* The picture half of `ItemCard` (design §4.1): 118 px tall, a radial glow of the card's own rarity
+   colour behind the icon — `--card-glow` is set on `.card` above and inherits down to here. */
+.cardThumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 7.375rem;
+  border-radius: var(--radius-sm);
+  background: radial-gradient(circle, var(--card-glow, transparent) 0%, var(--bg) 72%);
 }
 
-.tileName {
-  font-size: 0.8125rem;
+.cardThumb[data-locked='true'] img {
+  filter: grayscale(0.85) brightness(0.55);
+}
+
+.cardName {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.cardName[data-locked='true'] {
+  color: var(--ink-muted);
+}
+
+.cardRarity {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.card[data-rarity='common'] .cardRarity {
+  color: var(--rarity-common);
+}
+.card[data-rarity='rare'] .cardRarity {
+  color: var(--rarity-rare);
+}
+.card[data-rarity='epic'] .cardRarity {
+  color: var(--rarity-epic);
+}
+
+/* The locked row: 🔒 plus `hintFor`'s text (design §4.1). */
+.lockHint {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+}
+
+/* The round swatch `ColourCard` draws instead of a picture (design §4.3): 56 px, either `item.colour`
+   (`.colourSwatchBig`) or the half-and-half "Natural" mark carried over from Plan 13's `.naturalMark`. */
+.colourSwatchBig,
+.naturalSwatch {
+  align-self: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+}
+
+.naturalSwatch {
+  background: repeating-conic-gradient(var(--line) 0% 25%, transparent 0% 50%);
+}
+
+/* The base tab's figure card (design §4.2): a head portrait, a name, a gold border when it is the
+   draft's current base — no rarity, no lock, ever. */
+.baseCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--bg-elev);
+  cursor: pointer;
+}
+
+.baseCard[aria-pressed='true'] {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold);
 }
 
 /* An item's inventory icon: square, transparent, already centred and padded by the pipeline. */
 .tileIcon {
   display: block;
-  width: 4rem;
-  height: 4rem;
+  width: 5.5rem;
+  height: 5.5rem;
   max-width: 100%;
   object-fit: contain;
-}
-
-.tileHint {
-  font-size: 0.6875rem;
-  color: var(--ink-muted);
-}
-
-.baseGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
-  gap: var(--space-3);
 }
 
 .outfitBar {
@@ -167,14 +275,6 @@
   justify-content: center;
 }
 
-/* A tile plus the row of colour dots under it (design §6) — one grid cell of `.tileGrid`. */
-.itemCard {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-1);
-}
-
 .colourDots {
   display: flex;
   gap: var(--space-1);
@@ -203,40 +303,6 @@
   opacity: 0.6;
 }
 
-/* The hair-colour / eye-colour tabs: round swatches, "Natural" first, no picture (design §6). */
-.colourGrid {
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-
-.colourSwatch {
-  position: relative;
-  width: var(--tap);
-  height: var(--tap);
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  background: var(--bg-elev);
-  cursor: pointer;
-}
-
-.colourSwatch[aria-pressed='true'] {
-  box-shadow: 0 0 0 2px var(--gold);
-}
-
-.colourSwatch[aria-disabled='true'] {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.naturalMark {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: repeating-conic-gradient(var(--line) 0% 25%, transparent 0% 50%);
-}
-
 .lock {
   position: absolute;
   inset: 0;
@@ -248,5 +314,117 @@
 
 .lock::before {
   content: '🔒';
+}
+
+/* The right column's header (design §3.1): the group tablist, the active group's sub-tab tablist, and
+   the ownership filter row — `CategoryNav`. */
+.categoryNav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.groupTabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--bg-elev);
+}
+
+.groupTab {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: var(--tap);
+  border: none;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--ink-muted);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.groupTab[aria-selected='true'] {
+  background: var(--gold);
+  color: var(--gold-ink);
+}
+
+.groupIcon {
+  font-size: 1rem;
+}
+
+.subTabs {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: var(--space-2);
+}
+
+.subTab {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  padding: 0 var(--space-1);
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--ink-muted);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.subTab[aria-selected='true'] {
+  border-bottom-color: var(--gold);
+  color: var(--ink);
+}
+
+.tabCount {
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--bg-elev);
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.filterRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.filterButtons {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.filterBtn {
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--ink-muted);
+  cursor: pointer;
+  font: inherit;
+}
+
+.filterBtn[aria-pressed='true'] {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.ownedCountLabel {
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
 }
 

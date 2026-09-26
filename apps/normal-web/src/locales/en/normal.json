@@ -260,16 +260,37 @@
   },
   "wardrobe": {
     "title": "Wardrobe",
+    "groups": {
+      "look": "Look",
+      "wear": "Clothing",
+      "decor": "Decor"
+    },
     "tabs": {
       "base": "Base",
       "head": "Head",
-      "face": "Face",
+      "face": "Face accessory",
       "outfit": "Outfit",
       "aura": "Aura",
       "frame": "Frame",
       "hairColor": "Hair colour",
       "eyeColor": "Eye colour",
       "words": "Title & Badge"
+    },
+    "filter": {
+      "all": "All",
+      "owned": "Owned",
+      "locked": "Locked"
+    },
+    "ownedCount": "{{owned}}/{{total}} owned",
+    "wearingBadge": "Wearing",
+    "words": {
+      "titles": "Titles",
+      "badges": "Badges"
+    },
+    "rarity": {
+      "common": "Common",
+      "rare": "Rare",
+      "epic": "Epic"
     },
     "natural": "Natural",
     "expression": {

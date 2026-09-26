@@ -1,8 +1,10 @@
 import { assetUrl, useAvatarAssetsBase } from '@bp/ui-kit'
 import { useTranslation } from 'react-i18next'
 import type { AchievementDefDto, AvatarConfigDto, ItemDto, ItemSlot } from '../../api.js'
-import { itemName } from '../../catalog-i18n.js'
 import { hintFor } from '../catalog.js'
+import shared from '../normal.module.css'
+import { ItemCard, WordCard } from './cards.js'
+import { applyFilter, tabItems, tabOfSlot, type OwnershipFilter } from './categories.js'
 import s from './wardrobe.module.css'
 
 /** The slots that draw a picture; `title` and `badge` are words and preview as nothing. */
@@ -67,11 +69,12 @@ export interface ItemTabProps {
   draft: AvatarConfigDto
   /** The draft base's wear, so a gendered item's tile shows the cut the preview is wearing. */
   wear?: string
+  filter: OwnershipFilter
   onPick: (itemId: string) => void
 }
 
 /**
- * Every row of a slot's colour variants (design §6): items that share `asset.file` with another item
+ * Every row of a slot's colour variants (design §4.1): items that share `asset.file` with another item
  * but carry their own `asset.tint` are not separate cards — they are dots under the item whose file
  * they share. The original the variants vary has no `tint` at all, which is exactly what tells a card
  * apart from a dot.
@@ -88,72 +91,50 @@ function variantsByFile(rows: readonly ItemDto[]): Map<string, ItemDto[]> {
   return map
 }
 
+/** The words tab's two sub-headings (design §4.4) — `title` and `badge` are the only slots this names. */
+const WORD_HEADING: Partial<Record<ItemSlot, string>> = { title: 'wardrobe.words.titles', badge: 'wardrobe.words.badges' }
+
 /**
- * One wardrobe slot's tiles (design §7): everything the catalogue lists for this slot, owned pieces
- * clickable and the rest locked with a reason. `outfit`'s tiles are never locked-*and*-equipped at once —
- * every account starts with the default outfit owned — but the lock logic here does not know that; it just
- * asks `owned`.
+ * One wardrobe slot's cards (design §4, §7): `tabItems` for the ordering and the colour-variant split,
+ * `applyFilter` for the "all/owned/locked" filter, owned pieces clickable and the rest locked with a
+ * reason. `outfit`'s cards are never locked-*and*-worn at once — every account starts with the default
+ * outfit owned — but the lock logic here does not know that; it just asks `owned`.
  *
- * A colour variant of a slot's item (design §6) is never one of these tiles — it hangs off its card as
- * a small dot instead, via `variantsByFile`.
+ * `title`/`badge` (the words tab, called once per slot from `WardrobeScreen`) draw as `WordCard` under
+ * their own sub-heading instead of `ItemCard`; every other slot draws pictured `ItemCard`s, each with its
+ * colour variants as a dot row (design §4.1) — a variant is never one of these cards itself.
  */
-export function ItemTab({ slot, catalog, owned, achievements, draft, wear, onPick }: ItemTabProps) {
+export function ItemTab({ slot, catalog, owned, achievements, draft, wear, filter, onPick }: ItemTabProps) {
   const { t } = useTranslation('normal')
-  const rows = catalog.filter((item) => item.slot === slot)
-  const variants = variantsByFile(rows)
-  // A card is anything that is not itself a colour variant — including `title`/`badge`, which have no
-  // `asset` and so no `asset.tint` either.
-  const cards = rows.filter((item) => item.asset?.tint === undefined)
+  const rows = tabItems(tabOfSlot(slot), catalog).filter((item) => item.slot === slot)
+  const variants = variantsByFile(catalog.filter((item) => item.slot === slot))
+  const cards = applyFilter(rows, owned, filter)
+  const heading = WORD_HEADING[slot]
 
   return (
-    <div className={s.tileGrid} role="tabpanel">
-      {cards.map((item) => {
-        const isOwned = owned.has(item.id)
-        const equipped = draft[slot] === item.id
-        const dots = item.asset === undefined ? undefined : variants.get(item.asset.file)
-        return (
-          <div key={item.id} className={s.itemCard}>
-            <button
-              type="button"
-              className={s.tile}
-              data-rarity={item.rarity}
-              aria-pressed={equipped}
-              aria-disabled={!isOwned}
-              onClick={() => {
-                if (isOwned) onPick(item.id)
-              }}
-            >
-              <ItemPreview item={item} wear={wear} />
-              <span className={s.tileName}>{itemName(item.id, t)}</span>
-              {isOwned ? null : <span className={s.tileHint}>{hintFor(item, achievements, t)}</span>}
-            </button>
-            {dots === undefined || dots.length === 0 ? null : (
-              <div className={s.colourDots} role="group" aria-label={itemName(item.id, t)}>
-                {dots.map((variant) => {
-                  const variantOwned = owned.has(variant.id)
-                  const variantEquipped = draft[slot] === variant.id
-                  return (
-                    <button
-                      key={variant.id}
-                      type="button"
-                      className={s.colourDot}
-                      style={{ background: variant.asset!.tint }}
-                      aria-label={itemName(variant.id, t)}
-                      aria-pressed={variantEquipped}
-                      aria-disabled={!variantOwned}
-                      onClick={() => {
-                        if (variantOwned) onPick(variant.id)
-                      }}
-                    >
-                      {variantOwned ? null : <span className={s.lock} aria-hidden="true" />}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )
-      })}
-    </div>
+    <>
+      {heading === undefined ? null : <h3 className={shared.groupTitle}>{t(heading)}</h3>}
+      <div className={s.cardGrid} role="tabpanel">
+        {cards.map((item) => {
+          const isOwned = owned.has(item.id)
+          const wearing = draft[slot] === item.id
+          const hint = isOwned ? '' : hintFor(item, achievements, t)
+
+          if (heading !== undefined) {
+            return <WordCard key={item.id} item={item} owned={isOwned} wearing={wearing} hint={hint} onPick={onPick} />
+          }
+
+          const dots = item.asset === undefined ? undefined : variants.get(item.asset.file)
+          const variantProps =
+            dots === undefined || dots.length === 0
+              ? undefined
+              : dots.map((variant) => ({ item: variant, owned: owned.has(variant.id), wearing: draft[slot] === variant.id }))
+
+          return (
+            <ItemCard key={item.id} item={item} wear={wear} owned={isOwned} wearing={wearing} hint={hint} variants={variantProps} onPick={onPick} />
+          )
+        })}
+      </div>
+    </>
   )
 }

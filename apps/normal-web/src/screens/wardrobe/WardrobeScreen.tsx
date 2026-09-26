@@ -303,7 +303,6 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
             <BaseTab bases={loaded.avatarCatalog.bases} draft={config} items={items} onPick={pickBase} />
           ) : tab === 'words' ? (
             <>
-              <h3 className={s.groupTitle}>{t('wardrobe.tabs.words')}</h3>
               <ItemTab
                 slot="title"
                 catalog={loaded.catalog}
@@ -311,6 +310,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
                 achievements={loaded.achievements}
                 draft={config}
                 wear={wear}
+                filter="all"
                 onPick={(id) => pick('title', id)}
               />
               <ItemTab
@@ -320,6 +320,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
                 achievements={loaded.achievements}
                 draft={config}
                 wear={wear}
+                filter="all"
                 onPick={(id) => pick('badge', id)}
               />
             </>
@@ -330,6 +331,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
               owned={owned}
               achievements={loaded.achievements}
               draft={config}
+              filter="all"
               onPick={(id) => commit(withSlot(config, tab, id))}
             />
           ) : (
@@ -340,6 +342,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
               achievements={loaded.achievements}
               draft={config}
               wear={wear}
+              filter="all"
               onPick={(id) => pick(tab, id)}
             />
           )}

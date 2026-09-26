@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next'
 import type { AchievementDefDto, AvatarConfigDto, ItemDto } from '../../api.js'
-import { itemName } from '../../catalog-i18n.js'
 import { hintFor } from '../catalog.js'
+import { ColourCard } from './cards.js'
+import { applyFilter, tabItems, type OwnershipFilter } from './categories.js'
 import s from './wardrobe.module.css'
 
 export interface ColourTabProps {
@@ -10,52 +11,39 @@ export interface ColourTabProps {
   owned: ReadonlySet<string>
   achievements: readonly AchievementDefDto[]
   draft: AvatarConfigDto
+  filter: OwnershipFilter
   /** `undefined` equips nothing — the base's own colour — which is what the "Natural" swatch sends. */
   onPick: (itemId: string | undefined) => void
 }
 
 /**
- * The hair-colour and eye-colour tabs (design §6): round swatches painted with each item's own
+ * The hair-colour and eye-colour tabs (design §4.3): round swatches painted with each item's own
  * `colour`, one row, no picture — there is nothing to draw a colour *as* other than itself. The first
- * swatch is "Natural" (the base's own colour, no item at all) and is never locked; every other one
- * locks exactly like `ItemTab`'s tiles.
+ * card is "Natural" (the base's own colour, no item at all): always shown, never locked, and untouched
+ * by the ownership filter — it is not a catalogue row `applyFilter` has an opinion about. Every other
+ * card locks exactly like `ItemTab`'s.
  */
-export function ColourTab({ slot, catalog, owned, achievements, draft, onPick }: ColourTabProps) {
+export function ColourTab({ slot, catalog, owned, achievements, draft, filter, onPick }: ColourTabProps) {
   const { t } = useTranslation('normal')
-  const rows = catalog.filter((item) => item.slot === slot)
+  const rows = tabItems(slot, catalog)
+  const shown = applyFilter(rows, owned, filter)
   const natural = draft[slot] === undefined
 
   return (
-    <div className={s.colourGrid} role="tabpanel">
-      <button
-        type="button"
-        className={s.colourSwatch}
-        data-natural="true"
-        aria-label={t('wardrobe.natural')}
-        aria-pressed={natural}
-        onClick={() => onPick(undefined)}
-      >
-        <span className={s.naturalMark} aria-hidden="true" />
-      </button>
-      {rows.map((item) => {
+    <div className={s.cardGrid} role="tabpanel">
+      <ColourCard item={null} owned wearing={natural} hint="" onPick={onPick} />
+      {shown.map((item) => {
         const isOwned = owned.has(item.id)
-        const equipped = draft[slot] === item.id
+        const wearing = draft[slot] === item.id
         return (
-          <button
+          <ColourCard
             key={item.id}
-            type="button"
-            className={s.colourSwatch}
-            style={{ background: item.colour }}
-            aria-label={itemName(item.id, t)}
-            aria-pressed={equipped}
-            aria-disabled={!isOwned}
-            title={isOwned ? undefined : hintFor(item, achievements, t)}
-            onClick={() => {
-              if (isOwned) onPick(item.id)
-            }}
-          >
-            {isOwned ? null : <span className={s.lock} aria-hidden="true" />}
-          </button>
+            item={item}
+            owned={isOwned}
+            wearing={wearing}
+            hint={isOwned ? '' : hintFor(item, achievements, t)}
+            onPick={onPick}
+          />
         )
       })}
     </div>

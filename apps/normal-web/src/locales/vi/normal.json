@@ -260,16 +260,37 @@
   },
   "wardrobe": {
     "title": "Tủ đồ",
+    "groups": {
+      "look": "Ngoại hình",
+      "wear": "Trang phục",
+      "decor": "Trang trí"
+    },
     "tabs": {
       "base": "Thân nền",
       "head": "Mũ",
-      "face": "Mặt",
+      "face": "Phụ kiện mặt",
       "outfit": "Trang phục",
       "aura": "Hào quang",
       "frame": "Khung",
       "hairColor": "Màu tóc",
       "eyeColor": "Màu mắt",
       "words": "Danh hiệu & Huy hiệu"
+    },
+    "filter": {
+      "all": "Tất cả",
+      "owned": "Đã có",
+      "locked": "Chưa có"
+    },
+    "ownedCount": "{{owned}}/{{total}} đã có",
+    "wearingBadge": "Đang mặc",
+    "words": {
+      "titles": "Danh hiệu",
+      "badges": "Huy hiệu"
+    },
+    "rarity": {
+      "common": "Thường",
+      "rare": "Hiếm",
+      "epic": "Sử thi"
     },
     "natural": "Tự nhiên",
     "expression": {
