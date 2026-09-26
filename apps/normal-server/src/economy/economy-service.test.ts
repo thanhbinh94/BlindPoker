@@ -3,7 +3,7 @@ import { silentLogger } from '@bp/server-kit'
 import { asc, eq, sql } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { AppDb } from '../db/client.js'
-import { dailyLogins, inventory, players, pointTransactions, users } from '../db/schema.js'
+import { dailyLogins, inventory, items, players, pointTransactions, users } from '../db/schema.js'
 import type { TestDb } from '../db/test-db.js'
 import { createTestDb } from '../db/test-db.js'
 import type { AppEvent, AppEventBus } from '../events.js'
@@ -346,6 +346,19 @@ describe('claimDaily', () => {
       for (const id of catalog.freeIds()) expect(drawable('common')).not.toContain(id)
     })
 
+    it('never draws an item the catalogue has withdrawn, even though its row stays in `items` (bug 6)', async () => {
+      // A withdrawn item keeps its `items` row for the inventory foreign key — the hood did, after it left
+      // items.json. Seed one such row as a common head item: once every drawable common is owned, the tier
+      // must pay the fallback rather than hand it over.
+      await db.insert(items).values({ id: 'head_withdrawn_test01', slot: 'head', rarity: 'common', nameKey: 'items.head_withdrawn_test01', assetKey: 'head/head_withdrawn_test01', isDefault: false }).onConflictDoNothing()
+      const playerId = await seedPlayer()
+      await own(playerId, drawable('common'))
+      await rewindTo(playerId, 7)
+
+      const dry = await economy.claimDaily(playerId, OCT(7))
+      expect(dry).toMatchObject({ day: 7, item: null, items: [], fallbackPoints: 10_000 })
+      expect(await grantedOf(playerId)).not.toContain('head_withdrawn_test01')
+    })
     it('exhausts the rare tier without ever handing out a reserved id, then pays the fallback', async () => {
       const playerId = await seedPlayer()
       const pool = drawable('rare')
