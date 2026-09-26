@@ -184,7 +184,10 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
       return { items: granted, fallbackPoints: 0 }
     }
 
-    const unowned = await deps.inventory.unownedOfRarity(tx, playerId, rule.rarity, drawExclusion)
+    // `items` keeps every row it was ever seeded with (inventory's foreign key needs them), so an item the
+    // catalogue has since withdrawn — `head_hood_black01`, bug 6 — is still a row of the right slot and
+    // rarity. Only what the catalogue still offers is a prize.
+    const unowned = (await deps.inventory.unownedOfRarity(tx, playerId, rule.rarity, drawExclusion)).filter((id) => deps.catalog.get(id) !== undefined)
     if (unowned.length === 0) {
       // A second ledger entry under its own reason, sharing the claim's refId: one claim, two rows,
       // and §12.5's report can see how often the catalogue is failing to keep up.

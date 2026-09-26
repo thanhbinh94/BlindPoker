@@ -39,7 +39,7 @@ describe('normal locales', () => {
 
   it.each(bundles)('names every catalogue item in %s', (_lang, bundle) => {
     const named = bundle.items as Record<string, string | undefined>
-    expect(itemDefs.length).toBe(76)
+    expect(itemDefs.length).toBe(75)
     for (const def of itemDefs) expect(named[def.id], `items.${def.id}`).toBeTypeOf('string')
     // …and nothing more: a string for an id the server does not serve is a name nobody will ever read.
     expect(Object.keys(named).sort()).toEqual(itemDefs.map((d) => d.id).sort())

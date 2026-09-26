@@ -90,7 +90,7 @@ describe('the shipped catalogue', () => {
 
   it('has seventy-six items spread across all nine slots', () => {
     const all = catalog.all()
-    expect(all.length).toBe(76)
+    expect(all.length).toBe(75)
     for (const slot of SLOTS) expect(all.some((d) => d.slot === slot), slot).toBe(true)
     // The v2 slots are gone: a wardrobe piece is one PNG layer now, not a body part it dresses.
     expect(all.some((d) => ['hair', 'top', 'bottom', 'shoes', 'hat', 'accessory', 'jewelry'].includes(d.slot))).toBe(false)
@@ -154,9 +154,11 @@ describe('the shipped catalogue', () => {
     }
   })
 
-  it('marks the one head item that hides the base’s hair', () => {
-    expect(catalog.get('head_hood_black01')?.asset).toMatchObject({ hidesHairFront: true, hidesHairBack: true })
-    expect(catalog.get('head_beanie01')?.asset?.hidesHairFront).toBeUndefined()
+  it('no longer ships the hood, the one item that hid the back hair (bug 6)', () => {
+    // `head_hood_black01` was withdrawn in Plan 12 (a hood cannot erase hair baked into the base) and left
+    // the catalogue on 2026-09-26; nothing in it hides the back hair (layer 20) any more.
+    expect(catalog.get('head_hood_black01')).toBeUndefined()
+    for (const def of catalog.all()) expect(def.asset?.hidesHairBack, def.id).toBeUndefined()
   })
 
   it('leaves enough unowned commons and rares for the daily tiers to draw several before running dry', () => {

@@ -13,8 +13,6 @@
     "asset": { "layer": 80, "file": "item_head_tophat01_L80", "hidesHairFront": true, "fitsAvatarCrop": true } },
   { "id": "head_crown_gold01", "slot": "head", "rarity": "epic", "nameKey": "items.head_crown_gold01", "assetKey": "head/head_crown_gold01", "isDefault": false,
     "asset": { "layer": 80, "file": "item_head_crown_gold01_L80", "fitsAvatarCrop": true } },
-  { "id": "head_hood_black01", "slot": "head", "rarity": "epic", "nameKey": "items.head_hood_black01", "assetKey": "head/head_hood_black01", "isDefault": false,
-    "asset": { "layer": 80, "file": "item_head_hood_black01_L80", "hidesHairFront": true, "hidesHairBack": true, "fitsAvatarCrop": true } },
 
   { "id": "face_glasses_round_gold01", "slot": "face", "rarity": "common", "nameKey": "items.face_glasses_round_gold01", "assetKey": "face/face_glasses_round_gold01", "isDefault": false,
     "asset": { "layer": 70, "file": "item_face_glasses_round_gold01_L70", "fitsAvatarCrop": true } },
