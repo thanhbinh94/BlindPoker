@@ -260,10 +260,15 @@
   },
   "wardrobe": {
     "title": "Wardrobe",
+    "groups": {
+      "look": "Look",
+      "wear": "Clothing",
+      "decor": "Decor"
+    },
     "tabs": {
       "base": "Base",
       "head": "Head",
-      "face": "Face",
+      "face": "Face accessory",
       "outfit": "Outfit",
       "aura": "Aura",
       "frame": "Frame",
@@ -271,7 +276,24 @@
       "eyeColor": "Eye colour",
       "words": "Title & Badge"
     },
+    "filter": {
+      "all": "All",
+      "owned": "Owned",
+      "locked": "Locked"
+    },
+    "ownedCount": "{{owned}}/{{total}} owned",
+    "wearingBadge": "Wearing",
+    "words": {
+      "titles": "Titles",
+      "badges": "Badges"
+    },
     "natural": "Natural",
+    "equipped": {
+      "title": "Wearing",
+      "count": "Wearing ({{n}})",
+      "none": "None",
+      "remove": "Remove {{item}}"
+    },
     "expression": {
       "legend": "Preview expression",
       "neutral": "Neutral",
@@ -290,7 +312,10 @@
       "unavailable": "No way to earn this yet"
     },
     "save": "Save wardrobe",
+    "saveShort": "Save",
     "saved": "Your wardrobe is saved.",
+    "dirty": "● Unsaved changes",
+    "undo": "Undo",
     "close": "Close",
     "leaveTitle": "Leave without saving?",
     "leaveBody": "You have changes to your wardrobe that have not been saved yet.",
@@ -300,11 +325,13 @@
   "outfits": {
     "title": "Saved outfits",
     "empty": "Empty",
-    "emptySlot": "Slot {{n}}",
+    "emptySlot": "Slot {{n}} empty",
     "defaultName": "Outfit {{n}}",
     "nameLabel": "Outfit name",
     "apply": "Apply",
     "saveHere": "Save here",
+    "overwrite": "Overwrite",
+    "menu": "Outfit {{name}}",
     "rename": "Rename",
     "delete": "Delete",
     "error": "Could not complete that action — please try again"

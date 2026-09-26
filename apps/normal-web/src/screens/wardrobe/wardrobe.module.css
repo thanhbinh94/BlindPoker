@@ -1,47 +1,189 @@
 /* The wardrobe: a preview column and a tabbed picker beside it, same shell as the other account pages
-   (`normal.module.css`'s `.page`/`.wide`). Everything here is this screen's own — tiles, tabs, the outfit
-   bar — so a change to one wardrobe layout detail never touches the inventory or the profile. */
+   (`normal.module.css`'s `.page`/`.wide`). Everything here is this screen's own — cards, tabs, the saved-
+   outfit grid — so a change to one wardrobe layout detail never touches the inventory or the profile. */
 
-.layout {
+/* The header row (design §3.1): title + dirty label on the left, Hoàn tác/Lưu tủ đồ on the right. Phones
+   show a short "Lưu" and turn "Hoàn tác" into an icon-only button (`WardrobeScreen`'s own `phone` switch) —
+   this row's flex-wrap is what keeps that pair from ever pushing off the title on a narrow screen even
+   before that switch flips. */
+.header {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-5);
+  justify-content: space-between;
   flex-wrap: wrap;
+  gap: var(--space-3);
 }
 
-.previewColumn {
+.headerTitle {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* `--font-display`, 40 px desktop, 28 px phone (design §3.1) — a dedicated size rather than the shared
+   `h1` clamp in `global.css`, which tops out at 44 px and never settles on either of this screen's two
+   fixed values. */
+.title {
+  font-size: 1.75rem;
+}
+
+@media (min-width: 768px) {
+  .title {
+    font-size: 2.5rem;
+  }
+}
+
+.dirtyLabel {
+  color: var(--gold);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.headerActions {
   display: flex;
   flex: none;
-  flex-direction: column;
   align-items: center;
+  gap: var(--space-2);
+}
+
+/* The two-column body (design §3.1–§3.3): one column on phones (`WardrobeScreen` renders a different,
+   reordered tree there — see `.mobileSection` below), `300px 1fr` on tablets, `360px 1fr` on desktop. */
+.layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .layout {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    align-items: start;
+    gap: 28px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .layout {
+    grid-template-columns: 360px 1fr;
+  }
+}
+
+/* The left column (design §3.1): stage, wearing list and saved outfits, one card. Sticky only from the
+   tablet floor up — a phone's left column is not a column at all, just the top of one long scroll. */
+.previewColumn {
+  display: flex;
+  flex-direction: column;
   gap: var(--space-3);
-  width: 15rem;
+  width: 100%;
+  min-width: 0;
+}
+
+@media (min-width: 768px) {
+  .previewColumn {
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    background: var(--bg-elev);
+    position: sticky;
+    top: var(--space-4);
+    /* The column's own content — stage, wearing list, five saved-outfit portraits — runs close to 1000 px
+       tall; pinned at `top: var(--space-4)` with no cap of its own, an 800–900 px window left the saved-
+       outfit row (the *bottom* of the column) unreachable until the page's own end, since a sticky element
+       taller than the viewport just sits there running off the bottom edge. Capping it at the viewport's
+       own height (minus the same gap top and bottom) and scrolling the overflow internally keeps every row
+       reachable without leaving `position: sticky` at all. Phone never sticks (see `.previewColumn` above,
+       unscoped by this query), so it never needs this either — the whole page scrolls there instead. */
+    max-height: calc(100vh - 2 * var(--space-4));
+    overflow-y: auto;
+  }
+}
+
+/* The phone-only "Đang mặc (n)"/"Bộ đồ đã lưu" sections (design §3.2): native `<details>`, default closed,
+   summary carries the count so a player never has to open it just to see how full the wardrobe is. */
+.mobileSection {
+  width: 100%;
+}
+
+.mobileSummary {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.mobileSummary::-webkit-details-marker {
+  display: none;
+}
+
+/* A chevron stands in for the native disclosure triangle `list-style: none` above just removed — purely
+   decorative (the `<details>`/`<summary>` pair already carries the expanded state to assistive tech on
+   its own), rotating open via the browser's own `[open]` state on the parent `<details>`. */
+.mobileSummary::after {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-left: auto;
+  border-right: 2px solid var(--ink-muted);
+  border-bottom: 2px solid var(--ink-muted);
+  transform: rotate(45deg);
+  transition: transform 0.15s ease;
+}
+
+.mobileSection[open] > .mobileSummary::after {
+  transform: rotate(-135deg);
+}
+
+/* One segmented row of six (design §3.1 item 2): never wraps, scrolls horizontally instead once the
+   column is too narrow for all six at once. `flex-start` rather than `center` — centring a row that can
+   overflow clips its start behind the scrollport in most browsers (no `justify-content: safe center` yet
+   everywhere), which would strand the first button unreachable. Compact chips (V1 fix): small enough,
+   with tight enough padding, that all six fit the 360 px desktop column without ever touching the
+   `overflow-x` fallback above — that fallback now exists for the phone width alone. */
+.expressionRow {
+  display: flex;
+  gap: 2px;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  overflow-x: auto;
+  width: 100%;
   max-width: 100%;
 }
 
-.previewFigures {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: var(--space-3);
-}
-
-.expressionRow {
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
+/* `min-width: 40px` (V-fix, 2026-09-27): with none at all, a chip's own tap target was only as wide as its
+   short label plus 3px of padding — measured 24–35 px on phones, well under a thumb's own width. The row
+   already scrolls (`.expressionRow`'s `overflow-x: auto`) if six chips at 40 px each cannot all fit, so a
+   wider floor here costs nothing it did not already have a fallback for. */
 .expressionBtn {
-  min-width: var(--tap);
-  min-height: var(--tap);
+  flex: none;
+  padding: 0 3px;
+  min-width: 40px;
+  min-height: 40px;
   border-radius: var(--radius-md);
   border: 1px solid var(--line);
   background: var(--bg-elev);
   color: var(--ink-muted);
   cursor: pointer;
-  font-size: 1.1rem;
+  font-size: 0.6875rem;
+  white-space: nowrap;
+}
+
+/* Desktop keeps the compact chip the V1 fix tuned (see `.expressionRow`'s own comment): no tap-target
+   floor to hold onto with a pointer, and this is what buys the row its fit inside the 360 px column
+   without ever touching the phone-only scroll fallback above. */
+@media (min-width: 768px) {
+  .expressionBtn {
+    min-width: 0;
+    min-height: 30px;
+  }
 }
 
 .expressionBtn[aria-pressed='true'] {
@@ -50,76 +192,254 @@
 }
 
 .picker {
-  flex: 1 1 20rem;
+  width: 100%;
   min-width: 0;
 }
 
-.tabs {
-  display: flex;
-  gap: var(--space-1);
-  flex-wrap: wrap;
-  border-bottom: 1px solid var(--line);
-  margin-bottom: var(--space-4);
-}
-
-.tab {
-  min-height: var(--tap);
-  padding: 0 var(--space-3);
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: none;
-  color: var(--ink-muted);
-  cursor: pointer;
-  font: inherit;
-}
-
-.tab[aria-selected='true'] {
-  border-bottom-color: var(--gold);
-  color: var(--ink);
-}
-
-.tileGrid {
+/* The right column's card grid (design §3.1, §3.2, §3.3): every card shape below — `ItemCard`,
+   `ColourCard`, `WordCard`, `BaseCard` — sits in one of these. Fixed 3 columns on phones (deferred from
+   Task 2 to here); `auto-fill`/`minmax` from the tablet floor up, 130 px on tablet, 150 px on desktop. */
+.cardGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
 }
 
-.tile {
+@media (min-width: 768px) {
+  .cardGrid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .cardGrid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+}
+
+/* One grid cell of `.cardGrid` (design §4.1). `min-width: 0` (V5 fix): a grid item's implicit min-width
+   is `auto` — its content's own min-content size — which a long, unbreakable item name (`.cardName`'s
+   text) can exceed a phone's 1/3-of-343px column share; the grid track then grows past its `1fr` share to
+   fit it, and the whole grid — the whole page — scrolls sideways. `min-width: 0` lets the track (and the
+   name inside it) actually shrink and wrap instead. */
+.cardCell {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: var(--space-1);
-  padding: var(--space-2);
+  min-width: 0;
+}
+
+/* The one card chrome `ItemCard`, `ColourCard` and `WordCard` all share (design §4.1–§4.4): the
+   `data-rarity` border/glow, the gold "wearing" border `aria-pressed`/`data-wearing` sets, the
+   muted+not-allowed look `aria-disabled` sets. `BaseCard` does not use this class — it has neither a
+   rarity nor a lock (it gets the same neutral border/background directly, see `.baseCard` below).
+   `ColourCard` and `WordCard` render `.card` itself as the one clickable `<button>`. `ItemCard` is the one
+   exception (V3 fix): its colour-variant dots are themselves buttons, and a `<button>` cannot contain
+   another, so there `.card` is a plain `<div>` — the visual chrome only — wrapping an inner `.cardPick`
+   button (the thumb/name/rarity/lock, i.e. everything `.card` alone used to be) alongside the dot row,
+   which now sits inside the card body instead of below/outside it. `data-wearing`/`data-rarity` move to
+   this outer `.card` either way, so its border always reflects the item's state regardless of which of
+   the two shapes drew it. */
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3);
   border: 1px solid var(--line);
+  border-bottom-width: 3px;
   border-radius: var(--radius-md);
   background: var(--bg-elev);
   cursor: pointer;
-  text-align: center;
+  text-align: left;
+  font: inherit;
+  color: inherit;
 }
 
-.tile[aria-pressed='true'] {
+.card[data-rarity='common'] {
+  --card-glow: color-mix(in srgb, var(--rarity-common) 35%, transparent);
+  border-bottom-color: var(--rarity-common);
+}
+.card[data-rarity='rare'] {
+  --card-glow: color-mix(in srgb, var(--rarity-rare) 35%, transparent);
+  border-bottom-color: var(--rarity-rare);
+}
+.card[data-rarity='epic'] {
+  --card-glow: color-mix(in srgb, var(--rarity-epic) 35%, transparent);
+  border-bottom-color: var(--rarity-epic);
+}
+
+/* Wearing wins over rarity for the border colour (design §4.1) — declared after the `data-rarity` rules
+   above so the cascade, not specificity, decides. `aria-pressed` is `.card` itself for `ColourCard`/
+   `WordCard`; `data-wearing` is `ItemCard`'s own outer `<div>`, which has no `aria-pressed` of its own to
+   set (see the block comment above).
+   V-fix, 2026-09-27: this used to also set `border: 2px solid …`, the shorthand, which resets every side's
+   *width* along with its colour — 1 px top/left/right and 3 px bottom (`.card` above) both became a flat
+   2 px. `box-sizing: border-box` (`global.css`) keeps the card's own outer box the same size either way,
+   but the border eats into that fixed box by a different amount once it does, so the content inside (the
+   thumb, the name) visibly shifted by a pixel or two on every equip/unequip. `border-color` alone leaves
+   every width exactly as `.card`/`.card[data-rarity]` already set it — the 3 px rarity accent survives
+   being worn — and the inset shadow below adds back the bolder ring the flat 2 px border was going for,
+   with no width of its own to shift anything. */
+.card[aria-pressed='true'],
+.card[data-wearing='true'] {
   border-color: var(--gold);
+  box-shadow:
+    0 0 0 1px var(--gold),
+    inset 0 0 0 1px var(--gold);
+}
+
+.card[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
+/* `ItemCard`'s inner button (V3 fix — see the `.card` comment above): everything `.card` used to be
+   *as* the clickable element, now just the layout, with the chrome living one level up. */
+.cardPick {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+.cardPick[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
+/* The gold "✓ Đang mặc" pill (design §4.1), pinned to the card's own corner. Its positioned ancestor is
+   always `.card` — `position: relative` there, whichever of the two shapes above drew it — even when it
+   is painted from inside the nested `.cardPick` button, since an absolutely positioned element looks past
+   any number of non-positioned ancestors for the nearest one that is. */
+.wearingPill {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--gold);
+  color: var(--gold-ink);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* The picture half of `ItemCard` (design §4.1): 70 px tall on phones (deferred from Task 2 to here), 118 px
+   from the tablet floor up, a radial glow of the card's own rarity colour behind the icon — `--card-glow`
+   is set on `.card` above and inherits down to here. */
+.cardThumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 70px;
+  border-radius: var(--radius-sm);
+  background: radial-gradient(circle, var(--card-glow, transparent) 0%, var(--bg) 72%);
+}
+
+@media (min-width: 768px) {
+  .cardThumb {
+    height: 7.375rem;
+  }
+}
+
+.cardThumb[data-locked='true'] img {
+  filter: grayscale(0.85) brightness(0.55);
+}
+
+.cardName {
+  overflow-wrap: break-word;
+  width: 100%;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.cardName[data-locked='true'] {
+  color: var(--ink-muted);
+}
+
+.cardRarity {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.card[data-rarity='common'] .cardRarity {
+  color: var(--rarity-common);
+}
+.card[data-rarity='rare'] .cardRarity {
+  color: var(--rarity-rare);
+}
+.card[data-rarity='epic'] .cardRarity {
+  color: var(--rarity-epic);
+}
+
+/* The locked row: 🔒 plus `hintFor`'s text (design §4.1). */
+.lockHint {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+}
+
+/* The round swatch `ColourCard` draws instead of a picture (design §4.3): 56 px, either `item.colour`
+   (`.colourSwatchBig`) or the half-and-half "Natural" mark carried over from Plan 13's `.naturalMark`. */
+.colourSwatchBig,
+.naturalSwatch {
+  align-self: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+}
+
+.naturalSwatch {
+  background: repeating-conic-gradient(var(--line) 0% 25%, transparent 0% 50%);
+}
+
+/* The base tab's figure card (design §4.2): a head portrait, a name, a gold border when it is the
+   draft's current base — no rarity, no lock, ever. Same neutral chrome as an item `.card` (V7 fix) —
+   1 px `--line` all round plus the 3 px bottom accent, `--line` standing in for a rarity colour it does
+   not have — so an unselected tile still reads as its own card instead of dissolving into the page. */
+.baseCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-bottom-width: 3px;
+  border-radius: var(--radius-md);
+  background: var(--bg-elev);
+  cursor: pointer;
+}
+
+.baseCard[aria-pressed='true'] {
+  border: 2px solid var(--gold);
   box-shadow: 0 0 0 1px var(--gold);
 }
 
-.tile[aria-disabled='true'] {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.tile[data-rarity='rare'] {
-  background: color-mix(in srgb, var(--teal, #2f8f86) 12%, var(--bg-elev));
-}
-
-.tile[data-rarity='epic'] {
-  background: color-mix(in srgb, var(--gold) 14%, var(--bg-elev));
-}
-
-.tileName {
-  font-size: 0.8125rem;
-}
-
-/* An item's inventory icon: square, transparent, already centred and padded by the pipeline. */
+/* An item's own icon: square, transparent, already centred and padded by the pipeline. Fixed 4rem — the
+   *inventory* grid's own size (Plan 13's `.cardSwatch`, `normal.module.css`, still sized "like the drawn
+   slots' icon" to match it) — because `ItemPreview` (`ItemTab.tsx`) is shared between the wardrobe's own
+   cards and `InventoryScreen`'s read-only ones, and only one of the two owns this class.
+   V-fix, 2026-09-27: the V3 fix below used to resize *this* rule itself (58 px phone / 100 px desktop, for
+   the wardrobe's own `.cardThumb`), which — since `ItemPreview` renders this one class regardless of which
+   screen it is on — resized the inventory's icon right along with it, past `.cardSwatch`'s own comment.
+   `.cardThumb .tileIcon` below carries that breakpoint-driven size instead, scoped so it only ever wins
+   inside the wardrobe's own thumb. */
 .tileIcon {
   display: block;
   width: 4rem;
@@ -128,51 +448,327 @@
   object-fit: contain;
 }
 
-.tileHint {
-  font-size: 0.6875rem;
+/* `.cardThumb`'s own icon size (the V3 fix's original intent, now scoped here instead of on `.tileIcon`
+   itself — see that class's own comment): 70 px tall on phones, ~half the 118 px desktop thumb (`height`
+   the driving dimension; `width: auto` + `object-fit: contain` keeps every icon's own aspect ratio), 100 px
+   from the tablet floor up — never the flat 88 px `.tileIcon` alone drew before the V3 fix, and never
+   spilling past the phone thumb the way that flat size did (`.cardThumb` clips nothing of its own). */
+.cardThumb .tileIcon {
+  width: auto;
+  height: 58px;
+  max-width: 90%;
+}
+
+@media (min-width: 768px) {
+  .cardThumb .tileIcon {
+    height: 100px;
+  }
+}
+
+/* The left column's stage (design §3.1 item 1): a lit podium the chibi stands on. The glow and podium
+   are both decorative pseudo-elements so the figure itself — `.stageFigure`, the only real content — can
+   sit centred above them without fighting for stacking order. */
+.stagePanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.stage {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+  width: 100%;
+  height: 330px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 85%, black) 0%, var(--bg) 100%);
+}
+
+/* Tablet/phone stages (design §3.2, §3.3) are shorter; the figure inside keeps its own fixed size. Phone
+   is the default (250 px) since `compact` only turns on under the 1024 px desktop floor; the tablet band
+   between 768 and 1023 px gets its own taller 280 px on top of that. */
+.stage[data-compact='true'] {
+  height: 250px;
+}
+
+@media (min-width: 768px) {
+  .stage[data-compact='true'] {
+    height: 280px;
+  }
+}
+
+/* The gold glow behind the figure. */
+.stage::before {
+  content: '';
+  position: absolute;
+  top: 10%;
+  left: 50%;
+  width: 70%;
+  height: 70%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--gold) 30%, transparent) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* The podium ellipse under the figure's feet. */
+.stage::after {
+  content: '';
+  position: absolute;
+  bottom: 6%;
+  left: 50%;
+  width: 55%;
+  height: 14px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--gold) 25%, transparent);
+  filter: blur(2px);
+  pointer-events: none;
+}
+
+.stageFigure {
+  position: relative;
+  z-index: 1;
+}
+
+/* The left column's "Đang mặc" list (design §3.1 item 3): one row per slot. */
+.equippedList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+/* V6 fix: an `<h2>` without its own `font-family` inherits `global.css`'s `h1,h2,h3{font-family:
+   var(--font-display)}` — the same serif "Tủ đồ" uses — which is not the small muted sans the mockup
+   draws here. Naming `--font-body` explicitly is what actually overrides it (the global rule is a tag
+   selector, this is a class — either wins on specificity alone, but only one of them sets the property). */
+.equippedTitle {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--ink-muted);
 }
 
-.baseGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
-  gap: var(--space-3);
-}
-
-.outfitBar {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
-  gap: var(--space-3);
-  margin-top: var(--space-5);
-}
-
-.outfitSlot {
+.equippedRows {
   display: flex;
   flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.equippedRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.equippedRowMain {
+  display: flex;
+  flex: 1 1 auto;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-3);
-  border: 1px dashed var(--line);
-  border-radius: var(--radius-md);
+  min-height: var(--tap);
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
 }
 
-.outfitSlot[data-filled='true'] {
-  border-style: solid;
+.equippedRowMain:hover {
+  background: var(--bg-elev);
 }
 
-.outfitActions {
+.equippedIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.equippedLabel {
+  flex: none;
+  width: 5.5rem;
+  color: var(--ink-muted);
+  font-size: 0.8125rem;
+}
+
+.equippedValue {
+  overflow: hidden;
   display: flex;
+  align-items: center;
   gap: var(--space-1);
-  flex-wrap: wrap;
-  justify-content: center;
+  min-width: 0;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.875rem;
+  font-weight: 600;
 }
 
-/* A tile plus the row of colour dots under it (design §6) — one grid cell of `.tileGrid`. */
-.itemCard {
+.equippedValue[data-rarity='common'] {
+  color: var(--rarity-common);
+}
+.equippedValue[data-rarity='rare'] {
+  color: var(--rarity-rare);
+}
+.equippedValue[data-rarity='epic'] {
+  color: var(--rarity-epic);
+}
+
+.equippedSwatch {
+  flex: none;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+}
+
+.equippedRemove {
+  flex: none;
+  width: var(--tap);
+  height: var(--tap);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.equippedRemove:hover {
+  color: var(--ink);
+  background: var(--bg-elev);
+}
+
+/* The left column's "Bộ đồ đã lưu" (design §3.1 item 4): five 54 px round portraits. */
+.savedOutfits {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+/* Same V6 fix as `.equippedTitle` above, and for the same reason (an un-overridden `<h2>`). */
+.savedOutfitsTitle {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.savedOutfitsError {
+  margin: 0;
+  color: var(--danger, #e5484d);
+  font-size: 0.8125rem;
+}
+
+.outfitGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--space-2);
+}
+
+.outfitItem {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-1);
+  min-width: 0;
+}
+
+.outfitPortrait {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  padding: 0;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  background: var(--bg-elev);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.outfitPortrait[data-filled='true'] {
+  border-color: color-mix(in srgb, var(--gold) 60%, transparent);
+}
+
+.outfitPortrait[data-filled='false'] {
+  border-style: dashed;
+}
+
+.outfitPlus {
+  color: var(--ink-muted);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.outfitName {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--ink-muted);
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.6875rem;
+}
+
+.outfitMenu {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: var(--space-1);
+  padding: var(--space-1);
+  transform: translateX(-50%);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-elev);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+}
+
+/* Slot 1's and slot 5's menus (V-fix, 2026-09-27, design §3.1 item 4): centred like every other slot's
+   (`left: 50%` + `translateX(-50%)` above), this flyout is wider than one of five `.outfitGrid` columns,
+   so a centred one spills off both sides by roughly half that difference — at 400 px wide, measured 24 px
+   past the left edge on slot 1, 34 px past the right on slot 5, both of them sideways scroll. Anchoring
+   each end slot's menu flush to its own *inside* edge instead — slot 1 flush left, slot 5 flush right —
+   keeps the whole flyout inside `.outfitGrid`, and so inside the viewport, since the grid itself never
+   overflows. The three middle slots sit far enough from either edge that the centred anchor still fits
+   them and stays untouched. */
+.outfitItem:first-child .outfitMenu {
+  left: 0;
+  transform: none;
+}
+
+.outfitItem:last-child .outfitMenu {
+  left: auto;
+  right: 0;
+  transform: none;
 }
 
 .colourDots {
@@ -182,12 +778,13 @@
   justify-content: center;
 }
 
+/* 16 px, unowned at 35% opacity (design §4.1 — the redesign's own sizing, not Plan 13's 24 px/60%). */
 .colourDot {
   position: relative;
-  width: 1.5rem;
-  height: 1.5rem;
-  min-width: 1.5rem;
-  min-height: 1.5rem;
+  width: 1rem;
+  height: 1rem;
+  min-width: 1rem;
+  min-height: 1rem;
   padding: 0;
   border: 1px solid var(--line);
   border-radius: 50%;
@@ -200,41 +797,7 @@
 
 .colourDot[aria-disabled='true'] {
   cursor: not-allowed;
-  opacity: 0.6;
-}
-
-/* The hair-colour / eye-colour tabs: round swatches, "Natural" first, no picture (design §6). */
-.colourGrid {
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-
-.colourSwatch {
-  position: relative;
-  width: var(--tap);
-  height: var(--tap);
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  background: var(--bg-elev);
-  cursor: pointer;
-}
-
-.colourSwatch[aria-pressed='true'] {
-  box-shadow: 0 0 0 2px var(--gold);
-}
-
-.colourSwatch[aria-disabled='true'] {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.naturalMark {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: repeating-conic-gradient(var(--line) 0% 25%, transparent 0% 50%);
+  opacity: 0.35;
 }
 
 .lock {
@@ -248,5 +811,141 @@
 
 .lock::before {
   content: '🔒';
+}
+
+/* The right column's header (design §3.1): the group tablist, the active group's sub-tab tablist, and
+   the ownership filter row — `CategoryNav`. */
+.categoryNav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.groupTabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--bg-elev);
+}
+
+.groupTab {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: var(--tap);
+  border: none;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--ink-muted);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.groupTab[aria-selected='true'] {
+  background: var(--gold);
+  color: var(--gold-ink);
+}
+
+/* V-fix, 2026-09-27: a flex item's default `min-width: auto` (and `flex-shrink: 1`, the default) let this
+   wrapper shrink along with `.groupTab` once three group tabs' labels + icons ran out of room on a narrow
+   phone — down to a measured 7 px wide for "Trang phục"'s icon, past `global.css`'s `svg{max-width:100%}`
+   guard, which only clamps the icon *down*, never back up. `flex: none` keeps this wrapper at its own
+   natural size regardless of how tight `.groupTab` around it gets — the label text (`white-space: nowrap`)
+   gives way first instead, which is the one of the two that degrades gracefully. */
+.groupIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
+/* The icon's own fixed box, expressed directly on the `<svg>` rather than via this wrapper's `font-size` +
+   the icon's own `1em` (`Icon`, `icons.tsx`) — `max-width: none` here is the one line that actually stops
+   the squash above, the same guard `avatar2d.module.css`'s `.layer` needs against that same global rule,
+   for the same reason: a fixed box a competing `max-width: 100%` must never claw back down. */
+.groupIcon svg {
+  width: 1.1em;
+  height: 1.1em;
+  max-width: none;
+}
+
+/* One row, never two (V5 fix): `flex-wrap: wrap` let three sub-tabs plus their "n/m" counts break onto a
+   second line on a phone-width column; `nowrap` + `overflow-x: auto` keeps it one row everywhere, scrolling
+   only if it has to, the same pattern `.expressionRow` already uses above. */
+.subTabs {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: var(--space-2);
+}
+
+.subTab {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  padding: 0 var(--space-1);
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--ink-muted);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.subTab[aria-selected='true'] {
+  border-bottom-color: var(--gold);
+  color: var(--ink);
+}
+
+.tabCount {
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--bg-elev);
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.filterRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.filterButtons {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.filterBtn {
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--ink-muted);
+  cursor: pointer;
+  font: inherit;
+}
+
+.filterBtn[aria-pressed='true'] {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.ownedCountLabel {
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
 }
 

@@ -1,7 +1,8 @@
-import { Chibi } from '@bp/ui-kit'
-import { useTranslation } from 'react-i18next'
+import { useMediaQuery } from '@bp/ui-kit'
 import type { AvatarConfigDto, BaseDto, BaseId, ItemDto } from '../../api.js'
 import { chibiFromApi } from '../../avatar/chibi.js'
+import { BaseCard } from './cards.js'
+import { PHONE_QUERY } from './categories.js'
 import s from './wardrobe.module.css'
 
 export interface BaseTabProps {
@@ -9,35 +10,37 @@ export interface BaseTabProps {
   draft: AvatarConfigDto
   items: ReadonlyMap<string, ItemDto>
   onPick: (base: BaseId) => void
+  /** This tab's panel id and the tab that labels it (design §7) — same convention as `ColourTab`/`ItemTab`. */
+  panelId?: string
+  labelledBy?: string
 }
 
 /**
  * The fixed figures, chosen rather than owned (design §4.2, §5.1) — so unlike every other tab, nothing
- * here is ever locked. Each tile previews the base wearing the draft's *current* outfit, which is what
+ * here is ever locked. Each card previews the base wearing the draft's *current* outfit, which is what
  * makes the choice legible: a player picking a body is picking a silhouette, not a wardrobe.
  *
- * One tile per base the catalogue answered with, however many that is: the list is
+ * One card per base the catalogue answered with, however many that is: the list is
  * `apps/normal-server/data/avatar-bases.json` and adding a figure to it must not be a change here.
+ *
+ * `chibiFromApi` can in principle answer `null` (an id the catalogue itself just handed back should
+ * never actually fail to resolve, but the function's contract allows it for an unknown base or a
+ * catalogue with no default outfit) — a base that fails to preview is skipped rather than rendered
+ * without one, since `BaseCard.portrait` is not optional.
  */
-export function BaseTab({ bases, draft, items, onPick }: BaseTabProps) {
-  const { t } = useTranslation('normal')
+export function BaseTab({ bases, draft, items, onPick, panelId, labelledBy }: BaseTabProps) {
+  // V5 fix: a fixed 96 px portrait overflowed a phone's 3-column grid (`.baseCard`'s minimum content
+  // width, padding plus that fixed-width chibi, exceeded the column's own share) — 72 px fits it instead.
+  const phone = useMediaQuery(PHONE_QUERY)
+  const portraitSize = phone ? 72 : 96
 
   return (
-    <div className={s.baseGrid} role="tabpanel">
+    <div className={s.cardGrid} role="tabpanel" id={panelId} aria-labelledby={labelledBy}>
       {bases.map((base) => {
         const preview = chibiFromApi({ ...draft, head: undefined, face: undefined, aura: undefined, frame: undefined, base: base.id }, items, baseMapOf(base))
-        const selected = draft.base === base.id
+        if (preview === null) return null
         return (
-          <button
-            key={base.id}
-            type="button"
-            className={s.tile}
-            aria-pressed={selected}
-            onClick={() => onPick(base.id)}
-          >
-            {preview === null ? null : <Chibi subject={preview} frame="head" size={64} />}
-            <span className={s.tileName}>{t(base.nameKey)}</span>
-          </button>
+          <BaseCard key={base.id} base={base} portrait={preview} selected={draft.base === base.id} onPick={onPick} portraitSize={portraitSize} />
         )
       })}
     </div>

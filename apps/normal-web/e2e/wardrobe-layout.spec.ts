@@ -1,0 +1,179 @@
+import { expect, test, type Page } from '@playwright/test'
+import { account, expectNoSidewaysScroll, goToWardrobeTab, register, SHOTS } from './support.js'
+
+/**
+ * The dressing-room layout itself (wardrobe redesign design §3, §8, §9): the group row and the active
+ * group's sub-tab row must each render on one line at every breakpoint — no tab ever wraps onto a second
+ * line, whether the row scrolls horizontally to fit (`.subTabs`/`.groupTabs`, `wardrobe.module.css`) or
+ * simply has room for all of them. `WardrobeScreen.test.tsx` and `CategoryNav.test.tsx` already prove the
+ * groups/tabs/counts under jsdom, which has no layout engine at all — this is the one place a real
+ * browser lays the two tablists out and a wrap would actually show up.
+ *
+ * It also takes the rollout's own screenshots (design §9): one full page per breakpoint (desktop, tablet,
+ * mobile) times theme (dark, light), for a human to compare against `docs/wardrobe-redesign/mockup-*.png`.
+ * The theme comes from the app's own preference (`useThemePref`, `prefs.ts`) — visiting Settings and
+ * picking "Sáng" — rather than poking `localStorage` directly, so this exercises the real switch too.
+ */
+
+const preview = (page: Page) => page.getByRole('img', { name: 'Tủ đồ' })
+
+async function openWardrobe(page: Page): Promise<void> {
+  await page.goto('/#/avatar')
+  await expect(page.getByRole('heading', { name: 'Tủ đồ', exact: true })).toBeVisible()
+  await expect(preview(page)).toBeVisible()
+}
+
+/** Settings' own theme control (design §9's "light via the app's theme setting") — a device preference,
+ * so it survives the navigation back to the wardrobe below without anything re-applying it. */
+async function useLightTheme(page: Page): Promise<void> {
+  await page.goto('/#/settings')
+  await expect(page.getByRole('heading', { name: 'Cài đặt', exact: true })).toBeVisible()
+  const light = page.getByRole('button', { name: 'Sáng', exact: true })
+  await light.click()
+  await expect(light).toHaveAttribute('aria-pressed', 'true')
+}
+
+/** Every `role="tab"` inside the named `tablist` must share one `offsetTop` — the row is one line,
+ * whether every tab fits or the row scrolls sideways to hold them (never a second line). */
+async function assertTablistOnOneLine(page: Page, tablistName: string): Promise<void> {
+  const tops = await page
+    .getByRole('tablist', { name: tablistName })
+    .getByRole('tab')
+    .evaluateAll((tabs: HTMLElement[]) => tabs.map((tab) => tab.offsetTop))
+  expect(tops.length, `the "${tablistName}" tablist has tabs to check`).toBeGreaterThan(0)
+  expect(new Set(tops).size, `every tab in "${tablistName}" shares one offsetTop (the row never wraps)`).toBe(1)
+}
+
+/**
+ * The group row ("Tủ đồ", design §3.1's three groups) plus every group's own sub-tab row, ending back on
+ * "Ngoại hình" — the default group and its default tab, "Thân nền" (design §5.3) — so the screenshot
+ * taken right after always shows the same, mockup-matching view regardless of how many groups this walked
+ * through first.
+ */
+async function assertNavNeverWraps(page: Page): Promise<void> {
+  await assertTablistOnOneLine(page, 'Tủ đồ')
+  await assertTablistOnOneLine(page, 'Ngoại hình')
+
+  await goToWardrobeTab(page, 'Trang phục')
+  await assertTablistOnOneLine(page, 'Trang phục')
+
+  // "Danh hiệu & Huy hiệu" (design §4.4) is the longest sub-tab label in the whole screen — the one most
+  // likely to force a wrap on a narrow phone.
+  await goToWardrobeTab(page, 'Trang trí')
+  await assertTablistOnOneLine(page, 'Trang trí')
+
+  await goToWardrobeTab(page, 'Ngoại hình')
+}
+
+/** Fills the naming dialog's default name and saves — the empty-slot flow (design §3.1 item 4): a click on
+ * an empty portrait opens the dialog straight away, no menu first. */
+async function saveOutfitInEmptySlot(page: Page, slot: number): Promise<void> {
+  await page.getByRole('button', { name: `Ô ${slot} trống` }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: 'Lưu vào đây' }).click()
+  await expect(dialog).toBeHidden()
+}
+
+/** The outfit menu's own box: it carries no role or id of its own (a plain `<div>`, `SavedOutfits.tsx`),
+ * so this reads the parent shared by every one of its buttons — "Áp dụng" is always the first — rather
+ * than adding a hook nothing else in this file needs. */
+function outfitMenuBox(page: Page) {
+  return page.getByRole('button', { name: 'Áp dụng' }).locator('xpath=..')
+}
+
+async function assertOutfitMenuWithinViewport(page: Page): Promise<void> {
+  const box = await outfitMenuBox(page).boundingBox()
+  expect(box, 'the outfit menu is open and has a bounding box').not.toBeNull()
+  const width = page.viewportSize()?.width ?? 0
+  expect(box!.x, 'the outfit menu does not spill past the left edge').toBeGreaterThanOrEqual(0)
+  expect(box!.x + box!.width, 'the outfit menu does not spill past the right edge').toBeLessThanOrEqual(width)
+}
+
+test.describe('Just a Normal Poker Normal — bố cục tủ đồ (Kế hoạch 14)', () => {
+  test('desktop: nhóm và tab con không gãy dòng; ảnh chụp tối và sáng', async ({ page }) => {
+    const who = account('Hoa')
+    await register(page, who)
+    await openWardrobe(page)
+
+    await assertNavNeverWraps(page)
+    await page.screenshot({ path: `${SHOTS}wardrobe-desktop-dark.png`, fullPage: true })
+
+    await useLightTheme(page)
+    await openWardrobe(page)
+    await page.screenshot({ path: `${SHOTS}wardrobe-desktop-light.png`, fullPage: true })
+
+    // V-fix, 2026-09-27: `ItemPreview` (`ItemTab.tsx`) is shared between the wardrobe's own cards and the
+    // read-only inventory grid, and `.tileIcon` (`wardrobe.module.css`) used to carry the wardrobe card's
+    // own breakpoint-driven size, resizing the inventory's icon right along with it. Reuses this test's
+    // own account (no server round trip is cheap here, but a fresh registration is rate-limited, §19.2)
+    // rather than opening a whole new test for one more assertion.
+    await goToWardrobeTab(page, 'Trang phục', 'Trang phục')
+    const wardrobeIcon = page.locator('img[data-item-icon]').first()
+    await expect(wardrobeIcon).toBeVisible()
+    const wardrobeBox = await wardrobeIcon.boundingBox()
+    expect(wardrobeBox, 'the wardrobe card icon has a bounding box').not.toBeNull()
+    // `.cardThumb .tileIcon`, desktop viewport (≥768 px): 100 px tall.
+    expect(Math.abs(wardrobeBox!.height - 100), 'the wardrobe card icon is the larger, card-scoped size').toBeLessThan(1)
+
+    await page.goto('/#/inventory')
+    await expect(page.getByRole('heading', { name: 'Tủ đồ', exact: true })).toBeVisible()
+    const inventoryIcon = page.locator('img[data-item-icon]').first()
+    await expect(inventoryIcon).toBeVisible()
+    const inventoryBox = await inventoryIcon.boundingBox()
+    expect(inventoryBox, 'the inventory card icon has a bounding box').not.toBeNull()
+    // `.tileIcon` alone, unscoped: fixed 4rem = 64 px, at every viewport — the inventory's own size,
+    // restored to what it was before the wardrobe redesign touched the class they both draw through.
+    expect(Math.abs(inventoryBox!.height - 64), 'the inventory card icon keeps its own fixed 4rem size').toBeLessThan(1)
+  })
+
+  test('máy tính bảng (900×1100): nhóm và tab con không gãy dòng; ảnh chụp tối và sáng', async ({ page }) => {
+    // No dedicated Playwright project for the tablet band (design §3.3) — this sets the viewport inside
+    // the desktop project's own browser instead of adding a fourth project just for two screenshots.
+    await page.setViewportSize({ width: 900, height: 1100 })
+    const who = account('Lien')
+    await register(page, who)
+    await openWardrobe(page)
+
+    await assertNavNeverWraps(page)
+    await page.screenshot({ path: `${SHOTS}wardrobe-tablet-dark.png`, fullPage: true })
+
+    await useLightTheme(page)
+    await openWardrobe(page)
+    await page.screenshot({ path: `${SHOTS}wardrobe-tablet-light.png`, fullPage: true })
+  })
+
+  test('@mobile điện thoại: không cuộn ngang, nhóm và tab con không gãy dòng; ảnh chụp tối và sáng', async ({ page }) => {
+    const who = account('Yen')
+    await register(page, who)
+    await openWardrobe(page)
+
+    await expectNoSidewaysScroll(page)
+    await assertNavNeverWraps(page)
+    await expectNoSidewaysScroll(page)
+    await page.screenshot({ path: `${SHOTS}wardrobe-mobile-dark.png`, fullPage: true })
+
+    await useLightTheme(page)
+    await openWardrobe(page)
+    await expectNoSidewaysScroll(page)
+    await page.screenshot({ path: `${SHOTS}wardrobe-mobile-light.png`, fullPage: true })
+
+    // V-fix, 2026-09-27 (design §3.1 item 4): `.outfitMenu` used to centre under every slot's portrait —
+    // fine for the three middle ones, but wide enough to spill past the viewport on the two end slots
+    // (measured at 400 px: left edge −24 px on slot 1, right edge 409 px on slot 5). Reuses this test's
+    // own account, after both screenshots (registration is rate-limited, §19.2, and a saved outfit would
+    // otherwise show up as a filled slot in either mockup-comparison screenshot above). The saved-outfit
+    // section is a closed `<details>` on phone, so it has to be opened before either slot is reachable.
+    await page.locator('summary', { hasText: 'Bộ đồ đã lưu' }).click()
+
+    await saveOutfitInEmptySlot(page, 1)
+    await page.getByRole('button', { name: 'Bộ đồ Bộ 1' }).click()
+    await assertOutfitMenuWithinViewport(page)
+    await expectNoSidewaysScroll(page)
+
+    await saveOutfitInEmptySlot(page, 5)
+    await page.getByRole('button', { name: 'Bộ đồ Bộ 5' }).click()
+    await assertOutfitMenuWithinViewport(page)
+    await expectNoSidewaysScroll(page)
+  })
+})

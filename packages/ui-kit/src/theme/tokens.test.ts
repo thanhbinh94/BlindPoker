@@ -211,4 +211,16 @@ describe('theme contrast', () => {
       expect(ratio, `${key} got worse than the ${recorded}:1 on record`).toBeGreaterThanOrEqual(recorded - 0.005)
     }
   })
+
+  it('rarity tokens reach AA (4.5:1) against --bg-elev in every theme', () => {
+    const rarityTokens = ['--rarity-common', '--rarity-rare', '--rarity-epic']
+    for (const [name, palette] of Object.entries(PALETTES)) {
+      if (!('--bg-elev' in palette)) continue // only palettes with bg-elev
+      for (const token of rarityTokens) {
+        expect(palette[token], `${name} ${token}`).toMatch(/^#[0-9a-f]{6}$/)
+        const ratio = contrast(palette[token]!, palette['--bg-elev']!)
+        expect(ratio, `${name} ${token} on --bg-elev — ${palette[token]} on ${palette['--bg-elev']} is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA)
+      }
+    }
+  })
 })

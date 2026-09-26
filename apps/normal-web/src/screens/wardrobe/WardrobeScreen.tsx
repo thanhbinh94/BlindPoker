@@ -1,9 +1,11 @@
-import { Button, Chibi, defaultChibi, Modal, type Expression } from '@bp/ui-kit'
+import { Button, defaultChibi, Modal, useMediaQuery, type Expression } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ApiError,
+  OPTIONAL_SLOTS,
+  SLOTS,
   type AchievementDefDto,
   type AvatarCatalogDto,
   type AvatarConfigDto,
@@ -19,9 +21,13 @@ import { useAvatars } from '../../avatar/useAvatars.js'
 import s from '../normal.module.css'
 import { useAsync } from '../useAsync.js'
 import { BaseTab } from './BaseTab.js'
+import { counts, GROUPS, PHONE_QUERY, panelId, subTabId, type OwnershipFilter, type TabId } from './categories.js'
+import { CategoryNav } from './CategoryNav.js'
 import { ColourTab } from './ColourTab.js'
+import { EquippedList } from './EquippedList.js'
 import { ItemTab } from './ItemTab.js'
-import { OutfitBar } from './OutfitBar.js'
+import { SavedOutfits } from './SavedOutfits.js'
+import { StagePanel } from './StagePanel.js'
 import w from './wardrobe.module.css'
 
 /** Refusals this screen has words for; anything else is the kit's generic failure. */
@@ -32,15 +38,22 @@ export function avatarRefusal(cause: unknown, t: TFunction): string {
   return t('common:errors.INTERNAL')
 }
 
-const EXPRESSIONS: readonly Expression[] = ['neutral', 'happy', 'sad', 'surprised', 'closed', 'sleep']
-
-/** The tabs of design §7/§6, in the order the spec lists them: the base first, the two colour tabs
- * after the drawn slots, the words last. */
-const TABS = ['base', 'head', 'face', 'outfit', 'aura', 'frame', 'hairColor', 'eyeColor', 'words'] as const
-type Tab = (typeof TABS)[number]
+/** Every tab, flattened out of `GROUPS` (design §3.1) rather than re-listed here, so a tab added to a
+ * group is automatically one this screen counts and offers a panel for. */
+const ALL_TABS: readonly TabId[] = GROUPS.flatMap((group) => group.tabs)
 
 /** `useAvatars` wants an array it can key on; a fresh `[]` per render would restart its effect forever. */
 const NO_IDS: string[] = []
+
+/** Plain-glyph icons (aria-hidden, matching `EquippedList`/`SavedOutfits`'s own convention): the phone
+ * header's icon-only "Hoàn tác" (design §3.2). */
+const UNDO_GLYPH = '↺'
+
+/** Breakpoints (Global Constraints): phone (`PHONE_QUERY`, `./categories.js` — shared with `BaseTab`, which
+ * used to carry its own copy of the same literal string) is anything under the tablet floor; desktop is
+ * the point the stage stops being `compact` (design §3.1–§3.3). Tablet has no query of its own — it is
+ * "not phone, not desktop", the same branch as desktop for markup, told apart only by CSS. */
+const DESKTOP_QUERY = '(min-width: 1024px)'
 
 export interface WardrobeScreenProps {
   api: NormalApi
@@ -69,16 +82,25 @@ function withSlot(config: AvatarConfigDto, slot: ItemSlot, itemId: string | unde
   return { ...config, [slot]: itemId }
 }
 
-/** Two configurations are the same outfit when they name the same slots. */
+/** Two configurations are the same outfit when they name the same slots — read off both objects key by
+ * key (`v`, `base`, then every item slot) rather than via `JSON.stringify`, which used to make this
+ * comparison sensitive to *key order*: removing an optional slot and then re-adding it moves that key to
+ * the end of the spread object (`withSlot`'s `{ ...config, [slot]: itemId }`), so two configs naming the
+ * exact same outfit could stringify to two different strings and show a false "Có thay đổi chưa lưu". A
+ * slot absent from one side and one explicitly `undefined` on the other now compare equal either way,
+ * exactly as `withSlot`'s own "an omitted key is an empty slot" rule already treats them. */
 function sameConfig(a: AvatarConfigDto, b: AvatarConfigDto): boolean {
-  return JSON.stringify(a) === JSON.stringify(b)
+  if (a.v !== b.v || a.base !== b.base) return false
+  return SLOTS.every((slot) => a[slot] === b[slot])
 }
 
 type Note = 'saved' | null
 
 /**
- * The wardrobe: a chibi on a stage, an expression picker, seven tabs of tiles, and the outfit bar
- * (design §7).
+ * The wardrobe (design §3.1–§3.3): a header with the dirty label, undo and save; a left column of the
+ * stage, the expression row, the wearing list and the saved outfits; a right column of `CategoryNav`'s
+ * groups/tabs/filter and the active tab's cards. Phones fold the same pieces into one column, the wearing
+ * list and saved outfits collapsed under `<details>`.
  *
  * Only what is owned can be equipped — the tabs list the whole catalogue, but `ItemTab` locks anything not
  * in the player's inventory — so the only refusal a correct client can provoke is a race with a grant, and
@@ -110,13 +132,17 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
 
   const [draft, setDraft] = useState<AvatarConfigDto | null>(null)
   const [committed, setCommitted] = useState<AvatarConfigDto | null>(null)
-  const [tab, setTab] = useState<Tab>('base')
+  const [tab, setTab] = useState<TabId>('base')
+  const [filter, setFilter] = useState<OwnershipFilter>('all')
   const [expression, setExpression] = useState<Expression>('neutral')
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<Note>(null)
   const [busy, setBusy] = useState(false)
   /** The `#/…` a guarded click was heading for, while the confirmation is up. */
   const [leavingTo, setLeavingTo] = useState<string | null>(null)
+
+  const phone = useMediaQuery(PHONE_QUERY)
+  const desktop = useMediaQuery(DESKTOP_QUERY)
 
   const loaded = wardrobe.data
   const saved = committed ?? loaded?.inventory.avatar ?? null
@@ -167,6 +193,17 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
   const items = useMemo(() => new Map((loaded?.catalog ?? []).map((item) => [item.id, item])), [loaded])
   const bases = useMemo(() => new Map((loaded?.avatarCatalog.bases ?? []).map((base) => [base.id, base])), [loaded])
   const owned = useMemo(() => new Set((loaded?.inventory.items ?? []).map((item) => item.itemId)), [loaded])
+  /** Every tab's "n/m đã có" (design §3.1) — computed for all of them up front so `CategoryNav` has a
+   * count ready the moment its active group changes, not just for whichever group is showing now. */
+  const tabCounts = useMemo(() => {
+    const catalog = loaded?.catalog ?? []
+    const map: Partial<Record<TabId, { owned: number; total: number }>> = {}
+    for (const id of ALL_TABS) {
+      const count = counts(id, catalog, owned)
+      if (count !== null) map[id] = count
+    }
+    return map
+  }, [loaded, owned])
 
   if (wardrobe.loading && loaded === null) {
     return (
@@ -207,6 +244,22 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
 
   const pickBase = (base: BaseId): void => commit({ ...config, base })
 
+  /** Design §5.5: the ownership filter always resets to "all" the moment the tab changes, whether that
+   * change came from `CategoryNav` itself or from a jump off the wearing list. */
+  const changeTab = (next: TabId): void => {
+    setTab(next)
+    setFilter('all')
+  }
+
+  /** "Hoàn tác" (design §5.1): the draft goes back to the last saved config, no server round trip — the
+   * same "clear the draft" `leave()` does, plus dropping whatever error/notice was on screen, since both
+   * were about the draft this just threw away. */
+  const undo = (): void => {
+    setDraft(null)
+    setError(null)
+    setNote(null)
+  }
+
   const save = async (): Promise<void> => {
     if (busy) return
     setBusy(true)
@@ -237,124 +290,168 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
   // Which cut of a gendered item the tiles show: the *draft* base's, so picking a male figure switches
   // the dealer uniform's tile to the trousers the preview beside it is now wearing.
   const wear = bases.get(config.base)?.wear
+  // The phone header's collapsible "Đang mặc (n)" summary (design §3.2): the two always-filled rows
+  // (Thân, Trang phục) plus however many of `api.ts`'s own `OPTIONAL_SLOTS` the draft currently fills —
+  // the same eight slots `EquippedList`'s `ROWS` lists past `base`/`outfit`, read off the one source
+  // rather than a second copy of the list kept here.
+  const equippedCount = 2 + OPTIONAL_SLOTS.filter((slot) => config[slot] !== undefined).length
+  // The full-body figure's own width (V5 fix): `Chibi`'s "full" frame is a fixed 6:7 box, so a width of
+  // `stage_height * 6/7` is exactly the width whose height equals the stage around it — the figure then
+  // fits with no clip at all. Desktop keeps its already-tuned 320 (a deliberate, verified-safe ~43 px
+  // clip off a 373 px figure into the 330 px stage, for a tighter frame); the 280/250 px tablet/phone
+  // stages get the zero-clip number instead, since there is no verified-safe amount to reproduce for them.
+  const stageFullSize = phone ? 214 : desktop ? 320 : 240
+
+  const stageNode = (
+    <StagePanel
+      subject={preview}
+      expression={expression}
+      onExpression={setExpression}
+      portrait={tab === 'frame'}
+      compact={!desktop}
+      fullSize={stageFullSize}
+    />
+  )
+
+  const equippedNode = (
+    <EquippedList
+      config={config}
+      items={items}
+      bases={bases}
+      onRemove={(slot) => commit(withSlot(config, slot, undefined))}
+      onJump={changeTab}
+    />
+  )
+
+  const savedNode = (
+    <SavedOutfits
+      api={api}
+      outfits={loaded.outfits}
+      draft={config}
+      items={items}
+      bases={bases}
+      onOutfitsChanged={(next) => wardrobe.set({ ...loaded, outfits: next })}
+      onApplied={onOutfitApplied}
+    />
+  )
+
+  const pickerNode = (
+    <div className={w.picker}>
+      <CategoryNav tab={tab} onTab={changeTab} counts={tabCounts} filter={filter} onFilter={setFilter} showFilter={tab !== 'base'} />
+
+      {tab === 'base' ? (
+        <BaseTab bases={loaded.avatarCatalog.bases} draft={config} items={items} onPick={pickBase} panelId={panelId('base')} labelledBy={subTabId('base')} />
+      ) : tab === 'words' ? (
+        // One `tabpanel` for the whole tab (design §7) — `title` and `badge` are two `ItemTab` calls, not
+        // two tabs, and a `role="tabpanel"` has to appear exactly once for the sub-tab that names it;
+        // wrapping both calls here (rather than letting each draw its own, as it used to) is what keeps
+        // their headings *inside* the one panel too, instead of sitting outside any panel at all.
+        <div role="tabpanel" id={panelId('words')} aria-labelledby={subTabId('words')}>
+          <ItemTab
+            slot="title"
+            catalog={loaded.catalog}
+            owned={owned}
+            achievements={loaded.achievements}
+            draft={config}
+            wear={wear}
+            filter={filter}
+            onPick={(id) => pick('title', id)}
+          />
+          <ItemTab
+            slot="badge"
+            catalog={loaded.catalog}
+            owned={owned}
+            achievements={loaded.achievements}
+            draft={config}
+            wear={wear}
+            filter={filter}
+            onPick={(id) => pick('badge', id)}
+          />
+        </div>
+      ) : tab === 'hairColor' || tab === 'eyeColor' ? (
+        <ColourTab
+          slot={tab}
+          catalog={loaded.catalog}
+          owned={owned}
+          achievements={loaded.achievements}
+          draft={config}
+          filter={filter}
+          onPick={(id) => commit(withSlot(config, tab, id))}
+          panelId={panelId(tab)}
+          labelledBy={subTabId(tab)}
+        />
+      ) : (
+        <ItemTab
+          slot={tab}
+          catalog={loaded.catalog}
+          owned={owned}
+          achievements={loaded.achievements}
+          draft={config}
+          wear={wear}
+          filter={filter}
+          onPick={(id) => pick(tab, id)}
+          panelId={panelId(tab)}
+          labelledBy={subTabId(tab)}
+        />
+      )}
+    </div>
+  )
 
   return (
     <main className={`${s.page} ${s.wide}`}>
-      <div className={s.pageHead}>
-        <h1>{t('wardrobe.title')}</h1>
-        <span className={s.rule} aria-hidden="true" />
-      </div>
-
-      <div className={w.layout}>
-        <div className={w.previewColumn}>
-          <div className={w.previewFigures}>
-            <Chibi subject={preview} frame="full" size={192} expression={expression} label={t('wardrobe.title')} />
-            {tab === 'frame' ? <Chibi subject={preview} frame="head" size={96} expression={expression} /> : null}
-          </div>
-
-          <div className={w.expressionRow} role="group" aria-label={t('wardrobe.expression.legend')}>
-            {EXPRESSIONS.map((expr) => (
-              <button
-                key={expr}
-                type="button"
-                className={w.expressionBtn}
-                aria-pressed={expression === expr}
-                aria-label={t(`wardrobe.expression.${expr}`)}
-                onClick={() => setExpression(expr)}
-              >
-                {t(`wardrobe.expression.${expr}`)}
-              </button>
-            ))}
-          </div>
-
-          {error === null ? null : (
-            <p className={s.alert} role="alert">
-              {error}
-            </p>
+      <div className={w.header}>
+        <div className={w.headerTitle}>
+          <h1 className={w.title}>{t('wardrobe.title')}</h1>
+          {!dirty ? null : (
+            <span className={w.dirtyLabel} role="status">
+              {t('wardrobe.dirty')}
+            </span>
           )}
-          {note === null ? null : (
-            <p className={s.notice} role="status">
-              {t('wardrobe.saved')}
-            </p>
-          )}
-
-          <Button variant="gold" size="lg" loading={busy} onClick={() => void save()} disabled={!dirty && draft === null}>
-            {t('wardrobe.save')}
+        </div>
+        <div className={w.headerActions}>
+          <Button variant="ghost" onClick={undo} disabled={!dirty} aria-label={phone ? t('wardrobe.undo') : undefined}>
+            {phone ? <span aria-hidden="true">{UNDO_GLYPH}</span> : t('wardrobe.undo')}
+          </Button>
+          <Button variant="gold" loading={busy} onClick={() => void save()} disabled={!dirty && draft === null}>
+            {phone ? t('wardrobe.saveShort') : t('wardrobe.save')}
           </Button>
         </div>
-
-        <div className={w.picker}>
-          <div className={w.tabs} role="tablist" aria-label={t('wardrobe.title')}>
-            {TABS.map((key) => (
-              <button
-                key={key}
-                type="button"
-                className={w.tab}
-                role="tab"
-                aria-selected={tab === key}
-                onClick={() => setTab(key)}
-              >
-                {t(`wardrobe.tabs.${key}`)}
-              </button>
-            ))}
-          </div>
-
-          {tab === 'base' ? (
-            <BaseTab bases={loaded.avatarCatalog.bases} draft={config} items={items} onPick={pickBase} />
-          ) : tab === 'words' ? (
-            <>
-              <h3 className={s.groupTitle}>{t('wardrobe.tabs.words')}</h3>
-              <ItemTab
-                slot="title"
-                catalog={loaded.catalog}
-                owned={owned}
-                achievements={loaded.achievements}
-                draft={config}
-                wear={wear}
-                onPick={(id) => pick('title', id)}
-              />
-              <ItemTab
-                slot="badge"
-                catalog={loaded.catalog}
-                owned={owned}
-                achievements={loaded.achievements}
-                draft={config}
-                wear={wear}
-                onPick={(id) => pick('badge', id)}
-              />
-            </>
-          ) : tab === 'hairColor' || tab === 'eyeColor' ? (
-            <ColourTab
-              slot={tab}
-              catalog={loaded.catalog}
-              owned={owned}
-              achievements={loaded.achievements}
-              draft={config}
-              onPick={(id) => commit(withSlot(config, tab, id))}
-            />
-          ) : (
-            <ItemTab
-              slot={tab}
-              catalog={loaded.catalog}
-              owned={owned}
-              achievements={loaded.achievements}
-              draft={config}
-              wear={wear}
-              onPick={(id) => pick(tab, id)}
-            />
-          )}
-        </div>
       </div>
 
-      <OutfitBar
-        api={api}
-        outfits={loaded.outfits}
-        draft={config}
-        items={items}
-        bases={bases}
-        onOutfitsChanged={(next) => wardrobe.set({ ...loaded, outfits: next })}
-        onApplied={onOutfitApplied}
-      />
+      {error === null ? null : (
+        <p className={s.alert} role="alert">
+          {error}
+        </p>
+      )}
+      {note === null ? null : (
+        <p className={s.notice} role="status">
+          {t('wardrobe.saved')}
+        </p>
+      )}
+
+      {!phone ? (
+        <div className={w.layout}>
+          <div className={w.previewColumn}>
+            {stageNode}
+            {equippedNode}
+            {savedNode}
+          </div>
+          {pickerNode}
+        </div>
+      ) : (
+        <div className={w.layout}>
+          {stageNode}
+          {pickerNode}
+          <details className={w.mobileSection}>
+            <summary className={w.mobileSummary}>{t('wardrobe.equipped.count', { n: equippedCount })}</summary>
+            {equippedNode}
+          </details>
+          <details className={w.mobileSection}>
+            <summary className={w.mobileSummary}>{t('outfits.title')}</summary>
+            {savedNode}
+          </details>
+        </div>
+      )}
 
       <Modal open={leavingTo !== null} title={t('wardrobe.leaveTitle')} closeLabel={t('wardrobe.close')} onClose={() => setLeavingTo(null)}>
         <p>{t('wardrobe.leaveBody')}</p>
