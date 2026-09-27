@@ -117,6 +117,30 @@
   color: var(--ink);
 }
 
+/* The tab pictogram (bug 8) only shows on a phone rail, where it carries the tab and the label shrinks under it. */
+.navIcon {
+  display: none;
+  width: 18px;
+  height: 18px;
+  max-width: none;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.navLabel {
+  white-space: nowrap;
+}
+
+/* The language switch is two words side by side; wrapping "Tiếng Việt" onto two lines grew the rail and pushed
+   the page sideways at ~900 px (bug 8). */
+.railLang button {
+  white-space: nowrap;
+}
+
 /* the lacquer underline: it grows from the middle, so the active tab reads as struck rather than boxed */
 .navLink::after {
   content: '';
@@ -202,6 +226,28 @@
   min-height: 0;
 }
 
+/* Bug 8: between the wide rail and the phone rail everything used to stay, and a 700–1100 px window overflowed.
+   Items go one at a time as the width shrinks, least needed first: the edition pill, then the wordmark (the
+   mark stays), then the language switch (reachable on Settings) — while `Shell.tsx` writes the balance
+   compactly from 900 px down. */
+@media (max-width: 1199px) {
+  .edition {
+    display: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  .wordmark {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .railLang {
+    display: none;
+  }
+}
+
 /* Under 640px the rail keeps only what a thumb needs on every screen: the mark, the four tabs and the
    connection dot. Normal carries one tab more than Lite, so the squeeze is tighter — the wordmark, the
    edition pill and the language switch all go, and the tabs lose a step of padding. The language switch
@@ -253,6 +299,39 @@
   .navLink[aria-current='page']::after {
     left: var(--space-1);
     right: var(--space-1);
+  }
+
+  /* Bug 8: side by side, four Vietnamese labels plus the compact balance still overran 375 px and the nav
+     scrolled "Cài đặt" out of sight. Each tab becomes an icon over a small label and the four share the nav's
+     width equally, so they fit without scrolling. */
+  .nav {
+    align-self: stretch;
+    justify-content: space-between;
+    overflow-x: visible;
+  }
+
+  .navLink {
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    height: 100%;
+    padding: 0 2px;
+  }
+
+  .navIcon {
+    display: block;
+  }
+
+  .navLabel {
+    font-size: 0.625rem;
+    line-height: 1.1;
+  }
+
+  .navDot {
+    top: 4px;
+    right: calc(50% - 16px);
   }
 }
 
