@@ -98,6 +98,14 @@ test.describe('Just a Normal Poker Normal — bố cục tủ đồ (Kế hoạc
     await openWardrobe(page)
 
     await assertNavNeverWraps(page)
+
+    // The selected base card is ringed in gold without changing size: every card in the base grid is as tall
+    // as its neighbours (a 2 px border on the selected one used to shrink it and nudge its portrait).
+    const heights = await page.getByRole('tabpanel').getByRole('button', { pressed: undefined }).evaluateAll((cards) =>
+      cards.filter((c) => c.hasAttribute('aria-pressed')).map((c) => `${c.clientWidth}x${c.clientHeight}`),
+    )
+    expect(heights.length, 'the base grid lists every base').toBeGreaterThanOrEqual(6)
+    expect(new Set(heights).size, `base card content boxes ${heights.join(', ')}`).toBe(1)
     await page.screenshot({ path: `${SHOTS}wardrobe-desktop-dark.png`, fullPage: true })
 
     await useLightTheme(page)
