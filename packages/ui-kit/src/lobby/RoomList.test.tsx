@@ -50,6 +50,18 @@ const wrap = (ui: React.ReactElement) =>
   render(<I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>{ui}</I18nextProvider>)
 
 describe('RoomList', () => {
+  it('labels an empty room counting down to closing "Đang đóng…" instead of "Đang chờ" (bug 2)', () => {
+    const closing: RoomSummary = { ...rooms[0]!, playerCount: 0, closing: true }
+    wrap(<RoomList rooms={[closing]} onJoin={vi.fn()} lang="vi" />)
+    expect(screen.getByText('Đang đóng…')).toBeInTheDocument()
+    expect(screen.queryByText('Đang chờ')).toBeNull()
+  })
+
+  it('labels an open room without the flag, or with it false, "Đang chờ"', () => {
+    wrap(<RoomList rooms={[rooms[0]!, { ...rooms[0]!, roomId: '3', code: 'CCCCCC', closing: false }]} onJoin={vi.fn()} lang="vi" />)
+    expect(screen.getAllByText('Đang chờ')).toHaveLength(2)
+  })
+
   it('renders tickets with stakes and occupancy and joins on click', async () => {
     const onJoin = vi.fn()
     wrap(<RoomList rooms={rooms} onJoin={onJoin} lang="vi" />)

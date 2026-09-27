@@ -99,8 +99,9 @@ function RoomTicket({ room, onJoin, lang, busy }: RoomTicketProps) {
               <rect x="1.4" y="5.8" width="9.2" height="7.4" rx="1.7" fill="currentColor" />
             </svg>
           ) : null}
-          <Badge tone={room.status === 'OPEN' ? 'teal' : 'gold'}>
-            {t(room.status === 'OPEN' ? 'labels.waiting' : 'labels.inHand')}
+          {/* Bug 2: an empty room is kept 60 s for anyone coming back, and says so instead of "waiting". */}
+          <Badge tone={room.closing === true ? 'muted' : room.status === 'OPEN' ? 'teal' : 'gold'}>
+            {t(room.closing === true ? 'labels.closing' : room.status === 'OPEN' ? 'labels.waiting' : 'labels.inHand')}
           </Badge>
         </div>
 

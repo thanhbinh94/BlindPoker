@@ -71,6 +71,13 @@ export interface RoomSummary {
   playerCount: number
   maxPlayers: number
   status: 'OPEN' | 'IN_GAME'
+  /**
+   * True while nobody is in the room and it is counting down to closing (`emptyRoomCloseMs`, 60 s): the room
+   * is kept that long so a player who left by mistake or dropped can come back to it, and the lobby says
+   * "closing" meanwhile instead of "waiting" (bug 2). Joining cancels the countdown. Optional so a client
+   * built against an older server reads its absence as "not closing".
+   */
+  closing?: boolean
 }
 
 export interface RoomView extends RoomSummary {

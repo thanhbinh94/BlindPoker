@@ -97,7 +97,8 @@
     "waitingForTurn": "Waiting for your turn",
     "winner": "Winner",
     "winners": "Winners",
-    "you": "You"
+    "you": "You",
+    "closing": "Closing…"
   },
   "mode": {
     "holdem": "Texas Hold'em",
