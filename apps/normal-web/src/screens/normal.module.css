@@ -901,38 +901,6 @@
   min-width: 0;
 }
 
-.swatches {
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-  margin-bottom: var(--space-3);
-}
-
-.swatch {
-  width: var(--tap);
-  height: var(--tap);
-  border: 2px solid var(--line);
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-.swatch[aria-pressed='true'] {
-  border-color: var(--gold);
-  box-shadow: 0 0 0 2px var(--gold-soft);
-}
-
-.picker {
-  margin: 0;
-  padding: var(--space-4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--bg-elev);
-}
-
-.picker legend {
-  padding: 0 var(--space-2);
-}
-
 /* ── the wardrobe: a figure on the left, everything that goes on it on the right ─── */
 
 /* The one page in this app that is two columns, so the one that is allowed to be wider than 46rem: a

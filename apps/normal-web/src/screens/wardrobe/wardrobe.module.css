@@ -426,9 +426,13 @@
   cursor: pointer;
 }
 
+/* Selected: the same gold ring as a worn item card (`.card[aria-pressed='true']`) — colour and an inset shadow
+   rather than a thicker border, so choosing a base does not shrink the card by a pixel and nudge its portrait. */
 .baseCard[aria-pressed='true'] {
-  border: 2px solid var(--gold);
-  box-shadow: 0 0 0 1px var(--gold);
+  border-color: var(--gold);
+  box-shadow:
+    0 0 0 1px var(--gold),
+    inset 0 0 0 1px var(--gold);
 }
 
 /* An item's own icon: square, transparent, already centred and padded by the pipeline. Fixed 4rem — the
