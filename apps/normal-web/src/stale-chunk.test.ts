@@ -1,5 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
-import { isChunkLoadError, lazyScreen, reloadForNewVersion, RELOAD_KEY, RELOAD_WINDOW_MS } from './stale-chunk.js'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { isChunkLoadError, lazyScreen, reloadForNewVersion, RELOAD_KEY, RELOAD_WINDOW_MS, resetReloadingForTests } from './stale-chunk.js'
+
+beforeEach(() => resetReloadingForTests())
 
 /** A throwaway in-memory `Storage`: jsdom's sessionStorage is shared across the file. */
 function memoryStorage(): Storage {
@@ -69,6 +71,15 @@ describe('lazyScreen', () => {
     const err = new TypeError('Failed to fetch dynamically imported module: /a.js')
     const Screen = lazyScreen(() => Promise.reject(err), reload)
     await expect(factoryOf(Screen)()).rejects.toBe(err)
+  })
+
+  it('waits instead of rejecting while a reload this page asked for is on its way (preload error and import fail together)', async () => {
+    reloadForNewVersion({ now: 5_000, storage: memoryStorage(), reload: vi.fn() }) // e.g. Vite's preload error, first
+    const reload = vi.fn(() => false) // the window guard would refuse a second reload
+    const Screen = lazyScreen(() => Promise.reject(new TypeError('Failed to fetch dynamically imported module: /a.js')), reload)
+    const settled = await Promise.race([factoryOf(Screen)().then(() => 'settled', () => 'settled'), new Promise((r) => setTimeout(() => r('pending'), 20))])
+    expect(settled).toBe('pending')
+    expect(reload).not.toHaveBeenCalled()
   })
 
   it('rejects any other failure without reloading', async () => {

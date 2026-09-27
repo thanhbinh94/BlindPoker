@@ -34,6 +34,22 @@ function sessionStore(): Storage | null {
   }
 }
 
+/**
+ * Set once this page has asked the browser to reload. Vite's preload helper and the dynamic import usually fail
+ * together for one missing chunk: the first reloads, and the second must wait for the navigation rather than
+ * take the "already reloaded" path and flash the boundary's message just before the page goes away.
+ */
+let reloadInFlight = false
+
+/** Whether this page already asked for a reload that has not happened yet. Tests reset it. */
+export function reloading(): boolean {
+  return reloadInFlight
+}
+
+export function resetReloadingForTests(): void {
+  reloadInFlight = false
+}
+
 export interface ReloadDeps {
   now?: number
   storage?: Storage | null
@@ -54,6 +70,7 @@ export function reloadForNewVersion({ now = Date.now(), storage = sessionStore()
   } catch {
     return false
   }
+  reloadInFlight = true
   reload()
   return true
 }
@@ -72,7 +89,7 @@ export function lazyScreen<T extends ComponentType<any>>(
     try {
       return await factory()
     } catch (err) {
-      if (isChunkLoadError(err) && reload()) return new Promise<never>(() => {})
+      if (isChunkLoadError(err) && (reloading() || reload())) return new Promise<never>(() => {})
       throw err
     }
   })
