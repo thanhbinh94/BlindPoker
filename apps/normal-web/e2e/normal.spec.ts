@@ -309,6 +309,7 @@ test.describe('Just a Normal Poker Normal', () => {
       loads += 1
     })
     await rail.getByRole('link', { name: 'Hồ sơ' }).click()
+    await expect.poll(() => loads, { message: 'the tab reloads itself for the new version' }).toBe(1)
     await expect(page.getByRole('alert').filter({ hasText: 'Đã có phiên bản mới của trò chơi.' })).toBeVisible()
     expect(loads, 'one automatic reload, not a loop').toBe(1)
     await expect(page.getByRole('button', { name: 'Tải lại' })).toBeVisible()
