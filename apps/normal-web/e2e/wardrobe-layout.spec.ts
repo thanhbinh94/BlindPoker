@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { expectRailFits } from './rail.js'
 import { account, expectNoSidewaysScroll, goToWardrobeTab, register, SHOTS } from './support.js'
 
 /**
@@ -125,6 +126,11 @@ test.describe('Just a Normal Poker Normal — bố cục tủ đồ (Kế hoạc
     // `.tileIcon` alone, unscoped: fixed 4rem = 64 px, at every viewport — the inventory's own size,
     // restored to what it was before the wardrobe redesign touched the class they both draw through.
     expect(Math.abs(inventoryBox!.height - 64), 'the inventory card icon keeps its own fixed 4rem size').toBeLessThan(1)
+    // Bug 8: the account rail fits one row at every desktop width that used to overflow.
+    for (const width of [700, 900, 1100, 1440]) {
+      await page.setViewportSize({ width, height: 900 })
+      await expectRailFits(page, width)
+    }
   })
 
   test('máy tính bảng (900×1100): nhóm và tab con không gãy dòng; ảnh chụp tối và sáng', async ({ page }) => {
@@ -146,6 +152,8 @@ test.describe('Just a Normal Poker Normal — bố cục tủ đồ (Kế hoạc
   test('@mobile điện thoại: không cuộn ngang, nhóm và tab con không gãy dòng; ảnh chụp tối và sáng', async ({ page }) => {
     const who = account('Yen')
     await register(page, who)
+    // Bug 8: on a phone the four tabs are icons over small labels and all fit, none scrolled away.
+    await expectRailFits(page, page.viewportSize()!.width)
     await openWardrobe(page)
 
     await expectNoSidewaysScroll(page)

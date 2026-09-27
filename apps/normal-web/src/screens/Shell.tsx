@@ -9,13 +9,20 @@ const SPADE = '♠'
  * Four tabs, and four is the ceiling: at 375 px the rail holds the mark, four tabs and the connection dot,
  * and nothing more. Avatar, Inventory and Achievements are reached from Profile rather than from here —
  * a fifth tab would push the fourth off the edge on the phone this game is mostly played on.
+ *
+ * Bug 8 (2026-09-27): four Vietnamese labels side by side did not fit 375 px after all — the nav scrolled and
+ * cut "Cài đặt" to "Cài đ". Under 640 px each tab is now an icon over a small label (`normal.module.css`), so
+ * the four stack narrowly instead of queueing. The icon is decoration; the label stays the accessible name.
  */
-const NAV: { path: string; key: string }[] = [
-  { path: '/lobby', key: 'nav.lobby' },
-  { path: '/daily', key: 'nav.daily' },
-  { path: '/profile', key: 'nav.profile' },
-  { path: '/settings', key: 'nav.settings' },
+const NAV: { path: string; key: string; icon: IconPath }[] = [
+  { path: '/lobby', key: 'nav.lobby', icon: 'M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z' },
+  { path: '/daily', key: 'nav.daily', icon: 'M4 9h16v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM3 5h18v4H3zm9 0v16M12 5c-1.5-3-5-3-5 0m5 0c1.5-3 5-3 5 0' },
+  { path: '/profile', key: 'nav.profile', icon: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-7 9c0-4 3.1-6 7-6s7 2 7 6' },
+  { path: '/settings', key: 'nav.settings', icon: 'M4 6h9m4 0h3M4 12h3m4 0h9M4 18h11m4 0h1M15 4v4M9 10v4M17 16v4' },
 ]
+
+/** One tab's pictogram: a stroked path in the rail's own ink (`currentColor`), never announced. */
+type IconPath = string
 
 /**
  * Routes that print the balance in the page itself, and there is exactly one: the profile header carries it.
@@ -29,14 +36,15 @@ const NAV: { path: string; key: string }[] = [
 const BALANCE_IN_PAGE = ['/profile']
 
 /**
- * The width at which the rail stops being able to hold everything, and the same 640 px the stylesheet below
- * uses to drop the wordmark, the edition pill and the language switch.
+ * The width at which the rail stops being able to hold everything, and the same 900 px at which the stylesheet
+ * drops the language switch (bug 8: at 640 px the wordmark, edition pill, full balance and language switch still
+ * overflowed a 700–900 px window; the edition goes under 1200 px and the wordmark under 1024 px).
  *
  * It is a media query in JavaScript rather than in CSS because what changes is not layout but *text*: at this
  * width the balance is written `123K điểm` instead of `123.000 điểm`, and no amount of CSS reformats a number.
  * Rendering both and hiding one would leave a screen reader announcing the balance twice.
  */
-const NARROW_RAIL = '(max-width: 640px)'
+const NARROW_RAIL = '(max-width: 900px)'
 
 const STATUS_KEY: Record<ConnectionStatus, string> = {
   idle: 'game:status.offline',
@@ -105,7 +113,10 @@ export function Shell({ path, identity, lang, onLanguage, bar = true, dailyReady
                 href={`#${item.path}`}
                 aria-current={active(item.path) ? 'page' : undefined}
               >
-                {t(item.key)}
+                <svg className={s.navIcon} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d={item.icon} />
+                </svg>
+                <span className={s.navLabel}>{t(item.key)}</span>
                 {item.path === '/daily' && dailyReady ? (
                   <span className={s.navDot}>
                     <span className="visually-hidden">{t('nav.dailyReady')}</span>

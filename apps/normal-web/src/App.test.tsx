@@ -264,7 +264,8 @@ describe('App — the shell', () => {
       viNormal.nav.profile,
       viNormal.nav.settings,
     ])
-    expect(within(nav).getByText(viNormal.nav.daily)).toHaveAttribute('aria-current', 'page')
+    // The label is a <span> inside the link since bug 8 (icon over label on phones), so ask for the link itself.
+    expect(within(nav).getByRole('link', { name: new RegExp(`^${viNormal.nav.daily}`) })).toHaveAttribute('aria-current', 'page')
   })
 
   it('serves the account routes from their own chunk, behind one loading line', async () => {
