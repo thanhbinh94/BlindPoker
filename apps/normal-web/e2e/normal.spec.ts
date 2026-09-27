@@ -298,6 +298,21 @@ test.describe('Just a Normal Poker Normal', () => {
     await page.goto('/#/lobby')
     await expectLobby(page)
     await expect(rail.getByText('Có quà chưa nhận')).toHaveCount(0)
+
+    // --- 2. bug 4: a deploy removed the chunk this tab would load (simulated: the Profile chunk answers 404).
+    //        The tab reloads itself once for the new version, and when that cannot help it says so — never a
+    //        blank page. Rides on this test's account: the server allows ten sign-ups a minute and the suite
+    //        already uses nine.
+    await page.route('**/assets/ProfileScreen-*.js', (route) => route.fulfill({ status: 404, body: '' }))
+    let loads = 0
+    page.on('load', () => {
+      loads += 1
+    })
+    await rail.getByRole('link', { name: 'Hồ sơ' }).click()
+    await expect(page.getByRole('alert').filter({ hasText: 'Đã có phiên bản mới của trò chơi.' })).toBeVisible()
+    expect(loads, 'one automatic reload, not a loop').toBe(1)
+    await expect(page.getByRole('button', { name: 'Tải lại' })).toBeVisible()
+    await page.unroute('**/assets/ProfileScreen-*.js')
   })
 
   test('@mobile sảnh, bàn chơi và hồ sơ trên màn hình điện thoại', async ({ context }) => {

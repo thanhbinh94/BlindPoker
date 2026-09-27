@@ -130,7 +130,11 @@
   },
   "screens": {
     "loading": "Đang tải…",
-    "retry": "Thử lại"
+    "retry": "Thử lại",
+    "newVersion": "Đã có phiên bản mới của trò chơi.",
+    "failed": "Không mở được trang này.",
+    "reloadHint": "Tải lại trang để tiếp tục.",
+    "reload": "Tải lại"
   },
   "profile": {
     "title": "Hồ sơ",

@@ -10,7 +10,7 @@ import {
   useHashRoute,
   type SocketFactory,
 } from '@bp/ui-kit'
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AvatarCatalogDto, ItemDto, NormalApi } from './api.js'
 import a from './avatar/avatar.module.css'
@@ -21,11 +21,13 @@ import { mapNotifications } from './notifications.js'
 import { useLanguagePref } from './prefs.js'
 import { AuthScreen, type AuthMode } from './screens/AuthScreen.js'
 import { Shell } from './screens/Shell.js'
+import { UpdateBoundary } from './screens/UpdateBoundary.js'
 import { useDailyNudge } from './daily-nudge.js'
 import { makeCaptionFor, makeChibiFor } from './screens/TableChrome.js'
 import s from './screens/normal.module.css'
 import { clearLastEmail } from './session.js'
 import { useSessionGate } from './session-gate.js'
+import { lazyScreen } from './stale-chunk.js'
 import { useAsync } from './screens/useAsync.js'
 
 /** `/avatar/<file>@1x.png` / `@2x.png` — the PNG layers this build served alongside the bundle. */
@@ -49,12 +51,12 @@ export const NORMAL_VERSION = typeof __NORMAL_VERSION__ === 'string' ? __NORMAL_
  * chunk and ships there.) Splitting these six keeps the first paint small on the phone connection this game
  * is mostly played on, and each screen then costs one request, once.
  */
-const ProfileScreen = lazy(async () => ({ default: (await import('./screens/ProfileScreen.js')).ProfileScreen }))
-const WardrobeScreen = lazy(async () => ({ default: (await import('./screens/wardrobe/WardrobeScreen.js')).WardrobeScreen }))
-const InventoryScreen = lazy(async () => ({ default: (await import('./screens/InventoryScreen.js')).InventoryScreen }))
-const AchievementsScreen = lazy(async () => ({ default: (await import('./screens/AchievementsScreen.js')).AchievementsScreen }))
-const DailyScreen = lazy(async () => ({ default: (await import('./screens/DailyScreen.js')).DailyScreen }))
-const SettingsScreen = lazy(async () => ({ default: (await import('./screens/SettingsScreen.js')).SettingsScreen }))
+const ProfileScreen = lazyScreen(async () => ({ default: (await import('./screens/ProfileScreen.js')).ProfileScreen }))
+const WardrobeScreen = lazyScreen(async () => ({ default: (await import('./screens/wardrobe/WardrobeScreen.js')).WardrobeScreen }))
+const InventoryScreen = lazyScreen(async () => ({ default: (await import('./screens/InventoryScreen.js')).InventoryScreen }))
+const AchievementsScreen = lazyScreen(async () => ({ default: (await import('./screens/AchievementsScreen.js')).AchievementsScreen }))
+const DailyScreen = lazyScreen(async () => ({ default: (await import('./screens/DailyScreen.js')).DailyScreen }))
+const SettingsScreen = lazyScreen(async () => ({ default: (await import('./screens/SettingsScreen.js')).SettingsScreen }))
 
 /** The routes served by a lazy chunk rather than by the entry bundle. */
 export const ACCOUNT_ROUTES = ['/profile', '/avatar', '/inventory', '/achievements', '/daily', '/settings']
@@ -256,6 +258,9 @@ export function App({ api, socketFactory }: AppProps) {
             <>
               {/* One fallback for all six: the chunk is a single request on a page the rail has already drawn, so
                   what the player waits for is a line under the rail, not a blank screen with a spinner in the middle. */}
+              {/* Bug 4: a chunk that vanished in a deploy reloads the page once (`lazyScreen`); if that does not help,
+                  the boundary says a new version is out instead of leaving the page blank. */}
+              <UpdateBoundary key={path}>
               <Suspense
                 fallback={
                   <p className={s.booting} role="status">
@@ -277,6 +282,7 @@ export function App({ api, socketFactory }: AppProps) {
                   <AchievementsScreen api={guarded} lang={lang} />
                 )}
               </Suspense>
+              </UpdateBoundary>
               {/* The lobby and the room bring their own stack; these six have none, and `/daily` is precisely
                   where the login-day achievements unlock. Without this the slip would sit undelivered in the state
                   until the player wandered back to the lobby, and then fire there, out of context. It sits outside

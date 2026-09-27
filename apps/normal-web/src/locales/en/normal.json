@@ -130,7 +130,11 @@
   },
   "screens": {
     "loading": "Loading…",
-    "retry": "Try again"
+    "retry": "Try again",
+    "newVersion": "A new version of the game is out.",
+    "failed": "This page could not be opened.",
+    "reloadHint": "Reload the page to carry on.",
+    "reload": "Reload"
   },
   "profile": {
     "title": "Profile",

@@ -8,10 +8,17 @@ import { createApi } from './api.js'
 import enNormal from './locales/en/normal.json'
 import viNormal from './locales/vi/normal.json'
 import { loadTheme } from './prefs.js'
+import { reloadForNewVersion } from './stale-chunk.js'
 
 // Before React: the stored theme is on the root by the time the first frame paints, so the page never flashes
 // the wrong palette. `index.html` ships `data-theme="dark"` for the frame before even this runs.
 applyTheme(document.documentElement, loadTheme())
+
+// Bug 4: Vite's preload helper reports a chunk's missing CSS/JS here before the import itself rejects. Reload once
+// for the new version; if the tab already did, let the error through to `UpdateBoundary`.
+window.addEventListener('vite:preloadError', (event) => {
+  if (reloadForNewVersion()) event.preventDefault()
+})
 
 const i18n = createI18n({ extraResources: { vi: { normal: viNormal }, en: { normal: enNormal } } })
 
