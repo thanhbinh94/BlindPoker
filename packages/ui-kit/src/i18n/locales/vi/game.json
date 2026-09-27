@@ -97,7 +97,8 @@
     "waitingForTurn": "Đang chờ đến lượt bạn",
     "winner": "Người thắng",
     "winners": "Những người thắng",
-    "you": "Bạn"
+    "you": "Bạn",
+    "closing": "Đang đóng…"
   },
   "mode": {
     "holdem": "Texas Hold'em",

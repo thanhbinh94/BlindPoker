@@ -48,6 +48,16 @@ describe('Room membership', () => {
     expect(h.room.status).toBe('CLOSED')
     expect(closed).toBe('empty')
   })
+
+  it('reports an empty room as closing while its grace period runs, and not once someone is back (bug 2)', async () => {
+    const h = createRoomHarness(HOLDEM)
+    expect(h.room.summary().closing).toBe(false)
+    await h.room.leave('h')
+    // Still listed and still joinable — only the label changes while the 60 s run.
+    expect(h.room.summary()).toMatchObject({ status: 'OPEN', closing: true })
+    await h.room.join(h.identity('a'))
+    expect(h.room.summary().closing).toBe(false)
+  })
 })
 
 describe('Room seats and buy-ins', () => {

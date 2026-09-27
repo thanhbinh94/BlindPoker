@@ -112,6 +112,7 @@ export class Room {
       playerCount: this.humanCount + this.seatedBotCount,
       maxPlayers: this.config.maxPlayers,
       status: this.status === 'IN_GAME' ? 'IN_GAME' : 'OPEN',
+      closing: this.closeTimer !== null,
     }
   }
 
