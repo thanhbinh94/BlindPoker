@@ -1,10 +1,19 @@
 # Changelog
 
-Just a Normal Poker is built one plan at a time; each plan lands on `master` as a single merge commit. This
+Blind Luck Poker (called Just a Normal Poker until 2026-09-28) is built one plan at a time; each plan lands on `master` as a single merge commit. This
 file has one section per plan, newest first, with the merge commit that carried it.
 
 Nothing here has been released. Versions in `package.json` are `0.1.0` throughout; the sections
 below are the real history.
+
+---
+
+## 2026-09-28 — Renamed to Blind Luck Poker
+
+The product name changes from "Just a Normal Poker" to **Blind Luck Poker** — a pun on the game's own Blind Poker mode, and no longer
+colliding with the Normal edition's name ("Just a Normal Poker · Bản Normal"). Display names, page titles, the Lite shell, the
+deploy kits' messages and the live docs change; internal ids stay (`@bp/*`, the `bp_session` cookie, `bind-poker-lite.exe`, the
+repository name), so existing sessions, databases and Lite installs are untouched. Historical specs and plans keep the old name.
 
 ---
 

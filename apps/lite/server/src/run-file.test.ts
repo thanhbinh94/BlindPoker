@@ -213,7 +213,7 @@ describe('claimRunFile', () => {
     const claim = await claimRunFile(path, alive)
 
     expect(claim.state).toBe('stale')
-    expect(claim.state === 'stale' && claim.why).toMatch(/not a Just a Normal Poker Lite instance/)
+    expect(claim.state === 'stale' && claim.why).toMatch(/not a Blind Luck Poker Lite instance/)
   })
 
   it('is stale when the address answers an error, or something that is not JSON at all', async () => {

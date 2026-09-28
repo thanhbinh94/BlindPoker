@@ -70,7 +70,7 @@ async function settleAfterSignIn(page: Page, submit: () => Promise<void>): Promi
 /** Registers `who` and waits for the lobby. The cookie the server sets is the only credential involved. */
 export async function register(page: Page, who: Account): Promise<void> {
   await page.goto('/#/register')
-  await expect(page.getByRole('heading', { name: 'Just a Normal Poker' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Blind Luck Poker' })).toBeVisible()
   await page.getByLabel('Email', { exact: true }).fill(who.email)
   await page.getByLabel('Mật khẩu', { exact: true }).fill(who.password)
   await page.getByLabel('Tên hiển thị', { exact: true }).fill(who.displayName)

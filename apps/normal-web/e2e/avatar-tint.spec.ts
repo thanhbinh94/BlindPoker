@@ -25,7 +25,7 @@ async function save(page: Page): Promise<void> {
   await expect(page.getByText('Đã lưu tủ đồ.')).toBeVisible()
 }
 
-test.describe('Just a Normal Poker Normal — màu tóc, màu mắt', () => {
+test.describe('Blind Luck Poker Normal — màu tóc, màu mắt', () => {
   test('chọn màu tóc đỏ tô lại chibi bằng canvas và giữ nguyên khi lưu', async ({ page }) => {
     const who = account('Lan')
     await register(page, who)

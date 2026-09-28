@@ -56,7 +56,7 @@ async function barHashAfter(page: Page, was: string): Promise<string> {
   return chibiHash(lobbyAvatar(page))
 }
 
-test.describe('Just a Normal Poker Normal — nhân vật chibi', () => {
+test.describe('Blind Luck Poker Normal — nhân vật chibi', () => {
   test('tủ đồ, ghế và bộ outfit đều khớp một băm cấu hình', async ({ page }) => {
     const who = account('Mai')
     await register(page, who)

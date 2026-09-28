@@ -1,4 +1,4 @@
-# Triển khai Just a Normal Poker Normal
+# Triển khai Blind Luck Poker Normal
 
 Tài liệu này dành cho **người vận hành** bản Normal: một stack Docker Compose trên một máy chủ —
 ứng dụng, PostgreSQL 16, và Caddy đứng trước lo TLS.

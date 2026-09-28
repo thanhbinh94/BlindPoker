@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "Just a Normal Poker",
+    "name": "Blind Luck Poker",
     "edition": "Normal edition"
   },
   "nav": {
@@ -12,7 +12,7 @@
     "dailyReady": "Reward ready"
   },
   "auth": {
-    "title": "Just a Normal Poker",
+    "title": "Blind Luck Poker",
     "lead": "One account, every device. Your points, wardrobe and achievements follow the account, not the machine.",
     "signIn": "Sign in",
     "register": "Register",

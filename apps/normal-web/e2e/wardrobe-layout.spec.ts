@@ -91,7 +91,7 @@ async function assertOutfitMenuWithinViewport(page: Page): Promise<void> {
   expect(box!.x + box!.width, 'the outfit menu does not spill past the right edge').toBeLessThanOrEqual(width)
 }
 
-test.describe('Just a Normal Poker Normal — bố cục tủ đồ (Kế hoạch 14)', () => {
+test.describe('Blind Luck Poker Normal — bố cục tủ đồ (Kế hoạch 14)', () => {
   test('desktop: nhóm và tab con không gãy dòng; ảnh chụp tối và sáng', async ({ page }) => {
     const who = account('Hoa')
     await register(page, who)
