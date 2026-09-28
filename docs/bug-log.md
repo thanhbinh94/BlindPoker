@@ -116,14 +116,23 @@ Tôi tự rà: chụp 37 ảnh bản build thật — mọi màn Normal ở 1440
 
 | # | Mô tả | Hướng đã chọn | Trạng thái |
 |---|---|---|---|
-| C1 | Cài đặt: chọn Tối/Sáng dùng hai nút rời, còn chọn ngôn ngữ dùng công tắc bo tròn. | Cả hai dùng công tắc bo tròn. | sẽ sửa (đợt 2) |
-| C2 | Hai định dạng ngày: "29/9/26" (Điểm danh, Lịch sử điểm) và "28 thg 9, 2026" (Hồ sơ, Kho đồ). | Ngày đứng riêng: "28 thg 9, 2026"; kèm giờ: "08:46, 28 thg 9". | sẽ sửa (đợt 2) |
-| C3 | Kho đồ khác Phòng thay đồ: thứ tự và tên danh mục ("Khung viền"/"Khung"), hai kiểu thẻ, in cả hộp trống. | Theo 3 nhóm và thứ tự của Phòng thay đồ, chung kiểu thẻ, ẩn hộp trống. | sẽ sửa (đợt 2) |
-| C4 | "Chủ phòng" và "Đăng xuất" màu đỏ (đỏ = rủi ro). | "Chủ phòng" nhãn vàng; "Đăng xuất" nút viền, nút xác nhận trong hộp thoại vẫn đỏ. | sẽ sửa (đợt 2) |
-| C5 | Bàn trước ván: hàng nút "Đuổi" bot; gợi ý Sẵn sàng hiện cả khi chưa ngồi; "3/3 sẵn sàng" mà Bắt đầu khoá. | Nút "Quản lý bàn" mở danh sách; gợi ý theo đúng tình huống. | sẽ sửa (đợt 2) |
-| C6 | Điểm danh: lưới 5 cột, hàng cao thấp; điện thoại 2 cột (16 hàng). | 7 cột máy tính / 4 cột điện thoại, phần thưởng vật phẩm thành biểu tượng, thẻ tóm tắt có nút Nhận. | sẽ sửa (đợt 2) |
-| C7 | Hồ sơ: hai hình avatar thừa khoảng trống; số cột thống kê lệch; mã UUID trong Lịch sử điểm. | Một hình toàn thân + thông tin bên cạnh; thống kê 4 cột / 2 cột; ẩn mã. | sẽ sửa (đợt 2) |
-| C8 | Thành tựu: thanh tiến độ lệch cột; "Chưa mở" lặp 34 lần. | Cột cố định; mục chưa mở hiện mờ, mục đã mở có ✓ và ngày. | sẽ sửa (đợt 2) |
-| C9 | Tạo phòng: "Buy-in tối thiểu 50" không ghi đơn vị. | Ghi "BB" và quy đổi ra điểm. | sẽ sửa (đợt 2) |
-| C10 | Điện thoại, trang Hồ sơ: thanh điều hướng còn một chấm xanh lẻ (số dư đã ẩn vì trang tự in). | Ẩn luôn chấm ở trang đó. | sẽ sửa (đợt 2) |
+| C1 | Cài đặt: chọn Tối/Sáng dùng hai nút rời, còn chọn ngôn ngữ dùng công tắc bo tròn. | Cả hai dùng công tắc bo tròn. | đã sửa — `556a169`, merge `1aa040c` |
+| C2 | Hai định dạng ngày: "29/9/26" (Điểm danh, Lịch sử điểm) và "28 thg 9, 2026" (Hồ sơ, Kho đồ). | Ngày đứng riêng: "28 thg 9, 2026"; kèm giờ: "08:46, 28 thg 9". | đã sửa — `556a169`, merge `1aa040c` |
+| C3 | Kho đồ khác Phòng thay đồ: thứ tự và tên danh mục ("Khung viền"/"Khung"), hai kiểu thẻ, in cả hộp trống. | Theo 3 nhóm và thứ tự của Phòng thay đồ, chung kiểu thẻ, ẩn hộp trống. | đã sửa — `556a169`, merge `1aa040c` |
+| C4 | "Chủ phòng" và "Đăng xuất" màu đỏ (đỏ = rủi ro). | "Chủ phòng" nhãn vàng; "Đăng xuất" nút viền, nút xác nhận trong hộp thoại vẫn đỏ. | đã sửa — `556a169`, merge `1aa040c` |
+| C5 | Bàn trước ván: hàng nút "Đuổi" bot; gợi ý Sẵn sàng hiện cả khi chưa ngồi; "3/3 sẵn sàng" mà Bắt đầu khoá. | Nút "Quản lý bàn" mở danh sách; gợi ý theo đúng tình huống. | đã sửa — `556a169`, merge `1aa040c` |
+| C6 | Điểm danh: lưới 5 cột, hàng cao thấp; điện thoại 2 cột (16 hàng). | 7 cột máy tính / 4 cột điện thoại, phần thưởng vật phẩm thành biểu tượng, thẻ tóm tắt có nút Nhận. | đã sửa — `556a169`, merge `1aa040c` |
+| C7 | Hồ sơ: hai hình avatar thừa khoảng trống; số cột thống kê lệch; mã UUID trong Lịch sử điểm. | Một hình toàn thân + thông tin bên cạnh; thống kê 4 cột / 2 cột; ẩn mã. | đã sửa — `556a169`, merge `1aa040c` |
+| C8 | Thành tựu: thanh tiến độ lệch cột; "Chưa mở" lặp 34 lần. | Cột cố định; mục chưa mở hiện mờ, mục đã mở có ✓ và ngày. | đã sửa — `556a169`, merge `1aa040c` |
+| C9 | Tạo phòng: "Buy-in tối thiểu 50" không ghi đơn vị. | Ghi "BB" và quy đổi ra điểm. | đã sửa — `556a169`, merge `1aa040c` |
+| C10 | Điện thoại, trang Hồ sơ: thanh điều hướng còn một chấm xanh lẻ (số dư đã ẩn vì trang tự in). | Ẩn luôn chấm ở trang đó. | đã sửa — `556a169`, merge `1aa040c` |
+
+**28/09 đợt 2 đã sửa và lên host (pid 22496).** Ghi chú kỹ thuật:
+- C1: ui-kit có `Segmented` dùng chung cho nút ngôn ngữ, bộ lọc sảnh, chọn chế độ khi tạo phòng và chọn Tối/Sáng ở cả hai bản.
+- C2: `formatDay`/`formatMoment` chuyển vào ui-kit; cả hai bản in ngày cùng một kiểu.
+- C3: Kho đồ dùng thẻ `OwnedCard` (cùng khung thẻ với Phòng thay đồ); bỏ `RARITY_TONE`, `SLOT_ORDER` và các chuỗi `inventory.slot`/`inventory.equipped`.
+- C5: hộp thoại "Quản lý bàn" gắn với ván hiện tại, nên nếu một ván bắt đầu lúc nó đang mở thì nó đóng hẳn, không tự bật lại.
+- C7: mã tham chiếu của Lịch sử điểm còn trong chú thích khi rê chuột, để báo lỗi khi cần.
+- C10: áp dụng cả Lite (/daily, /settings).
+- Trong lúc kiểm bằng ảnh tôi bắt thêm hai lỗi và đã sửa trước khi merge: lịch Điểm danh vỡ dòng trên điện thoại, và dòng Lịch sử điểm mất bố cục một hàng.
 
