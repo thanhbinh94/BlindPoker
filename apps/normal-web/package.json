@@ -10,6 +10,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "e2e": "playwright test -c e2e/playwright.config.ts",
+    "e2e:ops": "playwright test -c e2e/ops/ops.config.ts",
     "avatar:placeholder": "node scripts/avatar-pipeline.mjs placeholder",
     "avatar:ingest": "node scripts/avatar-pipeline.mjs ingest",
     "avatar:check": "node scripts/avatar-pipeline.mjs check",

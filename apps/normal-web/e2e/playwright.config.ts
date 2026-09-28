@@ -16,6 +16,9 @@ const BASE_URL = `http://127.0.0.1:${PORT}`
 
 export default defineConfig({
   testDir: '.',
+  // The operation-test pack (`ops/`, docs/operation-test-plan.md) runs on its own config and its own server:
+  // it plays whole hands with several browsers and takes minutes, not seconds.
+  testIgnore: ['ops/**'],
   outputDir: './test-results',
   // One worker, one server, one economy: these tests register accounts and move points, and a parallel run
   // would have them settling each other's hands.
