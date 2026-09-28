@@ -1,4 +1,5 @@
 import { Chibi, type ChibiConfig } from '@bp/ui-kit'
+import type { ReactNode } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import type { BaseDto, BaseId, ItemDto, Rarity } from '../../api.js'
@@ -218,6 +219,37 @@ export function WordCard({ item, owned, wearing, hint, onPick }: WordCardProps) 
       <RarityLabel rarity={item.rarity} />
       {owned ? null : <LockHint hint={hint} />}
     </button>
+  )
+}
+
+export interface OwnedCardProps {
+  /** The item's id, named through `itemName` — an id this bundle has no words for is printed as the id. */
+  id: string
+  /** `null` for a row the catalogue no longer lists: plain chrome, no rarity line. */
+  rarity: Rarity | null
+  /** What goes on top — an `ItemPreview`, a colour swatch, or nothing for a word slot. Drawn by the caller,
+   * which is the one that has the catalogue row (or knows it has none). */
+  picture: ReactNode
+  wearing: boolean
+  /** Lines under the name: where it came from, when it arrived. */
+  detail: ReactNode
+}
+
+/**
+ * The Inventory screen's card (layout audit C3, 2026-09-28): the wardrobe's own chrome — rarity border, gold
+ * "✓ Đang mặc" pill — on a card that picks nothing, so an item looks the same on both screens. A `<div>`, not a
+ * button: the inventory is a list to read, and the wardrobe is where things are put on.
+ */
+export function OwnedCard({ id, rarity, picture, wearing, detail }: OwnedCardProps) {
+  const { t } = useTranslation('normal')
+  return (
+    <div className={`${s.card} ${s.cardStatic}`} data-rarity={rarity ?? undefined} data-wearing={wearing}>
+      {wearing ? <WearingPill /> : null}
+      {picture}
+      <span className={s.cardName}>{itemName(id, t)}</span>
+      {rarity === null ? null : <span className={s.cardRarity}>{t(`inventory.rarity.${rarity}`)}</span>}
+      {detail}
+    </div>
   )
 }
 

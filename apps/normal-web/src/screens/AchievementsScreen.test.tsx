@@ -149,8 +149,13 @@ describe('AchievementsScreen', () => {
     const done = screen.getByText(viNormal.achievements.login_days_7.name).closest('li')
     expect(done).not.toBeNull()
     expect(within(done as HTMLElement).getByText(/2026/)).toBeInTheDocument()
+    expect(done).toHaveAttribute('data-unlocked', 'true')
     const locked = screen.getByText(viNormal.achievements.login_days_30.name).closest('li')
-    expect(within(locked as HTMLElement).getByText(viNormal.achievements.ui.locked)).toBeInTheDocument()
+    // The state is the row's look now, not a printed "Chưa mở" on every row (layout audit C8) — but it is still
+    // said to a screen reader, after the name.
+    expect(locked).toHaveAttribute('data-unlocked', 'false')
+    expect(within(locked as HTMLElement).getByText(viNormal.achievements.ui.locked, { exact: false })).toHaveClass('visually-hidden')
+    expect(within(done as HTMLElement).getByText(viNormal.achievements.ui.unlocked, { exact: false })).toHaveClass('visually-hidden')
   })
 
   it('falls back to the id for an achievement this bundle has never heard of', async () => {

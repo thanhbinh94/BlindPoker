@@ -93,7 +93,8 @@
         "cooldown": "Bạn vừa nhận cứu trợ. Thử lại lúc {{at}}.",
         "other": "Chưa thể nhận cứu trợ lúc này."
       }
-    }
+    },
+    "calendarLead": "Số điểm nhận ở mỗi ngày của chuỗi; ô có hộp quà còn kèm vật phẩm."
   },
   "settings": {
     "title": "Cài đặt",
@@ -216,7 +217,6 @@
     "lead": "Tất cả những gì tài khoản này sở hữu. Món đang mặc được đánh dấu.",
     "summary": "Đang sở hữu {{owned}} món",
     "acquired": "Nhận ngày {{date}}",
-    "equipped": "Đang dùng",
     "empty": "Chưa có món nào.",
     "error": "Không tải được kho đồ của bạn",
     "rarity": {
@@ -230,17 +230,6 @@
       "achievement": "Thành tựu",
       "free": "Miễn phí",
       "other": "Khác"
-    },
-    "slot": {
-      "head": "Mũ",
-      "face": "Phụ kiện mặt",
-      "outfit": "Trang phục",
-      "aura": "Hào quang",
-      "frame": "Khung viền",
-      "hairColor": "Màu tóc",
-      "eyeColor": "Màu mắt",
-      "title": "Danh hiệu",
-      "badge": "Huy hiệu"
     }
   },
   "avatar": {
@@ -440,7 +429,8 @@
         "holdem": "Texas Hold'em",
         "blind": "Blind Poker",
         "social": "Tại bàn"
-      }
+      },
+      "unlocked": "Đã mở"
     },
     "login_days_7": {
       "name": "Bảy ngày ghé bàn",

@@ -112,14 +112,18 @@ Tôi tự rà: chụp 37 ảnh bản build thật — mọi màn Normal ở 1440
 - U3: token `--measure-wide` (1180 px) và `--measure-narrow` (44rem) trong ui-kit.
 - U5: bỏ luôn nhãn phiên bản trên thanh điều hướng của Lite; trang nhập tên của Lite vẫn giữ.
 
-Chưa chọn (ghi nhận):
-- Chọn Tối/Sáng dùng hai nút rời, còn chọn ngôn ngữ dùng công tắc bo tròn.
-- Hai định dạng ngày ("29/9/26" và "28 thg 9, 2026").
-- Kho đồ và Tủ đồ khác thứ tự và tên danh mục; Kho đồ in cả hộp trống.
-- "Chủ phòng" và "Đăng xuất" màu đỏ.
-- Bàn: hàng nút "Đuổi" bot; gợi ý Sẵn sàng hiện cả khi chưa ngồi.
-- Điểm danh: lưới 5 cột, trên điện thoại chỉ 2 cột.
-- Hồ sơ: hai hình avatar, số cột thống kê lệch nhau, mã UUID.
-- Thành tựu: thanh tiến độ lệch cột, chữ "Chưa mở" lặp lại.
-- Tạo phòng: buy-in không ghi đơn vị BB.
+**Đợt 2** (người dùng chọn 28/09: C1–C9 hướng (a), C10 theo đề xuất):
+
+| # | Mô tả | Hướng đã chọn | Trạng thái |
+|---|---|---|---|
+| C1 | Cài đặt: chọn Tối/Sáng dùng hai nút rời, còn chọn ngôn ngữ dùng công tắc bo tròn. | Cả hai dùng công tắc bo tròn. | sẽ sửa (đợt 2) |
+| C2 | Hai định dạng ngày: "29/9/26" (Điểm danh, Lịch sử điểm) và "28 thg 9, 2026" (Hồ sơ, Kho đồ). | Ngày đứng riêng: "28 thg 9, 2026"; kèm giờ: "08:46, 28 thg 9". | sẽ sửa (đợt 2) |
+| C3 | Kho đồ khác Phòng thay đồ: thứ tự và tên danh mục ("Khung viền"/"Khung"), hai kiểu thẻ, in cả hộp trống. | Theo 3 nhóm và thứ tự của Phòng thay đồ, chung kiểu thẻ, ẩn hộp trống. | sẽ sửa (đợt 2) |
+| C4 | "Chủ phòng" và "Đăng xuất" màu đỏ (đỏ = rủi ro). | "Chủ phòng" nhãn vàng; "Đăng xuất" nút viền, nút xác nhận trong hộp thoại vẫn đỏ. | sẽ sửa (đợt 2) |
+| C5 | Bàn trước ván: hàng nút "Đuổi" bot; gợi ý Sẵn sàng hiện cả khi chưa ngồi; "3/3 sẵn sàng" mà Bắt đầu khoá. | Nút "Quản lý bàn" mở danh sách; gợi ý theo đúng tình huống. | sẽ sửa (đợt 2) |
+| C6 | Điểm danh: lưới 5 cột, hàng cao thấp; điện thoại 2 cột (16 hàng). | 7 cột máy tính / 4 cột điện thoại, phần thưởng vật phẩm thành biểu tượng, thẻ tóm tắt có nút Nhận. | sẽ sửa (đợt 2) |
+| C7 | Hồ sơ: hai hình avatar thừa khoảng trống; số cột thống kê lệch; mã UUID trong Lịch sử điểm. | Một hình toàn thân + thông tin bên cạnh; thống kê 4 cột / 2 cột; ẩn mã. | sẽ sửa (đợt 2) |
+| C8 | Thành tựu: thanh tiến độ lệch cột; "Chưa mở" lặp 34 lần. | Cột cố định; mục chưa mở hiện mờ, mục đã mở có ✓ và ngày. | sẽ sửa (đợt 2) |
+| C9 | Tạo phòng: "Buy-in tối thiểu 50" không ghi đơn vị. | Ghi "BB" và quy đổi ra điểm. | sẽ sửa (đợt 2) |
+| C10 | Điện thoại, trang Hồ sơ: thanh điều hướng còn một chấm xanh lẻ (số dư đã ẩn vì trang tự in). | Ẩn luôn chấm ở trang đó. | sẽ sửa (đợt 2) |
 

@@ -1,5 +1,5 @@
 import { ECONOMY } from '@bp/core'
-import { Badge, Button, Panel, formatPoints, type Language } from '@bp/ui-kit'
+import { Badge, Button, Panel, formatMoment, formatPoints, type Language } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -20,12 +20,6 @@ const DAILY_CODES = new Set(['ALREADY_CLAIMED', 'NOT_ELIGIBLE'])
 function refusalText(cause: unknown, t: TFunction): string {
   if (cause instanceof ApiError && DAILY_CODES.has(cause.code)) return t(`daily.errors.${cause.code}`)
   return t('daily.error')
-}
-
-const LOCALE: Record<Language, string> = { vi: 'vi-VN', en: 'en-US' }
-
-function formatMoment(at: number, lang: Language): string {
-  return new Intl.DateTimeFormat(LOCALE[lang], { dateStyle: 'short', timeStyle: 'short' }).format(new Date(at))
 }
 
 export interface DailyScreenProps {

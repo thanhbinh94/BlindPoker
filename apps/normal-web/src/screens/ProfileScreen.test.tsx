@@ -146,22 +146,23 @@ describe('ProfileScreen', () => {
     expect(screen.getByText(/Thành viên từ/)).toBeInTheDocument()
     // 123.000 in `vi`: the assertion is on the digits, not on the separator the locale picked.
     expect(screen.getByText(/123/)).toBeInTheDocument()
-    // The stage carries two chibis — the full body (its aura visible) and the head crop (its frame ring
-    // visible) — on a backdrop keyed by the equipped title.
+    // The stage carries the full body (its aura visible) on a backdrop keyed by the equipped title.
     const stage = document.querySelector('[data-title]')
     expect(stage).toHaveAttribute('data-title', 'title_hot_hand')
     await waitFor(() => expect(within(stage as HTMLElement).getByRole('img', { name: 'Bình' })).toBeInTheDocument())
-    expect(stage?.querySelectorAll('[data-chibi-hash]')).toHaveLength(2)
+    expect(stage?.querySelectorAll('[data-chibi-hash]')).toHaveLength(1)
   })
 
-  it('stages exactly one full-body chibi and one head-crop chibi, side by side in their own row', async () => {
+  it('stages one full-body chibi, and keeps the head crop (its frame ring) as the portrait beside the name', async () => {
     renderScreen()
-    await screen.findByRole('heading', { name: 'Bình', level: 2 })
+    const name = await screen.findByRole('heading', { name: 'Bình', level: 2 })
 
+    // Layout audit C7: one figure on the stage, not a body and a big head side by side.
     const stage = document.querySelector('[data-title]') as HTMLElement
-    const chibis = [...stage.querySelectorAll('[data-chibi-hash]')]
-    expect(chibis).toHaveLength(2)
-    expect(chibis.map((el) => el.getAttribute('data-frame')).sort()).toEqual(['full', 'head'])
+    const staged = [...stage.querySelectorAll('[data-chibi-hash]')]
+    expect(staged.map((el) => el.getAttribute('data-frame'))).toEqual(['full'])
+    const portrait = name.parentElement?.querySelector('[data-chibi-hash]')
+    expect(portrait).toHaveAttribute('data-frame', 'head')
   })
 
   it('still draws the header, stats and history when the avatar catalogue fails — the stage falls back to a default chibi', async () => {
@@ -170,7 +171,7 @@ describe('ProfileScreen', () => {
     expect(await screen.findByRole('heading', { name: 'Bình', level: 2 })).toBeInTheDocument()
     expect(screen.getByText(viNormal.profile.stats.title)).toBeInTheDocument()
     const stage = document.querySelector('[data-title]')
-    expect(stage?.querySelectorAll('[data-chibi-hash]')).toHaveLength(2)
+    expect(stage?.querySelectorAll('[data-chibi-hash]')).toHaveLength(1)
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
@@ -288,7 +289,9 @@ describe('ProfileScreen', () => {
     expect(api.ledger).toHaveBeenCalledWith({ limit: 50 })
     expect(screen.getByText(viNormal.ledger.reason.buy_in)).toBeInTheDocument()
     expect(screen.getByText('-2.000')).toBeInTheDocument()
-    expect(screen.getByText(viNormal.profile.ledger.ref.replace('{{id}}', 'h1'))).toBeInTheDocument()
+    // The reference id is not printed any more (layout audit C7); it rides on the row as a hover title.
+    expect(screen.queryByText(viNormal.profile.ledger.ref.replace('{{id}}', 'h1'))).toBeNull()
+    expect(screen.getByText(viNormal.ledger.reason.settlement).closest('li')).toHaveAttribute('title', viNormal.profile.ledger.ref.replace('{{id}}', 'h1'))
   })
 
   it('pages the ledger on the cursor the server handed back, and puts the button away at the end', async () => {

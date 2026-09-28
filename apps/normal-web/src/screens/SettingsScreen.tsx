@@ -1,4 +1,4 @@
-import { Button, LanguageSwitch, Modal, Panel, type Language } from '@bp/ui-kit'
+import { Button, LanguageSwitch, Modal, Panel, Segmented, type Language } from '@bp/ui-kit'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { MeDto, NormalApi } from '../api.js'
@@ -44,13 +44,17 @@ export function SettingsScreen({ api, lang, onLanguage, onSignedOut, version }: 
 
       <Panel title={t('settings.theme.title')}>
         <p className={s.footnote}>{t('settings.theme.lead')}</p>
-        <div className={s.choices} role="group" aria-label={t('settings.theme.title')}>
-          <Button variant={theme === 'dark' ? 'gold' : 'ghost'} aria-pressed={theme === 'dark'} onClick={() => setTheme('dark')}>
-            {t('settings.theme.dark')}
-          </Button>
-          <Button variant={theme === 'light' ? 'gold' : 'ghost'} aria-pressed={theme === 'light'} onClick={() => setTheme('light')}>
-            {t('settings.theme.light')}
-          </Button>
+        {/* The same pill as the language below it: one choice, one control (layout audit C1). */}
+        <div className={s.choices}>
+          <Segmented
+            options={[
+              { value: 'dark', label: t('settings.theme.dark') },
+              { value: 'light', label: t('settings.theme.light') },
+            ]}
+            value={theme}
+            onChange={setTheme}
+            label={t('settings.theme.title')}
+          />
         </div>
       </Panel>
 
@@ -93,7 +97,8 @@ export function SettingsScreen({ api, lang, onLanguage, onSignedOut, version }: 
           </dl>
         )}
         <p>
-          <Button variant="danger" onClick={() => setConfirming(true)}>
+          {/* A quiet button: signing out is not a risky act, the confirm in the dialog is (layout audit C4). */}
+          <Button variant="ghost" onClick={() => setConfirming(true)}>
             {t('settings.account.signOut')}
           </Button>
         </p>

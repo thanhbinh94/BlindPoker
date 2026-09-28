@@ -7,6 +7,9 @@ import { formatDay } from './format.js'
 import s from './normal.module.css'
 import { useAsync } from './useAsync.js'
 
+/** The earned row's tick, a named value rather than a literal in the markup (`react/jsx-no-literals`). */
+const CHECK_GLYPH = '✓'
+
 /** `apps/normal-server/data/achievements.json` — the four buckets, in the order the screen reads best. */
 export const CATEGORY_ORDER = ['login', 'holdem', 'blind', 'social']
 
@@ -101,10 +104,25 @@ export function AchievementsScreen({ api, lang }: AchievementsScreenProps) {
                   progress: formatPoints(done, lang),
                   threshold: formatPoints(row.threshold, lang),
                 })
+                const unlocked = row.unlockedAt !== null
+                // Three fixed columns — what it is, how far along, what it pays — so every bar starts at the same
+                // x; the state is the row's look (✓ and a date, or dimmed) rather than "Chưa mở" printed 34
+                // times (layout audit C8, 2026-09-28). The word stays for a screen reader.
                 return (
-                  <li className={s.achievement} key={row.id} data-unlocked={String(row.unlockedAt !== null)}>
+                  <li className={s.achievement} key={row.id} data-unlocked={String(unlocked)}>
                     <span className={s.rowMain}>
-                      <span className={s.rowTitle}>{achievementName(row.id, t)}</span>
+                      <span className={s.rowTitle}>
+                        {unlocked ? (
+                          <span className={s.achCheck} aria-hidden="true">
+                            {CHECK_GLYPH}
+                          </span>
+                        ) : null}
+                        {achievementName(row.id, t)}
+                        <span className="visually-hidden">
+                          {' — '}
+                          {unlocked ? t('achievements.ui.unlocked') : t('achievements.ui.locked')}
+                        </span>
+                      </span>
                       <span className={s.rowMeta}>{achievementDesc(row.id, t)}</span>
                     </span>
 
@@ -123,16 +141,14 @@ export function AchievementsScreen({ api, lang }: AchievementsScreenProps) {
                       <span className={s.rowMeta}>{counter}</span>
                     </span>
 
-                    <span className={s.cardMarks}>
+                    <span className={s.achReward}>
                       {reward === '' ? null : (
-                        <Badge tone="teal">
+                        <Badge tone={unlocked ? 'gold' : 'muted'}>
                           <span className="visually-hidden">{t('achievements.ui.reward')}</span>
                           {reward}
                         </Badge>
                       )}
-                      {row.unlockedAt === null ? (
-                        <span className={s.rowMeta}>{t('achievements.ui.locked')}</span>
-                      ) : (
+                      {row.unlockedAt === null ? null : (
                         <time className={s.rowMeta} dateTime={new Date(row.unlockedAt).toISOString()}>
                           {t('achievements.ui.unlockedAt', { date: formatDay(row.unlockedAt, lang) })}
                         </time>

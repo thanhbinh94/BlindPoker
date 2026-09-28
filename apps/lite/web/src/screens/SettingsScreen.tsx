@@ -1,4 +1,4 @@
-import { Button, LanguageSwitch, Modal, Panel, THEME_MODES, formatPoints } from '@bp/ui-kit'
+import { Button, LanguageSwitch, Modal, Panel, Segmented, THEME_MODES, formatPoints } from '@bp/ui-kit'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLanguagePref, useThemePref } from '../prefs.js'
@@ -67,13 +67,12 @@ export function SettingsScreen({ me, balance, onSignedOut, version }: SettingsSc
           <div className={s.row}>
             <dt className={s.rowLabel}>{t('settings.theme')}</dt>
             <dd className={s.rowValue}>
-              <div className={s.segment} role="group" aria-label={t('settings.theme')}>
-                {THEME_MODES.map((mode) => (
-                  <button key={mode} type="button" className={s.segBtn} aria-pressed={mode === theme} onClick={() => setTheme(mode)}>
-                    {t(`settings.${mode}`)}
-                  </button>
-                ))}
-              </div>
+              <Segmented
+                options={THEME_MODES.map((mode) => ({ value: mode, label: t(`settings.${mode}`) }))}
+                value={theme}
+                onChange={setTheme}
+                label={t('settings.theme')}
+              />
             </dd>
           </div>
           <div className={s.row}>
@@ -90,7 +89,8 @@ export function SettingsScreen({ me, balance, onSignedOut, version }: SettingsSc
       </Panel>
 
       <div className={s.dangerRow}>
-        <Button variant="danger" onClick={() => setConfirming(true)}>
+        {/* A quiet button: signing out is not a risky act, the confirm in the dialog is (layout audit C4). */}
+          <Button variant="ghost" onClick={() => setConfirming(true)}>
           {t('settings.signOut')}
         </Button>
       </div>

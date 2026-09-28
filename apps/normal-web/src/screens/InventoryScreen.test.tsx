@@ -119,9 +119,22 @@ function stubApi(overrides: Partial<NormalApi> = {}): NormalApi {
 
 const renderScreen = (api: NormalApi = stubApi()) => renderWithI18n(<InventoryScreen api={api} lang="vi" />, makeI18n('vi'))
 
-/** The `<ul>` inside the panel whose heading names this slot. */
-const panelOf = (slot: keyof typeof viNormal.inventory.slot) => {
-  const heading = screen.getByRole('heading', { name: viNormal.inventory.slot[slot] })
+/** The wardrobe's name for a slot, as the inventory's sub-heading prints it (layout audit C3). */
+const SLOT_LABEL = {
+  head: viNormal.wardrobe.tabs.head,
+  face: viNormal.wardrobe.tabs.face,
+  outfit: viNormal.wardrobe.tabs.outfit,
+  aura: viNormal.wardrobe.tabs.aura,
+  frame: viNormal.wardrobe.tabs.frame,
+  hairColor: viNormal.wardrobe.tabs.hairColor,
+  eyeColor: viNormal.wardrobe.tabs.eyeColor,
+  title: viNormal.wardrobe.words.titles,
+  badge: viNormal.wardrobe.words.badges,
+} as const
+
+/** The section under the sub-heading (an `h3`, inside its group's panel) that names this slot. */
+const panelOf = (slot: keyof typeof SLOT_LABEL) => {
+  const heading = screen.getByRole('heading', { name: SLOT_LABEL[slot], level: 3 })
   const section = heading.closest('section')
   if (section === null) throw new Error(`no panel for ${slot}`)
   return within(section)
@@ -146,13 +159,15 @@ describe('InventoryScreen', () => {
     expect(await screen.findByText(viNormal.items.head_beanie01)).toBeInTheDocument()
   })
 
-  it('groups every slot and counts what is owned', async () => {
+  it("lists what is owned in the wardrobe's three groups, in its order, and counts it", async () => {
     renderScreen()
     await screen.findByText(viNormal.items.head_beanie01)
 
-    for (const label of Object.values(viNormal.inventory.slot)) {
-      expect(screen.getByRole('heading', { name: label })).toBeInTheDocument()
-    }
+    // Group panels in the wardrobe's order, each holding only the slots that have something in them.
+    const groups = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)
+    expect(groups).toEqual([viNormal.wardrobe.groups.look, viNormal.wardrobe.groups.wear, viNormal.wardrobe.groups.decor])
+    const slots = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)
+    expect(slots).toEqual([SLOT_LABEL.hairColor, SLOT_LABEL.eyeColor, SLOT_LABEL.head, SLOT_LABEL.outfit, SLOT_LABEL.title])
     expect(screen.getByText(viNormal.inventory.summary.replace('{{owned}}', '6'))).toBeInTheDocument()
   })
 
@@ -185,18 +200,26 @@ describe('InventoryScreen', () => {
     renderScreen()
     await screen.findByText(viNormal.items.head_beanie01)
 
-    expect(panelOf('head').getAllByText(viNormal.inventory.equipped)).toHaveLength(1)
-    expect(panelOf('title').getByText(viNormal.inventory.equipped)).toBeInTheDocument()
-    expect(panelOf('outfit').getByText(viNormal.inventory.equipped)).toBeInTheDocument()
+    // The wardrobe's own "✓ Đang mặc" pill (layout audit C3).
+    expect(panelOf('head').getAllByText(viNormal.wardrobe.wearingBadge)).toHaveLength(1)
+    expect(panelOf('title').getByText(viNormal.wardrobe.wearingBadge)).toBeInTheDocument()
+    expect(panelOf('outfit').getByText(viNormal.wardrobe.wearingBadge)).toBeInTheDocument()
   })
 
-  it('says a slot is empty rather than showing an empty box', async () => {
+  it('leaves out a slot with nothing in it, and says so only when there is nothing at all', async () => {
     renderScreen()
     await screen.findByText(viNormal.items.head_beanie01)
 
-    expect(panelOf('face').getByText(viNormal.inventory.empty)).toBeInTheDocument()
-    expect(panelOf('badge').getByText(viNormal.inventory.empty)).toBeInTheDocument()
-    expect(panelOf('head').queryByText(viNormal.inventory.empty)).toBeNull()
+    expect(screen.queryByRole('heading', { name: SLOT_LABEL.face, level: 3 })).toBeNull()
+    expect(screen.queryByRole('heading', { name: SLOT_LABEL.badge, level: 3 })).toBeNull()
+    expect(screen.queryByText(viNormal.inventory.empty)).toBeNull()
+  })
+
+  it('says the inventory is empty when it is', async () => {
+    renderScreen(stubApi({ inventory: vi.fn().mockResolvedValue({ ...INVENTORY, items: [] }) }))
+
+    expect(await screen.findByText(viNormal.inventory.empty)).toBeInTheDocument()
+    expect(screen.queryAllByRole('heading', { level: 2 })).toHaveLength(0)
   })
 
   it('shows an owned rare hair colour and a free eye colour in their own panels, as colour swatches', async () => {

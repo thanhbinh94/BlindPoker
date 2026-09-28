@@ -208,14 +208,15 @@
       "password": "The password must be 4–20 characters.",
       "buyIn": "The minimum buy-in must be at most the maximum.",
       "botCount": "There must be fewer bots than seats."
-    }
+    },
+    "buyInHint": "{{bb}} BB = {{points}}"
   },
   "room": {
     "title": "Room",
     "waitingForHost": "Waiting for the host to start",
     "readyCount": "{{ready}}/{{total}} ready",
     "startHint": "At least 2 players must be ready to start",
-    "startNeedsYou": "Press Ready first — a hand needs at least one player who is not a bot",
+    "startNeedsYou": "Press Ready to start — a hand needs at least one real player.",
     "leaveConfirm": "Leave this room?",
     "closed": "Room closed",
     "kicked": "You were kicked from the room",
@@ -224,7 +225,10 @@
     "sitOut": "Sit out",
     "sitIn": "Sit back in",
     "buyInTitle": "Choose your buy-in",
-    "controls": "Table controls"
+    "controls": "Table controls",
+    "manage": "Manage table",
+    "manageTitle": "People in the room",
+    "sitFirst": "Take a seat to play."
   },
   "cancel": {
     "shutdown": "The server is shutting down",

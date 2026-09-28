@@ -11,6 +11,8 @@ import { TurnTimer } from './TurnTimer.js'
 import s from './table.module.css'
 
 const DEALER_GLYPH = 'D'
+/** Marks the host's badge apart from "you" when both are gold (layout audit C4). */
+const CROWN_GLYPH = '♛ '
 
 export interface SeatProps {
   seat: ClientSeat
@@ -131,7 +133,14 @@ export function Seat({
 
       <div className={s.tags}>
         {isMe ? <Badge tone="gold">{t('labels.you')}</Badge> : null}
-        {player?.isHost === true ? <Badge tone="red">{t('labels.host')}</Badge> : null}
+        {/* Gold, not red — red is for the risky acts (fold, leave, kick); a crown tells it apart from "you"
+            when both sit on the same plate (layout audit C4). */}
+        {player?.isHost === true ? (
+          <Badge tone="gold">
+            <span aria-hidden="true">{CROWN_GLYPH}</span>
+            {t('labels.host')}
+          </Badge>
+        ) : null}
         {seat.isBot ? <Badge tone="muted">{t('labels.bot')}</Badge> : null}
         {pill === null ? null : <Badge tone={pill.tone}>{pill.text}</Badge>}
       </div>

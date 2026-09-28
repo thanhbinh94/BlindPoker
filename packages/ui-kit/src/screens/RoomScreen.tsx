@@ -71,6 +71,11 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
   const [buyIn, setBuyIn] = useState('')
   /** The hand whose result card the player has waved away; the next hand brings its own. */
   const [dismissedHandId, setDismissedHandId] = useState<string | null>(null)
+  /**
+   * The hand (or `none`) between whose deals the host opened "Manage table". Keyed rather than a flag, so a hand
+   * that starts under the open list closes it for good instead of bringing it back once that hand is over.
+   */
+  const [managingAfter, setManagingAfter] = useState<string | null>(null)
   const request = useRequest()
 
   // Left, closed or kicked: the reducer drops the room and the host app takes it from here. A *stale* room is a
@@ -90,6 +95,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
 
   const act = useCallback((action: PlayerAction) => void request.run(() => client.act(action)), [request, client])
   const closeBuyIn = useCallback(() => setBuyInSeat(null), [])
+  const closeManage = useCallback(() => setManagingAfter(null), [])
   const clearError = useCallback(() => {
     request.clear()
     client.clearError()
@@ -110,7 +116,6 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
   // and the button says so before the click rather than after.
   const readyHumans = seated.filter((p) => p.ready && !p.sittingOut && !p.isBot).length
   const canStart = readyCount >= MIN_TO_START && readyHumans >= 1
-  const startHint = canStart ? null : readyHumans === 0 && readyCount >= MIN_TO_START ? t('room.startNeedsYou') : t('room.startHint')
   const turnTimerMs = room.config.turnTimerSec * 1000
   const bb = holdem?.bigBlind ?? 0
   const minBuyIn = holdem === undefined ? 0 : holdem.minBuyInBB * bb
@@ -146,6 +151,29 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
   // Not `status`: that reports `IN_HAND` for the hand a fresh sitter is still finishing, so a snapshot taken
   // mid-hand (a RESYNC, a seq gap, a reconnect) would flip the toggle back and leave it unable to cancel.
   const sittingOut = me?.sittingOut === true
+  /**
+   * The one line under the controls between hands, saying what *this* player can do next (layout audit C5,
+   * 2026-09-28 — "press Ready" used to show to a host who had not even sat down): take a seat, press Ready,
+   * wait for a second player, or wait for the host.
+   */
+  const hintKey = !waiting
+    ? null
+    : !mySeated
+      ? canSit
+        ? 'room.sitFirst'
+        : null
+      : !isHost
+        ? 'room.waitingForHost'
+        : canStart
+          ? null
+          : readyHumans === 0
+            ? 'room.startNeedsYou'
+            : 'room.startHint'
+  /** Everyone the host could ask to leave: the other seats and the spectators, bots included. */
+  const others = room.players.filter((p) => p.playerId !== me?.playerId)
+  // Managing the roster is a between-hands job: the dialog closes itself the moment cards are dealt.
+  const canManage = waiting && isHost && others.length > 0
+  const manageKey = hand?.handId ?? 'none'
 
   const countdown =
     nextHandIn === null ? null : (
@@ -233,40 +261,20 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
             countdown
           ) : null}
 
-          {!waiting ? null : isHost ? (
-            <>
-              <Button variant="gold" disabled={request.busy || !canStart} onClick={() => void request.run(() => client.startGame())}>
-                {t('actions.start')}
-              </Button>
-              {startHint === null ? null : <span className={s.hint}>{startHint}</span>}
-            </>
-          ) : (
-            <span className={s.hint}>{t('room.waitingForHost')}</span>
-          )}
+          {waiting && isHost ? (
+            <Button variant="gold" disabled={request.busy || !canStart} onClick={() => void request.run(() => client.startGame())}>
+              {t('actions.start')}
+            </Button>
+          ) : null}
+          {/* The roster used to sit open in the tray, a red "Kick" per player, taking a row a phone did not
+              have; it is one quiet button now, and the list opens on demand (layout audit C5). */}
+          {canManage ? (
+            <Button variant="ghost" onClick={() => setManagingAfter(manageKey)}>
+              {t('room.manage')}
+            </Button>
+          ) : null}
+          {hintKey === null ? null : <span className={s.hint}>{t(hintKey)}</span>}
         </div>
-
-        {/* Managing the roster is a between-hands job: the tray stays clear while cards are out. */}
-        {!waiting || !isHost || room.players.length < 2 ? null : (
-          <ul className={s.roster} aria-label={t('labels.players')}>
-            {room.players
-              .filter((p) => p.playerId !== me?.playerId)
-              .map((p) => (
-                <li key={p.playerId} className={cx(s.rosterRow, !p.connected && s.rosterOffline)}>
-                  <span className={s.rosterName}>{p.displayName}</span>
-                  {p.seat === null || p.isBot ? null : <span className={s.rosterStack}>{formatPoints(p.stack, lang)}</span>}
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    disabled={request.busy}
-                    aria-label={`${t('actions.kick')} — ${p.displayName}`}
-                    onClick={() => void request.run(() => client.kick(p.playerId))}
-                  >
-                    {t('actions.kick')}
-                  </Button>
-                </li>
-              ))}
-          </ul>
-        )}
 
         {/* The tray belongs to a seated player in a live hand — it holds its place between turns rather than
             appearing and disappearing under the felt. */}
@@ -317,6 +325,26 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
             </Button>
           </div>
         </div>
+      </Modal>
+
+      <Modal open={canManage && managingAfter === manageKey} title={t('room.manageTitle')} closeLabel={t('actions.close')} onClose={closeManage}>
+        <ul className={s.roster} aria-label={t('labels.players')}>
+          {others.map((p) => (
+            <li key={p.playerId} className={cx(s.rosterRow, !p.connected && s.rosterOffline)}>
+              <span className={s.rosterName}>{p.displayName}</span>
+              {p.seat === null || p.isBot ? null : <span className={s.rosterStack}>{formatPoints(p.stack, lang)}</span>}
+              <Button
+                variant="danger"
+                size="sm"
+                disabled={request.busy}
+                aria-label={`${t('actions.kick')} — ${p.displayName}`}
+                onClick={() => void request.run(() => client.kick(p.playerId))}
+              >
+                {t('actions.kick')}
+              </Button>
+            </li>
+          ))}
+        </ul>
       </Modal>
 
       <Toasts

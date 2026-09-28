@@ -231,13 +231,18 @@ function LedgerPanel({ api, lang }: LedgerPanelProps) {
       {entries.length === 0 ? null : (
         <ul className={s.rows} aria-label={t('profile.ledger.title')}>
           {entries.map((entry) => (
-            <li className={s.ledgerRow} key={entry.id}>
+            // The reference id is a row in someone's database, not something a player reads (layout audit C7):
+            // it stays on the row as a hover title, for the bug report that needs it.
+            <li
+              className={s.ledgerRow}
+              key={entry.id}
+              title={entry.refId === null ? undefined : t('profile.ledger.ref', { id: entry.refId })}
+            >
               <span className={s.rowMain}>
                 <span className={s.rowTitle}>{reasonLabel(entry.reason, t)}</span>
                 <time className={s.rowMeta} dateTime={new Date(entry.createdAt).toISOString()}>
                   {formatMoment(entry.createdAt, lang)}
                 </time>
-                {entry.refId === null ? null : <span className={s.rowRef}>{t('profile.ledger.ref', { id: entry.refId })}</span>}
               </span>
               <span className={s.amount} data-sign={entry.amount < 0 ? 'down' : 'up'}>
                 {formatSigned(entry.amount, lang)}
@@ -341,14 +346,18 @@ export function ProfileScreen({ api, lang, balance, onRenamed }: ProfileScreenPr
       </div>
       <header className={s.identityCard}>
         {/* The backdrop is CSS, keyed on `data-title` — five gradient/glow variants, one per title, in
-            `normal.module.css`. `full` shows the aura behind the figure; the head crop beside it is what
-            makes the frame ring (a `head`-only layer) visible at all. */}
+            `normal.module.css`. One figure, full body with its aura, beside the text (layout audit C7,
+            2026-09-28: a 240 px body and a 192 px head used to stand side by side above the text, with room to
+            spare around both). The frame ring is a `head`-only layer, so the head crop stays — as the small
+            portrait beside the name, the size the table and the lobby show it at. */}
         <div className={s.identityStage} data-title={titleId ?? ''}>
-          <Chibi subject={chibi} frame="full" size={240} label={displayName} />
-          <Chibi subject={chibi} frame="head" size={192} />
+          <Chibi subject={chibi} frame="full" size={200} label={displayName} />
         </div>
         <div className={s.identityText}>
-          <h2 className={s.identityName}>{displayName}</h2>
+          <div className={s.identityHead}>
+            <Chibi subject={chibi} frame="head" size={56} />
+            <h2 className={s.identityName}>{displayName}</h2>
+          </div>
           <p className={s.marks}>
             {titleId === undefined || titleId === '' ? (
               <span className={s.footnote}>{t('profile.noTitle')}</span>

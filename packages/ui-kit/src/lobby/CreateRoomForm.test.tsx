@@ -24,6 +24,12 @@ describe('CreateRoomForm', () => {
       holdem: { smallBlind: 100, bigBlind: 200, minBuyInBB: 50, maxBuyInBB: 200 },
     })
   })
+  it('names the buy-in unit and what it comes to at the chosen stakes (layout audit C9)', () => {
+    wrap(<CreateRoomForm onSubmit={vi.fn()} lang="en" />)
+    // Default stakes 100/200: 50 BB and 200 BB.
+    expect(screen.getByLabelText('Min buy-in')).toHaveAccessibleDescription('50 BB = 10,000 pts')
+    expect(screen.getByLabelText('Max buy-in')).toHaveAccessibleDescription('200 BB = 40,000 pts')
+  })
   it('switches to blind, exposes blind fields, and rejects a bad bot count', async () => {
     const onSubmit = vi.fn()
     wrap(<CreateRoomForm onSubmit={onSubmit} lang="en" initialMode="blind" />)
