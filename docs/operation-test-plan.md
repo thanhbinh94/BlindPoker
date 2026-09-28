@@ -49,6 +49,10 @@ Ngày lập: 2026-09-28. Bản kiểm: master sau merge `22d1905` (đổi tên B
 
 ## 3. Cách chạy một đợt test
 
+**Bộ test tự động của kế hoạch này:** `apps/normal-web/e2e/ops/` — mỗi test mang mã ca (S-01, E-05…), chạy bằng
+`pnpm build:normal` rồi `pnpm --filter @bp/normal-web e2e:ops` (server thử PGlite, không đụng Neon, khoảng 20 phút).
+Những ca nó tự làm được thì người test chỉ cần kiểm lại trên thiết bị thật; kết quả từng đợt ghi ở `docs/test-runs/`.
+
 | Vòng | Ai | Thời lượng | Nội dung |
 |---|---|---|---|
 | 0 — Cổng tự động | Claude | ~10 phút | `pnpm typecheck && pnpm lint && pnpm test && pnpm build:normal && pnpm e2e:normal`, rồi `pnpm build:lite && pnpm --filter @bp/lite e2e`. Không xanh thì không mở vòng 1. |
@@ -69,7 +73,7 @@ mã phòng (nếu có), thiết bị, ảnh chụp màn hình. Claude chép vào
 |---|---|---|---|
 | S-01 | Mở địa chỉ máy chủ | Trang đăng nhập "Blind Luck Poker", tab trình duyệt cùng tên | P1 |
 | S-02 | Đăng ký tài khoản mới | Vào thẳng trang Điểm danh (lần đầu trong ngày), số dư 100.000 điểm | P1 |
-| S-03 | Bấm Nhận thưởng | Số dư +5.000, nút khoá lại, chấm vàng trên tab Điểm danh biến mất | P1 |
+| S-03 | Bấm Nhận thưởng | Số dư +5.000, nút khoá lại; chấm vàng trên tab Điểm danh biến mất khi rời trang (xem T1 trong `docs/bug-log.md` §6) | P1 |
 | S-04 | Sảnh → Tạo phòng Blind, 3 bot | Vào bàn, 3 bot ngồi sẵn, mã phòng 6 ký tự ở đầu trang | P1 |
 | S-05 | Ngồi vào bàn → Sẵn sàng → Bắt đầu | Ván chạy, lá chung lật, có người thắng, số dư đổi | P1 |
 | S-06 | Rời phòng | Về sảnh; phòng hiện nhãn "Đang đóng…" rồi biến mất sau ~60 giây | P1 |
@@ -151,7 +155,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 | F-04 | Cả hai chọn Bỏ | Pot chuyển sang ván sau, bàn hiện "Cộng dồn" | P1 |
 | F-05 | Sau F-04, mọi người thật bấm Ngồi ngoài (vẫn giữ ghế) để không ván nào bắt đầu, chờ > 60 giây | Pot cộng dồn chia đều cho người thật đang ngồi ghế, phần lẻ bị thu; nếu không còn người thật nào ngồi ghế thì cả pot bị thu | P2 |
 | F-06 | Chỉ một người chọn Chơi | Người đó thắng cả pot, không lật lá chung, lá riêng không lộ | P1 |
-| F-07 | Số dư < mức cược (kiểu A) hoặc < 2 × mức cược (kiểu B) | Ghế thành ngồi ngoài, không bị trừ điểm | P2 |
+| F-07 | (a) Bấm Ngồi vào bàn khi số dư < mức cược (kiểu A) hoặc < 2 × mức cược (kiểu B); (b) đang ngồi mà số dư tụt dưới mức đó | (a) Bị từ chối, báo "Số dư không đủ", không bị trừ điểm (FR-R07); (b) ghế tự ngồi ngoài, không ván nào trừ ante | P2 |
 | F-08 | Chủ phòng bấm Đuổi một bot | Bot rời ghế, ghế trống | P2 |
 | F-09 | Bật "Tự động chơi" | Tự quyết định mỗi ván cho tới khi tắt | P3 |
 
