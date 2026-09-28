@@ -173,7 +173,7 @@ async function tourStart(context: BrowserContext, who: Account, suffix: string):
 
 /* ── the tests ───────────────────────────────────────────────────────────────────────────────────── */
 
-test.describe('Just a Normal Poker Normal', () => {
+test.describe('Blind Luck Poker Normal', () => {
   test('một tài khoản chơi trọn một ván Blind với bot', async ({ context }) => {
     const who = account('An')
     const page = await tourStart(context, who, 'desktop')

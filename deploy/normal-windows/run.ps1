@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    Starts the Just a Normal Poker Normal server on a Windows PC for a LAN test — no Docker, no HTTPS.
+    Starts the Blind Luck Poker Normal server on a Windows PC for a LAN test — no Docker, no HTTPS.
 
 .DESCRIPTION
     The Normal edition is normally a Docker Compose stack (deploy/normal/). This script is the other
@@ -481,12 +481,12 @@ if (-not $listening) {
 }
 
 Write-Info ''
-Write-Info "Just a Normal Poker Normal đang chạy — pid $($process.Id), log ở $outLog"
+Write-Info "Blind Luck Poker Normal đang chạy — pid $($process.Id), log ở $outLog"
 Write-Info "  Máy này:        http://localhost:$effectivePort"
 Write-Info "  Máy khác trong LAN: http://$($lanIp):$effectivePort"
 Write-Info ''
 Write-Info 'Nếu máy khác không vào được, mở PowerShell bằng quyền Administrator và chạy một lần:'
-Write-Info "  New-NetFirewallRule -DisplayName `"Just a Normal Poker Normal`" -Direction Inbound -Protocol TCP -LocalPort $effectivePort -Profile Private -Action Allow"
+Write-Info "  New-NetFirewallRule -DisplayName `"Blind Luck Poker Normal`" -Direction Inbound -Protocol TCP -LocalPort $effectivePort -Profile Private -Action Allow"
 Write-Info ''
 Write-Info 'Dừng server:  .\stop.ps1   (tắt cứng — đóng hết phòng trước, xem README.md mục 7)'
 exit 0

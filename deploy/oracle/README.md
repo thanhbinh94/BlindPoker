@@ -1,4 +1,4 @@
-# Chạy Just a Normal Poker Normal miễn phí trên Oracle Cloud Always Free
+# Chạy Blind Luck Poker Normal miễn phí trên Oracle Cloud Always Free
 
 Runbook đầy đủ để đưa bản **Normal** lên Internet — tên miền thật, HTTPS thật, người ngoài vào chơi
 được — mà **không mất tiền hằng tháng**, trên một máy ảo ARM của Oracle Cloud Always Free.
@@ -455,7 +455,7 @@ Cách xử lý, theo thứ tự nên làm:
 
 - **Hạn mức Always Free** cho ARM là tổng **4 OCPU + 24 GB RAM** cho cả tài khoản, và **200 GB** block
   volume. Máy 2/8 ở đây dùng một nửa CPU và một phần ba RAM của hạn mức.
-- **Băng thông ra** 10 TB/tháng. Just a Normal Poker đẩy JSON qua WebSocket, không phải video — con số này
+- **Băng thông ra** 10 TB/tháng. Blind Luck Poker đẩy JSON qua WebSocket, không phải video — con số này
   không phải thứ bạn cần lo.
 - **Ổ 50 GB** phải chứa image Docker (~1 GB), database, và **các bản dump** nếu bạn để chúng ở đây.
   Mục 12 nói chuyện đó.

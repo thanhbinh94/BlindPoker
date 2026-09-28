@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Just a Normal Poker — one-time preparation of an Oracle Cloud Always Free VM (Ubuntu 24.04 on an ARM
+# Blind Luck Poker — one-time preparation of an Oracle Cloud Always Free VM (Ubuntu 24.04 on an ARM
 # `VM.Standard.A1.Flex`) for the Normal edition's Compose stack.
 #
 #     sudo ./bootstrap.sh <REPO_URL> [BRANCH]

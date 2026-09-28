@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "Just a Normal Poker",
+    "name": "Blind Luck Poker",
     "edition": "Bản Normal"
   },
   "nav": {
@@ -12,7 +12,7 @@
     "dailyReady": "Có quà chưa nhận"
   },
   "auth": {
-    "title": "Just a Normal Poker",
+    "title": "Blind Luck Poker",
     "lead": "Một tài khoản, mọi thiết bị. Điểm, tủ đồ và thành tựu của bạn theo tài khoản chứ không theo máy.",
     "signIn": "Đăng nhập",
     "register": "Đăng ký",

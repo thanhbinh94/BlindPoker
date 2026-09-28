@@ -1,4 +1,4 @@
-# Just a Normal Poker — sao lưu database hằng đêm trên VM Oracle.
+# Blind Luck Poker — sao lưu database hằng đêm trên VM Oracle.
 #
 # `deploy/normal/backup.sh` là một quy trình hoàn chỉnh; thứ duy nhất nó không tự làm là hẹn giờ,
 # vì lịch, nơi lưu và thời hạn giữ là quyết định của từng chỗ. File này là bản mẫu của quyết định đó.
