@@ -1,4 +1,4 @@
-import { Badge, Button, Panel, formatPoints, type BadgeTone, type Language } from '@bp/ui-kit'
+import { Button, Panel, formatPoints, type Language } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -12,11 +12,13 @@ import {
   type ReliefStatusDto,
 } from '../api.js'
 import { itemName } from '../catalog-i18n.js'
-import { RARITY_TONE } from './catalog.js'
 import { formatMoment } from './format.js'
 import s from './normal.module.css'
 import { refusalText } from './refusal.js'
 import { useAsync, type AsyncHandle } from './useAsync.js'
+
+/** A claimed tier's tick, a named value rather than a literal in the markup (`react/jsx-no-literals`). */
+const CHECK_GLYPH = '✓'
 
 /**
  * The line explaining a disabled claim button, so the button can point at it.
@@ -44,14 +46,26 @@ const pointsText = (amount: number, lang: Language, t: TFunction): string =>
  * something else entirely. The points on that day still show — only the promise this app cannot keep is
  * withheld.
  */
-const MARKERS: Record<string, { tone: BadgeTone; key: string }> = {
-  common: { tone: RARITY_TONE.common, key: 'daily.marker.common' },
-  rare: { tone: RARITY_TONE.rare, key: 'daily.marker.rare' },
-  badge_monthly: { tone: 'gold', key: 'daily.marker.monthly' },
+/** What an item tier pays, as the colour of its gift icon (`.calGift[data-kind]`) and the words for it. */
+export type MarkerKind = 'common' | 'rare' | 'monthly'
+
+const MARKERS: Record<string, { kind: MarkerKind; key: string }> = {
+  common: { kind: 'common', key: 'daily.marker.common' },
+  rare: { kind: 'rare', key: 'daily.marker.rare' },
+  badge_monthly: { kind: 'monthly', key: 'daily.marker.monthly' },
 }
 
-export function markerOf(entry: CalendarEntryDto): { tone: BadgeTone; key: string } | null {
+export function markerOf(entry: CalendarEntryDto): { kind: MarkerKind; key: string } | null {
   return entry.item === null ? null : (MARKERS[entry.item] ?? null)
+}
+
+/** The rail's own Daily pictogram, as the calendar's item marker: a stroked gift in the tier's colour. */
+function GiftIcon() {
+  return (
+    <svg className={s.calGiftIcon} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M4 9h16v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM3 5h18v4H3zm9 0v16M12 5c-1.5-3-5-3-5 0m5 0c1.5-3 5-3 5 0" />
+    </svg>
+  )
 }
 
 /**
@@ -246,29 +260,35 @@ export function DailyScreen({ api, lang }: DailyScreenProps) {
               reach, so printing it raw would say "5 days" over a calendar marking four — and would greet a
               player who has never claimed with a streak of one. `streak - 1` is exact on that branch, because
               `nextStreak` returns `previous + 1` there, and a broken or first-ever streak lands on 0. */}
-          <p className={s.summary}>{t('daily.streak', { streak: status.claimable ? status.streak - 1 : status.streak })}</p>
-          <p className={s.footnote}>{t('daily.reward', { amount: pointsText(status.reward, lang, t) })}</p>
-          <p className={s.footnote}>
-            <time dateTime={new Date(status.nextResetAt).toISOString()}>
-              {t('daily.resetsAt', { at: formatMoment(status.nextResetAt, lang) })}
-            </time>
-          </p>
-
-          <p>
-            <Button
-              variant="gold"
-              disabled={!status.claimable || busy}
-              onClick={() => void claim()}
-              {...(status.claimable ? {} : { 'aria-describedby': CLAIMED_NOTE_ID })}
-            >
-              {busy ? t('daily.claiming') : t('daily.claim')}
-            </Button>
-          </p>
-          {status.claimable ? null : (
-            <p className={s.footnote} id={CLAIMED_NOTE_ID}>
-              {t('daily.claimed')}
-            </p>
-          )}
+          {/* One card for today: the streak, what today pays and when the day turns, with the button beside them
+              (layout audit C6, 2026-09-28 — these were three loose lines and a button above the calendar). */}
+          <div className={s.dailySummary}>
+            <div className={s.dailyFacts}>
+              <p className={s.summary}>{t('daily.streak', { streak: status.claimable ? status.streak - 1 : status.streak })}</p>
+              <p className={s.footnote}>{t('daily.reward', { amount: pointsText(status.reward, lang, t) })}</p>
+              <p className={s.footnote}>
+                <time dateTime={new Date(status.nextResetAt).toISOString()}>
+                  {t('daily.resetsAt', { at: formatMoment(status.nextResetAt, lang) })}
+                </time>
+              </p>
+            </div>
+            <div className={s.dailyAction}>
+              <Button
+                variant="gold"
+                size="lg"
+                disabled={!status.claimable || busy}
+                onClick={() => void claim()}
+                {...(status.claimable ? {} : { 'aria-describedby': CLAIMED_NOTE_ID })}
+              >
+                {busy ? t('daily.claiming') : t('daily.claim')}
+              </Button>
+              {status.claimable ? null : (
+                <p className={s.footnote} id={CLAIMED_NOTE_ID}>
+                  {t('daily.claimed')}
+                </p>
+              )}
+            </div>
+          </div>
           {note === null ? null : (
             <p className={s.alert} role="alert">
               {note}
@@ -312,6 +332,7 @@ export function DailyScreen({ api, lang }: DailyScreenProps) {
           )}
 
           <Panel title={t('daily.calendarTitle')}>
+            <p className={s.footnote}>{t('daily.calendarLead')}</p>
             <ol className={s.calendar} aria-label={t('daily.calendarTitle')}>
               {status.calendar.map((entry) => {
                 // `day` is the tier this claim is *for*: the one about to be taken while it is claimable, and
@@ -328,13 +349,38 @@ export function DailyScreen({ api, lang }: DailyScreenProps) {
                     {...(entry.day === status.day ? { 'aria-current': 'date' as const } : {})}
                   >
                     <span className={s.calDay}>{t('daily.dayLabel', { day: entry.day })}</span>
-                    <span className={s.calPoints}>{pointsText(entry.points, lang, t)}</span>
-                    {marker === null ? null : <Badge tone={marker.tone}>{t(marker.key)}</Badge>}
-                    {mark === null ? null : <span className={s.rowMeta}>{mark}</span>}
+                    {/* The number alone: the lead above says these are points, and "12.000 điểm" does not fit a
+                        seventh of the page, let alone a quarter of a phone. */}
+                    <span className={s.calPoints}>{formatPoints(entry.points, lang)}</span>
+                    {marker === null ? null : (
+                      <span className={s.calGift} data-kind={marker.kind} title={t(marker.key)}>
+                        <GiftIcon />
+                        <span className="visually-hidden">{t(marker.key)}</span>
+                      </span>
+                    )}
+                    {mark === null ? null : claimed ? (
+                      <span className={s.calCheck}>
+                        <span aria-hidden="true">{CHECK_GLYPH}</span>
+                        <span className="visually-hidden">{mark}</span>
+                      </span>
+                    ) : (
+                      <span className={s.calToday}>{mark}</span>
+                    )}
                   </li>
                 )
               })}
             </ol>
+            {/* What the gifts mean, once, instead of a two-line pill in four cells. */}
+            <ul className={s.calLegend}>
+              {(['common', 'rare', 'monthly'] as const).map((kind) => (
+                <li key={kind}>
+                  <span className={s.calGift} data-kind={kind}>
+                    <GiftIcon />
+                  </span>
+                  {t(`daily.marker.${kind}`)}
+                </li>
+              ))}
+            </ul>
           </Panel>
         </>
       )}

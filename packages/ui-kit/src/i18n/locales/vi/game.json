@@ -208,14 +208,15 @@
       "password": "Mật khẩu cần 4–20 ký tự.",
       "buyIn": "Buy-in tối thiểu phải nhỏ hơn hoặc bằng buy-in tối đa.",
       "botCount": "Số bot phải ít hơn số ghế."
-    }
+    },
+    "buyInHint": "{{bb}} BB = {{points}}"
   },
   "room": {
     "title": "Phòng chơi",
     "waitingForHost": "Đang chờ chủ phòng bắt đầu",
     "readyCount": "{{ready}}/{{total}} sẵn sàng",
     "startHint": "Cần ít nhất 2 người sẵn sàng để bắt đầu",
-    "startNeedsYou": "Bạn cần bấm Sẵn sàng trước — ván cần ít nhất một người chơi không phải bot",
+    "startNeedsYou": "Bấm Sẵn sàng để bắt đầu — ván cần ít nhất một người chơi thật.",
     "leaveConfirm": "Bạn có chắc muốn rời phòng?",
     "closed": "Phòng đã đóng",
     "kicked": "Bạn đã bị đuổi khỏi phòng",
@@ -224,7 +225,10 @@
     "sitOut": "Ngồi ngoài",
     "sitIn": "Vào lại",
     "buyInTitle": "Chọn mức mang vào",
-    "controls": "Điều khiển bàn"
+    "controls": "Điều khiển bàn",
+    "manage": "Quản lý bàn",
+    "manageTitle": "Người trong phòng",
+    "sitFirst": "Hãy ngồi vào bàn để chơi."
   },
   "cancel": {
     "shutdown": "Máy chủ đang tắt",

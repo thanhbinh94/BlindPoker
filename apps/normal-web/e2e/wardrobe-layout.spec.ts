@@ -131,9 +131,9 @@ test.describe('Blind Luck Poker Normal — bố cục tủ đồ (Kế hoạch 1
     await expect(inventoryIcon).toBeVisible()
     const inventoryBox = await inventoryIcon.boundingBox()
     expect(inventoryBox, 'the inventory card icon has a bounding box').not.toBeNull()
-    // `.tileIcon` alone, unscoped: fixed 4rem = 64 px, at every viewport — the inventory's own size,
-    // restored to what it was before the wardrobe redesign touched the class they both draw through.
-    expect(Math.abs(inventoryBox!.height - 64), 'the inventory card icon keeps its own fixed 4rem size').toBeLessThan(1)
+    // Layout audit C3 (2026-09-28): the inventory draws the wardrobe's own card now (`OwnedCard`), picture
+    // box included, so an item's icon is the same size on both screens.
+    expect(Math.abs(inventoryBox!.height - wardrobeBox!.height), 'the inventory card icon matches the wardrobe card icon').toBeLessThan(1)
     // Bug 8: the account rail fits one row at every desktop width that used to overflow.
     for (const width of [700, 900, 1100, 1440]) {
       await page.setViewportSize({ width, height: 900 })

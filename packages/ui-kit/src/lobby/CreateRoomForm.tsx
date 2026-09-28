@@ -4,6 +4,7 @@ import type { FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { errorLabel, type Language } from '../i18n/index.js'
 import { Button } from '../primitives/Button.js'
+import { Segmented } from '../primitives/Segmented.js'
 import { Field } from '../primitives/Field.js'
 import { Select } from '../primitives/Select.js'
 import { cx } from '../primitives/cx.js'
@@ -126,20 +127,13 @@ export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem',
 
         <span className={s.wide}>
           <span className={s.label}>{t('create.mode')}</span>
-          <div className={s.segment} role="group" aria-label={t('create.mode')}>
-            {MODES.map((key) => (
-              <button
-                key={key}
-                type="button"
-                className={s.segBtn}
-                aria-pressed={key === mode}
-                disabled={busy}
-                onClick={() => setMode(key)}
-              >
-                {t(`mode.${key}`)}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            options={MODES.map((key) => ({ value: key, label: t(`mode.${key}`) }))}
+            value={mode}
+            onChange={setMode}
+            label={t('create.mode')}
+            disabled={busy}
+          />
         </span>
 
         <Field label={t('create.maxPlayers')}>

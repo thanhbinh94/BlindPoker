@@ -258,6 +258,7 @@ and an app only reaches for them directly when it builds its own room form.
 | `Panel` | `title?`, `tone?` (`ink`/`parchment`/`felt`), `className?` |
 | `Badge` | `tone` (`gold`/`red`/`teal`/`muted`) |
 | `Modal` | `open`, `title`, `onClose`, `closeLabel`, `children` |
+| `Segmented<T>` | `options` (`{ value, label }[]`), `value`, `onChange`, `label` (the group's name), `disabled?`, `className?` — the one "pick one of a few" pill: language, lobby filter, create-form mode, theme |
 
 ### Router
 
@@ -352,6 +353,8 @@ Rules:
 - **Every key exists in both languages.** A test asserts key parity between `en` and `vi`; adding one to a single
   locale fails the build.
 - Numbers go through `formatPoints` / `formatCompactPoints`, never `toLocaleString` at the call site.
+- Dates go through `formatDay` ("28 thg 9, 2026") and `formatMoment` ("08:46, 28 thg 9", the year only when it is
+  not this one) — both editions, every screen.
 - Hand categories translate through `handLabel(category, t)` off `HAND_CATEGORY_KEYS`; cards through
   `cardLabel(card, t)`; protocol errors through `errorLabel(code, t)`.
 - `NOTIFICATION` slips look up `notify.<kind>` and fall back to `notify.other`. `Toasts` hands `t` exactly two

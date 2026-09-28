@@ -241,7 +241,7 @@ describe('RoomScreen', () => {
     expect(screen.getByText('At least 2 players must be ready to start')).toBeInTheDocument()
   })
 
-  it('lets the host start once two players are ready, and kick the others', async () => {
+  it('lets the host start once two players are ready, and kick the others from Manage table', async () => {
     const client = fakeClient(makeState({ room: readyRoom }))
     wrap(client)
 
@@ -249,11 +249,15 @@ describe('RoomScreen', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Start' }))
     expect(client.startGame).toHaveBeenCalledTimes(1)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Kick — Ann' }))
+    // The roster is not open in the tray any more (layout audit C5): it is one button away.
+    expect(screen.queryByRole('button', { name: 'Kick — Ann' })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Manage table' }))
+    const dialog = screen.getByRole('dialog', { name: 'People in the room' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Kick — Ann' }))
     expect(client.kick).toHaveBeenCalledWith('a')
   })
 
-  it("lists a bot in the kick roster without its virtual bankroll", () => {
+  it("lists a bot in the kick roster without its virtual bankroll", async () => {
     const withBot = makeRoom({
       status: 'OPEN',
       players: [
@@ -262,6 +266,7 @@ describe('RoomScreen', () => {
       ],
     })
     wrap(fakeClient(makeState({ room: withBot })))
+    await userEvent.click(screen.getByRole('button', { name: 'Manage table' }))
     const roster = screen.getByRole('list', { name: 'Players' })
     expect(within(roster).getByText('Bot 1')).toBeInTheDocument()
     expect(within(roster).queryByText('1,000,000')).toBeNull()
@@ -276,12 +281,12 @@ describe('RoomScreen', () => {
 
     expect(screen.getByText('3/4 ready')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
-    expect(screen.getByText('Press Ready first — a hand needs at least one player who is not a bot')).toBeInTheDocument()
+    expect(screen.getByText('Press Ready to start — a hand needs at least one real player.')).toBeInTheDocument()
 
     // The host presses Ready: the same table can now deal, and the hint goes away.
     view.rerender(screenFor(fakeClient(makeState({ room: makeRoom({ status: 'OPEN', hostPlayerId: 'me', playerCount: 4, players: [{ ...host, ready: true, status: 'READY' }, ...bots] }) }))))
     expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
-    expect(screen.queryByText(/Press Ready first/)).toBeNull()
+    expect(screen.queryByText(/Press Ready to start/)).toBeNull()
     await userEvent.click(screen.getByRole('button', { name: 'Start' }))
   })
 
@@ -298,6 +303,17 @@ describe('RoomScreen', () => {
     expect(screen.queryByRole('button', { name: 'Start' })).toBeNull()
     expect(screen.getByText('Waiting for the host to start')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^kick/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Manage table' })).toBeNull()
+  })
+
+  it('tells a host who has not sat down to take a seat, not to press Ready (layout audit C5)', () => {
+    const bots = [1, 2, 3].map((i) => makePlayer({ playerId: `bot-${i}`, displayName: `Bot ${i}`, isBot: true, seat: i, status: 'READY', stack: 1_000_000, ready: true }))
+    const host = makePlayer({ playerId: 'me', displayName: 'Mai', isHost: true, seat: null, status: 'SEATED', stack: 0, ready: false })
+    wrap(fakeClient(makeState({ room: makeRoom({ status: 'OPEN', hostPlayerId: 'me', playerCount: 4, players: [host, ...bots] }) })))
+
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
+    expect(screen.getByText('Take a seat to play.')).toBeInTheDocument()
+    expect(screen.queryByText(/Press Ready/)).toBeNull()
   })
 
   it('renders the action bar on my turn and sends the action I pick', async () => {

@@ -265,8 +265,9 @@
 
   /* On /profile — the one page that prints the balance itself — the rail's copy is the first thing to go:
      without it the four tabs fit at 375 px instead of scrolling the last one away. Everywhere else the rail
-     keeps it, because nothing else on those pages shows it. */
-  .identity[data-balance-in-page='true'] .balance {
+     keeps it, because nothing else on those pages shows it. The connection dot goes with it: alone at the
+     edge it read as a stray mark, not as a status (layout audit C10, 2026-09-28). */
+  .identity[data-balance-in-page='true'] {
     display: none;
   }
 
@@ -587,10 +588,12 @@
    the only rules a phone needs are the ones that stop a *row* from being wider than it: every grid is
    `auto-fit`/`minmax`, every long string can wrap, and nothing has a fixed width in px. */
 
+/* The figure on the left, who they are on the right (layout audit C7, 2026-09-28); one column on a phone. */
 .identityCard {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-5);
   padding: var(--space-4);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
@@ -598,29 +601,30 @@
   box-shadow: var(--shadow-1);
 }
 
-/* The profile's own figure: the full-body chibi (its aura visible) beside the head crop (its frame ring
-   visible), on a backdrop keyed by the equipped title — five gradient/glow variants, no animation.
-   `Chibi`'s root is `flex: none` (ui-kit 595810e) — a flex parent can no longer shrink either chibi below its
-   own `size`, so this row gets the identity card's *full* width and wraps rather than fighting them for a
-   288 px-wide column, which is what used to squeeze a 192 px chibi down to 114 px. Under 640 px there still
-   is not room for 240 + 192 px side by side, so the two stack instead. */
+@media (max-width: 640px) {
+  .identityCard {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The profile's own figure: the full-body chibi, its aura visible, on a backdrop keyed by the equipped title —
+   five gradient/glow variants, no animation. `Chibi`'s root is `flex: none`, so the stage is as wide as the
+   figure and never squeezes it. */
 .identityStage {
   display: flex;
-  flex-wrap: wrap;
   align-items: flex-end;
   justify-content: center;
-  gap: var(--space-4);
-  width: 100%;
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);
   background: var(--bg-elev);
 }
 
-@media (max-width: 640px) {
-  .identityStage {
-    flex-direction: column;
-    align-items: center;
-  }
+/* The head crop (its frame ring visible) beside the name — the portrait the table and the lobby show. */
+.identityHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
 }
 
 .identityStage[data-title='title_rookie'] {
@@ -728,6 +732,19 @@
   margin: 0;
 }
 
+/* The profile's statistics sit in one grid of four columns, two on a phone, whatever each group holds — so a
+   group of two or three lines up under a group of four instead of spreading across the row, and a phone gets
+   two columns rather than the single long one `auto-fit` fell back to (layout audit C7). */
+.statGroup .stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media (max-width: 640px) {
+  .statGroup .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .stat {
   display: flex;
   flex-direction: column;
@@ -758,6 +775,8 @@
   list-style: none;
 }
 
+/* A row of a list inside a panel. The achievement row shares the rule but lays itself out as a three-column
+   grid (the achievements section below overrides `display`). */
 .ledgerRow,
 .handRow,
 .achievement {
@@ -797,12 +816,6 @@
   font-weight: 600;
 }
 
-.rowRef {
-  font-family: ui-monospace, 'Cascadia Mono', 'Consolas', monospace;
-  font-size: 0.75rem;
-  color: var(--ink-muted);
-  overflow-wrap: anywhere;
-}
 
 /* A movement reads by colour *and* by sign: the sign is in the text, so a red-green blindness costs nothing. */
 .amount {
@@ -897,56 +910,24 @@
   align-items: center;
 }
 
-/* ── the inventory grid ───────────────────────────────────────────────────── */
+/* ── the inventory ─────────────────────────────────────────────────────────── */
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.card {
+/* Inside each of the wardrobe's three groups, one sub-heading and card grid per slot that holds anything
+   (layout audit C3). The cards themselves are the wardrobe's (`OwnedCard`, `wardrobe.module.css`). */
+.invGroup {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: var(--space-3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  text-align: center;
+  gap: var(--space-5);
+}
+
+.invSlot {
   min-width: 0;
 }
 
-.card[data-equipped='true'] {
-  border-color: var(--gold);
-  background: var(--gold-soft);
-}
-
-.cardName {
-  font-size: 0.875rem;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-
-.cardMarks {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-/* A hairColor/eyeColor card's picture (Plan 13): a round swatch of the item's own colour, sized like the
-   drawn slots' icon (`ItemPreview`'s 4rem square) so the grid reads evenly across every panel. */
-.cardSwatch {
-  display: block;
-  width: 4rem;
-  height: 4rem;
-  border: 1px solid var(--line);
-  border-radius: 50%;
+.invSlot ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 /* ── achievements ─────────────────────────────────────────────────────────── */
@@ -978,38 +959,180 @@
   background: var(--teal);
 }
 
+/* Three fixed columns (layout audit C8, 2026-09-28): what it is, how far along, what it pays — the bars used to
+   start wherever the reward pill beside them left room. On a phone the bar takes its own full-width line. */
+.achievement {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(8rem, 12rem) 9.5rem;
+  grid-template-areas: 'main progress reward';
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+.achievement .rowMain {
+  grid-area: main;
+}
+
+.achievement .trackWrap {
+  grid-area: progress;
+}
+
+.achReward {
+  grid-area: reward;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  text-align: right;
+}
+
+@media (max-width: 640px) {
+  .achievement {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'main reward'
+      'progress progress';
+  }
+}
+
+/* Not yet earned: the title steps back to the muted ink; earned: a gold tick before it. */
+.achievement[data-unlocked='false'] .rowTitle {
+  color: var(--ink-muted);
+}
+
+.achCheck {
+  margin-right: 6px;
+  color: var(--gold);
+}
+
 /* ── the daily calendar ───────────────────────────────────────────────────── */
 
 /* Not a seven-column month grid, and deliberately: this calendar is a *streak* of 31 tiers, not a picture of
    September, so a row that breaks wherever the width allows is honest about it — and it is the only shape that
    survives 375 px without either scrolling sideways or shrinking a tier to an unreadable box. */
+/* Today, in one card: the facts on the left, the button on the right; stacked on a phone (layout audit C6). */
+.dailySummary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid color-mix(in srgb, var(--gold) 40%, var(--line));
+  border-radius: var(--radius-md);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--gold) 10%, var(--bg-elev)), var(--bg-elev));
+  box-shadow: var(--shadow-1);
+}
+
+.dailyFacts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dailyAction {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  max-width: 18rem;
+  text-align: right;
+}
+
+@media (max-width: 640px) {
+  .dailyAction {
+    align-items: stretch;
+    max-width: none;
+    width: 100%;
+    text-align: left;
+  }
+}
+
+/* The streak's 31 tiers, seven to a row — four on a phone — every row the same height (layout audit C6: five
+   columns whose rows grew wherever a two-line item pill landed, and two columns, sixteen rows, on a phone).
+   A tier is its day, its points and at most a gift icon and a mark, so a seventh of the page holds it. */
 .calendar {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
   gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+@media (max-width: 640px) {
+  .calendar {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 .calCell {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   min-width: 0;
 }
 
-/* The kit's `Badge` is `white-space: nowrap`, which is right on a seat and wrong in a 7rem box: day 28's
-   marker names two things and would otherwise push a horizontal scrollbar onto a 375 px page. Every span in
-   a cell is a label the reader wants whole rather than cropped, so they all wrap here. */
-.calCell span {
-  white-space: normal;
-  overflow-wrap: anywhere;
-  text-align: left;
+.calGift {
+  display: inline-flex;
+  color: var(--rarity-common);
+}
+
+.calGift[data-kind='rare'] {
+  color: var(--rarity-rare);
+}
+
+.calGift[data-kind='monthly'] {
+  color: var(--gold);
+}
+
+.calGiftIcon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* claimed: a tick in the corner; today: its word under the points */
+.calCheck {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  color: var(--teal);
+  font-weight: 700;
+}
+
+.calToday {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--gold);
+}
+
+.calLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+}
+
+.calLegend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .calCell[data-claimed='true'] {
@@ -1036,6 +1159,35 @@
   font-size: 0.875rem;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
+}
+
+/* A quarter of a phone is ~60 px of text, and nothing in a tier may break: "NGÀY 20" stays one line, "40.000"
+   one number, "Hôm nay" one word — tighter gaps, padding and type buy the room. */
+@media (max-width: 640px) {
+  .calendar {
+    gap: 4px;
+  }
+
+  .calCell {
+    padding: 6px;
+  }
+
+  .calDay {
+    font-size: 0.625rem;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+
+  .calPoints {
+    font-size: 0.8125rem;
+    overflow-wrap: normal;
+    white-space: nowrap;
+  }
+
+  .calToday {
+    font-size: 0.6875rem;
+    white-space: nowrap;
+  }
 }
 
 /* ── settings ─────────────────────────────────────────────────────────────── */

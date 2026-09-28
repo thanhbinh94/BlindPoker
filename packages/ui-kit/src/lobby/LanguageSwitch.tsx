@@ -1,28 +1,21 @@
 import { useTranslation } from 'react-i18next'
 import { SUPPORTED_LANGUAGES, type Language } from '../i18n/index.js'
-import s from './lobby.module.css'
+import { Segmented } from '../primitives/Segmented.js'
 
 export interface LanguageSwitchProps {
   lang: Language
   onChange: (l: Language) => void
 }
 
-/** Two-state segmented control; each half is a real button carrying its own `aria-pressed`. */
+/** The two languages as a `Segmented` pill; each half is a real button carrying its own `aria-pressed`. */
 export function LanguageSwitch({ lang, onChange }: LanguageSwitchProps) {
   const { t } = useTranslation()
   return (
-    <div className={s.segment} role="group" aria-label={t('nav.language')}>
-      {SUPPORTED_LANGUAGES.map((code) => (
-        <button
-          key={code}
-          type="button"
-          className={s.segBtn}
-          aria-pressed={code === lang}
-          onClick={() => onChange(code)}
-        >
-          {t(`common:language.${code}`)}
-        </button>
-      ))}
-    </div>
+    <Segmented
+      options={SUPPORTED_LANGUAGES.map((code) => ({ value: code, label: t(`common:language.${code}`) }))}
+      value={lang}
+      onChange={onChange}
+      label={t('nav.language')}
+    />
   )
 }

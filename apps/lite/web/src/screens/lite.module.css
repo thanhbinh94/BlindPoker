@@ -197,8 +197,9 @@
   }
 
   /* On /daily and /settings the page prints the balance itself, so the rail's copy is the first
-     thing to go: without it the three tabs fit at 375 px instead of scrolling the last one away. */
-  .identity[data-balance-in-page='true'] .balance {
+     thing to go: without it the three tabs fit at 375 px instead of scrolling the last one away. The
+     connection dot goes with it — alone at the edge it read as a stray mark (layout audit C10). */
+  .identity[data-balance-in-page='true'] {
     display: none;
   }
 
@@ -606,43 +607,6 @@
   font-size: 0.8125rem;
   font-weight: 400;
   color: var(--ink-muted);
-}
-
-.segment {
-  display: inline-flex;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
-}
-
-.segBtn {
-  min-height: 36px;
-  padding: 0 var(--space-4);
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  font-family: var(--font-body);
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--ink-muted);
-  cursor: pointer;
-  transition:
-    background-color var(--dur-1) var(--ease),
-    color var(--dur-1) var(--ease);
-}
-
-.segBtn[aria-pressed='true'] {
-  color: var(--gold-ink);
-  background: var(--gold);
-  box-shadow: var(--shadow-1);
-}
-
-@media (pointer: coarse) {
-  .segBtn {
-    min-height: var(--tap);
-  }
 }
 
 .modalText {

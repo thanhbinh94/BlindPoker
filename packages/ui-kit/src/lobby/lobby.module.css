@@ -1,43 +1,5 @@
 /* Lobby — a room is a torn-off ticket: dark stub, perforated seam, printed body. */
 
-/* Segmented control */
-.segment {
-  display: inline-flex;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
-}
-
-.segBtn {
-  min-height: 36px;
-  padding: 0 var(--space-4);
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  font-family: var(--font-body);
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--ink-muted);
-  cursor: pointer;
-  transition:
-    background-color var(--dur-1) var(--ease),
-    color var(--dur-1) var(--ease);
-}
-
-.segBtn[aria-pressed='true'] {
-  color: var(--gold-ink);
-  background: var(--gold);
-  box-shadow: var(--shadow-1);
-}
-
-@media (pointer: coarse) {
-  .segBtn {
-    min-height: var(--tap);
-  }
-}
-
 /* Room list */
 .filters {
   margin-bottom: var(--space-4);

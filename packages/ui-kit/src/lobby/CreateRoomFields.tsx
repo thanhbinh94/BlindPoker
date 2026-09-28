@@ -35,6 +35,11 @@ export function HoldemFields({
 }: HoldemFieldsProps) {
   const { t } = useTranslation()
   const { min, max } = ECONOMY.buyInBBRange
+  const bigBlind = ECONOMY.holdemBlindTiers[tierIndex]?.bigBlind ?? 0
+  // The window is counted in big blinds, which a number field alone never said (layout audit C9): each field
+  // names the unit and what it comes to in points at the chosen stakes.
+  const inPoints = (bb: number): string =>
+    t('create.buyInHint', { bb, points: `${formatPoints(bb * bigBlind, lang)} ${t('common:units.pointsShort')}` })
   const tiers = ECONOMY.holdemBlindTiers.map((tier, index) => ({
     value: index,
     label: `${formatPoints(tier.smallBlind, lang)}/${formatPoints(tier.bigBlind, lang)}`,
@@ -45,7 +50,7 @@ export function HoldemFields({
       <Field label={t('create.blindTier')}>
         <Select value={tierIndex} options={tiers} disabled={disabled} onChange={onTierIndex} />
       </Field>
-      <Field label={t('create.minBuyIn')}>
+      <Field label={t('create.minBuyIn')} hint={inPoints(minBuyInBB)}>
         <input
           className={s.input}
           type="number"
@@ -58,7 +63,7 @@ export function HoldemFields({
           onChange={(event) => onMinBuyInBB(toInt(event))}
         />
       </Field>
-      <Field label={t('create.maxBuyIn')}>
+      <Field label={t('create.maxBuyIn')} hint={inPoints(maxBuyInBB)}>
         <input
           className={s.input}
           type="number"

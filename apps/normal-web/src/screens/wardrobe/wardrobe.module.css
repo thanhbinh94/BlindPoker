@@ -270,6 +270,12 @@
     inset 0 0 0 1px var(--gold);
 }
 
+/* The Inventory's read-only card (`OwnedCard`, layout audit C3): the same chrome, nothing to press. */
+.cardStatic {
+  gap: var(--space-1);
+  cursor: default;
+}
+
 .card[aria-disabled='true'] {
   cursor: not-allowed;
 }

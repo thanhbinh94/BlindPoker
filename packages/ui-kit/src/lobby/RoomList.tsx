@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { formatPoints, type Language } from '../i18n/index.js'
 import { Badge } from '../primitives/Badge.js'
 import { Button } from '../primitives/Button.js'
+import { Segmented } from '../primitives/Segmented.js'
 import { cx } from '../primitives/cx.js'
 import s from './lobby.module.css'
 
@@ -28,19 +29,13 @@ export function RoomList({ rooms, onJoin, filter = 'all', onFilter, lang, busy =
   return (
     <div>
       {onFilter === undefined ? null : (
-        <div className={cx(s.segment, s.filters)} role="group" aria-label={t('labels.mode')}>
-          {FILTERS.map((key) => (
-            <button
-              key={key}
-              type="button"
-              className={s.segBtn}
-              aria-pressed={key === filter}
-              onClick={() => onFilter(key)}
-            >
-              {t(`lobby.filters.${key}`)}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          className={s.filters}
+          options={FILTERS.map((key) => ({ value: key, label: t(`lobby.filters.${key}`) }))}
+          value={filter}
+          onChange={onFilter}
+          label={t('labels.mode')}
+        />
       )}
       {shown.length === 0 ? (
         <p className={s.empty}>{t('lobby.empty')}</p>

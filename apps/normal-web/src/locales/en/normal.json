@@ -93,7 +93,8 @@
         "cooldown": "You claimed relief recently. Try again at {{at}}.",
         "other": "Relief is not available right now."
       }
-    }
+    },
+    "calendarLead": "Points for each day of the streak; a gift means an item comes with them."
   },
   "settings": {
     "title": "Settings",
@@ -216,7 +217,6 @@
     "lead": "Everything this account owns. Equipped pieces are marked.",
     "summary": "{{owned}} pieces owned",
     "acquired": "Acquired {{date}}",
-    "equipped": "Equipped",
     "empty": "Nothing here yet.",
     "error": "Could not load your inventory",
     "rarity": {
@@ -230,17 +230,6 @@
       "achievement": "Achievement",
       "free": "Free",
       "other": "Other"
-    },
-    "slot": {
-      "head": "Hats",
-      "face": "Face accessories",
-      "outfit": "Outfits",
-      "aura": "Auras",
-      "frame": "Frames",
-      "hairColor": "Hair colours",
-      "eyeColor": "Eye colours",
-      "title": "Titles",
-      "badge": "Badges"
     }
   },
   "avatar": {
@@ -440,7 +429,8 @@
         "holdem": "Texas Hold'em",
         "blind": "Blind Poker",
         "social": "At the table"
-      }
+      },
+      "unlocked": "Unlocked"
     },
     "login_days_7": {
       "name": "Seven days in",

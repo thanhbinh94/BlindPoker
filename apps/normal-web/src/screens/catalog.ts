@@ -1,28 +1,12 @@
-import type { BadgeTone } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
-import type { AchievementDefDto, ItemDto, ItemSlot, Rarity } from '../api.js'
+import type { AchievementDefDto, ItemDto, ItemSlot } from '../api.js'
 import { achievementName } from '../catalog-i18n.js'
 
 /**
- * The catalogue vocabulary two lazily-loaded screens share.
- *
- * It is its own module rather than an export off either of them precisely *because* they are separate
- * chunks: an import across the two would drag the whole wardrobe into the inventory route's download for
- * the sake of a three-entry table.
+ * The catalogue vocabulary the wardrobe needs beyond its own tabs. (The inventory used to share a slot order
+ * and a rarity-to-badge table from here; since layout audit C3 it lists items in the wardrobe's own groups
+ * and cards, so both are gone.)
  */
-
-/** Rarity, as the kit paints it: muted → teal → gold, so rarer reads as warmer. */
-export const RARITY_TONE: Record<Rarity, BadgeTone> = { common: 'muted', rare: 'teal', epic: 'gold' }
-
-/**
- * Every slot, in the order the inventory offers its panels: what is drawn first, the words last.
- *
- * `base` is not here — it is chosen, not owned, and has no inventory row of its own. `hairColor`/
- * `eyeColor` (Plan 13) sit right after the drawn slots, matching the wardrobe's own tab order —
- * they draw nothing, but they are owned exactly like everything above them, so a rare dye a player
- * won from the daily draw has to show up here too.
- */
-export const SLOT_ORDER: ItemSlot[] = ['head', 'face', 'outfit', 'aura', 'frame', 'hairColor', 'eyeColor', 'title', 'badge']
 
 /** The slots a daily-reward draw may land on (design §5.2) — mirrors the server's `DAILY_DRAW_SLOTS`. */
 const DAILY_DRAW_SLOTS = new Set<ItemSlot>(['head', 'face', 'aura', 'frame', 'hairColor', 'eyeColor'])
