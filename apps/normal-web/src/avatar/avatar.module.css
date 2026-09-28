@@ -39,38 +39,11 @@
   white-space: nowrap;
 }
 
-/* ── the lobby bar's corner: two links and my own face ────────────────────── */
+/* ── the lobby bar's face: the player's own chibi, the way into the wardrobe ── */
 
-.lobbyNav {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-/* Every one of these is a thumb target on a phone, so all three carry the kit's `--tap` floor rather than
-   collapsing to the height of their own glyphs — a 20 px text link and a 32 px disc are both under it. The
-   padding is what makes the hit area the whole control instead of just the run of letters. */
-.lobbyLink {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--tap);
-  padding: 0 var(--space-2);
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--ink-muted);
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.lobbyLink:hover {
-  color: var(--ink);
-}
-
-/* The avatar is 32 px by design (it sits in a bar), so the anchor around it — not the image — is what carries
-   the target: a square of `--tap` with the disc centred in it. Matched structurally (the one anchor in this
-   nav that is not a text link) rather than by class, so it holds however the markup spells that anchor. */
-.lobbyNav > a:not(.lobbyLink) {
+/* The chibi is 36 px (the size of the kit's initial disc it replaces), so the anchor around it — not the image —
+   carries the thumb target: a square of `--tap` with the disc centred in it. */
+.lobbyAvatarLink {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -82,16 +55,4 @@
 .lobbyAvatar {
   border: 1px solid color-mix(in srgb, var(--gold) 42%, transparent);
   border-radius: 50%;
-}
-
-/* The same reward dot on the lobby bar's Daily link, which sits outside the rail. */
-.navDot {
-  position: absolute;
-  top: -2px;
-  right: -6px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--gold);
-  box-shadow: 0 0 0 2px rgba(8, 13, 26, 0.9);
 }

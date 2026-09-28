@@ -17,11 +17,10 @@ import s from './screens.module.css'
 export interface LobbyScreenProps {
   client: GameClientApi
   lang: Language
-  onLanguage: (l: Language) => void
   /** Called once the server acks a join or a create; the host app decides where that lands. */
   onEnteredRoom: () => void
-  /** App-specific controls for the player bar (daily reward, profile…). */
-  extraNav?: ReactNode
+  /** The player's own face for the player bar; the name's initial when absent. */
+  avatar?: ReactNode
   /** App-specific banner above the lobby (edition branding, announcements…). */
   header?: ReactNode
 }
@@ -32,7 +31,7 @@ export interface LobbyScreenProps {
  * Composition only. It owns three things — the mode filter, whether the create dialog is open, and the reply to its
  * own last request — and asks `GameClientApi` for everything else.
  */
-export function LobbyScreen({ client, lang, onLanguage, onEnteredRoom, extraNav, header }: LobbyScreenProps) {
+export function LobbyScreen({ client, lang, onEnteredRoom, avatar, header }: LobbyScreenProps) {
   const { t } = useTranslation()
   const { state } = client
   const [filter, setFilter] = useState<RoomFilter>('all')
@@ -78,18 +77,22 @@ export function LobbyScreen({ client, lang, onLanguage, onEnteredRoom, extraNav,
         balance={state.balance}
         status={state.status}
         lang={lang}
-        onLanguage={onLanguage}
-        right={extraNav}
+        avatar={avatar}
       />
       {header}
 
       <main className={s.lobbyMain}>
         <section className={s.rooms} aria-labelledby={roomsId}>
+          {/* The page's one heading, sized like every other page's, with the way to make a room right beside it
+              (layout audit U3/U6): under the join card it fell below the whole list once the lobby went one column. */}
           <div className={s.sectionHead}>
-            <h2 className={s.sectionTitle} id={roomsId}>
+            <h1 className={s.sectionTitle} id={roomsId}>
               {t('nav.rooms')}
-            </h2>
+            </h1>
             <span className={s.rule} aria-hidden="true" />
+            <Button variant="gold" className={s.createBtn} onClick={() => setCreating(true)}>
+              {t('lobby.create')}
+            </Button>
           </div>
           <RoomList rooms={state.lobby} onJoin={joinListed} filter={filter} onFilter={setFilter} lang={lang} busy={request.busy} />
         </section>
@@ -99,12 +102,6 @@ export function LobbyScreen({ client, lang, onLanguage, onEnteredRoom, extraNav,
             <span className={s.eyebrow}>{t('lobby.joinByCode')}</span>
             <JoinByCode onJoin={joinByCode} busy={request.busy} lang={lang} />
           </Panel>
-          <div className={s.railCta}>
-            <span className={s.rule} aria-hidden="true" />
-            <Button variant="gold" size="lg" className={s.block} onClick={() => setCreating(true)}>
-              {t('lobby.create')}
-            </Button>
-          </div>
         </aside>
       </main>
 

@@ -234,7 +234,7 @@ export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem',
       )}
 
       <div className={s.formFoot}>
-        <Button type="submit" variant="primary" size="lg" loading={busy}>
+        <Button type="submit" variant="gold" size="lg" loading={busy}>
           {t('create.submit')}
         </Button>
       </div>

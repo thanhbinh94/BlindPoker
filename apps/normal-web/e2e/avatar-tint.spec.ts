@@ -12,17 +12,17 @@ import { account, chibiHash, createBlindRoom, expectLobby, goToWardrobeTab, regi
  */
 
 /** The wardrobe's own preview: the one `Chibi` on the screen with an accessible name. */
-const preview = (page: Page): Locator => page.getByRole('img', { name: 'Tủ đồ' })
+const preview = (page: Page): Locator => page.getByRole('img', { name: 'Phòng thay đồ' })
 
 async function openWardrobe(page: Page): Promise<void> {
   await page.goto('/#/avatar')
-  await expect(page.getByRole('heading', { name: 'Tủ đồ', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Phòng thay đồ', exact: true })).toBeVisible()
   await expect(preview(page)).toBeVisible()
 }
 
 async function save(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Lưu tủ đồ' }).click()
-  await expect(page.getByText('Đã lưu tủ đồ.')).toBeVisible()
+  await page.getByRole('button', { name: 'Lưu trang phục' }).click()
+  await expect(page.getByText('Đã lưu trang phục.')).toBeVisible()
 }
 
 test.describe('Blind Luck Poker Normal — màu tóc, màu mắt', () => {

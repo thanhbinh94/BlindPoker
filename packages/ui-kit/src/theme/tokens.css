@@ -146,6 +146,11 @@
   --tap: 44px;
   --z-modal: 100;
 
+  /* The two page widths (layout audit U3, 2026-09-28): wide for the two-column screens — the lobby, the
+     wardrobe — and narrow for a page that reads top to bottom. Content width, padding not included. */
+  --measure-wide: 1180px;
+  --measure-narrow: 44rem;
+
   --dur-1: 120ms;
   --dur-2: 220ms;
   --ease: cubic-bezier(0.2, 0.7, 0.3, 1);

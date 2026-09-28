@@ -178,8 +178,8 @@
     "passwordPlaceholder": "Nhập mật khẩu",
     "filters": {
       "all": "Tất cả",
-      "holdem": "Hold'em",
-      "blind": "Blind"
+      "holdem": "Texas Hold'em",
+      "blind": "Blind Poker"
     },
     "playersOf": "{{current}}/{{max}} người chơi"
   },

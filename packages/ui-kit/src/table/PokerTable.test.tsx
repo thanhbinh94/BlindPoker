@@ -89,9 +89,37 @@ describe('PokerTable', () => {
     expect(within(strip).getAllByRole('group')).toHaveLength(8)
     expect(strip.className).toContain(s.othersTwoRow)
     expect(strip.className).toContain(s.othersChip)
+    expect(strip.className).toContain(s.othersDense)
     // The viewer's own seat is pinned below the felt, never in the opponents' strip.
     expect(within(strip).queryByText('Ann')).toBeNull()
     expect(screen.getByText('Ann')).toBeInTheDocument()
+  })
+
+  it('stack layout makes chips of five opponents, but keeps their captions (layout audit L1)', () => {
+    const sixHanded = makeRoom({
+      maxPlayers: 6,
+      playerCount: 6,
+      hostPlayerId: 'p0',
+      players: NAMES.slice(0, 6).map((displayName, seat) =>
+        makePlayer({ playerId: `p${seat}`, displayName, seat, status: 'SEATED', stack: 20_000, isHost: seat === 0 }),
+      ),
+    })
+    wrap(
+      <PokerTable
+        room={sixHanded}
+        hand={null}
+        myPlayerId="p0"
+        deadlineAt={null}
+        serverNow={() => 0}
+        turnTimerMs={30000}
+        lang="en"
+        layout="stack"
+        canSit={false}
+      />,
+    )
+    const strip = screen.getByRole('group', { name: 'Players' })
+    expect(strip.className).toContain(s.othersChip)
+    expect(strip.className).not.toContain(s.othersDense)
   })
 
   it('hangs the app caption under each seated player, and asks about that player alone', () => {

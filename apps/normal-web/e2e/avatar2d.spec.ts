@@ -31,11 +31,11 @@ import {
 
 /** The wardrobe's own preview: the one `Chibi` on the screen with an accessible name, so it is reachable
  * by role rather than by a CSS module class a production build hashes away. */
-const preview = (page: Page): Locator => page.getByRole('img', { name: 'Tủ đồ' })
+const preview = (page: Page): Locator => page.getByRole('img', { name: 'Phòng thay đồ' })
 
 async function openWardrobe(page: Page): Promise<void> {
   await page.goto('/#/avatar')
-  await expect(page.getByRole('heading', { name: 'Tủ đồ', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Phòng thay đồ', exact: true })).toBeVisible()
   await expect(preview(page)).toBeVisible()
 }
 
@@ -46,8 +46,8 @@ async function toLobby(page: Page): Promise<void> {
 }
 
 async function save(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Lưu tủ đồ' }).click()
-  await expect(page.getByText('Đã lưu tủ đồ.')).toBeVisible()
+  await page.getByRole('button', { name: 'Lưu trang phục' }).click()
+  await expect(page.getByText('Đã lưu trang phục.')).toBeVisible()
 }
 
 /** Waits for the lobby bar's hash to be something other than `was`, and returns the new one. */
@@ -161,7 +161,7 @@ test.describe('Blind Luck Poker Normal — nhân vật chibi', () => {
     await expectNoSidewaysScroll(page)
     await shot(page, 'avatar2d-wardrobe-mobile')
 
-    // The phone header shortens "Lưu tủ đồ" to "Lưu" (design §3.2) — "Hoàn tác" becomes an icon-only
+    // The phone header shortens "Lưu trang phục" to "Lưu" (design §3.2) — "Hoàn tác" becomes an icon-only
     // button beside it, but this test only cares about the save action.
     const saveButton = page.getByRole('button', { name: 'Lưu', exact: true })
     await saveButton.scrollIntoViewIfNeeded()

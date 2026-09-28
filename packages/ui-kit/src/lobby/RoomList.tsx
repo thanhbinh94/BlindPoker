@@ -132,7 +132,7 @@ function RoomTicket({ room, onJoin, lang, busy }: RoomTicketProps) {
           >
             {occupancy}
           </span>
-          <Button variant="primary" size="sm" disabled={busy || full} aria-label={joinLabel} onClick={() => onJoin(room)}>
+          <Button variant="gold" size="sm" disabled={busy || full} aria-label={joinLabel} onClick={() => onJoin(room)}>
             {t('actions.join')}
           </Button>
         </div>

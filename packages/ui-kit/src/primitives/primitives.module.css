@@ -311,12 +311,15 @@
 }
 
 .dialog {
+  /* named so a sticky footer inside can reach over the bottom padding (see the create form's `.formFoot`) */
+  --dialog-pad: var(--space-5);
+
   width: min(30rem, 100%);
   max-height: 86vh;
   /* dvh, so a phone's collapsing address bar cannot push the dialog's own footer out of reach */
   max-height: 86dvh;
   overflow-y: auto;
-  padding: var(--space-5);
+  padding: var(--dialog-pad);
   color: var(--ink);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, transparent 38%),

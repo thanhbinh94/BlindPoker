@@ -61,7 +61,7 @@ export function JoinByCode({ onJoin, busy = false, error = null }: JoinByCodePro
             />
           </Field>
         </span>
-        <Button type="submit" variant="primary" loading={busy} disabled={trimmed === ''}>
+        <Button type="submit" variant="gold" loading={busy} disabled={trimmed === ''}>
           {t('actions.join')}
         </Button>
       </div>

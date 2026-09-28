@@ -71,6 +71,9 @@
   --line: rgba(27, 31, 46, 0.16);
   --gold: #856011;
   --gold-soft: rgba(133, 96, 17, 0.14);
+  /* the join button is gold like every primary action off the table (layout audit U1); on paper the gold is
+     the light theme's deep one, and its ink is light: #856011 under #fff8e8 is 5.4:1, under the dark ink 3.1:1 */
+  --gold-ink: #fff8e8;
   --red: #a9242d;
   --teal: #15544c;
   --teal-fill: #124a43;
@@ -326,16 +329,21 @@
 }
 
 /* The settings list is longer than a phone screen, so the dialog scrolls — but the button that finishes the job
-   rides along at the foot of it instead of hiding below the fold. */
+   rides along at the foot of it instead of hiding below the fold.
+   It sticks to the dialog's *border*, not to the top of its bottom padding: stuck at `bottom: 0` it left the
+   dialog's own padding strip open under it, and the field scrolling past showed through there, cut in half
+   below the button (layout audit L6, 2026-09-28). The negative margin gives that strip back at the end of the
+   scroll, so the resting layout is what it was. */
 .formFoot {
   position: sticky;
-  bottom: 0;
+  bottom: calc(-1 * var(--dialog-pad, 0px));
   z-index: 1;
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--space-3);
-  padding: var(--space-3) 0 var(--space-4);
+  margin-bottom: calc(-1 * var(--dialog-pad, 0px));
+  padding: var(--space-3) 0 calc(var(--space-4) + var(--dialog-pad, 0px));
   background: linear-gradient(180deg, transparent, var(--bg-elev) 18px);
 }
 

@@ -655,12 +655,13 @@
   min-height: calc(2 * var(--plate-h) + var(--space-2));
 }
 
-/* Seven seats and up: three plates a row is already the floor at 360 px, so the block gives instead of the grid.
+/* Four opponents and up (it was seven until layout audit L1, 2026-09-28): the block gives instead of the grid.
    The opponent becomes a chip — avatar, name, stack, and a second line carrying the bet and the state badge side
    by side instead of one under the other. What goes is the pair of face-down card backs: for an *opponent* they
    only ever say "still holding two", which the badge row says in words. Everything spec §27.3 asks a seat to show
-   — name, stack, avatar, current bet, fold/all-in/sitting-out/disconnected — stays. Shrinking the block is what
-   keeps the third row on screen; hiding the ninth player is not an alternative. */
+   — name, stack, avatar, current bet, fold/all-in/sitting-out/disconnected — stays. At six seats the full plates,
+   card backs and all, ran two rows 270 px tall on a phone and pushed the board under the viewer's own seat; as
+   chips the strip, the board and that seat all fit a 375 × 812 screen with the cards out. */
 .othersChip {
   --plate-min: 96px;
   --plate-h: 54px;
@@ -696,7 +697,7 @@
 
 /* Seven opponents up, the plate is down to a name and a number. The app's caption is the one thing on it that is
    decoration rather than state, so it is what gives up its line to keep the third row on screen. */
-.othersChip .seatCaption {
+.othersDense .seatCaption {
   display: none;
 }
 
@@ -758,9 +759,19 @@
     0 14px 34px rgba(3, 6, 16, 0.5);
 }
 
+/* The viewer's own plate never scrolls out of sight (layout audit L1, 2026-09-28): on a 375 × 812 phone with five
+   opponents, a pre-hand tray and the header, the stack ran taller than `.roomMain` and the plate — stack and cards
+   included — sat under the tray until the player thought to scroll the table. Sticky to the bottom of that scroll
+   box, it stays on screen and the strip and the felt scroll behind it instead; with room to spare it sits where it
+   always did. The backdrop is the stage's own night, so what passes behind does not show through. */
 .mine {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   display: flex;
   justify-content: center;
+  padding-top: var(--space-2);
+  background: linear-gradient(180deg, transparent, var(--bg) var(--space-3));
 }
 
 .mine .seat {
@@ -1112,33 +1123,6 @@
   border-bottom: 1px solid var(--line);
 }
 
-/* On a phone the identity bar is competing with the felt for the same 800 px of screen: same information, less air. */
-@media (max-width: 767px) {
-  .header {
-    gap: var(--space-2);
-    padding: var(--space-2) var(--space-3);
-  }
-
-  .modeGlyph {
-    font-size: 1.375rem;
-  }
-
-  .roomName {
-    font-size: 1.0625rem;
-  }
-
-  .headMeta {
-    gap: 6px;
-    margin-top: 1px;
-    font-size: 0.75rem;
-  }
-
-  .conn {
-    padding: 2px var(--space-2);
-    font-size: 0.75rem;
-  }
-}
-
 .headMain {
   display: flex;
   align-items: center;
@@ -1221,6 +1205,78 @@
 .conn[data-status='closed'] .connDot,
 .conn[data-status='idle'] .connDot {
   background: var(--red);
+}
+
+/* On a phone the identity bar is competing with the felt for the same 800 px of screen: same information, less
+   air. This block sits *after* the rules it overrides — above them, as it used to, every one of its declarations
+   lost to the equally specific base rule that followed, and the phone header was the desktop one, wrapped onto a
+   third row (layout audit L1). Two rows now: the glyph, the name, the connection dot and the way out on the
+   first; the badges, code, stakes and head-count across the full width of the second. The word for the
+   connection state is still read out, only not drawn. */
+@media (max-width: 767px) {
+  .header {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'glyph name right'
+      'meta meta meta';
+    align-items: center;
+    gap: 2px var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  /* the two wrappers step aside so their children can take the grid's cells */
+  .headMain,
+  .headText {
+    display: contents;
+  }
+
+  .modeGlyph {
+    grid-area: glyph;
+  }
+
+  .roomName {
+    grid-area: name;
+  }
+
+  .headMeta {
+    grid-area: meta;
+  }
+
+  .headRight {
+    grid-area: right;
+  }
+
+  .modeGlyph {
+    font-size: 1.375rem;
+  }
+
+  .roomName {
+    font-size: 1.0625rem;
+  }
+
+  .headMeta {
+    gap: 6px;
+    margin-top: 1px;
+    font-size: 0.75rem;
+  }
+
+  .conn {
+    padding: 0;
+    border: 0;
+    min-width: var(--space-4);
+    min-height: var(--space-7);
+    justify-content: center;
+  }
+
+  .connText {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 /* ---------------- Motion off ---------------- */

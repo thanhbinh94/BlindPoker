@@ -2,37 +2,21 @@
    (`normal.module.css`'s `.page`/`.wide`). Everything here is this screen's own — cards, tabs, the saved-
    outfit grid — so a change to one wardrobe layout detail never touches the inventory or the profile. */
 
-/* The header row (design §3.1): title + dirty label on the left, Hoàn tác/Lưu tủ đồ on the right. Phones
-   show a short "Lưu" and turn "Hoàn tác" into an icon-only button (`WardrobeScreen`'s own `phone` switch) —
-   this row's flex-wrap is what keeps that pair from ever pushing off the title on a narrow screen even
-   before that switch flips. */
+/* The header row (design §3.1): title + dirty label, the gold rule, then Hoàn tác/Lưu. Phones show a short
+   "Lưu" and turn "Hoàn tác" into an icon-only button (`WardrobeScreen`'s own `phone` switch) — this row's
+   flex-wrap is what keeps that pair from ever pushing off the title on a narrow screen; once wrapped, the
+   pair keeps to the right edge. */
 .header {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
   flex-wrap: wrap;
   gap: var(--space-3);
 }
 
-.headerTitle {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-/* `--font-display`, 40 px desktop, 28 px phone (design §3.1) — a dedicated size rather than the shared
-   `h1` clamp in `global.css`, which tops out at 44 px and never settles on either of this screen's two
-   fixed values. */
+/* The shared `h1` size from `global.css`, the one every page title uses (layout audit U3, 2026-09-28) —
+   this screen used to carry its own 40/28 px. */
 .title {
-  font-size: 1.75rem;
-}
-
-@media (min-width: 768px) {
-  .title {
-    font-size: 2.5rem;
-  }
+  flex: none;
 }
 
 .dirtyLabel {
@@ -47,6 +31,7 @@
   flex: none;
   align-items: center;
   gap: var(--space-2);
+  margin-left: auto;
 }
 
 /* The two-column body (design §3.1–§3.3): one column on phones (`WardrobeScreen` renders a different,
@@ -142,28 +127,23 @@
   transform: rotate(-135deg);
 }
 
-/* One segmented row of six (design §3.1 item 2): never wraps, scrolls horizontally instead once the
-   column is too narrow for all six at once. `flex-start` rather than `center` — centring a row that can
-   overflow clips its start behind the scrollport in most browsers (no `justify-content: safe center` yet
-   everywhere), which would strand the first button unreachable. Compact chips (V1 fix): small enough,
-   with tight enough padding, that all six fit the 360 px desktop column without ever touching the
-   `overflow-x` fallback above — that fallback now exists for the phone width alone. */
+/* The six expressions (design §3.1 item 2): one row wherever the six fit — the 360 px desktop column, a phone's
+   full width — and a second row where they do not. It used to scroll sideways instead, with no scrollbar to say
+   so, and in the 300 px tablet column that hid "Ngủ" behind the edge (layout audit L4, 2026-09-28). The chips
+   grow to share each row, so a wrapped row reads as a segmented control rather than a ragged line. */
 .expressionRow {
   display: flex;
   gap: 2px;
-  flex-wrap: nowrap;
-  justify-content: flex-start;
-  overflow-x: auto;
+  flex-wrap: wrap;
   width: 100%;
   max-width: 100%;
 }
 
 /* `min-width: 40px` (V-fix, 2026-09-27): with none at all, a chip's own tap target was only as wide as its
-   short label plus 3px of padding — measured 24–35 px on phones, well under a thumb's own width. The row
-   already scrolls (`.expressionRow`'s `overflow-x: auto`) if six chips at 40 px each cannot all fit, so a
-   wider floor here costs nothing it did not already have a fallback for. */
+   short label plus 3px of padding — measured 24–35 px on phones, well under a thumb's own width. If six chips
+   at 40 px cannot all fit, `.expressionRow` wraps, so a wider floor here costs nothing. */
 .expressionBtn {
-  flex: none;
+  flex: 1 1 auto;
   padding: 0 3px;
   min-width: 40px;
   min-height: 40px;
@@ -176,9 +156,8 @@
   white-space: nowrap;
 }
 
-/* Desktop keeps the compact chip the V1 fix tuned (see `.expressionRow`'s own comment): no tap-target
-   floor to hold onto with a pointer, and this is what buys the row its fit inside the 360 px column
-   without ever touching the phone-only scroll fallback above. */
+/* Desktop keeps the compact chip the V1 fix tuned: no tap-target floor to hold onto with a pointer, and this
+   is what keeps the six on one row inside the 360 px column. */
 @media (min-width: 768px) {
   .expressionBtn {
     min-width: 0;
@@ -487,7 +466,7 @@
   justify-content: center;
   overflow: hidden;
   width: 100%;
-  height: 330px;
+  height: 300px;
   border-radius: var(--radius-md);
   background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 85%, black) 0%, var(--bg) 100%);
 }
@@ -561,10 +540,14 @@
   color: var(--ink-muted);
 }
 
+/* Two columns of slots, each slot its label over its value (layout audit L5, 2026-09-28). Ten 44 px rows made the
+   list ~460 px tall, and on a 1440 × 900 screen that pushed "Bộ đồ đã lưu" below the column's own fold — reachable
+   only by scrolling inside the sticky column, which nothing on screen suggested. Five rows of two is half that,
+   and the whole column — stage, expressions, list, saved outfits — fits a 900 px window. */
 .equippedRows {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -573,14 +556,16 @@
 .equippedRow {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: 2px;
+  min-width: 0;
 }
 
 .equippedRowMain {
-  display: flex;
+  display: grid;
   flex: 1 1 auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: var(--space-2);
+  column-gap: 6px;
   min-height: var(--tap);
   min-width: 0;
   padding: var(--space-1) var(--space-2);
@@ -599,19 +584,21 @@
 
 .equippedIcon {
   display: inline-flex;
-  flex: none;
   align-items: center;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
+  color: var(--ink-muted);
 }
 
 .equippedLabel {
-  flex: none;
-  width: 5.5rem;
+  overflow: hidden;
   color: var(--ink-muted);
-  font-size: 0.8125rem;
+  font-size: 0.6875rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .equippedValue {
+  grid-column: 1 / -1;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -620,7 +607,7 @@
   color: var(--ink);
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 600;
 }
 
@@ -642,9 +629,10 @@
   border: 1px solid var(--line);
 }
 
+/* 28 px beside a half-width slot with a pointer; a thumb still gets the full `--tap` square. */
 .equippedRemove {
   flex: none;
-  width: var(--tap);
+  width: 28px;
   height: var(--tap);
   border: none;
   border-radius: var(--radius-sm);
@@ -653,6 +641,12 @@
   cursor: pointer;
   font-size: 1rem;
   line-height: 1;
+}
+
+@media (pointer: coarse) {
+  .equippedRemove {
+    width: var(--tap);
+  }
 }
 
 .equippedRemove:hover {

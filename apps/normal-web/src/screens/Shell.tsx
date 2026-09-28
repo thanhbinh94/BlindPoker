@@ -37,8 +37,8 @@ const BALANCE_IN_PAGE = ['/profile']
 
 /**
  * The width at which the rail stops being able to hold everything, and the same 900 px at which the stylesheet
- * drops the language switch (bug 8: at 640 px the wordmark, edition pill, full balance and language switch still
- * overflowed a 700–900 px window; the edition goes under 1200 px and the wordmark under 1024 px).
+ * drops the language switch (bug 8: at 640 px the wordmark, full balance and language switch still overflowed a
+ * 700–900 px window; the wordmark goes under 1024 px).
  *
  * It is a media query in JavaScript rather than in CSS because what changes is not layout but *text*: at this
  * width the balance is written `123K điểm` instead of `123.000 điểm`, and no amount of CSS reformats a number.
@@ -103,7 +103,6 @@ export function Shell({ path, identity, lang, onLanguage, bar = true, dailyReady
             </span>
             <span className={s.wordmark}>{t('app.name')}</span>
           </a>
-          <span className={s.edition}>{t('app.edition')}</span>
 
           <nav className={s.nav} aria-label={t('nav.main')}>
             {NAV.map((item) => (
@@ -135,11 +134,12 @@ export function Shell({ path, identity, lang, onLanguage, bar = true, dailyReady
                 <span className="visually-hidden">{t(STATUS_KEY[identity.status])}</span>
               </span>
               <span className={s.balance}>{balanceText}</span>
-              <span className={s.railLang}>
-                <LanguageSwitch lang={lang} onChange={onLanguage} />
-              </span>
             </span>
           )}
+          {/* On every route, the lobby included: the lobby's player bar carries the balance but not the language. */}
+          <span className={s.railLang}>
+            <LanguageSwitch lang={lang} onChange={onLanguage} />
+          </span>
         </header>
       ) : null}
 

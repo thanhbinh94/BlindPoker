@@ -91,7 +91,7 @@ function App() {
 
         <div className="pg-screen">
           {view === 'lobby' ? (
-            <LobbyScreen client={client.api} lang={lang} onLanguage={setLang} onEnteredRoom={() => setView('room')} />
+            <LobbyScreen client={client.api} lang={lang} onEnteredRoom={() => setView('room')} />
           ) : (
             <RoomScreen client={client.api} lang={lang} onLeft={() => setView('lobby')} layout={stacked ? 'stack' : undefined} />
           )}

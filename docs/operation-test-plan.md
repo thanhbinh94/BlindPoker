@@ -199,7 +199,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 | Mã | Bước | Kỳ vọng | Ưu tiên |
 |---|---|---|---|
 | K-01 | Kho đồ | Liệt kê đúng đồ đang có, đánh dấu món đang mặc | P2 |
-| K-02 | Chơi đủ 10 ván Blind (bàn có bot, bật tự động bắt đầu) | Hiện thông báo mở thành tựu "Mười ván Bài Mù", +2.000 điểm; trang Thành tựu cập nhật | P1 |
+| K-02 | Chơi đủ 10 ván Blind (bàn có bot, bật tự động bắt đầu) | Hiện thông báo mở thành tựu "Mười ván Blind Poker", +2.000 điểm; trang Thành tựu cập nhật | P1 |
 | K-03 | Vào 10 phòng khác nhau | Thành tựu "Mười phòng" mở | P3 |
 | K-04 | Hồ sơ → Thống kê sau vài ván | Số ván chơi/thắng tăng đúng | P2 |
 | K-05 | Hồ sơ → đổi tên hiển thị | Tên mới hiện ở sảnh, bàn, cài đặt; tên trùng người khác bị từ chối | P2 |

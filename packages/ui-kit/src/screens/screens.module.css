@@ -12,11 +12,17 @@
 
 /* ── lobby ────────────────────────────────────────────────────────────────── */
 
+/* The player bar and the board share one measure, so their edges line up (layout audit U3). */
+.lobby {
+  width: 100%;
+  max-width: calc(var(--measure-wide) + 2 * var(--space-4));
+  margin: 0 auto;
+}
+
 .lobbyMain {
   display: grid;
   gap: var(--space-6);
   width: 100%;
-  max-width: 1180px;
   margin: 0 auto;
   align-items: start;
 }
@@ -34,14 +40,19 @@
 
 .sectionHead {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-3);
   margin-bottom: var(--space-4);
 }
 
+/* The page title: global.css's `h1` size, the same one every other page's title uses (layout audit U3). */
 .sectionTitle {
   flex: none;
-  font-size: 1.5rem;
+  margin: 0;
+}
+
+.createBtn {
+  flex: none;
 }
 
 /* one hairline of lacquer, fading east */
@@ -64,16 +75,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-}
-
-.railCta {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.block {
-  width: 100%;
 }
 
 .eyebrow {
@@ -217,6 +218,20 @@
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--bg-elev) 70%, transparent);
   font-size: 0.85rem;
+}
+
+/* On a phone the host's roster is one row that scrolls sideways instead of two or three that push the viewer's
+   own seat off the stage (layout audit L1). */
+@media (max-width: 640px) {
+  .roster {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .rosterRow {
+    flex: none;
+  }
 }
 
 .rosterOffline {
