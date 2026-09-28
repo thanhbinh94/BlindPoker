@@ -62,7 +62,7 @@ export function RoomHeader({ room, status, onLeave, lang, right }: RoomHeaderPro
       <div className={s.headRight}>
         <span className={s.conn} data-status={status}>
           <span className={s.connDot} aria-hidden="true" />
-          {t(STATUS_KEY[status])}
+          <span className={s.connText}>{t(STATUS_KEY[status])}</span>
         </span>
         {right}
         <Button variant="danger" size="sm" onClick={onLeave}>

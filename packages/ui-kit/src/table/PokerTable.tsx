@@ -168,12 +168,14 @@ export function PokerTable({
 
   if (mode === 'stack') {
     // Spec §27.1/§27.3: the strip shows every other seat, always. Four opponents or more and it holds two rows
-    // open; seven or more and the plates go compact so the extra row fits rather than scrolling out of sight.
+    // open, and the plates go compact so the board and the viewer's own seat still fit a phone beside them
+    // (layout audit L1, 2026-09-28 — at six seats the full plates pushed the felt off a 375 × 812 screen once
+    // cards were out); seven or more and the plates also give up the app's caption so the third row fits.
     const opponents = order.filter((i) => i !== mySeat)
     return (
       <section className={cx(s.table, s.stack)} data-surface="night" aria-label={t('labels.table')}>
         <div
-          className={cx(s.others, opponents.length > 3 && s.othersTwoRow, opponents.length > 6 && s.othersChip)}
+          className={cx(s.others, opponents.length > 3 && s.othersTwoRow, opponents.length > 3 && s.othersChip, opponents.length > 6 && s.othersDense)}
           role="group"
           aria-label={t('labels.players')}
         >

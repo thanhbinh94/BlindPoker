@@ -115,6 +115,28 @@ describe('AchievementsScreen', () => {
     expect(past).toHaveAttribute('aria-valuetext', viNormal.achievements.ui.progress.replace('{{progress}}', '10').replace('{{threshold}}', '10'))
   })
 
+  it('groups the digits of a large counter the way every other number on screen is grouped', async () => {
+    const big: AchievementProgressDto = {
+      id: 'big_win_100k',
+      category: 'holdem',
+      metric: 'biggestWin',
+      threshold: 100_000,
+      reward: { points: 10_000 },
+      progress: 2_500,
+      unlockedAt: null,
+    }
+    renderScreen(stubApi({ achievements: vi.fn().mockResolvedValue([big]) }))
+    await screen.findByText(viNormal.achievements.big_win_100k.name)
+
+    // Layout audit L7: this used to read "2500 trên 100000".
+    const counter = viNormal.achievements.ui.progress.replace('{{progress}}', '2.500').replace('{{threshold}}', '100.000')
+    expect(screen.getByText(counter)).toBeInTheDocument()
+    const bar = screen.getByRole('progressbar', { name: viNormal.achievements.big_win_100k.name })
+    // The machine-readable values stay plain numbers.
+    expect(bar).toHaveAttribute('aria-valuenow', '2500')
+    expect(bar).toHaveAttribute('aria-valuemax', '100000')
+  })
+
   it('prints the reward as points, as an item, or as both, and dates what is unlocked', async () => {
     const { i18n } = renderScreen()
     await screen.findByText(viNormal.achievements.login_days_7.name)

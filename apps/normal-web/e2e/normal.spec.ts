@@ -162,6 +162,16 @@ async function tourStart(context: BrowserContext, who: Account, suffix: string):
   const page = await context.newPage()
   await page.goto('/#/register')
   await expect(page.getByLabel('Tên hiển thị', { exact: true })).toBeVisible()
+  // Layout audit L3: another screen's `.card` rule used to squeeze the sign-in card into a centred column
+  // too narrow for "Đăng nhập", which broke onto two lines. One line box per tab label, at any width.
+  for (const tab of await page.getByRole('navigation', { name: 'Blind Luck Poker' }).getByRole('link').all()) {
+    const lines = await tab.evaluate((el) => {
+      const range = document.createRange()
+      range.selectNodeContents(el)
+      return new Set(Array.from(range.getClientRects(), (r) => Math.round(r.top))).size
+    })
+    expect(lines, `"${await tab.textContent()}" stays on one line`).toBe(1)
+  }
   await shot(page, `auth-${suffix}`)
   await register(page, who)
   // The chibi is there from the first paint — it is a stack of same-origin PNGs, not a render, so there is
@@ -255,8 +265,8 @@ test.describe('Blind Luck Poker Normal', () => {
     // --- 5. the hand reached the progression ---------------------------------------------------------
     expect(await blindHandsPlayed(page, 1), 'the settlement wrote the blind hand counter').toBe(1)
     await page.goto('/#/achievements')
-    // `exact` matters: without it the substring also names "Mười ván Bài Mù thắng", the wins counter.
-    const blindHands = page.getByRole('progressbar', { name: 'Mười ván Bài Mù', exact: true })
+    // `exact` matters: without it the substring also names "Mười ván Blind Poker thắng", the wins counter.
+    const blindHands = page.getByRole('progressbar', { name: 'Mười ván Blind Poker', exact: true })
     await expect(blindHands).toHaveAttribute('aria-valuenow', '1')
     await expect(blindHands).toHaveAttribute('aria-valuetext', '1 trên 10')
     await shot(page, 'achievements-desktop')
@@ -326,9 +336,9 @@ test.describe('Blind Luck Poker Normal', () => {
     await expectRailFits(page)
     await shot(page, 'daily-mobile')
 
-    // The profile's own heading is the player's name — the page is about *them*, and the rail already
-    // says which tab this is.
+    // The profile is titled like every other page, and the player's name heads the card under that title.
     await page.goto('/#/profile')
+    await expect(page.getByRole('heading', { name: 'Hồ sơ', level: 1 })).toBeVisible()
     await expect(page.getByRole('heading', { name: who.displayName, exact: true })).toBeVisible()
     await expectRailFits(page)
     await shot(page, 'profile-mobile')
@@ -336,14 +346,23 @@ test.describe('Blind Luck Poker Normal', () => {
     // (The wardrobe at this width is `avatar2d.spec.ts`'s `@mobile` test.)
 
     // The table on a phone is the stack layout: opponents in a strip, my own plate under the felt. The
-    // `Người chơi` group is what the ring layout does not have.
+    // `Người chơi` group is what the ring layout does not have. A full table — five bots, so the strip runs
+    // two rows and the host's roster has five names — is the tallest this screen gets before a hand.
     await page.goto('/#/lobby')
     await expectLobby(page)
-    await createBlindRoom(page, unique('Bàn '), 1)
+    await createBlindRoom(page, unique('Bàn '), 5)
     await sit(page, 0)
     await expect(page.getByRole('region', { name: 'Bàn', exact: true })).toBeVisible()
     await expect(page.getByRole('group', { name: 'Người chơi', exact: true }), 'the phone gets the stack layout').toBeVisible()
     await expectNoSidewaysScroll(page)
+    // Layout audit L1: my own plate — name, stack, cards — sits whole on screen, above the tray, without the
+    // player scrolling the table to find it.
+    const mine = page.locator('[data-seat="0"]')
+    const [seatBox, trayBox] = [await mine.boundingBox(), await page.locator('footer').last().boundingBox()]
+    expect(seatBox, 'my seat has a box').not.toBeNull()
+    expect(trayBox, 'the tray has a box').not.toBeNull()
+    expect(seatBox!.y, 'my seat starts on screen').toBeGreaterThanOrEqual(0)
+    expect(seatBox!.y + seatBox!.height, 'my seat ends above the tray').toBeLessThanOrEqual(trayBox!.y + 1)
     await shot(page, 'room-mobile')
 
     await page.getByRole('button', { name: 'Rời phòng' }).click()

@@ -68,7 +68,6 @@ export function Shell({ path, identity, lang, onLanguage, bar = true, children }
             </span>
             <span className={s.wordmark}>{t('app.name')}</span>
           </a>
-          <span className={s.edition}>{t('app.edition')}</span>
 
           <nav className={s.nav} aria-label={t('nav.main')}>
             {NAV.map((item) => (
@@ -92,11 +91,12 @@ export function Shell({ path, identity, lang, onLanguage, bar = true, children }
                 <span className="visually-hidden">{t(STATUS_KEY[identity.status])}</span>
               </span>
               <span className={s.balance}>{balanceText}</span>
-              <span className={s.railLang}>
-                <LanguageSwitch lang={lang} onChange={onLanguage} />
-              </span>
             </span>
           )}
+          {/* On every route, the lobby included: the lobby's player bar carries the balance but not the language. */}
+          <span className={s.railLang}>
+            <LanguageSwitch lang={lang} onChange={onLanguage} />
+          </span>
         </header>
       ) : null}
 

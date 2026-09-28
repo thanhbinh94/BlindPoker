@@ -71,18 +71,6 @@
   white-space: nowrap;
 }
 
-.edition {
-  flex: none;
-  padding: 2px var(--space-2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  font-size: 0.625rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-muted);
-}
-
 .nav {
   display: flex;
   flex: 1 1 auto;
@@ -144,6 +132,11 @@
   flex: 1 1 auto;
 }
 
+/* Same as Normal's rail: "Tiếng Việt" on two lines would grow the rail. */
+.railLang button {
+  white-space: nowrap;
+}
+
 .identity {
   display: flex;
   align-items: center;
@@ -198,7 +191,6 @@
     padding: 0 var(--space-2);
   }
 
-  .edition,
   .wordmark,
   .railLang {
     display: none;
@@ -412,7 +404,7 @@
   flex-direction: column;
   gap: var(--space-5);
   width: 100%;
-  max-width: 46rem;
+  max-width: calc(var(--measure-narrow) + 2 * var(--space-4));
   margin: 0 auto;
   padding: var(--space-6) var(--space-4) var(--space-8);
 }
@@ -673,4 +665,10 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+}
+
+/* The lobby bar's face (layout audit U2): the name's default chibi, ringed like Normal's. */
+.lobbyAvatar {
+  border: 1px solid color-mix(in srgb, var(--gold) 42%, transparent);
+  border-radius: 50%;
 }

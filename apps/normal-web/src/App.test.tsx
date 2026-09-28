@@ -502,8 +502,9 @@ describe('App — the daily reminder', () => {
 
     expect(await screen.findByRole('heading', { name: ROOMS_HEADING })).toBeInTheDocument()
     expect(window.location.hash).not.toBe('#/daily')
-    // The lobby draws the Daily link twice — on the rail and on its own bar — and both carry the dot.
-    expect(await screen.findAllByText(viNormal.nav.dailyReady)).toHaveLength(2)
+    // The rail's Daily tab carries the dot on the lobby too — the lobby's own bar no longer repeats the link
+    // (layout audit U2), so there is exactly one.
+    expect(await screen.findAllByText(viNormal.nav.dailyReady)).toHaveLength(1)
   })
 
   it('leaves a deep link alone and shows no dot when today is already claimed', async () => {

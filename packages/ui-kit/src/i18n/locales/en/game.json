@@ -178,8 +178,8 @@
     "passwordPlaceholder": "Enter password",
     "filters": {
       "all": "All",
-      "holdem": "Hold'em",
-      "blind": "Blind"
+      "holdem": "Texas Hold'em",
+      "blind": "Blind Poker"
     },
     "playersOf": "{{current}}/{{max}} players"
   },

@@ -16,11 +16,11 @@ import { account, expectNoSidewaysScroll, goToWardrobeTab, register, SHOTS } fro
  * picking "Sáng" — rather than poking `localStorage` directly, so this exercises the real switch too.
  */
 
-const preview = (page: Page) => page.getByRole('img', { name: 'Tủ đồ' })
+const preview = (page: Page) => page.getByRole('img', { name: 'Phòng thay đồ' })
 
 async function openWardrobe(page: Page): Promise<void> {
   await page.goto('/#/avatar')
-  await expect(page.getByRole('heading', { name: 'Tủ đồ', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Phòng thay đồ', exact: true })).toBeVisible()
   await expect(preview(page)).toBeVisible()
 }
 
@@ -46,13 +46,13 @@ async function assertTablistOnOneLine(page: Page, tablistName: string): Promise<
 }
 
 /**
- * The group row ("Tủ đồ", design §3.1's three groups) plus every group's own sub-tab row, ending back on
+ * The group row ("Phòng thay đồ", design §3.1's three groups) plus every group's own sub-tab row, ending back on
  * "Ngoại hình" — the default group and its default tab, "Thân nền" (design §5.3) — so the screenshot
  * taken right after always shows the same, mockup-matching view regardless of how many groups this walked
  * through first.
  */
 async function assertNavNeverWraps(page: Page): Promise<void> {
-  await assertTablistOnOneLine(page, 'Tủ đồ')
+  await assertTablistOnOneLine(page, 'Phòng thay đồ')
   await assertTablistOnOneLine(page, 'Ngoại hình')
 
   await goToWardrobeTab(page, 'Trang phục')
@@ -126,7 +126,7 @@ test.describe('Blind Luck Poker Normal — bố cục tủ đồ (Kế hoạch 1
     expect(Math.abs(wardrobeBox!.height - 100), 'the wardrobe card icon is the larger, card-scoped size').toBeLessThan(1)
 
     await page.goto('/#/inventory')
-    await expect(page.getByRole('heading', { name: 'Tủ đồ', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Kho đồ', exact: true })).toBeVisible()
     const inventoryIcon = page.locator('img[data-item-icon]').first()
     await expect(inventoryIcon).toBeVisible()
     const inventoryBox = await inventoryIcon.boundingBox()

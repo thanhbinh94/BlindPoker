@@ -181,10 +181,11 @@ export function AuthScreen({ api, mode, onMode, onSignedIn, message = null }: Au
 
   return (
     <main className={s.authStage}>
-      <div className={s.card}>
+      <div className={s.authCard}>
         <div className={s.cardHead}>
-          <span className={s.eyebrow}>
-            <span aria-hidden="true">{SPADE}</span> {t('app.edition')}
+          {/* The rail's own mark; the edition is not something a player needs to read here (layout audit U5). */}
+          <span className={s.markGlyph} aria-hidden="true">
+            {SPADE}
           </span>
           <h1 className={s.authTitle}>{t('auth.title')}</h1>
           <p className={s.lead}>{t('auth.lead')}</p>

@@ -13,14 +13,14 @@ export interface StagePanelProps {
   /** `true` on the Khung (frame) tab (design §3.1 item 1): the stage swaps its full-body figure for a
    * 240 px framed head portrait rather than showing both. */
   portrait: boolean
-  /** Tablet/phone stages are shorter — 250/280 px instead of 330 px (design §3.2, §3.3) — and the caller
+  /** Tablet/phone stages are shorter — 250/280 px instead of 300 px (design §3.2, §3.3) — and the caller
    * is the one that knows which; this sets `.stage[data-compact]`'s own height, and the podium glow
    * (`.stage::before`/`::after`, both sized in percentages of `.stage` itself) follows it for free. */
   compact?: boolean
   /** The full-body figure's own width (V5 fix, 2026-09-27): a fixed 320 px regardless of the stage's own
    * height used to run the figure's head straight into the stage's `overflow: hidden` top edge once that
-   * stage was shorter than desktop's — the box shrank, the figure inside it did not. Defaults to 320, the
-   * value tuned for the 330 px desktop stage; a caller with a shorter stage passes a smaller one down. */
+   * stage was shorter than desktop's — the box shrank, the figure inside it did not. Defaults to 290, the
+   * value for the 300 px desktop stage; a caller with a shorter stage passes a smaller one down. */
   fullSize?: number
 }
 
@@ -30,7 +30,7 @@ export interface StagePanelProps {
  * its own framed portrait rather than showing a second small chibi beside the first, unlike the picker
  * column's pre-redesign behaviour.
  */
-export function StagePanel({ subject, expression, onExpression, portrait, compact = false, fullSize = 320 }: StagePanelProps) {
+export function StagePanel({ subject, expression, onExpression, portrait, compact = false, fullSize = 290 }: StagePanelProps) {
   const { t } = useTranslation('normal')
 
   return (

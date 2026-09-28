@@ -297,10 +297,12 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
   const equippedCount = 2 + OPTIONAL_SLOTS.filter((slot) => config[slot] !== undefined).length
   // The full-body figure's own width (V5 fix): `Chibi`'s "full" frame is a fixed 6:7 box, so a width of
   // `stage_height * 6/7` is exactly the width whose height equals the stage around it — the figure then
-  // fits with no clip at all. Desktop keeps its already-tuned 320 (a deliberate, verified-safe ~43 px
-  // clip off a 373 px figure into the 330 px stage, for a tighter frame); the 280/250 px tablet/phone
-  // stages get the zero-clip number instead, since there is no verified-safe amount to reproduce for them.
-  const stageFullSize = phone ? 214 : desktop ? 320 : 240
+  // fits with no clip at all. Desktop keeps the tighter frame it was tuned to — 320 wide into a 330 px stage
+  // clipped a verified-safe ~43 px (11.5 %) off a 373 px figure; the stage is 300 px since layout audit L5
+  // (it gave the column the room to show the saved outfits), and 290 wide keeps that same 11.5 %. The
+  // 280/250 px tablet/phone stages get the zero-clip number instead, since there is no verified-safe amount
+  // to reproduce for them.
+  const stageFullSize = phone ? 214 : desktop ? 290 : 240
 
   const stageNode = (
     <StagePanel
@@ -399,15 +401,15 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
 
   return (
     <main className={`${s.page} ${s.wide}`}>
+      {/* Title, gold rule, actions: the lobby's title row, so the two wide screens read alike (layout audit U3). */}
       <div className={w.header}>
-        <div className={w.headerTitle}>
-          <h1 className={w.title}>{t('wardrobe.title')}</h1>
-          {!dirty ? null : (
-            <span className={w.dirtyLabel} role="status">
-              {t('wardrobe.dirty')}
-            </span>
-          )}
-        </div>
+        <h1 className={w.title}>{t('wardrobe.title')}</h1>
+        {!dirty ? null : (
+          <span className={w.dirtyLabel} role="status">
+            {t('wardrobe.dirty')}
+          </span>
+        )}
+        <span className={s.rule} aria-hidden="true" />
         <div className={w.headerActions}>
           <Button variant="ghost" onClick={undo} disabled={!dirty} aria-label={phone ? t('wardrobe.undo') : undefined}>
             {phone ? <span aria-hidden="true">{UNDO_GLYPH}</span> : t('wardrobe.undo')}

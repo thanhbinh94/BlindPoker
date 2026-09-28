@@ -6,7 +6,11 @@ export type ButtonVariant = 'primary' | 'gold' | 'danger' | 'ghost'
 export type ButtonSize = 'sm' | 'md' | 'lg'
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  /** `gold` = money moves, `danger` = fold/leave/kick, `ghost` = quiet. */
+  /**
+   * `gold` = a screen's main action off the table (create, join, save, claim) and every money move on it (bet,
+   * raise, play, start, buy in); `primary` (teal) = the table's everyday affirmatives (check, call, ready);
+   * `danger` = fold/leave/kick; `ghost` = quiet. One action, one colour, wherever it appears (layout audit U1).
+   */
   variant?: ButtonVariant
   size?: ButtonSize
   loading?: boolean

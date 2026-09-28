@@ -39,13 +39,12 @@ function fakeClient(state: ClientState, overrides: Partial<GameClientApi> = {}):
 }
 
 const wrap = (client: GameClientApi, onEnteredRoom = vi.fn()) => {
-  const onLanguage = vi.fn()
   const view = render(
     <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
-      <LobbyScreen client={client} lang="en" onLanguage={onLanguage} onEnteredRoom={onEnteredRoom} />
+      <LobbyScreen client={client} lang="en" onEnteredRoom={onEnteredRoom} />
     </I18nextProvider>,
   )
-  return { view, onEnteredRoom, onLanguage }
+  return { view, onEnteredRoom }
 }
 
 describe('LobbyScreen', () => {
@@ -60,6 +59,15 @@ describe('LobbyScreen', () => {
     expect(screen.getByRole('heading', { name: 'Chiếu Bạc' })).toBeInTheDocument()
   })
 
+  it('titles the page like every other page, with the create button beside the title', () => {
+    wrap(fakeClient(makeState({ lobby: lobbyRooms })))
+    const title = screen.getByRole('heading', { level: 1, name: 'Rooms' })
+    // The one way to make a room sits in the title row (layout audit U6), not under the join-by-code card.
+    expect(title.parentElement).toContainElement(screen.getByRole('button', { name: 'Create room' }))
+    // The language switch is the app rail's now (layout audit U2).
+    expect(screen.queryByRole('button', { name: /tiếng việt/i })).toBeNull()
+  })
+
   it('re-lists the rooms when the connection re-opens', () => {
     const client = fakeClient(makeState({ status: 'reconnecting', lobby: [] }))
     const { view } = wrap(client)
@@ -70,7 +78,6 @@ describe('LobbyScreen', () => {
         <LobbyScreen
           client={fakeClient(makeState({ status: 'open' }), { listRooms: client.listRooms })}
           lang="en"
-          onLanguage={vi.fn()}
           onEnteredRoom={vi.fn()}
         />
       </I18nextProvider>,

@@ -1,5 +1,5 @@
 import type { RoomPlayerView } from '@bp/core'
-import { AvatarAssets, defaultChibi, GameClientProvider, LobbyScreen, RoomScreen, useGameClient, useHashRoute, type ChibiSubject, type SocketFactory } from '@bp/ui-kit'
+import { AvatarAssets, Chibi, defaultChibi, GameClientProvider, LobbyScreen, RoomScreen, useGameClient, useHashRoute, type ChibiSubject, type SocketFactory } from '@bp/ui-kit'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { LiteApi, SessionDto } from './api.js'
@@ -8,6 +8,7 @@ import { DailyScreen } from './screens/DailyScreen.js'
 import { NamePrompt } from './screens/NamePrompt.js'
 import { SettingsScreen } from './screens/SettingsScreen.js'
 import { Shell } from './screens/Shell.js'
+import s from './screens/lite.module.css'
 import { clearToken, loadToken, saveToken } from './session.js'
 
 /** Tracks `apps/lite/package.json`; shown on the settings page so a bug report can name a build. */
@@ -115,7 +116,15 @@ export function App({ api, socketFactory, version = LITE_VERSION }: AppProps) {
           ) : path === '/settings' ? (
             <SettingsScreen me={state.me} balance={state.balance} onSignedOut={onSignedOut} version={version} />
           ) : (
-            <LobbyScreen client={client} lang={lang} onLanguage={setLang} onEnteredRoom={() => navigate('/room')} />
+            <LobbyScreen
+              client={client}
+              lang={lang}
+              onEnteredRoom={() => navigate('/room')}
+              // The same face the player's seat shows at the table: Lite has no wardrobe, so the name decides it.
+              avatar={
+                state.me === null ? undefined : <Chibi subject={defaultChibi(state.me.displayName)} frame="head" size={36} className={s.lobbyAvatar} />
+              }
+            />
           )}
         </Shell>
       </GameClientProvider>

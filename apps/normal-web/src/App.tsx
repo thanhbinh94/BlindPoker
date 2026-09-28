@@ -299,28 +299,13 @@ export function App({ api, socketFactory }: AppProps) {
             <LobbyScreen
               client={viewClient}
               lang={lang}
-              onLanguage={setLang}
               onEnteredRoom={() => navigate('/room')}
-              // The lobby hides the shell's rail behind the kit's own `PlayerBar`, so the two routes a player
-              // reaches most from here — today's reward and their own profile — are re-hung on that bar, with
-              // the face they built as the way into it.
-              extraNav={
-                <span className={a.lobbyNav}>
-                  <a className={a.lobbyLink} href="#/daily">
-                    {t('nav.daily')}
-                    {dailyReady ? (
-                      <span className={a.navDot}>
-                        <span className="visually-hidden">{t('nav.dailyReady')}</span>
-                      </span>
-                    ) : null}
-                  </a>
-                  <a className={a.lobbyLink} href="#/profile">
-                    {t('nav.profile')}
-                  </a>
-                  <a href="#/avatar" aria-label={t('avatar.mine')}>
-                    <Chibi subject={myChibi ?? defaultChibi(gate.me?.displayName ?? '')} frame="head" size={32} className={a.lobbyAvatar} />
-                  </a>
-                </span>
+              // The face the player built, as the way into the wardrobe. Daily, Profile and the language switch
+              // are the rail's, which is on screen above the lobby too (layout audit U2).
+              avatar={
+                <a className={a.lobbyAvatarLink} href="#/avatar" aria-label={t('avatar.mine')}>
+                  <Chibi subject={myChibi ?? defaultChibi(gate.me?.displayName ?? '')} frame="head" size={36} className={a.lobbyAvatar} />
+                </a>
               }
             />
           )}

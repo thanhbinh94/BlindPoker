@@ -95,7 +95,12 @@ export function AchievementsScreen({ api, lang }: AchievementsScreenProps) {
                 // degenerate case reads as "there was nothing to do" rather than as a broken bar.
                 const filled = row.threshold === 0 ? 100 : (done / row.threshold) * 100
                 const reward = rewardText(row, lang, t)
-                const counter = t('achievements.ui.progress', { progress: done, threshold: row.threshold })
+                // Grouped like every other number on screen — "0 trên 100.000", not "0 trên 100000" (layout
+                // audit L7); `formatPoints` is the kit's integer formatter, points or not.
+                const counter = t('achievements.ui.progress', {
+                  progress: formatPoints(done, lang),
+                  threshold: formatPoints(row.threshold, lang),
+                })
                 return (
                   <li className={s.achievement} key={row.id} data-unlocked={String(row.unlockedAt !== null)}>
                     <span className={s.rowMain}>

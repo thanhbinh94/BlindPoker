@@ -62,7 +62,7 @@ it through `GameClientProvider`, or pass it down as the `client` prop.
 ```tsx
 import { GameClientProvider, LobbyScreen, RoomScreen, useGameClient, useHashRoute } from '@bp/ui-kit'
 
-function App({ lang, onLanguage }: { lang: Language; onLanguage: (l: Language) => void }) {
+function App({ lang }: { lang: Language }) {
   const client = useGameClient({ url: 'wss://…/ws', token: sessionToken })
   const { route, navigate } = useHashRoute()
   return (
@@ -70,7 +70,7 @@ function App({ lang, onLanguage }: { lang: Language; onLanguage: (l: Language) =
       {route.path.startsWith('/room') ? (
         <RoomScreen client={client} lang={lang} onLeft={() => navigate('/lobby')} />
       ) : (
-        <LobbyScreen client={client} lang={lang} onLanguage={onLanguage} onEnteredRoom={() => navigate('/room')} />
+        <LobbyScreen client={client} lang={lang} onEnteredRoom={() => navigate('/room')} />
       )}
     </GameClientProvider>
   )
@@ -156,7 +156,7 @@ formatting; strings come from `useTranslation()`.
 
 | Component | Props |
 | --- | --- |
-| `LobbyScreen` | `client`, `lang`, `onLanguage`, `onEnteredRoom`, `extraNav?`, `header?` |
+| `LobbyScreen` | `client`, `lang`, `onEnteredRoom`, `avatar?`, `header?` — navigation and the language switch are the host app's rail (layout audit U2) |
 | `RoomScreen` | `client`, `lang`, `onLeft`, `chibiFor?`, `captionFor?`, `header?`, `layout?` |
 | `Toasts` | `error`, `notifications`, `onClearError`, `onDismiss`, `lang` |
 
@@ -236,7 +236,7 @@ seat's `ChibiConfig`; a bot never asks it — `PokerTable` draws `botChibi` for 
 | `RoomList` | `rooms`, `onJoin`, `filter?`, `onFilter?`, `lang`, `busy?` |
 | `CreateRoomForm` | `onSubmit`, `busy?`, `initialMode?`, `lang` |
 | `JoinByCode` | `onJoin`, `busy?`, `lang`, `error?` |
-| `PlayerBar` | `displayName`, `balance`, `status`, `lang`, `onLanguage`, `right?` |
+| `PlayerBar` | `displayName`, `balance`, `status`, `lang`, `avatar?` (the initial in a gold disc when absent) |
 | `LanguageSwitch` | `lang`, `onChange` |
 | `HoldemFields` | `tierIndex`, `onTierIndex`, `minBuyInBB`, `maxBuyInBB`, `onMinBuyInBB`, `onMaxBuyInBB`, `disabled`, `lang` |
 | `BlindFields` | `holeCards`, `onHoleCards`, `decisionMode`, `onDecisionMode`, `fixedWager`, `onFixedWager`, `botCount`, `onBotCount`, `maxBots`, `disabled`, `lang` |
@@ -278,7 +278,7 @@ Tokens live in `src/theme/tokens.css` and are all an app needs to restyle the ki
 | Table | `--felt`, `--felt-edge` |
 | Cards | `--card-face`, `--card-ink`, `--card-red` |
 | Type | `--font-display`, `--font-body` |
-| Space | `--space-1`…`--space-8` (4 px scale), `--radius-sm/md/lg/pill`, `--tap` (44 px) |
+| Space | `--space-1`…`--space-8` (4 px scale), `--radius-sm/md/lg/pill`, `--tap` (44 px), `--measure-wide` (1180 px: lobby, wardrobe) and `--measure-narrow` (44rem: pages read top to bottom) — content widths, padding not included |
 | Motion | `--dur-1`, `--dur-2`, `--ease` |
 | Misc | `--focus`, `--shadow-1`, `--shadow-2`, `--z-modal` |
 

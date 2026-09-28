@@ -13,7 +13,7 @@
   },
   "auth": {
     "title": "Blind Luck Poker",
-    "lead": "Một tài khoản, mọi thiết bị. Điểm, tủ đồ và thành tựu của bạn theo tài khoản chứ không theo máy.",
+    "lead": "Một tài khoản, mọi thiết bị. Điểm, kho đồ và thành tựu của bạn theo tài khoản chứ không theo máy.",
     "signIn": "Đăng nhập",
     "register": "Đăng ký",
     "email": "Email",
@@ -124,8 +124,8 @@
     },
     "about": {
       "title": "Thông tin",
-      "edition": "Phiên bản",
-      "version": "Bản dựng"
+      "edition": "Ấn bản",
+      "version": "Phiên bản"
     }
   },
   "screens": {
@@ -141,8 +141,8 @@
     "memberSince": "Thành viên từ {{date}}",
     "balance": "Số điểm",
     "noTitle": "Chưa có danh hiệu",
-    "toAvatar": "Chỉnh trang phục",
-    "toInventory": "Tủ đồ",
+    "toAvatar": "Phòng thay đồ",
+    "toInventory": "Kho đồ",
     "toAchievements": "Thành tựu",
     "error": "Không tải được hồ sơ của bạn",
     "rename": {
@@ -212,13 +212,13 @@
     }
   },
   "inventory": {
-    "title": "Tủ đồ",
+    "title": "Kho đồ",
     "lead": "Tất cả những gì tài khoản này sở hữu. Món đang mặc được đánh dấu.",
     "summary": "Đang sở hữu {{owned}} món",
     "acquired": "Nhận ngày {{date}}",
     "equipped": "Đang dùng",
     "empty": "Chưa có món nào.",
-    "error": "Không tải được tủ đồ của bạn",
+    "error": "Không tải được kho đồ của bạn",
     "rarity": {
       "common": "Thường",
       "rare": "Hiếm",
@@ -263,7 +263,7 @@
     }
   },
   "wardrobe": {
-    "title": "Tủ đồ",
+    "title": "Phòng thay đồ",
     "groups": {
       "look": "Ngoại hình",
       "wear": "Trang phục",
@@ -315,14 +315,14 @@
       },
       "unavailable": "Chưa có cách nhận món này"
     },
-    "save": "Lưu tủ đồ",
+    "save": "Lưu trang phục",
     "saveShort": "Lưu",
-    "saved": "Đã lưu tủ đồ.",
+    "saved": "Đã lưu trang phục.",
     "dirty": "● Có thay đổi chưa lưu",
     "undo": "Hoàn tác",
     "close": "Đóng",
     "leaveTitle": "Rời đi mà không lưu?",
-    "leaveBody": "Bạn có thay đổi trong tủ đồ chưa được lưu.",
+    "leaveBody": "Bạn có thay đổi trang phục chưa được lưu.",
     "leaveStay": "Ở lại",
     "leaveDiscard": "Bỏ qua và rời đi"
   },
@@ -535,24 +535,24 @@
       "desc": "Ăn 500.000 điểm trong một ván."
     },
     "blind_hands_10": {
-      "name": "Mười ván Bài Mù",
-      "desc": "Chơi 10 ván Bài Mù."
+      "name": "Mười ván Blind Poker",
+      "desc": "Chơi 10 ván Blind Poker."
     },
     "blind_hands_100": {
-      "name": "Trăm ván Bài Mù",
-      "desc": "Chơi 100 ván Bài Mù."
+      "name": "Trăm ván Blind Poker",
+      "desc": "Chơi 100 ván Blind Poker."
     },
     "blind_hands_1000": {
-      "name": "Nghìn ván Bài Mù",
-      "desc": "Chơi 1.000 ván Bài Mù."
+      "name": "Nghìn ván Blind Poker",
+      "desc": "Chơi 1.000 ván Blind Poker."
     },
     "blind_wins_10": {
-      "name": "Mười ván Bài Mù thắng",
-      "desc": "Thắng 10 ván Bài Mù."
+      "name": "Mười ván Blind Poker thắng",
+      "desc": "Thắng 10 ván Blind Poker."
     },
     "blind_wins_100": {
-      "name": "Trăm ván Bài Mù thắng",
-      "desc": "Thắng 100 ván Bài Mù."
+      "name": "Trăm ván Blind Poker thắng",
+      "desc": "Thắng 100 ván Blind Poker."
     },
     "bot_hands_50": {
       "name": "Bạn của máy",

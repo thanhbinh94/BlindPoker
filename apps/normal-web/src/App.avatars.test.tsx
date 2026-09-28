@@ -134,20 +134,18 @@ describe('App — avatars on the bar and at the table', () => {
     window.history.replaceState(null, '', '/')
   })
 
-  it('hangs Daily, Profile and my own face on the lobby bar', async () => {
+  it('puts my own face on the lobby bar, as the way into the wardrobe', async () => {
     const playerAvatar = vi.fn().mockResolvedValue({ playerId: 'p1', displayName: 'Bình', avatar: AVATAR })
     renderApp(stubApi({ playerAvatar }))
     await waitFor(() => expect(FakeSocket.instances).toHaveLength(1))
     await welcome()
 
     const mine = await screen.findByRole('link', { name: viNormal.avatar.mine })
-    const corner = mine.closest('span')
-    expect(corner).not.toBeNull()
-    expect(within(corner as HTMLElement).getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
-      '#/daily',
-      '#/profile',
-      '#/avatar',
-    ])
+    expect(mine).toHaveAttribute('href', '#/avatar')
+    // Daily and Profile are the rail's; the lobby's bar no longer repeats them (layout audit U2).
+    const bar = mine.closest('header')
+    expect(bar).not.toBeNull()
+    expect(within(bar as HTMLElement).getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(['#/avatar'])
     // The boot probe named me before `WELCOME` did, so the face is fetched once and rendered from the
     // config — `data-chibi-hash` is that config's identity, and the only thing a Chibi can be asserted on.
     const expectedHash = hashChibi({

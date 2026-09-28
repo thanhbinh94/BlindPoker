@@ -171,7 +171,7 @@ export function DailyScreen({ api, token, lang }: DailyScreenProps) {
                   })}
                 </p>
                 {me.relief.eligible ? (
-                  <Button variant="primary" loading={busy === 'relief'} onClick={() => void takeRelief()}>
+                  <Button variant="gold" loading={busy === 'relief'} onClick={() => void takeRelief()}>
                     {t('daily.relief.button')}
                   </Button>
                 ) : (

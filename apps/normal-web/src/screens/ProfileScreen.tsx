@@ -334,6 +334,11 @@ export function ProfileScreen({ api, lang, balance, onRenamed }: ProfileScreenPr
 
   return (
     <main className={s.page}>
+      {/* A page title like every other page's (layout audit U3); the player's name heads the card below it. */}
+      <div className={s.pageHead}>
+        <h1>{t('profile.title')}</h1>
+        <span className={s.rule} aria-hidden="true" />
+      </div>
       <header className={s.identityCard}>
         {/* The backdrop is CSS, keyed on `data-title` — five gradient/glow variants, one per title, in
             `normal.module.css`. `full` shows the aura behind the figure; the head crop beside it is what
@@ -343,8 +348,7 @@ export function ProfileScreen({ api, lang, balance, onRenamed }: ProfileScreenPr
           <Chibi subject={chibi} frame="head" size={192} />
         </div>
         <div className={s.identityText}>
-          <span className={s.eyebrow}>{t('profile.title')}</span>
-          <h1 className={s.identityName}>{displayName}</h1>
+          <h2 className={s.identityName}>{displayName}</h2>
           <p className={s.marks}>
             {titleId === undefined || titleId === '' ? (
               <span className={s.footnote}>{t('profile.noTitle')}</span>

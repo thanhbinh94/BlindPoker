@@ -138,7 +138,9 @@ describe('ProfileScreen', () => {
   it('draws the header from the account and the balance from the socket', async () => {
     renderScreen()
 
-    expect(await screen.findByRole('heading', { name: 'Bình', level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Bình', level: 2 })).toBeInTheDocument()
+    // The page is titled like every other page; the name heads the card under it (layout audit U3).
+    expect(screen.getByRole('heading', { name: viNormal.profile.title, level: 1 })).toBeInTheDocument()
     expect(screen.getByText(viNormal.items.title_hot_hand)).toBeInTheDocument()
     expect(screen.getByText(viNormal.items.badge_gold)).toBeInTheDocument()
     expect(screen.getByText(/Thành viên từ/)).toBeInTheDocument()
@@ -154,7 +156,7 @@ describe('ProfileScreen', () => {
 
   it('stages exactly one full-body chibi and one head-crop chibi, side by side in their own row', async () => {
     renderScreen()
-    await screen.findByRole('heading', { name: 'Bình', level: 1 })
+    await screen.findByRole('heading', { name: 'Bình', level: 2 })
 
     const stage = document.querySelector('[data-title]') as HTMLElement
     const chibis = [...stage.querySelectorAll('[data-chibi-hash]')]
@@ -165,7 +167,7 @@ describe('ProfileScreen', () => {
   it('still draws the header, stats and history when the avatar catalogue fails — the stage falls back to a default chibi', async () => {
     renderScreen(stubApi({ avatarCatalog: vi.fn().mockRejectedValue(new ApiError(500, 'INTERNAL', 'nope')) }))
 
-    expect(await screen.findByRole('heading', { name: 'Bình', level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Bình', level: 2 })).toBeInTheDocument()
     expect(screen.getByText(viNormal.profile.stats.title)).toBeInTheDocument()
     const stage = document.querySelector('[data-title]')
     expect(stage?.querySelectorAll('[data-chibi-hash]')).toHaveLength(2)
@@ -174,7 +176,7 @@ describe('ProfileScreen', () => {
 
   it('groups all sixteen counters, prints points with their unit and names the best hand', async () => {
     const { i18n } = renderScreen()
-    await screen.findByRole('heading', { name: 'Bình', level: 1 })
+    await screen.findByRole('heading', { name: 'Bình', level: 2 })
 
     for (const group of Object.values(viNormal.profile.stats.groups)) {
       // `getAllByText`: "Texas Hold'em" is a group heading here *and* a mode label in the history below.
@@ -188,7 +190,7 @@ describe('ProfileScreen', () => {
 
   it('says "none yet" for a best hand nobody has won', async () => {
     renderScreen(stubApi({ stats: vi.fn().mockResolvedValue({ ...STATS, bestHandRank: 0 }) }))
-    await screen.findByRole('heading', { name: 'Bình', level: 1 })
+    await screen.findByRole('heading', { name: 'Bình', level: 2 })
 
     expect(screen.getByText(viNormal.profile.stats.none)).toBeInTheDocument()
   })
@@ -196,7 +198,7 @@ describe('ProfileScreen', () => {
   it('lists the last hands with my own net, the mode, the best hand and who else was there', async () => {
     const api = stubApi()
     const { i18n } = renderScreen(api)
-    await screen.findByRole('heading', { name: 'Bình', level: 1 })
+    await screen.findByRole('heading', { name: 'Bình', level: 2 })
 
     expect(api.history).toHaveBeenCalledWith(20)
     const hands = within(screen.getByRole('list', { name: viNormal.profile.history.title }))
@@ -220,7 +222,7 @@ describe('ProfileScreen', () => {
       ],
     }
     renderScreen(stubApi({ history: vi.fn().mockResolvedValue([namesake]) }))
-    await screen.findByRole('heading', { name: 'Bình', level: 1 })
+    await screen.findByRole('heading', { name: 'Bình', level: 2 })
 
     const hands = within(screen.getByRole('list', { name: viNormal.profile.history.title }))
     expect(hands.getAllByText('Binh')).toHaveLength(1)
@@ -235,14 +237,14 @@ describe('ProfileScreen', () => {
 
     await user.click(screen.getByRole('button', { name: viNormal.screens.retry }))
 
-    expect(await screen.findByRole('heading', { name: 'Bình', level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Bình', level: 2 })).toBeInTheDocument()
   })
 
   it('refuses a name the server validator would refuse, without asking the server', async () => {
     const api = stubApi()
     const user = userEvent.setup()
     renderScreen(api)
-    await screen.findByRole('heading', { name: 'Bình', level: 1 })
+    await screen.findByRole('heading', { name: 'Bình', level: 2 })
 
     const box = screen.getByLabelText(viNormal.profile.rename.label)
     await user.clear(box)
@@ -260,7 +262,7 @@ describe('ProfileScreen', () => {
       .mockResolvedValue({ playerId: 'p1', displayName: 'Minh Sài Gòn' })
     const user = userEvent.setup()
     renderScreen(stubApi({ rename }))
-    await screen.findByRole('heading', { name: 'Bình', level: 1 })
+    await screen.findByRole('heading', { name: 'Bình', level: 2 })
 
     const box = screen.getByLabelText(viNormal.profile.rename.label)
     await user.clear(box)
@@ -268,11 +270,11 @@ describe('ProfileScreen', () => {
     await user.click(screen.getByRole('button', { name: viNormal.profile.rename.submit }))
 
     expect(await screen.findByText(viNormal.auth.errors.DISPLAY_NAME_TAKEN)).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Bình', level: 1 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Bình', level: 2 })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: viNormal.profile.rename.submit }))
 
-    expect(await screen.findByRole('heading', { name: 'Minh Sài Gòn', level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Minh Sài Gòn', level: 2 })).toBeInTheDocument()
     // The seat was named when the player joined the room, so the note is the only honest thing to say.
     expect(screen.getByText(viNormal.profile.rename.saved)).toBeInTheDocument()
     expect(rename).toHaveBeenLastCalledWith('Minh Sài Gòn')
@@ -307,7 +309,7 @@ describe('ProfileScreen', () => {
   it('keeps the page when only the ledger fails, and blames only the ledger', async () => {
     renderScreen(stubApi({ ledger: vi.fn().mockRejectedValue(new ApiError(500, 'INTERNAL', 'nope')) }))
 
-    expect(await screen.findByRole('heading', { name: 'Bình', level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Bình', level: 2 })).toBeInTheDocument()
     // The profile above it rendered perfectly well, so saying it did not load would simply be untrue.
     expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.profile.ledger.error)
     expect(screen.queryByText(viNormal.profile.error)).toBeNull()
@@ -350,7 +352,7 @@ describe('ProfileScreen', () => {
   it('prints a title and badge this bundle has never heard of as their ids, not as i18n keys', async () => {
     const avatar = { ...AVATAR, title: 'title_from_the_future', badge: 'badge_lunar_2027' }
     renderScreen(stubApi({ me: vi.fn().mockResolvedValue({ ...ME, avatar }) }))
-    await screen.findByRole('heading', { name: 'Bình', level: 1 })
+    await screen.findByRole('heading', { name: 'Bình', level: 2 })
 
     expect(screen.getByText('title_from_the_future')).toBeInTheDocument()
     expect(screen.getByText('badge_lunar_2027')).toBeInTheDocument()

@@ -72,18 +72,6 @@
   white-space: nowrap;
 }
 
-.edition {
-  flex: none;
-  padding: 2px var(--space-2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  font-size: 0.625rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-muted);
-}
-
 .nav {
   display: flex;
   flex: 1 1 auto;
@@ -227,15 +215,10 @@
 }
 
 /* Bug 8: between the wide rail and the phone rail everything used to stay, and a 700–1100 px window overflowed.
-   Items go one at a time as the width shrinks, least needed first: the edition pill, then the wordmark (the
-   mark stays), then the language switch (reachable on Settings) — while `Shell.tsx` writes the balance
-   compactly from 900 px down. */
-@media (max-width: 1199px) {
-  .edition {
-    display: none;
-  }
-}
-
+   Items go one at a time as the width shrinks, least needed first: the wordmark (the mark stays), then the
+   language switch (reachable on Settings) — while `Shell.tsx` writes the balance compactly from 900 px down.
+   The edition pill that used to go first is gone altogether (layout audit U5, 2026-09-28): a player has no use
+   for it, and Settings → About still names the edition. */
 @media (max-width: 1023px) {
   .wordmark {
     display: none;
@@ -249,16 +232,15 @@
 }
 
 /* Under 640px the rail keeps only what a thumb needs on every screen: the mark, the four tabs and the
-   connection dot. Normal carries one tab more than Lite, so the squeeze is tighter — the wordmark, the
-   edition pill and the language switch all go, and the tabs lose a step of padding. The language switch
-   stays reachable on Settings and on the sign-in page, which is where a player changes it once. */
+   connection dot. Normal carries one tab more than Lite, so the squeeze is tighter — the wordmark and the
+   language switch both go, and the tabs lose a step of padding. The language switch stays reachable on
+   Settings and on the sign-in page, which is where a player changes it once. */
 @media (max-width: 640px) {
   .bar {
     gap: var(--space-1);
     padding: 0 var(--space-2);
   }
 
-  .edition,
   .wordmark,
   .railLang {
     display: none;
@@ -366,7 +348,10 @@
   justify-content: center;
 }
 
-.card {
+/* `authCard`, not `card`: this stylesheet is one CSS module, and the inventory's item `.card` further down
+   (centred, tight padding) used to merge into this one — which is what squeezed the sign-in form into a
+   centred 270 px column and broke "Đăng nhập" onto two lines (layout audit L3, 2026-09-28). */
+.authCard {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -378,19 +363,13 @@
   box-shadow: var(--shadow-2);
 }
 
+/* The mark, the name and one line about the account, centred over a form that runs the card's full width. */
 .cardHead {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: var(--space-2);
-}
-
-.eyebrow {
-  font-family: var(--font-display);
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--ink-muted);
+  text-align: center;
 }
 
 .authTitle {
@@ -572,12 +551,13 @@
 
 /* ── document pages ───────────────────────────────────────────────────────── */
 
+/* The kit's two measures (layout audit U3): narrow here, wide for the wardrobe below and the lobby. */
 .page {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
   width: 100%;
-  max-width: 46rem;
+  max-width: calc(var(--measure-narrow) + 2 * var(--space-4));
   margin: 0 auto;
   padding: var(--space-6) var(--space-4) var(--space-8);
 }
@@ -903,10 +883,11 @@
 
 /* ── the wardrobe: a figure on the left, everything that goes on it on the right ─── */
 
-/* The one page in this app that is two columns, so the one that is allowed to be wider than 46rem: a
-   stage narrow enough to fit beside a column of tiles is a stage too narrow to see a figure in. */
+/* The one account page that is two columns, so the one that is allowed the wide measure — the lobby's, so the
+   two two-column screens line up: a stage narrow enough to fit beside a column of tiles is a stage too narrow
+   to see a figure in. */
 .wide {
-  max-width: 64rem;
+  max-width: calc(var(--measure-wide) + 2 * var(--space-4));
 }
 
 .stageActions {
