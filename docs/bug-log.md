@@ -88,20 +88,29 @@ Tôi tự rà: chụp 37 ảnh bản build thật — mọi màn Normal ở 1440
 
 | # | Mô tả | Phân loại | Trạng thái |
 |---|---|---|---|
-| L1 | Điện thoại, trong bàn: ô ghế của chính mình bị cắt nửa dưới, không đọc được stack. | Lỗi hiển thị | sẽ sửa (đợt 1) |
-| L2 | Hai màn khác nhau cùng tiêu đề "Tủ đồ" (thay đồ `#/avatar` và kho `#/inventory`); nút ở Hồ sơ ghi "Chỉnh trang phục" và "Tủ đồ". | Đặt tên | sẽ sửa (đợt 1) |
-| L3 | Trang đăng nhập: tab "Đăng nhập" xuống 2 dòng. | Lỗi hiển thị | sẽ sửa (đợt 1) |
-| L4 | Tủ đồ ở khoảng 900 px: hàng biểu cảm bị cắt mất "Ngủ". | Lỗi hiển thị | sẽ sửa (đợt 1) |
-| L5 | Tủ đồ ở 1440×900: "Bộ đồ đã lưu" khuất trong cột trái cuộn riêng. | Bố cục | sẽ sửa (đợt 1) |
-| L6 | Hộp thoại Tạo phòng trên điện thoại: nút "Tạo phòng" nổi đè ô "Buy-in tối đa". | Lỗi hiển thị | sẽ sửa (đợt 1) |
-| L7 | Thành tựu: "0 trên 100000" không có dấu phân cách nghìn. | Định dạng số | sẽ sửa (đợt 1) |
-| L8 | Cài đặt → Thông tin: nhãn "Phiên bản" hiện "Bản Normal", "Bản dựng" hiện "0.1.0" (đảo nghĩa). | Đặt tên | sẽ sửa (đợt 1) |
-| U1 | Nút chính hai màu: "Tạo phòng" vàng ở sảnh, xanh trong hộp thoại; nút khoá hai kiểu. Quy ước: vàng = hành động chính ngoài bàn, xanh = hành động trên bàn. | Thống nhất | sẽ sửa (đợt 1) |
-| U2 | Thẻ người chơi ở sảnh (Normal) lặp "Điểm danh", "Hồ sơ" và nút ngôn ngữ của thanh trên, và có hai avatar (chữ "A" + chibi). Chỉ giữ chibi, tên, số dư, trạng thái. | Thống nhất | sẽ sửa (đợt 1) |
-| U3 | Tiêu đề trang 4 cỡ (Hồ sơ không có), nội dung 3 bề rộng. Một kiểu tiêu đề, hai bề rộng. | Thống nhất | sẽ sửa (đợt 1) |
-| U4 | Chế độ chơi gọi ba kiểu: "Blind Poker", "Blind", "Bài Mù". | Thống nhất | sẽ sửa (đợt 1) |
-| U5 | Nhãn "BẢN NORMAL" ở trang đăng nhập và thanh trên (chỉ để trong Cài đặt). | Thống nhất | sẽ sửa (đợt 1) |
-| U6 | Sảnh: nút "Tạo phòng" nằm dưới ô nhập mã; ≤ 900 px rơi xuống cuối danh sách phòng. Đưa lên cạnh tiêu đề. | Tối ưu | sẽ sửa (đợt 1) |
+| L1 | Điện thoại, trong bàn: ô ghế của chính mình bị cắt nửa dưới, không đọc được stack. | Lỗi hiển thị | đã sửa — `f6601bd`, merge `d9a5e89` |
+| L2 | Hai màn khác nhau cùng tiêu đề "Tủ đồ" (thay đồ `#/avatar` và kho `#/inventory`); nút ở Hồ sơ ghi "Chỉnh trang phục" và "Tủ đồ". | Đặt tên | đã sửa — `f6601bd`, merge `d9a5e89` |
+| L3 | Trang đăng nhập: tab "Đăng nhập" xuống 2 dòng. | Lỗi hiển thị | đã sửa — `f6601bd`, merge `d9a5e89` |
+| L4 | Tủ đồ ở khoảng 900 px: hàng biểu cảm bị cắt mất "Ngủ". | Lỗi hiển thị | đã sửa — `f6601bd`, merge `d9a5e89` |
+| L5 | Tủ đồ ở 1440×900: "Bộ đồ đã lưu" khuất trong cột trái cuộn riêng. | Bố cục | đã sửa — `f6601bd`, merge `d9a5e89` |
+| L6 | Hộp thoại Tạo phòng trên điện thoại: nút "Tạo phòng" nổi đè ô "Buy-in tối đa". | Lỗi hiển thị | đã sửa — `f6601bd`, merge `d9a5e89` |
+| L7 | Thành tựu: "0 trên 100000" không có dấu phân cách nghìn. | Định dạng số | đã sửa — `f6601bd`, merge `d9a5e89` |
+| L8 | Cài đặt → Thông tin: nhãn "Phiên bản" hiện "Bản Normal", "Bản dựng" hiện "0.1.0" (đảo nghĩa). | Đặt tên | đã sửa — `f6601bd`, merge `d9a5e89` |
+| U1 | Nút chính hai màu: "Tạo phòng" vàng ở sảnh, xanh trong hộp thoại; nút khoá hai kiểu. Quy ước: vàng = hành động chính ngoài bàn, xanh = hành động trên bàn. | Thống nhất | đã sửa — `f6601bd`, merge `d9a5e89` |
+| U2 | Thẻ người chơi ở sảnh (Normal) lặp "Điểm danh", "Hồ sơ" và nút ngôn ngữ của thanh trên, và có hai avatar (chữ "A" + chibi). Chỉ giữ chibi, tên, số dư, trạng thái. | Thống nhất | đã sửa — `f6601bd`, merge `d9a5e89` |
+| U3 | Tiêu đề trang 4 cỡ (Hồ sơ không có), nội dung 3 bề rộng. Một kiểu tiêu đề, hai bề rộng. | Thống nhất | đã sửa — `f6601bd`, merge `d9a5e89` |
+| U4 | Chế độ chơi gọi ba kiểu: "Blind Poker", "Blind", "Bài Mù". | Thống nhất | đã sửa — `f6601bd`, merge `d9a5e89` |
+| U5 | Nhãn "BẢN NORMAL" ở trang đăng nhập và thanh trên (chỉ để trong Cài đặt). | Thống nhất | đã sửa — `f6601bd`, merge `d9a5e89` |
+| U6 | Sảnh: nút "Tạo phòng" nằm dưới ô nhập mã; ≤ 900 px rơi xuống cuối danh sách phòng. Đưa lên cạnh tiêu đề. | Tối ưu | đã sửa — `f6601bd`, merge `d9a5e89` |
+
+**28/09 đã sửa và lên host (pid 3396).** Ghi chú kỹ thuật:
+- L1: ghế của mình dính đáy vùng bàn (sticky trong `.roomMain`). Khối `@media` cho điện thoại của `RoomHeader` từng nằm trước các quy tắc gốc nên chưa bao giờ có hiệu lực; giờ nằm sau và xếp đầu trang thành hai hàng. Đối thủ ở dạng xếp dọc chuyển sang dạng gọn từ 4 người (trước là 7), bỏ hai lá úp của đối thủ; danh hiệu chỉ ẩn từ 7 người (`othersDense`), vẫn đúng spec §27.3. Danh sách "Đuổi" bot trên điện thoại là một dải cuộn ngang. e2e: bàn 5 bot ở 375 px, ghế của mình nằm trọn trên khay nút.
+- L3: nguyên nhân là trùng tên lớp `.card` trong `normal.module.css` (thẻ đăng nhập và thẻ vật phẩm của Kho đồ); đổi thành `.authCard`. e2e kiểm mỗi tab nằm trên một dòng.
+- L5: sân khấu desktop 300 px (hình 290 px, giữ tỉ lệ cắt 11,5 % đã chỉnh).
+- U1: trên bàn giữ quy ước cũ — vàng cho tiền vào pot (Cược, Tố, Chơi, Bắt đầu, Mang vào), xanh cho Xem, Theo, Sẵn sàng.
+- U2: `LobbyScreen`/`PlayerBar` bỏ `onLanguage`, `extraNav`, `right`, thêm `avatar`; Lite truyền chibi mặc định theo tên.
+- U3: token `--measure-wide` (1180 px) và `--measure-narrow` (44rem) trong ui-kit.
+- U5: bỏ luôn nhãn phiên bản trên thanh điều hướng của Lite; trang nhập tên của Lite vẫn giữ.
 
 Chưa chọn (ghi nhận):
 - Chọn Tối/Sáng dùng hai nút rời, còn chọn ngôn ngữ dùng công tắc bo tròn.
