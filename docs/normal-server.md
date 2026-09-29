@@ -147,8 +147,9 @@ The invariant this buys (spec §18.4):
 Σ players.balance  +  Σ point_transactions where player_id is null  =  constant
 ```
 
-with live Hold'em stacks and carry-over pots as the third term, held in memory until the hand ends
-or the server drains. `app.test.ts` asserts it over a real settled hand.
+with live table stacks (Hold'em buy-ins and, since the table limit, Blind seats) and carry-over pots
+as the third term, held in memory until the seat is left, the pot is paid or released, or the server
+drains. `app.test.ts` asserts it over a real settled hand.
 
 ### When a settlement failed
 
@@ -165,10 +166,11 @@ select id, room_id, mode, fee, settlement_error, ended_at
 - **No counter moved.** `stats-service` skips a flagged hand exactly as it skips a cancelled one, so
   no achievement can be bought by a failed write. `app.ts` raises one `error` line —
   `hand settlement failed` with the `handId`, `roomId` and `fee` — through `logSettlementFailure`.
-- **A Hold'em hand's `table_fee` sink row is what was lost.** The seats' chips had already moved, so
-  balances are right, but `Σ balances + Σ sinks` has drifted by exactly `fee` and has to be put back
-  by hand: one sink row (`player_id null`, `amount = fee`, `reason = kind = 'table_fee'`,
-  `ref_id = games.id`). A Blind hand moved nothing at all and needs nothing.
+- **The hand's `table_fee` sink row is what was lost** — in either mode, since the table limit
+  (a Blind hand, like a Hold'em one, moves only table stacks and writes nothing but that row). The
+  seats' chips had already moved, so balances are right, but `Σ balances + Σ sinks` has drifted by
+  exactly `fee` and has to be put back by hand: one sink row (`player_id null`, `amount = fee`,
+  `reason = kind = 'table_fee'`, `ref_id = games.id`).
 
 `point_transactions` is `ON DELETE restrict` on `players`. Deleting an account whose ledger rows
 remain would turn its whole history — credits included — into sink rows and take its balance out of

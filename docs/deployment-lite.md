@@ -186,12 +186,14 @@ nên nói thẳng:
 | Shutdown/restart máy khi server đang chạy | — | ❌ Cứng |
 
 Dừng **êm** = `GameServer.shutdown()`: ngừng nhận kết nối mới, huỷ ván đang chơi, **hoàn lại điểm
-cược và cash-out toàn bộ stack Hold'em về số dư**, đóng socket với `SERVER_SHUTDOWN`, đóng listener
-rồi đóng database — tối đa 10 giây (`SHUTDOWN_BUDGET_MS`) rồi thoát dù còn dở.
+cược và cash-out mọi chồng trên bàn (Hold'em và Blind) về số dư**, đóng socket với
+`SERVER_SHUTDOWN`, đóng listener rồi đóng database — tối đa 10 giây (`SHUTDOWN_BUDGET_MS`) rồi thoát
+dù còn dở.
 
 Dừng **cứng** = tiến trình biến mất ngay. Số dư đã ghi trong SQLite vẫn nguyên (mọi bút toán đều
-nằm trong transaction), nhưng **stack Hold'em đang trên bàn và pot cộng dồn của Blind B thì mất** —
-chúng chỉ tồn tại trong bộ nhớ cho tới lúc ván kết thúc hoặc server drain.
+nằm trong transaction), nhưng **mọi chồng đang trên bàn — buy-in Hold'em và hạn mức bàn Blind, tới
+250.000 mỗi ghế — cùng pot cộng dồn của Blind B thì mất**: chồng chỉ tồn tại trong bộ nhớ cho tới
+lúc người chơi rời ghế, pot cho tới lúc được chia, hoặc cho tới khi server drain.
 
 ### 6.2 `--stop` và `--status`
 

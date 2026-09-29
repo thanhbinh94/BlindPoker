@@ -15,15 +15,6 @@ The three rows of [`acceptance-checklist.md`](acceptance-checklist.md) that are 
 
 ## Gameplay
 
-**Blind Poker shows opponents' balances.** In a Blind room the seat *is* the balance (spec §8.1):
-the ante comes straight out of it, there is no separate table stack to buy in with, and the room
-snapshot has to carry a number for each seat so the client can tell who can still afford the wager.
-Hiding it would mean inventing a second figure and keeping it in step with the real one for no
-gameplay benefit. Hold'em is unaffected — there the table stack is genuinely separate from the
-balance, and only the stack is published.
-*Why it stays:* it is what the ruleset is. *Tracked:* spec §8.1 and §11.3; a design limitation, not
-a roadmap item.
-
 **A display-name or cosmetic change reaches the table only at the next join.** The room snapshot
 captures the name, avatar and caption when a player joins; a rename or a new avatar saved while
 sitting at a table updates the account immediately but not the seat plate the others are looking at.
@@ -47,6 +38,13 @@ balance in full, so nothing is lost — it is a click, not a leak.
 reopen action), which is more rule surface than the MVP needed.
 *Tracked:* `docs/ui-kit.md` Known gaps.
 
+**Relief looks at the balance only.** Points on a table (a Hold'em buy-in, a Blind table limit) are
+not counted, so a player with most of their points on a table can claim relief
+(`POST /api/economy/relief`, once per 24 hours).
+*Why it stays:* counting live table stacks would make the economy service ask the rooms, across
+editions, for a once-a-day top-up of at most 5.000.
+*Tracked:* here; spec §12.4.
+
 **The `SIT_OUT` auto-stand-up cannot fire on a two-seat table.** A player who sits out is stood up
 after five consecutive *dealt* hands they skipped. The counter ticks on hands, not on wall-clock
 time — and on a table with two seats, one of them sitting out, no hand can start at all, so nothing
@@ -58,9 +56,11 @@ sit-out counter.
 
 **A carry-over pot released to the table also pays seats that asked to sit out.** When a Blind room
 cannot start a hand for `carryOverReleaseMs`, the accumulated pot is split across every seated human
-(`Room.seatedHumans()`), which since Plan 7 includes seats that have asked to sit out. Money is
-still exactly conserved — the `Σ balances + Σ sinks` identity is untouched, and the Blind soak
-asserts it every run — but a player who declined to play shares a pot they were never eligible for.
+— which since Plan 7 includes seats that have asked to sit out — and, since the table limit, every
+human stood up for a spent limit while that pot was carried who is still in the room
+(`Room.releaseCarryOver`). Money is still exactly conserved — the `Σ balances + Σ sinks` identity is
+untouched, and the Blind soak asserts it every run — but a player who declined to play shares a pot
+they were never eligible for.
 *Why it stays:* spec §8.4 predates `SIT_OUT` and says "the seated humans" without qualification, so
 excluding sitters is a rule change rather than a bug fix, and it is a rule change in the direction
 of taking points away from somebody. Ruled a roadmap item rather than a fix in this milestone.
@@ -89,8 +89,8 @@ rejected as the wrong complexity for the scope.
 
 **A hard kill of the Lite server loses live table stacks and the Blind carry-over pot.** On Windows,
 `taskkill`, `schtasks /End`, `sc stop` and closing the console window give the process no chance to
-drain: balances already written to SQLite stay correct, but chips sitting on a Hold'em table and a
-carried-over Blind pot are gone. Only `--stop`, `Ctrl`+`C` / `Ctrl`+`Break`, or NSSM (which sends
+drain: balances already written to SQLite stay correct, but table stacks (Hold'em and, since the
+table limit, Blind) and a carried-over Blind pot are gone. Only `--stop`, `Ctrl`+`C` / `Ctrl`+`Break`, or NSSM (which sends
 Ctrl+C) shut down cleanly, refunding everything first.
 *Why:* there is no code path to run when no code runs. The recovery *after* such a kill is handled —
 a stale `bind-poker.run.json` is detected and overwritten, and a second instance on the same data
@@ -216,8 +216,8 @@ CPU to look busy is not a workaround and is not recommended. `deploy/oracle/READ
 ends the process with `Stop-Process`. Windows has no way to deliver the Ctrl+C the server's graceful
 path is written for, and — unlike Lite — the Normal edition has no `--stop` and no run file to ask
 one instance to shut the other down. So the same thing is lost as in a hard kill of Lite: balances
-already written to PostgreSQL stay correct, because every entry is inside a transaction, but chips
-sitting on a Hold'em table and a carried-over Blind pot are gone.
+already written to PostgreSQL stay correct, because every entry is inside a transaction, but table
+stacks (Hold'em and, since the table limit, Blind) and a carried-over Blind pot are gone.
 *Why it stays:* the kit is for an internal LAN trial, where the answer is to close the rooms first;
 building a graceful stop for it means adding a run file and a stop protocol to the Normal server for
 the sake of a test harness. Recorded as decision D3 of the free-tier deployment design.
@@ -225,6 +225,16 @@ the sake of a test harness. Recorded as decision D3 of the free-tier deployment 
 arise — `docker compose stop app` is a graceful stop, and the server refunds every committed chip and
 cashes table stacks back into balances before it exits.
 *Tracked:* `deploy/normal-windows/README.md`; the free-tier deployment design §3 and Appendix D3.
+
+**An automatic cash-out retry after a write that committed but reported an error credits twice.**
+When a `cash_out` throws, the room keeps the seat and tries again on its own — at the end of the
+next hand, at the spectator-grace removal, in the shutdown sweep — each time with a fresh row. If
+the first write had in fact committed and only the reply was lost (a connection dropped on the
+`COMMIT` acknowledgement), the stack is credited twice. The same risk already existed in Hold'em for
+a player who pressed Stand Up again after an error.
+*Why it stays:* telling "did not write" from "wrote, then failed to say so" needs an idempotency key
+on the ledger row, which neither repository has; the window is a lost commit acknowledgement.
+*Tracked:* here.
 
 **The suite has never been run against a real PostgreSQL.** Every `apps/normal-server` test runs on
 in-process **PGlite** through the same driver-neutral `AppDb` the production code uses, so the

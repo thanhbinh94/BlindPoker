@@ -7,9 +7,10 @@
     refunding every wagered point before it exits. The Normal server has no such thing — it stops
     gracefully on SIGTERM under Docker, and Windows has no way to send one to a detached process.
 
-    So this script does the only thing left: `Stop-Process`. **Hold'em stacks sitting on a table and
-    Blind B's carry-over pot are lost.** Recorded balances in Postgres are safe either way. Close the
-    rooms before running it — see README.md section 7.
+    So this script does the only thing left: `Stop-Process`. **Every stack sitting on a table — Hold'em
+    buy-ins and Blind table limits alike, up to 250.000 per Blind seat — and Blind B's carry-over pot are
+    lost.** Recorded balances in Postgres are safe either way. Close the rooms first (`/health` must say
+    `rooms:0`) — see README.md section 7.
 
 .PARAMETER PidFile
     The pid file to read. Default: `normal.pid` beside this script.
@@ -51,7 +52,7 @@ if ($target.ProcessName -ne 'node') {
     exit 1
 }
 
-Write-Output "⚠ Tắt cứng pid $recorded. Stack Hold'em đang trên bàn và pot cộng dồn của Blind B sẽ mất; số dư đã ghi trong database thì an toàn."
+Write-Output "⚠ Tắt cứng pid $recorded. Mọi chồng đang trên bàn (buy-in Hold'em và hạn mức Blind) cùng pot cộng dồn của Blind B sẽ mất; số dư đã ghi trong database thì an toàn."
 Stop-Process -Id $target.Id -Force
 $target.WaitForExit(10000) | Out-Null
 if (-not $target.HasExited) {

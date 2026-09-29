@@ -105,14 +105,21 @@ describe('Room seats and buy-ins', () => {
     expect(await h.repos.balances.get('poor')).toBe(15_000)
   })
 
-  it('blind sit-down needs the required balance and never moves points', async () => {
+  it('blind sit-down needs the required balance and brings the table limit, or all of a smaller balance', async () => {
     const h = createRoomHarness(BLIND, { players: [['h', 100_000], ['poor', 1_500]] })
     await h.room.join(h.identity('poor'), 'pw12')
     expect(await code(h.room.sitDown('poor', 0))).toBe('INSUFFICIENT_BALANCE') // needs 2 × 1000
     await h.room.sitDown('h', 0)
-    expect(h.room.players.get('h')!.stack).toBe(100_000)
-    expect(h.repos.entries).toHaveLength(0)
+    expect(h.room.players.get('h')!.stack).toBe(5_000)
+    expect(h.repos.entries.map((e) => [e.entry.playerId, e.entry.delta, e.entry.reason])).toEqual([['h', -5_000, 'buy_in']])
+    expect(h.last('h', 'BALANCE')).toEqual({ t: 'BALANCE', balance: 95_000 })
     expect(await code(h.room.sitDown('h', 2))).toBe('ILLEGAL_ACTION') // seat 2 is a bot's — and h is already seated
+
+    const g = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 0 } }, { players: [['h', 100_000], ['mid', 3_000]] })
+    await g.room.join(g.identity('mid'), 'pw12')
+    await g.room.sitDown('mid', 1)
+    expect(g.room.players.get('mid')!.stack).toBe(3_000) // less than the limit, more than a hand: all of it
+    expect(await g.repos.balances.get('mid')).toBe(0)
   })
 
   it('ready needs a seat and an OPEN room; start needs the host and two ready seats', async () => {
@@ -408,9 +415,9 @@ describe('Start with nobody but bots able to play', () => {
     const h = createRoomHarness(BLIND)
     await h.room.sitDown('h', 0)
     await h.room.setReady('h', true)
-    // The balance is re-read when the hand is dealt: the host lost their points elsewhere since sitting down.
-    const balance = await h.repos.balances.get('h')
-    await h.repos.balances.apply([{ playerId: 'h', delta: -(balance - 500), reason: 'settlement' }])
+    // Unreachable through the API since the table limit — a spent seat is stood up when its hand ends — so the stack is
+    // forced here to keep the refusal honest.
+    h.room.players.get('h')!.stack = 500
     expect(await code(h.room.startGame('h'))).toBe('NOT_ENOUGH_PLAYERS')
     expect(h.room.handActive).toBe(false)
     expect(h.room.status).toBe('OPEN')

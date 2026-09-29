@@ -1,6 +1,7 @@
 import { createDeck } from '../cards/cards.js'
 import type { Rng } from '../cards/rng.js'
 import { shuffle } from '../cards/shuffle.js'
+import { ECONOMY } from '../constants/economy.js'
 import { cancelHand, carryOverAll, clone, commit, dealCards, getPlayer, revealNext, seatsClockwiseFrom, settle } from './common.js'
 import {
   EngineError,
@@ -21,6 +22,15 @@ export interface CreateBlindInput {
  */
 export function blindRequiredStack(rules: Pick<BlindRules, 'decisionMode' | 'fixedWager'>): number {
   return rules.decisionMode === 'playOrFold' ? rules.fixedWager * 2 : rules.fixedWager
+}
+
+/**
+ * The most a Blind seat brings to the table: five wagers (spec 2026-09-29). A player with less sits down with all of
+ * it, as long as that covers `blindRequiredStack`; a seat that can no longer cover a hand is stood up and must sit
+ * down again. Takes only the field it reads, so a client can ask it of the room config it was sent.
+ */
+export function blindTableLimit(rules: Pick<BlindRules, 'fixedWager'>): number {
+  return rules.fixedWager * ECONOMY.blindTableLimitMultiplier
 }
 
 const rulesOf = (state: HandState): BlindRules => {

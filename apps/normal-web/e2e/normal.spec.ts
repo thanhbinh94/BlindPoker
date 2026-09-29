@@ -41,6 +41,11 @@ import {
 const WAGER = 1_000
 /** The ante plus the play: what a hand costs a player who does not fold. */
 const PLAY_COST = WAGER * 2
+/**
+ * The table limit (spec 2026-09-29): five wagers go from the balance to the table at sit-down, and the whole
+ * stack comes home at stand-up. A hand moves the stack only, so the balance is read after leaving.
+ */
+const LIMIT = 5 * WAGER
 
 /* ── the session ─────────────────────────────────────────────────────────────────────────────────── */
 
@@ -77,7 +82,8 @@ async function balanceWhen(page: Page, settled: (n: number) => boolean, timeoutM
 
 /**
  * This account's point transactions, newest first. One default page (20) covers everything an account
- * this young can have written — the opening credit and one settlement — and the assertions below say so.
+ * this young can have written — the opening credit, one buy-in and one cash-out — and the assertions below
+ * say so.
  */
 async function readLedger(page: Page): Promise<{ amount: number; reason: string }[]> {
   const res = await page.request.get('/api/me/ledger')
@@ -225,13 +231,13 @@ test.describe('Blind Luck Poker Normal', () => {
     const uncalled = await uncalledReturn(result)
     const returned = uncalled.who === who.displayName ? uncalled.amount : 0
     const payout = payoutOf(rows, who.displayName)
-
-    const end = await balanceWhen(page, (n) => n !== start)
     await shot(page, 'hand-result-desktop')
 
-    // Out before the five-second timer deals the next hand: the numbers above must stay the final word.
+    // Out before the five-second timer deals the next hand: the numbers above must stay the final word. Leaving
+    // is also what brings the stack home — until then the balance is the start less the table limit.
     await page.getByRole('button', { name: 'Rời phòng' }).click()
     await expect(page).toHaveURL(/#\/lobby$/)
+    const end = await balanceWhen(page, (n) => n !== start - LIMIT)
 
     // The ledger, from two independent readings: what the database now holds, and what the card told the
     // player. Playing costs the ante plus the play; anything won or handed back comes off that.
@@ -253,14 +259,17 @@ test.describe('Blind Luck Poker Normal', () => {
     expect([WAGER, PLAY_COST], 'the bot either folded after its ante or paid to play').toContain(pot + uncalled.amount - PLAY_COST)
     expect(fee, 'the table fee is 2% of the pot').toBe(Math.floor(pot * 0.02))
 
-    // The third source, and the one that would catch a settlement crediting a balance it never wrote a row
-    // for (§18.4 rests on this): the ledger. Its rows must sum to the balance the account now holds, and
-    // its one settlement row must be the move the result card described.
+    // The third source, and the one that would catch a buy-in or cash-out moving a balance without writing a row
+    // for it (§18.4 rests on this): the ledger. Its rows must sum to the balance the account now holds, and
+    // the sit-down and the leave — the only rows a Blind seat writes — must together be the move the result
+    // card described.
     const entries = await readLedger(page)
     expect(entries.reduce((sum, e) => sum + e.amount, 0), 'the ledger sums to the balance').toBe(end)
-    const settlements = entries.filter((e) => e.reason === 'settlement')
-    expect(settlements, 'one hand writes exactly one settlement row').toHaveLength(1)
-    expect(settlements[0]!.amount, 'and it is the move the result card described').toBe(payout + returned - PLAY_COST)
+    const buyIns = entries.filter((e) => e.reason === 'buy_in')
+    const cashOuts = entries.filter((e) => e.reason === 'cash_out')
+    expect(buyIns.map((e) => e.amount), 'sitting down took the table limit').toEqual([-LIMIT])
+    expect(cashOuts, 'leaving took the stack home, once').toHaveLength(1)
+    expect(buyIns[0]!.amount + cashOuts[0]!.amount, 'and together they are the move the result card described').toBe(payout + returned - PLAY_COST)
 
     // --- 5. the hand reached the progression ---------------------------------------------------------
     expect(await blindHandsPlayed(page, 1), 'the settlement wrote the blind hand counter').toBe(1)

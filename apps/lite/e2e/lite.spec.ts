@@ -20,6 +20,11 @@ mkdirSync(SHOTS, { recursive: true })
 const WAGER = 1_000
 /** `blindRequiredStack`: the ante plus the play, which is what a hand costs a player who does not fold. */
 const PLAY_COST = WAGER * 2
+/**
+ * The table limit (spec 2026-09-29): five wagers go from the balance to the table at sit-down, and the whole stack
+ * comes home at stand-up. A hand moves the stack only, so the balances are read after leaving.
+ */
+const LIMIT = 5 * WAGER
 const TOKEN_KEY = 'bp.lite.token'
 
 /** Display names must be unique for the life of the server, and this file creates several per run. */
@@ -217,16 +222,16 @@ test.describe('Blind Luck Poker Lite', () => {
     const fee = (await feeLine.count()) === 0 ? 0 : parsePoints(await feeLine.innerText())
     const uncalled = await uncalledReturn(result)
     const returnedTo = (who: string): number => (uncalled.who === who ? uncalled.amount : 0)
-
-    // The folder's cost is fixed by the rules, so it is the reliable signal that the batch has been written.
-    const endB = await balanceWhen(pageB, tokenB, (n) => n !== startB)
-    const endA = await readBalance(pageA, tokenA)
     await shot(pageA, 'hand-result-desktop')
 
-    // Out before the five-second timer deals the next hand: the numbers above must stay the final word.
+    // Out before the five-second timer deals the next hand: the numbers above must stay the final word. Leaving is
+    // also what brings each stack home — until then a balance is the start less the table limit.
     await pageB.getByRole('button', { name: 'Rời phòng' }).click()
     await pageA.getByRole('button', { name: 'Rời phòng' }).click()
+    await expect(pageB).toHaveURL(/#\/lobby$/)
     await expect(pageA).toHaveURL(/#\/lobby$/)
+    const endB = await balanceWhen(pageB, tokenB, (n) => n !== startB - LIMIT)
+    const endA = await balanceWhen(pageA, tokenA, (n) => n !== startA - LIMIT)
 
     const deltaA = endA - startA
     const deltaB = endB - startB

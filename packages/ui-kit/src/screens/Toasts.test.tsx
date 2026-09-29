@@ -144,6 +144,34 @@ describe('Toasts', () => {
     expect(screen.getByRole('status')).not.toHaveTextContent('undefined')
   })
 
+  it('tells a player whose table limit is spent what came home, and what to do', () => {
+    wrap(
+      <Toasts
+        error={null}
+        notifications={[{ id: 1, kind: 'TABLE_LIMIT_SPENT', payload: { roomId: 'r', limit: 5_000, amount: 1_500 }, at: 0 }]}
+        onClearError={vi.fn()}
+        onDismiss={vi.fn()}
+        lang="en"
+      />,
+    )
+    expect(
+      screen.getByText('You have used up your table limit here — the 1,500 left went back to your balance. Pick an empty seat to play again.'),
+    ).toBeInTheDocument()
+  })
+
+  it('leaves out the "went back" part when nothing was left', () => {
+    wrap(
+      <Toasts
+        error={null}
+        notifications={[{ id: 1, kind: 'TABLE_LIMIT_SPENT', payload: { roomId: 'r', limit: 5_000, amount: 0 }, at: 0 }]}
+        onClearError={vi.fn()}
+        onDismiss={vi.fn()}
+        lang="en"
+      />,
+    )
+    expect(screen.getByText('You have used up your table limit here. Pick an empty seat to play again.')).toBeInTheDocument()
+  })
+
   it('falls back to a generic line for a notification kind it does not know', () => {
     wrap(
       <Toasts

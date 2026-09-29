@@ -1,5 +1,5 @@
 import {
-  EngineError, blindRequiredStack, engineErrorToErrorCode, filterEvent, nextButton, playerView, roomConfigToRuleset,
+  EngineError, blindRequiredStack, blindTableLimit, engineErrorToErrorCode, filterEvent, nextButton, playerView, roomConfigToRuleset,
   type GameEvent, type PlayerAction, type PlayerIdentity, type RoomConfig, type RoomEvent, type RoomPlayerView,
   type RoomSummary, type RoomView, type Ruleset, type SeatStatus, type ServerMessage,
 } from '@bp/core'
@@ -47,6 +47,12 @@ export class Room {
   private nextHandTimer: TimerHandle | null = null
   private closeTimer: TimerHandle | null = null
   private carryOverReleaseTimer: TimerHandle | null = null
+  /**
+   * Humans stood up by `standUpSpent` while a pot was carried over: their antes are in it, so a release still pays
+   * them as if they were seated (spec §8.4). A claim ends when that pot goes into a new hand, when it is released, or
+   * when the claimant leaves the room.
+   */
+  private readonly carryOverClaimants = new Set<string>()
   private readonly playerTimers = new Map<string, TimerHandle>()
   private turnStartSeq = 0
   /**
@@ -65,12 +71,13 @@ export class Room {
     this.rules = roomConfigToRuleset(init.config)
     this.hostPlayerId = init.host.playerId
     this.addPlayer(init.host)
-    if (init.config.mode === 'blind') {
-      const count = init.config.blind?.botCount ?? 0
-      for (let i = 0; i < count; i++) {
+    const blind = init.config.blind
+    if (init.config.mode === 'blind' && blind !== undefined) {
+      for (let i = 0; i < blind.botCount; i++) {
         const bot = this.addPlayer({ playerId: `bot:${init.roomId}:${i}`, displayName: `Bot ${i + 1}`, isBot: true })
         bot.seat = init.config.maxPlayers - 1 - i
-        bot.stack = init.deps.options.botStartingBalance
+        // A virtual table limit, like everyone else's, topped back up in `startHand` (spec 2026-09-29 §4.7).
+        bot.stack = blindTableLimit(blind)
         bot.ready = true
       }
     }
@@ -169,7 +176,7 @@ export class Room {
     })
   }
 
-  /** Re-reads a player's balance and pushes `BALANCE` (Blind: also re-mirrors their stack). Queued. */
+  /** Re-reads a player's balance and pushes `BALANCE`. Queued, so it lands after anything already in the room's queue. */
   refreshBalance(playerId: string): Promise<void> {
     return this.enqueue(() => this.pushBalance(playerId))
   }
@@ -217,29 +224,32 @@ export class Room {
       if (!Number.isInteger(seat) || seat < 0 || seat >= this.config.maxPlayers) throw new RoomError('ILLEGAL_ACTION', 'seat out of range')
       if (p.seat !== null) throw new RoomError('ILLEGAL_ACTION', 'already seated')
       if (this.seatPlayer(seat)) throw new RoomError('SEAT_TAKEN')
+      // Both modes bring a table stack out of the balance (spec 2026-09-29): Hold'em the buy-in the player chose, Blind
+      // the table limit — or the whole balance when that is less, as long as it covers one hand.
+      let amount: number
       if (this.rules.mode === 'holdem') {
         const bb = this.rules.bigBlind
         const min = (this.config.holdem?.minBuyInBB ?? 0) * bb
         const max = (this.config.holdem?.maxBuyInBB ?? 0) * bb
         if (buyIn === undefined || !Number.isInteger(buyIn) || buyIn < min || buyIn > max) throw new RoomError('INVALID_AMOUNT', `buy-in must be ${min}–${max}`)
-        try {
-          await this.deps.repos.balances.apply([{ playerId, delta: -buyIn, reason: 'buy_in', refId: this.roomId }])
-        } catch (err) {
-          if (err instanceof InsufficientBalanceError) throw new RoomError('INSUFFICIENT_BALANCE')
-          throw err
-        }
-        if (this.seatPlayer(seat)) {
-          // lost the race while awaiting: refund
-          await this.deps.repos.balances.apply([{ playerId, delta: buyIn, reason: 'refund', refId: this.roomId }])
-          throw new RoomError('SEAT_TAKEN')
-        }
-        p.stack = buyIn
+        amount = buyIn
       } else {
         const balance = await this.deps.repos.balances.get(playerId)
         if (balance < blindRequiredStack(this.rules)) throw new RoomError('INSUFFICIENT_BALANCE')
-        if (this.seatPlayer(seat)) throw new RoomError('SEAT_TAKEN')
-        p.stack = balance
+        amount = Math.min(balance, blindTableLimit(this.rules))
       }
+      try {
+        await this.deps.repos.balances.apply([{ playerId, delta: -amount, reason: 'buy_in', refId: this.roomId }])
+      } catch (err) {
+        if (err instanceof InsufficientBalanceError) throw new RoomError('INSUFFICIENT_BALANCE')
+        throw err
+      }
+      if (this.seatPlayer(seat)) {
+        // lost the race while awaiting: refund
+        await this.deps.repos.balances.apply([{ playerId, delta: amount, reason: 'refund', refId: this.roomId }])
+        throw new RoomError('SEAT_TAKEN')
+      }
+      p.stack = amount
       p.seat = seat
       p.ready = false
       p.sittingOut = false
@@ -248,6 +258,8 @@ export class Room {
       p.consecutiveTimeouts = 0
       this.broadcastRoomEvent({ type: 'PLAYER_SAT', playerId, seat, stack: p.stack })
       this.changed()
+      // The balance just moved to the table: the player's own bar must say so now, not at the next stand-up.
+      await this.pushBalance(playerId)
     })
   }
 
@@ -366,16 +378,32 @@ export class Room {
       if (this.inCurrentHand(p)) {
         p.standAfterHand = true
         this.runner!.markAutoFold(p.seat)
-      } else await this.standUpNow(p)
+      } else {
+        // This runs from a timer, where a rejection would vanish without a word and skip the grace timer below. A
+        // cash-out that cannot write keeps the seat but takes it out of the deal (`standAfterHand`): the stand-up is
+        // retried when the next hand ends, and the removal below tries again at the latest.
+        try {
+          await this.standUpNow(p)
+        } catch (err) {
+          p.standAfterHand = true
+          this.deps.log.error('reconnect-expiry stand-up failed', { roomId: this.roomId, playerId, stack: p.stack, err: String(err) })
+        }
+      }
     }
-    this.setPlayerTimer(playerId, this.deps.options.spectatorGraceMs, () => {
+    this.setPlayerTimer(playerId, this.deps.options.spectatorGraceMs, async () => {
       const still = this.players.get(playerId)
       if (!still || still.connected) return
       if (this.inCurrentHand(still)) {
         still.leaveAfterHand = true
         return
       }
-      return this.removePlayer(still, 'timeout')
+      try {
+        await this.removePlayer(still, 'timeout')
+      } catch (err) {
+        // Same reason: logged, and left to the end of the next hand to retry.
+        still.leaveAfterHand = true
+        this.deps.log.error('spectator-grace removal failed', { roomId: this.roomId, playerId, stack: still.stack, err: String(err) })
+      }
     })
   }
 
@@ -390,7 +418,15 @@ export class Room {
       }
       this.cancelTimers()
       await this.releaseCarryOver()
-      for (const p of this.seatedHumans()) await this.standUpNow(p)
+      for (const p of this.seatedHumans()) {
+        // One player's ledger failure must not strand everyone after them, nor keep the room from closing (and the
+        // server from closing its sockets): their stack is logged for an operator to reconcile, and the room goes on.
+        try {
+          await this.standUpNow(p)
+        } catch (err) {
+          this.deps.log.error('shutdown cash-out failed', { roomId: this.roomId, playerId: p.identity.playerId, stack: p.stack, err: String(err) })
+        }
+      }
       this.status = 'CLOSED'
       this.broadcastRoomEvent({ type: 'ROOM_CLOSED', reason })
       this.onClosed?.(this, reason)
@@ -410,32 +446,37 @@ export class Room {
   }
 
   /**
-   * Spec §8.4. Returns a carry-over pot to the table: an equal share to every seated human, with
-   * the indivisible remainder (or the whole pot when nobody is seated) recorded as a `carry_over`
-   * sink so `Σ balances + Σ sinks` stays constant. Called from the release timer, `close()` and
-   * `shutdown()`; always runs on the room queue.
+   * Spec §8.4. Returns a carry-over pot to the table: an equal share to every seated human and to every
+   * claimant still in the room (a seat stood up for its spent limit while this pot was carried — each
+   * person counted once), with the indivisible remainder (or the whole pot when there is nobody to pay)
+   * recorded as a `carry_over` sink so `Σ balances + Σ sinks` stays constant. Called from the release
+   * timer, `close()` and `shutdown()`; always runs on the room queue.
    */
   private async releaseCarryOver(): Promise<void> {
     this.carryOverReleaseTimer?.cancel()
     this.carryOverReleaseTimer = null
     const pot = this.carryOverPot
-    if (pot <= 0) return
-    const humans = this.seatedHumans()
-    const share = humans.length === 0 ? 0 : Math.floor(pot / humans.length)
-    const remainder = pot - share * humans.length
+    if (pot <= 0) {
+      this.carryOverClaimants.clear()
+      return
+    }
+    const recipients = this.humans().filter((p) => p.seat !== null || this.carryOverClaimants.has(p.identity.playerId))
+    const share = recipients.length === 0 ? 0 : Math.floor(pot / recipients.length)
+    const remainder = pot - share * recipients.length
     const entries: BalanceEntry[] = share > 0
-      ? humans.map((p) => ({ playerId: p.identity.playerId, delta: share, reason: 'refund' as const, refId: this.roomId }))
+      ? recipients.map((p) => ({ playerId: p.identity.playerId, delta: share, reason: 'refund' as const, refId: this.roomId }))
       : []
     this.carryOverPot = 0
     try {
       await this.deps.repos.balances.apply(entries, { refId: this.roomId, fee: remainder, kind: 'carry_over' })
     } catch (err) {
-      this.carryOverPot = pot // nothing was written: keep the pot so a later attempt can release it
+      this.carryOverPot = pot // nothing was written: keep the pot (and its claims) so a later attempt can release it
       this.deps.log.error('carry-over release failed', { roomId: this.roomId, pot, err: String(err) })
       return
     }
-    this.deps.log.info('carry-over released', { roomId: this.roomId, pot, recipients: humans.length, sink: remainder })
-    for (const p of humans) await this.pushBalance(p.identity.playerId)
+    this.carryOverClaimants.clear()
+    this.deps.log.info('carry-over released', { roomId: this.roomId, pot, recipients: recipients.length, sink: remainder })
+    for (const p of recipients) await this.pushBalance(p.identity.playerId)
     // status is unchanged; the event exists so every view refreshes `carryOverPot`.
     this.broadcastRoomEvent({ type: 'ROOM_STATUS', status: this.status === 'IN_GAME' ? 'IN_GAME' : 'OPEN', nextHandAt: this.nextHandAt })
   }
@@ -458,15 +499,14 @@ export class Room {
     this.carryOverReleaseTimer = null
     const required = this.requiredStack()
     if (this.rules.mode === 'blind') {
-      for (const p of this.seated()) {
-        if (p.identity.isBot) {
-          if (p.stack < required) p.stack = this.deps.options.botStartingBalance
-        } else p.stack = await this.deps.repos.balances.get(p.identity.playerId)
-      }
+      // Humans play from the stack they brought; only bots are topped up — back to the limit, never the ledger.
+      const limit = blindTableLimit(this.rules)
+      for (const p of this.seated()) if (p.identity.isBot && p.stack < required) p.stack = limit
     }
     // A seated human who cannot cover the requirement sits the hand out rather than silently
-    // vanishing from the table: playerView reports SITTING_OUT until they can afford to play again.
-    // A player who *asked* to sit out stays out whatever their stack says.
+    // vanishing from the table: playerView reports SITTING_OUT. Since the table limit (spec 2026-09-29)
+    // such a seat only exists when its stand-up in `onHandComplete` could not write, and it is retried
+    // when this hand ends. A player who *asked* to sit out stays out whatever their stack says.
     for (const p of this.seated()) if (!p.identity.isBot) this.setSittingOut(p, p.sitOutRequested || p.stack < required)
     const eligible = this.eligibleForHand()
     if (eligible.length < 2 || eligible.every((p) => p.identity.isBot)) {
@@ -508,6 +548,7 @@ export class Room {
     )
     this.runner = runner
     this.carryOverPot = 0
+    this.carryOverClaimants.clear() // the pot is this hand's now: whoever wins it takes it
     this.nextHandAt = null
     this.status = 'IN_GAME'
     this.broadcastRoomEvent({ type: 'ROOM_STATUS', status: 'IN_GAME', nextHandAt: null })
@@ -536,7 +577,6 @@ export class Room {
     if (!runner || !runner.isComplete || runner.state.result === null) return
     const state = runner.state
     const result = state.result!
-    const entries: BalanceEntry[] = []
     const summary: HandSummary = {
       handId: state.handId,
       roomId: this.roomId,
@@ -553,21 +593,17 @@ export class Room {
       const before = runner.stacksBefore.get(hp.seat) ?? hp.stack
       const net = hp.stack - before
       if (rp) rp.stack = hp.stack
-      if (rp && !rp.identity.isBot && this.rules.mode === 'blind' && net !== 0) entries.push({ playerId: rp.identity.playerId, delta: net, reason: 'settlement', refId: state.handId })
       summary.players.push({ playerId: hp.playerId, seat: hp.seat, isBot: hp.isBot, net, won: net > 0, bestCategory: result.showdown?.find((h) => h.seat === hp.seat)?.category ?? null })
     }
     this.carryOverPot = result.carryOverOut
     this.runner = null
     this.deadlineAt = null
-    // Blind settles player nets; Hold'em moves nothing (chips are already on the table) but both
-    // modes must record the table fee as a sink, so the call also happens for an empty batch.
-    if (entries.length > 0 || result.fee > 0) {
+    // Both modes move chips on the table (spec 2026-09-29), so the hand's only ledger row is the fee sink.
+    if (result.fee > 0) {
       try {
-        await this.deps.repos.balances.apply(entries, { refId: state.handId, fee: result.fee, kind: 'table_fee' })
-        for (const e of entries) await this.pushBalance(e.playerId)
+        await this.deps.repos.balances.apply([], { refId: state.handId, fee: result.fee, kind: 'table_fee' })
       } catch (err) {
         // The hand is still recorded and still emitted, flagged, so an operator can reconcile it.
-        // Nothing is pushed to clients: their balances did not move.
         summary.settlementError = String(err)
         this.deps.log.error('settlement failed', { roomId: this.roomId, handId: state.handId, err: String(err) })
       }
@@ -579,13 +615,21 @@ export class Room {
     }
     this.deps.onDomainEvent?.({ type: 'HAND_SETTLED', summary })
 
+    const required = this.requiredStack()
     for (const p of [...this.players.values()]) {
-      if (!p.identity.isBot && p.consecutiveTimeouts >= this.deps.options.consecutiveTimeoutsToStand) {
-        p.standAfterHand = true
-        p.consecutiveTimeouts = 0
+      // One player's ledger failure must not take the next deal down with it: logged, and retried after the next hand
+      // (a short seat sits that hand out in `startHand`).
+      try {
+        if (!p.identity.isBot && p.consecutiveTimeouts >= this.deps.options.consecutiveTimeoutsToStand) {
+          p.standAfterHand = true
+          p.consecutiveTimeouts = 0
+        }
+        if (p.leaveAfterHand) await this.removePlayer(p, 'left')
+        else if (p.standAfterHand) await this.standUpNow(p)
+        else if (p.seat !== null && !p.identity.isBot && p.stack < required) await this.standUpSpent(p)
+      } catch (err) {
+        this.deps.log.error('stand-up after hand failed', { roomId: this.roomId, playerId: p.identity.playerId, err: String(err) })
       }
-      if (p.leaveAfterHand) await this.removePlayer(p, 'left')
-      else if (p.standAfterHand || (this.rules.mode === 'holdem' && p.seat !== null && p.stack === 0)) await this.standUpNow(p)
     }
     if (this.status === 'CLOSED') return
     this.nextHandAt = this.deps.clock.now() + this.deps.options.handIntervalMs
@@ -708,10 +752,31 @@ export class Room {
     return view
   }
 
+  /**
+   * Spec 2026-09-29 (table limit): a seat whose stack can no longer cover a hand goes back to the rail when the hand
+   * ends — whatever is left goes home — and a Blind player is told why, so the empty seat reads as "your limit is
+   * spent, sit again" rather than a glitch. Hold'em's busted seat (stack 0) takes the same path without the notice.
+   *
+   * Their antes may be sitting in a carried-over pot (`onHandComplete` has already set `carryOverPot` to this hand's
+   * `carryOverOut`), so they keep a claim on it while they stay in the room: a release pays them as if still seated.
+   */
+  private async standUpSpent(p: RoomPlayer): Promise<void> {
+    const returned = p.stack
+    await this.standUpNow(p)
+    if (this.carryOverPot > 0) this.carryOverClaimants.add(p.identity.playerId)
+    if (this.rules.mode === 'blind' && p.connected) {
+      this.deps.outbox.send(p.identity.playerId, {
+        t: 'NOTIFICATION',
+        kind: 'TABLE_LIMIT_SPENT',
+        payload: { roomId: this.roomId, limit: blindTableLimit(this.rules), amount: returned },
+      })
+    }
+  }
+
   private async standUpNow(p: RoomPlayer): Promise<void> {
     if (p.seat === null) return
     const seat = p.seat
-    if (this.rules.mode === 'holdem' && !p.identity.isBot && p.stack > 0) {
+    if (!p.identity.isBot && p.stack > 0) {
       await this.deps.repos.balances.apply([{ playerId: p.identity.playerId, delta: p.stack, reason: 'cash_out', refId: this.roomId }])
       await this.pushBalance(p.identity.playerId)
     }
@@ -734,6 +799,7 @@ export class Room {
     // the room screen before the hand ended — was dropped in silence and left looking at a frozen table.
     this.broadcastRoomEvent({ type: 'PLAYER_LEFT', playerId: p.identity.playerId })
     this.players.delete(p.identity.playerId)
+    this.carryOverClaimants.delete(p.identity.playerId) // a claim on a carried-over pot lasts only while in the room
     this.onMembership?.(p.identity.playerId, false)
     this.clearPlayerTimer(p.identity.playerId)
     if (p.identity.playerId === this.hostPlayerId) this.transferHost()
@@ -754,7 +820,6 @@ export class Room {
     if (!p || !p.connected) return
     try {
       const balance = await this.deps.repos.balances.get(playerId)
-      if (this.rules.mode === 'blind' && p.seat !== null) p.stack = balance
       this.deps.outbox.send(playerId, { t: 'BALANCE', balance })
     } catch (err) {
       this.deps.log.warn('balance lookup failed', { playerId, err: String(err) })

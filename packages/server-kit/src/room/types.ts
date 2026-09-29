@@ -7,7 +7,7 @@ import type { Repositories } from '../repositories.js'
 export interface RoomPlayer {
   identity: PlayerIdentity
   seat: number | null
-  /** Hold'em: chips on the table (already deducted from the balance). Blind: last known balance (bots: virtual balance). */
+  /** Points on the table, already deducted from the balance (both modes, spec 2026-09-29). Bots: a virtual stack. */
   stack: number
   ready: boolean
   connected: boolean
@@ -20,7 +20,7 @@ export interface RoomPlayer {
   handsSatOut: number
   consecutiveTimeouts: number
   disconnectDeadline: number | null
-  /** Stand up (Hold'em: cash out) as soon as the current hand ends. */
+  /** Stand up (and cash out) as soon as the current hand ends. */
   standAfterHand: boolean
   /** Remove from the room as soon as the current hand ends (implies standAfterHand). */
   leaveAfterHand: boolean
@@ -34,12 +34,14 @@ export interface RoomOptions {
   reconnectWindowMs: number
   spectatorGraceMs: number
   emptyRoomCloseMs: number
-  /** How long a room may sit unable to start a hand before its carry-over pot is released to the seated humans. */
+  /**
+   * How long a room may sit unable to start a hand before its carry-over pot is released to the seated humans (and to
+   * the ones stood up for a spent table limit while it was carried, if still in the room).
+   */
   carryOverReleaseMs: number
   consecutiveTimeoutsToStand: number
   /** Hands started without a player who asked to sit out before the seat is taken back (spec §11.3). */
   handsSatOutToStand: number
-  botStartingBalance: number
   /** Test hook: overrides `config.turnTimerSec * 1000` when set. */
   turnTimerMsOverride?: number
 }
@@ -54,7 +56,6 @@ export const DEFAULT_ROOM_OPTIONS: RoomOptions = {
   carryOverReleaseMs: 60_000,
   consecutiveTimeoutsToStand: 3,
   handsSatOutToStand: 5,
-  botStartingBalance: 1_000_000,
 }
 
 export interface Outbox {

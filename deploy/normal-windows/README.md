@@ -195,11 +195,13 @@ Sau đó, các máy khác mở `http://<IP-LAN>:8080` — đúng địa chỉ m�
 SIGTERM (trong Docker), còn Windows không gửi được tín hiệu đó tới một tiến trình chạy nền, và bản
 Normal cũng không có `--stop` như bản Lite.
 
-Hậu quả cụ thể: **stack Hold'em đang nằm trên bàn và pot cộng dồn của Blind B sẽ mất**. Số dư đã
-ghi vào database thì luôn an toàn.
+Hậu quả cụ thể: **mọi chồng đang nằm trên bàn — buy-in Hold'em và cả hạn mức bàn Blind (tới 250.000
+mỗi ghế ở mức cược 50.000) — cùng pot cộng dồn của Blind B sẽ mất**. Số dư đã ghi vào database thì
+luôn an toàn.
 
-Vì vậy, quy tắc vận hành: **kết thúc hết các ván đang chơi và bảo mọi người rời bàn trước khi chạy
-`stop.ps1`.**
+Vì vậy, quy tắc vận hành: **kết thúc hết các ván đang chơi và bảo mọi người rời phòng trước khi chạy
+`stop.ps1`** — rời phòng là lúc chồng trên bàn về lại số dư. Kiểm `http://localhost:8080/health` báo
+`"rooms":0` (phòng trống tự đóng sau khoảng một phút) rồi mới dừng.
 
 `stop.ps1` đọc pid trong `normal.pid`, kiểm tra pid đó đúng là một tiến trình `node` (Windows hay
 cấp lại pid cũ cho chương trình khác — script từ chối giết nhầm), rồi `Stop-Process -Force` và xoá

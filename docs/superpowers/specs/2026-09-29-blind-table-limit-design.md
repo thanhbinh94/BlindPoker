@@ -55,14 +55,18 @@ giới hạn; thua hết khoản đó thì bị mời đứng dậy và phải t
    - ghế thành trống (`PLAYER_STOOD`), người chơi **ở lại phòng** làm người xem;
    - server gửi riêng người đó `NOTIFICATION { kind: 'TABLE_LIMIT_SPENT', payload: { roomId, limit: L, amount } }`
      (`amount` = số vừa trả về số dư, có thể 0 — tên `amount` để khớp cách `Toasts` đọc số từ payload);
-   - không tự ngồi lại, không thời gian chờ; bấm ghế lần nữa là một lần vào bàn mới theo mục 1.
+   - không tự ngồi lại, không thời gian chờ; bấm ghế lần nữa là một lần vào bàn mới theo mục 1;
+   - nếu lúc đó phòng đang giữ pot cộng dồn, người đó giữ quyền chia pot ấy như một người đang ngồi ghế, miễn còn trong
+     phòng (mục 6).
    Với Hold'em điều kiện này trùng luật cũ "chồng = 0 thì đứng dậy" (R = 1); Hold'em không nhận thông báo mới.
 4. **Mọi cách rời ghế trả toàn bộ chồng về số dư** (`cash_out`), cho cả hai chế độ: Đứng dậy, Rời phòng, bị đuổi, quá
    hạn kết nối lại, ngồi ngoài đủ `handsSatOutToStand` ván, đóng phòng, server tắt đúng cách. "Ngồi ngoài" (`SIT_OUT`)
    giữ ghế và chồng.
 5. **Điều kiện vào ván** (§8.2 mới): ghế đủ điều kiện khi `chồng ≥ R` (không còn đọc số dư). Nhờ mục 3, một ghế người
    thật giữa các ván luôn có `chồng ≥ R`.
-6. **Pot cộng dồn** (§8.4) khi giải phóng vẫn chia vào **số dư** (không vào chồng), như hiện nay.
+6. **Pot cộng dồn** (§8.4) khi giải phóng vẫn chia vào **số dư** (không vào chồng), như hiện nay. Người nhận là mọi
+   người thật đang ngồi ghế cộng những người bị mời đứng dậy theo mục 3 trong lúc pot đó đang cộng dồn mà vẫn còn trong
+   phòng (mỗi người một phần); quyền ấy mất khi pot vào một ván mới, khi pot được giải phóng, hoặc khi người đó rời phòng.
 7. **Bot.** Chồng ảo = L khi tạo phòng; trước mỗi ván, bot có `chồng < R` được nạp lại về L. Không đụng kinh tế người
    chơi. Tùy chọn `botStartingBalance` (1.000.000) của Room bị bỏ: chỉ phòng Blind có bot, và bot giờ luôn dùng L.
 8. **Hiển thị.** Ghế người thật hiện chồng trên bàn (không còn là số dư thật); bot vẫn ẩn số như hiện nay.
@@ -165,4 +169,8 @@ trước khi vào lại; tính điểm trên bàn vào điều kiện cứu tr�
 ## 11. Triển khai
 
 Khởi động lại host đóng mọi phòng và trả mọi chồng/pot (§16.7), nên không có ghế Blind nào vắt qua lúc đổi luật. Sau
-merge: `pnpm build:normal`, kiểm `/health` `rooms:0`, `stop.ps1`, `run.ps1 -NoMigrate`; `pnpm build:lite`.
+merge: `pnpm build:normal`, kiểm `/health` `rooms:0`, `stop.ps1`, `run.ps1 -NoMigrate`; `pnpm build:lite`. Trên máy
+host Windows LAN, `stop.ps1` là tắt cứng (không có đường drain), nên chính bước kiểm `/health` `rooms:0` trước khi dừng
+mới là thứ bảo vệ chồng trên bàn — giờ gồm cả hạn mức Blind, tới 250.000 mỗi ghế: phòng còn người ngồi ghế phải được
+đóng trước (mọi người rời phòng — mỗi lần rời trả chồng về số dư — và phòng trống tự đóng, giải phóng pot cộng dồn),
+rồi mới chạy `stop.ps1`.

@@ -804,6 +804,9 @@ describe('a whole hand between two registered players', () => {
     // `decisionMode: 'none'` means nobody acts: the hand deals, reveals and settles on its own.
     const complete = await a.next('GAME_EVENT', (m) => m.event.type === 'HAND_COMPLETE', 20_000)
     expect(complete.event.type).toBe('HAND_COMPLETE')
+    // Spec 2026-09-29 (table limit): the stacks go home when the players stand; only then do the balances show the hand.
+    expect(await a.request({ t: 'STAND_UP', reqId: 'stand-a' })).toMatchObject({ t: 'ACK' })
+    expect(await b.request({ t: 'STAND_UP', reqId: 'stand-b' })).toMatchObject({ t: 'ACK' })
 
     /**
      * The hand is recorded, and every point the engine took as a fee is a sink row — which is what
@@ -822,12 +825,12 @@ describe('a whole hand between two registered players', () => {
       expect(sinks.length).toBeGreaterThan(0)
       expect(Number(sinks[0]?.amount)).toBeGreaterThan(0)
 
-      // The settlement conserves points exactly: what the seats gained and lost, plus the fee that
-      // left for the sink, is zero. Stated over the settlement rows rather than over the balances
+      // The table conserves points exactly: what the seats brought, what they took home and the fee
+      // that left for the sink cancel to zero. Stated over those rows rather than over the balances
       // because the winner may also have unlocked an achievement on the way — a real credit, and
       // one whose size depends on which hand they happened to show down.
       const settled = rowsOf<{ amount: string | number }>(
-        await db.execute(sql`select amount from point_transactions where reason in ('settlement', 'table_fee')`),
+        await db.execute(sql`select amount from point_transactions where reason in ('buy_in', 'cash_out', 'table_fee')`),
       )
       expect(settled.reduce((sum, row) => sum + Number(row.amount), 0)).toBe(0)
 

@@ -46,10 +46,11 @@ await server.balanceChanged(playerId) // after crediting points elsewhere
   player's current connection. A push, not a mailbox: if the player is
   offline it does nothing.
 - **`balanceChanged(playerId)`** — re-reads the balance and pushes
-  `BALANCE`. If the player is seated in a Blind room it goes through the
-  room's queue (`Room.refreshBalance`) so the seat's mirrored `stack` is
-  updated too — in Blind mode a seat *is* the player's balance, and
-  without this it would keep showing the stale value until the next hand.
+  `BALANCE`. If the player is seated it goes through the room's queue
+  (`Room.refreshBalance`) so the push lands in order with the room's own.
+  It never touches a table stack: since the table limit (spec 2026-09-29)
+  a Blind seat, like a Hold'em one, plays from points it brought to the
+  table (`buy_in` at `SIT_DOWN`, `cash_out` when it stands).
 - **`renameIdentity(playerId, displayName)`** — after a successful rename,
   replaces the identity on every live connection of that player, so the
   next room they create or join seats them under the new name. A room they
@@ -84,8 +85,8 @@ interface GameHistoryRepository { recordHand(summary: HandSummary): Promise<void
 `BalanceRepository.apply` is the one atomicity contract the edition must
 honor: all entries in the batch commit or none do, and it must reject
 (throw `InsufficientBalanceError`) if any player's resulting balance would
-go negative, before writing anything. `Room` relies on this to settle a
-hand's net results, buy-ins, cash-outs, and carry-over refunds as a single
+go negative, before writing anything. `Room` relies on this to write
+buy-ins, cash-outs, refunds and carry-over releases each as a single
 unit — a partial write would let points leak or be created.
 
 Two further rules the implementation must honor:
@@ -101,10 +102,10 @@ Two further rules the implementation must honor:
   repositories push the meta onto `repos.sinks`. `meta.kind` is
   `'table_fee'` (the rake of a settled hand, `refId` = handId) or
   `'carry_over'` (the indivisible remainder of a released carry-over pot,
-  or the whole pot when nobody was seated, `refId` = roomId). Hold'em
-  settles no player entries at all, so its fee arrives as
-  `apply([], { kind: 'table_fee', ... })` — an empty batch that exists
-  purely to write the sink row.
+  or the whole pot when nobody was seated, `refId` = roomId). A hand
+  settles no player entries in either mode (chips move on the table), so
+  its fee arrives as `apply([], { kind: 'table_fee', ... })` — an empty
+  batch that exists purely to write the sink row.
 
 Sink rows are what make the money invariant checkable:
 `Σ player balances + Σ sinks (+ live table stacks and carry-over pots) `
@@ -126,6 +127,24 @@ IN_GAME ──(hand loop: HandRunner runs a hand to completion)──> onHandCom
 IN_GAME/OPEN ──(shutdown() or last human leaves + emptyRoomCloseMs)──> CLOSED
 ```
 
+### Table stacks and the Blind table limit (spec 2026-09-29)
+
+A seat plays from a stack taken out of the balance at `SIT_DOWN` (a
+`buy_in` row, `refId` = roomId), in both modes: Hold'em brings the buy-in
+the player chose, Blind brings the table limit `blindTableLimit(rules)`
+(5 × the wager) — or the whole balance when that is less, as long as it
+covers one hand (`blindRequiredStack`; below that the answer is
+`INSUFFICIENT_BALANCE`). The room pushes `BALANCE` right after the buy-in.
+Hands move only table stacks; every way off a seat (stand, leave, kick,
+reconnect expiry, sat out too long, shutdown) writes the stack back as a
+`cash_out`. When a hand ends, a human seat whose stack can no longer cover
+a hand is stood up the same way and stays in the room to watch; in Blind
+the player alone is sent `NOTIFICATION { kind: 'TABLE_LIMIT_SPENT',
+payload: { roomId, limit, amount } }`, where `amount` is what went back to
+the balance (possibly 0). Sitting again is a fresh buy-in. Bots play from a
+virtual stack of the limit, topped back up before a hand when it falls
+short, and never touch the ledger.
+
 ### Carry-over pots (spec §8.4)
 
 When every player folds a Blind hand the pot is not paid out: it carries
@@ -134,9 +153,15 @@ whenever the table stops being able to use it — when the room has been
 unable to start a hand for `carryOverReleaseMs` (the timer is armed each
 time the room falls back to `OPEN` and cancelled as soon as a hand
 starts), when the room closes, and on `shutdown()`. The pot is split
-evenly among the seated humans (regardless of stack); the indivisible
-remainder — or the whole pot, when nobody is seated — is recorded as a
-`carry_over` sink row rather than being handed to an arbitrary player.
+evenly among the seated humans (regardless of stack) and the pot's
+claimants still in the room, each person counted once; the indivisible
+remainder — or the whole pot, when there is nobody to pay — is recorded
+as a `carry_over` sink row rather than being handed to an arbitrary
+player. A claimant is a human `standUpSpent` stood up for a spent table
+limit while the pot was carried: their antes are in it, so they are paid
+as if still seated. The claim ends when the pot goes into a new hand
+(`startHand` takes it as `carryOverIn`), when it is released, or when
+the claimant leaves the room.
 
 ### Sitting out (spec §11.3)
 
@@ -155,8 +180,10 @@ Both answer `ACK`, or `ERROR{NOT_SEATED}` from a player with no seat.
 A room is created `OPEN` with its host seated. Each hand runs inside a
 `HandRunner` driven by `Room`'s own serialized queue (`enqueue`), so joins,
 seat changes, actions, disconnects and hand-completion callbacks never
-interleave. When a hand ends, `Room` settles balances, records history, then
-either starts the next hand after `handIntervalMs` or falls back to `OPEN`.
+interleave. When a hand ends, `Room` settles the table stacks, writes the fee
+sink, records history, stands up any seat that asked to go or can no longer
+cover a hand, then either starts the next hand after `handIntervalMs` or
+falls back to `OPEN`.
 
 ## Timers and options
 
@@ -174,7 +201,6 @@ either starts the next hand after `handIntervalMs` or falls back to `OPEN`.
 | `carryOverReleaseMs` | 60,000 | How long a room may sit unable to start a hand before its carry-over pot is released (spec §8.4) |
 | `consecutiveTimeoutsToStand` | 3 | Timed-out actions in a row before a human is stood up automatically |
 | `handsSatOutToStand` | 5 | Hands started without a player who asked to sit out before the seat is taken back (spec §11.3) |
-| `botStartingBalance` | 1,000,000 | Virtual balance bots start (and top up) with in Blind mode |
 | `turnTimerMsOverride` | — | Test hook: overrides `config.turnTimerSec * 1000` when set |
 
 `createGameServer` also takes `shutdownTimeoutMs` (default 10,000) — the
@@ -291,7 +317,7 @@ the live state is being settled:
 2. **Drain rooms.** `RoomManager.shutdown(reason)` runs `Room.shutdown(reason)`
    on every room in parallel. Each room cancels any in-flight hand (refunding
    what's live), releases its carry-over pot, cashes out every seated human's
-   stack back to their balance (Hold'em), marks the room `CLOSED`, and
+   stack back to their balance (both modes), marks the room `CLOSED`, and
    broadcasts `ROOM_EVENT { type: 'ROOM_CLOSED', reason }`. A `CLOSED` room
    refuses every further mutation with `ROOM_NOT_FOUND`, so a request racing
    the shutdown cannot deduct a buy-in into a room that is going away.
@@ -318,7 +344,11 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
 
 After `shutdown` resolves, every point that was ever in a stack or a
 carry-over pot has been returned to a `BalanceRepository` balance or
-recorded as a sink row — nothing is left in RAM.
+recorded as a sink row — nothing is left in RAM. The one exception is a
+cash-out the repository refuses: it is logged (`shutdown cash-out failed`,
+with the player and the stack) for an operator to reconcile, and the room
+still closes and the other seats are still cashed out, so one bad row
+cannot hold up the rest of the shutdown.
 
 ## Testing utilities
 
@@ -393,7 +423,7 @@ table stack and carry-over pot is back in a balance. `SoakResult` then reports:
 | `fees` | Σ `summary.fee` — the domain events are the fee source of truth |
 | `cancelledFees` | Σ `summary.fee` over the cancelled hands. A cancelled hand takes no rake, so assert `0` |
 | `sinks` | Σ every sink row the repositories recorded (`table_fee` + `carry_over`) |
-| `botNet` | Σ `net` of every bot seat: a bot's balance is virtual, so it is a term of its own |
+| `botNet` | Σ `net` of every bot seat: a bot's stack is virtual, so it is a term of its own |
 | `startBalances` / `endBalances` | Σ human balances, before the run and after the shutdown |
 | `latencySamples` | How many action → broadcast round trips were timed (a seat whose turn timer beat it contributes none) |
 | `seqGaps` / `resyncs` | Frames whose `seq` was not exactly one past the previous one, and the `RESYNC`s they cost |

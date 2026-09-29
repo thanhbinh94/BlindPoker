@@ -288,8 +288,9 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     catalog,
     bus,
     timezone: config.timezone,
-    // Points credited outside a hand still have to reach a live session — and a Blind seat mirrors
-    // the balance, so this goes through the game server rather than straight to the socket.
+    // Points credited outside a hand still have to reach a live session, so this goes through the game
+    // server, which pushes `BALANCE` in order with the room's own pushes when the player is in a room.
+    // Only the balance moves: a table stack, in either mode, is left alone.
     onBalanceChanged: (playerId) => void game.balanceChanged(playerId),
     // Everything an achievement has promised is off the random draw's table.
     reservedItemIds: defs.flatMap((def) => (def.reward.itemId === undefined ? [] : [def.reward.itemId])),
