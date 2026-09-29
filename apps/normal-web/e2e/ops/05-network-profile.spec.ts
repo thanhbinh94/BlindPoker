@@ -130,9 +130,9 @@ test('G-04: the host leaves, and the person who came in first after them hosts',
 
 test('K-03: joining ten rooms unlocks "Mười phòng"', async () => {
   test.setTimeout(240_000)
-  // Only a *join* counts (`Room.join` emits ROOM_JOINED; the creator is added without one) — finding T6: the
-  // description says "Vào 10 phòng chơi" and a player who creates their rooms never gets there. So Giang opens the
-  // rooms and Khoa walks into each.
+  // Giang opens the rooms and Khoa walks into each. Both count: finding T6 of the 2026-09-28 run was that a room
+  // its creator is in did not ("Vào 10 phòng chơi" said otherwise); the host now gets ROOM_JOINED at creation.
+  const hostBefore = (await statsOf(a.page)).roomsJoined ?? 0
   for (let i = 0; i < 10; i++) {
     const code = await createBlind(a.page, { name: unique('Bàn K03 '), bots: 1 })
     await joinByCode(c.page, code)
@@ -144,6 +144,10 @@ test('K-03: joining ten rooms unlocks "Mười phòng"', async () => {
   await expect.poll(async () => (await ledgerOf(c.page)).some((row) => row.reason === 'achievement' && row.amount === 2_000)).toBe(true)
   await c.page.goto('/#/achievements')
   await expect(c.page.getByRole('listitem').filter({ hasText: 'Mười phòng' }).first()).toHaveAttribute('data-unlocked', 'true')
+  // T6: the ten rooms Giang created count for her too, once each, and they take her past ten as well.
+  await expect.poll(async () => (await statsOf(a.page)).roomsJoined, { timeout: 30_000 }).toBe(hostBefore + 10)
+  await a.page.goto('/#/achievements')
+  await expect(a.page.getByRole('listitem').filter({ hasText: 'Mười phòng' }).first()).toHaveAttribute('data-unlocked', 'true')
 })
 
 test('K-04 K-05: the profile counts what was played, and a rename shows everywhere — but not onto a taken name', async () => {

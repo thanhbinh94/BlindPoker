@@ -38,6 +38,17 @@ describe('RoomManager', () => {
     expect(domainEvents.filter((e) => e.type === 'ROOM_CREATED')).toHaveLength(3)
   })
 
+  it('counts the room its creator is in: ROOM_JOINED for the host, once, right after ROOM_CREATED (T6)', async () => {
+    const { manager, domainEvents } = setup()
+    const room = manager.create(id('h'), { ...PUBLIC, mode: 'blind', turnTimerSec: 15, holdem: undefined, blind: { holeCards: 2, decisionMode: 'playOrFold', fixedWager: 1000, botCount: 1 } })
+    expect(domainEvents.map((e) => e.type)).toEqual(['ROOM_CREATED', 'ROOM_JOINED'])
+    expect(domainEvents[1]).toEqual({ type: 'ROOM_JOINED', roomId: room.roomId, playerId: 'h' })
+    // Bots are seated by the same constructor and are not anyone's account: nothing for them.
+    // A second person joining is one more event, for them alone.
+    await room.join(id('a'))
+    expect(domainEvents.filter((e) => e.type === 'ROOM_JOINED').map((e) => e.type === 'ROOM_JOINED' && e.playerId)).toEqual(['h', 'a'])
+  })
+
   it('never puts the room password in the ROOM_CREATED domain event', () => {
     const { manager, domainEvents } = setup()
     manager.create(id('h'), { ...PRIVATE, password: 'pw12' })

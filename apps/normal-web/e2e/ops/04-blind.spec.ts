@@ -227,12 +227,16 @@ test('H-02 F-07: below 5.000 the relief tops up to 5.000 once; a stake the balan
 
   // F-07 (FR-R07): a 10.000 stake is more than 5.000 — the seat is refused, in words, and nothing is charged. (A
   // player already seated whose balance falls below the stake sits out instead — the rounds above did exactly that
-  // after each fold, which is what the "Vào lại" toggle on their tray was saying.)
+  // after each fold, which is what the "Vào lại" toggle on their tray was saying; since T4 the tray says why.)
+  // "Nothing charged" is read off the ledger rather than the balance: every room Em creates counts towards "Mười
+  // phòng" since T6, and the room below may be the one that pays it.
+  const rowsBefore = (await ledgerOf(page)).length
   await createBlind(page, { name: unique('Bàn F07 '), bots: 1, mode: 'Thuần may rủi', wager: '10.000' })
   await mySeat(page).getByRole('button', { name: /Ngồi vào bàn/ }).click()
   await expect(page.getByText('Số dư không đủ')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Đứng dậy', exact: true })).toHaveCount(0)
-  expect(await balanceOf(page), 'nothing charged').toBe(balance)
+  const charged = (await ledgerSince(page, rowsBefore)).filter((row) => row.reason !== 'achievement')
+  expect(charged, `nothing charged (the balance was ${balance})`).toEqual([])
   await leave(page)
 })
 
