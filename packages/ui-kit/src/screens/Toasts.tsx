@@ -65,7 +65,9 @@ export function Toasts({ error, notifications, onClearError, onDismiss, lang }: 
 
   const describe = (n: ClientNotification): string => {
     const amount = amountOf(n.payload)
-    return t(`notify.${n.kind}`, {
+    // A spent table limit with nothing left over has no "went back to your balance" to report (spec 2026-09-29).
+    const key = n.kind === 'TABLE_LIMIT_SPENT' && amount === 0 ? 'notify.TABLE_LIMIT_SPENT_none' : `notify.${n.kind}`
+    return t(key, {
       defaultValue: t('notify.other'),
       amount: amount === null ? '' : formatPoints(amount, lang),
       id: idOf(n.payload) ?? '',

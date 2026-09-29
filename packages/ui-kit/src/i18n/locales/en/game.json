@@ -93,6 +93,7 @@
     "uncalledReturned": "Uncalled bet returned",
     "variant": "Variant",
     "wager": "Wager",
+    "tableLimit": "Limit",
     "waiting": "Waiting",
     "waitingForTurn": "Waiting for your turn",
     "winner": "Winner",
@@ -209,7 +210,8 @@
       "buyIn": "The minimum buy-in must be at most the maximum.",
       "botCount": "There must be fewer bots than seats."
     },
-    "buyInHint": "{{bb}} BB = {{points}}"
+    "buyInHint": "{{bb}} BB = {{points}}",
+    "tableLimitHint": "Table limit per player: {{points}} (5× the wager)"
   },
   "room": {
     "title": "Room",
@@ -217,7 +219,7 @@
     "readyCount": "{{ready}}/{{total}} ready",
     "startHint": "At least 2 players must be ready to start",
     "startNeedsYou": "Press Ready to start — a hand needs at least one real player.",
-    "shortOfPoints": "Not enough points for this stake (need {{amount}})",
+    "shortToSit": "Not enough points to take a seat (need {{amount}})",
     "leaveConfirm": "Leave this room?",
     "closed": "Room closed",
     "kicked": "You were kicked from the room",
@@ -243,6 +245,8 @@
     "ROOM_CLOSED": "The room was closed",
     "DAILY_REWARD": "Daily reward: {{amount}} points",
     "ACHIEVEMENT_UNLOCKED": "Achievement unlocked: {{id}}",
+    "TABLE_LIMIT_SPENT": "You have used up your table limit here — the {{amount}} left went back to your balance. Pick an empty seat to play again.",
+    "TABLE_LIMIT_SPENT_none": "You have used up your table limit here. Pick an empty seat to play again.",
     "other": "New notification"
   },
   "presets": {

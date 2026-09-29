@@ -350,8 +350,8 @@ describe('RoomScreen', () => {
     expect(screen.queryByRole('button', { name: 'Manage table' })).toBeNull()
   })
 
-  describe('a seat the balance cannot cover (T4)', () => {
-    /** Play-or-fold at 5,000: a hand needs the ante and the play, 10,000. */
+  describe('a player the balance cannot seat (T4, table limit)', () => {
+    /** Play-or-fold at 5,000: a hand needs the ante and the play, 10,000; the table limit is 25,000. */
     const blindRoom = (me: Partial<RoomPlayerView>, decisionMode: 'none' | 'playOrFold' = 'playOrFold') =>
       makeRoom({
         mode: 'blind',
@@ -368,46 +368,38 @@ describe('RoomScreen', () => {
           blind: { holeCards: 3, decisionMode, fixedWager: 5_000, botCount: 1 },
         },
         players: [
-          makePlayer({ playerId: 'me', displayName: 'Mai', isHost: true, seat: 0, status: 'SITTING_OUT', sittingOut: true, stack: 7_000, ...me }),
-          makePlayer({ playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true, seat: 3, status: 'READY', stack: 1_000_000, ready: true }),
+          makePlayer({ playerId: 'me', displayName: 'Mai', isHost: true, seat: null, status: null, stack: 0, ...me }),
+          makePlayer({ playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true, seat: 3, status: 'READY', stack: 25_000, ready: true }),
         ],
       })
 
-    it('says the balance is short, and by what, instead of asking the host to press Ready', () => {
+    it('tells a spectator whose balance cannot cover a hand what sitting down needs', () => {
       wrap(fakeClient(makeState({ balance: 7_000, room: blindRoom({}) })))
-      expect(screen.getByText('Not enough points for this stake (need 10,000)')).toBeInTheDocument()
-      expect(screen.queryByText(/Press Ready/)).toBeNull()
-    })
-
-    it('says so to a guest too, instead of "waiting for the host"', () => {
-      const room = blindRoom({ isHost: false })
-      wrap(fakeClient(makeState({ balance: 7_000, room: { ...room, hostPlayerId: 'x', players: [...room.players, makePlayer({ playerId: 'x', displayName: 'Xuan', isHost: true })] } })))
-      expect(screen.getByText('Not enough points for this stake (need 10,000)')).toBeInTheDocument()
-      expect(screen.queryByText('Waiting for the host to start')).toBeNull()
+      expect(screen.getByText('Not enough points to take a seat (need 10,000)')).toBeInTheDocument()
+      expect(screen.queryByText('Take a seat to play.')).toBeNull()
     })
 
     it('measures pure luck against the stake alone', () => {
       wrap(fakeClient(makeState({ balance: 4_000, room: blindRoom({}, 'none') })))
-      expect(screen.getByText('Not enough points for this stake (need 5,000)')).toBeInTheDocument()
+      expect(screen.getByText('Not enough points to take a seat (need 5,000)')).toBeInTheDocument()
     })
 
-    it('keeps the usual hint once the balance covers the hand', () => {
-      wrap(fakeClient(makeState({ balance: 10_000, room: blindRoom({ sittingOut: false, status: 'SEATED' }) })))
+    it('says it between hands too, while the table plays on without them', () => {
+      const room = { ...blindRoom({}), status: 'IN_GAME' as const, nextHandAt: 1_005_000 }
+      wrap(fakeClient(makeState({ balance: 7_000, room })))
+      expect(screen.getByText('Not enough points to take a seat (need 10,000)')).toBeInTheDocument()
+    })
+
+    it('never says it to a seated player: their points are on the table, and a short seat is stood up', () => {
+      wrap(fakeClient(makeState({ balance: 0, room: blindRoom({ seat: 0, status: 'SEATED', stack: 25_000 }) })))
       expect(screen.queryByText(/Not enough points/)).toBeNull()
       expect(screen.getByText('Press Ready to start — a hand needs at least one real player.')).toBeInTheDocument()
     })
 
-    it('says it between hands too, while the next deal counts down without this seat', () => {
-      const room = { ...blindRoom({}), status: 'IN_GAME' as const, nextHandAt: 1_005_000 }
-      wrap(fakeClient(makeState({ balance: 7_000, room })))
-      expect(screen.getByText('Not enough points for this stake (need 10,000)')).toBeInTheDocument()
-    })
-
-    it('stays quiet while the player still holds cards in the hand being played', () => {
-      const room = { ...blindRoom({ status: 'IN_HAND', sittingOut: false }), status: 'IN_GAME' as const }
-      const hand = makeHand({ mode: 'blind', phase: 'DECISION', mySeat: 0, actingSeat: null, legal: null })
-      wrap(fakeClient(makeState({ balance: 7_000, room, hand })))
+    it('keeps the usual hint once the balance covers a hand', () => {
+      wrap(fakeClient(makeState({ balance: 10_000, room: blindRoom({}) })))
       expect(screen.queryByText(/Not enough points/)).toBeNull()
+      expect(screen.getByText('Take a seat to play.')).toBeInTheDocument()
     })
 
     it('writes the amount the way the app writes points, in Vietnamese too', () => {
@@ -416,7 +408,12 @@ describe('RoomScreen', () => {
           <RoomScreen client={fakeClient(makeState({ balance: 7_000, room: blindRoom({}) }))} lang="vi" onLeft={vi.fn()} />
         </I18nextProvider>,
       )
-      expect(screen.getByText('Số dư không đủ cho mức cược này (cần 10.000 điểm)')).toBeInTheDocument()
+      expect(screen.getByText('Số dư không đủ để vào bàn (cần 10.000 điểm)')).toBeInTheDocument()
+    })
+
+    it('shows the wager and the table limit in the header', () => {
+      wrap(fakeClient(makeState({ balance: 50_000, room: blindRoom({}) })))
+      expect(screen.getByText(/Wager 5,000 · Limit 25,000/)).toBeInTheDocument()
     })
   })
 

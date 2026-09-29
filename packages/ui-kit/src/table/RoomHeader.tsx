@@ -1,4 +1,4 @@
-import type { RoomView } from '@bp/core'
+import { blindTableLimit, type RoomView } from '@bp/core'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ConnectionStatus } from '../client/types.js'
@@ -35,7 +35,7 @@ export function RoomHeader({ room, status, onLeave, lang, right }: RoomHeaderPro
       ? `${t('labels.blinds')} ${formatPoints(holdem.smallBlind, lang)}/${formatPoints(holdem.bigBlind, lang)}`
       : blind === undefined
         ? ''
-        : `${t('labels.wager')} ${formatPoints(blind.fixedWager, lang)}`
+        : `${t('labels.wager')} ${formatPoints(blind.fixedWager, lang)} · ${t('labels.tableLimit')} ${formatPoints(blindTableLimit(blind), lang)}`
   const players = t('lobby.playersOf', { current: room.playerCount, max: room.maxPlayers })
 
   return (

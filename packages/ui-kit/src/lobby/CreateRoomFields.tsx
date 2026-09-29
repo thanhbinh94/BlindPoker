@@ -1,4 +1,4 @@
-import { ECONOMY } from '@bp/core'
+import { blindTableLimit, ECONOMY } from '@bp/core'
 import type { ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatPoints, type Language } from '../i18n/index.js'
@@ -136,7 +136,10 @@ export function BlindFields({
           onChange={onDecisionMode}
         />
       </Field>
-      <Field label={t('create.wager')}>
+      <Field
+        label={t('create.wager')}
+        hint={t('create.tableLimitHint', { points: `${formatPoints(blindTableLimit({ fixedWager }), lang)} ${t('common:units.pointsShort')}` })}
+      >
         <Select value={fixedWager} options={wagers} disabled={disabled} onChange={onFixedWager} />
       </Field>
       <Field label={t('create.botCount')}>

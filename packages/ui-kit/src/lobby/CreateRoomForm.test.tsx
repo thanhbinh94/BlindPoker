@@ -45,6 +45,14 @@ describe('CreateRoomForm', () => {
       blind: { holeCards: 2, decisionMode: 'playOrFold', fixedWager: 1000, botCount: 2 },
     })
   })
+  it('says what the chosen wager means as a table limit', async () => {
+    const user = userEvent.setup()
+    wrap(<CreateRoomForm onSubmit={vi.fn()} lang="en" />)
+    await user.click(screen.getByRole('button', { name: 'Blind Poker' }))
+    expect(screen.getByText('Table limit per player: 5,000 pts (5× the wager)')).toBeInTheDocument()
+    await user.selectOptions(screen.getByLabelText('Fixed wager'), '5000')
+    expect(screen.getByText('Table limit per player: 25,000 pts (5× the wager)')).toBeInTheDocument()
+  })
   it('shows a localized validation error instead of submitting when the name is empty', async () => {
     const onSubmit = vi.fn()
     wrap(<CreateRoomForm onSubmit={onSubmit} lang="en" />)

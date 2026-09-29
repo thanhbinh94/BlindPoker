@@ -368,6 +368,9 @@ Rules:
   values off the payload — `amount` (already formatted) and `id` — so a string may use `{{amount}}` or `{{id}}`
   and nothing else. An app wanting a *name* where the server sent an id (`ACHIEVEMENT_UNLOCKED`) rewrites the
   notification before passing it in.
+- `TABLE_LIMIT_SPENT` (a Blind seat stood up because its table limit can no longer cover a hand; `payload.amount` is
+  what went back to the balance) reads `notify.TABLE_LIMIT_SPENT`, or `notify.TABLE_LIMIT_SPENT_none` when that amount
+  is 0 — `Toasts` picks the variant, so the string never announces a return of nothing.
 
 An app adds its own namespace without forking the resources:
 

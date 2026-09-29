@@ -170,17 +170,14 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
             ? 'room.startNeedsYou'
             : 'room.startHint'
   /**
-   * What the next hand costs this seat, when that can be more than it has (finding T4 of the 2026-09-28 run: a
-   * seat the server had sat out for want of points was told to press Ready). Blind only: a Blind seat mirrors the
-   * account balance, and `Room.startHand` sits out any seat whose balance is under the stake (twice it in
-   * play-or-fold). Hold'em never gets here — a seat that runs out of chips is stood up when the hand ends — so a
-   * seated Hold'em player can always cover the next deal.
+   * What sitting down needs, when the balance cannot cover it (finding T4 of the 2026-09-28 run, reworked for the table
+   * limit of 2026-09-29). Blind only, and only for a player who is not seated: a seat plays from the stack it brought,
+   * and a seat whose stack cannot cover the next hand is stood up — so the one who can be short is the one watching.
+   * Hold'em's buy-in dialog states its own range.
    */
   const needed = room.config.blind === undefined ? null : blindRequiredStack(room.config.blind)
-  // Not while the player still holds cards: the balance only moves when the hand they are in settles.
-  const inHandNow = hand !== null && hand.mySeat !== null && hand.phase !== 'COMPLETE'
-  const shortOf = mySeated && needed !== null && !inHandNow && state.balance < needed ? needed : null
-  const hint = shortOf !== null ? t('room.shortOfPoints', { amount: formatPoints(shortOf, lang) }) : hintKey === null ? null : t(hintKey)
+  const shortToSit = canSit && needed !== null && state.balance < needed ? needed : null
+  const hint = shortToSit !== null ? t('room.shortToSit', { amount: formatPoints(shortToSit, lang) }) : hintKey === null ? null : t(hintKey)
   /** Everyone the host could ask to leave: the other seats and the spectators, bots included. */
   const others = room.players.filter((p) => p.playerId !== me?.playerId)
   // Managing the roster is a between-hands job: the dialog closes itself the moment cards are dealt. "Between
