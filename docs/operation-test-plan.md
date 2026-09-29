@@ -174,8 +174,8 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 
 | Mã | Bước | Kỳ vọng | Ưu tiên |
 |---|---|---|---|
-| H-01 | Sau mỗi ván, so số dư với Hồ sơ → Lịch sử điểm | Mỗi thay đổi có một dòng tương ứng, cộng trừ khớp số dư | P1 |
-| H-02 | Tài khoản mới, chưa nhận điểm danh (100.000): chơi Blind Thuần may rủi mức cược 50.000 tới khi số dư dưới 5.000 → Điểm danh → Nhận cứu trợ | Số dư lên đúng 5.000; bấm lại trong 24 giờ bị từ chối | P1 |
+| H-01 | Sau mỗi ván (Blind: sau khi đứng dậy), so số dư với Hồ sơ → Lịch sử điểm. Ở Blind số dư chỉ đổi lúc ngồi (−hạn mức) và lúc rời ghế (+chồng); tiền của từng ván đọc ở **chồng trên bàn**, hoặc ở hai dòng `buy_in` / `cash_out` — không đọc ở số dư | Mỗi thay đổi có một dòng tương ứng, cộng trừ khớp số dư. Blind: một dòng "Vào bàn" khi ngồi (−hạn mức, hoặc −toàn bộ số dư nếu thấp hơn), một dòng "Rời bàn" khi rời ghế (+chồng); giữa hai lúc đó số dư đứng yên và sổ không có dòng nào | P1 |
+| H-02 | Tài khoản mới, chưa nhận điểm danh (100.000): chơi Blind Thuần may rủi mức cược 50.000, đứng dậy hoặc rời phòng khi chồng còn ít, cho tới khi số dư dưới 5.000 (số dư chỉ đổi lúc ngồi và lúc rời ghế) → Điểm danh → Nhận cứu trợ | Số dư lên đúng 5.000; bấm lại trong 24 giờ bị từ chối. Cứu trợ chỉ xét số dư: điểm đang nằm trên bàn không được tính (ngồi vào bàn với cả 100.000 thì số dư đã là 0) — xem `docs/known-limitations.md` | P1 |
 | H-03 | Cộng tổng stack cả bàn trước và sau một ván Hold'em | Tổng sau = tổng trước − phí bàn (2 % pot, tối đa 1 BB) | P1 |
 
 ### I. Điểm danh
@@ -204,7 +204,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 | Mã | Bước | Kỳ vọng | Ưu tiên |
 |---|---|---|---|
 | K-01 | Kho đồ | Liệt kê đúng đồ đang có, đánh dấu món đang mặc | P2 |
-| K-02 | Chơi đủ 10 ván Blind (bàn có bot, bật tự động bắt đầu) | Hiện thông báo mở thành tựu "Mười ván Blind Poker", +2.000 điểm; trang Thành tựu cập nhật | P1 |
+| K-02 | Chơi đủ 10 ván Blind (bàn có bot, bật tự động bắt đầu). Hết hạn mức thì bị mời đứng dậy (F-10) nên phải bấm ghế để ngồi lại (Sẵn sàng, bật lại Tự động chơi) thì mới đủ 10 ván | Hiện thông báo mở thành tựu "Mười ván Blind Poker", +2.000 điểm; trang Thành tựu cập nhật | P1 |
 | K-03 | Vào 10 phòng khác nhau | Thành tựu "Mười phòng" mở | P3 |
 | K-04 | Hồ sơ → Thống kê sau vài ván | Số ván chơi/thắng tăng đúng | P2 |
 | K-05 | Hồ sơ → đổi tên hiển thị | Tên mới hiện ở sảnh, bàn, cài đặt; tên trùng người khác bị từ chối | P2 |

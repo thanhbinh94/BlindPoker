@@ -204,6 +204,9 @@ dropping the oldest, so a chatty server cannot stack slips off the top of the sc
 can never produce an illegal amount. Keyboard: `F` fold, `C` check/call, `R` focus the amount, `Enter` submit — all
 advertised through `aria-keyshortcuts`. Between turns it stays in place and says so rather than collapsing.
 
+`RoomHeader` shows the blinds for a Hold'em room and "wager · limit" for a Blind one ("Mức cược 5.000 · Hạn mức 25.000"; the
+limit is `blindTableLimit`, five wagers).
+
 `HandResult` reads `hand.result`. Alongside `payouts` (the same money summed per seat) it carries **`pots`** — the
 engine's layered pots straight from `SETTLEMENT.pots`, each with its `amount`, `eligibleSeats` and `winners` — and
 prints a main/side-pot ledger whenever there is more than one, which is the only way a hand with a short all-in
@@ -252,7 +255,7 @@ seat's `ChibiConfig`; a bot never asks it — `PokerTable` draws `botChibi` for 
 *validated* config that reaches `onSubmit`.
 
 `HoldemFields` (blind tier plus the buy-in window in big blinds) and `BlindFields` (hole cards, decision mode, fixed
-wager, bot filler) are the mode-specific building blocks `CreateRoomForm` swaps between; both are fully controlled,
+wager — whose field carries the table-limit hint, "Table limit per player: … (5× the wager)" — and bot filler) are the mode-specific building blocks `CreateRoomForm` swaps between; both are fully controlled,
 and an app only reaches for them directly when it builds its own room form.
 
 ### Primitives

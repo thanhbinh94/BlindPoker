@@ -259,8 +259,8 @@ test.describe('Blind Luck Poker Normal', () => {
     expect([WAGER, PLAY_COST], 'the bot either folded after its ante or paid to play').toContain(pot + uncalled.amount - PLAY_COST)
     expect(fee, 'the table fee is 2% of the pot').toBe(Math.floor(pot * 0.02))
 
-    // The third source, and the one that would catch a settlement crediting a balance it never wrote a row
-    // for (§18.4 rests on this): the ledger. Its rows must sum to the balance the account now holds, and
+    // The third source, and the one that would catch a buy-in or cash-out moving a balance without writing a row
+    // for it (§18.4 rests on this): the ledger. Its rows must sum to the balance the account now holds, and
     // the sit-down and the leave — the only rows a Blind seat writes — must together be the move the result
     // card described.
     const entries = await readLedger(page)

@@ -119,8 +119,9 @@ export function Seat({
         <span className={s.plateText}>
           <span className={s.seatName}>{name}</span>
           {caption === undefined || caption === null ? null : <span className={s.seatCaption}>{caption}</span>}
-          {/* A bot's bankroll is virtual — a million-point figure beside a 5,000 wager only reads as a mistake. The
-              Bot badge below says what the seat is; its bets and payouts still show like anyone else's. */}
+          {/* A bot's stack is virtual — a table limit (5 × the wager) that is topped back up whenever it runs low, so
+              a figure beside it would only read as a real balance to compare against. The Bot badge below says what
+              the seat is; its bets and payouts still show like anyone else's. */}
           {seat.isBot ? null : <span className={s.seatStack}>{formatPoints(seat.stack, lang)}</span>}
         </span>
         {isActing ? <TurnTimer deadlineAt={deadlineAt} serverNow={serverNow} totalMs={turnTimerMs} size={38} /> : null}

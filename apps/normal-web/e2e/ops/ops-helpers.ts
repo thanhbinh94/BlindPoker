@@ -96,8 +96,8 @@ export async function ledgerOf(page: Page): Promise<LedgerRow[]> {
 
 /**
  * The rows written since the ledger held `countBefore` of them. A hand can unlock an achievement ("Thùng", "Ba ván
- * liền tay"…) whose reward lands beside its settlement, so a money check compares the balance with these rows,
- * never with the settlement alone.
+ * liền tay"…) whose reward lands beside the buy_in / cash_out rows, so a money check compares the balance with all
+ * of these rows, never with the buy_in and cash_out alone.
  */
 export async function ledgerSince(page: Page, countBefore: number): Promise<LedgerRow[]> {
   await page.waitForTimeout(800) // the achievement subscriber writes just after the settlement
