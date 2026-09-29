@@ -128,8 +128,8 @@ export type ClientAction =
   | { type: 'preAction'; kind: PreActionKind | null }
   | { type: 'autoPlay'; on: boolean }
   /**
-   * The account's display name changed (the app's own rename succeeded): `me` takes the new name at once. The
-   * socket's identity would otherwise keep the old one until the next `WELCOME`, and the lobby bar reads it.
+   * The account's display name changed (the app's own rename succeeded): `me` takes the new name at once. `me`
+   * came from `WELCOME` and would otherwise keep the old name until the next one, and the lobby bar reads it.
    */
   | { type: 'renamed'; displayName: string }
   /**

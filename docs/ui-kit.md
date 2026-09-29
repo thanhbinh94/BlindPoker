@@ -99,7 +99,7 @@ that already has a height.
 | `act(action)` | `ACTION` with `baseSeq` = the latest applied `seq` |
 | `resync()` | `RESYNC` |
 | `clearError()`, `dismissNotification(id)` | local state only |
-| `renamed(displayName)` | local state only — `state.me` takes the new name at once, for an app whose own rename just succeeded; the socket's identity would otherwise keep the old one until the next `WELCOME`. The table roster is left as the server named it. |
+| `renamed(displayName)` | local state only — `state.me` takes the new name at once, for an app whose own rename just succeeded; it came from `WELCOME` and would otherwise keep the old one until the next. The table roster is left as the server named it: the room the player is in keeps the old name, and the server's `renameIdentity` gives the new one to the next room they create or join. |
 | `reset()` | local state only — back to `initialClientState`. For a session ending: the reducer outlives any number of sessions, so without it a sign-out leaves the previous account's `me`, `balance`, `room` and notifications in place until the next `WELCOME`. Call it beside `disconnect()`, never on a live socket. |
 | `serverNow()` | `Date.now()` + the `WELCOME` clock offset — **always** compare deadlines against this |
 

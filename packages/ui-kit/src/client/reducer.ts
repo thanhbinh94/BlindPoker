@@ -403,8 +403,10 @@ export function reduceClient(state: ClientState, action: ClientAction): ClientSt
     case 'autoPlay':
       return { ...state, autoPlay: action.on }
     case 'renamed':
-      // Only `me`: a seat already at a table was named when its player sat down, for everyone at it, and the
-      // server renames it the next time that player enters a room — the app's rename notice says so.
+      // Only `me`. The room the player is in (if any) seated them under the name they entered it with, for
+      // everyone at the table, and keeps it; the server hands the new name to the player's live connection
+      // (`Gateway.renameIdentity`), so the next room they create or join uses it — the app's rename notice
+      // says exactly that.
       return state.me === null ? state : { ...state, me: { ...state.me, displayName: action.displayName } }
     case 'reset':
       return initialClientState

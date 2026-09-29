@@ -67,7 +67,7 @@ export interface RouteDeps {
   baseIds: BaseIds
   log: Logger
   /** Live socket and room counts for `/health` — the same two numbers Lite's probe reports. */
-  game: Pick<GameServer, 'connectionCount'> & { rooms: { size: number } }
+  game: Pick<GameServer, 'connectionCount' | 'renameIdentity'> & { rooms: { size: number } }
   /** This package's version, for `/health`. */
   version: string
   /** `false` answers `/health` with a 503 and `db: 'error'`. */

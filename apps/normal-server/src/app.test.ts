@@ -731,6 +731,23 @@ describe('the websocket, authenticated by the session cookie', () => {
   })
 })
 
+describe('a rename, and the next room', () => {
+  it('seats the new name in the next room the player creates, without a reconnect (T7)', async () => {
+    const h = await harness()
+    const me = await h.register()
+    const client = await connect(await listen(h), { cookie: me.cookie })
+    const welcome = await client.next('WELCOME')
+
+    const renamed = await h.app.fastify.inject({ method: 'PATCH', url: '/api/me', headers: h.auth(me), payload: { displayName: 'Tên Mới' } })
+    expect(renamed.statusCode).toBe(200)
+    expect(welcome.displayName).not.toBe('Tên Mới')
+
+    client.send({ t: 'CREATE_ROOM', config: BLIND_ROOM })
+    const snapshot = await client.next('ROOM_SNAPSHOT')
+    expect(snapshot.room.players.find((p) => p.playerId === me.playerId)?.displayName).toBe('Tên Mới')
+  })
+})
+
 describe('rooms joined', () => {
   it('counts the room a player creates as well as the one a player walks into — once each (T6)', async () => {
     const h = await harness()
