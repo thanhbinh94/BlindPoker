@@ -163,13 +163,16 @@ test('E-06: a player who only ever arms "Theo mọi mức" plays a whole hand wi
   const bar = c.page.getByRole('group', { name: 'Hành động' })
   const manual = bar.locator('button:not([aria-pressed])', { hasText: /^(Xem|Theo( [\d.]+)?)$/ })
   let pressed = 0
+  // Every click is bounded: the toggle row is hidden the moment Chi's turn arrives, and an unbounded click on a
+  // button that has just gone waits for it to come *back* — one whole turn later, after her clock ran out. That race
+  // (re-arming as a new street is dealt) failed this case once in the 2026-09-29 review run with an 18-second hand.
+  const QUICK = { timeout: 500 }
   const arming = (async () => {
     while ((await resultCard(c.page).count()) === 0) {
       if ((await armed.count()) > 0) {
-        if ((await armed.getAttribute('aria-pressed').catch(() => null)) === 'false') await armed.click().catch(() => undefined)
-      } else if ((await manual.count()) > 0 && (await manual.first().isEnabled().catch(() => false))) {
-        await manual.first().click().catch(() => undefined)
-        pressed++
+        if ((await armed.getAttribute('aria-pressed', QUICK).catch(() => null)) === 'false') await armed.click(QUICK).catch(() => undefined)
+      } else if ((await manual.count()) > 0 && (await manual.first().isEnabled(QUICK).catch(() => false))) {
+        if (await manual.first().click(QUICK).then(() => true, () => false)) pressed++
       }
       await c.page.waitForTimeout(150)
     }
