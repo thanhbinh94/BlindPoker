@@ -35,7 +35,7 @@ const REAL_SCRIPT = fileURLToPath(new URL('run.ps1', import.meta.url))
 /** A long enough secret that is obviously not one, so a leak into the output is unmistakable. */
 const SECRET = 'sekret-abcdefghijklmnopqrstuvwxyz-0123456789'
 const GOOD_ENV = [
-  'DATABASE_URL=postgres://neon_owner:hunter2@ep-test.aws.neon.tech/neondb?sslmode=require',
+  'DATABASE_URL=postgres://neon_owner:hunter2@ep-test.aws.neon.tech/neondb?sslmode=verify-full',
   `SESSION_SECRET=${SECRET}`,
   'ALLOWED_ORIGINS=http://localhost:8080,http://<IP-LAN>:8080',
   'PORT=8080',
@@ -188,7 +188,7 @@ describe.skipIf(!HAVE_POWERSHELL)('deploy/normal-windows/run.ps1 -DryRun', () =>
     expect(run.output).not.toContain(SECRET)
     expect(run.output).not.toContain('hunter2')
     expect(run.output).toContain('SESSION_SECRET=***')
-    expect(run.output).toContain('DATABASE_URL=postgres://neon_owner:***@ep-test.aws.neon.tech/neondb?sslmode=require')
+    expect(run.output).toContain('DATABASE_URL=postgres://neon_owner:***@ep-test.aws.neon.tech/neondb?sslmode=verify-full')
 
     // The two commands, and the directory they run in.
     expect(run.output).toContain('node dist/migrate-cli.js')
