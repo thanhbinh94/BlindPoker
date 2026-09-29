@@ -183,8 +183,11 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
   const hint = shortOf !== null ? t('room.shortOfPoints', { amount: formatPoints(shortOf, lang) }) : hintKey === null ? null : t(hintKey)
   /** Everyone the host could ask to leave: the other seats and the spectators, bots included. */
   const others = room.players.filter((p) => p.playerId !== me?.playerId)
-  // Managing the roster is a between-hands job: the dialog closes itself the moment cards are dealt.
-  const canManage = waiting && isHost && others.length > 0
+  // Managing the roster is a between-hands job: the dialog closes itself the moment cards are dealt. "Between
+  // hands" is the server's own kick rule — no seat holds cards — so it is also the countdown to the next deal, where
+  // the room still says IN_GAME (a Blind table with bots never goes back to OPEN between its hands).
+  const handLive = hand !== null && hand.phase !== 'COMPLETE'
+  const canManage = (waiting || !handLive) && isHost && others.length > 0
   const manageKey = hand?.handId ?? 'none'
 
   const countdown =

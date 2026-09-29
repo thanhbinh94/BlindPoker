@@ -292,6 +292,31 @@ describe('RoomScreen', () => {
     expect(screen.queryByText('Bot 1'), 'gone from the list and from its seat').toBeNull()
   })
 
+  it('offers Manage table in the countdown between hands too, and closes it for good when the next hand is dealt', async () => {
+    // A Blind table with bots stays IN_GAME between its hands; that countdown is when the server lets a bot go.
+    const bot = makePlayer({ playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true, seat: 2, status: 'READY', stack: 1_000_000, ready: true })
+    const players = [...readyRoom.players, bot]
+    const between = makeRoom({ status: 'IN_GAME', hostPlayerId: 'me', nextHandAt: 1_004_000, players })
+    const finished = makeHand({ handId: 'h1', phase: 'COMPLETE', mySeat: 1, actingSeat: null, legal: null })
+    const client = fakeClient(makeState({ room: between, hand: finished }))
+    const { view } = wrap(client)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Manage table' }))
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Kick — Bot 1' }))
+    expect(client.kick).toHaveBeenCalledWith('bot:r:0')
+
+    // The next deal: the list closes and the button goes while cards are out…
+    const live = makeHand({ handId: 'h2', phase: 'BETTING', mySeat: 1, actingSeat: 0, legal: null })
+    view.rerender(screenFor(fakeClient(makeState({ room: between, hand: live }))))
+    expect(screen.queryByRole('dialog', { name: 'People in the room' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Manage table' })).toBeNull()
+
+    // …and when that hand is over the button is back, but the list stays shut until it is asked for again.
+    view.rerender(screenFor(fakeClient(makeState({ room: between, hand: { ...live, phase: 'COMPLETE' } }))))
+    expect(screen.getByRole('button', { name: 'Manage table' })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'People in the room' })).toBeNull()
+  })
+
   it('keeps Start off while the only ready seats are bots, and says what the host must do', async () => {
     const bots = [1, 2, 3].map((i) => makePlayer({ playerId: `bot-${i}`, displayName: `Bot ${i}`, isBot: true, seat: i, status: 'READY', stack: 1_000_000, ready: true }))
     const host = makePlayer({ playerId: 'me', displayName: 'Mai', isHost: true, seat: 0, status: 'SEATED', stack: 20_000, ready: false })
