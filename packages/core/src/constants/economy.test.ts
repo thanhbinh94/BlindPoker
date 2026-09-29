@@ -19,5 +19,6 @@ describe('economy constants', () => {
     expect(ECONOMY.startingBalance).toBe(100000)
     expect(ECONOMY.blindWagerTiers).toEqual([1000, 2000, 5000, 10000, 20000, 50000])
     expect(ECONOMY.holdemBlindTiers.map((t) => t.bigBlind)).toEqual([200, 500, 1000, 2000, 5000])
+    expect(ECONOMY.blindTableLimitMultiplier).toBe(5)
   })
 })

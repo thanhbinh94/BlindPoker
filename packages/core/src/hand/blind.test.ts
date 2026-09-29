@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Rng } from '../cards/rng.js'
 import { seededRng } from '../cards/rng.js'
-import { applyBlindCommand, blindLegalActions, blindRequiredStack, createBlindHand } from './blind.js'
+import { applyBlindCommand, blindLegalActions, blindRequiredStack, blindTableLimit, createBlindHand } from './blind.js'
 import { playerView } from './view.js'
 import { EngineError, type BlindRules, type GameEvent, type HandState } from './types.js'
 
@@ -41,6 +41,12 @@ describe('setup', () => {
   it('required stack depends on decision mode', () => {
     expect(blindRequiredStack(rules({ decisionMode: 'none' }))).toBe(1000)
     expect(blindRequiredStack(rules({ decisionMode: 'playOrFold' }))).toBe(2000)
+  })
+  it('sets the table limit at five wagers for every tier (spec 2026-09-29)', () => {
+    expect([1_000, 2_000, 5_000, 10_000, 20_000, 50_000].map((fixedWager) => blindTableLimit({ fixedWager }))).toEqual([
+      5_000, 10_000, 25_000, 50_000, 100_000, 250_000,
+    ])
+    expect(blindTableLimit(rules({ decisionMode: 'playOrFold' }))).toBe(5_000) // the mode does not change it
   })
   it('antes every seat, deals the configured hole cards, adds carry-over', () => {
     const t = new Table(rules({ holeCards: 3 }), [5000, 5000, 5000], 700)
