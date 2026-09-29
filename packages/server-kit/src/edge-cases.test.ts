@@ -250,6 +250,8 @@ describe('§30 — a balance that changes while the player is at a table', () =>
     const snap = await openRoom(a, [], HOLDEM)
     expect(await a.request({ t: 'SIT_DOWN', reqId: rid(), seat: 0, buyIn: 20_000 })).toMatchObject({ t: 'ACK' })
     await a.next('ROOM_EVENT', (m) => m.event.type === 'PLAYER_SAT')
+    // Spec 2026-09-29 §5.2: a sit-down pushes the balance the buy-in left (both modes), ahead of the reward's push below.
+    expect((await a.next('BALANCE')).balance).toBe(80_000)
     const room = ts.server.rooms.get(snap.room.roomId)!
     expect(room.players.get('a')!.stack).toBe(20_000)
 

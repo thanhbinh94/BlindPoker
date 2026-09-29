@@ -82,8 +82,8 @@ export function buildApp(deps: BuildAppDeps): LiteApp {
     repos,
     timezone: config.timezone,
     ...(deps.now ? { now: deps.now } : {}),
-    // Points credited outside a hand still have to reach a live session — and a Blind seat mirrors
-    // the balance, so this must go through the game server rather than straight to the socket.
+    // Points credited outside a hand still have to reach a live session — through the game server
+    // rather than straight to the socket, so the push lands in order with the room's own.
     onBalanceChanged: (playerId) => game.balanceChanged(playerId),
   })
 

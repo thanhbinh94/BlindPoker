@@ -38,8 +38,9 @@ export interface GameServer {
   notify(playerId: string, msg: ServerMessage): void
   /**
    * Tells the server a player's balance changed outside a hand (a purchase, a reward, an admin
-   * adjustment). Pushes `BALANCE`, and re-mirrors the player's Blind-mode stack if they are seated
-   * in one — without it a Blind seat would keep showing the stale balance until the next hand.
+   * adjustment). Pushes `BALANCE` — through the room's queue when the player is in one, so it lands in
+   * order with the room's own pushes. A table stack is never touched: since the table limit (spec
+   * 2026-09-29) a seat in either mode plays from points it brought to the table.
    */
   balanceChanged(playerId: string): Promise<void>
   /**
@@ -80,7 +81,7 @@ export function createGameServer(options: GameServerOptions): GameServer {
     },
     async balanceChanged(playerId) {
       const room = rooms.roomOf(playerId)
-      if (room) return room.refreshBalance(playerId) // queued: keeps the stack mirror consistent
+      if (room) return room.refreshBalance(playerId) // queued: lands in order with the room's own BALANCE pushes
       try {
         gw.outbox.send(playerId, { t: 'BALANCE', balance: await options.repos.balances.get(playerId) })
       } catch (err) {
