@@ -141,7 +141,7 @@ Tôi tự rà: chụp 37 ảnh bản build thật — mọi màn Normal ở 1440
 
 Biên bản đầy đủ: `docs/test-runs/2026-09-29-dot-1.md`. Bộ test tự động: `apps/normal-web/e2e/ops/` (hai ca T2, T3
 từng là "lỗi đã biết", nay là ca thường). Người dùng chọn hướng (a) cho cả chín mục; cả chín đã sửa theo (a) trên
-nhánh `fix/ops-t1-t9` (29/09), chưa merge.
+nhánh `fix/ops-t1-t9` (29/09), merge `2111c55`, đã cập nhật host LAN.
 
 | # | Ca | Mức | Mô tả | Hướng sửa (khuyên in đậm) | Trạng thái |
 |---|---|---|---|---|---|
