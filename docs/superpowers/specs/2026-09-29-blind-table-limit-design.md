@@ -45,6 +45,7 @@ giới hạn; thua hết khoản đó thì bị mời đứng dậy và phải t
    - nếu ghế đã bị người khác lấy trong lúc chờ ghi sổ → hoàn `{ delta: +amount, reason: 'refund' }` và báo `SEAT_TAKEN`
      (y hệt Hold'em);
    - `stack = amount`. Không có hộp thoại chọn số.
+   - server đẩy `BALANCE` ngay sau khi ghi `buy_in` (cả Hold'em), để thanh số dư của người chơi đúng trong lúc ngồi.
 2. **Trong lúc ngồi.** Ante và tiền Chơi trừ từ chồng; thắng cộng vào chồng (có thể > L). Số dư không đổi theo từng ván.
    Thưởng điểm danh / thành tựu / cứu trợ vào **số dư**, không vào chồng. Sổ điểm mỗi ván chỉ còn dòng sink phí bàn
    (`table_fee`) — **không còn dòng `settlement` cho Blind**.
@@ -63,7 +64,7 @@ giới hạn; thua hết khoản đó thì bị mời đứng dậy và phải t
    thật giữa các ván luôn có `chồng ≥ R`.
 6. **Pot cộng dồn** (§8.4) khi giải phóng vẫn chia vào **số dư** (không vào chồng), như hiện nay.
 7. **Bot.** Chồng ảo = L khi tạo phòng; trước mỗi ván, bot có `chồng < R` được nạp lại về L. Không đụng kinh tế người
-   chơi. (Tùy chọn `botStartingBalance` của Room vẫn dùng cho bot Hold'em.)
+   chơi. Tùy chọn `botStartingBalance` (1.000.000) của Room bị bỏ: chỉ phòng Blind có bot, và bot giờ luôn dùng L.
 8. **Hiển thị.** Ghế người thật hiện chồng trên bàn (không còn là số dư thật); bot vẫn ẩn số như hiện nay.
 
 ## 5. Thay đổi kỹ thuật
@@ -82,6 +83,10 @@ giới hạn; thua hết khoản đó thì bị mời đứng dậy và phải t
   riêng Blind gửi `TABLE_LIMIT_SPENT` sau khi đứng dậy xong (`amount` lấy từ chồng trước khi trả).
 - `standUpNow`: `cash_out` khi `!isBot && stack > 0` cho **cả hai** chế độ.
 - `pushBalance` / `refreshBalance`: chỉ đẩy `BALANCE`; bỏ việc chép số dư vào chồng Blind.
+- `sitDown` gọi `pushBalance` sau khi vào bàn thành công (cả hai chế độ).
+- Vòng đứng dậy cuối ván (`onHandComplete`) bọc từng người trong `try/catch` + `log.error`, để một lần ghi `cash_out`
+  thất bại không làm phòng kẹt (không hẹn giờ ván sau).
+- `RoomOptions.botStartingBalance` bị xoá (mục 4.7).
 - `shutdown` / đóng phòng: mọi chồng người thật về số dư (đi qua `standUpNow` hoặc tương đương — kiểm tra lại cả hai
   đường).
 - `HandSummary.players[].net` không đổi (tính từ chồng trước/sau ván) → thống kê, thành tựu, lịch sử không đổi.
@@ -117,6 +122,7 @@ giới hạn; thua hết khoản đó thì bị mời đứng dậy và phải t
 | Rớt mạng > 90 giây | Đứng dậy sau ván, chồng về số dư, ở lại phòng 5 phút làm người xem |
 | Hết hạn mức đúng ván đang rời/đứng | Chỉ một lần đứng dậy, một lần `cash_out`; không gửi `TABLE_LIMIT_SPENT` cho người đã chủ động rời |
 | Ghi `cash_out` thất bại khi hết hạn mức | Ghi log lỗi như các đường `standUpNow` khác; ván sau thử lại (ghế vẫn còn, không đủ điều kiện vào ván) |
+| Ghi dòng phí bàn thất bại | Như Hold'em: chồng đã đổi trong bộ nhớ, ván được ghi `settlementError` để người vận hành đối soát; không đẩy `BALANCE` |
 | Lite bị tắt cưỡng bức | Mất chồng đang trên bàn (như Hold'em) — ghi vào known-limitations |
 | Cứu trợ khi điểm đang trên bàn | Cứu trợ chỉ xét số dư (như Hold'em) — ghi vào known-limitations |
 
