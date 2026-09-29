@@ -431,6 +431,36 @@ describe('frames with nothing to apply ask for a snapshot', () => {
   })
 })
 
+describe('PLAYER_LEFT that names me', () => {
+  it('takes the room off the client, as a leave it asked for would — a Leave that only took effect at the hand’s end', () => {
+    let s = start('holdem', HOLDEM_RULES, [20000, 20000], 1)
+    s = reduceClient(s, { type: 'autoPlay', on: true })
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 30, event: { type: 'PLAYER_LEFT', playerId: 'p1' } }, now: 0 })
+    expect(s.room).toBeNull()
+    expect(s.hand).toBeNull()
+    expect(s.roomStale).toBe(false) // confirmed gone: the room screen hands over to the app
+    expect(s.autoPlay).toBe(false)
+    expect(s.resyncNeeded).toBe(false) // nothing to ask for: the server just said so
+    expect(s.lastError).toBeNull()
+  })
+
+  it('a kick: the KICKED notice stays a toast, and the room goes once, through PLAYER_LEFT', () => {
+    let s = start('holdem', HOLDEM_RULES, [20000, 20000], 1)
+    s = reduceClient(s, { type: 'server', msg: { t: 'NOTIFICATION', kind: 'KICKED', payload: { roomId: 'r' } }, now: 5 })
+    expect(s.room).not.toBeNull() // the notice alone moves nothing
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 30, event: { type: 'PLAYER_LEFT', playerId: 'p1' } }, now: 6 })
+    expect(s.room).toBeNull()
+    expect(s.notifications.map((n) => n.kind)).toEqual(['KICKED'])
+    expect(s.lastError).toBeNull()
+  })
+
+  it('someone else leaving only shortens the roster', () => {
+    let s = start('holdem', HOLDEM_RULES, [20000, 20000], 1)
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 30, event: { type: 'PLAYER_LEFT', playerId: 'p0' } }, now: 0 })
+    expect(s.room?.players.map((p) => p.playerId)).toEqual(['p1'])
+  })
+})
+
 describe('renamed (T7)', () => {
   it('gives `me` the new name at once, and leaves the table roster as the server named it', () => {
     let s = start('blind', BLIND_B, [5000, 5000], 1)

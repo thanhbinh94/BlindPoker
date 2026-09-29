@@ -720,10 +720,13 @@ export class Room {
 
   private async removePlayer(p: RoomPlayer, reason: string): Promise<void> {
     await this.standUpNow(p)
+    // Said while the player is still on the list, so a connected player hears their own departure too. Without it
+    // a player removed later than they asked — a Leave pressed mid-hand, then a reconnect that put them back on
+    // the room screen before the hand ended — was dropped in silence and left looking at a frozen table.
+    this.broadcastRoomEvent({ type: 'PLAYER_LEFT', playerId: p.identity.playerId })
     this.players.delete(p.identity.playerId)
     this.onMembership?.(p.identity.playerId, false)
     this.clearPlayerTimer(p.identity.playerId)
-    this.broadcastRoomEvent({ type: 'PLAYER_LEFT', playerId: p.identity.playerId })
     if (p.identity.playerId === this.hostPlayerId) this.transferHost()
     if (this.humanCount === 0) this.scheduleClose()
     this.deps.log.info('player left room', { roomId: this.roomId, playerId: p.identity.playerId, reason })

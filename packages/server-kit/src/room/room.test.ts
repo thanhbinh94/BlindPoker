@@ -188,6 +188,20 @@ describe('Room seats and buy-ins', () => {
     expect(h.room.hasPlayer('a')).toBe(false)
     expect(h.last('a', 'NOTIFICATION')).toMatchObject({ kind: 'KICKED' })
     expect(h.last('h', 'ROOM_EVENT')?.event).toMatchObject({ type: 'PLAYER_LEFT', playerId: 'a' })
+    // The kicked player hears it too — the notice first (a toast), then the event that takes the room off their screen.
+    expect(h.sent.get('a')!.slice(-2)).toMatchObject([
+      { t: 'NOTIFICATION', kind: 'KICKED' },
+      { t: 'ROOM_EVENT', event: { type: 'PLAYER_LEFT', playerId: 'a' } },
+    ])
+  })
+
+  it('leave between hands: the leaver is told the same PLAYER_LEFT as everyone else', async () => {
+    const h = createRoomHarness(HOLDEM)
+    await h.room.join(h.identity('a'))
+    await h.room.leave('a')
+    expect(h.last('a', 'ROOM_EVENT')?.event).toMatchObject({ type: 'PLAYER_LEFT', playerId: 'a' })
+    expect(h.last('h', 'ROOM_EVENT')?.event).toMatchObject({ type: 'PLAYER_LEFT', playerId: 'a' })
+    expect(h.last('a', 'ROOM_EVENT')?.seq).toBe(h.last('h', 'ROOM_EVENT')?.seq)
   })
 
   it('kick takes a bot off the table between hands: the seat empties and a person fits in its place (T3)', async () => {

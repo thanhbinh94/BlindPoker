@@ -368,6 +368,12 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
       const event = msg.event
       // Standing, leaving or sitting out ends the seat's standing preferences with it.
       const mine = state.me !== null && 'playerId' in event && event.playerId === state.me.playerId
+      // The server has taken *me* off the list — a leave, a kick, or a Leave pressed mid-hand that only took effect
+      // when the hand ended. The room is gone for this client exactly as after a leave it asked for: the room screen
+      // hands over to the app (`onLeft`). A kick also brings its own KICKED notification; that stays a toast only.
+      if (mine && event.type === 'PLAYER_LEFT') {
+        return { ...state, room: null, hand: null, seq: msg.seq, deadlineAt: null, preAction: null, autoPlay: false }
+      }
       const stopsAutoPlay = mine && (event.type === 'PLAYER_STOOD' || event.type === 'PLAYER_LEFT' || (event.type === 'PLAYER_SIT_OUT' && event.sittingOut))
       return {
         ...state,
