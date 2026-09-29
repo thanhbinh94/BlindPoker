@@ -8,7 +8,7 @@ below are the real history.
 
 ---
 
-## Plan 15 — Blind Poker table limit — *merge commit to be filled in by the controller*
+## Plan 15 — Blind Poker table limit — merged `e0d7f57` (2026-09-29)
 
 A Blind seat no longer plays from the whole balance. Sitting down brings `min(balance, 5 × wager)` to the table
 (`buy_in`); hands move table stacks only, and the ledger records just the fee; every way off a seat takes the stack home
