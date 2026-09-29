@@ -32,6 +32,11 @@ export interface GameClientApi {
   /** Blind Poker: answer every play-or-fold decision with "play" until the seat is left. */
   setAutoPlay(on: boolean): void
   resync(): void
+  /**
+   * Local state only: the account was renamed (the app's own request succeeded), so `state.me` takes the new
+   * name now rather than at the next `WELCOME` — the lobby bar reads it from there.
+   */
+  renamed(displayName: string): void
   clearError(): void
   dismissNotification(id: number): void
   /**
@@ -141,6 +146,7 @@ export function useGameClient(opts: UseGameClientOptions): GameClientApi {
       setPreAction: (kind) => dispatch({ type: 'preAction', kind }),
       setAutoPlay: (on) => dispatch({ type: 'autoPlay', on }),
       resync: () => void connection.send({ t: 'RESYNC' }),
+      renamed: (displayName) => dispatch({ type: 'renamed', displayName }),
       clearError: () => dispatch({ type: 'clearError' }),
       dismissNotification: (id) => dispatch({ type: 'dismissNotification', id }),
       reset: () => dispatch({ type: 'reset' }),

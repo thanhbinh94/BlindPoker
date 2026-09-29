@@ -166,9 +166,11 @@ test('K-04 K-05: the profile counts what was played, and a rename shows everywhe
   await field.fill(fresh)
   await page.getByRole('button', { name: 'Lưu tên' }).click()
   await expect(page.getByRole('heading', { name: fresh, level: 2 })).toBeVisible()
-  // The lobby bar reads the socket's identity, which keeps the old name until the connection is made again —
-  // finding T7: the confirmation only warns about the table. After a reload the new name is everywhere.
+  // Finding T7: the lobby bar used to keep the old name until a reload. Now it takes the new one at once — no reload
+  // — and keeps it across one.
   await page.goto('/#/lobby')
+  await expect(page.getByRole('banner').getByText(fresh, { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('banner').getByText(a.who.displayName, { exact: true })).toHaveCount(0)
   await page.reload()
   await expect(page.getByRole('banner').getByText(fresh, { exact: true }).first()).toBeVisible()
 })

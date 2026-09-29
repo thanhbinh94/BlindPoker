@@ -431,6 +431,19 @@ describe('frames with nothing to apply ask for a snapshot', () => {
   })
 })
 
+describe('renamed (T7)', () => {
+  it('gives `me` the new name at once, and leaves the table roster as the server named it', () => {
+    let s = start('blind', BLIND_B, [5000, 5000], 1)
+    s = reduceClient(s, { type: 'renamed', displayName: 'Minh Sài Gòn' })
+    expect(s.me).toEqual({ playerId: 'p1', displayName: 'Minh Sài Gòn' })
+    expect(s.room?.players.find((p) => p.playerId === 'p1')?.displayName).toBe('P1')
+  })
+
+  it('has nobody to rename before WELCOME', () => {
+    expect(reduceClient(initialClientState, { type: 'renamed', displayName: 'Minh' })).toBe(initialClientState)
+  })
+})
+
 describe('reset', () => {
   it('forgets the session: identity, balance, room, hand and notifications all go back to nothing', () => {
     const room = roomView('holdem', HOLDEM_RULES, [20000, 20000])

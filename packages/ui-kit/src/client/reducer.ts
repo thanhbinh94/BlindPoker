@@ -402,6 +402,10 @@ export function reduceClient(state: ClientState, action: ClientAction): ClientSt
       return { ...state, preAction: action.kind === null || state.hand === null ? null : { kind: action.kind, handId: state.hand.handId } }
     case 'autoPlay':
       return { ...state, autoPlay: action.on }
+    case 'renamed':
+      // Only `me`: a seat already at a table was named when its player sat down, for everyone at it, and the
+      // server renames it the next time that player enters a room — the app's rename notice says so.
+      return state.me === null ? state : { ...state, me: { ...state.me, displayName: action.displayName } }
     case 'reset':
       return initialClientState
   }

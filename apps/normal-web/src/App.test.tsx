@@ -47,6 +47,9 @@ const socket = (): FakeSocket => {
 
 /** Drives the socket the way the Normal server would: open, then `WELCOME` — with no `HELLO` in between. */
 async function welcome(): Promise<void> {
+  // The gate opens the socket in an effect once the boot probe answers; on a cold first run the i18n instance can
+  // still be settling then, so `settled()` may return before that render — wait for the socket itself.
+  await waitFor(() => expect(FakeSocket.instances.length).toBeGreaterThan(0))
   await act(async () => {
     socket().open()
   })
@@ -508,6 +511,56 @@ describe('App — back into the room the server still holds (T5)', () => {
 
     expect(await screen.findByRole('heading', { name: ROOMS_HEADING })).toBeInTheDocument()
     expect(window.location.hash).toBe('#/lobby')
+  })
+})
+
+describe('App — a rename (T7)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    FakeSocket.reset()
+  })
+
+  const STATS = Object.fromEntries(
+    [
+      'handsPlayedHoldem', 'handsWonHoldem', 'handsPlayedBlind', 'handsWonBlind', 'botHands', 'currentWinStreak', 'bestWinStreak',
+      'currentLoseStreak', 'bestLoseStreak', 'bestHandRank', 'biggestWin', 'roomsJoined', 'gamesCompleted', 'totalLoginDays',
+      'loginStreak', 'bestLoginStreak',
+    ].map((key) => [key, 0]),
+  )
+
+  it('shows the new name in the lobby bar as soon as the server accepts it, with no reload', async () => {
+    window.history.replaceState(null, '', '/#/profile')
+    const rename = vi.fn().mockResolvedValue({ playerId: 'p1', displayName: 'Minh Sài Gòn' })
+    const user = userEvent.setup()
+    renderApp(
+      stubApi({
+        me: vi.fn().mockResolvedValue({
+          playerId: 'p1', displayName: 'Bình', email: 'binh@example.com', balance: 123_000,
+          avatar: { v: 3, base: 'f01', outfit: 'avatar_default' }, createdAt: 0, lastLoginAt: 0,
+        }),
+        stats: vi.fn().mockResolvedValue(STATS),
+        history: vi.fn().mockResolvedValue([]),
+        ledger: vi.fn().mockResolvedValue({ entries: [], nextBefore: null }),
+        rename,
+      }),
+    )
+    await settled()
+    await welcome()
+
+    const box = await screen.findByLabelText(viNormal.profile.rename.label)
+    await user.clear(box)
+    await user.type(box, 'Minh Sài Gòn')
+    await user.click(screen.getByRole('button', { name: viNormal.profile.rename.submit }))
+    await waitFor(() => expect(rename).toHaveBeenCalledWith('Minh Sài Gòn'))
+    expect(await screen.findByText(viNormal.profile.rename.saved)).toBeInTheDocument()
+
+    act(() => {
+      window.location.hash = '#/lobby'
+    })
+    expect(await screen.findByRole('heading', { name: ROOMS_HEADING })).toBeInTheDocument()
+    // The socket still says "Bình" — it was named at the upgrade — but the app no longer reads it back as is.
+    expect(await screen.findByText('Minh Sài Gòn')).toBeInTheDocument()
+    expect(screen.queryByText('Bình')).toBeNull()
   })
 })
 

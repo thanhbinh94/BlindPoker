@@ -28,6 +28,7 @@ function fakeClient(state: ClientState, overrides: Partial<GameClientApi> = {}):
     kick: vi.fn().mockResolvedValue(ACK),
     act: vi.fn().mockResolvedValue(ACK),
     resync: vi.fn(),
+    renamed: vi.fn(),
     clearError: vi.fn(),
     dismissNotification: vi.fn(),
     setPreAction: vi.fn(),

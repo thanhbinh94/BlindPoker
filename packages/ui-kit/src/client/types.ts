@@ -128,6 +128,11 @@ export type ClientAction =
   | { type: 'preAction'; kind: PreActionKind | null }
   | { type: 'autoPlay'; on: boolean }
   /**
+   * The account's display name changed (the app's own rename succeeded): `me` takes the new name at once. The
+   * socket's identity would otherwise keep the old one until the next `WELCOME`, and the lobby bar reads it.
+   */
+  | { type: 'renamed'; displayName: string }
+  /**
    * Forget everything: back to `initialClientState`.
    *
    * The one thing that needs it is a session ending. The reducer is created once per app mount and outlives

@@ -223,6 +223,17 @@ export function App({ api, socketFactory }: AppProps) {
   const toRoom = useCallback(() => navigate('/room'), [navigate])
   useRoomReturn(client.state, toRoom)
 
+  // A rename the server accepted: the gate (the rail) and the socket's identity (the lobby bar) both take the
+  // new name now, not at the next reload (finding T7 of the 2026-09-28 run).
+  const { renamed: gateRenamed } = gate
+  const onRenamed = useCallback(
+    (displayName: string) => {
+      gateRenamed(displayName)
+      clientRef.current.renamed(displayName)
+    },
+    [gateRenamed],
+  )
+
   if (gate.state === 'checking') {
     return (
       <p className={s.booting} role="status">
@@ -275,7 +286,7 @@ export function App({ api, socketFactory }: AppProps) {
                 }
               >
                 {path === '/profile' ? (
-                  <ProfileScreen api={guarded} lang={lang} balance={balance} onRenamed={gate.renamed} />
+                  <ProfileScreen api={guarded} lang={lang} balance={balance} onRenamed={onRenamed} />
                 ) : path === '/avatar' ? (
                   <WardrobeScreen api={guarded} playerId={myId} />
                 ) : path === '/inventory' ? (
