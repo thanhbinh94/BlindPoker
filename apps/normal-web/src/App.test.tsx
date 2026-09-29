@@ -518,6 +518,49 @@ describe('App — the daily reminder', () => {
     expect(screen.queryByText(viNormal.nav.dailyReady)).toBeNull()
   })
 
+  /** A day that is claimable until the claim lands, and taken after it — the server's own answer either side. */
+  const claimingApi = (claim: NormalApi['claimDaily']) => {
+    let taken = false
+    return stubApi({
+      daily: vi.fn(async () => status(!taken)),
+      claimDaily: vi.fn(async () => {
+        taken = true
+        return claim()
+      }),
+    })
+  }
+
+  it('drops the dot the moment the claim lands, while the player is still on the reward page (T1)', async () => {
+    const receipt = { claimed: true, day: 3, points: 7000, item: null, items: [], fallbackPoints: 0, balance: 130_000, streak: 3 }
+    const user = userEvent.setup()
+    renderApp(claimingApi(vi.fn().mockResolvedValue(receipt)))
+    await settled()
+    await welcome()
+    await waitFor(() => expect(window.location.hash).toBe('#/daily'))
+    const nav = screen.getByRole('navigation', { name: viNormal.nav.main })
+    expect(await within(nav).findByText(viNormal.nav.dailyReady)).toBeInTheDocument()
+
+    await user.click(await screen.findByRole('button', { name: viNormal.daily.claim }))
+
+    await waitFor(() => expect(within(nav).queryByText(viNormal.nav.dailyReady)).toBeNull())
+    expect(window.location.hash, 'nobody had to leave the page for it').toBe('#/daily')
+  })
+
+  it('drops the dot too when the claim is refused as already taken in another tab', async () => {
+    const user = userEvent.setup()
+    renderApp(claimingApi(vi.fn().mockRejectedValue(new ApiError(409, 'ALREADY_CLAIMED', 'already claimed today'))))
+    await settled()
+    await welcome()
+    await waitFor(() => expect(window.location.hash).toBe('#/daily'))
+    const nav = screen.getByRole('navigation', { name: viNormal.nav.main })
+    expect(await within(nav).findByText(viNormal.nav.dailyReady)).toBeInTheDocument()
+
+    await user.click(await screen.findByRole('button', { name: viNormal.daily.claim }))
+
+    expect(await screen.findByText(viNormal.daily.errors.ALREADY_CLAIMED)).toBeInTheDocument()
+    expect(within(nav).queryByText(viNormal.nav.dailyReady)).toBeNull()
+  })
+
   it('keeps a deep link even with a reward waiting, and only marks the tab', async () => {
     window.history.replaceState(null, '', '/#/settings')
     renderApp(apiWith(true))

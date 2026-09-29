@@ -12,6 +12,7 @@ import {
   type ReliefStatusDto,
 } from '../api.js'
 import { itemName } from '../catalog-i18n.js'
+import { markClaimedToday } from '../daily-nudge.js'
 import { formatMoment } from './format.js'
 import s from './normal.module.css'
 import { refusalText } from './refusal.js'
@@ -217,9 +218,13 @@ export function DailyScreen({ api, lang }: DailyScreenProps) {
     setNote(null)
     try {
       setReceipt(await api.claimDaily())
+      markClaimedToday()
     } catch (cause) {
       setReceipt(null)
-      setNote(cause instanceof ApiError && cause.code === 'ALREADY_CLAIMED' ? t('daily.errors.ALREADY_CLAIMED') : refusalText(cause, t))
+      const taken = cause instanceof ApiError && cause.code === 'ALREADY_CLAIMED'
+      // Refused as already claimed is the same news for the rail's dot: today's reward is gone.
+      if (taken) markClaimedToday()
+      setNote(taken ? t('daily.errors.ALREADY_CLAIMED') : refusalText(cause, t))
     } finally {
       setBusy(false)
       // Both, and whichever way the claim went: a success moved the streak *and* the balance, and an

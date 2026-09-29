@@ -304,7 +304,8 @@ test.describe('Blind Luck Poker Normal', () => {
     expect(valueAfter('Số dư mới'), 'the receipt agrees with itself').toBe(before + points)
     expect(await readBalance(page), 'the claim credited exactly what the receipt promised').toBe(before + points)
     await expect(page.getByText('Hôm nay bạn đã điểm danh rồi. Hẹn gặp lại ngày mai.')).toBeVisible()
-    // Claimed: leaving the page re-reads the status and the dot goes with it.
+    // Claimed: the dot goes on this page, at once (finding T1), and leaving the page re-reads the status too.
+    await expect(rail.getByText('Có quà chưa nhận'), 'the claim itself puts the dot out').toHaveCount(0)
     await page.goto('/#/lobby')
     await expectLobby(page)
     await expect(rail.getByText('Có quà chưa nhận')).toHaveCount(0)

@@ -40,8 +40,10 @@ test('S-01 S-02 S-03 I-01 I-02 I-03: first visit, first sign-in, first reward', 
   await claim.click()
   await expect(claim).toBeDisabled()
   await expect.poll(() => balanceOf(page)).toBe(105_000)
-  // The rail re-reads the dot on the way *out* of /daily (`daily-nudge.ts`), so it goes once the player leaves —
-  // finding T1 of the 2026-09-28 run: it stays on the daily page itself right after the claim.
+  // The dot goes on the daily page itself, the moment the claim lands (finding T1 of the 2026-09-28 run: it used to
+  // stay until the player left the page), and stays gone in the lobby.
+  await expect(page.getByText('Có quà chưa nhận')).toHaveCount(0)
+  await expect(page).toHaveURL(/#\/daily$/)
   await page.goto('/#/lobby')
   await expect(page.getByText('Có quà chưa nhận')).toHaveCount(0)
   await page.goto('/#/daily')
