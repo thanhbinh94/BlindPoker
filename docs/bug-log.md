@@ -163,3 +163,9 @@ nhánh `fix/ops-t1-t9` (29/09), chưa merge.
 - T6: phát `ROOM_JOINED` cho chủ phòng ngay sau `ROOM_CREATED`, mỗi phòng một lần.
 - T8: **`.env` thật trên host chưa đổi** — bạn tự sửa đuôi `DATABASE_URL` thành `?sslmode=verify-full` rồi khởi động lại.
 - T9: cảnh báo in ra thật là `Warning: Currently the require()…` của bộ nạp exe (do `ws` dò add-on tuỳ chọn); cảnh báo "SEA is experimental" đã tắt sẵn trong cấu hình SEA. Bộ lọc được nạp trước mọi module khác (`quiet-start.ts`), mọi cảnh báo khác vẫn in.
+
+Vòng sửa sau review (29/09), cùng nhánh:
+- T7 (`5c36038`): đổi tên còn báo cho kết nối đang mở (`renameIdentity`), nên phòng kế tiếp tạo/vào đã mang tên mới, không cần kết nối lại; phòng đang ngồi vẫn giữ tên cũ.
+- T5 (`0c377f9`): người bị đưa ra khỏi phòng (rời giữa ván có hiệu lực cuối ván, bị đuổi) nhận chính `PLAYER_LEFT` của mình; app trở về sảnh thay vì kẹt ở một bàn đứng hình.
+- T3 (`5e172ec`): nút "Quản lý bàn" hiện cả trong lúc đếm ngược giữa hai ván (bàn Blind có bot vẫn ở trạng thái IN_GAME).
+- T6 (`7d7c9d1`): mỗi người chỉ được tính "vào phòng" một lần cho mỗi phòng — rời rồi vào lại không cộng thêm.
