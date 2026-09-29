@@ -169,4 +169,8 @@ trước khi vào lại; tính điểm trên bàn vào điều kiện cứu tr�
 ## 11. Triển khai
 
 Khởi động lại host đóng mọi phòng và trả mọi chồng/pot (§16.7), nên không có ghế Blind nào vắt qua lúc đổi luật. Sau
-merge: `pnpm build:normal`, kiểm `/health` `rooms:0`, `stop.ps1`, `run.ps1 -NoMigrate`; `pnpm build:lite`.
+merge: `pnpm build:normal`, kiểm `/health` `rooms:0`, `stop.ps1`, `run.ps1 -NoMigrate`; `pnpm build:lite`. Trên máy
+host Windows LAN, `stop.ps1` là tắt cứng (không có đường drain), nên chính bước kiểm `/health` `rooms:0` trước khi dừng
+mới là thứ bảo vệ chồng trên bàn — giờ gồm cả hạn mức Blind, tới 250.000 mỗi ghế: phòng còn người ngồi ghế phải được
+đóng trước (mọi người rời phòng — mỗi lần rời trả chồng về số dư — và phòng trống tự đóng, giải phóng pot cộng dồn),
+rồi mới chạy `stop.ps1`.

@@ -3,9 +3,10 @@
  * `--status` — where it is listening and how to prove it is allowed to ask.
  *
  * Windows has no `kill -TERM`. `taskkill`, `sc stop` and closing the console window are hard kills
- * that lose in-flight Hold'em stacks, so the only graceful stop from outside the console is an HTTP
- * request to the process itself — and that request needs an address and a secret. Both live here, in
- * one small JSON file written at `listen()` and removed at `close()`.
+ * that lose every table stack (Hold'em and Blind) and any carry-over pot, so the only graceful stop
+ * from outside the console is an HTTP request to the process itself — and that request needs an
+ * address and a secret. Both live here, in one small JSON file written at `listen()` and removed at
+ * `close()`.
  */
 import { chmodSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'

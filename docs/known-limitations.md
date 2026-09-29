@@ -226,6 +226,16 @@ arise — `docker compose stop app` is a graceful stop, and the server refunds e
 cashes table stacks back into balances before it exits.
 *Tracked:* `deploy/normal-windows/README.md`; the free-tier deployment design §3 and Appendix D3.
 
+**An automatic cash-out retry after a write that committed but reported an error credits twice.**
+When a `cash_out` throws, the room keeps the seat and tries again on its own — at the end of the
+next hand, at the spectator-grace removal, in the shutdown sweep — each time with a fresh row. If
+the first write had in fact committed and only the reply was lost (a connection dropped on the
+`COMMIT` acknowledgement), the stack is credited twice. The same risk already existed in Hold'em for
+a player who pressed Stand Up again after an error.
+*Why it stays:* telling "did not write" from "wrote, then failed to say so" needs an idempotency key
+on the ledger row, which neither repository has; the window is a lost commit acknowledgement.
+*Tracked:* here.
+
 **The suite has never been run against a real PostgreSQL.** Every `apps/normal-server` test runs on
 in-process **PGlite** through the same driver-neutral `AppDb` the production code uses, so the
 queries under test are the production queries. PGlite is single-connection, though, which means the
