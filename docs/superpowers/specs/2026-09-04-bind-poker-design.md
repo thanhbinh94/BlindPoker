@@ -213,17 +213,18 @@ Royal flush (là straight flush cao nhất), Straight flush, Four of a kind, Ful
 | `holeCards` | 2 hoặc 3 |
 | `decisionMode` | `none` (kiểu A — thuần may rủi) hoặc `playOrFold` (kiểu B) |
 | `fixedWager` (W) | 1.000 / 2.000 / 5.000 / 10.000 / 20.000 / 50.000 |
+| Hạn mức (L) | 5 × `fixedWager` — cố định, không chọn khi tạo phòng (sửa đổi 2026-09-29) |
 | `maxPlayers` | 2–8 |
 | `botCount` | 0 … maxPlayers − 1 |
 | `turnTimer` | 10/15/30 giây, mặc định 15 (chỉ dùng cho pha DECISION) |
 
 ### 8.2 Điều kiện tham gia ván
-- Kiểu A: balance ≥ W. Kiểu B: balance ≥ 2W (đủ ante + Play).
-- Người không đủ điều kiện ngồi ngoài ván đó (trạng thái `SITTING_OUT`), vẫn ở ghế.
+- Ghế đủ điều kiện vào ván khi **chồng trên bàn** ≥ W (kiểu A) hoặc ≥ 2W (kiểu B, đủ ante + Play). Vào bàn cần số dư ≥ mức đó (§8.8).
+- Ghế người thật có chồng không đủ bị mời đứng dậy khi ván kết thúc (§8.8); bot được nạp lại.
 - Cần ≥ 2 người đủ điều kiện (bot tính là người), ngược lại về `WAITING`.
 
 ### 8.3 Luồng ván
-1. `STARTING`: dealer marker chuyển ghế kế tiếp (chỉ ảnh hưởng thứ tự chia bài và chip lẻ). Mỗi người đủ điều kiện bị trừ W vào pot. Nếu có pot cộng dồn từ ván trước, cộng vào pot.
+1. `STARTING`: dealer marker chuyển ghế kế tiếp (chỉ ảnh hưởng thứ tự chia bài và chip lẻ). Mỗi người đủ điều kiện bị trừ W từ chồng vào pot. Nếu có pot cộng dồn từ ván trước, cộng vào pot.
 2. `DEALING`: chia `holeCards` lá riêng cho mỗi người.
 3. **Kiểu A**: bỏ qua bước 4.
 4. **Kiểu B — `DECISION`**: tất cả quyết định **đồng thời** trong `turnTimer` giây: `play` (trừ thêm W vào pot) hoặc `fold`. Lựa chọn giấu kín tới khi pha kết thúc (mọi người đã chọn hoặc hết giờ). Hết giờ chưa chọn = `fold`. Kết thúc pha: công bố lựa chọn.
@@ -238,13 +239,13 @@ Royal flush (là straight flush cao nhất), Straight flush, Four of a kind, Ful
 ### 8.4 Pot cộng dồn
 - Chỉ phát sinh ở kiểu B. Lưu trong state phòng. Hiển thị "Pot cộng dồn" trên bàn.
 - Pot được giải phóng khi (a) phòng không thể bắt đầu ván mới liên tục trong `carryOverReleaseMs` (mặc định 60 giây), (b) phòng đóng, hoặc (c) server shutdown — tùy điều kiện nào đến trước.
-- Chia đều cho **mọi người thật đang ngồi ghế** (không xét stack): `share = floor(pot / n)`. Phần dư không chia được — hoặc toàn bộ pot khi không còn ai ngồi ghế — ghi thành một dòng sink `carry_over` qua `BalanceRepository.apply(entries, meta)`, không đưa cho một người bất kỳ.
+- Chia đều cho **mọi người thật đang ngồi ghế** (không xét stack): `share = floor(pot / n)`. Chia vào **số dư** (không vào chồng trên bàn). Phần dư không chia được — hoặc toàn bộ pot khi không còn ai ngồi ghế — ghi thành một dòng sink `carry_over` qua `BalanceRepository.apply(entries, meta)`, không đưa cho một người bất kỳ.
 - Sau khi giải phóng, `carryOverPot = 0` và phòng phát `ROOM_EVENT ROOM_STATUS` (trạng thái không đổi) để mọi view cập nhật lại con số.
 
 ### 8.5 Bot trong Blind Poker
 - Bot ngồi từ khi tạo phòng theo `botCount`, luôn ready, không đếm là host.
 - Bot **chiếm ghế thật**: chúng tính vào `maxPlayers`. Sức chứa người thật = `maxPlayers − botCount đang ngồi`; vượt quá → `ROOM_FULL`. `RoomSummary.playerCount` đếm cả người thật lẫn bot đang ngồi, để danh sách phòng không hứa hẹn những ghế không tồn tại.
-- Balance bot ảo (RAM) khởi đầu 1.000.000, tự nạp lại khi < 2W; không ghi vào kinh tế người chơi.
+- Bot có chồng ảo = L, tự nạp lại về L khi < mức cần cho một ván; không ghi vào kinh tế người chơi.
 - Kiểu A: bot không có quyết định. Kiểu B: xem mục 9.
 
 ### 8.6 Hàng ranking
@@ -253,6 +254,15 @@ Như mục 7.7.
 ### 8.7 Timer và hành động mặc định
 - Chỉ pha `DECISION` có timer. Hết giờ = `fold`.
 - 3 timeout liên tiếp → đứng dậy sau ván (như Normal).
+
+### 8.8 Hạn mức bàn (sửa đổi 2026-09-29)
+- **Vào bàn**: server lấy `min(số dư, L)` từ số dư lên bàn, ghi `buy_in` (từ chối `INSUFFICIENT_BALANCE` nếu số dư < mức cần cho một ván). Không có hộp thoại chọn số.
+- **Trong ván**: ante, tiền Chơi và tiền thắng chỉ đổi chồng trên bàn (có thể vượt L); sổ điểm mỗi ván chỉ ghi dòng sink phí bàn, không còn dòng `settlement` cho người chơi.
+- **Hết hạn mức**: khi ván kết thúc, ghế người thật có chồng không đủ cho một ván bị mời đứng dậy, phần lẻ (nếu có) về số dư qua `cash_out`, người chơi nhận thông báo `TABLE_LIMIT_SPENT`, **ở lại phòng** làm người xem và tự chọn một ghế trống để vào lại (một lần vào bàn mới).
+- **Mọi cách rời ghế trả cả chồng về số dư** (`cash_out`): Đứng dậy, Rời phòng, bị đuổi, quá hạn kết nối lại, ngồi ngoài đủ số ván, đóng phòng, server tắt đúng cách.
+- **Tắt cưỡng bức Lite** mất chồng đang trên bàn, như Hold'em (mục 30).
+
+Chi tiết và lý do: `docs/superpowers/specs/2026-09-29-blind-table-limit-design.md`.
 
 ## 9. Bot Design
 
@@ -328,7 +338,7 @@ Server kiểm tra từng giá trị thuộc tập cho phép; sai → `ERROR INVA
 `maxPlayers` là số ghế, bao gồm cả ghế bot: một phòng blind `maxPlayers: 4, botCount: 2` chỉ còn chỗ cho 2 người thật (mục 8.5).
 
 ### 11.3 Ghế và trạng thái người trong phòng
-- Vào phòng = là "người xem trong phòng" (không ghế). `SIT_DOWN{seat, buyIn?}` chiếm ghế (Hold'em kèm buy-in; Blind không). `STAND_UP` rời ghế.
+- Vào phòng = là "người xem trong phòng" (không ghế). `SIT_DOWN{seat, buyIn?}` chiếm ghế (Hold'em kèm buy-in; Blind không — server tự lấy `min(số dư, L)`, §8.8). `STAND_UP` rời ghế.
 - Trạng thái ghế (`SeatStatus`, cấp phòng): `SEATED`, `READY`, `IN_HAND`, `SITTING_OUT`, `DISCONNECTED` (ghế trống = không có người, `seat: null`). `FOLDED`/`ALL_IN` **không** phải trạng thái phòng: chúng là cờ theo từng ván trong `HandView.seats` (`hasFolded`, `isAllIn`) và biến mất khi ván kết thúc.
 - `SIT_OUT` giữ ghế nhưng xin bỏ qua các ván sau; **ván đang chơi vẫn đánh hết** (cờ chỉ tác động lên lần bắt đầu ván kế tiếp). `SIT_IN` bỏ yêu cầu đó. Chưa có ghế → `NOT_SEATED`.
 - `SITTING_OUT` được tính lại mỗi lần phòng thử bắt đầu ván: `sittingOut = đã xin SIT_OUT || stack < mức tối thiểu`. Người thật đang ngồi mà stack không đủ mức cược sẽ `sittingOut = true` (và trở lại `false` khi đủ) — nên `SIT_IN` với stack vẫn thiếu thì ghế **vẫn** `SITTING_OUT`.
@@ -357,12 +367,13 @@ Server kiểm tra từng giá trị thuộc tập cho phép; sai → `ERROR INVA
 | `tableFeeCapHoldemBB` | 1 |
 | `reliefThreshold` / `reliefTarget` / `reliefCooldownHours` | 5.000 / 5.000 / 24 |
 | `blindWagerTiers` | 1k, 2k, 5k, 10k, 20k, 50k |
+| `blindTableLimitMultiplier` | 5 |
 | `holdemBlindTiers` | 100/200, 250/500, 500/1k, 1k/2k, 2.5k/5k |
 
 ### 12.3 Phí bàn
 Hold'em: `min(floor(totalPot × 0,02), 1 BB)`. Blind: `floor(pot × 0,02)`. Không thu khi pot cộng dồn (chưa kết thúc).
 
-Phí được ghi thành **dòng sink** bởi `BalanceRepository.apply(entries, meta)` với `meta.kind = 'table_fee'` — cùng transaction với các entry của người chơi. Hold'em không có entry nào (chip đã nằm trên bàn) nên gọi `apply([], { kind: 'table_fee', refId: handId, fee })`: một batch rỗng chỉ để ghi dòng sink. Pot cộng dồn khi được giải phóng (mục 8.4) ghi sink `carry_over` theo đúng cơ chế đó.
+Phí được ghi thành **dòng sink** bởi `BalanceRepository.apply(entries, meta)` với `meta.kind = 'table_fee'` — cùng transaction với các entry của người chơi. Hold'em **và Blind** không có entry người chơi nào mỗi ván (chip đã nằm trên bàn) nên gọi `apply([], { kind: 'table_fee', refId: handId, fee })`: một batch rỗng chỉ để ghi dòng sink. Pot cộng dồn khi được giải phóng (mục 8.4) ghi sink `carry_over` theo đúng cơ chế đó.
 
 ### 12.4 Cứu trợ
 `POST /api/economy/relief` (cả hai edition, REST — không nằm trong protocol gameplay): nếu `balance < 5.000` và `lastReliefAt` cách ≥ 24 giờ → balance = 5.000, ghi `relief`.
@@ -979,7 +990,7 @@ Người chơi (tên, stack, avatar/chữ cái, badge/title ở Normal), lá ri�
 - Database **không** đi kèm: `bind-poker.sqlite` (+ `-wal`, `-shm`) được tạo cạnh exe ở lần chạy đầu.
 - Vận hành: copy thư mục vào host (thư mục có quyền ghi, không phải `C:\Program Files`), (tùy chọn) đổi `.env`, chạy exe → console in `Listening on http://0.0.0.0:8080`. Mở firewall cổng 8080 ở profile `Private` nếu cần. `GET /health` là endpoint giám sát (`503` khi database hỏng).
 - Chạy nền: `schtasks /Create /TN "BindPokerLite" … /SC ONSTART /RU SYSTEM` (khuyến nghị) hoặc NSSM với `AppStopMethodConsole` — công cụ bọc dịch vụ duy nhất được hỗ trợ, vì nó dừng bằng Ctrl+C. Không dùng `sc.exe create`: exe không nói giao thức SCM nên Service Control Manager vừa báo start timeout dù server vẫn chạy, vừa giết cứng khi `sc stop`.
-- **Dừng (Windows không có `kill -TERM`)** — chỉ ba đường sau là tắt êm: `bind-poker-lite.exe --stop`, `Ctrl`+`C`/`Ctrl`+`Break` trong console của server (`SIGINT`/`SIGBREAK`), và một service wrapper gửi Ctrl+C (NSSM). `taskkill`, `schtasks /End`, `sc stop` và đóng cửa sổ console là **tắt cứng**: số dư đã ghi vẫn an toàn (mọi bút toán trong transaction) nhưng **stack Hold'em đang trên bàn và pot cộng dồn Blind B thì mất**. `main.ts` bắt `SIGTERM`/`SIGINT`/`SIGBREAK`/`SIGHUP` và chạy cùng một `close()` (drain 10 s).
+- **Dừng (Windows không có `kill -TERM`)** — chỉ ba đường sau là tắt êm: `bind-poker-lite.exe --stop`, `Ctrl`+`C`/`Ctrl`+`Break` trong console của server (`SIGINT`/`SIGBREAK`), và một service wrapper gửi Ctrl+C (NSSM). `taskkill`, `schtasks /End`, `sc stop` và đóng cửa sổ console là **tắt cứng**: số dư đã ghi vẫn an toàn (mọi bút toán trong transaction) nhưng **chồng đang trên bàn (Hold'em và Blind) và pot cộng dồn Blind B thì mất**. `main.ts` bắt `SIGTERM`/`SIGINT`/`SIGBREAK`/`SIGHUP` và chạy cùng một `close()` (drain 10 s).
 - **`--stop` / `--status`**: lúc `listen()`, server ghi `bind-poker.run.json` cạnh file dữ liệu (giải như `SQLITE_PATH`) với `{ pid, port, host, token }` — `token` là 32 byte ngẫu nhiên hex, file mode `0600` ở nơi có — và xoá nó ở `close()`. `--stop` đọc file, `POST /api/admin/shutdown` qua loopback (`X-Requested-With` + `Authorization: Bearer <token>`), rồi poll `pid` tới 15 s và thoát `0`/`1`; `--status` in `/health` của tiến trình đang chạy. Endpoint chặn ba lớp theo thứ tự: rate-limit 5/phút → địa chỉ socket phải loopback (`127.0.0.0/8`, `::1`, `::ffff:127.0.0.1`), nếu không `403` → so token constant-time, sai `401`. Trả `{ ok: true }` rồi mới drain (stopAccepting → hoàn cược/cash-out → đóng listener → đóng database). Vì endpoint chỉ nghe loopback, `--stop` đòi `HOST` là `0.0.0.0` hoặc `127.0.0.1`; bind vào một IP LAN cụ thể thì chỉ còn Ctrl+C/NSSM.
 - **Run file là của đúng một tiến trình.** `--smoke` không ghi run file (nó là tiến trình thứ hai, thường dùng chung thư mục dữ liệu với server đang chạy); xóa run file luôn đọc lại và đối chiếu `pid` + `token` trước khi unlink; và khi khởi động mà run file mô tả một bản **thật sự đang chạy** thì process **từ chối chạy** ("another instance is already running …") thay vì chiếm file — chiếm file sẽ làm bản đang giữ stack của người chơi mất đường tắt êm.
 - **"Đang chạy" phải chứng minh được, không chỉ là `pid` còn sống.** Sau một lần tắt cứng run file vẫn nằm lại và hệ điều hành được phép cấp lại đúng `pid` đó cho một tiến trình bất kỳ, nên nếu chỉ hỏi `process.kill(pid, 0)` thì bản mới bị chặn oan bởi một trình duyệt tình cờ trùng pid. `claimRunFile` (`run-file.ts`) hỏi hai câu: `pid` còn sống **và** `GET /api/config` tại đúng địa chỉ ghi trong file (host `0.0.0.0`/`::`/rỗng → hỏi qua loopback) trả lời `edition: "lite"` trong vòng 1 giây → `held`, từ chối khởi động. Không có file, hoặc `pid` đã chết, là `vacant`/`stale` ngay — không cần hỏi mạng. Còn khi `pid` sống thì hai kết quả của lần hỏi mạng không nặng như nhau: kết nối bị **từ chối thẳng** (`ECONNREFUSED`/`ENOTFOUND`), hoặc trả lời HTTP lỗi/không phải JSON/`edition` khác, là bằng chứng chắc chắn — `stale`, server ghi một dòng `overwriting a stale bind-poker.run.json` kèm lý do rồi ghi đè; nhưng **hết 1 giây mà im lặng** chỉ là *chưa có bằng chứng* (một bản Lite sống nhưng bận đúng lúc đó im lặng y hệt), nên đây không tính là `stale` — server thử lại đúng một lần với cùng thời hạn, và nếu vẫn hết giờ thì kết quả là `unreachable`: process **từ chối khởi động hẳn**, với một thông báo lỗi riêng (khác câu "another instance is already running…" của `held`) bảo chạy `--stop` hoặc kiểm tra lại cổng — không bao giờ ghi đè chỉ vì im lặng, vì đó là hướng duy nhất mà cơ chế mới yếu hơn kiểm tra `pid`-only cũ nếu bỏ qua. Dùng `/api/config` chứ không phải `/health` vì nó đã mang sẵn `edition` (§19.3) nên không cần đổi shape của probe giám sát.
@@ -1046,7 +1057,7 @@ ESLint boundary; test đọc `package.json` từng package và kiểm graph mụ
 | Side pot | Thuật toán tầng 7.4 |
 | Kết nối trùng | Thay kết nối cũ |
 | Server restart | Hủy ván, hoàn cược, stack về balance, thông báo |
-| Lite bị tắt cứng trên Windows (`taskkill`, `schtasks /End`, `sc stop`, đóng cửa sổ) | Không có đường drain: số dư đã ghi vẫn đúng, nhưng stack Hold'em trên bàn và pot cộng dồn Blind B mất. Chỉ `--stop`, `Ctrl`+`C`/`Ctrl`+`Break`, hoặc NSSM (gửi Ctrl+C) mới tắt êm — §28.2 |
+| Lite bị tắt cứng trên Windows (`taskkill`, `schtasks /End`, `sc stop`, đóng cửa sổ) | Không có đường drain: số dư đã ghi vẫn đúng, nhưng chồng trên bàn (Hold'em và Blind, §8.8) và pot cộng dồn Blind B mất. Chỉ `--stop`, `Ctrl`+`C`/`Ctrl`+`Break`, hoặc NSSM (gửi Ctrl+C) mới tắt êm — §28.2 |
 | `bind-poker.run.json` còn lại sau một lần tắt cứng | `--stop` phát hiện `pid` đã chết, xoá file (sau khi đối chiếu `pid`+`token`) và thoát `0`; lần khởi động sau ghi đè file |
 | Tiến trình thứ hai trên cùng thư mục dữ liệu (server thứ hai, hay `--smoke`) | Server thứ hai từ chối khởi động kèm gợi ý `--stop`; `--smoke` không ghi run file. Run file của bản đang chạy không bị động tới |
 | WS lỗi giữa gửi | Client backoff reconnect, RESYNC |
@@ -1092,7 +1103,7 @@ ESLint boundary; test đọc `package.json` từng package và kiểm graph mụ
 16. Lite: giao diện web được nhúng thẳng vào exe (SEA asset) và đọc bằng `sea.getAsset()`; khi dev thì server đọc thư mục `dist/public` (ghi đè bằng `PUBLIC_DIR`). Không có chế độ nào server tự đi tải asset.
 17. `SIT_OUT` có hiệu lực từ **ván kế tiếp**: ván đang chơi vẫn chơi hết. Bộ đếm đứng dậy tự động đếm **ván được chia**, không đếm thời gian thực — nên trên bàn hai ghế mà một người ngồi ngoài thì không ván nào bắt đầu, không ván nào bị bỏ, và ghế được giữ cho tới khi người đó rời hoặc phòng đóng vì trống (`emptyRoomCloseMs`). Trường hợp bỏ bàn do đó thuộc về đường đóng-phòng-trống, không thuộc bộ đếm sit-out (§11.3).
 18. Không đóng gói web font: `--font-display` **đặt tên** một face rồi rơi về Cambria / Constantia / Segoe UI. Giả định là mọi host mục tiêu (Windows với Lite; trình duyệt hiện đại với Normal) có ít nhất một trong ba, và cả ba đều đủ glyph tiền tổ hợp tiếng Việt. Việc đóng gói một bản subset nằm ở roadmap mục 9.
-19. Blind Poker **công khai số dư của mọi ghế**, vì ở Blind ghế *chính là* số dư (§8.1): ante trừ thẳng vào đó và không có stack bàn riêng. Đây là hạn chế thiết kế được chấp nhận, không phải lỗi; Hold'em không bị ảnh hưởng vì ở đó stack bàn tách khỏi balance và chỉ stack được công bố.
+19. Ghế Blind hiện **chồng trên bàn** như Hold'em, không phải số dư thật (§8.8, sửa đổi 2026-09-29): số dư của người chơi không bị công khai ở cả hai chế độ. Trước đó Blind công khai số dư của mọi ghế vì ghế *chính là* số dư — hạn chế đó đã hết và được gỡ khỏi `docs/known-limitations.md`.
 20. Avatar SVG vẽ trong app (Phụ lục A) là bản **tạm**. Bản thay thế 3D có đặc tả riêng — `2026-09-05-avatar-3d-design.md` — và nằm ngoài phạm vi tài liệu này.
 
 ## 33. MVP Scope

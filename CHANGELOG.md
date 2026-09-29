@@ -8,6 +8,18 @@ below are the real history.
 
 ---
 
+## Plan 15 — Blind Poker table limit — *merge commit to be filled in by the controller*
+
+A Blind seat no longer plays from the whole balance. Sitting down brings `min(balance, 5 × wager)` to the table
+(`buy_in`); hands move table stacks only, and the ledger records just the fee; every way off a seat takes the stack home
+(`cash_out`). A seat whose stack can no longer cover a hand is stood up when the hand ends, told so
+(`TABLE_LIMIT_SPENT`), and stays in the room until the player picks a seat again. The room header shows "Mức cược W ·
+Hạn mức L", the create form says what the wager means as a limit, and a spectator who cannot afford a seat is told what
+it needs. Bots play from a virtual limit topped back up to 5 × wager. Design:
+`docs/superpowers/specs/2026-09-29-blind-table-limit-design.md`.
+
+---
+
 ## 2026-09-28 — Renamed to Blind Luck Poker
 
 The product name changes from "Just a Normal Poker" to **Blind Luck Poker** — a pun on the game's own Blind Poker mode, and no longer
