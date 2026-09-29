@@ -84,9 +84,9 @@ export interface ProfileScreenProps {
    */
   balance: number
   /**
-   * A successful rename, reported upwards. The rail and the lobby bar read the name from the session gate,
-   * not from this page's copy of `GET /api/me`, so a rename that stayed here would leave the old name
-   * everywhere else until the next reload.
+   * A successful rename, reported upwards. The rail and the lobby bar read the name from the session gate
+   * and the socket's identity, not from this page's copy of `GET /api/me`, so a rename that stayed here
+   * would leave the old name everywhere else until the next reload; the app updates both.
    */
   onRenamed?: (displayName: string) => void
 }

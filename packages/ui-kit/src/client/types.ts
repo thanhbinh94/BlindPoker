@@ -90,6 +90,14 @@ export interface ClientState {
    * out of the room they are still sitting in.
    */
   roomStale: boolean
+  /**
+   * How many times this session's server has answered a (re)connect with "you are still in a room": bumped by
+   * the `ROOM_SNAPSHOT` that clears `roomStale`. A counter rather than a flag so an app can react to each one
+   * (`useRoomReturn`) — the player who closed the tab mid-game and came back through the lobby is taken to the
+   * room the server is still holding them in, instead of being refused every other room with `ALREADY_IN_ROOM`
+   * and no word about which (finding T5 of the 2026-09-28 run). Back to 0 with `reset`.
+   */
+  roomReturns: number
   hand: ClientHand | null
   seq: number
   deadlineAt: number | null
@@ -120,6 +128,11 @@ export type ClientAction =
   | { type: 'preAction'; kind: PreActionKind | null }
   | { type: 'autoPlay'; on: boolean }
   /**
+   * The account's display name changed (the app's own rename succeeded): `me` takes the new name at once. `me`
+   * came from `WELCOME` and would otherwise keep the old name until the next one, and the lobby bar reads it.
+   */
+  | { type: 'renamed'; displayName: string }
+  /**
    * Forget everything: back to `initialClientState`.
    *
    * The one thing that needs it is a session ending. The reducer is created once per app mount and outlives
@@ -138,6 +151,7 @@ export const initialClientState: ClientState = {
   lobby: [],
   room: null,
   roomStale: true,
+  roomReturns: 0,
   hand: null,
   seq: 0,
   deadlineAt: null,

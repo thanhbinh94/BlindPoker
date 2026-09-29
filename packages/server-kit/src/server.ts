@@ -42,6 +42,12 @@ export interface GameServer {
    * in one — without it a Blind seat would keep showing the stale balance until the next hand.
    */
   balanceChanged(playerId: string): Promise<void>
+  /**
+   * Tells the server a player's display name changed outside the socket (a rename). Their live connection
+   * takes the new name for every room they create or join from now on; a room they are already in keeps the
+   * name its seat was given. See `Gateway.renameIdentity`.
+   */
+  renameIdentity(playerId: string, displayName: string): void
   shutdown(reason?: string): Promise<void>
   readonly connectionCount: number
 }
@@ -80,6 +86,9 @@ export function createGameServer(options: GameServerOptions): GameServer {
       } catch (err) {
         log.warn('balanceChanged lookup failed', { playerId, err: String(err) })
       }
+    },
+    renameIdentity(playerId, displayName) {
+      gw.renameIdentity(playerId, displayName)
     },
     async shutdown(reason = 'server shutdown') {
       log.info('shutting down', { reason, rooms: rooms.size, connections: gw.connectionCount })

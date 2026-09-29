@@ -1,4 +1,4 @@
-import { validateDisplayName } from '@bp/core'
+import { PASSWORD_MIN_LENGTH, validateDisplayName, validatePassword } from '@bp/core'
 import { Button, Field, LanguageSwitch } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
 import { useRef, useState, type FormEvent } from 'react'
@@ -19,10 +19,6 @@ const PASSWORD_HINT_ID = 'bp-auth-password-hint'
 const PASSWORD_ERROR_ID = 'bp-auth-password-error'
 
 export type AuthMode = 'signIn' | 'register'
-
-/** The server's rule (`auth-service.ts`): 8–128 characters, and not the email address. */
-export const MIN_PASSWORD_LENGTH = 8
-const MAX_PASSWORD_LENGTH = 128
 
 export type AuthField = 'email' | 'password' | 'displayName'
 
@@ -130,7 +126,10 @@ export function AuthScreen({ api, mode, onMode, onSignedIn, message = null }: Au
       refuse(localRefusal('INVALID_EMAIL'))
       return
     }
-    if (password.length < MIN_PASSWORD_LENGTH || password.length > MAX_PASSWORD_LENGTH) {
+    // The server's own password rule (`@bp/core`): 8–128 characters and, for a new account, neither the whole
+    // address nor the part before its `@` — what the hint under the box promises. A sign-in checks the length
+    // only; whether the password is right is the server's answer.
+    if (!validatePassword(password, registering ? address : undefined).ok) {
       refuse(localRefusal('INVALID_PASSWORD'))
       return
     }
@@ -233,7 +232,7 @@ export function AuthScreen({ api, mode, onMode, onSignedIn, message = null }: Au
                 className={s.input}
                 type={reveal ? 'text' : 'password'}
                 value={password}
-                minLength={MIN_PASSWORD_LENGTH}
+                minLength={PASSWORD_MIN_LENGTH}
                 aria-invalid={passwordError === undefined ? undefined : true}
                 aria-describedby={
                   // The hint and the error both describe this box; both ids go on, in reading order.

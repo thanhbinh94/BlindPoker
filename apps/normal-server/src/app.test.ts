@@ -731,6 +731,47 @@ describe('the websocket, authenticated by the session cookie', () => {
   })
 })
 
+describe('a rename, and the next room', () => {
+  it('seats the new name in the next room the player creates, without a reconnect (T7)', async () => {
+    const h = await harness()
+    const me = await h.register()
+    const client = await connect(await listen(h), { cookie: me.cookie })
+    const welcome = await client.next('WELCOME')
+
+    const renamed = await h.app.fastify.inject({ method: 'PATCH', url: '/api/me', headers: h.auth(me), payload: { displayName: 'Tên Mới' } })
+    expect(renamed.statusCode).toBe(200)
+    expect(welcome.displayName).not.toBe('Tên Mới')
+
+    client.send({ t: 'CREATE_ROOM', config: BLIND_ROOM })
+    const snapshot = await client.next('ROOM_SNAPSHOT')
+    expect(snapshot.room.players.find((p) => p.playerId === me.playerId)?.displayName).toBe('Tên Mới')
+  })
+})
+
+describe('rooms joined', () => {
+  it('counts the room a player creates as well as the one a player walks into — once each (T6)', async () => {
+    const h = await harness()
+    const alice = await h.register()
+    const mai = await h.register(SECOND_ACCOUNT)
+    const base = await listen(h)
+    const a = await connect(base, { cookie: alice.cookie })
+    const b = await connect(base, { cookie: mai.cookie })
+    await a.next('WELCOME')
+    await b.next('WELCOME')
+
+    a.send({ t: 'CREATE_ROOM', config: BLIND_ROOM })
+    const room = await a.next('ROOM_SNAPSHOT')
+    b.send({ t: 'JOIN_ROOM', code: room.room.code })
+    await b.next('ROOM_SNAPSHOT')
+
+    // The counters move through the bus, a tick after the frames.
+    await vi.waitFor(async () => {
+      expect((await h.app.services.stats.get(alice.playerId)).roomsJoined).toBe(1)
+      expect((await h.app.services.stats.get(mai.playerId)).roomsJoined).toBe(1)
+    }, { timeout: 10_000 })
+  })
+})
+
 describe('a whole hand between two registered players', () => {
   it('settles through the ledger, records a table_fee sink and moves both players’ counters', async () => {
     const h = await harness({ roomOptions: FAST_ROOM })

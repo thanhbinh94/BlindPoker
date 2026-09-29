@@ -13,6 +13,7 @@
  */
 import { validateDisplayName } from '@bp/core'
 import { HttpError } from '@bp/http-kit'
+import type { GameServer } from '@bp/server-kit'
 import { eq } from 'drizzle-orm'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import type { AchievementService } from '../achievements/achievement-service.js'
@@ -48,6 +49,8 @@ export interface MeRouteDeps {
   baseIds: BaseIds
   /** The loaded definitions, so `/api/me/achievements` can answer definition *and* progress at once. */
   defs: AchievementDef[]
+  /** The live socket side: a rename reaches the player's connection so the next room they enter uses it. */
+  game: Pick<GameServer, 'renameIdentity'>
   requireUser: RequireUser
 }
 
@@ -132,8 +135,10 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
    * place it can be decided without a race.
    *
    * A player who is seated keeps their old name at the table until they next join a room: the room
-   * actor holds the identity it was given at `HELLO`, and rewriting it mid-hand would change the
-   * name on a seat that other players are reading.
+   * actor holds the identity it was given when they entered, and rewriting it mid-hand would change
+   * the name on a seat that other players are reading. The live connection, though, takes the new
+   * name at once (`renameIdentity`), so that next room — created or joined — seats them under it
+   * without a reconnect (finding T7 of the 2026-09-28 operation test).
    */
   app.patch('/api/me', authed, async (req, reply) => {
     const raw = (req.body as { displayName?: unknown } | null | undefined)?.displayName
@@ -148,6 +153,7 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
       if (err instanceof DisplayNameTakenError) throw new HttpError(409, 'DISPLAY_NAME_TAKEN', err.message)
       throw err
     }
+    deps.game.renameIdentity(playerId, verdict.name)
     return reply.send({ playerId, displayName: verdict.name })
   })
 

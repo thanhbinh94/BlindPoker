@@ -318,7 +318,18 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
       return { ...state, lobby: msg.rooms }
     case 'ROOM_SNAPSHOT':
       // A snapshot is a fresh view of the hand, possibly a different spot from the one the tick was made in.
-      return { ...state, room: msg.room, roomStale: false, hand: msg.hand ? handFromView(msg.hand, msg.room) : null, seq: msg.seq, deadlineAt: msg.deadlineAt, resyncNeeded: false, preAction: null }
+      // One that lands while the room is unconfirmed is the server's answer to a (re)connect: still in a room.
+      return {
+        ...state,
+        room: msg.room,
+        roomStale: false,
+        roomReturns: state.roomStale ? state.roomReturns + 1 : state.roomReturns,
+        hand: msg.hand ? handFromView(msg.hand, msg.room) : null,
+        seq: msg.seq,
+        deadlineAt: msg.deadlineAt,
+        resyncNeeded: false,
+        preAction: null,
+      }
     case 'BALANCE':
       return { ...state, balance: msg.balance }
     case 'NOTIFICATION':
@@ -357,7 +368,13 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
       const event = msg.event
       // Standing, leaving or sitting out ends the seat's standing preferences with it.
       const mine = state.me !== null && 'playerId' in event && event.playerId === state.me.playerId
-      const stopsAutoPlay = mine && (event.type === 'PLAYER_STOOD' || event.type === 'PLAYER_LEFT' || (event.type === 'PLAYER_SIT_OUT' && event.sittingOut))
+      // The server has taken *me* off the list — a leave, a kick, or a Leave pressed mid-hand that only took effect
+      // when the hand ended. The room is gone for this client exactly as after a leave it asked for: the room screen
+      // hands over to the app (`onLeft`). A kick also brings its own KICKED notification; that stays a toast only.
+      if (mine && event.type === 'PLAYER_LEFT') {
+        return { ...state, room: null, hand: null, seq: msg.seq, deadlineAt: null, preAction: null, autoPlay: false }
+      }
+      const stopsAutoPlay = mine && (event.type === 'PLAYER_STOOD' || (event.type === 'PLAYER_SIT_OUT' && event.sittingOut))
       return {
         ...state,
         room: state.room ? applyRoomEvent(state.room, event) : null,
@@ -391,6 +408,12 @@ export function reduceClient(state: ClientState, action: ClientAction): ClientSt
       return { ...state, preAction: action.kind === null || state.hand === null ? null : { kind: action.kind, handId: state.hand.handId } }
     case 'autoPlay':
       return { ...state, autoPlay: action.on }
+    case 'renamed':
+      // Only `me`. The room the player is in (if any) seated them under the name they entered it with, for
+      // everyone at the table, and keeps it; the server hands the new name to the player's live connection
+      // (`Gateway.renameIdentity`), so the next room they create or join uses it — the app's rename notice
+      // says exactly that.
+      return state.me === null ? state : { ...state, me: { ...state.me, displayName: action.displayName } }
     case 'reset':
       return initialClientState
   }

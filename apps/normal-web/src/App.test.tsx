@@ -47,6 +47,9 @@ const socket = (): FakeSocket => {
 
 /** Drives the socket the way the Normal server would: open, then `WELCOME` — with no `HELLO` in between. */
 async function welcome(): Promise<void> {
+  // The gate opens the socket in an effect once the boot probe answers; on a cold first run the i18n instance can
+  // still be settling then, so `settled()` may return before that render — wait for the socket itself.
+  await waitFor(() => expect(FakeSocket.instances.length).toBeGreaterThan(0))
   await act(async () => {
     socket().open()
   })
@@ -469,6 +472,98 @@ describe('App — a session that ends under the player', () => {
   })
 })
 
+describe('App — back into the room the server still holds (T5)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    FakeSocket.reset()
+  })
+
+  const ROOM = {
+    roomId: 'r1', code: 'ABC234', name: 'Bàn cũ', mode: 'holdem' as const,
+    config: { name: 'Bàn cũ', mode: 'holdem' as const, maxPlayers: 4, isPrivate: false, turnTimerSec: 30, autoStart: false, hasPassword: false, holdem: { smallBlind: 100, bigBlind: 200, minBuyInBB: 50, maxBuyInBB: 200 } },
+    playerCount: 1, maxPlayers: 4, status: 'OPEN' as const, hostPlayerId: 'p1', carryOverPot: 0, nextHandAt: null,
+    players: [{ playerId: 'p1', displayName: 'Bình', isBot: false, isHost: true, connected: true, seat: null, status: null, sittingOut: false, stack: 0, ready: false }],
+  }
+
+  it.each(['/#/lobby', '/#/daily'])('opens the room screen from %s when the connect is answered with a room', async (start) => {
+    window.history.replaceState(null, '', start)
+    renderApp()
+    await settled()
+    await welcome()
+    expect(window.location.hash).toBe(start.slice(1))
+
+    await act(async () => {
+      socket().receive({ t: 'ROOM_SNAPSHOT', seq: 5, room: ROOM, hand: null, deadlineAt: null })
+    })
+
+    await waitFor(() => expect(window.location.hash).toBe('#/room'))
+    expect(await screen.findByRole('button', { name: /Rời phòng/ })).toBeInTheDocument()
+  })
+
+  it('stays in the lobby when the server holds no room for the player', async () => {
+    window.history.replaceState(null, '', '/#/lobby')
+    renderApp()
+    await settled()
+    await welcome()
+    await act(async () => {
+      socket().receive({ t: 'ERROR', code: 'NOT_IN_ROOM', message: 'not in a room' })
+    })
+
+    expect(await screen.findByRole('heading', { name: ROOMS_HEADING })).toBeInTheDocument()
+    expect(window.location.hash).toBe('#/lobby')
+  })
+})
+
+describe('App — a rename (T7)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    FakeSocket.reset()
+  })
+
+  const STATS = Object.fromEntries(
+    [
+      'handsPlayedHoldem', 'handsWonHoldem', 'handsPlayedBlind', 'handsWonBlind', 'botHands', 'currentWinStreak', 'bestWinStreak',
+      'currentLoseStreak', 'bestLoseStreak', 'bestHandRank', 'biggestWin', 'roomsJoined', 'gamesCompleted', 'totalLoginDays',
+      'loginStreak', 'bestLoginStreak',
+    ].map((key) => [key, 0]),
+  )
+
+  it('shows the new name in the lobby bar as soon as the server accepts it, with no reload', async () => {
+    window.history.replaceState(null, '', '/#/profile')
+    const rename = vi.fn().mockResolvedValue({ playerId: 'p1', displayName: 'Minh Sài Gòn' })
+    const user = userEvent.setup()
+    renderApp(
+      stubApi({
+        me: vi.fn().mockResolvedValue({
+          playerId: 'p1', displayName: 'Bình', email: 'binh@example.com', balance: 123_000,
+          avatar: { v: 3, base: 'f01', outfit: 'avatar_default' }, createdAt: 0, lastLoginAt: 0,
+        }),
+        stats: vi.fn().mockResolvedValue(STATS),
+        history: vi.fn().mockResolvedValue([]),
+        ledger: vi.fn().mockResolvedValue({ entries: [], nextBefore: null }),
+        rename,
+      }),
+    )
+    await settled()
+    await welcome()
+
+    const box = await screen.findByLabelText(viNormal.profile.rename.label)
+    await user.clear(box)
+    await user.type(box, 'Minh Sài Gòn')
+    await user.click(screen.getByRole('button', { name: viNormal.profile.rename.submit }))
+    await waitFor(() => expect(rename).toHaveBeenCalledWith('Minh Sài Gòn'))
+    expect(await screen.findByText(viNormal.profile.rename.saved)).toBeInTheDocument()
+
+    act(() => {
+      window.location.hash = '#/lobby'
+    })
+    expect(await screen.findByRole('heading', { name: ROOMS_HEADING })).toBeInTheDocument()
+    // The socket still says "Bình" — it was named at the upgrade — but the app no longer reads it back as is.
+    expect(await screen.findByText('Minh Sài Gòn')).toBeInTheDocument()
+    expect(screen.queryByText('Bình')).toBeNull()
+  })
+})
+
 describe('App — the daily reminder', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -516,6 +611,49 @@ describe('App — the daily reminder', () => {
     expect(await screen.findByRole('heading', { name: viNormal.achievements.ui.title })).toBeInTheDocument()
     expect(window.location.hash).toBe('#/achievements')
     expect(screen.queryByText(viNormal.nav.dailyReady)).toBeNull()
+  })
+
+  /** A day that is claimable until the claim lands, and taken after it — the server's own answer either side. */
+  const claimingApi = (claim: NormalApi['claimDaily']) => {
+    let taken = false
+    return stubApi({
+      daily: vi.fn(async () => status(!taken)),
+      claimDaily: vi.fn(async () => {
+        taken = true
+        return claim()
+      }),
+    })
+  }
+
+  it('drops the dot the moment the claim lands, while the player is still on the reward page (T1)', async () => {
+    const receipt = { claimed: true, day: 3, points: 7000, item: null, items: [], fallbackPoints: 0, balance: 130_000, streak: 3 }
+    const user = userEvent.setup()
+    renderApp(claimingApi(vi.fn().mockResolvedValue(receipt)))
+    await settled()
+    await welcome()
+    await waitFor(() => expect(window.location.hash).toBe('#/daily'))
+    const nav = screen.getByRole('navigation', { name: viNormal.nav.main })
+    expect(await within(nav).findByText(viNormal.nav.dailyReady)).toBeInTheDocument()
+
+    await user.click(await screen.findByRole('button', { name: viNormal.daily.claim }))
+
+    await waitFor(() => expect(within(nav).queryByText(viNormal.nav.dailyReady)).toBeNull())
+    expect(window.location.hash, 'nobody had to leave the page for it').toBe('#/daily')
+  })
+
+  it('drops the dot too when the claim is refused as already taken in another tab', async () => {
+    const user = userEvent.setup()
+    renderApp(claimingApi(vi.fn().mockRejectedValue(new ApiError(409, 'ALREADY_CLAIMED', 'already claimed today'))))
+    await settled()
+    await welcome()
+    await waitFor(() => expect(window.location.hash).toBe('#/daily'))
+    const nav = screen.getByRole('navigation', { name: viNormal.nav.main })
+    expect(await within(nav).findByText(viNormal.nav.dailyReady)).toBeInTheDocument()
+
+    await user.click(await screen.findByRole('button', { name: viNormal.daily.claim }))
+
+    expect(await screen.findByText(viNormal.daily.errors.ALREADY_CLAIMED)).toBeInTheDocument()
+    expect(within(nav).queryByText(viNormal.nav.dailyReady)).toBeNull()
   })
 
   it('keeps a deep link even with a reward waiting, and only marks the tab', async () => {

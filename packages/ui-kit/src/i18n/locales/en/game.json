@@ -217,6 +217,7 @@
     "readyCount": "{{ready}}/{{total}} ready",
     "startHint": "At least 2 players must be ready to start",
     "startNeedsYou": "Press Ready to start — a hand needs at least one real player.",
+    "shortOfPoints": "Not enough points for this stake (need {{amount}})",
     "leaveConfirm": "Leave this room?",
     "closed": "Room closed",
     "kicked": "You were kicked from the room",

@@ -38,6 +38,30 @@ describe('RoomManager', () => {
     expect(domainEvents.filter((e) => e.type === 'ROOM_CREATED')).toHaveLength(3)
   })
 
+  it('counts the room its creator is in: ROOM_JOINED for the host, once, right after ROOM_CREATED (T6)', async () => {
+    const { manager, domainEvents } = setup()
+    const room = manager.create(id('h'), { ...PUBLIC, mode: 'blind', turnTimerSec: 15, holdem: undefined, blind: { holeCards: 2, decisionMode: 'playOrFold', fixedWager: 1000, botCount: 1 } })
+    expect(domainEvents.map((e) => e.type)).toEqual(['ROOM_CREATED', 'ROOM_JOINED'])
+    expect(domainEvents[1]).toEqual({ type: 'ROOM_JOINED', roomId: room.roomId, playerId: 'h' })
+    // Bots are seated by the same constructor and are not anyone's account: nothing for them.
+    // A second person joining is one more event, for them alone.
+    await room.join(id('a'))
+    expect(domainEvents.filter((e) => e.type === 'ROOM_JOINED').map((e) => e.type === 'ROOM_JOINED' && e.playerId)).toEqual(['h', 'a'])
+  })
+
+  it('does not count the creator twice when they leave their room and come back (T6 review)', async () => {
+    const { manager, domainEvents } = setup()
+    const room = manager.create(id('h'), PUBLIC)
+    await room.join(id('a')) // keeps the room open while h is out
+    await room.leave('h')
+    expect(manager.roomOf('h')).toBeUndefined()
+    await room.join(id('h'))
+    await room.leave('a')
+    await room.join(id('a'))
+    const joined = domainEvents.filter((e) => e.type === 'ROOM_JOINED').map((e) => e.type === 'ROOM_JOINED' && e.playerId)
+    expect(joined).toEqual(['h', 'a'])
+  })
+
   it('never puts the room password in the ROOM_CREATED domain event', () => {
     const { manager, domainEvents } = setup()
     manager.create(id('h'), { ...PRIVATE, password: 'pw12' })
@@ -65,6 +89,17 @@ describe('RoomManager', () => {
     expect([...room.players.keys()].length).toBeGreaterThan(0)
     expect(manager.roomOf('h')).toBeUndefined()
     for (const bot of [...room.players.keys()]) expect(manager.roomOf(bot)).toBeUndefined()
+  })
+
+  it('drops a kicked bot from the player index and lists the room one seat emptier (T3)', async () => {
+    const { manager } = setup()
+    const room = manager.create(id('h'), { ...PUBLIC, mode: 'blind', turnTimerSec: 15, holdem: undefined, blind: { holeCards: 2, decisionMode: 'playOrFold', fixedWager: 1000, botCount: 2 } })
+    const [bot, other] = [...room.players.keys()].filter((p) => p.startsWith('bot:'))
+    expect(manager.listPublic()[0]!.playerCount).toBe(3)
+    await room.kick('h', bot!)
+    expect(manager.roomOf(bot!)).toBeUndefined()
+    expect(manager.roomOf(other!)).toBe(room)
+    expect(manager.listPublic()[0]!.playerCount).toBe(2)
   })
 
   it('refuses a second room for a player already in one', () => {

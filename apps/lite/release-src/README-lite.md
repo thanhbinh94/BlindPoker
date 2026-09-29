@@ -182,7 +182,7 @@ Nên sao lưu file `.sqlite` trước khi nâng cấp — hạ cấp về bản 
 | `EADDRINUSE` / server thoát ngay khi khởi động | Cổng 8080 đang bị chương trình khác chiếm. Tìm bằng `netstat -ano \| findstr :8080`, rồi tắt chương trình đó hoặc đặt `PORT=8081` trong `.env`. |
 | Màn hình xanh **"Windows protected your PC"** (SmartScreen) | Bản phát hành chưa ký số nên Windows cảnh báo "unknown publisher". Bấm **More info** → **Run anyway**. |
 | `SQLITE_CANTOPEN`, `EACCES`, `EPERM` | Thư mục chứa exe không cho ghi. Chuyển exe sang thư mục khác (ví dụ `D:\bind-poker\`) hoặc trỏ `SQLITE_PATH` tới nơi có quyền ghi. |
-| Dòng `Warning: Currently the require() provided to the main script...` hoặc `ExperimentalWarning: ...` | Vô hại, bỏ qua. Đó là thông báo của Node.js về cách đóng gói một-file và về tính năng đang thử nghiệm mà server sử dụng; chúng luôn xuất hiện và không phải lỗi. |
+| Dòng `Warning: ...` hoặc `ExperimentalWarning: ...` | Hai thông báo quen thuộc của Node.js (đóng gói một-file, và `node:sqlite` đang thử nghiệm) đã được exe tự ẩn từ bản này. Nếu vẫn thấy một dòng như vậy thì đó là cảnh báo khác, đáng đọc — chép lại khi báo lỗi. |
 | Máy khác không vào được | Kiểm tra theo thứ tự: server có đang chạy không; `HOST` không phải `127.0.0.1`; tường lửa đã mở cổng (mục 4); hai máy cùng một mạng; dùng đúng IP chứ không phải `localhost`. |
 | Trình duyệt hiện trang trắng | Ép tải lại bỏ cache bằng `Ctrl` + `F5`. Nếu vẫn trắng, xem log trong cửa sổ server. |
 | Không rõ server sống hay chết | Chạy `.\bind-poker-lite.exe --status`, hoặc mở `http://localhost:8080/health` — trả về JSON `{"status":"ok",...}` là bình thường. |
@@ -244,8 +244,8 @@ database. There is nothing to install.
 - **Upgrade:** `--stop`, replace the exe, start. Keep the `.sqlite` and `.env` files; schema
   migrations run automatically at startup.
 - **Troubleshooting:** port already in use → set `PORT`; SmartScreen "unknown publisher" → More info
-  → Run anyway (the build is unsigned); `SQLITE_CANTOPEN`/`EACCES` → the folder is not writable; the
-  `Warning: Currently the require() provided to the main script...` and `ExperimentalWarning` lines
-  Node prints on every start are harmless.
+  → Run anyway (the build is unsigned); `SQLITE_CANTOPEN`/`EACCES` → the folder is not writable. The
+  exe hides the two warnings Node used to print on every start (the single-executable `require()` note
+  and the `node:sqlite` experimental notice); any other `Warning`/`ExperimentalWarning` line is real.
 - **Limits:** Windows x64 only, one process (no clustering), no built-in HTTPS — put a TLS reverse
   proxy in front and list its origin in `ALLOWED_ORIGINS` — and no user accounts.

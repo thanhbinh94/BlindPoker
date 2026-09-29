@@ -49,6 +49,13 @@ export class Room {
   private carryOverReleaseTimer: TimerHandle | null = null
   private readonly playerTimers = new Map<string, TimerHandle>()
   private turnStartSeq = 0
+  /**
+   * Everyone who has ever been in this room — the host (and the bots) from the start, every joiner after. A
+   * player's `ROOM_JOINED` is said once per room (the host's by `RoomManager.create`, everyone else's by their
+   * first `join`): "rooms joined" counts rooms, so walking out and back in must not count again, or a player could
+   * farm "Mười phòng"/"Trăm phòng" by pressing Leave and rejoining.
+   */
+  private readonly everJoined = new Set<string>()
 
   constructor(init: RoomInit) {
     this.roomId = init.roomId
@@ -152,10 +159,11 @@ export class Room {
       }
       if (this.config.password !== undefined && password !== this.config.password) throw new RoomError('WRONG_PASSWORD')
       if (this.humanCount >= this.humanCapacity) throw new RoomError('ROOM_FULL')
+      const first = !this.everJoined.has(identity.playerId)
       const p = this.addPlayer(identity)
       this.cancelClose()
       this.broadcastRoomEvent({ type: 'PLAYER_JOINED', player: this.playerView(p) }, identity.playerId)
-      this.deps.onDomainEvent?.({ type: 'ROOM_JOINED', roomId: this.roomId, playerId: identity.playerId })
+      if (first) this.deps.onDomainEvent?.({ type: 'ROOM_JOINED', roomId: this.roomId, playerId: identity.playerId })
       this.changed()
       return this.snapshot(identity.playerId)
     })
@@ -180,14 +188,22 @@ export class Room {
     })
   }
 
+  /**
+   * The host asks someone to leave — a person or a bot, by the same rule: never a seat that holds cards in the
+   * hand being played, so between hands only.
+   *
+   * A bot goes the way a person does (`removePlayer`): its seat empties, it stops holding capacity a person
+   * could use, and the room says `PLAYER_LEFT`. There is nobody to notify and nothing to pay out — a bot has no
+   * account, and `standUpNow` writes no ledger row for one.
+   */
   kick(hostId: string, targetId: string): Promise<void> {
     return this.enqueue(() => {
       this.assertOpen()
       if (hostId !== this.hostPlayerId) throw new RoomError('NOT_HOST')
       const target = this.mustPlayer(targetId)
-      if (targetId === hostId || target.identity.isBot) throw new RoomError('ILLEGAL_ACTION', 'cannot kick this player')
+      if (targetId === hostId) throw new RoomError('ILLEGAL_ACTION', 'cannot kick this player')
       if (this.inCurrentHand(target)) throw new RoomError('GAME_IN_PROGRESS', 'player is in the current hand')
-      this.deps.outbox.send(targetId, { t: 'NOTIFICATION', kind: 'KICKED', payload: { roomId: this.roomId } })
+      if (!target.identity.isBot) this.deps.outbox.send(targetId, { t: 'NOTIFICATION', kind: 'KICKED', payload: { roomId: this.roomId } })
       return this.removePlayer(target, 'kicked')
     })
   }
@@ -595,6 +611,7 @@ export class Room {
       consecutiveTimeouts: 0, disconnectDeadline: null, standAfterHand: false, leaveAfterHand: false,
     }
     this.players.set(identity.playerId, p)
+    this.everJoined.add(identity.playerId)
     this.onMembership?.(identity.playerId, true)
     return p
   }
@@ -712,10 +729,13 @@ export class Room {
 
   private async removePlayer(p: RoomPlayer, reason: string): Promise<void> {
     await this.standUpNow(p)
+    // Said while the player is still on the list, so a connected player hears their own departure too. Without it
+    // a player removed later than they asked — a Leave pressed mid-hand, then a reconnect that put them back on
+    // the room screen before the hand ended — was dropped in silence and left looking at a frozen table.
+    this.broadcastRoomEvent({ type: 'PLAYER_LEFT', playerId: p.identity.playerId })
     this.players.delete(p.identity.playerId)
     this.onMembership?.(p.identity.playerId, false)
     this.clearPlayerTimer(p.identity.playerId)
-    this.broadcastRoomEvent({ type: 'PLAYER_LEFT', playerId: p.identity.playerId })
     if (p.identity.playerId === this.hostPlayerId) this.transferHost()
     if (this.humanCount === 0) this.scheduleClose()
     this.deps.log.info('player left room', { roomId: this.roomId, playerId: p.identity.playerId, reason })

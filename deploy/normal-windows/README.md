@@ -48,13 +48,17 @@ script không làm thay và không cần biết mật khẩu của bạn.
 4. Nếu lỡ đóng màn hình đó: vào **Dashboard** → chọn project → thẻ **Connection Details** ở cột phải
    → **Connection string** → **Copy**.
 
-Chuỗi nhận được có dạng:
+Neon đưa chuỗi kết thúc bằng `?sslmode=require`. Đổi `require` thành `verify-full` (phần phía sau, nếu có,
+như `&channel_binding=require`, giữ nguyên), để được chuỗi dạng:
 
 ```text
-postgresql://neondb_owner:npg_XXXXXXXX@ep-cool-name-12345678.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+postgresql://neondb_owner:npg_XXXXXXXX@ep-cool-name-12345678.ap-southeast-1.aws.neon.tech/neondb?sslmode=verify-full
 ```
 
-Giữ nguyên cả `?sslmode=require` ở cuối — thiếu nó Neon từ chối kết nối.
+Luôn phải có `sslmode` ở cuối — thiếu nó Neon từ chối kết nối. Vì sao `verify-full`: thư viện `pg` hiện hiểu
+`require` là "mã hoá và kiểm tra chứng chỉ", nhưng từ pg v9 `require` sẽ chỉ còn mã hoá, không kiểm tra chứng chỉ
+(và server đã in cảnh báo về chuyện này vào `normal.err.log`); `verify-full` giữ đúng mức kiểm tra hiện nay và hết
+cảnh báo.
 
 > **Lưu ý về gói miễn phí:** database sẽ **ngủ** sau khoảng 5 phút không ai dùng. Lần kết nối đầu
 > sau khi ngủ mất 1–2 giây, đôi khi lỗi luôn — chạy lại là được. Xem mục 8.
@@ -248,7 +252,7 @@ dụng cho trường hợp chạy LAN trực tiếp, không có proxy.
 | `[error] ... vẫn còn giá trị mẫu CHANGE_ME` | Bạn chép `.env.example` nhưng chưa điền `DATABASE_URL` và/hoặc `SESSION_SECRET`. Xem mục 4. |
 | `[error] SESSION_SECRET dài N ký tự, cần ít nhất 32` | Dùng lệnh sinh chuỗi ngẫu nhiên ở mục 4. |
 | `[error] Không thấy file cấu hình ...\.env` | Chưa `Copy-Item .env.example .env`, hoặc bạn đang đứng ở sai thư mục. |
-| `[error] migrate-cli thoát với mã 1` kèm `ECONNREFUSED` / `ETIMEDOUT` | Database không trả lời. Neon vừa ngủ dậy — **chạy lại lệnh một lần nữa**. Nếu vẫn lỗi: kiểm tra `DATABASE_URL` đã dán đủ cả `?sslmode=require`, và máy có Internet. |
+| `[error] migrate-cli thoát với mã 1` kèm `ECONNREFUSED` / `ETIMEDOUT` | Database không trả lời. Neon vừa ngủ dậy — **chạy lại lệnh một lần nữa**. Nếu vẫn lỗi: kiểm tra `DATABASE_URL` có đủ đuôi `?sslmode=verify-full`, và máy có Internet. |
 | `[error] ... DATABASE_URL is not a valid URL` | Mật khẩu chứa ký tự `/ ? # @` chưa được percent-encode. Ở Neon, bấm **Reset password** để lấy mật khẩu mới. |
 | `[error] Server thoát ngay khi khởi động` kèm `EADDRINUSE` | Cổng 8080 đang bị chương trình khác chiếm. Tìm bằng `netstat -ano \| findstr :8080`, rồi tắt chương trình đó, hoặc chạy `.\run.ps1 -Port 9090` **và** sửa cổng trong `ALLOWED_ORIGINS`. |
 | `[error] ALLOWED_ORIGINS chưa được đặt` | Điền `ALLOWED_ORIGINS` trong `.env` — xem mẫu ở `.env.example`. |

@@ -211,6 +211,35 @@ describe('AuthScreen — where a refusal lands', () => {
     expect(api.login).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ['the whole address', 'binh@example.com', 'Binh@Example.com'],
+    ['the part before the @', 'binh-account@example.com', 'BINH-ACCOUNT'],
+  ])('refuses %s as a new password on the password box, without calling the server (T2)', async (_, address, typed) => {
+    const api = stubApi()
+    const { user } = setup(api, 'register')
+
+    await user.type(emailBox(), address)
+    await user.type(passwordBox(), typed)
+    await user.type(nameBox(), 'Bình')
+    await user.click(submit(t.submitRegister))
+
+    expect(await screen.findByText(t.errors.INVALID_PASSWORD)).toBeInTheDocument()
+    expect(passwordBox()).toHaveAttribute('aria-invalid', 'true')
+    expect(passwordBox()).toHaveFocus()
+    expect(api.register).not.toHaveBeenCalled()
+  })
+
+  it('leaves the address-as-password question to the server on sign-in', async () => {
+    const api = stubApi()
+    const { user } = setup(api)
+
+    await user.type(emailBox(), 'binh@example.com')
+    await user.type(passwordBox(), 'binh@example.com')
+    await user.click(submit(t.submitSignIn))
+
+    await waitFor(() => expect(api.login).toHaveBeenCalledWith({ email: 'binh@example.com', password: 'binh@example.com' }))
+  })
+
   it('refuses an invalid display name on the name box, without calling the server', async () => {
     const api = stubApi()
     const { user } = setup(api, 'register')

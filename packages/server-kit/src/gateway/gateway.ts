@@ -114,6 +114,18 @@ export class Gateway {
     return this.accepting
   }
 
+  /**
+   * A player's display name changed outside the socket (an edition's rename). Every live connection of theirs
+   * takes it, so the rooms they create or join from now on seat them under it. The identity is *replaced*, not
+   * edited: a room they are already in holds the old object for its seat, and a seat other players are reading
+   * must not change its name under them — it keeps the old one until the player next enters a room.
+   */
+  renameIdentity(playerId: string, displayName: string): void {
+    for (const conn of this.all) {
+      if (conn.identity?.playerId === playerId) conn.identity = { ...conn.identity, displayName }
+    }
+  }
+
   private refuseUpgrade(socket: Duplex): void {
     socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n')
     socket.destroy()

@@ -327,6 +327,28 @@ describe('out-of-band pushes', () => {
     ts.server.notify('nobody', { t: 'NOTIFICATION', kind: 'X', payload: null }) // offline: a no-op, not a throw
     await ts.server.balanceChanged('b') // not in a room and not connected: also a no-op
   })
+
+  it('renameIdentity: the next room seats the new name; the room already joined keeps the old one (T7)', async () => {
+    ts = await startTestServer()
+    const a = await connect('a')
+    const b = await connect('b')
+    a.send({ t: 'CREATE_ROOM', config: HOLDEM })
+    const first = await a.next('ROOM_SNAPSHOT')
+    b.send({ t: 'JOIN_ROOM', code: first.room.code })
+    await b.next('ROOM_SNAPSHOT')
+
+    ts.server.renameIdentity('a', 'Anh Moi')
+    ts.server.renameIdentity('nobody', 'X') // offline: a no-op
+    // The seat other people are reading keeps its name for as long as a is in this room.
+    const room = ts.server.rooms.get(first.room.roomId)!
+    expect(room.view().players.find((p) => p.playerId === 'a')!.displayName).toBe('A')
+
+    a.send({ t: 'LEAVE_ROOM', reqId: 'leave' })
+    await a.next('ACK', (m) => m.reqId === 'leave')
+    a.send({ t: 'CREATE_ROOM', config: HOLDEM })
+    const second = await a.next('ROOM_SNAPSHOT')
+    expect(second.room.players.find((p) => p.playerId === 'a')!.displayName).toBe('Anh Moi')
+  })
 })
 
 describe('abuse protection', () => {

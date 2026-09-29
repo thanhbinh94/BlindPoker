@@ -4,6 +4,8 @@
  * ways this process can end (`--smoke`, a signal, `--stop` from a second copy of itself, or a
  * startup failure).
  */
+// First, before anything that could load `ws` or `node:sqlite`: the warning filter (see `quiet-start.ts`).
+import './quiet-start.js'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
@@ -28,21 +30,6 @@ const STOP_POLL_MS = 250
  * POSIX; `SIGHUP` is a real signal on both.
  */
 const STOP_SIGNALS = ['SIGTERM', 'SIGINT', 'SIGBREAK', 'SIGHUP'] as const
-
-/**
- * `node:sqlite` announces itself with an `ExperimentalWarning` on first load. It says nothing an
- * operator can act on and it would be the first line of the exe's output, so drop exactly that one
- * and re-dispatch everything else to the handlers Node installed — a swallow-all listener would
- * silence deprecations and unhandled-rejection warnings too.
- */
-function filterSqliteWarning(): void {
-  const defaults = process.listeners('warning') as ((warning: Error) => void)[]
-  for (const handler of defaults) process.removeListener('warning', handler)
-  process.on('warning', (warning) => {
-    if (warning.name === 'ExperimentalWarning' && warning.message.includes('SQLite is an experimental feature')) return
-    for (const handler of defaults) handler(warning)
-  })
-}
 
 function loadAssets(baseDir: string, config: LiteConfig, log: Logger): AssetSource | null {
   const sea = process.getBuiltinModule('node:sea')
@@ -183,7 +170,6 @@ async function pauseForOperator(): Promise<void> {
 // ---------------------------------------------------------------------------- main
 
 async function main(): Promise<void> {
-  filterSqliteWarning()
   const smoke = process.argv.includes('--smoke')
   const baseDir = resolveBaseDir()
   const envFile = resolve(baseDir, '.env')

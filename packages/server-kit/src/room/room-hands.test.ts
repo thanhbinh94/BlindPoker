@@ -273,6 +273,30 @@ describe('Blind hands', () => {
     expect(await h.repos.balances.get('a')).toBe(100_000)
     expect(h.repos.sinks).toEqual([]) // the fee sink is part of the same rejected transaction
   })
+
+  it('the host kicks a bot between hands, never out of the hand it holds cards in, and the next deal goes on without it (T3)', async () => {
+    const h = createRoomHarness(BLIND)
+    await seatAndStart(h, ['h', 'a'])
+    const bot = [...h.room.players.values()].find((p) => p.identity.isBot)!.identity.playerId
+    expect(await code(h.room.kick('h', bot))).toBe('GAME_IN_PROGRESS')
+    expect(h.room.hasPlayer(bot)).toBe(true)
+
+    await playOut(h)
+    expect(h.room.status).toBe('IN_GAME') // between hands: the next deal is on its timer
+    const rows = h.repos.entries.length
+    const sinks = h.repos.sinks.length
+    await h.room.kick('h', bot)
+    expect(h.room.hasPlayer(bot)).toBe(false)
+    expect(h.repos.entries).toHaveLength(rows) // a bot's chips are not anyone's points
+    expect(h.repos.sinks).toHaveLength(sinks)
+
+    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
+    await tick(h)
+    expect(h.room.handActive).toBe(true)
+    const dealt = h.room.snapshot(null).hand!.seats.map((s) => s.playerId)
+    expect(dealt).toHaveLength(3)
+    expect(dealt).not.toContain(bot)
+  })
 })
 
 describe('Hold’em hands', () => {
@@ -349,6 +373,35 @@ describe('Leaving, disconnecting, shutting down', () => {
     expect(h.room.hostPlayerId).toBe('a')
     expect(await h.repos.balances.get('h')).toBeLessThan(100_000) // lost a blind, cashed out the rest
     expect(h.repos.hands).toHaveLength(1)
+  })
+
+  it('a player whose mid-hand Leave takes effect at the end of the hand hears their own PLAYER_LEFT, once', async () => {
+    // Review of T5: a Leave pressed mid-hand, then a reconnect that put the player back on the room screen while the
+    // hand finished. They were removed without a word, and their screen froze on a room that no longer had them.
+    const h = createRoomHarness(HOLDEM)
+    await seatAndStart(h, ['h', 'a'], 20_000)
+    await h.room.leave('a')
+    const left = () => h.ofType('a', 'ROOM_EVENT').filter((m) => m.event.type === 'PLAYER_LEFT' && m.event.playerId === 'a')
+    expect(left()).toHaveLength(0) // not yet: still in the hand
+    await playOut(h)
+    expect(h.room.hasPlayer('a')).toBe(false)
+    expect(left()).toHaveLength(1)
+    // …and it is the last thing the room says to them.
+    expect(h.sent.get('a')!.at(-1)).toMatchObject({ t: 'ROOM_EVENT', event: { type: 'PLAYER_LEFT', playerId: 'a' } })
+  })
+
+  it('a disconnected player removed after the spectator grace is sent nothing: there is no socket to hear it', async () => {
+    const h = createRoomHarness(HOLDEM)
+    await h.room.join(h.identity('a'))
+    await h.room.onDisconnect('a')
+    const before = (h.sent.get('a') ?? []).length
+    h.clock.advance(TEST_ROOM_OPTIONS.reconnectWindowMs)
+    await tick(h)
+    h.clock.advance(TEST_ROOM_OPTIONS.spectatorGraceMs)
+    await tick(h)
+    expect(h.room.hasPlayer('a')).toBe(false)
+    expect(h.last('h', 'ROOM_EVENT')?.event).toMatchObject({ type: 'PLAYER_LEFT', playerId: 'a' })
+    expect((h.sent.get('a') ?? []).length).toBe(before)
   })
 
   it('disconnect: others are told, the player receives nothing, reconnect restores delivery; expiry stands up then removes', async () => {

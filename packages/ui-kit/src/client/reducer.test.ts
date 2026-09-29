@@ -357,6 +357,36 @@ describe('session handshake', () => {
     expect(s.roomStale).toBe(false)
     expect(s.lastError).toBeNull() // an expected probe answer, not a refusal to show the player
   })
+
+  it('counts each "still in a room" answer to a (re)connect, and nothing else (T5)', () => {
+    const room = roomView('holdem', HOLDEM_RULES, [20000, 20000])
+    const snapshot: ServerMessage = { t: 'ROOM_SNAPSHOT', seq: 7, room, hand: null, deadlineAt: null }
+    expect(initialClientState.roomReturns).toBe(0)
+
+    // Connect: WELCOME, then the snapshot the server sends because we are still in a room — one return.
+    let s = reduceClient(initialClientState, { type: 'server', msg: welcome, now: 0 })
+    s = reduceClient(s, { type: 'server', msg: snapshot, now: 0 })
+    expect(s.roomReturns).toBe(1)
+    // The answer to the hook's own RESYNC, a moment later, is the same news: not a second return.
+    s = reduceClient(s, { type: 'server', msg: { ...snapshot, seq: 8 }, now: 0 })
+    expect(s.roomReturns).toBe(1)
+
+    // Leaving, then a room event that sends the client after a snapshot: not a return either.
+    s = reduceClient(s, { type: 'leftRoom' })
+    s = reduceClient(s, { type: 'server', msg: { ...snapshot, seq: 9 }, now: 0 })
+    expect(s.roomReturns).toBe(1)
+
+    // A dropped socket comes back: WELCOME, still in the room — the second return.
+    s = reduceClient(s, { type: 'server', msg: welcome, now: 0 })
+    s = reduceClient(s, { type: 'server', msg: { ...snapshot, seq: 10 }, now: 0 })
+    expect(s.roomReturns).toBe(2)
+
+    // And a reconnect the server answers with NOT_IN_ROOM counts nothing.
+    s = reduceClient(s, { type: 'server', msg: welcome, now: 0 })
+    s = reduceClient(s, { type: 'server', msg: { t: 'ERROR', code: 'NOT_IN_ROOM', message: 'not in a room' }, now: 0 })
+    expect(s.roomReturns).toBe(2)
+    expect(reduceClient(s, { type: 'reset' }).roomReturns).toBe(0)
+  })
 })
 
 describe('notifications', () => {
@@ -398,6 +428,49 @@ describe('frames with nothing to apply ask for a snapshot', () => {
     })
     expect(s.seq).toBe(4)
     expect(s.resyncNeeded).toBe(true)
+  })
+})
+
+describe('PLAYER_LEFT that names me', () => {
+  it('takes the room off the client, as a leave it asked for would — a Leave that only took effect at the hand’s end', () => {
+    let s = start('holdem', HOLDEM_RULES, [20000, 20000], 1)
+    s = reduceClient(s, { type: 'autoPlay', on: true })
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 30, event: { type: 'PLAYER_LEFT', playerId: 'p1' } }, now: 0 })
+    expect(s.room).toBeNull()
+    expect(s.hand).toBeNull()
+    expect(s.roomStale).toBe(false) // confirmed gone: the room screen hands over to the app
+    expect(s.autoPlay).toBe(false)
+    expect(s.resyncNeeded).toBe(false) // nothing to ask for: the server just said so
+    expect(s.lastError).toBeNull()
+  })
+
+  it('a kick: the KICKED notice stays a toast, and the room goes once, through PLAYER_LEFT', () => {
+    let s = start('holdem', HOLDEM_RULES, [20000, 20000], 1)
+    s = reduceClient(s, { type: 'server', msg: { t: 'NOTIFICATION', kind: 'KICKED', payload: { roomId: 'r' } }, now: 5 })
+    expect(s.room).not.toBeNull() // the notice alone moves nothing
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 30, event: { type: 'PLAYER_LEFT', playerId: 'p1' } }, now: 6 })
+    expect(s.room).toBeNull()
+    expect(s.notifications.map((n) => n.kind)).toEqual(['KICKED'])
+    expect(s.lastError).toBeNull()
+  })
+
+  it('someone else leaving only shortens the roster', () => {
+    let s = start('holdem', HOLDEM_RULES, [20000, 20000], 1)
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_EVENT', seq: 30, event: { type: 'PLAYER_LEFT', playerId: 'p0' } }, now: 0 })
+    expect(s.room?.players.map((p) => p.playerId)).toEqual(['p1'])
+  })
+})
+
+describe('renamed (T7)', () => {
+  it('gives `me` the new name at once, and leaves the table roster as the server named it', () => {
+    let s = start('blind', BLIND_B, [5000, 5000], 1)
+    s = reduceClient(s, { type: 'renamed', displayName: 'Minh Sài Gòn' })
+    expect(s.me).toEqual({ playerId: 'p1', displayName: 'Minh Sài Gòn' })
+    expect(s.room?.players.find((p) => p.playerId === 'p1')?.displayName).toBe('P1')
+  })
+
+  it('has nobody to rename before WELCOME', () => {
+    expect(reduceClient(initialClientState, { type: 'renamed', displayName: 'Minh' })).toBe(initialClientState)
   })
 })
 

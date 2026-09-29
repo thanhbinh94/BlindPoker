@@ -148,4 +148,29 @@ describe('App', () => {
     expect(localStorage.getItem(TOKEN_KEY)).toBeNull()
     expect(screen.getByRole('status')).toHaveTextContent(viLite.session.expired)
   })
+
+  it('opens the room screen when the connect is answered with the room the player is still in (T5)', async () => {
+    localStorage.setItem(TOKEN_KEY, 'tok-stored')
+    window.history.replaceState(null, '', '/#/lobby')
+    renderApp()
+    await welcome()
+    expect(await screen.findByRole('heading', { name: ROOMS_HEADING })).toBeInTheDocument()
+
+    await act(async () => {
+      socket().receive({
+        t: 'ROOM_SNAPSHOT',
+        seq: 5,
+        room: {
+          roomId: 'r1', code: 'ABC234', name: 'Bàn cũ', mode: 'blind',
+          config: { name: 'Bàn cũ', mode: 'blind', maxPlayers: 4, isPrivate: false, turnTimerSec: 15, autoStart: false, hasPassword: false, blind: { holeCards: 3, decisionMode: 'none', fixedWager: 1000, botCount: 0 } },
+          playerCount: 1, maxPlayers: 4, status: 'OPEN', hostPlayerId: 'p1', carryOverPot: 0, nextHandAt: null,
+          players: [{ playerId: 'p1', displayName: 'Bình', isBot: false, isHost: true, connected: true, seat: null, status: null, sittingOut: false, stack: 0, ready: false }],
+        },
+        hand: null,
+        deadlineAt: null,
+      })
+    })
+
+    await waitFor(() => expect(window.location.hash).toBe('#/room'))
+  })
 })

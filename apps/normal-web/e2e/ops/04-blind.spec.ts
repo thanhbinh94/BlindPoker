@@ -155,20 +155,18 @@ test('F-06: one plays, one folds — the one who played takes the pot without a 
 })
 
 test('F-08 (T3): the host asks a bot to leave', async () => {
-  // Finding T3 of the 2026-09-28 run: "Quản lý bàn" offers "Đuổi" beside every bot, but the server refuses to kick
-  // a bot (`Room.kick`: ILLEGAL_ACTION "cannot kick this player") and the press changes nothing on screen.
-  // Expected to fail until T3 is decided and fixed — Playwright reports it the day it starts passing.
-  test.fail(true, 'T3: a bot cannot be kicked, but the button is offered')
+  // Finding T3 of the 2026-09-28 run: "Quản lý bàn" offered "Đuổi" beside every bot, but the server refused to kick
+  // a bot. Now a bot goes between hands like anyone else: off the list, off its seat, and the seat is free.
   await createBlind(a.page, { name: unique('Bàn F08 '), bots: 2, mode: 'Chơi hoặc bỏ' })
+  await expect(a.page.locator('[data-seat]').filter({ hasText: 'Bot 1' })).toHaveCount(1)
   await a.page.getByRole('button', { name: 'Quản lý bàn' }).click()
   const dialog = a.page.getByRole('dialog', { name: 'Người trong phòng' })
   await dialog.getByRole('button', { name: 'Đuổi — Bot 1' }).click()
-  try {
-    await expect(dialog.getByText('Bot 1')).toHaveCount(0, { timeout: 5_000 })
-  } finally {
-    await a.page.keyboard.press('Escape')
-    await leave(a.page)
-  }
+  await expect(dialog.getByText('Bot 1')).toHaveCount(0, { timeout: 5_000 })
+  await expect(dialog.getByText('Bot 2'), 'the other bot stays').toBeVisible()
+  await a.page.keyboard.press('Escape')
+  await expect(a.page.locator('[data-seat]').filter({ hasText: 'Bot 1' }), 'its seat is empty').toHaveCount(0)
+  await leave(a.page)
 })
 
 test('F-09: auto-play decides every hand by itself', async () => {
@@ -229,12 +227,16 @@ test('H-02 F-07: below 5.000 the relief tops up to 5.000 once; a stake the balan
 
   // F-07 (FR-R07): a 10.000 stake is more than 5.000 — the seat is refused, in words, and nothing is charged. (A
   // player already seated whose balance falls below the stake sits out instead — the rounds above did exactly that
-  // after each fold, which is what the "Vào lại" toggle on their tray was saying.)
+  // after each fold, which is what the "Vào lại" toggle on their tray was saying; since T4 the tray says why.)
+  // "Nothing charged" is read off the ledger rather than the balance: every room Em creates counts towards "Mười
+  // phòng" since T6, and the room below may be the one that pays it.
+  const rowsBefore = (await ledgerOf(page)).length
   await createBlind(page, { name: unique('Bàn F07 '), bots: 1, mode: 'Thuần may rủi', wager: '10.000' })
   await mySeat(page).getByRole('button', { name: /Ngồi vào bàn/ }).click()
   await expect(page.getByText('Số dư không đủ')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Đứng dậy', exact: true })).toHaveCount(0)
-  expect(await balanceOf(page), 'nothing charged').toBe(balance)
+  const charged = (await ledgerSince(page, rowsBefore)).filter((row) => row.reason !== 'achievement')
+  expect(charged, `nothing charged (the balance was ${balance})`).toEqual([])
   await leave(page)
 })
 

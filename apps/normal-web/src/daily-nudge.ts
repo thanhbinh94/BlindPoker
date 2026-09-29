@@ -28,6 +28,18 @@ const writeNudged = (value: string): void => {
   }
 }
 
+/** Every mounted reminder, told when today's reward is taken. One in practice: `App` mounts it once. */
+const claimListeners = new Set<() => void>()
+
+/**
+ * Today's reward is gone: the daily page calls this the moment a claim lands — or is refused as already
+ * claimed, which means another tab took it — so the tab's dot goes out at once instead of on the way out of
+ * `/daily` (finding T1 of the 2026-09-28 operation test).
+ */
+export function markClaimedToday(): void {
+  for (const listener of claimListeners) listener()
+}
+
 export interface DailyNudgeArgs {
   api: NormalApi
   /** The signed-in account, or `null` — the hook asks once per account, not once per render. */
@@ -42,8 +54,9 @@ export interface DailyNudgeArgs {
  * - **Once a day, on arrival:** when a session starts on a home route and today's reward is still there, the
  *   app opens `/daily` instead of the lobby — once per local day per browser, so a player who does not want it
  *   walks back to the lobby and is not dragged in again.
- * - **The dot on the tab:** `ready` is `true` while a reward is claimable. It is re-read when the player leaves
- *   `/daily`, which is the one place it can have changed.
+ * - **The dot on the tab:** `ready` is `true` while a reward is claimable. `/daily` is the one place it can
+ *   change, so the daily page reports a claim through `markClaimedToday` and the dot goes out right then; it
+ *   is also re-read when the player leaves `/daily`.
  */
 export function useDailyNudge({ api, playerId, path, navigate }: DailyNudgeArgs): { ready: boolean } {
   const [ready, setReady] = useState(false)
@@ -52,6 +65,19 @@ export function useDailyNudge({ api, playerId, path, navigate }: DailyNudgeArgs)
   const asked = useRef<string | null>(null)
   /** Which request is current, so a late reply cannot open the reward page under the next player. */
   const epoch = useRef(0)
+
+  // A claim on the daily page: the dot goes now. The epoch moves too, so a status read that left before the
+  // claim cannot land afterwards and put the dot back.
+  useEffect(() => {
+    const onClaimed = (): void => {
+      epoch.current += 1
+      setReady(false)
+    }
+    claimListeners.add(onClaimed)
+    return () => {
+      claimListeners.delete(onClaimed)
+    }
+  }, [])
 
   useEffect(() => {
     const previous = pathRef.current

@@ -1,4 +1,4 @@
-import type { PlayerAction, RoomPlayerView } from '@bp/core'
+import { blindRequiredStack, type PlayerAction, type RoomPlayerView } from '@bp/core'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useTableExpressions, type ChibiSubject } from '../avatar2d/index.js'
@@ -169,10 +169,25 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
           : readyHumans === 0
             ? 'room.startNeedsYou'
             : 'room.startHint'
+  /**
+   * What the next hand costs this seat, when that can be more than it has (finding T4 of the 2026-09-28 run: a
+   * seat the server had sat out for want of points was told to press Ready). Blind only: a Blind seat mirrors the
+   * account balance, and `Room.startHand` sits out any seat whose balance is under the stake (twice it in
+   * play-or-fold). Hold'em never gets here — a seat that runs out of chips is stood up when the hand ends — so a
+   * seated Hold'em player can always cover the next deal.
+   */
+  const needed = room.config.blind === undefined ? null : blindRequiredStack(room.config.blind)
+  // Not while the player still holds cards: the balance only moves when the hand they are in settles.
+  const inHandNow = hand !== null && hand.mySeat !== null && hand.phase !== 'COMPLETE'
+  const shortOf = mySeated && needed !== null && !inHandNow && state.balance < needed ? needed : null
+  const hint = shortOf !== null ? t('room.shortOfPoints', { amount: formatPoints(shortOf, lang) }) : hintKey === null ? null : t(hintKey)
   /** Everyone the host could ask to leave: the other seats and the spectators, bots included. */
   const others = room.players.filter((p) => p.playerId !== me?.playerId)
-  // Managing the roster is a between-hands job: the dialog closes itself the moment cards are dealt.
-  const canManage = waiting && isHost && others.length > 0
+  // Managing the roster is a between-hands job: the dialog closes itself the moment cards are dealt. "Between
+  // hands" is the server's own kick rule — no seat holds cards — so it is also the countdown to the next deal, where
+  // the room still says IN_GAME (a Blind table with bots never goes back to OPEN between its hands).
+  const handLive = hand !== null && hand.phase !== 'COMPLETE'
+  const canManage = (waiting || !handLive) && isHost && others.length > 0
   const manageKey = hand?.handId ?? 'none'
 
   const countdown =
@@ -273,7 +288,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
               {t('room.manage')}
             </Button>
           ) : null}
-          {hintKey === null ? null : <span className={s.hint}>{t(hintKey)}</span>}
+          {hint === null ? null : <span className={s.hint}>{hint}</span>}
         </div>
 
         {/* The tray belongs to a seated player in a live hand — it holds its place between turns rather than

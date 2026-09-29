@@ -42,6 +42,10 @@ export class RoomManager {
     this.byCode.set(code, room)
     this.deps.log.info('room created', { roomId, code, hostPlayerId: host.playerId, mode: config.mode })
     this.deps.onDomainEvent?.({ type: 'ROOM_CREATED', roomId, hostPlayerId: host.playerId, config: room.summary().config })
+    // The host is in the room as much as anyone who walks in later: "rooms joined" counts the rooms a player has
+    // been in, their own included (finding T6 of the 2026-09-28 run — `Room.join` is the only other place this is
+    // emitted, and the constructor seats the host without going through it). Once per room, like a join.
+    this.deps.onDomainEvent?.({ type: 'ROOM_JOINED', roomId, playerId: host.playerId })
     this.notify()
     return room
   }

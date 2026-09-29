@@ -137,6 +137,12 @@ describe('register', () => {
     await expectAuthError(auth.register({ ...GOOD, email: 'binhlathanh@example.com', password: 'BinhLaThanh' }), 'INVALID_PASSWORD')
   })
 
+  it('refuses the whole address as the password, whatever the casing (T2)', async () => {
+    await expectAuthError(auth.register({ ...GOOD, email: 'binhlathanh@example.com', password: 'binhlathanh@example.com' }), 'INVALID_PASSWORD')
+    await expectAuthError(auth.register({ ...GOOD, email: ' BinhLaThanh@Example.com', password: 'binhlathanh@EXAMPLE.com' }), 'INVALID_PASSWORD')
+    expect(await db.select().from(users)).toEqual([])
+  })
+
   it('refuses a display name the shared validator refuses', async () => {
     await expectAuthError(auth.register({ ...GOOD, displayName: 'x' }), 'INVALID_NAME')
     await expectAuthError(auth.register({ ...GOOD, displayName: 'x'.repeat(21) }), 'INVALID_NAME')

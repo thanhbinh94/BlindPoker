@@ -102,14 +102,16 @@ test('G-03: more than ninety seconds offline stands the seat up after the hand; 
   await autopilot(a.page, ['check', 'call'], async () => (await seatOf(a.page, 1).getByText(b.who.displayName).count()) === 0, 200_000)
   b.page = await b.context.newPage()
   await b.page.goto('/#/lobby')
+  // Spec §16.6 keeps him in the room as a spectator for five minutes, and the server refuses any other room until he
+  // is out of it. Finding T5: the lobby used to say nothing about it. Now the app answers the reconnect by taking him
+  // straight to that room, where its leave button is.
+  await expect(b.page, 'reopening lands on the room he is still in').toHaveURL(/#\/room$/, { timeout: 15_000 })
+  await expect(b.page.getByRole('button', { name: 'Rời phòng' }), 'the room is still his to leave').toBeVisible()
+  await expect(b.page.getByRole('button', { name: 'Đứng dậy', exact: true }), 'as a spectator, not in a seat').toHaveCount(0)
   // His stack came home: at least the 10.000 less the blinds he could have lost.
   const back = await balanceWhen(b.page, (n) => n > bWithout, 30_000)
   expect(back - bWithout, 'the stack reached his balance').toBeGreaterThan(9_000)
   await leave(a.page)
-  // Spec §16.6 keeps him in the room as a spectator for five minutes, and the server refuses any other room until he
-  // is out of it (finding T5: from the lobby nothing says so). The way out is the room screen and its leave button.
-  await b.page.goto('/#/room')
-  await expect(b.page.getByRole('button', { name: 'Rời phòng' }), 'the room is still his to leave').toBeVisible({ timeout: 15_000 })
   await leave(b.page)
 })
 
@@ -128,9 +130,9 @@ test('G-04: the host leaves, and the person who came in first after them hosts',
 
 test('K-03: joining ten rooms unlocks "Mười phòng"', async () => {
   test.setTimeout(240_000)
-  // Only a *join* counts (`Room.join` emits ROOM_JOINED; the creator is added without one) — finding T6: the
-  // description says "Vào 10 phòng chơi" and a player who creates their rooms never gets there. So Giang opens the
-  // rooms and Khoa walks into each.
+  // Giang opens the rooms and Khoa walks into each. Both count: finding T6 of the 2026-09-28 run was that a room
+  // its creator is in did not ("Vào 10 phòng chơi" said otherwise); the host now gets ROOM_JOINED at creation.
+  const hostBefore = (await statsOf(a.page)).roomsJoined ?? 0
   for (let i = 0; i < 10; i++) {
     const code = await createBlind(a.page, { name: unique('Bàn K03 '), bots: 1 })
     await joinByCode(c.page, code)
@@ -142,6 +144,10 @@ test('K-03: joining ten rooms unlocks "Mười phòng"', async () => {
   await expect.poll(async () => (await ledgerOf(c.page)).some((row) => row.reason === 'achievement' && row.amount === 2_000)).toBe(true)
   await c.page.goto('/#/achievements')
   await expect(c.page.getByRole('listitem').filter({ hasText: 'Mười phòng' }).first()).toHaveAttribute('data-unlocked', 'true')
+  // T6: the ten rooms Giang created count for her too, once each, and they take her past ten as well.
+  await expect.poll(async () => (await statsOf(a.page)).roomsJoined, { timeout: 30_000 }).toBe(hostBefore + 10)
+  await a.page.goto('/#/achievements')
+  await expect(a.page.getByRole('listitem').filter({ hasText: 'Mười phòng' }).first()).toHaveAttribute('data-unlocked', 'true')
 })
 
 test('K-04 K-05: the profile counts what was played, and a rename shows everywhere — but not onto a taken name', async () => {
@@ -160,9 +166,11 @@ test('K-04 K-05: the profile counts what was played, and a rename shows everywhe
   await field.fill(fresh)
   await page.getByRole('button', { name: 'Lưu tên' }).click()
   await expect(page.getByRole('heading', { name: fresh, level: 2 })).toBeVisible()
-  // The lobby bar reads the socket's identity, which keeps the old name until the connection is made again —
-  // finding T7: the confirmation only warns about the table. After a reload the new name is everywhere.
+  // Finding T7: the lobby bar used to keep the old name until a reload. Now it takes the new one at once — no reload
+  // — and keeps it across one.
   await page.goto('/#/lobby')
+  await expect(page.getByRole('banner').getByText(fresh, { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('banner').getByText(a.who.displayName, { exact: true })).toHaveCount(0)
   await page.reload()
   await expect(page.getByRole('banner').getByText(fresh, { exact: true }).first()).toBeVisible()
 })

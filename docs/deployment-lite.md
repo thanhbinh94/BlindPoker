@@ -283,7 +283,7 @@ hoặc chấp nhận các ván đang dở bị huỷ và hoàn điểm — `--st
 | SmartScreen "Windows protected your PC" | Exe chưa ký số: **More info** → **Run anyway**, hoặc ký release trước khi phát hành |
 | `SQLITE_CANTOPEN` / `EACCES` / `EPERM` | Thư mục chứa exe không cho ghi — chuyển đi nơi khác hoặc trỏ `SQLITE_PATH` sang chỗ ghi được |
 | Log `no web assets found` | Chạy `dist/server.cjs` ở sai thư mục làm việc: đặt `PUBLIC_DIR`, hoặc chạy từ `apps/lite` |
-| `Warning: Currently the require()…`, `ExperimentalWarning` | Vô hại. Cảnh báo của Node về đóng gói một-file; cảnh báo `node:sqlite` đã được lọc riêng |
+| `Warning: …`, `ExperimentalWarning: …` | `Warning: Currently the require()…` (đóng gói một-file) và cảnh báo `node:sqlite` được lọc ngay khi exe khởi động (`server/src/warnings.ts`, nạp đầu tiên qua `quiet-start.ts`), kể cả với `--status`/`--stop`. Dòng nào khác vẫn hiện là cảnh báo thật |
 | Máy khác không vào được | Theo thứ tự: server còn chạy?; `HOST` ≠ `127.0.0.1`?; firewall đã mở?; cùng mạng?; dùng IP chứ không phải `localhost`? |
 | Trang trắng sau khi nâng cấp | `Ctrl`+`F5`. `index.html` luôn `no-cache`, chỉ file trong `assets/` (đã gắn hash) mới cache vĩnh viễn |
 | Người chơi bị "Phiên chơi đã hết hạn" | Token trong `localStorage` không còn khớp database — thường vì database đã bị xoá/thay. Nhập lại tên mới |

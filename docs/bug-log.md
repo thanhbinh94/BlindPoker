@@ -139,17 +139,33 @@ Tôi tự rà: chụp 37 ảnh bản build thật — mọi màn Normal ở 1440
 
 ## 6. Đợt test vận hành 1 (2026-09-28/29)
 
-Biên bản đầy đủ: `docs/test-runs/2026-09-29-dot-1.md`. Bộ test tự động: `apps/normal-web/e2e/ops/` (các ca T2 và T3
-được đánh dấu "lỗi đã biết" trong đó — Playwright sẽ báo ngày chúng bắt đầu đạt). Chưa sửa gì, chờ người dùng chọn.
+Biên bản đầy đủ: `docs/test-runs/2026-09-29-dot-1.md`. Bộ test tự động: `apps/normal-web/e2e/ops/` (hai ca T2, T3
+từng là "lỗi đã biết", nay là ca thường). Người dùng chọn hướng (a) cho cả chín mục; cả chín đã sửa theo (a) trên
+nhánh `fix/ops-t1-t9` (29/09), chưa merge.
 
 | # | Ca | Mức | Mô tả | Hướng sửa (khuyên in đậm) | Trạng thái |
 |---|---|---|---|---|---|
-| T1 | S-03 | P3 | Nhận thưởng hằng ngày xong, chấm "Có quà chưa nhận" trên tab Điểm danh vẫn còn cho tới khi rời trang (`daily-nudge.ts` chỉ đọc lại khi rời `/daily`). | **(a) trang Điểm danh báo cho thanh điều hướng ngay khi nhận thành công, chấm tắt tức thì**; (b) giữ nguyên. | ghi nhận |
-| T2 | A-02 | P2 | Mật khẩu trùng **cả** địa chỉ email vẫn đăng ký được: `validatePassword` chỉ chặn phần trước @, trong khi form ghi "khác với email của bạn". | **(a) chặn cả địa chỉ đầy đủ lẫn phần trước @ (không phân biệt hoa thường), cả client và server, thêm test**; (b) sửa chữ trên form thành "khác với phần trước @". | ghi nhận |
-| T3 | F-08 | P2 | "Quản lý bàn" có nút "Đuổi" cạnh bot, nhưng server từ chối đuổi bot (`Room.kick`: ILLEGAL_ACTION) — bấm không đổi gì. | **(a) cho chủ phòng đuổi bot giữa các ván (ghế bot thành ghế trống, có chỗ cho người thật)**; (b) ẩn nút với bot. | ghi nhận |
-| T4 | F-07 | P3 | Đang ngồi mà số dư tụt dưới mức cần (Blind: 1× hoặc 2× mức cược), ghế tự ngồi ngoài nhưng gợi ý vẫn nói "Bấm Sẵn sàng để bắt đầu…". | **(a) gợi ý "Số dư không đủ cho mức cược này (cần X điểm)"**. | ghi nhận |
-| T5 | G-03 | P2 | Rớt mạng > 90 giây: bị mời đứng dậy nhưng vẫn ở trong phòng 5 phút (spec §16.6). Quay lại qua sảnh thì tạo/vào phòng khác bị từ chối "Bạn đã ở trong một phòng khác" mà không biết phòng nào; lối thoát duy nhất là mở `#/room` rồi "Rời phòng". | **(a) khi kết nối lại mà vẫn còn ở trong phòng, app đưa về màn phòng**; (b) sảnh hiện dải "Bạn vẫn ở phòng X — Quay lại / Rời phòng". | ghi nhận |
-| T6 | K-03 | P3 | "Mười phòng"/"Trăm phòng" chỉ tính khi vào phòng người khác; phòng tự tạo không được tính, trái với mô tả "Vào 10 phòng chơi". | **(a) tính cả phòng tự tạo**; (b) sửa mô tả thành "Vào 10 phòng do người khác mở". | ghi nhận |
-| T7 | K-05 | P3 | Đổi tên xong, thẻ người chơi ở sảnh vẫn hiện tên cũ tới khi tải lại trang (danh tính của kết nối chưa cập nhật); thông báo chỉ nhắc bàn chơi. | **(a) cập nhật tên trong app ngay khi đổi thành công**. | ghi nhận |
-| T8 | N-04 | P3 | Host: `normal.err.log` có cảnh báo của `pg` — `sslmode=require` sẽ mang nghĩa yếu hơn ở pg v9. | **(a) dùng `sslmode=verify-full` trong `DATABASE_URL` (`.env` của host, `.env.example`, tài liệu triển khai)**. | ghi nhận |
-| T9 | O-01/O-04 | P3 | Lite: exe in cảnh báo thử nghiệm SEA của Node mỗi lần chạy, kể cả `--status`/`--stop` — người vận hành dễ tưởng là lỗi. | **(a) lọc riêng cảnh báo đó khi exe khởi động**. | ghi nhận |
+| T1 | S-03 | P3 | Nhận thưởng hằng ngày xong, chấm "Có quà chưa nhận" trên tab Điểm danh vẫn còn cho tới khi rời trang (`daily-nudge.ts` chỉ đọc lại khi rời `/daily`). | **(a) trang Điểm danh báo cho thanh điều hướng ngay khi nhận thành công, chấm tắt tức thì**; (b) giữ nguyên. | đã sửa — `165585d` |
+| T2 | A-02 | P2 | Mật khẩu trùng **cả** địa chỉ email vẫn đăng ký được: `validatePassword` chỉ chặn phần trước @, trong khi form ghi "khác với email của bạn". | **(a) chặn cả địa chỉ đầy đủ lẫn phần trước @ (không phân biệt hoa thường), cả client và server, thêm test**; (b) sửa chữ trên form thành "khác với phần trước @". | đã sửa — `f5e77df` |
+| T3 | F-08 | P2 | "Quản lý bàn" có nút "Đuổi" cạnh bot, nhưng server từ chối đuổi bot (`Room.kick`: ILLEGAL_ACTION) — bấm không đổi gì. | **(a) cho chủ phòng đuổi bot giữa các ván (ghế bot thành ghế trống, có chỗ cho người thật)**; (b) ẩn nút với bot. | đã sửa — `dc1c84d` |
+| T4 | F-07 | P3 | Đang ngồi mà số dư tụt dưới mức cần (Blind: 1× hoặc 2× mức cược), ghế tự ngồi ngoài nhưng gợi ý vẫn nói "Bấm Sẵn sàng để bắt đầu…". | **(a) gợi ý "Số dư không đủ cho mức cược này (cần X điểm)"**. | đã sửa — `b34f798` |
+| T5 | G-03 | P2 | Rớt mạng > 90 giây: bị mời đứng dậy nhưng vẫn ở trong phòng 5 phút (spec §16.6). Quay lại qua sảnh thì tạo/vào phòng khác bị từ chối "Bạn đã ở trong một phòng khác" mà không biết phòng nào; lối thoát duy nhất là mở `#/room` rồi "Rời phòng". | **(a) khi kết nối lại mà vẫn còn ở trong phòng, app đưa về màn phòng**; (b) sảnh hiện dải "Bạn vẫn ở phòng X — Quay lại / Rời phòng". | đã sửa — `f43742e` |
+| T6 | K-03 | P3 | "Mười phòng"/"Trăm phòng" chỉ tính khi vào phòng người khác; phòng tự tạo không được tính, trái với mô tả "Vào 10 phòng chơi". | **(a) tính cả phòng tự tạo**; (b) sửa mô tả thành "Vào 10 phòng do người khác mở". | đã sửa — `f83551e` |
+| T7 | K-05 | P3 | Đổi tên xong, thẻ người chơi ở sảnh vẫn hiện tên cũ tới khi tải lại trang (danh tính của kết nối chưa cập nhật); thông báo chỉ nhắc bàn chơi. | **(a) cập nhật tên trong app ngay khi đổi thành công**. | đã sửa — `f13fe25` |
+| T8 | N-04 | P3 | Host: `normal.err.log` có cảnh báo của `pg` — `sslmode=require` sẽ mang nghĩa yếu hơn ở pg v9. | **(a) dùng `sslmode=verify-full` trong `DATABASE_URL` (`.env` của host, `.env.example`, tài liệu triển khai)**. | đã sửa — `0041a7e` |
+| T9 | O-01/O-04 | P3 | Lite: exe in cảnh báo thử nghiệm SEA của Node mỗi lần chạy, kể cả `--status`/`--stop` — người vận hành dễ tưởng là lỗi. | **(a) lọc riêng cảnh báo đó khi exe khởi động**. | đã sửa — `eb2afc7` |
+
+**29/09 đã sửa, chưa merge, chưa lên host.** Ghi chú kỹ thuật:
+- T2: luật mật khẩu chuyển vào `@bp/core` (`validatePassword`, như luật tên hiển thị), form đăng ký và server chạy cùng một hàm; đăng nhập vẫn chỉ kiểm độ dài.
+- T3: bot bị đuổi đi qua đúng đường của người (`removePlayer`): ghế trống, bớt một chỗ bot giữ, không có dòng sổ điểm, không gửi thông báo. `config.blind.botCount` giữ nguyên là số bot lúc tạo phòng (không nơi nào hiển thị nó; số người ở sảnh đếm ghế thật).
+- T4: client tự suy ra từ cấu hình phòng và số dư (không đổi giao thức); chỉ Blind — Hold'em hết chip thì bị mời đứng dậy ngay cuối ván, nên không có trường hợp này.
+- T5: làm một lần trong ui-kit (`roomReturns` + `useRoomReturn`), Normal và Lite cùng dùng; chỉ tính câu trả lời cho lần (tái) kết nối, không tính tạo/vào/vừa rời phòng.
+- T6: phát `ROOM_JOINED` cho chủ phòng ngay sau `ROOM_CREATED`, mỗi phòng một lần.
+- T8: **`.env` thật trên host chưa đổi** — bạn tự sửa đuôi `DATABASE_URL` thành `?sslmode=verify-full` rồi khởi động lại.
+- T9: cảnh báo in ra thật là `Warning: Currently the require()…` của bộ nạp exe (do `ws` dò add-on tuỳ chọn); cảnh báo "SEA is experimental" đã tắt sẵn trong cấu hình SEA. Bộ lọc được nạp trước mọi module khác (`quiet-start.ts`), mọi cảnh báo khác vẫn in.
+
+Vòng sửa sau review (29/09), cùng nhánh:
+- T7 (`5c36038`): đổi tên còn báo cho kết nối đang mở (`renameIdentity`), nên phòng kế tiếp tạo/vào đã mang tên mới, không cần kết nối lại; phòng đang ngồi vẫn giữ tên cũ.
+- T5 (`0c377f9`): người bị đưa ra khỏi phòng (rời giữa ván có hiệu lực cuối ván, bị đuổi) nhận chính `PLAYER_LEFT` của mình; app trở về sảnh thay vì kẹt ở một bàn đứng hình.
+- T3 (`5e172ec`): nút "Quản lý bàn" hiện cả trong lúc đếm ngược giữa hai ván (bàn Blind có bot vẫn ở trạng thái IN_GAME).
+- T6 (`7d7c9d1`): mỗi người chỉ được tính "vào phòng" một lần cho mỗi phòng — rời rồi vào lại không cộng thêm.
