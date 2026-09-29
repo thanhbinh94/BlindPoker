@@ -49,6 +49,19 @@ describe('RoomManager', () => {
     expect(domainEvents.filter((e) => e.type === 'ROOM_JOINED').map((e) => e.type === 'ROOM_JOINED' && e.playerId)).toEqual(['h', 'a'])
   })
 
+  it('does not count the creator twice when they leave their room and come back (T6 review)', async () => {
+    const { manager, domainEvents } = setup()
+    const room = manager.create(id('h'), PUBLIC)
+    await room.join(id('a')) // keeps the room open while h is out
+    await room.leave('h')
+    expect(manager.roomOf('h')).toBeUndefined()
+    await room.join(id('h'))
+    await room.leave('a')
+    await room.join(id('a'))
+    const joined = domainEvents.filter((e) => e.type === 'ROOM_JOINED').map((e) => e.type === 'ROOM_JOINED' && e.playerId)
+    expect(joined).toEqual(['h', 'a'])
+  })
+
   it('never puts the room password in the ROOM_CREATED domain event', () => {
     const { manager, domainEvents } = setup()
     manager.create(id('h'), { ...PRIVATE, password: 'pw12' })

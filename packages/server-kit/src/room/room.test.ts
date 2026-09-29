@@ -49,6 +49,23 @@ describe('Room membership', () => {
     expect(closed).toBe('empty')
   })
 
+  it('says ROOM_JOINED once per player per room: leaving and walking back in counts nothing (T6 review)', async () => {
+    const h = createRoomHarness(HOLDEM)
+    const joined = () => h.domainEvents.filter((e) => e.type === 'ROOM_JOINED').map((e) => e.type === 'ROOM_JOINED' && e.playerId)
+    await h.room.join(h.identity('a'))
+    await h.room.leave('a')
+    await h.room.join(h.identity('a'))
+    await h.room.leave('a')
+    await h.room.join(h.identity('a'))
+    expect(joined()).toEqual(['a'])
+    // The host was in the room from its first moment (their one ROOM_JOINED is RoomManager.create's): a rejoin is
+    // not a second one either.
+    await h.room.leave('h')
+    await h.room.join(h.identity('h'))
+    await h.room.join(h.identity('b'))
+    expect(joined()).toEqual(['a', 'b'])
+  })
+
   it('reports an empty room as closing while its grace period runs, and not once someone is back (bug 2)', async () => {
     const h = createRoomHarness(HOLDEM)
     expect(h.room.summary().closing).toBe(false)

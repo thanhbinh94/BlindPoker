@@ -49,6 +49,13 @@ export class Room {
   private carryOverReleaseTimer: TimerHandle | null = null
   private readonly playerTimers = new Map<string, TimerHandle>()
   private turnStartSeq = 0
+  /**
+   * Everyone who has ever been in this room — the host (and the bots) from the start, every joiner after. A
+   * player's `ROOM_JOINED` is said once per room (the host's by `RoomManager.create`, everyone else's by their
+   * first `join`): "rooms joined" counts rooms, so walking out and back in must not count again, or a player could
+   * farm "Mười phòng"/"Trăm phòng" by pressing Leave and rejoining.
+   */
+  private readonly everJoined = new Set<string>()
 
   constructor(init: RoomInit) {
     this.roomId = init.roomId
@@ -152,10 +159,11 @@ export class Room {
       }
       if (this.config.password !== undefined && password !== this.config.password) throw new RoomError('WRONG_PASSWORD')
       if (this.humanCount >= this.humanCapacity) throw new RoomError('ROOM_FULL')
+      const first = !this.everJoined.has(identity.playerId)
       const p = this.addPlayer(identity)
       this.cancelClose()
       this.broadcastRoomEvent({ type: 'PLAYER_JOINED', player: this.playerView(p) }, identity.playerId)
-      this.deps.onDomainEvent?.({ type: 'ROOM_JOINED', roomId: this.roomId, playerId: identity.playerId })
+      if (first) this.deps.onDomainEvent?.({ type: 'ROOM_JOINED', roomId: this.roomId, playerId: identity.playerId })
       this.changed()
       return this.snapshot(identity.playerId)
     })
@@ -603,6 +611,7 @@ export class Room {
       consecutiveTimeouts: 0, disconnectDeadline: null, standAfterHand: false, leaveAfterHand: false,
     }
     this.players.set(identity.playerId, p)
+    this.everJoined.add(identity.playerId)
     this.onMembership?.(identity.playerId, true)
     return p
   }
