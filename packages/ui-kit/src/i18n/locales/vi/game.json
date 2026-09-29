@@ -217,6 +217,7 @@
     "readyCount": "{{ready}}/{{total}} sẵn sàng",
     "startHint": "Cần ít nhất 2 người sẵn sàng để bắt đầu",
     "startNeedsYou": "Bấm Sẵn sàng để bắt đầu — ván cần ít nhất một người chơi thật.",
+    "shortOfPoints": "Số dư không đủ cho mức cược này (cần {{amount}} điểm)",
     "leaveConfirm": "Bạn có chắc muốn rời phòng?",
     "closed": "Phòng đã đóng",
     "kicked": "Bạn đã bị đuổi khỏi phòng",

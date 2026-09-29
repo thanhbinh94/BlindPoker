@@ -15,7 +15,11 @@ export interface CreateBlindInput {
   carryOverIn: number
 }
 
-export function blindRequiredStack(rules: BlindRules): number {
+/**
+ * What a seat must hold to be dealt a Blind hand: the ante, plus the play in play-or-fold. Takes only the two
+ * fields it reads, so a client can ask it of the room config it was sent (the "not enough points" hint).
+ */
+export function blindRequiredStack(rules: Pick<BlindRules, 'decisionMode' | 'fixedWager'>): number {
   return rules.decisionMode === 'playOrFold' ? rules.fixedWager * 2 : rules.fixedWager
 }
 

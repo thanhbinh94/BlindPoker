@@ -1,3 +1,4 @@
+import type { RoomPlayerView } from '@bp/core'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
@@ -321,6 +322,76 @@ describe('RoomScreen', () => {
     expect(screen.getByText('Waiting for the host to start')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^kick/i })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Manage table' })).toBeNull()
+  })
+
+  describe('a seat the balance cannot cover (T4)', () => {
+    /** Play-or-fold at 5,000: a hand needs the ante and the play, 10,000. */
+    const blindRoom = (me: Partial<RoomPlayerView>, decisionMode: 'none' | 'playOrFold' = 'playOrFold') =>
+      makeRoom({
+        mode: 'blind',
+        status: 'OPEN',
+        hostPlayerId: 'me',
+        config: {
+          name: 'B',
+          mode: 'blind',
+          maxPlayers: 4,
+          isPrivate: false,
+          turnTimerSec: 15,
+          autoStart: false,
+          hasPassword: false,
+          blind: { holeCards: 3, decisionMode, fixedWager: 5_000, botCount: 1 },
+        },
+        players: [
+          makePlayer({ playerId: 'me', displayName: 'Mai', isHost: true, seat: 0, status: 'SITTING_OUT', sittingOut: true, stack: 7_000, ...me }),
+          makePlayer({ playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true, seat: 3, status: 'READY', stack: 1_000_000, ready: true }),
+        ],
+      })
+
+    it('says the balance is short, and by what, instead of asking the host to press Ready', () => {
+      wrap(fakeClient(makeState({ balance: 7_000, room: blindRoom({}) })))
+      expect(screen.getByText('Not enough points for this stake (need 10,000)')).toBeInTheDocument()
+      expect(screen.queryByText(/Press Ready/)).toBeNull()
+    })
+
+    it('says so to a guest too, instead of "waiting for the host"', () => {
+      const room = blindRoom({ isHost: false })
+      wrap(fakeClient(makeState({ balance: 7_000, room: { ...room, hostPlayerId: 'x', players: [...room.players, makePlayer({ playerId: 'x', displayName: 'Xuan', isHost: true })] } })))
+      expect(screen.getByText('Not enough points for this stake (need 10,000)')).toBeInTheDocument()
+      expect(screen.queryByText('Waiting for the host to start')).toBeNull()
+    })
+
+    it('measures pure luck against the stake alone', () => {
+      wrap(fakeClient(makeState({ balance: 4_000, room: blindRoom({}, 'none') })))
+      expect(screen.getByText('Not enough points for this stake (need 5,000)')).toBeInTheDocument()
+    })
+
+    it('keeps the usual hint once the balance covers the hand', () => {
+      wrap(fakeClient(makeState({ balance: 10_000, room: blindRoom({ sittingOut: false, status: 'SEATED' }) })))
+      expect(screen.queryByText(/Not enough points/)).toBeNull()
+      expect(screen.getByText('Press Ready to start — a hand needs at least one real player.')).toBeInTheDocument()
+    })
+
+    it('says it between hands too, while the next deal counts down without this seat', () => {
+      const room = { ...blindRoom({}), status: 'IN_GAME' as const, nextHandAt: 1_005_000 }
+      wrap(fakeClient(makeState({ balance: 7_000, room })))
+      expect(screen.getByText('Not enough points for this stake (need 10,000)')).toBeInTheDocument()
+    })
+
+    it('stays quiet while the player still holds cards in the hand being played', () => {
+      const room = { ...blindRoom({ status: 'IN_HAND', sittingOut: false }), status: 'IN_GAME' as const }
+      const hand = makeHand({ mode: 'blind', phase: 'DECISION', mySeat: 0, actingSeat: null, legal: null })
+      wrap(fakeClient(makeState({ balance: 7_000, room, hand })))
+      expect(screen.queryByText(/Not enough points/)).toBeNull()
+    })
+
+    it('writes the amount the way the app writes points, in Vietnamese too', () => {
+      render(
+        <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+          <RoomScreen client={fakeClient(makeState({ balance: 7_000, room: blindRoom({}) }))} lang="vi" onLeft={vi.fn()} />
+        </I18nextProvider>,
+      )
+      expect(screen.getByText('Số dư không đủ cho mức cược này (cần 10.000 điểm)')).toBeInTheDocument()
+    })
   })
 
   it('tells a host who has not sat down to take a seat, not to press Ready (layout audit C5)', () => {
