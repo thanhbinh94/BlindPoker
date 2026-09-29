@@ -189,6 +189,35 @@ describe('Room seats and buy-ins', () => {
     expect(h.last('a', 'NOTIFICATION')).toMatchObject({ kind: 'KICKED' })
     expect(h.last('h', 'ROOM_EVENT')?.event).toMatchObject({ type: 'PLAYER_LEFT', playerId: 'a' })
   })
+
+  it('kick takes a bot off the table between hands: the seat empties and a person fits in its place (T3)', async () => {
+    const h = createRoomHarness(BLIND, { players: [['h', 1e5], ['a', 1e5], ['b', 1e5], ['c', 1e5]] })
+    await h.room.join(h.identity('a'), 'pw12')
+    // 4 seats, 2 held by bots: room for 2 humans, and h and a are both here.
+    expect(await code(h.room.join(h.identity('b'), 'pw12'))).toBe('ROOM_FULL')
+    const bot = [...h.room.players.values()].find((p) => p.identity.isBot && p.seat === 3)!.identity.playerId
+
+    expect(await code(h.room.kick('a', bot))).toBe('NOT_HOST')
+    expect(await code(h.room.kick('h', 'h'))).toBe('ILLEGAL_ACTION')
+    await h.room.kick('h', bot)
+
+    expect(h.room.hasPlayer(bot)).toBe(false)
+    expect(h.room.snapshot(null).room.players.some((p) => p.seat === 3)).toBe(false)
+    expect(h.room.seatedBotCount).toBe(1)
+    expect(h.room.humanCapacity).toBe(3)
+    expect(h.room.summary().playerCount).toBe(3) // 2 humans + the one bot left
+    expect(h.last('h', 'ROOM_EVENT')?.event).toMatchObject({ type: 'PLAYER_LEFT', playerId: bot })
+    expect(h.last('a', 'ROOM_EVENT')?.event).toMatchObject({ type: 'PLAYER_LEFT', playerId: bot })
+    // A bot is not an account: nobody to notify, and nothing on anyone's ledger.
+    expect(h.sent.get(bot)).toBeUndefined()
+    expect(h.repos.entries).toEqual([])
+    expect(h.domainEvents.filter((e) => e.type !== 'ROOM_JOINED')).toEqual([])
+
+    // The freed capacity is real: the person refused a moment ago gets in, and the bot's old seat is theirs.
+    await h.room.join(h.identity('b'), 'pw12')
+    await h.room.sitDown('b', 3)
+    expect(h.room.players.get('b')!.seat).toBe(3)
+  })
 })
 
 describe('Closed rooms', () => {

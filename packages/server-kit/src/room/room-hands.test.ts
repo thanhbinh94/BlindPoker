@@ -273,6 +273,30 @@ describe('Blind hands', () => {
     expect(await h.repos.balances.get('a')).toBe(100_000)
     expect(h.repos.sinks).toEqual([]) // the fee sink is part of the same rejected transaction
   })
+
+  it('the host kicks a bot between hands, never out of the hand it holds cards in, and the next deal goes on without it (T3)', async () => {
+    const h = createRoomHarness(BLIND)
+    await seatAndStart(h, ['h', 'a'])
+    const bot = [...h.room.players.values()].find((p) => p.identity.isBot)!.identity.playerId
+    expect(await code(h.room.kick('h', bot))).toBe('GAME_IN_PROGRESS')
+    expect(h.room.hasPlayer(bot)).toBe(true)
+
+    await playOut(h)
+    expect(h.room.status).toBe('IN_GAME') // between hands: the next deal is on its timer
+    const rows = h.repos.entries.length
+    const sinks = h.repos.sinks.length
+    await h.room.kick('h', bot)
+    expect(h.room.hasPlayer(bot)).toBe(false)
+    expect(h.repos.entries).toHaveLength(rows) // a bot's chips are not anyone's points
+    expect(h.repos.sinks).toHaveLength(sinks)
+
+    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
+    await tick(h)
+    expect(h.room.handActive).toBe(true)
+    const dealt = h.room.snapshot(null).hand!.seats.map((s) => s.playerId)
+    expect(dealt).toHaveLength(3)
+    expect(dealt).not.toContain(bot)
+  })
 })
 
 describe('Hold’em hands', () => {

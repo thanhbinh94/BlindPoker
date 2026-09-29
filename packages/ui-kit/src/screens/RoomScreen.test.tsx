@@ -273,6 +273,23 @@ describe('RoomScreen', () => {
     expect(within(roster).getByText('20,000')).toBeInTheDocument()
   })
 
+  it('kicks a bot from Manage table; once the server lets it go, its seat is free and the list keeps the rest (T3)', async () => {
+    const bot = makePlayer({ playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true, seat: 2, status: 'READY', stack: 1_000_000, ready: true })
+    const client = fakeClient(makeState({ room: makeRoom({ status: 'OPEN', hostPlayerId: 'me', players: [...readyRoom.players, bot] }) }))
+    const { view } = wrap(client)
+    expect(screen.getByText('Bot 1')).toBeInTheDocument() // its seat plate
+
+    await userEvent.click(screen.getByRole('button', { name: 'Manage table' }))
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Kick — Bot 1' }))
+    expect(client.kick).toHaveBeenCalledWith('bot:r:0')
+
+    // The server answers with PLAYER_LEFT, which the reducer applies to the roster: the same screen, one bot fewer.
+    view.rerender(screenFor(fakeClient(makeState({ room: makeRoom({ status: 'OPEN', hostPlayerId: 'me', players: readyRoom.players }) }))))
+    const roster = screen.getByRole('list', { name: 'Players' })
+    expect(within(roster).getByText('Ann')).toBeInTheDocument()
+    expect(screen.queryByText('Bot 1'), 'gone from the list and from its seat').toBeNull()
+  })
+
   it('keeps Start off while the only ready seats are bots, and says what the host must do', async () => {
     const bots = [1, 2, 3].map((i) => makePlayer({ playerId: `bot-${i}`, displayName: `Bot ${i}`, isBot: true, seat: i, status: 'READY', stack: 1_000_000, ready: true }))
     const host = makePlayer({ playerId: 'me', displayName: 'Mai', isHost: true, seat: 0, status: 'SEATED', stack: 20_000, ready: false })

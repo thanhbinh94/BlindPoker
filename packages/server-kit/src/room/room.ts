@@ -180,14 +180,22 @@ export class Room {
     })
   }
 
+  /**
+   * The host asks someone to leave — a person or a bot, by the same rule: never a seat that holds cards in the
+   * hand being played, so between hands only.
+   *
+   * A bot goes the way a person does (`removePlayer`): its seat empties, it stops holding capacity a person
+   * could use, and the room says `PLAYER_LEFT`. There is nobody to notify and nothing to pay out — a bot has no
+   * account, and `standUpNow` writes no ledger row for one.
+   */
   kick(hostId: string, targetId: string): Promise<void> {
     return this.enqueue(() => {
       this.assertOpen()
       if (hostId !== this.hostPlayerId) throw new RoomError('NOT_HOST')
       const target = this.mustPlayer(targetId)
-      if (targetId === hostId || target.identity.isBot) throw new RoomError('ILLEGAL_ACTION', 'cannot kick this player')
+      if (targetId === hostId) throw new RoomError('ILLEGAL_ACTION', 'cannot kick this player')
       if (this.inCurrentHand(target)) throw new RoomError('GAME_IN_PROGRESS', 'player is in the current hand')
-      this.deps.outbox.send(targetId, { t: 'NOTIFICATION', kind: 'KICKED', payload: { roomId: this.roomId } })
+      if (!target.identity.isBot) this.deps.outbox.send(targetId, { t: 'NOTIFICATION', kind: 'KICKED', payload: { roomId: this.roomId } })
       return this.removePlayer(target, 'kicked')
     })
   }

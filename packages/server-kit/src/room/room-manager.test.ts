@@ -67,6 +67,17 @@ describe('RoomManager', () => {
     for (const bot of [...room.players.keys()]) expect(manager.roomOf(bot)).toBeUndefined()
   })
 
+  it('drops a kicked bot from the player index and lists the room one seat emptier (T3)', async () => {
+    const { manager } = setup()
+    const room = manager.create(id('h'), { ...PUBLIC, mode: 'blind', turnTimerSec: 15, holdem: undefined, blind: { holeCards: 2, decisionMode: 'playOrFold', fixedWager: 1000, botCount: 2 } })
+    const [bot, other] = [...room.players.keys()].filter((p) => p.startsWith('bot:'))
+    expect(manager.listPublic()[0]!.playerCount).toBe(3)
+    await room.kick('h', bot!)
+    expect(manager.roomOf(bot!)).toBeUndefined()
+    expect(manager.roomOf(other!)).toBe(room)
+    expect(manager.listPublic()[0]!.playerCount).toBe(2)
+  })
+
   it('refuses a second room for a player already in one', () => {
     const { manager } = setup()
     manager.create(id('h'), PUBLIC)
