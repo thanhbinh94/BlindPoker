@@ -27,14 +27,14 @@ httpServer.on('upgrade', (req, socket, head) => server.handleUpgrade(req, socket
 
 `createGameServer` wires a `RoomManager` and a `Gateway` together and returns
 a `GameServer` exposing `rooms`, `gateway`, `handleUpgrade`, `notify`,
-`balanceChanged`, `shutdown`, and `connectionCount`. The edition never
+`balanceChanged`, `renameIdentity`, `shutdown`, and `connectionCount`. The edition never
 touches `Room` or `Gateway` internals directly — `handleUpgrade` and
 `shutdown` are the whole surface it needs for a working HTTP server.
 
 ### Pushing to a player from outside the game
 
 Editions own everything `server-kit` does not: purchases, daily rewards,
-achievements, moderation. Two methods let them reach a live session
+achievements, moderation. Three methods let them reach a live session
 without knowing anything about rooms or sockets:
 
 ```ts
@@ -50,6 +50,10 @@ await server.balanceChanged(playerId) // after crediting points elsewhere
   room's queue (`Room.refreshBalance`) so the seat's mirrored `stack` is
   updated too — in Blind mode a seat *is* the player's balance, and
   without this it would keep showing the stale value until the next hand.
+- **`renameIdentity(playerId, displayName)`** — after a successful rename,
+  replaces the identity on every live connection of that player, so the
+  next room they create or join seats them under the new name. A room they
+  are already in keeps the name its seat was given.
 
 ### `SessionResolver`
 

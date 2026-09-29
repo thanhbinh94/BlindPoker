@@ -374,7 +374,7 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
       if (mine && event.type === 'PLAYER_LEFT') {
         return { ...state, room: null, hand: null, seq: msg.seq, deadlineAt: null, preAction: null, autoPlay: false }
       }
-      const stopsAutoPlay = mine && (event.type === 'PLAYER_STOOD' || event.type === 'PLAYER_LEFT' || (event.type === 'PLAYER_SIT_OUT' && event.sittingOut))
+      const stopsAutoPlay = mine && (event.type === 'PLAYER_STOOD' || (event.type === 'PLAYER_SIT_OUT' && event.sittingOut))
       return {
         ...state,
         room: state.room ? applyRoomEvent(state.room, event) : null,
