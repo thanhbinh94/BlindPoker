@@ -338,7 +338,11 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
 
 After `shutdown` resolves, every point that was ever in a stack or a
 carry-over pot has been returned to a `BalanceRepository` balance or
-recorded as a sink row — nothing is left in RAM.
+recorded as a sink row — nothing is left in RAM. The one exception is a
+cash-out the repository refuses: it is logged (`shutdown cash-out failed`,
+with the player and the stack) for an operator to reconcile, and the room
+still closes and the other seats are still cashed out, so one bad row
+cannot hold up the rest of the shutdown.
 
 ## Testing utilities
 

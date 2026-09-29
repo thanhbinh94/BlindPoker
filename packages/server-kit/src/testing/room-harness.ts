@@ -1,6 +1,6 @@
 import { createBotStrategy, seededRng, type PlayerIdentity, type RoomConfig, type ServerMessage } from '@bp/core'
 import type { DomainEvent } from '../domain-events.js'
-import { silentLogger } from '../infra/logger.js'
+import type { Logger } from '../infra/logger.js'
 import { createMemoryRepositories, type MemoryRepositories } from '../memory-repositories.js'
 import { Room } from '../room/room.js'
 import { DEFAULT_ROOM_OPTIONS, type RoomOptions } from '../room/types.js'
@@ -12,9 +12,17 @@ export interface RoomHarness {
   repos: MemoryRepositories
   sent: Map<string, ServerMessage[]>
   domainEvents: DomainEvent[]
+  /** Everything the room logged (debug excluded), in order — so a test can assert a failure was not swallowed silently. */
+  logs: HarnessLogLine[]
   identity(id: string): PlayerIdentity
   ofType<T extends ServerMessage['t']>(playerId: string, t: T): Extract<ServerMessage, { t: T }>[]
   last<T extends ServerMessage['t']>(playerId: string, t: T): Extract<ServerMessage, { t: T }> | undefined
+}
+
+export interface HarnessLogLine {
+  level: 'info' | 'warn' | 'error'
+  msg: string
+  data?: object
 }
 
 export const TEST_ROOM_OPTIONS: RoomOptions = {
@@ -37,6 +45,9 @@ export function createRoomHarness(
   const repos = createMemoryRepositories()
   const sent = new Map<string, ServerMessage[]>()
   const domainEvents: DomainEvent[] = []
+  const logs: HarnessLogLine[] = []
+  const record = (level: HarnessLogLine['level']) => (msg: string, data?: object) => { logs.push(data === undefined ? { level, msg } : { level, msg, data }) }
+  const log: Logger = { debug: () => {}, info: record('info'), warn: record('warn'), error: record('error') }
   const players = opts.players ?? [['h', 100_000], ['a', 100_000], ['b', 100_000]]
   for (const [id, balance] of players) repos.addPlayer(id, id.toUpperCase(), balance)
   const identity = (id: string): PlayerIdentity => ({ playerId: id, displayName: id.toUpperCase(), isBot: false })
@@ -51,11 +62,11 @@ export function createRoomHarness(
       repos,
       outbox: { send: (playerId, msg) => { (sent.get(playerId) ?? sent.set(playerId, []).get(playerId)!).push(msg) } },
       bot: createBotStrategy(),
-      log: silentLogger,
+      log,
       options: { ...TEST_ROOM_OPTIONS, ...opts.options },
       onDomainEvent: (e) => domainEvents.push(e),
     },
   })
   const ofType = <T extends ServerMessage['t']>(playerId: string, t: T) => (sent.get(playerId) ?? []).filter((m): m is Extract<ServerMessage, { t: T }> => m.t === t)
-  return { room, clock, repos, sent, domainEvents, identity, ofType, last: (playerId, t) => ofType(playerId, t).at(-1) }
+  return { room, clock, repos, sent, domainEvents, logs, identity, ofType, last: (playerId, t) => ofType(playerId, t).at(-1) }
 }

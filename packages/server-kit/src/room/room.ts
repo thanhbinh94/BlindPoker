@@ -372,16 +372,32 @@ export class Room {
       if (this.inCurrentHand(p)) {
         p.standAfterHand = true
         this.runner!.markAutoFold(p.seat)
-      } else await this.standUpNow(p)
+      } else {
+        // This runs from a timer, where a rejection would vanish without a word and skip the grace timer below. A
+        // cash-out that cannot write keeps the seat but takes it out of the deal (`standAfterHand`): the stand-up is
+        // retried when the next hand ends, and the removal below tries again at the latest.
+        try {
+          await this.standUpNow(p)
+        } catch (err) {
+          p.standAfterHand = true
+          this.deps.log.error('reconnect-expiry stand-up failed', { roomId: this.roomId, playerId, stack: p.stack, err: String(err) })
+        }
+      }
     }
-    this.setPlayerTimer(playerId, this.deps.options.spectatorGraceMs, () => {
+    this.setPlayerTimer(playerId, this.deps.options.spectatorGraceMs, async () => {
       const still = this.players.get(playerId)
       if (!still || still.connected) return
       if (this.inCurrentHand(still)) {
         still.leaveAfterHand = true
         return
       }
-      return this.removePlayer(still, 'timeout')
+      try {
+        await this.removePlayer(still, 'timeout')
+      } catch (err) {
+        // Same reason: logged, and left to the end of the next hand to retry.
+        still.leaveAfterHand = true
+        this.deps.log.error('spectator-grace removal failed', { roomId: this.roomId, playerId, stack: still.stack, err: String(err) })
+      }
     })
   }
 
@@ -396,7 +412,15 @@ export class Room {
       }
       this.cancelTimers()
       await this.releaseCarryOver()
-      for (const p of this.seatedHumans()) await this.standUpNow(p)
+      for (const p of this.seatedHumans()) {
+        // One player's ledger failure must not strand everyone after them, nor keep the room from closing (and the
+        // server from closing its sockets): their stack is logged for an operator to reconcile, and the room goes on.
+        try {
+          await this.standUpNow(p)
+        } catch (err) {
+          this.deps.log.error('shutdown cash-out failed', { roomId: this.roomId, playerId: p.identity.playerId, stack: p.stack, err: String(err) })
+        }
+      }
       this.status = 'CLOSED'
       this.broadcastRoomEvent({ type: 'ROOM_CLOSED', reason })
       this.onClosed?.(this, reason)
