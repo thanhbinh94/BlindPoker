@@ -313,6 +313,27 @@ export async function autopilot(page: Page, prefer: Move[], until: () => Promise
 /** Resolves once a result card is on screen. */
 export const handOver = (page: Page) => async (): Promise<boolean> => (await resultCard(page).count()) > 0
 
+/**
+ * Spec 2026-09-29 (Blind table limit): a seat that spends its limit is stood up after the hand. A test that needs many
+ * hands calls this inside its poll: sit back down (a fresh buy-in), re-arm Ready/Start when the table fell back to
+ * waiting, and turn auto-play on again (it ends with the seat). Every step is a no-op when it does not apply, and every
+ * click gives up after a few seconds — a control that went away between the look and the press is the next poll's job,
+ * not a reason to hang the test.
+ */
+export async function keepPlaying(page: Page, seat: number): Promise<void> {
+  const sit = page.locator(`[data-seat="${seat}"]`).getByRole('button', { name: /Ngồi vào bàn/ })
+  if (await sit.isVisible().catch(() => false)) await takeSeat(page, seat)
+  const readyButton = page.getByRole('button', { name: 'Sẵn sàng', exact: true })
+  if (await readyButton.isVisible().catch(() => false)) await readyButton.click({ timeout: 5_000 }).catch(() => undefined)
+  const startButton = page.getByRole('button', { name: 'Bắt đầu', exact: true })
+  if ((await startButton.count()) > 0 && (await startButton.isEnabled().catch(() => false))) await startButton.click({ timeout: 5_000 }).catch(() => undefined)
+  // The toggle carries `aria-pressed` (ActionBar); it is only there while this seat has a hand to show.
+  const auto = page.getByRole('button', { name: 'Tự động chơi' })
+  if ((await auto.count()) > 0 && (await auto.getAttribute('aria-pressed', { timeout: 5_000 }).catch(() => null)) === 'false') {
+    await auto.click({ timeout: 5_000 }).catch(() => undefined)
+  }
+}
+
 /** Closes every player's context. */
 export async function closeAll(players: (Player | undefined)[]): Promise<void> {
   for (const p of players) if (p !== undefined) await p.context.close().catch(() => undefined)
