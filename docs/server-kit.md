@@ -153,9 +153,15 @@ whenever the table stops being able to use it — when the room has been
 unable to start a hand for `carryOverReleaseMs` (the timer is armed each
 time the room falls back to `OPEN` and cancelled as soon as a hand
 starts), when the room closes, and on `shutdown()`. The pot is split
-evenly among the seated humans (regardless of stack); the indivisible
-remainder — or the whole pot, when nobody is seated — is recorded as a
-`carry_over` sink row rather than being handed to an arbitrary player.
+evenly among the seated humans (regardless of stack) and the pot's
+claimants still in the room, each person counted once; the indivisible
+remainder — or the whole pot, when there is nobody to pay — is recorded
+as a `carry_over` sink row rather than being handed to an arbitrary
+player. A claimant is a human `standUpSpent` stood up for a spent table
+limit while the pot was carried: their antes are in it, so they are paid
+as if still seated. The claim ends when the pot goes into a new hand
+(`startHand` takes it as `carryOverIn`), when it is released, or when
+the claimant leaves the room.
 
 ### Sitting out (spec §11.3)
 

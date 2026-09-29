@@ -56,9 +56,11 @@ sit-out counter.
 
 **A carry-over pot released to the table also pays seats that asked to sit out.** When a Blind room
 cannot start a hand for `carryOverReleaseMs`, the accumulated pot is split across every seated human
-(`Room.seatedHumans()`), which since Plan 7 includes seats that have asked to sit out. Money is
-still exactly conserved — the `Σ balances + Σ sinks` identity is untouched, and the Blind soak
-asserts it every run — but a player who declined to play shares a pot they were never eligible for.
+— which since Plan 7 includes seats that have asked to sit out — and, since the table limit, every
+human stood up for a spent limit while that pot was carried who is still in the room
+(`Room.releaseCarryOver`). Money is still exactly conserved — the `Σ balances + Σ sinks` identity is
+untouched, and the Blind soak asserts it every run — but a player who declined to play shares a pot
+they were never eligible for.
 *Why it stays:* spec §8.4 predates `SIT_OUT` and says "the seated humans" without qualification, so
 excluding sitters is a rule change rather than a bug fix, and it is a rule change in the direction
 of taking points away from somebody. Ruled a roadmap item rather than a fix in this milestone.

@@ -34,7 +34,10 @@ export interface RoomOptions {
   reconnectWindowMs: number
   spectatorGraceMs: number
   emptyRoomCloseMs: number
-  /** How long a room may sit unable to start a hand before its carry-over pot is released to the seated humans. */
+  /**
+   * How long a room may sit unable to start a hand before its carry-over pot is released to the seated humans (and to
+   * the ones stood up for a spent table limit while it was carried, if still in the room).
+   */
   carryOverReleaseMs: number
   consecutiveTimeoutsToStand: number
   /** Hands started without a player who asked to sit out before the seat is taken back (spec §11.3). */

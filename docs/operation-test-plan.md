@@ -153,7 +153,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 | F-02 | Kiểu 3 lá | Mỗi người nhận 3 lá; xếp hạng dùng 5 lá tốt nhất trong 8 | P2 |
 | F-03 | Kiểu Chơi hoặc bỏ, 2 người thật | Hai người quyết định cùng lúc, không ai thấy lựa chọn của người kia trước khi hết pha | P1 |
 | F-04 | Cả hai chọn Bỏ | Pot chuyển sang ván sau, bàn hiện "Cộng dồn" | P1 |
-| F-05 | Sau F-04, mọi người thật bấm Ngồi ngoài (vẫn giữ ghế) để không ván nào bắt đầu, chờ > 60 giây | Pot cộng dồn chia đều cho người thật đang ngồi ghế, phần lẻ bị thu; nếu không còn người thật nào ngồi ghế thì cả pot bị thu | P2 |
+| F-05 | Sau F-04, mọi người thật bấm Ngồi ngoài (vẫn giữ ghế) để không ván nào bắt đầu, chờ > 60 giây | Pot cộng dồn chia đều cho người thật đang ngồi ghế (cùng người bị mời đứng dậy vì hết hạn mức trong lúc pot đang cộng dồn, nếu còn trong phòng), phần lẻ bị thu; nếu không còn ai để chia thì cả pot bị thu | P2 |
 | F-06 | Chỉ một người chọn Chơi | Người đó thắng cả pot, không lật lá chung, lá riêng không lộ | P1 |
 | F-07 | (a) Bấm Ngồi vào bàn khi số dư < mức cược (kiểu A) hoặc < 2 × mức cược (kiểu B); (b) đang ngồi mà chồng trên bàn không đủ cho ván sau | (a) Bị từ chối, báo "Số dư không đủ", không bị trừ điểm (FR-R07); (b) bị mời đứng dậy sau ván, phần còn lại về số dư (xem F-10) | P2 |
 | F-08 | Chủ phòng bấm Đuổi một bot | Bot rời ghế, ghế trống | P2 |

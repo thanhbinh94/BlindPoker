@@ -239,7 +239,7 @@ Royal flush (là straight flush cao nhất), Straight flush, Four of a kind, Ful
 ### 8.4 Pot cộng dồn
 - Chỉ phát sinh ở kiểu B. Lưu trong state phòng. Hiển thị "Pot cộng dồn" trên bàn.
 - Pot được giải phóng khi (a) phòng không thể bắt đầu ván mới liên tục trong `carryOverReleaseMs` (mặc định 60 giây), (b) phòng đóng, hoặc (c) server shutdown — tùy điều kiện nào đến trước.
-- Chia đều cho **mọi người thật đang ngồi ghế** (không xét stack): `share = floor(pot / n)`. Chia vào **số dư** (không vào chồng trên bàn). Phần dư không chia được — hoặc toàn bộ pot khi không còn ai ngồi ghế — ghi thành một dòng sink `carry_over` qua `BalanceRepository.apply(entries, meta)`, không đưa cho một người bất kỳ.
+- Chia đều cho **mọi người thật đang ngồi ghế** cùng **mọi người đã bị mời đứng dậy vì hết hạn mức (§8.8) trong lúc pot này đang cộng dồn mà vẫn còn trong phòng** — mỗi người tính một lần, không xét stack: `share = floor(pot / n)`. Quyền chia của người bị mời đứng dậy mất khi pot đó vào một ván mới (người thắng ván ấy nhận), khi pot được giải phóng, hoặc khi người đó rời phòng; ngồi lại thì họ chỉ là một người đang ngồi ghế. Chia vào **số dư** (không vào chồng trên bàn). Phần dư không chia được — hoặc toàn bộ pot khi không còn ai để chia — ghi thành một dòng sink `carry_over` qua `BalanceRepository.apply(entries, meta)`, không đưa cho một người bất kỳ.
 - Sau khi giải phóng, `carryOverPot = 0` và phòng phát `ROOM_EVENT ROOM_STATUS` (trạng thái không đổi) để mọi view cập nhật lại con số.
 
 ### 8.5 Bot trong Blind Poker
@@ -259,6 +259,7 @@ Như mục 7.7.
 - **Vào bàn**: server lấy `min(số dư, L)` từ số dư lên bàn, ghi `buy_in` (từ chối `INSUFFICIENT_BALANCE` nếu số dư < mức cần cho một ván). Không có hộp thoại chọn số.
 - **Trong ván**: ante, tiền Chơi và tiền thắng chỉ đổi chồng trên bàn (có thể vượt L); sổ điểm mỗi ván chỉ ghi dòng sink phí bàn, không còn dòng `settlement` cho người chơi.
 - **Hết hạn mức**: khi ván kết thúc, ghế người thật có chồng không đủ cho một ván bị mời đứng dậy, phần lẻ (nếu có) về số dư qua `cash_out`, người chơi nhận thông báo `TABLE_LIMIT_SPENT`, **ở lại phòng** làm người xem và tự chọn một ghế trống để vào lại (một lần vào bàn mới).
+- **Pot cộng dồn khi hết hạn mức**: nếu lúc bị mời đứng dậy phòng đang giữ pot cộng dồn, người đó vẫn được chia pot ấy khi nó được giải phóng như một người đang ngồi ghế, miễn là còn trong phòng (§8.4).
 - **Mọi cách rời ghế trả cả chồng về số dư** (`cash_out`): Đứng dậy, Rời phòng, bị đuổi, quá hạn kết nối lại, ngồi ngoài đủ số ván, đóng phòng, server tắt đúng cách.
 - **Tắt cưỡng bức Lite** mất chồng đang trên bàn, như Hold'em (mục 30).
 
