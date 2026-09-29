@@ -102,14 +102,16 @@ test('G-03: more than ninety seconds offline stands the seat up after the hand; 
   await autopilot(a.page, ['check', 'call'], async () => (await seatOf(a.page, 1).getByText(b.who.displayName).count()) === 0, 200_000)
   b.page = await b.context.newPage()
   await b.page.goto('/#/lobby')
+  // Spec §16.6 keeps him in the room as a spectator for five minutes, and the server refuses any other room until he
+  // is out of it. Finding T5: the lobby used to say nothing about it. Now the app answers the reconnect by taking him
+  // straight to that room, where its leave button is.
+  await expect(b.page, 'reopening lands on the room he is still in').toHaveURL(/#\/room$/, { timeout: 15_000 })
+  await expect(b.page.getByRole('button', { name: 'Rời phòng' }), 'the room is still his to leave').toBeVisible()
+  await expect(b.page.getByRole('button', { name: 'Đứng dậy', exact: true }), 'as a spectator, not in a seat').toHaveCount(0)
   // His stack came home: at least the 10.000 less the blinds he could have lost.
   const back = await balanceWhen(b.page, (n) => n > bWithout, 30_000)
   expect(back - bWithout, 'the stack reached his balance').toBeGreaterThan(9_000)
   await leave(a.page)
-  // Spec §16.6 keeps him in the room as a spectator for five minutes, and the server refuses any other room until he
-  // is out of it (finding T5: from the lobby nothing says so). The way out is the room screen and its leave button.
-  await b.page.goto('/#/room')
-  await expect(b.page.getByRole('button', { name: 'Rời phòng' }), 'the room is still his to leave').toBeVisible({ timeout: 15_000 })
   await leave(b.page)
 })
 

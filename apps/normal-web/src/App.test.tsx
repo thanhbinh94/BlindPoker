@@ -469,6 +469,48 @@ describe('App — a session that ends under the player', () => {
   })
 })
 
+describe('App — back into the room the server still holds (T5)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    FakeSocket.reset()
+  })
+
+  const ROOM = {
+    roomId: 'r1', code: 'ABC234', name: 'Bàn cũ', mode: 'holdem' as const,
+    config: { name: 'Bàn cũ', mode: 'holdem' as const, maxPlayers: 4, isPrivate: false, turnTimerSec: 30, autoStart: false, hasPassword: false, holdem: { smallBlind: 100, bigBlind: 200, minBuyInBB: 50, maxBuyInBB: 200 } },
+    playerCount: 1, maxPlayers: 4, status: 'OPEN' as const, hostPlayerId: 'p1', carryOverPot: 0, nextHandAt: null,
+    players: [{ playerId: 'p1', displayName: 'Bình', isBot: false, isHost: true, connected: true, seat: null, status: null, sittingOut: false, stack: 0, ready: false }],
+  }
+
+  it.each(['/#/lobby', '/#/daily'])('opens the room screen from %s when the connect is answered with a room', async (start) => {
+    window.history.replaceState(null, '', start)
+    renderApp()
+    await settled()
+    await welcome()
+    expect(window.location.hash).toBe(start.slice(1))
+
+    await act(async () => {
+      socket().receive({ t: 'ROOM_SNAPSHOT', seq: 5, room: ROOM, hand: null, deadlineAt: null })
+    })
+
+    await waitFor(() => expect(window.location.hash).toBe('#/room'))
+    expect(await screen.findByRole('button', { name: /Rời phòng/ })).toBeInTheDocument()
+  })
+
+  it('stays in the lobby when the server holds no room for the player', async () => {
+    window.history.replaceState(null, '', '/#/lobby')
+    renderApp()
+    await settled()
+    await welcome()
+    await act(async () => {
+      socket().receive({ t: 'ERROR', code: 'NOT_IN_ROOM', message: 'not in a room' })
+    })
+
+    expect(await screen.findByRole('heading', { name: ROOMS_HEADING })).toBeInTheDocument()
+    expect(window.location.hash).toBe('#/lobby')
+  })
+})
+
 describe('App — the daily reminder', () => {
   beforeEach(() => {
     localStorage.clear()

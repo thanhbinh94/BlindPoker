@@ -1,5 +1,17 @@
 import type { RoomPlayerView } from '@bp/core'
-import { AvatarAssets, Chibi, defaultChibi, GameClientProvider, LobbyScreen, RoomScreen, useGameClient, useHashRoute, type ChibiSubject, type SocketFactory } from '@bp/ui-kit'
+import {
+  AvatarAssets,
+  Chibi,
+  defaultChibi,
+  GameClientProvider,
+  LobbyScreen,
+  RoomScreen,
+  useGameClient,
+  useHashRoute,
+  useRoomReturn,
+  type ChibiSubject,
+  type SocketFactory,
+} from '@bp/ui-kit'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { LiteApi, SessionDto } from './api.js'
@@ -87,6 +99,11 @@ export function App({ api, socketFactory, version = LITE_VERSION }: AppProps) {
     setToken(null)
     navigate('/')
   }, [navigate])
+
+  // Still in a room when the socket came up (a reload, a window reopened after a drop): that room is where the
+  // player is, whichever screen they landed on — the lobby cannot take them anywhere else until they leave it.
+  const toRoom = useCallback(() => navigate('/room'), [navigate])
+  useRoomReturn(client.state, toRoom)
 
   if (token === null) {
     return <NamePrompt api={api} onSession={onSession} message={expired ? t('session.expired') : null} />

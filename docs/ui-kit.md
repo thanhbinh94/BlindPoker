@@ -103,8 +103,8 @@ that already has a height.
 | `serverNow()` | `Date.now()` + the `WELCOME` clock offset — **always** compare deadlines against this |
 
 `ClientState` carries `status` (`idle`/`connecting`/`open`/`reconnecting`/`closed`), `closeReason`, `me`,
-`balance`, `lobby`, `room`, `roomStale`, `hand`, `seq`, `deadlineAt`, `lastError`, `notifications`, `resyncNeeded`,
-`replaced`, `serverTimeOffset`.
+`balance`, `lobby`, `room`, `roomStale`, `roomReturns`, `hand`, `seq`, `deadlineAt`, `lastError`, `notifications`,
+`resyncNeeded`, `replaced`, `serverTimeOffset`.
 
 The rules the client obeys — reconnect with exponential backoff 1 s → 30 s, auto-`HELLO`, auto-`PONG`, a `seq` that
 goes backwards or a `STALE_STATE` / `INTERNAL "resync required"` error setting `resyncNeeded` and triggering
@@ -121,11 +121,17 @@ client is holding when a socket comes up is unconfirmed, and `roomStale` says so
 | --- | --- |
 | (initial state) | `roomStale: true` — nothing is confirmed until a session exists |
 | `WELCOME` | `room`/`hand` are kept on screen, `roomStale = true`, `resyncNeeded = true` (the hook sends `RESYNC`) |
-| `ROOM_SNAPSHOT` | the room is confirmed: `roomStale = false` |
+| `ROOM_SNAPSHOT` | the room is confirmed: `roomStale = false`; if it was stale, `roomReturns += 1` |
 | `ERROR{NOT_IN_ROOM}` | the probe's other answer: `room`/`hand` cleared, `seq = 0`, `roomStale = false`, and no `lastError` when the room was stale or already gone |
 
 **A screen must not act on `room === null` alone** — wait for `!roomStale`. `RoomScreen` does exactly that, which is
 why a refresh on `#/room` no longer bounces the player out of a room they are still sitting in.
+
+The other direction is `useRoomReturn(state, onReturn)`: it calls `onReturn` once for every `roomReturns` bump — each
+time a (re)connect is answered with "you are still in a room" — and both apps pass `() => navigate('/room')`. A player
+who reopens the app after a long drop, while the server still keeps them in the room as a spectator (spec §16.6), lands
+on that room rather than on a lobby that refuses every other room with `ALREADY_IN_ROOM` (finding T5, 2026-09-28). A
+room the player creates, joins or has just left never counts.
 
 A frame the reducer cannot apply to anything — a game event with no hand, a `HAND_STARTED` or room event with no
 room — takes its `seq` and sets `resyncNeeded` rather than being dropped.

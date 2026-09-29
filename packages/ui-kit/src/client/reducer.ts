@@ -318,7 +318,18 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
       return { ...state, lobby: msg.rooms }
     case 'ROOM_SNAPSHOT':
       // A snapshot is a fresh view of the hand, possibly a different spot from the one the tick was made in.
-      return { ...state, room: msg.room, roomStale: false, hand: msg.hand ? handFromView(msg.hand, msg.room) : null, seq: msg.seq, deadlineAt: msg.deadlineAt, resyncNeeded: false, preAction: null }
+      // One that lands while the room is unconfirmed is the server's answer to a (re)connect: still in a room.
+      return {
+        ...state,
+        room: msg.room,
+        roomStale: false,
+        roomReturns: state.roomStale ? state.roomReturns + 1 : state.roomReturns,
+        hand: msg.hand ? handFromView(msg.hand, msg.room) : null,
+        seq: msg.seq,
+        deadlineAt: msg.deadlineAt,
+        resyncNeeded: false,
+        preAction: null,
+      }
     case 'BALANCE':
       return { ...state, balance: msg.balance }
     case 'NOTIFICATION':

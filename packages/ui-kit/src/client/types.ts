@@ -90,6 +90,14 @@ export interface ClientState {
    * out of the room they are still sitting in.
    */
   roomStale: boolean
+  /**
+   * How many times this session's server has answered a (re)connect with "you are still in a room": bumped by
+   * the `ROOM_SNAPSHOT` that clears `roomStale`. A counter rather than a flag so an app can react to each one
+   * (`useRoomReturn`) — the player who closed the tab mid-game and came back through the lobby is taken to the
+   * room the server is still holding them in, instead of being refused every other room with `ALREADY_IN_ROOM`
+   * and no word about which (finding T5 of the 2026-09-28 run). Back to 0 with `reset`.
+   */
+  roomReturns: number
   hand: ClientHand | null
   seq: number
   deadlineAt: number | null
@@ -138,6 +146,7 @@ export const initialClientState: ClientState = {
   lobby: [],
   room: null,
   roomStale: true,
+  roomReturns: 0,
   hand: null,
   seq: 0,
   deadlineAt: null,

@@ -8,6 +8,7 @@ import {
   Toasts,
   useGameClient,
   useHashRoute,
+  useRoomReturn,
   type SocketFactory,
 } from '@bp/ui-kit'
 import { Suspense, useCallback, useEffect, useMemo, useRef } from 'react'
@@ -216,6 +217,11 @@ export function App({ api, socketFactory }: AppProps) {
   // Today's reward, as a reminder rather than a claim: a sign-in that lands on the lobby with a reward waiting
   // opens `/daily` once a day, and the rail's tab carries a dot while the reward is still there.
   const { ready: dailyReady } = useDailyNudge({ api: guarded, playerId: gate.signedIn ? gateId : null, path, navigate })
+
+  // Still in a room when the socket came up (a reload, a tab reopened after a drop): that room is where the player
+  // is, whichever screen they landed on — the lobby cannot take them anywhere else until they leave it.
+  const toRoom = useCallback(() => navigate('/room'), [navigate])
+  useRoomReturn(client.state, toRoom)
 
   if (gate.state === 'checking') {
     return (

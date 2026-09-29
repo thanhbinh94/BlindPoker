@@ -357,6 +357,36 @@ describe('session handshake', () => {
     expect(s.roomStale).toBe(false)
     expect(s.lastError).toBeNull() // an expected probe answer, not a refusal to show the player
   })
+
+  it('counts each "still in a room" answer to a (re)connect, and nothing else (T5)', () => {
+    const room = roomView('holdem', HOLDEM_RULES, [20000, 20000])
+    const snapshot: ServerMessage = { t: 'ROOM_SNAPSHOT', seq: 7, room, hand: null, deadlineAt: null }
+    expect(initialClientState.roomReturns).toBe(0)
+
+    // Connect: WELCOME, then the snapshot the server sends because we are still in a room — one return.
+    let s = reduceClient(initialClientState, { type: 'server', msg: welcome, now: 0 })
+    s = reduceClient(s, { type: 'server', msg: snapshot, now: 0 })
+    expect(s.roomReturns).toBe(1)
+    // The answer to the hook's own RESYNC, a moment later, is the same news: not a second return.
+    s = reduceClient(s, { type: 'server', msg: { ...snapshot, seq: 8 }, now: 0 })
+    expect(s.roomReturns).toBe(1)
+
+    // Leaving, then a room event that sends the client after a snapshot: not a return either.
+    s = reduceClient(s, { type: 'leftRoom' })
+    s = reduceClient(s, { type: 'server', msg: { ...snapshot, seq: 9 }, now: 0 })
+    expect(s.roomReturns).toBe(1)
+
+    // A dropped socket comes back: WELCOME, still in the room — the second return.
+    s = reduceClient(s, { type: 'server', msg: welcome, now: 0 })
+    s = reduceClient(s, { type: 'server', msg: { ...snapshot, seq: 10 }, now: 0 })
+    expect(s.roomReturns).toBe(2)
+
+    // And a reconnect the server answers with NOT_IN_ROOM counts nothing.
+    s = reduceClient(s, { type: 'server', msg: welcome, now: 0 })
+    s = reduceClient(s, { type: 'server', msg: { t: 'ERROR', code: 'NOT_IN_ROOM', message: 'not in a room' }, now: 0 })
+    expect(s.roomReturns).toBe(2)
+    expect(reduceClient(s, { type: 'reset' }).roomReturns).toBe(0)
+  })
 })
 
 describe('notifications', () => {
