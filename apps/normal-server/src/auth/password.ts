@@ -30,9 +30,6 @@ export interface Argon2Params {
   parallelism: number
 }
 
-const MIN_LENGTH = 8
-const MAX_LENGTH = 128
-
 export function hashPassword(plain: string, params: Argon2Params = ARGON2_PARAMS): Promise<string> {
   return hash(plain, { type: argon2id, ...params })
 }
@@ -55,23 +52,8 @@ export const DUMMY_HASH: Promise<string> = hashPassword(randomBytes(32).toString
 // failure surfaces at the login that needed it rather than as a silent exit at start-up.
 void DUMMY_HASH.catch(() => {})
 
-export type PasswordRefusal = 'length' | 'weak'
-
-export type PasswordVerdict = { ok: true } | { ok: false; reason: PasswordRefusal }
-
 /**
- * The rule: 8–128 characters, and not the local part of the address it protects.
- *
- * Length is counted in code points, like a display name's, so an accented or emoji-bearing password
- * is measured the way the person typing it counts. `email` is optional because the rule is about the
- * pair, and a caller that has no address to compare against still wants the length check.
+ * The rule itself — 8–128 characters, and neither the whole address nor the part before its `@` — lives in
+ * `@bp/core` so the register form runs the very same function before the request goes out.
  */
-export function validatePassword(password: string, email?: string): PasswordVerdict {
-  const length = [...password].length
-  if (length < MIN_LENGTH || length > MAX_LENGTH) return { ok: false, reason: 'length' }
-  if (email !== undefined) {
-    const local = email.trim().toLowerCase().split('@')[0] ?? ''
-    if (local !== '' && local === password.trim().toLowerCase()) return { ok: false, reason: 'weak' }
-  }
-  return { ok: true }
-}
+export { validatePassword, type PasswordRefusal, type PasswordVerdict } from '@bp/core'

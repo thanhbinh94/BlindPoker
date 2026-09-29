@@ -125,6 +125,7 @@ describe('POST /api/auth/register', () => {
     const cases: [Record<string, unknown>, string][] = [
       [{ ...GOOD, email: 'not-an-address' }, 'INVALID_EMAIL'],
       [{ ...GOOD, password: 'short' }, 'INVALID_PASSWORD'],
+      [{ ...GOOD, password: GOOD.email }, 'INVALID_PASSWORD'],
       [{ ...GOOD, displayName: 'x' }, 'INVALID_NAME'],
       [{ password: GOOD.password, displayName: GOOD.displayName }, 'INVALID_EMAIL'],
       [{ email: GOOD.email, displayName: GOOD.displayName }, 'INVALID_PASSWORD'],

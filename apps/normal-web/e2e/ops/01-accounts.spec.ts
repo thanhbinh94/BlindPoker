@@ -94,10 +94,8 @@ test('A-01 A-02 A-03: the register form refuses bad input and names the field', 
 })
 
 test('A-02 (T2): the whole email address as the password is refused', async ({ page }) => {
-  // Finding T2 of the 2026-09-28 run: the form says "khác với email của bạn", but the server only refuses the
-  // address's local part, so the full address goes through and the account is created. Expected to fail until
-  // T2 is fixed — Playwright reports it the day it starts passing.
-  test.fail(true, 'T2: a password equal to the whole email address is accepted')
+  // Finding T2 of the 2026-09-28 run: the form says "khác với email của bạn", but only the address's local part used
+  // to be refused. Now the whole address is too — by the form (the shared rule in `@bp/core`) and by the server.
   const address = `whole${Date.now() % 100_000}@ops.test`
   await page.goto('/#/register')
   await page.getByLabel('Email', { exact: true }).fill(address)
@@ -105,6 +103,11 @@ test('A-02 (T2): the whole email address as the password is refused', async ({ p
   await page.getByLabel('Tên hiển thị', { exact: true }).fill(`Whole ${Date.now() % 100_000}`)
   await page.getByRole('button', { name: 'Tạo tài khoản' }).click()
   await expect(page.getByLabel('Mật khẩu', { exact: true })).toHaveAttribute('aria-invalid', 'true', { timeout: 5_000 })
+  await expect(page.getByText('Mật khẩu cần 8–128 ký tự và khác với email của bạn')).toBeVisible()
+  await expect(page).toHaveURL(/#\/register$/)
+  // And the server refuses it on its own, for a client that skips the form.
+  const direct = await postApi(page, '/api/auth/register', { email: address, password: address.toUpperCase(), displayName: `Whole B ${Date.now() % 100_000}` })
+  expect(direct.status, 'the server refuses the whole address as a password').toBe(400)
 })
 
 test('A-04: an email or a name already taken is refused in words', async ({ page }) => {

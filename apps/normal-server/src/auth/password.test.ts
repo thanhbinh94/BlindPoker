@@ -64,6 +64,11 @@ describe('validatePassword', () => {
     expect(validatePassword('binhlathanh!', 'binhlathanh@example.com')).toEqual({ ok: true })
   })
 
+  it('refuses the whole address as well, whatever the casing (T2)', () => {
+    expect(validatePassword('binhlathanh@example.com', 'binhlathanh@example.com')).toEqual({ ok: false, reason: 'weak' })
+    expect(validatePassword(' BinhLaThanh@Example.com ', 'binhlathanh@example.com')).toEqual({ ok: false, reason: 'weak' })
+  })
+
   it('still checks the length when no address is offered', () => {
     expect(validatePassword('short')).toEqual({ ok: false, reason: 'length' })
     expect(validatePassword('long enough')).toEqual({ ok: true })
