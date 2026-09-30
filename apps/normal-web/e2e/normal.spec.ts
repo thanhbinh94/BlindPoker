@@ -271,11 +271,28 @@ test.describe('Blind Luck Poker Normal', () => {
     // is also what brings the stack home — until then the balance is the start less the table limit.
     await page.getByRole('button', { name: 'Rời phòng' }).click()
     await expect(page).toHaveURL(/#\/lobby$/)
-    const end = await balanceWhen(page, (n) => n !== start - LIMIT)
+    let end = await balanceWhen(page, (n) => n !== start - LIMIT)
+
+    // A flush or better unlocks a paid achievement ("Thùng", +3.000 …), written by a subscriber just after the
+    // settlement — so on any one read the balance may hold that reward or not yet, and the ledger likewise. The two
+    // are read together until they agree, and the reward rows are taken out of the move before it is compared with
+    // the hand (as ops 04-blind does): the card says nothing about achievements.
+    let entries: { amount: number; reason: string }[] = []
+    await expect
+      .poll(
+        async () => {
+          end = await readBalance(page)
+          entries = await readLedger(page)
+          return entries.reduce((sum, e) => sum + e.amount, 0) - end
+        },
+        { message: 'the ledger sums to the balance', timeout: 10_000 },
+      )
+      .toBe(0)
+    const rewards = entries.filter((e) => e.reason === 'achievement').reduce((sum, e) => sum + e.amount, 0)
 
     // The ledger, from two independent readings: what the database now holds, and what the card told the
     // player. Playing costs the ante plus the play; anything won or handed back comes off that.
-    expect(end - start, 'the balance is the stake, less the payout and anything returned').toBe(payout + returned - PLAY_COST)
+    expect(end - start - rewards, 'the balance is the stake, less the payout and anything returned').toBe(payout + returned - PLAY_COST)
 
     // The card must also add up on its own. The pot is what was paid out plus the fee skimmed off it;
     // add back any uncalled return and this player's known stake leaves the bot's — which the rules allow
@@ -294,11 +311,9 @@ test.describe('Blind Luck Poker Normal', () => {
     expect(fee, 'the table fee is 2% of the pot').toBe(Math.floor(pot * 0.02))
 
     // The third source, and the one that would catch a buy-in or cash-out moving a balance without writing a row
-    // for it (§18.4 rests on this): the ledger. Its rows must sum to the balance the account now holds, and
-    // the sit-down and the leave — the only rows a Blind seat writes — must together be the move the result
+    // for it (§18.4 rests on this): the ledger. Its rows sum to the balance the account now holds (polled above),
+    // and the sit-down and the leave — the only rows a Blind seat writes — must together be the move the result
     // card described.
-    const entries = await readLedger(page)
-    expect(entries.reduce((sum, e) => sum + e.amount, 0), 'the ledger sums to the balance').toBe(end)
     const buyIns = entries.filter((e) => e.reason === 'buy_in')
     const cashOuts = entries.filter((e) => e.reason === 'cash_out')
     expect(buyIns.map((e) => e.amount), 'sitting down took the table limit').toEqual([-LIMIT])
