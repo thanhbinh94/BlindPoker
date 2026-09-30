@@ -11,11 +11,17 @@ export interface ModalProps {
   title: string
   onClose(): void
   children: ReactNode
+  /**
+   * The dialog's action row — the buttons that answer it. Rendered after the body, centred, one section space below
+   * it, so every dialog answers in the same place and a caller never spaces its own buttons (No17). Nothing
+   * (`undefined`, `null`, `false`) renders no row at all, so a dialog without actions keeps no empty margin.
+   */
+  footer?: ReactNode
   /** Accessible name for the close button (i18n string from the host). */
   closeLabel: string
 }
 
-export function Modal({ open, title, onClose, children, closeLabel }: ModalProps) {
+export function Modal({ open, title, onClose, children, footer, closeLabel }: ModalProps) {
   const titleId = useId()
   const dialogRef = useRef<HTMLDivElement>(null)
   // Callers pass an inline arrow, so `onClose` is a new function on every render. Depending on it here would move
@@ -83,6 +89,7 @@ export function Modal({ open, title, onClose, children, closeLabel }: ModalProps
           </Button>
         </div>
         <div>{children}</div>
+        {footer === undefined || footer === null || footer === false ? null : <div className={s.dialogFoot}>{footer}</div>}
       </div>
     </div>,
     document.body,

@@ -262,12 +262,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.buyInFoot {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-3);
-}
-
 /* ── toasts ───────────────────────────────────────────────────────────────── */
 
 .toasts {

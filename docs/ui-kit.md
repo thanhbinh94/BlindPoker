@@ -267,7 +267,7 @@ and an app only reaches for them directly when it builds its own room form.
 | `Select<T>` | `value`, `options`, `onChange`, plus `<select>` attributes |
 | `Panel` | `title?`, `tone?` (`ink`/`parchment`/`felt`), `className?` |
 | `Badge` | `tone` (`gold`/`red`/`teal`/`muted`) |
-| `Modal` | `open`, `title`, `onClose`, `closeLabel`, `children` |
+| `Modal` | `open`, `title`, `onClose`, `closeLabel`, `children`, `footer?` — the action row: centred, `--space-5` below the body, `--space-3` between buttons; a dialog puts its buttons here and never spaces them itself. A form dialog keeps its submit button inside the `<form>` (the create-room dialog's sticky `.formFoot`, centred to match) |
 | `Segmented<T>` | `options` (`{ value, label }[]`), `value`, `onChange`, `label` (the group's name), `disabled?`, `className?` — the one "pick one of a few" pill: language, lobby filter, create-form mode, theme |
 
 ### Router

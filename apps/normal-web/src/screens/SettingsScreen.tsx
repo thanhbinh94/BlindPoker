@@ -124,16 +124,18 @@ export function SettingsScreen({ api, lang, onLanguage, onSignedOut, version }: 
         title={t('settings.signOut.title')}
         onClose={() => setConfirming(false)}
         closeLabel={t('settings.signOut.close')}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirming(false)}>
+              {t('settings.signOut.cancel')}
+            </Button>
+            <Button variant="danger" onClick={onSignedOut}>
+              {t('settings.signOut.confirm')}
+            </Button>
+          </>
+        }
       >
         <p className={s.footnote}>{t('settings.signOut.body')}</p>
-        <div className={s.choices}>
-          <Button variant="ghost" onClick={() => setConfirming(false)}>
-            {t('settings.signOut.cancel')}
-          </Button>
-          <Button variant="danger" onClick={onSignedOut}>
-            {t('settings.signOut.confirm')}
-          </Button>
-        </div>
       </Modal>
     </main>
   )

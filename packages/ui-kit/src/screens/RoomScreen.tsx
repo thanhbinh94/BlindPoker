@@ -312,6 +312,16 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
         title={t('room.buyInTitle')}
         closeLabel={t('actions.close')}
         onClose={closeBuyIn}
+        footer={
+          <>
+            <Button variant="ghost" onClick={closeBuyIn}>
+              {t('actions.cancel')}
+            </Button>
+            <Button variant="gold" size="lg" loading={request.busy} onClick={() => void confirmBuyIn()}>
+              {t('actions.sitDown')}
+            </Button>
+          </>
+        }
       >
         <div className={s.buyIn}>
           <Field
@@ -330,14 +340,6 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
               onChange={(event) => setBuyIn(event.target.value)}
             />
           </Field>
-          <div className={s.buyInFoot}>
-            <Button variant="ghost" onClick={closeBuyIn}>
-              {t('actions.cancel')}
-            </Button>
-            <Button variant="gold" size="lg" loading={request.busy} onClick={() => void confirmBuyIn()}>
-              {t('actions.sitDown')}
-            </Button>
-          </div>
         </div>
       </Modal>
 

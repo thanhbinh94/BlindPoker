@@ -95,16 +95,23 @@ export function SettingsScreen({ me, balance, onSignedOut, version }: SettingsSc
         </Button>
       </div>
 
-      <Modal open={confirming} title={t('settings.signOut')} closeLabel={t('game:actions.close')} onClose={() => setConfirming(false)}>
+      <Modal
+        open={confirming}
+        title={t('settings.signOut')}
+        closeLabel={t('game:actions.close')}
+        onClose={() => setConfirming(false)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirming(false)}>
+              {t('game:actions.cancel')}
+            </Button>
+            <Button variant="danger" onClick={signOut}>
+              {t('game:actions.confirm')}
+            </Button>
+          </>
+        }
+      >
         <p className={s.modalText}>{t('settings.signOutConfirm')}</p>
-        <div className={s.modalActions}>
-          <Button variant="ghost" onClick={() => setConfirming(false)}>
-            {t('game:actions.cancel')}
-          </Button>
-          <Button variant="danger" onClick={signOut}>
-            {t('game:actions.confirm')}
-          </Button>
-        </div>
       </Modal>
     </main>
   )

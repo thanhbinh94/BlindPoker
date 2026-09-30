@@ -354,6 +354,16 @@
   line-height: 1;
 }
 
+/* The action row of every dialog (`Modal`'s `footer`): centred, --space-5 below the body — the same step the page
+   uses between its sections — and --space-3 between buttons, wrapping when the width runs out. */
+.dialogFoot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
 @keyframes fade {
   from {
     opacity: 0;
