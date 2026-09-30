@@ -161,7 +161,7 @@ nhánh `fix/ops-t1-t9` (29/09), merge `2111c55`, đã cập nhật host LAN.
 - T4: client tự suy ra từ cấu hình phòng và số dư (không đổi giao thức); chỉ Blind — Hold'em hết chip thì bị mời đứng dậy ngay cuối ván, nên không có trường hợp này.
 - T5: làm một lần trong ui-kit (`roomReturns` + `useRoomReturn`), Normal và Lite cùng dùng; chỉ tính câu trả lời cho lần (tái) kết nối, không tính tạo/vào/vừa rời phòng.
 - T6: phát `ROOM_JOINED` cho chủ phòng ngay sau `ROOM_CREATED`, mỗi phòng một lần.
-- T8: **`.env` thật trên host chưa đổi** — bạn tự sửa đuôi `DATABASE_URL` thành `?sslmode=verify-full` rồi khởi động lại.
+- T8: `.env` thật trên host đã đổi sang `sslmode=verify-full` khi cập nhật host ngày 29/09 (chỉ đổi tham số, không in chuỗi kết nối); `/health` báo `db: ok`, log lỗi trống.
 - T9: cảnh báo in ra thật là `Warning: Currently the require()…` của bộ nạp exe (do `ws` dò add-on tuỳ chọn); cảnh báo "SEA is experimental" đã tắt sẵn trong cấu hình SEA. Bộ lọc được nạp trước mọi module khác (`quiet-start.ts`), mọi cảnh báo khác vẫn in.
 
 Vòng sửa sau review (29/09), cùng nhánh:
@@ -169,3 +169,31 @@ Vòng sửa sau review (29/09), cùng nhánh:
 - T5 (`0c377f9`): người bị đưa ra khỏi phòng (rời giữa ván có hiệu lực cuối ván, bị đuổi) nhận chính `PLAYER_LEFT` của mình; app trở về sảnh thay vì kẹt ở một bàn đứng hình.
 - T3 (`5e172ec`): nút "Quản lý bàn" hiện cả trong lúc đếm ngược giữa hai ván (bàn Blind có bot vẫn ở trạng thái IN_GAME).
 - T6 (`7d7c9d1`): mỗi người chỉ được tính "vào phòng" một lần cho mỗi phòng — rời rồi vào lại không cộng thêm.
+
+## 7. Góp ý review 2026-09-29 (`other/review/20260929/Note.txt`)
+
+Người dùng gửi 17 mục kèm ảnh (hai mục cùng số 11, ghi là 11a/11b). Phân loại và nguyên nhân do Claude dò trong code
+ngày 30/09; người dùng duyệt chia ba đợt: **Đợt 1** sửa lỗi ngay (Plan 16), **Đợt 2** cải tiến cần chốt lựa chọn,
+**Đợt 3** nhân vật thế hệ mới (spec riêng). Độ khó: D = dễ, TB = trung bình, K = khó.
+
+| # | Loại | Khó | Mô tả | Nguyên nhân / hướng | Đợt | Trạng thái |
+|---|---|---|---|---|---|---|
+| No15 | Bug P1 | D | Đổi màu mắt: nhân vật vẫn mắt xanh gốc | CSP `img-src 'self' data:` chặn ảnh `blob:` mà lớp tô màu dùng (`tinted.ts`); lớp mặt bị chặn nên lộ lớp thân còn mắt gốc. Cho phép `blob:` ở Normal, thêm dự phòng ảnh gốc khi lỗi, test kiểm ảnh tải được thật | 1 | đang sửa |
+| No16 | Bug P1 | D | Đổi màu tóc: mất cả đầu/tóc | Cùng nguyên nhân No15: ba lớp được tô (L30/L50/L60) đều bị chặn, chỉ còn áo | 1 | đang sửa |
+| No6 | Bug | D | "Chưa có tài khoản? Đăng ký" / "Đã có tài khoản? Đăng nhập" không chuyển tab | Link đổi `href` trong lúc bấm nên trình duyệt quay về địa chỉ cũ; hai link trùng việc với hai tab → bỏ hai link, giữ tab | 1 | đang sửa |
+| No4 | Bug | D | Hồ sơ → Ván gần đây hiện `bot:<mã phòng>:4` | Lịch sử ghi mã bot làm nhãn; hiện "Bot n" và thêm tên phòng ("Tại bàn …") | 1 | đang sửa |
+| No3 | Đổi hành vi | D | Phòng chỉ còn bot vẫn "Đang đóng…" 60 giây sau khi người cuối rời | Người thật cuối cùng rời phòng có bot → đóng ngay; phòng trống không bot giữ 60 giây như quyết định bug 2 | 1 | đang sửa |
+| No8b | Bug | D | Ô trang phục cao thấp khác nhau (kho đồ, phòng thay đồ) | Thẻ không giãn theo hàng lưới — không phải chủ đích | 1 | đang sửa |
+| No12 | Bug | D | Modal tạo phòng đổi chiều cao khi đổi chế độ | Hai bộ ô khác số dòng gợi ý; giữ chiều cao cố định | 1 | đang sửa |
+| No17 | Bug giao diện | D–TB | Nút cuối modal sát phần chữ, căn trái | Mỗi modal tự làm phần nút; thêm vùng nút chung (căn giữa, có khoảng cách) cho mọi modal | 1 | đang sửa |
+| No11b | Bug + test | TB | Chữ/khung đè nhau (thẻ "Tay nóng" sát "HUY HIỆU"; "Ván tiếp theo sau…" đè ghế mình) | Sửa hai chỗ + thêm bước kiểm tự động phát hiện chữ đè nhau trên các màn chính | 1 | đang sửa |
+| No2 | Bug layout | TB | Vào bàn chơi có thanh cuộn dọc trên PC tiêu chuẩn | Ghế của mình nhô dưới bàn tới 6 dòng; thu gọn ghế, tính lại kích thước bàn; sảnh/kho đồ chỉ cuộn khi nội dung thật sự dài | 1 | đang sửa |
+| No11a | Tính năng | D | Mặc định chỉ hiện món đã có + ô "hiện cả món chưa có" | Thay bộ lọc Tất cả/Đã có/Chưa có | 2 | chờ chốt |
+| No10 | Tính năng | D–TB | Chọn biểu cảm dạng trượt | ‹ tên biểu cảm › thay 6 nút | 2 | chờ chốt |
+| No1 | Tính năng | TB | Lật bài từ từ | Hiện chỉ có hiệu ứng lúc chia; thêm lật hai mặt ~0,6 giây | 2 | chờ chốt |
+| No8a | Bug/thiếu | TB (hoặc D) | Các bản màu áo phông cùng một icon | Icon chưa có mặt nạ tô màu; làm mặt nạ icon (TB) hoặc chấm màu (D) | 2 | chờ chốt |
+| No5 | Câu hỏi | TB | Kho đồ và Phòng thay đồ có cần tách? | Đề xuất gộp vào Phòng thay đồ | 2 | chờ chốt |
+| No9 | Rà câu chữ | TB | Câu chữ chưa tự nhiên, hướng dẫn thừa | Lập danh sách cũ → mới / bỏ để duyệt | 2 | chờ chốt |
+| No13 | Tính năng lớn | K | Tách giới tính, kiểu tóc, màu da, màu tóc; kiểu riêng nam/nữ | Thân nền là ảnh AI vẽ liền; cần vẽ lại tóc thành lớp riêng + biến thể da + đổi dữ liệu/pipeline | 3 | cần spec |
+| No14 | Tính năng lớn | K+ | Chỉnh dáng tự nhiên, có ngón tay | Ảnh 2D phẳng không có khung xương; khả thi nhất: vài tư thế vẽ sẵn + vẽ lại có ngón tay, cùng đợt No13 | 3 | cần spec |
+| No7 | Tương lai | D | Thông báo qua email | Ghi vào roadmap (spec §34), chưa làm | — | roadmap |
