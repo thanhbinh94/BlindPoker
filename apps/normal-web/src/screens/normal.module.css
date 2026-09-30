@@ -894,13 +894,6 @@
   max-width: calc(var(--measure-wide) + 2 * var(--space-4));
 }
 
-.stageActions {
-  display: flex;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  align-items: center;
-}
-
 /* ── the inventory ─────────────────────────────────────────────────────────── */
 
 /* Inside each of the wardrobe's three groups, one sub-heading and card grid per slot that holds anything
