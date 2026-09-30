@@ -413,9 +413,10 @@ test.describe('Blind Luck Poker Normal', () => {
     await expect(page).toHaveURL(/#\/lobby$/)
 
     // --- 7. a busy lobby: six rooms of every kind (review round 2, R2-1) ---------------------------------
-    // Last, because the socket route `withBusyLobby` lays stays on the page. A room with only bots in it closes at once, so
-    // the lobby above held none or one; here the server's `ROOM_LIST` is answered with `BUSY_LOBBY` — Hold'em and Blind, open,
-    // in a hand and closing, a lock, the longest name — and the lobby must still fit the player's screen with no text over text.
+    // Last, because the socket route that `withBusyLobby` sets up stays on the page. A room with only bots in it closes at
+    // once, so the lobby above held none or one; here the server's `ROOM_LIST` is answered with `BUSY_LOBBY` — Hold'em and
+    // Blind, open, in a hand and closing, a lock, two names that wrap — and the lobby must still fit the player's screen
+    // with no text over text.
     await withBusyLobby(page)
     const tickets = page.getByRole('button', { name: /^Vào phòng — / })
     await expect(tickets, 'the six fixture rooms are six tickets').toHaveCount(6)

@@ -107,7 +107,9 @@ screen, on the accounts they already make — the default e2e may not register m
 (1920×940), a laptop's (1366×768) and a phone's (375×812):
 
 - sign-in card, both tabs: all three, and 1440×900; on the desktop also as signing out leaves it (`normal.spec.ts`);
-- lobby, and a lobby of six rooms (patched `ROOM_LIST`: every kind of room; it must also fit 1920×940 and not scroll sideways on the phone), and its create-room dialog in both modes: all three (`normal.spec.ts`);
+- lobby; a lobby of six rooms (a patched `ROOM_LIST`: Hold'em and Blind, open, in a hand and closing, a lock, and two
+  names that wrap — the server's longest cut after two lines), which must also fit 1920×940 and not scroll sideways
+  on the phone; and the lobby's create-room dialog in both modes: all three (`normal.spec.ts`);
 - room taking seats, in a hand, and on the result card counting down and held: all three; on the phone the stage
   is also read scrolled to its foot (`normal.spec.ts`);
 - wardrobe (Ngoại hình, Mũ, Danh hiệu & Huy hiệu) and inventory: all three, plus 900×1100 (`wardrobe-layout.spec.ts`);

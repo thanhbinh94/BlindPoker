@@ -234,32 +234,42 @@ navigation. The countdown is never inside a row's `<li>` or the fee line, which 
 — and they find the card as `getByRole('group', { name: /^(Người thắng|Những người thắng|Ván bị hủy)$/ })`, since a
 `status` locator would now match the inner region alone and lose the footer.
 
-The card is at most as tall as the felt (`max-height: 100%` of `RoomScreen`'s overlay): past that its body — the rows, then the pot ledger under them — scrolls inside it, and the title, the close
-button and the footer stay put. While the body can still scroll down, its foot fades out (a CSS mask, switched by
-`data-more`, which `HandResult` measures on scroll and on resize), so a ledger below the fold reads as more to come;
-scrolled to the end, the fade goes.
+The card is at most as tall as the felt less the seat clearance (`max-height: 100%` of the content box of
+`RoomScreen`'s overlay, which ends above the viewer's own seat — below): past that its body — the rows, then the pot
+ledger under them — scrolls inside it, and the title, the close button and the footer stay put. While the body can
+still scroll down, its foot fades out (a CSS mask, switched by `data-more`, which `HandResult` measures on scroll and
+on resize), so a ledger below the fold reads as more to come; scrolled to the end, the fade goes.
 
 **The card stops above the viewer's own seat** (review round 2, R2-3: on a short stage it covered that seat whole, and
-at 1920 × 940 its plate). The overlay still spans the stage — its scrim fades out over the seat — but its bottom
-padding grows by `--seat-clearance`, which `RoomScreen` sets from `useSeatClearance(stageRef, active)`
-(`src/screens/seat-clearance.ts`) while a card is up. The hook finds the seat and its plate by `Seat`'s markers,
-`data-me="true"` on the viewer's own seat and `data-plate` on a plate — a contract of their own, not the hashed class
-names — and measures before paint, on a `ResizeObserver` over the stage and the seat (looked up afresh each time: the
-ring and the stack draw it anew), and once the fonts land; without `ResizeObserver` (jsdom) it measures once.
-`clearanceFor(stage, seat, plate)` picks the first of three tiers that leaves the card `MIN_CARD` (216 px: a title,
-one full row and the footer, ≈ 184 px of card, plus the overlay's 2 × 16 px padding) above what it clears, with a
-`CLEARANCE_GAP` of 8 px:
+at 1920 × 940 its plate). The overlay still spans the stage, but its bottom padding grows by `--seat-clearance`, and
+its scrim paints the padded content box alone — the card's stage — so the scrim's centre rises with the card and the
+seat below is not darkened (the ellipse is as tall as that box, so it is transparent by the box's foot and draws no
+line across the felt). `RoomScreen` sets the clearance from `useSeatClearance(stageRef, active, seat)`
+(`src/screens/seat-clearance.ts`) while a card is up; `seat` is the viewer's seat number, `null` while they watch. The
+hook finds the seat and its plate by `Seat`'s markers, `data-me="true"` on the viewer's own seat and `data-plate` on a
+plate — a contract of their own, not the hashed class names — and measures before paint, on a `ResizeObserver` over
+the stage and the seat (looked up afresh each time: the ring and the stack draw it anew), once the fonts land, and
+whenever `seat` changes (a seat taken or left under the card resizes nothing it observes); without `ResizeObserver`
+(jsdom) it measures once per change. Switched off, it forgets its answer, so the next card never starts from the last
+one's. `clearanceFor(stage, seat, plate)` picks the first of three tiers that leaves the card `MIN_CARD` (216 px: a
+title, one full row and the footer, ≈ 184 px of card, plus the overlay's 2 × 16 px padding) above what it clears,
+with a `CLEARANCE_GAP` of 8 px:
 
 1. above the whole seat block — cards, plate and the lines under it: every desktop room screen with six seats
    (`seat.top − stage.top` with the card held is about 405–410 px at 1920 × 940, 255 at 1536 × 730, 290 at
-   1366 × 768 and 245 at 1280 × 720, where that leaves the card about 205 px and a longer receipt scrolls inside it);
+   1366 × 768 and 245 at 1280 × 720, where that leaves the card about 205 px and a longer receipt scrolls inside it),
+   and a tall phone: 412 × 915 with touch has 331 px above the seat, room for a card of about 290 px;
 2. above the plate — the plate and its lines stay clear; the card may lie over the top of the viewer's hole cards,
-   which its own row repeats;
-3. neither: no clearance, and the card keeps the whole stage over the seat, closable as before. **The phone is tier
-   3**: on a 375 × 812 touch screen the stage above the pinned seat is 174 px, above its plate 223 — one pixel short
-   of tier 2. (A mouse-driven window of the same size has 16 px more stage — the coarse-pointer touch targets in the
-   bar and the tray are shorter there — and lands in tier 2: the card, about 190 px, stops above the plate.) A
-   spectator has no seat to clear and keeps the whole stage too.
+   which its own row repeats: a 390 × 844 phone with touch (206 px above the seat, 255 above the plate; room for a
+   card of about 215 px), and a 375 × 812 window without touch (190 and 239; about 200 px);
+3. neither: no clearance, and the card keeps the whole stage over the seat, closable as before — the 375 × 812 touch
+   screen the e2e phone runs at: 174 px above the pinned seat and 223 above its plate, **one pixel short of tier 2**
+   (its coarse-pointer touch targets in the bar and the tray take the 16 px that a mouse-driven window of the same
+   size has). A spectator has no seat to clear and keeps the whole stage too.
+
+So a phone's tier is a matter of a few pixels of stage, measured with six seats and the card held (2026-10-01): a
+change to the room's bar, tray or seat can move the small phone into tier 2, which is benign — the card then stops
+above the plate, as on 390 × 844.
 
 `normal.spec.ts` holds the held card to it at the four desktop sizes (`expectCardClearsMySeat`: the card meets
 neither the plate nor a line under it, and is still at least `MIN_CARD − 32` px tall, or whole, with its title on
