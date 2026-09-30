@@ -126,13 +126,15 @@ Lệnh này in ra toàn bộ biến sau khi chuẩn hoá (mật khẩu và khoá
 ```
 
 Script sẽ: kiểm Node và bản build → đọc `.env` → tìm IP LAN → chạy migration
-(`node dist/migrate-cli.js`) → khởi động server (`node dist/main.js`) → chờ tới khi server báo đã
-mở cổng, rồi in ra:
+(`node dist/migrate-cli.js`) → khởi động server (`node dist/main.js`) **tách khỏi cửa sổ này**, bằng
+một scheduled task của Windows → chờ tới khi server báo đã mở cổng, rồi in ra:
 
 ```text
 Blind Luck Poker Normal đang chạy — pid 12345, log ở D:\bind-poker\deploy\normal-windows\normal.log
   Máy này:        http://localhost:8080
   Máy khác trong LAN: http://192.168.1.10:8080
+
+Chạy tách nền bằng scheduled task 'BlindLuckPoker-Normal' — đóng cửa sổ này server vẫn chạy (đăng xuất Windows thì dừng). ...
 ```
 
 Nếu server chết ngay lúc khởi động, script **in ra thông báo lỗi của chính server** rồi thoát với mã
@@ -142,14 +144,42 @@ Tham số có thể dùng:
 
 | Tham số | Ý nghĩa |
 | --- | --- |
-| `-DryRun` | Chỉ in cấu hình và lệnh sẽ chạy, không đụng vào database lẫn cổng mạng. |
+| `-DryRun` | Chỉ in cấu hình, lệnh sẽ chạy và cách chạy (task nào, lệnh của task), không đụng vào database, cổng mạng lẫn Task Scheduler. |
 | `-NoMigrate` | Bỏ qua bước migration (schema đã có sẵn từ lần chạy trước). |
 | `-Port 9090` | Chạy tạm ở cổng khác. **Phải** sửa cổng trong `ALLOWED_ORIGINS` cho khớp trước — nếu không script sẽ từ chối chạy (kể cả `-DryRun`), không chỉ cảnh báo. |
 | `-EnvFile ..\a.env` | Dùng một file cấu hình khác. |
 | `-LanIp 192.168.1.50` | Bỏ qua bước tự dò card mạng, dùng thẳng địa chỉ này. Xem mục "IP LAN tự dò sai" ngay dưới. |
+| `-AutoStart` | Cho task tự chạy mỗi lần bạn **đăng nhập** Windows (trigger *At log on*). Lần chạy sau không có `-AutoStart` thì trigger bị bỏ — task luôn khớp với lần chạy gần nhất. |
+| `-Foreground` | Cách chạy cũ: server gắn vào cửa sổ PowerShell này. Chỉ dùng để gỡ lỗi — **đóng cửa sổ là server dừng**, không để lại dòng lỗi nào. |
+| `-TaskName Tên` | Đặt tên khác cho scheduled task (mặc định `BlindLuckPoker-Normal`), ví dụ khi chạy hai bản ở hai cổng. Khi đó `stop.ps1` cũng phải có `-TaskName Tên`. |
 
-Log của server nằm ở `normal.log` và `normal.err.log` cạnh script. Cửa sổ PowerShell đóng lại thì
-server **vẫn chạy** — dừng nó bằng `.\stop.ps1` (mục 7).
+Log của server nằm ở `normal.log` và `normal.err.log` cạnh script.
+
+**Server chạy tách nền như thế nào.** Trước đây server gắn vào cửa sổ PowerShell đã gọi `run.ps1`:
+cửa sổ đó (hoặc phiên chứa nó) đóng là server chết theo, im lặng. Nay `run.ps1` đăng ký một
+scheduled task tên `BlindLuckPoker-Normal` rồi chạy nó:
+
+- task chạy dưới **tài khoản Windows của bạn**, chỉ khi bạn đang đăng nhập, **không cần quyền
+  admin**, không lưu mật khẩu, không giới hạn thời gian chạy, vẫn chạy khi máy dùng pin;
+- lệnh của task là chính `run.ps1` với tham số nội bộ `-Serve`, trong một cửa sổ PowerShell ẩn (lúc
+  khởi động có thể thấy một cửa sổ đen nháy lên rồi biến mất — đó là nó). `-Serve` đọc lại `.env`,
+  chạy `node dist/main.js` và ghi pid vào `normal.pid`;
+- trong định nghĩa task chỉ có đường dẫn (và cổng/IP nếu bạn truyền `-Port`/`-LanIp`), **không có
+  mật khẩu hay khoá phiên nào** — chúng vẫn chỉ nằm trong `.env`;
+- vì vậy **đóng cửa sổ PowerShell, server vẫn chạy**. Đăng xuất (hoặc tắt máy) thì server dừng; muốn
+  nó tự chạy lại khi đăng nhập thì dùng `-AutoStart`.
+
+Xem task: mở **Task Scheduler** (`taskschd.msc`) → **Task Scheduler Library** → `BlindLuckPoker-Normal`
+(cột *Status* là *Running* khi server đang chạy, *Last Run Result* là mã thoát lần trước), hoặc:
+
+```powershell
+Get-ScheduledTask BlindLuckPoker-Normal | Select-Object TaskName, State
+(Get-ScheduledTask BlindLuckPoker-Normal).Actions   # lệnh task chạy — chỉ có đường dẫn
+```
+
+Lưu ý: biến môi trường bạn tự đặt trong cửa sổ PowerShell (`$env:...`) **không** theo sang server nữa
+— server chạy trong một tiến trình mới do Task Scheduler mở. Mọi cấu hình phải nằm trong `.env`.
+Dừng server bằng `.\stop.ps1` (mục 7).
 
 **IP LAN tự dò sai?** `run.ps1` chọn card mạng theo `InterfaceMetric` thấp nhất trong các card đang
 `Up` — đúng ý Windows trên máy bình thường, nhưng máy có Hyper-V (WSL bật tính năng ảo hoá), VPN, hay
@@ -205,7 +235,18 @@ Vì vậy, quy tắc vận hành: **kết thúc hết các ván đang chơi và 
 
 `stop.ps1` đọc pid trong `normal.pid`, kiểm tra pid đó đúng là một tiến trình `node` (Windows hay
 cấp lại pid cũ cho chương trình khác — script từ chối giết nhầm), rồi `Stop-Process -Force` và xoá
-file pid.
+file pid. Sau đó, nếu scheduled task `BlindLuckPoker-Normal` vẫn đang chạy, nó dừng luôn task (dừng
+task thôi thì không đủ: Task Scheduler chỉ tắt cửa sổ PowerShell ẩn, còn `node` vẫn sống — vì vậy
+`node` luôn bị tắt trước). Task **vẫn được giữ lại** để lần `run.ps1` sau dùng tiếp.
+
+Gỡ hẳn task (không dùng bộ kit nữa, hoặc bỏ `-AutoStart` cho chắc):
+
+```powershell
+.\stop.ps1 -Remove
+```
+
+`stop.ps1` vẫn là **tắt cứng** như mô tả ở trên, dù server chạy bằng task hay `-Foreground` — luôn
+đóng hết phòng trước (`/health` báo `"rooms":0`).
 
 ---
 
@@ -264,6 +305,10 @@ dụng cho trường hợp chạy LAN trực tiếp, không có proxy.
 | `[warn] Không xác định được địa chỉ IPv4 LAN` | Máy không có card mạng nào đang hoạt động, hoặc chỉ có địa chỉ `169.254.*` (Wi-Fi/LAN chưa nhận được IP). Nối mạng lại rồi chạy lại; hoặc điền tay IP vào `ALLOWED_ORIGINS` thay cho `<IP-LAN>`, hoặc dùng `-LanIp`. |
 | IP LAN script in ra không giống dải mạng thật (ví dụ `172.x`, `192.168.56.x`) | Máy có card ảo (Hyper-V/WSL/VPN/VirtualBox) với metric thấp hơn card thật. Xem mục 5 ("IP LAN tự dò sai?") và dùng `-LanIp`. |
 | `[error] Đã có một server đang chạy (pid N)` | Lần chạy trước chưa dừng. `.\stop.ps1` rồi chạy lại. |
+| `[error] Scheduled task 'BlindLuckPoker-Normal' đang chạy` | Server đã chạy tách nền từ trước (có thể `normal.pid` đã bị xoá). `.\stop.ps1` — nó tìm được `node` của task kể cả khi thiếu `normal.pid` — rồi chạy lại. |
+| `[error] Cổng 8080 đã có một server khác trả lời` | Một server khác (bản khác của repo, một cửa sổ `-Foreground`, …) đang giữ cổng. Tìm nó bằng `Get-NetTCPConnection -LocalPort 8080 -State Listen` (cột `OwningProcess` là pid), hoặc chạy ở `-Port` khác. |
+| `[error] Không đăng ký được scheduled task` | Máy bị chính sách công ty chặn Task Scheduler, hoặc dịch vụ Task Scheduler tắt. Chạy `.\run.ps1 -Foreground` và **để cửa sổ đó mở** suốt buổi chơi. |
+| Server tắt khi đăng xuất Windows | Đúng thiết kế: task chạy trong phiên đăng nhập của bạn. Đăng nhập lại rồi `.\run.ps1`, hoặc chạy một lần `.\run.ps1 -AutoStart` để lần sau tự chạy. |
 | Máy khác không vào được | Kiểm tra theo thứ tự: tường lửa (mục 6); `HOST=0.0.0.0` trong `.env`; hai máy cùng một mạng; dùng đúng IP script đã in, không phải `localhost`. |
 | Vào được trang nhưng đăng nhập xong lại bị đăng xuất | `COOKIE_SECURE` đang là `true` mà bạn đang dùng `http://`. Đặt lại `COOKIE_SECURE=false` cho mạng LAN. |
 | Trang trắng, hoặc giao diện cũ | `Ctrl` + `F5` để tải lại bỏ cache. Vẫn trắng thì xem `normal.err.log`. |
@@ -292,8 +337,9 @@ Thêm `--dry-run` để chỉ xem sẽ cấp gì. Chạy lại lần nữa khôn
 
 - **Không có HTTPS.** Mật khẩu đi qua mạng ở dạng rõ. Chỉ dùng trong mạng bạn tin được.
 - **Dừng là tắt cứng** (mục 7).
-- **Một tiến trình duy nhất.** Không nhân bản, không tự khởi động lại khi crash, không tự chạy khi
-  bật máy. Máy sập là mọi người mất kết nối; dữ liệu vẫn nằm nguyên trong Postgres.
+- **Một tiến trình duy nhất.** Không nhân bản, không tự khởi động lại khi crash. Chỉ tự chạy khi
+  **đăng nhập** Windows nếu bạn dùng `-AutoStart` (không phải khi bật máy mà chưa ai đăng nhập), và
+  dừng khi đăng xuất. Máy sập là mọi người mất kết nối; dữ liệu vẫn nằm nguyên trong Postgres.
 - **Neon free ngủ** sau vài phút rảnh, và có hạn mức dung lượng/băng thông. Đủ cho một buổi test,
   không đủ cho vận hành lâu dài.
 - Muốn chạy thật thì đọc [`docs/deployment-normal.md`](../../docs/deployment-normal.md).

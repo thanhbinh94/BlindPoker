@@ -8,15 +8,30 @@
     launcher, not a service wrapper — read README.md beside it before using it for anything but a
     test on your own network.
 
-    Two decisions are worth knowing up front.
+    Three decisions are worth knowing up front.
+
+    **The server does not belong to the window that started it.** Started with
+    `Start-Process -NoNewWindow`, node was attached to the launching console and lived in its process
+    tree, so closing that window — or losing the session it ran in — killed the server without one
+    line in its logs (bug log R2-5). By default this script now registers a per-user scheduled task
+    (`BlindLuckPoker-Normal`: the current user, logged-on only, no admin, no stored password, no
+    time limit) whose action is this same script with the internal `-Serve` switch, starts it, and
+    waits for `/health` exactly as before. `-Serve` runs in a hidden PowerShell owned by Task
+    Scheduler: it loads the same `.env` (sections 1-7), starts node in its foreground, records
+    node's pid in `normal.pid` and exits with node's exit code. `-Foreground` keeps the old attached
+    launch for debugging. `stop.ps1` stops node by pid and then the task; `stop.ps1 -Remove`
+    unregisters it.
 
     **Nothing is ever written into `apps/normal-server`.** `main.ts` builds its config as
     `{ ...readDotenv('.env'), ...process.env }` — `process.env` spreads last and wins, so a stray
     `.env` left in that directory would only ever be *outranked* by this kit's variables, never the
     other way round. That is not why we avoid it: a file dropped into a git working tree survives the
     test and can be committed by accident. Simpler to never write one — every variable is set into
-    `$env:` of this PowerShell session and inherited by the child process. The checkout stays exactly
-    as `git status` found it.
+    `$env:` of the PowerShell session that starts node (the task's hidden one, or this one under
+    `-Foreground`) and inherited by the child process. The checkout stays exactly as `git status`
+    found it. Nor does any secret reach the scheduled task: its action carries paths, and the port
+    and LAN address when they were passed, nothing else — `-Serve` reads the secrets from the file
+    itself.
 
     **`PUBLIC_DIR` is made absolute here.** `apps/normal-server/src/app.ts` resolves a relative
     `PUBLIC_DIR` against `process.cwd()`, which is fine when the operator can see what the cwd is
@@ -42,6 +57,24 @@
     switch, WSL or a VPN adapter can end up with a lower interface metric than the real Wi-Fi/Ethernet
     card. Find the right address with `ipconfig` or `Get-NetIPAddress -AddressFamily IPv4`.
 
+.PARAMETER Foreground
+    The old launch: node attached to this console instead of the scheduled task. For debugging —
+    closing this window stops the server.
+
+.PARAMETER AutoStart
+    Also give the scheduled task an `AtLogOn` trigger for the current user, so the server starts
+    whenever that user logs on to Windows. A run without it removes the trigger again: the task
+    always matches the flags of the last run.
+
+.PARAMETER TaskName
+    The scheduled task's name. Default `BlindLuckPoker-Normal`; `stop.ps1 -TaskName` must be given
+    the same name.
+
+.PARAMETER Serve
+    Internal — the scheduled task's action. Loads the configuration like any run, then starts node
+    in the foreground of this (hidden) process, records its pid, and exits with node's exit code.
+    Never migrates, never registers anything.
+
 .EXAMPLE
     .\run.ps1 -DryRun
 
@@ -50,6 +83,9 @@
 
 .EXAMPLE
     .\run.ps1 -LanIp 192.168.1.50
+
+.EXAMPLE
+    .\run.ps1 -AutoStart
 #>
 [CmdletBinding()]
 param(
@@ -57,7 +93,11 @@ param(
     [switch] $DryRun,
     [switch] $NoMigrate,
     [string] $Port,
-    [string] $LanIp
+    [string] $LanIp,
+    [switch] $Foreground,
+    [switch] $AutoStart,
+    [string] $TaskName,
+    [switch] $Serve
 )
 
 Set-StrictMode -Version 2.0
@@ -74,6 +114,14 @@ $BUILD_HINT = 'pnpm build:normal'
 $PLACEHOLDER = 'CHANGE_ME'
 $LAN_TOKEN = '<IP-LAN>'
 $MIN_SECRET_LENGTH = 32
+$DEFAULT_TASK_NAME = 'BlindLuckPoker-Normal'
+
+# Under -Serve nobody reads this process's console: Task Scheduler started it hidden. A refusal
+# there (node missing from the task's PATH, an .env edited since the launcher checked it) is also
+# appended to normal.err.log, which is where the launcher — or an operator — looks when the server
+# never came up. Node's own output replaces the file once node starts, so this only ever holds the
+# words of a -Serve that stopped before node.
+$serveErrorLog = if ($Serve) { Join-Path $PSScriptRoot 'normal.err.log' } else { $null }
 
 function Write-Info([string] $Message) { Write-Output $Message }
 
@@ -83,6 +131,9 @@ function Write-Note([string] $Message) { Write-Output "[warn] $Message" }
 
 function Stop-WithError([string] $Message) {
     [Console]::Error.WriteLine("[error] $Message")
+    if ($null -ne $serveErrorLog) {
+        try { [System.IO.File]::AppendAllText($serveErrorLog, "[error] $Message`r`n", (New-Object System.Text.UTF8Encoding $false)) } catch { }
+    }
     exit 1
 }
 
@@ -219,6 +270,44 @@ function Read-FileShared([string] $Path) {
     } catch { return '' }
 }
 
+# The pid in `normal.pid`, or $null while the file is absent, half-written or not a pid.
+function Read-PidFile([string] $Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { return $null }
+    $text = (Read-FileShared $Path).Trim()
+    if ($text -match '^\d+$') { return [int] $text }
+    return $null
+}
+
+# The kit's scheduled task, or $null — also when this Windows has no ScheduledTasks module, so the
+# checks built on it degrade to "no task" instead of failing a -Foreground or a stop.
+function Get-KitTask([string] $Name) {
+    if ($null -eq (Get-Command Get-ScheduledTask -ErrorAction SilentlyContinue)) { return $null }
+    return Get-ScheduledTask -TaskName $Name -TaskPath '\' -ErrorAction SilentlyContinue
+}
+
+function Test-KitTaskRunning([string] $Name) {
+    $task = Get-KitTask $Name
+    return ($null -ne $task -and "$($task.State)" -eq 'Running')
+}
+
+# --- 0. Which launch ---------------------------------------------------------------------------
+
+if ([string]::IsNullOrWhiteSpace($TaskName)) { $TaskName = $DEFAULT_TASK_NAME }
+if ($TaskName -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') {
+    Stop-WithError "-TaskName chỉ được gồm chữ, số và . _ - (nhận được '$TaskName')."
+}
+if ($Serve -and ($DryRun -or $Foreground -or $AutoStart)) {
+    Stop-WithError '-Serve là tham số nội bộ của scheduled task, không đi cùng -DryRun, -Foreground hay -AutoStart. Chạy .\run.ps1 không có -Serve.'
+}
+if ($Foreground -and $AutoStart) {
+    Stop-WithError '-AutoStart thêm trigger đăng nhập cho scheduled task, còn -Foreground không dùng scheduled task — chọn một trong hai.'
+}
+# The stop command to print: `stop.ps1` finds the default task by itself, a renamed one it must be told.
+$stopCommand = if ($TaskName -eq $DEFAULT_TASK_NAME) { '.\stop.ps1' } else { ".\stop.ps1 -TaskName $TaskName" }
+# Recorded now because PowerShell names are case-insensitive: section 4's `$lanIp` *is* `$LanIp`,
+# and after it the variable holds the detected address whether or not the caller passed one.
+$lanIpPassed = -not [string]::IsNullOrWhiteSpace($LanIp)
+
 # --- 1. Where everything is -------------------------------------------------------------------
 
 $kitDir = $PSScriptRoot
@@ -287,6 +376,16 @@ if (-not [string]::IsNullOrWhiteSpace($LanIp)) {
     $lanIp = $LanIp
 } else {
     $lanIp = Get-LanIPv4
+    # A task started by the -AutoStart logon trigger can run before Wi-Fi has an address; falling
+    # back to 'localhost' then would lock every other machine out (CORS) until the next restart.
+    # Only -Serve waits — an operator at a console would rather see the warning now.
+    if ($null -eq $lanIp -and $Serve) {
+        $lanDeadline = (Get-Date).AddSeconds(60)
+        while ($null -eq $lanIp -and (Get-Date) -lt $lanDeadline) {
+            Start-Sleep -Seconds 2
+            $lanIp = Get-LanIPv4
+        }
+    }
     if ($null -eq $lanIp) {
         $lanIp = 'localhost'
         Write-Note "Không xác định được địa chỉ IPv4 LAN (không có card mạng nào Up, hoặc chỉ có địa chỉ 169.254.*). Dùng tạm 'localhost' — máy khác trong mạng sẽ không vào được cho tới khi bạn sửa ALLOWED_ORIGINS bằng tay, hoặc chạy lại với -LanIp <địa chỉ thật>."
@@ -372,6 +471,59 @@ foreach ($key in @($settings.Keys | ForEach-Object { $_ })) {
     Set-Item -Path "Env:$key" -Value $settings[$key]
 }
 
+# --- 7b. -Serve: the scheduled task's side ------------------------------------------------------
+# Everything above ran exactly as for the launcher, so this process's environment is the server's
+# configuration. What is left is to run node and to be the process Task Scheduler waits on: node
+# lives exactly as long as this hidden PowerShell does not stop waiting for it. Nothing here
+# migrates (the launcher did, before it started the task) or touches the task.
+
+if ($Serve) {
+    # A second -Serve beside a live server (by hand, or a task started twice) must not delete the
+    # running server's logs and overwrite its pid; the launcher refuses the same case in section 9.
+    $recordedPid = Read-PidFile $pidFile
+    if ($null -ne $recordedPid) {
+        $recorded = Get-Process -Id $recordedPid -ErrorAction SilentlyContinue
+        if ($null -ne $recorded -and $recorded.ProcessName -eq 'node') {
+            Stop-WithError "Đã có một server đang chạy (pid $recordedPid, ghi trong $pidFile). -Serve không khởi động bản thứ hai."
+        }
+    }
+
+    foreach ($log in @($outLog, $errLog)) { if (Test-Path -LiteralPath $log) { Remove-Item -LiteralPath $log -Force } }
+
+    # -NoNewWindow puts node on this process's console, which Task Scheduler created hidden —
+    # without it Start-Process would open a visible console window for node.
+    $process = Start-Process -FilePath $nodeExe -ArgumentList 'dist/main.js' -WorkingDirectory $serverDir `
+        -NoNewWindow -PassThru -RedirectStandardOutput $outLog -RedirectStandardError $errLog
+    # Reading `Handle` once makes the Process object keep the OS handle, which is what lets
+    # `ExitCode` be read after `WaitForExit()` (see the -Foreground branch of section 11, where it
+    # is not, and the code is often missing).
+    $null = $process.Handle
+    Set-Content -LiteralPath $pidFile -Value $process.Id -Encoding ASCII
+    $process.WaitForExit()
+
+    $exitCode = 1
+    try { if ($null -ne $process.ExitCode) { $exitCode = [int] $process.ExitCode } } catch { }
+    # Only this server's record: a stop.ps1 that got there first already removed it, and a file that
+    # names another pid belongs to someone else.
+    if ((Read-PidFile $pidFile) -eq $process.Id) { Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue }
+    exit $exitCode
+}
+
+# --- 7c. How the server will be launched ------------------------------------------------------
+# Computed once so the dry run prints the very action section 11 registers. Only paths, and the
+# port and LAN address when the caller passed them, go into it: the task's definition is readable
+# by anyone who can open Task Scheduler on this account, and `-Serve` reads the secrets from the
+# file itself.
+
+$taskUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+$taskExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+if (-not (Test-Path -LiteralPath $taskExe)) { $taskExe = 'powershell.exe' }
+$taskArgumentList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
+    '-File', "`"$PSCommandPath`"", '-Serve', '-EnvFile', "`"$EnvFile`"")
+if (-not [string]::IsNullOrWhiteSpace($Port)) { $taskArgumentList += @('-Port', $settings['PORT']) }
+if ($lanIpPassed) { $taskArgumentList += @('-LanIp', "`"$lanIp`"") }
+$taskArguments = $taskArgumentList -join ' '
+
 # --- 8. Dry run: say what would happen, then stop ----------------------------------------------
 
 if ($DryRun) {
@@ -390,6 +542,17 @@ if ($DryRun) {
         Write-Info "  node dist/migrate-cli.js"
     }
     Write-Info "  node dist/main.js"
+    if ($Foreground) {
+        Write-Info "[dry-run] Chế độ chạy: foreground (-Foreground) — node gắn vào cửa sổ này; đóng cửa sổ là server dừng."
+    } else {
+        Write-Info "[dry-run] Chế độ chạy: detached — scheduled task '$TaskName' (người dùng $taskUser, chỉ khi đã đăng nhập, không cần quyền admin); đóng cửa sổ này server vẫn chạy."
+        Write-Info "  Action: `"$taskExe`" $taskArguments"
+        if ($AutoStart) {
+            Write-Info "  Trigger: AtLogOn (-AutoStart) — tự chạy mỗi lần $taskUser đăng nhập Windows."
+        } else {
+            Write-Info '  Trigger: không có — chỉ chạy khi gọi run.ps1 (thêm -AutoStart để tự chạy khi đăng nhập).'
+        }
+    }
     Write-Info "[dry-run] Không có gì được chạy. Bỏ -DryRun để khởi động thật."
     exit 0
 }
@@ -401,10 +564,15 @@ if (Test-Path -LiteralPath $pidFile) {
     $alive = $null
     if ($existing -match '^\d+$') { $alive = Get-Process -Id ([int] $existing) -ErrorAction SilentlyContinue }
     if ($null -ne $alive -and $alive.ProcessName -eq 'node') {
-        Stop-WithError "Đã có một server đang chạy (pid $existing). Dừng bằng .\stop.ps1 rồi chạy lại."
+        Stop-WithError "Đã có một server đang chạy (pid $existing). Dừng bằng $stopCommand rồi chạy lại."
     }
     Write-Note "Xoá $pidFile cũ (pid $existing không còn chạy) — dấu vết của một lần tắt không sạch."
     Remove-Item -LiteralPath $pidFile -Force
+}
+# The pid file is this kit's record, the task is Windows' own: a running task is a server (or one
+# on its way up) even when normal.pid was deleted by hand or not written yet.
+if (Test-KitTaskRunning $TaskName) {
+    Stop-WithError "Scheduled task '$TaskName' đang chạy — server đã được khởi động tách nền từ trước. Dừng bằng $stopCommand rồi chạy lại."
 }
 
 # --- 10. Migrations ----------------------------------------------------------------------------
@@ -443,50 +611,139 @@ if (-not $NoMigrate) {
 
 # --- 11. Start ---------------------------------------------------------------------------------
 
+# Section 9 looked at this kit's pid file and task. A server started some other way — another
+# checkout, a -Foreground window, a node orphaned by a killed wrapper — only shows as an answer on
+# the port, and the wait below would take that other server's /health for ours and report a start
+# that never happened (while the new node died of EADDRINUSE a moment later).
+if (Test-ServerListening $effectivePortNum) {
+    Stop-WithError "Cổng $effectivePortNum đã có một server khác trả lời (http://127.0.0.1:$effectivePortNum/health). Tìm tiến trình giữ cổng bằng: Get-NetTCPConnection -LocalPort $effectivePortNum -State Listen — hoặc chạy với -Port khác."
+}
+
 foreach ($log in @($outLog, $errLog)) { if (Test-Path -LiteralPath $log) { Remove-Item -LiteralPath $log -Force } }
 
-$process = Start-Process -FilePath $nodeExe -ArgumentList 'dist/main.js' -WorkingDirectory $serverDir `
-    -NoNewWindow -PassThru -RedirectStandardOutput $outLog -RedirectStandardError $errLog
-Set-Content -LiteralPath $pidFile -Value $process.Id -Encoding ASCII
-
-# Waiting for the port to answer — rather than printing a URL the moment Start-Process returns — is
+# Waiting for the port to answer — rather than printing a URL the moment the server is launched — is
 # what turns a bad DATABASE_URL from "the browser shows nothing and no one knows why" into the actual
 # error, here, on this console. This polls `GET /health` rather than grepping the log for the
 # `listening` line `main.ts` writes with `log.info`: `LOG_LEVEL=warn` or `error` drops `info`-level
 # logs entirely, which used to make a perfectly healthy start wait the full 30 s and then print a
 # false "chưa báo listening" warning.
-$deadline = (Get-Date).AddSeconds(30)
 $listening = $false
-while ((Get-Date) -lt $deadline) {
-    if ($process.HasExited) { break }
-    if (Test-ServerListening $effectivePortNum) { $listening = $true; break }
-    Start-Sleep -Milliseconds 250
+$exited = $false
+$serverPid = $null
+$exitCodeText = ''
+
+if ($Foreground) {
+    $process = Start-Process -FilePath $nodeExe -ArgumentList 'dist/main.js' -WorkingDirectory $serverDir `
+        -NoNewWindow -PassThru -RedirectStandardOutput $outLog -RedirectStandardError $errLog
+    $serverPid = $process.Id
+    Set-Content -LiteralPath $pidFile -Value $process.Id -Encoding ASCII
+
+    $deadline = (Get-Date).AddSeconds(30)
+    while ((Get-Date) -lt $deadline) {
+        if ($process.HasExited) { break }
+        if (Test-ServerListening $effectivePortNum) { $listening = $true; break }
+        Start-Sleep -Milliseconds 250
+    }
+    if ($process.HasExited) {
+        $exited = $true
+        # `ExitCode` is null on a `Start-Process -PassThru` handle even after the process is gone — the
+        # cmdlet does not keep the OS handle the property needs, and `WaitForExit()` cannot conjure it
+        # back. Reported when it happens to be there, dropped when it is not; what an operator needs from
+        # this message is the server's own words below, not a number.
+        try { $process.WaitForExit(); if ($null -ne $process.ExitCode) { $exitCodeText = " (mã $($process.ExitCode))" } } catch { }
+    }
+} else {
+    if ($null -eq (Get-Command Register-ScheduledTask -ErrorAction SilentlyContinue)) {
+        Stop-WithError 'Windows này không có module ScheduledTasks (Register-ScheduledTask). Chạy lại với -Foreground — server khi đó gắn vào cửa sổ này.'
+    }
+    $taskAction = New-ScheduledTaskAction -Execute $taskExe -Argument $taskArguments -WorkingDirectory $kitDir
+    # Interactive + Limited: runs as this user, only while they are logged on, never elevated, with no
+    # stored password — nothing here asks for admin.
+    $taskPrincipal = New-ScheduledTaskPrincipal -UserId $taskUser -LogonType Interactive -RunLevel Limited
+    # ExecutionTimeLimit zero is "no limit" (the default, 72 hours, would kill the server on day
+    # three); IgnoreNew makes a second start of a running task a no-op; the battery and idle rules are
+    # off so a laptop keeps serving; priority 4 is normal — the task default, 7, is below normal, and
+    # node would inherit it.
+    $taskSettings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew `
+        -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -DontStopOnIdleEnd -Priority 4
+    $registration = @{
+        TaskName    = $TaskName
+        TaskPath    = '\'
+        Action      = $taskAction
+        Principal   = $taskPrincipal
+        Settings    = $taskSettings
+        Description = "Blind Luck Poker Normal (LAN), tạo bởi $PSCommandPath. Dừng bằng stop.ps1 cạnh script đó; gỡ task bằng stop.ps1 -Remove."
+        Force       = $true
+    }
+    # -Force replaces the whole definition, so without -AutoStart a trigger left by an earlier
+    # -AutoStart run is gone too: the task always matches the last run's flags.
+    if ($AutoStart) { $registration['Trigger'] = New-ScheduledTaskTrigger -AtLogOn -User $taskUser }
+    try {
+        Register-ScheduledTask @registration | Out-Null
+    } catch {
+        Stop-WithError "Không đăng ký được scheduled task '$TaskName': $($_.Exception.Message) Chạy lại với -Foreground để chạy gắn vào cửa sổ này."
+    }
+
+    $startedAt = Get-Date
+    Start-ScheduledTask -TaskName $TaskName -TaskPath '\'
+    # node is not this process's child: its pid comes from the file -Serve writes, and its exit is
+    # seen through Get-Process.
+    $deadline = $startedAt.AddSeconds(30)
+    while ((Get-Date) -lt $deadline) {
+        if ($null -eq $serverPid) { $serverPid = Read-PidFile $pidFile }
+        if ($null -ne $serverPid) {
+            if ($null -eq (Get-Process -Id $serverPid -ErrorAction SilentlyContinue)) { $exited = $true; break }
+        } elseif (((Get-Date) - $startedAt).TotalSeconds -ge 3 -and -not (Test-KitTaskRunning $TaskName)) {
+            # The wrapper is gone and no pid was ever seen: -Serve refused before starting node (its
+            # words are in normal.err.log), or node died before the first look at the pid file.
+            $exited = $true
+            break
+        }
+        if (Test-ServerListening $effectivePortNum) { $listening = $true; break }
+        Start-Sleep -Milliseconds 250
+    }
+    if ($exited) {
+        # The task's last result is -Serve's exit code, which is node's. It lands once the wrapper has
+        # noticed and exited, a moment after node.
+        $settleDeadline = (Get-Date).AddSeconds(5)
+        while ((Test-KitTaskRunning $TaskName) -and (Get-Date) -lt $settleDeadline) { Start-Sleep -Milliseconds 250 }
+        if (-not (Test-KitTaskRunning $TaskName)) {
+            $taskInfo = Get-ScheduledTaskInfo -TaskName $TaskName -TaskPath '\' -ErrorAction SilentlyContinue
+            if ($null -ne $taskInfo) { $exitCodeText = " (mã $($taskInfo.LastTaskResult))" }
+        }
+    } elseif ($null -eq $serverPid) {
+        $serverPid = Read-PidFile $pidFile
+    }
 }
 
-if ($process.HasExited) {
+if ($exited) {
     Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
-    # `ExitCode` is null on a `Start-Process -PassThru` handle even after the process is gone — the
-    # cmdlet does not keep the OS handle the property needs, and `WaitForExit()` cannot conjure it
-    # back. Reported when it happens to be there, dropped when it is not; what an operator needs from
-    # this message is the server's own words below, not a number.
-    $code = ''
-    try { $process.WaitForExit(); if ($null -ne $process.ExitCode) { $code = " (mã $($process.ExitCode))" } } catch { }
     $details = ((Read-FileShared $errLog) + (Read-FileShared $outLog)).Trim()
     if ($details.Length -eq 0) { $details = "(server không in ra gì — xem $outLog và $errLog)" }
-    Stop-WithError ("Server thoát ngay khi khởi động$($code):`n$details")
+    Stop-WithError ("Server thoát ngay khi khởi động$($exitCodeText):`n$details")
 }
 
+$pidText = if ($null -ne $serverPid) { "pid $serverPid" } else { "chưa có $pidFile" }
 if (-not $listening) {
-    Write-Note "Server chưa báo 'listening' sau 30 giây nhưng vẫn đang chạy (pid $($process.Id)). Xem $outLog và $errLog."
+    Write-Note "Server chưa báo 'listening' sau 30 giây nhưng vẫn đang chạy ($pidText). Xem $outLog và $errLog."
 }
 
 Write-Info ''
-Write-Info "Blind Luck Poker Normal đang chạy — pid $($process.Id), log ở $outLog"
+Write-Info "Blind Luck Poker Normal đang chạy — $pidText, log ở $outLog"
 Write-Info "  Máy này:        http://localhost:$effectivePort"
 Write-Info "  Máy khác trong LAN: http://$($lanIp):$effectivePort"
+Write-Info ''
+if ($Foreground) {
+    Write-Info 'Chạy -Foreground: server gắn vào cửa sổ này — đóng cửa sổ (hoặc mất phiên đăng nhập) là server dừng, không để lại dòng lỗi nào.'
+} else {
+    Write-Info "Chạy tách nền bằng scheduled task '$TaskName' — đóng cửa sổ này server vẫn chạy (đăng xuất Windows thì dừng). Xem trong Task Scheduler (taskschd.msc) hoặc: Get-ScheduledTask $TaskName"
+    if ($AutoStart) {
+        Write-Info "Tự chạy mỗi lần $taskUser đăng nhập Windows (-AutoStart). Bỏ: chạy lại run.ps1 không có -AutoStart, hoặc $stopCommand -Remove."
+    }
+}
 Write-Info ''
 Write-Info 'Nếu máy khác không vào được, mở PowerShell bằng quyền Administrator và chạy một lần:'
 Write-Info "  New-NetFirewallRule -DisplayName `"Blind Luck Poker Normal`" -Direction Inbound -Protocol TCP -LocalPort $effectivePort -Profile Private -Action Allow"
 Write-Info ''
-Write-Info 'Dừng server:  .\stop.ps1   (tắt cứng — đóng hết phòng trước, xem README.md mục 7)'
+Write-Info "Dừng server:  $stopCommand   (tắt cứng — đóng hết phòng trước, xem README.md mục 7)"
 exit 0

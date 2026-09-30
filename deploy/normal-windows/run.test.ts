@@ -8,9 +8,10 @@
  * child process would actually receive — rather than about the script's prose.
  *
  * `-DryRun` is the whole test surface, deliberately. Starting the server for real needs a Postgres
- * URL, and the point of this kit is that the operator brings their own (Neon). What the dry run
- * proves is everything that happens *before* the first packet: the guards, the substitutions, and
- * that no secret reaches the console.
+ * URL, and the point of this kit is that the operator brings their own (Neon) — and would register a
+ * scheduled task on the machine running the suite. What the dry run proves is everything that
+ * happens *before* the first packet: the guards, the substitutions, the launch it would make, and
+ * that no secret reaches the console or the task's action.
  *
  * **The script is copied into a fixture tree rather than run in place.** `run.ps1` finds the repo
  * root from `$PSScriptRoot` and refuses to start without both built `dist` trees — so running it in
@@ -259,6 +260,82 @@ describe.skipIf(!HAVE_POWERSHELL)('deploy/normal-windows/run.ps1 -DryRun', () =>
     const run = dryRun('with-path.env', bad)
     expect(run.status).not.toBe(0)
     expect(run.output).toContain('ALLOWED_ORIGINS')
+  }, 60_000)
+
+  // The launch mode (bug log R2-5). By default the server runs as a scheduled task, detached from the
+  // console that started it; the dry run prints the exact action section 11 would register. That
+  // action is stored in the task's definition, readable in Task Scheduler — so it must hold paths and
+  // nothing else, which is what these pin.
+  const actionOf = (output: string): string | undefined => /^ {2}Action: (.+)$/m.exec(output)?.[1]?.trim()
+
+  it('launches detached by default: names the task, and its action runs -Serve on the env file with no secret in it', () => {
+    const run = dryRun('detached.env', GOOD_ENV)
+    expect(run.status).toBe(0)
+    // ASCII fragments only, as above: the prose around them is Vietnamese.
+    expect(run.output).toContain('detached')
+    expect(run.output).toContain("scheduled task 'BlindLuckPoker-Normal'")
+
+    const action = actionOf(run.output)
+    expect(action).toBeDefined()
+    expect(action).toContain('powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "')
+    expect(action).toContain(`${join(root, 'deploy', 'normal-windows', 'run.ps1')}" -Serve -EnvFile "`)
+    expect(action).toMatch(/-EnvFile "[^"]+detached\.env"$/)
+    // Neither -Port nor -LanIp was passed, so neither is baked into the task.
+    expect(action).not.toContain('-Port')
+    expect(action).not.toContain('-LanIp')
+    // No secret, and not even the names of the variables that hold them.
+    expect(action).not.toContain(SECRET)
+    expect(action).not.toContain('hunter2')
+    expect(action).not.toContain('DATABASE_URL')
+    expect(action).not.toContain('SESSION_SECRET')
+
+    // No logon trigger unless asked for.
+    expect(run.output).toContain('Trigger:')
+    expect(run.output).not.toContain('AtLogOn')
+  }, 60_000)
+
+  it('carries -Port and -LanIp into the task action when the caller passed them', () => {
+    const run = dryRun('detached-port.env', GOOD_ENV, '-Port', '8080', '-LanIp', '192.168.77.5')
+    expect(run.status).toBe(0)
+    const action = actionOf(run.output)
+    expect(action).toMatch(/ -Serve -EnvFile "[^"]+" -Port 8080 -LanIp "192\.168\.77\.5"$/)
+    expect(action).not.toContain(SECRET)
+    expect(action).not.toContain('hunter2')
+  }, 60_000)
+
+  it('-AutoStart adds the AtLogOn trigger; -TaskName renames the task', () => {
+    const run = dryRun('autostart.env', GOOD_ENV, '-AutoStart', '-TaskName', 'BlindLuckPoker-Normal-other')
+    expect(run.status).toBe(0)
+    expect(run.output).toContain("scheduled task 'BlindLuckPoker-Normal-other'")
+    expect(run.output).toContain('Trigger: AtLogOn (-AutoStart)')
+  }, 60_000)
+
+  it('-Foreground says foreground and describes no task', () => {
+    const run = dryRun('foreground.env', GOOD_ENV, '-Foreground')
+    expect(run.status).toBe(0)
+    expect(run.output).toContain('foreground (-Foreground)')
+    expect(run.output).not.toContain('detached')
+    expect(run.output).not.toContain('Action:')
+    expect(run.output).not.toContain('Trigger:')
+  }, 60_000)
+
+  it('refuses flag combinations that mean nothing: -Foreground with -AutoStart, and -Serve outside the task', () => {
+    const both = dryRun('fg-auto.env', GOOD_ENV, '-Foreground', '-AutoStart')
+    expect(both.status).not.toBe(0)
+    expect(both.output).toContain('-AutoStart')
+
+    // -Serve starts node for real, so the only safe way to exercise it here is a combination it
+    // refuses before it reads anything.
+    const serve = dryRun('serve-dry.env', GOOD_ENV, '-Serve')
+    expect(serve.status).not.toBe(0)
+    expect(serve.output).toContain('-Serve')
+    expect(serve.output).not.toContain('node dist/main.js')
+  }, 60_000)
+
+  it('refuses a -TaskName Task Scheduler would misread', () => {
+    const run = dryRun('bad-task.env', GOOD_ENV, '-TaskName', 'a\\b')
+    expect(run.status).not.toBe(0)
+    expect(run.output).toContain('-TaskName')
   }, 60_000)
 })
 
