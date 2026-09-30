@@ -458,9 +458,30 @@ export class Room {
         if (!runner.isComplete) runner.cancel(reason)
         await this.onHandComplete()
       })
+      // `onHandComplete` clears `this.runner` before anything it awaits, so a runner still here was never settled
+      // (the cancel threw): the step below must not leave its pot unaccounted for.
+      if (this.runner === runner) this.voidUnsettledHand(runner, reason)
     }
     this.cancelTimers()
     await this.closeStep(reason, 'carry-over', () => this.releaseCarryOver())
+  }
+
+  /**
+   * A hand the close could not settle (its cancel threw an engine error). `startHand` moved the pot it carried in out
+   * of `carryOverPot` and into the hand, and only `onHandComplete` gives it back — so put it back here, or those chips
+   * leave the books. Nothing else was taken from anyone: the seats' stacks are written only by `onHandComplete`, so each
+   * is still what it brought to the hand — exactly what a cancel would have refunded — and stands up with it. The hand
+   * is dropped unrecorded (there is no result to record); the release step that follows returns the pot. The one thing
+   * not restored is who had a claim on it (`startHand` cleared them when the pot went into the hand): the pot goes to
+   * whoever is seated, or to the `carry_over` sink, and the books balance either way.
+   */
+  private voidUnsettledHand(runner: HandRunner, reason: string): void {
+    const carryOverIn = runner.state.carryOverIn
+    runner.dispose()
+    this.runner = null
+    this.deadlineAt = null
+    this.carryOverPot += carryOverIn
+    this.deps.log.error('hand voided at close: not settled, its carried-in pot goes back', { roomId: this.roomId, reason, handId: runner.state.handId, carryOverIn })
   }
 
   private async closeStep(reason: string, step: string, fn: () => unknown): Promise<void> {

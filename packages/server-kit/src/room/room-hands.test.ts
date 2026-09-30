@@ -1016,6 +1016,42 @@ describe('Closing a room whose hand has just ended', () => {
     ])
   })
 
+  it('a close whose cancel throws mid-hand still returns the pot that hand carried in, and the books balance', async () => {
+    // `startHand` moves the carried pot into the hand (`carryOverPot` goes to 0). If the close cannot cancel that hand,
+    // `onHandComplete` never runs to hand the pot back — so the close must, or the chips leave the books.
+    for (const via of ['shutdown', 'close'] as const) {
+      const h = createRoomHarness(BLIND, { bot: folding })
+      await seatAndStart(h, ['h'])
+      await playOut(h, () => ({ kind: 'fold' })) // everyone folds: the three antes are carried
+      expect(h.room.carryOverPot).toBe(3_000)
+      h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
+      await tick(h)
+      expect(h.room.handActive).toBe(true)
+      expect(h.room.snapshot(null).hand!.carryOverIn).toBe(3_000) // the pot is this hand's now…
+      expect(h.room.carryOverPot).toBe(0) // …and no longer the room's
+      const runner = (h.room as unknown as { runner: { cancel(reason: string): unknown } }).runner
+      runner.cancel = () => { throw new Error('engine down') }
+      const closed: string[] = []
+      h.room.onClosed = (_r, reason) => { closed.push(reason) }
+      if (via === 'shutdown') await h.room.shutdown('maintenance')
+      else await h.room.enqueue(() => (h.room as unknown as { close(reason: string): Promise<void> }).close('empty'))
+      await tick(h)
+      expect(h.room.status).toBe('CLOSED')
+      expect(closed).toEqual([via === 'shutdown' ? 'maintenance' : 'empty'])
+      expect(refunds(h)).toEqual([['h', 3_000]]) // the carried pot went to the seated human
+      expect(h.room.carryOverPot).toBe(0) // released, not stranded on a closed room
+      expect(h.room.handActive).toBe(false)
+      expect(h.repos.hands).toHaveLength(1) // the voided hand is not recorded; the first one is
+      // h's own antes in the voided hand were never taken off its table stack, so nothing else moved.
+      expect(via === 'shutdown' ? await h.repos.balances.get('h') : h.room.players.get('h')!.stack).toBe(via === 'shutdown' ? 100_000 - 5_000 + 4_000 + 3_000 : 4_000)
+      expect(await books(h)).toBe(0)
+      expect(h.logs.filter((l) => l.level === 'error')).toEqual([
+        { level: 'error', msg: 'room close step failed', data: expect.objectContaining({ step: 'hand', err: 'Error: engine down' }) },
+        { level: 'error', msg: 'hand voided at close: not settled, its carried-in pot goes back', data: expect.objectContaining({ carryOverIn: 3_000 }) },
+      ])
+    }
+  })
+
   it('the immediate close of a room left with only bots survives a throwing listener: the Leave still succeeds', async () => {
     const g = createRoomHarness(BLIND)
     let calls = 0
