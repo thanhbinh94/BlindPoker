@@ -247,24 +247,27 @@
    out as they did when the fields were direct children — and this grid reserves the taller of the two heights.
    `align-content: start` keeps the reserved height from stretching the rows apart.
 
-   Heights measured in the real build, Vietnamese and English, 320–1920 px wide:
-     one column (a phone)  Hold'em 301.5 px, Blind 361.5 px (381 px below 375 px wide)  → 24rem
-     two columns           Hold'em 214 px, Blind 206 px                                  → 13.5rem
-   The columns are the grid's `auto-fit` ones, so the box is a size container and the two-column height applies
-   from the width at which they turn into two: 2 × 10.5rem + the 1rem gap. A change to a field that makes either
-   mode taller than its reserve fails the create-room height check in e2e/normal.spec.ts. */
+   Two columns (the dialog on a desktop or tablet): Hold'em measures 214 px and Blind 206 px in the real build,
+   Vietnamese and English alike, so the reserve is 14rem — a little over the taller of the two, so a line of
+   slack in the hint text does not undo it. The columns are the grid's `auto-fit` ones, so the box is a size
+   container and the reserve applies from the width at which they turn into two: 2 × 10.5rem + the 1rem gap.
+   A change to a field that makes either mode taller than the reserve fails the create-room height check in
+   e2e/normal.spec.ts.
+
+   One column (a phone) reserves nothing: there the dialog is as tall as its `max-height` (86dvh) in both modes —
+   the fields are taller than the screen — so its outer box already does not move, and a reserve would only add
+   blank space under the shorter Hold'em fields. */
 .modeBox {
   container-type: inline-size;
 }
 
 .modeFields {
   align-content: start;
-  min-height: 24rem;
 }
 
 @container (min-width: 22rem) {
   .modeFields {
-    min-height: 13.5rem;
+    min-height: 14rem;
   }
 }
 

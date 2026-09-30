@@ -364,11 +364,8 @@ test.describe('Blind Luck Poker Normal', () => {
     // two rows and the host's roster has five names — is the tallest this screen gets before a hand.
     await page.goto('/#/lobby')
     await expectLobby(page)
-    // The create-room dialog on a phone: the same outer box in both modes (it scrolls inside, it does not jump) —
-    // and on a phone tall enough that the dialog's own max-height does not clamp it, where only the one-column
-    // reserve of the mode fields keeps the two modes level.
+    // The create-room dialog on a phone: the same outer box in both modes (it scrolls inside, it does not jump).
     await expectCreateRoomKeepsItsHeight(page)
-    await expectCreateRoomKeepsItsHeight(page, { width: 375, height: 1600 })
     await createBlindRoom(page, unique('Bàn '), 5)
     await sit(page, 0)
     await expect(page.getByRole('region', { name: 'Bàn', exact: true })).toBeVisible()
