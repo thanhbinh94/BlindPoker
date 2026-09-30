@@ -222,19 +222,29 @@ describe('GET /api/config', () => {
 })
 
 describe('security headers', () => {
-  it('extends the shared CSP with the two hosts Google Fonts needs, and nothing else', async () => {
+  it('extends the shared CSP with the two hosts Google Fonts needs and blob: images, and nothing else', async () => {
     const h = await harness()
     const csp = (await h.app.fastify.inject('/health')).headers['content-security-policy'] as string
     expect(csp).toBe(normalCsp())
+    // The whole header, written out: a directive that drifts — or one that is quietly widened — is a diff here.
+    expect(csp).toBe(
+      "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+        "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; " +
+        "font-src 'self' https://fonts.gstatic.com; script-src 'self'",
+    )
     const directives = new Map(csp.split('; ').map((d) => [d.split(' ')[0], d]))
     expect(directives.get('style-src')).toBe(`style-src 'self' 'unsafe-inline' ${FONTS_STYLESHEET_HOST}`)
     expect(directives.get('font-src')).toBe(`font-src 'self' ${FONTS_FILE_HOST}`)
-    // Written out explicitly, and equal to what default-src already said — the avatar is same-origin
-    // PNG layers since Plan 11 and needs nothing wider than that.
+    // A recoloured avatar layer (Plan 13) is an image the page draws on a canvas and shows through a
+    // `blob:` object URL, so `img-src` — and only `img-src` — accepts `blob:`. Without it the browser
+    // refuses every tinted layer: a hair colour blanks the head, an eye colour does nothing (No15, No16).
+    expect(directives.get('img-src')).toBe("img-src 'self' data: blob:")
+    expect(csp.split('blob:')).toHaveLength(2)
+    // Scripts stay `'self'`: written out explicitly, and equal to what default-src already said.
     expect(directives.get('script-src')).toBe(SCRIPT_SRC)
-    // Everything the shared default said is still said, img-src included: nothing widens it any more.
+    // Everything else the shared default said is still said, word for word.
     for (const directive of DEFAULT_CSP.split('; ')) {
-      if (directive.startsWith('style-src ')) continue
+      if (directive.startsWith('style-src ') || directive.startsWith('img-src ')) continue
       expect(csp).toContain(directive)
     }
   })
@@ -819,6 +829,8 @@ describe('a whole hand between two registered players', () => {
       const hands = await h.app.services.history.listForPlayer(alice.playerId, 10)
       expect(hands).toHaveLength(1)
       expect(hands[0]?.mode).toBe('blind')
+      // The room's own name travels with the hand, from the config the room stored (No4).
+      expect(hands[0]?.roomName).toBe(BLIND_ROOM.name)
       expect(hands[0]?.players).toHaveLength(2)
 
       const sinks = rowsOf<{ amount: string | number }>(await db.execute(sql`select amount from point_transactions where player_id is null and kind = 'table_fee'`))

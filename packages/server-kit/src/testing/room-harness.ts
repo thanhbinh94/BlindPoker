@@ -1,4 +1,4 @@
-import { createBotStrategy, seededRng, type PlayerIdentity, type RoomConfig, type ServerMessage } from '@bp/core'
+import { createBotStrategy, seededRng, type BotStrategy, type PlayerIdentity, type RoomConfig, type ServerMessage } from '@bp/core'
 import type { DomainEvent } from '../domain-events.js'
 import type { Logger } from '../infra/logger.js'
 import { createMemoryRepositories, type MemoryRepositories } from '../memory-repositories.js'
@@ -39,7 +39,8 @@ export const TEST_ROOM_OPTIONS: RoomOptions = {
 
 export function createRoomHarness(
   config: RoomConfig,
-  opts: { players?: [id: string, balance: number][]; options?: Partial<RoomOptions>; seed?: number; hostId?: string } = {},
+  /** `bot` replaces the real strategy, for a test that needs the bots to make one particular move. */
+  opts: { players?: [id: string, balance: number][]; options?: Partial<RoomOptions>; seed?: number; hostId?: string; bot?: BotStrategy } = {},
 ): RoomHarness {
   const clock = new ManualClock()
   const repos = createMemoryRepositories()
@@ -61,7 +62,7 @@ export function createRoomHarness(
       rng: seededRng(opts.seed ?? 1),
       repos,
       outbox: { send: (playerId, msg) => { (sent.get(playerId) ?? sent.set(playerId, []).get(playerId)!).push(msg) } },
-      bot: createBotStrategy(),
+      bot: opts.bot ?? createBotStrategy(),
       log,
       options: { ...TEST_ROOM_OPTIONS, ...opts.options },
       onDomainEvent: (e) => domainEvents.push(e),

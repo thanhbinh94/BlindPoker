@@ -77,6 +77,9 @@ export interface ItemCardProps {
   /** This card's colour variants (design §4.1's dot row) — each one owned/worn independently of the
    * card itself, so a locked original can still show an owned variant's dot clickable. */
   variants?: { item: ItemDto; owned: boolean; wearing: boolean }[]
+  /** Keeps the dot row's height on a card that has no variants of its own, so that in a tab where some cards do
+   * have them every card's lock hint ends on the same line (No8b). `ItemTab` sets it; a lone card never needs it. */
+  reserveDots?: boolean
   onPick: (id: string) => void
 }
 
@@ -89,7 +92,7 @@ export interface ItemCardProps {
  * lock hint) moves into an inner `.cardPick` button beside the dot row, both now inside the same bordered
  * box instead of the dots sitting below/outside it.
  */
-export function ItemCard({ item, wear, owned, wearing, hint, variants, onPick }: ItemCardProps) {
+export function ItemCard({ item, wear, owned, wearing, hint, variants, reserveDots = false, onPick }: ItemCardProps) {
   const { t } = useTranslation('normal')
   const name = itemName(item.id, t)
   const hasVariants = variants !== undefined && variants.length > 0
@@ -117,7 +120,9 @@ export function ItemCard({ item, wear, owned, wearing, hint, variants, onPick }:
           <RarityLabel rarity={item.rarity} />
           {owned ? null : <LockHint hint={hint} />}
         </button>
-        {!hasVariants ? null : (
+        {!hasVariants ? (
+          reserveDots ? <div className={s.dotsSpacer} aria-hidden="true" /> : null
+        ) : (
           <div className={s.colourDots} role="group" aria-label={name}>
             {variants!.map(({ item: variant, owned: variantOwned, wearing: variantWearing }) => (
               <button

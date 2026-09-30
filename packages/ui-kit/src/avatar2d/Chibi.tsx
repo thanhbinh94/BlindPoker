@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { cx } from '../primitives/cx.js'
 import { assetUrl, useAvatarAssetsBase } from './AvatarAssets.js'
 import { hashChibi, layersFor } from './layers.js'
@@ -16,9 +16,15 @@ const FRAME_BORDER_ORDER = 90
  * ready; until then, and for a layer with no tints at all, it renders the plain two-density layer exactly as
  * before. Split out from `Chibi` itself because calling a hook inside `layers.map(...)` there would vary the
  * hook count across renders (equipping or removing an item changes how many layers there are).
+ *
+ * A tinted `<img>` the browser refuses to load — a page policy without `blob:` in `img-src` did exactly that
+ * (No15, No16) — is never left broken: on `error` this layer remembers that URL as failed and draws the plain
+ * layer instead, so the worst case is the untinted character, not a missing head. A *different* tinted URL (the
+ * next colour) is a new attempt and is tried again.
  */
 function ChibiLayer({ base, layer, className }: { base: string; layer: LayerRef; className?: string }) {
   const tinted = useTintedLayer(base, layer)
+  const [failedUrl, setFailedUrl] = useState<string | null>(null)
   const common = {
     className: cx(s.layer, className),
     style: { zIndex: layer.order },
@@ -28,7 +34,7 @@ function ChibiLayer({ base, layer, className }: { base: string; layer: LayerRef;
     draggable: false,
   }
 
-  if (tinted !== null) return <img {...common} src={tinted} />
+  if (tinted !== null && tinted !== failedUrl) return <img {...common} src={tinted} onError={() => setFailedUrl(tinted)} />
 
   return <img {...common} src={assetUrl(base, layer.file, 1)} srcSet={`${assetUrl(base, layer.file, 1)} 1x, ${assetUrl(base, layer.file, 2)} 2x`} />
 }

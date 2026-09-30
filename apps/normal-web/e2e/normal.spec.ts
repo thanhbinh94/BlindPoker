@@ -1,16 +1,25 @@
 import { expect, test, type BrowserContext, type Locator, type Page } from '@playwright/test'
+import { expectNoTextOverlap } from './overlap.js'
 import {
   account,
   createBlindRoom,
+  expectCreateRoomKeepsItsHeight,
   expectLobby,
+  expectMySeatLines,
   expectNoSidewaysScroll,
+  expectNoTextOverlapAt,
+  expectPageFits,
+  expectRoomFits,
+  LAPTOP_SCREEN,
   lobbyAvatar,
+  OVERLAP_SCREENS,
   parsePoints,
   register,
   shot,
   signIn,
   sit,
   unique,
+  USER_SCREEN,
   type Account,
 } from './support.js'
 
@@ -49,12 +58,21 @@ const LIMIT = 5 * WAGER
 
 /* ── the session ─────────────────────────────────────────────────────────────────────────────────── */
 
-/** Settings → sign out → confirm. The dialog is the kit's, so Escape and the focus trap come with it. */
+/**
+ * Settings → sign out → confirm. The dialog is the kit's, so Escape and the focus trap come with it. On the way the
+ * text-overlap rule (No11b) reads Settings and the confirm dialog at the desktop sizes it holds every screen to.
+ */
 async function signOut(page: Page): Promise<void> {
   await page.goto('/#/settings')
   await expect(page.getByRole('heading', { name: 'Cài đặt' })).toBeVisible()
-  await page.getByRole('button', { name: 'Đăng xuất', exact: true }).click()
-  await page.getByRole('button', { name: 'Đăng xuất ngay' }).click()
+  const signOutButton = page.getByRole('button', { name: 'Đăng xuất', exact: true })
+  await expect(signOutButton).toBeVisible()
+  await expectNoTextOverlapAt(page, 'settings', OVERLAP_SCREENS)
+  await signOutButton.click()
+  const confirm = page.getByRole('button', { name: 'Đăng xuất ngay' })
+  await expect(confirm).toBeVisible()
+  await expectNoTextOverlapAt(page, 'settings, the sign-out dialog', OVERLAP_SCREENS)
+  await confirm.click()
   await expect(page.getByRole('button', { name: 'Vào sảnh' })).toBeVisible()
 }
 
@@ -138,6 +156,31 @@ async function uncalledReturn(card: Locator): Promise<{ who: string; amount: num
   return { who: hit![1]!, amount: parsePoints(hit![2]!) }
 }
 
+/**
+ * Review 2026-09-29, No2: "Ván tiếp theo sau N giây" is the result card's own last line — inside the card, in an
+ * element that does not re-announce the card on every tick (the card is a status region), and in neither a player's
+ * row nor the fee line, which is what the rows and the fee are read by.
+ */
+async function expectCountdownOnTheCard(card: Locator): Promise<void> {
+  const next = card.getByText(/^Ván tiếp theo sau \d+ giây$/)
+  await expect(next, 'the countdown is printed on the result card').toBeVisible()
+  await expect(next, 'the countdown does not re-announce the card every second').toHaveAttribute('aria-live', 'off')
+  await expect(card.getByRole('listitem').filter({ hasText: 'Ván tiếp theo' }), 'the countdown is no player’s row').toHaveCount(0)
+  const fee = card.getByText(/^Phí bàn/)
+  if ((await fee.count()) > 0) expect(await fee.innerText(), 'the fee line is the fee alone').not.toContain('Ván tiếp theo')
+}
+
+/**
+ * Sits out while the hand is on, then plays it. The table is left with bots only, which cannot start a hand of their
+ * own, so once this one is over the room goes back to taking seats and the result card stays on the felt — the
+ * result state, held still for as long as a check needs.
+ */
+async function sitOutAndPlay(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Ngồi ngoài', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Vào lại', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: /^Chơi\b/ }).click()
+}
+
 /* ── the chrome ──────────────────────────────────────────────────────────────────────────────────── */
 
 /**
@@ -163,8 +206,11 @@ async function expectRailFits(page: Page): Promise<void> {
   await expectNoSidewaysScroll(page)
 }
 
-/** Register on a fresh page, capturing the sign-in card and the lobby on the way. */
-async function tourStart(context: BrowserContext, who: Account, suffix: string): Promise<Page> {
+/**
+ * Register on a fresh page, capturing the sign-in card and the lobby on the way. The card is held to the text-overlap
+ * rule (No11b) on both its tabs at `authViewports` — the page's own when omitted — before the account exists.
+ */
+async function tourStart(context: BrowserContext, who: Account, suffix: string, authViewports?: { width: number; height: number }[]): Promise<Page> {
   const page = await context.newPage()
   await page.goto('/#/register')
   await expect(page.getByLabel('Tên hiển thị', { exact: true })).toBeVisible()
@@ -178,7 +224,11 @@ async function tourStart(context: BrowserContext, who: Account, suffix: string):
     })
     expect(lines, `"${await tab.textContent()}" stays on one line`).toBe(1)
   }
+  await expectNoTextOverlapAt(page, 'sign-in card, create an account', authViewports)
   await shot(page, `auth-${suffix}`)
+  await page.getByRole('navigation', { name: 'Blind Luck Poker' }).getByRole('link', { name: 'Đăng nhập' }).click()
+  await expect(page.getByRole('button', { name: 'Vào sảnh' })).toBeVisible()
+  await expectNoTextOverlapAt(page, 'sign-in card, sign in', authViewports)
   await register(page, who)
   // The chibi is there from the first paint — it is a stack of same-origin PNGs, not a render, so there is
   // no fallback state to race.
@@ -192,17 +242,23 @@ async function tourStart(context: BrowserContext, who: Account, suffix: string):
 test.describe('Blind Luck Poker Normal', () => {
   test('một tài khoản chơi trọn một ván Blind với bot', async ({ context }) => {
     const who = account('An')
-    const page = await tourStart(context, who, 'desktop')
+    const page = await tourStart(context, who, 'desktop', OVERLAP_SCREENS)
 
     // --- 1. the cookie session: out, and back in ------------------------------------------------------
     await signOut(page)
     // Signed out means signed out on this device: the lobby is unreachable until the cookie comes back.
     await page.goto('/#/lobby')
     await expect(page.getByRole('button', { name: 'Vào sảnh' })).toBeVisible()
+    await expectNoTextOverlapAt(page, 'sign-in card, after signing out', OVERLAP_SCREENS)
     await signIn(page, who)
 
     const start = await readBalance(page)
     expect(start, 'a new account can afford a hand').toBeGreaterThan(PLAY_COST)
+
+    // --- 1b. the create-room dialog keeps its height across modes, at the size of the player's screen --
+    // (and a laptop's, where the text-overlap rule reads it too)
+    await expectCreateRoomKeepsItsHeight(page, { width: 1920, height: 940 })
+    await expectCreateRoomKeepsItsHeight(page, LAPTOP_SCREEN)
 
     // --- 2. a Blind room, one bot --------------------------------------------------------------------
     await createBlindRoom(page, unique('Bàn '), 1)
@@ -237,11 +293,28 @@ test.describe('Blind Luck Poker Normal', () => {
     // is also what brings the stack home — until then the balance is the start less the table limit.
     await page.getByRole('button', { name: 'Rời phòng' }).click()
     await expect(page).toHaveURL(/#\/lobby$/)
-    const end = await balanceWhen(page, (n) => n !== start - LIMIT)
+    let end = await balanceWhen(page, (n) => n !== start - LIMIT)
+
+    // A flush or better unlocks a paid achievement ("Thùng", +3.000 …), written by a subscriber just after the
+    // settlement — so on any one read the balance may hold that reward or not yet, and the ledger likewise. The two
+    // are read together until they agree, and the reward rows are taken out of the move before it is compared with
+    // the hand (as ops 04-blind does): the card says nothing about achievements.
+    let entries: { amount: number; reason: string }[] = []
+    await expect
+      .poll(
+        async () => {
+          end = await readBalance(page)
+          entries = await readLedger(page)
+          return entries.reduce((sum, e) => sum + e.amount, 0) - end
+        },
+        { message: 'the ledger sums to the balance', timeout: 10_000 },
+      )
+      .toBe(0)
+    const rewards = entries.filter((e) => e.reason === 'achievement').reduce((sum, e) => sum + e.amount, 0)
 
     // The ledger, from two independent readings: what the database now holds, and what the card told the
     // player. Playing costs the ante plus the play; anything won or handed back comes off that.
-    expect(end - start, 'the balance is the stake, less the payout and anything returned').toBe(payout + returned - PLAY_COST)
+    expect(end - start - rewards, 'the balance is the stake, less the payout and anything returned').toBe(payout + returned - PLAY_COST)
 
     // The card must also add up on its own. The pot is what was paid out plus the fee skimmed off it;
     // add back any uncalled return and this player's known stake leaves the bot's — which the rules allow
@@ -260,11 +333,9 @@ test.describe('Blind Luck Poker Normal', () => {
     expect(fee, 'the table fee is 2% of the pot').toBe(Math.floor(pot * 0.02))
 
     // The third source, and the one that would catch a buy-in or cash-out moving a balance without writing a row
-    // for it (§18.4 rests on this): the ledger. Its rows must sum to the balance the account now holds, and
-    // the sit-down and the leave — the only rows a Blind seat writes — must together be the move the result
+    // for it (§18.4 rests on this): the ledger. Its rows sum to the balance the account now holds (polled above),
+    // and the sit-down and the leave — the only rows a Blind seat writes — must together be the move the result
     // card described.
-    const entries = await readLedger(page)
-    expect(entries.reduce((sum, e) => sum + e.amount, 0), 'the ledger sums to the balance').toBe(end)
     const buyIns = entries.filter((e) => e.reason === 'buy_in')
     const cashOuts = entries.filter((e) => e.reason === 'cash_out')
     expect(buyIns.map((e) => e.amount), 'sitting down took the table limit').toEqual([-LIMIT])
@@ -279,6 +350,53 @@ test.describe('Blind Luck Poker Normal', () => {
     await expect(blindHands).toHaveAttribute('aria-valuenow', '1')
     await expect(blindHands).toHaveAttribute('aria-valuetext', '1 trên 10')
     await shot(page, 'achievements-desktop')
+    // No11b: the achievements, and the profile with a hand in its history and rows in its ledger, text clear of text.
+    await expectNoTextOverlapAt(page, 'achievements', OVERLAP_SCREENS)
+    await page.goto('/#/profile')
+    await expect(page.getByRole('heading', { name: 'Hồ sơ', level: 1 })).toBeVisible()
+    await expect(page.getByRole('list', { name: 'Ván gần đây' }).getByRole('listitem')).not.toHaveCount(0)
+    await expect(page.getByRole('list', { name: 'Lịch sử điểm' }).getByRole('listitem')).not.toHaveCount(0)
+    await expectNoTextOverlapAt(page, 'profile, one hand played', OVERLAP_SCREENS)
+
+    // --- 6. the lobby and a full room fit the player's screen (review 2026-09-29, No2, No11b) -------------
+    // After the money on purpose: this second hand must not be the one the counters above read. Six seats — five
+    // bots — in the room's three states: taking seats, a hand in play with the tray up, and the result card, first
+    // counting down to the next deal and then held still (`sitOutAndPlay`). No text over text in any of them, on the
+    // player's screen and on a 1366 × 768 laptop — the count-down one included: its five seconds outlast both reads.
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.setViewportSize(USER_SCREEN)
+    await page.goto('/#/lobby')
+    await expectLobby(page)
+    await expectPageFits(page, 'the lobby')
+    await expectNoTextOverlapAt(page, 'lobby', OVERLAP_SCREENS)
+    await createBlindRoom(page, unique('Bàn '), 5)
+    await sit(page, 0)
+    await page.getByRole('button', { name: 'Sẵn sàng', exact: true }).click()
+    await expect(page.getByText('6/6 sẵn sàng')).toBeVisible()
+    await expectRoomFits(page, 'taking seats')
+    await expectNoTextOverlapAt(page, 'room, taking seats', OVERLAP_SCREENS)
+
+    await page.getByRole('button', { name: 'Bắt đầu', exact: true }).click()
+    await expect(page.getByRole('button', { name: /^Chơi\b/ })).toBeVisible()
+    await expectRoomFits(page, 'in hand, the tray up')
+    await expectMySeatLines(page, who.displayName, 'in hand')
+    await expectNoTextOverlapAt(page, 'room, in hand', OVERLAP_SCREENS)
+
+    await sitOutAndPlay(page)
+    const card = resultCard(page)
+    await expect(card).toBeVisible()
+    await expectCountdownOnTheCard(card)
+    await expectNoTextOverlapAt(page, 'room, result card counting down', OVERLAP_SCREENS)
+    await expect(page.getByRole('button', { name: 'Bắt đầu', exact: true }), 'bots alone deal no hand: the room is taking seats').toBeVisible({ timeout: 15_000 })
+    await expect(card, 'the card stays on the felt').toBeVisible()
+    await expectRoomFits(page, 'the result card')
+    await expectMySeatLines(page, who.displayName, 'the result card')
+    await expectNoTextOverlapAt(page, 'room, result card', OVERLAP_SCREENS)
+    await shot(page, 'room-result-desktop')
+
+    await page.getByRole('button', { name: 'Rời phòng' }).click()
+    await expect(page).toHaveURL(/#\/lobby$/)
+    await page.emulateMedia({ reducedMotion: null })
   })
 
   test('điểm danh hằng ngày', async ({ context }) => {
@@ -295,10 +413,13 @@ test.describe('Blind Luck Poker Normal', () => {
     await expect(page.getByRole('heading', { name: 'Điểm danh hằng ngày' })).toBeVisible()
     const claim = page.getByRole('button', { name: 'Nhận thưởng' })
     await expect(claim).toBeEnabled()
+    // No11b: the page before the claim and with its receipt, on the player's screen and a laptop's.
+    await expectNoTextOverlapAt(page, 'daily, the reward waiting', OVERLAP_SCREENS)
     await claim.click()
 
     const receipt = page.locator('section').filter({ has: page.getByRole('heading', { name: /^Đã nhận thưởng ngày \d+$/ }) })
     await expect(receipt).toBeVisible()
+    await expectNoTextOverlapAt(page, 'daily, the receipt', OVERLAP_SCREENS)
     const lines = await receipt.getByRole('listitem').allInnerTexts()
     const valueAfter = (title: string): number => {
       const row = lines.find((line) => line.replace(/\s+/g, ' ').trim().startsWith(title))
@@ -340,18 +461,41 @@ test.describe('Blind Luck Poker Normal', () => {
     const who = account('Dung')
     const page = await tourStart(context, who, 'mobile')
 
-    // The rail carries four tabs and the page under it never scrolls sideways.
+    // The rail carries four tabs and the page under it never scrolls sideways; and no text lands on other text (No11b)
+    // on any page this phone visits, walked down whole.
     await page.goto('/#/daily')
     await expect(page.getByRole('heading', { name: 'Điểm danh hằng ngày' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Nhận thưởng' })).toBeEnabled()
     await expectRailFits(page)
+    await expectNoTextOverlapAt(page, 'daily, the reward waiting')
     await shot(page, 'daily-mobile')
+    await page.getByRole('button', { name: 'Nhận thưởng' }).click()
+    await expect(page.getByRole('heading', { name: /^Đã nhận thưởng ngày \d+$/ })).toBeVisible()
+    await expectNoTextOverlapAt(page, 'daily, the receipt')
 
     // The profile is titled like every other page, and the player's name heads the card under that title.
     await page.goto('/#/profile')
     await expect(page.getByRole('heading', { name: 'Hồ sơ', level: 1 })).toBeVisible()
     await expect(page.getByRole('heading', { name: who.displayName, exact: true })).toBeVisible()
     await expectRailFits(page)
+    await expect(page.getByRole('list', { name: 'Lịch sử điểm' }).getByRole('listitem')).not.toHaveCount(0)
+    await expectNoTextOverlapAt(page, 'profile')
     await shot(page, 'profile-mobile')
+
+    await page.goto('/#/achievements')
+    await expect(page.getByRole('progressbar', { name: 'Mười ván Blind Poker', exact: true })).toBeVisible()
+    await expectNoTextOverlapAt(page, 'achievements')
+    await page.goto('/#/settings')
+    const signOutButton = page.getByRole('button', { name: 'Đăng xuất', exact: true })
+    await expect(signOutButton).toBeVisible()
+    await expectNoTextOverlapAt(page, 'settings')
+    // The sign-out dialog too — opened, read, and closed again with Escape: this test stays signed in.
+    await signOutButton.click()
+    const confirm = page.getByRole('button', { name: 'Đăng xuất ngay' })
+    await expect(confirm).toBeVisible()
+    await expectNoTextOverlapAt(page, 'settings, the sign-out dialog')
+    await page.keyboard.press('Escape')
+    await expect(confirm).toBeHidden()
 
     // (The wardrobe at this width is `avatar2d.spec.ts`'s `@mobile` test.)
 
@@ -360,6 +504,9 @@ test.describe('Blind Luck Poker Normal', () => {
     // two rows and the host's roster has five names — is the tallest this screen gets before a hand.
     await page.goto('/#/lobby')
     await expectLobby(page)
+    await expectNoTextOverlapAt(page, 'lobby')
+    // The create-room dialog on a phone: the same outer box in both modes (it scrolls inside, it does not jump).
+    await expectCreateRoomKeepsItsHeight(page)
     await createBlindRoom(page, unique('Bàn '), 5)
     await sit(page, 0)
     await expect(page.getByRole('region', { name: 'Bàn', exact: true })).toBeVisible()
@@ -375,7 +522,37 @@ test.describe('Blind Luck Poker Normal', () => {
     expect(seatBox!.y + seatBox!.height, 'my seat ends above the tray').toBeLessThanOrEqual(trayBox!.y + 1)
     await shot(page, 'room-mobile')
 
+    // Review 2026-09-29, No2 and No11b: on a phone too, no text lands on other text in any of the room's three states —
+    // taking seats, a hand in play with the tray up, and the result card (counting down, then held still).
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await expectNoTextOverlap(page, 'room, taking seats, 375×812')
+    await page.getByRole('button', { name: 'Sẵn sàng', exact: true }).click()
+    await page.getByRole('button', { name: 'Bắt đầu', exact: true }).click()
+    await expect(page.getByRole('button', { name: /^Chơi\b/ })).toBeVisible()
+    await expectNoTextOverlap(page, 'room, in hand, 375×812')
+    await sitOutAndPlay(page)
+    const card = resultCard(page)
+    await expect(card).toBeVisible()
+    await expectCountdownOnTheCard(card)
+    await expectNoTextOverlap(page, 'room, result card counting down, 375×812')
+    await expect(page.getByRole('button', { name: 'Bắt đầu', exact: true })).toBeVisible({ timeout: 15_000 })
+    await expectNoTextOverlap(page, 'room, result card, 375×812')
+    await shot(page, 'room-result-mobile')
+    // With the card up the phone's stage scrolls (by design — the page itself does not): its foot, my own plate among
+    // it, is read too.
+    const stage = page.locator('main')
+    await stage.evaluate((el) => el.scrollTo(0, el.scrollHeight))
+    await expectNoTextOverlap(page, 'room, result card, 375×812, the stage scrolled to its foot')
+    await stage.evaluate((el) => el.scrollTo(0, 0))
+    await page.emulateMedia({ reducedMotion: null })
+
     await page.getByRole('button', { name: 'Rời phòng' }).click()
     await expect(page).toHaveURL(/#\/lobby$/)
+
+    // No11b: the profile once more, now that the hand above is in its history — the "Ván gần đây" rows on a phone.
+    await page.goto('/#/profile')
+    await expect(page.getByRole('heading', { name: 'Hồ sơ', level: 1 })).toBeVisible()
+    await expect(page.getByRole('list', { name: 'Ván gần đây' }).getByRole('listitem')).not.toHaveCount(0)
+    await expectNoTextOverlapAt(page, 'profile, one hand played')
   })
 })

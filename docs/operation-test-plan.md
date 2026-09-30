@@ -76,7 +76,7 @@ mã phòng (nếu có), thiết bị, ảnh chụp màn hình. Claude chép vào
 | S-03 | Bấm Nhận thưởng | Số dư +5.000, nút khoá lại; chấm vàng trên tab Điểm danh biến mất khi rời trang (xem T1 trong `docs/bug-log.md` §6) | P1 |
 | S-04 | Sảnh → Tạo phòng Blind, 3 bot | Vào bàn, 3 bot ngồi sẵn, mã phòng 6 ký tự ở đầu trang | P1 |
 | S-05 | Ngồi vào bàn → Sẵn sàng → Bắt đầu | Ngồi: số dư trừ hạn mức 5.000; ván chạy, lá chung lật, có người thắng, chồng trên bàn đổi; rời phòng: chồng về số dư | P1 |
-| S-06 | Rời phòng | Về sảnh; phòng hiện nhãn "Đang đóng…" rồi biến mất sau ~60 giây | P1 |
+| S-06 | Rời phòng | Về sảnh; phòng Blind của S-04 (chỉ còn bot) biến mất khỏi sảnh ngay (C-07); phòng không bot hiện nhãn "Đang đóng…" rồi biến mất sau ~60 giây (C-06) | P1 |
 | S-07 | Hồ sơ, Tủ đồ, Thành tựu, Cài đặt | Mỗi trang mở được, không trang trắng | P1 |
 | S-08 | Tải lại trang (F5) ở bất kỳ màn nào | Vẫn đăng nhập, về đúng màn | P1 |
 
@@ -94,6 +94,7 @@ mã phòng (nếu có), thiết bị, ảnh chụp màn hình. Claude chép vào
 | A-06 | Đăng xuất (Cài đặt) → bấm Back của trình duyệt | Không xem lại được trang có dữ liệu tài khoản | P1 |
 | A-07 | Đăng nhập cùng tài khoản trên máy thứ hai | Cả hai máy dùng được, số dư như nhau | P2 |
 | A-08 | Đổi ngôn ngữ ở trang đăng nhập rồi đăng nhập | Ngôn ngữ giữ nguyên sau khi vào | P3 |
+| A-09 | Ở trang đăng nhập, bấm qua lại giữa hai tab Đăng nhập / Đăng ký | Đổi form ngay ở lần bấm đầu; dưới form không còn dòng "Chưa có tài khoản? Đăng ký" / "Đã có tài khoản? Đăng nhập" (đã bỏ, review 29/09 No6) | P3 |
 
 ### B. Khung chung
 
@@ -113,7 +114,8 @@ mã phòng (nếu có), thiết bị, ảnh chụp màn hình. Claude chép vào
 | C-03 | A tạo phòng **riêng tư** có mật khẩu | B không thấy trong danh sách; nhập mã + đúng mật khẩu thì vào được, sai mật khẩu thì bị từ chối | P1 |
 | C-04 | Nhập mã phòng không tồn tại | Báo không tìm thấy phòng | P2 |
 | C-05 | Phòng đầy (ví dụ Blind 4 ghế, 3 bot, 1 người đã vào) | Danh sách ghi 4/4; người thứ hai bấm Vào phòng thì bị từ chối vì phòng đầy (bot chiếm ghế thật) | P2 |
-| C-06 | Mọi người rời phòng | Sảnh hiện "Đang đóng…" trong 60 giây rồi phòng biến mất; vào lại trong 60 giây thì phòng sống lại | P2 |
+| C-06 | Mọi người rời một phòng **không có bot** (ví dụ Hold'em) | Sảnh hiện "Đang đóng…" trong 60 giây rồi phòng biến mất; vào lại trong 60 giây thì phòng sống lại | P2 |
+| C-07 | Người thật cuối cùng rời một phòng **còn bot** (ví dụ Blind, 2 bot); người khác đang xem sảnh | Phòng biến mất khỏi sảnh ngay (vài giây), không qua "Đang đóng…"; nếu rời giữa ván thì phòng đóng khi ván đó kết thúc. Người rớt mạng vẫn tính là còn trong phòng tới khi hết 5 phút làm người xem | P2 |
 
 ### D. Tạo phòng
 
@@ -125,6 +127,7 @@ mã phòng (nếu có), thiết bị, ảnh chụp màn hình. Claude chép vào
 | D-04 | Mật khẩu phòng 3 ký tự | Bị chặn, gợi ý "4–20 ký tự" | P2 |
 | D-05 | Blind: 2 lá / 3 lá; Thuần may rủi / Chơi hoặc bỏ; Mức cược cố định; Số bot | Phòng đúng cấu hình; bot ngồi sẵn, luôn sẵn sàng | P1 |
 | D-06 | Bật "Tự động bắt đầu" | Ván tự chạy khi tất cả người thật đã Sẵn sàng (≥ 2 người tính cả bot) | P2 |
+| D-07 | Mở hộp thoại Tạo phòng, đổi qua lại Hold'em ↔ Blind | Hộp thoại giữ nguyên chiều cao (không giật lên xuống); các nút ở chân hộp thoại căn giữa, cách ô cuối một khoảng rõ (review 29/09 No12, No17) | P3 |
 
 ### E. Bàn Hold'em
 
@@ -191,13 +194,14 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 
 | Mã | Bước | Kỳ vọng | Ưu tiên |
 |---|---|---|---|
-| J-01 | Đổi thân nền (6 kiểu tóc), màu tóc, màu mắt | Hình xem trước đổi ngay; màu áp đúng lên tóc/mắt, không lem sang da | P1 |
+| J-01 | Đổi thân nền (6 kiểu tóc), màu tóc, màu mắt | Hình xem trước đổi ngay; màu áp đúng lên tóc/mắt, không lem sang da. Đổi màu tóc: đầu và tóc vẫn còn, chỉ đổi màu; đổi màu mắt: mắt đổi màu, không còn mắt xanh gốc (review 29/09 No15, No16 — trước đây bị chặn) | P1 |
 | J-02 | Đội mũ | Tóc không lòi qua mũ (trừ mũ lưỡi trai) | P2 |
 | J-03 | Đổi đồ → Hoàn tác | Quay về trạng thái đã lưu | P2 |
 | J-04 | Đổi đồ → Lưu → mở Sảnh / vào bàn | Hình đại diện mới hiện ở sảnh và trên ghế; người khác trong bàn cũng thấy | P1 |
 | J-05 | Lưu bộ đồ vào ô trống → mặc bộ khác → áp dụng lại bộ đã lưu | Đúng bộ đã lưu | P2 |
 | J-06 | Bấm các biểu cảm (Vui, Buồn, …) | Chỉ đổi hình xem trước, không cần lưu | P3 |
 | J-07 | Trên điện thoại: cuộn trang tủ đồ, mở "Đang mặc", "Bộ đồ đã lưu" | Không tràn ngang, bấm được mọi thẻ | P2 |
+| J-08 | Tủ đồ và Kho đồ: nhìn các hàng thẻ trong từng tab (Mũ, Trang phục, Danh hiệu & Huy hiệu…) | Thẻ cùng hàng cao bằng nhau, độ hiếm nằm ngay dưới tên; tiêu đề "Huy hiệu" không dính vào thẻ "Tay nóng" phía trên (review 29/09 No8b, No11b) | P3 |
 
 ### K. Kho đồ, Thành tựu, Hồ sơ
 
@@ -206,7 +210,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 | K-01 | Kho đồ | Liệt kê đúng đồ đang có, đánh dấu món đang mặc | P2 |
 | K-02 | Chơi đủ 10 ván Blind (bàn có bot, bật tự động bắt đầu). Hết hạn mức thì bị mời đứng dậy (F-10) nên phải bấm ghế để ngồi lại (Sẵn sàng, bật lại Tự động chơi) thì mới đủ 10 ván | Hiện thông báo mở thành tựu "Mười ván Blind Poker", +2.000 điểm; trang Thành tựu cập nhật | P1 |
 | K-03 | Vào 10 phòng khác nhau | Thành tựu "Mười phòng" mở | P3 |
-| K-04 | Hồ sơ → Thống kê sau vài ván | Số ván chơi/thắng tăng đúng | P2 |
+| K-04 | Hồ sơ → Thống kê sau vài ván | Số ván chơi/thắng tăng đúng; "Ván gần đây" ghi "Tại bàn `<tên phòng>`", đối thủ là bot hiện "Bot 1", "Bot 2"… chứ không hiện mã kiểu `bot:…` (review 29/09 No4) | P2 |
 | K-05 | Hồ sơ → đổi tên hiển thị | Tên mới hiện ở sảnh, bàn, cài đặt; tên trùng người khác bị từ chối | P2 |
 
 ### M. Giao diện trên nhiều cỡ màn hình
@@ -216,10 +220,18 @@ Tủ đồ, Kho đồ, Thành tựu, Cài đặt.
 
 | Mã | Kỳ vọng | Ưu tiên |
 |---|---|---|
-| M-01 | Không có thanh cuộn ngang, không chữ bị cắt, không nút bị che | P2 |
+| M-01 | Không có thanh cuộn ngang, không chữ bị cắt, không chữ đè lên chữ khác, không nút bị che | P2 |
 | M-02 | Trên điện thoại, ghế của chính mình và các nút hành động nhìn thấy đủ trong bàn | P1 |
 | M-03 | Chữ tiếng Việt có dấu hiển thị đúng font, không vỡ dòng giữa từ | P3 |
 | M-04 | Nền sáng: chữ đọc được trên mọi nền (vàng trên kem, xanh trên xanh) | P3 |
+| M-05 | Máy tính 1920×940 và 1366×768, vào bàn (chờ, trong ván, thẻ kết quả nhiều dòng): trang không có thanh cuộn dọc; ghế của mình chỉ còn hai dòng dưới bảng tên; "Ván tiếp theo sau…" nằm ở chân thẻ kết quả chứ không đè ghế; thân thẻ cuộn được bên trong và mờ ở chân khi còn cuộn được (review 29/09 No2, No11b) | P2 |
+
+**Luật "không chữ đè chữ" (review 2026-09-29, No11b) đã thành test tự động:** `pnpm e2e:normal` đo mọi màn hình
+kể trên — trừ Tủ đồ chỉ ba tab (Ngoại hình, Mũ, Danh hiệu & Huy hiệu) — ở 1920×940 (màn hình của bạn), 1366×768 và
+375×812, gồm bàn Blind lúc chờ, trong ván và thẻ kết quả; bộ `e2e/ops` đo thêm bàn Hold'em đang chơi và thẻ kết
+quả ở 1440×900 và ba cỡ trên, bàn Blind đang chơi và thẻ kết quả ở 1440×900. Cách đo và những gì nó không thấy:
+`docs/ui-kit.md`, mục "The text-overlap rule"; màn nào, trạng thái nào, cỡ nào và test nào: `docs/test-matrix.md`. Người test vẫn nhìn bằng mắt những gì máy không đo: chữ đè lên hình hay chạm mép thẻ, chữ
+trong ô nhập, bản English, và các cỡ màn hình khác.
 
 ### N. Vận hành máy chủ (người vận hành)
 
@@ -252,7 +264,8 @@ Tủ đồ, Kho đồ, Thành tựu, Cài đặt.
 5. A rời phòng khi đang là chủ phòng → kiểm chủ phòng mới (G-04).
 6. Chuyển sang phòng Blind "Chơi hoặc bỏ", mức cược 1.000, 2 lá, 1 bot. Chơi 10 ván; có ít nhất một ván
    cả nhóm cùng Bỏ để xem pot cộng dồn (F-04). Ai tiêu hết hạn mức 5.000 bị mời đứng dậy — bấm ghế để vào lại (F-10).
-7. Mọi người thật bấm Ngồi ngoài, chờ 60 giây → pot cộng dồn được chia (F-05). Rời hết → "Đang đóng…" (C-06).
+7. Mọi người thật bấm Ngồi ngoài, chờ 60 giây → pot cộng dồn được chia (F-05). Rời hết → phòng (còn 1 bot) biến
+   mất khỏi sảnh ngay (C-07); "Đang đóng…" 60 giây chỉ có ở phòng không bot (C-06).
 8. Mỗi người mở Hồ sơ → Lịch sử điểm, đối chiếu số dư (H-01), ghi lại số dư cuối.
 
 ## 7. Tiêu chí đạt

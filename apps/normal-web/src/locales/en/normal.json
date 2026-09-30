@@ -27,8 +27,6 @@
     "displayNameHint": "2–20 characters: letters, digits, spaces and _ - .",
     "submitSignIn": "Enter the lobby",
     "submitRegister": "Create account",
-    "toRegister": "No account yet? Register",
-    "toSignIn": "Already have an account? Sign in",
     "name": {
       "length": "A display name needs 2–20 characters",
       "chars": "A display name may only use letters, digits, spaces and _ - .",
@@ -186,7 +184,8 @@
       "won": "Won",
       "cancelled": "Cancelled",
       "bestHand": "Best hand",
-      "opponents": "At the table",
+      "table": "At table {{name}}",
+      "opponents": "Opponents",
       "bot": "bot"
     },
     "ledger": {

@@ -2,7 +2,8 @@
 
 Every requirement in the spec's server-kit integration list (§29.2), its multiplayer
 requirement (§29.3) and its edge-case table (§30) appears here exactly once, with the
-test that holds it up.
+test that holds it up. One row after the summary is not the spec's: the text-overlap rule
+of the 2026-09-29 review (No11b).
 
 Status legend:
 
@@ -11,6 +12,8 @@ Status legend:
   `packages/server-kit/src/soak.test.ts`, `packages/server-kit/src/testing/soak.ts`).
 - **partly covered** — the mechanism is tested, but part of the row is a documented
   consequence rather than an assertable behaviour. The reason is spelled out.
+- **added in Plan 16** — the one row after the summary, which is not the spec's: the text-overlap
+  rule the 2026-09-29 review asked for (No11b).
 
 Paths are relative to the repository root. Test names are the `it(...)` titles; the
 `describe` is given where it disambiguates.
@@ -60,7 +63,7 @@ had drifted from the tests.
 | Rớt mạng giữa lượt → ghế DISCONNECTED, ván tiếp tục, hết timer → mặc định | `packages/server-kit/src/room/room-hands.test.ts` | disconnect: others are told, the player receives nothing, reconnect restores delivery; expiry stands up then removes | covered |
 | Đóng trình duyệt (như rớt mạng) | `packages/server-kit/src/gateway/gateway.test.ts` | reconnect and duplicate sessions › a dropped client keeps its seat, gets a snapshot on return … | covered |
 | Host rời → chuyển host người vào sớm nhất; nếu đang ván, ván tiếp tục | `packages/server-kit/src/edge-cases.test.ts` | §30 — host leaves mid-hand › the hand plays on without them, and the host passes to the earliest joiner once it ends | added in Plan 7 |
-| Phòng trống → xóa sau 60 giây; pot cộng dồn chia theo §8.4 | `packages/server-kit/src/room/room.test.ts`, `packages/server-kit/src/room/room-hands.test.ts` | join: password, capacity net of seated bots, duplicates; leave: host transfer and empty-room close · sinks the whole carry-over pot when the room closes with nobody seated · releases a carry-over pot to the seated humans once the room cannot start a hand for carryOverReleaseMs · seats stood up for a spent limit keep their share of the carried-over pot, so an all-fold table does not pay the house | covered |
+| Phòng trống → còn bot: đóng ngay khi người thật cuối cùng rời (No3); không còn ai, kể cả bot: xóa sau 60 giây; pot cộng dồn chia theo §8.4 | `packages/server-kit/src/room/room.test.ts`, `packages/server-kit/src/room/room-hands.test.ts` | join: password, capacity net of seated bots, duplicates; leave: host transfer and empty-room close · The last person out of a room that still seats bots › the host leaving between hands closes the room in the same turn of the queue, and nothing is left armed · the host leaving mid-hand closes the room when that hand ends … · a disconnected host keeps the room open until the spectator grace removes them, and then it closes at once · a pot carried over when the last person leaves goes to the carry_over sink, and the books still balance · a room with nobody left and no bots either keeps its sixty-second grace … · sinks the whole carry-over pot when the room closes with nobody seated · releases a carry-over pot to the seated humans once the room cannot start a hand for carryOverReleaseMs · seats stood up for a spent limit keep their share of the carried-over pot, so an all-fold table does not pay the house | covered |
 | Phòng đầy → `ROOM_FULL` | `packages/server-kit/src/room/room.test.ts` | join: password, capacity net of seated bots, duplicates; … | covered |
 | Action trùng → `reqId` trả lại kết quả cũ | `packages/server-kit/src/gateway/gateway.test.ts`, `packages/server-kit/src/edge-cases.test.ts` | hold’em between two clients › … duplicates … · replays the original ERROR when a failed request is retransmitted with the same reqId · §30 — the same reqId sent again, on the same socket and on a fresh one › replays on the connection that remembers it, and is re-evaluated — never re-applied — on a new one | covered + added in Plan 7 |
 | Action sai lượt → `NOT_YOUR_TURN` | `packages/server-kit/src/gateway/gateway.test.ts`, `packages/server-kit/src/room/room-hands.test.ts` | hold’em between two clients › enforces turn order … · rejects stale, out-of-turn, illegal and non-seated actions with the right codes | covered |
@@ -69,7 +72,7 @@ had drifted from the tests.
 | Hòa → chia đều, chip lẻ theo vị trí | `packages/core/src/betting/pots.test.ts`, `packages/core/src/hand/holdem.test.ts` | splits ties and hands odd chips clockwise from the button · side pots: short all-in, ties split with odd chip after the button | covered |
 | Side pot → thuật toán tầng §7.4 | `packages/core/src/betting/pots.test.ts`, `packages/core/src/hand/holdem.test.ts` | creates side pots for uneven all-ins · handles several pots with different eligibility · side pots: short all-in, ties split with odd chip after the button | covered |
 | Kết nối trùng → thay kết nối cũ | `packages/server-kit/src/gateway/gateway.test.ts` | reconnect and duplicate sessions › … a second login replaces the first | covered |
-| Server restart → hủy ván, hoàn cược, stack về balance, thông báo | `packages/server-kit/src/gateway/gateway.test.ts`, `packages/server-kit/src/room/room-hands.test.ts` | shutdown › cancels hands, refunds, notifies and closes every socket · shutdown cancels the hand, refunds, cashes out and closes | covered |
+| Server restart → hủy ván, hoàn cược, stack về balance, thông báo | `packages/server-kit/src/gateway/gateway.test.ts`, `packages/server-kit/src/room/room-hands.test.ts` | shutdown › cancels hands, refunds, notifies and closes every socket · shutdown cancels the hand, refunds, cashes out and closes · a shutdown during a hand whose only person pressed Leave closes the room once, for the shutdown’s reason | covered |
 | Lite bị tắt cứng trên Windows → số dư đã ghi vẫn đúng, stack trên bàn và pot cộng dồn mất | `apps/lite/server/src/run-file.test.ts`, `apps/lite/server/src/app.test.ts` | overwrites a run file left behind by a hard kill · is stale when the pid is gone, without asking the network (the wreckage of a hard kill is not an owner) · accepts the run token from the loopback, drains the room and gives the buy-in back (the graceful path this row contrasts with) | partly covered — the loss itself is what happens when no code runs, so there is nothing to assert; only the recovery path and the graceful alternative are testable |
 | `bind-poker.run.json` còn lại sau tắt cứng → `--stop` xoá và thoát 0 | `apps/lite/server/src/run-file.test.ts` | deletes the file it owns and tolerates a second call · leaves a file that another instance has since taken over · leaves a file whose token differs even when the pid happens to match · is stale when the pid is gone, without asking the network … | covered |
 | Tiến trình thứ hai trên cùng thư mục dữ liệu | `apps/lite/test/smoke.test.ts`, `apps/lite/server/src/app.test.ts` | refuses to start, and leaves the running instance able to stop itself · is left completely alone by a smoke-style app, which is given no path | covered |
@@ -95,6 +98,31 @@ had drifted from the tests.
 
 Nothing is left with no test at all. The one *partly* covered row is the Lite hard kill,
 where the row's own subject is what happens when no code runs.
+
+## Review 2026-09-29 — the text-overlap rule (No11b)
+
+Not a row of the spec: the user asked, in the 2026-09-29 review, that text drawn over other text become a test rule.
+The rule and its limits are `docs/ui-kit.md`'s "The text-overlap rule". It runs inside tests that already visit each
+screen, on the accounts they already make — the default e2e may not register more — at the user's screen
+(1920×940), a laptop's (1366×768) and a phone's (375×812):
+
+- sign-in card, both tabs: all three, and 1440×900; on the desktop also as signing out leaves it (`normal.spec.ts`);
+- lobby, and its create-room dialog in both modes: all three (`normal.spec.ts`);
+- room taking seats, in a hand, and on the result card counting down and held: all three; on the phone the stage
+  is also read scrolled to its foot (`normal.spec.ts`);
+- wardrobe (Ngoại hình, Mũ, Danh hiệu & Huy hiệu) and inventory: all three, plus 900×1100 (`wardrobe-layout.spec.ts`);
+  a coloured outfit worn: 1920×940 and 1366×768 (`avatar-tint.spec.ts`). The wardrobe's other six tabs are not read;
+- profile with a hand in its history, achievements, Settings and its sign-out dialog: all three; on the phone the
+  profile is also read before the hand (`normal.spec.ts`); Settings in the light theme at 1440×900, 900×1100 and
+  375×812 (`wardrobe-layout.spec.ts`);
+- daily page, the reward waiting and the receipt: all three (`normal.spec.ts`);
+- the operation-test pack: a Hold'em hand in play, its result card counting down and a side-pot card at the pack's
+  1440×900 and at all three (`03-holdem`); a Blind hand in play, a carried-pot card and a card with an uncalled play
+  returned at 1440×900 (`04-blind`).
+
+| Rule | Test file | Test name | Status |
+|---|---|---|---|
+| Không chữ nào đè lên chữ khác trên mọi màn hình chính (No11b); bộ phát hiện tự kiểm bằng trang mẫu tĩnh | `apps/normal-web/e2e/overlap.spec.ts`, `apps/normal-web/e2e/normal.spec.ts`, `apps/normal-web/e2e/wardrobe-layout.spec.ts`, `apps/normal-web/e2e/avatar-tint.spec.ts`, `apps/normal-web/e2e/ops/03-holdem.spec.ts`, `apps/normal-web/e2e/ops/04-blind.spec.ts` | hai đoạn chữ đè lên nhau thì báo lỗi, kèm chữ, khung và đường dẫn CSS · một tài khoản chơi trọn một ván Blind với bot · điểm danh hằng ngày · @mobile sảnh, bàn chơi và hồ sơ trên màn hình điện thoại · desktop: nhóm và tab con không gãy dòng; ảnh chụp tối và sáng · máy tính bảng … · @mobile điện thoại: không cuộn ngang, nhóm và tab con không gãy dòng; ảnh chụp tối và sáng · chọn màu tóc đỏ tô lại chibi bằng canvas và giữ nguyên khi lưu · E-01 E-02 E-03 E-12 E-07 E-08: buy in, play a hand out … · E-05: three all-ins of different sizes make a side pot · E-10 E-11: leaving mid-hand folds and settles after; … · F-03 F-04 F-05: two players decide blind to each other; … · F-06: one plays, one folds … | added in Plan 16 |
 
 ## Ruling recorded: the `reqId` cache is per connection
 

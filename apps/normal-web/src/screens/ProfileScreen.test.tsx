@@ -84,6 +84,7 @@ const STATS: PlayerStatsDto = {
 const HAND: HistoryEntryDto = {
   handId: 'h1',
   roomId: 'r1',
+  roomName: '123',
   mode: 'holdem',
   startedAt: Date.UTC(2026, 8, 3, 10, 0),
   endedAt: Date.UTC(2026, 8, 3, 10, 5),
@@ -94,7 +95,8 @@ const HAND: HistoryEntryDto = {
   players: [
     { playerId: 'p1', label: 'Binh', seat: 0, isBot: false, net: 5_880, won: true },
     { playerId: 'p2', label: 'Lan', seat: 1, isBot: false, net: -4_000, won: false },
-    { playerId: null, label: 'bot-7', seat: 2, isBot: true, net: -1_880, won: false },
+    // The server has already turned the engine id into the in-room name (No4).
+    { playerId: null, label: 'Bot 5', seat: 2, isBot: true, net: -1_880, won: false },
   ],
 }
 
@@ -144,8 +146,9 @@ describe('ProfileScreen', () => {
     expect(screen.getByText(viNormal.items.title_hot_hand)).toBeInTheDocument()
     expect(screen.getByText(viNormal.items.badge_gold)).toBeInTheDocument()
     expect(screen.getByText(/Thành viên từ/)).toBeInTheDocument()
-    // 123.000 in `vi`: the assertion is on the digits, not on the separator the locale picked.
-    expect(screen.getByText(/123/)).toBeInTheDocument()
+    // 123.000 in `vi`: the assertion is on the digits, not on the separator the locale picked (and not on "123"
+    // alone, which is also the name of the table in the history below).
+    expect(screen.getByText(/123\D000/)).toBeInTheDocument()
     // The stage carries the full body (its aura visible) on a backdrop keyed by the equipped title.
     const stage = document.querySelector('[data-title]')
     expect(stage).toHaveAttribute('data-title', 'title_hot_hand')
@@ -209,9 +212,43 @@ describe('ProfileScreen', () => {
     expect(hands.getByText(i18n.t('game:hand.fullHouse'))).toBeInTheDocument()
     // Everyone but me, with the machine marked as one.
     expect(hands.getByText('Lan')).toBeInTheDocument()
-    expect(hands.getByText('bot-7')).toBeInTheDocument()
+    expect(hands.getByText('Bot 5')).toBeInTheDocument()
     expect(hands.getByText(viNormal.profile.history.bot)).toBeInTheDocument()
     expect(hands.queryByText('Binh')).toBeNull()
+  })
+
+  it('names the table each hand was played at, and labels the seats as opponents rather than as the table (No4)', async () => {
+    renderScreen()
+    await screen.findByRole('heading', { name: 'Bình', level: 2 })
+
+    const hands = within(screen.getByRole('list', { name: viNormal.profile.history.title }))
+    // "Tại bàn" used to head the list of seats, which is why a raw bot id read as a table code.
+    expect(hands.getByText('Tại bàn 123')).toBeInTheDocument()
+    expect(hands.getByText('Đối thủ')).toBeInTheDocument()
+    expect(hands.queryByText('Tại bàn')).toBeNull()
+    // The seats are the opponents' and nobody else's: the hand's own room name is not among them.
+    expect(hands.getAllByText(/^Tại bàn/)).toHaveLength(1)
+  })
+
+  it('shows no table line for a hand stored without a room name', async () => {
+    const old: HistoryEntryDto = { ...HAND, roomName: null }
+    renderScreen(stubApi({ history: vi.fn().mockResolvedValue([old]) }))
+    await screen.findByRole('heading', { name: 'Bình', level: 2 })
+
+    const hands = within(screen.getByRole('list', { name: viNormal.profile.history.title }))
+    expect(hands.queryByText(/Tại bàn/)).toBeNull()
+    // The rest of the row is unaffected.
+    expect(hands.getByText('Đối thủ')).toBeInTheDocument()
+    expect(hands.getByText('Bot 5')).toBeInTheDocument()
+  })
+
+  it('prints a room name as text, whatever it contains', async () => {
+    const odd: HistoryEntryDto = { ...HAND, roomName: '<b>Bàn</b> & co' }
+    renderScreen(stubApi({ history: vi.fn().mockResolvedValue([odd]) }))
+    await screen.findByRole('heading', { name: 'Bình', level: 2 })
+
+    const hands = within(screen.getByRole('list', { name: viNormal.profile.history.title }))
+    expect(hands.getByText('Tại bàn <b>Bàn</b> & co')).toBeInTheDocument()
   })
 
   it('excludes my own seat by id, even when an opponent happens to share my name', async () => {

@@ -46,6 +46,12 @@ export class Room {
   private queue: Promise<unknown> = Promise.resolve()
   private nextHandTimer: TimerHandle | null = null
   private closeTimer: TimerHandle | null = null
+  /**
+   * Set first thing by `close()` and `shutdown()`, whose cancelled hand can remove a last human who pressed Leave
+   * mid-hand: that removal must neither start a second close (`onClosed` would fire twice) nor arm the empty-room
+   * timer. Not `summary().closing`, which is the lobby's "counting down to closing" (`closeTimer`).
+   */
+  private closing = false
   private carryOverReleaseTimer: TimerHandle | null = null
   /**
    * Humans stood up by `standUpSpent` while a pot was carried over: their antes are in it, so a release still pays
@@ -412,12 +418,8 @@ export class Room {
   shutdown(reason: string): Promise<void> {
     return this.enqueue(async () => {
       if (this.status === 'CLOSED') return
-      if (this.runner && !this.runner.isComplete) {
-        this.runner.cancel(reason)
-        await this.onHandComplete()
-      }
-      this.cancelTimers()
-      await this.releaseCarryOver()
+      this.closing = true
+      await this.wrapUp(reason)
       for (const p of this.seatedHumans()) {
         // One player's ledger failure must not strand everyone after them, nor keep the room from closing (and the
         // server from closing its sockets): their stack is logged for an operator to reconcile, and the room goes on.
@@ -428,21 +430,66 @@ export class Room {
         }
       }
       this.status = 'CLOSED'
-      this.broadcastRoomEvent({ type: 'ROOM_CLOSED', reason })
-      this.onClosed?.(this, reason)
+      await this.closeStep(reason, 'announce', () => this.broadcastRoomEvent({ type: 'ROOM_CLOSED', reason }))
+      await this.closeStep(reason, 'onClosed', () => this.onClosed?.(this, reason))
     })
   }
 
   private async close(reason: string): Promise<void> {
-    if (this.status === 'CLOSED') return
-    if (this.runner && !this.runner.isComplete) {
-      this.runner.cancel(reason)
-      await this.onHandComplete()
+    if (this.status === 'CLOSED' || this.closing) return
+    this.closing = true
+    await this.wrapUp(reason)
+    this.status = 'CLOSED'
+    await this.closeStep(reason, 'onClosed', () => this.onClosed?.(this, reason))
+  }
+
+  /**
+   * What `close()` and `shutdown()` both do before the room is marked closed. The hand on the table is ended — cancelled
+   * if it is still running, and settled either way: a hand whose last move is in but whose settlement is still queued
+   * behind this close is settled here, so its stacks are the ones cashed out and its carried pot is the one released
+   * (the queued `onHandComplete` then finds no runner and returns). Then every timer stops and the carried pot goes back.
+   * Each step is guarded, like everything after it: a room whose close cannot finish a step still ends `CLOSED`, with
+   * one `onClosed`, rather than listed forever behind a `closing` flag nothing resets.
+   */
+  private async wrapUp(reason: string): Promise<void> {
+    const runner = this.runner
+    if (runner) {
+      await this.closeStep(reason, 'hand', async () => {
+        if (!runner.isComplete) runner.cancel(reason)
+        await this.onHandComplete()
+      })
+      // `onHandComplete` clears `this.runner` before anything it awaits, so a runner still here was never settled
+      // (the cancel threw): the step below must not leave its pot unaccounted for.
+      if (this.runner === runner) this.voidUnsettledHand(runner, reason)
     }
     this.cancelTimers()
-    await this.releaseCarryOver()
-    this.status = 'CLOSED'
-    this.onClosed?.(this, reason)
+    await this.closeStep(reason, 'carry-over', () => this.releaseCarryOver())
+  }
+
+  /**
+   * A hand the close could not settle (its cancel threw an engine error). `startHand` moved the pot it carried in out
+   * of `carryOverPot` and into the hand, and only `onHandComplete` gives it back — so put it back here, or those chips
+   * leave the books. Nothing else was taken from anyone: the seats' stacks are written only by `onHandComplete`, so each
+   * is still what it brought to the hand — exactly what a cancel would have refunded — and stands up with it. The hand
+   * is dropped unrecorded (there is no result to record); the release step that follows returns the pot. The one thing
+   * not restored is who had a claim on it (`startHand` cleared them when the pot went into the hand): the pot goes to
+   * whoever is seated, or to the `carry_over` sink, and the books balance either way.
+   */
+  private voidUnsettledHand(runner: HandRunner, reason: string): void {
+    const carryOverIn = runner.state.carryOverIn
+    runner.dispose()
+    this.runner = null
+    this.deadlineAt = null
+    this.carryOverPot += carryOverIn
+    this.deps.log.error('hand voided at close: not settled, its carried-in pot goes back', { roomId: this.roomId, reason, handId: runner.state.handId, carryOverIn })
+  }
+
+  private async closeStep(reason: string, step: string, fn: () => unknown): Promise<void> {
+    try {
+      await fn()
+    } catch (err) {
+      this.deps.log.error('room close step failed', { roomId: this.roomId, reason, step, err: String(err) })
+    }
   }
 
   /**
@@ -724,8 +771,14 @@ export class Room {
     return [...this.players.values()].find((p) => p.seat === seat)
   }
 
+  /**
+   * A hand is current until `onHandComplete` has settled it (and set `runner` to null), not merely until its last
+   * move: that settlement is queued behind whatever was already in the room's queue. A Leave or Stand queued ahead
+   * of it would otherwise take the pre-hand stack home and, the last person out of a room with bots, close the room
+   * under a settlement still to come — a carried pot set on a closed room and never released.
+   */
   private inCurrentHand(p: RoomPlayer): boolean {
-    return p.seat !== null && this.runner !== null && !this.runner.isComplete && this.runner.state.players.some((hp) => hp.seat === p.seat)
+    return p.seat !== null && this.runner !== null && this.runner.state.players.some((hp) => hp.seat === p.seat)
   }
 
   private eligibleForHand(): RoomPlayer[] {
@@ -803,8 +856,18 @@ export class Room {
     this.onMembership?.(p.identity.playerId, false)
     this.clearPlayerTimer(p.identity.playerId)
     if (p.identity.playerId === this.hostPlayerId) this.transferHost()
-    if (this.humanCount === 0) this.scheduleClose()
     this.deps.log.info('player left room', { roomId: this.roomId, playerId: p.identity.playerId, reason })
+    // "Human" counts members, connected or not: a disconnected player keeps the room until the spectator grace
+    // removes them. With no human left, bots have nobody to play with, so their room closes now (No3) — its carried
+    // pot released like the timer's close does. A room with nobody in it at all keeps its grace and the lobby's
+    // "Đang đóng…" (bug 2). Inside a `close()`/`shutdown()` the room is on its way out already: neither.
+    if (this.humanCount === 0 && !this.closing) {
+      if (this.seatedBotCount > 0) {
+        await this.close('empty') // `onClosed` tells the manager, which takes the room off the list
+        return
+      }
+      this.scheduleClose()
+    }
     this.changed()
   }
 

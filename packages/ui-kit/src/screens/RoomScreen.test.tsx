@@ -486,6 +486,35 @@ describe('RoomScreen', () => {
     expect(screen.queryByRole('heading', { name: 'Winner' })).toBeNull()
   })
 
+  // Review 2026-09-29, No2: printed under the card, the countdown landed on the viewer's own seat. It is the card's
+  // footer line now, and it moves to the tray only once the card has been waved off.
+  it('counts down to the next deal on the result card, and in the tray once the card is closed', async () => {
+    const room = makeRoom({
+      nextHandAt: 1_005_000,
+      players: [
+        makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'IN_HAND', stack: 19_800 }),
+        makePlayer({ playerId: 'me', displayName: 'Mai', seat: 2, status: 'IN_HAND', stack: 20_400 }),
+      ],
+    })
+    const hand = makeHand({
+      phase: 'COMPLETE',
+      mySeat: 2,
+      actingSeat: null,
+      result: { payouts: [{ seat: 2, amount: 600 }], pots: [], fee: 12, showdown: null, carryOverOut: 0, uncalledReturned: null, cancelled: false, reason: null },
+    })
+    wrap(fakeClient(makeState({ room, hand })))
+
+    const card = screen.getAllByRole('status').find((el) => within(el).queryByRole('heading', { name: 'Winner' }) !== null)
+    expect(card).toBeDefined()
+    const next = within(card!).getByText((_, el) => el?.textContent === 'Next hand in 5 sec' && el.tagName === 'P')
+    expect(next).toHaveAttribute('aria-live', 'off')
+    const controls = screen.getByRole('group', { name: 'Table controls' })
+    expect(within(controls).queryByText(/Next hand in/)).toBeNull()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(within(controls).getByText((_, el) => el?.textContent === 'Next hand in 5 sec' && el.tagName === 'P')).toBeInTheDocument()
+  })
+
   it('waits for the reconnect answer before deciding the room is gone', () => {
     const onLeft = vi.fn()
     const view = render(screenFor(fakeClient(makeState({ room: null, roomStale: true })), onLeft))

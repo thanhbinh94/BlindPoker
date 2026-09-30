@@ -182,16 +182,18 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
   const others = room.players.filter((p) => p.playerId !== me?.playerId)
   // Managing the roster is a between-hands job: the dialog closes itself the moment cards are dealt. "Between
   // hands" is the server's own kick rule — no seat holds cards — so it is also the countdown to the next deal, where
-  // the room still says IN_GAME (a Blind table with bots never goes back to OPEN between its hands).
+  // the room still says IN_GAME (a Blind table with bots never goes back to OPEN between its hands). The server counts
+  // a hand as over once it has settled it, a moment after `HAND_COMPLETE` lands here: a kick sent in that moment is
+  // refused with GAME_IN_PROGRESS, and the same kick a moment later goes through.
   const handLive = hand !== null && hand.phase !== 'COMPLETE'
   const canManage = (waiting || !handLive) && isHost && others.length > 0
   const manageKey = hand?.handId ?? 'none'
 
-  const countdown =
+  const nextHandText =
     nextHandIn === null ? null : (
-      <p className={s.countdown}>
+      <>
         {t('labels.nextHandIn')} <strong>{t('common:time.seconds', { count: nextHandIn })}</strong>
-      </p>
+      </>
     )
 
   return (
@@ -223,7 +225,9 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
           captionFor={captionFor}
         />
 
-        {/* the result card is dealt onto the felt, so it keeps the felt's night palette in either theme */}
+        {/* The result card is dealt onto the felt, so it keeps the felt's night palette in either theme. The countdown
+            to the next deal is the card's own footer line: printed under the card, it landed on the viewer's seat
+            (review 2026-09-29, No2). */}
         {resultCard === null ? null : (
           <div className={s.overlay} data-surface="night">
             <HandResult
@@ -232,8 +236,8 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
               myPlayerId={state.me?.playerId ?? null}
               lang={lang}
               onDismiss={() => setDismissedHandId(resultCard.handId)}
+              countdown={nextHandText}
             />
-            {countdown}
           </div>
         )}
       </main>
@@ -269,8 +273,8 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
           {waiting ? (
             <span className={s.readyCount}>{t('room.readyCount', { ready: readyCount, total: seated.length })}</span>
           ) : // While the result card is up the countdown lives on it; here it covers the gap once it is dismissed.
-          resultCard === null ? (
-            countdown
+          resultCard === null && nextHandText !== null ? (
+            <p className={s.countdown}>{nextHandText}</p>
           ) : null}
 
           {waiting && isHost ? (
@@ -310,6 +314,16 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
         title={t('room.buyInTitle')}
         closeLabel={t('actions.close')}
         onClose={closeBuyIn}
+        footer={
+          <>
+            <Button variant="ghost" onClick={closeBuyIn}>
+              {t('actions.cancel')}
+            </Button>
+            <Button variant="gold" size="lg" loading={request.busy} onClick={() => void confirmBuyIn()}>
+              {t('actions.sitDown')}
+            </Button>
+          </>
+        }
       >
         <div className={s.buyIn}>
           <Field
@@ -328,14 +342,6 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
               onChange={(event) => setBuyIn(event.target.value)}
             />
           </Field>
-          <div className={s.buyInFoot}>
-            <Button variant="ghost" onClick={closeBuyIn}>
-              {t('actions.cancel')}
-            </Button>
-            <Button variant="gold" size="lg" loading={request.busy} onClick={() => void confirmBuyIn()}>
-              {t('actions.sitDown')}
-            </Button>
-          </div>
         </div>
       </Modal>
 

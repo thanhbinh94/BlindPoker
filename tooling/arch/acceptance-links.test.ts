@@ -256,7 +256,9 @@ describe('docs/test-matrix.md', () => {
   const { citations, titleless, rows } = parseMatrixRows(markdown)
 
   it('covers the whole matrix, so a parser that stopped matching would be caught', () => {
-    expect(rows).toBe(42) // 16 rows of §29.2, 1 of §29.3, 25 of §30 — the counts the document's own summary gives
+    // 16 rows of §29.2, 1 of §29.3, 25 of §30 — the counts the document's own summary gives — and the text-overlap
+    // rule of the 2026-09-29 review (No11b), the one row that is not the spec's
+    expect(rows).toBe(43)
     expect(citations.length).toBeGreaterThanOrEqual(40)
   })
 

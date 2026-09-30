@@ -455,16 +455,23 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
         </div>
       )}
 
-      <Modal open={leavingTo !== null} title={t('wardrobe.leaveTitle')} closeLabel={t('wardrobe.close')} onClose={() => setLeavingTo(null)}>
+      <Modal
+        open={leavingTo !== null}
+        title={t('wardrobe.leaveTitle')}
+        closeLabel={t('wardrobe.close')}
+        onClose={() => setLeavingTo(null)}
+        footer={
+          <>
+            <Button variant="gold" onClick={() => setLeavingTo(null)}>
+              {t('wardrobe.leaveStay')}
+            </Button>
+            <Button variant="ghost" onClick={leave}>
+              {t('wardrobe.leaveDiscard')}
+            </Button>
+          </>
+        }
+      >
         <p>{t('wardrobe.leaveBody')}</p>
-        <div className={s.stageActions}>
-          <Button variant="gold" onClick={() => setLeavingTo(null)}>
-            {t('wardrobe.leaveStay')}
-          </Button>
-          <Button variant="ghost" onClick={leave}>
-            {t('wardrobe.leaveDiscard')}
-          </Button>
-        </div>
       </Modal>
     </main>
   )

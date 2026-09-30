@@ -117,7 +117,7 @@ Ký hiệu: **[C]** Core, **[N]** Normal-only, **[L]** Lite-only, **[O]** option
 - FR-R02 [C] Danh sách phòng công khai cập nhật realtime trong lobby.
 - FR-R03 [C] Vào phòng riêng bằng mã 6 ký tự; phòng có mật khẩu yêu cầu mật khẩu.
 - FR-R04 [C] Ready/unready; host Start khi ≥ 2 ready; tùy chọn tự bắt đầu khi tất cả ready.
-- FR-R05 [C] Host rời → chuyển host; phòng trống 60 giây → xóa.
+- FR-R05 [C] Host rời → chuyển host; người thật cuối cùng rời phòng còn bot → đóng ngay; phòng không còn ai (kể cả bot) 60 giây → xóa.
 - FR-R06 [C] Rời bàn giữa ván = fold; stack trả về balance sau ván.
 - FR-R07 [C] Ngồi xuống (sit down) yêu cầu đủ điểm theo mode; đứng dậy (stand up) trả stack.
 
@@ -318,7 +318,7 @@ Server-kit nhận identity từ `SessionResolver` do edition cung cấp (cookie 
 ## 11. Room System
 
 ### 11.1 Vòng đời phòng
-`OPEN` (chờ, có thể ready) ⇄ `IN_GAME` (đang ván) → `CLOSED` (trống 60 giây hoặc host đóng khi không có ván).
+`OPEN` (chờ, có thể ready) ⇄ `IN_GAME` (đang ván) → `CLOSED` (người thật cuối cùng rời phòng còn bot — ngay, hoặc khi hết ván nếu rời giữa ván; phòng không còn ai, kể cả bot, sau 60 giây — sảnh hiện "Đang đóng…" trong lúc chờ; hoặc host đóng khi không có ván). "Người thật" tính mọi thành viên không phải bot, kể cả người đang mất kết nối: họ còn trong phòng tới khi hết 5 phút làm người xem (§16.6), nên phòng không đóng khi họ chỉ mới rớt mạng.
 
 ### 11.2 Cấu hình phòng
 ```ts
@@ -705,7 +705,7 @@ Auth = cookie phiên `bp_session` (`HttpOnly`, `SameSite=Lax`, `Secure` khi `COO
 - Thân lỗi luôn là `{ error: { code, message } }`; các trường phụ (`retryAfterSec`, `claimed`, `granted`, `reason`, `retryAt`) nằm cạnh `error`, không nằm trong nó.
 - Mọi request mutating (`POST`/`PUT`/`PATCH`/`DELETE`) thiếu `X-Requested-With: bind-poker` → `403 FORBIDDEN`, kiểm ngay ở `preHandler` trước cả auth.
 - Rate-limit: mọi `/api/*` mutating đi qua một rổ chung **60/phút theo địa chỉ** (`WRITE_RATE_LIMIT` trong `http/routes.ts`), trừ `POST /api/session` (10/phút) và `POST /api/admin/shutdown` (5/phút) vốn đã có limiter riêng chặt hơn — tính hai lần chỉ làm cái chặt hơn vô hình. Khóa là địa chỉ chứ không phải bearer token, vì Lite dựng Fastify với `trustProxy: false` nên `req.ip` là peer của socket (không giả được), còn token thì người gọi tự bịa mỗi request một cái là có rổ mới. Đọc (`GET`) không tính: chúng chỉ đọc SQLite trong tiến trình, không mở transaction ghi. `429` kèm header `Retry-After` và `retryAfterSec`.
-- Header trên **mọi** phản hồi (kể cả 404 và lỗi): `x-content-type-options: nosniff`, `referrer-policy: no-referrer`, `x-frame-options: DENY`, và `content-security-policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'`. Bản Normal nới đúng bốn chỗ (`normalCsp`): hai host Google Fonts, cộng **`script-src 'self' 'wasm-unsafe-eval'`** và **`blob:`** thêm vào `img-src` — cả hai cho avatar 3D. `'wasm-unsafe-eval'` chỉ cho phép biên dịch WebAssembly (bộ giải nén meshopt của `.glb`), **không** mở lại `eval()` hay `new Function()` như `'unsafe-eval'`; thiếu nó thì mọi ảnh chân dung im lặng rơi về chữ cái đầu tên. `blob:` là vì ảnh chân dung do chính trình duyệt dựng ra rồi hiện qua object URL — một `blob:` URL theo định nghĩa là cùng origin và chỉ trỏ tới `Blob` mà tài liệu này đang giữ, nên nó không mở thêm nguồn nào ra ngoài. Xem `docs/security.md`. `connect-src 'self'` đủ cho cả WebSocket: `ws://`/`wss://` cùng origin khớp `'self'` theo CSP 3, nên hai nguồn `ws:`/`wss:` cũ đã bỏ. Bốn directive cuối bịt những chỗ `default-src` không với tới: nhúng iframe, `<base href>`, đích của form, và plugin. `/health` và `/api/*` thêm `cache-control: no-store`.
+- Header trên **mọi** phản hồi (kể cả 404 và lỗi): `x-content-type-options: nosniff`, `referrer-policy: no-referrer`, `x-frame-options: DENY`, và `content-security-policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'`. Bản Normal nới đúng ba chỗ (`normalCsp`): hai host Google Fonts (một vào `style-src`, một vào `font-src`), và **`blob:`** thêm vào `img-src` (`img-src 'self' data: blob:`) cho các lớp avatar tô màu ở Plan 13 (màu tóc, màu mắt, món có biến thể màu). `tinted.ts` tô lớp ảnh trên `<canvas>` rồi hiện qua object URL; thiếu `blob:` thì trình duyệt chặn mọi lớp đã tô — chọn màu tóc làm mất đầu nhân vật, chọn màu mắt không đổi gì (góp ý 29/09, No15 và No16). `script-src 'self'` được viết tường minh chứ không nới: từ Plan 11 không còn WebAssembly nào (`'wasm-unsafe-eval'` của avatar 3D đã bỏ), và `blob:` ở đây chỉ dành cho ảnh, không cho script. Một `blob:` URL theo định nghĩa là cùng origin và chỉ trỏ tới `Blob` mà tài liệu này đang giữ, nên nó không mở thêm nguồn nào ra ngoài. Bản Lite không tô màu nên giữ nguyên `img-src 'self' data:`. Xem `docs/security.md`. `connect-src 'self'` đủ cho cả WebSocket: `ws://`/`wss://` cùng origin khớp `'self'` theo CSP 3, nên hai nguồn `ws:`/`wss:` cũ đã bỏ. Bốn directive cuối bịt những chỗ `default-src` không với tới: nhúng iframe, `<base href>`, đích của form, và plugin. `/health` và `/api/*` thêm `cache-control: no-store`.
 - Cache của static: `assets/<tên>-<hash>.<ext>` → `public, max-age=31536000, immutable`; mọi thứ còn lại (`index.html`, `favicon.ico`) → `no-cache`.
 - Prefix `api`, `ws`, `health` được giữ chỗ: gõ sai dưới các prefix đó là `404`, không bao giờ rơi về `index.html`.
 - Lỗi Fastify trước khi vào handler được đổi thành code ổn định: `400 BAD_REQUEST`, `404 NOT_FOUND`, `413 PAYLOAD_TOO_LARGE`, `415 UNSUPPORTED_MEDIA_TYPE`, `429 RATE_LIMITED`; mọi lỗi ≥ 500 trả `500 INTERNAL` và chỉ ghi chi tiết vào log.
@@ -1048,7 +1048,7 @@ ESLint boundary; test đọc `package.json` từng package và kiểm graph mụ
 | Rớt mạng giữa lượt | Ghế DISCONNECTED, ván tiếp tục, hết timer → mặc định; reconnect 90 giây |
 | Đóng trình duyệt | Như rớt mạng |
 | Host rời | Chuyển host người vào sớm nhất; nếu đang ván, ván tiếp tục |
-| Phòng trống | Xóa sau 60 giây; pot cộng dồn chia theo 8.4 |
+| Phòng trống | Còn bot: đóng ngay khi người thật cuối cùng rời (hết ván nếu đang chơi); không còn ai, kể cả bot: xóa sau 60 giây ("Đang đóng…"); pot cộng dồn chia theo 8.4 (không còn người thật thì cả pot bị thu) |
 | Phòng đầy | `ROOM_FULL` |
 | Action trùng | `reqId` → trả lại kết quả cũ |
 | Action sai lượt | `NOT_YOUR_TURN` |
@@ -1134,6 +1134,7 @@ ESLint boundary; test đọc `package.json` từng package và kiểm graph mụ
 11. ~~Avatar 3D cho bản Normal~~ — **đã làm (Plan 8)**, theo `2026-09-05-avatar-3d-design.md`: three.js, chân dung dựng ở máy người chơi, catalog v2 theo `slot` + `variants[body]`. Bộ SVG của Plan 6 đã gỡ. Còn lại cho sau: animation idle, biểu cảm, bộ trang phục hiện đại/theo mùa (§10 của đặc tả ấy).
 12. Nâng Vitest 2 → 3 và Vite 5 → 6 trên cả tám package, để dọn 7 advisory chỉ-dev còn lại. Không dùng override cho `vite` transitive dưới Vitest: làm thế là ghim một phiên bản Vitest 2 không được build cùng, đổi một advisory chỉ-dev lấy một test runner hỏng. Chi tiết và disposition từng advisory ở `docs/security.md` §2.
 13. Chạy một lần suite của `normal-server` với `TEST_DATABASE_URL` trỏ vào PostgreSQL thật, và build ảnh Docker của bản Normal — hai việc chưa làm được trên máy dev vì không có Docker daemon (`docs/known-limitations.md`, `docs/deployment-normal.md` §2).
+14. Thông báo qua email cho bản Normal (góp ý review 29/09, No7): nhắc nhận thưởng điểm danh hằng ngày, đặt lại mật khẩu, và thư an ninh tài khoản. **Chưa xếp lịch** — người dùng nhờ ghi lại để làm sau. Đặt lại mật khẩu trùng với mục 2 (quên mật khẩu, xác minh email) nên làm cùng nhau; cả ba loại thư cần một kênh gửi thư và địa chỉ email đã được xác minh, trong khi hiện đăng ký không kiểm email (§32, giả định 12).
 
 ---
 

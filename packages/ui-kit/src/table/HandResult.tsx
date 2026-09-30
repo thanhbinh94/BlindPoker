@@ -1,4 +1,5 @@
 import type { RoomView, ShowdownHand } from '@bp/core'
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ClientHand } from '../client/types.js'
 import { formatPoints, handLabel, type Language } from '../i18n/index.js'
@@ -13,6 +14,13 @@ export interface HandResultProps {
   myPlayerId: string | null
   lang: Language
   onDismiss?: () => void
+  /**
+   * The room's "next hand in N seconds", printed in the card's footer beside the fee (review 2026-09-29, No2: free
+   * text under the card landed on the viewer's own seat). It ticks every second, so it sits in its own
+   * `aria-live="off"` element: the card is a status region, and a screen reader would otherwise read the whole
+   * receipt out again on every tick.
+   */
+  countdown?: ReactNode
 }
 
 /**
@@ -26,9 +34,34 @@ const reasonKey = (reason: string): string => {
   return words.map((w, i) => (i === 0 ? w : w[0]!.toUpperCase() + w.slice(1))).join('')
 }
 
+/**
+ * Whether a scroll box holds more below its fold: taller inside than out, and not yet scrolled to the end. Measured
+ * again on every scroll and whenever the box, or anything directly in it, changes size (a narrower window, a font
+ * landing, a side-pot ledger appearing); `key` names what the box shows, so a new one is observed afresh.
+ */
+function useMoreBelow(ref: RefObject<HTMLElement>, key: unknown): boolean {
+  const [more, setMore] = useState(false)
+  useEffect(() => {
+    const box = ref.current
+    if (box === null) return
+    const measure = (): void => setMore(box.scrollHeight - box.clientHeight - box.scrollTop > 1)
+    measure()
+    box.addEventListener('scroll', measure, { passive: true })
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    if (observer !== null) for (const el of [box, ...Array.from(box.children)]) observer.observe(el)
+    return () => {
+      box.removeEventListener('scroll', measure)
+      observer?.disconnect()
+    }
+  }, [ref, key])
+  return more
+}
+
 /** Showdown card: who won, with what, and for how much. Renders only for a completed hand that carries a result. */
-export function HandResult({ hand, room, myPlayerId, lang, onDismiss }: HandResultProps) {
+export function HandResult({ hand, room, myPlayerId, lang, onDismiss, countdown }: HandResultProps) {
   const { t } = useTranslation()
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const moreBelow = useMoreBelow(bodyRef, hand.result)
   const result = hand.result
   if (hand.phase !== 'COMPLETE' || result === null) return null
 
@@ -67,58 +100,70 @@ export function HandResult({ hand, room, myPlayerId, lang, onDismiss }: HandResu
         <p className={s.resultNote}>{t(`cancel.${reasonKey(result.reason)}`, { defaultValue: t('cancel.other') })}</p>
       ) : null}
 
-      {/* One pot needs no breakdown — `payouts` already says who took it. Two or more means somebody was all-in
-          for less than the rest, and "who was eligible for which pot" is the only way that reads as fair. */}
-      {result.pots.length > 1 ? (
-        <ul className={s.pots}>
-          {result.pots.map((pot, i) => {
-            const label = i === 0 ? t('labels.mainPot') : t('labels.sidePot', { n: i })
-            const eligibleText = `${t('labels.eligible')}: ${pot.eligibleSeats.map(nameOf).join(', ')}`
+      {/* The card never grows past the felt it is dealt onto: with six hands shown down and a side pot or two, the
+          ledger and the rows scroll here while the title, the close button and the footer stay put. While there is
+          more below the fold, `data-more` fades the box's foot, so it reads as a list that goes on. */}
+      <div ref={bodyRef} className={s.resultBody} data-more={moreBelow ? 'true' : undefined}>
+        <ul className={s.resultRows}>
+          {rows.map(({ seat, amount }) => {
+            const hit = showdown.get(seat)
+            const payoutText = `+${formatPoints(amount, lang)}`
             return (
-              <li key={`${label}${pot.amount}`} className={s.potRow}>
-                <span className={s.potName}>{label}</span>
-                <span className={s.potAmount}>{formatPoints(pot.amount, lang)}</span>
-                <span className={s.potEligible}>{eligibleText}</span>
-                <span className={s.potWinners}>
-                  {pot.winners
-                    .map((w) => ({ seat: w.seat, text: `${nameOf(w.seat)} +${formatPoints(w.amount, lang)}` }))
-                    .map((w) => (
-                      <span key={w.seat} className={s.potWinner}>
-                        {w.text}
-                      </span>
+              <li key={seat} className={cx(s.resultRow, seat === mySeat && s.resultMine)}>
+                <span className={s.resultName}>{nameOf(seat)}</span>
+                {hit === undefined ? null : <span className={s.resultHand}>{handLabel(hit.category, t)}</span>}
+                {hit === undefined ? null : (
+                  <span className={s.resultCards}>
+                    {hit.best.map((card, i) => (
+                      <Card key={card} card={card} size="sm" delayMs={i * 60} highlighted={amount > 0} />
                     ))}
-                </span>
+                  </span>
+                )}
+                {amount > 0 ? <span className={s.resultPayout}>{payoutText}</span> : null}
               </li>
             )
           })}
         </ul>
-      ) : null}
 
-      <ul className={s.resultRows}>
-        {rows.map(({ seat, amount }) => {
-          const hit = showdown.get(seat)
-          const payoutText = `+${formatPoints(amount, lang)}`
-          return (
-            <li key={seat} className={cx(s.resultRow, seat === mySeat && s.resultMine)}>
-              <span className={s.resultName}>{nameOf(seat)}</span>
-              {hit === undefined ? null : <span className={s.resultHand}>{handLabel(hit.category, t)}</span>}
-              {hit === undefined ? null : (
-                <span className={s.resultCards}>
-                  {hit.best.map((card, i) => (
-                    <Card key={card} card={card} size="sm" delayMs={i * 60} highlighted={amount > 0} />
-                  ))}
-                </span>
-              )}
-              {amount > 0 ? <span className={s.resultPayout}>{payoutText}</span> : null}
-            </li>
-          )
-        })}
-      </ul>
+        {/* One pot needs no breakdown — `payouts` already says who took it. Two or more means somebody was all-in
+            for less than the rest, and "who was eligible for which pot" is the only way that reads as fair. The
+            ledger sits under the rows, as its hairline rule was drawn for: with the card capped at the felt's height
+            the rows are what shows first, and the ledger is a scroll away. */}
+        {result.pots.length > 1 ? (
+          <ul className={s.pots}>
+            {result.pots.map((pot, i) => {
+              const label = i === 0 ? t('labels.mainPot') : t('labels.sidePot', { n: i })
+              const eligibleText = `${t('labels.eligible')}: ${pot.eligibleSeats.map(nameOf).join(', ')}`
+              return (
+                <li key={`${label}${pot.amount}`} className={s.potRow}>
+                  <span className={s.potName}>{label}</span>
+                  <span className={s.potAmount}>{formatPoints(pot.amount, lang)}</span>
+                  <span className={s.potEligible}>{eligibleText}</span>
+                  <span className={s.potWinners}>
+                    {pot.winners
+                      .map((w) => ({ seat: w.seat, text: `${nameOf(w.seat)} +${formatPoints(w.amount, lang)}` }))
+                      .map((w) => (
+                        <span key={w.seat} className={s.potWinner}>
+                          {w.text}
+                        </span>
+                      ))}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        ) : null}
+      </div>
 
       <div className={s.resultFoot}>
         {result.fee > 0 ? <span className={s.resultMeta}>{feeText}</span> : null}
         {result.carryOverOut > 0 ? <span className={s.resultMeta}>{carryText}</span> : null}
         {uncalled === null ? null : <span className={s.resultMeta}>{uncalledText}</span>}
+        {countdown === undefined || countdown === null ? null : (
+          <p className={s.resultNext} aria-live="off">
+            {countdown}
+          </p>
+        )}
       </div>
     </div>
   )

@@ -124,8 +124,31 @@ OPEN ──(2+ ready seats, autoStart or START_GAME)──> IN_GAME
 IN_GAME ──(hand loop: HandRunner runs a hand to completion)──> onHandComplete
   onHandComplete ──(another eligible hand)──> IN_GAME (next hand, after handIntervalMs)
   onHandComplete ──(fewer than 2 eligible players)──> OPEN
-IN_GAME/OPEN ──(shutdown() or last human leaves + emptyRoomCloseMs)──> CLOSED
+IN_GAME/OPEN ──(shutdown())──> CLOSED
+IN_GAME/OPEN ──(last human removed, bots still seated)──> CLOSED            at once
+IN_GAME/OPEN ──(last human removed, no bots + emptyRoomCloseMs)──> CLOSED   summary().closing meanwhile
 ```
+
+"Human" means every member that is not a bot, connected or not: a
+disconnected player is removed only when the spectator grace runs out
+(`reconnectWindowMs` + `spectatorGraceMs`), and the room stays until then.
+Whichever removal takes the last human out — a leave, the spectator-grace
+timeout, or a Leave pressed mid-hand that takes effect when the hand is
+settled (every removal runs the same check) — closes a room that still
+seats bots there and then (`close('empty')`: the carried-over pot is
+released, and with no human left it all goes to the `carry_over` sink), so
+the lobby never lists a table of bots with nobody to play with. A room with
+nobody in it at all keeps the `emptyRoomCloseMs` grace, listed with
+`closing: true` ("Đang đóng…"), and a join cancels it. A hand stays current
+— a Leave or Stand is deferred, and a kick of a seat dealt into it is
+refused with `GAME_IN_PROGRESS` — until `onHandComplete` has settled it, not
+just until its last move (clients see `HAND_COMPLETE` a moment before that).
+`close()` and `shutdown()` set a `closing` flag first so the removal their
+cancelled hand performs cannot start a second close; they settle a hand
+whose settlement is still queued behind them (its post-hand stacks are what
+go home, its carried pot is what is released), and every step of theirs is
+guarded — a step that throws is logged (`room close step failed`) and the
+room still ends `CLOSED` with one `onClosed`.
 
 ### Table stacks and the Blind table limit (spec 2026-09-29)
 
@@ -197,7 +220,7 @@ falls back to `OPEN`.
 | `botDelayMs` | `[1000, 3000]` | Random think-time range for bot actions |
 | `reconnectWindowMs` | 90,000 | How long a disconnected seated player is held before auto-fold/stand |
 | `spectatorGraceMs` | 300,000 | After the reconnect window, how long before the player is removed from the room entirely |
-| `emptyRoomCloseMs` | 60,000 | How long an empty room stays open before closing |
+| `emptyRoomCloseMs` | 60,000 | How long a room with nobody in it — no humans and no bots — stays open (listed as `closing`) before closing; a room whose last human leaves while bots are seated closes at once |
 | `carryOverReleaseMs` | 60,000 | How long a room may sit unable to start a hand before its carry-over pot is released (spec §8.4) |
 | `consecutiveTimeoutsToStand` | 3 | Timed-out actions in a row before a human is stood up automatically |
 | `handsSatOutToStand` | 5 | Hands started without a player who asked to sit out before the seat is taken back (spec §11.3) |

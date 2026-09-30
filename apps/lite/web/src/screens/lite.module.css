@@ -610,17 +610,9 @@
 }
 
 .modalText {
-  margin-bottom: var(--space-5);
   max-width: 34rem;
   color: var(--ink-muted);
   text-wrap: pretty;
-}
-
-.modalActions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--space-3);
 }
 
 .dangerRow {

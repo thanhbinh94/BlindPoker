@@ -1,6 +1,15 @@
 import { expect, test, type Page } from '@playwright/test'
 import { expectRailFits } from './rail.js'
-import { account, expectNoSidewaysScroll, goToWardrobeTab, register, SHOTS } from './support.js'
+import {
+  account,
+  expectEvenCardRows,
+  expectHeadingsClearOfCards,
+  expectNoSidewaysScroll,
+  expectNoTextOverlapDown,
+  goToWardrobeTab,
+  register,
+  SHOTS,
+} from './support.js'
 
 /**
  * The dressing-room layout itself (wardrobe redesign design §3, §8, §9): the group row and the active
@@ -14,7 +23,14 @@ import { account, expectNoSidewaysScroll, goToWardrobeTab, register, SHOTS } fro
  * mobile) times theme (dark, light), for a human to compare against `docs/wardrobe-redesign/mockup-*.png`.
  * The theme comes from the app's own preference (`useThemePref`, `prefs.ts`) — visiting Settings and
  * picking "Sáng" — rather than poking `localStorage` directly, so this exercises the real switch too.
+ *
+ * Review 2026-09-29, No8b and No11b: every card grid (the wardrobe's tabs, the inventory) keeps the cards of one row
+ * one height, the rarity line directly under the name (so on one line for names as tall) and the footer — hint, date,
+ * colour dots — ending on the card's bottom line; a group heading keeps 16 px from the cards above it; and no visible
+ * text overlaps other text (`expectNoTextOverlap` needs the reduced-motion media below, docs/ui-kit.md).
  */
+
+test.use({ contextOptions: { reducedMotion: 'reduce' } })
 
 const preview = (page: Page) => page.getByRole('img', { name: 'Phòng thay đồ' })
 
@@ -32,6 +48,9 @@ async function useLightTheme(page: Page): Promise<void> {
   const light = page.getByRole('button', { name: 'Sáng', exact: true })
   await light.click()
   await expect(light).toHaveAttribute('aria-pressed', 'true')
+  // No11b: Settings itself, in the light theme, at this test's viewport (desktop, tablet, phone).
+  const size = page.viewportSize()
+  await expectNoTextOverlapDown(page, `settings, light theme, ${size?.width ?? '?'}×${size?.height ?? '?'}`)
 }
 
 /** Every `role="tab"` inside the named `tablist` must share one `offsetTop` — the row is one line,
@@ -64,6 +83,59 @@ async function assertNavNeverWraps(page: Page): Promise<void> {
   await assertTablistOnOneLine(page, 'Trang trí')
 
   await goToWardrobeTab(page, 'Ngoại hình')
+}
+
+/**
+ * The card grids at the page's current viewport (No8b, No11b): the views of the user's screenshots — the inventory's
+ * "Trang phục" group (No8-1), the wardrobe's hats (No8-2), "Danh hiệu & Huy hiệu" (No11-1) — and the other tabs that draw
+ * cards. Fresh account: every card is the starter set, so all the words are locked and the hats carry colour dots,
+ * which is where the rows were uneven. Ends in the inventory.
+ */
+async function expectCardGrids(page: Page): Promise<void> {
+  const size = page.viewportSize()
+  const where = `${size?.width ?? '?'}×${size?.height ?? '?'}`
+  await openWardrobe(page)
+  const panel = page.getByRole('tabpanel')
+
+  // The default tab: the base cards — one of the three tabs measured for overlap, with the hats and the words below.
+  await expectEvenCardRows(panel, `wardrobe, Ngoại hình → Thân nền, ${where}`)
+  await expectNoTextOverlapDown(page, `wardrobe, Ngoại hình, ${where}`)
+
+  await goToWardrobeTab(page, 'Ngoại hình', 'Màu tóc')
+  await expectEvenCardRows(panel, `wardrobe, Ngoại hình → Màu tóc, ${where}`)
+  await goToWardrobeTab(page, 'Ngoại hình', 'Màu mắt')
+  await expectEvenCardRows(panel, `wardrobe, Ngoại hình → Màu mắt, ${where}`)
+
+  await goToWardrobeTab(page, 'Trang phục', 'Mũ')
+  await expectEvenCardRows(panel, `wardrobe, Trang phục → Mũ, ${where}`)
+  await expectNoTextOverlapDown(page, `wardrobe, Trang phục → Mũ, ${where}`)
+  await goToWardrobeTab(page, 'Trang phục', 'Phụ kiện mặt')
+  await expectEvenCardRows(panel, `wardrobe, Trang phục → Phụ kiện mặt, ${where}`)
+  await goToWardrobeTab(page, 'Trang phục', 'Trang phục')
+  await expectEvenCardRows(panel, `wardrobe, Trang phục → Trang phục, ${where}`)
+
+  await goToWardrobeTab(page, 'Trang trí', 'Hào quang')
+  await expectEvenCardRows(panel, `wardrobe, Trang trí → Hào quang, ${where}`)
+  await goToWardrobeTab(page, 'Trang trí', 'Khung')
+  await expectEvenCardRows(panel, `wardrobe, Trang trí → Khung, ${where}`)
+
+  // "Tay nóng" ended a row of its own and "Huy hiệu" printed straight under it (No11-1).
+  await goToWardrobeTab(page, 'Trang trí', 'Danh hiệu')
+  await expect(page.getByRole('heading', { name: 'Huy hiệu', level: 3 })).toBeVisible()
+  await expectEvenCardRows(panel, `wardrobe, Trang trí → Danh hiệu & Huy hiệu, ${where}`, 2)
+  await expectHeadingsClearOfCards(panel, `wardrobe, Trang trí → Danh hiệu & Huy hiệu, ${where}`)
+  await expectNoTextOverlapDown(page, `wardrobe, Trang trí → Danh hiệu & Huy hiệu, ${where}`)
+
+  await page.goto('/#/inventory')
+  await expect(page.getByRole('heading', { name: 'Kho đồ', exact: true })).toBeVisible()
+  await expect(page.locator('main ul li').first()).toBeVisible()
+  const inventory = page.locator('main')
+  // One grid (`<ul>`) per slot the account owns something in.
+  const slots = await inventory.locator('ul').count()
+  expect(slots, 'the inventory lists at least the starter slots').toBeGreaterThanOrEqual(3)
+  await expectEvenCardRows(inventory, `inventory, ${where}`, slots)
+  await expectHeadingsClearOfCards(inventory, `inventory, ${where}`)
+  await expectNoTextOverlapDown(page, `inventory, ${where}`)
 }
 
 /** Fills the naming dialog's default name and saves — the empty-slot flow (design §3.1 item 4): a click on
@@ -134,6 +206,15 @@ test.describe('Blind Luck Poker Normal — bố cục tủ đồ (Kế hoạch 1
     // Layout audit C3 (2026-09-28): the inventory draws the wardrobe's own card now (`OwnedCard`), picture
     // box included, so an item's icon is the same size on both screens.
     expect(Math.abs(inventoryBox!.height - wardrobeBox!.height), 'the inventory card icon matches the wardrobe card icon').toBeLessThan(1)
+    // No8b, No11b: even card rows, headings clear of the cards above, no text over text — at the user's screen
+    // (1920×940, measured from their screenshots) and at a laptop's.
+    for (const size of [
+      { width: 1920, height: 940 },
+      { width: 1366, height: 768 },
+    ]) {
+      await page.setViewportSize(size)
+      await expectCardGrids(page)
+    }
     // Bug 8: the account rail fits one row at every desktop width that used to overflow.
     for (const width of [700, 900, 1100, 1440]) {
       await page.setViewportSize({ width, height: 900 })
@@ -155,6 +236,9 @@ test.describe('Blind Luck Poker Normal — bố cục tủ đồ (Kế hoạch 1
     await useLightTheme(page)
     await openWardrobe(page)
     await page.screenshot({ path: `${SHOTS}wardrobe-tablet-light.png`, fullPage: true })
+
+    // No8b, No11b, on this account (registration is rate-limited): the tablet's 130 px columns.
+    await expectCardGrids(page)
   })
 
   test('@mobile điện thoại: không cuộn ngang, nhóm và tab con không gãy dòng; ảnh chụp tối và sáng', async ({ page }) => {
@@ -173,6 +257,11 @@ test.describe('Blind Luck Poker Normal — bố cục tủ đồ (Kế hoạch 1
     await openWardrobe(page)
     await expectNoSidewaysScroll(page)
     await page.screenshot({ path: `${SHOTS}wardrobe-mobile-light.png`, fullPage: true })
+
+    // No8b, No11b: three columns of ~100 px on a phone, where names wrap to three lines and rows differed most.
+    await expectCardGrids(page)
+    await expectNoSidewaysScroll(page)
+    await openWardrobe(page)
 
     // V-fix, 2026-09-27 (design §3.1 item 4): `.outfitMenu` used to centre under every slot's portrait —
     // fine for the three middle ones, but wide enough to spill past the viewport on the two end slots

@@ -28,7 +28,7 @@ Two facts frame everything below.
 | Session hijack *(Lite)* | A 32-byte bearer token in `localStorage`, stored as a digest server-side. There is no password behind it — see the last row. | `apps/lite/server/src/session/session-service.test.ts` → "stores the sha256 hex of the token, not the token itself", "generates a fresh 32-byte base64url token per player when no random() override is given" and "returns null for an unknown token" |
 | CSRF | `SameSite=Lax` plus a mandatory `X-Requested-With: bind-poker` on every `POST`/`PUT`/`PATCH`/`DELETE`, checked in an instance-wide `preHandler` before auth and before the rate limiter (`packages/http-kit/src/security.ts`, `registerCsrfGuard`). Only fetch/XHR can set a custom header, and doing so cross-origin forces a preflight neither server answers. The WebSocket upgrade checks `Origin` instead (below). | `packages/http-kit/src/security.test.ts` → the four `registerCsrfGuard` cases; **and, over the whole surface**, `apps/normal-server/src/app.test.ts` and `apps/lite/server/src/app.test.ts` → "every mutating route is guarded > refuses each of them without X-Requested-With" |
 | WebSocket cross-origin | `Gateway.originAllowed` (`packages/server-kit/src/gateway/gateway.ts`). Normal names the origins explicitly (`ALLOWED_ORIGINS`, required); Lite defaults to `'same-host'` — the page's `Origin` must match the request's `Host`, and a client that sends no `Origin` at all (not a browser, so no site to forge from) is let through. The refusal is a `403` written to the socket before any WebSocket exists. | `packages/server-kit/src/gateway/gateway.test.ts` → the four "origin policy" cases; `apps/normal-server/src/app.test.ts` → "refuses an origin that is not in ALLOWED_ORIGINS, and any path but /ws"; `apps/lite/server/src/app.test.ts` → "defaults to the same-host origin policy" and "honours an explicit ALLOWED_ORIGINS list instead" |
-| XSS | React escapes everything it renders; `dangerouslySetInnerHTML` appears nowhere; an avatar is same-origin `<img>` PNG layers, never injected markup. CSP is `default-src 'self'` with `object-src 'none'`, `base-uri 'self'`, `form-action 'self'` (`packages/http-kit/src/security.ts`, `DEFAULT_CSP`; Normal's `normalCsp` in `apps/normal-server/src/app.ts` adds the two Google Fonts hosts and an explicit `script-src 'self'` — see the note below). Display names are validated and normalized in `@bp/core` before they are stored. | `tooling/arch/security-static.test.ts` → "uses dangerouslySetInnerHTML nowhere"; `packages/http-kit/src/security.test.ts` → "names every directive the spec §19.3 header list requires"; `packages/core/src/protocol/display-name.test.ts` |
+| XSS | React escapes everything it renders; `dangerouslySetInnerHTML` appears nowhere; an avatar is `<img>` PNG layers (same-origin files, or a recoloured copy of one shown as a `blob:` URL), never injected markup. CSP is `default-src 'self'` with `object-src 'none'`, `base-uri 'self'`, `form-action 'self'` (`packages/http-kit/src/security.ts`, `DEFAULT_CSP`; Normal's `normalCsp` in `apps/normal-server/src/app.ts` adds the two Google Fonts hosts, `blob:` on `img-src` for the recoloured avatar layers, and an explicit `script-src 'self'` — see the note below). Display names are validated and normalized in `@bp/core` before they are stored. | `tooling/arch/security-static.test.ts` → "uses dangerouslySetInnerHTML nowhere"; `packages/http-kit/src/security.test.ts` → "names every directive the spec §19.3 header list requires"; `packages/core/src/protocol/display-name.test.ts` |
 | Clickjacking | `frame-ancestors 'none'` in the CSP, plus `X-Frame-Options: DENY` for the older browsers and embedded webviews that only understand that. Set on an `onRequest` hook, so they are on 404s and 500s too. | `packages/http-kit/src/security.test.ts` → "sets the header set on every response, misses included"; both editions' `app.test.ts` → "sets them on a 404 and on a 500, and lets nothing of the error into the body" |
 | SQL injection | Normal: Drizzle, parameterized (`apps/normal-server/src/repos/`, `db/schema.ts`); the one hand-written statement, the truncate in the test harness, is a test. Lite: `node:sqlite` prepared statements with bound parameters (`apps/lite/server/src/repos/sqlite-repos.ts`). Every request body is validated before it reaches a query. | `apps/normal-server/src/repos/player-repo.test.ts` → "returns null for an id that is not there, and for one that is not a uuid" (a hostile string reaches a *bound parameter*, and the driver refuses it rather than the query being rebuilt around it) and "refuses a name another player already holds, whatever its case"; `apps/lite/server/src/repos/sqlite-repos.test.ts` → "finds by name through the key, so case and composition do not matter"; `packages/core/src/protocol/display-name.test.ts` for the validation in front of them |
 | Path traversal in the static route | Percent-decoding first, then backslash folding, then a `..` segment rejects the whole path (`packages/http-kit/src/assets.ts`). `api`, `ws` and `health` are reserved prefixes the SPA fallback may never answer for. | `packages/http-kit/src/assets.test.ts`; `packages/http-kit/src/static-route.test.ts`; `apps/lite/server/src/app.test.ts` → "never falls back for API, ws or traversal paths"; `apps/normal-server/src/app.test.ts` → "never lets the fallback answer for the API, the socket or the probe" |
@@ -44,21 +44,37 @@ Two facts frame everything below.
 
 ### What Normal's CSP adds beyond the default
 
-`normalCsp` widens `DEFAULT_CSP` in three places (`apps/normal-server/src/app.ts`; asserted directive
-by directive in `app.test.ts`), and none of them is for the avatar any more.
+`normalCsp` changes `DEFAULT_CSP` in four places (`apps/normal-server/src/app.ts`; the whole header is
+pinned in `app.test.ts`, which also asserts `img-src`, `style-src`, `font-src` and `script-src` one by
+one): three widenings and one directive written out. Only one of them is for the avatar.
 
 **`style-src` and `font-src` gain the two Google Fonts hosts** `normal-web` (Plan 6) loads its display
 face from — see the doc comment beside `FONTS_STYLESHEET_HOST`/`FONTS_FILE_HOST`.
 
+**`img-src` gains `blob:`** — `img-src 'self' data: blob:` — for the recoloured avatar layers (Plan 13:
+hair colour, eye colour, the coloured outfits and hats). `packages/ui-kit/src/avatar2d/tinted.ts` paints a
+layer onto an offscreen `<canvas>` in the page and shows the result through an object URL; a policy that
+allows only `'self' data:` makes the browser refuse that URL, which is what blanked the head on a hair colour
+and left an eye colour unchanged (review 2026-09-29, No15 and No16). Nothing else accepts `blob:`:
+`script-src`, `connect-src`, `default-src` and `object-src` are untouched, so a `blob:` URL can still neither
+run as script nor be fetched by the page. It also opens no new source — only script already running on this
+origin can mint one, and it points at bytes this document itself holds — and `data:`, already allowed, is the
+wider of the two. `data:` URLs were the alternative and were rejected: they would mean base64-encoding ~96
+cached layers of several hundred KB each on the main thread. If a tinted image ever fails to load anyway,
+`Chibi` draws the plain layer instead of a broken one, and the tint e2e (`apps/normal-web/e2e/avatar-tint.spec.ts`)
+asserts every layer of the wardrobe preview really decoded and that the recoloured ones are `blob:` images,
+so a silent fallback fails the test.
+
 **`script-src 'self'`**, written out explicitly even though it says nothing `default-src 'self'` did
 not already say on its own. Before Plan 11 this line carried `'wasm-unsafe-eval'`, for the 3D avatar's
-WebAssembly meshopt decoder; since the avatar is same-origin PNG `<img>` layers, nothing in this app
-needs WebAssembly, `blob:` object URLs, or anything else wider than the default, and both keywords are
-gone. The explicit line stays anyway: a directive added here later narrows a policy that already named
-`script-src`, rather than falling back to `default-src` silently the way it would if the line were
-simply removed.
+WebAssembly meshopt decoder; since the avatar is `<img>` PNG layers, nothing in this app needs
+WebAssembly or anything else wider than the default, and that keyword is gone. The `blob:` images above
+are pictures, not scripts, so this line is untouched by them. The explicit line stays anyway: a
+directive added here later narrows a policy that already named `script-src`, rather than falling back to
+`default-src` silently the way it would if the line were simply removed.
 
-Lite keeps `DEFAULT_CSP` unchanged — it never had an avatar-specific widening to begin with.
+Lite keeps `DEFAULT_CSP` unchanged: it does not recolour avatar layers, so its `img-src` stays
+`'self' data:` and nothing in it accepts `blob:`.
 
 ### Guarded surface, by edition
 

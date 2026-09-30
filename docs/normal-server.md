@@ -386,8 +386,10 @@ while reading the code:
   and has no `players` row. Its engine-side id lives in `label`, which also survives a deleted
   account (`player_id` is `ON DELETE SET NULL`). `history-service` left-joins `players` on it, so a
   `HistorySeat` carries **both** `playerId` (the join key — `null` for a bot or a gone account) and
-  `label` (the current display name for a human, the engine id otherwise). A client filtering its own
-  seat out of a hand must compare `playerId`: display names are not unique.
+  `label` (the current display name for a human, `Bot n` for a bot — read back from the engine id
+  `bot:<roomId>:<i>`, n = i + 1 — and the recorded label otherwise). A client filtering its own
+  seat out of a hand must compare `playerId`: display names are not unique. A `HistoryEntry` also
+  carries `roomName`, read from the config stored with the hand (`null` when a row has none).
 - **`AUTO_MIGRATE` is read in `main.ts`, not in `loadConfig`** — it is a property of this startup,
   not of the server; `buildApp` could not use it.
 - **The mutating rate limiter keys on a hash of the session cookie, not on `playerId`.** Fastify

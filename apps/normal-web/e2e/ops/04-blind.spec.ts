@@ -5,6 +5,7 @@ import {
   balanceWhen,
   closeAll,
   createBlind,
+  expectNoTextOverlapAt,
   handOver,
   historyOf,
   joinByCode,
@@ -103,6 +104,8 @@ test('F-03 F-04 F-05: two players decide blind to each other; both fold carries 
   await a.page.getByRole('button', { name: 'Bỏ bài', exact: true }).click()
   await expect(mySeat(b.page, 0).getByText('Đã chọn')).toBeVisible()
   await expect(mySeat(b.page, 0).getByText('Đã bỏ bài')).toHaveCount(0)
+  // No11b: a Blind hand in play between two people, the other's choice marked on her seat — no text over text.
+  await expectNoTextOverlapAt(b.page, 'Blind, in hand, the other player has chosen')
 
   // F-04: Em folds too — nobody plays, the pot carries to the next hand.
   await b.page.getByRole('button', { name: 'Bỏ bài', exact: true }).click()
@@ -114,6 +117,8 @@ test('F-03 F-04 F-05: two players decide blind to each other; both fold carries 
   // the release pays the halves of the 2.000 into the balances, not onto the stacks (spec 2026-09-29 §4.6).
   await a.page.getByRole('button', { name: 'Ngồi ngoài' }).click()
   await b.page.getByRole('button', { name: 'Ngồi ngoài' }).click()
+  // No11b: the result card of a hand nobody played, the pot carried — read once both sit out, so no deal can follow.
+  await expectNoTextOverlapAt(a.page, 'Blind, result card, everyone folded and the pot carries')
   const aReleased = await balanceWhen(a.page, (n) => n === aBefore + 1_000, 90_000)
   const bReleased = await balanceWhen(b.page, (n) => n === bBefore + 1_000, 30_000)
   expect(aReleased, 'Đào gets her half of the 2.000').toBe(aBefore + 1_000)
@@ -147,6 +152,8 @@ test('F-06: one plays, one folds — the one who played takes the pot without a 
   await b.page.getByRole('button', { name: 'Ngồi ngoài' }).click()
   const cardText = (await resultCard(a.page).innerText()).replace(/\s+/g, ' ')
   expect(cardText, 'the card returns her uncalled play').toContain('Hoàn lại phần cược dư')
+  // No11b: the winner's card, the uncalled play handed back on it — no text over text.
+  await expectNoTextOverlapAt(a.page, 'Blind, result card, an uncalled play returned')
   await expect(faceUp(a.page.getByRole('group', { name: 'Bài chung' })), 'no board is dealt').toHaveCount(0)
   await expect(faceUp(mySeat(a.page, 1)), "Em's cards stay face down").toHaveCount(0)
   await leave(a.page)

@@ -122,26 +122,36 @@ async function withDeadline(promise: Promise<void>, budgetMs: number, onTimeout:
 }
 
 /**
- * The Normal edition's CSP: the default, plus the two hosts Google Fonts needs.
+ * The Normal edition's CSP: the default, plus the two hosts Google Fonts needs, plus `blob:` images.
  *
  * Derived from `DEFAULT_CSP` rather than written out again, so a directive added there — or
  * tightened — reaches this edition without anyone remembering to copy it. `normal-web` (Plan 6)
  * loads its display face from `fonts.googleapis.com`, which then fetches the font files themselves
  * from `fonts.gstatic.com`; a stylesheet host alone would load a CSS file that could not fetch
  * anything.
+ *
+ * `img-src` gains `blob:` for the recoloured avatar layers (Plan 13): `ui-kit`'s `tinted.ts` paints a
+ * layer on a canvas and hands the `<img>` an object URL for the result. Without it the browser refuses
+ * every recoloured layer — a hair colour blanked the head, an eye colour changed nothing (No15, No16).
+ * Only Normal recolours; Lite keeps `DEFAULT_CSP`.
  */
 export const FONTS_STYLESHEET_HOST = 'https://fonts.googleapis.com'
 export const FONTS_FILE_HOST = 'https://fonts.gstatic.com'
 /**
- * Since Plan 11 the avatar is same-origin PNG layers (`docs/avatar-2d.md`) — no WebAssembly, no `blob:`
- * object URL, nothing `default-src 'self'` does not already allow on its own. This is written out
- * anyway, `'self'` and nothing more, so a directive added here later narrows a policy that already
- * named `script-src` rather than falling back to `default-src` silently.
+ * Scripts stay `'self'`. Since Plan 11 the avatar is same-origin PNG layers (`docs/avatar-2d.md`) — no
+ * WebAssembly, nothing `default-src 'self'` does not already allow on its own — and the recoloured layers
+ * of Plan 13 are `blob:` *images* (`img-src` above), not scripts. This is written out anyway, `'self'` and
+ * nothing more, so a directive added here later narrows a policy that already named `script-src` rather
+ * than falling back to `default-src` silently.
  */
 export const SCRIPT_SRC = "script-src 'self'"
 
 export function normalCsp(base: string = DEFAULT_CSP): string {
-  const directives = base.split('; ').map((d) => (d.startsWith('style-src ') ? `${d} ${FONTS_STYLESHEET_HOST}` : d))
+  const directives = base.split('; ').map((d) => {
+    if (d.startsWith('style-src ')) return `${d} ${FONTS_STYLESHEET_HOST}`
+    if (d.startsWith('img-src ')) return `${d} blob:`
+    return d
+  })
   if (!directives.some((d) => d.startsWith('font-src '))) directives.push(`font-src 'self' ${FONTS_FILE_HOST}`)
   if (!directives.some((d) => d.startsWith('script-src '))) directives.push(SCRIPT_SRC)
   return directives.join('; ')

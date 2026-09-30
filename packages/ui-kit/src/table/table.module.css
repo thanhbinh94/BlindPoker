@@ -308,6 +308,9 @@
   width: var(--seat-disc, 40px);
   height: var(--seat-disc, 40px);
   overflow: visible;
+  /* The chibi stacks its layers with z-indexes up to 90. On the ring each seat's transform keeps them in; in the
+     phone's stacked strip nothing did, and the faces were painted over the result card dealt above the strip. */
+  isolation: isolate;
   border-radius: 50%;
   border: 2px solid rgba(217, 164, 65, 0.78);
   box-shadow:
@@ -358,16 +361,25 @@
   font-variant-numeric: tabular-nums;
 }
 
-.tags {
+/* The two lines under the plate (review 2026-09-29, No2): the badges with the bet chip beside them, then the hand's
+   name with the payout. Each wraps only when its seat is too narrow to hold it on one line. */
+.tags,
+.seatResult {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 3px;
   justify-content: center;
 }
 
+.seatResult {
+  column-gap: var(--space-2);
+}
+
 /* A seat's badges hang past the felt onto the page. Their default tint is translucent, which in the light theme
-   would leave gold ink floating on parchment, so on the table they mix their own tone into an opaque night ground. */
-.seat .tags > * {
+   would leave gold ink floating on parchment, so on the table they mix their own tone into an opaque night ground.
+   (The bet chip beside them has a ground of its own.) */
+.seat .tags > :not(.bet) {
   background-color: color-mix(in srgb, currentColor 14%, var(--bg));
 }
 
@@ -597,11 +609,40 @@
   font-size: var(--seat-name, 0.8125rem);
 }
 
-/* A ring squeezed into a short stage — a small window, or an app with a bar of its own above the room. The plates
-   keep their size because they carry the names; the cards and the gaps give, so a hand never lands on the board.
-   (`.ring` is a size container, so this asks about the felt, not the window.) */
-@container (max-height: 330px) {
-  .ring {
+/* On the rim the two lines under a plate may run wider than the plate, centred under it, so "Bot · Đã chọn · 2.000"
+   stays one line instead of three. How far is set by the neighbours: up to six seats the nearest plate beside a
+   seat is a third of the table away, so a line may take 30 % of the table's width, and the viewer's own — the one
+   carrying "Bạn", the host's crown, a state and a bet together, ~290 px — 48 %, which still ends short of the plates
+   at its flanks (their inner edges are 24 % out from the centre, and above its lines). Seven seats up, neighbours
+   close in: the lines keep to their plate again and the viewer's to 30 %. (`cqw` is the table's width: `.ring` is a
+   size container.) */
+.ring .tags,
+.ring .seatResult {
+  width: max-content;
+  max-width: var(--seat-line, 30cqw);
+}
+
+.ring .seatMe {
+  --seat-line: 48cqw;
+}
+
+.ring:is([data-seats='7'], [data-seats='8'], [data-seats='9']) .seat {
+  --seat-line: 100%;
+}
+
+.ring:is([data-seats='7'], [data-seats='8'], [data-seats='9']) .seatMe {
+  --seat-line: 30cqw;
+}
+
+/* A ring squeezed into a short stage — a laptop window, or an app with a bar of its own above the room. The plates
+   keep their size because they carry the names; the cards and the gaps give, so a hand never lands on the board and
+   the viewer's own block — cards, plate, two lines — stays inside the stage above the tray. 400 px of felt is where
+   that block at full size (a caption under the name, the payout under the badges) stops fitting between the board
+   and the foot of the stage (review 2026-09-29, No2: 1366 × 768, 1536 × 730 and 1280 × 720 all land below it).
+   (`.ring` is a size container, so this asks about the felt, not the window; the gap is set on the seats, whose
+   container the ring is — set on the ring itself it would ask the ring's own ancestors, which are no containers.) */
+@container (max-height: 400px) {
+  .ring .seat {
     --seat-gap: 2px;
   }
 
@@ -610,7 +651,7 @@
   }
 
   .ring .cardMd {
-    --card-w: clamp(24px, 6vw, 32px);
+    --card-w: clamp(24px, 6vw, 36px);
   }
 }
 
@@ -763,7 +804,9 @@
    opponents, a pre-hand tray and the header, the stack ran taller than `.roomMain` and the plate — stack and cards
    included — sat under the tray until the player thought to scroll the table. Sticky to the bottom of that scroll
    box, it stays on screen and the strip and the felt scroll behind it instead; with room to spare it sits where it
-   always did. The backdrop is the stage's own night, so what passes behind does not show through. */
+   always did. The backdrop is the stage's own night, so what passes behind does not show through — solid over the
+   whole block, with the fade drawn just above it: a fade *inside* the block left a band where the board's "Pot"
+   showed under the viewer's own hand name (review 2026-09-29, No11b, found by the text-overlap rule at 375 × 812). */
 .mine {
   position: sticky;
   bottom: 0;
@@ -771,7 +814,16 @@
   display: flex;
   justify-content: center;
   padding-top: var(--space-2);
-  background: linear-gradient(180deg, transparent, var(--bg) var(--space-3));
+  background: var(--bg);
+}
+
+.mine::before {
+  content: '';
+  position: absolute;
+  inset: auto 0 100%;
+  height: var(--space-3);
+  background: linear-gradient(180deg, transparent, var(--bg));
+  pointer-events: none;
 }
 
 .mine .seat {
@@ -963,10 +1015,14 @@
 }
 
 /* ---------------- Hand result ---------------- */
+/* Never taller than the felt it is dealt onto (review 2026-09-29, No2): past that the body scrolls inside the card,
+   and the card no longer pushes a scrollbar onto the whole stage. */
 .result {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  max-height: 100%;
+  min-height: 0;
   padding: var(--space-4) var(--space-5);
   border: 1px solid rgba(217, 164, 65, 0.42);
   border-radius: var(--radius-lg);
@@ -996,6 +1052,26 @@
 .resultNote {
   font-size: 0.875rem;
   color: var(--ink-muted);
+}
+
+/* The side-pot ledger and the rows: the one part of the card that gives when the felt is short. */
+.resultBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* More below the fold — the rest of the rows, the side-pot ledger: the foot of the box fades into the card, so it
+   reads as a list that goes on rather than one that ends at the edge. `HandResult` sets `data-more` while the box can
+   still scroll down, and drops it at the end. A mask, not an overlay, so it fades to whatever the card is painted
+   with; nothing moves, so there is no motion to reduce. */
+.resultBody[data-more='true'] {
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 2.5rem), transparent);
+  mask-image: linear-gradient(180deg, #000 calc(100% - 2.5rem), transparent);
 }
 
 .resultRows {
@@ -1104,12 +1180,27 @@
 .resultFoot {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-3);
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
 }
 
 .resultMeta {
   font-size: 0.8125rem;
   color: var(--ink-muted);
+}
+
+/* "Next hand in N seconds": the card's last word, at the right end of its footer (it used to hang under the card,
+   free text over the viewer's own seat — review 2026-09-29, No2). */
+.resultNext {
+  margin: 0 0 0 auto;
+  font-family: var(--font-display);
+  font-size: 0.875rem;
+  color: var(--ink-muted);
+}
+
+.resultNext strong {
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------------- Room header ---------------- */

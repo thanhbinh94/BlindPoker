@@ -181,7 +181,7 @@ curl -fsS -o /dev/null -w '%{http_code} %{content_type}\n' https://$DOMAIN/
 ```
 
 1. Mở `https://$DOMAIN` — ra thẳng thẻ **Đăng nhập**.
-2. Bấm **Chưa có tài khoản? Đăng ký**, điền email, mật khẩu (8–128 ký tự, khác email) và tên hiển
+2. Bấm thẻ **Đăng ký**, điền email, mật khẩu (8–128 ký tự, khác email) và tên hiển
    thị (2–20 ký tự), rồi **Tạo tài khoản**. Tài khoản mới được cấp 100.000 điểm khởi đầu.
 3. Vào được sảnh là xong: cookie phiên đã được set với `Secure` + `HttpOnly`, và WebSocket
    (`wss://$DOMAIN/ws`) xác thực bằng chính cookie đó chứ không bằng token nào khác.

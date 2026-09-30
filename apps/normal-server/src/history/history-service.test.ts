@@ -9,7 +9,7 @@ import { createTestDb } from '../db/test-db.js'
 import type { NormalRepositories } from '../repos/index.js'
 import { createRepositories } from '../repos/index.js'
 import type { HistoryService } from './history-service.js'
-import { createHistoryService } from './history-service.js'
+import { botLabel, createHistoryService } from './history-service.js'
 
 let test: TestDb
 let db: AppDb
@@ -47,6 +47,22 @@ function summary(patch: Partial<HandSummary> & Pick<HandSummary, 'handId' | 'pla
   return { roomId: 'r1', mode: 'holdem', config: CONFIG, startedAt: START, endedAt: START + MINUTE, fee: 0, cancelled: false, ...patch }
 }
 
+describe('botLabel', () => {
+  it('turns the engine id of a bot into the name the room gave it: the index, counted from one', () => {
+    expect(botLabel('bot:c30c3565-99ac-4163-bbce-f4be343fad3b:0')).toBe('Bot 1')
+    expect(botLabel('bot:c30c3565-99ac-4163-bbce-f4be343fad3b:4')).toBe('Bot 5')
+    expect(botLabel('bot:r1:11')).toBe('Bot 12')
+    // A room id is whatever the room was created under; only the trailing index matters.
+    expect(botLabel('bot:room:with:colons:2')).toBe('Bot 3')
+  })
+
+  it('returns anything else untouched', () => {
+    for (const label of ['bot-7', 'Bot 2', 'bot:r1', 'bot:r1:', 'bot:r1:x', 'bot::3', 'xbot:r1:3', 'bot:r1:3 ', '', 'Lan']) {
+      expect(botLabel(label)).toBe(label)
+    }
+  })
+})
+
 describe('listForPlayer', () => {
   it('returns the reading player’s own result alongside every other seat, named', async () => {
     const me = await seedPlayer('Bình')
@@ -67,6 +83,8 @@ describe('listForPlayer', () => {
     expect(entry).toEqual({
       handId: 'h1',
       roomId: 'r1',
+      // The name the table had when the hand was dealt, read from the stored config.
+      roomName: 'Bàn 1',
       mode: 'holdem',
       startedAt: START,
       endedAt: START + MINUTE,
@@ -82,6 +100,65 @@ describe('listForPlayer', () => {
         { playerId: null, label: 'bot-7', seat: 2, isBot: true, net: -2_000, won: false },
       ],
     })
+  })
+
+  it('reads a bot seat as "Bot n" — the in-room name — instead of the engine id it was recorded under (No4)', async () => {
+    const me = await seedPlayer('Bình')
+    await repos.history.recordHand(
+      summary({
+        handId: 'h1',
+        players: [
+          { playerId: me, seat: 0, isBot: false, net: 4_000, won: true, bestCategory: null },
+          // The engine's own ids: `bot:<roomId>:<i>`, with `i` counted from zero.
+          { playerId: 'bot:c30c3565-99ac-4163-bbce-f4be343fad3b:4', seat: 1, isBot: true, net: -2_000, won: false, bestCategory: null },
+          { playerId: 'bot:c30c3565-99ac-4163-bbce-f4be343fad3b:0', seat: 2, isBot: true, net: -2_000, won: false, bestCategory: null },
+        ],
+      }),
+    )
+
+    const [entry] = await history.listForPlayer(me)
+    expect(entry!.players.map((p) => p.label)).toEqual(['Bình', 'Bot 5', 'Bot 1'])
+    // Only the text changes: a bot still has no account, and is still marked as one.
+    expect(entry!.players[1]).toEqual({ playerId: null, label: 'Bot 5', seat: 1, isBot: true, net: -2_000, won: false })
+  })
+
+  it('leaves a bot label it cannot parse as it was recorded, and never renames a human seat', async () => {
+    const me = await seedPlayer('Bình')
+    // A display name that happens to look like an engine id: the mapping is for bots, whatever a human calls themselves.
+    const lookalike = await seedPlayer('bot:r1:3')
+    await repos.history.recordHand(
+      summary({
+        handId: 'h1',
+        players: [
+          { playerId: me, seat: 0, isBot: false, net: 100, won: true, bestCategory: null },
+          { playerId: lookalike, seat: 1, isBot: false, net: -50, won: false, bestCategory: null },
+          { playerId: 'bot-7', seat: 2, isBot: true, net: -50, won: false, bestCategory: null },
+        ],
+      }),
+    )
+
+    const [entry] = await history.listForPlayer(me)
+    expect(entry!.players.map((p) => p.label)).toEqual(['Bình', 'bot:r1:3', 'bot-7'])
+  })
+
+  it('carries the room name from the stored config, and null when the hand was stored without one', async () => {
+    const me = await seedPlayer('Bình')
+    const seats = [{ playerId: me, seat: 0, isBot: false, net: 0, won: false, bestCategory: null }]
+    await repos.history.recordHand(summary({ handId: 'h-named', startedAt: START + 4 * MINUTE, endedAt: START + 4 * MINUTE + 1_000, players: seats }))
+    // Rows written before the name was kept, or with a config that is not the shape we write today.
+    await repos.history.recordHand(summary({ handId: 'h-bare', startedAt: START + 3 * MINUTE, endedAt: START + 3 * MINUTE + 1_000, config: {} as PublicRoomConfig, players: seats }))
+    await repos.history.recordHand(summary({ handId: 'h-blank', startedAt: START + 2 * MINUTE, endedAt: START + 2 * MINUTE + 1_000, config: { ...CONFIG, name: '' }, players: seats }))
+    await repos.history.recordHand(
+      summary({ handId: 'h-odd', startedAt: START + MINUTE, endedAt: START + MINUTE + 1_000, config: { ...CONFIG, name: 7 } as unknown as PublicRoomConfig, players: seats }),
+    )
+
+    const hands = await history.listForPlayer(me)
+    expect(hands.map((h) => [h.handId, h.roomName])).toEqual([
+      ['h-named', 'Bàn 1'],
+      ['h-bare', null],
+      ['h-blank', null],
+      ['h-odd', null],
+    ])
   })
 
   it('falls back to the recorded id when the account behind a seat is gone', async () => {

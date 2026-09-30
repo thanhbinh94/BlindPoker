@@ -181,6 +181,56 @@ describe('Modal', () => {
     expect(opener).toHaveFocus()
     opener.remove()
   })
+  it('renders the footer after the body, inside the dialog, in its own row', () => {
+    render(
+      <Modal open title="Hi" onClose={vi.fn()} closeLabel="Close" footer={<button type="button">{GO}</button>}>
+        {BODY}
+      </Modal>,
+    )
+    const dialog = screen.getByRole('dialog', { name: 'Hi' })
+    const go = screen.getByRole('button', { name: 'Go' })
+    expect(dialog).toContainElement(go)
+    // After the body, not before it and not beside it.
+    expect(screen.getByText('body').compareDocumentPosition(go) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(go.parentElement?.className).toMatch(/dialogFoot/)
+    expect(go.parentElement?.parentElement).toBe(dialog)
+  })
+  it('renders no footer row when there is no footer', () => {
+    const { rerender } = render(
+      <Modal open title="Hi" onClose={vi.fn()} closeLabel="Close">
+        {BODY}
+      </Modal>,
+    )
+    const dialog = screen.getByRole('dialog', { name: 'Hi' })
+    expect(dialog.querySelector('[class*="dialogFoot"]')).toBeNull()
+    // "nothing" spelled the ways a caller's conditional spells it: still no empty row taking up the margin.
+    for (const nothing of [null, false, undefined]) {
+      rerender(
+        <Modal open title="Hi" onClose={vi.fn()} closeLabel="Close" footer={nothing}>
+          {BODY}
+        </Modal>,
+      )
+      expect(dialog.querySelector('[class*="dialogFoot"]'), `footer ${String(nothing)}`).toBeNull()
+    }
+  })
+  it('keeps the footer buttons inside the Tab loop, after the body', async () => {
+    render(
+      <Modal open title="Buy-in" onClose={vi.fn()} closeLabel="Close" footer={<button type="button">{GO}</button>}>
+        <input aria-label="Amount" />
+      </Modal>,
+    )
+    const close = screen.getByRole('button', { name: 'Close' })
+    const amount = screen.getByLabelText('Amount')
+    const go = screen.getByRole('button', { name: 'Go' })
+    expect(close).toHaveFocus()
+    await userEvent.tab()
+    expect(amount).toHaveFocus()
+    await userEvent.tab()
+    expect(go).toHaveFocus()
+    // The footer holds the last control, so it is the one the loop wraps from.
+    await userEvent.tab()
+    expect(close).toHaveFocus()
+  })
   it('does not close when the dialog surface itself is clicked', async () => {
     const onClose = vi.fn()
     render(

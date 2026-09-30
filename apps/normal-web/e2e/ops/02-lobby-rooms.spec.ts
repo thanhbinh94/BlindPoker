@@ -72,7 +72,8 @@ test('S-04 S-05 D-05: a Blind room with three bots, a hand played to the end', a
 test('S-06 C-06: an empty room says so for sixty seconds, comes back when someone joins, then closes', async () => {
   test.setTimeout(240_000)
   const name = unique('Bàn C06 ')
-  await createBlind(host.page, { name, bots: 1 })
+  // No bots: a room left with only bots closes at once instead (C-07). An empty one keeps its minute (bug 2).
+  await createHoldemRoom(host.page, { name })
   await guest.page.goto('/#/lobby')
   await expect(ticket(guest.page, name)).toBeVisible()
 
@@ -90,6 +91,26 @@ test('S-06 C-06: an empty room says so for sixty seconds, comes back when someon
   await leave(guest.page)
   await expect(ticket(host.page, name).getByText('Đang đóng…')).toBeVisible({ timeout: 10_000 })
   await expect(ticket(host.page, name)).toHaveCount(0, { timeout: 80_000 })
+})
+
+test('C-07: a room left with only bots closes at once', async () => {
+  const name = unique('Bàn C07 ')
+  await createBlind(host.page, { name, bots: 2 })
+  await guest.page.goto('/#/lobby')
+  await expect(ticket(guest.page, name)).toBeVisible()
+
+  // The host is the last person in it: the bots have nobody to play with, so the room does not wait out a minute.
+  await leave(host.page)
+  await expect(ticket(guest.page, name), 'gone from the other lobby, without a reload').toHaveCount(0, { timeout: 5_000 })
+
+  // The leaver's own lobby too, once it has provably loaded — an absence on a list that has not arrived proves
+  // nothing. A room the guest opens now must reach it; the closed one must not be there, where a grace would keep it
+  // for a minute.
+  const marker = unique('Bàn C07 mốc ')
+  await createHoldemRoom(guest.page, { name: marker })
+  await expect(ticket(host.page, marker), 'the leaver’s lobby is live').toBeVisible({ timeout: 10_000 })
+  await expect(ticket(host.page, name), 'and has no ticket for the room that closed').toHaveCount(0)
+  await leave(guest.page)
 })
 
 test('C-01 C-02: a new public room reaches the other lobby live, and the mode filter holds', async () => {

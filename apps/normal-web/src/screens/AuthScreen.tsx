@@ -285,10 +285,6 @@ export function AuthScreen({ api, mode, onMode, onSignedIn, message = null }: Au
             {t(registering ? 'auth.submitRegister' : 'auth.submitSignIn')}
           </Button>
         </form>
-
-        <a className={s.switcher} href={registering ? '#/login' : '#/register'} onClick={() => onMode(registering ? 'signIn' : 'register')}>
-          {t(registering ? 'auth.toSignIn' : 'auth.toRegister')}
-        </a>
       </div>
 
       <div className={s.authLang}>

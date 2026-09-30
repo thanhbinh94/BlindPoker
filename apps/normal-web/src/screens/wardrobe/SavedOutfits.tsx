@@ -205,7 +205,17 @@ export function SavedOutfits({ api, outfits, draft, items, bases, onOutfitsChang
         })}
       </div>
 
-      <Modal open={dialog !== null} title={dialogTitle} closeLabel={t('wardrobe.close')} onClose={() => setDialog(null)}>
+      <Modal
+        open={dialog !== null}
+        title={dialogTitle}
+        closeLabel={t('wardrobe.close')}
+        onClose={() => setDialog(null)}
+        footer={
+          <Button variant="gold" loading={busy} onClick={() => void submitDialog()}>
+            {dialogTitle}
+          </Button>
+        }
+      >
         <Field label={t('outfits.nameLabel')}>
           <input
             type="text"
@@ -214,9 +224,6 @@ export function SavedOutfits({ api, outfits, draft, items, bases, onOutfitsChang
             onChange={(event) => setDialog((prev) => (prev === null ? prev : { ...prev, name: event.target.value }))}
           />
         </Field>
-        <Button variant="gold" loading={busy} onClick={() => void submitDialog()}>
-          {dialogTitle}
-        </Button>
       </Modal>
     </section>
   )

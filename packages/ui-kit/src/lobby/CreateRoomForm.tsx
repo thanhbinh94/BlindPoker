@@ -153,32 +153,38 @@ export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem',
           />
         </Field>
 
-        {mode === 'holdem' ? (
-          <HoldemFields
-            tierIndex={tierIndex}
-            onTierIndex={setTierIndex}
-            minBuyInBB={minBuyInBB}
-            maxBuyInBB={maxBuyInBB}
-            onMinBuyInBB={setMinBuyInBB}
-            onMaxBuyInBB={setMaxBuyInBB}
-            disabled={busy}
-            lang={lang}
-          />
-        ) : (
-          <BlindFields
-            holeCards={holeCards}
-            onHoleCards={setHoleCards}
-            decisionMode={decisionMode}
-            onDecisionMode={setDecisionMode}
-            fixedWager={fixedWager}
-            onFixedWager={setFixedWager}
-            botCount={bots}
-            onBotCount={setBotCount}
-            maxBots={maxPlayers - 1}
-            disabled={busy}
-            lang={lang}
-          />
-        )}
+        {/* One box for both modes' fields, as tall as the taller of the two, so flipping the mode never moves the
+            dialog's edge (No12; the heights are in lobby.module.css). */}
+        <div className={cx(s.wide, s.modeBox)}>
+          <div className={cx(s.grid, s.modeFields)}>
+            {mode === 'holdem' ? (
+              <HoldemFields
+                tierIndex={tierIndex}
+                onTierIndex={setTierIndex}
+                minBuyInBB={minBuyInBB}
+                maxBuyInBB={maxBuyInBB}
+                onMinBuyInBB={setMinBuyInBB}
+                onMaxBuyInBB={setMaxBuyInBB}
+                disabled={busy}
+                lang={lang}
+              />
+            ) : (
+              <BlindFields
+                holeCards={holeCards}
+                onHoleCards={setHoleCards}
+                decisionMode={decisionMode}
+                onDecisionMode={setDecisionMode}
+                fixedWager={fixedWager}
+                onFixedWager={setFixedWager}
+                botCount={bots}
+                onBotCount={setBotCount}
+                maxBots={maxPlayers - 1}
+                disabled={busy}
+                lang={lang}
+              />
+            )}
+          </div>
+        </div>
 
         <label className={cx(s.check, s.wide)}>
           <input

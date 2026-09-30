@@ -536,20 +536,6 @@
   margin-top: var(--space-1);
 }
 
-.switcher {
-  align-self: center;
-  padding: var(--space-2);
-  color: var(--ink-muted);
-  font-family: var(--font-body);
-  font-size: 0.875rem;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-.switcher:hover {
-  color: var(--ink);
-}
-
 /* ── document pages ───────────────────────────────────────────────────────── */
 
 /* The kit's two measures (layout audit U3): narrow here, wide for the wardrobe below and the lobby. */
@@ -816,6 +802,11 @@
   font-weight: 600;
 }
 
+/* The table a hand was played at: a name the player typed, so it may be one long unbroken word. */
+.handTable {
+  overflow-wrap: anywhere;
+}
+
 
 /* A movement reads by colour *and* by sign: the sign is in the text, so a red-green blindness costs nothing. */
 .amount {
@@ -901,13 +892,6 @@
    to see a figure in. */
 .wide {
   max-width: calc(var(--measure-wide) + 2 * var(--space-4));
-}
-
-.stageActions {
-  display: flex;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  align-items: center;
 }
 
 /* ── the inventory ─────────────────────────────────────────────────────────── */

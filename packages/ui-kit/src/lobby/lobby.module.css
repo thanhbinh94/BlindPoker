@@ -241,6 +241,36 @@
   grid-column: 1 / -1;
 }
 
+/* The fields that depend on the mode (No12). Hold'em brings three (blind tier, buy-in min and max, each buy-in with a
+   hint line) and Blind Poker four (its table-limit hint runs two lines), so the dialog used to grow or shrink
+   when the host flipped between them. They sit in a grid of their own — the form's own `.grid`, so the rows come
+   out as they did when the fields were direct children — and this grid reserves the taller of the two heights.
+   `align-content: start` keeps the reserved height from stretching the rows apart.
+
+   Two columns (the dialog on a desktop or tablet): Hold'em measures 214 px and Blind 206 px in the real build,
+   Vietnamese and English alike, so the reserve is 14rem — a little over the taller of the two, so a line of
+   slack in the hint text does not undo it. The columns are the grid's `auto-fit` ones, so the box is a size
+   container and the reserve applies from the width at which they turn into two: 2 × 10.5rem + the 1rem gap.
+   A change to a field that makes either mode taller than the reserve fails the create-room height check in
+   e2e/normal.spec.ts.
+
+   One column (a phone) reserves nothing: there the dialog is as tall as its `max-height` (86dvh) in both modes —
+   the fields are taller than the screen — so its outer box already does not move, and a reserve would only add
+   blank space under the shorter Hold'em fields. */
+.modeBox {
+  container-type: inline-size;
+}
+
+.modeFields {
+  align-content: start;
+}
+
+@container (min-width: 22rem) {
+  .modeFields {
+    min-height: 14rem;
+  }
+}
+
 .input {
   width: 100%;
   min-height: var(--tap);
@@ -295,15 +325,19 @@
    It sticks to the dialog's *border*, not to the top of its bottom padding: stuck at `bottom: 0` it left the
    dialog's own padding strip open under it, and the field scrolling past showed through there, cut in half
    below the button (layout audit L6, 2026-09-28). The negative margin gives that strip back at the end of the
-   scroll, so the resting layout is what it was. */
+   scroll, so the resting layout is what it was.
+   Centred like every other dialog's action row (`Modal`'s `.dialogFoot`, No17), and the same distance below the
+   form: the form's own gap (--space-4) + this margin + this padding (--space-3) come to --space-5. The margin is
+   negative, so the fade above the button moves up over the empty gap and the footer's box does not change. */
 .formFoot {
   position: sticky;
   bottom: calc(-1 * var(--dialog-pad, 0px));
   z-index: 1;
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: center;
   gap: var(--space-3);
+  margin-top: calc(var(--space-5) - var(--space-4) - var(--space-3));
   margin-bottom: calc(-1 * var(--dialog-pad, 0px));
   padding: var(--space-3) 0 calc(var(--space-4) + var(--dialog-pad, 0px));
   background: linear-gradient(180deg, transparent, var(--bg-elev) 18px);

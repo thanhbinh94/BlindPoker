@@ -79,7 +79,8 @@ function App({ lang }: { lang: Language }) {
 
 `RoomScreen` fills the viewport by design (see [Responsive rules](#responsive-rules)). If the app draws its own bar
 above it, set `--bp-stage` on the room's container: `--bp-stage: calc(100dvh - 64px)`, or `100%` inside a flex column
-that already has a height.
+that already has a height. `LobbyScreen` takes the same value as its minimum height, so a short lobby under the bar
+fills the window without adding the bar's height as a scrollbar (a bare `100vh` did, review 2026-09-29).
 
 ---
 
@@ -212,13 +213,27 @@ engine's layered pots straight from `SETTLEMENT.pots`, each with its `amount`, `
 prints a main/side-pot ledger whenever there is more than one, which is the only way a hand with a short all-in
 reads as fair. `pots` is empty for a cancelled hand. A cancelled hand's `reason` is an operator-facing token, so it
 is normalised to a `cancel.*` key and translated; the raw token is never rendered. Pass `onDismiss` to make the card
-closable — `RoomScreen` does, and the between-hands countdown moves to the tray once it is waved off.
+closable — `RoomScreen` does, and the between-hands countdown moves to the tray once it is waved off. While the card
+is up, the countdown is the card's own last line: `RoomScreen` passes it as `countdown`, and `HandResult` prints it at
+the right end of the footer, beside the fee, in a `<p aria-live="off">` — the card is a `role="status"` region, and a
+line ticking inside it would otherwise have the whole receipt read out every second (review 2026-09-29, No2: printed
+under the card, it landed on the viewer's own seat). It is never inside a row's `<li>` or the fee line, which is what
+the e2e suites read the card by. The card is at most as tall as the felt (`max-height: 100%` of `RoomScreen`'s
+overlay): past that its body — the rows, then the pot ledger under them — scrolls inside it, and the title, the close
+button and the footer stay put. While the body can still scroll down, its foot fades out (a CSS mask, switched by
+`data-more`, which `HandResult` measures on scroll and on resize), so a ledger below the fold reads as more to come;
+scrolled to the end, the fade goes.
 
 **Seat slots.** A seat has two places the host app may write into, and they are threaded identically —
 `RoomScreen` → `PokerTable` → `Seat`. `chibiFor(player)` replaces the initial disc; `captionFor(player)` adds one
 muted, single-line, truncated line under the name (a title, a rank), and returning `null`/`undefined` leaves the
 plate exactly as it was. The caption is the plate's only decoration rather than state, so the compact plates
 (seven opponents and up in the stack layout) drop it to keep the third row on screen.
+
+**Under the plate, two lines at most** (review 2026-09-29, No2): the badges with the bet chip beside them, then the
+hand's name with the payout. On the ring those lines may run wider than the plate, centred under it — up to 30 % of
+the table's width for an opponent and 48 % for the viewer's own seat at six seats or fewer (the neighbours are a
+third of the table away), the plate's own width and 30 % from seven seats up — and wrap only past that.
 
 Under 768 px the table becomes the vertical stack (spec §27.1): opponents, felt, your own seat. **The opponents'
 strip never scrolls inside itself** — it wraps, holds a floor of two plate rows, and from seven seats up the plates
@@ -256,7 +271,12 @@ seat's `ChibiConfig`; a bot never asks it — `PokerTable` draws `botChibi` for 
 
 `HoldemFields` (blind tier plus the buy-in window in big blinds) and `BlindFields` (hole cards, decision mode, fixed
 wager — whose field carries the table-limit hint, "Table limit per player: … (5× the wager)" — and bot filler) are the mode-specific building blocks `CreateRoomForm` swaps between; both are fully controlled,
-and an app only reaches for them directly when it builds its own room form.
+and an app only reaches for them directly when it builds its own room form. The swap happens in a box that reserves
+the taller mode's height in the two-column layout (`.modeFields`: 14rem from 22rem of form width up), so the
+create-room dialog does not change height when the host flips the mode; a field added to either set must fit that
+height or raise it (the create-room height check in `apps/normal-web/e2e/normal.spec.ts` fails when it does not).
+On a phone (one column) nothing is reserved: the dialog is as tall as its `max-height` in both modes, so it does not
+move either.
 
 ### Primitives
 
@@ -267,7 +287,7 @@ and an app only reaches for them directly when it builds its own room form.
 | `Select<T>` | `value`, `options`, `onChange`, plus `<select>` attributes |
 | `Panel` | `title?`, `tone?` (`ink`/`parchment`/`felt`), `className?` |
 | `Badge` | `tone` (`gold`/`red`/`teal`/`muted`) |
-| `Modal` | `open`, `title`, `onClose`, `closeLabel`, `children` |
+| `Modal` | `open`, `title`, `onClose`, `closeLabel`, `children`, `footer?` — the action row: centred, `--space-5` below the body, `--space-3` between buttons; a dialog puts its buttons here and never spaces them itself. A form dialog keeps its submit button inside the `<form>` (the create-room dialog's sticky `.formFoot`, centred to match) |
 | `Segmented<T>` | `options` (`{ value, label }[]`), `value`, `onChange`, `label` (the group's name), `disabled?`, `className?` — the one "pick one of a few" pill: language, lobby filter, create-form mode, theme |
 
 ### Router
@@ -340,13 +360,78 @@ Breakpoints 480 / 768 / 1024, per spec §27.1. No horizontal page scroll at any 
 - **The ring table is height-led.** The oval takes the space between the header and the tray and derives its width
   from it (2:1, capped at 980 × 490). Seats ride the rim at fixed percentages of that box, spaced by equal *arc
   length* so a nine-handed table spreads evenly instead of bunching on the flanks; from seven seats up the plates
-  go compact. Standing alone in a box of unknown height, `PokerTable` falls back to its intrinsic size.
+  go compact. Standing alone in a box of unknown height, `PokerTable` falls back to its intrinsic size. On a felt
+  400 px tall or less (a laptop window with the tray up: 1366 × 768, 1536 × 730, 1280 × 720) the cards and the gaps
+  in the seat blocks shrink — never the plates, which carry the names — so the viewer's own block, cards, plate and
+  its two lines, stays inside the stage.
+- **The room fits the screen** (review 2026-09-29, No2). With six seats, neither the page nor the stage scrolls at
+  1920 × 940 (the user's screen), 1536 × 730, 1280 × 720 or 1366 × 768, whether the room is taking seats, a hand is
+  on with the tray up, or the result card is showing: `normal.spec.ts` asserts it at all four. The worst each state
+  can show — every plate with a caption, six hands shown down with two side pots, the Hold'em sizing tray — is
+  frozen in the playground at `#worst/<waiting|turn|result>/<seats>/<vi|en>` for measuring against a new size.
 - **Under 768 px wide *or* 620 px tall** the table switches to the vertical stack: opponents on top (that strip is
   the part that scrolls), board in the middle, the viewer's own seat pinned above the tray. A short window has no
   more to give than a narrow one, so both take the same layout. `layout="ring" | "stack"` overrides the choice.
 - Under 768 px the bet slider drops out (a thumb cannot hit a one-point step); the presets and the number input
   take its place full-width, and the room header and tray tighten so the viewer's own cards stay on screen.
 - Touch targets are ≥ 44 px (`--tap`) wherever the pointer is coarse.
+
+---
+
+## The text-overlap rule
+
+**No visible text is drawn over other visible text**, on any screen, at any viewport (review 2026-09-29, No11b: the
+"Ván tiếp theo sau 6 giây" countdown printed across the viewer's own seat plate, `No2-1`). The Normal e2e asserts it
+with `expectNoTextOverlap(page, label, opts?)` from `apps/normal-web/e2e/overlap.ts`, whose own proof is
+`e2e/overlap.spec.ts` (static fixtures, no account). A spec that calls it sets
+`test.use({ contextOptions: { reducedMotion: 'reduce' } })` — or calls it through `expectNoTextOverlapAt(page, label,
+viewports?)` (`e2e/support.ts`), which switches reduced motion on for the reading (and off again when the test was
+not running under it), sets each viewport in turn and walks a page taller than the window down in window-high
+steps. The helper waits for fonts and for *finite* animations (2 s at most — an infinite one is never waited on),
+then measures once:
+
+- **Text runs, not boxes.** Every non-blank text node's line boxes (`Range.getClientRects()`), clipped by every
+  ancestor that clips its overflow (an ellipsis, a scroll area — an absolutely positioned box escapes the ones below
+  its containing block) and by the viewport. Text in `svg`, `[role=img]` or `[aria-hidden=true]` is artwork and is
+  skipped, as is anything failing `checkVisibility`.
+- **Cut to the line-height, nothing more.** A line box is the font's full height (about 1.25 em for Be Vietnam Pro
+  and Fraunces). Where the element's computed line-height is smaller — `line-height: 1` — each box loses half the
+  difference at the top and half at the bottom, so consecutive lines of one block just touch instead of overlapping.
+  Under `normal` or any line-height at least the box's height nothing is cut, so two loosely set texts whose boxes
+  run 4–5 px into each other (the countdown over the viewer's badges at 1920×940) are an overlap.
+- **Layers.** Text inside a modal (`[role=dialog][aria-modal=true]`) or the toast stack is compared only with its own
+  layer; everything else is one page layer.
+- **Overlap** is two runs of one layer intersecting by more than 2 px in both axes — unless the lower one is covered:
+  at the centre of the intersection, some element painted above it (not its own ancestor) has a background at least
+  0.9 opaque — a solid `background-color`, or a gradient whose every stop is — after multiplying in its opacity. A
+  card's own title over the felt text beneath it, or a sticky footer over the fields it scrolls over, is covering, not
+  overlapping.
+- **The failure** lists each pair: both texts (trimmed to 40 characters), their measured boxes and a short CSS path.
+
+**`data-overlap-ok="<reason>"`** on an element exempts the text inside it. It is for the rare overlap that is there by
+design, the reason is mandatory (an empty attribute exempts nothing), and it is never a way to silence a layout bug.
+The helper's `ignore` option (CSS selectors skipped entirely) is for the same kind of rare, documented case.
+
+What the rule does **not** catch:
+
+- **Text against a box.** Text touching or crossing a card's or a badge's edge is a box-spacing problem: `No11-1`'s
+  "Tay nóng" card sitting on the "HUY HIỆU" heading is one, and it is the grid spacing assertion (group gap ≥ 16 px,
+  equal card heights in a row) that covers it. Likewise text over a badge's pill that stays clear of the badge's own
+  text.
+- **Words inside `aria-hidden`.** An `aria-hidden="true"` subtree is skipped even when it shows real words to the eye
+  — the wardrobe cards' rarity line (`RarityLabel`, "THƯỜNG", "HIẾM") is one — so an overlap involving such text goes
+  unreported. The rule does not look inside; words that need checking have to live outside the hidden subtree.
+- **What is not on screen or not a text node:** text below the fold (scroll and call again), form-control values and
+  placeholders, CSS generated content (`::before { content }`).
+- **Partial covers:** the cover test samples one point, the centre of the intersection; a cover that is a
+  pseudo-element, or less than 0.9 opaque, does not count as hiding anything.
+
+**Where it runs** (Plan 16, Task 9): `docs/test-matrix.md`, section "Review 2026-09-29 — the text-overlap rule
+(No11b)", lists every screen and state that is read, the sizes each is read at, and the tests. In short: the default
+e2e reads the main screens at 1920 × 940, 1366 × 768 and 375 × 812 inside tests that already go there — not every
+state at every size (the wardrobe's other six tabs, for one, are not read) — and the operation-test pack reads
+Hold'em hands at its own 1440 × 900 and those three sizes, Blind hands at 1440 × 900 only. No screen carries a
+`data-overlap-ok` today.
 
 ---
 
@@ -436,7 +521,10 @@ The kit's own tests run under jsdom with `@testing-library/react`: `pnpm --filte
 
 For eyeballing changes, `pnpm --filter @bp/ui-kit playground` starts Vite on port 5175 with an engine-driven mock
 server — real `@bp/core` hands, real `filterEvent` hole-card hiding, real reducer. Controls: game mode, room/lobby
-view, seat count (4/6/9), theme, language, forced stack layout, and "next hand".
+view, seat count (4/6/9), theme, language, forced stack layout, and "next hand". `#worst/<state>/<seats>/<lang>`
+(`playground/scenarios.tsx`) skips the engine and freezes the room at its tallest — `waiting`, `turn` (the Hold'em
+sizing tray, my turn ring running) or `result` (every seat shown down, two side pots, the countdown on the card) —
+full-viewport, for measuring a layout against a screen size.
 
 ---
 
