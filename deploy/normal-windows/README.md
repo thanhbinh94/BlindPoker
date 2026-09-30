@@ -151,9 +151,15 @@ Tham số có thể dùng:
 | `-LanIp 192.168.1.50` | Bỏ qua bước tự dò card mạng, dùng thẳng địa chỉ này. Xem mục "IP LAN tự dò sai" ngay dưới. |
 | `-AutoStart` | Cho task tự chạy mỗi lần bạn **đăng nhập** Windows (trigger *At log on*). Lần chạy sau không có `-AutoStart` thì trigger bị bỏ — task luôn khớp với lần chạy gần nhất. |
 | `-Foreground` | Cách chạy cũ: server gắn vào cửa sổ PowerShell này. Chỉ dùng để gỡ lỗi — **đóng cửa sổ là server dừng**, không để lại dòng lỗi nào. |
-| `-TaskName Tên` | Đặt tên khác cho scheduled task (mặc định `BlindLuckPoker-Normal`), ví dụ khi chạy hai bản ở hai cổng. Khi đó `stop.ps1` cũng phải có `-TaskName Tên`. |
+| `-TaskName Tên` | Đặt tên khác cho scheduled task (mặc định `BlindLuckPoker-Normal`; chỉ chữ, số và `. _ -`). Khi đó `stop.ps1` cũng phải có `-TaskName Tên`. Muốn chạy **hai bản cùng lúc** thì cần **hai bản checkout** (hai thư mục kit), mỗi bản một `-TaskName` và một cổng — hai lần chạy từ cùng một thư mục dùng chung `normal.pid` và log nên bản thứ hai bị từ chối. |
 
-Log của server nằm ở `normal.log` và `normal.err.log` cạnh script.
+Log của server nằm ở `normal.log` và `normal.err.log` cạnh script. Cảnh báo và lỗi của chính cửa sổ
+PowerShell ẩn (trước khi `node` chạy — ví dụ không tìm thấy `node`, `.env` hỏng, chưa có mạng) nằm ở
+`normal.serve.log`; `run.ps1` in lại nội dung file này khi khởi động.
+
+Mỗi task thuộc về **một thư mục kit**: `run.ps1` chỉ ghi đè, và `stop.ps1` chỉ dừng hay gỡ, task nào có
+lệnh chạy đúng `run.ps1 -Serve` ở thư mục của chính nó. Gặp một task cùng tên của chương trình khác
+(hoặc của bản checkout khác), cả hai script từ chối và không động vào nó.
 
 **Server chạy tách nền như thế nào.** Trước đây server gắn vào cửa sổ PowerShell đã gọi `run.ps1`:
 cửa sổ đó (hoặc phiên chứa nó) đóng là server chết theo, im lặng. Nay `run.ps1` đăng ký một
@@ -233,8 +239,9 @@ Vì vậy, quy tắc vận hành: **kết thúc hết các ván đang chơi và 
 `stop.ps1`** — rời phòng là lúc chồng trên bàn về lại số dư. Kiểm `http://localhost:8080/health` báo
 `"rooms":0` (phòng trống tự đóng sau khoảng một phút) rồi mới dừng.
 
-`stop.ps1` đọc pid trong `normal.pid`, kiểm tra pid đó đúng là một tiến trình `node` (Windows hay
-cấp lại pid cũ cho chương trình khác — script từ chối giết nhầm), rồi `Stop-Process -Force` và xoá
+`stop.ps1` đọc pid trong `normal.pid`, kiểm tra pid đó đúng là một tiến trình `node` đang chạy
+`dist/main.js` (Windows hay cấp lại pid cũ cho chương trình khác, kể cả một `node` khác — script từ
+chối giết nhầm), rồi `Stop-Process -Force` và xoá
 file pid. Sau đó, nếu scheduled task `BlindLuckPoker-Normal` vẫn đang chạy, nó dừng luôn task (dừng
 task thôi thì không đủ: Task Scheduler chỉ tắt cửa sổ PowerShell ẩn, còn `node` vẫn sống — vì vậy
 `node` luôn bị tắt trước). Task **vẫn được giữ lại** để lần `run.ps1` sau dùng tiếp.
@@ -308,10 +315,12 @@ dụng cho trường hợp chạy LAN trực tiếp, không có proxy.
 | `[error] Scheduled task 'BlindLuckPoker-Normal' đang chạy` | Server đã chạy tách nền từ trước (có thể `normal.pid` đã bị xoá). `.\stop.ps1` — nó tìm được `node` của task kể cả khi thiếu `normal.pid` — rồi chạy lại. |
 | `[error] Cổng 8080 đã có một server khác trả lời` | Một server khác (bản khác của repo, một cửa sổ `-Foreground`, …) đang giữ cổng. Tìm nó bằng `Get-NetTCPConnection -LocalPort 8080 -State Listen` (cột `OwningProcess` là pid), hoặc chạy ở `-Port` khác. |
 | `[error] Không đăng ký được scheduled task` | Máy bị chính sách công ty chặn Task Scheduler, hoặc dịch vụ Task Scheduler tắt. Chạy `.\run.ps1 -Foreground` và **để cửa sổ đó mở** suốt buổi chơi. |
+| `[error] Đã có một scheduled task tên '...' nhưng nó không chạy ...run.ps1 -Serve` | Tên đó đang được một task khác dùng (chương trình khác, hoặc bộ kit ở thư mục khác). Script không ghi đè. Chạy lại với `-TaskName <tên khác>` (và `stop.ps1 -TaskName <tên đó>`). |
 | Server tắt khi đăng xuất Windows | Đúng thiết kế: task chạy trong phiên đăng nhập của bạn. Đăng nhập lại rồi `.\run.ps1`, hoặc chạy một lần `.\run.ps1 -AutoStart` để lần sau tự chạy. |
 | Máy khác không vào được | Kiểm tra theo thứ tự: tường lửa (mục 6); `HOST=0.0.0.0` trong `.env`; hai máy cùng một mạng; dùng đúng IP script đã in, không phải `localhost`. |
 | Vào được trang nhưng đăng nhập xong lại bị đăng xuất | `COOKIE_SECURE` đang là `true` mà bạn đang dùng `http://`. Đặt lại `COOKIE_SECURE=false` cho mạng LAN. |
 | Trang trắng, hoặc giao diện cũ | `Ctrl` + `F5` để tải lại bỏ cache. Vẫn trắng thì xem `normal.err.log`. |
+| Task có chạy (hoặc tự chạy khi đăng nhập) mà server không lên | Xem `normal.serve.log` cạnh script — lỗi của cửa sổ PowerShell ẩn trước khi `node` chạy nằm ở đó — rồi `normal.err.log`. |
 | Không biết server còn sống không | Mở `http://localhost:8080/health` — trả về JSON là bình thường. Hoặc xem cuối `normal.log`. |
 | Người chơi mất stack sau khi dừng server | Đúng như mô tả ở mục 7. Số dư trong database không bị ảnh hưởng. |
 

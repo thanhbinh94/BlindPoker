@@ -11,7 +11,8 @@
  * URL, and the point of this kit is that the operator brings their own (Neon) — and would register a
  * scheduled task on the machine running the suite. What the dry run proves is everything that
  * happens *before* the first packet: the guards, the substitutions, the launch it would make, and
- * that no secret reaches the console or the task's action.
+ * that no secret reaches the console or the task's action. (One case runs `-Serve` instead, with an
+ * `.env` it refuses at the first line — long before node or any task.)
  *
  * **The script is copied into a fixture tree rather than run in place.** `run.ps1` finds the repo
  * root from `$PSScriptRoot` and refuses to start without both built `dist` trees — so running it in
@@ -25,9 +26,9 @@
  * exercise and saying so is the honest answer.
  */
 import { execFileSync } from 'node:child_process'
-import { copyFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
@@ -333,9 +334,41 @@ describe.skipIf(!HAVE_POWERSHELL)('deploy/normal-windows/run.ps1 -DryRun', () =>
   }, 60_000)
 
   it('refuses a -TaskName Task Scheduler would misread', () => {
-    const run = dryRun('bad-task.env', GOOD_ENV, '-TaskName', 'a\\b')
+    // `\` would make a folder path, `*` a wildcard pattern to the ScheduledTasks cmdlets.
+    for (const bad of ['a\\b', 'BlindLuckPoker-*']) {
+      const run = dryRun('bad-task.env', GOOD_ENV, '-TaskName', bad)
+      expect(run.status).not.toBe(0)
+      expect(run.output).toContain('-TaskName')
+    }
+  }, 60_000)
+
+  it('holds -LanIp to an IPv4 address or a host name before it reaches the task action', () => {
+    for (const bad of ['999.1.1.1', 'two words', 'a"b']) {
+      const run = dryRun('bad-lan.env', GOOD_ENV, '-LanIp', bad)
+      expect(run.status).not.toBe(0)
+      expect(run.output).toContain('-LanIp')
+    }
+    const named = dryRun('named-lan.env', GOOD_ENV, '-LanIp', 'poker-host.local')
+    expect(named.status).toBe(0)
+    expect(actionOf(named.output)).toMatch(/ -LanIp "poker-host\.local"$/)
+  }, 90_000)
+
+  it('under -Serve, names a malformed .env line by number only — on stderr and in normal.serve.log', () => {
+    // -Serve writes into a file that outlives the run, so not even the masked preview a console run
+    // prints may go there. The line is refused in section 3, long before anything would start.
+    const serveLog = join(dirname(script), 'normal.serve.log')
+    const run = runScript(script, '-Serve', '-EnvFile', envFile('serve-bad.env', `postgres://u:TOPSECRET@h/db\n${GOOD_ENV}`))
     expect(run.status).not.toBe(0)
-    expect(run.output).toContain('-TaskName')
+    expect(run.output).toContain('KEY=VALUE')
+    expect(run.output).not.toContain('TOPSECRET')
+    expect(run.output).not.toContain('postgres://')
+
+    expect(existsSync(serveLog)).toBe(true)
+    const logged = readFileSync(serveLog, 'utf8')
+    expect(logged).toContain('KEY=VALUE')
+    expect(logged).not.toContain('TOPSECRET')
+    expect(logged).not.toContain('postgres://')
+    expect(logged).not.toContain(SECRET)
   }, 60_000)
 })
 

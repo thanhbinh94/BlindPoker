@@ -116,25 +116,40 @@ $LAN_TOKEN = '<IP-LAN>'
 $MIN_SECRET_LENGTH = 32
 $DEFAULT_TASK_NAME = 'BlindLuckPoker-Normal'
 
-# Under -Serve nobody reads this process's console: Task Scheduler started it hidden. A refusal
-# there (node missing from the task's PATH, an .env edited since the launcher checked it) is also
-# appended to normal.err.log, which is where the launcher — or an operator — looks when the server
-# never came up. Node's own output replaces the file once node starts, so this only ever holds the
-# words of a -Serve that stopped before node.
-$serveErrorLog = if ($Serve) { Join-Path $PSScriptRoot 'normal.err.log' } else { $null }
+# Under -Serve nobody reads this process's console: Task Scheduler started it hidden. Its warnings
+# and refusals (node missing from the task's PATH, an .env edited since the launcher checked it, a
+# LAN address that never came) are also appended to normal.serve.log — a file of its own, because
+# node's redirected output truncates normal.log and normal.err.log the moment node starts. The
+# launcher reads it back: on failure beside the server's logs, on success to repeat the warnings.
+$serveLog = Join-Path $PSScriptRoot 'normal.serve.log'
+$serveLogWrite = [bool] $Serve
+if ($Serve -and (Test-Path -LiteralPath $serveLog)) { Remove-Item -LiteralPath $serveLog -Force -ErrorAction SilentlyContinue }
+
+function Write-ServeLog([string] $Line) {
+    if (-not $serveLogWrite) { return }
+    try { [System.IO.File]::AppendAllText($serveLog, "$Line`r`n", (New-Object System.Text.UTF8Encoding $false)) } catch { }
+}
 
 function Write-Info([string] $Message) { Write-Output $Message }
 
 # Warnings go to stdout, not the warning stream: an operator reading a console and a test reading a
 # captured pipe should both see them in order, next to the line they qualify.
-function Write-Note([string] $Message) { Write-Output "[warn] $Message" }
+function Write-Note([string] $Message) {
+    Write-ServeLog "[warn] $Message"
+    Write-Output "[warn] $Message"
+}
 
 function Stop-WithError([string] $Message) {
     [Console]::Error.WriteLine("[error] $Message")
-    if ($null -ne $serveErrorLog) {
-        try { [System.IO.File]::AppendAllText($serveErrorLog, "[error] $Message`r`n", (New-Object System.Text.UTF8Encoding $false)) } catch { }
-    }
+    Write-ServeLog "[error] $Message"
     exit 1
+}
+
+# Where a malformed `.env` line is. On a console it comes with a masked, truncated preview; under
+# -Serve the message lands in a file that outlives the run, so even that much of the line stays out.
+function Format-EnvLineContext([string] $Text) {
+    if ($Serve) { return '' }
+    return " — '$(Get-SafeLinePreview $Text)'"
 }
 
 <#
@@ -152,11 +167,11 @@ function Read-EnvFile([string] $Path) {
         if ($line.Length -eq 0 -or $line.StartsWith('#')) { continue }
         $split = $line.IndexOf('=')
         if ($split -lt 1) {
-            Stop-WithError "$Path dòng $($lineNumber): không phải dạng KEY=VALUE — '$(Get-SafeLinePreview $line)'"
+            Stop-WithError "$Path dòng $($lineNumber): không phải dạng KEY=VALUE$(Format-EnvLineContext $line)"
         }
         $key = $line.Substring(0, $split).Trim()
         if ($key -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') {
-            Stop-WithError "$Path dòng $($lineNumber): tên biến không hợp lệ — '$(Get-SafeLinePreview $key)'"
+            Stop-WithError "$Path dòng $($lineNumber): tên biến không hợp lệ$(Format-EnvLineContext $key)"
         }
         $value = $line.Substring($split + 1).Trim()
         if ($value.Length -ge 2) {
@@ -278,11 +293,15 @@ function Read-PidFile([string] $Path) {
     return $null
 }
 
-# The kit's scheduled task, or $null — also when this Windows has no ScheduledTasks module, so the
-# checks built on it degrade to "no task" instead of failing a -Foreground or a stop.
+# The root-folder task named exactly $Name, or $null — also when this Windows has no ScheduledTasks
+# module, so the checks built on it degrade to "no task" instead of failing a -Foreground. The
+# ScheduledTasks cmdlets treat -TaskName as a wildcard pattern; the name is validated in section 0
+# and matched here with -eq as well, so no pattern ever reaches Task Scheduler from this script.
 function Get-KitTask([string] $Name) {
     if ($null -eq (Get-Command Get-ScheduledTask -ErrorAction SilentlyContinue)) { return $null }
-    return Get-ScheduledTask -TaskName $Name -TaskPath '\' -ErrorAction SilentlyContinue
+    $found = @(Get-ScheduledTask -TaskPath '\' -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -eq $Name })
+    if ($found.Count -eq 0) { return $null }
+    return $found[0]
 }
 
 function Test-KitTaskRunning([string] $Name) {
@@ -290,11 +309,63 @@ function Test-KitTaskRunning([string] $Name) {
     return ($null -ne $task -and "$($task.State)" -eq 'Running')
 }
 
+<#
+    Whether the run started at $StartedAt has already ended. Not merely "not Running": right after
+    Start-ScheduledTask the task can still read Ready or Queued, and that is a start still coming,
+    not one that failed. Ended means neither Running nor Queued *and* a last run time at or after the
+    start (less two seconds: Task Scheduler keeps whole seconds). A task that has vanished has ended.
+#>
+function Test-TaskRunEnded([string] $Name, [datetime] $StartedAt) {
+    $task = Get-KitTask $Name
+    if ($null -eq $task) { return $true }
+    $state = "$($task.State)"
+    if ($state -eq 'Running' -or $state -eq 'Queued') { return $false }
+    $info = $task | Get-ScheduledTaskInfo -ErrorAction SilentlyContinue
+    return ($null -ne $info -and $info.LastRunTime -ge $StartedAt.AddSeconds(-2))
+}
+
+<#
+    Whether a task is this kit's: one exec action running powershell.exe on *this* copy of run.ps1
+    with -Serve. A task of the same name that is anything else — another program's, or another
+    checkout's kit — is never overwritten, started or stopped by this script.
+#>
+function Test-OwnTask($Task, [string] $RunScript) {
+    $actions = @($Task.Actions)
+    if ($actions.Count -ne 1 -or $actions[0].CimClass.CimClassName -ne 'MSFT_TaskExecAction') { return $false }
+    $execute = "$($actions[0].Execute)".Trim().Trim('"')
+    $arguments = "$($actions[0].Arguments)"
+    if ([System.IO.Path]::GetFileName($execute) -ine 'powershell.exe') { return $false }
+    if ($arguments.IndexOf("-File `"$RunScript`"", [System.StringComparison]::OrdinalIgnoreCase) -lt 0) { return $false }
+    return ($arguments -match '(^|\s)-Serve(\s|$)')
+}
+
+# `node.exe` running `dist/main.js`, the only command this kit ever starts. A pid in normal.pid is
+# trusted only while this holds: Windows reuses pids, and the one in the file may since have gone to
+# another program — including another node, a dev server say, that must never be taken for ours.
+function Test-KitNode([int] $Id) {
+    $proc = Get-CimInstance Win32_Process -Filter "ProcessId = $Id" -ErrorAction SilentlyContinue
+    if ($null -eq $proc -or "$($proc.Name)" -ine 'node.exe' -or $null -eq $proc.CommandLine) { return $false }
+    $command = "$($proc.CommandLine)".Trim().TrimEnd('"')
+    return ($command.EndsWith('dist/main.js', [System.StringComparison]::OrdinalIgnoreCase) -or
+        $command.EndsWith('dist\main.js', [System.StringComparison]::OrdinalIgnoreCase))
+}
+
 # --- 0. Which launch ---------------------------------------------------------------------------
 
 if ([string]::IsNullOrWhiteSpace($TaskName)) { $TaskName = $DEFAULT_TASK_NAME }
 if ($TaskName -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') {
     Stop-WithError "-TaskName chỉ được gồm chữ, số và . _ - (nhận được '$TaskName')."
+}
+# -LanIp is printed, substituted into ALLOWED_ORIGINS and written into the task's action, so it is
+# held to what it claims to be: a dotted IPv4 address or a plain host name.
+if (-not [string]::IsNullOrWhiteSpace($LanIp)) {
+    $ipv4 = $LanIp -match '^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$' -and
+        @($Matches[1], $Matches[2], $Matches[3], $Matches[4] | Where-Object { [int] $_ -gt 255 }).Count -eq 0
+    $hostName = $LanIp -match '^(?=.{1,253}$)[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$' -and
+        $LanIp -notmatch '^[\d.]+$'
+    if (-not ($ipv4 -or $hostName)) {
+        Stop-WithError "-LanIp phải là một địa chỉ IPv4 (ví dụ 192.168.1.50) hoặc một tên máy, nhận được '$LanIp'."
+    }
 }
 if ($Serve -and ($DryRun -or $Foreground -or $AutoStart)) {
     Stop-WithError '-Serve là tham số nội bộ của scheduled task, không đi cùng -DryRun, -Foreground hay -AutoStart. Chạy .\run.ps1 không có -Serve.'
@@ -372,13 +443,16 @@ if ($problems.Count -gt 0) {
 
 # --- 4. The LAN address -----------------------------------------------------------------------
 
+$lanIpMissing = $false
 if (-not [string]::IsNullOrWhiteSpace($LanIp)) {
     $lanIp = $LanIp
 } else {
     $lanIp = Get-LanIPv4
     # A task started by the -AutoStart logon trigger can run before Wi-Fi has an address; falling
     # back to 'localhost' then would lock every other machine out (CORS) until the next restart.
-    # Only -Serve waits — an operator at a console would rather see the warning now.
+    # Only -Serve waits — an operator at a console would rather see the warning now. The launcher
+    # knows it: when its own detection found nothing, section 11 waits these 60 s longer.
+    $lanIpMissing = ($null -eq $lanIp)
     if ($null -eq $lanIp -and $Serve) {
         $lanDeadline = (Get-Date).AddSeconds(60)
         while ($null -eq $lanIp -and (Get-Date) -lt $lanDeadline) {
@@ -481,11 +555,8 @@ if ($Serve) {
     # A second -Serve beside a live server (by hand, or a task started twice) must not delete the
     # running server's logs and overwrite its pid; the launcher refuses the same case in section 9.
     $recordedPid = Read-PidFile $pidFile
-    if ($null -ne $recordedPid) {
-        $recorded = Get-Process -Id $recordedPid -ErrorAction SilentlyContinue
-        if ($null -ne $recorded -and $recorded.ProcessName -eq 'node') {
-            Stop-WithError "Đã có một server đang chạy (pid $recordedPid, ghi trong $pidFile). -Serve không khởi động bản thứ hai."
-        }
+    if ($null -ne $recordedPid -and (Test-KitNode $recordedPid)) {
+        Stop-WithError "Đã có một server đang chạy (pid $recordedPid, ghi trong $pidFile). -Serve không khởi động bản thứ hai."
     }
 
     foreach ($log in @($outLog, $errLog)) { if (Test-Path -LiteralPath $log) { Remove-Item -LiteralPath $log -Force } }
@@ -563,16 +634,26 @@ if (Test-Path -LiteralPath $pidFile) {
     $existing = (Get-Content -LiteralPath $pidFile -Raw).Trim()
     $alive = $null
     if ($existing -match '^\d+$') { $alive = Get-Process -Id ([int] $existing) -ErrorAction SilentlyContinue }
-    if ($null -ne $alive -and $alive.ProcessName -eq 'node') {
+    if ($null -ne $alive -and $alive.ProcessName -eq 'node' -and (Test-KitNode $alive.Id)) {
         Stop-WithError "Đã có một server đang chạy (pid $existing). Dừng bằng $stopCommand rồi chạy lại."
     }
-    Write-Note "Xoá $pidFile cũ (pid $existing không còn chạy) — dấu vết của một lần tắt không sạch."
+    $staleReason = if ($null -eq $alive) { "pid $existing không còn chạy" } else { "pid $existing giờ là một tiến trình khác, không phải server này" }
+    Write-Note "Xoá $pidFile cũ ($staleReason) — dấu vết của một lần tắt không sạch."
     Remove-Item -LiteralPath $pidFile -Force
 }
 # The pid file is this kit's record, the task is Windows' own: a running task is a server (or one
-# on its way up) even when normal.pid was deleted by hand or not written yet.
-if (Test-KitTaskRunning $TaskName) {
-    Stop-WithError "Scheduled task '$TaskName' đang chạy — server đã được khởi động tách nền từ trước. Dừng bằng $stopCommand rồi chạy lại."
+# on its way up) even when normal.pid was deleted by hand or not written yet. And a task of this
+# name that is not this kit's is refused here, before migrations — section 11 would otherwise have
+# to overwrite it.
+$existingTask = Get-KitTask $TaskName
+if ($null -ne $existingTask) {
+    if (Test-OwnTask $existingTask $PSCommandPath) {
+        if ("$($existingTask.State)" -eq 'Running') {
+            Stop-WithError "Scheduled task '$TaskName' đang chạy — server đã được khởi động tách nền từ trước. Dừng bằng $stopCommand rồi chạy lại."
+        }
+    } elseif (-not $Foreground) {
+        Stop-WithError "Đã có một scheduled task tên '$TaskName' nhưng nó không chạy $PSCommandPath -Serve — của chương trình khác, hoặc của bộ kit ở thư mục khác. Không ghi đè. Chạy lại với -TaskName <tên khác>, hoặc tự xem nó trong Task Scheduler (taskschd.msc)."
+    }
 }
 
 # --- 10. Migrations ----------------------------------------------------------------------------
@@ -631,6 +712,7 @@ $listening = $false
 $exited = $false
 $serverPid = $null
 $exitCodeText = ''
+$waitSeconds = 30
 
 if ($Foreground) {
     $process = Start-Process -FilePath $nodeExe -ArgumentList 'dist/main.js' -WorkingDirectory $serverDir `
@@ -638,7 +720,7 @@ if ($Foreground) {
     $serverPid = $process.Id
     Set-Content -LiteralPath $pidFile -Value $process.Id -Encoding ASCII
 
-    $deadline = (Get-Date).AddSeconds(30)
+    $deadline = (Get-Date).AddSeconds($waitSeconds)
     while ((Get-Date) -lt $deadline) {
         if ($process.HasExited) { break }
         if (Test-ServerListening $effectivePortNum) { $listening = $true; break }
@@ -655,6 +737,12 @@ if ($Foreground) {
 } else {
     if ($null -eq (Get-Command Register-ScheduledTask -ErrorAction SilentlyContinue)) {
         Stop-WithError 'Windows này không có module ScheduledTasks (Register-ScheduledTask). Chạy lại với -Foreground — server khi đó gắn vào cửa sổ này.'
+    }
+    # Section 9 already refused a task of this name that is not this kit's; asked again right here
+    # because -Force below replaces whatever definition carries the name.
+    $currentTask = Get-KitTask $TaskName
+    if ($null -ne $currentTask -and -not (Test-OwnTask $currentTask $PSCommandPath)) {
+        Stop-WithError "Scheduled task '$TaskName' không phải của bộ kit này ($PSCommandPath). Không ghi đè — chạy lại với -TaskName <tên khác>."
     }
     $taskAction = New-ScheduledTaskAction -Execute $taskExe -Argument $taskArguments -WorkingDirectory $kitDir
     # Interactive + Limited: runs as this user, only while they are logged on, never elevated, with no
@@ -678,24 +766,33 @@ if ($Foreground) {
     # -Force replaces the whole definition, so without -AutoStart a trigger left by an earlier
     # -AutoStart run is gone too: the task always matches the last run's flags.
     if ($AutoStart) { $registration['Trigger'] = New-ScheduledTaskTrigger -AtLogOn -User $taskUser }
+    $registeredTask = $null
     try {
-        Register-ScheduledTask @registration | Out-Null
+        $registeredTask = Register-ScheduledTask @registration
     } catch {
         Stop-WithError "Không đăng ký được scheduled task '$TaskName': $($_.Exception.Message) Chạy lại với -Foreground để chạy gắn vào cửa sổ này."
     }
+    if (Test-Path -LiteralPath $serveLog) { Remove-Item -LiteralPath $serveLog -Force }
+
+    # When this launcher's own detection found no LAN address, -Serve spends up to 60 s waiting for
+    # one before it starts node (section 4), and the wait here covers that too.
+    if ($lanIpMissing -and -not $lanIpPassed) { $waitSeconds = 90 }
+    if ($waitSeconds -gt 30) {
+        Write-Note "Chưa có địa chỉ LAN: tiến trình nền chờ card mạng tối đa 60 giây trước khi mở server — chờ tối đa $waitSeconds giây."
+    }
 
     $startedAt = Get-Date
-    Start-ScheduledTask -TaskName $TaskName -TaskPath '\'
+    $registeredTask | Start-ScheduledTask
     # node is not this process's child: its pid comes from the file -Serve writes, and its exit is
     # seen through Get-Process.
-    $deadline = $startedAt.AddSeconds(30)
+    $deadline = $startedAt.AddSeconds($waitSeconds)
     while ((Get-Date) -lt $deadline) {
         if ($null -eq $serverPid) { $serverPid = Read-PidFile $pidFile }
         if ($null -ne $serverPid) {
             if ($null -eq (Get-Process -Id $serverPid -ErrorAction SilentlyContinue)) { $exited = $true; break }
-        } elseif (((Get-Date) - $startedAt).TotalSeconds -ge 3 -and -not (Test-KitTaskRunning $TaskName)) {
-            # The wrapper is gone and no pid was ever seen: -Serve refused before starting node (its
-            # words are in normal.err.log), or node died before the first look at the pid file.
+        } elseif (Test-TaskRunEnded $TaskName $startedAt) {
+            # This start of the task has come and gone and no pid was ever seen: -Serve refused before
+            # starting node (its words are in normal.serve.log), or node died before the first look.
             $exited = $true
             break
         }
@@ -707,25 +804,48 @@ if ($Foreground) {
         # noticed and exited, a moment after node.
         $settleDeadline = (Get-Date).AddSeconds(5)
         while ((Test-KitTaskRunning $TaskName) -and (Get-Date) -lt $settleDeadline) { Start-Sleep -Milliseconds 250 }
-        if (-not (Test-KitTaskRunning $TaskName)) {
-            $taskInfo = Get-ScheduledTaskInfo -TaskName $TaskName -TaskPath '\' -ErrorAction SilentlyContinue
+        $endedTask = Get-KitTask $TaskName
+        if ($null -ne $endedTask -and "$($endedTask.State)" -ne 'Running') {
+            $taskInfo = $endedTask | Get-ScheduledTaskInfo -ErrorAction SilentlyContinue
             if ($null -ne $taskInfo) { $exitCodeText = " (mã $($taskInfo.LastTaskResult))" }
         }
     } elseif ($null -eq $serverPid) {
         $serverPid = Read-PidFile $pidFile
+        if ($null -eq $serverPid -and -not $listening) {
+            # Neither a pid nor an answer, and the task never got going: Task Scheduler did not run it.
+            $idleTask = Get-KitTask $TaskName
+            $idleState = if ($null -ne $idleTask) { "$($idleTask.State)" } else { 'không còn' }
+            if ($idleState -ne 'Running') {
+                Stop-WithError "Scheduled task '$TaskName' không chạy sau $waitSeconds giây (trạng thái: $idleState). Xem Last Run Result trong Task Scheduler (taskschd.msc), hoặc chạy lại với -Foreground."
+            }
+        }
     }
 }
 
 if ($exited) {
     Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
-    $details = ((Read-FileShared $errLog) + (Read-FileShared $outLog)).Trim()
+    $serveText = if ($Foreground) { '' } else { Read-FileShared $serveLog }
+    $details = ($serveText + (Read-FileShared $errLog) + (Read-FileShared $outLog)).Trim()
     if ($details.Length -eq 0) { $details = "(server không in ra gì — xem $outLog và $errLog)" }
     Stop-WithError ("Server thoát ngay khi khởi động$($exitCodeText):`n$details")
 }
 
 $pidText = if ($null -ne $serverPid) { "pid $serverPid" } else { "chưa có $pidFile" }
 if (-not $listening) {
-    Write-Note "Server chưa báo 'listening' sau 30 giây nhưng vẫn đang chạy ($pidText). Xem $outLog và $errLog."
+    Write-Note "Server chưa báo 'listening' sau $waitSeconds giây nhưng vẫn đang chạy ($pidText). Xem $outLog và $errLog."
+}
+if (-not $Foreground) {
+    # -Serve's own warnings (the same checks as this run's, made again in the hidden window).
+    $serveNotes = @((Read-FileShared $serveLog) -split "`r?`n" | Where-Object { $_.Trim().Length -gt 0 })
+    if ($serveNotes.Count -gt 0) {
+        Write-Info "Tiến trình nền (-Serve) ghi trong $($serveLog):"
+        foreach ($note in $serveNotes) { Write-Info "  $note" }
+    }
+    # The address -Serve waited for may have arrived after this launcher's own look.
+    if ($lanIpMissing -and -not $lanIpPassed) {
+        $lateLanIp = Get-LanIPv4
+        if ($null -ne $lateLanIp) { $lanIp = $lateLanIp }
+    }
 }
 
 Write-Info ''
