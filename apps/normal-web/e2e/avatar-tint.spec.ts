@@ -20,23 +20,35 @@ async function openWardrobe(page: Page): Promise<void> {
   await expect(preview(page)).toBeVisible()
 }
 
+/** The `zIndex` each `Chibi` layer carries is its layer number (`layersFor`): 30 body, 40 outfit, 50 face, 60 front hair. */
+interface DrawnLayer {
+  order: number
+  src: string
+  decoded: boolean
+}
+
 /**
  * Every `<img>` in `chibi` is a picture the browser actually decoded (`complete && naturalWidth > 0` — a blocked
- * or failed load is `complete` with a width of 0), and at least `minBlobs` of them are recoloured `blob:` layers.
- * Polled, because the canvas render resolves a beat after the click; the poll's value is the list of problems so
- * a failure names the layers instead of saying "false".
+ * or failed load is `complete` with a width of 0); at least `minBlobs` of them are recoloured `blob:` layers; and
+ * the layers numbered in `blobOrders` are among them. Polled, because the canvas render resolves a beat after the
+ * click; the poll's value is the list of problems so a failure names the layers instead of saying "false".
  */
-async function expectEveryLayerDecoded(chibi: Locator, minBlobs: number): Promise<void> {
+async function expectEveryLayerDecoded(chibi: Locator, minBlobs: number, blobOrders: readonly number[]): Promise<void> {
   await expect
     .poll(
       async () => {
-        const layers = await chibi.locator('img').evaluateAll((imgs) =>
-          imgs.map((img) => ({ src: (img as HTMLImageElement).getAttribute('src') ?? '', decoded: (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0 })),
+        const layers: DrawnLayer[] = await chibi.locator('img').evaluateAll((els) =>
+          (els as HTMLImageElement[]).map((img) => ({ order: Number(img.style.zIndex), src: img.getAttribute('src') ?? '', decoded: img.complete && img.naturalWidth > 0 })),
         )
-        const problems = layers.filter((l) => !l.decoded).map((l) => `not decoded: ${l.src}`)
+        const problems = layers.filter((l) => !l.decoded).map((l) => `not decoded: L${l.order} ${l.src}`)
         const blobs = layers.filter((l) => l.src.startsWith('blob:')).length
         if (layers.length === 0) problems.push('no layers drawn')
         if (blobs < minBlobs) problems.push(`only ${blobs} blob layers of ${layers.length}, wanted at least ${minBlobs}`)
+        for (const order of blobOrders) {
+          const drawn = layers.find((l) => l.order === order)
+          if (drawn === undefined) problems.push(`no layer L${order} drawn`)
+          else if (!drawn.src.startsWith('blob:')) problems.push(`L${order} is not a recoloured blob: ${drawn.src}`)
+        }
         return problems
       },
       { message: 'every layer of the preview decodes, and the recoloured ones are blob: images', timeout: 15_000 },
@@ -84,10 +96,13 @@ test.describe('Blind Luck Poker Normal — màu tóc, màu mắt', () => {
 
     // `toBeVisible` says yes to an `<img>` the browser refused to load, so it proves nothing here: the
     // Content-Security-Policy `img-src` without `blob:` once left every tinted layer broken (No15, No16) while
-    // this test stayed green. What proves it is that each layer decoded, and that at least three of them (the
-    // hair, the eyes and the outfit each recolour a layer of their own; four blobs were measured) are really
-    // the recoloured images and not the plain fallback.
-    await expectEveryLayerDecoded(preview(page), 3)
+    // this test stayed green. What proves it is that each layer decoded and that the recoloured ones are really
+    // `blob:` images, not the plain fallback. The hair colour alone already recolours three layers (30, 50, 60),
+    // so a count of three would pass with the eyes and the outfit silently falling back: hence at least four, and
+    // two layers named. The face (50) is the one layer whose recolour also paints the eye mask; a layer's tints
+    // are painted in a single canvas job, so a face that is a blob is a face whose eye colour was applied. The
+    // outfit (40) is the coloured t-shirt itself.
+    await expectEveryLayerDecoded(preview(page), 4, [40, 50])
     const finalHash = await chibiHash(preview(page))
     expect(finalHash, 'the eye colour and the outfit redraw the preview too').not.toBe(afterPick)
 
