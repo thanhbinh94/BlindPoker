@@ -99,6 +99,9 @@ export function Seat({
       style={style}
       data-seat={seat.seat}
       data-half={position !== null && position.y < 50 ? 'top' : 'bottom'}
+      // `RoomScreen` measures the viewer's own seat and its plate to stop the result card above them (review round 2,
+      // R2-3). These two markers are that contract; the CSS modules' class names are hashed and are not.
+      data-me={isMe ? 'true' : undefined}
       role="group"
       aria-label={seatLabel}
     >
@@ -110,7 +113,7 @@ export function Seat({
         </div>
       ) : null}
 
-      <div className={s.plate}>
+      <div className={s.plate} data-plate="">
         {/* Every seat gets the same framed disc: a bot's chibi chosen by its id, the app's chibi for a human, and
             the initial when the app has none. The frame is what makes a table of six read as six faces. */}
         <span className={s.avatar} data-face={seat.isBot ? 'bot' : chibi === null ? 'default' : 'app'} aria-hidden="true">

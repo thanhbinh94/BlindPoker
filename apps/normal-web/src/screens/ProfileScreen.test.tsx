@@ -1,3 +1,4 @@
+import type { Language } from '@bp/ui-kit'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -13,6 +14,7 @@ import {
   type NormalApi,
   type PlayerStatsDto,
 } from '../api.js'
+import enNormal from '../locales/en/normal.json'
 import viNormal from '../locales/vi/normal.json'
 import { makeI18n, renderWithI18n } from '../test-i18n.js'
 import { ProfileScreen } from './ProfileScreen.js'
@@ -126,8 +128,9 @@ function stubApi(overrides: Partial<NormalApi> = {}): NormalApi {
   } as unknown as NormalApi
 }
 
-const renderScreen = (api: NormalApi = stubApi()) =>
-  renderWithI18n(<ProfileScreen api={api} lang="vi" balance={123_000} />, makeI18n('vi'))
+// `lang` is both the screen's prop (it drives number, date and case formatting) and the i18n instance's language.
+const renderScreen = (api: NormalApi = stubApi(), lang: Language = 'vi') =>
+  renderWithI18n(<ProfileScreen api={api} lang={lang} balance={123_000} />, makeI18n(lang))
 
 describe('ProfileScreen', () => {
   it('shows one status line while the header, the stats and the history are in flight', () => {
@@ -210,10 +213,11 @@ describe('ProfileScreen', () => {
     expect(hands.getByText('+5.880')).toBeInTheDocument()
     expect(hands.getByText(viNormal.profile.history.won)).toBeInTheDocument()
     expect(hands.getByText(i18n.t('game:hand.fullHouse'))).toBeInTheDocument()
-    // Everyone but me, with the machine marked as one.
+    // Everyone but me, with the machine marked as one — for a screen reader and by italics, no longer by a badge
+    // that made "Bot 5" read "Bot 5 bot" (R2-2): the word is there, and it is visually hidden.
     expect(hands.getByText('Lan')).toBeInTheDocument()
     expect(hands.getByText('Bot 5')).toBeInTheDocument()
-    expect(hands.getByText(viNormal.profile.history.bot)).toBeInTheDocument()
+    expect(hands.getByText(viNormal.profile.history.bot)).toHaveClass('visually-hidden')
     expect(hands.queryByText('Binh')).toBeNull()
   })
 
@@ -227,7 +231,76 @@ describe('ProfileScreen', () => {
     expect(hands.getByText('Đối thủ')).toBeInTheDocument()
     expect(hands.queryByText('Tại bàn')).toBeNull()
     // The seats are the opponents' and nobody else's: the hand's own room name is not among them.
-    expect(hands.getAllByText(/^Tại bàn/)).toHaveLength(1)
+    expect(hands.getAllByText(/^Tại /)).toHaveLength(1)
+  })
+
+  // R2-2: a room called "Bàn 123" used to read "Tại bàn Bàn 123". When the name's first word already is the page
+  // language's word for a table, the line is "Tại {name}"; otherwise the word is added, as before.
+  it.each<[Language, string, string]>([
+    ['vi', 'Bàn 123', 'Tại Bàn 123'],
+    ['vi', 'BÀN VIP', 'Tại BÀN VIP'],
+    ['vi', 'Bàn', 'Tại Bàn'],
+    ['vi', 'Bàn123', 'Tại bàn Bàn123'],
+    ['vi', '123', 'Tại bàn 123'],
+    ['en', 'Table 5', 'At Table 5'],
+    ['en', 'Bàn 5', 'At table Bàn 5'],
+    // Another language's word is only a name: "Table 5" is a room, not the Vietnamese table word.
+    ['vi', 'Table 5', 'Tại bàn Table 5'],
+    // The first word is read as Unicode text: lower case, composed, without the space before it.
+    ['vi', 'bàn 9', 'Tại bàn 9'],
+    ['vi', '  Bàn   9', 'Tại   Bàn   9'],
+    // decomposed: "a" + U+0300 COMBINING GRAVE ACCENT, written as an escape so no formatter can compose it
+    ['vi', 'Ba\u0300n 9', 'Tại Ba\u0300n 9'],
+    // Only the first word counts, and only when it is the whole word.
+    ['vi', 'Phòng Bàn 9', 'Tại bàn Phòng Bàn 9'],
+    ['vi', 'Bàn-9', 'Tại bàn Bàn-9'],
+  ])('says the table once: in %s, a room named "%s" reads "%s"', async (lang, roomName, line) => {
+    const hand: HistoryEntryDto = { ...HAND, roomName }
+    renderScreen(stubApi({ history: vi.fn().mockResolvedValue([hand]) }), lang)
+    const title = (lang === 'vi' ? viNormal : enNormal).profile.history.title
+    const hands = within(await screen.findByRole('list', { name: title }))
+
+    // `getByText` normalises whitespace in what it reads and in what it is given, so the line is compared as
+    // the reader sees it; the room's own words are never rewritten.
+    expect(hands.getByText(line.replace(/\s+/gu, ' '))).toBeInTheDocument()
+    // One table line per row, whichever form it took.
+    expect(hands.getAllByText(lang === 'vi' ? /^Tại / : /^At /)).toHaveLength(1)
+  })
+
+  it('marks a bot seat by italics and a hidden word rather than by a badge, so "Bot 5" never reads "Bot 5 bot" (R2-2)', async () => {
+    renderScreen()
+    await screen.findByRole('heading', { name: 'Bình', level: 2 })
+
+    const hands = within(screen.getByRole('list', { name: viNormal.profile.history.title }))
+    const chip = hands.getByText('Bot 5').parentElement as HTMLElement
+    expect(chip).toHaveAttribute('data-bot', 'true')
+    // For a screen reader the chip is "Bot 5 bot": the hidden word is the same key the badge used to print.
+    const hidden = within(chip).getByText(viNormal.profile.history.bot)
+    expect(hidden).toHaveClass('visually-hidden')
+    expect(chip).toHaveTextContent(`Bot 5 ${viNormal.profile.history.bot}`)
+    // Nothing *visible* says "bot": the only element with exactly that text is the hidden one.
+    const visible = hands.queryAllByText(viNormal.profile.history.bot).filter((el) => el.closest('.visually-hidden') === null)
+    expect(visible).toEqual([])
+  })
+
+  it('draws a human chip plain, even for a human who is called "Bot 5": no names are reserved', async () => {
+    const hand: HistoryEntryDto = {
+      ...HAND,
+      players: [
+        { playerId: 'p1', label: 'Binh', seat: 0, isBot: false, net: 5_880, won: true },
+        { playerId: 'p2', label: 'Lan', seat: 1, isBot: false, net: -4_000, won: false },
+        { playerId: 'p7', label: 'Bot 5', seat: 2, isBot: false, net: -1_880, won: false },
+      ],
+    }
+    renderScreen(stubApi({ history: vi.fn().mockResolvedValue([hand]) }))
+    await screen.findByRole('heading', { name: 'Bình', level: 2 })
+
+    const hands = within(screen.getByRole('list', { name: viNormal.profile.history.title }))
+    for (const name of ['Lan', 'Bot 5']) {
+      const chip = hands.getByText(name).parentElement as HTMLElement
+      expect(chip, name).not.toHaveAttribute('data-bot')
+      expect(within(chip).queryByText(viNormal.profile.history.bot), name).toBeNull()
+    }
   })
 
   it('shows no table line for a hand stored without a room name', async () => {
@@ -236,7 +309,7 @@ describe('ProfileScreen', () => {
     await screen.findByRole('heading', { name: 'Bình', level: 2 })
 
     const hands = within(screen.getByRole('list', { name: viNormal.profile.history.title }))
-    expect(hands.queryByText(/Tại bàn/)).toBeNull()
+    expect(hands.queryByText(/^Tại /)).toBeNull()
     // The rest of the row is unaffected.
     expect(hands.getByText('Đối thủ')).toBeInTheDocument()
     expect(hands.getByText('Bot 5')).toBeInTheDocument()

@@ -634,6 +634,26 @@
   --seat-line: 30cqw;
 }
 
+/* The viewer's own plate grows to its name (review round 2, R2-3): at the seat's 104 px floor a name of seven letters
+   printed as "Tam…". It is a flex item centred in its seat's column, so it widens evenly both ways, and it stops where
+   the neighbours beside the bottom seat begin — 30 % of the table up to six seats (their lines reach 32.9 % from the
+   left, the plate spans 35–65 %), 26 % at seven and eight (their plates end at 32.0 % and 35.3 %; 37–63 %), 22 % at
+   nine (38.0 %; 39–61 %). On the smallest ring, 480 px wide, that leaves 10, 24, 8 and 5 px. A longer name still ends
+   in "…". The opponents' plates keep their seat's width; the phone's own plate (`.mine`) is not on the ring. */
+.ring .seatMe .plate {
+  width: max-content;
+  min-width: 100%;
+  max-width: var(--seat-plate-max, 30cqw);
+}
+
+.ring:is([data-seats='7'], [data-seats='8']) .seatMe {
+  --seat-plate-max: 26cqw;
+}
+
+.ring[data-seats='9'] .seatMe {
+  --seat-plate-max: 22cqw;
+}
+
 /* A ring squeezed into a short stage — a laptop window, or an app with a bar of its own above the room. The plates
    keep their size because they carry the names; the cards and the gaps give, so a hand never lands on the board and
    the viewer's own block — cards, plate, two lines — stays inside the stage above the tray. 400 px of felt is where
@@ -1031,6 +1051,17 @@
     var(--bg-elev);
   box-shadow: var(--shadow-2), 0 0 34px rgba(217, 164, 65, 0.16);
   animation: riseUp 320ms var(--ease) backwards;
+}
+
+/* The card's one live region (review round 2, R2-4): the head, the cancel note and the scrolling body. It wraps them
+   without changing how they lay out — same column, same gap, and it gives where the body used to give, so the card
+   looks as it did. The footer is the card's next child, outside it. */
+.resultLive {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  flex: 0 1 auto;
+  min-height: 0;
 }
 
 .resultHead {

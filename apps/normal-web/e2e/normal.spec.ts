@@ -3,23 +3,28 @@ import { expectNoTextOverlap } from './overlap.js'
 import {
   account,
   createBlindRoom,
+  expectCardClearsMySeat,
   expectCreateRoomKeepsItsHeight,
   expectLobby,
+  expectMyNameWhole,
   expectMySeatLines,
   expectNoSidewaysScroll,
   expectNoTextOverlapAt,
+  expectNoTextOverlapDown,
   expectPageFits,
   expectRoomFits,
   LAPTOP_SCREEN,
   lobbyAvatar,
   OVERLAP_SCREENS,
   parsePoints,
+  PHONE_SCREEN,
   register,
   shot,
   signIn,
   sit,
   unique,
   USER_SCREEN,
+  withBusyLobby,
   type Account,
 } from './support.js'
 
@@ -125,11 +130,12 @@ async function blindHandsPlayed(page: Page, atLeast: number, timeoutMs = 20_000)
 
 /* ── the table ───────────────────────────────────────────────────────────────────────────────────── */
 
-/** The result card dealt over the felt once a hand completes. */
+/**
+ * The result card dealt over the felt once a hand completes: a group named by its title (review round 2, R2-4). Its
+ * live region is an inner `status` holding the title and the rows, so this is the card as a whole — footer included.
+ */
 function resultCard(page: Page): Locator {
-  return page
-    .locator('[role="status"]')
-    .filter({ has: page.getByRole('heading', { name: /Người thắng|Những người thắng|Ván bị hủy/ }) })
+  return page.getByRole('group', { name: /^(Người thắng|Những người thắng|Ván bị hủy)$/ })
 }
 
 const PAYOUT = /\+\s*([\d.,]+)/
@@ -157,14 +163,18 @@ async function uncalledReturn(card: Locator): Promise<{ who: string; amount: num
 }
 
 /**
- * Review 2026-09-29, No2: "Ván tiếp theo sau N giây" is the result card's own last line — inside the card, in an
- * element that does not re-announce the card on every tick (the card is a status region), and in neither a player's
- * row nor the fee line, which is what the rows and the fee are read by.
+ * Review 2026-09-29, No2: "Ván tiếp theo sau N giây" is the result card's own last line — inside the card, outside
+ * its live region (review round 2, R2-4: the region is the inner `status` with the title and the rows; the footer
+ * follows it), so a tick never has the card re-announced — and in neither a player's row nor the fee line, which is
+ * what the rows and the fee are read by.
  */
 async function expectCountdownOnTheCard(card: Locator): Promise<void> {
   const next = card.getByText(/^Ván tiếp theo sau \d+ giây$/)
   await expect(next, 'the countdown is printed on the result card').toBeVisible()
-  await expect(next, 'the countdown does not re-announce the card every second').toHaveAttribute('aria-live', 'off')
+  expect(
+    await next.evaluate((el) => el.closest('[role="status"],[role="alert"],[aria-live="polite"],[aria-live="assertive"]') === null),
+    'the countdown is outside every live region, so it does not re-announce the card every second',
+  ).toBe(true)
   await expect(card.getByRole('listitem').filter({ hasText: 'Ván tiếp theo' }), 'the countdown is no player’s row').toHaveCount(0)
   const fee = card.getByText(/^Phí bàn/)
   if ((await fee.count()) > 0) expect(await fee.innerText(), 'the fee line is the fee alone').not.toContain('Ván tiếp theo')
@@ -380,6 +390,8 @@ test.describe('Blind Luck Poker Normal', () => {
     await expect(page.getByRole('button', { name: /^Chơi\b/ })).toBeVisible()
     await expectRoomFits(page, 'in hand, the tray up')
     await expectMySeatLines(page, who.displayName, 'in hand')
+    // Review round 2, R2-3: the viewer's own name is whole on its plate at every size.
+    await expectMyNameWhole(page, who.displayName, 'in hand')
     await expectNoTextOverlapAt(page, 'room, in hand', OVERLAP_SCREENS)
 
     await sitOutAndPlay(page)
@@ -391,11 +403,34 @@ test.describe('Blind Luck Poker Normal', () => {
     await expect(card, 'the card stays on the felt').toBeVisible()
     await expectRoomFits(page, 'the result card')
     await expectMySeatLines(page, who.displayName, 'the result card')
+    // R2-3: and the held card stops above that seat on every desktop size, still tall enough to read.
+    await expectMyNameWhole(page, who.displayName, 'the result card')
+    await expectCardClearsMySeat(page, card, who.displayName)
     await expectNoTextOverlapAt(page, 'room, result card', OVERLAP_SCREENS)
     await shot(page, 'room-result-desktop')
 
     await page.getByRole('button', { name: 'Rời phòng' }).click()
     await expect(page).toHaveURL(/#\/lobby$/)
+
+    // --- 7. a busy lobby: six rooms of every kind (review round 2, R2-1) ---------------------------------
+    // Last, because the socket route that `withBusyLobby` sets up stays on the page. A room with only bots in it closes at
+    // once, so the lobby above held none or one; here the server's `ROOM_LIST` is answered with `BUSY_LOBBY` — Hold'em and
+    // Blind, open, in a hand and closing, a lock, two names that wrap — and the lobby must still fit the player's screen
+    // with no text over text.
+    await withBusyLobby(page)
+    const tickets = page.getByRole('button', { name: /^Vào phòng — / })
+    await expect(tickets, 'the six fixture rooms are six tickets').toHaveCount(6)
+    // The tickets arrive over the socket after the page's own text: any face they ask for first must land before the fit.
+    await page.evaluate(() => document.fonts.ready)
+    await expectPageFits(page, 'a lobby of six rooms', USER_SCREEN)
+    for (const ticket of await tickets.all()) await expect(ticket, `${await ticket.getAttribute('aria-label')} is whole on screen`).toBeInViewport({ ratio: 1 })
+    await shot(page, 'lobby-busy-desktop')
+    await expectNoTextOverlapAt(page, 'lobby, six rooms', OVERLAP_SCREENS)
+    // A phone holds them in one column, taller than the window: it scrolls down, never sideways, and is read all the way.
+    await page.setViewportSize(PHONE_SCREEN)
+    await expectNoSidewaysScroll(page)
+    await expectNoTextOverlapDown(page, 'lobby, six rooms, 375×812')
+    await shot(page, 'lobby-busy-mobile')
     await page.emulateMedia({ reducedMotion: null })
   })
 

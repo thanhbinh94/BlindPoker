@@ -486,6 +486,100 @@ describe('RoomScreen', () => {
     expect(screen.queryByRole('heading', { name: 'Winner' })).toBeNull()
   })
 
+  // Review round 2, R2-3: on a short stage the result card covered the viewer's own seat. The overlay's foot now stops
+  // above that seat when there is room for the card there — jsdom lays nothing out, so the boxes are pinned here.
+  describe('the result card stops above the viewer’s own seat', () => {
+    const box = (top: number, bottom: number): DOMRect =>
+      ({ top, bottom, left: 0, right: 900, x: 0, y: top, width: 900, height: bottom - top, toJSON: () => ({}) }) as DOMRect
+    /** The stage 100–700 px, the viewer's seat from 480 px with its plate from 540 px: room for the card above it all. */
+    const pinBoxes = () =>
+      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+        if (this.tagName === 'MAIN') return box(100, 700)
+        if (this.getAttribute('data-me') === 'true') return box(480, 680)
+        if (this.hasAttribute('data-plate') && this.closest('[data-me="true"]') !== null) return box(540, 590)
+        return box(0, 0)
+      })
+    const finished = (mySeat: number | null) =>
+      makeHand({
+        phase: 'COMPLETE',
+        mySeat,
+        actingSeat: null,
+        result: { payouts: [{ seat: 0, amount: 600 }], pots: [], fee: 0, showdown: null, carryOverOut: 0, uncalledReturned: null, cancelled: false, reason: null },
+      })
+    const seatedRoom = makeRoom({
+      players: [
+        makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'IN_HAND', stack: 20_400 }),
+        makePlayer({ playerId: 'me', displayName: 'Mai', seat: 2, status: 'IN_HAND', stack: 19_800 }),
+      ],
+    })
+    const overlayOf = (): HTMLElement => screen.getByRole('group', { name: 'Winner' }).parentElement!
+
+    it('pads the overlay by the seat block plus the gap while the card is up', () => {
+      const spy = pinBoxes()
+      try {
+        wrap(fakeClient(makeState({ room: seatedRoom, hand: finished(2) })))
+        // 700 − 480 + 8: the stage ends 8 px above the top of the viewer's seat block
+        expect(overlayOf().style.getPropertyValue('--seat-clearance')).toBe('228px')
+      } finally {
+        spy.mockRestore()
+      }
+    })
+
+    it('leaves a spectator’s card the whole stage', () => {
+      const spy = pinBoxes()
+      try {
+        const watching = makeRoom({
+          players: [
+            makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'IN_HAND', stack: 20_400 }),
+            makePlayer({ playerId: 'me', displayName: 'Mai' }),
+          ],
+        })
+        wrap(fakeClient(makeState({ room: watching, hand: finished(null) })))
+        expect(document.querySelector('[data-me]')).toBeNull()
+        expect(overlayOf().style.getPropertyValue('--seat-clearance')).toBe('')
+      } finally {
+        spy.mockRestore()
+      }
+    })
+
+    it('clears the viewer’s seat once they take one under the card, and gives the stage back when they leave it', () => {
+      const spy = pinBoxes()
+      try {
+        const hand = finished(null)
+        const watching = makeRoom({
+          players: [
+            makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'IN_HAND', stack: 20_400 }),
+            makePlayer({ playerId: 'me', displayName: 'Mai' }),
+          ],
+        })
+        const { view } = wrap(fakeClient(makeState({ room: watching, hand })))
+        expect(overlayOf().style.getPropertyValue('--seat-clearance')).toBe('')
+        // nothing on the stage changes size when a seat is taken: the hook looks again because the viewer's seat did
+        view.rerender(screenFor(fakeClient(makeState({ room: seatedRoom, hand }))))
+        expect(overlayOf().style.getPropertyValue('--seat-clearance')).toBe('228px')
+        view.rerender(screenFor(fakeClient(makeState({ room: watching, hand }))))
+        expect(overlayOf().style.getPropertyValue('--seat-clearance')).toBe('')
+      } finally {
+        spy.mockRestore()
+      }
+    })
+
+    // The overlay is the card's own wrapper, so this proves only that the two leave together; the hook's own reset on
+    // switching off is `seat-clearance.test.ts`'s.
+    it('takes the overlay away with the card when it is waved off', async () => {
+      const spy = pinBoxes()
+      try {
+        wrap(fakeClient(makeState({ room: seatedRoom, hand: finished(2) })))
+        expect(overlayOf().style.getPropertyValue('--seat-clearance')).toBe('228px')
+        await userEvent.click(screen.getByRole('button', { name: 'Close' }))
+        expect(screen.queryByRole('group', { name: 'Winner' })).toBeNull()
+        expect(document.querySelector('[style*="--seat-clearance"]')).toBeNull()
+      } finally {
+        spy.mockRestore()
+      }
+    })
+  })
+
   // Review 2026-09-29, No2: printed under the card, the countdown landed on the viewer's own seat. It is the card's
   // footer line now, and it moves to the tray only once the card has been waved off.
   it('counts down to the next deal on the result card, and in the tray once the card is closed', async () => {
@@ -504,10 +598,10 @@ describe('RoomScreen', () => {
     })
     wrap(fakeClient(makeState({ room, hand })))
 
-    const card = screen.getAllByRole('status').find((el) => within(el).queryByRole('heading', { name: 'Winner' }) !== null)
-    expect(card).toBeDefined()
-    const next = within(card!).getByText((_, el) => el?.textContent === 'Next hand in 5 sec' && el.tagName === 'P')
-    expect(next).toHaveAttribute('aria-live', 'off')
+    const card = screen.getByRole('group', { name: 'Winner' })
+    const next = within(card).getByText((_, el) => el?.textContent === 'Next hand in 5 sec' && el.tagName === 'P')
+    // R2-4: outside every live region, so a screen reader that ignores a nested `aria-live="off"` still keeps quiet
+    expect(next.closest('[role="status"], [role="alert"], [aria-live="polite"], [aria-live="assertive"]')).toBeNull()
     const controls = screen.getByRole('group', { name: 'Table controls' })
     expect(within(controls).queryByText(/Next hand in/)).toBeNull()
 

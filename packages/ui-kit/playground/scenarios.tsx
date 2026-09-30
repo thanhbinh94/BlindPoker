@@ -20,6 +20,10 @@ import { RoomScreen } from '../src/screens/RoomScreen.js'
  *
  * Every player has a caption (the Normal edition prints a title there), so every plate runs three lines. The room
  * takes the whole viewport, as Normal's room route does; `seats` is 2–9 (6 by default), `lang` `vi` (default) or `en`.
+ *
+ * An optional fifth segment, `#worst/<state>/<seats>/<lang>/long`, gives the viewer a 30-character name
+ * (`LONG_NAME`) — longer than the own plate's cap at any seat count, so it shows where the plate stops widening and
+ * the name ends in "…" (review round 2, R2-3). Without it the viewer keeps `NAMES[0]`, which earlier measurements use.
  */
 
 export type WorstState = 'waiting' | 'turn' | 'result'
@@ -28,23 +32,28 @@ export interface WorstSpec {
   state: WorstState
   seats: number
   lang: Language
+  /** The viewer's own name is `LONG_NAME` rather than `NAMES[0]`. */
+  long: boolean
 }
 
 const STATES: readonly WorstState[] = ['waiting', 'turn', 'result']
 
-/** Reads `#worst/<state>/<seats>/<lang>`; `null` for any other hash. */
+/** Reads `#worst/<state>/<seats>/<lang>[/long]`; `null` for any other hash. */
 export function parseWorstHash(hash: string): WorstSpec | null {
-  const [head, state, seats, lang] = hash.replace(/^#/, '').split('/')
+  const [head, state, seats, lang, long] = hash.replace(/^#/, '').split('/')
   if (head !== 'worst') return null
   const n = Number(seats ?? 6)
   return {
     state: STATES.includes(state as WorstState) ? (state as WorstState) : 'result',
     seats: Number.isInteger(n) && n >= 2 && n <= 9 ? n : 6,
     lang: SUPPORTED_LANGUAGES.includes(lang as Language) ? (lang as Language) : 'vi',
+    long: long === 'long',
   }
 }
 
 const ME = 'me'
+/** Thirty characters: wider than the viewer's own plate may grow at any seat count. */
+const LONG_NAME = 'Trịnh Nguyễn Hoàng Phương Thảo'
 const NAMES = [
   'Nguyễn Thị Phương Anh',
   'Trần Minh Khôi',
@@ -71,10 +80,13 @@ const HANDS: { hole: string; best: string; category: ShowdownHand['category'] }[
 ]
 const cards = (text: string): Card[] => parseCards(text)
 
-function players(n: number, state: WorstState): RoomPlayerView[] {
+/** Seat `i`'s name; the viewer sits in seat 0. */
+const nameOf = (i: number, long: boolean): string => (i === 0 && long ? LONG_NAME : (NAMES[i] ?? `Người chơi ${i}`))
+
+function players(n: number, state: WorstState, long: boolean): RoomPlayerView[] {
   return Array.from({ length: n }, (_, seat) => ({
     playerId: seat === 0 ? ME : `p${seat}`,
-    displayName: NAMES[seat] ?? `Người chơi ${seat}`,
+    displayName: nameOf(seat, long),
     isBot: false,
     isHost: seat === 0,
     connected: seat !== 2,
@@ -86,7 +98,7 @@ function players(n: number, state: WorstState): RoomPlayerView[] {
   }))
 }
 
-function room(n: number, state: WorstState, now: number): RoomView {
+function room(n: number, state: WorstState, now: number, long: boolean): RoomView {
   return {
     roomId: 'worst',
     code: 'WRST26',
@@ -106,18 +118,18 @@ function room(n: number, state: WorstState, now: number): RoomView {
     maxPlayers: n,
     status: state === 'waiting' ? 'OPEN' : 'IN_GAME',
     hostPlayerId: ME,
-    players: players(n, state),
+    players: players(n, state, long),
     carryOverPot: 0,
     nextHandAt: state === 'result' ? now + 59_000 : null,
   }
 }
 
-function seat(n: number, i: number, state: WorstState): ClientSeat {
+function seat(n: number, i: number, state: WorstState, long: boolean): ClientSeat {
   const shown = state === 'result' || i === 0
   return {
     seat: i,
     playerId: i === 0 ? ME : `p${i}`,
-    displayName: NAMES[i] ?? `Người chơi ${i}`,
+    displayName: nameOf(i, long),
     isBot: false,
     stack: i === 1 ? 0 : 118_000 - i * 7_777,
     // Everyone has chips out, and the most anyone's line can hold is a badge row *and* a bet.
@@ -133,7 +145,7 @@ function seat(n: number, i: number, state: WorstState): ClientSeat {
   }
 }
 
-function hand(n: number, state: WorstState): ClientHand | null {
+function hand(n: number, state: WorstState, long: boolean): ClientHand | null {
   if (state === 'waiting') return null
   const all = Array.from({ length: n }, (_, i) => i)
   const base: ClientHand = {
@@ -145,7 +157,7 @@ function hand(n: number, state: WorstState): ClientHand | null {
     carryOverIn: 0,
     button: Math.min(3, n - 1),
     actingSeat: state === 'turn' ? 0 : null,
-    seats: all.map((i) => seat(n, i, state)),
+    seats: all.map((i) => seat(n, i, state, long)),
     mySeat: 0,
     legal:
       state === 'turn'
@@ -215,16 +227,16 @@ export function WorstPage({ spec }: { spec: WorstSpec }) {
     return frozenClient({
       ...initialClientState,
       status: 'open',
-      me: { playerId: ME, displayName: NAMES[0]! },
+      me: { playerId: ME, displayName: nameOf(0, spec.long) },
       balance: 250_000,
       roomStale: false,
-      room: room(spec.seats, spec.state, now),
-      hand: hand(spec.seats, spec.state),
+      room: room(spec.seats, spec.state, now, spec.long),
+      hand: hand(spec.seats, spec.state, spec.long),
       deadlineAt: spec.state === 'turn' ? now + 25_000 : null,
     })
   }, [spec])
   useEffect(() => {
-    document.title = `worst: ${spec.state}, ${spec.seats} seats, ${spec.lang}`
+    document.title = `worst: ${spec.state}, ${spec.seats} seats, ${spec.lang}${spec.long ? ', long name' : ''}`
   }, [spec])
   return (
     <I18nextProvider i18n={i18n}>

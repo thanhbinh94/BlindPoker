@@ -1,5 +1,5 @@
 import { blindRequiredStack, type PlayerAction, type RoomPlayerView } from '@bp/core'
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useTableExpressions, type ChibiSubject } from '../avatar2d/index.js'
 import type { GameClientApi } from '../client/useGameClient.js'
@@ -12,6 +12,7 @@ import { ActionBar } from '../table/ActionBar.js'
 import { HandResult } from '../table/HandResult.js'
 import { PokerTable, type TableLayout } from '../table/PokerTable.js'
 import { RoomHeader } from '../table/RoomHeader.js'
+import { useSeatClearance } from './seat-clearance.js'
 import { Toasts } from './Toasts.js'
 import { useRequest } from './useRequest.js'
 import s from './screens.module.css'
@@ -102,9 +103,19 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
   }, [request, client])
   const dismiss = useCallback((id: number) => client.dismissNotification(id), [client])
 
+  const hand = state.hand
+  const finished = hand !== null && hand.phase === 'COMPLETE' && hand.result !== null ? hand : null
+  // The result card sits over the felt, so it has to be closable: between hands a player may well want to look at
+  // the table underneath it rather than at the receipt.
+  const resultCard = finished !== null && finished.handId !== dismissedHandId ? finished : null
+  // The card's stage stops above the viewer's own seat when there is room for the card there (review round 2, R2-3),
+  // measured again when the viewer takes a seat or leaves one under it. Up here, above the early return, because it is
+  // a hook — and worked out from `resultCard` itself, so what is measured for and what is drawn cannot disagree.
+  const stageRef = useRef<HTMLElement>(null)
+  const clearance = useSeatClearance(stageRef, resultCard !== null, me?.seat ?? null)
+
   if (room === null) return null
 
-  const hand = state.hand
   const holdem = room.config.holdem
   const seated = room.players.filter((p) => p.seat !== null)
   const canSit = me !== undefined && me.seat === null
@@ -141,10 +152,6 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
     if (await request.run(() => client.sitDown(buyInSeat, amount))) setBuyInSeat(null)
   }
 
-  const finished = hand !== null && hand.phase === 'COMPLETE' && hand.result !== null ? hand : null
-  // The result card sits over the felt, so it has to be closable: between hands a player may well want to look at
-  // the table underneath it rather than at the receipt.
-  const resultCard = finished !== null && finished.handId !== dismissedHandId ? finished : null
   /** Between hands: the room is taking seats rather than dealing. */
   const waiting = room.status === 'OPEN'
   const mySeated = me !== undefined && me.seat !== null
@@ -195,6 +202,9 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
         {t('labels.nextHandIn')} <strong>{t('common:time.seconds', { count: nextHandIn })}</strong>
       </>
     )
+  // Padding, not `bottom`: the overlay keeps the stage's box, and its scrim paints the padded content box alone — the
+  // card's stage — so the scrim's centre rises with the card and the seat below it is not darkened.
+  const overlayStyle = clearance === null ? undefined : ({ '--seat-clearance': `${clearance}px` } as CSSProperties)
 
   return (
     <div className={s.room}>
@@ -208,7 +218,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
         </p>
       )}
 
-      <main className={s.roomMain}>
+      <main ref={stageRef} className={s.roomMain}>
         <PokerTable
           room={room}
           hand={hand}
@@ -227,9 +237,9 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
 
         {/* The result card is dealt onto the felt, so it keeps the felt's night palette in either theme. The countdown
             to the next deal is the card's own footer line: printed under the card, it landed on the viewer's seat
-            (review 2026-09-29, No2). */}
+            (review 2026-09-29, No2). Its stage stops above the viewer's own seat when that leaves it room (R2-3). */}
         {resultCard === null ? null : (
-          <div className={s.overlay} data-surface="night">
+          <div className={s.overlay} data-surface="night" style={overlayStyle}>
             <HandResult
               hand={resultCard}
               room={room}

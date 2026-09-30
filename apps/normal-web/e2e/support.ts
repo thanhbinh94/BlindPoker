@@ -1,5 +1,6 @@
 import { mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import type { RoomSummary } from '@bp/core'
 import { expect, type Locator, type Page } from '@playwright/test'
 import { expectNoTextOverlap } from './overlap.js'
 
@@ -44,6 +45,80 @@ export const parsePoints = (text: string): number => Number(text.replace(/\D/g, 
 /** The lobby is "signed in": it only renders once the gate's probe has come back with an account. */
 export async function expectLobby(page: Page): Promise<void> {
   await expect(page.getByRole('button', { name: 'Tạo phòng' })).toBeVisible()
+}
+
+/**
+ * A public room as the server lists it: never private (a private room is not listed), never auto-starting, and not
+ * closing unless `closing` says so — a client reads the flag's absence as "not closing".
+ */
+function listed(code: string, config: Omit<RoomSummary['config'], 'isPrivate' | 'autoStart'>, playerCount: number, status: RoomSummary['status'], closing?: true): RoomSummary {
+  return {
+    roomId: `busy-${code}`,
+    code,
+    name: config.name,
+    mode: config.mode,
+    config: { ...config, isPrivate: false, autoStart: false },
+    playerCount,
+    maxPlayers: config.maxPlayers,
+    status,
+    ...(closing === undefined ? {} : { closing }),
+  }
+}
+
+/** The server's longest room name (30 characters, `validateRoomConfig`). No space in it: the only way it fits a ticket is to wrap anywhere. */
+const LONGEST_ROOM_NAME = 'Bàn_Đại_Gia_Phố_Núi_Sài_Gòn_01'
+
+/**
+ * Six public rooms for `withBusyLobby` (review round 2, R2-1): Texas Hold'em and Blind; open, in a hand and closing;
+ * two cards and three, `none` and `playOrFold`; one with a password; seats 3/9, 6/6, 1/6, 5/8, 2/4, and an empty room
+ * that is closing (0/6). Every blind and wager is one of `ECONOMY`'s tiers, the longest to print (2.500/5.000, 50.000)
+ * among them. Two names wrap, in different rows of the two-column grid: the server's longest (30 characters, no space),
+ * beside the lock and "Đang chơi", and "Ba lá chọn chơi hay bỏ" (22) beside "Đang chơi"; the widest badge, "Đang
+ * đóng…", sits beside a short name. A name wraps beside its badge and is cut after two lines, so no name makes a ticket
+ * taller than that: before, the badge dropped under a name that wrapped, and with both of these the lobby scrolled 3 px
+ * at 1920×940.
+ */
+const BUSY_LOBBY: RoomSummary[] = [
+  listed('WMQ7X4', { name: 'Đêm Sài Gòn', mode: 'holdem', maxPlayers: 9, turnTimerSec: 30, hasPassword: false, holdem: { smallBlind: 100, bigBlind: 200, minBuyInBB: 50, maxBuyInBB: 200 } }, 3, 'OPEN'),
+  listed('MWK9H2', { name: 'Bàn Cao Thủ', mode: 'holdem', maxPlayers: 6, turnTimerSec: 45, hasPassword: false, holdem: { smallBlind: 2_500, bigBlind: 5_000, minBuyInBB: 20, maxBuyInBB: 500 } }, 6, 'IN_GAME'),
+  listed('QWM4N8', { name: 'Chiếu Bạc', mode: 'blind', maxPlayers: 6, turnTimerSec: 15, hasPassword: false, blind: { holeCards: 2, decisionMode: 'none', fixedWager: 1_000, botCount: 0 } }, 1, 'OPEN'),
+  listed('HMW6R3', { name: 'Ba lá chọn chơi hay bỏ', mode: 'blind', maxPlayers: 8, turnTimerSec: 30, hasPassword: false, blind: { holeCards: 3, decisionMode: 'playOrFold', fixedWager: 50_000, botCount: 2 } }, 5, 'IN_GAME'),
+  listed('NWM2Z7', { name: LONGEST_ROOM_NAME, mode: 'blind', maxPlayers: 4, turnTimerSec: 10, hasPassword: true, blind: { holeCards: 3, decisionMode: 'none', fixedWager: 20_000, botCount: 1 } }, 2, 'IN_GAME'),
+  listed('MQW8K5', { name: 'Bàn vắng', mode: 'holdem', maxPlayers: 6, turnTimerSec: 60, hasPassword: false, holdem: { smallBlind: 500, bigBlind: 1_000, minBuyInBB: 50, maxBuyInBB: 200 } }, 0, 'OPEN', true),
+]
+
+/** One frame from the server, with a `ROOM_LIST`'s rooms swapped for `BUSY_LOBBY`; any other frame — JSON or not — as it came. */
+function patchRoomList(frame: string | Buffer): string | Buffer {
+  if (typeof frame !== 'string') return frame
+  let message: unknown
+  try {
+    message = JSON.parse(frame)
+  } catch {
+    return frame
+  }
+  if (typeof message === 'object' && message !== null && (message as { t?: unknown }).t === 'ROOM_LIST') return JSON.stringify({ ...message, rooms: BUSY_LOBBY })
+  return frame
+}
+
+/**
+ * Review round 2, R2-1: a lobby with six rooms in it, on the page's own account. A room with only bots in it closes
+ * at once, so the default suite's lobby holds none or one, and a layout that only breaks with several would pass it.
+ * The page's socket (`/ws`) is proxied to the real server and every `ROOM_LIST` the server sends is answered with
+ * `BUSY_LOBBY` instead — nothing is created, nobody registers, the server is not touched. The route only takes the
+ * sockets the page opens afterwards, hence the reload; it stays for the life of the page (Playwright has no way
+ * to take a WebSocket route off), so this belongs at the end of a test.
+ */
+export async function withBusyLobby(page: Page): Promise<void> {
+  await page.routeWebSocket(/\/ws$/, (ws) => {
+    const server = ws.connectToServer()
+    // Page to server is forwarded as it is; only what comes back is read.
+    server.onMessage((message) => ws.send(patchRoomList(message)))
+  })
+  await page.reload()
+  await expectLobby(page)
+  // The web fonts come from Google with `display=swap`: until they land the tickets are set in a fallback of other
+  // metrics, and a fit measured then is not the one the player sees.
+  await page.evaluate(() => document.fonts.ready.then(() => undefined))
 }
 
 /**
@@ -266,17 +341,40 @@ export async function expectRoomFits(page: Page, state: string, viewports = ROOM
   expect(problems, `the room (${state}) scrolls:\n  ${problems.join('\n  ')}`).toEqual([])
 }
 
+/** A box on screen, in the viewport's pixels. */
+interface Box {
+  top: number
+  bottom: number
+  left: number
+  right: number
+}
+
+/** The viewer's own seat, found the way a player finds it: the seat ("Ghế N") that prints their name. */
+function mySeat(page: Page, who: string): Locator {
+  return page.getByRole('group', { name: /^Ghế \d+$/ }).filter({ has: page.getByText(who, { exact: true }) })
+}
+
+/** A walk over the viewer's own seat (`walkMySeat`). */
+interface SeatWalk {
+  /** How many seats print the name. Only when it is 1 was a seat walked; otherwise `plate` is `null` and `runs` empty. */
+  seats: number
+  plate: Box | null
+  runs: (Box & { text: string })[]
+}
+
 /**
- * Review 2026-09-29, No2: the viewer's own seat block keeps to two lines of text under its plate on a desktop screen —
- * the badges with the bet, then the hand's name with the payout. The plate is the seat's first bordered box around
- * its name; a line is every text run whose top sits within 3 px of another's.
+ * One walk over the viewer's own seat, shared by the checks on it: its plate — the seat's first bordered box around
+ * the name — and every visible text run in the seat (artwork skipped: `svg`, `[role=img]`, `[aria-hidden=true]`),
+ * each as its line boxes. `plate` is `null` when no bordered box holds the name. It neither waits nor throws: a page
+ * with no such seat, or two, comes back as `seats` for the caller to report — `expectCardClearsMySeat` walks inside a
+ * poll that must still go on to measure the other sizes.
  */
-export async function expectMySeatLines(page: Page, who: string, state: string): Promise<void> {
-  const seat = page.getByRole('group', { name: /^Ghế \d+$/ }).filter({ has: page.getByText(who, { exact: true }) })
-  await expect(seat).toHaveCount(1)
-  const lines = await seat.evaluate((root: HTMLElement, name: string) => {
+async function walkMySeat(page: Page, who: string): Promise<SeatWalk> {
+  return mySeat(page, who).evaluateAll((roots: HTMLElement[], name: string) => {
+    if (roots.length !== 1) return { seats: roots.length, plate: null, runs: [] }
+    const root = roots[0]!
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
-    const runs: { text: string; top: number; bottom: number }[] = []
+    const runs: { text: string; top: number; bottom: number; left: number; right: number }[] = []
     let plate: Element | null = null
     const range = document.createRange()
     for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
@@ -291,23 +389,127 @@ export async function expectMySeatLines(page: Page, who: string, state: string):
         }
       }
       range.selectNodeContents(node)
-      for (const r of Array.from(range.getClientRects())) runs.push({ text, top: r.top, bottom: r.bottom })
+      for (const r of Array.from(range.getClientRects())) runs.push({ text, top: r.top, bottom: r.bottom, left: r.left, right: r.right })
     }
-    const floor = plate === null ? Number.POSITIVE_INFINITY : plate.getBoundingClientRect().bottom
-    const under = runs.filter((r) => r.top >= floor - 1).sort((a, b) => a.top - b.top)
-    // A line is a band of runs whose boxes overlap vertically: a 16 px payout beside a 12 px hand name is one line.
-    let lines = 0
-    let bandBottom = Number.NEGATIVE_INFINITY
-    for (const run of under) {
-      if (run.top >= bandBottom - 2) {
-        lines += 1
-        bandBottom = run.bottom
-      } else bandBottom = Math.max(bandBottom, run.bottom)
-    }
-    return { found: plate !== null, lines, texts: under.map((r) => r.text) }
+    const box = (plate as Element | null)?.getBoundingClientRect() ?? null
+    return { seats: 1, plate: box === null ? null : { top: box.top, bottom: box.bottom, left: box.left, right: box.right }, runs }
   }, who)
-  expect(lines.found, `${state}: the viewer's plate was found`).toBe(true)
-  expect(lines.lines, `${state}: the viewer's seat runs ${lines.lines} lines under its plate — ${lines.texts.join(' | ')}`).toBeLessThanOrEqual(2)
+}
+
+/** The text runs of a seat walk that sit under its plate, top to bottom; none when no plate was found. */
+const runsUnder = (walk: SeatWalk): (Box & { text: string })[] =>
+  walk.plate === null ? [] : walk.runs.filter((r) => r.top >= walk.plate!.bottom - 1).sort((a, b) => a.top - b.top)
+
+/**
+ * Review 2026-09-29, No2: the viewer's own seat block keeps to two lines of text under its plate on a desktop screen —
+ * the badges with the bet, then the hand's name with the payout. The plate is the seat's first bordered box around
+ * its name; a line is every text run whose top sits within 3 px of another's.
+ */
+export async function expectMySeatLines(page: Page, who: string, state: string): Promise<void> {
+  await expect(mySeat(page, who), `${state}: one seat prints "${who}"`).toHaveCount(1)
+  const walk = await walkMySeat(page, who)
+  const under = runsUnder(walk)
+  // A line is a band of runs whose boxes overlap vertically: a 16 px payout beside a 12 px hand name is one line.
+  let lines = 0
+  let bandBottom = Number.NEGATIVE_INFINITY
+  for (const run of under) {
+    if (run.top >= bandBottom - 2) {
+      lines += 1
+      bandBottom = run.bottom
+    } else bandBottom = Math.max(bandBottom, run.bottom)
+  }
+  expect(walk.plate !== null, `${state}: the viewer's plate was found`).toBe(true)
+  expect(lines, `${state}: the viewer's seat runs ${lines} lines under its plate — ${under.map((r) => r.text).join(' | ')}`).toBeLessThanOrEqual(2)
+}
+
+/** Waits two frames: a resize re-runs the table's container queries, and the room's own measurements follow them. */
+const twoFrames = (page: Page): Promise<unknown> => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+
+/**
+ * Review round 2, R2-3: the viewer's own name is printed whole on their plate — "Tam6z80" printed as "Tam…" on a
+ * 104 px plate at 1280 × 720. At each of `viewports` the name's element is no wider inside than out
+ * (`scrollWidth ≤ clientWidth`). Every size is measured before anything fails; the page's own viewport comes back.
+ * The e2e names are short (≤ 12 characters); the plate's cap on a long one is the playground's `/long` scenario.
+ */
+export async function expectMyNameWhole(page: Page, who: string, state: string, viewports = ROOM_SCREENS): Promise<void> {
+  const original = page.viewportSize()
+  const name = mySeat(page, who).getByText(who, { exact: true })
+  const problems: string[] = []
+  try {
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport)
+      await twoFrames(page)
+      const { scroll, client } = await name.evaluate((el) => ({ scroll: el.scrollWidth, client: el.clientWidth }))
+      if (scroll > client) problems.push(`${viewport.width}×${viewport.height}: the name needs ${scroll} px and has ${client} px`)
+    }
+  } finally {
+    if (original !== null) await page.setViewportSize(original)
+  }
+  expect(problems, `${state}: "${who}" is cut short on its plate:\n  ${problems.join('\n  ')}`).toEqual([])
+}
+
+/** `MIN_CARD` in `packages/ui-kit/src/screens/seat-clearance.ts`: the overlay height the result card is left above the seat. */
+const MIN_CARD = 216
+/** The overlay's own padding above and below the card (2 × `--space-4`). */
+const OVERLAY_PADDING = 32
+
+const intersects = (a: Box, b: Box): boolean => a.bottom > b.top + 0.5 && a.top < b.bottom - 0.5 && a.right > b.left + 0.5 && a.left < b.right - 0.5
+
+/**
+ * Review round 2, R2-3: the result card stops above the viewer's own seat on a desktop screen. At each of `viewports`,
+ * with the card up and held, the card's box meets neither the viewer's plate nor any text run under it; and so an
+ * oversized clearance cannot pass, the card is still at least `MIN_CARD − 32` px tall (title, one row, the footer) —
+ * or, a card with less to say than that (one row, no cards in it), its whole height, nothing scrolled away — with its
+ * title inside the viewport. The room measures the seat when it resizes, a frame or more after the window does, so
+ * each size is read until it holds (5 s at most) and then recorded; every size is measured before anything fails, and
+ * the page's own viewport comes back. Never at 375 × 812: that phone (touch) has no room above its pinned seat, and the
+ * card covers it there, closable, by design — taller phones land in tier 2 or 1 (`docs/ui-kit.md`).
+ */
+export async function expectCardClearsMySeat(page: Page, card: Locator, who: string, viewports = ROOM_SCREENS): Promise<void> {
+  const original = page.viewportSize()
+  const title = card.getByRole('heading', { level: 2 })
+  const problems: string[] = []
+  try {
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport)
+      const where = `${viewport.width}×${viewport.height}`
+      const deadline = Date.now() + 5_000
+      let found: string[] = []
+      for (;;) {
+        await twoFrames(page)
+        const walk = await walkMySeat(page, who)
+        const cardBox = await card.boundingBox()
+        const titleBox = await title.boundingBox()
+        // What the card's scroll boxes (its body) hold below their fold: its whole height is its box plus that. A box
+        // counts only when it overflows by more than 1 px, as `HandResult` reads it — a rounding pixel hides no row.
+        const scrolledAway = await card.evaluate((root) =>
+          Array.from(root.querySelectorAll('*')).reduce((sum, el) => {
+            const over = el.scrollHeight - el.clientHeight
+            return /auto|scroll/.test(getComputedStyle(el).overflowY) && over > 1 ? sum + over : sum
+          }, 0),
+        )
+        found = []
+        if (walk.seats !== 1) found.push(`${where}: the viewer's seat was not found (${walk.seats} seats print "${who}")`)
+        else if (walk.plate === null) found.push(`${where}: the viewer's plate was not found`)
+        if (cardBox === null || titleBox === null) found.push(`${where}: the card or its title has no box`)
+        if (walk.plate !== null && cardBox !== null && titleBox !== null) {
+          const c = { top: cardBox.y, bottom: cardBox.y + cardBox.height, left: cardBox.x, right: cardBox.x + cardBox.width }
+          const hit = [{ text: '(the plate)', ...walk.plate }, ...runsUnder(walk)].filter((r) => intersects(c, r))
+          if (hit.length > 0) found.push(`${where}: the card (${Math.round(c.top)}–${Math.round(c.bottom)} px) lies over ${hit.map((r) => `${r.text} (${Math.round(r.top)} px)`).join(', ')}`)
+          const floor = Math.min(MIN_CARD - OVERLAY_PADDING, cardBox.height + scrolledAway)
+          if (cardBox.height < floor - 0.5) {
+            found.push(`${where}: the card is ${Math.round(cardBox.height)} px tall with ${Math.round(scrolledAway)} px scrolled away, under ${MIN_CARD - OVERLAY_PADDING}`)
+          }
+          if (titleBox.y < 0 || titleBox.y + titleBox.height > viewport.height) found.push(`${where}: the card's title is off screen (${Math.round(titleBox.y)} px)`)
+        }
+        if (found.length === 0 || Date.now() > deadline) break
+      }
+      problems.push(...found)
+    }
+  } finally {
+    if (original !== null) await page.setViewportSize(original)
+  }
+  expect(problems, `the result card and the viewer's own seat:\n  ${problems.join('\n  ')}`).toEqual([])
 }
 
 /** Takes the given seat; the index is explicit so nothing ever races the bot for one. */

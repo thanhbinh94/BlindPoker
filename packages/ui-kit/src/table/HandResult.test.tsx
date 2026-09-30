@@ -117,10 +117,14 @@ describe('HandResult', () => {
     expect(view.container.textContent).not.toContain('gremlins')
   })
 
-  // Review 2026-09-29, No2 (R13): the countdown moved onto the card, whose root is a live region. Ticking inside it,
-  // the whole receipt would be read out again every second — so it sits in its own `aria-live="off"` element in the
-  // footer, apart from the rows and the fee line other code reads the card by.
-  describe('the countdown to the next hand', () => {
+  // Review 2026-09-29, No2 (R13): the countdown moved onto the card. Ticking inside a live region, the whole receipt
+  // would be read out again every second. The first answer nested an `aria-live="off"` element in the region, which a
+  // screen reader may or may not honour; review round 2, R2-4 made it structural instead: the card is a group named
+  // by its title, its head, note and body are the one `status` region, and the footer — fee, carry-over, uncalled
+  // return, countdown — follows outside every live region, apart from the rows and the fee line other code reads the
+  // card by.
+  describe('the live region and the countdown to the next hand', () => {
+    const LIVE = '[role="status"], [role="alert"], [aria-live="polite"], [aria-live="assertive"]'
     const room = {
       players: [
         { playerId: 'a', displayName: 'Ann', seat: 0 },
@@ -145,27 +149,77 @@ describe('HandResult', () => {
         reason: null,
       },
     } as unknown as ClientHand
-    const renderWith = (countdown?: string) =>
+    const renderWith = (countdown?: string, onDismiss?: () => void, shown: ClientHand = hand) =>
       render(
         <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
-          <HandResult hand={hand} room={room} myPlayerId="a" lang="vi" countdown={countdown} />
+          <HandResult hand={shown} room={room} myPlayerId="a" lang="vi" onDismiss={onDismiss} countdown={countdown} />
         </I18nextProvider>,
       )
 
     it('prints it inside the card, in its own element that does not announce each tick', () => {
       renderWith('Ván tiếp theo sau 5 giây')
-      const card = screen.getByRole('status')
+      const card = screen.getByRole('group', { name: 'Người thắng' })
       const next = within(card).getByText('Ván tiếp theo sau 5 giây')
-      expect(next).toHaveAttribute('aria-live', 'off')
+      expect(next.closest(LIVE), 'no live region around the countdown').toBeNull()
+      // the class the "no countdown" test looks for, so that test cannot pass on a selector that matches nothing
+      expect(next).toHaveClass(s.resultNext!)
       expect(next.closest('li')).toBeNull()
       expect(within(card).getByText('Phí bàn 80')).not.toContainElement(next)
       expect(within(card).getAllByRole('listitem').filter((li) => li.textContent?.includes('Ván tiếp theo'))).toEqual([])
     })
 
     it('prints nothing for it when there is no next hand to count down to', () => {
-      renderWith()
-      expect(screen.getByRole('status').querySelector('[aria-live="off"]')).toBeNull()
+      const view = renderWith()
+      expect(view.container.querySelector(`.${s.resultNext}`)).toBeNull()
       expect(screen.queryByText(/Ván tiếp theo/)).toBeNull()
+      expect(screen.getByText('Phí bàn 80'), 'the footer is still there').toBeInTheDocument()
+    })
+
+    it('is a group named by its title, whose one status region holds the title and the rows', () => {
+      renderWith('Ván tiếp theo sau 5 giây', vi.fn())
+      const card = screen.getByRole('group', { name: 'Người thắng' })
+      expect(card, 'the card itself is not the live region').not.toHaveAttribute('role', 'status')
+      expect(within(card).getAllByRole('status'), 'one live region on the card').toHaveLength(1)
+      const live = within(card).getByRole('status')
+      expect(within(live).getByRole('heading', { name: 'Người thắng' })).toBeInTheDocument()
+      expect(within(live).getByRole('button', { name: 'Đóng' }), 'the close button is in the region with the title').toBeInTheDocument()
+      expect(within(live).getByText('Bob')).toBeInTheDocument()
+      expect(within(live).getByText('Thùng')).toBeInTheDocument()
+      expect(within(live).getByText(/3\.920/)).toBeInTheDocument()
+    })
+
+    it('names the group after the title it carries: several winners, and a cancelled hand', () => {
+      const split = {
+        ...hand,
+        result: { ...hand.result!, payouts: [{ seat: 0, amount: 1_960 }, { seat: 1, amount: 1_960 }] },
+      } as unknown as ClientHand
+      const view = renderWith(undefined, undefined, split)
+      expect(screen.getByRole('group', { name: 'Những người thắng' })).toBeInTheDocument()
+      view.unmount()
+
+      const cancelled = {
+        ...hand,
+        result: { ...hand.result!, payouts: [], pots: [], fee: 0, showdown: null, cancelled: true, reason: 'server restart' },
+      } as unknown as ClientHand
+      renderWith(undefined, undefined, cancelled)
+      const card = screen.getByRole('group', { name: 'Ván bị hủy' })
+      // the note on why is part of what is announced, so it sits in the region with the title
+      expect(within(within(card).getByRole('status')).getByText('Máy chủ khởi động lại')).toBeInTheDocument()
+    })
+
+    it('keeps the fee, the carry-over, the uncalled return and the countdown outside every live region', () => {
+      const full = {
+        ...hand,
+        result: { ...hand.result!, carryOverOut: 40, uncalledReturned: { seat: 0, amount: 500 } },
+      } as unknown as ClientHand
+      renderWith('Ván tiếp theo sau 5 giây', undefined, full)
+      const card = screen.getByRole('group', { name: 'Người thắng' })
+      const live = within(card).getByRole('status')
+      for (const text of ['Phí bàn 80', 'Cộng dồn 40', 'Hoàn lại phần cược dư Ann 500', 'Ván tiếp theo sau 5 giây']) {
+        const line = within(card).getByText(text)
+        expect(line.closest(LIVE), `"${text}" has no live region around it`).toBeNull()
+        expect(live, `"${text}" is not in the status region`).not.toContainElement(line)
+      }
     })
   })
 
@@ -238,7 +292,7 @@ describe('HandResult', () => {
           <HandResult hand={hand} room={room} myPlayerId="a" lang="en" />
         </I18nextProvider>,
       )
-      const body = screen.getByRole('status').querySelector<HTMLElement>(`.${s.resultBody}`)
+      const body = screen.getByRole('group', { name: 'Winner' }).querySelector<HTMLElement>(`.${s.resultBody}`)
       expect(body).not.toBeNull()
       return body!
     }

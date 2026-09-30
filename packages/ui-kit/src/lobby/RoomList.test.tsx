@@ -73,6 +73,29 @@ describe('RoomList', () => {
     await userEvent.click(screen.getAllByRole('button', { name: /vào/i })[0]!)
     expect(onJoin).toHaveBeenCalledWith(rooms[0])
   })
+  // Review round 2, R2-1 (final fix wave): a name that wraps used to push the badge and the lock onto a row of their
+  // own, and a busy lobby then scrolled at 1920×940. The name is clamped to two lines beside them now, and says the
+  // rest in its tooltip.
+  describe('a long room name', () => {
+    const LONG = 'Bàn_Đại_Gia_Phố_Núi_Sài_Gòn_01'
+    const long: RoomSummary = { ...rooms[0]!, name: LONG, config: { ...rooms[0]!.config, name: LONG } }
+
+    it('carries the whole name in the heading’s title, since the heading may cut it after two lines', () => {
+      wrap(<RoomList rooms={[long]} onJoin={vi.fn()} lang="vi" />)
+      expect(screen.getByRole('heading', { level: 3, name: LONG })).toHaveAttribute('title', LONG)
+    })
+
+    it('keeps the lock and the status badge together in one box beside the name, not in the name’s own flow', () => {
+      wrap(<RoomList rooms={[long]} onJoin={vi.fn()} lang="vi" />)
+      const heading = screen.getByRole('heading', { level: 3, name: LONG })
+      const head = heading.parentElement!
+      expect(head.children).toHaveLength(2)
+      const status = heading.nextElementSibling!
+      expect(status).toContainElement(screen.getByRole('img', { name: /mật khẩu/i }))
+      expect(status).toContainElement(screen.getByText('Đang chờ'))
+    })
+  })
+
   it('shows an empty state', () => {
     wrap(<RoomList rooms={[]} onJoin={() => {}} lang="vi" />)
     expect(screen.getByText(/chưa có phòng/i)).toBeInTheDocument()
