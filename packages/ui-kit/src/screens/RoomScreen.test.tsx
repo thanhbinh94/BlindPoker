@@ -542,7 +542,31 @@ describe('RoomScreen', () => {
       }
     })
 
-    it('carries no clearance once the card is waved off', async () => {
+    it('clears the viewer’s seat once they take one under the card, and gives the stage back when they leave it', () => {
+      const spy = pinBoxes()
+      try {
+        const hand = finished(null)
+        const watching = makeRoom({
+          players: [
+            makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'IN_HAND', stack: 20_400 }),
+            makePlayer({ playerId: 'me', displayName: 'Mai' }),
+          ],
+        })
+        const { view } = wrap(fakeClient(makeState({ room: watching, hand })))
+        expect(overlayOf().style.getPropertyValue('--seat-clearance')).toBe('')
+        // nothing on the stage changes size when a seat is taken: the hook looks again because the viewer's seat did
+        view.rerender(screenFor(fakeClient(makeState({ room: seatedRoom, hand }))))
+        expect(overlayOf().style.getPropertyValue('--seat-clearance')).toBe('228px')
+        view.rerender(screenFor(fakeClient(makeState({ room: watching, hand }))))
+        expect(overlayOf().style.getPropertyValue('--seat-clearance')).toBe('')
+      } finally {
+        spy.mockRestore()
+      }
+    })
+
+    // The overlay is the card's own wrapper, so this proves only that the two leave together; the hook's own reset on
+    // switching off is `seat-clearance.test.ts`'s.
+    it('takes the overlay away with the card when it is waved off', async () => {
       const spy = pinBoxes()
       try {
         wrap(fakeClient(makeState({ room: seatedRoom, hand: finished(2) })))

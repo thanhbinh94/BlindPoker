@@ -37,12 +37,14 @@ export function clearanceFor(stage: DOMRect, seat: DOMRect | null, plate: DOMRec
  *
  * The seat and its plate are found by `Seat`'s `data-me="true"` and `data-plate` markers — a contract of their own,
  * not CSS-module class names. It is measured before paint, again whenever the stage or the seat changes size (a
- * resize, the tray growing, the seat's lines filling in) and once the web fonts have landed. The seat is looked up
- * afresh on every measurement and the new element observed, because a switch between the ring and the stack
- * layouts draws it anew. Where there is no `ResizeObserver` (jsdom) it measures once. Not active, it observes
- * nothing and returns `null`.
+ * resize, the tray growing, the seat's lines filling in), once the web fonts have landed, and whenever `seat` — the
+ * viewer's seat number, `null` while they watch — changes: taking a seat or leaving it under the card resizes
+ * nothing that is watched. The seat is looked up afresh on every measurement and the new element observed, because a
+ * switch between the ring and the stack layouts draws it anew. Where there is no `ResizeObserver` (jsdom) it measures
+ * once per change. Not active, it observes nothing and returns `null`, and it forgets its last answer then, so the next
+ * card starts from nothing rather than from the last hand's seat.
  */
-export function useSeatClearance(stageRef: RefObject<HTMLElement>, active: boolean): number | null {
+export function useSeatClearance(stageRef: RefObject<HTMLElement>, active: boolean, seat: number | null): number | null {
   const [clearance, setClearance] = useState<number | null>(null)
   useLayoutEffect(() => {
     const stage = stageRef.current
@@ -52,14 +54,14 @@ export function useSeatClearance(stageRef: RefObject<HTMLElement>, active: boole
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => measure())
     function measure(): void {
       if (!live || stage === null) return
-      const seat = stage.querySelector('[data-me="true"]')
-      const plate = seat?.querySelector('[data-plate]') ?? null
-      if (observer !== null && seat !== watched) {
+      const mine = stage.querySelector('[data-me="true"]')
+      const plate = mine?.querySelector('[data-plate]') ?? null
+      if (observer !== null && mine !== watched) {
         if (watched !== null) observer.unobserve(watched)
-        if (seat !== null) observer.observe(seat)
-        watched = seat
+        if (mine !== null) observer.observe(mine)
+        watched = mine
       }
-      setClearance(clearanceFor(stage.getBoundingClientRect(), seat?.getBoundingClientRect() ?? null, plate?.getBoundingClientRect() ?? null))
+      setClearance(clearanceFor(stage.getBoundingClientRect(), mine?.getBoundingClientRect() ?? null, plate?.getBoundingClientRect() ?? null))
     }
     observer?.observe(stage)
     measure()
@@ -67,7 +69,10 @@ export function useSeatClearance(stageRef: RefObject<HTMLElement>, active: boole
     return () => {
       live = false
       observer?.disconnect()
+      // Switched off (or about to measure again for a new seat): nothing from here may outlive this card.
+      setClearance(null)
     }
-  }, [stageRef, active])
+    // `seat` is read by nothing above: its change is the moment to look for the seat again (drawn, moved or removed).
+  }, [stageRef, active, seat])
   return active ? clearance : null
 }

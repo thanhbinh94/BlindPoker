@@ -101,16 +101,64 @@ describe('useSeatClearance', () => {
   it('measures once where there is no ResizeObserver (jsdom), and gives the stage back when it is not active', () => {
     const { stage: el } = stageWithSeat(512)
     const ref = { current: el }
-    const hook = renderHook(({ active }) => useSeatClearance(ref, active), { initialProps: { active: true } })
+    const hook = renderHook(({ active }) => useSeatClearance(ref, active, 2), { initialProps: { active: true } })
     expect(hook.result.current).toBe(724 - 512 + CLEARANCE_GAP)
     hook.rerender({ active: false })
+    expect(hook.result.current).toBeNull()
+  })
+
+  it('forgets the last card’s clearance once it is switched off, so the next card never starts from it', () => {
+    const { stage: el, moveSeat } = stageWithSeat(512)
+    const ref = { current: el }
+    const seen: (number | null)[] = []
+    const hook = renderHook(
+      ({ active }) => {
+        const clearance = useSeatClearance(ref, active, 2)
+        seen.push(clearance)
+        return clearance
+      },
+      { initialProps: { active: true } },
+    )
+    const last = 724 - 512 + CLEARANCE_GAP
+    expect(hook.result.current).toBe(last)
+    hook.rerender({ active: false })
+    // the next hand's card: the seat has moved since, and not one render hands out the last card's number
+    moveSeat(480)
+    seen.length = 0
+    hook.rerender({ active: true })
+    expect(seen).not.toContain(last)
+    expect(hook.result.current).toBe(724 - 480 + CLEARANCE_GAP)
+  })
+
+  it('looks for the viewer’s seat again when they take one, or leave it, while the card is up', () => {
+    vi.stubGlobal('ResizeObserver', FakeObserver)
+    const el = document.createElement('main')
+    el.getBoundingClientRect = () => stage
+    document.body.append(el)
+    const ref = { current: el }
+    const hook = renderHook(({ seat }) => useSeatClearance(ref, true, seat), { initialProps: { seat: null as number | null } })
+    // watching: no seat of theirs on the felt, nothing to clear
+    expect(hook.result.current).toBeNull()
+
+    // they sit down: the seat is drawn with its markers, and neither the stage nor anything watched changes size
+    const seat = document.createElement('div')
+    seat.setAttribute('data-me', 'true')
+    seat.getBoundingClientRect = () => box(512, 672)
+    el.append(seat)
+    hook.rerender({ seat: 2 })
+    expect(hook.result.current).toBe(724 - 512 + CLEARANCE_GAP)
+    expect(FakeObserver.all.at(-1)!.observed.has(seat)).toBe(true)
+
+    // and stand up again
+    seat.remove()
+    hook.rerender({ seat: null })
     expect(hook.result.current).toBeNull()
   })
 
   it('observes nothing while it is not active', () => {
     vi.stubGlobal('ResizeObserver', FakeObserver)
     const { stage: el } = stageWithSeat(512)
-    const hook = renderHook(() => useSeatClearance({ current: el }, false))
+    const hook = renderHook(() => useSeatClearance({ current: el }, false, 2))
     expect(hook.result.current).toBeNull()
     expect(FakeObserver.all).toHaveLength(0)
   })
@@ -119,7 +167,7 @@ describe('useSeatClearance', () => {
     vi.stubGlobal('ResizeObserver', FakeObserver)
     const { stage: el, seat, moveSeat } = stageWithSeat(512)
     const ref = { current: el }
-    const hook = renderHook(() => useSeatClearance(ref, true))
+    const hook = renderHook(() => useSeatClearance(ref, true, 2))
     expect(hook.result.current).toBe(724 - 512 + CLEARANCE_GAP)
     const observer = FakeObserver.all[0]!
     expect([...observer.observed]).toEqual([el, seat])
@@ -149,7 +197,7 @@ describe('useSeatClearance', () => {
     try {
       const { stage: el, moveSeat } = stageWithSeat(512)
       const ref = { current: el }
-      const hook = renderHook(({ active }) => useSeatClearance(ref, active), { initialProps: { active: true } })
+      const hook = renderHook(({ active }) => useSeatClearance(ref, active, 2), { initialProps: { active: true } })
       moveSeat(480)
       await act(async () => {
         land()

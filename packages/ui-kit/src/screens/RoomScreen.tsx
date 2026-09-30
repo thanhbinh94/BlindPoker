@@ -103,15 +103,19 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
   }, [request, client])
   const dismiss = useCallback((id: number) => client.dismissNotification(id), [client])
 
-  // The result card's stage stops above the viewer's own seat when there is room for the card there (review round 2,
-  // R2-3). Worked out from the state rather than from `resultCard` below: a hook cannot sit after the early return.
+  const hand = state.hand
+  const finished = hand !== null && hand.phase === 'COMPLETE' && hand.result !== null ? hand : null
+  // The result card sits over the felt, so it has to be closable: between hands a player may well want to look at
+  // the table underneath it rather than at the receipt.
+  const resultCard = finished !== null && finished.handId !== dismissedHandId ? finished : null
+  // The card's stage stops above the viewer's own seat when there is room for the card there (review round 2, R2-3),
+  // measured again when the viewer takes a seat or leaves one under it. Up here, above the early return, because it is
+  // a hook — and worked out from `resultCard` itself, so what is measured for and what is drawn cannot disagree.
   const stageRef = useRef<HTMLElement>(null)
-  const cardUp = room !== null && state.hand?.phase === 'COMPLETE' && state.hand.result !== null && state.hand.handId !== dismissedHandId
-  const clearance = useSeatClearance(stageRef, cardUp)
+  const clearance = useSeatClearance(stageRef, resultCard !== null, me?.seat ?? null)
 
   if (room === null) return null
 
-  const hand = state.hand
   const holdem = room.config.holdem
   const seated = room.players.filter((p) => p.seat !== null)
   const canSit = me !== undefined && me.seat === null
@@ -148,10 +152,6 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
     if (await request.run(() => client.sitDown(buyInSeat, amount))) setBuyInSeat(null)
   }
 
-  const finished = hand !== null && hand.phase === 'COMPLETE' && hand.result !== null ? hand : null
-  // The result card sits over the felt, so it has to be closable: between hands a player may well want to look at
-  // the table underneath it rather than at the receipt.
-  const resultCard = finished !== null && finished.handId !== dismissedHandId ? finished : null
   /** Between hands: the room is taking seats rather than dealing. */
   const waiting = room.status === 'OPEN'
   const mySeated = me !== undefined && me.seat !== null
