@@ -8,9 +8,11 @@
  * child process would actually receive — rather than about the script's prose.
  *
  * `-DryRun` is the whole test surface, deliberately. Starting the server for real needs a Postgres
- * URL, and the point of this kit is that the operator brings their own (Neon). What the dry run
- * proves is everything that happens *before* the first packet: the guards, the substitutions, and
- * that no secret reaches the console.
+ * URL, and the point of this kit is that the operator brings their own (Neon) — and would register a
+ * scheduled task on the machine running the suite. What the dry run proves is everything that
+ * happens *before* the first packet: the guards, the substitutions, the launch it would make, and
+ * that no secret reaches the console or the task's action. (One case runs `-Serve` instead, with an
+ * `.env` it refuses at the first line — long before node or any task.)
  *
  * **The script is copied into a fixture tree rather than run in place.** `run.ps1` finds the repo
  * root from `$PSScriptRoot` and refuses to start without both built `dist` trees — so running it in
@@ -24,9 +26,9 @@
  * exercise and saying so is the honest answer.
  */
 import { execFileSync } from 'node:child_process'
-import { copyFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
@@ -259,6 +261,140 @@ describe.skipIf(!HAVE_POWERSHELL)('deploy/normal-windows/run.ps1 -DryRun', () =>
     const run = dryRun('with-path.env', bad)
     expect(run.status).not.toBe(0)
     expect(run.output).toContain('ALLOWED_ORIGINS')
+  }, 60_000)
+
+  // The launch mode (bug log R2-5). By default the server runs as a scheduled task, detached from the
+  // console that started it; the dry run prints the exact action section 11 would register. That
+  // action is stored in the task's definition, readable in Task Scheduler — so it must hold paths and
+  // nothing else, which is what these pin.
+  const actionOf = (output: string): string | undefined => /^ {2}Action: (.+)$/m.exec(output)?.[1]?.trim()
+
+  it('launches detached by default: names the task, and its action runs -Serve on the env file with no secret in it', () => {
+    const run = dryRun('detached.env', GOOD_ENV)
+    expect(run.status).toBe(0)
+    // ASCII fragments only, as above: the prose around them is Vietnamese.
+    expect(run.output).toContain('detached')
+    expect(run.output).toContain("scheduled task 'BlindLuckPoker-Normal'")
+
+    const action = actionOf(run.output)
+    expect(action).toBeDefined()
+    expect(action).toContain('powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "')
+    expect(action).toContain(`${join(root, 'deploy', 'normal-windows', 'run.ps1')}" -Serve -EnvFile "`)
+    expect(action).toMatch(/-EnvFile "[^"]+detached\.env"$/)
+    // Neither -Port nor -LanIp was passed, so neither is baked into the task.
+    expect(action).not.toContain('-Port')
+    expect(action).not.toContain('-LanIp')
+    // No secret, and not even the names of the variables that hold them.
+    expect(action).not.toContain(SECRET)
+    expect(action).not.toContain('hunter2')
+    expect(action).not.toContain('DATABASE_URL')
+    expect(action).not.toContain('SESSION_SECRET')
+
+    // No logon trigger unless asked for.
+    expect(run.output).toContain('Trigger:')
+    expect(run.output).not.toContain('AtLogOn')
+  }, 60_000)
+
+  it('carries -Port and -LanIp into the task action when the caller passed them', () => {
+    const run = dryRun('detached-port.env', GOOD_ENV, '-Port', '8080', '-LanIp', '192.168.77.5')
+    expect(run.status).toBe(0)
+    const action = actionOf(run.output)
+    expect(action).toMatch(/ -Serve -EnvFile "[^"]+" -Port 8080 -LanIp "192\.168\.77\.5"$/)
+    expect(action).not.toContain(SECRET)
+    expect(action).not.toContain('hunter2')
+  }, 60_000)
+
+  it('-AutoStart adds the AtLogOn trigger; -TaskName renames the task', () => {
+    const run = dryRun('autostart.env', GOOD_ENV, '-AutoStart', '-TaskName', 'BlindLuckPoker-Normal-other')
+    expect(run.status).toBe(0)
+    expect(run.output).toContain("scheduled task 'BlindLuckPoker-Normal-other'")
+    expect(run.output).toContain('Trigger: AtLogOn (-AutoStart)')
+  }, 60_000)
+
+  it('-Foreground says foreground and describes no task', () => {
+    const run = dryRun('foreground.env', GOOD_ENV, '-Foreground')
+    expect(run.status).toBe(0)
+    expect(run.output).toContain('foreground (-Foreground)')
+    expect(run.output).not.toContain('detached')
+    expect(run.output).not.toContain('Action:')
+    expect(run.output).not.toContain('Trigger:')
+  }, 60_000)
+
+  it('refuses flag combinations that mean nothing: -Foreground with -AutoStart, and -Serve outside the task', () => {
+    const both = dryRun('fg-auto.env', GOOD_ENV, '-Foreground', '-AutoStart')
+    expect(both.status).not.toBe(0)
+    expect(both.output).toContain('-AutoStart')
+
+    // -Serve starts node for real, so the only safe way to exercise it here is a combination it
+    // refuses before it reads anything.
+    const serve = dryRun('serve-dry.env', GOOD_ENV, '-Serve')
+    expect(serve.status).not.toBe(0)
+    expect(serve.output).toContain('-Serve')
+    expect(serve.output).not.toContain('node dist/main.js')
+  }, 60_000)
+
+  it('refuses a -TaskName Task Scheduler would misread', () => {
+    // `\` would make a folder path, `*` a wildcard pattern to the ScheduledTasks cmdlets.
+    for (const bad of ['a\\b', 'BlindLuckPoker-*']) {
+      const run = dryRun('bad-task.env', GOOD_ENV, '-TaskName', bad)
+      expect(run.status).not.toBe(0)
+      expect(run.output).toContain('-TaskName')
+    }
+  }, 60_000)
+
+  it('holds -LanIp to an IPv4 address or a host name before it reaches the task action', () => {
+    for (const bad of ['999.1.1.1', 'two words', 'a"b']) {
+      const run = dryRun('bad-lan.env', GOOD_ENV, '-LanIp', bad)
+      expect(run.status).not.toBe(0)
+      expect(run.output).toContain('-LanIp')
+    }
+    const named = dryRun('named-lan.env', GOOD_ENV, '-LanIp', 'poker-host.local')
+    expect(named.status).toBe(0)
+    expect(actionOf(named.output)).toMatch(/ -LanIp "poker-host\.local"$/)
+  }, 90_000)
+
+  it('never echoes an invalid ALLOWED_ORIGINS entry, only where it is and what is wrong with it', () => {
+    // A connection string pasted into the origin list is the likely way a password gets here.
+    const pasted = GOOD_ENV.replace(
+      'ALLOWED_ORIGINS=http://localhost:8080,http://<IP-LAN>:8080',
+      'ALLOWED_ORIGINS=http://localhost:8080,postgres://neon_owner:TOPSECRET@ep-x.aws.neon.tech/neondb',
+    )
+    const run = dryRun('origin-paste.env', pasted)
+    expect(run.status).not.toBe(0)
+    expect(run.output).toContain('ALLOWED_ORIGINS')
+    expect(run.output).toContain(' 2 ') // "origin thứ 2 trong 2"
+    expect(run.output).not.toContain('TOPSECRET')
+    expect(run.output).not.toContain('neon_owner')
+  }, 60_000)
+
+  it('under -Serve, an unexpected error is still written to normal.serve.log before it exits non-zero', () => {
+    // A directory given as the env file passes the existence check and then makes the read throw —
+    // an error no Stop-WithError anticipates, the kind the -Serve trap exists for.
+    const serveLog = join(dirname(script), 'normal.serve.log')
+    const envDir = join(dir, 'env-is-a-directory')
+    mkdirSync(envDir, { recursive: true })
+    const run = runScript(script, '-Serve', '-EnvFile', envDir)
+    expect(run.status).not.toBe(0)
+    expect(existsSync(serveLog)).toBe(true)
+    expect(readFileSync(serveLog, 'utf8')).toContain('[error]')
+  }, 60_000)
+
+  it('under -Serve, names a malformed .env line by number only — on stderr and in normal.serve.log', () => {
+    // -Serve writes into a file that outlives the run, so not even the masked preview a console run
+    // prints may go there. The line is refused in section 3, long before anything would start.
+    const serveLog = join(dirname(script), 'normal.serve.log')
+    const run = runScript(script, '-Serve', '-EnvFile', envFile('serve-bad.env', `postgres://u:TOPSECRET@h/db\n${GOOD_ENV}`))
+    expect(run.status).not.toBe(0)
+    expect(run.output).toContain('KEY=VALUE')
+    expect(run.output).not.toContain('TOPSECRET')
+    expect(run.output).not.toContain('postgres://')
+
+    expect(existsSync(serveLog)).toBe(true)
+    const logged = readFileSync(serveLog, 'utf8')
+    expect(logged).toContain('KEY=VALUE')
+    expect(logged).not.toContain('TOPSECRET')
+    expect(logged).not.toContain('postgres://')
+    expect(logged).not.toContain(SECRET)
   }, 60_000)
 })
 
