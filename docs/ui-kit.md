@@ -220,7 +220,9 @@ line ticking inside it would otherwise have the whole receipt read out every sec
 under the card, it landed on the viewer's own seat). It is never inside a row's `<li>` or the fee line, which is what
 the e2e suites read the card by. The card is at most as tall as the felt (`max-height: 100%` of `RoomScreen`'s
 overlay): past that its body — the rows, then the pot ledger under them — scrolls inside it, and the title, the close
-button and the footer stay put.
+button and the footer stay put. While the body can still scroll down, its foot fades out (a CSS mask, switched by
+`data-more`, which `HandResult` measures on scroll and on resize), so a ledger below the fold reads as more to come;
+scrolled to the end, the fade goes.
 
 **Seat slots.** A seat has two places the host app may write into, and they are threaded identically —
 `RoomScreen` → `PokerTable` → `Seat`. `chibiFor(player)` replaces the initial disc; `captionFor(player)` adds one

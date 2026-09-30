@@ -1,5 +1,5 @@
 import type { RoomView, ShowdownHand } from '@bp/core'
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ClientHand } from '../client/types.js'
 import { formatPoints, handLabel, type Language } from '../i18n/index.js'
@@ -34,9 +34,34 @@ const reasonKey = (reason: string): string => {
   return words.map((w, i) => (i === 0 ? w : w[0]!.toUpperCase() + w.slice(1))).join('')
 }
 
+/**
+ * Whether a scroll box holds more below its fold: taller inside than out, and not yet scrolled to the end. Measured
+ * again on every scroll and whenever the box, or anything directly in it, changes size (a narrower window, a font
+ * landing, a side-pot ledger appearing); `key` names what the box shows, so a new one is observed afresh.
+ */
+function useMoreBelow(ref: RefObject<HTMLElement>, key: unknown): boolean {
+  const [more, setMore] = useState(false)
+  useEffect(() => {
+    const box = ref.current
+    if (box === null) return
+    const measure = (): void => setMore(box.scrollHeight - box.clientHeight - box.scrollTop > 1)
+    measure()
+    box.addEventListener('scroll', measure, { passive: true })
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    if (observer !== null) for (const el of [box, ...Array.from(box.children)]) observer.observe(el)
+    return () => {
+      box.removeEventListener('scroll', measure)
+      observer?.disconnect()
+    }
+  }, [ref, key])
+  return more
+}
+
 /** Showdown card: who won, with what, and for how much. Renders only for a completed hand that carries a result. */
 export function HandResult({ hand, room, myPlayerId, lang, onDismiss, countdown }: HandResultProps) {
   const { t } = useTranslation()
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const moreBelow = useMoreBelow(bodyRef, hand.result)
   const result = hand.result
   if (hand.phase !== 'COMPLETE' || result === null) return null
 
@@ -76,8 +101,9 @@ export function HandResult({ hand, room, myPlayerId, lang, onDismiss, countdown 
       ) : null}
 
       {/* The card never grows past the felt it is dealt onto: with six hands shown down and a side pot or two, the
-          ledger and the rows scroll here while the title, the close button and the footer stay put. */}
-      <div className={s.resultBody}>
+          ledger and the rows scroll here while the title, the close button and the footer stay put. While there is
+          more below the fold, `data-more` fades the box's foot, so it reads as a list that goes on. */}
+      <div ref={bodyRef} className={s.resultBody} data-more={moreBelow ? 'true' : undefined}>
         <ul className={s.resultRows}>
           {rows.map(({ seat, amount }) => {
             const hit = showdown.get(seat)

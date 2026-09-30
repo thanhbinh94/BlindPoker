@@ -115,8 +115,16 @@ test('E-05: three all-ins of different sizes make a side pot', async () => {
     autopilot(c.page, ['call', 'check'], handOver(c.page)),
   ])
   const card = resultCard(c.page)
-  await expect(card.getByText('Pot chính')).toBeVisible()
-  await expect(card.getByText('Pot phụ 1'), 'the short all-in cannot win the deeper stacks’ extra').toBeVisible()
+  // The ledger sits under the rows, and the card scrolls inside itself once it is taller than the felt: each line is
+  // scrolled to first, and must then be on screen — reachable, not merely somewhere in the DOM.
+  const main = card.getByText('Pot chính')
+  await main.scrollIntoViewIfNeeded()
+  await expect(main).toBeVisible()
+  await expect(main).toBeInViewport()
+  const side = card.getByText('Pot phụ 1')
+  await side.scrollIntoViewIfNeeded()
+  await expect(side, 'the short all-in cannot win the deeper stacks’ extra').toBeVisible()
+  await expect(side).toBeInViewport()
   for (const p of [a, b, c]) await leave(p.page)
 })
 

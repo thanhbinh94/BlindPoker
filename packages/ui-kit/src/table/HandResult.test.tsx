@@ -1,10 +1,11 @@
-import { render, screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nextProvider } from 'react-i18next'
 import { HandCategory, parseCards, type RoomView } from '@bp/core'
 import { createI18n } from '../i18n/index.js'
 import type { ClientHand } from '../client/types.js'
 import { HandResult } from './HandResult.js'
+import s from './table.module.css'
 
 describe('HandResult', () => {
   it('names the winner, the hand and the payout', () => {
@@ -165,6 +166,112 @@ describe('HandResult', () => {
       renderWith()
       expect(screen.getByRole('status').querySelector('[aria-live="off"]')).toBeNull()
       expect(screen.queryByText(/Ván tiếp theo/)).toBeNull()
+    })
+  })
+
+  // Task 8 review: capped at the felt's height, the card's body scrolls — and a side-pot ledger below the fold is only
+  // found by someone who can tell there is more. `data-more` fades the body's foot while it can still scroll down.
+  // jsdom lays nothing out, so the body's metrics are stubbed and the ResizeObserver is a fake whose callback the test
+  // fires itself.
+  describe('the fade that says the body scrolls', () => {
+    const room = {
+      players: [
+        { playerId: 'a', displayName: 'Ann', seat: 0 },
+        { playerId: 'b', displayName: 'Bob', seat: 1 },
+      ],
+    } as unknown as RoomView
+    const hand = {
+      phase: 'COMPLETE',
+      mode: 'holdem',
+      seats: [
+        { seat: 0, playerId: 'a', displayName: 'Ann' },
+        { seat: 1, playerId: 'b', displayName: 'Bob' },
+      ],
+      result: {
+        payouts: [{ seat: 1, amount: 588 }],
+        pots: [{ amount: 600, eligibleSeats: [0, 1], winners: [{ seat: 1, amount: 588 }] }],
+        fee: 12,
+        showdown: null,
+        carryOverOut: 0,
+        uncalledReturned: null,
+        cancelled: false,
+        reason: null,
+      },
+    } as unknown as ClientHand
+    const box = { scrollHeight: 0, clientHeight: 0 }
+    let resized: (() => void) | null = null
+    let observed: Element[] = []
+
+    beforeEach(() => {
+      const metric = (key: keyof typeof box) =>
+        function (this: HTMLElement): number {
+          return this.classList.contains(s.resultBody!) ? box[key] : 0
+        }
+      vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(metric('scrollHeight'))
+      vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(metric('clientHeight'))
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          constructor(callback: () => void) {
+            resized = callback
+          }
+          observe(el: Element): void {
+            observed.push(el)
+          }
+          disconnect(): void {
+            observed = []
+          }
+        },
+      )
+    })
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+      vi.unstubAllGlobals()
+      resized = null
+      observed = []
+    })
+
+    const bodyOf = (): HTMLElement => {
+      render(
+        <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+          <HandResult hand={hand} room={room} myPlayerId="a" lang="en" />
+        </I18nextProvider>,
+      )
+      const body = screen.getByRole('status').querySelector<HTMLElement>(`.${s.resultBody}`)
+      expect(body).not.toBeNull()
+      return body!
+    }
+
+    it('fades the foot while there is more below, and stops once scrolled to the end', () => {
+      Object.assign(box, { scrollHeight: 400, clientHeight: 200 })
+      const body = bodyOf()
+      expect(body).toHaveAttribute('data-more', 'true')
+
+      body.scrollTop = 120
+      fireEvent.scroll(body)
+      expect(body, 'still 80 px to go').toHaveAttribute('data-more', 'true')
+
+      body.scrollTop = 200
+      fireEvent.scroll(body)
+      expect(body, 'at the end').not.toHaveAttribute('data-more')
+    })
+
+    it('draws no fade when everything fits', () => {
+      Object.assign(box, { scrollHeight: 200, clientHeight: 200 })
+      expect(bodyOf()).not.toHaveAttribute('data-more')
+    })
+
+    it('measures again when the box or what it holds changes size', () => {
+      Object.assign(box, { scrollHeight: 200, clientHeight: 200 })
+      const body = bodyOf()
+      expect(body).not.toHaveAttribute('data-more')
+
+      // the window got shorter: the card's cap came down, the rows did not — and it is the body that is watched
+      Object.assign(box, { clientHeight: 120 })
+      expect(observed).toContain(body)
+      act(() => resized?.())
+      expect(body).toHaveAttribute('data-more', 'true')
     })
   })
 })

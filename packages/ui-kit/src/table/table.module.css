@@ -1065,6 +1065,15 @@
   overscroll-behavior: contain;
 }
 
+/* More below the fold — the rest of the rows, the side-pot ledger: the foot of the box fades into the card, so it
+   reads as a list that goes on rather than one that ends at the edge. `HandResult` sets `data-more` while the box can
+   still scroll down, and drops it at the end. A mask, not an overlay, so it fades to whatever the card is painted
+   with; nothing moves, so there is no motion to reduce. */
+.resultBody[data-more='true'] {
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 2.5rem), transparent);
+  mask-image: linear-gradient(180deg, #000 calc(100% - 2.5rem), transparent);
+}
+
 .resultRows {
   display: flex;
   flex-direction: column;
