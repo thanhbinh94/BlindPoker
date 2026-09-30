@@ -188,3 +188,136 @@ export async function expectNoSidewaysScroll(page: Page): Promise<void> {
   const width = page.viewportSize()?.width ?? 0
   expect(await page.evaluate(() => document.documentElement.scrollWidth), 'the page does not scroll sideways').toBeLessThanOrEqual(width)
 }
+
+/** One card of a card grid, as the browser laid it out (`measureCardLayout`). */
+export interface MeasuredCard {
+  /** The card's accessible name, or the start of its text — only for the failure message. */
+  name: string
+  top: number
+  bottom: number
+  /** The bordered box's outer height. */
+  height: number
+  /** From the lowest text line inside the card (its last row: the rarity, a lock hint, a date) down to the card's own
+   * bottom edge — equal across a row when every card's last row sits on the same line. Only a card with a rarity
+   * (`data-rarity`) has such rows; the base portraits and the "Tự nhiên" swatch are a picture and a name, and are
+   * `null` here. */
+  tail: number | null
+}
+
+export interface CardLayout {
+  /** Every grid whose items are bordered cards, split into visual rows (cards whose tops are within 2 px). */
+  rows: MeasuredCard[][]
+  /** Each `<h3>` in scope that has a card above it: the space between the last card above and the heading's top. */
+  headings: { text: string; gap: number }[]
+}
+
+/**
+ * Measures the card grids inside `scope`: the wardrobe's item, colour, word and base cards (a tab's grid, or the two
+ * grids of "Danh hiệu & Huy hiệu") and the inventory's owned cards. A grid counts when every item draws a border —
+ * itself, or through its first child (`.cardCell`, `<li>`) — so the wardrobe's other grids are not picked up. Nothing
+ * here knows a CSS-module class name.
+ */
+export async function measureCardLayout(scope: Locator): Promise<CardLayout> {
+  return scope.evaluate(async (root: HTMLElement): Promise<CardLayout> => {
+    await document.fonts.ready
+    const drawsBorder = (el: Element): boolean => parseFloat(getComputedStyle(el).borderBottomWidth) > 0
+    const cardOf = (item: Element): HTMLElement | null => {
+      if (drawsBorder(item)) return item as HTMLElement
+      const inner = item.firstElementChild
+      return inner !== null && drawsBorder(inner) ? (inner as HTMLElement) : null
+    }
+    const range = document.createRange()
+    /** The lowest text line the card draws in the flow — its rarity, hint or date, whichever comes last. A stretched
+     * wrapper is not a row (its box reaches the card's bottom whatever is in it), and neither is an absolutely
+     * positioned "Đang mặc" pill. */
+    const lowestTextOf = (card: HTMLElement): number => {
+      let lowest = card.getBoundingClientRect().top
+      for (const el of Array.from(card.querySelectorAll<HTMLElement>('*'))) {
+        if (getComputedStyle(el).position === 'absolute') continue
+        for (const node of Array.from(el.childNodes)) {
+          if (node.nodeType !== Node.TEXT_NODE || !/\S/.test(node.textContent ?? '')) continue
+          range.selectNodeContents(node)
+          for (const r of Array.from(range.getClientRects())) lowest = Math.max(lowest, r.bottom)
+        }
+      }
+      return lowest
+    }
+    const nameOf = (card: HTMLElement): string => card.getAttribute('aria-label') ?? card.querySelector('[aria-label]')?.getAttribute('aria-label') ?? (card.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 40)
+
+    const all: HTMLElement[] = []
+    const rows: MeasuredCard[][] = []
+    for (const grid of [root, ...Array.from(root.querySelectorAll<HTMLElement>('*'))]) {
+      if (getComputedStyle(grid).display !== 'grid') continue
+      const cards = Array.from(grid.children).map(cardOf)
+      if (cards.length === 0 || cards.some((c) => c === null)) continue
+      const placed = (cards as HTMLElement[])
+        .map((card) => ({ card, box: card.getBoundingClientRect() }))
+        .sort((a, b) => a.box.top - b.box.top || a.box.left - b.box.left)
+      let row: MeasuredCard[] = []
+      let rowTop = Number.NEGATIVE_INFINITY
+      for (const { card, box } of placed) {
+        all.push(card)
+        if (box.top - rowTop > 2) {
+          row = []
+          rows.push(row)
+          rowTop = box.top
+        }
+        const graded = card.hasAttribute('data-rarity')
+        row.push({ name: nameOf(card), top: box.top, bottom: box.bottom, height: box.height, tail: graded ? box.bottom - lowestTextOf(card) : null })
+      }
+    }
+
+    const headings: { text: string; gap: number }[] = []
+    for (const h of Array.from(root.querySelectorAll<HTMLElement>('h3'))) {
+      const above = all.filter((card) => h.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_PRECEDING)
+      if (above.length === 0) continue
+      const lastBottom = Math.max(...above.map((card) => card.getBoundingClientRect().bottom))
+      headings.push({ text: (h.textContent ?? '').trim(), gap: h.getBoundingClientRect().top - lastBottom })
+    }
+    return { rows, headings }
+  })
+}
+
+const px = (n: number): string => `${Math.round(n * 10) / 10}`
+
+/**
+ * Review 2026-09-29, No8b: in every card grid the cards of one row are one height ("ô dài, ô ngắn" was a tall card
+ * beside short ones) and their last text rows — rarity, lock hint, date — sit on one line. Height is the outer box,
+ * ±1 px; the last text line's distance to the card bottom is ±3 px: a rarity (0.6875 rem), a hint (0.75 rem) and a date
+ * (0.8125 rem) leave up to 2 px apart under their glyphs (measured), which is not a misaligned row. Cards without a
+ * rarity (the base portraits, the "Tự nhiên" swatch) have no such row and are compared on height only. Returns what
+ * it measured, for a caller that wants to report it.
+ */
+export async function expectEvenCardRows(scope: Locator, label: string): Promise<CardLayout> {
+  const layout = await measureCardLayout(scope)
+  const several = layout.rows.filter((row) => row.length > 1)
+  expect(several.length, `${label}: at least one row of two or more cards was measured`).toBeGreaterThan(0)
+  const problems: string[] = []
+  for (const row of several) {
+    const heights = row.map((c) => c.height)
+    const graded = row.filter((c): c is MeasuredCard & { tail: number } => c.tail !== null)
+    const tails = graded.map((c) => c.tail)
+    const heightSpread = Math.max(...heights) - Math.min(...heights)
+    const tailSpread = tails.length > 1 ? Math.max(...tails) - Math.min(...tails) : 0
+    if (heightSpread > 1) {
+      problems.push(`row at y=${px(row[0]!.top)}: heights differ by ${px(heightSpread)} px — ${row.map((c) => `${c.name} ${px(c.height)}`).join(' | ')}`)
+    }
+    if (tailSpread > 3) {
+      problems.push(`row at y=${px(row[0]!.top)}: last rows sit ${px(tailSpread)} px apart — ${graded.map((c) => `${c.name} ${px(c.tail)}`).join(' | ')}`)
+    }
+  }
+  // Soft: one run lists every tab's uneven rows, not just the first tab's.
+  expect.soft(problems, `${label}: cards in a row share one height and one bottom line\n  ${problems.join('\n  ')}`).toEqual([])
+  return layout
+}
+
+/** No11b: a group's heading keeps at least `min` px (16 by default) below the last card of the group above it. */
+export async function expectHeadingsClearOfCards(scope: Locator, label: string, min = 16): Promise<CardLayout> {
+  const layout = await measureCardLayout(scope)
+  expect(layout.headings.length, `${label}: at least one heading with a card above it was measured`).toBeGreaterThan(0)
+  const tight = layout.headings.filter((h) => h.gap < min)
+  expect
+    .soft(tight, `${label}: a heading sits under ${min} px from the card above it — ${tight.map((h) => `"${h.text}" ${px(h.gap)} px`).join(', ')}`)
+    .toEqual([])
+  return layout
+}

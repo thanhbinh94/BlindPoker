@@ -119,6 +119,9 @@ export function ItemTab({ slot, catalog, owned, achievements, draft, wear, filte
   const variants = variantsByFile(catalog.filter((item) => item.slot === slot))
   const cards = applyFilter(rows, owned, filter)
   const heading = WORD_HEADING[slot]
+  // A card with no colour variants keeps the dot row's height when another card shown has some (No8b), so every
+  // card in the grid ends its rarity/hint block on the same line.
+  const reserveDots = cards.some((item) => item.asset !== undefined && (variants.get(item.asset.file)?.length ?? 0) > 0)
   // `title`/`badge` render inside the caller's own shared `tabpanel` (see `panelId`'s own comment above),
   // so this `<div>` carries no panel role of its own then; every other slot is its own tab and carries the
   // role itself, exactly as before.
@@ -126,7 +129,7 @@ export function ItemTab({ slot, catalog, owned, achievements, draft, wear, filte
 
   return (
     <>
-      {heading === undefined ? null : <h3 className={shared.groupTitle}>{t(heading)}</h3>}
+      {heading === undefined ? null : <h3 className={`${shared.groupTitle} ${s.wordHeading}`}>{t(heading)}</h3>}
       <div className={s.cardGrid} role={isOwnPanel ? 'tabpanel' : undefined} id={isOwnPanel ? panelId : undefined} aria-labelledby={isOwnPanel ? labelledBy : undefined}>
         {cards.map((item) => {
           const isOwned = owned.has(item.id)
@@ -144,7 +147,17 @@ export function ItemTab({ slot, catalog, owned, achievements, draft, wear, filte
               : dots.map((variant) => ({ item: variant, owned: owned.has(variant.id), wearing: draft[slot] === variant.id }))
 
           return (
-            <ItemCard key={item.id} item={item} wear={wear} owned={isOwned} wearing={wearing} hint={hint} variants={variantProps} onPick={onPick} />
+            <ItemCard
+              key={item.id}
+              item={item}
+              wear={wear}
+              owned={isOwned}
+              wearing={wearing}
+              hint={hint}
+              variants={variantProps}
+              reserveDots={reserveDots}
+              onPick={onPick}
+            />
           )
         })}
       </div>
