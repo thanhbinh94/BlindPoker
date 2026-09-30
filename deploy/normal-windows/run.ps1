@@ -145,6 +145,15 @@ function Stop-WithError([string] $Message) {
     exit 1
 }
 
+# Anything that fails without going through Stop-WithError — a cmdlet error under
+# $ErrorActionPreference = 'Stop', an exception from .NET — would leave a hidden -Serve with no word
+# anywhere. Logged to normal.serve.log (a no-op outside -Serve), then rethrown (`break`), so the error
+# still prints and the script still exits non-zero exactly as it would without this trap.
+trap {
+    Write-ServeLog "[error] Lỗi không lường trước: $($_.Exception.Message)"
+    break
+}
+
 # Where a malformed `.env` line is. On a console it comes with a masked, truncated preview; under
 # -Serve the message lands in a file that outlives the run, so even that much of the line stays out.
 function Format-EnvLineContext([string] $Text) {
@@ -285,11 +294,12 @@ function Read-FileShared([string] $Path) {
     } catch { return '' }
 }
 
-# The pid in `normal.pid`, or $null while the file is absent, half-written or not a pid.
+# The pid in `normal.pid`, or $null while the file is absent, empty, half-written or not a pid. At
+# most nine digits: every Windows pid fits, and anything longer would overflow [int].
 function Read-PidFile([string] $Path) {
     if (-not (Test-Path -LiteralPath $Path)) { return $null }
-    $text = (Read-FileShared $Path).Trim()
-    if ($text -match '^\d+$') { return [int] $text }
+    $text = "$(Read-FileShared $Path)".Trim()
+    if ($text -match '^\d{1,9}$') { return [int] $text }
     return $null
 }
 
@@ -339,15 +349,23 @@ function Test-OwnTask($Task, [string] $RunScript) {
     return ($arguments -match '(^|\s)-Serve(\s|$)')
 }
 
-# `node.exe` running `dist/main.js`, the only command this kit ever starts. A pid in normal.pid is
-# trusted only while this holds: Windows reuses pids, and the one in the file may since have gone to
-# another program — including another node, a dev server say, that must never be taken for ours.
-function Test-KitNode([int] $Id) {
+<#
+    Whether the pid read from $PidPath is still the server that file was written for. Windows reuses
+    pids and the file outlives its process (a reboot, a -Foreground window closed), so the pid may
+    since belong to anything — another project's `node dist/main.js` included. Three things must
+    hold: the process is `node.exe`, its command line ends with `dist/main.js` (the only command this
+    kit starts), and it was created no later than the file was last written — both launch paths
+    write normal.pid after node has started, so a process that got the pid afterwards always fails.
+#>
+function Test-KitNode([int] $Id, [string] $PidPath) {
     $proc = Get-CimInstance Win32_Process -Filter "ProcessId = $Id" -ErrorAction SilentlyContinue
-    if ($null -eq $proc -or "$($proc.Name)" -ine 'node.exe' -or $null -eq $proc.CommandLine) { return $false }
+    if ($null -eq $proc -or "$($proc.Name)" -ine 'node.exe' -or $null -eq $proc.CommandLine -or $null -eq $proc.CreationDate) { return $false }
     $command = "$($proc.CommandLine)".Trim().TrimEnd('"')
-    return ($command.EndsWith('dist/main.js', [System.StringComparison]::OrdinalIgnoreCase) -or
-        $command.EndsWith('dist\main.js', [System.StringComparison]::OrdinalIgnoreCase))
+    $runsMain = $command.EndsWith('dist/main.js', [System.StringComparison]::OrdinalIgnoreCase) -or
+        $command.EndsWith('dist\main.js', [System.StringComparison]::OrdinalIgnoreCase)
+    if (-not $runsMain) { return $false }
+    $written = Get-Item -LiteralPath $PidPath -ErrorAction SilentlyContinue
+    return ($null -ne $written -and $proc.CreationDate -le $written.LastWriteTime)
 }
 
 # --- 0. Which launch ---------------------------------------------------------------------------
@@ -516,10 +534,20 @@ if ($settings.Contains('ALLOWED_ORIGINS')) { $origins = @($settings['ALLOWED_ORI
 if ($origins.Count -eq 0) {
     Stop-WithError "ALLOWED_ORIGINS chưa được đặt trong $EnvFile — cần ít nhất một origin, ví dụ http://localhost:$effectivePort (danh sách cách nhau bằng dấu phẩy)."
 }
-$badOrigins = @($origins | Where-Object { -not (Test-AbsoluteOrigin $_) })
+# The bad entries are named by position and by what is wrong with them, never echoed: a mis-pasted
+# connection string in this list would otherwise reach the console — and, under -Serve, a file.
+$badOrigins = @()
+for ($i = 0; $i -lt $origins.Count; $i++) {
+    $candidate = $origins[$i]
+    if (Test-AbsoluteOrigin $candidate) { continue }
+    $problem = if ($candidate -notmatch '^https?://') { 'không bắt đầu bằng http:// hoặc https://' }
+        elseif ($candidate.Contains('@')) { 'có tên đăng nhập (@)' }
+        elseif ($candidate.EndsWith('/')) { 'có dấu / ở cuối' }
+        else { 'có đường dẫn, query hoặc sai dạng' }
+    $badOrigins += "  - origin thứ $($i + 1) trong $($origins.Count): $problem"
+}
 if ($badOrigins.Count -gt 0) {
-    Stop-WithError ("ALLOWED_ORIGINS có origin không hợp lệ trong $($EnvFile):`n" +
-        (($badOrigins | ForEach-Object { "  - '$_'" }) -join "`n") +
+    Stop-WithError ("ALLOWED_ORIGINS có origin không hợp lệ trong $($EnvFile):`n" + ($badOrigins -join "`n") +
         "`nMỗi origin phải đúng dạng http(s)://host[:port] — không có path, không có dấu / ở cuối, không có tên đăng nhập.")
 }
 # A reverse proxy or tunnel — Cloudflare Tunnel, README §8 — puts a different origin between the
@@ -555,7 +583,7 @@ if ($Serve) {
     # A second -Serve beside a live server (by hand, or a task started twice) must not delete the
     # running server's logs and overwrite its pid; the launcher refuses the same case in section 9.
     $recordedPid = Read-PidFile $pidFile
-    if ($null -ne $recordedPid -and (Test-KitNode $recordedPid)) {
+    if ($null -ne $recordedPid -and (Test-KitNode $recordedPid $pidFile)) {
         Stop-WithError "Đã có một server đang chạy (pid $recordedPid, ghi trong $pidFile). -Serve không khởi động bản thứ hai."
     }
 
@@ -631,13 +659,17 @@ if ($DryRun) {
 # --- 9. Refuse to start a second copy ----------------------------------------------------------
 
 if (Test-Path -LiteralPath $pidFile) {
-    $existing = (Get-Content -LiteralPath $pidFile -Raw).Trim()
+    # `"$(…)"`: Get-Content -Raw of an empty file is $null. At most nine digits: longer overflows [int].
+    $existing = "$(Get-Content -LiteralPath $pidFile -Raw)".Trim()
+    $validPid = $existing -match '^\d{1,9}$'
     $alive = $null
-    if ($existing -match '^\d+$') { $alive = Get-Process -Id ([int] $existing) -ErrorAction SilentlyContinue }
-    if ($null -ne $alive -and $alive.ProcessName -eq 'node' -and (Test-KitNode $alive.Id)) {
+    if ($validPid) { $alive = Get-Process -Id ([int] $existing) -ErrorAction SilentlyContinue }
+    if ($null -ne $alive -and $alive.ProcessName -eq 'node' -and (Test-KitNode $alive.Id $pidFile)) {
         Stop-WithError "Đã có một server đang chạy (pid $existing). Dừng bằng $stopCommand rồi chạy lại."
     }
-    $staleReason = if ($null -eq $alive) { "pid $existing không còn chạy" } else { "pid $existing giờ là một tiến trình khác, không phải server này" }
+    $staleReason = if (-not $validPid) { 'không chứa một pid hợp lệ' }
+        elseif ($null -eq $alive) { "pid $existing không còn chạy" }
+        else { "pid $existing giờ là một tiến trình khác, không phải server này" }
     Write-Note "Xoá $pidFile cũ ($staleReason) — dấu vết của một lần tắt không sạch."
     Remove-Item -LiteralPath $pidFile -Force
 }

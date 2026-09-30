@@ -20,7 +20,7 @@
  * again in `finally`. The wildcard case uses a pattern that could only ever match its own decoy.
  */
 import { execFileSync, spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, realpathSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -216,6 +216,83 @@ describe.skipIf(!HAVE_POWERSHELL)('deploy/normal-windows/stop.ps1', () => {
       decoy.kill()
     }
   }, 30_000)
+
+  /** A harmless node whose command line ends with `dist/main.js`, like the kit's server's does. */
+  const spawnMainJsLookalike = () => spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', 'dist/main.js'], { stdio: 'ignore' })
+
+  it('refuses a node running dist/main.js that started after the pid file was written — a reused pid', async () => {
+    // After a reboot, or a -Foreground window closed without stop.ps1, the pid in a stale file can
+    // go to another project's `node dist/main.js`. The file is older than that process; the kit's
+    // own server is always older than its file.
+    const other = spawnMainJsLookalike()
+    try {
+      const pid = other.pid as number
+      await sleep(500)
+      expect(isAlive(pid)).toBe(true)
+      const pidFile = join(dir, 'reused-main.pid')
+      writeFileSync(pidFile, String(pid), 'utf8')
+      const minuteAgo = new Date(Date.now() - 60_000)
+      utimesSync(pidFile, minuteAgo, minuteAgo)
+
+      const run = runStop('-PidFile', pidFile)
+
+      expect(run.status).not.toBe(0)
+      expect(run.output).toContain(String(pid))
+      expect(existsSync(pidFile)).toBe(true)
+      expect(isAlive(pid)).toBe(true)
+    } finally {
+      other.kill()
+    }
+  }, 30_000)
+
+  it('does stop a node running dist/main.js that is older than its pid file — the server\'s own shape', async () => {
+    // The positive control for the case above: without it, a check that refused every process would
+    // pass all the refusal tests. The process is this test's own and harmless.
+    const server = spawnMainJsLookalike()
+    try {
+      const pid = server.pid as number
+      await sleep(500)
+      const pidFile = join(dir, 'own-main.pid')
+      writeFileSync(pidFile, String(pid), 'utf8')
+
+      const run = runStop('-PidFile', pidFile)
+
+      expect(run.status).toBe(0)
+      expect(run.output).toContain(String(pid))
+      expect(existsSync(pidFile)).toBe(false)
+      expect(isAlive(pid)).toBe(false)
+    } finally {
+      server.kill()
+    }
+  }, 30_000)
+
+  it('treats an empty or over-long pid file as invalid, cleanly — and -Remove still completes', (ctx) => {
+    const tenDigits = join(dir, 'ten-digits.pid')
+    writeFileSync(tenDigits, '12345678901', 'utf8')
+    const long = runStop('-PidFile', tenDigits)
+    expect(long.status).toBe(1)
+    expect(long.output).toContain('12345678901')
+    expect(long.output).not.toMatch(/overflow|Cannot convert|Exception/i)
+
+    const name = `${TEST_TASK_PREFIX}-emptypid`
+    if (!registerTask(name, OWN_ACTION)) {
+      ctx.skip()
+      return
+    }
+    try {
+      const empty = join(dir, 'empty.pid')
+      writeFileSync(empty, '', 'utf8')
+      const run = runStop('-PidFile', empty, '-TaskName', name, '-Remove')
+      expect(run.status).toBe(1)
+      expect(run.output).toContain('empty.pid')
+      expect(run.output).not.toMatch(/null-valued|Exception/i)
+      // The pid error is reported, and the uninstall still happened.
+      expect(run.output).toContain(name)
+      expect(taskExists(name)).toBe(false)
+    } finally {
+      unregisterTask(name)
+    }
+  }, 60_000)
 
   it('refuses a wildcard or otherwise invalid -TaskName before it looks at any task', (ctx) => {
     // The pattern can only ever match this test's own decoy — and the decoy is shaped like a real

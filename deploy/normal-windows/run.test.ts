@@ -353,6 +353,32 @@ describe.skipIf(!HAVE_POWERSHELL)('deploy/normal-windows/run.ps1 -DryRun', () =>
     expect(actionOf(named.output)).toMatch(/ -LanIp "poker-host\.local"$/)
   }, 90_000)
 
+  it('never echoes an invalid ALLOWED_ORIGINS entry, only where it is and what is wrong with it', () => {
+    // A connection string pasted into the origin list is the likely way a password gets here.
+    const pasted = GOOD_ENV.replace(
+      'ALLOWED_ORIGINS=http://localhost:8080,http://<IP-LAN>:8080',
+      'ALLOWED_ORIGINS=http://localhost:8080,postgres://neon_owner:TOPSECRET@ep-x.aws.neon.tech/neondb',
+    )
+    const run = dryRun('origin-paste.env', pasted)
+    expect(run.status).not.toBe(0)
+    expect(run.output).toContain('ALLOWED_ORIGINS')
+    expect(run.output).toContain(' 2 ') // "origin thứ 2 trong 2"
+    expect(run.output).not.toContain('TOPSECRET')
+    expect(run.output).not.toContain('neon_owner')
+  }, 60_000)
+
+  it('under -Serve, an unexpected error is still written to normal.serve.log before it exits non-zero', () => {
+    // A directory given as the env file passes the existence check and then makes the read throw —
+    // an error no Stop-WithError anticipates, the kind the -Serve trap exists for.
+    const serveLog = join(dirname(script), 'normal.serve.log')
+    const envDir = join(dir, 'env-is-a-directory')
+    mkdirSync(envDir, { recursive: true })
+    const run = runScript(script, '-Serve', '-EnvFile', envDir)
+    expect(run.status).not.toBe(0)
+    expect(existsSync(serveLog)).toBe(true)
+    expect(readFileSync(serveLog, 'utf8')).toContain('[error]')
+  }, 60_000)
+
   it('under -Serve, names a malformed .env line by number only — on stderr and in normal.serve.log', () => {
     // -Serve writes into a file that outlives the run, so not even the masked preview a console run
     // prints may go there. The line is refused in section 3, long before anything would start.

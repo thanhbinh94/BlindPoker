@@ -95,11 +95,18 @@ function Test-MainJsCommand($CommandLine) {
         $command.EndsWith('dist\main.js', [System.StringComparison]::OrdinalIgnoreCase))
 }
 
-# The pid names this kit's server only while it is `node.exe` running `dist/main.js`: a pid Windows
-# has handed to another node since — a dev server, say — must not be killed for a stale file.
+<#
+    The pid names this kit's server only while it is `node.exe` running `dist/main.js` *and* was
+    created no later than the pid file was last written. run.ps1 writes normal.pid after node has
+    started, on both launch paths; a pid Windows handed out afterwards — after a reboot, or a
+    -Foreground window closed without stop.ps1 — to another project's `node dist/main.js` is newer
+    than the file, and must not be killed for it.
+#>
 function Test-KitNode([int] $Id) {
     $proc = Get-CimInstance Win32_Process -Filter "ProcessId = $Id" -ErrorAction SilentlyContinue
-    return ($null -ne $proc -and "$($proc.Name)" -ieq 'node.exe' -and (Test-MainJsCommand $proc.CommandLine))
+    if ($null -eq $proc -or "$($proc.Name)" -ine 'node.exe' -or -not (Test-MainJsCommand $proc.CommandLine)) { return $false }
+    $written = Get-Item -LiteralPath $PidFile -ErrorAction SilentlyContinue
+    return ($null -ne $proc.CreationDate -and $null -ne $written -and $proc.CreationDate -le $written.LastWriteTime)
 }
 
 <#
@@ -161,7 +168,13 @@ function Complete-KitTask([bool] $NodeStopped) {
                 Stop-Process -Id $orphan.ProcessId -Force -ErrorAction SilentlyContinue
             }
         }
+        # Fetched again after the wait — and its ownership asked again, since the name could have been
+        # re-registered by someone else in the meantime.
         $task = Get-KitTask
+        if ($null -ne $task -and -not (Test-OwnTask $task)) {
+            Write-Output "[warn] Scheduled task '$TaskName' vừa được thay bằng một task không phải của bộ kit này — để nguyên."
+            return
+        }
         if ($null -ne $task -and "$($task.State)" -eq 'Running') {
             $task | Stop-ScheduledTask
             Write-Output "Đã dừng scheduled task '$TaskName'."
@@ -196,9 +209,12 @@ if (-not (Test-Path -LiteralPath $PidFile)) {
     exit 0
 }
 
-$recorded = (Get-Content -LiteralPath $PidFile -Raw).Trim()
-if ($recorded -notmatch '^\d+$') {
-    Exit-WithPidError "$PidFile không chứa một pid hợp lệ ('$recorded'). Xoá file này rồi tìm tiến trình bằng: Get-Process node"
+# `"$(…)"`: Get-Content -Raw of an empty file is $null, and `$null.Trim()` would throw. At most nine
+# digits: every Windows pid fits, and a longer number would overflow [int] below.
+$recorded = "$(Get-Content -LiteralPath $PidFile -Raw)".Trim()
+if ($recorded -notmatch '^\d{1,9}$') {
+    $shown = if ($recorded.Length -gt 20) { "$($recorded.Substring(0, 20))…" } else { $recorded }
+    Exit-WithPidError "$PidFile không chứa một pid hợp lệ ('$shown'). Xoá file này rồi tìm tiến trình bằng: Get-Process node"
 }
 
 $target = Get-Process -Id ([int] $recorded) -ErrorAction SilentlyContinue
@@ -215,9 +231,10 @@ if ($null -eq $target) {
 if ($target.ProcessName -ne 'node') {
     Exit-WithPidError "pid $recorded bây giờ là '$($target.ProcessName)', không phải node — Windows đã cấp lại pid cho chương trình khác. Không dừng nó. Xoá $PidFile rồi kiểm tra bằng: Get-Process node"
 }
-# The same reuse, by another node: only `node … dist/main.js` is this kit's server.
+# The same reuse, by another node: only a `node … dist/main.js` at least as old as the pid file is
+# this kit's server.
 if (-not (Test-KitNode $target.Id)) {
-    Exit-WithPidError "pid $recorded là một tiến trình node khác (không chạy dist/main.js) — không phải server của bộ kit này. Không dừng nó. Xoá $PidFile rồi kiểm tra bằng: Get-Process node"
+    Exit-WithPidError "pid $recorded là một tiến trình node khác (không chạy dist/main.js, hoặc khởi động sau khi $PidFile được ghi) — không phải server của bộ kit này. Không dừng nó. Xoá $PidFile rồi kiểm tra bằng: Get-Process node"
 }
 
 Write-Output "⚠ Tắt cứng pid $recorded. Mọi chồng đang trên bàn (buy-in Hold'em và hạn mức Blind) cùng pot cộng dồn của Blind B sẽ mất; số dư đã ghi trong database thì an toàn."
