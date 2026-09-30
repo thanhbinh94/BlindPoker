@@ -232,8 +232,9 @@ return, countdown — follows it as the group's last child, outside every live r
 uncalled lines are no longer part of what is announced when the card appears; they stay on the card and are read on
 navigation. The countdown is never inside a row's `<li>` or the fee line, which is what the e2e suites read the card by
 — and they find the card as `getByRole('group', { name: /^(Người thắng|Những người thắng|Ván bị hủy)$/ })`, since a
-`status` locator would now match the inner region alone and lose the footer. The card is at most as tall as the felt (`max-height: 100%` of `RoomScreen`'s
-overlay): past that its body — the rows, then the pot ledger under them — scrolls inside it, and the title, the close
+`status` locator would now match the inner region alone and lose the footer.
+
+The card is at most as tall as the felt (`max-height: 100%` of `RoomScreen`'s overlay): past that its body — the rows, then the pot ledger under them — scrolls inside it, and the title, the close
 button and the footer stay put. While the body can still scroll down, its foot fades out (a CSS mask, switched by
 `data-more`, which `HandResult` measures on scroll and on resize), so a ledger below the fold reads as more to come;
 scrolled to the end, the fade goes.

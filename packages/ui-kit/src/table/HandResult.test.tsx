@@ -161,6 +161,8 @@ describe('HandResult', () => {
       const card = screen.getByRole('group', { name: 'Người thắng' })
       const next = within(card).getByText('Ván tiếp theo sau 5 giây')
       expect(next.closest(LIVE), 'no live region around the countdown').toBeNull()
+      // the class the "no countdown" test looks for, so that test cannot pass on a selector that matches nothing
+      expect(next).toHaveClass(s.resultNext!)
       expect(next.closest('li')).toBeNull()
       expect(within(card).getByText('Phí bàn 80')).not.toContainElement(next)
       expect(within(card).getAllByRole('listitem').filter((li) => li.textContent?.includes('Ván tiếp theo'))).toEqual([])
