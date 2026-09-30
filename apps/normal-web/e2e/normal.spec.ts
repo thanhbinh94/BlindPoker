@@ -420,6 +420,8 @@ test.describe('Blind Luck Poker Normal', () => {
     await withBusyLobby(page)
     const tickets = page.getByRole('button', { name: /^Vào phòng — / })
     await expect(tickets, 'the six fixture rooms are six tickets').toHaveCount(6)
+    // The tickets arrive over the socket after the page's own text: any face they ask for first must land before the fit.
+    await page.evaluate(() => document.fonts.ready)
     await expectPageFits(page, 'a lobby of six rooms', USER_SCREEN)
     for (const ticket of await tickets.all()) await expect(ticket, `${await ticket.getAttribute('aria-label')} is whole on screen`).toBeInViewport({ ratio: 1 })
     await shot(page, 'lobby-busy-desktop')

@@ -462,8 +462,8 @@ const intersects = (a: Box, b: Box): boolean => a.bottom > b.top + 0.5 && a.top 
  * or, a card with less to say than that (one row, no cards in it), its whole height, nothing scrolled away — with its
  * title inside the viewport. The room measures the seat when it resizes, a frame or more after the window does, so
  * each size is read until it holds (5 s at most) and then recorded; every size is measured before anything fails, and
- * the page's own viewport comes back. Never at 375 × 812: a phone has no room above its pinned seat, and the card
- * covers it there, closable, by design.
+ * the page's own viewport comes back. Never at 375 × 812: that phone (touch) has no room above its pinned seat, and the
+ * card covers it there, closable, by design — taller phones land in tier 2 or 1 (`docs/ui-kit.md`).
  */
 export async function expectCardClearsMySeat(page: Page, card: Locator, who: string, viewports = ROOM_SCREENS): Promise<void> {
   const original = page.viewportSize()

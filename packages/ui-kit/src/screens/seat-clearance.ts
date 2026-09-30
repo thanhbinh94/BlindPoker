@@ -19,8 +19,8 @@ export const MIN_CARD = 216
  * 1. above the whole seat block — its cards, plate and the lines under it;
  * 2. above the plate — the plate and the lines under it stay clear, and the card may lie over the top of the viewer's
  *    own hole cards, which the card's own row repeats;
- * 3. neither (a phone, where the seat is pinned under a short stage): `null`, and the card keeps the whole stage over
- *    the seat, closable as before.
+ * 3. neither (a short phone such as 375 × 812, where the seat is pinned under a short stage): `null`, and the card
+ *    keeps the whole stage over the seat, closable as before.
  *
  * A spectator has no seat to clear (`null`). The answer is never negative: a seat laid out below the stage's foot has
  * nothing on screen to clear.
