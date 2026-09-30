@@ -802,6 +802,11 @@
   font-weight: 600;
 }
 
+/* The table a hand was played at: a name the player typed, so it may be one long unbroken word. */
+.handTable {
+  overflow-wrap: anywhere;
+}
+
 
 /* A movement reads by colour *and* by sign: the sign is in the text, so a red-green blindness costs nothing. */
 .amount {

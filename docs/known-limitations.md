@@ -68,10 +68,13 @@ of taking points away from somebody. Ruled a roadmap item rather than a fix in t
 still counts.
 
 **History names opponents by their recorded label.** A hand's history row stores each seat's id and
-a label. When the account behind a seat is gone — or the seat was a bot, which has no account — the
-listing falls back to that recorded label rather than a live profile lookup
+a label. When the account behind a seat is gone, the listing falls back to that recorded label (the
+account's id) rather than a live profile lookup
 (`apps/normal-server/src/history/history-service.test.ts` → "falls back to the recorded id when the
-account behind a seat is gone").
+account behind a seat is gone"). A bot has no account either; its recorded label is the engine id
+`bot:<roomId>:<i>`, which the listing reads back as "Bot n" (n = i + 1, the name the room gave it) and
+which reads as-is if it is not in that shape ("reads a bot seat as "Bot n"…", same file). Each hand
+also names its table from the room config stored with it, and shows no table line when that is missing.
 *Why:* history is an immutable record; resolving names live would rewrite the past every time
 somebody renames themselves.
 *Tracked:* `docs/normal-server.md`.

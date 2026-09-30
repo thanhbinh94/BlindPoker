@@ -184,7 +184,8 @@
       "won": "Thắng",
       "cancelled": "Đã hủy",
       "bestHand": "Bài mạnh nhất",
-      "opponents": "Tại bàn",
+      "table": "Tại bàn {{name}}",
+      "opponents": "Đối thủ",
       "bot": "bot"
     },
     "ledger": {

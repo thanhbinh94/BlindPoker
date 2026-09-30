@@ -281,7 +281,7 @@ export interface HistorySeatDto {
    * which two accounts may legitimately share and which the reader may even share with an opponent.
    */
   playerId: string | null
-  /** What to print: the account's display name for a human, the engine-side id for a bot. */
+  /** What to print: the account's display name for a human, "Bot n" for a bot (the server reads it back from the engine id). */
   label: string
   seat: number
   isBot: boolean
@@ -293,6 +293,8 @@ export interface HistorySeatDto {
 export interface HistoryEntryDto {
   handId: string
   roomId: string
+  /** What the table was called when the hand was dealt; `null` for a hand stored without a name. */
+  roomName: string | null
   mode: string
   startedAt: number
   endedAt: number

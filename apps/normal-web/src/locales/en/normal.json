@@ -184,7 +184,8 @@
       "won": "Won",
       "cancelled": "Cancelled",
       "bestHand": "Best hand",
-      "opponents": "At the table",
+      "table": "At table {{name}}",
+      "opponents": "Opponents",
       "bot": "bot"
     },
     "ledger": {

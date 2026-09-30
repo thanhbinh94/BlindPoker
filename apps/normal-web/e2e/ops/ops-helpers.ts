@@ -131,6 +131,7 @@ export async function postApi(page: Page, path: string, body?: unknown): Promise
 export interface HistoryHand {
   handId: string
   roomId: string
+  roomName: string | null
   mode: string
   net: number
   cancelled: boolean

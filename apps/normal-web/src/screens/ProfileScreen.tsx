@@ -431,6 +431,9 @@ export function ProfileScreen({ api, lang, balance, onRenamed }: ProfileScreenPr
                     <time className={s.rowMeta} dateTime={new Date(hand.endedAt).toISOString()}>
                       {formatMoment(hand.endedAt, lang)}
                     </time>
+                    {hand.roomName === null ? null : (
+                      <span className={`${s.rowMeta} ${s.handTable}`}>{t('profile.history.table', { name: hand.roomName })}</span>
+                    )}
                   </span>
                   <span className={s.handMarks}>
                     {hand.cancelled ? <Badge tone="muted">{t('profile.history.cancelled')}</Badge> : null}

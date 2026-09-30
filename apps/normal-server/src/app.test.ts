@@ -829,6 +829,8 @@ describe('a whole hand between two registered players', () => {
       const hands = await h.app.services.history.listForPlayer(alice.playerId, 10)
       expect(hands).toHaveLength(1)
       expect(hands[0]?.mode).toBe('blind')
+      // The room's own name travels with the hand, from the config the room stored (No4).
+      expect(hands[0]?.roomName).toBe(BLIND_ROOM.name)
       expect(hands[0]?.players).toHaveLength(2)
 
       const sinks = rowsOf<{ amount: string | number }>(await db.execute(sql`select amount from point_transactions where player_id is null and kind = 'table_fee'`))
