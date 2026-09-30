@@ -30,6 +30,21 @@ async function reportOf(page: Page, label: string, opts?: OverlapOptions): Promi
   }
 }
 
+/** How far the raw line box of `upper`'s text runs down into `lower`'s, in px (negative: a gap between them). */
+async function rawOverlapY(page: Page, upper: string, lower: string): Promise<number> {
+  return page.evaluate(
+    ([a, b]) => {
+      const box = (selector: string): DOMRect => {
+        const range = document.createRange()
+        range.selectNodeContents(document.querySelector(selector)!)
+        return range.getBoundingClientRect()
+      }
+      return box(a!).bottom - box(b!).top
+    },
+    [upper, lower],
+  )
+}
+
 async function timed<T>(work: () => Promise<T>): Promise<[T, number]> {
   const started = Date.now()
   const result = await work()
@@ -120,7 +135,46 @@ test.describe('Phát hiện chữ đè chữ (overlap.ts)', () => {
     expect(await reportOf(page, 'opaque gradient card')).toBe('')
     // The same solid card at half opacity hides nothing.
     await showCover(page, '#1b2340', 'opacity: 0.5')
-    expect(await reportOf(page, 'faded card')).toContain('"Felt text beneath the card"')
+    const faded = await reportOf(page, 'faded card')
+    expect(faded).toContain('(1 pair)')
+    expect(faded).toContain('"Felt text beneath the card"')
+    expect(faded).toContain('"Card title on top"')
+  })
+
+  test('chữ trong lớp phủ pointer-events: none đè lên chữ trên một tấm đục thì báo lỗi', async ({ page }) => {
+    // The room's overlay shape: a see-through layer that lets clicks through, over a seat plate. Hit testing skips
+    // the layer, so without the helper's pointer-events override the plate would look like it covers the overlay text.
+    await show(
+      page,
+      `<div class="plate at" style="left: 100px; top: 100px; width: 260px; height: 60px; background: #18203a; color: #eee">
+         <span class="at" style="left: 20px; top: 10px">Neon Test</span>
+       </div>
+       <div class="overlay at" style="left: 0; top: 0; width: 600px; height: 300px; pointer-events: none">
+         <p class="at" style="left: 110px; top: 114px">Ván tiếp theo sau 6 giây</p>
+       </div>`,
+    )
+    const report = await reportOf(page, 'click-through overlay')
+    expect(report).toContain('(1 pair)')
+    expect(report).toContain('"Neon Test"')
+    expect(report).toContain('"Ván tiếp theo sau 6 giây"')
+  })
+
+  test('huy hiệu định vị tuyệt đối thoát khỏi cha overflow: hidden (không định vị) đè lên chữ bên cạnh thì báo lỗi', async ({ page }) => {
+    // The badge's containing block is the card, not the clipping box between them, so that box does not clip it.
+    await show(
+      page,
+      `<div class="card at" style="left: 100px; top: 100px; width: 400px; height: 40px">
+         <div class="clipper" style="overflow: hidden; width: 120px; height: 40px">
+           <span>Plate name</span>
+           <span class="badge" style="position: absolute; left: 130px; top: 4px; white-space: nowrap">Escaped badge</span>
+         </div>
+       </div>
+       <span class="at" style="left: 240px; top: 106px">Neighbour text</span>`,
+    )
+    const report = await reportOf(page, 'escaped badge')
+    expect(report).toContain('(1 pair)')
+    expect(report).toContain('"Escaped badge"')
+    expect(report).toContain('"Neighbour text"')
   })
 
   test('chân biểu mẫu dính (sticky) che các ô đã cuộn qua thì qua; chữ bị cuộn khuất không tính', async ({ page }) => {
@@ -146,14 +200,27 @@ test.describe('Phát hiện chữ đè chữ (overlap.ts)', () => {
   })
 
   test('chữ trong SVG, role="img" và aria-hidden đè lên một đoạn chữ thì qua', async ({ page }) => {
-    await show(
-      page,
-      `<span class="at" style="left: 100px; top: 100px">Span under artwork</span>
-       <svg class="at" style="left: 100px; top: 95px" width="300" height="40"><text x="10" y="28" font-size="20">SVG label</text></svg>
-       <div class="at" role="img" aria-label="King of spades" style="left: 120px; top: 102px">K♠ card</div>
-       <span class="at" aria-hidden="true" style="left: 140px; top: 98px">♣ decorative</span>`,
-    )
+    const artwork = (asArtwork: boolean) =>
+      show(
+        page,
+        `<span class="at" style="left: 100px; top: 100px">Span under artwork</span>
+         ${
+           asArtwork
+             ? '<svg class="at" style="left: 100px; top: 95px" width="300" height="40"><text x="10" y="28" font-size="20">SVG label</text></svg>'
+             : '<span class="at" style="left: 110px; top: 100px">SVG label</span>'
+         }
+         <div class="at" ${asArtwork ? 'role="img" aria-label="King of spades"' : ''} style="left: 120px; top: 102px">K♠ card</div>
+         <span class="at" ${asArtwork ? 'aria-hidden="true"' : ''} style="left: 140px; top: 98px">♣ decorative</span>`,
+      )
+    await artwork(true)
     expect(await reportOf(page, 'artwork')).toBe('')
+
+    // The same words in the same places as plain text: the skip, not the geometry, is why the artwork passes.
+    await artwork(false)
+    const report = await reportOf(page, 'the same words as plain text')
+    expect(report).toContain('"SVG label"')
+    expect(report).toContain('"K♠ card"')
+    expect(report).toContain('"♣ decorative"')
   })
 
   test('dòng chữ sát nhau (line-height 1) không bị tính là đè', async ({ page }) => {
@@ -161,19 +228,37 @@ test.describe('Phát hiện chữ đè chữ (overlap.ts)', () => {
       page,
       `<p class="at" style="left: 100px; top: 100px; width: 260px; white-space: normal; font: 28px/1 Arial, sans-serif">
          Tight <b>heading</b> that <i>wraps</i> onto <b>several</b> lines here</p>
-       <div class="stack at" style="left: 500px; top: 100px; font: 28px/1 Arial, sans-serif"><div>Stacked name</div><div>67.020</div><div>Chủ phòng</div></div>`,
+       <div class="at" style="left: 500px; top: 100px; font: 28px/1 Arial, sans-serif">
+         <div class="row1">Stacked name</div><div class="row2">67.020</div><div>Chủ phòng</div></div>`,
     )
-    // Not vacuous: the raw line boxes of the stacked rows do overlap, by more than the 2 px tolerance.
-    const rawOverlap = await page.locator('.stack').evaluate((stack) => {
-      const range = document.createRange()
-      const [first, second] = Array.from(stack.children, (row) => {
-        range.selectNodeContents(row)
-        return range.getBoundingClientRect()
-      })
-      return first!.bottom - second!.top
-    })
-    expect(rawOverlap).toBeGreaterThan(2)
+    // Not vacuous: the raw line boxes of the stacked rows do overlap, by more than the 2 px tolerance; cut to the
+    // line-height they just touch.
+    expect(await rawOverlapY(page, '.row1', '.row2')).toBeGreaterThan(2)
     expect(await reportOf(page, 'tight line-height')).toBe('')
+  })
+
+  test('dòng đếm ngược (line-height 1.5) chồng 4–5 px lên chữ bên dưới thì báo lỗi; 1–2 px thì không', async ({ page }) => {
+    // The countdown of the user's own screenshot at 1920×940: set in loose lines, its box runs 4.6 px into the badge
+    // under it. Nothing is cut from a box whose line-height is taller than it, so that stays an overlap.
+    const countdown = (top: number) =>
+      show(
+        page,
+        `<span class="badge at" style="left: 150px; top: 120px; font: 12px/1.5 Arial, sans-serif">Chủ phòng</span>
+         <p class="countdown at" style="left: 100px; top: ${top}px; font: 15.2px/1.5 Arial, sans-serif">Ván tiếp theo sau 6 giây</p>`,
+      )
+    await countdown(107.5)
+    const raw = await rawOverlapY(page, '.countdown', '.badge')
+    expect(raw).toBeGreaterThanOrEqual(4)
+    expect(raw).toBeLessThanOrEqual(5)
+    const report = await reportOf(page, 'countdown over a badge')
+    expect(report).toContain('(1 pair)')
+    expect(report).toContain('"Ván tiếp theo sau 6 giây"')
+    expect(report).toContain('"Chủ phòng"')
+
+    // Three pixels higher the two boxes only graze each other, inside the 2 px tolerance.
+    await countdown(104.5)
+    expect(await rawOverlapY(page, '.countdown', '.badge')).toBeLessThanOrEqual(2)
+    expect(await reportOf(page, 'countdown clear of the badge')).toBe('')
   })
 
   test('data-overlap-ok có lý do, và ignore, thì bỏ qua; data-overlap-ok rỗng thì không', async ({ page }) => {

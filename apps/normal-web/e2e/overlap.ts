@@ -11,14 +11,15 @@ import { test, type Page } from '@playwright/test'
  *
  * - **Text runs**, not elements: every non-blank text node's line boxes (`Range.getClientRects()`), so two labels
  *   in overlapping boxes that never touch are fine, and a long name that wraps is measured line by line. Text inside
- *   `svg`, `[role=img]` or `[aria-hidden=true]` is artwork (a card's rank, a suit glyph), and an element that fails
- *   `checkVisibility` is not on screen at all.
+ *   `svg`, `[role=img]` or `[aria-hidden=true]` is artwork (a card's rank, a suit glyph) — an `aria-hidden` subtree
+ *   is skipped even when it shows words, a known gap — and an element that fails `checkVisibility` is not on screen.
  * - **Only what is visible**: each line box is clipped by every ancestor that clips its overflow (an ellipsis, a
  *   scroll area) and by the viewport; what lies below the fold is not measured — scroll and call again.
- * - **Glyphs, not leading**: each line box is 20 % of its font size shorter (10 % off the top, 10 % off the bottom).
- *   A line box is the font's full height — about 1.25 em for the kit's Be Vietnam Pro and Fraunces — so the lines
- *   of a block set at `line-height: 1` overlap by about 0.25 em; after the shrink what is left stays inside the
- *   2 px tolerance for type under 40 px.
+ * - **Line boxes, cut to the line-height**: a text's line box is the font's full height — about 1.25 em for the kit's
+ *   Be Vietnam Pro and Fraunces. Where the element's line-height is smaller (`line-height: 1`), each box loses half the
+ *   difference at the top and half at the bottom, so consecutive lines of one block just touch; where it is `normal`
+ *   or at least the box's height, the box is measured whole. Nothing else is shaved off: a fixed shrink let the
+ *   countdown over the viewer's badges at 1920×940 (4.6 px) slip under the tolerance.
  * - **Layers**: a modal (`[role=dialog][aria-modal=true]`) and the toast stack are each compared only with
  *   themselves; everything else is one page layer.
  * - **Covered is not overlapped**: where two runs intersect by more than 2 px both ways, the lower one is hidden —
@@ -58,8 +59,6 @@ interface Overlap {
 
 interface MeasureArgs {
   ignore: string[]
-  /** Fraction of the font size taken off every line box's height — half at the top, half at the bottom. */
-  shrink: number
   /** Intersections this size or smaller, in either axis, are touching rather than overlapping. */
   tolerance: number
   /** Background alpha (times the element's effective opacity) from which a box hides what is under it. */
@@ -68,7 +67,7 @@ interface MeasureArgs {
   animationCapMs: number
 }
 
-const TUNING: Omit<MeasureArgs, 'ignore'> = { shrink: 0.2, tolerance: 2, opaqueAlpha: 0.9, animationCapMs: 2_000 }
+const TUNING: Omit<MeasureArgs, 'ignore'> = { tolerance: 2, opaqueAlpha: 0.9, animationCapMs: 2_000 }
 
 /**
  * Fails (throws) when visible text overlaps other visible text on `page`, listing every pair: both texts, their
@@ -181,6 +180,16 @@ async function measureTextOverlaps(args: MeasureArgs): Promise<Overlap[]> {
     return box
   }
 
+  /** The element's line-height in px — `Infinity` for `normal`, which never cuts a box. `getComputedStyle` resolves
+   * numbers and percentages to px; a bare number, should one come back, is a multiple of the font size. */
+  const lineHeightOf = (el: Element): number => {
+    const cs = getComputedStyle(el)
+    if (cs.lineHeight === 'normal') return Infinity
+    const value = parseFloat(cs.lineHeight)
+    if (!Number.isFinite(value)) return Infinity
+    return cs.lineHeight.endsWith('px') ? value : value * parseFloat(cs.fontSize)
+  }
+
   const texts: Text[] = []
   const rects: Rect[] = []
   const range = document.createRange()
@@ -191,11 +200,14 @@ async function measureTextOverlaps(args: MeasureArgs): Promise<Overlap[]> {
     if (el === null || !/\S/.test(node.data)) continue
     if (el.closest(ARTWORK) !== null || exempt(el) || args.ignore.some((sel) => el.closest(sel) !== null)) continue
     if (!el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) continue
-    const inset = (parseFloat(getComputedStyle(el).fontSize) * args.shrink) / 2
+    const lineHeight = lineHeightOf(el)
     const clip = clipOf(el)
     const layer = el.closest(LAYERS)
     range.selectNodeContents(node)
     for (const r of Array.from(range.getClientRects())) {
+      // A line box taller than the line-height it is set in (a tight `line-height`) is cut down to it, centred, so
+      // consecutive lines just touch; under `normal` spacing, or any line-height at least the box's height, nothing is.
+      const inset = Math.max(0, (r.height - lineHeight) / 2)
       const left = Math.max(r.left, clip.left)
       const right = Math.min(r.right, clip.right)
       const top = Math.max(r.top + inset, clip.top)

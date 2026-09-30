@@ -359,10 +359,15 @@ with `expectNoTextOverlap(page, label, opts?)` from `apps/normal-web/e2e/overlap
 `test.use({ contextOptions: { reducedMotion: 'reduce' } })`; the helper waits for fonts and for *finite* animations
 (2 s at most — an infinite one is never waited on), then measures once:
 
-- **Text runs, not boxes.** Every non-blank text node's line boxes (`Range.getClientRects()`), each 20 % of its font
-  size shorter (10 % off the top and the bottom) so lines set as tight as `line-height: 1` do not count, clipped by
-  every ancestor that clips its overflow (an ellipsis, a scroll area) and by the viewport. Text in `svg`,
-  `[role=img]` or `[aria-hidden=true]` is artwork and is skipped, as is anything failing `checkVisibility`.
+- **Text runs, not boxes.** Every non-blank text node's line boxes (`Range.getClientRects()`), clipped by every
+  ancestor that clips its overflow (an ellipsis, a scroll area — an absolutely positioned box escapes the ones below
+  its containing block) and by the viewport. Text in `svg`, `[role=img]` or `[aria-hidden=true]` is artwork and is
+  skipped, as is anything failing `checkVisibility`.
+- **Cut to the line-height, nothing more.** A line box is the font's full height (about 1.25 em for Be Vietnam Pro
+  and Fraunces). Where the element's computed line-height is smaller — `line-height: 1` — each box loses half the
+  difference at the top and half at the bottom, so consecutive lines of one block just touch instead of overlapping.
+  Under `normal` or any line-height at least the box's height nothing is cut, so two loosely set texts whose boxes
+  run 4–5 px into each other (the countdown over the viewer's badges at 1920×940) are an overlap.
 - **Layers.** Text inside a modal (`[role=dialog][aria-modal=true]`) or the toast stack is compared only with its own
   layer; everything else is one page layer.
 - **Overlap** is two runs of one layer intersecting by more than 2 px in both axes — unless the lower one is covered:
@@ -380,8 +385,11 @@ What the rule does **not** catch:
 
 - **Text against a box.** Text touching or crossing a card's or a badge's edge is a box-spacing problem: `No11-1`'s
   "Tay nóng" card sitting on the "HUY HIỆU" heading is one, and it is the grid spacing assertion (group gap ≥ 16 px,
-  equal card heights in a row) that covers it. Likewise text over a badge's pill whose glyphs clear the badge's own
-  text by 2 px or less.
+  equal card heights in a row) that covers it. Likewise text over a badge's pill that stays clear of the badge's own
+  text.
+- **Words inside `aria-hidden`.** An `aria-hidden="true"` subtree is skipped even when it shows real words to the eye
+  — the wardrobe cards' rarity line (`RarityLabel`, "THƯỜNG", "HIẾM") is one — so an overlap involving such text goes
+  unreported. The rule does not look inside; words that need checking have to live outside the hidden subtree.
 - **What is not on screen or not a text node:** text below the fold (scroll and call again), form-control values and
   placeholders, CSS generated content (`::before { content }`).
 - **Partial covers:** the cover test samples one point, the centre of the intersection; a cover that is a
