@@ -79,7 +79,8 @@ function App({ lang }: { lang: Language }) {
 
 `RoomScreen` fills the viewport by design (see [Responsive rules](#responsive-rules)). If the app draws its own bar
 above it, set `--bp-stage` on the room's container: `--bp-stage: calc(100dvh - 64px)`, or `100%` inside a flex column
-that already has a height.
+that already has a height. `LobbyScreen` takes the same value as its minimum height, so a short lobby under the bar
+fills the window without adding the bar's height as a scrollbar (a bare `100vh` did, review 2026-09-29).
 
 ---
 
@@ -212,13 +213,25 @@ engine's layered pots straight from `SETTLEMENT.pots`, each with its `amount`, `
 prints a main/side-pot ledger whenever there is more than one, which is the only way a hand with a short all-in
 reads as fair. `pots` is empty for a cancelled hand. A cancelled hand's `reason` is an operator-facing token, so it
 is normalised to a `cancel.*` key and translated; the raw token is never rendered. Pass `onDismiss` to make the card
-closable — `RoomScreen` does, and the between-hands countdown moves to the tray once it is waved off.
+closable — `RoomScreen` does, and the between-hands countdown moves to the tray once it is waved off. While the card
+is up, the countdown is the card's own last line: `RoomScreen` passes it as `countdown`, and `HandResult` prints it at
+the right end of the footer, beside the fee, in a `<p aria-live="off">` — the card is a `role="status"` region, and a
+line ticking inside it would otherwise have the whole receipt read out every second (review 2026-09-29, No2: printed
+under the card, it landed on the viewer's own seat). It is never inside a row's `<li>` or the fee line, which is what
+the e2e suites read the card by. The card is at most as tall as the felt (`max-height: 100%` of `RoomScreen`'s
+overlay): past that its body — the rows, then the pot ledger under them — scrolls inside it, and the title, the close
+button and the footer stay put.
 
 **Seat slots.** A seat has two places the host app may write into, and they are threaded identically —
 `RoomScreen` → `PokerTable` → `Seat`. `chibiFor(player)` replaces the initial disc; `captionFor(player)` adds one
 muted, single-line, truncated line under the name (a title, a rank), and returning `null`/`undefined` leaves the
 plate exactly as it was. The caption is the plate's only decoration rather than state, so the compact plates
 (seven opponents and up in the stack layout) drop it to keep the third row on screen.
+
+**Under the plate, two lines at most** (review 2026-09-29, No2): the badges with the bet chip beside them, then the
+hand's name with the payout. On the ring those lines may run wider than the plate, centred under it — up to 30 % of
+the table's width for an opponent and 48 % for the viewer's own seat at six seats or fewer (the neighbours are a
+third of the table away), the plate's own width and 30 % from seven seats up — and wrap only past that.
 
 Under 768 px the table becomes the vertical stack (spec §27.1): opponents, felt, your own seat. **The opponents'
 strip never scrolls inside itself** — it wraps, holds a floor of two plate rows, and from seven seats up the plates
@@ -345,7 +358,15 @@ Breakpoints 480 / 768 / 1024, per spec §27.1. No horizontal page scroll at any 
 - **The ring table is height-led.** The oval takes the space between the header and the tray and derives its width
   from it (2:1, capped at 980 × 490). Seats ride the rim at fixed percentages of that box, spaced by equal *arc
   length* so a nine-handed table spreads evenly instead of bunching on the flanks; from seven seats up the plates
-  go compact. Standing alone in a box of unknown height, `PokerTable` falls back to its intrinsic size.
+  go compact. Standing alone in a box of unknown height, `PokerTable` falls back to its intrinsic size. On a felt
+  400 px tall or less (a laptop window with the tray up: 1366 × 768, 1536 × 730, 1280 × 720) the cards and the gaps
+  in the seat blocks shrink — never the plates, which carry the names — so the viewer's own block, cards, plate and
+  its two lines, stays inside the stage.
+- **The room fits the screen** (review 2026-09-29, No2). With six seats, neither the page nor the stage scrolls at
+  1920 × 940 (the user's screen), 1536 × 730, 1280 × 720 or 1366 × 768, whether the room is taking seats, a hand is
+  on with the tray up, or the result card is showing: `normal.spec.ts` asserts it at all four. The worst each state
+  can show — every plate with a caption, six hands shown down with two side pots, the Hold'em sizing tray — is
+  frozen in the playground at `#worst/<waiting|turn|result>/<seats>/<vi|en>` for measuring against a new size.
 - **Under 768 px wide *or* 620 px tall** the table switches to the vertical stack: opponents on top (that strip is
   the part that scrolls), board in the middle, the viewer's own seat pinned above the tray. A short window has no
   more to give than a narrow one, so both take the same layout. `layout="ring" | "stack"` overrides the choice.
@@ -488,7 +509,10 @@ The kit's own tests run under jsdom with `@testing-library/react`: `pnpm --filte
 
 For eyeballing changes, `pnpm --filter @bp/ui-kit playground` starts Vite on port 5175 with an engine-driven mock
 server — real `@bp/core` hands, real `filterEvent` hole-card hiding, real reducer. Controls: game mode, room/lobby
-view, seat count (4/6/9), theme, language, forced stack layout, and "next hand".
+view, seat count (4/6/9), theme, language, forced stack layout, and "next hand". `#worst/<state>/<seats>/<lang>`
+(`playground/scenarios.tsx`) skips the engine and freezes the room at its tallest — `waiting`, `turn` (the Hold'em
+sizing tray, my turn ring running) or `result` (every seat shown down, two side pots, the countdown on the card) —
+full-viewport, for measuring a layout against a screen size.
 
 ---
 

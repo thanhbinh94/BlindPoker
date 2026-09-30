@@ -49,6 +49,42 @@ describe('PokerTable', () => {
     expect(screen.getByText(/disconnected/i)).toBeInTheDocument()
     expect(screen.queryAllByRole('button', { name: /sit down/i })).toHaveLength(0) // canSit false
   })
+  // Review 2026-09-29, No2: a badge, the bet chip, the hand's name and the payout used to take a line each, and the
+  // viewer's block ran six lines deep past the foot of the stage. Two lines now: who the seat is and what it has in
+  // front of it, then how the hand ended for it — and nothing on them is dropped.
+  it('keeps a seat to two lines under its plate: the badges with the bet, then the hand with the payout', () => {
+    const finished = {
+      ...hand,
+      phase: 'COMPLETE' as const,
+      actingSeat: null,
+      seats: hand.seats.map((seat) => (seat.seat === 0 ? { ...seat, betThisStreet: 2_000, allIn: true } : seat)),
+      result: {
+        payouts: [{ seat: 0, amount: 3_920 }],
+        pots: [],
+        fee: 80,
+        showdown: [{ seat: 0, cards: hand.seats[0]!.holeCards!, rank: 0, category: 5 as const, best: hand.seats[0]!.holeCards! }],
+        carryOverOut: 0,
+        uncalledReturned: null,
+        cancelled: false,
+        reason: null,
+      },
+    }
+    wrap(
+      <PokerTable room={room} hand={finished} myPlayerId="a" deadlineAt={null} serverNow={() => 0} turnTimerMs={30000} lang="en" layout="ring" canSit={false} />,
+    )
+    const seat = screen.getByRole('group', { name: 'Seat 1' })
+    const lineOf = (text: string): HTMLElement => within(seat).getByText(text).closest(`.${s.tags}, .${s.seatResult}`) as HTMLElement
+    const badges = lineOf('You')
+    expect(badges).not.toBeNull()
+    expect(badges.parentElement).toBe(seat)
+    for (const text of ['Host', 'All-in', '2,000']) expect(lineOf(text), text).toBe(badges)
+    const outcome = lineOf('Flush')
+    expect(outcome).not.toBeNull()
+    expect(outcome.parentElement).toBe(seat)
+    expect(lineOf('+3,920')).toBe(outcome)
+    expect(outcome).not.toBe(badges)
+  })
+
   it('offers empty seats when the viewer may sit', async () => {
     const onSeatClick = vi.fn()
     wrap(

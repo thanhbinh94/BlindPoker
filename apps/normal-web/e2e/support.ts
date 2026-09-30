@@ -161,6 +161,101 @@ export async function expectCreateRoomKeepsItsHeight(page: Page, viewport?: { wi
   }
 }
 
+/** The user's own screen (review 2026-09-29): 1920 × 1080 less the browser's chrome and the taskbar. */
+export const USER_SCREEN = { width: 1920, height: 940 }
+
+/**
+ * Where the room must fit without a scrollbar (review 2026-09-29, No2): the user's screen, and the laptop sizes
+ * below it — 1536 × 730 and 1280 × 720 (a 1080p and a 720p panel at 125 % and 100 % less the browser) and
+ * 1366 × 768.
+ */
+export const ROOM_SCREENS = [USER_SCREEN, { width: 1536, height: 730 }, { width: 1280, height: 720 }, { width: 1366, height: 768 }]
+
+/** How far the page and the room's stage (the room's one `<main>`, the felt between the header and the tray) scroll. */
+async function overflowOf(page: Page): Promise<{ page: number; stage: number | null }> {
+  return page.evaluate(async () => {
+    // Two frames: a resize re-runs the table's container queries before anything is worth measuring.
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    const root = document.documentElement
+    const stage = document.querySelector('main')
+    return { page: root.scrollHeight - root.clientHeight, stage: stage === null ? null : stage.scrollHeight - stage.clientHeight }
+  })
+}
+
+/** No vertical scroll on the page at `viewport` (the page's own when omitted): `scrollHeight − clientHeight ≤ 1`. */
+export async function expectPageFits(page: Page, label: string, viewport?: { width: number; height: number }): Promise<void> {
+  if (viewport !== undefined) await page.setViewportSize(viewport)
+  const size = page.viewportSize()
+  const { page: overflow } = await overflowOf(page)
+  expect(overflow, `${label} at ${size?.width ?? '?'}×${size?.height ?? '?'}: the page scrolls ${overflow} px`).toBeLessThanOrEqual(1)
+}
+
+/**
+ * Review 2026-09-29, No2: the room fits the screen. At each of `viewports`, in the state the room is in now, neither
+ * the page nor the room's stage scrolls (`scrollHeight − clientHeight ≤ 1` for both). Every size is measured before
+ * anything fails, so one run names them all; the page's own viewport comes back afterwards.
+ */
+export async function expectRoomFits(page: Page, state: string, viewports = ROOM_SCREENS): Promise<void> {
+  const original = page.viewportSize()
+  const problems: string[] = []
+  try {
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport)
+      const { page: overflow, stage } = await overflowOf(page)
+      if (overflow > 1 || stage === null || stage > 1) {
+        problems.push(`${viewport.width}×${viewport.height}: the page scrolls ${overflow} px, the stage ${stage ?? '(no <main>)'} px`)
+      }
+    }
+  } finally {
+    if (original !== null) await page.setViewportSize(original)
+  }
+  expect(problems, `the room (${state}) scrolls:\n  ${problems.join('\n  ')}`).toEqual([])
+}
+
+/**
+ * Review 2026-09-29, No2: the viewer's own seat block keeps to two lines of text under its plate on a desktop screen —
+ * the badges with the bet, then the hand's name with the payout. The plate is the seat's first bordered box around
+ * its name; a line is every text run whose top sits within 3 px of another's.
+ */
+export async function expectMySeatLines(page: Page, who: string, state: string): Promise<void> {
+  const seat = page.getByRole('group', { name: /^Ghế \d+$/ }).filter({ has: page.getByText(who, { exact: true }) })
+  await expect(seat).toHaveCount(1)
+  const lines = await seat.evaluate((root: HTMLElement, name: string) => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+    const runs: { text: string; top: number; bottom: number }[] = []
+    let plate: Element | null = null
+    const range = document.createRange()
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+      const text = (node.textContent ?? '').trim()
+      if (text === '' || node.parentElement?.closest('svg, [role="img"], [aria-hidden="true"]') !== null) continue
+      if (text === name && plate === null) {
+        for (let el: Element | null = node.parentElement; el !== null && el !== root; el = el.parentElement) {
+          if (parseFloat(getComputedStyle(el).borderTopWidth) > 0) {
+            plate = el
+            break
+          }
+        }
+      }
+      range.selectNodeContents(node)
+      for (const r of Array.from(range.getClientRects())) runs.push({ text, top: r.top, bottom: r.bottom })
+    }
+    const floor = plate === null ? Number.POSITIVE_INFINITY : plate.getBoundingClientRect().bottom
+    const under = runs.filter((r) => r.top >= floor - 1).sort((a, b) => a.top - b.top)
+    // A line is a band of runs whose boxes overlap vertically: a 16 px payout beside a 12 px hand name is one line.
+    let lines = 0
+    let bandBottom = Number.NEGATIVE_INFINITY
+    for (const run of under) {
+      if (run.top >= bandBottom - 2) {
+        lines += 1
+        bandBottom = run.bottom
+      } else bandBottom = Math.max(bandBottom, run.bottom)
+    }
+    return { found: plate !== null, lines, texts: under.map((r) => r.text) }
+  }, who)
+  expect(lines.found, `${state}: the viewer's plate was found`).toBe(true)
+  expect(lines.lines, `${state}: the viewer's seat runs ${lines.lines} lines under its plate — ${lines.texts.join(' | ')}`).toBeLessThanOrEqual(2)
+}
+
 /** Takes the given seat; the index is explicit so nothing ever races the bot for one. */
 export async function sit(page: Page, seat: number): Promise<void> {
   await page.locator(`[data-seat="${seat}"]`).getByRole('button', { name: 'Ngồi vào bàn' }).click()

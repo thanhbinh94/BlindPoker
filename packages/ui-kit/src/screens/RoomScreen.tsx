@@ -189,11 +189,11 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
   const canManage = (waiting || !handLive) && isHost && others.length > 0
   const manageKey = hand?.handId ?? 'none'
 
-  const countdown =
+  const nextHandText =
     nextHandIn === null ? null : (
-      <p className={s.countdown}>
+      <>
         {t('labels.nextHandIn')} <strong>{t('common:time.seconds', { count: nextHandIn })}</strong>
-      </p>
+      </>
     )
 
   return (
@@ -225,7 +225,9 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
           captionFor={captionFor}
         />
 
-        {/* the result card is dealt onto the felt, so it keeps the felt's night palette in either theme */}
+        {/* The result card is dealt onto the felt, so it keeps the felt's night palette in either theme. The countdown
+            to the next deal is the card's own footer line: printed under the card, it landed on the viewer's seat
+            (review 2026-09-29, No2). */}
         {resultCard === null ? null : (
           <div className={s.overlay} data-surface="night">
             <HandResult
@@ -234,8 +236,8 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
               myPlayerId={state.me?.playerId ?? null}
               lang={lang}
               onDismiss={() => setDismissedHandId(resultCard.handId)}
+              countdown={nextHandText}
             />
-            {countdown}
           </div>
         )}
       </main>
@@ -271,8 +273,8 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
           {waiting ? (
             <span className={s.readyCount}>{t('room.readyCount', { ready: readyCount, total: seated.length })}</span>
           ) : // While the result card is up the countdown lives on it; here it covers the gap once it is dismissed.
-          resultCard === null ? (
-            countdown
+          resultCard === null && nextHandText !== null ? (
+            <p className={s.countdown}>{nextHandText}</p>
           ) : null}
 
           {waiting && isHost ? (

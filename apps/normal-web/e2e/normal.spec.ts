@@ -1,10 +1,14 @@
 import { expect, test, type BrowserContext, type Locator, type Page } from '@playwright/test'
+import { expectNoTextOverlap } from './overlap.js'
 import {
   account,
   createBlindRoom,
   expectCreateRoomKeepsItsHeight,
   expectLobby,
+  expectMySeatLines,
   expectNoSidewaysScroll,
+  expectPageFits,
+  expectRoomFits,
   lobbyAvatar,
   parsePoints,
   register,
@@ -12,6 +16,7 @@ import {
   signIn,
   sit,
   unique,
+  USER_SCREEN,
   type Account,
 } from './support.js'
 
@@ -137,6 +142,31 @@ async function uncalledReturn(card: Locator): Promise<{ who: string; amount: num
   const hit = /^Hoàn lại phần cược dư\s+(.*?)\s+([\d.,]+)$/.exec((await line.innerText()).replace(/\s+/g, ' ').trim())
   expect(hit, 'the uncalled-return line must name a player and an amount').not.toBeNull()
   return { who: hit![1]!, amount: parsePoints(hit![2]!) }
+}
+
+/**
+ * Review 2026-09-29, No2: "Ván tiếp theo sau N giây" is the result card's own last line — inside the card, in an
+ * element that does not re-announce the card on every tick (the card is a status region), and in neither a player's
+ * row nor the fee line, which is what the rows and the fee are read by.
+ */
+async function expectCountdownOnTheCard(card: Locator): Promise<void> {
+  const next = card.getByText(/^Ván tiếp theo sau \d+ giây$/)
+  await expect(next, 'the countdown is printed on the result card').toBeVisible()
+  await expect(next, 'the countdown does not re-announce the card every second').toHaveAttribute('aria-live', 'off')
+  await expect(card.getByRole('listitem').filter({ hasText: 'Ván tiếp theo' }), 'the countdown is no player’s row').toHaveCount(0)
+  const fee = card.getByText(/^Phí bàn/)
+  if ((await fee.count()) > 0) expect(await fee.innerText(), 'the fee line is the fee alone').not.toContain('Ván tiếp theo')
+}
+
+/**
+ * Sits out while the hand is on, then plays it. The table is left with bots only, which cannot start a hand of their
+ * own, so once this one is over the room goes back to taking seats and the result card stays on the felt — the
+ * result state, held still for as long as a check needs.
+ */
+async function sitOutAndPlay(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Ngồi ngoài', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Vào lại', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: /^Chơi\b/ }).click()
 }
 
 /* ── the chrome ──────────────────────────────────────────────────────────────────────────────────── */
@@ -283,6 +313,44 @@ test.describe('Blind Luck Poker Normal', () => {
     await expect(blindHands).toHaveAttribute('aria-valuenow', '1')
     await expect(blindHands).toHaveAttribute('aria-valuetext', '1 trên 10')
     await shot(page, 'achievements-desktop')
+
+    // --- 6. the lobby and a full room fit the player's screen (review 2026-09-29, No2, No11b) -------------
+    // After the money on purpose: this second hand must not be the one the counters above read. Six seats — five
+    // bots — in the room's three states: taking seats, a hand in play with the tray up, and the result card, first
+    // counting down to the next deal and then held still (`sitOutAndPlay`).
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.setViewportSize(USER_SCREEN)
+    await page.goto('/#/lobby')
+    await expectLobby(page)
+    await expectPageFits(page, 'the lobby')
+    await createBlindRoom(page, unique('Bàn '), 5)
+    await sit(page, 0)
+    await page.getByRole('button', { name: 'Sẵn sàng', exact: true }).click()
+    await expect(page.getByText('6/6 sẵn sàng')).toBeVisible()
+    await expectRoomFits(page, 'taking seats')
+    await expectNoTextOverlap(page, 'room, taking seats, 1920×940')
+
+    await page.getByRole('button', { name: 'Bắt đầu', exact: true }).click()
+    await expect(page.getByRole('button', { name: /^Chơi\b/ })).toBeVisible()
+    await expectRoomFits(page, 'in hand, the tray up')
+    await expectMySeatLines(page, who.displayName, 'in hand')
+    await expectNoTextOverlap(page, 'room, in hand, 1920×940')
+
+    await sitOutAndPlay(page)
+    const card = resultCard(page)
+    await expect(card).toBeVisible()
+    await expectCountdownOnTheCard(card)
+    await expectNoTextOverlap(page, 'room, result card counting down, 1920×940')
+    await expect(page.getByRole('button', { name: 'Bắt đầu', exact: true }), 'bots alone deal no hand: the room is taking seats').toBeVisible({ timeout: 15_000 })
+    await expect(card, 'the card stays on the felt').toBeVisible()
+    await expectRoomFits(page, 'the result card')
+    await expectMySeatLines(page, who.displayName, 'the result card')
+    await expectNoTextOverlap(page, 'room, result card, 1920×940')
+    await shot(page, 'room-result-desktop')
+
+    await page.getByRole('button', { name: 'Rời phòng' }).click()
+    await expect(page).toHaveURL(/#\/lobby$/)
+    await page.emulateMedia({ reducedMotion: null })
   })
 
   test('điểm danh hằng ngày', async ({ context }) => {
@@ -380,6 +448,24 @@ test.describe('Blind Luck Poker Normal', () => {
     expect(seatBox!.y, 'my seat starts on screen').toBeGreaterThanOrEqual(0)
     expect(seatBox!.y + seatBox!.height, 'my seat ends above the tray').toBeLessThanOrEqual(trayBox!.y + 1)
     await shot(page, 'room-mobile')
+
+    // Review 2026-09-29, No2 and No11b: on a phone too, no text lands on other text in any of the room's three states —
+    // taking seats, a hand in play with the tray up, and the result card (counting down, then held still).
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await expectNoTextOverlap(page, 'room, taking seats, 375×812')
+    await page.getByRole('button', { name: 'Sẵn sàng', exact: true }).click()
+    await page.getByRole('button', { name: 'Bắt đầu', exact: true }).click()
+    await expect(page.getByRole('button', { name: /^Chơi\b/ })).toBeVisible()
+    await expectNoTextOverlap(page, 'room, in hand, 375×812')
+    await sitOutAndPlay(page)
+    const card = resultCard(page)
+    await expect(card).toBeVisible()
+    await expectCountdownOnTheCard(card)
+    await expectNoTextOverlap(page, 'room, result card counting down, 375×812')
+    await expect(page.getByRole('button', { name: 'Bắt đầu', exact: true })).toBeVisible({ timeout: 15_000 })
+    await expectNoTextOverlap(page, 'room, result card, 375×812')
+    await shot(page, 'room-result-mobile')
+    await page.emulateMedia({ reducedMotion: null })
 
     await page.getByRole('button', { name: 'Rời phòng' }).click()
     await expect(page).toHaveURL(/#\/lobby$/)

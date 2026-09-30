@@ -1,12 +1,14 @@
 /* Screens: layout, not looks. The lobby is a night desk (tickets left, door card right); the room is a stage with the
    table lit in the middle and a lacquered tray at the foot. Everything else comes from the components. */
 
+/* `--bp-stage` is the height the host app leaves under its own bar (see `.room` below). A bare `100vh` under a 52 px
+   bar made every lobby 52 px taller than the window, a scrollbar with nothing below the fold (review 2026-09-29, No2). */
 .lobby,
 .room {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  min-height: 100vh;
+  min-height: var(--bp-stage, 100vh);
   padding: var(--space-4);
 }
 
@@ -114,6 +116,8 @@
   overflow-x: hidden;
 }
 
+/* The result card's stage: exactly the felt's box, so the card's `max-height: 100%` is the table area and a long
+   receipt scrolls inside the card instead of adding a scrollbar to `.roomMain`. */
 .overlay {
   position: absolute;
   inset: 0;
@@ -122,7 +126,6 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-3);
   padding: var(--space-4);
   pointer-events: none;
   background: radial-gradient(70% 60% at 50% 50%, rgba(4, 7, 18, 0.72), rgba(4, 7, 18, 0.32) 70%, transparent 100%);
@@ -132,6 +135,7 @@
   pointer-events: auto;
 }
 
+/* The tray's copy of the countdown, once the result card has been waved off (the card prints its own). */
 .countdown {
   font-family: var(--font-display);
   font-size: 0.95rem;

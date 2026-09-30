@@ -132,6 +132,9 @@ export function Seat({
         ) : null}
       </div>
 
+      {/* Two lines under the plate at most (review 2026-09-29, No2): who the seat is and what it has in front of
+          it — the badges and the bet — then how the hand ended for it — the hand's name and the payout. One badge,
+          one chip and one tag a line each ran the viewer's own block six lines deep, past the foot of the stage. */}
       <div className={s.tags}>
         {isMe ? <Badge tone="gold">{t('labels.you')}</Badge> : null}
         {/* Gold, not red — red is for the risky acts (fold, leave, kick); a crown tells it apart from "you"
@@ -144,11 +147,15 @@ export function Seat({
         ) : null}
         {seat.isBot ? <Badge tone="muted">{t('labels.bot')}</Badge> : null}
         {pill === null ? null : <Badge tone={pill.tone}>{pill.text}</Badge>}
+        {seat.betThisStreet > 0 ? <span className={s.bet}>{formatPoints(seat.betThisStreet, lang)}</span> : null}
       </div>
 
-      {seat.betThisStreet > 0 ? <span className={s.bet}>{formatPoints(seat.betThisStreet, lang)}</span> : null}
-      {showdownLabel === null ? null : <span className={s.handTag}>{showdownLabel}</span>}
-      {winnerPayout === null ? null : <span className={s.payout}>{payoutText}</span>}
+      {showdownLabel === null && winnerPayout === null ? null : (
+        <div className={s.seatResult}>
+          {showdownLabel === null ? null : <span className={s.handTag}>{showdownLabel}</span>}
+          {winnerPayout === null ? null : <span className={s.payout}>{payoutText}</span>}
+        </div>
+      )}
     </div>
   )
 }

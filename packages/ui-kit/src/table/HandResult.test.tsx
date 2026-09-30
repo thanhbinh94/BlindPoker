@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { I18nextProvider } from 'react-i18next'
 import { HandCategory, parseCards, type RoomView } from '@bp/core'
@@ -114,5 +114,57 @@ describe('HandResult', () => {
     )
     expect(screen.getByText('Không rõ lý do')).toBeInTheDocument()
     expect(view.container.textContent).not.toContain('gremlins')
+  })
+
+  // Review 2026-09-29, No2 (R13): the countdown moved onto the card, whose root is a live region. Ticking inside it,
+  // the whole receipt would be read out again every second — so it sits in its own `aria-live="off"` element in the
+  // footer, apart from the rows and the fee line other code reads the card by.
+  describe('the countdown to the next hand', () => {
+    const room = {
+      players: [
+        { playerId: 'a', displayName: 'Ann', seat: 0 },
+        { playerId: 'b', displayName: 'Bob', seat: 1 },
+      ],
+    } as unknown as RoomView
+    const hand = {
+      phase: 'COMPLETE',
+      mode: 'blind',
+      seats: [
+        { seat: 0, playerId: 'a', displayName: 'Ann' },
+        { seat: 1, playerId: 'b', displayName: 'Bob' },
+      ],
+      result: {
+        payouts: [{ seat: 1, amount: 3_920 }],
+        pots: [{ amount: 4_000, eligibleSeats: [0, 1], winners: [{ seat: 1, amount: 3_920 }] }],
+        fee: 80,
+        showdown: [{ seat: 1, cards: parseCards('Ah Kh'), rank: 0, category: HandCategory.FLUSH, best: parseCards('Ah Kh 9h 5h 2h') }],
+        carryOverOut: 0,
+        uncalledReturned: null,
+        cancelled: false,
+        reason: null,
+      },
+    } as unknown as ClientHand
+    const renderWith = (countdown?: string) =>
+      render(
+        <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+          <HandResult hand={hand} room={room} myPlayerId="a" lang="vi" countdown={countdown} />
+        </I18nextProvider>,
+      )
+
+    it('prints it inside the card, in its own element that does not announce each tick', () => {
+      renderWith('Ván tiếp theo sau 5 giây')
+      const card = screen.getByRole('status')
+      const next = within(card).getByText('Ván tiếp theo sau 5 giây')
+      expect(next).toHaveAttribute('aria-live', 'off')
+      expect(next.closest('li')).toBeNull()
+      expect(within(card).getByText('Phí bàn 80')).not.toContainElement(next)
+      expect(within(card).getAllByRole('listitem').filter((li) => li.textContent?.includes('Ván tiếp theo'))).toEqual([])
+    })
+
+    it('prints nothing for it when there is no next hand to count down to', () => {
+      renderWith()
+      expect(screen.getByRole('status').querySelector('[aria-live="off"]')).toBeNull()
+      expect(screen.queryByText(/Ván tiếp theo/)).toBeNull()
+    })
   })
 })
