@@ -116,6 +116,9 @@ export async function withBusyLobby(page: Page): Promise<void> {
   })
   await page.reload()
   await expectLobby(page)
+  // The web fonts come from Google with `display=swap`: until they land the tickets are set in a fallback of other
+  // metrics, and a fit measured then is not the one the player sees.
+  await page.evaluate(() => document.fonts.ready.then(() => undefined))
 }
 
 /**
@@ -351,15 +354,25 @@ function mySeat(page: Page, who: string): Locator {
   return page.getByRole('group', { name: /^Ghế \d+$/ }).filter({ has: page.getByText(who, { exact: true }) })
 }
 
+/** A walk over the viewer's own seat (`walkMySeat`). */
+interface SeatWalk {
+  /** How many seats print the name. Only when it is 1 was a seat walked; otherwise `plate` is `null` and `runs` empty. */
+  seats: number
+  plate: Box | null
+  runs: (Box & { text: string })[]
+}
+
 /**
  * One walk over the viewer's own seat, shared by the checks on it: its plate — the seat's first bordered box around
  * the name — and every visible text run in the seat (artwork skipped: `svg`, `[role=img]`, `[aria-hidden=true]`),
- * each as its line boxes. `plate` is `null` when no bordered box holds the name.
+ * each as its line boxes. `plate` is `null` when no bordered box holds the name. It neither waits nor throws: a page
+ * with no such seat, or two, comes back as `seats` for the caller to report — `expectCardClearsMySeat` walks inside a
+ * poll that must still go on to measure the other sizes.
  */
-async function walkMySeat(page: Page, who: string): Promise<{ plate: Box | null; runs: (Box & { text: string })[] }> {
-  const seat = mySeat(page, who)
-  await expect(seat).toHaveCount(1)
-  return seat.evaluate((root: HTMLElement, name: string) => {
+async function walkMySeat(page: Page, who: string): Promise<SeatWalk> {
+  return mySeat(page, who).evaluateAll((roots: HTMLElement[], name: string) => {
+    if (roots.length !== 1) return { seats: roots.length, plate: null, runs: [] }
+    const root = roots[0]!
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
     const runs: { text: string; top: number; bottom: number; left: number; right: number }[] = []
     let plate: Element | null = null
@@ -379,12 +392,12 @@ async function walkMySeat(page: Page, who: string): Promise<{ plate: Box | null;
       for (const r of Array.from(range.getClientRects())) runs.push({ text, top: r.top, bottom: r.bottom, left: r.left, right: r.right })
     }
     const box = (plate as Element | null)?.getBoundingClientRect() ?? null
-    return { plate: box === null ? null : { top: box.top, bottom: box.bottom, left: box.left, right: box.right }, runs }
+    return { seats: 1, plate: box === null ? null : { top: box.top, bottom: box.bottom, left: box.left, right: box.right }, runs }
   }, who)
 }
 
 /** The text runs of a seat walk that sit under its plate, top to bottom; none when no plate was found. */
-const runsUnder = (walk: { plate: Box | null; runs: (Box & { text: string })[] }): (Box & { text: string })[] =>
+const runsUnder = (walk: SeatWalk): (Box & { text: string })[] =>
   walk.plate === null ? [] : walk.runs.filter((r) => r.top >= walk.plate!.bottom - 1).sort((a, b) => a.top - b.top)
 
 /**
@@ -393,6 +406,7 @@ const runsUnder = (walk: { plate: Box | null; runs: (Box & { text: string })[] }
  * its name; a line is every text run whose top sits within 3 px of another's.
  */
 export async function expectMySeatLines(page: Page, who: string, state: string): Promise<void> {
+  await expect(mySeat(page, who), `${state}: one seat prints "${who}"`).toHaveCount(1)
   const walk = await walkMySeat(page, who)
   const under = runsUnder(walk)
   // A line is a band of runs whose boxes overlap vertically: a 16 px payout beside a 12 px hand name is one line.
@@ -466,12 +480,17 @@ export async function expectCardClearsMySeat(page: Page, card: Locator, who: str
         const walk = await walkMySeat(page, who)
         const cardBox = await card.boundingBox()
         const titleBox = await title.boundingBox()
-        // What the card's scroll boxes (its body) hold below their fold: its whole height is its box plus that.
+        // What the card's scroll boxes (its body) hold below their fold: its whole height is its box plus that. A box
+        // counts only when it overflows by more than 1 px, as `HandResult` reads it — a rounding pixel hides no row.
         const scrolledAway = await card.evaluate((root) =>
-          Array.from(root.querySelectorAll('*')).reduce((sum, el) => (/auto|scroll/.test(getComputedStyle(el).overflowY) ? sum + el.scrollHeight - el.clientHeight : sum), 0),
+          Array.from(root.querySelectorAll('*')).reduce((sum, el) => {
+            const over = el.scrollHeight - el.clientHeight
+            return /auto|scroll/.test(getComputedStyle(el).overflowY) && over > 1 ? sum + over : sum
+          }, 0),
         )
         found = []
-        if (walk.plate === null) found.push(`${where}: the viewer's plate was not found`)
+        if (walk.seats !== 1) found.push(`${where}: the viewer's seat was not found (${walk.seats} seats print "${who}")`)
+        else if (walk.plate === null) found.push(`${where}: the viewer's plate was not found`)
         if (cardBox === null || titleBox === null) found.push(`${where}: the card or its title has no box`)
         if (walk.plate !== null && cardBox !== null && titleBox !== null) {
           const c = { top: cardBox.y, bottom: cardBox.y + cardBox.height, left: cardBox.x, right: cardBox.x + cardBox.width }
