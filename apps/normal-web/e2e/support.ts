@@ -177,20 +177,26 @@ export const LAPTOP_SCREEN = { width: 1366, height: 768 }
 /** The two desktop sizes the text-overlap rule holds every screen to: the user's screen and a laptop's. */
 export const OVERLAP_SCREENS = [USER_SCREEN, LAPTOP_SCREEN]
 
+/** The phone the default e2e's mobile project runs at, for a desktop-sized page that is also read on a phone. */
+export const PHONE_SCREEN = { width: 375, height: 812 }
+
 /**
  * `expectNoTextOverlap` measures only what is on screen, so a page taller than the window is walked down in
  * window-high steps (100 px of overlap between two steps, so no line falls between them) and left back at the top.
  * A page that fits is measured once, as it stands. Only the document is walked: a screen whose own box scrolls (the
- * room's stage on a phone) scrolls that box itself and calls again.
+ * room's stage on a phone) scrolls that box itself and calls again. The window's height is the page's own (the
+ * detector's viewport), so a context without an emulated viewport walks too; one 100 px tall or less cannot move a
+ * step and fails rather than reading the top alone.
  */
 export async function expectNoTextOverlapDown(page: Page, label: string): Promise<void> {
-  const view = page.viewportSize()?.height ?? 0
-  const total = await page.evaluate(() => document.documentElement.scrollHeight)
+  const { view, total } = await page.evaluate(() => ({ view: document.documentElement.clientHeight, total: document.documentElement.scrollHeight }))
   if (total <= view + 1) {
     await expectNoTextOverlap(page, label)
     return
   }
-  for (let y = 0; ; y += view - 100) {
+  if (view <= 100) throw new Error(`${label}: a window ${view} px tall is too short to walk the page down in steps`)
+  const step = view - 100
+  for (let y = 0; ; y += step) {
     await page.evaluate((top) => window.scrollTo(0, top), y)
     await expectNoTextOverlap(page, `${label}, scrolled to ${y} px`)
     if (y + view >= total) break

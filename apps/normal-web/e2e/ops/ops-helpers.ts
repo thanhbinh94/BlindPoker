@@ -1,12 +1,12 @@
 import { expect, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test'
-import { account, expectNoTextOverlapAt, parsePoints, register, unique, type Account } from '../support.js'
+import { account, expectNoTextOverlapAt, OVERLAP_SCREENS, parsePoints, PHONE_SCREEN, register, unique, type Account } from '../support.js'
 
 /**
  * What the operation-test pack (`docs/operation-test-plan.md`) needs beyond `../support.js`: several players in
  * several browsers, rooms of every shape, the API as each player sees it, and a player that plays by itself.
  */
 
-export { account, expectNoTextOverlapAt, parsePoints, register, unique, type Account }
+export { account, expectNoTextOverlapAt, OVERLAP_SCREENS, parsePoints, PHONE_SCREEN, register, unique, type Account }
 
 export interface Player {
   who: Account

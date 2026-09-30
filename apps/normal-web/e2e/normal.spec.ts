@@ -208,7 +208,7 @@ async function expectRailFits(page: Page): Promise<void> {
 
 /**
  * Register on a fresh page, capturing the sign-in card and the lobby on the way. The card is held to the text-overlap
- * rule (No11b) at `authViewports` — the page's own when omitted — before the account exists.
+ * rule (No11b) on both its tabs at `authViewports` — the page's own when omitted — before the account exists.
  */
 async function tourStart(context: BrowserContext, who: Account, suffix: string, authViewports?: { width: number; height: number }[]): Promise<Page> {
   const page = await context.newPage()
@@ -226,6 +226,9 @@ async function tourStart(context: BrowserContext, who: Account, suffix: string, 
   }
   await expectNoTextOverlapAt(page, 'sign-in card, create an account', authViewports)
   await shot(page, `auth-${suffix}`)
+  await page.getByRole('navigation', { name: 'Blind Luck Poker' }).getByRole('link', { name: 'Đăng nhập' }).click()
+  await expect(page.getByRole('button', { name: 'Vào sảnh' })).toBeVisible()
+  await expectNoTextOverlapAt(page, 'sign-in card, sign in', authViewports)
   await register(page, who)
   // The chibi is there from the first paint — it is a stack of same-origin PNGs, not a render, so there is
   // no fallback state to race.
@@ -246,7 +249,7 @@ test.describe('Blind Luck Poker Normal', () => {
     // Signed out means signed out on this device: the lobby is unreachable until the cookie comes back.
     await page.goto('/#/lobby')
     await expect(page.getByRole('button', { name: 'Vào sảnh' })).toBeVisible()
-    await expectNoTextOverlapAt(page, 'sign-in card, sign in', OVERLAP_SCREENS)
+    await expectNoTextOverlapAt(page, 'sign-in card, after signing out', OVERLAP_SCREENS)
     await signIn(page, who)
 
     const start = await readBalance(page)
@@ -483,8 +486,16 @@ test.describe('Blind Luck Poker Normal', () => {
     await expect(page.getByRole('progressbar', { name: 'Mười ván Blind Poker', exact: true })).toBeVisible()
     await expectNoTextOverlapAt(page, 'achievements')
     await page.goto('/#/settings')
-    await expect(page.getByRole('button', { name: 'Đăng xuất', exact: true })).toBeVisible()
+    const signOutButton = page.getByRole('button', { name: 'Đăng xuất', exact: true })
+    await expect(signOutButton).toBeVisible()
     await expectNoTextOverlapAt(page, 'settings')
+    // The sign-out dialog too — opened, read, and closed again with Escape: this test stays signed in.
+    await signOutButton.click()
+    const confirm = page.getByRole('button', { name: 'Đăng xuất ngay' })
+    await expect(confirm).toBeVisible()
+    await expectNoTextOverlapAt(page, 'settings, the sign-out dialog')
+    await page.keyboard.press('Escape')
+    await expect(confirm).toBeHidden()
 
     // (The wardrobe at this width is `avatar2d.spec.ts`'s `@mobile` test.)
 
@@ -537,5 +548,11 @@ test.describe('Blind Luck Poker Normal', () => {
 
     await page.getByRole('button', { name: 'Rời phòng' }).click()
     await expect(page).toHaveURL(/#\/lobby$/)
+
+    // No11b: the profile once more, now that the hand above is in its history — the "Ván gần đây" rows on a phone.
+    await page.goto('/#/profile')
+    await expect(page.getByRole('heading', { name: 'Hồ sơ', level: 1 })).toBeVisible()
+    await expect(page.getByRole('list', { name: 'Ván gần đây' }).getByRole('listitem')).not.toHaveCount(0)
+    await expectNoTextOverlapAt(page, 'profile, one hand played')
   })
 })

@@ -106,18 +106,19 @@ The rule and its limits are `docs/ui-kit.md`'s "The text-overlap rule". It runs 
 screen, on the accounts they already make — the default e2e may not register more — at the user's screen
 (1920×940), a laptop's (1366×768) and a phone's (375×812):
 
-- sign-in card: both tabs at 1920×940 and 1366×768, "create an account" at 375×812 (`normal.spec.ts`);
+- sign-in card, both tabs: all three, and 1440×900; on the desktop also as signing out leaves it (`normal.spec.ts`);
 - lobby, and its create-room dialog in both modes: all three (`normal.spec.ts`);
 - room taking seats, in a hand, and on the result card counting down and held: all three; on the phone the stage
   is also read scrolled to its foot (`normal.spec.ts`);
 - wardrobe (Ngoại hình, Mũ, Danh hiệu & Huy hiệu) and inventory: all three, plus 900×1100 (`wardrobe-layout.spec.ts`);
-  a coloured outfit worn: 1920×940 and 1366×768 (`avatar-tint.spec.ts`);
-- profile, achievements and Settings: all three — on the desktop the profile after a hand, with Settings' sign-out
-  dialog too (`normal.spec.ts`); Settings in the light theme at 1440×900, 900×1100 and 375×812
-  (`wardrobe-layout.spec.ts`);
+  a coloured outfit worn: 1920×940 and 1366×768 (`avatar-tint.spec.ts`). The wardrobe's other six tabs are not read;
+- profile with a hand in its history, achievements, Settings and its sign-out dialog: all three; on the phone the
+  profile is also read before the hand (`normal.spec.ts`); Settings in the light theme at 1440×900, 900×1100 and
+  375×812 (`wardrobe-layout.spec.ts`);
 - daily page, the reward waiting and the receipt: all three (`normal.spec.ts`);
-- the operation-test pack, at its 1440×900: a Hold'em hand in play, its result card counting down, a side-pot card
-  (`03-holdem`); a Blind hand in play, a carried-pot card, a card with an uncalled play returned (`04-blind`).
+- the operation-test pack: a Hold'em hand in play, its result card counting down and a side-pot card at the pack's
+  1440×900 and at all three (`03-holdem`); a Blind hand in play, a carried-pot card and a card with an uncalled play
+  returned at 1440×900 (`04-blind`).
 
 | Rule | Test file | Test name | Status |
 |---|---|---|---|

@@ -12,6 +12,8 @@ import {
   joinByCode,
   ledgerOf,
   newPlayer,
+  OVERLAP_SCREENS,
+  PHONE_SCREEN,
   ready,
   resultCard,
   start,
@@ -44,6 +46,13 @@ test.afterAll(async () => {
 
 const acts = (page: Page) => page.getByRole('group', { name: 'Hành động' })
 const standUp = (page: Page) => page.getByRole('button', { name: 'Đứng dậy', exact: true })
+
+/**
+ * No11b: the only Hold'em hands any e2e plays are this file's, so the text-overlap rule reads them at the pack's own
+ * size and at the three the default e2e holds every screen to — the user's 1920 × 940, a 1366 × 768 laptop and a
+ * 375 × 812 phone. The page's own size comes back afterwards. All four reads take about a second.
+ */
+const holdemSizes = (page: Page) => [page.viewportSize() ?? { width: 1440, height: 900 }, ...OVERLAP_SCREENS, PHONE_SCREEN]
 
 async function leave(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Rời phòng' }).click()
@@ -80,7 +89,7 @@ test('E-01 E-02 E-03 E-12 E-07 E-08: buy in, play a hand out, the next deals its
   // E-12: the next hand deals itself a few seconds later.
   await expect(a.page.getByText(/Ván tiếp theo sau/).first()).toBeVisible({ timeout: 6_000 })
   // No11b: the Hold'em result card counting down to that deal — no text over text (the next deal waits for no one).
-  await expectNoTextOverlapAt(a.page, 'Hold’em, result card counting down')
+  await expectNoTextOverlapAt(a.page, 'Hold’em, result card counting down', holdemSizes(a.page))
   await expect(acts(a.page)).toBeVisible({ timeout: 12_000 })
 
   // E-07 + E-08: Bình stops pressing anything. His turns time out (check where he may, fold where he must), and
@@ -128,8 +137,10 @@ test('E-05: three all-ins of different sizes make a side pot', async () => {
   await side.scrollIntoViewIfNeeded()
   await expect(side, 'the short all-in cannot win the deeper stacks’ extra').toBeVisible()
   await expect(side).toBeInViewport()
-  // No11b: the card with its pot ledger in view, text clear of text.
-  await expectNoTextOverlapAt(c.page, 'Hold’em, result card with a side pot, the ledger scrolled into view')
+  // No11b: the card, text clear of text — its pot ledger scrolled into view at the pack's size, and read at the other
+  // sizes as the resize leaves it. (Should a short stack that won the main pot be dealt in again five seconds on, a
+  // late read sees that hand instead: still a Hold'em table, still held to the rule.)
+  await expectNoTextOverlapAt(c.page, 'Hold’em, result card with a side pot', holdemSizes(c.page))
   for (const p of [a, b, c]) await leave(p.page)
 })
 
@@ -144,7 +155,7 @@ test('E-10 E-11: leaving mid-hand folds and settles after; standing up between h
   await start(a.page)
   await expect(acts(b.page)).toBeVisible()
   // No11b: a Hold'em hand in play, the tray up — the one hand shape the default e2e (Blind only) never shows.
-  await expectNoTextOverlapAt(b.page, 'Hold’em, in hand, the tray up')
+  await expectNoTextOverlapAt(b.page, 'Hold’em, in hand, the tray up', holdemSizes(b.page))
 
   // E-10: Bình walks out with cards in hand: he folds, and his stack reaches his balance once the hand is over.
   // An keeps playing meanwhile — heads-up she may be first to act, and an idle An would time out into a fold.
