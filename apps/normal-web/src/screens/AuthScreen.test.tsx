@@ -78,11 +78,14 @@ describe('AuthScreen', () => {
     expect(modeLink(t.signIn)).toHaveAttribute('aria-current', 'page')
   })
 
-  it('offers the same move at the foot of the card', async () => {
-    const { user, onMode } = setup(stubApi())
+  it('renders only the tabs as links, not duplicate switch links at the foot', () => {
+    setup(stubApi())
 
-    await user.click(screen.getByRole('link', { name: t.toRegister }))
-    expect(onMode).toHaveBeenCalledWith('register')
+    // The tabs are the only way to switch; the duplicate links were removed.
+    const allLinks = screen.getAllByRole('link')
+    expect(allLinks.length).toBe(2)
+    expect(allLinks[0]).toHaveTextContent(t.signIn)
+    expect(allLinks[1]).toHaveTextContent(t.register)
   })
 
   it('shows the expiry message when the session was refused', () => {

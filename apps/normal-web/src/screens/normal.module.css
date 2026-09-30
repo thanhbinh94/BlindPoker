@@ -536,20 +536,6 @@
   margin-top: var(--space-1);
 }
 
-.switcher {
-  align-self: center;
-  padding: var(--space-2);
-  color: var(--ink-muted);
-  font-family: var(--font-body);
-  font-size: 0.875rem;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-.switcher:hover {
-  color: var(--ink);
-}
-
 /* ── document pages ───────────────────────────────────────────────────────── */
 
 /* The kit's two measures (layout audit U3): narrow here, wide for the wardrobe below and the lobby. */

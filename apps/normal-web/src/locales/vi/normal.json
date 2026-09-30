@@ -27,8 +27,6 @@
     "displayNameHint": "2–20 ký tự: chữ, số, dấu cách và _ - .",
     "submitSignIn": "Vào sảnh",
     "submitRegister": "Tạo tài khoản",
-    "toRegister": "Chưa có tài khoản? Đăng ký",
-    "toSignIn": "Đã có tài khoản? Đăng nhập",
     "name": {
       "length": "Tên hiển thị cần 2–20 ký tự",
       "chars": "Tên hiển thị chỉ gồm chữ, số, dấu cách và _ - .",
