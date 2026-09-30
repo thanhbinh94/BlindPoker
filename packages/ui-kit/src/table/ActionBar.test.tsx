@@ -4,8 +4,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { I18nextProvider } from 'react-i18next'
 import type { LegalActions, RoomView } from '@bp/core'
 import { createI18n } from '../i18n/index.js'
-import type { ClientHand } from '../client/types.js'
-import { ActionBar } from './ActionBar.js'
+import type { ClientHand, ClientSeat } from '../client/types.js'
+import { ActionBar, trayWaitKey } from './ActionBar.js'
 
 const room = { config: { mode: 'holdem', blind: undefined } } as unknown as RoomView
 const hand = (legal: LegalActions | null, extra: Partial<ClientHand> = {}): ClientHand => ({
@@ -200,5 +200,95 @@ describe('ActionBar pre-actions', () => {
     const blindRoom = { config: { mode: 'blind', blind: { fixedWager: 2000, decisionMode: 'none' } } } as unknown as RoomView
     wrap(<ActionBar hand={seated({ mode: 'blind', phase: 'REVEAL' })} room={blindRoom} onAct={() => {}} lang="en" autoPlay={false} onAutoPlay={() => {}} />)
     expect(screen.queryByRole('button', { name: 'Auto play' })).toBeNull()
+  })
+})
+
+// With no legal action the tray names what the seat is waiting for (review round 2, R2-3): one line per situation,
+// picked by `trayWaitKey` in the order of the rows below.
+describe('ActionBar waiting line', () => {
+  const blindRoom = { config: { mode: 'blind', blind: { fixedWager: 2000, decisionMode: 'playOrFold' } } } as unknown as RoomView
+  const seatOf = (seat: number, extra: Partial<ClientSeat> = {}): ClientSeat => ({
+    seat, playerId: `p${seat}`, displayName: `P${seat}`, isBot: false, stack: 5000, betThisStreet: 0, folded: false, allIn: false, cardCount: 2, holeCards: null, hasDecided: false, decision: null, lastAction: null, timedOut: false, ...extra,
+  })
+  /** The viewer is seat 1; `others` are the seats it plays against. */
+  const table = (mine: Partial<ClientSeat>, others: Partial<ClientSeat>[], extra: Partial<ClientHand> = {}): ClientHand =>
+    hand(null, { actingSeat: null, seats: [seatOf(1, mine), ...others.map((o, i) => seatOf(i + 2, o))], ...extra })
+  const said = (h: ClientHand, r: RoomView = room): string | null => {
+    const { unmount } = wrap(<ActionBar hand={h} room={r} onAct={() => {}} lang="en" />)
+    const line = screen.getByRole('status').textContent
+    unmount()
+    return line
+  }
+
+  it('says the hand is over once it is complete, however the seat ended it', () => {
+    expect(said(table({}, [{}], { phase: 'COMPLETE' }))).toBe('Hand over')
+    expect(said(table({ folded: true }, [{}], { phase: 'COMPLETE' })), 'over beats folded').toBe('Hand over')
+    expect(said(table({ allIn: true }, [{}], { phase: 'COMPLETE' })), 'over beats all in').toBe('Hand over')
+    expect(said(table({ hasDecided: true }, [{}], { mode: 'blind', phase: 'COMPLETE' }), blindRoom), 'over beats decided').toBe('Hand over')
+    expect(said(hand(null, { phase: 'COMPLETE', mySeat: null })), 'a spectator is told the same').toBe('Hand over')
+  })
+
+  it('says it in Vietnamese too', () => {
+    render(
+      <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+        <ActionBar hand={table({}, [{}], { phase: 'COMPLETE' })} room={room} onAct={() => {}} lang="vi" />
+      </I18nextProvider>,
+    )
+    expect(screen.getByRole('status')).toHaveTextContent(/^Ván đã kết thúc$/)
+  })
+
+  it('tells a folded seat it waits for the next hand', () => {
+    expect(said(table({ folded: true }, [{}, {}]))).toBe('You folded — waiting for the next hand')
+    expect(said(table({ folded: true, allIn: true }, [{}, {}])), 'folded beats all in').toBe('You folded — waiting for the next hand')
+  })
+
+  it('tells an all-in seat it waits for the result', () => {
+    expect(said(table({ allIn: true }, [{}, {}]))).toBe("You're all in — waiting for the result")
+  })
+
+  it('tells a Blind seat that has decided it waits for the others', () => {
+    expect(said(table({ hasDecided: true }, [{}, {}], { mode: 'blind', phase: 'DECISION' }), blindRoom)).toBe('Decided — waiting for the others')
+  })
+
+  it('keeps "Waiting for your turn" for a Blind seat whose decision is on its way', () => {
+    expect(said(table({}, [{}, {}], { mode: 'blind', phase: 'DECISION' }), blindRoom)).toBe('Waiting for your turn')
+    // a decision elsewhere in the room changes nothing for a seat that has not been asked yet
+    expect(said(table({}, [{ hasDecided: true }, {}], { mode: 'blind', phase: 'DECISION' }), blindRoom)).toBe('Waiting for your turn')
+  })
+
+  it('says a Blind hand is waiting for the reveal once the decisions are in', () => {
+    expect(said(table({ hasDecided: true }, [{}, {}], { mode: 'blind', phase: 'REVEAL' }), blindRoom)).toBe('Waiting for the reveal')
+    // pure luck never enters DECISION: the hand goes straight to the reveal
+    const luck = { config: { mode: 'blind', blind: { fixedWager: 2000, decisionMode: 'none' } } } as unknown as RoomView
+    expect(said(table({}, [{}, {}], { mode: 'blind', phase: 'REVEAL' }), luck)).toBe('Waiting for the reveal')
+    expect(said(table({}, [{}, {}], { mode: 'blind', phase: 'DEALING' }), luck), 'any phase that is not the decision').toBe('Waiting for the reveal')
+  })
+
+  it("says a Hold'em run-out is waiting for the reveal, since no turn is coming", () => {
+    expect(said(table({}, [{ allIn: true }], { phase: 'REVEAL' })), 'one live seat left').toBe('Waiting for the reveal')
+    expect(said(table({}, [{ folded: true }, { allIn: true }], { phase: 'REVEAL' })), 'one live seat left').toBe('Waiting for the reveal')
+    expect(said(hand(null, { phase: 'REVEAL', mySeat: null })), 'a spectator at a table with nobody live').toBe('Waiting for the reveal')
+  })
+
+  it("keeps \"Waiting for your turn\" for Hold'em between turns", () => {
+    expect(said(table({}, [{}], { phase: 'BETTING', actingSeat: 2 }))).toBe('Waiting for your turn')
+    expect(said(table({}, [{}], { phase: 'REVEAL' })), 'between streets, two seats can still act').toBe('Waiting for your turn')
+    expect(said(table({}, [{ allIn: true }], { phase: 'BETTING' })), 'a betting phase is never a run-out').toBe('Waiting for your turn')
+    expect(said(hand(null, { mySeat: null }))).toBe('Waiting for your turn')
+  })
+
+  it('picks its key from the hand and the own seat alone, and the own seat may be missing', () => {
+    expect(trayWaitKey(hand(null), undefined)).toBe('labels.waitingForTurn')
+    expect(trayWaitKey(hand(null, { phase: 'COMPLETE' }), undefined)).toBe('labels.handOver')
+    expect(trayWaitKey(hand(null, { mode: 'blind', phase: 'DECISION' }), undefined)).toBe('labels.waitingForTurn')
+    expect(trayWaitKey(hand(null, { mode: 'blind', phase: 'REVEAL' }), undefined)).toBe('labels.waitReveal')
+    const folded = seatOf(1, { folded: true })
+    expect(trayWaitKey(hand(null, { seats: [folded] }), folded)).toBe('labels.waitFolded')
+  })
+
+  it('keeps the pre-action row and the live status region as they were', () => {
+    wrap(<ActionBar hand={table({}, [{}], { phase: 'BETTING', actingSeat: 2 })} room={room} onAct={() => {}} lang="en" onPreAction={() => {}} />)
+    expect(screen.getByRole('group', { name: 'Before your turn' })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Waiting for your turn')
   })
 })

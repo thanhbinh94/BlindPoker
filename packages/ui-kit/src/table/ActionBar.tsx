@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { PreActionKind } from '../client/preaction.js'
-import type { ClientHand } from '../client/types.js'
+import type { ClientHand, ClientSeat } from '../client/types.js'
 import { formatPoints, type Language } from '../i18n/index.js'
 import { Button } from '../primitives/Button.js'
 import { cx } from '../primitives/cx.js'
@@ -30,6 +30,43 @@ const PRE_ACTIONS: readonly PreActionKind[] = ['checkFold', 'callAny', 'fold']
 
 const SLIDER_STEPS = 50
 
+/** The lines the tray can print while the seat has no legal action: one `labels.*` key each. */
+export type TrayWaitKey =
+  | 'labels.handOver'
+  | 'labels.waitFolded'
+  | 'labels.waitAllIn'
+  | 'labels.waitDecided'
+  | 'labels.waitReveal'
+  | 'labels.waitingForTurn'
+
+/**
+ * What a seat with no legal action is waiting for, as the key of the line the tray prints (review round 2, R2-3).
+ * The first row that fits wins, so a finished hand reads "over" whatever the seat did in it:
+ *
+ *  1. the hand is complete — the result card may still be held on the felt, but nothing is left to wait for;
+ *  2. the seat folded — it waits for the next deal;
+ *  3. the seat is all in — it waits for the result;
+ *  4. Blind, deciding, and this seat has already chosen — it waits for the others;
+ *  5. Blind, deciding, and it has not chosen — its own decision is on its way, the old line still fits;
+ *  6. Blind, any other phase (the reveal; a pure-luck hand never enters the decision) — it waits for the cards;
+ *  7. Hold'em, revealing, with fewer than two seats that can still act — a run-out: no turn is coming;
+ *  8. anything else is Hold'em between turns — the old line.
+ *
+ * `mine` is the viewer's own seat and is `undefined` for a spectator (or before the seat is in the hand).
+ */
+export function trayWaitKey(hand: ClientHand, mine: ClientSeat | undefined): TrayWaitKey {
+  if (hand.phase === 'COMPLETE') return 'labels.handOver'
+  if (mine?.folded === true) return 'labels.waitFolded'
+  if (mine?.allIn === true) return 'labels.waitAllIn'
+  if (hand.mode === 'blind') {
+    if (hand.phase !== 'DECISION') return 'labels.waitReveal'
+    return mine?.hasDecided === true ? 'labels.waitDecided' : 'labels.waitingForTurn'
+  }
+  const canStillAct = hand.seats.filter((seat) => !seat.folded && !seat.allIn).length
+  if (hand.phase === 'REVEAL' && canStillAct < 2) return 'labels.waitReveal'
+  return 'labels.waitingForTurn'
+}
+
 /**
  * The lacquered action tray, anchored to the bottom edge at every size.
  *
@@ -37,8 +74,8 @@ const SLIDER_STEPS = 50
  * preset is clamped into it, so a click can never produce an illegal amount. Shortcuts: F fold, C check/call,
  * R focus the amount, Enter submit — all advertised through `aria-keyshortcuts`.
  *
- * Between turns the tray stays put and says so: it is a fixture of the room, not a popup, and a tray that came and
- * went would resize the felt above it on every turn.
+ * Between turns the tray stays put and says what the seat is waiting for (`trayWaitKey`): it is a fixture of the room,
+ * not a popup, and a tray that came and went would resize the felt above it on every turn.
  */
 export function ActionBar({ hand, room, onAct, disabled = false, lang, preAction = null, onPreAction, autoPlay = false, onAutoPlay }: ActionBarProps) {
   const { t } = useTranslation()
@@ -121,7 +158,7 @@ export function ActionBar({ hand, room, onAct, disabled = false, lang, preAction
     return (
       <div className={s.tray} data-surface="night" role="group" aria-label={t('labels.actions')}>
         <p className={s.trayWait} role="status">
-          {t('labels.waitingForTurn')}
+          {t(trayWaitKey(hand, mine))}
         </p>
         {offersPreActions ? (
           <div className={s.preRow} role="group" aria-label={t('preActions.label')}>

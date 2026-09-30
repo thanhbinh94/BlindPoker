@@ -203,7 +203,14 @@ dropping the oldest, so a chatty server cannot stack slips off the top of the sc
 
 `ActionBar` offers only the kinds the server declared legal and clamps every preset into the legal range, so a click
 can never produce an illegal amount. Keyboard: `F` fold, `C` check/call, `R` focus the amount, `Enter` submit — all
-advertised through `aria-keyshortcuts`. Between turns it stays in place and says so rather than collapsing.
+advertised through `aria-keyshortcuts`. With no legal action it stays in place rather than collapsing, and its one
+`role="status"` line says what the seat is waiting for (review round 2, R2-3) — so a change of line is announced once.
+`trayWaitKey(hand, mine)` picks it, first match wins: "Ván đã kết thúc" once the hand is complete (the result card may
+still be held on the felt), "Bạn đã bỏ bài — chờ ván sau" for a folded seat, "Bạn đã tất tay — chờ kết quả" for an
+all-in seat, "Đã chọn — chờ các ghế khác" for a Blind seat that has decided, "Chờ lật bài" for a Blind hand past its
+decision and for a Hold'em run-out (fewer than two seats that can still act: no turn is coming), and "Đang chờ đến lượt
+bạn" otherwise — Hold'em between turns, or a Blind seat whose own decision is on its way. The pre-action and auto-play
+rows under the line are unchanged.
 
 `RoomHeader` shows the blinds for a Hold'em room and "wager · limit" for a Blind one ("Mức cược 5.000 · Hạn mức 25.000"; the
 limit is `blindTableLimit`, five wagers).
