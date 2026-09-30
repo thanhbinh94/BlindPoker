@@ -78,14 +78,17 @@ describe('AuthScreen', () => {
     expect(modeLink(t.signIn)).toHaveAttribute('aria-current', 'page')
   })
 
-  it('renders only the tabs as links, not duplicate switch links at the foot', () => {
-    setup(stubApi())
+  it.each([
+    ['signIn', 'signIn' as const],
+    ['register', 'register' as const],
+  ])('in %s mode, renders only the two tab links, not duplicate switch links', (_, mode) => {
+    setup(stubApi(), mode)
 
     // The tabs are the only way to switch; the duplicate links were removed.
     const allLinks = screen.getAllByRole('link')
     expect(allLinks.length).toBe(2)
-    expect(allLinks[0]).toHaveTextContent(t.signIn)
-    expect(allLinks[1]).toHaveTextContent(t.register)
+    const linkTexts = allLinks.map((link) => link.textContent)
+    expect(linkTexts).toEqual([t.signIn, t.register])
   })
 
   it('shows the expiry message when the session was refused', () => {
