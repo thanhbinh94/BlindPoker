@@ -217,10 +217,17 @@ Tủ đồ, Kho đồ, Thành tựu, Cài đặt.
 
 | Mã | Kỳ vọng | Ưu tiên |
 |---|---|---|
-| M-01 | Không có thanh cuộn ngang, không chữ bị cắt, không nút bị che | P2 |
+| M-01 | Không có thanh cuộn ngang, không chữ bị cắt, không chữ đè lên chữ khác, không nút bị che | P2 |
 | M-02 | Trên điện thoại, ghế của chính mình và các nút hành động nhìn thấy đủ trong bàn | P1 |
 | M-03 | Chữ tiếng Việt có dấu hiển thị đúng font, không vỡ dòng giữa từ | P3 |
 | M-04 | Nền sáng: chữ đọc được trên mọi nền (vàng trên kem, xanh trên xanh) | P3 |
+
+**Luật "không chữ đè chữ" (review 2026-09-29, No11b) đã thành test tự động:** `pnpm e2e:normal` đo mọi màn hình
+kể trên — trừ Tủ đồ chỉ ba tab (Ngoại hình, Mũ, Danh hiệu & Huy hiệu) — ở 1920×940 (màn hình của bạn), 1366×768 và
+375×812, gồm bàn Blind lúc chờ, trong ván và thẻ kết quả; bộ `e2e/ops` đo thêm bàn Hold'em và Blind đang chơi và thẻ
+kết quả ở 1440×900. Cách đo và những gì nó không thấy: `docs/ui-kit.md`, mục "The text-overlap rule"; danh sách test:
+`docs/test-matrix.md`. Người test vẫn nhìn bằng mắt những gì máy không đo: chữ đè lên hình hay chạm mép thẻ, chữ
+trong ô nhập, bản English, và các cỡ màn hình khác.
 
 ### N. Vận hành máy chủ (người vận hành)
 

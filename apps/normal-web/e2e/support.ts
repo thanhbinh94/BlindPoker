@@ -171,6 +171,54 @@ export const USER_SCREEN = { width: 1920, height: 940 }
  */
 export const ROOM_SCREENS = [USER_SCREEN, { width: 1536, height: 730 }, { width: 1280, height: 720 }, { width: 1366, height: 768 }]
 
+/** The laptop every screen's text-overlap check also runs at (review 2026-09-29, No11b), beside the user's own. */
+export const LAPTOP_SCREEN = { width: 1366, height: 768 }
+
+/** The two desktop sizes the text-overlap rule holds every screen to: the user's screen and a laptop's. */
+export const OVERLAP_SCREENS = [USER_SCREEN, LAPTOP_SCREEN]
+
+/**
+ * `expectNoTextOverlap` measures only what is on screen, so a page taller than the window is walked down in
+ * window-high steps (100 px of overlap between two steps, so no line falls between them) and left back at the top.
+ * A page that fits is measured once, as it stands. Only the document is walked: a screen whose own box scrolls (the
+ * room's stage on a phone) scrolls that box itself and calls again.
+ */
+export async function expectNoTextOverlapDown(page: Page, label: string): Promise<void> {
+  const view = page.viewportSize()?.height ?? 0
+  const total = await page.evaluate(() => document.documentElement.scrollHeight)
+  if (total <= view + 1) {
+    await expectNoTextOverlap(page, label)
+    return
+  }
+  for (let y = 0; ; y += view - 100) {
+    await page.evaluate((top) => window.scrollTo(0, top), y)
+    await expectNoTextOverlap(page, `${label}, scrolled to ${y} px`)
+    if (y + view >= total) break
+  }
+  await page.evaluate(() => window.scrollTo(0, 0))
+}
+
+/**
+ * Review 2026-09-29, No11b — the text-overlap rule (docs/ui-kit.md) on the screen as it stands, at each of `viewports`
+ * (the page's own when omitted), each walked down whole (`expectNoTextOverlapDown`); the label gets the size. The
+ * page's own viewport comes back afterwards, and so does its motion: the rule measures under reduced motion, and a
+ * test that was not running under it is not left there.
+ */
+export async function expectNoTextOverlapAt(page: Page, label: string, viewports?: { width: number; height: number }[]): Promise<void> {
+  const original = page.viewportSize()
+  const reduced = await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)
+  try {
+    for (const viewport of viewports ?? [original]) {
+      if (viewports !== undefined && viewport !== null) await page.setViewportSize(viewport)
+      const size = page.viewportSize()
+      await expectNoTextOverlapDown(page, `${label}, ${size?.width ?? '?'}×${size?.height ?? '?'}`)
+    }
+  } finally {
+    if (!reduced) await page.emulateMedia({ reducedMotion: null })
+    if (viewports !== undefined && original !== null) await page.setViewportSize(original)
+  }
+}
+
 /** How far the page and the room's stage (the room's one `<main>`, the felt between the header and the tray) scroll. */
 async function overflowOf(page: Page): Promise<{ page: number; stage: number | null }> {
   return page.evaluate(async () => {

@@ -1,7 +1,15 @@
 import { expect, test, type Page } from '@playwright/test'
-import { expectNoTextOverlap } from './overlap.js'
 import { expectRailFits } from './rail.js'
-import { account, expectEvenCardRows, expectHeadingsClearOfCards, expectNoSidewaysScroll, goToWardrobeTab, register, SHOTS } from './support.js'
+import {
+  account,
+  expectEvenCardRows,
+  expectHeadingsClearOfCards,
+  expectNoSidewaysScroll,
+  expectNoTextOverlapDown,
+  goToWardrobeTab,
+  register,
+  SHOTS,
+} from './support.js'
 
 /**
  * The dressing-room layout itself (wardrobe redesign design §3, §8, §9): the group row and the active
@@ -40,6 +48,9 @@ async function useLightTheme(page: Page): Promise<void> {
   const light = page.getByRole('button', { name: 'Sáng', exact: true })
   await light.click()
   await expect(light).toHaveAttribute('aria-pressed', 'true')
+  // No11b: Settings itself, in the light theme, at this test's viewport (desktop, tablet, phone).
+  const size = page.viewportSize()
+  await expectNoTextOverlapDown(page, `settings, light theme, ${size?.width ?? '?'}×${size?.height ?? '?'}`)
 }
 
 /** Every `role="tab"` inside the named `tablist` must share one `offsetTop` — the row is one line,
@@ -72,19 +83,6 @@ async function assertNavNeverWraps(page: Page): Promise<void> {
   await assertTablistOnOneLine(page, 'Trang trí')
 
   await goToWardrobeTab(page, 'Ngoại hình')
-}
-
-/** `expectNoTextOverlap` measures what is on screen, so a page taller than the window is walked in window-high steps
- * (100 px of overlap between two steps, so no line falls between them). Ends back at the top. */
-async function expectNoTextOverlapDown(page: Page, label: string): Promise<void> {
-  const view = page.viewportSize()?.height ?? 0
-  const total = await page.evaluate(() => document.documentElement.scrollHeight)
-  for (let y = 0; ; y += view - 100) {
-    await page.evaluate((top) => window.scrollTo(0, top), y)
-    await expectNoTextOverlap(page, `${label}, scrolled to ${y} px`)
-    if (y + view >= total) break
-  }
-  await page.evaluate(() => window.scrollTo(0, 0))
 }
 
 /**

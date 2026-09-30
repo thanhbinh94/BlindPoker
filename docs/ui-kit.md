@@ -384,8 +384,11 @@ Breakpoints 480 / 768 / 1024, per spec §27.1. No horizontal page scroll at any 
 "Ván tiếp theo sau 6 giây" countdown printed across the viewer's own seat plate, `No2-1`). The Normal e2e asserts it
 with `expectNoTextOverlap(page, label, opts?)` from `apps/normal-web/e2e/overlap.ts`, whose own proof is
 `e2e/overlap.spec.ts` (static fixtures, no account). A spec that calls it sets
-`test.use({ contextOptions: { reducedMotion: 'reduce' } })`; the helper waits for fonts and for *finite* animations
-(2 s at most — an infinite one is never waited on), then measures once:
+`test.use({ contextOptions: { reducedMotion: 'reduce' } })` — or calls it through `expectNoTextOverlapAt(page, label,
+viewports?)` (`e2e/support.ts`), which switches reduced motion on for the reading (and off again when the test was
+not running under it), sets each viewport in turn and walks a page taller than the window down in window-high
+steps. The helper waits for fonts and for *finite* animations (2 s at most — an infinite one is never waited on),
+then measures once:
 
 - **Text runs, not boxes.** Every non-blank text node's line boxes (`Range.getClientRects()`), clipped by every
   ancestor that clips its overflow (an ellipsis, a scroll area — an absolutely positioned box escapes the ones below
@@ -422,6 +425,14 @@ What the rule does **not** catch:
   placeholders, CSS generated content (`::before { content }`).
 - **Partial covers:** the cover test samples one point, the centre of the intersection; a cover that is a
   pseudo-element, or less than 0.9 opaque, does not count as hiding anything.
+
+**Where it runs** (Plan 16, Task 9). The default e2e reads every main screen at the user's screen (1920 × 940), a
+laptop's (1366 × 768) and a phone's (375 × 812), inside tests that already go there and on the accounts they already
+make: the sign-in card, the lobby and its create-room dialog, the room taking seats, in a hand and on the
+result card (counting down, then held), the wardrobe (Ngoại hình, Mũ, Danh hiệu & Huy hiệu; a coloured outfit worn),
+the inventory, the profile, the daily page (reward waiting, receipt), the achievements and Settings (with its sign-out
+dialog). The operation-test pack reads the Hold'em and Blind tables where it plays a hand, at its own 1440 × 900.
+`docs/test-matrix.md` lists which size reads which state, and the tests. No screen carries a `data-overlap-ok` today.
 
 ---
 

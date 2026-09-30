@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { account, chibiHash, createBlindRoom, expectLobby, goToWardrobeTab, register, sit, unique } from './support.js'
+import { account, chibiHash, createBlindRoom, expectLobby, expectNoTextOverlapAt, goToWardrobeTab, OVERLAP_SCREENS, register, sit, unique } from './support.js'
 
 /**
  * Hair-colour tinting end to end (avatar-tint design §7): picking a colour swatch in the wardrobe
@@ -107,6 +107,9 @@ test.describe('Blind Luck Poker Normal — màu tóc, màu mắt', () => {
     expect(finalHash, 'the eye colour and the outfit redraw the preview too').not.toBe(afterPick)
 
     await save(page)
+    // No11b: the tab with a coloured outfit picked and worn — its colour dots and the worn mark on the cards — and the
+    // saved notice, text clear of text on the player's screen and a laptop's.
+    await expectNoTextOverlapAt(page, 'wardrobe, Trang phục → Trang phục, a coloured tee worn', OVERLAP_SCREENS)
 
     // A table seat draws this player's own chibi (not a bot's) — the same door avatar2d.spec.ts
     // uses to prove a saved wardrobe choice reaches somewhere other than the wardrobe screen itself.

@@ -2,7 +2,8 @@
 
 Every requirement in the spec's server-kit integration list (§29.2), its multiplayer
 requirement (§29.3) and its edge-case table (§30) appears here exactly once, with the
-test that holds it up.
+test that holds it up. One row after the summary is not the spec's: the text-overlap rule
+of the 2026-09-29 review (No11b).
 
 Status legend:
 
@@ -11,6 +12,8 @@ Status legend:
   `packages/server-kit/src/soak.test.ts`, `packages/server-kit/src/testing/soak.ts`).
 - **partly covered** — the mechanism is tested, but part of the row is a documented
   consequence rather than an assertable behaviour. The reason is spelled out.
+- **added in Plan 16** — the one row after the summary, which is not the spec's: the text-overlap
+  rule the 2026-09-29 review asked for (No11b).
 
 Paths are relative to the repository root. Test names are the `it(...)` titles; the
 `describe` is given where it disambiguates.
@@ -95,6 +98,30 @@ had drifted from the tests.
 
 Nothing is left with no test at all. The one *partly* covered row is the Lite hard kill,
 where the row's own subject is what happens when no code runs.
+
+## Review 2026-09-29 — the text-overlap rule (No11b)
+
+Not a row of the spec: the user asked, in the 2026-09-29 review, that text drawn over other text become a test rule.
+The rule and its limits are `docs/ui-kit.md`'s "The text-overlap rule". It runs inside tests that already visit each
+screen, on the accounts they already make — the default e2e may not register more — at the user's screen
+(1920×940), a laptop's (1366×768) and a phone's (375×812):
+
+- sign-in card: both tabs at 1920×940 and 1366×768, "create an account" at 375×812 (`normal.spec.ts`);
+- lobby, and its create-room dialog in both modes: all three (`normal.spec.ts`);
+- room taking seats, in a hand, and on the result card counting down and held: all three; on the phone the stage
+  is also read scrolled to its foot (`normal.spec.ts`);
+- wardrobe (Ngoại hình, Mũ, Danh hiệu & Huy hiệu) and inventory: all three, plus 900×1100 (`wardrobe-layout.spec.ts`);
+  a coloured outfit worn: 1920×940 and 1366×768 (`avatar-tint.spec.ts`);
+- profile, achievements and Settings: all three — on the desktop the profile after a hand, with Settings' sign-out
+  dialog too (`normal.spec.ts`); Settings in the light theme at 1440×900, 900×1100 and 375×812
+  (`wardrobe-layout.spec.ts`);
+- daily page, the reward waiting and the receipt: all three (`normal.spec.ts`);
+- the operation-test pack, at its 1440×900: a Hold'em hand in play, its result card counting down, a side-pot card
+  (`03-holdem`); a Blind hand in play, a carried-pot card, a card with an uncalled play returned (`04-blind`).
+
+| Rule | Test file | Test name | Status |
+|---|---|---|---|
+| Không chữ nào đè lên chữ khác trên mọi màn hình chính (No11b); bộ phát hiện tự kiểm bằng trang mẫu tĩnh | `apps/normal-web/e2e/overlap.spec.ts`, `apps/normal-web/e2e/normal.spec.ts`, `apps/normal-web/e2e/wardrobe-layout.spec.ts`, `apps/normal-web/e2e/avatar-tint.spec.ts`, `apps/normal-web/e2e/ops/03-holdem.spec.ts`, `apps/normal-web/e2e/ops/04-blind.spec.ts` | hai đoạn chữ đè lên nhau thì báo lỗi, kèm chữ, khung và đường dẫn CSS · một tài khoản chơi trọn một ván Blind với bot · điểm danh hằng ngày · @mobile sảnh, bàn chơi và hồ sơ trên màn hình điện thoại · desktop: nhóm và tab con không gãy dòng; ảnh chụp tối và sáng · máy tính bảng … · @mobile điện thoại: không cuộn ngang, nhóm và tab con không gãy dòng; ảnh chụp tối và sáng · chọn màu tóc đỏ tô lại chibi bằng canvas và giữ nguyên khi lưu · E-01 E-02 E-03 E-12 E-07 E-08: buy in, play a hand out … · E-05: three all-ins of different sizes make a side pot · E-10 E-11: leaving mid-hand folds and settles after; … · F-03 F-04 F-05: two players decide blind to each other; … · F-06: one plays, one folds … | added in Plan 16 |
 
 ## Ruling recorded: the `reqId` cache is per connection
 
