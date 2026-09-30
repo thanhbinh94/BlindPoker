@@ -86,18 +86,24 @@ function RoomTicket({ room, onJoin, lang, busy }: RoomTicketProps) {
       <span className={cx(s.notch, s.notchBottom)} aria-hidden="true" />
 
       <div className={s.body}>
+        {/* The name wraps in a column of its own, two lines at most (the whole of it in the tooltip); the lock and the
+            status stay on its first line at the right, so a long name never pushes them onto a row of their own (R2-1). */}
         <div className={s.ticketHead}>
-          <h3 className={s.roomName}>{room.name}</h3>
-          {room.config.hasPassword ? (
-            <svg className={s.lock} viewBox="0 0 12 14" width="12" height="14" role="img" aria-label={t('labels.password')}>
-              <path d="M3.2 6V4a2.8 2.8 0 0 1 5.6 0v2" fill="none" stroke="currentColor" strokeWidth="1.5" />
-              <rect x="1.4" y="5.8" width="9.2" height="7.4" rx="1.7" fill="currentColor" />
-            </svg>
-          ) : null}
-          {/* Bug 2: an empty room is kept 60 s for anyone coming back, and says so instead of "waiting". */}
-          <Badge tone={room.closing === true ? 'muted' : room.status === 'OPEN' ? 'teal' : 'gold'}>
-            {t(room.closing === true ? 'labels.closing' : room.status === 'OPEN' ? 'labels.waiting' : 'labels.inHand')}
-          </Badge>
+          <h3 className={s.roomName} title={room.name}>
+            {room.name}
+          </h3>
+          <span className={s.ticketStatus}>
+            {room.config.hasPassword ? (
+              <svg className={s.lock} viewBox="0 0 12 14" width="12" height="14" role="img" aria-label={t('labels.password')}>
+                <path d="M3.2 6V4a2.8 2.8 0 0 1 5.6 0v2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                <rect x="1.4" y="5.8" width="9.2" height="7.4" rx="1.7" fill="currentColor" />
+              </svg>
+            ) : null}
+            {/* Bug 2: an empty room is kept 60 s for anyone coming back, and says so instead of "waiting". */}
+            <Badge tone={room.closing === true ? 'muted' : room.status === 'OPEN' ? 'teal' : 'gold'}>
+              {t(room.closing === true ? 'labels.closing' : room.status === 'OPEN' ? 'labels.waiting' : 'labels.inHand')}
+            </Badge>
+          </span>
         </div>
 
         <dl className={s.meta}>

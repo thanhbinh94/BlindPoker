@@ -69,18 +69,20 @@ function listed(code: string, config: Omit<RoomSummary['config'], 'isPrivate' | 
 const LONGEST_ROOM_NAME = 'Bàn_Đại_Gia_Phố_Núi_Sài_Gòn_01'
 
 /**
- * Six public rooms, one of every kind a lobby can hold, for `withBusyLobby` (review round 2, R2-1): Texas Hold'em and
- * Blind; open, in a hand and closing; two cards and three, `none` and `playOrFold`; one with a password; the longest
- * name the server takes (beside the lock and the widest badge); seats 1/6, 3/9 and 6/6, and an empty room that is
- * closing (0/6). The blinds and the wagers are entries of `ECONOMY`'s tiers, the widest among them. Every other name is
- * short on purpose: the long one wraps its ticket's heading onto three lines, which is as much as three rows hold at
- * 1920×940 (a second heading that wraps, and the lobby scrolls 3 px).
+ * Six public rooms for `withBusyLobby` (review round 2, R2-1): Texas Hold'em and Blind; open, in a hand and closing;
+ * two cards and three, `none` and `playOrFold`; one with a password; seats 3/9, 6/6, 1/6, 5/8, 2/4, and an empty room
+ * that is closing (0/6). Every blind and wager is one of `ECONOMY`'s tiers, the longest to print (2.500/5.000, 50.000)
+ * among them. Two names wrap, in different rows of the two-column grid: the server's longest (30 characters, no space),
+ * beside the lock and "Đang chơi", and "Ba lá chọn chơi hay bỏ" (22) beside "Đang chơi"; the widest badge, "Đang
+ * đóng…", sits beside a short name. A name wraps beside its badge and is cut after two lines, so no name makes a ticket
+ * taller than that: before, the badge dropped under a name that wrapped, and with both of these the lobby scrolled 3 px
+ * at 1920×940.
  */
-export const BUSY_LOBBY: RoomSummary[] = [
+const BUSY_LOBBY: RoomSummary[] = [
   listed('WMQ7X4', { name: 'Đêm Sài Gòn', mode: 'holdem', maxPlayers: 9, turnTimerSec: 30, hasPassword: false, holdem: { smallBlind: 100, bigBlind: 200, minBuyInBB: 50, maxBuyInBB: 200 } }, 3, 'OPEN'),
   listed('MWK9H2', { name: 'Bàn Cao Thủ', mode: 'holdem', maxPlayers: 6, turnTimerSec: 45, hasPassword: false, holdem: { smallBlind: 2_500, bigBlind: 5_000, minBuyInBB: 20, maxBuyInBB: 500 } }, 6, 'IN_GAME'),
   listed('QWM4N8', { name: 'Chiếu Bạc', mode: 'blind', maxPlayers: 6, turnTimerSec: 15, hasPassword: false, blind: { holeCards: 2, decisionMode: 'none', fixedWager: 1_000, botCount: 0 } }, 1, 'OPEN'),
-  listed('HMW6R3', { name: 'Ván ba lá', mode: 'blind', maxPlayers: 8, turnTimerSec: 30, hasPassword: false, blind: { holeCards: 3, decisionMode: 'playOrFold', fixedWager: 50_000, botCount: 2 } }, 5, 'IN_GAME'),
+  listed('HMW6R3', { name: 'Ba lá chọn chơi hay bỏ', mode: 'blind', maxPlayers: 8, turnTimerSec: 30, hasPassword: false, blind: { holeCards: 3, decisionMode: 'playOrFold', fixedWager: 50_000, botCount: 2 } }, 5, 'IN_GAME'),
   listed('NWM2Z7', { name: LONGEST_ROOM_NAME, mode: 'blind', maxPlayers: 4, turnTimerSec: 10, hasPassword: true, blind: { holeCards: 3, decisionMode: 'none', fixedWager: 20_000, botCount: 1 } }, 2, 'IN_GAME'),
   listed('MQW8K5', { name: 'Bàn vắng', mode: 'holdem', maxPlayers: 6, turnTimerSec: 60, hasPassword: false, holdem: { smallBlind: 500, bigBlind: 1_000, minBuyInBB: 50, maxBuyInBB: 200 } }, 0, 'OPEN', true),
 ]
