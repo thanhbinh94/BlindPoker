@@ -8,7 +8,7 @@ below are the real history.
 
 ---
 
-## Plan 16 — review 2026-09-29, round 1 — merged `merge commit to be filled in by the controller` (2026-09-30)
+## Plan 16 — review 2026-09-29, round 1 — merged `a836daa` (2026-09-30)
 
 Ten items from the user's review of 2026-09-29 are fixed: the two P1 avatar-colour bugs, a dead pair of sign-in
 links, how hand history reads, when an emptied room closes, four layout problems, and an automatic check that no text

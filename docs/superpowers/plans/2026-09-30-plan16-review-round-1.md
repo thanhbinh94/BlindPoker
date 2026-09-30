@@ -12,6 +12,8 @@
 
 **Pre-flight review (2026-09-30):** an independent review verified every root cause against the code and returned 14 amendments; all are folded into this version (see the ledger for the list).
 
+**Executed and merged (`a836daa`, 2026-09-30).** One ruled change to this text: the overlap detector's vertical measure is a **line-box inset** — each text rect inset per side by `max(0, (rect.height − computed line-height)/2)`, no inset for `line-height: normal` — not the "20 % shrink" in R6 and Task 5 step 2 below (the 20 % version missed the user's own countdown case). `docs/ui-kit.md` "The text-overlap rule" is the authoritative contract.
+
 ## Global Constraints
 
 - Work in the plan's worktree only (`D:\Work\Other Project\bind-poker\.worktrees\plan16`, branch `plan16/review-round-1`); never touch the main checkout, never merge or push, never open a real `.env`, never stop/start the user's LAN host on :8080.

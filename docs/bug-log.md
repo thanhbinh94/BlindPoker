@@ -155,7 +155,7 @@ nhánh `fix/ops-t1-t9` (29/09), merge `2111c55`, đã cập nhật host LAN.
 | T8 | N-04 | P3 | Host: `normal.err.log` có cảnh báo của `pg` — `sslmode=require` sẽ mang nghĩa yếu hơn ở pg v9. | **(a) dùng `sslmode=verify-full` trong `DATABASE_URL` (`.env` của host, `.env.example`, tài liệu triển khai)**. | đã sửa — `0041a7e` |
 | T9 | O-01/O-04 | P3 | Lite: exe in cảnh báo thử nghiệm SEA của Node mỗi lần chạy, kể cả `--status`/`--stop` — người vận hành dễ tưởng là lỗi. | **(a) lọc riêng cảnh báo đó khi exe khởi động**. | đã sửa — `eb2afc7` |
 
-**29/09 đã sửa, chưa merge, chưa lên host.** Ghi chú kỹ thuật:
+**29/09 đã sửa, merge `2111c55`, đã lên host LAN.** Ghi chú kỹ thuật:
 - T2: luật mật khẩu chuyển vào `@bp/core` (`validatePassword`, như luật tên hiển thị), form đăng ký và server chạy cùng một hàm; đăng nhập vẫn chỉ kiểm độ dài.
 - T3: bot bị đuổi đi qua đúng đường của người (`removePlayer`): ghế trống, bớt một chỗ bot giữ, không có dòng sổ điểm, không gửi thông báo. `config.blind.botCount` giữ nguyên là số bot lúc tạo phòng (không nơi nào hiển thị nó; số người ở sảnh đếm ghế thật).
 - T4: client tự suy ra từ cấu hình phòng và số dư (không đổi giao thức); chỉ Blind — Hold'em hết chip thì bị mời đứng dậy ngay cuối ván, nên không có trường hợp này.
@@ -176,7 +176,7 @@ Người dùng gửi 17 mục kèm ảnh (hai mục cùng số 11, ghi là 11a/1
 ngày 30/09; người dùng duyệt chia ba đợt: **Đợt 1** sửa lỗi ngay (Plan 16), **Đợt 2** cải tiến cần chốt lựa chọn,
 **Đợt 3** nhân vật thế hệ mới (spec riêng). Độ khó: D = dễ, TB = trung bình, K = khó.
 
-**Đợt 1 đã sửa xong trên nhánh `plan16/review-round-1` (30/09) — chưa merge, chưa lên host** (mười mục; No7 là
+**Đợt 1 đã sửa xong (30/09) — merge `a836daa`, đã lên host LAN** (mười mục; No7 là
 roadmap). Kế hoạch: `docs/superpowers/plans/2026-09-30-plan16-review-round-1.md`. Ghi chú kỹ thuật sau bảng.
 
 | # | Loại | Khó | Mô tả | Nguyên nhân / hướng | Đợt | Trạng thái |
@@ -201,7 +201,7 @@ roadmap). Kế hoạch: `docs/superpowers/plans/2026-09-30-plan16-review-round-1
 | No14 | Tính năng lớn | K+ | Chỉnh dáng tự nhiên, có ngón tay | Ảnh 2D phẳng không có khung xương; khả thi nhất: vài tư thế vẽ sẵn + vẽ lại có ngón tay, cùng đợt No13 | 3 | cần spec |
 | No7 | Tương lai | D | Thông báo qua email | Ghi vào roadmap (spec §34), chưa làm | — | roadmap — đã ghi ở spec §34, mục 14 |
 
-**30/09 đã sửa trên nhánh `plan16/review-round-1`, chưa merge, chưa lên host.** Ghi chú kỹ thuật:
+**30/09 đã sửa, merge `a836daa`, đã lên host LAN.** Ghi chú kỹ thuật:
 - No15/No16: nguyên nhân là CSP chứ không phải lớp tô màu. `normalCsp` cho `img-src 'self' data: blob:` (chỉ Normal; `script-src` và `connect-src` giữ nguyên, Lite giữ chính sách riêng), cả header được ghim trong `app.test.ts`. `ChibiLayer` rơi về lớp ảnh gốc khi ảnh đã tô lỗi nên không bao giờ còn đầu trống. Mười hai món có biến thể màu (như "Áo phông đỏ") bị chặn cùng lý do và nay hiện đúng màu. e2e `avatar-tint` chờ mọi `<img>` của phòng thay đồ giải mã được thật (`complete && naturalWidth > 0` — `toBeVisible` chấp nhận cả ảnh hỏng nên trước đây không thấy lỗi), cần ít nhất bốn lớp `blob:` trong đó có mặt (L50) và áo (L40), không chỉ tóc. Lý do nới CSP ở `docs/security.md` và spec §19.3.
 - No6: bỏ hai link "Chưa có tài khoản?/Đã có tài khoản?" (`href` đổi giữa lúc bấm nên trình duyệt quay về địa chỉ cũ); hai tab đã làm đúng việc đó. Test kiểm cả chế độ đăng nhập lẫn đăng ký.
 - No4: `botLabel()` đọc lại mã `bot:<mã phòng>:<i>` thành "Bot n" (n = i + 1), chỉ cho ghế bot; mã không đúng dạng và ghế người giữ nguyên như đã ghi. Mỗi ván mang thêm `roomName` lấy từ cấu hình phòng lưu kèm (không có thì không in dòng nào); Hồ sơ in "Tại bàn `<tên phòng>`" và nhãn "Đối thủ". Lịch sử vẫn bất biến: dòng cũ không bị ghi lại, chỉ được đọc khác đi.
@@ -212,3 +212,13 @@ roadmap). Kế hoạch: `docs/superpowers/plans/2026-09-30-plan16-review-round-1
 - No2: ghế của mình chỉ còn tối đa hai dòng dưới bảng tên (huy hiệu + tiền cược; tên bài + tiền thắng); chế độ gọn cho sân bàn thấp bắt đầu ở 400 px (trước 330), khoảng cách của nó nay đặt trên ghế (đặt trên vòng ghế thì không có tác dụng); `min-height` của sảnh là `--bp-stage` thay cho `100vh`. e2e đòi sảnh không cuộn dọc ở 1920×940, và bàn sáu ghế không cuộn dọc (trang lẫn sân bàn) ở 1920×940, 1536×730, 1366×768, 1280×720, trong ba trạng thái (chờ, trong ván, kết quả); điện thoại 375×812 giữ bố cục xếp dọc và được đo chữ đè ở cùng ba trạng thái. Chỗ thứ hai của No11b ("Ván tiếp theo sau…" đè ghế mình): đếm ngược chuyển vào chân thẻ kết quả, trong một `<p aria-live="off">` riêng (thẻ là `role="status"`, đọc mỗi giây sẽ ồn); thẻ cao tối đa bằng sân bàn, phần thân cuộn bên trong và **mờ dần ở chân khi còn cuộn được** (`b214056`) để biết dưới còn bảng pot.
 - No11b (bộ đo): `expectNoTextOverlap(page, nhãn, opts?)` trong `apps/normal-web/e2e/overlap.ts` đo mọi đoạn chữ thấy được trong một lần `page.evaluate`, cắt theo `overflow` và khung nhìn, bỏ svg/`role=img`/`aria-hidden`, so trong cùng lớp (trang, từng hộp thoại, chồng toast); phần tử đục vẽ đè lên dòng dưới thì tính là che; `data-overlap-ok="<lý do>"` cho ca cố ý (chưa dùng lần nào). **Phép đo là hộp dòng, không phải 20 % cỡ chữ:** mỗi cạnh khung chữ thu vào `max(0, (cao − line-height)/2)`, không thu khi `line-height: normal`. Mức 20 % đầu tiên bỏ sót đúng ca đếm ngược của người dùng (4,6 px còn 1,9 px); nay các dòng `line-height: 1` liền nhau chỉ chạm nhau chứ không bị báo đè. Bộ đo tự kiểm bằng trang mẫu tĩnh, mỗi ca đạt có một ca hỏng đi kèm. Chạy trong các test sẵn có ở 1920×940 (màn hình của người dùng), 1366×768 và 375×812 trên các màn chính; bộ ops đo thêm bàn Hold'em ở 1440×900, 1920×940, 1366×768 và 375×812, bàn Blind chỉ ở 1440×900. Ngoài hai chỗ người dùng nêu, bộ đo tìm thêm đúng một chỗ, trên điện thoại: khối ghế của mình dính đáy để lộ chữ "Pot" của bàn dưới tên bài (`.mine`, đã sửa ở `4b7813e` — khối đặc, vệt mờ vẽ phía trên nó); không màn nào khác có chữ đè.
 - Test Blind (review Task 8): "một tài khoản chơi trọn một ván Blind với bot" từng đỏ ngẫu nhiên khi ván có thành tựu từ Thùng trở lên (+3.000 trở lên, ghi ngay sau quyết toán) làm số dư lệch khỏi thẻ kết quả. Nay đọc số dư và sổ điểm cùng nhau cho tới khi sổ cộng đúng số dư, rồi trừ các dòng `achievement` trước khi so với thẻ (như ops 04-blind); chạy 24/24 với `--repeat-each=24` (`490f82c`).
+
+Ghi nhận từ final review Plan 16 — **chưa sửa, để đợt sau** (chờ người dùng chọn):
+
+| # | Mức | Mô tả | Hướng |
+|---|---|---|---|
+| R2-1 | P3 | Kiểm "sảnh không cuộn" trong e2e chạy với 0–1 phòng (từ No3, phòng toàn bot đóng ngay), nên lỗi chỉ lộ khi sảnh đông sẽ lọt | thêm ca sảnh 6 phòng trong ops hoặc playground |
+| R2-2 | P3 | "Tại bàn Bàn 123" lặp chữ khi tên phòng bắt đầu bằng "Bàn"; "Bot 5" cạnh huy hiệu "bot" | bỏ chữ trùng khi tên đã có "Bàn"; cân nhắc bỏ huy hiệu "bot" ở lịch sử |
+| R2-3 | P3 | Khay dưới bàn ghi "Đang chờ đến lượt bạn" khi phòng đang mở và thẻ kết quả đang giữ; tên mình bị cắt "Tam…" ở 1280×720; thẻ kết quả che hẳn ghế mình ở ≤ 1366 px | chỉnh câu khay theo trạng thái; cân nhắc đệm đáy lớp phủ |
+| R2-4 | P3 | Đếm ngược im lặng nhờ `aria-live="off"` lồng trong `role="status"` — đúng với Chromium, chưa thử NVDA/JAWS | thử trên trình đọc màn hình thật; nếu cần, dời vùng live vào trong |
+| R2-5 | P2 | **Host LAN tắt im lặng** hai lần (29/09 và đêm 30/09): `run.ps1` chạy node bằng `Start-Process -NoNewWindow`, gắn vào cửa sổ console đã gọi nó; cửa sổ/phiên đó đóng thì node chết theo, không để lại dòng lỗi | (a) chạy `run.ps1` từ cửa sổ PowerShell của người vận hành và để mở; (b) thêm tuỳ chọn chạy tách hẳn (cửa sổ riêng ẩn, hoặc Task Scheduler/NSSM như Lite) |
