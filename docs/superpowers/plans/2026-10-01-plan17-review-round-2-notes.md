@@ -24,6 +24,13 @@
   - The own plate reads "Tam…" / "Tam6…".
   - The card hides the own seat.
 
+**Executed and merged (`f6fe2f3`, 2026-10-01).** Changes from this text:
+- **Lobby ticket (fix wave).** The busy-lobby check found a real 3 px overflow, so the lobby ticket head was changed: the name wraps beside the badge, is clamped to two lines, and carries `title`.
+- **Name line height.** The clamped name uses line-height 1.3 with a 0.1em top pad; 1.15 clipped descenders.
+- **Scrim.** It is painted in the overlay's content box as a 70 %×50 % ellipse, so it follows the card.
+- **Clearance hook.** It also takes the viewer's seat as a dependency.
+- **Phone tiers.** 375×812 with touch is tier 3 by 1 px. 390×844 is tier 2, and 412×915 is tier 1.
+
 ## Global Constraints
 
 - **Worktree.**

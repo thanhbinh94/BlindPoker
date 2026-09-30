@@ -213,12 +213,40 @@ roadmap). Kế hoạch: `docs/superpowers/plans/2026-09-30-plan16-review-round-1
 - No11b (bộ đo): `expectNoTextOverlap(page, nhãn, opts?)` trong `apps/normal-web/e2e/overlap.ts` đo mọi đoạn chữ thấy được trong một lần `page.evaluate`, cắt theo `overflow` và khung nhìn, bỏ svg/`role=img`/`aria-hidden`, so trong cùng lớp (trang, từng hộp thoại, chồng toast); phần tử đục vẽ đè lên dòng dưới thì tính là che; `data-overlap-ok="<lý do>"` cho ca cố ý (chưa dùng lần nào). **Phép đo là hộp dòng, không phải 20 % cỡ chữ:** mỗi cạnh khung chữ thu vào `max(0, (cao − line-height)/2)`, không thu khi `line-height: normal`. Mức 20 % đầu tiên bỏ sót đúng ca đếm ngược của người dùng (4,6 px còn 1,9 px); nay các dòng `line-height: 1` liền nhau chỉ chạm nhau chứ không bị báo đè. Bộ đo tự kiểm bằng trang mẫu tĩnh, mỗi ca đạt có một ca hỏng đi kèm. Chạy trong các test sẵn có ở 1920×940 (màn hình của người dùng), 1366×768 và 375×812 trên các màn chính; bộ ops đo thêm bàn Hold'em ở 1440×900, 1920×940, 1366×768 và 375×812, bàn Blind chỉ ở 1440×900. Ngoài hai chỗ người dùng nêu, bộ đo tìm thêm đúng một chỗ, trên điện thoại: khối ghế của mình dính đáy để lộ chữ "Pot" của bàn dưới tên bài (`.mine`, đã sửa ở `4b7813e` — khối đặc, vệt mờ vẽ phía trên nó); không màn nào khác có chữ đè.
 - Test Blind (review Task 8): "một tài khoản chơi trọn một ván Blind với bot" từng đỏ ngẫu nhiên khi ván có thành tựu từ Thùng trở lên (+3.000 trở lên, ghi ngay sau quyết toán) làm số dư lệch khỏi thẻ kết quả. Nay đọc số dư và sổ điểm cùng nhau cho tới khi sổ cộng đúng số dư, rồi trừ các dòng `achievement` trước khi so với thẻ (như ops 04-blind); chạy 24/24 với `--repeat-each=24` (`490f82c`).
 
-Ghi nhận từ final review Plan 16 — **chưa sửa, để đợt sau** (chờ người dùng chọn; R2-5 đã sửa, xem dòng của nó):
+Ghi nhận từ final review Plan 16. R2-5 sửa ngày 30/09; R2-1 … R2-4 sửa ngày 01/10 trong **Plan 17** (`docs/superpowers/plans/2026-10-01-plan17-review-round-2-notes.md`, merge `f6fe2f3`, đã lên host LAN):
 
 | # | Mức | Mô tả | Hướng |
 |---|---|---|---|
-| R2-1 | P3 | Kiểm "sảnh không cuộn" trong e2e chạy với 0–1 phòng (từ No3, phòng toàn bot đóng ngay), nên lỗi chỉ lộ khi sảnh đông sẽ lọt | thêm ca sảnh 6 phòng trong ops hoặc playground |
-| R2-2 | P3 | "Tại bàn Bàn 123" lặp chữ khi tên phòng bắt đầu bằng "Bàn"; "Bot 5" cạnh huy hiệu "bot" | bỏ chữ trùng khi tên đã có "Bàn"; cân nhắc bỏ huy hiệu "bot" ở lịch sử |
-| R2-3 | P3 | Khay dưới bàn ghi "Đang chờ đến lượt bạn" khi phòng đang mở và thẻ kết quả đang giữ; tên mình bị cắt "Tam…" ở 1280×720; thẻ kết quả che hẳn ghế mình ở ≤ 1366 px | chỉnh câu khay theo trạng thái; cân nhắc đệm đáy lớp phủ |
-| R2-4 | P3 | Đếm ngược im lặng nhờ `aria-live="off"` lồng trong `role="status"` — đúng với Chromium, chưa thử NVDA/JAWS | thử trên trình đọc màn hình thật; nếu cần, dời vùng live vào trong |
+| R2-1 | P3 | Kiểm "sảnh không cuộn" trong e2e chạy với 0–1 phòng (từ No3, phòng toàn bot đóng ngay), nên lỗi chỉ lộ khi sảnh đông sẽ lọt | thêm ca sảnh 6 phòng trong ops hoặc playground. **Đã sửa — `28425fd`, `ac29dc0`, `604855e`, `112041a`**: e2e thay danh sách phòng qua WebSocket bằng sáu phòng đủ loại; ca mới bắt được lỗi thật và đã sửa (xem ghi chú dưới) |
+| R2-2 | P3 | "Tại bàn Bàn 123" lặp chữ khi tên phòng bắt đầu bằng "Bàn"; "Bot 5" cạnh huy hiệu "bot" | bỏ chữ trùng khi tên đã có "Bàn"; cân nhắc bỏ huy hiệu "bot" ở lịch sử. **Đã sửa — `6f600b3`** (+ `e78cd8a`, `f234f43`) |
+| R2-3 | P3 | Khay dưới bàn ghi "Đang chờ đến lượt bạn" khi phòng đang mở và thẻ kết quả đang giữ; tên mình bị cắt "Tam…" ở 1280×720; thẻ kết quả che hẳn ghế mình ở ≤ 1366 px | chỉnh câu khay theo trạng thái; cân nhắc đệm đáy lớp phủ. **Đã sửa — `6c46965`, `f93bb11`, `68a2707`, `db34d7c`** |
+| R2-4 | P3 | Đếm ngược im lặng nhờ `aria-live="off"` lồng trong `role="status"` — đúng với Chromium, chưa thử NVDA/JAWS | thử trên trình đọc màn hình thật; nếu cần, dời vùng live vào trong. **Đã sửa theo cấu trúc — `39bac22`** (không có trình đọc màn hình ở đây để thử; cách sửa không phụ thuộc trình đọc) |
+
+**01/10 đã sửa, merge `f6fe2f3`, đã lên host LAN.** Ghi chú kỹ thuật:
+- **R2-2, dòng bàn chơi.** Khi từ đầu tiên của tên phòng đã là chữ "bàn" của ngôn ngữ đang xem (so theo NFC, không phân biệt hoa thường), dòng ghi "Tại `<tên>`" (en "At `<name>`"), ví dụ "Tại Bàn 123", "Tại BÀN VIP". Các trường hợp khác vẫn ghi "Tại bàn `<tên>`".
+- **R2-2, ô đối thủ.** Ô của bot không còn huy hiệu "bot" nhìn thấy. Tên bot in nghiêng, màu nhạt, và có chữ "bot" ẩn cho trình đọc màn hình. Tên người chơi không bị cấm, nên một người tên "Bot 5" vẫn phân biệt được với bot, và không chỉ bằng màu.
+- **R2-3, câu ở khay** (một hàm `trayWaitKey` quyết định):
+  - ván xong → "Ván đã kết thúc";
+  - đã bỏ bài → "Bạn đã bỏ bài — chờ ván sau";
+  - tất tay → "Bạn đã tất tay — chờ kết quả";
+  - Blind đã chọn → "Đã chọn — chờ các ghế khác";
+  - Blind lúc lật bài, và Hold'em khi mọi ghế khác đã tất tay (chỉ còn chia nốt bài) → "Chờ lật bài";
+  - các trường hợp còn lại giữ "Đang chờ đến lượt bạn".
+- **R2-3, tên ghế mình.** Tấm tên của chính mình trên bàn tròn giãn theo tên, có giới hạn tính từ vị trí ghế bên cạnh: 30 % bề rộng bàn tới 6 ghế, 26 % ở 7–8 ghế, 22 % ở 9 ghế. Tên quá dài vẫn cắt bằng "…". Trước đây ở 1280×720 và 1536×730 tên chỉ có 44 px.
+- **R2-3, thẻ kết quả.**
+  - Thẻ kết quả dừng phía trên ghế mình: `useSeatClearance` đo ghế và đệm đáy lớp phủ (`--seat-clearance`). Có ba tầng: (1) tránh cả khối ghế, (2) tránh từ tấm tên trở xuống, (3) không đủ chỗ (≥ 216 px cho thẻ) thì phủ như cũ.
+  - Cả bốn màn desktop (1920×940, 1536×730, 1366×768, 1280×720) đều ở tầng 1.
+  - Điện thoại 375×812 ở tầng 3, chỉ thiếu 1 px: thẻ vẫn che ghế mình và bấm Đóng được như cũ. Điện thoại cao hơn (390×844, 412×915) rơi vào tầng 2 hoặc 1.
+  - Lớp tối phía sau thẻ nay chỉ phủ vùng của thẻ, không làm tối ghế mình.
+  - Hệ quả trên màn thấp (1280×720, 1366×768): thẻ nằm cao hơn nên che ghế đối thủ ở đỉnh bàn, và thẻ ngắn lại (khoảng 1,5 hàng; thân thẻ cuộn, có vệt mờ).
+- **R2-4.**
+  - Thẻ kết quả là một nhóm (`role="group"`) mang tên theo tiêu đề. Vùng đọc tự động (`role="status"`) nay chỉ bọc tiêu đề, ghi chú huỷ và các hàng. Chân thẻ nằm ngoài mọi vùng đọc tự động: phí bàn, pot cộng dồn, hoàn cược dư và đếm ngược.
+  - Cái giá: khi thẻ hiện, trình đọc màn hình không tự đọc các dòng ở chân thẻ nữa; người dùng vẫn đọc được khi duyệt thẻ.
+  - Ba bộ e2e (Normal, Lite, ops) tìm thẻ theo nhóm có tên.
+- **R2-1, ca kiểm.** Ca sảnh sáu phòng thay mọi khung `ROOM_LIST` bằng sáu phòng cố định: Hold'em/Blind, đang chờ/đang chơi/đang đóng, có khoá, 3/9 và 6/6, và hai tên dài xuống dòng, một tên 30 ký tự. Ca này kiểm sảnh vừa 1920×940 và không có chữ đè ở 1920×940, 1366×768 và 375×812.
+- **R2-1, lỗi ca kiểm bắt được.** Khi tên phòng xuống dòng, nhãn trạng thái rơi xuống một dòng riêng; hai tên như vậy làm trang cuộn 3 px ở 1920×940. Nay tên phòng xuống dòng cạnh nhãn và tối đa hai dòng (tên đầy đủ ở `title`). Sảnh sáu phòng còn trống khoảng 30 px ở 1920×940.
+- **Ghi nhận, chưa làm:**
+  - Mép trái/phải của lớp tối sau thẻ vẫn có một bậc mờ. Bậc này đã có từ trước, nay nằm lùi vào 16 px; ở giao diện sáng có thể rõ hơn.
+  - `title` trên tên phòng có thể khiến một số trình đọc màn hình đọc tên hai lần.
+  - Thẻ phòng ở bề rộng lưới nhỏ nhất chưa được chụp.
 | R2-5 | P2 | **Host LAN tắt im lặng** hai lần (29/09 và đêm 30/09): `run.ps1` chạy node bằng `Start-Process -NoNewWindow`, gắn vào cửa sổ console đã gọi nó; cửa sổ/phiên đó đóng thì node chết theo, không để lại dòng lỗi | (a) chạy `run.ps1` từ cửa sổ PowerShell của người vận hành và để mở; (b) thêm tuỳ chọn chạy tách hẳn (cửa sổ riêng ẩn, hoặc Task Scheduler/NSSM như Lite). **Đã sửa (b) — `5931218`, review `6f776f6` + `fecbf57`, merge `5228244`, host LAN chạy qua task từ 30/09** (không bao giờ dừng/gỡ/ghi đè task hay node không phải của bộ kit; `-TaskName` không nhận wildcard): mặc định `run.ps1` đăng ký và chạy scheduled task theo người dùng `BlindLuckPoker-Normal` (không cần admin, không giới hạn thời gian; action là `run.ps1 -Serve` ẩn, chỉ chứa đường dẫn, không bí mật); `-Foreground` giữ cách cũ, `-AutoStart` thêm trigger đăng nhập, `stop.ps1` dừng node rồi dừng task, `stop.ps1 -Remove` gỡ task. Thử tay trên :8099: `taskkill /T /F` cửa sổ đã gọi `run.ps1`, `/health` vẫn trả lời |

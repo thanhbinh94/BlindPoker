@@ -8,6 +8,43 @@ below are the real history.
 
 ---
 
+## Plan 17 — review round 2 notes (R2-1 … R2-4) — merged `f6fe2f3` (2026-10-01)
+
+These are the four notes the Plan 16 final review left open (`docs/bug-log.md` §7). There is no protocol, schema or
+server change, and no migration.
+
+- **Recent hands say the table once (R2-2).** A room named "Bàn 123" used to read "Tại bàn Bàn 123"; it now reads
+  "Tại Bàn 123" (en "At Table 5").
+  - The check is on the first word, in the page's language, ignoring case, with Unicode normalised first.
+  - A bot opponent no longer reads "Bot 5 bot". Its chip shows "Bot 5" in muted italics, with the word "bot" kept for
+    screen readers, so a human who calls themselves "Bot 5" still reads differently.
+- **The tray says what the seat waits for (R2-3).** Under a finished hand it said "Waiting for your turn". It now says
+  one of:
+  - "Hand over";
+  - "You folded — waiting for the next hand";
+  - "You're all in — waiting for the result";
+  - "Decided — waiting for the others" (Blind);
+  - "Waiting for the reveal" (Blind, and a Hold'em run-out);
+  - "Waiting for your turn" (between turns).
+- **The viewer's own seat stays in sight (R2-3).**
+  - Your own name plate on the table widens to fit the name, within a limit set by the neighbouring seats, so
+    "Tam6z80" no longer reads "Tam…" on a 1280 or 1536 px screen.
+  - The result card stops above your own seat on every desktop size (1920×940, 1536×730, 1366×768, 1280×720), so your
+    stack, badges and hand stay visible. Its dark backdrop follows the card.
+  - A 375×812 phone has no room for that, so there the card still covers the seat and closes with its button.
+  - On short screens the card is shorter and scrolls inside itself.
+- **The countdown is never announced (R2-4).** The result card is now a named group. Its live region holds only the
+  title, the cancel note and the rows. The footer (fee, carry-over, uncalled return, countdown) sits outside every live
+  region, so no screen reader re-reads the card each second. The fee lines are no longer read out automatically when
+  the card appears.
+- **A busy lobby is tested, and fits (R2-1).**
+  - The browser suite now fills the lobby with six rooms of every kind by patching the room list on the page's
+    WebSocket.
+  - The new check found that two wrapped room names pushed a six-room lobby 3 px past the user's 1920×940 screen. A
+    long room name now wraps beside its status badge, at most two lines, with the whole name in its tooltip.
+
+---
+
 ## Plan 16 — review 2026-09-29, round 1 — merged `a836daa` (2026-09-30)
 
 Ten items from the user's review of 2026-09-29 are fixed: the two P1 avatar-colour bugs, a dead pair of sign-in
