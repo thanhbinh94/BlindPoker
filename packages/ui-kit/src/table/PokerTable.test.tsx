@@ -85,6 +85,30 @@ describe('PokerTable', () => {
     expect(outcome).not.toBe(badges)
   })
 
+  // Review round 2, R2-3: `RoomScreen` measures the viewer's own seat to stop the result card above it. It finds the seat
+  // and its plate by these two attributes — a contract of their own, not the CSS modules' hashed class names.
+  it("marks the viewer's own seat, and its plate, for the room to measure", () => {
+    for (const layout of ['ring', 'stack'] as const) {
+      const view = wrap(
+        <PokerTable room={fullRoom} hand={null} myPlayerId="p4" deadlineAt={null} serverNow={() => 0} turnTimerMs={30000} lang="en" layout={layout} canSit={false} />,
+      )
+      const marked = document.querySelectorAll('[data-me]')
+      expect(marked, layout).toHaveLength(1)
+      expect(marked[0], layout).toBe(screen.getByRole('group', { name: 'Seat 5' }))
+      expect(marked[0], layout).toHaveAttribute('data-me', 'true')
+      const plate = marked[0]!.querySelector('[data-plate]')
+      expect(plate, layout).not.toBeNull()
+      expect(plate!.className, layout).toContain(s.plate)
+      expect(within(plate as HTMLElement).getByText('Em'), layout).toBeInTheDocument()
+      view.unmount()
+    }
+  })
+
+  it('marks no seat as the viewer’s for a spectator', () => {
+    wrap(<PokerTable room={fullRoom} hand={null} myPlayerId="zed" deadlineAt={null} serverNow={() => 0} turnTimerMs={30000} lang="en" layout="ring" canSit={false} />)
+    expect(document.querySelectorAll('[data-me]')).toHaveLength(0)
+  })
+
   it('offers empty seats when the viewer may sit', async () => {
     const onSeatClick = vi.fn()
     wrap(

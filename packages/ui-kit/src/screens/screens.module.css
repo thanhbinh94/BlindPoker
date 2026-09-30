@@ -116,8 +116,12 @@
   overflow-x: hidden;
 }
 
-/* The result card's stage: exactly the felt's box, so the card's `max-height: 100%` is the table area and a long
-   receipt scrolls inside the card instead of adding a scrollbar to `.roomMain`. */
+/* The result card's stage: the felt's box — less the viewer's own seat at its foot when that leaves the card room
+   enough — so the card's `max-height: 100%` is that area and a long receipt scrolls inside the card instead of adding
+   a scrollbar to `.roomMain` (or lying over the viewer's seat, review round 2, R2-3). `RoomScreen` measures how far up
+   the seat reaches (`useSeatClearance`) and sets `--seat-clearance`; without room for the card, or for a spectator,
+   it sets nothing and the card keeps the whole felt. The box itself stays `inset: 0` and only its padding grows, so
+   the scrim still fades out over the seat rather than stopping in a hard edge just above it. */
 .overlay {
   position: absolute;
   inset: 0;
@@ -127,6 +131,7 @@
   align-items: center;
   justify-content: center;
   padding: var(--space-4);
+  padding-bottom: calc(var(--space-4) + var(--seat-clearance, 0px));
   pointer-events: none;
   background: radial-gradient(70% 60% at 50% 50%, rgba(4, 7, 18, 0.72), rgba(4, 7, 18, 0.32) 70%, transparent 100%);
 }

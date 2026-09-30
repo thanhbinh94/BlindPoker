@@ -3,8 +3,10 @@ import { expectNoTextOverlap } from './overlap.js'
 import {
   account,
   createBlindRoom,
+  expectCardClearsMySeat,
   expectCreateRoomKeepsItsHeight,
   expectLobby,
+  expectMyNameWhole,
   expectMySeatLines,
   expectNoSidewaysScroll,
   expectNoTextOverlapAt,
@@ -385,6 +387,8 @@ test.describe('Blind Luck Poker Normal', () => {
     await expect(page.getByRole('button', { name: /^Chơi\b/ })).toBeVisible()
     await expectRoomFits(page, 'in hand, the tray up')
     await expectMySeatLines(page, who.displayName, 'in hand')
+    // Review round 2, R2-3: the viewer's own name is whole on its plate at every size.
+    await expectMyNameWhole(page, who.displayName, 'in hand')
     await expectNoTextOverlapAt(page, 'room, in hand', OVERLAP_SCREENS)
 
     await sitOutAndPlay(page)
@@ -396,6 +400,9 @@ test.describe('Blind Luck Poker Normal', () => {
     await expect(card, 'the card stays on the felt').toBeVisible()
     await expectRoomFits(page, 'the result card')
     await expectMySeatLines(page, who.displayName, 'the result card')
+    // R2-3: and the held card stops above that seat on every desktop size, still tall enough to read.
+    await expectMyNameWhole(page, who.displayName, 'the result card')
+    await expectCardClearsMySeat(page, card, who.displayName)
     await expectNoTextOverlapAt(page, 'room, result card', OVERLAP_SCREENS)
     await shot(page, 'room-result-desktop')
 

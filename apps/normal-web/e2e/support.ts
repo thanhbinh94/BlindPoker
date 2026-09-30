@@ -266,17 +266,30 @@ export async function expectRoomFits(page: Page, state: string, viewports = ROOM
   expect(problems, `the room (${state}) scrolls:\n  ${problems.join('\n  ')}`).toEqual([])
 }
 
+/** A box on screen, in the viewport's pixels. */
+interface Box {
+  top: number
+  bottom: number
+  left: number
+  right: number
+}
+
+/** The viewer's own seat, found the way a player finds it: the seat ("Ghế N") that prints their name. */
+function mySeat(page: Page, who: string): Locator {
+  return page.getByRole('group', { name: /^Ghế \d+$/ }).filter({ has: page.getByText(who, { exact: true }) })
+}
+
 /**
- * Review 2026-09-29, No2: the viewer's own seat block keeps to two lines of text under its plate on a desktop screen —
- * the badges with the bet, then the hand's name with the payout. The plate is the seat's first bordered box around
- * its name; a line is every text run whose top sits within 3 px of another's.
+ * One walk over the viewer's own seat, shared by the checks on it: its plate — the seat's first bordered box around
+ * the name — and every visible text run in the seat (artwork skipped: `svg`, `[role=img]`, `[aria-hidden=true]`),
+ * each as its line boxes. `plate` is `null` when no bordered box holds the name.
  */
-export async function expectMySeatLines(page: Page, who: string, state: string): Promise<void> {
-  const seat = page.getByRole('group', { name: /^Ghế \d+$/ }).filter({ has: page.getByText(who, { exact: true }) })
+async function walkMySeat(page: Page, who: string): Promise<{ plate: Box | null; runs: (Box & { text: string })[] }> {
+  const seat = mySeat(page, who)
   await expect(seat).toHaveCount(1)
-  const lines = await seat.evaluate((root: HTMLElement, name: string) => {
+  return seat.evaluate((root: HTMLElement, name: string) => {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
-    const runs: { text: string; top: number; bottom: number }[] = []
+    const runs: { text: string; top: number; bottom: number; left: number; right: number }[] = []
     let plate: Element | null = null
     const range = document.createRange()
     for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
@@ -291,23 +304,121 @@ export async function expectMySeatLines(page: Page, who: string, state: string):
         }
       }
       range.selectNodeContents(node)
-      for (const r of Array.from(range.getClientRects())) runs.push({ text, top: r.top, bottom: r.bottom })
+      for (const r of Array.from(range.getClientRects())) runs.push({ text, top: r.top, bottom: r.bottom, left: r.left, right: r.right })
     }
-    const floor = plate === null ? Number.POSITIVE_INFINITY : plate.getBoundingClientRect().bottom
-    const under = runs.filter((r) => r.top >= floor - 1).sort((a, b) => a.top - b.top)
-    // A line is a band of runs whose boxes overlap vertically: a 16 px payout beside a 12 px hand name is one line.
-    let lines = 0
-    let bandBottom = Number.NEGATIVE_INFINITY
-    for (const run of under) {
-      if (run.top >= bandBottom - 2) {
-        lines += 1
-        bandBottom = run.bottom
-      } else bandBottom = Math.max(bandBottom, run.bottom)
-    }
-    return { found: plate !== null, lines, texts: under.map((r) => r.text) }
+    const box = (plate as Element | null)?.getBoundingClientRect() ?? null
+    return { plate: box === null ? null : { top: box.top, bottom: box.bottom, left: box.left, right: box.right }, runs }
   }, who)
-  expect(lines.found, `${state}: the viewer's plate was found`).toBe(true)
-  expect(lines.lines, `${state}: the viewer's seat runs ${lines.lines} lines under its plate — ${lines.texts.join(' | ')}`).toBeLessThanOrEqual(2)
+}
+
+/** The text runs of a seat walk that sit under its plate, top to bottom; none when no plate was found. */
+const runsUnder = (walk: { plate: Box | null; runs: (Box & { text: string })[] }): (Box & { text: string })[] =>
+  walk.plate === null ? [] : walk.runs.filter((r) => r.top >= walk.plate!.bottom - 1).sort((a, b) => a.top - b.top)
+
+/**
+ * Review 2026-09-29, No2: the viewer's own seat block keeps to two lines of text under its plate on a desktop screen —
+ * the badges with the bet, then the hand's name with the payout. The plate is the seat's first bordered box around
+ * its name; a line is every text run whose top sits within 3 px of another's.
+ */
+export async function expectMySeatLines(page: Page, who: string, state: string): Promise<void> {
+  const walk = await walkMySeat(page, who)
+  const under = runsUnder(walk)
+  // A line is a band of runs whose boxes overlap vertically: a 16 px payout beside a 12 px hand name is one line.
+  let lines = 0
+  let bandBottom = Number.NEGATIVE_INFINITY
+  for (const run of under) {
+    if (run.top >= bandBottom - 2) {
+      lines += 1
+      bandBottom = run.bottom
+    } else bandBottom = Math.max(bandBottom, run.bottom)
+  }
+  expect(walk.plate !== null, `${state}: the viewer's plate was found`).toBe(true)
+  expect(lines, `${state}: the viewer's seat runs ${lines} lines under its plate — ${under.map((r) => r.text).join(' | ')}`).toBeLessThanOrEqual(2)
+}
+
+/** Waits two frames: a resize re-runs the table's container queries, and the room's own measurements follow them. */
+const twoFrames = (page: Page): Promise<unknown> => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+
+/**
+ * Review round 2, R2-3: the viewer's own name is printed whole on their plate — "Tam6z80" printed as "Tam…" on a
+ * 104 px plate at 1280 × 720. At each of `viewports` the name's element is no wider inside than out
+ * (`scrollWidth ≤ clientWidth`). Every size is measured before anything fails; the page's own viewport comes back.
+ * The e2e names are short (≤ 12 characters); the plate's cap on a long one is the playground's `/long` scenario.
+ */
+export async function expectMyNameWhole(page: Page, who: string, state: string, viewports = ROOM_SCREENS): Promise<void> {
+  const original = page.viewportSize()
+  const name = mySeat(page, who).getByText(who, { exact: true })
+  const problems: string[] = []
+  try {
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport)
+      await twoFrames(page)
+      const { scroll, client } = await name.evaluate((el) => ({ scroll: el.scrollWidth, client: el.clientWidth }))
+      if (scroll > client) problems.push(`${viewport.width}×${viewport.height}: the name needs ${scroll} px and has ${client} px`)
+    }
+  } finally {
+    if (original !== null) await page.setViewportSize(original)
+  }
+  expect(problems, `${state}: "${who}" is cut short on its plate:\n  ${problems.join('\n  ')}`).toEqual([])
+}
+
+/** `MIN_CARD` in `packages/ui-kit/src/screens/seat-clearance.ts`: the overlay height the result card is left above the seat. */
+const MIN_CARD = 216
+/** The overlay's own padding above and below the card (2 × `--space-4`). */
+const OVERLAY_PADDING = 32
+
+const intersects = (a: Box, b: Box): boolean => a.bottom > b.top + 0.5 && a.top < b.bottom - 0.5 && a.right > b.left + 0.5 && a.left < b.right - 0.5
+
+/**
+ * Review round 2, R2-3: the result card stops above the viewer's own seat on a desktop screen. At each of `viewports`,
+ * with the card up and held, the card's box meets neither the viewer's plate nor any text run under it; and so an
+ * oversized clearance cannot pass, the card is still at least `MIN_CARD − 32` px tall (title, one row, the footer) —
+ * or, a card with less to say than that (one row, no cards in it), its whole height, nothing scrolled away — with its
+ * title inside the viewport. The room measures the seat when it resizes, a frame or more after the window does, so
+ * each size is read until it holds (5 s at most) and then recorded; every size is measured before anything fails, and
+ * the page's own viewport comes back. Never at 375 × 812: a phone has no room above its pinned seat, and the card
+ * covers it there, closable, by design.
+ */
+export async function expectCardClearsMySeat(page: Page, card: Locator, who: string, viewports = ROOM_SCREENS): Promise<void> {
+  const original = page.viewportSize()
+  const title = card.getByRole('heading', { level: 2 })
+  const problems: string[] = []
+  try {
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport)
+      const where = `${viewport.width}×${viewport.height}`
+      const deadline = Date.now() + 5_000
+      let found: string[] = []
+      for (;;) {
+        await twoFrames(page)
+        const walk = await walkMySeat(page, who)
+        const cardBox = await card.boundingBox()
+        const titleBox = await title.boundingBox()
+        // What the card's scroll boxes (its body) hold below their fold: its whole height is its box plus that.
+        const scrolledAway = await card.evaluate((root) =>
+          Array.from(root.querySelectorAll('*')).reduce((sum, el) => (/auto|scroll/.test(getComputedStyle(el).overflowY) ? sum + el.scrollHeight - el.clientHeight : sum), 0),
+        )
+        found = []
+        if (walk.plate === null) found.push(`${where}: the viewer's plate was not found`)
+        if (cardBox === null || titleBox === null) found.push(`${where}: the card or its title has no box`)
+        if (walk.plate !== null && cardBox !== null && titleBox !== null) {
+          const c = { top: cardBox.y, bottom: cardBox.y + cardBox.height, left: cardBox.x, right: cardBox.x + cardBox.width }
+          const hit = [{ text: '(the plate)', ...walk.plate }, ...runsUnder(walk)].filter((r) => intersects(c, r))
+          if (hit.length > 0) found.push(`${where}: the card (${Math.round(c.top)}–${Math.round(c.bottom)} px) lies over ${hit.map((r) => `${r.text} (${Math.round(r.top)} px)`).join(', ')}`)
+          const floor = Math.min(MIN_CARD - OVERLAY_PADDING, cardBox.height + scrolledAway)
+          if (cardBox.height < floor - 0.5) {
+            found.push(`${where}: the card is ${Math.round(cardBox.height)} px tall with ${Math.round(scrolledAway)} px scrolled away, under ${MIN_CARD - OVERLAY_PADDING}`)
+          }
+          if (titleBox.y < 0 || titleBox.y + titleBox.height > viewport.height) found.push(`${where}: the card's title is off screen (${Math.round(titleBox.y)} px)`)
+        }
+        if (found.length === 0 || Date.now() > deadline) break
+      }
+      problems.push(...found)
+    }
+  } finally {
+    if (original !== null) await page.setViewportSize(original)
+  }
+  expect(problems, `the result card and the viewer's own seat:\n  ${problems.join('\n  ')}`).toEqual([])
 }
 
 /** Takes the given seat; the index is explicit so nothing ever races the bot for one. */

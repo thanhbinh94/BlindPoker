@@ -239,6 +239,32 @@ button and the footer stay put. While the body can still scroll down, its foot f
 `data-more`, which `HandResult` measures on scroll and on resize), so a ledger below the fold reads as more to come;
 scrolled to the end, the fade goes.
 
+**The card stops above the viewer's own seat** (review round 2, R2-3: on a short stage it covered that seat whole, and
+at 1920 × 940 its plate). The overlay still spans the stage — its scrim fades out over the seat — but its bottom
+padding grows by `--seat-clearance`, which `RoomScreen` sets from `useSeatClearance(stageRef, active)`
+(`src/screens/seat-clearance.ts`) while a card is up. The hook finds the seat and its plate by `Seat`'s markers,
+`data-me="true"` on the viewer's own seat and `data-plate` on a plate — a contract of their own, not the hashed class
+names — and measures before paint, on a `ResizeObserver` over the stage and the seat (looked up afresh each time: the
+ring and the stack draw it anew), and once the fonts land; without `ResizeObserver` (jsdom) it measures once.
+`clearanceFor(stage, seat, plate)` picks the first of three tiers that leaves the card `MIN_CARD` (216 px: a title,
+one full row and the footer, ≈ 184 px of card, plus the overlay's 2 × 16 px padding) above what it clears, with a
+`CLEARANCE_GAP` of 8 px:
+
+1. above the whole seat block — cards, plate and the lines under it: every desktop room screen with six seats
+   (`seat.top − stage.top` with the card held is about 405–410 px at 1920 × 940, 255 at 1536 × 730, 290 at
+   1366 × 768 and 245 at 1280 × 720, where that leaves the card about 205 px and a longer receipt scrolls inside it);
+2. above the plate — the plate and its lines stay clear; the card may lie over the top of the viewer's hole cards,
+   which its own row repeats;
+3. neither: no clearance, and the card keeps the whole stage over the seat, closable as before. **The phone is tier
+   3**: on a 375 × 812 touch screen the stage above the pinned seat is 174 px, above its plate 223 — one pixel short
+   of tier 2. (A mouse-driven window of the same size has 16 px more stage — the coarse-pointer touch targets in the
+   bar and the tray are shorter there — and lands in tier 2: the card, about 190 px, stops above the plate.) A
+   spectator has no seat to clear and keeps the whole stage too.
+
+`normal.spec.ts` holds the held card to it at the four desktop sizes (`expectCardClearsMySeat`: the card meets
+neither the plate nor a line under it, and is still at least `MIN_CARD − 32` px tall, or whole, with its title on
+screen); it never runs it on the phone.
+
 **Seat slots.** A seat has two places the host app may write into, and they are threaded identically —
 `RoomScreen` → `PokerTable` → `Seat`. `chibiFor(player)` replaces the initial disc; `captionFor(player)` adds one
 muted, single-line, truncated line under the name (a title, a rank), and returning `null`/`undefined` leaves the
@@ -249,6 +275,16 @@ plate exactly as it was. The caption is the plate's only decoration rather than 
 hand's name with the payout. On the ring those lines may run wider than the plate, centred under it — up to 30 % of
 the table's width for an opponent and 48 % for the viewer's own seat at six seats or fewer (the neighbours are a
 third of the table away), the plate's own width and 30 % from seven seats up — and wrap only past that.
+
+**The viewer's own plate grows to its name** on the ring (review round 2, R2-3: at the seat's 104 px floor, 1280 × 720,
+"Tam6z80" printed as "Tam…"). It is `max-content` wide, never narrower than its seat, and capped by
+`--seat-plate-max`: 30 % of the table's width up to six seats, 26 % at seven and eight, 22 % at nine. The caps come
+from the bottom neighbours in `geometry.ts` on the smallest ring (480 px wide), where the opponents' plate floors
+weigh most: they keep 10, 24, 8 and 5 px between the own plate and the nearest neighbour's plate or lines. Centred in
+its seat's column, the plate widens evenly both ways; a name longer than the cap still ends in "…" (the playground's
+`#worst/<state>/<seats>/<lang>/long` gives the viewer a 30-character name to see it). The opponents' plates keep their
+seat's width, and the phone's own plate (`.mine`, 340 px) is not on the ring. `normal.spec.ts` checks the name is whole
+at every desktop room size (`expectMyNameWhole`).
 
 Under 768 px the table becomes the vertical stack (spec §27.1): opponents, felt, your own seat. **The opponents'
 strip never scrolls inside itself** — it wraps, holds a floor of two plate rows, and from seven seats up the plates
@@ -383,7 +419,9 @@ Breakpoints 480 / 768 / 1024, per spec §27.1. No horizontal page scroll at any 
   1920 × 940 (the user's screen), 1536 × 730, 1280 × 720 or 1366 × 768, whether the room is taking seats, a hand is
   on with the tray up, or the result card is showing: `normal.spec.ts` asserts it at all four. The worst each state
   can show — every plate with a caption, six hands shown down with two side pots, the Hold'em sizing tray — is
-  frozen in the playground at `#worst/<waiting|turn|result>/<seats>/<vi|en>` for measuring against a new size.
+  frozen in the playground at `#worst/<waiting|turn|result>/<seats>/<vi|en>[/long]` for measuring against a new size
+  (`/long`: the viewer's own name is 30 characters). At all four sizes the held result card stops above the viewer's
+  own seat; on a 375 × 812 phone it still covers it, closable (see `HandResult` above).
 - **Under 768 px wide *or* 620 px tall** the table switches to the vertical stack: opponents on top (that strip is
   the part that scrolls), board in the middle, the viewer's own seat pinned above the tray. A short window has no
   more to give than a narrow one, so both take the same layout. `layout="ring" | "stack"` overrides the choice.
