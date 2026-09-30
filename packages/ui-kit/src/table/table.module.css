@@ -1033,6 +1033,17 @@
   animation: riseUp 320ms var(--ease) backwards;
 }
 
+/* The card's one live region (review round 2, R2-4): the head, the cancel note and the scrolling body. It wraps them
+   without changing how they lay out — same column, same gap, and it gives where the body used to give, so the card
+   looks as it did. The footer is the card's next child, outside it. */
+.resultLive {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  flex: 0 1 auto;
+  min-height: 0;
+}
+
 .resultHead {
   display: flex;
   align-items: center;

@@ -125,11 +125,12 @@ async function blindHandsPlayed(page: Page, atLeast: number, timeoutMs = 20_000)
 
 /* ── the table ───────────────────────────────────────────────────────────────────────────────────── */
 
-/** The result card dealt over the felt once a hand completes. */
+/**
+ * The result card dealt over the felt once a hand completes: a group named by its title (review round 2, R2-4). Its
+ * live region is an inner `status` holding the title and the rows, so this is the card as a whole — footer included.
+ */
 function resultCard(page: Page): Locator {
-  return page
-    .locator('[role="status"]')
-    .filter({ has: page.getByRole('heading', { name: /Người thắng|Những người thắng|Ván bị hủy/ }) })
+  return page.getByRole('group', { name: /^(Người thắng|Những người thắng|Ván bị hủy)$/ })
 }
 
 const PAYOUT = /\+\s*([\d.,]+)/
@@ -157,14 +158,18 @@ async function uncalledReturn(card: Locator): Promise<{ who: string; amount: num
 }
 
 /**
- * Review 2026-09-29, No2: "Ván tiếp theo sau N giây" is the result card's own last line — inside the card, in an
- * element that does not re-announce the card on every tick (the card is a status region), and in neither a player's
- * row nor the fee line, which is what the rows and the fee are read by.
+ * Review 2026-09-29, No2: "Ván tiếp theo sau N giây" is the result card's own last line — inside the card, outside
+ * its live region (review round 2, R2-4: the region is the inner `status` with the title and the rows; the footer
+ * follows it), so a tick never has the card re-announced — and in neither a player's row nor the fee line, which is
+ * what the rows and the fee are read by.
  */
 async function expectCountdownOnTheCard(card: Locator): Promise<void> {
   const next = card.getByText(/^Ván tiếp theo sau \d+ giây$/)
   await expect(next, 'the countdown is printed on the result card').toBeVisible()
-  await expect(next, 'the countdown does not re-announce the card every second').toHaveAttribute('aria-live', 'off')
+  expect(
+    await next.evaluate((el) => el.closest('[role="status"],[role="alert"],[aria-live="polite"],[aria-live="assertive"]') === null),
+    'the countdown is outside every live region, so it does not re-announce the card every second',
+  ).toBe(true)
   await expect(card.getByRole('listitem').filter({ hasText: 'Ván tiếp theo' }), 'the countdown is no player’s row').toHaveCount(0)
   const fee = card.getByText(/^Phí bàn/)
   if ((await fee.count()) > 0) expect(await fee.innerText(), 'the fee line is the fee alone').not.toContain('Ván tiếp theo')

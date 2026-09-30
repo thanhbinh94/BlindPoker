@@ -222,10 +222,17 @@ reads as fair. `pots` is empty for a cancelled hand. A cancelled hand's `reason`
 is normalised to a `cancel.*` key and translated; the raw token is never rendered. Pass `onDismiss` to make the card
 closable — `RoomScreen` does, and the between-hands countdown moves to the tray once it is waved off. While the card
 is up, the countdown is the card's own last line: `RoomScreen` passes it as `countdown`, and `HandResult` prints it at
-the right end of the footer, beside the fee, in a `<p aria-live="off">` — the card is a `role="status"` region, and a
-line ticking inside it would otherwise have the whole receipt read out every second (review 2026-09-29, No2: printed
-under the card, it landed on the viewer's own seat). It is never inside a row's `<li>` or the fee line, which is what
-the e2e suites read the card by. The card is at most as tall as the felt (`max-height: 100%` of `RoomScreen`'s
+the right end of the footer, beside the fee, in a plain `<p>` (review 2026-09-29, No2: printed under the card, it
+landed on the viewer's own seat). A line ticking inside a live region would have the whole receipt read out every
+second, so the card keeps it out of one by structure (review round 2, R2-4; the first answer was an `aria-live="off"`
+nested in a `role="status"` card, which the WAI-ARIA rules honour and Chromium does, but nobody had tried NVDA or JAWS):
+the card is a `role="group"` named by its title (`aria-labelledby`, an id from `useId`), its head, cancel note and
+scrolling body sit in the one `role="status"` wrapper (`.resultLive`), and the footer — fee, carry-over, uncalled
+return, countdown — follows it as the group's last child, outside every live region. The cost: the fee, carry-over and
+uncalled lines are no longer part of what is announced when the card appears; they stay on the card and are read on
+navigation. The countdown is never inside a row's `<li>` or the fee line, which is what the e2e suites read the card by
+— and they find the card as `getByRole('group', { name: /^(Người thắng|Những người thắng|Ván bị hủy)$/ })`, since a
+`status` locator would now match the inner region alone and lose the footer. The card is at most as tall as the felt (`max-height: 100%` of `RoomScreen`'s
 overlay): past that its body — the rows, then the pot ledger under them — scrolls inside it, and the title, the close
 button and the footer stay put. While the body can still scroll down, its foot fades out (a CSS mask, switched by
 `data-more`, which `HandResult` measures on scroll and on resize), so a ledger below the fold reads as more to come;

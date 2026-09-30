@@ -262,9 +262,13 @@ export async function start(page: Page): Promise<void> {
 
 /* ── the hand ────────────────────────────────────────────────────────────────────────────────────── */
 
-/** The result card dealt over the felt once a hand completes. */
+/**
+ * The result card dealt over the felt once a hand completes: a group named by its title (review round 2, R2-4). Its
+ * live region is an inner `status` holding the title and the rows, so this is the card as a whole — footer included,
+ * where the fee and the uncalled return are printed.
+ */
 export function resultCard(page: Page): Locator {
-  return page.locator('[role="status"]').filter({ has: page.getByRole('heading', { name: /Người thắng|Những người thắng|Ván bị hủy/ }) })
+  return page.getByRole('group', { name: /^(Người thắng|Những người thắng|Ván bị hủy)$/ })
 }
 
 /** The fee printed on a result card, 0 when the card prints none. */

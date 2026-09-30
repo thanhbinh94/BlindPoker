@@ -504,10 +504,10 @@ describe('RoomScreen', () => {
     })
     wrap(fakeClient(makeState({ room, hand })))
 
-    const card = screen.getAllByRole('status').find((el) => within(el).queryByRole('heading', { name: 'Winner' }) !== null)
-    expect(card).toBeDefined()
-    const next = within(card!).getByText((_, el) => el?.textContent === 'Next hand in 5 sec' && el.tagName === 'P')
-    expect(next).toHaveAttribute('aria-live', 'off')
+    const card = screen.getByRole('group', { name: 'Winner' })
+    const next = within(card).getByText((_, el) => el?.textContent === 'Next hand in 5 sec' && el.tagName === 'P')
+    // R2-4: outside every live region, so a screen reader that ignores a nested `aria-live="off"` still keeps quiet
+    expect(next.closest('[role="status"], [role="alert"], [aria-live="polite"], [aria-live="assertive"]')).toBeNull()
     const controls = screen.getByRole('group', { name: 'Table controls' })
     expect(within(controls).queryByText(/Next hand in/)).toBeNull()
 
