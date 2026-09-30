@@ -120,8 +120,11 @@
    enough — so the card's `max-height: 100%` is that area and a long receipt scrolls inside the card instead of adding
    a scrollbar to `.roomMain` (or lying over the viewer's seat, review round 2, R2-3). `RoomScreen` measures how far up
    the seat reaches (`useSeatClearance`) and sets `--seat-clearance`; without room for the card, or for a spectator,
-   it sets nothing and the card keeps the whole felt. The box itself stays `inset: 0` and only its padding grows, so
-   the scrim still fades out over the seat rather than stopping in a hard edge just above it. */
+   it sets nothing and the card keeps the whole felt. The box itself stays `inset: 0` and only its padding grows; the
+   scrim is painted in the content box alone — the card's stage — so its centre rises with the card and the viewer's
+   seat below it is not darkened (it lay under the scrim's darker band while the scrim was centred on the whole
+   stage). Its ellipse is as tall as that box (50 %), so it is `transparent` by the box's foot and leaves no edge on
+   the felt beside the card: at 60 % it still had about 0.15 of its alpha there, a visible line at 1280 × 720. */
 .overlay {
   position: absolute;
   inset: 0;
@@ -133,7 +136,10 @@
   padding: var(--space-4);
   padding-bottom: calc(var(--space-4) + var(--seat-clearance, 0px));
   pointer-events: none;
-  background: radial-gradient(70% 60% at 50% 50%, rgba(4, 7, 18, 0.72), rgba(4, 7, 18, 0.32) 70%, transparent 100%);
+  background-image: radial-gradient(70% 50% at 50% 50%, rgba(4, 7, 18, 0.72), rgba(4, 7, 18, 0.32) 70%, transparent 100%);
+  background-origin: content-box;
+  background-clip: content-box;
+  background-repeat: no-repeat;
 }
 
 .overlay > * {

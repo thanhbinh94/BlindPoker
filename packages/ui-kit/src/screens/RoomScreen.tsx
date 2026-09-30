@@ -202,8 +202,8 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
         {t('labels.nextHandIn')} <strong>{t('common:time.seconds', { count: nextHandIn })}</strong>
       </>
     )
-  // Padding, not `bottom`: the overlay still spans the whole stage, so its scrim fades out over the seat instead of
-  // ending in a hard edge just above it.
+  // Padding, not `bottom`: the overlay keeps the stage's box, and its scrim paints the padded content box alone — the
+  // card's stage — so the scrim's centre rises with the card and the seat below it is not darkened.
   const overlayStyle = clearance === null ? undefined : ({ '--seat-clearance': `${clearance}px` } as CSSProperties)
 
   return (
