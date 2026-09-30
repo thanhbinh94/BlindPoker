@@ -46,6 +46,12 @@ export class Room {
   private queue: Promise<unknown> = Promise.resolve()
   private nextHandTimer: TimerHandle | null = null
   private closeTimer: TimerHandle | null = null
+  /**
+   * Set first thing by `close()` and `shutdown()`, whose cancelled hand can remove a last human who pressed Leave
+   * mid-hand: that removal must neither start a second close (`onClosed` would fire twice) nor arm the empty-room
+   * timer. Not `summary().closing`, which is the lobby's "counting down to closing" (`closeTimer`).
+   */
+  private closing = false
   private carryOverReleaseTimer: TimerHandle | null = null
   /**
    * Humans stood up by `standUpSpent` while a pot was carried over: their antes are in it, so a release still pays
@@ -412,6 +418,7 @@ export class Room {
   shutdown(reason: string): Promise<void> {
     return this.enqueue(async () => {
       if (this.status === 'CLOSED') return
+      this.closing = true
       if (this.runner && !this.runner.isComplete) {
         this.runner.cancel(reason)
         await this.onHandComplete()
@@ -434,7 +441,8 @@ export class Room {
   }
 
   private async close(reason: string): Promise<void> {
-    if (this.status === 'CLOSED') return
+    if (this.status === 'CLOSED' || this.closing) return
+    this.closing = true
     if (this.runner && !this.runner.isComplete) {
       this.runner.cancel(reason)
       await this.onHandComplete()
@@ -724,8 +732,14 @@ export class Room {
     return [...this.players.values()].find((p) => p.seat === seat)
   }
 
+  /**
+   * A hand is current until `onHandComplete` has settled it (and set `runner` to null), not merely until its last
+   * move: that settlement is queued behind whatever was already in the room's queue. A Leave or Stand queued ahead
+   * of it would otherwise take the pre-hand stack home and, the last person out of a room with bots, close the room
+   * under a settlement still to come — a carried pot set on a closed room and never released.
+   */
   private inCurrentHand(p: RoomPlayer): boolean {
-    return p.seat !== null && this.runner !== null && !this.runner.isComplete && this.runner.state.players.some((hp) => hp.seat === p.seat)
+    return p.seat !== null && this.runner !== null && this.runner.state.players.some((hp) => hp.seat === p.seat)
   }
 
   private eligibleForHand(): RoomPlayer[] {
@@ -803,8 +817,18 @@ export class Room {
     this.onMembership?.(p.identity.playerId, false)
     this.clearPlayerTimer(p.identity.playerId)
     if (p.identity.playerId === this.hostPlayerId) this.transferHost()
-    if (this.humanCount === 0) this.scheduleClose()
     this.deps.log.info('player left room', { roomId: this.roomId, playerId: p.identity.playerId, reason })
+    // "Human" counts members, connected or not: a disconnected player keeps the room until the spectator grace
+    // removes them. With no human left, bots have nobody to play with, so their room closes now (No3) — its carried
+    // pot released like the timer's close does. A room with nobody in it at all keeps its grace and the lobby's
+    // "Đang đóng…" (bug 2). Inside a `close()`/`shutdown()` the room is on its way out already: neither.
+    if (this.humanCount === 0 && !this.closing) {
+      if (this.seatedBotCount > 0) {
+        await this.close('empty') // `onClosed` tells the manager, which takes the room off the list
+        return
+      }
+      this.scheduleClose()
+    }
     this.changed()
   }
 

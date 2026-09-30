@@ -72,7 +72,7 @@ describe('RoomManager', () => {
   })
 
   it('keeps an O(1) player index in step with joins, leaves and closes', async () => {
-    const { manager, clock } = setup()
+    const { manager } = setup()
     const room = manager.create(id('h'), { ...PUBLIC, mode: 'blind', turnTimerSec: 15, holdem: undefined, blind: { holeCards: 2, decisionMode: 'playOrFold', fixedWager: 1000, botCount: 2 } })
     expect(manager.roomOf('h')).toBe(room) // the host is indexed even though the constructor seated them
     for (const bot of [...room.players.keys()].filter((p) => p.startsWith('bot:'))) expect(manager.roomOf(bot)).toBe(room)
@@ -81,10 +81,9 @@ describe('RoomManager', () => {
     await room.leave('a')
     expect(manager.roomOf('a')).toBeUndefined()
     expect(manager.roomOf('h')).toBe(room)
-    await room.leave('h')
-    clock.advance(TEST_ROOM_OPTIONS.emptyRoomCloseMs)
-    await room.enqueue(() => undefined)
+    await room.leave('h') // only the bots are left: the room closes at once (No3), and is no longer listed
     expect(room.status).toBe('CLOSED')
+    expect(manager.listPublic()).toEqual([])
     // a closed room keeps its player map, but the index must not keep pointing at it
     expect([...room.players.keys()].length).toBeGreaterThan(0)
     expect(manager.roomOf('h')).toBeUndefined()

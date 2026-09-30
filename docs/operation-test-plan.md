@@ -76,7 +76,7 @@ mã phòng (nếu có), thiết bị, ảnh chụp màn hình. Claude chép vào
 | S-03 | Bấm Nhận thưởng | Số dư +5.000, nút khoá lại; chấm vàng trên tab Điểm danh biến mất khi rời trang (xem T1 trong `docs/bug-log.md` §6) | P1 |
 | S-04 | Sảnh → Tạo phòng Blind, 3 bot | Vào bàn, 3 bot ngồi sẵn, mã phòng 6 ký tự ở đầu trang | P1 |
 | S-05 | Ngồi vào bàn → Sẵn sàng → Bắt đầu | Ngồi: số dư trừ hạn mức 5.000; ván chạy, lá chung lật, có người thắng, chồng trên bàn đổi; rời phòng: chồng về số dư | P1 |
-| S-06 | Rời phòng | Về sảnh; phòng hiện nhãn "Đang đóng…" rồi biến mất sau ~60 giây | P1 |
+| S-06 | Rời phòng | Về sảnh; phòng Blind của S-04 (chỉ còn bot) biến mất khỏi sảnh ngay (C-07); phòng không bot hiện nhãn "Đang đóng…" rồi biến mất sau ~60 giây (C-06) | P1 |
 | S-07 | Hồ sơ, Tủ đồ, Thành tựu, Cài đặt | Mỗi trang mở được, không trang trắng | P1 |
 | S-08 | Tải lại trang (F5) ở bất kỳ màn nào | Vẫn đăng nhập, về đúng màn | P1 |
 
@@ -113,7 +113,8 @@ mã phòng (nếu có), thiết bị, ảnh chụp màn hình. Claude chép vào
 | C-03 | A tạo phòng **riêng tư** có mật khẩu | B không thấy trong danh sách; nhập mã + đúng mật khẩu thì vào được, sai mật khẩu thì bị từ chối | P1 |
 | C-04 | Nhập mã phòng không tồn tại | Báo không tìm thấy phòng | P2 |
 | C-05 | Phòng đầy (ví dụ Blind 4 ghế, 3 bot, 1 người đã vào) | Danh sách ghi 4/4; người thứ hai bấm Vào phòng thì bị từ chối vì phòng đầy (bot chiếm ghế thật) | P2 |
-| C-06 | Mọi người rời phòng | Sảnh hiện "Đang đóng…" trong 60 giây rồi phòng biến mất; vào lại trong 60 giây thì phòng sống lại | P2 |
+| C-06 | Mọi người rời một phòng **không có bot** (ví dụ Hold'em) | Sảnh hiện "Đang đóng…" trong 60 giây rồi phòng biến mất; vào lại trong 60 giây thì phòng sống lại | P2 |
+| C-07 | Người thật cuối cùng rời một phòng **còn bot** (ví dụ Blind, 2 bot); người khác đang xem sảnh | Phòng biến mất khỏi sảnh ngay (vài giây), không qua "Đang đóng…"; nếu rời giữa ván thì phòng đóng khi ván đó kết thúc. Người rớt mạng vẫn tính là còn trong phòng tới khi hết 5 phút làm người xem | P2 |
 
 ### D. Tạo phòng
 
@@ -252,7 +253,8 @@ Tủ đồ, Kho đồ, Thành tựu, Cài đặt.
 5. A rời phòng khi đang là chủ phòng → kiểm chủ phòng mới (G-04).
 6. Chuyển sang phòng Blind "Chơi hoặc bỏ", mức cược 1.000, 2 lá, 1 bot. Chơi 10 ván; có ít nhất một ván
    cả nhóm cùng Bỏ để xem pot cộng dồn (F-04). Ai tiêu hết hạn mức 5.000 bị mời đứng dậy — bấm ghế để vào lại (F-10).
-7. Mọi người thật bấm Ngồi ngoài, chờ 60 giây → pot cộng dồn được chia (F-05). Rời hết → "Đang đóng…" (C-06).
+7. Mọi người thật bấm Ngồi ngoài, chờ 60 giây → pot cộng dồn được chia (F-05). Rời hết → phòng (còn 1 bot) biến
+   mất khỏi sảnh ngay (C-07); "Đang đóng…" 60 giây chỉ có ở phòng không bot (C-06).
 8. Mỗi người mở Hồ sơ → Lịch sử điểm, đối chiếu số dư (H-01), ghi lại số dư cuối.
 
 ## 7. Tiêu chí đạt

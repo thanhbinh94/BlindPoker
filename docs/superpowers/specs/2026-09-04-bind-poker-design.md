@@ -117,7 +117,7 @@ Ký hiệu: **[C]** Core, **[N]** Normal-only, **[L]** Lite-only, **[O]** option
 - FR-R02 [C] Danh sách phòng công khai cập nhật realtime trong lobby.
 - FR-R03 [C] Vào phòng riêng bằng mã 6 ký tự; phòng có mật khẩu yêu cầu mật khẩu.
 - FR-R04 [C] Ready/unready; host Start khi ≥ 2 ready; tùy chọn tự bắt đầu khi tất cả ready.
-- FR-R05 [C] Host rời → chuyển host; phòng trống 60 giây → xóa.
+- FR-R05 [C] Host rời → chuyển host; người thật cuối cùng rời phòng còn bot → đóng ngay; phòng không còn ai (kể cả bot) 60 giây → xóa.
 - FR-R06 [C] Rời bàn giữa ván = fold; stack trả về balance sau ván.
 - FR-R07 [C] Ngồi xuống (sit down) yêu cầu đủ điểm theo mode; đứng dậy (stand up) trả stack.
 
@@ -318,7 +318,7 @@ Server-kit nhận identity từ `SessionResolver` do edition cung cấp (cookie 
 ## 11. Room System
 
 ### 11.1 Vòng đời phòng
-`OPEN` (chờ, có thể ready) ⇄ `IN_GAME` (đang ván) → `CLOSED` (trống 60 giây hoặc host đóng khi không có ván).
+`OPEN` (chờ, có thể ready) ⇄ `IN_GAME` (đang ván) → `CLOSED` (người thật cuối cùng rời phòng còn bot — ngay, hoặc khi hết ván nếu rời giữa ván; phòng không còn ai, kể cả bot, sau 60 giây — sảnh hiện "Đang đóng…" trong lúc chờ; hoặc host đóng khi không có ván). "Người thật" tính mọi thành viên không phải bot, kể cả người đang mất kết nối: họ còn trong phòng tới khi hết 5 phút làm người xem (§16.6), nên phòng không đóng khi họ chỉ mới rớt mạng.
 
 ### 11.2 Cấu hình phòng
 ```ts
@@ -1048,7 +1048,7 @@ ESLint boundary; test đọc `package.json` từng package và kiểm graph mụ
 | Rớt mạng giữa lượt | Ghế DISCONNECTED, ván tiếp tục, hết timer → mặc định; reconnect 90 giây |
 | Đóng trình duyệt | Như rớt mạng |
 | Host rời | Chuyển host người vào sớm nhất; nếu đang ván, ván tiếp tục |
-| Phòng trống | Xóa sau 60 giây; pot cộng dồn chia theo 8.4 |
+| Phòng trống | Còn bot: đóng ngay khi người thật cuối cùng rời (hết ván nếu đang chơi); không còn ai, kể cả bot: xóa sau 60 giây ("Đang đóng…"); pot cộng dồn chia theo 8.4 (không còn người thật thì cả pot bị thu) |
 | Phòng đầy | `ROOM_FULL` |
 | Action trùng | `reqId` → trả lại kết quả cũ |
 | Action sai lượt | `NOT_YOUR_TURN` |

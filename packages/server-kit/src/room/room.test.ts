@@ -41,10 +41,10 @@ describe('Room membership', () => {
     expect(h.room.humanCount).toBe(2)
     let closed: string | null = null
     h.room.onClosed = (_r, reason) => { closed = reason }
-    await h.room.leave('a'); await h.room.leave('b')
-    expect(h.room.status).toBe('OPEN')
-    h.clock.advance(500)
-    await h.room.enqueue(() => undefined)
+    await h.room.leave('a')
+    expect(h.room.status).toBe('OPEN') // b is still here
+    // The last person out of a room that still seats bots closes it there and then (No3): no grace to wait out.
+    await h.room.leave('b')
     expect(h.room.status).toBe('CLOSED')
     expect(closed).toBe('empty')
   })
@@ -330,15 +330,13 @@ describe('Bot-only rooms', () => {
     await h.room.enqueue(() => undefined)
     expect(h.room.handActive).toBe(false)
 
-    // the next-hand timer fires, but with zero humans eligible the room must NOT start a bot-only hand
+    // the host's removal at the end of the hand leaves only bots, so the room closes there and then (No3)…
+    expect(h.room.status).toBe('CLOSED')
+
+    // …and the next-hand interval passes without a bot-only hand
     h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
     await h.room.enqueue(() => undefined)
     expect(h.room.handActive).toBe(false)
-    expect(h.room.status).toBe('OPEN')
-
-    // the empty-room grace period elapses and the room closes
-    h.clock.advance(TEST_ROOM_OPTIONS.emptyRoomCloseMs)
-    await h.room.enqueue(() => undefined)
     expect(h.room.status).toBe('CLOSED')
     expect(h.repos.hands).toHaveLength(1)
   })
