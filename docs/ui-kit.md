@@ -350,6 +350,45 @@ Breakpoints 480 / 768 / 1024, per spec §27.1. No horizontal page scroll at any 
 
 ---
 
+## The text-overlap rule
+
+**No visible text is drawn over other visible text**, on any screen, at any viewport (review 2026-09-29, No11b: the
+"Ván tiếp theo sau 6 giây" countdown printed across the viewer's own seat plate, `No2-1`). The Normal e2e asserts it
+with `expectNoTextOverlap(page, label, opts?)` from `apps/normal-web/e2e/overlap.ts`, whose own proof is
+`e2e/overlap.spec.ts` (static fixtures, no account). A spec that calls it sets
+`test.use({ contextOptions: { reducedMotion: 'reduce' } })`; the helper waits for fonts and for *finite* animations
+(2 s at most — an infinite one is never waited on), then measures once:
+
+- **Text runs, not boxes.** Every non-blank text node's line boxes (`Range.getClientRects()`), each 20 % of its font
+  size shorter (10 % off the top and the bottom) so lines set as tight as `line-height: 1` do not count, clipped by
+  every ancestor that clips its overflow (an ellipsis, a scroll area) and by the viewport. Text in `svg`,
+  `[role=img]` or `[aria-hidden=true]` is artwork and is skipped, as is anything failing `checkVisibility`.
+- **Layers.** Text inside a modal (`[role=dialog][aria-modal=true]`) or the toast stack is compared only with its own
+  layer; everything else is one page layer.
+- **Overlap** is two runs of one layer intersecting by more than 2 px in both axes — unless the lower one is covered:
+  at the centre of the intersection, some element painted above it (not its own ancestor) has a background at least
+  0.9 opaque — a solid `background-color`, or a gradient whose every stop is — after multiplying in its opacity. A
+  card's own title over the felt text beneath it, or a sticky footer over the fields it scrolls over, is covering, not
+  overlapping.
+- **The failure** lists each pair: both texts (trimmed to 40 characters), their measured boxes and a short CSS path.
+
+**`data-overlap-ok="<reason>"`** on an element exempts the text inside it. It is for the rare overlap that is there by
+design, the reason is mandatory (an empty attribute exempts nothing), and it is never a way to silence a layout bug.
+The helper's `ignore` option (CSS selectors skipped entirely) is for the same kind of rare, documented case.
+
+What the rule does **not** catch:
+
+- **Text against a box.** Text touching or crossing a card's or a badge's edge is a box-spacing problem: `No11-1`'s
+  "Tay nóng" card sitting on the "HUY HIỆU" heading is one, and it is the grid spacing assertion (group gap ≥ 16 px,
+  equal card heights in a row) that covers it. Likewise text over a badge's pill whose glyphs clear the badge's own
+  text by 2 px or less.
+- **What is not on screen or not a text node:** text below the fold (scroll and call again), form-control values and
+  placeholders, CSS generated content (`::before { content }`).
+- **Partial covers:** the cover test samples one point, the centre of the intersection; a cover that is a
+  pseudo-element, or less than 0.9 opaque, does not count as hiding anything.
+
+---
+
 ## i18n
 
 Two namespaces per language: `common` (units, time, generic words) and `game` (everything else; the default
