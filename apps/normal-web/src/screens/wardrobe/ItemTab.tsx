@@ -120,7 +120,7 @@ export function ItemTab({ slot, catalog, owned, achievements, draft, wear, filte
   const cards = applyFilter(rows, owned, filter)
   const heading = WORD_HEADING[slot]
   // A card with no colour variants keeps the dot row's height when another card shown has some (No8b), so every
-  // card in the grid ends its rarity/hint block on the same line.
+  // card in the grid ends its lock hint on the same line.
   const reserveDots = cards.some((item) => item.asset !== undefined && (variants.get(item.asset.file)?.length ?? 0) > 0)
   // `title`/`badge` render inside the caller's own shared `tabpanel` (see `panelId`'s own comment above),
   // so this `<div>` carries no panel role of its own then; every other slot is its own tab and carries the

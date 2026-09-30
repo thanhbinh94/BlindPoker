@@ -363,14 +363,19 @@
 }
 
 .cardRarity {
-  /* With the cards of a row one height (`.cardCell > .card`), the spare height goes between the name and the
-     rarity: the rarity line, the hint or date under it and the colour dots after it are one block sitting on
-     the card's bottom edge, so every card in a row ends on the same line, whatever the name's line count. */
-  margin-top: auto;
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+/* The footer. With the cards of a row one height (`.cardCell > .card`), the spare height goes between the rarity
+   line and whatever follows it — the lock hint, or the source and date in the inventory (the colour dots come after
+   the `.cardPick` that holds it and are already at the bottom). The rarity itself stays directly under the name, so
+   cards whose names are as tall have their rarity lines on one line, and every card's footer ends on the card's
+   bottom edge, whatever the hint's line count. */
+.cardRarity + * {
+  margin-top: auto;
 }
 .card[data-rarity='common'] .cardRarity {
   color: var(--rarity-common);
@@ -796,7 +801,7 @@
 }
 
 /* The dot row's height held on an `ItemCard` that has no colour variants, when a neighbour in its tab does: the
-   rarity and hint rows of a row's cards then line up with or without dots under them (`.colourDot` is 1 rem). */
+   lock hints of a row's cards then end on one line with or without dots under them (`.colourDot` is 1 rem). */
 .dotsSpacer {
   width: 100%;
   height: 1rem;

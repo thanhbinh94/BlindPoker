@@ -78,7 +78,7 @@ export interface ItemCardProps {
    * card itself, so a locked original can still show an owned variant's dot clickable. */
   variants?: { item: ItemDto; owned: boolean; wearing: boolean }[]
   /** Keeps the dot row's height on a card that has no variants of its own, so that in a tab where some cards do
-   * have them every card's rarity and hint line up (No8b). `ItemTab` sets it; a lone card never needs it. */
+   * have them every card's lock hint ends on the same line (No8b). `ItemTab` sets it; a lone card never needs it. */
   reserveDots?: boolean
   onPick: (id: string) => void
 }

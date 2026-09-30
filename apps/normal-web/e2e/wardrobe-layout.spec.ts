@@ -17,8 +17,9 @@ import { account, expectEvenCardRows, expectHeadingsClearOfCards, expectNoSidewa
  * picking "Sáng" — rather than poking `localStorage` directly, so this exercises the real switch too.
  *
  * Review 2026-09-29, No8b and No11b: every card grid (the wardrobe's tabs, the inventory) keeps the cards of one row
- * one height with their last rows on one line, a group heading keeps 16 px from the cards above it, and no visible text
- * overlaps other text (`expectNoTextOverlap` needs the reduced-motion media below, docs/ui-kit.md).
+ * one height, the rarity line directly under the name (so on one line for names as tall) and the footer — hint, date,
+ * colour dots — ending on the card's bottom line; a group heading keeps 16 px from the cards above it; and no visible
+ * text overlaps other text (`expectNoTextOverlap` needs the reduced-motion media below, docs/ui-kit.md).
  */
 
 test.use({ contextOptions: { reducedMotion: 'reduce' } })
@@ -123,7 +124,7 @@ async function expectCardGrids(page: Page): Promise<void> {
   // "Tay nóng" ended a row of its own and "Huy hiệu" printed straight under it (No11-1).
   await goToWardrobeTab(page, 'Trang trí', 'Danh hiệu')
   await expect(page.getByRole('heading', { name: 'Huy hiệu', level: 3 })).toBeVisible()
-  await expectEvenCardRows(panel, `wardrobe, Trang trí → Danh hiệu & Huy hiệu, ${where}`)
+  await expectEvenCardRows(panel, `wardrobe, Trang trí → Danh hiệu & Huy hiệu, ${where}`, 2)
   await expectHeadingsClearOfCards(panel, `wardrobe, Trang trí → Danh hiệu & Huy hiệu, ${where}`)
   await expectNoTextOverlapDown(page, `wardrobe, Trang trí → Danh hiệu & Huy hiệu, ${where}`)
 
@@ -131,7 +132,10 @@ async function expectCardGrids(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Kho đồ', exact: true })).toBeVisible()
   await expect(page.locator('main ul li').first()).toBeVisible()
   const inventory = page.locator('main')
-  await expectEvenCardRows(inventory, `inventory, ${where}`)
+  // One grid (`<ul>`) per slot the account owns something in.
+  const slots = await inventory.locator('ul').count()
+  expect(slots, 'the inventory lists at least the starter slots').toBeGreaterThanOrEqual(3)
+  await expectEvenCardRows(inventory, `inventory, ${where}`, slots)
   await expectHeadingsClearOfCards(inventory, `inventory, ${where}`)
   await expectNoTextOverlapDown(page, `inventory, ${where}`)
 }
