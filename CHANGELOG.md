@@ -8,6 +8,65 @@ below are the real history.
 
 ---
 
+## Plan 16 — review 2026-09-29, round 1 — merged `merge commit to be filled in by the controller` (2026-09-30)
+
+Ten items from the user's review of 2026-09-29 are fixed: the two P1 avatar-colour bugs, a dead pair of sign-in
+links, how hand history reads, when an emptied room closes, four layout problems, and an automatic check that no text
+sits on top of other text. The items that need the user's choice (round 2) or a spec of their own (round 3) are
+untouched; email notifications (No7) are noted on the roadmap, not scheduled. The record of what was found and why is
+`docs/bug-log.md` §7. Nothing here needs a database migration.
+
+- **Hair and eye colours work again (No15, No16).** Normal's security policy (`img-src 'self' data:`) refused the
+  recoloured avatar pictures, which the browser makes itself (`blob:`). Picking a hair colour made the whole head
+  vanish, and picking an eye colour changed nothing (the base's blue eyes showed through). `img-src` now allows `blob:`
+  in Normal, and nothing else in the policy moves; Lite is not affected. A recoloured layer that still fails to load
+  falls back to the plain layer instead of leaving a hole. The twelve coloured items (a red t-shirt, say) show their
+  colour for the first time. The test that should have caught it now checks that every avatar picture really decoded,
+  and that the face and outfit layers are recoloured.
+- **Sign-in and Register tabs (No6).** The links "No account yet? Register" and "Already have an account? Sign in"
+  did nothing (the address flipped back mid-click) and only repeated what the two tabs do; they are gone.
+- **Recent hands read properly (No4).** Profile → Recent hands showed a bot as `bot:<room code>:4` under a label that
+  read as a table code. A bot is now "Bot 4", each hand says "At table <room name>", and the opponents' label is
+  "Opponents". Old rows read the same way.
+- **A room left with only bots closes at once (No3).** The last human leaving used to leave the room in the lobby as
+  "Closing…" for 60 seconds. When bots are still seated the room now closes there and then (at the end of the hand if
+  the player left in the middle of one), and a carried-over pot is released as it closes. A room with nobody at all,
+  bots included, keeps its 60-second grace. A player who has only lost connection still counts as in the room until the
+  five-minute spectator timeout. Two edge cases were settled while doing it: a hand that has just ended is settled
+  before the room closes or the server shuts down (no player is paid their pre-hand stack, no pot is stranded on a
+  closed room), and a Leave or Stand queued behind a hand's settlement waits for it, so **a host cannot kick a seat
+  until the hand it is dealt into is settled**.
+- **One footer for every dialog (No17).** The leave-without-saving, saved-outfit, sign-out (Normal and Lite) and
+  buy-in dialogs each laid out their buttons their own way, flush against the text and pushed left or right. They now
+  share one centred, wrapping button row with a clear gap above it. The create-room form's buttons follow the same rule.
+- **The create-room dialog keeps its height (No12).** Flipping between Hold'em and Blind Poker made the dialog grow
+  and shrink by a few pixels. The mode-specific fields now reserve the taller mode's height on wide screens.
+- **Wardrobe and inventory cards line up (No8b, No11b).** Cards in a row share one height, the rarity sits under the
+  name, and only the bottom lines (hint or date, colour dots) hug the card's foot. In the Title & Badge tab the
+  "Badges" heading no longer sits against the "Hot Hand" card above it.
+- **The table fits the screen (No2, No11b).** Joining a table no longer brings a vertical scrollbar on a desktop
+  screen (checked at 1920×940 and three smaller laptop sizes): your own seat is two lines at most under the plate, the
+  compact table starts at a taller threshold, and the lobby is no taller than the page. The "Next hand in…" countdown
+  moved into the result card's footer, where it no longer prints over your seat; the card is capped at the table's
+  height and its body scrolls inside it, fading at the foot while there is more to see (the pot ledger below the rows).
+- **Text may not sit on text — checked automatically (No11b).** `expectNoTextOverlap` measures every visible line of
+  text on a page and fails on any two that overlap within one layer (page, each dialog, the toasts). It measures the
+  line box, not a share of the font size: an earlier 20 % rule missed exactly the countdown the user reported. It has
+  self-tests on static fixtures, a failing twin for each passing case, and runs inside the existing end-to-end tests on
+  the sign-in card, lobby, create-room dialog, table (waiting, in hand, result), profile, daily check-in,
+  achievements, settings and the wardrobe tabs, at 1920×940, 1366×768 and 375×812; the operation pack adds Hold'em and
+  Blind hands at 1440×900. It found no other overlap.
+- **The Blind end-to-end money check no longer flakes.** "One account plays a whole Blind hand against bots" compared
+  the balance with the result card, but a flush or better pays an achievement (+3,000 and up) a moment after the hand
+  settles, which made the check fail on those hands. It now waits until the ledger sums to the balance and takes
+  achievement rows out before comparing (24 of 24 runs green, one of them a full house).
+- **Docs.** `docs/bug-log.md` §7 records each fix; the main spec (§11.1, FR-R05, §30, §19.3) says when a room closes
+  and why Normal accepts `blob:` images, and §34 lists email notifications (daily reminder, password reset,
+  account-security mail) as future work; the operation test plan's S-06 and C-06 change and C-07, A-09, D-07, J-08 and
+  M-05 are new.
+
+---
+
 ## Plan 15 — Blind Poker table limit — merged `e0d7f57` (2026-09-29)
 
 A Blind seat no longer plays from the whole balance. Sitting down brings `min(balance, 5 × wager)` to the table

@@ -1134,6 +1134,7 @@ ESLint boundary; test đọc `package.json` từng package và kiểm graph mụ
 11. ~~Avatar 3D cho bản Normal~~ — **đã làm (Plan 8)**, theo `2026-09-05-avatar-3d-design.md`: three.js, chân dung dựng ở máy người chơi, catalog v2 theo `slot` + `variants[body]`. Bộ SVG của Plan 6 đã gỡ. Còn lại cho sau: animation idle, biểu cảm, bộ trang phục hiện đại/theo mùa (§10 của đặc tả ấy).
 12. Nâng Vitest 2 → 3 và Vite 5 → 6 trên cả tám package, để dọn 7 advisory chỉ-dev còn lại. Không dùng override cho `vite` transitive dưới Vitest: làm thế là ghim một phiên bản Vitest 2 không được build cùng, đổi một advisory chỉ-dev lấy một test runner hỏng. Chi tiết và disposition từng advisory ở `docs/security.md` §2.
 13. Chạy một lần suite của `normal-server` với `TEST_DATABASE_URL` trỏ vào PostgreSQL thật, và build ảnh Docker của bản Normal — hai việc chưa làm được trên máy dev vì không có Docker daemon (`docs/known-limitations.md`, `docs/deployment-normal.md` §2).
+14. Thông báo qua email cho bản Normal (góp ý review 29/09, No7): nhắc nhận thưởng điểm danh hằng ngày, đặt lại mật khẩu, và thư an ninh tài khoản. **Chưa xếp lịch** — người dùng nhờ ghi lại để làm sau. Đặt lại mật khẩu trùng với mục 2 (quên mật khẩu, xác minh email) nên làm cùng nhau; cả ba loại thư cần một kênh gửi thư và địa chỉ email đã được xác minh, trong khi hiện đăng ký không kiểm email (§32, giả định 12).
 
 ---
 

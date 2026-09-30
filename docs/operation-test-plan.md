@@ -94,6 +94,7 @@ mã phòng (nếu có), thiết bị, ảnh chụp màn hình. Claude chép vào
 | A-06 | Đăng xuất (Cài đặt) → bấm Back của trình duyệt | Không xem lại được trang có dữ liệu tài khoản | P1 |
 | A-07 | Đăng nhập cùng tài khoản trên máy thứ hai | Cả hai máy dùng được, số dư như nhau | P2 |
 | A-08 | Đổi ngôn ngữ ở trang đăng nhập rồi đăng nhập | Ngôn ngữ giữ nguyên sau khi vào | P3 |
+| A-09 | Ở trang đăng nhập, bấm qua lại giữa hai tab Đăng nhập / Đăng ký | Đổi form ngay ở lần bấm đầu; dưới form không còn dòng "Chưa có tài khoản? Đăng ký" / "Đã có tài khoản? Đăng nhập" (đã bỏ, review 29/09 No6) | P3 |
 
 ### B. Khung chung
 
@@ -126,6 +127,7 @@ mã phòng (nếu có), thiết bị, ảnh chụp màn hình. Claude chép vào
 | D-04 | Mật khẩu phòng 3 ký tự | Bị chặn, gợi ý "4–20 ký tự" | P2 |
 | D-05 | Blind: 2 lá / 3 lá; Thuần may rủi / Chơi hoặc bỏ; Mức cược cố định; Số bot | Phòng đúng cấu hình; bot ngồi sẵn, luôn sẵn sàng | P1 |
 | D-06 | Bật "Tự động bắt đầu" | Ván tự chạy khi tất cả người thật đã Sẵn sàng (≥ 2 người tính cả bot) | P2 |
+| D-07 | Mở hộp thoại Tạo phòng, đổi qua lại Hold'em ↔ Blind | Hộp thoại giữ nguyên chiều cao (không giật lên xuống); các nút ở chân hộp thoại căn giữa, cách ô cuối một khoảng rõ (review 29/09 No12, No17) | P3 |
 
 ### E. Bàn Hold'em
 
@@ -192,13 +194,14 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 
 | Mã | Bước | Kỳ vọng | Ưu tiên |
 |---|---|---|---|
-| J-01 | Đổi thân nền (6 kiểu tóc), màu tóc, màu mắt | Hình xem trước đổi ngay; màu áp đúng lên tóc/mắt, không lem sang da | P1 |
+| J-01 | Đổi thân nền (6 kiểu tóc), màu tóc, màu mắt | Hình xem trước đổi ngay; màu áp đúng lên tóc/mắt, không lem sang da. Đổi màu tóc: đầu và tóc vẫn còn, chỉ đổi màu; đổi màu mắt: mắt đổi màu, không còn mắt xanh gốc (review 29/09 No15, No16 — trước đây bị chặn) | P1 |
 | J-02 | Đội mũ | Tóc không lòi qua mũ (trừ mũ lưỡi trai) | P2 |
 | J-03 | Đổi đồ → Hoàn tác | Quay về trạng thái đã lưu | P2 |
 | J-04 | Đổi đồ → Lưu → mở Sảnh / vào bàn | Hình đại diện mới hiện ở sảnh và trên ghế; người khác trong bàn cũng thấy | P1 |
 | J-05 | Lưu bộ đồ vào ô trống → mặc bộ khác → áp dụng lại bộ đã lưu | Đúng bộ đã lưu | P2 |
 | J-06 | Bấm các biểu cảm (Vui, Buồn, …) | Chỉ đổi hình xem trước, không cần lưu | P3 |
 | J-07 | Trên điện thoại: cuộn trang tủ đồ, mở "Đang mặc", "Bộ đồ đã lưu" | Không tràn ngang, bấm được mọi thẻ | P2 |
+| J-08 | Tủ đồ và Kho đồ: nhìn các hàng thẻ trong từng tab (Mũ, Trang phục, Danh hiệu & Huy hiệu…) | Thẻ cùng hàng cao bằng nhau, độ hiếm nằm ngay dưới tên; tiêu đề "Huy hiệu" không dính vào thẻ "Tay nóng" phía trên (review 29/09 No8b, No11b) | P3 |
 
 ### K. Kho đồ, Thành tựu, Hồ sơ
 
@@ -207,7 +210,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 | K-01 | Kho đồ | Liệt kê đúng đồ đang có, đánh dấu món đang mặc | P2 |
 | K-02 | Chơi đủ 10 ván Blind (bàn có bot, bật tự động bắt đầu). Hết hạn mức thì bị mời đứng dậy (F-10) nên phải bấm ghế để ngồi lại (Sẵn sàng, bật lại Tự động chơi) thì mới đủ 10 ván | Hiện thông báo mở thành tựu "Mười ván Blind Poker", +2.000 điểm; trang Thành tựu cập nhật | P1 |
 | K-03 | Vào 10 phòng khác nhau | Thành tựu "Mười phòng" mở | P3 |
-| K-04 | Hồ sơ → Thống kê sau vài ván | Số ván chơi/thắng tăng đúng | P2 |
+| K-04 | Hồ sơ → Thống kê sau vài ván | Số ván chơi/thắng tăng đúng; "Ván gần đây" ghi "Tại bàn <tên phòng>", đối thủ là bot hiện "Bot 1", "Bot 2"… chứ không hiện mã kiểu `bot:…` (review 29/09 No4) | P2 |
 | K-05 | Hồ sơ → đổi tên hiển thị | Tên mới hiện ở sảnh, bàn, cài đặt; tên trùng người khác bị từ chối | P2 |
 
 ### M. Giao diện trên nhiều cỡ màn hình
@@ -221,6 +224,7 @@ Tủ đồ, Kho đồ, Thành tựu, Cài đặt.
 | M-02 | Trên điện thoại, ghế của chính mình và các nút hành động nhìn thấy đủ trong bàn | P1 |
 | M-03 | Chữ tiếng Việt có dấu hiển thị đúng font, không vỡ dòng giữa từ | P3 |
 | M-04 | Nền sáng: chữ đọc được trên mọi nền (vàng trên kem, xanh trên xanh) | P3 |
+| M-05 | Máy tính 1920×940 và 1366×768: vào bàn (chờ, trong ván, thẻ kết quả); thẻ kết quả nhiều dòng thì cuộn được bên trong | Trang không có thanh cuộn dọc; ghế của mình chỉ còn hai dòng dưới mâm; "Ván tiếp theo sau…" nằm ở chân thẻ kết quả chứ không đè ghế; thân thẻ mờ ở chân khi còn cuộn được (review 29/09 No2, No11b) | P2 |
 
 **Luật "không chữ đè chữ" (review 2026-09-29, No11b) đã thành test tự động:** `pnpm e2e:normal` đo mọi màn hình
 kể trên — trừ Tủ đồ chỉ ba tab (Ngoại hình, Mũ, Danh hiệu & Huy hiệu) — ở 1920×940 (màn hình của bạn), 1366×768 và
