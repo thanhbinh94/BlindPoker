@@ -783,20 +783,20 @@ describe('Blind table limit (spec 2026-09-29)', () => {
   })
 })
 
+/** Bots that fold every hand, so a hand everyone folds carries its antes over. */
+const folding: BotStrategy = { decide: () => ({ kind: 'fold' }) }
+
+/**
+ * The conservation test's sum, for one human `h` who started with 100.000: their balance change, what is still on
+ * the table for them, every bot's net, every sink and the pot still carried add up to nothing.
+ */
+async function books(h: RoomHarness): Promise<number> {
+  const humanDelta = (await h.repos.balances.get('h')) + (h.room.players.get('h')?.stack ?? 0) - 100_000
+  const botNet = h.repos.hands.flatMap((x) => x.players).filter((p) => p.isBot).reduce((s, p) => s + p.net, 0)
+  return humanDelta + botNet + h.repos.sinks.reduce((s, x) => s + x.fee, 0) + h.room.carryOverPot
+}
+
 describe('The last person out of a room that still seats bots (No3)', () => {
-  /** Bots that fold every hand, so a hand everyone folds carries its antes over. */
-  const folding: BotStrategy = { decide: () => ({ kind: 'fold' }) }
-
-  /**
-   * The conservation test's sum, for one human `h` who started with 100.000: their balance change, what is still on
-   * the table for them, every bot's net, every sink and the pot still carried add up to nothing.
-   */
-  async function books(h: RoomHarness): Promise<number> {
-    const humanDelta = (await h.repos.balances.get('h')) + (h.room.players.get('h')?.stack ?? 0) - 100_000
-    const botNet = h.repos.hands.flatMap((x) => x.players).filter((p) => p.isBot).reduce((s, p) => s + p.net, 0)
-    return humanDelta + botNet + h.repos.sinks.reduce((s, x) => s + x.fee, 0) + h.room.carryOverPot
-  }
-
   it('the host leaving between hands closes the room in the same turn of the queue, and nothing is left armed', async () => {
     const h = createRoomHarness(BLIND)
     await seatAndStart(h, ['h'])
@@ -934,6 +934,101 @@ describe('The last person out of a room that still seats bots (No3)', () => {
     expect(closed).toEqual(['empty'])
     expect(h.room.status).toBe('CLOSED')
     expect(h.room.hasPlayer('h')).toBe(false)
+  })
+})
+
+describe('Closing a room whose hand has just ended', () => {
+  /** A Blind table of `h` and two folding bots whose bots have decided: `h`'s move is the hand's last. */
+  async function lastMoveIsHs(): Promise<RoomHarness> {
+    const h = createRoomHarness(BLIND, { bot: folding })
+    await seatAndStart(h, ['h'])
+    h.clock.advance(10) // both bots fold
+    await tick(h)
+    return h
+  }
+  const settled = (h: RoomHarness) => h.domainEvents.filter((e) => e.type === 'HAND_SETTLED')
+  const refunds = (h: RoomHarness) => h.repos.entries.filter((e) => e.entry.reason === 'refund').map((e) => [e.entry.playerId, e.entry.delta])
+
+  it('a shutdown queued between a hand’s last move and its settlement settles that hand first', async () => {
+    // The last move queues the settlement behind whatever is already in the room's queue — here, the shutdown.
+    const cases = [
+      { move: 'fold', cashOut: 4_000, refunds: [['h', 3_000]] }, // everyone folded: three antes carried, released to h
+      { move: 'play', cashOut: 6_940, refunds: [] }, // h alone played: the 3.000 pot less its 60 fee
+    ] as const
+    for (const c of cases) {
+      const h = await lastMoveIsHs()
+      const closed: string[] = []
+      h.room.onClosed = (_r, reason) => { closed.push(reason) }
+      const last = h.room.action('h', { kind: c.move }, h.room.seq)
+      const down = h.room.shutdown('maintenance')
+      await last
+      await down
+      await tick(h) // the settlement queued behind the shutdown finds nothing left to do
+      expect(h.room.status).toBe('CLOSED')
+      expect(closed).toEqual(['maintenance'])
+      expect(settled(h)).toHaveLength(1)
+      expect(h.repos.hands).toHaveLength(1)
+      expect(h.repos.hands[0]!.cancelled).toBe(false)
+      // What goes home is the stack the hand left, not the one it started with.
+      expect(h.repos.entries.filter((e) => e.entry.playerId === 'h' && e.entry.reason === 'cash_out').map((e) => e.entry.delta)).toEqual([c.cashOut])
+      expect(refunds(h)).toEqual(c.refunds)
+      expect(h.room.carryOverPot).toBe(0)
+      expect(await books(h)).toBe(0)
+    }
+  })
+
+  it('a close() queued between a hand’s last move and its settlement settles that hand and releases its pot', async () => {
+    // Not reachable through a Leave any more (a Leave waits for the settlement), so reached directly, as the in-flight
+    // close test does. close() is for rooms nobody is in, so the seated h's stack stays on the table; `books` counts it.
+    const h = await lastMoveIsHs()
+    const closed: string[] = []
+    h.room.onClosed = (_r, reason) => { closed.push(reason) }
+    const last = h.room.action('h', { kind: 'fold' }, h.room.seq)
+    const shut = h.room.enqueue(() => (h.room as unknown as { close(reason: string): Promise<void> }).close('empty'))
+    await last
+    await shut
+    await tick(h)
+    expect(h.room.status).toBe('CLOSED')
+    expect(closed).toEqual(['empty'])
+    expect(settled(h)).toHaveLength(1)
+    expect(h.room.players.get('h')!.stack).toBe(4_000)
+    expect(h.room.carryOverPot).toBe(0) // released, not stranded on a closed room
+    expect(refunds(h)).toEqual([['h', 3_000]])
+    expect(await books(h)).toBe(0)
+  })
+
+  it('a shutdown whose steps throw still ends CLOSED, with one onClosed, and logs what failed', async () => {
+    const h = createRoomHarness(BLIND)
+    await seatAndStart(h, ['h'])
+    h.domainEvents.push = () => { throw new Error('subscriber down') } // the hand's HAND_SETTLED subscriber
+    const closed: string[] = []
+    h.room.onClosed = (_r, reason) => {
+      closed.push(reason)
+      throw new Error('listener down')
+    }
+    await h.room.shutdown('maintenance') // resolves: the server's shutdown is not held up by one room
+    expect(h.room.status).toBe('CLOSED')
+    expect(closed).toEqual(['maintenance'])
+    expect(await h.repos.balances.get('h')).toBe(100_000) // the cancelled hand's ante came back, the stack went home
+    expect(h.logs.filter((l) => l.level === 'error')).toEqual([
+      { level: 'error', msg: 'room close step failed', data: expect.objectContaining({ step: 'hand', err: 'Error: subscriber down' }) },
+      { level: 'error', msg: 'room close step failed', data: expect.objectContaining({ step: 'onClosed', err: 'Error: listener down' }) },
+    ])
+  })
+
+  it('the immediate close of a room left with only bots survives a throwing listener: the Leave still succeeds', async () => {
+    const g = createRoomHarness(BLIND)
+    let calls = 0
+    g.room.onClosed = () => {
+      calls += 1
+      throw new Error('listener down')
+    }
+    await g.room.leave('h')
+    expect(g.room.status).toBe('CLOSED')
+    expect(calls).toBe(1)
+    expect(g.logs.filter((l) => l.level === 'error')).toEqual([
+      { level: 'error', msg: 'room close step failed', data: expect.objectContaining({ step: 'onClosed', reason: 'empty' }) },
+    ])
   })
 })
 

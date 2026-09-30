@@ -182,7 +182,9 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
   const others = room.players.filter((p) => p.playerId !== me?.playerId)
   // Managing the roster is a between-hands job: the dialog closes itself the moment cards are dealt. "Between
   // hands" is the server's own kick rule — no seat holds cards — so it is also the countdown to the next deal, where
-  // the room still says IN_GAME (a Blind table with bots never goes back to OPEN between its hands).
+  // the room still says IN_GAME (a Blind table with bots never goes back to OPEN between its hands). The server counts
+  // a hand as over once it has settled it, a moment after `HAND_COMPLETE` lands here: a kick sent in that moment is
+  // refused with GAME_IN_PROGRESS, and the same kick a moment later goes through.
   const handLive = hand !== null && hand.phase !== 'COMPLETE'
   const canManage = (waiting || !handLive) && isHost && others.length > 0
   const manageKey = hand?.handId ?? 'none'

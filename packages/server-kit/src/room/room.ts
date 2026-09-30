@@ -419,12 +419,7 @@ export class Room {
     return this.enqueue(async () => {
       if (this.status === 'CLOSED') return
       this.closing = true
-      if (this.runner && !this.runner.isComplete) {
-        this.runner.cancel(reason)
-        await this.onHandComplete()
-      }
-      this.cancelTimers()
-      await this.releaseCarryOver()
+      await this.wrapUp(reason)
       for (const p of this.seatedHumans()) {
         // One player's ledger failure must not strand everyone after them, nor keep the room from closing (and the
         // server from closing its sockets): their stack is logged for an operator to reconcile, and the room goes on.
@@ -435,22 +430,45 @@ export class Room {
         }
       }
       this.status = 'CLOSED'
-      this.broadcastRoomEvent({ type: 'ROOM_CLOSED', reason })
-      this.onClosed?.(this, reason)
+      await this.closeStep(reason, 'announce', () => this.broadcastRoomEvent({ type: 'ROOM_CLOSED', reason }))
+      await this.closeStep(reason, 'onClosed', () => this.onClosed?.(this, reason))
     })
   }
 
   private async close(reason: string): Promise<void> {
     if (this.status === 'CLOSED' || this.closing) return
     this.closing = true
-    if (this.runner && !this.runner.isComplete) {
-      this.runner.cancel(reason)
-      await this.onHandComplete()
+    await this.wrapUp(reason)
+    this.status = 'CLOSED'
+    await this.closeStep(reason, 'onClosed', () => this.onClosed?.(this, reason))
+  }
+
+  /**
+   * What `close()` and `shutdown()` both do before the room is marked closed. The hand on the table is ended — cancelled
+   * if it is still running, and settled either way: a hand whose last move is in but whose settlement is still queued
+   * behind this close is settled here, so its stacks are the ones cashed out and its carried pot is the one released
+   * (the queued `onHandComplete` then finds no runner and returns). Then every timer stops and the carried pot goes back.
+   * Each step is guarded, like everything after it: a room whose close cannot finish a step still ends `CLOSED`, with
+   * one `onClosed`, rather than listed forever behind a `closing` flag nothing resets.
+   */
+  private async wrapUp(reason: string): Promise<void> {
+    const runner = this.runner
+    if (runner) {
+      await this.closeStep(reason, 'hand', async () => {
+        if (!runner.isComplete) runner.cancel(reason)
+        await this.onHandComplete()
+      })
     }
     this.cancelTimers()
-    await this.releaseCarryOver()
-    this.status = 'CLOSED'
-    this.onClosed?.(this, reason)
+    await this.closeStep(reason, 'carry-over', () => this.releaseCarryOver())
+  }
+
+  private async closeStep(reason: string, step: string, fn: () => unknown): Promise<void> {
+    try {
+      await fn()
+    } catch (err) {
+      this.deps.log.error('room close step failed', { roomId: this.roomId, reason, step, err: String(err) })
+    }
   }
 
   /**
