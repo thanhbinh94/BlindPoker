@@ -250,7 +250,7 @@ describe('ProfileScreen', () => {
     ['vi', 'bàn 9', 'Tại bàn 9'],
     ['vi', '  Bàn   9', 'Tại   Bàn   9'],
     // decomposed: "a" + U+0300 COMBINING GRAVE ACCENT, written as an escape so no formatter can compose it
-    ['vi', 'Bàn 9', 'Tại Bàn 9'],
+    ['vi', 'Ba\u0300n 9', 'Tại Ba\u0300n 9'],
     // Only the first word counts, and only when it is the whole word.
     ['vi', 'Phòng Bàn 9', 'Tại bàn Phòng Bàn 9'],
     ['vi', 'Bàn-9', 'Tại bàn Bàn-9'],
