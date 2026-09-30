@@ -71,6 +71,20 @@ function statText(stats: PlayerStatsDto, metric: StatKey, lang: Language, t: TFu
   return POINT_METRICS.has(metric) ? `${value} ${t('common:units.pointsShort')}` : value
 }
 
+/**
+ * The table line of a history row. Rooms are often called "Bàn 123", and "Tại bàn Bàn 123" says the word twice
+ * (R2-2): when the name's first word already *is* the page language's word for a table, the line is "Tại {name}";
+ * otherwise it is "Tại bàn {name}" and the word is added. Words are compared as composed Unicode, lower-cased in
+ * the page's language, so "BÀN VIP" and a name typed with a combining accent count, and "Bàn123" or "Bàn-9" — one
+ * word that merely starts with it — do not. The name itself is printed as the room has it.
+ */
+function tableLine(roomName: string, lang: Language, t: TFunction): string {
+  const first = roomName.normalize('NFC').trim().split(/\s+/u)[0] ?? ''
+  const word = t('profile.history.tableWord').normalize('NFC')
+  const named = first.toLocaleLowerCase(lang) === word.toLocaleLowerCase(lang)
+  return t(named ? 'profile.history.tableNamed' : 'profile.history.table', { name: roomName })
+}
+
 /** The mode label belongs to the game, so it comes from the kit's `game` namespace, not this app's. */
 const modeLabel = (mode: string, t: TFunction): string => t(`game:mode.${mode}`, { defaultValue: mode })
 
@@ -432,7 +446,7 @@ export function ProfileScreen({ api, lang, balance, onRenamed }: ProfileScreenPr
                       {formatMoment(hand.endedAt, lang)}
                     </time>
                     {hand.roomName === null ? null : (
-                      <span className={`${s.rowMeta} ${s.handTable}`}>{t('profile.history.table', { name: hand.roomName })}</span>
+                      <span className={`${s.rowMeta} ${s.handTable}`}>{tableLine(hand.roomName, lang, t)}</span>
                     )}
                   </span>
                   <span className={s.handMarks}>
@@ -452,9 +466,19 @@ export function ProfileScreen({ api, lang, balance, onRenamed }: ProfileScreenPr
                     <dt className={s.rowMeta}>{t('profile.history.opponents')}</dt>
                     <dd className={s.seats}>
                       {others.map((seat) => (
-                        <span className={s.seatChip} key={`${seat.seat}-${seat.label}`}>
+                        // A bot's label already reads "Bot n", so it carries no badge that would say "bot" again;
+                        // and because no name is reserved (a human may be called "Bot 5"), it is marked by more
+                        // than colour: the attribute styles the name in italics, and the word is there for a
+                        // screen reader.
+                        <span className={s.seatChip} data-bot={seat.isBot ? 'true' : undefined} key={`${seat.seat}-${seat.label}`}>
                           <span className={s.seatName}>{seat.label}</span>
-                          {seat.isBot ? <Badge tone="muted">{t('profile.history.bot')}</Badge> : null}
+                          {seat.isBot ? (
+                            <>
+                              {/* A space between the two flex items (it draws nothing) keeps the text "Bot 5 bot". */}
+                              {' '}
+                              <span className="visually-hidden">{t('profile.history.bot')}</span>
+                            </>
+                          ) : null}
                         </span>
                       ))}
                     </dd>

@@ -185,6 +185,8 @@
       "cancelled": "Cancelled",
       "bestHand": "Best hand",
       "table": "At table {{name}}",
+      "tableNamed": "At {{name}}",
+      "tableWord": "table",
       "opponents": "Opponents",
       "bot": "bot"
     },

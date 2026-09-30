@@ -185,6 +185,8 @@
       "cancelled": "Đã hủy",
       "bestHand": "Bài mạnh nhất",
       "table": "Tại bàn {{name}}",
+      "tableNamed": "Tại {{name}}",
+      "tableWord": "bàn",
       "opponents": "Đối thủ",
       "bot": "bot"
     },

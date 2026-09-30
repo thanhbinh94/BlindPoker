@@ -864,6 +864,13 @@
   overflow-wrap: anywhere;
 }
 
+/* A bot's chip has no badge (its label already reads "Bot n"). No name is reserved, so it is told apart by more
+   than colour: italics here, and a visually hidden word for a screen reader (`ProfileScreen`). */
+.seatChip[data-bot='true'] .seatName {
+  font-style: italic;
+  color: var(--ink-muted);
+}
+
 /* ── the wardrobe ─────────────────────────────────────────────────────────── */
 
 .previewCard {
