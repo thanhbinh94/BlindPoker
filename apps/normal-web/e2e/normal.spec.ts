@@ -10,18 +10,21 @@ import {
   expectMySeatLines,
   expectNoSidewaysScroll,
   expectNoTextOverlapAt,
+  expectNoTextOverlapDown,
   expectPageFits,
   expectRoomFits,
   LAPTOP_SCREEN,
   lobbyAvatar,
   OVERLAP_SCREENS,
   parsePoints,
+  PHONE_SCREEN,
   register,
   shot,
   signIn,
   sit,
   unique,
   USER_SCREEN,
+  withBusyLobby,
   type Account,
 } from './support.js'
 
@@ -408,6 +411,23 @@ test.describe('Blind Luck Poker Normal', () => {
 
     await page.getByRole('button', { name: 'Rời phòng' }).click()
     await expect(page).toHaveURL(/#\/lobby$/)
+
+    // --- 7. a busy lobby: six rooms of every kind (review round 2, R2-1) ---------------------------------
+    // Last, because the socket route `withBusyLobby` lays stays on the page. A room with only bots in it closes at once, so
+    // the lobby above held none or one; here the server's `ROOM_LIST` is answered with `BUSY_LOBBY` — Hold'em and Blind, open,
+    // in a hand and closing, a lock, the longest name — and the lobby must still fit the player's screen with no text over text.
+    await withBusyLobby(page)
+    const tickets = page.getByRole('button', { name: /^Vào phòng — / })
+    await expect(tickets, 'the six fixture rooms are six tickets').toHaveCount(6)
+    await expectPageFits(page, 'a lobby of six rooms', USER_SCREEN)
+    for (const ticket of await tickets.all()) await expect(ticket, `${await ticket.getAttribute('aria-label')} is whole on screen`).toBeInViewport({ ratio: 1 })
+    await shot(page, 'lobby-busy-desktop')
+    await expectNoTextOverlapAt(page, 'lobby, six rooms', OVERLAP_SCREENS)
+    // A phone holds them in one column, taller than the window: it scrolls down, never sideways, and is read all the way.
+    await page.setViewportSize(PHONE_SCREEN)
+    await expectNoSidewaysScroll(page)
+    await expectNoTextOverlapDown(page, 'lobby, six rooms, 375×812')
+    await shot(page, 'lobby-busy-mobile')
     await page.emulateMedia({ reducedMotion: null })
   })
 

@@ -1,5 +1,6 @@
 import { mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import type { RoomSummary } from '@bp/core'
 import { expect, type Locator, type Page } from '@playwright/test'
 import { expectNoTextOverlap } from './overlap.js'
 
@@ -44,6 +45,75 @@ export const parsePoints = (text: string): number => Number(text.replace(/\D/g, 
 /** The lobby is "signed in": it only renders once the gate's probe has come back with an account. */
 export async function expectLobby(page: Page): Promise<void> {
   await expect(page.getByRole('button', { name: 'Tạo phòng' })).toBeVisible()
+}
+
+/**
+ * A public room as the server lists it: never private (a private room is not listed), never auto-starting, and not
+ * closing unless `closing` says so — a client reads the flag's absence as "not closing".
+ */
+function listed(code: string, config: Omit<RoomSummary['config'], 'isPrivate' | 'autoStart'>, playerCount: number, status: RoomSummary['status'], closing?: true): RoomSummary {
+  return {
+    roomId: `busy-${code}`,
+    code,
+    name: config.name,
+    mode: config.mode,
+    config: { ...config, isPrivate: false, autoStart: false },
+    playerCount,
+    maxPlayers: config.maxPlayers,
+    status,
+    ...(closing === undefined ? {} : { closing }),
+  }
+}
+
+/** The server's longest room name (30 characters, `validateRoomConfig`). No space in it: the only way it fits a ticket is to wrap anywhere. */
+const LONGEST_ROOM_NAME = 'Bàn_Đại_Gia_Phố_Núi_Sài_Gòn_01'
+
+/**
+ * Six public rooms, one of every kind a lobby can hold, for `withBusyLobby` (review round 2, R2-1): Texas Hold'em and
+ * Blind; open, in a hand and closing; two cards and three, `none` and `playOrFold`; one with a password; the longest
+ * name the server takes (beside the lock and the widest badge); seats 1/6, 3/9 and 6/6, and an empty room that is
+ * closing (0/6). The blinds and the wagers are entries of `ECONOMY`'s tiers, the widest among them. Every other name is
+ * short on purpose: the long one wraps its ticket's heading onto three lines, which is as much as three rows hold at
+ * 1920×940 (a second heading that wraps, and the lobby scrolls 3 px).
+ */
+export const BUSY_LOBBY: RoomSummary[] = [
+  listed('WMQ7X4', { name: 'Đêm Sài Gòn', mode: 'holdem', maxPlayers: 9, turnTimerSec: 30, hasPassword: false, holdem: { smallBlind: 100, bigBlind: 200, minBuyInBB: 50, maxBuyInBB: 200 } }, 3, 'OPEN'),
+  listed('MWK9H2', { name: 'Bàn Cao Thủ', mode: 'holdem', maxPlayers: 6, turnTimerSec: 45, hasPassword: false, holdem: { smallBlind: 2_500, bigBlind: 5_000, minBuyInBB: 20, maxBuyInBB: 500 } }, 6, 'IN_GAME'),
+  listed('QWM4N8', { name: 'Chiếu Bạc', mode: 'blind', maxPlayers: 6, turnTimerSec: 15, hasPassword: false, blind: { holeCards: 2, decisionMode: 'none', fixedWager: 1_000, botCount: 0 } }, 1, 'OPEN'),
+  listed('HMW6R3', { name: 'Ván ba lá', mode: 'blind', maxPlayers: 8, turnTimerSec: 30, hasPassword: false, blind: { holeCards: 3, decisionMode: 'playOrFold', fixedWager: 50_000, botCount: 2 } }, 5, 'IN_GAME'),
+  listed('NWM2Z7', { name: LONGEST_ROOM_NAME, mode: 'blind', maxPlayers: 4, turnTimerSec: 10, hasPassword: true, blind: { holeCards: 3, decisionMode: 'none', fixedWager: 20_000, botCount: 1 } }, 2, 'IN_GAME'),
+  listed('MQW8K5', { name: 'Bàn vắng', mode: 'holdem', maxPlayers: 6, turnTimerSec: 60, hasPassword: false, holdem: { smallBlind: 500, bigBlind: 1_000, minBuyInBB: 50, maxBuyInBB: 200 } }, 0, 'OPEN', true),
+]
+
+/** One frame from the server, with a `ROOM_LIST`'s rooms swapped for `BUSY_LOBBY`; any other frame — JSON or not — as it came. */
+function patchRoomList(frame: string | Buffer): string | Buffer {
+  if (typeof frame !== 'string') return frame
+  let message: unknown
+  try {
+    message = JSON.parse(frame)
+  } catch {
+    return frame
+  }
+  if (typeof message === 'object' && message !== null && (message as { t?: unknown }).t === 'ROOM_LIST') return JSON.stringify({ ...message, rooms: BUSY_LOBBY })
+  return frame
+}
+
+/**
+ * Review round 2, R2-1: a lobby with six rooms in it, on the page's own account. A room with only bots in it closes
+ * at once, so the default suite's lobby holds none or one, and a layout that only breaks with several would pass it.
+ * The page's socket (`/ws`) is proxied to the real server and every `ROOM_LIST` the server sends is answered with
+ * `BUSY_LOBBY` instead — nothing is created, nobody registers, the server is not touched. The route only takes the
+ * sockets the page opens afterwards, hence the reload; it stays for the life of the page (Playwright has no way
+ * to take a WebSocket route off), so this belongs at the end of a test.
+ */
+export async function withBusyLobby(page: Page): Promise<void> {
+  await page.routeWebSocket(/\/ws$/, (ws) => {
+    const server = ws.connectToServer()
+    // Page to server is forwarded as it is; only what comes back is read.
+    server.onMessage((message) => ws.send(patchRoomList(message)))
+  })
+  await page.reload()
+  await expectLobby(page)
 }
 
 /**
