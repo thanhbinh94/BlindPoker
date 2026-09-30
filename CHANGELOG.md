@@ -26,7 +26,7 @@ untouched; email notifications (No7) are noted on the roadmap, not scheduled. Th
 - **Sign-in and Register tabs (No6).** The links "No account yet? Register" and "Already have an account? Sign in"
   did nothing (the address flipped back mid-click) and only repeated what the two tabs do; they are gone.
 - **Recent hands read properly (No4).** Profile → Recent hands showed a bot as `bot:<room code>:4` under a label that
-  read as a table code. A bot is now "Bot 4", each hand says "At table <room name>", and the opponents' label is
+  read as a table code. A bot is now "Bot 4", each hand says "At table `<room name>`", and the opponents' label is
   "Opponents". Old rows read the same way.
 - **A room left with only bots closes at once (No3).** The last human leaving used to leave the room in the lobby as
   "Closing…" for 60 seconds. When bots are still seated the room now closes there and then (at the end of the hand if
@@ -34,8 +34,9 @@ untouched; email notifications (No7) are noted on the roadmap, not scheduled. Th
   bots included, keeps its 60-second grace. A player who has only lost connection still counts as in the room until the
   five-minute spectator timeout. Two edge cases were settled while doing it: a hand that has just ended is settled
   before the room closes or the server shuts down (no player is paid their pre-hand stack, no pot is stranded on a
-  closed room), and a Leave or Stand queued behind a hand's settlement waits for it, so **a host cannot kick a seat
-  until the hand it is dealt into is settled**.
+  closed room), and a Leave or Stand that arrives between a hand's last move and its settlement waits for the settlement (the
+  seat counts as still in the hand until then), so **a host cannot kick a seat until the hand it is dealt into is
+  settled**.
 - **One footer for every dialog (No17).** The leave-without-saving, saved-outfit, sign-out (Normal and Lite) and
   buy-in dialogs each laid out their buttons their own way, flush against the text and pushed left or right. They now
   share one centred, wrapping button row with a clear gap above it. The create-room form's buttons follow the same rule.
@@ -54,8 +55,10 @@ untouched; email notifications (No7) are noted on the roadmap, not scheduled. Th
   line box, not a share of the font size: an earlier 20 % rule missed exactly the countdown the user reported. It has
   self-tests on static fixtures, a failing twin for each passing case, and runs inside the existing end-to-end tests on
   the sign-in card, lobby, create-room dialog, table (waiting, in hand, result), profile, daily check-in,
-  achievements, settings and the wardrobe tabs, at 1920×940, 1366×768 and 375×812; the operation pack adds Hold'em and
-  Blind hands at 1440×900. It found no other overlap.
+  achievements, settings and the wardrobe tabs, at 1920×940, 1366×768 and 375×812; the operation pack adds Hold'em
+  hands at 1440×900, 1920×940, 1366×768 and 375×812, and Blind hands at 1440×900. Besides the two spots the user
+  reported, it found one more, on the phone: the viewer's pinned seat block let the board's "Pot" show under the
+  hand name. That is fixed too (the block is solid now). It found nothing else.
 - **The Blind end-to-end money check no longer flakes.** "One account plays a whole Blind hand against bots" compared
   the balance with the result card, but a flush or better pays an achievement (+3,000 and up) a moment after the hand
   settles, which made the check fail on those hands. It now waits until the ledger sums to the balance and takes
