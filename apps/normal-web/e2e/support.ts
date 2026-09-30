@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { expect, type Locator, type Page } from '@playwright/test'
+import { expectNoTextOverlap } from './overlap.js'
 
 /**
  * What both Normal specs need: an account, the cookie session, the lobby, a room, and the two chrome
@@ -114,6 +115,50 @@ export async function createBlindRoom(page: Page, roomName: string, bots: number
   const code = (await page.locator('header').getByLabel('Mã phòng').innerText()).trim()
   expect(code, 'the room header must show a join code').toMatch(/^[A-Z0-9]{4,8}$/)
   return code
+}
+
+/**
+ * The create-room dialog is one box. "Texas Hold'em" and "Blind Poker" bring different fields, and the dialog must
+ * not grow or shrink when the host flips between them (review 2026-09-29, No12). Opens the dialog from the lobby,
+ * measures its outer box in both modes at `viewport` (the page's own when omitted), runs the text-overlap rule on
+ * each mode and closes the dialog again.
+ *
+ * Reduced motion is emulated while it runs — the dialog's entrance animation scales it, so an unsettled box is not
+ * its size — and switched off again after, so the rest of the caller's test runs as it always did.
+ */
+export async function expectCreateRoomKeepsItsHeight(page: Page, viewport?: { width: number; height: number }): Promise<void> {
+  const original = page.viewportSize()
+  if (viewport !== undefined) await page.setViewportSize(viewport)
+  const size = page.viewportSize()
+  const where = `${size?.width ?? '?'}×${size?.height ?? '?'}`
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  try {
+    await page.getByRole('button', { name: 'Tạo phòng' }).click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+
+    const heights: number[] = []
+    for (const mode of ["Texas Hold'em", 'Blind Poker']) {
+      const choice = dialog.getByRole('button', { name: mode })
+      await choice.click()
+      await expect(choice).toHaveAttribute('aria-pressed', 'true')
+      const box = await dialog.boundingBox()
+      expect(box, `${mode}: the dialog has a box`).not.toBeNull()
+      heights.push(box!.height)
+      await expectNoTextOverlap(page, `create-room dialog, ${mode}, ${where}`)
+    }
+    const [holdem, blind] = heights as [number, number]
+    expect(
+      Math.abs(holdem - blind),
+      `the create-room dialog changed height with the mode at ${where}: Texas Hold'em ${holdem} px, Blind Poker ${blind} px`,
+    ).toBeLessThanOrEqual(1)
+
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeHidden()
+  } finally {
+    await page.emulateMedia({ reducedMotion: null })
+    if (viewport !== undefined && original !== null) await page.setViewportSize(original)
+  }
 }
 
 /** Takes the given seat; the index is explicit so nothing ever races the bot for one. */

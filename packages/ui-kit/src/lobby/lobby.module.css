@@ -241,6 +241,33 @@
   grid-column: 1 / -1;
 }
 
+/* The fields that depend on the mode (No12). Hold'em brings three (blind tier, buy-in min and max, each buy-in with a
+   hint line) and Blind Poker four (its table-limit hint runs two lines), so the dialog used to grow or shrink
+   when the host flipped between them. They sit in a grid of their own — the form's own `.grid`, so the rows come
+   out as they did when the fields were direct children — and this grid reserves the taller of the two heights.
+   `align-content: start` keeps the reserved height from stretching the rows apart.
+
+   Heights measured in the real build, Vietnamese and English, 320–1920 px wide:
+     one column (a phone)  Hold'em 301.5 px, Blind 361.5 px (381 px below 375 px wide)  → 24rem
+     two columns           Hold'em 214 px, Blind 206 px                                  → 13.5rem
+   The columns are the grid's `auto-fit` ones, so the box is a size container and the two-column height applies
+   from the width at which they turn into two: 2 × 10.5rem + the 1rem gap. A change to a field that makes either
+   mode taller than its reserve fails the create-room height check in e2e/normal.spec.ts. */
+.modeBox {
+  container-type: inline-size;
+}
+
+.modeFields {
+  align-content: start;
+  min-height: 24rem;
+}
+
+@container (min-width: 22rem) {
+  .modeFields {
+    min-height: 13.5rem;
+  }
+}
+
 .input {
   width: 100%;
   min-height: var(--tap);

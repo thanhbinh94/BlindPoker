@@ -256,7 +256,10 @@ seat's `ChibiConfig`; a bot never asks it — `PokerTable` draws `botChibi` for 
 
 `HoldemFields` (blind tier plus the buy-in window in big blinds) and `BlindFields` (hole cards, decision mode, fixed
 wager — whose field carries the table-limit hint, "Table limit per player: … (5× the wager)" — and bot filler) are the mode-specific building blocks `CreateRoomForm` swaps between; both are fully controlled,
-and an app only reaches for them directly when it builds its own room form.
+and an app only reaches for them directly when it builds its own room form. The swap happens in a box that reserves
+the taller mode's height (`.modeFields`: 24rem in one column, 13.5rem in two), so the create-room dialog does not
+change height when the host flips the mode; a field added to either set must fit those heights or raise them (the
+create-room height check in `apps/normal-web/e2e/normal.spec.ts` fails when it does not).
 
 ### Primitives
 

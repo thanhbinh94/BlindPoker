@@ -2,6 +2,7 @@ import { expect, test, type BrowserContext, type Locator, type Page } from '@pla
 import {
   account,
   createBlindRoom,
+  expectCreateRoomKeepsItsHeight,
   expectLobby,
   expectNoSidewaysScroll,
   lobbyAvatar,
@@ -204,6 +205,9 @@ test.describe('Blind Luck Poker Normal', () => {
     const start = await readBalance(page)
     expect(start, 'a new account can afford a hand').toBeGreaterThan(PLAY_COST)
 
+    // --- 1b. the create-room dialog keeps its height across modes, at the size of the player's screen --
+    await expectCreateRoomKeepsItsHeight(page, { width: 1920, height: 940 })
+
     // --- 2. a Blind room, one bot --------------------------------------------------------------------
     await createBlindRoom(page, unique('Bàn '), 1)
     await sit(page, 0)
@@ -360,6 +364,11 @@ test.describe('Blind Luck Poker Normal', () => {
     // two rows and the host's roster has five names — is the tallest this screen gets before a hand.
     await page.goto('/#/lobby')
     await expectLobby(page)
+    // The create-room dialog on a phone: the same outer box in both modes (it scrolls inside, it does not jump) —
+    // and on a phone tall enough that the dialog's own max-height does not clamp it, where only the one-column
+    // reserve of the mode fields keeps the two modes level.
+    await expectCreateRoomKeepsItsHeight(page)
+    await expectCreateRoomKeepsItsHeight(page, { width: 375, height: 1600 })
     await createBlindRoom(page, unique('Bàn '), 5)
     await sit(page, 0)
     await expect(page.getByRole('region', { name: 'Bàn', exact: true })).toBeVisible()
