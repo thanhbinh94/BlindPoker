@@ -20,7 +20,8 @@ import s from './wardrobe.module.css'
 
 /** "<name>, <rarity>[, wearing|, locked: <hint>]" (design §7). Rarity reuses the Inventory screen's own
  * `inventory.rarity.*` keys rather than a second Vietnamese vocabulary for the same three words; `locked`/
- * `wearing` reuse the filter and wearing-pill strings for the same reason. */
+ * `wearing` reuse the old filter's "Chưa có" (`wardrobe.filter.locked`, kept for this label when No11a's box
+ * replaced the filter buttons) and the wearing-pill strings for the same reason. */
 function cardLabel(name: string, rarity: Rarity, owned: boolean, wearing: boolean, hint: string, t: TFunction<'normal'>): string {
   const rarityLabel = t(`inventory.rarity.${rarity}`)
   if (!owned) return `${name}, ${rarityLabel}, ${t('wardrobe.filter.locked')}: ${hint}`
@@ -68,14 +69,19 @@ function RarityLabel({ rarity }: { rarity: Rarity }) {
 }
 
 export interface ItemCardProps {
+  /** The family member the card draws, names and picks (`FamilyCard.shown`, `./categories.js`): the original, or —
+   * box unticked, original not owned — the first owned colour variant (No11a). */
   item: ItemDto
+  /** The family's original, which names the dot row; `item` itself when omitted (a lone card, or the original shown). */
+  family?: ItemDto
   /** The draft base's wear (design §4.1's gendered cut), forwarded straight to `ItemPreview`. */
   wear?: string
   owned: boolean
   wearing: boolean
   hint: string
-  /** This card's colour variants (design §4.1's dot row) — each one owned/worn independently of the
-   * card itself, so a locked original can still show an owned variant's dot clickable. */
+  /** This card's colour-variant dots (design §4.1's dot row) — each one owned/worn independently of the
+   * card itself, so with the box ticked a locked original can still show an owned variant's dot clickable.
+   * Only the dots to draw: the caller has already dropped the ones not owned while the box is unticked. */
   variants?: { item: ItemDto; owned: boolean; wearing: boolean }[]
   /** Keeps the dot row's height on a card that has no variants of its own, so that in a tab where some cards do
    * have them every card's lock hint ends on the same line (No8b). `ItemTab` sets it; a lone card never needs it. */
@@ -92,7 +98,7 @@ export interface ItemCardProps {
  * lock hint) moves into an inner `.cardPick` button beside the dot row, both now inside the same bordered
  * box instead of the dots sitting below/outside it.
  */
-export function ItemCard({ item, wear, owned, wearing, hint, variants, reserveDots = false, onPick }: ItemCardProps) {
+export function ItemCard({ item, family = item, wear, owned, wearing, hint, variants, reserveDots = false, onPick }: ItemCardProps) {
   const { t } = useTranslation('normal')
   const name = itemName(item.id, t)
   const hasVariants = variants !== undefined && variants.length > 0
@@ -123,7 +129,7 @@ export function ItemCard({ item, wear, owned, wearing, hint, variants, reserveDo
         {!hasVariants ? (
           reserveDots ? <div className={s.dotsSpacer} aria-hidden="true" /> : null
         ) : (
-          <div className={s.colourDots} role="group" aria-label={name}>
+          <div className={s.colourDots} role="group" aria-label={itemName(family.id, t)}>
             {variants!.map(({ item: variant, owned: variantOwned, wearing: variantWearing }) => (
               <button
                 key={variant.id}

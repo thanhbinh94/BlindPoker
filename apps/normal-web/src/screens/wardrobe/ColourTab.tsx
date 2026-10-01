@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 import type { AchievementDefDto, AvatarConfigDto, ItemDto } from '../../api.js'
 import { hintFor } from '../catalog.js'
 import { ColourCard } from './cards.js'
-import { applyFilter, tabItems, type OwnershipFilter } from './categories.js'
+import { slotCards } from './categories.js'
 import s from './wardrobe.module.css'
 
 export interface ColourTabProps {
@@ -11,7 +11,8 @@ export interface ColourTabProps {
   owned: ReadonlySet<string>
   achievements: readonly AchievementDefDto[]
   draft: AvatarConfigDto
-  filter: OwnershipFilter
+  /** "Hiện cả món chưa có" (No11a): unticked, only the owned swatches (and "Natural", always). */
+  showLocked: boolean
   /** `undefined` equips nothing — the base's own colour — which is what the "Natural" swatch sends. */
   onPick: (itemId: string | undefined) => void
   /** This tab's panel id and the tab that labels it (design §7) — set by `CategoryNav`'s own id scheme,
@@ -24,13 +25,13 @@ export interface ColourTabProps {
  * The hair-colour and eye-colour tabs (design §4.3): round swatches painted with each item's own
  * `colour`, one row, no picture — there is nothing to draw a colour *as* other than itself. The first
  * card is "Natural" (the base's own colour, no item at all): always shown, never locked, and untouched
- * by the ownership filter — it is not a catalogue row `applyFilter` has an opinion about. Every other
- * card locks exactly like `ItemTab`'s.
+ * by the "Hiện cả món chưa có" box — it is not a catalogue row `applyFilter` has an opinion about — so this tab
+ * never needs the empty line `ItemTab` draws (No11a). Every other swatch is a family of one: shown when owned or
+ * when the box is ticked, and locked exactly like `ItemTab`'s cards.
  */
-export function ColourTab({ slot, catalog, owned, achievements, draft, filter, onPick, panelId, labelledBy }: ColourTabProps) {
+export function ColourTab({ slot, catalog, owned, achievements, draft, showLocked, onPick, panelId, labelledBy }: ColourTabProps) {
   const { t } = useTranslation('normal')
-  const rows = tabItems(slot, catalog)
-  const shown = applyFilter(rows, owned, filter)
+  const shown = slotCards(slot, catalog, owned, showLocked).map((card) => card.shown)
   const natural = draft[slot] === undefined
 
   return (

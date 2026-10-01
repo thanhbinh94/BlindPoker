@@ -170,9 +170,10 @@ The outfit bar sits under both columns, five slots wide.
 - **`BaseTab`** is the one tab with nothing locked — the two bases are chosen, not owned (design §5.1) —
   and each tile previews that base wearing the draft's *current* outfit, so the choice reads as a
   silhouette rather than a wardrobe.
-- **`ItemTab`** lists the whole catalogue for its slot and locks anything the player does not own
-  (`aria-disabled`, with a hint: the achievement that grants it, or a daily-calendar rarity, or "chưa
-  mở"). A tile's own picture (`ItemPreview`) is the item drawn on the figure that would actually wear it
+- **`ItemTab`** lists what the player owns — a colour-variant family shows when any member is owned
+  (`slotCards`, `categories.ts`; review 2026-09-29 No11a) — and, with **Hiện cả món chưa có** ticked, the
+  whole catalogue for its slot, locking anything the player does not own (`aria-disabled`, with a hint:
+  the achievement that grants it, or a daily-calendar rarity, or "chưa mở"). A tile's own picture (`ItemPreview`) is the item drawn on the figure that would actually wear it
   — head-and-shoulders for `head`/`face`/`frame`, the whole figure for `outfit`/`aura`, because a crop
   framed on the head would give every outfit tile the same face.
 - **`OutfitBar`** is a bookmark of a *whole* `AvatarConfigDto`, not of one item — "Mặc bộ này" replaces the

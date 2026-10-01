@@ -5,10 +5,12 @@ import {
   expectEvenCardRows,
   expectHeadingsClearOfCards,
   expectNoSidewaysScroll,
+  expectNoTextOverlapAt,
   expectNoTextOverlapDown,
   goToWardrobeTab,
   register,
   SHOTS,
+  USER_SCREEN,
 } from './support.js'
 
 /**
@@ -33,6 +35,14 @@ import {
 test.use({ contextOptions: { reducedMotion: 'reduce' } })
 
 const preview = (page: Page) => page.getByRole('img', { name: 'Phòng thay đồ' })
+
+/** Review 2026-09-29, No11a: the box that also lists what the account does not own yet — unticked whenever the
+ * wardrobe opens, hidden on "Nhân vật". Ticked with `check()` (idempotent), never `click()`: a `page.goto` to the
+ * URL the page is already on keeps the document, and with it the wardrobe's state. */
+const showLockedBox = (page: Page) => page.getByRole('checkbox', { name: 'Hiện cả món chưa có' })
+
+/** What a tab says in place of its grid when the box is unticked and nothing in it is owned (No11a). */
+const EMPTY_OWNED = 'Bạn chưa có món nào ở mục này.'
 
 async function openWardrobe(page: Page): Promise<void> {
   await page.goto('/#/avatar')
@@ -89,7 +99,8 @@ async function assertNavNeverWraps(page: Page): Promise<void> {
  * The card grids at the page's current viewport (No8b, No11b): the views of the user's screenshots — the inventory's
  * "Trang phục" group (No8-1), the wardrobe's hats (No8-2), "Danh hiệu & Huy hiệu" (No11-1) — and the other tabs that draw
  * cards. Fresh account: every card is the starter set, so all the words are locked and the hats carry colour dots,
- * which is where the rows were uneven. Ends in the inventory.
+ * which is where the rows were uneven. The grids are measured with "Hiện cả món chưa có" ticked (No11a): unticked, a
+ * fresh account's hats, faces, auras, frames and words are one line each, not a grid. Ends in the inventory.
  */
 async function expectCardGrids(page: Page): Promise<void> {
   const size = page.viewportSize()
@@ -102,6 +113,9 @@ async function expectCardGrids(page: Page): Promise<void> {
   await expectNoTextOverlapDown(page, `wardrobe, Ngoại hình, ${where}`)
 
   await goToWardrobeTab(page, 'Ngoại hình', 'Màu tóc')
+  // The box stays ticked for every tab below (it keeps its value across tab changes).
+  await showLockedBox(page).check()
+  await expect(showLockedBox(page)).toBeChecked()
   await expectEvenCardRows(panel, `wardrobe, Ngoại hình → Màu tóc, ${where}`)
   await goToWardrobeTab(page, 'Ngoại hình', 'Màu mắt')
   await expectEvenCardRows(panel, `wardrobe, Ngoại hình → Màu mắt, ${where}`)
@@ -184,6 +198,28 @@ test.describe('Blind Luck Poker Normal — bố cục tủ đồ (Kế hoạch 1
     await openWardrobe(page)
     await page.screenshot({ path: `${SHOTS}wardrobe-desktop-light.png`, fullPage: true })
 
+    // Review 2026-09-29, No11a: the wardrobe opens on what the account owns. This mount came from Settings, so the box
+    // is as every visit starts: unticked. A fresh account owns no hat — "Mũ" says so in one line, in its own panel.
+    await goToWardrobeTab(page, 'Trang phục', 'Mũ')
+    await expect(showLockedBox(page)).not.toBeChecked()
+    const panel = page.getByRole('tabpanel')
+    await expect(panel.getByText(EMPTY_OWNED)).toBeVisible()
+    await expect(panel.getByRole('button')).toHaveCount(0)
+    await expectNoTextOverlapAt(page, 'wardrobe, Trang phục → Mũ, nothing owned', [USER_SCREEN])
+    // "Quần áo": the starter tee and its four free colours (dots), and nothing locked.
+    await goToWardrobeTab(page, 'Trang phục', 'Quần áo')
+    await expect(panel.getByRole('button', { name: /^Bộ thường ngày, / })).toBeVisible()
+    await expect(panel.getByRole('group', { name: 'Bộ thường ngày' }).getByRole('button')).toHaveCount(4)
+    await expect(panel.locator('[aria-disabled="true"]')).toHaveCount(0)
+    // Ticked, the box shows the rest, and keeps showing it on the next tab.
+    await showLockedBox(page).check()
+    await expect(showLockedBox(page)).toBeChecked()
+    await expect(panel.getByRole('button', { name: /^Bộ tuxedo, / })).toBeVisible()
+    await goToWardrobeTab(page, 'Trang phục', 'Mũ')
+    await expect(showLockedBox(page)).toBeChecked()
+    await expect(panel.getByText(EMPTY_OWNED)).toHaveCount(0)
+    await expect(panel.getByRole('button', { name: /^Mũ chóp quý ông, / })).toBeVisible()
+
     // V-fix, 2026-09-27: `ItemPreview` (`ItemTab.tsx`) is shared between the wardrobe's own cards and the
     // read-only inventory grid, and `.tileIcon` (`wardrobe.module.css`) used to carry the wardrobe card's
     // own breakpoint-driven size, resizing the inventory's icon right along with it. Reuses this test's
@@ -262,6 +298,14 @@ test.describe('Blind Luck Poker Normal — bố cục tủ đồ (Kế hoạch 1
     await expectCardGrids(page)
     await expectNoSidewaysScroll(page)
     await openWardrobe(page)
+
+    // No11a on the phone: this mount came from the inventory, so the box is unticked and "Mũ" — nothing owned on a
+    // fresh account — is one line in place of the grid, clear of every other text on the page.
+    await goToWardrobeTab(page, 'Trang phục', 'Mũ')
+    await expect(showLockedBox(page)).not.toBeChecked()
+    await expect(page.getByRole('tabpanel').getByText(EMPTY_OWNED)).toBeVisible()
+    await expectNoSidewaysScroll(page)
+    await expectNoTextOverlapAt(page, 'wardrobe, Trang phục → Mũ, nothing owned')
 
     // V-fix, 2026-09-27 (design §3.1 item 4): `.outfitMenu` used to centre under every slot's portrait —
     // fine for the three middle ones, but wide enough to spill past the viewport on the two end slots

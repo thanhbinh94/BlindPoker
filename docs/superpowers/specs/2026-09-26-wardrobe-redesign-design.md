@@ -25,12 +25,14 @@ Màn tủ đồ nhìn như một phòng thay đồ của game: nhân vật lớn
 - **Cột phải**:
   1. **3 nhóm** dạng segmented có biểu tượng: Ngoại hình (Nhân vật, Màu tóc, Màu mắt) · Trang phục (Mũ, Phụ kiện mặt, Quần áo) · Trang trí (Hào quang, Khung, Danh hiệu & Huy hiệu).
   2. **Tab con** của nhóm đang chọn, gạch chân vàng khi chọn, mỗi tab kèm "đã có/tổng" (ví dụ "5/8"; tab Nhân vật không có số vì nhân vật không phải món).
-  3. **Bộ lọc**: Tất cả · Đã có · Chưa có (không hiện ở tab Thân). Bên phải hiện "n/m đã có".
+  3. **Bộ lọc** (review 29/09 No11a): một ô đánh dấu **"Hiện cả món chưa có"** (thay ba nút Tất cả · Đã có · Chưa có cũ), không hiện ở tab Nhân vật. Mặc định bỏ tích: tab chỉ liệt kê món đã có. Bên phải vẫn hiện "n/m đã có". Ô là `<input type="checkbox">` gốc trong `<label>`, cao một vùng bấm (`--tap`), `accent-color: var(--gold)` — đúng kiểu ô đánh dấu của hộp tạo phòng.
   4. **Lưới thẻ** `repeat(auto-fill, minmax(150px, 1fr))`, khoảng 14 px, lấp hết chiều ngang.
 
 ### 3.2 Điện thoại (< 768 px)
 
 Một cột theo thứ tự: đầu trang gọn (tiêu đề + "Lưu"; "Hoàn tác" thành nút biểu tượng); sân khấu 250 px (không sticky); biểu cảm cuộn ngang; 3 nhóm chiếm đủ chiều ngang; tab con; bộ lọc; lưới 3 cột; rồi "Đang dùng" và "Bộ đồ đã lưu" dạng mục thu gọn (mặc định đóng, tiêu đề ghi số món, ví dụ "Đang dùng (6)").
+
+Hàng bộ lọc trên điện thoại (No11a): ô "Hiện cả món chưa có" bên trái, "n/m đã có" bên phải, cùng một hàng ở 375 px; màn hẹp hơn thì "n/m đã có" xuống dòng dưới ô (hàng được phép xuống dòng), không cuộn ngang. Dòng "Bạn chưa có món nào ở mục này." thay lưới khi tab không có món nào đã có.
 
 ### 3.3 Máy tính bảng (768–1023 px)
 
@@ -65,7 +67,12 @@ Hai nhóm nhỏ trong cùng tab ("Danh hiệu", "Huy hiệu"), thẻ không ản
 2. **Rời màn khi chưa lưu**: giữ hộp thoại hiện có.
 3. **Tab nhớ**: nhóm và tab con đang chọn giữ nguyên khi đổi biểu cảm, lưu, áp dụng bộ đồ. Mặc định mở nhóm Ngoại hình, tab Thân.
 4. **Thứ tự thẻ** cố định: độ hiếm (Thường → Hiếm → Sử thi), rồi thứ tự catalogue. Món đang mặc không bị đưa lên đầu.
-5. **Bộ lọc** áp cho tab hiện tại, reset về "Tất cả" khi đổi tab.
+5. **Bộ lọc** (review 29/09 No11a; trước đây: áp cho tab hiện tại, reset về "Tất cả" khi đổi tab).
+   - Ô "Hiện cả món chưa có" bỏ tích mỗi lần mở tủ đồ, rồi **giữ nguyên khi đổi tab** trong lượt đó (không reset khi đổi tab, không lưu lại).
+   - **Theo họ món.** Một họ là món gốc cùng các biến thể màu của nó (cùng `asset.file`). Bỏ tích: thẻ của họ hiện khi người chơi có món gốc **hoặc bất kỳ biến thể nào**; trong thẻ, chấm của biến thể chưa có bị ẩn. Chưa có món gốc mà có biến thể thì thẻ hiện **biến thể đã có đầu tiên** (theo thứ tự catalogue): tên của nó, trạng thái đã có, bấm là mặc nó.
+   - Tích ô: mọi thứ hiện như trước — thẻ khoá, chấm khoá, thẻ là món gốc.
+   - Tab màu (Màu tóc, Màu mắt) theo cùng luật cho từng ô màu; "Tự nhiên" luôn hiện.
+   - **Không có gì để hiện.** Bỏ tích mà tab không có món nào đã có: lưới được thay bằng một dòng **"Bạn chưa có món nào ở mục này."**, nằm trong chính `tabpanel` của tab (cùng `id`, cùng `aria-labelledby`). Ở tab Danh hiệu & Huy hiệu, nhóm nào trống thì ẩn cả tiêu đề; cả hai trống thì dòng chữ hiện một lần.
 
 ## 6. Màu độ hiếm và chủ đề
 
@@ -73,7 +80,7 @@ Thêm token vào `packages/ui-kit/src/theme/tokens.css` cho cả chủ đề t�
 
 ## 7. Truy cập
 
-- Nhóm và tab con dùng `role="tablist"`/`tab`/`tabpanel`, phím mũi tên chuyển tab; biểu cảm, bộ lọc dùng nút `aria-pressed`.
+- Nhóm và tab con dùng `role="tablist"`/`tab`/`tabpanel`, phím mũi tên chuyển tab; biểu cảm dùng nút `aria-pressed`; bộ lọc là ô đánh dấu gốc trong `<label>` (tên đọc được "Hiện cả món chưa có", No11a). Tab không có gì để hiện vẫn là `tabpanel` của nó, chứa dòng chữ thay cho lưới — không phải một `tabpanel` có lưới rỗng.
 - Thẻ là `button` có `aria-pressed` (đang mặc) và `aria-disabled` + mô tả cách nhận (chưa có); nhãn đọc được: "<tên>, <độ hiếm>, đang mặc/chưa có".
 - Focus ring `--focus` rõ trên mọi phần tử bấm được; vùng bấm tối thiểu 40 px trên điện thoại.
 

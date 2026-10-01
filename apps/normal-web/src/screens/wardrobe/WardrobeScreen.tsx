@@ -21,7 +21,7 @@ import { useAvatars } from '../../avatar/useAvatars.js'
 import s from '../normal.module.css'
 import { useAsync } from '../useAsync.js'
 import { BaseTab } from './BaseTab.js'
-import { counts, GROUPS, PHONE_QUERY, panelId, subTabId, type OwnershipFilter, type TabId } from './categories.js'
+import { counts, GROUPS, PHONE_QUERY, panelId, slotCards, subTabId, type TabId } from './categories.js'
 import { CategoryNav } from './CategoryNav.js'
 import { ColourTab } from './ColourTab.js'
 import { EquippedList } from './EquippedList.js'
@@ -102,8 +102,9 @@ type Note = 'saved' | null
  * groups/tabs/filter and the active tab's cards. Phones fold the same pieces into one column, the wearing
  * list and saved outfits collapsed under `<details>`.
  *
- * Only what is owned can be equipped — the tabs list the whole catalogue, but `ItemTab` locks anything not
- * in the player's inventory — so the only refusal a correct client can provoke is a race with a grant, and
+ * Only what is owned can be equipped — the tabs list what the player owns, and with "Hiện cả món chưa có" ticked
+ * the whole catalogue, where `ItemTab` locks anything not in the player's inventory (No11a) — so the only refusal a
+ * correct client can provoke is a race with a grant, and
  * `avatarRefusal` still maps the server's codes because a save that says no with no words is a button that
  * appears to do nothing.
  *
@@ -133,7 +134,9 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
   const [draft, setDraft] = useState<AvatarConfigDto | null>(null)
   const [committed, setCommitted] = useState<AvatarConfigDto | null>(null)
   const [tab, setTab] = useState<TabId>('base')
-  const [filter, setFilter] = useState<OwnershipFilter>('all')
+  /** "Hiện cả món chưa có" (design §3.1 item 3, §5.5; No11a): unticked whenever the wardrobe opens, then kept for the
+   * visit across every tab change — never reset by `changeTab`, never stored. */
+  const [showLocked, setShowLocked] = useState(false)
   const [expression, setExpression] = useState<Expression>('neutral')
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<Note>(null)
@@ -244,11 +247,10 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
 
   const pickBase = (base: BaseId): void => commit({ ...config, base })
 
-  /** Design §5.5: the ownership filter always resets to "all" the moment the tab changes, whether that
-   * change came from `CategoryNav` itself or from a jump off the wearing list. */
+  /** A tab change from `CategoryNav` itself or from a jump off the wearing list. The "Hiện cả món chưa có" box keeps
+   * its value across it (design §5.5, No11a — it used to reset the old filter to "all"). */
   const changeTab = (next: TabId): void => {
     setTab(next)
-    setFilter('all')
   }
 
   /** "Hoàn tác" (design §5.1): the draft goes back to the last saved config, no server round trip — the
@@ -290,6 +292,10 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
   // Which cut of a gendered item the tiles show: the *draft* base's, so picking a male figure switches
   // the dealer uniform's tile to the trousers the preview beside it is now wearing.
   const wear = bases.get(config.base)?.wear
+  // The words tab's one empty line (No11a): neither of its two slots has a card to list. Asked of the same
+  // `slotCards` each `ItemTab` draws from, so the line and the two (then absent) headings never disagree.
+  const wordsEmpty =
+    tab === 'words' && (['title', 'badge'] as const).every((slot) => slotCards(slot, loaded.catalog, owned, showLocked).length === 0)
   // The phone header's collapsible "Đang mặc (n)" summary (design §3.2): the two always-filled rows
   // (Thân, Trang phục) plus however many of `api.ts`'s own `OPTIONAL_SLOTS` the draft currently fills —
   // the same eight slots `EquippedList`'s `ROWS` lists past `base`/`outfit`, read off the one source
@@ -339,7 +345,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
 
   const pickerNode = (
     <div className={w.picker}>
-      <CategoryNav tab={tab} onTab={changeTab} counts={tabCounts} filter={filter} onFilter={setFilter} showFilter={tab !== 'base'} />
+      <CategoryNav tab={tab} onTab={changeTab} counts={tabCounts} showLocked={showLocked} onShowLocked={setShowLocked} showFilter={tab !== 'base'} />
 
       {tab === 'base' ? (
         <BaseTab bases={loaded.avatarCatalog.bases} draft={config} items={items} onPick={pickBase} panelId={panelId('base')} labelledBy={subTabId('base')} />
@@ -347,8 +353,10 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
         // One `tabpanel` for the whole tab (design §7) — `title` and `badge` are two `ItemTab` calls, not
         // two tabs, and a `role="tabpanel"` has to appear exactly once for the sub-tab that names it;
         // wrapping both calls here (rather than letting each draw its own, as it used to) is what keeps
-        // their headings *inside* the one panel too, instead of sitting outside any panel at all.
+        // their headings *inside* the one panel too, instead of sitting outside any panel at all. A slot with
+        // nothing to list draws nothing, heading included; with both empty the panel says so once (No11a).
         <div role="tabpanel" id={panelId('words')} aria-labelledby={subTabId('words')}>
+          {wordsEmpty ? <p className={w.emptyOwned}>{t('wardrobe.emptyOwned')}</p> : null}
           <ItemTab
             slot="title"
             catalog={loaded.catalog}
@@ -356,7 +364,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
             achievements={loaded.achievements}
             draft={config}
             wear={wear}
-            filter={filter}
+            showLocked={showLocked}
             onPick={(id) => pick('title', id)}
           />
           <ItemTab
@@ -366,7 +374,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
             achievements={loaded.achievements}
             draft={config}
             wear={wear}
-            filter={filter}
+            showLocked={showLocked}
             onPick={(id) => pick('badge', id)}
           />
         </div>
@@ -377,7 +385,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
           owned={owned}
           achievements={loaded.achievements}
           draft={config}
-          filter={filter}
+          showLocked={showLocked}
           onPick={(id) => commit(withSlot(config, tab, id))}
           panelId={panelId(tab)}
           labelledBy={subTabId(tab)}
@@ -390,7 +398,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
           achievements={loaded.achievements}
           draft={config}
           wear={wear}
-          filter={filter}
+          showLocked={showLocked}
           onPick={(id) => pick(tab, id)}
           panelId={panelId(tab)}
           labelledBy={subTabId(tab)}

@@ -4,7 +4,7 @@ import type { AchievementDefDto, AvatarConfigDto, ItemDto, ItemSlot } from '../.
 import { hintFor } from '../catalog.js'
 import shared from '../normal.module.css'
 import { ItemCard, WordCard } from './cards.js'
-import { applyFilter, tabItems, tabOfSlot, type OwnershipFilter } from './categories.js'
+import { slotCards } from './categories.js'
 import s from './wardrobe.module.css'
 
 /** The slots that draw a picture; `title` and `badge` are words and preview as nothing. */
@@ -73,7 +73,8 @@ export interface ItemTabProps {
   draft: AvatarConfigDto
   /** The draft base's wear, so a gendered item's tile shows the cut the preview is wearing. */
   wear?: string
-  filter: OwnershipFilter
+  /** "Hiện cả món chưa có" (No11a): unticked, only the families the player owns a member of. */
+  showLocked: boolean
   onPick: (itemId: string) => void
   /** This tab's own panel id and the tab that labels it (design §7) — omitted for `title`/`badge`, whose
    * two calls share one `words` panel rendered one level up instead (`WardrobeScreen`): a `role="tabpanel"`
@@ -82,74 +83,65 @@ export interface ItemTabProps {
   labelledBy?: string
 }
 
-/**
- * Every row of a slot's colour variants (design §4.1): items that share `asset.file` with another item
- * but carry their own `asset.tint` are not separate cards — they are dots under the item whose file
- * they share. The original the variants vary has no `tint` at all, which is exactly what tells a card
- * apart from a dot.
- */
-function variantsByFile(rows: readonly ItemDto[]): Map<string, ItemDto[]> {
-  const map = new Map<string, ItemDto[]>()
-  for (const row of rows) {
-    if (row.asset?.tint === undefined) continue
-    const file = row.asset.file
-    const list = map.get(file)
-    if (list === undefined) map.set(file, [row])
-    else list.push(row)
-  }
-  return map
-}
-
 /** The words tab's two sub-headings (design §4.4) — `title` and `badge` are the only slots this names. */
 const WORD_HEADING: Partial<Record<ItemSlot, string>> = { title: 'wardrobe.words.titles', badge: 'wardrobe.words.badges' }
 
 /**
- * One wardrobe slot's cards (design §4, §7): `tabItems` for the ordering and the colour-variant split,
- * `applyFilter` for the "all/owned/locked" filter, owned pieces clickable and the rest locked with a
- * reason. `outfit`'s cards are never locked-*and*-worn at once — every account starts with the default
- * outfit owned — but the lock logic here does not know that; it just asks `owned`.
+ * One wardrobe slot's cards (design §4, §7): `slotCards` (`./categories.js`) for the ordering, the colour-variant
+ * families and the "Hiện cả món chưa có" box, owned pieces clickable and the rest locked with a reason. `outfit`'s
+ * cards are never locked-*and*-worn at once — every account starts with the default outfit owned — but the lock logic
+ * here does not know that; it just asks `owned`.
  *
  * `title`/`badge` (the words tab, called once per slot from `WardrobeScreen`) draw as `WordCard` under
  * their own sub-heading instead of `ItemCard`; every other slot draws pictured `ItemCard`s, each with its
  * colour variants as a dot row (design §4.1) — a variant is never one of these cards itself.
+ *
+ * Nothing to list (No11a — the box unticked and nothing owned here): a slot that is its own tab keeps its `tabpanel`
+ * and says so in one line in place of the grid; a word slot draws nothing at all, heading included, and the words
+ * panel says it once when both are empty (`WardrobeScreen`).
  */
-export function ItemTab({ slot, catalog, owned, achievements, draft, wear, filter, onPick, panelId, labelledBy }: ItemTabProps) {
+export function ItemTab({ slot, catalog, owned, achievements, draft, wear, showLocked, onPick, panelId, labelledBy }: ItemTabProps) {
   const { t } = useTranslation('normal')
-  const rows = tabItems(tabOfSlot(slot), catalog).filter((item) => item.slot === slot)
-  const variants = variantsByFile(catalog.filter((item) => item.slot === slot))
-  const cards = applyFilter(rows, owned, filter)
+  const cards = slotCards(slot, catalog, owned, showLocked)
   const heading = WORD_HEADING[slot]
-  // A card with no colour variants keeps the dot row's height when another card shown has some (No8b), so every
-  // card in the grid ends its lock hint on the same line.
-  const reserveDots = cards.some((item) => item.asset !== undefined && (variants.get(item.asset.file)?.length ?? 0) > 0)
+  // A card with no colour dots keeps the dot row's height when another card shown has some (No8b), so every
+  // card in the grid ends its lock hint on the same line — counted on the dots actually drawn, not the catalogue's.
+  const reserveDots = cards.some((card) => card.dots.length > 0)
   // `title`/`badge` render inside the caller's own shared `tabpanel` (see `panelId`'s own comment above),
   // so this `<div>` carries no panel role of its own then; every other slot is its own tab and carries the
   // role itself, exactly as before.
   const isOwnPanel = heading === undefined
+  const empty = cards.length === 0
+  if (empty && !isOwnPanel) return null
 
   return (
     <>
       {heading === undefined ? null : <h3 className={`${shared.groupTitle} ${s.wordHeading}`}>{t(heading)}</h3>}
-      <div className={s.cardGrid} role={isOwnPanel ? 'tabpanel' : undefined} id={isOwnPanel ? panelId : undefined} aria-labelledby={isOwnPanel ? labelledBy : undefined}>
-        {cards.map((item) => {
-          const isOwned = owned.has(item.id)
-          const wearing = draft[slot] === item.id
-          const hint = isOwned ? '' : hintFor(item, achievements, t)
+      {/* Empty, the panel stays the same element (same `id`, same `aria-labelledby`) and only the grid goes. */}
+      <div
+        className={empty ? undefined : s.cardGrid}
+        role={isOwnPanel ? 'tabpanel' : undefined}
+        id={isOwnPanel ? panelId : undefined}
+        aria-labelledby={isOwnPanel ? labelledBy : undefined}
+      >
+        {empty ? <p className={s.emptyOwned}>{t('wardrobe.emptyOwned')}</p> : null}
+        {cards.map(({ original, shown, dots }) => {
+          const isOwned = owned.has(shown.id)
+          const wearing = draft[slot] === shown.id
+          const hint = isOwned ? '' : hintFor(shown, achievements, t)
 
           if (heading !== undefined) {
-            return <WordCard key={item.id} item={item} owned={isOwned} wearing={wearing} hint={hint} onPick={onPick} />
+            return <WordCard key={original.id} item={shown} owned={isOwned} wearing={wearing} hint={hint} onPick={onPick} />
           }
 
-          const dots = item.asset === undefined ? undefined : variants.get(item.asset.file)
           const variantProps =
-            dots === undefined || dots.length === 0
-              ? undefined
-              : dots.map((variant) => ({ item: variant, owned: owned.has(variant.id), wearing: draft[slot] === variant.id }))
+            dots.length === 0 ? undefined : dots.map((variant) => ({ item: variant, owned: owned.has(variant.id), wearing: draft[slot] === variant.id }))
 
           return (
             <ItemCard
-              key={item.id}
-              item={item}
+              key={original.id}
+              item={shown}
+              family={original}
               wear={wear}
               owned={isOwned}
               wearing={wearing}

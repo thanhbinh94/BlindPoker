@@ -201,7 +201,8 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 | J-05 | Lưu bộ đồ vào ô trống → mặc bộ khác → áp dụng lại bộ đã lưu | Đúng bộ đã lưu | P2 |
 | J-06 | Bấm các biểu cảm (Vui, Buồn, …) | Chỉ đổi hình xem trước, không cần lưu | P3 |
 | J-07 | Trên điện thoại: cuộn trang tủ đồ, mở "Đang dùng", "Bộ đồ đã lưu" | Không tràn ngang, bấm được mọi thẻ | P2 |
-| J-08 | Tủ đồ và Kho đồ: nhìn các hàng thẻ trong từng tab (Mũ, Quần áo, Danh hiệu & Huy hiệu…) | Thẻ cùng hàng cao bằng nhau, độ hiếm nằm ngay dưới tên; tiêu đề "Huy hiệu" không dính vào thẻ "Tay nóng" phía trên (review 29/09 No8b, No11b) | P3 |
+| J-08 | Tủ đồ và Kho đồ: nhìn các hàng thẻ trong từng tab (Mũ, Quần áo, Danh hiệu & Huy hiệu…; ở tủ đồ tích "Hiện cả món chưa có" để thấy cả thẻ chưa có) | Thẻ cùng hàng cao bằng nhau, độ hiếm nằm ngay dưới tên; tiêu đề "Huy hiệu" không dính vào thẻ "Tay nóng" phía trên (review 29/09 No8b, No11b) | P3 |
+| J-09 | Tài khoản mới: mở tủ đồ → tab Mũ → Quần áo → tích "Hiện cả món chưa có" → đổi sang Mũ, Danh hiệu & Huy hiệu → rời tủ đồ rồi mở lại | Mặc định chỉ hiện món đã có: Mũ ghi "Bạn chưa có món nào ở mục này.", Quần áo có bộ thường ngày với 4 chấm màu áo phông. Tích ô thì hiện cả món chưa có (có khóa) và ô vẫn tích khi đổi tab; mở lại tủ đồ thì ô bỏ tích. Có biến thể màu mà chưa có món gốc (ví dụ được tặng "Mũ nồi xanh dương"): thẻ hiện chính biến thể đó, bấm là mặc (review 29/09 No11a) | P2 |
 
 ### K. Kho đồ, Thành tựu, Hồ sơ
 

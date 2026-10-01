@@ -112,7 +112,9 @@ screen, on the accounts they already make — the default e2e may not register m
   on the phone; and the lobby's create-room dialog in both modes: all three (`normal.spec.ts`);
 - room taking seats, in a hand, and on the result card counting down and held: all three; on the phone the stage
   is also read scrolled to its foot (`normal.spec.ts`);
-- wardrobe (Ngoại hình, Mũ, Danh hiệu & Huy hiệu) and inventory: all three, plus 900×1100 (`wardrobe-layout.spec.ts`);
+- wardrobe (Ngoại hình, Mũ, Danh hiệu & Huy hiệu) and inventory: all three, plus 900×1100, measured with "Hiện cả món
+  chưa có" ticked (`wardrobe-layout.spec.ts`); the wardrobe's owned-only empty state — a fresh account's Mũ, the box
+  unticked, one line in place of the grid (No11a): 1920×940 and 375×812 (`wardrobe-layout.spec.ts`);
   a coloured outfit worn: 1920×940 and 1366×768 (`avatar-tint.spec.ts`). The wardrobe's other six tabs are not read;
 - profile with a hand in its history, achievements, Settings and its sign-out dialog: all three; on the phone the
   profile is also read before the hand (`normal.spec.ts`); Settings in the light theme at 1440×900, 900×1100 and

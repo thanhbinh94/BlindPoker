@@ -269,10 +269,10 @@
       "words": "Danh hiệu & Huy hiệu"
     },
     "filter": {
-      "all": "Tất cả",
-      "owned": "Đã có",
       "locked": "Chưa có"
     },
+    "showLocked": "Hiện cả món chưa có",
+    "emptyOwned": "Bạn chưa có món nào ở mục này.",
     "ownedCount": "{{owned}}/{{total}} đã có",
     "wearingBadge": "Đang dùng",
     "words": {

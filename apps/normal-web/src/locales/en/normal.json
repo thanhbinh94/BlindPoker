@@ -269,10 +269,10 @@
       "words": "Title & Badge"
     },
     "filter": {
-      "all": "All",
-      "owned": "Owned",
       "locked": "Locked"
     },
+    "showLocked": "Show items you don't own yet",
+    "emptyOwned": "You don't own anything here yet.",
     "ownedCount": "{{owned}}/{{total}} owned",
     "wearingBadge": "Wearing",
     "words": {
