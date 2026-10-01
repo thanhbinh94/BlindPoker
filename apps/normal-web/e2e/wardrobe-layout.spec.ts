@@ -168,6 +168,55 @@ function outfitMenuBox(page: Page) {
   return page.getByRole('button', { name: 'Mặc bộ này' }).locator('xpath=..')
 }
 
+/** The expression stepper under the stage (review 2026-09-29 round 2, No10): `‹  Vui  ›`, one row at every width,
+ * the name between the two buttons, inside the column. Desktop keeps the row as short as the six chips it replaced
+ * (30 px; the left column must keep fitting a 900 px window); a phone's two buttons are each a `--tap` (44 px)
+ * square. Steps once each way, so the buttons are proven to act in a real browser, and ends where it began. */
+async function expectStepper(page: Page, where: string, phone: boolean): Promise<void> {
+  const group = page.getByRole('group', { name: 'Xem thử biểu cảm' })
+  const name = group.getByRole('status')
+  await expect(name, `${where}: the stepper names the current expression`).toBeVisible()
+  const [row, prev, next, label] = await Promise.all([
+    group.boundingBox(),
+    group.getByRole('button', { name: 'Biểu cảm trước' }).boundingBox(),
+    group.getByRole('button', { name: 'Biểu cảm sau' }).boundingBox(),
+    name.boundingBox(),
+  ])
+  if (!row || !prev || !next || !label) throw new Error(`${where}: the stepper has no layout`)
+
+  if (phone) {
+    for (const [which, box] of [['previous', prev], ['next', next]] as const) {
+      expect(box.width, `${where}: the ${which} button is at least 44 px wide`).toBeGreaterThanOrEqual(44)
+      expect(box.height, `${where}: the ${which} button is at least 44 px tall`).toBeGreaterThanOrEqual(44)
+    }
+  } else {
+    expect(row.height, `${where}: the stepper row is no taller than the chips were (about 36 px at most)`).toBeLessThanOrEqual(36)
+  }
+  // One line: previous, name, next, left to right, centred on one y.
+  expect(prev.x + prev.width, `${where}: the name starts after the previous button`).toBeLessThanOrEqual(label.x)
+  expect(label.x + label.width, `${where}: the name ends before the next button`).toBeLessThanOrEqual(next.x)
+  const centre = (box: { y: number; height: number }) => box.y + box.height / 2
+  expect(Math.abs(centre(prev) - centre(next)), `${where}: the buttons share a line`).toBeLessThan(1)
+  expect(Math.abs(centre(prev) - centre(label)), `${where}: the name shares it`).toBeLessThan(4)
+  expect(prev.x, `${where}: the row stays inside the column on the left`).toBeGreaterThanOrEqual(row.x - 0.5)
+  expect(next.x + next.width, `${where}: the row stays inside the column on the right`).toBeLessThanOrEqual(row.x + row.width + 0.5)
+
+  const before = await name.textContent()
+  await group.getByRole('button', { name: 'Biểu cảm sau' }).click()
+  await expect(name, `${where}: next moves on to another expression`).not.toHaveText(before ?? '')
+  await group.getByRole('button', { name: 'Biểu cảm trước' }).click()
+  await expect(name, `${where}: previous comes back`).toHaveText(before ?? '')
+}
+
+/** The left column (stage, stepper, wearing list, saved outfits) holds all its rows in its own box — no inner
+ * scroll — on a window as tall as `USER_SCREEN`'s or the 900 px one (the note on `.equippedRows`,
+ * `wardrobe.module.css`). The 768 px laptop is not asked: its column has scrolled inside itself since before No10. */
+async function expectColumnFits(page: Page, where: string): Promise<void> {
+  const column = page.getByRole('group', { name: 'Xem thử biểu cảm' }).locator('xpath=../..')
+  const { scrollHeight, clientHeight } = await column.evaluate((el) => ({ scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }))
+  expect(scrollHeight, `${where}: the left column fits its box (content ${scrollHeight} px, box ${clientHeight} px)`).toBeLessThanOrEqual(clientHeight)
+}
+
 async function assertOutfitMenuWithinViewport(page: Page): Promise<void> {
   const box = await outfitMenuBox(page).boundingBox()
   expect(box, 'the outfit menu is open and has a bounding box').not.toBeNull()
@@ -183,6 +232,10 @@ test.describe('Blind Luck Poker Normal — bố cục tủ đồ (Kế hoạch 1
     await openWardrobe(page)
 
     await assertNavNeverWraps(page)
+
+    // No10: the expression stepper, and the left column it sits in, at this project's 1440 × 900 window.
+    await expectStepper(page, 'wardrobe, desktop 1440×900', false)
+    await expectColumnFits(page, 'wardrobe, desktop 1440×900')
 
     // The selected base card is ringed in gold without changing size: every card in the base grid is as tall
     // as its neighbours (a 2 px border on the selected one used to shrink it and nudge its portrait).
@@ -240,6 +293,8 @@ test.describe('Blind Luck Poker Normal — bố cục tủ đồ (Kế hoạch 1
     ]) {
       await page.setViewportSize(size)
       await expectCardGrids(page)
+      await expectStepper(page, `wardrobe, ${size.width}×${size.height}`, false)
+      if (size.height >= 900) await expectColumnFits(page, `wardrobe, ${size.width}×${size.height}`)
     }
     // Bug 8: the account rail fits one row at every desktop width that used to overflow.
     for (const width of [700, 900, 1100, 1440]) {
@@ -257,6 +312,8 @@ test.describe('Blind Luck Poker Normal — bố cục tủ đồ (Kế hoạch 1
     await openWardrobe(page)
 
     await assertNavNeverWraps(page)
+    // No10: the 300 px tablet column, where the six chips had wrapped to two rows.
+    await expectStepper(page, 'wardrobe, tablet 900×1100', false)
     await page.screenshot({ path: `${SHOTS}wardrobe-tablet-dark.png`, fullPage: true })
 
     await useLightTheme(page)
@@ -277,6 +334,8 @@ test.describe('Blind Luck Poker Normal — bố cục tủ đồ (Kế hoạch 1
     await expectNoSidewaysScroll(page)
     await assertNavNeverWraps(page)
     await expectNoSidewaysScroll(page)
+    // No10: two thumb-sized buttons either side of the name.
+    await expectStepper(page, 'wardrobe, phone 375×812', true)
     await page.screenshot({ path: `${SHOTS}wardrobe-mobile-dark.png`, fullPage: true })
 
     await useLightTheme(page)

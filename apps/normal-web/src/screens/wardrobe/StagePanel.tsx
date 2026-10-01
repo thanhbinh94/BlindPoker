@@ -1,10 +1,17 @@
 import { Chibi, type ChibiConfig, type Expression } from '@bp/ui-kit'
+import type { KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import s from './wardrobe.module.css'
 
 /** The six faces every base ships (design §3.1 item 2) — same list `WardrobeScreen` used before this
- * component existed, moved here because the expression row is now this component's own. */
+ * component existed, moved here because the expression row is now this component's own. The order is the
+ * stepper's order: "next" from the last wraps to the first, "previous" from the first to the last. */
 const EXPRESSIONS: readonly Expression[] = ['neutral', 'happy', 'sad', 'surprised', 'closed', 'sleep']
+
+/** Plain-glyph arrows on the stepper's two buttons (aria-hidden, like `WardrobeScreen`'s `UNDO_GLYPH`): each
+ * button's own `aria-label` names it, the glyph only draws it. */
+const PREV_GLYPH = '‹'
+const NEXT_GLYPH = '›'
 
 export interface StagePanelProps {
   subject: ChibiConfig
@@ -26,12 +33,30 @@ export interface StagePanelProps {
 
 /**
  * The left column's stage (design §3.1 items 1–2): a lit podium the chibi stands on, and the expression
- * picker beneath it. `portrait` is a swap, not an addition — the frame tab replaces the full figure with
- * its own framed portrait rather than showing a second small chibi beside the first, unlike the picker
- * column's pre-redesign behaviour.
+ * stepper beneath it — `‹  Vui  ›`, two buttons around the current face's name (review 2026-09-29 round 2,
+ * No10; the six chips it replaces were cramped, Vietnamese names and all, and wrapped on a narrow column).
+ * `portrait` is a swap, not an addition — the frame tab replaces the full figure with its own framed portrait
+ * rather than showing a second small chibi beside the first, unlike the picker column's pre-redesign
+ * behaviour.
  */
 export function StagePanel({ subject, expression, onExpression, portrait, compact = false, fullSize = 290 }: StagePanelProps) {
   const { t } = useTranslation('normal')
+
+  /** One step along `EXPRESSIONS`, wrapping at both ends — a list of six is short enough that going the
+   * other way round is how a player reaches "Ngủ" from "Bình thường". */
+  const step = (delta: 1 | -1) => {
+    const next = EXPRESSIONS[(EXPRESSIONS.indexOf(expression) + delta + EXPRESSIONS.length) % EXPRESSIONS.length]
+    if (next !== undefined) onExpression(next)
+  }
+
+  /** ArrowLeft/ArrowRight anywhere in the group step as well, whichever of the two buttons holds focus. A
+   * chord with Alt, Ctrl or Meta is the browser's own (Alt+← is "back") and is left alone. */
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    event.preventDefault()
+    step(event.key === 'ArrowRight' ? 1 : -1)
+  }
 
   return (
     <div className={s.stagePanel}>
@@ -45,19 +70,16 @@ export function StagePanel({ subject, expression, onExpression, portrait, compac
         </div>
       </div>
 
-      <div className={s.expressionRow} role="group" aria-label={t('wardrobe.expression.legend')}>
-        {EXPRESSIONS.map((expr) => (
-          <button
-            key={expr}
-            type="button"
-            className={s.expressionBtn}
-            aria-pressed={expression === expr}
-            aria-label={t(`wardrobe.expression.${expr}`)}
-            onClick={() => onExpression(expr)}
-          >
-            {t(`wardrobe.expression.${expr}`)}
-          </button>
-        ))}
+      <div className={s.expressionRow} role="group" aria-label={t('wardrobe.expression.legend')} onKeyDown={onKeyDown}>
+        <button type="button" className={s.expressionStep} aria-label={t('wardrobe.expression.prev')} onClick={() => step(-1)}>
+          <span aria-hidden="true">{PREV_GLYPH}</span>
+        </button>
+        <output className={s.expressionName} aria-live="polite">
+          {t(`wardrobe.expression.${expression}`)}
+        </output>
+        <button type="button" className={s.expressionStep} aria-label={t('wardrobe.expression.next')} onClick={() => step(1)}>
+          <span aria-hidden="true">{NEXT_GLYPH}</span>
+        </button>
       </div>
     </div>
   )

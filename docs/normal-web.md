@@ -48,7 +48,7 @@ apps/normal-web/
       AuthScreen.tsx    sign in and register, one card, two modes
       {Profile,Achievements,Daily,Settings}Screen.tsx   four of the five lazy account screens
       wardrobe/
-        WardrobeScreen.tsx   the fifth — preview + expression picker + seven tabs + the outfit bar
+        WardrobeScreen.tsx   the fifth — preview + expression stepper + seven tabs + the outfit bar
         BaseTab.tsx          the two fixed bases (f01/m01) — chosen, never locked
         ItemTab.tsx          one slot's tiles: owned and clickable, or locked with a reason
         OutfitBar.tsx        five saved snapshots — apply / save here / rename / delete
@@ -162,7 +162,9 @@ result against ten acceptance criteria, and writes `avatar-manifest.json`. Until
 ### The wardrobe
 
 `/avatar` — `wardrobe/WardrobeScreen.tsx`. A `Chibi` preview on the left, sized 192 px, with an
-expression row to try each of the six faces and the save button below it; seven tabs on the right —
+expression stepper under it to try each of the six faces — `‹  Vui  ›`, a previous and a next button around the
+current face's name, wrapping at both ends, ArrowLeft/ArrowRight too (review 2026-09-29, No10; `wardrobe/StagePanel.tsx`) —
+and the save button below it; seven tabs on the right —
 **Nhân vật** (base), then a tile grid per equipped slot (**Mũ**, **Mặt**, **Quần áo**, **Aura**,
 **Khung**), then **Danh hiệu & Huy hiệu** (title and badge together, the two slots with no picture).
 The outfit bar sits under both columns, five slots wide.

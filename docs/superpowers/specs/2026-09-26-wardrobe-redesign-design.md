@@ -19,7 +19,7 @@ Màn tủ đồ nhìn như một phòng thay đồ của game: nhân vật lớn
 - **Hai cột** `360px | 1fr`, khoảng cách 28 px.
 - **Cột trái** (thẻ nền `--bg-elev`, bo 16 px, `position: sticky; top: 16px`):
   1. **Sân khấu** cao 330 px: nền gradient tối, vệt sáng vàng mờ sau nhân vật, bệ elip mờ dưới chân; chibi toàn thân cao 320 px. Khi đang ở tab Khung, sân khấu hiện chân dung tròn 240 px có khung (như hiện nay hiện thêm ảnh nhỏ), không hiện toàn thân.
-  2. **Biểu cảm**: một hàng segmented 6 nút nhỏ, không bao giờ gãy dòng.
+  2. **Biểu cảm** (review 29/09 No10): một hàng bộ chuyển `‹  Vui  ›` dưới sân khấu — nút "Biểu cảm trước" và "Biểu cảm sau" hai bên, tên biểu cảm đang xem ở giữa (trong `<output aria-live="polite">`). Sáu biểu cảm đi theo thứ tự Bình thường, Vui, Buồn, Ngạc nhiên, Nhắm mắt, Ngủ; bấm "sau" ở Ngủ thì về Bình thường, bấm "trước" ở Bình thường thì sang Ngủ. Phím ← → trong nhóm cũng chuyển (trừ khi giữ Alt, Ctrl hoặc Meta). Hàng cao 30 px, đúng bằng hàng 6 nút cũ (hàng đó từng bị chữ 11 px, chật và xuống hai dòng ở cột 300 px), để cột trái vẫn vừa cửa sổ cao 900 px. Chỉ đổi hình xem trước, không lưu; chân dung có khung ở tab Khung đổi theo.
   3. **Đang dùng**: danh sách mỗi slot một dòng — biểu tượng, tên slot, tên món (màu chữ theo độ hiếm; màu tóc/mắt có chấm màu). Thứ tự: Nhân vật, Màu tóc, Màu mắt, Mũ, Phụ kiện mặt, Quần áo, Hào quang, Khung, Danh hiệu, Huy hiệu. Slot trống ghi "Không có" (màu tóc/mắt trống ghi "Tự nhiên"). Slot tuỳ chọn đang có món có nút "×" để bỏ; Nhân vật và Quần áo không có "×". Bấm vào một dòng mở đúng nhóm/tab của slot đó.
   4. **Bộ đồ đã lưu**: 5 chân dung tròn 54 px (ô trống: vòng nét đứt có "+" và chữ "Trống"), tên bên dưới. Bấm ô có đồ mở menu nhỏ: Mặc bộ này · Lưu đè · Đổi tên · Xóa. Bấm ô trống mở hộp đặt tên để lưu bộ hiện tại vào ô đó. Các hộp thoại dùng lại luồng hiện có của `OutfitBar`.
 - **Cột phải**:
@@ -30,7 +30,7 @@ Màn tủ đồ nhìn như một phòng thay đồ của game: nhân vật lớn
 
 ### 3.2 Điện thoại (< 768 px)
 
-Một cột theo thứ tự: đầu trang gọn (tiêu đề + "Lưu"; "Hoàn tác" thành nút biểu tượng); sân khấu 250 px (không sticky); biểu cảm cuộn ngang; 3 nhóm chiếm đủ chiều ngang; tab con; bộ lọc; lưới 3 cột; rồi "Đang dùng" và "Bộ đồ đã lưu" dạng mục thu gọn (mặc định đóng, tiêu đề ghi số món, ví dụ "Đang dùng (6)").
+Một cột theo thứ tự: đầu trang gọn (tiêu đề + "Lưu"; "Hoàn tác" thành nút biểu tượng); sân khấu 250 px (không sticky); bộ chuyển biểu cảm `‹  tên  ›` (No10), mỗi nút một ô 44 px (`--tap`) nên hàng cao 44 px; 3 nhóm chiếm đủ chiều ngang; tab con; bộ lọc; lưới 3 cột; rồi "Đang dùng" và "Bộ đồ đã lưu" dạng mục thu gọn (mặc định đóng, tiêu đề ghi số món, ví dụ "Đang dùng (6)").
 
 Hàng bộ lọc trên điện thoại (No11a): ô "Hiện cả món chưa có" bên trái, "n/m đã có" bên phải, cùng một hàng ở 375 px; màn hẹp hơn thì "n/m đã có" xuống dòng dưới ô (hàng được phép xuống dòng), không cuộn ngang. Dòng "Bạn chưa có món nào ở mục này." thay lưới khi tab không có món nào đã có.
 
@@ -83,7 +83,7 @@ Thêm token vào `packages/ui-kit/src/theme/tokens.css` cho cả chủ đề t�
 
 ## 7. Truy cập
 
-- Nhóm và tab con dùng `role="tablist"`/`tab`/`tabpanel`, phím mũi tên chuyển tab; biểu cảm dùng nút `aria-pressed`; bộ lọc là ô đánh dấu gốc trong `<label>` (tên đọc được "Hiện cả món chưa có", No11a). Tab không có gì để hiện vẫn là `tabpanel` của nó, chứa dòng chữ thay cho lưới — không phải một `tabpanel` có lưới rỗng.
+- Nhóm và tab con dùng `role="tablist"`/`tab`/`tabpanel`, phím mũi tên chuyển tab; biểu cảm là một `role="group"` (nhãn "Xem thử biểu cảm") gồm hai nút có tên "Biểu cảm trước"/"Biểu cảm sau" và tên biểu cảm đang xem trong `<output aria-live="polite">`, nên đổi biểu cảm được đọc lên mà không cần đưa focus tới tên (No10); phím ← → trong nhóm cũng chuyển; bộ lọc là ô đánh dấu gốc trong `<label>` (tên đọc được "Hiện cả món chưa có", No11a). Tab không có gì để hiện vẫn là `tabpanel` của nó, chứa dòng chữ thay cho lưới — không phải một `tabpanel` có lưới rỗng.
 - Thẻ là `button` có `aria-pressed` (đang mặc) và `aria-disabled` + mô tả cách nhận (chưa có); nhãn đọc được: "<tên>, <độ hiếm>, đang mặc/chưa có".
 - Focus ring `--focus` rõ trên mọi phần tử bấm được; vùng bấm tối thiểu 40 px trên điện thoại.
 

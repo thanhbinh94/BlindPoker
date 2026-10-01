@@ -275,6 +275,8 @@
     },
     "expression": {
       "legend": "Xem thử biểu cảm",
+      "prev": "Biểu cảm trước",
+      "next": "Biểu cảm sau",
       "neutral": "Bình thường",
       "happy": "Vui",
       "sad": "Buồn",

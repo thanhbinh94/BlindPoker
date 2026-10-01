@@ -275,6 +275,8 @@
     },
     "expression": {
       "legend": "Preview expression",
+      "prev": "Previous expression",
+      "next": "Next expression",
       "neutral": "Neutral",
       "happy": "Happy",
       "sad": "Sad",
