@@ -180,9 +180,11 @@ wardrobe's "n/m đã có" counts remain.
 - **`ItemTab`** lists what the player owns — a colour-variant family shows when any member is owned
   (`slotCards`, `categories.ts`; review 2026-09-29 No11a) — and, with **Hiện cả món chưa có** ticked, the
   whole catalogue for its slot, locking anything the player does not own (`aria-disabled`, with a hint:
-  the achievement that grants it, or a daily-calendar rarity, or "chưa mở"). A tile's own picture (`ItemPreview`) is the item drawn on the figure that would actually wear it
-  — head-and-shoulders for `head`/`face`/`frame`, the whole figure for `outfit`/`aura`, because a crop
-  framed on the head would give every outfit tile the same face.
+  the achievement that grants it, or a daily-calendar rarity, or "chưa mở"). A tile's own picture (`ItemPreview`) is
+  the item's pipeline icon (`docs/avatar-2d.md` §4.2), and a colour variant's is that icon tinted to the variant's
+  colour through `useTintedLayer` (review 2026-09-29 No8a). A family's card is the member being worn, when one is —
+  its picture, name, "Đang dùng" and click — and its dot row lists the whole family, the original first as an
+  untinted dot.
 - **`OutfitBar`** is a bookmark of a *whole* `AvatarConfigDto`, not of one item — "Mặc bộ này" replaces the
   draft outright, "Lưu vào đây" snapshots whatever is currently equipped into that slot under a name up
   to 24 characters. Both round-trip the server (`PUT /api/me/outfits/:slot`, `POST

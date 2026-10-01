@@ -205,10 +205,11 @@ test.describe('Blind Luck Poker Normal — bố cục tủ đồ (Kế hoạch 1
     await expect(panel.getByText(EMPTY_OWNED)).toBeVisible()
     await expect(panel.getByRole('button')).toHaveCount(0)
     await expectNoTextOverlapAt(page, 'wardrobe, Trang phục → Mũ, nothing owned', [USER_SCREEN])
-    // "Quần áo": the starter tee and its four free colours (dots), and nothing locked.
+    // "Quần áo": the starter tee and its four free colours, and nothing locked. The dot row is the whole family, the
+    // starter itself first as an untinted dot (No8a): five.
     await goToWardrobeTab(page, 'Trang phục', 'Quần áo')
     await expect(panel.getByRole('button', { name: /^Bộ thường ngày, / })).toBeVisible()
-    await expect(panel.getByRole('group', { name: 'Bộ thường ngày' }).getByRole('button')).toHaveCount(4)
+    await expect(panel.getByRole('group', { name: 'Bộ thường ngày' }).getByRole('button')).toHaveCount(5)
     await expect(panel.locator('[aria-disabled="true"]')).toHaveCount(0)
     // Ticked, the box shows the rest, and keeps showing it on the next tab.
     await showLockedBox(page).check()

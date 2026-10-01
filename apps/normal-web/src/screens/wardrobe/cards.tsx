@@ -69,8 +69,10 @@ function RarityLabel({ rarity }: { rarity: Rarity }) {
 }
 
 export interface ItemCardProps {
-  /** The family member the card draws, names and picks (`FamilyCard.shown`, `./categories.js`): the original, or —
-   * box unticked, original not owned — the first owned colour variant (No11a). */
+  /** The family member the card draws, names and picks (`FamilyCard.shown`, `./categories.js`): the member worn in
+   * the slot (No8a); else the original, when it is owned or the box is ticked; else the first owned colour variant
+   * (No11a). Everything the button says and does is this member's — picture (tinted when it is a colour variant),
+   * name, rarity, "Đang dùng", lock and click. */
   item: ItemDto
   /** The family's original, which names the dot row; `item` itself when omitted (a lone card, or the original shown). */
   family?: ItemDto
@@ -79,9 +81,10 @@ export interface ItemCardProps {
   owned: boolean
   wearing: boolean
   hint: string
-  /** This card's colour-variant dots (design §4.1's dot row) — each one owned/worn independently of the
-   * card itself, so with the box ticked a locked original can still show an owned variant's dot clickable.
-   * Only the dots to draw: the caller has already dropped the ones not owned while the box is unticked. */
+  /** This card's dots (design §4.1's dot row): the family, the original first (No8a) — each one owned/worn
+   * independently of the card itself, so with the box ticked a locked original can still show an owned variant's
+   * dot clickable. A member with no `asset.tint` (the original) is drawn as the untinted natural swatch. Only the
+   * dots to draw: the caller has already dropped the ones not owned while the box is unticked. */
   variants?: { item: ItemDto; owned: boolean; wearing: boolean }[]
   /** Keeps the dot row's height on a card that has no variants of its own, so that in a tab where some cards do
    * have them every card's lock hint ends on the same line (No8b). `ItemTab` sets it; a lone card never needs it. */
@@ -130,22 +133,27 @@ export function ItemCard({ item, family = item, wear, owned, wearing, hint, vari
           reserveDots ? <div className={s.dotsSpacer} aria-hidden="true" /> : null
         ) : (
           <div className={s.colourDots} role="group" aria-label={itemName(family.id, t)}>
-            {variants!.map(({ item: variant, owned: variantOwned, wearing: variantWearing }) => (
-              <button
-                key={variant.id}
-                type="button"
-                className={s.colourDot}
-                style={{ background: variant.asset!.tint }}
-                aria-label={itemName(variant.id, t)}
-                aria-pressed={variantWearing}
-                aria-disabled={!variantOwned}
-                onClick={() => {
-                  if (variantOwned) onPick(variant.id)
-                }}
-              >
-                {variantOwned ? null : <span className={s.lock} aria-hidden="true" />}
-              </button>
-            ))}
+            {variants!.map(({ item: member, owned: memberOwned, wearing: memberWearing }) => {
+              const tint = member.asset?.tint
+              const memberName = itemName(member.id, t)
+              return (
+                <button
+                  key={member.id}
+                  type="button"
+                  className={tint === undefined ? `${s.colourDot} ${s.colourDotNatural}` : s.colourDot}
+                  style={tint === undefined ? undefined : { background: tint }}
+                  aria-label={memberName}
+                  title={memberName}
+                  aria-pressed={memberWearing}
+                  aria-disabled={!memberOwned}
+                  onClick={() => {
+                    if (memberOwned) onPick(member.id)
+                  }}
+                >
+                  {memberOwned ? null : <span className={s.lock} aria-hidden="true" />}
+                </button>
+              )
+            })}
           </div>
         )}
       </div>

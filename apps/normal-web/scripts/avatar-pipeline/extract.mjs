@@ -1480,7 +1480,9 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', varia
   }
   await writeManifest(manifest, targets)
   // Spec §4.1: whatever this ingest just wrote that `masks` would also cut gets its masks now, so a base or
-  // item is tintable the moment it lands rather than only after a separate `masks` run.
+  // item is tintable the moment it lands rather than only after a separate `masks` run. The order matters for
+  // an item (Plan 18, No8a): its icon is written above, first, because a tint mask also cuts the icon's own
+  // `<icon>_tintmask` and flags the icon's entry — which `writeIcon` replaces whole, flag and all.
   const targetable = maskTargets(manifest)
   const maskNames = layers.map(({ file: layerFile }) => layerFile.name).filter((name) => targetable.includes(name))
   if (maskNames.length) {

@@ -72,8 +72,9 @@ interface Manifest {
   frame: { w: number; h: number }
   crop: { x: number; y: number; size: number }
   files: Record<string, ManifestEntry>
-  /** One inventory icon per item layer (2026-09-17), named `<layer without _L<n>>_icon`. */
-  icons?: Record<string, { kind: 'icon'; of: string; w: number; h: number; bytes2x: number; placeholder?: boolean; real?: boolean }>
+  /** One inventory icon per item layer (2026-09-17), named `<layer without _L<n>>_icon`. `tintMask` (Plan 18, No8a):
+   * the icon has its own `<icon>_tintmask`, cut from its layer's tint mask. */
+  icons?: Record<string, { kind: 'icon'; of: string; w: number; h: number; bytes2x: number; placeholder?: boolean; real?: boolean; tintMask?: boolean }>
   bases?: Record<string, { transform: { scale: number; offsetX: number; offsetY: number } }>
 }
 
@@ -1182,7 +1183,8 @@ async function sharpDownscale(pic: Picture): Promise<Picture> {
 
 // ──────────────────────────────────────────────────────── the committed set ──
 
-/** Every PNG the stage-1 set puts on disk: each layer, and each item's icon, at both densities. */
+/** Every PNG the stage-1 set puts on disk: each layer, and each item's icon, at both densities — plus, from the
+ * manifest, each layer's masks and the tint mask of each icon flagged `tintMask` (Plan 18, No8a). */
 function stageOnePngs(
   layers: string[] = (stageOneFiles() as { name: string }[]).map((file) => file.name),
   items: string[] = (stageOneFiles() as { name: string; kind: string }[]).filter((file) => file.kind === 'item').map((file) => file.name),
@@ -1204,6 +1206,11 @@ function stageOnePngs(
           }
         }
       }
+    }
+    // …and each icon's own tint mask, where the manifest flags one.
+    for (const item of items) {
+      const icon = iconName(item)
+      if (manifest.icons?.[icon]?.tintMask === true) pngs.push(...DENSITIES.map((density: number) => `${icon}_tintmask@${density}x.png`))
     }
   }
 
@@ -1302,6 +1309,35 @@ describe('the committed placeholder set', () => {
       for (const density of DENSITIES) {
         const meta = await sharp(join(OUT_DIR, `${icon}@${density}x.png`)).metadata()
         expect([meta.width, meta.height], `${icon}@${density}x`).toEqual([ICON.w * density, ICON.h * density])
+      }
+    }
+  }, 60_000)
+
+  it('gives every tint-masked item layer an icon tint mask at both densities, the size of the icon and on its ink', async () => {
+    // Plan 18 (No8a): the wardrobe tints a colour variant's icon the way it tints the worn layer, so every layer
+    // with a tint mask — today these four — has `<icon>_tintmask`, cut with the icon's own fit and flagged on the
+    // icon's manifest entry (a field, not a key of its own).
+    const tinted = committedItems.filter((name) => manifest.files[name]!.masks?.tint !== undefined)
+    expect([...tinted].sort()).toEqual(['item_head_beanie01_L80', 'item_head_beret_red01_L80', 'item_head_party_cone01_L80', 'item_outfit_casual01_L40'])
+    const flagged = Object.entries(manifest.icons ?? {}).filter(([, entry]) => entry.tintMask === true).map(([icon]) => icon)
+    expect(flagged.sort()).toEqual(tinted.map((name) => iconName(name)).sort())
+    for (const name of tinted) {
+      const icon = iconName(name)
+      for (const density of DENSITIES) {
+        const file = join(OUT_DIR, `${icon}_tintmask@${density}x.png`)
+        expect(existsSync(file), `${icon}_tintmask@${density}x.png`).toBe(true)
+        const [mask, picture] = await Promise.all([readPicture(file), readPicture(join(OUT_DIR, `${icon}@${density}x.png`))])
+        expect([mask.width, mask.height], `${icon}_tintmask@${density}x`).toEqual([picture.width, picture.height])
+        // Cut with the icon's own box and fit, so the mask sits on the icon's ink rather than beside it.
+        let inked = 0
+        let onIcon = 0
+        for (let p = 0; p < mask.width * mask.height; p++) {
+          if (mask.data[p * 4 + 3]! < 128) continue
+          inked++
+          if (picture.data[p * 4 + 3]! > 8) onIcon++
+        }
+        expect(inked, `${icon}_tintmask@${density}x is empty`).toBeGreaterThan(0)
+        expect(onIcon / inked, `${icon}_tintmask@${density}x off the icon's ink`).toBeGreaterThan(0.99)
       }
     }
   }, 60_000)
@@ -1523,6 +1559,41 @@ describe('per-wear variants', () => {
     // …and no stand-in variant was invented for anything else.
     const invented = Object.keys(after.files).filter((file) => parseName(file)?.wear && file !== name)
     expect(invented, `placeholder drew variants: ${invented.join(', ')}`).toEqual([])
+  }, 600_000)
+
+  it('placeholder re-cuts the icon tint mask of a real icon it re-cuts (Plan 18, No8a)', async () => {
+    // A real layer whose icon has gone missing gets it back from the layer on disk; when that layer has a tint mask,
+    // the icon's own tint mask comes back with it, cut with the icon's fit — the left half of the block, here.
+    const dir = caseDir('variant-placeholder-tint')
+    const name = 'item_outfit_dealer01_m_L40'
+    const pic = blankPicture(FRAME.w * 2, FRAME.h * 2)
+    const mask = blankPicture(FRAME.w * 2, FRAME.h * 2)
+    for (let y = 500; y < 700; y++) {
+      for (let x = 300; x < 460; x++) {
+        pic.data.set([30, 40, 150, 255], (y * pic.width + x) * 4)
+        if (x < 380) mask.data.set([255, 255, 255, 255], (y * mask.width + x) * 4)
+      }
+    }
+    const bytes2x = await writeDensities(pic, dir, name)
+    const maskBytes = await writeDensities(mask, dir, `${name}_tintmask`)
+    manifestFor(dir, {
+      [name]: {
+        layer: LAYERS.outfit, w: FRAME.w, h: FRAME.h, bytes2x, real: true, variantOf: 'item_outfit_dealer01_L40', wear: 'm',
+        masks: { tint: { bytes2x: maskBytes, meanL: 0.3 } },
+      },
+    })
+
+    const after = await buildPlaceholders({ dir, targets: [join(dir, MANIFEST_NAME)] }) as unknown as Manifest
+    expect(after.icons?.item_outfit_dealer01_m_icon).toMatchObject({ kind: 'icon', of: name, real: true, tintMask: true })
+    for (const density of DENSITIES) {
+      const iconMask = await readPicture(join(dir, `item_outfit_dealer01_m_icon_tintmask@${density}x.png`))
+      expect([iconMask.width, iconMask.height], `@${density}x`).toEqual([ICON.w * density, ICON.h * density])
+    }
+    // The block's box is 160 × 200 @2x, fitted to 129 × 161 from x 31: its left half lands left of the icon's centre.
+    const at2x = await readPicture(join(dir, 'item_outfit_dealer01_m_icon_tintmask@2x.png'))
+    const alphaAt = (x: number): number => at2x.data[(ICON.h * at2x.width + x) * 4 + 3]!
+    expect(alphaAt(ICON.w - 30), 'the masked half').toBeGreaterThan(200)
+    expect(alphaAt(ICON.w + 30), 'the unmasked half').toBeLessThan(10)
   }, 600_000)
 
   // ── C6, routed by wear (R3) ──

@@ -46,8 +46,11 @@ Như desktop nhưng cột trái 300 px, sân khấu 280 px, lưới `minmax(130p
 - Tên món (đậm), nhãn độ hiếm chữ hoa nhỏ màu theo độ hiếm; viền dưới 3 px màu độ hiếm.
 - **Đang dùng**: viền vàng + nhãn "✓ Đang dùng" ở góc.
 - **Chưa có**: ảnh xám tối, tên màu nhạt, dòng khoá "🔒 <cách nhận>" (chuỗi `hintFor` hiện có). Không bấm mặc được; bấm hiện tooltip/nhãn cách nhận như hiện nay.
-- **Biến thể màu**: hàng chấm 16 px dưới thẻ món gốc (như Plan 13), chấm chưa có mờ 35 %.
-- Bấm thẻ đã có: mặc món; bấm lại món đang mặc ở slot tuỳ chọn: bỏ món.
+- **Biến thể màu** (review 29/09 No8a, Plan 18): một họ món — món gốc cùng các biến thể màu (cùng `asset.file`) — là **một thẻ**.
+  - Thẻ là **món đang mặc** trong họ; không mặc món nào của họ thì là món gốc khi đã có hoặc khi tích "Hiện cả món chưa có", còn không thì là biến thể đã có đầu tiên (theo thứ tự catalogue). Thẻ không đổi chỗ khi đổi món: thứ tự vẫn theo độ hiếm của món gốc.
+  - Mọi thứ trên thẻ là của món đó: ảnh (biến thể được tô đúng màu của nó, bằng mặt nạ màu của icon, như lớp đang mặc trên nhân vật), tên, độ hiếm, nhãn "✓ Đang dùng", trạng thái khoá và dòng cách nhận.
+  - Hàng chấm 16 px dưới thẻ (như Plan 13) liệt kê cả họ, **món gốc đứng đầu** với chấm không tô màu (kiểu ô "Tự nhiên"); mỗi chấm có tên món (nhãn và tooltip), chấm của món đang mặc có viền vàng, chấm chưa có mờ 35 % kèm khoá. Bỏ tích thì ẩn chấm chưa có; hàng chấm chỉ còn đúng món của thẻ thì bỏ cả hàng. Nhóm chấm mang tên món gốc.
+- Bấm thẻ đã có: mặc món của thẻ; bấm lại món đang mặc ở slot tuỳ chọn: bỏ món (Quần áo thì không bỏ được). Bấm một chấm đã có: mặc món của chấm đó (bấm lại chấm đang mặc ở slot tuỳ chọn cũng bỏ món), và thẻ chuyển theo món vừa mặc.
 
 ### 4.2 Thẻ thân (tab Thân)
 

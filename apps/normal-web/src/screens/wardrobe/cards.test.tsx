@@ -1,11 +1,22 @@
-import type { ChibiConfig } from '@bp/ui-kit'
-import { screen } from '@testing-library/react'
+import { useTintedLayer, type ChibiConfig, type LayerRef } from '@bp/ui-kit'
+import { fireEvent, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BaseDto, ItemDto } from '../../api.js'
 import viNormal from '../../locales/vi/normal.json'
 import { makeI18n, renderWithI18n } from '../../test-i18n.js'
 import { BaseCard, ColourCard, ItemCard, WordCard } from './cards.js'
+
+// Plan 18 (No8a): `ItemPreview` tints a colour variant's icon through the kit's own `useTintedLayer`. Whether the
+// canvas really paints is `tinted.test.ts`'s business (ui-kit); here the hook answers a fake blob URL for any layer
+// with tints, and `null` — "draw the plain icon" — for one without, as the real hook does under jsdom.
+vi.mock('@bp/ui-kit', async (importOriginal) => ({ ...(await importOriginal<typeof import('@bp/ui-kit')>()), useTintedLayer: vi.fn() }))
+const tintedLayer = vi.mocked(useTintedLayer)
+const fakeBlob = (layer: LayerRef): string | null => (layer.tints === undefined || layer.tints.length === 0 ? null : `blob:http://localhost/${layer.tints[0]!.colour}`)
+beforeEach(() => {
+  tintedLayer.mockReset()
+  tintedLayer.mockImplementation((_prefix, layer) => fakeBlob(layer))
+})
 
 const item = (patch: Partial<ItemDto> & Pick<ItemDto, 'id' | 'slot' | 'rarity'>): ItemDto => ({
   nameKey: `items.${patch.id}`,
@@ -76,7 +87,8 @@ describe('cards', () => {
       const onPick = vi.fn()
       render(<ItemCard item={HEAD_BERET} owned wearing={false} hint="" onPick={onPick} />)
 
-      await user.click(screen.getByRole('button', { name: new RegExp(`^${viNormal.items.head_beret_red01}`) }))
+      // The exact label: a prefix of the name would also match the original's own dot in a family's row (No8a).
+      await user.click(screen.getByRole('button', { name: `${viNormal.items.head_beret_red01}, ${viNormal.inventory.rarity.rare}` }))
 
       expect(onPick).toHaveBeenCalledWith('head_beret_red01')
     })
@@ -123,6 +135,109 @@ describe('cards', () => {
       await user.click(dot)
 
       expect(onPick).not.toHaveBeenCalled()
+    })
+  })
+
+  // Review 2026-09-29, No8a (Plan 18, pre-flight amendment 1): a family card *is* the member it shows — the one being
+  // worn, when one is — in every respect, and its picture is that member's colour.
+  describe('ItemCard — a colour family', () => {
+    const ICON = 'item_head_beret_red01_icon'
+
+    it("tints a colour variant's icon with its own colour, from the icon's tint mask, and draws the blob without srcset", () => {
+      const { container } = render(<ItemCard item={HEAD_BERET_BLUE} family={HEAD_BERET} owned wearing hint="" onPick={vi.fn()} />)
+
+      expect(tintedLayer).toHaveBeenCalledWith('/avatar/', {
+        order: 80,
+        file: ICON,
+        tints: [{ mask: `${ICON}_tintmask`, colour: '#3f6fd8', meanL: 0.5 }],
+      })
+      const icon = container.querySelector('img')!
+      expect(icon).toHaveAttribute('src', 'blob:http://localhost/#3f6fd8')
+      expect(icon.hasAttribute('srcset')).toBe(false)
+      expect(icon).toHaveAttribute('data-item-icon', 'head_beret_blue01')
+    })
+
+    it('falls back to the plain two-density icon when the tinted one fails to load', () => {
+      const { container } = render(<ItemCard item={HEAD_BERET_BLUE} family={HEAD_BERET} owned wearing hint="" onPick={vi.fn()} />)
+
+      fireEvent.error(container.querySelector('img')!)
+
+      const icon = container.querySelector('img')!
+      expect(icon).toHaveAttribute('src', `/avatar/${ICON}@1x.png`)
+      expect(icon).toHaveAttribute('srcset', `/avatar/${ICON}@1x.png 1x, /avatar/${ICON}@2x.png 2x`)
+    })
+
+    it('asks for no tint for an untinted item, which keeps its two-density icon', () => {
+      const { container } = render(<ItemCard item={HEAD_BERET} owned wearing={false} hint="" onPick={vi.fn()} />)
+
+      expect(tintedLayer).toHaveBeenCalledWith('/avatar/', { order: 80, file: ICON })
+      const icon = container.querySelector('img')!
+      expect(icon).toHaveAttribute('src', `/avatar/${ICON}@1x.png`)
+      expect(icon).toHaveAttribute('srcset', `/avatar/${ICON}@1x.png 1x, /avatar/${ICON}@2x.png 2x`)
+    })
+
+    it('names, marks and picks the member it shows — the worn variant — and keeps the family name on the dot row', async () => {
+      const user = userEvent.setup()
+      const onPick = vi.fn()
+      render(
+        <ItemCard
+          item={HEAD_BERET_BLUE}
+          family={HEAD_BERET}
+          owned
+          wearing
+          hint=""
+          variants={[
+            { item: HEAD_BERET, owned: false, wearing: false },
+            { item: HEAD_BERET_BLUE, owned: true, wearing: true },
+          ]}
+          onPick={onPick}
+        />,
+      )
+
+      const card = screen.getByRole('button', {
+        name: `${viNormal.items.head_beret_blue01}, ${viNormal.inventory.rarity.rare}, ${viNormal.wardrobe.wearingBadge}`,
+      })
+      expect(card).toHaveAttribute('aria-pressed', 'true')
+      expect(card).toHaveAttribute('aria-disabled', 'false')
+      expect(within(card).getByText(viNormal.items.head_beret_blue01)).toBeInTheDocument()
+      expect(within(card).getByText(viNormal.wardrobe.wearingBadge)).toBeInTheDocument()
+      expect(screen.getByRole('group', { name: viNormal.items.head_beret_red01 })).toBeInTheDocument()
+
+      await user.click(card)
+
+      expect(onPick).toHaveBeenCalledWith('head_beret_blue01')
+    })
+
+    it("titles every dot with its member's name, marks the worn one pressed, and draws the original's as an untinted swatch", async () => {
+      const user = userEvent.setup()
+      const onPick = vi.fn()
+      render(
+        <ItemCard
+          item={HEAD_BERET_BLUE}
+          family={HEAD_BERET}
+          owned
+          wearing
+          hint=""
+          variants={[
+            { item: HEAD_BERET, owned: true, wearing: false },
+            { item: HEAD_BERET_BLUE, owned: true, wearing: true },
+          ]}
+          onPick={onPick}
+        />,
+      )
+
+      const dots = within(screen.getByRole('group', { name: viNormal.items.head_beret_red01 })).getAllByRole('button')
+      expect(dots.map((dot) => [dot.getAttribute('aria-label'), dot.getAttribute('title'), dot.getAttribute('aria-pressed')])).toEqual([
+        [viNormal.items.head_beret_red01, viNormal.items.head_beret_red01, 'false'],
+        [viNormal.items.head_beret_blue01, viNormal.items.head_beret_blue01, 'true'],
+      ])
+      // The original wears no tint: its dot is the natural swatch, not a colour.
+      expect(dots[0]!.style.background).toBe('')
+      expect(dots[1]!.style.background).not.toBe('')
+
+      await user.click(dots[0]!)
+
+      expect(onPick).toHaveBeenCalledWith('head_beret_red01')
     })
   })
 

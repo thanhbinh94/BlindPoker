@@ -117,53 +117,62 @@ export function variantsByFile(rows: readonly ItemDto[]): Map<string, ItemDto[]>
  * player sees it. A row with no variants (a colour swatch, a word, most items) is a family of one.
  */
 export interface FamilyCard {
-  /** The family's untinted original: the card's identity, and the name its dot row carries. */
+  /** The family's untinted original: the card's identity — its place in the order, its key — and the name its dot row
+   * carries. */
   original: ItemDto
   /**
-   * The member the card itself draws, names and picks: the original — unless the box is unticked and the player owns
-   * no original but some variant, when it is the first owned variant in catalogue order (No11a, pre-flight amendment
-   * 5). Plan 18 Task 4 extends the choice (the worn member first).
+   * The member the card itself draws, names and picks (review 2026-09-29, No8a — Plan 18, pre-flight amendment 1): the
+   * member being worn in the slot; else the original, when it is owned or the box is ticked; else — box unticked, the
+   * original not owned — the first owned variant in catalogue order (No11a).
    */
   shown: ItemDto
-  /** The dot row: the family's colour variants in catalogue order — only the owned ones while the box is unticked. */
+  /**
+   * The dot row (No8a): the whole family, the original first and then its colour variants in catalogue order — only
+   * the owned members while the box is unticked — and empty when that would leave nothing but `shown` itself, or
+   * when the family has no variants at all.
+   */
   dots: ItemDto[]
 }
 
 const NO_VARIANTS: ReadonlyMap<string, readonly ItemDto[]> = new Map()
 
 /**
- * What a tab lists (design §3.1 item 3, §5.5; review 2026-09-29, No11a): with the box unticked — the default — only
- * the families the player owns a member of, each card showing an owned member and only the owned dots; with "Hiện cả
- * món chưa có" ticked, every card as its original and every dot, owned or not, exactly as before No11a. `items` are a
- * tab's cards (`tabItems`); `variants` is the slot's `variantsByFile`, left out for a slot that has none.
+ * What a tab lists (design §3.1 item 3, §4.1, §5.5; review 2026-09-29, No11a and No8a): with the box unticked — the
+ * default — only the families the player owns a member of, and only their owned dots; with "Hiện cả món chưa có"
+ * ticked, every family and every dot, owned or not. Either way a card shows the member `worn` (the draft's item in
+ * the slot) when it is one of the family's. Families keep the original's place in the order whichever member they
+ * show — re-sorting on a pick would make the card jump away from the finger that picked it.
+ *
+ * `items` are a tab's cards (`tabItems`); `variants` is the slot's `variantsByFile`, left out for a slot that has none.
  */
 export function applyFilter(
   items: readonly ItemDto[],
   owned: ReadonlySet<string>,
   showLocked: boolean,
   variants: ReadonlyMap<string, readonly ItemDto[]> = NO_VARIANTS,
+  worn?: string,
 ): FamilyCard[] {
   const cards: FamilyCard[] = []
   for (const original of items) {
-    const family = original.asset === undefined ? [] : (variants.get(original.asset.file) ?? [])
-    if (showLocked) {
-      cards.push({ original, shown: original, dots: [...family] })
-      continue
-    }
-    const ownedDots = family.filter((variant) => owned.has(variant.id))
-    const shown = owned.has(original.id) ? original : ownedDots[0]
-    if (shown !== undefined) cards.push({ original, shown, dots: ownedDots })
+    const tinted = original.asset === undefined ? [] : (variants.get(original.asset.file) ?? [])
+    const family = [original, ...tinted]
+    const listed = showLocked ? family : family.filter((member) => owned.has(member.id))
+    if (listed.length === 0) continue
+    const shown =
+      family.find((member) => member.id === worn) ?? (showLocked || owned.has(original.id) ? original : listed[0]!)
+    const dots = tinted.length === 0 || (listed.length === 1 && listed[0] === shown) ? [] : listed
+    cards.push({ original, shown, dots })
   }
   return cards
 }
 
 /**
  * One slot's cards, ready to draw: `tabItems` for the order and the variant split, `variantsByFile` for the families,
- * `applyFilter` for the box. The words tab calls it once per slot (`title`, `badge`), which is how `WardrobeScreen`
- * knows both of its headings would be empty before either `ItemTab` draws.
+ * `applyFilter` for the box and the member `worn` in the slot. The words tab calls it once per slot (`title`,
+ * `badge`), which is how `WardrobeScreen` knows both of its headings would be empty before either `ItemTab` draws.
  */
-export function slotCards(slot: ItemSlot, catalog: readonly ItemDto[], owned: ReadonlySet<string>, showLocked: boolean): FamilyCard[] {
+export function slotCards(slot: ItemSlot, catalog: readonly ItemDto[], owned: ReadonlySet<string>, showLocked: boolean, worn?: string): FamilyCard[] {
   const rows = tabItems(tabOfSlot(slot), catalog).filter((item) => item.slot === slot)
   const variants = variantsByFile(catalog.filter((item) => item.slot === slot))
-  return applyFilter(rows, owned, showLocked, variants)
+  return applyFilter(rows, owned, showLocked, variants, worn)
 }

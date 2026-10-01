@@ -96,6 +96,7 @@ item_<slot>_<code>_L<layer>                  a wardrobe item — <layer> is the 
 item_<slot>_<code>_<wear>_L<layer>           that item's cut for one wear, f or m (§3.1)
 item_<slot>_<code>_icon                      that item's 96 × 96 inventory icon (§4.2) — not a layer
 item_<slot>_<code>_<wear>_icon               a variant's own icon
+item_<slot>_<code>_icon_tintmask             a tintable item's icon tint mask, 96 × 96 like its icon (§4.2, §4.4)
 bot_<index>_L30                              a bot's body
 bot_<index>_face_<expression>_L50            a bot's expression
 ```
@@ -374,7 +375,7 @@ A frame's icon is its ring; an aura's is the aura — and since 2026-09-24 a rea
 cut from the ingested *picture* rather than from the layer (§4.3), so an aura that runs off the frame's sides
 still shows as a whole ring. `ingest` writes the icon with the layer, `placeholder`
 refreshes the stand-ins' icons. The manifest lists them under a separate `icons` key —
-`{ kind: 'icon', of: '<layer name>', w: 96, h: 96, bytes2x, real | placeholder }` — so `files` stays the
+`{ kind: 'icon', of: '<layer name>', w: 96, h: 96, bytes2x, real | placeholder, tintMask? }` — so `files` stays the
 set of frame-sized layers that `check`, the renderer and the server's loader read (the server ignores
 `icons`).
 
@@ -383,6 +384,19 @@ The wardrobe's cards show the icon (`ItemPreview` in
 `item_head_tophat01_L80` → `item_head_tophat01_icon` — so the API carries nothing new; the URL is built
 with the same `AvatarAssets` base and `srcset` as a `Chibi` layer. Seeing an item *worn* is the big
 preview's job: picking an owned tile puts it on the character there, and saving equips it.
+
+**A colour variant's icon** (2026-10-01, Plan 18, review No8a). A colour variant shares its original's layer, so it
+shares its icon too, and an untinted icon showed every variant in the original's colour. So every item layer with a
+tint mask (§4.4) also gets `item_<slot>_<code>_icon_tintmask@1x/@2x.png`, the same size as its icon: the layer's own
+written tint mask (so a hand-drawn override counts), cut with the **layer's** ink box and fitted exactly as the icon
+is (`iconFit` + `applyIconFit` in `png.mjs`, which `iconPicture` itself uses — 192 px square, 84 %, centred; @1x is
+the @2x halved). `masks` and `ingest` write it whenever they write the layer's tint mask, after the icon, and flag the
+icon's manifest entry `tintMask: true` — a field on the entry, not a key of its own; `placeholder` re-cuts it
+alongside a real icon it re-cuts. An aura's or a frame's icon is cut from the source picture rather than the layer
+(§4.3), so neither gets one. `ItemPreview` then paints the icon of an item with `asset.tint` the way `Chibi` paints the
+worn layer: `useTintedLayer` with the icon and `{ mask: <icon>_tintmask, colour: asset.tint, meanL: asset.tintMeanL }`
+(the layer's own `masks.tint.meanL`), drawn as a `blob:` image with no `srcset`, and the plain icon until it is ready —
+or for good if the browser refuses it.
 
 ### 4.3 Auras, frames and bots (2026-09-24, Plan 12)
 
@@ -439,6 +453,9 @@ pipeline cuts it out after the fact (design `2026-09-24-plan13-avatar-tint-desig
    *same* target lightness without a seam between them.
 4. `check`'s C11 (§5 below) holds every mask to its layer's own ink and a plausible shape; a mask that fails
    it is either bad art or a bad cut, and the review sheet (below) is where a person decides which.
+5. A tint mask is also cut down to the item's icon (2026-10-01, Plan 18): `<icon>_tintmask@1x/@2x.png`, with the
+   icon's own fit, and the icon's manifest entry flagged `tintMask: true` — what the wardrobe tints a colour
+   variant's icon with (§4.2).
 
 A cut the algorithm gets wrong is fixed by hand, not by tuning the algorithm for one picture: drop a PNG at
 `assets/avatar-src/masks/<layer>_hairmask.png` (or `_eyemask`/`_tintmask`), white on transparent (or plain
@@ -449,9 +466,11 @@ trust its shape and check only that it still fits the layer.
 ```bash
 pnpm --filter @bp/normal-web exec node scripts/avatar-pipeline.mjs masks
 # Cuts hair/eye/tint masks for every real base L30/L60, every real base face, and every item with a
-# tintSeed — the default target list (`maskTargets`). `ingest` already calls this on whatever it just
-# wrote, so a fresh base or item needs no separate run; `masks` is for re-cutting after an override lands,
-# or after the algorithm itself changes. Pass names to mask only those.
+# tintSeed — the default target list (`maskTargets`) — plus each tint-masked item's icon tint mask (§4.2).
+# `ingest` already calls this on whatever it just wrote, so a fresh base or item needs no separate run;
+# `masks` is for re-cutting after an override lands, or after the algorithm itself changes. Pass names to
+# mask only those — the four icon tint masks of 2026-10-01 came from:
+#   masks item_head_beanie01_L80 item_head_beret_red01_L80 item_head_party_cone01_L80 item_outfit_casual01_L40
 
 pnpm --filter @bp/normal-web exec node scripts/avatar-pipeline.mjs masks --tint-seed 150,200 --as item:head:tophat01
 # Records the tint seed (1x frame coordinates, inside the item's own colour region) on an item already in

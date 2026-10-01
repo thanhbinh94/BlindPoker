@@ -819,6 +819,12 @@
   cursor: pointer;
 }
 
+/* The family's original in its dot row (No8a): it wears no tint, so its dot is the untinted swatch — the
+   `.naturalSwatch` look — rather than a colour; picking it puts the original back on. */
+.colourDotNatural {
+  background: repeating-conic-gradient(var(--line) 0% 25%, transparent 0% 50%);
+}
+
 .colourDot[aria-pressed='true'] {
   box-shadow: 0 0 0 2px var(--gold);
 }

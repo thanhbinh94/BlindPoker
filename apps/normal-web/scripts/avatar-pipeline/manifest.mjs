@@ -18,7 +18,7 @@ import { mkdir } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { CROP, DENSITIES, FRAME, LAYERS, placeholderSvg } from './frame.mjs'
-import { iconPicture, readPicture, renderSvg, writeDensities, writeIfChanged } from './png.mjs'
+import { alphaBBox, applyIconFit, blankPicture, iconFit, iconPicture, readPicture, renderSvg, writeDensities, writeIfChanged } from './png.mjs'
 
 export const MANIFEST_NAME = 'avatar-manifest.json'
 export const MANIFEST_VERSION = 1
@@ -220,6 +220,43 @@ export async function writeIcon(layer2x, dir, layerName, manifest, flags) {
   return name
 }
 
+/** The slots whose icon is cut from the ingested square picture rather than from the layer (`ingestSquare`, §4.3). */
+const ICON_FROM_PICTURE = new Set(['aura', 'frame'])
+
+/**
+ * An icon's tint mask (2026-10-01, Plan 18 No8a): `<icon>_tintmask@1x/@2x.png`, the layer's own tint mask (`mask2x`,
+ * the one written beside the layer — a hand-drawn override included) cut with the *layer's* ink box and fitted
+ * exactly as `writeIcon` fits the layer, so it lands on the icon's own pixels. The wardrobe tints a colour
+ * variant's icon with it the way `Chibi` tints the worn layer.
+ *
+ * Only for an icon the manifest already lists, which it flags `tintMask: true` — a field on the icon's entry, not a
+ * key of its own. Not for an aura or a frame, whose icon is the source picture rather than the layer. Returns the
+ * mask's name, or `null` when nothing was written.
+ */
+export async function writeIconTintMask(mask2x, layer2x, dir, layerName, manifest) {
+  if (ICON_FROM_PICTURE.has(parseName(layerName)?.slot)) return null
+  const name = iconName(layerName)
+  const entry = manifest.icons?.[name]
+  if (!entry) return null
+  const fit = iconFit(alphaBBox(layer2x), ICON.w * 2, ICON.fill)
+  const picture = fit === null ? blankPicture(ICON.w * 2, ICON.h * 2) : await applyIconFit(mask2x, fit)
+  await writeDensities(picture, dir, `${name}_tintmask`)
+  entry.tintMask = true
+  return `${name}_tintmask`
+}
+
+/**
+ * A real item's icon cut again from its layer on disk — `placeholder`'s path for an icon that has gone missing — with
+ * the icon's tint mask re-cut alongside when the layer has a tint mask there (Plan 18, No8a), so the flag and the
+ * file never fall out of step with the icon.
+ */
+async function rewriteRealIcon(dir, layerName, entry, manifest) {
+  const layer2x = await readPicture(join(dir, `${layerName}@2x.png`))
+  await writeIcon(layer2x, dir, layerName, manifest, { real: true })
+  const tintMask = join(dir, `${layerName}_tintmask@2x.png`)
+  if (entry?.masks?.tint && existsSync(tintMask)) await writeIconTintMask(await readPicture(tintMask), layer2x, dir, layerName, manifest)
+}
+
 export function readManifest(file) {
   if (!existsSync(file)) return emptyManifest()
   return JSON.parse(readFileSync(file, 'utf8'))
@@ -307,7 +344,7 @@ export async function buildPlaceholders({ dir, targets, bases = BASES, log = () 
         const icon = iconName(file.name)
         const had = previous.icons?.[icon]
         if (had && existsSync(join(dir, `${icon}@2x.png`))) manifest.icons[icon] = had
-        else await writeIcon(await readPicture(join(dir, `${file.name}@2x.png`)), dir, file.name, manifest, { real: true })
+        else await rewriteRealIcon(dir, file.name, before, manifest)
       }
       continue
     }
@@ -326,7 +363,7 @@ export async function buildPlaceholders({ dir, targets, bases = BASES, log = () 
     const icon = iconName(name)
     const had = previous.icons?.[icon]
     if (had && existsSync(join(dir, `${icon}@2x.png`))) manifest.icons[icon] = had
-    else if (existsSync(join(dir, `${name}@2x.png`))) await writeIcon(await readPicture(join(dir, `${name}@2x.png`)), dir, name, manifest, { real: true })
+    else if (existsSync(join(dir, `${name}@2x.png`))) await rewriteRealIcon(dir, name, before, manifest)
     variants++
   }
   await writeManifest(manifest, targets)

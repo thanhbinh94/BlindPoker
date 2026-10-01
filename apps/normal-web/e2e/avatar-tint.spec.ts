@@ -93,6 +93,18 @@ test.describe('Blind Luck Poker Normal — màu tóc, màu mắt', () => {
     const redTee = page.getByRole('tabpanel').getByRole('button', { name: 'Áo phông đỏ', exact: true })
     await redTee.click()
     await expect(redTee, 'the coloured outfit it just picked reflects the choice').toHaveAttribute('aria-pressed', 'true')
+    // No8a: the Quần áo card follows the tee being worn — it reads "Áo phông đỏ", and its picture is that tee's own
+    // colour, the icon recoloured on a canvas: a `blob:` image the browser actually decoded, not the white original.
+    const teeCard = page.getByRole('tabpanel').getByRole('button', { name: /^Áo phông đỏ, / })
+    await expect(teeCard, 'the card is the worn tee').toHaveAttribute('aria-pressed', 'true')
+    await expect(teeCard.getByText('Áo phông đỏ', { exact: true })).toBeVisible()
+    await expect
+      .poll(
+        async () =>
+          teeCard.locator('img').evaluate((img: HTMLImageElement) => ({ blob: img.src.startsWith('blob:'), decoded: img.complete && img.naturalWidth > 0 })),
+        { message: "the card's icon is the tinted tee, decoded", timeout: 15_000 },
+      )
+      .toEqual({ blob: true, decoded: true })
 
     // `toBeVisible` says yes to an `<img>` the browser refused to load, so it proves nothing here: the
     // Content-Security-Policy `img-src` without `blob:` once left every tinted layer broken (No15, No16) while

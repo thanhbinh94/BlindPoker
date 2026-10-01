@@ -12,6 +12,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { runChecks } from '../scripts/avatar-pipeline/checks.mjs'
 import { eyeEllipses, eyeMask, hairMask, maskTargets, tintMask, writeMasks } from '../scripts/avatar-pipeline/masks.mjs'
+import { writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
 import { readPicture, renderSvg, resizePicture, writePicture } from '../scripts/avatar-pipeline/png.mjs'
 import { buildTintSheet } from '../scripts/avatar-pipeline/tint-sheet.mjs'
 
@@ -170,7 +171,8 @@ async function syntheticItem() {
 type Picture = { data: Buffer; width: number; height: number }
 type MaskEntry = { bytes2x: number; meanL: number; empty?: boolean; override?: boolean }
 type ManifestEntry = { real?: boolean; empty?: boolean; tintSeed?: { x: number; y: number }; masks?: Record<string, MaskEntry> }
-type Manifest = { files: Record<string, ManifestEntry> }
+type IconEntry = { kind: string; of: string; w: number; h: number; bytes2x: number; real?: boolean; tintMask?: boolean }
+type Manifest = { files: Record<string, ManifestEntry>; icons?: Record<string, IconEntry> }
 
 function hexToRgb(hex: string): [number, number, number] {
   const n = Number.parseInt(hex.slice(1), 16)
@@ -506,6 +508,51 @@ describe('writeMasks', () => {
     expect(hair.meanL).toBeGreaterThan(0)
     expect(hair.meanL).toBeLessThan(1)
     expect(hair.bytes2x).toBeGreaterThan(0)
+  })
+
+  // Plan 18 (No8a): a colour variant's icon is tinted the way its worn layer is, so a tint mask comes with an icon one.
+  it("cuts an item's icon tint mask from its tint mask with the icon's own fit, at both densities, and flags the icon", async () => {
+    const name = 'item_head_test02_L80'
+    const layer = await syntheticItem()
+    await writePicture(layer, join(dir, `${name}@2x.png`))
+    const manifest: Manifest = { files: { [name]: { real: true, tintSeed: { x: 150, y: 200 } } }, icons: {} }
+    const icon = await writeIcon(layer, dir, name, manifest, { real: true })
+
+    await writeMasks({ dir, manifest, names: [name], overridesDir })
+
+    expect(manifest.icons![icon]).toMatchObject({ kind: 'icon', of: name, real: true, tintMask: true })
+    for (const density of [1, 2]) {
+      const iconPic = await readPicture(join(dir, `${icon}@${density}x.png`))
+      const maskPic = await readPicture(join(dir, `${icon}_tintmask@${density}x.png`))
+      expect([maskPic.width, maskPic.height], `@${density}x`).toEqual([iconPic.width, iconPic.height])
+      const alpha = new Uint8Array(maskPic.width * maskPic.height)
+      for (let i = 0; i < alpha.length; i++) alpha[i] = maskPic.data[i * 4 + 3]!
+      // The seeded red block of the icon, and not the blue one beside it.
+      expect(coverage(alpha, colourPixels(iconPic, '#c0392b')), `@${density}x red`).toBeGreaterThan(0.9)
+      expect(coverage(alpha, colourPixels(iconPic, '#2c3e70')), `@${density}x blue`).toBeLessThan(0.02)
+    }
+  })
+
+  it("writes no icon tint mask for an aura or a frame, whose icon is the source picture's, nor for a layer with no icon", async () => {
+    const aura = 'item_aura_test03_L10'
+    const bare = 'item_head_test04_L80'
+    const layer = await syntheticItem()
+    await writePicture(layer, join(dir, `${aura}@2x.png`))
+    await writePicture(layer, join(dir, `${bare}@2x.png`))
+    const manifest: Manifest = {
+      files: { [aura]: { real: true, tintSeed: { x: 150, y: 200 } }, [bare]: { real: true, tintSeed: { x: 150, y: 200 } } },
+      icons: {},
+    }
+    const auraIcon = await writeIcon(layer, dir, aura, manifest, { real: true })
+
+    await writeMasks({ dir, manifest, names: [aura, bare], overridesDir })
+
+    expect(manifest.files[aura]!.masks!.tint).toBeDefined()
+    expect(manifest.icons![auraIcon]!.tintMask).toBeUndefined()
+    expect(existsSync(join(dir, `${auraIcon}_tintmask@2x.png`))).toBe(false)
+    expect(manifest.files[bare]!.masks!.tint).toBeDefined()
+    expect(Object.keys(manifest.icons!)).toEqual([auraIcon])
+    expect(existsSync(join(dir, 'item_head_test04_icon_tintmask@2x.png'))).toBe(false)
   })
 })
 

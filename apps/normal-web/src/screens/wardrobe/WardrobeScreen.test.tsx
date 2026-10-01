@@ -1,6 +1,7 @@
+import { useTintedLayer, type LayerRef } from '@bp/ui-kit'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent, { type UserEvent } from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AchievementDefDto,
   AvatarCatalogDto,
@@ -14,6 +15,16 @@ import type {
 import viNormal from '../../locales/vi/normal.json'
 import { makeI18n, renderWithI18n } from '../../test-i18n.js'
 import { WardrobeScreen } from './WardrobeScreen.js'
+
+// Plan 18 (No8a): a card's icon is tinted through the kit's `useTintedLayer` (`ItemPreview`). The hook answers a fake
+// blob URL for a layer with tints and `null` — the plain icon — for one without, as the real one does under jsdom.
+// Only the export the wardrobe's cards import is replaced; the stage's `Chibi` keeps the kit's own.
+vi.mock('@bp/ui-kit', async (importOriginal) => ({ ...(await importOriginal<typeof import('@bp/ui-kit')>()), useTintedLayer: vi.fn() }))
+beforeEach(() => {
+  vi.mocked(useTintedLayer).mockImplementation((_prefix: string, layer: LayerRef) =>
+    layer.tints === undefined || layer.tints.length === 0 ? null : `blob:http://localhost/${layer.tints[0]!.colour}`,
+  )
+})
 
 const FACES = {
   neutral: 'base_f01_face_neutral_L50',
@@ -466,19 +477,35 @@ describe('WardrobeScreen', () => {
       await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
       // With the box ticked the card is the original, locked, with every dot (No11a keeps this view behind the box).
       await user.click(showLockedBox())
+      const panel = within(screen.getByRole('tabpanel'))
+      const cardCount = panel.getAllByRole('button', { name: /,/ }).length
 
       // The variant is not its own card in the tile grid.
-      expect(screen.queryByText(viNormal.items.head_beret_blue01)).toBeNull()
+      expect(panel.queryByText(viNormal.items.head_beret_blue01)).toBeNull()
 
-      const card = screen.getByText(viNormal.items.head_beret_red01).closest('button') as HTMLElement
+      const card = panel.getByText(viNormal.items.head_beret_red01).closest('button') as HTMLElement
       expect(card).toHaveAttribute('aria-disabled', 'true')
 
-      const dot = screen.getByRole('button', { name: viNormal.items.head_beret_blue01 })
+      // No8a: the dot row is the whole family, the original first, each dot titled with its member's name.
+      const row = panel.getByRole('group', { name: viNormal.items.head_beret_red01 })
+      expect(within(row).getAllByRole('button').map((each) => each.getAttribute('title'))).toEqual([
+        viNormal.items.head_beret_red01,
+        viNormal.items.head_beret_blue01,
+        viNormal.items.head_beret_green01,
+      ])
+      expect(within(row).getByRole('button', { name: viNormal.items.head_beret_red01 })).toHaveAttribute('aria-disabled', 'true')
+      const dot = within(row).getByRole('button', { name: viNormal.items.head_beret_blue01 })
       expect(dot).toHaveAttribute('aria-disabled', 'false')
-      expect(screen.getByRole('button', { name: viNormal.items.head_beret_green01 })).toHaveAttribute('aria-disabled', 'true')
+      expect(within(row).getByRole('button', { name: viNormal.items.head_beret_green01 })).toHaveAttribute('aria-disabled', 'true')
 
       await user.click(dot)
       expect(dot).toHaveAttribute('aria-pressed', 'true')
+      // No8a: the card follows the variant now worn — its name, owned, worn, its own colour — and is still one card.
+      expect(card).toHaveAccessibleName(`${viNormal.items.head_beret_blue01}, ${viNormal.inventory.rarity.rare}, ${viNormal.wardrobe.wearingBadge}`)
+      expect(card).toHaveAttribute('aria-pressed', 'true')
+      expect(card).toHaveAttribute('aria-disabled', 'false')
+      expect(card.querySelector('img')).toHaveAttribute('src', 'blob:http://localhost/#3f6fd8')
+      expect(panel.getAllByRole('button', { name: /,/ })).toHaveLength(cardCount)
 
       await user.click(screen.getByRole('button', { name: viNormal.wardrobe.save }))
 
@@ -499,9 +526,11 @@ describe('WardrobeScreen', () => {
       const card = panel.getByRole('button', { name: `${viNormal.items.head_beret_blue01}, ${viNormal.inventory.rarity.rare}` })
       expect(card).toHaveAttribute('aria-disabled', 'false')
       expect(card).toHaveAttribute('aria-pressed', 'false')
-      // Its dot row keeps the owned variant and drops the one not owned.
-      const dots = panel.getByRole('group', { name: viNormal.items.head_beret_red01 })
-      expect(within(dots).getAllByRole('button').map((dot) => dot.getAttribute('aria-label'))).toEqual([viNormal.items.head_beret_blue01])
+      // Drawn in its own colour (No8a).
+      expect(card.querySelector('img')).toHaveAttribute('src', 'blob:http://localhost/#3f6fd8')
+      // The dots not owned are hidden — the original's and the green one's — which leaves the shown variant alone, and a
+      // row of one dot repeating the card is no row at all (No8a).
+      expect(panel.queryByRole('group', { name: viNormal.items.head_beret_red01 })).toBeNull()
       expect(panel.queryByRole('button', { name: viNormal.items.head_beret_green01 })).toBeNull()
 
       await user.click(card)
@@ -509,6 +538,51 @@ describe('WardrobeScreen', () => {
 
       await user.click(screen.getByRole('button', { name: viNormal.wardrobe.save }))
       await waitFor(() => expect(setAvatar).toHaveBeenCalledWith(expect.objectContaining({ head: 'head_beret_blue01' })))
+    })
+
+    it('follows the family member being worn: the original’s untinted dot puts the original back, and a second press on the worn card takes it off', async () => {
+      // Review 2026-09-29, No8a (Plan 18, pre-flight amendment 1): both the original and the blue variant are owned, the
+      // blue one is worn.
+      const withBothBerets: InventoryDto = {
+        items: [
+          ...INVENTORY.items,
+          { itemId: 'head_beret_red01', acquiredAs: 'head_beret_red01', slot: 'head', rarity: 'rare', nameKey: 'items.head_beret_red01', assetKey: 'head/head_beret_red01', source: 'default', acquiredAt: 0 },
+        ],
+        avatar: { ...AVATAR, head: 'head_beret_blue01' },
+      }
+      const user = userEvent.setup()
+      renderScreen(stubApi({ inventory: vi.fn().mockResolvedValue(withBothBerets) }))
+      await screen.findAllByText(viNormal.bases.f01)
+      await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
+
+      const panel = within(screen.getByRole('tabpanel'))
+      const rare = viNormal.inventory.rarity.rare
+      const wearing = viNormal.wardrobe.wearingBadge
+      const card = panel.getByRole('button', { name: `${viNormal.items.head_beret_blue01}, ${rare}, ${wearing}` })
+      expect(card).toHaveAttribute('aria-pressed', 'true')
+      expect(within(card).getByText(wearing)).toBeInTheDocument()
+      expect(card.querySelector('img')).toHaveAttribute('src', 'blob:http://localhost/#3f6fd8')
+      const row = panel.getByRole('group', { name: viNormal.items.head_beret_red01 })
+      const [original, blue] = within(row).getAllByRole('button')
+      expect(original).toHaveAccessibleName(viNormal.items.head_beret_red01)
+      expect(original).toHaveAttribute('aria-pressed', 'false')
+      expect(blue).toHaveAccessibleName(viNormal.items.head_beret_blue01)
+      expect(blue).toHaveAttribute('aria-pressed', 'true')
+
+      await user.click(original!)
+
+      expect(card).toHaveAccessibleName(`${viNormal.items.head_beret_red01}, ${rare}, ${wearing}`)
+      expect(original).toHaveAttribute('aria-pressed', 'true')
+      expect(blue).toHaveAttribute('aria-pressed', 'false')
+      // The original is drawn as it is, from its plain two-density icon.
+      expect(card.querySelector('img')).toHaveAttribute('src', '/avatar/item_head_beret_red01_icon@1x.png')
+
+      // Mũ is optional: a second press on the worn card takes it off, and the card stays the (owned) original.
+      await user.click(card)
+
+      expect(card).toHaveAccessibleName(`${viNormal.items.head_beret_red01}, ${rare}`)
+      expect(card).toHaveAttribute('aria-pressed', 'false')
+      expect(original).toHaveAttribute('aria-pressed', 'false')
     })
   })
 
