@@ -159,6 +159,20 @@ describe('ProfileScreen', () => {
     expect(stage?.querySelectorAll('[data-chibi-hash]')).toHaveLength(1)
   })
 
+  it('offers two quick links, the wardrobe and the achievements — the inventory has folded into the wardrobe (No5)', async () => {
+    renderScreen()
+    await screen.findByRole('heading', { name: 'Bình', level: 2 })
+
+    const links = within(screen.getByRole('navigation', { name: viNormal.profile.title })).getAllByRole('link')
+    expect(links.map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
+      [viNormal.profile.toAvatar, '#/avatar'],
+      [viNormal.profile.toAchievements, '#/achievements'],
+    ])
+    // The old name and the old target are both gone, not merely hidden.
+    expect(screen.queryByRole('link', { name: 'Kho đồ' })).toBeNull()
+    expect(document.querySelector('a[href="#/inventory"]')).toBeNull()
+  })
+
   it('stages one full-body chibi, and keeps the head crop (its frame ring) as the portrait beside the name', async () => {
     renderScreen()
     const name = await screen.findByRole('heading', { name: 'Bình', level: 2 })

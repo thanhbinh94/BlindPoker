@@ -7,7 +7,7 @@ The Normal edition's browser client: a Vite/React bundle that talks to
 [`@bp/ui-kit`](ui-kit.md). It is served by the server itself — the Docker image builds it and points
 `PUBLIC_DIR` at it — so the app, the API and the socket share one origin and one cookie.
 
-What it owns, and nothing else owns: the account screens (sign-in, profile, wardrobe, inventory,
+What it owns, and nothing else owns: the account screens (sign-in, profile, wardrobe,
 achievements, daily reward, settings), the REST client, the session gate, and the mapping from the
 server's avatar config to the kit's chibi — the wardrobe screen and the profile figure both go through
 it. The lobby and the table come from the kit unchanged.
@@ -46,9 +46,9 @@ apps/normal-web/
     screens/
       Shell.tsx         the rail and the page under it; publishes --bp-stage for the table
       AuthScreen.tsx    sign in and register, one card, two modes
-      {Profile,Inventory,Achievements,Daily,Settings}Screen.tsx   five of the six lazy account screens
+      {Profile,Achievements,Daily,Settings}Screen.tsx   four of the five lazy account screens
       wardrobe/
-        WardrobeScreen.tsx   the sixth — preview + expression picker + seven tabs + the outfit bar
+        WardrobeScreen.tsx   the fifth — preview + expression picker + seven tabs + the outfit bar
         BaseTab.tsx          the two fixed bases (f01/m01) — chosen, never locked
         ItemTab.tsx          one slot's tiles: owned and clickable, or locked with a reason
         OutfitBar.tsx        five saved snapshots — apply / save here / rename / delete
@@ -167,6 +167,13 @@ expression row to try each of the six faces and the save button below it; seven 
 **Khung**), then **Danh hiệu & Huy hiệu** (title and badge together, the two slots with no picture).
 The outfit bar sits under both columns, five slots wide.
 
+There is no separate inventory screen (review 2026-09-29, No5): what the account owns is this screen's default
+list, and Profile links here and to the achievements only. `#/inventory` — an old bookmark or link — still opens
+the wardrobe: `App` reads it as `/avatar` and swaps the address bar for `#/avatar` in place (`replaceState`; the
+kit's router has no replace of its own), so "Back" does not bounce off it. The inventory's acquired date and
+source ("Nhận ngày …", "Khởi đầu", "Miễn phí") and its "Đang sở hữu N món" total went with it, on purpose; the
+wardrobe's "n/m đã có" counts remain.
+
 - **`BaseTab`** is the one tab with nothing locked — the two bases are chosen, not owned (design §5.1) —
   and each tile previews that base wearing the draft's *current* outfit, so the choice reads as a
   silhouette rather than a wardrobe.
@@ -280,7 +287,7 @@ pictures at a quarter the pixels and never dominates the total — and it does n
 live on a fresh checkout that has not built anything.
 
 One structural assertion sits beside the numbers: the entry chunk is read off `dist/index.html`'s module
-script rather than guessed from a file name, and the six account screens must each still be a chunk of
+script rather than guessed from a file name, and the five account screens must each still be a chunk of
 their own — a screen that rejoined the entry is a chunk that stopped being emitted under its own name.
 The three build-dependent blocks **skip with a warning** when `dist/` is missing, so `pnpm test` on a
 fresh checkout stays green and says what it had nothing to measure. Run `pnpm build:normal` (or

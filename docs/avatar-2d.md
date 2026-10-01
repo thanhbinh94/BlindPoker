@@ -154,7 +154,7 @@ wears the one layer there is.
    ```
 
 Nothing else. No new item id, no catalogue row, no grant, no i18n key, no client change — the wardrobe
-tile, the inventory card, the table seat and the lobby bar all resolve the layer from the base they are
+tile, the table seat and the lobby bar all resolve the layer from the base they are
 drawing (`toWearRef` in `apps/normal-web/src/avatar/chibi.ts`).
 
 ## 4. The pipeline (`apps/normal-web/scripts/avatar-pipeline.mjs`, Node + `sharp`)
@@ -378,7 +378,7 @@ refreshes the stand-ins' icons. The manifest lists them under a separate `icons`
 set of frame-sized layers that `check`, the renderer and the server's loader read (the server ignores
 `icons`).
 
-The wardrobe tiles and the inventory cards show the icon (`ItemPreview` in
+The wardrobe's cards show the icon (`ItemPreview` in
 `apps/normal-web/src/screens/wardrobe/ItemTab.tsx`), deriving the name from the item's `asset.file` —
 `item_head_tophat01_L80` → `item_head_tophat01_icon` — so the API carries nothing new; the URL is built
 with the same `AvatarAssets` base and `srcset` as a `Chibi` layer. Seeing an item *worn* is the big

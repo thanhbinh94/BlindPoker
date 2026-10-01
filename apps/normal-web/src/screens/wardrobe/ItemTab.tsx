@@ -12,9 +12,9 @@ const PICTURED: ReadonlySet<ItemSlot> = new Set(['head', 'face', 'outfit', 'aura
 
 /** The `<img>`'s own intrinsic `width`/`height` (decoding hint, not layout): the files are 96 px (@1x) and
  * 192 px (@2x), so 64 only ever shrinks either density. The size it actually renders at on screen is CSS's
- * call, not this attribute's — `.tileIcon` (`wardrobe.module.css`) now draws two different ones off the
- * one `<img>`: a fixed 64 px (4rem) in the inventory grid, and a larger, breakpoint-driven size scoped to
- * the wardrobe's own `.cardThumb` (V-fix, 2026-09-27 — see that class's own comment). */
+ * call, not this attribute's — `.tileIcon` (`wardrobe.module.css`) is a fixed 64 px (4rem) by itself, and a
+ * larger, breakpoint-driven size inside the wardrobe's own `.cardThumb` (V-fix, 2026-09-27 — see that class's
+ * own comment). */
 const ICON_SIZE = 64
 
 /**
@@ -28,7 +28,7 @@ function iconFile(layerFile: string): string {
 
 export interface ItemPreviewProps {
   item: ItemDto
-  /** The wear of the base this tile is about — the wardrobe's draft base, the inventory's saved one. An
+  /** The wear of the base this tile is about — the wardrobe's draft base. An
    * item with a cut for it shows that cut's icon; everything else shows the shared one. */
   wear?: string
 }
@@ -38,8 +38,8 @@ export interface ItemPreviewProps {
  * square, so a hat reads as a hat whatever figure it will end up on — or nothing at all for `title`/`badge`,
  * which have no layer to draw. Seeing it *worn* is the big preview's job: picking a tile puts it there.
  *
- * Shared between the wardrobe's own tiles (`ItemTab` below) and the inventory's read-only cards: one picture,
- * two chrome styles around it. Served from the same asset base as every `Chibi` layer, so it is `img-src 'self'`.
+ * Drawn by the wardrobe's item cards (`ItemCard`). Served from the same asset base as every `Chibi` layer, so it is
+ * `img-src 'self'`.
  *
  * 2026-09-20: a gendered item has one icon per cut, because the tile has to show the skirt or the trousers
  * the figure on the stage beside it would actually be wearing. The icon is still derived from the layer's

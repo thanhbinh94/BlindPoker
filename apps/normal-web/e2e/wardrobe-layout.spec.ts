@@ -26,9 +26,9 @@ import {
  * The theme comes from the app's own preference (`useThemePref`, `prefs.ts`) — visiting Settings and
  * picking "Sáng" — rather than poking `localStorage` directly, so this exercises the real switch too.
  *
- * Review 2026-09-29, No8b and No11b: every card grid (the wardrobe's tabs, the inventory) keeps the cards of one row
- * one height, the rarity line directly under the name (so on one line for names as tall) and the footer — hint, date,
- * colour dots — ending on the card's bottom line; a group heading keeps 16 px from the cards above it; and no visible
+ * Review 2026-09-29, No8b and No11b: every card grid (the wardrobe's tabs) keeps the cards of one row one height,
+ * the rarity line directly under the name (so on one line for names as tall) and the footer — hint, colour dots —
+ * ending on the card's bottom line; a group heading keeps 16 px from the cards above it; and no visible
  * text overlaps other text (`expectNoTextOverlap` needs the reduced-motion media below, docs/ui-kit.md).
  */
 
@@ -48,6 +48,14 @@ async function openWardrobe(page: Page): Promise<void> {
   await page.goto('/#/avatar')
   await expect(page.getByRole('heading', { name: 'Phòng thay đồ', exact: true })).toBeVisible()
   await expect(preview(page)).toBeVisible()
+}
+
+/** The wardrobe as a new visit finds it (default tab, box unticked): `openWardrobe` alone is a no-op when the page is
+ * already on `#/avatar`, so this comes from Settings, the lightest screen, which unmounts it. */
+async function openWardrobeFresh(page: Page): Promise<void> {
+  await page.goto('/#/settings')
+  await expect(page.getByRole('heading', { name: 'Cài đặt', exact: true })).toBeVisible()
+  await openWardrobe(page)
 }
 
 /** Settings' own theme control (design §9's "light via the app's theme setting") — a device preference,
@@ -96,16 +104,18 @@ async function assertNavNeverWraps(page: Page): Promise<void> {
 }
 
 /**
- * The card grids at the page's current viewport (No8b, No11b): the views of the user's screenshots — the inventory's
- * "Trang phục" group (No8-1), the wardrobe's hats (No8-2), "Danh hiệu & Huy hiệu" (No11-1) — and the other tabs that draw
+ * The card grids at the page's current viewport (No8b, No11b): the views of the user's screenshots — the old
+ * inventory's "Trang phục" group (No8-1; the inventory has since folded into the wardrobe, No5, whose "Quần áo" tab
+ * is that view now), the wardrobe's hats (No8-2), "Danh hiệu & Huy hiệu" (No11-1) — and the other tabs that draw
  * cards. Fresh account: every card is the starter set, so all the words are locked and the hats carry colour dots,
  * which is where the rows were uneven. The grids are measured with "Hiện cả món chưa có" ticked (No11a): unticked, a
- * fresh account's hats, faces, auras, frames and words are one line each, not a grid. Ends in the inventory.
+ * fresh account's hats, faces, auras, frames and words are one line each, not a grid.
  */
 async function expectCardGrids(page: Page): Promise<void> {
   const size = page.viewportSize()
   const where = `${size?.width ?? '?'}×${size?.height ?? '?'}`
-  await openWardrobe(page)
+  // A fresh visit every time, so a second viewport does not start where the first one ended.
+  await openWardrobeFresh(page)
   const panel = page.getByRole('tabpanel')
 
   // The default tab: the base cards — one of the three tabs measured for overlap, with the hats and the words below.
@@ -139,17 +149,6 @@ async function expectCardGrids(page: Page): Promise<void> {
   await expectEvenCardRows(panel, `wardrobe, Trang trí → Danh hiệu & Huy hiệu, ${where}`, 2)
   await expectHeadingsClearOfCards(panel, `wardrobe, Trang trí → Danh hiệu & Huy hiệu, ${where}`)
   await expectNoTextOverlapDown(page, `wardrobe, Trang trí → Danh hiệu & Huy hiệu, ${where}`)
-
-  await page.goto('/#/inventory')
-  await expect(page.getByRole('heading', { name: 'Kho đồ', exact: true })).toBeVisible()
-  await expect(page.locator('main ul li').first()).toBeVisible()
-  const inventory = page.locator('main')
-  // One grid (`<ul>`) per slot the account owns something in.
-  const slots = await inventory.locator('ul').count()
-  expect(slots, 'the inventory lists at least the starter slots').toBeGreaterThanOrEqual(3)
-  await expectEvenCardRows(inventory, `inventory, ${where}`, slots)
-  await expectHeadingsClearOfCards(inventory, `inventory, ${where}`)
-  await expectNoTextOverlapDown(page, `inventory, ${where}`)
 }
 
 /** Fills the naming dialog's default name and saves — the empty-slot flow (design §3.1 item 4): a click on
@@ -220,11 +219,10 @@ test.describe('Blind Luck Poker Normal — bố cục tủ đồ (Kế hoạch 1
     await expect(panel.getByText(EMPTY_OWNED)).toHaveCount(0)
     await expect(panel.getByRole('button', { name: /^Mũ chóp quý ông, / })).toBeVisible()
 
-    // V-fix, 2026-09-27: `ItemPreview` (`ItemTab.tsx`) is shared between the wardrobe's own cards and the
-    // read-only inventory grid, and `.tileIcon` (`wardrobe.module.css`) used to carry the wardrobe card's
-    // own breakpoint-driven size, resizing the inventory's icon right along with it. Reuses this test's
-    // own account (no server round trip is cheap here, but a fresh registration is rate-limited, §19.2)
-    // rather than opening a whole new test for one more assertion.
+    // V-fix, 2026-09-27: `.tileIcon` (`wardrobe.module.css`) carries the wardrobe card's own breakpoint-driven size
+    // only inside `.cardThumb`. (The read-only inventory grid that once drew the same icon at another size has
+    // folded into the wardrobe, No5.) Reuses this test's own account (no server round trip is cheap here, but a
+    // fresh registration is rate-limited, §19.2) rather than opening a whole new test for one more assertion.
     await goToWardrobeTab(page, 'Trang phục', 'Quần áo')
     const wardrobeIcon = page.locator('img[data-item-icon]').first()
     await expect(wardrobeIcon).toBeVisible()
@@ -233,15 +231,6 @@ test.describe('Blind Luck Poker Normal — bố cục tủ đồ (Kế hoạch 1
     // `.cardThumb .tileIcon`, desktop viewport (≥768 px): 100 px tall.
     expect(Math.abs(wardrobeBox!.height - 100), 'the wardrobe card icon is the larger, card-scoped size').toBeLessThan(1)
 
-    await page.goto('/#/inventory')
-    await expect(page.getByRole('heading', { name: 'Kho đồ', exact: true })).toBeVisible()
-    const inventoryIcon = page.locator('img[data-item-icon]').first()
-    await expect(inventoryIcon).toBeVisible()
-    const inventoryBox = await inventoryIcon.boundingBox()
-    expect(inventoryBox, 'the inventory card icon has a bounding box').not.toBeNull()
-    // Layout audit C3 (2026-09-28): the inventory draws the wardrobe's own card now (`OwnedCard`), picture
-    // box included, so an item's icon is the same size on both screens.
-    expect(Math.abs(inventoryBox!.height - wardrobeBox!.height), 'the inventory card icon matches the wardrobe card icon').toBeLessThan(1)
     // No8b, No11b: even card rows, headings clear of the cards above, no text over text — at the user's screen
     // (1920×940, measured from their screenshots) and at a laptop's.
     for (const size of [
@@ -297,9 +286,9 @@ test.describe('Blind Luck Poker Normal — bố cục tủ đồ (Kế hoạch 1
     // No8b, No11b: three columns of ~100 px on a phone, where names wrap to three lines and rows differed most.
     await expectCardGrids(page)
     await expectNoSidewaysScroll(page)
-    await openWardrobe(page)
+    await openWardrobeFresh(page)
 
-    // No11a on the phone: this mount came from the inventory, so the box is unticked and "Mũ" — nothing owned on a
+    // No11a on the phone: this mount came from Settings, so the box is unticked and "Mũ" — nothing owned on a
     // fresh account — is one line in place of the grid, clear of every other text on the page.
     await goToWardrobeTab(page, 'Trang phục', 'Mũ')
     await expect(showLockedBox(page)).not.toBeChecked()

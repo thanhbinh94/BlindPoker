@@ -1,5 +1,5 @@
 /* Blind Luck Poker — Normal shell. The same "đêm Sài Gòn" lacquer rail Lite hangs its rooms in, widened by one
-   tab: an account edition has a profile, and the profile is where avatar, inventory and achievements live.
+   tab: an account edition has a profile, and the profile is where the wardrobe and achievements live.
    The kit draws the game; this file draws only the room it hangs in. */
 
 .shell {
@@ -349,9 +349,10 @@
   justify-content: center;
 }
 
-/* `authCard`, not `card`: this stylesheet is one CSS module, and the inventory's item `.card` further down
-   (centred, tight padding) used to merge into this one — which is what squeezed the sign-in form into a
-   centred 270 px column and broke "Đăng nhập" onto two lines (layout audit L3, 2026-09-28). */
+/* `authCard`, not `card`: this stylesheet is one CSS module, and the inventory's item `.card` (centred, tight
+   padding; the inventory has since folded into the wardrobe, No5) used to merge into this one — which is what
+   squeezed the sign-in form into a centred 270 px column and broke "Đăng nhập" onto two lines (layout audit L3,
+   2026-09-28). */
 .authCard {
   display: flex;
   flex-direction: column;
@@ -568,7 +569,7 @@
   color: var(--ink-muted);
 }
 
-/* ── the account screens: profile, wardrobe, inventory, achievements ──────── */
+/* ── the account screens: profile, wardrobe, achievements ──────────────────── */
 
 /* Everything below is one column and stays one column. `.page` is already capped at 46rem and centred, so
    the only rules a phone needs are the ones that stop a *row* from being wider than it: every grid is
@@ -899,26 +900,6 @@
    to see a figure in. */
 .wide {
   max-width: calc(var(--measure-wide) + 2 * var(--space-4));
-}
-
-/* ── the inventory ─────────────────────────────────────────────────────────── */
-
-/* Inside each of the wardrobe's three groups, one sub-heading and card grid per slot that holds anything
-   (layout audit C3). The cards themselves are the wardrobe's (`OwnedCard`, `wardrobe.module.css`). */
-.invGroup {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-}
-
-.invSlot {
-  min-width: 0;
-}
-
-.invSlot ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
 }
 
 /* ── achievements ─────────────────────────────────────────────────────────── */

@@ -556,7 +556,7 @@ export interface MeasuredCard {
   /** The height of what stands directly above the rarity line — the card's name, one line or several. Two cards whose
    * names are as tall put their rarity lines on one line. */
   nameHeight: number | null
-  /** The card's footer, measured from the bottom edge of its lowest row (a lock hint, a date, a colour-dot row) to the
+  /** The card's footer, measured from the bottom edge of its lowest row (a lock hint, a colour-dot row) to the
    * card's own bottom edge; `null` for a card with nothing under its rarity line. Equal across a row when every
    * card's footer sits on the bottom line. */
   tail: number | null
@@ -579,8 +579,8 @@ const RARITY_WORDS = { common: 'Thường', rare: 'Hiếm', epic: 'Cực hiếm'
 
 /**
  * Measures the card grids inside `scope`: the wardrobe's item, colour, word and base cards (a tab's grid, or the two
- * grids of "Danh hiệu & Huy hiệu") and the inventory's owned cards. A grid counts when every item draws a border —
- * itself, or through its first child (`.cardCell`, `<li>`) — so the wardrobe's other grids are not picked up. Nothing
+ * grids of "Danh hiệu & Huy hiệu"). A grid counts when every item draws a border —
+ * itself, or through its first child (`.cardCell`) — so the wardrobe's other grids are not picked up. Nothing
  * here knows a CSS-module class name.
  */
 export async function measureCardLayout(scope: Locator): Promise<CardLayout> {
@@ -698,13 +698,12 @@ export function rarityGroups(row: MeasuredCard[]): MeasuredCard[][] {
 /**
  * Review 2026-09-29, No8b: in every card grid the cards of one row are one height ("ô dài, ô ngắn" was a tall card
  * beside short ones), the rarity line sits directly under the name — so cards whose names are as tall have it on one
- * line (±3 px) — and the footer under it (lock hint, date, colour dots) ends on the card's bottom line (±3 px). Height
- * is the outer box, ±1 px. The 3 px is what a rarity (0.6875 rem), a hint (0.75 rem) and a date (0.8125 rem) leave
- * apart under their glyphs (measured up to 2 px); it is not a misaligned row. Cards with no rarity line (the base
+ * line (±3 px) — and the footer under it (lock hint, colour dots) ends on the card's bottom line (±3 px). Height
+ * is the outer box, ±1 px. The 3 px is what a rarity (0.6875 rem), a hint (0.75 rem) and, once, an inventory date
+ * (0.8125 rem) leave apart under their glyphs (measured up to 2 px); it is not a misaligned row. Cards with no rarity line (the base
  * portraits, the "Tự nhiên" swatch) are compared on height only, and one with nothing under its rarity has no footer.
  *
- * `grids` is how many grids `scope` must hold (a tab has one, "Danh hiệu & Huy hiệu" two, the inventory one per
- * group of items): a grid that could not be measured, or that measured no row, fails instead of passing unseen.
+ * `grids` is how many grids `scope` must hold (a tab has one, "Danh hiệu & Huy hiệu" two): a grid that could not be measured, or that measured no row, fails instead of passing unseen.
  * Returns what it measured, for a caller that wants to report it.
  */
 export async function expectEvenCardRows(scope: Locator, label: string, grids = 1): Promise<CardLayout> {

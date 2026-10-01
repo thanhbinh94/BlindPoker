@@ -139,7 +139,6 @@
     "balance": "Balance",
     "noTitle": "No title yet",
     "toAvatar": "Edit wardrobe",
-    "toInventory": "Inventory",
     "toAchievements": "Achievements",
     "error": "Could not load your profile",
     "rename": {
@@ -212,23 +211,11 @@
     }
   },
   "inventory": {
-    "title": "Inventory",
-    "lead": "Everything this account owns. Equipped pieces are marked.",
-    "summary": "{{owned}} pieces owned",
-    "acquired": "Acquired {{date}}",
-    "empty": "Nothing here yet.",
     "error": "Could not load your inventory",
     "rarity": {
       "common": "Common",
       "rare": "Rare",
       "epic": "Epic"
-    },
-    "source": {
-      "default": "Starter",
-      "daily": "Daily check-in",
-      "achievement": "Achievement",
-      "free": "Free",
-      "other": "Other"
     }
   },
   "avatar": {

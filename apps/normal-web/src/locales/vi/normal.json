@@ -139,7 +139,6 @@
     "balance": "Số dư",
     "noTitle": "Chưa có danh hiệu",
     "toAvatar": "Phòng thay đồ",
-    "toInventory": "Kho đồ",
     "toAchievements": "Thành tựu",
     "error": "Không tải được hồ sơ của bạn",
     "rename": {
@@ -212,23 +211,11 @@
     }
   },
   "inventory": {
-    "title": "Kho đồ",
-    "lead": "Tất cả những gì tài khoản này sở hữu. Món đang mặc được đánh dấu.",
-    "summary": "Đang sở hữu {{owned}} món",
-    "acquired": "Nhận ngày {{date}}",
-    "empty": "Chưa có món nào.",
-    "error": "Không tải được kho đồ của bạn",
+    "error": "Không tải được phòng thay đồ",
     "rarity": {
       "common": "Thường",
       "rare": "Hiếm",
       "epic": "Cực hiếm"
-    },
-    "source": {
-      "default": "Khởi đầu",
-      "daily": "Điểm danh hằng ngày",
-      "achievement": "Thành tựu",
-      "free": "Miễn phí",
-      "other": "Khác"
     }
   },
   "avatar": {

@@ -282,7 +282,30 @@ describe('App — the shell', () => {
     expect(screen.getByRole('navigation', { name: viNormal.nav.main })).toBeInTheDocument()
   })
 
-  /** Nothing is a placeholder any more: the last two routes are lazy screens like the other four. */
+  it('sends an old #/inventory link to the wardrobe, replacing it in the history rather than adding to it (No5)', async () => {
+    window.history.replaceState(null, '', '/#/inventory')
+    const entries = window.history.length
+    renderApp(
+      stubApi({
+        inventory: vi.fn().mockResolvedValue({ items: [], avatar: { v: 3, base: 'f01', outfit: 'outfit_casual01' } }),
+        outfits: vi.fn().mockResolvedValue({ outfits: [null, null, null, null, null] }),
+        catalogAchievements: vi.fn().mockResolvedValue({ achievements: [] }),
+      }),
+    )
+    await settled()
+    await welcome()
+
+    expect(await screen.findByRole('heading', { name: viNormal.wardrobe.title, level: 1 })).toBeInTheDocument()
+    await waitFor(() => expect(window.location.hash).toBe('#/avatar'))
+    // The URL was swapped under the player: there is no entry for "Back" to bounce off, which would read the
+    // old hash again and send them straight forward once more.
+    expect(window.history.length).toBe(entries)
+    // The wardrobe is behind the same rail as any account screen, and the old path is no route of its own.
+    expect(screen.getByRole('navigation', { name: viNormal.nav.main })).toBeInTheDocument()
+    expect(ACCOUNT_ROUTES).not.toContain('/inventory')
+  })
+
+  /** Nothing is a placeholder any more: the last two routes are lazy screens like the other three. */
   it.each([
     ['/daily', viNormal.daily.title],
     ['/settings', viNormal.settings.title],

@@ -188,7 +188,6 @@ test('A-08 B-02 B-03 S-07 S-08: language and theme stick; every account screen o
   const screens: [string, string][] = [
     ['/profile', 'Hồ sơ'],
     ['/avatar', 'Phòng thay đồ'],
-    ['/inventory', 'Kho đồ'],
     ['/achievements', 'Thành tựu'],
     ['/settings', 'Cài đặt'],
     ['/daily', 'Điểm danh hằng ngày'],
@@ -199,5 +198,15 @@ test('A-08 B-02 B-03 S-07 S-08: language and theme stick; every account screen o
     await page.reload()
     await expect(page.getByRole('heading', { name: heading, level: 1 }), `${route} survives a reload`).toBeVisible()
   }
+
+  // S-07, review 2026-09-29 No5: the inventory folded into the wardrobe, and its old address is the wardrobe now —
+  // with the address bar saying so, in place of the old entry: "Back" returns to where the player came from, not to
+  // `#/inventory` (which would send them forward again).
+  await page.goto('/#/profile')
+  await page.goto('/#/inventory')
+  await expect(page.getByRole('heading', { name: 'Phòng thay đồ', level: 1 })).toBeVisible()
+  await expect(page).toHaveURL(/#\/avatar$/)
+  await page.goBack()
+  await expect(page).toHaveURL(/#\/profile$/)
   await context.close()
 })

@@ -196,12 +196,12 @@ async function sitOutAndPlay(page: Page): Promise<void> {
 
 /**
  * The rail must hold all four tabs at 375 px, entirely inside the viewport, with nothing pushing the page
- * sideways. Four is the ceiling the Shell was designed to — Avatar, Inventory and Achievements are reached
+ * sideways. Four is the ceiling the Shell was designed to — the wardrobe and Achievements are reached
  * from Profile precisely so a fifth tab never has to fit.
  */
 async function expectRailFits(page: Page): Promise<void> {
   // The Shell's rail by its accessible name, not by `header nav`: the profile page has a header and a nav of
-  // its own (its three links into the wardrobe, the inventory and the achievements), and a positional
+  // its own (its two links into the wardrobe and the achievements), and a positional
   // selector would silently measure those instead.
   const links = page.getByRole('navigation', { name: 'Điều hướng chính' }).getByRole('link')
   await expect(links).toHaveCount(4)
