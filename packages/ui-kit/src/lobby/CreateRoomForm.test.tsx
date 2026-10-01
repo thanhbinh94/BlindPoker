@@ -74,7 +74,7 @@ describe('CreateRoomForm', () => {
     const raw = validateRoomConfig({ name: '', mode: 'holdem' })
     expect(raw.ok).toBe(false)
     if (!raw.ok) expect(container.textContent).not.toContain(raw.message)
-    expect(screen.getByRole('alert')).toHaveTextContent('Cấu hình phòng không hợp lệ')
+    expect(screen.getByRole('alert')).toHaveTextContent('Thiết lập phòng không hợp lệ')
     expect(screen.getByRole('alert')).toHaveTextContent('Tên phòng cần 1–30 ký tự.')
   })
 })

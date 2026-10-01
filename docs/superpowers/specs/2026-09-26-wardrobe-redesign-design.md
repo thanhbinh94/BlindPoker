@@ -20,17 +20,17 @@ Màn tủ đồ nhìn như một phòng thay đồ của game: nhân vật lớn
 - **Cột trái** (thẻ nền `--bg-elev`, bo 16 px, `position: sticky; top: 16px`):
   1. **Sân khấu** cao 330 px: nền gradient tối, vệt sáng vàng mờ sau nhân vật, bệ elip mờ dưới chân; chibi toàn thân cao 320 px. Khi đang ở tab Khung, sân khấu hiện chân dung tròn 240 px có khung (như hiện nay hiện thêm ảnh nhỏ), không hiện toàn thân.
   2. **Biểu cảm**: một hàng segmented 6 nút nhỏ, không bao giờ gãy dòng.
-  3. **Đang mặc**: danh sách mỗi slot một dòng — biểu tượng, tên slot, tên món (màu chữ theo độ hiếm; màu tóc/mắt có chấm màu). Thứ tự: Thân, Màu tóc, Màu mắt, Mũ, Phụ kiện mặt, Trang phục, Hào quang, Khung, Danh hiệu, Huy hiệu. Slot trống ghi "Không có" (màu tóc/mắt trống ghi "Tự nhiên"). Slot tuỳ chọn đang có món có nút "×" để bỏ; Thân và Trang phục không có "×". Bấm vào một dòng mở đúng nhóm/tab của slot đó.
-  4. **Bộ đồ đã lưu**: 5 chân dung tròn 54 px (ô trống: vòng nét đứt có "+" và chữ "Trống"), tên bên dưới. Bấm ô có đồ mở menu nhỏ: Áp dụng · Lưu đè vào đây · Đổi tên · Xoá. Bấm ô trống mở hộp đặt tên để lưu bộ hiện tại vào ô đó. Các hộp thoại dùng lại luồng hiện có của `OutfitBar`.
+  3. **Đang dùng**: danh sách mỗi slot một dòng — biểu tượng, tên slot, tên món (màu chữ theo độ hiếm; màu tóc/mắt có chấm màu). Thứ tự: Nhân vật, Màu tóc, Màu mắt, Mũ, Phụ kiện mặt, Quần áo, Hào quang, Khung, Danh hiệu, Huy hiệu. Slot trống ghi "Không có" (màu tóc/mắt trống ghi "Tự nhiên"). Slot tuỳ chọn đang có món có nút "×" để bỏ; Nhân vật và Quần áo không có "×". Bấm vào một dòng mở đúng nhóm/tab của slot đó.
+  4. **Bộ đồ đã lưu**: 5 chân dung tròn 54 px (ô trống: vòng nét đứt có "+" và chữ "Trống"), tên bên dưới. Bấm ô có đồ mở menu nhỏ: Mặc bộ này · Lưu đè · Đổi tên · Xóa. Bấm ô trống mở hộp đặt tên để lưu bộ hiện tại vào ô đó. Các hộp thoại dùng lại luồng hiện có của `OutfitBar`.
 - **Cột phải**:
-  1. **3 nhóm** dạng segmented có biểu tượng: Ngoại hình (Thân, Màu tóc, Màu mắt) · Trang phục (Mũ, Phụ kiện mặt, Trang phục) · Trang trí (Hào quang, Khung, Danh hiệu & Huy hiệu).
-  2. **Tab con** của nhóm đang chọn, gạch chân vàng khi chọn, mỗi tab kèm "đã có/tổng" (ví dụ "5/8"; tab Thân không có số vì thân không phải món).
+  1. **3 nhóm** dạng segmented có biểu tượng: Ngoại hình (Nhân vật, Màu tóc, Màu mắt) · Trang phục (Mũ, Phụ kiện mặt, Quần áo) · Trang trí (Hào quang, Khung, Danh hiệu & Huy hiệu).
+  2. **Tab con** của nhóm đang chọn, gạch chân vàng khi chọn, mỗi tab kèm "đã có/tổng" (ví dụ "5/8"; tab Nhân vật không có số vì nhân vật không phải món).
   3. **Bộ lọc**: Tất cả · Đã có · Chưa có (không hiện ở tab Thân). Bên phải hiện "n/m đã có".
   4. **Lưới thẻ** `repeat(auto-fill, minmax(150px, 1fr))`, khoảng 14 px, lấp hết chiều ngang.
 
 ### 3.2 Điện thoại (< 768 px)
 
-Một cột theo thứ tự: đầu trang gọn (tiêu đề + "Lưu"; "Hoàn tác" thành nút biểu tượng); sân khấu 250 px (không sticky); biểu cảm cuộn ngang; 3 nhóm chiếm đủ chiều ngang; tab con; bộ lọc; lưới 3 cột; rồi "Đang mặc" và "Bộ đồ đã lưu" dạng mục thu gọn (mặc định đóng, tiêu đề ghi số món, ví dụ "Đang mặc (6)").
+Một cột theo thứ tự: đầu trang gọn (tiêu đề + "Lưu"; "Hoàn tác" thành nút biểu tượng); sân khấu 250 px (không sticky); biểu cảm cuộn ngang; 3 nhóm chiếm đủ chiều ngang; tab con; bộ lọc; lưới 3 cột; rồi "Đang dùng" và "Bộ đồ đã lưu" dạng mục thu gọn (mặc định đóng, tiêu đề ghi số món, ví dụ "Đang dùng (6)").
 
 ### 3.3 Máy tính bảng (768–1023 px)
 
@@ -38,11 +38,11 @@ Như desktop nhưng cột trái 300 px, sân khấu 280 px, lưới `minmax(130p
 
 ## 4. Thẻ
 
-### 4.1 Thẻ món (Mũ, Phụ kiện mặt, Trang phục, Hào quang, Khung)
+### 4.1 Thẻ món (Mũ, Phụ kiện mặt, Quần áo, Hào quang, Khung)
 
 - Ô ảnh cao 118 px (điện thoại 70 px), nền tối có quầng màu độ hiếm; ảnh là biểu tượng món hiện có (`<layer>_icon`), với món theo giới dùng bản cắt của thân đang chọn như hiện nay.
 - Tên món (đậm), nhãn độ hiếm chữ hoa nhỏ màu theo độ hiếm; viền dưới 3 px màu độ hiếm.
-- **Đang mặc**: viền vàng + nhãn "✓ Đang mặc" ở góc.
+- **Đang dùng**: viền vàng + nhãn "✓ Đang dùng" ở góc.
 - **Chưa có**: ảnh xám tối, tên màu nhạt, dòng khoá "🔒 <cách nhận>" (chuỗi `hintFor` hiện có). Không bấm mặc được; bấm hiện tooltip/nhãn cách nhận như hiện nay.
 - **Biến thể màu**: hàng chấm 16 px dưới thẻ món gốc (như Plan 13), chấm chưa có mờ 35 %.
 - Bấm thẻ đã có: mặc món; bấm lại món đang mặc ở slot tuỳ chọn: bỏ món.
@@ -79,7 +79,7 @@ Thêm token vào `packages/ui-kit/src/theme/tokens.css` cho cả chủ đề t�
 
 ## 8. Kiểm thử
 
-- Đơn vị (vitest + testing-library): nhóm/tab con/đếm số; bộ lọc; thẻ đã có/chưa có/đang mặc; "×" trong Đang mặc bỏ đúng slot, không có "×" cho Thân và Trang phục; bấm dòng Đang mặc mở đúng tab; Hoàn tác; menu bộ đồ đã lưu (áp dụng, lưu đè, đổi tên, xoá, lưu vào ô trống); tab Khung đổi sân khấu sang chân dung.
+- Đơn vị (vitest + testing-library): nhóm/tab con/đếm số; bộ lọc; thẻ đã có/chưa có/đang dùng; "×" trong Đang dùng bỏ đúng slot, không có "×" cho Nhân vật và Quần áo; bấm dòng Đang dùng mở đúng tab; Hoàn tác; menu bộ đồ đã lưu (mặc bộ này, lưu đè, đổi tên, xóa, lưu vào ô trống); tab Khung đổi sân khấu sang chân dung.
 - Cập nhật `WardrobeScreen.test.tsx` và e2e (`avatar2d.spec.ts`, `avatar-tint.spec.ts`) theo nhãn và cấu trúc mới; e2e thêm một lần chụp màn tủ đồ desktop và điện thoại để so với mockup.
 - `tokens.test.ts`: tương phản của ba màu độ hiếm ở hai chủ đề.
 - Gate: `pnpm -r typecheck`, `pnpm lint`, `pnpm test`, `pnpm build:normal`, e2e Normal, `pnpm build:lite` (ui-kit đổi token).

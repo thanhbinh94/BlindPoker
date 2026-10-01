@@ -66,7 +66,7 @@ async function assertTablistOnOneLine(page: Page, tablistName: string): Promise<
 
 /**
  * The group row ("Phòng thay đồ", design §3.1's three groups) plus every group's own sub-tab row, ending back on
- * "Ngoại hình" — the default group and its default tab, "Thân nền" (design §5.3) — so the screenshot
+ * "Ngoại hình" — the default group and its default tab, "Nhân vật" (design §5.3) — so the screenshot
  * taken right after always shows the same, mockup-matching view regardless of how many groups this walked
  * through first.
  */
@@ -98,7 +98,7 @@ async function expectCardGrids(page: Page): Promise<void> {
   const panel = page.getByRole('tabpanel')
 
   // The default tab: the base cards — one of the three tabs measured for overlap, with the hats and the words below.
-  await expectEvenCardRows(panel, `wardrobe, Ngoại hình → Thân nền, ${where}`)
+  await expectEvenCardRows(panel, `wardrobe, Ngoại hình → Nhân vật, ${where}`)
   await expectNoTextOverlapDown(page, `wardrobe, Ngoại hình, ${where}`)
 
   await goToWardrobeTab(page, 'Ngoại hình', 'Màu tóc')
@@ -111,8 +111,8 @@ async function expectCardGrids(page: Page): Promise<void> {
   await expectNoTextOverlapDown(page, `wardrobe, Trang phục → Mũ, ${where}`)
   await goToWardrobeTab(page, 'Trang phục', 'Phụ kiện mặt')
   await expectEvenCardRows(panel, `wardrobe, Trang phục → Phụ kiện mặt, ${where}`)
-  await goToWardrobeTab(page, 'Trang phục', 'Trang phục')
-  await expectEvenCardRows(panel, `wardrobe, Trang phục → Trang phục, ${where}`)
+  await goToWardrobeTab(page, 'Trang phục', 'Quần áo')
+  await expectEvenCardRows(panel, `wardrobe, Trang phục → Quần áo, ${where}`)
 
   await goToWardrobeTab(page, 'Trang trí', 'Hào quang')
   await expectEvenCardRows(panel, `wardrobe, Trang trí → Hào quang, ${where}`)
@@ -149,10 +149,10 @@ async function saveOutfitInEmptySlot(page: Page, slot: number): Promise<void> {
 }
 
 /** The outfit menu's own box: it carries no role or id of its own (a plain `<div>`, `SavedOutfits.tsx`),
- * so this reads the parent shared by every one of its buttons — "Áp dụng" is always the first — rather
+ * so this reads the parent shared by every one of its buttons — "Mặc bộ này" is always the first — rather
  * than adding a hook nothing else in this file needs. */
 function outfitMenuBox(page: Page) {
-  return page.getByRole('button', { name: 'Áp dụng' }).locator('xpath=..')
+  return page.getByRole('button', { name: 'Mặc bộ này' }).locator('xpath=..')
 }
 
 async function assertOutfitMenuWithinViewport(page: Page): Promise<void> {
@@ -189,7 +189,7 @@ test.describe('Blind Luck Poker Normal — bố cục tủ đồ (Kế hoạch 1
     // own breakpoint-driven size, resizing the inventory's icon right along with it. Reuses this test's
     // own account (no server round trip is cheap here, but a fresh registration is rate-limited, §19.2)
     // rather than opening a whole new test for one more assertion.
-    await goToWardrobeTab(page, 'Trang phục', 'Trang phục')
+    await goToWardrobeTab(page, 'Trang phục', 'Quần áo')
     const wardrobeIcon = page.locator('img[data-item-icon]').first()
     await expect(wardrobeIcon).toBeVisible()
     const wardrobeBox = await wardrobeIcon.boundingBox()

@@ -148,7 +148,7 @@ describe('ProfileScreen', () => {
     expect(screen.getByRole('heading', { name: viNormal.profile.title, level: 1 })).toBeInTheDocument()
     expect(screen.getByText(viNormal.items.title_hot_hand)).toBeInTheDocument()
     expect(screen.getByText(viNormal.items.badge_gold)).toBeInTheDocument()
-    expect(screen.getByText(/Thành viên từ/)).toBeInTheDocument()
+    expect(screen.getByText(/Tham gia từ/)).toBeInTheDocument()
     // 123.000 in `vi`: the assertion is on the digits, not on the separator the locale picked (and not on "123"
     // alone, which is also the name of the table in the history below).
     expect(screen.getByText(/123\D000/)).toBeInTheDocument()

@@ -202,7 +202,7 @@ export interface BlindRoomOptions {
   bots: number
   maxPlayers?: number
   cards?: 2 | 3
-  mode?: 'Thuần may rủi' | 'Chơi hoặc bỏ'
+  mode?: 'Hoàn toàn may rủi' | 'Chơi hoặc bỏ'
   /** The fixed wager's label, e.g. `1.000`. */
   wager?: string
   timer?: '10 giây' | '15 giây' | '30 giây'
@@ -217,8 +217,8 @@ export async function createBlind(page: Page, o: BlindRoomOptions): Promise<stri
   await dialog.getByLabel('Tên phòng').fill(o.name)
   if (o.maxPlayers !== undefined) await dialog.getByLabel('Số người tối đa').selectOption({ label: String(o.maxPlayers) })
   await dialog.getByLabel('Thời gian mỗi lượt').selectOption({ label: o.timer ?? '15 giây' })
-  await dialog.getByLabel('Số lá riêng').selectOption({ label: `${o.cards ?? 2} lá` })
-  await dialog.getByLabel('Kiểu quyết định').selectOption({ label: o.mode ?? 'Chơi hoặc bỏ' })
+  await dialog.getByLabel('Số lá mỗi người').selectOption({ label: `${o.cards ?? 2} lá` })
+  await dialog.getByLabel('Cách chơi').selectOption({ label: o.mode ?? 'Chơi hoặc bỏ' })
   await dialog.getByLabel('Mức cược cố định').selectOption({ label: o.wager ?? '1.000' })
   await dialog.getByLabel('Số lượng bot').selectOption({ label: String(o.bots) })
   if (o.password !== undefined) {
@@ -241,7 +241,7 @@ export async function joinByCode(page: Page, code: string, password?: string): P
 /** Takes a seat; a Hold'em seat asks how much to bring, and `buyIn` answers (the minimum when omitted). */
 export async function takeSeat(page: Page, seat: number, buyIn?: number): Promise<void> {
   await page.locator(`[data-seat="${seat}"]`).getByRole('button', { name: /Ngồi vào bàn/ }).click()
-  const dialog = page.getByRole('dialog', { name: 'Chọn mức mang vào' })
+  const dialog = page.getByRole('dialog', { name: 'Chọn số điểm mang vào bàn' })
   if (await dialog.isVisible().catch(() => false)) {
     if (buyIn !== undefined) await dialog.getByLabel('Buy-in').fill(String(buyIn))
     await dialog.getByRole('button', { name: 'Ngồi vào bàn' }).click()
@@ -251,7 +251,7 @@ export async function takeSeat(page: Page, seat: number, buyIn?: number): Promis
 
 export async function ready(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Sẵn sàng', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Chưa sẵn sàng', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Hủy sẵn sàng', exact: true })).toBeVisible()
 }
 
 export async function start(page: Page): Promise<void> {
@@ -268,7 +268,7 @@ export async function start(page: Page): Promise<void> {
  * where the fee and the uncalled return are printed.
  */
 export function resultCard(page: Page): Locator {
-  return page.getByRole('group', { name: /^(Người thắng|Những người thắng|Ván bị hủy)$/ })
+  return page.getByRole('group', { name: /^(Người thắng|Ván bị hủy)$/ })
 }
 
 /** The fee printed on a result card, 0 when the card prints none. */

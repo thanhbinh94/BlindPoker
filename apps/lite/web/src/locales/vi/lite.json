@@ -11,7 +11,7 @@
   },
   "prompt": {
     "title": "Vào bàn",
-    "lead": "Chọn một tên hiển thị. Không có mật khẩu — tên này chính là phiên chơi của bạn trên thiết bị này.",
+    "lead": "Đặt một tên để vào chơi, không cần mật khẩu. Tên này gắn với thiết bị bạn đang dùng.",
     "name": "Tên hiển thị",
     "placeholder": "Ví dụ: Minh Sài Gòn",
     "submit": "Vào sảnh",
@@ -25,13 +25,13 @@
   },
   "daily": {
     "title": "Điểm danh hằng ngày",
-    "streak": "Chuỗi ngày",
+    "streak": "Chuỗi điểm danh",
     "day": "Ngày {{day}}",
     "todayReward": "Thưởng hôm nay",
     "claimed": "Đã nhận hôm nay",
     "claim": "Nhận thưởng",
     "next": "Ngày mai",
-    "monthlyReset": "Chuỗi ngày bắt đầu lại vào ngày 1 mỗi tháng.",
+    "monthlyReset": "Chuỗi điểm danh được tính lại từ ngày 1 mỗi tháng.",
     "receipt": "Đã nhận {{points}} điểm — chuỗi {{streak}} ngày",
     "loading": "Đang tải…",
     "error": "Không tải được thông tin điểm danh",
@@ -41,7 +41,7 @@
     },
     "relief": {
       "title": "Cứu trợ",
-      "lead": "Số dư dưới {{threshold}} điểm được nạp lên {{target}} điểm, mỗi {{hours}} giờ một lần.",
+      "lead": "Khi số dư dưới {{threshold}} điểm, bạn có thể nhận cứu trợ để số dư trở lại {{target}} điểm (mỗi {{hours}} giờ một lần).",
       "button": "Nhận cứu trợ",
       "cooldown": "Có thể nhận lại lúc {{at}}",
       "receipt": "Đã nhận {{amount}} điểm cứu trợ"
@@ -56,7 +56,7 @@
     "account": "Tài khoản",
     "playerId": "Mã người chơi",
     "signOut": "Đăng xuất khỏi thiết bị",
-    "signOutConfirm": "Phiên chơi trên thiết bị này sẽ bị xóa. Không có mật khẩu để vào lại, và tên hiển thị cũ không thể đăng ký lần nữa.",
+    "signOutConfirm": "Bạn sẽ không thể quay lại tài khoản này vì không có mật khẩu, và tên hiển thị hiện tại cũng không dùng lại được nữa.",
     "version": "Phiên bản"
   },
   "session": {

@@ -135,7 +135,7 @@ async function blindHandsPlayed(page: Page, atLeast: number, timeoutMs = 20_000)
  * live region is an inner `status` holding the title and the rows, so this is the card as a whole — footer included.
  */
 function resultCard(page: Page): Locator {
-  return page.getByRole('group', { name: /^(Người thắng|Những người thắng|Ván bị hủy)$/ })
+  return page.getByRole('group', { name: /^(Người thắng|Ván bị hủy)$/ })
 }
 
 const PAYOUT = /\+\s*([\d.,]+)/
@@ -155,9 +155,9 @@ function payoutOf(rows: string[], who: string): number {
  * happens whenever the bot folds on the player who paid to play.
  */
 async function uncalledReturn(card: Locator): Promise<{ who: string; amount: number }> {
-  const line = card.getByText(/^Hoàn lại phần cược dư/)
+  const line = card.getByText(/^Hoàn cược dư cho/)
   if ((await line.count()) === 0) return { who: '', amount: 0 }
-  const hit = /^Hoàn lại phần cược dư\s+(.*?)\s+([\d.,]+)$/.exec((await line.innerText()).replace(/\s+/g, ' ').trim())
+  const hit = /^Hoàn cược dư cho\s+(.*?)\s+([\d.,]+)$/.exec((await line.innerText()).replace(/\s+/g, ' ').trim())
   expect(hit, 'the uncalled-return line must name a player and an amount').not.toBeNull()
   return { who: hit![1]!, amount: parsePoints(hit![2]!) }
 }
@@ -186,9 +186,10 @@ async function expectCountdownOnTheCard(card: Locator): Promise<void> {
  * result state, held still for as long as a check needs.
  */
 async function sitOutAndPlay(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Ngồi ngoài', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Vào lại', exact: true })).toBeVisible()
-  await page.getByRole('button', { name: /^Chơi\b/ }).click()
+  await page.getByRole('button', { name: 'Tạm nghỉ', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Chơi tiếp', exact: true })).toBeVisible()
+  // "Chơi tiếp" (the sit-in toggle, in the room controls) also starts with "Chơi": the play button is the one in the tray.
+  await page.getByRole('group', { name: 'Hành động' }).getByRole('button', { name: /^Chơi\b/ }).click()
 }
 
 /* ── the chrome ──────────────────────────────────────────────────────────────────────────────────── */
@@ -355,7 +356,7 @@ test.describe('Blind Luck Poker Normal', () => {
     // --- 5. the hand reached the progression ---------------------------------------------------------
     expect(await blindHandsPlayed(page, 1), 'the settlement wrote the blind hand counter').toBe(1)
     await page.goto('/#/achievements')
-    // `exact` matters: without it the substring also names "Mười ván Blind Poker thắng", the wins counter.
+    // `exact` names the hands counter by its whole name; the wins counter beside it is "Mười ván thắng Blind Poker".
     const blindHands = page.getByRole('progressbar', { name: 'Mười ván Blind Poker', exact: true })
     await expect(blindHands).toHaveAttribute('aria-valuenow', '1')
     await expect(blindHands).toHaveAttribute('aria-valuetext', '1 trên 10')

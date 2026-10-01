@@ -13,13 +13,13 @@
   },
   "auth": {
     "title": "Blind Luck Poker",
-    "lead": "Một tài khoản, mọi thiết bị. Điểm, kho đồ và thành tựu của bạn theo tài khoản chứ không theo máy.",
+    "lead": "Một tài khoản, chơi trên mọi thiết bị — điểm, kho đồ và thành tựu luôn đi theo bạn.",
     "signIn": "Đăng nhập",
     "register": "Đăng ký",
     "email": "Email",
     "emailPlaceholder": "ban@vidu.com",
     "password": "Mật khẩu",
-    "passwordHint": "8–128 ký tự, khác với email của bạn.",
+    "passwordHint": "8–128 ký tự, không trùng với email.",
     "showPassword": "Hiện mật khẩu",
     "hidePassword": "Ẩn mật khẩu",
     "displayName": "Tên hiển thị",
@@ -34,9 +34,9 @@
     },
     "errors": {
       "INVALID_EMAIL": "Địa chỉ email không hợp lệ",
-      "INVALID_PASSWORD": "Mật khẩu cần 8–128 ký tự và khác với email của bạn",
+      "INVALID_PASSWORD": "Mật khẩu cần 8–128 ký tự và không trùng với email",
       "INVALID_NAME": "Tên hiển thị không hợp lệ",
-      "EMAIL_TAKEN": "Email này đã có tài khoản",
+      "EMAIL_TAKEN": "Email này đã được đăng ký",
       "DISPLAY_NAME_TAKEN": "Tên hiển thị đã có người dùng",
       "BAD_CREDENTIALS": "Email hoặc mật khẩu không đúng",
       "RATE_LIMITED": "Bạn thử quá nhiều lần, vui lòng đợi {{seconds}} giây",
@@ -50,15 +50,15 @@
   },
   "daily": {
     "title": "Điểm danh hằng ngày",
-    "lead": "Mỗi ngày một lần. Chuỗi càng dài thì phần thưởng càng lớn, và sang tháng mới chuỗi bắt đầu lại từ ngày 1.",
+    "lead": "Điểm danh mỗi ngày để nhận thưởng. Chuỗi càng dài, thưởng càng lớn; sang tháng mới, chuỗi tính lại từ ngày 1.",
     "error": "Không tải được lịch điểm danh",
     "streak": "Chuỗi hiện tại: {{streak}} ngày",
-    "resetsAt": "Ngày mới bắt đầu lúc {{at}}",
+    "resetsAt": "Lần điểm danh tiếp theo: {{at}}",
     "reward": "Phần thưởng hôm nay: {{amount}}",
     "claim": "Nhận thưởng",
     "claiming": "Đang nhận…",
     "claimed": "Hôm nay bạn đã điểm danh rồi. Hẹn gặp lại ngày mai.",
-    "calendarTitle": "Lịch 31 ngày",
+    "calendarTitle": "Lịch điểm danh",
     "dayLabel": "Ngày {{day}}",
     "todayMark": "Hôm nay",
     "claimedMark": "Đã nhận",
@@ -71,40 +71,38 @@
       "title": "Đã nhận thưởng ngày {{day}}",
       "points": "Điểm",
       "item": "Vật phẩm",
-      "fallback": "Bậc này đã hết vật phẩm mới cho bạn — nhận {{amount}} thay cho vật phẩm.",
+      "fallback": "Bạn đã có hết vật phẩm của mốc này nên nhận {{amount}} thay thế.",
       "balance": "Số dư mới",
-      "streak": "Chuỗi sau khi nhận: {{streak}} ngày"
+      "streak": "Chuỗi điểm danh: {{streak}} ngày"
     },
     "errors": {
-      "ALREADY_CLAIMED": "Phần thưởng hôm nay đã được nhận rồi, có thể từ một thiết bị khác. Lịch vừa được tải lại."
+      "ALREADY_CLAIMED": "Hôm nay bạn đã nhận thưởng rồi (có thể trên thiết bị khác)."
     },
     "relief": {
       "title": "Cứu trợ",
-      "lead": "Khi số dư xuống dưới {{threshold}}, bạn có thể xin nạp lại lên {{target}}.",
+      "lead": "Khi số dư dưới {{threshold}}, bạn có thể nhận cứu trợ để số dư trở lại {{target}}.",
       "error": "Không tải được trạng thái cứu trợ",
-      "eligible": "Bạn đủ điều kiện nhận cứu trợ ngay bây giờ.",
+      "eligible": "Bạn có thể nhận cứu trợ ngay bây giờ.",
       "claim": "Nhận cứu trợ",
       "claiming": "Đang nhận…",
       "granted": "Đã cộng {{amount}}. Số dư mới: {{balance}}.",
       "reason": {
-        "balance": "Số dư của bạn vẫn trên mức cứu trợ, nên chưa cần đến nó.",
-        "cooldown": "Bạn vừa nhận cứu trợ. Thử lại lúc {{at}}.",
+        "balance": "Số dư của bạn chưa xuống dưới mức cứu trợ.",
+        "cooldown": "Bạn vừa nhận cứu trợ, có thể nhận lại lúc {{at}}.",
         "other": "Chưa thể nhận cứu trợ lúc này."
       }
     },
-    "calendarLead": "Số điểm nhận ở mỗi ngày của chuỗi; ô có hộp quà còn kèm vật phẩm."
+    "calendarLead": "Số điểm thưởng cho từng ngày trong chuỗi."
   },
   "settings": {
     "title": "Cài đặt",
     "theme": {
       "title": "Giao diện",
-      "lead": "Nền tối là mặc định của bàn chơi; nền sáng dành cho nơi nhiều ánh sáng.",
       "dark": "Tối",
       "light": "Sáng"
     },
     "language": {
-      "title": "Ngôn ngữ",
-      "lead": "Ngôn ngữ được nhớ trên thiết bị này."
+      "title": "Ngôn ngữ"
     },
     "account": {
       "title": "Tài khoản",
@@ -116,9 +114,9 @@
     },
     "signOut": {
       "title": "Đăng xuất?",
-      "body": "Bạn sẽ rời khỏi bàn đang chơi và cần đăng nhập lại trên thiết bị này.",
+      "body": "Bạn sẽ rời bàn đang ngồi (nếu có) và cần đăng nhập lại để chơi tiếp.",
       "confirm": "Đăng xuất ngay",
-      "cancel": "Ở lại",
+      "cancel": "Hủy",
       "close": "Đóng"
     },
     "about": {
@@ -137,8 +135,8 @@
   },
   "profile": {
     "title": "Hồ sơ",
-    "memberSince": "Thành viên từ {{date}}",
-    "balance": "Số điểm",
+    "memberSince": "Tham gia từ {{date}}",
+    "balance": "Số dư",
     "noTitle": "Chưa có danh hiệu",
     "toAvatar": "Phòng thay đồ",
     "toInventory": "Kho đồ",
@@ -148,8 +146,8 @@
       "title": "Tên hiển thị",
       "label": "Tên hiển thị mới",
       "submit": "Lưu tên",
-      "saved": "Đã lưu. Bàn chơi vẫn giữ tên cũ cho tới lần bạn vào phòng kế tiếp.",
-      "same": "Đó đã là tên hiển thị của bạn"
+      "saved": "Đã đổi tên! Tên mới sẽ hiện ở bàn từ lần vào phòng tiếp theo.",
+      "same": "Bạn đang dùng tên này rồi"
     },
     "stats": {
       "title": "Thống kê",
@@ -157,9 +155,9 @@
       "groups": {
         "holdem": "Texas Hold'em",
         "blind": "Blind Poker",
-        "streaks": "Chuỗi",
+        "streaks": "Chuỗi thắng/thua",
         "login": "Điểm danh",
-        "social": "Tại bàn"
+        "social": "Hoạt động"
       },
       "handsPlayedHoldem": "Số ván đã chơi",
       "handsWonHoldem": "Số ván thắng",
@@ -201,13 +199,13 @@
   "ledger": {
     "reason": {
       "starting_balance": "Điểm khởi đầu",
-      "settlement": "Chia điểm cuối ván",
+      "settlement": "Kết quả ván",
       "buy_in": "Vào bàn",
       "cash_out": "Rời bàn",
       "refund": "Hoàn điểm",
       "daily_reward": "Thưởng hằng ngày",
       "daily_login": "Điểm danh hằng ngày",
-      "daily_item_fallback": "Thưởng hằng ngày, hết món để tặng",
+      "daily_item_fallback": "Điểm danh (điểm thay vật phẩm)",
       "relief": "Điểm cứu trợ",
       "achievement": "Thưởng thành tựu",
       "other": "Khác"
@@ -236,11 +234,11 @@
   "avatar": {
     "mine": "Ảnh đại diện của bạn",
     "errors": {
-      "NOT_OWNED": "Bạn chưa sở hữu một trong các món đó",
-      "WRONG_CATEGORY": "Một món không thuộc ô bạn chọn",
-      "MISSING_LAYER": "Trang phục cần một món",
-      "INVALID_ITEM": "Một món không có trong danh mục",
-      "INVALID_BASE": "Thân nền không hợp lệ"
+      "NOT_OWNED": "Có món bạn chưa sở hữu",
+      "WRONG_CATEGORY": "Có món không đúng vị trí",
+      "MISSING_LAYER": "Nhân vật cần mặc một bộ quần áo",
+      "INVALID_ITEM": "Có món không tồn tại trong danh mục",
+      "INVALID_BASE": "Nhân vật không hợp lệ"
     },
     "slot": {
       "hair": "Tóc",
@@ -260,10 +258,10 @@
       "decor": "Trang trí"
     },
     "tabs": {
-      "base": "Thân nền",
+      "base": "Nhân vật",
       "head": "Mũ",
       "face": "Phụ kiện mặt",
-      "outfit": "Trang phục",
+      "outfit": "Quần áo",
       "aura": "Hào quang",
       "frame": "Khung",
       "hairColor": "Màu tóc",
@@ -276,20 +274,20 @@
       "locked": "Chưa có"
     },
     "ownedCount": "{{owned}}/{{total}} đã có",
-    "wearingBadge": "Đang mặc",
+    "wearingBadge": "Đang dùng",
     "words": {
       "titles": "Danh hiệu",
       "badges": "Huy hiệu"
     },
     "natural": "Tự nhiên",
     "equipped": {
-      "title": "Đang mặc",
-      "count": "Đang mặc ({{n}})",
+      "title": "Đang dùng",
+      "count": "Đang dùng ({{n}})",
       "none": "Không có",
       "remove": "Bỏ {{item}}"
     },
     "expression": {
-      "legend": "Biểu cảm xem trước",
+      "legend": "Xem thử biểu cảm",
       "neutral": "Bình thường",
       "happy": "Vui",
       "sad": "Buồn",
@@ -299,9 +297,9 @@
     },
     "hint": {
       "daily": {
-        "common": "Có thể rút từ điểm danh hằng ngày (thường)",
-        "rare": "Có thể rút từ điểm danh hằng ngày (hiếm)",
-        "epic": "Có thể rút từ điểm danh hằng ngày (cực hiếm)"
+        "common": "Có thể nhận từ quà điểm danh (thường)",
+        "rare": "Có thể nhận từ quà điểm danh (hiếm)",
+        "epic": "Có thể nhận từ quà điểm danh (cực hiếm)"
       },
       "unavailable": "Chưa có cách nhận món này"
     },
@@ -311,10 +309,10 @@
     "dirty": "● Có thay đổi chưa lưu",
     "undo": "Hoàn tác",
     "close": "Đóng",
-    "leaveTitle": "Rời đi mà không lưu?",
-    "leaveBody": "Bạn có thay đổi trang phục chưa được lưu.",
+    "leaveTitle": "Thoát mà không lưu?",
+    "leaveBody": "Những thay đổi chưa lưu sẽ bị mất.",
     "leaveStay": "Ở lại",
-    "leaveDiscard": "Bỏ qua và rời đi"
+    "leaveDiscard": "Thoát không lưu"
   },
   "outfits": {
     "title": "Bộ đồ đã lưu",
@@ -322,17 +320,17 @@
     "emptySlot": "Ô {{n}} trống",
     "defaultName": "Bộ {{n}}",
     "nameLabel": "Tên bộ đồ",
-    "apply": "Áp dụng",
+    "apply": "Mặc bộ này",
     "saveHere": "Lưu vào đây",
-    "overwrite": "Lưu đè vào đây",
+    "overwrite": "Lưu đè",
     "menu": "Bộ đồ {{name}}",
     "rename": "Đổi tên",
-    "delete": "Xoá",
+    "delete": "Xóa",
     "error": "Không thực hiện được thao tác, vui lòng thử lại"
   },
   "items": {
     "head_beanie01": "Mũ len",
-    "head_dealer_visor01": "Chắn nắng người chia bài",
+    "head_dealer_visor01": "Mũ chia bài",
     "head_beret_red01": "Mũ nồi đỏ",
     "head_conical_hat01": "Nón lá",
     "head_party_cone01": "Mũ chóp tiệc",
@@ -343,19 +341,19 @@
     "face_masquerade01": "Mặt nạ dạ hội",
     "face_eyepatch01": "Bịt mắt cướp biển",
     "outfit_casual01": "Bộ thường ngày",
-    "outfit_dealer01": "Bộ người chia bài",
+    "outfit_dealer01": "Đồng phục chia bài",
     "outfit_tet_red01": "Áo dài Tết đỏ",
     "outfit_tuxedo01": "Bộ tuxedo",
     "outfit_royal_robe01": "Long bào hoàng gia",
     "outfit_champion01": "Bộ nhà vô địch",
-    "aura_water01": "Vòng nguyên tố nước",
-    "aura_wind01": "Vòng nguyên tố gió",
-    "aura_fire01": "Vòng nguyên tố lửa",
-    "aura_earth01": "Vòng nguyên tố đất",
-    "aura_sakura01": "Vòng hoa anh đào",
-    "aura_ice01": "Vòng băng giá",
-    "aura_lightning01": "Vòng sét",
-    "aura_gold_cards01": "Vòng bài vàng",
+    "aura_water01": "Hào quang nước",
+    "aura_wind01": "Hào quang gió",
+    "aura_fire01": "Hào quang lửa",
+    "aura_earth01": "Hào quang đất",
+    "aura_sakura01": "Hào quang hoa anh đào",
+    "aura_ice01": "Hào quang băng giá",
+    "aura_lightning01": "Hào quang sấm sét",
+    "aura_gold_cards01": "Hào quang bài vàng",
     "frame_bronze": "Khung đồng",
     "frame_silver": "Khung bạc",
     "frame_monthly": "Khung tháng",
@@ -418,20 +416,20 @@
   "achievements": {
     "ui": {
       "title": "Thành tựu",
-      "summary": "Đã mở {{unlocked}} / {{total}}",
+      "summary": "Đã đạt {{unlocked}}/{{total}}",
       "progress": "{{progress}} trên {{threshold}}",
       "reward": "Phần thưởng",
-      "unlockedAt": "Mở ngày {{date}}",
-      "locked": "Chưa mở",
-      "empty": "Chưa có gì ở đây.",
+      "unlockedAt": "Đạt ngày {{date}}",
+      "locked": "Chưa đạt",
+      "empty": "Chưa có thành tựu nào.",
       "error": "Không tải được thành tựu của bạn",
       "category": {
         "login": "Điểm danh",
         "holdem": "Texas Hold'em",
         "blind": "Blind Poker",
-        "social": "Tại bàn"
+        "social": "Hoạt động"
       },
-      "unlocked": "Đã mở"
+      "unlocked": "Đã đạt"
     },
     "login_days_7": {
       "name": "Bảy ngày ghé bàn",
@@ -450,7 +448,7 @@
       "desc": "Điểm danh liên tục 7 ngày."
     },
     "login_streak_28": {
-      "name": "Chuỗi hai tám ngày",
+      "name": "Chuỗi 28 ngày",
       "desc": "Điểm danh liên tục 28 ngày."
     },
     "login_days_365": {
@@ -538,15 +536,15 @@
       "desc": "Chơi 1.000 ván Blind Poker."
     },
     "blind_wins_10": {
-      "name": "Mười ván Blind Poker thắng",
+      "name": "Mười ván thắng Blind Poker",
       "desc": "Thắng 10 ván Blind Poker."
     },
     "blind_wins_100": {
-      "name": "Trăm ván Blind Poker thắng",
+      "name": "Trăm ván thắng Blind Poker",
       "desc": "Thắng 100 ván Blind Poker."
     },
     "bot_hands_50": {
-      "name": "Bạn của máy",
+      "name": "Bạn thân của bot",
       "desc": "Chơi 50 ván có bot cùng bàn."
     },
     "rooms_10": {

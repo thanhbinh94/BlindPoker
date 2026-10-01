@@ -98,13 +98,11 @@
     "title": "Settings",
     "theme": {
       "title": "Appearance",
-      "lead": "Dark is the table's own palette; light is for a bright room.",
       "dark": "Dark",
       "light": "Light"
     },
     "language": {
-      "title": "Language",
-      "lead": "Your language is remembered on this device."
+      "title": "Language"
     },
     "account": {
       "title": "Account",

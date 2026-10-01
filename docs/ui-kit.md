@@ -207,7 +207,7 @@ advertised through `aria-keyshortcuts`. With no legal action it stays in place r
 `role="status"` line says what the seat is waiting for (review round 2, R2-3) — so a change of line is announced once.
 `trayWaitKey(hand, mine)` picks it, first match wins: "Ván đã kết thúc" once the hand is complete (the result card may
 still be held on the felt), "Bạn đã bỏ bài — chờ ván sau" for a folded seat, "Bạn đã tất tay — chờ kết quả" for an
-all-in seat, "Đã chọn — chờ các ghế khác" for a Blind seat that has decided, "Chờ lật bài" for a Blind hand past its
+all-in seat, "Đã chọn — chờ người chơi khác" for a Blind seat that has decided, "Chờ lật bài" for a Blind hand past its
 decision and for a Hold'em run-out (fewer than two seats that can still act: no turn is coming), and "Đang chờ đến lượt
 bạn" otherwise — Hold'em between turns, or a Blind seat whose own decision is on its way. The pre-action and auto-play
 rows under the line are unchanged.
@@ -231,7 +231,7 @@ scrolling body sit in the one `role="status"` wrapper (`.resultLive`), and the f
 return, countdown — follows it as the group's last child, outside every live region. The cost: the fee, carry-over and
 uncalled lines are no longer part of what is announced when the card appears; they stay on the card and are read on
 navigation. The countdown is never inside a row's `<li>` or the fee line, which is what the e2e suites read the card by
-— and they find the card as `getByRole('group', { name: /^(Người thắng|Những người thắng|Ván bị hủy)$/ })`, since a
+— and they find the card as `getByRole('group', { name: /^(Người thắng|Ván bị hủy)$/ })`, since a
 `status` locator would now match the inner region alone and lose the footer.
 
 The card is at most as tall as the felt less the seat clearance (`max-height: 100%` of the content box of

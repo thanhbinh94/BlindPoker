@@ -43,7 +43,6 @@ export function SettingsScreen({ api, lang, onLanguage, onSignedOut, version }: 
       </div>
 
       <Panel title={t('settings.theme.title')}>
-        <p className={s.footnote}>{t('settings.theme.lead')}</p>
         {/* The same pill as the language below it: one choice, one control (layout audit C1). */}
         <div className={s.choices}>
           <Segmented
@@ -59,7 +58,6 @@ export function SettingsScreen({ api, lang, onLanguage, onSignedOut, version }: 
       </Panel>
 
       <Panel title={t('settings.language.title')}>
-        <p className={s.footnote}>{t('settings.language.lead')}</p>
         <div className={s.choices}>
           <LanguageSwitch lang={lang} onChange={onLanguage} />
         </div>

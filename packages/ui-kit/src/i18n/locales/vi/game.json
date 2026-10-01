@@ -21,10 +21,10 @@
     "sitDown": "Ngồi vào bàn",
     "standUp": "Đứng dậy",
     "ready": "Sẵn sàng",
-    "notReady": "Chưa sẵn sàng",
+    "notReady": "Hủy sẵn sàng",
     "start": "Bắt đầu",
     "leave": "Rời phòng",
-    "kick": "Đuổi",
+    "kick": "Mời ra",
     "resync": "Đồng bộ lại",
     "create": "Tạo phòng",
     "join": "Vào phòng",
@@ -58,7 +58,7 @@
     "dealer": "Cái",
     "decided": "Đã chọn",
     "disconnected": "Mất kết nối",
-    "eligible": "Được chia",
+    "eligible": "Tham gia",
     "emptySeat": "Ghế trống",
     "faceDown": "Lá úp",
     "fee": "Phí bàn",
@@ -91,18 +91,18 @@
     "tie": "Hòa",
     "timer": "Thời gian",
     "turn": "Lượt",
-    "uncalledReturned": "Hoàn lại phần cược dư",
+    "uncalledReturned": "Hoàn cược dư cho",
     "variant": "Biến thể",
     "wager": "Mức cược",
     "tableLimit": "Hạn mức",
     "waitAllIn": "Bạn đã tất tay — chờ kết quả",
-    "waitDecided": "Đã chọn — chờ các ghế khác",
+    "waitDecided": "Đã chọn — chờ người chơi khác",
     "waitFolded": "Bạn đã bỏ bài — chờ ván sau",
     "waitReveal": "Chờ lật bài",
     "waiting": "Đang chờ",
     "waitingForTurn": "Đang chờ đến lượt bạn",
     "winner": "Người thắng",
-    "winners": "Những người thắng",
+    "winners": "Người thắng",
     "you": "Bạn",
     "closing": "Đang đóng…"
   },
@@ -112,7 +112,7 @@
   },
   "blind": {
     "decision": {
-      "none": "Thuần may rủi",
+      "none": "Hoàn toàn may rủi",
       "playOrFold": "Chơi hoặc bỏ"
     },
     "cards2": "2 lá",
@@ -166,7 +166,7 @@
     "fullHouse": "Cù lũ",
     "quads": "Tứ quý",
     "straightFlush": "Thùng phá sảnh",
-    "royalFlush": "Thùng phá sảnh vua"
+    "royalFlush": "Thùng phá sảnh hoàng gia"
   },
   "status": {
     "connecting": "Đang kết nối",
@@ -177,7 +177,7 @@
   },
   "lobby": {
     "title": "Sảnh chờ",
-    "empty": "Chưa có phòng nào — hãy tạo một phòng.",
+    "empty": "Chưa có phòng nào. Tạo phòng mới để bắt đầu nhé!",
     "create": "Tạo phòng",
     "joinByCode": "Vào bằng mã phòng",
     "codePlaceholder": "Nhập mã phòng",
@@ -204,15 +204,15 @@
     "buyIn": "Buy-in",
     "minBuyIn": "Buy-in tối thiểu",
     "maxBuyIn": "Buy-in tối đa",
-    "holeCards": "Số lá riêng",
-    "decisionMode": "Kiểu quyết định",
+    "holeCards": "Số lá mỗi người",
+    "decisionMode": "Cách chơi",
     "wager": "Mức cược cố định",
     "botCount": "Số lượng bot",
     "submit": "Tạo phòng",
     "hint": {
       "name": "Tên phòng cần 1–30 ký tự.",
       "password": "Mật khẩu cần 4–20 ký tự.",
-      "buyIn": "Buy-in tối thiểu phải nhỏ hơn hoặc bằng buy-in tối đa.",
+      "buyIn": "Buy-in tối thiểu không được lớn hơn buy-in tối đa.",
       "botCount": "Số bot phải ít hơn số ghế."
     },
     "buyInHint": "{{bb}} BB = {{points}}",
@@ -230,13 +230,13 @@
     "kicked": "Bạn đã bị đuổi khỏi phòng",
     "hostLeft": "Chủ phòng đã rời đi",
     "reconnecting": "Mất kết nối — đang kết nối lại…",
-    "sitOut": "Ngồi ngoài",
-    "sitIn": "Vào lại",
-    "buyInTitle": "Chọn mức mang vào",
+    "sitOut": "Tạm nghỉ",
+    "sitIn": "Chơi tiếp",
+    "buyInTitle": "Chọn số điểm mang vào bàn",
     "controls": "Điều khiển bàn",
     "manage": "Quản lý bàn",
     "manageTitle": "Người trong phòng",
-    "sitFirst": "Hãy ngồi vào bàn để chơi."
+    "sitFirst": "Chọn một ghế trống để vào chơi."
   },
   "cancel": {
     "shutdown": "Máy chủ đang tắt",
@@ -246,12 +246,12 @@
     "other": "Không rõ lý do"
   },
   "notify": {
-    "KICKED": "Bạn đã bị mời khỏi phòng",
+    "KICKED": "Bạn đã bị mời ra khỏi phòng",
     "ROOM_CLOSED": "Phòng đã đóng",
     "DAILY_REWARD": "Thưởng hằng ngày: {{amount}} điểm",
-    "ACHIEVEMENT_UNLOCKED": "Mở khóa thành tựu: {{id}}",
-    "TABLE_LIMIT_SPENT": "Bạn đã dùng hết hạn mức ở bàn này — {{amount}} điểm còn lại đã về số dư. Chọn một ghế trống để vào lại.",
-    "TABLE_LIMIT_SPENT_none": "Bạn đã dùng hết hạn mức ở bàn này. Chọn một ghế trống để vào lại.",
+    "ACHIEVEMENT_UNLOCKED": "Đạt thành tựu mới: {{id}}",
+    "TABLE_LIMIT_SPENT": "Bạn đã dùng hết hạn mức ở bàn này, {{amount}} điểm còn lại đã được trả về số dư. Chọn ghế trống để chơi tiếp.",
+    "TABLE_LIMIT_SPENT_none": "Bạn đã dùng hết hạn mức ở bàn này. Chọn ghế trống để chơi tiếp.",
     "other": "Thông báo mới"
   },
   "presets": {

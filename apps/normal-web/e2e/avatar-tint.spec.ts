@@ -89,7 +89,7 @@ test.describe('Blind Luck Poker Normal — màu tóc, màu mắt', () => {
     await greenEyes.click()
     await expect(greenEyes, 'the eye colour it just picked reflects the choice').toHaveAttribute('aria-pressed', 'true')
 
-    await goToWardrobeTab(page, 'Trang phục', 'Trang phục')
+    await goToWardrobeTab(page, 'Trang phục', 'Quần áo')
     const redTee = page.getByRole('tabpanel').getByRole('button', { name: 'Áo phông đỏ', exact: true })
     await redTee.click()
     await expect(redTee, 'the coloured outfit it just picked reflects the choice').toHaveAttribute('aria-pressed', 'true')
@@ -109,7 +109,7 @@ test.describe('Blind Luck Poker Normal — màu tóc, màu mắt', () => {
     await save(page)
     // No11b: the tab with a coloured outfit picked and worn — its colour dots and the worn mark on the cards — and the
     // saved notice, text clear of text on the player's screen and a laptop's.
-    await expectNoTextOverlapAt(page, 'wardrobe, Trang phục → Trang phục, a coloured tee worn', OVERLAP_SCREENS)
+    await expectNoTextOverlapAt(page, 'wardrobe, Trang phục → Quần áo, a coloured tee worn', OVERLAP_SCREENS)
 
     // A table seat draws this player's own chibi (not a bot's) — the same door avatar2d.spec.ts
     // uses to prove a saved wardrobe choice reaches somewhere other than the wardrobe screen itself.

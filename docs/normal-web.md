@@ -163,7 +163,7 @@ result against ten acceptance criteria, and writes `avatar-manifest.json`. Until
 
 `/avatar` — `wardrobe/WardrobeScreen.tsx`. A `Chibi` preview on the left, sized 192 px, with an
 expression row to try each of the six faces and the save button below it; seven tabs on the right —
-**Thân nền** (base), then a tile grid per equipped slot (**Mũ**, **Mặt**, **Trang phục**, **Aura**,
+**Nhân vật** (base), then a tile grid per equipped slot (**Mũ**, **Mặt**, **Quần áo**, **Aura**,
 **Khung**), then **Danh hiệu & Huy hiệu** (title and badge together, the two slots with no picture).
 The outfit bar sits under both columns, five slots wide.
 
@@ -175,7 +175,7 @@ The outfit bar sits under both columns, five slots wide.
   mở"). A tile's own picture (`ItemPreview`) is the item drawn on the figure that would actually wear it
   — head-and-shoulders for `head`/`face`/`frame`, the whole figure for `outfit`/`aura`, because a crop
   framed on the head would give every outfit tile the same face.
-- **`OutfitBar`** is a bookmark of a *whole* `AvatarConfigDto`, not of one item — "Áp dụng" replaces the
+- **`OutfitBar`** is a bookmark of a *whole* `AvatarConfigDto`, not of one item — "Mặc bộ này" replaces the
   draft outright, "Lưu vào đây" snapshots whatever is currently equipped into that slot under a name up
   to 24 characters. Both round-trip the server (`PUT /api/me/outfits/:slot`, `POST
   /api/me/outfits/:slot/apply`) rather than only touching local state, so a saved outfit survives a

@@ -194,7 +194,7 @@ describe('HandResult', () => {
         result: { ...hand.result!, payouts: [{ seat: 0, amount: 1_960 }, { seat: 1, amount: 1_960 }] },
       } as unknown as ClientHand
       const view = renderWith(undefined, undefined, split)
-      expect(screen.getByRole('group', { name: 'Những người thắng' })).toBeInTheDocument()
+      expect(screen.getByRole('group', { name: 'Người thắng' })).toBeInTheDocument()
       view.unmount()
 
       const cancelled = {
@@ -215,7 +215,7 @@ describe('HandResult', () => {
       renderWith('Ván tiếp theo sau 5 giây', undefined, full)
       const card = screen.getByRole('group', { name: 'Người thắng' })
       const live = within(card).getByRole('status')
-      for (const text of ['Phí bàn 80', 'Cộng dồn 40', 'Hoàn lại phần cược dư Ann 500', 'Ván tiếp theo sau 5 giây']) {
+      for (const text of ['Phí bàn 80', 'Cộng dồn 40', 'Hoàn cược dư cho Ann 500', 'Ván tiếp theo sau 5 giây']) {
         const line = within(card).getByText(text)
         expect(line.closest(LIVE), `"${text}" has no live region around it`).toBeNull()
         expect(live, `"${text}" is not in the status region`).not.toContainElement(line)

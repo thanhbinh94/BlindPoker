@@ -60,7 +60,7 @@ test('S-04 S-05 D-05: a Blind room with three bots, a hand played to the end', a
   await ready(host.page)
   await start(host.page)
   await autopilot(host.page, ['play'], handOver(host.page))
-  await host.page.getByRole('button', { name: 'Ngồi ngoài' }).click()
+  await host.page.getByRole('button', { name: 'Tạm nghỉ' }).click()
   await leave(host.page)
   await balanceWhen(host.page, (n) => n !== before - 5_000)
   const fresh = await ledgerSince(host.page, rowsBefore)
@@ -177,7 +177,7 @@ test('D-01 D-02 D-03 D-04: the create form refuses what it cannot build and buil
   await dialog.getByLabel('Buy-in tối thiểu').fill('300')
   await dialog.getByLabel('Buy-in tối đa').fill('100')
   await dialog.getByRole('button', { name: 'Tạo phòng' }).click()
-  await expect(dialog.getByText('Buy-in tối thiểu phải nhỏ hơn hoặc bằng buy-in tối đa.')).toBeVisible()
+  await expect(dialog.getByText('Buy-in tối thiểu không được lớn hơn buy-in tối đa.')).toBeVisible()
 
   // D-04: a password of three characters.
   await dialog.getByLabel('Buy-in tối thiểu').fill('50')
@@ -195,7 +195,7 @@ test('D-01 D-02 D-03 D-04: the create form refuses what it cannot build and buil
   await expect(header.getByText('Blind 250/500')).toBeVisible()
   await expect(header.getByText(/\/4 người chơi/)).toBeVisible()
   await page.locator('[data-seat="0"]').getByRole('button', { name: /Ngồi vào bàn/ }).click()
-  const prompt = page.getByRole('dialog', { name: 'Chọn mức mang vào' })
+  const prompt = page.getByRole('dialog', { name: 'Chọn số điểm mang vào bàn' })
   await expect(prompt.getByText('20.000 – 50.000')).toBeVisible()
   await page.keyboard.press('Escape')
   await leave(page)
@@ -205,7 +205,7 @@ test('D-06: auto-start deals once every real player is ready', async () => {
   const page = host.page
   await createBlind(page, { name: unique('Bàn D06 '), bots: 1, autoStart: true })
   await takeSeat(page, 0)
-  // Not `ready()`: that waits for "Chưa sẵn sàng", and with auto-start the room deals the moment Ready lands.
+  // Not `ready()`: that waits for "Hủy sẵn sàng", and with auto-start the room deals the moment Ready lands.
   await page.getByRole('button', { name: 'Sẵn sàng', exact: true }).click()
   await expect(page.getByRole('group', { name: 'Hành động' }), 'the hand starts without "Bắt đầu"').toBeVisible({ timeout: 15_000 })
   await autopilot(page, ['fold'], handOver(page))
