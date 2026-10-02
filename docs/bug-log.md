@@ -191,12 +191,12 @@ roadmap). Kế hoạch: `docs/superpowers/plans/2026-09-30-plan16-review-round-1
 | No17 | Bug giao diện | D–TB | Nút cuối modal sát phần chữ, căn trái | Mỗi modal tự làm phần nút; thêm vùng nút chung (căn giữa, có khoảng cách) cho mọi modal | 1 | đã sửa — `c203aa2` |
 | No11b | Bug + test | TB | Chữ/khung đè nhau (thẻ "Tay nóng" sát "HUY HIỆU"; "Ván tiếp theo sau…" đè ghế mình) | Sửa hai chỗ + thêm bước kiểm tự động phát hiện chữ đè nhau trên các màn chính | 1 | đã sửa — `484235f`, `4b7813e`; bộ đo `27e3138`, `3aff93c`, `4a4ce0c`, `badb6ee` |
 | No2 | Bug layout | TB | Vào bàn chơi có thanh cuộn dọc trên PC tiêu chuẩn | Ghế của mình nhô dưới bàn tới 6 dòng; thu gọn ghế, tính lại kích thước bàn; sảnh/kho đồ chỉ cuộn khi nội dung thật sự dài | 1 | đã sửa — `4b7813e`, `b214056` |
-| No11a | Tính năng | D | Mặc định chỉ hiện món đã có + ô "hiện cả món chưa có" | Thay bộ lọc Tất cả/Đã có/Chưa có | 2 | chờ chốt |
-| No10 | Tính năng | D–TB | Chọn biểu cảm dạng trượt | ‹ tên biểu cảm › thay 6 nút | 2 | chờ chốt |
-| No1 | Tính năng | TB | Lật bài từ từ | Hiện chỉ có hiệu ứng lúc chia; thêm lật hai mặt ~0,6 giây | 2 | chờ chốt |
-| No8a | Bug/thiếu | TB (hoặc D) | Các bản màu áo phông cùng một icon | Icon chưa có mặt nạ tô màu; làm mặt nạ icon (TB) hoặc chấm màu (D) | 2 | chờ chốt |
-| No5 | Câu hỏi | TB | Kho đồ và Phòng thay đồ có cần tách? | Đề xuất gộp vào Phòng thay đồ | 2 | chờ chốt |
-| No9 | Rà câu chữ | TB | Câu chữ chưa tự nhiên, hướng dẫn thừa | Lập danh sách cũ → mới / bỏ để duyệt | 2 | chờ chốt |
+| No11a | Tính năng | D | Mặc định chỉ hiện món đã có + ô "hiện cả món chưa có" | Thay bộ lọc Tất cả/Đã có/Chưa có | 2 | đã sửa — `2708a22`, `f319e85` (Plan 18) |
+| No10 | Tính năng | D–TB | Chọn biểu cảm dạng trượt | ‹ tên biểu cảm › thay 6 nút | 2 | đã sửa — `762da23`, `f319e85` (Plan 18) |
+| No1 | Tính năng | TB | Lật bài từ từ | Hiện chỉ có hiệu ứng lúc chia; thêm lật hai mặt ~0,6 giây | 2 | đã sửa — `790022d`, `13b929c` (Plan 18) |
+| No8a | Bug/thiếu | TB (hoặc D) | Các bản màu áo phông cùng một icon | Icon chưa có mặt nạ tô màu; làm mặt nạ icon (TB) hoặc chấm màu (D) | 2 | đã sửa (mặt nạ icon) — `694882d`, `f319e85` (Plan 18) |
+| No5 | Câu hỏi | TB | Kho đồ và Phòng thay đồ có cần tách? | Đề xuất gộp vào Phòng thay đồ | 2 | đã sửa (gộp) — `92e833d`, `a2d821b` (Plan 18) |
+| No9 | Rà câu chữ | TB | Câu chữ chưa tự nhiên, hướng dẫn thừa | Lập danh sách cũ → mới / bỏ để duyệt | 2 | đã sửa — `313b0db` (Plan 18; danh sách ở `docs/copy-review-2026-10.md`) |
 | No13 | Tính năng lớn | K | Tách giới tính, kiểu tóc, màu da, màu tóc; kiểu riêng nam/nữ | Thân nền là ảnh AI vẽ liền; cần vẽ lại tóc thành lớp riêng + biến thể da + đổi dữ liệu/pipeline | 3 | cần spec |
 | No14 | Tính năng lớn | K+ | Chỉnh dáng tự nhiên, có ngón tay | Ảnh 2D phẳng không có khung xương; khả thi nhất: vài tư thế vẽ sẵn + vẽ lại có ngón tay, cùng đợt No13 | 3 | cần spec |
 | No7 | Tương lai | D | Thông báo qua email | Ghi vào roadmap (spec §34), chưa làm | — | roadmap — đã ghi ở spec §34, mục 14 |
@@ -212,6 +212,41 @@ roadmap). Kế hoạch: `docs/superpowers/plans/2026-09-30-plan16-review-round-1
 - No2: ghế của mình chỉ còn tối đa hai dòng dưới bảng tên (huy hiệu + tiền cược; tên bài + tiền thắng); chế độ gọn cho sân bàn thấp bắt đầu ở 400 px (trước 330), khoảng cách của nó nay đặt trên ghế (đặt trên vòng ghế thì không có tác dụng); `min-height` của sảnh là `--bp-stage` thay cho `100vh`. e2e đòi sảnh không cuộn dọc ở 1920×940, và bàn sáu ghế không cuộn dọc (trang lẫn sân bàn) ở 1920×940, 1536×730, 1366×768, 1280×720, trong ba trạng thái (chờ, trong ván, kết quả); điện thoại 375×812 giữ bố cục xếp dọc và được đo chữ đè ở cùng ba trạng thái. Chỗ thứ hai của No11b ("Ván tiếp theo sau…" đè ghế mình): đếm ngược chuyển vào chân thẻ kết quả, trong một `<p aria-live="off">` riêng (thẻ là `role="status"`, đọc mỗi giây sẽ ồn); thẻ cao tối đa bằng sân bàn, phần thân cuộn bên trong và **mờ dần ở chân khi còn cuộn được** (`b214056`) để biết dưới còn bảng pot.
 - No11b (bộ đo): `expectNoTextOverlap(page, nhãn, opts?)` trong `apps/normal-web/e2e/overlap.ts` đo mọi đoạn chữ thấy được trong một lần `page.evaluate`, cắt theo `overflow` và khung nhìn, bỏ svg/`role=img`/`aria-hidden`, so trong cùng lớp (trang, từng hộp thoại, chồng toast); phần tử đục vẽ đè lên dòng dưới thì tính là che; `data-overlap-ok="<lý do>"` cho ca cố ý (chưa dùng lần nào). **Phép đo là hộp dòng, không phải 20 % cỡ chữ:** mỗi cạnh khung chữ thu vào `max(0, (cao − line-height)/2)`, không thu khi `line-height: normal`. Mức 20 % đầu tiên bỏ sót đúng ca đếm ngược của người dùng (4,6 px còn 1,9 px); nay các dòng `line-height: 1` liền nhau chỉ chạm nhau chứ không bị báo đè. Bộ đo tự kiểm bằng trang mẫu tĩnh, mỗi ca đạt có một ca hỏng đi kèm. Chạy trong các test sẵn có ở 1920×940 (màn hình của người dùng), 1366×768 và 375×812 trên các màn chính; bộ ops đo thêm bàn Hold'em ở 1440×900, 1920×940, 1366×768 và 375×812, bàn Blind chỉ ở 1440×900. Ngoài hai chỗ người dùng nêu, bộ đo tìm thêm đúng một chỗ, trên điện thoại: khối ghế của mình dính đáy để lộ chữ "Pot" của bàn dưới tên bài (`.mine`, đã sửa ở `4b7813e` — khối đặc, vệt mờ vẽ phía trên nó); không màn nào khác có chữ đè.
 - Test Blind (review Task 8): "một tài khoản chơi trọn một ván Blind với bot" từng đỏ ngẫu nhiên khi ván có thành tựu từ Thùng trở lên (+3.000 trở lên, ghi ngay sau quyết toán) làm số dư lệch khỏi thẻ kết quả. Nay đọc số dư và sổ điểm cùng nhau cho tới khi sổ cộng đúng số dư, rồi trừ các dòng `achievement` trước khi so với thẻ (như ops 04-blind); chạy 24/24 với `--repeat-each=24` (`490f82c`).
+
+**Đợt 2 đã sửa (01–02/10) — Plan 18, merge `a2bd8cc`, đã lên host LAN.** Người dùng duyệt "Đợt 2 làm theo đề xuất của bạn luôn" (01/10).
+
+Plan: `docs/superpowers/plans/2026-10-01-plan18-review-round-2.md`. Danh sách câu chữ No9: `docs/copy-review-2026-10.md`.
+
+Ghi chú kỹ thuật:
+
+- **No9.**
+  - Áp dụng 95 dòng đổi chữ và bỏ 2 dòng hướng dẫn ở Cài đặt; dòng bỏ thứ ba (ghi chú Kho đồ) đi cùng màn Kho đồ ở No5.
+  - Thuật ngữ thống nhất:
+    - "Tạm nghỉ / Chơi tiếp" (thay "Ngồi ngoài / Vào lại"), "Hủy sẵn sàng", "Mời ra" (thay "Đuổi");
+    - "Người thắng" cho cả một lẫn nhiều người, "Hoàn cược dư cho …", "Đạt thành tựu mới";
+    - Phòng thay đồ: "Nhân vật" và "Quần áo", "Đang dùng", "Mặc bộ này".
+  - Giữ "{{x}} trên {{y}}" ở thanh tiến độ thành tựu, vì đó cũng là chữ cho trình đọc màn hình.
+- **No11a.**
+  - Phòng thay đồ mặc định chỉ hiện món đã có. Ô tích **"Hiện cả món chưa có"** hiện thêm phần còn lại; ô giữ trạng thái khi đổi tab trong lượt vào.
+  - Tab chưa có món nào: "Bạn chưa có món nào ở mục này."
+  - Một "họ" gồm món gốc và các bản màu của nó. Họ hiện khi có món gốc **hoặc** bất kỳ bản màu nào.
+  - Thẻ hiện thành viên đang mặc; nếu không mặc, hiện món gốc nếu có, không thì bản màu đầu tiên đã có. Vì vậy tích ô chỉ thêm thẻ, không biến thẻ đã có thành thẻ khoá.
+- **No5.**
+  - Bỏ màn Kho đồ; Hồ sơ chỉ còn hai nút Phòng thay đồ và Thành tựu.
+  - Link cũ `#/inventory` tự chuyển sang `#/avatar` mà không thêm bước lùi (`location.replace`).
+  - Mất ngày nhận, nguồn và tổng số món (chấp nhận); số "n/m đã có" ở từng tab vẫn còn.
+- **No8a.**
+  - Pipeline cắt thêm mặt nạ màu cho icon (8 ảnh mới) từ mặt nạ của lớp, cùng khung cắt với icon.
+  - Thẻ trong Phòng thay đồ tô icon theo bản màu đang mặc ("Áo phông đỏ" hiện áo đỏ).
+  - Hàng chấm màu gồm cả món gốc, là chấm đầu tiên; chấm có `title`. Trên điện thoại mỗi chấm có vùng bấm 44 × 44 px, nhìn vẫn 16 px.
+- **No10.** Biểu cảm chọn bằng `‹ tên ›`: hai nút trước/sau quay vòng, tên đọc bằng `aria-live="polite"`, có phím mũi tên; nút 44 px trên điện thoại.
+- **No1.**
+  - Lá úp chuyển sang ngửa ngay tại chỗ thì lật hai mặt trong 0,6 giây: bài đối thủ lúc so bài, cả Hold'em lẫn Blind.
+  - Lá chia ra đã ngửa (bài mình, bài chung) giữ hiệu ứng chia như cũ. Khi bật giảm chuyển động thì không lật.
+  - Phiếu kết quả chờ khoảng 0,87 giây cho bài lật xong rồi mới hiện; không chờ khi giảm chuyển động hoặc khi không có bài lật.
+- **Ghi nhận, chưa làm:**
+  - Dòng kết quả dưới ghế (tên bài, tiền thắng) và viền sáng người thắng hiện ngay lúc bài còn đang lật; có thể cho chờ cùng phiếu kết quả ở đợt sau.
+  - Khi đã tích ô, thẻ một bản màu đang có không còn hiện gợi ý mở khoá của món gốc.
 
 Ghi nhận từ final review Plan 16. R2-5 sửa ngày 30/09; R2-1 … R2-4 sửa ngày 01/10 trong **Plan 17** (`docs/superpowers/plans/2026-10-01-plan17-review-round-2-notes.md`, merge `f6fe2f3`, đã lên host LAN):
 

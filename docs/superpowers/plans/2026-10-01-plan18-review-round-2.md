@@ -33,6 +33,14 @@ There is no protocol, schema or server-logic change. The asset pipeline gains on
 
 They are folded into each task as **"Amendments (pre-flight)"** blocks. Where an amendment and the task text differ, the amendment wins. Verified as correct: 102/102 rows of the copy list match the current files, the icon pipeline regenerates byte-identically here, and the task order is sound.
 
+**Executed and merged (`a2bd8cc`, 2026-10-02).** Changes from this text, ruled during execution and made in the final fix wave (`13b929c`, `f319e85`, `a2d821b`):
+- **Result card wait.** The card waits `REVEAL_HOLD_MS` (870 ms) after an in-place reveal (`useRevealHold`). Without the wait it covered the top seats' flip.
+- **Tray during the wait.** The tray hides the countdown while the card waits.
+- **Flip easing.** The flip uses `ease-in-out`, not `var(--ease)`, so the back shows for the first half.
+- **Which member a card shows.** It is the worn one; else the owned original; else the first owned variant; else the original — regardless of the box, so ticking only adds.
+- **Colour dots.** They get 44 px touch targets on phones.
+- **Redirect.** It uses `window.location.replace('#/avatar')`.
+
 **Ruling on No9 approval:** the original proposal said the copy list would be approved before editing. The user's "làm theo đề xuất của bạn luôn" is the approval. The list is applied, committed as `docs/copy-review-2026-10.md`, and shown in the final report so the user can veto any line.
 
 ## Global Constraints

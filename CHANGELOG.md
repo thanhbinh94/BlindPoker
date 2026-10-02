@@ -8,6 +8,35 @@ below are the real history.
 
 ---
 
+## Plan 18 — review 2026-09-29, round 2 (No1, No5, No8a, No9, No10, No11a) — merged `a2bd8cc` (2026-10-02)
+
+This round covers six improvements the user approved on 2026-10-01 ("Đợt 2 làm theo đề xuất của bạn luôn"). The
+record is `docs/bug-log.md` §7. There is no protocol or schema change and no migration. The asset pipeline gains one
+output, icon tint masks: 8 new PNGs.
+
+- **Natural Vietnamese (No9).** About a hundred strings were rewritten to read like a Vietnamese game rather than a
+  translation, and two redundant Settings hints are gone. The full old → new list is in `docs/copy-review-2026-10.md`.
+  Notable renames:
+  - "Tạm nghỉ / Chơi tiếp" (sit out / sit in) and "Hủy sẵn sàng";
+  - "Mời ra" instead of "Đuổi";
+  - the wardrobe's "Nhân vật" / "Quần áo" / "Đang dùng";
+  - "Đạt thành tựu mới".
+- **The wardrobe shows what you own (No11a).** By default each tab lists only items you own. A box, **"Hiện cả món
+  chưa có"**, adds the rest, and a tab with nothing owned says so. A colour variant you own keeps its family visible
+  even when you don't own the original, and ticking the box only adds cards; it never replaces one.
+- **One place for your items (No5).** The profile's separate inventory screen is gone, and the wardrobe holds
+  everything. The old `#/inventory` address opens the wardrobe without leaving a step behind in the Back history.
+- **Colour variants look their colour (No8a).** The red, navy, green and yellow tees (and the beret, beanie and party
+  hat colours) used to share one white icon. Each now shows its own colour, and a family's card follows the variant
+  you are wearing. The colour dots include the original, carry names, and have thumb-sized tap targets on phones.
+- **Expression stepper (No10).** The six crowded expression buttons under the preview are now one `‹ Vui ›` row with
+  previous and next buttons, arrow keys, and the name read out politely.
+- **Cards turn over (No1).** An opponent's cards revealed at the showdown now flip over in about 0.6 s instead of
+  snapping face-up. The result card waits for the turn (about 0.9 s), so the reveal can be seen. With
+  reduced motion on, nothing flips and nothing waits.
+
+---
+
 ## Plan 17 — review round 2 notes (R2-1 … R2-4) — merged `f6fe2f3` (2026-10-01)
 
 These are the four notes the Plan 16 final review left open (`docs/bug-log.md` §7). There is no protocol, schema or
