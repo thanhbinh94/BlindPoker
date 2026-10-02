@@ -409,6 +409,16 @@ The one layout knob is `--bp-stage` (see [Embedding](#embedding-it-in-an-app)).
 pulses once per `POT_UPDATED`, the winner seat glows. `prefers-reduced-motion: reduce` switches every animation and
 transition off in `global.css`; there is no JS animation loop to disable.
 
+A face-down card that is revealed where it lies — an opponent's hand at the showdown — **turns over** (review
+2026-09-29, No1): a two-sided turn about the vertical axis, `--dur-flip` (600 ms), ease-in-out so the back shows for
+the first half and the face for the second, on the same 60 ms stagger. `Card` is an HTML wrapper (`.card`: size, drop
+shadow, deal-in, `perspective`), a `preserve-3d` flipper and the side(s) it shows, each with `backface-visibility:
+hidden`. The face is the flipper's resting style and the keyframe holds only the start (`from { rotateY(180deg) }`),
+so with motion off the reveal is instant. The side that shows is the card's one `role="img"` with the label and
+`data-card` / `data-face`, from the render that reveals it; the back behind a turned face is `aria-hidden` with none of
+them, so counts by role or label never see it, and nothing waits on `animationend`. A card that mounts face up — the
+viewer's own, the board, the result card's — does not turn; it keeps its deal-in.
+
 ---
 
 ## Responsive rules

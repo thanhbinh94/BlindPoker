@@ -153,5 +153,7 @@
 
   --dur-1: 120ms;
   --dur-2: 220ms;
+  /* A card turning over when it is revealed (review 2026-09-29, No1). */
+  --dur-flip: 600ms;
   --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
 }

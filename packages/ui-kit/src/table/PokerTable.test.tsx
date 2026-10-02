@@ -1,4 +1,4 @@
-import type { RoomPlayerView } from '@bp/core'
+import { parseCards, type RoomPlayerView } from '@bp/core'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -48,6 +48,28 @@ describe('PokerTable', () => {
     expect(screen.getByText('300')).toBeInTheDocument()
     expect(screen.getByText(/disconnected/i)).toBeInTheDocument()
     expect(screen.queryAllByRole('button', { name: /sit down/i })).toHaveLength(0) // canSit false
+  })
+  // Review 2026-09-29, No1: at the showdown an opponent's cards turn over where they lie. For the first half of the turn
+  // each card's back is drawn behind its face — as artwork: every card is still named once, and no back is left to count.
+  it("turns an opponent's cards over at the showdown and still names each card once", () => {
+    const i18n = createI18n({ language: 'en', storage: null })
+    const table = (h: typeof hand) => (
+      <I18nextProvider i18n={i18n}>
+        <PokerTable room={room} hand={h} myPlayerId="a" deadlineAt={null} serverNow={() => 0} turnTimerMs={30000} lang="en" layout="ring" canSit={false} />
+      </I18nextProvider>
+    )
+    const view = render(table(hand))
+    const me = screen.getByRole('group', { name: 'Seat 1' })
+    const bob = screen.getByRole('group', { name: 'Seat 3' })
+    expect(within(bob).getAllByLabelText('Face-down card')).toHaveLength(2)
+
+    view.rerender(table({ ...hand, actingSeat: null, seats: hand.seats.map((seat) => (seat.seat === 2 ? { ...seat, holeCards: parseCards('Jc Td') } : seat)) }))
+    expect(screen.queryAllByLabelText('Face-down card')).toHaveLength(0)
+    expect(within(bob).getAllByRole('img', { name: / of / })).toHaveLength(2)
+    for (const name of ['Jack of clubs', '10 of diamonds', 'Queen of spades', 'Queen of diamonds', 'Ace of hearts'])
+      expect(screen.getAllByLabelText(name), name).toHaveLength(1)
+    expect(bob.querySelectorAll(`.${s.cardTurn}`), "Bob's two cards turn").toHaveLength(2)
+    expect(me.querySelectorAll(`.${s.cardTurn}`), 'mine were dealt face up and do not').toHaveLength(0)
   })
   // Review 2026-09-29, No2: a badge, the bet chip, the hand's name and the payout used to take a line each, and the
   // viewer's block ran six lines deep past the foot of the stage. Two lines now: who the seat is and what it has in

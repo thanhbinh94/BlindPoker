@@ -1,8 +1,14 @@
 /* Đêm Sài Gòn — the table. Teal-black felt under a gold rail, ivory cards, lacquer-red backs.
-   All motion is CSS: a dealt-card flip, a conic turn ring, one pot pulse, one winner glow. */
+   All motion is CSS: a dealt-card flip, a revealed card turning over, a conic turn ring, one pot pulse, one winner
+   glow. */
 
 /* ---------------- Card ---------------- */
+/* The wrapper: size, drop shadow and the deal-in. It is an HTML box now (the card turns over inside it), so it takes
+   on the `display: block; max-width: 100%` that `global.css` gives an `svg`. Its `perspective` is the depth of the
+   turn below; the shadow and the deal-in stay here, off the flipper, whose 3D a filter or an opacity would flatten. */
 .card {
+  display: block;
+  max-width: 100%;
   width: var(--card-w, 46px);
   height: auto;
   aspect-ratio: 60 / 84;
@@ -11,6 +17,39 @@
   animation: deal 340ms var(--ease) backwards;
   animation-delay: var(--deal-delay, 0ms);
   transform-origin: 50% 62%;
+  perspective: 420px;
+}
+
+/* The flipper and its sides (review 2026-09-29, No1). The sides share one grid cell and hide whichever faces away;
+   the back of a card that has turned up sits rotated behind its face. No `filter`, `opacity` or `overflow` here. */
+.cardFlip {
+  display: grid;
+  transform-style: preserve-3d;
+}
+
+.cardSide {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: auto;
+  backface-visibility: hidden;
+}
+
+.cardUnder {
+  transform: rotateY(180deg);
+}
+
+/* A face-down card revealed in place turns over: two-sided, about 0.6 s, the back for the first half and the face for
+   the second (an ease-in-out, so the card is edge-on at the midpoint), staggered like the deal. Only the start of the
+   turn is a keyframe; the face is the resting style, so with every animation off (reduced motion) it simply shows. */
+.cardTurn {
+  animation: flip var(--dur-flip, 600ms) ease-in-out backwards;
+  animation-delay: var(--deal-delay, 0ms);
+}
+
+@keyframes flip {
+  from {
+    transform: rotateY(180deg);
+  }
 }
 
 .cardSm {
@@ -1404,6 +1443,7 @@
 /* ---------------- Motion off ---------------- */
 @media (prefers-reduced-motion: reduce) {
   .card,
+  .cardTurn,
   .potChips,
   .potValue,
   .payout,
