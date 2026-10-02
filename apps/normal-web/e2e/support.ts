@@ -549,6 +549,8 @@ export async function expectNoSidewaysScroll(page: Page): Promise<void> {
 export async function expectDotTarget(dot: Locator, label: string): Promise<{ width: number; height: number }> {
   await dot.scrollIntoViewIfNeeded()
   const measured = await dot.evaluate((el) => {
+    // Centred, not just in view: a dot near the window's edge or under the phone's sticky rail would measure short.
+    el.scrollIntoView({ block: 'center', inline: 'center' })
     const box = el.getBoundingClientRect()
     const cx = box.left + box.width / 2
     const cy = box.top + box.height / 2

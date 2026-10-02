@@ -48,7 +48,7 @@ apps/normal-web/
       AuthScreen.tsx    sign in and register, one card, two modes
       {Profile,Achievements,Daily,Settings}Screen.tsx   four of the five lazy account screens
       wardrobe/
-        WardrobeScreen.tsx   the fifth — preview + expression stepper + seven tabs + the outfit bar
+        WardrobeScreen.tsx   the fifth — preview + expression stepper + nine tabs + saved outfits
         BaseTab.tsx          the two fixed bases (f01/m01) — chosen, never locked
         ItemTab.tsx          one slot's tiles: owned and clickable, or locked with a reason
         OutfitBar.tsx        five saved snapshots — apply / save here / rename / delete
@@ -164,9 +164,9 @@ result against ten acceptance criteria, and writes `avatar-manifest.json`. Until
 `/avatar` — `wardrobe/WardrobeScreen.tsx`. A `Chibi` preview on the left, sized 192 px, with an expression stepper
 under it to try each of the six faces — `‹  Vui  ›`, a previous and a next button around the current face's name,
 wrapping at both ends, ArrowLeft/ArrowRight too, each button described by the name (review 2026-09-29, No10;
-`wardrobe/StagePanel.tsx`) — and the save button below it; seven tabs on the right — **Nhân vật** (base), then a
-tile grid per equipped slot (**Mũ**, **Mặt**, **Quần áo**, **Aura**, **Khung**), then **Danh hiệu & Huy hiệu**
-(title and badge together, the two slots with no picture). The outfit bar sits under both columns, five slots wide.
+`wardrobe/StagePanel.tsx`) — then the **Đang dùng** list and the five **Bộ đồ đã lưu** slots. On the right, nine
+tabs in three groups: **Ngoại hình** (Nhân vật, Màu tóc, Màu mắt), **Trang phục** (Mũ, Phụ kiện mặt, Quần áo) and
+**Trang trí** (Hào quang, Khung, Danh hiệu & Huy hiệu — title and badge together, the two slots with no picture).
 
 There is no separate inventory screen (review 2026-09-29, No5): what the account owns is this screen's default
 list, and Profile links here and to the achievements only. `#/inventory` — an old bookmark or link — still opens
