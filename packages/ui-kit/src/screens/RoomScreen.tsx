@@ -66,7 +66,14 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
   const { t } = useTranslation()
   const { state } = client
   const room = state.room
-  const expressionFor = useTableExpressions(state, client.serverNow)
+  const hand = state.hand
+  // A showdown that turns an opponent's cards over where they lie is watched first: the card waits out the turn
+  // (`REVEAL_HOLD_MS`, none under reduced motion) instead of opening over it (review round 2, fix wave, No1). The table
+  // waits with it — the lines under the seats, the winner's glow, the board's gold edge and the faces' reaction — so
+  // nothing on screen gives the result away before the card (the same fix wave, follow-up). The faces take the flag
+  // themselves: their reaction counts from the end of the hold, so it shows for its full length.
+  const held = useRevealHold(hand)
+  const expressionFor = useTableExpressions(state, client.serverNow, held)
   const onLeftRef = useRef(onLeft)
   onLeftRef.current = onLeft
   const [buyInSeat, setBuyInSeat] = useState<number | null>(null)
@@ -104,11 +111,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
   }, [request, client])
   const dismiss = useCallback((id: number) => client.dismissNotification(id), [client])
 
-  const hand = state.hand
   const finished = hand !== null && hand.phase === 'COMPLETE' && hand.result !== null ? hand : null
-  // A showdown that turns an opponent's cards over where they lie is watched first: the card waits out the turn
-  // (`REVEAL_HOLD_MS`, none under reduced motion) instead of opening over it (review round 2, fix wave, No1).
-  const held = useRevealHold(hand)
   // The result card sits over the felt, so it has to be closable: between hands a player may well want to look at
   // the table underneath it rather than at the receipt. Everything that follows the card — the seat clearance, the
   // close button, the countdown's place — follows this one, the card actually drawn.
@@ -238,6 +241,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
           chibiFor={chibiFor}
           expressionFor={expressionFor}
           captionFor={captionFor}
+          resultPending={held}
         />
 
         {/* The result card is dealt onto the felt, so it keeps the felt's night palette in either theme. The countdown

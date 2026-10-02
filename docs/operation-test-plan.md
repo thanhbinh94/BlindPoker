@@ -137,7 +137,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 |---|---|---|---|
 | E-01 | Ngồi vào bàn, chọn mức mang vào | Số dư trừ đúng số mang vào, stack hiện trên ghế | P1 |
 | E-02 | Bấm Bắt đầu khi chưa ai Sẵn sàng | Nút khoá, có gợi ý phải Sẵn sàng trước | P2 |
-| E-03 | Chơi một ván đến showdown | Button/SB/BB đúng vị trí; lá chung lật đủ 3–1–1; lá của đối thủ lật từ từ (~0,6 giây) rồi phiếu kết quả mới hiện; tắt khi bật giảm chuyển động; người thắng được cộng pot trừ phí bàn 2% (tối đa 1 BB) | P1 |
+| E-03 | Chơi một ván đến showdown | Button/SB/BB đúng vị trí; lá chung lật đủ 3–1–1; lá của đối thủ lật từ từ (~0,6 giây) rồi phiếu kết quả mới hiện — dòng kết quả dưới các ghế (tên tay bài, tiền thắng) và viền sáng của người thắng cũng đợi đến lúc đó; tắt khi bật giảm chuyển động; người thắng được cộng pot trừ phí bàn 2% (tối đa 1 BB) | P1 |
 | E-04 | Xem / Theo / Cược / Tố / Tất tay; dùng nút Min, ½, Pot, Max | Chỉ hiện hành động hợp lệ; tố thấp hơn mức tối thiểu bị chặn | P1 |
 | E-05 | 3 người, stack khác nhau, hai người tất tay | Có pot phụ; mỗi pot chia đúng người đủ điều kiện | P1 |
 | E-06 | Chọn trước "Xem/Bỏ", "Theo mọi mức", "Bỏ bài" khi chưa tới lượt | Tới lượt thì tự làm đúng lựa chọn; lựa chọn bị huỷ nếu có người tố làm nó không còn hợp lệ | P2 |
@@ -152,7 +152,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 
 | Mã | Bước | Kỳ vọng | Ưu tiên |
 |---|---|---|---|
-| F-01 | Kiểu Hoàn toàn may rủi, 2 lá, 3 bot | Mỗi ván trừ đúng mức cược cố định **từ chồng trên bàn**; không có lượt quyết định; lật bài và chia pot trừ 2% phí; lá của đối thủ lật từ từ (~0,6 giây) rồi phiếu kết quả mới hiện; tắt khi bật giảm chuyển động | P1 |
+| F-01 | Kiểu Hoàn toàn may rủi, 2 lá, 3 bot | Mỗi ván trừ đúng mức cược cố định **từ chồng trên bàn**; không có lượt quyết định; lật bài và chia pot trừ 2% phí; lá của đối thủ lật từ từ (~0,6 giây) rồi phiếu kết quả mới hiện — dòng kết quả dưới các ghế cũng đợi đến lúc đó; tắt khi bật giảm chuyển động | P1 |
 | F-02 | Kiểu 3 lá | Mỗi người nhận 3 lá; xếp hạng dùng 5 lá tốt nhất trong 8 | P2 |
 | F-03 | Kiểu Chơi hoặc bỏ, 2 người thật | Hai người quyết định cùng lúc, không ai thấy lựa chọn của người kia trước khi hết pha | P1 |
 | F-04 | Cả hai chọn Bỏ | Pot chuyển sang ván sau, bàn hiện "Cộng dồn" | P1 |

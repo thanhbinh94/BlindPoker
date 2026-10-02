@@ -1,8 +1,15 @@
 import { HandCategory, parseCards } from '@bp/core'
+import { renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { ClientHand, ClientHandResult } from '../client/types.js'
 import { makeHand, makePlayer, makeRoom, makeSeat, makeState } from '../test-fixtures.js'
-import { advanceExpressionMemory, expressionForSeat, initialExpressionMemory, type ExpressionMemory } from './expression.js'
+import {
+  advanceExpressionMemory,
+  expressionForSeat,
+  initialExpressionMemory,
+  useTableExpressions,
+  type ExpressionMemory,
+} from './expression.js'
 
 const T0 = 1_000_000
 
@@ -171,6 +178,69 @@ describe('advanceExpressionMemory / expressionForSeat', () => {
     const state = makeState({ room: sittingOutRoom, hand })
     const memory = advanceExpressionMemory(initialExpressionMemory(T0), state, T0)
     expect(expressionForSeat(memory, state, 0, T0)).toBe('sleep')
+  })
+})
+
+// Follow-up to review round 2, No1: while `RoomScreen` holds the result card for an opponent's cards to turn over, the faces
+// keep the result to themselves too — and the reaction counts from when the hold is over, not from when the result landed.
+describe('useTableExpressions with the result pending', () => {
+  /** The table before the hand in question: its id is not the one `over` carries, so the memory has not recorded that hand. */
+  const live: ClientHand = makeHand({
+    handId: 'h0',
+    phase: 'BETTING',
+    seats: [makeSeat({ seat: 0, playerId: 'a' }), makeSeat({ seat: 1, playerId: 'b' })],
+  })
+  /** Ann won, Bob lost at the showdown: `happy` and `sad` once the hook folds this in. */
+  const over: ClientHand = makeHand({
+    handId: 'h1',
+    phase: 'COMPLETE',
+    seats: [makeSeat({ seat: 0, playerId: 'a' }), makeSeat({ seat: 1, playerId: 'b' })],
+    result: result({ payouts: [{ seat: 0, amount: 500 }], showdown: [showdownHand(0), showdownHand(1)] }),
+  })
+
+  /** A table whose hand and flag are the hook's props, on a server clock the test moves by hand. */
+  const table = () => {
+    let now = T0
+    const initialProps: { hand: ClientHand; pending?: boolean } = { hand: live }
+    const view = renderHook(({ hand, pending }) => useTableExpressions(makeState({ room, hand }), () => now, pending), { initialProps })
+    const faces = () => [view.result.current(0), view.result.current(1)]
+    return { view, faces, at: (t: number) => void (now = T0 + t) }
+  }
+
+  it('shows neutral while pending, and the reactions run their full length from when it ends', () => {
+    const { view, faces, at } = table()
+    at(100)
+    view.rerender({ hand: over, pending: true })
+    expect(faces(), 'the result has landed').toEqual(['neutral', 'neutral'])
+    at(100 + 870)
+    expect(faces(), 'still pending').toEqual(['neutral', 'neutral'])
+
+    view.rerender({ hand: over, pending: false })
+    expect(faces()).toEqual(['happy', 'sad'])
+    at(100 + 870 + 2_999)
+    expect(faces()).toEqual(['happy', 'sad'])
+    at(100 + 870 + 3_001)
+    expect(faces(), 'sad: 3 s from the end of the hold').toEqual(['happy', 'neutral'])
+    at(100 + 870 + 3_999)
+    expect(faces()).toEqual(['happy', 'neutral'])
+    at(100 + 870 + 4_001)
+    expect(faces(), 'happy: 4 s from the end of the hold').toEqual(['neutral', 'neutral'])
+  })
+
+  it('reacts at once when nothing is pending, as it always did', () => {
+    const { view, faces, at } = table()
+    at(100)
+    view.rerender({ hand: over })
+    expect(faces()).toEqual(['happy', 'sad'])
+    at(100 + 4_001)
+    expect(faces()).toEqual(['neutral', 'neutral'])
+  })
+
+  it('keeps a folded seat’s closed eyes while pending: that is a state, not the result', () => {
+    const { view, faces } = table()
+    const seats = [makeSeat({ seat: 0, playerId: 'a' }), makeSeat({ seat: 1, playerId: 'b', folded: true })]
+    view.rerender({ hand: { ...over, seats }, pending: true })
+    expect(faces()).toEqual(['neutral', 'closed'])
   })
 })
 
