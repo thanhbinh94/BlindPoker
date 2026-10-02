@@ -258,7 +258,8 @@ reaction (4 s happy, 3 s sad) starts when the hold ends and runs its full length
 still shows what its own state says in the meantime (folded, sitting out, disconnected). Everything appears in the one
 render that deals the card, and nothing else about the hold changes. (Until bug-log §7 E1 was fixed on 03/10, the
 happy and sad reactions only fired for a hand first seen already complete: `advanceExpressionMemory` recorded the hand
-id on every live render, so the completed hand's id was already "seen". It now records the id only when it reacts.)
+id on every live render, so the completed hand's id was already "seen". It now records the id only when it reacts —
+which also restarts the 60 s idle-to-sleep clock on every completed hand, live ones included.)
 
 The card is at most as tall as the felt less the seat clearance (`max-height: 100%` of the content box of
 `RoomScreen`'s overlay, which ends above the viewer's own seat — below): past that its body — the rows, then the pot

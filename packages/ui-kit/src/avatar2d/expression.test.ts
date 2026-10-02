@@ -121,10 +121,26 @@ describe('advanceExpressionMemory / expressionForSeat', () => {
     memory = advanceExpressionMemory(memory, won('h1', 0), T0 + 1000)
     expect(memory.idleSince).toBe(T0 + 1000)
     memory = advanceExpressionMemory(memory, live('h2'), T0 + 10_000)
+    // h1's happy has run out, and the live h2 does not re-arm it
+    expect(expressionForSeat(memory, live('h2'), 0, T0 + 10_000)).toBe('neutral')
     expect(expressionForSeat(memory, live('h2'), 1, T0 + 10_000)).toBe('neutral')
     memory = advanceExpressionMemory(memory, won('h2', 1), T0 + 11_000)
     expect(expressionForSeat(memory, won('h2', 1), 1, T0 + 11_000)).toBe('happy')
     expect(memory.idleSince).toBe(T0 + 11_000)
+  })
+
+  it('a cancelled hand watched live wins and loses nobody a face, but still restarts the idle clock', () => {
+    const seats = [makeSeat({ seat: 0, playerId: 'a' }), makeSeat({ seat: 1, playerId: 'b' })]
+    const dealt = makeState({ room, hand: makeHand({ handId: 'h1', phase: 'BETTING', seats }) })
+    const cancelled = makeState({
+      room,
+      hand: makeHand({ handId: 'h1', phase: 'COMPLETE', seats, result: result({ cancelled: true, reason: 'shutdown' }) }),
+    })
+    let memory = advanceExpressionMemory(initialExpressionMemory(T0), dealt, T0)
+    memory = advanceExpressionMemory(memory, cancelled, T0 + 1000)
+    expect(expressionForSeat(memory, cancelled, 0, T0 + 1000)).toBe('neutral')
+    expect(expressionForSeat(memory, cancelled, 1, T0 + 1000)).toBe('neutral')
+    expect(memory.idleSince).toBe(T0 + 1000)
   })
 
   it('surprised for 2 s on any seat going all-in, table-wide, then neutral', () => {
