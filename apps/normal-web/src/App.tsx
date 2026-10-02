@@ -221,13 +221,11 @@ export function App({ api, socketFactory }: AppProps) {
   // The old inventory link is the wardrobe: the rail, the route list, the boundary's key and the daily reminder
   // all read `path`, so none of them has to know the inventory ever existed.
   const path = route.path === INVENTORY_ROUTE ? '/avatar' : route.path
-  // And the address bar follows, by *replacing* the entry. The kit's router has no replace (a `navigate` would add
-  // one, and "Back" would land on `#/inventory` and be sent forward again), and `replaceState` fires no
-  // `hashchange`, so the route above still reads `/inventory` until the next real navigation — which is why the
-  // screen is chosen from `path`, not from the hash.
+  // And the address bar follows, replacing the entry rather than adding one ("Back" would land on `#/inventory` and be
+  // sent forward again). `location.replace` fires `hashchange`, so the route reads `/avatar` from then on.
   const routePath = route.path
   useEffect(() => {
-    if (routePath === INVENTORY_ROUTE) window.history.replaceState(window.history.state, '', '#/avatar')
+    if (routePath === INVENTORY_ROUTE) window.location.replace('#/avatar')
   }, [routePath])
 
   // Today's reward, as a reminder rather than a claim: a sign-in that lands on the lobby with a reward waiting

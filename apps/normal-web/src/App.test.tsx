@@ -1,7 +1,7 @@
 import { FakeSocket, fakeSocketFactory } from '@bp/ui-kit'
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { ACCOUNT_ROUTES, App, websocketUrl } from './App.js'
 import { ApiError, type AuthMeDto, type NormalApi } from './api.js'
 import { DAILY_NUDGE_KEY } from './daily-nudge.js'
@@ -285,6 +285,12 @@ describe('App — the shell', () => {
   it('sends an old #/inventory link to the wardrobe, replacing it in the history rather than adding to it (No5)', async () => {
     window.history.replaceState(null, '', '/#/inventory')
     const entries = window.history.length
+    // The swap is a real navigation (`location.replace`), so the router hears it like any other and reads `/avatar`
+    // from the hash itself — `replaceState` changed the bar silently and left the route reading `/inventory`.
+    const heard: string[] = []
+    const onHashChange = (event: HashChangeEvent): void => void heard.push(new URL(event.newURL).hash)
+    window.addEventListener('hashchange', onHashChange)
+    onTestFinished(() => window.removeEventListener('hashchange', onHashChange))
     renderApp(
       stubApi({
         inventory: vi.fn().mockResolvedValue({ items: [], avatar: { v: 3, base: 'f01', outfit: 'outfit_casual01' } }),
@@ -297,6 +303,7 @@ describe('App — the shell', () => {
 
     expect(await screen.findByRole('heading', { name: viNormal.wardrobe.title, level: 1 })).toBeInTheDocument()
     await waitFor(() => expect(window.location.hash).toBe('#/avatar'))
+    await waitFor(() => expect(heard).toEqual(['#/avatar']))
     // The URL was swapped under the player: there is no entry for "Back" to bounce off, which would read the
     // old hash again and send them straight forward once more.
     expect(window.history.length).toBe(entries)

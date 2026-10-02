@@ -2,15 +2,16 @@ import { useTintedLayer, type LayerRef } from '@bp/ui-kit'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent, { type UserEvent } from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  AchievementDefDto,
-  AvatarCatalogDto,
-  AvatarConfigDto,
-  BaseDto,
-  InventoryDto,
-  ItemDto,
-  NormalApi,
-  OutfitDto,
+import {
+  ApiError,
+  type AchievementDefDto,
+  type AvatarCatalogDto,
+  type AvatarConfigDto,
+  type BaseDto,
+  type InventoryDto,
+  type ItemDto,
+  type NormalApi,
+  type OutfitDto,
 } from '../../api.js'
 import viNormal from '../../locales/vi/normal.json'
 import { makeI18n, renderWithI18n } from '../../test-i18n.js'
@@ -199,6 +200,23 @@ async function goTo(user: UserEvent, group: keyof typeof GROUP_LABEL, tabLabel?:
 const showLockedBox = (): HTMLElement => screen.getByRole('checkbox', { name: viNormal.wardrobe.showLocked })
 
 describe('WardrobeScreen', () => {
+  // Re-homed from the inventory screen's own test when the inventory folded into the wardrobe (No5): the wardrobe
+  // reads what the account owns from the same `inventory` call, so a failure of it is the wardrobe's to report.
+  it('says so when the wardrobe cannot be read, and asks again when told to', async () => {
+    const inventory = vi.fn().mockRejectedValueOnce(new ApiError(500, 'INTERNAL', 'nope')).mockResolvedValue(INVENTORY)
+    const user = userEvent.setup()
+    renderScreen(stubApi({ inventory }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.inventory.error)
+    expect(viNormal.inventory.error).toBe('Không tải được phòng thay đồ')
+
+    await user.click(screen.getByRole('button', { name: viNormal.screens.retry }))
+
+    expect(await screen.findByRole('heading', { name: viNormal.wardrobe.title, level: 1 })).toBeInTheDocument()
+    expect(inventory).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
   it('shows the base tab first, with both bases offered', async () => {
     renderScreen()
 

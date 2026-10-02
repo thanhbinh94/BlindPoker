@@ -211,7 +211,7 @@
     }
   },
   "inventory": {
-    "error": "Could not load your inventory",
+    "error": "Could not load the wardrobe",
     "rarity": {
       "common": "Common",
       "rare": "Rare",

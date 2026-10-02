@@ -170,8 +170,9 @@ tile grid per equipped slot (**Mũ**, **Mặt**, **Quần áo**, **Aura**, **Khu
 
 There is no separate inventory screen (review 2026-09-29, No5): what the account owns is this screen's default
 list, and Profile links here and to the achievements only. `#/inventory` — an old bookmark or link — still opens
-the wardrobe: `App` reads it as `/avatar` and swaps the address bar for `#/avatar` in place (`replaceState`; the
-kit's router has no replace of its own), so "Back" does not bounce off it. The inventory's acquired date and
+the wardrobe: `App` reads it as `/avatar` and swaps the address bar for `#/avatar` in place (`location.replace`: no
+history entry, so "Back" does not bounce off it, and a `hashchange`, so the router reads `/avatar` from then on —
+the kit's router has no replace of its own). The inventory's acquired date and
 source ("Nhận ngày …", "Khởi đầu", "Miễn phí") and its "Đang sở hữu N món" total went with it, on purpose; the
 wardrobe's "n/m đã có" counts remain.
 
