@@ -87,6 +87,46 @@ describe('advanceExpressionMemory / expressionForSeat', () => {
     expect(expressionForSeat(memory, state, 0, T0 + 10_000)).toBe('neutral')
   })
 
+  // Bug-log §7 E1 (02/10): a hand keeps one id from the deal to COMPLETE. The memory used to record that id on every
+  // render of the live hand, so by the time the same hand completed its id was already "seen" and no face reacted —
+  // happy and sad only ever showed for a hand first seen already over (a refresh).
+  it('reacts to a hand watched live: the same id from the deal to COMPLETE still fires happy and sad', () => {
+    const seats = [makeSeat({ seat: 0, playerId: 'a' }), makeSeat({ seat: 1, playerId: 'b' })]
+    const dealt = makeState({ room, hand: makeHand({ handId: 'h1', phase: 'BETTING', seats }) })
+    const over = makeState({
+      room,
+      hand: makeHand({
+        handId: 'h1',
+        phase: 'COMPLETE',
+        seats,
+        result: result({ payouts: [{ seat: 0, amount: 500 }], showdown: [showdownHand(0), showdownHand(1)] }),
+      }),
+    })
+    let memory = advanceExpressionMemory(initialExpressionMemory(T0), dealt, T0)
+    memory = advanceExpressionMemory(memory, dealt, T0 + 1000)
+    memory = advanceExpressionMemory(memory, over, T0 + 2000)
+    expect(expressionForSeat(memory, over, 0, T0 + 2000)).toBe('happy')
+    expect(expressionForSeat(memory, over, 1, T0 + 2000)).toBe('sad')
+    // …once: the result still in state on later renders does not re-arm it.
+    memory = advanceExpressionMemory(memory, over, T0 + 12_000)
+    expect(expressionForSeat(memory, over, 0, T0 + 12_000)).toBe('neutral')
+  })
+
+  it('reacts again to the next hand watched live, and restarts the idle clock on each completion', () => {
+    const seats = [makeSeat({ seat: 0, playerId: 'a' }), makeSeat({ seat: 1, playerId: 'b' })]
+    const live = (handId: string) => makeState({ room, hand: makeHand({ handId, phase: 'BETTING', seats }) })
+    const won = (handId: string, seat: number) =>
+      makeState({ room, hand: makeHand({ handId, phase: 'COMPLETE', seats, result: result({ payouts: [{ seat, amount: 500 }] }) }) })
+    let memory = advanceExpressionMemory(initialExpressionMemory(T0), live('h1'), T0)
+    memory = advanceExpressionMemory(memory, won('h1', 0), T0 + 1000)
+    expect(memory.idleSince).toBe(T0 + 1000)
+    memory = advanceExpressionMemory(memory, live('h2'), T0 + 10_000)
+    expect(expressionForSeat(memory, live('h2'), 1, T0 + 10_000)).toBe('neutral')
+    memory = advanceExpressionMemory(memory, won('h2', 1), T0 + 11_000)
+    expect(expressionForSeat(memory, won('h2', 1), 1, T0 + 11_000)).toBe('happy')
+    expect(memory.idleSince).toBe(T0 + 11_000)
+  })
+
   it('surprised for 2 s on any seat going all-in, table-wide, then neutral', () => {
     const hand: ClientHand = makeHand({
       handId: 'h1',
@@ -184,13 +224,9 @@ describe('advanceExpressionMemory / expressionForSeat', () => {
 // Follow-up to review round 2, No1: while `RoomScreen` holds the result card for an opponent's cards to turn over, the faces
 // keep the result to themselves too — and the reaction counts from when the hold is over, not from when the result landed.
 describe('useTableExpressions with the result pending', () => {
-  /**
-   * The table before the hand in question: its id is not the one `over` carries, so the memory has not recorded that hand.
-   * A real hand keeps one id from deal to COMPLETE, and today the memory records it on every live render, so a hand
-   * watched live never reacts at all (bug-log §7, logged 02/10). Two ids keep this test about the pending flag alone.
-   */
+  /** The same hand while it is still being played: one id from the deal to COMPLETE, as the reducer keeps it (E1). */
   const live: ClientHand = makeHand({
-    handId: 'h0',
+    handId: 'h1',
     phase: 'BETTING',
     seats: [makeSeat({ seat: 0, playerId: 'a' }), makeSeat({ seat: 1, playerId: 'b' })],
   })

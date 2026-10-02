@@ -53,6 +53,9 @@ export function advanceExpressionMemory(prev: ExpressionMemory, state: ClientSta
   const freshAllIn = [...nowAllIn].some((seat) => !prev.allIn.has(seat))
   if (freshAllIn) for (const seat of hand.seats) timed.set(seat.seat, { expression: 'surprised', until: now + SURPRISED_MS })
 
+  // The id is recorded only when its result is reacted to. A hand keeps one id from the deal to COMPLETE, so recording
+  // it on every live render (as this once did) left the completed hand's id already "seen" and no face ever reacted to
+  // a hand the player watched live (bug-log §7, E1).
   let handId = prev.handId
   let idleSince = prev.idleSince
   if (hand.phase === 'COMPLETE' && hand.result !== null && hand.handId !== handId) {
@@ -63,9 +66,9 @@ export function advanceExpressionMemory(prev: ExpressionMemory, state: ClientSta
       if ((payouts.get(seat.seat) ?? 0) > 0) timed.set(seat.seat, { expression: 'happy', until: now + HAPPY_MS })
       else if (showdownSeats.has(seat.seat)) timed.set(seat.seat, { expression: 'sad', until: now + SAD_MS })
     }
+    handId = hand.handId
     idleSince = now
   }
-  handId = hand.handId
 
   return { handId, timed, allIn: nowAllIn, idleSince }
 }
