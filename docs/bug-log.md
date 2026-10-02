@@ -247,14 +247,14 @@ Ghi chú kỹ thuật:
 - **Bổ sung 02/10 (người dùng: "cho dòng kết quả dưới ghế chờ cùng phiếu kết quả luôn") — `c8486ad`, merge `044b46a`.**
   Trong lúc phiếu kết quả chờ bài lật, bàn chơi cũng chưa lộ kết quả: không có dòng tên bài và tiền thắng dưới ghế,
   không có viền sáng người thắng, lá bài chung chưa tô vàng. Tất cả hiện cùng lúc với phiếu
-  (`PokerTable` prop `resultPending`). Nét mặt vui/buồn cũng chờ, nhưng xem dòng E1 bên dưới.
+  (`PokerTable` prop `resultPending`). Nét mặt vui/buồn cũng chờ, bắt đầu khi phiếu kết quả hiện (từ 03/10, sau khi sửa E1 bên dưới).
 - **Ghi nhận, chưa làm:**
   - Khi đã tích ô, thẻ một bản màu đang có không còn hiện gợi ý mở khoá của món gốc.
   - Con số tiền trên tấm tên người thắng vẫn tăng ngay lúc chia điểm, trong khi bài còn lật.
 
 | # | Mức | Mô tả | Nguyên nhân / hướng | Trạng thái |
 |---|---|---|---|---|
-| E1 | P3 | Nét mặt vui (thắng, 4 giây) và buồn (thua, 3 giây) của nhân vật **không bao giờ hiện trong ván đang xem trực tiếp**. Chỉ hiện khi vào phòng lúc ván đã xong. Lỗi có từ lúc làm avatar (`242b91a`), review của bản sửa ngày 02/10 phát hiện. | `advanceExpressionMemory` (`packages/ui-kit/src/avatar2d/expression.ts` ~58-68) ghi lại mã ván ở mọi lần vẽ, nên tới lúc ván COMPLETE thì mã đã trùng và bỏ qua phản ứng. Hướng sửa: chỉ ghi mã ván khi thật sự phản ứng (hoặc tách `reactedHandId`), thêm test "xem trực tiếp rồi kết thúc". Sửa xong thì nét mặt vui/buồn bắt đầu xuất hiện ở mọi ván, tức một thay đổi nhìn thấy được. | chờ người dùng ("fix") |
+| E1 | P3 | Nét mặt vui (thắng, 4 giây) và buồn (thua, 3 giây) của nhân vật **không bao giờ hiện trong ván đang xem trực tiếp**. Chỉ hiện khi vào phòng lúc ván đã xong. Lỗi có từ lúc làm avatar (`242b91a`), review của bản sửa ngày 02/10 phát hiện. | `advanceExpressionMemory` (`packages/ui-kit/src/avatar2d/expression.ts` ~58-68) ghi lại mã ván ở mọi lần vẽ, nên tới lúc ván COMPLETE thì mã đã trùng và bỏ qua phản ứng. Hướng sửa: chỉ ghi mã ván khi thật sự phản ứng (hoặc tách `reactedHandId`), thêm test "xem trực tiếp rồi kết thúc". Sửa xong thì nét mặt vui/buồn bắt đầu xuất hiện ở mọi ván, tức một thay đổi nhìn thấy được. | đã sửa 03/10 — `cc9cf44`, `45ab5c0`, merge `a96e598` (người dùng: "có"). Nay chỉ ghi mã ván khi phản ứng; đồng hồ ngủ 60 giây cũng đặt lại sau mỗi ván xem trực tiếp. Kiểm trên playground: người thắng `happy`, người thua lúc so bài `sad`, ghế bỏ bài `closed`, ván bị huỷ không có nét vui/buồn |
 
 Ghi nhận từ final review Plan 16. R2-5 sửa ngày 30/09; R2-1 … R2-4 sửa ngày 01/10 trong **Plan 17** (`docs/superpowers/plans/2026-10-01-plan17-review-round-2-notes.md`, merge `f6fe2f3`, đã lên host LAN):
 
