@@ -256,10 +256,10 @@ as without it and the turn still plays. The faces take the same flag, as the thi
 `useTableExpressions(state, serverNow, resultPending)`: it does not fold the state in while the flag is up, so the
 reaction (4 s happy, 3 s sad) starts when the hold ends and runs its full length rather than losing 870 ms of it. A seat
 still shows what its own state says in the meantime (folded, sitting out, disconnected). Everything appears in the one
-render that deals the card, and nothing else about the hold changes. Known gap (bug-log §7, logged 02/10): the happy
-and sad reactions only fire today for a hand first seen already complete (`advanceExpressionMemory` records the hand id
-on every render of a live hand), so for a hand watched live — the only kind that is ever held — no reaction shows yet;
-the flag is in place for when that is fixed.
+render that deals the card, and nothing else about the hold changes. (Until bug-log §7 E1 was fixed on 03/10, the
+happy and sad reactions only fired for a hand first seen already complete: `advanceExpressionMemory` recorded the hand
+id on every live render, so the completed hand's id was already "seen". It now records the id only when it reacts —
+which also restarts the 60 s idle-to-sleep clock on every completed hand, live ones included.)
 
 The card is at most as tall as the felt less the seat clearance (`max-height: 100%` of the content box of
 `RoomScreen`'s overlay, which ends above the viewer's own seat — below): past that its body — the rows, then the pot
