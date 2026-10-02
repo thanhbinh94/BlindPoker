@@ -184,7 +184,11 @@ describe('advanceExpressionMemory / expressionForSeat', () => {
 // Follow-up to review round 2, No1: while `RoomScreen` holds the result card for an opponent's cards to turn over, the faces
 // keep the result to themselves too — and the reaction counts from when the hold is over, not from when the result landed.
 describe('useTableExpressions with the result pending', () => {
-  /** The table before the hand in question: its id is not the one `over` carries, so the memory has not recorded that hand. */
+  /**
+   * The table before the hand in question: its id is not the one `over` carries, so the memory has not recorded that hand.
+   * A real hand keeps one id from deal to COMPLETE, and today the memory records it on every live render, so a hand
+   * watched live never reacts at all (bug-log §7, logged 02/10). Two ids keep this test about the pending flag alone.
+   */
   const live: ClientHand = makeHand({
     handId: 'h0',
     phase: 'BETTING',

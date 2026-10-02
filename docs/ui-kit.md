@@ -191,7 +191,7 @@ dropping the oldest, so a chatty server cannot stack slips off the top of the sc
 
 | Component | Props |
 | --- | --- |
-| `PokerTable` | `room`, `hand`, `myPlayerId`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `canSit`, `layout?`, `chibiFor?`, `expressionFor?`, `captionFor?`, `onSeatClick?` |
+| `PokerTable` | `room`, `hand`, `myPlayerId`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `canSit`, `layout?`, `chibiFor?`, `expressionFor?`, `captionFor?`, `onSeatClick?`, `resultPending?` |
 | `Seat` | `seat`, `player`, `isMe`, `isActing`, `isButton`, `winnerPayout`, `showdownLabel`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `position`, `chibi`, `expression`, `bounce`, `caption?` |
 | `Card` | `card?`, `faceDown?`, `size?` (`sm`/`md`/`lg`), `delayMs?`, `highlighted?`, `className?` |
 | `CommunityCards` | `cards`, `highlight?` |
@@ -249,14 +249,17 @@ for under a second, then jump onto the card and shift the tray's buttons after i
 
 **The table waits with it** (the same fix wave, follow-up to No1). With the card held, the seats must not give the result
 away either — the hand's name and the payout under each seat, the winner's glow, the gold edge on the best hand's board
-cards and the happy and sad faces all used to land the moment `HAND_COMPLETE` did, over a turn the player had not yet
-watched. `RoomScreen` passes `PokerTable` `resultPending={held}`: the payouts and the shown hands are left out of what
+cards (and, by design, the happy and sad faces) all used to land the moment `HAND_COMPLETE` did, over a turn the player
+had not yet watched. `RoomScreen` passes `PokerTable` `resultPending={held}`: the payouts and the shown hands are left out of what
 the seats are given, so no result line, no `.seatWin` and no `highlight` for the board, while every card is drawn exactly
 as without it and the turn still plays. The faces take the same flag, as the third argument of
 `useTableExpressions(state, serverNow, resultPending)`: it does not fold the state in while the flag is up, so the
 reaction (4 s happy, 3 s sad) starts when the hold ends and runs its full length rather than losing 870 ms of it. A seat
 still shows what its own state says in the meantime (folded, sitting out, disconnected). Everything appears in the one
-render that deals the card, and nothing else about the hold changes.
+render that deals the card, and nothing else about the hold changes. Known gap (bug-log §7, logged 02/10): the happy
+and sad reactions only fire today for a hand first seen already complete (`advanceExpressionMemory` records the hand id
+on every render of a live hand), so for a hand watched live — the only kind that is ever held — no reaction shows yet;
+the flag is in place for when that is fixed.
 
 The card is at most as tall as the felt less the seat clearance (`max-height: 100%` of the content box of
 `RoomScreen`'s overlay, which ends above the viewer's own seat — below): past that its body — the rows, then the pot
