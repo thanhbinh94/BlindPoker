@@ -1,5 +1,5 @@
 import { Chibi, type ChibiConfig, type Expression } from '@bp/ui-kit'
-import type { KeyboardEvent } from 'react'
+import { useId, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import s from './wardrobe.module.css'
 
@@ -41,6 +41,7 @@ export interface StagePanelProps {
  */
 export function StagePanel({ subject, expression, onExpression, portrait, compact = false, fullSize = 290 }: StagePanelProps) {
   const { t } = useTranslation('normal')
+  const nameId = useId()
 
   /** One step along `EXPRESSIONS`, wrapping at both ends — a list of six is short enough that going the
    * other way round is how a player reaches "Ngủ" from "Bình thường". */
@@ -70,14 +71,27 @@ export function StagePanel({ subject, expression, onExpression, portrait, compac
         </div>
       </div>
 
+      {/* Each button is described by the name between them (final fix wave, B5): focusing one reads the current face. */}
       <div className={s.expressionRow} role="group" aria-label={t('wardrobe.expression.legend')} onKeyDown={onKeyDown}>
-        <button type="button" className={s.expressionStep} aria-label={t('wardrobe.expression.prev')} onClick={() => step(-1)}>
+        <button
+          type="button"
+          className={s.expressionStep}
+          aria-label={t('wardrobe.expression.prev')}
+          aria-describedby={nameId}
+          onClick={() => step(-1)}
+        >
           <span aria-hidden="true">{PREV_GLYPH}</span>
         </button>
-        <output className={s.expressionName} aria-live="polite">
+        <output id={nameId} className={s.expressionName} aria-live="polite">
           {t(`wardrobe.expression.${expression}`)}
         </output>
-        <button type="button" className={s.expressionStep} aria-label={t('wardrobe.expression.next')} onClick={() => step(1)}>
+        <button
+          type="button"
+          className={s.expressionStep}
+          aria-label={t('wardrobe.expression.next')}
+          aria-describedby={nameId}
+          onClick={() => step(1)}
+        >
           <span aria-hidden="true">{NEXT_GLYPH}</span>
         </button>
       </div>

@@ -159,11 +159,13 @@ describe('categories', () => {
       expect(applyFilter(ORIGINALS, new Set(), true, VARIANTS).map((card) => card.original)).toEqual(ORIGINALS)
     })
 
-    it('with the box ticked lists every card as its original and the whole family as dots, owned or not', () => {
+    // Final fix wave (B2): ticking the box only adds cards and dots. It used to turn the owned blue beret's card into the
+    // locked original.
+    it('with the box ticked lists every family and the whole family as dots, owned or not — a card still shows what is owned', () => {
       expect(applyFilter(ORIGINALS, new Set(['head_beret_blue01']), true, VARIANTS)).toEqual([
         { original: BEANIE, shown: BEANIE, dots: [BEANIE, BEANIE_RED] },
         { original: CAP, shown: CAP, dots: [] },
-        { original: BERET_RED, shown: BERET_RED, dots: [BERET_RED, BERET_BLUE, BERET_GREEN] },
+        { original: BERET_RED, shown: BERET_BLUE, dots: [BERET_RED, BERET_BLUE, BERET_GREEN] },
       ])
     })
 
@@ -181,11 +183,16 @@ describe('categories', () => {
       expect(applyFilter([BERET_RED], owned, false, VARIANTS, 'head_cap')[0]!.shown).toBe(BERET_RED)
     })
 
-    it('with nothing of the family worn, shows the original when it is owned or the box is ticked, else the first owned variant', () => {
+    it('with nothing of the family worn, shows the original when it is owned, else the first owned variant, else the original — whichever box', () => {
       const variantOnly = new Set(['head_beret_green01'])
-      expect(applyFilter([BERET_RED], variantOnly, true, VARIANTS)[0]!.shown).toBe(BERET_RED)
-      expect(applyFilter([BERET_RED], variantOnly, false, VARIANTS)[0]!.shown).toBe(BERET_GREEN)
-      expect(applyFilter([BERET_RED], new Set(['head_beret_red01', 'head_beret_green01']), false, VARIANTS)[0]!.shown).toBe(BERET_RED)
+      const both = new Set(['head_beret_red01', 'head_beret_green01'])
+      for (const showLocked of [false, true]) {
+        const box = `box ${showLocked ? 'ticked' : 'unticked'}`
+        expect(applyFilter([BERET_RED], variantOnly, showLocked, VARIANTS)[0]!.shown, box).toBe(BERET_GREEN)
+        expect(applyFilter([BERET_RED], both, showLocked, VARIANTS)[0]!.shown, box).toBe(BERET_RED)
+      }
+      // Nothing of it owned: only the ticked box lists it, as its original.
+      expect(applyFilter([BERET_RED], new Set(), true, VARIANTS)[0]!.shown).toBe(BERET_RED)
     })
 
     it('treats a row with no variants (a colour swatch, a word, a variant map left out) as a family of one', () => {
@@ -198,9 +205,10 @@ describe('categories', () => {
         { original: CAP, shown: CAP, dots: [] },
         { original: BERET_RED, shown: BERET_BLUE, dots: [] },
       ])
-      expect(slotCards('head', CATALOG, owned, true).map((card) => card.shown.id)).toEqual(['head_beanie01', 'head_cap', 'head_beret_red01'])
-      // The member worn in the slot (Plan 18, No8a).
-      expect(slotCards('head', CATALOG, owned, true, 'head_beret_blue01').map((card) => card.shown.id)).toEqual(['head_beanie01', 'head_cap', 'head_beret_blue01'])
+      expect(slotCards('head', CATALOG, owned, true).map((card) => card.shown.id)).toEqual(['head_beanie01', 'head_cap', 'head_beret_blue01'])
+      // The member worn in the slot (Plan 18, No8a), ahead of the first owned variant.
+      const greenToo = new Set([...owned, 'head_beret_green01'])
+      expect(slotCards('head', CATALOG, greenToo, true, 'head_beret_green01').map((card) => card.shown.id)).toEqual(['head_beanie01', 'head_cap', 'head_beret_green01'])
       expect(slotCards('title', CATALOG, owned, false)).toEqual([])
       expect(slotCards('title', CATALOG, owned, true)).toEqual([{ original: TITLE, shown: TITLE, dots: [] }])
     })

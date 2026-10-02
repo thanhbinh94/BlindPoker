@@ -355,7 +355,8 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
         // wrapping both calls here (rather than letting each draw its own, as it used to) is what keeps
         // their headings *inside* the one panel too, instead of sitting outside any panel at all. A slot with
         // nothing to list draws nothing, heading included; with both empty the panel says so once (No11a).
-        <div role="tabpanel" id={panelId('words')} aria-labelledby={subTabId('words')}>
+        // Holding only the empty line, the panel takes the focus itself (the ARIA tabs pattern).
+        <div role="tabpanel" id={panelId('words')} aria-labelledby={subTabId('words')} tabIndex={wordsEmpty ? 0 : undefined}>
           {wordsEmpty ? <p className={w.emptyOwned}>{t('wardrobe.emptyOwned')}</p> : null}
           <ItemTab
             slot="title"

@@ -70,9 +70,9 @@ function RarityLabel({ rarity }: { rarity: Rarity }) {
 
 export interface ItemCardProps {
   /** The family member the card draws, names and picks (`FamilyCard.shown`, `./categories.js`): the member worn in
-   * the slot (No8a); else the original, when it is owned or the box is ticked; else the first owned colour variant
-   * (No11a). Everything the button says and does is this member's — picture (tinted when it is a colour variant),
-   * name, rarity, "Đang dùng", lock and click. */
+   * the slot (No8a); else the original, when it is owned; else the first owned colour variant (No11a); else the
+   * original — whichever way the box is ticked (final fix wave, B2). Everything the button says and does is this
+   * member's — picture (tinted when it is a colour variant), name, rarity, "Đang dùng", lock and click. */
   item: ItemDto
   /** The family's original, which names the dot row; `item` itself when omitted (a lone card, or the original shown). */
   family?: ItemDto
@@ -82,9 +82,9 @@ export interface ItemCardProps {
   wearing: boolean
   hint: string
   /** This card's dots (design §4.1's dot row): the family, the original first (No8a) — each one owned/worn
-   * independently of the card itself, so with the box ticked a locked original can still show an owned variant's
-   * dot clickable. A member with no `asset.tint` (the original) is drawn as the untinted natural swatch. Only the
-   * dots to draw: the caller has already dropped the ones not owned while the box is unticked. */
+   * independently of the card itself, so with the box ticked an owned variant's card still shows the locked original's
+   * dot, and a locked variant's. A member with no `asset.tint` (the original) is drawn as the untinted natural swatch.
+   * Only the dots to draw: the caller has already dropped the ones not owned while the box is unticked. */
   variants?: { item: ItemDto; owned: boolean; wearing: boolean }[]
   /** Keeps the dot row's height on a card that has no variants of its own, so that in a tab where some cards do
    * have them every card's lock hint ends on the same line (No8b). `ItemTab` sets it; a lone card never needs it. */

@@ -228,11 +228,12 @@ Tủ đồ, Thành tựu, Cài đặt.
 | M-05 | Máy tính 1920×940 và 1366×768, vào bàn (chờ, trong ván, thẻ kết quả nhiều dòng): trang không có thanh cuộn dọc; ghế của mình chỉ còn hai dòng dưới bảng tên; "Ván tiếp theo sau…" nằm ở chân thẻ kết quả chứ không đè ghế; thân thẻ cuộn được bên trong và mờ ở chân khi còn cuộn được (review 29/09 No2, No11b) | P2 |
 
 **Luật "không chữ đè chữ" (review 2026-09-29, No11b) đã thành test tự động:** `pnpm e2e:normal` đo mọi màn hình
-kể trên — trừ Tủ đồ chỉ ba tab (Ngoại hình, Mũ, Danh hiệu & Huy hiệu) — ở 1920×940 (màn hình của bạn), 1366×768 và
-375×812, gồm bàn Blind lúc chờ, trong ván và thẻ kết quả; bộ `e2e/ops` đo thêm bàn Hold'em đang chơi và thẻ kết
-quả ở 1440×900 và ba cỡ trên, bàn Blind đang chơi và thẻ kết quả ở 1440×900. Cách đo và những gì nó không thấy:
-`docs/ui-kit.md`, mục "The text-overlap rule"; màn nào, trạng thái nào, cỡ nào và test nào: `docs/test-matrix.md`. Người test vẫn nhìn bằng mắt những gì máy không đo: chữ đè lên hình hay chạm mép thẻ, chữ
-trong ô nhập, bản English, và các cỡ màn hình khác.
+kể trên — trừ Tủ đồ chỉ bốn tab (Ngoại hình, Mũ, Quần áo, Danh hiệu & Huy hiệu; ba tab đồ đo khi đã tích "Hiện cả
+món chưa có", để có đủ thẻ) — ở 1920×940 (màn hình của bạn), 1366×768 và 375×812, gồm bàn Blind lúc chờ, trong ván
+và thẻ kết quả; bộ `e2e/ops` đo thêm bàn Hold'em đang chơi và thẻ kết quả ở 1440×900 và ba cỡ trên, bàn Blind đang
+chơi và thẻ kết quả ở 1440×900. Cách đo và những gì nó không thấy: `docs/ui-kit.md`, mục "The text-overlap rule";
+màn nào, trạng thái nào, cỡ nào và test nào: `docs/test-matrix.md`. Người test vẫn nhìn bằng mắt những gì máy không
+đo: chữ đè lên hình hay chạm mép thẻ, chữ trong ô nhập, bản English, và các cỡ màn hình khác.
 
 ### N. Vận hành máy chủ (người vận hành)
 

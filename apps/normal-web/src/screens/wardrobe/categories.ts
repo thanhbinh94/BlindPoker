@@ -121,9 +121,10 @@ export interface FamilyCard {
    * carries. */
   original: ItemDto
   /**
-   * The member the card itself draws, names and picks (review 2026-09-29, No8a — Plan 18, pre-flight amendment 1): the
-   * member being worn in the slot; else the original, when it is owned or the box is ticked; else — box unticked, the
-   * original not owned — the first owned variant in catalogue order (No11a).
+   * The member the card itself draws, names and picks (review 2026-09-29, No8a — Plan 18, pre-flight amendment 1; the
+   * final fix wave, B2): the member being worn in the slot; else the original, when it is owned; else the first owned
+   * variant in catalogue order (No11a); else — nothing of it owned, so only the ticked box lists it — the original. The
+   * box plays no part: ticking it only adds cards and dots, and never turns an owned card into a locked one.
    */
   shown: ItemDto
   /**
@@ -139,9 +140,10 @@ const NO_VARIANTS: ReadonlyMap<string, readonly ItemDto[]> = new Map()
 /**
  * What a tab lists (design §3.1 item 3, §4.1, §5.5; review 2026-09-29, No11a and No8a): with the box unticked — the
  * default — only the families the player owns a member of, and only their owned dots; with "Hiện cả món chưa có"
- * ticked, every family and every dot, owned or not. Either way a card shows the member `worn` (the draft's item in
- * the slot) when it is one of the family's. Families keep the original's place in the order whichever member they
- * show — re-sorting on a pick would make the card jump away from the finger that picked it.
+ * ticked, every family and every dot, owned or not. Either way a card shows the same member (`FamilyCard.shown`): the
+ * one `worn` (the draft's item in the slot) when it is one of the family's, else what the player owns of it. Families
+ * keep the original's place in the order whichever member they show — re-sorting on a pick would make the card jump
+ * away from the finger that picked it.
  *
  * `items` are a tab's cards (`tabItems`); `variants` is the slot's `variantsByFile`, left out for a slot that has none.
  */
@@ -159,7 +161,8 @@ export function applyFilter(
     const listed = showLocked ? family : family.filter((member) => owned.has(member.id))
     if (listed.length === 0) continue
     const shown =
-      family.find((member) => member.id === worn) ?? (showLocked || owned.has(original.id) ? original : listed[0]!)
+      family.find((member) => member.id === worn) ??
+      (owned.has(original.id) ? original : (family.find((member) => owned.has(member.id)) ?? original))
     const dots = tinted.length === 0 || (listed.length === 1 && listed[0] === shown) ? [] : listed
     cards.push({ original, shown, dots })
   }

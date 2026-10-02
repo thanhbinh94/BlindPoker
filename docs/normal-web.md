@@ -161,13 +161,12 @@ result against ten acceptance criteria, and writes `avatar-manifest.json`. Until
 
 ### The wardrobe
 
-`/avatar` — `wardrobe/WardrobeScreen.tsx`. A `Chibi` preview on the left, sized 192 px, with an
-expression stepper under it to try each of the six faces — `‹  Vui  ›`, a previous and a next button around the
-current face's name, wrapping at both ends, ArrowLeft/ArrowRight too (review 2026-09-29, No10; `wardrobe/StagePanel.tsx`) —
-and the save button below it; seven tabs on the right —
-**Nhân vật** (base), then a tile grid per equipped slot (**Mũ**, **Mặt**, **Quần áo**, **Aura**,
-**Khung**), then **Danh hiệu & Huy hiệu** (title and badge together, the two slots with no picture).
-The outfit bar sits under both columns, five slots wide.
+`/avatar` — `wardrobe/WardrobeScreen.tsx`. A `Chibi` preview on the left, sized 192 px, with an expression stepper
+under it to try each of the six faces — `‹  Vui  ›`, a previous and a next button around the current face's name,
+wrapping at both ends, ArrowLeft/ArrowRight too, each button described by the name (review 2026-09-29, No10;
+`wardrobe/StagePanel.tsx`) — and the save button below it; seven tabs on the right — **Nhân vật** (base), then a
+tile grid per equipped slot (**Mũ**, **Mặt**, **Quần áo**, **Aura**, **Khung**), then **Danh hiệu & Huy hiệu**
+(title and badge together, the two slots with no picture). The outfit bar sits under both columns, five slots wide.
 
 There is no separate inventory screen (review 2026-09-29, No5): what the account owns is this screen's default
 list, and Profile links here and to the achievements only. `#/inventory` — an old bookmark or link — still opens
@@ -180,13 +179,17 @@ wardrobe's "n/m đã có" counts remain.
   and each tile previews that base wearing the draft's *current* outfit, so the choice reads as a
   silhouette rather than a wardrobe.
 - **`ItemTab`** lists what the player owns — a colour-variant family shows when any member is owned
-  (`slotCards`, `categories.ts`; review 2026-09-29 No11a) — and, with **Hiện cả món chưa có** ticked, the
-  whole catalogue for its slot, locking anything the player does not own (`aria-disabled`, with a hint:
-  the achievement that grants it, or a daily-calendar rarity, or "chưa mở"). A tile's own picture (`ItemPreview`) is
-  the item's pipeline icon (`docs/avatar-2d.md` §4.2), and a colour variant's is that icon tinted to the variant's
-  colour through `useTintedLayer` (review 2026-09-29 No8a). A family's card is the member being worn, when one is —
-  its picture, name, "Đang dùng" and click — and its dot row lists the whole family, the original first as an
-  untinted dot.
+  (`slotCards`, `categories.ts`; review 2026-09-29 No11a) — and, with **Hiện cả món chưa có** ticked, the whole
+  catalogue for its slot, locking anything the player does not own (`aria-disabled`, with a hint: the achievement
+  that grants it, or a daily-calendar rarity, or "chưa mở"). A tile's own picture (`ItemPreview`) is the item's
+  pipeline icon (`docs/avatar-2d.md` §4.2), and a colour variant's is that icon tinted to the variant's colour
+  through `useTintedLayer` (review 2026-09-29 No8a). A family's card is one member — the one worn; else the
+  original, if owned; else the first owned variant; else the original — whichever way the box is ticked: ticking it
+  only adds cards and dots (final fix wave, B2). The card is that member's picture, name, "Đang dùng" and click, and
+  its dot row lists the whole family, the original first as a checkered dot; after a coloured outfit, that dot is the
+  way back, the outfit slot being required. On a phone or under a finger every dot keeps its 16 px look inside a
+  44 px touch target, and the row wraps to keep those targets apart (B1). A tab with nothing to list keeps its
+  `tabpanel`, focusable then, with one line in it.
 - **`OutfitBar`** is a bookmark of a *whole* `AvatarConfigDto`, not of one item — "Mặc bộ này" replaces the
   draft outright, "Lưu vào đây" snapshots whatever is currently equipped into that slot under a name up
   to 24 characters. Both round-trip the server (`PUT /api/me/outfits/:slot`, `POST

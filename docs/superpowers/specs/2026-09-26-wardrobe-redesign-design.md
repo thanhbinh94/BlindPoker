@@ -25,7 +25,7 @@ Màn tủ đồ nhìn như một phòng thay đồ của game: nhân vật lớn
 - **Cột phải**:
   1. **3 nhóm** dạng segmented có biểu tượng: Ngoại hình (Nhân vật, Màu tóc, Màu mắt) · Trang phục (Mũ, Phụ kiện mặt, Quần áo) · Trang trí (Hào quang, Khung, Danh hiệu & Huy hiệu).
   2. **Tab con** của nhóm đang chọn, gạch chân vàng khi chọn, mỗi tab kèm "đã có/tổng" (ví dụ "5/8"; tab Nhân vật không có số vì nhân vật không phải món).
-  3. **Bộ lọc** (review 29/09 No11a): một ô đánh dấu **"Hiện cả món chưa có"** (thay ba nút Tất cả · Đã có · Chưa có cũ), không hiện ở tab Nhân vật. Mặc định bỏ tích: tab chỉ liệt kê món đã có. Bên phải vẫn hiện "n/m đã có". Ô là `<input type="checkbox">` gốc trong `<label>`, cao một vùng bấm (`--tap`), `accent-color: var(--gold)` — đúng kiểu ô đánh dấu của hộp tạo phòng.
+  3. **Bộ lọc** (review 29/09 No11a): một ô đánh dấu **"Hiện cả món chưa có"** (thay ba nút Tất cả · Đã có · Chưa có cũ), không hiện ở tab Nhân vật. Mặc định bỏ tích: tab chỉ liệt kê món đã có. Bên phải vẫn hiện "n/m đã có" — số này đếm từng biến thể màu như một món, nên một thẻ họ (§4.1) có thể đứng cho nhiều món đã có. Ô là `<input type="checkbox">` gốc trong `<label>`, cao một vùng bấm (`--tap`), `accent-color: var(--gold)` — đúng kiểu ô đánh dấu của hộp tạo phòng.
   4. **Lưới thẻ** `repeat(auto-fill, minmax(150px, 1fr))`, khoảng 14 px, lấp hết chiều ngang.
 
 ### 3.2 Điện thoại (< 768 px)
@@ -47,9 +47,9 @@ Như desktop nhưng cột trái 300 px, sân khấu 280 px, lưới `minmax(130p
 - **Đang dùng**: viền vàng + nhãn "✓ Đang dùng" ở góc.
 - **Chưa có**: ảnh xám tối, tên màu nhạt, dòng khoá "🔒 <cách nhận>" (chuỗi `hintFor` hiện có). Không bấm mặc được; bấm hiện tooltip/nhãn cách nhận như hiện nay.
 - **Biến thể màu** (review 29/09 No8a, Plan 18): một họ món — món gốc cùng các biến thể màu (cùng `asset.file`) — là **một thẻ**.
-  - Thẻ là **món đang mặc** trong họ; không mặc món nào của họ thì là món gốc khi đã có hoặc khi tích "Hiện cả món chưa có", còn không thì là biến thể đã có đầu tiên (theo thứ tự catalogue). Thẻ không đổi chỗ khi đổi món: thứ tự vẫn theo độ hiếm của món gốc.
+  - Thẻ là **món đang mặc** trong họ; không mặc món nào của họ thì là món gốc khi đã có; chưa có món gốc thì là biến thể đã có đầu tiên (theo thứ tự catalogue); không có gì của họ thì là món gốc. Luật này **không phụ thuộc ô "Hiện cả món chưa có"**: tích ô chỉ thêm thẻ và chấm, không bao giờ biến một thẻ đã có thành thẻ khoá (đợt sửa cuối Plan 18, B2). Thẻ không đổi chỗ khi đổi món: thứ tự vẫn theo độ hiếm của món gốc.
   - Mọi thứ trên thẻ là của món đó: ảnh (biến thể được tô đúng màu của nó, bằng mặt nạ màu của icon, như lớp đang mặc trên nhân vật), tên, độ hiếm, nhãn "✓ Đang dùng", trạng thái khoá và dòng cách nhận.
-  - Hàng chấm 16 px dưới thẻ (như Plan 13) liệt kê cả họ, **món gốc đứng đầu** với chấm không tô màu (kiểu ô "Tự nhiên"); mỗi chấm có tên món (nhãn và tooltip), chấm của món đang mặc có viền vàng, chấm chưa có mờ 35 % kèm khoá. Bỏ tích thì ẩn chấm chưa có; hàng chấm chỉ còn đúng món của thẻ thì bỏ cả hàng. Nhóm chấm mang tên món gốc.
+  - Hàng chấm 16 px dưới thẻ (như Plan 13) liệt kê cả họ, **món gốc đứng đầu** với chấm không tô màu (kiểu ô "Tự nhiên": viền `--ink-muted` và ô cờ sáng, đọc rõ trên thẻ tối); mỗi chấm có tên món (nhãn và tooltip), chấm của món đang mặc có viền vàng, chấm chưa có mờ 35 % kèm khoá. Chấm của món chưa có chỉ hiện khi tích ô; bỏ tích thì ẩn. Hàng chấm chỉ còn đúng món của thẻ thì bỏ cả hàng. Nhóm chấm mang tên món gốc. Sau khi mặc một biến thể Quần áo, chấm món gốc là đường duy nhất về lại món gốc (Quần áo không bỏ được), nên trên điện thoại hay màn cảm ứng mỗi chấm vẫn vẽ 16 px nhưng có vùng bấm 44 × 44 px trong suốt, các vùng không chồng nhau, hàng chấm được xuống dòng (B1).
 - Bấm thẻ đã có: mặc món của thẻ; bấm lại món đang mặc ở slot tuỳ chọn: bỏ món (Quần áo thì không bỏ được). Bấm một chấm đã có: mặc món của chấm đó (bấm lại chấm đang mặc ở slot tuỳ chọn cũng bỏ món), và thẻ chuyển theo món vừa mặc.
 
 ### 4.2 Thẻ thân (tab Thân)
@@ -73,7 +73,7 @@ Hai nhóm nhỏ trong cùng tab ("Danh hiệu", "Huy hiệu"), thẻ không ản
 5. **Bộ lọc** (review 29/09 No11a; trước đây: áp cho tab hiện tại, reset về "Tất cả" khi đổi tab).
    - Ô "Hiện cả món chưa có" bỏ tích mỗi lần mở tủ đồ, rồi **giữ nguyên khi đổi tab** trong lượt đó (không reset khi đổi tab, không lưu lại).
    - **Theo họ món.** Một họ là món gốc cùng các biến thể màu của nó (cùng `asset.file`). Bỏ tích: thẻ của họ hiện khi người chơi có món gốc **hoặc bất kỳ biến thể nào**; trong thẻ, chấm của biến thể chưa có bị ẩn. Chưa có món gốc mà có biến thể thì thẻ hiện **biến thể đã có đầu tiên** (theo thứ tự catalogue): tên của nó, trạng thái đã có, bấm là mặc nó.
-   - Tích ô: mọi thứ hiện như trước — thẻ khoá, chấm khoá, thẻ là món gốc.
+   - Tích ô: thêm các họ chưa có gì (thẻ khoá, là món gốc) và các chấm chưa có (khoá). Thẻ của một họ đã có giữ nguyên món nó đang hiện (§4.1): tích ô chỉ thêm, không đổi thẻ nào (B2).
    - Tab màu (Màu tóc, Màu mắt) theo cùng luật cho từng ô màu; "Tự nhiên" luôn hiện.
    - **Không có gì để hiện.** Bỏ tích mà tab không có món nào đã có: lưới được thay bằng một dòng **"Bạn chưa có món nào ở mục này."**, nằm trong chính `tabpanel` của tab (cùng `id`, cùng `aria-labelledby`). Ở tab Danh hiệu & Huy hiệu, nhóm nào trống thì ẩn cả tiêu đề; cả hai trống thì dòng chữ hiện một lần.
 
@@ -83,7 +83,7 @@ Thêm token vào `packages/ui-kit/src/theme/tokens.css` cho cả chủ đề t�
 
 ## 7. Truy cập
 
-- Nhóm và tab con dùng `role="tablist"`/`tab`/`tabpanel`, phím mũi tên chuyển tab; biểu cảm là một `role="group"` (nhãn "Xem thử biểu cảm") gồm hai nút có tên "Biểu cảm trước"/"Biểu cảm sau" và tên biểu cảm đang xem trong `<output aria-live="polite">`, nên đổi biểu cảm được đọc lên mà không cần đưa focus tới tên (No10); phím ← → trong nhóm cũng chuyển; bộ lọc là ô đánh dấu gốc trong `<label>` (tên đọc được "Hiện cả món chưa có", No11a). Tab không có gì để hiện vẫn là `tabpanel` của nó, chứa dòng chữ thay cho lưới — không phải một `tabpanel` có lưới rỗng.
+- Nhóm và tab con dùng `role="tablist"`/`tab`/`tabpanel`, phím mũi tên chuyển tab; biểu cảm là một `role="group"` (nhãn "Xem thử biểu cảm") gồm hai nút có tên "Biểu cảm trước"/"Biểu cảm sau" và tên biểu cảm đang xem trong `<output aria-live="polite">`, nên đổi biểu cảm được đọc lên mà không cần đưa focus tới tên (No10), và hai nút được mô tả bằng tên đó (`aria-describedby`), nên focus vào nút cũng đọc biểu cảm đang xem; phím ← → trong nhóm cũng chuyển; bộ lọc là ô đánh dấu gốc trong `<label>` (tên đọc được "Hiện cả món chưa có", No11a). Tab không có gì để hiện vẫn là `tabpanel` của nó, chứa dòng chữ thay cho lưới — không phải một `tabpanel` có lưới rỗng — và chính `tabpanel` nhận focus (`tabindex="0"`, theo mẫu tabs của ARIA) vì bên trong không còn gì để Tab tới.
 - Thẻ là `button` có `aria-pressed` (đang mặc) và `aria-disabled` + mô tả cách nhận (chưa có); nhãn đọc được: "<tên>, <độ hiếm>, đang mặc/chưa có".
 - Focus ring `--focus` rõ trên mọi phần tử bấm được; vùng bấm tối thiểu 40 px trên điện thoại.
 

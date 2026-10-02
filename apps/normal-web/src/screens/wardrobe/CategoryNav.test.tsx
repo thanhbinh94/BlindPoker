@@ -168,18 +168,22 @@ describe('CategoryNav', () => {
     expect(screen.getByRole('checkbox', { name: viNormal.wardrobe.showLocked })).toBeChecked()
   })
 
-  it('ticking the box calls onShowLocked(true), and unticking it calls onShowLocked(false)', async () => {
+  it('ticking the box calls onShowLocked(true)', async () => {
     const user = userEvent.setup()
     const onShowLocked = vi.fn()
     renderNav({ showLocked: false, onShowLocked })
 
     await user.click(screen.getByRole('checkbox', { name: viNormal.wardrobe.showLocked }))
     expect(onShowLocked).toHaveBeenLastCalledWith(true)
+  })
 
-    const onUntick = vi.fn()
-    renderNav({ showLocked: true, onShowLocked: onUntick })
-    await user.click(screen.getAllByRole('checkbox', { name: viNormal.wardrobe.showLocked })[1]!)
-    expect(onUntick).toHaveBeenLastCalledWith(false)
+  it('unticking the box calls onShowLocked(false)', async () => {
+    const user = userEvent.setup()
+    const onShowLocked = vi.fn()
+    renderNav({ showLocked: true, onShowLocked })
+
+    await user.click(screen.getByRole('checkbox', { name: viNormal.wardrobe.showLocked }))
+    expect(onShowLocked).toHaveBeenLastCalledWith(false)
   })
 
   it('hides the box entirely when showFilter is false', () => {

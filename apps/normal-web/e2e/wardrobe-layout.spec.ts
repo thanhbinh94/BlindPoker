@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { expectRailFits } from './rail.js'
 import {
   account,
+  expectDotTarget,
   expectEvenCardRows,
   expectHeadingsClearOfCards,
   expectNoSidewaysScroll,
@@ -118,7 +119,8 @@ async function expectCardGrids(page: Page): Promise<void> {
   await openWardrobeFresh(page)
   const panel = page.getByRole('tabpanel')
 
-  // The default tab: the base cards — one of the three tabs measured for overlap, with the hats and the words below.
+  // The default tab: the base cards — one of the four tabs measured for overlap, with the hats, the clothes and the
+  // words below.
   await expectEvenCardRows(panel, `wardrobe, Ngoại hình → Nhân vật, ${where}`)
   await expectNoTextOverlapDown(page, `wardrobe, Ngoại hình, ${where}`)
 
@@ -137,6 +139,8 @@ async function expectCardGrids(page: Page): Promise<void> {
   await expectEvenCardRows(panel, `wardrobe, Trang phục → Phụ kiện mặt, ${where}`)
   await goToWardrobeTab(page, 'Trang phục', 'Quần áo')
   await expectEvenCardRows(panel, `wardrobe, Trang phục → Quần áo, ${where}`)
+  // The view of the user's No8 screenshot (the old inventory's "Trang phục" group): its colour dots and lock hints.
+  await expectNoTextOverlapDown(page, `wardrobe, Trang phục → Quần áo, ${where}`)
 
   await goToWardrobeTab(page, 'Trang trí', 'Hào quang')
   await expectEvenCardRows(panel, `wardrobe, Trang trí → Hào quang, ${where}`)
@@ -171,7 +175,8 @@ function outfitMenuBox(page: Page) {
 /** The expression stepper under the stage (review 2026-09-29 round 2, No10): `‹  Vui  ›`, one row at every width,
  * the name between the two buttons, inside the column. Desktop keeps the row as short as the six chips it replaced
  * (30 px; the left column must keep fitting a 900 px window); a phone's two buttons are each a `--tap` (44 px)
- * square. Steps once each way, so the buttons are proven to act in a real browser, and ends where it began. */
+ * square. Steps through all six faces, each name shown whole — not cut by the ellipsis (final fix wave, B5) — and back
+ * once, so both buttons are proven to act in a real browser, and ends where it began. */
 async function expectStepper(page: Page, where: string, phone: boolean): Promise<void> {
   const group = page.getByRole('group', { name: 'Xem thử biểu cảm' })
   const name = group.getByRole('status')
@@ -200,12 +205,26 @@ async function expectStepper(page: Page, where: string, phone: boolean): Promise
   expect(Math.abs(centre(prev) - centre(label)), `${where}: the name shares it`).toBeLessThan(4)
   expect(prev.x, `${where}: the row stays inside the column on the left`).toBeGreaterThanOrEqual(row.x - 0.5)
   expect(next.x + next.width, `${where}: the row stays inside the column on the right`).toBeLessThanOrEqual(row.x + row.width + 0.5)
+  // The name is cut with an ellipsis rather than wrapped when the row is too narrow: it must not be cut at all.
+  const whole = async (): Promise<{ text: string; scrollWidth: number; clientWidth: number }> =>
+    name.evaluate((el) => ({ text: el.textContent ?? '', scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }))
+  const fits = (seen: { text: string; scrollWidth: number; clientWidth: number }): void =>
+    expect(seen.scrollWidth, `${where}: "${seen.text}" is shown whole (${seen.scrollWidth} px in ${seen.clientWidth} px)`).toBeLessThanOrEqual(seen.clientWidth)
 
-  const before = await name.textContent()
-  await group.getByRole('button', { name: 'Biểu cảm sau' }).click()
-  await expect(name, `${where}: next moves on to another expression`).not.toHaveText(before ?? '')
+  // Every one of the six names, stepping next all the way round to where it began; then previous once and back.
+  const nextButton = group.getByRole('button', { name: 'Biểu cảm sau' })
+  const before = (await name.textContent()) ?? ''
+  for (let i = 0; i < 6; i += 1) {
+    const seen = await whole()
+    fits(seen)
+    await nextButton.click()
+    await expect(name, `${where}: next moves on from "${seen.text}"`).not.toHaveText(seen.text)
+  }
+  await expect(name, `${where}: six steps come back round`).toHaveText(before)
   await group.getByRole('button', { name: 'Biểu cảm trước' }).click()
-  await expect(name, `${where}: previous comes back`).toHaveText(before ?? '')
+  await expect(name, `${where}: previous moves back`).not.toHaveText(before)
+  await nextButton.click()
+  await expect(name, `${where}: and next returns`).toHaveText(before)
 }
 
 /** The left column (stage, stepper, wearing list, saved outfits) holds all its rows in its own box — no inner
@@ -347,6 +366,13 @@ test.describe('Blind Luck Poker Normal — bố cục tủ đồ (Kế hoạch 1
     await expectCardGrids(page)
     await expectNoSidewaysScroll(page)
     await openWardrobeFresh(page)
+
+    // Final fix wave (B1): under a finger every colour dot is a thumb-sized target, though it still draws 16 px — the
+    // starter's own first of all, the one way back to "Bộ thường ngày" from a coloured tee.
+    await goToWardrobeTab(page, 'Trang phục', 'Quần áo')
+    const dots = page.getByRole('tabpanel').getByRole('group', { name: 'Bộ thường ngày' }).getByRole('button')
+    await expect(dots).toHaveCount(5)
+    for (const dot of await dots.all()) await expectDotTarget(dot, `wardrobe, Quần áo, the "${await dot.getAttribute('title')}" dot, phone`)
 
     // No11a on the phone: this mount came from Settings, so the box is unticked and "Mũ" — nothing owned on a
     // fresh account — is one line in place of the grid, clear of every other text on the page.

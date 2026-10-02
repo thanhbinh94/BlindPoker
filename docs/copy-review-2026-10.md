@@ -209,7 +209,7 @@ So với đề xuất gốc "[Hiển thị bao gồm chưa sở hữu]": câu đ
 
 Ghi chú cho người làm:
 - Mặc định **không tích**. Gợi ý khóa mới `wardrobe.showLocked`: vi "Hiện cả món chưa có", en "Show items you don't own yet".
-- Sau No11a, `wardrobe.filter.all` và `wardrobe.filter.owned` sẽ không còn chỗ dùng (xóa ở vi + en).
+- Sau No11a, `wardrobe.filter.all` và `wardrobe.filter.owned` không còn chỗ dùng và đã được xóa ở vi + en.
 - **Giữ** `wardrobe.filter.locked` ("Chưa có"), vì `cards.tsx:26` vẫn ghép nó vào aria-label của thẻ bị khóa ("{tên}, {độ hiếm}, Chưa có: {gợi ý}"). Có thể đổi tên khóa thành `wardrobe.locked` cho đúng vai trò.
 - `wardrobe.ownedCount` vẫn hữu ích khi đặt cạnh ô tích.
 

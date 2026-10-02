@@ -97,6 +97,7 @@ item_<slot>_<code>_<wear>_L<layer>           that item's cut for one wear, f or 
 item_<slot>_<code>_icon                      that item's 96 × 96 inventory icon (§4.2) — not a layer
 item_<slot>_<code>_<wear>_icon               a variant's own icon
 item_<slot>_<code>_icon_tintmask             a tintable item's icon tint mask, 96 × 96 like its icon (§4.2, §4.4)
+item_<slot>_<code>_<wear>_icon_tintmask      a tintable variant's own icon tint mask, cut from that wear's layer
 bot_<index>_L30                              a bot's body
 bot_<index>_face_<expression>_L50            a bot's expression
 ```
@@ -395,8 +396,8 @@ icon's manifest entry `tintMask: true` — a field on the entry, not a key of it
 alongside a real icon it re-cuts. An aura's or a frame's icon is cut from the source picture rather than the layer
 (§4.3), so neither gets one. `ItemPreview` then paints the icon of an item with `asset.tint` the way `Chibi` paints the
 worn layer: `useTintedLayer` with the icon and `{ mask: <icon>_tintmask, colour: asset.tint, meanL: asset.tintMeanL }`
-(the layer's own `masks.tint.meanL`), drawn as a `blob:` image with no `srcset`, and the plain icon until it is ready —
-or for good if the browser refuses it.
+(the layer's own `masks.tint.meanL`), drawn as a `blob:` image with no `srcset`. Until it is ready the card keeps the
+previous colour, or the plain icon on first paint; if the browser refuses it, the plain icon for good.
 
 ### 4.3 Auras, frames and bots (2026-09-24, Plan 12)
 

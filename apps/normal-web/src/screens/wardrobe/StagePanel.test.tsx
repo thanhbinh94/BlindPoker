@@ -81,12 +81,33 @@ describe('StagePanel', () => {
     expect(order).toEqual(['BUTTON', 'OUTPUT', 'BUTTON'])
   })
 
-  it('announces the name politely when it changes', () => {
-    render(<StagePanel subject={SUBJECT} expression="neutral" onExpression={vi.fn()} portrait={false} />)
+  it('announces the name politely when it changes', async () => {
+    const user = userEvent.setup()
+    render(<Stateful initial="neutral" />)
 
     const output = screen.getByRole('status')
     expect(output.tagName).toBe('OUTPUT')
     expect(output).toHaveAttribute('aria-live', 'polite')
+
+    await user.click(screen.getByRole('button', { name: viNormal.wardrobe.expression.next }))
+    // The same live region, its text changed in place: that change is what a screen reader announces.
+    expect(screen.getByRole('status')).toBe(output)
+    expect(output).toHaveTextContent(viNormal.wardrobe.expression.happy)
+  })
+
+  // Final fix wave (B5): focusing either button reads the face it would step from.
+  it('describes both buttons by the current face, and keeps the description current', async () => {
+    const user = userEvent.setup()
+    render(<Stateful initial="happy" />)
+
+    const prev = screen.getByRole('button', { name: viNormal.wardrobe.expression.prev })
+    const next = screen.getByRole('button', { name: viNormal.wardrobe.expression.next })
+    expect(prev).toHaveAccessibleDescription(viNormal.wardrobe.expression.happy)
+    expect(next).toHaveAccessibleDescription(viNormal.wardrobe.expression.happy)
+
+    await user.click(next)
+    expect(prev).toHaveAccessibleDescription(viNormal.wardrobe.expression.sad)
+    expect(next).toHaveAccessibleDescription(viNormal.wardrobe.expression.sad)
   })
 
   it('next steps to the following expression and calls onExpression with it', async () => {
@@ -144,9 +165,13 @@ describe('StagePanel', () => {
     await user.keyboard('{ArrowRight}')
     expect(screen.getByRole('status')).toHaveTextContent(viNormal.wardrobe.expression.happy)
 
+    // Left past the first face wraps to the last…
     await user.keyboard('{ArrowLeft}{ArrowLeft}')
     expect(screen.getByRole('status')).toHaveTextContent(viNormal.wardrobe.expression.sleep)
-    expect(onExpression.mock.calls.map(([expression]) => expression)).toEqual(['happy', 'neutral', 'sleep'])
+    // …and right past the last wraps to the first.
+    await user.keyboard('{ArrowRight}')
+    expect(screen.getByRole('status')).toHaveTextContent(viNormal.wardrobe.expression.neutral)
+    expect(onExpression.mock.calls.map(([expression]) => expression)).toEqual(['happy', 'neutral', 'sleep', 'neutral'])
   })
 
   it('the full-body figure wears the face the row names', async () => {

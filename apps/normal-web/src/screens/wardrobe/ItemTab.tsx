@@ -63,8 +63,9 @@ export interface ItemPreviewProps {
  *
  * 2026-10-01 (No8a): a colour variant shows its own colour — the icon tinted on a canvas by the kit's own
  * `useTintedLayer`, as a `blob:` image with no `srcset` (the hook already picked the screen's density). Until the
- * tinted one is ready, and for good if the browser refuses it (`ChibiLayer`'s rule: a URL that failed is never
- * retried), the plain two-density icon is drawn instead.
+ * tinted one is ready the card keeps the previous colour, or the plain icon on first paint (the hook holds its last
+ * render over a colour change on the same file); and for good if the browser refuses it (`ChibiLayer`'s rule: a URL
+ * that failed is never retried), the plain two-density icon is drawn instead.
  */
 export function ItemPreview({ item, wear }: ItemPreviewProps) {
   const base = useAvatarAssetsBase()
@@ -141,12 +142,14 @@ export function ItemTab({ slot, catalog, owned, achievements, draft, wear, showL
   return (
     <>
       {heading === undefined ? null : <h3 className={`${shared.groupTitle} ${s.wordHeading}`}>{t(heading)}</h3>}
-      {/* Empty, the panel stays the same element (same `id`, same `aria-labelledby`) and only the grid goes. */}
+      {/* Empty, the panel stays the same element (same `id`, same `aria-labelledby`) and only the grid goes. With no
+          card to Tab to, the panel itself takes the focus (the ARIA tabs pattern), so its one line is reachable. */}
       <div
         className={empty ? undefined : s.cardGrid}
         role={isOwnPanel ? 'tabpanel' : undefined}
         id={isOwnPanel ? panelId : undefined}
         aria-labelledby={isOwnPanel ? labelledBy : undefined}
+        tabIndex={isOwnPanel && empty ? 0 : undefined}
       >
         {empty ? <p className={s.emptyOwned}>{t('wardrobe.emptyOwned')}</p> : null}
         {cards.map(({ original, shown, dots }) => {

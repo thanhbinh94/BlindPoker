@@ -540,6 +540,35 @@ export async function expectNoSidewaysScroll(page: Page): Promise<void> {
   expect(await page.evaluate(() => document.documentElement.scrollWidth), 'the page does not scroll sideways').toBeLessThanOrEqual(width)
 }
 
+/**
+ * A wardrobe colour dot's touch target on a phone (final fix wave, B1; spec §7: at least 40 × 40), measured the way a
+ * tap meets it: the run of whole pixels across the dot's centre, left to right and top to bottom, that the browser
+ * hit-tests to the dot — its transparent `::before` included, which no bounding box reports. The dot itself stays
+ * 16 px to the eye. Returns the target's size, for the caller's message.
+ */
+export async function expectDotTarget(dot: Locator, label: string): Promise<{ width: number; height: number }> {
+  await dot.scrollIntoViewIfNeeded()
+  const measured = await dot.evaluate((el) => {
+    const box = el.getBoundingClientRect()
+    const cx = box.left + box.width / 2
+    const cy = box.top + box.height / 2
+    const hits = (x: number, y: number): boolean => {
+      const at = document.elementFromPoint(x, y)
+      return at !== null && el.contains(at)
+    }
+    const reach = (dx: number, dy: number): number => {
+      let n = 0
+      while (n < 80 && hits(cx + dx * (n + 1), cy + dy * (n + 1))) n += 1
+      return n
+    }
+    return { width: reach(-1, 0) + reach(1, 0) + 1, height: reach(0, -1) + reach(0, 1) + 1, dot: Math.round(box.width) }
+  })
+  expect(measured.dot, `${label}: the dot itself stays 16 px`).toBe(16)
+  expect(measured.width, `${label}: the dot's touch target is at least 40 px wide`).toBeGreaterThanOrEqual(40)
+  expect(measured.height, `${label}: the dot's touch target is at least 40 px tall`).toBeGreaterThanOrEqual(40)
+  return { width: measured.width, height: measured.height }
+}
+
 /** One card of a card grid, as the browser laid it out (`measureCardLayout`). */
 export interface MeasuredCard {
   /** The card's accessible name, or the start of its text — only for the failure message. */
@@ -699,12 +728,13 @@ export function rarityGroups(row: MeasuredCard[]): MeasuredCard[][] {
  * Review 2026-09-29, No8b: in every card grid the cards of one row are one height ("ô dài, ô ngắn" was a tall card
  * beside short ones), the rarity line sits directly under the name — so cards whose names are as tall have it on one
  * line (±3 px) — and the footer under it (lock hint, colour dots) ends on the card's bottom line (±3 px). Height
- * is the outer box, ±1 px. The 3 px is what a rarity (0.6875 rem), a hint (0.75 rem) and, once, an inventory date
- * (0.8125 rem) leave apart under their glyphs (measured up to 2 px); it is not a misaligned row. Cards with no rarity line (the base
- * portraits, the "Tự nhiên" swatch) are compared on height only, and one with nothing under its rarity has no footer.
+ * is the outer box, ±1 px. The 3 px is the room a rarity (0.6875 rem) and a hint (0.75 rem) of different sizes leave
+ * under their glyphs; it is not a misaligned row. Cards with no rarity line (the base portraits, the "Tự nhiên"
+ * swatch) are compared on height only, and one with nothing under its rarity has no footer.
  *
- * `grids` is how many grids `scope` must hold (a tab has one, "Danh hiệu & Huy hiệu" two): a grid that could not be measured, or that measured no row, fails instead of passing unseen.
- * Returns what it measured, for a caller that wants to report it.
+ * `grids` is how many grids `scope` must hold (a tab has one, "Danh hiệu & Huy hiệu" two): a grid that could not be
+ * measured, or that measured no row, fails instead of passing unseen. Returns what it measured, for a caller that
+ * wants to report it.
  */
 export async function expectEvenCardRows(scope: Locator, label: string, grids = 1): Promise<CardLayout> {
   const layout = await measureCardLayout(scope)

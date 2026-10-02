@@ -836,10 +836,37 @@
   cursor: pointer;
 }
 
-/* The family's original in its dot row (No8a): it wears no tint, so its dot is the untinted swatch — the
-   `.naturalSwatch` look — rather than a colour; picking it puts the original back on. */
+/* The family's original in its dot row (No8a): it wears no tint, so its dot is a swatch of "the original look" — a
+   checker, like `.naturalSwatch` — rather than a colour; picking it puts the original back on. On the dark card the
+   `--line` checker all but vanished (final fix wave, B1), and after a coloured outfit this dot is the only way back to
+   the original, the outfit slot being required: an `--ink-muted` ring and a lighter, finer checker. */
 .colourDotNatural {
-  background: repeating-conic-gradient(var(--line) 0% 25%, transparent 0% 50%);
+  border-color: var(--ink-muted);
+  background: repeating-conic-gradient(color-mix(in srgb, var(--ink) 45%, transparent) 0% 25%, transparent 0% 50%) 0 0 / 50% 50%;
+}
+
+/* A touch target, on a phone or under a finger (final fix wave, B1; spec §7 asks at least 40 px): the dot stays 16 px
+   to the eye and a transparent box reaching 14 px past it on every side takes the tap — the 14 px padding box plus
+   15 px a side is 44 × 44, the kit's `--tap`. The row spaces the dots by twice that reach, so no two dots' targets
+   overlap, and wraps where a card is too narrow. Above the row, the card's own gap (`--space-2`) plus this padding is
+   the 14 px a target reaches, so it stops at the card's pick button; below, it stays inside the card's 12 px padding
+   and 3 px bottom border. The spacer that holds a row's place on a card without dots moves down with it. */
+@media (max-width: 767px), (pointer: coarse) {
+  .colourDots {
+    gap: 28px;
+    padding-top: calc(14px - var(--space-2));
+  }
+
+  /* Square, not round: a rounded box is hit-tested round, and its corners would fall short of the square. */
+  .colourDot::before {
+    content: '';
+    position: absolute;
+    inset: -15px;
+  }
+
+  .dotsSpacer {
+    margin-top: calc(14px - var(--space-2));
+  }
 }
 
 .colourDot[aria-pressed='true'] {
