@@ -34,6 +34,13 @@ export interface PokerTableProps {
   captionFor?: (player: RoomPlayerView) => ReactNode
   onSeatClick?: (seat: number) => void
   canSit: boolean
+  /**
+   * The hand is over but its result is not out yet: `RoomScreen` holds the result card while an opponent's cards turn over
+   * where they lie (`useRevealHold`). While this is true the table keeps the result to itself too — no hand name or payout
+   * under any seat, no winner glow, no gold edge on the best hand's board cards — and draws every card exactly as it would
+   * without it, so the turn still plays. All of it appears in the render that drops the flag. Defaults to `false`.
+   */
+  resultPending?: boolean
 }
 
 /* The ring needs roughly 310 px of stage to seat everyone around it without the plates running into the board, and a
@@ -78,6 +85,7 @@ export function PokerTable({
   captionFor,
   onSeatClick,
   canSit,
+  resultPending = false,
 }: PokerTableProps) {
   const { t } = useTranslation()
   const narrow = useMediaQuery(STACKED)
@@ -92,9 +100,11 @@ export function PokerTable({
   const positions = mode === 'ring' ? ringPositions(order, mySeat) : null
 
   const handSeats = new Map<number, ClientSeat>((hand?.seats ?? []).map((hs) => [hs.seat, hs]))
+  // While the result is pending the table has none to show — no payouts, no hands named, so no result line, no winner
+  // glow and no best hand to put a gold edge on — but its cards (`handSeats`, `community`) are untouched, so they still turn.
   const payouts = new Map<number, number>()
-  for (const p of hand?.result?.payouts ?? []) payouts.set(p.seat, (payouts.get(p.seat) ?? 0) + p.amount)
-  const showdown = new Map<number, ShowdownHand>((hand?.result?.showdown ?? []).map((h) => [h.seat, h]))
+  for (const p of resultPending ? [] : (hand?.result?.payouts ?? [])) payouts.set(p.seat, (payouts.get(p.seat) ?? 0) + p.amount)
+  const showdown = new Map<number, ShowdownHand>((resultPending ? [] : (hand?.result?.showdown ?? [])).map((h) => [h.seat, h]))
 
   // The board cards belonging to the best showdown hand keep a gold edge once the hand is over.
   const topSeat = [...payouts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]

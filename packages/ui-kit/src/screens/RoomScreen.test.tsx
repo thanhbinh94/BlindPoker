@@ -1,9 +1,9 @@
 import { HandCategory, parseCards, type RoomPlayerView } from '@bp/core'
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { defaultChibi } from '../avatar2d/index.js'
+import { defaultChibi, useTableExpressions } from '../avatar2d/index.js'
 import type { ClientHand, ClientState } from '../client/types.js'
 import type { GameClientApi } from '../client/useGameClient.js'
 import { createI18n } from '../i18n/index.js'
@@ -11,6 +11,13 @@ import { makeHand, makePlayer, makeRoom, makeSeat, makeState } from '../test-fix
 import s from '../table/table.module.css'
 import { REVEAL_HOLD_MS } from './reveal-hold.js'
 import { RoomScreen } from './RoomScreen.js'
+
+// The faces are the one thing of the table's result the screen cannot be asked about from outside, so one test reads what
+// `RoomScreen` hands `useTableExpressions`. The hook itself runs as it is: the spy calls straight through.
+vi.mock('../avatar2d/index.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../avatar2d/index.js')>()
+  return { ...actual, useTableExpressions: vi.fn(actual.useTableExpressions) }
+})
 
 const ACK = { t: 'ACK' as const, reqId: 'x' }
 
@@ -709,6 +716,114 @@ describe('RoomScreen', () => {
       reduceMotion = true
       playTo(shownDown)
       expect(resultCard()).toBeInTheDocument()
+    })
+
+    // Follow-up to No1: the table keeps the result to itself for the hold as well — the lines under the seats, the winner's
+    // glow and the gold edge on the board wait with the card, and all of it lands in the render that deals the card.
+    describe('and the table keeps the result to itself until then', () => {
+      const seatOf = (n: number) => screen.getByRole('group', { name: `Seat ${n}` })
+      const resultLines = () => document.querySelectorAll(`.${s.seatResult}`)
+      const winnerGlows = () => document.querySelectorAll(`.${s.seatWin}`)
+      // the board's own cards: the result card draws gold-edged cards of its own
+      const goldEdges = () => screen.getByRole('group', { name: 'Community cards' }).querySelectorAll(`.${s.cardHi}`)
+      /** Everything the table says about the result: none of it, or all of it. */
+      const tableSaysNothing = () => {
+        expect(resultLines(), 'no result line under any seat').toHaveLength(0)
+        expect(winnerGlows(), 'no winner glow').toHaveLength(0)
+        expect(goldEdges(), 'no gold edge on the board').toHaveLength(0)
+        for (const text of ['Pair', 'High card', '+600']) expect(screen.queryByText(text), text).toBeNull()
+      }
+      const tableSaysItAll = () => {
+        // Ann (seat 1) lost with jack high; I (seat 3) won 600 with a pair of queens, on the ace, the king and the deuce
+        expect(within(seatOf(1)).getByText('High card')).toBeInTheDocument()
+        expect(within(seatOf(3)).getByText('Pair')).toBeInTheDocument()
+        expect(within(seatOf(3)).getByText('+600')).toBeInTheDocument()
+        expect(winnerGlows()).toHaveLength(1)
+        expect(seatOf(3).className).toContain(s.seatWin)
+        expect(goldEdges()).toHaveLength(3)
+      }
+
+      it('shows the cards turning and nothing of the result, then everything together with the card', () => {
+        playTo(shownDown)
+        expect(within(seatOf(1)).getByRole('img', { name: 'Jack of spades' }), 'Ann’s cards are up from the first render').toBeInTheDocument()
+        expect(seatOf(1).querySelectorAll(`.${s.cardTurn}`), 'and turning').toHaveLength(2)
+        expect(resultCard()).toBeNull()
+        tableSaysNothing()
+
+        act(() => vi.advanceTimersByTime(REVEAL_HOLD_MS - 1))
+        expect(resultCard()).toBeNull()
+        tableSaysNothing()
+        expect(seatOf(1).querySelectorAll(`.${s.cardTurn}`), 'the turn is still playing').toHaveLength(2)
+
+        act(() => vi.advanceTimersByTime(1))
+        expect(resultCard()).toBeInTheDocument()
+        tableSaysItAll()
+        expect(seatOf(1).querySelectorAll(`.${s.cardTurn}`), 'the turn is left alone').toHaveLength(2)
+      })
+
+      it('shows all of it at once under reduced motion, where nothing turns', () => {
+        reduceMotion = true
+        playTo(shownDown)
+        expect(resultCard()).toBeInTheDocument()
+        tableSaysItAll()
+      })
+
+      it('shows all of it at once when the hand was won by a fold', () => {
+        playTo(foldWin)
+        expect(resultCard()).toBeInTheDocument()
+        expect(within(seatOf(3)).getByText('+600')).toBeInTheDocument()
+        expect(winnerGlows()).toHaveLength(1)
+      })
+
+      it('shows all of it for a hand already over when the screen mounts — a snapshot after a refresh', () => {
+        wrap(fakeClient(makeState({ room, hand: shownDown })))
+        expect(resultCard()).toBeInTheDocument()
+        tableSaysItAll()
+      })
+
+      it('keeps what is waved off off: the hold does not bring the lines back', () => {
+        playTo(shownDown)
+        act(() => vi.advanceTimersByTime(REVEAL_HOLD_MS))
+        fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+        expect(resultCard()).toBeNull()
+        // the lines belong to the table, not to the card: they stay under the seats once it is closed
+        tableSaysItAll()
+      })
+
+      // The faces keep the result to themselves on the same flag, so their reaction counts from the end of the hold and runs
+      // its full length (`expression.test.ts` holds what the hook does with it). Here: the room raises the flag for the
+      // hold, and not a render longer or shorter.
+      describe('and tells the faces the result is pending', () => {
+        const pending = () => vi.mocked(useTableExpressions).mock.lastCall?.[2]
+
+        it('for exactly the hold', () => {
+          playTo(shownDown)
+          expect(pending()).toBe(true)
+          act(() => vi.advanceTimersByTime(REVEAL_HOLD_MS - 1))
+          expect(pending()).toBe(true)
+          act(() => vi.advanceTimersByTime(1))
+          expect(pending()).toBe(false)
+        })
+
+        it('not for the hand before the showdown, nor under reduced motion, a fold, or a snapshot of a finished hand', () => {
+          const { view } = wrap(fakeClient(makeState({ room, hand: river })))
+          expect(pending(), 'the river').toBe(false)
+          view.unmount()
+
+          reduceMotion = true
+          playTo(shownDown)
+          expect(pending(), 'reduced motion').toBe(false)
+          cleanup()
+
+          reduceMotion = false
+          playTo(foldWin)
+          expect(pending(), 'a fold').toBe(false)
+          cleanup()
+
+          wrap(fakeClient(makeState({ room, hand: shownDown })))
+          expect(pending(), 'a snapshot').toBe(false)
+        })
+      })
     })
 
     it('deals the card at once when the hand was won by a fold', () => {

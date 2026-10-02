@@ -97,8 +97,15 @@ export function expressionForSeat(memory: ExpressionMemory, state: ClientState, 
  * The memory itself is pure (`advanceExpressionMemory` / `expressionForSeat`); this hook adds only what React
  * needs: re-deriving it as `state` changes, and a low-frequency re-render so a timed reaction — or the 60 s idle
  * boundary — still expires on the wall clock even when nothing else about the room changes.
+ *
+ * `resultPending` is the room holding a finished hand's result back (`RoomScreen`'s reveal hold, while an opponent's
+ * cards turn over). The faces keep the result to themselves with it: `state` is not folded in, so no happy or sad starts
+ * — and the edge it would have started from is still there to be seen once the flag drops, which starts the reaction
+ * then and lets it run its full 4 s or 3 s rather than whatever was left of it after the hold. What a seat shows meanwhile
+ * is still what its own state says (folded, sitting out, disconnected, an earlier reaction still running). Defaults to
+ * `false`.
  */
-export function useTableExpressions(state: ClientState, serverNow: () => number): (seat: number) => Expression {
+export function useTableExpressions(state: ClientState, serverNow: () => number, resultPending = false): (seat: number) => Expression {
   const [, tick] = useState(0)
   const memoryRef = useRef<ExpressionMemory | null>(null)
   if (memoryRef.current === null) memoryRef.current = initialExpressionMemory(serverNow())
@@ -106,7 +113,7 @@ export function useTableExpressions(state: ClientState, serverNow: () => number)
   // Re-derive synchronously on every render so the very first read after a state change already reflects it.
   // Idempotent for an unchanged `state`: the edges it looks for (a new hand id, a freshly all-in seat) are already
   // folded into `memoryRef.current` by the time this runs again with the same input.
-  memoryRef.current = advanceExpressionMemory(memoryRef.current, state, serverNow())
+  if (!resultPending) memoryRef.current = advanceExpressionMemory(memoryRef.current, state, serverNow())
 
   useEffect(() => {
     const memory = memoryRef.current
