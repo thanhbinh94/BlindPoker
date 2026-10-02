@@ -1,10 +1,11 @@
-import { assetUrl, useAvatarAssetsBase } from '@bp/ui-kit'
+import { assetUrl, useAvatarAssetsBase, useTintedLayer, type LayerRef } from '@bp/ui-kit'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { AchievementDefDto, AvatarConfigDto, ItemDto, ItemSlot } from '../../api.js'
+import type { AchievementDefDto, AssetRefDto, AvatarConfigDto, ItemDto, ItemSlot } from '../../api.js'
 import { hintFor } from '../catalog.js'
 import shared from '../normal.module.css'
 import { ItemCard, WordCard } from './cards.js'
-import { applyFilter, tabItems, tabOfSlot, type OwnershipFilter } from './categories.js'
+import { slotCards } from './categories.js'
 import s from './wardrobe.module.css'
 
 /** The slots that draw a picture; `title` and `badge` are words and preview as nothing. */
@@ -12,9 +13,9 @@ const PICTURED: ReadonlySet<ItemSlot> = new Set(['head', 'face', 'outfit', 'aura
 
 /** The `<img>`'s own intrinsic `width`/`height` (decoding hint, not layout): the files are 96 px (@1x) and
  * 192 px (@2x), so 64 only ever shrinks either density. The size it actually renders at on screen is CSS's
- * call, not this attribute's — `.tileIcon` (`wardrobe.module.css`) now draws two different ones off the
- * one `<img>`: a fixed 64 px (4rem) in the inventory grid, and a larger, breakpoint-driven size scoped to
- * the wardrobe's own `.cardThumb` (V-fix, 2026-09-27 — see that class's own comment). */
+ * call, not this attribute's — `.tileIcon` (`wardrobe.module.css`) is a fixed 64 px (4rem) by itself, and a
+ * larger, breakpoint-driven size inside the wardrobe's own `.cardThumb` (V-fix, 2026-09-27 — see that class's
+ * own comment). */
 const ICON_SIZE = 64
 
 /**
@@ -26,9 +27,24 @@ function iconFile(layerFile: string): string {
   return `${layerFile.replace(/_L\d+$/, '')}_icon`
 }
 
+/** What `useTintedLayer` is asked for when there is no icon at all (`title`/`badge`): no tints, so it answers `null`
+ * without painting anything — the hook is still called, every render, before `ItemPreview` returns nothing. */
+const NO_ICON: LayerRef = { order: 0, file: '' }
+
+/**
+ * The icon as a layer for `useTintedLayer` (review 2026-09-29, No8a): a colour variant (`asset.tint`) is painted
+ * exactly as `Chibi` paints it worn — the same `recolour` at the same `meanL` (`asset.tintMeanL`, the layer's own
+ * `masks.tint.meanL`) — over the icon's own tint mask, `<icon>_tintmask`, which the pipeline cuts from the layer's
+ * with the icon's fit (docs/avatar-2d.md §4.2). Anything else carries no tints and is drawn as it is.
+ */
+function iconLayer(asset: AssetRefDto, file: string): LayerRef {
+  if (asset.tint === undefined || asset.tintMeanL === undefined) return { order: asset.layer, file }
+  return { order: asset.layer, file, tints: [{ mask: `${file}_tintmask`, colour: asset.tint, meanL: asset.tintMeanL }] }
+}
+
 export interface ItemPreviewProps {
   item: ItemDto
-  /** The wear of the base this tile is about — the wardrobe's draft base, the inventory's saved one. An
+  /** The wear of the base this tile is about — the wardrobe's draft base. An
    * item with a cut for it shows that cut's icon; everything else shows the shared one. */
   wear?: string
 }
@@ -38,31 +54,38 @@ export interface ItemPreviewProps {
  * square, so a hat reads as a hat whatever figure it will end up on — or nothing at all for `title`/`badge`,
  * which have no layer to draw. Seeing it *worn* is the big preview's job: picking a tile puts it there.
  *
- * Shared between the wardrobe's own tiles (`ItemTab` below) and the inventory's read-only cards: one picture,
- * two chrome styles around it. Served from the same asset base as every `Chibi` layer, so it is `img-src 'self'`.
+ * Drawn by the wardrobe's item cards (`ItemCard`). Served from the same asset base as every `Chibi` layer, so it is
+ * `img-src 'self'`.
  *
  * 2026-09-20: a gendered item has one icon per cut, because the tile has to show the skirt or the trousers
  * the figure on the stage beside it would actually be wearing. The icon is still derived from the layer's
  * name rather than carried by the API — only *which* layer is now a question.
+ *
+ * 2026-10-01 (No8a): a colour variant shows its own colour — the icon tinted on a canvas by the kit's own
+ * `useTintedLayer`, as a `blob:` image with no `srcset` (the hook already picked the screen's density). Until the
+ * tinted one is ready the card keeps the previous colour, or the plain icon on first paint (the hook holds its last
+ * render over a colour change on the same file); and for good if the browser refuses it (`ChibiLayer`'s rule: a URL
+ * that failed is never retried), the plain two-density icon is drawn instead.
  */
 export function ItemPreview({ item, wear }: ItemPreviewProps) {
   const base = useAvatarAssetsBase()
-  if (!PICTURED.has(item.slot) || item.asset === undefined) return null
-  const layer = (wear === undefined ? undefined : item.asset.variants?.[wear]) ?? item.asset.file
-  const file = iconFile(layer)
-  return (
-    <img
-      className={s.tileIcon}
-      src={assetUrl(base, file, 1)}
-      srcSet={`${assetUrl(base, file, 1)} 1x, ${assetUrl(base, file, 2)} 2x`}
-      width={ICON_SIZE}
-      height={ICON_SIZE}
-      alt=""
-      loading="lazy"
-      decoding="async"
-      data-item-icon={item.id}
-    />
-  )
+  const asset = PICTURED.has(item.slot) ? item.asset : undefined
+  const file = asset === undefined ? null : iconFile((wear === undefined ? undefined : asset.variants?.[wear]) ?? asset.file)
+  const tinted = useTintedLayer(base, asset === undefined || file === null ? NO_ICON : iconLayer(asset, file))
+  const [failedUrl, setFailedUrl] = useState<string | null>(null)
+  if (file === null) return null
+
+  const common = {
+    className: s.tileIcon,
+    width: ICON_SIZE,
+    height: ICON_SIZE,
+    alt: '',
+    loading: 'lazy' as const,
+    decoding: 'async' as const,
+    'data-item-icon': item.id,
+  }
+  if (tinted !== null && tinted !== failedUrl) return <img {...common} src={tinted} onError={() => setFailedUrl(tinted)} />
+  return <img {...common} src={assetUrl(base, file, 1)} srcSet={`${assetUrl(base, file, 1)} 1x, ${assetUrl(base, file, 2)} 2x`} />
 }
 
 export interface ItemTabProps {
@@ -73,7 +96,8 @@ export interface ItemTabProps {
   draft: AvatarConfigDto
   /** The draft base's wear, so a gendered item's tile shows the cut the preview is wearing. */
   wear?: string
-  filter: OwnershipFilter
+  /** "Hiện cả món chưa có" (No11a): unticked, only the families the player owns a member of. */
+  showLocked: boolean
   onPick: (itemId: string) => void
   /** This tab's own panel id and the tab that labels it (design §7) — omitted for `title`/`badge`, whose
    * two calls share one `words` panel rendered one level up instead (`WardrobeScreen`): a `role="tabpanel"`
@@ -82,74 +106,70 @@ export interface ItemTabProps {
   labelledBy?: string
 }
 
-/**
- * Every row of a slot's colour variants (design §4.1): items that share `asset.file` with another item
- * but carry their own `asset.tint` are not separate cards — they are dots under the item whose file
- * they share. The original the variants vary has no `tint` at all, which is exactly what tells a card
- * apart from a dot.
- */
-function variantsByFile(rows: readonly ItemDto[]): Map<string, ItemDto[]> {
-  const map = new Map<string, ItemDto[]>()
-  for (const row of rows) {
-    if (row.asset?.tint === undefined) continue
-    const file = row.asset.file
-    const list = map.get(file)
-    if (list === undefined) map.set(file, [row])
-    else list.push(row)
-  }
-  return map
-}
-
 /** The words tab's two sub-headings (design §4.4) — `title` and `badge` are the only slots this names. */
 const WORD_HEADING: Partial<Record<ItemSlot, string>> = { title: 'wardrobe.words.titles', badge: 'wardrobe.words.badges' }
 
 /**
- * One wardrobe slot's cards (design §4, §7): `tabItems` for the ordering and the colour-variant split,
- * `applyFilter` for the "all/owned/locked" filter, owned pieces clickable and the rest locked with a
- * reason. `outfit`'s cards are never locked-*and*-worn at once — every account starts with the default
- * outfit owned — but the lock logic here does not know that; it just asks `owned`.
+ * One wardrobe slot's cards (design §4, §7): `slotCards` (`./categories.js`) for the ordering, the colour-variant
+ * families and the "Hiện cả món chưa có" box, owned pieces clickable and the rest locked with a reason. `outfit`'s
+ * cards are never locked-*and*-worn at once — every account starts with the default outfit owned — but the lock logic
+ * here does not know that; it just asks `owned`.
  *
  * `title`/`badge` (the words tab, called once per slot from `WardrobeScreen`) draw as `WordCard` under
  * their own sub-heading instead of `ItemCard`; every other slot draws pictured `ItemCard`s, each with its
- * colour variants as a dot row (design §4.1) — a variant is never one of these cards itself.
+ * family as a dot row (design §4.1) — a variant is never one of these cards itself. A family's card is the member
+ * worn in the slot, when it is one of them (No8a): its picture, its name, its "Đang dùng", its click.
+ *
+ * Nothing to list (No11a — the box unticked and nothing owned here): a slot that is its own tab keeps its `tabpanel`
+ * and says so in one line in place of the grid; a word slot draws nothing at all, heading included, and the words
+ * panel says it once when both are empty (`WardrobeScreen`).
  */
-export function ItemTab({ slot, catalog, owned, achievements, draft, wear, filter, onPick, panelId, labelledBy }: ItemTabProps) {
+export function ItemTab({ slot, catalog, owned, achievements, draft, wear, showLocked, onPick, panelId, labelledBy }: ItemTabProps) {
   const { t } = useTranslation('normal')
-  const rows = tabItems(tabOfSlot(slot), catalog).filter((item) => item.slot === slot)
-  const variants = variantsByFile(catalog.filter((item) => item.slot === slot))
-  const cards = applyFilter(rows, owned, filter)
+  // A family card is the member worn in this slot, when it is one of the family (No8a).
+  const cards = slotCards(slot, catalog, owned, showLocked, draft[slot])
   const heading = WORD_HEADING[slot]
-  // A card with no colour variants keeps the dot row's height when another card shown has some (No8b), so every
-  // card in the grid ends its lock hint on the same line.
-  const reserveDots = cards.some((item) => item.asset !== undefined && (variants.get(item.asset.file)?.length ?? 0) > 0)
+  // A card with no colour dots keeps the dot row's height when another card shown has some (No8b), so every
+  // card in the grid ends its lock hint on the same line — counted on the dots actually drawn, not the catalogue's.
+  const reserveDots = cards.some((card) => card.dots.length > 0)
   // `title`/`badge` render inside the caller's own shared `tabpanel` (see `panelId`'s own comment above),
   // so this `<div>` carries no panel role of its own then; every other slot is its own tab and carries the
   // role itself, exactly as before.
   const isOwnPanel = heading === undefined
+  const empty = cards.length === 0
+  if (empty && !isOwnPanel) return null
 
   return (
     <>
       {heading === undefined ? null : <h3 className={`${shared.groupTitle} ${s.wordHeading}`}>{t(heading)}</h3>}
-      <div className={s.cardGrid} role={isOwnPanel ? 'tabpanel' : undefined} id={isOwnPanel ? panelId : undefined} aria-labelledby={isOwnPanel ? labelledBy : undefined}>
-        {cards.map((item) => {
-          const isOwned = owned.has(item.id)
-          const wearing = draft[slot] === item.id
-          const hint = isOwned ? '' : hintFor(item, achievements, t)
+      {/* Empty, the panel stays the same element (same `id`, same `aria-labelledby`) and only the grid goes. With no
+          card to Tab to, the panel itself takes the focus (the ARIA tabs pattern), so its one line is reachable. */}
+      <div
+        className={empty ? undefined : s.cardGrid}
+        role={isOwnPanel ? 'tabpanel' : undefined}
+        id={isOwnPanel ? panelId : undefined}
+        aria-labelledby={isOwnPanel ? labelledBy : undefined}
+        tabIndex={isOwnPanel && empty ? 0 : undefined}
+      >
+        {empty ? <p className={s.emptyOwned}>{t('wardrobe.emptyOwned')}</p> : null}
+        {cards.map(({ original, shown, dots }) => {
+          const isOwned = owned.has(shown.id)
+          const wearing = draft[slot] === shown.id
+          const hint = isOwned ? '' : hintFor(shown, achievements, t)
 
           if (heading !== undefined) {
-            return <WordCard key={item.id} item={item} owned={isOwned} wearing={wearing} hint={hint} onPick={onPick} />
+            return <WordCard key={original.id} item={shown} owned={isOwned} wearing={wearing} hint={hint} onPick={onPick} />
           }
 
-          const dots = item.asset === undefined ? undefined : variants.get(item.asset.file)
+          // The original's dot included (No8a): `dots` is the family, original first, as `slotCards` filtered it.
           const variantProps =
-            dots === undefined || dots.length === 0
-              ? undefined
-              : dots.map((variant) => ({ item: variant, owned: owned.has(variant.id), wearing: draft[slot] === variant.id }))
+            dots.length === 0 ? undefined : dots.map((member) => ({ item: member, owned: owned.has(member.id), wearing: draft[slot] === member.id }))
 
           return (
             <ItemCard
-              key={item.id}
-              item={item}
+              key={original.id}
+              item={shown}
+              family={original}
               wear={wear}
               owned={isOwned}
               wearing={wearing}

@@ -944,7 +944,7 @@ từ `@bp/ui-kit` thì dùng nguyên component của kit chứ không viết l�
 | 6 | Poker table | ✓ | ✓ | Đã triển khai (Plan 6) — `RoomScreen` của ui-kit + `avatarFor`/`captionFor` của app |
 | 7 | Player profile | ✓ | Rút gọn | Đã triển khai (Plan 6) — `screens/ProfileScreen.tsx` (thống kê, ván gần đây, lịch sử điểm, đổi tên) |
 | 8 | Avatar customization | ✓ | ✗ | Đã triển khai — nhân vật 3D (Plan 8): `screens/WardrobeScreen.tsx` + `avatar3d/` |
-| 9 | Inventory | ✓ | ✗ | Đã triển khai (Plan 6) — `screens/InventoryScreen.tsx` |
+| 9 | Inventory | ✓ | ✗ | Đã triển khai (Plan 6), rồi gộp vào Phòng thay đồ (Plan 18, review 29/09 No5): không còn màn riêng, danh sách mặc định của `screens/wardrobe/WardrobeScreen.tsx` là những gì tài khoản có; `#/inventory` cũ chuyển sang `#/avatar` |
 | 10 | Achievements | ✓ | ✗ | Đã triển khai (Plan 6) — `screens/AchievementsScreen.tsx` |
 | 11 | Daily reward | ✓ | ✓ (điểm) | Đã triển khai (Plan 6) — `screens/DailyScreen.tsx` (lịch 31 ngày, biên nhận, cứu trợ) |
 | 12 | Settings | ✓ | ✓ | Đã triển khai (Plan 6) — `screens/SettingsScreen.tsx` |

@@ -1,19 +1,31 @@
+import { useTintedLayer, type LayerRef } from '@bp/ui-kit'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent, { type UserEvent } from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
-import type {
-  AchievementDefDto,
-  AvatarCatalogDto,
-  AvatarConfigDto,
-  BaseDto,
-  InventoryDto,
-  ItemDto,
-  NormalApi,
-  OutfitDto,
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  ApiError,
+  type AchievementDefDto,
+  type AvatarCatalogDto,
+  type AvatarConfigDto,
+  type BaseDto,
+  type InventoryDto,
+  type ItemDto,
+  type NormalApi,
+  type OutfitDto,
 } from '../../api.js'
 import viNormal from '../../locales/vi/normal.json'
 import { makeI18n, renderWithI18n } from '../../test-i18n.js'
 import { WardrobeScreen } from './WardrobeScreen.js'
+
+// Plan 18 (No8a): a card's icon is tinted through the kit's `useTintedLayer` (`ItemPreview`). The hook answers a fake
+// blob URL for a layer with tints and `null` — the plain icon — for one without, as the real one does under jsdom.
+// Only the export the wardrobe's cards import is replaced; the stage's `Chibi` keeps the kit's own.
+vi.mock('@bp/ui-kit', async (importOriginal) => ({ ...(await importOriginal<typeof import('@bp/ui-kit')>()), useTintedLayer: vi.fn() }))
+beforeEach(() => {
+  vi.mocked(useTintedLayer).mockImplementation((_prefix: string, layer: LayerRef) =>
+    layer.tints === undefined || layer.tints.length === 0 ? null : `blob:http://localhost/${layer.tints[0]!.colour}`,
+  )
+})
 
 const FACES = {
   neutral: 'base_f01_face_neutral_L50',
@@ -96,6 +108,21 @@ const HEAD_BERET_BLUE = item({
   rarity: 'rare',
   asset: { layer: 80, file: 'item_head_beret_red01_L80', fitsAvatarCrop: true, tint: '#3f6fd8', tintMeanL: 0.5 },
 })
+/** A second beret variant the player does not own (No11a): its dot is hidden while the box is unticked. */
+const HEAD_BERET_GREEN = item({
+  id: 'head_beret_green01',
+  slot: 'head',
+  rarity: 'rare',
+  asset: { layer: 80, file: 'item_head_beret_red01_L80', fitsAvatarCrop: true, tint: '#2e7d4f', tintMeanL: 0.5 },
+})
+/** No11a: a tab with something in it and nothing owned — the face tab's empty line. */
+const FACE_SUNGLASSES = item({
+  id: 'face_sunglasses01',
+  slot: 'face',
+  rarity: 'rare',
+  asset: { layer: 70, file: 'item_face_sunglasses01_L70', fitsAvatarCrop: true },
+})
+const BADGE_BRONZE = item({ id: 'badge_bronze', slot: 'badge', rarity: 'common' })
 
 const CATALOG = [
   OUTFIT_CASUAL,
@@ -104,10 +131,13 @@ const CATALOG = [
   HEAD_TOPHAT,
   HEAD_BEANIE,
   TITLE_ROOKIE,
+  BADGE_BRONZE,
   HAIRCOLOR_RED,
   HAIRCOLOR_BLUE,
   HEAD_BERET_RED,
   HEAD_BERET_BLUE,
+  HEAD_BERET_GREEN,
+  FACE_SUNGLASSES,
 ]
 
 const AVATAR: AvatarConfigDto = { v: 3, base: 'f01', outfit: 'outfit_casual01', head: 'head_beanie01' }
@@ -165,7 +195,28 @@ async function goTo(user: UserEvent, group: keyof typeof GROUP_LABEL, tabLabel?:
   await user.click(within(subList).getByRole('tab', { name: new RegExp(`^${tabLabel}`) }))
 }
 
+/** No11a (design §3.1 item 3): the box that also lists what the account does not own yet. Unticked whenever the
+ * wardrobe opens, hidden on the base tab; a test about a locked card ticks it first. */
+const showLockedBox = (): HTMLElement => screen.getByRole('checkbox', { name: viNormal.wardrobe.showLocked })
+
 describe('WardrobeScreen', () => {
+  // Re-homed from the inventory screen's own test when the inventory folded into the wardrobe (No5): the wardrobe
+  // reads what the account owns from the same `inventory` call, so a failure of it is the wardrobe's to report.
+  it('says so when the wardrobe cannot be read, and asks again when told to', async () => {
+    const inventory = vi.fn().mockRejectedValueOnce(new ApiError(500, 'INTERNAL', 'nope')).mockResolvedValue(INVENTORY)
+    const user = userEvent.setup()
+    renderScreen(stubApi({ inventory }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.inventory.error)
+    expect(viNormal.inventory.error).toBe('Không tải được phòng thay đồ')
+
+    await user.click(screen.getByRole('button', { name: viNormal.screens.retry }))
+
+    expect(await screen.findByRole('heading', { name: viNormal.wardrobe.title, level: 1 })).toBeInTheDocument()
+    expect(inventory).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
   it('shows the base tab first, with both bases offered', async () => {
     renderScreen()
 
@@ -200,7 +251,8 @@ describe('WardrobeScreen', () => {
     await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
 
     expect(screen.getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.head}`) })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByText(viNormal.items.head_tophat01)).toBeInTheDocument()
+    // Scoped to the tile grid: "Mũ len" is also the wearing-list row's value, since it is the default equipped head.
+    expect(within(screen.getByRole('tabpanel')).getByText(viNormal.items.head_beanie01)).toBeInTheDocument()
   })
 
   it('draws a head tile as the item icon, not as a figure wearing it', async () => {
@@ -208,6 +260,7 @@ describe('WardrobeScreen', () => {
     renderScreen()
     await screen.findAllByText(viNormal.bases.f01)
     await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
+    await user.click(showLockedBox())
 
     const tile = screen.getByText(viNormal.items.head_tophat01).closest('button') as HTMLElement
     const icon = tile.querySelector('img')
@@ -231,6 +284,9 @@ describe('WardrobeScreen', () => {
       await goTo(user, 'wear', viNormal.wardrobe.tabs.outfit)
       return screen.getByText(viNormal.items.outfit_dealer01).closest('button')!.querySelector('img')
     }
+    // The dealer uniform is not owned: the box lists it, and stays ticked across the trip to the base tab below.
+    await goTo(user, 'wear', viNormal.wardrobe.tabs.outfit)
+    await user.click(showLockedBox())
     expect(await dealerIcon()).toHaveAttribute('src', '/avatar/item_outfit_dealer01_icon@1x.png')
 
     await goTo(user, 'look', viNormal.wardrobe.tabs.base)
@@ -249,6 +305,7 @@ describe('WardrobeScreen', () => {
     renderScreen()
     await screen.findAllByText(viNormal.bases.f01)
     await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
+    await user.click(showLockedBox())
 
     const locked = screen.getByText(viNormal.items.head_tophat01).closest('button')
     expect(locked).toHaveAttribute('aria-disabled', 'true')
@@ -370,14 +427,20 @@ describe('WardrobeScreen', () => {
 
       await goTo(user, 'look', viNormal.wardrobe.tabs.hairColor)
 
-      expect(screen.getByRole('button', { name: viNormal.wardrobe.natural })).toBeInTheDocument()
       // A card's accessible name is "<name>, <rarity>[, wearing|, locked: <hint>]" (design §7) — the redesign's
       // `cardLabel`, not the bare item name Plan 13 queried by.
+      const lockedName = `${viNormal.items.haircolor_blue01}, ${viNormal.inventory.rarity.rare}, ${viNormal.wardrobe.filter.locked}: ${viNormal.wardrobe.hint.daily.rare}`
+      // No11a: by default only "Tự nhiên" and the owned swatches; the box adds the locked ones.
+      expect(screen.getByRole('button', { name: viNormal.wardrobe.natural })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: `${viNormal.items.haircolor_red01}, ${viNormal.inventory.rarity.common}` })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: lockedName })).toBeNull()
+
+      await user.click(showLockedBox())
+
+      expect(screen.getByRole('button', { name: viNormal.wardrobe.natural })).toBeInTheDocument()
       const owned = screen.getByRole('button', { name: `${viNormal.items.haircolor_red01}, ${viNormal.inventory.rarity.common}` })
       expect(owned).toHaveAttribute('aria-disabled', 'false')
-      const locked = screen.getByRole('button', {
-        name: `${viNormal.items.haircolor_blue01}, ${viNormal.inventory.rarity.rare}, ${viNormal.wardrobe.filter.locked}: ${viNormal.wardrobe.hint.daily.rare}`,
-      })
+      const locked = screen.getByRole('button', { name: lockedName })
       expect(locked).toHaveAttribute('aria-disabled', 'true')
     })
 
@@ -386,6 +449,7 @@ describe('WardrobeScreen', () => {
       renderScreen()
       await screen.findAllByText(viNormal.bases.f01)
       await goTo(user, 'look', viNormal.wardrobe.tabs.hairColor)
+      await user.click(showLockedBox())
 
       const locked = screen.getByRole('button', {
         name: `${viNormal.items.haircolor_blue01}, ${viNormal.inventory.rarity.rare}, ${viNormal.wardrobe.filter.locked}: ${viNormal.wardrobe.hint.daily.rare}`,
@@ -423,28 +487,174 @@ describe('WardrobeScreen', () => {
       expect(red).toHaveAttribute('aria-pressed', 'false')
     })
 
-    it('shows the colour dots on the beret card — locked even though an owned variant hangs off it — equips a variant by its dot, and never lists the variant as its own card', async () => {
+    // Final fix wave (B2): ticking the box only adds cards and dots. It used to turn this card — the owned blue beret —
+    // into the locked original.
+    it('with the box ticked, keeps the beret card on the owned blue variant and adds the locked members as dots — equips a variant by its dot, and never lists a variant as its own card', async () => {
       const setAvatar = vi.fn().mockResolvedValue({ config: { ...AVATAR, head: 'head_beret_blue01' } })
       const user = userEvent.setup()
       renderScreen(stubApi({ setAvatar }))
       await screen.findAllByText(viNormal.bases.f01)
       await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
+      const rare = viNormal.inventory.rarity.rare
+      const panel = within(screen.getByRole('tabpanel'))
+      const card = panel.getByRole('button', { name: `${viNormal.items.head_beret_blue01}, ${rare}` })
 
-      // The variant is not its own card in the tile grid.
-      expect(screen.queryByText(viNormal.items.head_beret_blue01)).toBeNull()
+      await user.click(showLockedBox())
 
-      const card = screen.getByText(viNormal.items.head_beret_red01).closest('button') as HTMLElement
-      expect(card).toHaveAttribute('aria-disabled', 'true')
+      // The same card, still the blue beret the player owns: not the locked original, and no card of the original's.
+      expect(card).toHaveAccessibleName(`${viNormal.items.head_beret_blue01}, ${rare}`)
+      expect(card).toHaveAttribute('aria-disabled', 'false')
+      expect(card.querySelector('img')).toHaveAttribute('src', 'blob:http://localhost/#3f6fd8')
+      expect(panel.queryByText(viNormal.items.head_beret_red01)).toBeNull()
+      const cardCount = panel.getAllByRole('button', { name: /,/ }).length
 
-      const dot = screen.getByRole('button', { name: viNormal.items.head_beret_blue01 })
+      // No8a: the dot row is the whole family, the original first, each dot titled with its member's name; the box adds
+      // the two the player does not own, locked.
+      const row = panel.getByRole('group', { name: viNormal.items.head_beret_red01 })
+      expect(within(row).getAllByRole('button').map((each) => each.getAttribute('title'))).toEqual([
+        viNormal.items.head_beret_red01,
+        viNormal.items.head_beret_blue01,
+        viNormal.items.head_beret_green01,
+      ])
+      expect(within(row).getByRole('button', { name: viNormal.items.head_beret_red01 })).toHaveAttribute('aria-disabled', 'true')
+      const dot = within(row).getByRole('button', { name: viNormal.items.head_beret_blue01 })
       expect(dot).toHaveAttribute('aria-disabled', 'false')
+      const green = within(row).getByRole('button', { name: viNormal.items.head_beret_green01 })
+      expect(green).toHaveAttribute('aria-disabled', 'true')
+
+      await user.click(green)
+      expect(card, 'a locked dot equips nothing').toHaveAttribute('aria-pressed', 'false')
 
       await user.click(dot)
       expect(dot).toHaveAttribute('aria-pressed', 'true')
+      // No8a: the card follows the variant now worn — its name, owned, worn, its own colour — and is still one card.
+      expect(card).toHaveAccessibleName(`${viNormal.items.head_beret_blue01}, ${rare}, ${viNormal.wardrobe.wearingBadge}`)
+      expect(card).toHaveAttribute('aria-pressed', 'true')
+      expect(card.querySelector('img')).toHaveAttribute('src', 'blob:http://localhost/#3f6fd8')
+      expect(panel.getAllByRole('button', { name: /,/ })).toHaveLength(cardCount)
 
       await user.click(screen.getByRole('button', { name: viNormal.wardrobe.save }))
 
       await waitFor(() => expect(setAvatar).toHaveBeenCalledWith(expect.objectContaining({ head: 'head_beret_blue01' })))
+    })
+
+    it('with the box unticked, a family whose original is not owned shows its first owned variant — named, owned, a click equips it — and hides the dots not owned', async () => {
+      // No11a, pre-flight amendment 5: the beret's original (`head_beret_red01`) is not owned, its blue variant is.
+      const setAvatar = vi.fn().mockResolvedValue({ config: { ...AVATAR, head: 'head_beret_blue01' } })
+      const user = userEvent.setup()
+      renderScreen(stubApi({ setAvatar }))
+      await screen.findAllByText(viNormal.bases.f01)
+      await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
+      expect(showLockedBox()).not.toBeChecked()
+
+      const panel = within(screen.getByRole('tabpanel'))
+      expect(panel.queryByText(viNormal.items.head_beret_red01)).toBeNull()
+      const card = panel.getByRole('button', { name: `${viNormal.items.head_beret_blue01}, ${viNormal.inventory.rarity.rare}` })
+      expect(card).toHaveAttribute('aria-disabled', 'false')
+      expect(card).toHaveAttribute('aria-pressed', 'false')
+      // Drawn in its own colour (No8a).
+      expect(card.querySelector('img')).toHaveAttribute('src', 'blob:http://localhost/#3f6fd8')
+      // The dots not owned are hidden — the original's and the green one's — which leaves the shown variant alone, and a
+      // row of one dot repeating the card is no row at all (No8a).
+      expect(panel.queryByRole('group', { name: viNormal.items.head_beret_red01 })).toBeNull()
+      expect(panel.queryByRole('button', { name: viNormal.items.head_beret_green01 })).toBeNull()
+
+      await user.click(card)
+      expect(card).toHaveAttribute('aria-pressed', 'true')
+
+      await user.click(screen.getByRole('button', { name: viNormal.wardrobe.save }))
+      await waitFor(() => expect(setAvatar).toHaveBeenCalledWith(expect.objectContaining({ head: 'head_beret_blue01' })))
+    })
+
+    it('follows the family member being worn: the original’s untinted dot puts the original back, and a second press on the worn card takes it off', async () => {
+      // Review 2026-09-29, No8a (Plan 18, pre-flight amendment 1): both the original and the blue variant are owned, the
+      // blue one is worn.
+      const withBothBerets: InventoryDto = {
+        items: [
+          ...INVENTORY.items,
+          { itemId: 'head_beret_red01', acquiredAs: 'head_beret_red01', slot: 'head', rarity: 'rare', nameKey: 'items.head_beret_red01', assetKey: 'head/head_beret_red01', source: 'default', acquiredAt: 0 },
+        ],
+        avatar: { ...AVATAR, head: 'head_beret_blue01' },
+      }
+      const user = userEvent.setup()
+      renderScreen(stubApi({ inventory: vi.fn().mockResolvedValue(withBothBerets) }))
+      await screen.findAllByText(viNormal.bases.f01)
+      await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
+
+      const panel = within(screen.getByRole('tabpanel'))
+      const rare = viNormal.inventory.rarity.rare
+      const wearing = viNormal.wardrobe.wearingBadge
+      const card = panel.getByRole('button', { name: `${viNormal.items.head_beret_blue01}, ${rare}, ${wearing}` })
+      expect(card).toHaveAttribute('aria-pressed', 'true')
+      expect(within(card).getByText(wearing)).toBeInTheDocument()
+      expect(card.querySelector('img')).toHaveAttribute('src', 'blob:http://localhost/#3f6fd8')
+      const row = panel.getByRole('group', { name: viNormal.items.head_beret_red01 })
+      const [original, blue] = within(row).getAllByRole('button')
+      expect(original).toHaveAccessibleName(viNormal.items.head_beret_red01)
+      expect(original).toHaveAttribute('aria-pressed', 'false')
+      expect(blue).toHaveAccessibleName(viNormal.items.head_beret_blue01)
+      expect(blue).toHaveAttribute('aria-pressed', 'true')
+
+      await user.click(original!)
+
+      expect(card).toHaveAccessibleName(`${viNormal.items.head_beret_red01}, ${rare}, ${wearing}`)
+      expect(original).toHaveAttribute('aria-pressed', 'true')
+      expect(blue).toHaveAttribute('aria-pressed', 'false')
+      // The original is drawn as it is, from its plain two-density icon.
+      expect(card.querySelector('img')).toHaveAttribute('src', '/avatar/item_head_beret_red01_icon@1x.png')
+
+      // Mũ is optional: a second press on the worn card takes it off, and the card stays the (owned) original.
+      await user.click(card)
+
+      expect(card).toHaveAccessibleName(`${viNormal.items.head_beret_red01}, ${rare}`)
+      expect(card).toHaveAttribute('aria-pressed', 'false')
+      expect(original).toHaveAttribute('aria-pressed', 'false')
+    })
+
+    // Final fix wave (B1): the outfit slot is required, so a press on the worn tee keeps it on — the original's dot is
+    // the one way back to "Bộ thường ngày", and it has to say so.
+    it('takes a coloured outfit back to the original by the original’s dot, named after it', async () => {
+      const OUTFIT_CASUAL_RED = item({
+        id: 'outfit_casual_red01',
+        slot: 'outfit',
+        rarity: 'common',
+        asset: { layer: 40, file: 'item_outfit_casual01_L40', fitsAvatarCrop: false, tint: '#c0392b', tintMeanL: 0.5 },
+      })
+      const wearingTheTee: InventoryDto = {
+        items: [
+          ...INVENTORY.items,
+          { itemId: 'outfit_casual_red01', acquiredAs: 'outfit_casual_red01', slot: 'outfit', rarity: 'common', nameKey: 'items.outfit_casual_red01', assetKey: 'outfit/outfit_casual_red01', source: 'default', acquiredAt: 0 },
+        ],
+        avatar: { ...AVATAR, outfit: 'outfit_casual_red01' },
+      }
+      const setAvatar = vi.fn().mockResolvedValue({ config: AVATAR })
+      const user = userEvent.setup()
+      renderScreen(
+        stubApi({ catalogItems: vi.fn().mockResolvedValue({ items: [...CATALOG, OUTFIT_CASUAL_RED] }), inventory: vi.fn().mockResolvedValue(wearingTheTee), setAvatar }),
+      )
+      await screen.findAllByText(viNormal.bases.f01)
+      await goTo(user, 'wear', viNormal.wardrobe.tabs.outfit)
+
+      const panel = within(screen.getByRole('tabpanel'))
+      const common = viNormal.inventory.rarity.common
+      const wearing = viNormal.wardrobe.wearingBadge
+      const card = panel.getByRole('button', { name: `${viNormal.items.outfit_casual_red01}, ${common}, ${wearing}` })
+      // Required: pressing the worn tee leaves it on.
+      await user.click(card)
+      expect(card).toHaveAttribute('aria-pressed', 'true')
+
+      const row = panel.getByRole('group', { name: viNormal.items.outfit_casual01 })
+      const original = within(row).getByRole('button', { name: viNormal.items.outfit_casual01 })
+      expect(original, 'titled for a pointer too').toHaveAttribute('title', viNormal.items.outfit_casual01)
+      expect(original).toHaveAttribute('aria-pressed', 'false')
+      expect(original).toHaveAttribute('aria-disabled', 'false')
+
+      await user.click(original)
+
+      expect(original).toHaveAttribute('aria-pressed', 'true')
+      expect(card).toHaveAccessibleName(`${viNormal.items.outfit_casual01}, ${common}, ${wearing}`)
+      await user.click(screen.getByRole('button', { name: viNormal.wardrobe.save }))
+      await waitFor(() => expect(setAvatar).toHaveBeenCalledWith(expect.objectContaining({ outfit: 'outfit_casual01' })))
     })
   })
 
@@ -500,24 +710,93 @@ describe('WardrobeScreen', () => {
 
       const subList = screen.getByRole('tablist', { name: viNormal.wardrobe.groups.wear })
       expect(within(subList).getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.head}`) })).toHaveAttribute('aria-selected', 'true')
-      expect(screen.getByText(viNormal.items.head_tophat01)).toBeInTheDocument()
+      // Scoped to the tile grid: "Mũ len" is also the wearing-list row just clicked.
+      expect(within(screen.getByRole('tabpanel')).getByText(viNormal.items.head_beanie01)).toBeInTheDocument()
     })
 
-    it('resets the ownership filter to "all" whenever the tab changes', async () => {
+    // Review 2026-09-29, No11a (design §3.1 item 3, §5.5): owned items by default, one box for the rest. Acceptance
+    // row 66.19 cites this title.
+    it('lists only what the account owns by default, and the box shows the rest', async () => {
+      const user = userEvent.setup()
+      renderScreen()
+      await screen.findAllByText(viNormal.bases.f01)
+      // The base tab is chosen, not owned: no box there.
+      expect(screen.queryByRole('checkbox')).toBeNull()
+
+      await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
+      expect(showLockedBox()).not.toBeChecked()
+      const cardNames = (): string[] =>
+        within(screen.getByRole('tabpanel'))
+          .getAllByRole('button', { name: /,/ })
+          .map((card) => card.getAttribute('aria-label')!.split(',')[0]!)
+      // Owned: the beanie, and the beret family through its blue variant. Not owned: the top hat.
+      expect(cardNames()).toEqual([viNormal.items.head_beanie01, viNormal.items.head_beret_blue01])
+      expect(screen.queryByText(viNormal.items.head_tophat01)).toBeNull()
+
+      await user.click(showLockedBox())
+
+      expect(showLockedBox()).toBeChecked()
+      // The box only adds: the beret family is still the blue beret the account owns (final fix wave, B2).
+      expect(cardNames()).toEqual([viNormal.items.head_beanie01, viNormal.items.head_beret_blue01, viNormal.items.head_tophat01])
+      const tophat = screen.getByText(viNormal.items.head_tophat01).closest('button')
+      expect(tophat).toHaveAttribute('aria-disabled', 'true')
+
+      await user.click(showLockedBox())
+
+      expect(showLockedBox()).not.toBeChecked()
+      expect(screen.queryByText(viNormal.items.head_tophat01)).toBeNull()
+    })
+
+    it('keeps the box ticked or unticked across tab changes — a jump from the wearing list included', async () => {
       const user = userEvent.setup()
       renderScreen()
       await screen.findAllByText(viNormal.bases.f01)
       await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
 
-      await user.click(screen.getByRole('button', { name: viNormal.wardrobe.filter.locked }))
-      expect(screen.getByRole('button', { name: viNormal.wardrobe.filter.locked })).toHaveAttribute('aria-pressed', 'true')
-      // Scoped to the tile grid: "Mũ len" also names the wearing-list row, which the filter never touches.
-      expect(within(screen.getByRole('tabpanel')).queryByText(viNormal.items.head_beanie01)).toBeNull()
+      await user.click(showLockedBox())
+      expect(screen.getByText(viNormal.items.head_tophat01)).toBeInTheDocument()
 
       await goTo(user, 'wear', viNormal.wardrobe.tabs.outfit)
+      expect(showLockedBox()).toBeChecked()
+      expect(within(screen.getByRole('tabpanel')).getByText(viNormal.items.outfit_tuxedo01)).toBeInTheDocument()
 
-      expect(screen.getByRole('button', { name: viNormal.wardrobe.filter.all })).toHaveAttribute('aria-pressed', 'true')
-      expect(within(screen.getByRole('tabpanel')).getByText(viNormal.items.outfit_casual01)).toBeInTheDocument()
+      // Through the base tab, where the box is hidden, and back by the wearing list's "Mũ" row.
+      await goTo(user, 'look', viNormal.wardrobe.tabs.base)
+      expect(screen.queryByRole('checkbox')).toBeNull()
+      await user.click(screen.getByText(viNormal.wardrobe.tabs.head).closest('button') as HTMLElement)
+      expect(showLockedBox()).toBeChecked()
+      expect(screen.getByText(viNormal.items.head_tophat01)).toBeInTheDocument()
+
+      await user.click(showLockedBox())
+      await goTo(user, 'wear', viNormal.wardrobe.tabs.outfit)
+      expect(showLockedBox()).not.toBeChecked()
+      expect(within(screen.getByRole('tabpanel')).queryByText(viNormal.items.outfit_tuxedo01)).toBeNull()
+    })
+
+    it('replaces the grid with one line, inside the same tabpanel, on a tab where nothing is owned', async () => {
+      const user = userEvent.setup()
+      renderScreen()
+      await screen.findAllByText(viNormal.bases.f01)
+
+      await goTo(user, 'wear', viNormal.wardrobe.tabs.face)
+
+      const faceTab = screen.getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.face}`) })
+      const panel = screen.getByRole('tabpanel')
+      expect(panel).toHaveAttribute('id', faceTab.getAttribute('aria-controls'))
+      expect(panel).toHaveAttribute('aria-labelledby', faceTab.id)
+      const line = within(panel).getByText(viNormal.wardrobe.emptyOwned)
+      expect(line.tagName).toBe('P')
+      expect(within(panel).queryAllByRole('button')).toHaveLength(0)
+      // Nothing in it to Tab to, so the panel takes the focus itself (the ARIA tabs pattern).
+      expect(panel).toHaveAttribute('tabindex', '0')
+
+      await user.click(showLockedBox())
+
+      // The same panel, now holding the grid: the locked sunglasses card, and no line.
+      expect(screen.getByRole('tabpanel')).toBe(panel)
+      expect(within(panel).queryByText(viNormal.wardrobe.emptyOwned)).toBeNull()
+      expect(panel, 'its cards take the focus now').not.toHaveAttribute('tabindex')
+      expect(within(panel).getByText(viNormal.items.face_sunglasses01).closest('button')).toHaveAttribute('aria-disabled', 'true')
     })
 
     it('swaps the stage to the framed head portrait on the frame tab', async () => {
@@ -537,6 +816,8 @@ describe('WardrobeScreen', () => {
       await screen.findAllByText(viNormal.bases.f01)
 
       await goTo(user, 'decor', viNormal.wardrobe.tabs.words)
+      // Neither word is owned (pre-flight amendment 2): the box lists them.
+      await user.click(showLockedBox())
 
       // Two `ItemTab` calls (title, badge) used to each draw their own `role="tabpanel"`, with the heading
       // sitting outside either one — exactly one tabpanel, wrapping both headings and both grids, is the fix.
@@ -546,6 +827,7 @@ describe('WardrobeScreen', () => {
       expect(panel.getByRole('heading', { name: viNormal.wardrobe.words.titles })).toBeInTheDocument()
       expect(panel.getByRole('heading', { name: viNormal.wardrobe.words.badges })).toBeInTheDocument()
       expect(panel.getByText(viNormal.items.title_rookie)).toBeInTheDocument()
+      expect(panel.getByText(viNormal.items.badge_bronze)).toBeInTheDocument()
 
       // The panel and its tab name each other (design §7): the tab's `aria-controls` is the panel's own
       // `id`, and the panel's `aria-labelledby` is the tab's own `id`.
@@ -553,6 +835,48 @@ describe('WardrobeScreen', () => {
       expect(wordsTab.id).not.toBe('')
       expect(panels[0]).toHaveAttribute('id', wordsTab.getAttribute('aria-controls'))
       expect(panels[0]).toHaveAttribute('aria-labelledby', wordsTab.id)
+    })
+
+    it('on the words tab with the box unticked, hides a heading with nothing owned under it, and says so once inside the panel when neither has anything', async () => {
+      const user = userEvent.setup()
+      renderScreen()
+      await screen.findAllByText(viNormal.bases.f01)
+
+      await goTo(user, 'decor', viNormal.wardrobe.tabs.words)
+
+      const panels = screen.getAllByRole('tabpanel')
+      expect(panels).toHaveLength(1)
+      const wordsTab = screen.getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.words}`) })
+      expect(panels[0]).toHaveAttribute('id', wordsTab.getAttribute('aria-controls'))
+      expect(panels[0]).toHaveAttribute('aria-labelledby', wordsTab.id)
+      const panel = within(panels[0]!)
+      expect(panel.queryByRole('heading')).toBeNull()
+      expect(panel.getAllByText(viNormal.wardrobe.emptyOwned)).toHaveLength(1)
+      expect(panel.queryAllByRole('button')).toHaveLength(0)
+      expect(panels[0], 'the panel takes the focus, having nothing else to give it').toHaveAttribute('tabindex', '0')
+    })
+
+    it('on the words tab, an owned badge alone shows the badge heading and its card — no title heading, no empty line', async () => {
+      const user = userEvent.setup()
+      const withBadge: InventoryDto = {
+        ...INVENTORY,
+        items: [
+          ...INVENTORY.items,
+          { itemId: 'badge_bronze', acquiredAs: 'badge_bronze', slot: 'badge', rarity: 'common', nameKey: 'items.badge_bronze', assetKey: 'badge/badge_bronze', source: 'default', acquiredAt: 0 },
+        ],
+      }
+      renderScreen(stubApi({ inventory: vi.fn().mockResolvedValue(withBadge) }))
+      await screen.findAllByText(viNormal.bases.f01)
+
+      await goTo(user, 'decor', viNormal.wardrobe.tabs.words)
+
+      const panel = within(screen.getByRole('tabpanel'))
+      expect(panel.queryByRole('heading', { name: viNormal.wardrobe.words.titles })).toBeNull()
+      expect(panel.getByRole('heading', { name: viNormal.wardrobe.words.badges })).toBeInTheDocument()
+      expect(panel.getByText(viNormal.items.badge_bronze).closest('button')).toHaveAttribute('aria-disabled', 'false')
+      expect(panel.queryByText(viNormal.items.title_rookie)).toBeNull()
+      expect(panel.queryByText(viNormal.wardrobe.emptyOwned)).toBeNull()
+      expect(screen.getByRole('tabpanel')).not.toHaveAttribute('tabindex')
     })
 
     it('gives every tab a roving tabindex: only the selected one sits in the page Tab order', async () => {

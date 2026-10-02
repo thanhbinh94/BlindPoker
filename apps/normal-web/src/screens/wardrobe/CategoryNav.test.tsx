@@ -17,8 +17,8 @@ function renderNav(overrides: Partial<CategoryNavProps> = {}) {
     tab: 'head',
     onTab: vi.fn(),
     counts: COUNTS,
-    filter: 'all',
-    onFilter: vi.fn(),
+    showLocked: false,
+    onShowLocked: vi.fn(),
     showFilter: true,
     ...overrides,
   }
@@ -150,30 +150,47 @@ describe('CategoryNav', () => {
     expect(decor).toHaveFocus()
   })
 
-  it('shows the three ownership filters as aria-pressed buttons, the active one pressed', () => {
-    renderNav({ filter: 'owned' })
+  // No11a (design §3.1 item 3): one native checkbox in its label replaced the three filter buttons, beside the count.
+  it('shows the "show items you don\'t own yet" box unticked, beside the "n/m đã có" count, and no filter buttons', () => {
+    renderNav({ tab: 'head', showLocked: false })
 
-    expect(screen.getByRole('button', { name: viNormal.wardrobe.filter.all })).toHaveAttribute('aria-pressed', 'false')
-    expect(screen.getByRole('button', { name: viNormal.wardrobe.filter.owned })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: viNormal.wardrobe.filter.locked })).toHaveAttribute('aria-pressed', 'false')
+    const box = screen.getByRole('checkbox', { name: viNormal.wardrobe.showLocked })
+    expect(box).not.toBeChecked()
+    expect(box.tagName).toBe('INPUT')
+    expect(box.closest('label')).not.toBeNull()
+    expect(screen.getByText(viNormal.wardrobe.ownedCount.replace('{{owned}}', '5').replace('{{total}}', '8'))).toBeInTheDocument()
+    expect(screen.queryAllByRole('button')).toHaveLength(0)
   })
 
-  it('clicking a filter button calls onFilter', async () => {
+  it('shows the box ticked when showLocked is true', () => {
+    renderNav({ showLocked: true })
+
+    expect(screen.getByRole('checkbox', { name: viNormal.wardrobe.showLocked })).toBeChecked()
+  })
+
+  it('ticking the box calls onShowLocked(true)', async () => {
     const user = userEvent.setup()
-    const onFilter = vi.fn()
-    renderNav({ filter: 'all', onFilter })
+    const onShowLocked = vi.fn()
+    renderNav({ showLocked: false, onShowLocked })
 
-    await user.click(screen.getByRole('button', { name: viNormal.wardrobe.filter.locked }))
-
-    expect(onFilter).toHaveBeenCalledWith('locked')
+    await user.click(screen.getByRole('checkbox', { name: viNormal.wardrobe.showLocked }))
+    expect(onShowLocked).toHaveBeenLastCalledWith(true)
   })
 
-  it('hides the filter entirely when showFilter is false', () => {
+  it('unticking the box calls onShowLocked(false)', async () => {
+    const user = userEvent.setup()
+    const onShowLocked = vi.fn()
+    renderNav({ showLocked: true, onShowLocked })
+
+    await user.click(screen.getByRole('checkbox', { name: viNormal.wardrobe.showLocked }))
+    expect(onShowLocked).toHaveBeenLastCalledWith(false)
+  })
+
+  it('hides the box entirely when showFilter is false', () => {
     renderNav({ tab: 'base', showFilter: false })
 
-    expect(screen.queryByRole('button', { name: viNormal.wardrobe.filter.all })).toBeNull()
-    expect(screen.queryByRole('button', { name: viNormal.wardrobe.filter.owned })).toBeNull()
-    expect(screen.queryByRole('button', { name: viNormal.wardrobe.filter.locked })).toBeNull()
+    expect(screen.queryByRole('checkbox')).toBeNull()
+    expect(screen.queryByText(viNormal.wardrobe.showLocked)).toBeNull()
   })
 
   it("gives every tab an id and an aria-controls naming its panel's own id (design §7)", () => {

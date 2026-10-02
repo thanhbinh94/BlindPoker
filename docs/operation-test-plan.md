@@ -77,7 +77,7 @@ mã phòng (nếu có), thiết bị, ảnh chụp màn hình. Claude chép vào
 | S-04 | Sảnh → Tạo phòng Blind, 3 bot | Vào bàn, 3 bot ngồi sẵn, mã phòng 6 ký tự ở đầu trang | P1 |
 | S-05 | Ngồi vào bàn → Sẵn sàng → Bắt đầu | Ngồi: số dư trừ hạn mức 5.000; ván chạy, lá chung lật, có người thắng, chồng trên bàn đổi; rời phòng: chồng về số dư | P1 |
 | S-06 | Rời phòng | Về sảnh; phòng Blind của S-04 (chỉ còn bot) biến mất khỏi sảnh ngay (C-07); phòng không bot hiện nhãn "Đang đóng…" rồi biến mất sau ~60 giây (C-06) | P1 |
-| S-07 | Hồ sơ, Tủ đồ, Thành tựu, Cài đặt | Mỗi trang mở được, không trang trắng | P1 |
+| S-07 | Hồ sơ, Tủ đồ, Thành tựu, Cài đặt; địa chỉ cũ `#/inventory` | Mỗi trang mở được, không trang trắng; `#/inventory` mở Tủ đồ và đổi thành `#/avatar` | P1 |
 | S-08 | Tải lại trang (F5) ở bất kỳ màn nào | Vẫn đăng nhập, về đúng màn | P1 |
 
 ## 5. Test chức năng theo module
@@ -125,7 +125,7 @@ mã phòng (nếu có), thiết bị, ảnh chụp màn hình. Claude chép vào
 | D-02 | Buy-in tối thiểu > tối đa | Bị chặn, gợi ý rõ | P2 |
 | D-03 | Tên phòng rỗng / 31 ký tự | Bị chặn | P2 |
 | D-04 | Mật khẩu phòng 3 ký tự | Bị chặn, gợi ý "4–20 ký tự" | P2 |
-| D-05 | Blind: 2 lá / 3 lá; Thuần may rủi / Chơi hoặc bỏ; Mức cược cố định; Số bot | Phòng đúng cấu hình; bot ngồi sẵn, luôn sẵn sàng | P1 |
+| D-05 | Blind: 2 lá / 3 lá; Hoàn toàn may rủi / Chơi hoặc bỏ; Mức cược cố định; Số bot | Phòng đúng cấu hình; bot ngồi sẵn, luôn sẵn sàng | P1 |
 | D-06 | Bật "Tự động bắt đầu" | Ván tự chạy khi tất cả người thật đã Sẵn sàng (≥ 2 người tính cả bot) | P2 |
 | D-07 | Mở hộp thoại Tạo phòng, đổi qua lại Hold'em ↔ Blind | Hộp thoại giữ nguyên chiều cao (không giật lên xuống); các nút ở chân hộp thoại căn giữa, cách ô cuối một khoảng rõ (review 29/09 No12, No17) | P3 |
 
@@ -137,13 +137,13 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 |---|---|---|---|
 | E-01 | Ngồi vào bàn, chọn mức mang vào | Số dư trừ đúng số mang vào, stack hiện trên ghế | P1 |
 | E-02 | Bấm Bắt đầu khi chưa ai Sẵn sàng | Nút khoá, có gợi ý phải Sẵn sàng trước | P2 |
-| E-03 | Chơi một ván đến showdown | Button/SB/BB đúng vị trí; lá chung lật đủ 3–1–1; người thắng được cộng pot trừ phí bàn 2% (tối đa 1 BB) | P1 |
+| E-03 | Chơi một ván đến showdown | Button/SB/BB đúng vị trí; lá chung lật đủ 3–1–1; lá của đối thủ lật từ từ (~0,6 giây) rồi phiếu kết quả mới hiện; tắt khi bật giảm chuyển động; người thắng được cộng pot trừ phí bàn 2% (tối đa 1 BB) | P1 |
 | E-04 | Xem / Theo / Cược / Tố / Tất tay; dùng nút Min, ½, Pot, Max | Chỉ hiện hành động hợp lệ; tố thấp hơn mức tối thiểu bị chặn | P1 |
 | E-05 | 3 người, stack khác nhau, hai người tất tay | Có pot phụ; mỗi pot chia đúng người đủ điều kiện | P1 |
 | E-06 | Chọn trước "Xem/Bỏ", "Theo mọi mức", "Bỏ bài" khi chưa tới lượt | Tới lượt thì tự làm đúng lựa chọn; lựa chọn bị huỷ nếu có người tố làm nó không còn hợp lệ | P2 |
 | E-07 | Để hết giờ không bấm gì | Tự Xem nếu được, không thì Bỏ bài | P1 |
 | E-08 | Để hết giờ 3 lượt liên tiếp | Sau ván đó bị đứng dậy, stack về số dư | P2 |
-| E-09 | Ngồi ngoài → bỏ qua 5 ván | Tự đứng dậy, stack về số dư | P2 |
+| E-09 | Tạm nghỉ → bỏ qua 5 ván | Tự đứng dậy, stack về số dư | P2 |
 | E-10 | Rời phòng giữa ván | Coi như bỏ bài; stack về số dư khi ván kết thúc | P1 |
 | E-11 | Đứng dậy giữa hai ván | Stack về số dư ngay | P1 |
 | E-12 | Ván sau tự bắt đầu | Khoảng 5 giây sau khi ván trước kết thúc, nếu còn ≥ 2 người có stack | P2 |
@@ -152,14 +152,14 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 
 | Mã | Bước | Kỳ vọng | Ưu tiên |
 |---|---|---|---|
-| F-01 | Kiểu Thuần may rủi, 2 lá, 3 bot | Mỗi ván trừ đúng mức cược cố định **từ chồng trên bàn**; không có lượt quyết định; lật bài và chia pot trừ 2% phí | P1 |
+| F-01 | Kiểu Hoàn toàn may rủi, 2 lá, 3 bot | Mỗi ván trừ đúng mức cược cố định **từ chồng trên bàn**; không có lượt quyết định; lật bài và chia pot trừ 2% phí; lá của đối thủ lật từ từ (~0,6 giây) rồi phiếu kết quả mới hiện; tắt khi bật giảm chuyển động | P1 |
 | F-02 | Kiểu 3 lá | Mỗi người nhận 3 lá; xếp hạng dùng 5 lá tốt nhất trong 8 | P2 |
 | F-03 | Kiểu Chơi hoặc bỏ, 2 người thật | Hai người quyết định cùng lúc, không ai thấy lựa chọn của người kia trước khi hết pha | P1 |
 | F-04 | Cả hai chọn Bỏ | Pot chuyển sang ván sau, bàn hiện "Cộng dồn" | P1 |
-| F-05 | Sau F-04, mọi người thật bấm Ngồi ngoài (vẫn giữ ghế) để không ván nào bắt đầu, chờ > 60 giây | Pot cộng dồn chia đều cho người thật đang ngồi ghế (cùng người bị mời đứng dậy vì hết hạn mức trong lúc pot đang cộng dồn, nếu còn trong phòng), phần lẻ bị thu; nếu không còn ai để chia thì cả pot bị thu | P2 |
+| F-05 | Sau F-04, mọi người thật bấm Tạm nghỉ (vẫn giữ ghế) để không ván nào bắt đầu, chờ > 60 giây | Pot cộng dồn chia đều cho người thật đang ngồi ghế (cùng người bị mời đứng dậy vì hết hạn mức trong lúc pot đang cộng dồn, nếu còn trong phòng), phần lẻ bị thu; nếu không còn ai để chia thì cả pot bị thu | P2 |
 | F-06 | Chỉ một người chọn Chơi | Người đó thắng cả pot, không lật lá chung, lá riêng không lộ | P1 |
 | F-07 | (a) Bấm Ngồi vào bàn khi số dư < mức cược (kiểu A) hoặc < 2 × mức cược (kiểu B); (b) đang ngồi mà chồng trên bàn không đủ cho ván sau | (a) Bị từ chối, báo "Số dư không đủ", không bị trừ điểm (FR-R07); (b) bị mời đứng dậy sau ván, phần còn lại về số dư (xem F-10) | P2 |
-| F-08 | Chủ phòng bấm Đuổi một bot | Bot rời ghế, ghế trống | P2 |
+| F-08 | Chủ phòng bấm Mời ra một bot | Bot rời ghế, ghế trống | P2 |
 | F-09 | Bật "Tự động chơi" | Tự quyết định mỗi ván cho tới khi tắt | P3 |
 | F-10 | Phòng mức cược 1.000, Chơi hoặc bỏ, 1 bot; ngồi vào bàn rồi Bỏ mọi ván | Ngồi: số dư −5.000 (hạn mức 5×), đầu phòng ghi "Hạn mức 5.000"; sau 4 ván chồng còn 1.000 < 2.000 → bị mời đứng dậy, thông báo "Bạn đã dùng hết hạn mức…", 1.000 về số dư, vẫn ở trong phòng; bấm ghế lại → hạn mức mới 5.000 | P1 |
 
@@ -178,7 +178,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 | Mã | Bước | Kỳ vọng | Ưu tiên |
 |---|---|---|---|
 | H-01 | Sau mỗi ván (Blind: sau khi đứng dậy), so số dư với Hồ sơ → Lịch sử điểm. Ở Blind, tiền của từng ván nằm ở **chồng trên bàn** (đọc ở ghế và trên phiếu kết quả), không ở số dư; sổ chỉ có "Vào bàn" khi ngồi và "Rời bàn" khi rời ghế | Mỗi thay đổi có một dòng tương ứng, cộng trừ khớp số dư. Blind: "Vào bàn" (−hạn mức, hoặc −toàn bộ số dư nếu thấp hơn) và "Rời bàn" (+chồng) cho ra kết quả ròng của **cả lần ngồi**, không phải của từng ván. Ngoài hai dòng đó, số dư chỉ đổi khi có thưởng thành tựu, điểm danh, cứu trợ hoặc pot cộng dồn được chia ("Hoàn điểm"), mỗi thứ một dòng riêng — đối chiếu những dòng đó cùng | P1 |
-| H-02 | Tài khoản mới, chưa nhận điểm danh (100.000): tạo phòng Blind Thuần may rủi mức cược 50.000, ngồi vào bàn (không cần chơi) — ghế lấy hết 100.000 (hạn mức 250.000) nên số dư về 0 ngay → mở trang Điểm danh, bấm Nhận cứu trợ (không nhận thưởng ngày) | Số dư lên đúng 5.000; bấm lại trong 24 giờ bị từ chối. Cứu trợ chỉ xét số dư: điểm đang nằm trên bàn không được tính — xem `docs/known-limitations.md` | P1 |
+| H-02 | Tài khoản mới, chưa nhận điểm danh (100.000): tạo phòng Blind Hoàn toàn may rủi mức cược 50.000, ngồi vào bàn (không cần chơi) — ghế lấy hết 100.000 (hạn mức 250.000) nên số dư về 0 ngay → mở trang Điểm danh, bấm Nhận cứu trợ (không nhận thưởng ngày) | Số dư lên đúng 5.000; bấm lại trong 24 giờ bị từ chối. Cứu trợ chỉ xét số dư: điểm đang nằm trên bàn không được tính — xem `docs/known-limitations.md` | P1 |
 | H-03 | Cộng tổng stack cả bàn trước và sau một ván Hold'em | Tổng sau = tổng trước − phí bàn (2 % pot, tối đa 1 BB) | P1 |
 
 ### I. Điểm danh
@@ -187,7 +187,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 |---|---|---|---|
 | I-01 | Đăng nhập lần đầu trong ngày | Tự mở trang Điểm danh một lần; lần đăng nhập sau trong ngày thì vào sảnh | P2 |
 | I-02 | Nhận thưởng hai lần | Lần hai bị khoá | P1 |
-| I-03 | Xem "Ngày mới bắt đầu lúc" | 00:00 giờ Việt Nam hôm sau | P3 |
+| I-03 | Xem "Lần điểm danh tiếp theo" | 00:00 giờ Việt Nam hôm sau | P3 |
 | I-04 | Ngày 7, 14, 21, 28 của chuỗi | Nhận thêm vật phẩm (không thử được trong một ngày — đã có test tự động; nếu có người chơi đủ chuỗi thì ghi lại) | P3 |
 
 ### J. Tủ đồ (ngoại hình)
@@ -199,16 +199,17 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 | J-03 | Đổi đồ → Hoàn tác | Quay về trạng thái đã lưu | P2 |
 | J-04 | Đổi đồ → Lưu → mở Sảnh / vào bàn | Hình đại diện mới hiện ở sảnh và trên ghế; người khác trong bàn cũng thấy | P1 |
 | J-05 | Lưu bộ đồ vào ô trống → mặc bộ khác → áp dụng lại bộ đã lưu | Đúng bộ đã lưu | P2 |
-| J-06 | Bấm các biểu cảm (Vui, Buồn, …) | Chỉ đổi hình xem trước, không cần lưu | P3 |
-| J-07 | Trên điện thoại: cuộn trang tủ đồ, mở "Đang mặc", "Bộ đồ đã lưu" | Không tràn ngang, bấm được mọi thẻ | P2 |
-| J-08 | Tủ đồ và Kho đồ: nhìn các hàng thẻ trong từng tab (Mũ, Trang phục, Danh hiệu & Huy hiệu…) | Thẻ cùng hàng cao bằng nhau, độ hiếm nằm ngay dưới tên; tiêu đề "Huy hiệu" không dính vào thẻ "Tay nóng" phía trên (review 29/09 No8b, No11b) | P3 |
+| J-06 | Bấm nút ‹ và › hai bên tên biểu cảm dưới sân khấu (hoặc phím ← →) để đi qua các biểu cảm (Bình thường, Vui, Buồn, …); thử từ Bình thường bấm ‹, và từ Ngủ bấm › | Tên giữa hai nút đổi theo và hình xem trước đổi biểu cảm; không cần lưu. Đi hết vòng thì quay lại (Bình thường ‹ → Ngủ, Ngủ › → Bình thường). Trên điện thoại hai nút to bằng ngón tay, hàng không xuống dòng (review 29/09 No10) | P3 |
+| J-07 | Trên điện thoại: cuộn trang tủ đồ, mở "Đang dùng", "Bộ đồ đã lưu" | Không tràn ngang, bấm được mọi thẻ | P2 |
+| J-08 | Tủ đồ: nhìn các hàng thẻ trong từng tab (Mũ, Quần áo, Danh hiệu & Huy hiệu…; tích "Hiện cả món chưa có" để thấy cả thẻ chưa có) | Thẻ cùng hàng cao bằng nhau, độ hiếm nằm ngay dưới tên; tiêu đề "Huy hiệu" không dính vào thẻ "Tay nóng" phía trên (review 29/09 No8b, No11b) | P3 |
+| J-09 | Tài khoản mới: mở tủ đồ → tab Mũ → Quần áo → tích "Hiện cả món chưa có" → đổi sang Mũ, Danh hiệu & Huy hiệu → rời tủ đồ rồi mở lại | Mặc định chỉ hiện món đã có: Mũ ghi "Bạn chưa có món nào ở mục này.", Quần áo có bộ thường ngày với 5 chấm: chấm không màu của chính bộ gốc rồi 4 màu áo phông. Tích ô thì hiện cả món chưa có (có khóa) và ô vẫn tích khi đổi tab; mở lại tủ đồ thì ô bỏ tích. Có biến thể màu mà chưa có món gốc (ví dụ được tặng "Mũ nồi xanh dương"): thẻ hiện chính biến thể đó, ảnh tô đúng màu của nó, bấm là mặc (review 29/09 No11a, No8a). Mặc một biến thể (ví dụ chấm "Áo phông đỏ"): thẻ đổi sang tên và màu của biến thể đó, có nhãn "✓ Đang dùng"; bấm chấm ô cờ đầu hàng (bộ gốc) thì về lại "Bộ thường ngày" — trên điện thoại chấm vẫn nhỏ nhưng chạm hơi lệch vẫn trúng. Tích ô chỉ thêm thẻ và chấm: thẻ "Mũ nồi xanh dương" vẫn là chính nó, không đổi thành mũ gốc bị khóa (đợt sửa cuối Plan 18) | P2 |
 
-### K. Kho đồ, Thành tựu, Hồ sơ
+### K. Thành tựu, Hồ sơ
 
 | Mã | Bước | Kỳ vọng | Ưu tiên |
 |---|---|---|---|
-| K-01 | Kho đồ | Liệt kê đúng đồ đang có, đánh dấu món đang mặc | P2 |
-| K-02 | Chơi đủ 10 ván Blind (bàn có bot, bật tự động bắt đầu). Hết hạn mức thì bị mời đứng dậy (F-10) nên phải bấm ghế để ngồi lại (Sẵn sàng, bật lại Tự động chơi) thì mới đủ 10 ván | Hiện thông báo mở thành tựu "Mười ván Blind Poker", +2.000 điểm; trang Thành tựu cập nhật | P1 |
+| K-01 | Hồ sơ: nhìn các nút dưới tên; rồi mở địa chỉ cũ `#/inventory` (dán vào thanh địa chỉ), sau đó bấm Back của trình duyệt | Hồ sơ chỉ còn hai nút: Phòng thay đồ và Thành tựu, không còn "Kho đồ". Địa chỉ cũ mở thẳng Phòng thay đồ (thanh địa chỉ đổi thành `#/avatar`); Back về trang trước đó chứ không quay lại `#/inventory` (review 29/09 No5; ngày nhận và nguồn gốc của món không còn hiện ở đâu cả, có chủ đích) | P2 |
+| K-02 | Chơi đủ 10 ván Blind (bàn có bot, bật tự động bắt đầu). Hết hạn mức thì bị mời đứng dậy (F-10) nên phải bấm ghế để ngồi lại (Sẵn sàng, bật lại Tự động chơi) thì mới đủ 10 ván | Hiện thông báo "Đạt thành tựu mới: Mười ván Blind Poker", +2.000 điểm; trang Thành tựu cập nhật | P1 |
 | K-03 | Vào 10 phòng khác nhau | Thành tựu "Mười phòng" mở | P3 |
 | K-04 | Hồ sơ → Thống kê sau vài ván | Số ván chơi/thắng tăng đúng; "Ván gần đây" ghi "Tại bàn `<tên phòng>`" (hoặc "Tại `<tên phòng>`" khi tên phòng đã bắt đầu bằng "Bàn", không lặp chữ), đối thủ là bot hiện "Bot 1", "Bot 2"… chứ không hiện mã kiểu `bot:…` (review 29/09 No4); tên bot in nghiêng, không có huy hiệu "bot" nhìn thấy (vòng 2 R2-2) | P2 |
 | K-05 | Hồ sơ → đổi tên hiển thị | Tên mới hiện ở sảnh, bàn, cài đặt; tên trùng người khác bị từ chối | P2 |
@@ -216,7 +217,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 ### M. Giao diện trên nhiều cỡ màn hình
 
 Làm trên D1, T1, P1, P2 cho các màn: Đăng nhập, Sảnh, Tạo phòng, Bàn (trước và trong ván), Điểm danh, Hồ sơ,
-Tủ đồ, Kho đồ, Thành tựu, Cài đặt.
+Tủ đồ, Thành tựu, Cài đặt.
 
 | Mã | Kỳ vọng | Ưu tiên |
 |---|---|---|
@@ -227,11 +228,12 @@ Tủ đồ, Kho đồ, Thành tựu, Cài đặt.
 | M-05 | Máy tính 1920×940 và 1366×768, vào bàn (chờ, trong ván, thẻ kết quả nhiều dòng): trang không có thanh cuộn dọc; ghế của mình chỉ còn hai dòng dưới bảng tên; "Ván tiếp theo sau…" nằm ở chân thẻ kết quả chứ không đè ghế; thân thẻ cuộn được bên trong và mờ ở chân khi còn cuộn được (review 29/09 No2, No11b) | P2 |
 
 **Luật "không chữ đè chữ" (review 2026-09-29, No11b) đã thành test tự động:** `pnpm e2e:normal` đo mọi màn hình
-kể trên — trừ Tủ đồ chỉ ba tab (Ngoại hình, Mũ, Danh hiệu & Huy hiệu) — ở 1920×940 (màn hình của bạn), 1366×768 và
-375×812, gồm bàn Blind lúc chờ, trong ván và thẻ kết quả; bộ `e2e/ops` đo thêm bàn Hold'em đang chơi và thẻ kết
-quả ở 1440×900 và ba cỡ trên, bàn Blind đang chơi và thẻ kết quả ở 1440×900. Cách đo và những gì nó không thấy:
-`docs/ui-kit.md`, mục "The text-overlap rule"; màn nào, trạng thái nào, cỡ nào và test nào: `docs/test-matrix.md`. Người test vẫn nhìn bằng mắt những gì máy không đo: chữ đè lên hình hay chạm mép thẻ, chữ
-trong ô nhập, bản English, và các cỡ màn hình khác.
+kể trên — trừ Tủ đồ chỉ bốn tab (Ngoại hình, Mũ, Quần áo, Danh hiệu & Huy hiệu; ba tab đồ đo khi đã tích "Hiện cả
+món chưa có", để có đủ thẻ) — ở 1920×940 (màn hình của bạn), 1366×768 và 375×812, gồm bàn Blind lúc chờ, trong ván
+và thẻ kết quả; bộ `e2e/ops` đo thêm bàn Hold'em đang chơi và thẻ kết quả ở 1440×900 và ba cỡ trên, bàn Blind đang
+chơi và thẻ kết quả ở 1440×900. Cách đo và những gì nó không thấy: `docs/ui-kit.md`, mục "The text-overlap rule";
+màn nào, trạng thái nào, cỡ nào và test nào: `docs/test-matrix.md`. Người test vẫn nhìn bằng mắt những gì máy không
+đo: chữ đè lên hình hay chạm mép thẻ, chữ trong ô nhập, bản English, và các cỡ màn hình khác.
 
 ### N. Vận hành máy chủ (người vận hành)
 
@@ -264,7 +266,7 @@ trong ô nhập, bản English, và các cỡ màn hình khác.
 5. A rời phòng khi đang là chủ phòng → kiểm chủ phòng mới (G-04).
 6. Chuyển sang phòng Blind "Chơi hoặc bỏ", mức cược 1.000, 2 lá, 1 bot. Chơi 10 ván; có ít nhất một ván
    cả nhóm cùng Bỏ để xem pot cộng dồn (F-04). Ai tiêu hết hạn mức 5.000 bị mời đứng dậy — bấm ghế để vào lại (F-10).
-7. Mọi người thật bấm Ngồi ngoài, chờ 60 giây → pot cộng dồn được chia (F-05). Rời hết → phòng (còn 1 bot) biến
+7. Mọi người thật bấm Tạm nghỉ, chờ 60 giây → pot cộng dồn được chia (F-05). Rời hết → phòng (còn 1 bot) biến
    mất khỏi sảnh ngay (C-07); "Đang đóng…" 60 giây chỉ có ở phòng không bot (C-06).
 8. Mỗi người mở Hồ sơ → Lịch sử điểm, đối chiếu số dư (H-01), ghi lại số dư cuối.
 

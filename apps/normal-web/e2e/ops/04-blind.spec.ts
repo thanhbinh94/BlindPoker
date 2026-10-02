@@ -57,7 +57,7 @@ const faceUp = (scope: ReturnType<Page['locator']>) => scope.getByRole('img', { 
 test('F-01 F-02 H-01: pure luck, three cards — the ante goes in, nobody decides, and the ledger writes the buy-in and the cash-out', async () => {
   const before = await balanceOf(a.page)
   const rowsBefore = (await ledgerOf(a.page)).length
-  await createBlind(a.page, { name: unique('Bàn F01 '), bots: 2, mode: 'Thuần may rủi', cards: 3 })
+  await createBlind(a.page, { name: unique('Bàn F01 '), bots: 2, mode: 'Hoàn toàn may rủi', cards: 3 })
   await takeSeat(a.page, 0)
   await ready(a.page)
   await start(a.page)
@@ -115,8 +115,8 @@ test('F-03 F-04 F-05: two players decide blind to each other; both fold carries 
   // F-05: both sit out, so no hand can start; after a minute the carried pot is shared between the seated people.
   // The balances were read after the buy-ins: each 1.000 ante came off a table stack (4.000 stays on each seat), and
   // the release pays the halves of the 2.000 into the balances, not onto the stacks (spec 2026-09-29 §4.6).
-  await a.page.getByRole('button', { name: 'Ngồi ngoài' }).click()
-  await b.page.getByRole('button', { name: 'Ngồi ngoài' }).click()
+  await a.page.getByRole('button', { name: 'Tạm nghỉ' }).click()
+  await b.page.getByRole('button', { name: 'Tạm nghỉ' }).click()
   // No11b: the result card of a hand nobody played, the pot carried — read once both sit out, so no deal can follow.
   await expectNoTextOverlapAt(a.page, 'Blind, result card, everyone folded and the pot carries')
   const aReleased = await balanceWhen(a.page, (n) => n === aBefore + 1_000, 90_000)
@@ -148,10 +148,10 @@ test('F-06: one plays, one folds — the one who played takes the pot without a 
   await expect(resultCard(a.page)).toBeVisible()
   // Both sit out at once: the room deals the next hand five seconds after this one (FR-G08), and a leave that
   // lands inside that next hand would fold it and cost its ante — which is not what this case measures.
-  await a.page.getByRole('button', { name: 'Ngồi ngoài' }).click()
-  await b.page.getByRole('button', { name: 'Ngồi ngoài' }).click()
+  await a.page.getByRole('button', { name: 'Tạm nghỉ' }).click()
+  await b.page.getByRole('button', { name: 'Tạm nghỉ' }).click()
   const cardText = (await resultCard(a.page).innerText()).replace(/\s+/g, ' ')
-  expect(cardText, 'the card returns her uncalled play').toContain('Hoàn lại phần cược dư')
+  expect(cardText, 'the card returns her uncalled play').toContain('Hoàn cược dư cho')
   // No11b: the winner's card, the uncalled play handed back on it — no text over text.
   await expectNoTextOverlapAt(a.page, 'Blind, result card, an uncalled play returned')
   await expect(faceUp(a.page.getByRole('group', { name: 'Bài chung' })), 'no board is dealt').toHaveCount(0)
@@ -175,7 +175,7 @@ test('F-08 (T3): the host asks a bot to leave', async () => {
   await expect(a.page.locator('[data-seat]').filter({ hasText: 'Bot 1' })).toHaveCount(1)
   await a.page.getByRole('button', { name: 'Quản lý bàn' }).click()
   const dialog = a.page.getByRole('dialog', { name: 'Người trong phòng' })
-  await dialog.getByRole('button', { name: 'Đuổi — Bot 1' }).click()
+  await dialog.getByRole('button', { name: 'Mời ra — Bot 1' }).click()
   await expect(dialog.getByText('Bot 1')).toHaveCount(0, { timeout: 5_000 })
   await expect(dialog.getByText('Bot 2'), 'the other bot stays').toBeVisible()
   await a.page.keyboard.press('Escape')
@@ -224,7 +224,7 @@ test('F-10: the table limit — five wagers on the table, folded away, then stoo
   await start(page)
   const notice = page.getByText(/Bạn đã dùng hết hạn mức ở bàn này/)
   await autopilot(page, ['fold'], async () => (await notice.count()) > 0, 240_000)
-  await expect(notice).toContainText('1.000 điểm còn lại đã về số dư')
+  await expect(notice).toContainText('1.000 điểm còn lại đã được trả về số dư')
   await expect(page.getByRole('button', { name: 'Đứng dậy', exact: true }), 'no longer seated').toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Rời phòng' }), 'still in the room').toBeVisible()
   const fresh = await ledgerSince(page, rowsBefore)
@@ -235,11 +235,11 @@ test('F-10: the table limit — five wagers on the table, folded away, then stoo
   // With no one left to play the bot, the room stops dealing and asks for a seat. Sitting again is a fresh buy-in of
   // the limit. (Waiting for that, rather than sitting inside the five-second countdown, keeps the next deal from
   // taking Em straight back into a hand.)
-  await expect(page.getByText('Hãy ngồi vào bàn để chơi.'), 'the table waits for a seat').toBeVisible()
+  await expect(page.getByText('Chọn một ghế trống để vào chơi.'), 'the table waits for a seat').toBeVisible()
   await takeSeat(page, 0)
   const again = await ledgerSince(page, rowsBefore)
   expect(again.filter((row) => row.reason === 'buy_in').map((row) => row.amount)).toEqual([-5_000, -5_000])
-  await page.getByRole('button', { name: 'Ngồi ngoài' }).click()
+  await page.getByRole('button', { name: 'Tạm nghỉ' }).click()
   await leave(page)
 })
 
@@ -286,7 +286,7 @@ test('H-02 F-07: below 5.000 the relief tops up to 5.000 once; a stake the balan
     await autopilot(page, ['fold'], handOver(page))
     if (brought - stake >= 2 * stake) {
       // Still enough for a hand: sit out, so the leave cannot land in the next deal.
-      await page.getByRole('button', { name: 'Ngồi ngoài' }).click()
+      await page.getByRole('button', { name: 'Tạm nghỉ' }).click()
     } else {
       // Not enough for another hand: the room stands Em up as the hand ends (F-10), the rest already on its way home.
       await expect(page.getByRole('button', { name: 'Đứng dậy', exact: true }), 'a spent limit stands the seat up').toHaveCount(0)
@@ -310,7 +310,7 @@ test('H-02 F-07: below 5.000 the relief tops up to 5.000 once; a stake the balan
   // "Nothing charged" is read off the ledger rather than the balance: every room Em creates counts towards "Mười
   // phòng" since T6, and the room below may be the one that pays it.
   const rowsBefore = (await ledgerOf(page)).length
-  await createBlind(page, { name: unique('Bàn F07 '), bots: 1, mode: 'Thuần may rủi', wager: '10.000' })
+  await createBlind(page, { name: unique('Bàn F07 '), bots: 1, mode: 'Hoàn toàn may rủi', wager: '10.000' })
   // Spec 2026-09-29: a spectator who cannot cover a seat is told so before trying; the refusal still says it in words.
   await expect(page.getByText('Số dư không đủ để vào bàn (cần 10.000 điểm)'), 'the hint under the controls').toBeVisible()
   await mySeat(page).getByRole('button', { name: /Ngồi vào bàn/ }).click()

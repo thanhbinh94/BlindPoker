@@ -12,6 +12,7 @@ import { ActionBar } from '../table/ActionBar.js'
 import { HandResult } from '../table/HandResult.js'
 import { PokerTable, type TableLayout } from '../table/PokerTable.js'
 import { RoomHeader } from '../table/RoomHeader.js'
+import { useRevealHold } from './reveal-hold.js'
 import { useSeatClearance } from './seat-clearance.js'
 import { Toasts } from './Toasts.js'
 import { useRequest } from './useRequest.js'
@@ -105,9 +106,13 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
 
   const hand = state.hand
   const finished = hand !== null && hand.phase === 'COMPLETE' && hand.result !== null ? hand : null
+  // A showdown that turns an opponent's cards over where they lie is watched first: the card waits out the turn
+  // (`REVEAL_HOLD_MS`, none under reduced motion) instead of opening over it (review round 2, fix wave, No1).
+  const held = useRevealHold(hand)
   // The result card sits over the felt, so it has to be closable: between hands a player may well want to look at
-  // the table underneath it rather than at the receipt.
-  const resultCard = finished !== null && finished.handId !== dismissedHandId ? finished : null
+  // the table underneath it rather than at the receipt. Everything that follows the card — the seat clearance, the
+  // close button, the countdown's place — follows this one, the card actually drawn.
+  const resultCard = finished !== null && finished.handId !== dismissedHandId && !held ? finished : null
   // The card's stage stops above the viewer's own seat when there is room for the card there (review round 2, R2-3),
   // measured again when the viewer takes a seat or leaves one under it. Up here, above the early return, because it is
   // a hook — and worked out from `resultCard` itself, so what is measured for and what is drawn cannot disagree.
@@ -282,8 +287,10 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
 
           {waiting ? (
             <span className={s.readyCount}>{t('room.readyCount', { ready: readyCount, total: seated.length })}</span>
-          ) : // While the result card is up the countdown lives on it; here it covers the gap once it is dismissed.
-          resultCard === null && nextHandText !== null ? (
+          ) : // While the result card is up the countdown lives on it; here it covers the gap once it is dismissed. While
+          // the card is held it is on its way: printed here for the hold, the line would jump onto the card a moment
+          // later and shift the buttons after it.
+          resultCard === null && !held && nextHandText !== null ? (
             <p className={s.countdown}>{nextHandText}</p>
           ) : null}
 

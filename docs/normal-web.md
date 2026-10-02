@@ -7,7 +7,7 @@ The Normal edition's browser client: a Vite/React bundle that talks to
 [`@bp/ui-kit`](ui-kit.md). It is served by the server itself — the Docker image builds it and points
 `PUBLIC_DIR` at it — so the app, the API and the socket share one origin and one cookie.
 
-What it owns, and nothing else owns: the account screens (sign-in, profile, wardrobe, inventory,
+What it owns, and nothing else owns: the account screens (sign-in, profile, wardrobe,
 achievements, daily reward, settings), the REST client, the session gate, and the mapping from the
 server's avatar config to the kit's chibi — the wardrobe screen and the profile figure both go through
 it. The lobby and the table come from the kit unchanged.
@@ -46,9 +46,9 @@ apps/normal-web/
     screens/
       Shell.tsx         the rail and the page under it; publishes --bp-stage for the table
       AuthScreen.tsx    sign in and register, one card, two modes
-      {Profile,Inventory,Achievements,Daily,Settings}Screen.tsx   five of the six lazy account screens
+      {Profile,Achievements,Daily,Settings}Screen.tsx   four of the five lazy account screens
       wardrobe/
-        WardrobeScreen.tsx   the sixth — preview + expression picker + seven tabs + the outfit bar
+        WardrobeScreen.tsx   the fifth — preview + expression stepper + nine tabs + saved outfits
         BaseTab.tsx          the two fixed bases (f01/m01) — chosen, never locked
         ItemTab.tsx          one slot's tiles: owned and clickable, or locked with a reason
         OutfitBar.tsx        five saved snapshots — apply / save here / rename / delete
@@ -161,21 +161,37 @@ result against ten acceptance criteria, and writes `avatar-manifest.json`. Until
 
 ### The wardrobe
 
-`/avatar` — `wardrobe/WardrobeScreen.tsx`. A `Chibi` preview on the left, sized 192 px, with an
-expression row to try each of the six faces and the save button below it; seven tabs on the right —
-**Thân nền** (base), then a tile grid per equipped slot (**Mũ**, **Mặt**, **Trang phục**, **Aura**,
-**Khung**), then **Danh hiệu & Huy hiệu** (title and badge together, the two slots with no picture).
-The outfit bar sits under both columns, five slots wide.
+`/avatar` — `wardrobe/WardrobeScreen.tsx`. A `Chibi` preview on the left, sized 192 px, with an expression stepper
+under it to try each of the six faces — `‹  Vui  ›`, a previous and a next button around the current face's name,
+wrapping at both ends, ArrowLeft/ArrowRight too, each button described by the name (review 2026-09-29, No10;
+`wardrobe/StagePanel.tsx`) — then the **Đang dùng** list and the five **Bộ đồ đã lưu** slots. On the right, nine
+tabs in three groups: **Ngoại hình** (Nhân vật, Màu tóc, Màu mắt), **Trang phục** (Mũ, Phụ kiện mặt, Quần áo) and
+**Trang trí** (Hào quang, Khung, Danh hiệu & Huy hiệu — title and badge together, the two slots with no picture).
+
+There is no separate inventory screen (review 2026-09-29, No5): what the account owns is this screen's default
+list, and Profile links here and to the achievements only. `#/inventory` — an old bookmark or link — still opens
+the wardrobe: `App` reads it as `/avatar` and swaps the address bar for `#/avatar` in place (`location.replace`: no
+history entry, so "Back" does not bounce off it, and a `hashchange`, so the router reads `/avatar` from then on —
+the kit's router has no replace of its own). The inventory's acquired date and
+source ("Nhận ngày …", "Khởi đầu", "Miễn phí") and its "Đang sở hữu N món" total went with it, on purpose; the
+wardrobe's "n/m đã có" counts remain.
 
 - **`BaseTab`** is the one tab with nothing locked — the two bases are chosen, not owned (design §5.1) —
   and each tile previews that base wearing the draft's *current* outfit, so the choice reads as a
   silhouette rather than a wardrobe.
-- **`ItemTab`** lists the whole catalogue for its slot and locks anything the player does not own
-  (`aria-disabled`, with a hint: the achievement that grants it, or a daily-calendar rarity, or "chưa
-  mở"). A tile's own picture (`ItemPreview`) is the item drawn on the figure that would actually wear it
-  — head-and-shoulders for `head`/`face`/`frame`, the whole figure for `outfit`/`aura`, because a crop
-  framed on the head would give every outfit tile the same face.
-- **`OutfitBar`** is a bookmark of a *whole* `AvatarConfigDto`, not of one item — "Áp dụng" replaces the
+- **`ItemTab`** lists what the player owns — a colour-variant family shows when any member is owned
+  (`slotCards`, `categories.ts`; review 2026-09-29 No11a) — and, with **Hiện cả món chưa có** ticked, the whole
+  catalogue for its slot, locking anything the player does not own (`aria-disabled`, with a hint: the achievement
+  that grants it, or a daily-calendar rarity, or "chưa mở"). A tile's own picture (`ItemPreview`) is the item's
+  pipeline icon (`docs/avatar-2d.md` §4.2), and a colour variant's is that icon tinted to the variant's colour
+  through `useTintedLayer` (review 2026-09-29 No8a). A family's card is one member — the one worn; else the
+  original, if owned; else the first owned variant; else the original — whichever way the box is ticked: ticking it
+  only adds cards and dots (final fix wave, B2). The card is that member's picture, name, "Đang dùng" and click, and
+  its dot row lists the whole family, the original first as a checkered dot; after a coloured outfit, that dot is the
+  way back, the outfit slot being required. On a phone or under a finger every dot keeps its 16 px look inside a
+  44 px touch target, and the row wraps to keep those targets apart (B1). A tab with nothing to list keeps its
+  `tabpanel`, focusable then, with one line in it.
+- **`OutfitBar`** is a bookmark of a *whole* `AvatarConfigDto`, not of one item — "Mặc bộ này" replaces the
   draft outright, "Lưu vào đây" snapshots whatever is currently equipped into that slot under a name up
   to 24 characters. Both round-trip the server (`PUT /api/me/outfits/:slot`, `POST
   /api/me/outfits/:slot/apply`) rather than only touching local state, so a saved outfit survives a
@@ -279,7 +295,7 @@ pictures at a quarter the pixels and never dominates the total — and it does n
 live on a fresh checkout that has not built anything.
 
 One structural assertion sits beside the numbers: the entry chunk is read off `dist/index.html`'s module
-script rather than guessed from a file name, and the six account screens must each still be a chunk of
+script rather than guessed from a file name, and the five account screens must each still be a chunk of
 their own — a screen that rejoined the entry is a chunk that stopped being emitted under its own name.
 The three build-dependent blocks **skip with a warning** when `dist/` is missing, so `pnpm test` on a
 fresh checkout stays green and says what it had nothing to measure. Run `pnpm build:normal` (or

@@ -389,9 +389,6 @@ export function ProfileScreen({ api, lang, balance, onRenamed }: ProfileScreenPr
             <a className={s.quickLink} href="#/avatar">
               {t('profile.toAvatar')}
             </a>
-            <a className={s.quickLink} href="#/inventory">
-              {t('profile.toInventory')}
-            </a>
             <a className={s.quickLink} href="#/achievements">
               {t('profile.toAchievements')}
             </a>

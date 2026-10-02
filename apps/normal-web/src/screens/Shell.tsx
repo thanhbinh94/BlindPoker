@@ -7,7 +7,7 @@ const SPADE = '♠'
 
 /**
  * Four tabs, and four is the ceiling: at 375 px the rail holds the mark, four tabs and the connection dot,
- * and nothing more. Avatar, Inventory and Achievements are reached from Profile rather than from here —
+ * and nothing more. The wardrobe and Achievements are reached from Profile rather than from here —
  * a fifth tab would push the fourth off the edge on the phone this game is mostly played on.
  *
  * Bug 8 (2026-09-27): four Vietnamese labels side by side did not fit 375 px after all — the nav scrolled and

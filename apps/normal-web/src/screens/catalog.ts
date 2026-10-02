@@ -4,8 +4,8 @@ import { achievementName } from '../catalog-i18n.js'
 
 /**
  * The catalogue vocabulary the wardrobe needs beyond its own tabs. (The inventory used to share a slot order
- * and a rarity-to-badge table from here; since layout audit C3 it lists items in the wardrobe's own groups
- * and cards, so both are gone.)
+ * and a rarity-to-badge table from here; both went when layout audit C3 gave it the wardrobe's own groups and
+ * cards, and the screen itself when it folded into the wardrobe — No5.)
  */
 
 /** The slots a daily-reward draw may land on (design §5.2) — mirrors the server's `DAILY_DRAW_SLOTS`. */

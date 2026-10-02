@@ -51,7 +51,7 @@ test('S-01 S-02 S-03 I-01 I-02 I-03: first visit, first sign-in, first reward', 
   expect(again.status, 'a second claim the same day is refused').toBe(409)
 
   // I-03: the next day starts at 00:00, Vietnam time, and reads like every other moment on screen.
-  await expect(page.getByText(/^Ngày mới bắt đầu lúc 00:00, \d{1,2} thg \d{1,2}$/)).toBeVisible()
+  await expect(page.getByText(/^Lần điểm danh tiếp theo: 00:00, \d{1,2} thg \d{1,2}$/)).toBeVisible()
 
   // I-01 (second half): signing in again the same day stays in the lobby.
   const second = await browser.newContext({ locale: 'vi-VN', timezoneId: 'Asia/Ho_Chi_Minh' })
@@ -103,7 +103,7 @@ test('A-02 (T2): the whole email address as the password is refused', async ({ p
   await page.getByLabel('Tên hiển thị', { exact: true }).fill(`Whole ${Date.now() % 100_000}`)
   await page.getByRole('button', { name: 'Tạo tài khoản' }).click()
   await expect(page.getByLabel('Mật khẩu', { exact: true })).toHaveAttribute('aria-invalid', 'true', { timeout: 5_000 })
-  await expect(page.getByText('Mật khẩu cần 8–128 ký tự và khác với email của bạn')).toBeVisible()
+  await expect(page.getByText('Mật khẩu cần 8–128 ký tự và không trùng với email')).toBeVisible()
   await expect(page).toHaveURL(/#\/register$/)
   // And the server refuses it on its own, for a client that skips the form.
   const direct = await postApi(page, '/api/auth/register', { email: address, password: address.toUpperCase(), displayName: `Whole B ${Date.now() % 100_000}` })
@@ -116,7 +116,7 @@ test('A-04: an email or a name already taken is refused in words', async ({ page
   await page.getByLabel('Mật khẩu', { exact: true }).fill('another good password')
   await page.getByLabel('Tên hiển thị', { exact: true }).fill('Ops Taken A')
   await page.getByRole('button', { name: 'Tạo tài khoản' }).click()
-  await expect(page.getByText('Email này đã có tài khoản')).toBeVisible()
+  await expect(page.getByText('Email này đã được đăng ký')).toBeVisible()
 
   await page.getByLabel('Email', { exact: true }).fill(`${Date.now()}@ops.test`)
   await page.getByLabel('Tên hiển thị', { exact: true }).fill(main.who.displayName)
@@ -188,7 +188,6 @@ test('A-08 B-02 B-03 S-07 S-08: language and theme stick; every account screen o
   const screens: [string, string][] = [
     ['/profile', 'Hồ sơ'],
     ['/avatar', 'Phòng thay đồ'],
-    ['/inventory', 'Kho đồ'],
     ['/achievements', 'Thành tựu'],
     ['/settings', 'Cài đặt'],
     ['/daily', 'Điểm danh hằng ngày'],
@@ -199,5 +198,15 @@ test('A-08 B-02 B-03 S-07 S-08: language and theme stick; every account screen o
     await page.reload()
     await expect(page.getByRole('heading', { name: heading, level: 1 }), `${route} survives a reload`).toBeVisible()
   }
+
+  // S-07, review 2026-09-29 No5: the inventory folded into the wardrobe, and its old address is the wardrobe now —
+  // with the address bar saying so, in place of the old entry: "Back" returns to where the player came from, not to
+  // `#/inventory` (which would send them forward again).
+  await page.goto('/#/profile')
+  await page.goto('/#/inventory')
+  await expect(page.getByRole('heading', { name: 'Phòng thay đồ', level: 1 })).toBeVisible()
+  await expect(page).toHaveURL(/#\/avatar$/)
+  await page.goBack()
+  await expect(page).toHaveURL(/#\/profile$/)
   await context.close()
 })

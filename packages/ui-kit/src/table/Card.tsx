@@ -1,5 +1,5 @@
 import { RANK_CHARS, cardToString, rankOf, suitOf, type Card as CardId } from '@bp/core'
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import type { CSSProperties, ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cardLabel } from '../i18n/index.js'
@@ -8,12 +8,17 @@ import s from './table.module.css'
 
 export type CardSize = 'sm' | 'md' | 'lg'
 
+/** How long a revealed card takes to turn over: the `--dur-flip` token in `tokens.css` (`Card.test` holds them equal). */
+export const FLIP_MS = 600
+/** The step between the cards of one hand, for the deal-in and the turn: card `i` waits `i × CARD_STAGGER_MS`. */
+export const CARD_STAGGER_MS = 60
+
 export interface CardProps {
   /** Omit (or pass `null`) to draw the back. */
   card?: CardId | null
   faceDown?: boolean
   size?: CardSize
-  /** Stagger for the deal-in flip; the caller multiplies by ~60 ms. */
+  /** Stagger for the deal-in, and for the turn when the card is revealed; the caller multiplies by `CARD_STAGGER_MS`. */
   delayMs?: number
   highlighted?: boolean
   className?: string
@@ -64,41 +69,72 @@ const FACE_RANKS = new Set([9, 10, 11]) // J, Q, K
 const ACE = 12
 
 /**
- * One playing card as inline SVG (60 × 84): ivory face, corner indices, classic pip layouts, a lacquered medallion
- * for the court cards and a gold-lattice back. Every pip carries `data-pip` so views can count/animate them.
+ * The lacquered back. While it is what the card shows, it is the card's one named image (`role="img"`, the face-down
+ * label, `data-face="down"`). Drawn behind a face that has just turned up, it is artwork only: `aria-hidden`, with no
+ * role, label or `data-*`, so nothing that counts or names cards ever finds it.
+ */
+function CardBack({ uid, label }: { uid: string; label: string | null }): ReactElement {
+  const lattice = `lat-${uid}`
+  const named = label !== null
+  return (
+    <svg
+      className={cx(s.cardSide, !named && s.cardUnder)}
+      viewBox="0 0 60 84"
+      role={named ? 'img' : undefined}
+      aria-label={named ? label : undefined}
+      aria-hidden={named ? undefined : true}
+      data-face={named ? 'down' : undefined}
+    >
+      <defs>
+        <pattern id={lattice} width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <path className={s.cLattice} d="M0 0V9M0 0H9" />
+        </pattern>
+      </defs>
+      <rect className={s.cBack} x="0.75" y="0.75" width="58.5" height="82.5" rx="6" />
+      <rect x="0.75" y="0.75" width="58.5" height="82.5" rx="6" fill={`url(#${lattice})`} />
+      <rect className={s.cBackRail} x="4.25" y="4.25" width="51.5" height="75.5" rx="4" />
+      <path className={s.cBackMark} d="M30 30 40 42 30 54 20 42Z" />
+      <circle className={s.cBackDot} cx="30" cy="42" r="3.2" />
+    </svg>
+  )
+}
+
+/**
+ * One playing card (60 × 84): ivory face, corner indices, classic pip layouts, a lacquered medallion for the court
+ * cards and a gold-lattice back. Every pip carries `data-pip` so views can count/animate them.
+ *
+ * The card is three boxes: the `.card` wrapper (size, drop shadow, the deal-in), an inner flipper and the side(s) it
+ * shows. A card that turns from face down to face up — an opponent's hand at the showdown — **turns over** (review
+ * 2026-09-29, No1): the flipper starts the turn from 180° with the back towards the viewer and comes to rest on the
+ * face. Whichever side is showing carries the role, label and `data-card`/`data-face`, and it changes in the render
+ * that reveals the card — never at the turn's midpoint, and never on `animationend`. The resting style is the face,
+ * so under `prefers-reduced-motion` (every animation off) the reveal is instant. A card that mounts face up — the
+ * viewer's own, the board, the result card's — has nothing to turn from and keeps only its deal-in.
  */
 export function Card({ card, faceDown = false, size = 'md', delayMs = 0, highlighted = false, className }: CardProps) {
   const { t } = useTranslation()
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '')
-  const down = faceDown || card === undefined || card === null
+  const shown = faceDown || card === undefined || card === null ? null : card
+  const down = shown === null
+  // Was this card face down before? Kept as state and updated during render — React's pattern for "information
+  // from previous renders", which StrictMode's double render cannot trip — rather than a ref written mid-render.
+  // `turned` holds while the card stays up, so a later re-render (the winner's gold edge) leaves the turn alone.
+  const [was, setWas] = useState({ down, turned: false })
+  if (was.down !== down) setWas({ down, turned: was.down })
+  const turned = !down && was.turned
   const style = delayMs > 0 ? ({ '--deal-delay': `${delayMs}ms` } as CSSProperties) : undefined
-  const rootClass = cx(s.card, s[SIZE_CLASS[size]], highlighted && s.cardHi, className)
 
-  if (down) {
-    const lattice = `lat-${uid}`
-    return (
-      <svg
-        className={cx(rootClass, s.cardDown)}
-        viewBox="0 0 60 84"
-        role="img"
-        aria-label={t('labels.faceDown')}
-        data-face="down"
-        style={style}
-      >
-        <defs>
-          <pattern id={lattice} width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-            <path className={s.cLattice} d="M0 0V9M0 0H9" />
-          </pattern>
-        </defs>
-        <rect className={s.cBack} x="0.75" y="0.75" width="58.5" height="82.5" rx="6" />
-        <rect x="0.75" y="0.75" width="58.5" height="82.5" rx="6" fill={`url(#${lattice})`} />
-        <rect className={s.cBackRail} x="4.25" y="4.25" width="51.5" height="75.5" rx="4" />
-        <path className={s.cBackMark} d="M30 30 40 42 30 54 20 42Z" />
-        <circle className={s.cBackDot} cx="30" cy="42" r="3.2" />
-      </svg>
-    )
-  }
+  return (
+    <span className={cx(s.card, s[SIZE_CLASS[size]], down && s.cardDown, highlighted && s.cardHi, className)} style={style}>
+      <span className={cx(s.cardFlip, turned && s.cardTurn)}>
+        {shown === null ? null : <CardFace card={shown} uid={uid} label={cardLabel(shown, t)} />}
+        {down || turned ? <CardBack uid={uid} label={down ? t('labels.faceDown') : null} /> : null}
+      </span>
+    </span>
+  )
+}
 
+function CardFace({ card, uid, label }: { card: CardId; uid: string; label: string }): ReactElement {
   const rank = rankOf(card)
   const suit = suitOf(card)
   const rankChar = RANK_CHARS[rank]!
@@ -118,15 +154,7 @@ export function Card({ card, faceDown = false, size = 'md', delayMs = 0, highlig
   )
 
   return (
-    <svg
-      className={rootClass}
-      viewBox="0 0 60 84"
-      role="img"
-      aria-label={cardLabel(card, t)}
-      data-card={cardToString(card)}
-      data-face="up"
-      style={style}
-    >
+    <svg className={s.cardSide} viewBox="0 0 60 84" role="img" aria-label={label} data-card={cardToString(card)} data-face="up">
       <defs>
         <g id={pipId}>
           <SuitShape suit={suit} />

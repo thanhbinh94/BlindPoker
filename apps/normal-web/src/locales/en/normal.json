@@ -98,13 +98,11 @@
     "title": "Settings",
     "theme": {
       "title": "Appearance",
-      "lead": "Dark is the table's own palette; light is for a bright room.",
       "dark": "Dark",
       "light": "Light"
     },
     "language": {
-      "title": "Language",
-      "lead": "Your language is remembered on this device."
+      "title": "Language"
     },
     "account": {
       "title": "Account",
@@ -141,7 +139,6 @@
     "balance": "Balance",
     "noTitle": "No title yet",
     "toAvatar": "Edit wardrobe",
-    "toInventory": "Inventory",
     "toAchievements": "Achievements",
     "error": "Could not load your profile",
     "rename": {
@@ -214,23 +211,11 @@
     }
   },
   "inventory": {
-    "title": "Inventory",
-    "lead": "Everything this account owns. Equipped pieces are marked.",
-    "summary": "{{owned}} pieces owned",
-    "acquired": "Acquired {{date}}",
-    "empty": "Nothing here yet.",
-    "error": "Could not load your inventory",
+    "error": "Could not load the wardrobe",
     "rarity": {
       "common": "Common",
       "rare": "Rare",
       "epic": "Epic"
-    },
-    "source": {
-      "default": "Starter",
-      "daily": "Daily check-in",
-      "achievement": "Achievement",
-      "free": "Free",
-      "other": "Other"
     }
   },
   "avatar": {
@@ -271,10 +256,10 @@
       "words": "Title & Badge"
     },
     "filter": {
-      "all": "All",
-      "owned": "Owned",
       "locked": "Locked"
     },
+    "showLocked": "Show items you don't own yet",
+    "emptyOwned": "You don't own anything here yet.",
     "ownedCount": "{{owned}}/{{total}} owned",
     "wearingBadge": "Wearing",
     "words": {
@@ -290,6 +275,8 @@
     },
     "expression": {
       "legend": "Preview expression",
+      "prev": "Previous expression",
+      "next": "Next expression",
       "neutral": "Neutral",
       "happy": "Happy",
       "sad": "Sad",

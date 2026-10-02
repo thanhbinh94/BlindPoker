@@ -1,5 +1,18 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { account, chibiHash, createBlindRoom, expectLobby, expectNoTextOverlapAt, goToWardrobeTab, OVERLAP_SCREENS, register, sit, unique } from './support.js'
+import {
+  account,
+  chibiHash,
+  createBlindRoom,
+  expectDotTarget,
+  expectLobby,
+  expectNoTextOverlapAt,
+  goToWardrobeTab,
+  OVERLAP_SCREENS,
+  PHONE_SCREEN,
+  register,
+  sit,
+  unique,
+} from './support.js'
 
 /**
  * Hair-colour tinting end to end (avatar-tint design §7): picking a colour swatch in the wardrobe
@@ -89,10 +102,38 @@ test.describe('Blind Luck Poker Normal — màu tóc, màu mắt', () => {
     await greenEyes.click()
     await expect(greenEyes, 'the eye colour it just picked reflects the choice').toHaveAttribute('aria-pressed', 'true')
 
-    await goToWardrobeTab(page, 'Trang phục', 'Trang phục')
+    await goToWardrobeTab(page, 'Trang phục', 'Quần áo')
     const redTee = page.getByRole('tabpanel').getByRole('button', { name: 'Áo phông đỏ', exact: true })
     await redTee.click()
     await expect(redTee, 'the coloured outfit it just picked reflects the choice').toHaveAttribute('aria-pressed', 'true')
+    // No8a: the Quần áo card follows the tee being worn — it reads "Áo phông đỏ", and its picture is that tee's own
+    // colour, the icon recoloured on a canvas: a `blob:` image the browser actually decoded, not the white original.
+    const teeCard = page.getByRole('tabpanel').getByRole('button', { name: /^Áo phông đỏ, / })
+    await expect(teeCard, 'the card is the worn tee').toHaveAttribute('aria-pressed', 'true')
+    await expect(teeCard.getByText('Áo phông đỏ', { exact: true })).toBeVisible()
+    await expect
+      .poll(
+        async () =>
+          teeCard.locator('img').evaluate((img: HTMLImageElement) => ({ blob: img.src.startsWith('blob:'), decoded: img.complete && img.naturalWidth > 0 })),
+        { message: "the card's icon is the tinted tee, decoded", timeout: 15_000 },
+      )
+      .toEqual({ blob: true, decoded: true })
+
+    // Final fix wave (B1): the outfit slot is required, so pressing the worn tee keeps it on — the starter's own dot,
+    // first in the row, is the way back to "Bộ thường ngày". On a phone it is a thumb-sized target, though it still
+    // draws 16 px. Measured here at the phone's size rather than in the `@mobile` project, which would cost another
+    // account; the target follows the phone layout's width as much as a coarse pointer.
+    const starterDot = page.getByRole('tabpanel').getByRole('group', { name: 'Bộ thường ngày' }).getByRole('button', { name: 'Bộ thường ngày', exact: true })
+    await starterDot.click()
+    await expect(starterDot, 'the starter is worn again').toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('tabpanel').getByRole('button', { name: /^Bộ thường ngày, / }), 'the card is the starter again').toHaveAttribute('aria-pressed', 'true')
+    const desktop = page.viewportSize()!
+    await page.setViewportSize(PHONE_SCREEN)
+    await expectDotTarget(starterDot, 'wardrobe, Quần áo, the starter’s dot, 375×812')
+    await page.setViewportSize(desktop)
+    // Back into the tee for the rest of this test, by its own dot.
+    await redTee.click()
+    await expect(teeCard, 'the tee is worn again').toHaveAttribute('aria-pressed', 'true')
 
     // `toBeVisible` says yes to an `<img>` the browser refused to load, so it proves nothing here: the
     // Content-Security-Policy `img-src` without `blob:` once left every tinted layer broken (No15, No16) while
@@ -109,7 +150,7 @@ test.describe('Blind Luck Poker Normal — màu tóc, màu mắt', () => {
     await save(page)
     // No11b: the tab with a coloured outfit picked and worn — its colour dots and the worn mark on the cards — and the
     // saved notice, text clear of text on the player's screen and a laptop's.
-    await expectNoTextOverlapAt(page, 'wardrobe, Trang phục → Trang phục, a coloured tee worn', OVERLAP_SCREENS)
+    await expectNoTextOverlapAt(page, 'wardrobe, Trang phục → Quần áo, a coloured tee worn', OVERLAP_SCREENS)
 
     // A table seat draws this player's own chibi (not a bot's) — the same door avatar2d.spec.ts
     // uses to prove a saved wardrobe choice reaches somewhere other than the wardrobe screen itself.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ItemDto } from '../../api.js'
-import { applyFilter, counts, GROUPS, groupOf, tabItems, tabOfSlot, type TabId } from './categories.js'
+import { applyFilter, counts, GROUPS, groupOf, slotCards, tabItems, tabOfSlot, variantsByFile, type TabId } from './categories.js'
 
 const item = (patch: Partial<ItemDto> & Pick<ItemDto, 'id' | 'slot' | 'rarity'>): ItemDto => ({
   nameKey: `items.${patch.id}`,
@@ -107,23 +107,110 @@ describe('categories', () => {
     })
   })
 
-  describe('applyFilter', () => {
-    const A = item({ id: 'a', slot: 'head', rarity: 'common' })
-    const B = item({ id: 'b', slot: 'head', rarity: 'common' })
-    const C = item({ id: 'c', slot: 'head', rarity: 'common' })
-    const rows = [A, B, C]
-    const owned = new Set(['a', 'c'])
+  // Review 2026-09-29, No11a (design §3.1 item 3, §5.5): the wardrobe lists what the player owns, and one box shows
+  // the rest. A card is a family — an original plus the colour variants that share its file — so owning any member
+  // keeps the card.
+  describe('variantsByFile / applyFilter / slotCards (families, owned by default)', () => {
+    const tinted = (id: string, file: string, tint: string): ItemDto =>
+      item({ id, slot: 'head', rarity: 'rare', asset: { layer: 80, file, fitsAvatarCrop: true, tint, tintMeanL: 0.5 } })
+    const BEANIE = item({ id: 'head_beanie01', slot: 'head', rarity: 'common', asset: { layer: 80, file: 'item_head_beanie01_L80', fitsAvatarCrop: true } })
+    const BEANIE_RED = tinted('head_beanie_red01', 'item_head_beanie01_L80', '#b83a32')
+    const CAP = item({ id: 'head_cap', slot: 'head', rarity: 'common', asset: { layer: 80, file: 'item_head_cap_L80', fitsAvatarCrop: true } })
+    const BERET_RED = item({ id: 'head_beret_red01', slot: 'head', rarity: 'rare', asset: { layer: 80, file: 'item_head_beret_red01_L80', fitsAvatarCrop: true } })
+    const BERET_BLUE = tinted('head_beret_blue01', 'item_head_beret_red01_L80', '#3f6fd8')
+    const BERET_GREEN = tinted('head_beret_green01', 'item_head_beret_red01_L80', '#2e7d4f')
+    const TITLE = item({ id: 'title_rookie', slot: 'title', rarity: 'common' })
 
-    it('"all" keeps everything', () => {
-      expect(applyFilter(rows, owned, 'all')).toEqual([A, B, C])
+    const CATALOG = [BEANIE, CAP, BERET_RED, BEANIE_RED, BERET_BLUE, BERET_GREEN, TITLE]
+    const ORIGINALS = [BEANIE, CAP, BERET_RED]
+    const VARIANTS = variantsByFile(CATALOG)
+
+    it('groups colour variants under the file they share with their original, in catalogue order; an original is never a key', () => {
+      expect([...VARIANTS.entries()]).toEqual([
+        ['item_head_beanie01_L80', [BEANIE_RED]],
+        ['item_head_beret_red01_L80', [BERET_BLUE, BERET_GREEN]],
+      ])
     })
 
-    it('"owned" keeps only what is owned', () => {
-      expect(applyFilter(rows, owned, 'owned')).toEqual([A, C])
+    // Plan 18 (No8a, pre-flight amendment 1): the dot row is the whole family, the original first, so the original
+    // can be picked back from a variant — owned members only while the box is unticked, and no row at all when it
+    // would hold nothing but the member the card already shows.
+    it('keeps a family whose original is owned, showing the original, its dots the owned members — original first', () => {
+      expect(applyFilter(ORIGINALS, new Set(['head_beanie01']), false, VARIANTS)).toEqual([{ original: BEANIE, shown: BEANIE, dots: [] }])
+      expect(applyFilter(ORIGINALS, new Set(['head_beanie01', 'head_beanie_red01']), false, VARIANTS)).toEqual([
+        { original: BEANIE, shown: BEANIE, dots: [BEANIE, BEANIE_RED] },
+      ])
     })
 
-    it('"locked" keeps only what is not owned', () => {
-      expect(applyFilter(rows, owned, 'locked')).toEqual([B])
+    it('keeps a family when only a variant is owned (the beret): the card shows that variant, with no dot row of one', () => {
+      // `head_beret_red01` (the original) is not owned, `head_beret_blue01` is, `head_beret_green01` is not.
+      expect(applyFilter(ORIGINALS, new Set(['head_beret_blue01']), false, VARIANTS)).toEqual([
+        { original: BERET_RED, shown: BERET_BLUE, dots: [] },
+      ])
+    })
+
+    it('shows the first owned variant, in catalogue order, when the original is not owned and several are', () => {
+      const [card] = applyFilter([BERET_RED], new Set(['head_beret_green01', 'head_beret_blue01']), false, VARIANTS)
+      expect(card).toEqual({ original: BERET_RED, shown: BERET_BLUE, dots: [BERET_BLUE, BERET_GREEN] })
+    })
+
+    it('hides a family the player owns nothing of — unless the box is ticked', () => {
+      expect(applyFilter(ORIGINALS, new Set(), false, VARIANTS)).toEqual([])
+      expect(applyFilter(ORIGINALS, new Set(), true, VARIANTS).map((card) => card.original)).toEqual(ORIGINALS)
+    })
+
+    // Final fix wave (B2): ticking the box only adds cards and dots. It used to turn the owned blue beret's card into the
+    // locked original.
+    it('with the box ticked lists every family and the whole family as dots, owned or not — a card still shows what is owned', () => {
+      expect(applyFilter(ORIGINALS, new Set(['head_beret_blue01']), true, VARIANTS)).toEqual([
+        { original: BEANIE, shown: BEANIE, dots: [BEANIE, BEANIE_RED] },
+        { original: CAP, shown: CAP, dots: [] },
+        { original: BERET_RED, shown: BERET_BLUE, dots: [BERET_RED, BERET_BLUE, BERET_GREEN] },
+      ])
+    })
+
+    // Plan 18 (No8a): the card is the member being worn — its name, its tinted icon, its "Đang dùng" — whichever box.
+    it('shows the member being worn, ticked or not, and keeps the family where it was in the order', () => {
+      const owned = new Set(['head_beret_red01', 'head_beret_blue01', 'head_beret_green01', 'head_cap'])
+      for (const showLocked of [false, true]) {
+        const cards = applyFilter(ORIGINALS, owned, showLocked, VARIANTS, 'head_beret_green01')
+        const beret = cards.find((card) => card.original === BERET_RED)
+        expect(beret, `box ${showLocked ? 'ticked' : 'unticked'}`).toEqual({ original: BERET_RED, shown: BERET_GREEN, dots: [BERET_RED, BERET_BLUE, BERET_GREEN] })
+        expect(cards.at(-1)).toBe(beret)
+      }
+      // The worn original is the original, and a worn member of another family changes nothing here.
+      expect(applyFilter([BERET_RED], owned, false, VARIANTS, 'head_beret_red01')[0]!.shown).toBe(BERET_RED)
+      expect(applyFilter([BERET_RED], owned, false, VARIANTS, 'head_cap')[0]!.shown).toBe(BERET_RED)
+    })
+
+    it('with nothing of the family worn, shows the original when it is owned, else the first owned variant, else the original — whichever box', () => {
+      const variantOnly = new Set(['head_beret_green01'])
+      const both = new Set(['head_beret_red01', 'head_beret_green01'])
+      for (const showLocked of [false, true]) {
+        const box = `box ${showLocked ? 'ticked' : 'unticked'}`
+        expect(applyFilter([BERET_RED], variantOnly, showLocked, VARIANTS)[0]!.shown, box).toBe(BERET_GREEN)
+        expect(applyFilter([BERET_RED], both, showLocked, VARIANTS)[0]!.shown, box).toBe(BERET_RED)
+      }
+      // Nothing of it owned: only the ticked box lists it, as its original.
+      expect(applyFilter([BERET_RED], new Set(), true, VARIANTS)[0]!.shown).toBe(BERET_RED)
+    })
+
+    it('treats a row with no variants (a colour swatch, a word, a variant map left out) as a family of one', () => {
+      expect(applyFilter([TITLE, CAP], new Set(['title_rookie']), false)).toEqual([{ original: TITLE, shown: TITLE, dots: [] }])
+    })
+
+    it("slotCards: a slot's cards in tab order, its variants folded into families, owned only unless the box is ticked", () => {
+      const owned = new Set(['head_beret_blue01', 'head_cap'])
+      expect(slotCards('head', CATALOG, owned, false)).toEqual([
+        { original: CAP, shown: CAP, dots: [] },
+        { original: BERET_RED, shown: BERET_BLUE, dots: [] },
+      ])
+      expect(slotCards('head', CATALOG, owned, true).map((card) => card.shown.id)).toEqual(['head_beanie01', 'head_cap', 'head_beret_blue01'])
+      // The member worn in the slot (Plan 18, No8a), ahead of the first owned variant.
+      const greenToo = new Set([...owned, 'head_beret_green01'])
+      expect(slotCards('head', CATALOG, greenToo, true, 'head_beret_green01').map((card) => card.shown.id)).toEqual(['head_beanie01', 'head_cap', 'head_beret_green01'])
+      expect(slotCards('title', CATALOG, owned, false)).toEqual([])
+      expect(slotCards('title', CATALOG, owned, true)).toEqual([{ original: TITLE, shown: TITLE, dots: [] }])
     })
   })
 

@@ -95,7 +95,7 @@ describe('SavedOutfits', () => {
     await waitFor(() => expect(saveOutfit).toHaveBeenCalledWith(1, 'Bộ 1', expect.objectContaining({ v: 3 })))
   })
 
-  it('opens a menu on a filled slot with Áp dụng · Lưu đè vào đây · Đổi tên · Xoá', async () => {
+  it('opens a menu on a filled slot with Mặc bộ này · Lưu đè · Đổi tên · Xóa', async () => {
     const outfitOne: OutfitDto = { slot: 1, name: 'Đi làm', config: DRAFT, updatedAt: 0 }
     const user = userEvent.setup()
     renderBar({ outfits: [outfitOne, null, null, null, null] })

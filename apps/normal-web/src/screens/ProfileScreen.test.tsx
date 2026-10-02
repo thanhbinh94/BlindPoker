@@ -148,7 +148,7 @@ describe('ProfileScreen', () => {
     expect(screen.getByRole('heading', { name: viNormal.profile.title, level: 1 })).toBeInTheDocument()
     expect(screen.getByText(viNormal.items.title_hot_hand)).toBeInTheDocument()
     expect(screen.getByText(viNormal.items.badge_gold)).toBeInTheDocument()
-    expect(screen.getByText(/Thành viên từ/)).toBeInTheDocument()
+    expect(screen.getByText(/Tham gia từ/)).toBeInTheDocument()
     // 123.000 in `vi`: the assertion is on the digits, not on the separator the locale picked (and not on "123"
     // alone, which is also the name of the table in the history below).
     expect(screen.getByText(/123\D000/)).toBeInTheDocument()
@@ -157,6 +157,20 @@ describe('ProfileScreen', () => {
     expect(stage).toHaveAttribute('data-title', 'title_hot_hand')
     await waitFor(() => expect(within(stage as HTMLElement).getByRole('img', { name: 'Bình' })).toBeInTheDocument())
     expect(stage?.querySelectorAll('[data-chibi-hash]')).toHaveLength(1)
+  })
+
+  it('offers two quick links, the wardrobe and the achievements — the inventory has folded into the wardrobe (No5)', async () => {
+    renderScreen()
+    await screen.findByRole('heading', { name: 'Bình', level: 2 })
+
+    const links = within(screen.getByRole('navigation', { name: viNormal.profile.title })).getAllByRole('link')
+    expect(links.map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
+      [viNormal.profile.toAvatar, '#/avatar'],
+      [viNormal.profile.toAchievements, '#/achievements'],
+    ])
+    // The old name and the old target are both gone, not merely hidden.
+    expect(screen.queryByRole('link', { name: 'Kho đồ' })).toBeNull()
+    expect(document.querySelector('a[href="#/inventory"]')).toBeNull()
   })
 
   it('stages one full-body chibi, and keeps the head crop (its frame ring) as the portrait beside the name', async () => {

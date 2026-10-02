@@ -1,14 +1,15 @@
-import type { RoomPlayerView } from '@bp/core'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { HandCategory, parseCards, type RoomPlayerView } from '@bp/core'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultChibi } from '../avatar2d/index.js'
-import type { ClientState } from '../client/types.js'
+import type { ClientHand, ClientState } from '../client/types.js'
 import type { GameClientApi } from '../client/useGameClient.js'
 import { createI18n } from '../i18n/index.js'
-import { makeHand, makePlayer, makeRoom, makeState } from '../test-fixtures.js'
+import { makeHand, makePlayer, makeRoom, makeSeat, makeState } from '../test-fixtures.js'
 import s from '../table/table.module.css'
+import { REVEAL_HOLD_MS } from './reveal-hold.js'
 import { RoomScreen } from './RoomScreen.js'
 
 const ACK = { t: 'ACK' as const, reqId: 'x' }
@@ -607,6 +608,130 @@ describe('RoomScreen', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Close' }))
     expect(within(controls).getByText((_, el) => el?.textContent === 'Next hand in 5 sec' && el.tagName === 'P')).toBeInTheDocument()
+  })
+
+  // Review round 2, fix wave (No1): the result card opened in the very render that turned an opponent's cards over, so
+  // it covered the turn it was meant to follow — the top seat's at 1920 × 940, every opponent's on a 375 × 812 phone.
+  describe('the result card waits while an opponent’s cards turn over', () => {
+    const room = makeRoom({
+      nextHandAt: 1_005_000,
+      players: [
+        makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'IN_HAND', stack: 19_800 }),
+        makePlayer({ playerId: 'me', displayName: 'Mai', seat: 2, status: 'IN_HAND', stack: 19_800 }),
+      ],
+    })
+    /** Ann to act on the last street, seen from my seat: my queens up, Ann's two cards backs. */
+    const river = makeHand({
+      handId: 'h7',
+      mySeat: 2,
+      actingSeat: 0,
+      seats: [
+        makeSeat({ seat: 0, playerId: 'a', displayName: 'Ann', stack: 19_800 }),
+        makeSeat({ seat: 2, playerId: 'me', displayName: 'Mai', stack: 19_800, holeCards: parseCards('Qs Qd') }),
+      ],
+    })
+    const settled = { pots: [], fee: 0, carryOverOut: 0, uncalledReturned: null, cancelled: false, reason: null }
+    /** `SHOWDOWN`, `SETTLEMENT` and `HAND_COMPLETE` as the reducer leaves them: Ann's cards up, both hands shown. */
+    const shownDown: ClientHand = {
+      ...river,
+      phase: 'COMPLETE',
+      actingSeat: null,
+      seats: [{ ...river.seats[0]!, holeCards: parseCards('Js Th') }, river.seats[1]!],
+      result: {
+        ...settled,
+        payouts: [{ seat: 2, amount: 600 }],
+        showdown: [
+          { seat: 0, cards: parseCards('Js Th'), rank: 1, category: HandCategory.HIGH_CARD, best: parseCards('Ah Kd Js Th 2c') },
+          { seat: 2, cards: parseCards('Qs Qd'), rank: 2, category: HandCategory.PAIR, best: parseCards('Qs Qd Ah Kd 2c') },
+        ],
+      },
+    }
+    /** Ann folded on the river: nothing is shown, so nothing turns. */
+    const foldWin: ClientHand = {
+      ...river,
+      phase: 'COMPLETE',
+      actingSeat: null,
+      seats: [{ ...river.seats[0]!, folded: true }, river.seats[1]!],
+      result: { ...settled, payouts: [{ seat: 2, amount: 600 }], showdown: null },
+    }
+
+    const resultCard = () => screen.queryByRole('group', { name: 'Winner' })
+    /** The table as it was on the river, then the frames that end the hand landing on the same screen. */
+    const playTo = (end: ClientHand) => {
+      const { view } = wrap(fakeClient(makeState({ room, hand: river })))
+      view.rerender(screenFor(fakeClient(makeState({ room, hand: end }))))
+    }
+
+    let reduceMotion = false
+    beforeEach(() => {
+      vi.useFakeTimers()
+      reduceMotion = false
+      // jsdom has no `matchMedia`; this one answers the reduced-motion query and nothing else.
+      Object.defineProperty(window, 'matchMedia', {
+        configurable: true,
+        value: (query: string) => ({
+          matches: reduceMotion && query.includes('prefers-reduced-motion: reduce'),
+          media: query,
+          onchange: null,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          addListener: () => {},
+          removeListener: () => {},
+          dispatchEvent: () => false,
+        }),
+      })
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+      Reflect.deleteProperty(window, 'matchMedia')
+    })
+
+    it('holds the card while the cards turn, and deals it once the turn is over', () => {
+      playTo(shownDown)
+      const ann = screen.getByRole('group', { name: 'Seat 1' })
+      expect(within(ann).getByRole('img', { name: 'Jack of spades' }), 'Ann’s cards are up from the first render').toBeInTheDocument()
+      expect(ann.querySelectorAll(`.${s.cardTurn}`), 'and turning').toHaveLength(2)
+      expect(resultCard(), 'no card over the turn').toBeNull()
+      // The countdown waits with the card: printed in the tray for the hold, it would jump onto the card a moment
+      // later and shift the tray's buttons as it went.
+      const controls = screen.getByRole('group', { name: 'Table controls' })
+      expect(within(controls).queryByText(/Next hand in/)).toBeNull()
+
+      act(() => vi.advanceTimersByTime(REVEAL_HOLD_MS - 1))
+      expect(resultCard()).toBeNull()
+      act(() => vi.advanceTimersByTime(1))
+      expect(resultCard()).toBeInTheDocument()
+      expect(within(resultCard()!).getByText((_, el) => el?.textContent === 'Next hand in 5 sec' && el.tagName === 'P')).toBeInTheDocument()
+      expect(within(controls).queryByText(/Next hand in/)).toBeNull()
+    })
+
+    it('deals the card at once under reduced motion, where nothing turns', () => {
+      reduceMotion = true
+      playTo(shownDown)
+      expect(resultCard()).toBeInTheDocument()
+    })
+
+    it('deals the card at once when the hand was won by a fold', () => {
+      playTo(foldWin)
+      expect(resultCard()).toBeInTheDocument()
+    })
+
+    it('deals the card at once for a hand already over when the screen mounts — a snapshot after a refresh', () => {
+      wrap(fakeClient(makeState({ room, hand: shownDown })))
+      expect(resultCard()).toBeInTheDocument()
+    })
+
+    it('can be waved off once it is dealt, and the countdown moves to the tray', () => {
+      playTo(shownDown)
+      act(() => vi.advanceTimersByTime(REVEAL_HOLD_MS))
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+      expect(resultCard()).toBeNull()
+      const controls = screen.getByRole('group', { name: 'Table controls' })
+      expect(within(controls).getByText((_, el) => el?.textContent === 'Next hand in 5 sec' && el.tagName === 'P')).toBeInTheDocument()
+
+      act(() => vi.advanceTimersByTime(REVEAL_HOLD_MS))
+      expect(resultCard(), 'the hold does not bring a waved-off card back').toBeNull()
+    })
   })
 
   it('waits for the reconnect answer before deciding the room is gone', () => {

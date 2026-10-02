@@ -78,8 +78,8 @@ test('G-01 G-02: a reload mid-hand, and twenty seconds offline, both land back i
   // And the hand plays out between them.
   await Promise.all([autopilot(a.page, ['check', 'call'], handOver(a.page)), autopilot(b.page, ['check', 'call'], handOver(b.page))])
   await expect(resultCard(b.page)).toBeVisible()
-  await a.page.getByRole('button', { name: 'Ngồi ngoài' }).click()
-  await b.page.getByRole('button', { name: 'Ngồi ngoài' }).click()
+  await a.page.getByRole('button', { name: 'Tạm nghỉ' }).click()
+  await b.page.getByRole('button', { name: 'Tạm nghỉ' }).click()
   await leave(a.page)
   await leave(b.page)
 })

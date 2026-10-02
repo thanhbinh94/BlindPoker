@@ -357,14 +357,29 @@ export function applyMask(pic, mask) {
  * transparent square, centred. An empty picture gives an empty square.
  */
 export async function iconPicture(pic, size, fill) {
-  const box = alphaBBox(pic)
-  if (!box) return blankPicture(size, size)
+  const fit = iconFit(alphaBBox(pic), size, fill)
+  return fit === null ? blankPicture(size, size) : applyIconFit(pic, fit)
+}
+
+/**
+ * Where an icon puts a box (2026-10-01, Plan 18 No8a — split out of `iconPicture`, so an icon's tint mask is cut
+ * with exactly the icon's own fit): the box scaled, aspect kept, until its longer side is `fill` of a `size` ×
+ * `size` square — `width` × `height` — and centred at (`left`, `top`). `null` for no box (an empty picture).
+ */
+export function iconFit(box, size, fill) {
+  if (!box) return null
   const inner = Math.round(size * fill)
   const factor = inner / Math.max(box.w, box.h)
   const width = Math.max(1, Math.round(box.w * factor))
   const height = Math.max(1, Math.round(box.h * factor))
+  return { box, size, width, height, left: Math.floor((size - width) / 2), top: Math.floor((size - height) / 2) }
+}
+
+/** Apply an `iconFit` to a picture: cut `fit.box` out of it, scale that to the fit's size, place it on the square. */
+export async function applyIconFit(pic, fit) {
+  const { box, size, width, height, left, top } = fit
   const fitted = await resizePicture(cropPicture(pic, box.x, box.y, box.w, box.h), width, height)
-  return placeOnCanvas(fitted, size, size, Math.floor((size - width) / 2), Math.floor((size - height) / 2))
+  return placeOnCanvas(fitted, size, size, left, top)
 }
 
 // ───────────────────────────────────────────────────────────── the compositor ──

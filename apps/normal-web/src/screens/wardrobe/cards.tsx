@@ -1,5 +1,4 @@
 import { Chibi, type ChibiConfig } from '@bp/ui-kit'
-import type { ReactNode } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import type { BaseDto, BaseId, ItemDto, Rarity } from '../../api.js'
@@ -18,9 +17,11 @@ import s from './wardrobe.module.css'
  * caller's decision (`WardrobeScreen.pick`), not this file's, exactly as `ItemTab` already worked.
  */
 
-/** "<name>, <rarity>[, wearing|, locked: <hint>]" (design §7). Rarity reuses the Inventory screen's own
- * `inventory.rarity.*` keys rather than a second Vietnamese vocabulary for the same three words; `locked`/
- * `wearing` reuse the filter and wearing-pill strings for the same reason. */
+/** "<name>, <rarity>[, wearing|, locked: <hint>]" (design §7). Rarity reuses the `inventory.rarity.*` keys (the
+ * Inventory screen's, folded into the wardrobe by No5, which kept them) rather than a second Vietnamese vocabulary
+ * for the same three words; `locked`/
+ * `wearing` reuse the old filter's "Chưa có" (`wardrobe.filter.locked`, kept for this label when No11a's box
+ * replaced the filter buttons) and the wearing-pill strings for the same reason. */
 function cardLabel(name: string, rarity: Rarity, owned: boolean, wearing: boolean, hint: string, t: TFunction<'normal'>): string {
   const rarityLabel = t(`inventory.rarity.${rarity}`)
   if (!owned) return `${name}, ${rarityLabel}, ${t('wardrobe.filter.locked')}: ${hint}`
@@ -68,14 +69,22 @@ function RarityLabel({ rarity }: { rarity: Rarity }) {
 }
 
 export interface ItemCardProps {
+  /** The family member the card draws, names and picks (`FamilyCard.shown`, `./categories.js`): the member worn in
+   * the slot (No8a); else the original, when it is owned; else the first owned colour variant (No11a); else the
+   * original — whichever way the box is ticked (final fix wave, B2). Everything the button says and does is this
+   * member's — picture (tinted when it is a colour variant), name, rarity, "Đang dùng", lock and click. */
   item: ItemDto
+  /** The family's original, which names the dot row; `item` itself when omitted (a lone card, or the original shown). */
+  family?: ItemDto
   /** The draft base's wear (design §4.1's gendered cut), forwarded straight to `ItemPreview`. */
   wear?: string
   owned: boolean
   wearing: boolean
   hint: string
-  /** This card's colour variants (design §4.1's dot row) — each one owned/worn independently of the
-   * card itself, so a locked original can still show an owned variant's dot clickable. */
+  /** This card's dots (design §4.1's dot row): the family, the original first (No8a) — each one owned/worn
+   * independently of the card itself, so with the box ticked an owned variant's card still shows the locked original's
+   * dot, and a locked variant's. A member with no `asset.tint` (the original) is drawn as the untinted natural swatch.
+   * Only the dots to draw: the caller has already dropped the ones not owned while the box is unticked. */
   variants?: { item: ItemDto; owned: boolean; wearing: boolean }[]
   /** Keeps the dot row's height on a card that has no variants of its own, so that in a tab where some cards do
    * have them every card's lock hint ends on the same line (No8b). `ItemTab` sets it; a lone card never needs it. */
@@ -92,7 +101,7 @@ export interface ItemCardProps {
  * lock hint) moves into an inner `.cardPick` button beside the dot row, both now inside the same bordered
  * box instead of the dots sitting below/outside it.
  */
-export function ItemCard({ item, wear, owned, wearing, hint, variants, reserveDots = false, onPick }: ItemCardProps) {
+export function ItemCard({ item, family = item, wear, owned, wearing, hint, variants, reserveDots = false, onPick }: ItemCardProps) {
   const { t } = useTranslation('normal')
   const name = itemName(item.id, t)
   const hasVariants = variants !== undefined && variants.length > 0
@@ -123,23 +132,28 @@ export function ItemCard({ item, wear, owned, wearing, hint, variants, reserveDo
         {!hasVariants ? (
           reserveDots ? <div className={s.dotsSpacer} aria-hidden="true" /> : null
         ) : (
-          <div className={s.colourDots} role="group" aria-label={name}>
-            {variants!.map(({ item: variant, owned: variantOwned, wearing: variantWearing }) => (
-              <button
-                key={variant.id}
-                type="button"
-                className={s.colourDot}
-                style={{ background: variant.asset!.tint }}
-                aria-label={itemName(variant.id, t)}
-                aria-pressed={variantWearing}
-                aria-disabled={!variantOwned}
-                onClick={() => {
-                  if (variantOwned) onPick(variant.id)
-                }}
-              >
-                {variantOwned ? null : <span className={s.lock} aria-hidden="true" />}
-              </button>
-            ))}
+          <div className={s.colourDots} role="group" aria-label={itemName(family.id, t)}>
+            {variants!.map(({ item: member, owned: memberOwned, wearing: memberWearing }) => {
+              const tint = member.asset?.tint
+              const memberName = itemName(member.id, t)
+              return (
+                <button
+                  key={member.id}
+                  type="button"
+                  className={tint === undefined ? `${s.colourDot} ${s.colourDotNatural}` : s.colourDot}
+                  style={tint === undefined ? undefined : { background: tint }}
+                  aria-label={memberName}
+                  title={memberName}
+                  aria-pressed={memberWearing}
+                  aria-disabled={!memberOwned}
+                  onClick={() => {
+                    if (memberOwned) onPick(member.id)
+                  }}
+                >
+                  {memberOwned ? null : <span className={s.lock} aria-hidden="true" />}
+                </button>
+              )
+            })}
           </div>
         )}
       </div>
@@ -224,37 +238,6 @@ export function WordCard({ item, owned, wearing, hint, onPick }: WordCardProps) 
       <RarityLabel rarity={item.rarity} />
       {owned ? null : <LockHint hint={hint} />}
     </button>
-  )
-}
-
-export interface OwnedCardProps {
-  /** The item's id, named through `itemName` — an id this bundle has no words for is printed as the id. */
-  id: string
-  /** `null` for a row the catalogue no longer lists: plain chrome, no rarity line. */
-  rarity: Rarity | null
-  /** What goes on top — an `ItemPreview`, a colour swatch, or nothing for a word slot. Drawn by the caller,
-   * which is the one that has the catalogue row (or knows it has none). */
-  picture: ReactNode
-  wearing: boolean
-  /** Lines under the name: where it came from, when it arrived. */
-  detail: ReactNode
-}
-
-/**
- * The Inventory screen's card (layout audit C3, 2026-09-28): the wardrobe's own chrome — rarity border, gold
- * "✓ Đang mặc" pill — on a card that picks nothing, so an item looks the same on both screens. A `<div>`, not a
- * button: the inventory is a list to read, and the wardrobe is where things are put on.
- */
-export function OwnedCard({ id, rarity, picture, wearing, detail }: OwnedCardProps) {
-  const { t } = useTranslation('normal')
-  return (
-    <div className={`${s.card} ${s.cardStatic}`} data-rarity={rarity ?? undefined} data-wearing={wearing}>
-      {wearing ? <WearingPill /> : null}
-      {picture}
-      <span className={s.cardName}>{itemName(id, t)}</span>
-      {rarity === null ? null : <span className={s.cardRarity}>{t(`inventory.rarity.${rarity}`)}</span>}
-      {detail}
-    </div>
   )
 }
 

@@ -1712,7 +1712,8 @@
       "w": 96,
       "h": 96,
       "bytes2x": 20888,
-      "real": true
+      "real": true,
+      "tintMask": true
     },
     "item_head_beret_red01_icon": {
       "kind": "icon",
@@ -1720,7 +1721,8 @@
       "w": 96,
       "h": 96,
       "bytes2x": 16550,
-      "real": true
+      "real": true,
+      "tintMask": true
     },
     "item_head_conical_hat01_icon": {
       "kind": "icon",
@@ -1760,7 +1762,8 @@
       "w": 96,
       "h": 96,
       "bytes2x": 32774,
-      "real": true
+      "real": true,
+      "tintMask": true
     },
     "item_head_tophat01_icon": {
       "kind": "icon",
@@ -1776,7 +1779,8 @@
       "w": 96,
       "h": 96,
       "bytes2x": 25213,
-      "real": true
+      "real": true,
+      "tintMask": true
     },
     "item_outfit_champion01_icon": {
       "kind": "icon",

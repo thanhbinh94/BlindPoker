@@ -17,7 +17,7 @@
 import { existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { FACE_LIMIT_Y, FRAME, LAYERS, SKIN_WINDOW } from './frame.mjs'
-import { PACKAGE_ROOT, itemFile, parseName, wearOf } from './manifest.mjs'
+import { PACKAGE_ROOT, itemFile, parseName, wearOf, writeIconTintMask } from './manifest.mjs'
 import { ALPHA_INK, readPicture, resizePicture, writePicture } from './png.mjs'
 import { meanLightness } from '../../../../packages/ui-kit/src/avatar2d/recolour.mjs'
 
@@ -704,8 +704,11 @@ export const MASK_FILE_KIND = { hair: 'hair', eyes: 'eye', tint: 'tint' }
  * The mask to write for one `<name>_<kind>` (`kind` a manifest key: `hair`, `eyes` or `tint`): a hand-drawn
  * override if one exists at `overridesDir`, else `computed`. Writes both densities and records the manifest
  * entry — `{ bytes2x, meanL, empty?, override? }` — into `entry.masks[kind]`.
+ *
+ * A `tint` mask also gives the item's icon its own (2026-10-01, Plan 18 No8a): `writeIconTintMask` cuts this very
+ * mask — override and all — with the icon's fit, as `<icon>_tintmask`, and flags the icon in `manifest.icons`.
  */
-async function writeOneMask({ dir, name, kind, computed, layer2x, entry, overridesDir, log }) {
+async function writeOneMask({ dir, name, kind, computed, layer2x, entry, manifest, overridesDir, log }) {
   const { width, height } = layer2x
   const fileKind = MASK_FILE_KIND[kind]
   let mask = computed
@@ -740,6 +743,10 @@ async function writeOneMask({ dir, name, kind, computed, layer2x, entry, overrid
   entry.masks ??= {}
   entry.masks[kind] = { bytes2x, meanL, ...(sum === 0 ? { empty: true } : {}), ...(override ? { override: true } : {}) }
   log(`${name}_${fileKind}mask — ${(bytes2x / 1024).toFixed(1)} KB${override ? ', hand-drawn' : ''}${sum === 0 ? ', empty' : ''}`)
+  if (kind === 'tint') {
+    const iconMask = await writeIconTintMask(maskPic, layer2x, dir, name, manifest)
+    if (iconMask !== null) log(`${iconMask} — cut with the icon's fit`)
+  }
 }
 
 /**
@@ -771,7 +778,7 @@ export async function writeMasks({ dir, manifest, names, overridesDir = MASK_OVE
       await writeOneMask({ dir, name, kind: 'eyes', computed: eyes, layer2x, entry, overridesDir, log })
     } else if (parsed.kind === 'item' && entry.tintSeed) {
       const tint = tintMask(layer2x, entry.tintSeed)
-      await writeOneMask({ dir, name, kind: 'tint', computed: tint, layer2x, entry, overridesDir, log })
+      await writeOneMask({ dir, name, kind: 'tint', computed: tint, layer2x, entry, manifest, overridesDir, log })
     }
   }
 }

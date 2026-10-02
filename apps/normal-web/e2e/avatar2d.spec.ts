@@ -67,7 +67,7 @@ test.describe('Blind Luck Poker Normal — nhân vật chibi', () => {
 
     // --- 2. the wardrobe: switch base to m01, save ------------------------------------------------------
     await openWardrobe(page)
-    await expect(page.getByRole('tab', { name: 'Thân nền', exact: true })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByRole('tab', { name: 'Nhân vật', exact: true })).toHaveAttribute('aria-selected', 'true')
     const previewBeforeBase = await chibiHash(preview(page))
 
     const tabpanel = page.getByRole('tabpanel')
@@ -92,6 +92,11 @@ test.describe('Blind Luck Poker Normal — nhân vật chibi', () => {
     // lands on it (`CategoryNav`'s group click selects the group's `tabs[0]`) — the `goToWardrobeTab`
     // helper still names the sub-tab explicitly, matching how every other jump in this file reads.
     await goToWardrobeTab(page, 'Trang phục', 'Mũ')
+    // The tab lists only what the account owns until "Hiện cả món chưa có" is ticked (review 2026-09-29, No11a) — and
+    // this account owns no hat. `check()`, not a click: it is idempotent.
+    const showLocked = page.getByRole('checkbox', { name: 'Hiện cả món chưa có' })
+    await showLocked.check()
+    await expect(showLocked).toBeChecked()
     const lockedTile = tabpanel.locator('button').filter({ hasText: 'Mũ chóp quý ông' })
     await expect(lockedTile).toHaveAttribute('aria-disabled', 'true')
     const previewBeforeClick = await chibiHash(preview(page))
@@ -142,7 +147,7 @@ test.describe('Blind Luck Poker Normal — nhân vật chibi', () => {
     // A filled slot's portrait opens a small menu instead (design §3.1 item 4: Áp dụng · Lưu đè vào đây ·
     // Đổi tên · Xoá) — the button's own accessible name is "Bộ đồ <name>" (`outfits.menu`).
     await page.getByRole('button', { name: 'Bộ đồ Đi làm' }).click()
-    await page.getByRole('button', { name: 'Áp dụng' }).click()
+    await page.getByRole('button', { name: 'Mặc bộ này' }).click()
     await toLobby(page)
     const restored = await barHashAfter(page, third)
     expect(restored, 'applying the saved slot returns exactly the m01 configuration').toBe(second)
@@ -170,8 +175,12 @@ test.describe('Blind Luck Poker Normal — nhân vật chibi', () => {
     expect(tap, 'the save button has a box').not.toBeNull()
     expect(tap!.height, 'the save button is a 44 px target').toBeGreaterThanOrEqual(44)
 
-    // The head tab renders every tile at once — the screen most likely to overflow sideways.
+    // The head tab renders every tile at once — the screen most likely to overflow sideways — once "Hiện cả món chưa
+    // có" is ticked: a fresh account owns no hat, and the tab lists only what it owns by default (No11a).
     await goToWardrobeTab(page, 'Trang phục', 'Mũ')
+    const showLocked = page.getByRole('checkbox', { name: 'Hiện cả món chưa có' })
+    await showLocked.check()
+    await expect(showLocked).toBeChecked()
     await expectNoSidewaysScroll(page)
     const tiles = page.getByRole('tabpanel').locator('img')
     await expect(tiles.first()).toBeVisible()

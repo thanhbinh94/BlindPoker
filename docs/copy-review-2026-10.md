@@ -5,7 +5,8 @@ Review 2026-09-29, mục No9, thuộc Đợt 2 (Plan 18). Người dùng duyệt
 Bảng dưới là bản đề xuất. Plan 18, Task 1 áp dụng nguyên văn, trừ các điểm sau:
 
 - **Không áp dụng `inventory.*`:** màn Kho đồ bị gộp vào Phòng thay đồ (No5, Task 3), nên các khóa `inventory.lead`, `inventory.summary` và `inventory.source.*` bị xóa cùng màn.
-  - `inventory.rarity.*` và `inventory.error` giữ nguyên, vì Phòng thay đồ vẫn dùng.
+  - `inventory.rarity.*` và `inventory.error` giữ nguyên, vì Phòng thay đồ vẫn dùng. `inventory.error` đổi chữ cho đúng màn đang hiện nó: vi "Không tải được phòng thay đồ", en "Could not load the wardrobe" (đợt sửa cuối Plan 18; ngoại lệ của mục "Bản tiếng Anh" bên dưới).
+  - `auth.lead` (bảng 2.3) áp dụng với "trang phục" thay "kho đồ": "Một tài khoản, chơi trên mọi thiết bị — điểm, trang phục và thành tựu luôn đi theo bạn." Màn Kho đồ không còn, nên câu chào không nhắc tới nó (đợt sửa cuối Plan 18).
 - **Giữ nguyên `achievements.ui.progress` ("{{progress}} trên {{threshold}}"):** khóa này còn là `aria-valuetext` của thanh tiến độ. Viết "3/7" thì trình đọc màn hình đọc thành "3 gạch chéo 7".
 - **Chưa làm:**
   - các mục ở phần "Chỗ còn mơ hồ" (Ấn bản, nhãn ổ khóa, nút "Vào sảnh");
@@ -209,7 +210,7 @@ So với đề xuất gốc "[Hiển thị bao gồm chưa sở hữu]": câu đ
 
 Ghi chú cho người làm:
 - Mặc định **không tích**. Gợi ý khóa mới `wardrobe.showLocked`: vi "Hiện cả món chưa có", en "Show items you don't own yet".
-- Sau No11a, `wardrobe.filter.all` và `wardrobe.filter.owned` sẽ không còn chỗ dùng (xóa ở vi + en).
+- Sau No11a, `wardrobe.filter.all` và `wardrobe.filter.owned` không còn chỗ dùng và đã được xóa ở vi + en.
 - **Giữ** `wardrobe.filter.locked` ("Chưa có"), vì `cards.tsx:26` vẫn ghép nó vào aria-label của thẻ bị khóa ("{tên}, {độ hiếm}, Chưa có: {gợi ý}"). Có thể đổi tên khóa thành `wardrobe.locked` cho đúng vai trò.
 - `wardrobe.ownedCount` vẫn hữu ích khi đặt cạnh ô tích.
 

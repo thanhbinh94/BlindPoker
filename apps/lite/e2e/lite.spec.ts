@@ -76,8 +76,8 @@ async function createBlindRoom(page: Page, roomName: string, bots: number): Prom
   await dialog.getByRole('button', { name: 'Blind Poker' }).click()
   await dialog.getByLabel('Tên phòng').fill(roomName)
   await dialog.getByLabel('Thời gian mỗi lượt').selectOption({ label: '30 giây' })
-  await dialog.getByLabel('Số lá riêng').selectOption({ label: '2 lá' })
-  await dialog.getByLabel('Kiểu quyết định').selectOption({ label: 'Chơi hoặc bỏ' })
+  await dialog.getByLabel('Số lá mỗi người').selectOption({ label: '2 lá' })
+  await dialog.getByLabel('Cách chơi').selectOption({ label: 'Chơi hoặc bỏ' })
   await dialog.getByLabel('Mức cược cố định').selectOption({ label: '1.000' })
   await dialog.getByLabel('Số lượng bot').selectOption({ label: String(bots) })
   await dialog.getByRole('button', { name: 'Tạo phòng' }).click()
@@ -122,7 +122,7 @@ function roomCode(page: Page): Locator {
  * included, where the fee and the uncalled return are printed.
  */
 function resultCard(page: Page): Locator {
-  return page.getByRole('group', { name: /^(Người thắng|Những người thắng|Ván bị hủy)$/ })
+  return page.getByRole('group', { name: /^(Người thắng|Ván bị hủy)$/ })
 }
 
 const PAYOUT = /\+\s*([\d.,]+)/
@@ -142,9 +142,9 @@ function payoutOf(rows: string[], who: string): number {
  * really staked. In this hand it happens whenever the two opponents both fold on the one player who paid to play.
  */
 async function uncalledReturn(card: Locator): Promise<{ who: string; amount: number }> {
-  const line = card.getByText(/^Hoàn lại phần cược dư/)
+  const line = card.getByText(/^Hoàn cược dư cho/)
   if ((await line.count()) === 0) return { who: '', amount: 0 }
-  const hit = /^Hoàn lại phần cược dư\s+(.*?)\s+([\d.,]+)$/.exec((await line.innerText()).replace(/\s+/g, ' ').trim())
+  const hit = /^Hoàn cược dư cho\s+(.*?)\s+([\d.,]+)$/.exec((await line.innerText()).replace(/\s+/g, ' ').trim())
   expect(hit, 'the uncalled-return line must name a player and an amount').not.toBeNull()
   return { who: hit![1]!, amount: parsePoints(hit![2]!) }
 }

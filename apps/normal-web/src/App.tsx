@@ -43,24 +43,30 @@ const NO_ITEMS: ItemDto[] = []
 export const NORMAL_VERSION = typeof __NORMAL_VERSION__ === 'string' ? __NORMAL_VERSION__ : 'dev'
 
 /**
- * The six account screens, split out of the entry bundle.
+ * The five account screens, split out of the entry bundle.
  *
  * They are the right things to split and the lobby is not: a player reaches the lobby on every visit, these
  * on some visits and several of them never. Between them they carry the stats tables, the ledger, the
  * month's calendar and the achievement list — none of which the sign-in card or the lobby has any use for.
  * (`Chibi` is not among them: the lobby bar and the seat plates draw faces, so it belongs in the entry
- * chunk and ships there.) Splitting these six keeps the first paint small on the phone connection this game
+ * chunk and ships there.) Splitting these five keeps the first paint small on the phone connection this game
  * is mostly played on, and each screen then costs one request, once.
  */
 const ProfileScreen = lazyScreen(async () => ({ default: (await import('./screens/ProfileScreen.js')).ProfileScreen }))
 const WardrobeScreen = lazyScreen(async () => ({ default: (await import('./screens/wardrobe/WardrobeScreen.js')).WardrobeScreen }))
-const InventoryScreen = lazyScreen(async () => ({ default: (await import('./screens/InventoryScreen.js')).InventoryScreen }))
 const AchievementsScreen = lazyScreen(async () => ({ default: (await import('./screens/AchievementsScreen.js')).AchievementsScreen }))
 const DailyScreen = lazyScreen(async () => ({ default: (await import('./screens/DailyScreen.js')).DailyScreen }))
 const SettingsScreen = lazyScreen(async () => ({ default: (await import('./screens/SettingsScreen.js')).SettingsScreen }))
 
 /** The routes served by a lazy chunk rather than by the entry bundle. */
-export const ACCOUNT_ROUTES = ['/profile', '/avatar', '/inventory', '/achievements', '/daily', '/settings']
+export const ACCOUNT_ROUTES = ['/profile', '/avatar', '/achievements', '/daily', '/settings']
+
+/**
+ * The inventory's old route. The inventory folded into the wardrobe (review 2026-09-29, No5), but a bookmark, a
+ * shared link or the browser's history can still name it: everything in `App` reads `/avatar` in its place, and
+ * the address bar is swapped for it in place (the effect in `App`).
+ */
+const INVENTORY_ROUTE = '/inventory'
 
 /** Normal is served by the same origin as the socket, so the origin is never configured. */
 export function websocketUrl(loc: Pick<Location, 'protocol' | 'host'> = window.location): string {
@@ -212,7 +218,15 @@ export function App({ api, socketFactory }: AppProps) {
     return { ...client, state: { ...live, notifications, me: viewMe, balance } }
   }, [client, notifications, viewMe, balance])
 
-  const path = route.path
+  // The old inventory link is the wardrobe: the rail, the route list, the boundary's key and the daily reminder
+  // all read `path`, so none of them has to know the inventory ever existed.
+  const path = route.path === INVENTORY_ROUTE ? '/avatar' : route.path
+  // And the address bar follows, replacing the entry rather than adding one ("Back" would land on `#/inventory` and be
+  // sent forward again). `location.replace` fires `hashchange`, so the route reads `/avatar` from then on.
+  const routePath = route.path
+  useEffect(() => {
+    if (routePath === INVENTORY_ROUTE) window.location.replace('#/avatar')
+  }, [routePath])
 
   // Today's reward, as a reminder rather than a claim: a sign-in that lands on the lobby with a reward waiting
   // opens `/daily` once a day, and the rail's tab carries a dot while the reward is still there.
@@ -273,7 +287,7 @@ export function App({ api, socketFactory }: AppProps) {
             <RoomScreen client={viewClient} lang={lang} onLeft={() => navigate('/lobby')} chibiFor={chibiFor} captionFor={captionFor} />
           ) : ACCOUNT_ROUTES.includes(path) ? (
             <>
-              {/* One fallback for all six: the chunk is a single request on a page the rail has already drawn, so
+              {/* One fallback for all five: the chunk is a single request on a page the rail has already drawn, so
                   what the player waits for is a line under the rail, not a blank screen with a spinner in the middle. */}
               {/* Bug 4: a chunk that vanished in a deploy reloads the page once (`lazyScreen`); if that does not help,
                   the boundary says a new version is out instead of leaving the page blank. */}
@@ -289,8 +303,6 @@ export function App({ api, socketFactory }: AppProps) {
                   <ProfileScreen api={guarded} lang={lang} balance={balance} onRenamed={onRenamed} />
                 ) : path === '/avatar' ? (
                   <WardrobeScreen api={guarded} playerId={myId} />
-                ) : path === '/inventory' ? (
-                  <InventoryScreen api={guarded} lang={lang} />
                 ) : path === '/daily' ? (
                   <DailyScreen api={guarded} lang={lang} />
                 ) : path === '/settings' ? (
@@ -300,7 +312,7 @@ export function App({ api, socketFactory }: AppProps) {
                 )}
               </Suspense>
               </UpdateBoundary>
-              {/* The lobby and the room bring their own stack; these six have none, and `/daily` is precisely
+              {/* The lobby and the room bring their own stack; these five have none, and `/daily` is precisely
                   where the login-day achievements unlock. Without this the slip would sit undelivered in the state
                   until the player wandered back to the lobby, and then fire there, out of context. It sits outside
                   the `Suspense` so a frame that lands while the chunk is still in flight is not swallowed. */}
