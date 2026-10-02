@@ -188,12 +188,13 @@ describe('HandResult', () => {
       expect(within(live).getByText(/3\.920/)).toBeInTheDocument()
     })
 
-    it('names the group after the title it carries: several winners, and a cancelled hand', () => {
+    it('names the group after the title it carries: a split pot, titled like one winner, and a cancelled hand', () => {
       const split = {
         ...hand,
         result: { ...hand.result!, payouts: [{ seat: 0, amount: 1_960 }, { seat: 1, amount: 1_960 }] },
       } as unknown as ClientHand
       const view = renderWith(undefined, undefined, split)
+      // One winner and a split share the title "Người thắng" now (the copy review of 2026-10, No9).
       expect(screen.getByRole('group', { name: 'Người thắng' })).toBeInTheDocument()
       view.unmount()
 

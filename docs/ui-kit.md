@@ -234,6 +234,19 @@ navigation. The countdown is never inside a row's `<li>` or the fee line, which 
 — and they find the card as `getByRole('group', { name: /^(Người thắng|Ván bị hủy)$/ })`, since a
 `status` locator would now match the inner region alone and lose the footer.
 
+**The card waits for the cards to turn** (review round 2, fix wave, No1). Opened in the render that turned an
+opponent's cards over, it covered the very turn it was meant to follow: the top-centre seat's at 1920 × 940, every
+opponent's on a 375 × 812 phone. `RoomScreen` now holds it back with `useRevealHold(hand)`
+(`src/screens/reveal-hold.ts`) for `REVEAL_HOLD_MS` when a hand completes with a showdown in which a seat other than the
+viewer's had been drawn face down on this screen. That is 870 ms, counted from the numbers the CSS turns by: the 600 ms
+turn (`FLIP_MS` in `Card.tsx`, the `--dur-flip` token — `Card.test` holds the two equal), the stagger to the last of
+three cards (2 × `CARD_STAGGER_MS`, the 60 ms `Seat` multiplies by), and 150 ms to settle. The card shows at once under
+`prefers-reduced-motion: reduce` (nothing turns), for a hand won by a fold (no showdown), and for a hand that was
+already over when the screen first saw it (the snapshot that rebuilds the room after a refresh draws the shown cards
+face up). Everything that follows the card follows the card actually drawn: the seat clearance, the close button and
+the countdown's place. While the card is held, the countdown is not printed in the tray either — it would sit there
+for under a second, then jump onto the card and shift the tray's buttons after it.
+
 The card is at most as tall as the felt less the seat clearance (`max-height: 100%` of the content box of
 `RoomScreen`'s overlay, which ends above the viewer's own seat — below): past that its body — the rows, then the pot
 ledger under them — scrolls inside it, and the title, the close button and the footer stay put. While the body can
@@ -371,7 +384,7 @@ Tokens live in `src/theme/tokens.css` and are all an app needs to restyle the ki
 | Cards | `--card-face`, `--card-ink`, `--card-red` |
 | Type | `--font-display`, `--font-body` |
 | Space | `--space-1`…`--space-8` (4 px scale), `--radius-sm/md/lg/pill`, `--tap` (44 px), `--measure-wide` (1180 px: lobby, wardrobe) and `--measure-narrow` (44rem: pages read top to bottom) — content widths, padding not included |
-| Motion | `--dur-1`, `--dur-2`, `--ease` |
+| Motion | `--dur-1`, `--dur-2`, `--dur-flip` (a revealed card's turn), `--ease` |
 | Misc | `--focus`, `--shadow-1`, `--shadow-2`, `--z-modal` |
 
 **Dark is the default**; `data-theme="light"` on the root swaps the page to parchment. The felt does not follow it —
@@ -412,12 +425,15 @@ transition off in `global.css`; there is no JS animation loop to disable.
 A face-down card that is revealed where it lies — an opponent's hand at the showdown — **turns over** (review
 2026-09-29, No1): a two-sided turn about the vertical axis, `--dur-flip` (600 ms), ease-in-out so the back shows for
 the first half and the face for the second, on the same 60 ms stagger. `Card` is an HTML wrapper (`.card`: size, drop
-shadow, deal-in, `perspective`), a `preserve-3d` flipper and the side(s) it shows, each with `backface-visibility:
-hidden`. The face is the flipper's resting style and the keyframe holds only the start (`from { rotateY(180deg) }`),
-so with motion off the reveal is instant. The side that shows is the card's one `role="img"` with the label and
-`data-card` / `data-face`, from the render that reveals it; the back behind a turned face is `aria-hidden` with none of
-them, so counts by role or label never see it, and nothing waits on `animationend`. A card that mounts face up — the
-viewer's own, the board, the result card's — does not turn; it keeps its deal-in.
+shadow, deal-in, `perspective`), a flipper and the side(s) it shows. The 3D is the turning state's alone: `.cardTurn`
+puts the flipper in `preserve-3d` and gives its sides `backface-visibility: hidden`, and it stays on while the turned
+face is up, so the back rotated behind it stays hidden; a card that never turns — the board, the viewer's own, the
+result card's, most of the table — draws one side and stays flat. The face is the flipper's resting style and the
+keyframe holds only the start (`from { rotateY(180deg) }`), so with motion off the reveal is instant. The side that
+shows is the card's one `role="img"` with the label and `data-card` / `data-face`, from the render that reveals it; the
+back behind a turned face is `aria-hidden` with none of them, so counts by role or label never see it, and nothing
+waits on `animationend`. A card that mounts face up does not turn; it keeps its deal-in. The result card waits for the
+turn to end (`REVEAL_HOLD_MS`, see `HandResult` above).
 
 ---
 

@@ -5,7 +5,7 @@ import type { ClientHand } from '../client/types.js'
 import { formatPoints, handLabel, type Language } from '../i18n/index.js'
 import { Button } from '../primitives/Button.js'
 import { cx } from '../primitives/cx.js'
-import { Card } from './Card.js'
+import { CARD_STAGGER_MS, Card } from './Card.js'
 import s from './table.module.css'
 
 export interface HandResultProps {
@@ -124,7 +124,7 @@ export function HandResult({ hand, room, myPlayerId, lang, onDismiss, countdown 
                   {hit === undefined ? null : (
                     <span className={s.resultCards}>
                       {hit.best.map((card, i) => (
-                        <Card key={card} card={card} size="sm" delayMs={i * 60} highlighted={amount > 0} />
+                        <Card key={card} card={card} size="sm" delayMs={i * CARD_STAGGER_MS} highlighted={amount > 0} />
                       ))}
                     </span>
                   )}

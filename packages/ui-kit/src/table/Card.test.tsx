@@ -4,7 +4,8 @@ import { StrictMode } from 'react'
 import { describe, expect, it } from 'vitest'
 import { I18nextProvider } from 'react-i18next'
 import { createI18n } from '../i18n/index.js'
-import { Card } from './Card.js'
+import TOKENS_CSS from '../theme/tokens.css?raw'
+import { Card, FLIP_MS } from './Card.js'
 import s from './table.module.css'
 import TABLE_CSS from './table.module.css?raw'
 
@@ -102,5 +103,10 @@ describe('Card', () => {
   it('keeps the face-up end out of the keyframes, so reduced motion lands on the face', () => {
     const frames = /@keyframes\s+flip\s*\{([\s\S]*?\})\s*\}/.exec(TABLE_CSS)?.[1] ?? ''
     expect(frames).toMatch(/^\s*from\s*\{\s*transform:\s*rotateY\(180deg\);?\s*\}\s*$/)
+  })
+
+  // `RoomScreen` holds the result card for as long as the turn takes (`REVEAL_HOLD_MS`), counted from `FLIP_MS`.
+  it('turns for FLIP_MS, the duration the --dur-flip token gives the CSS', () => {
+    expect(/--dur-flip:\s*(\d+)ms;/.exec(TOKENS_CSS)?.[1]).toBe(String(FLIP_MS))
   })
 })

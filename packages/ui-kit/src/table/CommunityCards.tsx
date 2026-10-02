@@ -1,6 +1,6 @@
 import type { Card as CardId } from '@bp/core'
 import { useTranslation } from 'react-i18next'
-import { Card } from './Card.js'
+import { CARD_STAGGER_MS, Card } from './Card.js'
 import s from './table.module.css'
 
 export interface CommunityCardsProps {
@@ -19,7 +19,7 @@ export function CommunityCards({ cards, highlight }: CommunityCardsProps) {
       {SLOTS.map((i) => {
         const card = cards[i]
         if (card === undefined) return <span key={i} className={s.slot} aria-hidden="true" />
-        return <Card key={i} card={card} size="lg" delayMs={i * 60} highlighted={highlight?.includes(card)} />
+        return <Card key={i} card={card} size="lg" delayMs={i * CARD_STAGGER_MS} highlighted={highlight?.includes(card)} />
       })}
     </div>
   )

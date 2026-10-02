@@ -8,12 +8,17 @@ import s from './table.module.css'
 
 export type CardSize = 'sm' | 'md' | 'lg'
 
+/** How long a revealed card takes to turn over: the `--dur-flip` token in `tokens.css` (`Card.test` holds them equal). */
+export const FLIP_MS = 600
+/** The step between the cards of one hand, for the deal-in and the turn: card `i` waits `i × CARD_STAGGER_MS`. */
+export const CARD_STAGGER_MS = 60
+
 export interface CardProps {
   /** Omit (or pass `null`) to draw the back. */
   card?: CardId | null
   faceDown?: boolean
   size?: CardSize
-  /** Stagger for the deal-in, and for the turn when the card is revealed; the caller multiplies by ~60 ms. */
+  /** Stagger for the deal-in, and for the turn when the card is revealed; the caller multiplies by `CARD_STAGGER_MS`. */
   delayMs?: number
   highlighted?: boolean
   className?: string

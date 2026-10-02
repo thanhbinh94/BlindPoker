@@ -6,7 +6,7 @@ import type { ClientSeat } from '../client/types.js'
 import { formatPoints, type Language } from '../i18n/index.js'
 import { Badge, type BadgeTone } from '../primitives/Badge.js'
 import { cx } from '../primitives/cx.js'
-import { Card } from './Card.js'
+import { CARD_STAGGER_MS, Card } from './Card.js'
 import { TurnTimer } from './TurnTimer.js'
 import s from './table.module.css'
 
@@ -108,7 +108,7 @@ export function Seat({
       {faces.length > 0 ? (
         <div className={s.seatCards}>
           {faces.map((card, i) => (
-            <Card key={i} card={card} faceDown={card === null} size={cardSize} delayMs={i * 60} />
+            <Card key={i} card={card} faceDown={card === null} size={cardSize} delayMs={i * CARD_STAGGER_MS} />
           ))}
         </div>
       ) : null}

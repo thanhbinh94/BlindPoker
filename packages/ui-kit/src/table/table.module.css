@@ -20,30 +20,36 @@
   perspective: 420px;
 }
 
-/* The flipper and its sides (review 2026-09-29, No1). The sides share one grid cell and hide whichever faces away;
-   the back of a card that has turned up sits rotated behind its face. No `filter`, `opacity` or `overflow` here. */
+/* The flipper and its sides (review 2026-09-29, No1). The sides share one grid cell; a card that never turns — the
+   board, the viewer's own, the result card's, most of the table — draws one side and stays flat. No `filter`,
+   `opacity` or `overflow` here: they would flatten the 3D below. */
 .cardFlip {
   display: grid;
-  transform-style: preserve-3d;
 }
 
 .cardSide {
   grid-area: 1 / 1;
   width: 100%;
   height: auto;
+}
+
+/* A face-down card revealed in place turns over: two-sided, about 0.6 s, the back for the first half and the face for
+   the second (an ease-in-out, so the card is edge-on at the midpoint), staggered like the deal. Only the start of the
+   turn is a keyframe; the face is the resting style, so with every animation off (reduced motion) it simply shows.
+   The 3D is this state's alone: the flipper keeps its sides in 3D and each hides whichever faces away, and the class
+   stays on while the turned face is up, so the back rotated behind it stays hidden. */
+.cardTurn {
+  transform-style: preserve-3d;
+  animation: flip var(--dur-flip, 600ms) ease-in-out backwards;
+  animation-delay: var(--deal-delay, 0ms);
+}
+
+.cardTurn > .cardSide {
   backface-visibility: hidden;
 }
 
 .cardUnder {
   transform: rotateY(180deg);
-}
-
-/* A face-down card revealed in place turns over: two-sided, about 0.6 s, the back for the first half and the face for
-   the second (an ease-in-out, so the card is edge-on at the midpoint), staggered like the deal. Only the start of the
-   turn is a keyframe; the face is the resting style, so with every animation off (reduced motion) it simply shows. */
-.cardTurn {
-  animation: flip var(--dur-flip, 600ms) ease-in-out backwards;
-  animation-delay: var(--deal-delay, 0ms);
 }
 
 @keyframes flip {
