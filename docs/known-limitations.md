@@ -149,8 +149,9 @@ address and a password and trusts the address is spelled right.
 *Tracked:* spec §32 assumption 12; roadmap §34 item 2.
 
 **Lite's dev server has no avatar files until the app has been built at least once.** The chibi's PNG
-layers live at `apps/normal-web/public/avatar/`; `apps/lite/scripts/build.mjs` copies the `base_*`/
-`bot_*` files it needs into `dist/public/avatar` as one step of a full build. `pnpm --filter @bp/lite
+layers live at `apps/normal-web/public/avatar/`; `apps/lite/scripts/build.mjs` copies the `body_*`/
+`bot_*` files, the default hairs and the default outfit — the ones it draws, and no mask — into `dist/public/avatar`
+as one step of a full build. `pnpm --filter @bp/lite
 dev` runs Vite's own dev server against `apps/lite/web` directly and proxies only `/api` and `/ws`
 (`apps/lite/web/vite.config.ts`) — nothing serves `/avatar/` on that port, so every chibi 404s until
 `apps/normal-web` has been built at least once and a full `pnpm build:lite` has copied its output over.

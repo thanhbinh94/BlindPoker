@@ -839,15 +839,31 @@ runs.
 Lite has no wardrobe and no per-account cosmetic config (design §7 — "Không tủ đồ, không profile"), so
 every human at a Lite table draws the same deterministic figure the kit itself can produce with nothing
 from the server: `defaultChibi(displayName)` seeds a chibi from the player's own name, the same way on
-every device, with no request involved — always wearing `item_outfit_casual01_L40`, the one default
-outfit (`packages/ui-kit/src/avatar2d/defaults.ts`). `apps/lite/scripts/build.mjs`'s `copyAvatarAssets()`
-copies the `base_*` and `bot_*` files, plus the default outfit's, out of
-`apps/normal-web/public/avatar/` into `dist/public/avatar` — never any *other* wardrobe item, because Lite
-ships no store to buy them from — as one step of a full build, after the web bundle and before the SEA
-blob is assembled. Which files are "the default outfit's" is **read out of `items.json`**
-(`scripts/avatar-files.mjs`, 2026-09-20): its `asset.file` *and every variant of it the catalogue lists*
-(§3.1), because a Lite `m` base drawn in a cut Lite did not copy renders undressed. Adding a cut to the
-default outfit therefore stays one line of data. There is no dev-time equivalent of that copy (`docs/known-limitations.md`):
+every device, with no request involved (`packages/ui-kit/src/avatar2d/defaults.ts`). Since avatar v4 (spec
+`2026-10-03-avatar-v4-design.md` §6.4) that figure is **a body per gender** (`body_<g>_L30` with its six
+`body_<g>_face_<expr>_L50`), **that gender's default hairstyle** (`hair_f_bob01` or `hair_m_tousled01`, a back half
+`item_hair_<code>_L20` and a front half `_L60`) and `item_outfit_casual01_L40`, the one default outfit; a bot is
+`bot_<n>_L30` and its six faces.
+
+`apps/lite/scripts/build.mjs`'s `copyAvatarAssets()` copies **exactly those files, at `@1x` and `@2x`, and nothing
+else** out of `apps/normal-web/public/avatar/` into `dist/public/avatar` — no mask (Lite never recolours: no
+`_skinmask`, `_eyemask`, `_hairmask`, `_tintmask`), no old `base_*` ("bỏ được các ảnh base thừa"), and no *other*
+wardrobe item, because Lite ships no store to buy them from — as one step of a full build, after the web bundle and
+before the SEA blob is assembled. The bodies and the bots follow from their names (`isLiteAvatarFile`'s one pattern,
+`scripts/avatar-files.mjs`); the rest is **read out of `items.json`**:
+
+- **The default outfit** (2026-09-20): its `asset.file` *and every variant of it the catalogue lists* (§3.1), because
+  a body drawn in a cut Lite did not copy renders undressed. Adding a cut to the default outfit stays one line of data.
+- **The default hairs** (v4): for each of `LITE_DEFAULT_HAIRS` — the kit's and the server's `DEFAULT_HAIR` pair — the
+  row's `asset.back` (L20) *and* `asset.file` (L60), because a hairstyle is two layers and a figure missing either
+  renders bald. The build stops if a default hair is not in the catalogue, is not a `hairStyle`, lacks a layer, or names
+  a file that `public/avatar/` does not have.
+
+The names in `LITE_DEFAULT_HAIRS` are Lite's own copy of the kit's: `apps/lite/test/avatar-files.test.ts` pins them
+and checks that the copy is **exactly the set the kit draws** (every `layersFor` file of both default chibis and the eight
+bots, nothing more), and the Lite e2e checks at runtime that every layer on a table decodes. A third default hairstyle, a
+male cut of the default outfit or a ninth bot is therefore a change that the tests name rather than a bald figure that
+nobody sees. There is no dev-time equivalent of that copy (`docs/known-limitations.md`):
 `pnpm --filter @bp/lite dev` needs `apps/normal-web` built at least once first, or every chibi 404s.
 
 ## 9. Adding an item, end to end

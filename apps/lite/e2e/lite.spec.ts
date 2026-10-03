@@ -111,6 +111,32 @@ async function balanceWhen(page: Page, token: string, settled: (n: number) => bo
   return balance
 }
 
+/** The `src` every chibi layer on one seat resolved to, back to front. */
+function chibiLayers(page: Page, seat: number): Promise<string[]> {
+  return page.locator(`[data-seat="${seat}"] [data-chibi-hash] img`).evaluateAll((imgs) => imgs.map((img) => (img as HTMLImageElement).currentSrc))
+}
+
+/**
+ * Every chibi layer on the table has loaded and decoded (`complete` with a width — a 404 leaves `naturalWidth` at 0).
+ * Polled, because the images load after the seat plate is already visible. A table with no chibi layers yet counts as
+ * not ready rather than as passing, so the poll cannot pass on an empty list.
+ */
+async function expectChibisDecode(page: Page): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const layers = await page
+          .locator('[data-seat] [data-chibi-hash] img')
+          .evaluateAll((imgs) => imgs.map((img) => ({ src: (img as HTMLImageElement).currentSrc, ok: (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0 })))
+        if (layers.length === 0) return 'no chibi layers yet'
+        const broken = layers.filter((layer) => !layer.ok).map((layer) => layer.src.split('/avatar/')[1] ?? layer.src)
+        return broken.length === 0 ? 'every layer decodes' : `not decoded: ${broken.join(', ')}`
+      },
+      { message: 'every chibi layer on the table decodes' },
+    )
+    .toBe('every layer decodes')
+}
+
 /** The join code in the room header. The lobby's room list prints codes too, so the header is named explicitly. */
 function roomCode(page: Page): Locator {
   return page.locator('header').getByLabel('Mã phòng')
@@ -186,9 +212,13 @@ test.describe('Blind Luck Poker Lite', () => {
 
     await sit(pageA, 0)
     await sit(pageB, 1)
-    // The chibi Lite bundles for itself (`base_*`/`bot_*` copied into the build, design §7) draws from the
-    // same seat plate as Normal's — this is the one place Lite checks it does not ship faceless.
+    // The chibi Lite bundles for itself (the v4 `body_*`, `bot_*`, the two default hairs and the default outfit, copied
+    // into the build — `apps/lite/scripts/avatar-files.mjs`, spec §6.4) draws from the same seat plate as Normal's.
+    // This is the one place Lite checks it does not ship faceless, bald or bodiless: every layer of every chibi on the
+    // table must decode in a real browser, and a human's own seat must be standing on a v4 body.
     await expect(pageA.locator('[data-seat="0"] [data-chibi-hash]')).toBeVisible()
+    await expectChibisDecode(pageA)
+    expect(await chibiLayers(pageA, 0), 'seat 0 stands on a v4 body').toEqual(expect.arrayContaining([expect.stringMatching(/\/body_[fm]_L30@/)]))
     await pageA.getByRole('button', { name: 'Sẵn sàng', exact: true }).click()
     await pageB.getByRole('button', { name: 'Sẵn sàng', exact: true }).click()
     // Three ready of three seated: the bot holds a seat of its own and is ready from the moment the room exists.
