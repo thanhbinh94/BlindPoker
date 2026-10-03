@@ -3,7 +3,7 @@ import { FakeSocket, fakeSocketFactory, hashChibi } from '@bp/ui-kit'
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App.js'
-import type { AuthMeDto, AvatarCatalogDto, AvatarConfigDto, BaseDto, ItemDto, NormalApi } from './api.js'
+import type { AuthMeDto, AvatarCatalogDto, AvatarConfigDto, BodyDto, ItemDto, NormalApi } from './api.js'
 import { resetAvatarCache } from './avatar/useAvatars.js'
 import viNormal from './locales/vi/normal.json'
 import { makeI18n, renderWithI18n } from './test-i18n.js'
@@ -18,28 +18,22 @@ import { makeI18n, renderWithI18n } from './test-i18n.js'
 
 const ME: AuthMeDto = { playerId: 'p1', displayName: 'Bình', balance: 123_000 }
 
-const FACES = {
-  neutral: 'base_f01_face_neutral_L50',
-  happy: 'base_f01_face_happy_L50',
-  sad: 'base_f01_face_sad_L50',
-  surprised: 'base_f01_face_surprised_L50',
-  closed: 'base_f01_face_closed_L50',
-  sleep: 'base_f01_face_sleep_L50',
-}
+const EXPRESSIONS = ['neutral', 'happy', 'sad', 'surprised', 'closed', 'sleep'] as const
+const facesOf = (g: 'f' | 'm'): Record<string, string> => Object.fromEntries(EXPRESSIONS.map((e) => [e, `body_${g}_face_${e}_L50`]))
 
-const BASE_F01: BaseDto = {
-  id: 'f01',
-  nameKey: 'bases.f01',
-  wear: 'f',
-  layers: { hairBack: 'base_f01_L20', body: 'base_f01_L30', hairFront: 'base_f01_L60' },
-  faces: FACES,
-}
-const BASE_M01: BaseDto = {
-  id: 'm01',
-  nameKey: 'bases.m01',
-  wear: 'm',
-  layers: { hairBack: 'base_m01_L20', body: 'base_m01_L30', hairFront: 'base_m01_L60' },
-  faces: { ...FACES, neutral: 'base_m01_face_neutral_L50' },
+const BODY_F: BodyDto = { gender: 'f', body: 'body_f_L30', faces: facesOf('f'), naturalEyeColour: '#2e6a9b' }
+const BODY_M: BodyDto = { gender: 'm', body: 'body_m_L30', faces: facesOf('m'), naturalEyeColour: '#cc924c' }
+
+const HAIR_M_TOUSLED: ItemDto = {
+  id: 'hair_m_tousled01',
+  slot: 'hairStyle',
+  rarity: 'common',
+  nameKey: 'items.hair_m_tousled01',
+  assetKey: 'hairStyle/hair_m_tousled01',
+  isDefault: false,
+  free: true,
+  gender: 'm',
+  asset: { layer: 60, file: 'item_hair_m_tousled01_L60', back: 'item_hair_m_tousled01_L20', fitsAvatarCrop: true },
 }
 
 const OUTFIT_CASUAL: ItemDto = {
@@ -61,10 +55,10 @@ const OUTFIT_DEALER: ItemDto = {
   asset: { layer: 40, file: 'item_outfit_dealer01_L40', fitsAvatarCrop: false },
 }
 
-const CATALOG: AvatarCatalogDto = { frame: { w: 384, h: 448 }, crop: { x: 88, y: 40, size: 208 }, bases: [BASE_F01, BASE_M01], manifestVersion: 1 }
-const ITEMS = { items: [OUTFIT_CASUAL, OUTFIT_DEALER] }
+const CATALOG: AvatarCatalogDto = { frame: { w: 384, h: 448 }, crop: { x: 88, y: 40, size: 208 }, bodies: [BODY_F, BODY_M], manifestVersion: 1 }
+const ITEMS = { items: [HAIR_M_TOUSLED, OUTFIT_CASUAL, OUTFIT_DEALER] }
 
-const AVATAR: AvatarConfigDto = { v: 3, base: 'm01', outfit: 'outfit_dealer01', title: 'title_hot_hand', badge: 'badge_gold' }
+const AVATAR: AvatarConfigDto = { v: 4, gender: 'm', hairStyle: 'hair_m_tousled01', outfit: 'outfit_dealer01', title: 'title_hot_hand', badge: 'badge_gold' }
 
 function stubApi(overrides: Partial<NormalApi> = {}): NormalApi {
   return {
@@ -150,7 +144,8 @@ describe('App — avatars on the bar and at the table', () => {
     // config — `data-chibi-hash` is that config's identity, and the only thing a Chibi can be asserted on.
     const expectedHash = hashChibi({
       kind: 'human',
-      base: { id: 'm01', hairBack: 'base_m01_L20', body: 'base_m01_L30', hairFront: 'base_m01_L60', faces: BASE_M01.faces as never },
+      body: { gender: 'm', body: 'body_m_L30', faces: BODY_M.faces as never },
+      hair: { id: 'hair_m_tousled01', back: 'item_hair_m_tousled01_L20', front: 'item_hair_m_tousled01_L60' },
       outfit: { id: 'outfit_dealer01', order: 40, file: 'item_outfit_dealer01_L40' },
     })
     await waitFor(() => expect(mine.querySelector('[data-chibi-hash]')).toHaveAttribute('data-chibi-hash', expectedHash))

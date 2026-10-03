@@ -44,7 +44,7 @@ function iconLayer(asset: AssetRefDto, file: string): LayerRef {
 
 export interface ItemPreviewProps {
   item: ItemDto
-  /** The wear of the base this tile is about — the wardrobe's draft base. An
+  /** The gender this tile is about — the wardrobe draft's (a base's `wear` until Plan 19). An
    * item with a cut for it shows that cut's icon; everything else shows the shared one. */
   wear?: string
 }
@@ -94,7 +94,7 @@ export interface ItemTabProps {
   owned: ReadonlySet<string>
   achievements: readonly AchievementDefDto[]
   draft: AvatarConfigDto
-  /** The draft base's wear, so a gendered item's tile shows the cut the preview is wearing. */
+  /** The draft's gender, so a gendered item's tile shows the cut the preview is wearing. */
   wear?: string
   /** "Hiện cả món chưa có" (No11a): unticked, only the families the player owns a member of. */
   showLocked: boolean

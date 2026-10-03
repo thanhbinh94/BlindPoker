@@ -13,7 +13,8 @@ export interface CategoryNavProps {
   /** "Hiện cả món chưa có" (design §3.1 item 3, No11a): ticked, the tabs also list what the player does not own yet. */
   showLocked: boolean
   onShowLocked: (next: boolean) => void
-  /** `false` on `base` (design §3.1): a base is chosen, not owned, so the box has nothing to show or hide. */
+  /** Whether to draw the box at all. Every tab has one since Plan 19 removed the base tab — the one tab with nothing
+   * owned to show or hide — so the wardrobe always passes `true`; the prop goes when the look group is rebuilt (A6). */
   showFilter: boolean
 }
 

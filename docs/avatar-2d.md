@@ -813,8 +813,8 @@ placeholder is exactly as valid a layer as a real one, just not the picture the 
 
 ## 7. How the kit composes a chibi
 
-`@bp/ui-kit`'s `Chibi` (`packages/ui-kit/src/avatar2d/Chibi.tsx`) takes a `ChibiConfig` — a `BaseRef`
-plus a `WearRef` per equipped slot — and stacks one `<img>` per layer `layersFor` returns (§2 above),
+`@bp/ui-kit`'s `Chibi` (`packages/ui-kit/src/avatar2d/Chibi.tsx`) takes a `ChibiConfig` — since avatar v4 a `BodyRef` (the
+body of a gender), a `HairRef` (a hairstyle's two layers), a `WearRef` per equipped slot and up to three colours — and stacks one `<img>` per layer `layersFor` returns (§2 above),
 positioned by CSS `z-index` rather than draw order, inside a box that is either the full 6:7 frame
 (`frame="full"`) or the round head-crop (`frame="head"`, cut to the 208×208 window by a percentage
 `left`/`top`/`width`/`height` on the layer stack, not `object-position` — a fixed geometry computed once

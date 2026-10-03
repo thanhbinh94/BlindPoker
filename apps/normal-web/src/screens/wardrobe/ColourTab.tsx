@@ -13,7 +13,7 @@ export interface ColourTabProps {
   draft: AvatarConfigDto
   /** "Hiện cả món chưa có" (No11a): unticked, only the owned swatches (and "Natural", always). */
   showLocked: boolean
-  /** `undefined` equips nothing — the base's own colour — which is what the "Natural" swatch sends. */
+  /** `undefined` equips nothing — the hairstyle's or the body's own colour — which is what the "Natural" swatch sends. */
   onPick: (itemId: string | undefined) => void
   /** This tab's panel id and the tab that labels it (design §7) — set by `CategoryNav`'s own id scheme,
    * carried down through `WardrobeScreen` so the two ends of the relationship never drift apart. */
@@ -24,7 +24,7 @@ export interface ColourTabProps {
 /**
  * The hair-colour and eye-colour tabs (design §4.3): round swatches painted with each item's own
  * `colour`, one row, no picture — there is nothing to draw a colour *as* other than itself. The first
- * card is "Natural" (the base's own colour, no item at all): always shown, never locked, and untouched
+ * card is "Natural" (the hairstyle's or the body's own colour, no item at all): always shown, never locked, and untouched
  * by the "Hiện cả món chưa có" box — it is not a catalogue row `applyFilter` has an opinion about — so this tab
  * never needs the empty line `ItemTab` draws (No11a). Every other swatch is a family of one: shown when owned or
  * when the box is ticked, and locked exactly like `ItemTab`'s cards.

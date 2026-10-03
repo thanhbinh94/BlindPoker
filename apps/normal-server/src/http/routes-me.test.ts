@@ -6,14 +6,18 @@
  * a bare Fastify instance would pass while the assembled server answered 403 or 500.
  */
 import { ECONOMY } from '@bp/core'
+import { eq } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { AppDb } from '../db/client.js'
 import { createTestDb, type TestDb } from '../db/test-db.js'
-import { inventory, items } from '../db/schema.js'
+import { inventory, items, players } from '../db/schema.js'
 import { buildTestApp, resetDb, XRW, type Account, type Harness } from '../test-harness.js'
 
-/** What a fresh account is wearing: the `f01` base and the one default outfit (design §5.1). */
-const DEFAULT_AVATAR = { v: 3, base: 'f01', outfit: 'outfit_casual01' }
+/** What a fresh account is wearing (spec §4.1): the female body, her default bob and the one default outfit. */
+const DEFAULT_AVATAR = { v: 4, gender: 'f', hairStyle: 'hair_f_bob01', outfit: 'outfit_casual01' }
+/** An old account's stored v3 config, and the v4 it reads as (table 4.5, with the eye rule on the shipped bodies). */
+const STORED_V3_M02 = { v: 3, base: 'm02', outfit: 'outfit_casual01' }
+const READ_V3_M02 = { v: 4, gender: 'm', hairStyle: 'hair_m_neat01', outfit: 'outfit_casual01', skinColor: 'skin_fair01', eyeColor: 'eyecolor_grey01' }
 const SECOND = { email: 'mai@example.com', password: 'another good password', displayName: 'Mai Lan' }
 
 let test: TestDb
@@ -205,9 +209,10 @@ describe('inventory and avatars', () => {
   })
 
   it('stores a full replacement and reads it back', async () => {
-    // `base` is chosen, not owned (design §5.1), so switching it needs no grant — a real change the
-    // player can always make, which is what distinguishes "stored" from "nothing moved".
-    const config = { ...DEFAULT_AVATAR, base: 'm01' }
+    // The gender is chosen, not owned, and every hairstyle and skin colour is free (spec §4.1–4.3), so
+    // switching all three needs no grant — a real change the player can always make, which is what
+    // distinguishes "stored" from "nothing moved".
+    const config = { ...DEFAULT_AVATAR, gender: 'm', hairStyle: 'hair_m_tousled01', skinColor: 'skin_deep01' }
     const res = await h.app.fastify.inject({ method: 'PUT', url: '/api/me/avatar', headers: h.auth(me), payload: config })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ config })
@@ -215,14 +220,34 @@ describe('inventory and avatars', () => {
     expect((me2.json() as { avatar: unknown }).avatar).toEqual(config)
   })
 
+  it('reads an old account’s stored v3 config as the v4 of table 4.5, on every route that answers an avatar, without rewriting it', async () => {
+    await db.update(players).set({ avatarConfig: STORED_V3_M02 }).where(eq(players.id, me.playerId))
+
+    const profile = await h.app.fastify.inject({ url: '/api/me', headers: { cookie: me.cookie } })
+    expect((profile.json() as { avatar: unknown }).avatar).toEqual(READ_V3_M02)
+    const wardrobe = await h.app.fastify.inject({ url: '/api/me/inventory', headers: { cookie: me.cookie } })
+    expect((wardrobe.json() as { avatar: unknown }).avatar).toEqual(READ_V3_M02)
+    const seat = await h.app.fastify.inject({ url: `/api/players/${me.playerId}/avatar`, headers: { cookie: me.cookie } })
+    expect((seat.json() as { avatar: unknown }).avatar).toEqual(READ_V3_M02)
+
+    // Repaired on the way out only: the column is rewritten when the player saves, never by a read (spec §4.5).
+    const [row] = await db.select({ config: players.avatarConfig }).from(players).where(eq(players.id, me.playerId))
+    expect(row!.config).toEqual(STORED_V3_M02)
+  })
+
   it('refuses a malformed configuration with the code that says what was wrong', async () => {
     const cases: [Record<string, unknown>, string][] = [
       [{ ...DEFAULT_AVATAR, outfit: undefined }, 'MISSING_LAYER'],
       // A v1/v2 body: the shapes this route used to accept and now refuses outright.
       [{ base: 'base_01', face: 'face_01', clothing: 'clothing_tee', hair: 'hair_short', hairColor: '#2b2b2b' }, 'MISSING_LAYER'],
+      // A v3 body — what the wire spoke until Plan 19 — is refused the same way: a client still sending it is stale.
+      [{ v: 3, base: 'f01', outfit: 'outfit_casual01' }, 'MISSING_LAYER'],
+      [{ ...DEFAULT_AVATAR, gender: undefined }, 'MISSING_LAYER'],
+      [{ ...DEFAULT_AVATAR, hairStyle: undefined }, 'MISSING_LAYER'],
       [{ ...DEFAULT_AVATAR, base: 'robot' }, 'INVALID_BASE'],
       [{ ...DEFAULT_AVATAR, outfit: 'no_such_item' }, 'INVALID_ITEM'],
       [{ ...DEFAULT_AVATAR, outfit: 'title_rookie' }, 'WRONG_CATEGORY'],
+      [{ ...DEFAULT_AVATAR, hairStyle: 'hair_m_neat01' }, 'WRONG_GENDER'],
     ]
     for (const [payload, expected] of cases) {
       const res = await h.app.fastify.inject({ method: 'PUT', url: '/api/me/avatar', headers: h.auth(me), payload })

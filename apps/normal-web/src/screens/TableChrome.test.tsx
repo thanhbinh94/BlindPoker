@@ -1,28 +1,34 @@
 import type { RoomPlayerView } from '@bp/core'
 import { render } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { AvatarConfigDto, BaseDto, ItemDto, PlayerAvatarDto } from '../api.js'
+import type { AvatarConfigDto, BodyDto, ItemDto, PlayerAvatarDto } from '../api.js'
 import viNormal from '../locales/vi/normal.json'
 import { makeI18n } from '../test-i18n.js'
 import { makeCaptionFor, makeChibiFor, type AvatarCache } from './TableChrome.js'
 
 const FACES = {
-  neutral: 'base_f01_face_neutral_L50',
-  happy: 'base_f01_face_happy_L50',
-  sad: 'base_f01_face_sad_L50',
-  surprised: 'base_f01_face_surprised_L50',
-  closed: 'base_f01_face_closed_L50',
-  sleep: 'base_f01_face_sleep_L50',
+  neutral: 'body_f_face_neutral_L50',
+  happy: 'body_f_face_happy_L50',
+  sad: 'body_f_face_sad_L50',
+  surprised: 'body_f_face_surprised_L50',
+  closed: 'body_f_face_closed_L50',
+  sleep: 'body_f_face_sleep_L50',
 }
 
-const BASE_F01: BaseDto = {
-  id: 'f01',
-  nameKey: 'bases.f01',
-  wear: 'f',
-  layers: { hairBack: 'base_f01_L20', body: 'base_f01_L30', hairFront: 'base_f01_L60' },
-  faces: FACES,
+const BODY_F: BodyDto = { gender: 'f', body: 'body_f_L30', faces: FACES, naturalEyeColour: '#2e6a9b' }
+const bodies = new Map([['f', BODY_F]])
+
+const HAIR_BOB: ItemDto = {
+  id: 'hair_f_bob01',
+  slot: 'hairStyle',
+  rarity: 'common',
+  nameKey: 'items.hair_f_bob01',
+  assetKey: 'hairStyle/hair_f_bob01',
+  isDefault: false,
+  free: true,
+  gender: 'f',
+  asset: { layer: 60, file: 'item_hair_f_bob01_L60', back: 'item_hair_f_bob01_L20', fitsAvatarCrop: true },
 }
-const bases = new Map([['f01', BASE_F01]])
 
 const OUTFIT: ItemDto = {
   id: 'outfit_casual01',
@@ -33,9 +39,9 @@ const OUTFIT: ItemDto = {
   isDefault: true,
   asset: { layer: 40, file: 'item_outfit_casual01_L40', fitsAvatarCrop: false },
 }
-const items = new Map([[OUTFIT.id, OUTFIT]])
+const items = new Map([HAIR_BOB, OUTFIT].map((each) => [each.id, each]))
 
-const CONFIG: AvatarConfigDto = { v: 3, base: 'f01', outfit: 'outfit_casual01' }
+const CONFIG: AvatarConfigDto = { v: 4, gender: 'f', hairStyle: 'hair_f_bob01', outfit: 'outfit_casual01' }
 
 const player = (patch: Partial<RoomPlayerView> & Pick<RoomPlayerView, 'playerId'>): RoomPlayerView => ({
   displayName: patch.playerId,
@@ -65,25 +71,26 @@ describe('makeChibiFor', () => {
     const avatars: AvatarCache = new Map()
     const get = vi.spyOn(avatars, 'get')
 
-    expect(makeChibiFor(avatars, items, bases)(player({ playerId: 'bot-1', isBot: true }))).toBeNull()
+    expect(makeChibiFor(avatars, items, bodies)(player({ playerId: 'bot-1', isBot: true }))).toBeNull()
     expect(get).not.toHaveBeenCalled()
   })
 
   it('builds a ChibiConfig for a human the cache knows', () => {
     const avatars: AvatarCache = new Map([['a', entry('a', {})]])
 
-    const chibi = makeChibiFor(avatars, items, bases)(player({ playerId: 'a' }))
+    const chibi = makeChibiFor(avatars, items, bodies)(player({ playerId: 'a' }))
 
     expect(chibi).toEqual({
       kind: 'human',
-      base: expect.objectContaining({ id: 'f01' }),
+      body: expect.objectContaining({ gender: 'f', body: 'body_f_L30' }),
+      hair: expect.objectContaining({ id: 'hair_f_bob01' }),
       outfit: expect.objectContaining({ id: 'outfit_casual01' }),
     })
   })
 
   it('answers null while an avatar has not arrived, and when there is none', () => {
     const avatars: AvatarCache = new Map([['gone', null]])
-    const chibiFor = makeChibiFor(avatars, items, bases)
+    const chibiFor = makeChibiFor(avatars, items, bodies)
 
     expect(chibiFor(player({ playerId: 'gone' }))).toBeNull()
     expect(chibiFor(player({ playerId: 'pending' }))).toBeNull()

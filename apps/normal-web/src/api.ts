@@ -27,40 +27,44 @@ export const UNAUTHENTICATED_CODE = 'UNAUTHENTICATED'
  * unchanged: text beside a name, nothing to draw.
  *
  * 2026-09-24 (Plan 13): `hairColor` and `eyeColor` are two more optional slots. Unlike every other
- * one they draw nothing of their own — recolouring the base's own hair or eye pixels is not a PNG
+ * one they draw nothing of their own — recolouring the body's own hair or eye pixels is not a PNG
  * layer — but a colour is still an item, which is what buys it validation, ownership and a place in
  * the daily draw for free (`apps/normal-server/src/inventory/slots.ts`, verbatim).
- */
-export type ItemSlot = 'head' | 'face' | 'outfit' | 'aura' | 'frame' | 'hairColor' | 'eyeColor' | 'title' | 'badge'
-
-/**
- * A fixed figure a chibi is drawn on — chosen, never owned (design §4.2, §5.1).
  *
- * 2026-09-17: an open id, matching the server's (`apps/normal-server/src/inventory/slots.ts`). The list
- * of bases is `data/avatar-bases.json` and reaches the client through `/api/catalog/avatar`, so the
- * wardrobe renders a tile per `BaseDto` it is given and never checks an id against a union of its own.
+ * 2026-10-03 (Plan 19, avatar v4): the fixed base is gone. A figure is a body per **gender**, chosen
+ * rather than owned, wearing a `hairStyle` item — two layers, L20 behind the body and L60 in front of
+ * the face — and recoloured by a third colour, `skinColor`. `hairStyle` is required of every figure but
+ * validated on its own rather than through `REQUIRED_SLOTS` (the server's `HAIR_SLOT`): that list means
+ * "exactly one `isDefault` item", and a hairstyle's default depends on the gender.
  */
-export type BaseId = string
+export type ItemSlot = 'hairStyle' | 'head' | 'face' | 'outfit' | 'aura' | 'frame' | 'hairColor' | 'eyeColor' | 'skinColor' | 'title' | 'badge'
 
-/** The one slot every configuration must fill; a figure with no outfit is not a figure. */
+/** Which body a figure is drawn on (spec §4.3), and which cut of a gendered outfit it wears. */
+export type Gender = 'f' | 'm'
+
+/** Required of every figure, but not one of `REQUIRED_SLOTS` (see `ItemSlot`). */
+export const HAIR_SLOT = 'hairStyle' as const
+
+/** The one slot with exactly one `isDefault` item; a figure with no outfit is not a figure. */
 export const REQUIRED_SLOTS = ['outfit'] as const
 
-/** Everything else may be left empty: six cosmetic slots and the two name decorations. */
-export const OPTIONAL_SLOTS = ['head', 'face', 'aura', 'frame', 'hairColor', 'eyeColor', 'title', 'badge'] as const
+/** Everything else may be left empty: four cosmetic slots, three colours and the two name decorations. */
+export const OPTIONAL_SLOTS = ['head', 'face', 'aura', 'frame', 'hairColor', 'eyeColor', 'skinColor', 'title', 'badge'] as const
 
-/** The two colour slots (design §3.1, §5.2) — every id in either one names a `colour` item, not a layer. */
-export const COLOUR_SLOTS = ['hairColor', 'eyeColor'] as const
+/** The three colour slots (design §3.1, §5.2; spec §4.2) — every id in one names a `colour` item, not a layer. */
+export const COLOUR_SLOTS = ['hairColor', 'eyeColor', 'skinColor'] as const
 
 /** The slots drawn as a PNG layer — exactly the items that carry `asset` (`title`/`badge` are words). */
-export const DRAWN_SLOTS = ['head', 'face', 'outfit', 'aura', 'frame'] as const
+export const DRAWN_SLOTS = ['hairStyle', 'head', 'face', 'outfit', 'aura', 'frame'] as const
 
 /** The slots a daily-reward draw may land on (§13.2, design §5.2): `outfit` is drawable but chosen
  * deliberately, not handed out alongside a hat or an aura. `hairColor`/`eyeColor` are here even
- * though they draw nothing — a rare colour is exactly as much a prize as a rare hat. */
+ * though they draw nothing — a rare colour is exactly as much a prize as a rare hat. A hairstyle and a
+ * skin colour never are: a look is chosen, not handed out (spec §4.2). */
 export const DAILY_DRAW_SLOTS = ['head', 'face', 'aura', 'frame', 'hairColor', 'eyeColor'] as const
 
-/** Every slot, in the order a configuration lists them: the one required slot, then the rest. */
-export const SLOTS: readonly ItemSlot[] = [...REQUIRED_SLOTS, ...OPTIONAL_SLOTS]
+/** Every slot, in the order a configuration lists them: the hairstyle, the outfit, then the rest. */
+export const SLOTS: readonly ItemSlot[] = [HAIR_SLOT, ...REQUIRED_SLOTS, ...OPTIONAL_SLOTS]
 
 export type Rarity = 'common' | 'rare' | 'epic'
 
@@ -79,16 +83,30 @@ export interface ConfigDto {
   reconnectWindowSec: number
 }
 
-/** One PNG layer, shared by every base (design §3, §4.4) — `apps/normal-server/src/inventory/items.ts`'s
+/** One recolourable region across a set of layers (design §4.1, §5.2): the layer files whose mask of that kind is
+ * non-empty, and the one reference lightness each is tinted against — `apps/normal-server/src/inventory/bodies.ts`'s
+ * `MaskSet`, verbatim. */
+export interface MaskSetDto {
+  meanL: number
+  files: string[]
+}
+
+/** One PNG layer, shared by every body (design §3, §4.4) — `apps/normal-server/src/inventory/items.ts`'s
  * `AssetRef`, verbatim. */
 export interface AssetRefDto {
   layer: number
-  /** A name in the avatar manifest's `files`, without the `@1x`/`@2x` density suffix. */
+  /** A name in the avatar manifest's `files`, without the `@1x`/`@2x` density suffix. For a hairstyle, its front
+   * half (L60), drawn in front of the face. */
   file: string
-  /** The layer to draw instead of `file` on a base of that `wear` — one item, one id, two cuts
-   * (2026-09-20). A wear with no entry wears `file`. */
+  /** The layer to draw instead of `file` on a body of that gender — one item, one id, two cuts (2026-09-20; it was
+   * keyed by a base's `wear` until Plan 19). A gender with no entry wears `file`. Never on a hairstyle. */
   variants?: Record<string, string>
-  /** A head that hides the base's hair layers. */
+  /** A hairstyle's back half (`item_hair_<code>_L20`), drawn behind the body. Only on `hairStyle`. */
+  back?: string
+  /** Where a hairstyle can be recoloured by `hairColor`: `[back, file]` filtered to the layers with a hair mask, at
+   * the hairstyle's own reference lightness. Absent until the pipeline has cut one. Only on `hairStyle`. */
+  hairTint?: MaskSetDto
+  /** A head that hides the hairstyle's front (L60) or back (L20) half. */
   hidesHairFront?: boolean
   hidesHairBack?: boolean
   /** Whether this layer falls inside the 208×208 avatar crop the portrait is cut from. */
@@ -112,35 +130,42 @@ export interface ItemDto {
   isDefault: boolean
   /** The PNG layer to draw. Present for `DRAWN_SLOTS`, absent for `title` and `badge`. */
   asset?: AssetRefDto
-  /** The hex a `hairColor`/`eyeColor` item paints with (design §3.2). Present there, absent elsewhere. */
+  /** The hex a `hairColor`/`eyeColor`/`skinColor` item paints with (design §3.2). Present there, absent elsewhere. */
   colour?: string
   /** Owned by every player without an `inventory` row (design §3.2); `/api/me/inventory` reports it with
    *  `source: "free"`. */
   free?: true
+  /** The body a hairstyle is drawn for. Present on `hairStyle`, absent elsewhere. */
+  gender?: Gender
+  /** The hairstyle of the other gender a gender swap changes this one to. Present on `hairStyle`, absent elsewhere. */
+  counterpart?: string
+  /** The colour this hairstyle is drawn in, a lowercase hex — what the "Tự nhiên" hair swatch shows. Present on
+   * `hairStyle`, absent elsewhere. */
+  naturalColour?: string
 }
 
-/** The rig every chibi is drawn on (design §5.1) — `apps/normal-server/src/inventory/bases.ts`'s
- * `BaseDef`, verbatim. */
-export interface BaseDto {
-  id: string
-  nameKey: string
-  /** The body this base wears its clothes on, `f` or `m`: which cut of `AssetRefDto.variants` it draws. */
-  wear: string
-  layers: { hairBack: string; body: string; hairFront: string }
-  /** One face per expression (`neutral`, `happy`, `sad`, `surprised`, `closed`, `sleep`). */
+/** The body a figure of one gender is drawn on (spec §4.3) — `apps/normal-server/src/inventory/bodies.ts`'s
+ * `BodyDef`, verbatim. Chosen, never owned: bald, the skin in its "cream" tone, the hair an item of its own. */
+export interface BodyDto {
+  gender: Gender
+  /** `body_<g>_L30`. */
+  body: string
+  /** `body_<g>_face_<expression>_L50`, one per expression (`neutral`, `happy`, `sad`, `surprised`, `closed`, `sleep`). */
   faces: Record<string, string>
-  /** Where this base can be recoloured (design §4.1, §5.2), absent until the pipeline has cut masks
-   *  for it. `files` are the layer file stems that carry a non-empty mask for that region; `meanL` is
-   *  the whole base's reference lightness for it, shared by every layer so no seam shows. */
-  tint?: { hair?: { meanL: number; files: string[] }; eyes?: { meanL: number; files: string[] } }
+  /** The iris colour the faces were drawn with, a lowercase `#rrggbb`. */
+  naturalEyeColour: string
+  /** Where this body can be recoloured — skin by `skinColor`, eyes by `eyeColor` — derived from the manifest's masks,
+   * absent until the pipeline has cut them. */
+  tint?: { skin?: MaskSetDto; eyes?: MaskSetDto }
 }
 
-/** `GET /api/catalog/avatar`: the frame, crop and both bases — public, like `/api/catalog/items`, because a
- * base is chosen rather than owned and the wardrobe needs it before it needs a session. */
+/** `GET /api/catalog/avatar`: the frame, the crop and the two bodies, `f` then `m` — public, like
+ * `/api/catalog/items`, because a body is chosen rather than owned and the wardrobe needs it before it needs a
+ * session. */
 export interface AvatarCatalogDto {
   frame: { w: number; h: number }
   crop: { x: number; y: number; size: number }
-  bases: BaseDto[]
+  bodies: BodyDto[]
   manifestVersion: number
 }
 
@@ -167,16 +192,21 @@ export interface AuthMeDto {
 }
 
 /**
- * One player's figure — `AvatarConfigV3` on the server, and the avatar cache's whole key (design §5.1).
+ * One player's figure — `AvatarConfigV4` on the server, and the avatar cache's whole key (spec
+ * `2026-10-03-avatar-v4-design.md` §4.1).
  *
  * `v` is stored and sent so a future shape can tell itself apart from this one; the server refuses a
- * `PUT` that does not carry it. A figure is a fixed `base` plus whatever is equipped: `outfit` is the
- * one slot that must be filled, everything else is an optional PNG layer or a word.
+ * `PUT` that is not v4 (`MISSING_LAYER`). A figure is a `gender` — which body it is drawn on, chosen
+ * rather than owned — plus items: a `hairStyle` of that gender and an `outfit`, both required, and
+ * everything else an optional PNG layer, a colour or a word. Every read answers v4: the server repairs an
+ * older stored config on the way out without rewriting it.
  */
 export interface AvatarConfigDto {
-  v: 3
+  v: 4
   /** Chosen, not owned. */
-  base: BaseId
+  gender: Gender
+  /** A `hairStyle` item whose own `gender` is this one (`WRONG_GENDER` otherwise). */
+  hairStyle: string
   outfit: string
   head?: string
   face?: string
@@ -185,6 +215,7 @@ export interface AvatarConfigDto {
   /** Item ids, not hex — `chibiFromApi` resolves them through the catalogue (design §5.2). */
   hairColor?: string
   eyeColor?: string
+  skinColor?: string
   title?: string
   badge?: string
 }
@@ -405,7 +436,7 @@ export interface NormalApi {
   config(): Promise<ConfigDto>
   catalogItems(): Promise<{ items: ItemDto[] }>
   catalogAchievements(): Promise<{ achievements: AchievementDefDto[] }>
-  /** The rig every chibi is drawn on: the frame, the avatar crop and both bases (design §5.1). */
+  /** The rig every chibi is drawn on: the frame, the avatar crop and the two bodies (spec §4.3). */
   avatarCatalog(): Promise<AvatarCatalogDto>
 
   register(input: { email: string; password: string; displayName: string }): Promise<AuthMeDto>

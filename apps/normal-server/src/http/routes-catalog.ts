@@ -1,6 +1,6 @@
 /**
  * The reads that are the same for everybody: the client's boot configuration, the item catalogue,
- * the avatar frame/bases and the achievement definitions.
+ * the avatar frame/bodies and the achievement definitions.
  *
  * None of them is behind `requireUser`, and that is deliberate rather than an oversight. The sign-in
  * screen needs `/api/config` before it has a session, and the wardrobe and achievement screens are
@@ -15,7 +15,6 @@ import type { FastifyInstance } from 'fastify'
 import type { AchievementDef } from '../achievements/definitions.js'
 import type { NormalConfig } from '../config.js'
 import type { AvatarManifest } from '../inventory/manifest.js'
-import type { BaseDef } from '../inventory/bases.js'
 import type { Bodies } from '../inventory/bodies.js'
 import type { ItemCatalog } from '../inventory/items.js'
 
@@ -24,8 +23,6 @@ export interface CatalogRouteDeps {
   catalog: ItemCatalog
   defs: AchievementDef[]
   manifest: AvatarManifest
-  /** The v3 registry, still served until A5 switches the wire to v4. */
-  bases: Record<string, BaseDef>
   /** The v4 bodies, one per gender (Plan 19). */
   bodies: Bodies
 }
@@ -55,22 +52,18 @@ export function registerCatalogRoutes(app: FastifyInstance, deps: CatalogRouteDe
 
   /**
    * The rig every chibi is drawn on (design §5.1): the frame and profile crop the pipeline built to,
-   * and every base the registry defines — public, like `/api/catalog/items`, because a base is chosen
-   * rather than owned and the wardrobe needs it before it needs a session.
+   * and the bodies — public, like `/api/catalog/items`, because a gender is chosen rather than owned and
+   * the wardrobe needs its body before it needs a session.
    *
-   * 2026-09-17: the list is `deps.bases` itself, in `data/avatar-bases.json`'s own key order, rather
-   * than a constant naming two ids. Adding a figure is a registry entry and its art; the wardrobe's
-   * base tab draws one tile per entry it is sent, so nothing downstream counts them either.
-   *
-   * 2026-10-03 (Plan 19): `bodies` beside `bases` — the two v4 bodies, f then m, each with its files, its
-   * natural eye colour and the tint it derived from the manifest. Today's client ignores the key; A5 switches
-   * the client to it and drops `bases`.
+   * 2026-10-03 (Plan 19, avatar v4): `bodies` replaces `bases` — the two v4 bodies, f then m, each with its
+   * files, its natural eye colour and the tint it derived from the manifest (ruling 5: the client never
+   * measures a body itself). A hairstyle is an item now, served with the rest by `/api/catalog/items`. The old
+   * base registry is no longer read by the app (`inventory/bases.ts` stays on disk until D1 deletes it).
    */
   app.get('/api/catalog/avatar', async (_req, reply) =>
     reply.send({
       frame: deps.manifest.frame,
       crop: deps.manifest.crop,
-      bases: Object.values(deps.bases),
       bodies: Object.values(deps.bodies),
       manifestVersion: deps.manifest.version,
     }))

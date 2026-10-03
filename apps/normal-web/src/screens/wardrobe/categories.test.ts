@@ -13,7 +13,7 @@ describe('categories', () => {
   describe('GROUPS / groupOf / tabOfSlot', () => {
     it('lists the three groups in design §3.1 order, each with its tabs', () => {
       expect(GROUPS).toEqual([
-        { id: 'look', tabs: ['base', 'hairColor', 'eyeColor'] },
+        { id: 'look', tabs: ['hairColor', 'eyeColor'] },
         { id: 'wear', tabs: ['head', 'face', 'outfit'] },
         { id: 'decor', tabs: ['aura', 'frame', 'words'] },
       ])
@@ -35,6 +35,9 @@ describe('categories', () => {
       expect(tabOfSlot('frame')).toBe('frame')
       expect(tabOfSlot('hairColor')).toBe('hairColor')
       expect(tabOfSlot('eyeColor')).toBe('eyeColor')
+      // Plan 19: the two v4 slots get tabs of their own (A6 puts them in `GROUPS`).
+      expect(tabOfSlot('hairStyle')).toBe('hairStyle')
+      expect(tabOfSlot('skinColor')).toBe('skinColor')
     })
 
     it('maps title and badge — the two word slots — to the words tab', () => {
@@ -76,9 +79,6 @@ describe('categories', () => {
       expect(tabItems('words', CATALOG)).toEqual([BADGE_ONE, TITLE_ONE])
     })
 
-    it('answers an empty list for the base tab — a base is chosen, not a catalogue row', () => {
-      expect(tabItems('base', CATALOG)).toEqual([])
-    })
   })
 
   describe('counts', () => {
@@ -98,9 +98,6 @@ describe('categories', () => {
       expect(counts('head', CATALOG, owned)).toEqual({ owned: 2, total: 3 })
     })
 
-    it('is null for the base tab — a base is never "owned"', () => {
-      expect(counts('base', CATALOG, new Set())).toBeNull()
-    })
 
     it('is zero over zero for a tab the catalogue has nothing in', () => {
       expect(counts('aura', CATALOG, new Set())).toEqual({ owned: 0, total: 0 })
@@ -216,6 +213,7 @@ describe('categories', () => {
 
   it('TabId covers every group tab (type-level smoke: this assignment must compile)', () => {
     const all: TabId[] = GROUPS.flatMap((g) => g.tabs)
-    expect(all).toHaveLength(9)
+    // Eight since Plan 19 dropped the base tab; Kiểu tóc and Màu da join the look group in A6.
+    expect(all).toHaveLength(8)
   })
 })

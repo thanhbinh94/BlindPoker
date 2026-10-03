@@ -46,13 +46,12 @@ src/
   auth/              password.ts (argon2id) · session-service.ts · cookie.ts · auth-service.ts
   economy/           daily-rules.ts (pure) · economy-service.ts (daily claim, relief)
   inventory/         slots.ts (the slot/gender/base vocabulary) · manifest.ts (loads avatar-manifest.json)
-                     bases.ts (the v3 fixed figures, held against the manifest; goes in Plan 19's D1)
+                     bases.ts (the v3 fixed figures, no longer loaded by the app; goes in Plan 19's D1)
                      bodies.ts (the v4 bodies, one per gender, held against the manifest) · items.ts (catalogue)
                      aliases.ts (old wardrobe ids → current ones, or null when dropped)
-                     inventory-service.ts (ownership, alias-aware) · outfits-service.ts (five saved outfits)
+                     inventory-service.ts (ownership, alias-aware) · outfits-service.ts (five saved outfits, read as v4)
                      avatar.ts (config v4 + validation) · avatar-migrate.ts (reads a v1/v2/v3 config back as v4)
                      colour.ts (Lab and ΔE76, for the migration's eye rule)
-                     avatar-v3-wire.ts (the v3 HTTP contract, temporary: A5 switches the wire to v4 and deletes it)
   achievements/      definitions.ts (loader) · achievement-service.ts (listens, grants)
   stats/             player-stats.ts (the 16 counters) · stats-service.ts (listens, counts)
   history/           history-service.ts (writes a settled hand, reads a player's last N)
@@ -293,10 +292,11 @@ body's `tint` is **derived** from the manifest's masks, never written in the fil
 every face with a non-empty skin mask, at the body's own `meanL`; `eyes` = the faces with a non-empty eye
 mask, at `face_neutral`'s. The file ships with the server build (`SIDECARS` in `scripts/build.mjs`).
 
-`GET /api/catalog/avatar` answers `{ frame, crop, bases, bodies, manifestVersion }`: `bodies` is both
-`BodyDef`s, f then m, each `{ gender, body, faces, naturalEyeColour, tint? }`. `bases` (the v3 registry)
-stays until the wire switches to v4 configs; until then the configuration contract is still v3, and the
-new free hairstyles and skin colours simply appear in `/api/me/inventory` with `source: "free"`.
+`GET /api/catalog/avatar` answers `{ frame, crop, bodies, manifestVersion }`: `bodies` is both
+`BodyDef`s, f then m, each `{ gender, body, faces, naturalEyeColour, tint? }`. There is no `bases` any more: the
+wire speaks v4 since Plan 19's A5, and the app no longer loads `data/avatar-bases.json` (the file and `bases.ts`
+stay on disk, unused, until D1). The free hairstyles and skin colours appear in `/api/me/inventory` with
+`source: "free"`.
 
 ### Old wardrobe ids: `item-aliases.json`
 
@@ -346,8 +346,11 @@ order (spec §4.1, ruling 9) — the structural complaint always first:
 `items.category` is still the column name; it holds the current slot. `players.avatar_config` is **never
 rewritten** by a migration: `readAvatarConfig(stored, catalog, aliases, bodies)` (`inventory/avatar-migrate.ts`)
 repairs anything that does not validate on the way out, and the column changes only when the player presses
-Save. (Saved outfits, `avatar_outfits.config`, go through the same read on list and on apply once A5 wires
-it.) A valid v4 passes straight through. Otherwise:
+Save. Saved outfits, `avatar_outfits.config`, go through the same read: `GET /api/me/outfits` lists each row as
+the v4 it reads as, and `POST /api/me/outfits/:slot/apply` reads the row, checks the player owns every item of that
+v4 (`ITEM_NOT_OWNED` otherwise) and stores it — so applying an outfit saved before Plan 19 writes v4 into
+`players.avatar_config`, never an old base (R6). Listing never rewrites the row. A valid v4 passes straight
+through. Otherwise:
 
 - **A stored `v: 4`** (a withdrawn item, a hairstyle of the other gender) is repaired as itself: the gender
   kept if it is one (else `f`), the hairstyle kept if it is drawn for that gender (else `DEFAULT_HAIR`), every
@@ -379,12 +382,12 @@ own. f03's iris measures nearer `eyecolor_amber01` than `eyecolor_green01` (ΔE 
 as green, so green is pinned (ruling 6). The eyeColor column above is what the shipped bodies' provisional
 eye colours give (f `#2e6a9b`, m `#cc924c`); when C1 measures the real art, the rule, not the table, decides.
 
-**The wire is still v3 until A5.** This commit builds the v4 model as a library only. Every route
-(`GET /api/me`, `GET /api/me/inventory`, `GET /api/players/:id/avatar`, `PUT /api/me/avatar`, the outfits
-routes), the register default (`catalog.defaultAvatar()`) and `outfits-service.ts` go through
-`inventory/avatar-v3-wire.ts` — the pre-v4 code, moved verbatim — so they still read and write `{ v: 3, base,
-outfit, … }` against `data/avatar-bases.json` and answer `MISSING_LAYER` to a v4 body. A5 switches all of
-them to v4 at once, with the client, and deletes the wire.
+**The wire is v4** (Plan 19, A5, with the client in the same commit). `PUT /api/me/avatar` and
+`PUT /api/me/outfits/:slot` validate with `validateAvatarConfig`, so a v3 body is `MISSING_LAYER` and any `base`
+key `INVALID_BASE`; `GET /api/me`, `GET /api/me/inventory`, `GET /api/players/:id/avatar`, `GET /api/me/outfits` and
+`POST /api/me/outfits/:slot/apply` answer v4 through `readAvatarConfig`; a new account is registered wearing
+`catalog.defaultAvatar()` (v4). The database is written only by a save, an apply and `PUT /api/me/avatar` — a read
+never rewrites a row (spec §4.5).
 
 ## Adding an achievement
 

@@ -185,9 +185,9 @@ export function App({ api, socketFactory }: AppProps) {
     ),
   )
   const items = useMemo(() => new Map((catalog.data?.[1] ?? NO_ITEMS).map((item) => [item.id, item])), [catalog.data])
-  const bases = useMemo(() => new Map((catalog.data?.[0].bases ?? []).map((base) => [base.id, base])), [catalog.data])
-  const chibiFor = useMemo(() => makeChibiFor(avatars, items, bases), [avatars, items, bases])
-  const myChibi = useMemo(() => (myAvatar === null ? null : chibiFromApi(myAvatar, items, bases)), [myAvatar, items, bases])
+  const bodies = useMemo(() => new Map((catalog.data?.[0].bodies ?? []).map((body) => [body.gender, body])), [catalog.data])
+  const chibiFor = useMemo(() => makeChibiFor(avatars, items, bodies), [avatars, items, bodies])
+  const myChibi = useMemo(() => (myAvatar === null ? null : chibiFromApi(myAvatar, items, bodies)), [myAvatar, items, bodies])
 
   // `ACHIEVEMENT_UNLOCKED` arrives naming an achievement *id*, and the kit's toast interpolates it verbatim
   // because achievement names live in this app's namespace, not the kit's. The lobby and the room each render

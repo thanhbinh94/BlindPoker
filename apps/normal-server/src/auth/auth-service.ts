@@ -25,7 +25,7 @@ import { eq } from 'drizzle-orm'
 import type { AppDb } from '../db/client.js'
 import { isUniqueViolation, sanitizeDbError } from '../db/pg-errors.js'
 import { dailyLogins, inventory, players, playerStats, users } from '../db/schema.js'
-import type { AvatarConfigV3 } from '../inventory/avatar-migrate.js'
+import type { AvatarConfigV4 } from '../inventory/avatar.js'
 import { creditWithin, type NormalRepositories } from '../repos/index.js'
 import { DUMMY_HASH, hashPassword, validatePassword, verifyPassword, type Argon2Params } from './password.js'
 import type { SessionService } from './session-service.js'
@@ -64,7 +64,7 @@ export class AuthError extends Error {
  */
 export interface DefaultItemCatalog {
   defaults(): string[]
-  defaultAvatar(): AvatarConfigV3
+  defaultAvatar(): AvatarConfigV4
 }
 
 export interface RegisterInput {
@@ -183,7 +183,7 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
             nameKey: name.key,
             balance: 0,
             // The default cosmetics, worn — see `DefaultItemCatalog`. Cast because the column is a
-            // generic jsonb bag; `readAvatarConfig` is what reads it back as an `AvatarConfigV3`.
+            // generic jsonb bag; `readAvatarConfig` is what reads it back as an `AvatarConfigV4`.
             avatarConfig: avatarConfig as unknown as Record<string, unknown>,
             createdAt: at,
           })

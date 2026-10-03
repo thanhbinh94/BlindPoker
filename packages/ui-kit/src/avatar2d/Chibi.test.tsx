@@ -5,7 +5,7 @@ import AVATAR2D_CSS from './avatar2d.module.css?raw'
 import { Chibi } from './Chibi.js'
 import { defaultChibi } from './defaults.js'
 import { hashChibi, layersFor } from './layers.js'
-import type { BaseRef, BotChibi, ChibiConfig, WearRef } from './types.js'
+import type { BodyRef, BotChibi, ChibiConfig, HairRef, WearRef } from './types.js'
 
 const SUBJECT = defaultChibi('ann')
 const FRAME_ITEM: WearRef = { id: 'frame_gold', order: 90, file: 'item_frame_gold_L90' }
@@ -184,14 +184,20 @@ describe('Chibi', () => {
   })
 
   it('a tinted layer renders the plain layer src while no tinted URL exists yet (no canvas in jsdom)', () => {
-    const tintedBase: BaseRef = { ...SUBJECT.base, tint: { hair: { meanL: 0.4, files: [SUBJECT.base.body] } } }
-    const subject: ChibiConfig = { ...SUBJECT, base: tintedBase, hairColor: '#b3261e' }
-    const bodyLayer = layersFor(subject, 'neutral', 'full').find((l) => l.order === 30)!
-    expect(bodyLayer.tints).toEqual([{ mask: `${SUBJECT.base.body}_hairmask`, colour: '#b3261e', meanL: 0.4 }])
+    const tintedBody: BodyRef = { ...SUBJECT.body, tint: { skin: { meanL: 0.78, files: [SUBJECT.body.body] } } }
+    const tintedHair: HairRef = { ...SUBJECT.hair, tint: { meanL: 0.4, files: [SUBJECT.hair.front] } }
+    const subject: ChibiConfig = { ...SUBJECT, body: tintedBody, hair: tintedHair, skinColor: '#5c3a28', hairColor: '#b3261e' }
+    const layers = layersFor(subject, 'neutral', 'full')
+    const bodyLayer = layers.find((l) => l.order === 30)!
+    const hairLayer = layers.find((l) => l.order === 60)!
+    expect(bodyLayer.tints).toEqual([{ mask: `${SUBJECT.body.body}_skinmask`, colour: '#5c3a28', meanL: 0.78 }])
+    expect(hairLayer.tints).toEqual([{ mask: `${SUBJECT.hair.front}_hairmask`, colour: '#b3261e', meanL: 0.4 }])
 
     const { container } = render(<Chibi subject={subject} />)
-    const img = [...container.querySelectorAll('img')].find((el) => el.getAttribute('src')?.includes(bodyLayer.file))
-    expect(img).not.toBeUndefined()
-    expect(img!.getAttribute('src')).toBe(`/avatar/${bodyLayer.file}@1x.png`)
+    for (const layer of [bodyLayer, hairLayer]) {
+      const img = [...container.querySelectorAll('img')].find((el) => el.getAttribute('src')?.includes(layer.file))
+      expect(img, layer.file).not.toBeUndefined()
+      expect(img!.getAttribute('src')).toBe(`/avatar/${layer.file}@1x.png`)
+    }
   })
 })

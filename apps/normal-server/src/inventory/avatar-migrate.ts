@@ -19,13 +19,14 @@
  * become a `head` for `hat_crown` and a `face` for `accessory_glasses` without a second list here to keep in
  * step with `items.json`. What still means something is kept; everything else falls back to the default.
  *
- * Two things are new in the v3 repair and are not in the wire's copy of it (`avatar-v3-wire.ts`): the old
- * `hairColor` and `eyeColor` are kept (spec §4.5 — the repair used to drop them), and the base is read
- * against `V3_BASES` rather than the base registry, since what an old base *was* is now fixed history rather
- * than data that can change.
+ * Two things are new in the v3 repair compared with the one Plans 11–18 ran: the old `hairColor` and
+ * `eyeColor` are kept (spec §4.5 — the repair used to drop them), and the base is read against `V3_BASES`
+ * rather than the base registry, since what an old base *was* is now fixed history rather than data that can
+ * change.
  *
  * Writes never come through here. `PUT /api/me/avatar` refuses anything but a valid config, so the only way
- * a repaired one becomes the stored one is the player saving it themselves.
+ * a repaired one becomes the stored one is the player saving it themselves. The same reader repairs a saved
+ * outfit (`avatar_outfits.config`) when it is listed or applied (`outfits-service.ts`, R6).
  */
 import { resolveItemId } from './aliases.js'
 import type { AvatarConfigV4 } from './avatar.js'
@@ -37,12 +38,12 @@ import type { Gender, ItemSlot } from './slots.js'
 import { DEFAULT_GENDER, DEFAULT_HAIR, HAIR_SLOT, isGender } from './slots.js'
 
 /**
- * The configuration Plans 11–18 stored: a fixed base plus items (`avatar-v3-wire.ts` still validates it on
- * the wire until A5). Read here as history — it is never written again once A5 has switched the wire.
+ * The configuration Plans 11–18 stored: a fixed base plus items. Read here as history — the wire refuses it
+ * since Plan 19, so it is never written again.
  */
 export interface AvatarConfigV3 {
   v: 3
-  /** A `V3_BASES` key once repaired; on the wire, any id the base registry defined. */
+  /** A `V3_BASES` key once repaired; as stored, any id the old base registry defined. */
   base: string
   outfit: string
   head?: string

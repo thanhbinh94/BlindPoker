@@ -8,17 +8,18 @@ import { makeI18n, renderWithI18n } from '../../test-i18n.js'
 import { StagePanel } from './StagePanel.js'
 
 const FACES = {
-  neutral: 'base_f01_face_neutral_L50',
-  happy: 'base_f01_face_happy_L50',
-  sad: 'base_f01_face_sad_L50',
-  surprised: 'base_f01_face_surprised_L50',
-  closed: 'base_f01_face_closed_L50',
-  sleep: 'base_f01_face_sleep_L50',
+  neutral: 'body_f_face_neutral_L50',
+  happy: 'body_f_face_happy_L50',
+  sad: 'body_f_face_sad_L50',
+  surprised: 'body_f_face_surprised_L50',
+  closed: 'body_f_face_closed_L50',
+  sleep: 'body_f_face_sleep_L50',
 }
 
 const SUBJECT: ChibiConfig = {
   kind: 'human',
-  base: { id: 'f01', hairBack: 'base_f01_L20', body: 'base_f01_L30', hairFront: 'base_f01_L60', faces: FACES },
+  body: { gender: 'f', body: 'body_f_L30', faces: FACES },
+  hair: { id: 'hair_f_bob01', back: 'item_hair_f_bob01_L20', front: 'item_hair_f_bob01_L60' },
   outfit: { id: 'outfit_casual01', order: 40, file: 'item_outfit_casual01_L40' },
 }
 

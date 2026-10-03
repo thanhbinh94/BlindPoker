@@ -137,7 +137,7 @@ describe('the shipped catalogue', () => {
   it('composes its default into the avatar a new account is registered wearing', () => {
     // The method `AuthService` calls through `DefaultItemCatalog`, so it is wired here rather than
     // only through the standalone `defaultAvatar(catalog)` its tests use.
-    expect(catalog.defaultAvatar()).toEqual({ v: 3, base: 'f01', outfit: 'outfit_casual01' })
+    expect(catalog.defaultAvatar()).toEqual({ v: 4, gender: 'f', hairStyle: 'hair_f_bob01', outfit: 'outfit_casual01' })
   })
 
   it('contains every id the daily reward and the achievements promise, in its v3 slot', () => {

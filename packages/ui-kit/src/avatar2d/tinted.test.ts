@@ -3,29 +3,29 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tintKey, useTintedLayer } from './tinted.js'
 import type { LayerRef, TintRef } from './types.js'
 
-const HAIR_TINT: TintRef = { mask: 'base_f01_L30_hairmask', colour: '#b3261e', meanL: 0.4 }
+const SKIN_TINT: TintRef = { mask: 'body_f_L30_skinmask', colour: '#b3261e', meanL: 0.4 }
 
 describe('tintKey', () => {
   it('differs when the colour differs', () => {
-    const a = tintKey('base_f01_L30', 1, [HAIR_TINT])
-    const b = tintKey('base_f01_L30', 1, [{ ...HAIR_TINT, colour: '#2f7fd6' }])
+    const a = tintKey('body_f_L30', 1, [SKIN_TINT])
+    const b = tintKey('body_f_L30', 1, [{ ...SKIN_TINT, colour: '#2f7fd6' }])
     expect(a).not.toBe(b)
   })
 
   it('differs when the density differs', () => {
-    const a = tintKey('base_f01_L30', 1, [HAIR_TINT])
-    const b = tintKey('base_f01_L30', 2, [HAIR_TINT])
+    const a = tintKey('body_f_L30', 1, [SKIN_TINT])
+    const b = tintKey('body_f_L30', 2, [SKIN_TINT])
     expect(a).not.toBe(b)
   })
 
   it('is stable for the same file, density and tints', () => {
-    expect(tintKey('base_f01_L30', 1, [HAIR_TINT])).toBe(tintKey('base_f01_L30', 1, [{ ...HAIR_TINT }]))
+    expect(tintKey('body_f_L30', 1, [SKIN_TINT])).toBe(tintKey('body_f_L30', 1, [{ ...SKIN_TINT }]))
   })
 })
 
 describe('useTintedLayer', () => {
   it('returns null and never throws when there is no 2D canvas context (jsdom)', async () => {
-    const layer: LayerRef = { order: 30, file: 'base_f01_L30', tints: [HAIR_TINT] }
+    const layer: LayerRef = { order: 30, file: 'body_f_L30', tints: [SKIN_TINT] }
     const { result } = renderHook(() => useTintedLayer('/avatar/', layer))
 
     expect(result.current).toBeNull()
@@ -34,7 +34,7 @@ describe('useTintedLayer', () => {
   })
 
   it('returns null for a layer with no tints', () => {
-    const layer: LayerRef = { order: 30, file: 'base_f01_L30' }
+    const layer: LayerRef = { order: 30, file: 'body_f_L30' }
     const { result } = renderHook(() => useTintedLayer('/avatar/', layer))
     expect(result.current).toBeNull()
   })
@@ -102,7 +102,7 @@ describe('useTintedLayer — with a faked canvas pipeline', () => {
     restoreCanvasPipeline(stubs)
   })
 
-  // Distinct file/mask namespace from every other test in this file (`base_f01_L30` + `#b3261e` is already used,
+  // Distinct file/mask namespace from every other test in this file (`body_f_L30` + `#b3261e` is already used,
   // unmocked, by the `describe('useTintedLayer', ...)` block above) — `cache` is a module-level singleton shared
   // by the whole test file, so reusing a key that block already resolved to `null` would silently short-circuit
   // these tests through that stale cache entry instead of exercising the mocked canvas pipeline.

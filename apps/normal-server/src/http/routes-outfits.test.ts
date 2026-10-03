@@ -10,7 +10,7 @@ import { and, eq } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { AppDb } from '../db/client.js'
 import { createTestDb, type TestDb } from '../db/test-db.js'
-import { inventory as inventoryTable } from '../db/schema.js'
+import { avatarOutfits, inventory as inventoryTable, players } from '../db/schema.js'
 import { buildTestApp, resetDb, XRW, type Account, type Harness } from '../test-harness.js'
 
 let test: TestDb
@@ -20,10 +20,13 @@ let me: Account
 
 const code = (res: { json(): unknown }): string => (res.json() as { error: { code: string } }).error.code
 
-/** `outfit_casual01` is the one item every fresh account already owns. */
-const CASUAL = { v: 3, base: 'f01', outfit: 'outfit_casual01' }
+/** `outfit_casual01` is the one item every fresh account already owns; the bob is free. */
+const CASUAL = { v: 4, gender: 'f', hairStyle: 'hair_f_bob01', outfit: 'outfit_casual01' }
 /** Owned by nobody at registration — the item `save`/`apply` must refuse. */
-const DRESSED = { v: 3, base: 'm01', outfit: 'outfit_dealer01', head: 'head_beret_red01' }
+const DRESSED = { v: 4, gender: 'm', hairStyle: 'hair_m_neat01', outfit: 'outfit_dealer01', head: 'head_beret_red01' }
+/** A saved outfit from before Plan 19, as the table still holds it, and the v4 it reads as (table 4.5). */
+const STORED_V3_M02 = { v: 3, base: 'm02', outfit: 'outfit_casual01' }
+const READ_V3_M02 = { v: 4, gender: 'm', hairStyle: 'hair_m_neat01', outfit: 'outfit_casual01', skinColor: 'skin_fair01', eyeColor: 'eyecolor_grey01' }
 
 async function own(...itemIds: string[]): Promise<void> {
   await h.db.transaction(async (tx) => {
@@ -59,6 +62,17 @@ describe('GET /api/me/outfits', () => {
     expect(res.statusCode).toBe(401)
     expect(code(res)).toBe('UNAUTHENTICATED')
   })
+
+  it('lists an outfit saved before Plan 19 as the v4 it reads as, without rewriting the row (spec §4.5, R6)', async () => {
+    await db.insert(avatarOutfits).values({ playerId: me.playerId, slot: 2, name: 'Old', config: STORED_V3_M02 })
+
+    const res = await h.app.fastify.inject({ url: '/api/me/outfits', headers: { cookie: me.cookie } })
+    expect(res.statusCode).toBe(200)
+    expect((res.json() as { outfits: unknown[] }).outfits[1]).toMatchObject({ slot: 2, name: 'Old', config: READ_V3_M02 })
+
+    const [row] = await db.select({ config: avatarOutfits.config }).from(avatarOutfits).where(eq(avatarOutfits.playerId, me.playerId))
+    expect(row!.config).toEqual(STORED_V3_M02)
+  })
 })
 
 describe('PUT /api/me/outfits/:slot', () => {
@@ -88,14 +102,18 @@ describe('PUT /api/me/outfits/:slot', () => {
   })
 
   it('runs the same avatar validation PUT /api/me/avatar does, before the service ever sees the body', async () => {
-    const res = await h.app.fastify.inject({
-      method: 'PUT',
-      url: '/api/me/outfits/1',
-      headers: h.auth(me),
-      payload: { name: 'Broken', config: { ...CASUAL, base: 'robot' } },
-    })
-    expect(res.statusCode).toBe(400)
-    expect(code(res)).toBe('INVALID_BASE')
+    const cases: [Record<string, unknown>, string][] = [
+      [{ v: 3, base: 'f01', outfit: 'outfit_casual01' }, 'MISSING_LAYER'],
+      [{ ...CASUAL, base: 'robot' }, 'INVALID_BASE'],
+      [{ ...CASUAL, hairStyle: 'hair_m_neat01' }, 'WRONG_GENDER'],
+    ]
+    for (const [config, expected] of cases) {
+      const res = await h.app.fastify.inject({ method: 'PUT', url: '/api/me/outfits/1', headers: h.auth(me), payload: { name: 'Broken', config } })
+      expect(res.statusCode, expected).toBe(400)
+      expect(code(res), expected).toBe(expected)
+    }
+    const list = await h.app.fastify.inject({ url: '/api/me/outfits', headers: { cookie: me.cookie } })
+    expect(list.json()).toEqual({ outfits: [null, null, null, null, null] })
   })
 
   it('403s a config naming an item the player does not own', async () => {
@@ -143,6 +161,18 @@ describe('POST /api/me/outfits/:slot/apply', () => {
 
     const me2 = await h.app.fastify.inject({ url: '/api/me', headers: { cookie: me.cookie } })
     expect((me2.json() as { avatar: unknown }).avatar).toEqual(DRESSED)
+  })
+
+  it('applies an outfit saved before Plan 19 as the v4 it reads as, and stores that v4 (R6)', async () => {
+    await db.insert(avatarOutfits).values({ playerId: me.playerId, slot: 3, name: 'Old', config: STORED_V3_M02 })
+
+    const res = await h.app.fastify.inject({ method: 'POST', url: '/api/me/outfits/3/apply', headers: h.auth(me) })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ config: READ_V3_M02 })
+
+    // The player's own column receives v4 — never the old base the saved row still names.
+    const [row] = await db.select({ config: players.avatarConfig }).from(players).where(eq(players.id, me.playerId))
+    expect(row!.config).toEqual(READ_V3_M02)
   })
 
   it('404s an empty slot', async () => {

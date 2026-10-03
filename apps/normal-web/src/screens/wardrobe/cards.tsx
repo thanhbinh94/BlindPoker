@@ -1,18 +1,16 @@
-import { Chibi, type ChibiConfig } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
-import type { BaseDto, BaseId, ItemDto, Rarity } from '../../api.js'
+import type { ItemDto, Rarity } from '../../api.js'
 import { itemName } from '../../catalog-i18n.js'
 import { ItemPreview } from './ItemTab.js'
 import s from './wardrobe.module.css'
 
 /**
  * The right column's cards (design §4, §7): one accessible-name recipe and one "wearing/locked" chrome,
- * shared by every card shape the wardrobe draws — a picture (`ItemCard`), a colour swatch (`ColourCard`),
- * plain text (`WordCard`) or a base's portrait (`BaseCard`, which has neither rarity nor a lock and so
- * does not share the recipe at all).
+ * shared by every card shape the wardrobe draws — a picture (`ItemCard`), a colour swatch (`ColourCard`) or
+ * plain text (`WordCard`).
  *
- * Every card but `BaseCard` calls `onPick` unconditionally when it is owned — including the one already
+ * Every card calls `onPick` unconditionally when it is owned — including the one already
  * worn — so a second press on an equipped optional slot's card can unequip it; that toggle is the
  * caller's decision (`WardrobeScreen.pick`), not this file's, exactly as `ItemTab` already worked.
  */
@@ -76,7 +74,7 @@ export interface ItemCardProps {
   item: ItemDto
   /** The family's original, which names the dot row; `item` itself when omitted (a lone card, or the original shown). */
   family?: ItemDto
-  /** The draft base's wear (design §4.1's gendered cut), forwarded straight to `ItemPreview`. */
+  /** The draft's gender (design §4.1's gendered cut; a base's `wear` until Plan 19), forwarded straight to `ItemPreview`. */
   wear?: string
   owned: boolean
   wearing: boolean
@@ -162,7 +160,7 @@ export function ItemCard({ item, family = item, wear, owned, wearing, hint, vari
 }
 
 export interface ColourCardProps {
-  /** `null` is the "Natural" swatch — the base's own colour, never locked, never anyone's rarity. */
+  /** `null` is the "Natural" swatch — the hairstyle's or the body's own colour, never locked, never anyone's rarity. */
   item: ItemDto | null
   owned: boolean
   wearing: boolean
@@ -237,32 +235,6 @@ export function WordCard({ item, owned, wearing, hint, onPick }: WordCardProps) 
       </span>
       <RarityLabel rarity={item.rarity} />
       {owned ? null : <LockHint hint={hint} />}
-    </button>
-  )
-}
-
-export interface BaseCardProps {
-  base: BaseDto
-  /** The base wearing the draft's current outfit (design §4.2) — computed by the caller (`BaseTab`),
-   * which is the one that knows the rest of the draft. */
-  portrait: ChibiConfig
-  selected: boolean
-  onPick: (id: BaseId) => void
-  /** The portrait's own width (V5 fix, 2026-09-27): a fixed 96 px overflowed a phone's 3-column grid —
-   * `.baseCard`'s minimum content width (padding plus this fixed-width chibi) exceeded the column's own
-   * share, so the grid — the whole page — scrolled sideways. Defaults to 96, the desktop/tablet value;
-   * `BaseTab` passes a smaller one on phone. */
-  portraitSize?: number
-}
-
-/** A figure tile (tab Thân — design §4.2): chosen, not owned, so it has neither a rarity nor a lock —
- * only ever a gold border when it is the draft's current base. */
-export function BaseCard({ base, portrait, selected, onPick, portraitSize = 96 }: BaseCardProps) {
-  const { t } = useTranslation('normal')
-  return (
-    <button type="button" className={s.baseCard} aria-pressed={selected} onClick={() => onPick(base.id)}>
-      <Chibi subject={portrait} frame="head" size={portraitSize} />
-      <span className={s.cardName}>{t(base.nameKey)}</span>
     </button>
   )
 }

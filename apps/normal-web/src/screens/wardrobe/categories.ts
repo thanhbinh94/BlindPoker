@@ -3,19 +3,24 @@ import type { ItemDto, ItemSlot, Rarity } from '../../api.js'
 /**
  * The right column's vocabulary (design §3.1, §5.4, §5.5): three groups of tabs, a fixed card order
  * inside each tab, colour-variant families, and the "owned only, or everything" box. Kept apart from
- * `ItemTab`/`ColourTab`/`BaseTab` themselves so the ordering, family and counting rules have one place
+ * `ItemTab`/`ColourTab` themselves so the ordering, family and counting rules have one place
  * to be tested — the tab components below just ask this module what to draw.
  */
 
 export type GroupId = 'look' | 'wear' | 'decor'
 
-/** Every tab the wardrobe offers, `base` included even though it is not an owned slot — it still needs
- * a place in `GROUPS` and a `tabpanel` of its own. */
-export type TabId = 'base' | 'hairColor' | 'eyeColor' | 'head' | 'face' | 'outfit' | 'aura' | 'frame' | 'words'
+/**
+ * Every tab the wardrobe can show: one per slot (`tabOfSlot`), except the two word slots, which share `words`.
+ *
+ * Plan 19 (avatar v4): the `base` tab is gone with the bases — a figure's body is its gender now, chosen rather than
+ * owned. `hairStyle` and `skinColor` are tabs by type already, since `tabOfSlot` answers one for every slot, but no
+ * group lists them yet: the gender switch, Kiểu tóc and Màu da join the look group together (A6).
+ */
+export type TabId = 'hairStyle' | 'hairColor' | 'eyeColor' | 'skinColor' | 'head' | 'face' | 'outfit' | 'aura' | 'frame' | 'words'
 
 /** The three groups, in design §3.1's order, each listing its tabs in the order they render. */
 export const GROUPS: readonly { id: GroupId; tabs: readonly TabId[] }[] = [
-  { id: 'look', tabs: ['base', 'hairColor', 'eyeColor'] },
+  { id: 'look', tabs: ['hairColor', 'eyeColor'] },
   { id: 'wear', tabs: ['head', 'face', 'outfit'] },
   { id: 'decor', tabs: ['aura', 'frame', 'words'] },
 ]
@@ -35,9 +40,9 @@ export function tabOfSlot(slot: ItemSlot): TabId {
   return slot
 }
 
-/** Phone is anything under the tablet floor (design §3.1–§3.3, Global Constraints) — the one breakpoint
- * both `WardrobeScreen` (the two-column-vs-one-column switch) and `BaseTab` (the base portrait's own
- * smaller size) need, so it lives here once rather than as two copies of the same literal string. */
+/** Phone is anything under the tablet floor (design §3.1–§3.3, Global Constraints) — the breakpoint
+ * `WardrobeScreen` switches between two columns and one on, kept here beside the rest of the wardrobe's
+ * vocabulary rather than as a second copy of the same literal string. */
 export const PHONE_QUERY = '(max-width: 767px)'
 
 /** Stable DOM ids linking `CategoryNav`'s two `tablist`s to the panels they control (design §7): a tab's
@@ -48,10 +53,8 @@ export const groupTabId = (group: GroupId): string => `wardrobe-grouptab-${group
 export const subTabId = (tab: TabId): string => `wardrobe-subtab-${tab}`
 export const panelId = (tab: TabId): string => `wardrobe-panel-${tab}`
 
-/** The slot(s) a tab's cards come from — every drawn/coloured tab is one slot; `words` is two, `base`
- * is none (a base is chosen, not a catalogue row). */
+/** The slot(s) a tab's cards come from — every drawn/coloured tab is one slot; `words` is two. */
 function slotsOf(tab: TabId): readonly ItemSlot[] {
-  if (tab === 'base') return []
   if (tab === 'words') return ['title', 'badge']
   return [tab]
 }
@@ -68,7 +71,6 @@ function byRarityThenCatalogue(items: readonly ItemDto[]): ItemDto[] {
  * about every ownable row, not just the ones that get their own card. */
 function rowsForTab(tab: TabId, catalog: readonly ItemDto[]): ItemDto[] {
   const slots = slotsOf(tab)
-  if (slots.length === 0) return []
   return catalog.filter((item) => slots.includes(item.slot))
 }
 
@@ -85,11 +87,9 @@ export function tabItems(tab: TabId, catalog: readonly ItemDto[]): ItemDto[] {
 /**
  * "n/m đã có" for a tab (design §3.1): every catalogue row for the tab's slot(s) counts toward the
  * total, colour variants included, because each one is its own ownable row — a card that is locked but
- * whose variant a player owns (Plan 13's beret case) should still move `owned` up by one. `null` for
- * `base`, which is chosen rather than owned and so has no "n/m" to show.
+ * whose variant a player owns (Plan 13's beret case) should still move `owned` up by one.
  */
-export function counts(tab: TabId, catalog: readonly ItemDto[], owned: ReadonlySet<string>): { owned: number; total: number } | null {
-  if (tab === 'base') return null
+export function counts(tab: TabId, catalog: readonly ItemDto[], owned: ReadonlySet<string>): { owned: number; total: number } {
   const rows = rowsForTab(tab, catalog)
   return { owned: rows.filter((item) => owned.has(item.id)).length, total: rows.length }
 }

@@ -30,7 +30,7 @@ function stubApi(overrides: Partial<NormalApi> = {}): NormalApi {
     daily: vi.fn(() => new Promise<never>(() => undefined)),
     // The rig every chibi is drawn on: fetched once for the app's whole lifetime, and irrelevant to every
     // case in this file — none of them ever look at a face.
-    avatarCatalog: vi.fn().mockResolvedValue({ frame: { w: 384, h: 448 }, crop: { x: 88, y: 40, size: 208 }, bases: [], manifestVersion: 1 }),
+    avatarCatalog: vi.fn().mockResolvedValue({ frame: { w: 384, h: 448 }, crop: { x: 88, y: 40, size: 208 }, bodies: [], manifestVersion: 1 }),
     catalogItems: vi.fn().mockResolvedValue({ items: [] }),
     ...overrides,
   } as unknown as NormalApi
@@ -293,7 +293,7 @@ describe('App — the shell', () => {
     onTestFinished(() => window.removeEventListener('hashchange', onHashChange))
     renderApp(
       stubApi({
-        inventory: vi.fn().mockResolvedValue({ items: [], avatar: { v: 3, base: 'f01', outfit: 'outfit_casual01' } }),
+        inventory: vi.fn().mockResolvedValue({ items: [], avatar: { v: 4, gender: 'f', hairStyle: 'hair_f_bob01', outfit: 'outfit_casual01' } }),
         outfits: vi.fn().mockResolvedValue({ outfits: [null, null, null, null, null] }),
         catalogAchievements: vi.fn().mockResolvedValue({ achievements: [] }),
       }),
@@ -566,7 +566,7 @@ describe('App — a rename (T7)', () => {
       stubApi({
         me: vi.fn().mockResolvedValue({
           playerId: 'p1', displayName: 'Bình', email: 'binh@example.com', balance: 123_000,
-          avatar: { v: 3, base: 'f01', outfit: 'avatar_default' }, createdAt: 0, lastLoginAt: 0,
+          avatar: { v: 4, gender: 'f', hairStyle: 'hair_f_bob01', outfit: 'avatar_default' }, createdAt: 0, lastLoginAt: 0,
         }),
         stats: vi.fn().mockResolvedValue(STATS),
         history: vi.fn().mockResolvedValue([]),

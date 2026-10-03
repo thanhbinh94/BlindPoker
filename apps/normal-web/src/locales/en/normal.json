@@ -223,9 +223,10 @@
     "errors": {
       "NOT_OWNED": "You do not own one of those pieces",
       "WRONG_CATEGORY": "One of those pieces does not belong in that slot",
-      "MISSING_LAYER": "An outfit needs a piece",
+      "MISSING_LAYER": "Gender, hairstyle or outfit is missing",
       "INVALID_ITEM": "One of those pieces is not in the catalogue",
-      "INVALID_BASE": "That base is not valid"
+      "INVALID_BASE": "That base is not valid",
+      "WRONG_GENDER": "That hairstyle belongs to the other gender"
     },
     "slot": {
       "hair": "Hair",
@@ -244,8 +245,14 @@
       "wear": "Clothing",
       "decor": "Decor"
     },
+    "gender": {
+      "legend": "Gender",
+      "f": "Female",
+      "m": "Male"
+    },
     "tabs": {
-      "base": "Base",
+      "hairStyle": "Hairstyle",
+      "skinColor": "Skin tone",
       "head": "Head",
       "face": "Face accessory",
       "outfit": "Outfit",

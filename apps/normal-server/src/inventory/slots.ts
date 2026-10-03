@@ -1,12 +1,13 @@
 /**
- * The vocabulary the wardrobe is written in: the slots an item can fill, and what a base id is
- * (design §4.4, §5.1).
+ * The vocabulary the wardrobe is written in: the genders a figure can be drawn as, and the slots an
+ * item can fill (design §4.4, §5.1; spec `2026-10-03-avatar-v4-design.md` §4).
  *
  * A leaf module on purpose. `items.ts` needs the slot list to validate the catalogue and `avatar.ts`
- * needs it to validate a configuration, while `items.ts` already imports `defaultAvatar` from
- * `avatar.ts` at run time; putting these constants in either of those two would close that into an
- * import cycle whose evaluation order decides whether a `const` is initialised or in its temporal
- * dead zone. Nothing here imports anything, so there is no order to get wrong.
+ * needs it to validate a configuration, while `items.ts` imports `defaultAvatar` from `avatar.ts` at
+ * run time (and `avatar.ts` imports `items.ts` back, for types only); putting these constants in either
+ * of those two would close that into an import cycle whose evaluation order decides whether a `const`
+ * is initialised or in its temporal dead zone. Nothing here imports anything, so there is no order to
+ * get wrong.
  *
  * Plan 11 replaces the 3D figure with layered PNGs on a fixed frame. `hair`/`top`/`bottom`/`shoes`
  * are gone — a body is drawn once, as a fixed base, and its clothing is one indivisible `outfit`
@@ -25,8 +26,9 @@
  * third colour item, `skinColor`. `hairStyle` is required of a v4 figure but is **not** a
  * `REQUIRED_SLOTS` entry (ruling 3): that list means "exactly one `isDefault` item", while every
  * hairstyle a player starts with is `free` and the default depends on the gender (`DEFAULT_HAIR`).
- * So it is validated on its own, as `HAIR_SLOT`. The v3 wire still speaks bases until A5; `BaseId`
- * and its helpers stay until D1.
+ * So it is validated on its own, as `HAIR_SLOT`. The HTTP wire speaks v4 since A5: nothing the server
+ * runs reads a base any more. `BaseId` and its helpers below serve only the unused `bases.ts`, and go
+ * with it in D1.
  */
 
 /** Which body a figure is drawn on (spec §4.3), and which cut of a gendered outfit it wears. */

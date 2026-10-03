@@ -223,9 +223,10 @@
     "errors": {
       "NOT_OWNED": "Có món bạn chưa sở hữu",
       "WRONG_CATEGORY": "Có món không đúng vị trí",
-      "MISSING_LAYER": "Nhân vật cần mặc một bộ quần áo",
+      "MISSING_LAYER": "Nhân vật thiếu giới tính, kiểu tóc hoặc quần áo",
       "INVALID_ITEM": "Có món không tồn tại trong danh mục",
-      "INVALID_BASE": "Nhân vật không hợp lệ"
+      "INVALID_BASE": "Nhân vật không hợp lệ",
+      "WRONG_GENDER": "Kiểu tóc này dành cho giới tính khác"
     },
     "slot": {
       "hair": "Tóc",
@@ -244,8 +245,14 @@
       "wear": "Trang phục",
       "decor": "Trang trí"
     },
+    "gender": {
+      "legend": "Giới tính",
+      "f": "Nữ",
+      "m": "Nam"
+    },
     "tabs": {
-      "base": "Nhân vật",
+      "hairStyle": "Kiểu tóc",
+      "skinColor": "Màu da",
       "head": "Mũ",
       "face": "Phụ kiện mặt",
       "outfit": "Quần áo",

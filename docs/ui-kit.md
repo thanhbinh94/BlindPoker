@@ -331,14 +331,19 @@ go compact (avatar, name, stack, then bet and state badge side by side) so a thi
 ### Avatars (`src/avatar2d/`)
 
 The kit does render an avatar — a **chibi**: pre-rendered PNG layers on a shared frame, not a 3D rig or anything
-drawn at runtime. `Chibi` (`Chibi.tsx`) takes a `ChibiSubject` (a `ChibiConfig` — base plus equipped wearables — or
+drawn at runtime. `Chibi` (`Chibi.tsx`) takes a `ChibiSubject` (a `ChibiConfig` — since avatar v4 a `BodyRef` for its
+gender, a two-layer `HairRef`, the equipped wearables and up to three colours, `hairColor`/`eyeColor`/`skinColor` — or
 a bot's `BotChibi`), an `expression` and a `frame` (`'full'` the whole body, `'head'` the round 208×208 crop), and
-stacks one `<img>` per layer `layersFor` (`layers.ts`) returns, z-ordered by layer number. `AvatarAssets`
+stacks one `<img>` per layer `layersFor` (`layers.ts`) returns, z-ordered by layer number: L10 aura, L20 the hair's
+back half, L30 the body, L40 the outfit, L50 the face, L60 the hair's front half, L70 a face item, L80 a head item,
+L90 the frame, a colour landing only on the layers its mask set lists. `hashChibi` (prefix `human4:`) is the
+configuration's identity — gender, hairstyle, items and colours, never the expression or the crop. `AvatarAssets`
 (`AvatarAssets.tsx`) is the context provider that resolves a layer name to a URL — `assetUrl(base, file, density)`
 — so a host app points the whole tree at wherever its avatar files are served from. `expressions.ts` exports
 `useTableExpressions`, the per-seat expression schedule `RoomScreen` feeds `PokerTable`. `defaults.ts` builds a
-brand-new human's `ChibiConfig` (`defaultChibi(seed)`) with no wardrobe and no request involved — what Lite draws,
-having no cosmetics of its own — and `bot.ts` builds a bot's two-layer `BotChibi` (`botChibi(seed)`) the same
+brand-new human's `ChibiConfig` (`defaultChibi(seed)`) with no wardrobe and no request involved — the gender by the
+parity of the seed's hash, that gender's `DEFAULT_HAIR`, the starter tee (`DEFAULT_OUTFIT_FILE`), no colours; what Lite
+draws, having no cosmetics of its own — and `bot.ts` builds a bot's two-layer `BotChibi` (`botChibi(seed)`) the same
 deterministic way. `chibiFor(player)` (on `RoomScreen` and `PokerTable`) is how a host app supplies a *human*
 seat's `ChibiConfig`; a bot never asks it — `PokerTable` draws `botChibi` for a bot seat on its own. Full design:
 `docs/avatar-2d.md`.

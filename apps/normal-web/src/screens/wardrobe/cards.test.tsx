@@ -1,11 +1,11 @@
-import { useTintedLayer, type ChibiConfig, type LayerRef } from '@bp/ui-kit'
+import { useTintedLayer, type LayerRef } from '@bp/ui-kit'
 import { fireEvent, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BaseDto, ItemDto } from '../../api.js'
+import type { ItemDto } from '../../api.js'
 import viNormal from '../../locales/vi/normal.json'
 import { makeI18n, renderWithI18n } from '../../test-i18n.js'
-import { BaseCard, ColourCard, ItemCard, WordCard } from './cards.js'
+import { ColourCard, ItemCard, WordCard } from './cards.js'
 
 // Plan 18 (No8a): `ItemPreview` tints a colour variant's icon through the kit's own `useTintedLayer`. Whether the
 // canvas really paints is `tinted.test.ts`'s business (ui-kit); here the hook answers a fake blob URL for any layer
@@ -314,54 +314,6 @@ describe('cards', () => {
       expect(
         screen.getByRole('button', { name: `${viNormal.items.title_rookie}, ${viNormal.inventory.rarity.common}, ${viNormal.wardrobe.wearingBadge}` }),
       ).toHaveAttribute('aria-pressed', 'true')
-    })
-  })
-
-  describe('BaseCard', () => {
-    const BASE_F01: BaseDto = {
-      id: 'f01',
-      nameKey: 'bases.f01',
-      wear: 'f',
-      layers: { hairBack: 'base_f01_L20', body: 'base_f01_L30', hairFront: 'base_f01_L60' },
-      faces: {
-        neutral: 'base_f01_face_neutral_L50',
-        happy: 'base_f01_face_happy_L50',
-        sad: 'base_f01_face_sad_L50',
-        surprised: 'base_f01_face_surprised_L50',
-        closed: 'base_f01_face_closed_L50',
-        sleep: 'base_f01_face_sleep_L50',
-      },
-    }
-    const PORTRAIT: ChibiConfig = {
-      kind: 'human',
-      base: {
-        id: 'f01',
-        hairBack: 'base_f01_L20',
-        body: 'base_f01_L30',
-        hairFront: 'base_f01_L60',
-        faces: {
-          neutral: 'base_f01_face_neutral_L50',
-          happy: 'base_f01_face_happy_L50',
-          sad: 'base_f01_face_sad_L50',
-          surprised: 'base_f01_face_surprised_L50',
-          closed: 'base_f01_face_closed_L50',
-          sleep: 'base_f01_face_sleep_L50',
-        },
-      },
-      outfit: { id: 'outfit_casual01', order: 40, file: 'item_outfit_casual01_L40' },
-    }
-
-    it('names the base and reflects selection via aria-pressed', async () => {
-      const user = userEvent.setup()
-      const onPick = vi.fn()
-      render(<BaseCard base={BASE_F01} portrait={PORTRAIT} selected onPick={onPick} />)
-
-      const card = screen.getByRole('button', { name: viNormal.bases.f01 })
-      expect(card).toHaveAttribute('aria-pressed', 'true')
-
-      await user.click(card)
-
-      expect(onPick).toHaveBeenCalledWith('f01')
     })
   })
 })

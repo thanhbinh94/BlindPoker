@@ -26,8 +26,8 @@
  * column being rewritten in place. This module stays the one that decides what *valid* means, and does not
  * import that one.
  *
- * Until A5 switches it, the HTTP wire still speaks v3 through `avatar-v3-wire.ts`; nothing in this module
- * is reachable from a route yet.
+ * This is the HTTP wire (Plan 19, A5): `PUT /api/me/avatar` and `PUT /api/me/outfits/:slot` validate with
+ * `validateAvatarConfig`, a new account is registered wearing `defaultAvatar`, and every read answers v4.
  *
  * Three checks are deliberately separate. *Validation* is about the catalogue — does this id exist, does it
  * belong in this slot, is this hairstyle drawn for this body — and is a 400, the same answer for every

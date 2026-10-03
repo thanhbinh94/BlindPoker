@@ -67,12 +67,13 @@ describe('CategoryNav', () => {
     expect(face).toHaveTextContent('2/4')
   })
 
-  it('shows no count on the base tab', () => {
-    renderNav({ tab: 'base' })
+  it('shows no count on a sub-tab the counts leave out', () => {
+    // COUNTS has none for the look group's tabs.
+    renderNav({ tab: 'hairColor' })
 
     const { subList } = navLists()
-    const base = within(subList).getByRole('tab', { name: viNormal.wardrobe.tabs.base })
-    expect(base).not.toHaveTextContent('/')
+    const hairColor = within(subList).getByRole('tab', { name: viNormal.wardrobe.tabs.hairColor })
+    expect(hairColor).not.toHaveTextContent('/')
   })
 
   it('clicking a sub-tab calls onTab with its id', async () => {
@@ -187,7 +188,7 @@ describe('CategoryNav', () => {
   })
 
   it('hides the box entirely when showFilter is false', () => {
-    renderNav({ tab: 'base', showFilter: false })
+    renderNav({ tab: 'hairColor', showFilter: false })
 
     expect(screen.queryByRole('checkbox')).toBeNull()
     expect(screen.queryByText(viNormal.wardrobe.showLocked)).toBeNull()
@@ -203,8 +204,8 @@ describe('CategoryNav', () => {
     expect(wearGroup).toHaveAttribute('aria-controls', panelId('head'))
 
     const lookGroup = within(groupList).getByRole('tab', { name: viNormal.wardrobe.groups.look })
-    // Not the active group: it controls the panel its own first tab would show, `base` (GROUPS again).
-    expect(lookGroup).toHaveAttribute('aria-controls', panelId('base'))
+    // Not the active group: it controls the panel its own first tab would show, `hairColor` (GROUPS again).
+    expect(lookGroup).toHaveAttribute('aria-controls', panelId('hairColor'))
 
     const headTab = within(subList).getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.head}`) })
     expect(headTab).toHaveAttribute('id', subTabId('head'))

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Chibi } from './Chibi.js'
 import { defaultChibi } from './defaults.js'
 import { layersFor } from './layers.js'
-import type { BaseRef, ChibiConfig } from './types.js'
+import type { BodyRef, ChibiConfig } from './types.js'
 
 /**
  * What `Chibi` does when the browser refuses a tinted layer's `blob:` URL — the failure behind No15/No16, where
@@ -17,9 +17,9 @@ vi.mock('./tinted.js', () => ({
 }))
 
 const SUBJECT = defaultChibi('ann')
-const TINTED_BASE: BaseRef = { ...SUBJECT.base, tint: { hair: { meanL: 0.4, files: [SUBJECT.base.body] } } }
-const SUBJECT_WITH_HAIR: ChibiConfig = { ...SUBJECT, base: TINTED_BASE, hairColor: '#b3261e' }
-const LAYERS = layersFor(SUBJECT_WITH_HAIR, 'neutral', 'full')
+const TINTED_BODY: BodyRef = { ...SUBJECT.body, tint: { skin: { meanL: 0.78, files: [SUBJECT.body.body] } } }
+const SUBJECT_WITH_SKIN: ChibiConfig = { ...SUBJECT, body: TINTED_BODY, skinColor: '#5c3a28' }
+const LAYERS = layersFor(SUBJECT_WITH_SKIN, 'neutral', 'full')
 const BODY = LAYERS.find((l) => l.order === 30)!
 
 /** The `<img>` of the one tinted layer — found by its inline z-index, since its `src` is what changes. */
@@ -39,14 +39,14 @@ describe('Chibi — a tinted layer the browser refuses', () => {
 
   it('shows the tinted URL, with no srcset, while it loads', () => {
     expect(BODY.tints).toHaveLength(1)
-    const { container } = render(<Chibi subject={SUBJECT_WITH_HAIR} />)
+    const { container } = render(<Chibi subject={SUBJECT_WITH_SKIN} />)
     const img = bodyImg(container)
     expect(img.getAttribute('src')).toBe('blob:http://localhost/tint-a')
     expect(img.hasAttribute('srcset')).toBe(false)
   })
 
   it('falls back to the plain two-density layer when the tinted <img> fires error', () => {
-    const { container } = render(<Chibi subject={SUBJECT_WITH_HAIR} />)
+    const { container } = render(<Chibi subject={SUBJECT_WITH_SKIN} />)
     fireEvent.error(bodyImg(container))
 
     const img = bodyImg(container)
@@ -55,7 +55,7 @@ describe('Chibi — a tinted layer the browser refuses', () => {
   })
 
   it('leaves every other layer alone when one tinted layer fails', () => {
-    const { container } = render(<Chibi subject={SUBJECT_WITH_HAIR} />)
+    const { container } = render(<Chibi subject={SUBJECT_WITH_SKIN} />)
     const before = [...container.querySelectorAll('img')].map((el) => el.getAttribute('src'))
     fireEvent.error(bodyImg(container))
     const after = [...container.querySelectorAll('img')].map((el) => el.getAttribute('src'))
@@ -67,17 +67,17 @@ describe('Chibi — a tinted layer the browser refuses', () => {
   })
 
   it('keeps the plain layer for the URL that failed, but tries a different tinted URL again', () => {
-    const { container, rerender } = render(<Chibi subject={SUBJECT_WITH_HAIR} />)
+    const { container, rerender } = render(<Chibi subject={SUBJECT_WITH_SKIN} />)
     fireEvent.error(bodyImg(container))
     expect(bodyImg(container).getAttribute('src')).toBe(PLAIN_1X)
 
     // The same URL again (any re-render): still the plain layer, never a retry loop against a URL that failed.
-    rerender(<Chibi subject={SUBJECT_WITH_HAIR} expression="happy" />)
+    rerender(<Chibi subject={SUBJECT_WITH_SKIN} expression="happy" />)
     expect(bodyImg(container).getAttribute('src')).toBe(PLAIN_1X)
 
     // A new tint is a new URL: it is tried, without srcset, and can fail on its own account.
     mockTinted.url = 'blob:http://localhost/tint-b'
-    rerender(<Chibi subject={{ ...SUBJECT_WITH_HAIR, hairColor: '#3f6fd8' }} />)
+    rerender(<Chibi subject={{ ...SUBJECT_WITH_SKIN, skinColor: '#3f6fd8' }} />)
     expect(bodyImg(container).getAttribute('src')).toBe('blob:http://localhost/tint-b')
     expect(bodyImg(container).hasAttribute('srcset')).toBe(false)
 

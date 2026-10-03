@@ -34,8 +34,8 @@ import type { AppDb } from '../db/client.js'
 import { packageRoot } from '../db/migrate.js'
 import { items } from '../db/schema.js'
 import { DAILY_FIXED_ITEM_IDS } from '../economy/daily-rules.js'
-import type { AvatarConfigV3 } from './avatar-migrate.js'
-import { defaultAvatarV3 } from './avatar-v3-wire.js'
+import type { AvatarConfigV4 } from './avatar.js'
+import { defaultAvatar } from './avatar.js'
 import type { MaskSet } from './bodies.js'
 import type { AvatarManifest, MaskInfo } from './manifest.js'
 import { loadAvatarManifest } from './manifest.js'
@@ -132,8 +132,8 @@ export interface ItemCatalog {
   byRarity(r: Rarity): ItemDef[]
   /** The one `isDefault` item of a slot, or undefined for a slot that has none. */
   defaultOf(slot: ItemSlot): ItemDef | undefined
-  /** The avatar a new account is created wearing, built from the `isDefault` items. */
-  defaultAvatar(): AvatarConfigV3
+  /** The avatar a new account is created wearing (v4): `DEFAULT_GENDER`, its `DEFAULT_HAIR` and the `isDefault` outfit. */
+  defaultAvatar(): AvatarConfigV4
   /** Every `free` item's id (design §3.2) — what `InventoryService` and the daily draw are built from. */
   freeIds(): ReadonlySet<string>
   /** Upserts the catalogue into the `items` table. Idempotent: safe on every boot. */
@@ -425,7 +425,7 @@ export function loadItemCatalog(path: string = defaultItemsPath(), manifest: Ava
     defaults: () => defs.filter((d) => d.isDefault).map((d) => d.id),
     byRarity: (r) => defs.filter((d) => d.rarity === r),
     defaultOf: (slot) => defs.find((d) => d.slot === slot && d.isDefault),
-    defaultAvatar: () => defaultAvatarV3(catalog),
+    defaultAvatar: () => defaultAvatar(catalog),
     freeIds: () => freeIds,
     async seed(db) {
       if (defs.length === 0) return

@@ -42,7 +42,11 @@ describe('deltaE', () => {
   })
 
   it('measures f03’s iris nearer amber01 than green01, by the formula the plan fixes (green is pinned anyway, ruling 6)', () => {
-    expect(deltaE('#a9a564', '#d08a1c')).toBeCloseTo(39.7, 0)
-    expect(deltaE('#a9a564', '#2f9e55')).toBeCloseTo(40.5, 0)
+    const amber = deltaE('#a9a564', '#d08a1c')
+    const green = deltaE('#a9a564', '#2f9e55')
+    expect(amber).toBeCloseTo(39.7, 0)
+    expect(green).toBeCloseTo(40.5, 0)
+    // The title's own claim, which the two rounded pins above cannot enforce on their own.
+    expect(amber).toBeLessThan(green)
   })
 })
