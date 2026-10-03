@@ -92,6 +92,13 @@ function playThrough(mode: 'holdem' | 'blind', rules: HoldemRules | BlindRules, 
   expect(state.phase).toBe('COMPLETE')
   expect(client.hand!.phase).toBe('COMPLETE')
   expect(client.room!.players.find((p) => p.seat === me)!.stack).toBe(state.players.find((p) => p.seat === me)!.stack)
+  // The stack the table keeps showing while the result is held back (the reveal hold) is the settled stack less what the
+  // pots paid that seat; an uncalled bet handed back is not a result, so it is already in it.
+  const result = client.hand!.result!
+  for (const cs of client.hand!.seats) {
+    const paid = result.payouts.filter((p) => p.seat === cs.seat).reduce((sum, p) => sum + p.amount, 0)
+    expect(cs.stackBeforeResult, `seat ${cs.seat}: the stack before the pots were paid`).toBe(cs.stack - paid)
+  }
   return client
 }
 

@@ -37,8 +37,9 @@ export interface PokerTableProps {
   /**
    * The hand is over but its result is not out yet: `RoomScreen` holds the result card while an opponent's cards turn over
    * where they lie (`useRevealHold`). While this is true the table keeps the result to itself too — no hand name or payout
-   * under any seat, no winner glow, no gold edge on the best hand's board cards — and draws every card exactly as it would
-   * without it, so the turn still plays. All of it appears in the render that drops the flag. Defaults to `false`.
+   * under any seat, no winner glow, no gold edge on the best hand's board cards, and each plate's stack as it stood before
+   * the settlement paid it (`stackBeforeResult`) — and draws every card exactly as it would without it, so the turn still
+   * plays. All of it appears in the render that drops the flag. Defaults to `false`.
    */
   resultPending?: boolean
 }
@@ -136,7 +137,13 @@ export function PokerTable({
       )
     }
 
-    const clientSeat = handSeats.get(index) ?? seatFromPlayer(index, player)
+    const handSeat = handSeats.get(index)
+    const clientSeat =
+      handSeat === undefined
+        ? seatFromPlayer(index, player)
+        : resultPending && handSeat.stackBeforeResult !== undefined
+          ? { ...handSeat, stack: handSeat.stackBeforeResult }
+          : handSeat
     const acting = hand !== null && hand.actingSeat === index
     const hit = showdown.get(index)
     const chibi = player.isBot ? botChibi(player.playerId) : (chibiFor?.(player) ?? null)
