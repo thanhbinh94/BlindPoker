@@ -80,6 +80,8 @@ export const DENSITY_ALPHA_DRIFT = 12
 const FACE_SKIN_RATIO = { min: 0.8, max: 1.2 }
 /** C11 (Plan 19): how much of a hair layer's own ink its hair mask covers. The ink *is* the hair; the slack is the rim. */
 const HAIR_INK_SHARE = 0.9
+/** C11 (Plan 19): the masks a *real* v4 layer must carry — what the skin, eye and hair colours tint it through. */
+const REQUIRED_MASKS = { body: ['skin'], bodyFace: ['skin', 'eyes'], hair: ['hair'] }
 
 const ok = (detail) => ({ ok: true, detail })
 const bad = (detail) => ({ ok: false, detail })
@@ -176,30 +178,35 @@ async function load(dir, manifest, name, bases) {
   }
 
   // Plan 19. C11's skin-on-a-face rule measures against the same gender's `face_neutral` skin mask — and needs to
-  // know whether that face is real, because real art is compared with real art only (pre-flight #7, R26).
+  // know whether that face is real or a stand-in, because like is compared with like only (pre-flight #7, R26).
+  // `area` is 0 when the neutral face has no skin mask to measure: none listed, one marked empty, or none on disk.
   let neutralSkin = null
   if (parsed?.kind === 'bodyFace' && entry?.masks?.skin) {
     const neutralName = bodyFaceFile(parsed.gender, 'neutral')
+    const neutralEntry = manifest.files[neutralName]
+    let area = 0
     if (neutralName === name) {
-      neutralSkin = masks.skin ? { area: maskArea(masks.skin), real: entry.real === true } : null
+      area = masks.skin ? maskArea(masks.skin) : 0
     } else {
-      const neutralEntry = manifest.files[neutralName]
       const neutralFile = join(dir, `${neutralName}_${MASK_FILE_KIND.skin}mask@2x.png`)
-      if (neutralEntry?.masks?.skin && !neutralEntry.masks.skin.empty && existsSync(neutralFile)) {
-        neutralSkin = { area: maskArea(await readPicture(neutralFile)), real: neutralEntry.real === true }
-      }
+      if (neutralEntry?.masks?.skin && !neutralEntry.masks.skin.empty && existsSync(neutralFile)) area = maskArea(await readPicture(neutralFile))
     }
+    neutralSkin = { name: neutralName, area, real: neutralEntry?.real === true, standIn: neutralEntry?.placeholder === true }
   }
-  // C12 finds a body's eyes on its gender's neutral face — the face layer is where the eyes are drawn and masked.
+  // C12 finds a body's eyes on its gender's neutral face — the face layer is where the eyes are drawn and masked —
+  // and only on a real one: a stand-in's eyes are drawn where no head was ever measured.
   let neutralEyeMask = null
+  let neutralFaceStandIn = false
   if (parsed?.kind === 'body') {
     const neutralName = bodyFaceFile(parsed.gender, 'neutral')
-    const info = manifest.files[neutralName]?.masks?.eyes
+    const neutralEntry = manifest.files[neutralName]
+    neutralFaceStandIn = neutralEntry?.real !== true && neutralEntry?.placeholder === true
+    const info = neutralEntry?.masks?.eyes
     const neutralFile = join(dir, `${neutralName}_${MASK_FILE_KIND.eyes}mask@2x.png`)
-    if (info && !info.empty && existsSync(neutralFile)) neutralEyeMask = await readPicture(neutralFile)
+    if (neutralEntry?.real === true && info && !info.empty && existsSync(neutralFile)) neutralEyeMask = await readPicture(neutralFile)
   }
 
-  return { name, dir, manifest, entry, parsed, pictures, bytes, halved, bases, masks, neutralHairArea, neutralSkin, neutralEyeMask }
+  return { name, dir, manifest, entry, parsed, pictures, bytes, halved, bases, masks, neutralHairArea, neutralSkin, neutralEyeMask, neutralFaceStandIn }
 }
 
 /** Pixels of a mask (as a `readPicture` result: white RGB, coverage in alpha) at ≥ 128 — spec §4.3's areas. */
@@ -597,24 +604,29 @@ function eyeBlobs(maskPic) {
  * - skin on a body face: `FACE_SKIN_RATIO` × the same gender's `face_neutral` skin mask — measured only when both
  *   faces are real or both are stand-ins, because between the style gate (B3) and batch C1 the neutral face is real
  *   art and the other five still stand-ins, and a stand-in's oval says nothing about a drawn face (pre-flight #7,
- *   R26). A mixed pair reports `n/a — neutral is real, this face is a stand-in` (or the reverse) in the detail;
+ *   R26). A mixed pair reports `n/a — neutral is real, this face is a stand-in` (or the reverse) in the detail. A
+ *   real face whose own skin mask is empty fails, and so does one whose neutral face has no skin to compare with;
  * - eyes on a body face: the base faces' rules above;
  * - hair on a hair layer: at least `HAIR_INK_SHARE` of the layer's own ink — the layer *is* the hair;
  * - and on any layer with both, skin and eyes share no pixel at alpha ≥ 128, override or not: a pixel tinted
  *   twice is two colours fighting.
  *
- * A file the manifest lists no `masks` for (nothing has been through `masks`/`ingest` for it yet) reports
- * `n/a`, same as every other check that has nothing to judge.
+ * A **real** v4 layer must carry the masks of its kind (`REQUIRED_MASKS`): a body or a face the skin colour cannot
+ * reach is a failure, not something with nothing to judge. Any other file the manifest lists no `masks` for
+ * (nothing has been through `masks`/`ingest` for it yet) reports `n/a`, same as every other check that has nothing
+ * to judge.
  */
 function maskChecks(context) {
   const { entry, parsed, pictures, masks, neutralHairArea, neutralSkin } = context
-  if (!entry?.masks) return ok('n/a — no masks cut for this layer')
+  const absent = entry?.real === true ? (REQUIRED_MASKS[parsed?.kind] ?? []).filter((kind) => !entry.masks?.[kind]) : []
+  const missing = absent.map((kind) => `no ${kind} mask cut for this real layer`)
+  if (!entry?.masks) return missing.length ? bad(missing.join('; ')) : ok('n/a — no masks cut for this layer')
   const layer = pictures[2]
   if (!layer) return ok('n/a — no @2x to judge')
 
   let ink = 0
   for (let i = 3; i < layer.data.length; i += 4) if (layer.data[i] > ALPHA_INK) ink++
-  const problems = []
+  const problems = [...missing]
   const notes = []
   for (const [kind, info] of Object.entries(entry.masks)) {
     const maskPic = masks[kind]
@@ -665,10 +677,15 @@ function maskChecks(context) {
       if (share < SKIN_AREA.min || share > SKIN_AREA.max) problems.push(`skin covers ${share.toFixed(2)} of the body's ink, want ${SKIN_AREA.min}–${SKIN_AREA.max}`)
     } else if (kind === 'skin' && parsed?.kind === 'bodyFace' && neutralSkin !== null) {
       const real = entry.real === true
-      if (neutralSkin.real !== real) {
+      const mixed = real ? neutralSkin.standIn : neutralSkin.real
+      if (real && area === 0) {
+        problems.push('skin mask is empty')
+      } else if (mixed) {
         notes.push(`skin ${neutralSkin.real ? 'n/a — neutral is real, this face is a stand-in' : 'n/a — neutral is a stand-in, this face is real'}`)
+      } else if (neutralSkin.area === 0) {
+        problems.push(`${neutralSkin.name} has no skin mask to compare with`)
       } else {
-        const ratio = neutralSkin.area === 0 ? 1 : area / neutralSkin.area
+        const ratio = area / neutralSkin.area
         if (ratio < FACE_SKIN_RATIO.min || ratio > FACE_SKIN_RATIO.max) {
           problems.push(`skin area is ${ratio.toFixed(2)} × the neutral face's, want ${FACE_SKIN_RATIO.min}–${FACE_SKIN_RATIO.max} ×`)
         }
@@ -735,13 +752,16 @@ const HEAD_PARTS = [['eyeMidX', 'eye midpoint'], ['eyeMidY', 'eye line'], ['eyeS
  * C12 "đầu không xê dịch" (Plan 19, spec §5.1): a **real** `body_<g>_L30` keeps F01's head — each of `headMetrics`'
  * eye midpoint x and y, eye span and chin within `HEAD_TOLERANCE` (2 % of the crop) of `HEAD_REFERENCE`, for both
  * genders (ruling 2). Every hat, pair of glasses, aura and frame was cut on F01 and the portrait crop is fixed, so a
- * head that drifts is a head they all miss. A stand-in (drawn where no head is measured), a body whose neutral face
- * has no eye mask, and every layer that is not a v4 body report `n/a`.
+ * head that drifts is a head they all miss. A stand-in (drawn where no head is measured), a real body whose neutral
+ * face is still a stand-in (its eyes are the stand-in's, not the art's), a body whose neutral face has no eye mask,
+ * and every layer that is not a v4 body report `n/a`.
  */
-function headStaysPut({ parsed, entry, pictures, neutralEyeMask }) {
+function headStaysPut({ parsed, entry, pictures, neutralEyeMask, neutralFaceStandIn }) {
   if (parsed?.kind !== 'body') return ok('n/a — not a v4 body')
   if (entry?.real !== true) return ok('n/a — a stand-in, whose head nobody measures')
-  if (!neutralEyeMask) return ok(`n/a — ${bodyFaceFile(parsed.gender, 'neutral')} has no eye mask to find the eyes by`)
+  const neutral = bodyFaceFile(parsed.gender, 'neutral')
+  if (neutralFaceStandIn) return ok(`n/a — ${neutral} is a stand-in, whose eyes are not this body's`)
+  if (!neutralEyeMask) return ok(`n/a — ${neutral} has no eye mask to find the eyes by`)
   const body = pictures[1]
   if (!body) return bad('no @1x to find the chin on')
   let metrics

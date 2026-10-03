@@ -94,7 +94,9 @@ const PUPIL_R = 9
  * on its own; only the shine-pocket rule can bring it in.
  *
  * `bald` (Plan 19 A1b, pre-flight #21) draws no cap and no locks: a v4 body face, whose head top is scalp — the
- * very patch `analysePicture` samples its "hair palette" from.
+ * very patch `analysePicture` samples its "hair palette" from. `skinColour` and `scleraColour` (A1b fix round 1)
+ * repaint the skin and the white of the eye: a cream face with an off-white sclera is the pair a real v4 face has,
+ * the white within ΔE 22 of the skin.
  */
 async function syntheticBase({
   closedEyes = false,
@@ -106,6 +108,8 @@ async function syntheticBase({
   lashRing = null as 'L' | 'R' | null,
   shineBand = false,
   bald = false,
+  skinColour = SKIN,
+  scleraColour = WHITE,
 } = {}) {
   const cx = 384
   const cy = 330
@@ -139,9 +143,9 @@ async function syntheticBase({
         const innerW = 2 * rx * hideFrac
         const hide =
           side === outerWhiteOnly
-            ? `<rect x="${side === 'L' ? ex + rx - innerW : ex - rx}" y="${ey - ry}" width="${innerW}" height="${2 * ry}" fill="${SKIN}"/>`
+            ? `<rect x="${side === 'L' ? ex + rx - innerW : ex - rx}" y="${ey - ry}" width="${innerW}" height="${2 * ry}" fill="${skinColour}"/>`
             : ''
-        return `<ellipse cx="${ex}" cy="${ey}" rx="${rx}" ry="${ry}" fill="${WHITE}"/>${hide}` +
+        return `<ellipse cx="${ex}" cy="${ey}" rx="${rx}" ry="${ry}" fill="${scleraColour}"/>${hide}` +
           `<circle cx="${ex}" cy="${ey}" r="${IRIS_R}" fill="${irisColour}"/><circle cx="${ex}" cy="${ey}" r="${PUPIL_R}" fill="${PUPIL}"/>`
       }).join('')
   const hair = bald
@@ -153,9 +157,9 @@ async function syntheticBase({
     : `<rect x="234" y="280" width="40" height="240" rx="20" fill="${hairColour}"/>
     <rect x="494" y="280" width="40" height="240" rx="20" fill="${hairColour}"/>`
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-    <circle cx="${cx}" cy="${cy}" r="${r}" fill="${SKIN}"/>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="${skinColour}"/>
     ${hair}
-    <rect x="300" y="480" width="168" height="320" fill="${SKIN}"/>
+    <rect x="300" y="480" width="168" height="320" fill="${skinColour}"/>
     <rect x="300" y="480" width="168" height="120" fill="${TANK}"/>
     ${locks}
     ${filamentShape}
@@ -573,6 +577,46 @@ describe('skinMask, and eyes on a bald face (Plan 19 A1b, spec §5.5)', () => {
     }
     expect(near).toBe(0)
     expect(coverage(skin, skinPixels(pic))).toBeGreaterThan(0.9)
+  })
+
+  it('keeps an off-white sclera out of a cream face’s skin, though the eye mask it is given holds only the iris', async () => {
+    // #fdf8f5 is ΔE ~20 from cream, inside SKIN_MASK.tolerance: only taking the eye ellipses out keeps it out.
+    const SCLERA = '#fdf8f5'
+    const pic = await syntheticBase({ bald: true, skinColour: CREAM, scleraColour: SCLERA })
+    const eyes = eyeMask(pic, new Uint8Array(W * H))
+    const sclera = colourPixels(pic, SCLERA)
+    const disc = new Uint8Array(W * H)
+    for (const side of ['L', 'R'] as const) eyeWhiteDiscPixels(pic, side).forEach((inside, i) => { if (inside && sclera[i]) disc[i] = 1 })
+    expect(sum(disc), 'the fixture draws a sclera').toBeGreaterThan(1000)
+    expect(coverage(eyes, disc), 'the eye mask holds none of the white').toBe(0)
+    const skin = skinMask(pic, { eyes })
+    expect(coverage(skin, disc)).toBe(0)
+    expect(coverage(skin, colourPixels(pic, CREAM))).toBeGreaterThan(0.85)
+  })
+
+  it('measures an iris by its saturated mid-tones, a grey iris by its mid-tones, and a mask with no mid-tones whole', () => {
+    // A strip of flat pixels and a mask over all of them: `maskColour` only reads colours and weights.
+    const strip = (runs: [string, number][]) => {
+      const total = runs.reduce((n, [, count]) => n + count, 0)
+      const pic = { data: Buffer.alloc(total * 4), width: total, height: 1 }
+      let p = 0
+      for (const [hex, count] of runs) {
+        const [r, g, b] = hexToRgb(hex)
+        for (let i = 0; i < count; i++, p++) pic.data.set([r, g, b, 255], p * 4)
+      }
+      return { pic, mask: new Uint8Array(total).fill(255) }
+    }
+    // Pupil (#101010, lightness 0.06) and highlight (#ffffff) never count; red is 40 of 140 mid-tones, over a quarter.
+    const coloured = strip([['#101010', 30], ['#ffffff', 30], ['#808080', 100], ['#ff0000', 40]])
+    expect(maskColour(coloured.pic, coloured.mask, { iris: true })).toBe('#ff0000')
+    // Red is 10 of 110 mid-tones: a grey iris, measured by all its mid-tones — (128·100 + 255·10) / 110 = 139.5.
+    const grey = strip([['#101010', 30], ['#ffffff', 30], ['#808080', 100], ['#ff0000', 10]])
+    expect(maskColour(grey.pic, grey.mask, { iris: true })).toBe('#8c7474')
+    // No mid-tone at all (a flat dark stand-in eye and a highlight): the whole mask.
+    const flat = strip([['#101010', 50], ['#f0f0f0', 50]])
+    expect(maskColour(flat.pic, flat.mask, { iris: true })).toBe('#808080')
+    // Without `iris`, every masked pixel counts, by its weight.
+    expect(maskColour(grey.pic, grey.mask)).toBe(maskColour(grey.pic, grey.mask, { iris: false }))
   })
 
   it('cuts skin on a real body, skin and eyes (never hair) on a real body face, and the ink of a real hair layer', async () => {

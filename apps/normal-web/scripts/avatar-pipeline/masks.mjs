@@ -62,7 +62,7 @@ const labOfHex = (hex) => {
 /** CIE76 between two `#rrggbb` — the ΔE the plan's colour rules are written in (A4's `deltaE`). */
 const deltaE76 = (a, b) => labDist(labOfHex(a), labOfHex(b))
 
-/** HSL saturation and lightness (0–1) of an sRGB triple — the two `recolour` keeps or replaces per pixel. */
+/** HSL saturation and lightness (0–1) of an sRGB triple — the space `recolour` tints in (`IRIS` below). */
 function saturationLightness(r, g, b) {
   const max = Math.max(r, g, b) / 255
   const min = Math.min(r, g, b) / 255
@@ -675,6 +675,12 @@ export function tintMask(pic, seed, { tolerance = 18 } = {}) {
  * `minL` is 50 (pre-flight #2) because of the outline: the warm-brown `#7a4a32` the bodies are drawn with is
  * L* 36.5 with a hue only 17.7° from cream, inside `hueSpread`, so lightness is what keeps the line out. Shaded
  * cream sits at L* ~70 and stays in.
+ *
+ * `tolerance` has a limit worth knowing: a *light* neutral is close to cream in Lab whatever its hue. Greys from
+ * about `#b9b9b9` to `#f8f8f8`, and an off-white like `#fdf8f5`, are within ΔE 22 of `#f1d2b6`; only mid and dark
+ * greys (`#9aa3ad` is 32 away) fall out on their own. The eye white is taken out by geometry instead (`skinMask`).
+ * Pale underwear would be cut as skin: an outfit covers it anyway (C6), but at the style gate a pale underwear is
+ * answered first by a darker template and then, if it persists, by a hand-drawn `_skinmask` override.
  */
 export const SKIN_MASK = { tolerance: 22, hueSpread: 18, minL: 50, chroma: [0.5, 1.6], eyeMargin: 3, minRegion: 40 }
 
@@ -685,13 +691,16 @@ export const SKIN_MASK = { tolerance: 22, hueSpread: 18, minL: 50, chroma: [0.5,
  * The seed is `baseSkinColour` (the modal colour of `SKIN_WINDOW`, the cheeks and chin, which are skin on every
  * body by construction). A pixel is skin when it is solid (alpha > `ALPHA_SOLID`) and either within
  * `SKIN_MASK.tolerance` of the seed, or of the seed's hue, light enough and about as saturated (`SKIN_MASK`).
- * The outline is too dark, the grey underwear too unsaturated and a pink mouth too far round the hue circle, so
- * all three fall out by construction; the bodies are always drawn cream (spec §5.2), so one seed fits both.
+ * The outline is too dark, mid or dark grey underwear too unsaturated and too far, and a pink mouth too far round
+ * the hue circle, so all three fall out by construction; a *light* neutral does not (see `SKIN_MASK`). The bodies
+ * are always drawn cream (spec §5.2), so one seed fits both.
  *
- * The eyes — `eyes` when given (any non-zero pixel; `writeMasks` passes the eye mask it wrote), else
- * `eyeEllipses(pic)` — are taken out widened by `SKIN_MASK.eyeMargin`, so the skin and eye masks never meet. What
- * is left is closed by 2 px (the odd antialiased or textured pixel inside the skin) and kept to pieces of at least
- * `SKIN_MASK.minRegion` px. Returns 0/255 per pixel, like every mask here; empty when the window has no skin.
+ * The eyes are taken out widened by `SKIN_MASK.eyeMargin`: always `eyeEllipses(pic)` — the padded ellipse round
+ * each eye's white, because an off-white sclera is within `tolerance` of cream and no eye mask holds the white —
+ * and, unioned with it, `eyes` when given (any non-zero pixel; `writeMasks` passes the eye mask it wrote, a
+ * hand-drawn one included), so the skin and eye masks never meet. What is left is closed by 2 px (the odd
+ * antialiased or textured pixel inside the skin) and kept to pieces of at least `SKIN_MASK.minRegion` px. Returns
+ * 0/255 per pixel, like every mask here; empty when the window has no skin.
  *
  * @param {{ data: Buffer, width: number, height: number }} pic
  * @param {{ eyes?: Uint8Array | null }} [options]
@@ -721,9 +730,11 @@ export function skinMask(pic, { eyes = null } = {}) {
     if (hue <= hueSpread) skin[i] = 1
   }
 
-  const eyeSource = eyes ?? eyeEllipses(pic).mask
+  // The eye ellipses always, the given eyes as well: an eye mask is the iris and what it encloses, never the white
+  // round it (`eyeMask` drops every white pixel), and an off-white sclera is within `tolerance` of cream.
+  const ellipses = eyeEllipses(pic).mask
   const eyePixels = new Uint8Array(width * height)
-  for (let i = 0; i < eyePixels.length; i++) eyePixels[i] = eyeSource[i] ? 1 : 0
+  for (let i = 0; i < eyePixels.length; i++) eyePixels[i] = ellipses[i] || eyes?.[i] ? 1 : 0
   const eyeZone = dilate(eyePixels, width, height, Math.max(1, Math.round(SKIN_MASK.eyeMargin * scale)))
   for (let i = 0; i < skin.length; i++) if (eyeZone[i]) skin[i] = 0
 
@@ -740,12 +751,14 @@ export function skinMask(pic, { eyes = null } = {}) {
 // ────────────────────────────────────────────────────────────────── colour ──
 
 /**
- * What `maskColour` counts as the iris of an eye mask. An eye mask holds the whole eye — the pupil and the lash
- * line (dark), the highlights and any white (light), the iris between — and an eye colour means the iris: the
- * pixels whose HSL lightness is `minL`–`maxL` and whose saturation is at least `minS`, the very two numbers
- * `recolour` keeps (lightness) and replaces (saturation) on a tinted pixel. A grey iris has almost no saturated
- * pixel, so when under `greyShare` of the mid-tones are saturated the mid-tones are the iris; when there are
- * no mid-tones at all (a stand-in's flat dark eye), the whole mask is.
+ * What `maskColour` counts as the iris of an eye mask. An eye mask can hold more than the iris — the pupil and the
+ * lash line (dark), the highlights (light), and on a hand-drawn mask the white — and an eye colour means the iris:
+ * the pixels whose HSL lightness is `minL`–`maxL` and whose saturation is at least `minS`. HSL because it is the
+ * space `recolour` works in: it gives *every* masked pixel the target's hue and saturation and shifts its lightness
+ * by the target's distance from the mask's `meanL`, so what an eye colour has to match is the hue and saturation of
+ * the coloured part, which the dark, light and grey pixels would only pull towards black, white or grey. A grey
+ * iris has almost no saturated pixel, so when under `greyShare` of the mid-tones are saturated the mid-tones are
+ * the iris; when there are no mid-tones at all (a stand-in's flat dark eye), the whole mask is.
  *
  * On the old bases' committed eye masks this lands within ΔE76 1.2–4.7 of the irises the plan pinned (ruling 6),
  * which were measured before this function existed — no simple lightness/saturation cut reproduces all six exactly.
@@ -953,8 +966,8 @@ function inkMask(layer2x) {
  * else it changed in the same run (`ingest`, the `masks` command).
  *
  * Plan 19 (spec §5.5): a body L30 gets **skin**; a body face gets **eyes** and then **skin**, cut clear of the eye
- * mask as written (a hand-drawn `_eyemask` included), and never hair — the head is bald, so `eyeMask` is handed an
- * empty hair array (pre-flight #21); a hair layer's **hair** is its ink.
+ * ellipses and of the eye mask as written (a hand-drawn `_eyemask` included), and never hair — the head is bald,
+ * so `eyeMask` is handed an empty hair array (pre-flight #21); a hair layer's **hair** is its ink.
  */
 export async function writeMasks({ dir, manifest, names, overridesDir = MASK_OVERRIDE_DIR, log = () => {} }) {
   for (const name of names) {

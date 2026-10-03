@@ -1555,6 +1555,23 @@ describe('C12 and the v4 rules of C11 (Plan 19 A1b, spec §5.1, §5.5)', () => {
     expect(c12.detail.startsWith('n/a'), c12.detail).toBe(true)
   }, 30_000)
 
+  it('C12 says n/a for a real body whose neutral face is still a stand-in', async () => {
+    // The stand-in's eyes are drawn where no head was measured; holding a real body to them says nothing.
+    const dir = caseDir('c12-stand-in-face')
+    for (const density of DENSITIES) {
+      cpSync(join(OUT_DIR, `base_f01_L30@${density}x.png`), join(dir, `body_f_L30@${density}x.png`))
+      cpSync(join(OUT_DIR, `base_f01_face_neutral_L50_eyemask@${density}x.png`), join(dir, `body_f_face_neutral_L50_eyemask@${density}x.png`))
+    }
+    const bytes2x = statSync(join(dir, 'body_f_L30@2x.png')).size
+    const manifest = manifestFor(dir, {
+      body_f_L30: { layer: 30, w: FRAME.w, h: FRAME.h, bytes2x, real: true },
+      body_f_face_neutral_L50: { layer: 50, w: FRAME.w, h: FRAME.h, bytes2x: 0, placeholder: true, masks: { eyes: { bytes2x: 0, meanL: 0.5 } } },
+    })
+    const c12 = (await checkOne(dir, 'body_f_L30', manifest)).get('C12')!
+    expect(c12.ok).toBe(true)
+    expect(c12.detail).toMatch(/^n\/a — body_f_face_neutral_L50 is a stand-in/)
+  }, 30_000)
+
   it('C11 compares a face’s skin with the neutral face only when both are real or both are stand-ins', async () => {
     const neutral = 'body_f_face_neutral_L50'
     const happy = 'body_f_face_happy_L50'
@@ -1578,6 +1595,38 @@ describe('C12 and the v4 rules of C11 (Plan 19 A1b, spec §5.1, §5.5)', () => {
     const both = (await checkOne(halved, happy, manifestFor(halved, { [neutral]: flagged(neutral, true), [happy]: flagged(happy, true) }))).get('C11')!
     expect(both.ok).toBe(false)
     expect(both.detail).toMatch(/skin area is 0\.\d\d × the neutral face's, want 0\.8–1\.2 ×/)
+  }, 60_000)
+
+  it('C11 fails a real face with no skin mask, an empty one, or no neutral skin to compare with', async () => {
+    const neutral = 'body_f_face_neutral_L50'
+    const happy = 'body_f_face_happy_L50'
+    const dir = caseDir('c11-no-skin')
+    for (const face of [neutral, happy]) copyLayer(dir, face, ['skin', 'eye'])
+    const c11Of = async (entries: Record<string, ManifestEntry>) => (await checkOne(dir, happy, manifestFor(dir, entries))).get('C11')!
+    const withoutSkin = (name: string): ManifestEntry => {
+      const entry = flagged(name, true)
+      const { skin: _skin, ...rest } = entry.masks!
+      return { ...entry, masks: rest }
+    }
+    const { masks: _masks, ...bare } = flagged(happy, true)
+
+    const missing = await c11Of({ [neutral]: flagged(neutral, true), [happy]: withoutSkin(happy) })
+    expect(missing.ok).toBe(false)
+    expect(missing.detail).toContain('no skin mask')
+    const none = await c11Of({ [neutral]: flagged(neutral, true), [happy]: bare })
+    expect(none.ok).toBe(false)
+    expect(none.detail).toContain('no skin mask')
+    const noReference = await c11Of({ [neutral]: withoutSkin(neutral), [happy]: flagged(happy, true) })
+    expect(noReference.ok).toBe(false)
+    expect(noReference.detail).toContain(`${neutral} has no skin mask to compare with`)
+
+    await editMask(dir, happy, 'skin', (alpha) => alpha.fill(0))
+    const empty = await c11Of({ [neutral]: flagged(neutral, true), [happy]: flagged(happy, true) })
+    expect(empty.ok).toBe(false)
+    expect(empty.detail).toContain('skin mask is empty')
+    // A stand-in keeps the mixed-pair note rather than a failure.
+    const mixed = await c11Of({ [neutral]: flagged(neutral, true), [happy]: flagged(happy, false) })
+    expect(mixed.detail).toContain('n/a — neutral is real, this face is a stand-in')
   }, 60_000)
 
   it('C11 holds a body’s skin to SKIN_AREA of its ink, a hair layer’s hair to 0.9 of its ink, and skin off the eyes', async () => {
