@@ -360,6 +360,16 @@
   filter: grayscale(0.85) brightness(0.55);
 }
 
+/* A hairstyle card's head portrait (Kiểu tóc, avatar v4), drawn in the same thumb: 96 px from the tablet floor up,
+   inside the 118 px thumb; 72 px on a phone (the old base cards' sizes, `HairStyleTab`'s `portraitSize`), where the
+   thumb grows from its 70 px to hold it rather than clip it. */
+@media (max-width: 767px) {
+  .cardPortrait {
+    height: auto;
+    min-height: 70px;
+  }
+}
+
 .cardName {
   overflow-wrap: break-word;
   width: 100%;
@@ -921,6 +931,23 @@
   width: 1.1em;
   height: 1.1em;
   max-width: none;
+}
+
+/* The head of the look group (avatar v4, spec §6.1): the Nữ | Nam switch, under the group tabs and above the sub-tabs,
+   on every one of the group's tabs. One row, never taller than the sub-tab row under it on a desktop (the kit's
+   `Segmented`: 36 px buttons, 42 px in all, against a 44 px tab plus its underline). */
+.lookHeader {
+  display: flex;
+  align-items: center;
+}
+
+/* On a phone, or under a finger, each of the two buttons is a thumb's `--tap` (the kit already does this for a coarse
+   pointer; a phone-width window is held to it too). */
+@media (max-width: 767px), (pointer: coarse) {
+  .genderSwitch button {
+    min-height: var(--tap);
+    min-width: var(--tap);
+  }
 }
 
 /* One row, never two (V5 fix): `flex-wrap: wrap` let three sub-tabs plus their "n/m" counts break onto a

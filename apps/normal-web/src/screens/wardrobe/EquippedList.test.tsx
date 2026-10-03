@@ -17,9 +17,10 @@ const HAIR_BOB = item({ id: 'hair_f_bob01', slot: 'hairStyle', rarity: 'common',
 const OUTFIT_CASUAL = item({ id: 'outfit_casual01', slot: 'outfit', rarity: 'common', isDefault: true })
 const HEAD_BEANIE = item({ id: 'head_beanie01', slot: 'head', rarity: 'epic' })
 const HAIRCOLOR_RED = item({ id: 'haircolor_red01', slot: 'hairColor', rarity: 'rare', colour: '#b3261e' })
+const SKIN_DEEP = item({ id: 'skin_deep01', slot: 'skinColor', rarity: 'common', colour: '#5c3a28' })
 const TITLE_ROOKIE = item({ id: 'title_rookie', slot: 'title', rarity: 'common' })
 
-const ITEMS = new Map([HAIR_BOB, OUTFIT_CASUAL, HEAD_BEANIE, HAIRCOLOR_RED, TITLE_ROOKIE].map((it) => [it.id, it]))
+const ITEMS = new Map([HAIR_BOB, OUTFIT_CASUAL, HEAD_BEANIE, HAIRCOLOR_RED, SKIN_DEEP, TITLE_ROOKIE].map((it) => [it.id, it]))
 
 const CONFIG: AvatarConfigDto = {
   v: 4,
@@ -41,6 +42,8 @@ describe('EquippedList', () => {
 
     const labels = [
       viNormal.wardrobe.gender.legend,
+      viNormal.wardrobe.tabs.hairStyle,
+      viNormal.wardrobe.tabs.skinColor,
       viNormal.wardrobe.tabs.hairColor,
       viNormal.wardrobe.tabs.eyeColor,
       viNormal.wardrobe.tabs.head,
@@ -52,10 +55,45 @@ describe('EquippedList', () => {
       viNormal.wardrobe.words.badges,
     ]
     const rows = screen.getAllByRole('listitem')
-    expect(rows).toHaveLength(10)
+    expect(rows).toHaveLength(12)
     rows.forEach((row, index) => {
       expect(row).toHaveTextContent(labels[index]!)
     })
+  })
+
+  // Plan 19 (spec §6.3): the look comes first — Giới tính, Kiểu tóc, Màu da, Màu tóc, Màu mắt — then the items.
+  it('reads the hairstyle on the Kiểu tóc row, which has no "×", and the skin tone on Màu da with a swatch and a "×"', async () => {
+    const user = userEvent.setup()
+    const onRemove = vi.fn()
+    render(<EquippedList config={{ ...CONFIG, skinColor: 'skin_deep01' }} items={ITEMS} onRemove={onRemove} onJump={vi.fn()} />)
+
+    const [, hair, skin] = screen.getAllByRole('listitem')
+    expect(hair).toHaveTextContent(`${viNormal.wardrobe.tabs.hairStyle}${viNormal.items.hair_f_bob01}`)
+    expect(hair!.querySelectorAll('button')).toHaveLength(1)
+    expect(skin).toHaveTextContent(`${viNormal.wardrobe.tabs.skinColor}${viNormal.items.skin_deep01}`)
+    expect((skin!.querySelector('[style]') as HTMLElement).style.background).not.toBe('')
+
+    await user.click(screen.getByRole('button', { name: removeLabel(viNormal.items.skin_deep01) }))
+
+    expect(onRemove).toHaveBeenCalledWith('skinColor')
+  })
+
+  it('draws an icon of its own on each of the five look rows', () => {
+    render(<EquippedList config={CONFIG} items={ITEMS} onRemove={vi.fn()} onJump={vi.fn()} />)
+
+    const glyphs = screen
+      .getAllByRole('listitem')
+      .slice(0, 5)
+      .map((row) => row.querySelector('svg')!.innerHTML)
+    expect(new Set(glyphs).size).toBe(5)
+  })
+
+  it('reads Tự nhiên on the Màu da row while no skin tone is worn, with no "×"', () => {
+    render(<EquippedList config={CONFIG} items={ITEMS} onRemove={vi.fn()} onJump={vi.fn()} />)
+
+    const skin = screen.getAllByRole('listitem')[2]!
+    expect(skin).toHaveTextContent(`${viNormal.wardrobe.tabs.skinColor}${viNormal.wardrobe.natural}`)
+    expect(skin.querySelectorAll('button')).toHaveLength(1)
   })
 
   // Plan 19 (avatar v4): the body is chosen by gender, not by a base — so the first row names the gender. It is chosen,
@@ -88,8 +126,8 @@ describe('EquippedList', () => {
   it('shows "Tự nhiên" for an empty colour slot rather than "Không có"', () => {
     render(<EquippedList config={CONFIG} items={ITEMS} onRemove={vi.fn()} onJump={vi.fn()} />)
 
-    // eyeColor is unset; hairColor is set to the red item.
-    expect(screen.getByText(viNormal.wardrobe.natural)).toBeInTheDocument()
+    // skinColor and eyeColor are unset; hairColor is set to the red item.
+    expect(screen.getAllByText(viNormal.wardrobe.natural)).toHaveLength(2)
     expect(screen.getByText(viNormal.items.haircolor_red01)).toBeInTheDocument()
   })
 
@@ -104,6 +142,7 @@ describe('EquippedList', () => {
     render(<EquippedList config={CONFIG} items={ITEMS} onRemove={vi.fn()} onJump={vi.fn()} />)
 
     expect(screen.queryByRole('button', { name: removeLabel(viNormal.wardrobe.gender.f) })).toBeNull()
+    expect(screen.queryByRole('button', { name: removeLabel(viNormal.items.hair_f_bob01) })).toBeNull()
     expect(screen.queryByRole('button', { name: removeLabel(viNormal.items.outfit_casual01) })).toBeNull()
   })
 
@@ -125,15 +164,17 @@ describe('EquippedList', () => {
     expect(onRemove).toHaveBeenCalledWith('head')
   })
 
-  it('calls onJump with the hair colour tab when the Giới tính row is clicked', async () => {
-    // Until the gender switch heads the look group (A6), the hair colour is the look group's first tab.
+  it('calls onJump with the hairstyle tab when the Giới tính or Kiểu tóc row is clicked, and Màu da with its own', async () => {
+    // The gender has no tab: its switch heads the look group, whose first tab is Kiểu tóc.
     const user = userEvent.setup()
     const onJump = vi.fn()
     render(<EquippedList config={CONFIG} items={ITEMS} onRemove={vi.fn()} onJump={onJump} />)
 
     await user.click(screen.getByText(viNormal.wardrobe.gender.legend).closest('button') as HTMLElement)
+    await user.click(screen.getByText(viNormal.wardrobe.tabs.hairStyle).closest('button') as HTMLElement)
+    await user.click(screen.getByText(viNormal.wardrobe.tabs.skinColor).closest('button') as HTMLElement)
 
-    expect(onJump).toHaveBeenCalledWith('hairColor')
+    expect(onJump.mock.calls).toEqual([['hairStyle'], ['hairStyle'], ['skinColor']])
   })
 
   it('calls onJump with the words tab when the Danh hiệu row is clicked', async () => {

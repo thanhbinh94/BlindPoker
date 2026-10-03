@@ -194,7 +194,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 
 | Mã | Bước | Kỳ vọng | Ưu tiên |
 |---|---|---|---|
-| J-01 | Đổi thân nền (6 kiểu tóc), màu tóc, màu mắt | Hình xem trước đổi ngay; màu áp đúng lên tóc/mắt, không lem sang da. Đổi màu tóc: đầu và tóc vẫn còn, chỉ đổi màu; đổi màu mắt: mắt đổi màu, không còn mắt xanh gốc (review 29/09 No15, No16 — trước đây bị chặn) | P1 |
+| J-01 | Tủ đồ → Ngoại hình: bấm Nữ / Nam ở đầu nhóm; ở tab Kiểu tóc chọn vài kiểu; đổi màu tóc, màu da, màu mắt; đội một chiếc mũ rồi quay lại Kiểu tóc; bấm Hoàn tác | Nút Nữ \| Nam luôn ở đầu nhóm Ngoại hình (cả bốn tab Kiểu tóc, Màu tóc, Màu da, Màu mắt). Đổi giới tính: kiểu tóc chuyển sang kiểu tương ứng (ví dụ Tóc bob ↔ Tóc rối), quần áo đổi bản cắt, màu và mũ giữ nguyên; tab Kiểu tóc chỉ hiện 4 kiểu của giới tính đang chọn, mỗi thẻ là chân dung đầu đúng màu tóc, màu da hiện tại và không đội mũ. Hình xem trước đổi ngay; màu áp đúng lên tóc/da/mắt, không lem sang nhau. Đổi màu tóc: đầu và tóc vẫn còn, chỉ đổi màu; đổi màu mắt: mắt đổi màu, không còn mắt gốc (review 29/09 No15, No16). Hoàn tác đưa cả giới tính về như đã lưu (nhân vật v4, Kế hoạch 19) | P1 |
 | J-02 | Đội mũ | Tóc không lòi qua mũ (trừ mũ lưỡi trai) | P2 |
 | J-03 | Đổi đồ → Hoàn tác | Quay về trạng thái đã lưu | P2 |
 | J-04 | Đổi đồ → Lưu → mở Sảnh / vào bàn | Hình đại diện mới hiện ở sảnh và trên ghế; người khác trong bàn cũng thấy | P1 |

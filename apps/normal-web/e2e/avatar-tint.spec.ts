@@ -102,6 +102,13 @@ test.describe('Blind Luck Poker Normal — màu tóc, màu mắt', () => {
     await greenEyes.click()
     await expect(greenEyes, 'the eye colour it just picked reflects the choice').toHaveAttribute('aria-pressed', 'true')
 
+    // Avatar v4 (spec §6.1): the skin tone is a colour of its own, on the body (L30) and the face (L50). "Da nâu đậm" is
+    // `free`, like all six tones.
+    await goToWardrobeTab(page, 'Ngoại hình', 'Màu da')
+    const deepSkin = page.getByRole('tabpanel').getByRole('button', { name: /^Da nâu đậm, / })
+    await deepSkin.click()
+    await expect(deepSkin, 'the skin tone it just picked reflects the choice').toHaveAttribute('aria-pressed', 'true')
+
     await goToWardrobeTab(page, 'Trang phục', 'Quần áo')
     const redTee = page.getByRole('tabpanel').getByRole('button', { name: 'Áo phông đỏ', exact: true })
     await redTee.click()
@@ -138,14 +145,13 @@ test.describe('Blind Luck Poker Normal — màu tóc, màu mắt', () => {
     // `toBeVisible` says yes to an `<img>` the browser refused to load, so it proves nothing here: the
     // Content-Security-Policy `img-src` without `blob:` once left every tinted layer broken (No15, No16) while
     // this test stayed green. What proves it is that each layer decoded and that the recoloured ones are really
-    // `blob:` images, not the plain fallback. The hair colour alone already recolours three layers (30, 50, 60),
-    // so a count of three would pass with the eyes and the outfit silently falling back: hence at least four, and
-    // two layers named. The face (50) is the one layer whose recolour also paints the eye mask; a layer's tints
-    // are painted in a single canvas job, so a face that is a blob is a face whose eye colour was applied. The
-    // outfit (40) is the coloured t-shirt itself.
-    await expectEveryLayerDecoded(preview(page), 4, [40, 50])
+    // `blob:` images, not the plain fallback. Avatar v4 splits the figure: the body (30) and the face (50) carry
+    // the skin, the front hair (60) the hair colour, the outfit (40) the coloured t-shirt itself — so all four are
+    // named, and at least four blobs. The face (50) is also the layer whose recolour paints the eye mask; a layer's
+    // tints are painted in a single canvas job, so a face that is a blob is a face whose eye colour was applied.
+    await expectEveryLayerDecoded(preview(page), 4, [30, 40, 50, 60])
     const finalHash = await chibiHash(preview(page))
-    expect(finalHash, 'the eye colour and the outfit redraw the preview too').not.toBe(afterPick)
+    expect(finalHash, 'the eye colour, the skin tone and the outfit redraw the preview too').not.toBe(afterPick)
 
     await save(page)
     // No11b: the tab with a coloured outfit picked and worn — its colour dots and the worn mark on the cards — and the

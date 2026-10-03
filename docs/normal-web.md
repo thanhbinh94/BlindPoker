@@ -48,7 +48,9 @@ apps/normal-web/
       AuthScreen.tsx    sign in and register, one card, two modes
       {Profile,Achievements,Daily,Settings}Screen.tsx   four of the five lazy account screens
       wardrobe/
-        WardrobeScreen.tsx   the fifth — preview + expression stepper + eight tabs + saved outfits
+        WardrobeScreen.tsx   the fifth — preview + expression stepper + Nữ | Nam + ten tabs + saved outfits
+        HairStyleTab.tsx     Kiểu tóc: the gender's hairstyles, each card a head portrait of the draft
+        gender.ts            swapGender — the Nữ | Nam switch: the gender and a hairstyle of that gender
         ItemTab.tsx          one slot's tiles: owned and clickable, or locked with a reason
         OutfitBar.tsx        five saved snapshots — apply / save here / rename / delete
       TableChrome.tsx   makeChibiFor / makeCaptionFor — the two slots RoomScreen takes from this app
@@ -177,11 +179,26 @@ result against ten acceptance criteria, and writes `avatar-manifest.json`. Until
 `/avatar` — `wardrobe/WardrobeScreen.tsx`. A `Chibi` preview on the left, sized 192 px, with an expression stepper
 under it to try each of the six faces — `‹  Vui  ›`, a previous and a next button around the current face's name,
 wrapping at both ends, ArrowLeft/ArrowRight too, each button described by the name (review 2026-09-29, No10;
-`wardrobe/StagePanel.tsx`) — then the **Đang dùng** list, headed by **Giới tính** (Nữ/Nam, never removable), and
-the five **Bộ đồ đã lưu** slots. On the right, eight tabs in three groups: **Ngoại hình** (Màu tóc, Màu mắt — the
-screen opens on Màu tóc), **Trang phục** (Mũ, Phụ kiện mặt, Quần áo) and **Trang trí** (Hào quang, Khung, Danh hiệu
-& Huy hiệu — title and badge together, the two slots with no picture). Plan 19 removed the base tab (Nhân vật) with
-the bases; the Nữ | Nam switch and the Kiểu tóc and Màu da tabs that replace it are A6's.
+`wardrobe/StagePanel.tsx`) — then the **Đang dùng** list, whose first five rows are the look — **Giới tính**
+(Nữ/Nam), **Kiểu tóc**, **Màu da**, **Màu tóc**, **Màu mắt** — then the items, and the five **Bộ đồ đã lưu**
+slots. Giới tính, Kiểu tóc and Quần áo are never removable; the phone's "Đang dùng (n)" counts those three plus
+every optional slot filled. On the right, ten tabs in three groups: **Ngoại hình** (Kiểu tóc, Màu tóc, Màu da, Màu
+mắt — the screen opens on Kiểu tóc), **Trang phục** (Mũ, Phụ kiện mặt, Quần áo) and **Trang trí** (Hào quang,
+Khung, Danh hiệu & Huy hiệu — title and badge together, the two slots with no picture).
+
+**The look (avatar v4, Plan 19; spec `2026-10-03-avatar-v4-design.md` §6.1–6.3).** The body is the gender, chosen
+rather than owned: the **Nữ | Nam** switch (the kit's `Segmented`, a `group` named "Giới tính", passed to
+`CategoryNav` as `lookHeader`) heads the Ngoại hình group on every one of its tabs and is not a tab itself — a row
+no taller than the sub-tabs' on a desktop, a 44 px button each on a phone. Switching (`wardrobe/gender.ts`
+`swapGender`) changes the draft only: the hairstyle goes to its `counterpart` when owned, else to the first owned
+hairstyle of that gender; the outfit's cut follows the gender on its own (`layerFileFor`); colours, hat, glasses,
+aura, frame, title and badge stay. With no hairstyle of the other gender owned it changes nothing, so a draft never
+pairs a gender with the other gender's hairstyle. **Kiểu tóc** (`wardrobe/HairStyleTab.tsx`) lists that gender's
+hairstyles only (`slotCards`/`counts` take the gender), each card a head portrait (`ItemCard`'s `thumb`, 96 px, 72 on
+a phone) of the draft with that hairstyle — its gender, hair colour, skin and eyes, and no hat, glasses, aura or
+frame, which would make every card look the same; the hairstyle is required like the outfit, so a press on the worn
+card keeps it on. **Màu da** is a `ColourTab` like the hair and eye colours, its "Tự nhiên" swatch filled with the
+body's cream (`naturalColour`). Plan 19 removed the old base tab (Nhân vật) with the bases.
 
 There is no separate inventory screen (review 2026-09-29, No5): what the account owns is this screen's default
 list, and Profile links here and to the achievements only. `#/inventory` — an old bookmark or link — still opens
@@ -350,11 +367,13 @@ What the five tests are for:
 - **The wardrobe, end to end** (`avatar2d.spec.ts`). `Chibi.test.tsx` proves the layering and the hide
   rules under jsdom against a hand-built config; this file is the other half — that the *app* wires a
   saved choice back into the lobby bar, a seat plate and a second wardrobe visit consistently, on the
-  placeholder layers `avatar:placeholder` writes. It switches base to m01 and saves, checks that a
-  locked epic tile (`aria-disabled`) does not equip on click, sits at a table and asserts the seat's
-  `data-chibi-hash` matches the bar's and its `<img>` names `base_m01_L30` while both bots' name
-  `bot_`, then saves an outfit-bar snapshot, changes base again and applies the snapshot back — three
-  hashes belonging to two configurations, since f01 with nothing else equipped is exactly what the
+  placeholder layers `avatar:placeholder` writes. It opens on Kiểu tóc, switches Nữ to Nam (the bob
+  gives way to its counterpart, "Tóc rối"), picks "Tóc vuốt dựng" and saves, checks that a locked epic
+  tile (`aria-disabled`) does not equip on click, sits at a table and asserts the seat's
+  `data-chibi-hash` matches the bar's and its `<img>`s name `body_m_L30` and `item_hair_m_spiky01_L60`
+  while both bots' name `bot_`, then saves an outfit-bar snapshot, switches back to Nữ (the ponytail,
+  the spiky hair's counterpart), picks the bob, saves, and applies the snapshot back — three hashes
+  belonging to two configurations, since Nữ with the bob and nothing else equipped is exactly what the
   account started as. Nothing here needs a GPU: a chibi is a stack of same-origin `<img>`s, unlike the
   3D `avatar3d.spec.ts` this file replaced.
 

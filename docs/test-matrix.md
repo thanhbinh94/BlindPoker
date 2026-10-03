@@ -112,12 +112,13 @@ screen, on the accounts they already make — the default e2e may not register m
   on the phone; and the lobby's create-room dialog in both modes: all three (`normal.spec.ts`);
 - room taking seats, in a hand, and on the result card counting down and held: all three; on the phone the stage
   is also read scrolled to its foot (`normal.spec.ts`);
-- wardrobe (Ngoại hình, Mũ, Quần áo — the view of No8's screenshot, the old inventory's "Trang phục" group — and
-  Danh hiệu & Huy hiệu; the inventory screen folded into it, No5): all three, plus 900×1100, the item tabs measured
-  with "Hiện cả món chưa có" ticked (`wardrobe-layout.spec.ts`); the wardrobe's owned-only empty state — a fresh
-  account's Mũ, the box unticked, one line in place of the grid (No11a): 1920×940 and 375×812
-  (`wardrobe-layout.spec.ts`); a coloured outfit worn: 1920×940 and 1366×768 (`avatar-tint.spec.ts`). The wardrobe's
-  other five tabs are not read;
+- wardrobe (Ngoại hình — opening on Kiểu tóc under the Nữ | Nam switch since avatar v4 — Mũ, Quần áo — the view of
+  No8's screenshot, the old inventory's "Trang phục" group — and Danh hiệu & Huy hiệu; the inventory screen folded
+  into it, No5): all three, plus 900×1100, the item tabs measured with "Hiện cả món chưa có" ticked
+  (`wardrobe-layout.spec.ts`); Ngoại hình → Kiểu tóc with the gender switch on its own: 1920×940, 1366×768 and
+  375×812 (`wardrobe-layout.spec.ts`); the wardrobe's owned-only empty state — a fresh account's Mũ, the box
+  unticked, one line in place of the grid (No11a): 1920×940 and 375×812 (`wardrobe-layout.spec.ts`); a coloured
+  outfit worn: 1920×940 and 1366×768 (`avatar-tint.spec.ts`). The wardrobe's other six tabs are not read;
 - profile with a hand in its history, achievements, Settings and its sign-out dialog: all three; on the phone the
   profile is also read before the hand (`normal.spec.ts`); Settings in the light theme at 1440×900, 900×1100 and
   375×812 (`wardrobe-layout.spec.ts`);

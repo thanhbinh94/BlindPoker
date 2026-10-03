@@ -115,6 +115,17 @@ describe('cards', () => {
       expect(onPick).toHaveBeenCalledWith('head_beret_blue01')
     })
 
+    // Plan 19 (spec §6.1): a hairstyle card shows a head portrait, not an icon.
+    it('draws a given thumb instead of the icon', () => {
+      const HAIR = item({ id: 'hair_f_bob01', slot: 'hairStyle', rarity: 'common', asset: { layer: 60, file: 'item_hair_f_bob01_L60', back: 'item_hair_f_bob01_L20', fitsAvatarCrop: true } })
+      render(<ItemCard item={HAIR} owned wearing={false} hint="" thumb={<span data-testid="portrait" />} onPick={vi.fn()} />)
+
+      const card = screen.getByRole('button', { name: `${viNormal.items.hair_f_bob01}, ${viNormal.inventory.rarity.common}` })
+      expect(within(card).getByTestId('portrait')).toBeInTheDocument()
+      expect(card.querySelector('img')).toBeNull()
+      expect(tintedLayer).not.toHaveBeenCalled()
+    })
+
     it('does not call onPick when a variant dot is not owned', async () => {
       const user = userEvent.setup()
       const onPick = vi.fn()

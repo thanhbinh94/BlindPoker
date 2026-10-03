@@ -50,6 +50,11 @@ async function save(page: Page): Promise<void> {
   await expect(page.getByText('Đã lưu trang phục.')).toBeVisible()
 }
 
+/** One button of the wardrobe's Nữ | Nam switch (avatar v4, spec §6.1), scoped to its "Giới tính" group and named
+ * exactly: "Nữ" is also the wearing list's first value. */
+const genderButton = (page: Page, name: 'Nữ' | 'Nam'): Locator =>
+  page.getByRole('group', { name: 'Giới tính', exact: true }).getByRole('button', { name, exact: true })
+
 /** Waits for the lobby bar's hash to be something other than `was`, and returns the new one. */
 async function barHashAfter(page: Page, was: string): Promise<string> {
   await expect(lobbyAvatar(page), 'the bar must pick up the saved change').not.toHaveAttribute('data-chibi-hash', was)
@@ -65,22 +70,30 @@ test.describe('Blind Luck Poker Normal — nhân vật chibi', () => {
     const first = await chibiHash(lobbyAvatar(page))
     await shot(page, 'avatar2d-lobby-desktop')
 
-    // --- 2. the wardrobe: switch base to m01, save ------------------------------------------------------
+    // --- 2. the wardrobe: switch to Nam, pick a hairstyle, save ------------------------------------------
+    //
+    // Avatar v4 (spec §6.1–6.2): the wardrobe opens on Kiểu tóc under the Nữ | Nam switch. Switching the gender swaps
+    // the hairstyle to its counterpart (the bob's is "Tóc rối") and redraws the figure on the male body.
     await openWardrobe(page)
-    await expect(page.getByRole('tab', { name: 'Nhân vật', exact: true })).toHaveAttribute('aria-selected', 'true')
-    const previewBeforeBase = await chibiHash(preview(page))
+    await expect(page.getByRole('tablist', { name: 'Ngoại hình' }).getByRole('tab', { name: /^Kiểu tóc/ })).toHaveAttribute('aria-selected', 'true')
+    await expect(genderButton(page, 'Nữ')).toHaveAttribute('aria-pressed', 'true')
+    const previewBeforeGender = await chibiHash(preview(page))
 
     const tabpanel = page.getByRole('tabpanel')
-    const m01Tile = tabpanel.getByRole('button', { name: 'Tóc rối' })
-    await m01Tile.click()
-    await expect(m01Tile, 'the tile it just picked reflects the choice').toHaveAttribute('aria-pressed', 'true')
-    expect(await chibiHash(preview(page)), 'picking a base redraws the preview').not.toBe(previewBeforeBase)
+    await genderButton(page, 'Nam').click()
+    await expect(genderButton(page, 'Nam'), 'the switch reflects the choice').toHaveAttribute('aria-pressed', 'true')
+    await expect(tabpanel.getByRole('button', { name: /^Tóc rối, / }), 'the bob gives way to its counterpart').toHaveAttribute('aria-pressed', 'true')
+    expect(await chibiHash(preview(page)), 'switching the gender redraws the preview').not.toBe(previewBeforeGender)
+
+    const spiky = tabpanel.getByRole('button', { name: /^Tóc vuốt dựng, / })
+    await spiky.click()
+    await expect(spiky, 'the card it just picked reflects the choice').toHaveAttribute('aria-pressed', 'true')
     await shot(page, 'avatar2d-wardrobe-desktop')
     await save(page)
 
     await toLobby(page)
     const second = await barHashAfter(page, first)
-    expect(second, 'saving a new base changes the bar').not.toBe(first)
+    expect(second, 'saving a new gender and hairstyle changes the bar').not.toBe(first)
 
     // --- 3. the Head tab: an epic tile a fresh account has not unlocked ----------------------------------
     //
@@ -107,14 +120,15 @@ test.describe('Blind Luck Poker Normal — nhân vật chibi', () => {
     await lockedTile.click({ force: true })
     expect(await chibiHash(preview(page)), 'a locked tile does not equip on click').toBe(previewBeforeClick)
 
-    // --- 4. a table: my seat matches the bar, and draws the base layer named for m01 --------------------
+    // --- 4. a table: my seat matches the bar, and draws the male body and the spiky hair -----------------
     await toLobby(page)
     await createBlindRoom(page, unique('Bàn '), 2)
     await sit(page, 0)
 
     const mySeat = page.locator('[data-seat="0"] [data-chibi-hash]')
     expect(await chibiHash(mySeat), 'the seat draws the same configuration as the bar').toBe(second)
-    await expect(page.locator('[data-seat="0"] img[src*="base_m01_L30"]'), 'the seat layers in the m01 body').toHaveCount(1)
+    await expect(page.locator('[data-seat="0"] img[src*="body_m_L30"]'), 'the seat layers in the male body').toHaveCount(1)
+    await expect(page.locator('[data-seat="0"] img[src*="item_hair_m_spiky01_L60"]'), 'the seat layers in the spiky front hair').toHaveCount(1)
     // Two bots, each drawing from the bot art rather than a wardrobe — the count is loose because a bot
     // chibi has two layers (body and face), not one image per seat.
     expect(await page.locator('[data-seat] img[src*="bot_"]').count(), 'both bot seats draw bot art').toBeGreaterThanOrEqual(2)
@@ -123,7 +137,7 @@ test.describe('Blind Luck Poker Normal — nhân vật chibi', () => {
     await page.getByRole('button', { name: 'Rời phòng' }).click()
     await expectLobby(page)
 
-    // --- 5. the outfit bar: a snapshot saved, another base tried, and the snapshot restored -------------
+    // --- 5. the outfit bar: a snapshot saved, the other gender tried, and the snapshot restored ---------
     await openWardrobe(page)
     // A fresh account's five saved-outfit slots are all empty; an empty slot's portrait opens the naming
     // dialog straight away, no menu in between (design §3.1 item 4) — unlike a filled slot, see "Áp dụng" below.
@@ -134,14 +148,20 @@ test.describe('Blind Luck Poker Normal — nhân vật chibi', () => {
     await dialog.getByRole('button', { name: 'Lưu vào đây' }).click()
     await expect(dialog).toBeHidden()
 
-    await tabpanel.getByRole('button', { name: 'Tóc bob' }).click()
+    // Back to Nữ: the spiky hair gives way to its counterpart, the ponytail; then the bob.
+    await genderButton(page, 'Nữ').click()
+    await expect(genderButton(page, 'Nữ')).toHaveAttribute('aria-pressed', 'true')
+    await expect(tabpanel.getByRole('button', { name: /^Tóc đuôi ngựa, / }), 'the spiky hair gives way to its counterpart').toHaveAttribute('aria-pressed', 'true')
+    const bob = tabpanel.getByRole('button', { name: /^Tóc bob, / })
+    await bob.click()
+    await expect(bob).toHaveAttribute('aria-pressed', 'true')
     await save(page)
     await toLobby(page)
     const third = await barHashAfter(page, second)
-    // Switching back to f01 with nothing else equipped is exactly the fresh account's own default
-    // configuration, so `third` lands back on `first` — a hash is the configuration's identity, not a
-    // record of the path taken to reach it, and this is the one step in the flow where that shows.
-    expect(third, 'f01 with only the default outfit is the account it started as').toBe(first)
+    // Nữ with the bob and nothing else equipped is exactly the fresh account's own default configuration, so
+    // `third` lands back on `first` — a hash is the configuration's identity, not a record of the path taken to
+    // reach it, and this is the one step in the flow where that shows.
+    expect(third, 'Nữ with the bob and only the default outfit is the account it started as').toBe(first)
 
     await openWardrobe(page)
     // A filled slot's portrait opens a small menu instead (design §3.1 item 4: Áp dụng · Lưu đè vào đây ·
@@ -150,7 +170,7 @@ test.describe('Blind Luck Poker Normal — nhân vật chibi', () => {
     await page.getByRole('button', { name: 'Mặc bộ này' }).click()
     await toLobby(page)
     const restored = await barHashAfter(page, third)
-    expect(restored, 'applying the saved slot returns exactly the m01 configuration').toBe(second)
+    expect(restored, 'applying the saved slot returns exactly the Nam configuration').toBe(second)
   })
 
   test('@mobile tủ đồ trên màn hình điện thoại', async ({ page }) => {

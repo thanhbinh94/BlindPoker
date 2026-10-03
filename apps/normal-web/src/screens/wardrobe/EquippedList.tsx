@@ -13,13 +13,11 @@ export interface EquippedListProps {
   onJump: (tab: TabId) => void
 }
 
-/** The row order design §3.1 item 3 lists: the gender first, the two colours, the five drawn slots, then the
- * two word slots — `gender` is not an `ItemSlot` (it is chosen, not owned), so it gets its own row kind.
- *
- * Plan 19 (avatar v4): the gender row replaces the base's. `RowId` already spans every slot, `hairStyle` and
- * `skinColor` included, but their rows join the list with the look group's Kiểu tóc and Màu da tabs (A6). */
+/** The row order (design §3.1 item 3; avatar v4, spec §6.3): the look first — Giới tính, Kiểu tóc, Màu da, Màu tóc,
+ * Màu mắt — then the five drawn slots and the two word slots. `gender` is not an `ItemSlot` (it is chosen, not
+ * owned), so it gets its own row kind. */
 type RowId = 'gender' | ItemSlot
-const ROWS: readonly RowId[] = ['gender', 'hairColor', 'eyeColor', 'head', 'face', 'outfit', 'aura', 'frame', 'title', 'badge']
+const ROWS: readonly RowId[] = ['gender', 'hairStyle', 'skinColor', 'hairColor', 'eyeColor', 'head', 'face', 'outfit', 'aura', 'frame', 'title', 'badge']
 
 const COLOUR_SLOTS: ReadonlySet<RowId> = new Set(['hairColor', 'eyeColor', 'skinColor'])
 /** Design §3.1 item 3: Giới tính, Kiểu tóc and Trang phục never carry a "×" — the first is chosen rather than
@@ -48,11 +46,10 @@ const ROW_LABEL_KEY: Record<RowId, string> = {
  * the slot. */
 const ROW_ICON: Record<RowId, IconName> = {
   gender: 'person',
-  // Stand-ins until A6 draws these two rows with icons of their own (`hair`, `palm`).
-  hairStyle: 'person',
+  hairStyle: 'hair',
   hairColor: 'drop',
   eyeColor: 'eye',
-  skinColor: 'drop',
+  skinColor: 'palm',
   head: 'hat',
   face: 'glasses',
   outfit: 'shirt',
@@ -110,8 +107,9 @@ export function EquippedList({ config, items, onRemove, onJump }: EquippedListPr
     return itemRow(row as Exclude<ItemSlot, 'hairColor' | 'eyeColor' | 'skinColor'>, config, items, t)
   }
 
-  // The gender has no tab of its own: until the switch heads the look group (A6), its row opens that group's first tab.
-  const jumpTarget = (row: RowId): TabId => (row === 'gender' ? 'hairColor' : tabOfSlot(row))
+  // The gender has no tab of its own: its switch heads the look group, so its row opens that group's first tab, Kiểu
+  // tóc — the tab the gender changes.
+  const jumpTarget = (row: RowId): TabId => (row === 'gender' ? 'hairStyle' : tabOfSlot(row))
 
   return (
     <div className={s.equippedList}>

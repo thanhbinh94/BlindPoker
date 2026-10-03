@@ -4,11 +4,13 @@ import {
   account,
   expectDotTarget,
   expectEvenCardRows,
+  expectGroupOnOneLine,
   expectHeadingsClearOfCards,
   expectNoSidewaysScroll,
   expectNoTextOverlapAt,
   expectNoTextOverlapDown,
   goToWardrobeTab,
+  OVERLAP_SCREENS,
   register,
   SHOTS,
   USER_SCREEN,
@@ -38,7 +40,7 @@ test.use({ contextOptions: { reducedMotion: 'reduce' } })
 const preview = (page: Page) => page.getByRole('img', { name: 'Phòng thay đồ' })
 
 /** Review 2026-09-29, No11a: the box that also lists what the account does not own yet — unticked whenever the
- * wardrobe opens, hidden on "Nhân vật". Ticked with `check()` (idempotent), never `click()`: a `page.goto` to the
+ * wardrobe opens, and on every tab. Ticked with `check()` (idempotent), never `click()`: a `page.goto` to the
  * URL the page is already on keeps the document, and with it the wardrobe's state. */
 const showLockedBox = (page: Page) => page.getByRole('checkbox', { name: 'Hiện cả món chưa có' })
 
@@ -84,13 +86,14 @@ async function assertTablistOnOneLine(page: Page, tablistName: string): Promise<
 }
 
 /**
- * The group row ("Phòng thay đồ", design §3.1's three groups) plus every group's own sub-tab row, ending back on
- * "Ngoại hình" — the default group and its default tab, "Nhân vật" (design §5.3) — so the screenshot
- * taken right after always shows the same, mockup-matching view regardless of how many groups this walked
- * through first.
+ * The group row ("Phòng thay đồ", design §3.1's three groups) plus every group's own sub-tab row — and the look
+ * group's "Giới tính" switch above its four sub-tabs (avatar v4, spec §6.1) — ending back on "Ngoại hình", the default
+ * group, and its default tab, "Kiểu tóc", so the screenshot taken right after always shows the same view regardless
+ * of how many groups this walked through first.
  */
 async function assertNavNeverWraps(page: Page): Promise<void> {
   await assertTablistOnOneLine(page, 'Phòng thay đồ')
+  await expectGroupOnOneLine(page, 'Giới tính')
   await assertTablistOnOneLine(page, 'Ngoại hình')
 
   await goToWardrobeTab(page, 'Trang phục')
@@ -102,6 +105,7 @@ async function assertNavNeverWraps(page: Page): Promise<void> {
   await assertTablistOnOneLine(page, 'Trang trí')
 
   await goToWardrobeTab(page, 'Ngoại hình')
+  await expect(page.getByRole('tablist', { name: 'Ngoại hình' }).getByRole('tab', { name: /^Kiểu tóc/ })).toHaveAttribute('aria-selected', 'true')
 }
 
 /**
@@ -119,9 +123,11 @@ async function expectCardGrids(page: Page): Promise<void> {
   await openWardrobeFresh(page)
   const panel = page.getByRole('tabpanel')
 
-  // The default tab: the base cards — one of the four tabs measured for overlap, with the hats, the clothes and the
-  // words below.
-  await expectEvenCardRows(panel, `wardrobe, Ngoại hình → Nhân vật, ${where}`)
+  // The default tab: Kiểu tóc's hairstyle portraits under the Nữ | Nam switch (avatar v4) — one of the four tabs
+  // measured for overlap, with the hats, the clothes and the words below. Every hairstyle is free, so the box adds
+  // nothing here.
+  await expect(page.getByRole('tablist', { name: 'Ngoại hình' }).getByRole('tab', { name: /^Kiểu tóc/ })).toHaveAttribute('aria-selected', 'true')
+  await expectEvenCardRows(panel, `wardrobe, Ngoại hình → Kiểu tóc, ${where}`)
   await expectNoTextOverlapDown(page, `wardrobe, Ngoại hình, ${where}`)
 
   await goToWardrobeTab(page, 'Ngoại hình', 'Màu tóc')
@@ -129,6 +135,8 @@ async function expectCardGrids(page: Page): Promise<void> {
   await showLockedBox(page).check()
   await expect(showLockedBox(page)).toBeChecked()
   await expectEvenCardRows(panel, `wardrobe, Ngoại hình → Màu tóc, ${where}`)
+  await goToWardrobeTab(page, 'Ngoại hình', 'Màu da')
+  await expectEvenCardRows(panel, `wardrobe, Ngoại hình → Màu da, ${where}`)
   await goToWardrobeTab(page, 'Ngoại hình', 'Màu mắt')
   await expectEvenCardRows(panel, `wardrobe, Ngoại hình → Màu mắt, ${where}`)
 
@@ -256,13 +264,23 @@ test.describe('Blind Luck Poker Normal — bố cục tủ đồ (Kế hoạch 1
     await expectStepper(page, 'wardrobe, desktop 1440×900', false)
     await expectColumnFits(page, 'wardrobe, desktop 1440×900')
 
-    // The selected base card is ringed in gold without changing size: every card in the base grid is as tall
-    // as its neighbours (a 2 px border on the selected one used to shrink it and nudge its portrait).
-    const heights = await page.getByRole('tabpanel').getByRole('button', { pressed: undefined }).evaluateAll((cards) =>
-      cards.filter((c) => c.hasAttribute('aria-pressed')).map((c) => `${c.clientWidth}x${c.clientHeight}`),
-    )
-    expect(heights.length, 'the base grid lists every base').toBeGreaterThanOrEqual(6)
-    expect(new Set(heights).size, `base card content boxes ${heights.join(', ')}`).toBe(1)
+    // The worn hairstyle's card is ringed in gold without changing size: every card in the Kiểu tóc grid — the tab
+    // the wardrobe opens on (avatar v4), its head portraits where the bases used to be — is as large as its
+    // neighbours (a 2 px border on the selected one used to shrink it and nudge its portrait).
+    const hairPanel = page.getByRole('tabpanel')
+    await expect(hairPanel).toHaveAttribute('aria-labelledby', 'wardrobe-subtab-hairStyle')
+    await expect(hairPanel.getByRole('button', { name: /^Tóc bob, / }), 'the fresh account wears the bob').toHaveAttribute('aria-pressed', 'true')
+    const boxes = await hairPanel.locator('button[aria-pressed]').evaluateAll((cards) => cards.map((c) => `${c.clientWidth}x${c.clientHeight}`))
+    expect(boxes.length, 'the hairstyle grid lists every hairstyle of the gender').toBeGreaterThanOrEqual(4)
+    expect(new Set(boxes).size, `hairstyle card content boxes ${boxes.join(', ')}`).toBe(1)
+
+    // The Nữ | Nam switch heads the group in a row no taller than the sub-tab row under it (spec §6.1).
+    const genderSwitch = await page.getByRole('group', { name: 'Giới tính', exact: true }).boundingBox()
+    const subTabRow = await page.getByRole('tablist', { name: 'Ngoại hình' }).boundingBox()
+    if (genderSwitch === null || subTabRow === null) throw new Error('the gender switch or the sub-tab row has no layout')
+    expect(genderSwitch.height, `the gender switch (${genderSwitch.height} px) is no taller than the sub-tab row (${subTabRow.height} px)`).toBeLessThanOrEqual(subTabRow.height)
+    expect(genderSwitch.y + genderSwitch.height, 'the switch sits above the sub-tabs').toBeLessThanOrEqual(subTabRow.y)
+    await expectNoTextOverlapAt(page, 'wardrobe, Ngoại hình → Kiểu tóc, the gender switch', OVERLAP_SCREENS)
     await page.screenshot({ path: `${SHOTS}wardrobe-desktop-dark.png`, fullPage: true })
 
     await useLightTheme(page)
@@ -353,6 +371,15 @@ test.describe('Blind Luck Poker Normal — bố cục tủ đồ (Kế hoạch 1
     await expectNoSidewaysScroll(page)
     await assertNavNeverWraps(page)
     await expectNoSidewaysScroll(page)
+    // Avatar v4 (spec §6.1): the Nữ | Nam switch is two thumb-sized buttons, and the four look sub-tabs stay one row
+    // that scrolls inside itself rather than the page.
+    for (const name of ['Nữ', 'Nam']) {
+      const button = await page.getByRole('group', { name: 'Giới tính', exact: true }).getByRole('button', { name, exact: true }).boundingBox()
+      expect(button, `the "${name}" button has a box`).not.toBeNull()
+      expect(button!.height, `the "${name}" button is a 44 px target`).toBeGreaterThanOrEqual(44)
+      expect(button!.width, `the "${name}" button is at least 44 px wide`).toBeGreaterThanOrEqual(44)
+    }
+    await expectNoTextOverlapAt(page, 'wardrobe, Ngoại hình → Kiểu tóc, the gender switch')
     // No10: two thumb-sized buttons either side of the name.
     await expectStepper(page, 'wardrobe, phone 375×812', true)
     await page.screenshot({ path: `${SHOTS}wardrobe-mobile-dark.png`, fullPage: true })

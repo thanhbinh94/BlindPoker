@@ -20,12 +20,15 @@ Màn tủ đồ nhìn như một phòng thay đồ của game: nhân vật lớn
 - **Cột trái** (thẻ nền `--bg-elev`, bo 16 px, `position: sticky; top: 16px`):
   1. **Sân khấu** cao 330 px: nền gradient tối, vệt sáng vàng mờ sau nhân vật, bệ elip mờ dưới chân; chibi toàn thân cao 320 px. Khi đang ở tab Khung, sân khấu hiện chân dung tròn 240 px có khung (như hiện nay hiện thêm ảnh nhỏ), không hiện toàn thân.
   2. **Biểu cảm** (review 29/09 No10): một hàng bộ chuyển `‹  Vui  ›` dưới sân khấu — nút "Biểu cảm trước" và "Biểu cảm sau" hai bên, tên biểu cảm đang xem ở giữa (trong `<output aria-live="polite">`). Sáu biểu cảm đi theo thứ tự Bình thường, Vui, Buồn, Ngạc nhiên, Nhắm mắt, Ngủ; bấm "sau" ở Ngủ thì về Bình thường, bấm "trước" ở Bình thường thì sang Ngủ. Phím ← → trong nhóm cũng chuyển (trừ khi giữ Alt, Ctrl hoặc Meta). Hàng cao 30 px, đúng bằng hàng 6 nút cũ (hàng đó từng bị chữ 11 px, chật và xuống hai dòng ở cột 300 px), để cột trái vẫn vừa cửa sổ cao 900 px. Chỉ đổi hình xem trước, không lưu; chân dung có khung ở tab Khung đổi theo.
-  3. **Đang dùng**: danh sách mỗi slot một dòng — biểu tượng, tên slot, tên món (màu chữ theo độ hiếm; màu tóc/mắt có chấm màu). Thứ tự: Nhân vật, Màu tóc, Màu mắt, Mũ, Phụ kiện mặt, Quần áo, Hào quang, Khung, Danh hiệu, Huy hiệu. Slot trống ghi "Không có" (màu tóc/mắt trống ghi "Tự nhiên"). Slot tuỳ chọn đang có món có nút "×" để bỏ; Nhân vật và Quần áo không có "×". Bấm vào một dòng mở đúng nhóm/tab của slot đó.
+  3. **Đang dùng**: danh sách mỗi slot một dòng — biểu tượng, tên slot, tên món (màu chữ theo độ hiếm; màu tóc/da/mắt có chấm màu). Thứ tự (nhân vật v4, Kế hoạch 19): Giới tính, Kiểu tóc, Màu da, Màu tóc, Màu mắt, Mũ, Phụ kiện mặt, Quần áo, Hào quang, Khung, Danh hiệu, Huy hiệu (trước đây dòng đầu là Nhân vật). Slot trống ghi "Không có" (màu tóc/da/mắt trống ghi "Tự nhiên"). Slot tuỳ chọn đang có món có nút "×" để bỏ; Giới tính, Kiểu tóc và Quần áo không có "×". Bấm vào một dòng mở đúng nhóm/tab của slot đó; dòng Giới tính mở tab Kiểu tóc.
   4. **Bộ đồ đã lưu**: 5 chân dung tròn 54 px (ô trống: vòng nét đứt có "+" và chữ "Trống"), tên bên dưới. Bấm ô có đồ mở menu nhỏ: Mặc bộ này · Lưu đè · Đổi tên · Xóa. Bấm ô trống mở hộp đặt tên để lưu bộ hiện tại vào ô đó. Các hộp thoại dùng lại luồng hiện có của `OutfitBar`.
 - **Cột phải**:
-  1. **3 nhóm** dạng segmented có biểu tượng: Ngoại hình (Nhân vật, Màu tóc, Màu mắt) · Trang phục (Mũ, Phụ kiện mặt, Quần áo) · Trang trí (Hào quang, Khung, Danh hiệu & Huy hiệu).
-  2. **Tab con** của nhóm đang chọn, gạch chân vàng khi chọn, mỗi tab kèm "đã có/tổng" (ví dụ "5/8"; tab Nhân vật không có số vì nhân vật không phải món).
-  3. **Bộ lọc** (review 29/09 No11a): một ô đánh dấu **"Hiện cả món chưa có"** (thay ba nút Tất cả · Đã có · Chưa có cũ), không hiện ở tab Nhân vật. Mặc định bỏ tích: tab chỉ liệt kê món đã có. Bên phải vẫn hiện "n/m đã có" — số này đếm từng biến thể màu như một món, nên một thẻ họ (§4.1) có thể đứng cho nhiều món đã có. Ô là `<input type="checkbox">` gốc trong `<label>`, cao một vùng bấm (`--tap`), `accent-color: var(--gold)` — đúng kiểu ô đánh dấu của hộp tạo phòng.
+  1. **3 nhóm** dạng segmented có biểu tượng: Ngoại hình (Kiểu tóc, Màu tóc, Màu da, Màu mắt) · Trang phục (Mũ, Phụ kiện mặt, Quần áo) · Trang trí (Hào quang, Khung, Danh hiệu & Huy hiệu).
+     - **Nhóm Ngoại hình** (nhân vật v4, Kế hoạch 19; spec `2026-10-03-avatar-v4-design.md` §6.1): tab Nhân vật (`base`) bị bỏ cùng các thân cũ. Đầu nhóm là nút chuyển **Nữ | Nam** (`Segmented` của kit, nhóm "Giới tính"), nằm dưới hàng nhóm và trên hàng tab con, hiện ở cả bốn tab con của nhóm và **không phải một tab**. Hàng của nó không cao hơn hàng tab con trên desktop; trên điện thoại mỗi nút cao ít nhất 44 px (`--tap`).
+     - Đổi giới tính chỉ đổi bản nháp: kiểu tóc chuyển sang kiểu tương ứng (`counterpart`) nếu đã có, không thì kiểu đã có đầu tiên của giới tính đó; quần áo tự dùng bản cắt theo giới tính; màu tóc, màu da, màu mắt, mũ, kính, hào quang, khung, danh hiệu, huy hiệu giữ nguyên. "Lưu trang phục" mới lưu, "Hoàn tác" đưa giới tính về như mọi thay đổi khác.
+     - Bốn tab con nằm trên một hàng như các nhóm khác: hàng không xuống dòng và tự cuộn ngang bên trong khi chật; trang không cuộn ngang.
+  2. **Tab con** của nhóm đang chọn, gạch chân vàng khi chọn, mỗi tab kèm "đã có/tổng" (ví dụ "5/8"; Kiểu tóc chỉ đếm kiểu tóc của giới tính đang chọn).
+  3. **Bộ lọc** (review 29/09 No11a): một ô đánh dấu **"Hiện cả món chưa có"** (thay ba nút Tất cả · Đã có · Chưa có cũ), hiện ở mọi tab. Mặc định bỏ tích: tab chỉ liệt kê món đã có. Bên phải vẫn hiện "n/m đã có" — số này đếm từng biến thể màu như một món, nên một thẻ họ (§4.1) có thể đứng cho nhiều món đã có. Ô là `<input type="checkbox">` gốc trong `<label>`, cao một vùng bấm (`--tap`), `accent-color: var(--gold)` — đúng kiểu ô đánh dấu của hộp tạo phòng.
   4. **Lưới thẻ** `repeat(auto-fill, minmax(150px, 1fr))`, khoảng 14 px, lấp hết chiều ngang.
 
 ### 3.2 Điện thoại (< 768 px)
@@ -51,14 +54,15 @@ Như desktop nhưng cột trái 300 px, sân khấu 280 px, lưới `minmax(130p
   - Mọi thứ trên thẻ là của món đó: ảnh (biến thể được tô đúng màu của nó, bằng mặt nạ màu của icon, như lớp đang mặc trên nhân vật), tên, độ hiếm, nhãn "✓ Đang dùng", trạng thái khoá và dòng cách nhận.
   - Hàng chấm 16 px dưới thẻ (như Plan 13) liệt kê cả họ, **món gốc đứng đầu** với chấm không tô màu (kiểu ô "Tự nhiên": viền `--ink-muted` và ô cờ sáng, đọc rõ trên thẻ tối); mỗi chấm có tên món (nhãn và tooltip), chấm của món đang mặc có viền vàng, chấm chưa có mờ 35 % kèm khoá. Chấm của món chưa có chỉ hiện khi tích ô; bỏ tích thì ẩn. Hàng chấm chỉ còn đúng món của thẻ thì bỏ cả hàng. Nhóm chấm mang tên món gốc. Sau khi mặc một biến thể Quần áo, chấm món gốc là đường duy nhất về lại món gốc (Quần áo không bỏ được), nên trên điện thoại hay màn cảm ứng mỗi chấm vẫn vẽ 16 px nhưng có vùng bấm 44 × 44 px trong suốt, các vùng không chồng nhau, hàng chấm được xuống dòng (B1).
 - Bấm thẻ đã có: mặc món của thẻ; bấm lại món đang mặc ở slot tuỳ chọn: bỏ món (Quần áo thì không bỏ được). Bấm một chấm đã có: mặc món của chấm đó (bấm lại chấm đang mặc ở slot tuỳ chọn cũng bỏ món), và thẻ chuyển theo món vừa mặc.
+- **Thẻ kiểu tóc** (tab Kiểu tóc, nhân vật v4, Kế hoạch 19): thẻ món như trên, nhưng ô ảnh là **chân dung đầu** của bản nháp mang đúng kiểu tóc đó — 96 px (điện thoại 72 px, ô ảnh nở ra cho vừa), cùng giới tính, màu tóc, màu da và màu mắt đang chọn, và **không** đội mũ, đeo kính, hào quang hay khung (mũ che tóc mái sẽ làm mọi thẻ trông như nhau). Chỉ hiện kiểu tóc của giới tính đang chọn, kể cả khi tích "Hiện cả món chưa có". Kiểu tóc luôn phải có, như Quần áo: bấm lại thẻ đang mặc thì vẫn mặc.
 
 ### 4.2 Thẻ thân (tab Thân)
 
-Chân dung đầu 96 px của thân đó (mặc bộ đồ đang chọn), tên thân (§ lỗi 5: tên theo kiểu tóc), viền vàng khi chọn. Không có độ hiếm, không khoá.
+_Bỏ từ nhân vật v4 (Kế hoạch 19): thân là giới tính, chọn bằng nút Nữ | Nam (§3.1); kiểu tóc là thẻ ở tab Kiểu tóc (§4.1)._ Trước đây: chân dung đầu 96 px của thân đó (mặc bộ đồ đang chọn), tên thân (§ lỗi 5: tên theo kiểu tóc), viền vàng khi chọn. Không có độ hiếm, không khoá.
 
-### 4.3 Thẻ màu (Màu tóc, Màu mắt)
+### 4.3 Thẻ màu (Màu tóc, Màu da, Màu mắt)
 
-Chấm tròn 56 px tô `colour`, tên màu, nhãn độ hiếm; thẻ đầu "Tự nhiên" (chấm nửa màu gốc/nửa kẻ chéo) luôn có. Khoá và đang mặc như §4.1.
+Chấm tròn 56 px tô `colour`, tên màu, nhãn độ hiếm; thẻ đầu "Tự nhiên" luôn có — ở Màu tóc và Màu mắt là chấm nửa màu gốc/nửa kẻ chéo, ở Màu da là chấm tô màu da gốc của thân (tông kem). Khoá và đang mặc như §4.1.
 
 ### 4.4 Thẻ chữ (Danh hiệu & Huy hiệu)
 
@@ -68,13 +72,13 @@ Hai nhóm nhỏ trong cùng tab ("Danh hiệu", "Huy hiệu"), thẻ không ản
 
 1. **Bản nháp**: mọi thao tác sửa bản nháp và xem trước ngay. "Lưu tủ đồ" gửi như hiện nay; "Hoàn tác" đưa bản nháp về bản đã lưu (không gọi server).
 2. **Rời màn khi chưa lưu**: giữ hộp thoại hiện có.
-3. **Tab nhớ**: nhóm và tab con đang chọn giữ nguyên khi đổi biểu cảm, lưu, áp dụng bộ đồ. Mặc định mở nhóm Ngoại hình, tab Thân.
+3. **Tab nhớ**: nhóm và tab con đang chọn giữ nguyên khi đổi biểu cảm, lưu, áp dụng bộ đồ. Mặc định mở nhóm Ngoại hình, tab Kiểu tóc (trước Kế hoạch 19: tab Thân).
 4. **Thứ tự thẻ** cố định: độ hiếm (Thường → Hiếm → Sử thi), rồi thứ tự catalogue. Món đang mặc không bị đưa lên đầu.
 5. **Bộ lọc** (review 29/09 No11a; trước đây: áp cho tab hiện tại, reset về "Tất cả" khi đổi tab).
    - Ô "Hiện cả món chưa có" bỏ tích mỗi lần mở tủ đồ, rồi **giữ nguyên khi đổi tab** trong lượt đó (không reset khi đổi tab, không lưu lại).
    - **Theo họ món.** Một họ là món gốc cùng các biến thể màu của nó (cùng `asset.file`). Bỏ tích: thẻ của họ hiện khi người chơi có món gốc **hoặc bất kỳ biến thể nào**; trong thẻ, chấm của biến thể chưa có bị ẩn. Chưa có món gốc mà có biến thể thì thẻ hiện **biến thể đã có đầu tiên** (theo thứ tự catalogue): tên của nó, trạng thái đã có, bấm là mặc nó.
    - Tích ô: thêm các họ chưa có gì (thẻ khoá, là món gốc) và các chấm chưa có (khoá). Thẻ của một họ đã có giữ nguyên món nó đang hiện (§4.1): tích ô chỉ thêm, không đổi thẻ nào (B2).
-   - Tab màu (Màu tóc, Màu mắt) theo cùng luật cho từng ô màu; "Tự nhiên" luôn hiện.
+   - Tab màu (Màu tóc, Màu da, Màu mắt) theo cùng luật cho từng ô màu; "Tự nhiên" luôn hiện.
    - **Không có gì để hiện.** Bỏ tích mà tab không có món nào đã có: lưới được thay bằng một dòng **"Bạn chưa có món nào ở mục này."**, nằm trong chính `tabpanel` của tab (cùng `id`, cùng `aria-labelledby`). Ở tab Danh hiệu & Huy hiệu, nhóm nào trống thì ẩn cả tiêu đề; cả hai trống thì dòng chữ hiện một lần.
 
 ## 6. Màu độ hiếm và chủ đề

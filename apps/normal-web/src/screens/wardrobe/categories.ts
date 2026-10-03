@@ -1,4 +1,4 @@
-import type { ItemDto, ItemSlot, Rarity } from '../../api.js'
+import type { Gender, ItemDto, ItemSlot, Rarity } from '../../api.js'
 
 /**
  * The right column's vocabulary (design §3.1, §5.4, §5.5): three groups of tabs, a fixed card order
@@ -13,14 +13,15 @@ export type GroupId = 'look' | 'wear' | 'decor'
  * Every tab the wardrobe can show: one per slot (`tabOfSlot`), except the two word slots, which share `words`.
  *
  * Plan 19 (avatar v4): the `base` tab is gone with the bases — a figure's body is its gender now, chosen rather than
- * owned. `hairStyle` and `skinColor` are tabs by type already, since `tabOfSlot` answers one for every slot, but no
- * group lists them yet: the gender switch, Kiểu tóc and Màu da join the look group together (A6).
+ * owned, with the Nữ | Nam switch that heads the look group (`CategoryNav`'s `lookHeader`), which is not a tab. The
+ * hairstyle and the skin tone are chosen apart from it, on tabs of their own.
  */
 export type TabId = 'hairStyle' | 'hairColor' | 'eyeColor' | 'skinColor' | 'head' | 'face' | 'outfit' | 'aura' | 'frame' | 'words'
 
-/** The three groups, in design §3.1's order, each listing its tabs in the order they render. */
+/** The three groups, in design §3.1's order, each listing its tabs in the order they render (avatar v4, spec §6.1:
+ * Kiểu tóc, Màu tóc, Màu da, Màu mắt). */
 export const GROUPS: readonly { id: GroupId; tabs: readonly TabId[] }[] = [
-  { id: 'look', tabs: ['hairColor', 'eyeColor'] },
+  { id: 'look', tabs: ['hairStyle', 'hairColor', 'skinColor', 'eyeColor'] },
   { id: 'wear', tabs: ['head', 'face', 'outfit'] },
   { id: 'decor', tabs: ['aura', 'frame', 'words'] },
 ]
@@ -67,30 +68,39 @@ function byRarityThenCatalogue(items: readonly ItemDto[]): ItemDto[] {
   return [...items].sort((a, b) => RARITY_RANK[a.rarity] - RARITY_RANK[b.rarity])
 }
 
+/** Whether a row belongs to the figure of `gender` (avatar v4, spec §6.1): a hairstyle is drawn for one gender only,
+ * so the Kiểu tóc tab — its cards and its "n/m" alike — lists the current gender's; every other row fits both. No
+ * `gender` keeps every row. */
+function fitsGender(item: ItemDto, gender: Gender | undefined): boolean {
+  return gender === undefined || item.slot !== 'hairStyle' || item.gender === gender
+}
+
 /** Every catalogue row for a tab's slot(s), colour variants included — used by `counts`, which cares
- * about every ownable row, not just the ones that get their own card. */
-function rowsForTab(tab: TabId, catalog: readonly ItemDto[]): ItemDto[] {
+ * about every ownable row, not just the ones that get their own card. `gender` narrows the hairstyles to that
+ * gender's (`fitsGender`). */
+function rowsForTab(tab: TabId, catalog: readonly ItemDto[], gender?: Gender): ItemDto[] {
   const slots = slotsOf(tab)
-  return catalog.filter((item) => slots.includes(item.slot))
+  return catalog.filter((item) => slots.includes(item.slot) && fitsGender(item, gender))
 }
 
 /**
  * The items a tab lists as cards (design §5.4): its slot(s), minus colour variants — a row with its own
  * `asset.tint` hangs off its original as a dot instead (`variantsByFile` below) — ordered rarity
- * first, then catalogue order.
+ * first, then catalogue order. `gender` narrows the hairstyles to that gender's.
  */
-export function tabItems(tab: TabId, catalog: readonly ItemDto[]): ItemDto[] {
-  const rows = rowsForTab(tab, catalog).filter((item) => item.asset?.tint === undefined)
+export function tabItems(tab: TabId, catalog: readonly ItemDto[], gender?: Gender): ItemDto[] {
+  const rows = rowsForTab(tab, catalog, gender).filter((item) => item.asset?.tint === undefined)
   return byRarityThenCatalogue(rows)
 }
 
 /**
  * "n/m đã có" for a tab (design §3.1): every catalogue row for the tab's slot(s) counts toward the
  * total, colour variants included, because each one is its own ownable row — a card that is locked but
- * whose variant a player owns (Plan 13's beret case) should still move `owned` up by one.
+ * whose variant a player owns (Plan 13's beret case) should still move `owned` up by one. With `gender`, Kiểu tóc
+ * counts that gender's hairstyles only, the ones its cards can list.
  */
-export function counts(tab: TabId, catalog: readonly ItemDto[], owned: ReadonlySet<string>): { owned: number; total: number } {
-  const rows = rowsForTab(tab, catalog)
+export function counts(tab: TabId, catalog: readonly ItemDto[], owned: ReadonlySet<string>, gender?: Gender): { owned: number; total: number } {
+  const rows = rowsForTab(tab, catalog, gender)
   return { owned: rows.filter((item) => owned.has(item.id)).length, total: rows.length }
 }
 
@@ -173,9 +183,18 @@ export function applyFilter(
  * One slot's cards, ready to draw: `tabItems` for the order and the variant split, `variantsByFile` for the families,
  * `applyFilter` for the box and the member `worn` in the slot. The words tab calls it once per slot (`title`,
  * `badge`), which is how `WardrobeScreen` knows both of its headings would be empty before either `ItemTab` draws.
+ * `gender` narrows the hairstyles to that gender's (Kiểu tóc, avatar v4): ticking the box never lists the other
+ * gender's.
  */
-export function slotCards(slot: ItemSlot, catalog: readonly ItemDto[], owned: ReadonlySet<string>, showLocked: boolean, worn?: string): FamilyCard[] {
-  const rows = tabItems(tabOfSlot(slot), catalog).filter((item) => item.slot === slot)
-  const variants = variantsByFile(catalog.filter((item) => item.slot === slot))
+export function slotCards(
+  slot: ItemSlot,
+  catalog: readonly ItemDto[],
+  owned: ReadonlySet<string>,
+  showLocked: boolean,
+  worn?: string,
+  gender?: Gender,
+): FamilyCard[] {
+  const rows = tabItems(tabOfSlot(slot), catalog, gender).filter((item) => item.slot === slot)
+  const variants = variantsByFile(catalog.filter((item) => item.slot === slot && fitsGender(item, gender)))
   return applyFilter(rows, owned, showLocked, variants, worn)
 }

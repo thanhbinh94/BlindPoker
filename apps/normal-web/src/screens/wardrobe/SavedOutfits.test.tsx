@@ -105,6 +105,30 @@ describe('SavedOutfits', () => {
     await waitFor(() => expect(saveOutfit).toHaveBeenCalledWith(1, 'Bộ 1', expect.objectContaining({ v: 4 })))
   })
 
+  // Plan 19 (spec §6.3): a saved outfit is the whole v4 draft — gender, hairstyle and skin tone with the rest.
+  it('saves the whole v4 draft into a slot', async () => {
+    const draft: AvatarConfigDto = {
+      v: 4,
+      gender: 'm',
+      hairStyle: 'hair_m_spiky01',
+      outfit: 'outfit_dealer01',
+      head: 'head_beanie01',
+      hairColor: 'haircolor_red01',
+      eyeColor: 'eyecolor_green01',
+      skinColor: 'skin_deep01',
+      title: 'title_rookie',
+    }
+    const saveOutfit = vi.fn().mockResolvedValue({ slot: 2, name: 'Bộ 2', config: draft, updatedAt: 0 })
+    const user = userEvent.setup()
+    renderBar({ api: stubApi({ saveOutfit }), draft })
+
+    await user.click(screen.getByRole('button', { name: viNormal.outfits.emptySlot.replace('{{n}}', '2') }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: viNormal.outfits.saveHere }))
+
+    await waitFor(() => expect(saveOutfit).toHaveBeenCalledWith(2, 'Bộ 2', draft))
+    expect(saveOutfit.mock.calls[0]![2]).toStrictEqual(draft)
+  })
+
   it('draws a filled slot’s portrait from its v4 config: the body of its gender, its hairstyle', () => {
     const outfitOne: OutfitDto = { slot: 1, name: 'Đi làm', config: DRAFT, updatedAt: 0 }
     renderBar({ outfits: [outfitOne, null, null, null, null] })

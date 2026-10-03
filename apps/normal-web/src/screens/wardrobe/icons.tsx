@@ -13,7 +13,7 @@
 
 import type { SVGProps } from 'react'
 
-export type IconName = 'person' | 'drop' | 'eye' | 'hat' | 'glasses' | 'shirt' | 'sparkle' | 'frame' | 'tag' | 'medal'
+export type IconName = 'person' | 'hair' | 'palm' | 'drop' | 'eye' | 'hat' | 'glasses' | 'shirt' | 'sparkle' | 'frame' | 'tag' | 'medal'
 
 /** One `<path>`/primitive list per glyph — kept to circles, rects and straight-line paths wherever the
  * shape allows, so a hand-written `d` has as little room as possible to go visually wrong. */
@@ -22,6 +22,22 @@ const GLYPHS: Record<IconName, JSX.Element> = {
     <>
       <circle cx="12" cy="8.2" r="3.2" />
       <path d="M5.5 19c.9-3.6 3.4-5.6 6.5-5.6s5.6 2 6.5 5.6" />
+    </>
+  ),
+  // A head of long hair seen from the front: the crown and the two falls, a parted fringe across the brow.
+  hair: (
+    <>
+      <path d="M5 20v-8a7 7 0 0 1 14 0v8" />
+      <path d="M8.5 20v-6.5M15.5 20v-6.5" />
+      <path d="M5.6 10.2C8.4 10 11 8.6 12 6.2c1 2.4 3.6 3.8 6.4 4" />
+    </>
+  ),
+  // An open hand, four fingers and a thumb: the skin tone.
+  palm: (
+    <>
+      <path d="M8 12.5V6a1.5 1.5 0 0 1 3 0v5" />
+      <path d="M11 11V4.5a1.5 1.5 0 0 1 3 0V11" />
+      <path d="M14 11V6a1.5 1.5 0 0 1 3 0v7.5c0 4.1-2.7 7-6.4 7-2.3 0-3.8-1-5-2.8L3.8 14.4a1.5 1.5 0 0 1 2.5-1.6L8 15" />
     </>
   ),
   drop: <path d="M12 3s6 7 6 11a6 6 0 1 1-12 0c0-4 6-11 6-11Z" />,
