@@ -83,9 +83,11 @@ function settle(state: ClientState, hand: ClientHand, event: Extract<GameEvent, 
   const seats = hand.seats.map((s) => {
     const stack = stacks.get(s.seat)
     const mine = uncalled?.seat === s.seat
-    if (stack === undefined && !mine) return s
+    // Kept for the reveal hold: the plate shows the stack as it stood until the result is out (`PokerTable`).
+    if (stack === undefined && !mine) return { ...s, stackBeforeResult: s.stack }
     return {
       ...s,
+      stackBeforeResult: s.stack,
       stack: stack ?? s.stack,
       // An uncalled bet is handed back before the pots are computed: it leaves the seat with chips again.
       allIn: mine ? false : s.allIn,

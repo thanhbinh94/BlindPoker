@@ -251,7 +251,8 @@ for under a second, then jump onto the card and shift the tray's buttons after i
 away either — the hand's name and the payout under each seat, the winner's glow, the gold edge on the best hand's board
 cards (and, by design, the happy and sad faces) all used to land the moment `HAND_COMPLETE` did, over a turn the player
 had not yet watched. `RoomScreen` passes `PokerTable` `resultPending={held}`: the payouts and the shown hands are left out of what
-the seats are given, so no result line, no `.seatWin` and no `highlight` for the board, while every card is drawn exactly
+the seats are given, so no result line, no `.seatWin` and no `highlight` for the board, and each plate prints the
+stack it had before the settlement paid it (`ClientSeat.stackBeforeResult`, kept by the reducer), while every card is drawn exactly
 as without it and the turn still plays. The faces take the same flag, as the third argument of
 `useTableExpressions(state, serverNow, resultPending)`: it does not fold the state in while the flag is up, so the
 reaction (4 s happy, 3 s sad) starts when the hold ends and runs its full length rather than losing 870 ms of it. A seat

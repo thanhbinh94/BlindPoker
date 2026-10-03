@@ -176,6 +176,20 @@ describe('PokerTable', () => {
       expect(goldEdges()).toHaveLength(3)
     })
 
+    // The plate's stack is a result cue too: the settlement pays Ann's 600 into it in the render the hand completes.
+    it.each(['ring', 'stack'] as const)('keeps the stack from before the settlement on the plate until the flag drops (%s)', (layout) => {
+      const settled: ClientHand = {
+        ...showdown,
+        seats: showdown.seats.map((seat) => (seat.seat === 0 ? { ...seat, stack: 20_400, stackBeforeResult: 19_800 } : { ...seat, stackBeforeResult: seat.stack })),
+      }
+      const view = render(table(settled, layout, true))
+      expect(within(seatOf(1)).getByText('19,800'), 'the stack as it stood before the pot was paid').toBeInTheDocument()
+      expect(within(seatOf(1)).queryByText('20,400')).toBeNull()
+      view.rerender(table(settled, layout, false))
+      expect(within(seatOf(1)).getByText('20,400'), 'the paid stack, together with the result').toBeInTheDocument()
+      expect(within(seatOf(1)).queryByText('19,800')).toBeNull()
+    })
+
     it('prints all of it in the render that drops the flag, and leaves the turn alone', () => {
       const view = render(table(hand, 'ring', true))
       view.rerender(table(showdown, 'ring', true))
