@@ -2621,6 +2621,10 @@ describe('v4 ingest (Plan 19 A2a)', () => {
   const IRIS_BLUE = '#2f4f80'
   const IRIS_BROWN = '#8a5a3c'
   const MOUTH = '#c0505a'
+  const BROW = '#7a4a32'
+  /** What a hair picture redraws the mouth and the brows in: another pink (43 from `MOUTH`), a darker brown (51). */
+  const MOUTH_REDRAWN = '#d9607a'
+  const BROW_REDRAWN = '#4e3226'
   const PURPLE = '#5e3e6f'
   const DARK_BROWN = '#4a2e20'
   const RED = '#cc2222'
@@ -2630,6 +2634,14 @@ describe('v4 ingest (Plan 19 A2a)', () => {
   const IRIS_RADIUS = 6.5
   /** A shaded patch on the left cheek: skin by the skin mask's hue rule, and a hair picture may paint it out. */
   const SHADE_AT = { cx: 150, cy: 212, rx: 10, ry: 6 }
+  /** The mouth as the body draws it, and as a hair picture redraws it: bigger, 3 units lower, another pink. */
+  const MOUTH_AT = { cx: 192, cy: 226, rx: 7, ry: 2.5 }
+  const MOUTH_REDRAWN_AT = { cx: 192, cy: 229, rx: 10, ry: 4.5 }
+  /** The brows as the body draws them (thin, y 177) and as a hair picture redraws them (bolder, 5 units higher). */
+  const BROW_AT = { y: 177, width: 2.5 }
+  const BROW_REDRAWN_AT = { y: 172, width: 5 }
+  /** A fringe hanging from the cap down over both eyes. */
+  const FRINGE_AT = { x: 140, y: 120, w: 104, h: 90 }
   /** The hair: a cap over the head top (inside the crown band) and two strips beside the torso (off the body). */
   const CAP = { cx: 192, cy: 150, rx: 78, ry: 75, bottom: 132 }
   const PANELS = [{ x: 92, y: 240, w: 30, h: 90 }, { x: 262, y: 240, w: 30, h: 90 }]
@@ -2638,13 +2650,17 @@ describe('v4 ingest (Plan 19 A2a)', () => {
 
   /**
    * A bald body as the v4 template asks for one, in frame units: a cream head whose eyes sit on `HEAD_REFERENCE` and
-   * whose chin (where the head narrows into the 30-wide neck) is at y ≈ 244, a grey tank top, charcoal shorts, cream
-   * arms and legs, the feet on `BASELINE_Y`. `dy` moves all of it down; `iris` and `shade` are what a hair picture
-   * redraws.
+   * whose chin (where the head narrows into the 30-wide neck) is at y ≈ 244, thin brown brows, a pink mouth, a grey
+   * tank top, charcoal shorts, cream arms and legs, the feet on `BASELINE_Y`. `dy` moves all of it down; `iris`,
+   * `shade` and `redrawn` (the mouth and the brows) are what a hair picture redraws.
    */
-  function body({ dy = 0, iris = IRIS_BLUE, shade = true, extra = '' } = {}): string {
+  function body({ dy = 0, iris = IRIS_BLUE, shade = true, redrawn = false, extra = '' } = {}): string {
     const eye = (cx: number): string =>
       `<ellipse cx="${cx}" cy="${EYE_Y}" rx="10" ry="12" fill="#ffffff"/><circle cx="${cx}" cy="${EYE_Y}" r="${IRIS_RADIUS}" fill="${iris}"/>`
+    const brow = redrawn ? BROW_REDRAWN_AT : BROW_AT
+    const brows = EYE_XS.map((cx) =>
+      `<path d="M${cx - 10.5} ${brow.y} Q${cx} ${brow.y - 5} ${cx + 10.5} ${brow.y}" stroke="${redrawn ? BROW_REDRAWN : BROW}" stroke-width="${brow.width}" fill="none" stroke-linecap="round"/>`).join('')
+    const mouth = redrawn ? MOUTH_REDRAWN_AT : MOUTH_AT
     return `<g transform="translate(0 ${dy})">` +
       `<rect x="148" y="250" width="88" height="80" rx="12" fill="${TANK}"/>` +
       `<rect x="150" y="318" width="84" height="34" rx="6" fill="${SHORTS}"/>` +
@@ -2657,8 +2673,8 @@ describe('v4 ingest (Plan 19 A2a)', () => {
       `<rect x="177" y="225" width="30" height="30" fill="${CREAM}"/>` +
       `<ellipse cx="192" cy="165" rx="74" ry="80" fill="${CREAM}"/>` +
       (shade ? `<ellipse cx="${SHADE_AT.cx}" cy="${SHADE_AT.cy}" rx="${SHADE_AT.rx}" ry="${SHADE_AT.ry}" fill="${SHADE}"/>` : '') +
-      eye(EYE_XS[0]!) + eye(EYE_XS[1]!) +
-      `<ellipse cx="192" cy="226" rx="7" ry="2.5" fill="${MOUTH}"/>` +
+      eye(EYE_XS[0]!) + eye(EYE_XS[1]!) + brows +
+      `<ellipse cx="${mouth.cx}" cy="${mouth.cy}" rx="${mouth.rx}" ry="${mouth.ry}" fill="${redrawn ? MOUTH_REDRAWN : MOUTH}"/>` +
       `${extra}</g>`
   }
   const hair = (fill: string): string =>
@@ -2759,10 +2775,13 @@ describe('v4 ingest (Plan 19 A2a)', () => {
     y <= CAP.bottom - shrink && ((x - CAP.cx) / (CAP.rx - shrink)) ** 2 + ((y - CAP.cy) / (CAP.ry - shrink)) ** 2 <= 1
   const inPanels = (shrink: number) => (x: number, y: number): boolean =>
     PANELS.some((p) => x >= p.x + shrink && x <= p.x + p.w - shrink && y >= p.y + shrink && y <= p.y + p.h - shrink)
+  const inEllipse = (e: { cx: number; cy: number; rx: number; ry: number }, grow: number) => (x: number, y: number): boolean =>
+    ((x - e.cx) / (e.rx + grow)) ** 2 + ((y - e.cy) / (e.ry + grow)) ** 2 <= 1
   /** The pixels a hair picture redraws on the face: the cheek's shading and both irises, each grown by a unit. */
-  const redrawnFace = at2x((x, y) =>
-    ((x - SHADE_AT.cx) / (SHADE_AT.rx + 1)) ** 2 + ((y - SHADE_AT.cy) / (SHADE_AT.ry + 1)) ** 2 <= 1 ||
-    EYE_XS.some((ex) => Math.hypot(x - ex, y - EYE_Y) <= IRIS_RADIUS + 1))
+  const redrawnFace = at2x((x, y) => inEllipse(SHADE_AT, 1)(x, y) || EYE_XS.some((ex) => Math.hypot(x - ex, y - EYE_Y) <= IRIS_RADIUS + 1))
+  /** …and the mouth and the brows it redraws, where the body had them and where the picture puts them, grown by a unit. */
+  const redrawnMouth = at2x((x, y) => inEllipse(MOUTH_AT, 1)(x, y) || inEllipse(MOUTH_REDRAWN_AT, 1)(x, y))
+  const redrawnBrows = at2x((x, y) => EYE_XS.some((cx) => x >= cx - 13 && x <= cx + 13 && y >= BROW_REDRAWN_AT.y - 9 && y <= BROW_AT.y + 3))
 
   function memo<T>(make: () => Promise<T>): () => Promise<T> {
     let made: Promise<T> | null = null
@@ -2783,11 +2802,14 @@ describe('v4 ingest (Plan 19 A2a)', () => {
     await ingest({ file: await draw(dir, 'body.png', body()), target: { kind: 'body', gender: 'f' }, dir, targets: targetsOf(dir), overridesDir: noOverrides() })
     return dir
   })
-  /** …then `hair:f_bob01`: the same body with the cap and the panels, its cheek painted out and its irises brown. */
+  /**
+   * …then `hair:f_bob01`: the same body with the cap and the panels — its cheek painted out, its irises brown, its
+   * mouth and brows drawn again a little elsewhere.
+   */
   const hairCase = memo(async () => {
     const dir = copyCase(await bodyDir(), 'v4-hair')
     const lines: string[] = []
-    const file = await draw(dir, 'hair.png', body({ iris: IRIS_BROWN, shade: false }) + hair(PURPLE))
+    const file = await draw(dir, 'hair.png', body({ iris: IRIS_BROWN, shade: false, redrawn: true }) + hair(PURPLE))
     await ingest({ file, target: { kind: 'hair', code: 'f_bob01' }, dir, targets: targetsOf(dir), overridesDir: noOverrides(), log: (line: string) => lines.push(line) })
     return { dir, lines }
   })
@@ -2830,10 +2852,15 @@ describe('v4 ingest (Plan 19 A2a)', () => {
     expect(solidShare(l20, at2x(inPanels(2)))).toBeGreaterThan(0.98)
     expect(inked(l60, at2x(inPanels(0)))).toBe(0)
     expect(inked(l20, at2x(inCap(0)))).toBe(0)
-    // The cheek the picture painted out and the irises it recoloured are in neither layer (the hair face rule).
-    expect(inked(l60, redrawnFace), 'L60 holds the redrawn face').toBe(0)
-    expect(inked(l20, redrawnFace), 'L20 holds the redrawn face').toBe(0)
-    expect(lines.some((line) => /^hair face rule: dropped [1-9]\d* px/.test(line)), lines.join('\n')).toBe(true)
+    // The cheek the picture painted out and the irises it recoloured are in neither layer (the hair face rule)…
+    expect(inked(l60, redrawnFace), 'L60 holds the redrawn cheek or irises').toBe(0)
+    expect(inked(l20, redrawnFace), 'L20 holds the redrawn cheek or irises').toBe(0)
+    // …nor the mouth and the brows it drew again: neither skin-coloured nor near the eyes, islands inside the face.
+    for (const [part, region] of [['mouth', redrawnMouth], ['brows', redrawnBrows]] as const) {
+      expect(inked(l60, region), `L60 holds the redrawn ${part}`).toBe(0)
+      expect(inked(l20, region), `L20 holds the redrawn ${part}`).toBe(0)
+    }
+    expect(lines.some((line) => /^hair face rule: dropped \d+ px .*\([1-9]\d* of skin, [1-9]\d* in islands inside the face\)/.test(line)), lines.join('\n')).toBe(true)
 
     const rows = await allPass(dir, ['item_hair_f_bob01_L60', 'item_hair_f_bob01_L20'])
     expect(rows.get('item_hair_f_bob01_L60')!.get('C13')!.detail).toContain('the front on 0.0 % of the eyes')
@@ -2861,6 +2888,22 @@ describe('v4 ingest (Plan 19 A2a)', () => {
     expect(solidShare(l20, at2x(inCap(2)))).toBeGreaterThan(0.98)
     expect(inked(l60, at2x(inCap(0)))).toBe(0)
     await allPass(dir, ['item_hair_f_bob01_L60', 'item_hair_f_bob01_L20'])
+  }, 300_000)
+
+  it('keeps a fringe hanging from the cap over the eyes in L60, where C13 fails it (A2a ruling)', async () => {
+    // The hair face rule drops islands inside the face, not everything near the eyes: a fringe hangs from hair outside
+    // the face, so it is hair, and it is C13's to judge.
+    const dir = copyCase(await bodyDir(), 'v4-fringe')
+    const fringe = `<rect x="${FRINGE_AT.x}" y="${FRINGE_AT.y}" width="${FRINGE_AT.w}" height="${FRINGE_AT.h}" rx="6" fill="${PURPLE}"/>`
+    const file = await draw(dir, 'fringe.png', body() + hair(PURPLE) + fringe)
+    await ingest({ file, target: { kind: 'hair', code: 'f_bob01' }, dir, targets: targetsOf(dir), overridesDir: noOverrides() })
+    const l60 = await readPicture(join(dir, 'item_hair_f_bob01_L60@2x.png'))
+    const inFringe = (x: number, y: number): boolean => x >= FRINGE_AT.x + 2 && x <= FRINGE_AT.x + FRINGE_AT.w - 2 && y >= FRINGE_AT.y + 2 && y <= FRINGE_AT.y + FRINGE_AT.h - 2
+    expect(solidShare(l60, at2x(inFringe))).toBeGreaterThan(0.98)
+    expect(solidShare(l60, at2x((x, y) => EYE_XS.some((ex) => Math.hypot(x - ex, y - EYE_Y) <= IRIS_RADIUS))), 'the fringe over the irises').toBeGreaterThan(0.98)
+    const c13 = (await checkOne(dir, 'item_hair_f_bob01_L60', manifestIn(dir) as unknown as Manifest)).get('C13')!
+    expect(c13.ok).toBe(false)
+    expect(c13.detail).toMatch(/the front lies over the eyes on \d+\.\d % of the eye mask/)
   }, 300_000)
 
   it('3. cuts an outfit on body f: cutOn f, and C6 measures it against body_f_L30, not the old bases', async () => {

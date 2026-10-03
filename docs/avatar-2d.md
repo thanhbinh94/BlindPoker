@@ -679,15 +679,24 @@ them inside the frame. Ingested again without the flag, the body keeps the ancho
 1. The picture is anchored on the body's transform and registered on `body_<g>_L30` (`registerToBase`, measured on
    the rows `y ≥ HEAD_LIMIT_Y` the hair leaves alone).
 2. `diffAgainstBase(…, { slot: 'hair' })` gives the region: no area limit — hair runs from the crown to below the
-   shoulders — but **the hair face rule** (pre-flight #18, `hairFaceRule`). A hair picture redraws the face a little —
-   a cheek's shading moved or painted out, an iris a shade off — and that redraw must not become hair. So the region
-   never holds a pixel inside the neutral face's **skin mask** whose colour in the picture is the body's skin
-   (`isSkin` within `SKIN_TOLERANCE` of `baseSkinColour`), nor any pixel of the neutral **eye mask** grown by 3 px at
-   `@2x`. It is applied wherever a slot limit is — before the regions are cleaned, and again after the feather — and
-   the ingest logs what it dropped: `hair face rule: dropped 1593 px the picture redrew on the face (503 on the skin,
-   1090 round the eyes)` on the test picture, whose cheek shading is painted out and whose irises are recoloured.
-   Hair over the face is hair-coloured, so a fringe on the forehead is untouched — but a fringe drawn *over the eyes*
-   loses its pixels there rather than failing C13 (the template forbids it, and the review sheet shows the hole).
+   shoulders — but **the hair face rule** (pre-flight #18, `hairFaceRule` and `applyFaceRule`; A2a ruling). A hair
+   picture redraws the face a little — a cheek's shading moved or painted out, an iris a shade off, the mouth or a brow
+   drawn again a few pixels away — and that redraw must not become hair, tinted the hair colour. Two clauses, in order:
+   - **skin** — the region never holds a pixel inside the neutral face's skin mask whose colour in the picture is the
+     body's skin (`isSkin` within `SKIN_TOLERANCE` of `baseSkinColour`);
+   - **islands** — the *face interior* is the neutral face's skin mask ∪ its eye zone (`eyeZone`, §4.4.1: the eye
+     ellipses and the eye mask, widened), with its holes filled, so the mouth, the brows and the eyes all fall inside
+     it; every 8-connected piece of the region lying **wholly** inside the interior is dropped. A redrawn feature is
+     an island inside the face. A fringe always hangs down from hair outside it — over the head's outline, past the
+     top of the skull — so it stays in the hair however far down it falls, and **C13 judges it**: a fringe drawn over
+     the eyes is kept in the L60 and fails C13 (`the front lies over the eyes on 100.0 % of the eye mask` on the test).
+   The rule is applied wherever a slot limit is — first on the raw difference, before the closing and the hole fill
+   could join an island to the fringe, then on the core and after the feather — and the ingest logs what it dropped
+   from the raw difference: `hair face rule: dropped 3063 px the picture redrew on the face (503 of skin, 2560 in
+   islands inside the face)` on the test picture, whose cheek shading is painted out, irises recoloured and mouth and
+   brows drawn again (an earlier rule that only dropped pixels near the eyes let 614 px of that mouth and 1134 px of
+   those brows into the L60). One thing it cannot tell: a piece of hair that is drawn *apart from* the rest, inside
+   the face — a fringe cut through by a skin-coloured shine band across its whole width loses the part below it.
 3. `splitHair(region, body, { density: 2, override })` splits it (§4.5); `override` is the hand-drawn
    `item_hair_<code>_frontmask.png` from `assets/avatar-src/masks/` when one is there, read as any hand-drawn mask is.
 4. `item_hair_<code>_L60` (front) and `_L20` (back) are written, the back `empty: true` when the split leaves nothing
@@ -705,7 +714,8 @@ real) it is measured against the body *wearing* that hairstyle — its L20 under
 drawn over the bob takes none of the bob with it; without it, every hair pixel round the hat is new to the picture and
 joins the hat. `--hair` is for head and face items: an outfit is drawn on the bald body (the outfit template says so),
 and with long hair on the base, the outfit's union rule (§4.1.3) would take the hair below the chin for the base's own
-clothing. A body's wear is its gender (`wearOf('m')` is `'m'`), so `--variant m` goes with `--base m` and is refused
+clothing. **Never ingest an outfit with `--hair`** — nothing refuses it, and the outfit layer would take in, or paint over
+(§4.1.3–§4.1.4), the hairstyle's hair below the chin. A body's wear is its gender (`wearOf('m')` is `'m'`), so `--variant m` goes with `--base m` and is refused
 on body f, naming it. `--base f01` and the other old bases keep working until D1.
 
 **A bot on a body** — `--transform-from f|m` — reads `bodies.<g>.transform`. Without the flag a bot still takes

@@ -47,7 +47,7 @@ import { recolour } from '../../../../packages/ui-kit/src/avatar2d/recolour.mjs'
 // only be used at call time, never while the modules load — as neither of them uses anything of this file at load.
 import { headMetrics, judgeHead } from './checks.mjs'
 import { splitHair } from './hair.mjs'
-import { MASK_FILE_KIND, MASK_OVERRIDE_DIR, maskTargets, readHandMask, writeMasks } from './masks.mjs'
+import { MASK_FILE_KIND, MASK_OVERRIDE_DIR, eyeZone, maskTargets, readHandMask, writeMasks } from './masks.mjs'
 import {
   ALPHA_INK,
   ALPHA_SOLID,
@@ -363,13 +363,14 @@ export function registerBySilhouette(itemPic, basePic, { density = 1, range = RE
  * edge — which `cutItem` takes the edge's colour from.
  *
  * A **hairstyle** (`slot: 'hair'`, Plan 19) has no slot limit at all — hair reaches from the crown to below the
- * shoulders — but it has the hair face rule instead (`hairFaceRule`), given the body's neutral face masks as
- * `faceRule`. It is applied wherever a slot limit is, and what it took out of the first difference is returned as
- * `faceDropped: { skin, eyes }`, pixel counts.
+ * shoulders — but it has the hair face rule instead (`hairFaceRule`, `applyFaceRule`), given the body's neutral face
+ * and its masks as `faceRule`. It is applied wherever a slot limit is — first on the raw difference, before any
+ * clean-up can join a redrawn feature to the fringe — and what it took out of that first difference is returned as
+ * `faceDropped: { skin, islands }`, pixel counts.
  *
  * @param {{ data: Buffer, width: number, height: number }} itemPic
  * @param {{ data: Buffer, width: number, height: number }} basePic
- * @param {{ slot?: string, colorTol?: number, shadowTol?: number, minRegion?: number, relativeRegion?: number, closeRadius?: number, maxHole?: number, density?: number, faceRule?: { skin: Uint8Array | null, eyes: Uint8Array | null } | null }} [options]
+ * @param {{ slot?: string, colorTol?: number, shadowTol?: number, minRegion?: number, relativeRegion?: number, closeRadius?: number, maxHole?: number, density?: number, faceRule?: { skin: Uint8Array | null, eyes: Uint8Array | null, face?: { data: Buffer, width: number, height: number } | null } | null }} [options]
  */
 export function diffAgainstBase(itemPic, basePic, options = {}) {
   const { slot, density = 1, faceRule = null } = options
@@ -429,15 +430,10 @@ export function diffAgainstBase(itemPic, basePic, options = {}) {
       if ((!anySolid || !close) && !(slot === 'outfit' && skinOfBase(itemPic, basePic, p, skin, skinTol))) different[p] = 255
     }
   }
-  const faceDropped = { skin: 0, eyes: 0 }
-  if (face) {
-    for (let p = 0; p < different.length; p++) {
-      if (!different[p] || !face.drop[p]) continue
-      if (face.eyes[p]) faceDropped.eyes++
-      else faceDropped.skin++
-    }
-  }
-  slotLimits(different, { slot, width, height, density, face })
+  // The hair face rule, on the raw difference: counted here, and the islands found before any closing could join one
+  // to the fringe.
+  const faceDropped = face ? applyFaceRule(different, face, width, height) : null
+  slotLimits(different, { slot, width, height, density })
   // Areas are in frame units, so they grow with the square of the density.
   const area = density * density
   let kept = keepLargeRegions(different, width, height, Math.round(minRegion * area))
@@ -463,52 +459,110 @@ export function diffAgainstBase(itemPic, basePic, options = {}) {
   return { mask: final, core, cover, bbox: maskBBox(final, width, height), ...(face ? { faceDropped } : {}) }
 }
 
-/** How far (px at @2x, square) the hair face rule grows the neutral eye mask. */
-export const HAIR_EYE_GROW = 3
-
 /**
- * The hair face rule (Plan 19, pre-flight #18): what a hairstyle's region may never hold, as a 0/1 mask over the
- * picture (`drop`) — with `eyes`, the part of it that is the eyes.
+ * The hair face rule (Plan 19, pre-flight #18; A2a ruling, fix round 1): what a hairstyle's region may never hold.
  *
  * A hair picture is the bald body redrawn with the hair on, and the redraw touches the face a little: a cheek's
- * shading moved or painted out, an iris a shade off, a highlight elsewhere. The difference reads every one of those as
- * new, and on the face they would all become front hair. So two kinds of pixel go:
+ * shading moved or painted out, an iris a shade off, a mouth or a brow drawn again a few pixels away. The difference
+ * reads every one of those as new, and on the face they would all become front hair, tinted the hair colour. Two
+ * clauses take them out (`applyFaceRule` applies them, in this order):
  *
- * - inside the body face's **skin mask** (`skin`, the neutral face's, alpha ≥ 128), every pixel whose colour in the
- *   picture is the body's skin — `isSkin` within `skinTol` (`SKIN_TOLERANCE`) of `baseSkinColour` of the body;
- * - every pixel of the neutral **eye mask** (`eyes`), grown by 3 px at @2x — hair never covers the eyes (the hair
- *   template says so, and C13 holds the front to it), so whatever changed there is the eyes redrawn.
+ * 1. **Skin** (`drop`): inside the body face's skin mask (`skin`, the neutral face's, alpha ≥ 128), every pixel whose
+ *    colour in the picture is the body's skin — `isSkin` within `skinTol` (`SKIN_TOLERANCE`) of `baseSkinColour` of
+ *    the body. A shading painted out, a highlight moved.
+ * 2. **Islands** (`interior`): the **face interior** is the skin mask ∪ the eye zone (`eyeZone` of the neutral face,
+ *    its eye mask included), with its holes filled, so the mouth, the brows and the eyes all fall inside it. Every
+ *    8-connected piece of the region lying wholly inside it is dropped. A redrawn feature is an island inside the
+ *    face; a fringe always hangs down from hair outside it — over the head's outline, past the top of the skull — so
+ *    it stays in the hair, and C13 judges it (a fringe over the eyes fails there, as it should).
  *
- * Hair over the face is hair-coloured, so a fringe on the forehead is left alone; only the redrawn skin and eyes go.
+ * `face` is the neutral face layer at the picture's size, which `eyeZone` finds the eye ellipses on. Without it the
+ * interior is the skin mask ∪ the eye mask, filled; with neither mask there is no interior and no island clause.
  *
  * @param {{ data: Buffer, width: number, height: number }} itemPic the registered hair picture
  * @param {{ data: Buffer, width: number, height: number }} basePic the bald body
- * @param {{ skin: Uint8Array | null, eyes: Uint8Array | null }} faceRule the neutral face's masks, alpha per pixel
+ * @param {{ skin: Uint8Array | null, eyes: Uint8Array | null, face?: { data: Buffer, width: number, height: number } | null }} faceRule
+ *   the neutral face's skin and eye masks (alpha per pixel) and the face layer itself
  * @param {{ density: number, skinTol?: number }} options
- * @returns {{ drop: Uint8Array, eyes: Uint8Array }}
+ * @returns {{ drop: Uint8Array, interior: Uint8Array | null }}
  */
 export function hairFaceRule(itemPic, basePic, faceRule, { density, skinTol = SKIN_TOLERANCE }) {
   const { width, height, data } = itemPic
   const n = width * height
-  for (const [kind, mask] of Object.entries(faceRule)) {
+  const { skin = null, eyes = null, face = null } = faceRule
+  for (const [kind, mask] of [['skin', skin], ['eyes', eyes]]) {
     if (mask && mask.length !== n) throw new Error(`the face's ${kind} mask holds ${mask.length} pixels, the picture is ${width} × ${height}`)
   }
+  if (face && (face.width !== width || face.height !== height)) throw new Error(`the face is ${face.width} × ${face.height}, the picture is ${width} × ${height}`)
   const skinColour = baseSkinColour(basePic, density)
-  let eyes = new Uint8Array(n)
-  if (faceRule.eyes) {
-    for (let p = 0; p < n; p++) if (faceRule.eyes[p] >= ALPHA_SOLID) eyes[p] = 255
-    eyes = dilateMask(eyes, width, height, Math.max(1, Math.round((HAIR_EYE_GROW * density) / 2)))
-  }
   const drop = new Uint8Array(n)
-  for (let p = 0; p < n; p++) {
-    if (eyes[p]) {
-      drop[p] = 1
-      continue
+  if (skin) {
+    for (let p = 0; p < n; p++) {
+      if (skin[p] >= ALPHA_SOLID && isSkin(data[p * 4], data[p * 4 + 1], data[p * 4 + 2], skinColour, skinTol)) drop[p] = 1
     }
-    if (!faceRule.skin || faceRule.skin[p] < ALPHA_SOLID) continue
-    if (isSkin(data[p * 4], data[p * 4 + 1], data[p * 4 + 2], skinColour, skinTol)) drop[p] = 1
   }
-  return { drop, eyes }
+  if (!skin && !eyes) return { drop, interior: null }
+  const zone = face ? eyeZone(face, eyes) : null
+  const inside = new Uint8Array(n)
+  for (let p = 0; p < n; p++) {
+    if ((skin && skin[p] >= ALPHA_SOLID) || (eyes && eyes[p] >= ALPHA_SOLID) || (zone && zone[p])) inside[p] = 255
+  }
+  return { drop, interior: fillHoles(inside, width, height, Infinity) }
+}
+
+/**
+ * Apply the hair face rule (`hairFaceRule`) to a region mask, in place: first the skin clause, then every 8-connected
+ * piece of what is left that lies wholly inside the face interior. Returns how many pixels each clause took.
+ *
+ * @param {Uint8Array} mask
+ * @param {{ drop: Uint8Array, interior: Uint8Array | null }} face
+ * @param {number} width
+ * @param {number} height
+ * @returns {{ skin: number, islands: number }}
+ */
+export function applyFaceRule(mask, face, width, height) {
+  const dropped = { skin: 0, islands: 0 }
+  for (let p = 0; p < mask.length; p++) {
+    if (!mask[p] || !face.drop[p]) continue
+    mask[p] = 0
+    dropped.skin++
+  }
+  const { interior } = face
+  if (!interior) return dropped
+  const seen = new Uint8Array(mask.length)
+  const stack = new Int32Array(mask.length)
+  const piece = new Int32Array(mask.length)
+  // A piece with no pixel inside the interior is never visited: it is outside the face, and kept.
+  for (let start = 0; start < mask.length; start++) {
+    if (!mask[start] || seen[start] || !interior[start]) continue
+    let top = 0
+    let size = 0
+    let reachesOut = false
+    stack[top++] = start
+    seen[start] = 1
+    while (top > 0) {
+      const p = stack[--top]
+      piece[size++] = p
+      if (!interior[p]) reachesOut = true
+      const x = p % width
+      const y = (p - x) / width
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx
+          const ny = y + dy
+          if ((dx === 0 && dy === 0) || nx < 0 || ny < 0 || nx >= width || ny >= height) continue
+          const q = ny * width + nx
+          if (!mask[q] || seen[q]) continue
+          seen[q] = 1
+          stack[top++] = q
+        }
+      }
+    }
+    if (reachesOut) continue
+    for (let i = 0; i < size; i++) mask[piece[i]] = 0
+    dropped.islands += size
+  }
+  return dropped
 }
 
 /**
@@ -1078,7 +1132,7 @@ function slotLimits(mask, { slot, width, height, density, face = null }) {
   } else if (slot === 'outfit') {
     mask.fill(0, 0, Math.min(mask.length, OUTFIT_TOP_Y * density * width))
   } else if (slot === 'hair' && face) {
-    for (let p = 0; p < mask.length; p++) if (face.drop[p]) mask[p] = 0
+    applyFaceRule(mask, face, width, height)
   }
   return mask
 }
@@ -1824,7 +1878,7 @@ async function maskAlpha(dir, name, entry, kind) {
 /**
  * A hairstyle's two layers (spec §5.4): the picture registered on the bald body (`registerToBase`, measured on the
  * rows the hair leaves alone, y ≥ `HEAD_LIMIT_Y`), its difference against the body — no area limit, the hair face rule
- * (`hairFaceRule`, on the body's neutral face masks) — and that region split (`splitHair`), or split by a hand-drawn
+ * (`hairFaceRule`, on the body's neutral face and its masks) — and that region split (`splitHair`), or split by a hand-drawn
  * `item_hair_<code>_frontmask.png` in `overridesDir` when one is there.
  *
  * The L60 is the front, with `split: { region, front, back }` — the pixels at alpha ≥ 128 of the hair as the two
@@ -1839,11 +1893,18 @@ async function hairLayers({ anchored, code, dir, manifest, diff, overridesDir, l
   log(`registered on ${bodyName}: dx ${registered.dx}, dy ${registered.dy} px @2x, scale ${registered.scale} (mean difference ${registered.error.toFixed(1)})`)
 
   const neutral = bodyFaceFile(gender, 'neutral')
-  const faceRule = { skin: await maskAlpha(dir, neutral, manifest.files[neutral], 'skin'), eyes: await maskAlpha(dir, neutral, manifest.files[neutral], 'eyes') }
-  for (const kind of ['skin', 'eyes']) if (!faceRule[kind]) log(`hair face rule: ${neutral} has no ${kind} mask, so the ${kind === 'skin' ? 'redrawn skin' : 'redrawn eyes'} cannot be dropped`)
+  const neutralEntry = manifest.files[neutral]
+  const neutralFile = join(dir, `${neutral}@2x.png`)
+  const faceRule = {
+    skin: await maskAlpha(dir, neutral, neutralEntry, 'skin'),
+    eyes: await maskAlpha(dir, neutral, neutralEntry, 'eyes'),
+    face: neutralEntry && existsSync(neutralFile) ? await readPicture(neutralFile) : null,
+  }
+  for (const kind of ['skin', 'eyes']) if (!faceRule[kind]) log(`hair face rule: ${neutral} has no ${kind} mask — the face it can tell is smaller`)
+  if (!faceRule.skin && !faceRule.eyes) log('hair face rule: off — a redrawn face would become hair')
   const cut = diffAgainstBase(registered.picture, bodyPicture, { ...diff, slot: 'hair', density: 2, faceRule })
-  const dropped = cut.faceDropped ?? { skin: 0, eyes: 0 }
-  log(`hair face rule: dropped ${dropped.skin + dropped.eyes} px the picture redrew on the face (${dropped.skin} on the skin, ${dropped.eyes} round the eyes)`)
+  const dropped = cut.faceDropped ?? { skin: 0, islands: 0 }
+  log(`hair face rule: dropped ${dropped.skin + dropped.islands} px the picture redrew on the face (${dropped.skin} of skin, ${dropped.islands} in islands inside the face)`)
 
   const { width, height } = bodyPicture
   const frontMask = join(overridesDir, `item_hair_${code}_frontmask.png`)
