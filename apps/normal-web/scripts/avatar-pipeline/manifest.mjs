@@ -29,6 +29,8 @@ export const PACKAGE_ROOT = fileURLToPath(new URL('../../', import.meta.url))
 export const PUBLIC_DIR = resolve(PACKAGE_ROOT, 'public/avatar')
 export const SERVER_MANIFEST = resolve(PACKAGE_ROOT, '../normal-server/data/avatar-manifest.json')
 export const SHEET_FILE = resolve(PACKAGE_ROOT, '../../docs/avatar-2d-sheet.png')
+/** Plan 19 spec §5.6: the fit sheet — every hat and every face item on each of the eight hairstyles. */
+export const FIT_SHEET_FILE = resolve(PACKAGE_ROOT, '../../docs/avatar-2d-fit-sheet.png')
 /** Plan 13 spec §4.2: the tint review sheet — every base's three hair × three eye colours, every tintable item. */
 export const TINT_SHEET_FILE = resolve(PACKAGE_ROOT, '../../docs/avatar-2d-tint-sheet.png')
 /** The catalogue `tint-sheet` reads its tintable items from (spec §4.2's "mọi món `tintable`"). */
@@ -370,6 +372,37 @@ export function entryFor(file, bytes2x, extra = {}) {
     ...(file.hidesHairBack ? { hidesHairBack: true } : {}),
     ...extra,
   }
+}
+
+/**
+ * One entry with its hide rules set (Plan 19, `hides`): `front`/`back` true or false, `null` to leave that one as it
+ * is. A rule that is off is absent, never `false`, and one that is on sits where `entryFor` puts it, after
+ * `bytes2x` — so turning a flag off and on again gives back the very same bytes.
+ */
+export function withHides(entry, { front = null, back = null }) {
+  const { layer, w, h, bytes2x, hidesHairFront, hidesHairBack, ...rest } = entry
+  const hideFront = front ?? hidesHairFront === true
+  const hideBack = back ?? hidesHairBack === true
+  return {
+    layer,
+    w,
+    h,
+    bytes2x,
+    ...(hideFront ? { hidesHairFront: true } : {}),
+    ...(hideBack ? { hidesHairBack: true } : {}),
+    ...rest,
+  }
+}
+
+/**
+ * Every `items.json` id drawn with one layer: its `asset.file`, or one of its `asset.variants`. A hat's colour
+ * variants share the hat's layer (pre-flight #15), and the server refuses an item whose hide flags disagree with
+ * the manifest's (bug 7), so `hides` names them all.
+ */
+export function itemsOnLayer(items, layer) {
+  return (items ?? [])
+    .filter((item) => item?.asset?.file === layer || Object.values(item?.asset?.variants ?? {}).includes(layer))
+    .map((item) => item.id)
 }
 
 // ─────────────────────────────────────────────────────────── the stand-ins ──

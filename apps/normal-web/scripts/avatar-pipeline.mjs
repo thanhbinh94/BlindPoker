@@ -64,15 +64,29 @@
  *       two layers split cleanly) over every layer (or the named ones), print the table, exit 1 on any failure.
  *       `--skip` may be repeated.
  *
- *   node scripts/avatar-pipeline.mjs sheet [--dir <layers>] [--out <png>]
- *       Compose every item on both bases into docs/avatar-2d-sheet.png — the style gate of spec §9.
+ *   node scripts/avatar-pipeline.mjs sheet [--dir <layers>] [--hairs a,b] [--outfits a,b] [--out <png>] [--fit-out <png>]
+ *       Compose docs/avatar-2d-sheet.png — the style gate of spec §9, rebuilt for v4 (Plan 19 §5.6): the v4 grid
+ *       (each gender's hairstyles × casual01 and dealer01, the gender's cut where it exists × porcelain, natural
+ *       and deep skin, the outer two read from items.json and drawn natural, with a caption saying so, while an
+ *       item is missing), every outfit on both genders, every aura and frame, the six expressions per gender, the
+ *       eight bots and the portrait at three sizes. `--hairs` and `--outfits` (comma lists of codes, with or
+ *       without the `hair_`/`outfit_` prefix) narrow the v4 grid and nothing else. Also writes the fit sheet,
+ *       docs/avatar-2d-fit-sheet.png (or `--fit-out`): every hat and every face item × the eight hairstyles, cut
+ *       to the portrait, with the hide rules applied to the hair layers.
+ *
+ *   node scripts/avatar-pipeline.mjs hides <layer> --front on|off [--back on|off] [--out <dir>]
+ *       Set a worn item's hide rules — a hat's, in practice (D01 §4.3: `hidesHairFront` drops a hairstyle's L60, `hidesHairBack` its
+ *       L20) on that layer's entry in both manifests, or only in <dir>/avatar-manifest.json with `--out`. Either
+ *       flag may be given alone. Prints every items.json id drawn with that layer, colour variants included,
+ *       because the server refuses an item whose flags disagree with the manifest's (bug 7):
+ *         remember items.json: head_beanie01, head_beanie_red01, … — same flags (bug 7)
  *
  *   node scripts/avatar-pipeline.mjs tint-sheet [--dir <layers>] [--out <png>]
  *       Compose docs/avatar-2d-tint-sheet.png (Plan 13 spec §4.2): every masked base in three hair × three
  *       eye colours, plus one card per `items.json` entry with `asset.tint` set — the eyeballed check for
  *       recolouring before C11 or the client ever draws one.
  *
- * `placeholder`, `ingest` and `masks` take `--out <dir>`; `check`, `colours`, `sheet` and `tint-sheet` read `--dir <dir>`. Pointing
+ * `placeholder`, `ingest`, `masks` and `hides` take `--out <dir>`; `check`, `colours`, `sheet` and `tint-sheet` read `--dir <dir>`. Pointing
  * either at a directory that is not `public/avatar/` also stops the server's copy of the manifest from being
  * written, which is what makes the whole pipeline testable without touching the committed artefact.
  *
@@ -89,6 +103,7 @@ import { describeColours, maskTargets, writeMasks } from './avatar-pipeline/mask
 import { buildSheet } from './avatar-pipeline/sheet.mjs'
 import { buildTintSheet } from './avatar-pipeline/tint-sheet.mjs'
 import {
+  FIT_SHEET_FILE,
   ITEMS_FILE,
   MANIFEST_NAME,
   PUBLIC_DIR,
@@ -99,7 +114,10 @@ import {
   TINT_SHEET_FILE,
   buildPlaceholders,
   itemFile,
+  itemsOnLayer,
+  parseName,
   readManifest,
+  withHides,
   writeManifest,
 } from './avatar-pipeline/manifest.mjs'
 
@@ -169,6 +187,23 @@ function parseTarget(spec) {
   return die(`cannot read --as ${spec}`)
 }
 
+/** `--name a,b,c` as a list, or `null` when the option is absent. */
+function listOption(name) {
+  const value = option(name)
+  return value === null ? null : value.split(',').map((part) => part.trim()).filter(Boolean)
+}
+
+/** `--name on|off` as `true`/`false`, or `null` when the option is absent. */
+function onOffOption(name) {
+  const value = option(name)
+  if (value === null) return null
+  if (value !== 'on' && value !== 'off') die(`--${name} takes on or off, got ${value}`)
+  return value === 'on'
+}
+
+/** items.json, or nothing when it is not there (a test's own directory). */
+const readItems = () => (existsSync(ITEMS_FILE) ? JSON.parse(readFileSync(ITEMS_FILE, 'utf8')) : [])
+
 /** `--tint-seed x,y` (1x frame coords), or `null` when the option is absent. */
 function tintSeedOption() {
   const value = option('tint-seed')
@@ -236,21 +271,38 @@ try {
     if (!names.length) die('colours needs the layers to measure, e.g. colours body_f_L30 body_f_face_neutral_L50')
     const { dir } = destinations('dir')
     const manifest = readManifest(resolve(dir, MANIFEST_NAME))
-    const items = existsSync(ITEMS_FILE) ? JSON.parse(readFileSync(ITEMS_FILE, 'utf8')) : []
-    for (const line of await describeColours({ dir, manifest, names, items, log })) console.log(line)
+    for (const line of await describeColours({ dir, manifest, names, items: readItems(), log })) console.log(line)
   } else if (command === 'sheet') {
     const { dir } = destinations('dir')
     const manifest = readManifest(resolve(dir, MANIFEST_NAME))
     const out = option('out') ? resolve(process.cwd(), option('out')) : SHEET_FILE
-    await buildSheet({ dir, manifest, out, log })
+    const fitOut = option('fit-out') ? resolve(process.cwd(), option('fit-out')) : FIT_SHEET_FILE
+    await buildSheet({ dir, manifest, items: readItems(), hairs: listOption('hairs'), outfits: listOption('outfits'), out, fitOut, log })
+  } else if (command === 'hides') {
+    const [layer] = positionals()
+    if (!layer) die('hides needs a layer, e.g. hides item_head_beanie01_L80 --front off')
+    const front = onOffOption('front')
+    const back = onOffOption('back')
+    if (front === null && back === null) die('hides needs --front on|off, --back on|off, or both')
+    const { dir, targets } = destinations('out')
+    const manifest = readManifest(resolve(dir, MANIFEST_NAME))
+    const entry = manifest.files[layer]
+    if (!entry) die(`no layer ${layer} in ${resolve(dir, MANIFEST_NAME)}`)
+    if (parseName(layer)?.kind !== 'item') die(`${layer} is not an item layer: only a worn item hides hair`)
+    manifest.files[layer] = withHides(entry, { front, back })
+    const written = await writeManifest(manifest, targets)
+    const now = manifest.files[layer]
+    const state = (on) => (on ? 'on' : 'off')
+    log(`${layer}: hidesHairFront ${state(now.hidesHairFront)}, hidesHairBack ${state(now.hidesHairBack)} — ${written.length ? `written to ${written.length} of ${targets.length} manifest${targets.length === 1 ? '' : 's'}` : 'no change'}`)
+    const ids = itemsOnLayer(readItems(), layer)
+    log(ids.length ? `remember items.json: ${ids.join(', ')} — same flags (bug 7)` : `no items.json entry is drawn with ${layer}`)
   } else if (command === 'tint-sheet') {
     const { dir } = destinations('dir')
     const manifest = readManifest(resolve(dir, MANIFEST_NAME))
     const out = option('out') ? resolve(process.cwd(), option('out')) : TINT_SHEET_FILE
-    const items = existsSync(ITEMS_FILE) ? JSON.parse(readFileSync(ITEMS_FILE, 'utf8')) : []
-    await buildTintSheet({ dir, manifest, items, out, log })
+    await buildTintSheet({ dir, manifest, items: readItems(), out, log })
   } else {
-    die(`unknown command ${command ?? '(none)'} — one of placeholder, ingest, check, colours, sheet, masks, tint-sheet`)
+    die(`unknown command ${command ?? '(none)'} — one of placeholder, ingest, check, colours, sheet, hides, masks, tint-sheet`)
   }
 } catch (error) {
   die(error instanceof Error ? error.message : String(error))

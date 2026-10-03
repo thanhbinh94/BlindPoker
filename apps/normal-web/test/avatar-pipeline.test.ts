@@ -24,9 +24,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { headMetrics, runChecks } from '../scripts/avatar-pipeline/checks.mjs'
 import { OUTFIT_TOP_Y, cutItem, diffAgainstBase, ingest, measure, registerBySilhouette, registerToBase, shiftPicture } from '../scripts/avatar-pipeline/extract.mjs'
 import { AURA_CY, AURA_SIZE, AXIS_X, BASELINE_Y, BODY, CROP, DENSITIES, FACE_LIMIT_Y, FRAME, HEAD_REFERENCE, HEAD_TOLERANCE, LAYERS, RING, SKIN_AREA, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
-import { BASES, BASE_WEAR, EXPRESSIONS, HAIR_CODES, ICON, MANIFEST_NAME, NAME_PATTERN, WEARS, bodyFaceFile, bodyFile, buildPlaceholders, hairFile, hairItemId, iconName, itemFile, parseName, stageOneFiles, variantFile, wearOf, writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
+import { BASES, BASE_WEAR, EXPRESSIONS, FIT_SHEET_FILE, HAIR_CODES, ICON, ITEMS_FILE, MANIFEST_NAME, NAME_PATTERN, SHEET_FILE, WEARS, bodyFaceFile, bodyFile, buildPlaceholders, hairFile, hairItemId, iconName, itemFile, parseName, serialiseManifest, stageOneFiles, variantFile, wearOf, writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
 import { MASK_FILE_KIND, describeColours } from '../scripts/avatar-pipeline/masks.mjs'
 import { alphaBBox, blankPicture, cropPicture, overPicture, readPicture, removeChroma, renderSvg, writeDensities, writePicture } from '../scripts/avatar-pipeline/png.mjs'
+import { FIT_GRID, SHEET_GRID, composeCard, fitCards, sheetCards, sheetLayout } from '../scripts/avatar-pipeline/sheet.mjs'
 
 const PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url))
 const SCRIPT = resolve(PACKAGE_ROOT, 'scripts/avatar-pipeline.mjs')
@@ -34,6 +35,7 @@ const OUT_DIR = resolve(PACKAGE_ROOT, 'public/avatar')
 const WEB_MANIFEST = join(OUT_DIR, MANIFEST_NAME)
 const SERVER_MANIFEST = resolve(PACKAGE_ROOT, '../normal-server/data/avatar-manifest.json')
 const SHEET = resolve(PACKAGE_ROOT, '../../docs/avatar-2d-sheet.png')
+const FIT_SHEET = resolve(PACKAGE_ROOT, '../../docs/avatar-2d-fit-sheet.png')
 
 /** The generation canvas the prompts in D02 ask for: @3x, which everything is scaled down from. */
 const SRC = { w: 1152, h: 1344 }
@@ -1477,15 +1479,154 @@ describe('the committed placeholder set', () => {
     expect(stdout).not.toMatch(/FAIL/)
   }, 300_000)
 
-  it('leaves a review sheet for the style gate', () => {
+  it('leaves a review sheet for the style gate', async () => {
+    expect(SHEET_FILE).toBe(SHEET)
+    expect(FIT_SHEET_FILE).toBe(FIT_SHEET)
     expect(existsSync(SHEET), 'docs/avatar-2d-sheet.png has not been generated').toBe(true)
-    return sharp(SHEET)
-      .metadata()
-      .then((meta) => {
-        expect(meta.width!).toBeGreaterThan(1000)
-        expect(meta.height!).toBeGreaterThan(1000)
-      })
+    expect(existsSync(FIT_SHEET), 'docs/avatar-2d-fit-sheet.png has not been generated').toBe(true)
+    // Spec §5.6, Plan 19: the v4 grid (2 genders × 4 hairstyles × 3 tones × 2 outfits), every outfit on both genders,
+    // every aura and frame, six expressions per gender, the eight bots and the three portrait sizes.
+    const items = JSON.parse(readFileSync(ITEMS_FILE, 'utf8')) as unknown[]
+    const cards = sheetCards(manifest, { items })
+    const count = (...blocks: string[]): number => cards.filter((card) => blocks.includes(card.block)).length
+    expect(count('grid')).toBe(48)
+    expect(count('outfits')).toBe(12)
+    expect(count('auras', 'frames')).toBe(14)
+    expect(count('expressions')).toBe(12)
+    expect(count('bots')).toBe(8)
+    expect(count('portraits')).toBe(3)
+    expect(cards).toHaveLength(48 + 12 + 14 + 12 + 8 + 3)
+    // The fit sheet: every hat and every face item × the eight hairstyles.
+    const fit = fitCards(manifest)
+    expect(fit).toHaveLength(96)
+
+    // The committed pictures are the ones these lists lay out: a sheet left over from another card list fails here.
+    const [sheet, fitSheet] = await Promise.all([sharp(SHEET).metadata(), sharp(FIT_SHEET).metadata()])
+    const want = sheetLayout(cards, SHEET_GRID)
+    const wantFit = sheetLayout(fit, FIT_GRID)
+    expect({ width: sheet.width, height: sheet.height }).toEqual({ width: want.width, height: want.height })
+    expect({ width: fitSheet.width, height: fitSheet.height }).toEqual({ width: wantFit.width, height: wantFit.height })
+    for (const meta of [sheet, fitSheet]) {
+      expect(meta.width!).toBeGreaterThan(1000)
+      expect(meta.height!).toBeGreaterThan(1000)
+    }
   })
+})
+
+// ────────────────────────────────────────────── the v4 sheets and `hides` ──
+
+describe('the v4 review sheet and the fit sheet (Plan 19 A1d, spec §5.6)', () => {
+  const committed = JSON.parse(readFileSync(WEB_MANIFEST, 'utf8')) as Manifest
+  const SKIN = { porcelain: '#f8ece4', deep: '#6b4a3a' }
+  const skinItems = [
+    { id: 'skin_porcelain01', slot: 'skinColor', colour: SKIN.porcelain },
+    { id: 'skin_deep01', slot: 'skinColor', colour: SKIN.deep },
+  ]
+  const grid = (cards: { block: string }[]) => cards.filter((card) => card.block === 'grid') as { block: string; caption: string[]; names: string[]; tone?: { gender: string; colour: string } }[]
+
+  it('narrows the v4 grid with --hairs and --outfits, and nothing else', () => {
+    const all = sheetCards(committed, { items: skinItems })
+    const narrow = sheetCards(committed, { items: skinItems, hairs: ['hair_f_bob01', 'm_spiky01'], outfits: ['outfit_casual01'] })
+    expect(grid(narrow)).toHaveLength(2 * 3 * 1)
+    expect(grid(narrow).map((card) => card.names[0])).toEqual([...Array(3).fill(hairFile('f_bob01', 20)), ...Array(3).fill(hairFile('m_spiky01', 20))])
+    expect(narrow.filter((card) => card.block !== 'grid')).toEqual(all.filter((card) => card.block !== 'grid'))
+    expect(() => sheetCards(committed, { hairs: ['f_mohawk01'] })).toThrow(/f_mohawk01/)
+    expect(() => sheetCards(committed, { outfits: ['pyjamas01'] })).toThrow(/pyjamas01/)
+  })
+
+  it('paints the outer tones from items.json, and draws natural, saying so, while an item is missing', () => {
+    const withBoth = grid(sheetCards(committed, { items: skinItems }))
+    expect(withBoth.map((card) => card.tone?.colour ?? 'natural').slice(0, 3)).toEqual([SKIN.porcelain, 'natural', SKIN.deep])
+    expect(withBoth[0]!.caption.join(' ')).toContain(SKIN.porcelain)
+    const without = grid(sheetCards(committed, { items: [] }))
+    expect(without.every((card) => card.tone === undefined)).toBe(true)
+    expect(without[0]!.caption.join(' ')).toMatch(/porcelain.*no item.*natural/)
+    expect(without[2]!.caption.join(' ')).toMatch(/deep.*no item.*natural/)
+  })
+
+  it('dresses every v4 card in its gender’s cut of an outfit where one exists', () => {
+    const outfits = sheetCards(committed, { items: [] }).filter((card) => card.block === 'outfits')
+    const dealer = outfits.filter((card) => card.names.some((name) => name.startsWith('item_outfit_dealer01')))
+    expect(dealer.map((card) => card.names.find((name) => name.startsWith('item_outfit_')))).toEqual(['item_outfit_dealer01_L40', 'item_outfit_dealer01_m_L40'])
+    expect(dealer.map((card) => card.names.find((name) => name.startsWith('body_')))).toEqual([bodyFile('f'), bodyFile('m')])
+    // On the gender's default hairstyle: f → the bob, m → the tousled cut.
+    expect(dealer.map((card) => card.names[0])).toEqual([hairFile('f_bob01', 20), hairFile('m_tousled01', 20)])
+  })
+
+  it('drops the hair layer a head item hides on the fit sheet, and only that one', () => {
+    const files = { ...committed.files }
+    const flags = (name: string, front: boolean, back: boolean): void => {
+      const { hidesHairFront: _front, hidesHairBack: _back, ...rest } = files[name]!
+      files[name] = { ...rest, ...(front ? { hidesHairFront: true } : {}), ...(back ? { hidesHairBack: true } : {}) }
+    }
+    flags('item_head_beanie01_L80', true, false)
+    flags('item_head_hood_black01_L80', true, true)
+    flags('item_head_dealer_visor01_L80', false, false)
+    const cards = fitCards({ ...committed, files }) as { names: string[]; hair: string; item: string }[]
+    for (const code of HAIR_CODES) {
+      const back = hairFile(code, 20)
+      const front = hairFile(code, 60)
+      const card = (item: string): string[] => cards.find((c) => c.item === item && c.hair === code)!.names
+      // On the hairstyle's own gender, in casual01.
+      expect(card('item_head_beanie01_L80')).toEqual(expect.arrayContaining([bodyFile(code.slice(0, 1)), 'item_outfit_casual01_L40']))
+      expect(card('item_head_beanie01_L80'), `${code} under the beanie`).toContain(back)
+      expect(card('item_head_beanie01_L80'), `${code} under the beanie`).not.toContain(front)
+      expect(card('item_head_hood_black01_L80').filter((name) => name.startsWith('item_hair_')), `${code} under the hood`).toEqual([])
+      expect(card('item_head_dealer_visor01_L80')).toEqual(expect.arrayContaining([back, front]))
+      expect(card('item_face_sunglasses01_L70')).toEqual(expect.arrayContaining([back, front]))
+    }
+  })
+
+  it('paints a tone over skin only: the body and its face, by their skin masks', async () => {
+    const cards = grid(sheetCards(committed, { items: skinItems, hairs: ['f_bob01'], outfits: ['casual01'] }))
+    const [porcelain, natural, deep] = await Promise.all(cards.map((card) => composeCard(card, { dir: OUT_DIR, manifest: committed })))
+    const masks = await Promise.all([bodyFile('f'), bodyFaceFile('f', 'neutral')].map((name) => readPicture(join(OUT_DIR, `${name}_skinmask@1x.png`))))
+    for (const toned of [porcelain!, deep!]) {
+      let changed = 0
+      let outside = 0
+      for (let p = 0; p < natural!.width * natural!.height; p++) {
+        const differs = [0, 1, 2].some((c) => toned.data[p * 4 + c] !== natural!.data[p * 4 + c])
+        if (!differs) continue
+        changed++
+        if (masks.every((mask) => mask.data[p * 4 + 3] === 0)) outside++
+      }
+      expect(changed, 'the tone changed nothing').toBeGreaterThan(1000)
+      expect(outside, 'the tone reached past the skin masks').toBe(0)
+    }
+  }, 30_000)
+})
+
+describe('the hides command', () => {
+  const run = (args: string[]): string => execFileSync(process.execPath, [SCRIPT, ...args], { cwd: PACKAGE_ROOT, encoding: 'utf8' })
+
+  it('hides item_head_beanie01_L80 --front off --out <temp copy> flips that entry in the copy only, and names every items.json row on the layer', () => {
+    const dir = caseDir('hides')
+    const committedBytes = [readFileSync(WEB_MANIFEST), readFileSync(SERVER_MANIFEST)]
+    cpSync(WEB_MANIFEST, join(dir, MANIFEST_NAME))
+    const layer = 'item_head_beanie01_L80'
+
+    const stdout = run(['hides', layer, '--front', 'off', '--out', dir])
+    const expected = JSON.parse(committedBytes[0]!.toString('utf8')) as Manifest
+    delete expected.files[layer]!.hidesHairFront
+    // Exactly the one flag, written the way every manifest is written (sorted, two-space JSON, LF).
+    expect(readFileSync(join(dir, MANIFEST_NAME)).equals(serialiseManifest(expected))).toBe(true)
+    expect(stdout).toContain('remember items.json: head_beanie01, head_beanie_red01, head_beanie_grey01, head_beanie_mustard01 — same flags (bug 7)')
+    // The committed manifests are untouched.
+    expect(readFileSync(WEB_MANIFEST).equals(committedBytes[0]!)).toBe(true)
+    expect(readFileSync(SERVER_MANIFEST).equals(committedBytes[1]!)).toBe(true)
+
+    // Back on, and the copy is byte for byte the committed file again: the flag returns to its own place.
+    run(['hides', layer, '--front', 'on', '--out', dir])
+    expect(readFileSync(join(dir, MANIFEST_NAME)).equals(committedBytes[0]!)).toBe(true)
+
+    // --back alone, and a refusal for an unknown layer or a value that is not on|off.
+    run(['hides', layer, '--back', 'on', '--out', dir])
+    const both = JSON.parse(readFileSync(join(dir, MANIFEST_NAME), 'utf8')) as Manifest
+    expect(both.files[layer]).toMatchObject({ hidesHairFront: true, hidesHairBack: true })
+    expect(() => run(['hides', 'item_head_nothing01_L80', '--front', 'off', '--out', dir])).toThrow()
+    expect(() => run(['hides', layer, '--front', 'maybe', '--out', dir])).toThrow()
+    expect(() => run(['hides', layer, '--out', dir])).toThrow()
+  }, 60_000)
 })
 
 // ─────────────────────────────────────────────── C12, and C11 on the v4 set ──

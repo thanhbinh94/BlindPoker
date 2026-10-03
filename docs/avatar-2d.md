@@ -224,9 +224,36 @@ pnpm --filter @bp/normal-web avatar:check
 # design and occasionally needs a human override.
 
 pnpm --filter @bp/normal-web avatar:sheet
-# Composes every item on every base, across all six expressions, into docs/avatar-2d-sheet.png — the
-# eyeballed style gate before a picture is ever committed (design §6, §9). A base whose wear has a
-# real variant of an outfit is drawn wearing that variant, not the shared layer (§3.1).
+pnpm --filter @bp/normal-web avatar:sheet -- --hairs f_bob01,m_tousled01 --outfits casual01
+# Composes docs/avatar-2d-sheet.png — the eyeballed style gate before a picture is ever committed (design
+# §6, §9) — and docs/avatar-2d-fit-sheet.png, the hat-and-glasses fit check (Plan 19 §5.6). Both compose
+# through the renderer's layer order and hide rules, and both read --dir like `check`. The review sheet,
+# each block from a new row, twelve cards a row:
+#   1. the v4 grid: for each gender, each of its hairstyles × casual01 and dealer01 × three tones —
+#      skin_porcelain01's colour, natural, skin_deep01's colour, read from items.json and painted with the
+#      shared `recolour` under the body's and the face's skin masks at the body's skin meanL. A tone whose
+#      item is not in items.json yet is drawn natural, and its caption says so in amber (48 cards);
+#   2. every outfit on both genders, on the gender's default hairstyle (the bob, the tousled cut) (12);
+#   3. every aura, then every frame, on body f with the bob, in casual01 (8 + 6);
+#   4. the six expressions per gender (12), the eight bots, and the portrait at 192, 40 and 32 px.
+# A body wears its gender's cut of an outfit where the manifest has one (§3.1: dealer01_m, tet_red01_m),
+# and the caption names it. --hairs and --outfits (comma lists; `hair_`/`outfit_` prefixes optional) narrow
+# the v4 grid and nothing else — what the style gate shows the user. --out moves the review sheet.
+# The fit sheet (--fit-out moves it) is every hat in STAGE_ONE_ITEMS.head and every face item × the eight
+# hairstyles, on the hairstyle's gender, in casual01, cut to the portrait at @1x — one row per item, 96
+# cards. A hat's hide rules drop the hair layer they name (§2: front → the hairstyle's L60, back → its L20),
+# and the caption says which ("hides front", "hides front+back", "hides none").
+
+pnpm --filter @bp/normal-web exec node scripts/avatar-pipeline.mjs hides item_head_beanie01_L80 --front off
+pnpm --filter @bp/normal-web exec node scripts/avatar-pipeline.mjs hides item_head_hood_black01_L80 --front on --back on
+# Sets a worn item's hide rules on that layer's entry in both manifests (or only in <dir>'s with --out
+# <dir>); either flag may come alone. A rule that is off is left out of the entry. It then prints every
+# items.json id drawn with that layer — its asset.file or one of its asset.variants, colour variants
+# included:
+#   remember items.json: head_beanie01, head_beanie_red01, head_beanie_grey01, head_beanie_mustard01 — same flags (bug 7)
+# Set the same flags on every one of them by hand: the server refuses an item whose hidesHairFront /
+# hidesHairBack disagree with its layer's in the manifest (bug 7). A stand-in's flags are redrawn from
+# HIDES by `placeholder`, so `hides` is for real layers (Plan 19, batch C5).
 ```
 
 `placeholder` and `ingest` write into `public/avatar/` by default; pointing either at a different `--out`
