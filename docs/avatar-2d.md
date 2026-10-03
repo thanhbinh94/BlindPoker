@@ -669,7 +669,10 @@ measured eye span onto `HEAD_REFERENCE.eyeSpan`, scaling about the eye midpoint,
 (`eyeMidX`, `eyeMidY`): `bodies.<g> = { transform, anchor: 'head' }`. The ingest logs how the scale and the offset
 moved from f01's, and where the feet land — they may sit off `BASELINE_Y` by that much (a body drawn 6 units low on
 the synthetic test: `scale ×0.9999, offset moved +0.28, −5.89`, the feet from y 415 to 409.1); C2 and C3 still hold
-them inside the frame. Ingested again without the flag, the body keeps the anchored transform.
+them inside the frame. Ingested again without the flag, the body keeps the anchored transform. The anchor (and the
+dry run's C12) measures **the eyes its own cut finds** — never a hand-drawn `body_<g>_face_neutral_L50_eyemask.png`,
+which is drawn for the body where it is stored, not for the cut on f01's transform (A2a review); the face the ingest
+then writes does take the hand-drawn mask, as every mask does.
 
 **One of a body's faces** — `--as face:<g>:<expr>` — is an expression's cut, owned by the body:
 `body_<g>_face_<expr>_L50` on `bodies.<g>.transform`, masked like the neutral one. It needs the body first.
@@ -685,17 +688,21 @@ them inside the frame. Ingested again without the flag, the body keeps the ancho
    - **skin** — the region never holds a pixel inside the neutral face's skin mask whose colour in the picture is the
      body's skin (`isSkin` within `SKIN_TOLERANCE` of `baseSkinColour`);
    - **islands** — the *face interior* is the neutral face's skin mask ∪ its eye zone (`eyeZone`, §4.4.1: the eye
-     ellipses and the eye mask, widened), with its holes filled, so the mouth, the brows and the eyes all fall inside
-     it; every 8-connected piece of the region lying **wholly** inside the interior is dropped. A redrawn feature is
+     ellipses and the eye mask, widened) ∪ the body L30's own skin mask on the rows above `FACE_LIMIT_Y` (250), with
+     its holes filled, so the mouth, the brows and the eyes all fall inside it; every 8-connected piece of the region
+     lying **wholly** inside the interior is dropped. The body's skin is there for the chin: the face layer gives up
+     the torso column below y 236 (§4.3's `keepOnlyFace`) while the chin is at 243, so without it a mouth or a jaw
+     redrawn across y 236 reached "outside" the face through the cut and stayed in the hair (A2a review: 652 px of
+     a mouth at y 236). A redrawn feature is
      an island inside the face. A fringe always hangs down from hair outside it — over the head's outline, past the
      top of the skull — so it stays in the hair however far down it falls, and **C13 judges it**: a fringe drawn over
      the eyes is kept in the L60 and fails C13 (`the front lies over the eyes on 100.0 % of the eye mask` on the test).
    The rule is applied wherever a slot limit is — first on the raw difference, before the closing and the hole fill
    could join an island to the fringe, then on the core and after the feather — and the ingest logs what it dropped
-   from the raw difference: `hair face rule: dropped 3063 px the picture redrew on the face (503 of skin, 2560 in
-   islands inside the face)` on the test picture, whose cheek shading is painted out, irises recoloured and mouth and
-   brows drawn again (an earlier rule that only dropped pixels near the eyes let 614 px of that mouth and 1134 px of
-   those brows into the L60). One thing it cannot tell: a piece of hair that is drawn *apart from* the rest, inside
+   from the raw difference: `hair face rule: dropped 3379 px the picture redrew on the face (503 of skin, 2876 in
+   islands inside the face)` on the test picture, whose cheek shading is painted out, irises recoloured, brows drawn
+   again and mouth drawn again down past y 236 (an earlier rule that only dropped pixels near the eyes let a redrawn
+   mouth and brows into the L60 — 614 px and 1134 px of them on an earlier version of the picture). One thing it cannot tell: a piece of hair that is drawn *apart from* the rest, inside
    the face — a fringe cut through by a skin-coloured shine band across its whole width loses the part below it.
 3. `splitHair(region, body, { density: 2, override })` splits it (§4.5); `override` is the hand-drawn
    `item_hair_<code>_frontmask.png` from `assets/avatar-src/masks/` when one is there, read as any hand-drawn mask is.
@@ -706,7 +713,10 @@ them inside the frame. Ingested again without the flag, the body keeps the ancho
    15 ΔE from its `naturalColour`, and on the user's word: both layers' hair-masked pixels are recoloured to it with
    the shared `recolour`, each at its own hair `meanL` (the shading is kept, the mean lands on the colour), written
    again at both densities and masked again; the L60 records `recolouredTo`. A synthetic hair drawn `#4a2e20` reads
-   ΔE 40.6 from `#5e3e6f` before and 0.0 after.
+   ΔE 40.6 from `#5e3e6f` before and 0.0 after. Like an item's tint seed, the recolour is **kept**: the hairstyle
+   ingested again without the flag is recoloured to its L60's `recolouredTo` once more, and the ingest says so
+   (`item_hair_f_bob01_L60 keeps its recolour to #5e3e6f`). To drop it, delete `recolouredTo` from the L60's entry in
+   both manifests first.
 
 **An item on a body** — `--base f|m` (a gender rather than a base id) — is registered on and diffed against
 `body_<g>_L30` exactly as §4.1 diffs against a base. With **`--hair <code>`** (a hairstyle of the same gender, already

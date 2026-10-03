@@ -66,6 +66,7 @@ import {
   baseSkinColour,
   isSkin,
 } from './frame.mjs'
+// extract.mjs imports this file in turn (`headMetrics`, `judgeHead`, A2a), so `measure` may only be used at call time, never at load.
 import { measure } from './extract.mjs'
 import { HAIR_COVERAGE, HAIR_EYE_LIMIT } from './hair.mjs'
 import { EYE_GROUP_MERGE_RADIUS, MASK_FILE_KIND, eyeZone } from './masks.mjs'

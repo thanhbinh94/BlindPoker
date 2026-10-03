@@ -2634,9 +2634,12 @@ describe('v4 ingest (Plan 19 A2a)', () => {
   const IRIS_RADIUS = 6.5
   /** A shaded patch on the left cheek: skin by the skin mask's hue rule, and a hair picture may paint it out. */
   const SHADE_AT = { cx: 150, cy: 212, rx: 10, ry: 6 }
-  /** The mouth as the body draws it, and as a hair picture redraws it: bigger, 3 units lower, another pink. */
+  /**
+   * The mouth as the body draws it, and as a hair picture redraws it: bigger, 8 units lower, another pink — down to
+   * y 239, past y 236, below which the face layer gives up the torso column (`keepOnlyFace`) while the chin is at 244.
+   */
   const MOUTH_AT = { cx: 192, cy: 226, rx: 7, ry: 2.5 }
-  const MOUTH_REDRAWN_AT = { cx: 192, cy: 229, rx: 10, ry: 4.5 }
+  const MOUTH_REDRAWN_AT = { cx: 192, cy: 234, rx: 10, ry: 5 }
   /** The brows as the body draws them (thin, y 177) and as a hair picture redraws them (bolder, 5 units higher). */
   const BROW_AT = { y: 177, width: 2.5 }
   const BROW_REDRAWN_AT = { y: 172, width: 5 }
@@ -2855,7 +2858,9 @@ describe('v4 ingest (Plan 19 A2a)', () => {
     // The cheek the picture painted out and the irises it recoloured are in neither layer (the hair face rule)…
     expect(inked(l60, redrawnFace), 'L60 holds the redrawn cheek or irises').toBe(0)
     expect(inked(l20, redrawnFace), 'L20 holds the redrawn cheek or irises').toBe(0)
-    // …nor the mouth and the brows it drew again: neither skin-coloured nor near the eyes, islands inside the face.
+    // …nor the mouth and the brows it drew again: neither skin-coloured nor near the eyes, islands inside the face —
+    // the mouth across y 236 too, where the face interior has the body's own skin to reach the chin with (A2a review).
+    expect(MOUTH_REDRAWN_AT.cy + MOUTH_REDRAWN_AT.ry).toBeGreaterThan(TORSO_COLUMN.y0)
     for (const [part, region] of [['mouth', redrawnMouth], ['brows', redrawnBrows]] as const) {
       expect(inked(l60, region), `L60 holds the redrawn ${part}`).toBe(0)
       expect(inked(l20, region), `L20 holds the redrawn ${part}`).toBe(0)
@@ -3041,6 +3046,37 @@ describe('v4 ingest (Plan 19 A2a)', () => {
     expect(manifest.files[names[0]!]!.recolouredTo).toBe(PURPLE)
     expect(manifest.files[names[1]!]!.recolouredTo).toBeUndefined()
     await allPass(dir, names)
+
+    // Ingested again without the flag, it stays recoloured, as an item keeps its tint seed (A2a review).
+    expect(run(['ingest', file, '--as', 'hair:f_bob01', '--out', dir])).toContain(`item_hair_f_bob01_L60 keeps its recolour to ${PURPLE}`)
+    for (const delta of await deltas()) expect(delta).toBeLessThanOrEqual(5)
+    expect(manifestIn(dir).files[names[0]!]!.recolouredTo).toBe(PURPLE)
+  }, 300_000)
+
+  it('anchors a body by the eyes its cut finds, not by a hand-drawn eye mask drawn for another placement (A2a review)', async () => {
+    // A hand-drawn neutral eye mask, drawn where the eyes sit once the body is anchored (on HEAD_REFERENCE). The cut
+    // on f01's transform has them 6 units lower; measured through the drawing, the anchor would see nothing to move.
+    const dir = copyCase(await f01Dir(), 'v4-anchor-hand-eyes')
+    const overridesDir = caseDir('v4-anchor-hand-eyes-masks')
+    const drawing = blankPicture(FRAME.w, FRAME.h)
+    for (let y = 0; y < FRAME.h; y++) {
+      for (let x = 0; x < FRAME.w; x++) {
+        if (EYE_XS.some((ex) => Math.hypot(x + 0.5 - ex, y + 0.5 - EYE_Y) <= IRIS_RADIUS)) drawing.data.set([255, 255, 255, 255], (y * FRAME.w + x) * 4)
+      }
+    }
+    await writePicture(drawing, join(overridesDir, 'body_f_face_neutral_L50_eyemask.png'))
+    const lines: string[] = []
+    const file = await draw(dir, 'low.png', body({ dy: 6 }))
+    await ingest({ file, target: { kind: 'body', gender: 'f' }, dir, targets: targetsOf(dir), anchor: 'head', overridesDir, log: (line: string) => lines.push(line) })
+    const measured = /on f01's transform the eyes are at \([\d.]+, ([\d.]+)\)/.exec(lines.join('\n'))
+    expect(Number(measured?.[1]), lines.join('\n')).toBeGreaterThan(HEAD_REFERENCE.eyeMidY + 5)
+    const f01 = await f01Transform()
+    const manifest = manifestIn(dir)
+    expect(Math.abs(manifest.bodies!.f!.transform.offsetY - (f01.offsetY - 6))).toBeLessThan(1.5)
+    // The written face does take the drawing, which now sits on the anchored eyes: C12 passes through it.
+    expect(manifest.files.body_f_face_neutral_L50!.masks!.eyes!.override).toBe(true)
+    const c12 = (await checkOne(dir, 'body_f_L30', manifest as unknown as Manifest)).get('C12')!
+    expect(c12.ok, c12.detail).toBe(true)
   }, 300_000)
 
   it('cuts one of a body’s faces on the body’s transform (face:<g>:<expr>), and refuses it before the body', async () => {

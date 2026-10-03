@@ -45,7 +45,8 @@
  *         --anchor head         a body: place it by its eyes instead of f01's transform, onto HEAD_REFERENCE —
  *                               only on the user's word, when C12 fails on position or scale alone
  *         --recolour-to <hex>   a hairstyle: recolour both layers' hair to #rrggbb at each layer's own meanL and
- *                               record `recolouredTo` — only when `colours` shows it > 15 ΔE from its natural colour
+ *                               record `recolouredTo` — only when `colours` shows it > 15 ΔE from its natural colour;
+ *                               a later ingest of the hairstyle without the flag recolours it to that again
  *         --tolerance <n>       how wide the background key is (default 40)
  *         --white               the background is white rather than #00FF00; no despill
  *         --lock-scale <n>      force a scale instead of reading the base's stored one
