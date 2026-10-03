@@ -11,7 +11,7 @@
  *   C3  the empty part really is empty: no alpha at all more than 3 px outside the solid shape (§10.4)
  *   C4  no white fringe: the soft rim is the shape's colour, not white bled in (§10.5, §8.3)
  *   C5  head and face items fit inside the portrait crop (§10.6, §5)
- *   C6  an outfit covers the base's underwear (§10.7)
+ *   C6  an outfit covers the base's underwear (§10.7) — the real v4 bodies', for an outfit cut on one (`cutOn`)
  *   C7  the @1x really is the @2x scaled down (§8.2 — "never enlarge from a smaller size")
  *   C8  the file name follows §9.1, with a layer number that matches its slot
  *   C9  the manifest lists it, at that layer and that frame (§10.10)
@@ -69,7 +69,7 @@ import {
 import { measure } from './extract.mjs'
 import { HAIR_COVERAGE, HAIR_EYE_LIMIT } from './hair.mjs'
 import { EYE_GROUP_MERGE_RADIUS, MASK_FILE_KIND, eyeZone } from './masks.mjs'
-import { NAME_PATTERN, bodyFaceFile, faceFile, hairFile, itemFile, parseName, wearOf } from './manifest.mjs'
+import { GENDERS, NAME_PATTERN, bodyFaceFile, bodyFile, faceFile, hairFile, itemFile, parseName, wearOf } from './manifest.mjs'
 
 /** C10, and spec §8's 6 MB stage-1 footprint divided by the files that have to fit in it. */
 export const MAX_BYTES_2X = 400 * 1024
@@ -131,11 +131,12 @@ export const CHECK_IDS = CHECKS.map((check) => check.id)
 export async function runChecks({ dir, manifest, names, skip = [] }) {
   const wanted = names?.length ? names : Object.keys(manifest.files)
   const bases = await loadBases(dir, manifest)
+  const bodies = await loadBodies(dir, manifest)
   // C11's neutral-face measures, by name: five faces per gender are held to the same one (Plan 19).
   const neutralAreas = new Map()
   const rows = []
   for (const name of wanted) {
-    const context = await load(dir, manifest, name, bases, neutralAreas)
+    const context = await load(dir, manifest, name, bases, neutralAreas, bodies)
     const results = CHECKS.map((check) => ({
       id: check.id,
       ...(skip.includes(check.id) ? ok('skipped') : check.run(context)),
@@ -158,7 +159,22 @@ async function loadBases(dir, manifest) {
   return bases
 }
 
-async function load(dir, manifest, name, bases, neutralAreas = new Map()) {
+/**
+ * The v4 bodies' `body_<g>_L30` at @1x (Plan 19), which C6 measures an outfit cut on a body against (`cutOn`) — each
+ * with its gender as its wear, under its layer name.
+ */
+async function loadBodies(dir, manifest) {
+  const bodies = []
+  for (const gender of GENDERS) {
+    const name = bodyFile(gender)
+    const file = join(dir, `${name}@1x.png`)
+    if (!manifest.files[name] || !existsSync(file)) continue
+    bodies.push({ name, wear: gender, real: manifest.files[name].real === true, picture: await readPicture(file) })
+  }
+  return bodies
+}
+
+async function load(dir, manifest, name, bases, neutralAreas = new Map(), bodies = []) {
   const pictures = {}
   const bytes = {}
   for (const density of DENSITIES) {
@@ -238,7 +254,7 @@ async function load(dir, manifest, name, bases, neutralAreas = new Map()) {
     if (info && !info.empty && existsSync(eyesFile)) hairEyeMask = await readPicture(eyesFile)
   }
 
-  return { name, dir, manifest, entry, parsed, pictures, bytes, halved, bases, masks, neutralHairArea, neutralSkin, neutralEyeMask, neutralFaceStandIn, hairBack, hairEyeMask, hairNeutralFace }
+  return { name, dir, manifest, entry, parsed, pictures, bytes, halved, bases, bodies, masks, neutralHairArea, neutralSkin, neutralEyeMask, neutralFaceStandIn, hairBack, hairEyeMask, hairNeutralFace }
 }
 
 /** Pixels of a mask (as a `readPicture` result: white RGB, coverage in alpha) at ≥ 128 — spec §4.3's areas. */
@@ -448,6 +464,9 @@ function fitsThePortrait(context) {
  * worn by every base whose wear has no variant of this item — the moment a male dealer01 exists, the
  * default layer stops being what m01 wears and stops being measured against him, which is what lets a
  * skirt keep covering f01 while trousers cover m01.
+ *
+ * Plan 19: the candidates may be the v4 bodies instead, whose wear is their gender — the same rule then says which
+ * genders' bodies an outfit cut on a body is worn by (`coversTheUnderwear`).
  */
 function wornBy(context, candidates) {
   const { parsed, manifest } = context
@@ -458,12 +477,27 @@ function wornBy(context, candidates) {
   })
 }
 
+/**
+ * C6 (D01 §10.7), routed by the layer's `cutOn` (Plan 19, spec §5.6):
+ *
+ * - an outfit **cut on a v4 body** (`cutOn` ∈ `GENDERS`, which `ingest --base <g>` records) is measured against the
+ *   **real** `body_<g>_L30` of every gender that wears it (`wornBy`, the wear being the gender) — `n/a — no real body
+ *   wears it yet` while none is real. A stand-in body is a labelled rectangle, and the old bases have the old pose,
+ *   which an outfit redrawn for the new one cannot be held to;
+ * - an outfit **without `cutOn`, or cut on an old base** (`cutOn: 'f01'`), is measured exactly as before Plan 19, on
+ *   the old bases. That branch goes with them, in D1.
+ */
 function coversTheUnderwear(context) {
-  const { parsed, pictures, bases } = context
+  const { parsed, pictures, bases, bodies = [], entry } = context
   if (markedEmpty(context)) return EMPTY_NA
   if (parsed?.layer !== LAYERS.outfit) return ok('n/a — not an outfit')
   const outfit = pictures[1]
   if (!outfit) return ok('n/a — no @1x to judge')
+  if (GENDERS.includes(entry?.cutOn)) {
+    const worn = wornBy(context, bodies.filter((candidate) => candidate.real))
+    if (!worn.length) return ok('n/a — no real body wears it yet')
+    return measureCover(outfit, worn, (percent) => `covers ${percent} of ${worn.map((candidate) => candidate.name).join(' and ')}`)
+  }
   if (!bases.length) return bad('no base layer to measure against')
   // Real art is measured against real art. While one base is a photograph-grade picture and another is
   // still the labelled rectangle `placeholder` drew, holding a real dress to the stand-in's square
@@ -472,6 +506,11 @@ function coversTheUnderwear(context) {
   const real = bases.filter((candidate) => candidate.real)
   const worn = wornBy(context, real.length ? real : bases)
   if (!worn.length) return ok(`n/a — no base wears ${parsed.wear ? `the ${parsed.wear} cut` : 'this layer'}`)
+  return measureCover(outfit, worn, (percent) => `covers ${percent} of every base`)
+}
+
+/** How much of each wearer's underwear an outfit's @1x covers, held to `UNDERWEAR_COVERAGE` on the worst of them. */
+function measureCover(outfit, worn, passed) {
   let worst = { name: '', coverage: 1 }
   for (const candidate of worn) {
     const region = underwearRegion(candidate.picture)
@@ -483,7 +522,7 @@ function coversTheUnderwear(context) {
   }
   const percent = `${(worst.coverage * 100).toFixed(1)} %`
   return worst.coverage >= UNDERWEAR_COVERAGE
-    ? ok(`covers ${percent} of every base`)
+    ? ok(passed(percent))
     : bad(`leaves ${worst.name}'s underwear showing — covers only ${percent}`)
 }
 
@@ -704,7 +743,8 @@ function eyeBlobs(maskPic) {
  */
 function maskChecks(context) {
   const { entry, parsed, pictures, masks, neutralHairArea, neutralSkin } = context
-  const absent = entry?.real === true ? (REQUIRED_MASKS[parsed?.kind] ?? []).filter((kind) => !entry.masks?.[kind]) : []
+  // A layer marked `empty: true` (a short hairstyle's blank L20, since A2a) has nothing for a mask to sit on.
+  const absent = entry?.real === true && entry.empty !== true ? (REQUIRED_MASKS[parsed?.kind] ?? []).filter((kind) => !entry.masks?.[kind]) : []
   const missing = absent.map((kind) => `no ${kind} mask cut for this real layer`)
   if (!entry?.masks) return missing.length ? bad(missing.join('; ')) : ok('n/a — no masks cut for this layer')
   const layer = pictures[2]
@@ -870,6 +910,19 @@ function headStaysPut({ parsed, entry, pictures, neutralEyeMask, neutralFaceStan
   } catch (error) {
     return bad(error instanceof Error ? error.message : String(error))
   }
+  const verdict = judgeHead(metrics)
+  return verdict.ok ? ok(verdict.detail) : bad(verdict.detail)
+}
+
+/**
+ * C12's verdict on a head's `headMetrics`: `ok` when each of the four is within `HEAD_TOLERANCE` of `HEAD_REFERENCE`,
+ * and the detail C12 prints either way. Shared with `ingest --as body:<g> --dry-run` (A2a), which prints it for a cut
+ * into a temporary copy before anything is written.
+ *
+ * @param {{ eyeMidX: number, eyeMidY: number, eyeSpan: number, chinY: number }} metrics
+ * @returns {{ ok: boolean, detail: string }}
+ */
+export function judgeHead(metrics) {
   const where = `eyes (${metrics.eyeMidX.toFixed(1)}, ${metrics.eyeMidY.toFixed(1)}) ${metrics.eyeSpan.toFixed(1)} apart, chin ${metrics.chinY}`
   const off = []
   for (const [key, label] of HEAD_PARTS) {
@@ -877,8 +930,8 @@ function headStaysPut({ parsed, entry, pictures, neutralEyeMask, neutralFaceStan
     if (distance > HEAD_TOLERANCE) off.push(`${label} ${distance.toFixed(1)} from F01's`)
   }
   return off.length
-    ? bad(`${off.join(', ')}, want each within ${HEAD_TOLERANCE} — ${where}`)
-    : ok(`${where}, within ${HEAD_TOLERANCE} of F01's`)
+    ? { ok: false, detail: `${off.join(', ')}, want each within ${HEAD_TOLERANCE} — ${where}` }
+    : { ok: true, detail: `${where}, within ${HEAD_TOLERANCE} of F01's` }
 }
 
 // ───────────────────────────────────────────────────── C13: the hair splits cleanly ──

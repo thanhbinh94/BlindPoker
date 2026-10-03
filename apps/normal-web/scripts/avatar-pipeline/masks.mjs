@@ -917,6 +917,33 @@ function hasRealAlpha(pic) {
 }
 
 /**
+ * A hand-drawn mask (`assets/avatar-src/masks/…`) as one byte a pixel at `width` × `height`: its alpha when the file
+ * carries real alpha, otherwise its luminance — so a black-and-white drawing works as well as a transparent one. A
+ * frame-sized (@1x) drawing is scaled up to a layer at another density first; any other size is refused, because its
+ * pixels would land nowhere in particular. How `writeOneMask` reads an override, and (Plan 19) how `ingest` reads a
+ * hairstyle's hand-drawn front mask, `item_hair_<code>_frontmask.png`.
+ *
+ * @param {string} file
+ * @param {number} width
+ * @param {number} height
+ * @returns {Promise<Uint8Array>}
+ */
+export async function readHandMask(file, width, height) {
+  let pic = await readPicture(file)
+  if (pic.width === FRAME.w && pic.height === FRAME.h && (width !== FRAME.w || height !== FRAME.h)) pic = await resizePicture(pic, width, height)
+  if (pic.width !== width || pic.height !== height) {
+    throw new Error(`${file} is ${pic.width} × ${pic.height}: a hand-drawn mask is the frame (${FRAME.w} × ${FRAME.h}) or the layer (${width} × ${height})`)
+  }
+  const useAlpha = hasRealAlpha(pic)
+  const mask = new Uint8Array(width * height)
+  for (let i = 0; i < mask.length; i++) {
+    const o = i * 4
+    mask[i] = useAlpha ? pic.data[o + 3] : Math.round(0.3 * pic.data[o] + 0.59 * pic.data[o + 1] + 0.11 * pic.data[o + 2])
+  }
+  return mask
+}
+
+/**
  * `hair`/`eyes`/`tint`/`skin` in the manifest (`entry.masks`) are `hairmask`/`eyemask`/`tintmask`/`skinmask` on
  * disk (spec §4.1: file names say "eye", the manifest says "eyes"; Plan 19 adds skin, spec §5.5) — the one place
  * the two spellings have to meet.
@@ -938,16 +965,7 @@ async function writeOneMask({ dir, name, kind, computed, layer2x, entry, manifes
   let override = false
   const overrideFile = join(overridesDir, `${name}_${fileKind}mask.png`)
   if (existsSync(overrideFile)) {
-    let overridePic = await readPicture(overrideFile)
-    if (overridePic.width === FRAME.w && overridePic.height === FRAME.h) overridePic = await resizePicture(overridePic, width, height)
-    const useAlpha = hasRealAlpha(overridePic)
-    mask = new Uint8Array(width * height)
-    for (let i = 0; i < mask.length; i++) {
-      const o = i * 4
-      mask[i] = useAlpha
-        ? overridePic.data[o + 3]
-        : Math.round(0.3 * overridePic.data[o] + 0.59 * overridePic.data[o + 1] + 0.11 * overridePic.data[o + 2])
-    }
+    mask = await readHandMask(overrideFile, width, height)
     override = true
   }
   const maskPic = { data: Buffer.alloc(width * height * 4), width, height }

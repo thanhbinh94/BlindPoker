@@ -76,8 +76,11 @@ for (const base of BASES) {
   if (!WEARS.includes(BASE_WEAR[base])) throw new Error(`base ${base} has no wear in BASE_WEAR — one of ${WEARS.join(', ')}`)
 }
 
-/** The wear of a base id, or `null` for an id `BASE_WEAR` does not name. */
-export const wearOf = (baseId) => BASE_WEAR[baseId] ?? null
+/**
+ * The wear of a base id, or `null` for an id `BASE_WEAR` does not name. A v4 body (Plan 19, pre-flight #28) is owned
+ * by its gender, and a gender is its own wear: `wearOf('m')` is `'m'`, so `--variant m` is cut with `--base m`.
+ */
+export const wearOf = (id) => (GENDERS.includes(id) ? id : BASE_WEAR[id] ?? null)
 
 /** Spec §4.3: six per base, and — a decision of this plan — six per bot as well. */
 export const EXPRESSIONS = ['neutral', 'happy', 'sad', 'surprised', 'closed', 'sleep']
