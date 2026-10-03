@@ -30,7 +30,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { BODY_TRANSFORM_FROM, BOT_TRANSFORM_FROM } from '../avatar-pipeline/extract.mjs'
-import { GENDERS, PACKAGE_ROOT, hairGender } from '../avatar-pipeline/manifest.mjs'
+import { GENDERS, HAIR_CODES, PACKAGE_ROOT, hairGender } from '../avatar-pipeline/manifest.mjs'
 
 /** Where the generated pictures — and the registry that lists them — live. */
 export const SRC_DIR = resolve(PACKAGE_ROOT, '../../assets/avatar-src')
@@ -87,6 +87,11 @@ export function validateRegistry(registry) {
         fail(error instanceof Error ? error.message : String(error))
       }
       if (target !== V4_TARGET[asset.kind]) fail(`a ${asset.kind} is ingested as ${V4_TARGET[asset.kind] === 'bodyFace' ? 'face' : V4_TARGET[asset.kind]}:…, not ${asset.ingest.as}`)
+      // The pipeline refuses any other hairstyle at ingest; say so before a picture is generated for it.
+      if (asset.kind === 'hair') {
+        const { code } = parseSpec(asset.ingest.as)
+        if (!HAIR_CODES.includes(code)) fail(`hairstyle ${code} is not one of ${HAIR_CODES.join(', ')}`)
+      }
     }
     if (asset.ingest.flags !== undefined && !Array.isArray(asset.ingest.flags)) fail('ingest.flags is not an array')
     if (typeof asset.status !== 'string' || !STATUS.test(asset.status)) fail(`status ${asset.status} is not one of todo, generated, ok, ng, rework-<n>, approved, blocked`)

@@ -34,19 +34,34 @@ export const FIX_LINES = {
   style: null,
 }
 
+/**
+ * Where a kind needs another line for a reason than `FIX_LINES` gives (A2b review). A body or a hairstyle is
+ * `redrawn` only when it comes back on another canvas than the 1024 × 1536 it was drawn on — a body is cut on
+ * f01's transform, a hairstyle placed on its body — and the general line ("same hair, same clothing", against a
+ * reference that has hair) would tell the model to keep hair on a body that has to be bald.
+ */
+export const KIND_FIX_LINES = {
+  body: { redrawn: 'Output the exact same image size as the input, 1024 by 1536 pixels, with the face in exactly the same place and at exactly the same size as in the input' },
+  hair: { redrawn: "Output the exact same image size as the input, 1024 by 1536 pixels, and keep the body's exact outline, width and height" },
+}
+
 /** Which template an asset uses: an item's slot, otherwise its kind. */
 export const templateKey = (asset) => (asset.kind === 'item' ? asset.slot : asset.kind)
 
 const PLACEHOLDER = /\{\{\s*([^}\s]+)\s*\}\}/g
 
-/** The fix lines an asset's failed attempts call for, once per distinct reason, in the order they first failed. */
+/**
+ * The fix lines an asset's failed attempts call for, once per distinct reason, in the order they first failed:
+ * its kind's own line for a reason where `KIND_FIX_LINES` has one, otherwise `FIX_LINES`'.
+ */
 export function fixLines(asset) {
   const seen = new Set()
   const lines = []
+  const own = KIND_FIX_LINES[asset.kind] ?? {}
   for (const attempt of asset.attempts ?? []) {
     if (attempt.verdict !== 'ng' || !attempt.reason || seen.has(attempt.reason)) continue
     seen.add(attempt.reason)
-    const line = FIX_LINES[attempt.reason]
+    const line = Object.hasOwn(own, attempt.reason) ? own[attempt.reason] : FIX_LINES[attempt.reason]
     if (line) lines.push(line)
   }
   return lines

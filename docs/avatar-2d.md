@@ -967,6 +967,8 @@ The rules:
   | `item` on a body | `item:<slot>:<code>`, `base` `f`/`m` (`--hair <code>` when drawn over a hairstyle) | `@body_<g>` | the body's own |
   | `bot` on a body | `bot:<n>` / `bot:<n>:happy` | `@body_f` / `@v4/bot_<n>` | the body at the root of its references (`transformSource`) |
 
+  Reading the registry refuses a body, a body's face or a hairstyle whose `ingest.as` is not that target, and a
+  hairstyle whose code is not one of the pipeline's eight (`HAIR_CODES`), naming the asset.
   `transformSource` (`scripts/avatar-registry/registry.mjs`) is the one place that says which transform a body,
   a bot or a new base is cut on; `ingest` and `verify` both ask it. It follows a bot's references back to the first
   picture that is a base's or a body's own: `v4/bot_3:happy` → `@v4/bot_3` → `@body_f` → body f; Plan 12's
@@ -983,6 +985,12 @@ The rules:
   fingers: four fingers and a thumb", `bald` → "The head is completely bald: no hair, no hairline, no stubble",
   `pose` → "Relaxed pose: weight on one leg, arms hanging loosely away from the body". `style` (the user's
   taste) and every other reason add nothing.
+  A body and a hairstyle have their own `redrawn` line (`KIND_FIX_LINES`, A2b review): either is `redrawn` only
+  when it comes back on another canvas, and "same hair" would tell the model to keep hair on a bald body. A
+  body's is "Output the exact same image size as the input, 1024 by 1536 pixels, with the face in exactly the
+  same place and at exactly the same size as in the input"; a hairstyle's "Output the exact same image size as
+  the input, 1024 by 1536 pixels, and keep the body's exact outline, width and height". Every other kind keeps
+  the line above.
 - **Three attempts.** The third `ng` sets `blocked`; the loop skips it and Claude tells the user.
 - **Only the user approves.** `approve <id…>` or `approve --batch` (every `ok`) after the user answers a
   sheet; the user's "<id> ng" is `reject <id> [--reason style]`, which re-judges the last attempt (`verdict:

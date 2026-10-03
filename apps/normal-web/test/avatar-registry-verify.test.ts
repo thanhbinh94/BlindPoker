@@ -70,8 +70,13 @@ const CAP = `<ellipse cx="512" cy="310" rx="250" ry="140" fill="${BROWN}"/>`
 const LOCK = `<rect x="300" y="880" width="70" height="120" fill="${BROWN}"/>`
 /** …and the same hair painted over the torso, which a hairstyle never does. */
 const OVER_TORSO = `<rect x="420" y="850" width="180" height="150" fill="${BROWN}"/>`
+/**
+ * …and a side ponytail hanging behind the figure past the right hand (x 860–1000, the arms end at 862): the whole
+ * box's right edge moves 138 px and its centre about +69, while the legs do not move at all.
+ */
+const SIDE_TAIL = `<rect x="860" y="400" width="140" height="500" rx="40" fill="${BROWN}"/>`
 
-const svg =(body: string, width = W, height = H, background = ''): string =>
+const svg = (body: string, width = W, height = H, background = ''): string =>
   `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${background}${body}</svg>`
 
 /** A 16 px checkerboard of white and light grey — the fake transparency the image model sometimes paints. */
@@ -88,6 +93,7 @@ type Fixture =
   | 'ref' | 'happy' | 'shifted' | 'nudged' | 'wide' | 'small' | 'zoomed' | 'wider' | 'checker' | 'checkerCorners'
   | 'recoloured' | 'torso' | 'hat' | 'shirt' | 'face' | 'ring' | 'disc'
   | 'bald' | 'baldHappy' | 'baldTorso' | 'bodyRaised' | 'hairOk' | 'hairTorso' | 'hairWide'
+  | 'hairSideTail' | 'hairRaised' | 'hairWideSmall'
 /** Every synthetic picture, by name, as a path under `srcDir`. */
 const files = {} as Record<Fixture, string>
 
@@ -128,6 +134,10 @@ beforeAll(async () => {
   files.hairOk = await draw('hair-ok.png', svg(`${bald()}${CAP}${LOCK}`))
   files.hairTorso = await draw('hair-torso.png', svg(`${bald()}${CAP}${OVER_TORSO}`))
   files.hairWide = await draw('hair-wide.png', svg(`<g transform="translate(31 -44)">${bald()}${CAP}${LOCK}</g>`, 1086, 1448), 1086, 1448)
+  files.hairSideTail = await draw('hair-side-tail.png', svg(`${SIDE_TAIL}${bald()}${CAP}`))
+  files.hairRaised = await draw('hair-raised.png', svg(`<g transform="translate(0 -20)">${bald()}${CAP}${LOCK}</g>`))
+  // The model's other canvas, but the figure redrawn at 0.9 of its size: placing it at scale 1 would miss the body.
+  files.hairWideSmall = await draw('hair-wide-small.png', svg(`<g transform="translate(80 60) scale(0.9)">${bald()}${CAP}${LOCK}</g>`, 1086, 1448), 1086, 1448)
 }, 120_000)
 
 afterAll(() => rmSync(temp, { recursive: true, force: true }))
@@ -351,6 +361,27 @@ describe('verify: the v4 kinds (Plan 19)', () => {
     const torso = await score(files.hairTorso, { kind: 'hair', referenceFile: files.bald })
     expect(torso).toMatchObject({ verdict: 'ng', reason: 'scope' })
     expect(torso.measure.scope).toBeGreaterThan(0.01)
+  })
+
+  it('holds a hairstyle to its legs, not its box: a side ponytail past the hand moves the box centre, not the verdict', async () => {
+    const tail = await score(files.hairSideTail, { kind: 'hair', referenceFile: files.bald })
+    expect(tail.verdict, tail.reason).toBe('ok')
+    expect(tail.measure.drift).toEqual({ left: null, top: null, right: null, bottom: 0, centre: 0 })
+    // The whole box's centre line moved by about 69 px — the drift a whole-box rule would see.
+    const box = alphaBBox(await renderSvg(svg(`${SIDE_TAIL}${bald()}${CAP}`), W, H))!
+    expect(Math.round(box.x + box.w / 2 - 512)).toBeGreaterThan(60)
+  })
+
+  it('fails a hairstyle whose feet sit 20 px higher than its body on drift', async () => {
+    const raised = await score(files.hairRaised, { kind: 'hair', referenceFile: files.bald })
+    expect(raised).toMatchObject({ verdict: 'ng', reason: 'drift' })
+    expect(raised.measure.drift).toMatchObject({ bottom: -20, centre: 0 })
+  })
+
+  it('calls a hairstyle on another canvas redrawn when its body came back at another size', async () => {
+    const small = await score(files.hairWideSmall, { kind: 'hair', referenceFile: files.bald })
+    expect(small).toMatchObject({ verdict: 'ng', reason: 'redrawn' })
+    expect(small.measure.widthRatio).toBeCloseTo(0.9, 1)
   })
 
   it('places a hairstyle on another canvas by its feet and centre line before measuring scope', async () => {

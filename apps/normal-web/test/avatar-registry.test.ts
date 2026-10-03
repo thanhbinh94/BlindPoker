@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { FIX_LINES, renderPrompt } from '../scripts/avatar-registry/prompts.mjs'
+import { FIX_LINES, KIND_FIX_LINES, renderPrompt } from '../scripts/avatar-registry/prompts.mjs'
 import { PRIORITY, approve, nextAssets, ready, reject, statusCounts } from '../scripts/avatar-registry/queue.mjs'
 import { KINDS, REGISTRY_FILE, SRC_DIR, parseFlags, parseSpec, readRegistry, transformSource, validateRegistry, writeRegistry } from '../scripts/avatar-registry/registry.mjs'
 
@@ -136,6 +136,13 @@ describe('validateRegistry', () => {
     expect(() => validateRegistry(registryOf([v4('item_hair_f_bob01', 'hair', 'item:hair:f_bob01')]))).toThrow(/item_hair_f_bob01.*hair:/)
     expect(() => validateRegistry(registryOf([v4('item_hair_x', 'hair', 'hair:bob01')]))).toThrow(/item_hair_x.*bob01/)
     expect(() => validateRegistry(registryOf([v4('body_f:sad', 'bodyExpression', 'expr:f:sad')]))).toThrow(/body_f:sad.*face:/)
+  })
+
+  it('refuses a hairstyle whose code is not one of the eight, naming it', () => {
+    const hair = (id: string, code: string): Asset => asset({ id, kind: 'hair', reference: 'f01_candidate_1.png', ingest: as(`hair:${code}`) })
+    expect(() => validateRegistry(registryOf([hair('item_hair_f_bobb01', 'f_bobb01')]))).toThrow(/item_hair_f_bobb01.*f_bobb01/)
+    expect(() => validateRegistry(registryOf([hair('item_hair_m_spiky02', 'm_spiky02')]))).toThrow(/item_hair_m_spiky02/)
+    expect(() => validateRegistry(registryOf([hair('item_hair_f_bob01', 'f_bob01'), hair('item_hair_m_spiky01', 'm_spiky01')]))).not.toThrow()
   })
 })
 
@@ -310,6 +317,27 @@ describe('renderPrompt', () => {
       ],
     })
     expect(renderPrompt(body, registryOf([body]))).toBe(`Body F. Ref f01_candidate_1.png\n${FIX_LINES['check:C12']}\n${FIX_LINES.fingers}`)
+  })
+
+  it('gives a body or a hairstyle redrawn on another canvas its own fix line, never "same hair" (A2b review)', () => {
+    expect(KIND_FIX_LINES.body?.redrawn).toBe('Output the exact same image size as the input, 1024 by 1536 pixels, with the face in exactly the same place and at exactly the same size as in the input')
+    expect(KIND_FIX_LINES.hair?.redrawn).toBe("Output the exact same image size as the input, 1024 by 1536 pixels, and keep the body's exact outline, width and height")
+    const redrawn = [{ n: 1, verdict: 'ng', reason: 'redrawn', by: 'verify' }]
+    const body = asset({ id: 'body_f', kind: 'body', look: { code: 'F' }, reference: 'f01_candidate_1.png', ingest: as('body:f'), attempts: redrawn })
+    const hair = asset({ id: 'item_hair_f_bob01', kind: 'hair', look: { description: 'a bob' }, reference: '@body_f', ingest: as('hair:f_bob01'), attempts: redrawn })
+    const registry = registryOf([body, hair])
+    const bodyPrompt = renderPrompt(body, registry)
+    expect(bodyPrompt).toBe(`Body F. Ref f01_candidate_1.png\n${KIND_FIX_LINES.body?.redrawn}`)
+    expect(bodyPrompt).not.toContain('same hair')
+    expect(bodyPrompt).not.toContain(FIX_LINES.redrawn)
+    const hairPrompt = renderPrompt(hair, registry)
+    expect(hairPrompt).toBe(`Hair: a bob.\n${KIND_FIX_LINES.hair?.redrawn}`)
+    expect(hairPrompt).not.toContain('same hair')
+    // Every other kind keeps the line it had.
+    const hat = asset({ id: 'item_head_beret01', kind: 'item', slot: 'head', look: { description: 'a beret' }, attempts: redrawn })
+    expect(renderPrompt(hat, registryOf([hat]))).toBe(`Head: a beret.\n${FIX_LINES.redrawn}`)
+    const face = asset({ id: 'body_f:sad', kind: 'bodyExpression', reference: '@body_f', file: 'body_f_sad.png', look: { expression: 'sad' }, ingest: as('face:f:sad'), attempts: redrawn })
+    expect(renderPrompt(face, registryOf([body, face]))).toBe(`Body expression: sad.\n${FIX_LINES.redrawn}`)
   })
 })
 
