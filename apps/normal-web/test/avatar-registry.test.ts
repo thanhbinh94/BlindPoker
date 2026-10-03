@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { FIX_LINES, KIND_FIX_LINES, renderPrompt } from '../scripts/avatar-registry/prompts.mjs'
 import { PRIORITY, approve, nextAssets, ready, reject, statusCounts } from '../scripts/avatar-registry/queue.mjs'
-import { KINDS, REGISTRY_FILE, SRC_DIR, parseFlags, parseSpec, readRegistry, transformSource, validateRegistry, writeRegistry } from '../scripts/avatar-registry/registry.mjs'
+import { KINDS, REGISTRY_FILE, SRC_DIR, parseFlags, parseSpec, readRegistry, referenceOf, transformSource, validateRegistry, writeRegistry } from '../scripts/avatar-registry/registry.mjs'
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- the registry is plain JSON, typed by its validator */
 type Registry = any
@@ -508,6 +508,54 @@ describe('approve / reject', () => {
 
 // ─────────────────────────────────────────────────────────── the seed file ──
 
+/**
+ * Plan 19's 44 v4 assets as task A2c seeds them, in file order — the style gate's five (both bodies, bob,
+ * tousled, casual01) first within their kinds. It holds only the fields the art loop never changes; status,
+ * attempts, prompt, `ingest.flags` and `ingested` move as the pictures are drawn.
+ */
+const V4_GENDERS = ['f', 'm']
+const V4_EXPRESSIONS = ['happy', 'sad', 'surprised', 'closed', 'sleep']
+const V4_HAIRS: [string, string][] = [
+  ['f_bob01', 'f'], ['m_tousled01', 'm'],
+  ['f_hime01', 'f'], ['f_wavy01', 'f'], ['f_ponytail01', 'f'], ['m_neat01', 'm'], ['m_curly01', 'm'], ['m_spiky01', 'm'],
+]
+const V4_BOTS = [0, 1, 2, 3, 4, 5, 6, 7]
+const v4Ingest = (spec: string, base: string | null = null, variant: string | null = null): Asset => ({ as: spec, base, variant })
+const v4Hair = ([code, g]: [string, string]): Asset => ({
+  id: `item_hair_${code}`, kind: 'hair', slot: null, wear: g, catalog: `hair_${code}`, reference: `@body_${g}`, file: `item_hair_${code}.png`, ingest: v4Ingest(`hair:${code}`),
+})
+/** A v4 outfit redraw: drawn on body f (`wear` null, `base` f), or a male cut on body m. */
+const v4Outfit = (code: string, cut: 'f' | 'm' = 'f'): Asset => {
+  const m = cut === 'm' ? '_m' : ''
+  return {
+    id: `v4/item_outfit_${code}${m}`, kind: 'item', slot: 'outfit', wear: cut === 'm' ? 'm' : null, catalog: `outfit_${code}`,
+    reference: `@body_${cut}`, file: `v4_item_outfit_${code}${m}.png`, ingest: v4Ingest(`item:outfit:${code}`, cut, cut === 'm' ? 'm' : null),
+  }
+}
+const V4_SEED: Asset[] = [
+  ...V4_GENDERS.map((g) => ({ id: `body_${g}`, kind: 'body', slot: null, wear: g, catalog: g, reference: 'f01_candidate_1.png', file: `body_${g}.png`, ingest: v4Ingest(`body:${g}`) })),
+  ...V4_HAIRS.slice(0, 2).map(v4Hair),
+  v4Outfit('casual01'),
+  ...V4_HAIRS.slice(2).map(v4Hair),
+  ...['dealer01', 'tuxedo01', 'royal_robe01', 'tet_red01', 'champion01'].map((code) => v4Outfit(code)),
+  v4Outfit('dealer01', 'm'),
+  v4Outfit('tet_red01', 'm'),
+  ...V4_GENDERS.flatMap((g) => V4_EXPRESSIONS.map((e) => ({
+    id: `body_${g}:${e}`, kind: 'bodyExpression', slot: null, wear: g, catalog: g, reference: `@body_${g}`, file: `body_${g}_${e}.png`, ingest: v4Ingest(`face:${g}:${e}`),
+  }))),
+  ...V4_BOTS.map((n) => ({ id: `v4/bot_${n}`, kind: 'bot', slot: null, wear: null, catalog: `bot_${n}`, reference: '@body_f', file: `v4_bot_${n}.png`, ingest: v4Ingest(`bot:${n}`) })),
+  ...V4_BOTS.map((n) => ({
+    id: `v4/bot_${n}:happy`, kind: 'bot', slot: null, wear: null, catalog: `bot_${n}`, reference: `@v4/bot_${n}`, file: `v4_bot_${n}_happy.png`, ingest: v4Ingest(`bot:${n}:happy`),
+  })),
+]
+const V4_IDS: string[] = V4_SEED.map((row) => row.id)
+/** How every v4 template's last line starts (task A2c); the body's then keeps the face in place, the others the outline. */
+const SIZE_LINE = 'Output the exact same image size as the input, 1024 by 1536 pixels'
+
+/** The kinds the v4 assets add; Plan 12's are every other asset that is not a `v4/` redraw. */
+const isPlan12 = (entry: Asset): boolean => !entry.id.startsWith('v4/') && !['body', 'bodyExpression', 'hair'].includes(entry.kind)
+const tally = (assets: Asset[]): Record<string, number> => assets.reduce((acc: Record<string, number>, entry: Asset) => ({ ...acc, [entry.kind]: (acc[entry.kind] ?? 0) + 1 }), {})
+
 describe('the committed registry', () => {
   it('validates, and every null prompt renders', () => {
     const registry = readRegistry(REGISTRY_FILE)
@@ -516,16 +564,107 @@ describe('the committed registry', () => {
 
   it('lists every asset the plan seeds, and every one carries a legal status', () => {
     // The committed registry is a living file: the loop moves assets from todo through generated to ok and
-    // approved, so this holds the shape, not the day's tallies.
+    // approved, and C3/C5 add more v4 redraws, so this holds the shape, not the day's tallies (pre-flight #4).
     const registry = readRegistry(REGISTRY_FILE)
     const counts = statusCounts(registry)
-    expect(registry.assets).toHaveLength(65)
-    expect(Object.values(counts).reduce((a: number, b) => a + (b as number), 0)).toBe(65)
+    expect(registry.assets.length).toBeGreaterThanOrEqual(109)
+    expect(Object.values(counts).reduce((a: number, b) => a + (b as number), 0)).toBe(registry.assets.length)
+    const ids = new Set(registry.assets.map((entry: Asset) => entry.id))
+    expect(V4_IDS.filter((id) => !ids.has(id))).toEqual([])
     const casual = registry.assets.find((entry: Asset) => entry.id === 'item_outfit_casual01')
     // casual01's first picture painted the tank-top strap; that reason stays on the prompt until the asset is done.
     if (!['ok', 'approved'].includes(casual.status)) expect(renderPrompt(casual, registry)).toContain(FIX_LINES.strap)
-    const kinds = registry.assets.reduce((acc: Record<string, number>, entry: Asset) => ({ ...acc, [entry.kind]: (acc[entry.kind] ?? 0) + 1 }), {})
-    expect(kinds).toEqual({ item: 11, aura: 8, frame: 6, base: 4, expression: 20, bot: 16 })
+    // Plan 12's assets stay exactly as they were…
+    expect(tally(registry.assets.filter(isPlan12))).toEqual({ item: 11, aura: 8, frame: 6, base: 4, expression: 20, bot: 16 })
+    // …and the v4 kinds hold at least the 44 A2c seeds.
+    const v4 = tally(registry.assets.filter((entry: Asset) => !isPlan12(entry)))
+    for (const [kind, least] of Object.entries({ body: 2, hair: 8, bodyExpression: 10, item: 8, bot: 16 })) expect(v4[kind] ?? 0).toBeGreaterThanOrEqual(least)
+  })
+
+  it('seeds the 44 v4 assets with the ids, files, references and ingest targets the plan names, in its order (Plan 19, R16)', () => {
+    const registry = readRegistry(REGISTRY_FILE)
+    // File order: the gate's five lead their kinds; whatever C3/C5 add later does not change these ones' order.
+    expect(registry.assets.map((entry: Asset) => entry.id).filter((id: string) => V4_IDS.includes(id))).toEqual(V4_IDS)
+    for (const row of V4_SEED) expect(registry.assets.find((entry: Asset) => entry.id === row.id)).toMatchObject(row)
+    // B2's fallback (R1) reads a buzz cut from each body's look.
+    for (const g of V4_GENDERS) expect(registry.assets.find((entry: Asset) => entry.id === `body_${g}`).look.head_fallback).toMatch(/buzz-cut/)
+  })
+
+  it('renders body_f from the character lock: bald, five fingers, the size line (Plan 19)', () => {
+    const registry = readRegistry(REGISTRY_FILE)
+    // The template, whatever attempts or manual override the art loop gives the asset later.
+    const body = { ...registry.assets.find((entry: Asset) => entry.id === 'body_f'), prompt: null, attempts: [] }
+    const prompt = renderPrompt(body, registry)
+    for (const words of ['CHARACTER LOCK BODY_F', 'completely bald', 'exactly five fingers', '1024 by 1536']) expect(prompt).toContain(words)
+    // The A1b ruling: a light-grey top would sit inside the skin mask's tolerance of cream skin.
+    expect(prompt).toContain('Clothing: a plain mid-gray tank top and plain charcoal shorts, no pattern, barefoot.')
+    // Every v4 template ends with the size line; the bot keeps today's text in the new pose.
+    for (const key of ['body', 'bodyExpression', 'hair', 'outfit', 'head', 'face', 'bot']) {
+      const lines: string[] = registry.templates[key].split('\n')
+      expect(lines[lines.length - 1], key).toMatch(new RegExp(`^${SIZE_LINE}`))
+    }
+    expect(registry.templates.bot).toContain('same relaxed standing pose and the same five-fingered hands')
+    expect(registry.templates.bot).not.toContain('arms slightly away from the body')
+  })
+
+  describe('on a clone, beside a stub of the one reference a fresh worktree lacks (pre-flight #29)', () => {
+    let shipped = ''
+
+    beforeAll(() => {
+      shipped = join(temp, 'shipped')
+      mkdirSync(shipped, { recursive: true })
+      writeFileSync(join(shipped, 'f01_candidate_1.png'), 'not really a png')
+    })
+
+    /** The shipped registry with every v4 asset back at its seed: todo, no attempts. */
+    const seeded = (): Registry => {
+      const registry = structuredClone(readRegistry(REGISTRY_FILE))
+      for (const entry of registry.assets) if (V4_IDS.includes(entry.id)) Object.assign(entry, { status: 'todo', attempts: [] })
+      return registry
+    }
+    const setOk = (registry: Registry, ids: string[]): void => {
+      for (const id of ids) registry.assets.find((entry: Asset) => entry.id === id).status = 'ok'
+    }
+    const queue = (registry: Registry): string[] => nextAssets(registry, { srcDir: shipped }).map((entry: Asset) => entry.id)
+
+    it('hands out the bodies first, then bob and tousled ahead of the hairstyles and casual01 ahead of the outfits', () => {
+      const registry = seeded()
+      expect(queue(registry).slice(0, 2)).toEqual(['body_f', 'body_m'])
+      setOk(registry, ['body_f', 'body_m'])
+      const ids = queue(registry)
+      expect(ids.filter((id) => id.startsWith('item_hair_')).slice(0, 2)).toEqual(['item_hair_f_bob01', 'item_hair_m_tousled01'])
+      expect(ids.filter((id) => id.startsWith('v4/item_outfit_'))[0]).toBe('v4/item_outfit_casual01')
+      // PRIORITY alone hands out all eight hairstyles before casual01, which is why Phase B names the gate's assets with --only.
+      const seeds = ids.filter((id) => V4_IDS.includes(id)).map((id) => registry.assets.find((entry: Asset) => entry.id === id))
+      expect(seeds.map((entry: Asset) => (entry.kind === 'item' ? entry.slot : entry.kind))).toEqual([
+        ...Array(8).fill('hair'), ...Array(8).fill('outfit'), ...Array(10).fill('bodyExpression'), ...Array(8).fill('bot'),
+      ])
+      expect(nextAssets(registry, { srcDir: shipped, only: ['item_hair_f_bob01', 'item_hair_m_tousled01'] }).map((entry: Asset) => entry.id)).toEqual(['item_hair_f_bob01', 'item_hair_m_tousled01'])
+      expect(nextAssets(registry, { srcDir: shipped, only: ['v4/item_outfit_casual01'] }).map((entry: Asset) => entry.id)).toEqual(['v4/item_outfit_casual01'])
+    })
+
+    it('resolves every v4 reference to a v4 asset or to f01_candidate_1.png, and hands out all 44 as the ones before them are done', () => {
+      const registry = seeded()
+      for (const id of V4_IDS) {
+        const entry = registry.assets.find((other: Asset) => other.id === id)
+        const { file, asset: other } = referenceOf(entry, registry)
+        if (other) expect(V4_IDS, `${id} → ${entry.reference}`).toContain(other.id)
+        else expect(file, id).toBe('f01_candidate_1.png')
+      }
+      // Each v4 bot, the happy ones too, is cut on body f's transform; each body on f01's.
+      for (const n of V4_BOTS) for (const id of [`v4/bot_${n}`, `v4/bot_${n}:happy`]) expect(transformSource(registry.assets.find((entry: Asset) => entry.id === id), registry)).toBe('f')
+      for (const g of V4_GENDERS) expect(transformSource(registry.assets.find((entry: Asset) => entry.id === `body_${g}`), registry)).toBe('f01')
+      // Drain the queue: every round's ready assets come out ok, until nothing is ready.
+      const handed: string[] = []
+      for (let round = 0; round < 10; round++) {
+        const ids = queue(registry)
+        if (ids.length === 0) break
+        handed.push(...ids)
+        setOk(registry, ids)
+      }
+      expect(handed.filter((id) => V4_IDS.includes(id)).sort()).toEqual([...V4_IDS].sort())
+      expect(handed.indexOf('v4/bot_0:happy')).toBeGreaterThan(handed.indexOf('v4/bot_0'))
+    })
   })
 
   it('lives next to the pictures it describes', () => {

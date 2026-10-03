@@ -6,12 +6,15 @@
   "templates": {
     "base": "Keep this exact image: same body shape, same pose, same size and position in the frame, same gray tank top and shorts, same transparent background, same semi-painterly anime rendering. Same head size and shape, same eye size and eye placement, similar hair volume on top of the head. Change only the hair, the eye colour, the expression and the skin tone:\nHair: {{look.hair}}\nEyes: {{look.eyes}}\nExpression: {{look.expression}}\nSkin: {{look.skin}}\nHair must not cover the tank top or the arms: long hair falls behind the back. Skin tone applies to the face, neck, arms and legs. Do not move, zoom, crop or redraw the body, arms, legs, clothing or framing.",
     "expression": "Keep this exact image: same character, same pose, same size and position in the frame, same image size, same hair and hair colour, same skin tone, same tank top and shorts, same transparent background. Change only the eyes and mouth to this expression: {{look.expression}}. Do not move, zoom, crop, recolour or redraw anything else.",
-    "head": "Keep this exact image: same character, same pose, same size and position in the frame, same neutral face with open eyes, same hair colour, same tank top and shorts, same transparent background. Add only this: {{look.description}}, sitting naturally on top of the head, fully inside the image. The small hair strand on top of the head is hidden under it. The hat is at most slightly wider than the hair. Face and the rest of the hair unchanged. No glasses. Do not move, zoom, crop, recolour or redraw anything else.",
-    "face": "Keep this exact image: same character, same pose, same size and position in the frame, same neutral face with open eyes, same hair and hair colour, same tank top and shorts, same transparent background. Add only this: {{look.description}}. No hat. Do not move, zoom, crop, recolour or redraw anything else.",
-    "outfit": "Keep this exact image: same character, same pose, same size and position in the frame, same neutral face with open eyes, same hair and hair colour, same skin tone, same transparent background. Replace the gray tank top and shorts completely with: {{look.description}}. The tank top must be completely gone: no straps, no gray fabric visible anywhere. Simple shapes, few folds, no small patterns, no logos, nothing in the hands. No hat, no glasses. Do not move, zoom, crop, recolour or redraw anything else.",
+    "head": "Keep this exact image: the same character, the same pose, the same size and position in the frame, the same neutral face with open eyes, the same hair and hair colour, the same tank top and shorts, the same transparent background. Add only this: {{look.description}}, sitting naturally on top of the hair, fully inside the image. Hair the hat does not cover stays exactly as it is, the fringe below the brim included. The hat is at most slightly wider than the hair. No glasses. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
+    "face": "Keep this exact image: same character, same pose, same size and position in the frame, same neutral face with open eyes, same hair and hair colour, same tank top and shorts, same transparent background. Add only this: {{look.description}}. No hat. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
+    "outfit": "Keep this exact image: the same character, the same head and face, the same pose, the same hands and fingers, the same size and position in the frame, the same skin tone, the same transparent background. The head stays completely bald: do not add hair. Replace the gray tank top and shorts completely with: {{look.description}}. The tank top must be completely gone: no straps, no gray fabric visible anywhere. Sleeves end at the wrists; both hands and all their fingers stay visible and unchanged. Simple shapes, few folds, no small patterns, no logos, nothing in the hands. No hat, no glasses. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
     "aura": "A decorative circular aura effect for a character portrait: {{look.description}}. Centered in a square image, the center area is completely empty and transparent, effect concentrated in a ring around the center, soft glowing painterly style allowed, transparent background outside the effect, no character, no text, no watermark.",
     "frame": "A circular decorative frame ring for a player avatar: {{look.description}}. Perfectly round, the inside of the ring is completely empty and transparent, ring thickness about 8 percent of the image width, centered in a square image, clean cel-shaded style with colored outlines, transparent background inside and outside the ring, no character, no text, no watermark.",
-    "bot": "Keep this exact image's proportions, pose, size and position in the frame, and the transparent background, but redraw the character as a cute chibi robot: {{look.description}}. Same 2.25-heads-tall proportions with an oversized round head, same standing pose with arms slightly away from the body, no hair, no clothing, smooth rounded metal body, cel-shaded with colored outlines, semi-painterly anime rendering. Face: {{look.expression}}. Do not move, zoom or crop."
+    "bot": "Keep this exact image's proportions, pose, size and position in the frame, and the transparent background, but redraw the character as a cute chibi robot: {{look.description}}. Same 2.25-heads-tall proportions with an oversized round head, same relaxed standing pose and the same five-fingered hands, no hair, no clothing, smooth rounded metal body, cel-shaded with colored outlines, semi-painterly anime rendering. Face: {{look.expression}}. Do not move, zoom or crop.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
+    "body": "This is a base model for a 2D dress-up game: hair, clothes and accessories are added later as separate layers, so the head must be completely bald.\nKeep from the input image: the chibi proportions (about 2.25 heads tall), the face (eyes, eye size and placement, nose, mouth, cheeks, chin) at exactly the same size and position in the frame, the line art, the semi-painterly anime rendering, the transparent background and the image size. Redraw everything else as follows.\nCHARACTER LOCK BODY_{{look.code}}:\nChibi anime {{look.figure}}, about 2.25 heads tall, oversized round head, small body, short limbs.\nHead: {{look.head}}. The skull is a smooth even dome the same colour as the face, a little smaller than the hair outline in the input. Simple small ears. Thin eyebrows drawn on the skin.\nFace: {{look.eyes}}, a tiny dot nose, {{look.mouth}}. No blush, no makeup.\nSkin: warm light cream on the face, scalp, neck, arms, hands and legs; soft semi-painterly shading.\nPose: relaxed natural standing pose, front view at eye level, head upright and centred, not tilted. Weight slightly more on one leg; shoulders relaxed and lowered; both arms hang loosely, slightly bent, held clearly away from the body so both hands are drawn against the empty background; both feet on the same ground line, pointing forward.\nHands: small open chibi hands, palms toward the thighs, each with exactly five fingers (four fingers and one thumb), slightly apart so every finger is visible. Not mittens, not fists, not cartoon four-finger hands. Nothing in the hands.\nClothing: a plain mid-gray tank top and plain charcoal shorts, no pattern, barefoot.\nLine art: colored outlines, warm brown around the skin, navy black around the clothing, medium clean line weight.\nRendering: semi-painterly skin, two-tone cel shading on the clothing, no texture, no noise, no text, no watermark.\nNo hair anywhere: no fringe, no hairline, no stubble, no hair shadow.\nOutput the exact same image size as the input, 1024 by 1536 pixels, with the face in exactly the same place and at exactly the same size as in the input.",
+    "bodyExpression": "Keep this exact image: the same character, the same bald head, the same pose and hands, the same size and position in the frame, the same image size, the same skin tone, the same tank top and shorts, the same transparent background. Change only the eyes and mouth to this expression: {{look.expression}}. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
+    "hair": "Keep this exact image: the same character, the same face and expression, the same pose and hands, the same size and position in the frame, the same image size, the same skin tone, the same tank top and shorts, the same transparent background. Add only this hairstyle on the bald head: {{look.description}}. Hair colour: {{look.colour}}, semi-painterly shading with one soft highlight band, outlines a darker shade of the hair colour. The hair covers the whole top and back of the scalp and never covers the eyes. Hair longer than the neck falls behind the shoulders and the back, never over the tank top, the arms or the hands. No hat, no hair accessories except those described. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the body's exact outline, width and height."
   },
   "assets": [
     {
@@ -3750,6 +3753,966 @@
         }
       ],
       "ingested": true
+    },
+    {
+      "id": "body_f",
+      "kind": "body",
+      "slot": null,
+      "wear": "f",
+      "catalog": "f",
+      "look": {
+        "code": "F",
+        "figure": "girl",
+        "head": "completely bald, smooth and clean, no hair at all, no hairline, no stubble, no hair shadow",
+        "eyes": "very large eyes, each nearly half the face width, blue iris gradient from deep navy at the top to bright aqua at the bottom, three white highlights, thick upper lashes flicking outward",
+        "mouth": "a small, slightly open smiling mouth",
+        "head_fallback": "very short buzz-cut hair lying flat against the scalp, one even dark colour, no fringe and no loose strands"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "body_f.png",
+      "ingest": {
+        "as": "body:f",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "body_m",
+      "kind": "body",
+      "slot": null,
+      "wear": "m",
+      "catalog": "m",
+      "look": {
+        "code": "M",
+        "figure": "boy",
+        "head": "completely bald, smooth and clean, no hair at all, no hairline, no stubble, no hair shadow",
+        "eyes": "very large eyes, each nearly half the face width, warm amber iris gradient from deep brown at the top to bright amber at the bottom, three white highlights, short simple upper lashes",
+        "mouth": "a small calm smile",
+        "head_fallback": "very short buzz-cut hair lying flat against the scalp, one even dark colour, no fringe and no loose strands"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "body_m.png",
+      "ingest": {
+        "as": "body:m",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_hair_f_bob01",
+      "kind": "hair",
+      "slot": null,
+      "wear": "f",
+      "catalog": "hair_f_bob01",
+      "look": {
+        "description": "a jaw-length bob: thick bangs split into soft rounded clumps just above the eyes, long side locks down to the chin, one curved ahoge strand on top, one soft highlight band",
+        "colour": "dark violet (#5e3e6f)"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "item_hair_f_bob01.png",
+      "ingest": {
+        "as": "hair:f_bob01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_hair_m_tousled01",
+      "kind": "hair",
+      "slot": null,
+      "wear": "m",
+      "catalog": "hair_m_tousled01",
+      "look": {
+        "description": "short tousled hair with messy layered tips and a side-swept fringe above the eyes, one small ahoge strand",
+        "colour": "warm dark brown (#684136)"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "item_hair_m_tousled01.png",
+      "ingest": {
+        "as": "hair:m_tousled01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/item_outfit_casual01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_casual01",
+      "look": {
+        "description": "a plain white short-sleeved t-shirt with a round crew neck that fully covers both shoulders and the chest, blue jeans down to the ankles, white sneakers. Unisex cut",
+        "color": "white/blue",
+        "style": "casual"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_casual01.png",
+      "ingest": {
+        "as": "item:outfit:casual01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_hair_f_hime01",
+      "kind": "hair",
+      "slot": null,
+      "wear": "f",
+      "catalog": "hair_f_hime01",
+      "look": {
+        "description": "long straight hair falling behind the back to the waist, blunt straight bangs, two straight side locks ending at the chin",
+        "colour": "black with a cool violet tint (#302c39)"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "item_hair_f_hime01.png",
+      "ingest": {
+        "as": "hair:f_hime01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_hair_f_wavy01",
+      "kind": "hair",
+      "slot": null,
+      "wear": "f",
+      "catalog": "hair_f_wavy01",
+      "look": {
+        "description": "a short wavy bob ending above the shoulders, side-swept bangs, one small braid hanging behind the left shoulder",
+        "colour": "platinum blonde (#e0c9b3)"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "item_hair_f_wavy01.png",
+      "ingest": {
+        "as": "hair:f_wavy01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_hair_f_ponytail01",
+      "kind": "hair",
+      "slot": null,
+      "wear": "f",
+      "catalog": "hair_f_ponytail01",
+      "look": {
+        "description": "a high ponytail tied with a small dark band, the tail falling behind the head to the shoulder blades, soft side-swept bangs above the eyes, two short face-framing strands",
+        "colour": "chestnut brown (#7b3f22)"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "item_hair_f_ponytail01.png",
+      "ingest": {
+        "as": "hair:f_ponytail01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_hair_m_neat01",
+      "kind": "hair",
+      "slot": null,
+      "wear": "m",
+      "catalog": "hair_m_neat01",
+      "look": {
+        "description": "short neat hair, the fringe swept to the left showing part of the forehead, one soft highlight band",
+        "colour": "black (#2c282d)"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "item_hair_m_neat01.png",
+      "ingest": {
+        "as": "hair:m_neat01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_hair_m_curly01",
+      "kind": "hair",
+      "slot": null,
+      "wear": "m",
+      "catalog": "hair_m_curly01",
+      "look": {
+        "description": "short curly hair with tight round curls and tidy sides",
+        "colour": "black-brown (#2a1f1e)"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "item_hair_m_curly01.png",
+      "ingest": {
+        "as": "hair:m_curly01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "item_hair_m_spiky01",
+      "kind": "hair",
+      "slot": null,
+      "wear": "m",
+      "catalog": "hair_m_spiky01",
+      "look": {
+        "description": "short spiked-up hair with pointed tips standing upward, short tidy sides",
+        "colour": "dark brown (#4a2c1d)"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "item_hair_m_spiky01.png",
+      "ingest": {
+        "as": "hair:m_spiky01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/item_outfit_dealer01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_dealer01",
+      "look": {
+        "description": "a white long-sleeved dress shirt, a dark navy vest with two gold buttons, a red bow tie, a dark navy pleated skirt, white knee socks and black flat shoes with a strap"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_dealer01.png",
+      "ingest": {
+        "as": "item:outfit:dealer01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/item_outfit_tuxedo01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_tuxedo01",
+      "look": {
+        "description": "a black tuxedo jacket with shiny black satin lapels and one button, a white shirt, a black bow tie, black trousers and black shoes"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_tuxedo01.png",
+      "ingest": {
+        "as": "item:outfit:tuxedo01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/item_outfit_royal_robe01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_royal_robe01",
+      "look": {
+        "description": "a royal purple ankle-length robe that wraps across the chest, with a small stand-up collar and gold trim at the collar, cuffs and hem, a wide gold sash tied at the waist with one long end hanging down the front, and soft purple slippers with gold trim"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_royal_robe01.png",
+      "ingest": {
+        "as": "item:outfit:royal_robe01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/item_outfit_tet_red01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_tet_red01",
+      "look": {
+        "description": "a red and gold traditional Vietnamese áo dài for Tết: a red tunic with a high stand-up collar, long sleeves and thin gold trim at the collar, cuffs and side slits, its front and back panels falling to the knees, over loose white trousers, and red flat shoes"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_tet_red01.png",
+      "ingest": {
+        "as": "item:outfit:tet_red01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/item_outfit_champion01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_champion01",
+      "look": {
+        "description": "a white and gold zip-up track jacket with a high collar, gold sleeves with one white stripe down each, a large gold star on the chest, gold-striped cuffs and waistband, white track pants with a gold stripe down each side, and gold and white sneakers"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_champion01.png",
+      "ingest": {
+        "as": "item:outfit:champion01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/item_outfit_dealer01_m",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": "m",
+      "catalog": "outfit_dealer01",
+      "look": {
+        "description": "a white long-sleeved dress shirt, a dark navy vest with two gold buttons, a red bow tie, long straight dark navy trousers and black shoes"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "v4_item_outfit_dealer01_m.png",
+      "ingest": {
+        "as": "item:outfit:dealer01",
+        "base": "m",
+        "variant": "m",
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/item_outfit_tet_red01_m",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": "m",
+      "catalog": "outfit_tet_red01",
+      "look": {
+        "description": "a red and gold traditional Vietnamese men's áo dài for Tết: a straight red tunic with a high stand-up collar, a gold-trimmed opening curving from the collar to the right side, long sleeves with gold cuffs and short side slits, ending just above the knees, over loose white trousers, and black flat shoes"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "v4_item_outfit_tet_red01_m.png",
+      "ingest": {
+        "as": "item:outfit:tet_red01",
+        "base": "m",
+        "variant": "m",
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "body_f:happy",
+      "kind": "bodyExpression",
+      "slot": null,
+      "wear": "f",
+      "catalog": "f",
+      "look": {
+        "expression": "a happy expression: eyes curved into happy arcs, wide open smile"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "body_f_happy.png",
+      "ingest": {
+        "as": "face:f:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "body_f:sad",
+      "kind": "bodyExpression",
+      "slot": null,
+      "wear": "f",
+      "catalog": "f",
+      "look": {
+        "expression": "a sad expression: drooping eyes with a small tear highlight, downturned mouth"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "body_f_sad.png",
+      "ingest": {
+        "as": "face:f:sad",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "body_f:surprised",
+      "kind": "bodyExpression",
+      "slot": null,
+      "wear": "f",
+      "catalog": "f",
+      "look": {
+        "expression": "a surprised expression: eyes fully round and wider, small round open mouth. No tears"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "body_f_surprised.png",
+      "ingest": {
+        "as": "face:f:surprised",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "body_f:closed",
+      "kind": "bodyExpression",
+      "slot": null,
+      "wear": "f",
+      "catalog": "f",
+      "look": {
+        "expression": "eyes gently closed, calm small smile"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "body_f_closed.png",
+      "ingest": {
+        "as": "face:f:closed",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "body_f:sleep",
+      "kind": "bodyExpression",
+      "slot": null,
+      "wear": "f",
+      "catalog": "f",
+      "look": {
+        "expression": "sleeping: eyes closed, mouth slightly open, and add one small \"z\" letter floating just beside the head near the temple"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "body_f_sleep.png",
+      "ingest": {
+        "as": "face:f:sleep",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "body_m:happy",
+      "kind": "bodyExpression",
+      "slot": null,
+      "wear": "m",
+      "catalog": "m",
+      "look": {
+        "expression": "a happy expression: eyes curved into happy arcs, wide open smile"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "body_m_happy.png",
+      "ingest": {
+        "as": "face:m:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "body_m:sad",
+      "kind": "bodyExpression",
+      "slot": null,
+      "wear": "m",
+      "catalog": "m",
+      "look": {
+        "expression": "a sad expression: drooping eyes with a small tear highlight, downturned mouth"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "body_m_sad.png",
+      "ingest": {
+        "as": "face:m:sad",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "body_m:surprised",
+      "kind": "bodyExpression",
+      "slot": null,
+      "wear": "m",
+      "catalog": "m",
+      "look": {
+        "expression": "a surprised expression: eyes fully round and wider, small round open mouth. No tears"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "body_m_surprised.png",
+      "ingest": {
+        "as": "face:m:surprised",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "body_m:closed",
+      "kind": "bodyExpression",
+      "slot": null,
+      "wear": "m",
+      "catalog": "m",
+      "look": {
+        "expression": "eyes gently closed, calm small smile"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "body_m_closed.png",
+      "ingest": {
+        "as": "face:m:closed",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "body_m:sleep",
+      "kind": "bodyExpression",
+      "slot": null,
+      "wear": "m",
+      "catalog": "m",
+      "look": {
+        "expression": "sleeping: eyes closed, mouth slightly open, and add one small \"z\" letter floating just beside the head near the temple"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "body_m_sleep.png",
+      "ingest": {
+        "as": "face:m:sleep",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/bot_0",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_0",
+      "look": {
+        "description": "white and sky-blue casing, round LED eyes",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_bot_0.png",
+      "ingest": {
+        "as": "bot:0",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/bot_1",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_1",
+      "look": {
+        "description": "black and orange casing, visor-shaped LED eyes",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_bot_1.png",
+      "ingest": {
+        "as": "bot:1",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/bot_2",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_2",
+      "look": {
+        "description": "mint green casing, small antenna, round LED eyes",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_bot_2.png",
+      "ingest": {
+        "as": "bot:2",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/bot_3",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_3",
+      "look": {
+        "description": "pink and white casing, heart-shaped LED eyes",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_bot_3.png",
+      "ingest": {
+        "as": "bot:3",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/bot_4",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_4",
+      "look": {
+        "description": "gold casing with a small crown-shaped crest, round LED eyes",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_bot_4.png",
+      "ingest": {
+        "as": "bot:4",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/bot_5",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_5",
+      "look": {
+        "description": "red and cream casing, square LED eyes",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_bot_5.png",
+      "ingest": {
+        "as": "bot:5",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/bot_6",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_6",
+      "look": {
+        "description": "purple casing with a single wide visor LED eye",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_bot_6.png",
+      "ingest": {
+        "as": "bot:6",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/bot_7",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_7",
+      "look": {
+        "description": "teal and white casing, two antennae, round LED eyes",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_bot_7.png",
+      "ingest": {
+        "as": "bot:7",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/bot_0:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_0",
+      "look": {
+        "description": "white and sky-blue casing, round LED eyes",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@v4/bot_0",
+      "prompt": null,
+      "file": "v4_bot_0_happy.png",
+      "ingest": {
+        "as": "bot:0:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/bot_1:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_1",
+      "look": {
+        "description": "black and orange casing, visor-shaped LED eyes",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@v4/bot_1",
+      "prompt": null,
+      "file": "v4_bot_1_happy.png",
+      "ingest": {
+        "as": "bot:1:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/bot_2:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_2",
+      "look": {
+        "description": "mint green casing, small antenna, round LED eyes",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@v4/bot_2",
+      "prompt": null,
+      "file": "v4_bot_2_happy.png",
+      "ingest": {
+        "as": "bot:2:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/bot_3:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_3",
+      "look": {
+        "description": "pink and white casing, heart-shaped LED eyes",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@v4/bot_3",
+      "prompt": null,
+      "file": "v4_bot_3_happy.png",
+      "ingest": {
+        "as": "bot:3:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/bot_4:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_4",
+      "look": {
+        "description": "gold casing with a small crown-shaped crest, round LED eyes",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@v4/bot_4",
+      "prompt": null,
+      "file": "v4_bot_4_happy.png",
+      "ingest": {
+        "as": "bot:4:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/bot_5:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_5",
+      "look": {
+        "description": "red and cream casing, square LED eyes",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@v4/bot_5",
+      "prompt": null,
+      "file": "v4_bot_5_happy.png",
+      "ingest": {
+        "as": "bot:5:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/bot_6:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_6",
+      "look": {
+        "description": "purple casing with a single wide visor LED eye",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@v4/bot_6",
+      "prompt": null,
+      "file": "v4_bot_6_happy.png",
+      "ingest": {
+        "as": "bot:6:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
+    },
+    {
+      "id": "v4/bot_7:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_7",
+      "look": {
+        "description": "teal and white casing, two antennae, round LED eyes",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@v4/bot_7",
+      "prompt": null,
+      "file": "v4_bot_7_happy.png",
+      "ingest": {
+        "as": "bot:7:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "todo",
+      "attempts": []
     }
   ]
 }

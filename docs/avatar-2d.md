@@ -570,8 +570,8 @@ it with `skinMask` (`masks.mjs`), at `@2x`:
   fall out on their own (the stand-ins' `#9aa3ad` is ΔE 32 from `#f1d2b6`), but greys from about `#b9b9b9` to
   `#f8f8f8` — `#d9d9d9` and `#f0f0f0` included — and an off-white like `#fdf8f5` are within ΔE 22 and would be cut
   as skin. The eye white is taken out by geometry (next point). Pale underwear is covered by every outfit anyway
-  (C6); at the style gate it is answered first by a darker underwear in the body template, then, if it persists, by
-  a hand-drawn `_skinmask` override.
+  (C6); the body template therefore asks for a mid-gray tank top and charcoal shorts (A2c, §10.1), and if a pale
+  one still comes back at the style gate, a hand-drawn `_skinmask` override answers it.
 - The eyes are taken out, widened by `eyeMargin` (3 px): always the padded ellipse round each eye's white
   (`eyeEllipses`) — no eye mask holds the white, and an off-white sclera is within ΔE 22 of cream — and, on a face,
   the eye mask as written as well (a hand-drawn `_eyemask` included), so skin and eyes never share a pixel. This is
@@ -973,6 +973,43 @@ The rules:
   a bot or a new base is cut on; `ingest` and `verify` both ask it. It follows a bot's references back to the first
   picture that is a base's or a body's own: `v4/bot_3:happy` → `@v4/bot_3` → `@body_f` → body f; Plan 12's
   `bot_3:happy` → `@bot_3` → `f01_candidate_1.png` → f01.
+- **The v4 templates** (Plan 19, A2c). `templates.body` is the **character lock** (spec §5.2): the head must be
+  completely bald for a dress-up base, the face kept at exactly F01's size and place, `CHARACTER LOCK BODY_<code>`,
+  then head, face (no blush, no makeup), cream skin, the relaxed pose, hands "with exactly five fingers (four
+  fingers and one thumb)", clothing, line art and rendering. The clothing is a plain **mid-gray** tank top and
+  **charcoal** shorts: a light-grey top would sit inside the skin mask's tolerance of cream (§4.4.1, the limit
+  of `tolerance`; A1b ruling). Its look holds `code`, `figure`, `head`, `eyes`, `mouth`, and `head_fallback` — the buzz
+  cut B2 puts in a manual prompt when ChatGPT cannot draw a clean bald head (R1). `templates.bodyExpression` (only
+  the eyes and mouth, on the bald body) and `templates.hair` (`{{look.description}}`, `{{look.colour}}` — the
+  hairstyle's natural colour with its hex; hair longer than the neck falls behind the shoulders, never over the
+  tank top, arms or hands) are new. `outfit` (the head stays bald; sleeves end at the wrists, every finger stays
+  visible), `head` (the hat sits on the hair; the fringe below the brim stays), `face` and `bot` ("the same relaxed
+  standing pose and the same five-fingered hands") are rewritten for the new body; Plan 12's head and face items,
+  casual01 and bots render from them too, but all of them are done or blocked. `base` and `expression` stay for
+  Plan 12's assets until D1. Every v4 template ends with a **size line**: "Output the exact same image size as the
+  input, 1024 by 1536 pixels," then, for a body, "with the face in exactly the same place and at exactly the same
+  size as in the input", for a hairstyle "and keep the body's exact outline, width and height", and for the
+  others "and keep the figure's exact outline, width and height".
+- **The v4 assets and ids** (Plan 19, A2c; R16). A v4 redraw of a Plan 12 asset is **`v4/<old id>`** with the file
+  **`v4_<old file>`**, so its attempts never mix with Plan 12's history; the new kinds take new ids. A2c seeds 44,
+  all `todo`, in this file order — the style gate's five (both bodies, `f_bob01`, `m_tousled01`, casual01) first
+  within their kinds:
+
+  | Ids | Kind | Reference | File | `ingest` |
+  |---|---|---|---|---|
+  | `body_f`, `body_m` | `body` | `f01_candidate_1.png` | `body_<g>.png` | `body:<g>` |
+  | `item_hair_<code>`, the eight `HAIR_CODES` | `hair` | `@body_<g>` | `item_hair_<code>.png` | `hair:<code>` |
+  | `v4/item_outfit_<code>`: casual01, dealer01, tuxedo01, royal_robe01, tet_red01, champion01 | `item` / `outfit` | `@body_f` | `v4_item_outfit_<code>.png` | `item:outfit:<code>`, `base` f |
+  | `v4/item_outfit_dealer01_m`, `v4/item_outfit_tet_red01_m` (`wear` m) | `item` / `outfit` | `@body_m` | `v4_item_outfit_<code>_m.png` | `item:outfit:<code>`, `base` m, `variant` m |
+  | `body_<g>:<expr>`: happy, sad, surprised, closed, sleep | `bodyExpression` | `@body_<g>` | `body_<g>_<expr>.png` | `face:<g>:<expr>` |
+  | `v4/bot_<n>`, n 0–7 | `bot` | `@body_f` | `v4_bot_<n>.png` | `bot:<n>` |
+  | `v4/bot_<n>:happy` | `bot` | `@v4/bot_<n>` | `v4_bot_<n>_happy.png` | `bot:<n>:happy` |
+
+  casual01's and the bots' looks are copied from their Plan 12 assets, the body faces' from f02's and m02's; the
+  other outfits describe today's pictures (`item_outfit_<code>_icon@2x.png`) so the redraw keeps their design.
+  `next` alone would hand out all eight hairstyles before casual01 (`PRIORITY`), so the gate names its assets with
+  `next --only`. C3 and C5 add more the same way (`v4/item_outfit_<code>_m`, `v4/item_head_<code>`,
+  `v4/item_face_<code>`).
 - **Fix lines.** After a failure the next prompt is the prompt plus one line per *distinct* reason the earlier
   attempts failed for: `redrawn` → "same image size, same hair, same clothing", `tears` → "No tears",
   `hair_colour` → "same hair colour", `background` → "transparent background, no checkerboard", `cropped` →
