@@ -39,8 +39,11 @@ export interface AvatarManifestFile {
    *  catalogue's own flags must agree (bug 7). */
   hidesHairFront?: boolean
   hidesHairBack?: boolean
-  /** The tint masks this layer carries, if any (design §4.1): at most one of each kind. */
-  masks?: { hair?: MaskInfo; eyes?: MaskInfo; tint?: MaskInfo }
+  /**
+   * The tint masks this layer carries, if any (design §4.1): at most one of each kind. `skin` is v4's
+   * (Plan 19): a body and its faces carry one, for `skinColor` to paint (`bodies.ts`).
+   */
+  masks?: { hair?: MaskInfo; eyes?: MaskInfo; tint?: MaskInfo; skin?: MaskInfo }
 }
 
 export interface AvatarManifest {
@@ -75,7 +78,7 @@ function unitInterval(path: string, value: unknown, what: string): number {
   return value
 }
 
-const MASK_KINDS = ['hair', 'eyes', 'tint'] as const
+const MASK_KINDS = ['hair', 'eyes', 'tint', 'skin'] as const
 type MaskKind = (typeof MASK_KINDS)[number]
 
 function parseMaskInfo(path: string, name: string, kind: MaskKind, raw: unknown): MaskInfo {

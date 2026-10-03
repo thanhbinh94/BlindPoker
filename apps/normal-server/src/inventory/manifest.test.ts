@@ -103,6 +103,27 @@ describe('loadAvatarManifest', () => {
     expect(manifest.files['item_head_tophat01_L80']?.masks).toBeUndefined()
   })
 
+  it('parses a skin mask, and an empty one, like every other kind (A3)', () => {
+    const withSkin = {
+      ...VALID,
+      files: {
+        ...VALID.files,
+        body_f_L30: { layer: 30, w: 384, h: 448, bytes2x: 24191, placeholder: true, masks: { skin: { bytes2x: 11313, meanL: 0.8293 } } },
+        body_f_face_sleep_L50: { layer: 50, w: 384, h: 448, bytes2x: 8847, masks: { skin: { bytes2x: 7010, meanL: 0, empty: true }, eyes: { bytes2x: 4015, meanL: 0, empty: true } } },
+      },
+    }
+    const files = loadAvatarManifest(fixture(withSkin)).files
+    expect(files['body_f_L30']?.masks).toEqual({ skin: { bytes2x: 11313, meanL: 0.8293 } })
+    expect(files['body_f_face_sleep_L50']?.masks).toEqual({ skin: { bytes2x: 7010, meanL: 0, empty: true }, eyes: { bytes2x: 4015, meanL: 0, empty: true } })
+
+    const badSkin = { ...VALID, files: { ...VALID.files, body_f_L30: { layer: 30, w: 1, h: 1, bytes2x: 1, masks: { skin: { bytes2x: 1, meanL: 2 } } } } }
+    expect(() => loadAvatarManifest(fixture(badSkin))).toThrow(/files\.body_f_L30\.masks\.skin\.meanL must be a number between 0 and 1/)
+  })
+
+  it('reads the shipped stand-in bodies’ skin masks', () => {
+    expect(loadAvatarManifest().files['body_f_L30']?.masks?.skin?.meanL).toBeGreaterThan(0)
+  })
+
   it('refuses a mask whose meanL is out of the 0–1 range, or a malformed mask entry', () => {
     const badMeanL = { ...VALID, files: { ...VALID.files, base_f01_L30: { ...VALID.files.base_f01_L30, masks: { hair: { bytes2x: 1, meanL: 1.2 } } } } }
     expect(() => loadAvatarManifest(fixture(badMeanL))).toThrow(/files\.base_f01_L30\.masks\.hair\.meanL must be a number between 0 and 1/)

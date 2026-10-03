@@ -128,5 +128,29 @@
   { "id": "head_party_cone_blue01", "slot": "head", "rarity": "common", "nameKey": "items.head_party_cone_blue01", "assetKey": "head/head_party_cone_blue01", "isDefault": false,
     "asset": { "layer": 80, "file": "item_head_party_cone01_L80", "hidesHairFront": true, "fitsAvatarCrop": true, "tint": "#4a8fe0" } },
   { "id": "head_party_cone_green01", "slot": "head", "rarity": "common", "nameKey": "items.head_party_cone_green01", "assetKey": "head/head_party_cone_green01", "isDefault": false,
-    "asset": { "layer": 80, "file": "item_head_party_cone01_L80", "hidesHairFront": true, "fitsAvatarCrop": true, "tint": "#4fb86a" } }
+    "asset": { "layer": 80, "file": "item_head_party_cone01_L80", "hidesHairFront": true, "fitsAvatarCrop": true, "tint": "#4fb86a" } },
+
+  { "id": "hair_f_bob01", "slot": "hairStyle", "rarity": "common", "nameKey": "items.hair_f_bob01", "assetKey": "hairStyle/hair_f_bob01", "isDefault": false, "free": true, "gender": "f", "counterpart": "hair_m_tousled01", "naturalColour": "#5e3e6f",
+    "asset": { "layer": 60, "file": "item_hair_f_bob01_L60", "back": "item_hair_f_bob01_L20", "fitsAvatarCrop": true } },
+  { "id": "hair_f_hime01", "slot": "hairStyle", "rarity": "common", "nameKey": "items.hair_f_hime01", "assetKey": "hairStyle/hair_f_hime01", "isDefault": false, "free": true, "gender": "f", "counterpart": "hair_m_neat01", "naturalColour": "#302c39",
+    "asset": { "layer": 60, "file": "item_hair_f_hime01_L60", "back": "item_hair_f_hime01_L20", "fitsAvatarCrop": true } },
+  { "id": "hair_f_wavy01", "slot": "hairStyle", "rarity": "common", "nameKey": "items.hair_f_wavy01", "assetKey": "hairStyle/hair_f_wavy01", "isDefault": false, "free": true, "gender": "f", "counterpart": "hair_m_curly01", "naturalColour": "#e0c9b3",
+    "asset": { "layer": 60, "file": "item_hair_f_wavy01_L60", "back": "item_hair_f_wavy01_L20", "fitsAvatarCrop": true } },
+  { "id": "hair_f_ponytail01", "slot": "hairStyle", "rarity": "common", "nameKey": "items.hair_f_ponytail01", "assetKey": "hairStyle/hair_f_ponytail01", "isDefault": false, "free": true, "gender": "f", "counterpart": "hair_m_spiky01", "naturalColour": "#7b3f22",
+    "asset": { "layer": 60, "file": "item_hair_f_ponytail01_L60", "back": "item_hair_f_ponytail01_L20", "fitsAvatarCrop": true } },
+  { "id": "hair_m_tousled01", "slot": "hairStyle", "rarity": "common", "nameKey": "items.hair_m_tousled01", "assetKey": "hairStyle/hair_m_tousled01", "isDefault": false, "free": true, "gender": "m", "counterpart": "hair_f_bob01", "naturalColour": "#684136",
+    "asset": { "layer": 60, "file": "item_hair_m_tousled01_L60", "back": "item_hair_m_tousled01_L20", "fitsAvatarCrop": true } },
+  { "id": "hair_m_neat01", "slot": "hairStyle", "rarity": "common", "nameKey": "items.hair_m_neat01", "assetKey": "hairStyle/hair_m_neat01", "isDefault": false, "free": true, "gender": "m", "counterpart": "hair_f_hime01", "naturalColour": "#2c282d",
+    "asset": { "layer": 60, "file": "item_hair_m_neat01_L60", "back": "item_hair_m_neat01_L20", "fitsAvatarCrop": true } },
+  { "id": "hair_m_curly01", "slot": "hairStyle", "rarity": "common", "nameKey": "items.hair_m_curly01", "assetKey": "hairStyle/hair_m_curly01", "isDefault": false, "free": true, "gender": "m", "counterpart": "hair_f_wavy01", "naturalColour": "#2a1f1e",
+    "asset": { "layer": 60, "file": "item_hair_m_curly01_L60", "back": "item_hair_m_curly01_L20", "fitsAvatarCrop": true } },
+  { "id": "hair_m_spiky01", "slot": "hairStyle", "rarity": "common", "nameKey": "items.hair_m_spiky01", "assetKey": "hairStyle/hair_m_spiky01", "isDefault": false, "free": true, "gender": "m", "counterpart": "hair_f_ponytail01", "naturalColour": "#4a2c1d",
+    "asset": { "layer": 60, "file": "item_hair_m_spiky01_L60", "back": "item_hair_m_spiky01_L20", "fitsAvatarCrop": true } },
+
+  { "id": "skin_porcelain01", "slot": "skinColor", "rarity": "common", "nameKey": "items.skin_porcelain01", "assetKey": "skinColor/skin_porcelain01", "isDefault": false, "free": true, "colour": "#f3dccb" },
+  { "id": "skin_fair01", "slot": "skinColor", "rarity": "common", "nameKey": "items.skin_fair01", "assetKey": "skinColor/skin_fair01", "isDefault": false, "free": true, "colour": "#ecc9ad" },
+  { "id": "skin_lighttan01", "slot": "skinColor", "rarity": "common", "nameKey": "items.skin_lighttan01", "assetKey": "skinColor/skin_lighttan01", "isDefault": false, "free": true, "colour": "#d9a47a" },
+  { "id": "skin_tan01", "slot": "skinColor", "rarity": "common", "nameKey": "items.skin_tan01", "assetKey": "skinColor/skin_tan01", "isDefault": false, "free": true, "colour": "#b9835a" },
+  { "id": "skin_brown01", "slot": "skinColor", "rarity": "common", "nameKey": "items.skin_brown01", "assetKey": "skinColor/skin_brown01", "isDefault": false, "free": true, "colour": "#8a5a3c" },
+  { "id": "skin_deep01", "slot": "skinColor", "rarity": "common", "nameKey": "items.skin_deep01", "assetKey": "skinColor/skin_deep01", "isDefault": false, "free": true, "colour": "#5c3a28" }
 ]

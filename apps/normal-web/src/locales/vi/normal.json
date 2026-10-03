@@ -392,7 +392,21 @@
     "head_beanie_grey01": "Mũ len xám",
     "head_beanie_mustard01": "Mũ len vàng mù tạt",
     "head_party_cone_blue01": "Mũ chóp tiệc xanh dương",
-    "head_party_cone_green01": "Mũ chóp tiệc xanh lá"
+    "head_party_cone_green01": "Mũ chóp tiệc xanh lá",
+    "hair_f_bob01": "Tóc bob",
+    "hair_f_hime01": "Tóc dài mái bằng",
+    "hair_f_wavy01": "Tóc gợn sóng",
+    "hair_f_ponytail01": "Tóc đuôi ngựa",
+    "hair_m_tousled01": "Tóc rối",
+    "hair_m_neat01": "Tóc gọn",
+    "hair_m_curly01": "Tóc xoăn",
+    "hair_m_spiky01": "Tóc vuốt dựng",
+    "skin_porcelain01": "Da trắng sứ",
+    "skin_fair01": "Da sáng",
+    "skin_lighttan01": "Da sáng ấm",
+    "skin_tan01": "Da ngăm",
+    "skin_brown01": "Da nâu",
+    "skin_deep01": "Da nâu đậm"
   },
   "bases": {
     "f01": "Tóc bob",

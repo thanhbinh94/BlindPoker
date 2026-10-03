@@ -21,6 +21,11 @@
  * `badge_monthly` turning the day-28 reward into a foreign-key violation on the 28th of the month —
  * and now, an `asset.file` the manifest never produced, which is a catalogue entry the wardrobe would
  * offer and the stage could never draw.
+ *
+ * 2026-10-03 (Plan 19, avatar v4): the hair leaves the body and becomes an item, `hairStyle` — two layers,
+ * `asset.file` at 60 in front of the face and `asset.back` at 20 behind the body — with a `gender`, a
+ * `counterpart` of the other gender (what a gender swap changes it to) and a `naturalColour` (the old base's
+ * hair, measured). `skinColor` is a third colour slot. The catalogue must hold `DEFAULT_HAIR` for both genders.
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -31,12 +36,11 @@ import { items } from '../db/schema.js'
 import { DAILY_FIXED_ITEM_IDS } from '../economy/daily-rules.js'
 import type { AvatarConfigV3 } from './avatar.js'
 import { defaultAvatar } from './avatar.js'
-import type { Wear } from './bases.js'
-import { WEARS } from './bases.js'
-import type { AvatarManifest } from './manifest.js'
+import type { MaskSet } from './bodies.js'
+import type { AvatarManifest, MaskInfo } from './manifest.js'
 import { loadAvatarManifest } from './manifest.js'
-import type { ItemSlot } from './slots.js'
-import { COLOUR_SLOTS, DRAWN_SLOTS, isItemSlot, REQUIRED_SLOTS } from './slots.js'
+import type { Gender, ItemSlot } from './slots.js'
+import { COLOUR_SLOTS, DEFAULT_HAIR, DRAWN_SLOTS, GENDERS, HAIR_SLOT, isGender, isItemSlot, REQUIRED_SLOTS } from './slots.js'
 
 export type { ItemSlot } from './slots.js'
 
@@ -44,22 +48,33 @@ export type Rarity = 'common' | 'rare' | 'epic'
 export const RARITIES: readonly Rarity[] = ['common', 'rare', 'epic']
 
 /** The layer a slot's asset must sit on (design §3) — one half of the manifest cross-check. */
-const SLOT_LAYER: Partial<Record<ItemSlot, number>> = { head: 80, face: 70, outfit: 40, aura: 10, frame: 90 }
+const SLOT_LAYER: Partial<Record<ItemSlot, number>> = { hairStyle: 60, head: 80, face: 70, outfit: 40, aura: 10, frame: 90 }
 
-/** One PNG layer, shared by every base. */
+/** The layer a hairstyle's `asset.back` sits on: behind the body (L30), in front of the aura (L10). */
+const HAIR_BACK_LAYER = 20
+
+/** One PNG layer, shared by every body. */
 export interface AssetRef {
-  layer: 10 | 40 | 70 | 80 | 90
+  layer: 10 | 40 | 60 | 70 | 80 | 90
   /** A name in `data/avatar-manifest.json`'s `files`, without the `@1x`/`@2x` density suffix. */
   file: string
   /**
-   * The layer to draw instead of `file` on a base of a given wear (2026-09-20).
+   * The layer to draw instead of `file` on a body of a given gender (2026-09-20; was a base's `wear`).
    *
    * A dealer's uniform is a skirt on `f` and trousers on `m`, but it stays **one item**: ownership,
    * achievements, the daily calendar and the outfits table all key on the id, and only the picture
-   * differs. A wear with no entry here wears `file`, so this map is added one cut at a time as the
-   * art arrives — see `docs/avatar-2d.md` §3.1.
+   * differs. A gender with no entry here wears `file`, so this map is added one cut at a time as the
+   * art arrives — see `docs/avatar-2d.md` §3.1. Never on a hairstyle, which is drawn for one gender.
    */
-  variants?: Partial<Record<Wear, string>>
+  variants?: Partial<Record<Gender, string>>
+  /** A hairstyle's back half (`item_hair_<code>_L20`), drawn behind the body; `file` is its front half. Only on `hairStyle`. */
+  back?: string
+  /**
+   * Where a hairstyle can be recoloured by `hairColor`, derived from the manifest's hair masks the way
+   * `tintMeanL` is: `files` are `[back, file]` filtered to those with a non-empty hair mask, `meanL` the
+   * front layer's (else the back's). Absent when neither layer has one. Only on `hairStyle`.
+   */
+  hairTint?: MaskSet
   /** A head that hides the base's hair layers (design §3). */
   hidesHairFront?: boolean
   hidesHairBack?: boolean
@@ -88,8 +103,17 @@ export interface ItemDef {
   isDefault: boolean
   /** The PNG layer to draw. Required for `DRAWN_SLOTS`, absent for `title` and `badge`. */
   asset?: AssetRef
-  /** The hex a `hairColor`/`eyeColor` item paints with (design §3.2). Required there, forbidden elsewhere. */
+  /** The hex a `hairColor`/`eyeColor`/`skinColor` item paints with (design §3.2). Required there, forbidden elsewhere. */
   colour?: string
+  /** The body a hairstyle is drawn for. Required on `hairStyle`, forbidden elsewhere. */
+  gender?: Gender
+  /** The hairstyle of the other gender a gender swap changes this one to. Required on `hairStyle`, forbidden elsewhere. */
+  counterpart?: string
+  /**
+   * The colour this hairstyle is drawn in — the old base's hair, measured — which the wardrobe's "Tự nhiên"
+   * swatch shows. A lowercase hex; required on `hairStyle`, forbidden elsewhere.
+   */
+  naturalColour?: string
   /**
    * Owned by every player without an `inventory` row (design §3.2) — `owns`/`missingOf` say so, and
    * `/api/me/inventory` reports it with `source: "free"`. Only ever `true`: a catalogue never writes
@@ -167,6 +191,29 @@ function parseAsset(path: string, id: string, slot: ItemSlot, manifest: AvatarMa
 
   const asset: AssetRef = { layer: expectedLayer as AssetRef['layer'], file, fitsAvatarCrop }
 
+  // A hairstyle (Plan 19) is two layers: `file` in front of the face and `back` behind the body, both held
+  // to the manifest at their own layer — a back half that resolves to nothing is a head of hair with a hole
+  // where the nape should be. It is drawn for one gender and recoloured by `hairColor` through its own hair
+  // masks, so a per-gender cut or a colour variant would be a second, conflicting way of saying the same thing.
+  const hairStyle = slot === HAIR_SLOT
+  const backRaw = r['back']
+  if (!hairStyle) {
+    if (backRaw !== undefined) fail(path, `item ${id} has an asset.back but is not in the hairStyle slot (${slot})`)
+  } else {
+    if (r['variants'] !== undefined) fail(path, `item ${id} is a hairstyle, which never has asset.variants`)
+    if (r['tint'] !== undefined) fail(path, `item ${id} is a hairstyle, which never has asset.tint`)
+    if (backRaw === undefined) fail(path, `item ${id} has no asset.back (slot hairStyle)`)
+    if (typeof backRaw !== 'string' || backRaw === '') fail(path, `item ${id} has a malformed asset.back`)
+    const backEntry = manifest.files[backRaw]
+    if (backEntry === undefined) fail(path, `item ${id} names the back layer ${backRaw}, which is not in the avatar manifest`)
+    if (backEntry.layer !== HAIR_BACK_LAYER) {
+      fail(path, `item ${id}'s back layer ${backRaw} is manifest layer ${String(backEntry.layer)} rather than ${String(HAIR_BACK_LAYER)}`)
+    }
+    asset.back = backRaw
+    const hairTint = deriveHairTint(manifest, backRaw, file)
+    if (hairTint !== undefined) asset.hairTint = hairTint
+  }
+
   // A colour variant (design §3.3): the manifest has to carry a non-empty `masks.tint` for `file`,
   // or there is no region for `recolour` to paint — a variant whose art has no tint mask is a rare
   // hat that would silently render as its own original colour.
@@ -185,9 +232,9 @@ function parseAsset(path: string, id: string, slot: ItemSlot, manifest: AvatarMa
   const variantsRaw = r['variants']
   if (variantsRaw !== undefined) {
     if (typeof variantsRaw !== 'object' || variantsRaw === null || Array.isArray(variantsRaw)) fail(path, `item ${id} has a malformed asset.variants`)
-    const variants: Partial<Record<Wear, string>> = {}
+    const variants: Partial<Record<Gender, string>> = {}
     for (const [wear, name] of Object.entries(variantsRaw as Record<string, unknown>)) {
-      if (!(WEARS as readonly string[]).includes(wear)) fail(path, `item ${id} has the asset variant ${wear}, which is not one of ${WEARS.join(', ')}`)
+      if (!isGender(wear)) fail(path, `item ${id} has the asset variant ${wear}, which is not one of ${GENDERS.join(', ')}`)
       if (typeof name !== 'string' || name === '') fail(path, `item ${id}'s ${wear} asset variant has no file name`)
       const entry = manifest.files[name]
       if (entry === undefined) fail(path, `item ${id} names the ${wear} asset variant ${name}, which is not in the avatar manifest`)
@@ -203,7 +250,7 @@ function parseAsset(path: string, id: string, slot: ItemSlot, manifest: AvatarMa
           fail(path, `item ${id}'s ${wear} asset variant ${name} has no tint mask to paint`)
         }
       }
-      variants[wear as Wear] = name
+      variants[wear] = name
     }
     if (Object.keys(variants).length > 0) asset.variants = variants
   }
@@ -225,6 +272,23 @@ function parseAsset(path: string, id: string, slot: ItemSlot, manifest: AvatarMa
     }
   }
   return asset
+}
+
+/**
+ * `AssetRef.hairTint`, read off the manifest's hair masks the way `tintMeanL` is read off its tint mask, so
+ * neither the client nor the pipeline ever re-measures the artwork. The front layer is the reference
+ * lightness (it is the hair a face is seen under); a style whose front is bald — every strand behind, a bun —
+ * falls back to the back layer's. Both layers are then tinted against that one `meanL`, so no seam shows
+ * where the halves meet.
+ */
+function deriveHairTint(manifest: AvatarManifest, back: string, front: string): MaskSet | undefined {
+  const hairOf = (file: string): MaskInfo | undefined => {
+    const mask = manifest.files[file]?.masks?.hair
+    return mask !== undefined && mask.empty !== true ? mask : undefined
+  }
+  const reference = hairOf(front) ?? hairOf(back)
+  if (reference === undefined) return undefined
+  return { meanL: reference.meanL, files: [back, front].filter((file) => hairOf(file) !== undefined) }
 }
 
 function parseItem(path: string, manifest: AvatarManifest, raw: unknown, at: number): ItemDef {
@@ -254,6 +318,25 @@ function parseItem(path: string, manifest: AvatarManifest, raw: unknown, at: num
     fail(path, `item ${id} has a colour but is not in a colour slot (${slot})`)
   }
 
+  // A hairstyle's own three fields (Plan 19), by the same rule as `colour`: mandatory on `hairStyle`,
+  // forbidden everywhere else. Without a gender the wardrobe could not say whose hair it is, without a
+  // counterpart a gender swap would not know what to change it to, and without a natural colour the "Tự
+  // nhiên" swatch would have nothing to show. Whether the counterpart exists is checked once the whole
+  // catalogue is read (`loadItemCatalog`).
+  const hairSlot = slot === HAIR_SLOT
+  const genderRaw = r['gender']
+  const counterpartRaw = r['counterpart']
+  const naturalColourRaw = r['naturalColour']
+  if (hairSlot) {
+    if (!isGender(genderRaw)) fail(path, `item ${id} needs a gender, one of ${GENDERS.join(', ')} (slot ${slot})`)
+    if (typeof counterpartRaw !== 'string' || counterpartRaw === '') fail(path, `item ${id} needs a counterpart (slot ${slot})`)
+    if (typeof naturalColourRaw !== 'string' || !HEX_COLOUR.test(naturalColourRaw)) fail(path, `item ${id} needs a 6-digit hex naturalColour (slot ${slot})`)
+  } else {
+    for (const field of ['gender', 'counterpart', 'naturalColour'] as const) {
+      if (r[field] !== undefined) fail(path, `item ${id} has a ${field} but is not in the hairStyle slot (${slot})`)
+    }
+  }
+
   // `free` (design §3.2): only ever the literal `true`, and only on a common, non-default item —
   // "free" and "rare" contradict each other, and a default is already granted to everyone another way.
   const freeRaw = r['free']
@@ -268,6 +351,11 @@ function parseItem(path: string, manifest: AvatarManifest, raw: unknown, at: num
   const def: ItemDef = { id, slot, rarity: rarity as Rarity, nameKey: str('nameKey'), assetKey, isDefault }
   if (colourSlot) def.colour = colourRaw as string
   if (freeRaw === true) def.free = true
+  if (hairSlot) {
+    def.gender = genderRaw as Gender
+    def.counterpart = counterpartRaw as string
+    def.naturalColour = naturalColourRaw as string
+  }
   return asset === undefined ? def : { ...def, asset }
 }
 
@@ -304,6 +392,29 @@ export function loadItemCatalog(path: string = defaultItemsPath(), manifest: Ava
   }
   for (const id of DAILY_FIXED_ITEM_IDS) {
     if (!byId.has(id)) fail(path, `the day-28 daily reward grants ${id}, which is not in the catalogue`)
+  }
+
+  // Plan 19's two hairstyle checks run last (pre-flight #6): after every check that existed before them, so
+  // a catalogue with one of those older problems is still told about that one first.
+  //
+  // `DEFAULT_HAIR` first, since it is the more basic failure: a new account of either gender starts out in
+  // its hairstyle, and must own it without a row — so it has to exist, be of that gender and be `free`.
+  for (const gender of GENDERS) {
+    const id = DEFAULT_HAIR[gender]
+    const def = byId.get(id)
+    if (def === undefined) fail(path, `DEFAULT_HAIR.${gender} names ${id}, which is not in the catalogue`)
+    if (def.slot !== HAIR_SLOT) fail(path, `DEFAULT_HAIR.${gender} names ${id}, which is in the slot ${def.slot} rather than ${HAIR_SLOT}`)
+    if (def.gender !== gender) fail(path, `DEFAULT_HAIR.${gender} names ${id}, which is a hairstyle of gender ${String(def.gender)}`)
+    if (def.free !== true) fail(path, `DEFAULT_HAIR.${gender} names ${id}, which is not free`)
+  }
+  // A counterpart is what a gender swap changes the hairstyle to, so it must be a hairstyle the other gender
+  // can wear. Symmetry is not required: a future rare style may point at a free one that keeps its own partner.
+  for (const def of defs) {
+    if (def.slot !== HAIR_SLOT) continue
+    const other = def.counterpart === undefined ? undefined : byId.get(def.counterpart)
+    if (other === undefined || other.slot !== HAIR_SLOT || other.gender === def.gender) {
+      fail(path, `item ${def.id} has the counterpart ${String(def.counterpart)}, which is not a hairStyle item of the other gender`)
+    }
   }
 
   const freeIds = new Set(defs.filter((d) => d.free).map((d) => d.id))

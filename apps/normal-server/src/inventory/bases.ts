@@ -22,14 +22,14 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { packageRoot } from '../db/migrate.js'
+// The expressions moved to `bodies.ts` with Plan 19 (pre-flight #9): this module is the v3 registry D1
+// deletes, so it imports them from there and nothing new imports from here.
+import type { Expression } from './bodies.js'
+import { EXPRESSIONS } from './bodies.js'
 import type { AvatarManifest } from './manifest.js'
 import { loadAvatarManifest } from './manifest.js'
 import type { BaseId, BaseIds } from './slots.js'
 import { BASE_ID_PATTERN, DEFAULT_BASE } from './slots.js'
-
-/** The six expressions every base and every bot is drawn for (design §4.3). */
-export type Expression = 'neutral' | 'happy' | 'sad' | 'surprised' | 'closed' | 'sleep'
-export const EXPRESSIONS: readonly Expression[] = ['neutral', 'happy', 'sad', 'surprised', 'closed', 'sleep']
 
 const HAIR_BACK_LAYER = 20
 const BODY_LAYER = 30

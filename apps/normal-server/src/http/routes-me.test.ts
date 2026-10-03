@@ -160,13 +160,15 @@ describe('inventory and avatars', () => {
     const res = await h.app.fastify.inject({ url: '/api/me/inventory', headers: { cookie: me.cookie } })
     expect(res.statusCode).toBe(200)
     const body = res.json() as { items: { itemId: string; slot: string; source: string }[]; avatar: unknown }
-    // A fresh account: the one granted default plus every `free` colour and variant (design §3.2) —
-    // owned by everyone without a row, and always listed.
+    // A fresh account: the one granted default plus every `free` colour, variant, hairstyle and skin colour
+    // (design §3.2, A3) — owned by everyone without a row, and always listed.
     const granted = body.items.filter((i) => i.source !== 'free')
     expect(granted.map((i) => i.itemId)).toEqual(['outfit_casual01'])
     const free = body.items.filter((i) => i.source === 'free')
-    expect(free.length).toBe(18)
+    expect(free.length).toBe(32)
     expect(free.map((i) => i.itemId)).toContain('haircolor_black01')
+    expect(body.items.find((i) => i.itemId === 'hair_f_bob01')).toMatchObject({ slot: 'hairStyle', source: 'free' })
+    expect(body.items.find((i) => i.itemId === 'skin_deep01')).toMatchObject({ slot: 'skinColor', source: 'free' })
     // Joined against the catalogue.
     expect(body.items.find((i) => i.itemId === 'outfit_casual01')).toMatchObject({ slot: 'outfit', rarity: 'common', assetKey: 'outfit/outfit_casual01' })
     expect(body.items.find((i) => i.itemId === 'haircolor_black01')).toMatchObject({ slot: 'hairColor', rarity: 'common', source: 'free' })

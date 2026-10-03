@@ -2,7 +2,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import { EXPRESSIONS, baseIdsOf, loadBases } from './bases.js'
+import { baseIdsOf, loadBases } from './bases.js'
+import { EXPRESSIONS } from './bodies.js'
 import type { AvatarManifest } from './manifest.js'
 
 let scratch: string

@@ -16,6 +16,7 @@ import type { AchievementDef } from '../achievements/definitions.js'
 import type { NormalConfig } from '../config.js'
 import type { AvatarManifest } from '../inventory/manifest.js'
 import type { BaseDef } from '../inventory/bases.js'
+import type { Bodies } from '../inventory/bodies.js'
 import type { ItemCatalog } from '../inventory/items.js'
 
 export interface CatalogRouteDeps {
@@ -23,7 +24,10 @@ export interface CatalogRouteDeps {
   catalog: ItemCatalog
   defs: AchievementDef[]
   manifest: AvatarManifest
+  /** The v3 registry, still served until A5 switches the wire to v4. */
   bases: Record<string, BaseDef>
+  /** The v4 bodies, one per gender (Plan 19). */
+  bodies: Bodies
 }
 
 /** The languages `normal-web` ships strings for (spec §21). */
@@ -57,12 +61,17 @@ export function registerCatalogRoutes(app: FastifyInstance, deps: CatalogRouteDe
    * 2026-09-17: the list is `deps.bases` itself, in `data/avatar-bases.json`'s own key order, rather
    * than a constant naming two ids. Adding a figure is a registry entry and its art; the wardrobe's
    * base tab draws one tile per entry it is sent, so nothing downstream counts them either.
+   *
+   * 2026-10-03 (Plan 19): `bodies` beside `bases` — the two v4 bodies, f then m, each with its files, its
+   * natural eye colour and the tint it derived from the manifest. Today's client ignores the key; A5 switches
+   * the client to it and drops `bases`.
    */
   app.get('/api/catalog/avatar', async (_req, reply) =>
     reply.send({
       frame: deps.manifest.frame,
       crop: deps.manifest.crop,
       bases: Object.values(deps.bases),
+      bodies: Object.values(deps.bodies),
       manifestVersion: deps.manifest.version,
     }))
 

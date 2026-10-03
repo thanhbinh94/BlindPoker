@@ -34,8 +34,8 @@ import { ServiceError } from '../errors.js'
 import { players } from '../db/schema.js'
 import type { InventoryService } from './inventory-service.js'
 import type { ItemCatalog } from './items.js'
-import type { BaseId, BaseIds, RequiredSlot } from './slots.js'
-import { DEFAULT_BASE, isBaseId, OPTIONAL_SLOTS, REQUIRED_SLOTS, SLOTS } from './slots.js'
+import type { BaseId, BaseIds, ItemSlot, RequiredSlot } from './slots.js'
+import { DEFAULT_BASE, HAIR_SLOT, isBaseId, OPTIONAL_SLOTS, REQUIRED_SLOTS, SLOTS } from './slots.js'
 
 export type { BaseId, BaseIds, ItemSlot } from './slots.js'
 export { DEFAULT_BASE, OPTIONAL_SLOTS, REQUIRED_SLOTS, SLOTS } from './slots.js'
@@ -54,9 +54,18 @@ export interface AvatarConfigV3 {
   frame?: string
   hairColor?: string
   eyeColor?: string
+  /** An optional slot since Plan 19 (A3) — never sent by today's client, validated like `hairColor` when it is. */
+  skinColor?: string
   title?: string
   badge?: string
 }
+
+/**
+ * The slots a v3 configuration has: every slot but the hairstyle (Plan 19, A3). The hair is still baked into
+ * a v3 base, so a v3 config never names one and owning it never means owning one; A4 moves this contract
+ * aside and A5 retires it.
+ */
+const V3_SLOTS = SLOTS.filter((slot): slot is Exclude<ItemSlot, typeof HAIR_SLOT> => slot !== HAIR_SLOT)
 
 export interface AvatarView {
   config: AvatarConfigV3
@@ -111,7 +120,7 @@ export function validateAvatarConfig(input: unknown, catalog: ItemCatalog, bases
     value[slot] = id
   }
 
-  for (const slot of SLOTS) {
+  for (const slot of V3_SLOTS) {
     const id = value[slot]
     if (id === undefined) continue
     const def = catalog.get(id)
@@ -122,9 +131,9 @@ export function validateAvatarConfig(input: unknown, catalog: ItemCatalog, bases
   return { ok: true, value }
 }
 
-/** Every item id a config references, in slot order and without the base. */
+/** Every item id a config references, in slot order and without the base (and, in v3, never a hairstyle). */
 export function itemIdsOf(config: AvatarConfigV3): string[] {
-  return SLOTS.map((slot) => config[slot]).filter((id): id is string => id !== undefined)
+  return V3_SLOTS.map((slot) => config[slot]).filter((id): id is string => id !== undefined)
 }
 
 /**

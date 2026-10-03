@@ -392,7 +392,21 @@
     "head_beanie_grey01": "Grey beanie",
     "head_beanie_mustard01": "Mustard beanie",
     "head_party_cone_blue01": "Blue party cone",
-    "head_party_cone_green01": "Green party cone"
+    "head_party_cone_green01": "Green party cone",
+    "hair_f_bob01": "Bob cut",
+    "hair_f_hime01": "Long with bangs",
+    "hair_f_wavy01": "Wavy bob",
+    "hair_f_ponytail01": "Ponytail",
+    "hair_m_tousled01": "Tousled",
+    "hair_m_neat01": "Neat crop",
+    "hair_m_curly01": "Curly",
+    "hair_m_spiky01": "Spiked",
+    "skin_porcelain01": "Porcelain skin",
+    "skin_fair01": "Fair skin",
+    "skin_lighttan01": "Light tan skin",
+    "skin_tan01": "Tan skin",
+    "skin_brown01": "Brown skin",
+    "skin_deep01": "Deep brown skin"
   },
   "bases": {
     "f01": "Bob cut",

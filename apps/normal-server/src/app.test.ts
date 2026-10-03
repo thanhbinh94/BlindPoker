@@ -219,6 +219,21 @@ describe('GET /api/config', () => {
     expect(bases.length).toBeGreaterThan(0)
     expect(new Map(bases.map((base) => [base.id, base.wear]))).toEqual(new Map([['f01', 'f'], ['m01', 'm'], ['f02', 'f'], ['f03', 'f'], ['m02', 'm'], ['m03', 'm']]))
   })
+
+  it('also answers the v4 bodies, f then m, beside the bases it still serves until A5', async () => {
+    const h = await harness()
+    const answer = (await h.app.fastify.inject('/api/catalog/avatar')).json() as {
+      bases: unknown[]
+      bodies: { gender: string; body: string; faces: Record<string, string>; naturalEyeColour: string; tint?: { skin?: unknown; eyes?: unknown } }[]
+    }
+    expect(answer.bodies.map((body) => body.gender)).toEqual(['f', 'm'])
+    expect(answer.bodies[0]).toMatchObject({ gender: 'f', body: 'body_f_L30', naturalEyeColour: '#2e6a9b', faces: { neutral: 'body_f_face_neutral_L50' } })
+    expect(answer.bodies[1]).toMatchObject({ gender: 'm', body: 'body_m_L30', naturalEyeColour: '#cc924c', faces: { sleep: 'body_m_face_sleep_L50' } })
+    // The derived tint travels with it (ruling 5): the client never measures a body itself.
+    for (const body of answer.bodies) expect(body.tint?.skin, body.gender).toBeDefined()
+    expect(answer.bases.length).toBeGreaterThan(0)
+    expect(h.app.services.bodies.f.gender).toBe('f')
+  })
 })
 
 describe('security headers', () => {

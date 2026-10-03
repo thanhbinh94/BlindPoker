@@ -346,6 +346,19 @@ describe('claimDaily', () => {
       for (const id of catalog.freeIds()) expect(drawable('common')).not.toContain(id)
     })
 
+    it('never draws a hairstyle or a skin colour', () => {
+      // Not a prize (spec §4.2): neither slot is in the allow-list, whatever rarity a future one has.
+      expect(DAILY_DRAW_SLOTS).not.toContain('hairStyle')
+      expect(DAILY_DRAW_SLOTS).not.toContain('skinColor')
+      // Not vacuous: the catalogue does have both, eight hairstyles and six skin colours.
+      const looks = catalog.all().filter((d) => d.slot === 'hairStyle' || d.slot === 'skinColor').map((d) => d.id)
+      expect(looks).toHaveLength(14)
+      for (const rarity of ['common', 'rare'] as const) {
+        for (const id of looks) expect(drawable(rarity), `${rarity} ${id}`).not.toContain(id)
+      }
+      for (const id of looks) expect(undrawable('common'), id).toContain(id)
+    })
+
     it('never draws an item the catalogue has withdrawn, even though its row stays in `items` (bug 6)', async () => {
       // A withdrawn item keeps its `items` row for the inventory foreign key — the hood did, after it left
       // items.json. Seed one such row as a common head item: once every drawable common is owned, the tier

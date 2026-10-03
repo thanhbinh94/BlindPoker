@@ -165,6 +165,20 @@ describe('validateAvatarConfig', () => {
     expect(validateAvatarConfig({ ...CASUAL, hairColor: 'eyecolor_green01' }, catalog, baseIds)).toEqual({ ok: false, code: 'WRONG_CATEGORY' })
     expect(validateAvatarConfig({ ...CASUAL, hairColor: 'nope' }, catalog, baseIds)).toEqual({ ok: false, code: 'INVALID_ITEM' })
   })
+
+  it('still validates a v3 configuration exactly as before the new slots existed', () => {
+    // A3 widens the slots (hairStyle, skinColor) while the wire stays v3 until A5. The full v3 fixture is
+    // stored exactly as it was sent, and owning it means owning exactly what it always meant.
+    expect(validateAvatarConfig(DRESSED, catalog, baseIds)).toEqual({ ok: true, value: DRESSED })
+    expect(itemIdsOf(DRESSED)).toEqual(worn(DRESSED))
+    // A hairstyle is not part of the v3 contract: dropped like any other unknown key, never stored, never owned.
+    expect(validateAvatarConfig({ ...DRESSED, hairStyle: 'hair_f_bob01' }, catalog, baseIds)).toEqual({ ok: true, value: DRESSED })
+    expect(itemIdsOf({ ...DRESSED, hairStyle: 'hair_f_bob01' } as AvatarConfigV3)).not.toContain('hair_f_bob01')
+    // skinColor is an optional slot from now on — never sent by today's client, validated like hairColor when it is.
+    expect(validateAvatarConfig({ ...CASUAL, skinColor: 'skin_deep01' }, catalog, baseIds)).toEqual({ ok: true, value: { ...CASUAL, skinColor: 'skin_deep01' } })
+    expect(validateAvatarConfig({ ...CASUAL, skinColor: 'haircolor_red01' }, catalog, baseIds)).toEqual({ ok: false, code: 'WRONG_CATEGORY' })
+    expect(itemIdsOf({ ...CASUAL, skinColor: 'skin_deep01' })).toEqual(['outfit_casual01', 'skin_deep01'])
+  })
 })
 
 describe('itemIdsOf', () => {

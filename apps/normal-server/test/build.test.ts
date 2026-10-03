@@ -131,7 +131,7 @@ describe.skipIf(SKIP)('the production build', () => {
   })
 
   it('ships the migrations and the catalogues beside dist/', async () => {
-    for (const rel of ['drizzle/0000_init.sql', 'drizzle/meta/_journal.json', 'data/items.json', 'data/achievements.json', 'package.json']) {
+    for (const rel of ['drizzle/0000_init.sql', 'drizzle/meta/_journal.json', 'data/items.json', 'data/achievements.json', 'data/avatar-bodies.json', 'package.json']) {
       expect((await stat(join(ROOT, rel))).isFile(), rel).toBe(true)
     }
     // `packageRoot()` walks up from `import.meta.url` to the manifest with this name; `dist/main.js`
