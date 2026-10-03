@@ -247,10 +247,9 @@ Ghi chú kỹ thuật:
 - **Bổ sung 02/10 (người dùng: "cho dòng kết quả dưới ghế chờ cùng phiếu kết quả luôn") — `c8486ad`, merge `044b46a`.**
   Trong lúc phiếu kết quả chờ bài lật, bàn chơi cũng chưa lộ kết quả: không có dòng tên bài và tiền thắng dưới ghế,
   không có viền sáng người thắng, lá bài chung chưa tô vàng. Tất cả hiện cùng lúc với phiếu
-  (`PokerTable` prop `resultPending`). Nét mặt vui/buồn cũng chờ, bắt đầu khi phiếu kết quả hiện (từ 03/10, sau khi sửa E1 bên dưới).
+  (`PokerTable` prop `resultPending`). Từ 03/10 (người dùng: "cho số tiền chờ luôn", `88c79be`, `ecd117e`, merge `11ea2e1`) số tiền trên tấm tên cũng giữ số trước khi chia pot cho tới khi phiếu hiện (`ClientSeat.stackBeforeResult`); phần cược dư được hoàn lại thì hiện ngay vì không phải kết quả. Nét mặt vui/buồn cũng chờ, bắt đầu khi phiếu kết quả hiện (từ 03/10, sau khi sửa E1 bên dưới).
 - **Ghi nhận, chưa làm:**
   - Khi đã tích ô, thẻ một bản màu đang có không còn hiện gợi ý mở khoá của món gốc.
-  - Con số tiền trên tấm tên người thắng vẫn tăng ngay lúc chia điểm, trong khi bài còn lật.
 
 | # | Mức | Mô tả | Nguyên nhân / hướng | Trạng thái |
 |---|---|---|---|---|
