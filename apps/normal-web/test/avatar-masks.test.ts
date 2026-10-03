@@ -945,6 +945,56 @@ describe('C11 (checks.mjs, spec §4.3)', () => {
     expect(c11.detail).toContain('n/a')
   })
 
+  // Plan 19 A1b fix round 2 (controller ruling): a body face's skin is compared with its neutral face's as skin ∪ eye
+  // zone, because between expressions only the eye region moves between "eye" and "skin".
+  /**
+   * A real neutral face (open eyes, an off-white sclera) and a real shut-eye face of the same cream bald head, masked.
+   * Cut to the head region (above y 500 at @2x, `FACE_LIMIT_Y`), as an ingested face layer is, so the eyes are the
+   * share of the face they are on a real one.
+   */
+  async function shutAndOpen(gender: 'f' | 'm') {
+    const neutral = `body_${gender}_face_neutral_L50`
+    const closed = `body_${gender}_face_closed_L50`
+    const headOnly = (pic: Picture): Picture => {
+      for (let i = 500 * W * 4 + 3; i < pic.data.length; i += 4) pic.data[i] = 0
+      return pic
+    }
+    await writePicture(headOnly(await syntheticBase({ bald: true, skinColour: CREAM, scleraColour: '#fdf8f5' })), join(dir, `${neutral}@2x.png`))
+    await writePicture(headOnly(await syntheticBase({ bald: true, skinColour: CREAM, closedEyes: true })), join(dir, `${closed}@2x.png`))
+    const manifest: Manifest = { files: { [neutral]: { real: true }, [closed]: { real: true } } }
+    await writeMasks({ dir, manifest, names: [neutral, closed], overridesDir })
+    const skinArea = async (name: string) => {
+      const mask = await readPicture(join(dir, `${name}_skinmask@2x.png`))
+      let solid = 0
+      for (let i = 3; i < mask.data.length; i += 4) if (mask.data[i]! >= 128) solid++
+      return solid
+    }
+    return { neutral, closed, manifest, skinArea }
+  }
+
+  it('passes a shut-eye face whose eyelids are skin against an open-eye neutral of the same head', async () => {
+    const { neutral, closed, manifest, skinArea } = await shutAndOpen('f')
+    // Skin alone would not do: the shut eyes are eyelid skin, the open ones are iris, white and margin.
+    expect((await skinArea(closed)) / (await skinArea(neutral)), 'skin alone').toBeGreaterThan(1.2)
+    const c11 = await c11Of(manifest, closed)
+    expect(c11.ok, c11.detail).toBe(true)
+  })
+
+  it('still fails a face whose skin and eye zone are half the neutral face’s', async () => {
+    const { closed, manifest } = await shutAndOpen('m')
+    // The shut face has no eye zone (no white, no eye mask): halving its skin halves skin ∪ eye zone.
+    const maskFile = join(dir, `${closed}_skinmask@2x.png`)
+    const mask = await readPicture(maskFile)
+    let solid = 0
+    for (let i = 3; i < mask.data.length; i += 4) if (mask.data[i]! >= 128) solid++
+    let cleared = 0
+    for (let i = 3; i < mask.data.length && cleared < solid / 2; i += 4) if (mask.data[i]! >= 128) { mask.data[i] = 0; cleared++ }
+    await writePicture(mask, maskFile)
+    const c11 = await c11Of(manifest, closed)
+    expect(c11.ok).toBe(false)
+    expect(c11.detail).toMatch(/skin and eye zone are 0\.(4|5)\d × the neutral face's, want 0\.8–1\.2 ×/)
+  })
+
   it('counts an iris split by a pupil and a highlight as one eye (Task 2b: merge before counting)', async () => {
     const name = 'base_fc7_face_neutral_L50'
     await writePicture(await syntheticBase(), join(dir, `${name}@2x.png`))

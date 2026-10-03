@@ -685,6 +685,25 @@ export function tintMask(pic, seed, { tolerance = 18 } = {}) {
 export const SKIN_MASK = { tolerance: 22, hueSpread: 18, minL: 50, chroma: [0.5, 1.6], eyeMargin: 3, minRegion: 40 }
 
 /**
+ * A face's eye zone (Plan 19): the padded ellipse round each eye's white (`eyeEllipses`) — always, because no eye
+ * mask holds the white and an off-white sclera is within `SKIN_MASK.tolerance` of cream — unioned with `eyes` when
+ * given (any non-zero pixel: the eye mask as written, a hand-drawn one included), widened by `SKIN_MASK.eyeMargin`.
+ * What `skinMask` takes out, and what C11 adds back to the skin to compare one face with another (between
+ * expressions only this region moves between "eye" and "skin"). 0/1 per pixel.
+ *
+ * @param {{ data: Buffer, width: number, height: number }} pic
+ * @param {Uint8Array | null} [eyes]
+ * @returns {Uint8Array}
+ */
+export function eyeZone(pic, eyes = null) {
+  const { width, height } = pic
+  const ellipses = eyeEllipses(pic).mask
+  const inside = new Uint8Array(width * height)
+  for (let i = 0; i < inside.length; i++) inside[i] = ellipses[i] || eyes?.[i] ? 1 : 0
+  return dilate(inside, width, height, Math.max(1, Math.round(SKIN_MASK.eyeMargin * (width / 768))))
+}
+
+/**
  * Skin on a body or a body face, at @2x (Plan 19, spec §5.5) — what the skin colour item tints, so the line art,
  * the eyes, the mouth and the underwear must all stay out of it.
  *
@@ -695,10 +714,10 @@ export const SKIN_MASK = { tolerance: 22, hueSpread: 18, minL: 50, chroma: [0.5,
  * the hue circle, so all three fall out by construction; a *light* neutral does not (see `SKIN_MASK`). The bodies
  * are always drawn cream (spec §5.2), so one seed fits both.
  *
- * The eyes are taken out widened by `SKIN_MASK.eyeMargin`: always `eyeEllipses(pic)` — the padded ellipse round
- * each eye's white, because an off-white sclera is within `tolerance` of cream and no eye mask holds the white —
- * and, unioned with it, `eyes` when given (any non-zero pixel; `writeMasks` passes the eye mask it wrote, a
- * hand-drawn one included), so the skin and eye masks never meet. What is left is closed by 2 px (the odd
+ * The eye zone (`eyeZone`) is taken out: always `eyeEllipses(pic)` — the padded ellipse round each eye's white,
+ * because an off-white sclera is within `tolerance` of cream and no eye mask holds the white — and, unioned with
+ * it, `eyes` when given (any non-zero pixel; `writeMasks` passes the eye mask it wrote, a hand-drawn one included),
+ * widened by `SKIN_MASK.eyeMargin`, so the skin and eye masks never meet. What is left is closed by 2 px (the odd
  * antialiased or textured pixel inside the skin) and kept to pieces of at least `SKIN_MASK.minRegion` px. Returns
  * 0/255 per pixel, like every mask here; empty when the window has no skin.
  *
@@ -730,17 +749,12 @@ export function skinMask(pic, { eyes = null } = {}) {
     if (hue <= hueSpread) skin[i] = 1
   }
 
-  // The eye ellipses always, the given eyes as well: an eye mask is the iris and what it encloses, never the white
-  // round it (`eyeMask` drops every white pixel), and an off-white sclera is within `tolerance` of cream.
-  const ellipses = eyeEllipses(pic).mask
-  const eyePixels = new Uint8Array(width * height)
-  for (let i = 0; i < eyePixels.length; i++) eyePixels[i] = ellipses[i] || eyes?.[i] ? 1 : 0
-  const eyeZone = dilate(eyePixels, width, height, Math.max(1, Math.round(SKIN_MASK.eyeMargin * scale)))
-  for (let i = 0; i < skin.length; i++) if (eyeZone[i]) skin[i] = 0
+  const zone = eyeZone(pic, eyes)
+  for (let i = 0; i < skin.length; i++) if (zone[i]) skin[i] = 0
 
   skin = close(skin, width, height, Math.max(1, Math.round(2 * scale)))
   // The closing must not hand back what was just taken out, nor reach past the solid picture.
-  for (let i = 0; i < skin.length; i++) if (eyeZone[i] || !solid(i)) skin[i] = 0
+  for (let i = 0; i < skin.length; i++) if (zone[i] || !solid(i)) skin[i] = 0
 
   const minRegion = Math.max(1, Math.round(SKIN_MASK.minRegion * scale * scale))
   const { label, sizes } = components(skin, width, height)

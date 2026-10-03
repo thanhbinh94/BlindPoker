@@ -1594,7 +1594,7 @@ describe('C12 and the v4 rules of C11 (Plan 19 A1b, spec §5.1, §5.5)', () => {
     })
     const both = (await checkOne(halved, happy, manifestFor(halved, { [neutral]: flagged(neutral, true), [happy]: flagged(happy, true) }))).get('C11')!
     expect(both.ok).toBe(false)
-    expect(both.detail).toMatch(/skin area is 0\.\d\d × the neutral face's, want 0\.8–1\.2 ×/)
+    expect(both.detail).toMatch(/skin and eye zone are 0\.\d\d × the neutral face's, want 0\.8–1\.2 ×/)
   }, 60_000)
 
   it('C11 fails a real face with no skin mask, an empty one, or no neutral skin to compare with', async () => {
