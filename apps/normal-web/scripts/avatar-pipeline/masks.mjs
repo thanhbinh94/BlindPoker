@@ -691,6 +691,11 @@ export const SKIN_MASK = { tolerance: 22, hueSpread: 18, minL: 50, chroma: [0.5,
  * What `skinMask` takes out, and what C11 adds back to the skin to compare one face with another (between
  * expressions only this region moves between "eye" and "skin"). 0/1 per pixel.
  *
+ * It can come out too big: `eyeEllipses` unions every white blob on a side of the eye band and mirrors it, so a pale
+ * tear, highlight or bubble there widens both ellipses and the skin loses what they gain. C11 guards a real face
+ * against the worst of it (skin alone, eye zone alone, against the neutral face); the rest is why every real face's
+ * skin-mask overlay is checked by eye (`docs/avatar-2d.md` §4.4.1).
+ *
  * @param {{ data: Buffer, width: number, height: number }} pic
  * @param {Uint8Array | null} [eyes]
  * @returns {Uint8Array}

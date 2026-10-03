@@ -1620,10 +1620,21 @@ describe('C12 and the v4 rules of C11 (Plan 19 A1b, spec §5.1, §5.5)', () => {
     expect(noReference.ok).toBe(false)
     expect(noReference.detail).toContain(`${neutral} has no skin mask to compare with`)
 
+    // Two stand-ins, the neutral's skin entry gone: nothing real to hold to anything — a note, not a failure.
+    const { real: _real, ...skinlessNeutral } = withoutSkin(neutral)
+    const standIns = await c11Of({ [neutral]: { ...skinlessNeutral, placeholder: true }, [happy]: flagged(happy, false) })
+    expect(standIns.ok, standIns.detail).toBe(true)
+    expect(standIns.detail).toContain(`n/a — ${neutral} has no skin mask to compare with`)
+
     await editMask(dir, happy, 'skin', (alpha) => alpha.fill(0))
     const empty = await c11Of({ [neutral]: flagged(neutral, true), [happy]: flagged(happy, true) })
     expect(empty.ok).toBe(false)
     expect(empty.detail).toContain('skin mask is empty')
+    // A hand-drawn mask is trusted for its shape, not for being there: an empty override fails as well.
+    const drawn = flagged(happy, true)
+    const emptyOverride = await c11Of({ [neutral]: flagged(neutral, true), [happy]: { ...drawn, masks: { ...drawn.masks, skin: { ...drawn.masks!.skin!, override: true } } } })
+    expect(emptyOverride.ok).toBe(false)
+    expect(emptyOverride.detail).toContain('skin mask is empty')
     // A stand-in keeps the mixed-pair note rather than a failure.
     const mixed = await c11Of({ [neutral]: flagged(neutral, true), [happy]: flagged(happy, false) })
     expect(mixed.detail).toContain('n/a — neutral is real, this face is a stand-in')

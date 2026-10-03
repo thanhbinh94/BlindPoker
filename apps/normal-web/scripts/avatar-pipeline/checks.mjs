@@ -17,8 +17,9 @@
  *   C9  the manifest lists it, at that layer and that frame (§10.10)
  *   C10 the @2x is inside the per-file budget, and the manifest says what is on disk
  *   C11 every mask the layer lists sits on its ink and has a plausible shape (Plan 13 §4.3) — since Plan 19
- *       (spec §5.5) skin on bodies and body faces too (a face's skin ∪ eye zone held to its neutral face's), skin
- *       never on the eyes, a hair layer's hair its ink, and a real v4 layer never without its masks
+ *       (spec §5.5) skin on bodies and body faces too (a face's skin ∪ eye zone held to its neutral face's, and on a
+ *       real pair its skin alone and its eye zone as well), skin never on the eyes, a hair layer's hair its ink, and
+ *       a real v4 layer never without its masks
  *   C12 a real v4 body's head sits where F01's does: the eyes and the chin within 2 % of the crop (Plan 19
  *       spec §5.1, rulings 1–2), so every hat, glasses, aura and frame cut on F01 still fits it
  *
@@ -77,8 +78,18 @@ export const WHITE_TOLERANCE = 24
 /** C7: how alike the two densities have to be. */
 export const DENSITY_CORRELATION = 0.97
 export const DENSITY_ALPHA_DRIFT = 12
-/** C11 (Plan 19, spec §5.5): a body face's skin against its gender's neutral face's — the same 0.8–1.2 the spec names. */
+/**
+ * C11 (Plan 19, spec §5.5): a body face's skin ∪ eye zone against its gender's neutral face's — the same 0.8–1.2 the
+ * spec names for the skin (controller ruling, A1b fix round 2).
+ */
 const FACE_SKIN_RATIO = { min: 0.8, max: 1.2 }
+/**
+ * C11's two guards on a real face against a real neutral (controller ruling, A1b fix round 3), because a stray white
+ * blob in the eye band swells `eyeZone` by exactly what the skin loses and `FACE_SKIN_RATIO` cannot see it: skin
+ * alone at least `skinFloor` × the neutral's (one-sided — a shut face only gains skin), and the eye zone at most
+ * `eyeZoneCap` × the neutral's.
+ */
+const FACE_GUARDS = { skinFloor: 0.8, eyeZoneCap: 1.5 }
 /** C11 (Plan 19): how much of a hair layer's own ink its hair mask covers. The ink *is* the hair; the slack is the rim. */
 const HAIR_INK_SHARE = 0.9
 /** C11 (Plan 19): the masks a *real* v4 layer must carry — what the skin, eye and hair colours tint it through. */
@@ -180,18 +191,19 @@ async function load(dir, manifest, name, bases, neutralAreas = new Map()) {
     }
   }
 
-  // Plan 19. C11's skin-on-a-face rule measures against the same gender's `face_neutral` — its skin and eye zone
-  // (`skinAndEyeArea`) — and needs to know whether that face is real or a stand-in, because like is compared with
-  // like only (pre-flight #7, R26). `area` is 0 when the neutral face has no skin mask to measure (none listed, one
-  // marked empty, or none on disk); `self` when this file *is* the neutral face, which needs no measure to be 1 ×.
+  // Plan 19. C11's skin-on-a-face rules measure against the same gender's `face_neutral` (`faceMeasures`: skin ∪ eye
+  // zone, skin alone, eye zone alone) — and need to know whether that face is real or a stand-in, because like is
+  // compared with like only (pre-flight #7, R26). `measures` is null when the neutral face has no skin mask to measure
+  // (none listed, one marked empty, none on disk, or one with no pixel); `self` when this file *is* the neutral face,
+  // which needs no measure to be 1 ×.
   let neutralSkin = null
   if (parsed?.kind === 'bodyFace' && entry?.masks?.skin) {
     const neutralName = bodyFaceFile(parsed.gender, 'neutral')
     const neutralEntry = manifest.files[neutralName]
     const self = neutralName === name
-    if (!self && !neutralAreas.has(neutralName)) neutralAreas.set(neutralName, await neutralSkinAndEyeArea(dir, neutralName, neutralEntry))
-    const area = self ? 0 : neutralAreas.get(neutralName)
-    neutralSkin = { name: neutralName, self, area, real: neutralEntry?.real === true, standIn: neutralEntry?.placeholder === true }
+    if (!self && !neutralAreas.has(neutralName)) neutralAreas.set(neutralName, await neutralFaceMeasures(dir, neutralName, neutralEntry))
+    const measures = self ? null : neutralAreas.get(neutralName)
+    neutralSkin = { name: neutralName, self, measures, real: neutralEntry?.real === true, standIn: neutralEntry?.placeholder === true }
   }
   // C12 finds a body's eyes on its gender's neutral face — the face layer is where the eyes are drawn and masked —
   // and only on a real one: a stand-in's eyes are drawn where no head was ever measured.
@@ -217,17 +229,21 @@ function maskArea(pic) {
 }
 
 /**
- * C11's measure of a body face (Plan 19, controller ruling on A1b): the pixels of the face's ink inside its skin mask
- * (alpha ≥ 128) **or** its eye zone — `eyeZone`, the eye ellipses and the face's eye mask widened by the margin, the
- * very region `skinMask` takes out. Between two expressions of one head only the eyes change, and what they change
- * is which pixels are "eye" and which are "skin" (a shut eye is eyelid skin, an open one iris, white and margin); the
- * two together are the head, and the head stays the same size.
+ * C11's measures of a body face (Plan 19, controller rulings on A1b), each a count of the face's own ink at @2x:
+ *
+ * - `union` — inside its skin mask (alpha ≥ 128) **or** its eye zone (`eyeZone`: the eye ellipses and the face's eye
+ *   mask, widened by the margin — the very region `skinMask` takes out). Between two expressions of one head only the
+ *   eyes change, and what they change is which pixels are "eye" and which are "skin" (a shut eye is eyelid skin, an
+ *   open one iris, white and margin); the two together are the head, and the head stays the same size.
+ * - `skin` — inside its skin mask alone, and `zone` — inside its eye zone alone: what the two guards on a real pair
+ *   read, because `union` cannot see a stray white blob that swells the zone by exactly what the skin loses.
  *
  * @param {{ data: Buffer, width: number, height: number }} layer the face at @2x
  * @param {{ data: Buffer, width: number, height: number }} skinPic its skin mask at @2x
  * @param {{ data: Buffer, width: number, height: number } | null} eyesPic its eye mask at @2x, if it has one
+ * @returns {{ union: number, skin: number, zone: number }}
  */
-function skinAndEyeArea(layer, skinPic, eyesPic) {
+function faceMeasures(layer, skinPic, eyesPic) {
   const n = layer.width * layer.height
   let eyes = null
   if (eyesPic && eyesPic.width === layer.width && eyesPic.height === layer.height) {
@@ -235,26 +251,30 @@ function skinAndEyeArea(layer, skinPic, eyesPic) {
     for (let i = 0; i < n; i++) eyes[i] = eyesPic.data[i * 4 + 3]
   }
   const zone = eyeZone(layer, eyes)
-  let area = 0
+  const measures = { union: 0, skin: 0, zone: 0 }
   for (let i = 0; i < n; i++) {
     if (layer.data[i * 4 + 3] <= ALPHA_INK) continue
-    if (skinPic.data[i * 4 + 3] >= 128 || zone[i]) area++
+    const isSkin = skinPic.data[i * 4 + 3] >= 128
+    if (isSkin) measures.skin++
+    if (zone[i]) measures.zone++
+    if (isSkin || zone[i]) measures.union++
   }
-  return area
+  return measures
 }
 
-/** `skinAndEyeArea` of a gender's neutral face read from `dir`, or 0 when it has no skin mask to measure. */
-async function neutralSkinAndEyeArea(dir, name, entry) {
+/** `faceMeasures` of a gender's neutral face read from `dir`, or `null` when it has no skin mask to measure. */
+async function neutralFaceMeasures(dir, name, entry) {
   const skinInfo = entry?.masks?.skin
   const layerFile = join(dir, `${name}@2x.png`)
   const skinFile = join(dir, `${name}_${MASK_FILE_KIND.skin}mask@2x.png`)
-  if (!skinInfo || skinInfo.empty || !existsSync(skinFile) || !existsSync(layerFile)) return 0
+  if (!skinInfo || skinInfo.empty || !existsSync(skinFile) || !existsSync(layerFile)) return null
   const layer = await readPicture(layerFile)
   const skin = await readPicture(skinFile)
-  if (skin.width !== layer.width || skin.height !== layer.height) return 0
+  if (skin.width !== layer.width || skin.height !== layer.height) return null
   const eyesFile = join(dir, `${name}_${MASK_FILE_KIND.eyes}mask@2x.png`)
   const eyes = entry.masks.eyes && existsSync(eyesFile) ? await readPicture(eyesFile) : null
-  return skinAndEyeArea(layer, skin, eyes)
+  const measures = faceMeasures(layer, skin, eyes)
+  return measures.skin === 0 ? null : measures
 }
 
 // ───────────────────────────────────────────────────────────── the criteria ──
@@ -642,13 +662,16 @@ function eyeBlobs(maskPic) {
  * Plan 19 (spec §5.5) adds the v4 set:
  *
  * - skin on a body `L30`: `SKIN_AREA` (`frame.mjs`) of the layer's own ink;
- * - skin on a body face: its skin and eye zone together (`skinAndEyeArea`: skin mask ∪ `eyeZone`) is
+ * - skin on a body face: its skin and eye zone together (`faceMeasures`: skin mask ∪ `eyeZone`) is
  *   `FACE_SKIN_RATIO` × the same measure on the same gender's `face_neutral` — skin alone would not do, because a
  *   shut eye is eyelid skin where an open one is iris, white and margin (controller ruling, A1b fix round 2). It is
- *   measured only when both faces are real or both are stand-ins, because between the style gate (B3) and batch C1 the neutral face is real
- *   art and the other five still stand-ins, and a stand-in's oval says nothing about a drawn face (pre-flight #7,
- *   R26). A mixed pair reports `n/a — neutral is real, this face is a stand-in` (or the reverse) in the detail. A
- *   real face whose own skin mask is empty fails, and so does one whose neutral face has no skin to compare with;
+ *   measured only when both faces are real or both are stand-ins, because between the style gate (B3) and batch C1
+ *   the neutral face is real art and the other five still stand-ins, and a stand-in's oval says nothing about a drawn
+ *   face (pre-flight #7, R26); a mixed pair reports `n/a — neutral is real, this face is a stand-in` (or the reverse)
+ *   in the detail. On a **real** pair two guards follow (`FACE_GUARDS`, fix round 3), because a stray white blob in
+ *   the eye band swells the eye zone by exactly what the skin loses: skin alone at least 0.8 × the neutral's, and
+ *   the eye zone at most 1.5 × the neutral's. A real face whose own skin mask is empty fails (a hand-drawn one too),
+ *   and so does one whose neutral face has no skin to compare with — a stand-in pair only notes it;
  * - eyes on a body face: the base faces' rules above;
  * - hair on a hair layer: at least `HAIR_INK_SHARE` of the layer's own ink — the layer *is* the hair;
  * - and on any layer with both, skin and eyes share no pixel at alpha ≥ 128, override or not: a pixel tinted
@@ -687,6 +710,11 @@ function maskChecks(context) {
       if (layer.data[i * 4 + 3] <= ALPHA_INK) outside++
     }
     if (outside) { problems.push(`${kind} mask outside the layer at ${outside} pixel${outside === 1 ? '' : 's'}`); continue }
+    // A real body or face with no skin pixel cannot take a skin colour at all — whoever drew the mask.
+    if (kind === 'skin' && entry.real === true && (parsed?.kind === 'body' || parsed?.kind === 'bodyFace') && area === 0) {
+      problems.push('skin mask is empty')
+      continue
+    }
     if (info.override) continue // a hand-drawn mask is trusted for its shape — size and coverage still hold.
 
     if (kind === 'hair' && parsed?.kind === 'base' && parsed.layer === LAYERS.body) {
@@ -718,19 +746,28 @@ function maskChecks(context) {
     } else if (kind === 'skin' && parsed?.kind === 'body') {
       const share = ink === 0 ? 0 : area / ink
       if (share < SKIN_AREA.min || share > SKIN_AREA.max) problems.push(`skin covers ${share.toFixed(2)} of the body's ink, want ${SKIN_AREA.min}–${SKIN_AREA.max}`)
-    } else if (kind === 'skin' && parsed?.kind === 'bodyFace' && neutralSkin !== null) {
+    } else if (kind === 'skin' && parsed?.kind === 'bodyFace' && neutralSkin !== null && !neutralSkin.self) {
+      // (The neutral face is its own reference, 1 × by definition.)
       const real = entry.real === true
       const mixed = real ? neutralSkin.standIn : neutralSkin.real
-      if (real && area === 0) {
-        problems.push('skin mask is empty')
-      } else if (mixed) {
+      const reference = neutralSkin.measures
+      if (mixed) {
         notes.push(`skin ${neutralSkin.real ? 'n/a — neutral is real, this face is a stand-in' : 'n/a — neutral is a stand-in, this face is real'}`)
-      } else if (neutralSkin.area === 0 && !neutralSkin.self) {
-        problems.push(`${neutralSkin.name} has no skin mask to compare with`)
-      } else if (!neutralSkin.self) { // the neutral face is its own reference, 1 × by definition
-        const ratio = skinAndEyeArea(layer, maskPic, masks.eyes ?? null) / neutralSkin.area
+      } else if (!reference) {
+        if (real) problems.push(`${neutralSkin.name} has no skin mask to compare with`)
+        else notes.push(`skin n/a — ${neutralSkin.name} has no skin mask to compare with`)
+      } else {
+        const own = faceMeasures(layer, maskPic, masks.eyes ?? null)
+        const ratio = own.union / reference.union
         if (ratio < FACE_SKIN_RATIO.min || ratio > FACE_SKIN_RATIO.max) {
           problems.push(`skin and eye zone are ${ratio.toFixed(2)} × the neutral face's, want ${FACE_SKIN_RATIO.min}–${FACE_SKIN_RATIO.max} ×`)
+        }
+        if (real && neutralSkin.real) {
+          // The two guards (A1b fix round 3): a stray white blob swells the eye zone by what the skin loses.
+          const skinAlone = own.skin / reference.skin
+          if (skinAlone < FACE_GUARDS.skinFloor) problems.push(`skin alone ${skinAlone.toFixed(2)} × neutral's (min ${FACE_GUARDS.skinFloor})`)
+          const zone = reference.zone === 0 ? 0 : own.zone / reference.zone
+          if (zone > FACE_GUARDS.eyeZoneCap) problems.push(`eye zone ${zone.toFixed(2)} × neutral's (max ${FACE_GUARDS.eyeZoneCap})`)
         }
       }
     } else if (kind === 'hair' && parsed?.kind === 'hair') {

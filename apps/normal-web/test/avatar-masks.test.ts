@@ -96,7 +96,7 @@ const PUPIL_R = 9
  * `bald` (Plan 19 A1b, pre-flight #21) draws no cap and no locks: a v4 body face, whose head top is scalp — the
  * very patch `analysePicture` samples its "hair palette" from. `skinColour` and `scleraColour` (A1b fix round 1)
  * repaint the skin and the white of the eye: a cream face with an off-white sclera is the pair a real v4 face has,
- * the white within ΔE 22 of the skin.
+ * the white within ΔE 22 of the skin. `extra` (A1b fix round 3) is raw SVG drawn last — a white cheek sparkle, say.
  */
 async function syntheticBase({
   closedEyes = false,
@@ -110,6 +110,7 @@ async function syntheticBase({
   bald = false,
   skinColour = SKIN,
   scleraColour = WHITE,
+  extra = '',
 } = {}) {
   const cx = 384
   const cy = 330
@@ -166,6 +167,7 @@ async function syntheticBase({
     ${shineBandShape}
     ${lashRingShape}
     ${eyes}
+    ${extra}
   </svg>`
   return renderSvg(svg, W, H)
 }
@@ -993,6 +995,31 @@ describe('C11 (checks.mjs, spec §4.3)', () => {
     const c11 = await c11Of(manifest, closed)
     expect(c11.ok).toBe(false)
     expect(c11.detail).toMatch(/skin and eye zone are 0\.(4|5)\d × the neutral face's, want 0\.8–1\.2 ×/)
+  })
+
+  // A1b fix round 3 (controller ruling): `eyeEllipses` unions every white blob on a side and mirrors it, so a white
+  // sparkle on a cheek swells both eye zones and the skin mask loses what they gain — skin ∪ eye zone stays ≈ 1 ×. On
+  // a real pair, C11 also holds skin alone to ≥ 0.8 × and the eye zone to ≤ 1.5 × the neutral face's.
+  it('fails a real face whose white cheek sparkle swells the eye zone and eats its skin, on both guards', async () => {
+    const neutral = 'body_f_face_neutral_L50'
+    const sparkly = 'body_f_face_happy_L50'
+    const headOnly = (pic: Picture): Picture => {
+      for (let i = 500 * W * 4 + 3; i < pic.data.length; i += 4) pic.data[i] = 0
+      return pic
+    }
+    const face = { bald: true, skinColour: CREAM, scleraColour: '#fdf8f5' }
+    await writePicture(headOnly(await syntheticBase(face)), join(dir, `${neutral}@2x.png`))
+    // Below and outside the left eye, inside the band `eyeEllipses` looks for whites in (y < 420 here).
+    await writePicture(headOnly(await syntheticBase({ ...face, extra: '<circle cx="264" cy="413" r="6" fill="#ffffff"/>' })), join(dir, `${sparkly}@2x.png`))
+    const manifest: Manifest = { files: { [neutral]: { real: true }, [sparkly]: { real: true } } }
+    await writeMasks({ dir, manifest, names: [neutral, sparkly], overridesDir })
+
+    const c11 = await c11Of(manifest, sparkly)
+    expect(c11.ok, c11.detail).toBe(false)
+    expect(c11.detail).toMatch(/skin alone 0\.\d\d × neutral's \(min 0\.8\)/)
+    expect(c11.detail).toMatch(/eye zone \d\.\d\d × neutral's \(max 1\.5\)/)
+    // The rule they guard is blind to it: skin and eye zone together are still the neutral face's.
+    expect(c11.detail).not.toContain('skin and eye zone are')
   })
 
   it('counts an iris split by a pupil and a highlight as one eye (Task 2b: merge before counting)', async () => {
