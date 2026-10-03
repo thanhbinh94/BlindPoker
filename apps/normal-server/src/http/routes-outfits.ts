@@ -9,7 +9,7 @@
  */
 import { HttpError } from '@bp/http-kit'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import { validateAvatarConfig } from '../inventory/avatar.js'
+import { validateAvatarConfigV3 } from '../inventory/avatar-v3-wire.js'
 import type { BaseIds } from '../inventory/slots.js'
 import type { ItemCatalog } from '../inventory/items.js'
 import type { OutfitsService } from '../inventory/outfits-service.js'
@@ -50,7 +50,7 @@ export function registerOutfitRoutes(app: FastifyInstance, deps: OutfitRouteDeps
     const name = body?.name
     if (typeof name !== 'string') throw new HttpError(400, 'INVALID_NAME', 'name must be a string')
 
-    const checked = validateAvatarConfig(body?.config, deps.catalog, deps.baseIds)
+    const checked = validateAvatarConfigV3(body?.config, deps.catalog, deps.baseIds)
     if (!checked.ok) throw new HttpError(400, checked.code, `avatar refused: ${checked.code}`)
 
     try {

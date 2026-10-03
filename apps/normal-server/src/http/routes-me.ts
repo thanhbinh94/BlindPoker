@@ -24,8 +24,7 @@ import type { EconomyService } from '../economy/economy-service.js'
 import { ServiceError } from '../errors.js'
 import type { HistoryService } from '../history/history-service.js'
 import { resolveItemId } from '../inventory/aliases.js'
-import { applyAvatarConfig, validateAvatarConfig } from '../inventory/avatar.js'
-import { readAvatarConfig } from '../inventory/avatar-migrate.js'
+import { applyAvatarConfigV3, readAvatarConfigV3, validateAvatarConfigV3 } from '../inventory/avatar-v3-wire.js'
 import type { InventoryService } from '../inventory/inventory-service.js'
 import type { ItemCatalog } from '../inventory/items.js'
 import type { BaseIds } from '../inventory/slots.js'
@@ -113,7 +112,7 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
       displayName: player.displayName,
       email: account?.email ?? null,
       balance: player.balance,
-      avatar: readAvatarConfig(player.avatarConfig, deps.catalog, deps.aliases, deps.baseIds),
+      avatar: readAvatarConfigV3(player.avatarConfig, deps.catalog, deps.aliases, deps.baseIds),
       // The summary Lite publishes under the same key: both modes folded into one pair, because
       // that is what the shared player bar draws. The per-mode counters are `/api/me/stats`.
       stats: {
@@ -216,16 +215,16 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
           acquiredAt: item.acquiredAt,
         }
       }),
-      avatar: readAvatarConfig(player.avatarConfig, deps.catalog, deps.aliases, deps.baseIds),
+      avatar: readAvatarConfigV3(player.avatarConfig, deps.catalog, deps.aliases, deps.baseIds),
     })
   })
 
   /** A full replace, not a patch: omitting `title` is how a player takes their title off. */
   app.put('/api/me/avatar', authed, async (req, reply) => {
-    const checked = validateAvatarConfig(req.body, deps.catalog, deps.baseIds)
+    const checked = validateAvatarConfigV3(req.body, deps.catalog, deps.baseIds)
     if (!checked.ok) throw new HttpError(400, checked.code, `avatar refused: ${checked.code}`)
     try {
-      return reply.send(await applyAvatarConfig(deps.db, deps.inventory, playerIdOf(req), checked.value))
+      return reply.send(await applyAvatarConfigV3(deps.db, deps.inventory, playerIdOf(req), checked.value))
     } catch (err) {
       return translateServiceError(err)
     }
@@ -245,7 +244,7 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
     return reply.send({
       playerId: player.playerId,
       displayName: player.displayName,
-      avatar: readAvatarConfig(player.avatarConfig, deps.catalog, deps.aliases, deps.baseIds),
+      avatar: readAvatarConfigV3(player.avatarConfig, deps.catalog, deps.aliases, deps.baseIds),
     })
   })
 

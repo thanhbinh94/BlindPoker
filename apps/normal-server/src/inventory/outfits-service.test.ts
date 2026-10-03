@@ -5,8 +5,8 @@ import { avatarOutfits, inventory as inventoryTable, players, users } from '../d
 import type { TestDb } from '../db/test-db.js'
 import { createTestDb } from '../db/test-db.js'
 import { ServiceError } from '../errors.js'
-import type { AvatarConfigV3 } from './avatar.js'
-import { itemIdsOf } from './avatar.js'
+import type { AvatarConfigV3 } from './avatar-migrate.js'
+import { itemIdsOfV3 } from './avatar-v3-wire.js'
 import type { InventoryService } from './inventory-service.js'
 import { createInventoryService } from './inventory-service.js'
 import type { ItemCatalog } from './items.js'
@@ -62,7 +62,7 @@ describe('OutfitsService', () => {
 
     it('puts a saved outfit at its own index — slot 2 lands at index 1', async () => {
       const playerId = await seedPlayer()
-      await own(playerId, ...itemIdsOf(CASUAL))
+      await own(playerId, ...itemIdsOfV3(CASUAL))
       await outfits.save(playerId, 2, 'Weekend', CASUAL)
 
       const list = await outfits.list(playerId)
@@ -75,7 +75,7 @@ describe('OutfitsService', () => {
   describe('save', () => {
     it('trims the name and stores the config', async () => {
       const playerId = await seedPlayer()
-      await own(playerId, ...itemIdsOf(CASUAL))
+      await own(playerId, ...itemIdsOfV3(CASUAL))
       const view = await outfits.save(playerId, 1, '  Everyday  ', CASUAL)
       expect(view).toMatchObject({ slot: 1, name: 'Everyday', config: CASUAL })
       expect(view.updatedAt).toBeGreaterThan(0)
@@ -92,7 +92,7 @@ describe('OutfitsService', () => {
 
     it('refuses an empty or over-long name', async () => {
       const playerId = await seedPlayer()
-      await own(playerId, ...itemIdsOf(CASUAL))
+      await own(playerId, ...itemIdsOfV3(CASUAL))
       for (const name of ['', '   ', 'x'.repeat(OUTFIT_NAME_MAX + 1)]) {
         const err = await outfits.save(playerId, 1, name, CASUAL).catch((e: unknown) => e)
         expect(err, JSON.stringify(name)).toBeInstanceOf(ServiceError)
@@ -112,7 +112,7 @@ describe('OutfitsService', () => {
 
     it('overwrites whatever was already in the slot', async () => {
       const playerId = await seedPlayer()
-      await own(playerId, ...itemIdsOf(CASUAL), ...itemIdsOf(DRESSED))
+      await own(playerId, ...itemIdsOfV3(CASUAL), ...itemIdsOfV3(DRESSED))
       await outfits.save(playerId, 1, 'First', CASUAL)
       const second = await outfits.save(playerId, 1, 'Second', DRESSED)
       expect(second).toMatchObject({ slot: 1, name: 'Second', config: DRESSED })
@@ -123,7 +123,7 @@ describe('OutfitsService', () => {
   describe('remove', () => {
     it('answers true once and false the second time', async () => {
       const playerId = await seedPlayer()
-      await own(playerId, ...itemIdsOf(CASUAL))
+      await own(playerId, ...itemIdsOfV3(CASUAL))
       await outfits.save(playerId, 3, 'Gone soon', CASUAL)
       expect(await outfits.remove(playerId, 3)).toBe(true)
       expect(await outfits.remove(playerId, 3)).toBe(false)
@@ -140,7 +140,7 @@ describe('OutfitsService', () => {
   describe('apply', () => {
     it('writes the saved config as the player’s avatar and returns it', async () => {
       const playerId = await seedPlayer()
-      await own(playerId, ...itemIdsOf(DRESSED))
+      await own(playerId, ...itemIdsOfV3(DRESSED))
       await outfits.save(playerId, 4, 'Gala', DRESSED)
 
       const view = await outfits.apply(playerId, 4)
@@ -158,7 +158,7 @@ describe('OutfitsService', () => {
 
     it('re-checks ownership rather than trusting the save', async () => {
       const playerId = await seedPlayer()
-      await own(playerId, ...itemIdsOf(DRESSED))
+      await own(playerId, ...itemIdsOfV3(DRESSED))
       await outfits.save(playerId, 4, 'Gala', DRESSED)
       // The item leaves the wardrobe after the save — nothing in this server actually does this
       // today, but `apply` must not assume it never will.
@@ -179,7 +179,7 @@ describe('OutfitsService', () => {
   describe('cascade', () => {
     it('deletes a player’s saved outfits when the account is deleted', async () => {
       const playerId = await seedPlayer()
-      await own(playerId, ...itemIdsOf(CASUAL))
+      await own(playerId, ...itemIdsOfV3(CASUAL))
       await outfits.save(playerId, 1, 'Bye', CASUAL)
 
       await db.delete(users).where(eq(users.id, playerId))

@@ -17,8 +17,9 @@ import { and, eq } from 'drizzle-orm'
 import type { AppDb } from '../db/client.js'
 import { avatarOutfits } from '../db/schema.js'
 import { ServiceError } from '../errors.js'
-import type { AvatarConfigV3, AvatarView } from './avatar.js'
-import { applyAvatarConfig, itemIdsOf } from './avatar.js'
+import type { AvatarConfigV3 } from './avatar-migrate.js'
+import type { AvatarViewV3 } from './avatar-v3-wire.js'
+import { applyAvatarConfigV3, itemIdsOfV3 } from './avatar-v3-wire.js'
 import type { InventoryService } from './inventory-service.js'
 
 /** The number of outfit slots a player has — the bar's own length. */
@@ -42,7 +43,7 @@ export interface OutfitsService {
   /** True when a saved outfit was there to remove. */
   remove(playerId: string, slot: number): Promise<boolean>
   /** Re-checks ownership, then applies the saved config as the player's avatar. `('NOT_FOUND')` on an empty slot. */
-  apply(playerId: string, slot: number): Promise<AvatarView>
+  apply(playerId: string, slot: number): Promise<AvatarViewV3>
 }
 
 function isValidSlot(slot: number): boolean {
@@ -50,7 +51,7 @@ function isValidSlot(slot: number): boolean {
 }
 
 async function checkOwnership(inventory: InventoryService, playerId: string, config: AvatarConfigV3): Promise<void> {
-  const missing = await inventory.missingOf(playerId, itemIdsOf(config))
+  const missing = await inventory.missingOf(playerId, itemIdsOfV3(config))
   if (missing.length > 0) throw new ServiceError('ITEM_NOT_OWNED', `not owned: ${missing.join(', ')}`)
 }
 
@@ -101,7 +102,7 @@ export function createOutfitsService(db: AppDb, inventory: InventoryService): Ou
       if (row === undefined) throw new ServiceError('NOT_FOUND', `no outfit saved in slot ${String(slot)}`)
       const config = row.config as unknown as AvatarConfigV3
       await checkOwnership(inventory, playerId, config)
-      return applyAvatarConfig(db, inventory, playerId, config)
+      return applyAvatarConfigV3(db, inventory, playerId, config)
     },
   }
 }

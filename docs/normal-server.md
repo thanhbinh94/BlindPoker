@@ -50,7 +50,9 @@ src/
                      bodies.ts (the v4 bodies, one per gender, held against the manifest) · items.ts (catalogue)
                      aliases.ts (old wardrobe ids → current ones, or null when dropped)
                      inventory-service.ts (ownership, alias-aware) · outfits-service.ts (five saved outfits)
-                     avatar.ts (config v3 + validation) · avatar-migrate.ts (reads a v1/v2 config back as v3)
+                     avatar.ts (config v4 + validation) · avatar-migrate.ts (reads a v1/v2/v3 config back as v4)
+                     colour.ts (Lab and ΔE76, for the migration's eye rule)
+                     avatar-v3-wire.ts (the v3 HTTP contract, temporary: A5 switches the wire to v4 and deletes it)
   achievements/      definitions.ts (loader) · achievement-service.ts (listens, grants)
   stats/             player-stats.ts (the 16 counters) · stats-service.ts (listens, counts)
   history/           history-service.ts (writes a settled hand, reads a player's last N)
@@ -310,14 +312,79 @@ satisfies the new one), `grant`, which always writes the current id, and `GET /a
 (`http/routes-me.ts`), which resolves each row before joining the catalogue and collapses a player who
 somehow holds both the old and the new row into one entry, keeping the old id as `acquiredAs`.
 
-### The v1/v2 → v3 avatar migration
+### The avatar configuration: v4
 
-`items.category` is still the column name; it holds the current slot. `players.avatar_config` is
-**not** rewritten: `readAvatarConfig` (`inventory/avatar-migrate.ts`) repairs anything that does not
-validate on the way out — `body` → a chosen `base`, `hat`/`accessory`/`jewelry` resolved through the
-alias map into `head`/`face`/`aura`, `top`/`bottom`/`shoes`/`clothing` collapsed into one `outfit`
-(a v2 `clothing_suit` becomes `outfit_tuxedo01`; anything else falls back to the default outfit) —
-while `PUT /api/me/avatar` accepts v3 only and answers `MISSING_LAYER` to anything else.
+Plan 19 replaces the fixed base with a gender and three items (spec §4.1). `inventory/avatar.ts`:
+
+```ts
+{ v: 4, gender: 'f' | 'm', hairStyle, outfit,          // required
+  skinColor?, hairColor?, eyeColor?,                     // colours: absent = the body's / hairstyle's own
+  head?, face?, aura?, frame?, title?, badge? }          // every value an item id
+```
+
+`hairStyle` must be a hairstyle drawn for `gender`. A new account is `{ v: 4, gender: 'f', hairStyle:
+'hair_f_bob01', outfit: 'outfit_casual01' }` (`defaultAvatar`). Every hairstyle and skin colour a player
+starts with is `free`, so wearing one is always owned — but `itemIdsOf` lists them (hairstyle first, in
+`SLOTS` order) and `applyAvatarConfig` asks, as for any item. A `PUT` is a full replace: the stored value
+is rebuilt key by key, so an omitted slot is emptied and an unknown key never reaches the database.
+
+`validateAvatarConfig(input, catalog)` has five error codes and answers the first check that fails, in this
+order (spec §4.1, ruling 9) — the structural complaint always first:
+
+1. not an object → `MISSING_LAYER`;
+2. `v` is not `4` → `MISSING_LAYER` (a v3 body included: v1–v3 are readable, not writable);
+3. the body still carries `base`, whatever its value → `INVALID_BASE` (v4 has no such field);
+4. `gender` is not `'f'`/`'m'` → `MISSING_LAYER`;
+5. `hairStyle` or `outfit` is not a non-empty string → `MISSING_LAYER`;
+6. an optional slot that is neither absent/`null` (empty) nor a non-empty string → `INVALID_ITEM`;
+7. for every slot in `SLOTS`: an id the catalogue does not have → `INVALID_ITEM`; one that belongs to another
+   slot (a skin colour as a hairstyle, a face piece as a hat) → `WRONG_CATEGORY`;
+8. the hairstyle is drawn for the other gender → `WRONG_GENDER`.
+
+### Reading old configurations: v1/v2/v3 → v4
+
+`items.category` is still the column name; it holds the current slot. `players.avatar_config` is **never
+rewritten** by a migration: `readAvatarConfig(stored, catalog, aliases, bodies)` (`inventory/avatar-migrate.ts`)
+repairs anything that does not validate on the way out, and the column changes only when the player presses
+Save. (Saved outfits, `avatar_outfits.config`, go through the same read on list and on apply once A5 wires
+it.) A valid v4 passes straight through. Otherwise:
+
+- **A stored `v: 4`** (a withdrawn item, a hairstyle of the other gender) is repaired as itself: the gender
+  kept if it is one (else `f`), the hairstyle kept if it is drawn for that gender (else `DEFAULT_HAIR`), every
+  other slot kept if the catalogue still has it in that slot — and checked again, falling back to the default.
+- **Anything else** is repaired as a v3 first, as it always was — `body` → a base (`female` f01, `male` m01,
+  none f01), `hat`/`accessory`/`jewelry` resolved through the alias map into `head`/`face`/`aura`,
+  `top`/`bottom`/`shoes`/`clothing` collapsed into one `outfit` (a v2 `clothing_suit` becomes
+  `outfit_tuxedo01`; anything else falls back to the default outfit) — now **keeping** `hairColor` and
+  `eyeColor` (spec §4.5: the v3 repair used to drop them). Then the base becomes a gender, a hairstyle and a
+  skin colour (`V3_BASES`, table 4.5), and every other slot is carried across:
+
+| Old base | gender | hairStyle | skinColor | eyeColor (from the eye rule) |
+| --- | --- | --- | --- | --- |
+| f01 | f | `hair_f_bob01` | — (the bodies' own "cream") | — (`keepEyes`) |
+| f02 | f | `hair_f_hime01` | `skin_porcelain01` | `eyecolor_grey01` |
+| f03 | f | `hair_f_wavy01` | `skin_tan01` | `eyecolor_green01` (pinned) |
+| m01 | m | `hair_m_tousled01` | `skin_lighttan01` | — (`keepEyes`) |
+| m02 | m | `hair_m_neat01` | `skin_fair01` | `eyecolor_grey01` |
+| m03 | m | `hair_m_curly01` | `skin_deep01` | `eyecolor_brown01` |
+| anything else | f | `hair_f_bob01` | — | — |
+
+**The eye rule.** A body's face layers carry their own eyes, so an old base whose eyes were another colour
+would come back with someone else's. When the old base's iris (`V3_BASES[base].naturalEye`, measured from the
+committed art, ruling 6) is more than `EYE_KEEP_DELTA_E` = 12 (ΔE76 in CIE Lab, `inventory/colour.ts`) from
+the new body's `naturalEyeColour`, and the config has no `eyeColor` of its own, it is given one: the row's
+pinned pick, else the nearest free eye colour (ties to the earlier catalogue row). A chosen eye colour always
+wins. f01 and m01 never get one (`keepEyes`): the bodies are drawn from them, so their eyes are the bodies'
+own. f03's iris measures nearer `eyecolor_amber01` than `eyecolor_green01` (ΔE 39.7 against 40.5) but reads
+as green, so green is pinned (ruling 6). The eyeColor column above is what the shipped bodies' provisional
+eye colours give (f `#2e6a9b`, m `#cc924c`); when C1 measures the real art, the rule, not the table, decides.
+
+**The wire is still v3 until A5.** This commit builds the v4 model as a library only. Every route
+(`GET /api/me`, `GET /api/me/inventory`, `GET /api/players/:id/avatar`, `PUT /api/me/avatar`, the outfits
+routes), the register default (`catalog.defaultAvatar()`) and `outfits-service.ts` go through
+`inventory/avatar-v3-wire.ts` — the pre-v4 code, moved verbatim — so they still read and write `{ v: 3, base,
+outfit, … }` against `data/avatar-bases.json` and answer `MISSING_LAYER` to a v4 body. A5 switches all of
+them to v4 at once, with the client, and deletes the wire.
 
 ## Adding an achievement
 

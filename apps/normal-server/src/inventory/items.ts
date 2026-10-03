@@ -34,8 +34,8 @@ import type { AppDb } from '../db/client.js'
 import { packageRoot } from '../db/migrate.js'
 import { items } from '../db/schema.js'
 import { DAILY_FIXED_ITEM_IDS } from '../economy/daily-rules.js'
-import type { AvatarConfigV3 } from './avatar.js'
-import { defaultAvatar } from './avatar.js'
+import type { AvatarConfigV3 } from './avatar-migrate.js'
+import { defaultAvatarV3 } from './avatar-v3-wire.js'
 import type { MaskSet } from './bodies.js'
 import type { AvatarManifest, MaskInfo } from './manifest.js'
 import { loadAvatarManifest } from './manifest.js'
@@ -425,7 +425,7 @@ export function loadItemCatalog(path: string = defaultItemsPath(), manifest: Ava
     defaults: () => defs.filter((d) => d.isDefault).map((d) => d.id),
     byRarity: (r) => defs.filter((d) => d.rarity === r),
     defaultOf: (slot) => defs.find((d) => d.slot === slot && d.isDefault),
-    defaultAvatar: () => defaultAvatar(catalog),
+    defaultAvatar: () => defaultAvatarV3(catalog),
     freeIds: () => freeIds,
     async seed(db) {
       if (defs.length === 0) return

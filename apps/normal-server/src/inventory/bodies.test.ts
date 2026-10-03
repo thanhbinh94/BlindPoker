@@ -105,6 +105,29 @@ describe('loadBodies', () => {
       })
     })
 
+    it('takes each kind’s meanL only from a non-empty reference mask, and leaves the kind out without one', () => {
+      // (a) The body's own skin mask is empty while five faces carry one: there is no reference lightness
+      // for skin — a face's would put a seam where it overlaps the body — so `skin` is left out, and the
+      // eyes, whose reference is intact, are still derived.
+      const emptyBodySkin: AvatarManifest = { ...withMasks, files: { ...withMasks.files, body_f_L30: entry(30, { skin: skin(0, true) }) } }
+      expect(loadBodies(fixture(VALID), emptyBodySkin).f.tint).toEqual({
+        eyes: { meanL: 0.18, files: [faceFile('f', 'neutral'), faceFile('f', 'happy'), faceFile('f', 'sad'), faceFile('f', 'surprised')] },
+      })
+
+      // (b) face_neutral's eye mask is empty while happy, sad and surprised carry one: no reference for the
+      // eyes, so `eyes` is left out rather than tinted against an empty region's 0 — and skin is untouched.
+      const emptyNeutralEyes: AvatarManifest = {
+        ...withMasks,
+        files: { ...withMasks.files, [faceFile('f', 'neutral')]: entry(50, { skin: skin(0.83), eyes: { bytes2x: 1, meanL: 0, empty: true } }) },
+      }
+      expect(loadBodies(fixture(VALID), emptyNeutralEyes).f.tint).toEqual({
+        skin: {
+          meanL: 0.82,
+          files: ['body_f_L30', faceFile('f', 'neutral'), faceFile('f', 'happy'), faceFile('f', 'sad'), faceFile('f', 'surprised'), faceFile('f', 'closed')],
+        },
+      })
+    })
+
     it('gives a body with no masks no tint key, and never reads one from the file', () => {
       expect(loadBodies(fixture(VALID), withMasks).m.tint).toBeUndefined()
       // Derived, not written (ruling 5): a hand-written `tint` in the JSON is not what the server serves.
