@@ -21,11 +21,11 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { runChecks } from '../scripts/avatar-pipeline/checks.mjs'
-import { OUTFIT_TOP_Y, cutItem, diffAgainstBase, ingest, measure, registerBySilhouette, registerToBase } from '../scripts/avatar-pipeline/extract.mjs'
-import { AURA_CY, AURA_SIZE, AXIS_X, BASELINE_Y, BODY, CROP, DENSITIES, FACE_LIMIT_Y, FRAME, LAYERS, RING, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
+import { headMetrics, runChecks } from '../scripts/avatar-pipeline/checks.mjs'
+import { OUTFIT_TOP_Y, cutItem, diffAgainstBase, ingest, measure, registerBySilhouette, registerToBase, shiftPicture } from '../scripts/avatar-pipeline/extract.mjs'
+import { AURA_CY, AURA_SIZE, AXIS_X, BASELINE_Y, BODY, CROP, DENSITIES, FACE_LIMIT_Y, FRAME, HEAD_REFERENCE, HEAD_TOLERANCE, LAYERS, RING, SKIN_AREA, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
 import { BASES, BASE_WEAR, EXPRESSIONS, HAIR_CODES, ICON, MANIFEST_NAME, NAME_PATTERN, WEARS, bodyFaceFile, bodyFile, buildPlaceholders, hairFile, hairItemId, iconName, itemFile, parseName, stageOneFiles, variantFile, wearOf, writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
-import { MASK_FILE_KIND } from '../scripts/avatar-pipeline/masks.mjs'
+import { MASK_FILE_KIND, describeColours } from '../scripts/avatar-pipeline/masks.mjs'
 import { alphaBBox, blankPicture, cropPicture, overPicture, readPicture, removeChroma, renderSvg, writeDensities, writePicture } from '../scripts/avatar-pipeline/png.mjs'
 
 const PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url))
@@ -1022,7 +1022,7 @@ describe('the ten acceptance checks', () => {
     const entry = await writePlaceholder(dir, 'item_head_tophat01_L80')
     const manifest = manifestFor(dir, { item_head_tophat01_L80: entry })
     const results = await checkOne(dir, 'item_head_tophat01_L80', manifest)
-    expect([...results.keys()].sort()).toEqual(['C1', 'C10', 'C11', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9'])
+    expect([...results.keys()].sort()).toEqual(['C1', 'C10', 'C11', 'C12', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9'])
     for (const [id, result] of results) expect(result.ok, `${id}: ${result.detail}`).toBe(true)
   }, 30_000)
 
@@ -1387,8 +1387,9 @@ describe('the committed placeholder set', () => {
   type V4File = { name: string; kind: string; layer: number; gender: string; expr?: string; code?: string }
   /** The masks each v4 kind is drawn with, by manifest key (`MASK_FILE_KIND` spells them on disk). */
   const V4_MASKS: Record<string, string[]> = { body: ['skin'], bodyFace: ['eyes', 'skin'], hair: ['hair'] }
-  const v4StandIns = (): V4File[] =>
-    (stageOneFiles() as V4File[]).filter((file) => V4_MASKS[file.kind] !== undefined && manifest.files[file.name]?.placeholder === true)
+  /** Every v4 name on the list: two bodies, twelve body faces, sixteen hair layers. */
+  const v4Files = (): V4File[] => (stageOneFiles() as V4File[]).filter((file) => V4_MASKS[file.kind] !== undefined)
+  const v4StandIns = (): V4File[] => v4Files().filter((file) => manifest.files[file.name]?.placeholder === true)
   /** The @2x mask of one layer, as the alpha byte per pixel. */
   const maskAlpha = async (name: string, kind: string): Promise<Uint8Array> => {
     const pic = await readPicture(join(OUT_DIR, `${name}_${MASK_FILE_KIND[kind as keyof typeof MASK_FILE_KIND]}mask@2x.png`))
@@ -1401,11 +1402,15 @@ describe('the committed placeholder set', () => {
   it('gives every v4 stand-in the masks it is drawn with, and every stand-in hair L60 a split that adds up', async () => {
     // Skin on a body and on every face, eyes on every face (empty on closed and sleep), hair on both hair layers —
     // rendered from the stand-in's own shapes (`placeholderMaskSvg`), never computed. A hair L60 records how the
-    // hairstyle's region splits between its two layers, in @2x pixels, and the two never share one.
-    const standIns = v4StandIns()
-    expect(standIns.length, 'no v4 stand-in is committed').toBeGreaterThan(0)
-    for (const file of standIns) {
+    // hairstyle's region splits between its two layers, in @2x pixels, and the two never share one. Once the art
+    // phase has replaced a layer with real art it is C11's to hold (A1b), so the loop passes over it — but every one
+    // of the 30 v4 names is in the manifest, stand-in or not.
+    const v4 = v4Files()
+    expect(v4.length, 'the v4 set is 2 bodies, 12 body faces and 16 hair layers').toBe(30)
+    for (const file of v4) expect(manifest.files[file.name], `${file.name} is not in the manifest`).toBeDefined()
+    for (const file of v4) {
       const entry = manifest.files[file.name]!
+      if (entry.placeholder !== true) continue
       expect(Object.keys(entry.masks ?? {}).sort(), file.name).toEqual(V4_MASKS[file.kind])
       for (const [kind, info] of Object.entries(entry.masks!)) {
         const fileKind = MASK_FILE_KIND[kind as keyof typeof MASK_FILE_KIND]
@@ -1481,6 +1486,166 @@ describe('the committed placeholder set', () => {
         expect(meta.height!).toBeGreaterThan(1000)
       })
   })
+})
+
+// ─────────────────────────────────────────────── C12, and C11 on the v4 set ──
+
+describe('C12 and the v4 rules of C11 (Plan 19 A1b, spec §5.1, §5.5)', () => {
+  const committed = JSON.parse(readFileSync(WEB_MANIFEST, 'utf8')) as Manifest
+
+  /** A committed layer at both densities, with the masks named (by file kind: `skin`, `eye`, `hair`), copied to `dir`. */
+  function copyLayer(dir: string, name: string, fileKinds: string[]): void {
+    for (const density of DENSITIES) {
+      cpSync(join(OUT_DIR, `${name}@${density}x.png`), join(dir, `${name}@${density}x.png`))
+      for (const kind of fileKinds) cpSync(join(OUT_DIR, `${name}_${kind}mask@${density}x.png`), join(dir, `${name}_${kind}mask@${density}x.png`))
+    }
+  }
+  /** The committed entry of `name`, flagged real or stand-in as the case needs, whatever it is today. */
+  function flagged(name: string, real: boolean): ManifestEntry {
+    const { placeholder: _placeholder, real: _real, ...rest } = committed.files[name]!
+    return real ? { ...rest, real: true } : { ...rest, placeholder: true }
+  }
+  /** The @2x mask of `name` in `dir`, run through `edit` (alpha per pixel) and written back. */
+  async function editMask(dir: string, name: string, fileKind: string, edit: (alpha: Uint8Array, width: number) => void): Promise<void> {
+    const file = join(dir, `${name}_${fileKind}mask@2x.png`)
+    const pic = await readPicture(file)
+    const alpha = new Uint8Array(pic.width * pic.height)
+    for (let p = 0; p < alpha.length; p++) alpha[p] = pic.data[p * 4 + 3]!
+    edit(alpha, pic.width)
+    for (let p = 0; p < alpha.length; p++) pic.data[p * 4 + 3] = alpha[p]!
+    await writePicture(pic, file)
+  }
+
+  it('pins HEAD_REFERENCE to F01 as committed (rulings 1, 2; index / 2, no half-pixel)', async () => {
+    const metrics = headMetrics(await readPicture(join(OUT_DIR, 'base_f01_L30@1x.png')), await readPicture(join(OUT_DIR, 'base_f01_face_neutral_L50_eyemask@2x.png')))
+    for (const key of ['eyeMidX', 'eyeMidY', 'eyeSpan', 'chinY'] as const) expect(Math.abs(metrics[key] - HEAD_REFERENCE[key]), key).toBeLessThanOrEqual(0.1)
+    expect(HEAD_TOLERANCE).toBeCloseTo(0.02 * CROP.size, 10)
+  })
+
+  it('C12 passes a real body whose eyes and chin sit on F01, and fails one moved by 6 units', async () => {
+    // F01's committed body and neutral eye mask, written as a real body f and its neutral face, moved down by `dy`.
+    const build = async (dir: string, dy: number): Promise<Manifest> => {
+      for (const density of DENSITIES) {
+        const body = await readPicture(join(OUT_DIR, `base_f01_L30@${density}x.png`))
+        await writePicture(shiftPicture(body, 0, dy * density), join(dir, `body_f_L30@${density}x.png`))
+        const eyes = await readPicture(join(OUT_DIR, `base_f01_face_neutral_L50_eyemask@${density}x.png`))
+        await writePicture(shiftPicture(eyes, 0, dy * density), join(dir, `body_f_face_neutral_L50_eyemask@${density}x.png`))
+      }
+      const bytes2x = statSync(join(dir, 'body_f_L30@2x.png')).size
+      return manifestFor(dir, {
+        body_f_L30: { layer: 30, w: FRAME.w, h: FRAME.h, bytes2x, real: true },
+        body_f_face_neutral_L50: { layer: 50, w: FRAME.w, h: FRAME.h, bytes2x: 0, real: true, masks: { eyes: { bytes2x: 0, meanL: 0.5 } } },
+      })
+    }
+    const still = caseDir('c12-still')
+    const c12 = (await checkOne(still, 'body_f_L30', await build(still, 0))).get('C12')!
+    expect(c12.ok, c12.detail).toBe(true)
+    const moved = caseDir('c12-moved')
+    const off = (await checkOne(moved, 'body_f_L30', await build(moved, 6))).get('C12')!
+    expect(off.ok).toBe(false)
+    expect(off.detail).toContain("eye line 6.0 from F01's")
+    expect(off.detail).toContain("chin 6.0 from F01's")
+  }, 60_000)
+
+  it('C12 says n/a for a stand-in', async () => {
+    const dir = caseDir('c12-stand-in')
+    const entry = await writePlaceholder(dir, 'body_f_L30')
+    const c12 = (await checkOne(dir, 'body_f_L30', manifestFor(dir, { body_f_L30: entry }))).get('C12')!
+    expect(c12.ok).toBe(true)
+    expect(c12.detail.startsWith('n/a'), c12.detail).toBe(true)
+  }, 30_000)
+
+  it('C11 compares a face’s skin with the neutral face only when both are real or both are stand-ins', async () => {
+    const neutral = 'body_f_face_neutral_L50'
+    const happy = 'body_f_face_happy_L50'
+    // Between B3 and C1 the neutral face is real art and the other five are still stand-ins (pre-flight #7, R26).
+    const mixed = caseDir('c11-mixed')
+    for (const face of [neutral, happy]) copyLayer(mixed, face, ['skin', 'eye'])
+    const mixedRow = (await checkOne(mixed, happy, manifestFor(mixed, { [neutral]: flagged(neutral, true), [happy]: flagged(happy, false) }))).get('C11')!
+    expect(mixedRow.ok, mixedRow.detail).toBe(true)
+    expect(mixedRow.detail).toContain('n/a — neutral is real, this face is a stand-in')
+    const reverse = (await checkOne(mixed, happy, manifestFor(mixed, { [neutral]: flagged(neutral, false), [happy]: flagged(happy, true) }))).get('C11')!
+    expect(reverse.detail).toContain('n/a — neutral is a stand-in, this face is real')
+
+    // Both real, and the happy face has lost half its skin: measured, and too small.
+    const halved = caseDir('c11-halved')
+    for (const face of [neutral, happy]) copyLayer(halved, face, ['skin', 'eye'])
+    await editMask(halved, happy, 'skin', (alpha) => {
+      const total = alpha.reduce((n, a) => n + (a >= 128 ? 1 : 0), 0)
+      let cleared = 0
+      for (let p = 0; p < alpha.length && cleared < total / 2; p++) if (alpha[p]! >= 128) { alpha[p] = 0; cleared++ }
+    })
+    const both = (await checkOne(halved, happy, manifestFor(halved, { [neutral]: flagged(neutral, true), [happy]: flagged(happy, true) }))).get('C11')!
+    expect(both.ok).toBe(false)
+    expect(both.detail).toMatch(/skin area is 0\.\d\d × the neutral face's, want 0\.8–1\.2 ×/)
+  }, 60_000)
+
+  it('C11 holds a body’s skin to SKIN_AREA of its ink, a hair layer’s hair to 0.9 of its ink, and skin off the eyes', async () => {
+    const body = 'body_m_L30'
+    const face = 'body_m_face_neutral_L50'
+    const hair = 'item_hair_m_spiky01_L60'
+    const dir = caseDir('c11-v4')
+    copyLayer(dir, body, ['skin'])
+    copyLayer(dir, face, ['skin', 'eye'])
+    copyLayer(dir, hair, ['hair'])
+    const manifest = manifestFor(dir, { [body]: flagged(body, true), [face]: flagged(face, true), [hair]: flagged(hair, true) })
+    for (const name of [body, face, hair]) {
+      const c11 = (await checkOne(dir, name, manifest)).get('C11')!
+      expect(c11.ok, `${name}: ${c11.detail}`).toBe(true)
+    }
+
+    // A body whose skin mask keeps under SKIN_AREA.min of its ink.
+    await editMask(dir, body, 'skin', (alpha) => {
+      const keep = alpha.reduce((n, a) => n + (a >= 128 ? 1 : 0), 0) * 0.3
+      let kept = 0
+      for (let p = 0; p < alpha.length; p++) if (alpha[p]! >= 128 && kept++ >= keep) alpha[p] = 0
+    })
+    const thin = (await checkOne(dir, body, manifest)).get('C11')!
+    expect(thin.ok).toBe(false)
+    expect(thin.detail).toMatch(new RegExp(`skin covers 0\\.\\d\\d of the body's ink, want ${SKIN_AREA.min}–${SKIN_AREA.max}`))
+
+    // A hair layer whose mask holds only the top half of its rows.
+    await editMask(dir, hair, 'hair', (alpha, width) => {
+      const rows = alpha.length / width
+      let first = rows
+      let last = -1
+      for (let p = 0; p < alpha.length; p++) if (alpha[p]! >= 128) { first = Math.min(first, Math.floor(p / width)); last = Math.floor(p / width) }
+      for (let p = Math.ceil((first + last) / 2) * width; p < alpha.length; p++) alpha[p] = 0
+    })
+    const bald = (await checkOne(dir, hair, manifest)).get('C11')!
+    expect(bald.ok).toBe(false)
+    expect(bald.detail).toMatch(/hair covers 0\.\d\d of the layer's ink, want ≥ 0\.9/)
+
+    // A face whose skin mask runs over its eyes.
+    const eyes = await readPicture(join(dir, `${face}_eyemask@2x.png`))
+    await editMask(dir, face, 'skin', (alpha) => {
+      for (let p = 0; p < alpha.length; p++) if (eyes.data[p * 4 + 3]! >= 128) alpha[p] = 255
+    })
+    const over = (await checkOne(dir, face, manifest)).get('C11')!
+    expect(over.ok).toBe(false)
+    expect(over.detail).toMatch(/skin and eyes share \d+ pixels/)
+  }, 60_000)
+
+  it('colours prints one line per mask: a body’s skin, a face’s skin and the iris of its eyes', () => {
+    const stdout = execFileSync(process.execPath, [SCRIPT, 'colours', 'body_f_L30', 'body_f_face_neutral_L50'], { cwd: PACKAGE_ROOT, encoding: 'utf8' })
+    expect(stdout).toMatch(/^body_f_L30 skin #[0-9a-f]{6}$/m)
+    expect(stdout).toMatch(/^body_f_face_neutral_L50 eyes #[0-9a-f]{6}$/m)
+    expect(stdout).toMatch(/^body_f_face_neutral_L50 skin #[0-9a-f]{6}$/m)
+  }, 30_000)
+
+  it('colours adds a hairstyle’s natural colour and how far its hair is from it, once items.json names one', async () => {
+    const name = 'item_hair_f_bob01_L60'
+    const dir = caseDir('colours-natural')
+    copyLayer(dir, name, ['hair'])
+    const manifest = { files: { [name]: committed.files[name]! } }
+    const [plain] = await describeColours({ dir, manifest, names: [name], items: [] })
+    expect(plain).toMatch(new RegExp(`^${name} hair #[0-9a-f]{6}$`))
+    const measured = plain!.split(' ')[2]!
+    const [same] = await describeColours({ dir, manifest, names: [name], items: [{ id: hairItemId('f_bob01'), naturalColour: measured }] })
+    expect(same).toBe(`${name} hair ${measured} natural ${measured} ΔE 0.0`)
+    const [far] = await describeColours({ dir, manifest, names: [name], items: [{ id: hairItemId('f_bob01'), naturalColour: '#ffffff' }] })
+    expect(far).toMatch(new RegExp(`^${name} hair ${measured} natural #ffffff ΔE \\d+\\.\\d$`))
+  }, 30_000)
 })
 
 describe('the ingest command', () => {

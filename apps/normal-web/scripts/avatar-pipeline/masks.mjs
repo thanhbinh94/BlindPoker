@@ -13,12 +13,16 @@
  * A mask here is a `Uint8Array` of `width * height`, 0 or 255 per pixel (hard-edged: `writeMasks` softens
  * nothing, the @1x copy's own downscale gives the soft edge — D01 §8.3's antialiasing is a property of a
  * *picture*, not of a mask cut from one).
+ *
+ * Plan 19 (spec §5.5) adds the v4 set: a **skin** mask on every body and body face (`skinMask`), the eyes of a
+ * body face found on a bald head, the ink of a hair layer as its hair — and `maskColour`, the colour a mask
+ * covers, which the `colours` command prints (`describeColours`).
  */
 import { existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { FACE_LIMIT_Y, FRAME, LAYERS, SKIN_WINDOW } from './frame.mjs'
-import { PACKAGE_ROOT, itemFile, parseName, wearOf, writeIconTintMask } from './manifest.mjs'
-import { ALPHA_INK, readPicture, resizePicture, writePicture } from './png.mjs'
+import { FACE_LIMIT_Y, FRAME, LAYERS, SKIN_WINDOW, baseSkinColour } from './frame.mjs'
+import { PACKAGE_ROOT, hairItemId, itemFile, parseName, wearOf, writeIconTintMask } from './manifest.mjs'
+import { ALPHA_INK, ALPHA_SOLID, readPicture, resizePicture, writePicture } from './png.mjs'
 import { meanLightness } from '../../../../packages/ui-kit/src/avatar2d/recolour.mjs'
 
 /** Where a hand-drawn mask overrides the automatic one (spec §4.1). Committed — see `.gitignore` there. */
@@ -51,6 +55,21 @@ function labOf(r, g, b) {
   return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)]
 }
 const labDist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
+const labOfHex = (hex) => {
+  const n = Number.parseInt(hex.slice(1), 16)
+  return labOf((n >> 16) & 255, (n >> 8) & 255, n & 255)
+}
+/** CIE76 between two `#rrggbb` — the ΔE the plan's colour rules are written in (A4's `deltaE`). */
+const deltaE76 = (a, b) => labDist(labOfHex(a), labOfHex(b))
+
+/** HSL saturation and lightness (0–1) of an sRGB triple — the two `recolour` keeps or replaces per pixel. */
+function saturationLightness(r, g, b) {
+  const max = Math.max(r, g, b) / 255
+  const min = Math.min(r, g, b) / 255
+  const l = (max + min) / 2
+  if (max === min) return [0, l]
+  return [l > 0.5 ? (max - min) / (2 - max - min) : (max - min) / (max + min), l]
+}
 
 /**
  * k-means over Lab points, deterministic: the seed centres are a stride through `points` rather than a
@@ -190,6 +209,12 @@ function collectPoints(pic, labAt, x0, x1, y0, y1) {
  * horizontal centre, the hair palette (a patch just under the head top) and the skin palette (`SKIN_WINDOW`,
  * kept to the two most populous clusters that are not hair-like). Recomputed by each caller — it is cheap
  * next to the mask it feeds, and it keeps `hairMask`/`eyeMask` each a plain function of their own picture.
+ *
+ * On a **bald** head — every v4 body face (Plan 19, pre-flight #21) — the patch under the head top is scalp, so
+ * the "hair palette" is skin, and `skinOnly` (clusters more than 12 from it) may keep no skin at all. `eyeMask`
+ * still finds the eyes there: its hair-coloured leak flood, run on a scalp palette, drops the skin corners of the
+ * ellipse exactly as its skin flood would have. `writeMasks` never cuts hair on a body face; it hands `eyeMask` an
+ * empty hair array, and a unit test holds a synthetic bald face to two eyes.
  */
 function analysePicture(pic) {
   const { width, height } = pic
@@ -635,9 +660,172 @@ export function tintMask(pic, seed, { tolerance = 18 } = {}) {
   return out
 }
 
+// ──────────────────────────────────────────────────────────────────── skin ──
+
+/**
+ * How `skinMask` tells skin (Plan 19, spec §5.5), in @2x px where it is a size:
+ *
+ * - `tolerance` — ΔE76 from the seed in Lab that is skin outright;
+ * - `hueSpread`, `minL`, `chroma` — or, further than that, skin when its LCh hue is within `hueSpread`° of the
+ *   seed's, its L* at least `minL`, and its chroma `chroma[0]`–`chroma[1]` × the seed's: shading and light on
+ *   the same skin, which moves a long way in Lab while keeping its hue;
+ * - `eyeMargin` — how far round the eyes the skin keeps off;
+ * - `minRegion` — the smallest piece of skin kept.
+ *
+ * `minL` is 50 (pre-flight #2) because of the outline: the warm-brown `#7a4a32` the bodies are drawn with is
+ * L* 36.5 with a hue only 17.7° from cream, inside `hueSpread`, so lightness is what keeps the line out. Shaded
+ * cream sits at L* ~70 and stays in.
+ */
+export const SKIN_MASK = { tolerance: 22, hueSpread: 18, minL: 50, chroma: [0.5, 1.6], eyeMargin: 3, minRegion: 40 }
+
+/**
+ * Skin on a body or a body face, at @2x (Plan 19, spec §5.5) — what the skin colour item tints, so the line art,
+ * the eyes, the mouth and the underwear must all stay out of it.
+ *
+ * The seed is `baseSkinColour` (the modal colour of `SKIN_WINDOW`, the cheeks and chin, which are skin on every
+ * body by construction). A pixel is skin when it is solid (alpha > `ALPHA_SOLID`) and either within
+ * `SKIN_MASK.tolerance` of the seed, or of the seed's hue, light enough and about as saturated (`SKIN_MASK`).
+ * The outline is too dark, the grey underwear too unsaturated and a pink mouth too far round the hue circle, so
+ * all three fall out by construction; the bodies are always drawn cream (spec §5.2), so one seed fits both.
+ *
+ * The eyes — `eyes` when given (any non-zero pixel; `writeMasks` passes the eye mask it wrote), else
+ * `eyeEllipses(pic)` — are taken out widened by `SKIN_MASK.eyeMargin`, so the skin and eye masks never meet. What
+ * is left is closed by 2 px (the odd antialiased or textured pixel inside the skin) and kept to pieces of at least
+ * `SKIN_MASK.minRegion` px. Returns 0/255 per pixel, like every mask here; empty when the window has no skin.
+ *
+ * @param {{ data: Buffer, width: number, height: number }} pic
+ * @param {{ eyes?: Uint8Array | null }} [options]
+ */
+export function skinMask(pic, { eyes = null } = {}) {
+  const { width, height, data } = pic
+  const scale = width / 768
+  const out = new Uint8Array(width * height)
+  const seed = baseSkinColour(pic, width / FRAME.w)
+  if (seed === null) return out
+  const seedLab = labOf(seed[0], seed[1], seed[2])
+  const seedChroma = Math.hypot(seedLab[1], seedLab[2])
+  const seedHue = Math.atan2(seedLab[2], seedLab[1])
+  const hueSpread = (SKIN_MASK.hueSpread * Math.PI) / 180
+  const solid = (i) => data[i * 4 + 3] > ALPHA_SOLID
+
+  let skin = new Uint8Array(width * height)
+  for (let i = 0; i < skin.length; i++) {
+    if (!solid(i)) continue
+    const p = labOf(data[i * 4], data[i * 4 + 1], data[i * 4 + 2])
+    if (labDist(p, seedLab) <= SKIN_MASK.tolerance) { skin[i] = 1; continue }
+    if (p[0] < SKIN_MASK.minL) continue
+    const chroma = Math.hypot(p[1], p[2])
+    if (chroma < SKIN_MASK.chroma[0] * seedChroma || chroma > SKIN_MASK.chroma[1] * seedChroma) continue
+    let hue = Math.abs(Math.atan2(p[2], p[1]) - seedHue)
+    if (hue > Math.PI) hue = 2 * Math.PI - hue
+    if (hue <= hueSpread) skin[i] = 1
+  }
+
+  const eyeSource = eyes ?? eyeEllipses(pic).mask
+  const eyePixels = new Uint8Array(width * height)
+  for (let i = 0; i < eyePixels.length; i++) eyePixels[i] = eyeSource[i] ? 1 : 0
+  const eyeZone = dilate(eyePixels, width, height, Math.max(1, Math.round(SKIN_MASK.eyeMargin * scale)))
+  for (let i = 0; i < skin.length; i++) if (eyeZone[i]) skin[i] = 0
+
+  skin = close(skin, width, height, Math.max(1, Math.round(2 * scale)))
+  // The closing must not hand back what was just taken out, nor reach past the solid picture.
+  for (let i = 0; i < skin.length; i++) if (eyeZone[i] || !solid(i)) skin[i] = 0
+
+  const minRegion = Math.max(1, Math.round(SKIN_MASK.minRegion * scale * scale))
+  const { label, sizes } = components(skin, width, height)
+  for (let i = 0; i < out.length; i++) out[i] = label[i] >= 0 && sizes[label[i]] >= minRegion ? 255 : 0
+  return out
+}
+
+// ────────────────────────────────────────────────────────────────── colour ──
+
+/**
+ * What `maskColour` counts as the iris of an eye mask. An eye mask holds the whole eye — the pupil and the lash
+ * line (dark), the highlights and any white (light), the iris between — and an eye colour means the iris: the
+ * pixels whose HSL lightness is `minL`–`maxL` and whose saturation is at least `minS`, the very two numbers
+ * `recolour` keeps (lightness) and replaces (saturation) on a tinted pixel. A grey iris has almost no saturated
+ * pixel, so when under `greyShare` of the mid-tones are saturated the mid-tones are the iris; when there are
+ * no mid-tones at all (a stand-in's flat dark eye), the whole mask is.
+ *
+ * On the old bases' committed eye masks this lands within ΔE76 1.2–4.7 of the irises the plan pinned (ruling 6),
+ * which were measured before this function existed — no simple lightness/saturation cut reproduces all six exactly.
+ */
+const IRIS = { minL: 0.15, maxL: 0.85, minS: 0.2, greyShare: 0.25 }
+
+/**
+ * The colour a mask covers on its layer (Plan 19, the `colours` command): the layer's RGB under the mask, each
+ * pixel weighted by the mask's own alpha, as `#rrggbb` — or `null` for an empty mask. This is how the hairstyles'
+ * natural colours were measured from the old bases (`base_<id>_L30_hairmask`, plan A3), and it reproduces them.
+ * `iris` keeps to the iris of an eye mask (`IRIS` above).
+ *
+ * @param {{ data: Buffer, width: number, height: number }} pic
+ * @param {Uint8Array} mask
+ * @param {{ iris?: boolean }} [options]
+ * @returns {string | null}
+ */
+export function maskColour(pic, mask, { iris = false } = {}) {
+  const { data } = pic
+  const all = [0, 0, 0, 0]
+  const mid = [0, 0, 0, 0]
+  const coloured = [0, 0, 0, 0]
+  const add = (sum, o, weight) => { sum[0] += data[o] * weight; sum[1] += data[o + 1] * weight; sum[2] += data[o + 2] * weight; sum[3] += weight }
+  for (let i = 0; i < mask.length; i++) {
+    const weight = mask[i]
+    if (!weight) continue
+    const o = i * 4
+    add(all, o, weight)
+    if (!iris) continue
+    const [s, l] = saturationLightness(data[o], data[o + 1], data[o + 2])
+    if (l <= IRIS.minL || l >= IRIS.maxL) continue
+    add(mid, o, weight)
+    if (s >= IRIS.minS) add(coloured, o, weight)
+  }
+  const sum = !iris ? all : coloured[3] >= IRIS.greyShare * mid[3] && coloured[3] > 0 ? coloured : mid[3] > 0 ? mid : all
+  if (sum[3] === 0) return null
+  return `#${[sum[0], sum[1], sum[2]].map((v) => Math.round(v / sum[3]).toString(16).padStart(2, '0')).join('')}`
+}
+
+/**
+ * The `colours` command's lines (Plan 19): for each of `names`, one line per mask its manifest entry lists —
+ * `<name> <kind> #rrggbb`, the eyes by their iris (`maskColour`), `empty` for an empty mask. A hair layer's hair
+ * line adds its hairstyle's `naturalColour` from `items` (`items.json`, once A3 gives the hairstyles one) and how
+ * far the drawn hair is from it: `natural #rrggbb ΔE n.n`. A name with no masks is logged, not printed.
+ *
+ * @param {{ dir: string, manifest: { files: Record<string, any> }, names: string[], items?: { id: string, naturalColour?: string }[], log?: (message: string) => void }} options
+ * @returns {Promise<string[]>}
+ */
+export async function describeColours({ dir, manifest, names, items = [], log = () => {} }) {
+  const lines = []
+  for (const name of names) {
+    const entry = manifest.files?.[name]
+    if (!entry) throw new Error(`no layer ${name} in the manifest`)
+    const kinds = Object.keys(entry.masks ?? {})
+    if (!kinds.length) { log(`${name} has no masks`); continue }
+    const parsed = parseName(name)
+    const layer2x = await readPicture(join(dir, `${name}@2x.png`))
+    for (const kind of kinds) {
+      const maskPic = await readPicture(join(dir, `${name}_${MASK_FILE_KIND[kind]}mask@2x.png`))
+      const alpha = new Uint8Array(maskPic.width * maskPic.height)
+      for (let i = 0; i < alpha.length; i++) alpha[i] = maskPic.data[i * 4 + 3]
+      const colour = maskColour(layer2x, alpha, { iris: kind === 'eyes' })
+      if (colour === null) { lines.push(`${name} ${kind} empty`); continue }
+      let line = `${name} ${kind} ${colour}`
+      if (kind === 'hair' && parsed?.kind === 'hair') {
+        const natural = items.find((item) => item.id === hairItemId(parsed.code))?.naturalColour
+        if (natural) line += ` natural ${natural} ΔE ${deltaE76(colour, natural).toFixed(1)}`
+      }
+      lines.push(line)
+    }
+  }
+  return lines
+}
+
 // ──────────────────────────────────────────────────────────────── writing ──
 
-/** Every manifest name `writeMasks` can cut a mask for: real base L30/L60, every real base face, every tintable item. */
+/**
+ * Every manifest name `writeMasks` can cut a mask for: real base L30/L60, every real base face, every tintable item —
+ * and (Plan 19) every real v4 body, body face and hair layer. A stand-in's masks are drawn with it, never cut.
+ */
 export function maskTargets(manifest) {
   const names = []
   for (const [name, entry] of Object.entries(manifest.files ?? {})) {
@@ -650,6 +838,8 @@ export function maskTargets(manifest) {
       names.push(name)
     } else if (parsed.kind === 'item' && entry.tintSeed) {
       names.push(name)
+    } else if (parsed.kind === 'body' || parsed.kind === 'bodyFace' || parsed.kind === 'hair') {
+      if (!entry.empty) names.push(name)
     }
   }
   return names
@@ -702,7 +892,7 @@ function hasRealAlpha(pic) {
 export const MASK_FILE_KIND = { hair: 'hair', eyes: 'eye', tint: 'tint', skin: 'skin' }
 
 /**
- * The mask to write for one `<name>_<kind>` (`kind` a manifest key: `hair`, `eyes` or `tint`): a hand-drawn
+ * The mask to write for one `<name>_<kind>` (`kind` a manifest key: `hair`, `eyes`, `tint` or `skin`): a hand-drawn
  * override if one exists at `overridesDir`, else `computed`. Writes both densities and records the manifest
  * entry — `{ bytes2x, meanL, empty?, override? }` — into `entry.masks[kind]`.
  *
@@ -750,10 +940,21 @@ async function writeOneMask({ dir, name, kind, computed, layer2x, entry, manifes
   }
 }
 
+/** The ink of a layer as a mask: what a base L60's hair is, and (Plan 19) a hair layer's. */
+function inkMask(layer2x) {
+  const ink = new Uint8Array(layer2x.width * layer2x.height)
+  for (let i = 0; i < ink.length; i++) ink[i] = layer2x.data[i * 4 + 3] > ALPHA_INK ? 255 : 0
+  return ink
+}
+
 /**
  * Cut and write the masks for `names` (from `maskTargets`, or a caller's own subset), into `dir`. Mutates
  * `manifest.files[name].masks` for each; does not write the manifest — the caller does, alongside whatever
  * else it changed in the same run (`ingest`, the `masks` command).
+ *
+ * Plan 19 (spec §5.5): a body L30 gets **skin**; a body face gets **eyes** and then **skin**, cut clear of the eye
+ * mask as written (a hand-drawn `_eyemask` included), and never hair — the head is bald, so `eyeMask` is handed an
+ * empty hair array (pre-flight #21); a hair layer's **hair** is its ink.
  */
 export async function writeMasks({ dir, manifest, names, overridesDir = MASK_OVERRIDE_DIR, log = () => {} }) {
   for (const name of names) {
@@ -762,24 +963,35 @@ export async function writeMasks({ dir, manifest, names, overridesDir = MASK_OVE
     const entry = manifest.files[name]
     if (!entry?.real || entry.empty) continue
     const layer2x = await readPicture(join(dir, `${name}@2x.png`))
+    const shut = parsed.expr === 'closed' || parsed.expr === 'sleep'
 
     if (parsed.kind === 'base' && parsed.layer === LAYERS.body) {
       const neverVisible = await computeNeverVisible(dir, manifest, parsed.base)
       const hair = hairMask(layer2x, { neverVisible })
-      await writeOneMask({ dir, name, kind: 'hair', computed: hair, layer2x, entry, overridesDir, log })
+      await writeOneMask({ dir, name, kind: 'hair', computed: hair, layer2x, entry, manifest, overridesDir, log })
     } else if (parsed.kind === 'base' && parsed.layer === LAYERS.hairFront) {
-      const hair = new Uint8Array(layer2x.width * layer2x.height)
-      for (let i = 0; i < hair.length; i++) hair[i] = layer2x.data[i * 4 + 3] > ALPHA_INK ? 255 : 0
-      await writeOneMask({ dir, name, kind: 'hair', computed: hair, layer2x, entry, overridesDir, log })
+      await writeOneMask({ dir, name, kind: 'hair', computed: inkMask(layer2x), layer2x, entry, manifest, overridesDir, log })
     } else if (parsed.kind === 'baseFace') {
       const hair = hairMask(layer2x, { neverVisible: null })
       const computedEyes = eyeMask(layer2x, hair) // mutates hair in place regardless of expression
-      const eyes = parsed.expr === 'closed' || parsed.expr === 'sleep' ? new Uint8Array(layer2x.width * layer2x.height) : computedEyes
-      await writeOneMask({ dir, name, kind: 'hair', computed: hair, layer2x, entry, overridesDir, log })
-      await writeOneMask({ dir, name, kind: 'eyes', computed: eyes, layer2x, entry, overridesDir, log })
+      const eyes = shut ? new Uint8Array(layer2x.width * layer2x.height) : computedEyes
+      await writeOneMask({ dir, name, kind: 'hair', computed: hair, layer2x, entry, manifest, overridesDir, log })
+      await writeOneMask({ dir, name, kind: 'eyes', computed: eyes, layer2x, entry, manifest, overridesDir, log })
     } else if (parsed.kind === 'item' && entry.tintSeed) {
       const tint = tintMask(layer2x, entry.tintSeed)
       await writeOneMask({ dir, name, kind: 'tint', computed: tint, layer2x, entry, manifest, overridesDir, log })
+    } else if (parsed.kind === 'body') {
+      await writeOneMask({ dir, name, kind: 'skin', computed: skinMask(layer2x, { eyes: null }), layer2x, entry, manifest, overridesDir, log })
+    } else if (parsed.kind === 'bodyFace') {
+      const { width, height } = layer2x
+      const eyes = shut ? new Uint8Array(width * height) : eyeMask(layer2x, new Uint8Array(width * height))
+      await writeOneMask({ dir, name, kind: 'eyes', computed: eyes, layer2x, entry, manifest, overridesDir, log })
+      const written = await readPicture(join(dir, `${name}_${MASK_FILE_KIND.eyes}mask@2x.png`))
+      const writtenEyes = new Uint8Array(width * height)
+      for (let i = 0; i < writtenEyes.length; i++) writtenEyes[i] = written.data[i * 4 + 3]
+      await writeOneMask({ dir, name, kind: 'skin', computed: skinMask(layer2x, { eyes: writtenEyes }), layer2x, entry, manifest, overridesDir, log })
+    } else if (parsed.kind === 'hair') {
+      await writeOneMask({ dir, name, kind: 'hair', computed: inkMask(layer2x), layer2x, entry, manifest, overridesDir, log })
     }
   }
 }

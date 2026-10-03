@@ -46,13 +46,22 @@
  *       `masks` run.
  *
  *   node scripts/avatar-pipeline.mjs masks [<name>...] [--tint-seed <x,y> --as item:<slot>:<code>]
- *       Cut hair, eye and tint masks (spec §4.1) for the named layers, or — with none named — every real
- *       base L30/L60, base face and tintable item. `--tint-seed` (with `--as`) records a tint seed on an
- *       item already in the manifest before masking it.
+ *       Cut hair, eye, tint and skin masks (spec §4.1; Plan 19 §5.5) for the named layers, or — with none
+ *       named — every real base L30/L60, base face and tintable item, and every real v4 body (skin), body face
+ *       (eyes, then skin clear of them; never hair — the head is bald) and hair layer (its ink). A hand-drawn
+ *       `assets/avatar-src/masks/<name>_<kind>mask.png` wins over the cut. `--tint-seed` (with `--as`) records
+ *       a tint seed on an item already in the manifest before masking it.
+ *
+ *   node scripts/avatar-pipeline.mjs colours <name>... [--dir <layers>]
+ *       Print the colour each mask of the named layers covers, one line per mask: `<name> <kind> #rrggbb` —
+ *       the alpha-weighted mean of the layer under the mask, an eye mask by its iris alone (`maskColour`). A
+ *       hair layer's line adds its hairstyle's `naturalColour` from items.json, once it has one, and the
+ *       distance to it: `natural #rrggbb ΔE n.n`. How the style gate records the drawn cream and irises, and
+ *       how a hairstyle is held to its natural colour (Plan 19, phases B and C).
  *
  *   node scripts/avatar-pipeline.mjs check [<name>...] [--skip C6]
- *       Run D01 §10's ten criteria over every layer (or the named ones), print the table, exit 1 on any
- *       failure. `--skip` may be repeated.
+ *       Run D01 §10's ten criteria, C11 (masks) and C12 (a v4 body's head stays on F01's) over every layer
+ *       (or the named ones), print the table, exit 1 on any failure. `--skip` may be repeated.
  *
  *   node scripts/avatar-pipeline.mjs sheet [--dir <layers>] [--out <png>]
  *       Compose every item on both bases into docs/avatar-2d-sheet.png — the style gate of spec §9.
@@ -62,19 +71,20 @@
  *       eye colours, plus one card per `items.json` entry with `asset.tint` set — the eyeballed check for
  *       recolouring before C11 or the client ever draws one.
  *
- * `placeholder`, `ingest` and `masks` take `--out <dir>`; `check`, `sheet` and `tint-sheet` read `--dir <dir>`. Pointing
+ * `placeholder`, `ingest` and `masks` take `--out <dir>`; `check`, `colours`, `sheet` and `tint-sheet` read `--dir <dir>`. Pointing
  * either at a directory that is not `public/avatar/` also stops the server's copy of the manifest from being
  * written, which is what makes the whole pipeline testable without touching the committed artefact.
  *
  * The work is in `scripts/avatar-pipeline/`, one module per stage — `png` (pixels), `frame` (the frame
  * and the stand-in art), `extract` (cutting a layer out of a picture), `masks` (spec §4.1's hair/eye/tint
- * cuts), `checks` (D01 §10), `sheet`, `manifest` (names and the file). This file only reads the command line.
+ * cuts, Plan 19's skin, and the colours they cover), `checks` (D01 §10, C11, C12), `sheet`, `manifest` (names
+ * and the file). This file only reads the command line.
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { anyFailed, formatChecks, runChecks } from './avatar-pipeline/checks.mjs'
 import { ingest } from './avatar-pipeline/extract.mjs'
-import { maskTargets, writeMasks } from './avatar-pipeline/masks.mjs'
+import { describeColours, maskTargets, writeMasks } from './avatar-pipeline/masks.mjs'
 import { buildSheet } from './avatar-pipeline/sheet.mjs'
 import { buildTintSheet } from './avatar-pipeline/tint-sheet.mjs'
 import {
@@ -220,6 +230,13 @@ try {
     const rows = await runChecks({ dir, manifest, names: positionals(), skip: options('skip') })
     console.log(formatChecks(rows))
     if (anyFailed(rows)) process.exitCode = 1
+  } else if (command === 'colours') {
+    const names = positionals()
+    if (!names.length) die('colours needs the layers to measure, e.g. colours body_f_L30 body_f_face_neutral_L50')
+    const { dir } = destinations('dir')
+    const manifest = readManifest(resolve(dir, MANIFEST_NAME))
+    const items = existsSync(ITEMS_FILE) ? JSON.parse(readFileSync(ITEMS_FILE, 'utf8')) : []
+    for (const line of await describeColours({ dir, manifest, names, items, log })) console.log(line)
   } else if (command === 'sheet') {
     const { dir } = destinations('dir')
     const manifest = readManifest(resolve(dir, MANIFEST_NAME))
@@ -232,7 +249,7 @@ try {
     const items = existsSync(ITEMS_FILE) ? JSON.parse(readFileSync(ITEMS_FILE, 'utf8')) : []
     await buildTintSheet({ dir, manifest, items, out, log })
   } else {
-    die(`unknown command ${command ?? '(none)'} — one of placeholder, ingest, check, sheet, masks, tint-sheet`)
+    die(`unknown command ${command ?? '(none)'} — one of placeholder, ingest, check, colours, sheet, masks, tint-sheet`)
   }
 } catch (error) {
   die(error instanceof Error ? error.message : String(error))

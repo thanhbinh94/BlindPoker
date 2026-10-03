@@ -218,8 +218,8 @@ pnpm --filter @bp/normal-web avatar:ingest -- <picture.png> --as bot:3:happy
 # again — see §4.3.
 
 pnpm --filter @bp/normal-web avatar:check
-# Runs the ten acceptance criteria (D01 §10) over every committed layer and prints a pass/fail table;
-# exits 1 on any failure. Pass names to check only those (`avatar:check base_f01_L30`), or `--skip C6`
+# Runs the acceptance criteria (D01 §10's ten, then C11 and C12 — §5) over every committed layer and prints a
+# pass/fail table; exits 1 on any failure. Pass names to check only those (`avatar:check base_f01_L30`), or `--skip C6`
 # for the one criterion (an outfit must cover the base's underwear) that has no coordinates in the
 # design and occasionally needs a human override.
 
@@ -490,7 +490,8 @@ trust its shape and check only that it still fits the layer.
 ```bash
 pnpm --filter @bp/normal-web exec node scripts/avatar-pipeline.mjs masks
 # Cuts hair/eye/tint masks for every real base L30/L60, every real base face, and every item with a
-# tintSeed — the default target list (`maskTargets`) — plus each tint-masked item's icon tint mask (§4.2).
+# tintSeed, and skin/eye/hair masks for every real v4 body, body face and hair layer (§4.4.1) — the default
+# target list (`maskTargets`) — plus each tint-masked item's icon tint mask (§4.2).
 # `ingest` already calls this on whatever it just wrote, so a fresh base or item needs no separate run;
 # `masks` is for re-cutting after an override lands, or after the algorithm itself changes. Pass names to
 # mask only those — the four icon tint masks of 2026-10-01 came from:
@@ -509,9 +510,58 @@ pnpm --filter @bp/normal-web exec node scripts/avatar-pipeline.mjs tint-sheet
 # tinted item ships, the same role avatar:sheet plays for the plain layer set.
 ```
 
-## 5. The eleven acceptance criteria (`avatar:check`)
+### 4.4.1 Skin masks, and the eyes of a bald face (Plan 19, 2026-10-03)
 
-| | Checks (D01 §10, plan 13 §4.3) |
+A v4 body is bald and cream (design `2026-10-03-avatar-v4-design.md` §5.2), and the skin colour item tints it, so
+every real `body_<g>_L30` and every real `body_<g>_face_<expr>_L50` gets a **skin** mask (§5.5 of that design),
+written as `<layer>_skinmask@1x/@2x.png` and recorded under `masks.skin` like the others. `masks` and `ingest` cut
+it with `skinMask` (`masks.mjs`), at `@2x`:
+
+- The seed is `baseSkinColour` — the modal colour of `SKIN_WINDOW`, the cheeks and chin, which are skin on every
+  body by construction.
+- A pixel is skin when it is solid (alpha > 128) and either within ΔE76 `SKIN_MASK.tolerance` (22) of the seed in
+  Lab, or within `hueSpread` (18°) of the seed's LCh hue, at L* ≥ `minL` (50), with a chroma `chroma` (0.5–1.6) ×
+  the seed's. The second branch is shaded and lit skin, which travels a long way in Lab and keeps its hue; shaded
+  cream sits at L* ~70 and stays in.
+- **Why `minL` is 50:** the warm-brown outline the bodies are drawn with, `#7a4a32`, is L* 36.5 with a hue only
+  17.7° from cream — inside `hueSpread`. Lightness is what keeps the line out, and the line keeps its colour, so it
+  stays crisp on every skin tone. Grey underwear falls out on chroma, a pink mouth on hue.
+- The eyes are taken out, widened by `eyeMargin` (3 px): on a face, the eye mask as written (a hand-drawn
+  `_eyemask` included), so skin and eyes never share a pixel; on a body, `eyeEllipses`.
+- What is left is closed by 2 px and kept to pieces of at least `minRegion` (40 px).
+- A hand-drawn `assets/avatar-src/masks/<layer>_skinmask.png` wins, as for hair, and is marked `override: true`.
+
+A body face is never given a hair mask — there is no hair on it — and its eyes are cut with `eyeMask` handed an
+empty hair array. `eyeMask` samples its "hair palette" just under the head top, which on a bald head is the scalp;
+the hair-coloured leak it runs then does the work of its skin leak, and both eyes are still found (a unit test
+holds a synthetic bald face to one eye each side). A v4 hair layer's **hair** mask is its ink, as a base L60's is.
+
+The stand-ins keep the masks they were drawn with (§6); only real art is cut.
+
+### 4.4.2 What colour a mask covers: `colours` (Plan 19)
+
+```bash
+pnpm --filter @bp/normal-web exec node scripts/avatar-pipeline.mjs colours body_f_L30 body_f_face_neutral_L50
+# body_f_L30 skin #f1d2b6
+# body_f_face_neutral_L50 skin #f1d2b6
+# body_f_face_neutral_L50 eyes #35292d
+```
+
+One line per mask of each named layer: the layer's colour under the mask, each pixel weighted by the mask's
+alpha (`maskColour`). An eye mask holds the pupil, the lash line and the highlights as well as the iris, so an eye
+line is the **iris alone**: the pixels of HSL lightness 0.15–0.85 and saturation ≥ 0.2 — the mid-tones `recolour`
+keeps the lightness of and gives a new hue — or, for a grey iris (under a quarter of the mid-tones saturated), the
+mid-tones; an empty mask prints `empty`. A hair layer's line adds its hairstyle's `naturalColour` from `items.json`,
+once it has one, and how far the drawn hair is from it: `natural #rrggbb ΔE n.n` (CIE76). The style gate records
+the drawn cream and the irises with it, and every hairstyle batch holds its hair to its natural colour.
+
+On the old bases this reproduces the plan's hairstyle natural colours exactly (the alpha-weighted mean under each
+`base_<id>_L30_hairmask`) and lands within ΔE 1.2–4.7 of the irises pinned for the migration (f01 `#2f6695`,
+f02 `#6f5c75`, f03 `#a8a364`, m01 `#ca904c`, m02 `#a0989e`, m03 `#a26846`).
+
+## 5. The twelve acceptance criteria (`avatar:check`)
+
+| | Checks (D01 §10, plan 13 §4.3, Plan 19 §5.1/§5.5) |
 |---|---|
 | C1 | The frame, exactly, at both densities — one pixel out is a fail |
 | C2 | Nothing opaque on the outermost row or column — except an aura (layer 10), which is 400 wide by design and reported `-` (2026-09-24, §4.3) |
@@ -523,7 +573,8 @@ pnpm --filter @bp/normal-web exec node scripts/avatar-pipeline.mjs tint-sheet
 | C8 | The file name follows §3 above, with a layer that matches its slot |
 | C9 | The manifest lists it, at that layer and that frame size |
 | C10 | The `@2x` is inside the per-file share of the stage-1 budget (6 MB in the design; 32 MB since 2026-09-24 for real AI art, see `test/footprint.test.ts`), and the manifest's byte count matches the file on disk |
-| C11 | Every mask a layer's manifest entry lists (§4.4, Plan 13) is the layer's own `@2x` size and covers none of its transparency; unless hand-drawn (`override`, which skips the area/shape rules below): hair is 3–20 % of the frame on `L30` and 0.7–1.3 × the same base's `face_neutral` hair mask on a face (skipped when that reference is empty); eyes on `neutral` are exactly two 8-connected blobs, 100–8000 px `@2x` each, one each side of centre — another open-eyed expression allows that or none, `closed`/`sleep` always none; tint is at least 2 % of the layer's own ink. A layer with no masks cut for it yet reports `-` |
+| C11 | Every mask a layer's manifest entry lists (§4.4, Plan 13) is the layer's own `@2x` size and covers none of its transparency; unless hand-drawn (`override`, which skips the area/shape rules below): hair is 3–20 % of the frame on `L30` and 0.7–1.3 × the same base's `face_neutral` hair mask on a face (skipped when that reference is empty); eyes on `neutral` are exactly two 8-connected blobs, 100–8000 px `@2x` each, one each side of centre — another open-eyed expression allows that or none, `closed`/`sleep` always none; tint is at least 2 % of the layer's own ink. A layer with no masks cut for it yet reports `-`. **Plan 19 (§4.4.1):** skin on a body `L30` covers `SKIN_AREA` (0.35–0.85, provisional until the style gate sets it to the real bodies' ± 0.10) of the layer's own ink; skin on a body face is 0.8–1.2 × the same gender's `face_neutral` skin — measured only when **both faces are real or both are stand-ins**, because between the style gate and batch C1 the neutral face is real art and the other five are still stand-ins, and a stand-in's oval says nothing about a drawn face; a mixed pair passes with `n/a — neutral is real, this face is a stand-in` (or the reverse) in its detail; a body face's eyes follow the base faces' rules; hair on a hair layer covers at least 0.9 of the layer's ink; and on any layer that has both, skin and eyes share no pixel at alpha ≥ 128 — hand-drawn or not |
+| C12 | **The head stays put** ("đầu không xê dịch", Plan 19 §5.1, rulings 1–2): a real `body_<g>_L30` keeps F01's head, so every hat, pair of glasses, aura, frame and the portrait crop cut on F01 fit it. F01's skull cannot be measured (its hair is baked into its L30), so the eyes and the chin are: `headMetrics` takes the centroid of the gender's `face_neutral` eye mask at alpha ≥ 128 either side of its middle column, **in frame units as pixel index / 2 at `@2x`, with no half-pixel offset**, their midpoint and x distance, and the chin from `measure` on the body's `@1x`. Eye midpoint x and y, eye span and chin must each lie within `HEAD_TOLERANCE` (4.16, 2 % of the 208 crop) of `HEAD_REFERENCE` — F01's own (190.9, 194.0), 60.6 and 243 — for **both** genders: M01's head, measured the same way, sits 4.6 units lower (198.6) and is not a second reference. A failure names each part and how far it is, e.g. `eye line 6.0 from F01's`. A stand-in, a body whose neutral face has no eye mask, and every other layer report `-` |
 
 ## 6. Placeholder vs. real
 

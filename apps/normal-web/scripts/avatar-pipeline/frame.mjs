@@ -117,6 +117,24 @@ export const SKIN_WINDOW = { x0: 140, x1: 244, y0: 124, y1: FACE_LIMIT_Y }
 /** How far (RGB distance) a pixel may be from that colour and still be the base's own skin. */
 export const SKIN_TOLERANCE = 24
 
+/**
+ * C12 "đầu không xê dịch" (Plan 19, spec §5.1, rulings 1–2): where a v4 body's head has to sit, so the hats, glasses,
+ * auras, frames and portrait crop cut on F01 still land on it. F01's and M01's hair is baked into their L30, so the
+ * skull cannot be measured; the eyes and the chin can. These are F01's, from `headMetrics` on the committed
+ * `base_f01_L30@1x` and `base_f01_face_neutral_L50_eyemask@2x` — eye midpoint (190.91, 193.99), eye span 60.61,
+ * chin 243 — rounded to a tenth. Both bodies are held to them (ruling 2): M01's head, measured the same way at
+ * (191.46, 198.59), 60.78 and 239, sits 4.6 units lower than F01's, past the tolerance, and every shared item was
+ * cut on F01. Recorded for information only.
+ */
+export const HEAD_REFERENCE = { eyeMidX: 190.9, eyeMidY: 194.0, eyeSpan: 60.6, chinY: 243 }
+/** How far each of `HEAD_REFERENCE`'s four may drift: 2 % of the 208 crop, the spec's "không quá 2%". */
+export const HEAD_TOLERANCE = 4.16
+/**
+ * C11 on a body L30 (Plan 19, spec §5.5): the share of the layer's own ink its skin mask may cover. Provisional —
+ * the stand-ins measure 0.57 — until the style gate measures the two real bodies and sets it to theirs ± 0.10 (B5).
+ */
+export const SKIN_AREA = { min: 0.35, max: 0.85 }
+
 /** The base's skin colour, in the frame's own units at `density`, or `null` on an empty window. */
 export function baseSkinColour(pic, density = 1) {
   return modalColour(pic, (x, y) =>
