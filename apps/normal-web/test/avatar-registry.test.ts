@@ -596,8 +596,10 @@ describe('the committed registry', () => {
     const body = { ...registry.assets.find((entry: Asset) => entry.id === 'body_f'), prompt: null, attempts: [] }
     const prompt = renderPrompt(body, registry)
     for (const words of ['CHARACTER LOCK BODY_F', 'completely bald', 'exactly five fingers', '1024 by 1536']) expect(prompt).toContain(words)
-    // The A1b ruling: a light-grey top would sit inside the skin mask's tolerance of cream skin.
-    expect(prompt).toContain('Clothing: a plain mid-gray tank top and plain charcoal shorts, no pattern, barefoot.')
+    // The A1b ruling: a light-grey top would sit inside the skin mask's tolerance of cream skin. Only the colours are
+    // held: the gate (Phase B) may retune the rest of the sentence.
+    expect(prompt).toMatch(/mid-gray tank top/)
+    expect(prompt).toMatch(/charcoal shorts/)
     // Every v4 template ends with the size line; the bot keeps today's text in the new pose.
     for (const key of ['body', 'bodyExpression', 'hair', 'outfit', 'head', 'face', 'bot']) {
       const lines: string[] = registry.templates[key].split('\n')
@@ -605,6 +607,9 @@ describe('the committed registry', () => {
     }
     expect(registry.templates.bot).toContain('same relaxed standing pose and the same five-fingered hands')
     expect(registry.templates.bot).not.toContain('arms slightly away from the body')
+    // casual01 is short-sleeved: the outfit template bounds the sleeves, it does not lengthen them (A2c review).
+    expect(registry.templates.outfit).toContain('No sleeve reaches past the wrists')
+    expect(registry.templates.outfit).not.toContain('Sleeves end at the wrists')
   })
 
   describe('on a clone, beside a stub of the one reference a fresh worktree lacks (pre-flight #29)', () => {

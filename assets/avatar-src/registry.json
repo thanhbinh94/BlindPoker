@@ -8,7 +8,7 @@
     "expression": "Keep this exact image: same character, same pose, same size and position in the frame, same image size, same hair and hair colour, same skin tone, same tank top and shorts, same transparent background. Change only the eyes and mouth to this expression: {{look.expression}}. Do not move, zoom, crop, recolour or redraw anything else.",
     "head": "Keep this exact image: the same character, the same pose, the same size and position in the frame, the same neutral face with open eyes, the same hair and hair colour, the same tank top and shorts, the same transparent background. Add only this: {{look.description}}, sitting naturally on top of the hair, fully inside the image. Hair the hat does not cover stays exactly as it is, the fringe below the brim included. The hat is at most slightly wider than the hair. No glasses. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
     "face": "Keep this exact image: same character, same pose, same size and position in the frame, same neutral face with open eyes, same hair and hair colour, same tank top and shorts, same transparent background. Add only this: {{look.description}}. No hat. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
-    "outfit": "Keep this exact image: the same character, the same head and face, the same pose, the same hands and fingers, the same size and position in the frame, the same skin tone, the same transparent background. The head stays completely bald: do not add hair. Replace the gray tank top and shorts completely with: {{look.description}}. The tank top must be completely gone: no straps, no gray fabric visible anywhere. Sleeves end at the wrists; both hands and all their fingers stay visible and unchanged. Simple shapes, few folds, no small patterns, no logos, nothing in the hands. No hat, no glasses. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
+    "outfit": "Keep this exact image: the same character, the same head and face, the same pose, the same hands and fingers, the same size and position in the frame, the same skin tone, the same transparent background. The head stays completely bald: do not add hair. Replace the gray tank top and shorts completely with: {{look.description}}. The tank top must be completely gone: no straps, no gray fabric visible anywhere. No sleeve reaches past the wrists; both hands and all their fingers stay visible and unchanged. Simple shapes, few folds, no small patterns, no logos, nothing in the hands. No hat, no glasses. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
     "aura": "A decorative circular aura effect for a character portrait: {{look.description}}. Centered in a square image, the center area is completely empty and transparent, effect concentrated in a ring around the center, soft glowing painterly style allowed, transparent background outside the effect, no character, no text, no watermark.",
     "frame": "A circular decorative frame ring for a player avatar: {{look.description}}. Perfectly round, the inside of the ring is completely empty and transparent, ring thickness about 8 percent of the image width, centered in a square image, clean cel-shaded style with colored outlines, transparent background inside and outside the ring, no character, no text, no watermark.",
     "bot": "Keep this exact image's proportions, pose, size and position in the frame, and the transparent background, but redraw the character as a cute chibi robot: {{look.description}}. Same 2.25-heads-tall proportions with an oversized round head, same relaxed standing pose and the same five-fingered hands, no hair, no clothing, smooth rounded metal body, cel-shaded with colored outlines, semi-painterly anime rendering. Face: {{look.expression}}. Do not move, zoom or crop.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
@@ -4012,7 +4012,7 @@
       "wear": null,
       "catalog": "outfit_dealer01",
       "look": {
-        "description": "a white long-sleeved dress shirt, a dark navy vest with two gold buttons, a red bow tie, a dark navy pleated skirt, white knee socks and black flat shoes with a strap"
+        "description": "a white long-sleeved dress shirt, a dark navy vest with two gold buttons, a red bow tie, a short dark navy pleated skirt, white knee socks and black flat shoes with a strap"
       },
       "reference": "@body_f",
       "prompt": null,
@@ -4075,7 +4075,7 @@
       "wear": null,
       "catalog": "outfit_tet_red01",
       "look": {
-        "description": "a red and gold traditional Vietnamese áo dài for Tết: a red tunic with a high stand-up collar, long sleeves and thin gold trim at the collar, cuffs and side slits, its front and back panels falling to the knees, over loose white trousers, and red flat shoes"
+        "description": "a red and gold traditional Vietnamese áo dài for Tết: a red tunic with a high stand-up collar, long sleeves and thin gold trim at the collar, cuffs, side slits and hem, its front and back panels falling to the knees, over loose white trousers, and red flat shoes"
       },
       "reference": "@body_f",
       "prompt": null,
@@ -4096,7 +4096,7 @@
       "wear": null,
       "catalog": "outfit_champion01",
       "look": {
-        "description": "a white and gold zip-up track jacket with a high collar, gold sleeves with one white stripe down each, a large gold star on the chest, gold-striped cuffs and waistband, white track pants with a gold stripe down each side, and gold and white sneakers"
+        "description": "a white and gold zip-up track jacket with a high collar, gold sleeves with one white stripe down each, a large gold star shape on the chest, gold-striped cuffs and waistband, white track pants with a gold stripe down each side, and gold and white sneakers"
       },
       "reference": "@body_f",
       "prompt": null,
@@ -4138,7 +4138,7 @@
       "wear": "m",
       "catalog": "outfit_tet_red01",
       "look": {
-        "description": "a red and gold traditional Vietnamese men's áo dài for Tết: a straight red tunic with a high stand-up collar, a gold-trimmed opening curving from the collar to the right side, long sleeves with gold cuffs and short side slits, ending just above the knees, over loose white trousers, and black flat shoes"
+        "description": "a red and gold traditional Vietnamese men's áo dài for Tết: a straight red tunic with a high stand-up collar, a gold-trimmed opening curving from the collar down the wearer's right side, long sleeves with gold cuffs and short side slits, ending just above the knees, over loose white trousers, and black flat shoes"
       },
       "reference": "@body_m",
       "prompt": null,

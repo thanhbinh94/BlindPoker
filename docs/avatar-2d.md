@@ -982,8 +982,8 @@ The rules:
   cut B2 puts in a manual prompt when ChatGPT cannot draw a clean bald head (R1). `templates.bodyExpression` (only
   the eyes and mouth, on the bald body) and `templates.hair` (`{{look.description}}`, `{{look.colour}}` — the
   hairstyle's natural colour with its hex; hair longer than the neck falls behind the shoulders, never over the
-  tank top, arms or hands) are new. `outfit` (the head stays bald; sleeves end at the wrists, every finger stays
-  visible), `head` (the hat sits on the hair; the fringe below the brim stays), `face` and `bot` ("the same relaxed
+  tank top, arms or hands) are new. `outfit` (the head stays bald; no sleeve reaches past the wrists, so a short
+  sleeve stays short and every finger stays visible), `head` (the hat sits on the hair; the fringe below the brim stays), `face` and `bot` ("the same relaxed
   standing pose and the same five-fingered hands") are rewritten for the new body; Plan 12's head and face items,
   casual01 and bots render from them too, but all of them are done or blocked. `base` and `expression` stay for
   Plan 12's assets until D1. Every v4 template ends with a **size line**: "Output the exact same image size as the
