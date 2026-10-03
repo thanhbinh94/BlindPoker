@@ -25,9 +25,10 @@ export interface ClientSeat {
   lastAction: PlayerAction | null
   timedOut: boolean
   /**
-   * The stack this seat had just before `SETTLEMENT` paid the hand out, set by the reducer when it settles. The table
-   * shows it while the result is held back (`PokerTable`'s `resultPending`, the reveal hold), so the plate does not
-   * announce the winner before the cards have turned. Absent before a hand is settled, and on a snapshot.
+   * The stack this seat had before `SETTLEMENT` paid the pots out (an uncalled bet handed back already in it — that is
+   * not the result), set by the reducer when it settles. The table shows it while the result is held back
+   * (`PokerTable`'s `resultPending`, the reveal hold), so the plate does not announce the winner before the cards have
+   * turned. Absent before a hand is settled, and on a snapshot.
    */
   stackBeforeResult?: number
 }

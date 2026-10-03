@@ -190,6 +190,12 @@ describe('PokerTable', () => {
       expect(within(seatOf(1)).queryByText('19,800')).toBeNull()
     })
 
+    it('prints the stack it has when no earlier one was kept — a hand rebuilt from a snapshot', () => {
+      const rebuilt: ClientHand = { ...showdown, seats: showdown.seats.map((seat) => (seat.seat === 0 ? { ...seat, stack: 20_400 } : seat)) }
+      render(table(rebuilt, 'ring', true))
+      expect(within(seatOf(1)).getByText('20,400')).toBeInTheDocument()
+    })
+
     it('prints all of it in the render that drops the flag, and leaves the turn alone', () => {
       const view = render(table(hand, 'ring', true))
       view.rerender(table(showdown, 'ring', true))
