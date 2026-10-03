@@ -17,8 +17,9 @@ import { existsSync, readFileSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { CROP, DENSITIES, FRAME, LAYERS, placeholderSvg } from './frame.mjs'
+import { CROP, DENSITIES, FRAME, LAYERS, placeholderMaskSvg, placeholderSvg } from './frame.mjs'
 import { alphaBBox, applyIconFit, blankPicture, iconFit, iconPicture, readPicture, renderSvg, writeDensities, writeIfChanged } from './png.mjs'
+import { meanLightness } from '../../../../packages/ui-kit/src/avatar2d/recolour.mjs'
 
 export const MANIFEST_NAME = 'avatar-manifest.json'
 export const MANIFEST_VERSION = 1
@@ -83,6 +84,17 @@ export const BASE_LAYERS = [LAYERS.hairBack, LAYERS.body, LAYERS.hairFront]
 /** Spec §7: eight bots, chibi robots on the same proportions. */
 export const BOTS = [0, 1, 2, 3, 4, 5, 6, 7]
 
+/**
+ * v4 (Plan 19, spec §4.1–§4.3): gender, hairstyle and skin are chosen separately. A body is drawn once per
+ * gender — bald, cream-skinned, in the relaxed pose with fingers — and a hairstyle is an item of its own, cut
+ * into a back layer (L20) and a front layer (L60). The old bases above stay until the switch-over (D1).
+ */
+export const GENDERS = ['f', 'm']
+/** Spec §4.2's eight hairstyles, four per gender, in the table's order. The code starts with its gender. */
+export const HAIR_CODES = ['f_bob01', 'f_hime01', 'f_wavy01', 'f_ponytail01', 'm_tousled01', 'm_neat01', 'm_curly01', 'm_spiky01']
+/** The two layers a hairstyle is cut into: behind the body, and over the face. */
+export const HAIR_LAYERS = [LAYERS.hairBack, LAYERS.hairFront]
+
 /** The layer each wearable slot occupies. A file whose name and slot disagree fails C8. */
 export const SLOT_LAYER = {
   aura: LAYERS.aura,
@@ -126,11 +138,33 @@ export function variantFile(layerName, wear) {
 export const botFile = (bot) => `bot_${bot}_L${LAYERS.body}`
 export const botFaceFile = (bot, expression) => `bot_${bot}_face_${expression}_L${LAYERS.face}`
 
+/** A v4 body (Plan 19): `body_f_L30`. */
+export const bodyFile = (gender) => `body_${gender}_L${LAYERS.body}`
+/** One of a v4 body's six faces: `body_m_face_happy_L50`. */
+export const bodyFaceFile = (gender, expression) => `body_${gender}_face_${expression}_L${LAYERS.face}`
+/**
+ * One of a hairstyle's two layers: `item_hair_f_bob01_L20` / `_L60`. A hair code starts with its one-letter
+ * gender, which `CODE` below forbids, so hair layers have a name pattern of their own and never take a
+ * per-wear variant (ruling 4).
+ */
+export const hairFile = (code, layer) => `item_hair_${code}_L${layer}`
+/** The gender a hair code belongs to: `m_spiky01` → `m`. Throws for a code that names none. */
+export function hairGender(code) {
+  const gender = String(code).split('_')[0]
+  if (!GENDERS.includes(gender)) throw new Error(`hair code ${code} does not start with a gender — one of ${GENDERS.join(', ')}`)
+  return gender
+}
+/** The catalogue id of a hairstyle: `m_spiky01` → `hair_m_spiky01`. */
+export const hairItemId = (code) => `hair_${code}`
+
 /**
  * Every file stage 1 needs, in a stable order.
  *
  * This list is the contract: `placeholder` writes exactly it, `check` walks exactly it, and the tests
  * assert it against spec §4.4 so that a name added here without being added there is caught.
+ *
+ * Plan 19 appends the v4 set (spec §5.3): per gender a body and its six faces, then per hairstyle its back
+ * and front layer — 30 names, which hold no icon (a hairstyle's wardrobe card is a portrait, ruling 12).
  */
 export function stageOneFiles(bases = BASES) {
   const files = []
@@ -146,11 +180,19 @@ export function stageOneFiles(bases = BASES) {
     files.push({ name: botFile(bot), kind: 'bot', layer: LAYERS.body, bot })
     for (const expr of EXPRESSIONS) files.push({ name: botFaceFile(bot, expr), kind: 'botFace', layer: LAYERS.face, bot, expr })
   }
+  for (const gender of GENDERS) {
+    files.push({ name: bodyFile(gender), kind: 'body', layer: LAYERS.body, gender })
+    for (const expr of EXPRESSIONS) files.push({ name: bodyFaceFile(gender, expr), kind: 'bodyFace', layer: LAYERS.face, gender, expr })
+  }
+  for (const code of HAIR_CODES) {
+    for (const layer of HAIR_LAYERS) files.push({ name: hairFile(code, layer), kind: 'hair', layer, gender: hairGender(code), code })
+  }
   return files
 }
 
 const EXPR_GROUP = EXPRESSIONS.join('|')
 const WEAR_GROUP = WEARS.join('|')
+const GENDER_GROUP = GENDERS.join('|')
 /**
  * An item's code: lower case, digits and underscores, every segment **at least two characters**.
  *
@@ -160,13 +202,20 @@ const WEAR_GROUP = WEARS.join('|')
  */
 const CODE = '[a-z0-9]{2,}(?:_[a-z0-9]{2,})*'
 const ITEM_ALTERNATIVES = Object.entries(SLOT_LAYER).map(([slot, layer]) => `item_${slot}_${CODE}(?:_(?:${WEAR_GROUP}))?_L${layer}`)
-/** D01 §9.1: lower case, digits and underscores, and a layer number that matches the slot. */
+/**
+ * D01 §9.1: lower case, digits and underscores, and a layer number that matches the slot — plus, since Plan 19,
+ * the v4 names (ruling 4): `body_<g>_L30`, `body_<g>_face_<expr>_L50` and `item_hair_<g>_<CODE>_L20|L60`. A hair
+ * code is its gender and then a `CODE`, so `item_hair_f_bob01_m_L60` stays illegal: no variant, ever.
+ */
 export const NAME_PATTERN = new RegExp(
   `^(?:base_[a-z][a-z0-9]*_L(?:${BASE_LAYERS.join('|')})` +
   `|base_[a-z][a-z0-9]*_face_(?:${EXPR_GROUP})_L${LAYERS.face}` +
   `|${ITEM_ALTERNATIVES.join('|')}` +
   `|bot_[0-9]+_L${LAYERS.body}` +
-  `|bot_[0-9]+_face_(?:${EXPR_GROUP})_L${LAYERS.face})$`,
+  `|bot_[0-9]+_face_(?:${EXPR_GROUP})_L${LAYERS.face}` +
+  `|body_(?:${GENDER_GROUP})_L${LAYERS.body}` +
+  `|body_(?:${GENDER_GROUP})_face_(?:${EXPR_GROUP})_L${LAYERS.face}` +
+  `|item_hair_(?:${GENDER_GROUP})_${CODE}_L(?:${HAIR_LAYERS.join('|')}))$`,
 )
 
 /** What a legal file name says about itself, or `null` when the name is not legal at all. */
@@ -174,6 +223,15 @@ export function parseName(name) {
   if (!NAME_PATTERN.test(name)) return null
   const layer = Number(name.slice(name.lastIndexOf('_L') + 2))
   const stem = name.slice(0, name.lastIndexOf('_L'))
+  // The v4 names first (Plan 19): `item_hair_` is not a wardrobe slot, and `body_` would read as a base below.
+  if (stem.startsWith('item_hair_')) {
+    const code = stem.slice('item_hair_'.length)
+    return { kind: 'hair', layer, gender: hairGender(code), code }
+  }
+  if (stem.startsWith('body_')) {
+    const [, gender, face, expr] = stem.split('_')
+    return face === 'face' ? { kind: 'bodyFace', layer, gender, expr } : { kind: 'body', layer, gender }
+  }
   if (stem.startsWith('item_')) {
     const slot = Object.keys(SLOT_LAYER).find((candidate) => stem.startsWith(`item_${candidate}_`))
     const rest = stem.slice(`item_${slot}_`.length)
@@ -193,8 +251,9 @@ export function parseName(name) {
 
 // ──────────────────────────────────────────────────────────────── the file ──
 
+/** `bodies` (Plan 19) is to a v4 body what `bases` is to a base: `{ [gender]: { transform } }`, once one is ingested. */
 export function emptyManifest() {
-  return { version: MANIFEST_VERSION, frame: FRAME, crop: CROP, files: {}, icons: {}, bases: {} }
+  return { version: MANIFEST_VERSION, frame: FRAME, crop: CROP, files: {}, icons: {}, bases: {}, bodies: {} }
 }
 
 // ───────────────────────────────────────────────────────────────── the icons ──
@@ -276,6 +335,8 @@ export function serialiseManifest(manifest) {
   for (const name of Object.keys(manifest.icons ?? {}).sort()) icons[name] = manifest.icons[name]
   const bases = {}
   for (const base of Object.keys(manifest.bases ?? {}).sort()) bases[base] = manifest.bases[base]
+  const bodies = {}
+  for (const gender of Object.keys(manifest.bodies ?? {}).sort()) bodies[gender] = manifest.bodies[gender]
   const ordered = {
     version: manifest.version,
     frame: manifest.frame,
@@ -283,6 +344,7 @@ export function serialiseManifest(manifest) {
     files,
     ...(Object.keys(icons).length ? { icons } : {}),
     ...(Object.keys(bases).length ? { bases } : {}),
+    ...(Object.keys(bodies).length ? { bodies } : {}),
   }
   return Buffer.from(`${JSON.stringify(ordered, null, 2)}\n`)
 }
@@ -313,6 +375,68 @@ export function entryFor(file, bytes2x, extra = {}) {
 // ─────────────────────────────────────────────────────────── the stand-ins ──
 
 /**
+ * The masks a v4 stand-in carries (Plan 19), by manifest key: skin on a body, skin and eyes on a face, hair on
+ * each hair layer. They are **rendered** from the stand-in's own shapes (`placeholderMaskSvg`), never computed
+ * (pre-flight #8): a stand-in is flat colour by construction, so its masks are exactly what was drawn.
+ */
+const STAND_IN_MASKS = { body: ['skin'], bodyFace: ['skin', 'eyes'], hair: ['hair'] }
+
+/** How many pixels of a mask are at least half covered — the count every split and C11 area is made of. */
+const SOLID_COVER = 128
+
+/**
+ * Render one stand-in mask, write it at both densities exactly as `writeMasks` writes a real one (white, coverage
+ * in alpha, @1x the @2x halved), and return its @2x alpha with the manifest's `{ bytes2x, meanL, empty? }` —
+ * `meanL` the stand-in layer's own mean lightness under the mask, as for real art.
+ */
+async function writeStandInMask(file, kind, fileKind, layer2x, dir) {
+  const { width, height } = layer2x
+  // The mask SVG is opaque, white where the region is and black elsewhere, so red is the coverage.
+  const rendered = await renderSvg(placeholderMaskSvg(file, kind), width, height)
+  const alpha = new Uint8Array(width * height)
+  const picture = { data: Buffer.alloc(width * height * 4, 255), width, height }
+  let inked = 0
+  for (let p = 0; p < alpha.length; p++) {
+    alpha[p] = rendered.data[p * 4]
+    picture.data[p * 4 + 3] = alpha[p]
+    if (alpha[p] > 0) inked++
+  }
+  const bytes2x = await writeDensities(picture, dir, `${file.name}_${fileKind}mask`)
+  const meanL = Math.round(meanLightness(layer2x.data, alpha) * 10000) / 10000
+  return { alpha, info: { bytes2x, meanL, ...(inked === 0 ? { empty: true } : {}) } }
+}
+
+/**
+ * A hair L60's `split` (spec §5.4): the hairstyle's region — every @2x pixel at least half covered by either
+ * layer's hair mask — and how many of those the front and the back layer hold. The stand-in layers are drawn
+ * apart, so `front + back === region`; C13 (A1c) holds real art to the same numbers.
+ */
+function splitOf(front, back) {
+  let region = 0
+  let inFront = 0
+  let inBack = 0
+  for (let p = 0; p < front.length; p++) {
+    const f = front[p] >= SOLID_COVER
+    const b = back !== null && back[p] >= SOLID_COVER
+    if (f) inFront++
+    if (b) inBack++
+    if (f || b) region++
+  }
+  return { region, front: inFront, back: inBack }
+}
+
+/** A real hair layer's hair at @2x, for its stand-in sibling's split: its hair mask when it has one, else its ink. */
+async function hairOnDisk(dir, name, entry, fileKind) {
+  const maskFile = join(dir, `${name}_${fileKind}mask@2x.png`)
+  const file = entry?.masks?.hair && existsSync(maskFile) ? maskFile : join(dir, `${name}@2x.png`)
+  if (!existsSync(file)) return null
+  const pic = await readPicture(file)
+  const alpha = new Uint8Array(pic.width * pic.height)
+  for (let p = 0; p < alpha.length; p++) alpha[p] = pic.data[p * 4 + 3]
+  return alpha
+}
+
+/**
  * Fill a directory with the whole stage-1 set as labelled stand-ins, and write the manifest for it.
  *
  * `bases` is `BASES` for every real run — adding an id to that constant is all it takes for the next
@@ -326,13 +450,22 @@ export function entryFor(file, bytes2x, extra = {}) {
  * is not part of the stage-1 list — it exists only once somebody has generated a male picture of that
  * outfit — so this never invents a stand-in for one, and the entries and icons of the real ones it finds
  * in the previous manifest are copied through untouched rather than dropped for not being on the list.
+ *
+ * Plan 19: a v4 stand-in (body, body face, hair layer) is drawn with its masks (`STAND_IN_MASKS`), and a hair
+ * L60 with its `split`. The manifest's `bodies` is carried through like `bases`.
  */
 export async function buildPlaceholders({ dir, targets, bases = BASES, log = () => {} }) {
   await mkdir(dir, { recursive: true })
+  // Imported here rather than at the top: `masks.mjs` imports this module and reads it while loading
+  // (`MASK_OVERRIDE_DIR`), so a static import back would make the load order decide which of the two works.
+  const { MASK_FILE_KIND } = await import('./masks.mjs')
   const previous = readManifest(join(dir, MANIFEST_NAME))
-  const manifest = { ...emptyManifest(), bases: previous.bases ?? {} }
+  const manifest = { ...emptyManifest(), bases: previous.bases ?? {}, bodies: previous.bodies ?? {} }
   let drawn = 0
   let kept = 0
+  let masked = 0
+  /** Each hair L20's stand-in hair mask at @2x, for its L60's split — the list puts L20 first. */
+  const backHair = new Map()
   for (const file of stageOneFiles(bases)) {
     const before = previous.files?.[file.name]
     if (before?.real) {
@@ -350,7 +483,21 @@ export async function buildPlaceholders({ dir, targets, bases = BASES, log = () 
     }
     const picture = await renderSvg(placeholderSvg(file, 2), FRAME.w * 2, FRAME.h * 2)
     const bytes2x = await writeDensities(picture, dir, file.name)
-    manifest.files[file.name] = entryFor(file, bytes2x, { placeholder: true })
+    const extra = { placeholder: true }
+    for (const kind of STAND_IN_MASKS[file.kind] ?? []) {
+      const { alpha, info } = await writeStandInMask(file, kind, MASK_FILE_KIND[kind], picture, dir)
+      extra.masks = { ...extra.masks, [kind]: info }
+      masked++
+      if (file.kind !== 'hair') continue
+      if (file.layer === LAYERS.hairBack) {
+        backHair.set(file.code, alpha)
+      } else {
+        const back = hairFile(file.code, LAYERS.hairBack)
+        const backAlpha = backHair.get(file.code) ?? await hairOnDisk(dir, back, previous.files?.[back], MASK_FILE_KIND.hair)
+        extra.split = splitOf(alpha, backAlpha)
+      }
+    }
+    manifest.files[file.name] = entryFor(file, bytes2x, extra)
     if (file.kind === 'item') await writeIcon(picture, dir, file.name, manifest, { placeholder: true })
     drawn++
   }
@@ -367,6 +514,6 @@ export async function buildPlaceholders({ dir, targets, bases = BASES, log = () 
     variants++
   }
   await writeManifest(manifest, targets)
-  log(`${drawn} stand-ins drawn at ${DENSITIES.map((density) => `@${density}x`).join(' and ')}, ${kept} real layers and ${variants} variants left alone`)
+  log(`${drawn} stand-ins drawn at ${DENSITIES.map((density) => `@${density}x`).join(' and ')} with ${masked} masks, ${kept} real layers and ${variants} variants left alone`)
   return manifest
 }

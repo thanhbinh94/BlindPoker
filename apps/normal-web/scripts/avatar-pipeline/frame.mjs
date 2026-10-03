@@ -262,26 +262,129 @@ function figure(skin, cloth) {
     `<ellipse cx="212" cy="400" rx="20" ry="8" fill="${skin}"/>`
 }
 
+/**
+ * One expression of spec §4.3 in three parts (Plan 19): the **eyes**, which are all an eye mask is; the
+ * **extras** drawn beside them — sad's tear and sleep's Z, which are not eyes (the tear would split the right
+ * eye's blob if an eye mask held it); and the **mouth**. `grow` widens every shape by that many frame units,
+ * which is how a skin mask cuts them with a margin; `tear` is the tear's own colour, which a mask overrides.
+ */
+function expressionParts(expression, ink, { grow = 0, tear = '#7fb7e0' } = {}) {
+  const solid = grow ? `fill="${ink}" stroke="${ink}" stroke-width="${grow}"` : `fill="${ink}"`
+  const line = (width, colour = ink) => `stroke="${colour}" stroke-width="${width + grow}" fill="none"`
+  const mouth = {
+    neutral: `<path d="M176 178 Q192 188 208 178" ${line(4)} stroke-linecap="round"/>`,
+    happy: `<path d="M172 174 Q192 194 212 174" ${line(5)} stroke-linecap="round"/>`,
+    sad: `<path d="M176 186 Q192 174 208 186" ${line(4)} stroke-linecap="round"/>`,
+    surprised: `<ellipse cx="192" cy="180" rx="9" ry="11" ${solid}/>`,
+    closed: `<path d="M178 178 Q192 186 206 178" ${line(4)} stroke-linecap="round"/>`,
+    sleep: `<ellipse cx="192" cy="180" rx="7" ry="9" ${solid}/>`,
+  }[expression]
+  const shut = `<path d="M158 154 Q170 166 182 154" ${line(5)} stroke-linecap="round"/><path d="M202 154 Q214 166 226 154" ${line(5)} stroke-linecap="round"/>`
+  const eyes = {
+    neutral: `<ellipse cx="170" cy="154" rx="12" ry="15" ${solid}/><ellipse cx="214" cy="154" rx="12" ry="15" ${solid}/>`,
+    happy: `<path d="M158 158 Q170 144 182 158" ${line(5)} stroke-linecap="round"/><path d="M202 158 Q214 144 226 158" ${line(5)} stroke-linecap="round"/>`,
+    sad: `<ellipse cx="170" cy="158" rx="11" ry="13" ${solid}/><ellipse cx="214" cy="158" rx="11" ry="13" ${solid}/>`,
+    surprised: `<circle cx="170" cy="152" r="16" ${solid}/><circle cx="214" cy="152" r="16" ${solid}/>`,
+    closed: shut,
+    sleep: shut,
+  }[expression]
+  const extras = {
+    sad: `<path d="M214 172 q4 8 -2 10" ${line(4, tear)} stroke-linecap="round"/>`,
+    sleep: `<path d="M232 118 h16 l-16 16 h16" ${line(4)} stroke-linejoin="round"/>`,
+  }[expression] ?? ''
+  return { eyes, extras, mouth }
+}
+
 /** The six expressions of spec §4.3, as the only thing that changes between the six face layers. */
 function eyesAndMouth(expression, ink) {
-  const mouth = {
-    neutral: `<path d="M176 178 Q192 188 208 178" stroke="${ink}" stroke-width="4" fill="none" stroke-linecap="round"/>`,
-    happy: `<path d="M172 174 Q192 194 212 174" stroke="${ink}" stroke-width="5" fill="none" stroke-linecap="round"/>`,
-    sad: `<path d="M176 186 Q192 174 208 186" stroke="${ink}" stroke-width="4" fill="none" stroke-linecap="round"/>`,
-    surprised: `<ellipse cx="192" cy="180" rx="9" ry="11" fill="${ink}"/>`,
-    closed: `<path d="M178 178 Q192 186 206 178" stroke="${ink}" stroke-width="4" fill="none" stroke-linecap="round"/>`,
-    sleep: `<ellipse cx="192" cy="180" rx="7" ry="9" fill="${ink}"/>`,
-  }[expression]
-  const eyes = {
-    neutral: `<ellipse cx="170" cy="154" rx="12" ry="15" fill="${ink}"/><ellipse cx="214" cy="154" rx="12" ry="15" fill="${ink}"/>`,
-    happy: `<path d="M158 158 Q170 144 182 158" stroke="${ink}" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M202 158 Q214 144 226 158" stroke="${ink}" stroke-width="5" fill="none" stroke-linecap="round"/>`,
-    sad: `<ellipse cx="170" cy="158" rx="11" ry="13" fill="${ink}"/><ellipse cx="214" cy="158" rx="11" ry="13" fill="${ink}"/><path d="M214 172 q4 8 -2 10" stroke="#7fb7e0" stroke-width="4" fill="none" stroke-linecap="round"/>`,
-    surprised: `<circle cx="170" cy="152" r="16" fill="${ink}"/><circle cx="214" cy="152" r="16" fill="${ink}"/>`,
-    closed: `<path d="M158 154 Q170 166 182 154" stroke="${ink}" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M202 154 Q214 166 226 154" stroke="${ink}" stroke-width="5" fill="none" stroke-linecap="round"/>`,
-    sleep: `<path d="M158 154 Q170 166 182 154" stroke="${ink}" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M202 154 Q214 166 226 154" stroke="${ink}" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M232 118 h16 l-16 16 h16" stroke="${ink}" stroke-width="4" fill="none" stroke-linejoin="round"/>`,
-  }[expression]
-  return eyes + mouth
+  const { eyes, extras, mouth } = expressionParts(expression, ink)
+  return eyes + extras + mouth
 }
+
+// ── the v4 stand-ins (Plan 19, spec §5.2–§5.4) ──
+
+/** Both v4 bodies are drawn cream (spec §5.2); the underwear tells f from m at a glance, the plate says so. */
+const BODY_SKIN = '#f1d2b6'
+const BODY_UNDERWEAR = { f: '#9aa3ad', m: '#8f99a4' }
+const FACE_INK = '#33272b'
+/** One tint per hairstyle, shared by its two layers, so a sheet of eight is eight colours. */
+const hairTint = (code) => hsl(jitter(`hair ${code}`), 0.36, 0.4)
+/** The three long styles whose back layer hangs behind the shoulders; every other style's is a crescent behind the head. */
+const LONG_HAIR = new Set(['f_hime01', 'f_wavy01', 'f_ponytail01'])
+
+/** Where each v4 stand-in's plate sits, so the layer and its masks agree on it. */
+const BODY_PLATE = { x: 150, y: 250, w: 84, h: 24 }
+const FACE_PLATE = { x: 150, y: 188, w: 84, h: 16 }
+const FRONT_PLATE = { x: 132, y: 70, w: 120, h: 22 }
+const CRESCENT_PLATE = { x: 140, y: 222, w: 104, h: 22 }
+/** Long hair's plate runs up the left panel, turned a quarter, because a panel is narrower than its code. */
+const PANEL_PLATE = { x: 68, y: 288, w: 110, h: 24, turn: 'rotate(-90 123 300)' }
+
+/**
+ * The relaxed pose of spec §5.2, as a stand-in: `figure()`'s shapes with the weight on the right leg, which
+ * stays straight while the left one rests a little out; both arms angled away from the body; five short finger
+ * strokes on each hand, the thumb toward the body. The head is bald — hair is an item now. `figure()` itself is
+ * untouched, because the old bases and the bots still draw with it.
+ */
+export function relaxedFigure(skin, cloth) {
+  const arm = (x, pivot, turn, inward) =>
+    `<g transform="rotate(${turn} ${pivot} 240)">` +
+    `<rect x="${x}" y="236" width="22" height="84" rx="11" fill="${cloth}"/>` +
+    `<circle cx="${pivot}" cy="326" r="12" fill="${skin}"/>${fingers(pivot, 326, inward, skin)}</g>`
+  return `<ellipse cx="192" cy="146.5" rx="80" ry="74.5" fill="${skin}"/>` +
+    `<rect x="177" y="216" width="30" height="20" fill="${cloth}"/>` +
+    `<rect x="148" y="228" width="88" height="96" rx="14" fill="${cloth}"/>` +
+    arm(124, 135, 12, 1) +
+    arm(238, 249, -12, -1) +
+    `<g transform="rotate(8 178 320)"><rect x="166" y="318" width="24" height="80" rx="12" fill="${cloth}"/></g>` +
+    `<rect x="194" y="318" width="24" height="84" rx="12" fill="${cloth}"/>` +
+    `<ellipse cx="162" cy="398" rx="19" ry="8" fill="${skin}"/>` +
+    `<ellipse cx="212" cy="400" rx="20" ry="8" fill="${skin}"/>`
+}
+
+/** Four fingers fanned below the palm and a thumb toward the body (`inward` +1 points it right, −1 left). */
+const FINGERS = [{ angle: -36, to: 20 }, { angle: -12, to: 20 }, { angle: 12, to: 20 }, { angle: 36, to: 20 }, { angle: 70, to: 18 }]
+function fingers(cx, cy, inward, colour) {
+  const d = FINGERS.map(({ angle, to }) => {
+    const rad = (angle * inward * Math.PI) / 180
+    const at = (r) => `${(cx + Math.sin(rad) * r).toFixed(1)} ${(cy + Math.cos(rad) * r).toFixed(1)}`
+    return `M${at(9)} L${at(to)}`
+  }).join(' ')
+  return `<path d="${d}" stroke="${colour}" stroke-width="3.6" fill="none" stroke-linecap="round"/>`
+}
+
+/**
+ * A hairstyle's shape on one of its two layers. **L60** is a fringe-and-crown cap whose lowest point (y 120) is
+ * above y 126, clear of every stand-in eye (y 127–160). **L20** is, for a long style, two panels behind the
+ * shoulders from y 238 down, either side of the torso; for a short one, a crescent behind the head from y 130
+ * down. The layers therefore never share a pixel. The crescent's clip path id is fixed: every stand-in is an
+ * SVG of its own.
+ */
+function hairShape(entry, colour) {
+  if (entry.layer === LAYERS.hairFront) {
+    return `<path d="M104 120 C100 62 146 52 192 52 C238 52 284 62 280 120 Q258 104 236 118 Q214 102 192 116 Q170 102 148 118 Q126 104 104 120 Z" fill="${colour}"/>`
+  }
+  if (LONG_HAIR.has(entry.code)) {
+    return `<rect x="100" y="238" width="46" height="124" rx="16" fill="${colour}"/>` +
+      `<rect x="238" y="238" width="46" height="124" rx="16" fill="${colour}"/>`
+  }
+  return `<clipPath id="below-cap"><rect x="0" y="130" width="${FRAME.w}" height="${FRAME.h - 130}"/></clipPath>` +
+    `<path clip-path="url(#below-cap)" fill-rule="evenodd" fill="${colour}" d="M92 170 A100 90 0 1 0 292 170 A100 90 0 1 0 92 170 Z M110 136 A82 78 0 1 0 274 136 A82 78 0 1 0 110 136 Z"/>`
+}
+
+/** Where a hair layer's plate goes: inside its own shape, always. */
+function hairPlate(entry) {
+  if (entry.layer === LAYERS.hairFront) return { ...FRONT_PLATE, text: `${entry.code} front` }
+  return { ...(LONG_HAIR.has(entry.code) ? PANEL_PLATE : CRESCENT_PLATE), text: `${entry.code} back` }
+}
+
+const drawPlate = ({ x, y, w, h, text, turn }) => {
+  const drawn = plate(x, y, w, h, text)
+  return turn ? `<g transform="${turn}">${drawn}</g>` : drawn
+}
+
+/** The face of a v4 body: the oval and one expression, as a base's stand-in face is drawn. */
+const faceOval = (skin) => `<ellipse cx="192" cy="162" rx="56" ry="44" fill="${skin}"/>`
 
 /** The body of the SVG for one stage-1 entry, in frame units. */
 function shapesFor(entry) {
@@ -312,6 +415,13 @@ function shapesFor(entry) {
       return `<rect x="136" y="118" width="112" height="88" rx="20" fill="${hsl(BOT_HUE, 0.18, 0.68)}"/>` +
         `<g transform="translate(0 -9)">${eyesAndMouth(entry.expr, '#22303a')}</g>` +
         plate(146, 188, 92, 16, `bot ${entry.bot} ${entry.expr}`)
+    case 'body':
+      return `${relaxedFigure(BODY_SKIN, BODY_UNDERWEAR[entry.gender])}${drawPlate({ ...BODY_PLATE, text: `body ${entry.gender}` })}`
+    case 'bodyFace':
+      return `${faceOval(BODY_SKIN)}<g transform="translate(0 -9)">${eyesAndMouth(entry.expr, FACE_INK)}</g>` +
+        drawPlate({ ...FACE_PLATE, text: `${entry.gender} ${entry.expr}` })
+    case 'hair':
+      return `${hairShape(entry, hairTint(entry.code))}${drawPlate(hairPlate(entry))}`
     default:
       return itemShapes(entry, tint)
   }
@@ -346,4 +456,54 @@ function itemShapes(entry, tint) {
 /** The whole SVG for one stage-1 entry at one density. */
 export function placeholderSvg(entry, density) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${FRAME.w * density}" height="${FRAME.h * density}" viewBox="0 0 ${FRAME.w} ${FRAME.h}">${shapesFor(entry)}</svg>`
+}
+
+// ── the stand-ins' masks (Plan 19) ──
+
+/** A mask SVG is opaque: white where the region is, black elsewhere, so its red channel is the coverage. */
+const IN = '#ffffff'
+const OUT = '#000000'
+/**
+ * How far (frame units) a skin mask's black cut reaches past an eye, a mouth or a plate. At @2x that is 2 px of
+ * clear skin between the two masks' soft rims, so no pixel is ever ≥ 128 in both the skin and the eye mask.
+ */
+const MASK_CUT = 1
+const plateCut = ({ x, y, w, h, turn }) => {
+  const cut = `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="${OUT}" stroke="${OUT}" stroke-width="${2 * MASK_CUT}"/>`
+  return turn ? `<g transform="${turn}">${cut}</g>` : cut
+}
+
+/** The shapes of one stand-in's mask: the very shapes `shapesFor` draws, in mask colours. */
+function maskShapes(entry, kind) {
+  switch (`${entry.kind} ${kind}`) {
+    case 'body skin':
+      // Skin white and underwear black, in the figure's own drawing order, so the neck that covers the chin and
+      // the hands that cover the sleeves come out exactly as drawn; then the plate, which sits on the underwear.
+      return `${relaxedFigure(IN, OUT)}${plateCut(BODY_PLATE)}`
+    case 'bodyFace skin': {
+      // The oval, less everything drawn on it: eyes, tear or Z, mouth and plate, each with a margin.
+      const { eyes, extras, mouth } = expressionParts(entry.expr, OUT, { grow: 2 * MASK_CUT, tear: OUT })
+      return `${faceOval(IN)}<g transform="translate(0 -9)">${eyes}${extras}${mouth}</g>${plateCut(FACE_PLATE)}`
+    }
+    case 'bodyFace eyes':
+      // The eyes only — no tear, no Z, no mouth — and none at all when they are shut.
+      if (entry.expr === 'closed' || entry.expr === 'sleep') return ''
+      return `<g transform="translate(0 -9)">${expressionParts(entry.expr, IN).eyes}</g>`
+    case 'hair hair':
+      // The whole hair shape: its plate sits inside it.
+      return hairShape(entry, IN)
+    default:
+      throw new Error(`no ${kind} mask is drawn for the stand-in ${entry.name}`)
+  }
+}
+
+/**
+ * The SVG of one stand-in's mask (Plan 19) — `skin` on a body or a body face, `eyes` on a body face, `hair` on a
+ * hair layer — rendered from the same shapes as the stand-in itself, never computed from its pixels (pre-flight
+ * #8). Opaque, white where the region is and black elsewhere: the red channel is the mask. @2x by default, the
+ * density every mask is cut at.
+ */
+export function placeholderMaskSvg(entry, kind, density = 2) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${FRAME.w * density}" height="${FRAME.h * density}" viewBox="0 0 ${FRAME.w} ${FRAME.h}">` +
+    `<rect width="${FRAME.w}" height="${FRAME.h}" fill="${OUT}"/>${maskShapes(entry, kind)}</svg>`
 }

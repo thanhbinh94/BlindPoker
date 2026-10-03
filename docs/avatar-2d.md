@@ -100,6 +100,10 @@ item_<slot>_<code>_icon_tintmask             a tintable item's icon tint mask, 9
 item_<slot>_<code>_<wear>_icon_tintmask      a tintable variant's own icon tint mask, cut from that wear's layer
 bot_<index>_L30                              a bot's body
 bot_<index>_face_<expression>_L50            a bot's expression
+body_<gender>_L30                            a v4 body, gender f or m (Plan 19) — bald, cream, the relaxed pose
+body_<gender>_face_<expression>_L50          one of a v4 body's six faces
+item_hair_<gender>_<code>_L20                a hairstyle's back layer (Plan 19) — no icon, no per-wear variant
+item_hair_<gender>_<code>_L60                that hairstyle's front layer
 ```
 
 A file on disk always carries a density suffix the name above does not: `…@1x.png` / `…@2x.png`. The
@@ -114,6 +118,25 @@ pipeline's own `check` command (`C8`) refuse a name whose layer disagrees with i
 
 A `<code>`'s own segments are **two characters or more**. That is what makes the one-letter wear in
 `item_outfit_dealer01_m_L40` readable as a wear rather than as part of the code `dealer01_m`.
+
+**The v4 names** (Plan 19, 2026-10-03; spec `2026-10-03-avatar-v4-design.md` §5.3, ruling 4). Gender,
+hairstyle and skin are chosen separately now, so a body is drawn once per gender and a hairstyle is an item of
+its own, cut into a back layer (L20) and a front layer (L60). `manifest.mjs` names them from `GENDERS`
+(`f`, `m`) and the eight `HAIR_CODES` (`f_bob01`, `f_hime01`, `f_wavy01`, `f_ponytail01`, `m_tousled01`,
+`m_neat01`, `m_curly01`, `m_spiky01`): `bodyFile(g)`, `bodyFaceFile(g, expr)` and `hairFile(code, 20 | 60)`;
+`hairItemId(code)` is the hairstyle's catalogue id (`hair_<code>`) and `hairGender(code)` its gender.
+
+- A hair code *starts* with its one-letter gender, which the two-character rule above forbids in a `<code>`. So
+  hair layers have a pattern of their own, `item_hair_[fm]_<code>_L(20|60)`, beside the item pattern rather than
+  inside it, and they never take a per-wear variant: `item_hair_f_bob01_m_L60` is illegal, as is any layer but
+  20 and 60.
+- `parseName` reads them as kinds `body` (`{ gender }`), `bodyFace` (`{ gender, expr }`) and `hair`
+  (`{ gender, code }`), checked before the item and base readings either would otherwise fall into.
+- They join `stageOneFiles` after the old names: 2 bodies, 12 faces and 16 hair layers, 172 entries in all. The
+  `base_*` names stay on the list, and on disk, until the switch-over deletes them.
+- A hair layer has no inventory icon: a hairstyle's wardrobe card is a portrait of the head wearing it.
+- The manifest gains a `bodies` key beside `bases` — `{ [gender]: { transform } }` once a body is ingested — and a
+  hair L60's entry gains `split` (§6).
 
 ## 3.1 One item, a layer per wear (2026-09-20)
 
@@ -523,6 +546,34 @@ with an entry that has no `copyOf`.
 A real entry may also carry `"empty": true`: an AI base's hair layers, which ship as fully transparent
 frames (§2). `avatar:check` holds such a layer to being fully transparent at both densities (C3) and
 reports C4–C6 as `-` for it; a fully transparent layer *without* the mark fails C3.
+
+**A v4 stand-in carries its masks** (Plan 19, 2026-10-03). The server, the kit and the wardrobe are built on
+stand-ins before the v4 art exists, and they tint skin, eyes and hair through masks, so `placeholder` draws
+each body, body face and hair layer (§3) together with the masks real art will have:
+
+| Stand-in | Masks | Drawn as |
+|---|---|---|
+| `body_<g>_L30` | `skin` | `relaxedFigure()` (`frame.mjs`): the bases' figure in the relaxed pose — the left leg resting out, both arms angled away, five short finger strokes per hand — with a bald head and a `body f` / `body m` plate. `figure()` itself is unchanged, because the old bases and the bots still draw with it |
+| `body_<g>_face_<expr>_L50` | `skin`, `eyes` | the face oval and the expression, plate `f happy` |
+| `item_hair_<g>_<code>_L60` | `hair` | a fringe-and-crown cap in the hairstyle's own tint, lowest point y 120 — clear of every stand-in eye (y 127–160) |
+| `item_hair_<g>_<code>_L20` | `hair` | a long style (`f_hime01`, `f_wavy01`, `f_ponytail01`): two panels behind the shoulders, either side of the torso, from y 238 down; a short style: a crescent behind the head from y 130 down |
+
+- The masks are **rendered** from the stand-in's own shapes (`placeholderMaskSvg`), never cut by the
+  algorithm: a stand-in is flat colour, so its masks are exactly what was drawn.
+  - **skin** is the skin-coloured shapes, less everything drawn on them — eyes, sad's tear, sleep's Z, the mouth
+    and the plate — each cut 1 frame unit wider than drawn, so no pixel is ≥ 128 in both the skin and the eye
+    mask;
+  - **eyes** is the eye shapes alone: not the tear, which would split the right eye's blob, and nothing at all on
+    `closed` and `sleep`, whose mask is written empty and marked `"empty": true`;
+  - **hair** is the whole hair shape; the plate sits inside it.
+- They are written as §4.4 describes — `<layer>_skinmask`, `_eyemask`, `_hairmask`, white with the coverage in
+  alpha, at both densities — and the entry's `masks` holds `{ bytes2x, meanL }` for each, `meanL` measured on the
+  stand-in itself.
+- A hair L60's entry also holds `split: { region, front, back }`: in `@2x` pixels, the hairstyle's region (every
+  pixel at least half covered by either layer's hair mask) and how much of it each layer holds. The two stand-in
+  layers never share a pixel, so `front + back = region`.
+- Every stand-in carries its code on an opaque plate inside its own shape. A long style's back plate runs up its
+  left panel, turned a quarter, because a panel is narrower than the code.
 
 `apps/normal-web/public/avatar/` ships whatever mix of the two the repository is currently at. Nothing
 downstream — the server's catalogue, the kit's `Chibi`, any test — treats the two differently; a

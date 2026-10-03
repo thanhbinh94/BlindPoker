@@ -24,7 +24,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { runChecks } from '../scripts/avatar-pipeline/checks.mjs'
 import { OUTFIT_TOP_Y, cutItem, diffAgainstBase, ingest, measure, registerBySilhouette, registerToBase } from '../scripts/avatar-pipeline/extract.mjs'
 import { AURA_CY, AURA_SIZE, AXIS_X, BASELINE_Y, BODY, CROP, DENSITIES, FACE_LIMIT_Y, FRAME, LAYERS, RING, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
-import { BASES, BASE_WEAR, EXPRESSIONS, ICON, MANIFEST_NAME, NAME_PATTERN, WEARS, buildPlaceholders, iconName, itemFile, parseName, stageOneFiles, variantFile, wearOf, writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
+import { BASES, BASE_WEAR, EXPRESSIONS, HAIR_CODES, ICON, MANIFEST_NAME, NAME_PATTERN, WEARS, bodyFaceFile, bodyFile, buildPlaceholders, hairFile, hairItemId, iconName, itemFile, parseName, stageOneFiles, variantFile, wearOf, writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
+import { MASK_FILE_KIND } from '../scripts/avatar-pipeline/masks.mjs'
 import { alphaBBox, blankPicture, cropPicture, overPicture, readPicture, removeChroma, renderSvg, writeDensities, writePicture } from '../scripts/avatar-pipeline/png.mjs'
 
 const PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url))
@@ -63,8 +64,10 @@ interface ManifestEntry {
   /** A per-wear cut of another item layer (2026-09-20): the layer it is a cut of, and which wear wears it. */
   variantOf?: string
   wear?: string
-  /** Hair, eye and tint masks (Plan 13 Task 2). */
+  /** Hair, eye and tint masks (Plan 13 Task 2); skin masks (Plan 19). */
   masks?: Record<string, { bytes2x: number; meanL?: number; empty?: boolean; override?: boolean }>
+  /** A hair L60's region and how it splits between the two hair layers, in @2x pixels (Plan 19, spec §5.4). */
+  split?: { region: number; front: number; back: number }
 }
 
 interface Manifest {
@@ -1195,7 +1198,7 @@ function stageOnePngs(
 
   // Add mask files for each layer that has masks in the manifest.
   if (manifest) {
-    const maskFileKind = { hair: 'hair', eyes: 'eye', tint: 'tint' }
+    const maskFileKind = { hair: 'hair', eyes: 'eye', tint: 'tint', skin: 'skin' }
     for (const layerName of layers) {
       const entry = manifest.files[layerName]
       if (entry?.masks) {
@@ -1236,7 +1239,13 @@ describe('the stage-1 name list', () => {
     expect(byKind('item').filter((name) => name.startsWith('item_frame_'))).toHaveLength(6)
     expect(byKind('bot')).toHaveLength(8)
     expect(byKind('botFace')).toHaveLength(48)
-    expect(files).toHaveLength(142)
+    // Plan 19 (spec §5.3): the v4 bodies, their twelve faces and eight hairstyles of two layers each. The old
+    // bases above stay on the list until the switch-over (D1) deletes them.
+    expect(byKind('body')).toEqual(['body_f_L30', 'body_m_L30'])
+    expect(byKind('bodyFace')).toHaveLength(12)
+    expect(byKind('hair').sort()).toEqual(HAIR_CODES.flatMap((code: string) => [hairFile(code, 20), hairFile(code, 60)]).sort())
+    expect(byKind('hair')).toHaveLength(16)
+    expect(files).toHaveLength(172)
     expect(files.map((file: { name: string }) => file.name)).toContain('item_head_tophat01_L80')
     expect(files.map((file: { name: string }) => file.name)).toContain('item_frame_founder_L90')
     expect(files.map((file: { name: string }) => file.name)).toContain('bot_7_face_sleep_L50')
@@ -1262,6 +1271,22 @@ describe('the stage-1 name list', () => {
     for (const file of files as { name: string; layer: number }[]) {
       expect(known.has(file.layer), `${file.name} claims layer ${file.layer}`).toBe(true)
       expect(file.name.endsWith(`_L${file.layer}`), file.name).toBe(true)
+    }
+  })
+})
+
+describe('v4 names (spec §5.3)', () => {
+  it('names bodies, body faces and both hair layers, and reads them back', () => {
+    expect(bodyFile('f')).toBe('body_f_L30')
+    expect(bodyFaceFile('m', 'happy')).toBe('body_m_face_happy_L50')
+    expect(hairFile('f_bob01', 20)).toBe('item_hair_f_bob01_L20')
+    expect(hairItemId('m_spiky01')).toBe('hair_m_spiky01')
+    expect(parseName('body_f_L30')).toEqual({ kind: 'body', layer: 30, gender: 'f' })
+    expect(parseName('body_m_face_sleep_L50')).toEqual({ kind: 'bodyFace', layer: 50, gender: 'm', expr: 'sleep' })
+    expect(parseName('item_hair_m_spiky01_L60')).toEqual({ kind: 'hair', layer: 60, gender: 'm', code: 'm_spiky01' })
+    for (const bad of ['body_x_L30', 'body_f_L50', 'item_hair_f_bob01_L30', 'item_hair_bob01_L60', 'item_hair_f_bob01_m_L60', 'item_hair_x_bob01_L20']) {
+      expect(parseName(bad), bad).toBeNull()
+      expect(NAME_PATTERN.test(bad), bad).toBe(false)
     }
   })
 })
@@ -1356,6 +1381,76 @@ describe('the committed placeholder set', () => {
       if (entry.empty) expect(entry.real, `${name} is marked empty, which only ingest writes`).toBe(true)
     }
   })
+
+  // ── the v4 stand-ins (Plan 19, A1a) ──
+
+  type V4File = { name: string; kind: string; layer: number; gender: string; expr?: string; code?: string }
+  /** The masks each v4 kind is drawn with, by manifest key (`MASK_FILE_KIND` spells them on disk). */
+  const V4_MASKS: Record<string, string[]> = { body: ['skin'], bodyFace: ['eyes', 'skin'], hair: ['hair'] }
+  const v4StandIns = (): V4File[] =>
+    (stageOneFiles() as V4File[]).filter((file) => V4_MASKS[file.kind] !== undefined && manifest.files[file.name]?.placeholder === true)
+  /** The @2x mask of one layer, as the alpha byte per pixel. */
+  const maskAlpha = async (name: string, kind: string): Promise<Uint8Array> => {
+    const pic = await readPicture(join(OUT_DIR, `${name}_${MASK_FILE_KIND[kind as keyof typeof MASK_FILE_KIND]}mask@2x.png`))
+    const alpha = new Uint8Array(pic.width * pic.height)
+    for (let p = 0; p < alpha.length; p++) alpha[p] = pic.data[p * 4 + 3]!
+    return alpha
+  }
+  const solidCount = (alpha: Uint8Array): number => alpha.reduce((n, a) => n + (a >= 128 ? 1 : 0), 0)
+
+  it('gives every v4 stand-in the masks it is drawn with, and every stand-in hair L60 a split that adds up', async () => {
+    // Skin on a body and on every face, eyes on every face (empty on closed and sleep), hair on both hair layers —
+    // rendered from the stand-in's own shapes (`placeholderMaskSvg`), never computed. A hair L60 records how the
+    // hairstyle's region splits between its two layers, in @2x pixels, and the two never share one.
+    const standIns = v4StandIns()
+    expect(standIns.length, 'no v4 stand-in is committed').toBeGreaterThan(0)
+    for (const file of standIns) {
+      const entry = manifest.files[file.name]!
+      expect(Object.keys(entry.masks ?? {}).sort(), file.name).toEqual(V4_MASKS[file.kind])
+      for (const [kind, info] of Object.entries(entry.masks!)) {
+        const fileKind = MASK_FILE_KIND[kind as keyof typeof MASK_FILE_KIND]
+        expect(info.bytes2x, `${file.name} ${kind}`).toBe(statSync(join(OUT_DIR, `${file.name}_${fileKind}mask@2x.png`)).size)
+        expect(info.meanL, `${file.name} ${kind}`).toBeGreaterThanOrEqual(0)
+        expect(info.meanL, `${file.name} ${kind}`).toBeLessThanOrEqual(1)
+      }
+      if (file.kind === 'bodyFace') {
+        const shut = file.expr === 'closed' || file.expr === 'sleep'
+        expect(entry.masks!.eyes!.empty === true, `${file.name}: an eye mask is empty exactly when the eyes are shut`).toBe(shut)
+        expect(solidCount(await maskAlpha(file.name, 'eyes')) === 0, file.name).toBe(shut)
+      }
+      if (file.kind === 'hair' && file.layer === LAYERS.hairFront) {
+        const split = entry.split
+        expect(split, `${file.name} has no split`).toBeDefined()
+        expect(split!.front + split!.back, `${file.name}: front + back`).toBe(split!.region)
+        const back = hairFile(file.code!, LAYERS.hairBack)
+        if (manifest.files[back]?.placeholder !== true) continue
+        const [front2x, back2x] = await Promise.all([maskAlpha(file.name, 'hair'), maskAlpha(back, 'hair')])
+        expect(split!.front, file.name).toBe(solidCount(front2x))
+        expect(split!.back, file.name).toBe(solidCount(back2x))
+        expect(split!.back, `${file.name}: the back layer is empty`).toBeGreaterThan(0)
+        // The two layers' own pixels never meet, and the fringe stops above the stand-in eyes (y 130–160).
+        const [layer60, layer20] = await Promise.all([readPicture(join(OUT_DIR, `${file.name}@2x.png`)), readPicture(join(OUT_DIR, `${back}@2x.png`))])
+        let shared = 0
+        for (let p = 0; p < layer60.width * layer60.height; p++) if (layer60.data[p * 4 + 3]! >= 128 && layer20.data[p * 4 + 3]! >= 128) shared++
+        expect(shared, `${file.name} and ${back} share pixels`).toBe(0)
+        const box = alphaBBox(layer60)!
+        expect((box.y + box.h) / 2, `${file.name} reaches down to y ${(box.y + box.h) / 2}`).toBeLessThan(126)
+      } else {
+        expect(entry.split, `${file.name} carries a split`).toBeUndefined()
+      }
+    }
+  }, 120_000)
+
+  it('never lets a stand-in face’s skin and eye masks share a pixel', async () => {
+    const faces = v4StandIns().filter((file) => file.kind === 'bodyFace')
+    for (const file of faces) {
+      const [skin, eyes] = await Promise.all([maskAlpha(file.name, 'skin'), maskAlpha(file.name, 'eyes')])
+      let both = 0
+      for (let p = 0; p < skin.length; p++) if (skin[p]! >= 128 && eyes[p]! >= 128) both++
+      expect(both, `${file.name}: skin and eyes share ${both} pixels`).toBe(0)
+      expect(solidCount(skin), `${file.name} has no skin`).toBeGreaterThan(0)
+    }
+  }, 60_000)
 
   it('ships the server the very same bytes', () => {
     // The catalogue validates against this copy; two manifests that drift are two truths about which
@@ -1883,8 +1978,10 @@ describe('the placeholder command', () => {
     const run = (): string => execFileSync(process.execPath, [SCRIPT, 'placeholder', '--out', dir], { cwd: PACKAGE_ROOT, encoding: 'utf8' })
     run()
     const first = readFileSync(join(dir, MANIFEST_NAME))
-    expect(readdirSync(dir).filter((name) => name.endsWith('.png')).sort()).toEqual(stageOnePngs().sort())
     const written = JSON.parse(first.toString('utf8')) as Manifest
+    // …the v4 stand-ins with the masks they are drawn with (Plan 19), which only the manifest names.
+    expect(readdirSync(dir).filter((name) => name.endsWith('.png')).sort()).toEqual(stageOnePngs(undefined, undefined, written).sort())
+    expect(written.files.body_f_L30?.masks?.skin, 'a fresh stand-in set has no skin mask on its body').toBeDefined()
     expect(written.icons?.item_frame_gold_icon).toMatchObject({ kind: 'icon', of: 'item_frame_gold_L90', placeholder: true })
     // Idempotent: the artefact is committed, so a second run that changed a byte would be a dirty tree.
     run()
