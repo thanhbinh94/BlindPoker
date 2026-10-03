@@ -13,12 +13,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { ingest as pipelineIngest } from '../scripts/avatar-pipeline/extract.mjs'
+import { anchorBase } from '../scripts/avatar-pipeline/frame.mjs'
 import { MANIFEST_NAME } from '../scripts/avatar-pipeline/manifest.mjs'
 import { alphaBBox, renderSvg, writePicture } from '../scripts/avatar-pipeline/png.mjs'
 import { collect } from '../scripts/avatar-registry/collect.mjs'
 import { addVariant, baseGaps, ingestAssets } from '../scripts/avatar-registry/ingest.mjs'
 import { parseSpec } from '../scripts/avatar-registry/registry.mjs'
-import { bodyBox, compareBoxes, comparePictures, layerNames, scorePicture, verifyAssets } from '../scripts/avatar-registry/verify.mjs'
+import {
+  HAIR_BODY_MARGIN, allowedArea, bodyBox, compareBoxes, comparePictures, kindOfSpec, layerNames, ownerOf, scorePicture, verifyAssets,
+} from '../scripts/avatar-registry/verify.mjs'
 
 // Every case here renders synthetic pictures and runs the real pipeline on them: 3–6 s each on this machine, and
 // past vitest's 5 s default when the suite shares the CPU with typecheck or a build. The budget is the work, not a
@@ -38,8 +41,9 @@ const H = 1536
  * heads, inside D02 §8's 2.0–2.5.
  */
 const HAIR = '#8a6a9a'
-const figure = ({ hair = HAIR, eyes = '#202020' } = {}): string => `
-  <ellipse cx="512" cy="420" rx="250" ry="250" fill="${hair}"/>
+const SKIN = '#e0c0a0'
+const figure = ({ hair = HAIR, eyes = '#202020', head = 250 } = {}): string => `
+  <ellipse cx="512" cy="420" rx="${head}" ry="${head}" fill="${hair}"/>
   <ellipse cx="512" cy="500" rx="200" ry="170" fill="#e0c0a0"/>
   <ellipse cx="440" cy="500" rx="30" ry="40" fill="${eyes}"/>
   <ellipse cx="584" cy="500" rx="30" ry="40" fill="${eyes}"/>
@@ -50,7 +54,24 @@ const figure = ({ hair = HAIR, eyes = '#202020' } = {}): string => `
   <rect x="410" y="1010" width="80" height="330" rx="20" fill="#808080"/>
   <rect x="534" y="1010" width="80" height="330" rx="20" fill="#808080"/>`
 
-const svg = (body: string, width = W, height = H, background = ''): string =>
+/**
+ * A v4 body (Plan 19): the same figure with a bald head — a skin-coloured dome 20 px lower and 40 px narrower than
+ * the hair outline, as the body template asks. Its box is x 162–862 (the arms), y 190–1340.
+ */
+const bald = ({ eyes = '#202020' } = {}): string => figure({ hair: SKIN, eyes, head: 230 })
+/**
+ * A hairstyle's colour: dark brown (m_spiky01's), well away from the grey clothing — `HAIR` lies within the scope
+ * rule's RGB distance 40 of it (35.5), so a lock of `HAIR` over the tank top would not read as a change at all.
+ */
+const BROWN = '#4a2c1d'
+/** A hairstyle on that body: a cap over the top of the head, above the eyes. */
+const CAP = `<ellipse cx="512" cy="310" rx="250" ry="140" fill="${BROWN}"/>`
+/** …a lock hanging behind the shoulder, outside the body: x 300–370 beside the torso (x 382), y 880–1000 below the arm. */
+const LOCK = `<rect x="300" y="880" width="70" height="120" fill="${BROWN}"/>`
+/** …and the same hair painted over the torso, which a hairstyle never does. */
+const OVER_TORSO = `<rect x="420" y="850" width="180" height="150" fill="${BROWN}"/>`
+
+const svg =(body: string, width = W, height = H, background = ''): string =>
   `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${background}${body}</svg>`
 
 /** A 16 px checkerboard of white and light grey — the fake transparency the image model sometimes paints. */
@@ -66,6 +87,7 @@ let srcDir = ''
 type Fixture =
   | 'ref' | 'happy' | 'shifted' | 'nudged' | 'wide' | 'small' | 'zoomed' | 'wider' | 'checker' | 'checkerCorners'
   | 'recoloured' | 'torso' | 'hat' | 'shirt' | 'face' | 'ring' | 'disc'
+  | 'bald' | 'baldHappy' | 'baldTorso' | 'bodyRaised' | 'hairOk' | 'hairTorso' | 'hairWide'
 /** Every synthetic picture, by name, as a path under `srcDir`. */
 const files = {} as Record<Fixture, string>
 
@@ -98,6 +120,14 @@ beforeAll(async () => {
   const ring = (inner: string): string => svg(`<circle cx="512" cy="512" r="440" fill="none" stroke="#d0a030" stroke-width="80"/>${inner}`, 1024, 1024)
   files.ring = await draw('ring.png', ring(''), 1024, 1024)
   files.disc = await draw('disc.png', ring('<circle cx="512" cy="512" r="400" fill="#d0a030"/>'), 1024, 1024)
+  // Plan 19: a body, its happy face, a face that changed the torso, a body whose feet sit 20 px higher, and hairstyles.
+  files.bald = await draw('bald.png', svg(bald()))
+  files.baldHappy = await draw('bald-happy.png', svg(bald({ eyes: '#6a2020' })))
+  files.baldTorso = await draw('bald-torso.png', svg(`${bald()}<rect x="420" y="850" width="180" height="150" fill="#cc2222"/>`))
+  files.bodyRaised = await draw('body-raised.png', svg(`<g transform="translate(0 -20)">${bald()}</g>`))
+  files.hairOk = await draw('hair-ok.png', svg(`${bald()}${CAP}${LOCK}`))
+  files.hairTorso = await draw('hair-torso.png', svg(`${bald()}${CAP}${OVER_TORSO}`))
+  files.hairWide = await draw('hair-wide.png', svg(`<g transform="translate(31 -44)">${bald()}${CAP}${LOCK}</g>`, 1086, 1448), 1086, 1448)
 }, 120_000)
 
 afterAll(() => rmSync(temp, { recursive: true, force: true }))
@@ -255,6 +285,96 @@ describe('verify: scope', () => {
   })
 })
 
+describe('verify: the v4 kinds (Plan 19)', () => {
+  it('reads what kind of asset a v4 spec describes', () => {
+    expect(kindOfSpec('hair:m_neat01')).toEqual({ kind: 'hair', slot: null })
+    expect(kindOfSpec('face:f:sad')).toEqual({ kind: 'bodyExpression', slot: null })
+    expect(kindOfSpec('body:m')).toEqual({ kind: 'body', slot: null })
+    expect(kindOfSpec('expr:f02:sad')).toEqual({ kind: 'expression', slot: null })
+    expect(kindOfSpec('item:outfit:casual01')).toEqual({ kind: 'item', slot: 'outfit' })
+  })
+
+  it('names the layers each v4 target writes', () => {
+    expect(layerNames({ kind: 'hair', code: 'm_neat01', gender: 'm' }, 'm')).toEqual(['item_hair_m_neat01_L20', 'item_hair_m_neat01_L60'])
+    expect(layerNames(parseSpec('body:f'), 'f')).toEqual(['body_f_L30', 'body_f_face_neutral_L50'])
+    expect(layerNames(parseSpec('face:m:sleep'), 'm')).toEqual(['body_m_face_sleep_L50'])
+    expect(layerNames(parseSpec('item:outfit:dealer01'), 'm', 'm')).toEqual(['item_outfit_dealer01_m_L40'])
+  })
+
+  it('names the owner of a v4 ingest: a body, a face or a hairstyle its gender, an item its --base', () => {
+    expect(ownerOf(parseSpec('body:m'), null)).toBe('m')
+    expect(ownerOf(parseSpec('face:f:happy'), null)).toBe('f')
+    expect(ownerOf(parseSpec('hair:m_spiky01'), { base: null })).toBe('m')
+    expect(ownerOf(parseSpec('item:outfit:casual01'), { base: 'f' })).toBe('f')
+    expect(ownerOf(parseSpec('item:head:beret_red01'), { base: null })).toBe('f01')
+  })
+
+  it('holds a body to its feet and centre line only: a bald head lower and narrower than the hair is fine', async () => {
+    const body = await score(files.bald, { kind: 'body' })
+    expect(body.verdict, body.reason).toBe('ok')
+    expect(body.measure.drift).toEqual({ left: null, top: null, right: null, bottom: 0, centre: 0 })
+    expect(body.measure.heads).toBeGreaterThanOrEqual(2)
+    expect(body.measure.heads).toBeLessThanOrEqual(2.5)
+    expect(body.measure.hairDelta).toBeUndefined()
+    expect(body.measure.scope).toBeUndefined()
+    // The same picture held to all four edges, as an expression is, drifts on its top.
+    expect(await score(files.bald, { kind: 'expression' })).toMatchObject({ verdict: 'ng', reason: 'drift' })
+  })
+
+  it('fails a body whose feet sit 20 px higher than the reference, and one on another canvas (it is cut on f01)', async () => {
+    const raised = await score(files.bodyRaised, { kind: 'body' })
+    expect(raised).toMatchObject({ verdict: 'ng', reason: 'drift' })
+    expect(raised.measure.drift).toMatchObject({ bottom: -20, centre: 0 })
+    expect(await score(files.wide, { kind: 'body' })).toMatchObject({ verdict: 'ng', reason: 'redrawn' })
+  })
+
+  it('scores a body expression as an expression, against its body', async () => {
+    const happy = await score(files.baldHappy, { kind: 'bodyExpression', referenceFile: files.bald })
+    expect(happy.verdict, happy.reason).toBe('ok')
+    expect(happy.measure.drift).toEqual({ left: 0, top: 0, right: 0, bottom: 0 })
+    expect(happy.measure.hairDelta).toBe(0)
+    expect(happy.measure.scope).toBeLessThan(0.01)
+    const torso = await score(files.baldTorso, { kind: 'bodyExpression', referenceFile: files.bald })
+    expect(torso).toMatchObject({ verdict: 'ng', reason: 'scope' })
+  })
+
+  it('holds a hairstyle to its feet and centre line, lets it fall outside the body, and asks neither heads nor hair colour', async () => {
+    const hair = await score(files.hairOk, { kind: 'hair', referenceFile: files.bald })
+    expect(hair.verdict, hair.reason).toBe('ok')
+    expect(hair.measure.drift).toEqual({ left: null, top: null, right: null, bottom: 0, centre: 0 })
+    expect(hair.measure.scope).toBeLessThan(0.01)
+    expect(hair.measure.heads).toBeUndefined()
+    expect(hair.measure.hairDelta).toBeUndefined()
+  })
+
+  it('fails a hairstyle that paints over the torso on scope', async () => {
+    const torso = await score(files.hairTorso, { kind: 'hair', referenceFile: files.bald })
+    expect(torso).toMatchObject({ verdict: 'ng', reason: 'scope' })
+    expect(torso.measure.scope).toBeGreaterThan(0.01)
+  })
+
+  it('places a hairstyle on another canvas by its feet and centre line before measuring scope', async () => {
+    const wide = await score(files.hairWide, { kind: 'hair', referenceFile: files.bald })
+    expect(wide.verdict, wide.reason).toBe('ok')
+    expect(wide.notes.join('\n')).toMatch(/another canvas/)
+    expect(wide.measure.scope).toBeLessThan(0.01)
+  })
+
+  it("allows a hairstyle above the face line and outside the body grown by 4 px, and nowhere else", async () => {
+    const ref = await renderSvg(svg(bald()), W, H)
+    const allowed = allowedArea('hair', null, anchorBase(ref), ref)!
+    expect(HAIR_BODY_MARGIN).toBe(4)
+    expect(allowed(512, 300)).toBe(true) // the head
+    expect(allowed(512, 700)).toBe(true) // the neck, above FACE_LIMIT_Y on this figure
+    expect(allowed(512, 950)).toBe(false) // the torso
+    expect(allowed(200, 835)).toBe(false) // an arm
+    expect(allowed(320, 950)).toBe(true) // beside the torso, behind the shoulder
+    // The torso's left side is x 382: 4 px out is still the body's, 5 px out is not.
+    expect(allowed(378, 950)).toBe(false)
+    expect(allowed(377, 950)).toBe(true)
+  })
+})
+
 describe('verify: an aura or a frame', () => {
   it('passes a hollow ring and fails a filled disc', async () => {
     const ring = await score(files.ring, { kind: 'aura', referenceFile: null })
@@ -326,6 +446,60 @@ describe('verify: the pipeline', () => {
     expect(layerNames(parseSpec('bot:3'), 'f01')).toEqual(['bot_3_L30', ...faces(3)])
     expect(layerNames(parseSpec('bot:3:happy'), 'f01')).toEqual(['bot_3_face_happy_L50'])
   })
+
+  // ── Plan 19: the v4 targets in the copy ──
+
+  const spec = (as: string, flags: string[] = [], base: string | null = null): Asset => ({ as, base, variant: null, flags })
+
+  /** Score with `keepTmp`, hand back the copy's manifest, and remove the copy. */
+  async function scoreKeeping(fields: Record<string, unknown>): Promise<{ result: any; copy: any }> {
+    const lines: string[] = []
+    const result = await scorePicture({ publicDir, keepTmp: true, log: (line: string) => lines.push(line), ...fields } as any)
+    const kept = /^kept (.+)$/.exec(lines.find((line) => line.startsWith('kept ')) ?? '')?.[1]
+    expect(kept, lines.join('\n')).toBeDefined()
+    const copy = JSON.parse(readFileSync(join(kept!, 'avatar', MANIFEST_NAME), 'utf8'))
+    rmSync(kept!, { recursive: true, force: true })
+    return { result, copy }
+  }
+
+  it('checks a body on its two layers, cut in the copy on f01 transform', async () => {
+    const { result, copy } = await scoreKeeping({ file: files.bald, referenceFile: files.ref, kind: 'body', ingest: spec('body:f') })
+    expect(result.measure.pipelineError, JSON.stringify(result)).toBeUndefined()
+    expect(Object.keys(result.measure.checks).sort()).toEqual(['body_f_L30', 'body_f_face_neutral_L50'])
+    expect(copy.bodies.f.transform).toEqual(copy.bases.f01.transform)
+  }, 120_000)
+
+  it('ingests the reference as body:<g> first when the copy has no body yet, then checks both hair layers', async () => {
+    const before = readFileSync(join(publicDir, MANIFEST_NAME), 'utf8')
+    expect(JSON.parse(before).bodies?.f).toBeUndefined()
+    const { result, copy } = await scoreKeeping({ file: files.hairOk, referenceFile: files.bald, kind: 'hair', ingest: spec('hair:f_bob01') })
+    expect(result.measure.pipelineError, JSON.stringify(result)).toBeUndefined()
+    expect(Object.keys(result.measure.checks).sort()).toEqual(['item_hair_f_bob01_L20', 'item_hair_f_bob01_L60'])
+    expect(copy.bodies.f.transform).toEqual(copy.bases.f01.transform)
+    expect(copy.files.body_f_L30).toMatchObject({ real: true })
+    expect(readFileSync(join(publicDir, MANIFEST_NAME), 'utf8')).toBe(before)
+  }, 120_000)
+
+  it('cuts a v4 bot on its body, ingesting the body from the reference only when the reference is that body', async () => {
+    const { result, copy } = await scoreKeeping({ file: files.bald, referenceFile: files.bald, kind: 'bot', ingest: spec('bot:0'), transformFrom: 'f', referenceOwner: 'f' })
+    expect(result.measure.pipelineError, JSON.stringify(result)).toBeUndefined()
+    expect(Object.keys(result.measure.checks)).toContain('bot_0_L30')
+    expect(copy.files.bot_0_L30.cutOn).toBe('f')
+    // A happy face is drawn from the bot's own picture, which cannot stand in for body f.
+    const happy = await scorePicture({ file: files.baldHappy, referenceFile: files.bald, kind: 'bot', ingest: spec('bot:0:happy'), transformFrom: 'f', referenceOwner: null, publicDir })
+    expect(happy).toMatchObject({ verdict: 'ng', reason: 'pipeline' })
+    expect(happy.measure.pipelineError).toMatch(/no body f in .* and no reference/)
+  }, 120_000)
+
+  it('passes an asset --recolour-to, --hair and --anchor through to the pipeline', async () => {
+    // Each on a target it does not belong to, so the pipeline's own refusal shows it arrived.
+    const recolour = await scorePicture({ file: files.bald, referenceFile: files.ref, kind: 'body', ingest: spec('body:f', ['--recolour-to', '#5e3e6f']), publicDir })
+    expect(recolour.measure.pipelineError).toMatch(/--recolour-to belongs to a hairstyle/)
+    const hair = await scorePicture({ file: files.bald, referenceFile: files.ref, kind: 'body', ingest: spec('body:f', ['--hair', 'f_bob01']), publicDir })
+    expect(hair.measure.pipelineError).toMatch(/--hair belongs to a worn item/)
+    const anchor = await scorePicture({ file: files.hat, referenceFile: files.ref, kind: 'item', slot: 'head', ingest: spec('item:head:x01', ['--anchor', 'head'], 'f01'), publicDir })
+    expect(anchor.measure.pipelineError).toMatch(/--anchor head belongs to a body/)
+  }, 120_000)
 })
 
 // ─────────────────────────────────────────────────── verify on the registry ──
@@ -542,4 +716,45 @@ describe('ingestAssets', () => {
     expect(manifest.files.bot_4_face_happy_L50).toMatchObject({ real: true })
     expect(manifest.files.bot_4_face_happy_L50.copyOf).toBeUndefined()
   }, 180_000)
+
+  // ── Plan 19 ──
+
+  const v4Asset = (fields: Asset): Asset => ({
+    slot: null, wear: null, look: { description: 'x' }, prompt: null, status: 'ok', attempts: [{ n: 1, verdict: 'ok' }], ...fields,
+    ingest: { base: null, variant: null, flags: [], ...fields.ingest },
+  })
+
+  it('ingests a body on f01 transform, then a hairstyle drawn on it with its --recolour-to', async () => {
+    const publicDir = join(temp, 'public-ingest-v4')
+    mkdirSync(publicDir, { recursive: true })
+    const targets = [join(publicDir, MANIFEST_NAME)]
+    await pipelineIngest({ file: files.ref, target: { kind: 'base', base: 'f01' }, dir: publicDir, targets })
+    const body = v4Asset({ id: 'body_f', kind: 'body', wear: 'f', catalog: 'f', reference: 'ref.png', file: 'bald.png', ingest: { as: 'body:f' } })
+    const bob = v4Asset({
+      id: 'item_hair_f_bob01', kind: 'hair', wear: 'f', catalog: 'hair_f_bob01', reference: '@body_f', file: 'hair-ok.png', status: 'approved',
+      ingest: { as: 'hair:f_bob01', flags: ['--recolour-to', '#5e3e6f'] },
+    })
+    const lines: string[] = []
+    const results = await ingestAssets(registryOf([body, bob]), [], { srcDir, publicDir, targets, log: (line: string) => lines.push(line) })
+    expect(results.map((result: { id: string; done: boolean; name?: string | null }) => [result.id, result.done, result.name])).toEqual([
+      ['body_f', true, 'body_f_L30'],
+      ['item_hair_f_bob01', true, 'item_hair_f_bob01_L60'],
+    ])
+    expect(body.ingested && bob.ingested).toBe(true)
+    expect(lines.join('\n')).toMatch(/transform taken from f01/)
+    const manifest = JSON.parse(readFileSync(targets[0]!, 'utf8'))
+    expect(manifest.bodies.f.transform).toEqual(manifest.bases.f01.transform)
+    expect(manifest.files.body_f_face_neutral_L50).toMatchObject({ real: true })
+    expect(manifest.files.item_hair_f_bob01_L20).toMatchObject({ real: true })
+    expect(manifest.files.item_hair_f_bob01_L60).toMatchObject({ real: true, recolouredTo: '#5e3e6f' })
+  }, 180_000)
+
+  it('passes an asset --hair and --anchor through to the pipeline, which refuses them where they do not belong', async () => {
+    const publicDir = join(temp, 'public-ingest-flags')
+    mkdirSync(publicDir, { recursive: true })
+    const targets = [join(publicDir, MANIFEST_NAME)]
+    const hat = (flags: string[], base: string): Asset => v4Asset({ id: 'v4/item_head_x01', kind: 'item', slot: 'head', catalog: 'head_x01', reference: 'ref.png', file: 'hat.png', ingest: { as: 'item:head:x01', base, flags } })
+    await expect(ingestAssets(registryOf([hat(['--hair', 'm_tousled01'], 'f')]), [], { srcDir, publicDir, targets })).rejects.toThrow(/m_tousled01 is worn on body m, not on body f/)
+    await expect(ingestAssets(registryOf([hat(['--anchor', 'head'], 'f01')]), [], { srcDir, publicDir, targets })).rejects.toThrow(/--anchor head belongs to a body/)
+  }, 60_000)
 })

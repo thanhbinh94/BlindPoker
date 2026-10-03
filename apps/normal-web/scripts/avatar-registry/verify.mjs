@@ -34,7 +34,19 @@
  * reference's canvas before drift, hair colour and scope are measured, and before the pipeline cuts it. A
  * head item's hat covers the top of the head, so `heads` and `hair_colour` are not asked of it. A bot goes
  * through the pipeline like everything else since 2026-09-24 (`bot:<n>` checks its body and six faces,
- * `bot:<n>:happy` that one face), cut on f01's transform.
+ * `bot:<n>:happy` that one face), cut on the transform `transformSource` names: f01's, or a v4 redraw's body's.
+ *
+ * Plan 19 (v4) adds three kinds (docs/avatar-2d.md §10.4 has the table):
+ *
+ *   body            against F01's picture, its feet and centre line only (`comparePictures`; on another canvas
+ *                   `redrawn`, since it is cut on f01's transform, as a bot is); `heads`; no hair colour or scope;
+ *                   the pipeline on `body_<g>_L30` and its neutral face — C12 holds the head
+ *   bodyExpression  as an expression, against its body's picture
+ *   hair            against its body's picture, the feet and centre line of the legs only; no `heads` or hair
+ *                   colour; `scope` outside the head region and the body grown by `HAIR_BODY_MARGIN`
+ *                   (`allowedArea`); the pipeline on both layers — C13 holds the split
+ *
+ * An item drawn on a body is measured as today; its owner is the body (`ingest.base` `f`/`m`).
  *
  * Nothing here writes into public/avatar/.
  */
@@ -42,11 +54,13 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { runChecks } from '../avatar-pipeline/checks.mjs'
-import { BOT_TRANSFORM_FROM, ingest, measure as measureFigure } from '../avatar-pipeline/extract.mjs'
+import { ingest, measure as measureFigure } from '../avatar-pipeline/extract.mjs'
 import { CROP, FACE_LIMIT_Y, HEAD_LIMIT_Y, LAYERS, anchorBase } from '../avatar-pipeline/frame.mjs'
-import { EXPRESSIONS, MANIFEST_NAME, PUBLIC_DIR, SLOT_LAYER, baseFile, botFaceFile, botFile, faceFile, itemFile, readManifest } from '../avatar-pipeline/manifest.mjs'
-import { ALPHA_SOLID, alphaBBox, colourDistance, placeOnCanvas, readPicture, removeChroma, resizePicture, writePicture } from '../avatar-pipeline/png.mjs'
-import { MAX_ATTEMPTS, SRC_DIR, parseFlags, parseSpec, referencePath, requireAsset } from './registry.mjs'
+import {
+  EXPRESSIONS, GENDERS, MANIFEST_NAME, PUBLIC_DIR, SLOT_LAYER, baseFile, bodyFaceFile, bodyFile, botFaceFile, botFile, faceFile, hairFile, itemFile, readManifest,
+} from '../avatar-pipeline/manifest.mjs'
+import { ALPHA_SOLID, alphaBBox, colourDistance, dilateMask, placeOnCanvas, readPicture, removeChroma, resizePicture, writePicture } from '../avatar-pipeline/png.mjs'
+import { MAX_ATTEMPTS, SRC_DIR, parseFlags, parseSpec, referenceOwner, referencePath, requireAsset, transformSource } from './registry.mjs'
 
 export const PORTRAIT = { aspects: [2 / 3, 3 / 4], tolerance: 0.05, minHeight: 1152 }
 export const SQUARE = { tolerance: 0.05, minSide: 1024 }
@@ -67,8 +81,16 @@ export const SCOPE_DIFF = 40
 export const SCOPE_RADIUS = 2
 export const SCOPE_LIMIT = 0.01
 export const HOLLOW = { radius: 0.4, limit: 0.05 }
+/**
+ * How far (reference px) round its body a hairstyle may not change the picture below the head region (Plan 19,
+ * `allowedArea`): hair falls behind the shoulders and the back, never over the torso, the arms or the hands, nor
+ * against their outline.
+ */
+export const HAIR_BODY_MARGIN = 4
 
 const SQUARE_KINDS = new Set(['aura', 'frame'])
+/** The kinds whose picture is a redraw of a face on its owner's picture (Plan 12's expression, Plan 19's body face). */
+const FACE_KINDS = new Set(['expression', 'bodyExpression'])
 const round2 = (n) => Math.round(n * 1000) / 1000
 
 // ─────────────────────────────────────────────────────────────── the rules ──
@@ -190,10 +212,13 @@ export async function alignPicture(pic, ref, { scale, left, top }) {
 /** Compare a picture with its reference: both boxes, the rules, and the placement onto the reference's canvas. */
 export function comparePictures(pic, ref, kind, slot) {
   const anchored = pic.width !== ref.width || pic.height !== ref.height
-  if (kind === 'bot') {
+  if (kind === 'bot' || kind === 'body') {
     // A bot is its own figure — a robot has no hair (box top 88 px lower than F01's) and ear discs (1.16× as
     // wide) — drawn on F01's canvas and cut on F01's transform. What must agree is where it stands: its feet
     // and its centre line. Another canvas is a redraw, since the transform is F01's.
+    // A v4 body (Plan 19, pre-flight #23) is the same case: drawn from F01's picture and cut on f01's transform,
+    // with a bald head where F01 has hair (its top lower, its head narrower) and a new pose (its arms elsewhere).
+    // Its feet stay on F01's ground line and its centre line on F01's; C12, in the pipeline rule, holds the head.
     const box = figureBox(pic)
     const refBox = figureBox(ref)
     const placement = { scale: 1, left: 0, top: 0 }
@@ -203,6 +228,7 @@ export function comparePictures(pic, ref, kind, slot) {
     const drift = Math.max(Math.abs(bottom), Math.abs(centre))
     return { scale: 1, widthRatio: box.w / refBox.w, edges: { left: null, top: null, right: null, bottom, centre }, drift, placement, reason: drift > DRIFT_LIMIT ? 'drift' : null }
   }
+  if (kind === 'hair') return compareHair(pic, ref, anchored)
   if ((kind === 'item' && slot === 'head') || kind === 'base') {
     // A hat may be far wider than the hair (the conical hat: 1.15× the figure) — that is the item, not a
     // redraw. So a head item is held to its *body*: the ink below the reference's mid-height, where no hat
@@ -219,8 +245,45 @@ export function comparePictures(pic, ref, kind, slot) {
 
 /** The share of the reference's height above which a head item's ink is ignored by `comparePictures`. */
 export const HEAD_ITEM_BODY_FROM = 0.5
-/** …and a new base's: the legs alone (F02's hair reaches her hips, about 0.67 of the figure). */
+/** …and a new base's: the legs alone (F02's hair reaches her hips, about 0.67 of the figure). A hairstyle's too. */
 export const BASE_LEGS_FROM = 0.8
+
+/**
+ * A hairstyle against its bald body (Plan 19, the `hair` row of §10.4). The hair may raise the box's top, widen
+ * its sides and reach the hips, so the picture is held to its legs — the rows from `BASE_LEGS_FROM` of the body's
+ * height down, which no hairstyle reaches — and of those only the bottom edge (the feet, on the body's ground line)
+ * and the centre line count, up to `DRIFT_LIMIT`.
+ *
+ * On another canvas (the model's 1086 × 1448, which keeps the figure's size and moves it — the 2026-09-24 case)
+ * where it stands says nothing, so it is placed at scale 1 by those two instead, as a head item is by its feet,
+ * and the pipeline is given that placed copy (`pipelineInput`). Then only the legs' width can still tell a figure
+ * redrawn at another size: outside `WIDTH_RANGE` it is `redrawn`, since the cut would miss the body.
+ */
+function compareHair(pic, ref, anchored) {
+  const refBox = alphaBBox(ref)
+  const fromY = refBox.y + Math.floor(refBox.h * BASE_LEGS_FROM)
+  const refLegs = bodyBox(ref, fromY)
+  // On another canvas the legs start as far above the picture's own feet as the body's start above its feet.
+  const picBox = alphaBBox(pic)
+  const picLegs = picBox ? bodyBox(pic, anchored ? picBox.y + picBox.h - (refBox.y + refBox.h - fromY) : fromY) : null
+  const none = { left: null, top: null, right: null, bottom: null, centre: null }
+  const placement = { scale: 1, left: 0, top: 0 }
+  if (!refLegs || !picLegs) return { scale: 1, widthRatio: null, edges: none, drift: Infinity, placement, reason: 'redrawn' }
+  const bottomOf = (b) => b.y + b.h
+  const centreOf = (b) => b.x + b.w / 2
+  const widthRatio = picLegs.w / refLegs.w
+  if (anchored) {
+    placement.left = centreOf(refLegs) - centreOf(picLegs)
+    placement.top = bottomOf(refLegs) - bottomOf(picLegs)
+  }
+  const bottom = Math.round(bottomOf(picLegs) + placement.top - bottomOf(refLegs))
+  const centre = Math.round(centreOf(picLegs) + placement.left - centreOf(refLegs))
+  const drift = Math.max(Math.abs(bottom), Math.abs(centre))
+  let reason = null
+  if (anchored && (widthRatio < WIDTH_RANGE[0] || widthRatio > WIDTH_RANGE[1])) reason = 'redrawn'
+  else if (drift > DRIFT_LIMIT) reason = 'drift'
+  return { scale: 1, widthRatio, edges: { ...none, bottom, centre }, drift, placement, reason }
+}
 
 /**
  * The *solid* ink box of the rows at or below `fromY` — a figure's body, when `fromY` is under its head.
@@ -268,13 +331,30 @@ export function hairColour(pic) {
  * An outfit has none (ruling 2026-09-24): the outfit cut discards everything above the chin line, so a head
  * the generator redrew never reaches the layer — and five of the eight accepted real outfits redrew theirs
  * (tuxedo01 4.4 %, tet_red01 15.9 % of the head changed).
+ *
+ * Plan 19: a body's face (`bodyExpression`) has an expression's. A hairstyle (`hair`) may change the head region
+ * and anything outside its body, but not the body itself below the head region nor within `HAIR_BODY_MARGIN` of it
+ * — hair never covers the torso, the arms or the hands — which is why it needs the body's picture, `ref`.
+ *
+ * @param {string} kind
+ * @param {string | null} slot
+ * @param {{ scale: number, offsetX: number, offsetY: number }} transform
+ * @param {{ data: Buffer, width: number, height: number } | null} [ref]
  */
-export function allowedArea(kind, slot, transform) {
+export function allowedArea(kind, slot, transform, ref = null) {
   const fx = (x) => x * transform.scale + transform.offsetX
   const fy = (y) => y * transform.scale + transform.offsetY
   const inCrop = (x, y) => fx(x) >= CROP.x && fx(x) < CROP.x + CROP.size && fy(y) >= CROP.y && fy(y) < CROP.y + CROP.size
-  if (kind === 'expression') return (_x, y) => fy(y) < FACE_LIMIT_Y
+  if (FACE_KINDS.has(kind)) return (_x, y) => fy(y) < FACE_LIMIT_Y
   if (kind === 'item' && (slot === 'head' || slot === 'face')) return (x, y) => fy(y) < HEAD_LIMIT_Y || inCrop(x, y)
+  if (kind === 'hair') {
+    if (!ref) throw new Error('a hairstyle is held to its body: allowedArea needs the body picture')
+    const { width, height, data } = ref
+    const solid = new Uint8Array(width * height)
+    for (let at = 0; at < solid.length; at++) solid[at] = data[at * 4 + 3] > ALPHA_SOLID ? 255 : 0
+    const body = dilateMask(solid, width, height, HAIR_BODY_MARGIN)
+    return (x, y) => fy(y) < FACE_LIMIT_Y || body[y * width + x] === 0
+  }
   return null
 }
 
@@ -348,11 +428,19 @@ export function hollowness(pic) {
 /**
  * The layers an ingest of `target` writes, which are the ones `runChecks` is run over. An aura or a frame is
  * its one item layer; a bot's neutral picture is its body and all six faces (the five besides neutral written
- * as copies of it, or kept where already real); a bot's second face is that face alone.
+ * as copies of it, or kept where already real); a bot's second face is that face alone. Plan 19: a body is its
+ * L30 and its neutral face, a body's face that face, a hairstyle its back (L20) and front (L60).
+ *
+ * @param {any} target a `parseSpec` result
+ * @param {string} owner
+ * @param {string | null} [variant]
  */
 export function layerNames(target, owner, variant = null) {
   if (target.kind === 'base') return [baseFile(owner, LAYERS.body), faceFile(owner, 'neutral'), baseFile(owner, LAYERS.hairBack), baseFile(owner, LAYERS.hairFront)]
   if (target.kind === 'expr') return [faceFile(owner, target.expr)]
+  if (target.kind === 'body') return [bodyFile(target.gender), bodyFaceFile(target.gender, 'neutral')]
+  if (target.kind === 'bodyFace') return [bodyFaceFile(target.gender, target.expr)]
+  if (target.kind === 'hair') return [hairFile(target.code, LAYERS.hairBack), hairFile(target.code, LAYERS.hairFront)]
   if (target.kind === 'bot') {
     const expr = target.expr ?? 'neutral'
     return expr === 'neutral' ? [botFile(target.bot), ...EXPRESSIONS.map((face) => botFaceFile(target.bot, face))] : [botFaceFile(target.bot, expr)]
@@ -360,17 +448,28 @@ export function layerNames(target, owner, variant = null) {
   return [itemFile(target.slot, target.code, SLOT_LAYER[target.slot], variant)]
 }
 
-/** Which base an ingest belongs to: the base itself, an expression's base, or an item's `--base` (f01). */
-export const ownerOf = (target, spec) => (target.kind === 'base' || target.kind === 'expr' ? target.base : spec?.base ?? 'f01')
+/**
+ * Which base or body an ingest belongs to: the base itself, an expression's base; since Plan 19 the body itself,
+ * a body face's or a hairstyle's gender; or an item's `--base` (f01 when none — a body when it is `f`/`m`).
+ */
+export function ownerOf(target, spec) {
+  if (target.kind === 'base' || target.kind === 'expr') return target.base
+  if (target.kind === 'body' || target.kind === 'bodyFace' || target.kind === 'hair') return target.gender
+  return spec?.base ?? 'f01'
+}
+
+/** The kinds `pipelineInput` aligns: each is cut with its owner's stored transform. */
+const ALIGNED_KINDS = new Set(['expression', 'item', 'bodyExpression', 'hair'])
 
 /**
- * The file the pipeline should be given for a picture. An expression and an item are cut with their base's
- * stored transform, which was measured on a canvas the reference's size; a picture on another canvas (the
- * model's 1086 × 1448) is moved onto the reference's canvas first, aligned as `verify` aligned it, and
- * written to `tmp`. Anything else — and any picture already on the reference's canvas — goes in as it is.
+ * The file the pipeline should be given for a picture. An expression, an item and — Plan 19 — a body's face and
+ * a hairstyle are cut with their owner's stored transform, which was measured on a canvas the reference's size; a
+ * picture on another canvas (the model's 1086 × 1448) is moved onto the reference's canvas first, aligned as
+ * `verify` aligned it, and written to `tmp`. Anything else — a base, a body or a bot, which take a transform
+ * whole, and any picture already on the reference's canvas — goes in as it is.
  */
 export async function pipelineInput({ file, kind, slot = null, referenceFile, tmp }) {
-  if (!referenceFile || (kind !== 'expression' && kind !== 'item')) return { file, aligned: false }
+  if (!referenceFile || !ALIGNED_KINDS.has(kind)) return { file, aligned: false }
   const pic = await readPicture(file)
   const ref = await readPicture(referenceFile)
   if (pic.width === ref.width && pic.height === ref.height) return { file, aligned: false }
@@ -381,12 +480,21 @@ export async function pipelineInput({ file, kind, slot = null, referenceFile, tm
   return { file: out, aligned: true }
 }
 
+/** What a stored transform belongs to, in a message: a body (Plan 19) or a base. */
+const ownerLabel = (owner) => (GENDERS.includes(owner) ? `body ${owner}` : `base ${owner}`)
+
 /**
- * Ingest `file` into a copy of `publicDir` and run the ten checks over what that wrote. A base the copy
- * has no transform for yet (an expression of a base not ingested) is ingested there first from the
- * reference picture, which for an expression is that base's own picture.
+ * Ingest `file` into a copy of `publicDir` and run the checks (C1–C13) over what that wrote.
+ *
+ * The cut takes `transformFrom` — `transformSource`'s answer, never worked out here from a file name (Plan 19,
+ * pre-flight #28): a new base's source base, a bot's root (f01, or a v4 redraw's body), a body's f01. A base or
+ * body the copy has no transform for yet — an expression of a base not ingested, or since Plan 19 a hairstyle, a
+ * body face or an item on a body not ingested — is ingested there first from the reference picture, as
+ * `base:<id>` or `body:<g>`: for an expression, a face, a hairstyle or an item that is its owner's own picture.
+ * A bot or a body needs its root's, so its reference stands in only when it is that picture (`referenceOwner`) —
+ * a bot's happy face, drawn from the bot, cannot.
  */
-async function pipelineChecks({ file, kind, slot, referenceFile, spec, publicDir, keepTmp, log }) {
+async function pipelineChecks({ file, kind, slot, referenceFile, spec, transformFrom, rootPicture, publicDir, keepTmp, log }) {
   const tmp = mkdtempSync(join(tmpdir(), 'avatar-verify-'))
   const dir = join(tmp, 'avatar')
   try {
@@ -395,24 +503,24 @@ async function pipelineChecks({ file, kind, slot, referenceFile, spec, publicDir
     const target = parseSpec(spec.as)
     const owner = ownerOf(target, spec)
     const quiet = () => {}
-    // A base drawn from another base's picture takes that base's transform (see `transformSource` in ingest.mjs),
-    // and a bot always does — f01's, unless its reference is another base's picture.
-    const candidate = referenceFile ? /^([fm]\d\d)_candidate_\d+\.png$/.exec(basename(referenceFile))?.[1] ?? null : null
-    const fromBase = target.kind === 'base' ? candidate : target.kind === 'bot' ? candidate ?? BOT_TRANSFORM_FROM : null
-    // The base whose stored transform the cut needs: an expression's or an item's own base, a bot's transform
-    // source. An aura or a frame is placed by its ink box and needs none.
+    // The base or body whose stored transform the cut needs: a bot's or a body's transform source, or an
+    // expression's, a face's, a hairstyle's or an item's owner. A new base takes `transformFrom` from the copy as it
+    // is (or is anchored by its own box), and an aura or a frame is placed by its ink box: neither needs one here.
     const square = target.kind === 'item' && SQUARE_KINDS.has(target.slot)
-    const needed = target.kind === 'bot' ? fromBase : target.kind === 'base' || square ? null : owner
-    if (needed !== null && !readManifest(targets[0]).bases?.[needed]) {
-      // Only a picture of that base can stand in for it: an expression's reference, or a bot's F01 reference.
-      if (!referenceFile || (target.kind === 'bot' && candidate !== needed)) throw new Error(`no base ${needed} in ${publicDir} and no reference to ingest it from`)
-      await ingest({ file: referenceFile, target: { kind: 'base', base: needed }, dir, targets, log: quiet })
+    const fromRoot = target.kind === 'bot' || target.kind === 'body'
+    const needed = fromRoot ? transformFrom : target.kind === 'base' || square ? null : owner
+    const has = (manifest) => (GENDERS.includes(needed) ? manifest.bodies?.[needed] : manifest.bases?.[needed])
+    if (needed !== null && !has(readManifest(targets[0]))) {
+      if (!referenceFile || (fromRoot && rootPicture !== needed)) throw new Error(`no ${ownerLabel(needed)} in ${publicDir} and no reference to ingest it from`)
+      const standIn = GENDERS.includes(needed) ? { kind: 'body', gender: needed } : { kind: 'base', base: needed }
+      await ingest({ file: referenceFile, target: standIn, dir, targets, log: quiet })
     }
     const input = await pipelineInput({ file, kind, slot, referenceFile, tmp: join(tmp, 'input') })
     const flags = parseFlags(spec.flags)
     await ingest({
       file: input.file, target, dir, targets, baseId: owner, variant: spec.variant ?? null,
-      tolerance: flags.tolerance, white: flags.white, lockScale: flags.lockScale ?? null, transformFrom: fromBase, hides: flags.hides, diff: flags.diff, log: quiet,
+      tolerance: flags.tolerance, white: flags.white, lockScale: flags.lockScale ?? null, transformFrom, hides: flags.hides, diff: flags.diff,
+      hair: flags.hair ?? null, anchor: flags.anchor ?? null, recolourTo: flags.recolourTo ?? null, log: quiet,
     })
     const names = layerNames(target, owner, spec.variant ?? null)
     const rows = await runChecks({ dir, manifest: readManifest(targets[0]), names })
@@ -428,14 +536,24 @@ async function pipelineChecks({ file, kind, slot, referenceFile, spec, publicDir
 
 // ──────────────────────────────────────────────────────────────── scoring ──
 
+/** No registry: what `transformSource` and `referenceOwner` read when a picture is scored on its own. */
+const NO_REGISTRY = { assets: [] }
+
 /**
  * Score one picture. `kind`/`slot` are the asset's; `referenceFile` is the reference picture's path (null
  * for an aura or a frame); `ingest` is the asset's `ingest` spec. `pipeline: false` stops before the
  * pipeline rule (the tests use it). Returns `{ verdict: 'ok' | 'ng', reason, measure, notes }`.
  *
- * @param {{ file: string, kind: string, slot?: string | null, referenceFile?: string | null, ingest?: any, publicDir?: string, pipeline?: boolean, keepTmp?: boolean, log?: (line: string) => void }} options
+ * `transformFrom` and `referenceOwner` are what the registry says of the asset (`transformSource`, and
+ * `referenceOwner` of its reference — `verifyAssets` passes both); left out, they are worked out from the
+ * reference picture's name alone, as for `verify --picture` (an `f01_candidate_1.png` is F01's).
+ *
+ * @param {{ file: string, kind: string, slot?: string | null, referenceFile?: string | null, ingest?: any, transformFrom?: string | null, referenceOwner?: string | null, publicDir?: string, pipeline?: boolean, keepTmp?: boolean, log?: (line: string) => void }} options
  */
-export async function scorePicture({ file, kind, slot = null, referenceFile = null, ingest: spec = null, publicDir = PUBLIC_DIR, pipeline = true, keepTmp = false, log = () => {} }) {
+export async function scorePicture({ file, kind, slot = null, referenceFile = null, ingest: spec = null, transformFrom, referenceOwner: rootPicture, publicDir = PUBLIC_DIR, pipeline = true, keepTmp = false, log = () => {} }) {
+  const alone = { kind, reference: referenceFile === null ? null : basename(referenceFile) }
+  const source = transformFrom === undefined ? transformSource(alone, NO_REGISTRY) : transformFrom
+  const root = rootPicture === undefined ? referenceOwner(alone.reference, NO_REGISTRY) : rootPicture
   /** @type {Record<string, any>} */
   const measure = {}
   /** @type {string[]} */
@@ -465,7 +583,7 @@ export async function scorePicture({ file, kind, slot = null, referenceFile = nu
       return done(null)
     }
     try {
-      const result = await pipelineChecks({ file, kind, slot, referenceFile, spec, publicDir, keepTmp, log })
+      const result = await pipelineChecks({ file, kind, slot, referenceFile, spec, transformFrom: source, rootPicture: root, publicDir, keepTmp, log })
       measure.checks = result.checks
       if (result.aligned) notes.push('pipeline: fed the picture aligned onto the reference canvas')
       if (result.failed.length) {
@@ -503,7 +621,7 @@ export async function scorePicture({ file, kind, slot = null, referenceFile = nu
     // held out, mean difference 2.9 on registration, a clean layer.)
     // A sleeping face floats a "z" glyph beside the head, which widens the box on that side alone (M02's: right
     // edge +20 px); the face cut keeps it — that is the expression — so a side edge up to `SLEEP_GLYPH` is fine.
-    const sleepy = kind === 'expression' && /:sleep$/.test(spec?.as ?? '')
+    const sleepy = FACE_KINDS.has(kind) && /:sleep$/.test(spec?.as ?? '')
     const sideOnly = compared.reason === 'drift' && sleepy && (compared.edges.top === null || Math.abs(compared.edges.top) <= DRIFT_LIMIT) &&
       Math.abs(compared.edges.bottom) <= DRIFT_LIMIT && Math.abs(compared.edges.left) <= SLEEP_GLYPH && Math.abs(compared.edges.right) <= SLEEP_GLYPH
     if (compared.reason && headItem) notes.push(`body box ${compared.reason} (width ratio ${round2(compared.widthRatio)}, edges ${JSON.stringify(compared.edges)}) — advisory for a head item`)
@@ -513,20 +631,22 @@ export async function scorePicture({ file, kind, slot = null, referenceFile = nu
     notes.push('no reference: drift, hair colour and scope not measured')
   }
 
-  if (kind === 'base' || kind === 'expression' || (kind === 'item' && !headItem)) {
+  // A body is held to D02 §8's proportions like a base (Plan 19); a hairstyle's hair counts as head, so it is not.
+  if (kind === 'base' || kind === 'body' || FACE_KINDS.has(kind) || (kind === 'item' && !headItem)) {
     const figure = measureFigure(removeChroma(pic))
     measure.heads = round2(figure.heads)
     // An expression is its base's own picture with the eyes and mouth redrawn: its proportions are the
-    // base's, and `measure()`'s chin-finding is what moves (F02's long hair, a rounder eye). Advisory there.
+    // base's, and `measure()`'s chin-finding is what moves (F02's long hair, a rounder eye). Advisory there,
+    // and for a body's face (Plan 19), its proportions the body's.
     if (figure.heads < HEADS_RANGE[0] || figure.heads > HEADS_RANGE[1]) {
-      if (kind === 'expression') notes.push(`heads ${measure.heads} outside ${HEADS_RANGE.join('–')} — advisory for an expression (its proportions are the base's)`)
+      if (FACE_KINDS.has(kind)) notes.push(`heads ${measure.heads} outside ${HEADS_RANGE.join('–')} — advisory for an expression (its proportions are the base's)`)
       else return done('heads')
     }
   }
 
   if (ref) {
     const aligned = await alignPicture(pic, ref, compared.placement)
-    if (kind === 'expression' || (kind === 'item' && !headItem)) {
+    if (FACE_KINDS.has(kind) || (kind === 'item' && !headItem)) {
       const mine = hairColour(aligned)
       const theirs = hairColour(ref)
       if (theirs !== null) {
@@ -534,7 +654,7 @@ export async function scorePicture({ file, kind, slot = null, referenceFile = nu
         if (mine === null || measure.hairDelta > HAIR_LIMIT) return done('hair_colour')
       }
     }
-    const allowed = allowedArea(kind, slot, anchorBase(removeChroma(ref)))
+    const allowed = allowedArea(kind, slot, anchorBase(removeChroma(ref)), ref)
     if (allowed) {
       measure.scope = round2(scopeFraction(aligned, ref, allowed))
       // For a head item the body is outside the cut as well as outside the allowed area: advisory (see above).
@@ -546,11 +666,17 @@ export async function scorePicture({ file, kind, slot = null, referenceFile = nu
   return pipelineRule()
 }
 
-/** What kind of asset an `--as` spec describes, for `verify --picture` (no registry entry to ask). */
+/**
+ * What kind of asset an `--as` spec describes, for `verify --picture` (no registry entry to ask): the registry's
+ * kind for the pipeline's target — `expr` an `expression`, and since Plan 19 `bodyFace` a `bodyExpression`.
+ */
 export function kindOfSpec(spec) {
   const target = parseSpec(spec)
   if (target.kind === 'base') return { kind: 'base', slot: null }
   if (target.kind === 'expr') return { kind: 'expression', slot: null }
+  if (target.kind === 'body') return { kind: 'body', slot: null }
+  if (target.kind === 'bodyFace') return { kind: 'bodyExpression', slot: null }
+  if (target.kind === 'hair') return { kind: 'hair', slot: null }
   if (target.kind === 'bot') return { kind: 'bot', slot: null }
   if (target.slot === 'aura' || target.slot === 'frame') return { kind: target.slot, slot: target.slot }
   return { kind: 'item', slot: target.slot }
@@ -575,7 +701,10 @@ export async function verifyAssets(registry, ids = [], { srcDir = SRC_DIR, publi
     if (!existsSync(file)) throw new Error(`asset ${asset.id}: no picture at ${file}`)
     const referenceFile = referencePath(asset, registry, srcDir)
     if (referenceFile && !existsSync(referenceFile)) throw new Error(`asset ${asset.id}: no reference picture at ${referenceFile}`)
-    const result = await scorePicture({ file, kind: asset.kind, slot: asset.slot, referenceFile, ingest: asset.ingest, publicDir, keepTmp, pipeline, log })
+    const result = await scorePicture({
+      file, kind: asset.kind, slot: asset.slot, referenceFile, ingest: asset.ingest,
+      transformFrom: transformSource(asset, registry), referenceOwner: referenceOwner(asset.reference, registry), publicDir, keepTmp, pipeline, log,
+    })
     Object.assign(last, { measure: result.measure, verdict: result.verdict, reason: result.reason, by: 'verify' })
     if (result.notes.length) last.notes = result.notes
     asset.status = result.verdict === 'ok' ? 'ok' : asset.attempts.length >= MAX_ATTEMPTS ? 'blocked' : 'ng'

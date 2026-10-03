@@ -6,10 +6,14 @@ import { renderPrompt } from './prompts.mjs'
 import { MAX_ATTEMPTS, SRC_DIR, isRework, pictureExists, referenceOf, referencePath, requireAsset } from './registry.mjs'
 
 /**
- * The order `next` hands assets out in (spec §4 step 1): items on F01 first — head, face, outfit — then
- * the new bases, their expressions, auras, frames and bots. Within a group the registry's own order holds.
+ * The order `next` hands assets out in. Plan 12 (spec §4 step 1) put items on F01 first — head, face,
+ * outfit — then the new bases, their expressions, auras, frames and bots. Plan 19 (v4) leads with what
+ * everything else is drawn on: the bodies, then the hairstyles drawn on them, the outfits, the bodies' other
+ * faces and the bots redrawn on body f, then the hats and glasses redrawn where they no longer fit. Every
+ * Plan 12 asset is done or blocked by then, so the reorder moves nothing of theirs. Within a group the
+ * registry's own order holds; `next --only` (Phase B's gate) picks assets out of it by id.
  */
-export const PRIORITY = ['item:head', 'item:face', 'item:outfit', 'base', 'expression', 'aura', 'frame', 'bot']
+export const PRIORITY = ['body', 'hair', 'item:outfit', 'bodyExpression', 'bot', 'item:head', 'item:face', 'base', 'expression', 'aura', 'frame']
 
 export function priorityOf(asset) {
   const at = PRIORITY.indexOf(asset.kind === 'item' ? `item:${asset.slot}` : asset.kind)
@@ -31,11 +35,18 @@ export function ready(asset, registry, { srcDir = SRC_DIR } = {}) {
   return file === null || pictureExists(srcDir, file)
 }
 
-/** The ready assets, in priority order, at most `limit` of them. */
-export function nextAssets(registry, { limit = Infinity, srcDir = SRC_DIR } = {}) {
+/**
+ * The ready assets, in priority order, at most `limit` of them — or, with `only` (`next --only <id,…>`), only
+ * those of the named ids that are ready, still in priority order. An `only` id the registry lacks throws.
+ *
+ * @param {any} registry
+ * @param {{ limit?: number, srcDir?: string, only?: string[] | null }} [options]
+ */
+export function nextAssets(registry, { limit = Infinity, srcDir = SRC_DIR, only = null } = {}) {
+  const named = only === null ? null : new Set(only.map((id) => requireAsset(registry, id).id))
   return registry.assets
     .map((asset, index) => ({ asset, index }))
-    .filter(({ asset }) => ready(asset, registry, { srcDir }))
+    .filter(({ asset }) => (named === null || named.has(asset.id)) && ready(asset, registry, { srcDir }))
     .sort((a, b) => priorityOf(a.asset) - priorityOf(b.asset) || a.index - b.index)
     .slice(0, limit)
     .map(({ asset }) => asset)

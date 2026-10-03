@@ -10,12 +10,13 @@
  *
  * An asset:
  *
- *   id         the layer name without `_L<n>` (`item_head_beret_red01`, `f02`, `bot_3`); an expression or
- *              a bot's second face is `<owner>:<expression>` (`f02:happy`, `bot_3:happy`)
- *   kind       base | expression | item | aura | frame | bot
+ *   id         the layer name without `_L<n>` (`item_head_beret_red01`, `f02`, `bot_3`, `body_f`,
+ *              `item_hair_f_bob01`); an expression or a bot's second face is `<owner>:<expression>` (`f02:happy`,
+ *              `bot_3:happy`, `body_f:happy`); a v4 redraw of a Plan 12 asset is `v4/<old id>` (Plan 19)
+ *   kind       base | expression | item | aura | frame | bot, and since Plan 19 (v4) body | bodyExpression | hair
  *   slot       item: head | face | outfit; aura/frame: their own kind; otherwise null
- *   wear       base: f | m; an item's per-wear cut: f | m; otherwise null
- *   catalog    the id in avatar-bases.json / items.json (bot: bot_<n>)
+ *   wear       base, body, body expression, hairstyle: f | m; an item's per-wear cut: f | m; otherwise null
+ *   catalog    the id in avatar-bases.json / items.json (bot: bot_<n>; body: its gender; hairstyle: hair_<code>)
  *   look       what the template's `{{look.<key>}}` placeholders read
  *   reference  the picture attached when generating: a file in assets/avatar-src/, `@<id>` of another
  *              asset (its `file`, once that asset is ok or approved), or null (aura, frame)
@@ -28,18 +29,26 @@
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
-import { PACKAGE_ROOT } from '../avatar-pipeline/manifest.mjs'
+import { BODY_TRANSFORM_FROM, BOT_TRANSFORM_FROM } from '../avatar-pipeline/extract.mjs'
+import { GENDERS, PACKAGE_ROOT, hairGender } from '../avatar-pipeline/manifest.mjs'
 
 /** Where the generated pictures — and the registry that lists them — live. */
 export const SRC_DIR = resolve(PACKAGE_ROOT, '../../assets/avatar-src')
 export const REGISTRY_FILE = join(SRC_DIR, 'registry.json')
 export const REGISTRY_VERSION = 1
 
-export const KINDS = ['base', 'expression', 'item', 'aura', 'frame', 'bot']
+/**
+ * Plan 12's six kinds, and Plan 19's three (v4): a `body` (`body:<g>`, its picture drawn from F01's), a
+ * `bodyExpression` (`face:<g>:<expr>`, drawn on the body's picture) and a `hair`style (`hair:<code>`, drawn on its
+ * gender's bald body). A v4 outfit, bot, hat or glasses stays an `item` or a `bot`, cut on a body.
+ */
+export const KINDS = ['base', 'expression', 'item', 'aura', 'frame', 'bot', 'body', 'bodyExpression', 'hair']
 export const ITEM_SLOTS = ['head', 'face', 'outfit']
 /** Spec §3: after the third failed attempt an asset is `blocked` and the loop leaves it to the user. */
 export const MAX_ATTEMPTS = 3
 const STATUS = /^(?:todo|generated|ok|ng|approved|blocked|rework-[1-9][0-9]*)$/
+/** The pipeline target each v4 kind is ingested as (Plan 19): `parseSpec(ingest.as).kind`. */
+const V4_TARGET = { body: 'body', bodyExpression: 'bodyFace', hair: 'hair' }
 
 export const isRework = (status) => /^rework-[1-9][0-9]*$/.test(status)
 
@@ -70,6 +79,15 @@ export function validateRegistry(registry) {
     if (!asset.look || typeof asset.look !== 'object') fail('needs a look')
     if (asset.prompt !== null && typeof asset.prompt !== 'string') fail('prompt is neither null nor a string')
     if (typeof asset.ingest?.as !== 'string' || asset.ingest.as === '') fail('ingest.as is empty')
+    if (V4_TARGET[asset.kind]) {
+      let target = null
+      try {
+        target = parseSpec(asset.ingest.as).kind
+      } catch (error) {
+        fail(error instanceof Error ? error.message : String(error))
+      }
+      if (target !== V4_TARGET[asset.kind]) fail(`a ${asset.kind} is ingested as ${V4_TARGET[asset.kind] === 'bodyFace' ? 'face' : V4_TARGET[asset.kind]}:…, not ${asset.ingest.as}`)
+    }
     if (asset.ingest.flags !== undefined && !Array.isArray(asset.ingest.flags)) fail('ingest.flags is not an array')
     if (typeof asset.status !== 'string' || !STATUS.test(asset.status)) fail(`status ${asset.status} is not one of todo, generated, ok, ng, rework-<n>, approved, blocked`)
     if (!Array.isArray(asset.attempts)) fail('attempts is not an array')
@@ -133,22 +151,40 @@ export const pictureExists = (srcDir, file) => existsSync(join(srcDir, file))
 
 /**
  * The pipeline target an `ingest.as` names: `base:f02`, `expr:f02:happy`, `item:head:beret_red01`,
- * `bot:3`, `bot:3:happy`. Mirrors `parseTarget` in `avatar-pipeline.mjs`, which is private to that CLI
- * and exits the process on a bad spec; this one throws.
+ * `bot:3`, `bot:3:happy`, and since Plan 19 `body:f`, `face:f:happy` (`{ kind: 'bodyFace', … }`, the pipeline's
+ * name; the registry's kind is `bodyExpression`, see `kindOfSpec`) and `hair:f_bob01` (gendered by its code).
+ * Mirrors `parseTarget` in `avatar-pipeline.mjs`, which is private to that CLI and exits the process on a bad
+ * spec; this one throws.
  */
 export function parseSpec(spec) {
-  const [kind, first, second] = String(spec).split(':')
+  const [kind, first, second, ...rest] = String(spec).split(':')
   if (kind === 'base' && first) return { kind: 'base', base: first }
   if (kind === 'expr' && first && second) return { kind: 'expr', base: first, expr: second }
   if (kind === 'item' && first && second) return { kind: 'item', slot: first, code: second }
   if (kind === 'bot' && first !== undefined && first !== '') return { kind: 'bot', bot: Number(first), expr: second ?? 'neutral' }
+  if (kind === 'body' && first && second === undefined) return { kind: 'body', gender: first }
+  if (kind === 'face' && first && second && rest.length === 0) return { kind: 'bodyFace', gender: first, expr: second }
+  if (kind === 'hair' && first && second === undefined) {
+    let gender
+    try {
+      gender = hairGender(first)
+    } catch (error) {
+      throw new Error(`cannot read the ingest target ${spec}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    return { kind: 'hair', code: first, gender }
+  }
   throw new Error(`cannot read the ingest target ${spec}`)
 }
+
+/** `--recolour-to`'s value: the pipeline's own rule (`checkV4Options` in extract.mjs). */
+const HEX = /^#[0-9a-f]{6}$/i
 
 /**
  * `ingest.flags` → the pipeline's `ingest()` options. Booleans are `--hides-hair-front`,
  * `--hides-hair-back` and `--white`; `--color-tol`, `--min-region`, `--max-hole`, `--tolerance` and
- * `--lock-scale` take the next entry (or `--name=value`).
+ * `--lock-scale` take the next entry as a number (or `--name=value`). Plan 19's three take a word:
+ * `--hair <code>` (an item drawn over that hairstyle), `--anchor head` (a body placed by its eyes) and
+ * `--recolour-to <#rrggbb>` (a hairstyle recoloured); the pipeline itself decides which target each belongs to.
  */
 export function parseFlags(flags = []) {
   const hides = {}
@@ -162,6 +198,11 @@ export function parseFlags(flags = []) {
       if (value === undefined || Number.isNaN(Number(value))) throw new Error(`ingest flag ${name} needs a number`)
       return Number(value)
     }
+    const takeWord = () => {
+      if (value === undefined) value = list[++at]
+      if (value === undefined || value === '' || String(value).startsWith('--')) throw new Error(`ingest flag ${name} needs a value`)
+      return String(value)
+    }
     if (name === '--hides-hair-front') hides.hidesHairFront = true
     else if (name === '--hides-hair-back') hides.hidesHairBack = true
     else if (name === '--white') options.white = true
@@ -170,7 +211,70 @@ export function parseFlags(flags = []) {
     else if (name === '--max-hole') diff.maxHole = takeValue()
     else if (name === '--tolerance') options.tolerance = takeValue()
     else if (name === '--lock-scale') options.lockScale = takeValue()
-    else throw new Error(`unknown ingest flag ${name}`)
+    else if (name === '--hair') options.hair = takeWord()
+    else if (name === '--anchor') {
+      options.anchor = takeWord()
+      if (options.anchor !== 'head') throw new Error(`ingest flag --anchor ${options.anchor} is not one the pipeline knows — only head`)
+    } else if (name === '--recolour-to') {
+      options.recolourTo = takeWord()
+      if (!HEX.test(options.recolourTo)) throw new Error(`ingest flag --recolour-to ${options.recolourTo} is not a #rrggbb colour`)
+    } else throw new Error(`unknown ingest flag ${name}`)
   }
   return { hides, diff, ...options }
+}
+
+/** A base's own picture, as the registry names it: `f01_candidate_1.png` is F01's. */
+const BASE_PICTURE = /^([fm]\d\d)_candidate_\d+\.png$/
+
+/**
+ * Whose own picture a reference is — the base or body that picture is the drawing of — or null: a base's
+ * (`f01_candidate_1.png` → `f01`, `@f02` → `f02`), a body's (`@body_f` → `f`). Anything else — a bot's picture,
+ * a hairstyle's, `ref.png` — is nobody's.
+ */
+export function referenceOwner(reference, registry) {
+  if (reference === null || reference === undefined) return null
+  if (!reference.startsWith('@')) return BASE_PICTURE.exec(basename(reference))?.[1] ?? null
+  const other = findAsset(registry, reference.slice(1))
+  if (other?.kind === 'base') return other.id
+  if (other?.kind === 'body') return parseSpec(other.ingest.as).gender ?? null
+  return null
+}
+
+/**
+ * The base or body whose stored transform the pipeline cuts an asset's picture on (`--transform-from`), or
+ * null when the pipeline needs none from the registry. The one copy, shared by `ingest` and `verify` (Plan 19,
+ * pre-flight #28; it lived in ingest.mjs before).
+ *
+ * - A **bot** (2026-09-24) follows its chain of references back to the first picture that is a base's or a
+ *   body's own (`referenceOwner`): Plan 12's `bot_3:happy` → `@bot_3` → `f01_candidate_1.png` → `f01`; a v4
+ *   redraw `v4/bot_3:happy` → `@v4/bot_3` → `@body_f` → `f`. A chain that reaches no such picture ends on
+ *   `BOT_TRANSFORM_FROM`.
+ * - A **body** (Plan 19) is drawn from F01's picture, so it takes F01's (`f01_candidate_1.png` → `f01`; anything
+ *   else `BODY_TRANSFORM_FROM`). `--anchor head` then moves it by the eyes, starting from there.
+ * - A **base** (2026-09-24) drawn from another base's picture — its `reference` is that base's file or `@<id>` —
+ *   shares that base's body and canvas, so it takes that base's transform; one with no base reference is null,
+ *   and the pipeline anchors it by its own box. (D1 retires this branch with the bases.)
+ * - Anything else — an expression, an item, a body's face, a hairstyle — is cut on its owner's own transform,
+ *   which the pipeline reads itself: null.
+ */
+export function transformSource(asset, registry) {
+  if (asset.kind === 'bot') {
+    const seen = new Set()
+    let at = asset
+    while (at?.reference && !seen.has(at.id)) {
+      seen.add(at.id)
+      const owner = referenceOwner(at.reference, registry)
+      if (owner !== null) return owner
+      if (!at.reference.startsWith('@')) return BOT_TRANSFORM_FROM
+      at = findAsset(registry, at.reference.slice(1))
+    }
+    return BOT_TRANSFORM_FROM
+  }
+  if (asset.kind === 'body') return referenceOwner(asset.reference, registry) ?? BODY_TRANSFORM_FROM
+  if (asset.kind === 'base') {
+    // A base takes another base's transform only, never a body's.
+    const owner = referenceOwner(asset.reference, registry)
+    return owner !== null && !GENDERS.includes(owner) ? owner : null
+  }
+  return null
 }

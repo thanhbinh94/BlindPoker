@@ -936,14 +936,14 @@ and points at them by `catalog` id.
 
 | Field | |
 |---|---|
-| `id` | the layer name without `_L<n>` (`item_head_beret_red01`, `f02`, `bot_3`); a second face of an owner is `<owner>:<expression>` (`f02:happy`, `bot_3:happy`) |
-| `kind` / `slot` / `wear` | `base`, `expression`, `item` (slot `head`/`face`/`outfit`), `aura`, `frame`, `bot`; `wear` is `f`/`m` for a base or an item's per-wear cut |
-| `catalog` | the id in `avatar-bases.json` / `items.json` (`bot_<n>` for a bot) |
+| `id` | the layer name without `_L<n>` (`item_head_beret_red01`, `f02`, `bot_3`, `body_f`, `item_hair_f_bob01`); a second face of an owner is `<owner>:<expression>` (`f02:happy`, `bot_3:happy`, `body_f:happy`) |
+| `kind` / `slot` / `wear` | `base`, `expression`, `item` (slot `head`/`face`/`outfit`), `aura`, `frame`, `bot`, and since Plan 19 (v4) `body`, `bodyExpression`, `hair` (no slot); `wear` is `f`/`m` for a base, a body, a body's face, a hairstyle or an item's per-wear cut |
+| `catalog` | the id in `avatar-bases.json` / `items.json` (`bot_<n>` for a bot, the gender for a body, `hair_<code>` for a hairstyle) |
 | `look` | what `{{look.<key>}}` in the template reads |
 | `reference` | the picture attached in ChatGPT: a file in `assets/avatar-src/`, `@<id>` of another asset (its `file`), or null (aura, frame) |
 | `prompt` | null: rendered from `templates[kind]` (an item: `templates[slot]`) on every read, so editing a template edits every prompt; a string: a manual override |
 | `file` | the generated picture's name in `assets/avatar-src/` |
-| `ingest` | `{ as, base, variant, flags }` — the pipeline's `--as`, `--base`, `--variant` and extra flags (`--hides-hair-front`, …) |
+| `ingest` | `{ as, base, variant, flags }` — the pipeline's `--as`, `--base`, `--variant` and extra flags (`--hides-hair-front`, …; since Plan 19 also `--hair <code>`, `--anchor head`, `--recolour-to <#rrggbb>`) |
 | `status` | `todo` → `generated` → `ok` / `ng` → `approved`; `rework-<n>` (sent back by the user or by Claude's eye); `blocked` |
 | `attempts` | one per picture: `{ n, at, chat, file, measure, verdict, reason, by }` |
 | `ingested` | true once `ingest` has put it into `public/avatar/` |
@@ -952,14 +952,37 @@ The rules:
 
 - **Ready** means: status `todo`, `ng` or `rework-<n>`; fewer than three attempts; and the reference resolves —
   the file exists, or the `@<id>` asset is `ok` or `approved` (so a base's expressions wait for the base).
-- **Order** (`next`): head items, face items, outfits (all on F01), then new bases, expressions, auras, frames,
-  bots; within a group, the file's own order.
+- **Order** (`next`; Plan 19): bodies, hairstyles, outfits, the bodies' other faces, bots, head items, face
+  items, then Plan 12's bases, expressions, auras and frames; within a group, the file's own order. (Plan 12 put
+  head, face and outfit items first; every Plan 12 asset is done or blocked, so the reorder moved nothing.)
+  `next --only <id,…>` hands out only the named ids — each still only once it is ready — in that same order;
+  the style gate (Phase B) uses it to pick its five assets out of the queue.
+- **The v4 kinds** (Plan 19). The ingest target and the reference of each:
+
+  | Kind | `ingest.as` | Reference | Transform the cut takes |
+  |---|---|---|---|
+  | `body` | `body:<g>` | `f01_candidate_1.png` | f01's (`--anchor head` in `flags` then moves it by the eyes) |
+  | `bodyExpression` | `face:<g>:<expr>` | `@body_<g>` | the body's own |
+  | `hair` | `hair:<code>` (the code starts with its gender) | `@body_<g>` | the body's own |
+  | `item` on a body | `item:<slot>:<code>`, `base` `f`/`m` (`--hair <code>` when drawn over a hairstyle) | `@body_<g>` | the body's own |
+  | `bot` on a body | `bot:<n>` / `bot:<n>:happy` | `@body_f` / `@v4/bot_<n>` | the body at the root of its references (`transformSource`) |
+
+  `transformSource` (`scripts/avatar-registry/registry.mjs`) is the one place that says which transform a body,
+  a bot or a new base is cut on; `ingest` and `verify` both ask it. It follows a bot's references back to the first
+  picture that is a base's or a body's own: `v4/bot_3:happy` → `@v4/bot_3` → `@body_f` → body f; Plan 12's
+  `bot_3:happy` → `@bot_3` → `f01_candidate_1.png` → f01.
 - **Fix lines.** After a failure the next prompt is the prompt plus one line per *distinct* reason the earlier
   attempts failed for: `redrawn` → "same image size, same hair, same clothing", `tears` → "No tears",
   `hair_colour` → "same hair colour", `background` → "transparent background, no checkerboard", `cropped` →
   "whole figure inside the image", `strap` → "The tank top must be completely gone: no straps, no gray
-  fabric anywhere", `scope` → "Change nothing outside the requested area". `style` (the user's taste) and
-  every other reason add nothing.
+  fabric anywhere", `scope` → "Change nothing outside the requested area". Plan 19 adds two the pipeline
+  gives — `check:C12` → "Keep the face exactly the same size and in exactly the same place as in the input; only
+  the body pose changes", `check:C13` → "The hair never covers the eyes; hair longer than the neck falls behind
+  the shoulders" — and three only an eye gives, recorded with `reject <id> --reason fingers|bald|pose` when a
+  picture `verify` passed fails the controller's look: `fingers` → "Each hand shows exactly five separate
+  fingers: four fingers and a thumb", `bald` → "The head is completely bald: no hair, no hairline, no stubble",
+  `pose` → "Relaxed pose: weight on one leg, arms hanging loosely away from the body". `style` (the user's
+  taste) and every other reason add nothing.
 - **Three attempts.** The third `ng` sets `blocked`; the loop skips it and Claude tells the user.
 - **Only the user approves.** `approve <id…>` or `approve --batch` (every `ok`) after the user answers a
   sheet; the user's "<id> ng" is `reject <id> [--reason style]`, which re-judges the last attempt (`verdict:
@@ -968,10 +991,11 @@ The rules:
 ### 10.2 The commands
 
 ```bash
-avatar:registry next [--limit n] [--json]    # ready assets: id, file, reference path, attempt n, the prompt
+avatar:registry next [--limit n] [--json] [--only <id,…>]   # ready assets: id, file, reference path, attempt n, the prompt
 avatar:registry collect <id> --chat <url> [--downloads <dir>] [--file <png>]
 avatar:registry verify [<id…>] [--keep-tmp]  # every generated asset, or these
 avatar:registry verify --picture <png> --as <spec> [--reference <png>] [--base <id>] [--variant <f|m>]
+                       [--hair <code>] [--anchor head] [--recolour-to <#rrggbb>] [--transform-from <id>]
 avatar:registry ingest [<id…>]
 avatar:registry approve <id…> | --batch
 avatar:registry reject <id…> [--reason style]
@@ -982,7 +1006,15 @@ avatar:registry status                       # counts per status, the blocked on
 ChatGPT names them `ChatGPT Image Sep 24, 2026, 12_42_45 AM.png`) that is newer than the asset's last attempt
 — or at most 30 minutes old for a first attempt — and refuses, saying what it found, when there is none.
 The picture replaced in `assets/avatar-src/` is kept as `<name>.prev<k>.png`. `verify --picture` scores one
-file without touching the registry — the way to try a rule on a picture by hand.
+file without touching the registry — the way to try a rule on a picture by hand. Its reference defaults to the
+owner's picture: `f01_candidate_1.png` for a base, a body or a bot, `body_<g>.png` for a body's face, a hairstyle
+or an item on a body (`--base f|m`), `<base>_candidate_1.png` otherwise. It takes the v4 flags as the registry's
+`ingest.flags` would carry them, and `--transform-from <id>` where the reference's name cannot say which transform
+a bot is cut on (a v4 bot: `--transform-from f`).
+
+`next --only <id,…>` (Plan 19) hands out only the named ids, comma-separated, in the usual order and each only
+once it is ready (`next --only item_hair_f_bob01` prints nothing while `body_f` is not `ok`); an id the registry
+does not have is refused. `--limit` still applies.
 
 ### 10.3 Generating in ChatGPT (Claude, with Claude in Chrome)
 
@@ -1024,7 +1056,7 @@ has the exact definitions).
 | `heads` | outside 2.0–2.5 heads (`measure()` after `removeChroma`); not asked of a head item, whose hat counts as head |
 | `hair_colour` | the mean colour of the top-of-head band (x 330–700, y 250–330 of the reference) moved by more than 12 — expressions, face and outfit items (not a head item: the hat covers the band) |
 | `scope` | 1 % or more of the figure changed outside what the asset may change: an expression, below the head region (`FACE_LIMIT_Y`); a head or face item, below `HEAD_LIMIT_Y` and outside the crop. Not an outfit, whose cut discards everything above the chin line anyway. "Changed" is asked the way `diffAgainstBase` asks it: no reference pixel within 2 px is within RGB distance 40 |
-| `check:<Cn>` | the ten criteria (§5) on the layers an ingest into a **copy** of `public/avatar/` wrote; a new base's expression gets its base ingested into the copy first, from the reference. `pipeline` if the ingest itself threw |
+| `check:<Cn>` | the criteria (§5; thirteen since Plan 19) on the layers an ingest into a **copy** of `public/avatar/` wrote; a new base's expression gets its base ingested into the copy first, from the reference. `pipeline` if the ingest itself threw |
 | `hollow` | an aura or a frame: mean alpha inside 40 % of the half-width is 0.05 or more — asked right after `background`; an aura or a frame that passes goes on to the `check:<Cn>` / `pipeline` rule and nothing else (2026-09-24) |
 
 A picture on the reference's own canvas is compared where it stands, since the pipeline will cut it there. A
@@ -1034,6 +1066,25 @@ is cut with its base's stored transform, measured on the reference's canvas. Sin
 the pipeline rule too, on f01's transform: `bot:<n>` is checked on its body and all six faces, `bot:<n>:happy`
 on that one face. A bot's picture is handed to the pipeline as it is, not aligned: it is taken to be on
 F01's own canvas (§4.3), like a base drawn with `--transform-from`.
+
+**The v4 kinds (Plan 19).** The same rules in the same order; `—` means not asked.
+
+| Kind (reference) | `redrawn` / `drift` | `heads` | `hair_colour` | `scope` | `check:<Cn>` |
+|---|---|---|---|---|---|
+| `body` (`f01_candidate_1.png`) | **the bottom edge and the centre line of the figure box only**, each ≤ 12 px (pre-flight #23): the feet stay on F01's ground line. The bald head (lower and narrower than F01's hair) and the new pose (the arms elsewhere) are meant to differ. On another canvas: `redrawn`, since a body is cut on f01's transform, as a bot is | 2.0–2.5 | — | — | ingest `body:<g>` into the copy on f01's transform (with the asset's `--anchor head` when its `flags` carry it); C1–C13 on `body_<g>_L30` and `body_<g>_face_neutral_L50` — C12 holds the head |
+| `bodyExpression` (`@body_<g>`) | as an expression | advisory, as an expression | as an expression (on a bald body the band is the scalp) | the head region (`FACE_LIMIT_Y`), as an expression | as an expression: `face:<g>:<expr>` on the body's transform; C1–C13 on `body_<g>_face_<expr>_L50` |
+| `hair` (`@body_<g>`) | **the bottom edge and the centre line of the legs only** — the rows from 0.8 of the body's height down, which no hairstyle reaches — each ≤ 12 px. On another canvas the picture is placed at scale 1 by those two first (the model's 1086 × 1448 moves the figure, it does not resize it), and is `redrawn` if the legs' width ratio is then outside 0.96–1.04 | — | — | outside the head region **and** outside the body grown by 4 px (`HAIR_BODY_MARGIN`, `allowedArea('hair')`): hair falls behind the shoulders and the back, never over the torso, the arms or the hands | `hair:<code>` on the body's transform; C1–C13 on `item_hair_<code>_L20` and `_L60` — C13 holds the split |
+| `item` on a body (`@body_<g>`, `base` `f`/`m`) | as today | as today | as today | as today | as today, owned by the body; `--hair <code>` passed through |
+| `bot` on a body (`@body_f`, `@v4/bot_<n>`) | as today (feet and centre line) | — | — | — | as today, on the transform `transformSource` names: body f's |
+
+What the cut needs comes from `transformSource` (§10.1), never from the reference's file name. When the copy has
+no transform for the owner yet, the reference is ingested into the copy first: as `base:<id>` as before, or as
+`body:<g>` when the owner is a body (a hairstyle, a body's face or an item on a body verified before its body is
+ingested). A bot's or a body's reference stands in only when it *is* the picture at the root of its references
+(`referenceOwner`): `v4/bot_3`'s `@body_f` can, `v4/bot_3:happy`'s `@v4/bot_3` cannot, and that one fails
+`pipeline` until body f is in `public/avatar/`. A body's face and a hairstyle on another canvas are aligned onto
+the body's canvas before the cut, as an expression is; a body, like a bot, is handed over as it is. The asset's
+`--hair`, `--anchor` and `--recolour-to` reach the trial ingest as they reach the real one.
 
 Measured on the real pictures of Plan 11 (2026-09-24), every accepted picture passes: all ten real expressions,
 `tophat01`, `glasses_round_gold01`, and all eight outfits and cuts (`casual01` as regenerated, `tuxedo01`,
@@ -1055,7 +1106,10 @@ For every `ok` or `approved` asset not yet `ingested`: the real pipeline `ingest
 - a **bot, an aura or a frame** goes in like everything else (2026-09-24 — the "not supported yet" set is gone):
   `item:aura:<code>`, `item:frame:<code>`, `bot:<n>` and `bot:<n>:happy` are the pipeline's own targets
   (§4.3), passed straight through, and a bot is given f01's transform — the base at the root of its reference
-  chain (`f01_candidate_1.png`, or `@bot_<n>` → that).
+  chain (`f01_candidate_1.png`, or `@bot_<n>` → that);
+- a **body, a body's face or a hairstyle** (Plan 19) goes in on its own target (§4.6): a body on f01's
+  transform, a face and a hairstyle on the body's; a v4 bot on the body at the root of its references
+  (`transformSource`, §10.1). The asset's `--hair`, `--anchor head` and `--recolour-to` flags reach `ingest()`.
 
 ### 10.6 A batch
 

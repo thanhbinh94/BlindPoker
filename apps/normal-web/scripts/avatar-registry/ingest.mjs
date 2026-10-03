@@ -12,14 +12,20 @@
  *
  * An aura, a frame and a bot go through like everything else (2026-09-24, Plan 12): `item:aura:<code>`,
  * `item:frame:<code>`, `bot:<n>` and `bot:<n>:happy` are the pipeline's own targets, passed straight through,
- * and a bot is cut on f01's transform (`transformSource`).
+ * and a bot is cut on the transform at the root of its references (`transformSource` in registry.mjs): f01's,
+ * or a v4 redraw's body's.
+ *
+ * Plan 19 (v4): a body (`body:<g>`, on f01's transform), a body's face (`face:<g>:<expr>`) and a hairstyle
+ * (`hair:<code>`) are the pipeline's targets too, and an item drawn on a body names it with `ingest.base` `f`/`m`.
+ * The flags `--hair`, `--anchor head` and `--recolour-to` reach `ingest()` as its `hair`, `anchor` and
+ * `recolourTo` (`parseFlags`).
  */
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { BOT_TRANSFORM_FROM, ingest } from '../avatar-pipeline/extract.mjs'
+import { ingest } from '../avatar-pipeline/extract.mjs'
 import { BASES, BASE_WEAR, MANIFEST_NAME, PACKAGE_ROOT, PUBLIC_DIR, SERVER_MANIFEST, SLOT_LAYER, itemFile } from '../avatar-pipeline/manifest.mjs'
-import { SRC_DIR, parseFlags, parseSpec, referencePath, requireAsset } from './registry.mjs'
+import { SRC_DIR, parseFlags, parseSpec, referencePath, requireAsset, transformSource } from './registry.mjs'
 import { ownerOf, pipelineInput } from './verify.mjs'
 
 export const ITEMS_FILE = resolve(PACKAGE_ROOT, '../normal-server/data/items.json')
@@ -73,37 +79,6 @@ export function baseGaps(id, wear, { basesFile = BASES_FILE, localeFiles = LOCAL
 }
 
 /**
- * The base whose transform a new base takes (2026-09-24): a base drawn from another base's picture — its
- * `reference` is that base's file (`f01_candidate_1.png`) or `@<id>` — shares that base's body and canvas,
- * so the pipeline anchors it exactly as it anchored the reference (`--transform-from`). Null for anything
- * else, and for a base with no base reference, which the pipeline then anchors by its own box.
- *
- * A **bot** always has one (2026-09-24): its neutral picture is drawn from `f01_candidate_1.png` and its happy
- * one from `@bot_<n>`, so the chain of references is followed to the base picture at its root — f01, unless
- * that chain names another base's picture.
- */
-export function transformSource(asset, registry) {
-  if (asset.kind === 'bot') {
-    const seen = new Set()
-    let at = asset
-    while (at?.reference && !seen.has(at.id)) {
-      seen.add(at.id)
-      if (!at.reference.startsWith('@')) return /^([fm]\d\d)_candidate_\d+\.png$/.exec(at.reference)?.[1] ?? BOT_TRANSFORM_FROM
-      const next = at.reference.slice(1)
-      at = registry.assets.find((entry) => entry.id === next)
-    }
-    return BOT_TRANSFORM_FROM
-  }
-  if (asset.kind !== 'base' || !asset.reference) return null
-  if (asset.reference.startsWith('@')) {
-    const other = registry.assets.find((entry) => entry.id === asset.reference.slice(1))
-    return other?.kind === 'base' ? other.id : null
-  }
-  const match = /^([fm]\d\d)_candidate_\d+\.png$/.exec(asset.reference)
-  return match ? match[1] : null
-}
-
-/**
  * Ingest every `ok`/`approved` asset with `ingested !== true` — or only the named ones — into `publicDir`.
  * Returns one `{ id, done, name?, gaps? }` per asset considered.
  *
@@ -133,7 +108,8 @@ export async function ingestAssets(registry, ids = [], { srcDir = SRC_DIR, publi
       if (input.aligned) log(`${asset.id}: aligned onto the reference canvas before the cut`)
       ;({ name } = await ingest({
         file: input.file, target, dir: publicDir, targets: manifests, baseId: owner, variant,
-        tolerance: flags.tolerance, white: flags.white, lockScale: flags.lockScale ?? null, transformFrom: transformSource(asset, registry), hides: flags.hides, diff: flags.diff, log,
+        tolerance: flags.tolerance, white: flags.white, lockScale: flags.lockScale ?? null, transformFrom: transformSource(asset, registry), hides: flags.hides, diff: flags.diff,
+        hair: flags.hair ?? null, anchor: flags.anchor ?? null, recolourTo: flags.recolourTo ?? null, log,
       }))
     } finally {
       rmSync(tmp, { recursive: true, force: true })

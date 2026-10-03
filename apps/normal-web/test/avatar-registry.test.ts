@@ -8,17 +8,21 @@
  * The last block reads the committed `assets/avatar-src/registry.json` itself, so a hand edit that breaks
  * the schema fails here rather than in the middle of a generation batch.
  */
+import { spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { FIX_LINES, renderPrompt } from '../scripts/avatar-registry/prompts.mjs'
-import { approve, nextAssets, ready, reject, statusCounts } from '../scripts/avatar-registry/queue.mjs'
-import { REGISTRY_FILE, SRC_DIR, readRegistry, validateRegistry, writeRegistry } from '../scripts/avatar-registry/registry.mjs'
+import { PRIORITY, approve, nextAssets, ready, reject, statusCounts } from '../scripts/avatar-registry/queue.mjs'
+import { KINDS, REGISTRY_FILE, SRC_DIR, parseFlags, parseSpec, readRegistry, transformSource, validateRegistry, writeRegistry } from '../scripts/avatar-registry/registry.mjs'
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- the registry is plain JSON, typed by its validator */
 type Registry = any
 type Asset = any
+
+const CLI = fileURLToPath(new URL('../scripts/avatar-registry.mjs', import.meta.url))
 
 const TEMPLATES = {
   base: 'Base. Hair: {{look.hair}}. Skin: {{look.skin}}. Ref {{ref}}',
@@ -29,7 +33,13 @@ const TEMPLATES = {
   aura: 'Aura: {{look.description}}.',
   frame: 'Frame: {{look.description}}.',
   bot: 'Bot: {{look.description}}. Face: {{look.expression}}.',
+  body: 'Body {{look.code}}. Ref {{ref}}',
+  bodyExpression: 'Body expression: {{look.expression}}.',
+  hair: 'Hair: {{look.description}}.',
 }
+
+/** A v4 asset's `ingest`: the target alone, as the shipped registry writes it (A2c). */
+const as = (spec: string, fields: Record<string, unknown> = {}): Asset => ({ as: spec, base: null, variant: null, flags: [], ...fields })
 
 function asset(fields: Partial<Asset> & { id: string; kind: string }): Asset {
   return {
@@ -60,6 +70,8 @@ beforeAll(() => {
   // The reference files `ready` looks for: `ref.png` exists, `missing.png` does not.
   mkdirSync(srcDir, { recursive: true })
   writeFileSync(join(srcDir, 'ref.png'), 'not really a png')
+  // …and the reference both v4 bodies are drawn from, which a fresh worktree does not have either (pre-flight #1).
+  writeFileSync(join(srcDir, 'f01_candidate_1.png'), 'not really a png')
 })
 
 afterAll(() => rmSync(temp, { recursive: true, force: true }))
@@ -105,6 +117,94 @@ describe('validateRegistry', () => {
 
   it('refuses attempts that are not an array', () => {
     expect(() => validateRegistry(registryOf([asset({ id: 'a04', kind: 'item', slot: 'head', attempts: null })]))).toThrow(/a04/)
+  })
+
+  it('accepts the v4 kinds: a body, a body expression and a hairstyle (Plan 19)', () => {
+    expect(KINDS).toEqual(expect.arrayContaining(['body', 'bodyExpression', 'hair']))
+    const registry = registryOf([
+      asset({ id: 'body_f', kind: 'body', wear: 'f', catalog: 'f', reference: 'f01_candidate_1.png', ingest: as('body:f') }),
+      asset({ id: 'body_f:happy', kind: 'bodyExpression', wear: 'f', catalog: 'f', reference: '@body_f', file: 'body_f_happy.png', ingest: as('face:f:happy') }),
+      asset({ id: 'item_hair_f_bob01', kind: 'hair', wear: 'f', catalog: 'hair_f_bob01', reference: '@body_f', ingest: as('hair:f_bob01') }),
+      asset({ id: 'v4/item_outfit_casual01', kind: 'item', slot: 'outfit', reference: '@body_f', file: 'v4_item_outfit_casual01.png', ingest: as('item:outfit:casual01', { base: 'f' }) }),
+    ])
+    expect(() => validateRegistry(registry)).not.toThrow()
+  })
+
+  it('refuses a v4 asset whose ingest target is not its kind, naming it', () => {
+    const v4 = (id: string, kind: string, spec: string): Asset => asset({ id, kind, reference: 'f01_candidate_1.png', file: `${id.replace(':', '_')}.png`, ingest: as(spec) })
+    expect(() => validateRegistry(registryOf([v4('body_f', 'body', 'base:f')]))).toThrow(/body_f.*body:/)
+    expect(() => validateRegistry(registryOf([v4('item_hair_f_bob01', 'hair', 'item:hair:f_bob01')]))).toThrow(/item_hair_f_bob01.*hair:/)
+    expect(() => validateRegistry(registryOf([v4('item_hair_x', 'hair', 'hair:bob01')]))).toThrow(/item_hair_x.*bob01/)
+    expect(() => validateRegistry(registryOf([v4('body_f:sad', 'bodyExpression', 'expr:f:sad')]))).toThrow(/body_f:sad.*face:/)
+  })
+})
+
+// ─────────────────────────────────────────────────── specs and flags (v4) ──
+
+describe('parseSpec / parseFlags: the v4 targets and flags (Plan 19)', () => {
+  it('reads body:<g>, face:<g>:<expr> and hair:<code>, the hairstyle gendered by its code', () => {
+    expect(parseSpec('body:f')).toEqual({ kind: 'body', gender: 'f' })
+    expect(parseSpec('face:m:happy')).toEqual({ kind: 'bodyFace', gender: 'm', expr: 'happy' })
+    expect(parseSpec('hair:f_bob01')).toEqual({ kind: 'hair', code: 'f_bob01', gender: 'f' })
+    expect(parseSpec('hair:m_neat01')).toEqual({ kind: 'hair', code: 'm_neat01', gender: 'm' })
+    // Plan 12's targets read as before.
+    expect(parseSpec('expr:f02:happy')).toEqual({ kind: 'expr', base: 'f02', expr: 'happy' })
+    expect(parseSpec('bot:3:happy')).toEqual({ kind: 'bot', bot: 3, expr: 'happy' })
+  })
+
+  it('refuses a v4 target with a part missing or one too many, and a hair code that names no gender', () => {
+    expect(() => parseSpec('body:f:happy')).toThrow(/body:f:happy/)
+    expect(() => parseSpec('body:')).toThrow(/body:/)
+    expect(() => parseSpec('face:f')).toThrow(/face:f/)
+    expect(() => parseSpec('hair:f_bob01:x')).toThrow(/hair:f_bob01:x/)
+    expect(() => parseSpec('hair:bob01')).toThrow(/bob01/)
+  })
+
+  it('takes --hair, --anchor and --recolour-to as words, beside the numbers and booleans it took before', () => {
+    expect(parseFlags(['--hair', 'f_bob01'])).toEqual({ hides: {}, diff: {}, hair: 'f_bob01' })
+    expect(parseFlags(['--anchor', 'head'])).toEqual({ hides: {}, diff: {}, anchor: 'head' })
+    expect(parseFlags(['--recolour-to', '#5e3e6f'])).toEqual({ hides: {}, diff: {}, recolourTo: '#5e3e6f' })
+    expect(parseFlags(['--recolour-to=#5E3E6F', '--hides-hair-front', '--color-tol', '30', '--hair=m_neat01'])).toEqual({
+      hides: { hidesHairFront: true }, diff: { colorTol: 30 }, recolourTo: '#5E3E6F', hair: 'm_neat01',
+    })
+  })
+
+  it('refuses an anchor other than head, a colour that is not #rrggbb, and a word flag with no value', () => {
+    expect(() => parseFlags(['--anchor', 'feet'])).toThrow(/--anchor feet.*head/)
+    expect(() => parseFlags(['--recolour-to', 'violet'])).toThrow(/#rrggbb/)
+    expect(() => parseFlags(['--recolour-to', '#5e3e6'])).toThrow(/#rrggbb/)
+    expect(() => parseFlags(['--hair'])).toThrow(/--hair needs/)
+    expect(() => parseFlags(['--hair', '--white'])).toThrow(/--hair needs/)
+    expect(() => parseFlags(['--color-tol', 'f_bob01'])).toThrow(/--color-tol needs a number/)
+  })
+})
+
+describe('transformSource', () => {
+  const body = asset({ id: 'body_f', kind: 'body', wear: 'f', catalog: 'f', reference: 'f01_candidate_1.png', ingest: as('body:f') })
+  const bot = asset({ id: 'v4/bot_3', kind: 'bot', catalog: 'bot_3', reference: '@body_f', file: 'v4_bot_3.png', ingest: as('bot:3') })
+  const happy = asset({ id: 'v4/bot_3:happy', kind: 'bot', catalog: 'bot_3', reference: '@v4/bot_3', file: 'v4_bot_3_happy.png', ingest: as('bot:3:happy') })
+  const oldBot = asset({ id: 'bot_3', kind: 'bot', reference: 'f01_candidate_1.png', ingest: as('bot:3') })
+  const oldHappy = asset({ id: 'bot_3:happy', kind: 'bot', reference: '@bot_3', ingest: as('bot:3:happy') })
+  const f02 = asset({ id: 'f02', kind: 'base', reference: 'f01_candidate_1.png', ingest: as('base:f02') })
+  const hair = asset({ id: 'item_hair_f_bob01', kind: 'hair', reference: '@body_f', ingest: as('hair:f_bob01') })
+  const face = asset({ id: 'body_f:sad', kind: 'bodyExpression', reference: '@body_f', ingest: as('face:f:sad') })
+  const registry = registryOf([body, bot, happy, oldBot, oldHappy, f02, hair, face])
+
+  it('follows a v4 bot back to the body it was drawn on: @v4/bot_3 → @body_f → f', () => {
+    expect(transformSource(happy, registry)).toBe('f')
+    expect(transformSource(bot, registry)).toBe('f')
+  })
+
+  it('cuts a body on f01, the base its reference picture is', () => {
+    expect(transformSource(body, registry)).toBe('f01')
+  })
+
+  it('keeps Plan 12: a bot and a new base drawn from f01 take f01, and a hairstyle or face takes none (the body is its owner)', () => {
+    expect(transformSource(oldBot, registry)).toBe('f01')
+    expect(transformSource(oldHappy, registry)).toBe('f01')
+    expect(transformSource(f02, registry)).toBe('f01')
+    expect(transformSource(hair, registry)).toBeNull()
+    expect(transformSource(face, registry)).toBeNull()
   })
 })
 
@@ -192,6 +292,25 @@ describe('renderPrompt', () => {
     const hat = asset({ id: 'item_head_beret01', kind: 'item', slot: 'head', prompt: 'Draw a beret, exactly.', attempts: [{ n: 1, verdict: 'ng', reason: 'tears' }] })
     expect(renderPrompt(hat, registryOf([hat]))).toBe(`Draw a beret, exactly.\n${FIX_LINES.tears}`)
   })
+
+  it('carries the v4 fix lines verbatim: C12, C13, and the eye-check reasons fingers, bald and pose (Plan 19)', () => {
+    expect(FIX_LINES['check:C12']).toBe('Keep the face exactly the same size and in exactly the same place as in the input; only the body pose changes')
+    expect(FIX_LINES['check:C13']).toBe('The hair never covers the eyes; hair longer than the neck falls behind the shoulders')
+    expect(FIX_LINES.fingers).toBe('Each hand shows exactly five separate fingers: four fingers and a thumb')
+    expect(FIX_LINES.bald).toBe('The head is completely bald: no hair, no hairline, no stubble')
+    expect(FIX_LINES.pose).toBe('Relaxed pose: weight on one leg, arms hanging loosely away from the body')
+  })
+
+  it('renders a body whose attempts failed C12 and then the eye check on fingers with both new fix lines', () => {
+    const body = asset({
+      id: 'body_f', kind: 'body', look: { code: 'F' }, reference: 'f01_candidate_1.png', ingest: as('body:f'),
+      attempts: [
+        { n: 1, verdict: 'ng', reason: 'check:C12', by: 'verify' },
+        { n: 2, verdict: 'ng', reason: 'fingers', by: 'user' },
+      ],
+    })
+    expect(renderPrompt(body, registryOf([body]))).toBe(`Body F. Ref f01_candidate_1.png\n${FIX_LINES['check:C12']}\n${FIX_LINES.fingers}`)
+  })
 })
 
 // ────────────────────────────────────────────────────────────────── queue ──
@@ -227,7 +346,9 @@ describe('ready / nextAssets', () => {
     expect(ready(aura, registryOf([aura]), opts())).toBe(true)
   })
 
-  it('orders head, face, outfit items, then bases, expressions, auras, frames, bots — stable within a group', () => {
+  it('orders bodies, hairstyles, outfits, body expressions, bots, head and face items, then bases, expressions, auras, frames — stable within a group', () => {
+    // Plan 19: the v4 kinds lead. Every Plan 12 asset is done or blocked, so the reorder moves nothing of theirs.
+    expect(PRIORITY).toEqual(['body', 'hair', 'item:outfit', 'bodyExpression', 'bot', 'item:head', 'item:face', 'base', 'expression', 'aura', 'frame'])
     const assets = [
       asset({ id: 'bot_0', kind: 'bot' }),
       asset({ id: 'item_frame_gold', kind: 'frame', slot: 'frame', reference: null }),
@@ -235,14 +356,68 @@ describe('ready / nextAssets', () => {
       asset({ id: 'f02', kind: 'base', status: 'ok' }),
       asset({ id: 'f02:happy', kind: 'expression', reference: '@f02' }),
       asset({ id: 'f03', kind: 'base' }),
+      asset({ id: 'body_m:sad', kind: 'bodyExpression', reference: '@body_m', file: 'body_m_sad.png', ingest: as('face:m:sad') }),
       asset({ id: 'item_outfit_casual01', kind: 'item', slot: 'outfit' }),
       asset({ id: 'item_face_mask01', kind: 'item', slot: 'face' }),
+      asset({ id: 'item_hair_m_neat01', kind: 'hair', reference: '@body_m', ingest: as('hair:m_neat01') }),
       asset({ id: 'item_head_b01', kind: 'item', slot: 'head' }),
+      asset({ id: 'body_m', kind: 'body', status: 'ok', reference: 'f01_candidate_1.png', ingest: as('body:m') }),
       asset({ id: 'item_head_a01', kind: 'item', slot: 'head' }),
+      asset({ id: 'body_f', kind: 'body', reference: 'f01_candidate_1.png', ingest: as('body:f') }),
+      // …waits for body_f, which is only todo.
+      asset({ id: 'item_hair_f_bob01', kind: 'hair', reference: '@body_f', ingest: as('hair:f_bob01') }),
       asset({ id: 'm02', kind: 'base' }),
     ]
     const ids = nextAssets(registryOf(assets), opts()).map((a: Asset) => a.id)
-    expect(ids).toEqual(['item_head_b01', 'item_head_a01', 'item_face_mask01', 'item_outfit_casual01', 'f03', 'm02', 'f02:happy', 'item_aura_fire01', 'item_frame_gold', 'bot_0'])
+    expect(ids).toEqual([
+      'body_f', 'item_hair_m_neat01', 'item_outfit_casual01', 'body_m:sad', 'bot_0', 'item_head_b01', 'item_head_a01', 'item_face_mask01',
+      'f03', 'm02', 'f02:happy', 'item_aura_fire01', 'item_frame_gold',
+    ])
+  })
+
+  it('hands out only the ids next --only names, once each is ready, in priority order (Plan 19)', () => {
+    const body = asset({ id: 'body_f', kind: 'body', reference: 'f01_candidate_1.png', ingest: as('body:f') })
+    const bob = asset({ id: 'item_hair_f_bob01', kind: 'hair', reference: '@body_f', ingest: as('hair:f_bob01') })
+    const casual = asset({ id: 'v4/item_outfit_casual01', kind: 'item', slot: 'outfit', reference: '@body_f', file: 'v4_item_outfit_casual01.png', ingest: as('item:outfit:casual01', { base: 'f' }) })
+    const head = asset({ id: 'item_head_a01', kind: 'item', slot: 'head' })
+    const registry = registryOf([head, casual, bob, body])
+    const ids = (only: string[], limit = Infinity): string[] => nextAssets(registry, { ...opts(), only, limit }).map((a: Asset) => a.id)
+    // Named, but its reference is body_f, which is not ok yet: nothing.
+    expect(ids(['item_hair_f_bob01'])).toEqual([])
+    expect(ids(['body_f'])).toEqual(['body_f'])
+    body.status = 'ok'
+    expect(ids(['item_hair_f_bob01'])).toEqual(['item_hair_f_bob01'])
+    // In priority order whatever order they are named in, still capped by --limit; the ones not named never come.
+    expect(ids(['item_head_a01', 'v4/item_outfit_casual01', 'item_hair_f_bob01'])).toEqual(['item_hair_f_bob01', 'v4/item_outfit_casual01', 'item_head_a01'])
+    expect(ids(['item_head_a01', 'v4/item_outfit_casual01'], 1)).toEqual(['v4/item_outfit_casual01'])
+    // Without --only, everything ready.
+    expect(nextAssets(registry, opts()).map((a: Asset) => a.id)).toEqual(['item_hair_f_bob01', 'v4/item_outfit_casual01', 'item_head_a01'])
+  })
+
+  it('refuses an --only id that is not in the registry, naming it', () => {
+    const registry = registryOf([asset({ id: 'item_head_a01', kind: 'item', slot: 'head' })])
+    expect(() => nextAssets(registry, { ...opts(), only: ['item_head_a01', 'body_x'] })).toThrow(/body_x/)
+  })
+
+  it('reads next --only <id,…> on the command line', () => {
+    // The CLI takes the pictures' folder from the registry's own: a temp registry beside the stub reference.
+    const file = join(srcDir, 'cli-registry.json')
+    const body = asset({ id: 'body_f', kind: 'body', look: { code: 'F' }, reference: 'f01_candidate_1.png', ingest: as('body:f') })
+    const casual = asset({ id: 'v4/item_outfit_casual01', kind: 'item', slot: 'outfit', reference: '@body_f', file: 'v4_item_outfit_casual01.png', ingest: as('item:outfit:casual01', { base: 'f' }) })
+    const head = asset({ id: 'item_head_a01', kind: 'item', slot: 'head', reference: 'f01_candidate_1.png' })
+    writeRegistry(file, registryOf([head, casual, body]))
+    const next = (...args: string[]): { status: number | null; stdout: string; stderr: string } =>
+      spawnSync(process.execPath, [CLI, 'next', '--registry', file, ...args], { encoding: 'utf8' })
+    const ids = (run: { stdout: string; stderr: string }): string[] => {
+      expect(run.stderr).toBe('')
+      return (JSON.parse(run.stdout) as { id: string }[]).map((entry) => entry.id)
+    }
+    expect(ids(next('--only', 'item_head_a01,body_f,v4/item_outfit_casual01', '--json'))).toEqual(['body_f', 'item_head_a01'])
+    expect(ids(next('--json', '--only', ' body_f '))).toEqual(['body_f'])
+    expect(ids(next('--json'))).toEqual(['body_f', 'item_head_a01'])
+    const unknown = next('--only', 'body_x')
+    expect(unknown.status).toBe(1)
+    expect(unknown.stderr).toMatch(/body_x/)
   })
 
   it('skips what is not ready and honours the limit', () => {
