@@ -60,8 +60,9 @@
  *       how a hairstyle is held to its natural colour (Plan 19, phases B and C).
  *
  *   node scripts/avatar-pipeline.mjs check [<name>...] [--skip C6]
- *       Run D01 §10's ten criteria, C11 (masks) and C12 (a v4 body's head stays on F01's) over every layer
- *       (or the named ones), print the table, exit 1 on any failure. `--skip` may be repeated.
+ *       Run D01 §10's ten criteria, C11 (masks), C12 (a v4 body's head stays on F01's) and C13 (a hairstyle's
+ *       two layers split cleanly) over every layer (or the named ones), print the table, exit 1 on any failure.
+ *       `--skip` may be repeated.
  *
  *   node scripts/avatar-pipeline.mjs sheet [--dir <layers>] [--out <png>]
  *       Compose every item on both bases into docs/avatar-2d-sheet.png — the style gate of spec §9.
@@ -77,8 +78,8 @@
  *
  * The work is in `scripts/avatar-pipeline/`, one module per stage — `png` (pixels), `frame` (the frame
  * and the stand-in art), `extract` (cutting a layer out of a picture), `masks` (spec §4.1's hair/eye/tint
- * cuts, Plan 19's skin, and the colours they cover), `checks` (D01 §10, C11, C12), `sheet`, `manifest` (names
- * and the file). This file only reads the command line.
+ * cuts, Plan 19's skin, and the colours they cover), `hair` (Plan 19's front/back hair split), `checks` (D01 §10,
+ * C11–C13), `sheet`, `manifest` (names and the file). This file only reads the command line.
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'

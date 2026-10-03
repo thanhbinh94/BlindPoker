@@ -1022,7 +1022,7 @@ describe('the ten acceptance checks', () => {
     const entry = await writePlaceholder(dir, 'item_head_tophat01_L80')
     const manifest = manifestFor(dir, { item_head_tophat01_L80: entry })
     const results = await checkOne(dir, 'item_head_tophat01_L80', manifest)
-    expect([...results.keys()].sort()).toEqual(['C1', 'C10', 'C11', 'C12', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9'])
+    expect([...results.keys()].sort()).toEqual(['C1', 'C10', 'C11', 'C12', 'C13', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9'])
     for (const [id, result] of results) expect(result.ok, `${id}: ${result.detail}`).toBe(true)
   }, 30_000)
 

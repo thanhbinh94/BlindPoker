@@ -218,7 +218,7 @@ pnpm --filter @bp/normal-web avatar:ingest -- <picture.png> --as bot:3:happy
 # again — see §4.3.
 
 pnpm --filter @bp/normal-web avatar:check
-# Runs the acceptance criteria (D01 §10's ten, then C11 and C12 — §5) over every committed layer and prints a
+# Runs the acceptance criteria (D01 §10's ten, then C11, C12 and C13 — §5) over every committed layer and prints a
 # pass/fail table; exits 1 on any failure. Pass names to check only those (`avatar:check base_f01_L30`), or `--skip C6`
 # for the one criterion (an outfit must cover the base's underwear) that has no coordinates in the
 # design and occasionally needs a human override.
@@ -581,9 +581,36 @@ On the old bases this reproduces the plan's hairstyle natural colours exactly (t
 plan pinned for the migration (`#2e6a9b`, `#6b5771`, `#a9a564`, `#cc924c`, `#998c91`, `#ad6f4a`), which were measured
 before `colours` existed.
 
-## 5. The twelve acceptance criteria (`avatar:check`)
+### 4.5 A hairstyle's two layers: front and back (Plan 19, 2026-10-03)
 
-| | Checks (D01 §10, plan 13 §4.3, Plan 19 §5.1/§5.5) |
+A v4 hairstyle is drawn once, on its gender's bald body, and shipped as two layers: **L60**, over the face, and
+**L20**, behind the body (design `2026-10-03-avatar-v4-design.md` §5.4). The ingest finds the hair as the
+difference between the picture and the registered body, and `splitHair(region, body, { density, override })`
+(`hair.mjs`) cuts that region in two. The rule follows the body's own head and shoulders, at `@2x`, with
+`HAIR_SPLIT` in frame units × the density:
+
+- **the head, grown** — the body's ink on every row above `measure(body).chin` + `shoulderMargin` (8), which takes
+  in the skull, the face and the neck but not the shoulders, grown by `reach` (6): hair lying on the head, and a
+  little rim round it;
+- **the crown band** — every row above the head top + `crownBand` (0.35) × (chin − head top), across the grown
+  head's whole width: the top of the hair is in front however far it stands out past the skull;
+- **the body's own ink, on any row** (pre-flight #17) — a hair pixel over the body is drawn over the body, so a lock
+  or a braid resting on a shoulder stays in front of the outfit rather than vanishing under it.
+
+A hair pixel in any of the three is **front**; every other one is **back** — long hair behind the shoulders, a
+ponytail, the back of the hair standing out of the head shape. Long hair behind the back shows only outside the
+silhouette, so it is never on the body's ink. Each pixel goes to exactly one layer with its own coverage, so the
+two add up to the region.
+
+When the rule gets a hairstyle wrong, a hand-drawn **front mask**
+`assets/avatar-src/masks/item_hair_<code>_frontmask.png` replaces it outright: front = region ∧ mask ≥ 128, the
+rest is back. It is read as any hand-drawn mask is (its alpha, or its luminance when it has none) and applied by
+ingesting the hairstyle again. The L60's manifest entry records `split: { region, front, back }`, the pixel counts
+at ≥ 128, and C13 (§5) holds the two written layers to it.
+
+## 5. The thirteen acceptance criteria (`avatar:check`)
+
+| | Checks (D01 §10, plan 13 §4.3, Plan 19 §5.1/§5.4/§5.5) |
 |---|---|
 | C1 | The frame, exactly, at both densities — one pixel out is a fail |
 | C2 | Nothing opaque on the outermost row or column — except an aura (layer 10), which is 400 wide by design and reported `-` (2026-09-24, §4.3) |
@@ -597,6 +624,7 @@ before `colours` existed.
 | C10 | The `@2x` is inside the per-file share of the stage-1 budget (6 MB in the design; 32 MB since 2026-09-24 for real AI art, see `test/footprint.test.ts`), and the manifest's byte count matches the file on disk |
 | C11 | Every mask a layer's manifest entry lists (§4.4, Plan 13) is the layer's own `@2x` size and covers none of its transparency; unless hand-drawn (`override`, which skips the area/shape rules below — though a real body's or face's skin mask may never be empty): hair is 3–20 % of the frame on `L30` and 0.7–1.3 × the same base's `face_neutral` hair mask on a face (skipped when that reference is empty); eyes on `neutral` are exactly two 8-connected blobs, 100–8000 px `@2x` each, one each side of centre — another open-eyed expression allows that or none, `closed`/`sleep` always none; tint is at least 2 % of the layer's own ink. A layer with no masks cut for it yet reports `-`. **Plan 19 (§4.4.1):** skin on a body `L30` covers `SKIN_AREA` (0.35–0.85, provisional until the style gate sets it to the real bodies' ± 0.10) of the layer's own ink; on a body face, the skin **and the eye zone** together — the pixels of the face's ink in its skin mask or in `eyeZone` (the eye ellipses and its eye mask, widened by `eyeMargin`: exactly what `skinMask` takes out) — are 0.8–1.2 × the same measure on the same gender's `face_neutral` (controller ruling, 2026-10-03: between expressions only the eye region moves between "eye" and "skin" — a shut eye is eyelid skin, an open one iris, white and margin — so skin alone runs 1.3–1.5 × on shut-eye faces while the head's skin and eyes stay the same size) — measured only when **both faces are real or both are stand-ins**, because between the style gate and batch C1 the neutral face is real art and the other five are still stand-ins, and a stand-in's oval says nothing about a drawn face; a mixed pair passes with `n/a — neutral is real, this face is a stand-in` (or the reverse) in its detail. On a **real face against a real neutral** two guards follow (controller ruling, A1b fix round 3), because a stray white blob in the eye band swells the eye zone by exactly what the skin loses and leaves the union at 1.00 × (§4.4.1): **skin alone at least 0.8 ×** the neutral's skin alone (one-sided — a shut face only gains skin) and **the eye zone at most 1.5 ×** the neutral's eye zone, failing as e.g. `skin alone 0.76 × neutral's (min 0.8)`, `eye zone 1.87 × neutral's (max 1.5)`. They do not catch everything: a small pale feature — a tear, a highlight — can still inflate the eye zone under both limits (a pale tear on the test face: 0.93 ×, 1.27 ×) and leave a patch that stays cream under every other skin colour, so every real face's skin-mask overlay is checked by eye at the style gate and in batch C1. A real face whose own skin mask is empty fails — a hand-drawn one too — and so does a real face whose neutral face has no skin to compare with (a stand-in pair only notes it); a **real** v4 layer must carry the masks of its kind (skin on a body; skin and eyes on a face; hair on a hair layer) — one without them fails rather than reporting `-`; a body face's eyes follow the base faces' rules; hair on a hair layer covers at least 0.9 of the layer's ink; and on any layer that has both, skin and eyes share no pixel at alpha ≥ 128 — hand-drawn or not |
 | C12 | **The head stays put** ("đầu không xê dịch", Plan 19 §5.1, rulings 1–2): a real `body_<g>_L30` keeps F01's head, so every hat, pair of glasses, aura, frame and the portrait crop cut on F01 fit it. F01's skull cannot be measured (its hair is baked into its L30), so the eyes and the chin are: `headMetrics` takes the centroid of the gender's `face_neutral` eye mask at alpha ≥ 128 either side of its middle column, **in frame units as pixel index / 2 at `@2x`, with no half-pixel offset**, their midpoint and x distance, and the chin from `measure` on the body's `@1x`. Eye midpoint x and y, eye span and chin must each lie within `HEAD_TOLERANCE` (4.16, 2 % of the 208 crop) of `HEAD_REFERENCE` — F01's own (190.9, 194.0), 60.6 and 243 — for **both** genders: M01's head, measured the same way, sits 4.6 units lower (198.6) and is not a second reference. A failure names each part and how far it is, e.g. `eye line 6.0 from F01's`. A stand-in body, a real body whose neutral face is still a stand-in (the eyes it would measure are the stand-in's), a body whose neutral face has no eye mask, and every other layer report `-` |
+| C13 | **The hair splits cleanly** ("tóc tách đúng", Plan 19 §5.4, §4.5 above): checked on a hair `L60` whose entry records a `split`, together with its `L20` sibling, counting pixels at alpha ≥ 128 at `@2x`. **No pixel is in both layers** (a strand drawn twice is over the face *and* behind the body); the two layers together hold **at least `HAIR_COVERAGE` (0.99) × `split.region`** (a strand in neither is lost from every look that wears the hairstyle); and the front covers **at most `HAIR_EYE_LIMIT` (1 %)** of the gender's `body_<g>_face_neutral_L50` eye mask — a fringe over the eyes hides every expression under it. Failures read e.g. `the two layers overlap at 120 pixels`, `the split covers 0.55 of the hair, want ≥ 0.99`, `the front lies over the eyes on 33.2 % of the eye mask, want ≤ 1 %`. The eye part is `n/a` while the neutral face has no eye mask (the rest is still checked); a missing `L20` fails. The `L20` reports `-` (`n/a — checked with its L60`), as do an `L60` with no `split` and every other layer. On the stand-ins every `L60` passes with no overlap, coverage 1.00 and 0.0 % of the eyes |
 
 ## 6. Placeholder vs. real
 

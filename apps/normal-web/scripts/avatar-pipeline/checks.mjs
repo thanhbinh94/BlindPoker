@@ -22,6 +22,9 @@
  *       a real v4 layer never without its masks
  *   C12 a real v4 body's head sits where F01's does: the eyes and the chin within 2 % of the crop (Plan 19
  *       spec §5.1, rulings 1–2), so every hat, glasses, aura and frame cut on F01 still fits it
+ *   C13 a hairstyle's two layers are the split it was cut into (Plan 19 spec §5.4): checked on the L60 with its
+ *       L20 — no pixel in both, together at least 99 % of the hair region its `split` records, and the front off
+ *       the gender's neutral eyes
  *
  * Two of them are judgement calls that the document leaves to a person and this file has to pin down.
  * C4 compares the *rim* to the *interior*: white-on-white art is legitimate and would otherwise fail
@@ -64,8 +67,9 @@ import {
   isSkin,
 } from './frame.mjs'
 import { measure } from './extract.mjs'
+import { HAIR_COVERAGE, HAIR_EYE_LIMIT } from './hair.mjs'
 import { EYE_GROUP_MERGE_RADIUS, MASK_FILE_KIND, eyeZone } from './masks.mjs'
-import { NAME_PATTERN, bodyFaceFile, faceFile, itemFile, parseName, wearOf } from './manifest.mjs'
+import { NAME_PATTERN, bodyFaceFile, faceFile, hairFile, itemFile, parseName, wearOf } from './manifest.mjs'
 
 /** C10, and spec §8's 6 MB stage-1 footprint divided by the files that have to fit in it. */
 export const MAX_BYTES_2X = 400 * 1024
@@ -111,6 +115,7 @@ const CHECKS = [
   { id: 'C10', run: insideTheBudget },
   { id: 'C11', run: maskChecks },
   { id: 'C12', run: headStaysPut },
+  { id: 'C13', run: hairSplits },
 ]
 
 export const CHECK_IDS = CHECKS.map((check) => check.id)
@@ -217,8 +222,20 @@ async function load(dir, manifest, name, bases, neutralAreas = new Map()) {
     const neutralFile = join(dir, `${neutralName}_${MASK_FILE_KIND.eyes}mask@2x.png`)
     if (neutralEntry?.real === true && info && !info.empty && existsSync(neutralFile)) neutralEyeMask = await readPicture(neutralFile)
   }
+  // C13 judges a hair L60 together with its L20 sibling, and its front against the gender's neutral eye mask — a
+  // stand-in's or real art's alike, since a fringe over the eyes is wrong on either.
+  let hairBack = null
+  let hairEyeMask = null
+  if (parsed?.kind === 'hair' && parsed.layer === LAYERS.hairFront && entry?.split) {
+    const backFile = join(dir, `${hairFile(parsed.code, LAYERS.hairBack)}@2x.png`)
+    if (existsSync(backFile)) hairBack = await readPicture(backFile)
+    const neutralName = bodyFaceFile(parsed.gender, 'neutral')
+    const info = manifest.files[neutralName]?.masks?.eyes
+    const eyesFile = join(dir, `${neutralName}_${MASK_FILE_KIND.eyes}mask@2x.png`)
+    if (info && !info.empty && existsSync(eyesFile)) hairEyeMask = await readPicture(eyesFile)
+  }
 
-  return { name, dir, manifest, entry, parsed, pictures, bytes, halved, bases, masks, neutralHairArea, neutralSkin, neutralEyeMask, neutralFaceStandIn }
+  return { name, dir, manifest, entry, parsed, pictures, bytes, halved, bases, masks, neutralHairArea, neutralSkin, neutralEyeMask, neutralFaceStandIn, hairBack, hairEyeMask }
 }
 
 /** Pixels of a mask (as a `readPicture` result: white RGB, coverage in alpha) at ≥ 128 — spec §4.3's areas. */
@@ -859,6 +876,78 @@ function headStaysPut({ parsed, entry, pictures, neutralEyeMask, neutralFaceStan
   return off.length
     ? bad(`${off.join(', ')}, want each within ${HEAD_TOLERANCE} — ${where}`)
     : ok(`${where}, within ${HEAD_TOLERANCE} of F01's`)
+}
+
+// ───────────────────────────────────────────────────── C13: the hair splits cleanly ──
+
+/** A share as C13 prints it, rounded *down* to two places, so a coverage just under 0.99 never prints as 0.99. */
+const shareDown = (share) => (Math.floor(share * 100) / 100).toFixed(2)
+
+/**
+ * C13 "tóc tách đúng" (Plan 19, spec §5.4): a hairstyle's front layer (L60) and back layer (L20) are the region of
+ * hair they were split from (`hair.mjs`, `splitHair`), cleanly. On a hair L60 whose entry records a `split`, with its
+ * L20 sibling, every pixel counted at alpha ≥ 128 at `@2x`:
+ *
+ * - no pixel is in both layers — one strand drawn twice is drawn over the face *and* behind the body;
+ * - the two together hold at least `HAIR_COVERAGE` (99 %) of `split.region`, the hair the ingest found — a strand
+ *   that fell out of both layers is gone from every look that wears the hairstyle;
+ * - the front covers at most `HAIR_EYE_LIMIT` (1 %) of the gender's `body_<g>_face_neutral_L50` eye mask — a fringe
+ *   over the eyes hides every expression under it. That part is `n/a` while the neutral face has no eye mask.
+ *
+ * The L20 reports `n/a — checked with its L60`; an L60 with no `split` (nothing has split it), and every other
+ * layer, report `n/a`. A missing L20 fails: the split cannot be judged without it.
+ */
+function hairSplits({ parsed, entry, pictures, hairBack, hairEyeMask }) {
+  if (parsed?.kind !== 'hair') return ok('n/a — not a hair layer')
+  if (parsed.layer === LAYERS.hairBack) return ok('n/a — checked with its L60')
+  if (!entry?.split) return ok('n/a — no split recorded for this layer')
+  const front = pictures[2]
+  if (!front) return ok('n/a — no @2x to judge')
+  const backName = hairFile(parsed.code, LAYERS.hairBack)
+  if (!hairBack) return bad(`${backName} has no @2x on disk, so the split cannot be judged`)
+  if (hairBack.width !== front.width || hairBack.height !== front.height) {
+    return bad(`${backName} is ${hairBack.width} × ${hairBack.height}, this layer is ${front.width} × ${front.height}`)
+  }
+
+  let shared = 0
+  let held = 0
+  for (let i = 3; i < front.data.length; i += 4) {
+    const inFront = front.data[i] >= 128
+    const inBack = hairBack.data[i] >= 128
+    if (inFront && inBack) shared++
+    if (inFront || inBack) held++
+  }
+  const { region } = entry.split
+  const covers = region > 0 ? held / region : 1
+
+  const problems = []
+  if (shared) problems.push(`the two layers overlap at ${shared} pixel${shared === 1 ? '' : 's'}`)
+  if (covers < HAIR_COVERAGE) problems.push(`the split covers ${shareDown(covers)} of the hair, want ≥ ${HAIR_COVERAGE}`)
+
+  const neutral = bodyFaceFile(parsed.gender, 'neutral')
+  let eyes = `eyes n/a — ${neutral} has no eye mask`
+  if (hairEyeMask && hairEyeMask.width === front.width && hairEyeMask.height === front.height) {
+    let eyePixels = 0
+    let covered = 0
+    for (let i = 3; i < hairEyeMask.data.length; i += 4) {
+      if (hairEyeMask.data[i] < 128) continue
+      eyePixels++
+      if (front.data[i] >= 128) covered++
+    }
+    if (eyePixels > 0) {
+      const share = covered / eyePixels
+      const percent = `${(share * 100).toFixed(1)} %`
+      if (share > HAIR_EYE_LIMIT) problems.push(`the front lies over the eyes on ${percent} of the eye mask, want ≤ ${HAIR_EYE_LIMIT * 100} %`)
+      eyes = `the front on ${percent} of the eyes`
+    } else {
+      eyes = `eyes n/a — ${neutral}'s eye mask is empty`
+    }
+  } else if (hairEyeMask) {
+    problems.push(`${neutral}'s eye mask is ${hairEyeMask.width} × ${hairEyeMask.height}, this layer is ${front.width} × ${front.height}`)
+  }
+
+  if (problems.length) return bad(problems.join('; '))
+  return ok(`no overlap, covers ${shareDown(covers)} of the hair, ${eyes}`)
 }
 
 // ────────────────────────────────────────────────────────────────── the table ──
