@@ -323,9 +323,15 @@
 /* The gold "✓ Đang mặc" pill (design §4.1), pinned to the card's own corner. Its positioned ancestor is
    always `.card` — `position: relative` there, whichever of the two shapes above drew it — even when it
    is painted from inside the nested `.cardPick` button, since an absolutely positioned element looks past
-   any number of non-positioned ancestors for the nearest one that is. */
+   any number of non-positioned ancestors for the nearest one that is.
+   Above the card's picture (A6 review): a hairstyle portrait is a `Chibi` whose layers are positioned and stacked
+   by their own `z-index`, and the pill comes before it in the DOM, so on a phone, where the pill reaches over the
+   portrait, the portrait painted over the pill. `.cardPortrait` keeps those layers inside the thumb; this lifts
+   the pill above the thumb. An icon or a swatch is not positioned and was already under the pill. One is enough:
+   the page's sticky bar (20), the outfit menu (10) and the modals all stay above it. */
 .wearingPill {
   position: absolute;
+  z-index: 1;
   top: var(--space-2);
   right: var(--space-2);
   padding: 2px var(--space-2);
@@ -362,7 +368,12 @@
 
 /* A hairstyle card's head portrait (Kiểu tóc, avatar v4), drawn in the same thumb: 96 px from the tablet floor up,
    inside the 118 px thumb; 72 px on a phone (the old base cards' sizes, `HairStyleTab`'s `portraitSize`), where the
-   thumb grows from its 70 px to hold it rather than clip it. */
+   thumb grows from its 70 px to hold it rather than clip it. Its own stacking context: the `Chibi` inside opens none,
+   so without this its layers' `z-index` (20–90) would compete with the card's "Đang dùng" pill (`.wearingPill`). */
+.cardPortrait {
+  isolation: isolate;
+}
+
 @media (max-width: 767px) {
   .cardPortrait {
     height: auto;

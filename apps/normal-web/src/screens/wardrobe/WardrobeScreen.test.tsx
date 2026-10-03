@@ -401,6 +401,33 @@ describe('WardrobeScreen', () => {
     }
   })
 
+  // A6 review: the portrait is the draft's look — its skin tone too, the saved one and one just picked.
+  it('a hairstyle card’s portrait carries the draft’s skin tone', async () => {
+    const user = userEvent.setup()
+    renderScreen(stubApi({ inventory: vi.fn().mockResolvedValue({ ...INVENTORY, avatar: { ...AVATAR, skinColor: 'skin_deep01' } }) }))
+    await opened()
+
+    const items = new Map(CATALOG.map((row) => [row.id, row]))
+    const bodies = new Map(AVATAR_CATALOG.bodies.map((body) => [body.gender, body]))
+    const expectPortraits = (skinColor: string): void => {
+      for (const id of FEMALE_HAIRS) {
+        const portrait = card(viNormal.items[id as keyof typeof viNormal.items]).querySelector('[data-chibi-hash]') as HTMLElement
+        const withSkin = chibiFromApi({ v: 4, gender: 'f', hairStyle: id, outfit: 'outfit_casual01', skinColor }, items, bodies)!
+        const without = chibiFromApi({ v: 4, gender: 'f', hairStyle: id, outfit: 'outfit_casual01' }, items, bodies)!
+        expect(portrait, `${id} in ${skinColor}`).toHaveAttribute('data-chibi-hash', hashChibi(withSkin))
+        expect(hashChibi(withSkin), 'the skin tone is part of the hash').not.toBe(hashChibi(without))
+      }
+    }
+    // The saved skin tone…
+    expectPortraits('skin_deep01')
+
+    // …and one picked in the draft.
+    await goTo(user, 'look', viNormal.wardrobe.tabs.skinColor)
+    await user.click(card(viNormal.items.skin_porcelain01))
+    await goTo(user, 'look', viNormal.wardrobe.tabs.hairStyle)
+    expectPortraits('skin_porcelain01')
+  })
+
   it('the Màu da tab equips a skin colour, and Tự nhiên takes it off', async () => {
     const user = userEvent.setup()
     renderScreen()
