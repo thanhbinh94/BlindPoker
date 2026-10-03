@@ -20,7 +20,9 @@
  * C13 (`checks.mjs`) holds the two layers written from a split to it: no shared pixel, the region kept whole, the
  * front off the eyes — with `HAIR_COVERAGE` and `HAIR_EYE_LIMIT` below.
  */
+// extract.mjs's ingest imports this file in turn (A2a), so `measure` may only be used at call time, never at load.
 import { measure } from './extract.mjs'
+import { FRAME } from './frame.mjs'
 import { ALPHA_INK, dilateMask } from './png.mjs'
 
 /**
@@ -56,6 +58,10 @@ const HALF = 128
 export function splitHair(region, bodyPic, { density = 2, override = null } = {}) {
   const { width, height } = bodyPic
   const n = width * height
+  // Every margin is in frame units × the density, so a body at another density would be split with the wrong ones.
+  if (width !== FRAME.w * density || height !== FRAME.h * density) {
+    throw new Error(`the body is ${width} × ${height}, not the frame at density ${density} (${FRAME.w * density} × ${FRAME.h * density})`)
+  }
   if (region?.length !== n) throw new Error(`the hair region holds ${region?.length ?? 'no'} pixels, the body is ${width} × ${height}`)
   if (override && override.length !== n) throw new Error(`the front-mask override holds ${override.length} pixels, the body is ${width} × ${height}`)
   const zone = override ? null : frontZone(bodyPic, density)

@@ -55,7 +55,7 @@ function maskOf(inside: (x: number, y: number) => boolean): Mask {
   return mask
 }
 
-/** The three parts of the synthetic hair region, each on its known side of the body. */
+/** The four parts of the synthetic hair region, each on its known side of the body. */
 const parts = {
   /** Over the head top, y 60–135: an ellipse a little wider than the skull, cut off above the eyes. */
   cap: maskOf((x, y) => y >= 60 && y <= 135 && ((x - 192) / 80) ** 2 + ((y - 150) / 90) ** 2 <= 1),
@@ -63,9 +63,16 @@ const parts = {
   panel: maskOf((x, y) => y >= 240 && y <= 330 && ((x >= 104 && x < 146) || (x >= 238 && x < 280))),
   /** A lock lying on the left shoulder, on the torso's own ink. */
   shoulderLock: maskOf((x, y) => x >= 150 && x <= 166 && y >= 236 && y <= 260),
+  /**
+   * A bunch standing out beside the left jaw, y 195–215, x 96–118: off the head shape, so spec §5.4 puts it in L20.
+   * It lies below the crown band (which ends at y 127.65 on this body) and outside the head grown by `reach` (whose
+   * left edge is x ≥ 120.8 on these rows) — but its right third is inside the grown head's *horizontal extent*
+   * (x ≥ 110), so a crown band reaching the chin would take that part to the front, and so would a much longer reach.
+   */
+  sideBunch: maskOf((x, y) => x >= 96 && x <= 118 && y >= 195 && y <= 215),
 }
 const union = (...masks: Mask[]): Mask => masks.reduce((out, mask) => out.map((v, p) => Math.max(v, mask[p]!)), new Uint8Array(W * H))
-const region = union(parts.cap, parts.panel, parts.shoulderLock)
+const region = union(parts.cap, parts.panel, parts.shoulderLock, parts.sideBunch)
 /** The neutral face's eyes, under the cap's lower edge: two ellipses at y 139–169. */
 const eyes = maskOf((x, y) => ((x - 170) / 12) ** 2 + ((y - 154) / 15) ** 2 <= 1 || ((x - 214) / 12) ** 2 + ((y - 154) / 15) ** 2 <= 1)
 
@@ -114,18 +121,29 @@ describe('splitHair (Plan 19 A1c, spec §5.4)', () => {
     expect(coverage(splitHair(region, body, { density: DENSITY }).front, parts.shoulderLock)).toBeGreaterThan(0.98)
   })
 
+  it('puts a bunch standing out beside the head, below the crown band, behind', () => {
+    // Pins `crownBand` and `reach` by behaviour: a band down to the chin, or a reach of 20, takes part of it forward.
+    expect(coverage(splitHair(region, body, { density: DENSITY }).back, parts.sideBunch)).toBeGreaterThan(0.98)
+  })
+
   it('lets a front-mask override decide instead', () => {
     // A hand-drawn `item_hair_<code>_frontmask.png` that says the panel is the front: the rule is not consulted.
     const { front, back } = splitHair(region, body, { density: DENSITY, override: parts.panel })
     expect(coverage(front, parts.panel)).toBeGreaterThan(0.98)
     expect(coverage(back, parts.cap)).toBeGreaterThan(0.98)
     expect(coverage(back, parts.shoulderLock)).toBeGreaterThan(0.98)
+    expect(coverage(back, parts.sideBunch)).toBeGreaterThan(0.98)
     expect(overlap(front, back)).toBe(0)
   })
 
   it('refuses a region or an override that is not the body’s size', () => {
     expect(() => splitHair(new Uint8Array(10), body, { density: DENSITY })).toThrow(/region/)
     expect(() => splitHair(region, body, { density: DENSITY, override: new Uint8Array(10) })).toThrow(/override/)
+  })
+
+  it('refuses a body that is not the frame at the density it is told', () => {
+    // The margins are frame units × density: a @2x body split as @1x would grow the head by half the reach.
+    expect(() => splitHair(region, body, { density: 1 })).toThrow('the body is 768 × 896, not the frame at density 1 (384 × 448)')
   })
 })
 
@@ -157,21 +175,27 @@ describe('C13 the hair splits cleanly (checks.mjs, spec §5.4)', () => {
 
   /**
    * One case's directory: the two hair layers at @2x and, unless `withEyes` is false, the neutral face's eye mask
-   * listed in the manifest. `split` is what ingest recorded for the region, whatever the layers now hold.
+   * listed in the manifest. `split` is what ingest recorded for the region (`regionCount`, the synthetic region's own
+   * count by default), whatever the layers now hold. The hair and the neutral face are real unless told they are
+   * stand-ins.
    */
-  async function hairCase(name: string, layers: { front: Mask; back: Mask }, { withEyes = true, split = true } = {}): Promise<{ dir: string; manifest: Manifest }> {
+  async function hairCase(
+    name: string,
+    layers: { front: Mask; back: Mask },
+    { withEyes = true, split = true, regionCount = solidCount(region), hairReal = true, faceReal = true } = {},
+  ): Promise<{ dir: string; manifest: Manifest }> {
     const dir = join(temp, name)
     mkdirSync(dir, { recursive: true })
     await writePicture(hairPicture(layers.front), join(dir, `${front}@2x.png`))
     await writePicture(hairPicture(layers.back), join(dir, `${back}@2x.png`))
-    const entry = (layer: number): Entry => ({ layer, w: FRAME.w, h: FRAME.h, bytes2x: 0, real: true })
+    const entry = (layer: number, real: boolean): Entry => ({ layer, w: FRAME.w, h: FRAME.h, bytes2x: 0, ...(real ? { real: true } : { placeholder: true }) })
     const files: Manifest['files'] = {
-      [front]: { ...entry(60), ...(split ? { split: { region: solidCount(region), front: 0, back: 0 } } : {}) },
-      [back]: entry(20),
+      [front]: { ...entry(60, hairReal), ...(split ? { split: { region: regionCount, front: 0, back: 0 } } : {}) },
+      [back]: entry(20, hairReal),
     }
     if (withEyes) {
       await writePicture(maskPicture(eyes), join(dir, `${neutral}_eyemask@2x.png`))
-      files[neutral] = { ...entry(50), masks: { eyes: { bytes2x: 0, meanL: 0.2 } } }
+      files[neutral] = { ...entry(50, faceReal), masks: { eyes: { bytes2x: 0, meanL: 0.2 } } }
     }
     return { dir, manifest: { files } }
   }
@@ -201,7 +225,7 @@ describe('C13 the hair splits cleanly (checks.mjs, spec §5.4)', () => {
     const lost = await hairCase('lost', { front: split.front, back: new Uint8Array(W * H) })
     const c = await c13Of(lost.dir, lost.manifest)
     expect(c.ok).toBe(false)
-    expect(c.detail).toContain('covers 0.55 of the hair, want ≥ 0.99')
+    expect(c.detail).toContain('covers 0.53 of the hair, want ≥ 0.99')
 
     // (d) A fringe grown down over the eyes: a band y 136–150 across the face, on top of the good split.
     const fringe = maskOf((x, y) => y > 135 && y <= 150 && x >= 150 && x <= 234)
@@ -225,5 +249,46 @@ describe('C13 the hair splits cleanly (checks.mjs, spec §5.4)', () => {
     const none = await c13Of(unsplit.dir, unsplit.manifest)
     expect(none.ok).toBe(true)
     expect(none.detail.startsWith('n/a'), none.detail).toBe(true)
+  })
+
+  it('C13 holds the front to the eyes only like with like, and still checks overlap and coverage on a mixed pair', async () => {
+    // Real hair over a stand-in face would be judged against eyes drawn where no head was measured (pre-flight #7,
+    // R26), and stand-in hair against real eyes says nothing about the art: the fringe here covers a third of them.
+    const split = splitHair(region, body, { density: DENSITY })
+    const fringe = maskOf((x, y) => y > 135 && y <= 150 && x >= 150 && x <= 234)
+    const fringed = { front: union(split.front, fringe), back: split.back }
+
+    const realHair = await hairCase('mixed-real-hair', fringed, { faceReal: false })
+    const a = await c13Of(realHair.dir, realHair.manifest)
+    expect(a.ok, a.detail).toBe(true)
+    expect(a.detail).toContain(`eyes n/a — ${neutral} is a stand-in`)
+
+    const standInHair = await hairCase('mixed-stand-in-hair', fringed, { hairReal: false })
+    const b = await c13Of(standInHair.dir, standInHair.manifest)
+    expect(b.ok, b.detail).toBe(true)
+    expect(b.detail).toContain(`eyes n/a — ${neutral} is real, this hair is a stand-in`)
+
+    // The other two parts still hold on a mixed pair.
+    const doubled = await hairCase('mixed-overlap', { front: fringed.front, back: region }, { faceReal: false })
+    const c = await c13Of(doubled.dir, doubled.manifest)
+    expect(c.ok).toBe(false)
+    expect(c.detail).toContain('the two layers overlap at')
+    expect(c.detail).not.toContain('over the eyes')
+
+    // Both stand-ins: measured, and over the eyes.
+    const standIns = await hairCase('both-stand-ins', fringed, { hairReal: false, faceReal: false })
+    const d = await c13Of(standIns.dir, standIns.manifest)
+    expect(d.ok).toBe(false)
+    expect(d.detail).toContain('over the eyes on 33.2 % of the eye mask')
+  })
+
+  it('C13 prints a coverage of 0.57 as 0.57, not 0.56 (rounded down, without the float error)', async () => {
+    // 57 / 100 * 100 is 56.99999999999999 in floating point: floored as it stands, that is 0.56.
+    const layer = new Uint8Array(W * H)
+    layer.fill(255, 300 * W + 300, 300 * W + 357)
+    const { dir, manifest } = await hairCase('fifty-seven', { front: layer, back: new Uint8Array(W * H) }, { regionCount: 100 })
+    const c13 = await c13Of(dir, manifest)
+    expect(c13.ok).toBe(false)
+    expect(c13.detail).toContain('the split covers 0.57 of the hair, want ≥ 0.99')
   })
 })

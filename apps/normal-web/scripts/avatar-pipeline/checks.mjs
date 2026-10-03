@@ -222,20 +222,23 @@ async function load(dir, manifest, name, bases, neutralAreas = new Map()) {
     const neutralFile = join(dir, `${neutralName}_${MASK_FILE_KIND.eyes}mask@2x.png`)
     if (neutralEntry?.real === true && info && !info.empty && existsSync(neutralFile)) neutralEyeMask = await readPicture(neutralFile)
   }
-  // C13 judges a hair L60 together with its L20 sibling, and its front against the gender's neutral eye mask — a
-  // stand-in's or real art's alike, since a fringe over the eyes is wrong on either.
+  // C13 judges a hair L60 together with its L20 sibling, and its front against the gender's neutral eye mask — like
+  // with like only, as C11 and C12 compare (controller ruling, A1c review): which of the two is real is kept with it.
   let hairBack = null
   let hairEyeMask = null
+  let hairNeutralFace = null
   if (parsed?.kind === 'hair' && parsed.layer === LAYERS.hairFront && entry?.split) {
     const backFile = join(dir, `${hairFile(parsed.code, LAYERS.hairBack)}@2x.png`)
     if (existsSync(backFile)) hairBack = await readPicture(backFile)
     const neutralName = bodyFaceFile(parsed.gender, 'neutral')
-    const info = manifest.files[neutralName]?.masks?.eyes
+    const neutralEntry = manifest.files[neutralName]
+    hairNeutralFace = { name: neutralName, real: neutralEntry?.real === true, standIn: neutralEntry?.real !== true && neutralEntry?.placeholder === true }
+    const info = neutralEntry?.masks?.eyes
     const eyesFile = join(dir, `${neutralName}_${MASK_FILE_KIND.eyes}mask@2x.png`)
     if (info && !info.empty && existsSync(eyesFile)) hairEyeMask = await readPicture(eyesFile)
   }
 
-  return { name, dir, manifest, entry, parsed, pictures, bytes, halved, bases, masks, neutralHairArea, neutralSkin, neutralEyeMask, neutralFaceStandIn, hairBack, hairEyeMask }
+  return { name, dir, manifest, entry, parsed, pictures, bytes, halved, bases, masks, neutralHairArea, neutralSkin, neutralEyeMask, neutralFaceStandIn, hairBack, hairEyeMask, hairNeutralFace }
 }
 
 /** Pixels of a mask (as a `readPicture` result: white RGB, coverage in alpha) at ≥ 128 — spec §4.3's areas. */
@@ -880,8 +883,11 @@ function headStaysPut({ parsed, entry, pictures, neutralEyeMask, neutralFaceStan
 
 // ───────────────────────────────────────────────────── C13: the hair splits cleanly ──
 
-/** A share as C13 prints it, rounded *down* to two places, so a coverage just under 0.99 never prints as 0.99. */
-const shareDown = (share) => (Math.floor(share * 100) / 100).toFixed(2)
+/**
+ * A share as C13 prints it, rounded *down* to two places, so a coverage just under 0.99 never prints as 0.99 — past
+ * the float error of the product first: 0.57 × 100 is 56.99999999999999, which floors to 0.56.
+ */
+const shareDown = (share) => (Math.floor(share * 100 + 1e-9) / 100).toFixed(2)
 
 /**
  * C13 "tóc tách đúng" (Plan 19, spec §5.4): a hairstyle's front layer (L60) and back layer (L20) are the region of
@@ -892,12 +898,16 @@ const shareDown = (share) => (Math.floor(share * 100) / 100).toFixed(2)
  * - the two together hold at least `HAIR_COVERAGE` (99 %) of `split.region`, the hair the ingest found — a strand
  *   that fell out of both layers is gone from every look that wears the hairstyle;
  * - the front covers at most `HAIR_EYE_LIMIT` (1 %) of the gender's `body_<g>_face_neutral_L50` eye mask — a fringe
- *   over the eyes hides every expression under it. That part is `n/a` while the neutral face has no eye mask.
+ *   over the eyes hides every expression under it. That part is `n/a` while the neutral face has no eye mask, and —
+ *   like with like, as C11 and C12 (controller ruling, A1c review) — when one of the hair and the neutral face is real
+ *   and the other a stand-in: `n/a — <neutral> is a stand-in` for real hair, `n/a — <neutral> is real, this hair is a
+ *   stand-in` for a stand-in's. A stand-in's eyes are drawn where no head was measured, and a stand-in's cap was
+ *   never drawn for a real face. Overlap and coverage are checked either way.
  *
  * The L20 reports `n/a — checked with its L60`; an L60 with no `split` (nothing has split it), and every other
  * layer, report `n/a`. A missing L20 fails: the split cannot be judged without it.
  */
-function hairSplits({ parsed, entry, pictures, hairBack, hairEyeMask }) {
+function hairSplits({ parsed, entry, pictures, hairBack, hairEyeMask, hairNeutralFace }) {
   if (parsed?.kind !== 'hair') return ok('n/a — not a hair layer')
   if (parsed.layer === LAYERS.hairBack) return ok('n/a — checked with its L60')
   if (!entry?.split) return ok('n/a — no split recorded for this layer')
@@ -924,9 +934,16 @@ function hairSplits({ parsed, entry, pictures, hairBack, hairEyeMask }) {
   if (shared) problems.push(`the two layers overlap at ${shared} pixel${shared === 1 ? '' : 's'}`)
   if (covers < HAIR_COVERAGE) problems.push(`the split covers ${shareDown(covers)} of the hair, want ≥ ${HAIR_COVERAGE}`)
 
-  const neutral = bodyFaceFile(parsed.gender, 'neutral')
+  const neutral = hairNeutralFace?.name ?? bodyFaceFile(parsed.gender, 'neutral')
+  // Like with like (controller ruling, A1c review): real hair is not held to a stand-in's eyes, nor the reverse.
+  const hairReal = entry.real === true
+  const hairStandIn = !hairReal && entry.placeholder === true
   let eyes = `eyes n/a — ${neutral} has no eye mask`
-  if (hairEyeMask && hairEyeMask.width === front.width && hairEyeMask.height === front.height) {
+  if (hairReal && hairNeutralFace?.standIn) {
+    eyes = `eyes n/a — ${neutral} is a stand-in`
+  } else if (hairStandIn && hairNeutralFace?.real) {
+    eyes = `eyes n/a — ${neutral} is real, this hair is a stand-in`
+  } else if (hairEyeMask && hairEyeMask.width === front.width && hairEyeMask.height === front.height) {
     let eyePixels = 0
     let covered = 0
     for (let i = 3; i < hairEyeMask.data.length; i += 4) {
