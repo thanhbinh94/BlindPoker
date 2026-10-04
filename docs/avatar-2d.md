@@ -560,12 +560,36 @@ it with `skinMask` (`masks.mjs`), at `@2x`:
 - The seed is `baseSkinColour` — the modal colour of `SKIN_WINDOW`, the cheeks and chin, which are skin on every
   body by construction.
 - A pixel is skin when it is solid (alpha > 128), has a Lab chroma C* of at least `minChroma` (8), and is either
-  within ΔE76 `SKIN_MASK.tolerance` (22) of the seed in Lab, or within `hueSpread` (18°) of the seed's LCh hue, at
-  L* ≥ `minL` (50), with a chroma `chroma` (0.5–1.6) × the seed's. The second branch is shaded and lit skin, which
-  travels a long way in Lab and keeps its hue; shaded cream sits at L* ~70 and stays in.
-- **Why `minL` is 50:** the warm-brown outline the bodies are drawn with, `#7a4a32`, is L* 36.5 with a hue only
-  17.7° from cream — inside `hueSpread`. Lightness is what keeps the line out, and the line keeps its colour, so it
-  stays crisp on every skin tone. A pink mouth falls out on hue.
+  within ΔE76 `SKIN_MASK.tolerance` (22) of the seed in Lab, or **warm and light enough**: its LCh hue
+  h = atan2(b*, a*) is `SKIN_MASK.hue` (44–100°) and its L* at least `minL` (50), **at any chroma**. The first branch
+  is light cream (and a light warm blush off its hue); the second is shaded skin, which travels a long way in Lab and
+  gains chroma as it darkens while staying warm.
+- **Why a hue window and no chroma ceiling (style gate, 2026-10-04):** the rule used to be "within 18° of the seed's
+  hue, with 0.5–1.6 × its chroma". Under a deep tone (`#5c3a28`) that left the ears, the cheek and jaw shading and
+  the neck shadow under the chin cream or orange, because shaded skin is the most saturated skin there is: measured
+  on the real bodies, `@2x`,
+
+  | what | Lab | C* | h |
+  |---|---|---|---|
+  | cream skin (the cheek) | (92.0, 4.8, 13.7) | 14.5 | 71° |
+  | its highlights | L* 94–97 | 10–13 | up to ~100° |
+  | shaded skin (cheek, ear, jaw) | (79.2, 22.1, 26.1) | 34 | 50° |
+  | deeper shade (the neck under the chin) | (59.2, 26.7, 30.1) | 40 | 48° |
+  | the ears' deepest pixels | L* 68–79 | 34–44 | 45–51° |
+  | antialiased rim between skin and outline | L* 50–80 | 24–40 | 47–60° |
+  | the mouth, inside (f / m) | L* 72–78 | 36–45 | 29–37° / 35–43° |
+  | the outline, brows, lashes | L* 21–44 | — | outline 45–48° |
+  | tank top / eye whites | — | 4.3 / ≤ 3 | — |
+  | m's amber iris `#945e26`, its light side | L* 60–90 | 45–70 | 65–90° |
+
+  The old ceiling (1.6 × 14.5 = 23) took 63 % of the first shade on body f and 39 % on body m, and the ears' rims
+  none. So the window is absolute and the chroma open: the mouth's inside stops under 44° on both faces, the
+  deepest ear shading starts at 45° — a thin margin, measured, not guessed — and nothing on a body is
+  warmer-yellow than its own highlights. The pink mouth falls out on hue; its antialiased edge, a blend towards
+  the skin, falls in, as the rim of any line does.
+- **Why `minL` is 50:** the warm-brown outline is L* 30–45 with a hue (45–48°) inside the window, and the brows and
+  lashes are as dark. Lightness is what keeps the line out, and the line keeps its colour, so it stays crisp on every
+  skin tone (on a deep tone it reads as a warm-brown line round a dark figure).
 - **Why `minChroma` is 8 (style gate, 2026-10-04):** `tolerance` alone cannot tell a *light* neutral from cream,
   whatever its hue. Mid and dark greys fall out on their own (the stand-ins' `#9aa3ad` is ΔE 32 from `#f1d2b6`), but
   greys from about `#b9b9b9` to `#f8f8f8` and an off-white like `#fdf8f5` are within ΔE 22 of it. The real v4 bodies
@@ -578,25 +602,47 @@ it with `skinMask` (`masks.mjs`), at `@2x`:
   so the closing cannot fill the shirt back in. On the real bodies the share of tank-coloured pixels in the mask went
   from 97 % (body f) and 47 % (body m) to 0; the neutral faces lost 9 px and 0 px. The cost is that a near-white
   highlight under C* 8 (`#fff1e6` is 7.6) drops out of the mask and stays white under a tint, as a highlight should.
-  The eye white is taken out by geometry (next point), and a hand-drawn `_skinmask` override still answers anything
-  else that gets through.
-- The eyes are taken out, widened by `eyeMargin` (3 px): always the padded ellipse round each eye's white
-  (`eyeEllipses`) — no eye mask holds the white, and an off-white sclera is within ΔE 22 of cream — and, on a face,
-  the eye mask as written as well (a hand-drawn `_eyemask` included), so skin and eyes never share a pixel. This is
-  the **eye zone** (`eyeZone`), and C11 measures faces by it (§5).
-- **The eye zone can be too big.** `eyeEllipses` finds the eyes from white blobs in the eye band and unions every
-  blob on a side, then mirrors the box to the other side. A small pale feature there that is not an eye white — a
-  tear, a highlight on a cheek, a pale "zZ" bubble, white hair shine — widens both ellipses, and the skin mask loses
-  what they gain: a white cheek sparkle on the test face grows them from 44 × 52 to 62 × 70 px and takes 24 % of the
-  skin. C11's two guards on real faces (§5) catch a sparkle like that, but not everything: a pale tear still
-  passes both (skin alone 0.93 ×, eye zone 1.27 ×), and the skin it takes stays cream when the face is tinted to
-  another skin colour. So **every real face's skin-mask overlay is checked by eye** at the style gate and in batch
-  C1, and a bad one is answered with a hand-drawn `_skinmask` override. Bald faces do not make this go away; there
-  is just no hair shine left to cause it.
-- What is left is closed by 2 px and kept to pieces of at least `minRegion` (40 px). The closing bridges a gap of up
-  to about 4 px between two pieces of skin, so a strap or a line that thin would be filled back in. The real tank
-  tops' straps are 8–20 px wide and taper to 4–6 px only at their very tips under the shoulder, and measured on both
-  real bodies none of the top is in the mask after the closing.
+  The white of the eye (C* ≤ 3 on the real faces, `#fdf8f5` is 2.3) falls out the same way, and a hand-drawn
+  `_skinmask` override still answers anything else that gets through.
+- **The eyes are taken out by their eye mask only**, widened by `eyeGap` (1 px), so skin and eyes never share a
+  pixel. On a face that is the eye mask as written (a hand-drawn `_eyemask` included); on a body `L30`, which carries
+  the neutral face under the face layer, it is the eye mask `eyeMask` finds on it (not written anywhere). The eye mask
+  is what keeps an iris out whose colour is warm: m's amber is inside the window and, on its light side, above
+  `minL`. Until the style gate the padded **eye ellipses** were taken out too, widened by `eyeMargin` (3 px), because
+  an off-white sclera is within ΔE 22 of cream; `minChroma` has made that unnecessary, and the ellipses are drawn
+  much bigger than the eye, so they left a cream ring round both eyes under a deep tone.
+- **The eye zone** (`eyeZone`: the eye ellipses ∪ the eye mask, widened by `eyeMargin`) is still what C11 adds to
+  the skin to compare one face with another (§5) and what the hair face rule counts as face (§4.6) — the region that
+  moves between "eye" and "skin" between expressions. It can come out too big: `eyeEllipses` finds the eyes from
+  white blobs in the eye band and unions every blob on a side, then mirrors the box to the other side, so a small pale
+  feature there that is not an eye white — a tear, a highlight on a cheek, a pale "zZ" bubble — widens both ellipses
+  (a white cheek sparkle on the test face grows them from 44 × 52 to 62 × 70 px). Before the style gate the skin mask
+  lost what they gained (24 % of the test face's skin); now it loses nothing, and C11's eye-zone guard on real faces
+  (§5) is what catches a sparkle like that. **Every real face's skin-mask overlay is still checked by eye** at the
+  style gate and in batch C1, and a bad one is answered with a hand-drawn `_skinmask` override.
+- What is left is closed by 2 px and kept to pieces of at least `minRegion` (40 px). The closing fills the odd
+  textured or near-white pixel inside the skin, but it **adds no pixel of line art** (L* under `minL`), none within
+  `eyeMargin` of the eye mask (the white's corner between the iris and the lid is a near-white sliver it would
+  otherwise fill) and nothing past the solid picture. So it fills no brow or lid line — the old closing took 92–93 %
+  of the brows' dark pixels into the mask — and it does not cross the outline into the clothes. It still bridges a
+  gap of up to about 4 px between two pieces of skin that is not line art, so a strap that thin would be filled back
+  in; the real tank tops' straps are 8–20 px wide and taper to 4–6 px only at their very tips under the shoulder, and
+  measured on both real bodies none of the top or the shorts is in the mask.
+- **Measured on the real bodies after the style-gate fix** (`@2x`, each set's share inside the skin mask, before →
+  after; shades are the pixels within ΔE 5 of the two shades above):
+
+  | | shade (79.2, 22.1, 26.1) | shade (59.2, 26.7, 30.1) | skin round the eyes | ears | neck | outline (L* < 45) | brows |
+  |---|---|---|---|---|---|---|---|
+  | `body_f_L30` | 63.5 → 100 % | 41.8 → 100 % | 0 → 95.9 % | 74.9 → 98.9 % | 90.7 → 98.5 % | 3.5 → 0 % | 93 → 0 % |
+  | `body_f_face_neutral_L50` | 59.2 → 100 % | 39.5 → 100 % | 0 → 95.9 % | 74.9 → 98.9 % | 78.2 → 100 % | 11.7 → 0 % | 93 → 0 % |
+  | `body_m_L30` | 39.4 → 100 % | 60.8 → 100 % | 0 → 96.8 % | 80.1 → 99.7 % | 89.0 → 99.3 % | 3.7 → 0 % | 92 → 0 % |
+  | `body_m_face_neutral_L50` | 29.7 → 100 % | 61.3 → 100 % | 0 → 96.8 % | 80.1 → 99.7 % | 87.9 → 100 % | 12.8 → 0 % | 92 → 0 % |
+
+  The mouth, the irises and the tank top stay at 0 % on all four, and the eye whites at 0.1 % (f, 1 px) and 0.3 %
+  (m, 3 px); no pixel of the tank top or the shorts is in either body's mask.
+
+  The skin round the eyes left out is the eyes' pinkish inner corners (h under 44°) and the lashes' antialiased
+  tips. Skin now covers 0.672 (f) and 0.663 (m) of the body `L30`s' ink, inside `SKIN_AREA` (§5).
 - A hand-drawn `assets/avatar-src/masks/<layer>_skinmask.png` wins, as for hair, and is marked `override: true`.
 
 A body face is never given a hair mask — there is no hair on it — and its eyes are cut with `eyeMask` handed an
@@ -765,7 +811,7 @@ again from it, and the ingest says so: `item_head_beanie01_L80 keeps its tint se
 | C8 | The file name follows §3 above, with a layer that matches its slot |
 | C9 | The manifest lists it, at that layer and that frame size |
 | C10 | The `@2x` is inside the per-file share of the stage-1 budget (6 MB in the design; 32 MB since 2026-09-24 for real AI art, see `test/footprint.test.ts`), and the manifest's byte count matches the file on disk |
-| C11 | Every mask a layer's manifest entry lists (§4.4, Plan 13) is the layer's own `@2x` size and covers none of its transparency; unless hand-drawn (`override`, which skips the area/shape rules below — though a real body's or face's skin mask may never be empty): hair is 3–20 % of the frame on `L30` and 0.7–1.3 × the same base's `face_neutral` hair mask on a face (skipped when that reference is empty); eyes on `neutral` are exactly two 8-connected blobs, 100–8000 px `@2x` each, one each side of centre — another open-eyed expression allows that or none, `closed`/`sleep` always none; tint is at least 2 % of the layer's own ink. A layer with no masks cut for it yet reports `-`. **Plan 19 (§4.4.1):** skin on a body `L30` covers `SKIN_AREA` (0.35–0.85, provisional until the style gate sets it to the real bodies' ± 0.10) of the layer's own ink; on a body face, the skin **and the eye zone** together — the pixels of the face's ink in its skin mask or in `eyeZone` (the eye ellipses and its eye mask, widened by `eyeMargin`: exactly what `skinMask` takes out) — are 0.8–1.2 × the same measure on the same gender's `face_neutral` (controller ruling, 2026-10-03: between expressions only the eye region moves between "eye" and "skin" — a shut eye is eyelid skin, an open one iris, white and margin — so skin alone runs 1.3–1.5 × on shut-eye faces while the head's skin and eyes stay the same size) — measured only when **both faces are real or both are stand-ins**, because between the style gate and batch C1 the neutral face is real art and the other five are still stand-ins, and a stand-in's oval says nothing about a drawn face; a mixed pair passes with `n/a — neutral is real, this face is a stand-in` (or the reverse) in its detail. On a **real face against a real neutral** two guards follow (controller ruling, A1b fix round 3), because a stray white blob in the eye band swells the eye zone by exactly what the skin loses and leaves the union at 1.00 × (§4.4.1): **skin alone at least 0.8 ×** the neutral's skin alone (one-sided — a shut face only gains skin) and **the eye zone at most 1.5 ×** the neutral's eye zone, failing as e.g. `skin alone 0.76 × neutral's (min 0.8)`, `eye zone 1.87 × neutral's (max 1.5)`. They do not catch everything: a small pale feature — a tear, a highlight — can still inflate the eye zone under both limits (a pale tear on the test face: 0.93 ×, 1.27 ×) and leave a patch that stays cream under every other skin colour, so every real face's skin-mask overlay is checked by eye at the style gate and in batch C1. A real face whose own skin mask is empty fails — a hand-drawn one too — and so does a real face whose neutral face has no skin to compare with (a stand-in pair only notes it); a **real** v4 layer must carry the masks of its kind (skin on a body; skin and eyes on a face; hair on a hair layer) — one without them fails rather than reporting `-`, unless it is marked `empty: true` (a short hairstyle's blank `L20`, §4.6), which has nothing for a mask to sit on; a body face's eyes follow the base faces' rules; hair on a hair layer covers at least 0.9 of the layer's ink; and on any layer that has both, skin and eyes share no pixel at alpha ≥ 128 — hand-drawn or not |
+| C11 | Every mask a layer's manifest entry lists (§4.4, Plan 13) is the layer's own `@2x` size and covers none of its transparency; unless hand-drawn (`override`, which skips the area/shape rules below — though a real body's or face's skin mask may never be empty): hair is 3–20 % of the frame on `L30` and 0.7–1.3 × the same base's `face_neutral` hair mask on a face (skipped when that reference is empty); eyes on `neutral` are exactly two 8-connected blobs, 100–8000 px `@2x` each, one each side of centre — another open-eyed expression allows that or none, `closed`/`sleep` always none; tint is at least 2 % of the layer's own ink. A layer with no masks cut for it yet reports `-`. **Plan 19 (§4.4.1):** skin on a body `L30` covers `SKIN_AREA` (0.35–0.85, provisional until the style gate sets it to the real bodies' ± 0.10) of the layer's own ink; on a body face, the skin **and the eye zone** together — the pixels of the face's ink in its skin mask or in `eyeZone` (the eye ellipses and its eye mask, widened by `eyeMargin`; until the style gate exactly what `skinMask` took out, now only the eye mask's 1 px is, §4.4.1) — are 0.8–1.2 × the same measure on the same gender's `face_neutral` (controller ruling, 2026-10-03: between expressions only the eye region moves between "eye" and "skin" — a shut eye is eyelid skin, an open one iris, white and margin — so skin alone ran 1.3–1.5 × on shut-eye faces while the head's skin and eyes stay the same size — less since the style gate, when the open face's skin stopped giving up a ring round each eye, but still past 1.1 ×) — measured only when **both faces are real or both are stand-ins**, because between the style gate and batch C1 the neutral face is real art and the other five are still stand-ins, and a stand-in's oval says nothing about a drawn face; a mixed pair passes with `n/a — neutral is real, this face is a stand-in` (or the reverse) in its detail. On a **real face against a real neutral** two guards follow (controller ruling, A1b fix round 3), because a stray white blob in the eye band swells the eye zone and leaves the union at 1.00 × (§4.4.1; until the style gate the skin also lost exactly what the zone gained, now it loses nothing and the eye-zone guard is the one that catches it): **skin alone at least 0.8 ×** the neutral's skin alone (one-sided — a shut face only gains skin) and **the eye zone at most 1.5 ×** the neutral's eye zone, failing as e.g. `skin alone 0.76 × neutral's (min 0.8)`, `eye zone 1.87 × neutral's (max 1.5)`. They do not catch everything: a small pale feature — a tear, a highlight — can still inflate the eye zone under the limit (a pale tear on the test face: 1.27 ×); since the style gate that no longer costs the skin anything, but a skin mask can be wrong in other ways, so every real face's skin-mask overlay is checked by eye at the style gate and in batch C1. A real face whose own skin mask is empty fails — a hand-drawn one too — and so does a real face whose neutral face has no skin to compare with (a stand-in pair only notes it); a **real** v4 layer must carry the masks of its kind (skin on a body; skin and eyes on a face; hair on a hair layer) — one without them fails rather than reporting `-`, unless it is marked `empty: true` (a short hairstyle's blank `L20`, §4.6), which has nothing for a mask to sit on; a body face's eyes follow the base faces' rules; hair on a hair layer covers at least 0.9 of the layer's ink; and on any layer that has both, skin and eyes share no pixel at alpha ≥ 128 — hand-drawn or not |
 | C12 | **The head stays put** ("đầu không xê dịch", Plan 19 §5.1, rulings 1–2): a real `body_<g>_L30` keeps F01's head, so every hat, pair of glasses, aura, frame and the portrait crop cut on F01 fit it. F01's skull cannot be measured (its hair is baked into its L30), so the eyes and the chin are: `headMetrics` takes the centroid of the gender's `face_neutral` eye mask at alpha ≥ 128 either side of its middle column, **in frame units as pixel index / 2 at `@2x`, with no half-pixel offset**, their midpoint and x distance, and the chin from `measure` on the body's `@1x`. Eye midpoint x and y and eye span must each lie within `HEAD_TOLERANCE` (4.16, 2 % of the 208 crop) of `HEAD_REFERENCE` — F01's own (190.9, 194.0) and 60.6 — and the chin within `CHIN_TOLERANCE` (12) of F01's 243 (controller ruling, Plan 19 gate: a bald chibi face is drawn shorter than F01's framed one — real v4 bodies chin at 233–236 with their eyes within ~2 units — and the chin anchors nothing once the outfits are redrawn on the new bodies, while glasses ride the eye line and hats the head top), for **both** genders: M01's head, measured the same way, sits 4.6 units lower (198.6) and is not a second reference. A failure names each part that is off, how far it is and its limit, e.g. `eye line 6.0 from F01's (want within 4.16)` or `chin 13.0 from F01's (want within 12)`, followed by ` — ` and where the eyes and chin are. A stand-in body, a real body whose neutral face is still a stand-in (the eyes it would measure are the stand-in's), a body whose neutral face has no eye mask, and every other layer report `-` |
 | C13 | **The hair splits cleanly** ("tóc tách đúng", Plan 19 §5.4, §4.5 above): checked on a hair `L60` whose entry records a `split`, together with its `L20` sibling, counting pixels at alpha ≥ 128 at `@2x`. **No pixel is in both layers** (a strand drawn twice is over the face *and* behind the body); the two layers together hold **at least `HAIR_COVERAGE` (0.99) × `split.region`** (a strand in neither is lost from every look that wears the hairstyle); and the front covers **at most `HAIR_EYE_LIMIT` (1 %)** of the gender's `body_<g>_face_neutral_L50` eye mask — a fringe over the eyes hides every expression under it. Failures read e.g. `the two layers overlap at 120 pixels`, `the split covers 0.53 of the hair, want ≥ 0.99` (the share rounded down), `the front lies over the eyes on 33.2 % of the eye mask, want ≤ 1 %`. The eye part is `n/a` while the neutral face has no eye mask, and it is measured **like with like** only, as C11 and C12 are (controller ruling, A1c review): real hair against a stand-in neutral face reports `eyes n/a — body_<g>_face_neutral_L50 is a stand-in`, a stand-in hairstyle against a real one `eyes n/a — … is real, this hair is a stand-in`, because a stand-in's eyes are drawn where no head was measured. Overlap and coverage are checked in every case; a missing `L20` fails. The `L20` reports `-` (`n/a — checked with its L60`), as do an `L60` with no `split` and every other layer. On the stand-ins every `L60` passes with no overlap, coverage 1.00 and 0.0 % of the eyes |
 

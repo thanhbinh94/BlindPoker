@@ -665,37 +665,55 @@ export function tintMask(pic, seed, { tolerance = 18 } = {}) {
 /**
  * How `skinMask` tells skin (Plan 19, spec §5.5), in @2x px where it is a size:
  *
- * - `tolerance` — ΔE76 from the seed in Lab that is skin outright;
- * - `hueSpread`, `minL`, `chroma` — or, further than that, skin when its LCh hue is within `hueSpread`° of the
- *   seed's, its L* at least `minL`, and its chroma `chroma[0]`–`chroma[1]` × the seed's: shading and light on
- *   the same skin, which moves a long way in Lab while keeping its hue;
- * - `minChroma` — the CIE Lab chroma C* (√(a*² + b*²)) a pixel needs to be skin at all, whichever rule above lets it in;
- * - `eyeMargin` — how far round the eyes the skin keeps off;
+ * - `minChroma` — the CIE Lab chroma C* (√(a*² + b*²)) a pixel needs to be skin at all, whichever rule below lets it in;
+ * - `tolerance` — ΔE76 from the seed in Lab that is skin outright (light cream, and a light warm blush off its hue);
+ * - `hue`, `minL` — or, further than that, skin when its LCh hue h = atan2(b*, a*) is `hue[0]`–`hue[1]`° and its L*
+ *   at least `minL`, at any chroma: shading on the same skin, which moves a long way in Lab and gains chroma as it
+ *   darkens, while staying warm;
+ * - `eyeGap` — how far round the eye mask the skin keeps off;
+ * - `eyeMargin` — how far `eyeZone` reaches past the eye ellipses and the eye mask (C11 and the hair face rule), and
+ *   how far round the eye mask the close in `skinMask` adds nothing;
  * - `minRegion` — the smallest piece of skin kept.
  *
- * `minL` is 50 (pre-flight #2) because of the outline: the warm-brown `#7a4a32` the bodies are drawn with is
- * L* 36.5 with a hue only 17.7° from cream, inside `hueSpread`, so lightness is what keeps the line out. Shaded
- * cream sits at L* ~70 and stays in.
+ * Measured on the real v4 bodies (Plan 19 style gate), Lab at @2x:
+ *
+ * - cream skin (92, 4.8, 13.7): C* 14.5, h 71°; its highlights C* 10–13, h up to ~100°;
+ * - its shading, the ears, the cheek and jaw, the neck under the chin: (79.2, 22.1, 26.1), C* 34, h 50°, down to
+ *   (59.2, 26.7, 30.1), C* 40, h 48°; the ears' deepest pixels h 45°; the antialiased rim between skin and the
+ *   outline L* 50–80, C* 24–40, h 47–60°;
+ * - the mouth, pink: its inside L* 72–78, C* 36–45, h 29–37° (f) and 35–43° (m);
+ * - the outline, the brows and the lashes: L* 21–44 — the warm-brown outline is h 45–48°, inside the window;
+ * - the tank top C* 4.3, bluish; the eye whites C* ≤ 3; the iris blue (f) or amber (m, `#945e26`, h ~70°, C* 45–70
+ *   on its light side — warm and inside the window, which is why the eye mask, not colour, keeps it out).
+ *
+ * So `hue` is 44–100°: the mouth's inside stops under 44° on both faces, the darkest ear shading starts at 45°, and
+ * nothing on a body is warmer-yellow than its own highlights. There is no chroma ceiling: the shading is the most
+ * saturated skin there is (C* 30–45 against the cream's 14.5), and the ceiling the rule used to have (1.6 × the
+ * seed's chroma, with a hue window of 18° round the seed's) is what left the ears and the neck shadow cream.
+ *
+ * `minL` is 50 (pre-flight #2) because of the line art: the outline, the brows and the lashes are all under L* 45 and
+ * the outline's hue is inside the window, so lightness is what keeps the line out. The close in `skinMask` adds no
+ * pixel under it either, so a 3 px brow or lid line is not filled back in.
  *
  * `minChroma` is 8 (Plan 19 style gate) because `tolerance` alone cannot tell a light neutral from cream: greys from
  * about `#b9b9b9` to `#f8f8f8`, an off-white like `#fdf8f5` and the real bodies' pale bluish-grey tank top (C* 4.3, ΔE ~20
  * from the cheek) are all within ΔE 22 of cream, while skin always carries warm chroma, about 12 and over even in
- * its highlights (a real body's cheek is C* 14.5, its thigh 15.3). A near-white highlight under C* 8 drops out of the mask.
- * The eye white is taken out by geometry instead (`skinMask`).
+ * its highlights (a real body's cheek is C* 14.5, its thigh 15.3). A near-white highlight under C* 8 drops out of the
+ * mask, and so does the white of an eye (C* ≤ 3 on the real faces) — colour, not the eye ellipses, keeps it out.
  */
-export const SKIN_MASK = { tolerance: 22, hueSpread: 18, minL: 50, minChroma: 8, chroma: [0.5, 1.6], eyeMargin: 3, minRegion: 40 }
+export const SKIN_MASK = { tolerance: 22, hue: [44, 100], minL: 50, minChroma: 8, eyeGap: 1, eyeMargin: 3, minRegion: 40 }
 
 /**
- * A face's eye zone (Plan 19): the padded ellipse round each eye's white (`eyeEllipses`) — always, because no eye
- * mask holds the white and an off-white sclera is within `SKIN_MASK.tolerance` of cream — unioned with `eyes` when
- * given (any non-zero pixel: the eye mask as written, a hand-drawn one included), widened by `SKIN_MASK.eyeMargin`.
- * What `skinMask` takes out, and what C11 adds back to the skin to compare one face with another (between
- * expressions only this region moves between "eye" and "skin"). 0/1 per pixel.
+ * A face's eye zone (Plan 19): the padded ellipse round each eye's white (`eyeEllipses`) — always — unioned with `eyes`
+ * when given (any non-zero pixel: the eye mask as written, a hand-drawn one included), widened by `SKIN_MASK.eyeMargin`.
+ * The region between expressions moves between "eye" and "skin" (a shut eye is eyelid skin, an open one iris, white
+ * and lid): C11 adds it to the skin to compare one face with another, and the hair face rule counts it as face
+ * (`extract.mjs`). `skinMask` no longer takes it out (style gate): the skin runs up to the eye mask, and the white
+ * stays out on its chroma. 0/1 per pixel.
  *
  * It can come out too big: `eyeEllipses` unions every white blob on a side of the eye band and mirrors it, so a pale
- * tear, highlight or bubble there widens both ellipses and the skin loses what they gain. C11 guards a real face
- * against the worst of it (skin alone, eye zone alone, against the neutral face); the rest is why every real face's
- * skin-mask overlay is checked by eye (`docs/avatar-2d.md` §4.4.1).
+ * tear, highlight or bubble there widens both ellipses. C11 guards a real face against it (the eye zone alone, against
+ * the neutral face); the rest is why every real face's skin-mask overlay is checked by eye (`docs/avatar-2d.md` §4.4.1).
  *
  * @param {{ data: Buffer, width: number, height: number }} pic
  * @param {Uint8Array | null} [eyes]
@@ -711,22 +729,27 @@ export function eyeZone(pic, eyes = null) {
 
 /**
  * Skin on a body or a body face, at @2x (Plan 19, spec §5.5) — what the skin colour item tints, so the line art,
- * the eyes, the mouth and the underwear must all stay out of it.
+ * the eyes, the mouth and the underwear must all stay out of it, and every skin pixel, shaded or not, must be in it:
+ * a pixel left out keeps its cream under a deep tone.
  *
  * The seed is `baseSkinColour` (the modal colour of `SKIN_WINDOW`, the cheeks and chin, which are skin on every
  * body by construction). A pixel is skin when it is solid (alpha > `ALPHA_SOLID`), has at least `SKIN_MASK.minChroma`
- * chroma, and is either within `SKIN_MASK.tolerance` of the seed, or of the seed's hue, light enough and about as
- * saturated (`SKIN_MASK`). The outline is too dark, mid or dark grey underwear too unsaturated and too far, and a
- * pink mouth too far round the hue circle, so all three fall out by construction; a *light* neutral, which is
- * close to cream in Lab, falls out on `minChroma` (see `SKIN_MASK`). The bodies are always drawn cream (spec
- * §5.2), so one seed fits both.
+ * chroma, and is either within `SKIN_MASK.tolerance` of the seed, or warm — its hue in `SKIN_MASK.hue` — and at least
+ * `SKIN_MASK.minL` light (`SKIN_MASK` has the numbers measured on the real bodies). The line art is too dark, the
+ * underwear and the eye whites too grey, a blue iris and the pink mouth outside the hue window, so all of them fall
+ * out by colour; the bodies are always drawn cream (spec §5.2), so one rule fits both.
  *
- * The eye zone (`eyeZone`) is taken out: always `eyeEllipses(pic)` — the padded ellipse round each eye's white,
- * because an off-white sclera is within `tolerance` of cream and no eye mask holds the white — and, unioned with
- * it, `eyes` when given (any non-zero pixel; `writeMasks` passes the eye mask it wrote, a hand-drawn one included),
- * widened by `SKIN_MASK.eyeMargin`, so the skin and eye masks never meet. What is left is closed by 2 px (the odd
- * antialiased or textured pixel inside the skin) and kept to pieces of at least `SKIN_MASK.minRegion` px. Returns
- * 0/255 per pixel, like every mask here; empty when the window has no skin.
+ * `eyes` (any non-zero pixel) is taken out, widened by `SKIN_MASK.eyeGap`: what keeps an iris out whose colour is
+ * warm (an amber one is inside the window), and keeps the skin and eye masks from meeting. `writeMasks` passes a
+ * face the eye mask it wrote (a hand-drawn one included) and a body L30 the eye mask `eyeMask` finds on it. Only the
+ * eye mask — not the eye ellipses (`eyeZone`), which are drawn wider than the eye and used to leave a cream ring
+ * round it.
+ *
+ * What is left is closed by 2 px — the odd textured or near-white pixel inside the skin — but the close adds no pixel
+ * that is line art (L* under `minL`), none within `SKIN_MASK.eyeMargin` of `eyes` and nothing past the solid picture,
+ * so it fills no brow, lid line or outline, nor the white's corner by the iris, and does not cross the outline into
+ * the clothes. Pieces under `SKIN_MASK.minRegion` px are
+ * dropped. Returns 0/255 per pixel, like every mask here; empty when the window has no skin.
  *
  * @param {{ data: Buffer, width: number, height: number }} pic
  * @param {{ eyes?: Uint8Array | null }} [options]
@@ -738,32 +761,39 @@ export function skinMask(pic, { eyes = null } = {}) {
   const seed = baseSkinColour(pic, width / FRAME.w)
   if (seed === null) return out
   const seedLab = labOf(seed[0], seed[1], seed[2])
-  const seedChroma = Math.hypot(seedLab[1], seedLab[2])
-  const seedHue = Math.atan2(seedLab[2], seedLab[1])
-  const hueSpread = (SKIN_MASK.hueSpread * Math.PI) / 180
+  const [hueMin, hueMax] = SKIN_MASK.hue
   const solid = (i) => data[i * 4 + 3] > ALPHA_SOLID
 
-  let skin = new Uint8Array(width * height)
+  const skin = new Uint8Array(width * height)
+  const ink = new Uint8Array(width * height)
   for (let i = 0; i < skin.length; i++) {
     if (!solid(i)) continue
     const p = labOf(data[i * 4], data[i * 4 + 1], data[i * 4 + 2])
-    const chroma = Math.hypot(p[1], p[2])
+    if (p[0] < SKIN_MASK.minL) ink[i] = 1
     // Before the close below, so it cannot fill a grey garment back in; a neutral sits within `tolerance` of pale cream.
-    if (chroma < SKIN_MASK.minChroma) continue
+    if (Math.hypot(p[1], p[2]) < SKIN_MASK.minChroma) continue
     if (labDist(p, seedLab) <= SKIN_MASK.tolerance) { skin[i] = 1; continue }
-    if (p[0] < SKIN_MASK.minL) continue
-    if (chroma < SKIN_MASK.chroma[0] * seedChroma || chroma > SKIN_MASK.chroma[1] * seedChroma) continue
-    let hue = Math.abs(Math.atan2(p[2], p[1]) - seedHue)
-    if (hue > Math.PI) hue = 2 * Math.PI - hue
-    if (hue <= hueSpread) skin[i] = 1
+    if (ink[i]) continue
+    let hue = (Math.atan2(p[2], p[1]) * 180) / Math.PI
+    if (hue < 0) hue += 360
+    if (hue >= hueMin && hue <= hueMax) skin[i] = 1
   }
 
-  const zone = eyeZone(pic, eyes)
-  for (let i = 0; i < skin.length; i++) if (zone[i]) skin[i] = 0
+  // `gap`: the eyes widened by `eyeGap`, never skin. `nearEyes`: widened by `eyeMargin`, where the close adds nothing —
+  // the white's corner between the iris and the lid is a sliver of near-white the close would otherwise fill.
+  let gap = null
+  let nearEyes = null
+  if (eyes) {
+    const eyePixels = new Uint8Array(width * height)
+    for (let i = 0; i < eyePixels.length; i++) eyePixels[i] = eyes[i] ? 1 : 0
+    gap = dilate(eyePixels, width, height, Math.max(1, Math.round(SKIN_MASK.eyeGap * scale)))
+    nearEyes = dilate(eyePixels, width, height, Math.max(1, Math.round(SKIN_MASK.eyeMargin * scale)))
+    for (let i = 0; i < skin.length; i++) if (gap[i]) skin[i] = 0
+  }
 
-  skin = close(skin, width, height, Math.max(1, Math.round(2 * scale)))
-  // The closing must not hand back what was just taken out, nor reach past the solid picture.
-  for (let i = 0; i < skin.length; i++) if (zone[i] || !solid(i)) skin[i] = 0
+  const closed = close(skin, width, height, Math.max(1, Math.round(2 * scale)))
+  // The closing must not reach towards the eyes, fill the line art in, nor reach past the solid picture.
+  for (let i = 0; i < skin.length; i++) if (closed[i] && !skin[i] && !nearEyes?.[i] && !ink[i] && solid(i)) skin[i] = 1
 
   const minRegion = Math.max(1, Math.round(SKIN_MASK.minRegion * scale * scale))
   const { label, sizes } = components(skin, width, height)
@@ -1006,9 +1036,10 @@ function inkMask(layer2x) {
  * `manifest.files[name].masks` for each; does not write the manifest — the caller does, alongside whatever
  * else it changed in the same run (`ingest`, the `masks` command).
  *
- * Plan 19 (spec §5.5): a body L30 gets **skin**; a body face gets **eyes** and then **skin**, cut clear of the eye
- * ellipses and of the eye mask as written (a hand-drawn `_eyemask` included), and never hair — the head is bald,
- * so `eyeMask` is handed an empty hair array (pre-flight #21); a hair layer's **hair** is its ink.
+ * Plan 19 (spec §5.5): a body L30 gets **skin**, cut clear of the eyes `eyeMask` finds on it (not written); a body
+ * face gets **eyes** and then **skin**, cut clear of the eye mask as written (a hand-drawn `_eyemask` included), and
+ * never hair — the head is bald, so `eyeMask` is handed an empty hair array (pre-flight #21); a hair layer's **hair**
+ * is its ink.
  */
 export async function writeMasks({ dir, manifest, names, overridesDir = MASK_OVERRIDE_DIR, log = () => {} }) {
   for (const name of names) {
@@ -1035,7 +1066,11 @@ export async function writeMasks({ dir, manifest, names, overridesDir = MASK_OVE
       const tint = tintMask(layer2x, entry.tintSeed)
       await writeOneMask({ dir, name, kind: 'tint', computed: tint, layer2x, entry, manifest, overridesDir, log })
     } else if (parsed.kind === 'body') {
-      await writeOneMask({ dir, name, kind: 'skin', computed: skinMask(layer2x, { eyes: null }), layer2x, entry, manifest, overridesDir, log })
+      // The body carries the neutral face too (under the face layer): its own eyes, found the way a face's are and
+      // never written, keep an amber iris out of its skin.
+      const { width, height } = layer2x
+      const eyes = eyeMask(layer2x, new Uint8Array(width * height))
+      await writeOneMask({ dir, name, kind: 'skin', computed: skinMask(layer2x, { eyes }), layer2x, entry, manifest, overridesDir, log })
     } else if (parsed.kind === 'bodyFace') {
       const { width, height } = layer2x
       const eyes = shut ? new Uint8Array(width * height) : eyeMask(layer2x, new Uint8Array(width * height))

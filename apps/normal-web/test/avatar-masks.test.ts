@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { runChecks } from '../scripts/avatar-pipeline/checks.mjs'
-import { SKIN_MASK, eyeEllipses, eyeMask, hairMask, maskColour, maskTargets, skinMask, tintMask, writeMasks } from '../scripts/avatar-pipeline/masks.mjs'
+import { SKIN_MASK, eyeEllipses, eyeMask, eyeZone, hairMask, maskColour, maskTargets, skinMask, tintMask, writeMasks } from '../scripts/avatar-pipeline/masks.mjs'
 import { writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
 import { readPicture, renderSvg, resizePicture, writePicture } from '../scripts/avatar-pipeline/png.mjs'
 import { buildTintSheet } from '../scripts/avatar-pipeline/tint-sheet.mjs'
@@ -562,6 +562,60 @@ describe('skinMask, and eyes on a bald face (Plan 19 A1b, spec §5.5)', () => {
     expect(SKIN_MASK.minChroma).toBe(8)
   })
 
+  it('takes shaded skin, an ear and the skin round an eye, and leaves the mouth, the eye, a brow and a grey top out (Plan 19 gate)', async () => {
+    // The colours the real v4 bodies are drawn in (docs/avatar-2d.md §4.4.1). Under a deep tone the old rule left the
+    // shading, the ears and a ring round each eye cream: the shading is past `tolerance` and was past a chroma ceiling
+    // of 1.6 × the seed's (30.6 for this cream), and the eye ellipses were taken out whole.
+    const SHADE_LIGHT = '#fbb495' // Lab (79.2, 22.1, 26.1), C* 34, h 50° — a cheek, an ear
+    const SHADE_DEEP = '#c87b5b' // Lab (59.2, 26.7, 30.1), C* 40, h 48° — the neck under the chin
+    const EAR_DEEP = '#f6a588' // Lab (75.0, 26.7, 27.2), C* 38, h 45.6° — the ear's deepest, just inside the window
+    const MOUTH_F = '#fe9c8e' // Lab (74.1, 35.0, 22.9), h 33° — f's mouth
+    const MOUTH_M = '#fc9e82' // Lab (74.0, 32.1, 29.3), h 42.4° — m's mouth at its warmest, just under the window
+    const SCLERA = '#fdf8f5' // C* 2.3
+    const IRIS_AMBER = '#945e26' // m's iris, L* 44.9
+    const IRIS_LIGHT = '#f4aa42' // its light side: Lab (75.1, 18.2, 61.9), h 74° — warm, light, inside the window
+    const BROW = '#4e2c1e' // L* 22, a 3 px line the close would fill if it could
+    const TANK_PALE = '#cecdd5'
+    const extra =
+      `<ellipse cx="470" cy="360" rx="26" ry="16" fill="${SHADE_LIGHT}"/>` +
+      `<ellipse cx="384" cy="425" rx="40" ry="10" fill="${SHADE_DEEP}"/>` +
+      `<ellipse cx="228" cy="300" rx="14" ry="24" fill="${EAR_DEEP}" stroke="${OUTLINE}" stroke-width="3"/>` +
+      `<ellipse cx="384" cy="375" rx="24" ry="13" fill="${MOUTH_F}"/>` +
+      `<ellipse cx="384" cy="381" rx="16" ry="6" fill="${MOUTH_M}"/>` +
+      `<path d="M300 236 Q320 226 340 236" stroke="${BROW}" stroke-width="3" fill="none"/>` +
+      `<ellipse cx="448" cy="280" rx="26" ry="32" fill="${SCLERA}"/>` +
+      `<circle cx="448" cy="284" r="15" fill="${IRIS_AMBER}"/>` +
+      `<circle cx="448" cy="288" r="9" fill="${IRIS_LIGHT}"/>`
+    const { pic } = await syntheticBody({ underwear: TANK_PALE, extra })
+    // The eye mask `eyeMask` would give: the iris, nothing of the white.
+    const eyes = new Uint8Array(W * H)
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (Math.hypot(x - 448, y - 284) <= 15.5) eyes[y * W + x] = 255
+    const mask = skinMask(pic, { eyes })
+
+    for (const [label, hex] of [['light shading', SHADE_LIGHT], ['deep shading', SHADE_DEEP], ['the ear', EAR_DEEP]] as const) {
+      expect(sum(colourPixels(pic, hex, 6)), label).toBeGreaterThan(100)
+      expect(coverage(mask, colourPixels(pic, hex, 6)), label).toBeGreaterThan(0.95)
+    }
+    // The cream right up to the white: what the padded ellipse round it used to take.
+    const ring = new Uint8Array(W * H)
+    colourPixels(pic, CREAM).forEach((v, i) => {
+      const x = i % W
+      const y = (i - x) / W
+      if (v && ((x - 448) / 40) ** 2 + ((y - 280) / 46) ** 2 <= 1) ring[i] = 1
+    })
+    expect(sum(ring), 'cream round the eye').toBeGreaterThan(1500)
+    expect(coverage(mask, ring), 'cream round the eye').toBeGreaterThan(0.95)
+
+    for (const [label, hex] of [['f mouth', MOUTH_F], ['m mouth', MOUTH_M], ['sclera', SCLERA], ['amber iris', IRIS_AMBER], ['light amber iris', IRIS_LIGHT], ['brow', BROW], ['tank top', TANK_PALE]] as const) {
+      expect(sum(colourPixels(pic, hex, 6)), label).toBeGreaterThan(50)
+      expect(coverage(mask, colourPixels(pic, hex, 6)), label).toBe(0)
+    }
+    expect(coverage(mask, colourPixels(pic, OUTLINE)), 'outline').toBeLessThan(0.02)
+    // The light amber is warm and light: colour alone would take it — the eye mask is what keeps an amber iris out.
+    expect(coverage(skinMask(pic, { eyes: null }), colourPixels(pic, IRIS_LIGHT, 6)), 'light amber, no eye mask').toBeGreaterThan(0.9)
+    expect(SKIN_MASK.hue).toEqual([44, 100])
+  })
+
   it('takes a hand-drawn _skinmask override over the computed one', async () => {
     const name = 'body_f_L30'
     const { pic } = await syntheticBody()
@@ -594,12 +648,19 @@ describe('skinMask, and eyes on a bald face (Plan 19 A1b, spec §5.5)', () => {
     expect(coverage(eyes, irisPixels(pic))).toBeGreaterThan(0.8)
   })
 
-  it('keeps the eyes it is given, widened by eyeMargin, out of the skin', async () => {
+  it('keeps the eyes it is given, widened by eyeGap, out of the skin — and no more than that (Plan 19 gate)', async () => {
     const pic = await syntheticBase({ bald: true })
     const eyes = eyeMask(pic, new Uint8Array(W * H))
     const skin = skinMask(pic, { eyes })
-    // Every skin pixel is more than `eyeMargin` px from every eye pixel — the two masks never meet.
-    const r = SKIN_MASK.eyeMargin
+    // The skin runs right up to the eye: the skin-coloured pixels of the eye zone (the padded ellipses the skin used to
+    // give up, a cream ring round each eye under a deep tone) are skin now.
+    const zone = eyeZone(pic, eyes)
+    const zoneSkin = new Uint8Array(W * H)
+    skinPixels(pic).forEach((v, i) => { if (v && zone[i]) zoneSkin[i] = 1 })
+    expect(sum(zoneSkin), 'the eye zone holds skin round the eyes').toBeGreaterThan(2000)
+    expect(coverage(skin, zoneSkin), 'the skin round the eyes').toBeGreaterThan(0.95)
+    // Every skin pixel is more than `eyeGap` px from every eye pixel — the two masks never meet.
+    const r = SKIN_MASK.eyeGap
     let near = 0
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
@@ -618,7 +679,8 @@ describe('skinMask, and eyes on a bald face (Plan 19 A1b, spec §5.5)', () => {
   })
 
   it('keeps an off-white sclera out of a cream face’s skin, though the eye mask it is given holds only the iris', async () => {
-    // #fdf8f5 is ΔE ~20 from cream, inside SKIN_MASK.tolerance: only taking the eye ellipses out keeps it out.
+    // #fdf8f5 is ΔE ~20 from cream, inside SKIN_MASK.tolerance, and the eye ellipses are no longer taken out (Plan 19
+    // gate): its chroma, C* 2.3, under SKIN_MASK.minChroma, is what keeps it out.
     const SCLERA = '#fdf8f5'
     const pic = await syntheticBase({ bald: true, skinColour: CREAM, scleraColour: SCLERA })
     const eyes = eyeMask(pic, new Uint8Array(W * H))
@@ -1012,8 +1074,10 @@ describe('C11 (checks.mjs, spec §4.3)', () => {
 
   it('passes a shut-eye face whose eyelids are skin against an open-eye neutral of the same head', async () => {
     const { neutral, closed, manifest, skinArea } = await shutAndOpen('f')
-    // Skin alone would not do: the shut eyes are eyelid skin, the open ones are iris, white and margin.
-    expect((await skinArea(closed)) / (await skinArea(neutral)), 'skin alone').toBeGreaterThan(1.2)
+    // Skin alone would not do: the shut eyes are eyelid skin, the open ones are iris and white. (The gap is smaller than
+    // it was before the Plan 19 gate, when the open face's skin also gave up a padded ring round each eye: ~1.13 here, and
+    // more on a real face, whose eyes are a bigger share of it.)
+    expect((await skinArea(closed)) / (await skinArea(neutral)), 'skin alone').toBeGreaterThan(1.1)
     const c11 = await c11Of(manifest, closed)
     expect(c11.ok, c11.detail).toBe(true)
   })
@@ -1034,9 +1098,10 @@ describe('C11 (checks.mjs, spec §4.3)', () => {
   })
 
   // A1b fix round 3 (controller ruling): `eyeEllipses` unions every white blob on a side and mirrors it, so a white
-  // sparkle on a cheek swells both eye zones and the skin mask loses what they gain — skin ∪ eye zone stays ≈ 1 ×. On
-  // a real pair, C11 also holds skin alone to ≥ 0.8 × and the eye zone to ≤ 1.5 × the neutral face's.
-  it('fails a real face whose white cheek sparkle swells the eye zone and eats its skin, on both guards', async () => {
+  // sparkle on a cheek swells both eye zones — skin ∪ eye zone stays ≈ 1 ×. On a real pair, C11 also holds skin alone to
+  // ≥ 0.8 × and the eye zone to ≤ 1.5 × the neutral face's. Since the Plan 19 gate the skin mask no longer gives up the
+  // eye zone, so the sparkle no longer eats the skin: the eye-zone guard is the one that catches it.
+  it('fails a real face whose white cheek sparkle swells the eye zone, on the eye-zone guard; its skin is untouched', async () => {
     const neutral = 'body_f_face_neutral_L50'
     const sparkly = 'body_f_face_happy_L50'
     const headOnly = (pic: Picture): Picture => {
@@ -1052,10 +1117,18 @@ describe('C11 (checks.mjs, spec §4.3)', () => {
 
     const c11 = await c11Of(manifest, sparkly)
     expect(c11.ok, c11.detail).toBe(false)
-    expect(c11.detail).toMatch(/skin alone 0\.\d\d × neutral's \(min 0\.8\)/)
     expect(c11.detail).toMatch(/eye zone \d\.\d\d × neutral's \(max 1\.5\)/)
+    expect(c11.detail).not.toContain('skin alone')
     // The rule they guard is blind to it: skin and eye zone together are still the neutral face's.
     expect(c11.detail).not.toContain('skin and eye zone are')
+    const skinArea = async (name: string) => {
+      const mask = await readPicture(join(dir, `${name}_skinmask@2x.png`))
+      let solid = 0
+      for (let i = 3; i < mask.data.length; i += 4) if (mask.data[i]! >= 128) solid++
+      return solid
+    }
+    // All the sparkle takes from the skin is its own few pixels.
+    expect((await skinArea(sparkly)) / (await skinArea(neutral))).toBeGreaterThan(0.99)
   })
 
   it('counts an iris split by a pupil and a highlight as one eye (Task 2b: merge before counting)', async () => {

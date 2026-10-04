@@ -92,9 +92,10 @@ export const DENSITY_ALPHA_DRIFT = 12
 const FACE_SKIN_RATIO = { min: 0.8, max: 1.2 }
 /**
  * C11's two guards on a real face against a real neutral (controller ruling, A1b fix round 3), because a stray white
- * blob in the eye band swells `eyeZone` by exactly what the skin loses and `FACE_SKIN_RATIO` cannot see it: skin
- * alone at least `skinFloor` × the neutral's (one-sided — a shut face only gains skin), and the eye zone at most
- * `eyeZoneCap` × the neutral's.
+ * blob in the eye band swells `eyeZone` and `FACE_SKIN_RATIO` cannot see it: skin alone at least `skinFloor` × the
+ * neutral's (one-sided — a shut face only gains skin), and the eye zone at most `eyeZoneCap` × the neutral's. (Until the
+ * style gate the skin also lost what the zone gained; `skinMask` no longer takes the zone out, so the eye-zone cap is
+ * the guard that catches the blob, and the skin floor holds a skin mask that shrank for any other reason.)
  */
 const FACE_GUARDS = { skinFloor: 0.8, eyeZoneCap: 1.5 }
 /** C11 (Plan 19): how much of a hair layer's own ink its hair mask covers. The ink *is* the hair; the slack is the rim. */
@@ -271,11 +272,12 @@ function maskArea(pic) {
  * C11's measures of a body face (Plan 19, controller rulings on A1b), each a count of the face's own ink at @2x:
  *
  * - `union` — inside its skin mask (alpha ≥ 128) **or** its eye zone (`eyeZone`: the eye ellipses and the face's eye
- *   mask, widened by the margin — the very region `skinMask` takes out). Between two expressions of one head only the
- *   eyes change, and what they change is which pixels are "eye" and which are "skin" (a shut eye is eyelid skin, an
- *   open one iris, white and margin); the two together are the head, and the head stays the same size.
+ *   mask, widened by the margin — the region round the eyes, which since the style gate `skinMask` no longer takes out
+ *   whole: the skin runs up to the eye mask, and the white stays out on its chroma). Between two expressions of one
+ *   head only the eyes change, and what they change is which pixels are "eye" and which are "skin" (a shut eye is
+ *   eyelid skin, an open one iris and white); the two together are the head, and the head stays the same size.
  * - `skin` — inside its skin mask alone, and `zone` — inside its eye zone alone: what the two guards on a real pair
- *   read, because `union` cannot see a stray white blob that swells the zone by exactly what the skin loses.
+ *   read, because `union` cannot see a stray white blob that swells the zone.
  *
  * @param {{ data: Buffer, width: number, height: number }} layer the face at @2x
  * @param {{ data: Buffer, width: number, height: number }} skinPic its skin mask at @2x
@@ -726,12 +728,12 @@ function eyeBlobs(maskPic) {
  * - skin on a body `L30`: `SKIN_AREA` (`frame.mjs`) of the layer's own ink;
  * - skin on a body face: its skin and eye zone together (`faceMeasures`: skin mask ∪ `eyeZone`) is
  *   `FACE_SKIN_RATIO` × the same measure on the same gender's `face_neutral` — skin alone would not do, because a
- *   shut eye is eyelid skin where an open one is iris, white and margin (controller ruling, A1b fix round 2). It is
+ *   shut eye is eyelid skin where an open one is iris and white (controller ruling, A1b fix round 2). It is
  *   measured only when both faces are real or both are stand-ins, because between the style gate (B3) and batch C1
  *   the neutral face is real art and the other five still stand-ins, and a stand-in's oval says nothing about a drawn
  *   face (pre-flight #7, R26); a mixed pair reports `n/a — neutral is real, this face is a stand-in` (or the reverse)
  *   in the detail. On a **real** pair two guards follow (`FACE_GUARDS`, fix round 3), because a stray white blob in
- *   the eye band swells the eye zone by exactly what the skin loses: skin alone at least 0.8 × the neutral's, and
+ *   the eye band swells the eye zone where `union` cannot see it: skin alone at least 0.8 × the neutral's, and
  *   the eye zone at most 1.5 × the neutral's. A real face whose own skin mask is empty fails (a hand-drawn one too),
  *   and so does one whose neutral face has no skin to compare with — a stand-in pair only notes it;
  * - eyes on a body face: the base faces' rules above;
