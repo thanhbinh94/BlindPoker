@@ -105,7 +105,7 @@ describe('splitHair (Plan 19 A1c, spec §5.4)', () => {
   it('names the numbers the plan gives it', () => {
     expect(HAIR_SPLIT).toEqual({ reach: 6, crownBand: 0.35, shoulderMargin: 8 })
     expect(HAIR_COVERAGE).toBe(0.99)
-    expect(HAIR_EYE_LIMIT).toBe(0.01)
+    expect(HAIR_EYE_LIMIT).toBe(0.05)
   })
 
   it('puts the cap in front and the long panel behind', () => {
@@ -232,8 +232,29 @@ describe('C13 the hair splits cleanly (checks.mjs, spec §5.4)', () => {
     const over = await hairCase('eyes', { front: union(split.front, fringe), back: split.back })
     const d = await c13Of(over.dir, over.manifest)
     expect(d.ok).toBe(false)
-    expect(d.detail).toContain('over the eyes on 33.2 % of the eye mask, want ≤ 1 %')
+    expect(d.detail).toContain('over the eyes on 33.2 % of the eye mask, want ≤ 5 %')
     expect(d.detail).not.toContain('overlap at')
+  })
+
+  it('C13 lets a fringe rest on the upper lashes (about 4 % of the eye mask) and fails one that hangs lower (about 7 %), Plan 19 C2 ruling', async () => {
+    const split = splitHair(region, body, { density: DENSITY })
+    // A band from the cap down over the top of both eyes, which run y 139–169: 2.5 and 3.5 frame units into them.
+    const resting = maskOf((x, y) => y > 135 && y <= 141.4 && x >= 150 && x <= 234)
+    const hanging = maskOf((x, y) => y > 135 && y <= 142.6 && x >= 150 && x <= 234)
+    const share = (detail: string): number => Number(/on (\d+\.\d) %/.exec(detail)![1])
+
+    const rest = await hairCase('lashes', { front: union(split.front, resting), back: split.back })
+    const a = await c13Of(rest.dir, rest.manifest)
+    expect(a.ok, a.detail).toBe(true)
+    expect(share(a.detail)).toBeGreaterThan(3)
+    expect(share(a.detail)).toBeLessThan(5)
+
+    const hang = await hairCase('hanging', { front: union(split.front, hanging), back: split.back })
+    const b = await c13Of(hang.dir, hang.manifest)
+    expect(b.ok).toBe(false)
+    expect(share(b.detail)).toBeGreaterThan(5)
+    expect(share(b.detail)).toBeLessThan(8)
+    expect(b.detail).toContain('of the eye mask, want ≤ 5 %')
   })
 
   it('C13 reports n/a for the L20, an L60 with no split, and the eyes without an eye mask', async () => {

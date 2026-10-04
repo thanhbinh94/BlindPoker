@@ -972,7 +972,7 @@ const shareDown = (share) => (Math.floor(share * 100 + 1e-9) / 100).toFixed(2)
  * - no pixel is in both layers — one strand drawn twice is drawn over the face *and* behind the body;
  * - the two together hold at least `HAIR_COVERAGE` (99 %) of `split.region`, the hair the ingest found — a strand
  *   that fell out of both layers is gone from every look that wears the hairstyle;
- * - the front covers at most `HAIR_EYE_LIMIT` (1 %) of the gender's `body_<g>_face_neutral_L50` eye mask — a fringe
+ * - the front covers at most `HAIR_EYE_LIMIT` (5 %) of the gender's `body_<g>_face_neutral_L50` eye mask — a fringe
  *   over the eyes hides every expression under it. That part is `n/a` while the neutral face has no eye mask, and —
  *   like with like, as C11 and C12 (controller ruling, A1c review) — when one of the hair and the neutral face is real
  *   and the other a stand-in: `n/a — <neutral> is a stand-in` for real hair, `n/a — <neutral> is real, this hair is a

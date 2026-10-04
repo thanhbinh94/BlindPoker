@@ -34,7 +34,7 @@ export const HAIR_SPLIT = { reach: 6, crownBand: 0.35, shoulderMargin: 8 }
 /** C13: the two layers together hold at least this share of the hair region the split was made from. */
 export const HAIR_COVERAGE = 0.99
 /** C13: the front layer covers at most this share of the gender's neutral eye mask. */
-export const HAIR_EYE_LIMIT = 0.01
+export const HAIR_EYE_LIMIT = 0.05 // not 1 %: a blunt fringe rests on the upper lashes (real hime01 L60: 3.8 %), eyes readable
 
 /** Where a mask says yes: at least half covered, as every mask count in the pipeline is. */
 const HALF = 128
