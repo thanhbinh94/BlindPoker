@@ -36,19 +36,23 @@
  * reference's canvas before drift, hair colour and scope are measured, and before the pipeline cuts it. A
  * head item's hat covers the top of the head, so `heads` and `hair_colour` are not asked of it. A bot goes
  * through the pipeline like everything else since 2026-09-24 (`bot:<n>` checks its body and six faces,
- * `bot:<n>:happy` that one face), cut on the transform `transformSource` names: f01's, or a v4 redraw's body's.
+ * `bot:<n>:happy` that one face), cut on the transform `transformSource` names: its body's (body f's).
  *
  * Plan 19 (v4) adds three kinds (docs/avatar-2d.md §10.4 has the table):
  *
  *   body            against F01's picture, its feet and centre line only (`comparePictures`; on another canvas
- *                   `redrawn`, since it is cut on f01's transform, as a bot is); `heads`; no hair colour or scope;
- *                   the pipeline on `body_<g>_L30` and its neutral face — C12 holds the head
+ *                   `redrawn`, since it is cut on the stored transform of F01's canvas, as a bot is); `heads`; no hair
+ *                   colour or scope; the pipeline on `body_<g>_L30` and its neutral face — C12 holds the head
  *   bodyExpression  as an expression, against its body's picture
  *   hair            against its body's picture, the feet and centre line of the legs only; no `heads` or hair
  *                   colour; `scope` outside the head region and the body grown by `HAIR_BODY_MARGIN`
  *                   (`allowedArea`); the pipeline on both layers — C13 holds the split
  *
- * An item drawn on a body is measured as today; its owner is the body (`ingest.base` `f`/`m`).
+ * An item drawn on a body is measured as today; its owner is the body (`ingest.base` `f`/`m`, f when none).
+ *
+ * Plan 19 D1: Plan 12's `base` and `expression` assets are history — `parseSpec` refuses their targets, so `verify`
+ * refuses them before scoring anything (`verifyAssets`). The `expression` kind's rules stay: a body's face
+ * (`bodyExpression`) is held to them.
  *
  * Plan 19 C2: a hairstyle, and an outfit drawn on a body, on the reference's own canvas are judged **after the
  * registration the ingest applies** (`registerOnBody`): the image model zooms the whole picture out by a few per cent to
@@ -73,7 +77,7 @@ import { runChecks } from '../avatar-pipeline/checks.mjs'
 import { REGISTER_SCALES, ingest, measure as measureFigure, registerToBase } from '../avatar-pipeline/extract.mjs'
 import { AXIS_X, BASELINE_Y, CROP, FACE_LIMIT_Y, HEAD_LIMIT_Y, LAYERS, anchorBase, applyTransform } from '../avatar-pipeline/frame.mjs'
 import {
-  EXPRESSIONS, GENDERS, MANIFEST_NAME, PUBLIC_DIR, SLOT_LAYER, baseFile, bodyFaceFile, bodyFile, botFaceFile, botFile, faceFile, hairFile, itemFile, readManifest,
+  EXPRESSIONS, GENDERS, MANIFEST_NAME, PUBLIC_DIR, SLOT_LAYER, bodyFaceFile, bodyFile, botFaceFile, botFile, hairFile, itemFile, readManifest,
 } from '../avatar-pipeline/manifest.mjs'
 import { components } from '../avatar-pipeline/masks.mjs'
 import { ALPHA_INK, ALPHA_SOLID, alphaBBox, clonePicture, colourDistance, dilateMask, placeOnCanvas, readPicture, removeChroma, resizePicture, writePicture } from '../avatar-pipeline/png.mjs'
@@ -191,7 +195,7 @@ export function figureBox(pic, { ignoreSpecks = false } = {}) {
  * Compare a picture's box with its reference's (spec §5, as ruled on 2026-09-24).
  *
  * The **scale** is the reference's height over the picture's, both measured from the head top (`box.top`,
- * below the strand) to the feet — or from the box top, for a base, a bot, or when the box heights agree
+ * below the strand) to the feet — or from the box top, for a bot, or when the box heights agree
  * better than the head heights do (see below) — except for a head item, whose hat moves the top (a visor
  * hides the strand and the box top drops 77 px), and which is not height-normalised at all (scale 1). The
  * **width ratio** is the picture's width, times that scale, over the reference's.
@@ -200,7 +204,7 @@ export function figureBox(pic, { ignoreSpecks = false } = {}) {
  * false`) that is where it is: a figure that moved in the frame has drifted, and the pipeline's stored
  * transform will cut it there. On another canvas (`anchored: true`, the model's 1086 × 1448) where it is
  * says nothing, so it is first scaled and anchored — by the head top and centre line, or a head item by its
- * feet and centre line — and what the edges then measure is the shape. Which edges count: a base, all four
+ * feet and centre line — and what the edges then measure is the shape. Which edges count: a bot, all four
  * of its raw box; an expression, a face or an outfit item, all four with the top taken as the scale took it;
  * a head item, left, right and bottom only.
  *
@@ -215,14 +219,14 @@ export function figureBox(pic, { ignoreSpecks = false } = {}) {
 export function compareBoxes(box, ref, { kind = 'expression', slot = null, anchored = false } = {}) {
   const headItem = kind === 'item' && slot === 'head'
   const bottom = (b) => b.y + b.h
-  // Which top: a new base's (or bot's) hair is its own, so its box top; anything else the head top below the
-  // strand — unless `measure()` itself disagreed with itself about the strand (it takes M01's for head on some
-  // pictures and not others: head top 125 against 152 with box tops 79 against 80), which shows as head
-  // heights, feet up, that agree worse than the box heights do. Then the box top is the steadier of the two.
+  // Which top: a bot's head is its own, so its box top; anything else the head top below the strand — unless
+  // `measure()` itself disagreed with itself about the strand (it took M01's for head on some pictures and not
+  // others: head top 125 against 152 with box tops 79 against 80), which shows as head heights, feet up, that agree
+  // worse than the box heights do. Then the box top is the steadier of the two.
   const agreement = (top) => Math.abs((bottom(box) - top(box)) / (bottom(ref) - top(ref)) - 1)
   const headTop = (b) => b.top ?? b.y
   const boxTop = (b) => b.y
-  const rawTop = kind === 'base' || kind === 'bot' || box.top === undefined || ref.top === undefined || agreement(boxTop) < agreement(headTop)
+  const rawTop = kind === 'bot' || box.top === undefined || ref.top === undefined || agreement(boxTop) < agreement(headTop)
   const topOf = rawTop ? boxTop : headTop
   const scale = headItem ? 1 : (bottom(ref) - topOf(ref)) / (bottom(box) - topOf(box))
   const widthRatio = (box.w * scale) / ref.w
@@ -263,11 +267,12 @@ export function comparePictures(pic, ref, kind, slot) {
   const anchored = pic.width !== ref.width || pic.height !== ref.height
   if (kind === 'bot' || kind === 'body') {
     // A bot is its own figure — a robot has no hair (box top 88 px lower than F01's) and ear discs (1.16× as
-    // wide) — drawn on F01's canvas and cut on F01's transform. What must agree is where it stands: its feet
-    // and its centre line. Another canvas is a redraw, since the transform is F01's.
-    // A v4 body (Plan 19, pre-flight #23) is the same case: drawn from F01's picture and cut on f01's transform,
-    // with a bald head where F01 has hair (its top lower, its head narrower) and a new pose (its arms elsewhere).
-    // Its feet stay on F01's ground line and its centre line on F01's; C12, in the pipeline rule, holds the head.
+    // wide) — drawn on its body's canvas and cut on its body's stored transform. What must agree is where it stands:
+    // its feet and its centre line. Another canvas is a redraw, since the transform is the canvas's.
+    // A v4 body (Plan 19, pre-flight #23) is the same case: drawn from F01's picture and cut on that canvas's
+    // transform (f01's, which body f's is verbatim), with a bald head where F01 has hair (its top lower, its head
+    // narrower) and a new pose (its arms elsewhere). Its feet stay on F01's ground line and its centre line on F01's;
+    // C12, in the pipeline rule, holds the head.
     const box = figureBox(pic)
     const refBox = figureBox(ref)
     const placement = { scale: 1, left: 0, top: 0 }
@@ -278,16 +283,13 @@ export function comparePictures(pic, ref, kind, slot) {
     return { scale: 1, widthRatio: box.w / refBox.w, edges: { left: null, top: null, right: null, bottom, centre }, drift, placement, reason: drift > DRIFT_LIMIT ? 'drift' : null }
   }
   if (kind === 'hair') return compareHair(pic, ref, anchored)
-  if ((kind === 'item' && slot === 'head') || kind === 'base') {
+  if (kind === 'item' && slot === 'head') {
     // A hat may be far wider than the hair (the conical hat: 1.15× the figure) — that is the item, not a
     // redraw. So a head item is held to its *body*: the ink below the reference's mid-height, where no hat
-    // reaches, compared left, right and bottom. A new base is the same case from the other side: its head
-    // is *meant* to differ (F02's straight hair is 78 px narrower than F01's bob and has no ahoge), and what
-    // it must share with the reference is the body.
-    // A base's hair may fall to the waist (F02), so a base is held to its legs, lower still.
+    // reaches, compared left, right and bottom.
     const refBox = figureBox(ref)
-    const fromY = refBox.y + Math.floor(refBox.h * (kind === 'base' ? BASE_LEGS_FROM : HEAD_ITEM_BODY_FROM))
-    return compareBoxes(bodyBox(pic, fromY), bodyBox(ref, fromY), { kind, slot: kind === 'base' ? 'head' : slot, anchored })
+    const fromY = refBox.y + Math.floor(refBox.h * HEAD_ITEM_BODY_FROM)
+    return compareBoxes(bodyBox(pic, fromY), bodyBox(ref, fromY), { kind, slot, anchored })
   }
   // An expression, or a body's face: a "z" floating beside a sleeping head, or a sparkle, is not the figure (`figureBox`).
   const ignoreSpecks = FACE_KINDS.has(kind)
@@ -296,7 +298,10 @@ export function comparePictures(pic, ref, kind, slot) {
 
 /** The share of the reference's height above which a head item's ink is ignored by `comparePictures`. */
 export const HEAD_ITEM_BODY_FROM = 0.5
-/** …and a new base's: the legs alone (F02's hair reaches her hips, about 0.67 of the figure). A hairstyle's too. */
+/**
+ * …and a hairstyle's: the legs alone, which no hairstyle reaches (long hair falls to the hips, about 0.67 of the
+ * figure). Named for the flat base it was first measured on (F02, Plan 12), retired since D1.
+ */
 export const BASE_LEGS_FROM = 0.8
 
 /**
@@ -412,9 +417,10 @@ export const BODY_SEARCH = [
 
 /**
  * Which registration a picture is judged after (`registerOnBody`), or null: a hairstyle's (`hair`), an outfit's when it
- * is cut on a v4 body (`outfit`, `ingest.base` `f`/`m`), and — Plan 19 C4 — a bot's happy face (`botFace`, `ingest.as`
- * `bot:<n>:happy`, drawn from the bot's own neutral picture). An outfit on an old base (f01…) is held to its edges as before,
- * and a bot's neutral picture (`bot:<n>`) is its body, which the ingest takes whole: its feet and centre line, as before.
+ * is cut on a v4 body (`outfit`, `ingest.base` `f`/`m`, or none: body f, the pipeline's default since D1), and — Plan 19
+ * C4 — a bot's happy face (`botFace`, `ingest.as` `bot:<n>:happy`, drawn from the bot's own neutral picture). An outfit
+ * naming an old base (f01…, which the pipeline refuses since D1) is held to its edges as before, and a bot's neutral
+ * picture (`bot:<n>`) is its body, which the ingest takes whole: its feet and centre line, as before.
  * Only on the reference's own canvas: a picture on another canvas is placed as before (`comparePictures`).
  *
  * @param {string} kind
@@ -424,7 +430,7 @@ export const BODY_SEARCH = [
  */
 export function bodyRegistration(kind, slot, base, as = null) {
   if (kind === 'hair') return 'hair'
-  if (kind === 'item' && slot === 'outfit' && GENDERS.includes(base ?? '')) return 'outfit'
+  if (kind === 'item' && slot === 'outfit' && GENDERS.includes(base ?? 'f')) return 'outfit'
   if (kind === 'bot' && as) {
     const target = parseSpec(as)
     if (target.kind === 'bot' && (target.expr ?? 'neutral') !== 'neutral') return 'botFace'
@@ -637,8 +643,6 @@ export function hollowness(pic) {
  * @param {string | null} [variant]
  */
 export function layerNames(target, owner, variant = null) {
-  if (target.kind === 'base') return [baseFile(owner, LAYERS.body), faceFile(owner, 'neutral'), baseFile(owner, LAYERS.hairBack), baseFile(owner, LAYERS.hairFront)]
-  if (target.kind === 'expr') return [faceFile(owner, target.expr)]
   if (target.kind === 'body') return [bodyFile(target.gender), bodyFaceFile(target.gender, 'neutral')]
   if (target.kind === 'bodyFace') return [bodyFaceFile(target.gender, target.expr)]
   if (target.kind === 'hair') return [hairFile(target.code, LAYERS.hairBack), hairFile(target.code, LAYERS.hairFront)]
@@ -650,13 +654,12 @@ export function layerNames(target, owner, variant = null) {
 }
 
 /**
- * Which base or body an ingest belongs to: the base itself, an expression's base; since Plan 19 the body itself,
- * a body face's or a hairstyle's gender; or an item's `--base` (f01 when none — a body when it is `f`/`m`).
+ * Which body an ingest belongs to: the body itself, a body face's or a hairstyle's gender (Plan 19); or an item's
+ * `--base` — body f when none, the pipeline's own default since the flat bases were retired (D1; it was f01 before).
  */
 export function ownerOf(target, spec) {
-  if (target.kind === 'base' || target.kind === 'expr') return target.base
   if (target.kind === 'body' || target.kind === 'bodyFace' || target.kind === 'hair') return target.gender
-  return spec?.base ?? 'f01'
+  return spec?.base ?? 'f'
 }
 
 /** The kinds `pipelineInput` aligns: each is cut with its owner's stored transform. */
@@ -669,8 +672,8 @@ const ALIGNED_KINDS = new Set(['expression', 'item', 'bodyExpression', 'hair'])
  * `verify` aligned it, and written to `tmp`. Since Plan 19 C2 a hairstyle, or an outfit cut on a v4 body (`base`
  * `f`/`m`), on the reference's own canvas is registered onto the body first (`registerOnBody`), as `verify` judged it,
  * when that moves it at all (`registered: true`); since C4 so is a bot's happy face (`as` `bot:<n>:happy`), onto the
- * bot's neutral picture. Anything else — a base, a body or a bot's neutral picture, which take a transform whole, and
- * any other picture already on the reference's canvas — goes in as it is.
+ * bot's neutral picture. Anything else — a body or a bot's neutral picture, which take a transform whole, and any
+ * other picture already on the reference's canvas — goes in as it is.
  *
  * `placement`, when the caller has it already (`scorePicture`), is used instead of being worked out again.
  */
@@ -692,19 +695,15 @@ export async function pipelineInput({ file, kind, slot = null, base = null, as =
   return { file: out, aligned: true, registered: onBody !== null }
 }
 
-/** What a stored transform belongs to, in a message: a body (Plan 19) or a base. */
-const ownerLabel = (owner) => (GENDERS.includes(owner) ? `body ${owner}` : `base ${owner}`)
-
 /**
  * Ingest `file` into a copy of `publicDir` and run the checks (C1–C13) over what that wrote.
  *
  * The cut takes `transformFrom` — `transformSource`'s answer, never worked out here from a file name (Plan 19,
- * pre-flight #28): a new base's source base, a bot's root (f01, or a v4 redraw's body), a body's f01. A base or
- * body the copy has no transform for yet — an expression of a base not ingested, or since Plan 19 a hairstyle, a
- * body face or an item on a body not ingested — is ingested there first from the reference picture, as
- * `base:<id>` or `body:<g>`: for an expression, a face, a hairstyle or an item that is its owner's own picture.
- * A bot or a body needs its root's, so its reference stands in only when it is that picture (`referenceOwner`) —
- * a bot's happy face, drawn from the bot, cannot.
+ * pre-flight #28): a bot's root body, or a body drawn from another body. A body the copy has no transform for yet — a
+ * hairstyle, a body face or an item on a body not ingested — is ingested there first from the reference picture, as
+ * `body:<g>`, when that picture is its owner's own. A bot or a body needs its root's, so its reference stands in only
+ * when it is that body's picture (`referenceOwner`) — a bot's happy face, drawn from the bot, cannot. A body with no
+ * `transformFrom` needs nothing from the copy: the pipeline places it itself (`bodyTransform` in extract.mjs).
  */
 async function pipelineChecks({ file, kind, slot, referenceFile, spec, transformFrom, rootPicture, placement, publicDir, keepTmp, log }) {
   const tmp = mkdtempSync(join(tmpdir(), 'avatar-verify-'))
@@ -715,17 +714,15 @@ async function pipelineChecks({ file, kind, slot, referenceFile, spec, transform
     const target = parseSpec(spec.as)
     const owner = ownerOf(target, spec)
     const quiet = () => {}
-    // The base or body whose stored transform the cut needs: a bot's or a body's transform source, or an
-    // expression's, a face's, a hairstyle's or an item's owner. A new base takes `transformFrom` from the copy as it
-    // is (or is anchored by its own box), and an aura or a frame is placed by its ink box: neither needs one here.
+    // The body whose stored transform the cut needs: a bot's or a body's transform source, or a face's, a hairstyle's
+    // or an item's owner. An aura or a frame is placed by its ink box and needs none.
     const square = target.kind === 'item' && SQUARE_KINDS.has(target.slot)
     const fromRoot = target.kind === 'bot' || target.kind === 'body'
-    const needed = fromRoot ? transformFrom : target.kind === 'base' || square ? null : owner
-    const has = (manifest) => (GENDERS.includes(needed) ? manifest.bodies?.[needed] : manifest.bases?.[needed])
-    if (needed !== null && !has(readManifest(targets[0]))) {
-      if (!referenceFile || (fromRoot && rootPicture !== needed)) throw new Error(`no ${ownerLabel(needed)} in ${publicDir} and no reference to ingest it from`)
-      const standIn = GENDERS.includes(needed) ? { kind: 'body', gender: needed } : { kind: 'base', base: needed }
-      await ingest({ file: referenceFile, target: standIn, dir, targets, log: quiet })
+    const needed = fromRoot ? transformFrom : square ? null : owner
+    if (needed !== null && !GENDERS.includes(needed)) throw new Error(`${needed} is not a body — f or m`)
+    if (needed !== null && !readManifest(targets[0]).bodies?.[needed]) {
+      if (!referenceFile || (fromRoot && rootPicture !== needed)) throw new Error(`no body ${needed} in ${publicDir} and no reference to ingest it from`)
+      await ingest({ file: referenceFile, target: { kind: 'body', gender: needed }, dir, targets, log: quiet })
     }
     const input = await pipelineInput({ file, kind, slot, base: spec.base ?? null, as: spec.as, referenceFile, tmp: join(tmp, 'input'), placement })
     const flags = parseFlags(spec.flags)
@@ -758,7 +755,8 @@ const NO_REGISTRY = { assets: [] }
  *
  * `transformFrom` and `referenceOwner` are what the registry says of the asset (`transformSource`, and
  * `referenceOwner` of its reference — `verifyAssets` passes both); left out, they are worked out from the
- * reference picture's name alone, as for `verify --picture` (an `f01_candidate_1.png` is F01's).
+ * reference picture's name alone, as for `verify --picture` (a plain picture names no body: a bot is then cut on
+ * body f, a body on its own stored transform).
  *
  * @param {{ file: string, kind: string, slot?: string | null, referenceFile?: string | null, ingest?: any, transformFrom?: string | null, referenceOwner?: string | null, publicDir?: string, pipeline?: boolean, keepTmp?: boolean, log?: (line: string) => void }} options
  */
@@ -872,15 +870,16 @@ export async function scorePicture({ file, kind, slot = null, referenceFile = nu
     notes.push('no reference: drift, hair colour and scope not measured')
   }
 
-  // A body is held to D02 §8's proportions like a base (Plan 19); a hairstyle's hair counts as head, so it is not.
-  if (kind === 'base' || kind === 'body' || FACE_KINDS.has(kind) || (kind === 'item' && !headItem)) {
+  // A body is held to D02 §8's proportions (Plan 19; the flat bases were before it); a hairstyle's hair counts as
+  // head, so it is not.
+  if (kind === 'body' || FACE_KINDS.has(kind) || (kind === 'item' && !headItem)) {
     const figure = measureFigure(removeChroma(pic))
     measure.heads = round2(figure.heads)
-    // An expression is its base's own picture with the eyes and mouth redrawn: its proportions are the
-    // base's, and `measure()`'s chin-finding is what moves (F02's long hair, a rounder eye). Advisory there,
+    // An expression is its owner's own picture with the eyes and mouth redrawn: its proportions are the
+    // owner's, and `measure()`'s chin-finding is what moves (F02's long hair, a rounder eye). Advisory there,
     // and for a body's face (Plan 19), its proportions the body's.
     if (figure.heads < HEADS_RANGE[0] || figure.heads > HEADS_RANGE[1]) {
-      if (FACE_KINDS.has(kind)) notes.push(`heads ${measure.heads} outside ${HEADS_RANGE.join('–')} — advisory for an expression (its proportions are the base's)`)
+      if (FACE_KINDS.has(kind)) notes.push(`heads ${measure.heads} outside ${HEADS_RANGE.join('–')} — advisory for an expression (its proportions are its body's)`)
       else return done('heads')
     }
   }
@@ -909,12 +908,11 @@ export async function scorePicture({ file, kind, slot = null, referenceFile = nu
 
 /**
  * What kind of asset an `--as` spec describes, for `verify --picture` (no registry entry to ask): the registry's
- * kind for the pipeline's target — `expr` an `expression`, and since Plan 19 `bodyFace` a `bodyExpression`.
+ * kind for the pipeline's target — since Plan 19 `bodyFace` a `bodyExpression`. A retired `base:`/`expr:` spec is
+ * refused by `parseSpec` (D1).
  */
 export function kindOfSpec(spec) {
   const target = parseSpec(spec)
-  if (target.kind === 'base') return { kind: 'base', slot: null }
-  if (target.kind === 'expr') return { kind: 'expression', slot: null }
   if (target.kind === 'body') return { kind: 'body', slot: null }
   if (target.kind === 'bodyFace') return { kind: 'bodyExpression', slot: null }
   if (target.kind === 'hair') return { kind: 'hair', slot: null }
@@ -926,7 +924,8 @@ export function kindOfSpec(spec) {
 /**
  * Verify every `generated` asset, or the named ones: score the picture, write `measure`, `verdict`,
  * `reason` (and `notes`) onto the last attempt, and set the status — `ok`, `ng`, or `blocked` on the third
- * failure. Returns one `{ id, verdict, reason, measure, notes }` per asset.
+ * failure. Returns one `{ id, verdict, reason, measure, notes }` per asset. A retired flat base or expression (Plan 19
+ * D1) is refused — `parseSpec` throws on its target — before anything is scored or written onto its history.
  *
  * @param {any} registry
  * @param {string[]} [ids]
@@ -934,6 +933,13 @@ export function kindOfSpec(spec) {
  */
 export async function verifyAssets(registry, ids = [], { srcDir = SRC_DIR, publicDir = PUBLIC_DIR, keepTmp = false, pipeline = true, log = () => {} } = {}) {
   const targets = ids.length ? ids.map((id) => requireAsset(registry, id)) : registry.assets.filter((asset) => asset.status === 'generated')
+  for (const asset of targets) {
+    try {
+      parseSpec(asset.ingest.as)
+    } catch (error) {
+      throw new Error(`asset ${asset.id}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
   const results = []
   for (const asset of targets) {
     const last = asset.attempts[asset.attempts.length - 1]

@@ -69,8 +69,8 @@ import {
   removeChroma,
   writeDensities,
 } from './png.mjs'
-import { AURA_CY, AURA_SIZE, AXIS_X, BASELINE_Y, CROP, FACE_LIMIT_Y, FRAME, HEAD_LIMIT_Y, HEAD_REFERENCE, LAYERS, RING, RING_HOLLOW, SKIN_TOLERANCE, STRAND_MARGIN, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, isSkin, placeByInk } from './frame.mjs'
-import { BOTS, EXPRESSIONS, GENDERS, HAIR_CODES, ICON, MANIFEST_NAME, SLOT_LAYER, WEARS, baseFile, bodyFaceFile, bodyFile, botFaceFile, botFile, entryFor, faceFile, hairFile, hairGender, itemFile, readManifest, wearOf, writeIcon, writeManifest } from './manifest.mjs'
+import { AURA_CY, AURA_SIZE, AXIS_X, BASELINE_Y, CROP, FACE_LIMIT_Y, HEAD_LIMIT_Y, HEAD_REFERENCE, LAYERS, RING, RING_HOLLOW, SKIN_TOLERANCE, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, isSkin, placeByInk } from './frame.mjs'
+import { BOTS, EXPRESSIONS, GENDERS, HAIR_CODES, ICON, MANIFEST_NAME, SLOT_LAYER, WEARS, bodyFaceFile, bodyFile, botFaceFile, botFile, entryFor, hairFile, hairGender, itemFile, readManifest, writeIcon, writeManifest } from './manifest.mjs'
 
 /** D02 §8.3: a chibi is between two and two and a half heads tall, or it is not this character. */
 export const HEADS_RANGE = [2, 2.5]
@@ -1490,7 +1490,7 @@ export function keepOnlyCrop(mask, width, height, density) {
 
 /**
  * Zero everything outside the *head region* — the portrait crop, cut off at `FACE_LIMIT_Y` — which is
- * what a base's face layer (50) holds, whether it came from an expression picture or from the base.
+ * what a face layer (50) holds: a body's or a bot's, cut from its own picture or from an expression's.
  */
 export function keepOnlyHead(mask, width, height, density) {
   keepOnlyCrop(mask, width, height, density)
@@ -1498,32 +1498,18 @@ export function keepOnlyHead(mask, width, height, density) {
   return mask
 }
 
-/**
- * What a base's face layer (50) holds: the head region, less the torso column below y 236 (`TORSO_COLUMN`),
- * less the rows above `strandY` (frame units, or `null`) that an AI base's strand of hair went to layer 60 in.
- */
-export function keepOnlyFace(mask, width, height, density, strandY = null) {
+/** What a face layer (50) holds: the head region, less the torso column below y 236 (`TORSO_COLUMN`). */
+export function keepOnlyFace(mask, width, height, density) {
   keepOnlyHead(mask, width, height, density)
   const left = TORSO_COLUMN.x0 * density
   const right = (TORSO_COLUMN.x1 + 1) * density
   for (let y = TORSO_COLUMN.y0 * density; y < height; y++) mask.fill(0, y * width + left, y * width + right)
-  if (strandY !== null) mask.fill(0, 0, Math.min(mask.length, Math.round(strandY * density) * width))
   return mask
 }
 
-/** A clip (`(pic, density) => pic`, as `writeDensities` takes) down to a base's face layer; see `keepOnlyFace`. */
-export function clipToFace(strandY = null) {
-  return (pic, density) => applyMask(pic, keepOnlyFace(new Uint8Array(pic.width * pic.height).fill(255), pic.width, pic.height, density, strandY))
-}
-
-/** A clip keeping only the rows `from ≤ y < to` (frame units; `null` for no bound). */
-export function clipToRows(from, to) {
-  return (pic, density) => {
-    const mask = new Uint8Array(pic.width * pic.height).fill(255)
-    if (from !== null) mask.fill(0, 0, Math.min(mask.length, Math.round(from * density) * pic.width))
-    if (to !== null) mask.fill(0, Math.min(mask.length, Math.round(to * density) * pic.width))
-    return applyMask(pic, mask)
-  }
+/** A clip (`(pic, density) => pic`, as `writeDensities` takes) down to a face layer; see `keepOnlyFace`. */
+export function clipToFace() {
+  return (pic, density) => applyMask(pic, keepOnlyFace(new Uint8Array(pic.width * pic.height).fill(255), pic.width, pic.height, density))
 }
 
 /** Every pixel under `threshold` (default `ALPHA_INK`) made fully transparent black, in place. */
@@ -1545,23 +1531,8 @@ export function dropStrays(pic, density) {
   return strays.length
 }
 
-/**
- * The faint threshold for a strand layer (L60): a strand is solid ink, and what the key leaves around it at
- * alpha 8–30 is noise that C3 counts as litter (M03's second picture: one alpha-13 pixel off the strand).
- */
-export const STRAND_FAINT = 32
 /** The faint threshold for an aura (layer 10): its painterly glow trails into alpha ≤ 30 far from the ring. */
 export const GLOW_FAINT = 32
-
-/**
- * Where an AI base's strand of hair ends, in frame units, or `null` when it has none (2026-09-17, fix
- * round 1). `measure` finds the head top below any thin strand above it; the cut sits `STRAND_MARGIN` below
- * that, on a whole frame unit so both densities cut on the same row.
- */
-export function strandCut(report, transform) {
-  if (!report.strand) return null
-  return Math.round(report.top * transform.scale + transform.offsetY + STRAND_MARGIN)
-}
 
 // ─────────────────────────────────────────────────────────── the style gate ──
 
@@ -1703,84 +1674,73 @@ export function describeMeasurement(report, width) {
 /**
  * One generated picture in, its layers (at both densities) and their manifest entries out.
  *
- * `target` is what `--as` parsed to: `{ kind: 'base' | 'expr' | 'item', … }`. A base establishes the
- * transform and stores it; everything after it reads that transform back, so an expression and a hat
- * generated from the same character lock land on the same pixels as the body they belong to.
+ * `target` is what `--as` parsed to. Since the switch-over (Plan 19 D1) every figure is a v4 body, and every picture
+ * drawn on one is cut on that body's stored transform — so a face, a hairstyle, a hat and a bot generated from the same
+ * character lock land on the same pixels as the body they belong to:
  *
- * An item and an expression write one layer each; an expression keeps only the face region (`keepOnlyFace`).
- * A base writes four (2026-09-15, AI bases are flat): L30 the whole figure, the neutral face L50 as its face
- * region, and L20/L60 as empty frames marked `empty: true` — except that since 2026-09-17 a strand of hair
- * above the head top (`measure`'s `strand`) is cut off at `strandY` (stored beside the transform) into L60,
- * and out of L30 and every face layer; items are then measured against L30 with L60 over it. Re-ingesting a
- * base therefore resets the neutral face to the base's own; ingest `expr:<base>:neutral` after it to
- * override that.
- *
- * `variant` (2026-09-20) makes an item the per-wear layer of an item that already exists rather than the
- * item itself: the same cut, against the base named by `--base`, written as `item_<slot>_<code>_<wear>_L<n>`
- * with `variantOf` and `wear` in its manifest entry. It has to agree with that base — a `m` variant is cut
- * on a base that wears `m`, or the layer would be the wrong shape for every figure that will wear it.
- *
- * 2026-09-24 (Plan 12), three more targets:
- *
- * - **An aura or a frame** (`item:aura:<code>`, `item:frame:<code>`) is a square picture with the effect in a
- *   ring and nothing to diff against a base — see `ingestSquare`.
- * - **A bot** (`bot:<n>`) is a figure drawn from F01's own picture, same canvas and pose, so it is cut like a
- *   base on the transform of `transformFrom` (default `BOT_TRANSFORM_FROM`, f01) rather than anchored by its
- *   own box: the whole figure as `bot_<n>_L30` — no strand cut, since a bot has no L60 to move it to and
- *   wears nothing that could hide it — and its head region as `bot_<n>_face_neutral_L50`. The other five
- *   faces are written as copies of the neutral one, marked `copyOf`, so `check` and the app see a complete
- *   set — except a face already real in its own right, which a new neutral picture leaves alone.
- * - **A bot's second face** (`bot:<n>:<expression>`, `bot:<n>:happy` in practice) cuts that one face from
- *   its picture's head region, on the same transform, and replaces the copy.
- *
- * 2026-10-03 (Plan 19, v4), three more targets and two more owners:
- *
- * - **A body** (`{ kind: 'body', gender }`, `--as body:<g>`) is cut like a bot — the whole figure as `body_<g>_L30`
- *   (no strand cut: a bald head has none) and its head region as `body_<g>_face_neutral_L50` — on the transform of
- *   `transformFrom` (default `BODY_TRANSFORM_FROM`, f01: the canvas `f01_candidate_1.png` was drawn on), or, when it
- *   is ingested again and no `transformFrom` is given, on the body's own stored one. It stores `bodies[<g>] =
- *   { transform }`, and both layers are masked (skin; eyes on the face). `--dry-run` also prints C12 for a cut into a
- *   temporary copy. **`anchor: 'head'`** (`--anchor head`, on the user's word only, when C12 fails on position or
- *   scale alone) re-places the body by its eyes instead — see `bodyTransform` — and stores `anchor: 'head'` beside it.
- * - **A body's face** (`{ kind: 'bodyFace', gender, expr }`, `--as face:<g>:<expr>`) is an expression's cut, owned by
- *   the body: `body_<g>_face_<expr>_L50` on `bodies[<g>].transform`.
+ * - **A body** (`{ kind: 'body', gender }`, `--as body:<g>`): the whole figure as `body_<g>_L30` and its head region
+ *   as `body_<g>_face_neutral_L50`, both masked (skin; eyes on the face), and `bodies[<g>] = { transform }` stored.
+ *   Where it goes is `bodyTransform`'s answer: `transformFrom`'s stored transform; else, ingested again, the body's own;
+ *   else `BODY_TRANSFORM_FROM`'s, body f's — f01's verbatim, the canvas `f01_candidate_1.png` was drawn on, which both
+ *   bodies are drawn from; and only in a manifest that holds no body at all, its own box (`anchorBase`), as the first
+ *   flat base once set the canvas. `--dry-run` also prints C12 for a cut into a temporary copy. **`anchor: 'head'`**
+ *   (`--anchor head`, on the user's word only, when C12 fails on position or scale alone) re-places the body by its
+ *   eyes instead and stores `anchor: 'head'` beside the transform.
+ * - **A body's face** (`{ kind: 'bodyFace', gender, expr }`, `--as face:<g>:<expr>`): `body_<g>_face_<expr>_L50`, the
+ *   head region of an expression's picture (`keepOnlyFace`), on `bodies[<g>].transform`.
  * - **A hairstyle** (`{ kind: 'hair', code }`, `--as hair:<code>`) is drawn on its gender's bald body: registered on
  *   it, diffed against it with the hair face rule (`hairFaceRule`), and the region split (`splitHair`) into
  *   `item_hair_<code>_L60` (front, with the split's `split`) and `_L20` (back, `empty: true` when blank) — see
  *   `hairLayers`. **`recolourTo`** (`--recolour-to #rrggbb`, only when `colours` shows a mapped style more than
  *   15 ΔE from its `naturalColour`) recolours both layers' hair to it and records `recolouredTo` on the L60; an ingest
  *   of the hairstyle without it recolours to the recorded colour again.
- * - **An item on a body**: `baseId` (`--base`) a gender. It is registered on and diffed against `body_<g>_L30` —
- *   with **`hair`** (`--hair <code>`), against that body wearing the hairstyle, its L20 under and its L60 over it.
- *   A body is its gender's wear (`wearOf`), so `--variant m` needs `--base m`. Both an item on a body and a hairstyle
- *   keep the body's own skin, as the picture redrew it, out of their layers (the body-skin rule, `bodySkinRule`; style
- *   gate), and log how much: `body skin kept out: N px`.
- * - **A bot on a body**: `transformFrom` a gender reads `bodies[<g>].transform`.
+ * - **An item** (`item:<slot>:<code>`) on the body `baseId` names (`--base f|m`, f by default): registered on and
+ *   diffed against `body_<g>_L30` — with **`hair`** (`--hair <code>`), against that body wearing the hairstyle, its L20
+ *   under and its L60 over it. Both an item and a hairstyle keep the body's own skin, as the picture redrew it, out of
+ *   their layers (the body-skin rule, `bodySkinRule`; style gate), and log how much: `body skin kept out: N px`.
+ *   `variant` (2026-09-20) makes it the per-wear layer of an item that already exists rather than the item itself: the
+ *   same cut, written as `item_<slot>_<code>_<wear>_L<n>` with `variantOf` and `wear` in its manifest entry. A body is
+ *   its gender's wear (`wearOf`), so `--variant m` is cut with `--base m`.
+ * - **An aura or a frame** (`item:aura:<code>`, `item:frame:<code>`, Plan 12) is a square picture with the effect in a
+ *   ring and nothing to diff against a body — see `ingestSquare`.
+ * - **A bot** (`bot:<n>`, Plan 12) is a figure drawn from a body's own picture, same canvas and pose, so it is cut on
+ *   the transform of `transformFrom` (default `BOT_TRANSFORM_FROM`, body f) rather than anchored by its own box: the
+ *   whole figure as `bot_<n>_L30` and its head region as `bot_<n>_face_neutral_L50`. The other five faces are written
+ *   as copies of the neutral one, marked `copyOf`, so `check` and the app see a complete set — except a face already
+ *   real in its own right, which a new neutral picture leaves alone. **A bot's second face** (`bot:<n>:<expression>`,
+ *   `bot:<n>:happy` in practice) cuts that one face from its picture's head region, on the same transform, and
+ *   replaces the copy.
  *
- * Every item and bot layer ingested records **`cutOn`**, its owner — the base or the body it was cut on (an aura
- * and a frame have none) — which is how C6 knows a v4 outfit from an old one. And an item ingested again with no
- * `tintSeed` **keeps the seed** its entry had (R13), so its tint mask and its icon's are cut again from it.
+ * Every item and bot layer ingested records **`cutOn`**, the body it was cut on (an aura and a frame have none): C6
+ * fails a real outfit layer without one. And an item ingested again with no `tintSeed` **keeps the seed** its entry
+ * had (R13), so its tint mask and its icon's are cut again from it.
  *
- * @param {{ file: string, target: { kind: string, slot?: string, code?: string, base?: string, expr?: string, bot?: number, gender?: string }, dir: string, targets?: string[], baseId?: string, variant?: string | null, tolerance?: number, white?: boolean, dryRun?: boolean, lockScale?: number | null, transformFrom?: string | null, hides?: object, diff?: object, tintSeed?: { x: number, y: number } | null, hair?: string | null, anchor?: string | null, recolourTo?: string | null, overridesDir?: string, log?: (line: string) => void }} options
+ * The flat bases' targets — `base:<id>` and `expr:<id>:<expr>`, Plans 11–12 — are retired (D1) and refused.
+ *
+ * @param {{ file: string, target: { kind: string, slot?: string, code?: string, expr?: string, bot?: number, gender?: string }, dir: string, targets?: string[], baseId?: string, variant?: string | null, tolerance?: number, white?: boolean, dryRun?: boolean, lockScale?: number | null, transformFrom?: string | null, hides?: object, diff?: object, tintSeed?: { x: number, y: number } | null, hair?: string | null, anchor?: string | null, recolourTo?: string | null, overridesDir?: string, log?: (line: string) => void }} options
  */
-export async function ingest({ file, target, dir, targets, baseId = 'f01', variant = null, tolerance = 40, white = false, dryRun = false, lockScale = null, transformFrom = null, hides = {}, diff = {}, tintSeed = null, hair = null, anchor = null, recolourTo = null, overridesDir = MASK_OVERRIDE_DIR, log = () => {} }) {
+export async function ingest({ file, target, dir, targets, baseId = 'f', variant = null, tolerance = 40, white = false, dryRun = false, lockScale = null, transformFrom = null, hides = {}, diff = {}, tintSeed = null, hair = null, anchor = null, recolourTo = null, overridesDir = MASK_OVERRIDE_DIR, log = () => {} }) {
+  if (!TARGET_KINDS.includes(target.kind)) {
+    throw new Error(`cannot ingest a ${target.kind} — the flat bases and their expressions are retired (Plan 19 D1): a figure is a body (body:<g>) and its faces (face:<g>:<expr>)`)
+  }
   const square = target.kind === 'item' && SQUARE_SLOTS.has(target.slot)
   if (variant !== null) {
     if (!WEARS.includes(variant)) throw new Error(`--variant ${variant} is not one of ${WEARS.join(', ')}`)
     if (target.kind !== 'item') throw new Error('--variant belongs to an item — only a wardrobe layer has per-wear variants')
-    if (square) throw new Error(`--variant belongs to a worn item — an ${target.slot} is one picture for every base`)
-    const on = target.base ?? baseId
-    const wear = wearOf(on)
-    if (wear !== variant) {
-      if (GENDERS.includes(on)) throw new Error(`--variant ${variant} does not match body ${on} — a body wears its own gender's cut, so the ${variant} variant is cut with --base ${variant}`)
-      throw new Error(`--variant ${variant} does not match base ${on}, which wears ${wear ?? 'nothing the pipeline knows'} — cut a ${variant} variant on a ${variant} base`)
-    }
+    if (square) throw new Error(`--variant belongs to a worn item — an ${target.slot} is one picture for every body`)
+  }
+  // A worn item is cut on a body (D1): there is no other figure left to diff it against.
+  if (target.kind === 'item' && !square && !GENDERS.includes(baseId)) {
+    throw new Error(`--base ${baseId} is not a body — an item is cut on ${GENDERS.map((gender) => `body ${gender} (--base ${gender})`).join(' or ')}`)
+  }
+  if (variant !== null && baseId !== variant) {
+    throw new Error(`--variant ${variant} does not match body ${baseId} — a body wears its own gender's cut, so the ${variant} variant is cut with --base ${variant}`)
   }
   if (target.kind === 'bot') {
     if (!BOTS.includes(target.bot)) throw new Error(`there is no bot ${target.bot} — the bots are ${BOTS.join(', ')}`)
     if (!EXPRESSIONS.includes(target.expr ?? 'neutral')) throw new Error(`bot ${target.bot} has no expression ${target.expr} — one of ${EXPRESSIONS.join(', ')}`)
   }
-  checkV4Options({ target, square, on: target.base ?? baseId, hair, anchor, recolourTo })
+  checkV4Options({ target, square, on: baseId, hair, anchor, recolourTo })
   const recolourHex = recolourTo === null ? null : recolourTo.toLowerCase()
   const source = await readPicture(file)
   if (square) return ingestSquare({ source, target, dir, targets, tolerance, white, dryRun, log })
@@ -1795,10 +1755,8 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', varia
 
   const manifestFile = join(dir, MANIFEST_NAME)
   const manifest = readManifest(manifestFile)
-  manifest.bases ??= {}
   manifest.bodies ??= {}
-  const owner = target.kind === 'base' ? target.base : target.base ?? baseId
-  /** The base or body a worn item or a bot is cut on (Plan 19): recorded on every layer it writes. */
+  /** The body a worn item or a bot is cut on (Plan 19): recorded on every layer it writes. */
   let cutOn = null
   // A hairstyle recoloured once stays recoloured (A2a review), as an item keeps its tint seed: ingested again without
   // `--recolour-to`, it is recoloured to what its L60 recorded. Read before the new entries replace the old ones.
@@ -1806,82 +1764,33 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', varia
   const recolourTarget = recolourHex ?? keptRecolour
 
   let transform
-  let strandY = null
-  if (target.kind === 'base') {
-    if (transformFrom !== null) {
-      // 2026-09-24: a base drawn *from* another base (F02 from F01: same body, same pose, same canvas)
-      // shares that base's body, so it takes that base's transform verbatim — anchoring it by its own box
-      // would scale it by its own hair (no ahoge: 5.8 % taller a box) and every shared item would miss.
-      const from = manifest.bases[transformFrom]?.transform
-      if (!from) throw new Error(`no transform stored for base ${transformFrom} — ingest it with --as base:${transformFrom} first`)
-      transform = { ...from }
-      log(`transform taken from ${transformFrom}: scale ${from.scale.toFixed(4)}, offset ${from.offsetX.toFixed(1)}, ${from.offsetY.toFixed(1)}`)
-    } else {
-      const anchored = anchorBase(keyed)
-      transform = { scale: anchored.scale, offsetX: anchored.offsetX, offsetY: anchored.offsetY }
-    }
-    strandY = strandCut(report, transform)
-    manifest.bases[owner] = { transform, ...(strandY === null ? {} : { strandY }) }
-  } else if (target.kind === 'body') {
+  if (target.kind === 'body') {
     const placed = await bodyTransform({ keyed, manifest, gender: target.gender, transformFrom, anchor, log })
     transform = placed.transform
     manifest.bodies[target.gender] = { transform, ...(placed.anchor === null ? {} : { anchor: placed.anchor }) }
   } else if (target.kind === 'bot') {
-    // A bot is drawn from F01's picture (the registry's `f01_candidate_1.png`): same canvas, same pose, so
-    // F01's transform places it — its own box would scale it by whatever it has instead of an ahoge. A bot
-    // redrawn on a v4 body (Plan 19) takes the body's: `transformFrom` f or m reads `bodies[<g>]`.
+    // A bot is drawn from a body's own picture: same canvas, same pose, so that body's transform places it — its own
+    // box would scale it by whatever it has instead of hair. Body f's unless `transformFrom` names the other body.
     const from = transformFrom ?? BOT_TRANSFORM_FROM
-    const stored = storedTransform(manifest, from)
-    if (!stored) throw new Error(`no transform stored for ${ownerLabel(from)} — a bot is cut on it; ingest it with --as ${ownerSpec(from)} first`)
-    transform = { ...stored }
+    const stored = { ...bodyTransformOf(manifest, from, 'a bot') }
+    transform = stored
     cutOn = from
-    log(`transform taken from ${from}: scale ${stored.scale.toFixed(4)}, offset ${stored.offsetX.toFixed(1)}, ${stored.offsetY.toFixed(1)}`)
+    log(`transform taken from ${from}: ${describeTransform(stored)}`)
   } else if (target.kind === 'bodyFace' || target.kind === 'hair') {
     // A body's face and a hairstyle are drawn on the body's own picture, so the body's transform places them.
     const gender = target.kind === 'hair' ? hairGender(target.code) : target.gender
-    transform = manifest.bodies[gender]?.transform
-    if (!transform) throw new Error(`no transform stored for body ${gender} — ingest it with --as body:${gender} first`)
+    transform = bodyTransformOf(manifest, gender, `a ${target.kind === 'hair' ? 'hairstyle' : 'face'}`)
   } else {
-    transform = storedTransform(manifest, owner)
-    strandY = GENDERS.includes(owner) ? null : manifest.bases[owner]?.strandY ?? null
-    if (!transform) throw new Error(`no transform stored for ${ownerLabel(owner)} — ingest it with --as ${ownerSpec(owner)} first`)
-    if (target.kind === 'item') cutOn = owner
+    // An item, on the body `--base` names.
+    transform = bodyTransformOf(manifest, baseId, 'an item')
+    cutOn = baseId
   }
   if (lockScale !== null) transform = { ...transform, scale: lockScale }
 
   const anchored = await applyTransform(keyed, transform, 2)
   /** What this picture becomes: `{ file, picture, clip?, extra? }`, one per layer written. */
   const layers = []
-  if (target.kind === 'base') {
-    // An AI base is one flat picture — hair, face and body baked together — so it is cut up by region:
-    // the whole figure as the body; its head region again as the neutral face, because layer 50 sits
-    // above the outfit and the hair ends and chin have to stay above a collar; the strand of hair above
-    // the head top (an ahoge), if there is one, as the front hair (60), so a hat can hide it; and the back
-    // hair (20) as an empty frame, since there is no separate hair to put in it.
-    // `dropFaint` on every cut, as for items: a base whose key left a stray alpha-1 pixel a few pixels off
-    // the figure (m01 did) fails C3 at @1x, and nothing under `ALPHA_INK` is visible anyway.
-    const rowsBody = clipToRows(strandY, null)
-    const body = (pic, density) => dropFaint(rowsBody(pic, density))
-    layers.push({ file: { name: baseFile(owner, LAYERS.body), layer: LAYERS.body }, picture: body(anchored, 2), clip: body })
-    const faceRows = clipToFace(strandY)
-    const face = (pic, density) => dropFaint(faceRows(pic, density))
-    layers.push({ file: { name: faceFile(owner, 'neutral'), layer: LAYERS.face }, picture: face(anchored, 2), clip: face })
-    layers.push({ file: { name: baseFile(owner, LAYERS.hairBack), layer: LAYERS.hairBack }, picture: blankPicture(FRAME.w * 2, FRAME.h * 2), extra: { empty: true } })
-    if (strandY === null) {
-      layers.push({ file: { name: baseFile(owner, LAYERS.hairFront), layer: LAYERS.hairFront }, picture: blankPicture(FRAME.w * 2, FRAME.h * 2), extra: { empty: true } })
-    } else {
-      // Faint key noise above the head would be a stray pixel far outside a shape this small (C3), and the
-      // colour a transparent pixel keeps is bytes nobody sees.
-      const rows = clipToRows(null, strandY)
-      const strand = (pic, density) => dropFaint(rows(pic, density), STRAND_FAINT)
-      layers.push({ file: { name: baseFile(owner, LAYERS.hairFront), layer: LAYERS.hairFront }, picture: strand(anchored, 2), clip: strand })
-      log(`strand above y ${strandY} moved to ${baseFile(owner, LAYERS.hairFront)}`)
-    }
-  } else if (target.kind === 'expr') {
-    const faceRows = clipToFace(strandY)
-    const face = (pic, density) => dropFaint(faceRows(pic, density))
-    layers.push({ file: { name: faceFile(owner, target.expr), layer: LAYERS.face }, picture: face(anchored, 2), clip: face })
-  } else if (target.kind === 'body') {
+  if (target.kind === 'body') {
     layers.push(...bodyLayers(anchored, target.gender))
   } else if (target.kind === 'bodyFace') {
     layers.push(faceLayer(anchored, bodyFaceFile(target.gender, target.expr)))
@@ -1889,10 +1798,12 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', varia
     layers.push(...await hairLayers({ anchored, code: target.code, dir, manifest, diff, overridesDir, log }))
   } else if (target.kind === 'bot') {
     // The kit draws a bot as two layers (`layersFor` in packages/ui-kit/src/avatar2d/layers.ts): L30 and one
-    // L50 face per expression — no hair layers, no wardrobe, so no strand cut and no icon. Every layer this
-    // writes, the copies included, says what it was cut on (`cutOn`): D1 checks every bot was redrawn on a body.
+    // L50 face per expression — no hair layers, no wardrobe, so no icon. Every layer this writes, the copies
+    // included, says what it was cut on (`cutOn`): the committed set's test holds every bot to body f (D1).
+    // `dropFaint` on every cut, as for items: a key that leaves a stray alpha-1 pixel a few pixels off the figure
+    // fails C3 at @1x, and nothing under `ALPHA_INK` is visible anyway.
     const body = (pic) => dropFaint(pic)
-    const faceRows = clipToFace(null)
+    const faceRows = clipToFace()
     const face = (pic, density) => dropFaint(faceRows(pic, density))
     const expr = target.expr ?? 'neutral'
     if (expr === 'neutral') {
@@ -1914,23 +1825,15 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', varia
       layers.push({ file: { name: botFaceFile(target.bot, expr), layer: LAYERS.face }, picture: face(anchored, 2), clip: face, extra: { cutOn } })
     }
   } else {
-    // The item is measured against the whole base as it is drawn: its body, and its front hair when that
-    // holds a strand — otherwise a strand the item picture still shows would read as part of the item. On a
-    // v4 body (Plan 19) that is `body_<g>_L30`, wearing the hairstyle the item was drawn over (`hair`) if any.
-    let basePicture
-    if (GENDERS.includes(owner)) {
-      basePicture = await readPicture(join(dir, `${bodyFile(owner)}@2x.png`))
-      if (hair !== null) basePicture = await wearingHair(basePicture, { dir, manifest, code: hair, log })
-    } else {
-      basePicture = await readPicture(join(dir, `${baseFile(owner, LAYERS.body)}@2x.png`))
-      const hairFront = baseFile(owner, LAYERS.hairFront)
-      if (manifest.files[hairFront] && !manifest.files[hairFront].empty) overPicture(basePicture, await readPicture(join(dir, `${hairFront}@2x.png`)))
-    }
+    // The item is measured against the body as it is drawn: `body_<g>_L30`, wearing the hairstyle the item was drawn
+    // over (`hair`) if any — otherwise the hair the item picture still shows would read as part of the item.
+    let basePicture = await readPicture(join(dir, `${bodyFile(baseId)}@2x.png`))
+    if (hair !== null) basePicture = await wearingHair(basePicture, { dir, manifest, code: hair, log })
     const registered = registerToBase(anchored, basePicture, { slot: target.slot, density: 2 })
     const fit = registered.iou === undefined ? `mean difference ${registered.error.toFixed(1)}` : `silhouette IoU ${registered.iou.toFixed(3)}`
-    log(`registered on ${owner}: dx ${registered.dx}, dy ${registered.dy} px @2x, scale ${registered.scale} (${fit})`)
-    // On a v4 body the item keeps the body's own skin out (the body-skin rule); on an old base nothing changes.
-    const skin = GENDERS.includes(owner) ? await itemBodySkin({ dir, manifest, gender: owner, hair, log }) : null
+    log(`registered on ${baseId}: dx ${registered.dx}, dy ${registered.dy} px @2x, scale ${registered.scale} (${fit})`)
+    // The item keeps the body's own skin out (the body-skin rule) — off only while the body has no skin mask.
+    const skin = await itemBodySkin({ dir, manifest, gender: baseId, hair, log })
     const ownSkin = skin && { skin, ...BODY_SKIN_RULE.item }
     const cut = diffAgainstBase(registered.picture, basePicture, { ...diff, slot: target.slot, density: 2, ownSkin })
     if (skin) log(`body skin kept out: ${cut.skinDropped} px`)
@@ -1961,8 +1864,8 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', varia
     }
   }
   await writeManifest(manifest, targets)
-  // Spec §4.1: whatever this ingest just wrote that `masks` would also cut gets its masks now, so a base or
-  // item is tintable the moment it lands rather than only after a separate `masks` run. The order matters for
+  // Spec §4.1: whatever this ingest just wrote that `masks` would also cut gets its masks now, so a body, a hairstyle
+  // or an item is tintable the moment it lands rather than only after a separate `masks` run. The order matters for
   // an item (Plan 18, No8a): its icon is written above, first, because a tint mask also cuts the icon's own
   // `<icon>_tintmask` and flags the icon's entry — which `writeIcon` replaces whole, flag and all.
   const targetable = maskTargets(manifest)
@@ -1983,17 +1886,19 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', varia
 
 /** The item slots whose picture is a square with the effect in a ring, placed by `ingestSquare` (2026-09-24). */
 export const SQUARE_SLOTS = new Set(['aura', 'frame'])
+/** The targets `ingest` cuts (Plan 19 D1): the flat bases' `base` and `expr` are not among them any more. */
+export const TARGET_KINDS = ['body', 'bodyFace', 'hair', 'item', 'bot']
 /**
- * The base or body whose stored transform a bot is cut on, unless `transformFrom` says otherwise (2026-09-24). A bot
- * redrawn on a v4 body is ingested with `transformFrom` f or m (Plan 19), which reads `bodies[<g>]`; D1 makes the body
- * the default once every bot is redrawn.
+ * The body whose stored transform a bot is cut on, unless `transformFrom` names the other (Plan 19 D1): body f, whose
+ * picture every v4 bot was drawn from. Plan 12's bots were cut on f01's, which body f's is verbatim.
  */
-export const BOT_TRANSFORM_FROM = 'f01'
+export const BOT_TRANSFORM_FROM = 'f'
 /**
- * The base whose stored transform a v4 body is cut on, unless `transformFrom` says otherwise or the body has one of its
- * own already (Plan 19): f01, the canvas `f01_candidate_1.png` was drawn on, which both bodies are drawn from.
+ * The body whose stored transform a body with none of its own is cut on, unless `transformFrom` says otherwise (Plan 19
+ * D1): body f, whose transform is f01's verbatim — the canvas `f01_candidate_1.png` was drawn on, which both bodies are
+ * drawn from. (Until D1 this was f01 itself.)
  */
-export const BODY_TRANSFORM_FROM = 'f01'
+export const BODY_TRANSFORM_FROM = 'f'
 
 // ─────────────────────────────────────────────────────── the v4 targets (Plan 19) ──
 
@@ -2007,9 +1912,6 @@ function checkV4Options({ target, square, on, hair, anchor, recolourTo }) {
   }
   if (target.kind === 'hair' && !HAIR_CODES.includes(target.code)) {
     throw new Error(`there is no hairstyle ${target.code} — the hairstyles are ${HAIR_CODES.join(', ')}`)
-  }
-  if ((target.kind === 'base' || target.kind === 'expr') && GENDERS.includes(target.base)) {
-    throw new Error(`${target.base} is a v4 body, not a base — ingest it with --as ${target.kind === 'base' ? `body:${target.base}` : `face:${target.base}:${target.expr}`}`)
   }
   if (anchor !== null) {
     if (anchor !== 'head') throw new Error(`--anchor ${anchor} is not one the pipeline knows — only head`)
@@ -2027,63 +1929,75 @@ function checkV4Options({ target, square, on, hair, anchor, recolourTo }) {
   }
 }
 
-/** A stored transform by owner: a gender's from `bodies` (Plan 19), any other id's from `bases`. */
-function storedTransform(manifest, owner) {
-  return GENDERS.includes(owner) ? manifest.bodies?.[owner]?.transform : manifest.bases?.[owner]?.transform
+/**
+ * The transform stored for body `gender`, for `what` to be cut on — throwing, with what to do about it, when `gender`
+ * names no body (an old base's id, since D1) or the body has not been ingested yet.
+ */
+function bodyTransformOf(manifest, gender, what) {
+  if (!GENDERS.includes(gender)) throw new Error(`${gender} is not a body — ${what} is cut on body ${GENDERS.join(' or ')}`)
+  const stored = manifest.bodies?.[gender]?.transform
+  if (!stored) throw new Error(`no transform stored for body ${gender} — ${what} is cut on it; ingest it with --as body:${gender} first`)
+  return stored
 }
-const ownerLabel = (owner) => (GENDERS.includes(owner) ? `body ${owner}` : `base ${owner}`)
-const ownerSpec = (owner) => (GENDERS.includes(owner) ? `body:${owner}` : `base:${owner}`)
 const describeTransform = (t) => `scale ${t.scale.toFixed(4)}, offset ${t.offsetX.toFixed(1)}, ${t.offsetY.toFixed(1)}`
 
 /**
  * Where a v4 body goes on the frame: `{ transform, anchor }`, `anchor` `'head'` or `null`.
  *
- * - `transformFrom` given: that base's (or body's) stored transform, verbatim.
+ * - `transformFrom` given: that body's stored transform, verbatim.
  * - Otherwise the body's own stored transform when it has one — it is being ingested again, and keeps where it was
- *   placed (and, if it was, that it was placed by its head) — or else `BODY_TRANSFORM_FROM`'s, f01's.
+ *   placed (and, if it was, that it was placed by its head) — or else `BODY_TRANSFORM_FROM`'s, body f's: f01's
+ *   verbatim, the canvas both bodies are drawn on. In a manifest with neither (a fresh directory: the first body ever
+ *   cut there), the body sets the canvas itself — placed by its own box (`anchorBase`), as the first flat base once was.
  * - **`anchor: 'head'`** (pre-flight #23; on the user's word only, when C12 fails on position or scale alone) starts
- *   from `transformFrom` or f01 and cuts once on it into a temporary directory (`headOf`). The transform it returns
- *   maps the eye span measured there onto `HEAD_REFERENCE.eyeSpan`, scaling about the eye midpoint, and the eye
- *   midpoint onto (`eyeMidX`, `eyeMidY`); it logs how far the scale and the offset moved from the start, and where the
- *   feet land. The feet may then sit off `BASELINE_Y` by that much — C2 and C3 still hold them inside the frame.
+ *   from that same transform and cuts once on it into a temporary directory (`headOf`). The transform it returns maps
+ *   the eye span measured there onto `HEAD_REFERENCE.eyeSpan`, scaling about the eye midpoint, and the eye midpoint
+ *   onto (`eyeMidX`, `eyeMidY`) — wherever it started, so starting from a body's own earlier anchor lands on the same
+ *   place. It logs how far the scale and the offset moved from the start, and where the feet land. The feet may then
+ *   sit off `BASELINE_Y` by that much — C2 and C3 still hold them inside the frame.
  */
 async function bodyTransform({ keyed, manifest, gender, transformFrom, anchor, log }) {
-  const startFrom = (from) => {
-    const stored = storedTransform(manifest, from)
-    if (!stored) throw new Error(`no transform stored for ${ownerLabel(from)} — a body is cut on it; ingest it with --as ${ownerSpec(from)} first`)
-    return { ...stored }
-  }
-  if (anchor === 'head') {
-    const from = transformFrom ?? BODY_TRANSFORM_FROM
-    const start = startFrom(from)
-    const { metrics, feet } = await headOf(keyed, start, gender)
-    const k = HEAD_REFERENCE.eyeSpan / metrics.eyeSpan
-    const transform = {
-      scale: start.scale * k,
-      offsetX: (start.offsetX - metrics.eyeMidX) * k + HEAD_REFERENCE.eyeMidX,
-      offsetY: (start.offsetY - metrics.eyeMidY) * k + HEAD_REFERENCE.eyeMidY,
+  /** The transform the body starts from, `{ transform, anchor, from, line }` — `line` how a plain ingest logs it. */
+  const start = () => {
+    if (transformFrom !== null) {
+      const transform = { ...bodyTransformOf(manifest, transformFrom, 'a body') }
+      return { transform, anchor: null, from: `body ${transformFrom}'s transform`, line: `transform taken from ${transformFrom}: ${describeTransform(transform)}` }
     }
-    log(`anchored on the head: on ${from}'s transform the eyes are at (${metrics.eyeMidX.toFixed(1)}, ${metrics.eyeMidY.toFixed(1)}), ${metrics.eyeSpan.toFixed(1)} apart, the chin at ${metrics.chinY}`)
-    log(`anchored on the head: scale ×${k.toFixed(4)} (${start.scale.toFixed(4)} → ${transform.scale.toFixed(4)}), offset moved ${signed(transform.offsetX - start.offsetX)}, ${signed(transform.offsetY - start.offsetY)} from ${from}'s`)
-    if (feet !== null) {
-      const landed = (feet - metrics.eyeMidY) * k + HEAD_REFERENCE.eyeMidY
-      log(`anchored on the head: the feet move from y ${feet} to y ${landed.toFixed(1)}, ${signed(landed - BASELINE_Y)} from BASELINE_Y ${BASELINE_Y}`)
+    const own = manifest.bodies?.[gender]
+    if (own?.transform) {
+      const transform = { ...own.transform }
+      const anchored = own.anchor ? ` (anchored on the ${own.anchor})` : ''
+      return { transform, anchor: own.anchor ?? null, from: `body ${gender}'s transform`, line: `transform kept from body ${gender}'s last ingest${anchored}: ${describeTransform(transform)}` }
     }
-    return { transform, anchor: 'head' }
+    const canvas = manifest.bodies?.[BODY_TRANSFORM_FROM]?.transform
+    if (canvas) {
+      const transform = { ...canvas }
+      return { transform, anchor: null, from: `body ${BODY_TRANSFORM_FROM}'s transform`, line: `transform taken from ${BODY_TRANSFORM_FROM}: ${describeTransform(transform)}` }
+    }
+    const { scale, offsetX, offsetY } = anchorBase(keyed)
+    const transform = { scale, offsetX, offsetY }
+    return { transform, anchor: null, from: 'its own box', line: `no body has a transform yet: placed by its own box — ${describeTransform(transform)}` }
   }
-  if (transformFrom !== null) {
-    const transform = startFrom(transformFrom)
-    log(`transform taken from ${transformFrom}: ${describeTransform(transform)}`)
-    return { transform, anchor: null }
+  const from = start()
+  if (anchor !== 'head') {
+    log(from.line)
+    return { transform: from.transform, anchor: from.anchor }
   }
-  const own = manifest.bodies?.[gender]
-  if (own?.transform) {
-    log(`transform kept from body ${gender}'s last ingest${own.anchor ? ` (anchored on the ${own.anchor})` : ''}: ${describeTransform(own.transform)}`)
-    return { transform: { ...own.transform }, anchor: own.anchor ?? null }
+  const { metrics, feet } = await headOf(keyed, from.transform, gender)
+  const k = HEAD_REFERENCE.eyeSpan / metrics.eyeSpan
+  const was = from.transform
+  const transform = {
+    scale: was.scale * k,
+    offsetX: (was.offsetX - metrics.eyeMidX) * k + HEAD_REFERENCE.eyeMidX,
+    offsetY: (was.offsetY - metrics.eyeMidY) * k + HEAD_REFERENCE.eyeMidY,
   }
-  const transform = startFrom(BODY_TRANSFORM_FROM)
-  log(`transform taken from ${BODY_TRANSFORM_FROM}: ${describeTransform(transform)}`)
-  return { transform, anchor: null }
+  log(`anchored on the head: on ${from.from} the eyes are at (${metrics.eyeMidX.toFixed(1)}, ${metrics.eyeMidY.toFixed(1)}), ${metrics.eyeSpan.toFixed(1)} apart, the chin at ${metrics.chinY}`)
+  log(`anchored on the head: scale ×${k.toFixed(4)} (${was.scale.toFixed(4)} → ${transform.scale.toFixed(4)}), offset moved ${signed(transform.offsetX - was.offsetX)}, ${signed(transform.offsetY - was.offsetY)} from ${from.from}`)
+  if (feet !== null) {
+    const landed = (feet - metrics.eyeMidY) * k + HEAD_REFERENCE.eyeMidY
+    log(`anchored on the head: the feet move from y ${feet} to y ${landed.toFixed(1)}, ${signed(landed - BASELINE_Y)} from BASELINE_Y ${BASELINE_Y}`)
+  }
+  return { transform, anchor: 'head' }
 }
 
 const signed = (value) => `${value >= 0 ? '+' : '−'}${Math.abs(value).toFixed(2)}`
@@ -2097,9 +2011,9 @@ function bodyLayers(anchored, gender) {
   ]
 }
 
-/** A face layer (L50) from an anchored picture: its head region, as a base's face is cut (`keepOnlyFace`). */
+/** A face layer (L50) from an anchored picture: its head region, as every face is cut (`keepOnlyFace`). */
 function faceLayer(anchored, name) {
-  const faceRows = clipToFace(null)
+  const faceRows = clipToFace()
   const face = (pic, density) => dropFaint(faceRows(pic, density))
   return { file: { name, layer: LAYERS.face }, picture: face(anchored, 2), clip: face }
 }
@@ -2109,8 +2023,8 @@ function faceLayer(anchored, name) {
  * there, and `headMetrics` taken — with the feet, the bottom of the body's ink at @1x. Nothing is written anywhere else.
  *
  * The eyes are the ones this cut finds, **never a hand-drawn eye mask** (A2a review): an override
- * `body_<g>_face_neutral_L50_eyemask.png` is drawn for the body where it is stored, and this cut is on another
- * transform (f01's, for `--anchor head`) — measured through the override, the eyes would be wherever the drawing put
+ * `body_<g>_face_neutral_L50_eyemask.png` is drawn for the body where it is stored, and this cut may be on another
+ * transform (the start of `--anchor head`) — measured through the override, the eyes would be wherever the drawing put
  * them, not where this cut has them. So the masks are cut with an overrides directory that does not exist.
  */
 async function headOf(keyed, transform, gender) {

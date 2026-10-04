@@ -17,7 +17,7 @@ import { anchorBase } from '../scripts/avatar-pipeline/frame.mjs'
 import { MANIFEST_NAME } from '../scripts/avatar-pipeline/manifest.mjs'
 import { alphaBBox, readPicture, renderSvg, writePicture } from '../scripts/avatar-pipeline/png.mjs'
 import { collect } from '../scripts/avatar-registry/collect.mjs'
-import { addVariant, baseGaps, ingestAssets } from '../scripts/avatar-registry/ingest.mjs'
+import { addVariant, ingestAssets } from '../scripts/avatar-registry/ingest.mjs'
 import { parseSpec } from '../scripts/avatar-registry/registry.mjs'
 import {
   HAIR_BODY_MARGIN, REGISTRATION, allowedArea, bodyBox, compareBoxes, comparePictures, figureBox, kindOfSpec, layerNames, ownerOf, scorePicture, verifyAssets,
@@ -299,8 +299,8 @@ describe('verify: drift and redrawn', () => {
     const m01 = { x: 155, y: 80, w: 713, h: 1364, top: 152 }
     const sad = { x: 153, y: 79, w: 717, h: 1367, top: 125 }
     expect(compareBoxes(sad, m01, { kind: 'expression' })).toMatchObject({ reason: null, edges: { top: -1 } })
-    // …and a new base, whose hair is its own, is held to the raw box.
-    expect(compareBoxes({ ...strand, y: 60, h: 1382 }, ref, { kind: 'base' }).edges.top).toBe(-22)
+    // …and a bot, whose head is its own, is held to the raw box (a new flat base was too, until D1 retired them).
+    expect(compareBoxes({ ...strand, y: 60, h: 1382 }, ref, { kind: 'bot' }).edges.top).toBe(-22)
   })
 
   it('holds a head item to its body, so a hat wider than the hair is not a redraw', async () => {
@@ -341,7 +341,7 @@ describe('verify: a detached speck does not move the figure box (Plan 19 C1)', (
     expect(sleep.measure.widthRatio).toBe(1)
   })
 
-  it('passes an expression of a base the same way', async () => {
+  it('passes a Plan 12 expression the same way (a body face is held to its rules)', async () => {
     const sleep = await score(files.refZ, { kind: 'expression' })
     expect(sleep.verdict, sleep.reason).toBe('ok')
     expect(sleep.measure.drift).toEqual({ left: 0, top: 0, right: 0, bottom: 0 })
@@ -401,8 +401,10 @@ describe('verify: the v4 kinds (Plan 19)', () => {
     expect(kindOfSpec('hair:m_neat01')).toEqual({ kind: 'hair', slot: null })
     expect(kindOfSpec('face:f:sad')).toEqual({ kind: 'bodyExpression', slot: null })
     expect(kindOfSpec('body:m')).toEqual({ kind: 'body', slot: null })
-    expect(kindOfSpec('expr:f02:sad')).toEqual({ kind: 'expression', slot: null })
     expect(kindOfSpec('item:outfit:casual01')).toEqual({ kind: 'item', slot: 'outfit' })
+    // Plan 12's flat-base targets are retired (D1).
+    expect(() => kindOfSpec('expr:f02:sad')).toThrow(/retired/)
+    expect(() => kindOfSpec('base:f02')).toThrow(/retired/)
   })
 
   it('names the layers each v4 target writes', () => {
@@ -412,12 +414,13 @@ describe('verify: the v4 kinds (Plan 19)', () => {
     expect(layerNames(parseSpec('item:outfit:dealer01'), 'm', 'm')).toEqual(['item_outfit_dealer01_m_L40'])
   })
 
-  it('names the owner of a v4 ingest: a body, a face or a hairstyle its gender, an item its --base', () => {
+  it('names the owner of a v4 ingest: a body, a face or a hairstyle its gender, an item its --base (body f when none)', () => {
     expect(ownerOf(parseSpec('body:m'), null)).toBe('m')
     expect(ownerOf(parseSpec('face:f:happy'), null)).toBe('f')
     expect(ownerOf(parseSpec('hair:m_spiky01'), { base: null })).toBe('m')
-    expect(ownerOf(parseSpec('item:outfit:casual01'), { base: 'f' })).toBe('f')
-    expect(ownerOf(parseSpec('item:head:beret_red01'), { base: null })).toBe('f01')
+    expect(ownerOf(parseSpec('item:outfit:casual01'), { base: 'm' })).toBe('m')
+    // The pipeline's own default since D1 (f01 before).
+    expect(ownerOf(parseSpec('item:head:beret_red01'), { base: null })).toBe('f')
   })
 
   it('holds a body to its feet and centre line only: a bald head lower and narrower than the hair is fine', async () => {
@@ -432,7 +435,7 @@ describe('verify: the v4 kinds (Plan 19)', () => {
     expect(await score(files.bald, { kind: 'expression' })).toMatchObject({ verdict: 'ng', reason: 'drift' })
   })
 
-  it('fails a body whose feet sit 20 px higher than the reference, and one on another canvas (it is cut on f01)', async () => {
+  it('fails a body whose feet sit 20 px higher than the reference, and one on another canvas (it is cut on the canvas’s transform)', async () => {
     const raised = await score(files.bodyRaised, { kind: 'body' })
     expect(raised).toMatchObject({ verdict: 'ng', reason: 'drift' })
     expect(raised.measure.drift).toMatchObject({ bottom: -20, centre: 0 })
@@ -529,14 +532,17 @@ describe('verify: the v4 kinds (Plan 19)', () => {
     expect(moved.measure.registered.iou).toBeLessThan(REGISTRATION.iou.hair)
   })
 
-  it('registers an outfit cut on a v4 body before judging drift, and holds an old base\'s outfit to its edges as before', async () => {
-    const outfit = (base: string): Record<string, unknown> => ({ kind: 'item', slot: 'outfit', referenceFile: files.dressed, ingest: { as: 'item:outfit:x01', base, variant: null, flags: [] } })
-    const onBody = await score(files.outfitZoomed, outfit('f'))
-    expect(onBody.verdict, `${onBody.reason} ${JSON.stringify(onBody.measure)}`).toBe('ok')
-    expect(onBody.measure.registered.scale).toBeGreaterThanOrEqual(1.03)
-    expect(onBody.measure.registered.scale).toBeLessThanOrEqual(1.05)
-    expect(onBody.measure.registered.iou).toBeGreaterThanOrEqual(REGISTRATION.iou.outfit)
-    expect(onBody.measure.hairDelta).toBeLessThanOrEqual(12)
+  it('registers an outfit cut on a v4 body (body f when it names none) before judging drift, and holds an old base\'s outfit to its edges as before', async () => {
+    const outfit = (base: string | null): Record<string, unknown> => ({ kind: 'item', slot: 'outfit', referenceFile: files.dressed, ingest: { as: 'item:outfit:x01', base, variant: null, flags: [] } })
+    for (const base of ['f', null]) {
+      const onBody = await score(files.outfitZoomed, outfit(base))
+      expect(onBody.verdict, `${base} ${onBody.reason} ${JSON.stringify(onBody.measure)}`).toBe('ok')
+      expect(onBody.measure.registered.scale).toBeGreaterThanOrEqual(1.03)
+      expect(onBody.measure.registered.scale).toBeLessThanOrEqual(1.05)
+      expect(onBody.measure.registered.iou).toBeGreaterThanOrEqual(REGISTRATION.iou.outfit)
+      expect(onBody.measure.hairDelta).toBeLessThanOrEqual(12)
+    }
+    // (An old base's id names no body since D1: the pipeline refuses the cut; verify, unregistered, finds the drift.)
     const onBase = await score(files.outfitZoomed, outfit('f01'))
     expect(onBase).toMatchObject({ verdict: 'ng', reason: 'drift' })
     expect(onBase.measure.registered).toBeUndefined()
@@ -608,26 +614,27 @@ describe('verify: the pipeline', () => {
   beforeAll(async () => {
     publicDir = join(temp, 'public')
     mkdirSync(publicDir, { recursive: true })
-    await pipelineIngest({ file: files.ref, target: { kind: 'base', base: 'f01' }, dir: publicDir, targets: [join(publicDir, MANIFEST_NAME)] })
+    // Body f, the first body there: placed by its own box (until D1 this was the flat base f01, placed the same way).
+    await pipelineIngest({ file: files.ref, target: { kind: 'body', gender: 'f' }, dir: publicDir, targets: [join(publicDir, MANIFEST_NAME)] })
   }, 120_000)
 
   it('ingests into a copy, runs the checks on what it wrote, and leaves public/avatar alone', async () => {
     const before = readFileSync(join(publicDir, MANIFEST_NAME), 'utf8')
     const listed = readdirSync(publicDir).sort()
-    const result = await scorePicture({ file: files.happy, referenceFile: files.ref, kind: 'expression', ingest: { as: 'expr:f01:happy', base: 'f01', variant: null, flags: [] }, publicDir })
+    const result = await scorePicture({ file: files.happy, referenceFile: files.ref, kind: 'bodyExpression', ingest: { as: 'face:f:happy', base: null, variant: null, flags: [] }, publicDir })
     expect(result.verdict, JSON.stringify(result.measure)).toBe('ok')
-    expect(result.measure.checks).toEqual({ base_f01_face_happy_L50: [] })
+    expect(result.measure.checks).toEqual({ body_f_face_happy_L50: [] })
     expect(readFileSync(join(publicDir, MANIFEST_NAME), 'utf8')).toBe(before)
     expect(readdirSync(publicDir).sort()).toEqual(listed)
   }, 120_000)
 
-  it('ingests a new base from the reference first, when the expression belongs to one', async () => {
-    const result = await scorePicture({ file: files.happy, referenceFile: files.ref, kind: 'expression', ingest: { as: 'expr:f09:happy', base: 'f09', variant: null, flags: [] }, publicDir })
+  it('ingests the body from the reference first, when the face belongs to one the copy has not got', async () => {
+    const result = await scorePicture({ file: files.happy, referenceFile: files.ref, kind: 'bodyExpression', ingest: { as: 'face:m:happy', base: null, variant: null, flags: [] }, publicDir })
     expect(result.verdict, JSON.stringify(result.measure)).toBe('ok')
-    expect(Object.keys(result.measure.checks)).toEqual(['base_f09_face_happy_L50'])
+    expect(Object.keys(result.measure.checks)).toEqual(['body_m_face_happy_L50'])
   }, 120_000)
 
-  it('runs a bot through the pipeline on f01 transform, and checks its body and all six faces', async () => {
+  it('runs a bot through the pipeline on body f’s transform, and checks its body and all six faces', async () => {
     const result = await scorePicture({ file: files.ref, referenceFile: files.ref, kind: 'bot', ingest: { as: 'bot:0', base: null, variant: null, flags: [] }, publicDir })
     expect(result.verdict, JSON.stringify(result.measure)).toBe('ok')
     expect(result.notes).not.toContain('pipeline: skipped (bot)')
@@ -659,10 +666,10 @@ describe('verify: the pipeline', () => {
 
   it('names the layers each ingest target writes', () => {
     const faces = (bot: number): string[] => ['neutral', 'happy', 'sad', 'surprised', 'closed', 'sleep'].map((expr) => `bot_${bot}_face_${expr}_L50`)
-    expect(layerNames({ kind: 'item', slot: 'aura', code: 'water01' }, 'f01')).toEqual(['item_aura_water01_L10'])
-    expect(layerNames({ kind: 'item', slot: 'frame', code: 'gold' }, 'f01')).toEqual(['item_frame_gold_L90'])
-    expect(layerNames(parseSpec('bot:3'), 'f01')).toEqual(['bot_3_L30', ...faces(3)])
-    expect(layerNames(parseSpec('bot:3:happy'), 'f01')).toEqual(['bot_3_face_happy_L50'])
+    expect(layerNames({ kind: 'item', slot: 'aura', code: 'water01' }, 'f')).toEqual(['item_aura_water01_L10'])
+    expect(layerNames({ kind: 'item', slot: 'frame', code: 'gold' }, 'f')).toEqual(['item_frame_gold_L90'])
+    expect(layerNames(parseSpec('bot:3'), 'f')).toEqual(['bot_3_L30', ...faces(3)])
+    expect(layerNames(parseSpec('bot:3:happy'), 'f')).toEqual(['bot_3_face_happy_L50'])
   })
 
   // ── Plan 19: the v4 targets in the copy ──
@@ -680,33 +687,36 @@ describe('verify: the pipeline', () => {
     return { result, copy }
   }
 
-  it('checks a body on its two layers, cut in the copy on f01 transform', async () => {
+  it('checks a body on its two layers, cut in the copy on its own stored transform', async () => {
+    const stored = JSON.parse(readFileSync(join(publicDir, MANIFEST_NAME), 'utf8')).bodies.f.transform
     const { result, copy } = await scoreKeeping({ file: files.bald, referenceFile: files.ref, kind: 'body', ingest: spec('body:f') })
     expect(result.measure.pipelineError, JSON.stringify(result)).toBeUndefined()
     expect(Object.keys(result.measure.checks).sort()).toEqual(['body_f_L30', 'body_f_face_neutral_L50'])
-    expect(copy.bodies.f.transform).toEqual(copy.bases.f01.transform)
+    expect(copy.bodies.f.transform).toEqual(stored)
   }, 120_000)
 
-  it('ingests the reference as body:<g> first when the copy has no body yet, then checks both hair layers', async () => {
+  it('ingests the reference as body:<g> first when the copy has no such body yet, then checks both hair layers', async () => {
     const before = readFileSync(join(publicDir, MANIFEST_NAME), 'utf8')
-    expect(JSON.parse(before).bodies?.f).toBeUndefined()
-    const { result, copy } = await scoreKeeping({ file: files.hairOk, referenceFile: files.bald, kind: 'hair', ingest: spec('hair:f_bob01') })
+    expect(JSON.parse(before).bodies?.m).toBeUndefined()
+    const { result, copy } = await scoreKeeping({ file: files.hairOk, referenceFile: files.bald, kind: 'hair', ingest: spec('hair:m_tousled01') })
     expect(result.measure.pipelineError, JSON.stringify(result)).toBeUndefined()
-    expect(Object.keys(result.measure.checks).sort()).toEqual(['item_hair_f_bob01_L20', 'item_hair_f_bob01_L60'])
-    expect(copy.bodies.f.transform).toEqual(copy.bases.f01.transform)
-    expect(copy.files.body_f_L30).toMatchObject({ real: true })
+    expect(Object.keys(result.measure.checks).sort()).toEqual(['item_hair_m_tousled01_L20', 'item_hair_m_tousled01_L60'])
+    // A body with none of its own takes body f's (`BODY_TRANSFORM_FROM`): the canvas both are drawn on.
+    expect(copy.bodies.m.transform).toEqual(copy.bodies.f.transform)
+    expect(copy.files.body_m_L30).toMatchObject({ real: true })
     expect(readFileSync(join(publicDir, MANIFEST_NAME), 'utf8')).toBe(before)
   }, 120_000)
 
   it('cuts a v4 bot on its body, ingesting the body from the reference only when the reference is that body', async () => {
-    const { result, copy } = await scoreKeeping({ file: files.bald, referenceFile: files.bald, kind: 'bot', ingest: spec('bot:0'), transformFrom: 'f', referenceOwner: 'f' })
+    // Body m: the copy has none, so its picture — the reference — is ingested as body m first.
+    const { result, copy } = await scoreKeeping({ file: files.bald, referenceFile: files.bald, kind: 'bot', ingest: spec('bot:0'), transformFrom: 'm', referenceOwner: 'm' })
     expect(result.measure.pipelineError, JSON.stringify(result)).toBeUndefined()
     expect(Object.keys(result.measure.checks)).toContain('bot_0_L30')
-    expect(copy.files.bot_0_L30.cutOn).toBe('f')
-    // A happy face is drawn from the bot's own picture, which cannot stand in for body f.
-    const happy = await scorePicture({ file: files.baldHappy, referenceFile: files.bald, kind: 'bot', ingest: spec('bot:0:happy'), transformFrom: 'f', referenceOwner: null, publicDir })
+    expect(copy.files.bot_0_L30.cutOn).toBe('m')
+    // A happy face is drawn from the bot's own picture, which cannot stand in for body m.
+    const happy = await scorePicture({ file: files.baldHappy, referenceFile: files.bald, kind: 'bot', ingest: spec('bot:0:happy'), transformFrom: 'm', referenceOwner: null, publicDir })
     expect(happy).toMatchObject({ verdict: 'ng', reason: 'pipeline' })
-    expect(happy.measure.pipelineError).toMatch(/no body f in .* and no reference/)
+    expect(happy.measure.pipelineError).toMatch(/no body m in .* and no reference/)
   }, 120_000)
 
   it('passes an asset --recolour-to, --hair and --anchor through to the pipeline', async () => {
@@ -715,7 +725,7 @@ describe('verify: the pipeline', () => {
     expect(recolour.measure.pipelineError).toMatch(/--recolour-to belongs to a hairstyle/)
     const hair = await scorePicture({ file: files.bald, referenceFile: files.ref, kind: 'body', ingest: spec('body:f', ['--hair', 'f_bob01']), publicDir })
     expect(hair.measure.pipelineError).toMatch(/--hair belongs to a worn item/)
-    const anchor = await scorePicture({ file: files.hat, referenceFile: files.ref, kind: 'item', slot: 'head', ingest: spec('item:head:x01', ['--anchor', 'head'], 'f01'), publicDir })
+    const anchor = await scorePicture({ file: files.hat, referenceFile: files.ref, kind: 'item', slot: 'head', ingest: spec('item:head:x01', ['--anchor', 'head'], 'f'), publicDir })
     expect(anchor.measure.pipelineError).toMatch(/--anchor head belongs to a body/)
   }, 120_000)
 })
@@ -856,59 +866,59 @@ describe('addVariant', () => {
   })
 })
 
-describe('baseGaps', () => {
-  it('names every place a new base still has to be added by hand, and nothing that is already there', () => {
-    const basesFile = join(temp, 'avatar-bases.json')
-    // f09 is a base nothing knows yet (f02–m03 joined BASES on 2026-09-24).
-    writeFileSync(basesFile, JSON.stringify({ f01: {}, f09: {} }))
-    const vi = join(temp, 'vi.json')
-    const en = join(temp, 'en.json')
-    writeFileSync(vi, JSON.stringify({ bases: { f01: 'a', f09: 'b' } }))
-    writeFileSync(en, JSON.stringify({ bases: { f01: 'a' } }))
-    const gaps = baseGaps('f09', 'f', { basesFile, localeFiles: [vi, en] })
-    expect(gaps).toHaveLength(3)
-    expect(gaps[0]).toMatch(/BASES .*f09/)
-    expect(gaps[1]).toMatch(/BASE_WEAR .*f09.*'f'/)
-    expect(gaps[2]).toContain(`${en}: bases.f09`)
-    expect(baseGaps('f01', 'f', { basesFile, localeFiles: [vi, en] })).toEqual([])
-    expect(baseGaps('m03', 'm', { basesFile, localeFiles: [vi] }).join('\n')).toMatch(/avatar-bases\.json.*m03/)
-  })
-})
-
 describe('ingestAssets', () => {
   it('ingests a per-wear outfit, adds variants.m to the catalogue, and marks it ingested', async () => {
     const publicDir = join(temp, 'public-ingest')
     mkdirSync(publicDir, { recursive: true })
     const targets = [join(publicDir, MANIFEST_NAME)]
-    await pipelineIngest({ file: files.ref, target: { kind: 'base', base: 'm01' }, dir: publicDir, targets })
+    await pipelineIngest({ file: files.ref, target: { kind: 'body', gender: 'm' }, dir: publicDir, targets })
     const itemsFile = join(temp, 'items.json')
     writeFileSync(itemsFile, ITEMS_JSON)
     const outfit: Asset = {
       id: 'item_outfit_casual01:m', kind: 'item', slot: 'outfit', wear: 'm', catalog: 'outfit_casual01', look: { description: 'x' },
       reference: 'ref.png', prompt: null, file: 'shirt.png',
-      ingest: { as: 'item:outfit:casual01', base: 'm01', variant: 'm', flags: [] }, status: 'approved', attempts: [{ n: 1, verdict: 'ok' }],
+      ingest: { as: 'item:outfit:casual01', base: 'm', variant: 'm', flags: [] }, status: 'approved', attempts: [{ n: 1, verdict: 'ok' }],
     }
     const lines: string[] = []
     await ingestAssets(registryOf([outfit]), [], { srcDir, publicDir, targets, itemsFile, log: (line: string) => lines.push(line) })
     expect(outfit.ingested).toBe(true)
     expect(JSON.parse(readFileSync(itemsFile, 'utf8'))[0].asset.variants).toEqual({ m: 'item_outfit_casual01_m_L40' })
     const manifest = JSON.parse(readFileSync(targets[0]!, 'utf8'))
-    expect(manifest.files.item_outfit_casual01_m_L40).toMatchObject({ real: true, wear: 'm', variantOf: 'item_outfit_casual01_L40' })
-    expect(lines.join('\n')).toMatch(/registered on m01/)
+    expect(manifest.files.item_outfit_casual01_m_L40).toMatchObject({ real: true, wear: 'm', variantOf: 'item_outfit_casual01_L40', cutOn: 'm' })
+    expect(lines.join('\n')).toMatch(/registered on m:/)
   }, 120_000)
+
+  it('refuses a retired flat base or expression, in ingest and in verify, before touching anything (Plan 19 D1)', async () => {
+    const publicDir = join(temp, 'public-ingest-retired')
+    mkdirSync(publicDir, { recursive: true })
+    const targets = [join(publicDir, MANIFEST_NAME)]
+    const base: Asset = {
+      id: 'f09', kind: 'base', slot: null, wear: 'f', catalog: 'f09', look: { description: 'x' }, reference: 'ref.png', prompt: null, file: 'ref.png',
+      ingest: { as: 'base:f09', base: null, variant: null, flags: [] }, status: 'generated', attempts: [{ n: 1, verdict: null }],
+    }
+    const expr: Asset = { ...base, id: 'f09:happy', kind: 'expression', reference: '@f09', file: 'happy.png', ingest: { ...base.ingest, as: 'expr:f09:happy' }, status: 'ok' }
+    await expect(ingestAssets(registryOf([base, expr]), ['f09:happy'], { srcDir, publicDir, targets })).rejects.toThrow(/expr:f09:happy is retired/)
+    await expect(verifyAssets(registryOf([base, expr]), [], { srcDir, publicDir, pipeline: false })).rejects.toThrow(/asset f09: the ingest target base:f09 is retired/)
+    // Nothing was scored onto its history, nothing ingested.
+    expect(base.attempts).toEqual([{ n: 1, verdict: null }])
+    expect(base.status).toBe('generated')
+    expect(expr.ingested).toBeUndefined()
+    expect(existsSync(targets[0]!)).toBe(false)
+  }, 60_000)
 
   it('ingests an aura, a frame, a bot and its happy face, and marks each ingested', async () => {
     const publicDir = join(temp, 'public-ingest-square')
     mkdirSync(publicDir, { recursive: true })
     const targets = [join(publicDir, MANIFEST_NAME)]
-    await pipelineIngest({ file: files.ref, target: { kind: 'base', base: 'f01' }, dir: publicDir, targets })
+    await pipelineIngest({ file: files.ref, target: { kind: 'body', gender: 'f' }, dir: publicDir, targets })
     const square = (kind: string, code: string): Asset => ({
       id: `item_${kind}_${code}`, kind, slot: kind, wear: null, catalog: `${kind}_${code}`, look: { description: 'x' }, reference: null, prompt: null, file: 'ring.png',
       ingest: { as: `item:${kind}:${code}`, base: null, variant: null, flags: [] }, status: 'ok', attempts: [{ n: 1, verdict: 'ok' }],
     })
     const aura = square('aura', 'water01')
     const frame = square('frame', 'gold')
-    // As the committed registry seeds them: the neutral picture drawn from F01's, the happy one from the bot's own.
+    // As Plan 12's registry seeded them: the neutral picture drawn from F01's, the happy one from the bot's own. A chain
+    // that reaches no body's picture ends on body f's transform since D1 (f01's before).
     const bot: Asset = {
       id: 'bot_4', kind: 'bot', slot: null, wear: null, catalog: 'bot_4', look: { description: 'x', expression: 'y' },
       reference: 'ref.png', prompt: null, file: 'ref.png',
@@ -925,7 +935,7 @@ describe('ingestAssets', () => {
     ])
     for (const asset of [aura, frame, bot, happy]) expect(asset.ingested, asset.id).toBe(true)
     expect(lines.join('\n')).not.toMatch(/not supported/)
-    expect(lines.join('\n')).toMatch(/transform taken from f01/)
+    expect(lines.join('\n')).toMatch(/transform taken from f:/)
     const manifest = JSON.parse(readFileSync(targets[0]!, 'utf8'))
     expect(manifest.files.item_aura_water01_L10).toMatchObject({ layer: 10, real: true })
     expect(manifest.files.item_frame_gold_L90).toMatchObject({ layer: 90, real: true })
@@ -942,29 +952,30 @@ describe('ingestAssets', () => {
     ingest: { base: null, variant: null, flags: [], ...fields.ingest },
   })
 
-  it('ingests a body on f01 transform, then a hairstyle drawn on it with its --recolour-to', async () => {
+  it('ingests a body drawn on F01’s canvas on body f’s transform, then a hairstyle drawn on it with its --recolour-to', async () => {
     const publicDir = join(temp, 'public-ingest-v4')
     mkdirSync(publicDir, { recursive: true })
     const targets = [join(publicDir, MANIFEST_NAME)]
-    await pipelineIngest({ file: files.ref, target: { kind: 'base', base: 'f01' }, dir: publicDir, targets })
-    const body = v4Asset({ id: 'body_f', kind: 'body', wear: 'f', catalog: 'f', reference: 'ref.png', file: 'bald.png', ingest: { as: 'body:f' } })
-    const bob = v4Asset({
-      id: 'item_hair_f_bob01', kind: 'hair', wear: 'f', catalog: 'hair_f_bob01', reference: '@body_f', file: 'hair-ok.png', status: 'approved',
-      ingest: { as: 'hair:f_bob01', flags: ['--recolour-to', '#5e3e6f'] },
+    // Body f stands for the canvas both bodies are drawn on (its transform is f01's verbatim in the real manifest).
+    await pipelineIngest({ file: files.ref, target: { kind: 'body', gender: 'f' }, dir: publicDir, targets })
+    const body = v4Asset({ id: 'body_m', kind: 'body', wear: 'm', catalog: 'm', reference: 'ref.png', file: 'bald.png', ingest: { as: 'body:m' } })
+    const tousled = v4Asset({
+      id: 'item_hair_m_tousled01', kind: 'hair', wear: 'm', catalog: 'hair_m_tousled01', reference: '@body_m', file: 'hair-ok.png', status: 'approved',
+      ingest: { as: 'hair:m_tousled01', flags: ['--recolour-to', '#5e3e6f'] },
     })
     const lines: string[] = []
-    const results = await ingestAssets(registryOf([body, bob]), [], { srcDir, publicDir, targets, log: (line: string) => lines.push(line) })
+    const results = await ingestAssets(registryOf([body, tousled]), [], { srcDir, publicDir, targets, log: (line: string) => lines.push(line) })
     expect(results.map((result: { id: string; done: boolean; name?: string | null }) => [result.id, result.done, result.name])).toEqual([
-      ['body_f', true, 'body_f_L30'],
-      ['item_hair_f_bob01', true, 'item_hair_f_bob01_L60'],
+      ['body_m', true, 'body_m_L30'],
+      ['item_hair_m_tousled01', true, 'item_hair_m_tousled01_L60'],
     ])
-    expect(body.ingested && bob.ingested).toBe(true)
-    expect(lines.join('\n')).toMatch(/transform taken from f01/)
+    expect(body.ingested && tousled.ingested).toBe(true)
+    expect(lines.join('\n')).toMatch(/transform taken from f:/)
     const manifest = JSON.parse(readFileSync(targets[0]!, 'utf8'))
-    expect(manifest.bodies.f.transform).toEqual(manifest.bases.f01.transform)
-    expect(manifest.files.body_f_face_neutral_L50).toMatchObject({ real: true })
-    expect(manifest.files.item_hair_f_bob01_L20).toMatchObject({ real: true })
-    expect(manifest.files.item_hair_f_bob01_L60).toMatchObject({ real: true, recolouredTo: '#5e3e6f' })
+    expect(manifest.bodies.m.transform).toEqual(manifest.bodies.f.transform)
+    expect(manifest.files.body_m_face_neutral_L50).toMatchObject({ real: true })
+    expect(manifest.files.item_hair_m_tousled01_L20).toMatchObject({ real: true })
+    expect(manifest.files.item_hair_m_tousled01_L60).toMatchObject({ real: true, recolouredTo: '#5e3e6f' })
   }, 180_000)
 
   it("ingests a bot's happy face registered onto the bot's neutral picture, so a zoomed face is cut where the neutral one is (Plan 19 C4)", async () => {
@@ -973,7 +984,7 @@ describe('ingestAssets', () => {
       const publicDir = join(temp, name)
       mkdirSync(publicDir, { recursive: true })
       const targets = [join(publicDir, MANIFEST_NAME)]
-      await pipelineIngest({ file: files.ref, target: { kind: 'base', base: 'f01' }, dir: publicDir, targets })
+      await pipelineIngest({ file: files.ref, target: { kind: 'body', gender: 'f' }, dir: publicDir, targets })
       const neutral = v4Asset({ id: 'v4/bot_0', kind: 'bot', catalog: 'bot_0', reference: 'ref.png', file: 'dressed.png', ingest: { as: 'bot:0' } })
       const happy = v4Asset({ id: 'v4/bot_0:happy', kind: 'bot', catalog: 'bot_0', reference: '@v4/bot_0', file, ingest: { as: 'bot:0:happy' } })
       const lines: string[] = []
@@ -995,6 +1006,8 @@ describe('ingestAssets', () => {
     const targets = [join(publicDir, MANIFEST_NAME)]
     const hat = (flags: string[], base: string): Asset => v4Asset({ id: 'v4/item_head_x01', kind: 'item', slot: 'head', catalog: 'head_x01', reference: 'ref.png', file: 'hat.png', ingest: { as: 'item:head:x01', base, flags } })
     await expect(ingestAssets(registryOf([hat(['--hair', 'm_tousled01'], 'f')]), [], { srcDir, publicDir, targets })).rejects.toThrow(/m_tousled01 is worn on body m, not on body f/)
-    await expect(ingestAssets(registryOf([hat(['--anchor', 'head'], 'f01')]), [], { srcDir, publicDir, targets })).rejects.toThrow(/--anchor head belongs to a body/)
+    await expect(ingestAssets(registryOf([hat(['--anchor', 'head'], 'f')]), [], { srcDir, publicDir, targets })).rejects.toThrow(/--anchor head belongs to a body/)
+    // An old base's id names no body since D1.
+    await expect(ingestAssets(registryOf([hat([], 'f01')]), [], { srcDir, publicDir, targets })).rejects.toThrow(/--base f01 is not a body/)
   }, 60_000)
 })

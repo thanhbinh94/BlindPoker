@@ -4,8 +4,7 @@
  *
  * `assets/avatar-src/registry.json` is the queue of pictures still to generate *and* the history of every
  * attempt at them. It never repeats what another file already owns — rarity, achievements, frame geometry
- * and catalogue names stay in `items.json`, `avatar-bases.json` and the pipeline — and points at them by
- * `catalog` id instead (spec §2). The pictures it names sit beside it and stay out of git; the registry
+ * and catalogue names stay in `items.json` and the pipeline — and points at them by `catalog` id instead (spec §2). The pictures it names sit beside it and stay out of git; the registry
  * itself is committed (`assets/avatar-src/.gitignore` carries `!registry.json`).
  *
  * An asset:
@@ -13,10 +12,11 @@
  *   id         the layer name without `_L<n>` (`item_head_beret_red01`, `f02`, `bot_3`, `body_f`,
  *              `item_hair_f_bob01`); an expression or a bot's second face is `<owner>:<expression>` (`f02:happy`,
  *              `bot_3:happy`, `body_f:happy`); a v4 redraw of a Plan 12 asset is `v4/<old id>` (Plan 19)
- *   kind       base | expression | item | aura | frame | bot, and since Plan 19 (v4) body | bodyExpression | hair
+ *   kind       item | aura | frame | bot, and since Plan 19 (v4) body | bodyExpression | hair; base | expression are
+ *              Plan 12's flat bases and their faces — history only since the switch-over (D1)
  *   slot       item: head | face | outfit; aura/frame: their own kind; otherwise null
- *   wear       base, body, body expression, hairstyle: f | m; an item's per-wear cut: f | m; otherwise null
- *   catalog    the id in avatar-bases.json / items.json (bot: bot_<n>; body: its gender; hairstyle: hair_<code>)
+ *   wear       body, body expression, hairstyle (and a retired base): f | m; an item's per-wear cut: f | m; otherwise null
+ *   catalog    the id in items.json (bot: bot_<n>; body: its gender; hairstyle: hair_<code>; a retired base: its id)
  *   look       what the template's `{{look.<key>}}` placeholders read
  *   reference  the picture attached when generating: a file in assets/avatar-src/, `@<id>` of another
  *              asset (its `file`, once that asset is ok or approved), or null (aura, frame)
@@ -29,8 +29,8 @@
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
-import { BODY_TRANSFORM_FROM, BOT_TRANSFORM_FROM } from '../avatar-pipeline/extract.mjs'
-import { GENDERS, HAIR_CODES, PACKAGE_ROOT, hairGender } from '../avatar-pipeline/manifest.mjs'
+import { BOT_TRANSFORM_FROM } from '../avatar-pipeline/extract.mjs'
+import { HAIR_CODES, PACKAGE_ROOT, hairGender } from '../avatar-pipeline/manifest.mjs'
 
 /** Where the generated pictures — and the registry that lists them — live. */
 export const SRC_DIR = resolve(PACKAGE_ROOT, '../../assets/avatar-src')
@@ -41,6 +41,11 @@ export const REGISTRY_VERSION = 1
  * Plan 12's six kinds, and Plan 19's three (v4): a `body` (`body:<g>`, its picture drawn from F01's), a
  * `bodyExpression` (`face:<g>:<expr>`, drawn on the body's picture) and a `hair`style (`hair:<code>`, drawn on its
  * gender's bald body). A v4 outfit, bot, hat or glasses stays an `item` or a `bot`, cut on a body.
+ *
+ * `base` and `expression` are **retired** (Plan 19 D1): the flat bases and their faces are gone from the pipeline and
+ * the app. The kinds stay so the committed registry keeps Plan 12's history of them (its four bases, twenty faces and
+ * the two templates they render from), but nothing new is made of them — `parseSpec` refuses their `base:`/`expr:`
+ * targets, so neither `verify` nor `ingest` will touch one.
  */
 export const KINDS = ['base', 'expression', 'item', 'aura', 'frame', 'bot', 'body', 'bodyExpression', 'hair']
 export const ITEM_SLOTS = ['head', 'face', 'outfit']
@@ -155,16 +160,18 @@ export function referencePath(asset, registry, srcDir = SRC_DIR) {
 export const pictureExists = (srcDir, file) => existsSync(join(srcDir, file))
 
 /**
- * The pipeline target an `ingest.as` names: `base:f02`, `expr:f02:happy`, `item:head:beret_red01`,
- * `bot:3`, `bot:3:happy`, and since Plan 19 `body:f`, `face:f:happy` (`{ kind: 'bodyFace', … }`, the pipeline's
- * name; the registry's kind is `bodyExpression`, see `kindOfSpec`) and `hair:f_bob01` (gendered by its code).
- * Mirrors `parseTarget` in `avatar-pipeline.mjs`, which is private to that CLI and exits the process on a bad
- * spec; this one throws.
+ * The pipeline target an `ingest.as` names: `item:head:beret_red01`, `bot:3`, `bot:3:happy`, and since Plan 19
+ * `body:f`, `face:f:happy` (`{ kind: 'bodyFace', … }`, the pipeline's name; the registry's kind is `bodyExpression`,
+ * see `kindOfSpec`) and `hair:f_bob01` (gendered by its code). Mirrors `parseTarget` in `avatar-pipeline.mjs`, which
+ * is private to that CLI and exits the process on a bad spec; this one throws.
+ *
+ * Plan 12's `base:<id>` and `expr:<id>:<expr>` are retired (D1, see `KINDS`): refused, saying what replaced them.
  */
 export function parseSpec(spec) {
   const [kind, first, second, ...rest] = String(spec).split(':')
-  if (kind === 'base' && first) return { kind: 'base', base: first }
-  if (kind === 'expr' && first && second) return { kind: 'expr', base: first, expr: second }
+  if (kind === 'base' || kind === 'expr') {
+    throw new Error(`the ingest target ${spec} is retired (Plan 19 D1): the flat bases are gone — a figure is a body (body:<g>) and its faces (face:<g>:<expr>)`)
+  }
   if (kind === 'item' && first && second) return { kind: 'item', slot: first, code: second }
   if (kind === 'bot' && first !== undefined && first !== '') return { kind: 'bot', bot: Number(first), expr: second ?? 'neutral' }
   if (kind === 'body' && first && second === undefined) return { kind: 'body', gender: first }
@@ -228,39 +235,32 @@ export function parseFlags(flags = []) {
   return { hides, diff, ...options }
 }
 
-/** A base's own picture, as the registry names it: `f01_candidate_1.png` is F01's. */
-const BASE_PICTURE = /^([fm]\d\d)_candidate_\d+\.png$/
-
 /**
- * Whose own picture a reference is — the base or body that picture is the drawing of — or null: a base's
- * (`f01_candidate_1.png` → `f01`, `@f02` → `f02`), a body's (`@body_f` → `f`). Anything else — a bot's picture,
- * a hairstyle's, `ref.png` — is nobody's.
+ * Whose own picture a reference is — the body that picture is the drawing of — or null: `@body_f` → `f`. Anything
+ * else — a bot's picture, a hairstyle's, `f01_candidate_1.png` (F01's, the canvas the bodies were drawn from, which
+ * names no transform since the switch-over retired the base, D1), `ref.png` — is nobody's.
  */
 export function referenceOwner(reference, registry) {
-  if (reference === null || reference === undefined) return null
-  if (!reference.startsWith('@')) return BASE_PICTURE.exec(basename(reference))?.[1] ?? null
+  if (reference === null || reference === undefined || !reference.startsWith('@')) return null
   const other = findAsset(registry, reference.slice(1))
-  if (other?.kind === 'base') return other.id
   if (other?.kind === 'body') return parseSpec(other.ingest.as).gender ?? null
   return null
 }
 
 /**
- * The base or body whose stored transform the pipeline cuts an asset's picture on (`--transform-from`), or
- * null when the pipeline needs none from the registry. The one copy, shared by `ingest` and `verify` (Plan 19,
- * pre-flight #28; it lived in ingest.mjs before).
+ * The body whose stored transform the pipeline cuts an asset's picture on (`--transform-from`), or null when the
+ * pipeline needs none from the registry. The one copy, shared by `ingest` and `verify` (Plan 19, pre-flight #28; it
+ * lived in ingest.mjs before).
  *
- * - A **bot** (2026-09-24) follows its chain of references back to the first picture that is a base's or a
- *   body's own (`referenceOwner`): Plan 12's `bot_3:happy` → `@bot_3` → `f01_candidate_1.png` → `f01`; a v4
- *   redraw `v4/bot_3:happy` → `@v4/bot_3` → `@body_f` → `f`. A chain that reaches no such picture ends on
- *   `BOT_TRANSFORM_FROM`.
- * - A **body** (Plan 19) is drawn from F01's picture, so it takes F01's (`f01_candidate_1.png` → `f01`; anything
- *   else `BODY_TRANSFORM_FROM`). `--anchor head` then moves it by the eyes, starting from there.
- * - A **base** (2026-09-24) drawn from another base's picture — its `reference` is that base's file or `@<id>` —
- *   shares that base's body and canvas, so it takes that base's transform; one with no base reference is null,
- *   and the pipeline anchors it by its own box. (D1 retires this branch with the bases.)
- * - Anything else — an expression, an item, a body's face, a hairstyle — is cut on its owner's own transform,
- *   which the pipeline reads itself: null.
+ * - A **bot** (2026-09-24) follows its chain of references back to the first picture that is a body's own
+ *   (`referenceOwner`): a v4 redraw `v4/bot_3:happy` → `@v4/bot_3` → `@body_f` → `f`. A chain that reaches no such
+ *   picture — Plan 12's `bot_3:happy` → `@bot_3` → `f01_candidate_1.png` — ends on `BOT_TRANSFORM_FROM`, body f, whose
+ *   transform is f01's verbatim.
+ * - A **body** drawn from another body's picture takes that body's (`@body_f` → `f`). One drawn from F01's picture —
+ *   both of them — gets null: the pipeline places it on its own stored transform, or else on body f's (`bodyTransform`
+ *   in extract.mjs). `--anchor head` then moves it by the eyes, starting from there.
+ * - Anything else — an item, a body's face, a hairstyle — is cut on its owner's own transform, which the pipeline
+ *   reads itself: null. (Until D1 a flat base drawn from another took that base's transform here.)
  */
 export function transformSource(asset, registry) {
   if (asset.kind === 'bot') {
@@ -275,11 +275,6 @@ export function transformSource(asset, registry) {
     }
     return BOT_TRANSFORM_FROM
   }
-  if (asset.kind === 'body') return referenceOwner(asset.reference, registry) ?? BODY_TRANSFORM_FROM
-  if (asset.kind === 'base') {
-    // A base takes another base's transform only, never a body's.
-    const owner = referenceOwner(asset.reference, registry)
-    return owner !== null && !GENDERS.includes(owner) ? owner : null
-  }
+  if (asset.kind === 'body') return referenceOwner(asset.reference, registry)
   return null
 }

@@ -2,8 +2,8 @@
  * The build output Task 1's asset pipeline emits: the list of every PNG layer that actually exists,
  * by name, with its layer number and pixel size (design §3, §4.4).
  *
- * `loadItemCatalog` (`items.ts`) and `loadBases` (`bases.ts`) both hold their own `asset.file`
- * references against this — an item or a base that names a file the pipeline never produced would
+ * `loadItemCatalog` (`items.ts`) and `loadBodies` (`bodies.ts`) both hold their own `asset.file`
+ * references against this — an item or a body that names a file the pipeline never produced would
  * otherwise be an invisible layer on somebody's chibi, caught only by looking. Loaded once, at boot,
  * the same way `items.json` is: refused loudly rather than degraded, because every avatar this
  * server renders is built from what this file says exists.
@@ -143,7 +143,7 @@ function parseFile(path: string, name: string, raw: unknown): AvatarManifestFile
  * Reads and validates `data/avatar-manifest.json`.
  *
  * Refuses rather than defaults: a manifest that failed to parse would otherwise let every
- * `asset.file` check in `items.ts`/`bases.ts` pass vacuously (nothing to compare against), which is
+ * `asset.file` check in `items.ts`/`bodies.ts` pass vacuously (nothing to compare against), which is
  * a worse failure than a container that will not boot.
  */
 export function loadAvatarManifest(path: string = defaultManifestPath()): AvatarManifest {

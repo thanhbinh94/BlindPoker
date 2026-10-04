@@ -58,7 +58,7 @@ export function registerCatalogRoutes(app: FastifyInstance, deps: CatalogRouteDe
    * 2026-10-03 (Plan 19, avatar v4): `bodies` replaces `bases` — the two v4 bodies, f then m, each with its
    * files, its natural eye colour and the tint it derived from the manifest (ruling 5: the client never
    * measures a body itself). A hairstyle is an item now, served with the rest by `/api/catalog/items`. The old
-   * base registry is no longer read by the app (`inventory/bases.ts` stays on disk until D1 deletes it).
+   * base registry is gone (D1).
    */
   app.get('/api/catalog/avatar', async (_req, reply) =>
     reply.send({

@@ -246,8 +246,8 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
 
   const bus = createEventBus(log)
   const manifest = loadAvatarManifest()
-  // Since Plan 19 (avatar v4) a figure is a body per gender; the old base registry (`data/avatar-bases.json`,
-  // `inventory/bases.ts`) is no longer read — an old account's base is history, fixed in `avatar-migrate.ts`.
+  // Since Plan 19 (avatar v4) a figure is a body per gender; the old base registry is gone (D1) — an old
+  // account's base is history, fixed in `avatar-migrate.ts`.
   const bodies = loadBodies(undefined, manifest)
   const aliases = loadAliases()
   const catalog = loadItemCatalog(undefined, manifest)

@@ -415,14 +415,6 @@
     "skin_brown01": "Da nâu",
     "skin_deep01": "Da nâu đậm"
   },
-  "bases": {
-    "f01": "Tóc bob",
-    "m01": "Tóc rối",
-    "f02": "Tóc dài mái bằng",
-    "f03": "Tóc gợn sóng",
-    "m02": "Tóc gọn",
-    "m03": "Tóc xoăn"
-  },
   "achievements": {
     "ui": {
       "title": "Thành tựu",

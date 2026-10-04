@@ -415,14 +415,6 @@
     "skin_brown01": "Brown skin",
     "skin_deep01": "Deep brown skin"
   },
-  "bases": {
-    "f01": "Bob cut",
-    "m01": "Tousled",
-    "f02": "Long with bangs",
-    "f03": "Wavy bob",
-    "m02": "Neat crop",
-    "m03": "Curly"
-  },
   "achievements": {
     "ui": {
       "title": "Achievements",

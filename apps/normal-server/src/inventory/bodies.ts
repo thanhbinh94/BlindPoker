@@ -5,11 +5,11 @@
  * (`body_<g>_L30`: bald, in neutral underwear, its skin the "cream" tone) plus one of six face layers
  * (`body_<g>_face_<expr>_L50`: the face alone, no hair) for the current expression; the hair is an item of
  * its own now (`hairStyle`, `items.ts`). `data/avatar-bodies.json` names the files and each body's natural
- * eye colour, and this loader holds every file against `data/avatar-manifest.json`, the way `loadBases`
- * did for the bases this replaces — a body naming a file the pipeline never produced would render with a
+ * eye colour, and this loader holds every file against `data/avatar-manifest.json`, as the base registry
+ * this replaced did (retired in D1) — a body naming a file the pipeline never produced would render with a
  * hole in it.
  *
- * Unlike the base registry, the list is closed: exactly `f` and `m` (`GENDERS`), since a gender is a type in
+ * Unlike that registry, the list is closed: exactly `f` and `m` (`GENDERS`), since a gender is a type in
  * the code (the outfit cut it wears, the hairstyles it may wear), not a row of data.
  *
  * Where a body can be recoloured — skin and eyes — is **derived** from the manifest's masks rather than
@@ -108,7 +108,7 @@ function parseBody(path: string, manifest: AvatarManifest, gender: Gender, raw: 
 }
 
 /**
- * `BodyDef.tint` (ruling 5), read off the manifest's `masks` the way `bases.ts`'s `deriveTint` reads a base's.
+ * `BodyDef.tint` (ruling 5), read off the manifest's `masks` the way the retired base registry read a base's.
  *
  * Skin candidates are the body and all six faces, in that order; eye candidates are the six faces alone. A
  * layer is in `files` when its mask of that kind is non-empty — a shut-eyed face has no iris to paint. The

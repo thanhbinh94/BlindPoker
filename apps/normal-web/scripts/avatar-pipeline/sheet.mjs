@@ -290,7 +290,7 @@ async function maskAlpha(dir, name, kind) {
 /**
  * The @1x layers a sheet reads, each read once: as drawn, or — for a toned card's body and body faces — painted
  * with `recolour` under the layer's own skin mask at the **body's** skin `meanL`, the one number both layers are
- * tinted at so the seam between body and face stays invisible (as `tint-sheet` does for a base's hair and eyes).
+ * tinted at so the seam between body and face stays invisible (as `tint-sheet` does for a hairstyle's two layers).
  * A layer with no skin mask is drawn as it is.
  */
 function layerReader(dir, manifest) {

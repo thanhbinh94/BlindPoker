@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { BOT_TRANSFORM_FROM } from '../scripts/avatar-pipeline/extract.mjs'
 import { FIX_LINES, KIND_FIX_LINES, renderPrompt } from '../scripts/avatar-registry/prompts.mjs'
 import { PRIORITY, approve, nextAssets, ready, reject, statusCounts } from '../scripts/avatar-registry/queue.mjs'
 import { KINDS, REGISTRY_FILE, SRC_DIR, parseFlags, parseSpec, readRegistry, referenceOf, transformSource, validateRegistry, writeRegistry } from '../scripts/avatar-registry/registry.mjs'
@@ -154,9 +155,15 @@ describe('parseSpec / parseFlags: the v4 targets and flags (Plan 19)', () => {
     expect(parseSpec('face:m:happy')).toEqual({ kind: 'bodyFace', gender: 'm', expr: 'happy' })
     expect(parseSpec('hair:f_bob01')).toEqual({ kind: 'hair', code: 'f_bob01', gender: 'f' })
     expect(parseSpec('hair:m_neat01')).toEqual({ kind: 'hair', code: 'm_neat01', gender: 'm' })
-    // Plan 12's targets read as before.
-    expect(parseSpec('expr:f02:happy')).toEqual({ kind: 'expr', base: 'f02', expr: 'happy' })
+    // Plan 12's bot targets read as before.
     expect(parseSpec('bot:3:happy')).toEqual({ kind: 'bot', bot: 3, expr: 'happy' })
+  })
+
+  it('refuses the retired base:<id> and expr:<id>:<expr>, saying what replaced them (Plan 19 D1)', () => {
+    expect(() => parseSpec('base:f02')).toThrow(/base:f02 .*retired.*body:<g>/)
+    expect(() => parseSpec('expr:f02:happy')).toThrow(/expr:f02:happy .*retired.*face:<g>:<expr>/)
+    // The kinds stay, for Plan 12's history in the committed registry.
+    expect(KINDS).toEqual(expect.arrayContaining(['base', 'expression']))
   })
 
   it('refuses a v4 target with a part missing or one too many, and a hair code that names no gender', () => {
@@ -192,24 +199,26 @@ describe('transformSource', () => {
   const happy = asset({ id: 'v4/bot_3:happy', kind: 'bot', catalog: 'bot_3', reference: '@v4/bot_3', file: 'v4_bot_3_happy.png', ingest: as('bot:3:happy') })
   const oldBot = asset({ id: 'bot_3', kind: 'bot', reference: 'f01_candidate_1.png', ingest: as('bot:3') })
   const oldHappy = asset({ id: 'bot_3:happy', kind: 'bot', reference: '@bot_3', ingest: as('bot:3:happy') })
-  const f02 = asset({ id: 'f02', kind: 'base', reference: 'f01_candidate_1.png', ingest: as('base:f02') })
+  const bodyM = asset({ id: 'body_m', kind: 'body', wear: 'm', catalog: 'm', reference: '@body_f', file: 'body_m.png', ingest: as('body:m') })
   const hair = asset({ id: 'item_hair_f_bob01', kind: 'hair', reference: '@body_f', ingest: as('hair:f_bob01') })
   const face = asset({ id: 'body_f:sad', kind: 'bodyExpression', reference: '@body_f', ingest: as('face:f:sad') })
-  const registry = registryOf([body, bot, happy, oldBot, oldHappy, f02, hair, face])
+  const registry = registryOf([body, bot, happy, oldBot, oldHappy, bodyM, hair, face])
 
   it('follows a v4 bot back to the body it was drawn on: @v4/bot_3 → @body_f → f', () => {
     expect(transformSource(happy, registry)).toBe('f')
     expect(transformSource(bot, registry)).toBe('f')
   })
 
-  it('cuts a body on f01, the base its reference picture is', () => {
-    expect(transformSource(body, registry)).toBe('f01')
+  it('leaves a body drawn on F01’s canvas to the pipeline (its own stored transform, else body f’s), and cuts one drawn from a body on that body', () => {
+    // Plan 19 D1: `f01_candidate_1.png` is nobody's picture any more — no base is left to read a transform from.
+    expect(transformSource(body, registry)).toBeNull()
+    expect(transformSource(bodyM, registry)).toBe('f')
   })
 
-  it('keeps Plan 12: a bot and a new base drawn from f01 take f01, and a hairstyle or face takes none (the body is its owner)', () => {
-    expect(transformSource(oldBot, registry)).toBe('f01')
-    expect(transformSource(oldHappy, registry)).toBe('f01')
-    expect(transformSource(f02, registry)).toBe('f01')
+  it('cuts every bot on body f, Plan 12’s too, and a hairstyle or face on none (the body is its owner)', () => {
+    expect(BOT_TRANSFORM_FROM).toBe('f')
+    expect(transformSource(oldBot, registry)).toBe('f')
+    expect(transformSource(oldHappy, registry)).toBe('f')
     expect(transformSource(hair, registry)).toBeNull()
     expect(transformSource(face, registry)).toBeNull()
   })
@@ -656,9 +665,10 @@ describe('the committed registry', () => {
         if (other) expect(V4_IDS, `${id} → ${entry.reference}`).toContain(other.id)
         else expect(file, id).toBe('f01_candidate_1.png')
       }
-      // Each v4 bot, the happy ones too, is cut on body f's transform; each body on f01's.
+      // Each v4 bot, the happy ones too, is cut on body f's transform; each body on its own stored one (Plan 19 D1:
+      // F01's picture names no base any more, so the registry hands the pipeline no source for a body).
       for (const n of V4_BOTS) for (const id of [`v4/bot_${n}`, `v4/bot_${n}:happy`]) expect(transformSource(registry.assets.find((entry: Asset) => entry.id === id), registry)).toBe('f')
-      for (const g of V4_GENDERS) expect(transformSource(registry.assets.find((entry: Asset) => entry.id === `body_${g}`), registry)).toBe('f01')
+      for (const g of V4_GENDERS) expect(transformSource(registry.assets.find((entry: Asset) => entry.id === `body_${g}`), registry)).toBeNull()
       // Drain the queue: every round's ready assets come out ok, until nothing is ready.
       const handed: string[] = []
       for (let round = 0; round < 10; round++) {

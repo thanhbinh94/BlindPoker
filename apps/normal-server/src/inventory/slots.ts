@@ -26,9 +26,10 @@
  * third colour item, `skinColor`. `hairStyle` is required of a v4 figure but is **not** a
  * `REQUIRED_SLOTS` entry (ruling 3): that list means "exactly one `isDefault` item", while every
  * hairstyle a player starts with is `free` and the default depends on the gender (`DEFAULT_HAIR`).
- * So it is validated on its own, as `HAIR_SLOT`. The HTTP wire speaks v4 since A5: nothing the server
- * runs reads a base any more. `BaseId` and its helpers below serve only the unused `bases.ts`, and go
- * with it in D1.
+ * So it is validated on its own, as `HAIR_SLOT`. The HTTP wire speaks v4 since A5, and the switch-over
+ * (D1) deleted the old base registry (`bases.ts`, `data/avatar-bases.json`) and the `BaseId` vocabulary
+ * that served it: an old account's base is history, read once in `avatar-migrate.ts` (`V3_BASES`), and a
+ * v4 configuration that still carries `base` is refused (`INVALID_BASE`, `avatar.ts`).
  */
 
 /** Which body a figure is drawn on (spec §4.3), and which cut of a gendered outfit it wears. */
@@ -82,37 +83,12 @@ export const DRAWN_SLOTS: readonly ItemSlot[] = ['hairStyle', 'head', 'face', 'o
  */
 export const DAILY_DRAW_SLOTS: readonly ItemSlot[] = ['head', 'face', 'aura', 'frame', 'hairColor', 'eyeColor']
 
-/**
- * Which fixed figure a chibi is drawn on. Not an item: a player picks it, they do not own it.
- *
- * 2026-09-17: an **open** id, not a union of the two that happen to exist. More bases are coming — they
- * share F01's body and pose and differ in head, hair and skin tone — and the list of them is data:
- * `data/avatar-bases.json`, which `loadBases` reads and validates against the asset manifest. A union
- * here would have made every new base a code change in three packages, so the type is `string` and the
- * *registry* is what says whether a given string is a base (`isBaseId`, below, takes one).
- */
-export type BaseId = string
-
-/** The ids a loaded registry defines — `new Set(Object.keys(bases))`, `BaseRegistry`'s own key set. */
-export type BaseIds = ReadonlySet<BaseId>
-
-/** The base a config falls back to when nothing better is known; the registry must define it. */
-export const DEFAULT_BASE: BaseId = 'f01'
-
-/** How a base id may be spelled at all, before any registry is consulted: D01 §9.1's `base_<id>_L30`. */
-export const BASE_ID_PATTERN = /^[a-z][a-z0-9]*$/
-
 export function isItemSlot(value: string): value is ItemSlot {
   return (SLOTS as readonly string[]).includes(value)
 }
 
 export function isGender(value: unknown): value is Gender {
   return typeof value === 'string' && (GENDERS as readonly string[]).includes(value)
-}
-
-/** Whether `value` is a base **this server has**: a string the loaded registry defines. */
-export function isBaseId(value: unknown, bases: BaseIds): value is BaseId {
-  return typeof value === 'string' && bases.has(value)
 }
 
 export function isDrawnSlot(slot: ItemSlot): boolean {

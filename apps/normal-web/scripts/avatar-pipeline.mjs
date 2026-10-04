@@ -8,71 +8,65 @@
  *       in the hand-over from stand-ins to art. Every item also gets its inventory icon: a stand-in's is
  *       redrawn, a real item's is kept (or, if it has none yet, cut from its layer on disk). Idempotent.
  *
- *   node scripts/avatar-pipeline.mjs ingest <png> --as base:f01 | expr:f01:happy | item:head:tophat01
+ *   node scripts/avatar-pipeline.mjs ingest <png> --as body:f | face:f:happy | hair:f_bob01 | item:head:tophat01
  *                                              | item:aura:fire01 | item:frame:gold | bot:3 | bot:3:happy
- *       One generated picture in, its layers at @1x and @2x out, plus their manifest entries. A base is a
- *       flat AI picture and writes four: L30 (the figure), face_neutral L50 (its head region, less the torso
- *       column under y 236), L60 (a strand of hair above the head top, if the picture has one, else empty) and
- *       an empty L20, the empty ones marked `empty: true`. The strand's rows go to L60 only. An expression
- *       keeps only the face region (as face_neutral).
+ *       One generated picture in, its layers at @1x and @2x out, plus their manifest entries. A v4 body (`body:<g>`,
+ *       Plan 19) is the whole figure as body_<g>_L30 and its head region (less the torso column under y 236) as
+ *       body_<g>_face_neutral_L50, masked (skin; eyes on the face), with `bodies.<g>.transform` stored: on
+ *       `--transform-from`'s transform, or the body's own when it is ingested again, or else body f's — f01's verbatim,
+ *       the canvas both bodies are drawn on (in a directory with no body yet, on its own box). `--dry-run` adds C12
+ *       for a cut into a temporary copy. `face:<g>:<expr>` cuts one of the body's faces on its transform.
+ *       `hair:<code>` cuts a hairstyle drawn on its gender's bald body: the difference against the registered body,
+ *       less the face the picture redrew (the hair face rule), split into item_hair_<code>_L60 (front, with `split`)
+ *       and _L20 (back, `empty` when blank), both masked; a hand-drawn assets/avatar-src/masks/item_hair_<code>_frontmask.png
+ *       splits it instead of the rule. An item is cut on the body `--base` names and diffed against it, and every
+ *       item and bot layer records `cutOn`. A hairstyle and an item both leave out the body's own skin the picture
+ *       redrew (the body-skin rule), logged as `body skin kept out: N px`.
  *       An aura or a frame is a square picture, the effect in a ring: placed by its ink box — an aura fitted to
  *       400 and centred on (192, 240), running off the frame's sides; a frame fitted to the 260 ring round the
  *       crop centre (192, 144), and refused unless its middle is empty — and written with its icon.
- *       A bot (`bot:<n>`, n 0–7) is cut like a base on f01's stored transform: bot_<n>_L30 (the whole figure)
- *       and bot_<n>_face_neutral_L50, with the other five faces written as copies of it (`copyOf`); a face
- *       already real is kept. `bot:<n>:happy` cuts only that face from its own picture.
- *
- *   node scripts/avatar-pipeline.mjs ingest <png> --as body:f | face:f:happy | hair:f_bob01      (Plan 19, v4)
- *       A v4 body (`body:<g>`) is cut like a bot, on f01's stored transform (or `--transform-from`'s, or the body's
- *       own when it is ingested again): body_<g>_L30 and body_<g>_face_neutral_L50, masked (skin; eyes on the face),
- *       and `bodies.<g>.transform` stored. `--dry-run` adds C12 for a cut into a temporary copy. `face:<g>:<expr>`
- *       cuts one of the body's faces on its transform. `hair:<code>` cuts a hairstyle drawn on its gender's bald
- *       body: the difference against the registered body, less the face the picture redrew (the hair face rule),
- *       split into item_hair_<code>_L60 (front, with `split`) and _L20 (back, `empty` when blank), both masked; a
- *       hand-drawn assets/avatar-src/masks/item_hair_<code>_frontmask.png splits it instead of the rule. An item
- *       cut with `--base f|m` is diffed against that body, and every item and bot layer records `cutOn`. A hairstyle
- *       and an item on a body both leave out the body's own skin the picture redrew (the body-skin rule), logged as
- *       `body skin kept out: N px`.
+ *       A bot (`bot:<n>`, n 0–7) is cut on body f's stored transform (or `--transform-from`'s): bot_<n>_L30 (the
+ *       whole figure) and bot_<n>_face_neutral_L50, with the other five faces written as copies of it (`copyOf`); a
+ *       face already real is kept. `bot:<n>:happy` cuts only that face from its own picture.
+ *       The flat bases' `base:<id>` and `expr:<id>:<expr>` are retired (Plan 19 D1) and refused.
  *       Options, for every target:
  *         --dry-run             measure the picture against D02 §8 and print a verdict; write nothing
- *         --base <id>           which base an item or expression belongs to (default f01), or the body
- *                               (f or m) an item is cut on
+ *         --base <f|m>          the body an item is cut on (default f)
  *         --variant <f|m>       cut this picture as the per-wear variant of an item that already exists,
  *                               `item_<slot>_<code>_<wear>_L<n>` — e.g. a male dealer01:
- *                                 --as item:outfit:dealer01 --base m01 --variant m
- *                               The wear must be the wear of `--base`, or the cut is refused; a body's is its
- *                               gender, so `--variant m` goes with `--base m`.
- *         --hair <code>         an item on a body: the hairstyle its picture was drawn over, so it is diffed
- *                               against the body wearing it (its L20 under, its L60 over) — a hat or glasses
- *         --anchor head         a body: place it by its eyes instead of f01's transform, onto HEAD_REFERENCE —
+ *                                 --as item:outfit:dealer01 --base m --variant m
+ *                               A body's wear is its gender, so `--variant m` goes with `--base m`; anything else is
+ *                               refused.
+ *         --hair <code>         an item: the hairstyle its picture was drawn over, so it is diffed against the
+ *                               body wearing it (its L20 under, its L60 over) — a hat or glasses
+ *         --anchor head         a body: place it by its eyes instead of its stored transform, onto HEAD_REFERENCE —
  *                               only on the user's word, when C12 fails on position or scale alone
  *         --recolour-to <hex>   a hairstyle: recolour both layers' hair to #rrggbb at each layer's own meanL and
  *                               record `recolouredTo` — only when `colours` shows it > 15 ΔE from its natural colour;
  *                               a later ingest of the hairstyle without the flag recolours it to that again
  *         --tolerance <n>       how wide the background key is (default 40)
  *         --white               the background is white rather than #00FF00; no despill
- *         --lock-scale <n>      force a scale instead of reading the base's stored one
- *         --transform-from <id> a new base drawn from base <id> (same body, same canvas) takes <id>'s transform;
- *                               a bot takes f01's unless this names another base, or a body (f or m) — a bot
- *                               redrawn on a v4 body; a body takes f01's unless this names another
+ *         --lock-scale <n>      force a scale instead of reading the body's stored one
+ *         --transform-from <g>  a bot or a body: cut it on body <g>'s stored transform (f or m) — a bot takes
+ *                               body f's without it, a body its own (or else body f's)
  *         --hides-hair-front    record D01 §4.3's hide rules on a head item
  *         --hides-hair-back
- *         --color-tol <n>       an item: how far (RGB distance) a pixel must be from every base pixel near it
+ *         --color-tol <n>       an item: how far (RGB distance) a pixel must be from every body pixel near it
  *                               to count as the item (default: DIFF_DEFAULTS in extract.mjs)
  *         --min-region <n>      an item: the smallest connected region kept, in @1x pixels
  *         --max-hole <n>        an item: the largest enclosed hole filled, in @1x pixels
  *         --tint-seed <x,y>     a tintable item: the point (1x frame coords) `masks`/tint-sheet later cuts
  *                               its colour region from; stored on the item's manifest entry. Without it, an
  *                               item ingested again keeps the seed its entry already had
- *       An item is registered on its base first (the offset is logged), cut down to only itself, and written
+ *       An item is registered on its body first (the offset is logged), cut down to only itself, and written
  *       with its inventory icon, item_<slot>_<code>_icon (96 × 96 at @1x, 192 × 192 at @2x). `ingest` masks
  *       whatever it just wrote that `masks` would (spec §4.1), so art ingested after this needs no separate
  *       `masks` run.
  *
  *   node scripts/avatar-pipeline.mjs masks [<name>...] [--tint-seed <x,y> --as item:<slot>:<code>]
  *       Cut hair, eye, tint and skin masks (spec §4.1; Plan 19 §5.5) for the named layers, or — with none
- *       named — every real base L30/L60, base face and tintable item, and every real v4 body (skin), body face
- *       (eyes, then skin clear of them; never hair — the head is bald) and hair layer (its ink). A hand-drawn
+ *       named — every tintable item, and every real v4 body (skin), body face (eyes, then skin clear of them;
+ *       never hair — the head is bald) and hair layer (its ink). A hand-drawn
  *       `assets/avatar-src/masks/<name>_<kind>mask.png` wins over the cut. `--tint-seed` (with `--as`) records
  *       a tint seed on an item already in the manifest before masking it.
  *
@@ -106,9 +100,9 @@
  *         remember items.json: head_beanie01, head_beanie_red01, … — same flags (bug 7)
  *
  *   node scripts/avatar-pipeline.mjs tint-sheet [--dir <layers>] [--out <png>]
- *       Compose docs/avatar-2d-tint-sheet.png (Plan 13 spec §4.2): every masked base in three hair × three
- *       eye colours, plus one card per `items.json` entry with `asset.tint` set — the eyeballed check for
- *       recolouring before C11 or the client ever draws one.
+ *       Compose docs/avatar-2d-tint-sheet.png (Plan 13 spec §4.2): each gender in its default hairstyle in three
+ *       hair × three eye colours, plus one card per `items.json` entry with `asset.tint` set, on body f in the bob —
+ *       the eyeballed check for recolouring before C11 or the client ever draws one.
  *
  * `placeholder`, `ingest`, `masks` and `hides` take `--out <dir>`; `check`, `colours`, `sheet` and `tint-sheet` read `--dir <dir>`. Pointing
  * either at a directory that is not `public/avatar/` also stops the server's copy of the manifest from being
@@ -198,14 +192,13 @@ function destinations(name) {
 }
 
 /**
- * `base:f01`, `expr:f01:happy`, `item:head:tophat01`, `item:aura:fire01`, `item:frame:gold`, `bot:3`, `bot:3:happy` —
- * and (Plan 19) `body:f`, `face:f:happy`, `hair:f_bob01`.
+ * `body:f`, `face:f:happy`, `hair:f_bob01` (Plan 19), `item:head:tophat01`, `item:aura:fire01`, `item:frame:gold`,
+ * `bot:3`, `bot:3:happy`. The flat bases' `base:<id>` and `expr:<id>:<expr>` are retired (D1), and said so.
  */
 function parseTarget(spec) {
-  if (!spec) die('ingest needs --as body:f | face:f:happy | hair:f_bob01 | item:head:tophat01 | bot:3 | bot:3:happy | base:f01 | expr:f01:happy')
+  if (!spec) die('ingest needs --as body:f | face:f:happy | hair:f_bob01 | item:head:tophat01 | bot:3 | bot:3:happy')
   const [kind, first, second] = spec.split(':')
-  if (kind === 'base' && first) return { kind: 'base', base: first }
-  if (kind === 'expr' && first && second) return { kind: 'expr', base: first, expr: second }
+  if (kind === 'base' || kind === 'expr') die(`--as ${spec}: the flat bases are retired (Plan 19 D1) — a figure is a body (body:<g>) and its faces (face:<g>:<expr>)`)
   if (kind === 'body' && first && second === undefined) return { kind: 'body', gender: first }
   if (kind === 'face' && first && second) return { kind: 'bodyFace', gender: first, expr: second }
   if (kind === 'hair' && first && second === undefined) return { kind: 'hair', code: first }
@@ -258,7 +251,7 @@ try {
       target: parseTarget(option('as')),
       dir,
       targets,
-      baseId: option('base', 'f01'),
+      baseId: option('base', 'f'),
       variant: option('variant'),
       tolerance: Number(option('tolerance', '40')),
       white: flag('white'),

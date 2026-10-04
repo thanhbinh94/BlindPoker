@@ -84,24 +84,17 @@ export const HEAD_LIMIT_Y = 260
 /**
  * The bottom of the *head region*: just below the chin, above the tank-top straps of the first real F01
  * picture (chin y ≈ 240, hair ends y ≈ 251, straps from y ≈ 256). The head region is the portrait crop
- * *and* `y < FACE_LIMIT_Y`, and it is what a base's face layer (50) holds — see `ingest` in `extract.mjs`.
- * 2026-09-15: added when the first AI base arrived as one flat picture rather than separate layers.
+ * *and* `y < FACE_LIMIT_Y`, and it is what a face layer (50) holds — a body's or a bot's, see `ingest` in
+ * `extract.mjs`. 2026-09-15: added when the first AI base arrived as one flat picture rather than separate layers.
  */
 export const FACE_LIMIT_Y = 250
 
 /**
- * The part of the head region a base's face layer (50) gives up (2026-09-17, fix round 1): the torso column
- * x ∈ [150, 234] from y 236 down. Layer 50 sits above the outfit, so whatever of the base it holds there —
+ * The part of the head region a face layer (50) gives up (2026-09-17, fix round 1): the torso column
+ * x ∈ [150, 234] from y 236 down. Layer 50 sits above the outfit, so whatever of the figure it holds there —
  * the tank top's straps beside a collar — shows on top of every outfit; the hair tips either side of it stay.
  */
 export const TORSO_COLUMN = { x0: 150, x1: 234, y0: 236 }
-
-/**
- * How far below the head top `measure` finds (frame units) an AI base's strand of hair — its ahoge — is cut
- * off into layer 60 (2026-09-17, fix round 1). The strand's root runs down into the hair a few pixels; cut
- * exactly at the head top it would leave a stub standing beside a hat.
- */
-export const STRAND_MARGIN = 6
 
 /**
  * Where a base's own skin colour is measured (2026-09-17, phase 2): the middle of the face, from below
@@ -120,11 +113,12 @@ export const SKIN_TOLERANCE = 24
 /**
  * C12 "đầu không xê dịch" (Plan 19, spec §5.1, rulings 1–2): where a v4 body's head has to sit, so the hats, glasses,
  * auras, frames and portrait crop cut on F01 still land on it. F01's and M01's hair is baked into their L30, so the
- * skull cannot be measured; the eyes and the chin can. These are F01's, from `headMetrics` on the committed
+ * skull cannot be measured; the eyes and the chin can. These are F01's, from `headMetrics` on the then-committed
  * `base_f01_L30@1x` and `base_f01_face_neutral_L50_eyemask@2x` — eye midpoint (190.91, 193.99), eye span 60.61,
  * chin 243 — rounded to a tenth. Both bodies are held to them (ruling 2): M01's head, measured the same way at
  * (191.46, 198.59), 60.78 and 239, sits 4.6 units lower than F01's, past the tolerance, and every shared item was
- * cut on F01. Recorded for information only.
+ * cut on F01. Recorded for information only. The switch-over (D1) deleted those files, so the numbers stand as
+ * constants now, and a test pins them as such.
  */
 export const HEAD_REFERENCE = { eyeMidX: 190.9, eyeMidY: 194.0, eyeSpan: 60.6, chinY: 243 }
 /** How far each of `HEAD_REFERENCE`'s eye numbers (midpoint x and y, span) may drift: 2 % of the 208 crop, the spec's "không quá 2%". */
@@ -214,18 +208,6 @@ export async function placeByInk(pic, { size, cx, cy }, density) {
  * its own file code written across it, so a screen full of them reads as "the art is not here yet" and
  * still exercises every layer, hide rule and crop the renderer has.
  */
-/**
- * The two bases that existed when the stand-ins were drawn keep their exact tones, so re-running
- * `placeholder` never rewrites a committed file. Any base added to `BASES` later — which is all it takes
- * to get a full set of stand-ins for it (§4, R5) — is given its own skin, underwear and hair by the same
- * stable hue jitter the items use, so three bases are three figures and not one drawn three times.
- */
-const SKIN = { f01: '#dcc4a6', m01: '#c9ac86' }
-const UNDERWEAR = { f01: '#9aa3ad', m01: '#8f99a4' }
-const HAIR = { f01: '#5b4a6b', m01: '#6b5540' }
-const skinOf = (base) => SKIN[base] ?? hsl(10 + (jitter(base) % 40), 0.42, 0.40 + ((jitter(base) >> 3) % 5) * 0.11)
-const underwearOf = (base) => UNDERWEAR[base] ?? hsl(200 + (jitter(base) % 40), 0.12, 0.64)
-const hairOf = (base) => HAIR[base] ?? hsl(jitter(`hair ${base}`), 0.26, 0.34)
 const SLOT_HUE = { head: 14, face: 205, outfit: 232, aura: 172, frame: 45 }
 const BOT_HUE = 190
 
@@ -273,7 +255,7 @@ function plate(x, y, w, h, text, ink = '#eef2f7') {
     ` font-family="DejaVu Sans, Verdana, Arial, sans-serif" font-size="${size.toFixed(2)}" fill="${ink}">${text}</text>`
 }
 
-/** The standing figure the bases and the bots share: head, neck, torso, arms, hands, legs, feet. */
+/** A bot's standing stand-in figure (the flat bases drew with it too, until D1): head, neck, torso, arms, hands, legs, feet. */
 function figure(skin, cloth) {
   return `<ellipse cx="192" cy="146.5" rx="80" ry="74.5" fill="${skin}"/>` +
     `<rect x="177" y="216" width="30" height="20" fill="${cloth}"/>` +
@@ -350,7 +332,7 @@ const PANEL_PLATE = { x: 68, y: 288, w: 110, h: 24, turn: 'rotate(-90 123 300)' 
  * The relaxed pose of spec §5.2, as a stand-in: `figure()`'s shapes with the weight on the right leg, which
  * stays straight while the left one rests a little out; both arms angled away from the body; five short finger
  * strokes on each hand, the thumb toward the body. The head is bald — hair is an item now. `figure()` itself is
- * untouched, because the old bases and the bots still draw with it.
+ * untouched, because the bots' stand-ins still draw with it.
  */
 export function relaxedFigure(skin, cloth) {
   const arm = (x, pivot, turn, inward) =>
@@ -409,7 +391,7 @@ const drawPlate = ({ x, y, w, h, text, turn }) => {
   return turn ? `<g transform="${turn}">${drawn}</g>` : drawn
 }
 
-/** The face of a v4 body: the oval and one expression, as a base's stand-in face is drawn. */
+/** The face of a v4 body: the oval and one expression. */
 const faceOval = (skin) => `<ellipse cx="192" cy="162" rx="56" ry="44" fill="${skin}"/>`
 
 /** The body of the SVG for one stage-1 entry, in frame units. */
@@ -417,24 +399,6 @@ function shapesFor(entry) {
   const hue = SLOT_HUE[entry.slot] ?? BOT_HUE
   const tint = hsl(hue + (jitter(entry.name) % 48) - 24, 0.44, 0.54)
   switch (entry.kind) {
-    case 'base': {
-      const skin = skinOf(entry.base)
-      const cloth = underwearOf(entry.base)
-      const hair = hairOf(entry.base)
-      if (entry.layer === LAYERS.hairBack) {
-        return `<ellipse cx="192" cy="150" rx="94" ry="84" fill="${hair}"/>${plate(132, 190, 120, 24, `${entry.base} hair back`)}`
-      }
-      if (entry.layer === LAYERS.hairFront) {
-        // A fringe, not a helmet: layer 60 sits over the face, so it has to stop above the eye line at
-        // ~62 % of the head or every expression underneath it is invisible.
-        return `<ellipse cx="192" cy="96" rx="82" ry="38" fill="${hair}"/>${plate(140, 80, 104, 22, `${entry.base} bangs`)}`
-      }
-      return `${figure(skin, cloth)}${plate(150, 244, 84, 24, entry.base)}`
-    }
-    case 'baseFace':
-      return `<ellipse cx="192" cy="162" rx="56" ry="44" fill="${skinOf(entry.base)}"/>` +
-        `<g transform="translate(0 -9)">${eyesAndMouth(entry.expr, '#33272b')}</g>` +
-        plate(150, 188, 84, 16, `${entry.base} ${entry.expr}`)
     case 'bot':
       return `${figure(hsl(BOT_HUE, 0.18, 0.68), hsl(BOT_HUE + entry.bot * 24, 0.34, 0.46))}${plate(150, 244, 84, 24, `bot ${entry.bot}`)}`
     case 'botFace':

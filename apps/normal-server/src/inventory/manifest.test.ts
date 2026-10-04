@@ -24,7 +24,7 @@ const VALID = {
   frame: { w: 384, h: 448 },
   crop: { x: 88, y: 40, size: 208 },
   files: {
-    base_f01_L30: { layer: 30, w: 384, h: 448, bytes2x: 15716, placeholder: true },
+    body_f_L30: { layer: 30, w: 384, h: 448, bytes2x: 15716, placeholder: true },
     item_head_tophat01_L80: { layer: 80, w: 384, h: 448, bytes2x: 4000, real: true },
   },
 }
@@ -36,7 +36,7 @@ describe('loadAvatarManifest', () => {
     expect(manifest.frame).toEqual({ w: 384, h: 448 })
     expect(manifest.crop).toEqual({ x: 88, y: 40, size: 208 })
     expect(Object.keys(manifest.files).length).toBeGreaterThan(0)
-    expect(manifest.files['base_f01_L30']).toMatchObject({ layer: 30 })
+    expect(manifest.files['body_f_L30']).toMatchObject({ layer: 30 })
   })
 
   it('parses a well-formed fixture, including the optional flags', () => {
@@ -83,8 +83,8 @@ describe('loadAvatarManifest', () => {
       ...VALID,
       files: {
         ...VALID.files,
-        base_f01_L30: {
-          ...VALID.files.base_f01_L30,
+        body_f_L30: {
+          ...VALID.files.body_f_L30,
           masks: {
             hair: { bytes2x: 6532, meanL: 0.3416 },
             eyes: { bytes2x: 4547, meanL: 0.4086, empty: true },
@@ -94,7 +94,7 @@ describe('loadAvatarManifest', () => {
       },
     }
     const manifest = loadAvatarManifest(fixture(withMasks))
-    expect(manifest.files['base_f01_L30']?.masks).toEqual({
+    expect(manifest.files['body_f_L30']?.masks).toEqual({
       hair: { bytes2x: 6532, meanL: 0.3416 },
       eyes: { bytes2x: 4547, meanL: 0.4086, empty: true },
       tint: { bytes2x: 4516, meanL: 0.9546, override: true },
@@ -125,16 +125,16 @@ describe('loadAvatarManifest', () => {
   })
 
   it('refuses a mask whose meanL is out of the 0–1 range, or a malformed mask entry', () => {
-    const badMeanL = { ...VALID, files: { ...VALID.files, base_f01_L30: { ...VALID.files.base_f01_L30, masks: { hair: { bytes2x: 1, meanL: 1.2 } } } } }
-    expect(() => loadAvatarManifest(fixture(badMeanL))).toThrow(/files\.base_f01_L30\.masks\.hair\.meanL must be a number between 0 and 1/)
+    const badMeanL = { ...VALID, files: { ...VALID.files, body_f_L30: { ...VALID.files.body_f_L30, masks: { hair: { bytes2x: 1, meanL: 1.2 } } } } }
+    expect(() => loadAvatarManifest(fixture(badMeanL))).toThrow(/files\.body_f_L30\.masks\.hair\.meanL must be a number between 0 and 1/)
 
-    const negativeMeanL = { ...VALID, files: { ...VALID.files, base_f01_L30: { ...VALID.files.base_f01_L30, masks: { hair: { bytes2x: 1, meanL: -0.1 } } } } }
-    expect(() => loadAvatarManifest(fixture(negativeMeanL))).toThrow(/files\.base_f01_L30\.masks\.hair\.meanL must be a number between 0 and 1/)
+    const negativeMeanL = { ...VALID, files: { ...VALID.files, body_f_L30: { ...VALID.files.body_f_L30, masks: { hair: { bytes2x: 1, meanL: -0.1 } } } } }
+    expect(() => loadAvatarManifest(fixture(negativeMeanL))).toThrow(/files\.body_f_L30\.masks\.hair\.meanL must be a number between 0 and 1/)
 
-    const noBytes = { ...VALID, files: { ...VALID.files, base_f01_L30: { ...VALID.files.base_f01_L30, masks: { hair: { meanL: 0.5 } } } } }
-    expect(() => loadAvatarManifest(fixture(noBytes))).toThrow(/files\.base_f01_L30\.masks\.hair\.bytes2x must be a positive number/)
+    const noBytes = { ...VALID, files: { ...VALID.files, body_f_L30: { ...VALID.files.body_f_L30, masks: { hair: { meanL: 0.5 } } } } }
+    expect(() => loadAvatarManifest(fixture(noBytes))).toThrow(/files\.body_f_L30\.masks\.hair\.bytes2x must be a positive number/)
 
-    const badEmpty = { ...VALID, files: { ...VALID.files, base_f01_L30: { ...VALID.files.base_f01_L30, masks: { hair: { bytes2x: 1, meanL: 0.5, empty: 'yes' } } } } }
-    expect(() => loadAvatarManifest(fixture(badEmpty))).toThrow(/files\.base_f01_L30\.masks\.hair\.empty must be a boolean/)
+    const badEmpty = { ...VALID, files: { ...VALID.files, body_f_L30: { ...VALID.files.body_f_L30, masks: { hair: { bytes2x: 1, meanL: 0.5, empty: 'yes' } } } } }
+    expect(() => loadAvatarManifest(fixture(badEmpty))).toThrow(/files\.body_f_L30\.masks\.hair\.empty must be a boolean/)
   })
 })

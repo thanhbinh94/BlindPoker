@@ -20,8 +20,8 @@
  */
 import { existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { FACE_LIMIT_Y, FRAME, LAYERS, SKIN_WINDOW, baseSkinColour } from './frame.mjs'
-import { PACKAGE_ROOT, hairItemId, itemFile, parseName, wearOf, writeIconTintMask } from './manifest.mjs'
+import { FACE_LIMIT_Y, FRAME, SKIN_WINDOW, baseSkinColour } from './frame.mjs'
+import { PACKAGE_ROOT, hairItemId, parseName, writeIconTintMask } from './manifest.mjs'
 import { ALPHA_INK, ALPHA_SOLID, readPicture, resizePicture, writePicture } from './png.mjs'
 import { meanLightness } from '../../../../packages/ui-kit/src/avatar2d/recolour.mjs'
 
@@ -364,18 +364,18 @@ export function eyeEllipses(pic) {
  * a bluish-grey shine band across the hair stayed unmasked because a fixed chroma ceiling can't tell "this
  * hair's own shine" from "a different colour" once the hair itself is anything but neutral (f02, m02).
  *
- * `neverVisible`, when given, is the intersection of every outfit layer the base can wear (`writeMasks`) —
- * a pixel under permanent clothing is never candidate hair, whatever colour it happens to be.
+ * Plan 19 D1: no layer the pipeline cuts needs this any more — a v4 hair layer's hair is its ink, and a body is bald —
+ * so `writeMasks` never calls it. Its `neverVisible` option (every outfit a flat base could wear) went with the bases;
+ * the function stays for the hair a flat picture carries, which `eyeMask` is handed and its tests build with it.
  */
-export function hairMask(pic, { neverVisible = null } = {}) {
+export function hairMask(pic) {
   const { width, height, scale, LAB, labAt, hairPal, skinOnly, hairWindow } = analysePicture(pic)
   const { mask: eyeEllipseMask } = eyeEllipses(pic)
-  const never = neverVisible ?? new Uint8Array(width * height)
   const hairChroma = Math.max(...hairPal.map((c) => Math.hypot(c[1], c[2]))) + 12
   const HAIR_T = 14
   const cand = new Uint8Array(width * height)
   for (let i = 0; i < width * height; i++) {
-    if (!opaqueAt(pic, i) || never[i]) continue
+    if (!opaqueAt(pic, i)) continue
     const p = labAt(i)
     if (Math.hypot(p[1], p[2]) > hairChroma) continue
     const dh = Math.min(...hairPal.map((c) => labDist(c, p)))
@@ -405,7 +405,7 @@ export function hairMask(pic, { neverVisible = null } = {}) {
   const nearSkin = dilate(skinMask, width, height, Math.round(3 * scale))
   const grownEdge = dilate(hair, width, height, Math.round(2 * scale))
   for (let i = 0; i < width * height; i++) {
-    if (grownEdge[i] && !hair[i] && opaqueAt(pic, i) && LAB[i * 3] < 28 && !nearSkin[i] && !never[i]) hair[i] = 1
+    if (grownEdge[i] && !hair[i] && opaqueAt(pic, i) && LAB[i * 3] < 28 && !nearSkin[i]) hair[i] = 1
   }
 
   // light pockets: a small enclosed pocket of highlight (not skin) joins the hair round it. Two shapes of
@@ -889,8 +889,9 @@ export async function describeColours({ dir, manifest, names, items = [], log = 
 // ──────────────────────────────────────────────────────────────── writing ──
 
 /**
- * Every manifest name `writeMasks` can cut a mask for: real base L30/L60, every real base face, every tintable item —
- * and (Plan 19) every real v4 body, body face and hair layer. A stand-in's masks are drawn with it, never cut.
+ * Every manifest name `writeMasks` can cut a mask for: every tintable item and (Plan 19) every real v4 body, body face
+ * and hair layer that is not marked empty. A stand-in's masks are drawn with it, never cut. (The flat bases' L30, L60
+ * and faces were targets too, until the switch-over retired them, D1.)
  */
 export function maskTargets(manifest) {
   const names = []
@@ -898,49 +899,13 @@ export function maskTargets(manifest) {
     if (!entry?.real) continue
     const parsed = parseName(name)
     if (!parsed) continue
-    if (parsed.kind === 'base' && (parsed.layer === LAYERS.body || parsed.layer === LAYERS.hairFront)) {
-      if (!entry.empty) names.push(name)
-    } else if (parsed.kind === 'baseFace') {
-      names.push(name)
-    } else if (parsed.kind === 'item' && entry.tintSeed) {
+    if (parsed.kind === 'item' && entry.tintSeed) {
       names.push(name)
     } else if (parsed.kind === 'body' || parsed.kind === 'bodyFace' || parsed.kind === 'hair') {
       if (!entry.empty) names.push(name)
     }
   }
   return names
-}
-
-/** The part of a base that no outfit ever lets show: the intersection of alpha over every outfit it can wear. */
-async function computeNeverVisible(dir, manifest, baseId) {
-  const wear = wearOf(baseId)
-  const codes = new Set()
-  for (const name of Object.keys(manifest.files ?? {})) {
-    const parsed = parseName(name)
-    if (parsed?.kind === 'item' && parsed.slot === 'outfit' && parsed.layer === LAYERS.outfit && !parsed.wear) codes.add(parsed.code)
-  }
-  let never = null
-  for (const code of codes) {
-    let fileName = itemFile('outfit', code, LAYERS.outfit)
-    if (wear === 'm') {
-      const variant = itemFile('outfit', code, LAYERS.outfit, 'm')
-      const variantEntry = manifest.files[variant]
-      if (variantEntry?.real && !variantEntry.empty) fileName = variant
-    }
-    const entry = manifest.files[fileName]
-    if (!entry?.real || entry.empty) continue
-    const file = join(dir, `${fileName}@2x.png`)
-    if (!existsSync(file)) continue
-    const pic = await readPicture(file)
-    const mask = new Uint8Array(pic.width * pic.height)
-    for (let i = 0; i < mask.length; i++) mask[i] = pic.data[i * 4 + 3] > 200 ? 1 : 0
-    if (never === null) {
-      never = mask
-    } else {
-      for (let i = 0; i < never.length; i++) never[i] = never[i] && mask[i] ? 1 : 0
-    }
-  }
-  return never
 }
 
 /** Whether a picture's own alpha channel carries real coverage, as opposed to `ensureAlpha`'s all-255 filler. */
@@ -1024,7 +989,7 @@ async function writeOneMask({ dir, name, kind, computed, layer2x, entry, manifes
   }
 }
 
-/** The ink of a layer as a mask: what a base L60's hair is, and (Plan 19) a hair layer's. */
+/** The ink of a layer as a mask: a hair layer's hair (Plan 19) — the layer *is* the hair. */
 function inkMask(layer2x) {
   const ink = new Uint8Array(layer2x.width * layer2x.height)
   for (let i = 0; i < ink.length; i++) ink[i] = layer2x.data[i * 4 + 3] > ALPHA_INK ? 255 : 0
@@ -1050,19 +1015,7 @@ export async function writeMasks({ dir, manifest, names, overridesDir = MASK_OVE
     const layer2x = await readPicture(join(dir, `${name}@2x.png`))
     const shut = parsed.expr === 'closed' || parsed.expr === 'sleep'
 
-    if (parsed.kind === 'base' && parsed.layer === LAYERS.body) {
-      const neverVisible = await computeNeverVisible(dir, manifest, parsed.base)
-      const hair = hairMask(layer2x, { neverVisible })
-      await writeOneMask({ dir, name, kind: 'hair', computed: hair, layer2x, entry, manifest, overridesDir, log })
-    } else if (parsed.kind === 'base' && parsed.layer === LAYERS.hairFront) {
-      await writeOneMask({ dir, name, kind: 'hair', computed: inkMask(layer2x), layer2x, entry, manifest, overridesDir, log })
-    } else if (parsed.kind === 'baseFace') {
-      const hair = hairMask(layer2x, { neverVisible: null })
-      const computedEyes = eyeMask(layer2x, hair) // mutates hair in place regardless of expression
-      const eyes = shut ? new Uint8Array(layer2x.width * layer2x.height) : computedEyes
-      await writeOneMask({ dir, name, kind: 'hair', computed: hair, layer2x, entry, manifest, overridesDir, log })
-      await writeOneMask({ dir, name, kind: 'eyes', computed: eyes, layer2x, entry, manifest, overridesDir, log })
-    } else if (parsed.kind === 'item' && entry.tintSeed) {
+    if (parsed.kind === 'item' && entry.tintSeed) {
       const tint = tintMask(layer2x, entry.tintSeed)
       await writeOneMask({ dir, name, kind: 'tint', computed: tint, layer2x, entry, manifest, overridesDir, log })
     } else if (parsed.kind === 'body') {

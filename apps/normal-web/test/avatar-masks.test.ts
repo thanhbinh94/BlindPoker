@@ -384,14 +384,14 @@ function blobsPerSide(mask: Uint8Array, width = W): [number, number] {
 describe('hairMask / eyeMask (synthetic base)', () => {
   it('cuts the hair cap and locks, not the face', async () => {
     const pic = await syntheticBase()
-    const hair = hairMask(pic, { neverVisible: null })
+    const hair = hairMask(pic)
     expect(coverage(hair, capPixels(pic))).toBeGreaterThan(0.9)
     expect(coverage(hair, skinPixels(pic))).toBeLessThan(0.02)
   })
 
   it('finds one iris per side and takes it out of the hair', async () => {
     const pic = await syntheticBase()
-    const hair = hairMask(pic, { neverVisible: null })
+    const hair = hairMask(pic)
     const eyes = eyeMask(pic, hair)
     expect(coverage(eyes, irisPixels(pic))).toBeGreaterThan(0.8)
     expect(blobsPerSide(eyes)).toEqual([1, 1])
@@ -400,7 +400,7 @@ describe('hairMask / eyeMask (synthetic base)', () => {
 
   it('answers an empty eye mask for closed eyes (lash lines only)', async () => {
     const pic = await syntheticBase({ closedEyes: true })
-    const hair = hairMask(pic, { neverVisible: null })
+    const hair = hairMask(pic)
     expect(sum(eyeMask(pic, hair))).toBe(0)
   })
 
@@ -411,7 +411,7 @@ describe('hairMask / eyeMask (synthetic base)', () => {
 
   it('keeps an iris the same colour as the hair in the eye mask, and out of the hair mask', async () => {
     const pic = await syntheticBase({ irisColour: HAIR })
-    const hair = hairMask(pic, { neverVisible: null })
+    const hair = hairMask(pic)
     const eyes = eyeMask(pic, hair)
     const ring = irisRingPixels(pic)
     expect(coverage(eyes, ring)).toBeGreaterThan(0.8)
@@ -420,7 +420,7 @@ describe('hairMask / eyeMask (synthetic base)', () => {
 
   it('keeps an iris the same colour as the skin, enclosed by the white of the eye, in the eye mask', async () => {
     const pic = await syntheticBase({ irisColour: SKIN })
-    const hair = hairMask(pic, { neverVisible: null })
+    const hair = hairMask(pic)
     const eyes = eyeMask(pic, hair)
     const ring = irisRingPixels(pic)
     expect(coverage(eyes, ring)).toBeGreaterThan(0.8)
@@ -433,7 +433,7 @@ describe('hairMask / eyeMask (synthetic base)', () => {
   // is thin borrows the fuller shape of the other eye, reflected into place.
   it('covers both irises when one eye shows white only on its outer side, paired with a normal eye', async () => {
     const pic = await syntheticBase({ outerWhiteOnly: 'L' })
-    const hair = hairMask(pic, { neverVisible: null })
+    const hair = hairMask(pic)
     const eyes = eyeMask(pic, hair)
     const [leftCentre, rightCentre] = EYE_CENTRES
     expect(coverage(eyes, irisRingPixels(pic, [leftCentre!]))).toBeGreaterThanOrEqual(0.8)
@@ -451,7 +451,7 @@ describe('hairMask / eyeMask (synthetic base)', () => {
     // centre line, so the leaked-in patch grows past the iris's own size — without the `hairlike` leak,
     // the largest-group trim then keeps the hair patch *instead of* the iris.
     const pic = await syntheticBase({ capFraction: 0.6 })
-    const hair = hairMask(pic, { neverVisible: null })
+    const hair = hairMask(pic)
     const eyes = eyeMask(pic, hair)
     expect(coverage(eyes, capPixels(pic))).toBe(0)
     expect(coverage(eyes, irisPixels(pic))).toBeGreaterThan(0.8)
@@ -459,7 +459,7 @@ describe('hairMask / eyeMask (synthetic base)', () => {
 
   it('drops a hair-coloured filament fully inside the padded ellipse, separate from the iris (largest-group trim)', async () => {
     const pic = await syntheticBase({ filament: 'L' })
-    const hair = hairMask(pic, { neverVisible: null })
+    const hair = hairMask(pic)
     const eyes = eyeMask(pic, hair)
     expect(coverage(eyes, filamentPixels(pic, 'L'))).toBe(0)
     expect(coverage(eyes, irisRingPixels(pic, [EYE_CENTRES[0]!]))).toBeGreaterThan(0.8)
@@ -474,7 +474,7 @@ describe('hairMask / eyeMask (synthetic base)', () => {
 
   it('keeps an eye white enclosed by hair-coloured lashes out of the hair mask', async () => {
     const pic = await syntheticBase({ lashRing: 'L' })
-    const hair = hairMask(pic, { neverVisible: null })
+    const hair = hairMask(pic)
     // < 2 %, not exactly 0: the same antialiasing tolerance the very first case in this file gives
     // `skinPixels` — a soft edge between the white and the ring round it, a pixel or two wide.
     expect(coverage(hair, eyeWhiteDiscPixels(pic, 'L'))).toBeLessThan(0.02)
@@ -482,7 +482,7 @@ describe('hairMask / eyeMask (synthetic base)', () => {
 
   it('puts a bluish-grey shine band (chroma ≈ 15) enclosed by bluish-black hair in the hair mask', async () => {
     const pic = await syntheticBase({ hairColour: HAIR_BLUE, shineBand: true })
-    const hair = hairMask(pic, { neverVisible: null })
+    const hair = hairMask(pic)
     expect(coverage(hair, shineBandPixels(pic))).toBeGreaterThan(0.9)
   })
 
@@ -490,7 +490,7 @@ describe('hairMask / eyeMask (synthetic base)', () => {
     // capFraction 0.6, the same heavy fringe the `hairlike` leak test uses: it genuinely reaches down
     // across the left eye's own padded ellipse, connected the whole way back to the cap.
     const pic = await syntheticBase({ capFraction: 0.6 })
-    const hair = hairMask(pic, { neverVisible: null })
+    const hair = hairMask(pic)
     const { mask: ellipseMask } = eyeEllipses(pic)
     const cap = capPixels(pic)
     let insideEllipse = 0
@@ -753,7 +753,7 @@ describe('skinMask, and eyes on a bald face (Plan 19 A1b, spec §5.5)', () => {
 
   it('measures a mask’s colour as its alpha-weighted mean, and an eye mask’s by its iris alone', async () => {
     const pic = await syntheticBase()
-    const hair = hairMask(pic, { neverVisible: null })
+    const hair = hairMask(pic)
     const away = (hex: string | null, from: string) => {
       expect(hex).toMatch(/^#[0-9a-f]{6}$/)
       const [r, g, b] = hexToRgb(hex!)
@@ -796,8 +796,8 @@ describe('writeMasks', () => {
   afterAll(() => rmSync(temp, { recursive: true, force: true }))
 
   it('lets a hand-drawn override win and marks it', async () => {
-    const name = 'base_f01_face_neutral_L50'
-    await writePicture(await syntheticBase(), join(dir, `${name}@2x.png`))
+    const name = 'body_f_face_neutral_L50'
+    await writePicture(await syntheticBase({ bald: true, skinColour: CREAM }), join(dir, `${name}@2x.png`))
     const manifest = { files: { [name]: { real: true } } } as Manifest
 
     const overridePic = { data: Buffer.alloc(W * H * 4), width: W, height: H }
@@ -821,22 +821,33 @@ describe('writeMasks', () => {
   })
 
   it('writes both densities and records meanL for every mask it writes', async () => {
+    const name = 'body_m_L30'
+    await writePicture((await syntheticBody()).pic, join(dir, `${name}@2x.png`))
+    const manifest = { files: { [name]: { real: true } } } as Manifest
+
+    await writeMasks({ dir, manifest, names: [name], overridesDir })
+
+    expect(existsSync(join(dir, `${name}_skinmask@1x.png`))).toBe(true)
+    expect(existsSync(join(dir, `${name}_skinmask@2x.png`))).toBe(true)
+    const at1x = await readPicture(join(dir, `${name}_skinmask@1x.png`))
+    const at2x = await readPicture(join(dir, `${name}_skinmask@2x.png`))
+    expect([at1x.width, at1x.height]).toEqual([384, 448])
+    expect([at2x.width, at2x.height]).toEqual([768, 896])
+    const skin = manifest.files[name]!.masks!.skin!
+    expect(skin.meanL).toBeGreaterThan(0)
+    expect(skin.meanL).toBeLessThan(1)
+    expect(skin.bytes2x).toBeGreaterThan(0)
+  })
+
+  it('cuts nothing for a retired flat base’s name: it is no name the pipeline reads (Plan 19 D1)', async () => {
     const name = 'base_f02_L30'
     await writePicture(await syntheticBase(), join(dir, `${name}@2x.png`))
     const manifest = { files: { [name]: { real: true } } } as Manifest
 
     await writeMasks({ dir, manifest, names: [name], overridesDir })
 
-    expect(existsSync(join(dir, `${name}_hairmask@1x.png`))).toBe(true)
-    expect(existsSync(join(dir, `${name}_hairmask@2x.png`))).toBe(true)
-    const at1x = await readPicture(join(dir, `${name}_hairmask@1x.png`))
-    const at2x = await readPicture(join(dir, `${name}_hairmask@2x.png`))
-    expect([at1x.width, at1x.height]).toEqual([384, 448])
-    expect([at2x.width, at2x.height]).toEqual([768, 896])
-    const hair = manifest.files[name]!.masks!.hair!
-    expect(hair.meanL).toBeGreaterThan(0)
-    expect(hair.meanL).toBeLessThan(1)
-    expect(hair.bytes2x).toBeGreaterThan(0)
+    expect(manifest.files[name]!.masks).toBeUndefined()
+    expect(existsSync(join(dir, `${name}_hairmask@2x.png`))).toBe(false)
   })
 
   // Plan 18 (No8a): a colour variant's icon is tinted the way its worn layer is, so a tint mask comes with an icon one.
@@ -886,25 +897,19 @@ describe('writeMasks', () => {
 })
 
 describe('maskTargets', () => {
-  it('picks real, non-empty base layers, every base face, and tintable items', () => {
+  it('picks tintable real items, and no retired flat base, its faces or its hair (Plan 19 D1)', () => {
     const manifest = {
       files: {
         base_f01_L30: { real: true, layer: 30 },
-        base_f01_L60: { real: true, layer: 60, empty: true },
         base_f01_face_neutral_L50: { real: true, layer: 50 },
-        base_f01_face_happy_L50: { real: true, layer: 50 },
         item_outfit_casual01_L40: { real: true, layer: 40 },
         item_outfit_dealer01_L40: { real: true, layer: 40, tintSeed: { x: 10, y: 10 } },
         item_head_tophat01_L80: { placeholder: true, layer: 80 },
       },
     }
     const targets = maskTargets(manifest)
-    expect(targets).toContain('base_f01_L30')
-    expect(targets).not.toContain('base_f01_L60') // empty
-    expect(targets).toContain('base_f01_face_neutral_L50')
-    expect(targets).toContain('base_f01_face_happy_L50')
+    expect(targets).toEqual(['item_outfit_dealer01_L40'])
     expect(targets).not.toContain('item_outfit_casual01_L40') // no tintSeed
-    expect(targets).toContain('item_outfit_dealer01_L40')
     expect(targets).not.toContain('item_head_tophat01_L80') // placeholder, not real
   })
 
@@ -915,6 +920,7 @@ describe('maskTargets', () => {
         body_f_face_happy_L50: { real: true, layer: 50 },
         item_hair_f_bob01_L20: { real: true, layer: 20 },
         item_hair_f_bob01_L60: { real: true, layer: 60 },
+        item_hair_m_neat01_L20: { real: true, layer: 20, empty: true },
         body_m_L30: { placeholder: true, layer: 30 },
         body_m_face_neutral_L50: { placeholder: true, layer: 50 },
         item_hair_m_spiky01_L60: { placeholder: true, layer: 60 },
@@ -951,96 +957,114 @@ describe('C11 (checks.mjs, spec §4.3)', () => {
     return { data, width: W, height: H }
   }
 
-  async function c11Of(manifest: Manifest, name: string) {
-    const [row] = await runChecks({ dir, manifest, names: [name] })
+  async function c11Of(manifest: Manifest, name: string, where = dir) {
+    const [row] = await runChecks({ dir: where, manifest, names: [name] })
     return row!.results.find((r) => r.id === 'C11')!
+  }
+  /**
+   * A directory of one case's own, under `dir`: the cases below all use the one real neutral face's name (Plan 19 D1 —
+   * the flat bases' `base_fc<n>_…` names were free to invent), so each writes its own copy.
+   */
+  function caseIn(name: string): string {
+    const sub = join(dir, name)
+    mkdirSync(sub, { recursive: true })
+    return sub
+  }
+  /** A real neutral body face — a bald cream head with open eyes — masked (eyes, then skin) in `where`. */
+  async function maskedNeutralFace(where: string): Promise<{ name: string; manifest: Manifest }> {
+    const name = 'body_f_face_neutral_L50'
+    await writePicture(await syntheticBase({ bald: true, skinColour: CREAM }), join(where, `${name}@2x.png`))
+    const manifest: Manifest = { files: { [name]: { real: true } } }
+    await writeMasks({ dir: where, manifest, names: [name], overridesDir })
+    return { name, manifest }
   }
 
   it('is ok when the masks are untouched', async () => {
-    const name = 'base_fc1_face_neutral_L50'
-    await writePicture(await syntheticBase(), join(dir, `${name}@2x.png`))
-    const manifest: Manifest = { files: { [name]: { real: true } } }
-    await writeMasks({ dir, manifest, names: [name], overridesDir })
-
-    const c11 = await c11Of(manifest, name)
-    expect(c11.ok).toBe(true)
+    const where = caseIn('fc1')
+    const { name, manifest } = await maskedNeutralFace(where)
+    const c11 = await c11Of(manifest, name, where)
+    expect(c11.ok, c11.detail).toBe(true)
   })
 
   it('fails when a mask covers a pixel the layer leaves transparent', async () => {
-    const name = 'base_fc2_face_neutral_L50'
-    await writePicture(await syntheticBase(), join(dir, `${name}@2x.png`))
-    const manifest: Manifest = { files: { [name]: { real: true } } }
-    await writeMasks({ dir, manifest, names: [name], overridesDir })
+    const where = caseIn('fc2')
+    const { name, manifest } = await maskedNeutralFace(where)
 
-    // (4, 4) is the canvas corner — nothing is drawn there in the synthetic base.
-    const maskFile = join(dir, `${name}_hairmask@2x.png`)
+    // (4, 4) is the canvas corner — nothing is drawn there in the synthetic face.
+    const maskFile = join(where, `${name}_skinmask@2x.png`)
     const mask = await readPicture(maskFile)
     const i = (4 * mask.width + 4) * 4
     mask.data[i] = 255; mask.data[i + 1] = 255; mask.data[i + 2] = 255; mask.data[i + 3] = 255
     await writePicture(mask, maskFile)
 
-    const c11 = await c11Of(manifest, name)
+    const c11 = await c11Of(manifest, name, where)
     expect(c11.ok).toBe(false)
     expect(c11.detail).toContain('mask outside the layer')
   })
 
   it('fails a neutral face whose eye mask has one blob', async () => {
-    const name = 'base_fc3_face_neutral_L50'
-    await writePicture(await syntheticBase(), join(dir, `${name}@2x.png`))
-    const manifest: Manifest = { files: { [name]: { real: true } } }
-    await writeMasks({ dir, manifest, names: [name], overridesDir })
+    const where = caseIn('fc3')
+    const { name, manifest } = await maskedNeutralFace(where)
 
-    const maskFile = join(dir, `${name}_eyemask@2x.png`)
+    const maskFile = join(where, `${name}_eyemask@2x.png`)
     const mask = await readPicture(maskFile)
     for (let y = 0; y < mask.height; y++) {
       for (let x = Math.floor(mask.width / 2); x < mask.width; x++) mask.data[(y * mask.width + x) * 4 + 3] = 0
     }
     await writePicture(mask, maskFile)
 
-    const c11 = await c11Of(manifest, name)
+    const c11 = await c11Of(manifest, name, where)
     expect(c11.ok).toBe(false)
     expect(c11.detail).toContain('neutral face needs two eyes')
   })
 
-  it('fails an L30 hair mask covering 40 % of the frame', async () => {
-    const name = 'base_fc4_L30'
-    await writePicture(solidPicture(), join(dir, `${name}@2x.png`))
+  it('fails a body L30 skin mask covering 40 % of an all-ink frame', async () => {
+    // (Plan 13's hair rule held a flat base's L30 hair mask to 3–20 % of the frame; a body's skin is held to `SKIN_AREA`
+    // of its own ink instead, D1.)
+    const where = caseIn('fc4')
+    const name = 'body_f_L30'
+    await writePicture(solidPicture(), join(where, `${name}@2x.png`))
     const manifest: Manifest = { files: { [name]: { real: true } } }
-    await writeMasks({ dir, manifest, names: [name], overridesDir })
+    await writeMasks({ dir: where, manifest, names: [name], overridesDir })
 
-    const maskFile = join(dir, `${name}_hairmask@2x.png`)
+    const maskFile = join(where, `${name}_skinmask@2x.png`)
     const mask = await readPicture(maskFile)
     const target = Math.round(0.4 * W * H)
-    for (let i = 0; i < target; i++) {
+    for (let i = 0; i < W * H; i++) {
       const o = i * 4
-      mask.data[o] = 255; mask.data[o + 1] = 255; mask.data[o + 2] = 255; mask.data[o + 3] = 255
+      mask.data[o] = 255; mask.data[o + 1] = 255; mask.data[o + 2] = 255; mask.data[o + 3] = i < target ? 255 : 0
     }
     await writePicture(mask, maskFile)
 
-    const c11 = await c11Of(manifest, name)
+    const c11 = await c11Of(manifest, name, where)
     expect(c11.ok).toBe(false)
-    expect(c11.detail).toContain('hair area')
+    expect(c11.detail).toContain("skin covers 0.40 of the body's ink")
   })
 
   it('is ok for an override whose area is out of range', async () => {
-    const name = 'base_fc5_L30'
-    await writePicture(solidPicture(), join(dir, `${name}@2x.png`))
+    const where = caseIn('fc5')
+    const name = 'body_f_L30'
+    await writePicture(solidPicture(), join(where, `${name}@2x.png`))
     const manifest: Manifest = { files: { [name]: { real: true } } }
-    await writePicture(solidPicture(), join(overridesDir, `${name}_hairmask.png`))
+    // The whole frame: past `SKIN_AREA`'s 0.75 of the ink, and trusted for its shape because a person drew it.
+    const overrides = join(where, 'overrides')
+    mkdirSync(overrides, { recursive: true })
+    await writePicture(solidPicture(), join(overrides, `${name}_skinmask.png`))
 
-    await writeMasks({ dir, manifest, names: [name], overridesDir })
-    expect(manifest.files[name]!.masks!.hair!.override).toBe(true)
+    await writeMasks({ dir: where, manifest, names: [name], overridesDir: overrides })
+    expect(manifest.files[name]!.masks!.skin!.override).toBe(true)
 
-    const c11 = await c11Of(manifest, name)
-    expect(c11.ok).toBe(true)
+    const c11 = await c11Of(manifest, name, where)
+    expect(c11.ok, c11.detail).toBe(true)
   })
 
-  it('is n/a for a layer with no masks', async () => {
-    const name = 'base_fc6_L30'
-    await writePicture(solidPicture(), join(dir, `${name}@2x.png`))
+  it('is n/a for a layer with no masks, which its kind does not require', async () => {
+    const where = caseIn('fc6')
+    const name = 'item_head_tophat01_L80'
+    await writePicture(solidPicture(), join(where, `${name}@2x.png`))
     const manifest: Manifest = { files: { [name]: { real: true } } }
 
-    const c11 = await c11Of(manifest, name)
+    const c11 = await c11Of(manifest, name, where)
     expect(c11.ok).toBe(true)
     expect(c11.detail).toContain('n/a')
   })
@@ -1132,14 +1156,12 @@ describe('C11 (checks.mjs, spec §4.3)', () => {
   })
 
   it('counts an iris split by a pupil and a highlight as one eye (Task 2b: merge before counting)', async () => {
-    const name = 'base_fc7_face_neutral_L50'
-    await writePicture(await syntheticBase(), join(dir, `${name}@2x.png`))
-    const manifest: Manifest = { files: { [name]: { real: true } } }
-    await writeMasks({ dir, manifest, names: [name], overridesDir })
+    const where = caseIn('fc7')
+    const { name, manifest } = await maskedNeutralFace(where)
 
     // Cut two 3 px gaps through the left eye's own mask, splitting the one blob C11 saw into three — a
     // pupil and a highlight cutting up an iris, not a change in how many eyes are there.
-    const maskFile = join(dir, `${name}_eyemask@2x.png`)
+    const maskFile = join(where, `${name}_eyemask@2x.png`)
     const mask = await readPicture(maskFile)
     const mid = Math.floor(mask.width / 2)
     let x0 = mask.width
@@ -1166,8 +1188,8 @@ describe('C11 (checks.mjs, spec §4.3)', () => {
     }
     await writePicture(mask, maskFile)
 
-    const c11 = await c11Of(manifest, name)
-    expect(c11.ok).toBe(true)
+    const c11 = await c11Of(manifest, name, where)
+    expect(c11.ok, c11.detail).toBe(true)
   })
 })
 
@@ -1187,29 +1209,32 @@ describe('buildTintSheet', () => {
     mkdirSync(overridesDir, { recursive: true })
 
     manifest = { files: {} }
+    /** One layer at both densities, as real art, its masks cut by `writeMasks`. */
+    const layer = async (name: string, pic: Picture): Promise<void> => {
+      await writePicture(pic, join(dir, `${name}@2x.png`))
+      await writePicture(await resizePicture(pic, W / 2, H / 2), join(dir, `${name}@1x.png`))
+      manifest.files[name] = { real: true }
+      await writeMasks({ dir, manifest, names: [name], overridesDir })
+    }
 
-    // f01, masked: L30 (hair) and face_neutral (hair + eyes) — enough for baseTintMeans to find both meanLs.
-    const l30 = 'base_f01_L30'
-    await writePicture(await syntheticBase(), join(dir, `${l30}@2x.png`))
-    manifest.files[l30] = { real: true }
-    await writeMasks({ dir, manifest, names: [l30], overridesDir })
-
-    const face = 'base_f01_face_neutral_L50'
-    await writePicture(await syntheticBase(), join(dir, `${face}@2x.png`))
-    manifest.files[face] = { real: true }
-    await writeMasks({ dir, manifest, names: [face], overridesDir })
+    // Body f in its default hairstyle, masked: the body (skin), its neutral face (eyes + skin) and the bob's two layers
+    // (hair, their ink) — enough for the sheet to find the hair and eye meanLs (Plan 19 D1: a gender's, not a base's).
+    await layer('body_f_L30', (await syntheticBody()).pic)
+    await layer('body_f_face_neutral_L50', await syntheticBase({ bald: true, skinColour: CREAM }))
+    await layer('item_hair_f_bob01_L60', await syntheticItem())
+    await layer('item_hair_f_bob01_L20', await syntheticItem())
 
     // The outfit every card dresses in — plain, untinted.
     const outfit = 'item_outfit_casual01_L40'
-    const outfitPic = await syntheticBase()
+    const outfitPic = (await syntheticBody({ underwear: '#2c3e70' })).pic
     await writePicture(outfitPic, join(dir, `${outfit}@2x.png`))
     await writePicture(await resizePicture(outfitPic, W / 2, H / 2), join(dir, `${outfit}@1x.png`))
     manifest.files[outfit] = { real: true }
 
-    // A base with no masks at all — must not contribute any cards.
-    const bare = 'base_fbare_L30'
-    await writePicture(await syntheticBase(), join(dir, `${bare}@2x.png`))
-    await writePicture(await resizePicture(await syntheticBase(), W / 2, H / 2), join(dir, `${bare}@1x.png`))
+    // Body m with no masks at all, and no hairstyle — must not contribute any cards.
+    const bare = 'body_m_L30'
+    await writePicture((await syntheticBody()).pic, join(dir, `${bare}@2x.png`))
+    await writePicture(await resizePicture((await syntheticBody()).pic, W / 2, H / 2), join(dir, `${bare}@1x.png`))
     manifest.files[bare] = { real: true }
 
     // A tintable item.
@@ -1220,10 +1245,10 @@ describe('buildTintSheet', () => {
   })
   afterAll(() => rmSync(temp, { recursive: true, force: true }))
 
-  it('draws one card per base per hair × eye pair, and none for a base with no masks or an untinted item', async () => {
+  it('draws one card per gender per hair × eye pair, and none for a gender with no masks or an untinted item', async () => {
     const out = join(temp, 'sheet-no-items.png')
     const result = await buildTintSheet({ dir, manifest, items: [], out })
-    expect(result.cards).toBe(9) // 3 hair colours × 3 eye colours, one base only
+    expect(result.cards).toBe(9) // 3 hair colours × 3 eye colours, body f only
     expect(existsSync(out)).toBe(true)
   })
 
@@ -1231,7 +1256,17 @@ describe('buildTintSheet', () => {
     const out = join(temp, 'sheet-with-item.png')
     const items = [{ id: 'head_test01', asset: { file: 'item_head_test01_L80', layer: 80, tint: '#c0392b' } }]
     const result = await buildTintSheet({ dir, manifest, items, out })
-    expect(result.cards).toBe(10) // 9 base cards + 1 item card
+    expect(result.cards).toBe(10) // 9 gender cards + 1 item card, on body f in the bob
     expect(existsSync(out)).toBe(true)
+  })
+
+  it('draws no card for a retired flat base, and none for a gender whose default hairstyle has no hair mask (Plan 19 D1)', async () => {
+    // A manifest that still lists a masked flat base gets no card for it: the cards are the genders'.
+    const withBase: Manifest = { files: { ...manifest.files, base_f01_L30: { real: true, masks: { hair: { bytes2x: 1, meanL: 0.3 } } } } }
+    const out = join(temp, 'sheet-old-base.png')
+    expect((await buildTintSheet({ dir, manifest: withBase, items: [], out })).cards).toBe(9)
+    // Without the bob's hair mask the gender has no hair meanL, so no cards at all.
+    const { item_hair_f_bob01_L60: _front, item_hair_f_bob01_L20: _back, ...noHair } = manifest.files
+    expect((await buildTintSheet({ dir, manifest: { files: noHair }, items: [], out })).cards).toBe(0)
   })
 })

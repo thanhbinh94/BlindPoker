@@ -2,10 +2,11 @@
  * Names and the manifest: what the stage-1 set *is*, what each file is called, and the one JSON file
  * that says so.
  *
- * The naming rules are D01 §9.1 with the change spec §3 makes to them — a base carries its own code, so
- * `base_f01_L30@2x.png` rather than the document's `base_body_default_L30@2x.png`, because there are two
- * bases now and there will be six. Items are generated on F01 and worn by both (spec D2), so they carry
- * no base in their name at all.
+ * The naming rules are D01 §9.1 with the changes the avatar plans made to them. Since Plan 19 (v4) a figure is a
+ * body per gender (`body_f_L30`), its six faces (`body_f_face_happy_L50`) and a hairstyle of two layers
+ * (`item_hair_f_bob01_L20` / `_L60`). Items are worn by both bodies, so they carry no body in their name — only a
+ * per-wear cut does (`item_outfit_dealer01_m_L40`). The six flat bases of Plans 11–12 (`base_f01_L30` …) were retired
+ * by the switch-over (Plan 19 D1): no name of theirs is legal any more.
  *
  * The manifest is written **twice**, byte for byte: `public/avatar/avatar-manifest.json` for the web
  * build and `apps/normal-server/data/avatar-manifest.json` for the catalogue's validation. Two copies is
@@ -31,7 +32,7 @@ export const SERVER_MANIFEST = resolve(PACKAGE_ROOT, '../normal-server/data/avat
 export const SHEET_FILE = resolve(PACKAGE_ROOT, '../../docs/avatar-2d-sheet.png')
 /** Plan 19 spec §5.6: the fit sheet — every hat and every face item on each of the eight hairstyles. */
 export const FIT_SHEET_FILE = resolve(PACKAGE_ROOT, '../../docs/avatar-2d-fit-sheet.png')
-/** Plan 13 spec §4.2: the tint review sheet — every base's three hair × three eye colours, every tintable item. */
+/** Plan 13 spec §4.2: the tint review sheet — each gender's three hair × three eye colours, every tintable item. */
 export const TINT_SHEET_FILE = resolve(PACKAGE_ROOT, '../../docs/avatar-2d-tint-sheet.png')
 /** The catalogue `tint-sheet` reads its tintable items from (spec §4.2's "mọi món `tintable`"). */
 export const ITEMS_FILE = resolve(PACKAGE_ROOT, '../normal-server/data/items.json')
@@ -39,62 +40,32 @@ export const ITEMS_FILE = resolve(PACKAGE_ROOT, '../normal-server/data/items.jso
 // ──────────────────────────────────────────────────────── the stage-1 set ──
 
 /**
- * Every base the app has art for — the **source of truth** for the base list (2026-09-17, phase 2).
- *
- * A base cannot exist before its layers do: the server's registry (`apps/normal-server/data/avatar-bases.json`)
- * names files and refuses at boot any name the committed manifest does not list, so the order of operations
- * for adding a base is always *this list first* (which gives `placeholder` a full stand-in set to draw and
- * `ingest` a place to put the real pictures), then the registry entry that points at them, then the i18n key.
- * `stageOneFiles` and `buildPlaceholders` take the list as an argument so a test can add a third base
- * without touching the committed artefact; nothing else should pass anything but this.
- *
- * Spec §4: two bases now, six in stage 2. `f02`/`f03` have i18n names waiting for them and no art yet.
+ * v4 (Plan 19, spec §4.1–§4.3): gender, hairstyle and skin are chosen separately. A body is drawn once per
+ * gender — bald, cream-skinned, in the relaxed pose with fingers — and a hairstyle is an item of its own, cut
+ * into a back layer (L20) and a front layer (L60). The six flat bases this replaced (f01…m03, one picture each
+ * with the hair baked in) are retired (D1).
  */
-export const BASES = ['f01', 'm01', 'f02', 'f03', 'm02', 'm03']
+export const GENDERS = ['f', 'm']
 
 /**
- * The two bodies an item layer can be cut for (2026-09-20, phase 2 variants).
+ * The two bodies an item layer can be cut for (2026-09-20, phase 2 variants): one per gender since Plan 19.
  *
- * Every base wears its clothes on one of them, and one inventory item may ship one layer per wear —
- * a skirted dealer's uniform and a trousered one are the same owned item, drawn differently. See
- * `itemFile` for the names and `docs/avatar-2d.md` §3.1 for the rule.
+ * One inventory item may ship one layer per wear — a skirted dealer's uniform and a trousered one are the same
+ * owned item, drawn differently. See `itemFile` for the names and `docs/avatar-2d.md` §3.1 for the rule.
  */
 export const WEARS = ['f', 'm']
 
 /**
- * Which body each base wears clothes on — the art side's half of `avatar-bases.json`'s `"wear"`.
- *
- * `BASES` and this map are one table written twice, so the module refuses to load with a base that
- * has no wear: a base drawn without one would silently get every default layer and never a variant.
- * The server's registry mirrors both (`docs/avatar-2d.md` §9.1); the pipeline's own test holds the
- * two files against each other.
+ * The wear of an owner id: a v4 body (Plan 19, pre-flight #28) is owned by its gender, and a gender is its own wear —
+ * `wearOf('m')` is `'m'`, so `--variant m` is cut with `--base m`. `null` for anything else, an old base's id included.
  */
-/** @type {Record<string, string>} */
-export const BASE_WEAR = { f01: 'f', m01: 'm', f02: 'f', f03: 'f', m02: 'm', m03: 'm' }
+export const wearOf = (id) => (GENDERS.includes(id) ? id : null)
 
-for (const base of BASES) {
-  if (!WEARS.includes(BASE_WEAR[base])) throw new Error(`base ${base} has no wear in BASE_WEAR — one of ${WEARS.join(', ')}`)
-}
-
-/**
- * The wear of a base id, or `null` for an id `BASE_WEAR` does not name. A v4 body (Plan 19, pre-flight #28) is owned
- * by its gender, and a gender is its own wear: `wearOf('m')` is `'m'`, so `--variant m` is cut with `--base m`.
- */
-export const wearOf = (id) => (GENDERS.includes(id) ? id : BASE_WEAR[id] ?? null)
-
-/** Spec §4.3: six per base, and — a decision of this plan — six per bot as well. */
+/** Spec §4.3: six faces per body, and — a decision of Plan 11 — six per bot as well. */
 export const EXPRESSIONS = ['neutral', 'happy', 'sad', 'surprised', 'closed', 'sleep']
-/** The three layers a base is cut into. Its face is layer 50 and comes one per expression. */
-export const BASE_LAYERS = [LAYERS.hairBack, LAYERS.body, LAYERS.hairFront]
 /** Spec §7: eight bots, chibi robots on the same proportions. */
 export const BOTS = [0, 1, 2, 3, 4, 5, 6, 7]
 
-/**
- * v4 (Plan 19, spec §4.1–§4.3): gender, hairstyle and skin are chosen separately. A body is drawn once per
- * gender — bald, cream-skinned, in the relaxed pose with fingers — and a hairstyle is an item of its own, cut
- * into a back layer (L20) and a front layer (L60). The old bases above stay until the switch-over (D1).
- */
-export const GENDERS = ['f', 'm']
 /** Spec §4.2's eight hairstyles, four per gender, in the table's order. The code starts with its gender. */
 export const HAIR_CODES = ['f_bob01', 'f_hime01', 'f_wavy01', 'f_ponytail01', 'm_tousled01', 'm_neat01', 'm_curly01', 'm_spiky01']
 /** The two layers a hairstyle is cut into: behind the body, and over the face. */
@@ -121,8 +92,6 @@ export const STAGE_ONE_ITEMS = {
 /** D01 §4.3: the only hide rules stage 1 has. A hood covers both halves of the hair. */
 export const HIDES = { hood_black01: { hidesHairFront: true, hidesHairBack: true } }
 
-export const baseFile = (baseId, layer) => `base_${baseId}_L${layer}`
-export const faceFile = (baseId, expression) => `base_${baseId}_face_${expression}_L${LAYERS.face}`
 /**
  * A wardrobe layer's name, `item_<slot>_<code>_L<layer>` — plus the wear of a *variant*, between the
  * code and the layer: `item_outfit_dealer01_m_L40` (2026-09-20).
@@ -168,15 +137,12 @@ export const hairItemId = (code) => `hair_${code}`
  * This list is the contract: `placeholder` writes exactly it, `check` walks exactly it, and the tests
  * assert it against spec §4.4 so that a name added here without being added there is caught.
  *
- * Plan 19 appends the v4 set (spec §5.3): per gender a body and its six faces, then per hairstyle its back
- * and front layer — 30 names, which hold no icon (a hairstyle's wardrobe card is a portrait, ruling 12).
+ * The items and the bots, then the v4 set (Plan 19, spec §5.3): per gender a body and its six faces, then per
+ * hairstyle its back and front layer — 30 names, which hold no icon (a hairstyle's wardrobe card is a portrait,
+ * ruling 12). 118 names in all since the switch-over (D1) took the six flat bases' 54 off the front of the list.
  */
-export function stageOneFiles(bases = BASES) {
+export function stageOneFiles() {
   const files = []
-  for (const base of bases) {
-    for (const layer of BASE_LAYERS) files.push({ name: baseFile(base, layer), kind: 'base', layer, base })
-    for (const expr of EXPRESSIONS) files.push({ name: faceFile(base, expr), kind: 'baseFace', layer: LAYERS.face, base, expr })
-  }
   for (const [slot, codes] of Object.entries(STAGE_ONE_ITEMS)) {
     const layer = SLOT_LAYER[slot]
     for (const code of codes) files.push({ name: itemFile(slot, code, layer), kind: 'item', layer, slot, code, ...HIDES[code] })
@@ -210,12 +176,11 @@ const ITEM_ALTERNATIVES = Object.entries(SLOT_LAYER).map(([slot, layer]) => `ite
 /**
  * D01 §9.1: lower case, digits and underscores, and a layer number that matches the slot — plus, since Plan 19,
  * the v4 names (ruling 4): `body_<g>_L30`, `body_<g>_face_<expr>_L50` and `item_hair_<g>_<CODE>_L20|L60`. A hair
- * code is its gender and then a `CODE`, so `item_hair_f_bob01_m_L60` stays illegal: no variant, ever.
+ * code is its gender and then a `CODE`, so `item_hair_f_bob01_m_L60` stays illegal: no variant, ever. The flat
+ * bases' `base_<id>_L20|30|60` and `base_<id>_face_<expr>_L50` were legal until the switch-over (D1) retired them.
  */
 export const NAME_PATTERN = new RegExp(
-  `^(?:base_[a-z][a-z0-9]*_L(?:${BASE_LAYERS.join('|')})` +
-  `|base_[a-z][a-z0-9]*_face_(?:${EXPR_GROUP})_L${LAYERS.face}` +
-  `|${ITEM_ALTERNATIVES.join('|')}` +
+  `^(?:${ITEM_ALTERNATIVES.join('|')}` +
   `|bot_[0-9]+_L${LAYERS.body}` +
   `|bot_[0-9]+_face_(?:${EXPR_GROUP})_L${LAYERS.face}` +
   `|body_(?:${GENDER_GROUP})_L${LAYERS.body}` +
@@ -228,7 +193,7 @@ export function parseName(name) {
   if (!NAME_PATTERN.test(name)) return null
   const layer = Number(name.slice(name.lastIndexOf('_L') + 2))
   const stem = name.slice(0, name.lastIndexOf('_L'))
-  // The v4 names first (Plan 19): `item_hair_` is not a wardrobe slot, and `body_` would read as a base below.
+  // The v4 names first (Plan 19): `item_hair_` is not a wardrobe slot.
   if (stem.startsWith('item_hair_')) {
     const code = stem.slice('item_hair_'.length)
     return { kind: 'hair', layer, gender: hairGender(code), code }
@@ -246,19 +211,20 @@ export function parseName(name) {
     if (WEARS.includes(tail)) return { kind: 'item', layer, slot, code: rest.slice(0, cut), wear: tail }
     return { kind: 'item', layer, slot, code: rest }
   }
-  const [prefix, owner, ...rest] = stem.split('_')
-  if (rest[0] === 'face') {
-    const kind = prefix === 'bot' ? 'botFace' : 'baseFace'
-    return { kind, layer, expr: rest[1], ...(prefix === 'bot' ? { bot: Number(owner) } : { base: owner }) }
-  }
-  return prefix === 'bot' ? { kind: 'bot', layer, bot: Number(owner) } : { kind: 'base', layer, base: owner }
+  // What is left is a bot: `bot_<n>_L30` or `bot_<n>_face_<expr>_L50`.
+  const [, bot, face, expr] = stem.split('_')
+  return face === 'face' ? { kind: 'botFace', layer, bot: Number(bot), expr } : { kind: 'bot', layer, bot: Number(bot) }
 }
 
 // ──────────────────────────────────────────────────────────────── the file ──
 
-/** `bodies` (Plan 19) is to a v4 body what `bases` is to a base: `{ [gender]: { transform } }`, once one is ingested. */
+/**
+ * `bodies` (Plan 19) holds each v4 body's stored transform, `{ [gender]: { transform, anchor? } }`, once one is
+ * ingested — what every face, hairstyle, item and bot cut on that body is placed with. (The flat bases kept theirs
+ * under `bases` until the switch-over, D1.)
+ */
 export function emptyManifest() {
-  return { version: MANIFEST_VERSION, frame: FRAME, crop: CROP, files: {}, icons: {}, bases: {}, bodies: {} }
+  return { version: MANIFEST_VERSION, frame: FRAME, crop: CROP, files: {}, icons: {}, bodies: {} }
 }
 
 // ───────────────────────────────────────────────────────────────── the icons ──
@@ -338,17 +304,15 @@ export function serialiseManifest(manifest) {
   for (const name of Object.keys(manifest.files).sort()) files[name] = manifest.files[name]
   const icons = {}
   for (const name of Object.keys(manifest.icons ?? {}).sort()) icons[name] = manifest.icons[name]
-  const bases = {}
-  for (const base of Object.keys(manifest.bases ?? {}).sort()) bases[base] = manifest.bases[base]
   const bodies = {}
   for (const gender of Object.keys(manifest.bodies ?? {}).sort()) bodies[gender] = manifest.bodies[gender]
+  // Only these keys are written: a manifest read with the retired `bases` (Plan 19 D1) loses it here.
   const ordered = {
     version: manifest.version,
     frame: manifest.frame,
     crop: manifest.crop,
     files,
     ...(Object.keys(icons).length ? { icons } : {}),
-    ...(Object.keys(bases).length ? { bases } : {}),
     ...(Object.keys(bodies).length ? { bodies } : {}),
   }
   return Buffer.from(`${JSON.stringify(ordered, null, 2)}\n`)
@@ -475,9 +439,6 @@ async function hairOnDisk(dir, name, entry, fileKind) {
 /**
  * Fill a directory with the whole stage-1 set as labelled stand-ins, and write the manifest for it.
  *
- * `bases` is `BASES` for every real run — adding an id to that constant is all it takes for the next
- * `placeholder` to draw a complete stand-in set (body, hair, six faces) for a base nobody has drawn yet.
- *
  * Idempotent twice over. A name the manifest already marks `real: true` is left alone — ingesting art is
  * the one-way door from stand-in to art, and re-running this must never undo it — and every write goes
  * through a compare-first path, so a second run leaves a clean tree.
@@ -488,21 +449,25 @@ async function hairOnDisk(dir, name, entry, fileKind) {
  * in the previous manifest are copied through untouched rather than dropped for not being on the list.
  *
  * Plan 19: a v4 stand-in (body, body face, hair layer) is drawn with its masks (`STAND_IN_MASKS`), and a hair
- * L60 with its `split`. The manifest's `bodies` is carried through like `bases`.
+ * L60 with its `split`. The manifest's `bodies` — the stored transforms — is carried through as it is.
+ *
+ * Plan 19 D1: what is not on the list is not carried — neither a name the previous manifest still lists (the retired
+ * `base_*` layers) nor its retired `bases` key — except a real per-wear variant, below. This never deletes a file: the
+ * PNGs of a dropped name stay on disk until somebody does, and the committed-set test fails while they are there.
  */
-export async function buildPlaceholders({ dir, targets, bases = BASES, log = () => {} }) {
+export async function buildPlaceholders({ dir, targets, log = () => {} }) {
   await mkdir(dir, { recursive: true })
   // Imported here rather than at the top: `masks.mjs` imports this module and reads it while loading
   // (`MASK_OVERRIDE_DIR`), so a static import back would make the load order decide which of the two works.
   const { MASK_FILE_KIND } = await import('./masks.mjs')
   const previous = readManifest(join(dir, MANIFEST_NAME))
-  const manifest = { ...emptyManifest(), bases: previous.bases ?? {}, bodies: previous.bodies ?? {} }
+  const manifest = { ...emptyManifest(), bodies: previous.bodies ?? {} }
   let drawn = 0
   let kept = 0
   let masked = 0
   /** Each hair L20's stand-in hair mask at @2x, for its L60's split — the list puts L20 first. */
   const backHair = new Map()
-  for (const file of stageOneFiles(bases)) {
+  for (const file of stageOneFiles()) {
     const before = previous.files?.[file.name]
     if (before?.real) {
       manifest.files[file.name] = before
