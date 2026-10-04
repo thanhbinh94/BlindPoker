@@ -762,6 +762,8 @@ then writes does take the hand-drawn mask, as every mask does.
    again and mouth drawn again down past y 236 (an earlier rule that only dropped pixels near the eyes let a redrawn
    mouth and brows into the L60 — 614 px and 1134 px of them on an earlier version of the picture). One thing it cannot tell: a piece of hair that is drawn *apart from* the rest, inside
    the face — a fringe cut through by a skin-coloured shine band across its whole width loses the part below it.
+   After it, at the same points, **the body-skin rule** (below) takes out the body's own skin the picture redrew —
+   the skin between the fringe strands, in the hair's shadow, and an ear between two locks.
 3. `splitHair(region, body, { density: 2, override })` splits it (§4.5); `override` is the hand-drawn
    `item_hair_<code>_frontmask.png` from `assets/avatar-src/masks/` when one is there, read as any hand-drawn mask is.
 4. `item_hair_<code>_L60` (front) and `_L20` (back) are written, the back `empty: true` when the split leaves nothing
@@ -785,6 +787,65 @@ and with long hair on the base, the outfit's union rule (§4.1.3) would take the
 clothing. **Never ingest an outfit with `--hair`** — nothing refuses it, and the outfit layer would take in, or paint over
 (§4.1.3–§4.1.4), the hairstyle's hair below the chin. A body's wear is its gender (`wearOf('m')` is `'m'`), so `--variant m` goes with `--base m` and is refused
 on body f, naming it. `--base f01` and the other old bases keep working until D1.
+
+**The body-skin rule** (Plan 19 style gate, `bodySkinRule`, `BODY_SKIN_RULE`; a hairstyle and an item on a body —
+an old base's item is cut exactly as before). With the body's skin masks right, a deep tone (`#5c3a28`) still left
+cream in the layers *above* the body, where no skin mask reaches: on the real bob's L60 1 199 px the body's skin
+mask would call skin (1 130 of them light, L\* ≥ 70) — the forehead between the fringe strands, drawn in the hair's
+shadow, and both ears — 912 on the tousled cut's, and 1 187 on casual01's L40 — a cream rim inside both arms'
+outline, the fingers' edges, the thumbs, a peach band under each sleeve. The difference keeps such a pixel because it
+is not the body's colour there, and the face rule because it touches the hair. A region pixel is a **candidate** when
+the body has skin within 3 px at `@2x` (`reach` 1.5: its L30 skin mask ∪ its neutral face's, less where a `--hair`
+hairstyle's L60 covers it) and the picture's pixel there is
+
+- **shaded skin**: L\*, C\* and LCh hue in a window. The body's skin reddens and gains chroma as it darkens (its own
+  shading h 45–60°, C\* 22–40, against the cream's h 70°, C\* 14), and so did every redrawn pixel: L\* 51–88, C\* 16–37,
+  h 45–64° over the three layers (5th–95th percentile). On the hairstyles it sat 15–20 ΔE from the body's own skin
+  there (median) and under a quarter within ΔE 8 — the plan's "ΔE ≤ 8 of the body's local skin" alone would have
+  taken a quarter of the bob's and 5 % of the tousled cut's. And no ΔE from the cream separates it from blonde: the
+  real platinum (`base_f03`'s hair, 53 477 px) is h 61–77°, C\* 12–21, and 63 % of it lies within ΔE 8 of the v4
+  cream (37 % within 3). What separates them is that blonde, beige and gold do not redden; the hue's upper end keeps
+  them, and a chroma ceiling (50) keeps saturated gold and orange trim (tet_red01's dark gold: h 57–61°, C\* 57–59);
+- or, **on an item only**, within ΔE 8 of the body's colour on some skin pixel within `reach` (not the nearest one:
+  at an outline that is the antialiased rim the skin mask holds, 25 ΔE from the cream drawn over it) — the unshaded
+  redraws, the cream rim and the thumbs. Never on a hairstyle, where it would take a blonde fringe with the forehead.
+
+| | L\* | C\* | hue | ΔE to the body's own skin |
+|---|---|---|---|---|
+| hairstyle (`hair`) | ≥ 60 | 20–50 | 38–62° | — |
+| item on a body (`item`) | ≥ 50 | 16–50 | 44–64° | ≤ 8 |
+
+The hairstyle's window is the tighter one: base_f03's blonde pasted onto body f and cut as a hairstyle loses 0 px to
+it, against 108 with L\* ≥ 50. A candidate is dropped only as part of an 8-connected **piece of candidates that touches
+skin the region leaves bare** — a redraw of the body's skin carries on from the skin round it, while a highlight inside
+the hair, a shading line inside a blonde or a print inside a shirt touches none. It runs after the face rule, on the raw
+difference (logged) and on the filled mask before it is grown, which is the core — so neither the dilation nor an
+outfit's limb cover starts from a pixel it took. Not after the feather, where the face rule runs once more: the soft rim
+takes the core's colour (`cutItem`), never the skin's under it, and taking it would cut the item's antialiased edge off
+wherever it borders bare skin (an earlier version did, and the synthetic outfit's hem lost its last solid `@1x` row to
+C3). And in two more places where the clean-up would put the body back:
+
+- **a hole the body shows through stays open** (`bodyShowsThrough`): `fillHoles` leaves a hole that is at least half the
+  body's skin and holds at least 16 px at `@2x` of the body's own line art (ink under L\* 50 that the picture draws
+  too). The closing sealed each of the bob's ears off from the face by its outline and the fill then took them into
+  the hair (382 and 463 px, 81–84 % skin, 49–54 px of the ear's outline), their rims landing in the L60. A hole of hair
+  the colour of the skin holds no line art of the body's, and is filled as before;
+- **an outfit's union with the body** (§4.1.3, `keepSkinOutOfUnion`): the union takes the body's line art in the
+  picture's colour, and where the picture drew an arm a pixel or two off the body's, that colour is the arm's cream —
+  892 of the 984 cream pixels casual01's L40 still held after the rule on the difference. The rule runs once more over
+  the grown mask with the union, before the limb cover; the union pixels it takes leave the layer, and the cover may not
+  paint them either, so the body's own outline shows. C6's underwear region (grown by a pixel at `@1x`) is never taken,
+  whatever colour the picture has over it.
+
+The ingest logs the total — the raw difference, the open holes and the union: `body skin kept out: 1529 px` (bob),
+`598 px` (tousled), `1259 px` (casual01). On the real art the skin-coloured pixels left are bob L60 1 199 → 121 (light
+1 130 → 99), tousled L60 912 → 278 (638 → 54), casual01 L40 1 187 → 22 (721 → 9), both L20s 0; the hair face rule's
+counts (38 and 41 px, all islands), the splits' back layers, C6 (`covers 100.0 % of body_f_L30 and body_m_L30`) and
+C13 are unchanged, and a `--hair` hat is measured on the skin the hairstyle leaves showing. What is left: the bob's
+parting, a short streak of scalp inside the hair that touches no bare skin; near-cream single pixels along strand
+edges (C\* under 20 or h over 62°), the soft rim they lend their colour to, and the hair's own white glints; on body m,
+casual01's own arm outline (cut on f) a few pixels off m's arms, which the cream rim used to hide. A garment drawn in
+the body's shaded-skin colours — peach, caramel, L\* ≥ 50 at h 44–64° — loses the part of it that touches bare skin.
 
 **A bot on a body** — `--transform-from f|m` — reads `bodies.<g>.transform`. Without the flag a bot still takes
 f01's (`BOT_TRANSFORM_FROM`) until D1.

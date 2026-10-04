@@ -39,8 +39,8 @@ export const EYE_GROUP_MERGE_RADIUS = 3
 
 // ─────────────────────────────────────────────────────────────────── colour ──
 
-/** sRGB (0–255) to CIE Lab, D65. Verbatim from the spike. */
-function labOf(r, g, b) {
+/** sRGB (0–255) to CIE Lab, D65. Verbatim from the spike. The body-skin rule (`extract.mjs`) measures in it too. */
+export function labOf(r, g, b) {
   const f = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }
   const R = f(r)
   const G = f(g)

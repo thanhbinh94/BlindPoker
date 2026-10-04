@@ -30,7 +30,9 @@
  *       body: the difference against the registered body, less the face the picture redrew (the hair face rule),
  *       split into item_hair_<code>_L60 (front, with `split`) and _L20 (back, `empty` when blank), both masked; a
  *       hand-drawn assets/avatar-src/masks/item_hair_<code>_frontmask.png splits it instead of the rule. An item
- *       cut with `--base f|m` is diffed against that body, and every item and bot layer records `cutOn`.
+ *       cut with `--base f|m` is diffed against that body, and every item and bot layer records `cutOn`. A hairstyle
+ *       and an item on a body both leave out the body's own skin the picture redrew (the body-skin rule), logged as
+ *       `body skin kept out: N px`.
  *       Options, for every target:
  *         --dry-run             measure the picture against D02 §8 and print a verdict; write nothing
  *         --base <id>           which base an item or expression belongs to (default f01), or the body

@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { headMetrics, runChecks } from '../scripts/avatar-pipeline/checks.mjs'
-import { OUTFIT_TOP_Y, cutItem, diffAgainstBase, ingest, measure, registerBySilhouette, registerToBase, shiftPicture } from '../scripts/avatar-pipeline/extract.mjs'
+import { BODY_SKIN_RULE, OUTFIT_TOP_Y, cutItem, diffAgainstBase, ingest, measure, registerBySilhouette, registerToBase, shiftPicture } from '../scripts/avatar-pipeline/extract.mjs'
 import { AURA_CY, AURA_SIZE, AXIS_X, BASELINE_Y, BODY, CHIN_TOLERANCE, CROP, DENSITIES, FACE_LIMIT_Y, FRAME, HEAD_REFERENCE, HEAD_TOLERANCE, LAYERS, RING, SKIN_AREA, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
 import { BASES, BASE_WEAR, EXPRESSIONS, FIT_SHEET_FILE, HAIR_CODES, ICON, ITEMS_FILE, MANIFEST_NAME, NAME_PATTERN, SHEET_FILE, WEARS, bodyFaceFile, bodyFile, buildPlaceholders, hairFile, hairItemId, iconName, itemFile, parseName, serialiseManifest, stageOneFiles, variantFile, wearOf, writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
 import { MASK_FILE_KIND, describeColours } from '../scripts/avatar-pipeline/masks.mjs'
@@ -2682,9 +2682,9 @@ describe('v4 ingest (Plan 19 A2a)', () => {
    * A bald body as the v4 template asks for one, in frame units: a cream head whose eyes sit on `HEAD_REFERENCE` and
    * whose chin (where the head narrows into the 30-wide neck) is at y ≈ 244, thin brown brows, a pink mouth, a grey
    * tank top, charcoal shorts, cream arms and legs, the feet on `BASELINE_Y`. `dy` moves all of it down; `iris`,
-   * `shade` and `redrawn` (the mouth and the brows) are what a hair picture redraws.
+   * `shade` and `redrawn` (the mouth and the brows) are what a hair picture redraws; `cream` is the skin.
    */
-  function body({ dy = 0, iris = IRIS_BLUE, shade = true, redrawn = false, extra = '' } = {}): string {
+  function body({ dy = 0, iris = IRIS_BLUE, shade = true, redrawn = false, extra = '', cream = CREAM } = {}): string {
     const eye = (cx: number): string =>
       `<ellipse cx="${cx}" cy="${EYE_Y}" rx="10" ry="12" fill="#ffffff"/><circle cx="${cx}" cy="${EYE_Y}" r="${IRIS_RADIUS}" fill="${iris}"/>`
     const brow = redrawn ? BROW_REDRAWN_AT : BROW_AT
@@ -2694,14 +2694,14 @@ describe('v4 ingest (Plan 19 A2a)', () => {
     return `<g transform="translate(0 ${dy})">` +
       `<rect x="148" y="250" width="88" height="80" rx="12" fill="${TANK}"/>` +
       `<rect x="150" y="318" width="84" height="34" rx="6" fill="${SHORTS}"/>` +
-      `<rect x="128" y="254" width="18" height="78" rx="9" fill="${CREAM}"/>` +
-      `<rect x="238" y="254" width="18" height="78" rx="9" fill="${CREAM}"/>` +
-      `<rect x="160" y="348" width="26" height="54" rx="10" fill="${CREAM}"/>` +
-      `<rect x="198" y="348" width="26" height="54" rx="10" fill="${CREAM}"/>` +
-      `<ellipse cx="172" cy="402" rx="16" ry="6" fill="${CREAM}"/>` +
-      `<ellipse cx="212" cy="402" rx="16" ry="6" fill="${CREAM}"/>` +
-      `<rect x="177" y="225" width="30" height="30" fill="${CREAM}"/>` +
-      `<ellipse cx="192" cy="165" rx="74" ry="80" fill="${CREAM}"/>` +
+      `<rect x="128" y="254" width="18" height="78" rx="9" fill="${cream}"/>` +
+      `<rect x="238" y="254" width="18" height="78" rx="9" fill="${cream}"/>` +
+      `<rect x="160" y="348" width="26" height="54" rx="10" fill="${cream}"/>` +
+      `<rect x="198" y="348" width="26" height="54" rx="10" fill="${cream}"/>` +
+      `<ellipse cx="172" cy="402" rx="16" ry="6" fill="${cream}"/>` +
+      `<ellipse cx="212" cy="402" rx="16" ry="6" fill="${cream}"/>` +
+      `<rect x="177" y="225" width="30" height="30" fill="${cream}"/>` +
+      `<ellipse cx="192" cy="165" rx="74" ry="80" fill="${cream}"/>` +
       (shade ? `<ellipse cx="${SHADE_AT.cx}" cy="${SHADE_AT.cy}" rx="${SHADE_AT.rx}" ry="${SHADE_AT.ry}" fill="${SHADE}"/>` : '') +
       eye(EYE_XS[0]!) + eye(EYE_XS[1]!) + brows +
       `<ellipse cx="${mouth.cx}" cy="${mouth.cy}" rx="${mouth.rx}" ry="${mouth.ry}" fill="${redrawn ? MOUTH_REDRAWN : MOUTH}"/>` +
@@ -3165,4 +3165,154 @@ describe('v4 ingest (Plan 19 A2a)', () => {
       bytesOf(dir, name).forEach((now, index) => expect(now.equals(bytes[name]![index]!), `${name} was redrawn`).toBe(true))
     }
   }, 600_000)
+
+  // ── The body-skin rule (Plan 19 style gate): a hair or outfit picture's redraw of the body's own skin stays out ──
+
+  /** The real v4 bodies' cream. A platinum blonde is ΔE 10 from it: a darker cream, which the difference reads as its shadow. */
+  const REAL_CREAM = '#fce5cf'
+  const PLATINUM = '#e0c9b3'
+  const PLATINUM_SHADE = '#c8ae96'
+  /** The body's outline round its ears, arms and hands. */
+  const LINE = '#7a3e2a'
+  /** Skin in the hair's shadow, between the fringe strands (L* 78, C* 28, h 55°), and a redrawn ear's (L* 74, C* 30, h 54°). */
+  const SHADOW_SKIN = '#eab496'
+  const EAR_SHADE = '#e2a88a'
+  const BLUE = '#2244cc'
+  const GOLD = '#d4af37'
+  const GOLD_DEEP = '#b8860b'
+  /** The ears (on the head's edge), the arms' outline and the hands; `grow` widens the arms outwards and drops the hands. */
+  const EARS_AT = [{ cx: 119, cy: 196 }, { cx: 265, cy: 196 }]
+  const ears = (): string => EARS_AT.map((e) => `<ellipse cx="${e.cx}" cy="${e.cy}" rx="7" ry="12" fill="${REAL_CREAM}" stroke="${LINE}" stroke-width="1.5"/>`).join('')
+  /** The shading inside each ear's lower half, as a hair picture redraws it — the ear's own cream round it. */
+  const EAR_SHADES = EARS_AT.map((e) => ({ cx: e.cx, cy: e.cy + 2, rx: 3.5, ry: 6 }))
+  const limbs = (grow = 0): string =>
+    `<rect x="${128 - grow}" y="254" width="${18 + grow}" height="78" rx="9" fill="${REAL_CREAM}" stroke="${LINE}" stroke-width="1.5"/>` +
+    `<rect x="238" y="254" width="${18 + grow}" height="78" rx="9" fill="${REAL_CREAM}" stroke="${LINE}" stroke-width="1.5"/>` +
+    [137, 247].map((cx) => `<ellipse cx="${cx}" cy="${334 + grow}" rx="9" ry="7" fill="${REAL_CREAM}" stroke="${LINE}" stroke-width="1.5"/>`).join('')
+  /** A bald body in the real cream, with ears and outlined arms and hands. */
+  const skinBody = ({ grow = 0, extra = '' } = {}): string => body({ cream: REAL_CREAM, extra: ears() + limbs(grow) + extra })
+  const skinBodyDir = memo(async () => {
+    const dir = copyCase(await f01Dir(), 'v4-skin-body')
+    await ingest({ file: await draw(dir, 'body.png', skinBody()), target: { kind: 'body', gender: 'f' }, dir, targets: targetsOf(dir), overridesDir: noOverrides() })
+    return dir
+  })
+  /** Four fringe strands hanging from the cap over the forehead to y 150 (`tips`), and the cap and the side locks over the ears' tops. */
+  const STRANDS = [150, 171, 192, 213].map((x) => ({ x, y: 120, w: 17, h: 30 }))
+  const strands = (fill: string, line: string): string => STRANDS.map((s) =>
+    `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${fill}"/><rect x="${s.x + 7.5}" y="${s.y}" width="2" height="${s.h - 4}" fill="${line}"/>`).join('')
+  const sideLocks = (fill: string): string => EARS_AT.map((e) => `<rect x="${e.cx - 13}" y="120" width="20" height="${e.cy - 6 - 120}" fill="${fill}"/>`).join('')
+  /** Solid pixels of `pic` within 30 of `hex` inside `region`. */
+  function solidOfIn(pic: Picture, hex: string, region: Uint8Array): number {
+    const n = Number.parseInt(hex.slice(1), 16)
+    const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+    let count = 0
+    for (let p = 0; p < region.length; p++) {
+      const at = p * 4
+      if (!region[p] || pic.data[at + 3]! < 128) continue
+      if (Math.hypot(pic.data[at]! - r, pic.data[at + 1]! - g, pic.data[at + 2]! - b) <= 30) count++
+    }
+    return count
+  }
+  const everywhere = new Uint8Array(FRAME.w * 2 * FRAME.h * 2).fill(1)
+  const keptOut = (lines: string[]): number => Number(/^body skin kept out: (\d+) px$/m.exec(lines.join('\n'))?.[1] ?? Number.NaN)
+
+  it('keeps the skin a hair picture redraws between the fringe strands and on the ears out of both hair layers', async () => {
+    // The picture shades the forehead between the strand tips and the ears below the side locks in the hair's shadow:
+    // not the body's colour there, so the difference takes them, and they touch the hair, so the face rule keeps them.
+    const dir = copyCase(await skinBodyDir(), 'v4-skin-hair')
+    const band = `<rect x="148" y="128" width="84" height="18" fill="${SHADOW_SKIN}"/>`
+    const earShades = EAR_SHADES.map((e) => `<ellipse cx="${e.cx}" cy="${e.cy}" rx="${e.rx}" ry="${e.ry}" fill="${EAR_SHADE}"/>`).join('')
+    const file = await draw(dir, 'hair.png', skinBody({ extra: earShades }) + band + hair(PURPLE) + strands(PURPLE, BROW_REDRAWN) + sideLocks(PURPLE))
+    const lines: string[] = []
+    await ingest({ file, target: { kind: 'hair', code: 'f_bob01' }, dir, targets: targetsOf(dir), overridesDir: noOverrides(), log: (line: string) => lines.push(line) })
+    const l60 = await readPicture(join(dir, 'item_hair_f_bob01_L60@2x.png'))
+    const l20 = await readPicture(join(dir, 'item_hair_f_bob01_L20@2x.png'))
+    for (const [name, layer] of [['L60', l60], ['L20', l20]] as const) {
+      expect(solidOfIn(layer, SHADOW_SKIN, everywhere), `${name} holds the skin between the strands`).toBe(0)
+      expect(solidOfIn(layer, EAR_SHADE, everywhere), `${name} holds the redrawn ears`).toBe(0)
+    }
+    // The hair itself is all there: the cap, every strand to its tip, the side locks.
+    expect(solidShare(l60, at2x(inCap(2)))).toBeGreaterThan(0.98)
+    const inStrands = (x: number, y: number): boolean => STRANDS.some((s) => x >= s.x + 1.5 && x <= s.x + s.w - 1.5 && y >= CAP.bottom && y <= s.y + s.h - 1.5)
+    expect(solidShare(l60, at2x(inStrands)), 'the strands').toBeGreaterThan(0.98)
+    expect(keptOut(lines), lines.join('\n')).toBeGreaterThan(0)
+  }, 300_000)
+
+  it('takes nothing of a platinum-blonde fringe over the cream forehead: blonde does not redden as skin does', async () => {
+    // Measured on the difference itself, with the rule and without: a flat platinum over the cream is a darker cream,
+    // which the difference reads as the skin's shadow and drops whether or not the rule runs. The fringe below is held
+    // because its strands are outlined — the outline encloses each one, and the clean-up fills it — and it reaches past
+    // the head's sides, so it is not an island of the face. What the rule may not do is take any more of it.
+    const dir = await skinBodyDir()
+    const outline = '#8c6e58'
+    const CELLS = Array.from({ length: 14 }, (_, i) => 120 + i * 10)
+    const fringe = `<rect x="118" y="120" width="148" height="26" fill="${PLATINUM}" stroke="${outline}" stroke-width="1.5"/>` +
+      CELLS.map((x) => `<rect x="${x + 4}" y="122" width="2" height="22" fill="${PLATINUM_SHADE}"/><rect x="${x + 9.25}" y="120" width="1.5" height="26" fill="${outline}"/>`).join('')
+    const file = await draw(caseDir('v4-skin-blonde'), 'blonde.png', skinBody() + hair(PLATINUM) + fringe)
+    const bodyPic = await readPicture(join(dir, 'body_f_L30@2x.png'))
+    const keyed = removeChroma(await readPicture(file), { tolerance: 40 })
+    const { picture } = registerToBase(await applyTransform(keyed, manifestIn(dir).bodies!.f!.transform, 2), bodyPic, { slot: 'hair', density: 2 })
+    const alphaOf = async (name: string): Promise<Uint8Array> => {
+      const pic = await readPicture(join(dir, `${name}@2x.png`))
+      return Uint8Array.from({ length: pic.width * pic.height }, (_, p) => pic.data[p * 4 + 3]!)
+    }
+    const faceRule = {
+      skin: await alphaOf('body_f_face_neutral_L50_skinmask'),
+      eyes: await alphaOf('body_f_face_neutral_L50_eyemask'),
+      face: await readPicture(join(dir, 'body_f_face_neutral_L50@2x.png')),
+      bodySkin: await alphaOf('body_f_L30_skinmask'),
+    }
+    const skin = Uint8Array.from(faceRule.skin, (value, p) => Math.max(value, faceRule.bodySkin[p]!))
+    const without = diffAgainstBase(picture, bodyPic, { slot: 'hair', density: 2, faceRule })
+    const withRule = diffAgainstBase(picture, bodyPic, { slot: 'hair', density: 2, faceRule, ownSkin: { skin, ...BODY_SKIN_RULE.hair } })
+    const inFringe = at2x((x, y) => CELLS.some((left) => x >= left + 1.5 && x <= left + 7.5) && y >= CAP.bottom && y <= 144.5)
+    let held = 0
+    let inside = 0
+    let lost = 0
+    for (let p = 0; p < inFringe.length; p++) {
+      if (inFringe[p]) inside++
+      if (inFringe[p] && without.mask[p]! >= 128) held++
+      if (without.mask[p]! >= 128 && withRule.mask[p]! < 128) lost++
+    }
+    expect(held / inside, 'the fringe, cut without the rule').toBeGreaterThan(0.98)
+    expect(lost, 'blonde the rule took').toBe(0)
+    expect(withRule.skinDropped).toBe(0)
+  }, 300_000)
+
+  /** A t-shirt over the tank top, short sleeves over the arms' tops; the arms bare below y 278. */
+  const TSHIRT = `<rect x="147" y="238" width="90" height="116" rx="6" fill="${BLUE}"/>`
+  const sleeves = (fill: string, bottom: number): string => [124, 234].map((x) => `<rect x="${x}" y="248" width="26" height="${bottom - 248}" rx="3" fill="${fill}"/>`).join('')
+  /** The bare arms and hands below the sleeves, on both sides. */
+  const bareArms = (top: number): Uint8Array => at2x((x, y) => y >= top && y <= 345 && (x < 147 || x > 237))
+
+  it('keeps an outfit picture’s cream rim and finger edges out of its layer, and still covers the underwear (C6)', async () => {
+    // The picture draws the arms 1.5 units wider on the outside and the hands 1.5 lower: the body's own outline then
+    // lies under the picture's cream, which the union with the body takes — a cream rim round the arms and the hands.
+    // And it shades the arms in the sleeves' shadow just below them.
+    const dir = copyCase(await skinBodyDir(), 'v4-skin-outfit')
+    const shadow = [127.5, 239].map((x) => `<rect x="${x}" y="278" width="17.5" height="4" fill="${SHADOW_SKIN}"/>`).join('')
+    const file = await draw(dir, 'outfit.png', skinBody({ grow: 1.5, extra: shadow }) + TSHIRT + sleeves(BLUE, 278))
+    const lines: string[] = []
+    await ingest({ file, target: { kind: 'item', slot: 'outfit', code: 'casual01' }, dir, targets: targetsOf(dir), baseId: 'f', overridesDir: noOverrides(), log: (line: string) => lines.push(line) })
+    const name = 'item_outfit_casual01_L40'
+    const l40 = await readPicture(join(dir, `${name}@2x.png`))
+    expect(solidOfIn(l40, REAL_CREAM, bareArms(278)), 'the cream rim round the arms and hands').toBe(0)
+    expect(solidOfIn(l40, SHADOW_SKIN, bareArms(278)), 'the skin in the sleeves’ shadow').toBe(0)
+    expect(solidOfIn(l40, BLUE, everywhere), 'the t-shirt and the sleeves').toBeGreaterThan(10_000)
+    expect(keptOut(lines), lines.join('\n')).toBeGreaterThan(0)
+    const rows = await allPass(dir, [name])
+    expect(rows.get(name)!.get('C6')!.detail).toContain('body_f_L30')
+  }, 300_000)
+
+  it('keeps a gold sleeve over the arm whole, cuff and all: gold is not the body’s skin', async () => {
+    const dir = copyCase(await skinBodyDir(), 'v4-skin-gold')
+    const cuffs = [124, 234].map((x) => `<rect x="${x}" y="294" width="26" height="6" fill="${GOLD_DEEP}"/>`).join('')
+    const file = await draw(dir, 'gold.png', skinBody() + TSHIRT + sleeves(GOLD, 300) + cuffs)
+    await ingest({ file, target: { kind: 'item', slot: 'outfit', code: 'champion01' }, dir, targets: targetsOf(dir), baseId: 'f', overridesDir: noOverrides() })
+    const l40 = await readPicture(join(dir, 'item_outfit_champion01_L40@2x.png'))
+    const inSleeves = (x: number, y: number): boolean => [124, 234].some((left) => x >= left + 1.5 && x <= left + 26 - 1.5 && y >= 249.5 && y <= 298.5)
+    expect(solidShare(l40, at2x(inSleeves)), 'the gold sleeves').toBeGreaterThan(0.98)
+    const inCuffs = (x: number, y: number): boolean => [124, 234].some((left) => x >= left + 1.5 && x <= left + 26 - 1.5 && y >= 295 && y <= 299)
+    expect(solidShare(l40, at2x(inCuffs)), 'the deep-gold cuffs on the bare forearm').toBeGreaterThan(0.98)
+  }, 300_000)
 })
