@@ -67,9 +67,10 @@ import {
   placeOnCanvas,
   readPicture,
   removeChroma,
+  resizePicture,
   writeDensities,
 } from './png.mjs'
-import { AURA_CY, AURA_SIZE, AXIS_X, BASELINE_Y, CROP, FACE_LIMIT_Y, HEAD_LIMIT_Y, HEAD_REFERENCE, LAYERS, RING, RING_HOLLOW, SKIN_TOLERANCE, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, isSkin, placeByInk } from './frame.mjs'
+import { AURA_CY, AURA_SIZE, AXIS_X, BASELINE_Y, CROP, F01_TRANSFORM, FACE_LIMIT_Y, FRAME, HEAD_LIMIT_Y, HEAD_REFERENCE, LAYERS, RING, RING_HOLLOW, SKIN_TOLERANCE, TORSO_COLUMN, UNDERWEAR_BAND, applyTransform, baseSkinColour, isSkin, placeByInk } from './frame.mjs'
 import { BOTS, EXPRESSIONS, GENDERS, HAIR_CODES, ICON, MANIFEST_NAME, SLOT_LAYER, WEARS, bodyFaceFile, bodyFile, botFaceFile, botFile, entryFor, hairFile, hairGender, itemFile, readManifest, writeIcon, writeManifest } from './manifest.mjs'
 
 /** D02 §8.3: a chibi is between two and two and a half heads tall, or it is not this character. */
@@ -328,6 +329,165 @@ export function registerBySilhouette(itemPic, basePic, { density = 1, range = RE
   }
   const picture = shiftPicture(scaleAbout(itemPic, best.scale, pivotX, pivotY), best.dx, best.dy)
   return { picture, dx: best.dx, dy: best.dy, scale: best.scale, error: 1 - best.iou, iou: best.iou }
+}
+
+// ─────────────────────────────────────── the wide registration (Plan 19 final review) ──
+
+/**
+ * The search `registerWide` runs: the pipeline's own `registerToBase`, twice. First over ±10 % of scale in 1 % steps and
+ * ±16 px at half the frame's density (±32 frame units, about ±125 px of a 1024 × 1536 picture), then over the pipeline's
+ * own scales (`REGISTER_SCALES`, ±1 %) and ±6 px at @2x, from there. The pipeline's own search alone (±1 %, ±12 px @2x)
+ * cannot reach the 4–5 % zoom the image model applies to make room for what it adds: on spiky01 it stopped at its edge
+ * (dy 12, scale 0.99) with a mean difference of 20.4 — a picture that fits is at 2.4–4 — and cut the body's outline into
+ * the hair, which no check failed (Plan 19 C2).
+ *
+ * The second pass is also run alone, from where the picture stands, and whichever of the two lines the body up better
+ * (`registerWide`'s IoU) is the registration: a wide search over colour can slide a picture that changed the body — hair
+ * painted over the torso — to wherever the change shows least, and that picture is `verify`'s `scope` to fail.
+ */
+export const WIDE_SEARCH = [
+  { density: 0.5, range: 16, scales: Array.from({ length: 21 }, (_, i) => (90 + i) / 100) },
+  { density: 2, range: 6, scales: REGISTER_SCALES },
+]
+
+/**
+ * The legs: the rows from this share of the body's height down, which no hairstyle reaches (long hair falls to the hips,
+ * about 0.67 of the figure). A hairstyle's registration is measured there (`registerWide`), and `verify` holds a
+ * hairstyle's feet and centre line there (`BASE_LEGS_FROM`).
+ */
+export const LEGS_FROM = 0.8
+
+/** What `registerToBase` is given for each wide rule: what the picture leaves alone, so what it measures. */
+const WIDE_SLOT = { hair: 'hair', outfit: 'outfit', botFace: 'face' }
+/** How each rule's IoU is named in the log. */
+const WIDE_FIT = { hair: 'legs IoU', outfit: 'silhouette IoU', botFace: 'figure IoU' }
+
+/**
+ * Which wide registration an ingest target takes (`registerWide`), or null — the one rule every ingest asks, the CLI's and
+ * the registry's alike (Plan 19 final review: one code path):
+ *
+ * - `hair` — a hairstyle, drawn on its gender's bald body;
+ * - `outfit` — an outfit cut on a v4 body (`baseId` `f`/`m`): it changes the body everywhere below the chin, so it is
+ *   registered by silhouette;
+ * - `botFace` — a bot's second face (`bot:<n>:happy`), drawn from the bot's own neutral picture (Plan 19 C4).
+ *
+ * Everything else is registered by `registerToBase` alone (a hat, a pair of glasses) or not at all (a body, a body's face,
+ * a bot's neutral picture, which are cut on a stored transform as they were drawn; an aura or a frame, placed by its ink).
+ *
+ * @param {{ kind: string, slot?: string, expr?: string }} target
+ * @param {string | null} [baseId]
+ */
+export function wideRegistration(target, baseId = 'f') {
+  if (target.kind === 'hair') return 'hair'
+  if (target.kind === 'item' && target.slot === 'outfit' && GENDERS.includes(baseId ?? 'f')) return 'outfit'
+  if (target.kind === 'bot' && (target.expr ?? 'neutral') !== 'neutral') return 'botFace'
+  return null
+}
+
+/** `transform` followed by a move on the frame: scaled by `scale` about (`AXIS_X`, `BASELINE_Y`), then shifted by (`dx`, `dy`) frame units. */
+export function movedTransform(transform, { scale, dx, dy }) {
+  return {
+    scale: transform.scale * scale,
+    offsetX: (transform.offsetX - AXIS_X) * scale + AXIS_X + dx,
+    offsetY: (transform.offsetY - BASELINE_Y) * scale + BASELINE_Y + dy,
+  }
+}
+
+/** The IoU of two same-size pictures' solid pixels over the rows from `fromY` down (0: the whole picture). */
+function solidIoU(pic, ref, fromY = 0) {
+  const { width, height } = ref
+  let both = 0
+  let either = 0
+  for (let y = Math.max(0, fromY); y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const at = (y * width + x) * 4 + 3
+      const a = pic.data[at] > ALPHA_SOLID
+      const b = ref.data[at] > ALPHA_SOLID
+      if (a && b) both++
+      if (a || b) either++
+    }
+  }
+  return either === 0 ? 0 : both / either
+}
+
+/**
+ * How well a registered picture lines up with what it was drawn on, at @2x — what `registerWide` chooses between its two
+ * searches by, and what `verify` holds a registration to (`REGISTRATION` in avatar-registry/verify.mjs):
+ *
+ * - `hair` — the legs (`LEGS_FROM`), solid in either picture: the part of the body no hairstyle reaches;
+ * - `outfit` — `registerBySilhouette`'s own IoU, the number its log prints: an outfit changes the body everywhere below
+ *   the chin, so nothing is left alone to measure;
+ * - `botFace` — the whole figure, solid in either picture: a face changes the inside of the head and nothing else.
+ */
+function wideFit(rule, placed, body, found) {
+  if (rule === 'outfit') return found.iou
+  if (rule === 'botFace') return solidIoU(placed, body)
+  const box = alphaBBox(body)
+  return box === null ? 0 : solidIoU(placed, body, box.y + Math.floor(box.h * LEGS_FROM))
+}
+
+/**
+ * Register a picture onto what it was drawn on, searched wide (`WIDE_SEARCH`) — the one registration every ingest of a
+ * hairstyle, an outfit on a v4 body and a bot's second face applies, from the command line and from the registry alike,
+ * and the one `verify` judges such a picture's `drift` by (Plan 19 final review). The image model zooms or moves a
+ * picture by a few per cent to make room for what it adds; this finds it again.
+ *
+ * `keyed` is the picture with its background removed, on its own canvas; `transform` puts it on the frame (the body's
+ * stored transform, in an ingest); `body` is what it is registered onto, on the frame at @2x — the body's L30 (worn with
+ * the hairstyle an item was drawn over), or a bot's neutral L30. Each pass places the picture afresh from `keyed`, the move
+ * found so far folded into the transform, so the picture is resampled once whatever the search did.
+ *
+ * Returns the registered picture at @2x, its `transform`, the move — `scale` about (`AXIS_X`, `BASELINE_Y`), then `dx`,
+ * `dy` in frame units — its `iou` (`wideFit`), which search won (`near`, the @2x pass alone from where the picture stood,
+ * or `wide`, both passes) and the other's IoU.
+ *
+ * @param {{ keyed: { data: Buffer, width: number, height: number }, transform: { scale: number, offsetX: number, offsetY: number }, body: { data: Buffer, width: number, height: number }, rule: 'hair' | 'outfit' | 'botFace' }} options
+ */
+export async function registerWide({ keyed, transform, body, rule }) {
+  const slot = WIDE_SLOT[rule]
+  if (!slot) throw new Error(`no wide registration ${rule} — one of ${Object.keys(WIDE_SLOT).join(', ')}`)
+  if (body.width !== FRAME.w * 2 || body.height !== FRAME.h * 2) throw new Error(`the picture registered onto is ${body.width} × ${body.height}, not the frame at @2x`)
+  const bodies = new Map([[2, body]])
+  const bodyAt = async (density) => {
+    if (!bodies.has(density)) bodies.set(density, await resizePicture(body, Math.round(FRAME.w * density), Math.round(FRAME.h * density)))
+    return bodies.get(density)
+  }
+  /** Run `passes` one after the other, each from where the last left the picture. */
+  const search = async (passes) => {
+    let move = { scale: 1, dx: 0, dy: 0 }
+    let found = null
+    for (const { density, range, scales } of passes) {
+      const placed = await applyTransform(keyed, movedTransform(transform, move), density)
+      found = registerToBase(placed, await bodyAt(density), { slot, density, range, scales })
+      // `found` scaled about (AXIS_X, BASELINE_Y) at this density, then shifted by whole pixels at it: in frame units,
+      // that scale and the shift / density, composed after the moves before it.
+      move = { scale: move.scale * found.scale, dx: move.dx * found.scale + found.dx / density, dy: move.dy * found.scale + found.dy / density }
+    }
+    const placed = await applyTransform(keyed, movedTransform(transform, move), 2)
+    return { move, placed, iou: wideFit(rule, placed, body, found) }
+  }
+  const near = await search(WIDE_SEARCH.slice(-1))
+  const wide = await search(WIDE_SEARCH)
+  const [chosen, other, searched] = near.iou >= wide.iou ? [near, wide, 'near'] : [wide, near, 'wide']
+  return { picture: chosen.placed, transform: movedTransform(transform, chosen.move), ...chosen.move, iou: chosen.iou, searched, otherIou: other.iou }
+}
+
+/**
+ * The registration an ingest cuts a picture after: the wide one (`registerWide`) when `rule` names one, else the pipeline's
+ * own `registerToBase` on the anchored picture. Logs it as `registered on <onto>: …` and returns what `registerToBase`
+ * returns — `{ picture, dx, dy, scale, error?, iou? }`, the move in px @2x.
+ */
+async function registerForCut({ keyed, transform, anchored, onto, ontoName, rule, slot, log }) {
+  if (rule) {
+    const found = await registerWide({ keyed, transform, body: onto, rule })
+    const searched = found.searched === 'wide' ? `the wide search; the near one alone ${found.otherIou.toFixed(3)}` : `the near search; the wide one ${found.otherIou.toFixed(3)}`
+    log(`registered on ${ontoName}: dx ${(found.dx * 2).toFixed(1)}, dy ${(found.dy * 2).toFixed(1)} px @2x, scale ${found.scale.toFixed(4)} (${WIDE_FIT[rule]} ${found.iou.toFixed(3)}, ${searched})`)
+    return { picture: found.picture, dx: found.dx * 2, dy: found.dy * 2, scale: found.scale, iou: found.iou }
+  }
+  const registered = registerToBase(anchored, onto, { slot, density: 2 })
+  const fit = registered.iou === undefined ? `mean difference ${registered.error.toFixed(1)}` : `silhouette IoU ${registered.iou.toFixed(3)}`
+  log(`registered on ${ontoName}: dx ${registered.dx}, dy ${registered.dy} px @2x, scale ${registered.scale} (${fit})`)
+  return registered
 }
 
 /**
@@ -1681,15 +1841,15 @@ export function describeMeasurement(report, width) {
  * - **A body** (`{ kind: 'body', gender }`, `--as body:<g>`): the whole figure as `body_<g>_L30` and its head region
  *   as `body_<g>_face_neutral_L50`, both masked (skin; eyes on the face), and `bodies[<g>] = { transform }` stored.
  *   Where it goes is `bodyTransform`'s answer: `transformFrom`'s stored transform; else, ingested again, the body's own;
- *   else `BODY_TRANSFORM_FROM`'s, body f's — f01's verbatim, the canvas `f01_candidate_1.png` was drawn on, which both
- *   bodies are drawn from; and only in a manifest that holds no body at all, its own box (`anchorBase`), as the first
- *   flat base once set the canvas. `--dry-run` also prints C12 for a cut into a temporary copy. **`anchor: 'head'`**
+ *   else `F01_TRANSFORM` (frame.mjs), the canvas `f01_candidate_1.png` was drawn on, which both bodies are drawn from —
+ *   in a fresh directory too (Plan 19 final review). `--dry-run` also prints C12 for a cut into a temporary copy. **`anchor: 'head'`**
  *   (`--anchor head`, on the user's word only, when C12 fails on position or scale alone) re-places the body by its
  *   eyes instead and stores `anchor: 'head'` beside the transform.
  * - **A body's face** (`{ kind: 'bodyFace', gender, expr }`, `--as face:<g>:<expr>`): `body_<g>_face_<expr>_L50`, the
  *   head region of an expression's picture (`keepOnlyFace`), on `bodies[<g>].transform`.
  * - **A hairstyle** (`{ kind: 'hair', code }`, `--as hair:<code>`) is drawn on its gender's bald body: registered on
- *   it, diffed against it with the hair face rule (`hairFaceRule`), and the region split (`splitHair`) into
+ *   it (searched wide, `registerWide`: the image model zooms a hair picture out by 4–5 %), diffed against it with the
+ *   hair face rule (`hairFaceRule`), and the region split (`splitHair`) into
  *   `item_hair_<code>_L60` (front, with the split's `split`) and `_L20` (back, `empty: true` when blank) — see
  *   `hairLayers`. **`recolourTo`** (`--recolour-to #rrggbb`, only when `colours` shows a mapped style more than
  *   15 ΔE from its `naturalColour`) recolours both layers' hair to it and records `recolouredTo` on the L60; an ingest
@@ -1708,8 +1868,14 @@ export function describeMeasurement(report, width) {
  *   whole figure as `bot_<n>_L30` and its head region as `bot_<n>_face_neutral_L50`. The other five faces are written
  *   as copies of the neutral one, marked `copyOf`, so `check` and the app see a complete set — except a face already
  *   real in its own right, which a new neutral picture leaves alone. **A bot's second face** (`bot:<n>:<expression>`,
- *   `bot:<n>:happy` in practice) cuts that one face from its picture's head region, on the same transform, and
- *   replaces the copy.
+ *   `bot:<n>:happy` in practice) is drawn from the bot's own neutral picture: it is registered onto the bot's real
+ *   `bot_<n>_L30` (searched wide, `registerWide` — cut as drawn, and said so, while that is still a stand-in), then that one
+ *   face is cut from its head region and replaces the copy.
+ *
+ * **One registration** (Plan 19 final review): what `wideRegistration` names — a hairstyle, an outfit on a v4 body, a bot's
+ * second face — is registered with the wide search (`registerWide`) here, in the pipeline, whoever calls it: the command
+ * line and the registry's `ingest` and `verify` hand it the same picture and get the same layers. A hat or a pair of
+ * glasses keeps the pipeline's own `registerToBase` (±1 %, ±12 px @2x).
  *
  * Every item and bot layer ingested records **`cutOn`**, the body it was cut on (an aura and a frame have none): C6
  * fails a real outfit layer without one. And an item ingested again with no `tintSeed` **keeps the seed** its entry
@@ -1795,7 +1961,7 @@ export async function ingest({ file, target, dir, targets, baseId = 'f', variant
   } else if (target.kind === 'bodyFace') {
     layers.push(faceLayer(anchored, bodyFaceFile(target.gender, target.expr)))
   } else if (target.kind === 'hair') {
-    layers.push(...await hairLayers({ anchored, code: target.code, dir, manifest, diff, overridesDir, log }))
+    layers.push(...await hairLayers({ keyed, transform, anchored, code: target.code, dir, manifest, diff, overridesDir, log }))
   } else if (target.kind === 'bot') {
     // The kit draws a bot as two layers (`layersFor` in packages/ui-kit/src/avatar2d/layers.ts): L30 and one
     // L50 face per expression — no hair layers, no wardrobe, so no icon. Every layer this writes, the copies
@@ -1822,16 +1988,26 @@ export async function ingest({ file, target, dir, targets, baseId = 'f', variant
         layers.push({ file: { name, layer: LAYERS.face }, picture: neutralPicture, clip: face, extra: { copyOf: neutral, cutOn } })
       }
     } else {
-      layers.push({ file: { name: botFaceFile(target.bot, expr), layer: LAYERS.face }, picture: face(anchored, 2), clip: face, extra: { cutOn } })
+      // Drawn from the bot's own neutral picture, and zoomed or moved a little on the way (Plan 19 C4): registered onto
+      // that picture's cut, the bot's L30, so the face lands where the neutral one is. A stand-in L30 is no picture of the
+      // bot to register onto: the face is then cut where it was drawn.
+      const neutralName = botFile(target.bot)
+      const neutralFile = join(dir, `${neutralName}@2x.png`)
+      let drawn = anchored
+      if (manifest.files[neutralName]?.real === true && existsSync(neutralFile)) {
+        drawn = (await registerForCut({ keyed, transform, anchored, onto: await readPicture(neutralFile), ontoName: neutralName, rule: wideRegistration(target), log })).picture
+      } else {
+        log(`${neutralName} is not real art yet: ${botFaceFile(target.bot, expr)} is cut where it was drawn, not registered onto the bot's neutral picture`)
+      }
+      layers.push({ file: { name: botFaceFile(target.bot, expr), layer: LAYERS.face }, picture: face(drawn, 2), clip: face, extra: { cutOn } })
     }
   } else {
     // The item is measured against the body as it is drawn: `body_<g>_L30`, wearing the hairstyle the item was drawn
-    // over (`hair`) if any — otherwise the hair the item picture still shows would read as part of the item.
+    // over (`hair`) if any — otherwise the hair the item picture still shows would read as part of the item. An outfit is
+    // registered on it searched wide (`wideRegistration`), a hat or a pair of glasses by the pipeline's own search.
     let basePicture = await readPicture(join(dir, `${bodyFile(baseId)}@2x.png`))
     if (hair !== null) basePicture = await wearingHair(basePicture, { dir, manifest, code: hair, log })
-    const registered = registerToBase(anchored, basePicture, { slot: target.slot, density: 2 })
-    const fit = registered.iou === undefined ? `mean difference ${registered.error.toFixed(1)}` : `silhouette IoU ${registered.iou.toFixed(3)}`
-    log(`registered on ${baseId}: dx ${registered.dx}, dy ${registered.dy} px @2x, scale ${registered.scale} (${fit})`)
+    const registered = await registerForCut({ keyed, transform, anchored, onto: basePicture, ontoName: baseId, rule: wideRegistration(target, baseId), slot: target.slot, log })
     // The item keeps the body's own skin out (the body-skin rule) — off only while the body has no skin mask.
     const skin = await itemBodySkin({ dir, manifest, gender: baseId, hair, log })
     const ownSkin = skin && { skin, ...BODY_SKIN_RULE.item }
@@ -1890,15 +2066,9 @@ export const SQUARE_SLOTS = new Set(['aura', 'frame'])
 export const TARGET_KINDS = ['body', 'bodyFace', 'hair', 'item', 'bot']
 /**
  * The body whose stored transform a bot is cut on, unless `transformFrom` names the other (Plan 19 D1): body f, whose
- * picture every v4 bot was drawn from. Plan 12's bots were cut on f01's, which body f's is verbatim.
+ * picture every v4 bot was drawn from. Plan 12's bots were cut on f01's, which body f's is verbatim (`F01_TRANSFORM`).
  */
 export const BOT_TRANSFORM_FROM = 'f'
-/**
- * The body whose stored transform a body with none of its own is cut on, unless `transformFrom` says otherwise (Plan 19
- * D1): body f, whose transform is f01's verbatim — the canvas `f01_candidate_1.png` was drawn on, which both bodies are
- * drawn from. (Until D1 this was f01 itself.)
- */
-export const BODY_TRANSFORM_FROM = 'f'
 
 // ─────────────────────────────────────────────────────── the v4 targets (Plan 19) ──
 
@@ -1946,9 +2116,10 @@ const describeTransform = (t) => `scale ${t.scale.toFixed(4)}, offset ${t.offset
  *
  * - `transformFrom` given: that body's stored transform, verbatim.
  * - Otherwise the body's own stored transform when it has one — it is being ingested again, and keeps where it was
- *   placed (and, if it was, that it was placed by its head) — or else `BODY_TRANSFORM_FROM`'s, body f's: f01's
- *   verbatim, the canvas both bodies are drawn on. In a manifest with neither (a fresh directory: the first body ever
- *   cut there), the body sets the canvas itself — placed by its own box (`anchorBase`), as the first flat base once was.
+ *   placed (and, if it was, that it was placed by its head) — or else `F01_TRANSFORM` (frame.mjs): the canvas both
+ *   bodies are drawn on, F01's, in a fresh directory as much as beside the other body (Plan 19 final review). Neither the
+ *   body's own box (`anchorBase` put the real bald body_f at scale 0.2725, C12 25.7 units off) nor the other body's
+ *   stored transform (moved by its eyes, were it ever ingested with `--anchor head`) stands in for the canvas.
  * - **`anchor: 'head'`** (pre-flight #23; on the user's word only, when C12 fails on position or scale alone) starts
  *   from that same transform and cuts once on it into a temporary directory (`headOf`). The transform it returns maps
  *   the eye span measured there onto `HEAD_REFERENCE.eyeSpan`, scaling about the eye midpoint, and the eye midpoint
@@ -1969,14 +2140,8 @@ async function bodyTransform({ keyed, manifest, gender, transformFrom, anchor, l
       const anchored = own.anchor ? ` (anchored on the ${own.anchor})` : ''
       return { transform, anchor: own.anchor ?? null, from: `body ${gender}'s transform`, line: `transform kept from body ${gender}'s last ingest${anchored}: ${describeTransform(transform)}` }
     }
-    const canvas = manifest.bodies?.[BODY_TRANSFORM_FROM]?.transform
-    if (canvas) {
-      const transform = { ...canvas }
-      return { transform, anchor: null, from: `body ${BODY_TRANSFORM_FROM}'s transform`, line: `transform taken from ${BODY_TRANSFORM_FROM}: ${describeTransform(transform)}` }
-    }
-    const { scale, offsetX, offsetY } = anchorBase(keyed)
-    const transform = { scale, offsetX, offsetY }
-    return { transform, anchor: null, from: 'its own box', line: `no body has a transform yet: placed by its own box — ${describeTransform(transform)}` }
+    const transform = { ...F01_TRANSFORM }
+    return { transform, anchor: null, from: "F01's transform", line: `body ${gender} has no transform of its own yet: placed on F01's canvas — ${describeTransform(transform)}` }
   }
   const from = start()
   if (anchor !== 'head') {
@@ -2081,8 +2246,9 @@ async function maskAlpha(dir, name, entry, kind) {
 }
 
 /**
- * A hairstyle's two layers (spec §5.4): the picture registered on the bald body (`registerToBase`, measured on the
- * rows the hair leaves alone, y ≥ `HEAD_LIMIT_Y`), its difference against the body — no area limit, the hair face rule
+ * A hairstyle's two layers (spec §5.4): the picture registered on the bald body (`registerWide`, the pipeline's own
+ * `registerToBase` searched wide, measured on the rows the hair leaves alone, y ≥ `HEAD_LIMIT_Y` — from `keyed` on
+ * `transform`), its difference against the body — no area limit, the hair face rule
  * (`hairFaceRule`, on the body's neutral face and its masks) — and that region split (`splitHair`), or split by a hand-drawn
  * `item_hair_<code>_frontmask.png` in `overridesDir` when one is there.
  *
@@ -2090,12 +2256,11 @@ async function maskAlpha(dir, name, entry, kind) {
  * layers hold it (the region at the picture's own alpha), and of each — and the L20 the back, `empty: true` when the
  * split leaves nothing behind (a short style).
  */
-async function hairLayers({ anchored, code, dir, manifest, diff, overridesDir, log }) {
+async function hairLayers({ keyed, transform, anchored, code, dir, manifest, diff, overridesDir, log }) {
   const gender = hairGender(code)
   const bodyName = bodyFile(gender)
   const bodyPicture = await readPicture(join(dir, `${bodyName}@2x.png`))
-  const registered = registerToBase(anchored, bodyPicture, { slot: 'hair', density: 2 })
-  log(`registered on ${bodyName}: dx ${registered.dx}, dy ${registered.dy} px @2x, scale ${registered.scale} (mean difference ${registered.error.toFixed(1)})`)
+  const registered = await registerForCut({ keyed, transform, anchored, onto: bodyPicture, ontoName: bodyName, rule: 'hair', log })
 
   const neutral = bodyFaceFile(gender, 'neutral')
   const neutralEntry = manifest.files[neutral]

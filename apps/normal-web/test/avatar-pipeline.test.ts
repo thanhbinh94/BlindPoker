@@ -23,7 +23,7 @@ import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { STRAY_MARGIN, eachStray, headMetrics, runChecks } from '../scripts/avatar-pipeline/checks.mjs'
 import { BODY_SKIN_RULE, OUTFIT_TOP_Y, cutItem, diffAgainstBase, dropStrays, ingest, measure, registerBySilhouette, registerToBase, shiftPicture } from '../scripts/avatar-pipeline/extract.mjs'
-import { AURA_CY, AURA_SIZE, AXIS_X, BASELINE_Y, BODY, CHIN_TOLERANCE, CROP, DENSITIES, FACE_LIMIT_Y, FRAME, HEAD_REFERENCE, HEAD_TOLERANCE, LAYERS, RING, SKIN_AREA, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
+import { AURA_CY, AURA_SIZE, AXIS_X, BASELINE_Y, BODY, CHIN_TOLERANCE, CROP, DENSITIES, F01_TRANSFORM, FACE_LIMIT_Y, FRAME, HEAD_REFERENCE, HEAD_TOLERANCE, LAYERS, RING, SKIN_AREA, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
 import { EXPRESSIONS, FIT_SHEET_FILE, HAIR_CODES, ICON, ITEMS_FILE, MANIFEST_NAME, NAME_PATTERN, SHEET_FILE, WEARS, bodyFaceFile, bodyFile, buildPlaceholders, hairFile, hairItemId, iconName, itemFile, parseName, serialiseManifest, stageOneFiles, variantFile, wearOf, writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
 import { MASK_FILE_KIND, describeColours } from '../scripts/avatar-pipeline/masks.mjs'
 import { alphaBBox, blankPicture, cropPicture, overPicture, readPicture, removeChroma, renderSvg, writeDensities, writePicture } from '../scripts/avatar-pipeline/png.mjs'
@@ -160,6 +160,20 @@ function caseDir(name: string): string {
   const dir = join(temp, name)
   mkdirSync(dir, { recursive: true })
   return dir
+}
+
+/**
+ * Seed `dir`'s manifest with the synthetic canvas's own transform for each of `genders`, before a case ingests the grey
+ * FIGURE as that body. A body with no stored transform of its own lands on F01's (`F01_TRANSFORM`, Plan 19 final review):
+ * the real canvas, 1024 × 1536. This one is 1152 × 1344, laid out so the frame maths comes out round, and on F01's
+ * transform its figure would stand off the axis and short of the baseline — so the canvas brings its own, `anchorBase` of
+ * the figure, as a body was placed in an empty directory until then. The body then keeps it, as a body ingested again does.
+ */
+function seedCanvas(dir: string, genders: string[] = ['f']): { scale: number; offsetX: number; offsetY: number } {
+  const canvas = { scale: transform.scale, offsetX: transform.offsetX, offsetY: transform.offsetY }
+  const bodies = Object.fromEntries(genders.map((gender) => [gender, { transform: { ...canvas } }]))
+  writeFileSync(join(dir, MANIFEST_NAME), serialiseManifest({ version: 1, frame: FRAME, crop: CROP, files: {}, bodies }))
+  return canvas
 }
 
 /** The manifest `check` reads: one entry per file, the same shape the pipeline writes. */
@@ -1564,6 +1578,26 @@ describe('the v4 review sheet and the fit sheet (Plan 19 A1d, spec §5.6)', () =
     expect(() => sheetCards(committed, { outfits: ['pyjamas01'] })).toThrow(/pyjamas01/)
   })
 
+  it('refuses an empty --hairs or --outfits, which would narrow the grid to nothing (Plan 19 final review)', () => {
+    for (const empty of [[], [''], [' ', '']]) {
+      expect(() => sheetCards(committed, { hairs: empty }), JSON.stringify(empty)).toThrow(/--hairs names no hairstyle — give one or more of f_bob01/)
+      expect(() => sheetCards(committed, { outfits: empty }), JSON.stringify(empty)).toThrow(/--outfits names no outfit — give one or more of/)
+    }
+    // On the command line, before a sheet is written: exit 1, and the reason.
+    const out = join(caseDir('sheet-empty-hairs'), 'sheet.png')
+    let failed: { status?: number; stderr?: string } = {}
+    try {
+      execFileSync(process.execPath, [SCRIPT, 'sheet', '--hairs', '', '--out', out, '--fit-out', `${out}.fit.png`], { cwd: PACKAGE_ROOT, encoding: 'utf8', stdio: 'pipe' })
+    } catch (error) {
+      failed = error as { status?: number; stderr?: string }
+    }
+    expect(failed.status).toBe(1)
+    expect(failed.stderr).toMatch(/--hairs names no hairstyle/)
+    expect(existsSync(out)).toBe(false)
+    // The fit sheet's tile is the portrait crop at @1x, so a crop is blitted as it is.
+    expect(FIT_GRID.tile).toEqual({ w: CROP.size, h: CROP.size })
+  })
+
   it('paints the outer tones from items.json, and draws natural, saying so, while an item is missing', () => {
     const withBoth = grid(sheetCards(committed, { items: skinItems }))
     expect(withBoth.map((card) => card.tone?.colour ?? 'natural').slice(0, 3)).toEqual([SKIN.porcelain, 'natural', SKIN.deep])
@@ -1949,14 +1983,15 @@ describe('the ingest command', () => {
     expect(existsSync(join(dir, MANIFEST_NAME))).toBe(false)
   }, 60_000)
 
-  it('anchors the first body by its own box, then cuts a hat out against it (--base f by default), and both pass the checks', async () => {
+  it('keeps the body on its canvas’s transform, then cuts a hat out against it (--base f by default), and both pass the checks', async () => {
     const dir = caseDir('ingest-run')
     const { base, item } = await sources(dir)
+    seedCanvas(dir)
     run(['ingest', base, '--as', 'body:f', '--out', dir])
     run(['ingest', item, '--as', 'item:head:tophat01', '--out', dir])
     const manifest = JSON.parse(readFileSync(join(dir, MANIFEST_NAME), 'utf8')) as Manifest
-    // No body had a transform yet, so this one sets the canvas by its own box (Plan 19 D1: the first flat base did, before),
-    // and stores it so that everything generated beside it lands on the same pixels.
+    // The body keeps the canvas's stored transform — the figure's own box — so that everything generated beside it lands
+    // on the same pixels.
     expect(manifest.bodies!.f!.transform.scale).toBeCloseTo(BODY.h / (SRC_FIGURE.bottom - SRC_FIGURE.top), 3)
     for (const name of ['body_f_L30', 'item_head_tophat01_L80']) {
       expect(manifest.files[name]!.real, `${name} should be marked as real art`).toBe(true)
@@ -2043,6 +2078,7 @@ describe('per-wear variants', () => {
         throw new Error(`${(error as { stdout?: string }).stdout ?? ''}\n${(error as { stderr?: string }).stderr ?? ''}\n${(error as Error).message}`)
       }
     }
+    seedCanvas(dir, ['m'])
     run(['ingest', base, '--as', 'body:m', '--out', dir])
     // The line for a male dealer01: the body's gender is its wear.
     run(['ingest', clothes, '--as', 'item:outfit:dealer01', '--base', 'm', '--variant', 'm', '--out', dir])
@@ -2237,10 +2273,11 @@ const fullyTransparent = (pic: Picture): boolean => {
 }
 
 describe('a body cut from one picture, and layers marked empty', () => {
-  // The grey FIGURE as a body: the first one in a fresh directory, so placed by its own box.
+  // The grey FIGURE as a body, on its canvas's transform (`seedCanvas`).
   const ingestBody = async (dir: string): Promise<Manifest> => {
     const file = join(dir, 'body.png')
     await writePicture(await renderSvg(sourceSvg(), SRC.w, SRC.h), file)
+    seedCanvas(dir)
     await ingest({ file, target: { kind: 'body', gender: 'f' }, dir, targets: [join(dir, MANIFEST_NAME)] })
     return JSON.parse(readFileSync(join(dir, MANIFEST_NAME), 'utf8')) as Manifest
   }
@@ -2445,9 +2482,10 @@ describe('auras, frames and bots', () => {
       for (const result of row.results) expect(result.ok, `${row.name} ${result.id}: ${result.detail}`).toBe(true)
     }
   }
-  /** The grey FIGURE as body f, the first body in `dir`: placed by its own box. */
+  /** The grey FIGURE as body f, the first body in `dir`, on its canvas's transform (`seedCanvas`). */
   async function ingestBodyF(dir: string): Promise<void> {
     const file = await draw(dir, 'body.png', sourceSvg(), SRC.w, SRC.h)
+    seedCanvas(dir)
     await ingest({ file, target: { kind: 'body', gender: 'f' }, dir, targets: targetsOf(dir) })
   }
 
@@ -2605,6 +2643,7 @@ describe('auras, frames and bots', () => {
     const frame = await draw(dir, 'frame.png', ringSvg(1024, 440, 80), 1024, 1024)
     const bot = await draw(dir, 'bot.png', sourceSvg(ANTENNA), SRC.w, SRC.h)
     const happy = await draw(dir, 'bot-happy.png', sourceSvg(ANTENNA + SMILE), SRC.w, SRC.h)
+    seedCanvas(dir)
     run(['ingest', base, '--as', 'body:f', '--out', dir])
     // The exact lines docs/avatar-2d.md §4 gives.
     run(['ingest', aura, '--as', 'item:aura:fire01', '--out', dir])
@@ -2637,8 +2676,8 @@ describe('auras, frames and bots', () => {
  * items and bots cut on a body, and C6 routed by an outfit's `cutOn`.
  *
  * Every picture is synthetic and drawn in **frame units**, then mapped onto the source canvas through the canvas's
- * stored transform (`onCanvas`) — the grey FIGURE's, ingested first as body f and so placed by its own box, as the
- * first flat base f01 set it before D1. A shape drawn at frame (x, y) therefore lands on frame (x, y) once a body cut
+ * stored transform (`onCanvas`) — the grey FIGURE's, ingested first as body f on the canvas's own transform (`seedCanvas`:
+ * the figure's box, as the first flat base f01 set it before D1). A shape drawn at frame (x, y) therefore lands on frame (x, y) once a body cut
  * on that transform has ingested it — which is what puts this body's eyes and chin exactly where C12 wants F01's, and
  * what lets every assertion below name its pixels by the shapes that drew them.
  *
@@ -2831,14 +2870,14 @@ describe('v4 ingest (Plan 19 A2a)', () => {
     return () => (made ??= make())
   }
   /**
-   * The canvas every v4 picture is drawn on (`f01_candidate_1.png`'s role): the grey FIGURE ingested as body f into a
-   * fresh directory — no body has a transform there yet, so it is placed by its own box — whose stored transform the
-   * real bald body then keeps.
+   * The canvas every v4 picture is drawn on (`f01_candidate_1.png`'s role): the grey FIGURE ingested as body f on the
+   * canvas's own transform (`seedCanvas`, the figure's own box) — whose stored transform the real bald body then keeps.
    */
   const canvasDir = memo(async () => {
     const dir = caseDir('v4-canvas')
     const file = join(dir, 'canvas.png')
     await writePicture(await renderSvg(sourceSvg(), SRC.w, SRC.h), file)
+    seedCanvas(dir)
     await ingest({ file, target: { kind: 'body', gender: 'f' }, dir, targets: targetsOf(dir), overridesDir: noOverrides() })
     return dir
   })
@@ -2865,8 +2904,8 @@ describe('v4 ingest (Plan 19 A2a)', () => {
     const dir = await bodyDir()
     const manifest = manifestIn(dir)
     expect(manifest.bodies?.f).toEqual({ transform: await canvasTransform() })
-    // The canvas itself was placed by the grey figure's own box (no body had a transform before it): the same
-    // transform `anchorBase` gives the picture.
+    // The canvas's transform is the grey figure's own box (`seedCanvas`): the same transform `anchorBase` gives the
+    // picture, kept by both bodies cut on it.
     const { scale, offsetX, offsetY } = anchorBase(removeChroma(await renderSvg(sourceSvg(), SRC.w, SRC.h), { tolerance: 40 }))
     expect(await canvasTransform()).toEqual({ scale, offsetX, offsetY })
     for (const [name, kinds] of [['body_f_L30', ['skin']], ['body_f_face_neutral_L50', ['eyes', 'skin']]] as const) {
@@ -2880,6 +2919,36 @@ describe('v4 ingest (Plan 19 A2a)', () => {
     const rows = await allPass(dir, ['body_f_L30', 'body_f_face_neutral_L50'])
     // C12 measured the head (it is not an n/a): the eyes and the chin sit on F01's.
     expect(rows.get('body_f_L30')!.get('C12')!.detail).toMatch(/^eyes \(/)
+  }, 300_000)
+
+  it('places a body with no transform of its own on F01’s — in an empty folder, and beside a body moved by its eyes (Plan 19 final review)', async () => {
+    // F01's transform, pinned as a constant beside HEAD_REFERENCE: the committed manifest's, verbatim, for both bodies.
+    const committed = JSON.parse(readFileSync(WEB_MANIFEST, 'utf8')) as Manifest
+    expect(committed.bodies!.f!.transform).toEqual({ ...F01_TRANSFORM })
+    expect(committed.bodies!.m!.transform).toEqual({ ...F01_TRANSFORM })
+    expect(F01_TRANSFORM.scale).toBeCloseTo(0.2467, 4)
+    expect(F01_TRANSFORM.offsetX).toBeCloseTo(65.6, 1)
+    expect(F01_TRANSFORM.offsetY).toBeCloseTo(52.0, 1)
+
+    // An empty folder: the body lands on F01's canvas, not on its own box (anchorBase put the real bald body_f at 0.2725).
+    const dir = caseDir('v4-f01-transform')
+    const file = join(dir, 'body.png')
+    await writePicture(await renderSvg(sourceSvg(), SRC.w, SRC.h), file)
+    const lines: string[] = []
+    await ingest({ file, target: { kind: 'body', gender: 'f' }, dir, targets: targetsOf(dir), overridesDir: noOverrides(), log: (line: string) => lines.push(line) })
+    expect(manifestIn(dir).bodies).toEqual({ f: { transform: { ...F01_TRANSFORM } } })
+    expect(lines.join('\n')).toMatch(/body f has no transform of its own yet: placed on F01's canvas — scale 0\.2467, offset 65\.6, 52\.0/)
+    expect(transform.scale, 'the figure’s own box would have placed it elsewhere').not.toBeCloseTo(F01_TRANSFORM.scale, 3)
+
+    // Body f moved 6 units up by its eyes (as `--anchor head` stores it): body m still lands on F01's, not on body f's.
+    const moved = manifestIn(dir)
+    moved.bodies!.f = { transform: { ...F01_TRANSFORM, offsetY: F01_TRANSFORM.offsetY - 6 }, anchor: 'head' }
+    writeFileSync(join(dir, MANIFEST_NAME), serialiseManifest(moved))
+    await ingest({ file, target: { kind: 'body', gender: 'm' }, dir, targets: targetsOf(dir), overridesDir: noOverrides() })
+    expect(manifestIn(dir).bodies!.m).toEqual({ transform: { ...F01_TRANSFORM } })
+    // …and a body ingested again keeps its own, anchor and all.
+    await ingest({ file, target: { kind: 'body', gender: 'f' }, dir, targets: targetsOf(dir), overridesDir: noOverrides() })
+    expect(manifestIn(dir).bodies!.f).toEqual(moved.bodies!.f)
   }, 300_000)
 
   it('2. cuts a hairstyle into a front cap (L60) and a back panel (L20), and leaves the face it redrew out of both', async () => {

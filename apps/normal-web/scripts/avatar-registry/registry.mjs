@@ -26,6 +26,10 @@
  *   status     todo | generated | ok | ng | rework-<n> | approved | blocked
  *   attempts   [{ n, at, chat, file, measure, verdict, reason, by? }], one per generated picture
  *   ingested   true once `ingest` has put it into public/avatar/ (absent before)
+ *   superseded (Plan 19 final review) the id of the asset that replaced it (`'v4/bot_0'`), or `true` when nothing did — a
+ *              Plan 12 picture drawn and cut on the retired flat base f01, kept as history: `ingest` and `verify` refuse it
+ *              up front, and `next` never hands it out (`refuseSuperseded`, `isSuperseded`)
+ *   note       a sentence for a human reading the file — why an asset is superseded, say (absent when there is none)
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
@@ -101,6 +105,17 @@ export function validateRegistry(registry) {
     if (asset.ingest.flags !== undefined && !Array.isArray(asset.ingest.flags)) fail('ingest.flags is not an array')
     if (typeof asset.status !== 'string' || !STATUS.test(asset.status)) fail(`status ${asset.status} is not one of todo, generated, ok, ng, rework-<n>, approved, blocked`)
     if (!Array.isArray(asset.attempts)) fail('attempts is not an array')
+    if (asset.superseded !== undefined && asset.superseded !== true && (typeof asset.superseded !== 'string' || asset.superseded === '')) {
+      fail(`superseded is ${JSON.stringify(asset.superseded)} — the id of the asset that replaced it, or true`)
+    }
+    if (asset.note !== undefined && (typeof asset.note !== 'string' || asset.note === '')) fail('note is not a sentence')
+  }
+  for (const asset of registry.assets) {
+    if (typeof asset.superseded === 'string') {
+      const by = findAsset(registry, asset.superseded)
+      if (by === null) throw new Error(`asset ${asset.id}: superseded by ${asset.superseded}, which is not in the registry`)
+      if (by.id === asset.id || isSuperseded(by)) throw new Error(`asset ${asset.id}: superseded by ${asset.superseded}, which is not a live asset`)
+    }
   }
   for (const asset of registry.assets) {
     const { reference } = asset
@@ -137,6 +152,22 @@ export function requireAsset(registry, id) {
   const asset = findAsset(registry, id)
   if (!asset) throw new Error(`no asset ${id} in the registry`)
   return asset
+}
+
+/** Whether an asset is a superseded Plan 12 entry, kept as history (`superseded`: an id, or `true`). */
+export const isSuperseded = (asset) => asset.superseded !== undefined && asset.superseded !== false
+
+/**
+ * Throw, naming the asset and what replaced it, when `what` (`ingest`, `verify`) is asked of a superseded entry (Plan 19
+ * final review). Plan 12's bots, casual01 and hats and glasses were drawn and cut on the flat base f01, which the
+ * switch-over retired: cut again today, a bot or casual01 would land under its v4 replacement's `ingest.as` and overwrite
+ * that art, and a hat or a pair of glasses — `base` null, no `--hair` — would be diffed against the bald body f, F01's
+ * hair and all read as the item.
+ */
+export function refuseSuperseded(asset, what) {
+  if (!isSuperseded(asset)) return
+  const by = typeof asset.superseded === 'string' ? `superseded by ${asset.superseded}` : 'superseded'
+  throw new Error(`asset ${asset.id} is ${by} — ${asset.note ?? 'kept as history'}; ${what} refuses it (Plan 19 final review)`)
 }
 
 /**

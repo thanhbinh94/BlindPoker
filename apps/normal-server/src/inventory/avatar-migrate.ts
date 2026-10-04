@@ -193,6 +193,22 @@ export function nearestFreeEyeColour(hex: string, catalog: ItemCatalog): string 
 const CARRIED_SLOTS = ['head', 'face', 'aura', 'frame', 'hairColor', 'eyeColor', 'title', 'badge'] as const
 
 /**
+ * The eye colour the eye rule hands an old base, or undefined to leave the body's own eyes (spec §4.5, Plan 19 final
+ * review). The rule exists to keep a look, not to move it, so the pick — the row's pinned one (f03's green) or else the
+ * nearest free eye colour — is handed out only when two things hold: the body's own eyes are more than
+ * `EYE_KEEP_DELTA_E` from the old base's (they read as another colour), and the pick is closer (ΔE76) to the old base's
+ * eyes than the body's own are. A pick further from the old eyes than the body's would move the look, not keep it: m03's
+ * iris (#ad6f4a) is 12.7 from the m body's (#945e26) and 22.9 from brown01, so m03 keeps the body's eyes.
+ */
+export function eyeRuleColour(row: { naturalEye: string; eyeColor?: string }, bodyEye: string, catalog: ItemCatalog): string | undefined {
+  const bodyDistance = deltaE(row.naturalEye, bodyEye)
+  if (bodyDistance <= EYE_KEEP_DELTA_E) return undefined
+  const pick = row.eyeColor ?? nearestFreeEyeColour(row.naturalEye, catalog)
+  const colour = pick === undefined ? undefined : catalog.get(pick)?.colour
+  return colour !== undefined && deltaE(row.naturalEye, colour) < bodyDistance ? pick : undefined
+}
+
+/**
  * A repaired v3 configuration as v4 (table 4.5).
  *
  * The gender, hairstyle and skin colour come from the old base's row; every wardrobe slot is carried across
@@ -200,10 +216,10 @@ const CARRIED_SLOTS = ['head', 'face', 'aura', 'frame', 'hairColor', 'eyeColor',
  * falls back to f01 — becomes the default figure, with no skin and no eye rule.
  *
  * **The eye rule** (spec §4.5). The body's face layers carry their own eyes, so a player whose base had
- * different ones would wake up with someone else's. When the old base's iris is more than `EYE_KEEP_DELTA_E`
- * from the new body's and the player chose no eye colour, they are given one: the row's pinned pick (f03's
- * green) or else the nearest free eye colour. A chosen eye colour always wins, and f01 and m01 never get one
- * (`keepEyes`): the bodies are drawn from them, so their eyes are the bodies' own.
+ * different ones would wake up with someone else's. When the player chose no eye colour, they are given the one
+ * `eyeRuleColour` names — the row's pinned pick (f03's green) or the nearest free eye colour, and only when that is
+ * nearer the old base's iris than the body's own eyes are — or none. A chosen eye colour always wins, and f01 and m01
+ * never get one (`keepEyes`): the bodies are drawn from them, so their eyes are the bodies' own.
  */
 function v3ToV4(v3: AvatarConfigV3, catalog: ItemCatalog, bodies: Bodies): AvatarConfigV4 {
   const row = v3BaseOf(v3.base)
@@ -215,8 +231,8 @@ function v3ToV4(v3: AvatarConfigV3, catalog: ItemCatalog, bodies: Bodies): Avata
     if (id !== undefined) config[slot] = id
   }
 
-  if (row !== undefined && row.keepEyes !== true && config.eyeColor === undefined && deltaE(row.naturalEye, bodies[row.gender].naturalEyeColour) > EYE_KEEP_DELTA_E) {
-    const eyeColor = row.eyeColor ?? nearestFreeEyeColour(row.naturalEye, catalog)
+  if (row !== undefined && row.keepEyes !== true && config.eyeColor === undefined) {
+    const eyeColor = eyeRuleColour(row, bodies[row.gender].naturalEyeColour, catalog)
     if (eyeColor !== undefined) config.eyeColor = eyeColor
   }
 

@@ -143,10 +143,15 @@ function toneOf(items, { label, item }) {
   return { colour: null, caption: `${label} (no item: natural)`, missing: true }
 }
 
-/** `--hairs` / `--outfits`: codes with or without their id prefix (`hair_f_bob01` or `f_bob01`), each one known. */
+/**
+ * `--hairs` / `--outfits`: codes with or without their id prefix (`hair_f_bob01` or `f_bob01`), each one known. An empty
+ * list (`--hairs ""`) is refused: it would narrow the grid to nothing and still write a sheet, exit 0 — leave the option
+ * out to see all of them.
+ */
 function narrowTo(given, known, prefix, what) {
   if (given === null || given === undefined) return null
   const codes = given.map((code) => String(code).trim()).filter(Boolean).map((code) => (code.startsWith(prefix) ? code.slice(prefix.length) : code))
+  if (codes.length === 0) throw new Error(`--${what === 'hairstyle' ? 'hairs' : 'outfits'} names no ${what} — give one or more of ${known.join(', ')}, or leave the option out for all of them`)
   const unknown = codes.filter((code) => !known.includes(code))
   if (unknown.length) throw new Error(`unknown ${what} ${unknown.join(', ')} — one of ${known.join(', ')}`)
   return [...new Set(codes)]
@@ -373,8 +378,8 @@ async function writeSheet(cards, grid, { dir, manifest, read, out }) {
       const cut = await resizePicture(cropPicture(composed, CROP.x, CROP.y, CROP.size, CROP.size), each.portrait, each.portrait)
       blit(canvas, cut, left + Math.round((tile.w - each.portrait) / 2), top + Math.round((tile.h - each.portrait) / 2))
     } else if (each.crop) {
-      const cut = cropPicture(composed, CROP.x, CROP.y, CROP.size, CROP.size)
-      blit(canvas, cut.width === tile.w && cut.height === tile.h ? cut : await resizePicture(cut, tile.w, tile.h), left, top)
+      // The fit sheet's tile is the portrait crop at @1x (`FIT_GRID`): the cut is already the tile's size.
+      blit(canvas, cropPicture(composed, CROP.x, CROP.y, CROP.size, CROP.size), left, top)
     } else {
       blit(canvas, await resizePicture(composed, tile.w, tile.h), left, top)
     }

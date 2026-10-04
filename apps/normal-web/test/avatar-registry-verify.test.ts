@@ -12,15 +12,16 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import { ingest as pipelineIngest } from '../scripts/avatar-pipeline/extract.mjs'
-import { anchorBase } from '../scripts/avatar-pipeline/frame.mjs'
+import { ingest as pipelineIngest, registerToBase, wideRegistration } from '../scripts/avatar-pipeline/extract.mjs'
+import { F01_TRANSFORM, anchorBase, applyTransform } from '../scripts/avatar-pipeline/frame.mjs'
 import { MANIFEST_NAME } from '../scripts/avatar-pipeline/manifest.mjs'
-import { alphaBBox, readPicture, renderSvg, writePicture } from '../scripts/avatar-pipeline/png.mjs'
+import { alphaBBox, readPicture, removeChroma, renderSvg, writePicture } from '../scripts/avatar-pipeline/png.mjs'
 import { collect } from '../scripts/avatar-registry/collect.mjs'
 import { addVariant, ingestAssets } from '../scripts/avatar-registry/ingest.mjs'
 import { parseSpec } from '../scripts/avatar-registry/registry.mjs'
 import {
-  HAIR_BODY_MARGIN, REGISTRATION, allowedArea, bodyBox, compareBoxes, comparePictures, figureBox, kindOfSpec, layerNames, ownerOf, scorePicture, verifyAssets,
+  HAIR_BODY_MARGIN, REGISTRATION, alignPicture, allowedArea, bodyBox, bodyRegistration, compareBoxes, comparePictures, figureBox, kindOfSpec, layerNames, ownerOf,
+  registerOnBody, scorePicture, verifyAssets,
 } from '../scripts/avatar-registry/verify.mjs'
 
 // Every case here renders synthetic pictures and runs the real pipeline on them: 3–6 s each on this machine, and
@@ -108,6 +109,32 @@ const zoomedBy = (factor: number, inner: string): string => `<g transform="trans
 const svg = (body: string, width = W, height = H, background = ''): string =>
   `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${background}${body}</svg>`
 
+/**
+ * How much of each of two same-size layers the other holds to within `radius` px: the smaller of the two shares of solid
+ * pixels (alpha ≥ 128) with a solid pixel of the other that near. Two cuts of one hairstyle registered a pixel or two
+ * apart — resampled once or twice, at another scale step — read 1.0 at 3 px @2x where their plain IoU reads 0.94–0.97;
+ * the same cut 13 px off (what a ±1 % search leaves of a 4 % zoom at the head) reads 0.81–0.91.
+ */
+function heldWithin(a: { data: Buffer; width: number; height: number }, b: { data: Buffer; width: number; height: number }, radius: number): number {
+  const { width, height } = a
+  const solid = (pic: { data: Buffer }, x: number, y: number): boolean => x >= 0 && y >= 0 && x < width && y < height && pic.data[(y * width + x) * 4 + 3]! >= 128
+  const share = (from: { data: Buffer }, to: { data: Buffer }): number => {
+    let all = 0
+    let held = 0
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (!solid(from, x, y)) continue
+        all++
+        let near = false
+        for (let dy = -radius; dy <= radius && !near; dy++) for (let dx = -radius; dx <= radius && !near; dx++) near = solid(to, x + dx, y + dy)
+        if (near) held++
+      }
+    }
+    return all === 0 ? 1 : held / all
+  }
+  return Math.min(share(a, b), share(b, a))
+}
+
 /** A 16 px checkerboard of white and light grey — the fake transparency the image model sometimes paints. */
 const PATTERN = `<defs><pattern id="c" width="32" height="32" patternUnits="userSpaceOnUse">
   <rect width="32" height="32" fill="#ffffff"/><rect width="16" height="16" fill="#cccccc"/><rect x="16" y="16" width="16" height="16" fill="#cccccc"/>
@@ -124,7 +151,7 @@ type Fixture =
   | 'bald' | 'baldHappy' | 'baldTorso' | 'bodyRaised' | 'hairOk' | 'hairTorso' | 'hairWide'
   | 'hairSideTail' | 'hairRaised' | 'hairWideSmall'
   | 'refZ' | 'baldZ' | 'baldSquare' | 'baldSmall' | 'baldSmallZ'
-  | 'dressed' | 'hairZoomed' | 'hairZoomedFar' | 'hairBodyMoved' | 'outfitZoomed'
+  | 'dressed' | 'hairDressed' | 'hairZoomed' | 'hairZoomedFar' | 'hairBodyMoved' | 'outfitZoomed'
   | 'botHappy' | 'botHappyZoomed' | 'botHappyZoomedFar'
 /** Every synthetic picture, by name, as a path under `srcDir`. */
 const files = {} as Record<Fixture, string>
@@ -182,6 +209,8 @@ beforeAll(async () => {
   // Plan 19 C2: the dressed body; a hairstyle picture zoomed out to 0.96 (the batch C2 case) and to 0.85 about the canvas
   // centre; one whose body moved 40 px left while its hair stayed where the body's head was; an outfit zoomed to 0.96.
   files.dressed = await draw('dressed.png', svg(dressed()))
+  // …the same hairstyle in place, which the zoomed one is registered back onto (Plan 19 final review).
+  files.hairDressed = await draw('hair-dressed.png', svg(`${dressed()}${CAP}${LOCK}`))
   files.hairZoomed = await draw('hair-zoomed.png', svg(zoomedBy(0.96, `${dressed()}${CAP}${LOCK}`)))
   files.hairZoomedFar = await draw('hair-zoomed-far.png', svg(zoomedBy(0.85, `${dressed()}${CAP}${LOCK}`)))
   files.hairBodyMoved = await draw('hair-body-moved.png', svg(`<g transform="translate(-40 0)">${dressed()}</g>${CAP}${LOCK}`))
@@ -614,7 +643,9 @@ describe('verify: the pipeline', () => {
   beforeAll(async () => {
     publicDir = join(temp, 'public')
     mkdirSync(publicDir, { recursive: true })
-    // Body f, the first body there: placed by its own box (until D1 this was the flat base f01, placed the same way).
+    // Body f, the first body there: on F01's transform, as every body with none of its own (Plan 19 final review; it was
+    // placed by its own box before, and the flat base f01 until D1). The synthetic figure is drawn on a 1024 × 1536 canvas
+    // like F01's, centred on it, so it lands on the axis.
     await pipelineIngest({ file: files.ref, target: { kind: 'body', gender: 'f' }, dir: publicDir, targets: [join(publicDir, MANIFEST_NAME)] })
   }, 120_000)
 
@@ -646,6 +677,20 @@ describe('verify: the pipeline', () => {
     const result = await scorePicture({ file: files.happy, referenceFile: files.ref, kind: 'bot', ingest: { as: 'bot:0:happy', base: null, variant: null, flags: [] }, publicDir })
     expect(result.verdict, JSON.stringify(result.measure)).toBe('ok')
     expect(result.measure.checks).toEqual({ bot_0_face_happy_L50: [] })
+  }, 120_000)
+
+  it('registers a bot’s happy face in the copy onto its neutral picture, ingested there from the reference first (Plan 19 final review)', async () => {
+    // The pipeline registers the face onto the bot's L30; the copy's bot 0 is a stand-in or another picture, so the
+    // reference — the bot's neutral picture — goes in as bot:0 first, as the registry ingests it before its happy face.
+    const lines: string[] = []
+    const result = await scorePicture({ file: files.botHappyZoomed, referenceFile: files.dressed, kind: 'bot', ingest: { as: 'bot:0:happy', base: null, variant: null, flags: [] }, publicDir, keepTmp: true, log: (line: string) => lines.push(line) })
+    expect(result.verdict, JSON.stringify(result)).toBe('ok')
+    expect(result.measure.checks).toEqual({ bot_0_face_happy_L50: [] })
+    const kept = /^kept (.+)$/.exec(lines.find((line) => line.startsWith('kept ')) ?? '')?.[1]
+    expect(kept, lines.join('\n')).toBeDefined()
+    const copy = JSON.parse(readFileSync(join(kept!, 'avatar', MANIFEST_NAME), 'utf8'))
+    rmSync(kept!, { recursive: true, force: true })
+    expect(copy.files.bot_0_L30).toMatchObject({ real: true, cutOn: 'f' })
   }, 120_000)
 
   it('runs an aura and a frame through the pipeline once they pass hollow, and leaves public/avatar alone', async () => {
@@ -701,8 +746,9 @@ describe('verify: the pipeline', () => {
     const { result, copy } = await scoreKeeping({ file: files.hairOk, referenceFile: files.bald, kind: 'hair', ingest: spec('hair:m_tousled01') })
     expect(result.measure.pipelineError, JSON.stringify(result)).toBeUndefined()
     expect(Object.keys(result.measure.checks).sort()).toEqual(['item_hair_m_tousled01_L20', 'item_hair_m_tousled01_L60'])
-    // A body with none of its own takes body f's (`BODY_TRANSFORM_FROM`): the canvas both are drawn on.
-    expect(copy.bodies.m.transform).toEqual(copy.bodies.f.transform)
+    // A body with none of its own lands on F01's transform (`F01_TRANSFORM`): the canvas both are drawn on.
+    expect(copy.bodies.m.transform).toEqual({ ...F01_TRANSFORM })
+    expect(copy.bodies.f.transform).toEqual({ ...F01_TRANSFORM })
     expect(copy.files.body_m_L30).toMatchObject({ real: true })
     expect(readFileSync(join(publicDir, MANIFEST_NAME), 'utf8')).toBe(before)
   }, 120_000)
@@ -970,8 +1016,10 @@ describe('ingestAssets', () => {
       ['item_hair_m_tousled01', true, 'item_hair_m_tousled01_L60'],
     ])
     expect(body.ingested && tousled.ingested).toBe(true)
-    expect(lines.join('\n')).toMatch(/transform taken from f:/)
+    // Body m has no transform of its own: it lands on F01's, the canvas both bodies are drawn on (Plan 19 final review).
+    expect(lines.join('\n')).toMatch(/body m has no transform of its own yet: placed on F01's canvas/)
     const manifest = JSON.parse(readFileSync(targets[0]!, 'utf8'))
+    expect(manifest.bodies.m.transform).toEqual({ ...F01_TRANSFORM })
     expect(manifest.bodies.m.transform).toEqual(manifest.bodies.f.transform)
     expect(manifest.files.body_m_face_neutral_L50).toMatchObject({ real: true })
     expect(manifest.files.item_hair_m_tousled01_L20).toMatchObject({ real: true })
@@ -979,8 +1027,8 @@ describe('ingestAssets', () => {
   }, 180_000)
 
   it("ingests a bot's happy face registered onto the bot's neutral picture, so a zoomed face is cut where the neutral one is (Plan 19 C4)", async () => {
-    /** The registry ingests a bot and its happy face (drawn as `file`) into a fresh copy, and returns the happy face layer's ink box. */
-    const ingestHappy = async (name: string, file: string): Promise<{ lines: string[]; box: { x: number; y: number; w: number; h: number } }> => {
+    /** The registry ingests a bot and its happy face (drawn as `file`) into a fresh copy: the log, and the happy face layer. */
+    const ingestHappy = async (name: string, file: string): Promise<{ lines: string[]; dir: string; box: { x: number; y: number; w: number; h: number } }> => {
       const publicDir = join(temp, name)
       mkdirSync(publicDir, { recursive: true })
       const targets = [join(publicDir, MANIFEST_NAME)]
@@ -989,16 +1037,145 @@ describe('ingestAssets', () => {
       const happy = v4Asset({ id: 'v4/bot_0:happy', kind: 'bot', catalog: 'bot_0', reference: '@v4/bot_0', file, ingest: { as: 'bot:0:happy' } })
       const lines: string[] = []
       await ingestAssets(registryOf([neutral, happy]), [], { srcDir, publicDir, targets, log: (line: string) => lines.push(line) })
-      return { lines, box: alphaBBox(await readPicture(join(publicDir, 'bot_0_face_happy_L50@2x.png')))! }
+      return { lines, dir: publicDir, box: alphaBBox(await readPicture(join(publicDir, 'bot_0_face_happy_L50@2x.png')))! }
     }
     const inPlace = await ingestHappy('public-ingest-bot-happy', 'bot-happy.png')
-    expect(inPlace.lines.join('\n')).not.toMatch(/registered onto/)
+    // The pipeline registers the face onto the bot's L30 (Plan 19 final review), and finds it in place.
+    expect(inPlace.lines.join('\n')).toMatch(/registered on bot_0_L30: dx 0\.0, dy 0\.0 px @2x, scale 1\.0000 \(figure IoU/)
     const zoomed = await ingestHappy('public-ingest-bot-happy-zoomed', 'bot-happy-zoomed.png')
-    expect(zoomed.lines.join('\n')).toMatch(/v4\/bot_0:happy: registered onto its reference before the cut/)
-    expect(zoomed.lines.join('\n')).not.toMatch(/v4\/bot_0: registered/)
+    const moved = /registered on bot_0_L30: dx (-?[\d.]+), dy (-?[\d.]+) px @2x, scale ([\d.]+) \(figure IoU ([\d.]+), the wide search/.exec(zoomed.lines.join('\n'))
+    expect(moved, zoomed.lines.join('\n')).not.toBeNull()
+    expect(Number(moved![3])).toBeGreaterThanOrEqual(1.03)
+    expect(Number(moved![4])).toBeGreaterThanOrEqual(REGISTRATION.iou.botFace)
+    // Only the happy face is registered: the neutral picture is the bot's body, taken whole.
+    expect(zoomed.lines.filter((line) => line.startsWith('registered on'))).toHaveLength(1)
     // Cut on the stored transform as drawn, the face's box stands 5–13 px (@2x) off the one in place on every side; registered, within 1.
     for (const edge of ['x', 'y', 'w', 'h'] as const) expect(Math.abs(zoomed.box[edge] - inPlace.box[edge]), edge).toBeLessThanOrEqual(2)
-  }, 180_000)
+
+    // The command line cuts the same picture into the same face, byte for byte: one registration path.
+    const cliDir = join(temp, 'public-cli-bot-happy-zoomed')
+    mkdirSync(cliDir, { recursive: true })
+    const cliTargets = [join(cliDir, MANIFEST_NAME)]
+    await pipelineIngest({ file: files.ref, target: { kind: 'body', gender: 'f' }, dir: cliDir, targets: cliTargets })
+    await pipelineIngest({ file: files.dressed, target: { kind: 'bot', bot: 0, expr: 'neutral' }, dir: cliDir, targets: cliTargets })
+    await pipelineIngest({ file: files.botHappyZoomed, target: { kind: 'bot', bot: 0, expr: 'happy' }, dir: cliDir, targets: cliTargets })
+    for (const density of [1, 2]) {
+      const name = `bot_0_face_happy_L50@${density}x.png`
+      expect(readFileSync(join(cliDir, name)).equals(readFileSync(join(zoomed.dir, name))), name).toBe(true)
+    }
+  }, 240_000)
+
+  it('cuts a zoomed hairstyle the same from the command line and from the registry — the layers of the picture registered first (Plan 19 final review)', async () => {
+    /** A fresh copy holding body f, cut from the dressed body (on F01's transform: the copy has no body yet). */
+    const withBody = async (name: string): Promise<{ dir: string; targets: string[] }> => {
+      const dir = join(temp, name)
+      mkdirSync(dir, { recursive: true })
+      const targets = [join(dir, MANIFEST_NAME)]
+      await pipelineIngest({ file: files.dressed, target: { kind: 'body', gender: 'f' }, dir, targets })
+      return { dir, targets }
+    }
+    const hair = { kind: 'hair', code: 'f_bob01' }
+    const layersOf = async (dir: string): Promise<Record<string, Buffer>> => Object.fromEntries(
+      ['item_hair_f_bob01_L60', 'item_hair_f_bob01_L20'].flatMap((name) => [1, 2].map((density) => [`${name}@${density}x`, readFileSync(join(dir, `${name}@${density}x.png`))])),
+    )
+
+    // The picture zoomed out to 0.96 about the canvas centre, as the image model returns it (batch C2), from the command
+    // line: the pipeline's own ingest registers it, searched wide.
+    const cli = await withBody('one-path-cli')
+    const cliLines: string[] = []
+    await pipelineIngest({ file: files.hairZoomed, target: hair, dir: cli.dir, targets: cli.targets, log: (line: string) => cliLines.push(line) })
+    const registered = /registered on body_f_L30: dx (-?[\d.]+), dy (-?[\d.]+) px @2x, scale ([\d.]+) \(legs IoU ([\d.]+), the wide search/.exec(cliLines.join('\n'))
+    expect(registered, cliLines.join('\n')).not.toBeNull()
+    expect(Number(registered![3])).toBeGreaterThanOrEqual(1.03)
+    expect(Number(registered![3])).toBeLessThanOrEqual(1.05)
+    expect(Number(registered![4])).toBeGreaterThanOrEqual(REGISTRATION.iou.hair)
+
+    // …from the registry: the same picture, the same layers, byte for byte.
+    const viaRegistry = await withBody('one-path-registry')
+    const asset = v4Asset({ id: 'item_hair_f_bob01', kind: 'hair', wear: 'f', catalog: 'hair_f_bob01', reference: 'dressed.png', file: 'hair-zoomed.png', ingest: { as: 'hair:f_bob01' } })
+    await ingestAssets(registryOf([asset]), [], { srcDir, publicDir: viaRegistry.dir, targets: viaRegistry.targets })
+    const cliLayers = await layersOf(cli.dir)
+    const registryLayers = await layersOf(viaRegistry.dir)
+    for (const [name, bytes] of Object.entries(cliLayers)) expect(bytes.equals(registryLayers[name]!), name).toBe(true)
+
+    // …and the layers the picture gives once it is registered onto its body first — `registerOnBody`'s placement, the one
+    // `verify` judges, applied to the picture before the cut (what the registry used to hand the pipeline) — and the
+    // layers of the same hairstyle drawn in place: the same hair, to within 3 px @2x (1.5 frame units) everywhere. The
+    // two registrations land a scale step apart (1.045 against 1.040, a pixel or two at the head), and each picture is
+    // resampled its own way, so the bytes differ; the hair does not.
+    const pic = await readPicture(files.hairZoomed)
+    const ref = await readPicture(files.dressed)
+    const onBody = await registerOnBody(pic, ref, 'hair')
+    expect(onBody.reason).toBeNull()
+    const firstFile = join(srcDir, 'hair-zoomed-registered-first.png')
+    await writePicture(await alignPicture(pic, ref, onBody.placement), firstFile)
+    const first = await withBody('one-path-registered-first')
+    await pipelineIngest({ file: firstFile, target: hair, dir: first.dir, targets: first.targets })
+    const inPlace = await withBody('one-path-in-place')
+    await pipelineIngest({ file: files.hairDressed, target: hair, dir: inPlace.dir, targets: inPlace.targets })
+    for (const name of ['item_hair_f_bob01_L60', 'item_hair_f_bob01_L20']) {
+      const cut = await readPicture(join(cli.dir, `${name}@2x.png`))
+      for (const [label, other] of [['registered first', first.dir], ['drawn in place', inPlace.dir]] as const) {
+        const theirs = await readPicture(join(other, `${name}@2x.png`))
+        expect(heldWithin(cut, theirs, 3), `${name} against the picture ${label}`).toBeGreaterThanOrEqual(0.995)
+        const [a, b] = [alphaBBox(cut)!, alphaBBox(theirs)!]
+        for (const edge of ['x', 'y', 'w', 'h'] as const) expect(Math.abs(a[edge] - b[edge]), `${name} ${edge} against the picture ${label}`).toBeLessThanOrEqual(3)
+      }
+    }
+
+    // What the pipeline's own search alone did with it (the hand path before the review): it cannot reach the zoom.
+    const transform = JSON.parse(readFileSync(cli.targets[0]!, 'utf8')).bodies.f.transform
+    const narrow = registerToBase(await applyTransform(removeChroma(pic), transform, 2), await readPicture(join(cli.dir, 'body_f_L30@2x.png')), { slot: 'hair', density: 2 })
+    expect(narrow.scale).toBeLessThanOrEqual(1.01)
+  }, 300_000)
+
+  it('refuses a superseded Plan 12 entry in ingest and in verify, before anything is cut or scored (Plan 19 final review)', async () => {
+    const publicDir = join(temp, 'public-ingest-superseded')
+    mkdirSync(publicDir, { recursive: true })
+    const targets = [join(publicDir, MANIFEST_NAME)]
+    const live = v4Asset({ id: 'v4/bot_0', kind: 'bot', catalog: 'bot_0', reference: 'ref.png', file: 'dressed.png', ingest: { as: 'bot:0' }, status: 'ok' })
+    const old = v4Asset({
+      id: 'bot_0', kind: 'bot', catalog: 'bot_0', reference: 'f01_candidate_1.png', file: 'ref.png', ingest: { as: 'bot:0' }, status: 'ok',
+      superseded: 'v4/bot_0', note: 'cut on the retired f01; kept as history',
+    })
+    const hat = v4Asset({ id: 'item_head_beanie01', kind: 'item', slot: 'head', catalog: 'head_beanie01', reference: 'ref.png', file: 'hat.png', ingest: { as: 'item:head:beanie01' }, status: 'generated', attempts: [{ n: 1, verdict: null }], superseded: true })
+    // Named, and in the default run: the live bot comes first in the file and is still not cut.
+    await expect(ingestAssets(registryOf([live, old]), ['bot_0'], { srcDir, publicDir, targets })).rejects.toThrow(/asset bot_0 is superseded by v4\/bot_0 — cut on the retired f01; kept as history; ingest refuses it/)
+    await expect(ingestAssets(registryOf([live, old]), [], { srcDir, publicDir, targets })).rejects.toThrow(/bot_0 is superseded/)
+    expect(live.ingested).toBeUndefined()
+    expect(existsSync(targets[0]!)).toBe(false)
+    // verify: named, or a superseded entry somehow back at `generated`.
+    await expect(verifyAssets(registryOf([live, old]), ['bot_0'], { srcDir, publicDir, pipeline: false })).rejects.toThrow(/asset bot_0 is superseded by v4\/bot_0.*verify refuses it/)
+    await expect(verifyAssets(registryOf([hat]), [], { srcDir, publicDir, pipeline: false })).rejects.toThrow(/asset item_head_beanie01 is superseded — kept as history; verify refuses it/)
+    expect(hat.attempts).toEqual([{ n: 1, verdict: null }])
+  }, 60_000)
+
+  it('checks every asset it would cut before cutting any: a retired one later in the file stops the run up front (Plan 19 final review)', async () => {
+    const publicDir = join(temp, 'public-ingest-up-front')
+    mkdirSync(publicDir, { recursive: true })
+    const targets = [join(publicDir, MANIFEST_NAME)]
+    const aura = v4Asset({ id: 'item_aura_water01', kind: 'aura', slot: 'aura', catalog: 'aura_water01', reference: null, file: 'ring.png', ingest: { as: 'item:aura:water01' } })
+    const expr = v4Asset({ id: 'f09:happy', kind: 'expression', reference: 'ref.png', file: 'happy.png', ingest: { as: 'expr:f09:happy', base: 'f09' } })
+    await expect(ingestAssets(registryOf([aura, expr]), [], { srcDir, publicDir, targets })).rejects.toThrow(/asset f09:happy: the ingest target expr:f09:happy is retired/)
+    expect(aura.ingested).toBeUndefined()
+    expect(existsSync(targets[0]!)).toBe(false)
+  }, 60_000)
+
+  it('names the one wide registration rule the pipeline and verify share', () => {
+    expect(wideRegistration({ kind: 'hair' })).toBe('hair')
+    expect(wideRegistration({ kind: 'item', slot: 'outfit' }, 'm')).toBe('outfit')
+    expect(wideRegistration({ kind: 'item', slot: 'outfit' }, 'f01')).toBeNull()
+    expect(wideRegistration({ kind: 'item', slot: 'head' }, 'f')).toBeNull()
+    expect(wideRegistration(parseSpec('bot:3:happy'))).toBe('botFace')
+    expect(wideRegistration(parseSpec('bot:3'))).toBeNull()
+    expect(wideRegistration(parseSpec('body:f'))).toBeNull()
+    // verify asks the same rule of a registry kind.
+    expect(bodyRegistration('hair', null, null)).toBe('hair')
+    expect(bodyRegistration('item', 'outfit', null)).toBe('outfit')
+    expect(bodyRegistration('item', 'outfit', 'f01')).toBeNull()
+    expect(bodyRegistration('bot', null, null, 'bot:0:happy')).toBe('botFace')
+    expect(bodyRegistration('bodyExpression', null, null, 'face:f:happy')).toBeNull()
+  })
 
   it('passes an asset --hair and --anchor through to the pipeline, which refuses them where they do not belong', async () => {
     const publicDir = join(temp, 'public-ingest-flags')

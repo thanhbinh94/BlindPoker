@@ -145,6 +145,18 @@ describe('validateRegistry', () => {
     expect(() => validateRegistry(registryOf([hair('item_hair_m_spiky02', 'm_spiky02')]))).toThrow(/item_hair_m_spiky02/)
     expect(() => validateRegistry(registryOf([hair('item_hair_f_bob01', 'f_bob01'), hair('item_hair_m_spiky01', 'm_spiky01')]))).not.toThrow()
   })
+
+  it('reads a superseded entry: true, or the id of a live asset that replaced it, with a note (Plan 19 final review)', () => {
+    const bot = (fields: Partial<Asset> = {}): Asset => asset({ id: 'bot_0', kind: 'bot', ingest: as('bot:0'), status: 'ok', ...fields })
+    const v4 = asset({ id: 'v4/bot_0', kind: 'bot', file: 'v4_bot_0.png', ingest: as('bot:0'), status: 'ok' })
+    expect(() => validateRegistry(registryOf([bot({ superseded: 'v4/bot_0', note: 'cut on f01' }), v4]))).not.toThrow()
+    expect(() => validateRegistry(registryOf([bot({ superseded: true })]))).not.toThrow()
+    expect(() => validateRegistry(registryOf([bot({ superseded: 'v4/bot_9' })]))).toThrow(/bot_0: superseded by v4\/bot_9, which is not in the registry/)
+    expect(() => validateRegistry(registryOf([bot({ superseded: 'bot_0' })]))).toThrow(/bot_0: superseded by bot_0, which is not a live asset/)
+    expect(() => validateRegistry(registryOf([bot({ superseded: 'v4/bot_0' }), { ...v4, superseded: true }]))).toThrow(/which is not a live asset/)
+    expect(() => validateRegistry(registryOf([bot({ superseded: 1 })]))).toThrow(/bot_0: superseded is 1/)
+    expect(() => validateRegistry(registryOf([bot({ note: '' })]))).toThrow(/bot_0: note is not a sentence/)
+  })
 })
 
 // ─────────────────────────────────────────────────── specs and flags (v4) ──
@@ -354,6 +366,12 @@ describe('renderPrompt', () => {
 
 describe('ready / nextAssets', () => {
   const opts = (): { srcDir: string } => ({ srcDir })
+
+  it('never hands out a superseded entry, whatever its status (Plan 19 final review)', () => {
+    const registry = registryOf([asset({ id: 'bot_0', kind: 'bot', ingest: as('bot:0'), status: 'rework-1', attempts: [{ n: 1 }], superseded: true })])
+    expect(ready(registry.assets[0], registry, { srcDir })).toBe(false)
+    expect(nextAssets(registry, { srcDir })).toEqual([])
+  })
 
   it('takes todo, ng and rework-n, and skips blocked, generated, ok and approved', () => {
     const statuses = ['todo', 'ng', 'rework-1', 'blocked', 'generated', 'ok', 'approved']
@@ -684,5 +702,37 @@ describe('the committed registry', () => {
 
   it('lives next to the pictures it describes', () => {
     expect(REGISTRY_FILE).toBe(join(SRC_DIR, 'registry.json'))
+  })
+
+  it('keeps Plan 12’s bots, casual01, hats and glasses as superseded history, and no two live assets cut the same layer (Plan 19 final review)', () => {
+    const registry = readRegistry(REGISTRY_FILE)
+    const byId = new Map<string, Asset>(registry.assets.map((entry: Asset): [string, Asset] => [entry.id, entry]))
+    // Every Plan 12 bot, its happy face and casual01: superseded by the v4 redraw that cuts the same layer.
+    const replaced = [
+      ...V4_BOTS.flatMap((n) => [`bot_${n}`, `bot_${n}:happy`]),
+      'item_outfit_casual01',
+    ]
+    for (const id of replaced) {
+      const entry = byId.get(id)
+      expect(entry?.superseded, id).toBe(`v4/${id}`)
+      expect(entry.note, id).toMatch(/retired flat base f01/)
+      expect(byId.get(`v4/${id}`).ingest.as, id).toBe(entry.ingest.as)
+    }
+    // Plan 12's hats and glasses, drawn on F01 with no --hair: superseded with nothing to replace them yet; the withdrawn
+    // hood with them.
+    const worn = registry.assets.filter((entry: Asset) => entry.kind === 'item' && ['head', 'face'].includes(entry.slot) && !entry.id.startsWith('v4/'))
+    expect(worn.map((entry: Asset) => entry.id).sort()).toEqual([
+      'item_face_eyepatch01', 'item_face_masquerade01', 'item_face_sunglasses01',
+      'item_head_beanie01', 'item_head_beret_red01', 'item_head_conical_hat01', 'item_head_crown_gold01', 'item_head_dealer_visor01', 'item_head_hood_black01', 'item_head_party_cone01',
+    ])
+    for (const entry of worn) expect(entry.superseded, entry.id).toBe(true)
+    // Batch 5 (C5): no hat hides the hair, and the manifests and items.json say so; only the withdrawn hood keeps its flags
+    // as history. A re-cut carrying the flag would have turned it back on.
+    const hiding = registry.assets.filter((entry: Asset) => (entry.ingest.flags ?? []).some((flag: string) => flag.startsWith('--hides-hair')))
+    expect(hiding.map((entry: Asset) => entry.id)).toEqual(['item_head_hood_black01'])
+    // What is left live never shares a layer: no two of them cut the same ingest target and wear.
+    const live = registry.assets.filter((entry: Asset) => entry.superseded === undefined)
+    const layers = live.map((entry: Asset) => `${entry.ingest.as} ${entry.ingest.variant ?? '-'}`)
+    expect(layers.filter((layer: string, at: number) => layers.indexOf(layer) !== at)).toEqual([])
   })
 })

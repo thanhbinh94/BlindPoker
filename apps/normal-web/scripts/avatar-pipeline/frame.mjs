@@ -121,6 +121,16 @@ export const SKIN_TOLERANCE = 24
  * constants now, and a test pins them as such.
  */
 export const HEAD_REFERENCE = { eyeMidX: 190.9, eyeMidY: 194.0, eyeSpan: 60.6, chinY: 243 }
+/**
+ * F01's transform: where a picture on the canvas of `f01_candidate_1.png` (1024 × 1536, the canvas both v4 bodies were
+ * drawn from) lands on the frame — `{ scale, offsetX, offsetY }`, as `anchorBase` placed the first real F01 picture by its
+ * own box (2026-09-15) and every flat base after it kept. Both bodies' stored transforms are this, verbatim, and a body with
+ * no stored transform of its own is cut on it (`bodyTransform` in extract.mjs; Plan 19 final review): the canvas is F01's
+ * whichever body came first, and a body placed by its own box instead lands elsewhere (the real bald body_f: scale 0.2725,
+ * C12 25.7 units off). The switch-over (D1) deleted F01's files, so the numbers stand as a constant, read from the
+ * committed manifest's `bodies.f.transform`, and a test pins them as such.
+ */
+export const F01_TRANSFORM = Object.freeze({ scale: 0.24669603524229075, offsetX: 65.568281938326, offsetY: 52.01762114537445 })
 /** How far each of `HEAD_REFERENCE`'s eye numbers (midpoint x and y, span) may drift: 2 % of the 208 crop, the spec's "không quá 2%". */
 export const HEAD_TOLERANCE = 4.16
 /**

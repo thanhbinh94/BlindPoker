@@ -3,7 +3,7 @@
  * `approve`/`reject` transitions, and the text `next` and `status` print.
  */
 import { renderPrompt } from './prompts.mjs'
-import { MAX_ATTEMPTS, SRC_DIR, isRework, pictureExists, referenceOf, referencePath, requireAsset } from './registry.mjs'
+import { MAX_ATTEMPTS, SRC_DIR, isRework, isSuperseded, pictureExists, referenceOf, referencePath, requireAsset } from './registry.mjs'
 
 /**
  * The order `next` hands assets out in. Plan 12 (spec §4 step 1) put items on F01 first — head, face,
@@ -24,10 +24,12 @@ export function priorityOf(asset) {
 export const wantsPicture = (status) => status === 'todo' || status === 'ng' || isRework(status)
 
 /**
- * Whether an asset can be generated now: its status wants a picture, it has attempts left, and its
- * reference resolves — a file that exists in `srcDir`, or an `@<id>` asset that is `ok` or `approved`.
+ * Whether an asset can be generated now: it is not a superseded entry kept as history (Plan 19 final review), its status
+ * wants a picture, it has attempts left, and its reference resolves — a file that exists in `srcDir`, or an `@<id>` asset
+ * that is `ok` or `approved`.
  */
 export function ready(asset, registry, { srcDir = SRC_DIR } = {}) {
+  if (isSuperseded(asset)) return false
   if (!wantsPicture(asset.status)) return false
   if (asset.attempts.length >= MAX_ATTEMPTS) return false
   const { file, asset: other } = referenceOf(asset, registry)

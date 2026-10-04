@@ -57,16 +57,23 @@
  * Plan 19 C2: a hairstyle, and an outfit drawn on a body, on the reference's own canvas are judged **after the
  * registration the ingest applies** (`registerOnBody`): the image model zooms the whole picture out by a few per cent to
  * make room for what it adds, and the edges as drawn (still in `measure.drift`) then read 20–60 px off. `drift` is the
- * registration's verdict instead — more than 8 % of scale, or the silhouettes still apart (`REGISTRATION`) — and scope
- * and the pipeline are given the registered picture (an outfit's hair colour is read with its head placed by its head
- * top, as on another canvas). A body's face is not: the face ingest cuts on the body's transform without registering at
- * all, so a zoomed face would be cut where it was drawn.
+ * registration's verdict instead — more than 8 % of scale, or the silhouettes still apart (`REGISTRATION`) — and scope is
+ * measured on the registered picture (an outfit's hair colour is read with its head placed by its head top, as on another
+ * canvas). A body's face is not: the face ingest cuts on the body's transform without registering at all, so a zoomed
+ * face would be cut where it was drawn.
  *
  * Plan 19 C4: a bot's happy face (`bot:<n>:happy`) is drawn by the image model from the bot's own neutral picture and comes
- * back zoomed or moved the same way (bottom edge −31 to −42 px on bots 0 and 4), and its ingest cuts the face on the stored
- * transform without registering either. So it is registered too — onto that neutral picture, `registerOnBody` with the
- * `botFace` rule — and `drift` is that registration's verdict: more than 8 % of scale, or the whole figures' silhouettes
- * still under 0.9 IoU apart. Nothing else is asked of a bot (no `scope`, no hair colour); `bot:<n>` itself is as before.
+ * back zoomed or moved the same way (bottom edge −31 to −42 px on bots 0 and 4). So it is registered too — onto that
+ * neutral picture, `registerOnBody` with the `botFace` rule — and `drift` is that registration's verdict: more than 8 % of
+ * scale, or the whole figures' silhouettes still under 0.9 IoU apart. Nothing else is asked of a bot (no `scope`, no hair
+ * colour); `bot:<n>` itself is as before.
+ *
+ * Plan 19 final review — **one registration**: the wide search is the pipeline's (`registerWide` and `wideRegistration` in
+ * avatar-pipeline/extract.mjs), and every ingest of these three applies it itself, from the command line as from the
+ * registry. `registerOnBody` asks the same function, on the reference picture, for the verdict; the picture handed to the
+ * trial ingest and to the real one is the picture as drawn, and the pipeline registers it there exactly as the command line
+ * would. (Until then the registry registered the picture here and handed the pipeline a registered copy, which a hand
+ * ingest of the same picture never got.)
  *
  * Nothing here writes into public/avatar/.
  */
@@ -74,14 +81,14 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { runChecks } from '../avatar-pipeline/checks.mjs'
-import { REGISTER_SCALES, ingest, measure as measureFigure, registerToBase } from '../avatar-pipeline/extract.mjs'
+import { LEGS_FROM, ingest, measure as measureFigure, registerWide, wideRegistration } from '../avatar-pipeline/extract.mjs'
 import { AXIS_X, BASELINE_Y, CROP, FACE_LIMIT_Y, HEAD_LIMIT_Y, LAYERS, anchorBase, applyTransform } from '../avatar-pipeline/frame.mjs'
 import {
   EXPRESSIONS, GENDERS, MANIFEST_NAME, PUBLIC_DIR, SLOT_LAYER, bodyFaceFile, bodyFile, botFaceFile, botFile, hairFile, itemFile, readManifest,
 } from '../avatar-pipeline/manifest.mjs'
 import { components } from '../avatar-pipeline/masks.mjs'
 import { ALPHA_INK, ALPHA_SOLID, alphaBBox, clonePicture, colourDistance, dilateMask, placeOnCanvas, readPicture, removeChroma, resizePicture, writePicture } from '../avatar-pipeline/png.mjs'
-import { MAX_ATTEMPTS, SRC_DIR, parseFlags, parseSpec, referenceOwner, referencePath, requireAsset, transformSource } from './registry.mjs'
+import { MAX_ATTEMPTS, SRC_DIR, parseFlags, parseSpec, referenceOwner, referencePath, refuseSuperseded, requireAsset, transformSource } from './registry.mjs'
 
 export const PORTRAIT = { aspects: [2 / 3, 3 / 4], tolerance: 0.05, minHeight: 1152 }
 export const SQUARE = { tolerance: 0.05, minSide: 1024 }
@@ -300,9 +307,10 @@ export function comparePictures(pic, ref, kind, slot) {
 export const HEAD_ITEM_BODY_FROM = 0.5
 /**
  * …and a hairstyle's: the legs alone, which no hairstyle reaches (long hair falls to the hips, about 0.67 of the
- * figure). Named for the flat base it was first measured on (F02, Plan 12), retired since D1.
+ * figure) — the pipeline's `LEGS_FROM`, which its wide registration measures a hairstyle on too. Named for the flat base
+ * it was first measured on (F02, Plan 12), retired since D1.
  */
-export const BASE_LEGS_FROM = 0.8
+export const BASE_LEGS_FROM = LEGS_FROM
 
 /**
  * A hairstyle against its bald body (Plan 19, the `hair` row of §10.4). The hair may raise the box's top, widen
@@ -374,10 +382,13 @@ export function bodyBox(pic, fromY) {
  * silhouettes, once registered, of at least `iou[<slot>]`. Anything else is `drift`.
  *
  * The IoU is taken where the asset leaves the body alone, so each slot has its own measure and floor, set on the real
- * pictures of 2026-10-04:
+ * pictures of 2026-10-04. Since the final review the IoU is the pipeline's own (`registerWide`), at @2x on the frame
+ * rather than at the reference's size; measured again on every real picture that day, each moved by at most 0.024 and
+ * every verdict stayed `ok` (hairstyles 0.967–0.993, outfits 0.670–0.888, bot faces 0.941–0.991). The other figures below
+ * are the first measure's:
  *
  * - `hair` — the legs, the rows from `BASE_LEGS_FROM` of the body's height down that no hairstyle reaches, solid in either
- *   picture, at the reference's size. Registered, all eight real hairstyles measured 0.977–0.994 — neat01, spiky01 and
+ *   picture. Registered, all eight real hairstyles measured 0.977–0.994 — neat01, spiky01 and
  *   ponytail01 among them, zoomed out 4.5–5 % and at 0.64–0.77 as drawn; bob01 and tousled01 zoomed to 0.96 and 0.92 by hand
  *   0.974–0.996. Zoomed to 0.85, neither registers better than 0.84 (nor within 8 %).
  * - `outfit` — the pipeline's own silhouette IoU (`registerBySilhouette`, the number its log prints): an outfit changes the
@@ -396,31 +407,13 @@ export function bodyBox(pic, fromY) {
  */
 export const REGISTRATION = { scale: 0.08, iou: { hair: 0.9, outfit: 0.6, botFace: 0.9 } }
 
-/** The slot `registerToBase` is given for each: what it leaves alone, and so what it measures. */
-const SEARCH_SLOT = { hair: 'hair', outfit: 'outfit', botFace: 'face' }
-
 /**
- * The search `registerOnBody` runs: the pipeline's own `registerToBase`, twice. First over ±10 % of scale in 1 % steps and
- * ±16 px at half the frame's density (about ±125 px of a 1024 × 1536 picture), then over the pipeline's own scales
- * (`REGISTER_SCALES`, ±1 %) and ±6 px at its @2x, from there. The pipeline's own search alone (±1 %, ±12 px @2x) cannot
- * reach a 4 % zoom: on spiky01 it stopped at its edge (dy 12, scale 0.99) with a mean difference of 20.4 — a picture that
- * fits is at 2.4–4 — and cut the body's outline into the hair, which no check failed.
- *
- * The second pass is also run alone, from where the picture stands, and whichever of the two lines the body up better
- * (`REGISTRATION`'s IoU) is the registration: a wide search over colour can slide a picture that changed the body — hair
- * painted over the torso — to wherever the change shows least, and that picture is `scope`'s to fail, not `drift`'s.
- */
-export const BODY_SEARCH = [
-  { density: 0.5, range: 16, scales: Array.from({ length: 21 }, (_, i) => (90 + i) / 100) },
-  { density: 2, range: 6, scales: REGISTER_SCALES },
-]
-
-/**
- * Which registration a picture is judged after (`registerOnBody`), or null: a hairstyle's (`hair`), an outfit's when it
- * is cut on a v4 body (`outfit`, `ingest.base` `f`/`m`, or none: body f, the pipeline's default since D1), and — Plan 19
- * C4 — a bot's happy face (`botFace`, `ingest.as` `bot:<n>:happy`, drawn from the bot's own neutral picture). An outfit
- * naming an old base (f01…, which the pipeline refuses since D1) is held to its edges as before, and a bot's neutral
- * picture (`bot:<n>`) is its body, which the ingest takes whole: its feet and centre line, as before.
+ * Which registration a picture is judged after (`registerOnBody`), or null — the pipeline's own rule
+ * (`wideRegistration`), asked of the asset's kind: a hairstyle's (`hair`), an outfit's when it is cut on a v4 body
+ * (`outfit`, `ingest.base` `f`/`m`, or none: body f, the pipeline's default since D1), and — Plan 19 C4 — a bot's happy
+ * face (`botFace`, `ingest.as` `bot:<n>:happy`, drawn from the bot's own neutral picture). An outfit naming an old base
+ * (f01…, which the pipeline refuses since D1) is held to its edges as before, and a bot's neutral picture (`bot:<n>`) is
+ * its body, which the ingest takes whole: its feet and centre line, as before.
  * Only on the reference's own canvas: a picture on another canvas is placed as before (`comparePictures`).
  *
  * @param {string} kind
@@ -429,87 +422,42 @@ export const BODY_SEARCH = [
  * @param {string | null | undefined} [as] the asset's `ingest.as`
  */
 export function bodyRegistration(kind, slot, base, as = null) {
-  if (kind === 'hair') return 'hair'
-  if (kind === 'item' && slot === 'outfit' && GENDERS.includes(base ?? 'f')) return 'outfit'
-  if (kind === 'bot' && as) {
-    const target = parseSpec(as)
-    if (target.kind === 'bot' && (target.expr ?? 'neutral') !== 'neutral') return 'botFace'
-  }
+  if (kind === 'hair') return wideRegistration({ kind: 'hair' })
+  if (kind === 'item') return wideRegistration({ kind: 'item', slot }, base ?? 'f')
+  if (kind === 'bot' && as) return wideRegistration(parseSpec(as))
   return null
 }
 
 /**
- * Register a picture onto its body as the ingest will (Plan 19 C2), with the pipeline's own `registerToBase` — colour over
- * the rows below the head for a hairstyle, the silhouette below the chin for an outfit (`slot`) — searched as `BODY_SEARCH`
- * says, both pictures put on the frame by the body's own box (`anchorBase`), so the scale is about the body's feet and
- * centre line, as the pipeline's is. `pipelineInput` hands the ingest the picture registered this way, and the ingest's own
- * registration then finds it in place.
+ * Register a picture onto its body as the ingest does (Plan 19 C2; one code path since the final review): the pipeline's
+ * own `registerWide`, both pictures put on the frame by the body's own box (`anchorBase`) — the ingest puts them there by
+ * the body's stored transform, the same canvas mapped the same way — so the scale is about the body's feet and centre
+ * line, as the pipeline's is. Colour over the rows below the head for a hairstyle and a bot's face, the silhouette below
+ * the chin for an outfit (`slot`).
  *
  * Returns `{ placement, scale, dx, dy, iou, reason }`: `placement` as `comparePictures`' (a picture pixel lands at
  * `x * scale + left` on the reference's canvas); `scale` and `dx`/`dy` the same move told the pipeline's way, a scale about
- * the body's feet and centre line and then a shift, in reference px; `iou` as `REGISTRATION` measures it; `reason` `drift`
- * when the registration is not plausible, else null.
+ * the body's feet and centre line and then a shift, in reference px; `iou` as `registerWide` measures it (at @2x on the
+ * frame); `reason` `drift` when the registration is not plausible (`REGISTRATION`), else null.
  *
  * @param {{ data: Buffer, width: number, height: number }} pic
  * @param {{ data: Buffer, width: number, height: number }} ref on the same canvas as `pic`
  * @param {'hair' | 'outfit' | 'botFace'} slot
  */
 export async function registerOnBody(pic, ref, slot) {
-  const keyed = removeChroma(pic)
   const body = removeChroma(ref)
-  const transform = anchorBase(body)
-  const searchSlot = SEARCH_SLOT[slot]
-  /** Run `passes` one after the other, each from where the last left the picture: the placement, and its IoU. */
-  const search = async (passes) => {
-    let placement = { scale: 1, left: 0, top: 0 }
-    let found = null
-    for (const { density, range, scales } of passes) {
-      const moved = await alignPicture(keyed, ref, placement)
-      found = registerToBase(await applyTransform(moved, transform, density), await applyTransform(body, transform, density), { slot: searchSlot, density, range, scales })
-      // The move found on the frame — scaled about (AXIS_X, BASELINE_Y), then shifted by (dx, dy) px at `density` — taken
-      // back onto the reference's canvas, and composed with the passes before it.
-      const step = {
-        scale: found.scale,
-        left: ((found.scale - 1) * (transform.offsetX - AXIS_X) + found.dx / density) / transform.scale,
-        top: ((found.scale - 1) * (transform.offsetY - BASELINE_Y) + found.dy / density) / transform.scale,
-      }
-      placement = { scale: placement.scale * step.scale, left: placement.left * step.scale + step.left, top: placement.top * step.scale + step.top }
-    }
-    if (slot === 'outfit') return { placement, iou: found.iou }
-    const placed = await alignPicture(pic, ref, placement)
-    return { placement, iou: slot === 'botFace' ? solidIoU(placed, ref) : legsIoU(placed, ref) }
+  const { scale: k, offsetX, offsetY } = anchorBase(body)
+  const transform = { scale: k, offsetX, offsetY }
+  const found = await registerWide({ keyed: removeChroma(pic), transform, body: await applyTransform(body, transform, 2), rule: slot })
+  const { scale, iou } = found
+  // The move on the frame, taken back onto the reference's canvas: a frame point f lands at (f − pivot) · scale + pivot + d.
+  const placement = {
+    scale,
+    left: ((scale - 1) * (offsetX - AXIS_X) + found.dx) / k,
+    top: ((scale - 1) * (offsetY - BASELINE_Y) + found.dy) / k,
   }
-  const near = await search(BODY_SEARCH.slice(-1))
-  const wide = await search(BODY_SEARCH)
-  const { placement, iou } = near.iou >= wide.iou ? near : wide
-  const { scale } = placement
-  const feetX = (AXIS_X - transform.offsetX) / transform.scale
-  const feetY = (BASELINE_Y - transform.offsetY) / transform.scale
   const reason = Math.abs(scale - 1) > REGISTRATION.scale || iou < REGISTRATION.iou[slot] ? 'drift' : null
-  return { placement, scale, dx: Math.round((scale - 1) * feetX + placement.left), dy: Math.round((scale - 1) * feetY + placement.top), iou, reason }
-}
-
-/** The IoU of two pictures' solid pixels over the rows from `fromY` down (0: the whole canvas, the whole figure). */
-function solidIoU(pic, ref, fromY = 0) {
-  const { width, height } = ref
-  let both = 0
-  let either = 0
-  for (let y = fromY; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const at = (y * width + x) * 4 + 3
-      const a = pic.data[at] > ALPHA_SOLID
-      const b = ref.data[at] > ALPHA_SOLID
-      if (a && b) both++
-      if (a || b) either++
-    }
-  }
-  return either === 0 ? 0 : both / either
-}
-
-/** The IoU of two pictures' solid pixels over `ref`'s legs: the rows from `BASE_LEGS_FROM` of its height down. */
-function legsIoU(pic, ref) {
-  const box = alphaBBox(ref)
-  return solidIoU(pic, ref, box.y + Math.floor(box.h * BASE_LEGS_FROM))
+  return { placement, scale, dx: Math.round(found.dx / k), dy: Math.round(found.dy / k), iou, reason }
 }
 
 /** Whether a placement leaves a picture where it is, to the whole pixel `alignPicture` places it by. */
@@ -669,30 +617,24 @@ const ALIGNED_KINDS = new Set(['expression', 'item', 'bodyExpression', 'hair'])
  * The file the pipeline should be given for a picture. An expression, an item and — Plan 19 — a body's face and
  * a hairstyle are cut with their owner's stored transform, which was measured on a canvas the reference's size; a
  * picture on another canvas (the model's 1086 × 1448) is moved onto the reference's canvas first, aligned as
- * `verify` aligned it, and written to `tmp`. Since Plan 19 C2 a hairstyle, or an outfit cut on a v4 body (`base`
- * `f`/`m`), on the reference's own canvas is registered onto the body first (`registerOnBody`), as `verify` judged it,
- * when that moves it at all (`registered: true`); since C4 so is a bot's happy face (`as` `bot:<n>:happy`), onto the
- * bot's neutral picture. Anything else — a body or a bot's neutral picture, which take a transform whole, and any
- * other picture already on the reference's canvas — goes in as it is.
+ * `verify` aligned it, and written to `tmp`. Anything else — a body or a bot, which take a transform whole, and any
+ * picture already on the reference's canvas — goes in as it is: a hairstyle, an outfit on a v4 body and a bot's happy face
+ * are registered onto what they were drawn on by the pipeline itself (`registerWide`, Plan 19 final review), exactly as a
+ * command-line ingest of the same picture registers them.
  *
  * `placement`, when the caller has it already (`scorePicture`), is used instead of being worked out again.
  */
-export async function pipelineInput({ file, kind, slot = null, base = null, as = null, referenceFile, tmp, placement = null }) {
-  const asItIs = { file, aligned: false, registered: false }
-  const registration = bodyRegistration(kind, slot, base, as)
-  if (!referenceFile || !(ALIGNED_KINDS.has(kind) || registration !== null)) return asItIs
+export async function pipelineInput({ file, kind, slot = null, referenceFile, tmp, placement = null }) {
+  const asItIs = { file, aligned: false }
+  if (!referenceFile || !ALIGNED_KINDS.has(kind)) return asItIs
   const pic = await readPicture(file)
   const ref = await readPicture(referenceFile)
-  const sameCanvas = pic.width === ref.width && pic.height === ref.height
-  const onBody = sameCanvas ? registration : null
-  // Another canvas is aligned only for the kinds cut on their owner's transform: a bot's happy face on one is `redrawn`.
-  if (onBody === null && (sameCanvas || !ALIGNED_KINDS.has(kind))) return asItIs
-  const where = placement ?? (onBody ? (await registerOnBody(pic, ref, onBody)).placement : comparePictures(pic, ref, kind, slot).placement)
-  if (sameCanvas && inPlace(where)) return asItIs
+  if (pic.width === ref.width && pic.height === ref.height) return asItIs
+  const where = placement ?? comparePictures(pic, ref, kind, slot).placement
   mkdirSync(tmp, { recursive: true })
   const out = join(tmp, 'aligned.png')
   await writePicture(await alignPicture(pic, ref, where), out)
-  return { file: out, aligned: true, registered: onBody !== null }
+  return { file: out, aligned: true }
 }
 
 /**
@@ -704,6 +646,10 @@ export async function pipelineInput({ file, kind, slot = null, base = null, as =
  * `body:<g>`, when that picture is its owner's own. A bot or a body needs its root's, so its reference stands in only
  * when it is that body's picture (`referenceOwner`) — a bot's happy face, drawn from the bot, cannot. A body with no
  * `transformFrom` needs nothing from the copy: the pipeline places it itself (`bodyTransform` in extract.mjs).
+ *
+ * A bot's second face is registered by the pipeline onto the bot's L30 (Plan 19 final review): its reference — the bot's
+ * neutral picture — is ingested into the copy as `bot:<n>` first, so the trial registers it onto the picture it was drawn
+ * from, as the real ingest will once that neutral picture is in (the registry ingests it first).
  */
 async function pipelineChecks({ file, kind, slot, referenceFile, spec, transformFrom, rootPicture, placement, publicDir, keepTmp, log }) {
   const tmp = mkdtempSync(join(tmpdir(), 'avatar-verify-'))
@@ -724,7 +670,10 @@ async function pipelineChecks({ file, kind, slot, referenceFile, spec, transform
       if (!referenceFile || (fromRoot && rootPicture !== needed)) throw new Error(`no body ${needed} in ${publicDir} and no reference to ingest it from`)
       await ingest({ file: referenceFile, target: { kind: 'body', gender: needed }, dir, targets, log: quiet })
     }
-    const input = await pipelineInput({ file, kind, slot, base: spec.base ?? null, as: spec.as, referenceFile, tmp: join(tmp, 'input'), placement })
+    if (target.kind === 'bot' && (target.expr ?? 'neutral') !== 'neutral' && referenceFile) {
+      await ingest({ file: referenceFile, target: { kind: 'bot', bot: target.bot, expr: 'neutral' }, dir, targets, transformFrom, log: quiet })
+    }
+    const input = await pipelineInput({ file, kind, slot, referenceFile, tmp: join(tmp, 'input'), placement })
     const flags = parseFlags(spec.flags)
     await ingest({
       file: input.file, target, dir, targets, baseId: owner, variant: spec.variant ?? null,
@@ -736,7 +685,7 @@ async function pipelineChecks({ file, kind, slot, referenceFile, spec, transform
     const checks = {}
     for (const row of rows) checks[row.name] = row.results.filter((result) => !result.ok).map((result) => result.id)
     const failed = rows.flatMap((row) => row.results.filter((result) => !result.ok).map((result) => ({ name: row.name, id: result.id, detail: result.detail })))
-    return { checks, failed, aligned: input.aligned, registered: input.registered }
+    return { checks, failed, aligned: input.aligned }
   } finally {
     if (keepTmp) log(`kept ${tmp}`)
     else rmSync(tmp, { recursive: true, force: true })
@@ -787,8 +736,6 @@ export async function scorePicture({ file, kind, slot = null, referenceFile = nu
   let compared = null
   /** Where a registered outfit's head is read for `hair_colour` (Plan 19 C2): placed by its head, not its body. */
   let headPlacement = null
-  /** What a registered picture is registered onto, in a note: its body, or (Plan 19 C4) a bot's happy face's neutral picture. */
-  let registeredOnto = 'the body'
 
   /** The last rule, `pipeline` / `check:<Cn>`: a trial ingest into a copy of `publicDir`, then `check`. */
   const pipelineRule = async () => {
@@ -804,8 +751,7 @@ export async function scorePicture({ file, kind, slot = null, referenceFile = nu
       const placement = compared?.placement ?? null
       const result = await pipelineChecks({ file, kind, slot, referenceFile, spec, transformFrom: source, rootPicture: root, placement, publicDir, keepTmp, log })
       measure.checks = result.checks
-      if (result.registered) notes.push(`pipeline: fed the picture registered onto ${registeredOnto}`)
-      else if (result.aligned) notes.push('pipeline: fed the picture aligned onto the reference canvas')
+      if (result.aligned) notes.push('pipeline: fed the picture aligned onto the reference canvas')
       if (result.failed.length) {
         for (const { name, id, detail } of result.failed) notes.push(`${name} ${id}: ${detail ?? 'failed'}`)
         return done(`check:${result.failed[0].id}`)
@@ -834,8 +780,9 @@ export async function scorePicture({ file, kind, slot = null, referenceFile = nu
       notes.push(`another canvas than the reference's: scaled by ${round2(compared.placement.scale)} and anchored before drift, hair colour and scope`)
     }
     // Plan 19 C2: a hairstyle, or an outfit cut on a body, on the reference's own canvas is judged after the registration
-    // the ingest applies. The edges as drawn stay in `measure.drift`; `drift` is the registration's verdict, and scope and
-    // the pipeline are given the registered picture. A `redrawn` box is still `redrawn`.
+    // the ingest applies — the pipeline's own `registerWide` (one code path, Plan 19 final review). The edges as drawn stay
+    // in `measure.drift`; `drift` is the registration's verdict, and scope is measured on the registered picture. The
+    // pipeline is given the picture as drawn and registers it itself. A `redrawn` box is still `redrawn`.
     // An outfit's hair colour is a question about its head, which the registration — on the body below the chin — need
     // not line up: royal_robe01 drew its head in place and its feet 20 px up, and registered on its body its band read
     // 12.96, placed by its head 3.93. So the band is read with the head placed as on another canvas (`compareBoxes`, head
@@ -846,7 +793,7 @@ export async function scorePicture({ file, kind, slot = null, referenceFile = nu
     if (onBody && compared.reason !== 'redrawn') {
       const registered = await registerOnBody(pic, ref, onBody)
       measure.registered = { scale: round2(registered.scale), dx: registered.dx, dy: registered.dy, iou: round2(registered.iou) }
-      if (onBody === 'botFace') registeredOnto = "the bot's neutral picture"
+      const registeredOnto = onBody === 'botFace' ? "the bot's neutral picture" : 'the body'
       if (!inPlace(registered.placement) || compared.reason) {
         notes.push(`registered onto ${registeredOnto} as the ingest will be: scale ${round2(registered.scale)} about the feet,` +
           ` then ${registered.dx}, ${registered.dy} px (IoU ${round2(registered.iou)}) — drift${onBody === 'hair' ? ' and scope are' : ' is'} judged there, not on the edges as drawn`)
@@ -925,7 +872,8 @@ export function kindOfSpec(spec) {
  * Verify every `generated` asset, or the named ones: score the picture, write `measure`, `verdict`,
  * `reason` (and `notes`) onto the last attempt, and set the status — `ok`, `ng`, or `blocked` on the third
  * failure. Returns one `{ id, verdict, reason, measure, notes }` per asset. A retired flat base or expression (Plan 19
- * D1) is refused — `parseSpec` throws on its target — before anything is scored or written onto its history.
+ * D1) is refused — `parseSpec` throws on its target — and so is a superseded Plan 12 entry (`refuseSuperseded`, Plan 19
+ * final review), before anything is scored or written onto its history.
  *
  * @param {any} registry
  * @param {string[]} [ids]
@@ -934,6 +882,7 @@ export function kindOfSpec(spec) {
 export async function verifyAssets(registry, ids = [], { srcDir = SRC_DIR, publicDir = PUBLIC_DIR, keepTmp = false, pipeline = true, log = () => {} } = {}) {
   const targets = ids.length ? ids.map((id) => requireAsset(registry, id)) : registry.assets.filter((asset) => asset.status === 'generated')
   for (const asset of targets) {
+    refuseSuperseded(asset, 'verify')
     try {
       parseSpec(asset.ingest.as)
     } catch (error) {

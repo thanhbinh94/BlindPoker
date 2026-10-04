@@ -369,21 +369,31 @@ through. Otherwise:
 | f03 | f | `hair_f_wavy01` | `skin_tan01` | `eyecolor_green01` (pinned) |
 | m01 | m | `hair_m_tousled01` | `skin_lighttan01` | — (`keepEyes`) |
 | m02 | m | `hair_m_neat01` | `skin_fair01` | `eyecolor_grey01` |
-| m03 | m | `hair_m_curly01` | `skin_deep01` | `eyecolor_brown01` |
+| m03 | m | `hair_m_curly01` | `skin_deep01` | — (the m body's own eyes: nearer than `eyecolor_brown01`) |
 | anything else | f | `hair_f_bob01` | — | — |
 
 **The eye rule.** A body's face layers carry their own eyes, so an old base whose eyes were another colour
-would come back with someone else's. When the old base's iris (`V3_BASES[base].naturalEye`, measured from the
-committed art, ruling 6) is more than `EYE_KEEP_DELTA_E` = 12 (ΔE76 in CIE Lab, `inventory/colour.ts`) from
-the new body's `naturalEyeColour`, and the config has no `eyeColor` of its own, it is given one: the row's
-pinned pick, else the nearest free eye colour (ties to the earlier catalogue row). A chosen eye colour always
-wins. f01 and m01 never get one (`keepEyes`): the bodies are drawn from them, so their eyes are the bodies'
-own. f03's iris measures nearer `eyecolor_amber01` than `eyecolor_green01` (ΔE 39.7 against 40.5) but reads
-as green, so green is pinned (ruling 6). The shipped bodies' natural eyes are the ones measured on the real art
-(`avatar-pipeline.mjs colours`: f `#2a6492`, m `#945e26`, in `avatar-bodies.json`); the table above gives the same eye
-colours with them as it did with the provisional values the unit tests still pin (f `#2e6a9b`, m `#cc924c`) — m03's
-iris is the nearest call, about 12.7 from the real m body, just over `EYE_KEEP_DELTA_E` — and the rule, not the
-table, decides.
+would come back with someone else's. The rule exists to keep a look, not to move it (Plan 19 final review). When
+the config has no `eyeColor` of its own, the old base's iris (`V3_BASES[base].naturalEye`, measured from the
+committed art, ruling 6) is more than `EYE_KEEP_DELTA_E` = 12 (ΔE76 in CIE Lab, `inventory/colour.ts`) from the
+new body's `naturalEyeColour`, and the pick — the row's pinned one, else the nearest free eye colour (ties to the
+earlier catalogue row) — is **nearer that iris than the body's own eyes are**, the config is given the pick
+(`eyeRuleColour`); otherwise it keeps the body's eyes. A chosen eye colour always wins. f01 and m01 never get one
+(`keepEyes`): the bodies are drawn from them, so their eyes are the bodies' own. f03's iris measures nearer
+`eyecolor_amber01` than `eyecolor_green01` (ΔE 39.7 against 40.5) but reads as green, so green is pinned (ruling 6) —
+and the pin is held to the same comparison. With the shipped bodies' natural eyes, measured on the real art
+(`avatar-pipeline.mjs colours`: f `#2a6492`, m `#945e26`, in `avatar-bodies.json`), the distances from each old iris
+are:
+
+| Old base | iris | to the body's eyes | to the pick | outcome |
+| --- | --- | --- | --- | --- |
+| f02 | `#6b5771` | 25.1 | `eyecolor_grey01` 23.7 | grey01 |
+| f03 | `#a9a564` | 70.1 | `eyecolor_green01` (pinned) 40.5 | green01 |
+| m02 | `#998c91` | 44.8 | `eyecolor_grey01` 10.6 | grey01 |
+| m03 | `#ad6f4a` | 12.7 | `eyecolor_brown01` 22.9 | none: brown01 would move the look further than the body's eyes do |
+
+`avatar-migrate.test.ts` pins that table literally against `loadBodies()`, and the rule's mechanics on fixture bodies
+with the provisional values (f `#2e6a9b`, m `#cc924c`).
 
 **The wire is v4** (Plan 19, A5, with the client in the same commit). `PUT /api/me/avatar` and
 `PUT /api/me/outfits/:slot` validate with `validateAvatarConfig`, so a v3 body is `MISSING_LAYER` and any `base`

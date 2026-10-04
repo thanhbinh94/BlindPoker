@@ -3,15 +3,15 @@
  * signed in since before Plan 19 (or Plan 11, or Plan 8) recognises their own figure (spec §4.5, R5).
  *
  * No database: this is a pure function of a stored jsonb value, the catalogue, the alias map and the bodies.
- * The table 4.5 cases run on fixture bodies whose natural eye colours are pinned here (ruling 6), so they
- * keep meaning the same thing when C1 measures the real art; one test runs the same rule on the shipped
- * bodies, whatever they say.
+ * The table 4.5 cases run on fixture bodies whose natural eye colours are pinned here (ruling 6), so the rule's
+ * mechanics keep meaning the same thing whatever the art measures; one test pins the literal outcome on the
+ * shipped bodies (`avatar-bodies.json`), so a change to the art or the rule that moves a player's eyes fails here.
  */
 import { describe, expect, it } from 'vitest'
 import { loadAliases } from './aliases.js'
 import type { AvatarConfigV4 } from './avatar.js'
 import { defaultAvatar, validateAvatarConfig } from './avatar.js'
-import { EYE_KEEP_DELTA_E, nearestFreeEyeColour, readAvatarConfig, V3_BASES } from './avatar-migrate.js'
+import { EYE_KEEP_DELTA_E, eyeRuleColour, nearestFreeEyeColour, readAvatarConfig, V3_BASES } from './avatar-migrate.js'
 import type { Bodies } from './bodies.js'
 import { loadBodies } from './bodies.js'
 import { deltaE } from './colour.js'
@@ -75,10 +75,28 @@ describe('readAvatarConfig — v3 to v4 (table 4.5)', () => {
     ['f03', { gender: 'f', hairStyle: 'hair_f_wavy01', skinColor: 'skin_tan01', eyeColor: 'eyecolor_green01' }],
     ['m01', { gender: 'm', hairStyle: 'hair_m_tousled01', skinColor: 'skin_lighttan01' }],
     ['m02', { gender: 'm', hairStyle: 'hair_m_neat01', skinColor: 'skin_fair01', eyeColor: 'eyecolor_grey01' }],
-    ['m03', { gender: 'm', hairStyle: 'hair_m_curly01', skinColor: 'skin_deep01', eyeColor: 'eyecolor_brown01' }],
+    // brown01 is further from m03's iris (22.9) than these bodies' own eyes are (19.9): handing it out would move the look.
+    ['m03', { gender: 'm', hairStyle: 'hair_m_curly01', skinColor: 'skin_deep01' }],
     ['robot', { gender: 'f', hairStyle: 'hair_f_bob01' }],
   ])('reads the old base %s as table 4.5 says', (base, expected) => {
     expect(read(v3(base))).toEqual({ v: 4, outfit: 'outfit_casual01', ...expected })
+  })
+
+  it('hands out an eye colour only when it is nearer the old base’s eyes than the body’s own are (Plan 19 final review)', () => {
+    // m03 (#ad6f4a) on these bodies: their eyes are 19.9 away, past EYE_KEEP_DELTA_E, but the nearest free colour,
+    // brown01, is 22.9 away — further than the body's own. The rule keeps a look; it does not move it.
+    expect(deltaE(V3_BASES.m03.naturalEye, BODIES_FIXTURE.m.naturalEyeColour)).toBeGreaterThan(EYE_KEEP_DELTA_E)
+    expect(nearestFreeEyeColour(V3_BASES.m03.naturalEye, catalog)).toBe('eyecolor_brown01')
+    expect(deltaE(V3_BASES.m03.naturalEye, catalog.get('eyecolor_brown01')!.colour!)).toBeGreaterThan(deltaE(V3_BASES.m03.naturalEye, BODIES_FIXTURE.m.naturalEyeColour))
+    expect(eyeRuleColour(V3_BASES.m03, BODIES_FIXTURE.m.naturalEyeColour, catalog)).toBeUndefined()
+    // …f03's pinned green is a pick like any other: on a body whose eyes are 23.5 from f03's (#c0b040), green01 (40.5) is
+    // further, so f03 keeps the body's eyes there.
+    const yellowish = { f: { naturalEyeColour: '#c0b040' }, m: { naturalEyeColour: '#cc924c' } } as unknown as Bodies
+    expect(deltaE(V3_BASES.f03.naturalEye, '#c0b040')).toBeGreaterThan(EYE_KEEP_DELTA_E)
+    expect(deltaE(V3_BASES.f03.naturalEye, '#c0b040')).toBeLessThan(deltaE(V3_BASES.f03.naturalEye, catalog.get('eyecolor_green01')!.colour!))
+    expect(readAvatarConfig(v3('f03'), catalog, aliases, yellowish).eyeColor).toBeUndefined()
+    // …and a pick nearer than the body's eyes is handed out: f02's grey01 (23.7) against these bodies' 26.3.
+    expect(eyeRuleColour(V3_BASES.f02, BODIES_FIXTURE.f.naturalEyeColour, catalog)).toBe('eyecolor_grey01')
   })
 
   it('never tints f01 or m01 eyes, whatever the bodies’ natural eye colours are (keepEyes)', () => {
@@ -141,12 +159,12 @@ describe('readAvatarConfig — v3 to v4 (table 4.5)', () => {
       eyeColor: 'eyecolor_blue01',
     })
     // A colour id the catalogue no longer has is dropped like any other withdrawn item — and then the eye rule applies.
-    expect(read(v3('m03', { hairColor: 'haircolor_gone', eyeColor: 'eyecolor_gone' }))).toEqual({
+    expect(read(v3('m02', { hairColor: 'haircolor_gone', eyeColor: 'eyecolor_gone' }))).toEqual({
       v: 4,
       gender: 'm',
-      hairStyle: 'hair_m_curly01',
-      skinColor: 'skin_deep01',
-      eyeColor: 'eyecolor_brown01',
+      hairStyle: 'hair_m_neat01',
+      skinColor: 'skin_fair01',
+      eyeColor: 'eyecolor_grey01',
       outfit: 'outfit_casual01',
     })
   })
@@ -171,16 +189,34 @@ describe('readAvatarConfig — v3 to v4 (table 4.5)', () => {
     }
   })
 
-  it('with the shipped bodies, every old base keeps its eyes, gets its pinned pick, or gets the nearest free eye colour', () => {
+  it('with the shipped bodies, reads every old base as docs/normal-server.md’s table says (Plan 19 final review)', () => {
+    // The literal table, not the rule worked out again: the shipped bodies' eyes (f #2a6492, m #945e26, measured on the
+    // real art) give f02 and m02 grey01 and f03 its pinned green01, and leave f01, m01 (keepEyes) and m03 on the body's
+    // own eyes — m03's are 12.7 from its old iris, brown01 22.9.
     const bodies = loadBodies()
-    for (const [base, row] of Object.entries(V3_BASES) as [string, V3BaseRow][]) {
-      const far = deltaE(row.naturalEye, bodies[row.gender].naturalEyeColour) > EYE_KEEP_DELTA_E
-      const expected = row.keepEyes === true || !far ? undefined : (row.eyeColor ?? nearestFreeEyeColour(row.naturalEye, catalog))
+    expect(bodies.f.naturalEyeColour).toBe('#2a6492')
+    expect(bodies.m.naturalEyeColour).toBe('#945e26')
+    const table: Record<keyof typeof V3_BASES, Partial<AvatarConfigV4>> = {
+      f01: { gender: 'f', hairStyle: 'hair_f_bob01' },
+      f02: { gender: 'f', hairStyle: 'hair_f_hime01', skinColor: 'skin_porcelain01', eyeColor: 'eyecolor_grey01' },
+      f03: { gender: 'f', hairStyle: 'hair_f_wavy01', skinColor: 'skin_tan01', eyeColor: 'eyecolor_green01' },
+      m01: { gender: 'm', hairStyle: 'hair_m_tousled01', skinColor: 'skin_lighttan01' },
+      m02: { gender: 'm', hairStyle: 'hair_m_neat01', skinColor: 'skin_fair01', eyeColor: 'eyecolor_grey01' },
+      m03: { gender: 'm', hairStyle: 'hair_m_curly01', skinColor: 'skin_deep01' },
+    }
+    for (const [base, expected] of Object.entries(table)) {
       const migrated = readAvatarConfig(v3(base), catalog, aliases, bodies)
-      expect(migrated.eyeColor, base).toBe(expected)
-      expect(migrated, base).toMatchObject({ v: 4, gender: row.gender, hairStyle: row.hairStyle })
+      expect(migrated, base).toEqual({ v: 4, outfit: 'outfit_casual01', ...expected })
       expect(validateAvatarConfig(migrated, catalog), base).toEqual({ ok: true, value: migrated })
     }
+    // f03's pinned green still applies on the real f body: green01 is 40.5 from f03's iris (#a9a564), the body's eyes 70.1.
+    const green = catalog.get('eyecolor_green01')!.colour!
+    expect(green).toBe('#2f9e55')
+    expect(deltaE(V3_BASES.f03.naturalEye, green)).toBeCloseTo(40.52, 1)
+    expect(deltaE(V3_BASES.f03.naturalEye, bodies.f.naturalEyeColour)).toBeCloseTo(70.13, 1)
+    // …and m03's is the call the rule changed: past EYE_KEEP_DELTA_E, nearer the body's eyes than brown01.
+    expect(deltaE(V3_BASES.m03.naturalEye, bodies.m.naturalEyeColour)).toBeCloseTo(12.68, 1)
+    expect(deltaE(V3_BASES.m03.naturalEye, catalog.get('eyecolor_brown01')!.colour!)).toBeCloseTo(22.94, 1)
   })
 })
 

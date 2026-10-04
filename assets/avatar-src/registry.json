@@ -81,7 +81,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/item_outfit_casual01",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/item_outfit_casual01 replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "item_head_dealer_visor01",
@@ -99,9 +101,7 @@
         "as": "item:head:dealer_visor01",
         "base": null,
         "variant": null,
-        "flags": [
-          "--hides-hair-front"
-        ]
+        "flags": []
       },
       "status": "ok",
       "attempts": [
@@ -139,7 +139,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": true,
+      "note": "Plan 12's picture, drawn on F01's picture and cut on the retired flat base f01 with her hair under it (base null, no --hair); the committed layer is still that cut. Kept as history: ingest and verify refuse it, since cut today it would be diffed against the bald body f — a re-cut is a new v4 asset drawn over a hairstyle (--hair)."
     },
     {
       "id": "item_head_beret_red01",
@@ -157,9 +159,7 @@
         "as": "item:head:beret_red01",
         "base": null,
         "variant": null,
-        "flags": [
-          "--hides-hair-front"
-        ]
+        "flags": []
       },
       "status": "ok",
       "attempts": [
@@ -197,7 +197,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": true,
+      "note": "Plan 12's picture, drawn on F01's picture and cut on the retired flat base f01 with her hair under it (base null, no --hair); the committed layer is still that cut. Kept as history: ingest and verify refuse it, since cut today it would be diffed against the bald body f — a re-cut is a new v4 asset drawn over a hairstyle (--hair)."
     },
     {
       "id": "item_head_crown_gold01",
@@ -215,9 +217,7 @@
         "as": "item:head:crown_gold01",
         "base": null,
         "variant": null,
-        "flags": [
-          "--hides-hair-front"
-        ]
+        "flags": []
       },
       "status": "ok",
       "attempts": [
@@ -255,7 +255,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": true,
+      "note": "Plan 12's picture, drawn on F01's picture and cut on the retired flat base f01 with her hair under it (base null, no --hair); the committed layer is still that cut. Kept as history: ingest and verify refuse it, since cut today it would be diffed against the bald body f — a re-cut is a new v4 asset drawn over a hairstyle (--hair)."
     },
     {
       "id": "item_head_conical_hat01",
@@ -273,9 +275,7 @@
         "as": "item:head:conical_hat01",
         "base": null,
         "variant": null,
-        "flags": [
-          "--hides-hair-front"
-        ]
+        "flags": []
       },
       "status": "ok",
       "attempts": [
@@ -313,7 +313,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": true,
+      "note": "Plan 12's picture, drawn on F01's picture and cut on the retired flat base f01 with her hair under it (base null, no --hair); the committed layer is still that cut. Kept as history: ingest and verify refuse it, since cut today it would be diffed against the bald body f — a re-cut is a new v4 asset drawn over a hairstyle (--hair)."
     },
     {
       "id": "item_head_beanie01",
@@ -331,9 +333,7 @@
         "as": "item:head:beanie01",
         "base": null,
         "variant": null,
-        "flags": [
-          "--hides-hair-front"
-        ]
+        "flags": []
       },
       "status": "ok",
       "attempts": [
@@ -371,7 +371,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": true,
+      "note": "Plan 12's picture, drawn on F01's picture and cut on the retired flat base f01 with her hair under it (base null, no --hair); the committed layer is still that cut. Kept as history: ingest and verify refuse it, since cut today it would be diffed against the bald body f — a re-cut is a new v4 asset drawn over a hairstyle (--hair)."
     },
     {
       "id": "item_head_party_cone01",
@@ -389,9 +391,7 @@
         "as": "item:head:party_cone01",
         "base": null,
         "variant": null,
-        "flags": [
-          "--hides-hair-front"
-        ]
+        "flags": []
       },
       "status": "ok",
       "attempts": [
@@ -433,7 +433,9 @@
           ]
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": true,
+      "note": "Plan 12's picture, drawn on F01's picture and cut on the retired flat base f01 with her hair under it (base null, no --hair); the committed layer is still that cut. Kept as history: ingest and verify refuse it, since cut today it would be diffed against the bald body f — a re-cut is a new v4 asset drawn over a hairstyle (--hair)."
     },
     {
       "id": "item_head_hood_black01",
@@ -499,7 +501,9 @@
           "judgedAt": "2026-09-23T18:51:12.885Z",
           "note": "a hood cannot hide hair that is baked into the body layer: the cut keeps F01 hair round the hood and M01 wears it — item withdrawn from stage 1"
         }
-      ]
+      ],
+      "superseded": true,
+      "note": "Withdrawn in Plan 12 (the hood could not hide hair drawn into the flat base) and blocked; never ingested. Kept as history: ingest and verify refuse it."
     },
     {
       "id": "item_face_sunglasses01",
@@ -557,7 +561,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": true,
+      "note": "Plan 12's picture, drawn on F01's picture and cut on the retired flat base f01 with her hair under it (base null, no --hair); the committed layer is still that cut. Kept as history: ingest and verify refuse it, since cut today it would be diffed against the bald body f — a re-cut is a new v4 asset drawn over a hairstyle (--hair)."
     },
     {
       "id": "item_face_masquerade01",
@@ -615,7 +621,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": true,
+      "note": "Plan 12's picture, drawn on F01's picture and cut on the retired flat base f01 with her hair under it (base null, no --hair); the committed layer is still that cut. Kept as history: ingest and verify refuse it, since cut today it would be diffed against the bald body f — a re-cut is a new v4 asset drawn over a hairstyle (--hair)."
     },
     {
       "id": "item_face_eyepatch01",
@@ -673,7 +681,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": true,
+      "note": "Plan 12's picture, drawn on F01's picture and cut on the retired flat base f01 with her hair under it (base null, no --hair); the committed layer is still that cut. Kept as history: ingest and verify refuse it, since cut today it would be diffed against the bald body f — a re-cut is a new v4 asset drawn over a hairstyle (--hair)."
     },
     {
       "id": "item_aura_water01",
@@ -2855,7 +2865,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_0",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_0 replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_1",
@@ -2918,7 +2930,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_1",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_1 replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_2",
@@ -2981,7 +2995,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_2",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_2 replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_3",
@@ -3044,7 +3060,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_3",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_3 replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_4",
@@ -3107,7 +3125,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_4",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_4 replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_5",
@@ -3170,7 +3190,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_5",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_5 replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_6",
@@ -3233,7 +3255,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_6",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_6 replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_7",
@@ -3296,7 +3320,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_7",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_7 replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_0:happy",
@@ -3353,7 +3379,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_0:happy",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_0:happy replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_1:happy",
@@ -3410,7 +3438,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_1:happy",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_1:happy replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_2:happy",
@@ -3467,7 +3497,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_2:happy",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_2:happy replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_3:happy",
@@ -3524,7 +3556,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_3:happy",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_3:happy replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_4:happy",
@@ -3581,7 +3615,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_4:happy",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_4:happy replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_5:happy",
@@ -3638,7 +3674,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_5:happy",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_5:happy replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_6:happy",
@@ -3695,7 +3733,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_6:happy",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_6:happy replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_7:happy",
@@ -3752,7 +3792,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_7:happy",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_7:happy replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "body_f",

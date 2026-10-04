@@ -13,10 +13,11 @@
  *       One generated picture in, its layers at @1x and @2x out, plus their manifest entries. A v4 body (`body:<g>`,
  *       Plan 19) is the whole figure as body_<g>_L30 and its head region (less the torso column under y 236) as
  *       body_<g>_face_neutral_L50, masked (skin; eyes on the face), with `bodies.<g>.transform` stored: on
- *       `--transform-from`'s transform, or the body's own when it is ingested again, or else body f's — f01's verbatim,
- *       the canvas both bodies are drawn on (in a directory with no body yet, on its own box). `--dry-run` adds C12
+ *       `--transform-from`'s transform, or the body's own when it is ingested again, or else F01's (`F01_TRANSFORM`,
+ *       frame.mjs) — the canvas both bodies are drawn on, in an empty directory too. `--dry-run` adds C12
  *       for a cut into a temporary copy. `face:<g>:<expr>` cuts one of the body's faces on its transform.
- *       `hair:<code>` cuts a hairstyle drawn on its gender's bald body: the difference against the registered body,
+ *       `hair:<code>` cuts a hairstyle drawn on its gender's bald body, registered on it searched wide (`registerWide`:
+ *       ±10 % of scale, as the registry's verify judges it — one code path): the difference against the registered body,
  *       less the face the picture redrew (the hair face rule), split into item_hair_<code>_L60 (front, with `split`)
  *       and _L20 (back, `empty` when blank), both masked; a hand-drawn assets/avatar-src/masks/item_hair_<code>_frontmask.png
  *       splits it instead of the rule. An item is cut on the body `--base` names and diffed against it, and every
@@ -27,7 +28,8 @@
  *       crop centre (192, 144), and refused unless its middle is empty — and written with its icon.
  *       A bot (`bot:<n>`, n 0–7) is cut on body f's stored transform (or `--transform-from`'s): bot_<n>_L30 (the
  *       whole figure) and bot_<n>_face_neutral_L50, with the other five faces written as copies of it (`copyOf`); a
- *       face already real is kept. `bot:<n>:happy` cuts only that face from its own picture.
+ *       face already real is kept. `bot:<n>:happy` cuts only that face from its own picture, registered first onto the
+ *       bot's real bot_<n>_L30, searched wide. An outfit cut on a body is registered on it searched wide too.
  *       The flat bases' `base:<id>` and `expr:<id>:<expr>` are retired (Plan 19 D1) and refused.
  *       Options, for every target:
  *         --dry-run             measure the picture against D02 §8 and print a verdict; write nothing
@@ -58,7 +60,7 @@
  *         --tint-seed <x,y>     a tintable item: the point (1x frame coords) `masks`/tint-sheet later cuts
  *                               its colour region from; stored on the item's manifest entry. Without it, an
  *                               item ingested again keeps the seed its entry already had
- *       An item is registered on its body first (the offset is logged), cut down to only itself, and written
+ *       An item is registered on its body first (the move is logged), cut down to only itself, and written
  *       with its inventory icon, item_<slot>_<code>_icon (96 × 96 at @1x, 192 × 192 at @2x). `ingest` masks
  *       whatever it just wrote that `masks` would (spec §4.1), so art ingested after this needs no separate
  *       `masks` run.
@@ -88,7 +90,7 @@
  *       and deep skin, the outer two read from items.json and drawn natural, with a caption saying so, while an
  *       item is missing), every outfit on both genders, every aura and frame, the six expressions per gender, the
  *       eight bots and the portrait at three sizes. `--hairs` and `--outfits` (comma lists of codes, with or
- *       without the `hair_`/`outfit_` prefix) narrow the v4 grid and nothing else. Also writes the fit sheet,
+ *       without the `hair_`/`outfit_` prefix) narrow the v4 grid and nothing else; an empty list is refused. Also writes the fit sheet,
  *       docs/avatar-2d-fit-sheet.png (or `--fit-out`): every hat and every face item × the eight hairstyles, cut
  *       to the portrait, with the hide rules applied to the hair layers.
  *

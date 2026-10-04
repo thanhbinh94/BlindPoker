@@ -256,7 +256,8 @@ pnpm --filter @bp/normal-web avatar:sheet -- --hairs f_bob01,m_tousled01 --outfi
 #   4. the six expressions per gender (12), the eight bots, and the portrait at 192, 40 and 32 px.
 # A body wears its gender's cut of an outfit where the manifest has one (§3.1: dealer01_m, tet_red01_m),
 # and the caption names it. --hairs and --outfits (comma lists; `hair_`/`outfit_` prefixes optional) narrow
-# the v4 grid and nothing else — what the style gate shows the user. --out moves the review sheet.
+# the v4 grid and nothing else — what the style gate shows the user; an empty list (`--hairs ""`) is refused, exit 1,
+# rather than drawing an empty grid. --out moves the review sheet.
 # The fit sheet (--fit-out moves it) is every hat in STAGE_ONE_ITEMS.head and every face item × the eight
 # hairstyles, on the hairstyle's gender, in casual01, cut to the portrait at @1x — one row per item, 96
 # cards. A hat's hide rules drop the hair layer they name (§2: front → the hairstyle's L60, back → its L20),
@@ -297,7 +298,9 @@ against: since v4 a gender's body `body_<g>_L30` (`--base f|m`), with its hairst
    the body (y ≥ 260) for `head`/`face`. An `outfit` is registered on the body instead (fix round 1): the
    same search maximises the intersection-over-union of the two silhouettes below the chin line, with pixels
    within 2 px of the base's outline counting 8 × (`SILHOUETTE_EDGE`), because the base's own limbs show
-   wherever the outfit picture's limbs miss them. `ingest` logs the chosen offset.
+   wherever the outfit picture's limbs miss them. `ingest` logs the chosen offset. An outfit on a v4 body is
+   registered **searched wide** (`registerWide`, §4.6; Plan 19 final review): the same function over ±10 % of
+   scale first, since the image model zooms a whole picture out by a few per cent.
 3. **Neighbourhood difference** (`diffAgainstBase`): a pixel is the item only if its colour is more than
    `colorTol` away from *every* solid base pixel in the 5 × 5 window around it (or that whole window is
    transparent in the base), and it is not simply the base pixel under it darkened (a cast shadow,
@@ -754,9 +757,11 @@ The v4 set is ingested with the same command as everything else: `body:`, `face:
 **A body** — `--as body:<g>` — is cut like a bot (§4.3): the whole figure as `body_<g>_L30` (`dropFaint`, no strand
 cut — a bald head has none) and its head region as `body_<g>_face_neutral_L50` (`clipToFace`: the portrait crop less the torso column), on a
 stored transform rather than its own box. Which one: `--transform-from <g>` when given; otherwise the body's own, when
-it is ingested again (it stays where it was placed); otherwise `BODY_TRANSFORM_FROM`, body f's — f01's verbatim,
-`f01_candidate_1.png` being the canvas both bodies are drawn on (in a directory with no body yet, the first one sets the
-canvas by its own box). The manifest gets `bodies.<g> = { transform }`, and both layers
+it is ingested again (it stays where it was placed); otherwise **F01's** (`F01_TRANSFORM` in `frame.mjs`, beside
+`HEAD_REFERENCE`: scale 0.2467, offset 65.6, 52.0 — the committed manifest's `bodies.f.transform` and `bodies.m.transform`),
+`f01_candidate_1.png` being the canvas both bodies are drawn on — in an empty directory too, and whatever the other body's
+transform is (Plan 19 final review: by its own box the real bald body_f lands at scale 0.2725, C12 25.7 units off, and
+the other body's transform may have been moved by `--anchor head`). The manifest gets `bodies.<g> = { transform }`, and both layers
 are masked at once (skin; eyes and skin on the face, §4.4.1). `--dry-run` prints `measure`'s lines and then C12's
 verdict for a cut into a temporary copy, masked there — e.g. `C12 FAIL — eye line 5.9 from F01's (want within
 4.16), chin 13.0 from F01's (want within 12) — eyes (…) … apart, chin …` — writes nothing, and exits 1 when it
@@ -779,8 +784,17 @@ then writes does take the hand-drawn mask, as every mask does.
 
 **A hairstyle** — `--as hair:<code>` — is drawn on its gender's bald body (`hairGender`), and needs that body first.
 
-1. The picture is anchored on the body's transform and registered on `body_<g>_L30` (`registerToBase`, measured on
-   the rows `y ≥ HEAD_LIMIT_Y` the hair leaves alone).
+1. The picture is anchored on the body's transform and registered on `body_<g>_L30` **searched wide** (`registerWide`;
+   Plan 19 final review — one code path): the pipeline's own `registerToBase`, by colour on the rows `y ≥ HEAD_LIMIT_Y`
+   the hair leaves alone, first over ±10 % of scale in 1 % steps and ±16 px at half the frame's density, then over ±1 %
+   and ±6 px at @2x from there; that @2x pass is also run alone from where the picture stands, and whichever lines the
+   legs up better (solid IoU over the rows from 0.8 of the body's height down) is the registration. Each pass places the
+   picture afresh from the source with the move folded into the transform, so it is resampled once. The image model
+   zooms a hair picture out by 4–5 % to make room for the hair; the ±1 % search alone stopped at its edge on spiky01
+   (mean difference 20.4 against 2.4–4 for a fit) and cut the body's outline into the hair. The log says which search
+   won: `registered on body_m_L30: dx 1.0, dy 30.0 px @2x, scale 1.0500 (legs IoU 0.974, the wide search; the near one
+   alone 0.700)`. `verify` judges the same registration (§10.4), and a command-line ingest and a registry ingest of the
+   same picture cut the same layers, byte for byte.
 2. `diffAgainstBase(…, { slot: 'hair' })` gives the region: no area limit — hair runs from the crown to below the
    shoulders — but **the hair face rule** (pre-flight #18, `hairFaceRule` and `applyFaceRule`; A2a ruling). A hair
    picture redraws the face a little — a cheek's shading moved or painted out, an iris a shade off, the mouth or a brow
@@ -824,7 +838,8 @@ then writes does take the hand-drawn mask, as every mask does.
    asset's `ingest.flags` carry it) and now reads ΔE 0.0 from its natural colour.
 
 **An item on a body** — `--base f|m` (a gender rather than a base id) — is registered on and diffed against
-`body_<g>_L30` exactly as §4.1 diffs against a base. With **`--hair <code>`** (a hairstyle of the same gender, already
+`body_<g>_L30` exactly as §4.1 diffs against a base; an outfit is registered searched wide (`registerWide`, as a
+hairstyle is, by silhouette), a hat or a pair of glasses by the ±1 % search alone. With **`--hair <code>`** (a hairstyle of the same gender, already
 real) it is measured against the body *wearing* that hairstyle — its L20 under the body, its L60 over it — so a hat
 drawn over the bob takes none of the bob with it; without it, every hair pixel round the hat is new to the picture and
 joins the hat. `--hair` is for head and face items: an outfit is drawn on the bald body (the outfit template says so),
@@ -1062,7 +1077,11 @@ nobody sees. There is no dev-time equivalent of that copy (`docs/known-limitatio
    the bald body, a hat or a pair of glasses on the body wearing a hairstyle, `--hair`) and
    green-screen or white-background it per
    D01 §8. Then `avatar:ingest <file> --as item:<slot>:<code> [--base f|m] [--hair <code>]` (§4 above); `--dry-run`
-   first if unsure, and `avatar:check <name>` after, since ingest does not run the acceptance criteria itself. A hat
+   first if unsure, and `avatar:check <name>` after, since ingest does not run the acceptance criteria itself. By hand
+   or through the registry (§10.5) the cut is the same: an outfit on a body is registered on it searched wide
+   (`registerWide`, ±10 % of scale) in the pipeline itself, so a picture the image model zoomed out by a few per cent is
+   cut where it belongs either way (Plan 19 final review). A picture on another canvas than its reference's (the model's
+   1086 × 1448) goes through the registry, which aligns it onto the reference's canvas first. A hat
    then has to be tried on all eight hairstyles on the fit sheet (step 6).
 2. **The catalogue.** Add the row to `apps/normal-server/data/items.json`: `id`, `slot`, `rarity`,
    `isDefault`, and `asset.{layer, file}` — `file` is the manifest name `ingest` just wrote, with no
@@ -1110,7 +1129,11 @@ The order, therefore:
    `item_hair_<code>_L20` and `_L60`, with their hair masks (§6). The app builds and runs from here.
 2. **The picture.** One, drawn on the gender's bald body: add a `hair` asset to `assets/avatar-src/registry.json`
    (`ingest.as` `hair:<code>`, reference `@body_<g>`, a `look` with `description` and `colour`) and let the loop of §10
-   generate it, or ingest a picture by hand (`avatar:ingest <picture> --as hair:<code>`, §4.6). Then `avatar:check`,
+   generate it, or ingest a picture by hand (`avatar:ingest <picture> --as hair:<code>`, §4.6). Both paths cut the same
+   layers from the same picture: the pipeline registers a hairstyle on its body searched wide (`registerWide`), the one
+   registration `verify` judges too, so the 4–5 % zoom the image model applies to a hair picture is undone by hand as well
+   (Plan 19 final review; until then only the registry did, and a hand ingest cut a zoomed picture wrong, silently). A
+   picture on another canvas (the model's 1086 × 1448) goes through the registry, which aligns it first. Then `avatar:check`,
    and `avatar:sheet` and the fit sheet to look at it beside the others and under every hat. A split the rule gets
    wrong is fixed with a hand-drawn `item_hair_<code>_frontmask.png` (§4.5); a colour the picture will not take
    (platinum on cream skin) with `--recolour-to` (§4.6).
@@ -1155,6 +1178,8 @@ and points at them by `catalog` id.
 | `status` | `todo` → `generated` → `ok` / `ng` → `approved`; `rework-<n>` (sent back by the user or by Claude's eye); `blocked` |
 | `attempts` | one per picture: `{ n, at, chat, file, measure, verdict, reason, by }` |
 | `ingested` | true once `ingest` has put it into `public/avatar/` |
+| `superseded` | (Plan 19 final review) the id of the live asset that replaced it — `"v4/bot_0"` — or `true` when nothing has: a Plan 12 picture drawn and cut on the retired flat base f01, kept as history. `ingest` and `verify` refuse it up front and `next` never hands it out; reading the registry refuses an id that names no live asset |
+| `note` | a sentence for whoever reads the file — on a superseded entry, why it is kept and what replaced it |
 
 The rules:
 
@@ -1328,10 +1353,10 @@ which is registered onto the bot's neutral picture first (Plan 19 C4, below).
 |---|---|---|---|---|---|
 | `body` (`f01_candidate_1.png`) | **the bottom edge and the centre line of the figure box only**, each ≤ 12 px (pre-flight #23): the feet stay on F01's ground line. The bald head (lower and narrower than F01's hair) and the new pose (the arms elsewhere) are meant to differ. On another canvas: `redrawn`, since a body is cut on f01's transform, as a bot is | 2.0–2.5 | — | — | ingest `body:<g>` into the copy on f01's transform (with the asset's `--anchor head` when its `flags` carry it); C1–C13 on `body_<g>_L30` and `body_<g>_face_neutral_L50` — C12 holds the head |
 | `bodyExpression` (`@body_<g>`) | as an expression | advisory, as an expression | as an expression (on a bald body the band is the scalp) | the head region (`FACE_LIMIT_Y`), as an expression | as an expression: `face:<g>:<expr>` on the body's transform; C1–C13 on `body_<g>_face_<expr>_L50` |
-| `hair` (`@body_<g>`) | **after the registration the ingest applies** (Plan 19 C2, `registerOnBody`): the picture is registered onto the body with the pipeline's own `registerToBase` — by colour, over the rows below the head — searched over ±10 % of scale and about ±125 px, and is `drift` only when that takes a scale more than 8 % from 1, or leaves the legs (the rows from 0.8 of the body's height down, which no hairstyle reaches) at a silhouette IoU under 0.9. `measure.registered` holds the scale (about the feet and centre line), the move `dx`/`dy` and the IoU; `measure.drift` still holds the legs' bottom edge and centre line as drawn, which A2b held to 12 px — the image model zooms a picture out by 4–5 % to make room for the hair, and batch C2's neat01, spiky01 and ponytail01 stood 29–62 px off. On another canvas the picture is placed at scale 1 by those two instead, as before (the model's 1086 × 1448 moves the figure, it does not resize it), and is `redrawn` if the legs' width ratio is then outside 0.96–1.04 | — | — | outside the head region **and** outside the body grown by 4 px (`HAIR_BODY_MARGIN`, `allowedArea('hair')`), on the registered picture: hair falls behind the shoulders and the back, never over the torso, the arms or the hands | `hair:<code>` on the body's transform, **given the registered picture**; C1–C13 on `item_hair_<code>_L20` and `_L60` — C13 holds the split |
-| `item` on a body (`@body_<g>`, `base` `f`/`m`) | as today, except an **outfit**: its `drift` after the registration the ingest applies, as a hairstyle's (Plan 19 C2) — the pipeline's `registerBySilhouette`, the same search and 8 % bound, and its own silhouette IoU (the number its log prints) at least 0.6: an outfit changes the whole body below the chin, and the real v4 outfits register at 0.67 (royal_robe01's robe) to 0.89 (casual01). Its edges as drawn stay in `measure.drift` (royal_robe01: bottom −20, which failed it), and `redrawn` is asked first as before | as today | as today; a registered outfit's band is read with its head placed by its head top and centre line, as on another canvas — the registration lines up the body below the chin, and royal_robe01, its head drawn in place and its feet 20 px up, read 12.96 registered and 3.93 by its head | as today | as today, owned by the body (an outfit given the registered picture); `--hair <code>` passed through |
+| `hair` (`@body_<g>`) | **after the registration the ingest applies** (Plan 19 C2, `registerOnBody`): the picture is registered onto the body with the pipeline's own `registerWide` (since the final review the very function the ingest registers it with) — by colour, over the rows below the head — searched over ±10 % of scale and about ±125 px, and is `drift` only when that takes a scale more than 8 % from 1, or leaves the legs (the rows from 0.8 of the body's height down, which no hairstyle reaches) at a silhouette IoU under 0.9. `measure.registered` holds the scale (about the feet and centre line), the move `dx`/`dy` and the IoU; `measure.drift` still holds the legs' bottom edge and centre line as drawn, which A2b held to 12 px — the image model zooms a picture out by 4–5 % to make room for the hair, and batch C2's neat01, spiky01 and ponytail01 stood 29–62 px off. On another canvas the picture is placed at scale 1 by those two instead, as before (the model's 1086 × 1448 moves the figure, it does not resize it), and is `redrawn` if the legs' width ratio is then outside 0.96–1.04 | — | — | outside the head region **and** outside the body grown by 4 px (`HAIR_BODY_MARGIN`, `allowedArea('hair')`), on the registered picture: hair falls behind the shoulders and the back, never over the torso, the arms or the hands | `hair:<code>` on the body's transform, given the picture as drawn — the ingest registers it itself, as a command-line ingest does; C1–C13 on `item_hair_<code>_L20` and `_L60` — C13 holds the split |
+| `item` on a body (`@body_<g>`, `base` `f`/`m`) | as today, except an **outfit**: its `drift` after the registration the ingest applies, as a hairstyle's (Plan 19 C2) — the pipeline's `registerBySilhouette`, the same search and 8 % bound, and its own silhouette IoU (the number its log prints) at least 0.6: an outfit changes the whole body below the chin, and the real v4 outfits register at 0.67 (royal_robe01's robe) to 0.89 (casual01). Its edges as drawn stay in `measure.drift` (royal_robe01: bottom −20, which failed it), and `redrawn` is asked first as before | as today | as today; a registered outfit's band is read with its head placed by its head top and centre line, as on another canvas — the registration lines up the body below the chin, and royal_robe01, its head drawn in place and its feet 20 px up, read 12.96 registered and 3.93 by its head | as today | as today, owned by the body (an outfit registered by the ingest itself, searched wide); `--hair <code>` passed through |
 | `bot` on a body (`@body_f`) | as today (feet and centre line) | — | — | — | as today, on the transform `transformSource` names: body f's |
-| `bot` happy face on a body (`bot:<n>:happy`, `@v4/bot_<n>`) | **after the registration the ingest applies** (Plan 19 C4, `registerOnBody`): the picture is registered onto the bot's neutral picture with the pipeline's own `registerToBase`, as a hairstyle is — by colour, over the rows below the head, searched over ±10 % of scale and about ±125 px — and is `drift` only when that takes a scale more than 8 % from 1, or leaves the two whole figures' silhouettes at an IoU under 0.9. The nine real v4 faces of 2026-10-04 registered at 0.943–0.991 (scale 0.935 for bot_7, 0.995–1.025 for the rest); an independent redraw of the same bot registers at 0.74–0.80 and another bot's body at 0.83–0.915. `measure.registered` holds the scale (about the feet and centre line), the move `dx`/`dy` and the IoU; `measure.drift` still holds the feet and centre line as drawn, which failed bot_0 (bottom −31, then −42) and bot_4 (−38) although the pictures were the right figure, a little off. On another canvas: `redrawn`, as before | — | — | — | as today on body f's transform, **given the registered picture** — the face cut is where the neutral picture's face is; C1–C13 on `bot_<n>_face_happy_L50`. The neutral `bot:<n>` keeps its rule and is handed over as it is |
+| `bot` happy face on a body (`bot:<n>:happy`, `@v4/bot_<n>`) | **after the registration the ingest applies** (Plan 19 C4, `registerOnBody`): the picture is registered onto the bot's neutral picture with the pipeline's own `registerWide`, as a hairstyle is — by colour, over the rows below the head, searched over ±10 % of scale and about ±125 px — and is `drift` only when that takes a scale more than 8 % from 1, or leaves the two whole figures' silhouettes at an IoU under 0.9. The nine real v4 faces of 2026-10-04 registered at 0.943–0.991 (scale 0.935 for bot_7, 0.995–1.025 for the rest); an independent redraw of the same bot registers at 0.74–0.80 and another bot's body at 0.83–0.915. `measure.registered` holds the scale (about the feet and centre line), the move `dx`/`dy` and the IoU; `measure.drift` still holds the feet and centre line as drawn, which failed bot_0 (bottom −31, then −42) and bot_4 (−38) although the pictures were the right figure, a little off. On another canvas: `redrawn`, as before | — | — | — | as today on body f's transform, the neutral picture (the reference) ingested into the copy as `bot:<n>` first, so the ingest registers the face onto it as the real one will — the face cut is where the neutral picture's face is; C1–C13 on `bot_<n>_face_happy_L50`. The neutral `bot:<n>` keeps its rule and is handed over as it is |
 
 What the cut needs comes from `transformSource` (§10.1), never from the reference's file name. When the copy has
 no transform for the owner yet, the reference is ingested into the copy first, as `body:<g>` (a hairstyle, a body's
@@ -1341,27 +1366,34 @@ face or an item on a body verified before its body is ingested). A bot's or a bo
 the body's canvas before the cut, as an expression is; a body, like a bot, is handed over as it is. The asset's
 `--hair`, `--anchor` and `--recolour-to` reach the trial ingest as they reach the real one.
 
-**Registered on the body (Plan 19 C2).** A hairstyle, and an outfit cut on a v4 body, on the body's own canvas are
-handed to the pipeline — the trial ingest and the real one alike (`pipelineInput`) — *registered* onto the body, as
-`verify` judged them, whenever the registration moves them at all. The ingest's own registration searches ±1 % of scale
-and ±12 px at @2x, which cannot reach a 4 % zoom: given spiky01 as drawn, it stopped at the edge of that search (mean
-difference 20.4, against 2.4–4 for a picture that fits) and cut the body's outline into the hair, and no check failed.
-Given the registered picture, it finds it in place. The wide search runs the pipeline's own function twice — ±10 % in
-1 % steps at half the frame's density, then ±1 % at @2x — and the narrow @2x search is also run alone; whichever lines the
-body up better is the registration, so a picture that changed the body (hair painted over the torso) is left for `scope`
-rather than slid to where the change shows least. A body's face is not registered: its ingest cuts on the body's
-transform without registering at all, so a zoomed face would be cut where it was drawn, and `bodyExpression` keeps the
-expression's four edges.
+**Registered on the body (Plan 19 C2; one code path since the final review).** A hairstyle, and an outfit cut on a v4
+body, on the body's own canvas are judged *registered* onto the body. The pipeline's ±1 %, ±12 px @2x search alone
+cannot reach a 4 % zoom: given spiky01 as drawn, it stopped at the edge of that search (mean difference 20.4, against
+2.4–4 for a picture that fits) and cut the body's outline into the hair, and no check failed. The wide search is the
+pipeline's own `registerWide` (§4.6) — `registerToBase` twice, ±10 % in 1 % steps at half the frame's density, then ±1 %
+at @2x, and the @2x search also run alone; whichever lines the body up better is the registration, so a picture that
+changed the body (hair painted over the torso) is left for `scope` rather than slid to where the change shows least.
+`registerOnBody` asks it of the reference picture for the verdict, and **every ingest applies it itself** —
+`wideRegistration` names the targets — so the trial ingest, the registry's real one and a command-line
+`avatar:ingest … --as hair:<code>` of the same picture are handed the picture as drawn and cut the same layers, byte for
+byte. (From C2 until the final review the registry registered the picture here and handed the pipeline a registered
+copy, which a hand ingest never got: a zoomed hairstyle or outfit ingested by hand was cut wrong, silently.) Re-cut
+through the one path on 2026-10-04, every real picture that had registered in place came out byte for byte the committed
+layer; the ones the image model had zoomed or moved land a pixel or two from their committed cuts (hair layers at solid
+IoU 0.89–0.996, outfits 0.985–0.996, bot faces 0.97–0.99) and pass every check — the committed art was not re-cut. A
+body's face is not registered: its ingest cuts on the body's transform without registering at all, so a zoomed face
+would be cut where it was drawn, and `bodyExpression` keeps the expression's four edges.
 
 **A bot's happy face (Plan 19 C4).** `bot:<n>:happy` is the same case from the other side: the image model draws it from
 the bot's own neutral picture (`@v4/bot_<n>`) and comes back zoomed out or moved by a few per cent — bot_0's first face
-stood 31 px up and its second 42, bot_4's 38 — and the bot ingest cuts the face on body f's stored transform without
-registering, so a picture as drawn would put the face that far from the neutral one's. It is registered onto the
-neutral picture as a hairstyle is onto its body (`registerOnBody`, the same search, `botFace`), `verify` judges `drift`
-there — 8 % of scale, whole-figure silhouette IoU 0.9, measured on the real faces above — and the trial ingest and the
-real one (`pipelineInput`, with the asset's `ingest.as`) are given the registered picture, whenever the registration
-moves it at all. The face changes the inside of the head and nothing else, so nothing but `drift` is asked of it, as
-before. The neutral `bot:<n>` itself is its body, which the ingest takes whole, and keeps its feet-and-centre-line rule.
+stood 31 px up and its second 42, bot_4's 38 — so a picture cut as drawn would put the face that far from the neutral
+one's. It is registered onto the neutral picture as a hairstyle is onto its body (`registerOnBody`, the same search,
+`botFace`) and `verify` judges `drift` there — 8 % of scale, whole-figure silhouette IoU 0.9, measured on the real faces
+above. The ingest registers it onto the bot's real `bot_<n>_L30` (cut from that neutral picture; the registry ingests the
+neutral asset first), and the trial ingest gets the reference ingested into its copy as `bot:<n>` first so it does the
+same. A face whose bot is still a stand-in is cut as drawn, and the log says so. The face changes the inside of the head
+and nothing else, so nothing but `drift` is asked of it, as before. The neutral `bot:<n>` itself is its body, which the
+ingest takes whole, and keeps its feet-and-centre-line rule.
 
 Two rulings of 2026-09-24, made on the real pictures of Plan 11 (ten expressions, `tophat01`,
 `glasses_round_gold01` and all eight outfits and cuts passed with them), still stand for the v4 outfits. **An outfit has no `scope` rule**: five of them had their whole head redrawn
@@ -1372,20 +1404,27 @@ sneakers put its bottom edge 19 px down.
 ### 10.5 What `ingest` does
 
 For every `ok` or `approved` asset not yet `ingested`: the real pipeline `ingest()` into `public/avatar/`
-(both manifests), with the asset's `ingest` spec, the registration line printed. Then:
+(both manifests), with the asset's `ingest` spec and its picture as drawn (aligned first only when it is on another
+canvas than its reference's), the registration line printed — the pipeline registers a hairstyle, an outfit on a v4 body
+and a bot's happy face itself, as on the command line. Before anything is cut, **every** asset it would cut is checked
+(Plan 19 final review), so a bad one later in the file stops the run before the first is cut:
 
 - a **retired flat base or expression** (`base:<id>`, `expr:<id>:<expr>`) is refused before anything is cut — `parseSpec`
   says what replaced it — and `verify` refuses its asset the same way (D1; the registry keeps their entries as
   history);
+- a **superseded Plan 12 entry** (`superseded`, §10.1) is refused the same way, by `ingest` and by `verify`, naming what
+  replaced it: Plan 12's eight bots and their happy faces and `item_outfit_casual01` (each superseded by its `v4/`
+  redraw, which cuts the same layer), and its six hats, three pairs of glasses and the withdrawn hood (`superseded:
+  true`: drawn on F01 with her hair under them and no `--hair`, they would be diffed against the bald body f today). Their
+  committed layers stay as they are; `next` never hands them out;
 - an item's **per-wear cut** gains `asset.variants.<wear>` in `items.json`, if it is not there, in the file's own
   formatting (§3.1);
 - a **bot, an aura or a frame** goes in like everything else (2026-09-24 — the "not supported yet" set is gone):
   `item:aura:<code>`, `item:frame:<code>`, `bot:<n>` and `bot:<n>:happy` are the pipeline's own targets
   (§4.3), passed straight through, and a bot is given the transform of the body at the root of its reference
-  chain (`transformSource`, §10.1): body f's — f01's verbatim — for a Plan 12 bot (`f01_candidate_1.png`, or
-  `@bot_<n>` → that);
+  chain (`transformSource`, §10.1): body f's;
 - a **body, a body's face or a hairstyle** (Plan 19) goes in on its own target (§4.6): a body on its own stored transform
-  (else body f's, f01's verbatim), a face and a hairstyle on the body's; a v4 bot on the body at the root of its references
+  (else F01's, `F01_TRANSFORM`), a face and a hairstyle on the body's; a v4 bot on the body at the root of its references
   (`transformSource`, §10.1). The asset's `--hair`, `--anchor head` and `--recolour-to` flags reach `ingest()`.
 
 ### 10.6 A batch

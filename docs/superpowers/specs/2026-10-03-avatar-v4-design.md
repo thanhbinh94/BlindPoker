@@ -146,7 +146,7 @@ interface AvatarConfigV4 {
 | khác hoặc không rõ | f | `hair_f_bob01` | vắng |
 
 - `hairColor` và `eyeColor` của cấu hình cũ được giữ nguyên. Cách chuyển đổi hiện tại đánh rơi hai trường này; spec này sửa luôn lỗi đó.
-- **Màu mắt tự nhiên:** nếu màu mắt tự nhiên của base cũ khác màu mắt tự nhiên của giới tính mới, và cấu hình không có `eyeColor`, thì gán món màu mắt miễn phí gần nhất (khoảng cách trong không gian Lab).
+- **Màu mắt tự nhiên:** nếu màu mắt tự nhiên của base cũ khác màu mắt tự nhiên của giới tính mới, và cấu hình không có `eyeColor`, thì gán món màu mắt miễn phí gần nhất (khoảng cách trong không gian Lab). **Sửa 2026-10-04 (Plan 19, rà soát cuối):** chỉ gán khi món đó (kể cả món chọn sẵn của f03) gần màu mắt cũ hơn màu mắt tự nhiên của thân mới; nếu không, giữ mắt của thân — luật này để giữ diện mạo, không để đổi nó. Với hai thân thật: f02 và m02 → `eyecolor_grey01`, f03 → `eyecolor_green01`, m03 giữ mắt thân m (ΔE 12,7, còn `eyecolor_brown01` 22,9), f01 và m01 không đổi.
 - **Phạm vi áp dụng:** áp cho `players.avatar_config` khi đọc, và cho `avatar_outfits.config` khi liệt kê và khi áp bộ đồ. Bộ đồ đã lưu hiện được trả nguyên trạng và áp mà không kiểm base; từ nay luôn qua chuyển đổi rồi mới kiểm.
 - **Cấu hình v1/v2:** đi tiếp v1→v3→v4.
 - **Khi nào ghi lại DB:** chỉ khi người chơi bấm Lưu.

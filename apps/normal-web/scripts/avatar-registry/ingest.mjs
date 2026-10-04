@@ -12,17 +12,19 @@
  * `item:frame:<code>`, `bot:<n>` and `bot:<n>:happy` are the pipeline's own targets, passed straight through,
  * and a bot is cut on the transform at the root of its references (`transformSource` in registry.mjs): its body's.
  *
- * Plan 19 (v4): a body (`body:<g>`, on its own stored transform or body f's), a body's face (`face:<g>:<expr>`) and a
+ * Plan 19 (v4): a body (`body:<g>`, on its own stored transform or F01's), a body's face (`face:<g>:<expr>`) and a
  * hairstyle (`hair:<code>`) are the pipeline's targets too, and an item drawn on a body names it with `ingest.base`
  * `f`/`m`. The flags `--hair`, `--anchor head` and `--recolour-to` reach `ingest()` as its `hair`, `anchor` and
- * `recolourTo` (`parseFlags`).
+ * `recolourTo` (`parseFlags`). The picture itself goes in as drawn: whatever is registered — a hairstyle, an outfit on a
+ * v4 body, a bot's happy face — the pipeline registers (Plan 19 final review), so this ingest and a command-line one of
+ * the same picture cut the same layers.
  */
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ingest } from '../avatar-pipeline/extract.mjs'
 import { MANIFEST_NAME, PACKAGE_ROOT, PUBLIC_DIR, SERVER_MANIFEST, SLOT_LAYER, itemFile } from '../avatar-pipeline/manifest.mjs'
-import { SRC_DIR, parseFlags, parseSpec, referencePath, requireAsset, transformSource } from './registry.mjs'
+import { SRC_DIR, parseFlags, parseSpec, referencePath, refuseSuperseded, requireAsset, transformSource } from './registry.mjs'
 import { ownerOf, pipelineInput } from './verify.mjs'
 
 export const ITEMS_FILE = resolve(PACKAGE_ROOT, '../normal-server/data/items.json')
@@ -57,8 +59,15 @@ export function addVariant(text, catalogId, wear, layer) {
 
 /**
  * Ingest every `ok`/`approved` asset with `ingested !== true` — or only the named ones — into `publicDir`.
- * Returns one `{ id, done, name? }` per asset considered. A retired flat base or expression (Plan 19 D1) is refused by
- * `parseSpec` before anything is cut.
+ * Returns one `{ id, done, name? }` per asset considered.
+ *
+ * Every asset it would cut is checked **before anything is cut** (Plan 19 final review, as `verifyAssets` checks): a
+ * retired flat base or expression (Plan 19 D1) is refused by `parseSpec`, and a superseded Plan 12 entry (`superseded`)
+ * by `refuseSuperseded` — drawn and cut on the retired f01, its picture would overwrite the v4 art. A named asset is
+ * checked even when it would then be skipped as already ingested.
+ *
+ * A picture on its reference's canvas goes to the pipeline as it is: a hairstyle, an outfit on a v4 body and a bot's
+ * happy face are registered by the pipeline itself (`registerWide`), as a command-line ingest of the same picture is.
  *
  * @param {any} registry
  * @param {string[]} [ids]
@@ -68,6 +77,14 @@ export async function ingestAssets(registry, ids = [], { srcDir = SRC_DIR, publi
   const manifests = targets ?? (publicDir === PUBLIC_DIR ? [join(PUBLIC_DIR, MANIFEST_NAME), SERVER_MANIFEST] : [join(publicDir, MANIFEST_NAME)])
   const wanted = (asset) => (asset.status === 'ok' || asset.status === 'approved') && asset.ingested !== true
   const candidates = ids.length ? ids.map((id) => requireAsset(registry, id)) : registry.assets.filter(wanted)
+  for (const asset of candidates) {
+    refuseSuperseded(asset, 'ingest')
+    try {
+      parseSpec(asset.ingest.as)
+    } catch (error) {
+      throw new Error(`asset ${asset.id}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
   const results = []
   for (const asset of candidates) {
     if (!wanted(asset)) {
@@ -82,9 +99,8 @@ export async function ingestAssets(registry, ids = [], { srcDir = SRC_DIR, publi
     const tmp = mkdtempSync(join(tmpdir(), 'avatar-ingest-'))
     let name
     try {
-      const input = await pipelineInput({ file: join(srcDir, asset.file), kind: asset.kind, slot: asset.slot, base: asset.ingest.base ?? null, as: asset.ingest.as, referenceFile: referencePath(asset, registry, srcDir), tmp })
-      if (input.registered) log(`${asset.id}: registered onto its reference before the cut, as verify judged it`)
-      else if (input.aligned) log(`${asset.id}: aligned onto the reference canvas before the cut`)
+      const input = await pipelineInput({ file: join(srcDir, asset.file), kind: asset.kind, slot: asset.slot, referenceFile: referencePath(asset, registry, srcDir), tmp })
+      if (input.aligned) log(`${asset.id}: aligned onto the reference canvas before the cut`)
       ;({ name } = await ingest({
         file: input.file, target, dir: publicDir, targets: manifests, baseId: owner, variant,
         tolerance: flags.tolerance, white: flags.white, lockScale: flags.lockScale ?? null, transformFrom: transformSource(asset, registry), hides: flags.hides, diff: flags.diff,
