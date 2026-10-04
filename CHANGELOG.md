@@ -8,6 +8,51 @@ below are the real history.
 
 ---
 
+## Plan 19 — avatar v4: gender, hairstyle and skin tone chosen separately; a natural pose with fingers (No13, No14) — merged `76555ef` (2026-10-05)
+
+This is round 3 of the 2026-09-29 review, the new-generation character the user approved on 2026-10-03 ("lập plan và
+làm luôn"). The record is `docs/bug-log.md` §7. The spec is `docs/superpowers/specs/2026-10-03-avatar-v4-design.md`.
+There is no schema change and no SQL migration: old configs are read as v4, and the database is only written when a
+player saves.
+
+- **Gender, hairstyle and skin tone are separate choices (No13).**
+  - The wardrobe's character group opens with a **Nữ | Nam** switch. Under it are the tabs **Kiểu tóc**, Màu tóc,
+    **Màu da** and Màu mắt. The old "Nhân vật" tab, which picked a whole pre-drawn figure, is gone.
+  - Each gender has four hairstyles, all free:
+    - women: bob, long with a blunt fringe (hime), wavy, ponytail;
+    - men: tousled, neat, curly, spiked.
+  - Hairstyle cards are head portraits in the hair colour and skin tone being worn.
+  - Skin comes in seven tones, all free: "Tự nhiên" (cream) and six more, from porcelain to deep brown.
+  - Switching gender swaps only the hairstyle (to its counterpart) and the outfit's cut. Colours and every other item
+    stay.
+- **A new pose with fingers (No14).**
+  - Every character, the eight bots included, now stands on one of two new bodies, one per gender. The pose is
+    relaxed, and the hands have five fingers.
+  - All art was redrawn with ChatGPT through the asset registry, after a style check the user approved:
+    - 2 bodies with 6 expressions each;
+    - 8 two-layer hairstyles;
+    - 6 outfits, with male cuts of the dealer outfit and the Tết áo dài;
+    - 8 bots.
+- **Data.**
+  - The avatar config is now v4: `gender`, a `hairStyle` item slot and a `skinColor` colour slot.
+  - v1–v3 configs, both the one being worn and saved outfits, are read as v4. Hair and eye colours now survive that
+    read; the old conversion dropped them.
+  - An old figure's eyes get a free eye-colour item only when it keeps the look better than the new body's own eyes.
+  - The server refuses a v3 config, an old base id, and a hairstyle of the other gender (`WRONG_GENDER`).
+  - `/api/catalog/avatar` returns `bodies` instead of `bases`.
+- **Hats.** No hat hides the hair any more. The front hair layer now holds the whole crown, so hiding it left a bald
+  head; the hair sits under the hat instead.
+- **Size.**
+  - The 274 old base pictures are gone: avatar art is 17.6 MB, down from 26.2 MB.
+  - The Lite exe ships only the files it draws, and is 95.3 MB.
+- **Pipeline.** New tools and checks:
+  - skin masks;
+  - checks C11 (face skin), C12 (the head stays put) and C13 (a clean hair split);
+  - registration before cutting, so a slightly zoomed ChatGPT picture no longer costs an attempt;
+  - a hair or outfit picture's redraw of the body's skin is kept out of its layer, so the skin tone shows through.
+
+---
+
 ## Plan 18 — review 2026-09-29, round 2 (No1, No5, No8a, No9, No10, No11a) — merged `a2bd8cc` (2026-10-02)
 
 This round covers six improvements the user approved on 2026-10-01 ("Đợt 2 làm theo đề xuất của bạn luôn"). The

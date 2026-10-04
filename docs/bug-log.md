@@ -197,8 +197,8 @@ roadmap). Kế hoạch: `docs/superpowers/plans/2026-09-30-plan16-review-round-1
 | No8a | Bug/thiếu | TB (hoặc D) | Các bản màu áo phông cùng một icon | Icon chưa có mặt nạ tô màu; làm mặt nạ icon (TB) hoặc chấm màu (D) | 2 | đã sửa (mặt nạ icon) — `694882d`, `f319e85` (Plan 18) |
 | No5 | Câu hỏi | TB | Kho đồ và Phòng thay đồ có cần tách? | Đề xuất gộp vào Phòng thay đồ | 2 | đã sửa (gộp) — `92e833d`, `a2d821b` (Plan 18) |
 | No9 | Rà câu chữ | TB | Câu chữ chưa tự nhiên, hướng dẫn thừa | Lập danh sách cũ → mới / bỏ để duyệt | 2 | đã sửa — `313b0db` (Plan 18; danh sách ở `docs/copy-review-2026-10.md`) |
-| No13 | Tính năng lớn | K | Tách giới tính, kiểu tóc, màu da, màu tóc; kiểu riêng nam/nữ | Thân nền là ảnh AI vẽ liền; cần vẽ lại tóc thành lớp riêng + biến thể da + đổi dữ liệu/pipeline | 3 | cần spec |
-| No14 | Tính năng lớn | K+ | Chỉnh dáng tự nhiên, có ngón tay | Ảnh 2D phẳng không có khung xương; khả thi nhất: vài tư thế vẽ sẵn + vẽ lại có ngón tay, cùng đợt No13 | 3 | cần spec |
+| No13 | Tính năng lớn | K | Tách giới tính, kiểu tóc, màu da, màu tóc; kiểu riêng nam/nữ | Thân nền là ảnh AI vẽ liền; cần vẽ lại tóc thành lớp riêng + biến thể da + đổi dữ liệu/pipeline | 3 | đã sửa — `56b4ca9`, `38b93f2`, `f3eed7a`, `bf42de7`, tranh `15492ba` … `d8f9a80`, `de7e502` (Plan 19) |
+| No14 | Tính năng lớn | K+ | Chỉnh dáng tự nhiên, có ngón tay | Ảnh 2D phẳng không có khung xương; khả thi nhất: vài tư thế vẽ sẵn + vẽ lại có ngón tay, cùng đợt No13 | 3 | đã sửa (một dáng mới có ngón tay cho mọi nhân vật) — thân `15492ba`, tranh `611b3e5`, `d8f9a80` (Plan 19) |
 | No7 | Tương lai | D | Thông báo qua email | Ghi vào roadmap (spec §34), chưa làm | — | roadmap — đã ghi ở spec §34, mục 14 |
 
 **30/09 đã sửa, merge `a836daa`, đã lên host LAN.** Ghi chú kỹ thuật:
@@ -254,6 +254,45 @@ Ghi chú kỹ thuật:
 | # | Mức | Mô tả | Nguyên nhân / hướng | Trạng thái |
 |---|---|---|---|---|
 | E1 | P3 | Nét mặt vui (thắng, 4 giây) và buồn (thua, 3 giây) của nhân vật **không bao giờ hiện trong ván đang xem trực tiếp**. Chỉ hiện khi vào phòng lúc ván đã xong. Lỗi có từ lúc làm avatar (`242b91a`), review của bản sửa ngày 02/10 phát hiện. | `advanceExpressionMemory` (`packages/ui-kit/src/avatar2d/expression.ts` ~58-68) ghi lại mã ván ở mọi lần vẽ, nên tới lúc ván COMPLETE thì mã đã trùng và bỏ qua phản ứng. Hướng sửa: chỉ ghi mã ván khi thật sự phản ứng (hoặc tách `reactedHandId`), thêm test "xem trực tiếp rồi kết thúc". Sửa xong thì nét mặt vui/buồn bắt đầu xuất hiện ở mọi ván, tức một thay đổi nhìn thấy được. | đã sửa 03/10 — `cc9cf44`, `45ab5c0`, merge `a96e598` (người dùng: "có"). Nay chỉ ghi mã ván khi phản ứng; đồng hồ ngủ 60 giây cũng đặt lại sau mỗi ván xem trực tiếp. Kiểm trên playground: người thắng `happy`, người thua lúc so bài `sad`, ghế bỏ bài `closed`, ván bị huỷ không có nét vui/buồn |
+
+**Đợt 3 đã sửa (03–05/10) — Plan 19, merge `76555ef`, đã lên host LAN.** Người dùng duyệt thiết kế và plan
+("lập plan và làm luôn"), rồi duyệt điểm phong cách ("ok", 04/10).
+
+Spec: `docs/superpowers/specs/2026-10-03-avatar-v4-design.md`. Plan: `docs/superpowers/plans/2026-10-03-plan19-avatar-v4.md`.
+
+Ghi chú kỹ thuật:
+
+- **Dữ liệu (No13).**
+  - Cấu hình nhân vật v4: `gender` (`f`/`m`), ô vật phẩm `hairStyle` và ô màu `skinColor`, cạnh `hairColor`, `eyeColor` và các món đồ như cũ.
+  - Server từ chối cấu hình v3, mã base cũ và kiểu tóc lệch giới tính (`WRONG_GENDER`).
+  - `avatar-bodies.json` thay `avatar-bases.json`; `/api/catalog/avatar` trả `bodies` thay `bases`.
+  - Catalogue thêm 8 kiểu tóc (nữ: bob, dài mái bằng, gợn sóng, đuôi ngựa; nam: rối, gọn, xoăn, vuốt dựng) và 6 màu da, tất cả miễn phí.
+- **Chuyển đổi lúc đọc, không migration SQL.**
+  - Cấu hình v1–v3 (đang dùng và bộ đồ đã lưu) được đọc thành v4 theo bảng spec §4.5. DB chỉ được ghi lại khi người chơi bấm Lưu.
+  - `hairColor` và `eyeColor` cũ nay được giữ; trước đây bước chuyển đổi cũ đánh rơi chúng.
+  - Màu mắt: chỉ gán món màu mắt khi nó gần mắt cũ hơn mắt tự nhiên của thân mới. Kết quả: f02, m02 → xám; f03 → xanh lá; f01, m01, m03 giữ mắt của thân.
+- **Tranh (No13, No14).**
+  - Mỗi giới tính một thân trọc, đứng thả lỏng, tay năm ngón, da tông kem. Kèm 6 nét mặt, 8 kiểu tóc tách hai lớp (sau L20, trước L60), 6 bộ quần áo (dealer và áo dài Tết có bản cắt nam) và 8 bot. Tất cả vẽ bằng ChatGPT qua registry.
+  - Màu da tô bằng mặt nạ da. Bảy tông: trắng sứ #fcf0e9, sáng #f9e6da, tự nhiên #fbe0ca, sáng ấm #e5bd9e, ngăm #c7916b, nâu #9c6140, nâu đậm #643e2b.
+  - Đã xoá 274 ảnh base cũ, tức 26,2 → 17,6 MB tranh. Lite chỉ đóng gói ảnh nó vẽ (exe 95,3 MB).
+- **Phòng thay đồ (No13).** Nút Nữ | Nam ở đầu nhóm Nhân vật, cùng tab Kiểu tóc (ảnh chân dung theo màu tóc và tông da đang chọn) và Màu da. Tab "Nhân vật" chọn base cũ đã bỏ.
+  - Đổi giới tính chỉ đổi kiểu tóc sang kiểu tương ứng và bản cắt quần áo. Màu và các món đồ khác giữ nguyên.
+- **Pipeline.** Thêm các bước:
+  - mặt nạ da theo sắc độ ấm;
+  - kiểm C11 (da và vùng mắt của nét mặt), C12 (đầu đứng yên; cằm cho lệch 12 đơn vị vì ChatGPT vẽ mặt trọc ngắn hơn) và C13 (tóc tách sạch; mái được chạm mi trên tới 5 % mặt nạ mắt);
+  - căn ảnh trước khi cắt cho tóc, quần áo và mặt vui của bot;
+  - giữ vùng da mà tranh tóc hay quần áo vẽ lại ra khỏi lớp của chúng, để tông da hiện qua.
+- **Quyết định trong lúc vẽ.**
+  - Không mũ nào che tóc mái nữa, vì lớp L60 nay là cả mái lẫn đỉnh đầu, che đi thì đầu trọc. Tóc nằm dưới mũ.
+  - Kiểu gợn sóng vẽ màu bạc rồi tô lại màu bạch kim, vì bạch kim trên da kem không cắt được.
+  - Kiểu dài mái bằng (hime) được duyệt tay: mép thân đè lên tóc dài phía sau, không phải vẽ lại thân.
+  - Bot 0 nay mặt là màn hình tối kiểu kính che.
+- **Ghi nhận, chưa làm:**
+  - Ở tông nâu đậm (và phần nào tông nâu), viền tay và kẽ ngón còn nét vẽ màu nâu cam của thân gốc, nhìn gần thấy một
+    quầng sáng quanh tay. Ở cỡ ghế và thẻ thì khó thấy. Cách sửa nếu cần: tô cả nét viền theo tông da (mặt nạ nét riêng).
+  - Viên thuốc "Đang dùng" trên desktop còn che vài px góc ô màu da.
+  - Cắt lại một ảnh đã căn sẽ lệch 1–2 px so với bản đã commit; vẫn qua mọi kiểm tra.
+  - Chưa có e2e đo pixel rằng viên thuốc "Đang dùng" nằm trên ảnh chân dung kiểu tóc ở điện thoại; đã kiểm bằng ảnh chụp.
 
 Ghi nhận từ final review Plan 16. R2-5 sửa ngày 30/09; R2-1 … R2-4 sửa ngày 01/10 trong **Plan 17** (`docs/superpowers/plans/2026-10-01-plan17-review-round-2-notes.md`, merge `f6fe2f3`, đã lên host LAN):
 
