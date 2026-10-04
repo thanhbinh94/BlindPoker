@@ -440,7 +440,7 @@ describe('WardrobeScreen', () => {
     const natural = panel.getByRole('button', { name: viNormal.wardrobe.natural })
     expect(natural).toHaveAttribute('aria-pressed', 'true')
     // "Tự nhiên" is the body's own cream, filled in — not the checker the hair and eye tabs draw.
-    expect((natural.querySelector('span[style]') as HTMLElement).style.background).toBe('rgb(243, 220, 203)')
+    expect((natural.querySelector('span[style]') as HTMLElement).style.background).toBe('rgb(251, 224, 202)')
     // Then the tones, in catalogue order.
     expect(cardNames()).toEqual([viNormal.items.skin_porcelain01, viNormal.items.skin_deep01])
 

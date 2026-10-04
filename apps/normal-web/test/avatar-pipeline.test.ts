@@ -1599,30 +1599,35 @@ describe('the v4 review sheet and the fit sheet (Plan 19 A1d, spec §5.6)', () =
 describe('the hides command', () => {
   const run = (args: string[]): string => execFileSync(process.execPath, [SCRIPT, ...args], { cwd: PACKAGE_ROOT, encoding: 'utf8' })
 
-  it('hides item_head_beanie01_L80 --front off --out <temp copy> flips that entry in the copy only, and names every items.json row on the layer', () => {
+  it('hides item_head_beanie01_L80 --front on --out <temp copy> flips that entry in the copy only, and names every items.json row on the layer', () => {
+    // Since the C5 fit check no hat hides the front hair (the beanie is committed with neither flag), so this turns
+    // the flag on in a copy and back off again.
     const dir = caseDir('hides')
     const committedBytes = [readFileSync(WEB_MANIFEST), readFileSync(SERVER_MANIFEST)]
     cpSync(WEB_MANIFEST, join(dir, MANIFEST_NAME))
     const layer = 'item_head_beanie01_L80'
 
-    const stdout = run(['hides', layer, '--front', 'off', '--out', dir])
+    const stdout = run(['hides', layer, '--front', 'on', '--out', dir])
     const expected = JSON.parse(committedBytes[0]!.toString('utf8')) as Manifest
-    delete expected.files[layer]!.hidesHairFront
-    // Exactly the one flag, written the way every manifest is written (sorted, two-space JSON, LF).
-    expect(readFileSync(join(dir, MANIFEST_NAME)).equals(serialiseManifest(expected))).toBe(true)
+    expected.files[layer]!.hidesHairFront = true
+    // Exactly the one flag (the writer gives it its own place among the keys, so compare the data here; the round
+    // trip below holds the bytes).
+    expect(JSON.parse(readFileSync(join(dir, MANIFEST_NAME), 'utf8'))).toEqual(expected)
+    expect(readFileSync(join(dir, MANIFEST_NAME), 'utf8').endsWith('\n')).toBe(true)
     expect(stdout).toContain('remember items.json: head_beanie01, head_beanie_red01, head_beanie_grey01, head_beanie_mustard01 — same flags (bug 7)')
     // The committed manifests are untouched.
     expect(readFileSync(WEB_MANIFEST).equals(committedBytes[0]!)).toBe(true)
     expect(readFileSync(SERVER_MANIFEST).equals(committedBytes[1]!)).toBe(true)
 
-    // Back on, and the copy is byte for byte the committed file again: the flag returns to its own place.
-    run(['hides', layer, '--front', 'on', '--out', dir])
+    // Back off, and the copy is byte for byte the committed file again.
+    run(['hides', layer, '--front', 'off', '--out', dir])
     expect(readFileSync(join(dir, MANIFEST_NAME)).equals(committedBytes[0]!)).toBe(true)
 
     // --back alone, and a refusal for an unknown layer or a value that is not on|off.
     run(['hides', layer, '--back', 'on', '--out', dir])
-    const both = JSON.parse(readFileSync(join(dir, MANIFEST_NAME), 'utf8')) as Manifest
-    expect(both.files[layer]).toMatchObject({ hidesHairFront: true, hidesHairBack: true })
+    const back = JSON.parse(readFileSync(join(dir, MANIFEST_NAME), 'utf8')) as Manifest
+    expect(back.files[layer]).toMatchObject({ hidesHairBack: true })
+    expect(back.files[layer]!.hidesHairFront).toBeUndefined()
     expect(() => run(['hides', 'item_head_nothing01_L80', '--front', 'off', '--out', dir])).toThrow()
     expect(() => run(['hides', layer, '--front', 'maybe', '--out', dir])).toThrow()
     expect(() => run(['hides', layer, '--out', dir])).toThrow()

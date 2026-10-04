@@ -4184,7 +4184,7 @@
         "colour": "black with a cool violet tint (#302c39)"
       },
       "reference": "@body_f",
-      "prompt": null,
+      "prompt": "Keep this exact image: the same character, the same face and expression, the same pose and hands, the same size and position in the frame, the same image size, the same skin tone, the same tank top and shorts, the same transparent background. Add only this hairstyle on the bald head: long straight hair falling behind the back to the waist, blunt straight bangs, two straight side locks ending at the chin. Hair colour: black with a cool violet tint (#302c39), semi-painterly shading with one soft highlight band, outlines a darker shade of the hair colour. The hair covers the whole top and back of the scalp and never covers the eyes. The long hair hangs straight down behind the shoulders and behind both arms: the shoulders, the tank top straps and both arms stay fully visible in front of the hair; only the two side locks come forward, and they end at the chin. No hat, no hair accessories except those described. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the body's exact outline, width and height.\nChange nothing outside the requested area",
       "file": "item_hair_f_hime01.png",
       "ingest": {
         "as": "hair:f_hime01",
@@ -4192,7 +4192,7 @@
         "variant": null,
         "flags": []
       },
-      "status": "ng",
+      "status": "ok",
       "attempts": [
         {
           "n": 1,
@@ -4224,8 +4224,73 @@
           },
           "reason": "scope",
           "by": "verify"
+        },
+        {
+          "n": 2,
+          "at": "2026-10-04T11:47:42.955Z",
+          "chat": "https://chatgpt.com/c/6ac23c35-3f34-83ec-9536-ab84cb2fe1bd",
+          "file": "item_hair_f_hime01.png",
+          "verdict": "ng",
+          "measure": {
+            "registered": {
+              "scale": 1,
+              "dx": 0,
+              "dy": 0,
+              "iou": 0.993
+            },
+            "scope": 0.029
+          },
+          "reason": "scope",
+          "by": "verify",
+          "notes": [
+            "picture kept as item_hair_f_hime01.prev2.png"
+          ]
+        },
+        {
+          "n": 3,
+          "at": "2026-10-04T11:47:42.955Z",
+          "chat": "https://chatgpt.com/c/6ac248f9-7c14-83ec-9366-e23764f4607c",
+          "file": "item_hair_f_hime01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 1,
+              "centre": 0
+            },
+            "registered": {
+              "scale": 1,
+              "dx": 0,
+              "dy": 0,
+              "iou": 0.991
+            },
+            "scope": 0.041
+          },
+          "reason": null,
+          "by": "controller",
+          "overriddenFrom": "scope",
+          "notes": [
+            "controller eye-check (Plan 19 C2): scope 0.041 is the body's antialiased silhouette edge now composited over the long hair drawn behind the arms and torso, not a redraw of the body; the picture keeps the shoulders and arms in front of the hair as asked",
+            "record restored by the controller: a registry ingest running at the same time rewrote registry.json and dropped this attempt; the picture (item_hair_f_hime01.png) and the verdict are attempt 3's"
+          ],
+          "prompt": "Keep this exact image: the same character, the same face and expression, the same pose and hands, the same size and position in the frame, the same image size, the same skin tone, the same tank top and shorts, the same transparent background. Add only this hairstyle on the bald head: long straight hair falling behind the back to the waist, blunt straight bangs, two straight side locks ending at the chin. Hair colour: black with a cool violet tint (#302c39), semi-painterly shading with one soft highlight band, outlines a darker shade of the hair colour. The hair covers the whole top and back of the scalp and never covers the eyes. The long hair hangs straight down behind the shoulders and behind both arms: the shoulders, the tank top straps and both arms stay fully visible in front of the hair; only the two side locks come forward, and they end at the chin. No hat, no hair accessories except those described. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the body's exact outline, width and height.\nChange nothing outside the requested area"
         }
-      ]
+      ],
+      "ingested": true
     },
     {
       "id": "item_hair_f_wavy01",
@@ -4238,16 +4303,138 @@
         "colour": "platinum blonde (#e0c9b3)"
       },
       "reference": "@body_f",
-      "prompt": null,
+      "prompt": "Keep this exact image: the same character, the same face and expression, the same pose and hands, the same size and position in the frame, the same image size, the same skin tone, the same tank top and shorts, the same transparent background. Add only this hairstyle on the bald head: a short wavy bob ending above the shoulders, side-swept bangs, one small braid hanging behind the left shoulder. Hair colour: cool silver grey (#a0a4ac), clearly different from the skin, semi-painterly shading with one soft highlight band, outlines a darker shade of the hair colour. The hair covers the whole top and back of the scalp and never covers the eyes. Hair longer than the neck falls behind the shoulders and the back, never over the tank top, the arms or the hands. No hat, no hair accessories except those described. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the body's exact outline, width and height.",
       "file": "item_hair_f_wavy01.png",
       "ingest": {
         "as": "hair:f_wavy01",
         "base": null,
         "variant": null,
-        "flags": []
+        "flags": [
+          "--recolour-to",
+          "#e0c9b3"
+        ]
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:39:53.517Z",
+          "chat": "https://chatgpt.com/c/6ac23981-a3d4-83ec-939b-16d6f1b1f966",
+          "file": "item_hair_f_wavy01.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 0.958,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": -37,
+              "centre": -2
+            }
+          },
+          "reason": "drift",
+          "by": "verify"
+        },
+        {
+          "n": 2,
+          "at": "2026-10-04T11:49:06.511Z",
+          "chat": "https://chatgpt.com/c/6ac23c42-4e84-83ec-b664-1eb2bb7d18c8",
+          "file": "item_hair_f_wavy01.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 1,
+              "centre": 0
+            },
+            "registered": {
+              "scale": 1,
+              "dx": 0,
+              "dy": 0,
+              "iou": 0.994
+            },
+            "scope": 0.002,
+            "checks": {
+              "item_hair_f_wavy01_L20": [],
+              "item_hair_f_wavy01_L60": []
+            }
+          },
+          "reason": "style",
+          "by": "user",
+          "judgedAt": "2026-10-04T12:59:23.539Z"
+        },
+        {
+          "n": 3,
+          "at": "2026-10-04T13:03:09.457Z",
+          "chat": "https://chatgpt.com/c/6ac24de0-7034-83ec-bc11-f536d5799a4b",
+          "file": "item_hair_f_wavy01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 0.94,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": -56,
+              "centre": 0
+            },
+            "registered": {
+              "scale": 1.065,
+              "dx": 0,
+              "dy": 59,
+              "iou": 0.983
+            },
+            "scope": 0.004,
+            "checks": {
+              "item_hair_f_wavy01_L20": [],
+              "item_hair_f_wavy01_L60": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 1.065 about the feet, then 0, 59 px (IoU 0.983) — drift and scope are judged there, not on the edges as drawn",
+            "pipeline: fed the picture registered onto the body"
+          ]
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "item_hair_f_ponytail01",
@@ -4268,8 +4455,55 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:44:34.104Z",
+          "chat": "https://chatgpt.com/c/6ac23b55-17dc-83ec-b2d9-9393a47da860",
+          "file": "item_hair_f_ponytail01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 0.958,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": -62,
+              "centre": 0
+            },
+            "registered": {
+              "scale": 1.05,
+              "dx": 0,
+              "dy": 64,
+              "iou": 0.985
+            },
+            "scope": 0.004,
+            "checks": {
+              "item_hair_f_ponytail01_L20": [],
+              "item_hair_f_ponytail01_L60": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 1.05 about the feet, then 0, 64 px (IoU 0.985) — drift and scope are judged there, not on the edges as drawn",
+            "pipeline: fed the picture registered onto the body"
+          ]
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "item_hair_m_neat01",
@@ -4290,14 +4524,14 @@
         "variant": null,
         "flags": []
       },
-      "status": "ng",
+      "status": "ok",
       "attempts": [
         {
           "n": 1,
           "at": "2026-10-04T11:34:03.286Z",
           "chat": "https://chatgpt.com/c/6ac238e8-5074-83ec-b51a-a985d96b3d65",
           "file": "item_hair_m_neat01.png",
-          "verdict": "ng",
+          "verdict": "ok",
           "measure": {
             "size": "1024×1536",
             "width": 1024,
@@ -4317,12 +4551,28 @@
               "right": null,
               "bottom": -29,
               "centre": -5
+            },
+            "registered": {
+              "scale": 1.05,
+              "dx": 4,
+              "dy": 29,
+              "iou": 0.977
+            },
+            "scope": 0.004,
+            "checks": {
+              "item_hair_m_neat01_L20": [],
+              "item_hair_m_neat01_L60": []
             }
           },
-          "reason": "drift",
-          "by": "verify"
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 1.05 about the feet, then 4, 29 px (IoU 0.977) — drift and scope are judged there, not on the edges as drawn",
+            "pipeline: fed the picture registered onto the body"
+          ]
         }
-      ]
+      ],
+      "ingested": true
     },
     {
       "id": "item_hair_m_curly01",
@@ -4343,8 +4593,48 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:40:20.790Z",
+          "chat": "https://chatgpt.com/c/6ac239de-3070-83ec-9217-228fcf862ab2",
+          "file": "item_hair_m_curly01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.007,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 1,
+              "centre": 0
+            },
+            "scope": 0.004,
+            "checks": {
+              "item_hair_m_curly01_L20": [],
+              "item_hair_m_curly01_L60": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "item_hair_m_curly01_L20 C3: @1x has 4 pixels outside the shape, up to alpha 31"
+          ]
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "item_hair_m_spiky01",
@@ -4365,8 +4655,55 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:43:53.173Z",
+          "chat": "https://chatgpt.com/c/6ac23b54-f15c-83ec-a1bf-00db7b4094f9",
+          "file": "item_hair_m_spiky01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 0.965,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": -56,
+              "centre": 0
+            },
+            "registered": {
+              "scale": 1.045,
+              "dx": 0,
+              "dy": 58,
+              "iou": 0.99
+            },
+            "scope": 0.004,
+            "checks": {
+              "item_hair_m_spiky01_L20": [],
+              "item_hair_m_spiky01_L60": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 1.045 about the feet, then 0, 58 px (IoU 0.99) — drift and scope are judged there, not on the edges as drawn",
+            "pipeline: fed the picture registered onto the body"
+          ]
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/item_outfit_dealer01",
@@ -4386,8 +4723,44 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:51:25.075Z",
+          "chat": "https://chatgpt.com/c/6ac23d07-cda8-83ec-9ce3-1a8c2b6f1703",
+          "file": "v4_item_outfit_dealer01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.986,
+            "widthRatio": 0.989,
+            "drift": {
+              "left": -1,
+              "top": 0,
+              "right": 1,
+              "bottom": 18
+            },
+            "heads": 2.429,
+            "hairDelta": 4.138,
+            "checks": {
+              "item_outfit_dealer01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/item_outfit_tuxedo01",
@@ -4407,8 +4780,44 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:55:16.385Z",
+          "chat": "https://chatgpt.com/c/6ac23de0-704c-83ec-a0b3-0299b542494f",
+          "file": "v4_item_outfit_tuxedo01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.997,
+            "widthRatio": 1.001,
+            "drift": {
+              "left": -1,
+              "top": 0,
+              "right": 1,
+              "bottom": 4
+            },
+            "heads": 2.399,
+            "hairDelta": 1.623,
+            "checks": {
+              "item_outfit_tuxedo01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/item_outfit_royal_robe01",
@@ -4428,8 +4837,54 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:56:40.989Z",
+          "chat": "https://chatgpt.com/c/6ac23e35-76ac-83ec-9941-55dcda72d3e9",
+          "file": "v4_item_outfit_royal_robe01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1.015,
+            "widthRatio": 0.993,
+            "drift": {
+              "left": 5,
+              "top": -2,
+              "right": -6,
+              "bottom": -20
+            },
+            "registered": {
+              "scale": 0.995,
+              "dx": 2,
+              "dy": 20,
+              "iou": 0.67
+            },
+            "heads": 2.459,
+            "hairDelta": 3.931,
+            "checks": {
+              "item_outfit_royal_robe01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 0.995 about the feet, then 2, 20 px (IoU 0.67) — drift is judged there, not on the edges as drawn",
+            "pipeline: fed the picture registered onto the body"
+          ]
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/item_outfit_tet_red01",
@@ -4449,8 +4904,54 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:59:08.814Z",
+          "chat": "https://chatgpt.com/c/6ac23eca-d188-83ec-bd52-6e8d923dad70",
+          "file": "v4_item_outfit_tet_red01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1.029,
+            "widthRatio": 1.005,
+            "drift": {
+              "left": 5,
+              "top": -16,
+              "right": -7,
+              "bottom": -51
+            },
+            "registered": {
+              "scale": 1.015,
+              "dx": 0,
+              "dy": 49,
+              "iou": 0.726
+            },
+            "heads": 2.422,
+            "hairDelta": 1.238,
+            "checks": {
+              "item_outfit_tet_red01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 1.015 about the feet, then 0, 49 px (IoU 0.726) — drift is judged there, not on the edges as drawn",
+            "pipeline: fed the picture registered onto the body"
+          ]
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/item_outfit_champion01",
@@ -4470,8 +4971,54 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:00:32.736Z",
+          "chat": "https://chatgpt.com/c/6ac23f1d-b280-83ec-9da2-bcb2fda6c4a9",
+          "file": "v4_item_outfit_champion01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1.01,
+            "widthRatio": 1.018,
+            "drift": {
+              "left": -2,
+              "top": -6,
+              "right": 2,
+              "bottom": -18
+            },
+            "registered": {
+              "scale": 0.99,
+              "dx": 0,
+              "dy": 17,
+              "iou": 0.744
+            },
+            "heads": 2.462,
+            "hairDelta": 5.735,
+            "checks": {
+              "item_outfit_champion01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 0.99 about the feet, then 0, 17 px (IoU 0.744) — drift is judged there, not on the edges as drawn",
+            "pipeline: fed the picture registered onto the body"
+          ]
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/item_outfit_dealer01_m",
@@ -4491,8 +5038,44 @@
         "variant": "m",
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:52:47.397Z",
+          "chat": "https://chatgpt.com/c/6ac23d55-ad3c-83ec-b888-c0c68b0e59a7",
+          "file": "v4_item_outfit_dealer01_m.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.998,
+            "widthRatio": 1,
+            "drift": {
+              "left": 0,
+              "top": -1,
+              "right": 1,
+              "bottom": 2
+            },
+            "heads": 2.444,
+            "hairDelta": 2.774,
+            "checks": {
+              "item_outfit_dealer01_m_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/item_outfit_tet_red01_m",
@@ -4512,8 +5095,94 @@
         "variant": "m",
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:02:46.262Z",
+          "chat": "https://chatgpt.com/c/6ac23fb3-9248-83ec-8fa5-f0fbf9c639dc",
+          "file": "v4_item_outfit_tet_red01_m.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.998,
+            "widthRatio": 0.992,
+            "drift": {
+              "left": -3,
+              "top": -1,
+              "right": -6,
+              "bottom": 1
+            },
+            "registered": {
+              "scale": 1,
+              "dx": 6,
+              "dy": -2,
+              "iou": 0.742
+            },
+            "heads": 2.467,
+            "hairDelta": 12.401
+          },
+          "reason": "hair_colour",
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 1 about the feet, then 6, -2 px (IoU 0.742) — drift is judged there, not on the edges as drawn"
+          ]
+        },
+        {
+          "n": 2,
+          "at": "2026-10-04T12:42:16.745Z",
+          "chat": "https://chatgpt.com/c/6ac248fb-bf3c-83ec-b427-eec16af5dc4e",
+          "file": "v4_item_outfit_tet_red01_m.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.996,
+            "widthRatio": 0.998,
+            "drift": {
+              "left": 0,
+              "top": -1,
+              "right": 1,
+              "bottom": 4
+            },
+            "registered": {
+              "scale": 0.995,
+              "dx": 0,
+              "dy": -4,
+              "iou": 0.773
+            },
+            "heads": 2.453,
+            "hairDelta": 6.628,
+            "checks": {
+              "item_outfit_tet_red01_m_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 0.995 about the feet, then 0, -4 px (IoU 0.773) — drift is judged there, not on the edges as drawn",
+            "pipeline: fed the picture registered onto the body"
+          ]
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "body_f:happy",
@@ -5262,8 +5931,49 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:04:07.079Z",
+          "chat": "https://chatgpt.com/c/6ac24022-aa30-83ec-aef3-40c9d946f620",
+          "file": "v4_bot_0.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.116,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 12,
+              "centre": 0
+            },
+            "checks": {
+              "bot_0_L30": [],
+              "bot_0_face_neutral_L50": [],
+              "bot_0_face_happy_L50": [],
+              "bot_0_face_sad_L50": [],
+              "bot_0_face_surprised_L50": [],
+              "bot_0_face_closed_L50": [],
+              "bot_0_face_sleep_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/bot_1",
@@ -5284,8 +5994,79 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:07:03.927Z",
+          "chat": "https://chatgpt.com/c/6ac2408a-2e54-83ec-98b4-8807c11db8d8",
+          "file": "v4_bot_1.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.169,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": -17,
+              "centre": 0
+            }
+          },
+          "reason": "drift",
+          "by": "verify"
+        },
+        {
+          "n": 2,
+          "at": "2026-10-04T12:20:32.052Z",
+          "chat": "https://chatgpt.com/c/6ac243ba-cb2c-83ec-b5fc-482a4cd421db",
+          "file": "v4_bot_1.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.195,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 6,
+              "centre": 0
+            },
+            "checks": {
+              "bot_1_L30": [],
+              "bot_1_face_neutral_L50": [],
+              "bot_1_face_happy_L50": [],
+              "bot_1_face_sad_L50": [],
+              "bot_1_face_surprised_L50": [],
+              "bot_1_face_closed_L50": [],
+              "bot_1_face_sleep_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/bot_2",
@@ -5306,8 +6087,49 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:08:24.569Z",
+          "chat": "https://chatgpt.com/c/6ac24102-b0f0-83ec-b763-f384394550fa",
+          "file": "v4_bot_2.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.193,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 8,
+              "centre": 0
+            },
+            "checks": {
+              "bot_2_L30": [],
+              "bot_2_face_neutral_L50": [],
+              "bot_2_face_happy_L50": [],
+              "bot_2_face_sad_L50": [],
+              "bot_2_face_surprised_L50": [],
+              "bot_2_face_closed_L50": [],
+              "bot_2_face_sleep_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/bot_3",
@@ -5328,8 +6150,49 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:10:20.745Z",
+          "chat": "https://chatgpt.com/c/6ac2418d-bec0-83ec-b33e-61eabb16ec17",
+          "file": "v4_bot_3.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.035,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 8,
+              "centre": 0
+            },
+            "checks": {
+              "bot_3_L30": [],
+              "bot_3_face_neutral_L50": [],
+              "bot_3_face_happy_L50": [],
+              "bot_3_face_sad_L50": [],
+              "bot_3_face_surprised_L50": [],
+              "bot_3_face_closed_L50": [],
+              "bot_3_face_sleep_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/bot_4",
@@ -5350,8 +6213,49 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:12:00.253Z",
+          "chat": "https://chatgpt.com/c/6ac241db-9d00-83ec-b715-1145afba5da8",
+          "file": "v4_bot_4.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.12,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 11,
+              "centre": 1
+            },
+            "checks": {
+              "bot_4_L30": [],
+              "bot_4_face_neutral_L50": [],
+              "bot_4_face_happy_L50": [],
+              "bot_4_face_sad_L50": [],
+              "bot_4_face_surprised_L50": [],
+              "bot_4_face_closed_L50": [],
+              "bot_4_face_sleep_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/bot_5",
@@ -5372,8 +6276,79 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:14:26.778Z",
+          "chat": "https://chatgpt.com/c/6ac24261-3800-83ec-93e4-9eb96a1a074e",
+          "file": "v4_bot_5.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.315,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": -46,
+              "centre": 0
+            }
+          },
+          "reason": "drift",
+          "by": "verify"
+        },
+        {
+          "n": 2,
+          "at": "2026-10-04T12:23:02.641Z",
+          "chat": "https://chatgpt.com/c/6ac2445f-a738-83ec-b1ef-c8f527081ed3",
+          "file": "v4_bot_5.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.222,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 3,
+              "centre": 1
+            },
+            "checks": {
+              "bot_5_L30": [],
+              "bot_5_face_neutral_L50": [],
+              "bot_5_face_happy_L50": [],
+              "bot_5_face_sad_L50": [],
+              "bot_5_face_surprised_L50": [],
+              "bot_5_face_closed_L50": [],
+              "bot_5_face_sleep_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/bot_6",
@@ -5394,8 +6369,49 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:16:07.378Z",
+          "chat": "https://chatgpt.com/c/6ac242c5-1d20-83ec-a359-c6c2b5f632bf",
+          "file": "v4_bot_6.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.207,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 1,
+              "centre": 1
+            },
+            "checks": {
+              "bot_6_L30": [],
+              "bot_6_face_neutral_L50": [],
+              "bot_6_face_happy_L50": [],
+              "bot_6_face_sad_L50": [],
+              "bot_6_face_surprised_L50": [],
+              "bot_6_face_closed_L50": [],
+              "bot_6_face_sleep_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/bot_7",
@@ -5416,8 +6432,49 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:19:06.788Z",
+          "chat": "https://chatgpt.com/c/6ac24351-aeb4-83ec-908d-015fe0c0bd60",
+          "file": "v4_bot_7.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.297,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 12,
+              "centre": 1
+            },
+            "checks": {
+              "bot_7_L30": [],
+              "bot_7_face_neutral_L50": [],
+              "bot_7_face_happy_L50": [],
+              "bot_7_face_sad_L50": [],
+              "bot_7_face_surprised_L50": [],
+              "bot_7_face_closed_L50": [],
+              "bot_7_face_sleep_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/bot_0:happy",
@@ -5438,8 +6495,83 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:25:35.493Z",
+          "chat": "https://chatgpt.com/c/6ac244d3-d790-83ec-8861-829d87884fcf",
+          "file": "v4_bot_0_happy.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.012,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": -31,
+              "centre": 1
+            }
+          },
+          "reason": "drift",
+          "by": "verify"
+        },
+        {
+          "n": 2,
+          "at": "2026-10-04T12:54:19.042Z",
+          "chat": "https://chatgpt.com/c/6ac24bfb-d9f4-83ec-b064-3533440e4c75",
+          "file": "v4_bot_0_happy.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.042,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": -42,
+              "centre": 0
+            },
+            "registered": {
+              "scale": 0.995,
+              "dx": 0,
+              "dy": 45,
+              "iou": 0.957
+            },
+            "checks": {
+              "bot_0_face_happy_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the bot's neutral picture as the ingest will be: scale 0.995 about the feet, then 0, 45 px (IoU 0.957) — drift is judged there, not on the edges as drawn",
+            "pipeline: fed the picture registered onto the bot's neutral picture"
+          ]
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/bot_1:happy",
@@ -5460,8 +6592,43 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:28:13.535Z",
+          "chat": "https://chatgpt.com/c/6ac2458b-5bac-83ec-bdfc-64f071cf34eb",
+          "file": "v4_bot_1_happy.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.008,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 3,
+              "centre": -2
+            },
+            "checks": {
+              "bot_1_face_happy_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/bot_2:happy",
@@ -5482,8 +6649,43 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:29:50.684Z",
+          "chat": "https://chatgpt.com/c/6ac245f4-914c-83ec-b753-4dd1a5ed824e",
+          "file": "v4_bot_2_happy.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.003,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 1,
+              "centre": 0
+            },
+            "checks": {
+              "bot_2_face_happy_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/bot_3:happy",
@@ -5504,8 +6706,43 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:36:42.681Z",
+          "chat": "https://chatgpt.com/c/6ac24689-022c-83ec-b3ae-b14174b5308e",
+          "file": "v4_bot_3_happy.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.01,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 1,
+              "centre": 1
+            },
+            "checks": {
+              "bot_3_face_happy_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/bot_4:happy",
@@ -5526,8 +6763,53 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:37:28.741Z",
+          "chat": "https://chatgpt.com/c/6ac246e8-9d20-83ec-8d90-5eaa6833109e",
+          "file": "v4_bot_4_happy.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 0.993,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": -38,
+              "centre": -4
+            },
+            "registered": {
+              "scale": 1.025,
+              "dx": 2,
+              "dy": 38,
+              "iou": 0.967
+            },
+            "checks": {
+              "bot_4_face_happy_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the bot's neutral picture as the ingest will be: scale 1.025 about the feet, then 2, 38 px (IoU 0.967) — drift is judged there, not on the edges as drawn",
+            "pipeline: fed the picture registered onto the bot's neutral picture"
+          ]
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/bot_5:happy",
@@ -5548,8 +6830,43 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:51:32.935Z",
+          "chat": "https://chatgpt.com/c/6ac24aa0-0fec-83ec-9c54-7d5661b9cdb9",
+          "file": "v4_bot_5_happy.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.005,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 2,
+              "centre": 1
+            },
+            "checks": {
+              "bot_5_face_happy_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/bot_6:happy",
@@ -5570,8 +6887,43 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:49:05.442Z",
+          "chat": "https://chatgpt.com/c/6ac24aa0-a088-83ec-b3aa-e648d904d2b6",
+          "file": "v4_bot_6_happy.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.007,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 1,
+              "centre": 0
+            },
+            "checks": {
+              "bot_6_face_happy_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/bot_7:happy",
@@ -5592,8 +6944,53 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T13:01:21.644Z",
+          "chat": "https://chatgpt.com/c/6ac24ceb-c278-83ec-9e97-3bfaf496e75f",
+          "file": "v4_bot_7_happy.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.08,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 13,
+              "centre": -1
+            },
+            "registered": {
+              "scale": 0.935,
+              "dx": 0,
+              "dy": -12,
+              "iou": 0.943
+            },
+            "checks": {
+              "bot_7_face_happy_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the bot's neutral picture as the ingest will be: scale 0.935 about the feet, then 0, -12 px (IoU 0.943) — drift is judged there, not on the edges as drawn",
+            "pipeline: fed the picture registered onto the body"
+          ]
+        }
+      ],
+      "ingested": true
     }
   ]
 }

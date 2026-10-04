@@ -206,11 +206,11 @@ describe('the shipped catalogue', () => {
       hair_f_bob01: ['f', 'hair_m_tousled01', '#5e3e6f'],
       hair_f_hime01: ['f', 'hair_m_neat01', '#302c39'],
       hair_f_wavy01: ['f', 'hair_m_curly01', '#e0c9b3'],
-      hair_f_ponytail01: ['f', 'hair_m_spiky01', '#7b3f22'],
+      hair_f_ponytail01: ['f', 'hair_m_spiky01', '#874a2f'],
       hair_m_tousled01: ['m', 'hair_f_bob01', '#684136'],
       hair_m_neat01: ['m', 'hair_f_hime01', '#2c282d'],
       hair_m_curly01: ['m', 'hair_f_wavy01', '#2a1f1e'],
-      hair_m_spiky01: ['m', 'hair_f_ponytail01', '#4a2c1d'],
+      hair_m_spiky01: ['m', 'hair_f_ponytail01', '#5d3627'],
     }
     for (const [id, [gender, counterpart, naturalColour]] of Object.entries(natural)) {
       expect(catalog.get(id), id).toMatchObject({ gender, counterpart, naturalColour, asset: { fitsAvatarCrop: true } })
@@ -227,12 +227,12 @@ describe('the shipped catalogue', () => {
   it('ships six free skin colours with lowercase hex colours', () => {
     const skins = catalog.all().filter((d) => d.slot === 'skinColor')
     expect(skins.map((d) => [d.id, d.colour])).toEqual([
-      ['skin_porcelain01', '#fcefe6'],
-      ['skin_fair01', '#ecc9ad'],
-      ['skin_lighttan01', '#d9a47a'],
-      ['skin_tan01', '#b9835a'],
-      ['skin_brown01', '#8a5a3c'],
-      ['skin_deep01', '#5c3a28'],
+      ['skin_porcelain01', '#fcf0e9'],
+      ['skin_fair01', '#f9e6da'],
+      ['skin_lighttan01', '#e5bd9e'],
+      ['skin_tan01', '#c7916b'],
+      ['skin_brown01', '#9c6140'],
+      ['skin_deep01', '#643e2b'],
     ])
     for (const skin of skins) {
       expect(skin, skin.id).toMatchObject({ rarity: 'common', free: true, isDefault: false })
@@ -247,12 +247,13 @@ describe('the shipped catalogue', () => {
     for (const def of catalog.all()) expect(def.asset?.hidesHairBack, def.id).toBeUndefined()
   })
 
-  it('hides the hair strand under every hat but the open-topped visor (bug 7)', () => {
-    const strand = (id: string): boolean => catalog.get(id)?.asset?.hidesHairFront === true
-    for (const id of ['head_tophat01', 'head_beret_red01', 'head_crown_gold01', 'head_conical_hat01', 'head_beanie01', 'head_party_cone01', 'head_beret_blue01', 'head_beanie_grey01', 'head_party_cone_green01']) {
-      expect(strand(id), id).toBe(true)
+  it('hides the front hair only under the hats the fit check chose', () => {
+    // Plan 19 C5: a v4 hairstyle's L60 is the whole crown and fringe, not the old bases' one strand, so hiding it
+    // left a bald head under every hat. The fit check chose to keep the hair under all of them; the hat sits over it.
+    const hidesFront = (id: string): boolean => catalog.get(id)?.asset?.hidesHairFront === true
+    for (const id of ['head_tophat01', 'head_beret_red01', 'head_crown_gold01', 'head_conical_hat01', 'head_beanie01', 'head_party_cone01', 'head_beret_blue01', 'head_beanie_grey01', 'head_party_cone_green01', 'head_dealer_visor01']) {
+      expect(hidesFront(id), id).toBe(false)
     }
-    expect(strand('head_dealer_visor01')).toBe(false)
   })
 
   it('leaves enough unowned commons and rares for the daily tiers to draw several before running dry', () => {
