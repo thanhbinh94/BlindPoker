@@ -114,7 +114,7 @@ const NEIGHBOURS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]]
 
 /** Connected components, iterative (a recursive flood fill overflows the stack on a 768 × 896 mask).
  * 8-connected by default; pass `NEIGHBOURS4` for a stricter, edge-only flood. */
-function components(mask, width, height, neighbours = NEIGHBOURS8) {
+export function components(mask, width, height, neighbours = NEIGHBOURS8) {
   const label = new Int32Array(width * height).fill(-1)
   const sizes = []
   const stack = []

@@ -15,12 +15,12 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { ingest as pipelineIngest } from '../scripts/avatar-pipeline/extract.mjs'
 import { anchorBase } from '../scripts/avatar-pipeline/frame.mjs'
 import { MANIFEST_NAME } from '../scripts/avatar-pipeline/manifest.mjs'
-import { alphaBBox, renderSvg, writePicture } from '../scripts/avatar-pipeline/png.mjs'
+import { alphaBBox, readPicture, renderSvg, writePicture } from '../scripts/avatar-pipeline/png.mjs'
 import { collect } from '../scripts/avatar-registry/collect.mjs'
 import { addVariant, baseGaps, ingestAssets } from '../scripts/avatar-registry/ingest.mjs'
 import { parseSpec } from '../scripts/avatar-registry/registry.mjs'
 import {
-  HAIR_BODY_MARGIN, allowedArea, bodyBox, compareBoxes, comparePictures, kindOfSpec, layerNames, ownerOf, scorePicture, verifyAssets,
+  HAIR_BODY_MARGIN, allowedArea, bodyBox, compareBoxes, comparePictures, figureBox, kindOfSpec, layerNames, ownerOf, scorePicture, verifyAssets,
 } from '../scripts/avatar-registry/verify.mjs'
 
 // Every case here renders synthetic pictures and runs the real pipeline on them: 3–6 s each on this machine, and
@@ -75,6 +75,15 @@ const OVER_TORSO = `<rect x="420" y="850" width="180" height="150" fill="${BROWN
  * box's right edge moves 138 px and its centre about +69, while the legs do not move at all.
  */
 const SIDE_TAIL = `<rect x="860" y="400" width="140" height="500" rx="40" fill="${BROWN}"/>`
+/**
+ * A sleeping face's floating "z" (Plan 19 C1): a 40 × 40 px letter, strokes 8 px wide (about 1 100 px of ink, 0.3 % of
+ * the figure), by the temple and detached from it — x 871–911, past the hand's end (862) and 49 px beyond the figure's
+ * box on the right, y 330–370, 430 px above the arm. A "z" like that used to widen the box, and the width ratio called
+ * the whole picture redrawn.
+ */
+const Z_GLYPH = '<path d="M875 334 H907 L875 366 H907" fill="none" stroke="#202020" stroke-width="8"/>'
+/** …and a detached piece that is not a speck: a 100 × 100 px square (2.6 % of the figure), which stays in the box. */
+const DETACHED_SQUARE = '<rect x="880" y="300" width="100" height="100" fill="#202020"/>'
 
 const svg = (body: string, width = W, height = H, background = ''): string =>
   `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${background}${body}</svg>`
@@ -94,6 +103,7 @@ type Fixture =
   | 'recoloured' | 'torso' | 'hat' | 'shirt' | 'face' | 'ring' | 'disc'
   | 'bald' | 'baldHappy' | 'baldTorso' | 'bodyRaised' | 'hairOk' | 'hairTorso' | 'hairWide'
   | 'hairSideTail' | 'hairRaised' | 'hairWideSmall'
+  | 'refZ' | 'baldZ' | 'baldSquare' | 'baldSmall' | 'baldSmallZ'
 /** Every synthetic picture, by name, as a path under `srcDir`. */
 const files = {} as Record<Fixture, string>
 
@@ -138,6 +148,14 @@ beforeAll(async () => {
   files.hairRaised = await draw('hair-raised.png', svg(`<g transform="translate(0 -20)">${bald()}${CAP}${LOCK}</g>`))
   // The model's other canvas, but the figure redrawn at 0.9 of its size: placing it at scale 1 would miss the body.
   files.hairWideSmall = await draw('hair-wide-small.png', svg(`<g transform="translate(80 60) scale(0.9)">${bald()}${CAP}${LOCK}</g>`, 1086, 1448), 1086, 1448)
+  // Plan 19 C1: the same faces with a detached "z" (or a square too big to be a speck), and a figure really drawn at 0.9
+  // of its size (about its feet and centre line, on the same canvas) with and without the "z".
+  const shrunk = (inner: string): string => `<g transform="translate(512 1340) scale(0.9) translate(-512 -1340)">${inner}</g>`
+  files.refZ = await draw('ref-z.png', svg(`${figure()}${Z_GLYPH}`))
+  files.baldZ = await draw('bald-z.png', svg(`${bald()}${Z_GLYPH}`))
+  files.baldSquare = await draw('bald-square.png', svg(`${bald()}${DETACHED_SQUARE}`))
+  files.baldSmall = await draw('bald-small.png', svg(shrunk(bald())))
+  files.baldSmallZ = await draw('bald-small-z.png', svg(`${shrunk(bald())}${Z_GLYPH}`))
 }, 120_000)
 
 afterAll(() => rmSync(temp, { recursive: true, force: true }))
@@ -258,6 +276,53 @@ describe('verify: drift and redrawn', () => {
     const box = alphaBBox(base)!
     const from = box.y + Math.floor(box.h * 0.5)
     expect(bodyBox(hatted, from)).toEqual(bodyBox(base, from))
+  })
+})
+
+describe('verify: a detached speck does not move the figure box (Plan 19 C1)', () => {
+  it('premise: the "z" widens the raw box by 40 px or more, past the width ratio', async () => {
+    const withZ = alphaBBox(await readPicture(files.baldZ))!
+    const body = alphaBBox(await readPicture(files.bald))!
+    expect(withZ.x + withZ.w - (body.x + body.w)).toBeGreaterThanOrEqual(40)
+    expect(withZ.w / body.w).toBeGreaterThan(1.04)
+  })
+
+  it('measures the figure without a piece under 2 % of the largest one, and with one above it', async () => {
+    const body = await readPicture(files.bald)
+    const withZ = await readPicture(files.baldZ)
+    expect(figureBox(withZ, { ignoreSpecks: true })).toEqual(figureBox(body))
+    expect(figureBox(withZ)!.w).toBeGreaterThan(figureBox(body)!.w + 40)
+    // A 100 × 100 px square is 2.6 % of the figure: a piece of it, not a speck.
+    const withSquare = await readPicture(files.baldSquare)
+    expect(figureBox(withSquare, { ignoreSpecks: true })).toEqual(figureBox(withSquare))
+    expect(figureBox(body, { ignoreSpecks: true })).toEqual(figureBox(body))
+  })
+
+  it('passes a body face whose "z" floats beside the head: the box is the body\'s', async () => {
+    const sleep = await score(files.baldZ, { kind: 'bodyExpression', referenceFile: files.bald })
+    expect(sleep.verdict, sleep.reason).toBe('ok')
+    expect(sleep.measure.drift).toEqual({ left: 0, top: 0, right: 0, bottom: 0 })
+    expect(sleep.measure.widthRatio).toBe(1)
+  })
+
+  it('passes an expression of a base the same way', async () => {
+    const sleep = await score(files.refZ, { kind: 'expression' })
+    expect(sleep.verdict, sleep.reason).toBe('ok')
+    expect(sleep.measure.drift).toEqual({ left: 0, top: 0, right: 0, bottom: 0 })
+  })
+
+  it('still fails a figure really drawn at 0.9 of its size on the same canvas, with the "z" or without', async () => {
+    for (const file of [files.baldSmall, files.baldSmallZ]) {
+      const result = await score(file, { kind: 'bodyExpression', referenceFile: files.bald })
+      expect(result).toMatchObject({ verdict: 'ng', reason: 'redrawn' })
+      expect(result.measure.scale).toBeGreaterThan(1.1)
+    }
+  })
+
+  it('still fails a detached piece that is not a speck, and holds the other kinds to their raw box', async () => {
+    expect(await score(files.baldSquare, { kind: 'bodyExpression', referenceFile: files.bald })).toMatchObject({ verdict: 'ng', reason: 'redrawn' })
+    // An outfit's picture is not ignored the same way: the "z" is part of what it drew.
+    expect(await score(files.refZ, { kind: 'item', slot: 'outfit' })).toMatchObject({ verdict: 'ng', reason: 'redrawn' })
   })
 })
 

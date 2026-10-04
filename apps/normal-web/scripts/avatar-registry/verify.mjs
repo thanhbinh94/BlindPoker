@@ -13,7 +13,9 @@
  *   redrawn      against the reference picture (`compareBoxes`): the picture's scale — the reference's
  *                height over the picture's, head top to feet — is outside 0.90–1.10, or its box's width
  *                ratio after that scaling is outside 0.96–1.04 (a figure drawn wider at the same height —
- *                the ChatGPT edit that the pipeline could only register at IoU 0.645)
+ *                the ChatGPT edit that the pipeline could only register at IoU 0.645). An expression's or a body
+ *                face's box leaves out the specks (`withoutSpecks`: a detached piece of ink under 2 % of the largest
+ *                one — a sleeping face's "z"), here and in `drift`
  *   drift        …or an edge of the box is more than 12 px off the reference's — an outfit's bottom edge may
  *                sit up to 24 px lower, for shoes (which edges, and where the picture stands when they are
  *                measured: `compareBoxes`)
@@ -59,7 +61,8 @@ import { CROP, FACE_LIMIT_Y, HEAD_LIMIT_Y, LAYERS, anchorBase } from '../avatar-
 import {
   EXPRESSIONS, GENDERS, MANIFEST_NAME, PUBLIC_DIR, SLOT_LAYER, baseFile, bodyFaceFile, bodyFile, botFaceFile, botFile, faceFile, hairFile, itemFile, readManifest,
 } from '../avatar-pipeline/manifest.mjs'
-import { ALPHA_SOLID, alphaBBox, colourDistance, dilateMask, placeOnCanvas, readPicture, removeChroma, resizePicture, writePicture } from '../avatar-pipeline/png.mjs'
+import { components } from '../avatar-pipeline/masks.mjs'
+import { ALPHA_INK, ALPHA_SOLID, alphaBBox, clonePicture, colourDistance, dilateMask, placeOnCanvas, readPicture, removeChroma, resizePicture, writePicture } from '../avatar-pipeline/png.mjs'
 import { MAX_ATTEMPTS, SRC_DIR, parseFlags, parseSpec, referenceOwner, referencePath, requireAsset, transformSource } from './registry.mjs'
 
 export const PORTRAIT = { aspects: [2 / 3, 3 / 4], tolerance: 0.05, minHeight: 1152 }
@@ -129,13 +132,45 @@ export function background(pic) {
 }
 
 /**
+ * A detached piece of ink smaller than this share of the figure's largest piece is a speck, not part of the figure
+ * (`withoutSpecks`): a sleeping face's "z", a sparkle, a stray dot.
+ */
+export const SPECK_SHARE = 0.02
+
+/**
+ * The picture with its specks cleared (the picture itself when it has none): the ink (`alpha > ALPHA_INK`, as the box
+ * counts it) is split into 8-connected pieces — `components`, the pipeline's own labelling — and every piece under
+ * `SPECK_SHARE` of the largest one has its alpha set to 0. The figure and anything big enough to be a part of it (an
+ * arm held away from the body, a lock of hair behind the shoulder) stay.
+ */
+export function withoutSpecks(pic, share = SPECK_SHARE) {
+  const { width, height, data } = pic
+  const ink = new Uint8Array(width * height)
+  for (let at = 0; at < ink.length; at++) ink[at] = data[at * 4 + 3] > ALPHA_INK ? 1 : 0
+  const { label, sizes } = components(ink, width, height)
+  const floor = sizes.reduce((most, size) => Math.max(most, size), 0) * share
+  if (sizes.every((size) => size >= floor)) return pic
+  const out = clonePicture(pic)
+  for (let at = 0; at < ink.length; at++) if (ink[at] && sizes[label[at]] < floor) out.data[at * 4 + 3] = 0
+  return out
+}
+
+/**
  * A figure's box for `compareBoxes`: its ink box, plus `top` — where `measure()` puts the head top, below
  * a strand of hair (an ahoge) that a generator redraws a little differently every time.
+ *
+ * `ignoreSpecks` measures the figure without its specks (`withoutSpecks`), box and head top both: a detached "z"
+ * beside a sleeping head widened the box by 49 px on the real `body_f_sleep.png` and the width ratio called the
+ * unchanged body redrawn.
+ *
+ * @param {{ width: number, height: number, data: Buffer }} pic
+ * @param {{ ignoreSpecks?: boolean }} [options]
  */
-export function figureBox(pic) {
-  const box = alphaBBox(pic)
+export function figureBox(pic, { ignoreSpecks = false } = {}) {
+  const figure = ignoreSpecks ? withoutSpecks(pic) : pic
+  const box = alphaBBox(figure)
   if (!box) return null
-  return { ...box, top: measureFigure(removeChroma(pic)).top }
+  return { ...box, top: measureFigure(removeChroma(figure)).top }
 }
 
 /**
@@ -240,7 +275,9 @@ export function comparePictures(pic, ref, kind, slot) {
     const fromY = refBox.y + Math.floor(refBox.h * (kind === 'base' ? BASE_LEGS_FROM : HEAD_ITEM_BODY_FROM))
     return compareBoxes(bodyBox(pic, fromY), bodyBox(ref, fromY), { kind, slot: kind === 'base' ? 'head' : slot, anchored })
   }
-  return compareBoxes(figureBox(pic), figureBox(ref), { kind, slot, anchored })
+  // An expression, or a body's face: a "z" floating beside a sleeping head, or a sparkle, is not the figure (`figureBox`).
+  const ignoreSpecks = FACE_KINDS.has(kind)
+  return compareBoxes(figureBox(pic, { ignoreSpecks }), figureBox(ref, { ignoreSpecks }), { kind, slot, anchored })
 }
 
 /** The share of the reference's height above which a head item's ink is ignored by `comparePictures`. */
