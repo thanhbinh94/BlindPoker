@@ -559,19 +559,27 @@ it with `skinMask` (`masks.mjs`), at `@2x`:
 
 - The seed is `baseSkinColour` — the modal colour of `SKIN_WINDOW`, the cheeks and chin, which are skin on every
   body by construction.
-- A pixel is skin when it is solid (alpha > 128) and either within ΔE76 `SKIN_MASK.tolerance` (22) of the seed in
-  Lab, or within `hueSpread` (18°) of the seed's LCh hue, at L* ≥ `minL` (50), with a chroma `chroma` (0.5–1.6) ×
-  the seed's. The second branch is shaded and lit skin, which travels a long way in Lab and keeps its hue; shaded
-  cream sits at L* ~70 and stays in.
+- A pixel is skin when it is solid (alpha > 128), has a Lab chroma C* of at least `minChroma` (8), and is either
+  within ΔE76 `SKIN_MASK.tolerance` (22) of the seed in Lab, or within `hueSpread` (18°) of the seed's LCh hue, at
+  L* ≥ `minL` (50), with a chroma `chroma` (0.5–1.6) × the seed's. The second branch is shaded and lit skin, which
+  travels a long way in Lab and keeps its hue; shaded cream sits at L* ~70 and stays in.
 - **Why `minL` is 50:** the warm-brown outline the bodies are drawn with, `#7a4a32`, is L* 36.5 with a hue only
   17.7° from cream — inside `hueSpread`. Lightness is what keeps the line out, and the line keeps its colour, so it
   stays crisp on every skin tone. A pink mouth falls out on hue.
-- **The limit of `tolerance`:** a *light* neutral is close to cream in Lab whatever its hue. Mid and dark greys
-  fall out on their own (the stand-ins' `#9aa3ad` is ΔE 32 from `#f1d2b6`), but greys from about `#b9b9b9` to
-  `#f8f8f8` — `#d9d9d9` and `#f0f0f0` included — and an off-white like `#fdf8f5` are within ΔE 22 and would be cut
-  as skin. The eye white is taken out by geometry (next point). Pale underwear is covered by every outfit anyway
-  (C6); the body template therefore asks for a mid-gray tank top and charcoal shorts (A2c, §10.1), and if a pale
-  one still comes back at the style gate, a hand-drawn `_skinmask` override answers it.
+- **Why `minChroma` is 8 (style gate, 2026-10-04):** `tolerance` alone cannot tell a *light* neutral from cream,
+  whatever its hue. Mid and dark greys fall out on their own (the stand-ins' `#9aa3ad` is ΔE 32 from `#f1d2b6`), but
+  greys from about `#b9b9b9` to `#f8f8f8` and an off-white like `#fdf8f5` are within ΔE 22 of it. The real v4 bodies
+  came back with exactly that: a light bluish-grey tank top where the template asked for a mid-gray one — `body_f_L30`
+  `rgb(206,205,213)` = Lab (82.7, 1.8, −3.8) and `body_m_L30` `rgb(199,197,205)` = Lab (79.9, 2.2, −3.8), both chroma
+  C* 4.3 — only ΔE ~20 from the cheek (Lab (92.0, 4.8, 13.7), C* 14.5). The mask took the whole top of body f and
+  patches of body m's, and a skin tint would have painted the shirt. Skin always carries warm chroma, about 12 and
+  over even in its highlights: the cheek is C* 14.5, the thigh (91.5, 5.9, 14.1) 15.3, shaded skin (79.2, 22.1, 26.1)
+  34 and (59.2, 26.7, 30.1) 40. So a pixel under C* 8 is not skin by either rule. The test comes before the closing,
+  so the closing cannot fill the shirt back in. On the real bodies the share of tank-coloured pixels in the mask went
+  from 97 % (body f) and 47 % (body m) to 0; the neutral faces lost 9 px and 0 px. The cost is that a near-white
+  highlight under C* 8 (`#fff1e6` is 7.6) drops out of the mask and stays white under a tint, as a highlight should.
+  The eye white is taken out by geometry (next point), and a hand-drawn `_skinmask` override still answers anything
+  else that gets through.
 - The eyes are taken out, widened by `eyeMargin` (3 px): always the padded ellipse round each eye's white
   (`eyeEllipses`) — no eye mask holds the white, and an off-white sclera is within ΔE 22 of cream — and, on a face,
   the eye mask as written as well (a hand-drawn `_eyemask` included), so skin and eyes never share a pixel. This is
@@ -585,7 +593,10 @@ it with `skinMask` (`masks.mjs`), at `@2x`:
   another skin colour. So **every real face's skin-mask overlay is checked by eye** at the style gate and in batch
   C1, and a bad one is answered with a hand-drawn `_skinmask` override. Bald faces do not make this go away; there
   is just no hair shine left to cause it.
-- What is left is closed by 2 px and kept to pieces of at least `minRegion` (40 px).
+- What is left is closed by 2 px and kept to pieces of at least `minRegion` (40 px). The closing bridges a gap of up
+  to about 4 px between two pieces of skin, so a strap or a line that thin would be filled back in. The real tank
+  tops' straps are 8–20 px wide and taper to 4–6 px only at their very tips under the shoulder, and measured on both
+  real bodies none of the top is in the mask after the closing.
 - A hand-drawn `assets/avatar-src/masks/<layer>_skinmask.png` wins, as for hair, and is marked `override: true`.
 
 A body face is never given a hair mask — there is no hair on it — and its eyes are cut with `eyeMask` handed an
@@ -994,8 +1005,8 @@ The rules:
   completely bald for a dress-up base, the face kept at exactly F01's size and place, `CHARACTER LOCK BODY_<code>`,
   then head, face (no blush, no makeup), cream skin, the relaxed pose, hands "with exactly five fingers (four
   fingers and one thumb)", clothing, line art and rendering. The clothing is a plain **mid-gray** tank top and
-  **charcoal** shorts: a light-grey top would sit inside the skin mask's tolerance of cream (§4.4.1, the limit
-  of `tolerance`; A1b ruling). Its look holds `code`, `figure`, `head`, `eyes`, `mouth`, and `head_fallback` — the buzz
+  **charcoal** shorts: a light-grey top would sit inside the skin mask's tolerance of cream (§4.4.1, A1b ruling;
+  the real art's light top is now kept out by `minChroma`). Its look holds `code`, `figure`, `head`, `eyes`, `mouth`, and `head_fallback` — the buzz
   cut B2 puts in a manual prompt when ChatGPT cannot draw a clean bald head (R1). `templates.bodyExpression` (only
   the eyes and mouth, on the bald body) and `templates.hair` (`{{look.description}}`, `{{look.colour}}` — the
   hairstyle's natural colour with its hex; hair longer than the neck falls behind the shoulders, never over the

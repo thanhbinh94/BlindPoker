@@ -669,6 +669,7 @@ export function tintMask(pic, seed, { tolerance = 18 } = {}) {
  * - `hueSpread`, `minL`, `chroma` — or, further than that, skin when its LCh hue is within `hueSpread`° of the
  *   seed's, its L* at least `minL`, and its chroma `chroma[0]`–`chroma[1]` × the seed's: shading and light on
  *   the same skin, which moves a long way in Lab while keeping its hue;
+ * - `minChroma` — the CIE Lab chroma C* (√(a*² + b*²)) a pixel needs to be skin at all, whichever rule above lets it in;
  * - `eyeMargin` — how far round the eyes the skin keeps off;
  * - `minRegion` — the smallest piece of skin kept.
  *
@@ -676,13 +677,13 @@ export function tintMask(pic, seed, { tolerance = 18 } = {}) {
  * L* 36.5 with a hue only 17.7° from cream, inside `hueSpread`, so lightness is what keeps the line out. Shaded
  * cream sits at L* ~70 and stays in.
  *
- * `tolerance` has a limit worth knowing: a *light* neutral is close to cream in Lab whatever its hue. Greys from
- * about `#b9b9b9` to `#f8f8f8`, and an off-white like `#fdf8f5`, are within ΔE 22 of `#f1d2b6`; only mid and dark
- * greys (`#9aa3ad` is 32 away) fall out on their own. The eye white is taken out by geometry instead (`skinMask`).
- * Pale underwear would be cut as skin: an outfit covers it anyway (C6), but at the style gate a pale underwear is
- * answered first by a darker template and then, if it persists, by a hand-drawn `_skinmask` override.
+ * `minChroma` is 8 (Plan 19 style gate) because `tolerance` alone cannot tell a light neutral from cream: greys from
+ * about `#b9b9b9` to `#f8f8f8`, an off-white like `#fdf8f5` and the real bodies' pale bluish-grey tank top (C* 4.3, ΔE ~20
+ * from the cheek) are all within ΔE 22 of cream, while skin always carries warm chroma, about 12 and over even in
+ * its highlights (a real body's cheek is C* 14.5, its thigh 15.3). A near-white highlight under C* 8 drops out of the mask.
+ * The eye white is taken out by geometry instead (`skinMask`).
  */
-export const SKIN_MASK = { tolerance: 22, hueSpread: 18, minL: 50, chroma: [0.5, 1.6], eyeMargin: 3, minRegion: 40 }
+export const SKIN_MASK = { tolerance: 22, hueSpread: 18, minL: 50, minChroma: 8, chroma: [0.5, 1.6], eyeMargin: 3, minRegion: 40 }
 
 /**
  * A face's eye zone (Plan 19): the padded ellipse round each eye's white (`eyeEllipses`) — always, because no eye
@@ -713,11 +714,12 @@ export function eyeZone(pic, eyes = null) {
  * the eyes, the mouth and the underwear must all stay out of it.
  *
  * The seed is `baseSkinColour` (the modal colour of `SKIN_WINDOW`, the cheeks and chin, which are skin on every
- * body by construction). A pixel is skin when it is solid (alpha > `ALPHA_SOLID`) and either within
- * `SKIN_MASK.tolerance` of the seed, or of the seed's hue, light enough and about as saturated (`SKIN_MASK`).
- * The outline is too dark, mid or dark grey underwear too unsaturated and too far, and a pink mouth too far round
- * the hue circle, so all three fall out by construction; a *light* neutral does not (see `SKIN_MASK`). The bodies
- * are always drawn cream (spec §5.2), so one seed fits both.
+ * body by construction). A pixel is skin when it is solid (alpha > `ALPHA_SOLID`), has at least `SKIN_MASK.minChroma`
+ * chroma, and is either within `SKIN_MASK.tolerance` of the seed, or of the seed's hue, light enough and about as
+ * saturated (`SKIN_MASK`). The outline is too dark, mid or dark grey underwear too unsaturated and too far, and a
+ * pink mouth too far round the hue circle, so all three fall out by construction; a *light* neutral, which is
+ * close to cream in Lab, falls out on `minChroma` (see `SKIN_MASK`). The bodies are always drawn cream (spec
+ * §5.2), so one seed fits both.
  *
  * The eye zone (`eyeZone`) is taken out: always `eyeEllipses(pic)` — the padded ellipse round each eye's white,
  * because an off-white sclera is within `tolerance` of cream and no eye mask holds the white — and, unioned with
@@ -745,9 +747,11 @@ export function skinMask(pic, { eyes = null } = {}) {
   for (let i = 0; i < skin.length; i++) {
     if (!solid(i)) continue
     const p = labOf(data[i * 4], data[i * 4 + 1], data[i * 4 + 2])
+    const chroma = Math.hypot(p[1], p[2])
+    // Before the close below, so it cannot fill a grey garment back in; a neutral sits within `tolerance` of pale cream.
+    if (chroma < SKIN_MASK.minChroma) continue
     if (labDist(p, seedLab) <= SKIN_MASK.tolerance) { skin[i] = 1; continue }
     if (p[0] < SKIN_MASK.minL) continue
-    const chroma = Math.hypot(p[1], p[2])
     if (chroma < SKIN_MASK.chroma[0] * seedChroma || chroma > SKIN_MASK.chroma[1] * seedChroma) continue
     let hue = Math.abs(Math.atan2(p[2], p[1]) - seedHue)
     if (hue > Math.PI) hue = 2 * Math.PI - hue

@@ -198,27 +198,31 @@ const MOUTH = '#d9607a'
  *
  * `parts` is each region by its colour (solid pixels within 20 of what was drawn, so not the antialiased rim between
  * two of them) — what the skin mask is measured against.
+ *
+ * `skin` and `underwear` repaint the cream and the grey (the style-gate test below gives it the real art's tank top);
+ * `extra` is raw SVG drawn last, over the head — a second shaded patch or a highlight, say.
  */
-async function syntheticBody() {
+async function syntheticBody({ skin = CREAM, underwear = UNDERWEAR, extra = '' } = {}) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-    <rect x="300" y="430" width="168" height="220" rx="20" fill="${UNDERWEAR}"/>
-    <rect x="300" y="640" width="168" height="80" fill="${UNDERWEAR}"/>
-    <rect x="250" y="450" width="44" height="250" rx="20" fill="${CREAM}"/>
-    <rect x="474" y="450" width="44" height="250" rx="20" fill="${CREAM}"/>
-    <rect x="316" y="720" width="60" height="140" rx="20" fill="${CREAM}"/>
-    <rect x="392" y="720" width="60" height="140" rx="20" fill="${CREAM}"/>
-    <ellipse cx="384" cy="300" rx="160" ry="150" fill="${CREAM}" stroke="${OUTLINE}" stroke-width="3"/>
+    <rect x="300" y="430" width="168" height="220" rx="20" fill="${underwear}"/>
+    <rect x="300" y="640" width="168" height="80" fill="${underwear}"/>
+    <rect x="250" y="450" width="44" height="250" rx="20" fill="${skin}"/>
+    <rect x="474" y="450" width="44" height="250" rx="20" fill="${skin}"/>
+    <rect x="316" y="720" width="60" height="140" rx="20" fill="${skin}"/>
+    <rect x="392" y="720" width="60" height="140" rx="20" fill="${skin}"/>
+    <ellipse cx="384" cy="300" rx="160" ry="150" fill="${skin}" stroke="${OUTLINE}" stroke-width="3"/>
     <ellipse cx="300" cy="350" rx="30" ry="20" fill="${SHADE}"/>
     <ellipse cx="320" cy="280" rx="22" ry="30" fill="${EYE_DARK}"/>
     <ellipse cx="448" cy="280" rx="22" ry="30" fill="${EYE_DARK}"/>
     <ellipse cx="384" cy="375" rx="24" ry="13" fill="${MOUTH}"/>
+    ${extra}
   </svg>`
   const pic = await renderSvg(svg, W, H)
   const parts = {
-    skin: colourPixels(pic, CREAM),
+    skin: colourPixels(pic, skin),
     shading: colourPixels(pic, SHADE),
     outline: colourPixels(pic, OUTLINE),
-    underwear: colourPixels(pic, UNDERWEAR),
+    underwear: colourPixels(pic, underwear),
     eyes: colourPixels(pic, EYE_DARK),
     mouth: colourPixels(pic, MOUTH),
   }
@@ -524,6 +528,38 @@ describe('skinMask, and eyes on a bald face (Plan 19 A1b, spec §5.5)', () => {
     expect(coverage(mask, parts.shading)).toBeGreaterThan(0.95)
     for (const part of ['eyes', 'mouth', 'underwear'] as const) expect(coverage(mask, parts[part]), part).toBe(0)
     expect(coverage(mask, parts.outline)).toBeLessThan(0.02)
+  })
+
+  it('keeps a pale bluish-grey tank top out of the skin though it is inside the tolerance of the cream (Plan 19 gate)', async () => {
+    // The real v4 bodies came back with a light bluish-grey tank top, `#cecdd5` — Lab (82.7, 1.8, −3.8), chroma 4.3 — and
+    // a cream cheek of Lab (92, 4.8, 13.7) is ΔE 20 from it, inside SKIN_MASK.tolerance (22): without a chroma floor the
+    // whole top is cut as skin and a skin tint paints the shirt. `#f1d2bb` is the synthetic cream that is that close to
+    // it too (Lab (86.2, 7.3, 15.4): ΔE 20.3 from the top, 19.5 from the `#fbb495` shading below).
+    const CREAM_NEAR = '#f1d2bb'
+    const TANK_PALE = '#cecdd5'
+    const SHADED = '#fbb495' // Lab (79.2, 22.1, 26.1), chroma 34 — shaded skin, a real body's shading
+    const SOFT = '#ffeadb' // Lab (94.0, 4.7, 9.8), chroma 10.9 — a pale highlight that still carries a cream's warmth
+    const NEAR_WHITE = '#fff1e6' // Lab (95.9, 2.9, 7.0), chroma 7.6 — under SKIN_MASK.minChroma: the edge of the rule
+    // The highlights sit on the forehead, above the eye band: a white blob inside the band is read as an eye white, which is
+    // the separate, documented "eye zone can be too big" problem.
+    const extra =
+      `<ellipse cx="470" cy="360" rx="30" ry="20" fill="${SHADED}"/>` +
+      `<ellipse cx="328" cy="205" rx="26" ry="12" fill="${SOFT}"/>` +
+      `<ellipse cx="440" cy="205" rx="26" ry="12" fill="${NEAR_WHITE}"/>`
+    const { pic, parts } = await syntheticBody({ skin: CREAM_NEAR, underwear: TANK_PALE, extra })
+    const mask = skinMask(pic, { eyes: null })
+
+    expect(sum(parts.underwear), 'the fixture draws a tank top and shorts').toBeGreaterThan(20000)
+    expect(coverage(mask, parts.underwear), 'the pale tank top').toBeLessThan(0.01)
+    expect(coverage(mask, parts.skin)).toBeGreaterThan(0.95)
+    expect(coverage(mask, parts.shading)).toBeGreaterThan(0.95)
+    expect(coverage(mask, colourPixels(pic, SHADED, 6)), 'shaded skin').toBeGreaterThan(0.95)
+    expect(coverage(mask, colourPixels(pic, SOFT, 6)), 'a pale highlight of chroma 10.9').toBeGreaterThan(0.95)
+    // Chroma 7.6 is under the floor, so a near-white highlight is not skin — it stays near-white under a tint, as a highlight
+    // should. It is a hole in the mask only where the picture itself has near-white: no skin pixel of a cream carries that little.
+    expect(coverage(mask, colourPixels(pic, NEAR_WHITE, 6)), 'a near-white highlight of chroma 7.6').toBeLessThan(0.05)
+    for (const part of ['eyes', 'mouth'] as const) expect(coverage(mask, parts[part]), part).toBe(0)
+    expect(SKIN_MASK.minChroma).toBe(8)
   })
 
   it('takes a hand-drawn _skinmask override over the computed one', async () => {
