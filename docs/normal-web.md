@@ -59,7 +59,7 @@ apps/normal-web/
       useAsync.ts       load once, expose { data, loading, reload, set } — every account screen's spine
     locales/{vi,en}/normal.json
   public/avatar/             the chibi's PNG layers + avatar-manifest.json (committed; see avatar-2d.md)
-  scripts/avatar-pipeline.mjs  the asset pipeline: placeholder | ingest | check | sheet
+  scripts/avatar-pipeline.mjs  the asset pipeline: placeholder | ingest | masks | colours | check | sheet | tint-sheet | hides
   test/footprint.test.ts   the download budget, measured on `dist/` and on `public/avatar/`
   e2e/                     Playwright against the real server (support.ts is shared, not a test)
 ```
@@ -170,8 +170,10 @@ instead — the kit's own robot art, unaffected by any wardrobe.
 
 **Where the layer files come from** is [`avatar-2d.md`](avatar-2d.md): `scripts/avatar-pipeline.mjs`
 turns a green-screened AI-generated picture into `@1x`/`@2x` PNGs under `public/avatar/`, validates the
-result against ten acceptance criteria, and writes `avatar-manifest.json`. Until the real art lands,
-`avatar:placeholder` writes synthetic layers so every screen and every test here runs against something
+result against thirteen acceptance criteria, and writes `avatar-manifest.json`. The shipped set is real art
+(a body per gender, six faces each, eight two-layer hairstyles, the outfits, hats, glasses, auras, frames and eight
+bots) apart from one stand-in the catalogue no longer offers; `avatar:placeholder` writes synthetic layers for
+anything not yet drawn, so a new item can be built into every screen and every test before its picture exists
 (`docs/known-limitations.md`).
 
 ### The wardrobe
@@ -198,7 +200,7 @@ hairstyles only (`slotCards`/`counts` take the gender), each card a head portrai
 a phone) of the draft with that hairstyle — its gender, hair colour, skin and eyes, and no hat, glasses, aura or
 frame, which would make every card look the same; the hairstyle is required like the outfit, so a press on the worn
 card keeps it on. **Màu da** is a `ColourTab` like the hair and eye colours, its "Tự nhiên" swatch filled with the
-body's cream (`naturalColour`). Plan 19 removed the old base tab (Nhân vật) with the bases.
+body's cream (`naturalColour`). Plan 19 removed the old tab that chose one of six fixed figures, with the figures.
 
 There is no separate inventory screen (review 2026-09-29, No5): what the account owns is this screen's default
 list, and Profile links here and to the achievements only. `#/inventory` — an old bookmark or link — still opens
@@ -233,9 +235,11 @@ and every seat plate pick the new face up without a reload.
 
 ### Adding an item, end to end
 
-1. **The picture.** Generate (or draw) it on F01 per `docs/avatar/02-mo-ta-nhan-vat-khoa-va-yeu-cau-sinh-anh.md`,
-   then `pnpm --filter @bp/normal-web avatar:ingest <file> --as item:<slot>:<id>` — see
-   [`avatar-2d.md`](avatar-2d.md) for the exact command and the ten checks `avatar:check` runs against it.
+1. **The picture.** Generate (or draw) it on the body of its gender per
+   `docs/avatar/02-mo-ta-nhan-vat-khoa-va-yeu-cau-sinh-anh.md` — an outfit on the bald body, a hat or glasses on the
+   body wearing a hairstyle — then `pnpm --filter @bp/normal-web avatar:ingest <file> --as item:<slot>:<id> --base f|m`
+   (plus `--hair <code>` for a hat or glasses) — see [`avatar-2d.md`](avatar-2d.md) for the exact command and the
+   thirteen checks `avatar:check` runs against it.
 2. **The catalogue.** Add the row to `apps/normal-server/data/items.json` with its `slot`, `rarity`,
    `isDefault` and `asset.{layer,file}` naming the file the pipeline just wrote — see
    [`normal-server.md`](normal-server.md). The server validates the catalogue against the committed
@@ -249,9 +253,15 @@ and every seat plate pick the new face up without a reload.
 4. **How it is won.** A grant in `data/achievements.json` or the daily calendar (`head`/`face`/`aura`/
    `frame` only — design §5.2), or nothing — an item nobody owns is an item nobody sees, because the
    wardrobe lists the inventory and not the catalogue.
-5. **The contact sheet.** `pnpm --filter @bp/normal-web avatar:sheet` re-composites every item on both
-   bases and all six expressions into `docs/avatar-2d-sheet.png` — the eyeballed gate before a picture is
-   committed.
+5. **The contact sheets.** `pnpm --filter @bp/normal-web avatar:sheet` re-composites the whole set into
+   `docs/avatar-2d-sheet.png` — the eyeballed gate before a picture is committed — through the renderer's own
+   layer order and hide rules. Since avatar v4 (Plan 19) it is a grid of each gender's hairstyles × three skin tones
+   (porcelain, natural, deep) × two outfits (`casual01` and `dealer01`, in the gender's cut where there is one),
+   then every outfit on both genders, every aura and frame, the six expressions per gender, the eight bots and the
+   portrait at 192, 40 and 32 px. A second picture, `docs/avatar-2d-fit-sheet.png`, tries every hat and every pair
+   of glasses on each of the eight hairstyles, cut to the portrait: the fit check. Look at both beside every
+   other piece before committing. `--hairs` and `--outfits` narrow the grid to what a style gate shows
+   (`docs/avatar-2d.md` §4).
 6. **Commit the new PNGs, `avatar-manifest.json` and the catalogue together.** The layers are a committed
    build artefact; nothing under `public/avatar/` may be generated at build time, because no CI runner has
    the AI tool or the `assets/avatar-src/` originals (gitignored).
@@ -314,7 +324,7 @@ and holds four budgets:
 | entry chunk (first paint) | 130 KB | 108 KB |
 | every JS chunk together | 900 KB | 119 KB |
 | the stylesheet | 60 KB | 13 KB |
-| `public/avatar/*@2x.png`, raw bytes (design §8) | 6 MB total | ~1.2 MB (placeholders) |
+| `public/avatar/*@2x.png`, raw bytes (design §8) | 32 MB total (design: 6 MB; raised 2026-09-24 for real art) | ~17 MB (the v4 art) |
 
 The first three are headroom rather than targets: their job is to catch a *step change* (a chart
 library, a locale bundle that stopped being split), not to fail on the kilobyte a feature costs. The
@@ -367,7 +377,7 @@ What the five tests are for:
 - **The wardrobe, end to end** (`avatar2d.spec.ts`). `Chibi.test.tsx` proves the layering and the hide
   rules under jsdom against a hand-built config; this file is the other half — that the *app* wires a
   saved choice back into the lobby bar, a seat plate and a second wardrobe visit consistently, on the
-  placeholder layers `avatar:placeholder` writes. It opens on Kiểu tóc, switches Nữ to Nam (the bob
+  layers `public/avatar/` ships. It opens on Kiểu tóc, switches Nữ to Nam (the bob
   gives way to its counterpart, "Tóc rối"), picks "Tóc vuốt dựng" and saves, checks that a locked epic
   tile (`aria-disabled`) does not equip on click, sits at a table and asserts the seat's
   `data-chibi-hash` matches the bar's and its `<img>`s name `body_m_L30` and `item_hair_m_spiky01_L60`

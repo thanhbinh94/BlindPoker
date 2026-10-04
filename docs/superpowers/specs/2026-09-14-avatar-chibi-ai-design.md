@@ -17,7 +17,9 @@ Nhân vật chibi đẹp ở mức minh hoạ chuyên nghiệp, sinh bằng côn
 | S5 | Server: config v3 (`base`, `head`, `face`, `outfit`, `aura`, `frame`, `title`, `badge`), catalogue map lại, outfit 5 ô, API | Trong |
 | S6 | Normal web: bàn, sảnh, tủ đồ, profile; gỡ 3D; CSP; Lite: bot + thân nền mặc định | Trong |
 | S7 | Giai đoạn 2: thêm 4 thân nền (3 nữ 3 nam), ô vật cầm tay, biểu tượng túi đồ riêng | Ngoài (ghi roadmap) |
-| — | Chuyển động aura; đổi màu da/tóc trong app; kiểu mắt sưu tầm; tự đăng ảnh | Ngoài |
+| — | Chuyển động aura; đổi màu da/tóc trong app; kiểu mắt sưu tầm; tự đăng ảnh | Ngoài *(màu tóc và màu mắt: xem ghi chú 2026-10-04 dưới bảng)* |
+
+**2026-10-04 amendment (Plan 19, avatar v4): skin and hair colour are no longer "ngoài".** Màu tóc và màu mắt đổi được trong app từ Plan 13 (spec `2026-09-24-avatar-tint-design.md`), và Plan 19 (spec `2026-10-03-avatar-v4-design.md`) làm nốt hai thứ còn lại của dòng này: **màu da** (một ô màu `skinColor`, 6 tông miễn phí cộng "Tự nhiên", tô lên thân và mặt qua mặt nạ da) và **kiểu tóc** (một ô vật phẩm `hairStyle`, 8 kiểu miễn phí, mỗi giới tính 4 kiểu), chọn riêng với giới tính. Chuyển động aura và kiểu mắt sưu tầm vẫn ngoài phạm vi.
 
 ## 3. Quy cách tài sản (kế thừa tài liệu 01, các điểm sửa in đậm)
 - Khung ảnh 384 × 448; khung cơ thể 224 × 336 tại (80, 72); trục dọc x = 192; đường chân đế y = 408; đầu ≈ 149 px, thân 2,25 đầu; mắt ở 60–65 % chiều cao đầu. Bất biến sau món đầu tiên.
@@ -31,6 +33,8 @@ Nhân vật chibi đẹp ở mức minh hoạ chuyên nghiệp, sinh bằng côn
 **2026-09-15: crop moved to 208×208 at (88,40), ring 260, after the first real F01 picture.** Ảnh F01 thật đầu tiên cho thấy ô cắt cũ (160 × 160 tại (112, 48)) cắt cụt khuôn mặt ngay tại mắt; trục dọc x = 192 và tâm dọc y = 144 giữ nguyên.
 
 **2026-09-15 amendment: AI bases are flat; L20/L60 are empty; the face layer is the whole head region; hood-style items that hide hair can only cover what their own picture covers.** Ảnh thân sinh bằng AI là một ảnh phẳng (tóc, mặt, thân dính liền), nên `ingest --as base` ghi L30 là cả hình, mặt `neutral` L50 là vùng đầu (ô cắt ∩ y < 250), L20/L60 là khung trong suốt đánh dấu `empty: true`; `hides_hair_front/back` không thể gỡ phần tóc đã nằm trong L30/L50.
+
+**2026-10-04 amendment (Plan 19, avatar v4): the flat bases are retired; body, face and hair are separate layers again.** Sáu thân phẳng `f01`…`m03` (tóc, mặt và thân dính liền, L20/L60 trống, sợi tóc dựng cắt ra L60) bị bỏ ở bước chuyển hẳn (D1), kèm tên tệp `base_<id>_…`, `ingest --as base`/`expr`, sổ đăng ký `avatar-bases.json` và tab "Nhân vật". Thay vào đó mỗi giới tính có **một thân đầu trọc** (`body_<g>_L30`, dáng đứng thả lỏng, bàn tay năm ngón), **sáu nét mặt không tóc** (`body_<g>_face_<expr>_L50`) và mỗi kiểu tóc là một món hai lớp thật (`item_hair_<code>_L20` sau thân, `_L60` trước mặt), nên hai cờ `hides_hair_front/back` lại có tác dụng thật lên hai lớp tóc; hiện chưa mũ nào đặt cờ (L60 của một kiểu tóc v4 là cả đỉnh đầu và mái, che nó đi để lại đầu trọc dưới mũ). Khung, các số lớp và ô cắt ở trên giữ nguyên. Chi tiết: `docs/avatar-2d.md`.
 
 ## 4. Phong cách và khối khoá nhân vật
 ### 4.1 Phong cách (rút từ ảnh tham khảo, áp cho mọi ảnh sinh)
@@ -53,6 +57,8 @@ Eyes: very large, each nearly half the face width, placed at two-thirds of the h
 Skin: warm light tan with a soft gradient on the cheeks and under the chin.
 Line art: colored outlines — warm brown around skin, dark brown around hair, navy black around clothes — medium clean line weight, no brush texture.
 ```
+**2026-10-04 amendment (Plan 19, avatar v4): the F01/M01 lock above is replaced by the body lock.** Hai khối `CHARACTER LOCK F01` và `M01` mô tả hai nhân vật có tóc, bàn tay dạng găng và má hồng; chúng được thay bằng **một khối khoá thân** (`CHARACTER LOCK BODY_<code>`, mẫu `body` của `assets/avatar-src/registry.json`, chép nguyên văn ở `docs/avatar/02-mo-ta-nhan-vat-khoa-va-yeu-cau-sinh-anh.md` mục 2.3): đầu trọc hoàn toàn, mắt và mặt giữ đúng cỡ và đúng chỗ như F01, da kem, dáng đứng thả lỏng, bàn tay có đúng năm ngón, áo ba lỗ xám trung bình và quần đùi xám than, **không má hồng** (mặt nạ da không tô được mảng hồng sang da đậm — quyết định 13 của Plan 19; dòng "má ửng hồng" ở §4.1 không còn áp cho thân). Tóc được vẽ riêng sau, trên thân trọc. Hai khối F01/M01 giữ lại ở trên như bản ghi của Plan 11.
+
 Khối chung (dán sau khối khoá): POSE AND FRAMING, OUTFIT (thân nền: áo ba lỗ xám nhạt + quần đùi xám đậm, chân trần), BACKGROUND `#00FF00`, RENDERING và câu lệnh phủ định — lấy nguyên từ tài liệu 02 §4, thêm vào RENDERING: `semi-painterly anime illustration, soft gradient shading allowed on skin and hair, hard-edged two-tone cel shading on clothing and hats`.
 
 ### 4.3 Biểu cảm (6 ảnh mỗi thân, chỉ đổi phần EXPRESSION)
@@ -68,6 +74,8 @@ Khối chung (dán sau khối khoá): POSE AND FRAMING, OUTFIT (thân nền: áo
 
 ## 5. Mô hình dữ liệu
 ### 5.1 Config v3
+
+**2026-10-04 amendment (Plan 19, avatar v4): config v4 replaces v3.** `base` (và sổ đăng ký `avatar-bases.json`, `loadBases`) bị thay bằng `gender: 'f' | 'm'` cùng ô vật phẩm `hairStyle` và ô màu `skinColor`; thân là `avatar-bodies.json` (`loadBodies`), một thân mỗi giới tính, và máy chủ chỉ nhận `v: 4`. Cấu hình v1–v3 vẫn đọc được và được chuyển sang v4 lúc đọc (không ghi đè cơ sở dữ liệu): mỗi thân nền cũ thành một giới tính, một kiểu tóc và một tông da. Mô tả bên dưới là v3 như Plan 11 ghi; v4 ở `docs/superpowers/specs/2026-10-03-avatar-v4-design.md` mục 4 và `docs/normal-server.md`.
 
 **2026-09-17 amendment: base is an open id validated against the registry; outfit layers are skin-free so bases may differ in skin tone.** `base` không còn là hợp kiểu đóng `'f01' | 'm01'` mà là `string`, hợp lệ khi có trong **sổ đăng ký** `apps/normal-server/data/avatar-bases.json` (`loadBases` đọc, kiểm tra từng tệp theo manifest, bắt buộc có `DEFAULT_BASE`). Ghi: base lạ → `INVALID_BASE` (400, nguyên dạng lỗi cũ). Đọc: base không còn trong sổ đăng ký → quay về `DEFAULT_BASE`. Thêm một thân nền = 7 ảnh + một dòng trong sổ đăng ký + khoá i18n `bases.<id>`, không sửa kiểu ở server, web hay ui-kit. Đi kèm: lớp trang phục (L40) **chỉ chứa quần áo, không chứa da** (§6 vòng sửa 3), nên các thân nền dùng chung một bộ đồ vẫn giữ đúng màu da của mình.
 

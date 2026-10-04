@@ -2,6 +2,8 @@
 
 Review 2026-09-29, mục No9, thuộc Đợt 2 (Plan 18). Người dùng duyệt ngày 01/10: "Đợt 2 làm theo đề xuất của bạn luôn".
 
+**Ghi chú 2026-10-04 (Plan 19, nhân vật v4):** tài liệu này ghi lại quyết định của Plan 18 và giữ nguyên như một bản ghi lịch sử. Tab "Nhân vật" (`wardrobe.tabs.base`) và các khóa `bases.*` mà nó nhắc tới đã bị bỏ cùng các thân phẳng; nhóm "Ngoại hình" có nút Nữ | Nam và các tab Kiểu tóc, Màu tóc, Màu da, Màu mắt thay vào đó (`docs/normal-web.md`). `avatar.errors.INVALID_BASE` còn lại, giữ chữ "Nhân vật không hợp lệ", nhưng nay chỉ báo lỗi khi một cấu hình v4 còn mang trường `base`.
+
 Bảng dưới là bản đề xuất. Plan 18, Task 1 áp dụng nguyên văn, trừ các điểm sau:
 
 - **Không áp dụng `inventory.*`:** màn Kho đồ bị gộp vào Phòng thay đồ (No5, Task 3), nên các khóa `inventory.lead`, `inventory.summary` và `inventory.source.*` bị xóa cùng màn.

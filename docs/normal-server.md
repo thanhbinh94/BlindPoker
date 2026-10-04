@@ -45,8 +45,7 @@ src/
 
   auth/              password.ts (argon2id) · session-service.ts · cookie.ts · auth-service.ts
   economy/           daily-rules.ts (pure) · economy-service.ts (daily claim, relief)
-  inventory/         slots.ts (the slot/gender/base vocabulary) · manifest.ts (loads avatar-manifest.json)
-                     bases.ts (the v3 fixed figures, no longer loaded by the app; goes in Plan 19's D1)
+  inventory/         slots.ts (the slot and gender vocabulary) · manifest.ts (loads avatar-manifest.json)
                      bodies.ts (the v4 bodies, one per gender, held against the manifest) · items.ts (catalogue)
                      aliases.ts (old wardrobe ids → current ones, or null when dropped)
                      inventory-service.ts (ownership, alias-aware) · outfits-service.ts (five saved outfits, read as v4)
@@ -57,7 +56,7 @@ src/
   history/           history-service.ts (writes a settled hand, reads a player's last N)
   http/              routes.ts + routes-auth/-me/-rewards/-catalog/-outfits.ts · auth-guard.ts · types.ts
 
-data/                items.json, item-aliases.json, avatar-bases.json, avatar-bodies.json, achievements.json — content, not code
+data/                items.json, item-aliases.json, avatar-bodies.json, achievements.json — content, not code
                       avatar-manifest.json — Task 1's asset pipeline output, mirrored from normal-web
 drizzle/             committed migration SQL (0000 generated; 0001_avatar_v2, 0002_outfits hand-written, data only)
 test/build.test.ts   the build itself, as a test
@@ -186,8 +185,9 @@ first, not a `DELETE`.
 `data/items.json` is the source of truth; the `items` table is a projection of it, upserted on every
 boot so that foreign keys have something to point at. Nothing writes items at run time.
 
-Since Plan 11 a figure is a fixed base (`f01`/`m01`) with PNG layers stacked on it, so an item names
-a **slot** and one **asset**, shared by every base — a hat drawn once is worn by both:
+Since Plan 19 a figure is one of two bodies (`f`, `m`) with PNG layers stacked on it, so an item names
+a **slot** and one **asset**, shared by both bodies — a hat drawn once is worn by both (a hairstyle is the one
+drawn-per-gender item, below):
 
 1. Add an object to `data/items.json`:
 
@@ -222,8 +222,8 @@ a **slot** and one **asset**, shared by every base — a hat drawn once is worn 
 
    `file` is the front half (L60, over the face), `back` the half behind the body (held to manifest layer
    20). `gender` is the body it is drawn for; `counterpart` is the hairstyle of the other gender a gender
-   swap changes it to; `naturalColour` is the colour it is drawn in (the "Tự nhiên" swatch — for the six
-   that replace the old bases, the base's own hair, measured). `asset.variants` and `asset.tint` are refused
+   swap changes it to; `naturalColour` is the colour it is drawn in (the "Tự nhiên" swatch — measured from the
+   art with `avatar-pipeline.mjs colours`; for the six that took over from the flat bases' hair it is that hair's colour, so an old player keeps their look). `asset.variants` and `asset.tint` are refused
    on a hairstyle. `asset.hairTint` is **derived** at load, like `tintMeanL`: `files` = `[back, file]`
    filtered to the layers with a non-empty hair mask, `meanL` = the front layer's mask (else the back's);
    absent when neither has one. `/api/catalog/items` serves it with the rest of the asset.
@@ -236,12 +236,11 @@ a **slot** and one **asset**, shared by every base — a hat drawn once is worn 
               "variants": { "m": "item_outfit_dealer01_m_L40" }, "fitsAvatarCrop": true }
    ```
 
-   Keys are `f` and `m` (`GENDERS`) — the `wear` every base declares in `data/avatar-bases.json`, and the
-   gender of a v4 body — and each file is held to the manifest exactly as `file` is. A base whose wear
-   is not listed wears `file`. The
+   Keys are `f` and `m` (`GENDERS`) — the gender of a v4 body, which is the `wear` it dresses in — and each
+   file is held to the manifest exactly as `file` is. A body whose gender is not listed wears `file`. The
    catalogue row, ownership, achievements, the daily calendar and the outfits table are all unchanged
    by this: only the layer `/api/catalog/items` hands the client differs, and the client picks between
-   them with the `wear` of the base it is drawing (`docs/avatar-2d.md` §3.1).
+   them with the gender of the body it is drawing (`layerFileFor`; `docs/avatar-2d.md` §3.1).
 
 2. Run the asset pipeline (`apps/normal-web/scripts/avatar-pipeline.mjs ingest`, then `check`) so the
    file exists at both densities and is listed in the manifest, and add the `nameKey` string to the
@@ -281,7 +280,7 @@ natural eye colour:
 ```json
 { "f": { "body": "body_f_L30",
          "faces": { "neutral": "body_f_face_neutral_L50", "happy": "…", "sad": "…", "surprised": "…", "closed": "…", "sleep": "…" },
-         "naturalEyeColour": "#2e6a9b" },
+         "naturalEyeColour": "#2a6492" },
   "m": { … } }
 ```
 
@@ -294,8 +293,9 @@ mask, at `face_neutral`'s. The file ships with the server build (`SIDECARS` in `
 
 `GET /api/catalog/avatar` answers `{ frame, crop, bodies, manifestVersion }`: `bodies` is both
 `BodyDef`s, f then m, each `{ gender, body, faces, naturalEyeColour, tint? }`. There is no `bases` any more: the
-wire speaks v4 since Plan 19's A5, and the app no longer loads `data/avatar-bases.json` (the file and `bases.ts`
-stay on disk, unused, until D1). The free hairstyles and skin colours appear in `/api/me/inventory` with
+wire speaks v4 since Plan 19's A5, and the old base registry (its JSON file, `inventory/bases.ts`, `loadBases` and
+the `BaseId` vocabulary) was deleted by the switch-over (D1): an old account's base is read once, in
+`avatar-migrate.ts` (below). The free hairstyles and skin colours appear in `/api/me/inventory` with
 `source: "free"`.
 
 ### Old wardrobe ids: `item-aliases.json`
@@ -379,8 +379,11 @@ the new body's `naturalEyeColour`, and the config has no `eyeColor` of its own, 
 pinned pick, else the nearest free eye colour (ties to the earlier catalogue row). A chosen eye colour always
 wins. f01 and m01 never get one (`keepEyes`): the bodies are drawn from them, so their eyes are the bodies'
 own. f03's iris measures nearer `eyecolor_amber01` than `eyecolor_green01` (ΔE 39.7 against 40.5) but reads
-as green, so green is pinned (ruling 6). The eyeColor column above is what the shipped bodies' provisional
-eye colours give (f `#2e6a9b`, m `#cc924c`); when C1 measures the real art, the rule, not the table, decides.
+as green, so green is pinned (ruling 6). The shipped bodies' natural eyes are the ones measured on the real art
+(`avatar-pipeline.mjs colours`: f `#2a6492`, m `#945e26`, in `avatar-bodies.json`); the table above gives the same eye
+colours with them as it did with the provisional values the unit tests still pin (f `#2e6a9b`, m `#cc924c`) — m03's
+iris is the nearest call, about 12.7 from the real m body, just over `EYE_KEEP_DELTA_E` — and the rule, not the
+table, decides.
 
 **The wire is v4** (Plan 19, A5, with the client in the same commit). `PUT /api/me/avatar` and
 `PUT /api/me/outfits/:slot` validate with `validateAvatarConfig`, so a v3 body is `MISSING_LAYER` and any `base`
