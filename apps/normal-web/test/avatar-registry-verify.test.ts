@@ -20,7 +20,7 @@ import { collect } from '../scripts/avatar-registry/collect.mjs'
 import { addVariant, baseGaps, ingestAssets } from '../scripts/avatar-registry/ingest.mjs'
 import { parseSpec } from '../scripts/avatar-registry/registry.mjs'
 import {
-  HAIR_BODY_MARGIN, allowedArea, bodyBox, compareBoxes, comparePictures, figureBox, kindOfSpec, layerNames, ownerOf, scorePicture, verifyAssets,
+  HAIR_BODY_MARGIN, REGISTRATION, allowedArea, bodyBox, compareBoxes, comparePictures, figureBox, kindOfSpec, layerNames, ownerOf, scorePicture, verifyAssets,
 } from '../scripts/avatar-registry/verify.mjs'
 
 // Every case here renders synthetic pictures and runs the real pipeline on them: 3–6 s each on this machine, and
@@ -84,6 +84,26 @@ const SIDE_TAIL = `<rect x="860" y="400" width="140" height="500" rx="40" fill="
 const Z_GLYPH = '<path d="M875 334 H907 L875 366 H907" fill="none" stroke="#202020" stroke-width="8"/>'
 /** …and a detached piece that is not a speck: a 100 × 100 px square (2.6 % of the figure), which stays in the box. */
 const DETACHED_SQUARE = '<rect x="880" y="300" width="100" height="100" fill="#202020"/>'
+/**
+ * The bald body dressed as the real one is (Plan 19 C2): skin hands, dark shorts over the hips and thighs, skin shins and
+ * shoes. The pipeline registers a hairstyle by *colour* over the rows below the head, and on `bald()` those rows are one
+ * flat grey, where every small move matches as well as none — the real body's hands, shorts and shins are what it lines up.
+ */
+const SHORTS = '#3a3a5a'
+const dressed = (): string => `${bald()}
+  <rect x="162" y="800" width="60" height="70" rx="20" fill="${SKIN}"/>
+  <rect x="802" y="800" width="60" height="70" rx="20" fill="${SKIN}"/>
+  <rect x="382" y="960" width="260" height="70" fill="${SHORTS}"/>
+  <rect x="410" y="1010" width="80" height="90" fill="${SHORTS}"/>
+  <rect x="534" y="1010" width="80" height="90" fill="${SHORTS}"/>
+  <rect x="410" y="1100" width="80" height="200" fill="${SKIN}"/>
+  <rect x="534" y="1100" width="80" height="200" fill="${SKIN}"/>
+  <rect x="410" y="1300" width="80" height="40" rx="10" fill="#202020"/>
+  <rect x="534" y="1300" width="80" height="40" rx="10" fill="#202020"/>`
+/** An outfit's shirt over the torso, as `files.shirt` draws it. */
+const SHIRT = '<rect x="372" y="750" width="280" height="290" rx="30" fill="#2244cc"/>'
+/** The whole picture zoomed by `factor` about the canvas centre — what the image model does to make room for hair. */
+const zoomedBy = (factor: number, inner: string): string => `<g transform="translate(512 768) scale(${factor}) translate(-512 -768)">${inner}</g>`
 
 const svg = (body: string, width = W, height = H, background = ''): string =>
   `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${background}${body}</svg>`
@@ -104,6 +124,7 @@ type Fixture =
   | 'bald' | 'baldHappy' | 'baldTorso' | 'bodyRaised' | 'hairOk' | 'hairTorso' | 'hairWide'
   | 'hairSideTail' | 'hairRaised' | 'hairWideSmall'
   | 'refZ' | 'baldZ' | 'baldSquare' | 'baldSmall' | 'baldSmallZ'
+  | 'dressed' | 'hairZoomed' | 'hairZoomedFar' | 'hairBodyMoved' | 'outfitZoomed'
 /** Every synthetic picture, by name, as a path under `srcDir`. */
 const files = {} as Record<Fixture, string>
 
@@ -145,7 +166,8 @@ beforeAll(async () => {
   files.hairTorso = await draw('hair-torso.png', svg(`${bald()}${CAP}${OVER_TORSO}`))
   files.hairWide = await draw('hair-wide.png', svg(`<g transform="translate(31 -44)">${bald()}${CAP}${LOCK}</g>`, 1086, 1448), 1086, 1448)
   files.hairSideTail = await draw('hair-side-tail.png', svg(`${SIDE_TAIL}${bald()}${CAP}`))
-  files.hairRaised = await draw('hair-raised.png', svg(`<g transform="translate(0 -20)">${bald()}${CAP}${LOCK}</g>`))
+  // On the dressed body, so the registration can see the move (Plan 19 C2).
+  files.hairRaised = await draw('hair-raised.png', svg(`<g transform="translate(0 -20)">${dressed()}${CAP}${LOCK}</g>`))
   // The model's other canvas, but the figure redrawn at 0.9 of its size: placing it at scale 1 would miss the body.
   files.hairWideSmall = await draw('hair-wide-small.png', svg(`<g transform="translate(80 60) scale(0.9)">${bald()}${CAP}${LOCK}</g>`, 1086, 1448), 1086, 1448)
   // Plan 19 C1: the same faces with a detached "z" (or a square too big to be a speck), and a figure really drawn at 0.9
@@ -156,6 +178,13 @@ beforeAll(async () => {
   files.baldSquare = await draw('bald-square.png', svg(`${bald()}${DETACHED_SQUARE}`))
   files.baldSmall = await draw('bald-small.png', svg(shrunk(bald())))
   files.baldSmallZ = await draw('bald-small-z.png', svg(`${shrunk(bald())}${Z_GLYPH}`))
+  // Plan 19 C2: the dressed body; a hairstyle picture zoomed out to 0.96 (the batch C2 case) and to 0.85 about the canvas
+  // centre; one whose body moved 40 px left while its hair stayed where the body's head was; an outfit zoomed to 0.96.
+  files.dressed = await draw('dressed.png', svg(dressed()))
+  files.hairZoomed = await draw('hair-zoomed.png', svg(zoomedBy(0.96, `${dressed()}${CAP}${LOCK}`)))
+  files.hairZoomedFar = await draw('hair-zoomed-far.png', svg(zoomedBy(0.85, `${dressed()}${CAP}${LOCK}`)))
+  files.hairBodyMoved = await draw('hair-body-moved.png', svg(`<g transform="translate(-40 0)">${dressed()}</g>${CAP}${LOCK}`))
+  files.outfitZoomed = await draw('outfit-zoomed.png', svg(zoomedBy(0.96, `${dressed()}${SHIRT}`)))
 }, 120_000)
 
 afterAll(() => rmSync(temp, { recursive: true, force: true }))
@@ -432,15 +461,22 @@ describe('verify: the v4 kinds (Plan 19)', () => {
     const tail = await score(files.hairSideTail, { kind: 'hair', referenceFile: files.bald })
     expect(tail.verdict, tail.reason).toBe('ok')
     expect(tail.measure.drift).toEqual({ left: null, top: null, right: null, bottom: 0, centre: 0 })
+    // …and the registration (Plan 19 C2), which measures the body and not the hair, leaves it where it is.
+    expect(tail.measure.registered).toMatchObject({ scale: 1, dx: 0, dy: 0 })
     // The whole box's centre line moved by about 69 px — the drift a whole-box rule would see.
     const box = alphaBBox(await renderSvg(svg(`${SIDE_TAIL}${bald()}${CAP}`), W, H))!
     expect(Math.round(box.x + box.w / 2 - 512)).toBeGreaterThan(60)
   })
 
-  it('fails a hairstyle whose feet sit 20 px higher than its body on drift', async () => {
-    const raised = await score(files.hairRaised, { kind: 'hair', referenceFile: files.bald })
-    expect(raised).toMatchObject({ verdict: 'ng', reason: 'drift' })
+  it('passes a hairstyle whose whole figure sits 20 px higher: the ingest registers it back (A2b failed it on drift)', async () => {
+    const raised = await score(files.hairRaised, { kind: 'hair', referenceFile: files.dressed })
+    expect(raised.verdict, raised.reason).toBe('ok')
+    // The legs as drawn still read 20 px up; the registration moves the picture 20 px down, at scale 1.
     expect(raised.measure.drift).toMatchObject({ bottom: -20, centre: 0 })
+    expect(raised.measure.registered).toMatchObject({ scale: 1, dx: 0 })
+    expect(raised.measure.registered.dy).toBeGreaterThanOrEqual(18)
+    expect(raised.measure.registered.dy).toBeLessThanOrEqual(22)
+    expect(raised.measure.scope).toBeLessThan(0.01)
   })
 
   it('calls a hairstyle on another canvas redrawn when its body came back at another size', async () => {
@@ -454,6 +490,49 @@ describe('verify: the v4 kinds (Plan 19)', () => {
     expect(wide.verdict, wide.reason).toBe('ok')
     expect(wide.notes.join('\n')).toMatch(/another canvas/)
     expect(wide.measure.scope).toBeLessThan(0.01)
+  })
+
+  it('passes a hairstyle picture zoomed out to 0.96 about the canvas centre: drift is judged after the registration', async () => {
+    const zoomed = await score(files.hairZoomed, { kind: 'hair', referenceFile: files.dressed })
+    expect(zoomed.verdict, `${zoomed.reason} ${JSON.stringify(zoomed.measure)}`).toBe('ok')
+    // As drawn, the feet sit 23 px up — A2b's rule failed it there.
+    expect(zoomed.measure.drift.bottom).toBeLessThan(-12)
+    // Registered back at about 1 / 0.96, the legs line up again, and so does everything scope looks at.
+    expect(zoomed.measure.registered.scale).toBeGreaterThanOrEqual(1.03)
+    expect(zoomed.measure.registered.scale).toBeLessThanOrEqual(1.05)
+    expect(zoomed.measure.registered.iou).toBeGreaterThanOrEqual(REGISTRATION.iou.hair)
+    expect(zoomed.measure.scope).toBeLessThan(0.01)
+    expect(zoomed.notes.join('\n')).toMatch(/registered onto the body/)
+  })
+
+  it('still fails a hairstyle picture zoomed out to 0.85 on drift: no registration within 8 % fits it', async () => {
+    const far = await score(files.hairZoomedFar, { kind: 'hair', referenceFile: files.dressed })
+    expect(far).toMatchObject({ verdict: 'ng', reason: 'drift' })
+    expect(Math.abs(far.measure.registered.scale - 1)).toBeGreaterThan(REGISTRATION.scale)
+  })
+
+  it('catches a hairstyle whose body moved 40 px while its hair stayed put, on the IoU', async () => {
+    const moved = await score(files.hairBodyMoved, { kind: 'hair', referenceFile: files.dressed })
+    expect(moved).toMatchObject({ verdict: 'ng', reason: 'drift' })
+    // Not the scale: the lock the body left behind lies over the torso, and the colour registration stops short of the
+    // body's 40 px (about 31) where the lock shows least — so the legs no longer line up. A registration that followed the
+    // body all the way would put the lock on the torso instead (scope 2.7 %), which `scope` fails.
+    expect(Math.abs(moved.measure.registered.scale - 1)).toBeLessThanOrEqual(REGISTRATION.scale)
+    expect(moved.measure.registered.dx).toBeGreaterThan(12)
+    expect(moved.measure.registered.iou).toBeLessThan(REGISTRATION.iou.hair)
+  })
+
+  it('registers an outfit cut on a v4 body before judging drift, and holds an old base\'s outfit to its edges as before', async () => {
+    const outfit = (base: string): Record<string, unknown> => ({ kind: 'item', slot: 'outfit', referenceFile: files.dressed, ingest: { as: 'item:outfit:x01', base, variant: null, flags: [] } })
+    const onBody = await score(files.outfitZoomed, outfit('f'))
+    expect(onBody.verdict, `${onBody.reason} ${JSON.stringify(onBody.measure)}`).toBe('ok')
+    expect(onBody.measure.registered.scale).toBeGreaterThanOrEqual(1.03)
+    expect(onBody.measure.registered.scale).toBeLessThanOrEqual(1.05)
+    expect(onBody.measure.registered.iou).toBeGreaterThanOrEqual(REGISTRATION.iou.outfit)
+    expect(onBody.measure.hairDelta).toBeLessThanOrEqual(12)
+    const onBase = await score(files.outfitZoomed, outfit('f01'))
+    expect(onBase).toMatchObject({ verdict: 'ng', reason: 'drift' })
+    expect(onBase.measure.registered).toBeUndefined()
   })
 
   it("allows a hairstyle above the face line and outside the body grown by 4 px, and nowhere else", async () => {
