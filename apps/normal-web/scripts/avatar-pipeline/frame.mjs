@@ -127,8 +127,15 @@ export const SKIN_TOLERANCE = 24
  * cut on F01. Recorded for information only.
  */
 export const HEAD_REFERENCE = { eyeMidX: 190.9, eyeMidY: 194.0, eyeSpan: 60.6, chinY: 243 }
-/** How far each of `HEAD_REFERENCE`'s four may drift: 2 % of the 208 crop, the spec's "không quá 2%". */
+/** How far each of `HEAD_REFERENCE`'s eye numbers (midpoint x and y, span) may drift: 2 % of the 208 crop, the spec's "không quá 2%". */
 export const HEAD_TOLERANCE = 4.16
+/**
+ * How far the chin may drift from `HEAD_REFERENCE.chinY` — its own, wider limit (controller ruling, Plan 19 gate): a
+ * bald chibi face is drawn shorter than F01's framed one (real v4 bodies chin at 233–236 against 243, eyes within
+ * ~2 units), and the chin anchors nothing once the outfits are redrawn on the new bodies; glasses ride the eye line
+ * and hats the head top, so the eyes stay held to `HEAD_TOLERANCE`.
+ */
+export const CHIN_TOLERANCE = 12
 /**
  * C11 on a body L30 (Plan 19, spec §5.5): the share of the layer's own ink its skin mask may cover. Provisional —
  * the stand-ins measure 0.57 — until the style gate measures the two real bodies and sets it to theirs ± 0.10 (B5).

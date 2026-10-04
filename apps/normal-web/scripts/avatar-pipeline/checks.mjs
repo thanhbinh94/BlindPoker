@@ -20,8 +20,9 @@
  *       (spec §5.5) skin on bodies and body faces too (a face's skin ∪ eye zone held to its neutral face's, and on a
  *       real pair its skin alone and its eye zone as well), skin never on the eyes, a hair layer's hair its ink, and
  *       a real v4 layer never without its masks
- *   C12 a real v4 body's head sits where F01's does: the eyes and the chin within 2 % of the crop (Plan 19
- *       spec §5.1, rulings 1–2), so every hat, glasses, aura and frame cut on F01 still fits it
+ *   C12 a real v4 body's head sits where F01's does: the eyes within 2 % of the crop and the chin within 12 units
+ *       (Plan 19 spec §5.1, rulings 1–2; the chin's own limit is the gate ruling — a bald face is drawn shorter), so
+ *       every hat, glasses, aura and frame cut on F01 still fits it
  *   C13 a hairstyle's two layers are the split it was cut into (Plan 19 spec §5.4): checked on the L60 with its
  *       L20 — no pixel in both, together at least 99 % of the hair region its `split` records, and the front off
  *       the gender's neutral eyes
@@ -51,6 +52,7 @@ import {
   resizePicture,
 } from './png.mjs'
 import {
+  CHIN_TOLERANCE,
   CROP,
   DENSITIES,
   FACE_LIMIT_Y,
@@ -886,13 +888,19 @@ export function headMetrics(body1x, eyeMask2x) {
   return { eyeMidX: (left.x + right.x) / 2, eyeMidY: (left.y + right.y) / 2, eyeSpan: right.x - left.x, chinY: measure(body1x).chin }
 }
 
-/** C12's four numbers, as its detail names them. */
-const HEAD_PARTS = [['eyeMidX', 'eye midpoint'], ['eyeMidY', 'eye line'], ['eyeSpan', 'eye span'], ['chinY', 'chin']]
+/** C12's four numbers, as its detail names them, each with the limit it is held to. */
+const HEAD_PARTS = [
+  ['eyeMidX', 'eye midpoint', HEAD_TOLERANCE],
+  ['eyeMidY', 'eye line', HEAD_TOLERANCE],
+  ['eyeSpan', 'eye span', HEAD_TOLERANCE],
+  ['chinY', 'chin', CHIN_TOLERANCE],
+]
 
 /**
  * C12 "đầu không xê dịch" (Plan 19, spec §5.1): a **real** `body_<g>_L30` keeps F01's head — each of `headMetrics`'
- * eye midpoint x and y, eye span and chin within `HEAD_TOLERANCE` (2 % of the crop) of `HEAD_REFERENCE`, for both
- * genders (ruling 2). Every hat, pair of glasses, aura and frame was cut on F01 and the portrait crop is fixed, so a
+ * eye midpoint x and y and eye span within `HEAD_TOLERANCE` (2 % of the crop) of `HEAD_REFERENCE`, and the chin within
+ * `CHIN_TOLERANCE` (12 units — a bald face is drawn shorter than F01's framed one, gate ruling), for both genders
+ * (ruling 2). Every hat, pair of glasses, aura and frame was cut on F01 and the portrait crop is fixed, so a
  * head that drifts is a head they all miss. A stand-in (drawn where no head is measured), a real body whose neutral
  * face is still a stand-in (its eyes are the stand-in's, not the art's), a body whose neutral face has no eye mask,
  * and every layer that is not a v4 body report `n/a`.
@@ -916,8 +924,9 @@ function headStaysPut({ parsed, entry, pictures, neutralEyeMask, neutralFaceStan
 }
 
 /**
- * C12's verdict on a head's `headMetrics`: `ok` when each of the four is within `HEAD_TOLERANCE` of `HEAD_REFERENCE`,
- * and the detail C12 prints either way. Shared with `ingest --as body:<g> --dry-run` (A2a), which prints it for a cut
+ * C12's verdict on a head's `headMetrics`: `ok` when each eye number is within `HEAD_TOLERANCE` of `HEAD_REFERENCE`
+ * and the chin within `CHIN_TOLERANCE`, and the detail C12 prints either way — a failure names each part that is off
+ * with its limit. Shared with `ingest --as body:<g> --dry-run` (A2a), which prints it for a cut
  * into a temporary copy before anything is written.
  *
  * @param {{ eyeMidX: number, eyeMidY: number, eyeSpan: number, chinY: number }} metrics
@@ -926,13 +935,13 @@ function headStaysPut({ parsed, entry, pictures, neutralEyeMask, neutralFaceStan
 export function judgeHead(metrics) {
   const where = `eyes (${metrics.eyeMidX.toFixed(1)}, ${metrics.eyeMidY.toFixed(1)}) ${metrics.eyeSpan.toFixed(1)} apart, chin ${metrics.chinY}`
   const off = []
-  for (const [key, label] of HEAD_PARTS) {
+  for (const [key, label, limit] of HEAD_PARTS) {
     const distance = Math.abs(metrics[key] - HEAD_REFERENCE[key])
-    if (distance > HEAD_TOLERANCE) off.push(`${label} ${distance.toFixed(1)} from F01's`)
+    if (distance > limit) off.push(`${label} ${distance.toFixed(1)} from F01's (want within ${limit})`)
   }
   return off.length
-    ? { ok: false, detail: `${off.join(', ')}, want each within ${HEAD_TOLERANCE} — ${where}` }
-    : { ok: true, detail: `${where}, within ${HEAD_TOLERANCE} of F01's` }
+    ? { ok: false, detail: `${off.join(', ')} — ${where}` }
+    : { ok: true, detail: `${where}, eyes within ${HEAD_TOLERANCE} and chin within ${CHIN_TOLERANCE} of F01's` }
 }
 
 // ───────────────────────────────────────────────────── C13: the hair splits cleanly ──

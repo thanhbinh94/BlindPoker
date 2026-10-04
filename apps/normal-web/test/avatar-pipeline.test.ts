@@ -23,7 +23,7 @@ import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { headMetrics, runChecks } from '../scripts/avatar-pipeline/checks.mjs'
 import { OUTFIT_TOP_Y, cutItem, diffAgainstBase, ingest, measure, registerBySilhouette, registerToBase, shiftPicture } from '../scripts/avatar-pipeline/extract.mjs'
-import { AURA_CY, AURA_SIZE, AXIS_X, BASELINE_Y, BODY, CROP, DENSITIES, FACE_LIMIT_Y, FRAME, HEAD_REFERENCE, HEAD_TOLERANCE, LAYERS, RING, SKIN_AREA, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
+import { AURA_CY, AURA_SIZE, AXIS_X, BASELINE_Y, BODY, CHIN_TOLERANCE, CROP, DENSITIES, FACE_LIMIT_Y, FRAME, HEAD_REFERENCE, HEAD_TOLERANCE, LAYERS, RING, SKIN_AREA, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
 import { BASES, BASE_WEAR, EXPRESSIONS, FIT_SHEET_FILE, HAIR_CODES, ICON, ITEMS_FILE, MANIFEST_NAME, NAME_PATTERN, SHEET_FILE, WEARS, bodyFaceFile, bodyFile, buildPlaceholders, hairFile, hairItemId, iconName, itemFile, parseName, serialiseManifest, stageOneFiles, variantFile, wearOf, writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
 import { MASK_FILE_KIND, describeColours } from '../scripts/avatar-pipeline/masks.mjs'
 import { alphaBBox, blankPicture, cropPicture, overPicture, readPicture, removeChroma, renderSvg, writeDensities, writePicture } from '../scripts/avatar-pipeline/png.mjs'
@@ -1661,32 +1661,59 @@ describe('C12 and the v4 rules of C11 (Plan 19 A1b, spec §5.1, §5.5)', () => {
     const metrics = headMetrics(await readPicture(join(OUT_DIR, 'base_f01_L30@1x.png')), await readPicture(join(OUT_DIR, 'base_f01_face_neutral_L50_eyemask@2x.png')))
     for (const key of ['eyeMidX', 'eyeMidY', 'eyeSpan', 'chinY'] as const) expect(Math.abs(metrics[key] - HEAD_REFERENCE[key]), key).toBeLessThanOrEqual(0.1)
     expect(HEAD_TOLERANCE).toBeCloseTo(0.02 * CROP.size, 10)
+    // The chin has its own, wider limit (gate ruling): a bald face is drawn shorter than F01's framed one.
+    expect(CHIN_TOLERANCE).toBe(12)
   })
 
-  it('C12 passes a real body whose eyes and chin sit on F01, and fails one moved by 6 units', async () => {
-    // F01's committed body and neutral eye mask, written as a real body f and its neutral face, moved down by `dy`.
-    const build = async (dir: string, dy: number): Promise<Manifest> => {
-      for (const density of DENSITIES) {
-        const body = await readPicture(join(OUT_DIR, `base_f01_L30@${density}x.png`))
-        await writePicture(shiftPicture(body, 0, dy * density), join(dir, `body_f_L30@${density}x.png`))
-        const eyes = await readPicture(join(OUT_DIR, `base_f01_face_neutral_L50_eyemask@${density}x.png`))
-        await writePicture(shiftPicture(eyes, 0, dy * density), join(dir, `body_f_face_neutral_L50_eyemask@${density}x.png`))
-      }
-      const bytes2x = statSync(join(dir, 'body_f_L30@2x.png')).size
-      return manifestFor(dir, {
-        body_f_L30: { layer: 30, w: FRAME.w, h: FRAME.h, bytes2x, real: true },
-        body_f_face_neutral_L50: { layer: 50, w: FRAME.w, h: FRAME.h, bytes2x: 0, real: true, masks: { eyes: { bytes2x: 0, meanL: 0.5 } } },
-      })
+  /**
+   * F01's committed body and neutral eye mask, written into `dir` as a real body f and its neutral face: the body moved
+   * down by `bodyDy` units (the chin moves with it), the eye mask by `eyesDy` (the eyes), `bodyDy` by default.
+   */
+  async function buildHead(dir: string, bodyDy: number, eyesDy = bodyDy): Promise<Manifest> {
+    for (const density of DENSITIES) {
+      const body = await readPicture(join(OUT_DIR, `base_f01_L30@${density}x.png`))
+      await writePicture(shiftPicture(body, 0, bodyDy * density), join(dir, `body_f_L30@${density}x.png`))
+      const eyes = await readPicture(join(OUT_DIR, `base_f01_face_neutral_L50_eyemask@${density}x.png`))
+      await writePicture(shiftPicture(eyes, 0, eyesDy * density), join(dir, `body_f_face_neutral_L50_eyemask@${density}x.png`))
     }
+    const bytes2x = statSync(join(dir, 'body_f_L30@2x.png')).size
+    return manifestFor(dir, {
+      body_f_L30: { layer: 30, w: FRAME.w, h: FRAME.h, bytes2x, real: true },
+      body_f_face_neutral_L50: { layer: 50, w: FRAME.w, h: FRAME.h, bytes2x: 0, real: true, masks: { eyes: { bytes2x: 0, meanL: 0.5 } } },
+    })
+  }
+
+  it('C12 passes a real body whose eyes and chin sit on F01, and fails one moved by 6 units on its eye line alone', async () => {
     const still = caseDir('c12-still')
-    const c12 = (await checkOne(still, 'body_f_L30', await build(still, 0))).get('C12')!
+    const c12 = (await checkOne(still, 'body_f_L30', await buildHead(still, 0))).get('C12')!
     expect(c12.ok, c12.detail).toBe(true)
+    expect(c12.detail).toMatch(/^eyes \(.*\) [\d.]+ apart, chin \d+, eyes within 4\.16 and chin within 12 of F01's$/)
     const moved = caseDir('c12-moved')
-    const off = (await checkOne(moved, 'body_f_L30', await build(moved, 6))).get('C12')!
+    const off = (await checkOne(moved, 'body_f_L30', await buildHead(moved, 6))).get('C12')!
     expect(off.ok).toBe(false)
-    expect(off.detail).toContain("eye line 6.0 from F01's")
-    expect(off.detail).toContain("chin 6.0 from F01's")
+    expect(off.detail).toContain("eye line 6.0 from F01's (want within 4.16) — eyes (")
+    // The chin moved 6 too, inside its own 12: it is not named.
+    expect(off.detail).not.toMatch(/chin \d+\.\d from F01's/)
   }, 60_000)
+
+  it('C12 holds the chin to 12 units and the eyes to 4.16, each named with its own limit', async () => {
+    // A bald face is drawn shorter than F01's: the body's chin 10 units up with the eyes exact still passes ...
+    const near = caseDir('c12-chin-10')
+    const ten = (await checkOne(near, 'body_f_L30', await buildHead(near, -10, 0))).get('C12')!
+    expect(ten.ok, ten.detail).toBe(true)
+    expect(ten.detail).toContain(`chin ${HEAD_REFERENCE.chinY - 10},`)
+    // ... 13 units fails, on the chin alone, naming the 12 ...
+    const far = caseDir('c12-chin-13')
+    const thirteen = (await checkOne(far, 'body_f_L30', await buildHead(far, -13, 0))).get('C12')!
+    expect(thirteen.ok).toBe(false)
+    expect(thirteen.detail.startsWith("chin 13.0 from F01's (want within 12) — eyes (")).toBe(true)
+    // ... and the eye line 6 units off still fails on the 4.16, whatever the chin does.
+    const low = caseDir('c12-eyes-6')
+    const six = (await checkOne(low, 'body_f_L30', await buildHead(low, 0, 6))).get('C12')!
+    expect(six.ok).toBe(false)
+    expect(six.detail).toContain("eye line 6.0 from F01's (want within 4.16) — eyes (")
+    expect(six.detail).not.toMatch(/chin \d+\.\d from F01's/)
+  }, 90_000)
 
   it('C12 says n/a for a stand-in', async () => {
     const dir = caseDir('c12-stand-in')
@@ -3001,7 +3028,7 @@ describe('v4 ingest (Plan 19 A2a)', () => {
     const before = readFileSync(join(dir, MANIFEST_NAME))
     const dry = runFailing(['ingest', file, '--as', 'body:f', '--dry-run', '--out', dir])
     expect(dry).toContain('head height')
-    expect(dry).toMatch(/C12 +FAIL — .*eye line \d+\.\d from F01's/)
+    expect(dry).toMatch(/C12 +FAIL — .*eye line \d+\.\d from F01's \(want within 4\.16\)/)
     expect(run(['ingest', file, '--as', 'body:f', '--anchor', 'head', '--dry-run', '--out', dir])).toMatch(/C12 +PASS — eyes \(/)
     expect(readFileSync(join(dir, MANIFEST_NAME)).equals(before)).toBe(true)
     expect(existsSync(join(dir, 'body_f_L30@2x.png'))).toBe(false)
@@ -3009,8 +3036,9 @@ describe('v4 ingest (Plan 19 A2a)', () => {
     run(['ingest', file, '--as', 'body:f', '--out', dir])
     const plain = (await checkOne(dir, 'body_f_L30', manifestIn(dir) as unknown as Manifest)).get('C12')!
     expect(plain.ok).toBe(false)
-    expect(plain.detail).toMatch(/eye line \d+\.\d from F01's/)
-    expect(plain.detail).toMatch(/chin \d+\.\d from F01's/)
+    expect(plain.detail).toMatch(/eye line \d+\.\d from F01's \(want within 4\.16\)/)
+    // The chin moved by about as much (6) and is inside its own 12: only the eyes fail.
+    expect(plain.detail).not.toMatch(/chin \d+\.\d from F01's/)
 
     const out = run(['ingest', file, '--as', 'body:f', '--anchor', 'head', '--out', dir])
     expect(out).toContain('anchored on the head')
