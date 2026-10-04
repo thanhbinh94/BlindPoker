@@ -21,8 +21,8 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { headMetrics, runChecks } from '../scripts/avatar-pipeline/checks.mjs'
-import { BODY_SKIN_RULE, OUTFIT_TOP_Y, cutItem, diffAgainstBase, ingest, measure, registerBySilhouette, registerToBase, shiftPicture } from '../scripts/avatar-pipeline/extract.mjs'
+import { STRAY_MARGIN, eachStray, headMetrics, runChecks } from '../scripts/avatar-pipeline/checks.mjs'
+import { BODY_SKIN_RULE, OUTFIT_TOP_Y, cutItem, diffAgainstBase, dropStrays, ingest, measure, registerBySilhouette, registerToBase, shiftPicture } from '../scripts/avatar-pipeline/extract.mjs'
 import { AURA_CY, AURA_SIZE, AXIS_X, BASELINE_Y, BODY, CHIN_TOLERANCE, CROP, DENSITIES, FACE_LIMIT_Y, FRAME, HEAD_REFERENCE, HEAD_TOLERANCE, LAYERS, RING, SKIN_AREA, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
 import { BASES, BASE_WEAR, EXPRESSIONS, FIT_SHEET_FILE, HAIR_CODES, ICON, ITEMS_FILE, MANIFEST_NAME, NAME_PATTERN, SHEET_FILE, WEARS, bodyFaceFile, bodyFile, buildPlaceholders, hairFile, hairItemId, iconName, itemFile, parseName, serialiseManifest, stageOneFiles, variantFile, wearOf, writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
 import { MASK_FILE_KIND, describeColours } from '../scripts/avatar-pipeline/masks.mjs'
@@ -2677,6 +2677,8 @@ describe('v4 ingest (Plan 19 A2a)', () => {
   const PANELS = [{ x: 92, y: 240, w: 30, h: 90 }, { x: 262, y: 240, w: 30, h: 90 }]
   /** A hat over the head top: beanie01's real tint seed (191, 98) is inside it. */
   const HAT_AT = { x: 150, y: 62, w: 84, h: 50 }
+  /** Hairline wisps: one hanging from the foot of each panel, one rising from the crown — a pixel wide at @2x, and long. */
+  const WISPS = [{ x: 106.5, y: 320, w: 1, h: 34 }, { x: 276.5, y: 320, w: 1, h: 34 }, { x: 191.5, y: 52, w: 1, h: 30 }]
 
   /**
    * A bald body as the v4 template asks for one, in frame units: a cream head whose eyes sit on `HEAD_REFERENCE` and
@@ -2897,6 +2899,56 @@ describe('v4 ingest (Plan 19 A2a)', () => {
     const rows = await allPass(dir, ['item_hair_f_bob01_L60', 'item_hair_f_bob01_L20'])
     expect(rows.get('item_hair_f_bob01_L60')!.get('C13')!.detail).toContain('the front on 0.0 % of the eyes')
   }, 300_000)
+
+  it('clears the faint litter a split leaves in a hair layer away from its solid part, so C3 holds (Plan 19 C2)', async () => {
+    // A wisp that thin is joined to the hair by the region (it is connected to it), but the mask's feather leaves it
+    // under alpha 128 along its whole length: faint pixels well past STRAY_MARGIN from the solid part of whichever layer
+    // the split gave them to — the back's two below the panels, the front's above the cap. Without the clearing C3
+    // fails both layers, at both densities: the @1x too, which the halving makes new litter in even from a clean @2x
+    // (the clip, `hairClip`).
+    const dir = copyCase(await bodyDir(), 'v4-wisps')
+    const wisps = WISPS.map((w) => `<rect x="${w.x}" y="${w.y}" width="${w.w}" height="${w.h}" fill="${PURPLE}"/>`).join('')
+    const file = await draw(dir, 'wisps.png', body({ iris: IRIS_BROWN, shade: false, redrawn: true }) + hair(PURPLE) + wisps)
+    const lines: string[] = []
+    await ingest({ file, target: { kind: 'hair', code: 'f_bob01' }, dir, targets: targetsOf(dir), overridesDir: noOverrides(), log: (line: string) => lines.push(line) })
+    const names = ['item_hair_f_bob01_L60', 'item_hair_f_bob01_L20']
+    const rows = await allPass(dir, names)
+    for (const name of names) expect(rows.get(name)!.get('C3')!.detail, name).toBe('empty where it should be')
+
+    // The litter was there (a test whose wisps were lost on the way would pass for nothing), and was logged, per layer.
+    for (const name of names) {
+      const cleared = lines.filter((line) => new RegExp(`^${name}: dropped [1-9]\\d* px of faint litter away from its solid part @2x$`).test(line))
+      expect(cleared, `${name}: no litter cleared @2x\n${lines.join('\n')}`).toHaveLength(1)
+    }
+    // The hair itself stays whole, and the split still adds up: what was cleared was alpha < 128, which `split` never counted.
+    const l60 = await readPicture(join(dir, 'item_hair_f_bob01_L60@2x.png'))
+    const l20 = await readPicture(join(dir, 'item_hair_f_bob01_L20@2x.png'))
+    expect(solidShare(l60, at2x(inCap(2)))).toBeGreaterThan(0.98)
+    expect(solidShare(l20, at2x(inPanels(2)))).toBeGreaterThan(0.98)
+    const { split } = manifestIn(dir).files.item_hair_f_bob01_L60!
+    expect(split!.front + split!.back).toBe(split!.region)
+  }, 300_000)
+
+  it('dropStrays clears what C3 flags and nothing else, at the density’s own margin', () => {
+    // A 20 × 10 solid block at (40, 30), a faint pixel just inside C3's margin on each side, one just outside, and a
+    // soft rim beside the block. Margin: STRAY_MARGIN × density.
+    for (const density of DENSITIES) {
+      const margin = STRAY_MARGIN * density
+      const pic = blankPicture(120, 100)
+      const put = (x: number, y: number, alpha: number): void => pic.data.set([200, 100, 50, alpha], (y * pic.width + x) * 4)
+      for (let y = 30; y < 40; y++) for (let x = 40; x < 60; x++) put(x, y, 255)
+      const kept = [[39, 35, 90], [60 + margin - 1, 35, 40], [50, 30 - margin, 25], [50, 39 + margin, 60]]
+      const litter = [[60 + margin, 35, 31], [39 - margin, 35, 10], [50, 29 - margin, 70], [50, 40 + margin, 20], [5, 5, 1]]
+      for (const [x, y, alpha] of [...kept, ...litter]) put(x!, y!, alpha!)
+      expect(dropStrays(pic, density), `@${density}x`).toBe(litter.length)
+      expect(dropStrays(pic, density), `@${density}x, again`).toBe(0)
+      for (const [x, y, alpha] of kept) expect(pic.data[(y! * pic.width + x!) * 4 + 3], `@${density}x kept (${x}, ${y})`).toBe(alpha)
+      for (const [x, y] of litter) expect([...pic.data.subarray((y! * pic.width + x!) * 4, (y! * pic.width + x!) * 4 + 4)], `@${density}x cleared (${x}, ${y})`).toEqual([0, 0, 0, 0])
+      let strays = 0
+      eachStray(pic, density, () => strays++)
+      expect(strays, `@${density}x strays left`).toBe(0)
+    }
+  })
 
   it('splits a hairstyle by its hand-drawn front mask instead of the rule, when there is one', async () => {
     // item_hair_<code>_frontmask.png, frame-sized (@1x) and black and white: here it says the panels are the front.

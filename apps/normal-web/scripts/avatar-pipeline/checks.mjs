@@ -370,6 +370,31 @@ function fullyTransparent(picture) {
   return true
 }
 
+/**
+ * C3's rule, which the hair ingest (`dropStrays`, extract.mjs) holds its layers to as well: calls `visit(p, alpha)` for
+ * every pixel of `picture` with any alpha at all that lies more than `STRAY_MARGIN` (× `density`) outside the box of
+ * the layer's solid pixels (alpha > `ALPHA_SOLID`; the box of any ink, when nothing is solid).
+ *
+ * The box is taken over the *solid* pixels, not over every pixel with any alpha at all. Taken over every pixel it would
+ * move to enclose the very rubbish it is meant to find — one alpha-40 pixel in a corner and the box is the whole frame,
+ * with nothing outside it to complain about. The shape is where the opaque pixels are; a faint pixel more than
+ * `STRAY_MARGIN` away from that is not the shape's soft edge, it is what D01 §8.3 calls rác bán trong suốt.
+ */
+export function eachStray(picture, density, visit) {
+  const box = alphaBBox(picture, ALPHA_SOLID) ?? alphaBBox(picture)
+  if (!box) return
+  const margin = STRAY_MARGIN * density
+  const { width, height, data } = picture
+  for (let y = 0; y < height; y++) {
+    const outsideRow = y < box.y - margin || y >= box.y + box.h + margin
+    for (let x = 0; x < width; x++) {
+      if (!outsideRow && x >= box.x - margin && x < box.x + box.w + margin) continue
+      const alpha = data[(y * width + x) * 4 + 3]
+      if (alpha !== 0) visit(y * width + x, alpha)
+    }
+  }
+}
+
 function noStrayPixels(context) {
   const { pictures } = context
   // Emptiness is judged here because this is the check about "the empty part really is empty": a layer
@@ -388,27 +413,12 @@ function noStrayPixels(context) {
   for (const density of DENSITIES) {
     const picture = pictures[density]
     if (!picture) continue
-    // The box is taken over the *solid* pixels, not over every pixel with any alpha at all. Taken over
-    // every pixel it would move to enclose the very rubbish it is meant to find — one alpha-40 pixel in
-    // a corner and the box is the whole frame, with nothing outside it to complain about. The shape is
-    // where the opaque pixels are; a faint pixel more than `STRAY_MARGIN` away from that is not the
-    // shape's soft edge, it is what D01 §8.3 calls rác bán trong suốt.
-    const box = alphaBBox(picture, ALPHA_SOLID) ?? alphaBBox(picture)
-    if (!box) continue
-    const margin = STRAY_MARGIN * density
-    const { width, height, data } = picture
     let strays = 0
     let worst = 0
-    for (let y = 0; y < height; y++) {
-      const outsideRow = y < box.y - margin || y >= box.y + box.h + margin
-      for (let x = 0; x < width; x++) {
-        if (!outsideRow && x >= box.x - margin && x < box.x + box.w + margin) continue
-        const alpha = data[(y * width + x) * 4 + 3]
-        if (alpha === 0) continue
-        strays++
-        worst = Math.max(worst, alpha)
-      }
-    }
+    eachStray(picture, density, (_p, alpha) => {
+      strays++
+      worst = Math.max(worst, alpha)
+    })
     if (strays) return bad(`@${density}x has ${strays} pixels outside the shape, up to alpha ${worst}`)
   }
   return ok('empty where it should be')

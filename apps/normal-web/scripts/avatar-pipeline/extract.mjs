@@ -43,10 +43,10 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { recolour } from '../../../../packages/ui-kit/src/avatar2d/recolour.mjs'
-// checks.mjs and hair.mjs each import this file in turn (`measure`), so `headMetrics`, `judgeHead`, `underwearRegion` and
-// `splitHair` may only be used at call time, never while the modules load — as neither of them uses anything of this file
-// at load.
-import { headMetrics, judgeHead, underwearRegion } from './checks.mjs'
+// checks.mjs and hair.mjs each import this file in turn (`measure`), so `eachStray`, `headMetrics`, `judgeHead`,
+// `underwearRegion` and `splitHair` may only be used at call time, never while the modules load — as neither of them
+// uses anything of this file at load.
+import { eachStray, headMetrics, judgeHead, underwearRegion } from './checks.mjs'
 import { splitHair } from './hair.mjs'
 import { MASK_FILE_KIND, MASK_OVERRIDE_DIR, SKIN_MASK, eyeZone, labOf, maskTargets, readHandMask, writeMasks } from './masks.mjs'
 import {
@@ -1533,6 +1533,19 @@ export function dropFaint(pic, threshold = ALPHA_INK) {
 }
 
 /**
+ * Every pixel C3 would call litter at `density` made fully transparent black, in place — the same pixels, found by
+ * C3's own rule (`eachStray`): any alpha at all more than `STRAY_MARGIN` outside the box of the layer's solid pixels.
+ * Returns how many it cleared. `dropFaint` cannot do this: it cuts by alpha everywhere, and the soft rim of the shape
+ * has the same alphas as the litter off it.
+ */
+export function dropStrays(pic, density) {
+  const strays = []
+  eachStray(pic, density, (p) => strays.push(p))
+  for (const p of strays) pic.data.fill(0, p * 4, p * 4 + 4)
+  return strays.length
+}
+
+/**
  * The faint threshold for a strand layer (L60): a strand is solid ink, and what the key leaves around it at
  * alpha 8–30 is noise that C3 counts as litter (M03's second picture: one alpha-13 pixel off the strand).
  */
@@ -2202,6 +2215,13 @@ async function hairLayers({ anchored, code, dir, manifest, diff, overridesDir, l
   }
   const frontPicture = dropFaint(cutItem(registered.picture, { mask: front, core: coreOf(front) }))
   const backPicture = dropFaint(cutItem(registered.picture, { mask: back, core: coreOf(back) }))
+  // The split hands each layer the feathered rim of the hair beside it too, and a rim pixel can land far from the layer's
+  // own solid part: litter, which C3 fails. Cleared here by C3's rule, before the layers are counted (`split` is what is
+  // written) — and again at @1x by the clip, which the halving would otherwise have made new litter in.
+  for (const [layer, picture] of [[LAYERS.hairFront, frontPicture], [LAYERS.hairBack, backPicture]]) {
+    const dropped = dropStrays(picture, 2)
+    if (dropped) log(`${hairFile(code, layer)}: dropped ${dropped} px of faint litter away from its solid part @2x`)
+  }
   const split = { region: 0, front: 0, back: 0 }
   for (let p = 0; p < width * height; p++) {
     const inFront = frontPicture.data[p * 4 + 3] >= ALPHA_SOLID
@@ -2212,14 +2232,26 @@ async function hairLayers({ anchored, code, dir, manifest, diff, overridesDir, l
   }
   log(`split: ${split.region} px of hair @2x — ${split.front} in front, ${split.back} behind${override ? ' (hand-drawn front mask)' : ''}`)
 
-  const clip = (pic) => dropFaint(pic)
   const layerOf = (layer, picture, extra) => {
     const file = { name: hairFile(code, layer), layer }
     return alphaBBox(picture, 0) === null
       ? { file, picture: blankPicture(width, height), extra: { ...extra, empty: true } }
-      : { file, picture, clip, extra }
+      : { file, picture, clip: hairClip(file.name, log), extra }
   }
   return [layerOf(LAYERS.hairFront, frontPicture, { split }), layerOf(LAYERS.hairBack, backPicture, {})]
+}
+
+/**
+ * The clip of a hairstyle layer's @1x (`writeDensities`): `dropFaint`, then C3's litter at the halved picture's own
+ * solid box (`dropStrays`) — a rim pixel the @2x keeps within `STRAY_MARGIN` of its box can be further than that from
+ * the @1x's, and the halving's filter reaches past the @2x's edge too.
+ */
+function hairClip(name, log) {
+  return (pic, density) => {
+    const dropped = dropStrays(dropFaint(pic), density)
+    if (dropped) log(`${name}: dropped ${dropped} px of faint litter away from its solid part @${density}x`)
+    return pic
+  }
 }
 
 /** The union of skin masks (alpha per pixel, `null` for a missing one) at alpha ≥ `ALPHA_SOLID`, or `null` when none is given. */
@@ -2289,7 +2321,7 @@ async function recolourHair({ dir, manifest, names, colour, overridesDir, log })
     const mask = await maskAlpha(dir, name, entry, 'hair')
     if (mask === null) continue
     recolour(pic.data, mask, colour, entry.masks.hair.meanL)
-    entry.bytes2x = await writeDensities(pic, dir, name, (half) => dropFaint(half))
+    entry.bytes2x = await writeDensities(pic, dir, name, hairClip(name, log))
     log(`${name} — recoloured to ${colour} at its hair meanL ${entry.masks.hair.meanL}`)
     done.push(name)
   }
