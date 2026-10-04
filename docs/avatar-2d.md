@@ -1245,7 +1245,8 @@ head item's feet and centre line — and the pipeline is given that aligned copy
 is cut with its base's stored transform, measured on the reference's canvas. Since 2026-09-24 (§4.3) a bot runs
 the pipeline rule too, on f01's transform: `bot:<n>` is checked on its body and all six faces, `bot:<n>:happy`
 on that one face. A bot's picture is handed to the pipeline as it is, not aligned: it is taken to be on
-F01's own canvas (§4.3), like a base drawn with `--transform-from`.
+F01's own canvas (§4.3), like a base drawn with `--transform-from` — except a v4 bot's happy face on its own canvas,
+which is registered onto the bot's neutral picture first (Plan 19 C4, below).
 
 **The v4 kinds (Plan 19).** The same rules in the same order; `—` means not asked.
 
@@ -1255,7 +1256,8 @@ F01's own canvas (§4.3), like a base drawn with `--transform-from`.
 | `bodyExpression` (`@body_<g>`) | as an expression | advisory, as an expression | as an expression (on a bald body the band is the scalp) | the head region (`FACE_LIMIT_Y`), as an expression | as an expression: `face:<g>:<expr>` on the body's transform; C1–C13 on `body_<g>_face_<expr>_L50` |
 | `hair` (`@body_<g>`) | **after the registration the ingest applies** (Plan 19 C2, `registerOnBody`): the picture is registered onto the body with the pipeline's own `registerToBase` — by colour, over the rows below the head — searched over ±10 % of scale and about ±125 px, and is `drift` only when that takes a scale more than 8 % from 1, or leaves the legs (the rows from 0.8 of the body's height down, which no hairstyle reaches) at a silhouette IoU under 0.9. `measure.registered` holds the scale (about the feet and centre line), the move `dx`/`dy` and the IoU; `measure.drift` still holds the legs' bottom edge and centre line as drawn, which A2b held to 12 px — the image model zooms a picture out by 4–5 % to make room for the hair, and batch C2's neat01, spiky01 and ponytail01 stood 29–62 px off. On another canvas the picture is placed at scale 1 by those two instead, as before (the model's 1086 × 1448 moves the figure, it does not resize it), and is `redrawn` if the legs' width ratio is then outside 0.96–1.04 | — | — | outside the head region **and** outside the body grown by 4 px (`HAIR_BODY_MARGIN`, `allowedArea('hair')`), on the registered picture: hair falls behind the shoulders and the back, never over the torso, the arms or the hands | `hair:<code>` on the body's transform, **given the registered picture**; C1–C13 on `item_hair_<code>_L20` and `_L60` — C13 holds the split |
 | `item` on a body (`@body_<g>`, `base` `f`/`m`) | as today, except an **outfit**: its `drift` after the registration the ingest applies, as a hairstyle's (Plan 19 C2) — the pipeline's `registerBySilhouette`, the same search and 8 % bound, and its own silhouette IoU (the number its log prints) at least 0.6: an outfit changes the whole body below the chin, and the real v4 outfits register at 0.67 (royal_robe01's robe) to 0.89 (casual01). Its edges as drawn stay in `measure.drift` (royal_robe01: bottom −20, which failed it), and `redrawn` is asked first as before | as today | as today; a registered outfit's band is read with its head placed by its head top and centre line, as on another canvas — the registration lines up the body below the chin, and royal_robe01, its head drawn in place and its feet 20 px up, read 12.96 registered and 3.93 by its head | as today | as today, owned by the body (an outfit given the registered picture); `--hair <code>` passed through |
-| `bot` on a body (`@body_f`, `@v4/bot_<n>`) | as today (feet and centre line) | — | — | — | as today, on the transform `transformSource` names: body f's |
+| `bot` on a body (`@body_f`) | as today (feet and centre line) | — | — | — | as today, on the transform `transformSource` names: body f's |
+| `bot` happy face on a body (`bot:<n>:happy`, `@v4/bot_<n>`) | **after the registration the ingest applies** (Plan 19 C4, `registerOnBody`): the picture is registered onto the bot's neutral picture with the pipeline's own `registerToBase`, as a hairstyle is — by colour, over the rows below the head, searched over ±10 % of scale and about ±125 px — and is `drift` only when that takes a scale more than 8 % from 1, or leaves the two whole figures' silhouettes at an IoU under 0.9. The nine real v4 faces of 2026-10-04 registered at 0.943–0.991 (scale 0.935 for bot_7, 0.995–1.025 for the rest); an independent redraw of the same bot registers at 0.74–0.80 and another bot's body at 0.83–0.915. `measure.registered` holds the scale (about the feet and centre line), the move `dx`/`dy` and the IoU; `measure.drift` still holds the feet and centre line as drawn, which failed bot_0 (bottom −31, then −42) and bot_4 (−38) although the pictures were the right figure, a little off. On another canvas: `redrawn`, as before | — | — | — | as today on body f's transform, **given the registered picture** — the face cut is where the neutral picture's face is; C1–C13 on `bot_<n>_face_happy_L50`. The neutral `bot:<n>` keeps its rule and is handed over as it is |
 
 What the cut needs comes from `transformSource` (§10.1), never from the reference's file name. When the copy has
 no transform for the owner yet, the reference is ingested into the copy first: as `base:<id>` as before, or as
@@ -1277,6 +1279,16 @@ body up better is the registration, so a picture that changed the body (hair pai
 rather than slid to where the change shows least. A body's face is not registered: its ingest cuts on the body's
 transform without registering at all, so a zoomed face would be cut where it was drawn, and `bodyExpression` keeps the
 expression's four edges.
+
+**A bot's happy face (Plan 19 C4).** `bot:<n>:happy` is the same case from the other side: the image model draws it from
+the bot's own neutral picture (`@v4/bot_<n>`) and comes back zoomed out or moved by a few per cent — bot_0's first face
+stood 31 px up and its second 42, bot_4's 38 — and the bot ingest cuts the face on body f's stored transform without
+registering, so a picture as drawn would put the face that far from the neutral one's. It is registered onto the
+neutral picture as a hairstyle is onto its body (`registerOnBody`, the same search, `botFace`), `verify` judges `drift`
+there — 8 % of scale, whole-figure silhouette IoU 0.9, measured on the real faces above — and the trial ingest and the
+real one (`pipelineInput`, with the asset's `ingest.as`) are given the registered picture, whenever the registration
+moves it at all. The face changes the inside of the head and nothing else, so nothing but `drift` is asked of it, as
+before. The neutral `bot:<n>` itself is its body, which the ingest takes whole, and keeps its feet-and-centre-line rule.
 
 Measured on the real pictures of Plan 11 (2026-09-24), every accepted picture passes: all ten real expressions,
 `tophat01`, `glasses_round_gold01`, and all eight outfits and cuts (`casual01` as regenerated, `tuxedo01`,

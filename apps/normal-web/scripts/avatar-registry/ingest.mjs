@@ -104,8 +104,8 @@ export async function ingestAssets(registry, ids = [], { srcDir = SRC_DIR, publi
     const tmp = mkdtempSync(join(tmpdir(), 'avatar-ingest-'))
     let name
     try {
-      const input = await pipelineInput({ file: join(srcDir, asset.file), kind: asset.kind, slot: asset.slot, base: asset.ingest.base ?? null, referenceFile: referencePath(asset, registry, srcDir), tmp })
-      if (input.registered) log(`${asset.id}: registered onto the body before the cut, as verify judged it`)
+      const input = await pipelineInput({ file: join(srcDir, asset.file), kind: asset.kind, slot: asset.slot, base: asset.ingest.base ?? null, as: asset.ingest.as, referenceFile: referencePath(asset, registry, srcDir), tmp })
+      if (input.registered) log(`${asset.id}: registered onto its reference before the cut, as verify judged it`)
       else if (input.aligned) log(`${asset.id}: aligned onto the reference canvas before the cut`)
       ;({ name } = await ingest({
         file: input.file, target, dir: publicDir, targets: manifests, baseId: owner, variant,

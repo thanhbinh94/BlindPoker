@@ -90,7 +90,7 @@ const DETACHED_SQUARE = '<rect x="880" y="300" width="100" height="100" fill="#2
  * flat grey, where every small move matches as well as none — the real body's hands, shorts and shins are what it lines up.
  */
 const SHORTS = '#3a3a5a'
-const dressed = (): string => `${bald()}
+const dressed = ({ eyes = '#202020' } = {}): string => `${bald({ eyes })}
   <rect x="162" y="800" width="60" height="70" rx="20" fill="${SKIN}"/>
   <rect x="802" y="800" width="60" height="70" rx="20" fill="${SKIN}"/>
   <rect x="382" y="960" width="260" height="70" fill="${SHORTS}"/>
@@ -125,6 +125,7 @@ type Fixture =
   | 'hairSideTail' | 'hairRaised' | 'hairWideSmall'
   | 'refZ' | 'baldZ' | 'baldSquare' | 'baldSmall' | 'baldSmallZ'
   | 'dressed' | 'hairZoomed' | 'hairZoomedFar' | 'hairBodyMoved' | 'outfitZoomed'
+  | 'botHappy' | 'botHappyZoomed' | 'botHappyZoomedFar'
 /** Every synthetic picture, by name, as a path under `srcDir`. */
 const files = {} as Record<Fixture, string>
 
@@ -185,6 +186,12 @@ beforeAll(async () => {
   files.hairZoomedFar = await draw('hair-zoomed-far.png', svg(zoomedBy(0.85, `${dressed()}${CAP}${LOCK}`)))
   files.hairBodyMoved = await draw('hair-body-moved.png', svg(`<g transform="translate(-40 0)">${dressed()}</g>${CAP}${LOCK}`))
   files.outfitZoomed = await draw('outfit-zoomed.png', svg(zoomedBy(0.96, `${dressed()}${SHIRT}`)))
+  // Plan 19 C4: a bot's happy face is drawn from the bot's own neutral picture (`dressed`) and comes back zoomed out like
+  // the rest — here at 0.96 and at 0.85 about the canvas centre, and in place.
+  const happyEyes = dressed({ eyes: '#6a2020' })
+  files.botHappy = await draw('bot-happy.png', svg(happyEyes))
+  files.botHappyZoomed = await draw('bot-happy-zoomed.png', svg(zoomedBy(0.96, happyEyes)))
+  files.botHappyZoomedFar = await draw('bot-happy-zoomed-far.png', svg(zoomedBy(0.85, happyEyes)))
 }, 120_000)
 
 afterAll(() => rmSync(temp, { recursive: true, force: true }))
@@ -533,6 +540,42 @@ describe('verify: the v4 kinds (Plan 19)', () => {
     const onBase = await score(files.outfitZoomed, outfit('f01'))
     expect(onBase).toMatchObject({ verdict: 'ng', reason: 'drift' })
     expect(onBase.measure.registered).toBeUndefined()
+  })
+
+  // ── Plan 19 C4: a bot's happy face, registered onto the bot's neutral picture ──
+
+  const bot = (as: string): Record<string, unknown> => ({ kind: 'bot', referenceFile: files.dressed, ingest: { as, base: null, variant: null, flags: [] } })
+
+  it("passes a bot's happy face zoomed out to 0.96: drift is judged after the registration onto the bot's neutral picture", async () => {
+    const zoomed = await score(files.botHappyZoomed, bot('bot:0:happy'))
+    expect(zoomed.verdict, `${zoomed.reason} ${JSON.stringify(zoomed.measure)}`).toBe('ok')
+    // As drawn, the feet sit 23 px up — the feet-and-centre-line rule a bot was held to failed it there.
+    expect(zoomed.measure.drift.bottom).toBeLessThan(-12)
+    // Registered back at about 1 / 0.96, the whole figure lines up with the neutral picture again.
+    expect(zoomed.measure.registered.scale).toBeGreaterThanOrEqual(1.03)
+    expect(zoomed.measure.registered.scale).toBeLessThanOrEqual(1.05)
+    expect(zoomed.measure.registered.iou).toBeGreaterThanOrEqual(REGISTRATION.iou.botFace)
+    expect(zoomed.notes.join('\n')).toMatch(/registered onto the bot's neutral picture/)
+    // In place it is left alone, and so is every other picture that is already where its neutral one stands.
+    const inPlace = await score(files.botHappy, bot('bot:0:happy'))
+    expect(inPlace.verdict, inPlace.reason).toBe('ok')
+    expect(inPlace.measure.registered).toMatchObject({ scale: 1, dx: 0, dy: 0 })
+    expect(inPlace.notes.join('\n')).not.toMatch(/registered onto/)
+  })
+
+  it("still fails a bot's happy face zoomed out to 0.85 on drift: no registration within 8 % fits it", async () => {
+    const far = await score(files.botHappyZoomedFar, bot('bot:0:happy'))
+    expect(far).toMatchObject({ verdict: 'ng', reason: 'drift' })
+    expect(Math.abs(far.measure.registered.scale - 1)).toBeGreaterThan(REGISTRATION.scale)
+  })
+
+  it("holds a bot's neutral picture, and a happy face on another canvas, to what they were: no registration", async () => {
+    // The neutral picture is the body the ingest takes whole: its feet and centre line, as drawn.
+    const neutral = await score(files.botHappyZoomed, bot('bot:0'))
+    expect(neutral).toMatchObject({ verdict: 'ng', reason: 'drift' })
+    expect(neutral.measure.registered).toBeUndefined()
+    // A face on the model's 1086 × 1448 is `redrawn`, since it is cut on a stored transform.
+    expect(await score(files.wide, { ...bot('bot:0:happy'), referenceFile: files.ref })).toMatchObject({ verdict: 'ng', reason: 'redrawn' })
   })
 
   it("allows a hairstyle above the face line and outside the body grown by 4 px, and nowhere else", async () => {
@@ -922,6 +965,28 @@ describe('ingestAssets', () => {
     expect(manifest.files.body_f_face_neutral_L50).toMatchObject({ real: true })
     expect(manifest.files.item_hair_f_bob01_L20).toMatchObject({ real: true })
     expect(manifest.files.item_hair_f_bob01_L60).toMatchObject({ real: true, recolouredTo: '#5e3e6f' })
+  }, 180_000)
+
+  it("ingests a bot's happy face registered onto the bot's neutral picture, so a zoomed face is cut where the neutral one is (Plan 19 C4)", async () => {
+    /** The registry ingests a bot and its happy face (drawn as `file`) into a fresh copy, and returns the happy face layer's ink box. */
+    const ingestHappy = async (name: string, file: string): Promise<{ lines: string[]; box: { x: number; y: number; w: number; h: number } }> => {
+      const publicDir = join(temp, name)
+      mkdirSync(publicDir, { recursive: true })
+      const targets = [join(publicDir, MANIFEST_NAME)]
+      await pipelineIngest({ file: files.ref, target: { kind: 'base', base: 'f01' }, dir: publicDir, targets })
+      const neutral = v4Asset({ id: 'v4/bot_0', kind: 'bot', catalog: 'bot_0', reference: 'ref.png', file: 'dressed.png', ingest: { as: 'bot:0' } })
+      const happy = v4Asset({ id: 'v4/bot_0:happy', kind: 'bot', catalog: 'bot_0', reference: '@v4/bot_0', file, ingest: { as: 'bot:0:happy' } })
+      const lines: string[] = []
+      await ingestAssets(registryOf([neutral, happy]), [], { srcDir, publicDir, targets, log: (line: string) => lines.push(line) })
+      return { lines, box: alphaBBox(await readPicture(join(publicDir, 'bot_0_face_happy_L50@2x.png')))! }
+    }
+    const inPlace = await ingestHappy('public-ingest-bot-happy', 'bot-happy.png')
+    expect(inPlace.lines.join('\n')).not.toMatch(/registered onto/)
+    const zoomed = await ingestHappy('public-ingest-bot-happy-zoomed', 'bot-happy-zoomed.png')
+    expect(zoomed.lines.join('\n')).toMatch(/v4\/bot_0:happy: registered onto its reference before the cut/)
+    expect(zoomed.lines.join('\n')).not.toMatch(/v4\/bot_0: registered/)
+    // Cut on the stored transform as drawn, the face's box stands 5–13 px (@2x) off the one in place on every side; registered, within 1.
+    for (const edge of ['x', 'y', 'w', 'h'] as const) expect(Math.abs(zoomed.box[edge] - inPlace.box[edge]), edge).toBeLessThanOrEqual(2)
   }, 180_000)
 
   it('passes an asset --hair and --anchor through to the pipeline, which refuses them where they do not belong', async () => {
