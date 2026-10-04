@@ -1,16 +1,19 @@
 /**
  * Five saved outfits per player (design §5.3, same contract Plan 10 §5.4 speced for v2).
  *
- * `PUT`'s body carries a whole `AvatarConfigDto` the same shape `PUT /api/me/avatar` accepts, and it
- * is validated the same way — `validateAvatarConfig` before anything reaches `outfits-service.ts` —
- * so an outfit can never be saved half-wrong: what a player can save is exactly what they could wear
- * directly, and the avatar error codes (`INVALID_ITEM`, `WRONG_CATEGORY`, `MISSING_LAYER`,
- * `INVALID_BASE`) mean the same thing here as they do there.
+ * `PUT`'s body carries a whole v4 `AvatarConfigDto` — gender, hairstyle, outfit and the optional slots
+ * (Plan 19) — the same shape `PUT /api/me/avatar` accepts, and it is validated the same way —
+ * `validateAvatarConfig` before anything reaches `outfits-service.ts` — so an outfit can never be saved
+ * half-wrong: what a player can save is exactly what they could wear directly, and the avatar error codes
+ * (`INVALID_ITEM`, `WRONG_CATEGORY`, `MISSING_LAYER`, `INVALID_BASE`, `WRONG_GENDER`) mean the same thing
+ * here as they do there. A v3 body (one that still names a `base`) is refused like any stale client's.
+ *
+ * Reading is the other way round: `GET` and `apply` answer with whatever the service reads a saved row
+ * as, and a row saved before Plan 19 reads as the v4 it migrates to (spec §4.5, R6) — never as itself.
  */
 import { HttpError } from '@bp/http-kit'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { validateAvatarConfig } from '../inventory/avatar.js'
-import type { BaseIds } from '../inventory/slots.js'
 import type { ItemCatalog } from '../inventory/items.js'
 import type { OutfitsService } from '../inventory/outfits-service.js'
 import { ServiceError } from '../errors.js'
@@ -20,8 +23,6 @@ import './types.js'
 export interface OutfitRouteDeps {
   outfits: OutfitsService
   catalog: ItemCatalog
-  /** The ids `data/avatar-bases.json` defines — what `INVALID_BASE` is measured against. */
-  baseIds: BaseIds
   requireUser: RequireUser
 }
 
@@ -50,7 +51,7 @@ export function registerOutfitRoutes(app: FastifyInstance, deps: OutfitRouteDeps
     const name = body?.name
     if (typeof name !== 'string') throw new HttpError(400, 'INVALID_NAME', 'name must be a string')
 
-    const checked = validateAvatarConfig(body?.config, deps.catalog, deps.baseIds)
+    const checked = validateAvatarConfig(body?.config, deps.catalog)
     if (!checked.ok) throw new HttpError(400, checked.code, `avatar refused: ${checked.code}`)
 
     try {

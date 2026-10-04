@@ -223,9 +223,10 @@
     "errors": {
       "NOT_OWNED": "Có món bạn chưa sở hữu",
       "WRONG_CATEGORY": "Có món không đúng vị trí",
-      "MISSING_LAYER": "Nhân vật cần mặc một bộ quần áo",
+      "MISSING_LAYER": "Nhân vật thiếu giới tính, kiểu tóc hoặc quần áo",
       "INVALID_ITEM": "Có món không tồn tại trong danh mục",
-      "INVALID_BASE": "Nhân vật không hợp lệ"
+      "INVALID_BASE": "Nhân vật không hợp lệ",
+      "WRONG_GENDER": "Kiểu tóc này dành cho giới tính khác"
     },
     "slot": {
       "hair": "Tóc",
@@ -244,8 +245,14 @@
       "wear": "Trang phục",
       "decor": "Trang trí"
     },
+    "gender": {
+      "legend": "Giới tính",
+      "f": "Nữ",
+      "m": "Nam"
+    },
     "tabs": {
-      "base": "Nhân vật",
+      "hairStyle": "Kiểu tóc",
+      "skinColor": "Màu da",
       "head": "Mũ",
       "face": "Phụ kiện mặt",
       "outfit": "Quần áo",
@@ -392,15 +399,21 @@
     "head_beanie_grey01": "Mũ len xám",
     "head_beanie_mustard01": "Mũ len vàng mù tạt",
     "head_party_cone_blue01": "Mũ chóp tiệc xanh dương",
-    "head_party_cone_green01": "Mũ chóp tiệc xanh lá"
-  },
-  "bases": {
-    "f01": "Tóc bob",
-    "m01": "Tóc rối",
-    "f02": "Tóc dài mái bằng",
-    "f03": "Tóc gợn sóng",
-    "m02": "Tóc gọn",
-    "m03": "Tóc xoăn"
+    "head_party_cone_green01": "Mũ chóp tiệc xanh lá",
+    "hair_f_bob01": "Tóc bob",
+    "hair_f_hime01": "Tóc dài mái bằng",
+    "hair_f_wavy01": "Tóc gợn sóng",
+    "hair_f_ponytail01": "Tóc đuôi ngựa",
+    "hair_m_tousled01": "Tóc rối",
+    "hair_m_neat01": "Tóc gọn",
+    "hair_m_curly01": "Tóc xoăn",
+    "hair_m_spiky01": "Tóc vuốt dựng",
+    "skin_porcelain01": "Da trắng sứ",
+    "skin_fair01": "Da sáng",
+    "skin_lighttan01": "Da sáng ấm",
+    "skin_tan01": "Da ngăm",
+    "skin_brown01": "Da nâu",
+    "skin_deep01": "Da nâu đậm"
   },
   "achievements": {
     "ui": {

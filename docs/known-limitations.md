@@ -149,8 +149,9 @@ address and a password and trusts the address is spelled right.
 *Tracked:* spec §32 assumption 12; roadmap §34 item 2.
 
 **Lite's dev server has no avatar files until the app has been built at least once.** The chibi's PNG
-layers live at `apps/normal-web/public/avatar/`; `apps/lite/scripts/build.mjs` copies the `base_*`/
-`bot_*` files it needs into `dist/public/avatar` as one step of a full build. `pnpm --filter @bp/lite
+layers live at `apps/normal-web/public/avatar/`; `apps/lite/scripts/build.mjs` copies the `body_*`/
+`bot_*` files, the default hairs and the default outfit — the ones it draws, and no mask — into `dist/public/avatar`
+as one step of a full build. `pnpm --filter @bp/lite
 dev` runs Vite's own dev server against `apps/lite/web` directly and proxies only `/api` and `/ws`
 (`apps/lite/web/vite.config.ts`) — nothing serves `/avatar/` on that port, so every chibi 404s until
 `apps/normal-web` has been built at least once and a full `pnpm build:lite` has copied its output over.
@@ -311,18 +312,21 @@ build-pipeline change of its own.
 *Tracked:* `packages/ui-kit/src/theme/tokens.test.ts` → "reaches a Windows face with full Vietnamese
 coverage before the generic serif"; roadmap §34 item 9.
 
-**Most of the wardrobe is placeholder art until the real pictures land.** `apps/normal-web/public/avatar/`
-ships whatever `scripts/avatar-pipeline.mjs placeholder` last generated — flat shapes on the right frame
-and crop, not the chibi the design describes — until each item is drawn or AI-generated, ingested and
-passes `avatar:check` (avatar-chibi-ai design §6, §9 step 6). The catalogue, the server and every test run against
-these exactly as they will against the real thing: nothing here is mocked, only undrawn.
-*Why it stays:* the app, the pipeline and every screen had to work before a single real picture existed,
-so the plan builds and tests on synthetic layers first and swaps them file by file afterwards.
-*Tracked:* `docs/avatar-2d.md`; avatar-chibi-ai design §9 lays out the ingest order.
+**One wardrobe layer is still placeholder art, and a new item starts as one.** `apps/normal-web/public/avatar/`
+ships real pictures for the whole v4 set (two bodies, their faces, eight hairstyles, the outfits, hats, glasses,
+auras, frames and eight bots) except `item_head_hood_black01_L80`, a labelled stand-in `scripts/avatar-pipeline.mjs
+placeholder` draws — a flat shape on the right frame and crop, not the chibi the design describes. The catalogue
+no longer offers the hood (players who own it keep the row, and the daily draw skips it), so no screen draws it.
+A future item gets a stand-in the same way until it is drawn or AI-generated, ingested and passes `avatar:check`
+(avatar-chibi-ai design §6, §9 step 6): the catalogue, the server and every test run against it exactly as they
+will against the real thing; nothing here is mocked, only undrawn.
+*Why it stays:* the app, the pipeline and every screen had to work before a single real picture existed, and a
+new item should be buildable the same way; the hood is a withdrawn item, not worth a picture of its own.
+*Tracked:* `docs/avatar-2d.md` §6; avatar-chibi-ai design §9 lays out the ingest order.
 
 **The art is AI-generated, and that carries a licensing question this repository does not resolve.**
-Every base, expression and item picture starts from a prompt against the character's locked block
-(`docs/avatar/02-mo-ta-nhan-vat-khoa-va-yeu-cau-sinh-anh.md`) run through a third-party image generator.
+Every body, face, hairstyle, outfit, hat, bot and other picture starts from a prompt against the character's
+locked block (`docs/avatar/02-mo-ta-nhan-vat-khoa-va-yeu-cau-sinh-anh.md`) run through a third-party image generator.
 No named character or artist's name is ever put in a prompt, but the commercial terms of whichever tool
 generates the final art are the operator's to read and accept — this codebase does not vendor a licence
 and cannot vouch for one on the operator's behalf.
@@ -339,6 +343,17 @@ larger.
 layers that render instantly on both editions; a second angle would mean a second full set of art per
 item.
 *Tracked:* avatar-chibi-ai design §1, §2.
+
+**The chibi stands in one pose, and a skin colour is a tint of one body.** Since avatar v4 (No14) every body is
+the same relaxed standing pose with five-fingered hands — there is no second pose or emote to choose — and the six
+skin tones are the cream body recoloured through a skin mask, not six drawings: the outlines keep their warm
+brown on every tone, and a near-white highlight under chroma 8 stays white under a tint. Hairstyles belong to a
+gender (four each); there is no hairstyle both genders can wear, and no rare hairstyle exists yet (the system
+allows one: a hairstyle is an item).
+*Why it stays:* the user chose one new pose for this round (spec 2026-10-03 Q1) and a tint over six drawn bodies
+(Q2); a second pose is a second full set of body, faces, hairs and outfits, and a drawn skin tone is a body each.
+*Tracked:* `docs/superpowers/specs/2026-10-03-avatar-v4-design.md` §2 (Q1–Q3) and §3 ("Không làm"); the mask
+rules in `docs/avatar-2d.md` §4.4.1.
 
 **The felt resizes slightly at the ring/stack breakpoint.** Crossing the breakpoint changes the table
 layout and the felt's height with it. The action tray's height is reserved from 768 px up so that it

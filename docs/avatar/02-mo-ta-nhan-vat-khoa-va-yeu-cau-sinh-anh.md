@@ -3,6 +3,7 @@
 Phiên bản: 1.0
 Ngày: 12 tháng 9 năm 2026
 Dùng kèm với: Tài liệu số 01, Quy cách tài sản nhân vật và kho đồ
+Sửa đổi 2026-10-04 (Plan 19, nhân vật v4; thiết kế `docs/superpowers/specs/2026-10-03-avatar-v4-design.md` mục 5.2 và 11): mục 2 (khối khóa mới), 4, đầu mục 5 và mục 8, tiêu chí 7.
 
 ---
 
@@ -22,43 +23,84 @@ Quy trình bắt buộc gồm năm bước, làm theo đúng thứ tự:
 
 ## 2. Mô tả nhân vật khóa
 
-Đây là bản mô tả cố định. Mọi câu lệnh sinh ảnh đều phải chứa nguyên văn khối này. Không thêm, không bớt, không diễn đạt lại giữa các lần sinh, vì mỗi thay đổi nhỏ trong mô tả đều làm nhân vật trôi.
+Đây là bản mô tả cố định. Mọi lần sinh một thân nền đều phải chứa nguyên văn khối khóa ở mục 2.3; các ảnh khác (nét mặt, tóc, quần áo, mũ, kính) thừa hưởng nó qua ảnh tham chiếu. Không thêm, không bớt, không diễn đạt lại giữa các lần sinh, vì mỗi thay đổi nhỏ trong mô tả đều làm nhân vật trôi.
 
 ### 2.1 Mã nhân vật
 
-- Mã nội bộ: `BASE_F01`
+- Mã nội bộ: `BODY_F` (thân nữ) và `BODY_M` (thân nam), từ nhân vật v4 (Plan 19, 2026-10-03). Hai thân cùng khung, cùng dáng, đầu đặt đúng chỗ đầu F01 (phép kiểm C12), khác nhau ở khuôn mặt (mục 2.3). Mã `BASE_F01` và `BASE_M01` của sáu thân phẳng cũ (f01…m03, tóc vẽ liền) đã bỏ cùng các thân đó.
 - Tên gợi ý trong game: tùy đội quyết định, không ảnh hưởng đến hình.
 
 ### 2.2 Bản mô tả bằng tiếng Việt, để đội đọc và duyệt
 
-Nhân vật nữ, phong cách chibi anime, cao 2,25 đơn vị đầu người, đầu rất to và rộng hơn cao, thân nhỏ, tay chân ngắn mập không thấy khớp, bàn tay dạng găng, bàn chân nhỏ.
+Đây là bản tiếng Việt của khối khóa ở mục 2.3 (thân nền v4, Plan 19). Bản tiếng Anh là bản duy nhất đưa vào công cụ.
 
-Tóc màu tím than, kiểu bob dài ngang vai, tóc mái rậm chia thành các cụm tròn mềm phủ xuống gần mắt, hai bên có tóc mai dài xuống ngang cằm, có một sợi tóc dựng cong trên đỉnh đầu. Tóc có một dải sáng mềm vắt ngang đỉnh đầu.
+Thân nền dùng cho trò chơi thay trang phục: tóc, quần áo và phụ kiện được thêm sau thành các lớp riêng, nên **đầu phải hoàn toàn trọc**.
 
-Mắt rất to, chiếm gần nửa bề rộng mặt mỗi bên, đặt ở khoảng hai phần ba chiều cao đầu tính từ đỉnh xuống. Tròng mắt màu xanh dương chuyển từ xanh đậm ở trên xuống xanh ngọc sáng ở dưới, có ba đốm sáng trắng kích thước khác nhau, ánh sáng đến từ phía trên bên trái ở cả hai mắt. Mi trên dày, đuôi mi hất ra ngoài. Lông mày mảnh, vẽ đè lên tóc mái. Mũi chỉ là một chấm nhỏ. Miệng nhỏ, hơi mở, mỉm cười. Má ửng hồng.
+Giữ nguyên từ ảnh F01 làm tham chiếu: tỉ lệ chibi (khoảng 2,25 đơn vị đầu người), khuôn mặt (mắt, cỡ và vị trí mắt, mũi, miệng, má, cằm) đúng cỡ và đúng chỗ trong khung, nét viền, cách tô bán-painterly, nền trong suốt và kích thước ảnh. Mọi thứ còn lại được vẽ lại như dưới đây.
 
-Da sáng màu kem ấm. Tô bóng kiểu cel, tức là bóng đổ có cạnh rõ, không loang mềm, thêm một chút chuyển màu nhẹ ở má và dưới cằm.
+Nhân vật chibi anime, nữ hoặc nam, cao khoảng 2,25 đơn vị đầu người, đầu rất to và tròn, thân nhỏ, tay chân ngắn.
 
-Nét viền màu, không phải đen thuần: viền quanh da màu nâu cam, viền quanh tóc màu tím than đậm, viền quanh trang phục màu xanh đen. Độ dày viền vừa phải, sạch, không có vệt cọ.
+Đầu: trọc hoàn toàn, nhẵn và sạch, không tóc, không chân tóc, không râu lởm chởm, không bóng tóc. Hộp sọ là một vòm đều, cùng màu da mặt, nhỏ hơn đường viền tóc trong ảnh gốc một chút. Tai nhỏ, đơn giản. Lông mày mảnh, vẽ ngay trên da.
 
-Tư thế: đứng thẳng, nhìn chính diện, hai tay hạ xuống hơi tách khỏi thân, hai chân hơi tách, không cầm gì.
+Mặt: mắt rất to, mỗi mắt gần nửa bề rộng mặt. Thân nữ có tròng xanh dương chuyển từ xanh navy đậm ở trên xuống xanh ngọc sáng ở dưới, ba đốm sáng trắng, mi trên dày hất ra ngoài, miệng nhỏ hơi mở, mỉm cười. Thân nam có tròng hổ phách ấm chuyển từ nâu đậm ở trên xuống hổ phách sáng ở dưới, ba đốm sáng trắng, mi trên ngắn và đơn giản, miệng nhỏ, cười điềm tĩnh. Mũi chỉ là một chấm nhỏ. **Không má hồng, không trang điểm** (xem ghi chú dưới mục 2.3).
 
-Thân nền mặc: áo ba lỗ màu xám nhạt và quần đùi ngắn màu xám đậm, đơn giản, không hoa văn. Chân trần.
+Da: màu kem sáng ấm trên mặt, đầu, cổ, tay, bàn tay và chân; tô bóng bán-painterly mềm. Tông kem này là tông "Tự nhiên"; mọi tông da khác do ứng dụng tô lên qua mặt nạ da.
 
-Nền: một màu phẳng duy nhất, không có gì khác.
+Dáng: đứng thả lỏng tự nhiên, nhìn chính diện ngang tầm mắt, đầu thẳng và ở giữa, không nghiêng. Trọng tâm hơi dồn về một chân; vai hạ thả lỏng; hai tay buông lỏng, hơi cong, tách rõ khỏi thân để cả hai bàn tay hiện trên nền trống; hai bàn chân cùng đứng trên một đường chân, hướng ra trước.
+
+Bàn tay: bàn tay chibi nhỏ, mở, lòng bàn tay quay về phía đùi, mỗi tay có đúng năm ngón (bốn ngón và một ngón cái), hơi tách nhau để thấy từng ngón. Không phải găng, không nắm tay, không phải bàn tay hoạt hình bốn ngón. Không cầm gì.
+
+Thân mặc: áo ba lỗ xám trung bình và quần đùi xám than, trơn, không hoa văn, chân trần. Áo không được xám nhạt: màu xám nhạt nằm gần màu kem của da đến mức mặt nạ da lẫn áo vào da.
+
+Nét viền màu, không phải đen thuần: viền quanh da màu nâu ấm, viền quanh quần áo màu xanh đen, độ dày vừa phải, sạch.
+
+Tô: da bán-painterly; quần áo cel hai tông; không chất liệu, không nhiễu, không chữ, không hình mờ. Không có tóc ở bất kỳ chỗ nào: không mái, không chân tóc, không râu lởm chởm, không bóng tóc.
+
+Kích thước ra đúng kích thước ảnh vào, 1024 nhân 1536 điểm ảnh, với khuôn mặt đúng chỗ và đúng cỡ như trong ảnh vào.
 
 ### 2.3 Bản mô tả khóa bằng tiếng Anh, để đưa vào công cụ
 
-Công cụ sinh ảnh hiểu tiếng Anh ổn định hơn nhiều. Khối dưới đây là **khối khóa**, sao chép nguyên văn vào mọi câu lệnh.
+Công cụ sinh ảnh hiểu tiếng Anh ổn định hơn nhiều. Khối dưới đây là **mẫu `body`** của sổ tài sản (`assets/avatar-src/registry.json`, `templates.body`), chép nguyên văn; mọi ảnh thân nền đều được sinh từ nó, và `avatar:registry next` in ra bản đã điền. Phần `CHARACTER LOCK BODY_…` là **khối khóa** và phải đi nguyên văn trong mọi lần sinh một thân. Ảnh tham chiếu đính kèm là bức F01 gốc (`f01_candidate_1.png`): cùng một khung, cùng tỉ lệ.
 
 ```
-CHARACTER LOCK BASE_F01:
-chibi anime girl, 2.25 heads tall, oversized round head wider than tall, tiny body, short stubby limbs with no visible joints, mitten-like hands, small feet.
-Hair: dark violet bob to the shoulders, thick bangs split into soft rounded clumps hanging just above the eyes, long side locks down to the chin, one curved ahoge strand on top of the head, one soft highlight band across the top of the hair.
-Eyes: very large, each nearly half the face width, placed at two-thirds of the head height from the top, blue iris gradient from deep navy at the top to bright aqua at the bottom, three white highlights of different sizes, light source from the upper left on both eyes, thick upper lashes flicking outward, thin eyebrows drawn over the bangs, nose is a tiny dot, small slightly open smiling mouth, soft pink blush on both cheeks.
-Skin: warm light cream. Cel shading with hard-edged shadows and a slight soft gradient on the cheeks and under the chin.
-Line art: colored outlines, warm brown around skin, deep violet around hair, navy black around clothes, medium clean line weight, no brush texture.
+This is a base model for a 2D dress-up game: hair, clothes and accessories are added later as separate layers, so the head must be completely bald.
+Keep from the input image: the chibi proportions (about 2.25 heads tall), the face (eyes, eye size and placement, nose, mouth, cheeks, chin) at exactly the same size and position in the frame, the line art, the semi-painterly anime rendering, the transparent background and the image size. Redraw everything else as follows.
+CHARACTER LOCK BODY_{{look.code}}:
+Chibi anime {{look.figure}}, about 2.25 heads tall, oversized round head, small body, short limbs.
+Head: {{look.head}}. The skull is a smooth even dome the same colour as the face, a little smaller than the hair outline in the input. Simple small ears. Thin eyebrows drawn on the skin.
+Face: {{look.eyes}}, a tiny dot nose, {{look.mouth}}. No blush, no makeup.
+Skin: warm light cream on the face, scalp, neck, arms, hands and legs; soft semi-painterly shading.
+Pose: relaxed natural standing pose, front view at eye level, head upright and centred, not tilted. Weight slightly more on one leg; shoulders relaxed and lowered; both arms hang loosely, slightly bent, held clearly away from the body so both hands are drawn against the empty background; both feet on the same ground line, pointing forward.
+Hands: small open chibi hands, palms toward the thighs, each with exactly five fingers (four fingers and one thumb), slightly apart so every finger is visible. Not mittens, not fists, not cartoon four-finger hands. Nothing in the hands.
+Clothing: a plain mid-gray tank top and plain charcoal shorts, no pattern, barefoot.
+Line art: colored outlines, warm brown around the skin, navy black around the clothing, medium clean line weight.
+Rendering: semi-painterly skin, two-tone cel shading on the clothing, no texture, no noise, no text, no watermark.
+No hair anywhere: no fringe, no hairline, no stubble, no hair shadow.
+Output the exact same image size as the input, 1024 by 1536 pixels, with the face in exactly the same place and at exactly the same size as in the input.
 ```
+
+Các chỗ `{{look.…}}` do từng thân điền (`look` của mục trong sổ tài sản):
+
+| `look` | Thân nữ (`body_f`) | Thân nam (`body_m`) |
+|---|---|---|
+| `code` | F | M |
+| `figure` | girl | boy |
+| `head` | completely bald, smooth and clean, no hair at all, no hairline, no stubble, no hair shadow | completely bald, smooth and clean, no hair at all, no hairline, no stubble, no hair shadow |
+| `eyes` | very large eyes, each nearly half the face width, blue iris gradient from deep navy at the top to bright aqua at the bottom, three white highlights, thick upper lashes flicking outward | very large eyes, each nearly half the face width, warm amber iris gradient from deep brown at the top to bright amber at the bottom, three white highlights, short simple upper lashes |
+| `mouth` | a small, slightly open smiling mouth | a small calm smile |
+
+Mục `look` còn một khóa nữa, `head_fallback`, không nằm trong mẫu: "very short buzz-cut hair lying flat against the scalp, one even dark colour, no fringe and no loose strands" (cho cả hai thân). Đó là câu mô tả đầu dự phòng, đặt vào một lời nhắc viết tay thay cho dòng `Head:` khi công cụ không vẽ nổi một cái đầu trọc sạch; tóc sát da khi đó được tách khỏi đầu bằng mặt nạ.
+
+**Những gì đã đổi so với khối cũ** (`BASE_F01`, `BASE_M01`, Plan 11):
+
+- Bỏ cụm tiếng Anh mô tả **bàn tay dạng găng** của khối cũ (dòng đầu của nó). Thay bằng đúng năm ngón, rõ từng ngón; mẫu còn dặn thẳng là không phải găng, không nắm tay (nhân vật cần có ngón tay, No14).
+- Đầu **trọc**: tóc là món riêng nên không còn mô tả tóc trong khối khóa; mỗi kiểu tóc được vẽ sau, trên thân trọc (mẫu `hair` của sổ tài sản).
+- Dáng đứng **thả lỏng** thay cho đứng thẳng tay hạ xuống.
+- **Không má hồng** (quyết định 13 của Plan 19). Mặt nạ da không mang được một mảng hồng sang tông da đậm: mảng hồng không được tô lại nên vẫn nhạt, và hiện ra như những vệt bợt trên da nâu. Khối cũ có "soft pink blush on both cheeks". Nếu người dùng không ưng khuôn mặt thiếu má hồng, phương án thay là vẽ má hồng và mở rộng cửa sổ màu của mặt nạ da về phía đỏ (`SKIN_MASK`, `docs/avatar-2d.md` mục 4.4.1); chưa làm.
+- Áo ba lỗ **xám trung bình**, quần đùi **xám than**, thay cho "xám nhạt" và "xám đậm" (lý do ở mục 2.2).
+- Khối kết thúc bằng **dòng kích thước** ("Output the exact same image size as the input, 1024 by 1536 pixels, …"): mô hình ảnh trả một ảnh sửa 1024 nhân 1536 thành 1086 nhân 1448 nếu không được dặn.
+
+Các loại ảnh khác (nét mặt, kiểu tóc, bộ trang phục, mũ, kính, bot) cũng được sinh từ các mẫu của sổ tài sản (`templates.bodyExpression`, `hair`, `outfit`, `head`, `face`, `bot`), mỗi mẫu bắt đầu bằng "Keep this exact image…" và chỉ đổi một thứ. Chúng không chép lại khối khóa: khối khóa nằm trong ảnh tham chiếu. Chi tiết ở `docs/avatar-2d.md` mục 10.1.
 
 ---
 
@@ -109,20 +151,11 @@ Ghi chú quan trọng: bức tham khảo bạn thích có chất tranh sơn mề
 
 ## 4. Câu lệnh sinh ảnh chủ, tức thân nền
 
-Sao chép nguyên khối. Phần trong ngoặc nhọn là chỗ thay theo công cụ.
+Câu lệnh của một thân nền là **mẫu `body` ở mục 2.3, nguyên văn**, với các chỗ `{{look.…}}` điền theo bảng ở đó (thân nữ hoặc thân nam), và ảnh F01 gốc đính kèm làm tham chiếu. Bốn phần của câu lệnh Plan 11 (POSE AND FRAMING, OUTFIT, BACKGROUND, RENDERING) nay nằm bên trong mẫu, ở các dòng `Pose:`, `Hands:`, `Clothing:` và `Rendering:`. Nền là nền trong suốt của ảnh vào; nếu công cụ trả nền xanh `#00FF00` hay nền trắng thì pipeline tự xóa (mục 3.2; `--white` cho nền trắng).
 
-**Câu lệnh chính:**
+Một thân chỉ được duyệt khi qua các tiêu chí ở mục 8 **và** hai phép kiểm của pipeline dành riêng cho nó: đầu nằm đúng chỗ đầu F01 (C12) và da cùng mặt nạ da hợp lý (C11). Một ảnh `verify` cho qua mà người duyệt thấy sai thì bị trả lại kèm lý do `fingers` (bàn tay không đủ năm ngón rời), `bald` (đầu còn tóc, chân tóc hay râu lởm chởm) hoặc `pose` (dáng không thả lỏng); mỗi lý do thêm một dòng sửa vào lần sinh sau (`docs/avatar-2d.md` mục 10.1).
 
-```
-[CHARACTER LOCK BASE_F01 — dán nguyên khối ở mục 2.3 vào đây]
-
-POSE AND FRAMING: full body from the top of the hair to the bottom of the feet, standing straight, front view at eye level, arms hanging down and slightly away from the body, legs slightly apart, feet pointing forward, calm expression with a slight smile, head may tilt at most 5 degrees. Character centered with generous empty space on all sides.
-OUTFIT: plain light gray tank top and plain dark gray short shorts, no pattern, barefoot. Nothing in the hands. No accessories.
-BACKGROUND: flat solid bright green background, color #00FF00, no gradient, no shadow on the ground, nothing else in the image.
-RENDERING: clean cel-shaded anime illustration, colored line art, flat colors with hard-edged shadows, no painterly brush texture, no noise, no text, no watermark, no signature.
-```
-
-**Câu lệnh phủ định**, dùng ở công cụ có ô nhập riêng cho những thứ không muốn:
+**Câu lệnh phủ định**, dùng ở công cụ có ô nhập riêng cho những thứ không muốn. ChatGPT không có ô này, nên đợt v4 không dùng nó; bản dưới đây là của Plan 11 và chưa chỉnh cho phong cách bán-painterly, vì vậy bỏ `painterly, oil painting, watercolor, brush strokes` khỏi nó trước khi dùng cho một thân:
 
 ```
 realistic, photo, 3d render, painterly, oil painting, watercolor, brush strokes, texture, noise, grain, multiple characters, side view, three-quarter view, back view, cropped, cut off, dynamic pose, running, jumping, holding object, weapon, props, background scenery, gradient background, shadow on ground, text, watermark, signature, logo, blurry, deformed hands, extra limbs, long legs, tall proportions, realistic proportions
@@ -134,7 +167,7 @@ realistic, photo, 3d render, painterly, oil painting, watercolor, brush strokes,
 
 Nguyên tắc: mỗi món được sinh dưới dạng **nhân vật đang mặc món đó**, với ảnh chủ làm tham chiếu, sau đó người dọn cắt phần món ra thành lớp riêng. Không yêu cầu công cụ sinh "chỉ cái mũ lơ lửng", vì kết quả sẽ không khớp vị trí và phối cảnh với đầu.
 
-Với mỗi câu lệnh bên dưới: dán khối khóa ở mục 2.3 lên đầu, dán nguyên phần POSE AND FRAMING, BACKGROUND, RENDERING của mục 4, và **chỉ thay phần OUTFIT hoặc thêm phần ACCESSORY**.
+**Từ nhân vật v4 (Plan 19)** ảnh chủ của một món là **thân trọc đúng giới tính** (bộ trang phục: thân nam cho bản cắt nam của `dealer01` và `tet_red01`), hoặc thân đó **đội kiểu tóc** mà món sẽ đội (mũ và kính; `--hair` của lệnh `ingest`). Câu lệnh thật nằm trong sổ tài sản (`templates.outfit`, `head`, `face`), mỗi mẫu bắt đầu bằng "Keep this exact image…" và chỉ đổi một thứ; chúng không dán lại khối khóa hay POSE AND FRAMING, vì cả hai nằm sẵn trong ảnh tham chiếu. Các khối `ACCESSORY` và `OUTFIT` dưới đây vì vậy chỉ còn là **hình dạng của phần mô tả món** (`{{look.description}}` của mục trong sổ), và danh sách ví dụ là kho mô tả để mượn; không dán chúng vào ChatGPT như một câu lệnh đầy đủ.
 
 ### 5.1 Mũ và đội đầu
 
@@ -264,7 +297,7 @@ Kiểm tra trước khi tốn công dọn. Không đạt mục nào thì sinh l�
 4. Mắt nằm ở nửa dưới của đầu.
 5. Nền là một màu phẳng thật sự, không có chuyển sáng ở góc, không có bóng dưới chân.
 6. Không có chữ, hình mờ, chữ ký.
-7. Số ngón tay, số tay, số chân đúng. Với bàn tay dạng găng thì không thấy ngón là bình thường.
+7. Số ngón tay, số tay, số chân đúng: mỗi bàn tay thấy rõ đúng năm ngón (bốn ngón và một ngón cái), tách nhau, không phải găng và không nắm tay. Thân nền phải trọc hoàn toàn, không má hồng.
 8. Tóc, mắt, màu da khớp ảnh chủ. Đặt cạnh ảnh chủ để so, không so bằng trí nhớ.
 9. Với món mũ và phụ kiện mặt: món nằm gọn trong nửa trên của ảnh, không tràn xuống vai.
 10. Với bộ trang phục: che kín phần đồ lót của thân nền, không lộ.

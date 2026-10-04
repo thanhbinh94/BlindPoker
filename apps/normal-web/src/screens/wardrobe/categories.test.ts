@@ -13,7 +13,8 @@ describe('categories', () => {
   describe('GROUPS / groupOf / tabOfSlot', () => {
     it('lists the three groups in design §3.1 order, each with its tabs', () => {
       expect(GROUPS).toEqual([
-        { id: 'look', tabs: ['base', 'hairColor', 'eyeColor'] },
+        // Plan 19 (spec §6.1): the gender switch heads the group, and is not a tab.
+        { id: 'look', tabs: ['hairStyle', 'hairColor', 'skinColor', 'eyeColor'] },
         { id: 'wear', tabs: ['head', 'face', 'outfit'] },
         { id: 'decor', tabs: ['aura', 'frame', 'words'] },
       ])
@@ -35,6 +36,9 @@ describe('categories', () => {
       expect(tabOfSlot('frame')).toBe('frame')
       expect(tabOfSlot('hairColor')).toBe('hairColor')
       expect(tabOfSlot('eyeColor')).toBe('eyeColor')
+      // Plan 19: the two v4 slots have tabs of their own.
+      expect(tabOfSlot('hairStyle')).toBe('hairStyle')
+      expect(tabOfSlot('skinColor')).toBe('skinColor')
     })
 
     it('maps title and badge — the two word slots — to the words tab', () => {
@@ -76,9 +80,6 @@ describe('categories', () => {
       expect(tabItems('words', CATALOG)).toEqual([BADGE_ONE, TITLE_ONE])
     })
 
-    it('answers an empty list for the base tab — a base is chosen, not a catalogue row', () => {
-      expect(tabItems('base', CATALOG)).toEqual([])
-    })
   })
 
   describe('counts', () => {
@@ -98,12 +99,28 @@ describe('categories', () => {
       expect(counts('head', CATALOG, owned)).toEqual({ owned: 2, total: 3 })
     })
 
-    it('is null for the base tab — a base is never "owned"', () => {
-      expect(counts('base', CATALOG, new Set())).toBeNull()
-    })
 
     it('is zero over zero for a tab the catalogue has nothing in', () => {
       expect(counts('aura', CATALOG, new Set())).toEqual({ owned: 0, total: 0 })
+    })
+
+    // Plan 19 (spec §6.1): Kiểu tóc lists the current gender's hairstyles only, and its "n/m" says the same.
+    it('counts hairstyles of one gender', () => {
+      const hair = (id: string, gender: 'f' | 'm'): ItemDto => item({ id, slot: 'hairStyle', rarity: 'common', gender })
+      const hairs = [hair('hair_f_bob01', 'f'), hair('hair_m_tousled01', 'm'), hair('hair_f_hime01', 'f'), hair('hair_m_neat01', 'm'), hair('hair_m_curly01', 'm')]
+      const catalog = [...CATALOG, ...hairs]
+      const owned = new Set(['hair_f_bob01', 'hair_m_tousled01', 'hair_m_neat01'])
+
+      expect(counts('hairStyle', catalog, owned, 'f')).toEqual({ owned: 1, total: 2 })
+      expect(counts('hairStyle', catalog, owned, 'm')).toEqual({ owned: 2, total: 3 })
+      // No gender: every hairstyle, as before.
+      expect(counts('hairStyle', catalog, owned)).toEqual({ owned: 3, total: 5 })
+      // The gender filters hairstyles only: every other tab counts as it did.
+      expect(counts('head', catalog, new Set(['head_a', 'head_b_blue']), 'm')).toEqual({ owned: 2, total: 3 })
+      // The cards follow the same rule.
+      expect(tabItems('hairStyle', catalog, 'm').map((row) => row.id)).toEqual(['hair_m_tousled01', 'hair_m_neat01', 'hair_m_curly01'])
+      expect(slotCards('hairStyle', catalog, owned, false, 'hair_f_bob01', 'f').map((card) => card.shown.id)).toEqual(['hair_f_bob01'])
+      expect(slotCards('hairStyle', catalog, owned, true, 'hair_f_bob01', 'f').map((card) => card.shown.id)).toEqual(['hair_f_bob01', 'hair_f_hime01'])
     })
   })
 
@@ -216,6 +233,7 @@ describe('categories', () => {
 
   it('TabId covers every group tab (type-level smoke: this assignment must compile)', () => {
     const all: TabId[] = GROUPS.flatMap((g) => g.tabs)
-    expect(all).toHaveLength(9)
+    // Ten since Plan 19: the base tab went, Kiểu tóc and Màu da came.
+    expect(all).toHaveLength(10)
   })
 })

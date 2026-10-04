@@ -12,12 +12,22 @@ import type { AvatarManifest } from './manifest.js'
 import { loadAvatarManifest } from './manifest.js'
 import type { AssetRef, ItemDef } from './items.js'
 import { loadItemCatalog } from './items.js'
-import { DRAWN_SLOTS, SLOTS } from './slots.js'
-import type { ItemSlot } from './slots.js'
+import { DEFAULT_HAIR, DRAWN_SLOTS, SLOTS } from './slots.js'
+import type { Gender, ItemSlot } from './slots.js'
 
-/** A `hairColor`/`eyeColor` item: no `asset`, a required `colour`. */
-function colourItem(id: string, slot: 'hairColor' | 'eyeColor', colour: string, extra: Partial<ItemDef> = {}): ItemDef {
+/** A `hairColor`/`eyeColor`/`skinColor` item: no `asset`, a required `colour`. */
+function colourItem(id: string, slot: 'hairColor' | 'eyeColor' | 'skinColor', colour: string, extra: Partial<ItemDef> = {}): ItemDef {
   return { id, slot, rarity: 'common', nameKey: `items.${id}`, assetKey: `${slot}/${id}`, isDefault: false, colour, ...extra }
+}
+
+/** A free common hairstyle drawn from `item_<id>_L60` in front and `item_<id>_L20` behind (A3). */
+function hairStyle(id: string, gender: Gender, counterpart: string, extra: Partial<ItemDef> = {}): ItemDef {
+  return {
+    id, slot: 'hairStyle', rarity: 'common', nameKey: `items.${id}`, assetKey: `hairStyle/${id}`, isDefault: false, free: true,
+    gender, counterpart, naturalColour: '#5e3e6f',
+    asset: { layer: 60, file: `item_${id}_L60`, back: `item_${id}_L20`, fitsAvatarCrop: true },
+    ...extra,
+  }
 }
 
 let test: TestDb
@@ -43,7 +53,7 @@ function fixture(defs: unknown): string {
   return path
 }
 
-const LAYER_OF: Partial<Record<ItemSlot, AssetRef['layer']>> = { head: 80, face: 70, outfit: 40, aura: 10, frame: 90 }
+const LAYER_OF: Partial<Record<ItemSlot, AssetRef['layer']>> = { hairStyle: 60, head: 80, face: 70, outfit: 40, aura: 10, frame: 90 }
 
 /** A tiny manifest that names exactly the files the fixtures below reference. */
 const MANIFEST: AvatarManifest = {
@@ -64,6 +74,17 @@ const MANIFEST: AvatarManifest = {
     item_outfit_dealer01_tinted_L40: { layer: 40, w: 1, h: 1, bytes2x: 1, masks: { tint: { bytes2x: 1, meanL: 0.5 } } },
     item_outfit_dealer01_tinted_m_L40: { layer: 40, w: 1, h: 1, bytes2x: 1 },
     item_outfit_dealer01_tinted_m_masked_L40: { layer: 40, w: 1, h: 1, bytes2x: 1, masks: { tint: { bytes2x: 1, meanL: 0.4 } } },
+    // The two default hairstyles every catalogue needs (pre-flight #6). The bob's layers carry hair masks
+    // and the tousled cut's do not — the asymmetry the `hairTint` tests need.
+    item_hair_f_bob01_L20: { layer: 20, w: 1, h: 1, bytes2x: 1, masks: { hair: { bytes2x: 1, meanL: 0.35 } } },
+    item_hair_f_bob01_L60: { layer: 60, w: 1, h: 1, bytes2x: 1, masks: { hair: { bytes2x: 1, meanL: 0.31 } } },
+    item_hair_m_tousled01_L20: { layer: 20, w: 1, h: 1, bytes2x: 1 },
+    item_hair_m_tousled01_L60: { layer: 60, w: 1, h: 1, bytes2x: 1 },
+    // A bun: every strand behind the head, so its front layer's hair mask is empty.
+    item_hair_f_bun01_L20: { layer: 20, w: 1, h: 1, bytes2x: 1, masks: { hair: { bytes2x: 1, meanL: 0.4 } } },
+    item_hair_f_bun01_L60: { layer: 60, w: 1, h: 1, bytes2x: 1, masks: { hair: { bytes2x: 1, meanL: 0, empty: true } } },
+    item_hair_m_neat01_L20: { layer: 20, w: 1, h: 1, bytes2x: 1 },
+    item_hair_m_neat01_L60: { layer: 60, w: 1, h: 1, bytes2x: 1 },
   },
 }
 
@@ -75,11 +96,20 @@ function drawable(id: string, slot: ItemSlot, isDefault: boolean, file: string):
   return { id, slot, rarity: 'common', nameKey: `items.${id}`, assetKey: `${slot}/${id}`, isDefault, asset: asset(slot, file) }
 }
 
+/**
+ * The smallest catalogue `loadItemCatalog` accepts: the default outfit, what the day-28 reward pays, and the
+ * two `DEFAULT_HAIR` styles, each the other's counterpart (pre-flight #6). The hairstyles come last so that
+ * `MINIMAL[0..2]` keep the meaning every case below was written against.
+ */
 const MINIMAL: ItemDef[] = [
   drawable('outfit_casual01', 'outfit', true, 'item_outfit_casual01_L40'),
   { id: 'badge_monthly', slot: 'badge', rarity: 'rare', nameKey: 'items.badge_monthly', assetKey: 'badge/badge_monthly', isDefault: false },
   { id: 'title_devoted', slot: 'title', rarity: 'rare', nameKey: 'items.title_devoted', assetKey: 'title/title_devoted', isDefault: false },
+  hairStyle('hair_f_bob01', 'f', 'hair_m_tousled01'),
+  hairStyle('hair_m_tousled01', 'm', 'hair_f_bob01'),
 ]
+/** `MINIMAL` without its two hairstyles: what every catalogue was before A3. */
+const NO_HAIR = MINIMAL.filter((d) => d.slot !== 'hairStyle')
 
 function fixtureWith(...defs: ItemDef[]): string {
   return fixture([...MINIMAL, ...defs])
@@ -88,9 +118,10 @@ function fixtureWith(...defs: ItemDef[]): string {
 describe('the shipped catalogue', () => {
   const catalog = loadItemCatalog()
 
-  it('has seventy-six items spread across all nine slots', () => {
+  it('has eighty-nine items spread across all eleven slots', () => {
     const all = catalog.all()
-    expect(all.length).toBe(75)
+    expect(all.length).toBe(89)
+    expect(SLOTS).toHaveLength(11)
     for (const slot of SLOTS) expect(all.some((d) => d.slot === slot), slot).toBe(true)
     // The v2 slots are gone: a wardrobe piece is one PNG layer now, not a body part it dresses.
     expect(all.some((d) => ['hair', 'top', 'bottom', 'shoes', 'hat', 'accessory', 'jewelry'].includes(d.slot))).toBe(false)
@@ -106,7 +137,7 @@ describe('the shipped catalogue', () => {
   it('composes its default into the avatar a new account is registered wearing', () => {
     // The method `AuthService` calls through `DefaultItemCatalog`, so it is wired here rather than
     // only through the standalone `defaultAvatar(catalog)` its tests use.
-    expect(catalog.defaultAvatar()).toEqual({ v: 3, base: 'f01', outfit: 'outfit_casual01' })
+    expect(catalog.defaultAvatar()).toEqual({ v: 4, gender: 'f', hairStyle: 'hair_f_bob01', outfit: 'outfit_casual01' })
   })
 
   it('contains every id the daily reward and the achievements promise, in its v3 slot', () => {
@@ -132,7 +163,7 @@ describe('the shipped catalogue', () => {
   })
 
   it('gives every drawn-slot item an asset on the slot’s canonical layer, and nothing else one at all', () => {
-    const layerOf: Partial<Record<ItemSlot, number>> = { head: 80, face: 70, outfit: 40, aura: 10, frame: 90 }
+    const layerOf: Partial<Record<ItemSlot, number>> = { hairStyle: 60, head: 80, face: 70, outfit: 40, aura: 10, frame: 90 }
     for (const def of catalog.all()) {
       if (!DRAWN_SLOTS.includes(def.slot)) {
         expect(def.asset, def.id).toBeUndefined()
@@ -151,6 +182,61 @@ describe('the shipped catalogue', () => {
       const entry = manifest.files[def.asset.file]
       expect(entry, `${def.id}: ${def.asset.file}`).toBeDefined()
       expect(entry!.layer, def.id).toBe(def.asset.layer)
+      // A hairstyle's back half, behind the body (pre-flight #41).
+      if (def.asset.back === undefined) continue
+      const back = manifest.files[def.asset.back]
+      expect(back, `${def.id}: ${def.asset.back}`).toBeDefined()
+      expect(back!.layer, def.id).toBe(20)
+    }
+  })
+
+  it('ships eight free hairstyles, four per gender, each pointing at the other gender’s counterpart', () => {
+    const hairs = catalog.all().filter((d) => d.slot === 'hairStyle')
+    expect(hairs.map((d) => d.id)).toEqual(['hair_f_bob01', 'hair_f_hime01', 'hair_f_wavy01', 'hair_f_ponytail01', 'hair_m_tousled01', 'hair_m_neat01', 'hair_m_curly01', 'hair_m_spiky01'])
+    for (const hair of hairs) {
+      expect(hair).toMatchObject({ rarity: 'common', free: true, asset: { layer: 60, file: `item_${hair.id}_L60`, back: `item_${hair.id}_L20` } })
+      expect(catalog.get(hair.counterpart!)?.gender).not.toBe(hair.gender)
+    }
+    expect(catalog.get(DEFAULT_HAIR.f)).toMatchObject({ gender: 'f', free: true })
+    expect(catalog.get(DEFAULT_HAIR.m)).toMatchObject({ gender: 'm', free: true })
+  })
+
+  it('pairs each hairstyle with its counterpart both ways, and gives it the old base’s hair as its natural colour', () => {
+    const natural: Record<string, [Gender, string, string]> = {
+      hair_f_bob01: ['f', 'hair_m_tousled01', '#5e3e6f'],
+      hair_f_hime01: ['f', 'hair_m_neat01', '#302c39'],
+      hair_f_wavy01: ['f', 'hair_m_curly01', '#e0c9b3'],
+      hair_f_ponytail01: ['f', 'hair_m_spiky01', '#874a2f'],
+      hair_m_tousled01: ['m', 'hair_f_bob01', '#684136'],
+      hair_m_neat01: ['m', 'hair_f_hime01', '#2c282d'],
+      hair_m_curly01: ['m', 'hair_f_wavy01', '#2a1f1e'],
+      hair_m_spiky01: ['m', 'hair_f_ponytail01', '#5d3627'],
+    }
+    for (const [id, [gender, counterpart, naturalColour]] of Object.entries(natural)) {
+      expect(catalog.get(id), id).toMatchObject({ gender, counterpart, naturalColour, asset: { fitsAvatarCrop: true } })
+    }
+  })
+
+  it('tints every shipped hairstyle from its own hair masks, back layer first', () => {
+    const manifest = loadAvatarManifest()
+    for (const hair of catalog.all().filter((d) => d.slot === 'hairStyle')) {
+      expect(hair.asset?.hairTint, hair.id).toEqual({ meanL: manifest.files[hair.asset!.file]?.masks?.hair?.meanL, files: [hair.asset!.back, hair.asset!.file] })
+    }
+  })
+
+  it('ships six free skin colours with lowercase hex colours', () => {
+    const skins = catalog.all().filter((d) => d.slot === 'skinColor')
+    expect(skins.map((d) => [d.id, d.colour])).toEqual([
+      ['skin_porcelain01', '#fcf0e9'],
+      ['skin_fair01', '#f9e6da'],
+      ['skin_lighttan01', '#e5bd9e'],
+      ['skin_tan01', '#c7916b'],
+      ['skin_brown01', '#9c6140'],
+      ['skin_deep01', '#643e2b'],
+    ])
+    for (const skin of skins) {
+      expect(skin, skin.id).toMatchObject({ rarity: 'common', free: true, isDefault: false })
+      expect(skin.asset, skin.id).toBeUndefined()
     }
   })
 
@@ -161,12 +247,13 @@ describe('the shipped catalogue', () => {
     for (const def of catalog.all()) expect(def.asset?.hidesHairBack, def.id).toBeUndefined()
   })
 
-  it('hides the hair strand under every hat but the open-topped visor (bug 7)', () => {
-    const strand = (id: string): boolean => catalog.get(id)?.asset?.hidesHairFront === true
-    for (const id of ['head_tophat01', 'head_beret_red01', 'head_crown_gold01', 'head_conical_hat01', 'head_beanie01', 'head_party_cone01', 'head_beret_blue01', 'head_beanie_grey01', 'head_party_cone_green01']) {
-      expect(strand(id), id).toBe(true)
+  it('hides the front hair only under the hats the fit check chose', () => {
+    // Plan 19 C5: a v4 hairstyle's L60 is the whole crown and fringe, not the old bases' one strand, so hiding it
+    // left a bald head under every hat. The fit check chose to keep the hair under all of them; the hat sits over it.
+    const hidesFront = (id: string): boolean => catalog.get(id)?.asset?.hidesHairFront === true
+    for (const id of ['head_tophat01', 'head_beret_red01', 'head_crown_gold01', 'head_conical_hat01', 'head_beanie01', 'head_party_cone01', 'head_beret_blue01', 'head_beanie_grey01', 'head_party_cone_green01', 'head_dealer_visor01']) {
+      expect(hidesFront(id), id).toBe(false)
     }
-    expect(strand('head_dealer_visor01')).toBe(false)
   })
 
   it('leaves enough unowned commons and rares for the daily tiers to draw several before running dry', () => {
@@ -390,17 +477,141 @@ describe('colour items, free items and asset.tint', () => {
       ),
       MANIFEST,
     )
-    expect(catalog.freeIds()).toEqual(new Set(['haircolor_red01']))
+    // `MINIMAL`'s two default hairstyles are free too, as every catalogue's must be.
+    expect(catalog.freeIds()).toEqual(new Set(['hair_f_bob01', 'hair_m_tousled01', 'haircolor_red01']))
+  })
+})
+
+/**
+ * Hairstyles (A3, spec §4.2): an item in `hairStyle`, drawn as two layers — `asset.file` at 60 in front of the
+ * face, `asset.back` at 20 behind the body — with a gender, a counterpart of the other gender and a natural
+ * colour. `DEFAULT_HAIR` names one per gender, and every catalogue must have both.
+ */
+describe('hairStyle items', () => {
+  /** `MINIMAL` (plus `extra`) with the row `id` rewritten in raw JSON, so a field can be dropped or misspelt. */
+  function editing(id: string, edit: (row: Record<string, unknown>) => Record<string, unknown>, extra: ItemDef[] = []): string {
+    const rows = [...MINIMAL, ...extra].map((d) => JSON.parse(JSON.stringify(d)) as Record<string, unknown>)
+    return fixture(rows.map((row) => (row['id'] === id ? edit(row) : row)))
+  }
+  const assetOf = (row: Record<string, unknown>): Record<string, unknown> => row['asset'] as Record<string, unknown>
+
+  it('passes a hairstyle through with both layers, its gender, its counterpart and its natural colour', () => {
+    const catalog = loadItemCatalog(fixtureWith(), MANIFEST)
+    expect(catalog.get('hair_m_tousled01')).toEqual({
+      id: 'hair_m_tousled01', slot: 'hairStyle', rarity: 'common', nameKey: 'items.hair_m_tousled01', assetKey: 'hairStyle/hair_m_tousled01',
+      isDefault: false, free: true, gender: 'm', counterpart: 'hair_f_bob01', naturalColour: '#5e3e6f',
+      asset: { layer: 60, file: 'item_hair_m_tousled01_L60', back: 'item_hair_m_tousled01_L20', fitsAvatarCrop: true },
+    })
+    // Nothing else gains the hairstyle fields.
+    expect(catalog.get('outfit_casual01')).not.toHaveProperty('gender')
+    expect(catalog.get('outfit_casual01')?.asset).not.toHaveProperty('back')
+  })
+
+  it('derives hairTint from the hair layers’ masks', () => {
+    const catalog = loadItemCatalog(fixtureWith(hairStyle('hair_f_bun01', 'f', 'hair_m_tousled01')), MANIFEST)
+    // Both layers masked: the front layer's lightness, and both files, back to front.
+    expect(catalog.get('hair_f_bob01')?.asset?.hairTint).toEqual({ meanL: 0.31, files: ['item_hair_f_bob01_L20', 'item_hair_f_bob01_L60'] })
+    // An empty front mask (a bun): the back layer's lightness, and only the back layer to paint.
+    expect(catalog.get('hair_f_bun01')?.asset?.hairTint).toEqual({ meanL: 0.4, files: ['item_hair_f_bun01_L20'] })
+    // No mask on either layer: nothing to tint, and no key at all.
+    expect(catalog.get('hair_m_tousled01')?.asset).not.toHaveProperty('hairTint')
+  })
+
+  it('refuses gender, counterpart or naturalColour outside hairStyle, and a hairStyle without them', () => {
+    for (const [field, value] of [['gender', 'f'], ['counterpart', 'hair_f_bob01'], ['naturalColour', '#5e3e6f']] as const) {
+      expect(() => loadItemCatalog(editing('outfit_casual01', (row) => ({ ...row, [field]: value })), MANIFEST), field)
+        .toThrow(new RegExp(`outfit_casual01 has a ${field} but is not in the hairStyle slot \\(outfit\\)`))
+      const without = editing('hair_f_bob01', (row) => Object.fromEntries(Object.entries(row).filter(([key]) => key !== field)))
+      expect(() => loadItemCatalog(without, MANIFEST), field).toThrow(new RegExp(`hair_f_bob01 needs a .*\\b${field}\\b.*\\(slot hairStyle\\)`))
+    }
+    expect(() => loadItemCatalog(editing('hair_f_bob01', (row) => ({ ...row, gender: 'x' })), MANIFEST)).toThrow(/hair_f_bob01 needs a gender, one of f, m \(slot hairStyle\)/)
+    for (const bad of ['#5E3E6F', '5e3e6f', '#5e3e6', 42]) {
+      expect(() => loadItemCatalog(editing('hair_f_bob01', (row) => ({ ...row, naturalColour: bad })), MANIFEST), String(bad)).toThrow(/hair_f_bob01 needs a 6-digit hex naturalColour/)
+    }
+  })
+
+  it('refuses a hairstyle with no back layer, a back layer on any other slot, and the variants and tint a hairstyle never has', () => {
+    const noBack = editing('hair_f_bob01', (row) => ({ ...row, asset: Object.fromEntries(Object.entries(assetOf(row)).filter(([key]) => key !== 'back')) }))
+    expect(() => loadItemCatalog(noBack, MANIFEST)).toThrow(/hair_f_bob01 has no asset\.back \(slot hairStyle\)/)
+    const outfitBack = editing('outfit_casual01', (row) => ({ ...row, asset: { ...assetOf(row), back: 'item_hair_f_bob01_L20' } }))
+    expect(() => loadItemCatalog(outfitBack, MANIFEST)).toThrow(/outfit_casual01 has an asset\.back but is not in the hairStyle slot \(outfit\)/)
+    const ghostBack = editing('hair_f_bob01', (row) => ({ ...row, asset: { ...assetOf(row), back: 'item_hair_f_ghost01_L20' } }))
+    expect(() => loadItemCatalog(ghostBack, MANIFEST)).toThrow(/hair_f_bob01 names the back layer item_hair_f_ghost01_L20, which is not in the avatar manifest/)
+    const variants = editing('hair_f_bob01', (row) => ({ ...row, asset: { ...assetOf(row), variants: { m: 'item_hair_m_tousled01_L60' } } }))
+    expect(() => loadItemCatalog(variants, MANIFEST)).toThrow(/hair_f_bob01 is a hairstyle, which never has asset\.variants/)
+    const tinted = editing('hair_f_bob01', (row) => ({ ...row, asset: { ...assetOf(row), tint: '#b3261e' } }))
+    expect(() => loadItemCatalog(tinted, MANIFEST)).toThrow(/hair_f_bob01 is a hairstyle, which never has asset\.tint/)
+    const wrongFront = editing('hair_f_bob01', (row) => ({ ...row, asset: { ...assetOf(row), file: 'item_hair_f_bob01_L20' } }))
+    expect(() => loadItemCatalog(wrongFront, MANIFEST)).toThrow(/hair_f_bob01's asset file item_hair_f_bob01_L20 is manifest layer 20 rather than 60/)
+  })
+
+  it('refuses a counterpart of the same gender, and a back layer on the wrong layer', () => {
+    const sameGender = editing('hair_f_bob01', (row) => ({ ...row, counterpart: 'hair_f_bun01' }), [hairStyle('hair_f_bun01', 'f', 'hair_m_tousled01')])
+    expect(() => loadItemCatalog(sameGender, MANIFEST)).toThrow(/hair_f_bob01 has the counterpart hair_f_bun01, which is not a hairStyle item of the other gender/)
+    const ghost = editing('hair_f_bob01', (row) => ({ ...row, counterpart: 'hair_m_ghost01' }))
+    expect(() => loadItemCatalog(ghost, MANIFEST)).toThrow(/hair_f_bob01 has the counterpart hair_m_ghost01, which is not a hairStyle item of the other gender/)
+    const notHair = editing('hair_f_bob01', (row) => ({ ...row, counterpart: 'outfit_casual01' }))
+    expect(() => loadItemCatalog(notHair, MANIFEST)).toThrow(/hair_f_bob01 has the counterpart outfit_casual01, which is not a hairStyle item of the other gender/)
+
+    const wrongBack = editing('hair_f_bob01', (row) => ({ ...row, asset: { ...assetOf(row), back: 'item_hair_f_bob01_L60' } }))
+    expect(() => loadItemCatalog(wrongBack, MANIFEST)).toThrow(/hair_f_bob01's back layer item_hair_f_bob01_L60 is manifest layer 60 rather than 20/)
+  })
+
+  it('does not require the pairing to be symmetric', () => {
+    // A future rare style may point at a free one, which keeps its own partner.
+    const rare = { ...hairStyle('hair_m_neat01', 'm', 'hair_f_bob01'), rarity: 'rare' as const, free: undefined }
+    expect(loadItemCatalog(fixtureWith(rare), MANIFEST).get('hair_m_neat01')).toMatchObject({ rarity: 'rare', counterpart: 'hair_f_bob01' })
+  })
+
+  it('refuses a catalogue whose default hairstyle is missing, of the wrong gender or not free', () => {
+    const noBob = fixture(MINIMAL.filter((d) => d.id !== DEFAULT_HAIR.f))
+    expect(() => loadItemCatalog(noBob, MANIFEST)).toThrow(/DEFAULT_HAIR\.f names hair_f_bob01, which is not in the catalogue/)
+    const male = editing('hair_f_bob01', (row) => ({ ...row, gender: 'm' }))
+    expect(() => loadItemCatalog(male, MANIFEST)).toThrow(/DEFAULT_HAIR\.f names hair_f_bob01, which is a hairstyle of gender m/)
+    const rare = editing('hair_m_tousled01', (row) => ({ ...Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'free')), rarity: 'rare' }))
+    expect(() => loadItemCatalog(rare, MANIFEST)).toThrow(/DEFAULT_HAIR\.m names hair_m_tousled01, which is not free/)
+  })
+
+  it('runs every hairstyle check after the checks that exist today (pre-flight #6)', () => {
+    // A catalogue with no hairstyle at all still hears about its older problem first…
+    expect(() => loadItemCatalog(fixture([{ ...NO_HAIR[0]!, isDefault: false }, ...NO_HAIR.slice(1)]), MANIFEST)).toThrow(/no default item for the required slot outfit/)
+    expect(() => loadItemCatalog(fixture([...NO_HAIR, drawable('outfit_other', 'outfit', true, 'item_outfit_casual01_L40')]), MANIFEST)).toThrow(/the required slot outfit has 2 defaults/)
+    expect(() => loadItemCatalog(fixture([...NO_HAIR, drawable('head_default', 'head', true, 'item_head_beanie01_L80')]), MANIFEST)).toThrow(/head_default is a default in the optional slot head/)
+    expect(() => loadItemCatalog(fixture(NO_HAIR.filter((d) => d.id !== 'badge_monthly')), MANIFEST)).toThrow(/badge_monthly, which is not in the catalogue/)
+    // …and once those are fixed, the missing hairstyles are what it names.
+    expect(() => loadItemCatalog(fixture(NO_HAIR), MANIFEST)).toThrow(/DEFAULT_HAIR\.f names hair_f_bob01, which is not in the catalogue/)
+  })
+})
+
+/** Skin colours (A3, spec §4.2): a third colour slot, exactly like `hairColor` and `eyeColor`. */
+describe('skinColor items', () => {
+  it('reads a skin colour as a colour item: a colour, and nothing to draw', () => {
+    const catalog = loadItemCatalog(fixtureWith(colourItem('skin_deep01', 'skinColor', '#5c3a28', { free: true })), MANIFEST)
+    expect(catalog.get('skin_deep01')).toEqual({
+      id: 'skin_deep01', slot: 'skinColor', rarity: 'common', nameKey: 'items.skin_deep01',
+      assetKey: 'skinColor/skin_deep01', isDefault: false, colour: '#5c3a28', free: true,
+    })
+  })
+
+  it('refuses a skin colour without a lowercase hex, or with a layer to draw', () => {
+    const noColour = fixtureWith({ ...colourItem('skin_deep01', 'skinColor', '#5c3a28'), colour: undefined })
+    expect(() => loadItemCatalog(noColour, MANIFEST)).toThrow(/skin_deep01 needs a 6-digit hex colour \(slot skinColor\)/)
+    expect(() => loadItemCatalog(fixtureWith(colourItem('skin_deep01', 'skinColor', '#5C3A28')), MANIFEST)).toThrow(/skin_deep01 needs a 6-digit hex colour/)
+    const drawn = fixtureWith(colourItem('skin_deep01', 'skinColor', '#5c3a28', { asset: asset('outfit', 'item_outfit_casual01_L40') }))
+    expect(() => loadItemCatalog(drawn, MANIFEST)).toThrow(/skin_deep01 is in the slot skinColor, which is never drawn, but has an asset/)
   })
 })
 
 describe('the shipped catalogue’s free items and tints', () => {
   const catalog = loadItemCatalog()
 
-  it('freeIds() names exactly the free ids the design lists (18: 8 hair + 6 eye colours + 4 casual variants)', () => {
+  it('freeIds() names exactly the free ids (32: 8 hair colours + 6 eye colours + 4 casual variants + 8 hairstyles + 6 skin colours)', () => {
     const ids = catalog.freeIds()
-    expect(ids.size).toBe(18)
-    for (const id of ['haircolor_black01', 'eyecolor_brown01', 'outfit_casual_red01']) expect(ids.has(id), id).toBe(true)
+    expect(ids.size).toBe(32)
+    const count = (slot: ItemSlot): number => [...ids].filter((id) => catalog.get(id)?.slot === slot).length
+    expect({ hairColor: count('hairColor'), eyeColor: count('eyeColor'), outfit: count('outfit'), hairStyle: count('hairStyle'), skinColor: count('skinColor') })
+      .toEqual({ hairColor: 8, eyeColor: 6, outfit: 4, hairStyle: 8, skinColor: 6 })
+    for (const id of ['haircolor_black01', 'eyecolor_brown01', 'outfit_casual_red01', 'hair_m_spiky01', 'skin_deep01']) expect(ids.has(id), id).toBe(true)
     for (const id of ['haircolor_pink01', 'head_beret_blue01', 'head_party_cone_blue01']) expect(ids.has(id), id).toBe(false)
     for (const id of ids) expect(catalog.get(id)?.rarity, id).toBe('common')
   })
@@ -421,13 +632,15 @@ describe('seed', () => {
     await catalog.seed(db)
     await catalog.seed(db)
 
-    const rows = await db.select().from(items).where(sql`${items.id} in ('outfit_casual01', 'badge_monthly', 'title_devoted')`).orderBy(asc(items.id))
+    const rows = await db.select().from(items).where(sql`${items.id} in ('outfit_casual01', 'badge_monthly', 'title_devoted', 'hair_f_bob01', 'hair_m_tousled01')`).orderBy(asc(items.id))
     expect(rows).toHaveLength(MINIMAL.length)
     expect(rows.find((r) => r.id === 'outfit_casual01')).toMatchObject({ slot: 'outfit', rarity: 'common', isDefault: true, assetKey: 'outfit/outfit_casual01' })
+    // A hairstyle is an ordinary row: the slot lands in the same column as every other one.
+    expect(rows.find((r) => r.id === 'hair_f_bob01')).toMatchObject({ slot: 'hairStyle', rarity: 'common', isDefault: false, assetKey: 'hairStyle/hair_f_bob01' })
   })
 
   it('carries an edited row into a database that already has the old one', async () => {
-    const edited = [MINIMAL[0]!, { ...MINIMAL[1]!, rarity: 'epic' as const, nameKey: 'items.renamed' }, MINIMAL[2]!]
+    const edited = [MINIMAL[0]!, { ...MINIMAL[1]!, rarity: 'epic' as const, nameKey: 'items.renamed' }, ...MINIMAL.slice(2)]
     await loadItemCatalog(fixture(edited), MANIFEST).seed(db)
 
     const [row] = await db.select().from(items).where(sql`${items.id} = 'badge_monthly'`)

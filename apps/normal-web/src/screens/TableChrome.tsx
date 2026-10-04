@@ -2,7 +2,7 @@ import type { RoomPlayerView } from '@bp/core'
 import type { ChibiSubject } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
 import type { ReactNode } from 'react'
-import type { BaseDto, ItemDto, PlayerAvatarDto } from '../api.js'
+import type { BodyDto, ItemDto, PlayerAvatarDto } from '../api.js'
 import { chibiFromApi } from '../avatar/chibi.js'
 import { itemName } from '../catalog-i18n.js'
 import a from '../avatar/avatar.module.css'
@@ -36,17 +36,19 @@ export type AvatarCache = Map<string, PlayerAvatarDto | null>
  * bot at every table, forever — and `PokerTable` never asks this for one; it draws its own `botChibi`
  * instead. A human whose avatar has not arrived (or has none) answers `null`, and the kit's `Seat` falls
  * back to the name's initial, the same way it always has.
+ *
+ * `bodies` is `/api/catalog/avatar`'s `bodies`, keyed by `gender` (avatar v4).
  */
 export function makeChibiFor(
   avatars: AvatarCache,
   items: ReadonlyMap<string, ItemDto>,
-  bases: ReadonlyMap<string, BaseDto>,
+  bodies: ReadonlyMap<string, BodyDto>,
 ): (player: RoomPlayerView) => ChibiSubject | null {
   return (player) => {
     if (player.isBot) return null
     const config = avatars.get(player.playerId)?.avatar
     if (config === undefined || config === null) return null
-    return chibiFromApi(config, items, bases)
+    return chibiFromApi(config, items, bodies)
   }
 }
 

@@ -42,14 +42,15 @@ apps/normal-web/
     notifications.ts    the kit's notification list, with achievement ids translated
     avatar/
       useAvatars.ts     the shared avatar cache (module scope, 60 s, one request per id)
-      chibi.ts          chibiFromApi — an AvatarConfigDto (v3) + the catalogue → the kit's ChibiConfig
+      chibi.ts          chibiFromApi — an AvatarConfigDto (v4) + the catalogue + the bodies → the kit's ChibiConfig
     screens/
       Shell.tsx         the rail and the page under it; publishes --bp-stage for the table
       AuthScreen.tsx    sign in and register, one card, two modes
       {Profile,Achievements,Daily,Settings}Screen.tsx   four of the five lazy account screens
       wardrobe/
-        WardrobeScreen.tsx   the fifth — preview + expression stepper + nine tabs + saved outfits
-        BaseTab.tsx          the two fixed bases (f01/m01) — chosen, never locked
+        WardrobeScreen.tsx   the fifth — preview + expression stepper + Nữ | Nam + ten tabs + saved outfits
+        HairStyleTab.tsx     Kiểu tóc: the gender's hairstyles, each card a head portrait of the draft
+        gender.ts            swapGender — the Nữ | Nam switch: the gender and a hairstyle of that gender
         ItemTab.tsx          one slot's tiles: owned and clickable, or locked with a reason
         OutfitBar.tsx        five saved snapshots — apply / save here / rename / delete
       TableChrome.tsx   makeChibiFor / makeCaptionFor — the two slots RoomScreen takes from this app
@@ -58,7 +59,7 @@ apps/normal-web/
       useAsync.ts       load once, expose { data, loading, reload, set } — every account screen's spine
     locales/{vi,en}/normal.json
   public/avatar/             the chibi's PNG layers + avatar-manifest.json (committed; see avatar-2d.md)
-  scripts/avatar-pipeline.mjs  the asset pipeline: placeholder | ingest | check | sheet
+  scripts/avatar-pipeline.mjs  the asset pipeline: placeholder | ingest | masks | colours | check | sheet | tint-sheet | hides
   test/footprint.test.ts   the download budget, measured on `dist/` and on `public/avatar/`
   e2e/                     Playwright against the real server (support.ts is shared, not a test)
 ```
@@ -118,17 +119,20 @@ player id.
 
 ## Avatars
 
-An avatar is a **chibi**, drawn as a stack of same-origin PNG `<img>`s — a fixed base (`f01`/`m01`,
-chosen rather than owned) plus whatever is equipped in each slot, on a 384×448 frame (design §3, §5).
+An avatar is a **chibi**, drawn as a stack of same-origin PNG `<img>`s — since Plan 19 (avatar v4, spec
+`2026-10-03-avatar-v4-design.md`) a body per **gender** (`f`/`m`, chosen rather than owned), a two-layer hairstyle
+and whatever is equipped in each slot, recoloured by up to three colours, on a 384×448 frame (design §3, §5).
 Nothing is rendered on the server and nothing is rendered by this app either: every picture is the
 browser laying out `<img>` tags, and `@bp/ui-kit`'s `Chibi` (`packages/ui-kit/src/avatar2d/`) is the one
 component that does it. This app's own job is smaller than the 3D system's was — turn the server's
 config into the shape `Chibi` draws, and wire a save back to every place a face is shown.
 
 ```
-AvatarConfigDto (v3)      base + outfit + head?/face?/aura?/frame? + title?/badge?
+AvatarConfigDto (v4)      gender + hairStyle + outfit + head?/face?/aura?/frame?
+                          + hairColor?/eyeColor?/skinColor? + title?/badge?
    │
-   ├─ chibiFromApi()  ──►   ChibiConfig                the kit's own shape: a BaseRef + WearRefs
+   ├─ chibiFromApi()  ──►   ChibiConfig                the kit's own shape: a BodyRef, a HairRef, WearRefs
+   │                          │                        and the three colours as hex
    │                          │
    │                          └─ hashChibi()  ──►  '1aa20c85'   the configuration's identity
    │
@@ -136,13 +140,24 @@ AvatarConfigDto (v3)      base + outfit + head?/face?/aura?/frame? + title?/badg
                                                                   tiles, the profile figure
 ```
 
-**`chibiFromApi`** (`src/avatar/chibi.ts`) is the whole bridge: it resolves `base` against the
-catalogue's two bases and every optional slot against `items.json`, and it is written to never throw at
-an id it does not recognise — a browser holding yesterday's bundle can meet ids the server added since.
-An unknown base answers `null` for the whole chibi (there is no body to draw it on); an unknown optional
-item is simply omitted, the same way an unknown badge drops from a seat caption rather than printing a
-raw key; an unknown `outfit` falls back to the catalogue's default outfit, and only if that is *also*
-missing does the whole function give up.
+**`chibiFromApi(config, items, bodies)`** (`src/avatar/chibi.ts`) is the whole bridge. `bodies` is
+`/api/catalog/avatar`'s `bodies`, keyed by `gender`; `App`, the profile and the table each build that map once
+(`makeChibiFor(avatars, items, bodies)` for the seats). The body is `bodies.get(config.gender)`, its `tint` (where
+skin and eyes may be recoloured) copied straight across; the hairstyle is the `hairStyle` row's two layers —
+`{ id, back: asset.back, front: asset.file, tint: asset.hairTint }`; every other slot is resolved against
+`items.json`, a gendered item drawing its cut for that gender (`layerFileFor(asset, gender)` =
+`asset.variants?.[gender] ?? asset.file`); and `hairColor`, `eyeColor` and `skinColor` resolve to the hex their
+item paints with. It is written to never throw at an id it does not recognise — a browser holding yesterday's
+bundle can meet ids the server added since. An unknown gender answers `null` for the whole chibi (there is no body
+to draw it on); an unknown hairstyle wears that gender's first hairstyle in catalogue order, and only a catalogue
+with none of that gender answers `null`; an unknown optional item is simply omitted, the same way an unknown badge
+drops from a seat caption rather than printing a raw key; an unknown `outfit` falls back to the catalogue's
+default outfit, and only if that is *also* missing does the whole function give up. Where nothing can be drawn,
+every caller falls back to the kit's `defaultChibi(seed)` (or the seat's initial).
+
+The kit's own defaults — `DEFAULT_HAIR`, `hairRefOf`'s naming rule and `DEFAULT_OUTFIT_FILE`, which `defaultChibi`
+draws with and which Lite draws every player with — are held to `items.json` by `src/avatar/kit-defaults.test.ts`
+(Plan 19 R14), since the kit has no catalogue to look them up in.
 
 **`data-chibi-hash`** (`hashChibi`, in the kit) is the configuration's identity — two different
 configurations must not share one, and the same configuration must arrive at the same one wherever it
@@ -155,8 +170,10 @@ instead — the kit's own robot art, unaffected by any wardrobe.
 
 **Where the layer files come from** is [`avatar-2d.md`](avatar-2d.md): `scripts/avatar-pipeline.mjs`
 turns a green-screened AI-generated picture into `@1x`/`@2x` PNGs under `public/avatar/`, validates the
-result against ten acceptance criteria, and writes `avatar-manifest.json`. Until the real art lands,
-`avatar:placeholder` writes synthetic layers so every screen and every test here runs against something
+result against thirteen acceptance criteria, and writes `avatar-manifest.json`. The shipped set is real art
+(a body per gender, six faces each, eight two-layer hairstyles, the outfits, hats, glasses, auras, frames and eight
+bots) apart from one stand-in the catalogue no longer offers; `avatar:placeholder` writes synthetic layers for
+anything not yet drawn, so a new item can be built into every screen and every test before its picture exists
 (`docs/known-limitations.md`).
 
 ### The wardrobe
@@ -164,9 +181,26 @@ result against ten acceptance criteria, and writes `avatar-manifest.json`. Until
 `/avatar` — `wardrobe/WardrobeScreen.tsx`. A `Chibi` preview on the left, sized 192 px, with an expression stepper
 under it to try each of the six faces — `‹  Vui  ›`, a previous and a next button around the current face's name,
 wrapping at both ends, ArrowLeft/ArrowRight too, each button described by the name (review 2026-09-29, No10;
-`wardrobe/StagePanel.tsx`) — then the **Đang dùng** list and the five **Bộ đồ đã lưu** slots. On the right, nine
-tabs in three groups: **Ngoại hình** (Nhân vật, Màu tóc, Màu mắt), **Trang phục** (Mũ, Phụ kiện mặt, Quần áo) and
-**Trang trí** (Hào quang, Khung, Danh hiệu & Huy hiệu — title and badge together, the two slots with no picture).
+`wardrobe/StagePanel.tsx`) — then the **Đang dùng** list, whose first five rows are the look — **Giới tính**
+(Nữ/Nam), **Kiểu tóc**, **Màu da**, **Màu tóc**, **Màu mắt** — then the items, and the five **Bộ đồ đã lưu**
+slots. Giới tính, Kiểu tóc and Quần áo are never removable; the phone's "Đang dùng (n)" counts those three plus
+every optional slot filled. On the right, ten tabs in three groups: **Ngoại hình** (Kiểu tóc, Màu tóc, Màu da, Màu
+mắt — the screen opens on Kiểu tóc), **Trang phục** (Mũ, Phụ kiện mặt, Quần áo) and **Trang trí** (Hào quang,
+Khung, Danh hiệu & Huy hiệu — title and badge together, the two slots with no picture).
+
+**The look (avatar v4, Plan 19; spec `2026-10-03-avatar-v4-design.md` §6.1–6.3).** The body is the gender, chosen
+rather than owned: the **Nữ | Nam** switch (the kit's `Segmented`, a `group` named "Giới tính", passed to
+`CategoryNav` as `lookHeader`) heads the Ngoại hình group on every one of its tabs and is not a tab itself — a row
+no taller than the sub-tabs' on a desktop, a 44 px button each on a phone. Switching (`wardrobe/gender.ts`
+`swapGender`) changes the draft only: the hairstyle goes to its `counterpart` when owned, else to the first owned
+hairstyle of that gender; the outfit's cut follows the gender on its own (`layerFileFor`); colours, hat, glasses,
+aura, frame, title and badge stay. With no hairstyle of the other gender owned it changes nothing, so a draft never
+pairs a gender with the other gender's hairstyle. **Kiểu tóc** (`wardrobe/HairStyleTab.tsx`) lists that gender's
+hairstyles only (`slotCards`/`counts` take the gender), each card a head portrait (`ItemCard`'s `thumb`, 96 px, 72 on
+a phone) of the draft with that hairstyle — its gender, hair colour, skin and eyes, and no hat, glasses, aura or
+frame, which would make every card look the same; the hairstyle is required like the outfit, so a press on the worn
+card keeps it on. **Màu da** is a `ColourTab` like the hair and eye colours, its "Tự nhiên" swatch filled with the
+body's cream (`naturalColour`). Plan 19 removed the old tab that chose one of six fixed figures, with the figures.
 
 There is no separate inventory screen (review 2026-09-29, No5): what the account owns is this screen's default
 list, and Profile links here and to the achievements only. `#/inventory` — an old bookmark or link — still opens
@@ -176,9 +210,6 @@ the kit's router has no replace of its own). The inventory's acquired date and
 source ("Nhận ngày …", "Khởi đầu", "Miễn phí") and its "Đang sở hữu N món" total went with it, on purpose; the
 wardrobe's "n/m đã có" counts remain.
 
-- **`BaseTab`** is the one tab with nothing locked — the two bases are chosen, not owned (design §5.1) —
-  and each tile previews that base wearing the draft's *current* outfit, so the choice reads as a
-  silhouette rather than a wardrobe.
 - **`ItemTab`** lists what the player owns — a colour-variant family shows when any member is owned
   (`slotCards`, `categories.ts`; review 2026-09-29 No11a) — and, with **Hiện cả món chưa có** ticked, the whole
   catalogue for its slot, locking anything the player does not own (`aria-disabled`, with a hint: the achievement
@@ -197,16 +228,18 @@ wardrobe's "n/m đã có" counts remain.
   /api/me/outfits/:slot/apply`) rather than only touching local state, so a saved outfit survives a
   reload.
 
-Picking a tile only ever changes the in-memory draft (`withSlot`/`pickBase`); nothing reaches the
-server until **Lưu tủ đồ** is pressed. Saving is `PUT /api/me/avatar` with the full v3 payload (an empty
+Picking a tile only ever changes the in-memory draft (`withSlot`); nothing reaches the
+server until **Lưu tủ đồ** is pressed. Saving is `PUT /api/me/avatar` with the full v4 payload (an empty
 optional slot is *absent* from the object, not `''`), and on success `invalidate(myId)` so the lobby bar
 and every seat plate pick the new face up without a reload.
 
 ### Adding an item, end to end
 
-1. **The picture.** Generate (or draw) it on F01 per `docs/avatar/02-mo-ta-nhan-vat-khoa-va-yeu-cau-sinh-anh.md`,
-   then `pnpm --filter @bp/normal-web avatar:ingest <file> --as item:<slot>:<id>` — see
-   [`avatar-2d.md`](avatar-2d.md) for the exact command and the ten checks `avatar:check` runs against it.
+1. **The picture.** Generate (or draw) it on the body of its gender per
+   `docs/avatar/02-mo-ta-nhan-vat-khoa-va-yeu-cau-sinh-anh.md` — an outfit on the bald body, a hat or glasses on the
+   body wearing a hairstyle — then `pnpm --filter @bp/normal-web avatar:ingest <file> --as item:<slot>:<id> --base f|m`
+   (plus `--hair <code>` for a hat or glasses) — see [`avatar-2d.md`](avatar-2d.md) for the exact command and the
+   thirteen checks `avatar:check` runs against it.
 2. **The catalogue.** Add the row to `apps/normal-server/data/items.json` with its `slot`, `rarity`,
    `isDefault` and `asset.{layer,file}` naming the file the pipeline just wrote — see
    [`normal-server.md`](normal-server.md). The server validates the catalogue against the committed
@@ -220,9 +253,15 @@ and every seat plate pick the new face up without a reload.
 4. **How it is won.** A grant in `data/achievements.json` or the daily calendar (`head`/`face`/`aura`/
    `frame` only — design §5.2), or nothing — an item nobody owns is an item nobody sees, because the
    wardrobe lists the inventory and not the catalogue.
-5. **The contact sheet.** `pnpm --filter @bp/normal-web avatar:sheet` re-composites every item on both
-   bases and all six expressions into `docs/avatar-2d-sheet.png` — the eyeballed gate before a picture is
-   committed.
+5. **The contact sheets.** `pnpm --filter @bp/normal-web avatar:sheet` re-composites the whole set into
+   `docs/avatar-2d-sheet.png` — the eyeballed gate before a picture is committed — through the renderer's own
+   layer order and hide rules. Since avatar v4 (Plan 19) it is a grid of each gender's hairstyles × three skin tones
+   (porcelain, natural, deep) × two outfits (`casual01` and `dealer01`, in the gender's cut where there is one),
+   then every outfit on both genders, every aura and frame, the six expressions per gender, the eight bots and the
+   portrait at 192, 40 and 32 px. A second picture, `docs/avatar-2d-fit-sheet.png`, tries every hat and every pair
+   of glasses on each of the eight hairstyles, cut to the portrait: the fit check. Look at both beside every
+   other piece before committing. `--hairs` and `--outfits` narrow the grid to what a style gate shows
+   (`docs/avatar-2d.md` §4).
 6. **Commit the new PNGs, `avatar-manifest.json` and the catalogue together.** The layers are a committed
    build artefact; nothing under `public/avatar/` may be generated at build time, because no CI runner has
    the AI tool or the `assets/avatar-src/` originals (gitignored).
@@ -285,7 +324,7 @@ and holds four budgets:
 | entry chunk (first paint) | 130 KB | 108 KB |
 | every JS chunk together | 900 KB | 119 KB |
 | the stylesheet | 60 KB | 13 KB |
-| `public/avatar/*@2x.png`, raw bytes (design §8) | 6 MB total | ~1.2 MB (placeholders) |
+| `public/avatar/*@2x.png`, raw bytes (design §8) | 32 MB total (design: 6 MB; raised 2026-09-24 for real art) | ~17 MB (the v4 art) |
 
 The first three are headroom rather than targets: their job is to catch a *step change* (a chart
 library, a locale bundle that stopped being split), not to fail on the kilobyte a feature costs. The
@@ -338,11 +377,13 @@ What the five tests are for:
 - **The wardrobe, end to end** (`avatar2d.spec.ts`). `Chibi.test.tsx` proves the layering and the hide
   rules under jsdom against a hand-built config; this file is the other half — that the *app* wires a
   saved choice back into the lobby bar, a seat plate and a second wardrobe visit consistently, on the
-  placeholder layers `avatar:placeholder` writes. It switches base to m01 and saves, checks that a
-  locked epic tile (`aria-disabled`) does not equip on click, sits at a table and asserts the seat's
-  `data-chibi-hash` matches the bar's and its `<img>` names `base_m01_L30` while both bots' name
-  `bot_`, then saves an outfit-bar snapshot, changes base again and applies the snapshot back — three
-  hashes belonging to two configurations, since f01 with nothing else equipped is exactly what the
+  layers `public/avatar/` ships. It opens on Kiểu tóc, switches Nữ to Nam (the bob
+  gives way to its counterpart, "Tóc rối"), picks "Tóc vuốt dựng" and saves, checks that a locked epic
+  tile (`aria-disabled`) does not equip on click, sits at a table and asserts the seat's
+  `data-chibi-hash` matches the bar's and its `<img>`s name `body_m_L30` and `item_hair_m_spiky01_L60`
+  while both bots' name `bot_`, then saves an outfit-bar snapshot, switches back to Nữ (the ponytail,
+  the spiky hair's counterpart), picks the bob, saves, and applies the snapshot back — three hashes
+  belonging to two configurations, since Nữ with the bob and nothing else equipped is exactly what the
   account started as. Nothing here needs a GPU: a chibi is a stack of same-origin `<img>`s, unlike the
   3D `avatar3d.spec.ts` this file replaced.
 

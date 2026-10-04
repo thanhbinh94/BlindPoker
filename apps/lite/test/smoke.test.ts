@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { RUN_FILE_NAME } from '../server/src/run-file.js'
-import { EXE, PACKAGE_ROOT, SERVER_BUNDLE } from './paths.js'
+import { EXE, PACKAGE_ROOT, PUBLIC_DIR, SERVER_BUNDLE, walk } from './paths.js'
 
 /** Generous next to the ~1 s a warm start takes, but short enough to fail rather than hang CI. */
 const BUDGET_MS = 10_000
@@ -168,7 +168,7 @@ describe.skipIf(!hasExe)('bind-poker-lite.exe', () => {
  * for the address it bound, makes one request, and kills it.
  */
 describe.skipIf(!hasExe)('bind-poker-lite.exe serving the bundled avatar assets', () => {
-  it('answers GET /avatar/base_f01_L30@1x.png and the default outfit with 200', async () => {
+  it('answers GET /avatar/body_f_L30@1x.png, the default hair and the default outfit with 200 image/png', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'bp-lite-avatar-'))
     const env = { ...process.env, PORT: '0', HOST: '127.0.0.1', SQLITE_PATH: join(dir, 'bp.sqlite'), LOG_LEVEL: 'info' }
     const child = spawn(EXE, [], { cwd: dirname(EXE), env, stdio: ['ignore', 'pipe', 'pipe'] })
@@ -208,14 +208,21 @@ describe.skipIf(!hasExe)('bind-poker-lite.exe serving the bundled avatar assets'
         })
       })
 
-      const res = await fetch(`${address}/avatar/base_f01_L30@1x.png`)
-      expect(res.status).toBe(200)
-      await res.arrayBuffer()
+      // The v4 body `defaultChibi` stands on, and the front half of its default hair: before A7 Lite shipped the
+      // old `base_*` files instead, and every human seat's body and hair 404ed. `image/png` as well as 200, because
+      // the static route may answer an unknown path with the app shell (which is `text/html`, and 200).
+      for (const name of ['body_f_L30@1x.png', 'item_hair_f_bob01_L60@1x.png']) {
+        const res = await fetch(`${address}/avatar/${name}`)
+        expect(res.status, name).toBe(200)
+        expect(res.headers.get('content-type'), name).toBe('image/png')
+        await res.arrayBuffer()
+      }
 
       // The default outfit `defaultChibi` equips every human with — without it, every Lite seat 404s on
       // its outfit layer and renders undressed (`apps/lite/scripts/build.mjs`'s `isLiteAvatarFile`).
       const outfitRes = await fetch(`${address}/avatar/item_outfit_casual01_L40@1x.png`)
       expect(outfitRes.status).toBe(200)
+      expect(outfitRes.headers.get('content-type')).toBe('image/png')
       await outfitRes.arrayBuffer()
     } finally {
       child.kill()
@@ -225,6 +232,27 @@ describe.skipIf(!hasExe)('bind-poker-lite.exe serving the bundled avatar assets'
       await rmDirWhenUnlocked(dir)
     }
   }, BUDGET_MS + 5_000)
+})
+
+/**
+ * What the build leaves on disk, and what the SEA step embeds from it. Checked here by name rather than over HTTP: an
+ * unknown path may be answered with the app shell, so a 200 would not prove a file absent. "Bỏ được các ảnh base thừa"
+ * (spec §6.4): Lite draws no old `base_*` and no mask, so neither may be in the exe.
+ */
+const AVATAR_DIR = join(PUBLIC_DIR, 'avatar')
+const hasAvatars = existsSync(AVATAR_DIR)
+if (!hasAvatars) console.warn(`[smoke] skipping the avatar file list: ${AVATAR_DIR} is missing — run \`pnpm --filter @bp/lite build\` first`)
+
+describe.skipIf(!hasAvatars)('dist/public/avatar', () => {
+  it('holds no old base and no mask, and does hold the v4 body and the default hair', () => {
+    const names = walk(AVATAR_DIR)
+    expect(names.filter((name) => name.startsWith('base_')), 'old base_* files').toEqual([])
+    expect(names.filter((name) => name.includes('mask')), 'mask files').toEqual([])
+    for (const name of ['body_f_L30', 'body_m_L30', 'body_f_face_neutral_L50', 'item_hair_f_bob01_L20', 'item_hair_f_bob01_L60', 'item_hair_m_tousled01_L20', 'item_hair_m_tousled01_L60', 'item_outfit_casual01_L40']) {
+      expect(names, name).toContain(`${name}@1x.png`)
+      expect(names, name).toContain(`${name}@2x.png`)
+    }
+  })
 })
 
 /** `rmSync` retried past a transient `EBUSY`/`EPERM` (Windows holding a just-killed process's file open a beat

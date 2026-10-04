@@ -223,9 +223,10 @@
     "errors": {
       "NOT_OWNED": "You do not own one of those pieces",
       "WRONG_CATEGORY": "One of those pieces does not belong in that slot",
-      "MISSING_LAYER": "An outfit needs a piece",
+      "MISSING_LAYER": "Gender, hairstyle or outfit is missing",
       "INVALID_ITEM": "One of those pieces is not in the catalogue",
-      "INVALID_BASE": "That base is not valid"
+      "INVALID_BASE": "That base is not valid",
+      "WRONG_GENDER": "That hairstyle belongs to the other gender"
     },
     "slot": {
       "hair": "Hair",
@@ -244,8 +245,14 @@
       "wear": "Clothing",
       "decor": "Decor"
     },
+    "gender": {
+      "legend": "Gender",
+      "f": "Female",
+      "m": "Male"
+    },
     "tabs": {
-      "base": "Base",
+      "hairStyle": "Hairstyle",
+      "skinColor": "Skin tone",
       "head": "Head",
       "face": "Face accessory",
       "outfit": "Outfit",
@@ -392,15 +399,21 @@
     "head_beanie_grey01": "Grey beanie",
     "head_beanie_mustard01": "Mustard beanie",
     "head_party_cone_blue01": "Blue party cone",
-    "head_party_cone_green01": "Green party cone"
-  },
-  "bases": {
-    "f01": "Bob cut",
-    "m01": "Tousled",
-    "f02": "Long with bangs",
-    "f03": "Wavy bob",
-    "m02": "Neat crop",
-    "m03": "Curly"
+    "head_party_cone_green01": "Green party cone",
+    "hair_f_bob01": "Bob cut",
+    "hair_f_hime01": "Long with bangs",
+    "hair_f_wavy01": "Wavy bob",
+    "hair_f_ponytail01": "Ponytail",
+    "hair_m_tousled01": "Tousled",
+    "hair_m_neat01": "Neat crop",
+    "hair_m_curly01": "Curly",
+    "hair_m_spiky01": "Spiked",
+    "skin_porcelain01": "Porcelain skin",
+    "skin_fair01": "Fair skin",
+    "skin_lighttan01": "Light tan skin",
+    "skin_tan01": "Tan skin",
+    "skin_brown01": "Brown skin",
+    "skin_deep01": "Deep brown skin"
   },
   "achievements": {
     "ui": {

@@ -193,7 +193,7 @@
 }
 
 /* The right column's card grid (design §3.1, §3.2, §3.3): every card shape below — `ItemCard`,
-   `ColourCard`, `WordCard`, `BaseCard` — sits in one of these. Fixed 3 columns on phones (deferred from
+   `ColourCard`, `WordCard` — sits in one of these. Fixed 3 columns on phones (deferred from
    Task 2 to here); `auto-fill`/`minmax` from the tablet floor up, 130 px on tablet, 150 px on desktop. */
 .cardGrid {
   display: grid;
@@ -235,8 +235,7 @@
 
 /* The one card chrome `ItemCard`, `ColourCard` and `WordCard` all share (design §4.1–§4.4): the
    `data-rarity` border/glow, the gold "wearing" border `aria-pressed`/`data-wearing` sets, the
-   muted+not-allowed look `aria-disabled` sets. `BaseCard` does not use this class — it has neither a
-   rarity nor a lock (it gets the same neutral border/background directly, see `.baseCard` below).
+   muted+not-allowed look `aria-disabled` sets.
    `ColourCard` and `WordCard` render `.card` itself as the one clickable `<button>`. `ItemCard` is the one
    exception (V3 fix): its colour-variant dots are themselves buttons, and a `<button>` cannot contain
    another, so there `.card` is a plain `<div>` — the visual chrome only — wrapping an inner `.cardPick`
@@ -324,9 +323,15 @@
 /* The gold "✓ Đang mặc" pill (design §4.1), pinned to the card's own corner. Its positioned ancestor is
    always `.card` — `position: relative` there, whichever of the two shapes above drew it — even when it
    is painted from inside the nested `.cardPick` button, since an absolutely positioned element looks past
-   any number of non-positioned ancestors for the nearest one that is. */
+   any number of non-positioned ancestors for the nearest one that is.
+   Above the card's picture (A6 review): a hairstyle portrait is a `Chibi` whose layers are positioned and stacked
+   by their own `z-index`, and the pill comes before it in the DOM, so on a phone, where the pill reaches over the
+   portrait, the portrait painted over the pill. `.cardPortrait` keeps those layers inside the thumb; this lifts
+   the pill above the thumb. An icon or a swatch is not positioned and was already under the pill. One is enough:
+   the page's sticky bar (20), the outfit menu (10) and the modals all stay above it. */
 .wearingPill {
   position: absolute;
+  z-index: 1;
   top: var(--space-2);
   right: var(--space-2);
   padding: 2px var(--space-2);
@@ -359,6 +364,21 @@
 
 .cardThumb[data-locked='true'] img {
   filter: grayscale(0.85) brightness(0.55);
+}
+
+/* A hairstyle card's head portrait (Kiểu tóc, avatar v4), drawn in the same thumb: 96 px from the tablet floor up,
+   inside the 118 px thumb; 72 px on a phone (the old base cards' sizes, `HairStyleTab`'s `portraitSize`), where the
+   thumb grows from its 70 px to hold it rather than clip it. Its own stacking context: the `Chibi` inside opens none,
+   so without this its layers' `z-index` (20–90) would compete with the card's "Đang dùng" pill (`.wearingPill`). */
+.cardPortrait {
+  isolation: isolate;
+}
+
+@media (max-width: 767px) {
+  .cardPortrait {
+    height: auto;
+    min-height: 70px;
+  }
 }
 
 .cardName {
@@ -422,31 +442,14 @@
   background: repeating-conic-gradient(var(--line) 0% 25%, transparent 0% 50%);
 }
 
-/* The base tab's figure card (design §4.2): a head portrait, a name, a gold border when it is the
-   draft's current base — no rarity, no lock, ever. Same neutral chrome as an item `.card` (V7 fix) —
-   1 px `--line` all round plus the 3 px bottom accent, `--line` standing in for a rarity colour it does
-   not have — so an unselected tile still reads as its own card instead of dissolving into the page. */
-.baseCard {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-  padding: var(--space-3);
-  border: 1px solid var(--line);
-  border-bottom-width: 3px;
-  border-radius: var(--radius-md);
-  background: var(--bg-elev);
-  cursor: pointer;
-}
-
-/* Selected: the same gold ring as a worn item card (`.card[aria-pressed='true']`) — colour and an inset shadow
-   rather than a thicker border, so choosing a base does not shrink the card by a pixel and nudge its portrait. */
-.baseCard[aria-pressed='true'] {
-  border-color: var(--gold);
-  box-shadow:
-    0 0 0 1px var(--gold),
-    inset 0 0 0 1px var(--gold);
+/* On a phone a card is about 100 px wide and the "✓ Đang dùng" pill (`.wearingPill`, 8 px from the top) spans most of
+   it, so a worn card's swatch started under the pill — Màu da's "Tự nhiên" on a fresh account (Plan 19 final review). The
+   swatch starts below the pill there, on every colour card alike, so a row's cards keep one height. */
+@media (max-width: 767px) {
+  .colourSwatchBig,
+  .naturalSwatch {
+    margin-top: 1.25rem;
+  }
 }
 
 /* An item's own icon: square, transparent, already centred and padded by the pipeline. Fixed 4rem as the base
@@ -949,6 +952,23 @@
   width: 1.1em;
   height: 1.1em;
   max-width: none;
+}
+
+/* The head of the look group (avatar v4, spec §6.1): the Nữ | Nam switch, under the group tabs and above the sub-tabs,
+   on every one of the group's tabs. One row, never taller than the sub-tab row under it on a desktop (the kit's
+   `Segmented`: 36 px buttons, 42 px in all, against a 44 px tab plus its underline). */
+.lookHeader {
+  display: flex;
+  align-items: center;
+}
+
+/* On a phone, or under a finger, each of the two buttons is a thumb's `--tap` (the kit already does this for a coarse
+   pointer; a phone-width window is held to it too). */
+@media (max-width: 767px), (pointer: coarse) {
+  .genderSwitch button {
+    min-height: var(--tap);
+    min-width: var(--tap);
+  }
 }
 
 /* One row, never two (V5 fix): `flex-wrap: wrap` let three sub-tabs plus their "n/m" counts break onto a

@@ -10,838 +10,239 @@
     "size": 208
   },
   "files": {
-    "base_f01_L20": {
-      "layer": 20,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 2769,
-      "real": true,
-      "empty": true
-    },
-    "base_f01_L30": {
+    "body_f_L30": {
       "layer": 30,
       "w": 384,
       "h": 448,
-      "bytes2x": 280066,
+      "bytes2x": 182871,
       "real": true,
       "masks": {
-        "hair": {
-          "bytes2x": 6532,
-          "meanL": 0.3416
+        "skin": {
+          "bytes2x": 7487,
+          "meanL": 0.8881
         }
       }
     },
-    "base_f01_L60": {
-      "layer": 60,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 8445,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 4193,
-          "meanL": 0.2789
-        }
-      }
-    },
-    "base_f01_face_closed_L50": {
+    "body_f_face_closed_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 271157,
+      "bytes2x": 81115,
       "real": true,
       "masks": {
-        "hair": {
-          "bytes2x": 6398,
-          "meanL": 0.3229
-        },
         "eyes": {
           "bytes2x": 4015,
           "meanL": 0,
           "empty": true
+        },
+        "skin": {
+          "bytes2x": 5428,
+          "meanL": 0.891
         }
       }
     },
-    "base_f01_face_happy_L50": {
+    "body_f_face_happy_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 266331,
+      "bytes2x": 82992,
       "real": true,
       "masks": {
-        "hair": {
-          "bytes2x": 6356,
-          "meanL": 0.3404
-        },
         "eyes": {
           "bytes2x": 4015,
           "meanL": 0,
           "empty": true
+        },
+        "skin": {
+          "bytes2x": 5537,
+          "meanL": 0.8935
         }
       }
     },
-    "base_f01_face_neutral_L50": {
+    "body_f_face_neutral_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 272458,
+      "bytes2x": 92347,
       "real": true,
       "masks": {
-        "hair": {
-          "bytes2x": 6321,
-          "meanL": 0.3445
-        },
         "eyes": {
-          "bytes2x": 4547,
-          "meanL": 0.4086
+          "bytes2x": 4496,
+          "meanL": 0.3876
+        },
+        "skin": {
+          "bytes2x": 5615,
+          "meanL": 0.8917
         }
       }
     },
-    "base_f01_face_sad_L50": {
+    "body_f_face_sad_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 272083,
+      "bytes2x": 90986,
       "real": true,
       "masks": {
-        "hair": {
-          "bytes2x": 6405,
-          "meanL": 0.3414
-        },
         "eyes": {
-          "bytes2x": 5439,
-          "meanL": 0.4863
+          "bytes2x": 4472,
+          "meanL": 0.4203
+        },
+        "skin": {
+          "bytes2x": 5521,
+          "meanL": 0.8967
         }
       }
     },
-    "base_f01_face_sleep_L50": {
+    "body_f_face_sleep_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 276200,
+      "bytes2x": 80624,
       "real": true,
       "masks": {
-        "hair": {
-          "bytes2x": 6474,
-          "meanL": 0.334
-        },
         "eyes": {
           "bytes2x": 4015,
           "meanL": 0,
           "empty": true
+        },
+        "skin": {
+          "bytes2x": 5401,
+          "meanL": 0.8975
         }
       }
     },
-    "base_f01_face_surprised_L50": {
+    "body_f_face_surprised_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 281978,
+      "bytes2x": 94357,
       "real": true,
       "masks": {
-        "hair": {
-          "bytes2x": 6481,
-          "meanL": 0.3443
-        },
         "eyes": {
-          "bytes2x": 4726,
-          "meanL": 0.4368
+          "bytes2x": 4634,
+          "meanL": 0.4161
+        },
+        "skin": {
+          "bytes2x": 5625,
+          "meanL": 0.8934
         }
       }
     },
-    "base_f02_L20": {
-      "layer": 20,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 2769,
-      "real": true,
-      "empty": true
-    },
-    "base_f02_L30": {
+    "body_m_L30": {
       "layer": 30,
       "w": 384,
       "h": 448,
-      "bytes2x": 283631,
+      "bytes2x": 179057,
       "real": true,
       "masks": {
-        "hair": {
-          "bytes2x": 7622,
-          "meanL": 0.1995
+        "skin": {
+          "bytes2x": 7397,
+          "meanL": 0.8819
         }
       }
     },
-    "base_f02_L60": {
-      "layer": 60,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 2769,
-      "real": true,
-      "empty": true
-    },
-    "base_f02_face_closed_L50": {
+    "body_m_face_closed_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 158348,
+      "bytes2x": 74613,
       "real": true,
       "masks": {
-        "hair": {
-          "bytes2x": 5911,
-          "meanL": 0.2193
-        },
         "eyes": {
           "bytes2x": 4015,
           "meanL": 0,
           "empty": true
+        },
+        "skin": {
+          "bytes2x": 5375,
+          "meanL": 0.8905
         }
       }
     },
-    "base_f02_face_happy_L50": {
+    "body_m_face_happy_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 160135,
+      "bytes2x": 76939,
       "real": true,
       "masks": {
-        "hair": {
-          "bytes2x": 5926,
-          "meanL": 0.2197
-        },
-        "eyes": {
-          "bytes2x": 4851,
-          "meanL": 0.5249
-        }
-      }
-    },
-    "base_f02_face_neutral_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 164112,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 6430,
-          "meanL": 0.208,
-          "override": true
-        },
-        "eyes": {
-          "bytes2x": 5154,
-          "meanL": 0.522
-        }
-      }
-    },
-    "base_f02_face_sad_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 166649,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 6375,
-          "meanL": 0.216
-        },
-        "eyes": {
-          "bytes2x": 5563,
-          "meanL": 0.5793
-        }
-      }
-    },
-    "base_f02_face_sleep_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 160270,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 5974,
-          "meanL": 0.2173
-        },
         "eyes": {
           "bytes2x": 4015,
           "meanL": 0,
           "empty": true
+        },
+        "skin": {
+          "bytes2x": 5499,
+          "meanL": 0.8852
         }
       }
     },
-    "base_f02_face_surprised_L50": {
+    "body_m_face_neutral_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 168231,
+      "bytes2x": 87807,
       "real": true,
       "masks": {
-        "hair": {
-          "bytes2x": 6230,
-          "meanL": 0.2158
-        },
         "eyes": {
-          "bytes2x": 5172,
-          "meanL": 0.5134
+          "bytes2x": 4518,
+          "meanL": 0.3708
+        },
+        "skin": {
+          "bytes2x": 5544,
+          "meanL": 0.8872
         }
       }
     },
-    "base_f03_L20": {
-      "layer": 20,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 2769,
-      "real": true,
-      "empty": true
-    },
-    "base_f03_L30": {
-      "layer": 30,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 293661,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 7869,
-          "meanL": 0.7914
-        }
-      }
-    },
-    "base_f03_L60": {
-      "layer": 60,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 9930,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 4208,
-          "meanL": 0.7074
-        }
-      }
-    },
-    "base_f03_face_closed_L50": {
+    "body_m_face_sad_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 201120,
+      "bytes2x": 87477,
       "real": true,
       "masks": {
-        "hair": {
-          "bytes2x": 8345,
-          "meanL": 0.791
+        "eyes": {
+          "bytes2x": 4555,
+          "meanL": 0.4191
         },
+        "skin": {
+          "bytes2x": 5487,
+          "meanL": 0.8914
+        }
+      }
+    },
+    "body_m_face_sleep_L50": {
+      "layer": 50,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 75795,
+      "real": true,
+      "masks": {
         "eyes": {
           "bytes2x": 4015,
           "meanL": 0,
           "empty": true
+        },
+        "skin": {
+          "bytes2x": 5296,
+          "meanL": 0.8911
         }
       }
     },
-    "base_f03_face_happy_L50": {
+    "body_m_face_surprised_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 201908,
+      "bytes2x": 89369,
       "real": true,
       "masks": {
-        "hair": {
-          "bytes2x": 8405,
-          "meanL": 0.7873
-        },
         "eyes": {
-          "bytes2x": 4015,
-          "meanL": 0,
-          "empty": true
-        }
-      }
-    },
-    "base_f03_face_neutral_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 203889,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 7702,
-          "meanL": 0.798
+          "bytes2x": 4651,
+          "meanL": 0.3982
         },
-        "eyes": {
-          "bytes2x": 4668,
-          "meanL": 0.3562
-        }
-      }
-    },
-    "base_f03_face_sad_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 210006,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 8363,
-          "meanL": 0.7904
-        },
-        "eyes": {
-          "bytes2x": 5365,
-          "meanL": 0.3597
-        }
-      }
-    },
-    "base_f03_face_sleep_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 198726,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 8308,
-          "meanL": 0.8014
-        },
-        "eyes": {
-          "bytes2x": 4015,
-          "meanL": 0,
-          "empty": true
-        }
-      }
-    },
-    "base_f03_face_surprised_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 211846,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 8219,
-          "meanL": 0.7914
-        },
-        "eyes": {
-          "bytes2x": 5212,
-          "meanL": 0.386
-        }
-      }
-    },
-    "base_m01_L20": {
-      "layer": 20,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 2769,
-      "real": true,
-      "empty": true
-    },
-    "base_m01_L30": {
-      "layer": 30,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 252589,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 6112,
-          "meanL": 0.3099
-        }
-      }
-    },
-    "base_m01_L60": {
-      "layer": 60,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 10611,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 4252,
-          "meanL": 0.268
-        }
-      }
-    },
-    "base_m01_face_closed_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 156834,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 5731,
-          "meanL": 0.3313
-        },
-        "eyes": {
-          "bytes2x": 4015,
-          "meanL": 0,
-          "empty": true
-        }
-      }
-    },
-    "base_m01_face_happy_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 158310,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 5741,
-          "meanL": 0.3189
-        },
-        "eyes": {
-          "bytes2x": 4015,
-          "meanL": 0,
-          "empty": true
-        }
-      }
-    },
-    "base_m01_face_neutral_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 165468,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 6110,
-          "meanL": 0.3112
-        },
-        "eyes": {
-          "bytes2x": 4522,
-          "meanL": 0.5622
-        }
-      }
-    },
-    "base_m01_face_sad_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 168903,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 6126,
-          "meanL": 0.324
-        },
-        "eyes": {
-          "bytes2x": 4492,
-          "meanL": 0.562
-        }
-      }
-    },
-    "base_m01_face_sleep_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 156526,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 5746,
-          "meanL": 0.3324
-        },
-        "eyes": {
-          "bytes2x": 4015,
-          "meanL": 0,
-          "empty": true
-        }
-      }
-    },
-    "base_m01_face_surprised_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 170721,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 5849,
-          "meanL": 0.3265
-        },
-        "eyes": {
-          "bytes2x": 4469,
-          "meanL": 0.3587
-        }
-      }
-    },
-    "base_m02_L20": {
-      "layer": 20,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 2769,
-      "real": true,
-      "empty": true
-    },
-    "base_m02_L30": {
-      "layer": 30,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 245837,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 6428,
-          "meanL": 0.1699
-        }
-      }
-    },
-    "base_m02_L60": {
-      "layer": 60,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 6414,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 4180,
-          "meanL": 0.1428
-        }
-      }
-    },
-    "base_m02_face_closed_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 151859,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 5802,
-          "meanL": 0.1829,
-          "override": true
-        },
-        "eyes": {
-          "bytes2x": 4015,
-          "meanL": 0,
-          "empty": true
-        }
-      }
-    },
-    "base_m02_face_happy_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 154002,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 5749,
-          "meanL": 0.1829,
-          "override": true
-        },
-        "eyes": {
-          "bytes2x": 4015,
-          "meanL": 0,
-          "empty": true
-        }
-      }
-    },
-    "base_m02_face_neutral_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 157238,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 6118,
-          "meanL": 0.1743,
-          "override": true
-        },
-        "eyes": {
-          "bytes2x": 4631,
-          "meanL": 0.5828
-        }
-      }
-    },
-    "base_m02_face_sad_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 158764,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 6063,
-          "meanL": 0.181,
-          "override": true
-        },
-        "eyes": {
-          "bytes2x": 4576,
-          "meanL": 0.6036
-        }
-      }
-    },
-    "base_m02_face_sleep_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 153092,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 5771,
-          "meanL": 0.1814,
-          "override": true
-        },
-        "eyes": {
-          "bytes2x": 4015,
-          "meanL": 0,
-          "empty": true
-        }
-      }
-    },
-    "base_m02_face_surprised_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 159982,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 5946,
-          "meanL": 0.185,
-          "override": true
-        },
-        "eyes": {
-          "bytes2x": 4676,
-          "meanL": 0.4882
-        }
-      }
-    },
-    "base_m03_L20": {
-      "layer": 20,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 2769,
-      "real": true,
-      "empty": true
-    },
-    "base_m03_L30": {
-      "layer": 30,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 249164,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 6342,
-          "meanL": 0.1413
-        }
-      }
-    },
-    "base_m03_L60": {
-      "layer": 60,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 5587,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 4158,
-          "meanL": 0.1368
-        }
-      }
-    },
-    "base_m03_face_closed_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 150567,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 6062,
-          "meanL": 0.1537
-        },
-        "eyes": {
-          "bytes2x": 4015,
-          "meanL": 0,
-          "empty": true
-        }
-      }
-    },
-    "base_m03_face_happy_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 154081,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 6020,
-          "meanL": 0.1525
-        },
-        "eyes": {
-          "bytes2x": 4015,
-          "meanL": 0,
-          "empty": true
-        }
-      }
-    },
-    "base_m03_face_neutral_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 160443,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 6294,
-          "meanL": 0.1412
-        },
-        "eyes": {
-          "bytes2x": 4551,
-          "meanL": 0.4488
-        }
-      }
-    },
-    "base_m03_face_sad_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 159671,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 5901,
-          "meanL": 0.152
-        },
-        "eyes": {
-          "bytes2x": 4498,
-          "meanL": 0.5054
-        }
-      }
-    },
-    "base_m03_face_sleep_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 149669,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 5991,
-          "meanL": 0.1513
-        },
-        "eyes": {
-          "bytes2x": 4015,
-          "meanL": 0,
-          "empty": true
-        }
-      }
-    },
-    "base_m03_face_surprised_L50": {
-      "layer": 50,
-      "w": 384,
-      "h": 448,
-      "bytes2x": 160183,
-      "real": true,
-      "masks": {
-        "hair": {
-          "bytes2x": 6035,
-          "meanL": 0.157
-        },
-        "eyes": {
-          "bytes2x": 4888,
-          "meanL": 0.4367
+        "skin": {
+          "bytes2x": 5570,
+          "meanL": 0.8889
         }
       }
     },
@@ -849,425 +250,481 @@
       "layer": 30,
       "w": 384,
       "h": 448,
-      "bytes2x": 273592,
-      "real": true
+      "bytes2x": 266600,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_0_face_closed_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 153075,
+      "bytes2x": 134351,
       "real": true,
-      "copyOf": "bot_0_face_neutral_L50"
+      "copyOf": "bot_0_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_0_face_happy_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 150678,
-      "real": true
+      "bytes2x": 139632,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_0_face_neutral_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 153075,
-      "real": true
+      "bytes2x": 134351,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_0_face_sad_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 153075,
+      "bytes2x": 134351,
       "real": true,
-      "copyOf": "bot_0_face_neutral_L50"
+      "copyOf": "bot_0_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_0_face_sleep_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 153075,
+      "bytes2x": 134351,
       "real": true,
-      "copyOf": "bot_0_face_neutral_L50"
+      "copyOf": "bot_0_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_0_face_surprised_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 153075,
+      "bytes2x": 134351,
       "real": true,
-      "copyOf": "bot_0_face_neutral_L50"
+      "copyOf": "bot_0_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_1_L30": {
       "layer": 30,
       "w": 384,
       "h": 448,
-      "bytes2x": 352191,
-      "real": true
+      "bytes2x": 295934,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_1_face_closed_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 209191,
+      "bytes2x": 145540,
       "real": true,
-      "copyOf": "bot_1_face_neutral_L50"
+      "copyOf": "bot_1_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_1_face_happy_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 213978,
-      "real": true
+      "bytes2x": 150550,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_1_face_neutral_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 209191,
-      "real": true
+      "bytes2x": 145540,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_1_face_sad_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 209191,
+      "bytes2x": 145540,
       "real": true,
-      "copyOf": "bot_1_face_neutral_L50"
+      "copyOf": "bot_1_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_1_face_sleep_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 209191,
+      "bytes2x": 145540,
       "real": true,
-      "copyOf": "bot_1_face_neutral_L50"
+      "copyOf": "bot_1_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_1_face_surprised_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 209191,
+      "bytes2x": 145540,
       "real": true,
-      "copyOf": "bot_1_face_neutral_L50"
+      "copyOf": "bot_1_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_2_L30": {
       "layer": 30,
       "w": 384,
       "h": 448,
-      "bytes2x": 253807,
-      "real": true
+      "bytes2x": 270773,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_2_face_closed_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 138962,
+      "bytes2x": 135817,
       "real": true,
-      "copyOf": "bot_2_face_neutral_L50"
+      "copyOf": "bot_2_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_2_face_happy_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 127160,
-      "real": true
+      "bytes2x": 130906,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_2_face_neutral_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 138962,
-      "real": true
+      "bytes2x": 135817,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_2_face_sad_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 138962,
+      "bytes2x": 135817,
       "real": true,
-      "copyOf": "bot_2_face_neutral_L50"
+      "copyOf": "bot_2_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_2_face_sleep_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 138962,
+      "bytes2x": 135817,
       "real": true,
-      "copyOf": "bot_2_face_neutral_L50"
+      "copyOf": "bot_2_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_2_face_surprised_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 138962,
+      "bytes2x": 135817,
       "real": true,
-      "copyOf": "bot_2_face_neutral_L50"
+      "copyOf": "bot_2_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_3_L30": {
       "layer": 30,
       "w": 384,
       "h": 448,
-      "bytes2x": 296141,
-      "real": true
+      "bytes2x": 255198,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_3_face_closed_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 171313,
+      "bytes2x": 114209,
       "real": true,
-      "copyOf": "bot_3_face_neutral_L50"
+      "copyOf": "bot_3_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_3_face_happy_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 180232,
-      "real": true
+      "bytes2x": 114804,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_3_face_neutral_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 171313,
-      "real": true
+      "bytes2x": 114209,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_3_face_sad_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 171313,
+      "bytes2x": 114209,
       "real": true,
-      "copyOf": "bot_3_face_neutral_L50"
+      "copyOf": "bot_3_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_3_face_sleep_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 171313,
+      "bytes2x": 114209,
       "real": true,
-      "copyOf": "bot_3_face_neutral_L50"
+      "copyOf": "bot_3_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_3_face_surprised_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 171313,
+      "bytes2x": 114209,
       "real": true,
-      "copyOf": "bot_3_face_neutral_L50"
+      "copyOf": "bot_3_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_4_L30": {
       "layer": 30,
       "w": 384,
       "h": 448,
-      "bytes2x": 369144,
-      "real": true
+      "bytes2x": 352870,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_4_face_closed_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 206057,
+      "bytes2x": 180774,
       "real": true,
-      "copyOf": "bot_4_face_neutral_L50"
+      "copyOf": "bot_4_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_4_face_happy_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 205702,
-      "real": true
+      "bytes2x": 175873,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_4_face_neutral_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 206057,
-      "real": true
+      "bytes2x": 180774,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_4_face_sad_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 206057,
+      "bytes2x": 180774,
       "real": true,
-      "copyOf": "bot_4_face_neutral_L50"
+      "copyOf": "bot_4_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_4_face_sleep_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 206057,
+      "bytes2x": 180774,
       "real": true,
-      "copyOf": "bot_4_face_neutral_L50"
+      "copyOf": "bot_4_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_4_face_surprised_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 206057,
+      "bytes2x": 180774,
       "real": true,
-      "copyOf": "bot_4_face_neutral_L50"
+      "copyOf": "bot_4_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_5_L30": {
       "layer": 30,
       "w": 384,
       "h": 448,
-      "bytes2x": 314855,
-      "real": true
+      "bytes2x": 311036,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_5_face_closed_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 176588,
+      "bytes2x": 155966,
       "real": true,
-      "copyOf": "bot_5_face_neutral_L50"
+      "copyOf": "bot_5_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_5_face_happy_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 180891,
-      "real": true
+      "bytes2x": 155084,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_5_face_neutral_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 176588,
-      "real": true
+      "bytes2x": 155966,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_5_face_sad_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 176588,
+      "bytes2x": 155966,
       "real": true,
-      "copyOf": "bot_5_face_neutral_L50"
+      "copyOf": "bot_5_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_5_face_sleep_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 176588,
+      "bytes2x": 155966,
       "real": true,
-      "copyOf": "bot_5_face_neutral_L50"
+      "copyOf": "bot_5_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_5_face_surprised_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 176588,
+      "bytes2x": 155966,
       "real": true,
-      "copyOf": "bot_5_face_neutral_L50"
+      "copyOf": "bot_5_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_6_L30": {
       "layer": 30,
       "w": 384,
       "h": 448,
-      "bytes2x": 318152,
-      "real": true
+      "bytes2x": 326348,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_6_face_closed_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 179747,
+      "bytes2x": 153916,
       "real": true,
-      "copyOf": "bot_6_face_neutral_L50"
+      "copyOf": "bot_6_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_6_face_happy_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 183878,
-      "real": true
+      "bytes2x": 156027,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_6_face_neutral_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 179747,
-      "real": true
+      "bytes2x": 153916,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_6_face_sad_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 179747,
+      "bytes2x": 153916,
       "real": true,
-      "copyOf": "bot_6_face_neutral_L50"
+      "copyOf": "bot_6_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_6_face_sleep_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 179747,
+      "bytes2x": 153916,
       "real": true,
-      "copyOf": "bot_6_face_neutral_L50"
+      "copyOf": "bot_6_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_6_face_surprised_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 179747,
+      "bytes2x": 153916,
       "real": true,
-      "copyOf": "bot_6_face_neutral_L50"
+      "copyOf": "bot_6_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_7_L30": {
       "layer": 30,
       "w": 384,
       "h": 448,
-      "bytes2x": 332121,
-      "real": true
+      "bytes2x": 337143,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_7_face_closed_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 203168,
+      "bytes2x": 175272,
       "real": true,
-      "copyOf": "bot_7_face_neutral_L50"
+      "copyOf": "bot_7_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_7_face_happy_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 201778,
-      "real": true
+      "bytes2x": 173904,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_7_face_neutral_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 203168,
-      "real": true
+      "bytes2x": 175272,
+      "real": true,
+      "cutOn": "f"
     },
     "bot_7_face_sad_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 203168,
+      "bytes2x": 175272,
       "real": true,
-      "copyOf": "bot_7_face_neutral_L50"
+      "copyOf": "bot_7_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_7_face_sleep_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 203168,
+      "bytes2x": 175272,
       "real": true,
-      "copyOf": "bot_7_face_neutral_L50"
+      "copyOf": "bot_7_face_neutral_L50",
+      "cutOn": "f"
     },
     "bot_7_face_surprised_L50": {
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 203168,
+      "bytes2x": 175272,
       "real": true,
-      "copyOf": "bot_7_face_neutral_L50"
+      "copyOf": "bot_7_face_neutral_L50",
+      "cutOn": "f"
     },
     "item_aura_earth01_L10": {
       "layer": 10,
@@ -1395,12 +852,260 @@
       "bytes2x": 236456,
       "real": true
     },
+    "item_hair_f_bob01_L20": {
+      "layer": 20,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 15909,
+      "real": true,
+      "masks": {
+        "hair": {
+          "bytes2x": 4945,
+          "meanL": 0.2799
+        }
+      }
+    },
+    "item_hair_f_bob01_L60": {
+      "layer": 60,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 100960,
+      "real": true,
+      "split": {
+        "region": 41212,
+        "front": 38827,
+        "back": 2385
+      },
+      "masks": {
+        "hair": {
+          "bytes2x": 6029,
+          "meanL": 0.3406
+        }
+      }
+    },
+    "item_hair_f_hime01_L20": {
+      "layer": 20,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 64903,
+      "real": true,
+      "masks": {
+        "hair": {
+          "bytes2x": 6090,
+          "meanL": 0.1948
+        }
+      }
+    },
+    "item_hair_f_hime01_L60": {
+      "layer": 60,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 104360,
+      "real": true,
+      "split": {
+        "region": 61158,
+        "front": 38300,
+        "back": 22858
+      },
+      "masks": {
+        "hair": {
+          "bytes2x": 7026,
+          "meanL": 0.2289
+        }
+      }
+    },
+    "item_hair_f_ponytail01_L20": {
+      "layer": 20,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 49898,
+      "real": true,
+      "masks": {
+        "hair": {
+          "bytes2x": 5511,
+          "meanL": 0.3131
+        }
+      }
+    },
+    "item_hair_f_ponytail01_L60": {
+      "layer": 60,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 112318,
+      "real": true,
+      "split": {
+        "region": 53098,
+        "front": 39973,
+        "back": 13125
+      },
+      "masks": {
+        "hair": {
+          "bytes2x": 6186,
+          "meanL": 0.3579
+        }
+      }
+    },
+    "item_hair_f_wavy01_L20": {
+      "layer": 20,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 39391,
+      "real": true,
+      "masks": {
+        "hair": {
+          "bytes2x": 5838,
+          "meanL": 0.7898
+        }
+      }
+    },
+    "item_hair_f_wavy01_L60": {
+      "layer": 60,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 75573,
+      "real": true,
+      "split": {
+        "region": 48980,
+        "front": 38728,
+        "back": 10252
+      },
+      "masks": {
+        "hair": {
+          "bytes2x": 5781,
+          "meanL": 0.7899
+        }
+      },
+      "recolouredTo": "#e0c9b3"
+    },
+    "item_hair_m_curly01_L20": {
+      "layer": 20,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 12996,
+      "real": true,
+      "masks": {
+        "hair": {
+          "bytes2x": 4703,
+          "meanL": 0.15
+        }
+      }
+    },
+    "item_hair_m_curly01_L60": {
+      "layer": 60,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 82998,
+      "real": true,
+      "split": {
+        "region": 33181,
+        "front": 30953,
+        "back": 2228
+      },
+      "masks": {
+        "hair": {
+          "bytes2x": 5544,
+          "meanL": 0.1851
+        }
+      }
+    },
+    "item_hair_m_neat01_L20": {
+      "layer": 20,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 10215,
+      "real": true,
+      "masks": {
+        "hair": {
+          "bytes2x": 4535,
+          "meanL": 0.1566
+        }
+      }
+    },
+    "item_hair_m_neat01_L60": {
+      "layer": 60,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 87156,
+      "real": true,
+      "split": {
+        "region": 34622,
+        "front": 33091,
+        "back": 1531
+      },
+      "masks": {
+        "hair": {
+          "bytes2x": 5449,
+          "meanL": 0.2473
+        }
+      }
+    },
+    "item_hair_m_spiky01_L20": {
+      "layer": 20,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 6019,
+      "real": true,
+      "masks": {
+        "hair": {
+          "bytes2x": 4383,
+          "meanL": 0.1788
+        }
+      }
+    },
+    "item_hair_m_spiky01_L60": {
+      "layer": 60,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 83031,
+      "real": true,
+      "split": {
+        "region": 28191,
+        "front": 27774,
+        "back": 417
+      },
+      "masks": {
+        "hair": {
+          "bytes2x": 5690,
+          "meanL": 0.2585
+        }
+      }
+    },
+    "item_hair_m_tousled01_L20": {
+      "layer": 20,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 10655,
+      "real": true,
+      "masks": {
+        "hair": {
+          "bytes2x": 4572,
+          "meanL": 0.2602
+        }
+      }
+    },
+    "item_hair_m_tousled01_L60": {
+      "layer": 60,
+      "w": 384,
+      "h": 448,
+      "bytes2x": 86942,
+      "real": true,
+      "split": {
+        "region": 35751,
+        "front": 34175,
+        "back": 1576
+      },
+      "masks": {
+        "hair": {
+          "bytes2x": 5689,
+          "meanL": 0.3204
+        }
+      }
+    },
     "item_head_beanie01_L80": {
       "layer": 80,
       "w": 384,
       "h": 448,
       "bytes2x": 83368,
-      "hidesHairFront": true,
       "real": true,
       "tintSeed": {
         "x": 191,
@@ -1418,7 +1123,6 @@
       "w": 384,
       "h": 448,
       "bytes2x": 45928,
-      "hidesHairFront": true,
       "real": true,
       "tintSeed": {
         "x": 209,
@@ -1436,7 +1140,6 @@
       "w": 384,
       "h": 448,
       "bytes2x": 82263,
-      "hidesHairFront": true,
       "real": true
     },
     "item_head_crown_gold01_L80": {
@@ -1444,7 +1147,6 @@
       "w": 384,
       "h": 448,
       "bytes2x": 23561,
-      "hidesHairFront": true,
       "real": true
     },
     "item_head_dealer_visor01_L80": {
@@ -1468,7 +1170,6 @@
       "w": 384,
       "h": 448,
       "bytes2x": 21656,
-      "hidesHairFront": true,
       "real": true,
       "tintSeed": {
         "x": 187,
@@ -1487,23 +1188,23 @@
       "w": 384,
       "h": 448,
       "bytes2x": 297382,
-      "hidesHairFront": true,
       "real": true
     },
     "item_outfit_casual01_L40": {
       "layer": 40,
       "w": 384,
       "h": 448,
-      "bytes2x": 98872,
+      "bytes2x": 92782,
       "real": true,
+      "cutOn": "f",
       "tintSeed": {
         "x": 191,
         "y": 276
       },
       "masks": {
         "tint": {
-          "bytes2x": 4516,
-          "meanL": 0.9546
+          "bytes2x": 4526,
+          "meanL": 0.953
         }
       }
     },
@@ -1511,54 +1212,61 @@
       "layer": 40,
       "w": 384,
       "h": 448,
-      "bytes2x": 122277,
-      "real": true
+      "bytes2x": 123715,
+      "real": true,
+      "cutOn": "f"
     },
     "item_outfit_dealer01_L40": {
       "layer": 40,
       "w": 384,
       "h": 448,
-      "bytes2x": 93208,
-      "real": true
+      "bytes2x": 94794,
+      "real": true,
+      "cutOn": "f"
     },
     "item_outfit_dealer01_m_L40": {
       "layer": 40,
       "w": 384,
       "h": 448,
-      "bytes2x": 90301,
+      "bytes2x": 95597,
       "real": true,
       "variantOf": "item_outfit_dealer01_L40",
-      "wear": "m"
+      "wear": "m",
+      "cutOn": "m"
     },
     "item_outfit_royal_robe01_L40": {
       "layer": 40,
       "w": 384,
       "h": 448,
-      "bytes2x": 120025,
-      "real": true
+      "bytes2x": 129517,
+      "real": true,
+      "cutOn": "f"
     },
     "item_outfit_tet_red01_L40": {
       "layer": 40,
       "w": 384,
       "h": 448,
-      "bytes2x": 110604,
-      "real": true
+      "bytes2x": 118138,
+      "real": true,
+      "cutOn": "f"
     },
     "item_outfit_tet_red01_m_L40": {
       "layer": 40,
       "w": 384,
       "h": 448,
-      "bytes2x": 104840,
+      "bytes2x": 112756,
       "real": true,
       "variantOf": "item_outfit_tet_red01_L40",
-      "wear": "m"
+      "wear": "m",
+      "cutOn": "m"
     },
     "item_outfit_tuxedo01_L40": {
       "layer": 40,
       "w": 384,
       "h": 448,
-      "bytes2x": 94456,
-      "real": true
+      "bytes2x": 94987,
+      "real": true,
+      "cutOn": "f"
     }
   },
   "icons": {
@@ -1778,7 +1486,7 @@
       "of": "item_outfit_casual01_L40",
       "w": 96,
       "h": 96,
-      "bytes2x": 25213,
+      "bytes2x": 24619,
       "real": true,
       "tintMask": true
     },
@@ -1787,7 +1495,7 @@
       "of": "item_outfit_champion01_L40",
       "w": 96,
       "h": 96,
-      "bytes2x": 30423,
+      "bytes2x": 30967,
       "real": true
     },
     "item_outfit_dealer01_icon": {
@@ -1795,7 +1503,7 @@
       "of": "item_outfit_dealer01_L40",
       "w": 96,
       "h": 96,
-      "bytes2x": 24730,
+      "bytes2x": 24227,
       "real": true
     },
     "item_outfit_dealer01_m_icon": {
@@ -1803,7 +1511,7 @@
       "of": "item_outfit_dealer01_m_L40",
       "w": 96,
       "h": 96,
-      "bytes2x": 23576,
+      "bytes2x": 23839,
       "real": true
     },
     "item_outfit_royal_robe01_icon": {
@@ -1811,7 +1519,7 @@
       "of": "item_outfit_royal_robe01_L40",
       "w": 96,
       "h": 96,
-      "bytes2x": 30057,
+      "bytes2x": 31913,
       "real": true
     },
     "item_outfit_tet_red01_icon": {
@@ -1819,7 +1527,7 @@
       "of": "item_outfit_tet_red01_L40",
       "w": 96,
       "h": 96,
-      "bytes2x": 26849,
+      "bytes2x": 29190,
       "real": true
     },
     "item_outfit_tet_red01_m_icon": {
@@ -1827,7 +1535,7 @@
       "of": "item_outfit_tet_red01_m_L40",
       "w": 96,
       "h": 96,
-      "bytes2x": 26491,
+      "bytes2x": 27440,
       "real": true
     },
     "item_outfit_tuxedo01_icon": {
@@ -1835,57 +1543,24 @@
       "of": "item_outfit_tuxedo01_L40",
       "w": 96,
       "h": 96,
-      "bytes2x": 23265,
+      "bytes2x": 24072,
       "real": true
     }
   },
-  "bases": {
-    "f01": {
-      "transform": {
-        "scale": 0.24669603524229075,
-        "offsetX": 65.568281938326,
-        "offsetY": 52.01762114537445
-      },
-      "strandY": 97
-    },
-    "f02": {
+  "bodies": {
+    "f": {
       "transform": {
         "scale": 0.24669603524229075,
         "offsetX": 65.568281938326,
         "offsetY": 52.01762114537445
       }
     },
-    "f03": {
+    "m": {
       "transform": {
         "scale": 0.24669603524229075,
         "offsetX": 65.568281938326,
         "offsetY": 52.01762114537445
-      },
-      "strandY": 97
-    },
-    "m01": {
-      "transform": {
-        "scale": 0.24633431085043989,
-        "offsetX": 66,
-        "offsetY": 52.29325513196481
-      },
-      "strandY": 96
-    },
-    "m02": {
-      "transform": {
-        "scale": 0.24633431085043989,
-        "offsetX": 66,
-        "offsetY": 52.29325513196481
-      },
-      "strandY": 89
-    },
-    "m03": {
-      "transform": {
-        "scale": 0.24633431085043989,
-        "offsetX": 66,
-        "offsetY": 52.29325513196481
-      },
-      "strandY": 93
+      }
     }
   }
 }

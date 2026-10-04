@@ -1,4 +1,4 @@
-import { Button, defaultChibi, Modal, useMediaQuery, type Expression } from '@bp/ui-kit'
+import { Button, defaultChibi, Modal, Segmented, useMediaQuery, type Expression } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -9,7 +9,7 @@ import {
   type AchievementDefDto,
   type AvatarCatalogDto,
   type AvatarConfigDto,
-  type BaseId,
+  type Gender,
   type InventoryDto,
   type ItemDto,
   type ItemSlot,
@@ -20,18 +20,20 @@ import { chibiFromApi } from '../../avatar/chibi.js'
 import { useAvatars } from '../../avatar/useAvatars.js'
 import s from '../normal.module.css'
 import { useAsync } from '../useAsync.js'
-import { BaseTab } from './BaseTab.js'
 import { counts, GROUPS, PHONE_QUERY, panelId, slotCards, subTabId, type TabId } from './categories.js'
 import { CategoryNav } from './CategoryNav.js'
 import { ColourTab } from './ColourTab.js'
 import { EquippedList } from './EquippedList.js'
+import { swapGender } from './gender.js'
+import { HairStyleTab } from './HairStyleTab.js'
 import { ItemTab } from './ItemTab.js'
+import { NATURAL_SKIN } from './natural-skin.js'
 import { SavedOutfits } from './SavedOutfits.js'
 import { StagePanel } from './StagePanel.js'
 import w from './wardrobe.module.css'
 
 /** Refusals this screen has words for; anything else is the kit's generic failure. */
-const KNOWN_CODES = new Set(['NOT_OWNED', 'WRONG_CATEGORY', 'MISSING_LAYER', 'INVALID_ITEM', 'INVALID_BASE'])
+const KNOWN_CODES = new Set(['NOT_OWNED', 'WRONG_CATEGORY', 'MISSING_LAYER', 'INVALID_ITEM', 'INVALID_BASE', 'WRONG_GENDER'])
 
 export function avatarRefusal(cause: unknown, t: TFunction): string {
   if (cause instanceof ApiError && KNOWN_CODES.has(cause.code)) return t(`avatar.errors.${cause.code}`)
@@ -49,11 +51,13 @@ const NO_IDS: string[] = []
  * header's icon-only "Hoàn tác" (design §3.2). */
 const UNDO_GLYPH = '↺'
 
-/** Breakpoints (Global Constraints): phone (`PHONE_QUERY`, `./categories.js` — shared with `BaseTab`, which
- * used to carry its own copy of the same literal string) is anything under the tablet floor; desktop is
- * the point the stage stops being `compact` (design §3.1–§3.3). Tablet has no query of its own — it is
- * "not phone, not desktop", the same branch as desktop for markup, told apart only by CSS. */
+/** Breakpoints (Global Constraints): phone (`PHONE_QUERY`, `./categories.js`) is anything under the tablet
+ * floor; desktop is the point the stage stops being `compact` (design §3.1–§3.3). Tablet has no query of its
+ * own — it is "not phone, not desktop", the same branch as desktop for markup, told apart only by CSS. */
 const DESKTOP_QUERY = '(min-width: 1024px)'
+
+/** The two genders, in the order the switch draws them: Nữ | Nam (spec §6.1). */
+const GENDER_ORDER: readonly Gender[] = ['f', 'm']
 
 export interface WardrobeScreenProps {
   api: NormalApi
@@ -83,14 +87,15 @@ function withSlot(config: AvatarConfigDto, slot: ItemSlot, itemId: string | unde
 }
 
 /** Two configurations are the same outfit when they name the same slots — read off both objects key by
- * key (`v`, `base`, then every item slot) rather than via `JSON.stringify`, which used to make this
- * comparison sensitive to *key order*: removing an optional slot and then re-adding it moves that key to
- * the end of the spread object (`withSlot`'s `{ ...config, [slot]: itemId }`), so two configs naming the
- * exact same outfit could stringify to two different strings and show a false "Có thay đổi chưa lưu". A
- * slot absent from one side and one explicitly `undefined` on the other now compare equal either way,
- * exactly as `withSlot`'s own "an omitted key is an empty slot" rule already treats them. */
-function sameConfig(a: AvatarConfigDto, b: AvatarConfigDto): boolean {
-  if (a.v !== b.v || a.base !== b.base) return false
+ * key (`v`, `gender`, then every item slot, the hairstyle and the skin colour among them) rather than via
+ * `JSON.stringify`, which used to make this comparison sensitive to *key order*: removing an optional slot
+ * and then re-adding it moves that key to the end of the spread object (`withSlot`'s
+ * `{ ...config, [slot]: itemId }`), so two configs naming the exact same outfit could stringify to two
+ * different strings and show a false "Có thay đổi chưa lưu". A slot absent from one side and one explicitly
+ * `undefined` on the other now compare equal either way, exactly as `withSlot`'s own "an omitted key is an
+ * empty slot" rule already treats them. */
+export function sameConfig(a: AvatarConfigDto, b: AvatarConfigDto): boolean {
+  if (a.v !== b.v || a.gender !== b.gender) return false
   return SLOTS.every((slot) => a[slot] === b[slot])
 }
 
@@ -133,7 +138,9 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
 
   const [draft, setDraft] = useState<AvatarConfigDto | null>(null)
   const [committed, setCommitted] = useState<AvatarConfigDto | null>(null)
-  const [tab, setTab] = useState<TabId>('base')
+  // The look group's first tab, under the Nữ | Nam switch (avatar v4, spec §6.1). Plan 19 removed the base tab the
+  // wardrobe used to open on.
+  const [tab, setTab] = useState<TabId>('hairStyle')
   /** "Hiện cả món chưa có" (design §3.1 item 3, §5.5; No11a): unticked whenever the wardrobe opens, then kept for the
    * visit across every tab change — never reset by `changeTab`, never stored. */
   const [showLocked, setShowLocked] = useState(false)
@@ -194,19 +201,18 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
   }
 
   const items = useMemo(() => new Map((loaded?.catalog ?? []).map((item) => [item.id, item])), [loaded])
-  const bases = useMemo(() => new Map((loaded?.avatarCatalog.bases ?? []).map((base) => [base.id, base])), [loaded])
+  const bodies = useMemo(() => new Map((loaded?.avatarCatalog.bodies ?? []).map((body) => [body.gender, body])), [loaded])
   const owned = useMemo(() => new Set((loaded?.inventory.items ?? []).map((item) => item.itemId)), [loaded])
   /** Every tab's "n/m đã có" (design §3.1) — computed for all of them up front so `CategoryNav` has a
-   * count ready the moment its active group changes, not just for whichever group is showing now. */
+   * count ready the moment its active group changes, not just for whichever group is showing now. Kiểu tóc counts
+   * the draft's gender's hairstyles, the only ones it lists, so it is counted again when the gender changes. */
+  const gender = config?.gender
   const tabCounts = useMemo(() => {
     const catalog = loaded?.catalog ?? []
     const map: Partial<Record<TabId, { owned: number; total: number }>> = {}
-    for (const id of ALL_TABS) {
-      const count = counts(id, catalog, owned)
-      if (count !== null) map[id] = count
-    }
+    for (const id of ALL_TABS) map[id] = counts(id, catalog, owned, gender)
     return map
-  }, [loaded, owned])
+  }, [loaded, owned, gender])
 
   if (wardrobe.loading && loaded === null) {
     return (
@@ -239,13 +245,19 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
     setError(null)
   }
 
+  /** A card's click: wears its item, or takes it off when it is already worn — except in a slot a figure can never go
+   * without, the outfit and (avatar v4) the hairstyle, where the worn card stays worn. */
   const pick = (slot: ItemSlot, itemId: string): void => {
     const equipped = config[slot] === itemId
-    const required = slot === 'outfit'
+    const required = slot === 'outfit' || slot === 'hairStyle'
     commit(withSlot(config, slot, equipped && !required ? undefined : itemId))
   }
 
-  const pickBase = (base: BaseId): void => commit({ ...config, base })
+  /** The Nữ | Nam switch (spec §6.2): the gender, its counterpart hairstyle, the outfit's cut with it — in the draft
+   * only, like every other change: "Lưu trang phục" saves it, "Hoàn tác" takes it back. */
+  const onGender = (next: Gender): void => {
+    commit(swapGender(config, next, items, owned))
+  }
 
   /** A tab change from `CategoryNav` itself or from a jump off the wearing list. The "Hiện cả món chưa có" box keeps
    * its value across it (design §5.5, No11a — it used to reset the old filter to "all"). */
@@ -288,19 +300,18 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
     if (playerId !== null) invalidate(playerId)
   }
 
-  const preview = chibiFromApi(config, items, bases) ?? defaultChibi('preview')
-  // Which cut of a gendered item the tiles show: the *draft* base's, so picking a male figure switches
-  // the dealer uniform's tile to the trousers the preview beside it is now wearing.
-  const wear = bases.get(config.base)?.wear
+  const preview = chibiFromApi(config, items, bodies) ?? defaultChibi('preview')
+  // Which cut of a gendered item the tiles show: the *draft*'s gender, so a male figure's dealer uniform tile
+  // shows the trousers the preview beside it is wearing.
+  const wear = config.gender
   // The words tab's one empty line (No11a): neither of its two slots has a card to list. Asked of the same
   // `slotCards` each `ItemTab` draws from, so the line and the two (then absent) headings never disagree.
   const wordsEmpty =
     tab === 'words' && (['title', 'badge'] as const).every((slot) => slotCards(slot, loaded.catalog, owned, showLocked).length === 0)
-  // The phone header's collapsible "Đang mặc (n)" summary (design §3.2): the two always-filled rows
-  // (Thân, Trang phục) plus however many of `api.ts`'s own `OPTIONAL_SLOTS` the draft currently fills —
-  // the same eight slots `EquippedList`'s `ROWS` lists past `base`/`outfit`, read off the one source
-  // rather than a second copy of the list kept here.
-  const equippedCount = 2 + OPTIONAL_SLOTS.filter((slot) => config[slot] !== undefined).length
+  // The phone header's collapsible "Đang mặc (n)" summary (design §3.2): the three always-filled rows
+  // (Giới tính, Kiểu tóc, Trang phục) plus however many of `api.ts`'s own `OPTIONAL_SLOTS` the draft currently
+  // fills, the skin tone among them, read off the one source rather than a second copy of the list kept here.
+  const equippedCount = 3 + OPTIONAL_SLOTS.filter((slot) => config[slot] !== undefined).length
   // The full-body figure's own width (V5 fix): `Chibi`'s "full" frame is a fixed 6:7 box, so a width of
   // `stage_height * 6/7` is exactly the width whose height equals the stage around it — the figure then
   // fits with no clip at all. Desktop keeps the tighter frame it was tuned to — 320 wide into a 330 px stage
@@ -325,7 +336,6 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
     <EquippedList
       config={config}
       items={items}
-      bases={bases}
       onRemove={(slot) => commit(withSlot(config, slot, undefined))}
       onJump={changeTab}
     />
@@ -337,18 +347,42 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
       outfits={loaded.outfits}
       draft={config}
       items={items}
-      bases={bases}
+      bodies={bodies}
       onOutfitsChanged={(next) => wardrobe.set({ ...loaded, outfits: next })}
       onApplied={onOutfitApplied}
     />
   )
 
+  // The head of the look group (spec §6.1): Nữ | Nam, on every one of its tabs, and not a tab itself. A row no taller
+  // than the sub-tabs' on a desktop; a thumb's `--tap` per button on a phone (`.genderSwitch`).
+  const lookHeader = (
+    <Segmented
+      label={t('wardrobe.gender.legend')}
+      options={GENDER_ORDER.map((value) => ({ value, label: t(`wardrobe.gender.${value}`) }))}
+      value={config.gender}
+      onChange={onGender}
+      className={w.genderSwitch}
+    />
+  )
+
   const pickerNode = (
     <div className={w.picker}>
-      <CategoryNav tab={tab} onTab={changeTab} counts={tabCounts} showLocked={showLocked} onShowLocked={setShowLocked} showFilter={tab !== 'base'} />
+      <CategoryNav tab={tab} onTab={changeTab} counts={tabCounts} showLocked={showLocked} onShowLocked={setShowLocked} lookHeader={lookHeader} />
 
-      {tab === 'base' ? (
-        <BaseTab bases={loaded.avatarCatalog.bases} draft={config} items={items} onPick={pickBase} panelId={panelId('base')} labelledBy={subTabId('base')} />
+      {tab === 'hairStyle' ? (
+        <HairStyleTab
+          catalog={loaded.catalog}
+          items={items}
+          bodies={bodies}
+          owned={owned}
+          achievements={loaded.achievements}
+          draft={config}
+          showLocked={showLocked}
+          onPick={(id) => pick('hairStyle', id)}
+          portraitSize={phone ? 72 : 96}
+          panelId={panelId(tab)}
+          labelledBy={subTabId(tab)}
+        />
       ) : tab === 'words' ? (
         // One `tabpanel` for the whole tab (design §7) — `title` and `badge` are two `ItemTab` calls, not
         // two tabs, and a `role="tabpanel"` has to appear exactly once for the sub-tab that names it;
@@ -379,7 +413,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
             onPick={(id) => pick('badge', id)}
           />
         </div>
-      ) : tab === 'hairColor' || tab === 'eyeColor' ? (
+      ) : tab === 'hairColor' || tab === 'eyeColor' || tab === 'skinColor' ? (
         <ColourTab
           slot={tab}
           catalog={loaded.catalog}
@@ -388,6 +422,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
           draft={config}
           showLocked={showLocked}
           onPick={(id) => commit(withSlot(config, tab, id))}
+          naturalColour={tab === 'skinColor' ? NATURAL_SKIN : undefined}
           panelId={panelId(tab)}
           labelledBy={subTabId(tab)}
         />

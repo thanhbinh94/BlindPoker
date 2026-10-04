@@ -1,21 +1,23 @@
-import { useTintedLayer, type LayerRef } from '@bp/ui-kit'
+import { hashChibi, useTintedLayer, type LayerRef } from '@bp/ui-kit'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent, { type UserEvent } from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ApiError,
   type AchievementDefDto,
   type AvatarCatalogDto,
   type AvatarConfigDto,
-  type BaseDto,
+  type BodyDto,
+  type Gender,
   type InventoryDto,
   type ItemDto,
   type NormalApi,
   type OutfitDto,
 } from '../../api.js'
+import { chibiFromApi } from '../../avatar/chibi.js'
 import viNormal from '../../locales/vi/normal.json'
 import { makeI18n, renderWithI18n } from '../../test-i18n.js'
-import { WardrobeScreen } from './WardrobeScreen.js'
+import { sameConfig, WardrobeScreen } from './WardrobeScreen.js'
 
 // Plan 18 (No8a): a card's icon is tinted through the kit's `useTintedLayer` (`ItemPreview`). The hook answers a fake
 // blob URL for a layer with tints and `null` — the plain icon — for one without, as the real one does under jsdom.
@@ -27,28 +29,10 @@ beforeEach(() => {
   )
 })
 
-const FACES = {
-  neutral: 'base_f01_face_neutral_L50',
-  happy: 'base_f01_face_happy_L50',
-  sad: 'base_f01_face_sad_L50',
-  surprised: 'base_f01_face_surprised_L50',
-  closed: 'base_f01_face_closed_L50',
-  sleep: 'base_f01_face_sleep_L50',
-}
-const BASE_F01: BaseDto = {
-  id: 'f01',
-  nameKey: 'bases.f01',
-  wear: 'f',
-  layers: { hairBack: 'base_f01_L20', body: 'base_f01_L30', hairFront: 'base_f01_L60' },
-  faces: FACES,
-}
-const BASE_M01: BaseDto = {
-  id: 'm01',
-  nameKey: 'bases.m01',
-  wear: 'm',
-  layers: { hairBack: 'base_m01_L20', body: 'base_m01_L30', hairFront: 'base_m01_L60' },
-  faces: { ...FACES, neutral: 'base_m01_face_neutral_L50' },
-}
+const EXPRESSIONS = ['neutral', 'happy', 'sad', 'surprised', 'closed', 'sleep'] as const
+const facesOf = (g: Gender): Record<string, string> => Object.fromEntries(EXPRESSIONS.map((e) => [e, `body_${g}_face_${e}_L50`]))
+const BODY_F: BodyDto = { gender: 'f', body: 'body_f_L30', faces: facesOf('f'), naturalEyeColour: '#2e6a9b' }
+const BODY_M: BodyDto = { gender: 'm', body: 'body_m_L30', faces: facesOf('m'), naturalEyeColour: '#cc924c' }
 
 const item = (patch: Partial<ItemDto> & Pick<ItemDto, 'id' | 'slot' | 'rarity'>): ItemDto => ({
   nameKey: `items.${patch.id}`,
@@ -56,6 +40,32 @@ const item = (patch: Partial<ItemDto> & Pick<ItemDto, 'id' | 'slot' | 'rarity'>)
   isDefault: false,
   ...patch,
 })
+
+/** The catalogue's eight hairstyles, `free` like every hairstyle a player starts with, each naming its counterpart of
+ * the other gender (spec §4.2) — the female four, then the male four, in `items.json`'s order. */
+const HAIR_PAIRS: readonly [string, string][] = [
+  ['hair_f_bob01', 'hair_m_tousled01'],
+  ['hair_f_hime01', 'hair_m_neat01'],
+  ['hair_f_wavy01', 'hair_m_curly01'],
+  ['hair_f_ponytail01', 'hair_m_spiky01'],
+]
+const hairStyle = (id: string, gender: Gender, counterpart: string): ItemDto =>
+  item({
+    id,
+    slot: 'hairStyle',
+    rarity: 'common',
+    gender,
+    counterpart,
+    free: true,
+    asset: { layer: 60, file: `item_${id}_L60`, back: `item_${id}_L20`, fitsAvatarCrop: true },
+  })
+const HAIRS: ItemDto[] = [...HAIR_PAIRS.map(([f, m]) => hairStyle(f, 'f', m)), ...HAIR_PAIRS.map(([f, m]) => hairStyle(m, 'm', f))]
+const FEMALE_HAIRS = HAIR_PAIRS.map(([f]) => f)
+const MALE_HAIRS = HAIR_PAIRS.map(([, m]) => m)
+
+/** Two skin tones, `free` like all six (spec §4.2). */
+const SKIN_PORCELAIN = item({ id: 'skin_porcelain01', slot: 'skinColor', rarity: 'common', free: true, colour: '#fcefe6' })
+const SKIN_DEEP = item({ id: 'skin_deep01', slot: 'skinColor', rarity: 'common', free: true, colour: '#5c3a28' })
 
 const OUTFIT_CASUAL = item({
   id: 'outfit_casual01',
@@ -125,6 +135,9 @@ const FACE_SUNGLASSES = item({
 const BADGE_BRONZE = item({ id: 'badge_bronze', slot: 'badge', rarity: 'common' })
 
 const CATALOG = [
+  ...HAIRS,
+  SKIN_PORCELAIN,
+  SKIN_DEEP,
   OUTFIT_CASUAL,
   OUTFIT_TUXEDO,
   OUTFIT_DEALER,
@@ -140,10 +153,25 @@ const CATALOG = [
   FACE_SUNGLASSES,
 ]
 
-const AVATAR: AvatarConfigDto = { v: 3, base: 'f01', outfit: 'outfit_casual01', head: 'head_beanie01' }
+const AVATAR: AvatarConfigDto = { v: 4, gender: 'f', hairStyle: 'hair_f_bob01', outfit: 'outfit_casual01', head: 'head_beanie01' }
+
+/** An inventory row for an item every player owns without a grant (`free`). */
+const freeRow = (row: ItemDto): InventoryDto['items'][number] => ({
+  itemId: row.id,
+  acquiredAs: row.id,
+  slot: row.slot,
+  rarity: row.rarity,
+  nameKey: row.nameKey,
+  assetKey: row.assetKey,
+  source: 'free',
+  acquiredAt: 0,
+})
 
 const INVENTORY: InventoryDto = {
   items: [
+    ...HAIRS.map(freeRow),
+    freeRow(SKIN_PORCELAIN),
+    freeRow(SKIN_DEEP),
     { itemId: 'outfit_casual01', acquiredAs: 'outfit_casual01', slot: 'outfit', rarity: 'common', nameKey: 'items.outfit_casual01', assetKey: 'outfit/outfit_casual01', source: 'default', acquiredAt: 0 },
     { itemId: 'head_beanie01', acquiredAs: 'head_beanie01', slot: 'head', rarity: 'common', nameKey: 'items.head_beanie01', assetKey: 'head/head_beanie01', source: 'default', acquiredAt: 0 },
     { itemId: 'haircolor_red01', acquiredAs: 'haircolor_red01', slot: 'hairColor', rarity: 'common', nameKey: 'items.haircolor_red01', assetKey: 'hairColor/haircolor_red01', source: 'default', acquiredAt: 0 },
@@ -152,7 +180,7 @@ const INVENTORY: InventoryDto = {
   avatar: AVATAR,
 }
 
-const AVATAR_CATALOG: AvatarCatalogDto = { frame: { w: 384, h: 448 }, crop: { x: 88, y: 40, size: 208 }, bases: [BASE_F01, BASE_M01], manifestVersion: 1 }
+const AVATAR_CATALOG: AvatarCatalogDto = { frame: { w: 384, h: 448 }, crop: { x: 88, y: 40, size: 208 }, bodies: [BODY_F, BODY_M], manifestVersion: 1 }
 
 const ACHIEVEMENTS: AchievementDefDto[] = [
   { id: 'login_days_100', category: 'login', metric: 'totalLoginDays', threshold: 100, reward: { itemId: 'head_tophat01' } },
@@ -190,14 +218,45 @@ async function goTo(user: UserEvent, group: keyof typeof GROUP_LABEL, tabLabel?:
   await user.click(within(groupList).getByRole('tab', { name: GROUP_LABEL[group] }))
   if (tabLabel === undefined) return
   const subList = screen.getByRole('tablist', { name: GROUP_LABEL[group] })
-  // Every sub-tab but "Thân" carries an "n/m" count in its own accessible name (`CategoryNav`'s
-  // `.tabCount`), so a caller's bare label only ever matches as a prefix.
+  // Every sub-tab carries an "n/m" count in its own accessible name (`CategoryNav`'s `.tabCount`), so a
+  // caller's bare label only ever matches as a prefix.
   await user.click(within(subList).getByRole('tab', { name: new RegExp(`^${tabLabel}`) }))
 }
 
 /** No11a (design §3.1 item 3): the box that also lists what the account does not own yet. Unticked whenever the
- * wardrobe opens, hidden on the base tab; a test about a locked card ticks it first. */
+ * wardrobe opens; a test about a locked card ticks it first. */
 const showLockedBox = (): HTMLElement => screen.getByRole('checkbox', { name: viNormal.wardrobe.showLocked })
+
+/** The wardrobe has loaded: its page title is drawn only once the five reads have answered (the loading and the
+ * failure states draw a line of their own instead). */
+const opened = (): Promise<HTMLElement> => screen.findByRole('heading', { name: viNormal.wardrobe.title, level: 1 })
+
+/** The hair colour tab's red swatch, owned. A prefix, since a worn card's accessible name gains ", Đang dùng". */
+const redSwatch = (): HTMLElement => screen.getByRole('button', { name: new RegExp(`^${viNormal.items.haircolor_red01}, `) })
+
+/** One click to dirty the draft: the red hair colour, from Màu tóc (the wardrobe opens on Kiểu tóc since Plan 19). */
+async function pickRedHair(user: UserEvent): Promise<void> {
+  await goTo(user, 'look', viNormal.wardrobe.tabs.hairColor)
+  await user.click(redSwatch())
+}
+
+/** The Nữ | Nam switch heading the look group (spec §6.1): a `Segmented`, so a `group` of two pressed-or-not buttons,
+ * named "Giới tính" — scoped to it, since "Nữ" is also the wearing list's first value. */
+const genderButton = (gender: Gender): HTMLElement =>
+  within(screen.getByRole('group', { name: viNormal.wardrobe.gender.legend })).getByRole('button', { name: viNormal.wardrobe.gender[gender] })
+
+/** A card in the open tab by its item's name: "<name>, <rarity>[, …]" (design §7). */
+const card = (name: string): HTMLElement => within(screen.getByRole('tabpanel')).getByRole('button', { name: new RegExp(`^${name}, `) })
+
+/** The open tab's card names, in order (the part of each accessible name before its first comma). */
+const cardNames = (): string[] =>
+  within(screen.getByRole('tabpanel'))
+    .getAllByRole('button', { name: /,/ })
+    .map((each) => each.getAttribute('aria-label')!.split(',')[0]!)
+
+/** The stage's own figure: the first `Chibi` on the screen (the left column comes before the cards). */
+const stage = (): HTMLElement => document.querySelector('[data-chibi-hash]') as HTMLElement
+const sourcesIn = (root: Element): string[] => [...root.querySelectorAll('img')].map((img) => img.getAttribute('src') ?? '')
 
 describe('WardrobeScreen', () => {
   // Re-homed from the inventory screen's own test when the inventory folded into the wardrobe (No5): the wardrobe
@@ -217,36 +276,299 @@ describe('WardrobeScreen', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
-  it('shows the base tab first, with both bases offered', async () => {
+  // Plan 19 (avatar v4, spec §6.1): the base tab is gone. The look group opens on Kiểu tóc, under the Nữ | Nam switch,
+  // and the wearing list's first row says which body the figure is drawn on.
+  it('opens on Kiểu tóc under the Nữ | Nam switch, with Giới tính: Nữ first in Đang dùng', async () => {
     renderScreen()
+    await opened()
 
-    await screen.findAllByText(viNormal.bases.f01)
-    expect(screen.getByText(viNormal.bases.m01)).toBeInTheDocument()
+    const subList = screen.getByRole('tablist', { name: viNormal.wardrobe.groups.look })
+    expect(within(subList).getAllByRole('tab').map((tab) => tab.id)).toEqual(['hairStyle', 'hairColor', 'skinColor', 'eyeColor'].map((id) => `wardrobe-subtab-${id}`))
+    expect(within(subList).getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.hairStyle}`) })).toHaveAttribute('aria-selected', 'true')
+    // Not a tab: a group of two buttons, Nữ pressed.
+    expect(genderButton('f')).toHaveAttribute('aria-pressed', 'true')
+    expect(genderButton('m')).toHaveAttribute('aria-pressed', 'false')
+    expect(card(viNormal.items.hair_f_bob01)).toHaveAttribute('aria-pressed', 'true')
+    const [first] = screen.getAllByRole('listitem')
+    expect(first).toHaveTextContent(`${viNormal.wardrobe.gender.legend}${viNormal.wardrobe.gender.f}`)
+    expect(screen.queryByRole('tab', { name: 'Nhân vật' })).toBeNull()
   })
 
-  it('offers a tile per base the catalogue answers with, however many that is', async () => {
-    // The base list is data (2026-09-17): a third figure must reach the wardrobe with no change here
-    // and no change in `BaseTab`. The name comes from its `nameKey`, which already exists in both
-    // languages so the tile never shows a raw key.
-    const BASE_F02: BaseDto = {
-      id: 'f02',
-      nameKey: 'bases.f02',
-      wear: 'f',
-      layers: { hairBack: 'base_f02_L20', body: 'base_f02_L30', hairFront: 'base_f02_L60' },
-      faces: { ...FACES, neutral: 'base_f02_face_neutral_L50' },
-    }
-    renderScreen(stubApi({ avatarCatalog: vi.fn().mockResolvedValue({ ...AVATAR_CATALOG, bases: [BASE_F01, BASE_M01, BASE_F02] }) }))
+  it('keeps the Nữ | Nam switch on every look tab, and only there', async () => {
+    const user = userEvent.setup()
+    renderScreen()
+    await opened()
 
-    await screen.findAllByText(viNormal.bases.f01)
-    const tiles = screen.getAllByRole('tabpanel')[0]!.querySelectorAll('button')
-    expect(tiles).toHaveLength(3)
-    expect(screen.getByText(viNormal.bases.f02)).toBeInTheDocument()
+    for (const tab of [viNormal.wardrobe.tabs.hairColor, viNormal.wardrobe.tabs.skinColor, viNormal.wardrobe.tabs.eyeColor]) {
+      await goTo(user, 'look', tab)
+      expect(screen.getByRole('group', { name: viNormal.wardrobe.gender.legend }), tab).toBeInTheDocument()
+    }
+    await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
+    expect(screen.queryByRole('group', { name: viNormal.wardrobe.gender.legend })).toBeNull()
+  })
+
+  // Spec §6.2: the hairstyle follows the gender to its counterpart, the outfit to its cut; nothing else changes.
+  it('the Nữ | Nam switch swaps the hairstyle to its counterpart and dresses the male cut', async () => {
+    const dealerRow = { itemId: 'outfit_dealer01', acquiredAs: 'outfit_dealer01', slot: 'outfit' as const, rarity: 'rare' as const, nameKey: 'items.outfit_dealer01', assetKey: 'outfit/outfit_dealer01', source: 'default' as const, acquiredAt: 0 }
+    const dressed: InventoryDto = { items: [...INVENTORY.items, dealerRow], avatar: { ...AVATAR, outfit: 'outfit_dealer01', hairColor: 'haircolor_red01' } }
+    const user = userEvent.setup()
+    renderScreen(stubApi({ inventory: vi.fn().mockResolvedValue(dressed) }))
+    await opened()
+    expect(sourcesIn(stage()).some((src) => src.includes('item_outfit_dealer01_L40'))).toBe(true)
+    const before = stage().getAttribute('data-chibi-hash')
+
+    await user.click(genderButton('m'))
+
+    expect(genderButton('m')).toHaveAttribute('aria-pressed', 'true')
+    expect(genderButton('f')).toHaveAttribute('aria-pressed', 'false')
+    expect(card(viNormal.items.hair_m_tousled01)).toHaveAttribute('aria-pressed', 'true')
+    const drawn = sourcesIn(stage())
+    expect(drawn.some((src) => src.includes('item_outfit_dealer01_m_L40')), 'the male cut').toBe(true)
+    expect(drawn.some((src) => src.includes('body_m_L30')), 'the male body').toBe(true)
+    expect(drawn.some((src) => src.includes('item_hair_m_tousled01_L60')), 'the counterpart hairstyle').toBe(true)
+    // The hat stays on.
+    expect(drawn.some((src) => src.includes('item_head_beanie01_L80'))).toBe(true)
+    expect(stage().getAttribute('data-chibi-hash')).not.toBe(before)
+    expect(screen.getByText(viNormal.wardrobe.dirty)).toBeInTheDocument()
+    expect(screen.getAllByRole('listitem')[0]).toHaveTextContent(`${viNormal.wardrobe.gender.legend}${viNormal.wardrobe.gender.m}`)
+
+    // A second press on the pressed button changes nothing.
+    await user.click(genderButton('m'))
+    expect(card(viNormal.items.hair_m_tousled01)).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('the Kiểu tóc tab lists only the current gender’s hairstyles', async () => {
+    const user = userEvent.setup()
+    renderScreen()
+    await opened()
+
+    const names = (ids: readonly string[]): string[] => ids.map((id) => viNormal.items[id as keyof typeof viNormal.items])
+    expect(cardNames()).toEqual(names(FEMALE_HAIRS))
+    const tab = screen.getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.hairStyle}`) })
+    expect(tab).toHaveTextContent('4/4')
+
+    await user.click(genderButton('m'))
+
+    expect(cardNames()).toEqual(names(MALE_HAIRS))
+    expect(tab).toHaveTextContent('4/4')
+    // The box adds nothing of the other gender.
+    await user.click(showLockedBox())
+    expect(cardNames()).toEqual(names(MALE_HAIRS))
+  })
+
+  it('picks a hairstyle with a click, and a second click on the worn one keeps it on', async () => {
+    const setAvatar = vi.fn().mockResolvedValue({ config: { ...AVATAR, hairStyle: 'hair_f_ponytail01' } })
+    const user = userEvent.setup()
+    renderScreen(stubApi({ setAvatar }))
+    await opened()
+
+    await user.click(card(viNormal.items.hair_f_ponytail01))
+    expect(card(viNormal.items.hair_f_ponytail01)).toHaveAttribute('aria-pressed', 'true')
+    expect(card(viNormal.items.hair_f_bob01)).toHaveAttribute('aria-pressed', 'false')
+    expect(sourcesIn(stage()).some((src) => src.includes('item_hair_f_ponytail01_L60'))).toBe(true)
+
+    // Required, like the outfit: a figure always wears a hairstyle.
+    await user.click(card(viNormal.items.hair_f_ponytail01))
+    expect(card(viNormal.items.hair_f_ponytail01)).toHaveAttribute('aria-pressed', 'true')
+
+    await user.click(screen.getByRole('button', { name: viNormal.wardrobe.save }))
+    await waitFor(() => expect(setAvatar).toHaveBeenCalledWith(expect.objectContaining({ hairStyle: 'hair_f_ponytail01' })))
+  })
+
+  // Pre-flight #20: a hat that hides the front hair would make every portrait the same; the portrait is the hairstyle in
+  // the draft's colours and gender, and nothing else.
+  it('a hairstyle card’s portrait leaves the worn hat off', async () => {
+    const user = userEvent.setup()
+    renderScreen()
+    await opened()
+    await pickRedHair(user)
+    await goTo(user, 'look', viNormal.wardrobe.tabs.hairStyle)
+
+    expect(sourcesIn(stage()).some((src) => src.includes('item_head_beanie01_L80')), 'the stage wears the hat').toBe(true)
+    const items = new Map(CATALOG.map((row) => [row.id, row]))
+    const bodies = new Map(AVATAR_CATALOG.bodies.map((body) => [body.gender, body]))
+    for (const id of FEMALE_HAIRS) {
+      const portrait = card(viNormal.items[id as keyof typeof viNormal.items]).querySelector('[data-chibi-hash]') as HTMLElement
+      expect(portrait, id).not.toBeNull()
+      expect(portrait).toHaveAttribute('data-frame', 'head')
+      const drawn = sourcesIn(portrait)
+      expect(drawn.some((src) => src.includes('item_head_beanie01_L80')), `${id}: no hat`).toBe(false)
+      expect(drawn.some((src) => src.includes(`item_${id}_L60`)), `${id}: its own hairstyle`).toBe(true)
+      expect(drawn.some((src) => src.includes('body_f_L30')), `${id}: the draft's body`).toBe(true)
+      // Exactly the draft's look with this hairstyle: the red hair colour in, the hat out.
+      const expected = chibiFromApi({ v: 4, gender: 'f', hairStyle: id, outfit: 'outfit_casual01', hairColor: 'haircolor_red01' }, items, bodies)!
+      expect(portrait).toHaveAttribute('data-chibi-hash', hashChibi(expected))
+    }
+  })
+
+  // A6 review: the portrait is the draft's look — its skin tone too, the saved one and one just picked.
+  it('a hairstyle card’s portrait carries the draft’s skin tone', async () => {
+    const user = userEvent.setup()
+    renderScreen(stubApi({ inventory: vi.fn().mockResolvedValue({ ...INVENTORY, avatar: { ...AVATAR, skinColor: 'skin_deep01' } }) }))
+    await opened()
+
+    const items = new Map(CATALOG.map((row) => [row.id, row]))
+    const bodies = new Map(AVATAR_CATALOG.bodies.map((body) => [body.gender, body]))
+    const expectPortraits = (skinColor: string): void => {
+      for (const id of FEMALE_HAIRS) {
+        const portrait = card(viNormal.items[id as keyof typeof viNormal.items]).querySelector('[data-chibi-hash]') as HTMLElement
+        const withSkin = chibiFromApi({ v: 4, gender: 'f', hairStyle: id, outfit: 'outfit_casual01', skinColor }, items, bodies)!
+        const without = chibiFromApi({ v: 4, gender: 'f', hairStyle: id, outfit: 'outfit_casual01' }, items, bodies)!
+        expect(portrait, `${id} in ${skinColor}`).toHaveAttribute('data-chibi-hash', hashChibi(withSkin))
+        expect(hashChibi(withSkin), 'the skin tone is part of the hash').not.toBe(hashChibi(without))
+      }
+    }
+    // The saved skin tone…
+    expectPortraits('skin_deep01')
+
+    // …and one picked in the draft.
+    await goTo(user, 'look', viNormal.wardrobe.tabs.skinColor)
+    await user.click(card(viNormal.items.skin_porcelain01))
+    await goTo(user, 'look', viNormal.wardrobe.tabs.hairStyle)
+    expectPortraits('skin_porcelain01')
+  })
+
+  it('the Màu da tab equips a skin colour, and Tự nhiên takes it off', async () => {
+    const user = userEvent.setup()
+    renderScreen()
+    await opened()
+    const before = stage().getAttribute('data-chibi-hash')
+
+    await goTo(user, 'look', viNormal.wardrobe.tabs.skinColor)
+
+    const panel = within(screen.getByRole('tabpanel'))
+    const natural = panel.getByRole('button', { name: viNormal.wardrobe.natural })
+    expect(natural).toHaveAttribute('aria-pressed', 'true')
+    // "Tự nhiên" is the body's own cream, filled in — not the checker the hair and eye tabs draw.
+    expect((natural.querySelector('span[style]') as HTMLElement).style.background).toBe('rgb(251, 224, 202)')
+    // Then the tones, in catalogue order.
+    expect(cardNames()).toEqual([viNormal.items.skin_porcelain01, viNormal.items.skin_deep01])
+
+    await user.click(card(viNormal.items.skin_deep01))
+
+    expect(card(viNormal.items.skin_deep01)).toHaveAttribute('aria-pressed', 'true')
+    expect(natural).toHaveAttribute('aria-pressed', 'false')
+    expect(stage().getAttribute('data-chibi-hash')).not.toBe(before)
+    expect(screen.getAllByRole('listitem')[2]).toHaveTextContent(`${viNormal.wardrobe.tabs.skinColor}${viNormal.items.skin_deep01}`)
+
+    await user.click(natural)
+
+    expect(natural).toHaveAttribute('aria-pressed', 'true')
+    expect(stage().getAttribute('data-chibi-hash')).toBe(before)
+    expect(screen.queryByText(viNormal.wardrobe.dirty)).toBeNull()
+  })
+
+  it('Đang dùng lists Giới tính, Kiểu tóc, Màu da, Màu tóc and Màu mắt first', async () => {
+    renderScreen()
+    await opened()
+
+    const rows = screen.getAllByRole('listitem').slice(0, 6)
+    expect(rows.map((row) => row.textContent)).toEqual([
+      `${viNormal.wardrobe.gender.legend}${viNormal.wardrobe.gender.f}`,
+      `${viNormal.wardrobe.tabs.hairStyle}${viNormal.items.hair_f_bob01}`,
+      `${viNormal.wardrobe.tabs.skinColor}${viNormal.wardrobe.natural}`,
+      `${viNormal.wardrobe.tabs.hairColor}${viNormal.wardrobe.natural}`,
+      `${viNormal.wardrobe.tabs.eyeColor}${viNormal.wardrobe.natural}`,
+      // …then the items, as before.
+      `${viNormal.wardrobe.tabs.head}${viNormal.items.head_beanie01}×`,
+    ])
+  })
+
+  it('Hoàn tác brings the gender back', async () => {
+    const user = userEvent.setup()
+    renderScreen()
+    await opened()
+    const before = stage().getAttribute('data-chibi-hash')
+
+    await user.click(genderButton('m'))
+    expect(card(viNormal.items.hair_m_tousled01)).toHaveAttribute('aria-pressed', 'true')
+    await user.click(screen.getByRole('button', { name: viNormal.wardrobe.undo }))
+
+    expect(genderButton('f')).toHaveAttribute('aria-pressed', 'true')
+    expect(card(viNormal.items.hair_f_bob01)).toHaveAttribute('aria-pressed', 'true')
+    expect(cardNames()).toEqual(FEMALE_HAIRS.map((id) => viNormal.items[id as keyof typeof viNormal.items]))
+    expect(stage().getAttribute('data-chibi-hash')).toBe(before)
+    expect(screen.queryByText(viNormal.wardrobe.dirty)).toBeNull()
+  })
+
+  it('saving after a gender change sends gender and hairStyle together', async () => {
+    const male: AvatarConfigDto = { v: 4, gender: 'm', hairStyle: 'hair_m_tousled01', outfit: 'outfit_casual01', head: 'head_beanie01' }
+    const setAvatar = vi.fn().mockResolvedValue({ config: male })
+    const user = userEvent.setup()
+    renderScreen(stubApi({ setAvatar }))
+    await opened()
+
+    await user.click(genderButton('m'))
+    await user.click(screen.getByRole('button', { name: viNormal.wardrobe.save }))
+
+    await waitFor(() => expect(setAvatar).toHaveBeenCalledWith(male))
+    expect(await screen.findByText(viNormal.wardrobe.saved)).toBeInTheDocument()
+    expect(genderButton('m')).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  describe('on a phone', () => {
+    // jsdom has no `matchMedia`; this one answers the phone query (`PHONE_QUERY`) and nothing else.
+    beforeEach(() => {
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        matches: query === '(max-width: 767px)',
+        media: query,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      }))
+    })
+    afterEach(() => {
+      vi.unstubAllGlobals()
+    })
+
+    it('counts gender, hairstyle and outfit in the Đang dùng summary, with every optional slot filled', async () => {
+      const withSkin: InventoryDto = { ...INVENTORY, avatar: { ...AVATAR, skinColor: 'skin_deep01' } }
+      renderScreen(stubApi({ inventory: vi.fn().mockResolvedValue(withSkin) }))
+      await opened()
+
+      // Giới tính, Kiểu tóc, Quần áo, plus the hat and the skin tone.
+      expect(screen.getByText(viNormal.wardrobe.equipped.count.replace('{{n}}', '5'))).toBeInTheDocument()
+    })
+
+    it('draws the hairstyle portraits 72 px wide (96 px on a wider screen)', async () => {
+      renderScreen()
+      await opened()
+
+      const portrait = card(viNormal.items.hair_f_bob01).querySelector('[data-chibi-hash]') as HTMLElement
+      expect(portrait.style.width).toBe('72px')
+    })
+  })
+
+  it('draws the hairstyle portraits 96 px wide off a phone', async () => {
+    renderScreen()
+    await opened()
+
+    const portrait = card(viNormal.items.hair_f_bob01).querySelector('[data-chibi-hash]') as HTMLElement
+    expect(portrait.style.width).toBe('96px')
+  })
+
+  it('draws the preview from the body of the saved gender and its hairstyle', async () => {
+    renderScreen()
+    await opened()
+
+    const stage = document.querySelector('[data-chibi-hash]') as HTMLElement
+    const sources = [...stage.querySelectorAll('img')].map((img) => img.getAttribute('src'))
+    expect(sources.some((src) => src?.includes('body_f_L30'))).toBe(true)
+    expect(sources.some((src) => src?.includes('item_hair_f_bob01_L60'))).toBe(true)
+  })
+
+  it('marks a draft dirty when only the gender differs', () => {
+    // The wardrobe compares a draft with what is saved key by key (`sameConfig`): `v`, `gender`, then every slot —
+    // the hairstyle and the skin colour among them. A gender switch alone must read as a change to save.
+    expect(sameConfig(AVATAR, { ...AVATAR })).toBe(true)
+    expect(sameConfig(AVATAR, { ...AVATAR, gender: 'm' })).toBe(false)
+    expect(sameConfig(AVATAR, { ...AVATAR, hairStyle: 'hair_m_tousled01' })).toBe(false)
+    expect(sameConfig(AVATAR, { ...AVATAR, skinColor: 'skin_deep01' })).toBe(false)
   })
 
   it('switches tabs on click', async () => {
     const user = userEvent.setup()
     renderScreen()
-    await screen.findAllByText(viNormal.bases.f01)
+    await opened()
 
     await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
 
@@ -258,7 +580,7 @@ describe('WardrobeScreen', () => {
   it('draws a head tile as the item icon, not as a figure wearing it', async () => {
     const user = userEvent.setup()
     renderScreen()
-    await screen.findAllByText(viNormal.bases.f01)
+    await opened()
     await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
     await user.click(showLockedBox())
 
@@ -273,37 +595,41 @@ describe('WardrobeScreen', () => {
     expect(tile.querySelector('[data-chibi-hash]')).toBeNull()
   })
 
-  it('switches a gendered outfit’s tile icon when the draft base changes', async () => {
-    // 2026-09-20: one item, two cuts. The tile has to show the cut the figure on the stage beside it is
-    // wearing, so it follows the *draft* base rather than the saved one — before anything is saved.
+  it('draws a gendered outfit’s tile in the cut of the draft’s gender', async () => {
+    // 2026-09-20: one item, two cuts. The tile has to show the cut the figure on the stage beside it is wearing — since
+    // v4, the cut of the draft's gender (it was the base's `wear`).
+    const male: AvatarConfigDto = { v: 4, gender: 'm', hairStyle: 'hair_m_tousled01', outfit: 'outfit_casual01' }
     const user = userEvent.setup()
-    renderScreen()
-    await screen.findAllByText(viNormal.bases.f01)
+    renderScreen(stubApi({ inventory: vi.fn().mockResolvedValue({ ...INVENTORY, avatar: male }) }))
+    await opened()
 
-    const dealerIcon = async (): Promise<Element | null> => {
-      await goTo(user, 'wear', viNormal.wardrobe.tabs.outfit)
-      return screen.getByText(viNormal.items.outfit_dealer01).closest('button')!.querySelector('img')
-    }
-    // The dealer uniform is not owned: the box lists it, and stays ticked across the trip to the base tab below.
+    // The dealer uniform is not owned: the box lists it.
     await goTo(user, 'wear', viNormal.wardrobe.tabs.outfit)
     await user.click(showLockedBox())
-    expect(await dealerIcon()).toHaveAttribute('src', '/avatar/item_outfit_dealer01_icon@1x.png')
 
-    await goTo(user, 'look', viNormal.wardrobe.tabs.base)
-    await user.click(screen.getByText(viNormal.bases.m01).closest('button') as HTMLElement)
-
-    const icon = await dealerIcon()
+    const icon = screen.getByText(viNormal.items.outfit_dealer01).closest('button')!.querySelector('img')
     expect(icon).toHaveAttribute('src', '/avatar/item_outfit_dealer01_m_icon@1x.png')
     expect(icon).toHaveAttribute('srcset', '/avatar/item_outfit_dealer01_m_icon@1x.png 1x, /avatar/item_outfit_dealer01_m_icon@2x.png 2x')
-    // An item with no cut for this wear is untouched: the tuxedo is one layer for everybody.
+    // An item with no cut for this gender is untouched: the tuxedo is one layer for everybody.
     const tuxedo = screen.getByText(viNormal.items.outfit_tuxedo01).closest('button')!.querySelector('img')
     expect(tuxedo).toHaveAttribute('src', '/avatar/item_outfit_tuxedo01_icon@1x.png')
+  })
+
+  it('draws a gendered outfit’s tile in the shared cut for gender f', async () => {
+    const user = userEvent.setup()
+    renderScreen()
+    await opened()
+    await goTo(user, 'wear', viNormal.wardrobe.tabs.outfit)
+    await user.click(showLockedBox())
+
+    const icon = screen.getByText(viNormal.items.outfit_dealer01).closest('button')!.querySelector('img')
+    expect(icon).toHaveAttribute('src', '/avatar/item_outfit_dealer01_icon@1x.png')
   })
 
   it('locks an unowned tile, and a click on it does not equip anything', async () => {
     const user = userEvent.setup()
     renderScreen()
-    await screen.findAllByText(viNormal.bases.f01)
+    await opened()
     await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
     await user.click(showLockedBox())
 
@@ -321,7 +647,7 @@ describe('WardrobeScreen', () => {
   it('equips an owned tile, and a second click on the equipped one unequips it', async () => {
     const user = userEvent.setup()
     renderScreen()
-    await screen.findAllByText(viNormal.bases.f01)
+    await opened()
     await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
 
     // Scoped to the tile grid: "Mũ len" is also the wearing-list row's value, since it is the default
@@ -344,7 +670,7 @@ describe('WardrobeScreen', () => {
     const withHairColor: AvatarConfigDto = { ...AVATAR, hairColor: 'haircolor_red01' }
     const user = userEvent.setup()
     renderScreen(stubApi({ inventory: vi.fn().mockResolvedValue({ ...INVENTORY, avatar: withHairColor }) }))
-    await screen.findAllByText(viNormal.bases.f01)
+    await opened()
     await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
 
     // Scoped to the tile grid: "Mũ len" is also the wearing-list row's value, since it is the default
@@ -361,7 +687,7 @@ describe('WardrobeScreen', () => {
   it('cannot unequip the required outfit — a second click on it stays equipped', async () => {
     const user = userEvent.setup()
     renderScreen()
-    await screen.findAllByText(viNormal.bases.f01)
+    await opened()
     await goTo(user, 'wear', viNormal.wardrobe.tabs.outfit)
 
     // Scoped to the tile grid: "Bộ thường ngày" is also the wearing-list row's value, since it is the
@@ -375,29 +701,25 @@ describe('WardrobeScreen', () => {
     expect(equipped).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('switches base by clicking the other tile', async () => {
-    const user = userEvent.setup()
-    renderScreen()
-    await screen.findAllByText(viNormal.bases.f01)
-
-    const m01 = screen.getByText(viNormal.bases.m01).closest('button') as HTMLElement
-    expect(m01).toHaveAttribute('aria-pressed', 'false')
-
-    await user.click(m01)
-
-    expect(m01).toHaveAttribute('aria-pressed', 'true')
-  })
-
-  it('sends the v3 draft to setAvatar on save', async () => {
-    const setAvatar = vi.fn().mockResolvedValue({ config: { ...AVATAR, base: 'm01' } })
+  it('sends the v4 draft to setAvatar on save', async () => {
+    const setAvatar = vi.fn().mockResolvedValue({ config: { ...AVATAR, hairColor: 'haircolor_red01' } })
     const user = userEvent.setup()
     renderScreen(stubApi({ setAvatar }))
-    await screen.findAllByText(viNormal.bases.f01)
+    await opened()
 
-    await user.click(screen.getByText(viNormal.bases.m01))
+    await pickRedHair(user)
     await user.click(screen.getByRole('button', { name: viNormal.wardrobe.save }))
 
-    await waitFor(() => expect(setAvatar).toHaveBeenCalledWith(expect.objectContaining({ v: 3, base: 'm01', outfit: 'outfit_casual01' })))
+    await waitFor(() =>
+      expect(setAvatar).toHaveBeenCalledWith({
+        v: 4,
+        gender: 'f',
+        hairStyle: 'hair_f_bob01',
+        outfit: 'outfit_casual01',
+        head: 'head_beanie01',
+        hairColor: 'haircolor_red01',
+      }),
+    )
     expect(await screen.findByText(viNormal.wardrobe.saved)).toBeInTheDocument()
   })
 
@@ -406,11 +728,11 @@ describe('WardrobeScreen', () => {
   // right props through and reacts to `onApplied` by pushing the config into the draft and showing
   // "saved", same as a direct `save()` (design §5.3, §3.1 item 4).
   it('wires the saved-outfit portraits in: applying one updates the draft and shows the saved notice', async () => {
-    const outfitOne: OutfitDto = { slot: 1, name: 'Đi làm', config: { v: 3, base: 'm01', outfit: 'outfit_tuxedo01' }, updatedAt: 0 }
+    const outfitOne: OutfitDto = { slot: 1, name: 'Đi làm', config: { v: 4, gender: 'm', hairStyle: 'hair_m_tousled01', outfit: 'outfit_tuxedo01' }, updatedAt: 0 }
     const applyOutfit = vi.fn().mockResolvedValue({ config: outfitOne.config })
     const user = userEvent.setup()
     renderScreen(stubApi({ outfits: vi.fn().mockResolvedValue({ outfits: [outfitOne, null, null, null, null] }), applyOutfit }))
-    await screen.findAllByText(viNormal.bases.f01)
+    await opened()
 
     await user.click(screen.getByRole('button', { name: viNormal.outfits.menu.replace('{{name}}', 'Đi làm') }))
     await user.click(screen.getByRole('button', { name: viNormal.outfits.apply }))
@@ -423,7 +745,7 @@ describe('WardrobeScreen', () => {
     it('lists a Natural swatch plus owned and locked colour swatches in the hair colour tab', async () => {
       const user = userEvent.setup()
       renderScreen()
-      await screen.findAllByText(viNormal.bases.f01)
+      await opened()
 
       await goTo(user, 'look', viNormal.wardrobe.tabs.hairColor)
 
@@ -447,7 +769,7 @@ describe('WardrobeScreen', () => {
     it('a click on a locked swatch does not equip anything', async () => {
       const user = userEvent.setup()
       renderScreen()
-      await screen.findAllByText(viNormal.bases.f01)
+      await opened()
       await goTo(user, 'look', viNormal.wardrobe.tabs.hairColor)
       await user.click(showLockedBox())
 
@@ -463,7 +785,7 @@ describe('WardrobeScreen', () => {
       const setAvatar = vi.fn().mockResolvedValue({ config: { ...AVATAR, hairColor: 'haircolor_red01' } })
       const user = userEvent.setup()
       renderScreen(stubApi({ setAvatar }))
-      await screen.findAllByText(viNormal.bases.f01)
+      await opened()
       const chibi = document.querySelector('[data-chibi-hash]') as HTMLElement
       const before = chibi.getAttribute('data-chibi-hash')
 
@@ -493,7 +815,7 @@ describe('WardrobeScreen', () => {
       const setAvatar = vi.fn().mockResolvedValue({ config: { ...AVATAR, head: 'head_beret_blue01' } })
       const user = userEvent.setup()
       renderScreen(stubApi({ setAvatar }))
-      await screen.findAllByText(viNormal.bases.f01)
+      await opened()
       await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
       const rare = viNormal.inventory.rarity.rare
       const panel = within(screen.getByRole('tabpanel'))
@@ -543,7 +865,7 @@ describe('WardrobeScreen', () => {
       const setAvatar = vi.fn().mockResolvedValue({ config: { ...AVATAR, head: 'head_beret_blue01' } })
       const user = userEvent.setup()
       renderScreen(stubApi({ setAvatar }))
-      await screen.findAllByText(viNormal.bases.f01)
+      await opened()
       await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
       expect(showLockedBox()).not.toBeChecked()
 
@@ -578,7 +900,7 @@ describe('WardrobeScreen', () => {
       }
       const user = userEvent.setup()
       renderScreen(stubApi({ inventory: vi.fn().mockResolvedValue(withBothBerets) }))
-      await screen.findAllByText(viNormal.bases.f01)
+      await opened()
       await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
 
       const panel = within(screen.getByRole('tabpanel'))
@@ -632,7 +954,7 @@ describe('WardrobeScreen', () => {
       renderScreen(
         stubApi({ catalogItems: vi.fn().mockResolvedValue({ items: [...CATALOG, OUTFIT_CASUAL_RED] }), inventory: vi.fn().mockResolvedValue(wearingTheTee), setAvatar }),
       )
-      await screen.findAllByText(viNormal.bases.f01)
+      await opened()
       await goTo(user, 'wear', viNormal.wardrobe.tabs.outfit)
 
       const panel = within(screen.getByRole('tabpanel'))
@@ -660,13 +982,13 @@ describe('WardrobeScreen', () => {
 
   describe('header (design §3.1): dirty label, undo', () => {
     it('shows the dirty label only while the draft differs from the saved config, and clears it on save', async () => {
-      const setAvatar = vi.fn().mockResolvedValue({ config: { ...AVATAR, base: 'm01' } })
+      const setAvatar = vi.fn().mockResolvedValue({ config: { ...AVATAR, hairColor: 'haircolor_red01' } })
       const user = userEvent.setup()
       renderScreen(stubApi({ setAvatar }))
-      await screen.findAllByText(viNormal.bases.f01)
+      await opened()
       expect(screen.queryByText(viNormal.wardrobe.dirty)).toBeNull()
 
-      await user.click(screen.getByText(viNormal.bases.m01))
+      await pickRedHair(user)
       expect(screen.getByText(viNormal.wardrobe.dirty)).toBeInTheDocument()
 
       await user.click(screen.getByRole('button', { name: viNormal.wardrobe.save }))
@@ -679,13 +1001,13 @@ describe('WardrobeScreen', () => {
       const setAvatar = vi.fn()
       const user = userEvent.setup()
       renderScreen(stubApi({ setAvatar }))
-      await screen.findAllByText(viNormal.bases.f01)
+      await opened()
       const chibi = document.querySelector('[data-chibi-hash]') as HTMLElement
       const before = chibi.getAttribute('data-chibi-hash')
       const undoButton = screen.getByRole('button', { name: viNormal.wardrobe.undo })
       expect(undoButton).toBeDisabled()
 
-      await user.click(screen.getByText(viNormal.bases.m01))
+      await pickRedHair(user)
       expect(chibi.getAttribute('data-chibi-hash')).not.toBe(before)
       expect(undoButton).toBeEnabled()
 
@@ -702,7 +1024,7 @@ describe('WardrobeScreen', () => {
     it('jumps to a slot’s group and tab when its wearing-list row is clicked', async () => {
       const user = userEvent.setup()
       renderScreen()
-      await screen.findAllByText(viNormal.bases.f01)
+      await opened()
 
       // "Mũ" (head) is rendered once at this point — the wearing-list row — since the default group,
       // "look", does not show the "wear" group's own sub-tabs yet.
@@ -719,9 +1041,9 @@ describe('WardrobeScreen', () => {
     it('lists only what the account owns by default, and the box shows the rest', async () => {
       const user = userEvent.setup()
       renderScreen()
-      await screen.findAllByText(viNormal.bases.f01)
-      // The base tab is chosen, not owned: no box there.
-      expect(screen.queryByRole('checkbox')).toBeNull()
+      await opened()
+      // The box is on the tab the wardrobe opens on, and unticked.
+      expect(showLockedBox()).not.toBeChecked()
 
       await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
       expect(showLockedBox()).not.toBeChecked()
@@ -750,7 +1072,7 @@ describe('WardrobeScreen', () => {
     it('keeps the box ticked or unticked across tab changes — a jump from the wearing list included', async () => {
       const user = userEvent.setup()
       renderScreen()
-      await screen.findAllByText(viNormal.bases.f01)
+      await opened()
       await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
 
       await user.click(showLockedBox())
@@ -760,9 +1082,9 @@ describe('WardrobeScreen', () => {
       expect(showLockedBox()).toBeChecked()
       expect(within(screen.getByRole('tabpanel')).getByText(viNormal.items.outfit_tuxedo01)).toBeInTheDocument()
 
-      // Through the base tab, where the box is hidden, and back by the wearing list's "Mũ" row.
-      await goTo(user, 'look', viNormal.wardrobe.tabs.base)
-      expect(screen.queryByRole('checkbox')).toBeNull()
+      // Through the hair colour tab, another group, and back by the wearing list's "Mũ" row.
+      await goTo(user, 'look', viNormal.wardrobe.tabs.hairColor)
+      expect(showLockedBox()).toBeChecked()
       await user.click(screen.getByText(viNormal.wardrobe.tabs.head).closest('button') as HTMLElement)
       expect(showLockedBox()).toBeChecked()
       expect(screen.getByText(viNormal.items.head_tophat01)).toBeInTheDocument()
@@ -776,7 +1098,7 @@ describe('WardrobeScreen', () => {
     it('replaces the grid with one line, inside the same tabpanel, on a tab where nothing is owned', async () => {
       const user = userEvent.setup()
       renderScreen()
-      await screen.findAllByText(viNormal.bases.f01)
+      await opened()
 
       await goTo(user, 'wear', viNormal.wardrobe.tabs.face)
 
@@ -799,10 +1121,31 @@ describe('WardrobeScreen', () => {
       expect(within(panel).getByText(viNormal.items.face_sunglasses01).closest('button')).toHaveAttribute('aria-disabled', 'true')
     })
 
+    // No11a on Kiểu tóc: every hairstyle is free, so this only happens to an account the catalogue has outgrown — but
+    // the box and the empty line work there as on every tab.
+    it('on Kiểu tóc with no hairstyle of the gender owned, says so in one line, and the box lists them locked', async () => {
+      const user = userEvent.setup()
+      const bare: InventoryDto = { ...INVENTORY, items: INVENTORY.items.filter((row) => row.slot !== 'hairStyle') }
+      renderScreen(stubApi({ inventory: vi.fn().mockResolvedValue(bare) }))
+      await opened()
+
+      const panel = screen.getByRole('tabpanel')
+      expect(within(panel).getByText(viNormal.wardrobe.emptyOwned)).toBeInTheDocument()
+      expect(panel).toHaveAttribute('tabindex', '0')
+      expect(screen.getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.hairStyle}`) })).toHaveTextContent('0/4')
+
+      await user.click(showLockedBox())
+
+      expect(screen.getByRole('tabpanel')).toBe(panel)
+      expect(within(panel).queryByText(viNormal.wardrobe.emptyOwned)).toBeNull()
+      expect(cardNames()).toEqual(FEMALE_HAIRS.map((id) => viNormal.items[id as keyof typeof viNormal.items]))
+      expect(card(viNormal.items.hair_f_hime01)).toHaveAttribute('aria-disabled', 'true')
+    })
+
     it('swaps the stage to the framed head portrait on the frame tab', async () => {
       const user = userEvent.setup()
       renderScreen()
-      await screen.findAllByText(viNormal.bases.f01)
+      await opened()
 
       await goTo(user, 'decor', viNormal.wardrobe.tabs.frame)
 
@@ -813,7 +1156,7 @@ describe('WardrobeScreen', () => {
     it('draws the words tab (title/badge) as one tabpanel wrapping both headings and grids, correctly labelled', async () => {
       const user = userEvent.setup()
       renderScreen()
-      await screen.findAllByText(viNormal.bases.f01)
+      await opened()
 
       await goTo(user, 'decor', viNormal.wardrobe.tabs.words)
       // Neither word is owned (pre-flight amendment 2): the box lists them.
@@ -840,7 +1183,7 @@ describe('WardrobeScreen', () => {
     it('on the words tab with the box unticked, hides a heading with nothing owned under it, and says so once inside the panel when neither has anything', async () => {
       const user = userEvent.setup()
       renderScreen()
-      await screen.findAllByText(viNormal.bases.f01)
+      await opened()
 
       await goTo(user, 'decor', viNormal.wardrobe.tabs.words)
 
@@ -866,7 +1209,7 @@ describe('WardrobeScreen', () => {
         ],
       }
       renderScreen(stubApi({ inventory: vi.fn().mockResolvedValue(withBadge) }))
-      await screen.findAllByText(viNormal.bases.f01)
+      await opened()
 
       await goTo(user, 'decor', viNormal.wardrobe.tabs.words)
 
@@ -881,7 +1224,7 @@ describe('WardrobeScreen', () => {
 
     it('gives every tab a roving tabindex: only the selected one sits in the page Tab order', async () => {
       renderScreen()
-      await screen.findAllByText(viNormal.bases.f01)
+      await opened()
 
       const groupList = screen.getByRole('tablist', { name: viNormal.wardrobe.title })
       expect(within(groupList).getByRole('tab', { name: viNormal.wardrobe.groups.look })).toHaveAttribute('tabindex', '0')
@@ -889,32 +1232,44 @@ describe('WardrobeScreen', () => {
       expect(within(groupList).getByRole('tab', { name: viNormal.wardrobe.groups.decor })).toHaveAttribute('tabindex', '-1')
 
       const subList = screen.getByRole('tablist', { name: viNormal.wardrobe.groups.look })
-      expect(within(subList).getByRole('tab', { name: viNormal.wardrobe.tabs.base })).toHaveAttribute('tabindex', '0')
+      expect(within(subList).getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.hairStyle}`) })).toHaveAttribute('tabindex', '0')
       expect(within(subList).getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.hairColor}`) })).toHaveAttribute('tabindex', '-1')
+      expect(within(subList).getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.skinColor}`) })).toHaveAttribute('tabindex', '-1')
+      expect(within(subList).getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.eyeColor}`) })).toHaveAttribute('tabindex', '-1')
     })
 
-    it("every sub-tab's aria-controls names its own panel's id, for every one of the three panel shapes", async () => {
+    it("every sub-tab's aria-controls names its own panel's id, for every one of the four panel shapes", async () => {
       const user = userEvent.setup()
       renderScreen()
-      await screen.findAllByText(viNormal.bases.f01)
+      await opened()
 
-      // `base` (`BaseTab`) is the tab this screen opens on — no navigation needed for it.
-      const baseTab = screen.getByRole('tab', { name: viNormal.wardrobe.tabs.base })
-      expect(screen.getByRole('tabpanel')).toHaveAttribute('id', baseTab.getAttribute('aria-controls'))
-      expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', baseTab.id)
+      // `hairStyle` (`HairStyleTab`) is the tab this screen opens on — no navigation needed for it.
+      const styleTab = screen.getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.hairStyle}`) })
+      let panel = screen.getByRole('tabpanel')
+      expect(panel).toHaveAttribute('id', styleTab.getAttribute('aria-controls'))
+      expect(panel).toHaveAttribute('aria-labelledby', styleTab.id)
+
+      // `ColourTab`, for the skin tone as for the hair colour.
+      for (const label of [viNormal.wardrobe.tabs.hairColor, viNormal.wardrobe.tabs.skinColor]) {
+        await goTo(user, 'look', label)
+        const colourTab = screen.getByRole('tab', { name: new RegExp(`^${label}`) })
+        panel = screen.getByRole('tabpanel')
+        expect(panel).toHaveAttribute('id', colourTab.getAttribute('aria-controls'))
+        expect(panel).toHaveAttribute('aria-labelledby', colourTab.id)
+      }
 
       await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
       const headTab = screen.getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.head}`) })
-      let panel = screen.getByRole('tabpanel')
+      panel = screen.getByRole('tabpanel')
       expect(panel).toHaveAttribute('id', headTab.getAttribute('aria-controls'))
       expect(panel).toHaveAttribute('aria-labelledby', headTab.id)
 
-      // `hairColor` (`ColourTab`) — the third of the three shapes.
-      await goTo(user, 'look', viNormal.wardrobe.tabs.hairColor)
-      const hairTab = screen.getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.hairColor}`) })
+      // `words` — the one panel two `ItemTab` calls share, the last of the four shapes.
+      await goTo(user, 'decor', viNormal.wardrobe.tabs.words)
+      const wordsTab = screen.getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.words}`) })
       panel = screen.getByRole('tabpanel')
-      expect(panel).toHaveAttribute('id', hairTab.getAttribute('aria-controls'))
-      expect(panel).toHaveAttribute('aria-labelledby', hairTab.id)
+      expect(panel).toHaveAttribute('id', wordsTab.getAttribute('aria-controls'))
+      expect(panel).toHaveAttribute('aria-labelledby', wordsTab.id)
     })
   })
 
@@ -934,11 +1289,10 @@ describe('WardrobeScreen', () => {
       const user = userEvent.setup()
       window.location.hash = '#/wardrobe'
       renderWithLink()
-      await screen.findAllByText(viNormal.bases.f01)
+      await opened()
 
-      await user.click(screen.getByText(viNormal.bases.m01)) // dirties the draft
-      // Scoped to the tile grid: once equipped, "Tóc rối" also names the wearing-list row.
-      expect(within(screen.getByRole('tabpanel')).getByText(viNormal.bases.m01).closest('button')).toHaveAttribute('aria-pressed', 'true')
+      await pickRedHair(user) // dirties the draft
+      expect(redSwatch()).toHaveAttribute('aria-pressed', 'true')
 
       await user.click(screen.getByRole('link', { name: 'profile link' }))
 
@@ -952,23 +1306,23 @@ describe('WardrobeScreen', () => {
       const user = userEvent.setup()
       window.location.hash = '#/wardrobe'
       renderWithLink()
-      await screen.findAllByText(viNormal.bases.f01)
-      await user.click(screen.getByText(viNormal.bases.m01))
+      await opened()
+      await pickRedHair(user)
       await user.click(screen.getByRole('link', { name: 'profile link' }))
 
       await user.click(screen.getByRole('button', { name: viNormal.wardrobe.leaveStay }))
 
       expect(screen.queryByRole('dialog')).toBeNull()
       expect(window.location.hash).toBe('#/wardrobe')
-      expect(within(screen.getByRole('tabpanel')).getByText(viNormal.bases.m01).closest('button')).toHaveAttribute('aria-pressed', 'true')
+      expect(redSwatch()).toHaveAttribute('aria-pressed', 'true')
     })
 
     it('navigates away and drops the draft when the player chooses to discard it', async () => {
       const user = userEvent.setup()
       window.location.hash = '#/wardrobe'
       renderWithLink()
-      await screen.findAllByText(viNormal.bases.f01)
-      await user.click(screen.getByText(viNormal.bases.m01))
+      await opened()
+      await pickRedHair(user)
       await user.click(screen.getByRole('link', { name: 'profile link' }))
 
       await user.click(screen.getByRole('button', { name: viNormal.wardrobe.leaveDiscard }))

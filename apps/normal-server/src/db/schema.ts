@@ -228,8 +228,9 @@ export const playerStats = pgTable('player_stats', {
  *
  * Keyed by `(player_id, slot)` rather than a surrogate id: a player has at most five, `slot` is the
  * position in the bar the client draws, and there is never a reason to address a saved outfit any
- * other way. `config` is the same `AvatarConfigV3` jsonb shape `players.avatar_config` stores — an
- * outfit is a config a player set aside, not a different kind of thing.
+ * other way. `config` is the same avatar config jsonb `players.avatar_config` stores — an outfit is a
+ * config a player set aside, not a different kind of thing. Rows written since Plan 19 hold an
+ * `AvatarConfigV4`; older ones hold v3 and are read through `readAvatarConfig` (`outfits-service.ts`).
  */
 export const avatarOutfits = pgTable('avatar_outfits', {
   playerId: uuid('player_id').notNull().references(() => players.id, { onDelete: 'cascade' }),

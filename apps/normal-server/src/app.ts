@@ -62,7 +62,8 @@ import { createEconomyService, type EconomyService } from './economy/economy-ser
 import { createEventBus, type AppEventBus } from './events.js'
 import { createHistoryService, type HistoryService } from './history/history-service.js'
 import { loadAliases } from './inventory/aliases.js'
-import { baseIdsOf, loadBases, type BaseDef } from './inventory/bases.js'
+import { readAvatarConfig } from './inventory/avatar-migrate.js'
+import { loadBodies, type Bodies } from './inventory/bodies.js'
 import { createInventoryService, type InventoryService } from './inventory/inventory-service.js'
 import { loadItemCatalog, type ItemCatalog } from './inventory/items.js'
 import { loadAvatarManifest, type AvatarManifest } from './inventory/manifest.js'
@@ -206,7 +207,8 @@ export interface AppServices {
   /** Old wardrobe ids, kept readable — see `inventory/aliases.ts`. */
   aliases: ReadonlyMap<string, string>
   manifest: AvatarManifest
-  bases: Record<string, BaseDef>
+  /** The v4 bodies, one per gender (Plan 19) — see `inventory/bodies.ts`. */
+  bodies: Bodies
 }
 
 export interface NormalApp {
@@ -244,8 +246,9 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
 
   const bus = createEventBus(log)
   const manifest = loadAvatarManifest()
-  const bases = loadBases(undefined, manifest)
-  const baseIds = baseIdsOf(bases)
+  // Since Plan 19 (avatar v4) a figure is a body per gender; the old base registry is gone (D1) — an old
+  // account's base is history, fixed in `avatar-migrate.ts`.
+  const bodies = loadBodies(undefined, manifest)
   const aliases = loadAliases()
   const catalog = loadItemCatalog(undefined, manifest)
   const defs = loadAchievements(catalog)
@@ -289,7 +292,8 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
   })
 
   const inventory = createInventoryService(db, aliases, catalog.freeIds())
-  const outfits = createOutfitsService(db, inventory)
+  // A saved outfit is read the way `players.avatar_config` is: repaired to v4 on the way out (spec §4.5, R6).
+  const outfits = createOutfitsService(db, inventory, (stored) => readAvatarConfig(stored, catalog, aliases, bodies))
   const stats = createStatsService({ db, bus })
   const economy = createEconomyService({
     db,
@@ -353,8 +357,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     defs,
     aliases,
     manifest,
-    bases,
-    baseIds,
+    bodies,
     log,
     game,
     version: packageVersion(),
@@ -468,7 +471,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
   return {
     fastify,
     game,
-    services: { bus, catalog, defs, repos, sessions, auth, inventory, outfits, stats, achievements, economy, history, aliases, manifest, bases },
+    services: { bus, catalog, defs, repos, sessions, auth, inventory, outfits, stats, achievements, economy, history, aliases, manifest, bodies },
     close,
   }
 }

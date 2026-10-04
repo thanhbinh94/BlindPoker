@@ -14,7 +14,8 @@
  * The three slot rules exist because the difference is honest but not clever. `head` drops everything
  * below `HEAD_LIMIT_Y` — no hat reaches the waist. `face` keeps only the head region (the portrait crop
  * above `FACE_LIMIT_Y`). `outfit` drops everything above the chin line `OUTFIT_TOP_Y` and then adds back
- * exactly as much of the base as D01 §10.7 needs — see `underwearUnion`.
+ * exactly as much of the base as D01 §10.7 needs — see `underwearUnion`. A v4 hairstyle (`hair`, Plan 19) has no
+ * area rule at all, only the hair face rule — see `hairFaceRule` — and its region is then split in two (`hair.mjs`).
  *
  * 2026-09-17: an item layer holds only the item. Items are worn by M01 too and shown alone as inventory
  * icons, so the hair under a brim, the skin round a rim and the head above a collar — all of which the
@@ -38,8 +39,16 @@
  * clothing is covered by the layer wherever it is, not only inside the underwear band
  * (`baseClothingUnion`, `coverBaseLimbs`).
  */
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { maskTargets, writeMasks } from './masks.mjs'
+import { recolour } from '../../../../packages/ui-kit/src/avatar2d/recolour.mjs'
+// checks.mjs and hair.mjs each import this file in turn (`measure`), so `eachStray`, `headMetrics`, `judgeHead`,
+// `underwearRegion` and `splitHair` may only be used at call time, never while the modules load — as neither of them
+// uses anything of this file at load.
+import { eachStray, headMetrics, judgeHead, underwearRegion } from './checks.mjs'
+import { splitHair } from './hair.mjs'
+import { MASK_FILE_KIND, MASK_OVERRIDE_DIR, SKIN_MASK, eyeZone, labOf, maskTargets, readHandMask, writeMasks } from './masks.mjs'
 import {
   ALPHA_INK,
   ALPHA_SOLID,
@@ -58,10 +67,11 @@ import {
   placeOnCanvas,
   readPicture,
   removeChroma,
+  resizePicture,
   writeDensities,
 } from './png.mjs'
-import { AURA_CY, AURA_SIZE, AXIS_X, BASELINE_Y, CROP, FACE_LIMIT_Y, FRAME, HEAD_LIMIT_Y, LAYERS, RING, RING_HOLLOW, SKIN_TOLERANCE, STRAND_MARGIN, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, isSkin, placeByInk } from './frame.mjs'
-import { BOTS, EXPRESSIONS, ICON, MANIFEST_NAME, SLOT_LAYER, WEARS, baseFile, botFaceFile, botFile, entryFor, faceFile, itemFile, readManifest, wearOf, writeIcon, writeManifest } from './manifest.mjs'
+import { AURA_CY, AURA_SIZE, AXIS_X, BASELINE_Y, CROP, F01_TRANSFORM, FACE_LIMIT_Y, FRAME, HEAD_LIMIT_Y, HEAD_REFERENCE, LAYERS, RING, RING_HOLLOW, SKIN_TOLERANCE, TORSO_COLUMN, UNDERWEAR_BAND, applyTransform, baseSkinColour, isSkin, placeByInk } from './frame.mjs'
+import { BOTS, EXPRESSIONS, GENDERS, HAIR_CODES, ICON, MANIFEST_NAME, SLOT_LAYER, WEARS, bodyFaceFile, bodyFile, botFaceFile, botFile, entryFor, hairFile, hairGender, itemFile, readManifest, writeIcon, writeManifest } from './manifest.mjs'
 
 /** D02 §8.3: a chibi is between two and two and a half heads tall, or it is not this character. */
 export const HEADS_RANGE = [2, 2.5]
@@ -114,11 +124,12 @@ export const SHADOW_RANGE = [0.45, 0.92]
 
 /**
  * Where colour registration measures a picture against the base: the part of the figure the slot does
- * *not* change. A hat or a pair of glasses leaves the body alone. (An outfit changes the body's colours
- * everywhere, so it is registered by silhouette instead — see `registerBySilhouette`.)
+ * *not* change. A hat or a pair of glasses leaves the body alone, and so (Plan 19) does a hairstyle drawn on a
+ * bald body, below its shoulders. (An outfit changes the body's colours everywhere, so it is registered by
+ * silhouette instead — see `registerBySilhouette`.)
  */
 function registrationRegion(slot, density) {
-  if (slot === 'head' || slot === 'face') {
+  if (slot === 'head' || slot === 'face' || slot === 'hair') {
     const top = HEAD_LIMIT_Y * density
     return (_x, y) => y >= top
   }
@@ -320,6 +331,165 @@ export function registerBySilhouette(itemPic, basePic, { density = 1, range = RE
   return { picture, dx: best.dx, dy: best.dy, scale: best.scale, error: 1 - best.iou, iou: best.iou }
 }
 
+// ─────────────────────────────────────── the wide registration (Plan 19 final review) ──
+
+/**
+ * The search `registerWide` runs: the pipeline's own `registerToBase`, twice. First over ±10 % of scale in 1 % steps and
+ * ±16 px at half the frame's density (±32 frame units, about ±125 px of a 1024 × 1536 picture), then over the pipeline's
+ * own scales (`REGISTER_SCALES`, ±1 %) and ±6 px at @2x, from there. The pipeline's own search alone (±1 %, ±12 px @2x)
+ * cannot reach the 4–5 % zoom the image model applies to make room for what it adds: on spiky01 it stopped at its edge
+ * (dy 12, scale 0.99) with a mean difference of 20.4 — a picture that fits is at 2.4–4 — and cut the body's outline into
+ * the hair, which no check failed (Plan 19 C2).
+ *
+ * The second pass is also run alone, from where the picture stands, and whichever of the two lines the body up better
+ * (`registerWide`'s IoU) is the registration: a wide search over colour can slide a picture that changed the body — hair
+ * painted over the torso — to wherever the change shows least, and that picture is `verify`'s `scope` to fail.
+ */
+export const WIDE_SEARCH = [
+  { density: 0.5, range: 16, scales: Array.from({ length: 21 }, (_, i) => (90 + i) / 100) },
+  { density: 2, range: 6, scales: REGISTER_SCALES },
+]
+
+/**
+ * The legs: the rows from this share of the body's height down, which no hairstyle reaches (long hair falls to the hips,
+ * about 0.67 of the figure). A hairstyle's registration is measured there (`registerWide`), and `verify` holds a
+ * hairstyle's feet and centre line there (`BASE_LEGS_FROM`).
+ */
+export const LEGS_FROM = 0.8
+
+/** What `registerToBase` is given for each wide rule: what the picture leaves alone, so what it measures. */
+const WIDE_SLOT = { hair: 'hair', outfit: 'outfit', botFace: 'face' }
+/** How each rule's IoU is named in the log. */
+const WIDE_FIT = { hair: 'legs IoU', outfit: 'silhouette IoU', botFace: 'figure IoU' }
+
+/**
+ * Which wide registration an ingest target takes (`registerWide`), or null — the one rule every ingest asks, the CLI's and
+ * the registry's alike (Plan 19 final review: one code path):
+ *
+ * - `hair` — a hairstyle, drawn on its gender's bald body;
+ * - `outfit` — an outfit cut on a v4 body (`baseId` `f`/`m`): it changes the body everywhere below the chin, so it is
+ *   registered by silhouette;
+ * - `botFace` — a bot's second face (`bot:<n>:happy`), drawn from the bot's own neutral picture (Plan 19 C4).
+ *
+ * Everything else is registered by `registerToBase` alone (a hat, a pair of glasses) or not at all (a body, a body's face,
+ * a bot's neutral picture, which are cut on a stored transform as they were drawn; an aura or a frame, placed by its ink).
+ *
+ * @param {{ kind: string, slot?: string, expr?: string }} target
+ * @param {string | null} [baseId]
+ */
+export function wideRegistration(target, baseId = 'f') {
+  if (target.kind === 'hair') return 'hair'
+  if (target.kind === 'item' && target.slot === 'outfit' && GENDERS.includes(baseId ?? 'f')) return 'outfit'
+  if (target.kind === 'bot' && (target.expr ?? 'neutral') !== 'neutral') return 'botFace'
+  return null
+}
+
+/** `transform` followed by a move on the frame: scaled by `scale` about (`AXIS_X`, `BASELINE_Y`), then shifted by (`dx`, `dy`) frame units. */
+export function movedTransform(transform, { scale, dx, dy }) {
+  return {
+    scale: transform.scale * scale,
+    offsetX: (transform.offsetX - AXIS_X) * scale + AXIS_X + dx,
+    offsetY: (transform.offsetY - BASELINE_Y) * scale + BASELINE_Y + dy,
+  }
+}
+
+/** The IoU of two same-size pictures' solid pixels over the rows from `fromY` down (0: the whole picture). */
+function solidIoU(pic, ref, fromY = 0) {
+  const { width, height } = ref
+  let both = 0
+  let either = 0
+  for (let y = Math.max(0, fromY); y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const at = (y * width + x) * 4 + 3
+      const a = pic.data[at] > ALPHA_SOLID
+      const b = ref.data[at] > ALPHA_SOLID
+      if (a && b) both++
+      if (a || b) either++
+    }
+  }
+  return either === 0 ? 0 : both / either
+}
+
+/**
+ * How well a registered picture lines up with what it was drawn on, at @2x — what `registerWide` chooses between its two
+ * searches by, and what `verify` holds a registration to (`REGISTRATION` in avatar-registry/verify.mjs):
+ *
+ * - `hair` — the legs (`LEGS_FROM`), solid in either picture: the part of the body no hairstyle reaches;
+ * - `outfit` — `registerBySilhouette`'s own IoU, the number its log prints: an outfit changes the body everywhere below
+ *   the chin, so nothing is left alone to measure;
+ * - `botFace` — the whole figure, solid in either picture: a face changes the inside of the head and nothing else.
+ */
+function wideFit(rule, placed, body, found) {
+  if (rule === 'outfit') return found.iou
+  if (rule === 'botFace') return solidIoU(placed, body)
+  const box = alphaBBox(body)
+  return box === null ? 0 : solidIoU(placed, body, box.y + Math.floor(box.h * LEGS_FROM))
+}
+
+/**
+ * Register a picture onto what it was drawn on, searched wide (`WIDE_SEARCH`) — the one registration every ingest of a
+ * hairstyle, an outfit on a v4 body and a bot's second face applies, from the command line and from the registry alike,
+ * and the one `verify` judges such a picture's `drift` by (Plan 19 final review). The image model zooms or moves a
+ * picture by a few per cent to make room for what it adds; this finds it again.
+ *
+ * `keyed` is the picture with its background removed, on its own canvas; `transform` puts it on the frame (the body's
+ * stored transform, in an ingest); `body` is what it is registered onto, on the frame at @2x — the body's L30 (worn with
+ * the hairstyle an item was drawn over), or a bot's neutral L30. Each pass places the picture afresh from `keyed`, the move
+ * found so far folded into the transform, so the picture is resampled once whatever the search did.
+ *
+ * Returns the registered picture at @2x, its `transform`, the move — `scale` about (`AXIS_X`, `BASELINE_Y`), then `dx`,
+ * `dy` in frame units — its `iou` (`wideFit`), which search won (`near`, the @2x pass alone from where the picture stood,
+ * or `wide`, both passes) and the other's IoU.
+ *
+ * @param {{ keyed: { data: Buffer, width: number, height: number }, transform: { scale: number, offsetX: number, offsetY: number }, body: { data: Buffer, width: number, height: number }, rule: 'hair' | 'outfit' | 'botFace' }} options
+ */
+export async function registerWide({ keyed, transform, body, rule }) {
+  const slot = WIDE_SLOT[rule]
+  if (!slot) throw new Error(`no wide registration ${rule} — one of ${Object.keys(WIDE_SLOT).join(', ')}`)
+  if (body.width !== FRAME.w * 2 || body.height !== FRAME.h * 2) throw new Error(`the picture registered onto is ${body.width} × ${body.height}, not the frame at @2x`)
+  const bodies = new Map([[2, body]])
+  const bodyAt = async (density) => {
+    if (!bodies.has(density)) bodies.set(density, await resizePicture(body, Math.round(FRAME.w * density), Math.round(FRAME.h * density)))
+    return bodies.get(density)
+  }
+  /** Run `passes` one after the other, each from where the last left the picture. */
+  const search = async (passes) => {
+    let move = { scale: 1, dx: 0, dy: 0 }
+    let found = null
+    for (const { density, range, scales } of passes) {
+      const placed = await applyTransform(keyed, movedTransform(transform, move), density)
+      found = registerToBase(placed, await bodyAt(density), { slot, density, range, scales })
+      // `found` scaled about (AXIS_X, BASELINE_Y) at this density, then shifted by whole pixels at it: in frame units,
+      // that scale and the shift / density, composed after the moves before it.
+      move = { scale: move.scale * found.scale, dx: move.dx * found.scale + found.dx / density, dy: move.dy * found.scale + found.dy / density }
+    }
+    const placed = await applyTransform(keyed, movedTransform(transform, move), 2)
+    return { move, placed, iou: wideFit(rule, placed, body, found) }
+  }
+  const near = await search(WIDE_SEARCH.slice(-1))
+  const wide = await search(WIDE_SEARCH)
+  const [chosen, other, searched] = near.iou >= wide.iou ? [near, wide, 'near'] : [wide, near, 'wide']
+  return { picture: chosen.placed, transform: movedTransform(transform, chosen.move), ...chosen.move, iou: chosen.iou, searched, otherIou: other.iou }
+}
+
+/**
+ * The registration an ingest cuts a picture after: the wide one (`registerWide`) when `rule` names one, else the pipeline's
+ * own `registerToBase` on the anchored picture. Logs it as `registered on <onto>: …` and returns what `registerToBase`
+ * returns — `{ picture, dx, dy, scale, error?, iou? }`, the move in px @2x.
+ */
+async function registerForCut({ keyed, transform, anchored, onto, ontoName, rule, slot, log }) {
+  if (rule) {
+    const found = await registerWide({ keyed, transform, body: onto, rule })
+    const searched = found.searched === 'wide' ? `the wide search; the near one alone ${found.otherIou.toFixed(3)}` : `the near search; the wide one ${found.otherIou.toFixed(3)}`
+    log(`registered on ${ontoName}: dx ${(found.dx * 2).toFixed(1)}, dy ${(found.dy * 2).toFixed(1)} px @2x, scale ${found.scale.toFixed(4)} (${WIDE_FIT[rule]} ${found.iou.toFixed(3)}, ${searched})`)
+    return { picture: found.picture, dx: found.dx * 2, dy: found.dy * 2, scale: found.scale, iou: found.iou }
+  }
+  const registered = registerToBase(anchored, onto, { slot, density: 2 })
+  const fit = registered.iou === undefined ? `mean difference ${registered.error.toFixed(1)}` : `silhouette IoU ${registered.iou.toFixed(3)}`
+  log(`registered on ${ontoName}: dx ${registered.dx}, dy ${registered.dy} px @2x, scale ${registered.scale} (${fit})`)
+  return registered
+}
+
 /**
  * The item, as a mask over the item picture.
  *
@@ -353,17 +523,34 @@ export function registerBySilhouette(itemPic, basePic, { density = 1, range = RE
  * Returns the `mask`, its `bbox`, and the `core` — the pixels that are the item itself rather than its soft
  * edge — which `cutItem` takes the edge's colour from.
  *
+ * A **hairstyle** (`slot: 'hair'`, Plan 19) has no slot limit at all — hair reaches from the crown to below the
+ * shoulders — but it has the hair face rule instead (`hairFaceRule`, `applyFaceRule`), given the body's neutral face
+ * and its masks as `faceRule`. It is applied wherever a slot limit is — first on the raw difference, before any
+ * clean-up can join a redrawn feature to the fringe — and what it took out of that first difference is returned as
+ * `faceDropped: { skin, islands }`, pixel counts.
+ *
+ * A hairstyle, and any item cut on a v4 body (Plan 19 style gate), also keeps the **body's own skin** out
+ * (`bodySkinRule`, given as `ownSkin: { skin, shade, tolerance }`, `BODY_SKIN_RULE.hair` or `.item`): after the face
+ * rule, on the raw difference, and again after clean-up on the filled mask before it is grown (it is the core), so
+ * neither the dilation nor an outfit's limb cover starts from a pixel it took. Not after the feather: the soft rim takes
+ * the core's colour (`cutItem`), never the skin's under it. Two more places where the clean-up would put the body back:
+ * a hole that is the body showing through (`bodyShowsThrough` — an ear between two locks) is not filled, and an
+ * outfit's union with the body gives up the picture's redrawn limbs over the body's outline (`keepSkinOutOfUnion`).
+ * What it kept out of the first difference, of the holes and of the union is returned as `skinDropped`, a pixel count.
+ *
  * @param {{ data: Buffer, width: number, height: number }} itemPic
  * @param {{ data: Buffer, width: number, height: number }} basePic
- * @param {{ slot?: string, colorTol?: number, shadowTol?: number, minRegion?: number, relativeRegion?: number, closeRadius?: number, maxHole?: number, density?: number }} [options]
+ * @param {{ slot?: string, colorTol?: number, shadowTol?: number, minRegion?: number, relativeRegion?: number, closeRadius?: number, maxHole?: number, density?: number, faceRule?: { skin: Uint8Array | null, eyes: Uint8Array | null, face?: { data: Buffer, width: number, height: number } | null, bodySkin?: Uint8Array | null } | null, ownSkin?: { skin: Uint8Array, shade: { minL: number, minChroma: number, maxChroma: number, hue: number[] }, tolerance?: number } | null }} [options]
  */
 export function diffAgainstBase(itemPic, basePic, options = {}) {
-  const { slot, density = 1 } = options
+  const { slot, density = 1, faceRule = null, ownSkin = null } = options
   const { colorTol, shadowTol, skinTol, minRegion, relativeRegion, closeRadius, maxHole, gapOpening, coverReach } = { ...DIFF_DEFAULTS, ...stripUndefined(options) }
   const { width, height } = itemPic
   if (basePic.width !== width || basePic.height !== height) {
     throw new Error(`the base is ${basePic.width} × ${basePic.height} and the item is ${width} × ${height} — they must share a frame`)
   }
+  const face = slot === 'hair' && faceRule ? hairFaceRule(itemPic, basePic, faceRule, { density, skinTol }) : null
+  const skinRule = ownSkin ? bodySkinRule(itemPic, basePic, { ...ownSkin, density }) : null
   const radius = Math.max(1, Math.round(density))
   // Just under the chin line an outfit picture still holds the character's own chin, a few pixels off the
   // base's once the body is registered rather than the head: there the window reaches further.
@@ -414,6 +601,11 @@ export function diffAgainstBase(itemPic, basePic, options = {}) {
       if ((!anySolid || !close) && !(slot === 'outfit' && skinOfBase(itemPic, basePic, p, skin, skinTol))) different[p] = 255
     }
   }
+  // The hair face rule, on the raw difference: counted here, and the islands found before any closing could join one
+  // to the fringe.
+  const faceDropped = face ? applyFaceRule(different, face, width, height) : null
+  // The body-skin rule likewise, after the face rule: counted here, before closing could join what it took back on.
+  const skinDropped = skinRule ? applyBodySkinRule(different, skinRule, width, height) : null
   slotLimits(different, { slot, width, height, density })
   // Areas are in frame units, so they grow with the square of the density.
   const area = density * density
@@ -423,21 +615,368 @@ export function diffAgainstBase(itemPic, basePic, options = {}) {
   const closed = closeBy > 0 ? erodeMask(dilateMask(kept, width, height, closeBy), width, height, closeBy) : kept
   // An outfit's holes are decided by where they lead, not by how big they are (R1); every other slot keeps
   // the size limit, because a pair of glasses is a frame around a lens that has to stay open.
+  // On a v4 body a hole that is the body showing through — an ear between two locks — stays open (`bodyShowsThrough`).
+  let pockets = 0
+  const showsThrough = skinRule
+    ? (pixels) => {
+        const open = bodyShowsThrough(pixels, itemPic, basePic, skinRule.skin, density)
+        if (open) pockets += pixels.length
+        return open
+      }
+    : null
   const filled = slot === 'outfit'
     ? fillEnclosedGaps(closed, itemPic, basePic, { width, height, density, gapOpening, skin, skinTol })
-    : fillHoles(closed, width, height, Math.round(maxHole * area))
+    : fillHoles(closed, width, height, Math.round(maxHole * area), showsThrough)
+  // What the closing and the fill put back of the body's skin goes again before the mask is grown: an outfit's limb
+  // cover bleeds from the grown mask, and a cream pixel there would be bled over the body's outline.
+  if (skinRule) applyBodySkinRule(filled, skinRule, width, height)
   const grown = dilateMask(filled, width, height, Math.max(1, Math.ceil(density / 2)))
   for (let p = 0; p < grown.length; p++) grown[p] = Math.min(grown[p], itemPic.data[p * 4 + 3])
   const union = slot === 'outfit' ? baseClothingUnion(itemPic, basePic, { width, height, density, colorTol, skinTol, skin }) : null
-  const cover = slot === 'outfit' ? coverBaseLimbs(grown, itemPic, basePic, { width, height, density, union, skinTol, skin, reach: coverReach }) : null
+  const taken = union && skinRule ? keepSkinOutOfUnion(grown, union, skinRule, basePic, { width, height, density }) : null
+  const cover = slot === 'outfit' ? coverBaseLimbs(grown, itemPic, basePic, { width, height, density, union, bare: taken?.bare ?? null, skinTol, skin, reach: coverReach }) : null
   const mask = featherMask(grown, width, height)
-  const core = slotLimits(filled, { slot, width, height, density })
-  applySlotRule(mask, basePic, { slot, width, height, density, core, union, cover })
+  const core = slotLimits(filled, { slot, width, height, density, face, skinRule })
+  // Not on the feathered mask: its soft rim takes the core's colour (`cutItem`), never the skin's under it, and taking
+  // it would cut the item's antialiased edge off wherever it borders bare skin.
+  applySlotRule(mask, basePic, { slot, width, height, density, core, union, cover, face })
   // The outfit's union with the base can leave slivers of its own — the tips of the hair just under the
   // head region — so the same minimum region is held once more on the finished mask.
   const final = keepLargeRegions(mask, width, height, Math.round(minRegion * area))
   for (let p = 0; p < core.length; p++) if (!final[p]) core[p] = 0
-  return { mask: final, core, cover, bbox: maskBBox(final, width, height) }
+  const skinTaken = skinRule ? { skinDropped: skinDropped + pockets + (taken?.count ?? 0) } : {}
+  return { mask: final, core, cover, bbox: maskBBox(final, width, height), ...(face ? { faceDropped } : {}), ...skinTaken }
+}
+
+/**
+ * The body-skin rule on an outfit's union with the body (Plan 19 style gate), in place, before the limb cover runs.
+ *
+ * `baseClothingUnion` takes every pixel the body inks that is not its skin — its underwear, and its **line art** — in the
+ * picture's colour. Where the picture drew a bare limb a pixel or two off the body's, the picture's colour over the
+ * body's outline is the limb's skin: a cream rim round both arms and every finger, which a skin tone never reaches. So
+ * the rule (`applyBodySkinRule`) runs over the layer as it stands — the grown mask with the union — and what it takes of
+ * the union comes out of it (and of the grown mask there), returned as `{ bare, count }`: `bare`, 0/1 per pixel, the
+ * pixels the limb cover (`coverBaseLimbs`) must not paint either, so that the body's own outline shows there, as round
+ * every other bare limb. The grown mask gives up nothing else: the filled mask was ruled before it was grown, and what it
+ * holds of the skin by now is its soft rim, which takes the core's colour.
+ *
+ * The body's **underwear** is never taken, whatever colour the picture has over it (D01 §10.7, R3: a swimsuit cut
+ * still covers it): `underwearRegion`, C6's own measure, grown by a pixel at @1x so its @1x copy stays covered.
+ */
+function keepSkinOutOfUnion(grown, union, rule, basePic, { width, height, density }) {
+  const n = width * height
+  const underwear = new Uint8Array(n)
+  for (const p of underwearRegion(basePic, density).pixels) underwear[p] = 1
+  const kept = dilateMask(underwear, width, height, Math.max(1, Math.round(density)))
+  const candidate = Uint8Array.from(rule.candidate, (value, p) => (value && !kept[p] ? 1 : 0))
+  const held = new Uint8Array(n)
+  for (let p = 0; p < n; p++) if (grown[p] > 0 || union[p] > 0) held[p] = 255
+  const before = Uint8Array.from(held)
+  applyBodySkinRule(held, { skin: rule.skin, candidate }, width, height)
+  const bare = new Uint8Array(n)
+  let count = 0
+  for (let p = 0; p < n; p++) {
+    if (!before[p] || held[p] || union[p] === 0) continue
+    bare[p] = 1
+    grown[p] = 0
+    union[p] = 0
+    count++
+  }
+  return { bare, count }
+}
+
+/**
+ * The hair face rule (Plan 19, pre-flight #18; A2a ruling, fix round 1): what a hairstyle's region may never hold.
+ *
+ * A hair picture is the bald body redrawn with the hair on, and the redraw touches the face a little: a cheek's
+ * shading moved or painted out, an iris a shade off, a mouth or a brow drawn again a few pixels away. The difference
+ * reads every one of those as new, and on the face they would all become front hair, tinted the hair colour. Two
+ * clauses take them out (`applyFaceRule` applies them, in this order):
+ *
+ * 1. **Skin** (`drop`): inside the body face's skin mask (`skin`, the neutral face's, alpha ≥ 128), every pixel whose
+ *    colour in the picture is the body's skin — `isSkin` within `skinTol` (`SKIN_TOLERANCE`) of `baseSkinColour` of
+ *    the body. A shading painted out, a highlight moved.
+ * 2. **Islands** (`interior`): the **face interior** is the skin mask ∪ the eye zone (`eyeZone` of the neutral face,
+ *    its eye mask included) ∪ the body L30's own skin mask on the rows above `FACE_LIMIT_Y` (`bodySkin`), with its
+ *    holes filled, so the mouth, the brows and the eyes all fall inside it. Every 8-connected piece of the region lying
+ *    wholly inside it is dropped. A redrawn feature is an island inside the face; a fringe always hangs down from hair
+ *    outside it — over the head's outline, past the top of the skull — so it stays in the hair, and C13 judges it (a
+ *    fringe over the eyes fails there, as it should). The body's skin is there for the chin (A2a review): the face
+ *    layer gives up the torso column below y 236 (`keepOnlyFace`), and the chin is at 243, so a mouth or a jaw
+ *    redrawn across y 236 would otherwise reach "outside" the face through the cut and stay in the hair.
+ *
+ * `face` is the neutral face layer at the picture's size, which `eyeZone` finds the eye ellipses on. Without it the
+ * eye zone is the eye mask alone; with no mask at all there is no interior and no island clause.
+ *
+ * @param {{ data: Buffer, width: number, height: number }} itemPic the registered hair picture
+ * @param {{ data: Buffer, width: number, height: number }} basePic the bald body
+ * @param {{ skin: Uint8Array | null, eyes: Uint8Array | null, face?: { data: Buffer, width: number, height: number } | null, bodySkin?: Uint8Array | null }} faceRule
+ *   the neutral face's skin and eye masks (alpha per pixel), the face layer itself, and the body L30's skin mask
+ * @param {{ density: number, skinTol?: number }} options
+ * @returns {{ drop: Uint8Array, interior: Uint8Array | null }}
+ */
+export function hairFaceRule(itemPic, basePic, faceRule, { density, skinTol = SKIN_TOLERANCE }) {
+  const { width, height, data } = itemPic
+  const n = width * height
+  const { skin = null, eyes = null, face = null, bodySkin = null } = faceRule
+  for (const [kind, mask] of [['skin', skin], ['eyes', eyes], ['body skin', bodySkin]]) {
+    if (mask && mask.length !== n) throw new Error(`the face's ${kind} mask holds ${mask.length} pixels, the picture is ${width} × ${height}`)
+  }
+  if (face && (face.width !== width || face.height !== height)) throw new Error(`the face is ${face.width} × ${face.height}, the picture is ${width} × ${height}`)
+  const skinColour = baseSkinColour(basePic, density)
+  const drop = new Uint8Array(n)
+  if (skin) {
+    for (let p = 0; p < n; p++) {
+      if (skin[p] >= ALPHA_SOLID && isSkin(data[p * 4], data[p * 4 + 1], data[p * 4 + 2], skinColour, skinTol)) drop[p] = 1
+    }
+  }
+  if (!skin && !eyes && !bodySkin) return { drop, interior: null }
+  const zone = face ? eyeZone(face, eyes) : null
+  /** The head's rows: the body's own skin counts as face above `FACE_LIMIT_Y` only — its arms and legs are not face. */
+  const headEnd = Math.min(height, Math.round(FACE_LIMIT_Y * density)) * width
+  const inside = new Uint8Array(n)
+  for (let p = 0; p < n; p++) {
+    if ((skin && skin[p] >= ALPHA_SOLID) || (eyes && eyes[p] >= ALPHA_SOLID) || (zone && zone[p]) || (bodySkin && p < headEnd && bodySkin[p] >= ALPHA_SOLID)) inside[p] = 255
+  }
+  return { drop, interior: fillHoles(inside, width, height, Infinity) }
+}
+
+/**
+ * Apply the hair face rule (`hairFaceRule`) to a region mask, in place: first the skin clause, then every 8-connected
+ * piece of what is left that lies wholly inside the face interior. Returns how many pixels each clause took.
+ *
+ * @param {Uint8Array} mask
+ * @param {{ drop: Uint8Array, interior: Uint8Array | null }} face
+ * @param {number} width
+ * @param {number} height
+ * @returns {{ skin: number, islands: number }}
+ */
+export function applyFaceRule(mask, face, width, height) {
+  const dropped = { skin: 0, islands: 0 }
+  for (let p = 0; p < mask.length; p++) {
+    if (!mask[p] || !face.drop[p]) continue
+    mask[p] = 0
+    dropped.skin++
+  }
+  const { interior } = face
+  if (!interior) return dropped
+  const seen = new Uint8Array(mask.length)
+  const stack = new Int32Array(mask.length)
+  const piece = new Int32Array(mask.length)
+  // A piece with no pixel inside the interior is never visited: it is outside the face, and kept.
+  for (let start = 0; start < mask.length; start++) {
+    if (!mask[start] || seen[start] || !interior[start]) continue
+    let top = 0
+    let size = 0
+    let reachesOut = false
+    stack[top++] = start
+    seen[start] = 1
+    while (top > 0) {
+      const p = stack[--top]
+      piece[size++] = p
+      if (!interior[p]) reachesOut = true
+      const x = p % width
+      const y = (p - x) / width
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx
+          const ny = y + dy
+          if ((dx === 0 && dy === 0) || nx < 0 || ny < 0 || nx >= width || ny >= height) continue
+          const q = ny * width + nx
+          if (!mask[q] || seen[q]) continue
+          seen[q] = 1
+          stack[top++] = q
+        }
+      }
+    }
+    if (reachesOut) continue
+    for (let i = 0; i < size; i++) mask[piece[i]] = 0
+    dropped.islands += size
+  }
+  return dropped
+}
+
+/**
+ * The body-skin rule's numbers (Plan 19 style gate) — see `bodySkinRule`. `reach` is in frame units (3 px at @2x), and
+ * so is `pocketLine` (an area: 16 px at @2x); `shade` is CIE Lab L*, chroma C* and LCh hue in degrees; `tolerance` ΔE76.
+ * A hairstyle's numbers are the tighter ones (no `tolerance` clause, `minL` 60): a platinum blonde is the body's cream.
+ */
+export const BODY_SKIN_RULE = {
+  reach: 1.5,
+  hair: { shade: { minL: 60, minChroma: 20, maxChroma: 50, hue: [38, 62] }, tolerance: 0 },
+  item: { shade: { minL: 50, minChroma: 16, maxChroma: 50, hue: [44, 64] }, tolerance: 8 },
+  pocketLine: 4,
+}
+
+/**
+ * The body-skin rule (Plan 19 style gate): what a hairstyle's or a v4 item's region may never hold — the body's own
+ * skin, as the picture redrew it. A hair picture draws the skin between the fringe strands in the hair's shadow; an
+ * outfit picture draws its arms a pixel or two off the body's, with the cream rim inside their outline and the fingers'
+ * edges. The difference keeps those pixels (they are not the body's colour there), and a layer above the body then holds
+ * cream that no skin tone reaches.
+ *
+ * A pixel is a **candidate** when the body has skin at or near it — `skin` (the body L30's skin mask ∪ the neutral
+ * face's, less whatever a worn hairstyle covers) grown by `reach` — and the picture's pixel there is
+ *
+ * - **shaded skin** (`shade`): L* ≥ `minL`, C* `minChroma`–`maxChroma`, hue `hue[0]`–`hue[1]`°. The body's skin reddens
+ *   and gains chroma as it darkens (its own shading is h 45–60°, C* 22–40, against the cream's h 70°, C* 14), and so
+ *   does the redrawn skin: L* 51–88, C* 16–37, h 45–64° over the real bob's, tousled's and casual01's (5th–95th
+ *   percentile) — on the hairstyles 15–20 ΔE from the body's own skin there (median; under a quarter within 8).
+ *   Blonde hair, beige and gold do not redden: the real platinum blonde (`base_f03`'s hair, 53 477 px) is h 61–77°,
+ *   C* 12–21 — and 63 % of it within ΔE 8 of the cream, so no ΔE from the cream could tell it from skin; the hue's
+ *   upper end does. The chroma ceiling keeps saturated gold and orange trim out (tet_red01's dark gold: h 57–61°,
+ *   C* 57–59);
+ * - or, on an item (`tolerance` > 0), **the body's own skin there**: within `tolerance` ΔE76 of the body's colour on
+ *   some skin pixel within `reach` of p — the unshaded redraws, a thumb tip, the cream just inside an arm's outline.
+ *   Some pixel, not the nearest: the skin mask holds an outline's antialiased rim, so the skin pixel nearest the
+ *   body's outline is a mix of cream and line, 25 ΔE from the cream the picture drew over it. Never on a hairstyle: a
+ *   blonde fringe over the forehead would go with the skin. A pixel this close to the body is not in the raw
+ *   difference at all (it is within `colorTol`), so the clause bites on what the clean-up puts back and on an outfit's
+ *   union with the body (`keepSkinOutOfUnion`).
+ *
+ * A candidate is dropped only where it **touches skin the region leaves bare** — a redraw of the body's skin carries on
+ * from the skin round it — as part of an 8-connected piece of candidates (`applyBodySkinRule`). A highlight inside the
+ * hair, a shading line inside a blonde, a print inside a shirt touch no bare skin, and stay. Pasted onto body f and cut as
+ * a hairstyle, the real blonde loses no pixel to the rule (108 with `minL` 50).
+ *
+ * @param {{ data: Buffer, width: number, height: number }} itemPic the registered picture
+ * @param {{ data: Buffer, width: number, height: number }} basePic the body it was registered on
+ * @param {{ skin: Uint8Array, shade: { minL: number, minChroma: number, maxChroma: number, hue: number[] }, tolerance?: number, density?: number, reach?: number }} options
+ *   `skin`: the body's skin, alpha per pixel (≥ `ALPHA_SOLID` is skin); `shade` and `tolerance`: `BODY_SKIN_RULE.hair`
+ *   or `.item`
+ * @returns {{ skin: Uint8Array, candidate: Uint8Array }} both 0/1 per pixel
+ */
+export function bodySkinRule(itemPic, basePic, { skin: skinAlpha, shade, tolerance = 0, density = 1, reach = BODY_SKIN_RULE.reach }) {
+  const { width, height, data } = itemPic
+  const n = width * height
+  if (skinAlpha.length !== n) throw new Error(`the body's skin mask holds ${skinAlpha.length} pixels, the picture is ${width} × ${height}`)
+  const skin = new Uint8Array(n)
+  for (let p = 0; p < n; p++) if (skinAlpha[p] >= ALPHA_SOLID) skin[p] = 1
+  const by = Math.max(1, Math.round(reach * density))
+  const near = dilateMask(skin, width, height, by)
+  // The body's own colour in Lab, on its skin only.
+  const own = tolerance > 0 ? new Float32Array(n * 3) : null
+  if (own) {
+    for (let p = 0; p < n; p++) if (skin[p]) own.set(labOf(basePic.data[p * 4], basePic.data[p * 4 + 1], basePic.data[p * 4 + 2]), p * 3)
+  }
+  const candidate = new Uint8Array(n)
+  const [hueMin, hueMax] = shade.hue
+  for (let p = 0; p < n; p++) {
+    if (!near[p] || data[p * 4 + 3] <= ALPHA_SOLID) continue
+    const lab = labOf(data[p * 4], data[p * 4 + 1], data[p * 4 + 2])
+    let hue = (Math.atan2(lab[2], lab[1]) * 180) / Math.PI
+    if (hue < 0) hue += 360
+    const chroma = Math.hypot(lab[1], lab[2])
+    if (lab[0] >= shade.minL && chroma >= shade.minChroma && chroma <= shade.maxChroma && hue >= hueMin && hue <= hueMax) {
+      candidate[p] = 1
+      continue
+    }
+    if (own && nearOwnSkin(lab, own, skin, p, width, height, by, tolerance)) candidate[p] = 1
+  }
+  return { skin, candidate }
+}
+
+/**
+ * Whether a hole the clean-up would fill is the body showing through the item (Plan 19 style gate): at least half of
+ * it is the body's skin, and it holds the body's own line art — at least `BODY_SKIN_RULE.pocketLine` frame units of
+ * pixels the body inks under `SKIN_MASK.minL` and the picture draws too. An ear between two locks of hair is that: the
+ * closing seals the gap by its outline, and the bob's two ears were then filled into the hair (382 and 463 px at @2x,
+ * 81–84 % skin, 49–54 px of the ear's own outline) and their rims landed in the L60. A hole of hair the colour of the
+ * skin — a platinum blonde over the skull — holds no line art of the body's, and is filled as before.
+ */
+function bodyShowsThrough(pixels, itemPic, basePic, skin, density) {
+  let onSkin = 0
+  let line = 0
+  for (const p of pixels) {
+    if (skin[p]) {
+      onSkin++
+      continue
+    }
+    const at = p * 4
+    if (basePic.data[at + 3] <= ALPHA_SOLID || itemPic.data[at + 3] <= ALPHA_SOLID) continue
+    if (labOf(basePic.data[at], basePic.data[at + 1], basePic.data[at + 2])[0] < SKIN_MASK.minL) line++
+  }
+  return onSkin * 2 >= pixels.length && line >= BODY_SKIN_RULE.pocketLine * density * density
+}
+
+/** Whether `lab` is within `tolerance` ΔE76 of the body's colour (`own`, Lab per pixel) on some skin pixel within `reach` of `p`. */
+function nearOwnSkin(lab, own, skin, p, width, height, reach, tolerance) {
+  const x = p % width
+  const y = (p - x) / width
+  const limit = tolerance * tolerance
+  for (let dy = -reach; dy <= reach; dy++) {
+    for (let dx = -reach; dx <= reach; dx++) {
+      const nx = x + dx
+      const ny = y + dy
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue
+      const q = ny * width + nx
+      if (!skin[q]) continue
+      const dL = lab[0] - own[q * 3]
+      const da = lab[1] - own[q * 3 + 1]
+      const db = lab[2] - own[q * 3 + 2]
+      if (dL * dL + da * da + db * db <= limit) return true
+    }
+  }
+  return false
+}
+
+/**
+ * Apply the body-skin rule (`bodySkinRule`) to a region mask, in place: every 8-connected piece of candidates in the
+ * region that touches a skin pixel the region does not hold is taken out. Returns how many pixels it took.
+ *
+ * @param {Uint8Array} mask
+ * @param {{ skin: Uint8Array, candidate: Uint8Array }} rule
+ * @param {number} width
+ * @param {number} height
+ */
+export function applyBodySkinRule(mask, { skin, candidate }, width, height) {
+  const n = width * height
+  const besideBare = (p) => {
+    const x = p % width
+    const y = (p - x) / width
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx
+        const ny = y + dy
+        if ((dx === 0 && dy === 0) || nx < 0 || ny < 0 || nx >= width || ny >= height) continue
+        const q = ny * width + nx
+        if (skin[q] && !mask[q]) return true
+      }
+    }
+    return false
+  }
+  const gone = new Uint8Array(n)
+  const stack = new Int32Array(n)
+  let top = 0
+  // Seeds: a candidate in the region with bare skin beside it; the flood then takes its whole piece.
+  for (let p = 0; p < n; p++) {
+    if (!mask[p] || !candidate[p] || !besideBare(p)) continue
+    gone[p] = 1
+    stack[top++] = p
+  }
+  while (top > 0) {
+    const p = stack[--top]
+    const x = p % width
+    const y = (p - x) / width
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx
+        const ny = y + dy
+        if ((dx === 0 && dy === 0) || nx < 0 || ny < 0 || nx >= width || ny >= height) continue
+        const q = ny * width + nx
+        if (gone[q] || !mask[q] || !candidate[q]) continue
+        gone[q] = 1
+        stack[top++] = q
+      }
+    }
+  }
+  let dropped = 0
+  for (let p = 0; p < n; p++) {
+    if (!gone[p]) continue
+    mask[p] = 0
+    dropped++
+  }
+  return dropped
 }
 
 /**
@@ -713,7 +1252,7 @@ export function baseClothingUnion(itemPic, basePic, { width, height, density = 1
  * Writes the alpha into `grown` (the mask before its feather) and returns `{ at, rgb }`: which pixels were
  * added, and the colour each takes.
  */
-function coverBaseLimbs(grown, itemPic, basePic, { width, height, density, union = null, skinTol = DIFF_DEFAULTS.skinTol, skin = null, reach = DIFF_DEFAULTS.coverReach }) {
+function coverBaseLimbs(grown, itemPic, basePic, { width, height, density, union = null, bare = null, skinTol = DIFF_DEFAULTS.skinTol, skin = null, reach = DIFF_DEFAULTS.coverReach }) {
   const top = OUTFIT_TOP_Y * density
   const inHead = headRegion(density)
   // The layer's *clothing*: solidly covered (the outfit's own soft rim is see-through, and the base's
@@ -755,8 +1294,10 @@ function coverBaseLimbs(grown, itemPic, basePic, { width, height, density, union
           // The base's own skin is left to the base: only its line art (and its own clothing) is covered.
           if (isSkin(basePic.data[q * 4], basePic.data[q * 4 + 1], basePic.data[q * 4 + 2], skin, skinTol)) continue
           // Inside the band the underwear rule has already said what the layer holds, in the picture's own
-          // colours; the cover must not paint over a swimsuit-cut outfit there.
+          // colours; the cover must not paint over a swimsuit-cut outfit there. Nor over the body's outline where the
+          // body-skin rule took the picture's redrawn limb back out of the union (`bare`, Plan 19 style gate).
           if (union !== null && union[q] > 0) continue
+          if (bare !== null && bare[q]) continue
           distance[q] = step
           ring.push(q)
         }
@@ -995,20 +1536,27 @@ function stripUndefined(options) {
   return Object.fromEntries(Object.entries(options).filter(([, value]) => value !== undefined))
 }
 
-/** The hard limits of a slot, as a mask operation: what a slot's item can never reach. */
-function slotLimits(mask, { slot, width, height, density }) {
+/**
+ * The hard limits of a slot, as a mask operation: what a slot's item can never reach. A hairstyle (`hair`, Plan 19)
+ * reaches anywhere — no area limit — except what the hair face rule drops (`face`, from `hairFaceRule`). On a v4 body,
+ * no slot's item holds the body's own skin (`skinRule`, from `bodySkinRule`), after the slot's own limit.
+ */
+function slotLimits(mask, { slot, width, height, density, face = null, skinRule = null }) {
   if (slot === 'head') {
     mask.fill(0, Math.min(mask.length, HEAD_LIMIT_Y * density * width))
   } else if (slot === 'face') {
     keepOnlyHead(mask, width, height, density)
   } else if (slot === 'outfit') {
     mask.fill(0, 0, Math.min(mask.length, OUTFIT_TOP_Y * density * width))
+  } else if (slot === 'hair' && face) {
+    applyFaceRule(mask, face, width, height)
   }
+  if (skinRule) applyBodySkinRule(mask, skinRule, width, height)
   return mask
 }
 
-function applySlotRule(mask, basePic, { slot, width, height, density, core = null, union = null, cover = null }) {
-  slotLimits(mask, { slot, width, height, density })
+function applySlotRule(mask, basePic, { slot, width, height, density, core = null, union = null, cover = null, face = null }) {
+  slotLimits(mask, { slot, width, height, density, face })
   if (slot !== 'outfit') return
   // D01 §10.7: no underwear showing. What that costs the layer is `baseClothingUnion`'s decision now —
   // the base's own clothing anywhere below the chin, plus the pixels the picture changed inside the band.
@@ -1069,12 +1617,15 @@ export function keepRelativeRegions(mask, width, height, fraction) {
   return out
 }
 
-/** Fill every enclosed hole (a region of empty pixels not touching the edge) smaller than `maxHole`. */
-export function fillHoles(mask, width, height, maxHole) {
+/**
+ * Fill every enclosed hole (a region of empty pixels not touching the edge) smaller than `maxHole` — except one that
+ * `keepOpen(pixels)` says stays open (the body showing through, `bodyShowsThrough`).
+ */
+export function fillHoles(mask, width, height, maxHole, keepOpen = null) {
   const out = Uint8Array.from(mask)
   if (maxHole <= 0) return out
   eachRegion(width, height, (p) => mask[p] === 0, (pixels, size, border) => {
-    if (border || size >= maxHole) return
+    if (border || size >= maxHole || keepOpen?.(pixels)) return
     for (const p of pixels) out[p] = 255
   })
   return out
@@ -1099,7 +1650,7 @@ export function keepOnlyCrop(mask, width, height, density) {
 
 /**
  * Zero everything outside the *head region* — the portrait crop, cut off at `FACE_LIMIT_Y` — which is
- * what a base's face layer (50) holds, whether it came from an expression picture or from the base.
+ * what a face layer (50) holds: a body's or a bot's, cut from its own picture or from an expression's.
  */
 export function keepOnlyHead(mask, width, height, density) {
   keepOnlyCrop(mask, width, height, density)
@@ -1107,32 +1658,18 @@ export function keepOnlyHead(mask, width, height, density) {
   return mask
 }
 
-/**
- * What a base's face layer (50) holds: the head region, less the torso column below y 236 (`TORSO_COLUMN`),
- * less the rows above `strandY` (frame units, or `null`) that an AI base's strand of hair went to layer 60 in.
- */
-export function keepOnlyFace(mask, width, height, density, strandY = null) {
+/** What a face layer (50) holds: the head region, less the torso column below y 236 (`TORSO_COLUMN`). */
+export function keepOnlyFace(mask, width, height, density) {
   keepOnlyHead(mask, width, height, density)
   const left = TORSO_COLUMN.x0 * density
   const right = (TORSO_COLUMN.x1 + 1) * density
   for (let y = TORSO_COLUMN.y0 * density; y < height; y++) mask.fill(0, y * width + left, y * width + right)
-  if (strandY !== null) mask.fill(0, 0, Math.min(mask.length, Math.round(strandY * density) * width))
   return mask
 }
 
-/** A clip (`(pic, density) => pic`, as `writeDensities` takes) down to a base's face layer; see `keepOnlyFace`. */
-export function clipToFace(strandY = null) {
-  return (pic, density) => applyMask(pic, keepOnlyFace(new Uint8Array(pic.width * pic.height).fill(255), pic.width, pic.height, density, strandY))
-}
-
-/** A clip keeping only the rows `from ≤ y < to` (frame units; `null` for no bound). */
-export function clipToRows(from, to) {
-  return (pic, density) => {
-    const mask = new Uint8Array(pic.width * pic.height).fill(255)
-    if (from !== null) mask.fill(0, 0, Math.min(mask.length, Math.round(from * density) * pic.width))
-    if (to !== null) mask.fill(0, Math.min(mask.length, Math.round(to * density) * pic.width))
-    return applyMask(pic, mask)
-  }
+/** A clip (`(pic, density) => pic`, as `writeDensities` takes) down to a face layer; see `keepOnlyFace`. */
+export function clipToFace() {
+  return (pic, density) => applyMask(pic, keepOnlyFace(new Uint8Array(pic.width * pic.height).fill(255), pic.width, pic.height, density))
 }
 
 /** Every pixel under `threshold` (default `ALPHA_INK`) made fully transparent black, in place. */
@@ -1142,22 +1679,20 @@ export function dropFaint(pic, threshold = ALPHA_INK) {
 }
 
 /**
- * The faint threshold for a strand layer (L60): a strand is solid ink, and what the key leaves around it at
- * alpha 8–30 is noise that C3 counts as litter (M03's second picture: one alpha-13 pixel off the strand).
+ * Every pixel C3 would call litter at `density` made fully transparent black, in place — the same pixels, found by
+ * C3's own rule (`eachStray`): any alpha at all more than `STRAY_MARGIN` outside the box of the layer's solid pixels.
+ * Returns how many it cleared. `dropFaint` cannot do this: it cuts by alpha everywhere, and the soft rim of the shape
+ * has the same alphas as the litter off it.
  */
-export const STRAND_FAINT = 32
+export function dropStrays(pic, density) {
+  const strays = []
+  eachStray(pic, density, (p) => strays.push(p))
+  for (const p of strays) pic.data.fill(0, p * 4, p * 4 + 4)
+  return strays.length
+}
+
 /** The faint threshold for an aura (layer 10): its painterly glow trails into alpha ≤ 30 far from the ring. */
 export const GLOW_FAINT = 32
-
-/**
- * Where an AI base's strand of hair ends, in frame units, or `null` when it has none (2026-09-17, fix
- * round 1). `measure` finds the head top below any thin strand above it; the cut sits `STRAND_MARGIN` below
- * that, on a whole frame unit so both densities cut on the same row.
- */
-export function strandCut(report, transform) {
-  if (!report.strand) return null
-  return Math.round(report.top * transform.scale + transform.offsetY + STRAND_MARGIN)
-}
 
 // ─────────────────────────────────────────────────────────── the style gate ──
 
@@ -1299,143 +1834,149 @@ export function describeMeasurement(report, width) {
 /**
  * One generated picture in, its layers (at both densities) and their manifest entries out.
  *
- * `target` is what `--as` parsed to: `{ kind: 'base' | 'expr' | 'item', … }`. A base establishes the
- * transform and stores it; everything after it reads that transform back, so an expression and a hat
- * generated from the same character lock land on the same pixels as the body they belong to.
+ * `target` is what `--as` parsed to. Since the switch-over (Plan 19 D1) every figure is a v4 body, and every picture
+ * drawn on one is cut on that body's stored transform — so a face, a hairstyle, a hat and a bot generated from the same
+ * character lock land on the same pixels as the body they belong to:
  *
- * An item and an expression write one layer each; an expression keeps only the face region (`keepOnlyFace`).
- * A base writes four (2026-09-15, AI bases are flat): L30 the whole figure, the neutral face L50 as its face
- * region, and L20/L60 as empty frames marked `empty: true` — except that since 2026-09-17 a strand of hair
- * above the head top (`measure`'s `strand`) is cut off at `strandY` (stored beside the transform) into L60,
- * and out of L30 and every face layer; items are then measured against L30 with L60 over it. Re-ingesting a
- * base therefore resets the neutral face to the base's own; ingest `expr:<base>:neutral` after it to
- * override that.
+ * - **A body** (`{ kind: 'body', gender }`, `--as body:<g>`): the whole figure as `body_<g>_L30` and its head region
+ *   as `body_<g>_face_neutral_L50`, both masked (skin; eyes on the face), and `bodies[<g>] = { transform }` stored.
+ *   Where it goes is `bodyTransform`'s answer: `transformFrom`'s stored transform; else, ingested again, the body's own;
+ *   else `F01_TRANSFORM` (frame.mjs), the canvas `f01_candidate_1.png` was drawn on, which both bodies are drawn from —
+ *   in a fresh directory too (Plan 19 final review). `--dry-run` also prints C12 for a cut into a temporary copy. **`anchor: 'head'`**
+ *   (`--anchor head`, on the user's word only, when C12 fails on position or scale alone) re-places the body by its
+ *   eyes instead and stores `anchor: 'head'` beside the transform.
+ * - **A body's face** (`{ kind: 'bodyFace', gender, expr }`, `--as face:<g>:<expr>`): `body_<g>_face_<expr>_L50`, the
+ *   head region of an expression's picture (`keepOnlyFace`), on `bodies[<g>].transform`.
+ * - **A hairstyle** (`{ kind: 'hair', code }`, `--as hair:<code>`) is drawn on its gender's bald body: registered on
+ *   it (searched wide, `registerWide`: the image model zooms a hair picture out by 4–5 %), diffed against it with the
+ *   hair face rule (`hairFaceRule`), and the region split (`splitHair`) into
+ *   `item_hair_<code>_L60` (front, with the split's `split`) and `_L20` (back, `empty: true` when blank) — see
+ *   `hairLayers`. **`recolourTo`** (`--recolour-to #rrggbb`, only when `colours` shows a mapped style more than
+ *   15 ΔE from its `naturalColour`) recolours both layers' hair to it and records `recolouredTo` on the L60; an ingest
+ *   of the hairstyle without it recolours to the recorded colour again.
+ * - **An item** (`item:<slot>:<code>`) on the body `baseId` names (`--base f|m`, f by default): registered on and
+ *   diffed against `body_<g>_L30` — with **`hair`** (`--hair <code>`), against that body wearing the hairstyle, its L20
+ *   under and its L60 over it. Both an item and a hairstyle keep the body's own skin, as the picture redrew it, out of
+ *   their layers (the body-skin rule, `bodySkinRule`; style gate), and log how much: `body skin kept out: N px`.
+ *   `variant` (2026-09-20) makes it the per-wear layer of an item that already exists rather than the item itself: the
+ *   same cut, written as `item_<slot>_<code>_<wear>_L<n>` with `variantOf` and `wear` in its manifest entry. A body is
+ *   its gender's wear (`wearOf`), so `--variant m` is cut with `--base m`.
+ * - **An aura or a frame** (`item:aura:<code>`, `item:frame:<code>`, Plan 12) is a square picture with the effect in a
+ *   ring and nothing to diff against a body — see `ingestSquare`.
+ * - **A bot** (`bot:<n>`, Plan 12) is a figure drawn from a body's own picture, same canvas and pose, so it is cut on
+ *   the transform of `transformFrom` (default `BOT_TRANSFORM_FROM`, body f) rather than anchored by its own box: the
+ *   whole figure as `bot_<n>_L30` and its head region as `bot_<n>_face_neutral_L50`. The other five faces are written
+ *   as copies of the neutral one, marked `copyOf`, so `check` and the app see a complete set — except a face already
+ *   real in its own right, which a new neutral picture leaves alone. **A bot's second face** (`bot:<n>:<expression>`,
+ *   `bot:<n>:happy` in practice) is drawn from the bot's own neutral picture: it is registered onto the bot's real
+ *   `bot_<n>_L30` (searched wide, `registerWide` — cut as drawn, and said so, while that is still a stand-in), then that one
+ *   face is cut from its head region and replaces the copy.
  *
- * `variant` (2026-09-20) makes an item the per-wear layer of an item that already exists rather than the
- * item itself: the same cut, against the base named by `--base`, written as `item_<slot>_<code>_<wear>_L<n>`
- * with `variantOf` and `wear` in its manifest entry. It has to agree with that base — a `m` variant is cut
- * on a base that wears `m`, or the layer would be the wrong shape for every figure that will wear it.
+ * **One registration** (Plan 19 final review): what `wideRegistration` names — a hairstyle, an outfit on a v4 body, a bot's
+ * second face — is registered with the wide search (`registerWide`) here, in the pipeline, whoever calls it: the command
+ * line and the registry's `ingest` and `verify` hand it the same picture and get the same layers. A hat or a pair of
+ * glasses keeps the pipeline's own `registerToBase` (±1 %, ±12 px @2x).
  *
- * 2026-09-24 (Plan 12), three more targets:
+ * Every item and bot layer ingested records **`cutOn`**, the body it was cut on (an aura and a frame have none): C6
+ * fails a real outfit layer without one. And an item ingested again with no `tintSeed` **keeps the seed** its entry
+ * had (R13), so its tint mask and its icon's are cut again from it.
  *
- * - **An aura or a frame** (`item:aura:<code>`, `item:frame:<code>`) is a square picture with the effect in a
- *   ring and nothing to diff against a base — see `ingestSquare`.
- * - **A bot** (`bot:<n>`) is a figure drawn from F01's own picture, same canvas and pose, so it is cut like a
- *   base on the transform of `transformFrom` (default `BOT_TRANSFORM_FROM`, f01) rather than anchored by its
- *   own box: the whole figure as `bot_<n>_L30` — no strand cut, since a bot has no L60 to move it to and
- *   wears nothing that could hide it — and its head region as `bot_<n>_face_neutral_L50`. The other five
- *   faces are written as copies of the neutral one, marked `copyOf`, so `check` and the app see a complete
- *   set — except a face already real in its own right, which a new neutral picture leaves alone.
- * - **A bot's second face** (`bot:<n>:<expression>`, `bot:<n>:happy` in practice) cuts that one face from
- *   its picture's head region, on the same transform, and replaces the copy.
+ * The flat bases' targets — `base:<id>` and `expr:<id>:<expr>`, Plans 11–12 — are retired (D1) and refused.
  *
- * @param {{ file: string, target: { kind: string, slot?: string, code?: string, base?: string, expr?: string, bot?: number }, dir: string, targets?: string[], baseId?: string, variant?: string | null, tolerance?: number, white?: boolean, dryRun?: boolean, lockScale?: number | null, transformFrom?: string | null, hides?: object, diff?: object, log?: (line: string) => void }} options
+ * @param {{ file: string, target: { kind: string, slot?: string, code?: string, expr?: string, bot?: number, gender?: string }, dir: string, targets?: string[], baseId?: string, variant?: string | null, tolerance?: number, white?: boolean, dryRun?: boolean, lockScale?: number | null, transformFrom?: string | null, hides?: object, diff?: object, tintSeed?: { x: number, y: number } | null, hair?: string | null, anchor?: string | null, recolourTo?: string | null, overridesDir?: string, log?: (line: string) => void }} options
  */
-export async function ingest({ file, target, dir, targets, baseId = 'f01', variant = null, tolerance = 40, white = false, dryRun = false, lockScale = null, transformFrom = null, hides = {}, diff = {}, tintSeed = null, log = () => {} }) {
+export async function ingest({ file, target, dir, targets, baseId = 'f', variant = null, tolerance = 40, white = false, dryRun = false, lockScale = null, transformFrom = null, hides = {}, diff = {}, tintSeed = null, hair = null, anchor = null, recolourTo = null, overridesDir = MASK_OVERRIDE_DIR, log = () => {} }) {
+  if (!TARGET_KINDS.includes(target.kind)) {
+    throw new Error(`cannot ingest a ${target.kind} — the flat bases and their expressions are retired (Plan 19 D1): a figure is a body (body:<g>) and its faces (face:<g>:<expr>)`)
+  }
   const square = target.kind === 'item' && SQUARE_SLOTS.has(target.slot)
   if (variant !== null) {
     if (!WEARS.includes(variant)) throw new Error(`--variant ${variant} is not one of ${WEARS.join(', ')}`)
     if (target.kind !== 'item') throw new Error('--variant belongs to an item — only a wardrobe layer has per-wear variants')
-    if (square) throw new Error(`--variant belongs to a worn item — an ${target.slot} is one picture for every base`)
-    const wear = wearOf(target.base ?? baseId)
-    if (wear !== variant) {
-      throw new Error(`--variant ${variant} does not match base ${target.base ?? baseId}, which wears ${wear ?? 'nothing the pipeline knows'} — cut a ${variant} variant on a ${variant} base`)
-    }
+    if (square) throw new Error(`--variant belongs to a worn item — an ${target.slot} is one picture for every body`)
+  }
+  // A worn item is cut on a body (D1): there is no other figure left to diff it against.
+  if (target.kind === 'item' && !square && !GENDERS.includes(baseId)) {
+    throw new Error(`--base ${baseId} is not a body — an item is cut on ${GENDERS.map((gender) => `body ${gender} (--base ${gender})`).join(' or ')}`)
+  }
+  if (variant !== null && baseId !== variant) {
+    throw new Error(`--variant ${variant} does not match body ${baseId} — a body wears its own gender's cut, so the ${variant} variant is cut with --base ${variant}`)
   }
   if (target.kind === 'bot') {
     if (!BOTS.includes(target.bot)) throw new Error(`there is no bot ${target.bot} — the bots are ${BOTS.join(', ')}`)
     if (!EXPRESSIONS.includes(target.expr ?? 'neutral')) throw new Error(`bot ${target.bot} has no expression ${target.expr} — one of ${EXPRESSIONS.join(', ')}`)
   }
+  checkV4Options({ target, square, on: baseId, hair, anchor, recolourTo })
+  const recolourHex = recolourTo === null ? null : recolourTo.toLowerCase()
   const source = await readPicture(file)
   if (square) return ingestSquare({ source, target, dir, targets, tolerance, white, dryRun, log })
   const keyed = removeChroma(source, { key: white ? [255, 255, 255] : [0, 255, 0], tolerance, despill: !white })
   const report = measure(keyed)
   if (dryRun) {
     for (const line of describeMeasurement(report, source.width)) log(line)
-    return { report, name: null }
+    if (target.kind !== 'body') return { report, name: null }
+    const head = await dryRunHead({ keyed, dir, gender: target.gender, transformFrom, anchor, log })
+    return { report, name: null, head }
   }
 
   const manifestFile = join(dir, MANIFEST_NAME)
   const manifest = readManifest(manifestFile)
-  manifest.bases ??= {}
-  const owner = target.kind === 'base' ? target.base : target.base ?? baseId
+  manifest.bodies ??= {}
+  /** The body a worn item or a bot is cut on (Plan 19): recorded on every layer it writes. */
+  let cutOn = null
+  // A hairstyle recoloured once stays recoloured (A2a review), as an item keeps its tint seed: ingested again without
+  // `--recolour-to`, it is recoloured to what its L60 recorded. Read before the new entries replace the old ones.
+  const keptRecolour = target.kind === 'hair' && recolourHex === null ? manifest.files[hairFile(target.code, LAYERS.hairFront)]?.recolouredTo ?? null : null
+  const recolourTarget = recolourHex ?? keptRecolour
 
   let transform
-  let strandY = null
-  if (target.kind === 'base') {
-    if (transformFrom !== null) {
-      // 2026-09-24: a base drawn *from* another base (F02 from F01: same body, same pose, same canvas)
-      // shares that base's body, so it takes that base's transform verbatim — anchoring it by its own box
-      // would scale it by its own hair (no ahoge: 5.8 % taller a box) and every shared item would miss.
-      const from = manifest.bases[transformFrom]?.transform
-      if (!from) throw new Error(`no transform stored for base ${transformFrom} — ingest it with --as base:${transformFrom} first`)
-      transform = { ...from }
-      log(`transform taken from ${transformFrom}: scale ${from.scale.toFixed(4)}, offset ${from.offsetX.toFixed(1)}, ${from.offsetY.toFixed(1)}`)
-    } else {
-      const anchored = anchorBase(keyed)
-      transform = { scale: anchored.scale, offsetX: anchored.offsetX, offsetY: anchored.offsetY }
-    }
-    strandY = strandCut(report, transform)
-    manifest.bases[owner] = { transform, ...(strandY === null ? {} : { strandY }) }
+  if (target.kind === 'body') {
+    const placed = await bodyTransform({ keyed, manifest, gender: target.gender, transformFrom, anchor, log })
+    transform = placed.transform
+    manifest.bodies[target.gender] = { transform, ...(placed.anchor === null ? {} : { anchor: placed.anchor }) }
   } else if (target.kind === 'bot') {
-    // A bot is drawn from F01's picture (the registry's `f01_candidate_1.png`): same canvas, same pose, so
-    // F01's transform places it — its own box would scale it by whatever it has instead of an ahoge.
+    // A bot is drawn from a body's own picture: same canvas, same pose, so that body's transform places it — its own
+    // box would scale it by whatever it has instead of hair. Body f's unless `transformFrom` names the other body.
     const from = transformFrom ?? BOT_TRANSFORM_FROM
-    const stored = manifest.bases[from]?.transform
-    if (!stored) throw new Error(`no transform stored for base ${from} — a bot is cut on it; ingest it with --as base:${from} first`)
-    transform = { ...stored }
-    log(`transform taken from ${from}: scale ${stored.scale.toFixed(4)}, offset ${stored.offsetX.toFixed(1)}, ${stored.offsetY.toFixed(1)}`)
+    const stored = { ...bodyTransformOf(manifest, from, 'a bot') }
+    transform = stored
+    cutOn = from
+    log(`transform taken from ${from}: ${describeTransform(stored)}`)
+  } else if (target.kind === 'bodyFace' || target.kind === 'hair') {
+    // A body's face and a hairstyle are drawn on the body's own picture, so the body's transform places them.
+    const gender = target.kind === 'hair' ? hairGender(target.code) : target.gender
+    transform = bodyTransformOf(manifest, gender, `a ${target.kind === 'hair' ? 'hairstyle' : 'face'}`)
   } else {
-    transform = manifest.bases[owner]?.transform
-    strandY = manifest.bases[owner]?.strandY ?? null
-    if (!transform) throw new Error(`no transform stored for base ${owner} — ingest it with --as base:${owner} first`)
+    // An item, on the body `--base` names.
+    transform = bodyTransformOf(manifest, baseId, 'an item')
+    cutOn = baseId
   }
   if (lockScale !== null) transform = { ...transform, scale: lockScale }
 
   const anchored = await applyTransform(keyed, transform, 2)
   /** What this picture becomes: `{ file, picture, clip?, extra? }`, one per layer written. */
   const layers = []
-  if (target.kind === 'base') {
-    // An AI base is one flat picture — hair, face and body baked together — so it is cut up by region:
-    // the whole figure as the body; its head region again as the neutral face, because layer 50 sits
-    // above the outfit and the hair ends and chin have to stay above a collar; the strand of hair above
-    // the head top (an ahoge), if there is one, as the front hair (60), so a hat can hide it; and the back
-    // hair (20) as an empty frame, since there is no separate hair to put in it.
-    // `dropFaint` on every cut, as for items: a base whose key left a stray alpha-1 pixel a few pixels off
-    // the figure (m01 did) fails C3 at @1x, and nothing under `ALPHA_INK` is visible anyway.
-    const rowsBody = clipToRows(strandY, null)
-    const body = (pic, density) => dropFaint(rowsBody(pic, density))
-    layers.push({ file: { name: baseFile(owner, LAYERS.body), layer: LAYERS.body }, picture: body(anchored, 2), clip: body })
-    const faceRows = clipToFace(strandY)
-    const face = (pic, density) => dropFaint(faceRows(pic, density))
-    layers.push({ file: { name: faceFile(owner, 'neutral'), layer: LAYERS.face }, picture: face(anchored, 2), clip: face })
-    layers.push({ file: { name: baseFile(owner, LAYERS.hairBack), layer: LAYERS.hairBack }, picture: blankPicture(FRAME.w * 2, FRAME.h * 2), extra: { empty: true } })
-    if (strandY === null) {
-      layers.push({ file: { name: baseFile(owner, LAYERS.hairFront), layer: LAYERS.hairFront }, picture: blankPicture(FRAME.w * 2, FRAME.h * 2), extra: { empty: true } })
-    } else {
-      // Faint key noise above the head would be a stray pixel far outside a shape this small (C3), and the
-      // colour a transparent pixel keeps is bytes nobody sees.
-      const rows = clipToRows(null, strandY)
-      const strand = (pic, density) => dropFaint(rows(pic, density), STRAND_FAINT)
-      layers.push({ file: { name: baseFile(owner, LAYERS.hairFront), layer: LAYERS.hairFront }, picture: strand(anchored, 2), clip: strand })
-      log(`strand above y ${strandY} moved to ${baseFile(owner, LAYERS.hairFront)}`)
-    }
-  } else if (target.kind === 'expr') {
-    const faceRows = clipToFace(strandY)
-    const face = (pic, density) => dropFaint(faceRows(pic, density))
-    layers.push({ file: { name: faceFile(owner, target.expr), layer: LAYERS.face }, picture: face(anchored, 2), clip: face })
+  if (target.kind === 'body') {
+    layers.push(...bodyLayers(anchored, target.gender))
+  } else if (target.kind === 'bodyFace') {
+    layers.push(faceLayer(anchored, bodyFaceFile(target.gender, target.expr)))
+  } else if (target.kind === 'hair') {
+    layers.push(...await hairLayers({ keyed, transform, anchored, code: target.code, dir, manifest, diff, overridesDir, log }))
   } else if (target.kind === 'bot') {
     // The kit draws a bot as two layers (`layersFor` in packages/ui-kit/src/avatar2d/layers.ts): L30 and one
-    // L50 face per expression — no hair layers, no wardrobe, so no strand cut and no icon.
+    // L50 face per expression — no hair layers, no wardrobe, so no icon. Every layer this writes, the copies
+    // included, says what it was cut on (`cutOn`): the committed set's test holds every bot to body f (D1).
+    // `dropFaint` on every cut, as for items: a key that leaves a stray alpha-1 pixel a few pixels off the figure
+    // fails C3 at @1x, and nothing under `ALPHA_INK` is visible anyway.
     const body = (pic) => dropFaint(pic)
-    const faceRows = clipToFace(null)
+    const faceRows = clipToFace()
     const face = (pic, density) => dropFaint(faceRows(pic, density))
     const expr = target.expr ?? 'neutral'
     if (expr === 'neutral') {
-      layers.push({ file: { name: botFile(target.bot), layer: LAYERS.body }, picture: body(anchored), clip: body })
+      layers.push({ file: { name: botFile(target.bot), layer: LAYERS.body }, picture: body(anchored), clip: body, extra: { cutOn } })
       const neutral = botFaceFile(target.bot, 'neutral')
       const neutralPicture = face(anchored, 2)
-      layers.push({ file: { name: neutral, layer: LAYERS.face }, picture: neutralPicture, clip: face })
+      layers.push({ file: { name: neutral, layer: LAYERS.face }, picture: neutralPicture, clip: face, extra: { cutOn } })
       for (const other of EXPRESSIONS) {
         if (other === 'neutral') continue
         const name = botFaceFile(target.bot, other)
@@ -1444,34 +1985,54 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', varia
           log(`${name} — real, left as it is`)
           continue
         }
-        layers.push({ file: { name, layer: LAYERS.face }, picture: neutralPicture, clip: face, extra: { copyOf: neutral } })
+        layers.push({ file: { name, layer: LAYERS.face }, picture: neutralPicture, clip: face, extra: { copyOf: neutral, cutOn } })
       }
     } else {
-      layers.push({ file: { name: botFaceFile(target.bot, expr), layer: LAYERS.face }, picture: face(anchored, 2), clip: face })
+      // Drawn from the bot's own neutral picture, and zoomed or moved a little on the way (Plan 19 C4): registered onto
+      // that picture's cut, the bot's L30, so the face lands where the neutral one is. A stand-in L30 is no picture of the
+      // bot to register onto: the face is then cut where it was drawn.
+      const neutralName = botFile(target.bot)
+      const neutralFile = join(dir, `${neutralName}@2x.png`)
+      let drawn = anchored
+      if (manifest.files[neutralName]?.real === true && existsSync(neutralFile)) {
+        drawn = (await registerForCut({ keyed, transform, anchored, onto: await readPicture(neutralFile), ontoName: neutralName, rule: wideRegistration(target), log })).picture
+      } else {
+        log(`${neutralName} is not real art yet: ${botFaceFile(target.bot, expr)} is cut where it was drawn, not registered onto the bot's neutral picture`)
+      }
+      layers.push({ file: { name: botFaceFile(target.bot, expr), layer: LAYERS.face }, picture: face(drawn, 2), clip: face, extra: { cutOn } })
     }
   } else {
-    // The item is measured against the whole base as it is drawn: its body, and its front hair when that
-    // holds a strand — otherwise a strand the item picture still shows would read as part of the item.
-    const basePicture = await readPicture(join(dir, `${baseFile(owner, LAYERS.body)}@2x.png`))
-    const hairFront = baseFile(owner, LAYERS.hairFront)
-    if (manifest.files[hairFront] && !manifest.files[hairFront].empty) overPicture(basePicture, await readPicture(join(dir, `${hairFront}@2x.png`)))
-    const registered = registerToBase(anchored, basePicture, { slot: target.slot, density: 2 })
-    const fit = registered.iou === undefined ? `mean difference ${registered.error.toFixed(1)}` : `silhouette IoU ${registered.iou.toFixed(3)}`
-    log(`registered on ${owner}: dx ${registered.dx}, dy ${registered.dy} px @2x, scale ${registered.scale} (${fit})`)
-    const cut = diffAgainstBase(registered.picture, basePicture, { ...diff, slot: target.slot, density: 2 })
+    // The item is measured against the body as it is drawn: `body_<g>_L30`, wearing the hairstyle the item was drawn
+    // over (`hair`) if any — otherwise the hair the item picture still shows would read as part of the item. An outfit is
+    // registered on it searched wide (`wideRegistration`), a hat or a pair of glasses by the pipeline's own search.
+    let basePicture = await readPicture(join(dir, `${bodyFile(baseId)}@2x.png`))
+    if (hair !== null) basePicture = await wearingHair(basePicture, { dir, manifest, code: hair, log })
+    const registered = await registerForCut({ keyed, transform, anchored, onto: basePicture, ontoName: baseId, rule: wideRegistration(target, baseId), slot: target.slot, log })
+    // The item keeps the body's own skin out (the body-skin rule) — off only while the body has no skin mask.
+    const skin = await itemBodySkin({ dir, manifest, gender: baseId, hair, log })
+    const ownSkin = skin && { skin, ...BODY_SKIN_RULE.item }
+    const cut = diffAgainstBase(registered.picture, basePicture, { ...diff, slot: target.slot, density: 2, ownSkin })
+    if (skin) log(`body skin kept out: ${cut.skinDropped} px`)
     const layer = SLOT_LAYER[target.slot]
     // A variant carries the default layer's name so that everything downstream — the catalogue's
     // `asset.variants`, C6's routing, `placeholder`'s carry-over — can say which item it belongs to.
-    const extra = variant === null ? {} : { variantOf: itemFile(target.slot, target.code, layer), wear: variant }
+    const extra = { ...(variant === null ? {} : { variantOf: itemFile(target.slot, target.code, layer), wear: variant }), cutOn }
     // Below `ALPHA_INK` nothing is visible, and the halved copy of a mask edge can land a stray alpha-1
     // pixel a few pixels outside the shape — which is C3's `rác bán trong suốt`, not a soft edge.
     layers.push({ file: { name: itemFile(target.slot, target.code, layer, variant), layer, ...hides }, picture: dropFaint(cutItem(registered.picture, cut)), clip: (pic) => dropFaint(pic), extra, icon: true })
   }
 
   for (const { file: layerFile, picture, clip = null, extra = {}, icon = false } of layers) {
+    const before = manifest.files[layerFile.name]
     const bytes2x = await writeDensities(picture, dir, layerFile.name, clip)
     manifest.files[layerFile.name] = entryFor(layerFile, bytes2x, { real: true, ...extra })
-    if (target.kind === 'item' && tintSeed) manifest.files[layerFile.name].tintSeed = tintSeed
+    // R13: an item's tint seed outlives a new picture of it. Without `--tint-seed` the one its entry had is kept,
+    // so the tint mask — and the icon's — are cut again from it below rather than lost with the old entry.
+    if (target.kind === 'item') {
+      const seed = tintSeed ?? before?.tintSeed ?? null
+      if (seed) manifest.files[layerFile.name].tintSeed = seed
+      if (seed && !tintSeed) log(`${layerFile.name} keeps its tint seed (${seed.x}, ${seed.y})`)
+    }
     log(`${layerFile.name} — ${(bytes2x / 1024).toFixed(1)} KB at @2x${extra.empty ? ', empty' : ''}${extra.copyOf ? `, a copy of ${extra.copyOf}` : ''}`)
     if (icon) {
       const name = await writeIcon(picture, dir, layerFile.name, manifest, { real: true })
@@ -1479,14 +2040,20 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', varia
     }
   }
   await writeManifest(manifest, targets)
-  // Spec §4.1: whatever this ingest just wrote that `masks` would also cut gets its masks now, so a base or
-  // item is tintable the moment it lands rather than only after a separate `masks` run. The order matters for
+  // Spec §4.1: whatever this ingest just wrote that `masks` would also cut gets its masks now, so a body, a hairstyle
+  // or an item is tintable the moment it lands rather than only after a separate `masks` run. The order matters for
   // an item (Plan 18, No8a): its icon is written above, first, because a tint mask also cuts the icon's own
   // `<icon>_tintmask` and flags the icon's entry — which `writeIcon` replaces whole, flag and all.
   const targetable = maskTargets(manifest)
   const maskNames = layers.map(({ file: layerFile }) => layerFile.name).filter((name) => targetable.includes(name))
   if (maskNames.length) {
-    await writeMasks({ dir, manifest, names: maskNames, log })
+    await writeMasks({ dir, manifest, names: maskNames, overridesDir, log })
+    await writeManifest(manifest, targets)
+  }
+  if (target.kind === 'hair' && recolourTarget !== null) {
+    if (keptRecolour !== null) log(`${hairFile(target.code, LAYERS.hairFront)} keeps its recolour to ${keptRecolour}`)
+    await recolourHair({ dir, manifest, names: layers.map(({ file: layerFile }) => layerFile.name), colour: recolourTarget, overridesDir, log })
+    manifest.files[hairFile(target.code, LAYERS.hairFront)].recolouredTo = recolourTarget
     await writeManifest(manifest, targets)
   }
   log(`${report.heads.toFixed(2)} heads`)
@@ -1495,8 +2062,350 @@ export async function ingest({ file, target, dir, targets, baseId = 'f01', varia
 
 /** The item slots whose picture is a square with the effect in a ring, placed by `ingestSquare` (2026-09-24). */
 export const SQUARE_SLOTS = new Set(['aura', 'frame'])
-/** The base whose stored transform a bot is cut on, unless `transformFrom` says otherwise (2026-09-24). */
-export const BOT_TRANSFORM_FROM = 'f01'
+/** The targets `ingest` cuts (Plan 19 D1): the flat bases' `base` and `expr` are not among them any more. */
+export const TARGET_KINDS = ['body', 'bodyFace', 'hair', 'item', 'bot']
+/**
+ * The body whose stored transform a bot is cut on, unless `transformFrom` names the other (Plan 19 D1): body f, whose
+ * picture every v4 bot was drawn from. Plan 12's bots were cut on f01's, which body f's is verbatim (`F01_TRANSFORM`).
+ */
+export const BOT_TRANSFORM_FROM = 'f'
+
+// ─────────────────────────────────────────────────────── the v4 targets (Plan 19) ──
+
+/** Refuse a v4 option on a target it does not belong to, before anything is read or written. */
+function checkV4Options({ target, square, on, hair, anchor, recolourTo }) {
+  if (target.kind === 'body' || target.kind === 'bodyFace') {
+    if (!GENDERS.includes(target.gender)) throw new Error(`there is no body ${target.gender} — the bodies are ${GENDERS.join(', ')}`)
+  }
+  if (target.kind === 'bodyFace' && !EXPRESSIONS.includes(target.expr)) {
+    throw new Error(`body ${target.gender} has no expression ${target.expr} — one of ${EXPRESSIONS.join(', ')}`)
+  }
+  if (target.kind === 'hair' && !HAIR_CODES.includes(target.code)) {
+    throw new Error(`there is no hairstyle ${target.code} — the hairstyles are ${HAIR_CODES.join(', ')}`)
+  }
+  if (anchor !== null) {
+    if (anchor !== 'head') throw new Error(`--anchor ${anchor} is not one the pipeline knows — only head`)
+    if (target.kind !== 'body') throw new Error('--anchor head belongs to a body: it places the body by its eyes')
+  }
+  if (recolourTo !== null) {
+    if (target.kind !== 'hair') throw new Error('--recolour-to belongs to a hairstyle: it recolours both of its layers')
+    if (!/^#[0-9a-f]{6}$/i.test(recolourTo)) throw new Error(`--recolour-to ${recolourTo} is not a #rrggbb colour`)
+  }
+  if (hair !== null) {
+    if (target.kind !== 'item' || square) throw new Error('--hair belongs to a worn item: the hairstyle its picture was drawn over')
+    if (!GENDERS.includes(on)) throw new Error(`--hair needs a body to wear it — --base ${GENDERS.join(' or --base ')}, not ${on}`)
+    if (!HAIR_CODES.includes(hair)) throw new Error(`there is no hairstyle ${hair} — the hairstyles are ${HAIR_CODES.join(', ')}`)
+    if (hairGender(hair) !== on) throw new Error(`hairstyle ${hair} is worn on body ${hairGender(hair)}, not on body ${on}`)
+  }
+}
+
+/**
+ * The transform stored for body `gender`, for `what` to be cut on — throwing, with what to do about it, when `gender`
+ * names no body (an old base's id, since D1) or the body has not been ingested yet.
+ */
+function bodyTransformOf(manifest, gender, what) {
+  if (!GENDERS.includes(gender)) throw new Error(`${gender} is not a body — ${what} is cut on body ${GENDERS.join(' or ')}`)
+  const stored = manifest.bodies?.[gender]?.transform
+  if (!stored) throw new Error(`no transform stored for body ${gender} — ${what} is cut on it; ingest it with --as body:${gender} first`)
+  return stored
+}
+const describeTransform = (t) => `scale ${t.scale.toFixed(4)}, offset ${t.offsetX.toFixed(1)}, ${t.offsetY.toFixed(1)}`
+
+/**
+ * Where a v4 body goes on the frame: `{ transform, anchor }`, `anchor` `'head'` or `null`.
+ *
+ * - `transformFrom` given: that body's stored transform, verbatim.
+ * - Otherwise the body's own stored transform when it has one — it is being ingested again, and keeps where it was
+ *   placed (and, if it was, that it was placed by its head) — or else `F01_TRANSFORM` (frame.mjs): the canvas both
+ *   bodies are drawn on, F01's, in a fresh directory as much as beside the other body (Plan 19 final review). Neither the
+ *   body's own box (`anchorBase` put the real bald body_f at scale 0.2725, C12 25.7 units off) nor the other body's
+ *   stored transform (moved by its eyes, were it ever ingested with `--anchor head`) stands in for the canvas.
+ * - **`anchor: 'head'`** (pre-flight #23; on the user's word only, when C12 fails on position or scale alone) starts
+ *   from that same transform and cuts once on it into a temporary directory (`headOf`). The transform it returns maps
+ *   the eye span measured there onto `HEAD_REFERENCE.eyeSpan`, scaling about the eye midpoint, and the eye midpoint
+ *   onto (`eyeMidX`, `eyeMidY`) — wherever it started, so starting from a body's own earlier anchor lands on the same
+ *   place. It logs how far the scale and the offset moved from the start, and where the feet land. The feet may then
+ *   sit off `BASELINE_Y` by that much — C2 and C3 still hold them inside the frame.
+ */
+async function bodyTransform({ keyed, manifest, gender, transformFrom, anchor, log }) {
+  /** The transform the body starts from, `{ transform, anchor, from, line }` — `line` how a plain ingest logs it. */
+  const start = () => {
+    if (transformFrom !== null) {
+      const transform = { ...bodyTransformOf(manifest, transformFrom, 'a body') }
+      return { transform, anchor: null, from: `body ${transformFrom}'s transform`, line: `transform taken from ${transformFrom}: ${describeTransform(transform)}` }
+    }
+    const own = manifest.bodies?.[gender]
+    if (own?.transform) {
+      const transform = { ...own.transform }
+      const anchored = own.anchor ? ` (anchored on the ${own.anchor})` : ''
+      return { transform, anchor: own.anchor ?? null, from: `body ${gender}'s transform`, line: `transform kept from body ${gender}'s last ingest${anchored}: ${describeTransform(transform)}` }
+    }
+    const transform = { ...F01_TRANSFORM }
+    return { transform, anchor: null, from: "F01's transform", line: `body ${gender} has no transform of its own yet: placed on F01's canvas — ${describeTransform(transform)}` }
+  }
+  const from = start()
+  if (anchor !== 'head') {
+    log(from.line)
+    return { transform: from.transform, anchor: from.anchor }
+  }
+  const { metrics, feet } = await headOf(keyed, from.transform, gender)
+  const k = HEAD_REFERENCE.eyeSpan / metrics.eyeSpan
+  const was = from.transform
+  const transform = {
+    scale: was.scale * k,
+    offsetX: (was.offsetX - metrics.eyeMidX) * k + HEAD_REFERENCE.eyeMidX,
+    offsetY: (was.offsetY - metrics.eyeMidY) * k + HEAD_REFERENCE.eyeMidY,
+  }
+  log(`anchored on the head: on ${from.from} the eyes are at (${metrics.eyeMidX.toFixed(1)}, ${metrics.eyeMidY.toFixed(1)}), ${metrics.eyeSpan.toFixed(1)} apart, the chin at ${metrics.chinY}`)
+  log(`anchored on the head: scale ×${k.toFixed(4)} (${was.scale.toFixed(4)} → ${transform.scale.toFixed(4)}), offset moved ${signed(transform.offsetX - was.offsetX)}, ${signed(transform.offsetY - was.offsetY)} from ${from.from}`)
+  if (feet !== null) {
+    const landed = (feet - metrics.eyeMidY) * k + HEAD_REFERENCE.eyeMidY
+    log(`anchored on the head: the feet move from y ${feet} to y ${landed.toFixed(1)}, ${signed(landed - BASELINE_Y)} from BASELINE_Y ${BASELINE_Y}`)
+  }
+  return { transform, anchor: 'head' }
+}
+
+const signed = (value) => `${value >= 0 ? '+' : '−'}${Math.abs(value).toFixed(2)}`
+
+/** A body's two layers from its anchored picture: the whole figure (L30) and its head region (the neutral face). */
+function bodyLayers(anchored, gender) {
+  const body = (pic) => dropFaint(pic)
+  return [
+    { file: { name: bodyFile(gender), layer: LAYERS.body }, picture: body(clonePicture(anchored)), clip: body },
+    faceLayer(anchored, bodyFaceFile(gender, 'neutral')),
+  ]
+}
+
+/** A face layer (L50) from an anchored picture: its head region, as every face is cut (`keepOnlyFace`). */
+function faceLayer(anchored, name) {
+  const faceRows = clipToFace()
+  const face = (pic, density) => dropFaint(faceRows(pic, density))
+  return { file: { name, layer: LAYERS.face }, picture: face(anchored, 2), clip: face }
+}
+
+/**
+ * Where a body's head lands on `transform`: its picture cut once into a temporary directory, the neutral face masked
+ * there, and `headMetrics` taken — with the feet, the bottom of the body's ink at @1x. Nothing is written anywhere else.
+ *
+ * The eyes are the ones this cut finds, **never a hand-drawn eye mask** (A2a review): an override
+ * `body_<g>_face_neutral_L50_eyemask.png` is drawn for the body where it is stored, and this cut may be on another
+ * transform (the start of `--anchor head`) — measured through the override, the eyes would be wherever the drawing put
+ * them, not where this cut has them. So the masks are cut with an overrides directory that does not exist.
+ */
+async function headOf(keyed, transform, gender) {
+  const anchored = await applyTransform(keyed, transform, 2)
+  const temp = mkdtempSync(join(tmpdir(), 'avatar-head-'))
+  try {
+    const files = {}
+    for (const { file, picture, clip } of bodyLayers(anchored, gender)) {
+      files[file.name] = entryFor(file, await writeDensities(picture, temp, file.name, clip), { real: true })
+    }
+    const face = bodyFaceFile(gender, 'neutral')
+    await writeMasks({ dir: temp, manifest: { files }, names: [face], overridesDir: join(temp, 'no-hand-drawn-masks') })
+    const body1x = await readPicture(join(temp, `${bodyFile(gender)}@1x.png`))
+    const metrics = headMetrics(body1x, await readPicture(join(temp, `${face}_${MASK_FILE_KIND.eyes}mask@2x.png`)))
+    const box = alphaBBox(body1x)
+    return { metrics, feet: box === null ? null : box.y + box.h }
+  } finally {
+    rmSync(temp, { recursive: true, force: true })
+  }
+}
+
+/**
+ * `--dry-run` for a body: after `measure`'s lines, C12 on a cut into a temporary copy (`headOf`), on the transform
+ * the ingest would use. Returns C12's verdict, or `null` when there is no transform to cut on yet. Like `headOf`, it
+ * measures the eyes the cut finds: a hand-drawn eye mask, which `check` would read instead, is not consulted.
+ */
+async function dryRunHead({ keyed, dir, gender, transformFrom, anchor, log }) {
+  const manifest = readManifest(join(dir, MANIFEST_NAME))
+  let placed
+  try {
+    placed = await bodyTransform({ keyed, manifest, gender, transformFrom, anchor, log })
+  } catch (error) {
+    log(`C12              n/a — ${error instanceof Error ? error.message : String(error)}`)
+    return null
+  }
+  let verdict
+  try {
+    verdict = judgeHead((await headOf(keyed, placed.transform, gender)).metrics)
+  } catch (error) {
+    verdict = { ok: false, detail: error instanceof Error ? error.message : String(error) }
+  }
+  log(`C12              ${verdict.ok ? 'PASS' : 'FAIL'} — ${verdict.detail}`)
+  return verdict
+}
+
+/** One mask file at @2x as its alpha, one byte a pixel, or `null` when the entry lists none or it is not on disk. */
+async function maskAlpha(dir, name, entry, kind) {
+  const file = join(dir, `${name}_${MASK_FILE_KIND[kind]}mask@2x.png`)
+  if (!entry?.masks?.[kind] || entry.masks[kind].empty || !existsSync(file)) return null
+  const pic = await readPicture(file)
+  const alpha = new Uint8Array(pic.width * pic.height)
+  for (let p = 0; p < alpha.length; p++) alpha[p] = pic.data[p * 4 + 3]
+  return alpha
+}
+
+/**
+ * A hairstyle's two layers (spec §5.4): the picture registered on the bald body (`registerWide`, the pipeline's own
+ * `registerToBase` searched wide, measured on the rows the hair leaves alone, y ≥ `HEAD_LIMIT_Y` — from `keyed` on
+ * `transform`), its difference against the body — no area limit, the hair face rule
+ * (`hairFaceRule`, on the body's neutral face and its masks) — and that region split (`splitHair`), or split by a hand-drawn
+ * `item_hair_<code>_frontmask.png` in `overridesDir` when one is there.
+ *
+ * The L60 is the front, with `split: { region, front, back }` — the pixels at alpha ≥ 128 of the hair as the two
+ * layers hold it (the region at the picture's own alpha), and of each — and the L20 the back, `empty: true` when the
+ * split leaves nothing behind (a short style).
+ */
+async function hairLayers({ keyed, transform, anchored, code, dir, manifest, diff, overridesDir, log }) {
+  const gender = hairGender(code)
+  const bodyName = bodyFile(gender)
+  const bodyPicture = await readPicture(join(dir, `${bodyName}@2x.png`))
+  const registered = await registerForCut({ keyed, transform, anchored, onto: bodyPicture, ontoName: bodyName, rule: 'hair', log })
+
+  const neutral = bodyFaceFile(gender, 'neutral')
+  const neutralEntry = manifest.files[neutral]
+  const neutralFile = join(dir, `${neutral}@2x.png`)
+  const faceRule = {
+    skin: await maskAlpha(dir, neutral, neutralEntry, 'skin'),
+    eyes: await maskAlpha(dir, neutral, neutralEntry, 'eyes'),
+    face: neutralEntry && existsSync(neutralFile) ? await readPicture(neutralFile) : null,
+    bodySkin: await maskAlpha(dir, bodyName, manifest.files[bodyName], 'skin'),
+  }
+  for (const kind of ['skin', 'eyes']) if (!faceRule[kind]) log(`hair face rule: ${neutral} has no ${kind} mask — the face it can tell is smaller`)
+  if (!faceRule.bodySkin) log(`hair face rule: ${bodyName} has no skin mask — the chin below y 236 is not face`)
+  if (!faceRule.skin && !faceRule.eyes && !faceRule.bodySkin) log('hair face rule: off — a redrawn face would become hair')
+  const skin = bodySkinOf([faceRule.bodySkin, faceRule.skin])
+  if (!skin) log(`body skin rule: off — neither ${bodyName} nor ${neutral} has a skin mask`)
+  const ownSkin = skin && { skin, ...BODY_SKIN_RULE.hair }
+  const cut = diffAgainstBase(registered.picture, bodyPicture, { ...diff, slot: 'hair', density: 2, faceRule, ownSkin })
+  const dropped = cut.faceDropped ?? { skin: 0, islands: 0 }
+  log(`hair face rule: dropped ${dropped.skin + dropped.islands} px the picture redrew on the face (${dropped.skin} of skin, ${dropped.islands} in islands inside the face)`)
+  if (skin) log(`body skin kept out: ${cut.skinDropped} px`)
+
+  const { width, height } = bodyPicture
+  const frontMask = join(overridesDir, `item_hair_${code}_frontmask.png`)
+  const override = existsSync(frontMask) ? await readHandMask(frontMask, width, height) : null
+  if (override) log(`front mask: ${frontMask} splits the hair, not the rule`)
+  const { front, back } = splitHair(cut.mask, bodyPicture, { density: 2, override })
+  const coreOf = (part) => {
+    const core = new Uint8Array(part.length)
+    for (let p = 0; p < part.length; p++) if (part[p] && cut.core[p]) core[p] = cut.core[p]
+    return core
+  }
+  const frontPicture = dropFaint(cutItem(registered.picture, { mask: front, core: coreOf(front) }))
+  const backPicture = dropFaint(cutItem(registered.picture, { mask: back, core: coreOf(back) }))
+  // The split hands each layer the feathered rim of the hair beside it too, and a rim pixel can land far from the layer's
+  // own solid part: litter, which C3 fails. Cleared here by C3's rule, before the layers are counted (`split` is what is
+  // written) — and again at @1x by the clip, which the halving would otherwise have made new litter in.
+  for (const [layer, picture] of [[LAYERS.hairFront, frontPicture], [LAYERS.hairBack, backPicture]]) {
+    const dropped = dropStrays(picture, 2)
+    if (dropped) log(`${hairFile(code, layer)}: dropped ${dropped} px of faint litter away from its solid part @2x`)
+  }
+  const split = { region: 0, front: 0, back: 0 }
+  for (let p = 0; p < width * height; p++) {
+    const inFront = frontPicture.data[p * 4 + 3] >= ALPHA_SOLID
+    const inBack = backPicture.data[p * 4 + 3] >= ALPHA_SOLID
+    if (inFront) split.front++
+    if (inBack) split.back++
+    if (inFront || inBack) split.region++
+  }
+  log(`split: ${split.region} px of hair @2x — ${split.front} in front, ${split.back} behind${override ? ' (hand-drawn front mask)' : ''}`)
+
+  const layerOf = (layer, picture, extra) => {
+    const file = { name: hairFile(code, layer), layer }
+    return alphaBBox(picture, 0) === null
+      ? { file, picture: blankPicture(width, height), extra: { ...extra, empty: true } }
+      : { file, picture, clip: hairClip(file.name, log), extra }
+  }
+  return [layerOf(LAYERS.hairFront, frontPicture, { split }), layerOf(LAYERS.hairBack, backPicture, {})]
+}
+
+/**
+ * The clip of a hairstyle layer's @1x (`writeDensities`): `dropFaint`, then C3's litter at the halved picture's own
+ * solid box (`dropStrays`) — a rim pixel the @2x keeps within `STRAY_MARGIN` of its box can be further than that from
+ * the @1x's, and the halving's filter reaches past the @2x's edge too.
+ */
+function hairClip(name, log) {
+  return (pic, density) => {
+    const dropped = dropStrays(dropFaint(pic), density)
+    if (dropped) log(`${name}: dropped ${dropped} px of faint litter away from its solid part @${density}x`)
+    return pic
+  }
+}
+
+/** The union of skin masks (alpha per pixel, `null` for a missing one) at alpha ≥ `ALPHA_SOLID`, or `null` when none is given. */
+function bodySkinOf(masks) {
+  const given = masks.filter((mask) => mask !== null)
+  if (given.length === 0) return null
+  const skin = new Uint8Array(given[0].length)
+  for (const mask of given) for (let p = 0; p < skin.length; p++) if (mask[p] >= ALPHA_SOLID) skin[p] = 255
+  return skin
+}
+
+/**
+ * The body-skin rule's skin for an item cut on body `gender` (Plan 19 style gate): the body L30's skin mask ∪ its
+ * neutral face's, less what the hairstyle the picture was drawn over (`hair`) covers with its L60 — skin under a fringe
+ * is not skin the picture shows. `null`, logged, when the body has no skin mask yet.
+ */
+async function itemBodySkin({ dir, manifest, gender, hair, log }) {
+  const bodyName = bodyFile(gender)
+  const neutral = bodyFaceFile(gender, 'neutral')
+  const skin = bodySkinOf([await maskAlpha(dir, bodyName, manifest.files[bodyName], 'skin'), await maskAlpha(dir, neutral, manifest.files[neutral], 'skin')])
+  if (!skin) {
+    log(`body skin rule: off — neither ${bodyName} nor ${neutral} has a skin mask`)
+    return null
+  }
+  const frontName = hair === null ? null : hairFile(hair, LAYERS.hairFront)
+  const front = frontName === null || manifest.files[frontName]?.empty ? null : join(dir, `${frontName}@2x.png`)
+  if (front !== null && existsSync(front)) {
+    const over = await readPicture(front)
+    for (let p = 0; p < skin.length; p++) if (over.data[p * 4 + 3] >= ALPHA_SOLID) skin[p] = 0
+  }
+  return skin
+}
+
+/**
+ * A body wearing a hairstyle, for an item drawn over it (`--hair`): the hairstyle's L20 under the body and its L60
+ * over it — what the picture shows that is not the item. The hairstyle has to be real art already.
+ */
+async function wearingHair(bodyPicture, { dir, manifest, code, log }) {
+  const frontName = hairFile(code, LAYERS.hairFront)
+  const backName = hairFile(code, LAYERS.hairBack)
+  if (manifest.files[frontName]?.real !== true) throw new Error(`hairstyle ${code} is not real art yet — ingest it with --as hair:${code} first`)
+  const layerOf = async (name) => {
+    const entry = manifest.files[name]
+    const file = join(dir, `${name}@2x.png`)
+    return entry && !entry.empty && existsSync(file) ? readPicture(file) : null
+  }
+  const under = await layerOf(backName)
+  const over = await layerOf(frontName)
+  const picture = under === null ? bodyPicture : overPicture(under, bodyPicture)
+  if (over !== null) overPicture(picture, over)
+  log(`measured against ${bodyFile(hairGender(code))} wearing ${backName} under it and ${frontName} over it`)
+  return picture
+}
+
+/**
+ * `--recolour-to` (pre-flight #43): every hair-masked pixel of the named hair layers recoloured to `colour` with the
+ * shared `recolour`, at the layer's own hair `meanL` — so the hair's shading is kept and its mean lands on the colour
+ * — then both densities written again and the masks cut again (their `meanL` is the new hair's). Only when `colours`
+ * shows a mapped hairstyle more than 15 ΔE from its `naturalColour`, on the user's word.
+ */
+async function recolourHair({ dir, manifest, names, colour, overridesDir, log }) {
+  const done = []
+  for (const name of names) {
+    const entry = manifest.files[name]
+    if (entry.empty || !entry.masks?.hair) continue
+    const pic = await readPicture(join(dir, `${name}@2x.png`))
+    const mask = await maskAlpha(dir, name, entry, 'hair')
+    if (mask === null) continue
+    recolour(pic.data, mask, colour, entry.masks.hair.meanL)
+    entry.bytes2x = await writeDensities(pic, dir, name, hairClip(name, log))
+    log(`${name} — recoloured to ${colour} at its hair meanL ${entry.masks.hair.meanL}`)
+    done.push(name)
+  }
+  await writeMasks({ dir, manifest, names: done, overridesDir, log })
+}
 
 /** Where each square slot's ink box goes, in frame units: its larger side, and its centre. */
 const SQUARE_PLACEMENT = {

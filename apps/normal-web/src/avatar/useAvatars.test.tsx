@@ -6,7 +6,7 @@ import { AVATAR_TTL_MS, resetAvatarCache, useAvatars } from './useAvatars.js'
 const avatarOf = (playerId: string, outfit = 'outfit_casual01'): PlayerAvatarDto => ({
   playerId,
   displayName: playerId.toUpperCase(),
-  avatar: { v: 3, base: 'f01', outfit },
+  avatar: { v: 4, gender: 'f', hairStyle: 'hair_f_bob01', outfit },
 })
 
 const NOT_FOUND = new ApiError(404, 'NOT_FOUND', 'no such player')

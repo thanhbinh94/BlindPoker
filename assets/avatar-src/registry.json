@@ -6,12 +6,15 @@
   "templates": {
     "base": "Keep this exact image: same body shape, same pose, same size and position in the frame, same gray tank top and shorts, same transparent background, same semi-painterly anime rendering. Same head size and shape, same eye size and eye placement, similar hair volume on top of the head. Change only the hair, the eye colour, the expression and the skin tone:\nHair: {{look.hair}}\nEyes: {{look.eyes}}\nExpression: {{look.expression}}\nSkin: {{look.skin}}\nHair must not cover the tank top or the arms: long hair falls behind the back. Skin tone applies to the face, neck, arms and legs. Do not move, zoom, crop or redraw the body, arms, legs, clothing or framing.",
     "expression": "Keep this exact image: same character, same pose, same size and position in the frame, same image size, same hair and hair colour, same skin tone, same tank top and shorts, same transparent background. Change only the eyes and mouth to this expression: {{look.expression}}. Do not move, zoom, crop, recolour or redraw anything else.",
-    "head": "Keep this exact image: same character, same pose, same size and position in the frame, same neutral face with open eyes, same hair colour, same tank top and shorts, same transparent background. Add only this: {{look.description}}, sitting naturally on top of the head, fully inside the image. The small hair strand on top of the head is hidden under it. The hat is at most slightly wider than the hair. Face and the rest of the hair unchanged. No glasses. Do not move, zoom, crop, recolour or redraw anything else.",
-    "face": "Keep this exact image: same character, same pose, same size and position in the frame, same neutral face with open eyes, same hair and hair colour, same tank top and shorts, same transparent background. Add only this: {{look.description}}. No hat. Do not move, zoom, crop, recolour or redraw anything else.",
-    "outfit": "Keep this exact image: same character, same pose, same size and position in the frame, same neutral face with open eyes, same hair and hair colour, same skin tone, same transparent background. Replace the gray tank top and shorts completely with: {{look.description}}. The tank top must be completely gone: no straps, no gray fabric visible anywhere. Simple shapes, few folds, no small patterns, no logos, nothing in the hands. No hat, no glasses. Do not move, zoom, crop, recolour or redraw anything else.",
+    "head": "Keep this exact image: the same character, the same pose, the same size and position in the frame, the same neutral face with open eyes, the same hair and hair colour, the same tank top and shorts, the same transparent background. Add only this: {{look.description}}, sitting naturally on top of the hair, fully inside the image. Hair the hat does not cover stays exactly as it is, the fringe below the brim included. The hat is at most slightly wider than the hair. No glasses. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
+    "face": "Keep this exact image: same character, same pose, same size and position in the frame, same neutral face with open eyes, same hair and hair colour, same tank top and shorts, same transparent background. Add only this: {{look.description}}. No hat. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
+    "outfit": "Keep this exact image: the same character, the same head and face, the same pose, the same hands and fingers, the same size and position in the frame, the same skin tone, the same transparent background. The head stays completely bald: do not add hair. Replace the gray tank top and shorts completely with: {{look.description}}. The tank top must be completely gone: no straps, no gray fabric visible anywhere. No sleeve reaches past the wrists; both hands and all their fingers stay visible and unchanged. Simple shapes, few folds, no small patterns, no logos, nothing in the hands. No hat, no glasses. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
     "aura": "A decorative circular aura effect for a character portrait: {{look.description}}. Centered in a square image, the center area is completely empty and transparent, effect concentrated in a ring around the center, soft glowing painterly style allowed, transparent background outside the effect, no character, no text, no watermark.",
     "frame": "A circular decorative frame ring for a player avatar: {{look.description}}. Perfectly round, the inside of the ring is completely empty and transparent, ring thickness about 8 percent of the image width, centered in a square image, clean cel-shaded style with colored outlines, transparent background inside and outside the ring, no character, no text, no watermark.",
-    "bot": "Keep this exact image's proportions, pose, size and position in the frame, and the transparent background, but redraw the character as a cute chibi robot: {{look.description}}. Same 2.25-heads-tall proportions with an oversized round head, same standing pose with arms slightly away from the body, no hair, no clothing, smooth rounded metal body, cel-shaded with colored outlines, semi-painterly anime rendering. Face: {{look.expression}}. Do not move, zoom or crop."
+    "bot": "Keep this exact image's proportions, pose, size and position in the frame, and the transparent background, but redraw the character as a cute chibi robot: {{look.description}}. Same 2.25-heads-tall proportions with an oversized round head, same relaxed standing pose and the same five-fingered hands, no hair, no clothing, smooth rounded metal body, cel-shaded with colored outlines, semi-painterly anime rendering. Face: {{look.expression}}. Do not move, zoom or crop.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
+    "body": "This is a base model for a 2D dress-up game: hair, clothes and accessories are added later as separate layers, so the head must be completely bald.\nKeep from the input image: the chibi proportions (about 2.25 heads tall), the face (eyes, eye size and placement, nose, mouth, cheeks, chin) at exactly the same size and position in the frame, the line art, the semi-painterly anime rendering, the transparent background and the image size. Redraw everything else as follows.\nCHARACTER LOCK BODY_{{look.code}}:\nChibi anime {{look.figure}}, about 2.25 heads tall, oversized round head, small body, short limbs.\nHead: {{look.head}}. The skull is a smooth even dome the same colour as the face, a little smaller than the hair outline in the input. Simple small ears. Thin eyebrows drawn on the skin.\nFace: {{look.eyes}}, a tiny dot nose, {{look.mouth}}. No blush, no makeup.\nSkin: warm light cream on the face, scalp, neck, arms, hands and legs; soft semi-painterly shading.\nPose: relaxed natural standing pose, front view at eye level, head upright and centred, not tilted. Weight slightly more on one leg; shoulders relaxed and lowered; both arms hang loosely, slightly bent, held clearly away from the body so both hands are drawn against the empty background; both feet on the same ground line, pointing forward.\nHands: small open chibi hands, palms toward the thighs, each with exactly five fingers (four fingers and one thumb), slightly apart so every finger is visible. Not mittens, not fists, not cartoon four-finger hands. Nothing in the hands.\nClothing: a plain mid-gray tank top and plain charcoal shorts, no pattern, barefoot.\nLine art: colored outlines, warm brown around the skin, navy black around the clothing, medium clean line weight.\nRendering: semi-painterly skin, two-tone cel shading on the clothing, no texture, no noise, no text, no watermark.\nNo hair anywhere: no fringe, no hairline, no stubble, no hair shadow.\nOutput the exact same image size as the input, 1024 by 1536 pixels, with the face in exactly the same place and at exactly the same size as in the input.",
+    "bodyExpression": "Keep this exact image: the same character, the same bald head, the same pose and hands, the same size and position in the frame, the same image size, the same skin tone, the same tank top and shorts, the same transparent background. Change only the eyes and mouth to this expression: {{look.expression}}. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the figure's exact outline, width and height.",
+    "hair": "Keep this exact image: the same character, the same face and expression, the same pose and hands, the same size and position in the frame, the same image size, the same skin tone, the same tank top and shorts, the same transparent background. Add only this hairstyle on the bald head: {{look.description}}. Hair colour: {{look.colour}}, semi-painterly shading with one soft highlight band, outlines a darker shade of the hair colour. The hair covers the whole top and back of the scalp and never covers the eyes. Hair longer than the neck falls behind the shoulders and the back, never over the tank top, the arms or the hands. No hat, no hair accessories except those described. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the body's exact outline, width and height."
   },
   "assets": [
     {
@@ -78,7 +81,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/item_outfit_casual01",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/item_outfit_casual01 replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "item_head_dealer_visor01",
@@ -96,9 +101,7 @@
         "as": "item:head:dealer_visor01",
         "base": null,
         "variant": null,
-        "flags": [
-          "--hides-hair-front"
-        ]
+        "flags": []
       },
       "status": "ok",
       "attempts": [
@@ -136,7 +139,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": true,
+      "note": "Plan 12's picture, drawn on F01's picture and cut on the retired flat base f01 with her hair under it (base null, no --hair); the committed layer is still that cut. Kept as history: ingest and verify refuse it, since cut today it would be diffed against the bald body f — a re-cut is a new v4 asset drawn over a hairstyle (--hair)."
     },
     {
       "id": "item_head_beret_red01",
@@ -154,9 +159,7 @@
         "as": "item:head:beret_red01",
         "base": null,
         "variant": null,
-        "flags": [
-          "--hides-hair-front"
-        ]
+        "flags": []
       },
       "status": "ok",
       "attempts": [
@@ -194,7 +197,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": true,
+      "note": "Plan 12's picture, drawn on F01's picture and cut on the retired flat base f01 with her hair under it (base null, no --hair); the committed layer is still that cut. Kept as history: ingest and verify refuse it, since cut today it would be diffed against the bald body f — a re-cut is a new v4 asset drawn over a hairstyle (--hair)."
     },
     {
       "id": "item_head_crown_gold01",
@@ -212,9 +217,7 @@
         "as": "item:head:crown_gold01",
         "base": null,
         "variant": null,
-        "flags": [
-          "--hides-hair-front"
-        ]
+        "flags": []
       },
       "status": "ok",
       "attempts": [
@@ -252,7 +255,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": true,
+      "note": "Plan 12's picture, drawn on F01's picture and cut on the retired flat base f01 with her hair under it (base null, no --hair); the committed layer is still that cut. Kept as history: ingest and verify refuse it, since cut today it would be diffed against the bald body f — a re-cut is a new v4 asset drawn over a hairstyle (--hair)."
     },
     {
       "id": "item_head_conical_hat01",
@@ -270,9 +275,7 @@
         "as": "item:head:conical_hat01",
         "base": null,
         "variant": null,
-        "flags": [
-          "--hides-hair-front"
-        ]
+        "flags": []
       },
       "status": "ok",
       "attempts": [
@@ -310,7 +313,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": true,
+      "note": "Plan 12's picture, drawn on F01's picture and cut on the retired flat base f01 with her hair under it (base null, no --hair); the committed layer is still that cut. Kept as history: ingest and verify refuse it, since cut today it would be diffed against the bald body f — a re-cut is a new v4 asset drawn over a hairstyle (--hair)."
     },
     {
       "id": "item_head_beanie01",
@@ -328,9 +333,7 @@
         "as": "item:head:beanie01",
         "base": null,
         "variant": null,
-        "flags": [
-          "--hides-hair-front"
-        ]
+        "flags": []
       },
       "status": "ok",
       "attempts": [
@@ -368,7 +371,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": true,
+      "note": "Plan 12's picture, drawn on F01's picture and cut on the retired flat base f01 with her hair under it (base null, no --hair); the committed layer is still that cut. Kept as history: ingest and verify refuse it, since cut today it would be diffed against the bald body f — a re-cut is a new v4 asset drawn over a hairstyle (--hair)."
     },
     {
       "id": "item_head_party_cone01",
@@ -386,9 +391,7 @@
         "as": "item:head:party_cone01",
         "base": null,
         "variant": null,
-        "flags": [
-          "--hides-hair-front"
-        ]
+        "flags": []
       },
       "status": "ok",
       "attempts": [
@@ -430,7 +433,9 @@
           ]
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": true,
+      "note": "Plan 12's picture, drawn on F01's picture and cut on the retired flat base f01 with her hair under it (base null, no --hair); the committed layer is still that cut. Kept as history: ingest and verify refuse it, since cut today it would be diffed against the bald body f — a re-cut is a new v4 asset drawn over a hairstyle (--hair)."
     },
     {
       "id": "item_head_hood_black01",
@@ -496,7 +501,9 @@
           "judgedAt": "2026-09-23T18:51:12.885Z",
           "note": "a hood cannot hide hair that is baked into the body layer: the cut keeps F01 hair round the hood and M01 wears it — item withdrawn from stage 1"
         }
-      ]
+      ],
+      "superseded": true,
+      "note": "Withdrawn in Plan 12 (the hood could not hide hair drawn into the flat base) and blocked; never ingested. Kept as history: ingest and verify refuse it."
     },
     {
       "id": "item_face_sunglasses01",
@@ -554,7 +561,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": true,
+      "note": "Plan 12's picture, drawn on F01's picture and cut on the retired flat base f01 with her hair under it (base null, no --hair); the committed layer is still that cut. Kept as history: ingest and verify refuse it, since cut today it would be diffed against the bald body f — a re-cut is a new v4 asset drawn over a hairstyle (--hair)."
     },
     {
       "id": "item_face_masquerade01",
@@ -612,7 +621,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": true,
+      "note": "Plan 12's picture, drawn on F01's picture and cut on the retired flat base f01 with her hair under it (base null, no --hair); the committed layer is still that cut. Kept as history: ingest and verify refuse it, since cut today it would be diffed against the bald body f — a re-cut is a new v4 asset drawn over a hairstyle (--hair)."
     },
     {
       "id": "item_face_eyepatch01",
@@ -670,7 +681,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": true,
+      "note": "Plan 12's picture, drawn on F01's picture and cut on the retired flat base f01 with her hair under it (base null, no --hair); the committed layer is still that cut. Kept as history: ingest and verify refuse it, since cut today it would be diffed against the bald body f — a re-cut is a new v4 asset drawn over a hairstyle (--hair)."
     },
     {
       "id": "item_aura_water01",
@@ -2852,7 +2865,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_0",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_0 replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_1",
@@ -2915,7 +2930,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_1",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_1 replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_2",
@@ -2978,7 +2995,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_2",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_2 replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_3",
@@ -3041,7 +3060,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_3",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_3 replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_4",
@@ -3104,7 +3125,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_4",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_4 replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_5",
@@ -3167,7 +3190,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_5",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_5 replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_6",
@@ -3230,7 +3255,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_6",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_6 replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_7",
@@ -3293,7 +3320,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_7",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_7 replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_0:happy",
@@ -3350,7 +3379,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_0:happy",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_0:happy replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_1:happy",
@@ -3407,7 +3438,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_1:happy",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_1:happy replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_2:happy",
@@ -3464,7 +3497,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_2:happy",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_2:happy replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_3:happy",
@@ -3521,7 +3556,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_3:happy",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_3:happy replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_4:happy",
@@ -3578,7 +3615,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_4:happy",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_4:happy replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_5:happy",
@@ -3635,7 +3674,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_5:happy",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_5:happy replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_6:happy",
@@ -3692,7 +3733,9 @@
           "by": "verify"
         }
       ],
-      "ingested": true
+      "ingested": true,
+      "superseded": "v4/bot_6:happy",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_6:happy replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
     },
     {
       "id": "bot_7:happy",
@@ -3747,6 +3790,3246 @@
           },
           "reason": null,
           "by": "verify"
+        }
+      ],
+      "ingested": true,
+      "superseded": "v4/bot_7:happy",
+      "note": "Plan 12's picture, drawn from F01's picture and cut on the retired flat base f01; v4/bot_7:happy replaced it on body f (Plan 19). Kept as history: ingest and verify refuse it."
+    },
+    {
+      "id": "body_f",
+      "kind": "body",
+      "slot": null,
+      "wear": "f",
+      "catalog": "f",
+      "look": {
+        "code": "F",
+        "figure": "girl",
+        "head": "completely bald, smooth and clean, no hair at all, no hairline, no stubble, no hair shadow",
+        "eyes": "very large eyes, each nearly half the face width, blue iris gradient from deep navy at the top to bright aqua at the bottom, three white highlights, thick upper lashes flicking outward",
+        "mouth": "a small, slightly open smiling mouth",
+        "head_fallback": "very short buzz-cut hair lying flat against the scalp, one even dark colour, no fringe and no loose strands"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "body_f.png",
+      "ingest": {
+        "as": "body:f",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "approved",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T07:09:14.237Z",
+          "chat": "https://chatgpt.com/c/6ac1fae9-17ec-83ec-bd8d-8168c8bf7e92",
+          "file": "body_f.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 0.729,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 5,
+              "centre": 0
+            },
+            "heads": 2.38,
+            "checks": {
+              "body_f_L30": [
+                "C12"
+              ],
+              "body_f_face_neutral_L50": []
+            }
+          },
+          "reason": "check:C12",
+          "by": "verify",
+          "notes": [
+            "body_f_L30 C12: chin 10.0 from F01's, want each within 4.16 — eyes (191.1, 191.9) 58.0 apart, chin 233"
+          ]
+        },
+        {
+          "n": 2,
+          "at": "2026-10-04T07:15:02.919Z",
+          "chat": "https://chatgpt.com/c/6ac1fc85-b51c-83ec-b0a5-8b5689856cda",
+          "file": "body_f.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 0.743,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 16,
+              "centre": 0
+            }
+          },
+          "reason": "drift",
+          "by": "verify"
+        },
+        {
+          "n": 3,
+          "at": "2026-10-04T07:28:24.668Z",
+          "chat": "https://chatgpt.com/c/6ac1fae9-17ec-83ec-bd8d-8168c8bf7e92",
+          "file": "body_f.png",
+          "verdict": "ok",
+          "notes": [
+            "re-judges attempt 1 picture (chat 6ac1fae9…) after the C12 chin ruling (CHIN_TOLERANCE 12, edfa9cf); attempt 2 failed drift"
+          ],
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 0.729,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 5,
+              "centre": 0
+            },
+            "heads": 2.38,
+            "checks": {
+              "body_f_L30": [],
+              "body_f_face_neutral_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "body_m",
+      "kind": "body",
+      "slot": null,
+      "wear": "m",
+      "catalog": "m",
+      "look": {
+        "code": "M",
+        "figure": "boy",
+        "head": "completely bald, smooth and clean, no hair at all, no hairline, no stubble, no hair shadow",
+        "eyes": "very large eyes, each nearly half the face width, warm amber iris gradient from deep brown at the top to bright amber at the bottom, three white highlights, short simple upper lashes",
+        "mouth": "a small calm smile",
+        "head_fallback": "very short buzz-cut hair lying flat against the scalp, one even dark colour, no fringe and no loose strands"
+      },
+      "reference": "f01_candidate_1.png",
+      "prompt": null,
+      "file": "body_m.png",
+      "ingest": {
+        "as": "body:m",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "approved",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T07:12:05.498Z",
+          "chat": "https://chatgpt.com/c/6ac1fbc0-476c-83ec-889f-90cab1bfef06",
+          "file": "body_m.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 0.706,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 12,
+              "centre": 0
+            },
+            "heads": 2.436,
+            "checks": {
+              "body_m_L30": [],
+              "body_m_face_neutral_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "body_m_L30 C12: chin 9.0 from F01's, want each within 4.16 — eyes (191.2, 192.7) 57.5 apart, chin 234"
+          ]
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "item_hair_f_bob01",
+      "kind": "hair",
+      "slot": null,
+      "wear": "f",
+      "catalog": "hair_f_bob01",
+      "look": {
+        "description": "a jaw-length bob: thick bangs split into soft rounded clumps just above the eyes, long side locks down to the chin, one curved ahoge strand on top, one soft highlight band",
+        "colour": "dark violet (#5e3e6f)"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "item_hair_f_bob01.png",
+      "ingest": {
+        "as": "hair:f_bob01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "approved",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T07:33:56.391Z",
+          "chat": "https://chatgpt.com/c/6ac200cd-b480-83ec-85d6-0f059fa7836d",
+          "file": "item_hair_f_bob01.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 1,
+              "centre": 0
+            },
+            "scope": 0.002,
+            "checks": {
+              "item_hair_f_bob01_L20": [],
+              "item_hair_f_bob01_L60": [
+                "C13"
+              ]
+            }
+          },
+          "reason": "check:C13",
+          "by": "verify",
+          "notes": [
+            "item_hair_f_bob01_L60 C13: the front lies over the eyes on 1.9 % of the eye mask, want ≤ 1 %"
+          ]
+        },
+        {
+          "n": 2,
+          "at": "2026-10-04T07:53:19.518Z",
+          "chat": "https://chatgpt.com/c/6ac20574-a368-83ec-813e-aed598dec8f9",
+          "file": "item_hair_f_bob01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 0,
+              "centre": 0
+            },
+            "scope": 0.002,
+            "checks": {
+              "item_hair_f_bob01_L20": [],
+              "item_hair_f_bob01_L60": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "item_hair_m_tousled01",
+      "kind": "hair",
+      "slot": null,
+      "wear": "m",
+      "catalog": "hair_m_tousled01",
+      "look": {
+        "description": "short tousled hair with messy layered tips and a side-swept fringe above the eyes, one small ahoge strand",
+        "colour": "warm dark brown (#684136)"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "item_hair_m_tousled01.png",
+      "ingest": {
+        "as": "hair:m_tousled01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "approved",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T07:36:07.188Z",
+          "chat": "https://chatgpt.com/c/6ac20172-e094-83ec-bc70-f74ac62f8f50",
+          "file": "item_hair_m_tousled01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.004,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 1,
+              "centre": 1
+            },
+            "scope": 0.001,
+            "checks": {
+              "item_hair_m_tousled01_L20": [],
+              "item_hair_m_tousled01_L60": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/item_outfit_casual01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_casual01",
+      "look": {
+        "description": "a plain white short-sleeved t-shirt with a round crew neck that fully covers both shoulders and the chest, blue jeans down to the ankles, white sneakers. Unisex cut",
+        "color": "white/blue",
+        "style": "casual"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_casual01.png",
+      "ingest": {
+        "as": "item:outfit:casual01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "approved",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T07:39:00.202Z",
+          "chat": "https://chatgpt.com/c/6ac20212-9518-83ec-8220-21aa8c4a1111",
+          "file": "v4_item_outfit_casual01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.995,
+            "widthRatio": 0.999,
+            "drift": {
+              "left": -1,
+              "top": 0,
+              "right": 1,
+              "bottom": 6
+            },
+            "heads": 2.398,
+            "hairDelta": 1.607,
+            "checks": {
+              "item_outfit_casual01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "item_hair_f_hime01",
+      "kind": "hair",
+      "slot": null,
+      "wear": "f",
+      "catalog": "hair_f_hime01",
+      "look": {
+        "description": "long straight hair falling behind the back to the waist, blunt straight bangs, two straight side locks ending at the chin",
+        "colour": "black with a cool violet tint (#302c39)"
+      },
+      "reference": "@body_f",
+      "prompt": "Keep this exact image: the same character, the same face and expression, the same pose and hands, the same size and position in the frame, the same image size, the same skin tone, the same tank top and shorts, the same transparent background. Add only this hairstyle on the bald head: long straight hair falling behind the back to the waist, blunt straight bangs, two straight side locks ending at the chin. Hair colour: black with a cool violet tint (#302c39), semi-painterly shading with one soft highlight band, outlines a darker shade of the hair colour. The hair covers the whole top and back of the scalp and never covers the eyes. The long hair hangs straight down behind the shoulders and behind both arms: the shoulders, the tank top straps and both arms stay fully visible in front of the hair; only the two side locks come forward, and they end at the chin. No hat, no hair accessories except those described. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the body's exact outline, width and height.\nChange nothing outside the requested area",
+      "file": "item_hair_f_hime01.png",
+      "ingest": {
+        "as": "hair:f_hime01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:32:44.049Z",
+          "chat": "https://chatgpt.com/c/6ac2389a-f160-83ec-9cda-85c786390f5a",
+          "file": "item_hair_f_hime01.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 1,
+              "centre": 0
+            },
+            "scope": 0.034
+          },
+          "reason": "scope",
+          "by": "verify"
+        },
+        {
+          "n": 2,
+          "at": "2026-10-04T11:47:42.955Z",
+          "chat": "https://chatgpt.com/c/6ac23c35-3f34-83ec-9536-ab84cb2fe1bd",
+          "file": "item_hair_f_hime01.png",
+          "verdict": "ng",
+          "measure": {
+            "registered": {
+              "scale": 1,
+              "dx": 0,
+              "dy": 0,
+              "iou": 0.993
+            },
+            "scope": 0.029
+          },
+          "reason": "scope",
+          "by": "verify",
+          "notes": [
+            "picture kept as item_hair_f_hime01.prev2.png"
+          ]
+        },
+        {
+          "n": 3,
+          "at": "2026-10-04T11:47:42.955Z",
+          "chat": "https://chatgpt.com/c/6ac248f9-7c14-83ec-9366-e23764f4607c",
+          "file": "item_hair_f_hime01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 1,
+              "centre": 0
+            },
+            "registered": {
+              "scale": 1,
+              "dx": 0,
+              "dy": 0,
+              "iou": 0.991
+            },
+            "scope": 0.041
+          },
+          "reason": null,
+          "by": "controller",
+          "overriddenFrom": "scope",
+          "notes": [
+            "controller eye-check (Plan 19 C2): scope 0.041 is the body's antialiased silhouette edge now composited over the long hair drawn behind the arms and torso, not a redraw of the body; the picture keeps the shoulders and arms in front of the hair as asked",
+            "record restored by the controller: a registry ingest running at the same time rewrote registry.json and dropped this attempt; the picture (item_hair_f_hime01.png) and the verdict are attempt 3's"
+          ],
+          "prompt": "Keep this exact image: the same character, the same face and expression, the same pose and hands, the same size and position in the frame, the same image size, the same skin tone, the same tank top and shorts, the same transparent background. Add only this hairstyle on the bald head: long straight hair falling behind the back to the waist, blunt straight bangs, two straight side locks ending at the chin. Hair colour: black with a cool violet tint (#302c39), semi-painterly shading with one soft highlight band, outlines a darker shade of the hair colour. The hair covers the whole top and back of the scalp and never covers the eyes. The long hair hangs straight down behind the shoulders and behind both arms: the shoulders, the tank top straps and both arms stay fully visible in front of the hair; only the two side locks come forward, and they end at the chin. No hat, no hair accessories except those described. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the body's exact outline, width and height.\nChange nothing outside the requested area"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "item_hair_f_wavy01",
+      "kind": "hair",
+      "slot": null,
+      "wear": "f",
+      "catalog": "hair_f_wavy01",
+      "look": {
+        "description": "a short wavy bob ending above the shoulders, side-swept bangs, one small braid hanging behind the left shoulder",
+        "colour": "platinum blonde (#e0c9b3)"
+      },
+      "reference": "@body_f",
+      "prompt": "Keep this exact image: the same character, the same face and expression, the same pose and hands, the same size and position in the frame, the same image size, the same skin tone, the same tank top and shorts, the same transparent background. Add only this hairstyle on the bald head: a short wavy bob ending above the shoulders, side-swept bangs, one small braid hanging behind the left shoulder. Hair colour: cool silver grey (#a0a4ac), clearly different from the skin, semi-painterly shading with one soft highlight band, outlines a darker shade of the hair colour. The hair covers the whole top and back of the scalp and never covers the eyes. Hair longer than the neck falls behind the shoulders and the back, never over the tank top, the arms or the hands. No hat, no hair accessories except those described. Do not move, zoom, crop, recolour or redraw anything else.\nOutput the exact same image size as the input, 1024 by 1536 pixels, and keep the body's exact outline, width and height.",
+      "file": "item_hair_f_wavy01.png",
+      "ingest": {
+        "as": "hair:f_wavy01",
+        "base": null,
+        "variant": null,
+        "flags": [
+          "--recolour-to",
+          "#e0c9b3"
+        ]
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:39:53.517Z",
+          "chat": "https://chatgpt.com/c/6ac23981-a3d4-83ec-939b-16d6f1b1f966",
+          "file": "item_hair_f_wavy01.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 0.958,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": -37,
+              "centre": -2
+            }
+          },
+          "reason": "drift",
+          "by": "verify"
+        },
+        {
+          "n": 2,
+          "at": "2026-10-04T11:49:06.511Z",
+          "chat": "https://chatgpt.com/c/6ac23c42-4e84-83ec-b664-1eb2bb7d18c8",
+          "file": "item_hair_f_wavy01.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 1,
+              "centre": 0
+            },
+            "registered": {
+              "scale": 1,
+              "dx": 0,
+              "dy": 0,
+              "iou": 0.994
+            },
+            "scope": 0.002,
+            "checks": {
+              "item_hair_f_wavy01_L20": [],
+              "item_hair_f_wavy01_L60": []
+            }
+          },
+          "reason": "style",
+          "by": "user",
+          "judgedAt": "2026-10-04T12:59:23.539Z"
+        },
+        {
+          "n": 3,
+          "at": "2026-10-04T13:03:09.457Z",
+          "chat": "https://chatgpt.com/c/6ac24de0-7034-83ec-bc11-f536d5799a4b",
+          "file": "item_hair_f_wavy01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 0.94,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": -56,
+              "centre": 0
+            },
+            "registered": {
+              "scale": 1.065,
+              "dx": 0,
+              "dy": 59,
+              "iou": 0.983
+            },
+            "scope": 0.004,
+            "checks": {
+              "item_hair_f_wavy01_L20": [],
+              "item_hair_f_wavy01_L60": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 1.065 about the feet, then 0, 59 px (IoU 0.983) — drift and scope are judged there, not on the edges as drawn",
+            "pipeline: fed the picture registered onto the body"
+          ]
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "item_hair_f_ponytail01",
+      "kind": "hair",
+      "slot": null,
+      "wear": "f",
+      "catalog": "hair_f_ponytail01",
+      "look": {
+        "description": "a high ponytail tied with a small dark band, the tail falling behind the head to the shoulder blades, soft side-swept bangs above the eyes, two short face-framing strands",
+        "colour": "chestnut brown (#7b3f22)"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "item_hair_f_ponytail01.png",
+      "ingest": {
+        "as": "hair:f_ponytail01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:44:34.104Z",
+          "chat": "https://chatgpt.com/c/6ac23b55-17dc-83ec-b2d9-9393a47da860",
+          "file": "item_hair_f_ponytail01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 0.958,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": -62,
+              "centre": 0
+            },
+            "registered": {
+              "scale": 1.05,
+              "dx": 0,
+              "dy": 64,
+              "iou": 0.985
+            },
+            "scope": 0.004,
+            "checks": {
+              "item_hair_f_ponytail01_L20": [],
+              "item_hair_f_ponytail01_L60": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 1.05 about the feet, then 0, 64 px (IoU 0.985) — drift and scope are judged there, not on the edges as drawn",
+            "pipeline: fed the picture registered onto the body"
+          ]
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "item_hair_m_neat01",
+      "kind": "hair",
+      "slot": null,
+      "wear": "m",
+      "catalog": "hair_m_neat01",
+      "look": {
+        "description": "short neat hair, the fringe swept to the left showing part of the forehead, one soft highlight band",
+        "colour": "black (#2c282d)"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "item_hair_m_neat01.png",
+      "ingest": {
+        "as": "hair:m_neat01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:34:03.286Z",
+          "chat": "https://chatgpt.com/c/6ac238e8-5074-83ec-b51a-a985d96b3d65",
+          "file": "item_hair_m_neat01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 0.961,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": -29,
+              "centre": -5
+            },
+            "registered": {
+              "scale": 1.05,
+              "dx": 4,
+              "dy": 29,
+              "iou": 0.977
+            },
+            "scope": 0.004,
+            "checks": {
+              "item_hair_m_neat01_L20": [],
+              "item_hair_m_neat01_L60": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 1.05 about the feet, then 4, 29 px (IoU 0.977) — drift and scope are judged there, not on the edges as drawn",
+            "pipeline: fed the picture registered onto the body"
+          ]
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "item_hair_m_curly01",
+      "kind": "hair",
+      "slot": null,
+      "wear": "m",
+      "catalog": "hair_m_curly01",
+      "look": {
+        "description": "short curly hair with tight round curls and tidy sides",
+        "colour": "black-brown (#2a1f1e)"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "item_hair_m_curly01.png",
+      "ingest": {
+        "as": "hair:m_curly01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:40:20.790Z",
+          "chat": "https://chatgpt.com/c/6ac239de-3070-83ec-9217-228fcf862ab2",
+          "file": "item_hair_m_curly01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.007,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 1,
+              "centre": 0
+            },
+            "scope": 0.004,
+            "checks": {
+              "item_hair_m_curly01_L20": [],
+              "item_hair_m_curly01_L60": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "item_hair_m_curly01_L20 C3: @1x has 4 pixels outside the shape, up to alpha 31"
+          ]
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "item_hair_m_spiky01",
+      "kind": "hair",
+      "slot": null,
+      "wear": "m",
+      "catalog": "hair_m_spiky01",
+      "look": {
+        "description": "short spiked-up hair with pointed tips standing upward, short tidy sides",
+        "colour": "dark brown (#4a2c1d)"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "item_hair_m_spiky01.png",
+      "ingest": {
+        "as": "hair:m_spiky01",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:43:53.173Z",
+          "chat": "https://chatgpt.com/c/6ac23b54-f15c-83ec-a1bf-00db7b4094f9",
+          "file": "item_hair_m_spiky01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 0.965,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": -56,
+              "centre": 0
+            },
+            "registered": {
+              "scale": 1.045,
+              "dx": 0,
+              "dy": 58,
+              "iou": 0.99
+            },
+            "scope": 0.004,
+            "checks": {
+              "item_hair_m_spiky01_L20": [],
+              "item_hair_m_spiky01_L60": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 1.045 about the feet, then 0, 58 px (IoU 0.99) — drift and scope are judged there, not on the edges as drawn",
+            "pipeline: fed the picture registered onto the body"
+          ]
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/item_outfit_dealer01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_dealer01",
+      "look": {
+        "description": "a white long-sleeved dress shirt, a dark navy vest with two gold buttons, a red bow tie, a short dark navy pleated skirt, white knee socks and black flat shoes with a strap"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_dealer01.png",
+      "ingest": {
+        "as": "item:outfit:dealer01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:51:25.075Z",
+          "chat": "https://chatgpt.com/c/6ac23d07-cda8-83ec-9ce3-1a8c2b6f1703",
+          "file": "v4_item_outfit_dealer01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.986,
+            "widthRatio": 0.989,
+            "drift": {
+              "left": -1,
+              "top": 0,
+              "right": 1,
+              "bottom": 18
+            },
+            "heads": 2.429,
+            "hairDelta": 4.138,
+            "checks": {
+              "item_outfit_dealer01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/item_outfit_tuxedo01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_tuxedo01",
+      "look": {
+        "description": "a black tuxedo jacket with shiny black satin lapels and one button, a white shirt, a black bow tie, black trousers and black shoes"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_tuxedo01.png",
+      "ingest": {
+        "as": "item:outfit:tuxedo01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:55:16.385Z",
+          "chat": "https://chatgpt.com/c/6ac23de0-704c-83ec-a0b3-0299b542494f",
+          "file": "v4_item_outfit_tuxedo01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.997,
+            "widthRatio": 1.001,
+            "drift": {
+              "left": -1,
+              "top": 0,
+              "right": 1,
+              "bottom": 4
+            },
+            "heads": 2.399,
+            "hairDelta": 1.623,
+            "checks": {
+              "item_outfit_tuxedo01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/item_outfit_royal_robe01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_royal_robe01",
+      "look": {
+        "description": "a royal purple ankle-length robe that wraps across the chest, with a small stand-up collar and gold trim at the collar, cuffs and hem, a wide gold sash tied at the waist with one long end hanging down the front, and soft purple slippers with gold trim"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_royal_robe01.png",
+      "ingest": {
+        "as": "item:outfit:royal_robe01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:56:40.989Z",
+          "chat": "https://chatgpt.com/c/6ac23e35-76ac-83ec-9941-55dcda72d3e9",
+          "file": "v4_item_outfit_royal_robe01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1.015,
+            "widthRatio": 0.993,
+            "drift": {
+              "left": 5,
+              "top": -2,
+              "right": -6,
+              "bottom": -20
+            },
+            "registered": {
+              "scale": 0.995,
+              "dx": 2,
+              "dy": 20,
+              "iou": 0.67
+            },
+            "heads": 2.459,
+            "hairDelta": 3.931,
+            "checks": {
+              "item_outfit_royal_robe01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 0.995 about the feet, then 2, 20 px (IoU 0.67) — drift is judged there, not on the edges as drawn",
+            "pipeline: fed the picture registered onto the body"
+          ]
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/item_outfit_tet_red01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_tet_red01",
+      "look": {
+        "description": "a red and gold traditional Vietnamese áo dài for Tết: a red tunic with a high stand-up collar, long sleeves and thin gold trim at the collar, cuffs, side slits and hem, its front and back panels falling to the knees, over loose white trousers, and red flat shoes"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_tet_red01.png",
+      "ingest": {
+        "as": "item:outfit:tet_red01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:59:08.814Z",
+          "chat": "https://chatgpt.com/c/6ac23eca-d188-83ec-bd52-6e8d923dad70",
+          "file": "v4_item_outfit_tet_red01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1.029,
+            "widthRatio": 1.005,
+            "drift": {
+              "left": 5,
+              "top": -16,
+              "right": -7,
+              "bottom": -51
+            },
+            "registered": {
+              "scale": 1.015,
+              "dx": 0,
+              "dy": 49,
+              "iou": 0.726
+            },
+            "heads": 2.422,
+            "hairDelta": 1.238,
+            "checks": {
+              "item_outfit_tet_red01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 1.015 about the feet, then 0, 49 px (IoU 0.726) — drift is judged there, not on the edges as drawn",
+            "pipeline: fed the picture registered onto the body"
+          ]
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/item_outfit_champion01",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": null,
+      "catalog": "outfit_champion01",
+      "look": {
+        "description": "a white and gold zip-up track jacket with a high collar, gold sleeves with one white stripe down each, a large gold star shape on the chest, gold-striped cuffs and waistband, white track pants with a gold stripe down each side, and gold and white sneakers"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_item_outfit_champion01.png",
+      "ingest": {
+        "as": "item:outfit:champion01",
+        "base": "f",
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:00:32.736Z",
+          "chat": "https://chatgpt.com/c/6ac23f1d-b280-83ec-9da2-bcb2fda6c4a9",
+          "file": "v4_item_outfit_champion01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1.01,
+            "widthRatio": 1.018,
+            "drift": {
+              "left": -2,
+              "top": -6,
+              "right": 2,
+              "bottom": -18
+            },
+            "registered": {
+              "scale": 0.99,
+              "dx": 0,
+              "dy": 17,
+              "iou": 0.744
+            },
+            "heads": 2.462,
+            "hairDelta": 5.735,
+            "checks": {
+              "item_outfit_champion01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 0.99 about the feet, then 0, 17 px (IoU 0.744) — drift is judged there, not on the edges as drawn",
+            "pipeline: fed the picture registered onto the body"
+          ]
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/item_outfit_dealer01_m",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": "m",
+      "catalog": "outfit_dealer01",
+      "look": {
+        "description": "a white long-sleeved dress shirt, a dark navy vest with two gold buttons, a red bow tie, long straight dark navy trousers and black shoes"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "v4_item_outfit_dealer01_m.png",
+      "ingest": {
+        "as": "item:outfit:dealer01",
+        "base": "m",
+        "variant": "m",
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:52:47.397Z",
+          "chat": "https://chatgpt.com/c/6ac23d55-ad3c-83ec-b888-c0c68b0e59a7",
+          "file": "v4_item_outfit_dealer01_m.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.998,
+            "widthRatio": 1,
+            "drift": {
+              "left": 0,
+              "top": -1,
+              "right": 1,
+              "bottom": 2
+            },
+            "heads": 2.444,
+            "hairDelta": 2.774,
+            "checks": {
+              "item_outfit_dealer01_m_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/item_outfit_tet_red01_m",
+      "kind": "item",
+      "slot": "outfit",
+      "wear": "m",
+      "catalog": "outfit_tet_red01",
+      "look": {
+        "description": "a red and gold traditional Vietnamese men's áo dài for Tết: a straight red tunic with a high stand-up collar, a gold-trimmed opening curving from the collar down the wearer's right side, long sleeves with gold cuffs and short side slits, ending just above the knees, over loose white trousers, and black flat shoes"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "v4_item_outfit_tet_red01_m.png",
+      "ingest": {
+        "as": "item:outfit:tet_red01",
+        "base": "m",
+        "variant": "m",
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:02:46.262Z",
+          "chat": "https://chatgpt.com/c/6ac23fb3-9248-83ec-8fa5-f0fbf9c639dc",
+          "file": "v4_item_outfit_tet_red01_m.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.998,
+            "widthRatio": 0.992,
+            "drift": {
+              "left": -3,
+              "top": -1,
+              "right": -6,
+              "bottom": 1
+            },
+            "registered": {
+              "scale": 1,
+              "dx": 6,
+              "dy": -2,
+              "iou": 0.742
+            },
+            "heads": 2.467,
+            "hairDelta": 12.401
+          },
+          "reason": "hair_colour",
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 1 about the feet, then 6, -2 px (IoU 0.742) — drift is judged there, not on the edges as drawn"
+          ]
+        },
+        {
+          "n": 2,
+          "at": "2026-10-04T12:42:16.745Z",
+          "chat": "https://chatgpt.com/c/6ac248fb-bf3c-83ec-b427-eec16af5dc4e",
+          "file": "v4_item_outfit_tet_red01_m.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.996,
+            "widthRatio": 0.998,
+            "drift": {
+              "left": 0,
+              "top": -1,
+              "right": 1,
+              "bottom": 4
+            },
+            "registered": {
+              "scale": 0.995,
+              "dx": 0,
+              "dy": -4,
+              "iou": 0.773
+            },
+            "heads": 2.453,
+            "hairDelta": 6.628,
+            "checks": {
+              "item_outfit_tet_red01_m_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the body as the ingest will be: scale 0.995 about the feet, then 0, -4 px (IoU 0.773) — drift is judged there, not on the edges as drawn",
+            "pipeline: fed the picture registered onto the body"
+          ]
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "body_f:happy",
+      "kind": "bodyExpression",
+      "slot": null,
+      "wear": "f",
+      "catalog": "f",
+      "look": {
+        "expression": "a happy expression: eyes curved into happy arcs, wide open smile"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "body_f_happy.png",
+      "ingest": {
+        "as": "face:f:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:05:32.691Z",
+          "chat": "https://chatgpt.com/c/6ac2328b-6e48-83ec-8f97-464632287d09",
+          "file": "body_f_happy.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.999,
+            "widthRatio": 1.001,
+            "drift": {
+              "left": -1,
+              "top": -1,
+              "right": 0,
+              "bottom": 0
+            },
+            "heads": 2.384,
+            "hairDelta": 0.48,
+            "scope": 0.002,
+            "checks": {
+              "body_f_face_happy_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "body_f:sad",
+      "kind": "bodyExpression",
+      "slot": null,
+      "wear": "f",
+      "catalog": "f",
+      "look": {
+        "expression": "a sad expression: drooping eyes with a small tear highlight, downturned mouth"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "body_f_sad.png",
+      "ingest": {
+        "as": "face:f:sad",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:09:39.747Z",
+          "chat": "https://chatgpt.com/c/6ac23330-f1a0-83ec-8910-547d35252bff",
+          "file": "body_f_sad.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.004,
+            "drift": {
+              "left": -1,
+              "top": 0,
+              "right": 1,
+              "bottom": 0
+            },
+            "heads": 2.382,
+            "hairDelta": 2.448,
+            "scope": 0.002,
+            "checks": {
+              "body_f_face_sad_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "body_f:surprised",
+      "kind": "bodyExpression",
+      "slot": null,
+      "wear": "f",
+      "catalog": "f",
+      "look": {
+        "expression": "a surprised expression: eyes fully round and wider, small round open mouth. No tears"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "body_f_surprised.png",
+      "ingest": {
+        "as": "face:f:surprised",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:13:14.621Z",
+          "chat": "https://chatgpt.com/c/6ac2342d-1f14-83ec-9b9d-79a75f5df2aa",
+          "file": "body_f_surprised.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.998,
+            "widthRatio": 1.002,
+            "drift": {
+              "left": -1,
+              "top": -1,
+              "right": 1,
+              "bottom": 1
+            },
+            "heads": 2.381,
+            "hairDelta": 1.583,
+            "scope": 0.001,
+            "checks": {
+              "body_f_face_surprised_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "body_f:closed",
+      "kind": "bodyExpression",
+      "slot": null,
+      "wear": "f",
+      "catalog": "f",
+      "look": {
+        "expression": "eyes gently closed, calm small smile"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "body_f_closed.png",
+      "ingest": {
+        "as": "face:f:closed",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:16:26.208Z",
+          "chat": "https://chatgpt.com/c/6ac23502-34f8-83ec-8e70-1013e0f5526d",
+          "file": "body_f_closed.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1.047,
+            "widthRatio": 1.01,
+            "drift": {
+              "left": 5,
+              "top": -1,
+              "right": -13,
+              "bottom": -56
+            }
+          },
+          "reason": "drift",
+          "by": "verify"
+        },
+        {
+          "n": 2,
+          "at": "2026-10-04T11:23:05.656Z",
+          "chat": "https://chatgpt.com/c/6ac2368d-fa58-83ec-9236-d76d4946d7c9",
+          "file": "body_f_closed.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.998,
+            "widthRatio": 1.002,
+            "drift": {
+              "left": -1,
+              "top": -1,
+              "right": 1,
+              "bottom": 1
+            },
+            "heads": 2.384,
+            "hairDelta": 1.283,
+            "scope": 0.002,
+            "checks": {
+              "body_f_face_closed_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "body_f:sleep",
+      "kind": "bodyExpression",
+      "slot": null,
+      "wear": "f",
+      "catalog": "f",
+      "look": {
+        "expression": "sleeping: eyes closed, mouth slightly open, and add one small \"z\" letter floating just beside the head near the temple"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "body_f_sleep.png",
+      "ingest": {
+        "as": "face:f:sleep",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:19:50.057Z",
+          "chat": "https://chatgpt.com/c/6ac235c4-cbe4-83ec-817a-2782532415ca",
+          "file": "body_f_sleep.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1.058,
+            "widthRatio": 1.106,
+            "drift": {
+              "left": 12,
+              "top": -3,
+              "right": 35,
+              "bottom": -71
+            }
+          },
+          "reason": "redrawn",
+          "by": "verify"
+        },
+        {
+          "n": 2,
+          "at": "2026-10-04T11:27:55.407Z",
+          "chat": "https://chatgpt.com/c/6ac23761-3884-83ec-9b79-c625f8374799",
+          "file": "body_f_sleep.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.999,
+            "widthRatio": 1.003,
+            "drift": {
+              "left": -1,
+              "top": 0,
+              "right": 1,
+              "bottom": 1
+            },
+            "heads": 2.377,
+            "hairDelta": 3.164,
+            "scope": 0.002,
+            "checks": {
+              "body_f_face_sleep_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "body_m:happy",
+      "kind": "bodyExpression",
+      "slot": null,
+      "wear": "m",
+      "catalog": "m",
+      "look": {
+        "expression": "a happy expression: eyes curved into happy arcs, wide open smile"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "body_m_happy.png",
+      "ingest": {
+        "as": "face:m:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:07:04.213Z",
+          "chat": "https://chatgpt.com/c/6ac2328b-93e0-83ec-a524-60381ff8ef25",
+          "file": "body_m_happy.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.999,
+            "widthRatio": 1.003,
+            "drift": {
+              "left": -1,
+              "top": 0,
+              "right": 1,
+              "bottom": 1
+            },
+            "heads": 2.445,
+            "hairDelta": 4.754,
+            "scope": 0.001,
+            "checks": {
+              "body_m_face_happy_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "body_m:sad",
+      "kind": "bodyExpression",
+      "slot": null,
+      "wear": "m",
+      "catalog": "m",
+      "look": {
+        "expression": "a sad expression: drooping eyes with a small tear highlight, downturned mouth"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "body_m_sad.png",
+      "ingest": {
+        "as": "face:m:sad",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:10:21.520Z",
+          "chat": "https://chatgpt.com/c/6ac2337a-c1c4-83ec-98ce-d692d104c071",
+          "file": "body_m_sad.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1.035,
+            "widthRatio": 1.016,
+            "drift": {
+              "left": 3,
+              "top": 0,
+              "right": -6,
+              "bottom": -41
+            }
+          },
+          "reason": "drift",
+          "by": "verify"
+        },
+        {
+          "n": 2,
+          "at": "2026-10-04T11:23:46.231Z",
+          "chat": "https://chatgpt.com/c/6ac2369a-4f1c-83ec-8f9c-a30f0401ef55",
+          "file": "body_m_sad.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.998,
+            "widthRatio": 1.002,
+            "drift": {
+              "left": -1,
+              "top": -1,
+              "right": 1,
+              "bottom": 1
+            },
+            "heads": 2.442,
+            "hairDelta": 0.782,
+            "scope": 0.002,
+            "checks": {
+              "body_m_face_sad_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "body_m:surprised",
+      "kind": "bodyExpression",
+      "slot": null,
+      "wear": "m",
+      "catalog": "m",
+      "look": {
+        "expression": "a surprised expression: eyes fully round and wider, small round open mouth. No tears"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "body_m_surprised.png",
+      "ingest": {
+        "as": "face:m:surprised",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:13:54.411Z",
+          "chat": "https://chatgpt.com/c/6ac2344b-116c-83ec-8272-b9890dadf507",
+          "file": "body_m_surprised.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.998,
+            "widthRatio": 1.002,
+            "drift": {
+              "left": -1,
+              "top": -1,
+              "right": 1,
+              "bottom": 1
+            },
+            "heads": 2.442,
+            "hairDelta": 3.226,
+            "scope": 0.002,
+            "checks": {
+              "body_m_face_surprised_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "body_m:closed",
+      "kind": "bodyExpression",
+      "slot": null,
+      "wear": "m",
+      "catalog": "m",
+      "look": {
+        "expression": "eyes gently closed, calm small smile"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "body_m_closed.png",
+      "ingest": {
+        "as": "face:m:closed",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:17:07.347Z",
+          "chat": "https://chatgpt.com/c/6ac2350f-6ef0-83ec-9ca6-d06159c40624",
+          "file": "body_m_closed.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1.002,
+            "widthRatio": 1.004,
+            "drift": {
+              "left": -5,
+              "top": -1,
+              "right": -4,
+              "bottom": -3
+            },
+            "heads": 2.444,
+            "hairDelta": 9.086,
+            "scope": 0.141
+          },
+          "reason": "scope",
+          "by": "verify"
+        },
+        {
+          "n": 2,
+          "at": "2026-10-04T11:26:34.748Z",
+          "chat": "https://chatgpt.com/c/6ac23753-4554-83ec-bd94-067885041588",
+          "file": "body_m_closed.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.999,
+            "widthRatio": 1.003,
+            "drift": {
+              "left": -1,
+              "top": 0,
+              "right": 1,
+              "bottom": 1
+            },
+            "heads": 2.438,
+            "hairDelta": 1.911,
+            "scope": 0.002,
+            "checks": {
+              "body_m_face_closed_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "body_m:sleep",
+      "kind": "bodyExpression",
+      "slot": null,
+      "wear": "m",
+      "catalog": "m",
+      "look": {
+        "expression": "sleeping: eyes closed, mouth slightly open, and add one small \"z\" letter floating just beside the head near the temple"
+      },
+      "reference": "@body_m",
+      "prompt": null,
+      "file": "body_m_sleep.png",
+      "ingest": {
+        "as": "face:m:sleep",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T11:20:29.663Z",
+          "chat": "https://chatgpt.com/c/6ac235e0-88d0-83ec-9623-46040d68321c",
+          "file": "body_m_sleep.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1.044,
+            "widthRatio": 1.099,
+            "drift": {
+              "left": 2,
+              "top": -3,
+              "right": 28,
+              "bottom": -54
+            }
+          },
+          "reason": "redrawn",
+          "by": "verify"
+        },
+        {
+          "n": 2,
+          "at": "2026-10-04T11:30:12.702Z",
+          "chat": "https://chatgpt.com/c/6ac23814-7f50-83ec-aab3-f2f41325136c",
+          "file": "body_m_sleep.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.998,
+            "widthRatio": 1.002,
+            "drift": {
+              "left": -1,
+              "top": -1,
+              "right": 1,
+              "bottom": 1
+            },
+            "heads": 2.445,
+            "hairDelta": 2.018,
+            "scope": 0.002,
+            "checks": {
+              "body_m_face_sleep_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/bot_0",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_0",
+      "look": {
+        "description": "white and sky-blue casing, round LED eyes",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_bot_0.png",
+      "ingest": {
+        "as": "bot:0",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:04:07.079Z",
+          "chat": "https://chatgpt.com/c/6ac24022-aa30-83ec-aef3-40c9d946f620",
+          "file": "v4_bot_0.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.116,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 12,
+              "centre": 0
+            },
+            "checks": {
+              "bot_0_L30": [],
+              "bot_0_face_neutral_L50": [],
+              "bot_0_face_happy_L50": [],
+              "bot_0_face_sad_L50": [],
+              "bot_0_face_surprised_L50": [],
+              "bot_0_face_closed_L50": [],
+              "bot_0_face_sleep_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/bot_1",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_1",
+      "look": {
+        "description": "black and orange casing, visor-shaped LED eyes",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_bot_1.png",
+      "ingest": {
+        "as": "bot:1",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:07:03.927Z",
+          "chat": "https://chatgpt.com/c/6ac2408a-2e54-83ec-98b4-8807c11db8d8",
+          "file": "v4_bot_1.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.169,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": -17,
+              "centre": 0
+            }
+          },
+          "reason": "drift",
+          "by": "verify"
+        },
+        {
+          "n": 2,
+          "at": "2026-10-04T12:20:32.052Z",
+          "chat": "https://chatgpt.com/c/6ac243ba-cb2c-83ec-b5fc-482a4cd421db",
+          "file": "v4_bot_1.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.195,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 6,
+              "centre": 0
+            },
+            "checks": {
+              "bot_1_L30": [],
+              "bot_1_face_neutral_L50": [],
+              "bot_1_face_happy_L50": [],
+              "bot_1_face_sad_L50": [],
+              "bot_1_face_surprised_L50": [],
+              "bot_1_face_closed_L50": [],
+              "bot_1_face_sleep_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/bot_2",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_2",
+      "look": {
+        "description": "mint green casing, small antenna, round LED eyes",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_bot_2.png",
+      "ingest": {
+        "as": "bot:2",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:08:24.569Z",
+          "chat": "https://chatgpt.com/c/6ac24102-b0f0-83ec-b763-f384394550fa",
+          "file": "v4_bot_2.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.193,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 8,
+              "centre": 0
+            },
+            "checks": {
+              "bot_2_L30": [],
+              "bot_2_face_neutral_L50": [],
+              "bot_2_face_happy_L50": [],
+              "bot_2_face_sad_L50": [],
+              "bot_2_face_surprised_L50": [],
+              "bot_2_face_closed_L50": [],
+              "bot_2_face_sleep_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/bot_3",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_3",
+      "look": {
+        "description": "pink and white casing, heart-shaped LED eyes",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_bot_3.png",
+      "ingest": {
+        "as": "bot:3",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:10:20.745Z",
+          "chat": "https://chatgpt.com/c/6ac2418d-bec0-83ec-b33e-61eabb16ec17",
+          "file": "v4_bot_3.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.035,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 8,
+              "centre": 0
+            },
+            "checks": {
+              "bot_3_L30": [],
+              "bot_3_face_neutral_L50": [],
+              "bot_3_face_happy_L50": [],
+              "bot_3_face_sad_L50": [],
+              "bot_3_face_surprised_L50": [],
+              "bot_3_face_closed_L50": [],
+              "bot_3_face_sleep_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/bot_4",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_4",
+      "look": {
+        "description": "gold casing with a small crown-shaped crest, round LED eyes",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_bot_4.png",
+      "ingest": {
+        "as": "bot:4",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:12:00.253Z",
+          "chat": "https://chatgpt.com/c/6ac241db-9d00-83ec-b715-1145afba5da8",
+          "file": "v4_bot_4.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.12,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 11,
+              "centre": 1
+            },
+            "checks": {
+              "bot_4_L30": [],
+              "bot_4_face_neutral_L50": [],
+              "bot_4_face_happy_L50": [],
+              "bot_4_face_sad_L50": [],
+              "bot_4_face_surprised_L50": [],
+              "bot_4_face_closed_L50": [],
+              "bot_4_face_sleep_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/bot_5",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_5",
+      "look": {
+        "description": "red and cream casing, square LED eyes",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_bot_5.png",
+      "ingest": {
+        "as": "bot:5",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:14:26.778Z",
+          "chat": "https://chatgpt.com/c/6ac24261-3800-83ec-93e4-9eb96a1a074e",
+          "file": "v4_bot_5.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.315,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": -46,
+              "centre": 0
+            }
+          },
+          "reason": "drift",
+          "by": "verify"
+        },
+        {
+          "n": 2,
+          "at": "2026-10-04T12:23:02.641Z",
+          "chat": "https://chatgpt.com/c/6ac2445f-a738-83ec-b1ef-c8f527081ed3",
+          "file": "v4_bot_5.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.222,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 3,
+              "centre": 1
+            },
+            "checks": {
+              "bot_5_L30": [],
+              "bot_5_face_neutral_L50": [],
+              "bot_5_face_happy_L50": [],
+              "bot_5_face_sad_L50": [],
+              "bot_5_face_surprised_L50": [],
+              "bot_5_face_closed_L50": [],
+              "bot_5_face_sleep_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/bot_6",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_6",
+      "look": {
+        "description": "purple casing with a single wide visor LED eye",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_bot_6.png",
+      "ingest": {
+        "as": "bot:6",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:16:07.378Z",
+          "chat": "https://chatgpt.com/c/6ac242c5-1d20-83ec-a359-c6c2b5f632bf",
+          "file": "v4_bot_6.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.207,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 1,
+              "centre": 1
+            },
+            "checks": {
+              "bot_6_L30": [],
+              "bot_6_face_neutral_L50": [],
+              "bot_6_face_happy_L50": [],
+              "bot_6_face_sad_L50": [],
+              "bot_6_face_surprised_L50": [],
+              "bot_6_face_closed_L50": [],
+              "bot_6_face_sleep_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/bot_7",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_7",
+      "look": {
+        "description": "teal and white casing, two antennae, round LED eyes",
+        "expression": "neutral LED eyes, small LED smile"
+      },
+      "reference": "@body_f",
+      "prompt": null,
+      "file": "v4_bot_7.png",
+      "ingest": {
+        "as": "bot:7",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:19:06.788Z",
+          "chat": "https://chatgpt.com/c/6ac24351-aeb4-83ec-908d-015fe0c0bd60",
+          "file": "v4_bot_7.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.297,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 12,
+              "centre": 1
+            },
+            "checks": {
+              "bot_7_L30": [],
+              "bot_7_face_neutral_L50": [],
+              "bot_7_face_happy_L50": [],
+              "bot_7_face_sad_L50": [],
+              "bot_7_face_surprised_L50": [],
+              "bot_7_face_closed_L50": [],
+              "bot_7_face_sleep_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/bot_0:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_0",
+      "look": {
+        "description": "white and sky-blue casing, round LED eyes",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@v4/bot_0",
+      "prompt": null,
+      "file": "v4_bot_0_happy.png",
+      "ingest": {
+        "as": "bot:0:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:25:35.493Z",
+          "chat": "https://chatgpt.com/c/6ac244d3-d790-83ec-8861-829d87884fcf",
+          "file": "v4_bot_0_happy.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.012,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": -31,
+              "centre": 1
+            }
+          },
+          "reason": "drift",
+          "by": "verify"
+        },
+        {
+          "n": 2,
+          "at": "2026-10-04T12:54:19.042Z",
+          "chat": "https://chatgpt.com/c/6ac24bfb-d9f4-83ec-b064-3533440e4c75",
+          "file": "v4_bot_0_happy.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.042,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": -42,
+              "centre": 0
+            },
+            "registered": {
+              "scale": 0.995,
+              "dx": 0,
+              "dy": 45,
+              "iou": 0.957
+            },
+            "checks": {
+              "bot_0_face_happy_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the bot's neutral picture as the ingest will be: scale 0.995 about the feet, then 0, 45 px (IoU 0.957) — drift is judged there, not on the edges as drawn",
+            "pipeline: fed the picture registered onto the bot's neutral picture"
+          ]
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/bot_1:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_1",
+      "look": {
+        "description": "black and orange casing, visor-shaped LED eyes",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@v4/bot_1",
+      "prompt": null,
+      "file": "v4_bot_1_happy.png",
+      "ingest": {
+        "as": "bot:1:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:28:13.535Z",
+          "chat": "https://chatgpt.com/c/6ac2458b-5bac-83ec-bdfc-64f071cf34eb",
+          "file": "v4_bot_1_happy.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.008,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 3,
+              "centre": -2
+            },
+            "checks": {
+              "bot_1_face_happy_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/bot_2:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_2",
+      "look": {
+        "description": "mint green casing, small antenna, round LED eyes",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@v4/bot_2",
+      "prompt": null,
+      "file": "v4_bot_2_happy.png",
+      "ingest": {
+        "as": "bot:2:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:29:50.684Z",
+          "chat": "https://chatgpt.com/c/6ac245f4-914c-83ec-b753-4dd1a5ed824e",
+          "file": "v4_bot_2_happy.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.003,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 1,
+              "centre": 0
+            },
+            "checks": {
+              "bot_2_face_happy_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/bot_3:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_3",
+      "look": {
+        "description": "pink and white casing, heart-shaped LED eyes",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@v4/bot_3",
+      "prompt": null,
+      "file": "v4_bot_3_happy.png",
+      "ingest": {
+        "as": "bot:3:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:36:42.681Z",
+          "chat": "https://chatgpt.com/c/6ac24689-022c-83ec-b3ae-b14174b5308e",
+          "file": "v4_bot_3_happy.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.01,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 1,
+              "centre": 1
+            },
+            "checks": {
+              "bot_3_face_happy_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/bot_4:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_4",
+      "look": {
+        "description": "gold casing with a small crown-shaped crest, round LED eyes",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@v4/bot_4",
+      "prompt": null,
+      "file": "v4_bot_4_happy.png",
+      "ingest": {
+        "as": "bot:4:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:37:28.741Z",
+          "chat": "https://chatgpt.com/c/6ac246e8-9d20-83ec-8d90-5eaa6833109e",
+          "file": "v4_bot_4_happy.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 0.993,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": -38,
+              "centre": -4
+            },
+            "registered": {
+              "scale": 1.025,
+              "dx": 2,
+              "dy": 38,
+              "iou": 0.967
+            },
+            "checks": {
+              "bot_4_face_happy_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the bot's neutral picture as the ingest will be: scale 1.025 about the feet, then 2, 38 px (IoU 0.967) — drift is judged there, not on the edges as drawn",
+            "pipeline: fed the picture registered onto the bot's neutral picture"
+          ]
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/bot_5:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_5",
+      "look": {
+        "description": "red and cream casing, square LED eyes",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@v4/bot_5",
+      "prompt": null,
+      "file": "v4_bot_5_happy.png",
+      "ingest": {
+        "as": "bot:5:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:51:32.935Z",
+          "chat": "https://chatgpt.com/c/6ac24aa0-0fec-83ec-9c54-7d5661b9cdb9",
+          "file": "v4_bot_5_happy.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.005,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 2,
+              "centre": 1
+            },
+            "checks": {
+              "bot_5_face_happy_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/bot_6:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_6",
+      "look": {
+        "description": "purple casing with a single wide visor LED eye",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@v4/bot_6",
+      "prompt": null,
+      "file": "v4_bot_6_happy.png",
+      "ingest": {
+        "as": "bot:6:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T12:49:05.442Z",
+          "chat": "https://chatgpt.com/c/6ac24aa0-a088-83ec-b3aa-e648d904d2b6",
+          "file": "v4_bot_6_happy.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.007,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 1,
+              "centre": 0
+            },
+            "checks": {
+              "bot_6_face_happy_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
+    },
+    {
+      "id": "v4/bot_7:happy",
+      "kind": "bot",
+      "slot": null,
+      "wear": null,
+      "catalog": "bot_7",
+      "look": {
+        "description": "teal and white casing, two antennae, round LED eyes",
+        "expression": "a happy face: LED eyes as upward arcs, wide LED smile"
+      },
+      "reference": "@v4/bot_7",
+      "prompt": null,
+      "file": "v4_bot_7_happy.png",
+      "ingest": {
+        "as": "bot:7:happy",
+        "base": null,
+        "variant": null,
+        "flags": []
+      },
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T13:01:21.644Z",
+          "chat": "https://chatgpt.com/c/6ac24ceb-c278-83ec-9e97-3bfaf496e75f",
+          "file": "v4_bot_7_happy.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.08,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 13,
+              "centre": -1
+            },
+            "registered": {
+              "scale": 0.935,
+              "dx": 0,
+              "dy": -12,
+              "iou": 0.943
+            },
+            "checks": {
+              "bot_7_face_happy_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "registered onto the bot's neutral picture as the ingest will be: scale 0.935 about the feet, then 0, -12 px (IoU 0.943) — drift is judged there, not on the edges as drawn",
+            "pipeline: fed the picture registered onto the body"
+          ]
         }
       ],
       "ingested": true

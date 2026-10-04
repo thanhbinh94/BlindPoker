@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest'
 // raw key on a wardrobe tile. It is the only thing `normal-web` ever reads out of `normal-server`, it is data
 // rather than code, and it never reaches the bundle — this file is a test.
 import achievementDefs from '../../../normal-server/data/achievements.json'
-import baseDefs from '../../../normal-server/data/avatar-bases.json'
 import itemDefs from '../../../normal-server/data/items.json'
 import en from './en/normal.json'
 import vi from './vi/normal.json'
@@ -29,17 +28,9 @@ describe('normal locales', () => {
     for (const [, bundle] of bundles) expect(JSON.stringify(bundle)).not.toContain('""')
   })
 
-  it.each(bundles)('names every base the registry defines in %s', (_lang, bundle) => {
-    // A base's display name comes from its `nameKey`, which `loadBases` holds to `bases.<id>`. Names
-    // ahead of the registry are allowed and are the point (2026-09-17): `f02`/`f03` are written here now
-    // so that adding either is art plus a registry entry, with no string to translate under pressure.
-    const named = bundle.bases as Record<string, string | undefined>
-    for (const id of Object.keys(baseDefs)) expect(named[id], `bases.${id}`).toBeTypeOf('string')
-  })
-
   it.each(bundles)('names every catalogue item in %s', (_lang, bundle) => {
     const named = bundle.items as Record<string, string | undefined>
-    expect(itemDefs.length).toBe(75)
+    expect(itemDefs.length).toBe(89)
     for (const def of itemDefs) expect(named[def.id], `items.${def.id}`).toBeTypeOf('string')
     // …and nothing more: a string for an id the server does not serve is a name nobody will ever read.
     expect(Object.keys(named).sort()).toEqual(itemDefs.map((d) => d.id).sort())

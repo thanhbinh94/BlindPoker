@@ -535,6 +535,20 @@ export async function goToWardrobeTab(page: Page, group: 'Ngoại hình' | 'Tran
   await subList.getByRole('tab', { name: new RegExp(`^${subTab}`) }).click()
 }
 
+/**
+ * Every button of the `role="group"` named `name` sits on one line (one top edge, ±1 px) — the group counterpart of
+ * the tablist checks in `wardrobe-layout.spec.ts`, for a `Segmented` control (the kit's pill of `aria-pressed`
+ * buttons, a `group` rather than a `tablist`), such as the wardrobe's "Giới tính" switch. The name is exact.
+ */
+export async function expectGroupOnOneLine(page: Page, name: string): Promise<void> {
+  const tops = await page
+    .getByRole('group', { name, exact: true })
+    .getByRole('button')
+    .evaluateAll((buttons: HTMLElement[]) => buttons.map((button) => Math.round(button.getBoundingClientRect().top)))
+  expect(tops.length, `the "${name}" group has buttons to check`).toBeGreaterThan(1)
+  expect(Math.max(...tops) - Math.min(...tops), `every button in "${name}" shares one line (${tops.join(', ')})`).toBeLessThanOrEqual(1)
+}
+
 export async function expectNoSidewaysScroll(page: Page): Promise<void> {
   const width = page.viewportSize()?.width ?? 0
   expect(await page.evaluate(() => document.documentElement.scrollWidth), 'the page does not scroll sideways').toBeLessThanOrEqual(width)
@@ -579,7 +593,7 @@ export interface MeasuredCard {
   bottom: number
   /** The bordered box's outer height. */
   height: number
-  /** The card's `data-rarity`; `null` for the base portraits, the "Tự nhiên" swatch and a row the catalogue lost. */
+  /** The card's `data-rarity`; `null` for the "Tự nhiên" swatch and a row the catalogue lost. */
   rarity: string | null
   /** The rarity line's top edge, measured from the card's own top; `null` when the card has no rarity line — which,
    * for a card with a `rarity`, is a line the measure could not find. */
@@ -609,7 +623,7 @@ export interface CardLayout {
 const RARITY_WORDS = { common: 'Thường', rare: 'Hiếm', epic: 'Cực hiếm' }
 
 /**
- * Measures the card grids inside `scope`: the wardrobe's item, colour, word and base cards (a tab's grid, or the two
+ * Measures the card grids inside `scope`: the wardrobe's item, hairstyle, colour and word cards (a tab's grid, or the two
  * grids of "Danh hiệu & Huy hiệu"). A grid counts when every item draws a border —
  * itself, or through its first child (`.cardCell`) — so the wardrobe's other grids are not picked up. Nothing
  * here knows a CSS-module class name.
@@ -731,8 +745,8 @@ export function rarityGroups(row: MeasuredCard[]): MeasuredCard[][] {
  * beside short ones), the rarity line sits directly under the name — so cards whose names are as tall have it on one
  * line (±3 px) — and the footer under it (lock hint, colour dots) ends on the card's bottom line (±3 px). Height
  * is the outer box, ±1 px. The 3 px is the room a rarity (0.6875 rem) and a hint (0.75 rem) of different sizes leave
- * under their glyphs; it is not a misaligned row. Cards with no rarity line (the base portraits, the "Tự nhiên"
- * swatch) are compared on height only, and one with nothing under its rarity has no footer.
+ * under their glyphs; it is not a misaligned row. Cards with no rarity line (the "Tự nhiên" swatch) are compared on
+ * height only, and one with nothing under its rarity has no footer.
  *
  * `grids` is how many grids `scope` must hold (a tab has one, "Danh hiệu & Huy hiệu" two): a grid that could not be
  * measured, or that measured no row, fails instead of passing unseen. Returns what it measured, for a caller that

@@ -3,6 +3,7 @@
 Phiên bản: 1.0
 Ngày: 12 tháng 9 năm 2026
 Phạm vi: tính năng kho đồ phụ trợ trong game bài poker, phần thưởng theo thành tích và đăng nhập liên tục
+Sửa đổi 2026-10-04 (Plan 19, nhân vật v4; thiết kế `docs/superpowers/specs/2026-10-03-avatar-v4-design.md` mục 11): mục 2, 3.3, 3.4, 4.1, 4.2 và 9.1. Khung ảnh và các con số ở mục 3.1 không đổi.
 
 ---
 
@@ -20,7 +21,7 @@ Mọi con số trong tài liệu này là con số đã chốt. Thay đổi bấ
 
 ## 2. Thuật ngữ dùng trong tài liệu
 
-- **Thân nền**: hình cơ thể nhân vật khi chưa mặc trang bị nào, mặc sẵn đồ lót cơ bản màu trung tính. Đây là lớp luôn hiển thị.
+- **Thân nền**: hình cơ thể nhân vật khi chưa mặc trang bị nào, mặc sẵn đồ lót cơ bản màu trung tính. Đây là lớp luôn hiển thị. Từ nhân vật v4 (Plan 19) có hai thân, mỗi giới tính một, đầu trọc, da tông kem; tóc và màu da là lựa chọn riêng của người chơi (mục 3.3).
 - **Lớp**: một tệp ảnh riêng biệt chứa đúng một món hoặc một bộ phận, phần còn lại trong suốt. Nhân vật hoàn chỉnh là kết quả xếp chồng nhiều lớp.
 - **Ô trang bị**: một vị trí trên cơ thể có thể gắn món, ví dụ ô mũ. Mỗi ô tại một thời điểm chỉ chứa tối đa một món.
 - **Khung ảnh**: kích thước tệp ảnh cố định mà mọi lớp đều dùng chung.
@@ -57,16 +58,24 @@ Mọi con số trong tài liệu này là con số đã chốt. Thay đổi bấ
 
 ### 3.3 Tư thế bắt buộc của thân nền
 
-- Đứng thẳng, nhìn chính diện, trọng tâm ở giữa.
-- Hai tay hạ xuống, hơi tách khỏi thân người để tay áo và găng tay không bị thân che.
-- Hai chân hơi tách nhau, bàn chân hướng ra trước.
-- Đầu được phép nghiêng tối đa 8 độ để tạo sự tự nhiên. Thân và chân không nghiêng.
-- Biểu cảm mặc định: điềm tĩnh, hơi mỉm cười, mắt mở.
+Từ nhân vật thế hệ mới (v4, Plan 19, 2026-10-03) mọi thân nền dùng **một dáng đứng thả lỏng, có ngón tay**:
+
+- Nhìn chính diện, ngang tầm mắt. Đứng thả lỏng: trọng tâm hơi dồn về một chân, vai hạ tự nhiên, hai bàn chân cùng đứng trên đường chân đế và hướng ra trước.
+- Hai tay buông, hơi cong, tách rõ khỏi thân người để cả hai bàn tay hiện trên nền trống và tay áo không bị thân che.
+- **Mỗi bàn tay thấy rõ đúng năm ngón** (bốn ngón và một ngón cái), đơn giản, cỡ chibi, hơi tách nhau để thấy từng ngón. Không vẽ bàn tay dạng găng, không nắm tay. Lòng bàn tay quay về phía đùi.
+- Đầu thẳng, ở giữa, không nghiêng, và nằm đúng chỗ, đúng cỡ đầu F01 (sai lệch không quá 2 phần trăm, phép kiểm C12): nhờ vậy mũ, kính, hào quang, khung và ảnh đại diện đã vẽ vẫn khớp. Dáng cũ cho nghiêng đầu tối đa 8 độ; thân mới bỏ phép đó.
+- Biểu cảm mặc định: điềm tĩnh, hơi mỉm cười, mắt mở. Không vẽ má hồng (xem tài liệu số 02, mục 2.3).
 - Không cầm vật gì trên tay ở thân nền. Vật cầm tay là một món riêng thuộc ô vật cầm tay.
+- **Đầu trọc nhẵn**: không tóc, không chân tóc, không bóng tóc. Tóc là món riêng (ô kiểu tóc, mục 4.2). Da tông kem. Thân mặc áo ba lỗ xám trung bình và quần đùi xám than, chân trần.
+- **Hai thân, mỗi giới tính một** (`f`, `m`), cùng dáng, cùng vị trí đầu. Giới tính, kiểu tóc và màu da do người chơi chọn riêng; màu da là tô màu lên thân qua mặt nạ da, không phải vẽ thêm một thân.
+
+Dáng cũ (Plan 11 và 12: đứng thẳng, hai tay hạ xuống, bàn tay dạng găng, sáu thân phẳng f01…m03 với tóc vẽ liền) đã bị thay bởi dáng này và không còn tệp nào của nó trong ứng dụng.
 
 ### 3.4 Quy tắc bất biến
 
 Ba thứ sau đây không bao giờ được thay đổi sau khi đã có món trang bị đầu tiên: kích thước khung ảnh, vị trí trục dọc, vị trí đường chân đế. Đây là điều kiện để mọi lớp ghép khớp nhau chỉ bằng cách đặt chồng lên, không cần tính toán vị trí.
+
+**Nhân vật v4 (Plan 19, 2026-10-03) giữ nguyên mục này.** Khung vẫn 384 nhân 448 ở @1x và 768 nhân 896 ở @2x, trục dọc vẫn ngang 192, đường chân đế vẫn dọc 408; ô cắt ảnh đại diện 208 nhân 208 tại (88, 40) và vòng khung 260 cũng không đổi, và các số lớp 10 đến 90 giữ nguyên. Chỉ dáng đứng (mục 3.3) và đầu trọc là mới, và đầu mới phải nằm đúng chỗ đầu F01 (phép kiểm C12) để mọi món đã vẽ trên khung này vẫn khớp.
 
 ---
 
@@ -85,6 +94,8 @@ Kho đồ giai đoạn một có bốn ô. Danh sách này đã được rút g�
 
 Ô vật cầm tay là ô mở rộng, chỉ thêm ở giai đoạn hai nếu cần.
 
+Nhân vật v4 (Plan 19, 2026-10-03) thêm hai ô vào danh sách của ứng dụng: **kiểu tóc** (`hairStyle`, một món vẽ hai lớp 20 và 60, mục 4.2) và **màu da** (`skinColor`, một món màu: không vẽ lớp nào, chỉ tô màu lên thân và mặt qua mặt nạ da). Màu tóc và màu mắt cũng là món màu như vậy. Cả ba là lựa chọn của người chơi và đều miễn phí ở đợt đầu.
+
 ### 4.2 Thứ tự xếp lớp
 
 Đánh số từ dưới lên trên. Số nhỏ hơn bị đè bởi số lớn hơn.
@@ -92,15 +103,17 @@ Kho đồ giai đoạn một có bốn ô. Danh sách này đã được rút g�
 | Thứ tự | Tên lớp | Thuộc về | Mô tả |
 |---|---|---|---|
 | 10 | Hiệu ứng nền | SLOT_AURA | Vòng sáng, hoa văn, hạt bay phía sau nhân vật |
-| 20 | Tóc phía sau | Thân nền | Phần tóc nằm sau đầu và sau vai |
-| 30 | Thân nền | Thân nền | Da, đồ lót cơ bản, chân, tay, bàn tay, bàn chân |
+| 20 | Tóc phía sau | Ô kiểu tóc | Phần tóc nằm sau đầu và sau vai (tóc thật của kiểu tóc đang đội) |
+| 30 | Thân nền | Thân nền | Da, đồ lót cơ bản, chân, tay, bàn tay có năm ngón, bàn chân |
 | 40 | Bộ trang phục | SLOT_OUTFIT | Toàn bộ quần áo, giày, tay áo |
-| 50 | Đầu và khuôn mặt | Thân nền | Mặt, mắt, mũi, miệng, má hồng, tai |
-| 60 | Tóc phía trước | Thân nền | Tóc mái và tóc mai, đè lên trán và má |
+| 50 | Đầu và khuôn mặt | Thân nền | Mặt, mắt, mũi, miệng, tai; không má hồng |
+| 60 | Tóc phía trước | Ô kiểu tóc | Tóc mái, tóc mai và đỉnh đầu, đè lên trán và má (tóc thật của kiểu tóc đang đội) |
 | 70 | Phụ kiện mặt | SLOT_FACE | Kính, mặt nạ |
 | 80 | Mũ và đội đầu | SLOT_HEAD | Mũ, băng đô, ghim tóc |
 
 Lý do tóc tách thành hai lớp: tóc phía sau phải nằm dưới bộ trang phục để đuôi tóc bị áo che, còn tóc mái phải nằm trên khuôn mặt. Nếu gộp một lớp thì không thể vừa che vừa bị che.
+
+**Lớp 20 và 60 nay chứa tóc thật (nhân vật v4, Plan 19).** Trong đợt đầu của ứng dụng tóc vẽ liền trong thân nền, hai lớp này gần như để trống (2026-09-15) và luật che khuất ở mục 4.3 chỉ gỡ được những gì ảnh của chính món mũ phủ tới. Từ v4 thân nền đầu trọc, và mỗi kiểu tóc là một món vẽ riêng gồm hai tệp: **lớp 60** là phần tóc đè lên đầu và mặt (mái, tóc mai trước tai, đỉnh đầu), **lớp 20** là phần nằm ngoài dáng người (sau vai, sau lưng, đuôi ngựa, phần sau đầu nhô ra); một kiểu tóc ngắn có thể có lớp 20 trống. Hai lớp không chồng nhau và cộng lại phủ trọn vùng tóc (phép kiểm C13). Hai cờ `hides_hair_front` và `hides_hair_back` vì thế có tác dụng thật lên hai lớp này. Chưa có món mũ nào đặt cờ che tóc: lớp 60 của một kiểu tóc v4 là cả đỉnh đầu lẫn mái, nên che nó đi để lại một cái đầu trọc dưới mũ, và mọi mũ hiện đội lên trên tóc.
 
 ### 4.3 Luật che khuất
 
@@ -211,16 +224,18 @@ Cấu trúc: `[loại]_[mã ô]_[mã món]_[lớp]@[mật độ].png`
 
 Ví dụ:
 
-- `base_body_default_L30@2x.png` thân nền, lớp 30, mật độ 2
-- `base_body_default_L20@2x.png` tóc sau của thân nền
-- `base_body_default_L50@2x.png` khuôn mặt
-- `base_body_default_L60@2x.png` tóc trước
+- `body_f_L30@2x.png` thân nền nữ, lớp 30, mật độ 2 (thân nam: `body_m_L30`)
+- `body_f_face_happy_L50@2x.png` khuôn mặt vui của thân nữ (mỗi thân có sáu nét mặt: `neutral`, `happy`, `sad`, `surprised`, `closed`, `sleep`)
+- `item_hair_f_bob01_L20@2x.png` tóc sau của kiểu tóc bob nữ
+- `item_hair_f_bob01_L60@2x.png` tóc trước của kiểu tóc bob nữ
 - `item_head_tophat01_L80@2x.png` mũ chóp số 01, lớp 80
 - `item_outfit_dealer01_L40@2x.png` bộ trang phục người chia bài số 01
 - `item_aura_goldring01_L10@2x.png` hiệu ứng nền vòng vàng
 - `icon_head_tophat01@2x.png` biểu tượng của mũ chóp trong túi
 
 Chỉ dùng chữ thường, số và dấu gạch dưới. Không dùng dấu cách, không dùng tiếng Việt có dấu trong tên tệp.
+
+Các tên thân, nét mặt, kiểu tóc, bộ trang phục theo giới tính và bot mà ứng dụng thật sự dùng, cùng quy tắc cho từng loại, nằm ở `docs/avatar-2d.md` mục 3.
 
 ### 9.2 Dữ liệu mô tả món
 

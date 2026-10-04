@@ -6,7 +6,7 @@ import {
   ApiError,
   type AvatarCatalogDto,
   type AvatarConfigDto,
-  type BaseDto,
+  type BodyDto,
   type HistoryEntryDto,
   type ItemDto,
   type LedgerPageDto,
@@ -19,19 +19,30 @@ import viNormal from '../locales/vi/normal.json'
 import { makeI18n, renderWithI18n } from '../test-i18n.js'
 import { ProfileScreen } from './ProfileScreen.js'
 
-const BASE_F01: BaseDto = {
-  id: 'f01',
-  nameKey: 'bases.f01',
-  wear: 'f',
-  layers: { hairBack: 'base_f01_L20', body: 'base_f01_L30', hairFront: 'base_f01_L60' },
+const BODY_F: BodyDto = {
+  gender: 'f',
+  body: 'body_f_L30',
   faces: {
-    neutral: 'base_f01_face_neutral_L50',
-    happy: 'base_f01_face_happy_L50',
-    sad: 'base_f01_face_sad_L50',
-    surprised: 'base_f01_face_surprised_L50',
-    closed: 'base_f01_face_closed_L50',
-    sleep: 'base_f01_face_sleep_L50',
+    neutral: 'body_f_face_neutral_L50',
+    happy: 'body_f_face_happy_L50',
+    sad: 'body_f_face_sad_L50',
+    surprised: 'body_f_face_surprised_L50',
+    closed: 'body_f_face_closed_L50',
+    sleep: 'body_f_face_sleep_L50',
   },
+  naturalEyeColour: '#2e6a9b',
+}
+
+const HAIR_BOB: ItemDto = {
+  id: 'hair_f_bob01',
+  slot: 'hairStyle',
+  rarity: 'common',
+  nameKey: 'items.hair_f_bob01',
+  assetKey: 'hairStyle/hair_f_bob01',
+  isDefault: false,
+  free: true,
+  gender: 'f',
+  asset: { layer: 60, file: 'item_hair_f_bob01_L60', back: 'item_hair_f_bob01_L20', fitsAvatarCrop: true },
 }
 
 const OUTFIT: ItemDto = {
@@ -44,11 +55,12 @@ const OUTFIT: ItemDto = {
   asset: { layer: 40, file: 'item_outfit_royal_robe01_L40', fitsAvatarCrop: false },
 }
 
-const AVATAR_CATALOG: AvatarCatalogDto = { frame: { w: 384, h: 448 }, crop: { x: 88, y: 40, size: 208 }, bases: [BASE_F01], manifestVersion: 1 }
+const AVATAR_CATALOG: AvatarCatalogDto = { frame: { w: 384, h: 448 }, crop: { x: 88, y: 40, size: 208 }, bodies: [BODY_F], manifestVersion: 1 }
 
 const AVATAR: AvatarConfigDto = {
-  v: 3,
-  base: 'f01',
+  v: 4,
+  gender: 'f',
+  hairStyle: 'hair_f_bob01',
   outfit: 'outfit_royal_robe01',
   title: 'title_hot_hand',
   badge: 'badge_gold',
@@ -122,7 +134,7 @@ function stubApi(overrides: Partial<NormalApi> = {}): NormalApi {
     history: vi.fn().mockResolvedValue([HAND]),
     ledger: vi.fn().mockResolvedValue(PAGE_ONE),
     rename: vi.fn(),
-    catalogItems: vi.fn().mockResolvedValue({ items: [OUTFIT] }),
+    catalogItems: vi.fn().mockResolvedValue({ items: [HAIR_BOB, OUTFIT] }),
     avatarCatalog: vi.fn().mockResolvedValue(AVATAR_CATALOG),
     ...overrides,
   } as unknown as NormalApi
@@ -181,6 +193,9 @@ describe('ProfileScreen', () => {
     const stage = document.querySelector('[data-title]') as HTMLElement
     const staged = [...stage.querySelectorAll('[data-chibi-hash]')]
     expect(staged.map((el) => el.getAttribute('data-frame'))).toEqual(['full'])
+    // Drawn from the saved v4 config — the body of its gender, its hairstyle, its outfit — not the default chibi.
+    const sources = [...stage.querySelectorAll('img')].map((img) => img.getAttribute('src') ?? '')
+    for (const file of ['body_f_L30', 'item_hair_f_bob01_L60', 'item_outfit_royal_robe01_L40']) expect(sources.some((src) => src.includes(file)), file).toBe(true)
     const portrait = name.parentElement?.querySelector('[data-chibi-hash]')
     expect(portrait).toHaveAttribute('data-frame', 'head')
   })

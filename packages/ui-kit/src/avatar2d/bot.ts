@@ -5,8 +5,8 @@ export const BOT_FACE_COUNT = 8
 
 /**
  * FNV-1a over UTF-16 code units: cheap, stable across sessions and machines, and good enough to spread eight faces
- * (or two bases) evenly. Kept here — not duplicated — because `botFaceIndex`, `botChibi` and `defaultChibi` all
- * need the exact same hash so a seed keeps the same identity everywhere it is used.
+ * (or two genders) evenly. Kept here — not duplicated — because `botFaceIndex`, `botChibi`, `defaultChibi` and
+ * `hashChibi` all need the exact same hash so a seed keeps the same identity everywhere it is used.
  */
 export function fnv1a(seed: string): number {
   let h = 0x811c9dc5

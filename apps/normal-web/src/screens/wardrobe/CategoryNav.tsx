@@ -1,4 +1,4 @@
-import { useRef, type KeyboardEvent, type MutableRefObject } from 'react'
+import { useRef, type KeyboardEvent, type MutableRefObject, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { groupTabId, GROUPS, groupOf, panelId, subTabId, type TabId } from './categories.js'
 import { Icon, type IconName } from './icons.js'
@@ -10,11 +10,13 @@ export interface CategoryNavProps {
    * one piece of state this screen remembers — the group is always derived from it via `groupOf`). */
   onTab: (tab: TabId) => void
   counts: Partial<Record<TabId, { owned: number; total: number }>>
-  /** "Hiện cả món chưa có" (design §3.1 item 3, No11a): ticked, the tabs also list what the player does not own yet. */
+  /** "Hiện cả món chưa có" (design §3.1 item 3, No11a): ticked, the tabs also list what the player does not own yet.
+   * Every tab has the box since Plan 19 removed the base tab, the one tab with nothing owned to show or hide. */
   showLocked: boolean
   onShowLocked: (next: boolean) => void
-  /** `false` on `base` (design §3.1): a base is chosen, not owned, so the box has nothing to show or hide. */
-  showFilter: boolean
+  /** What heads the look group (avatar v4, spec §6.1: the Nữ | Nam switch): drawn under the group tabs and above the
+   * sub-tabs on every one of the group's tabs, and nowhere else. Not a tab itself. */
+  lookHeader?: ReactNode
 }
 
 /**
@@ -41,16 +43,16 @@ function onArrowKey<T>(
 }
 
 /**
- * The right column's header (design §3.1): the three groups, the active group's sub-tabs (each with its
- * "owned/total" count), and the filter row — the "Hiện cả món chưa có" box beside the "n/m đã có" count
- * (No11a) — everything above the card grid itself.
+ * The right column's header (design §3.1): the three groups, the look group's own header while it is the active
+ * one (`lookHeader`), the active group's sub-tabs (each with its "owned/total" count), and the filter row — the
+ * "Hiện cả món chưa có" box beside the "n/m đã có" count (No11a) — everything above the card grid itself.
  *
  * Two nested `tablist`s rather than one flat one, matching the two-level structure the mockup draws: a
  * group's own label can legitimately repeat a sub-tab's (`wear`'s "Trang phục" names both the clothing
  * group and its `outfit` tab), so callers — and this component's own keyboard handling — always work
  * with ids, never with the rendered label. Both tablists share `onArrowKey` above.
  */
-export function CategoryNav({ tab, onTab, counts, showLocked, onShowLocked, showFilter }: CategoryNavProps) {
+export function CategoryNav({ tab, onTab, counts, showLocked, onShowLocked, lookHeader }: CategoryNavProps) {
   const { t } = useTranslation('normal')
   const activeGroup = groupOf(tab)
   const subTabs = GROUPS.find((group) => group.id === activeGroup)!.tabs
@@ -95,6 +97,8 @@ export function CategoryNav({ tab, onTab, counts, showLocked, onShowLocked, show
         })}
       </div>
 
+      {activeGroup !== 'look' || lookHeader === undefined ? null : <div className={s.lookHeader}>{lookHeader}</div>}
+
       <div className={s.subTabs} role="tablist" aria-label={t(`wardrobe.groups.${activeGroup}`)}>
         {subTabs.map((subTab, index) => {
           const count = counts[subTab]
@@ -126,18 +130,16 @@ export function CategoryNav({ tab, onTab, counts, showLocked, onShowLocked, show
         })}
       </div>
 
-      {!showFilter ? null : (
-        <div className={s.filterRow}>
-          {/* A native checkbox in its label, the create-room form's own look (`lobby.module.css` `.check`). */}
-          <label className={s.showLocked}>
-            <input className={s.showLockedBox} type="checkbox" checked={showLocked} onChange={(event) => onShowLocked(event.target.checked)} />
-            {t('wardrobe.showLocked')}
-          </label>
-          {activeCount === null ? null : (
-            <span className={s.ownedCountLabel}>{t('wardrobe.ownedCount', { owned: activeCount.owned, total: activeCount.total })}</span>
-          )}
-        </div>
-      )}
+      <div className={s.filterRow}>
+        {/* A native checkbox in its label, the create-room form's own look (`lobby.module.css` `.check`). */}
+        <label className={s.showLocked}>
+          <input className={s.showLockedBox} type="checkbox" checked={showLocked} onChange={(event) => onShowLocked(event.target.checked)} />
+          {t('wardrobe.showLocked')}
+        </label>
+        {activeCount === null ? null : (
+          <span className={s.ownedCountLabel}>{t('wardrobe.ownedCount', { owned: activeCount.owned, total: activeCount.total })}</span>
+        )}
+      </div>
     </div>
   )
 }

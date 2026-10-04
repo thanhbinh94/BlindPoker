@@ -21,7 +21,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { isLiteAvatarFile, readDefaultOutfitLayers } from './avatar-files.mjs'
+import { isLiteAvatarFile, readDefaultHairLayers, readDefaultOutfitLayers } from './avatar-files.mjs'
 
 const require = createRequire(import.meta.url)
 
@@ -32,12 +32,13 @@ const RELEASE_DIR = resolve(ROOT, 'release/lite')
 const RELEASE_SRC = resolve(ROOT, 'release-src')
 const EXE = join(RELEASE_DIR, 'bind-poker-lite.exe')
 
-/** Normal's placeholder chibi PNGs are the only art Lite ships: T1 generated `base_*` (the two bodies),
- * `bot_*` (the eight bots) and the one default outfit every human chibi wears once, under Normal's public
+/** Normal's chibi PNGs are the only art Lite ships: the two v4 `body_*` (with their faces), the eight `bot_*`, the two
+ * default hairstyles (both layers each) and the one default outfit every human chibi wears, under Normal's public
  * dir, and every edition draws from the same files rather than each carrying its own copy. */
 const AVATAR_SRC = resolve(ROOT, '../normal-web/public/avatar')
 const AVATAR_DEST = join(PUBLIC_DIR, 'avatar')
-/** The catalogue the copy rule reads: which outfit is the default, and which cuts of it exist. */
+/** The catalogue the copy rule reads: which outfit is the default and which cuts of it exist, and each default
+ * hairstyle's two layers. */
 const ITEMS_JSON = resolve(ROOT, '../normal-server/data/items.json')
 
 /** The exe is a copy of `node.exe` plus our blob; 120 MB leaves headroom over that without hiding a regression. */
@@ -99,22 +100,28 @@ function buildWeb() {
 }
 
 /**
- * Copies the placeholder chibi bases, bots and default outfit into `dist/public/avatar`, after the web
+ * Copies the chibi bodies, bots, default hairs and default outfit into `dist/public/avatar`, after the web
  * build (which would otherwise wipe `dist/public`) and before the SEA step (which embeds whatever
- * `dist/public` holds). `isLiteAvatarFile` is the whole of what that is — every other wardrobe item is
- * Normal-only for now, Lite ships no store to buy them from.
+ * `dist/public` holds). `isLiteAvatarFile` is the whole of what that is — exactly the files `defaultChibi` and
+ * `botChibi` draw, and no mask and no old `base_*`; every other wardrobe item is Normal-only for now, Lite ships
+ * no store to buy them from.
  *
- * "The default outfit" is read out of `items.json` (`scripts/avatar-files.mjs`), cuts and all: if that
- * outfit ever gains a per-wear variant, Lite's `m` bases must get it too, and that has to follow from
- * the catalogue rather than from somebody remembering this file.
+ * "The default outfit" and "the default hairs" are read out of `items.json` (`scripts/avatar-files.mjs`), cuts and
+ * layers and all: if that outfit ever gains a per-wear variant, Lite's `m` bodies must get it too, and a hairstyle
+ * is two files, and both have to follow from the catalogue rather than from somebody remembering this file.
  */
 function copyAvatarAssets() {
   if (!existsSync(AVATAR_SRC)) die(`avatar: source directory missing — ${AVATAR_SRC} (build apps/normal-web first)`)
   mkdirSync(AVATAR_DEST, { recursive: true })
-  const layers = readDefaultOutfitLayers(ITEMS_JSON)
+  const outfit = readDefaultOutfitLayers(ITEMS_JSON)
+  const hair = readDefaultHairLayers(ITEMS_JSON)
+  const layers = [...outfit, ...hair]
   const files = readdirSync(AVATAR_SRC).filter((name) => isLiteAvatarFile(name, layers))
+  // A layer the catalogue names but the folder lacks would ship as a bald or undressed figure with no error anywhere.
+  const missing = layers.flatMap((layer) => [`${layer}@1x.png`, `${layer}@2x.png`]).filter((name) => !files.includes(name))
+  if (missing.length > 0) die(`avatar: the catalogue names layers that ${AVATAR_SRC} does not have — ${missing.join(', ')}`)
   for (const name of files) copyFileSync(join(AVATAR_SRC, name), join(AVATAR_DEST, name))
-  log(`avatar: copied ${files.length} files from normal-web (default outfit: ${layers.join(', ')})`)
+  log(`avatar: copied ${files.length} files from normal-web (default outfit: ${outfit.join(', ')}; default hair: ${hair.join(', ')})`)
 }
 
 // ---------------------------------------------------------------------------- server

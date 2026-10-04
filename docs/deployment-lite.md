@@ -68,7 +68,7 @@ pnpm --filter @bp/lite test      # footprint + smoke
 
 - `dist/server.cjs` không được chứa `pg`, `drizzle`, `argon2`, `react-router`.
 - Tổng gzip của JS trong `dist/public` ≤ 250 KB, của CSS ≤ 40 KB.
-- `bind-poker-lite.exe` ≤ 120 MB (build hiện tại ~81 MB).
+- `bind-poker-lite.exe` ≤ 120 MB (build hiện tại ~95 MB, đo sau khi chuyển sang chibi v4 của Plan 19).
 
 **Danh sách phụ thuộc của Lite chỉ có một nguồn: `apps/lite/package.json`.** `footprint.test.ts`
 grep vài gói *cấm* trong bundle — đó là lưới chặn hồi quy, không phải allowlist. Muốn thêm hay bớt

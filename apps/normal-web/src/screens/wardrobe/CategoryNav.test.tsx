@@ -19,7 +19,6 @@ function renderNav(overrides: Partial<CategoryNavProps> = {}) {
     counts: COUNTS,
     showLocked: false,
     onShowLocked: vi.fn(),
-    showFilter: true,
     ...overrides,
   }
   renderWithI18n(<CategoryNav {...props} />, makeI18n('vi'))
@@ -67,12 +66,13 @@ describe('CategoryNav', () => {
     expect(face).toHaveTextContent('2/4')
   })
 
-  it('shows no count on the base tab', () => {
-    renderNav({ tab: 'base' })
+  it('shows no count on a sub-tab the counts leave out', () => {
+    // COUNTS has none for the look group's tabs.
+    renderNav({ tab: 'hairColor' })
 
     const { subList } = navLists()
-    const base = within(subList).getByRole('tab', { name: viNormal.wardrobe.tabs.base })
-    expect(base).not.toHaveTextContent('/')
+    const hairColor = within(subList).getByRole('tab', { name: viNormal.wardrobe.tabs.hairColor })
+    expect(hairColor).not.toHaveTextContent('/')
   })
 
   it('clicking a sub-tab calls onTab with its id', async () => {
@@ -186,11 +186,50 @@ describe('CategoryNav', () => {
     expect(onShowLocked).toHaveBeenLastCalledWith(false)
   })
 
-  it('hides the box entirely when showFilter is false', () => {
-    renderNav({ tab: 'base', showFilter: false })
+  // Plan 19 (spec §6.1): the gender switch heads the look group — under the group tabs, above its sub-tabs, on every
+  // one of its sub-tabs — and is not a tab of its own.
+  it('draws lookHeader only while Ngoại hình is active', () => {
+    const header = <div role="group" aria-label="look header" />
+    const { unmount } = renderWithI18n(
+      <CategoryNav tab="hairStyle" onTab={vi.fn()} counts={COUNTS} showLocked={false} onShowLocked={vi.fn()} lookHeader={header} />,
+      makeI18n('vi'),
+    )
 
-    expect(screen.queryByRole('checkbox')).toBeNull()
-    expect(screen.queryByText(viNormal.wardrobe.showLocked)).toBeNull()
+    const drawn = screen.getByRole('group', { name: 'look header' })
+    const [groupList, subList] = screen.getAllByRole('tablist')
+    expect(groupList!.compareDocumentPosition(drawn) & Node.DOCUMENT_POSITION_FOLLOWING, 'after the group tabs').toBeTruthy()
+    expect(subList!.compareDocumentPosition(drawn) & Node.DOCUMENT_POSITION_PRECEDING, 'before the sub-tabs').toBeTruthy()
+    expect(within(subList!).queryByRole('group')).toBeNull()
+    unmount()
+
+    for (const tab of ['skinColor', 'eyeColor'] as const) {
+      const { unmount: again } = renderWithI18n(
+        <CategoryNav tab={tab} onTab={vi.fn()} counts={COUNTS} showLocked={false} onShowLocked={vi.fn()} lookHeader={header} />,
+        makeI18n('vi'),
+      )
+      expect(screen.getByRole('group', { name: 'look header' }), `on ${tab}`).toBeInTheDocument()
+      again()
+    }
+
+    for (const tab of ['head', 'aura'] as const) {
+      const { unmount: other } = renderWithI18n(
+        <CategoryNav tab={tab} onTab={vi.fn()} counts={COUNTS} showLocked={false} onShowLocked={vi.fn()} lookHeader={header} />,
+        makeI18n('vi'),
+      )
+      expect(screen.queryByRole('group', { name: 'look header' }), `not on ${tab}`).toBeNull()
+      other()
+    }
+  })
+
+  it('shows the box on every tab, the look group’s included', () => {
+    for (const tab of ['hairStyle', 'hairColor', 'skinColor', 'eyeColor', 'head', 'words'] as const) {
+      const { unmount } = renderWithI18n(
+        <CategoryNav tab={tab} onTab={vi.fn()} counts={COUNTS} showLocked={false} onShowLocked={vi.fn()} />,
+        makeI18n('vi'),
+      )
+      expect(screen.getByRole('checkbox', { name: viNormal.wardrobe.showLocked }), `on ${tab}`).toBeInTheDocument()
+      unmount()
+    }
   })
 
   it("gives every tab an id and an aria-controls naming its panel's own id (design §7)", () => {
@@ -203,8 +242,8 @@ describe('CategoryNav', () => {
     expect(wearGroup).toHaveAttribute('aria-controls', panelId('head'))
 
     const lookGroup = within(groupList).getByRole('tab', { name: viNormal.wardrobe.groups.look })
-    // Not the active group: it controls the panel its own first tab would show, `base` (GROUPS again).
-    expect(lookGroup).toHaveAttribute('aria-controls', panelId('base'))
+    // Not the active group: it controls the panel its own first tab would show, `hairStyle` (GROUPS again).
+    expect(lookGroup).toHaveAttribute('aria-controls', panelId('hairStyle'))
 
     const headTab = within(subList).getByRole('tab', { name: new RegExp(`^${viNormal.wardrobe.tabs.head}`) })
     expect(headTab).toHaveAttribute('id', subTabId('head'))

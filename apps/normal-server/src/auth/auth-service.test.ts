@@ -28,7 +28,7 @@ const SECRET = 's'.repeat(32)
 const START = Date.UTC(2026, 8, 4, 3, 0)
 const DEFAULT_ITEMS = ['outfit_casual01', 'title_rookie']
 /** The catalogue stub's avatar: what `register` must store in `avatar_config`. */
-const DEFAULT_AVATAR = { v: 3 as const, base: 'f01' as const, outfit: 'outfit_casual01' }
+const DEFAULT_AVATAR = { v: 4 as const, gender: 'f' as const, hairStyle: 'hair_f_bob01', outfit: 'outfit_casual01' }
 
 let test: TestDb
 let db: AppDb

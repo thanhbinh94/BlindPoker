@@ -18,7 +18,7 @@ import { drizzle } from 'drizzle-orm/pglite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { loadAliases } from '../inventory/aliases.js'
 import { readAvatarConfig } from '../inventory/avatar-migrate.js'
-import { baseIdsOf, loadBases } from '../inventory/bases.js'
+import { loadBodies } from '../inventory/bodies.js'
 import { createInventoryService } from '../inventory/inventory-service.js'
 import { loadItemCatalog } from '../inventory/items.js'
 import type { AppDb } from './client.js'
@@ -136,7 +136,7 @@ describe('0001_avatar_v2', () => {
     expect(await rows(`SELECT * FROM "inventory" ORDER BY "item_id"`)).toEqual(before.owned)
   })
 
-  it('leaves the player wearing a v3 avatar built from what they still own, once the boot seed has run', async () => {
+  it('leaves the player wearing a v4 avatar built from what they still own, once the boot seed has run', async () => {
     await apply('0001_avatar_v2')
     // What `app.ts` does next on every boot: upsert the shipped catalogue over whatever is there.
     const catalog = loadItemCatalog()
@@ -145,11 +145,12 @@ describe('0001_avatar_v2', () => {
     const inventory = createInventoryService(db, aliases)
 
     const [player] = await db.select({ config: schema.players.avatarConfig }).from(schema.players)
-    const avatar = readAvatarConfig(player!.config, catalog, aliases, baseIdsOf(loadBases()))
-    // The v1 layers, migrated all the way to v3: no body at all (falls to the default base), the
-    // conical hat resolved through its alias into `head`, the title kept, and the outfit — nothing
-    // v1 wore maps to one — at its default.
-    expect(avatar).toMatchObject({ v: 3, base: catalog.defaultAvatar().base, outfit: 'outfit_casual01', head: 'head_conical_hat01', title: 'title_devoted' })
+    const avatar = readAvatarConfig(player!.config, catalog, aliases, loadBodies())
+    // The v1 layers, migrated all the way to v4: no body at all (falls to the default figure, a woman
+    // with the bob and her own eyes), the conical hat resolved through its alias into `head`, the title
+    // kept, the old hex hair colour dropped (never an item), and the outfit — nothing v1 wore maps to
+    // one — at its default.
+    expect(avatar).toEqual({ v: 4, gender: 'f', hairStyle: 'hair_f_bob01', outfit: 'outfit_casual01', head: 'head_conical_hat01', title: 'title_devoted' })
 
     // …and every *item* slot in it is one this player owns — through the alias, since their
     // inventory row is still the v2 id `0001` never rewrote. `outfit` is the one exception: `0002`,

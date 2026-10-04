@@ -23,7 +23,7 @@ const START = Date.UTC(2026, 8, 4, 3, 0)
 const XRW = { 'x-requested-with': REQUESTED_WITH }
 const GOOD = { email: 'binh@example.com', password: 'a good password', displayName: 'Bình An' }
 const DEFAULT_ITEMS = ['avatar_default']
-const DEFAULT_AVATAR = { v: 3 as const, base: 'f01' as const, outfit: 'avatar_default' }
+const DEFAULT_AVATAR = { v: 4 as const, gender: 'f' as const, hairStyle: 'hair_f_bob01', outfit: 'avatar_default' }
 
 let test: TestDb
 let db: AppDb

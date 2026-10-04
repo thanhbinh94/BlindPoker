@@ -21,11 +21,13 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { runChecks } from '../scripts/avatar-pipeline/checks.mjs'
-import { OUTFIT_TOP_Y, cutItem, diffAgainstBase, ingest, measure, registerBySilhouette, registerToBase } from '../scripts/avatar-pipeline/extract.mjs'
-import { AURA_CY, AURA_SIZE, AXIS_X, BASELINE_Y, BODY, CROP, DENSITIES, FACE_LIMIT_Y, FRAME, LAYERS, RING, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
-import { BASES, BASE_WEAR, EXPRESSIONS, ICON, MANIFEST_NAME, NAME_PATTERN, WEARS, buildPlaceholders, iconName, itemFile, parseName, stageOneFiles, variantFile, wearOf, writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
+import { STRAY_MARGIN, eachStray, headMetrics, runChecks } from '../scripts/avatar-pipeline/checks.mjs'
+import { BODY_SKIN_RULE, OUTFIT_TOP_Y, cutItem, diffAgainstBase, dropStrays, ingest, measure, registerBySilhouette, registerToBase, shiftPicture } from '../scripts/avatar-pipeline/extract.mjs'
+import { AURA_CY, AURA_SIZE, AXIS_X, BASELINE_Y, BODY, CHIN_TOLERANCE, CROP, DENSITIES, F01_TRANSFORM, FACE_LIMIT_Y, FRAME, HEAD_REFERENCE, HEAD_TOLERANCE, LAYERS, RING, SKIN_AREA, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
+import { EXPRESSIONS, FIT_SHEET_FILE, HAIR_CODES, ICON, ITEMS_FILE, MANIFEST_NAME, NAME_PATTERN, SHEET_FILE, WEARS, bodyFaceFile, bodyFile, buildPlaceholders, hairFile, hairItemId, iconName, itemFile, parseName, serialiseManifest, stageOneFiles, variantFile, wearOf, writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
+import { MASK_FILE_KIND, describeColours } from '../scripts/avatar-pipeline/masks.mjs'
 import { alphaBBox, blankPicture, cropPicture, overPicture, readPicture, removeChroma, renderSvg, writeDensities, writePicture } from '../scripts/avatar-pipeline/png.mjs'
+import { FIT_GRID, SHEET_GRID, composeCard, fitCards, sheetCards, sheetLayout } from '../scripts/avatar-pipeline/sheet.mjs'
 
 const PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url))
 const SCRIPT = resolve(PACKAGE_ROOT, 'scripts/avatar-pipeline.mjs')
@@ -33,6 +35,7 @@ const OUT_DIR = resolve(PACKAGE_ROOT, 'public/avatar')
 const WEB_MANIFEST = join(OUT_DIR, MANIFEST_NAME)
 const SERVER_MANIFEST = resolve(PACKAGE_ROOT, '../normal-server/data/avatar-manifest.json')
 const SHEET = resolve(PACKAGE_ROOT, '../../docs/avatar-2d-sheet.png')
+const FIT_SHEET = resolve(PACKAGE_ROOT, '../../docs/avatar-2d-fit-sheet.png')
 
 /** The generation canvas the prompts in D02 ask for: @3x, which everything is scaled down from. */
 const SRC = { w: 1152, h: 1344 }
@@ -56,15 +59,19 @@ interface ManifestEntry {
   bytes2x: number
   placeholder?: boolean
   real?: boolean
-  /** A real layer with nothing on it, on purpose: an AI base's hair layers (its hair is baked into L30/L50). */
+  /** A real layer with nothing on it, on purpose: a short hairstyle's back layer (L20). */
   empty?: boolean
+  /** The body an item or a bot was cut on (Plan 19): `f` or `m`. */
+  cutOn?: string
   hidesHairFront?: boolean
   hidesHairBack?: boolean
   /** A per-wear cut of another item layer (2026-09-20): the layer it is a cut of, and which wear wears it. */
   variantOf?: string
   wear?: string
-  /** Hair, eye and tint masks (Plan 13 Task 2). */
+  /** Hair, eye and tint masks (Plan 13 Task 2); skin masks (Plan 19). */
   masks?: Record<string, { bytes2x: number; meanL?: number; empty?: boolean; override?: boolean }>
+  /** A hair L60's region and how it splits between the two hair layers, in @2x pixels (Plan 19, spec §5.4). */
+  split?: { region: number; front: number; back: number }
 }
 
 interface Manifest {
@@ -75,7 +82,8 @@ interface Manifest {
   /** One inventory icon per item layer (2026-09-17), named `<layer without _L<n>>_icon`. `tintMask` (Plan 18, No8a):
    * the icon has its own `<icon>_tintmask`, cut from its layer's tint mask. */
   icons?: Record<string, { kind: 'icon'; of: string; w: number; h: number; bytes2x: number; placeholder?: boolean; real?: boolean; tintMask?: boolean }>
-  bases?: Record<string, { transform: { scale: number; offsetX: number; offsetY: number } }>
+  /** Each v4 body's stored transform (Plan 19), once one is ingested. */
+  bodies?: Record<string, { transform: { scale: number; offsetX: number; offsetY: number }; anchor?: string }>
 }
 
 /** A bot's face written as a copy of its neutral face at ingest (2026-09-24): the layer it copies. */
@@ -152,6 +160,20 @@ function caseDir(name: string): string {
   const dir = join(temp, name)
   mkdirSync(dir, { recursive: true })
   return dir
+}
+
+/**
+ * Seed `dir`'s manifest with the synthetic canvas's own transform for each of `genders`, before a case ingests the grey
+ * FIGURE as that body. A body with no stored transform of its own lands on F01's (`F01_TRANSFORM`, Plan 19 final review):
+ * the real canvas, 1024 × 1536. This one is 1152 × 1344, laid out so the frame maths comes out round, and on F01's
+ * transform its figure would stand off the axis and short of the baseline — so the canvas brings its own, `anchorBase` of
+ * the figure, as a body was placed in an empty directory until then. The body then keeps it, as a body ingested again does.
+ */
+function seedCanvas(dir: string, genders: string[] = ['f']): { scale: number; offsetX: number; offsetY: number } {
+  const canvas = { scale: transform.scale, offsetX: transform.offsetX, offsetY: transform.offsetY }
+  const bodies = Object.fromEntries(genders.map((gender) => [gender, { transform: { ...canvas } }]))
+  writeFileSync(join(dir, MANIFEST_NAME), serialiseManifest({ version: 1, frame: FRAME, crop: CROP, files: {}, bodies }))
+  return canvas
 }
 
 /** The manifest `check` reads: one entry per file, the same shape the pipeline writes. */
@@ -719,15 +741,15 @@ describe('an outfit layer cut from a base with skin and underwear', () => {
     }
   })
 
-  it('passes C6 against the base it was cut from', async () => {
+  it('passes C6 against the body it was cut from', async () => {
     const dir = caseDir('skin-free')
     const bytes = {
-      base_f01_L30: await writeDensities(base, dir, 'base_f01_L30'),
+      body_f_L30: await writeDensities(base, dir, 'body_f_L30'),
       item_outfit_dealer01_L40: await writeDensities(layer, dir, 'item_outfit_dealer01_L40'),
     }
     const manifest = manifestFor(dir, {
-      base_f01_L30: { layer: LAYERS.body, w: FRAME.w, h: FRAME.h, bytes2x: bytes.base_f01_L30, real: true },
-      item_outfit_dealer01_L40: { layer: LAYERS.outfit, w: FRAME.w, h: FRAME.h, bytes2x: bytes.item_outfit_dealer01_L40, real: true },
+      body_f_L30: { layer: LAYERS.body, w: FRAME.w, h: FRAME.h, bytes2x: bytes.body_f_L30, real: true },
+      item_outfit_dealer01_L40: { layer: LAYERS.outfit, w: FRAME.w, h: FRAME.h, bytes2x: bytes.item_outfit_dealer01_L40, real: true, cutOn: 'f' },
     })
     const c6 = (await checkOne(dir, 'item_outfit_dealer01_L40', manifest)).get('C6')!
     expect(c6.ok, c6.detail).toBe(true)
@@ -1019,7 +1041,7 @@ describe('the ten acceptance checks', () => {
     const entry = await writePlaceholder(dir, 'item_head_tophat01_L80')
     const manifest = manifestFor(dir, { item_head_tophat01_L80: entry })
     const results = await checkOne(dir, 'item_head_tophat01_L80', manifest)
-    expect([...results.keys()].sort()).toEqual(['C1', 'C10', 'C11', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9'])
+    expect([...results.keys()].sort()).toEqual(['C1', 'C10', 'C11', 'C12', 'C13', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9'])
     for (const [id, result] of results) expect(result.ok, `${id}: ${result.detail}`).toBe(true)
   }, 30_000)
 
@@ -1098,11 +1120,13 @@ describe('the ten acceptance checks', () => {
     expect((await checkOne(dir, 'item_head_tophat01_L80', manifest)).get('C5')!.ok).toBe(false)
   }, 30_000)
 
-  it('C6 fails an outfit that leaves the base showing', async () => {
-    const dir = caseDir('c6')
-    const bases: Record<string, ManifestEntry> = {}
-    for (const name of ['base_f01_L30', 'base_m01_L30']) bases[name] = await writePlaceholder(dir, name)
-    // A tiny scrap where a full outfit should be.
+  /** The committed real body f at both densities, written into `dir` as `body_f_L30`, with its entry. */
+  async function realBodyF(dir: string): Promise<Record<string, ManifestEntry>> {
+    for (const density of DENSITIES) cpSync(join(OUT_DIR, `body_f_L30@${density}x.png`), join(dir, `body_f_L30@${density}x.png`))
+    return { body_f_L30: { layer: LAYERS.body, w: FRAME.w, h: FRAME.h, bytes2x: statSync(join(dir, 'body_f_L30@2x.png')).size, real: true } }
+  }
+  /** A tiny scrap where a full outfit should be, at both densities, as `item_outfit_casual01_L40`. */
+  async function outfitScrap(dir: string): Promise<number> {
     const build = (density: number): Picture => {
       const pic = blankPicture(FRAME.w * density, FRAME.h * density)
       for (let y = 240 * density; y < 260 * density; y++) {
@@ -1111,17 +1135,37 @@ describe('the ten acceptance checks', () => {
       return pic
     }
     for (const density of DENSITIES) await writePicture(build(density), join(dir, `item_outfit_casual01_L40@${density}x.png`))
-    const bytes2x = statSync(join(dir, 'item_outfit_casual01_L40@2x.png')).size
-    const manifest = manifestFor(dir, { ...bases, item_outfit_casual01_L40: { layer: 40, w: FRAME.w, h: FRAME.h, bytes2x, placeholder: true } })
-    expect((await checkOne(dir, 'item_outfit_casual01_L40', manifest)).get('C6')!.ok).toBe(false)
+    return statSync(join(dir, 'item_outfit_casual01_L40@2x.png')).size
+  }
+
+  it('C6 fails an outfit that leaves the body showing', async () => {
+    const dir = caseDir('c6')
+    const bytes2x = await outfitScrap(dir)
+    const outfit: ManifestEntry = { layer: 40, w: FRAME.w, h: FRAME.h, bytes2x, real: true, cutOn: 'f' }
+    const manifest = manifestFor(dir, { ...await realBodyF(dir), item_outfit_casual01_L40: outfit })
+    const c6 = (await checkOne(dir, 'item_outfit_casual01_L40', manifest)).get('C6')!
+    expect(c6.ok, c6.detail).toBe(false)
+    expect(c6.detail).toContain("leaves body_f_L30's underwear showing")
+  }, 60_000)
+
+  it('C6 fails a real outfit layer cut on no body: every outfit is cut on body f or m (Plan 19 D1)', async () => {
+    // Before D1 an outfit without `cutOn` was measured against the old bases. They are gone, and so is that branch:
+    // a real outfit layer that names no body (or an old base) is a layer nobody re-cut for the v4 pose.
+    const dir = caseDir('c6-no-body')
+    const bytes2x = await outfitScrap(dir)
+    const body = await realBodyF(dir)
+    for (const cutOn of [undefined, 'f01']) {
+      const outfit: ManifestEntry = { layer: 40, w: FRAME.w, h: FRAME.h, bytes2x, real: true, ...(cutOn ? { cutOn } : {}) }
+      const c6 = (await checkOne(dir, 'item_outfit_casual01_L40', manifestFor(dir, { ...body, item_outfit_casual01_L40: outfit }))).get('C6')!
+      expect(c6.ok, `cutOn ${String(cutOn)}: ${c6.detail}`).toBe(false)
+      expect(c6.detail).toMatch(/cut on no body/)
+    }
   }, 60_000)
 
   it('C6 passes the same outfit when the check is skipped', async () => {
     const dir = caseDir('c6-skip')
-    const bases: Record<string, ManifestEntry> = {}
-    for (const name of ['base_f01_L30', 'base_m01_L30']) bases[name] = await writePlaceholder(dir, name)
     const outfit = await writePlaceholder(dir, 'item_outfit_casual01_L40')
-    const manifest = manifestFor(dir, { ...bases, item_outfit_casual01_L40: outfit })
+    const manifest = manifestFor(dir, { ...await realBodyF(dir), item_outfit_casual01_L40: outfit })
     const [row] = await runChecks({ dir, manifest, names: ['item_outfit_casual01_L40'], skip: ['C6'] })
     const c6 = row!.results.find((result: { id: string }) => result.id === 'C6')!
     expect(c6.ok).toBe(true)
@@ -1195,7 +1239,7 @@ function stageOnePngs(
 
   // Add mask files for each layer that has masks in the manifest.
   if (manifest) {
-    const maskFileKind = { hair: 'hair', eyes: 'eye', tint: 'tint' }
+    const maskFileKind = { hair: 'hair', eyes: 'eye', tint: 'tint', skin: 'skin' }
     for (const layerName of layers) {
       const entry = manifest.files[layerName]
       if (entry?.masks) {
@@ -1222,13 +1266,10 @@ describe('the stage-1 name list', () => {
 
   it('is the list the design names in §4.4, and nothing else', () => {
     const byKind = (kind: string): string[] => files.filter((file: { kind: string }) => file.kind === kind).map((file: { name: string }) => file.name)
-    // 2026-09-24: four more bases (f02, f03, m02, m03 — phase 2 of the design, §5.1) joined the list.
-    expect(byKind('base').sort()).toEqual([
-      'base_f01_L20', 'base_f01_L30', 'base_f01_L60', 'base_f02_L20', 'base_f02_L30', 'base_f02_L60',
-      'base_f03_L20', 'base_f03_L30', 'base_f03_L60', 'base_m01_L20', 'base_m01_L30', 'base_m01_L60',
-      'base_m02_L20', 'base_m02_L30', 'base_m02_L60', 'base_m03_L20', 'base_m03_L30', 'base_m03_L60',
-    ])
-    expect(byKind('baseFace')).toHaveLength(36)
+    // Plan 19 D1: the six flat bases (f01…m03) and their faces are retired — the stage set is bodies, their faces,
+    // hairstyles, items and bots, and no name on it is a base's.
+    expect([...new Set(files.map((file: { kind: string }) => file.kind))].sort()).toEqual(['body', 'bodyFace', 'bot', 'botFace', 'hair', 'item'])
+    expect(files.filter((file: { name: string }) => file.name.startsWith('base_'))).toEqual([])
     expect(byKind('item').filter((name) => name.startsWith('item_head_'))).toHaveLength(8)
     expect(byKind('item').filter((name) => name.startsWith('item_face_'))).toHaveLength(4)
     expect(byKind('item').filter((name) => name.startsWith('item_outfit_'))).toHaveLength(6)
@@ -1236,25 +1277,23 @@ describe('the stage-1 name list', () => {
     expect(byKind('item').filter((name) => name.startsWith('item_frame_'))).toHaveLength(6)
     expect(byKind('bot')).toHaveLength(8)
     expect(byKind('botFace')).toHaveLength(48)
-    expect(files).toHaveLength(142)
+    // Plan 19 (spec §5.3): the v4 bodies, their twelve faces and eight hairstyles of two layers each.
+    expect(byKind('body')).toEqual(['body_f_L30', 'body_m_L30'])
+    expect(byKind('bodyFace')).toHaveLength(12)
+    expect(byKind('hair').sort()).toEqual(HAIR_CODES.flatMap((code: string) => [hairFile(code, 20), hairFile(code, 60)]).sort())
+    expect(byKind('hair')).toHaveLength(16)
+    // 172 before D1, less the six bases' three layers and six faces each (54).
+    expect(files).toHaveLength(118)
     expect(files.map((file: { name: string }) => file.name)).toContain('item_head_tophat01_L80')
     expect(files.map((file: { name: string }) => file.name)).toContain('item_frame_founder_L90')
     expect(files.map((file: { name: string }) => file.name)).toContain('bot_7_face_sleep_L50')
   })
 
-  it('grows by a whole figure when a base is added to the list, and by nothing else', () => {
-    // R5, 2026-09-17: `BASES` in `manifest.mjs` is the source of truth for which bases exist, and adding
-    // one there is what gives the next `placeholder` run a full stand-in set to draw for it — nine files,
-    // the three layers and the six expressions, exactly as `f01` and `m01` have.
-    const three = stageOneFiles([...BASES, 'f09']) as { name: string; kind: string }[]
-    const added = three.filter((file) => !files.some((had: { name: string }) => had.name === file.name))
-    expect(added.map((file) => file.name).sort()).toEqual([
-      'base_f09_L20', 'base_f09_L30', 'base_f09_L60',
-      'base_f09_face_closed_L50', 'base_f09_face_happy_L50', 'base_f09_face_neutral_L50',
-      'base_f09_face_sad_L50', 'base_f09_face_sleep_L50', 'base_f09_face_surprised_L50',
-    ].sort())
-    // …and a name the placeholder set has never seen still has to be a legal one (C8).
-    for (const file of added) expect(NAME_PATTERN.test(file.name), file.name).toBe(true)
+  it('reads no base name any more: a retired base_* name is not a legal one (Plan 19 D1)', () => {
+    for (const name of ['base_f01_L30', 'base_m01_face_happy_L50', 'base_f02_L60']) {
+      expect(parseName(name), name).toBeNull()
+      expect(NAME_PATTERN.test(name), name).toBe(false)
+    }
   })
 
   it('gives every entry the layer its name ends in', () => {
@@ -1262,6 +1301,22 @@ describe('the stage-1 name list', () => {
     for (const file of files as { name: string; layer: number }[]) {
       expect(known.has(file.layer), `${file.name} claims layer ${file.layer}`).toBe(true)
       expect(file.name.endsWith(`_L${file.layer}`), file.name).toBe(true)
+    }
+  })
+})
+
+describe('v4 names (spec §5.3)', () => {
+  it('names bodies, body faces and both hair layers, and reads them back', () => {
+    expect(bodyFile('f')).toBe('body_f_L30')
+    expect(bodyFaceFile('m', 'happy')).toBe('body_m_face_happy_L50')
+    expect(hairFile('f_bob01', 20)).toBe('item_hair_f_bob01_L20')
+    expect(hairItemId('m_spiky01')).toBe('hair_m_spiky01')
+    expect(parseName('body_f_L30')).toEqual({ kind: 'body', layer: 30, gender: 'f' })
+    expect(parseName('body_m_face_sleep_L50')).toEqual({ kind: 'bodyFace', layer: 50, gender: 'm', expr: 'sleep' })
+    expect(parseName('item_hair_m_spiky01_L60')).toEqual({ kind: 'hair', layer: 60, gender: 'm', code: 'm_spiky01' })
+    for (const bad of ['body_x_L30', 'body_f_L50', 'item_hair_f_bob01_L30', 'item_hair_bob01_L60', 'item_hair_f_bob01_m_L60', 'item_hair_x_bob01_L20']) {
+      expect(parseName(bad), bad).toBeNull()
+      expect(NAME_PATTERN.test(bad), bad).toBe(false)
     }
   })
 })
@@ -1357,6 +1412,102 @@ describe('the committed placeholder set', () => {
     }
   })
 
+  // ── the switch-over (Plan 19 D1) ──
+
+  it('carries no base: no base_* layer, icon or file, and no `bases` key in either manifest', () => {
+    expect(Object.keys(manifest.files).filter((name) => name.startsWith('base_'))).toEqual([])
+    expect(Object.keys(manifest.icons ?? {}).filter((name) => name.startsWith('base_'))).toEqual([])
+    expect(readdirSync(OUT_DIR).filter((name) => name.startsWith('base_'))).toEqual([])
+    for (const file of [WEB_MANIFEST, SERVER_MANIFEST]) expect(Object.keys(JSON.parse(readFileSync(file, 'utf8'))), file).not.toContain('bases')
+  })
+
+  it('cuts every outfit layer on a body: cutOn f or m, on the default layer and on every per-wear cut', () => {
+    const outfits = Object.entries(manifest.files as Record<string, ManifestEntry & { cutOn?: string }>).filter(([name]) => name.startsWith('item_outfit_'))
+    expect(outfits.length, 'six outfits and their male cuts').toBeGreaterThanOrEqual(6)
+    for (const [name, entry] of outfits) expect(['f', 'm'], `${name} is cut on ${String(entry.cutOn)}`).toContain(entry.cutOn)
+  })
+
+  it('draws every bot on body f: its body and all six faces carry cutOn f', () => {
+    const bots = Object.entries(manifest.files as Record<string, ManifestEntry & { cutOn?: string }>).filter(([name]) => name.startsWith('bot_'))
+    expect(bots).toHaveLength(8 * 7)
+    for (const [name, entry] of bots) expect(entry.cutOn, name).toBe('f')
+  })
+
+  // ── the v4 stand-ins (Plan 19, A1a) ──
+
+  type V4File = { name: string; kind: string; layer: number; gender: string; expr?: string; code?: string }
+  /** The masks each v4 kind is drawn with, by manifest key (`MASK_FILE_KIND` spells them on disk). */
+  const V4_MASKS: Record<string, string[]> = { body: ['skin'], bodyFace: ['eyes', 'skin'], hair: ['hair'] }
+  /** Every v4 name on the list: two bodies, twelve body faces, sixteen hair layers. */
+  const v4Files = (): V4File[] => (stageOneFiles() as V4File[]).filter((file) => V4_MASKS[file.kind] !== undefined)
+  const v4StandIns = (): V4File[] => v4Files().filter((file) => manifest.files[file.name]?.placeholder === true)
+  /** The @2x mask of one layer, as the alpha byte per pixel. */
+  const maskAlpha = async (name: string, kind: string): Promise<Uint8Array> => {
+    const pic = await readPicture(join(OUT_DIR, `${name}_${MASK_FILE_KIND[kind as keyof typeof MASK_FILE_KIND]}mask@2x.png`))
+    const alpha = new Uint8Array(pic.width * pic.height)
+    for (let p = 0; p < alpha.length; p++) alpha[p] = pic.data[p * 4 + 3]!
+    return alpha
+  }
+  const solidCount = (alpha: Uint8Array): number => alpha.reduce((n, a) => n + (a >= 128 ? 1 : 0), 0)
+
+  it('gives every v4 stand-in the masks it is drawn with, and every stand-in hair L60 a split that adds up', async () => {
+    // Skin on a body and on every face, eyes on every face (empty on closed and sleep), hair on both hair layers —
+    // rendered from the stand-in's own shapes (`placeholderMaskSvg`), never computed. A hair L60 records how the
+    // hairstyle's region splits between its two layers, in @2x pixels, and the two never share one. Once the art
+    // phase has replaced a layer with real art it is C11's to hold (A1b), so the loop passes over it — but every one
+    // of the 30 v4 names is in the manifest, stand-in or not.
+    const v4 = v4Files()
+    expect(v4.length, 'the v4 set is 2 bodies, 12 body faces and 16 hair layers').toBe(30)
+    for (const file of v4) expect(manifest.files[file.name], `${file.name} is not in the manifest`).toBeDefined()
+    for (const file of v4) {
+      const entry = manifest.files[file.name]!
+      if (entry.placeholder !== true) continue
+      expect(Object.keys(entry.masks ?? {}).sort(), file.name).toEqual(V4_MASKS[file.kind])
+      for (const [kind, info] of Object.entries(entry.masks!)) {
+        const fileKind = MASK_FILE_KIND[kind as keyof typeof MASK_FILE_KIND]
+        expect(info.bytes2x, `${file.name} ${kind}`).toBe(statSync(join(OUT_DIR, `${file.name}_${fileKind}mask@2x.png`)).size)
+        expect(info.meanL, `${file.name} ${kind}`).toBeGreaterThanOrEqual(0)
+        expect(info.meanL, `${file.name} ${kind}`).toBeLessThanOrEqual(1)
+      }
+      if (file.kind === 'bodyFace') {
+        const shut = file.expr === 'closed' || file.expr === 'sleep'
+        expect(entry.masks!.eyes!.empty === true, `${file.name}: an eye mask is empty exactly when the eyes are shut`).toBe(shut)
+        expect(solidCount(await maskAlpha(file.name, 'eyes')) === 0, file.name).toBe(shut)
+      }
+      if (file.kind === 'hair' && file.layer === LAYERS.hairFront) {
+        const split = entry.split
+        expect(split, `${file.name} has no split`).toBeDefined()
+        expect(split!.front + split!.back, `${file.name}: front + back`).toBe(split!.region)
+        const back = hairFile(file.code!, LAYERS.hairBack)
+        if (manifest.files[back]?.placeholder !== true) continue
+        const [front2x, back2x] = await Promise.all([maskAlpha(file.name, 'hair'), maskAlpha(back, 'hair')])
+        expect(split!.front, file.name).toBe(solidCount(front2x))
+        expect(split!.back, file.name).toBe(solidCount(back2x))
+        expect(split!.back, `${file.name}: the back layer is empty`).toBeGreaterThan(0)
+        // The two layers' own pixels never meet, and the fringe stops above the stand-in eyes (y 130–160).
+        const [layer60, layer20] = await Promise.all([readPicture(join(OUT_DIR, `${file.name}@2x.png`)), readPicture(join(OUT_DIR, `${back}@2x.png`))])
+        let shared = 0
+        for (let p = 0; p < layer60.width * layer60.height; p++) if (layer60.data[p * 4 + 3]! >= 128 && layer20.data[p * 4 + 3]! >= 128) shared++
+        expect(shared, `${file.name} and ${back} share pixels`).toBe(0)
+        const box = alphaBBox(layer60)!
+        expect((box.y + box.h) / 2, `${file.name} reaches down to y ${(box.y + box.h) / 2}`).toBeLessThan(126)
+      } else {
+        expect(entry.split, `${file.name} carries a split`).toBeUndefined()
+      }
+    }
+  }, 120_000)
+
+  it('never lets a stand-in face’s skin and eye masks share a pixel', async () => {
+    const faces = v4StandIns().filter((file) => file.kind === 'bodyFace')
+    for (const file of faces) {
+      const [skin, eyes] = await Promise.all([maskAlpha(file.name, 'skin'), maskAlpha(file.name, 'eyes')])
+      let both = 0
+      for (let p = 0; p < skin.length; p++) if (skin[p]! >= 128 && eyes[p]! >= 128) both++
+      expect(both, `${file.name}: skin and eyes share ${both} pixels`).toBe(0)
+      expect(solidCount(skin), `${file.name} has no skin`).toBeGreaterThan(0)
+    }
+  }, 60_000)
+
   it('ships the server the very same bytes', () => {
     // The catalogue validates against this copy; two manifests that drift are two truths about which
     // files exist, and the one the server trusts is the one nothing else reads.
@@ -1364,28 +1515,447 @@ describe('the committed placeholder set', () => {
     expect(readFileSync(SERVER_MANIFEST).equals(readFileSync(WEB_MANIFEST))).toBe(true)
   })
 
-  it('passes its own acceptance checks', () => {
-    // C6 measures outfits against each base's real body. While a base is real art and the outfits are
-    // still stand-ins drawn for the stand-in body, they cannot cover it, and that is expected rather
-    // than a fault — so C6 is skipped exactly for that mix, and runs again once real outfits land.
-    const entries = Object.entries(manifest.files)
-    const realBase = entries.some(([name, entry]) => /^base_[a-z0-9]+_L30$/.test(name) && entry.real)
-    const standInOutfit = entries.some(([name, entry]) => name.startsWith('item_outfit_') && entry.placeholder)
-    const skip = realBase && standInOutfit ? ['--skip', 'C6'] : []
-    const stdout = execFileSync(process.execPath, [SCRIPT, 'check', ...skip], { cwd: PACKAGE_ROOT, encoding: 'utf8' })
+  it('passes its own acceptance checks, every one of them (Plan 19 D1: no --skip)', () => {
+    // Until D1, C6 was skipped while a real flat base stood under stand-in outfits. Every outfit is real art cut on a
+    // real body now, so nothing is skipped.
+    const stdout = execFileSync(process.execPath, [SCRIPT, 'check'], { cwd: PACKAGE_ROOT, encoding: 'utf8' })
     expect(stdout).toMatch(/C1/)
     expect(stdout).not.toMatch(/FAIL/)
   }, 300_000)
 
-  it('leaves a review sheet for the style gate', () => {
+  it('leaves a review sheet for the style gate', async () => {
+    expect(SHEET_FILE).toBe(SHEET)
+    expect(FIT_SHEET_FILE).toBe(FIT_SHEET)
     expect(existsSync(SHEET), 'docs/avatar-2d-sheet.png has not been generated').toBe(true)
-    return sharp(SHEET)
-      .metadata()
-      .then((meta) => {
-        expect(meta.width!).toBeGreaterThan(1000)
-        expect(meta.height!).toBeGreaterThan(1000)
-      })
+    expect(existsSync(FIT_SHEET), 'docs/avatar-2d-fit-sheet.png has not been generated').toBe(true)
+    // Spec §5.6, Plan 19: the v4 grid (2 genders × 4 hairstyles × 3 tones × 2 outfits), every outfit on both genders,
+    // every aura and frame, six expressions per gender, the eight bots and the three portrait sizes.
+    const items = JSON.parse(readFileSync(ITEMS_FILE, 'utf8')) as unknown[]
+    const cards = sheetCards(manifest, { items })
+    const count = (...blocks: string[]): number => cards.filter((card) => blocks.includes(card.block)).length
+    expect(count('grid')).toBe(48)
+    expect(count('outfits')).toBe(12)
+    expect(count('auras', 'frames')).toBe(14)
+    expect(count('expressions')).toBe(12)
+    expect(count('bots')).toBe(8)
+    expect(count('portraits')).toBe(3)
+    expect(cards).toHaveLength(48 + 12 + 14 + 12 + 8 + 3)
+    // The fit sheet: every hat and every face item × the eight hairstyles.
+    const fit = fitCards(manifest)
+    expect(fit).toHaveLength(96)
+
+    // The committed pictures are the ones these lists lay out: a sheet left over from another card list fails here.
+    const [sheet, fitSheet] = await Promise.all([sharp(SHEET).metadata(), sharp(FIT_SHEET).metadata()])
+    const want = sheetLayout(cards, SHEET_GRID)
+    const wantFit = sheetLayout(fit, FIT_GRID)
+    expect({ width: sheet.width, height: sheet.height }).toEqual({ width: want.width, height: want.height })
+    expect({ width: fitSheet.width, height: fitSheet.height }).toEqual({ width: wantFit.width, height: wantFit.height })
+    for (const meta of [sheet, fitSheet]) {
+      expect(meta.width!).toBeGreaterThan(1000)
+      expect(meta.height!).toBeGreaterThan(1000)
+    }
   })
+})
+
+// ────────────────────────────────────────────── the v4 sheets and `hides` ──
+
+describe('the v4 review sheet and the fit sheet (Plan 19 A1d, spec §5.6)', () => {
+  const committed = JSON.parse(readFileSync(WEB_MANIFEST, 'utf8')) as Manifest
+  const SKIN = { porcelain: '#f8ece4', deep: '#6b4a3a' }
+  const skinItems = [
+    { id: 'skin_porcelain01', slot: 'skinColor', colour: SKIN.porcelain },
+    { id: 'skin_deep01', slot: 'skinColor', colour: SKIN.deep },
+  ]
+  const grid = (cards: { block: string }[]) => cards.filter((card) => card.block === 'grid') as { block: string; caption: string[]; names: string[]; tone?: { gender: string; colour: string } }[]
+
+  it('narrows the v4 grid with --hairs and --outfits, and nothing else', () => {
+    const all = sheetCards(committed, { items: skinItems })
+    const narrow = sheetCards(committed, { items: skinItems, hairs: ['hair_f_bob01', 'm_spiky01'], outfits: ['outfit_casual01'] })
+    expect(grid(narrow)).toHaveLength(2 * 3 * 1)
+    expect(grid(narrow).map((card) => card.names[0])).toEqual([...Array(3).fill(hairFile('f_bob01', 20)), ...Array(3).fill(hairFile('m_spiky01', 20))])
+    expect(narrow.filter((card) => card.block !== 'grid')).toEqual(all.filter((card) => card.block !== 'grid'))
+    expect(() => sheetCards(committed, { hairs: ['f_mohawk01'] })).toThrow(/f_mohawk01/)
+    expect(() => sheetCards(committed, { outfits: ['pyjamas01'] })).toThrow(/pyjamas01/)
+  })
+
+  it('refuses an empty --hairs or --outfits, which would narrow the grid to nothing (Plan 19 final review)', () => {
+    for (const empty of [[], [''], [' ', '']]) {
+      expect(() => sheetCards(committed, { hairs: empty }), JSON.stringify(empty)).toThrow(/--hairs names no hairstyle — give one or more of f_bob01/)
+      expect(() => sheetCards(committed, { outfits: empty }), JSON.stringify(empty)).toThrow(/--outfits names no outfit — give one or more of/)
+    }
+    // On the command line, before a sheet is written: exit 1, and the reason.
+    const out = join(caseDir('sheet-empty-hairs'), 'sheet.png')
+    let failed: { status?: number; stderr?: string } = {}
+    try {
+      execFileSync(process.execPath, [SCRIPT, 'sheet', '--hairs', '', '--out', out, '--fit-out', `${out}.fit.png`], { cwd: PACKAGE_ROOT, encoding: 'utf8', stdio: 'pipe' })
+    } catch (error) {
+      failed = error as { status?: number; stderr?: string }
+    }
+    expect(failed.status).toBe(1)
+    expect(failed.stderr).toMatch(/--hairs names no hairstyle/)
+    expect(existsSync(out)).toBe(false)
+    // The fit sheet's tile is the portrait crop at @1x, so a crop is blitted as it is.
+    expect(FIT_GRID.tile).toEqual({ w: CROP.size, h: CROP.size })
+  })
+
+  it('paints the outer tones from items.json, and draws natural, saying so, while an item is missing', () => {
+    const withBoth = grid(sheetCards(committed, { items: skinItems }))
+    expect(withBoth.map((card) => card.tone?.colour ?? 'natural').slice(0, 3)).toEqual([SKIN.porcelain, 'natural', SKIN.deep])
+    expect(withBoth[0]!.caption.join(' ')).toContain(SKIN.porcelain)
+    const without = grid(sheetCards(committed, { items: [] }))
+    expect(without.every((card) => card.tone === undefined)).toBe(true)
+    expect(without[0]!.caption.join(' ')).toMatch(/porcelain.*no item.*natural/)
+    expect(without[2]!.caption.join(' ')).toMatch(/deep.*no item.*natural/)
+  })
+
+  it('dresses every v4 card in its gender’s cut of an outfit where one exists', () => {
+    const outfits = sheetCards(committed, { items: [] }).filter((card) => card.block === 'outfits')
+    const dealer = outfits.filter((card) => card.names.some((name) => name.startsWith('item_outfit_dealer01')))
+    expect(dealer.map((card) => card.names.find((name) => name.startsWith('item_outfit_')))).toEqual(['item_outfit_dealer01_L40', 'item_outfit_dealer01_m_L40'])
+    expect(dealer.map((card) => card.names.find((name) => name.startsWith('body_')))).toEqual([bodyFile('f'), bodyFile('m')])
+    // On the gender's default hairstyle: f → the bob, m → the tousled cut.
+    expect(dealer.map((card) => card.names[0])).toEqual([hairFile('f_bob01', 20), hairFile('m_tousled01', 20)])
+  })
+
+  it('drops the hair layer a head item hides on the fit sheet, and only that one', () => {
+    const files = { ...committed.files }
+    const flags = (name: string, front: boolean, back: boolean): void => {
+      const { hidesHairFront: _front, hidesHairBack: _back, ...rest } = files[name]!
+      files[name] = { ...rest, ...(front ? { hidesHairFront: true } : {}), ...(back ? { hidesHairBack: true } : {}) }
+    }
+    flags('item_head_beanie01_L80', true, false)
+    flags('item_head_hood_black01_L80', true, true)
+    flags('item_head_dealer_visor01_L80', false, false)
+    const cards = fitCards({ ...committed, files }) as { names: string[]; hair: string; item: string }[]
+    for (const code of HAIR_CODES) {
+      const back = hairFile(code, 20)
+      const front = hairFile(code, 60)
+      const card = (item: string): string[] => cards.find((c) => c.item === item && c.hair === code)!.names
+      // On the hairstyle's own gender, in casual01.
+      expect(card('item_head_beanie01_L80')).toEqual(expect.arrayContaining([bodyFile(code.slice(0, 1)), 'item_outfit_casual01_L40']))
+      expect(card('item_head_beanie01_L80'), `${code} under the beanie`).toContain(back)
+      expect(card('item_head_beanie01_L80'), `${code} under the beanie`).not.toContain(front)
+      expect(card('item_head_hood_black01_L80').filter((name) => name.startsWith('item_hair_')), `${code} under the hood`).toEqual([])
+      expect(card('item_head_dealer_visor01_L80')).toEqual(expect.arrayContaining([back, front]))
+      expect(card('item_face_sunglasses01_L70')).toEqual(expect.arrayContaining([back, front]))
+    }
+  })
+
+  it('paints a tone over skin only: the body and its face, by their skin masks', async () => {
+    const cards = grid(sheetCards(committed, { items: skinItems, hairs: ['f_bob01'], outfits: ['casual01'] }))
+    const [porcelain, natural, deep] = await Promise.all(cards.map((card) => composeCard(card, { dir: OUT_DIR, manifest: committed })))
+    const masks = await Promise.all([bodyFile('f'), bodyFaceFile('f', 'neutral')].map((name) => readPicture(join(OUT_DIR, `${name}_skinmask@1x.png`))))
+    for (const toned of [porcelain!, deep!]) {
+      let changed = 0
+      let outside = 0
+      for (let p = 0; p < natural!.width * natural!.height; p++) {
+        const differs = [0, 1, 2].some((c) => toned.data[p * 4 + c] !== natural!.data[p * 4 + c])
+        if (!differs) continue
+        changed++
+        if (masks.every((mask) => mask.data[p * 4 + 3] === 0)) outside++
+      }
+      expect(changed, 'the tone changed nothing').toBeGreaterThan(1000)
+      expect(outside, 'the tone reached past the skin masks').toBe(0)
+    }
+  }, 30_000)
+})
+
+describe('the hides command', () => {
+  const run = (args: string[]): string => execFileSync(process.execPath, [SCRIPT, ...args], { cwd: PACKAGE_ROOT, encoding: 'utf8' })
+
+  it('hides item_head_beanie01_L80 --front on --out <temp copy> flips that entry in the copy only, and names every items.json row on the layer', () => {
+    // Since the C5 fit check no hat hides the front hair (the beanie is committed with neither flag), so this turns
+    // the flag on in a copy and back off again.
+    const dir = caseDir('hides')
+    const committedBytes = [readFileSync(WEB_MANIFEST), readFileSync(SERVER_MANIFEST)]
+    cpSync(WEB_MANIFEST, join(dir, MANIFEST_NAME))
+    const layer = 'item_head_beanie01_L80'
+
+    const stdout = run(['hides', layer, '--front', 'on', '--out', dir])
+    const expected = JSON.parse(committedBytes[0]!.toString('utf8')) as Manifest
+    expected.files[layer]!.hidesHairFront = true
+    // Exactly the one flag (the writer gives it its own place among the keys, so compare the data here; the round
+    // trip below holds the bytes).
+    expect(JSON.parse(readFileSync(join(dir, MANIFEST_NAME), 'utf8'))).toEqual(expected)
+    expect(readFileSync(join(dir, MANIFEST_NAME), 'utf8').endsWith('\n')).toBe(true)
+    expect(stdout).toContain('remember items.json: head_beanie01, head_beanie_red01, head_beanie_grey01, head_beanie_mustard01 — same flags (bug 7)')
+    // The committed manifests are untouched.
+    expect(readFileSync(WEB_MANIFEST).equals(committedBytes[0]!)).toBe(true)
+    expect(readFileSync(SERVER_MANIFEST).equals(committedBytes[1]!)).toBe(true)
+
+    // Back off, and the copy is byte for byte the committed file again.
+    run(['hides', layer, '--front', 'off', '--out', dir])
+    expect(readFileSync(join(dir, MANIFEST_NAME)).equals(committedBytes[0]!)).toBe(true)
+
+    // --back alone, and a refusal for an unknown layer or a value that is not on|off.
+    run(['hides', layer, '--back', 'on', '--out', dir])
+    const back = JSON.parse(readFileSync(join(dir, MANIFEST_NAME), 'utf8')) as Manifest
+    expect(back.files[layer]).toMatchObject({ hidesHairBack: true })
+    expect(back.files[layer]!.hidesHairFront).toBeUndefined()
+    expect(() => run(['hides', 'item_head_nothing01_L80', '--front', 'off', '--out', dir])).toThrow()
+    expect(() => run(['hides', layer, '--front', 'maybe', '--out', dir])).toThrow()
+    expect(() => run(['hides', layer, '--out', dir])).toThrow()
+  }, 60_000)
+})
+
+// ─────────────────────────────────────────────── C12, and C11 on the v4 set ──
+
+describe('C12 and the v4 rules of C11 (Plan 19 A1b, spec §5.1, §5.5)', () => {
+  const committed = JSON.parse(readFileSync(WEB_MANIFEST, 'utf8')) as Manifest
+
+  /** A committed layer at both densities, with the masks named (by file kind: `skin`, `eye`, `hair`), copied to `dir`. */
+  function copyLayer(dir: string, name: string, fileKinds: string[]): void {
+    for (const density of DENSITIES) {
+      cpSync(join(OUT_DIR, `${name}@${density}x.png`), join(dir, `${name}@${density}x.png`))
+      for (const kind of fileKinds) cpSync(join(OUT_DIR, `${name}_${kind}mask@${density}x.png`), join(dir, `${name}_${kind}mask@${density}x.png`))
+    }
+  }
+  /** The committed entry of `name`, flagged real or stand-in as the case needs, whatever it is today. */
+  function flagged(name: string, real: boolean): ManifestEntry {
+    const { placeholder: _placeholder, real: _real, ...rest } = committed.files[name]!
+    return real ? { ...rest, real: true } : { ...rest, placeholder: true }
+  }
+  /** The @2x mask of `name` in `dir`, run through `edit` (alpha per pixel) and written back. */
+  async function editMask(dir: string, name: string, fileKind: string, edit: (alpha: Uint8Array, width: number) => void): Promise<void> {
+    const file = join(dir, `${name}_${fileKind}mask@2x.png`)
+    const pic = await readPicture(file)
+    const alpha = new Uint8Array(pic.width * pic.height)
+    for (let p = 0; p < alpha.length; p++) alpha[p] = pic.data[p * 4 + 3]!
+    edit(alpha, pic.width)
+    for (let p = 0; p < alpha.length; p++) pic.data[p * 4 + 3] = alpha[p]!
+    await writePicture(pic, file)
+  }
+
+  it('pins HEAD_REFERENCE to F01 as measured before D1 retired its files (rulings 1, 2; index / 2, no half-pixel)', () => {
+    // headMetrics on the committed base_f01_L30@1x and base_f01_face_neutral_L50_eyemask@2x gave (190.91, 193.99),
+    // 60.61 apart, chin 243 — rounded to a tenth. Those files are gone (Plan 19 D1), so the numbers are pinned as such.
+    expect(HEAD_REFERENCE).toEqual({ eyeMidX: 190.9, eyeMidY: 194.0, eyeSpan: 60.6, chinY: 243 })
+    expect(HEAD_TOLERANCE).toBeCloseTo(0.02 * CROP.size, 10)
+    // The chin has its own, wider limit (gate ruling): a bald face is drawn shorter than F01's framed one.
+    expect(CHIN_TOLERANCE).toBe(12)
+  })
+
+  /** The committed real body f's head as C12 finds it — its own eyes and chin, measured once. */
+  let bodyFHead: Promise<{ eyeMidX: number; eyeMidY: number; eyeSpan: number; chinY: number }> | null = null
+  const committedHead = (): Promise<{ eyeMidX: number; eyeMidY: number; eyeSpan: number; chinY: number }> =>
+    (bodyFHead ??= (async () => headMetrics(await readPicture(join(OUT_DIR, 'body_f_L30@1x.png')), await readPicture(join(OUT_DIR, 'body_f_face_neutral_L50_eyemask@2x.png'))))())
+
+  /**
+   * The committed body f and its neutral eye mask (F01's were used until D1 deleted them), written into `dir` as a real
+   * body f and its neutral face, moved so the chin lands `chinOff` units below `HEAD_REFERENCE.chinY` — exactly: the
+   * chin is a row — and the eye line `eyeOff` units below `HEAD_REFERENCE.eyeMidY`, to within a quarter unit (the eye
+   * mask moves in half units, a pixel at @2x). The eyes' midpoint x and span are body f's own, inside C12's 4.16.
+   */
+  async function buildHead(dir: string, chinOff: number, eyeOff = chinOff): Promise<Manifest> {
+    const head = await committedHead()
+    const bodyDy = HEAD_REFERENCE.chinY + chinOff - head.chinY
+    const eyes2xDy = Math.round(2 * (HEAD_REFERENCE.eyeMidY + eyeOff - head.eyeMidY))
+    for (const density of DENSITIES) {
+      const body = await readPicture(join(OUT_DIR, `body_f_L30@${density}x.png`))
+      await writePicture(shiftPicture(body, 0, bodyDy * density), join(dir, `body_f_L30@${density}x.png`))
+      const eyes = await readPicture(join(OUT_DIR, `body_f_face_neutral_L50_eyemask@${density}x.png`))
+      await writePicture(shiftPicture(eyes, 0, Math.round((eyes2xDy * density) / 2)), join(dir, `body_f_face_neutral_L50_eyemask@${density}x.png`))
+    }
+    const bytes2x = statSync(join(dir, 'body_f_L30@2x.png')).size
+    return manifestFor(dir, {
+      body_f_L30: { layer: 30, w: FRAME.w, h: FRAME.h, bytes2x, real: true },
+      body_f_face_neutral_L50: { layer: 50, w: FRAME.w, h: FRAME.h, bytes2x: 0, real: true, masks: { eyes: { bytes2x: 0, meanL: 0.5 } } },
+    })
+  }
+  /** C12's way of naming an eye line about 6 units off (the eye mask lands within a quarter unit of it). */
+  const EYE_LINE_6 = /eye line (?:5\.[89]|6\.[0-2]) from F01's \(want within 4\.16\) — eyes \(/
+
+  it('C12 passes a real body whose eyes and chin sit on F01, and fails one moved by 6 units on its eye line alone', async () => {
+    const still = caseDir('c12-still')
+    const c12 = (await checkOne(still, 'body_f_L30', await buildHead(still, 0))).get('C12')!
+    expect(c12.ok, c12.detail).toBe(true)
+    expect(c12.detail).toMatch(/^eyes \(.*\) [\d.]+ apart, chin \d+, eyes within 4\.16 and chin within 12 of F01's$/)
+    const moved = caseDir('c12-moved')
+    const off = (await checkOne(moved, 'body_f_L30', await buildHead(moved, 6))).get('C12')!
+    expect(off.ok).toBe(false)
+    expect(off.detail).toMatch(EYE_LINE_6)
+    // The chin moved 6 too, inside its own 12: it is not named.
+    expect(off.detail).not.toMatch(/chin \d+\.\d from F01's/)
+  }, 60_000)
+
+  it('C12 holds the chin to 12 units and the eyes to 4.16, each named with its own limit', async () => {
+    // A bald face is drawn shorter than F01's: the body's chin 10 units up with the eyes on F01's still passes ...
+    const near = caseDir('c12-chin-10')
+    const ten = (await checkOne(near, 'body_f_L30', await buildHead(near, -10, 0))).get('C12')!
+    expect(ten.ok, ten.detail).toBe(true)
+    expect(ten.detail).toContain(`chin ${HEAD_REFERENCE.chinY - 10},`)
+    // ... 13 units fails, on the chin alone, naming the 12 ...
+    const far = caseDir('c12-chin-13')
+    const thirteen = (await checkOne(far, 'body_f_L30', await buildHead(far, -13, 0))).get('C12')!
+    expect(thirteen.ok).toBe(false)
+    expect(thirteen.detail.startsWith("chin 13.0 from F01's (want within 12) — eyes (")).toBe(true)
+    // ... and the eye line 6 units off still fails on the 4.16, whatever the chin does.
+    const low = caseDir('c12-eyes-6')
+    const six = (await checkOne(low, 'body_f_L30', await buildHead(low, 0, 6))).get('C12')!
+    expect(six.ok).toBe(false)
+    expect(six.detail).toMatch(EYE_LINE_6)
+    expect(six.detail).not.toMatch(/chin \d+\.\d from F01's/)
+  }, 90_000)
+
+  it('C12 says n/a for a stand-in', async () => {
+    const dir = caseDir('c12-stand-in')
+    const entry = await writePlaceholder(dir, 'body_f_L30')
+    const c12 = (await checkOne(dir, 'body_f_L30', manifestFor(dir, { body_f_L30: entry }))).get('C12')!
+    expect(c12.ok).toBe(true)
+    expect(c12.detail.startsWith('n/a'), c12.detail).toBe(true)
+  }, 30_000)
+
+  it('C12 says n/a for a real body whose neutral face is still a stand-in', async () => {
+    // The stand-in's eyes are drawn where no head was measured; holding a real body to them says nothing.
+    const dir = caseDir('c12-stand-in-face')
+    for (const density of DENSITIES) {
+      cpSync(join(OUT_DIR, `body_f_L30@${density}x.png`), join(dir, `body_f_L30@${density}x.png`))
+      cpSync(join(OUT_DIR, `body_f_face_neutral_L50_eyemask@${density}x.png`), join(dir, `body_f_face_neutral_L50_eyemask@${density}x.png`))
+    }
+    const bytes2x = statSync(join(dir, 'body_f_L30@2x.png')).size
+    const manifest = manifestFor(dir, {
+      body_f_L30: { layer: 30, w: FRAME.w, h: FRAME.h, bytes2x, real: true },
+      body_f_face_neutral_L50: { layer: 50, w: FRAME.w, h: FRAME.h, bytes2x: 0, placeholder: true, masks: { eyes: { bytes2x: 0, meanL: 0.5 } } },
+    })
+    const c12 = (await checkOne(dir, 'body_f_L30', manifest)).get('C12')!
+    expect(c12.ok).toBe(true)
+    expect(c12.detail).toMatch(/^n\/a — body_f_face_neutral_L50 is a stand-in/)
+  }, 30_000)
+
+  it('C11 compares a face’s skin with the neutral face only when both are real or both are stand-ins', async () => {
+    const neutral = 'body_f_face_neutral_L50'
+    const happy = 'body_f_face_happy_L50'
+    // Between B3 and C1 the neutral face is real art and the other five are still stand-ins (pre-flight #7, R26).
+    const mixed = caseDir('c11-mixed')
+    for (const face of [neutral, happy]) copyLayer(mixed, face, ['skin', 'eye'])
+    const mixedRow = (await checkOne(mixed, happy, manifestFor(mixed, { [neutral]: flagged(neutral, true), [happy]: flagged(happy, false) }))).get('C11')!
+    expect(mixedRow.ok, mixedRow.detail).toBe(true)
+    expect(mixedRow.detail).toContain('n/a — neutral is real, this face is a stand-in')
+    const reverse = (await checkOne(mixed, happy, manifestFor(mixed, { [neutral]: flagged(neutral, false), [happy]: flagged(happy, true) }))).get('C11')!
+    expect(reverse.detail).toContain('n/a — neutral is a stand-in, this face is real')
+
+    // Both real, and the happy face has lost half its skin: measured, and too small.
+    const halved = caseDir('c11-halved')
+    for (const face of [neutral, happy]) copyLayer(halved, face, ['skin', 'eye'])
+    await editMask(halved, happy, 'skin', (alpha) => {
+      const total = alpha.reduce((n, a) => n + (a >= 128 ? 1 : 0), 0)
+      let cleared = 0
+      for (let p = 0; p < alpha.length && cleared < total / 2; p++) if (alpha[p]! >= 128) { alpha[p] = 0; cleared++ }
+    })
+    const both = (await checkOne(halved, happy, manifestFor(halved, { [neutral]: flagged(neutral, true), [happy]: flagged(happy, true) }))).get('C11')!
+    expect(both.ok).toBe(false)
+    expect(both.detail).toMatch(/skin and eye zone are 0\.\d\d × the neutral face's, want 0\.8–1\.2 ×/)
+  }, 60_000)
+
+  it('C11 fails a real face with no skin mask, an empty one, or no neutral skin to compare with', async () => {
+    const neutral = 'body_f_face_neutral_L50'
+    const happy = 'body_f_face_happy_L50'
+    const dir = caseDir('c11-no-skin')
+    for (const face of [neutral, happy]) copyLayer(dir, face, ['skin', 'eye'])
+    const c11Of = async (entries: Record<string, ManifestEntry>) => (await checkOne(dir, happy, manifestFor(dir, entries))).get('C11')!
+    const withoutSkin = (name: string): ManifestEntry => {
+      const entry = flagged(name, true)
+      const { skin: _skin, ...rest } = entry.masks!
+      return { ...entry, masks: rest }
+    }
+    const { masks: _masks, ...bare } = flagged(happy, true)
+
+    const missing = await c11Of({ [neutral]: flagged(neutral, true), [happy]: withoutSkin(happy) })
+    expect(missing.ok).toBe(false)
+    expect(missing.detail).toContain('no skin mask')
+    const none = await c11Of({ [neutral]: flagged(neutral, true), [happy]: bare })
+    expect(none.ok).toBe(false)
+    expect(none.detail).toContain('no skin mask')
+    const noReference = await c11Of({ [neutral]: withoutSkin(neutral), [happy]: flagged(happy, true) })
+    expect(noReference.ok).toBe(false)
+    expect(noReference.detail).toContain(`${neutral} has no skin mask to compare with`)
+
+    // Two stand-ins, the neutral's skin entry gone: nothing real to hold to anything — a note, not a failure.
+    const { real: _real, ...skinlessNeutral } = withoutSkin(neutral)
+    const standIns = await c11Of({ [neutral]: { ...skinlessNeutral, placeholder: true }, [happy]: flagged(happy, false) })
+    expect(standIns.ok, standIns.detail).toBe(true)
+    expect(standIns.detail).toContain(`n/a — ${neutral} has no skin mask to compare with`)
+
+    await editMask(dir, happy, 'skin', (alpha) => alpha.fill(0))
+    const empty = await c11Of({ [neutral]: flagged(neutral, true), [happy]: flagged(happy, true) })
+    expect(empty.ok).toBe(false)
+    expect(empty.detail).toContain('skin mask is empty')
+    // A hand-drawn mask is trusted for its shape, not for being there: an empty override fails as well.
+    const drawn = flagged(happy, true)
+    const emptyOverride = await c11Of({ [neutral]: flagged(neutral, true), [happy]: { ...drawn, masks: { ...drawn.masks, skin: { ...drawn.masks!.skin!, override: true } } } })
+    expect(emptyOverride.ok).toBe(false)
+    expect(emptyOverride.detail).toContain('skin mask is empty')
+    // A stand-in keeps the mixed-pair note rather than a failure.
+    const mixed = await c11Of({ [neutral]: flagged(neutral, true), [happy]: flagged(happy, false) })
+    expect(mixed.detail).toContain('n/a — neutral is real, this face is a stand-in')
+  }, 60_000)
+
+  it('C11 holds a body’s skin to SKIN_AREA of its ink, a hair layer’s hair to 0.9 of its ink, and skin off the eyes', async () => {
+    const body = 'body_m_L30'
+    const face = 'body_m_face_neutral_L50'
+    const hair = 'item_hair_m_spiky01_L60'
+    const dir = caseDir('c11-v4')
+    copyLayer(dir, body, ['skin'])
+    copyLayer(dir, face, ['skin', 'eye'])
+    copyLayer(dir, hair, ['hair'])
+    const manifest = manifestFor(dir, { [body]: flagged(body, true), [face]: flagged(face, true), [hair]: flagged(hair, true) })
+    for (const name of [body, face, hair]) {
+      const c11 = (await checkOne(dir, name, manifest)).get('C11')!
+      expect(c11.ok, `${name}: ${c11.detail}`).toBe(true)
+    }
+
+    // A body whose skin mask keeps under SKIN_AREA.min of its ink.
+    await editMask(dir, body, 'skin', (alpha) => {
+      const keep = alpha.reduce((n, a) => n + (a >= 128 ? 1 : 0), 0) * 0.3
+      let kept = 0
+      for (let p = 0; p < alpha.length; p++) if (alpha[p]! >= 128 && kept++ >= keep) alpha[p] = 0
+    })
+    const thin = (await checkOne(dir, body, manifest)).get('C11')!
+    expect(thin.ok).toBe(false)
+    expect(thin.detail).toMatch(new RegExp(`skin covers 0\\.\\d\\d of the body's ink, want ${SKIN_AREA.min}–${SKIN_AREA.max}`))
+
+    // A hair layer whose mask holds only the top half of its rows.
+    await editMask(dir, hair, 'hair', (alpha, width) => {
+      const rows = alpha.length / width
+      let first = rows
+      let last = -1
+      for (let p = 0; p < alpha.length; p++) if (alpha[p]! >= 128) { first = Math.min(first, Math.floor(p / width)); last = Math.floor(p / width) }
+      for (let p = Math.ceil((first + last) / 2) * width; p < alpha.length; p++) alpha[p] = 0
+    })
+    const bald = (await checkOne(dir, hair, manifest)).get('C11')!
+    expect(bald.ok).toBe(false)
+    expect(bald.detail).toMatch(/hair covers 0\.\d\d of the layer's ink, want ≥ 0\.9/)
+
+    // A face whose skin mask runs over its eyes.
+    const eyes = await readPicture(join(dir, `${face}_eyemask@2x.png`))
+    await editMask(dir, face, 'skin', (alpha) => {
+      for (let p = 0; p < alpha.length; p++) if (eyes.data[p * 4 + 3]! >= 128) alpha[p] = 255
+    })
+    const over = (await checkOne(dir, face, manifest)).get('C11')!
+    expect(over.ok).toBe(false)
+    expect(over.detail).toMatch(/skin and eyes share \d+ pixels/)
+  }, 60_000)
+
+  it('colours prints one line per mask: a body’s skin, a face’s skin and the iris of its eyes', () => {
+    const stdout = execFileSync(process.execPath, [SCRIPT, 'colours', 'body_f_L30', 'body_f_face_neutral_L50'], { cwd: PACKAGE_ROOT, encoding: 'utf8' })
+    expect(stdout).toMatch(/^body_f_L30 skin #[0-9a-f]{6}$/m)
+    expect(stdout).toMatch(/^body_f_face_neutral_L50 eyes #[0-9a-f]{6}$/m)
+    expect(stdout).toMatch(/^body_f_face_neutral_L50 skin #[0-9a-f]{6}$/m)
+  }, 30_000)
+
+  it('colours adds a hairstyle’s natural colour and how far its hair is from it, once items.json names one', async () => {
+    const name = 'item_hair_f_bob01_L60'
+    const dir = caseDir('colours-natural')
+    copyLayer(dir, name, ['hair'])
+    const manifest = { files: { [name]: committed.files[name]! } }
+    const [plain] = await describeColours({ dir, manifest, names: [name], items: [] })
+    expect(plain).toMatch(new RegExp(`^${name} hair #[0-9a-f]{6}$`))
+    const measured = plain!.split(' ')[2]!
+    const [same] = await describeColours({ dir, manifest, names: [name], items: [{ id: hairItemId('f_bob01'), naturalColour: measured }] })
+    expect(same).toBe(`${name} hair ${measured} natural ${measured} ΔE 0.0`)
+    const [far] = await describeColours({ dir, manifest, names: [name], items: [{ id: hairItemId('f_bob01'), naturalColour: '#ffffff' }] })
+    expect(far).toMatch(new RegExp(`^${name} hair ${measured} natural #ffffff ΔE \\d+\\.\\d$`))
+  }, 30_000)
 })
 
 describe('the ingest command', () => {
@@ -1403,7 +1973,8 @@ describe('the ingest command', () => {
   it('measures a picture against D02 §8 without writing anything', async () => {
     const dir = caseDir('ingest-dry')
     const { base } = await sources(dir)
-    const stdout = run(['ingest', base, '--as', 'base:f01', '--dry-run', '--out', dir])
+    // An item's dry run: D02 §8's report alone (a body's adds C12, which the grey figure, eyeless, cannot pass).
+    const stdout = run(['ingest', base, '--as', 'item:head:tophat01', '--dry-run', '--out', dir])
     for (const line of ['head height', 'total height', 'eye line', 'centre offset', 'verdict']) {
       expect(stdout, `the report does not mention ${line}`).toContain(line)
     }
@@ -1412,24 +1983,25 @@ describe('the ingest command', () => {
     expect(existsSync(join(dir, MANIFEST_NAME))).toBe(false)
   }, 60_000)
 
-  it('anchors a base, then cuts a hat out against it, and both pass the checks', async () => {
+  it('keeps the body on its canvas’s transform, then cuts a hat out against it (--base f by default), and both pass the checks', async () => {
     const dir = caseDir('ingest-run')
     const { base, item } = await sources(dir)
-    run(['ingest', base, '--as', 'base:f01', '--out', dir])
+    seedCanvas(dir)
+    run(['ingest', base, '--as', 'body:f', '--out', dir])
     run(['ingest', item, '--as', 'item:head:tophat01', '--out', dir])
     const manifest = JSON.parse(readFileSync(join(dir, MANIFEST_NAME), 'utf8')) as Manifest
-    // The base's transform is stored so that everything generated beside it lands on the same pixels.
-    expect(manifest.bases!.f01!.transform.scale).toBeCloseTo(BODY.h / (SRC_FIGURE.bottom - SRC_FIGURE.top), 3)
-    for (const name of ['base_f01_L30', 'item_head_tophat01_L80']) {
+    // The body keeps the canvas's stored transform — the figure's own box — so that everything generated beside it lands
+    // on the same pixels.
+    expect(manifest.bodies!.f!.transform.scale).toBeCloseTo(BODY.h / (SRC_FIGURE.bottom - SRC_FIGURE.top), 3)
+    for (const name of ['body_f_L30', 'item_head_tophat01_L80']) {
       expect(manifest.files[name]!.real, `${name} should be marked as real art`).toBe(true)
       expect(manifest.files[name]!.placeholder).toBeUndefined()
     }
-    // C11 skipped for the hair-area rule: FIGURE is one flat grey (#808080, chroma ≈ 0) all over, which is
-    // exactly the shape Task 2b's grey-shine rule (spec §4.1) exists to catch on real hair — on a fixture
-    // with no colour difference between "hair" and "not hair" at all, it duly pulls extra area into the
-    // mask (18.4 % → 20.0 %, just over the 20 % ceiling). Fine for the extraction geometry this test is
-    // about; `syntheticBase` in avatar-masks.test.ts is what actually exercises the hair/eye heuristic.
-    const stdout = run(['check', 'base_f01_L30', 'item_head_tophat01_L80', '--dir', dir, '--skip', 'C11'])
+    expect(manifest.files.item_head_tophat01_L80!.cutOn).toBe('f')
+    // C11 skipped: FIGURE is one flat grey (#808080, chroma ≈ 0) all over, with flat #202020 eyes — no skin for the
+    // skin mask (it wants warm chroma) and no eye white for the eye mask, so a real body cut from it has neither.
+    // Fine for the extraction geometry this test is about; avatar-masks.test.ts exercises the masks.
+    const stdout = run(['check', 'body_f_L30', 'item_head_tophat01_L80', '--dir', dir, '--skip', 'C11'])
     expect(stdout, stdout).not.toMatch(/FAIL/)
     // …and the item's inventory icon comes with it.
     expect(manifest.icons?.item_head_tophat01_icon).toMatchObject({ kind: 'icon', of: 'item_head_tophat01_L80', w: ICON.w, h: ICON.h, real: true })
@@ -1468,33 +2040,31 @@ describe('per-wear variants', () => {
     expect(parseName('item_outfit_dealer01_x_L40')).toBeNull()
   })
 
-  it('says which body each base wears, and the server registry says the same', () => {
-    // `BASES`/`BASE_WEAR` here is the art side's source of truth; `data/avatar-bases.json` mirrors it
-    // (docs/avatar-2d.md §9.1). Two files that disagree would put m01 in a skirt on one side of the app
-    // and in trousers on the other, so they are held against each other here.
+  it('says which body each wear is: a gender is its own, and nothing else has one (Plan 19 D1)', () => {
+    // Until D1 `BASE_WEAR` gave each flat base a wear and `data/avatar-bases.json` mirrored it; a body is owned by its
+    // gender now, and its gender is its wear.
     expect(WEARS).toEqual(['f', 'm'])
-    for (const base of BASES) expect(WEARS, `${base} wears ${String(wearOf(base))}`).toContain(wearOf(base))
-    const registry = JSON.parse(readFileSync(resolve(PACKAGE_ROOT, '../normal-server/data/avatar-bases.json'), 'utf8')) as Record<string, { wear?: string }>
-    expect(Object.keys(registry).sort()).toEqual([...BASES].sort())
-    for (const [id, entry] of Object.entries(registry)) expect(entry.wear, `registry ${id}`).toBe(BASE_WEAR[id])
+    expect([wearOf('f'), wearOf('m'), wearOf('f01'), wearOf('m01'), wearOf('x')]).toEqual(['f', 'm', null, null, null])
   })
 
-  it('refuses a variant whose wear is not the wear of the base it is cut on', async () => {
-    // The layer is the shape of the figure it was diffed against, so cutting an `m` variant on f01 would
+  it('refuses a variant whose wear is not the wear of the body it is cut on, and an item cut on no body', async () => {
+    // The layer is the shape of the figure it was diffed against, so cutting an `m` variant on body f would
     // ship a female silhouette under a male name — a mistake nothing downstream could see.
     const dir = caseDir('variant-mismatch')
     const file = join(dir, 'clothes.png')
     await writePicture(await renderSvg(sourceSvg(CLOTHES), SRC.w, SRC.h), file)
-    const run = (baseId: string, variant: string): Promise<unknown> =>
+    const run = (baseId: string, variant: string | null): Promise<unknown> =>
       ingest({ file, target: { kind: 'item', slot: 'outfit', code: 'dealer01' }, dir, targets: [join(dir, MANIFEST_NAME)], baseId, variant })
-    await expect(run('f01', 'm')).rejects.toThrow(/--variant m does not match base f01, which wears f/)
-    await expect(run('m01', 'f')).rejects.toThrow(/--variant f does not match base m01, which wears m/)
-    await expect(run('m01', 'x')).rejects.toThrow(/--variant x is not one of f, m/)
+    await expect(run('f', 'm')).rejects.toThrow(/--variant m does not match body f/)
+    await expect(run('m', 'f')).rejects.toThrow(/--variant f does not match body m/)
+    await expect(run('m', 'x')).rejects.toThrow(/--variant x is not one of f, m/)
+    // An old base names no body any more (D1): there is nothing left to cut the item on.
+    await expect(run('m01', null)).rejects.toThrow(/--base m01 is not a body/)
     // …and nothing is written on the way to refusing.
     expect(existsSync(join(dir, MANIFEST_NAME))).toBe(false)
   }, 60_000)
 
-  it('cuts a male variant on m01: its own name, its own icon, and the item it belongs to', async () => {
+  it('cuts a male variant on body m: its own name, its own icon, and the item it belongs to', async () => {
     const dir = caseDir('variant-ingest')
     const base = join(dir, 'base.png')
     const clothes = join(dir, 'clothes.png')
@@ -1508,9 +2078,10 @@ describe('per-wear variants', () => {
         throw new Error(`${(error as { stdout?: string }).stdout ?? ''}\n${(error as { stderr?: string }).stderr ?? ''}\n${(error as Error).message}`)
       }
     }
-    run(['ingest', base, '--as', 'base:m01', '--out', dir])
-    // The exact line docs/avatar-2d.md §3.1 gives for a male dealer01.
-    run(['ingest', clothes, '--as', 'item:outfit:dealer01', '--base', 'm01', '--variant', 'm', '--out', dir])
+    seedCanvas(dir, ['m'])
+    run(['ingest', base, '--as', 'body:m', '--out', dir])
+    // The line for a male dealer01: the body's gender is its wear.
+    run(['ingest', clothes, '--as', 'item:outfit:dealer01', '--base', 'm', '--variant', 'm', '--out', dir])
 
     const manifest = JSON.parse(readFileSync(join(dir, MANIFEST_NAME), 'utf8')) as Manifest
     const name = 'item_outfit_dealer01_m_L40'
@@ -1521,15 +2092,16 @@ describe('per-wear variants', () => {
       real: true,
       variantOf: 'item_outfit_dealer01_L40',
       wear: 'm',
+      cutOn: 'm',
     })
     expect(manifest.files[name]!.placeholder).toBeUndefined()
-    // The default layer is *not* written by a variant ingest: it is another picture, on another base.
+    // The default layer is *not* written by a variant ingest: it is another picture, on another body.
     expect(manifest.files.item_outfit_dealer01_L40).toBeUndefined()
     for (const density of DENSITIES) expect(existsSync(join(dir, `${name}@${density}x.png`)), `${name}@${density}x`).toBe(true)
     // Its own icon, under the manifest's `icons` key like every other item's.
     expect(manifest.icons?.item_outfit_dealer01_m_icon).toMatchObject({ kind: 'icon', of: name, w: ICON.w, h: ICON.h, real: true })
     for (const density of DENSITIES) expect(existsSync(join(dir, `item_outfit_dealer01_m_icon@${density}x.png`))).toBe(true)
-    // The whole gate, bar C6: this synthetic base is one flat grey with no underwear on it at all, so
+    // The whole gate, bar C6: this synthetic body is one flat grey with no underwear on it at all, so
     // there is no band for an outfit to cover and no verdict to give. C6's own routing is two cases below.
     expect(run(['check', name, '--dir', dir, '--skip', 'C6'])).not.toMatch(/FAIL/)
   }, 300_000)
@@ -1621,58 +2193,61 @@ describe('per-wear variants', () => {
     return pic
   }
 
-  /** f01's band is narrow, m01's is wide; the skirt covers only the first. */
+  /** Body f's band is narrow, body m's is wide; the skirt covers only the first. */
   const F_BAND = [150, 230] as const
   const M_BAND = [120, 260] as const
 
+  /** Each picture at @1x as a real layer; an outfit cut on body f — or, a variant, on the body of its wear. */
   async function c6Fixture(dir: string, files: Record<string, Picture>): Promise<Record<string, ManifestEntry>> {
     const entries: Record<string, ManifestEntry> = {}
     for (const [name, picture] of Object.entries(files)) {
       await writePicture(picture, join(dir, `${name}@1x.png`))
-      entries[name] = { layer: parseName(name)!.layer, w: FRAME.w, h: FRAME.h, bytes2x: 1, real: true }
+      const parsed = parseName(name)!
+      entries[name] = { layer: parsed.layer, w: FRAME.w, h: FRAME.h, bytes2x: 1, real: true, ...(parsed.kind === 'item' ? { cutOn: parsed.wear ?? 'f' } : {}) }
     }
     return entries
   }
 
-  it('measures a variant only against the bases that wear it', async () => {
+  it('measures a variant only against the body that wears it', async () => {
     const dir = caseDir('c6-variant')
     const entries = await c6Fixture(dir, {
-      base_f01_L30: baseWithUnderwear(...F_BAND),
-      base_m01_L30: baseWithUnderwear(...M_BAND),
+      body_f_L30: baseWithUnderwear(...F_BAND),
+      body_m_L30: baseWithUnderwear(...M_BAND),
       item_outfit_dealer01_L40: outfitCovering(148, 232),
       item_outfit_dealer01_m_L40: outfitCovering(118, 262),
     })
     entries.item_outfit_dealer01_m_L40 = { ...entries.item_outfit_dealer01_m_L40!, variantOf: 'item_outfit_dealer01_L40', wear: 'm' }
     const manifest = manifestFor(dir, entries)
 
-    // The male cut covers m01 and would leave f01's narrower band over-covered rather than bare, but the
+    // The male cut covers body m and would leave body f's narrower band over-covered rather than bare, but the
     // point is that it is never held to a figure that will not wear it.
     const variant = (await checkOne(dir, 'item_outfit_dealer01_m_L40', manifest)).get('C6')!
     expect(variant.ok, variant.detail).toBe(true)
+    expect(variant.detail).toContain('body_m_L30')
 
-    // The default layer stops being what m01 wears the moment the male cut exists, so it is measured
-    // against f01 alone — where it covers every thread — and not against the wide band it never sees.
+    // The default layer stops being what body m wears the moment the male cut exists, so it is measured
+    // against body f alone — where it covers every thread — and not against the wide band it never sees.
     const shared = (await checkOne(dir, 'item_outfit_dealer01_L40', manifest)).get('C6')!
     expect(shared.ok, shared.detail).toBe(true)
-    expect(shared.detail).toContain('100.0 %')
+    expect(shared.detail).toBe('covers 100.0 % of body_f_L30')
   }, 60_000)
 
   it('still measures a default layer against every wear that has no variant of it', async () => {
-    // The control for the case above: with no male cut in the manifest, m01 wears the shared layer and
-    // C6 says so — the routing is a consequence of the variant existing, not of the name of the base.
+    // The control for the case above: with no male cut in the manifest, body m wears the shared layer and
+    // C6 says so — the routing is a consequence of the variant existing, not of the name of the body.
     const dir = caseDir('c6-no-variant')
     const manifest = manifestFor(dir, await c6Fixture(dir, {
-      base_f01_L30: baseWithUnderwear(...F_BAND),
-      base_m01_L30: baseWithUnderwear(...M_BAND),
+      body_f_L30: baseWithUnderwear(...F_BAND),
+      body_m_L30: baseWithUnderwear(...M_BAND),
       item_outfit_dealer01_L40: outfitCovering(148, 232),
     }))
     const shared = (await checkOne(dir, 'item_outfit_dealer01_L40', manifest)).get('C6')!
     expect(shared.ok, shared.detail).toBe(false)
-    expect(shared.detail).toContain('m01')
+    expect(shared.detail).toContain("leaves body_m_L30's underwear showing")
   }, 60_000)
 })
 
-// ──────────────────────────────────────────────────────────── flat AI bases ──
+// ──────────────────────────────────────────────── a body's cut, and empty layers ──
 
 /** Every pixel with any alpha, as `x,y`, that lies outside the head region at this density. */
 function inkOutsideHead(pic: Picture, density: number): string[] {
@@ -1697,26 +2272,37 @@ const fullyTransparent = (pic: Picture): boolean => {
   return true
 }
 
-describe('a flat AI base', () => {
-  // An AI picture is one image with hair, face and body baked together, not three layers.
-  const ingestBase = async (dir: string): Promise<Manifest> => {
-    const file = join(dir, 'base.png')
+describe('a body cut from one picture, and layers marked empty', () => {
+  // The grey FIGURE as a body, on its canvas's transform (`seedCanvas`).
+  const ingestBody = async (dir: string): Promise<Manifest> => {
+    const file = join(dir, 'body.png')
     await writePicture(await renderSvg(sourceSvg(), SRC.w, SRC.h), file)
-    await ingest({ file, target: { kind: 'base', base: 'f01' }, dir, targets: [join(dir, MANIFEST_NAME)] })
+    seedCanvas(dir)
+    await ingest({ file, target: { kind: 'body', gender: 'f' }, dir, targets: [join(dir, MANIFEST_NAME)] })
     return JSON.parse(readFileSync(join(dir, MANIFEST_NAME), 'utf8')) as Manifest
   }
 
-  it('writes the body, the head region as the neutral face, and empty hair layers', async () => {
-    const dir = caseDir('flat-base')
-    const manifest = await ingestBase(dir)
-    expect(manifest.files.base_f01_L30).toMatchObject({ layer: 30, real: true })
-    expect(manifest.files.base_f01_L30!.empty).toBeUndefined()
+  it('refuses the retired flat base and its expressions, writing nothing (Plan 19 D1)', async () => {
+    const dir = caseDir('flat-base-retired')
+    const file = join(dir, 'base.png')
+    await writePicture(await renderSvg(sourceSvg(), SRC.w, SRC.h), file)
+    for (const target of [{ kind: 'base', base: 'f01' }, { kind: 'expr', base: 'f01', expr: 'happy' }]) {
+      await expect(ingest({ file, target, dir, targets: [join(dir, MANIFEST_NAME)] }), target.kind).rejects.toThrow(/retired \(Plan 19 D1\)/)
+    }
+    expect(existsSync(join(dir, MANIFEST_NAME))).toBe(false)
+  }, 60_000)
 
-    const face = manifest.files.base_f01_face_neutral_L50
+  it('writes the whole figure as the body and its head region as the neutral face', async () => {
+    const dir = caseDir('flat-base')
+    const manifest = await ingestBody(dir)
+    expect(manifest.files.body_f_L30).toMatchObject({ layer: 30, real: true })
+    expect(manifest.files.body_f_L30!.empty).toBeUndefined()
+
+    const face = manifest.files.body_f_face_neutral_L50
     expect(face).toMatchObject({ layer: 50, real: true })
     expect(face!.empty).toBeUndefined()
     for (const density of DENSITIES) {
-      const pic = await readPicture(join(dir, `base_f01_face_neutral_L50@${density}x.png`))
+      const pic = await readPicture(join(dir, `body_f_face_neutral_L50@${density}x.png`))
       expect(alphaBBox(pic), `@${density}x face has no head in it`).not.toBeNull()
       const outside = inkOutsideHead(pic, density)
       expect(outside.length, `@${density}x face has ink outside the head region, e.g. ${outside.slice(0, 3).join(' ')}`).toBe(0)
@@ -1728,87 +2314,31 @@ describe('a flat AI base', () => {
       expect(beside, `@${density}x lost the head region beside the torso column`).toBeGreaterThan(0)
     }
     // Inside the head region the face is the body's own pixels: layer 50 repeats the head on purpose.
-    const body2x = await readPicture(join(dir, 'base_f01_L30@2x.png'))
-    const face2x = await readPicture(join(dir, 'base_f01_face_neutral_L50@2x.png'))
+    const body2x = await readPicture(join(dir, 'body_f_L30@2x.png'))
+    const face2x = await readPicture(join(dir, 'body_f_face_neutral_L50@2x.png'))
     const at = (144 * 2 * body2x.width + 192 * 2) * 4
     expect([...face2x.data.subarray(at, at + 4)]).toEqual([...body2x.data.subarray(at, at + 4)])
 
-    for (const name of ['base_f01_L20', 'base_f01_L60']) {
-      expect(manifest.files[name], name).toMatchObject({ real: true, empty: true })
-      expect(manifest.files[name]!.placeholder).toBeUndefined()
-      for (const density of DENSITIES) {
-        const pic = await readPicture(join(dir, `${name}@${density}x.png`))
-        expect([pic.width, pic.height]).toEqual([FRAME.w * density, FRAME.h * density])
-        expect(fullyTransparent(pic), `${name}@${density}x is not empty`).toBe(true)
-      }
-    }
-
-    // C11 skipped: FIGURE's eyes are flat #202020 ellipses with no iris/white to tell from a pupil — fine
-    // for the extraction geometry this test is about, but below the L15 floor the colour heuristic (spec
-    // §4.3) needs to call something an eye. `syntheticBase` in avatar-masks.test.ts draws real ones.
-    const rows = await runChecks({ dir, manifest, names: ['base_f01_L20', 'base_f01_L30', 'base_f01_face_neutral_L50', 'base_f01_L60'], skip: ['C11'] })
+    // C11 skipped: FIGURE is flat grey with flat #202020 eyes — no warm skin for the skin mask, no eye white for the
+    // eye mask — fine for the cut geometry this test is about; avatar-masks.test.ts draws real ones. C12 is n/a for
+    // the same reason: the neutral face has no eye to measure the head by.
+    const rows = await runChecks({ dir, manifest, names: ['body_f_L30', 'body_f_face_neutral_L50'], skip: ['C11'] })
     for (const row of rows) {
       for (const result of row.results) expect(result.ok, `${row.name} ${result.id}: ${result.detail}`).toBe(true)
     }
   }, 120_000)
 
-  it('moves a strand of hair above the head top into the front hair, and out of the body and every face', async () => {
-    const dir = caseDir('flat-strand')
-    // The ahoge of `measure`'s own test: 14 px wide, standing 120 px above the head.
-    const strand = `<rect x="569" y="80" width="14" height="140" fill="#808080"/>`
-    const baseFile = join(dir, 'base.png')
-    await writePicture(await renderSvg(sourceSvg(strand), SRC.w, SRC.h), baseFile)
-    await ingest({ file: baseFile, target: { kind: 'base', base: 'f01' }, dir, targets: [join(dir, MANIFEST_NAME)] })
-    const exprFile = join(dir, 'happy.png')
-    await writePicture(await renderSvg(sourceSvg(strand + `<rect x="500" y="560" width="152" height="30" fill="#cc2222"/>`), SRC.w, SRC.h), exprFile)
-    await ingest({ file: exprFile, target: { kind: 'expr', base: 'f01', expr: 'happy' }, dir, targets: [join(dir, MANIFEST_NAME)] })
-    const manifest = JSON.parse(readFileSync(join(dir, MANIFEST_NAME), 'utf8')) as Manifest & { bases: Record<string, { strandY?: number }> }
-    const strandY = manifest.bases.f01!.strandY!
-    // The head top is at source y 200; the cut sits a few frame pixels under where that lands.
-    const headTop = 200 * manifest.bases.f01!.transform.scale + manifest.bases.f01!.transform.offsetY
-    expect(strandY).toBeGreaterThan(headTop)
-    expect(strandY).toBeLessThan(headTop + 10)
-    expect(manifest.files.base_f01_L60, 'the front hair now holds the strand').toMatchObject({ layer: 60, real: true })
-    expect(manifest.files.base_f01_L60!.empty).toBeUndefined()
-    expect(manifest.files.base_f01_L20).toMatchObject({ real: true, empty: true })
-    const inkRows = (pic: Picture): { above: number; below: number } => {
-      let above = 0
-      let below = 0
-      for (let p = 0; p < pic.width * pic.height; p++) {
-        if (pic.data[p * 4 + 3] === 0) continue
-        if (Math.floor(p / pic.width) < strandY * (pic.width / FRAME.w)) above++
-        else below++
-      }
-      return { above, below }
-    }
-    for (const density of DENSITIES) {
-      const hair = inkRows(await readPicture(join(dir, `base_f01_L60@${density}x.png`)))
-      expect(hair.above, `@${density}x front hair has no strand`).toBeGreaterThan(0)
-      expect(hair.below, `@${density}x front hair reaches below the cut`).toBe(0)
-      for (const name of ['base_f01_L30', 'base_f01_face_neutral_L50', 'base_f01_face_happy_L50']) {
-        const layer = inkRows(await readPicture(join(dir, `${name}@${density}x.png`)))
-        expect(layer.above, `@${density}x ${name} still holds the strand`).toBe(0)
-        expect(layer.below, `@${density}x ${name} is empty`).toBeGreaterThan(0)
-      }
-    }
-    // C11 skipped: see the note above — FIGURE's eyes have no colour the hair/eye heuristic can find.
-    const rows = await runChecks({ dir, manifest, names: ['base_f01_L30', 'base_f01_L60', 'base_f01_face_neutral_L50', 'base_f01_face_happy_L50'], skip: ['C11'] })
-    for (const row of rows) {
-      for (const result of row.results) expect(result.ok, `${row.name} ${result.id}: ${result.detail}`).toBe(true)
-    }
-  }, 180_000)
-
-  it('masks an expression to the head region', async () => {
+  it('masks a body face to the head region', async () => {
     const dir = caseDir('flat-expr')
-    await ingestBase(dir)
+    await ingestBody(dir)
     const file = join(dir, 'happy.png')
     // The same figure with a red smile and a red smudge on the chest: only the smile is head.
     await writePicture(await renderSvg(sourceSvg(`<rect x="500" y="560" width="152" height="30" fill="#cc2222"/>${SMUDGE}`), SRC.w, SRC.h), file)
-    await ingest({ file, target: { kind: 'expr', base: 'f01', expr: 'happy' }, dir, targets: [join(dir, MANIFEST_NAME)] })
+    await ingest({ file, target: { kind: 'bodyFace', gender: 'f', expr: 'happy' }, dir, targets: [join(dir, MANIFEST_NAME)] })
     const manifest = JSON.parse(readFileSync(join(dir, MANIFEST_NAME), 'utf8')) as Manifest
-    expect(manifest.files.base_f01_face_happy_L50).toMatchObject({ layer: 50, real: true })
+    expect(manifest.files.body_f_face_happy_L50).toMatchObject({ layer: 50, real: true })
     for (const density of DENSITIES) {
-      const pic = await readPicture(join(dir, `base_f01_face_happy_L50@${density}x.png`))
+      const pic = await readPicture(join(dir, `body_f_face_happy_L50@${density}x.png`))
       expect(alphaBBox(pic)).not.toBeNull()
       const outside = inkOutsideHead(pic, density)
       expect(outside.length, `@${density}x has ink outside the head region, e.g. ${outside.slice(0, 3).join(' ')}`).toBe(0)
@@ -1816,26 +2346,27 @@ describe('a flat AI base', () => {
   }, 120_000)
 
   it('check passes a layer marked empty and fails an unmarked empty one', async () => {
+    // A short hairstyle's back layer is the one blank-on-purpose layer since D1 (the flat bases' hair layers were before).
     const dir = caseDir('empty-check')
-    for (const name of ['base_f01_L20', 'base_f01_L60']) {
+    for (const name of ['item_hair_f_bob01_L20', 'item_hair_f_bob01_L60']) {
       for (const density of DENSITIES) await writePicture(blankPicture(FRAME.w * density, FRAME.h * density), join(dir, `${name}@${density}x.png`))
     }
     const bytes = (name: string): number => statSync(join(dir, `${name}@2x.png`)).size
     const manifest = manifestFor(dir, {
-      base_f01_L20: { layer: 20, w: FRAME.w, h: FRAME.h, bytes2x: bytes('base_f01_L20'), real: true, empty: true },
-      base_f01_L60: { layer: 60, w: FRAME.w, h: FRAME.h, bytes2x: bytes('base_f01_L60'), real: true },
+      item_hair_f_bob01_L20: { layer: 20, w: FRAME.w, h: FRAME.h, bytes2x: bytes('item_hair_f_bob01_L20'), real: true, empty: true },
+      item_hair_f_bob01_L60: { layer: 60, w: FRAME.w, h: FRAME.h, bytes2x: bytes('item_hair_f_bob01_L60'), real: true },
     })
-    const marked = await checkOne(dir, 'base_f01_L20', manifest)
+    const marked = await checkOne(dir, 'item_hair_f_bob01_L20', manifest)
     for (const [id, result] of marked) expect(result.ok, `${id}: ${result.detail}`).toBe(true)
-    const unmarked = await checkOne(dir, 'base_f01_L60', manifest)
+    const unmarked = await checkOne(dir, 'item_hair_f_bob01_L60', manifest)
     expect([...unmarked.values()].some((result) => !result.ok), 'an unmarked empty layer passed every check').toBe(true)
   }, 30_000)
 
   it('check fails a layer marked empty that is not', async () => {
     const dir = caseDir('empty-not')
-    const entry = await writePlaceholder(dir, 'base_f01_L20')
-    const manifest = manifestFor(dir, { base_f01_L20: { layer: entry.layer, w: entry.w, h: entry.h, bytes2x: entry.bytes2x, real: true, empty: true } })
-    const results = await checkOne(dir, 'base_f01_L20', manifest)
+    const entry = await writePlaceholder(dir, 'item_hair_f_bob01_L20')
+    const manifest = manifestFor(dir, { item_hair_f_bob01_L20: { layer: entry.layer, w: entry.w, h: entry.h, bytes2x: entry.bytes2x, real: true, empty: true } })
+    const results = await checkOne(dir, 'item_hair_f_bob01_L20', manifest)
     expect([...results.values()].some((result) => !result.ok), 'a drawn layer marked empty passed every check').toBe(true)
   }, 30_000)
 
@@ -1843,7 +2374,7 @@ describe('a flat AI base', () => {
     const dir = caseDir('empty-placeholder')
     const blank = { layer: 0, w: FRAME.w, h: FRAME.h, bytes2x: 0, real: true, empty: true }
     const files: Record<string, ManifestEntry> = {}
-    for (const [name, layer] of [['base_f01_L20', 20], ['base_f01_L60', 60]] as const) {
+    for (const [name, layer] of [['item_hair_f_bob01_L20', 20], ['item_hair_m_tousled01_L20', 20]] as const) {
       for (const density of DENSITIES) await writePicture(blankPicture(FRAME.w * density, FRAME.h * density), join(dir, `${name}@${density}x.png`))
       files[name] = { ...blank, layer, bytes2x: statSync(join(dir, `${name}@2x.png`)).size }
     }
@@ -1863,7 +2394,7 @@ describe('a flat AI base', () => {
     const after = JSON.parse(readFileSync(join(dir, MANIFEST_NAME), 'utf8')) as Manifest
     expect(Object.keys(after.files)).toHaveLength(stageOneFiles().length)
     for (const name of Object.keys(files)) expect(after.files[name], name).toEqual(files[name])
-    for (const name of ['base_f01_L20', 'base_f01_L60']) {
+    for (const name of ['item_hair_f_bob01_L20', 'item_hair_m_tousled01_L20']) {
       for (const density of DENSITIES) {
         expect(fullyTransparent(await readPicture(join(dir, `${name}@${density}x.png`))), `${name}@${density}x was redrawn`).toBe(true)
       }
@@ -1883,8 +2414,10 @@ describe('the placeholder command', () => {
     const run = (): string => execFileSync(process.execPath, [SCRIPT, 'placeholder', '--out', dir], { cwd: PACKAGE_ROOT, encoding: 'utf8' })
     run()
     const first = readFileSync(join(dir, MANIFEST_NAME))
-    expect(readdirSync(dir).filter((name) => name.endsWith('.png')).sort()).toEqual(stageOnePngs().sort())
     const written = JSON.parse(first.toString('utf8')) as Manifest
+    // …the v4 stand-ins with the masks they are drawn with (Plan 19), which only the manifest names.
+    expect(readdirSync(dir).filter((name) => name.endsWith('.png')).sort()).toEqual(stageOnePngs(undefined, undefined, written).sort())
+    expect(written.files.body_f_L30?.masks?.skin, 'a fresh stand-in set has no skin mask on its body').toBeDefined()
     expect(written.icons?.item_frame_gold_icon).toMatchObject({ kind: 'icon', of: 'item_frame_gold_L90', placeholder: true })
     // Idempotent: the artefact is committed, so a second run that changed a byte would be a dirty tree.
     run()
@@ -1892,25 +2425,26 @@ describe('the placeholder command', () => {
     await Promise.resolve()
   }, 600_000)
 
-  it('draws a full stand-in figure for a base the list has just gained', async () => {
-    // R5: the whole cost of adding `f03` is adding it to `BASES`. Nine files appear — body, both hair
-    // layers, six expressions — each a legal name at the right layer, each listed in the manifest, and
-    // each a *different* figure from f01's, so a sheet of three bases reads as three characters.
-    const dir = caseDir('placeholder-three')
-    const manifest = await buildPlaceholders({ dir, targets: [join(dir, MANIFEST_NAME)], bases: [...BASES, 'f03'] }) as unknown as Manifest
-    const names = ['base_f03_L20', 'base_f03_L30', 'base_f03_L60', ...['neutral', 'happy', 'sad', 'surprised', 'closed', 'sleep'].map((expr) => `base_f03_face_${expr}_L50`)]
-    for (const name of names) {
-      expect(manifest.files[name], name).toMatchObject({ w: FRAME.w, h: FRAME.h, placeholder: true })
-      for (const density of DENSITIES) expect(existsSync(join(dir, `${name}@${density}x.png`)), `${name}@${density}x`).toBe(true)
-    }
-    const rows = await runChecks({ dir, manifest, names })
-    for (const row of rows as { name: string; results: { id: string; ok: boolean; detail: string }[] }[]) {
-      for (const result of row.results) expect(result.ok, `${row.name} ${result.id}: ${result.detail}`).toBe(true)
-    }
-    // Its own skin, not f01's: `baseSkinColour` is what every outfit's extraction asks the base about.
-    const f01 = baseSkinColour(await readPicture(join(dir, 'base_f01_L30@2x.png')), 2)!
-    const f03 = baseSkinColour(await readPicture(join(dir, 'base_f03_L30@2x.png')), 2)!
-    expect(Math.hypot(f01[0]! - f03[0]!, f01[1]! - f03[1]!, f01[2]! - f03[2]!)).toBeGreaterThan(24)
+  it('drops what the list no longer names — a retired base_* entry and the `bases` key — and keeps `bodies` (Plan 19 D1)', async () => {
+    // The switch-over's own path: the committed manifest still listed the six flat bases until `placeholder` ran over
+    // it. Their entries and their `bases` transforms go; the files are deleted by hand, never by this.
+    const dir = caseDir('placeholder-retired')
+    const name = 'base_f01_L30'
+    for (const density of DENSITIES) await writePicture(blankPicture(FRAME.w * density, FRAME.h * density), join(dir, `${name}@${density}x.png`))
+    const transform = { scale: 0.25, offsetX: 66, offsetY: 52 }
+    writeFileSync(join(dir, MANIFEST_NAME), `${JSON.stringify({
+      version: 1, frame: FRAME, crop: CROP,
+      files: { [name]: { layer: 30, w: FRAME.w, h: FRAME.h, bytes2x: 1, real: true } },
+      bases: { f01: { transform } },
+      bodies: { f: { transform } },
+    }, null, 2)}\n`)
+    const after = await buildPlaceholders({ dir, targets: [join(dir, MANIFEST_NAME)] }) as unknown as Manifest & { bases?: unknown }
+    expect(after.files[name]).toBeUndefined()
+    expect(Object.keys(after.files)).toHaveLength(stageOneFiles().length)
+    const written = JSON.parse(readFileSync(join(dir, MANIFEST_NAME), 'utf8')) as Record<string, unknown>
+    expect(Object.keys(written)).not.toContain('bases')
+    expect(written.bodies).toEqual({ f: { transform } })
+    for (const density of DENSITIES) expect(existsSync(join(dir, `${name}@${density}x.png`)), `${name}@${density}x was deleted`).toBe(true)
   }, 600_000)
 })
 
@@ -1918,15 +2452,16 @@ describe('the placeholder command', () => {
 
 /**
  * The three targets the registry loop needed next. An aura and a frame are *square* pictures — an effect in
- * a ring on transparency, nothing to diff against a base — placed on the frame by their ink box alone. A bot
- * is a figure drawn from F01's own picture, so it is cut like a base on F01's stored transform.
+ * a ring on transparency, nothing to diff against a body — placed on the frame by their ink box alone. A bot
+ * is a figure drawn from a body's own picture, so it is cut on that body's stored transform: body f's by default
+ * since D1 (F01's, before).
  */
 describe('auras, frames and bots', () => {
   /** A ring on a transparent square, what the image model returns for an aura or a frame. */
   const ringSvg = (side: number, r: number, stroke: number, inner = ''): string =>
     `<svg xmlns="http://www.w3.org/2000/svg" width="${side}" height="${side}">` +
     `<circle cx="${side / 2}" cy="${side / 2}" r="${r}" fill="none" stroke="#3a7fd0" stroke-width="${stroke}"/>${inner}</svg>`
-  /** A robot drawn from F01's picture: the same body, with an antenna standing above the head. */
+  /** A robot drawn from body f's picture: the same figure, with an antenna standing above the head. */
   const ANTENNA = '<rect x="569" y="120" width="14" height="100" fill="#606060"/>'
   const SMILE = '<rect x="500" y="560" width="152" height="30" fill="#cc2222"/>'
   const botFaces = (bot: number): string[] => EXPRESSIONS.map((expr: string) => `bot_${bot}_face_${expr}_L50`)
@@ -1947,9 +2482,11 @@ describe('auras, frames and bots', () => {
       for (const result of row.results) expect(result.ok, `${row.name} ${result.id}: ${result.detail}`).toBe(true)
     }
   }
-  async function ingestF01(dir: string): Promise<void> {
-    const file = await draw(dir, 'base.png', sourceSvg(), SRC.w, SRC.h)
-    await ingest({ file, target: { kind: 'base', base: 'f01' }, dir, targets: targetsOf(dir) })
+  /** The grey FIGURE as body f, the first body in `dir`, on its canvas's transform (`seedCanvas`). */
+  async function ingestBodyF(dir: string): Promise<void> {
+    const file = await draw(dir, 'body.png', sourceSvg(), SRC.w, SRC.h)
+    seedCanvas(dir)
+    await ingest({ file, target: { kind: 'body', gender: 'f' }, dir, targets: targetsOf(dir) })
   }
 
   it('fits an aura to AURA_SIZE on the axis at AURA_CY, lets it run off the frame, and passes check', async () => {
@@ -2007,9 +2544,9 @@ describe('auras, frames and bots', () => {
     expect(existsSync(join(discDir, 'item_frame_gold_L90@2x.png'))).toBe(false)
   }, 120_000)
 
-  it('cuts a bot on f01 transform: its body, its neutral face and the other five as marked copies', async () => {
+  it('cuts a bot on body f’s transform: its body, its neutral face and the other five as marked copies, all cut on f', async () => {
     const dir = caseDir('bot-neutral')
-    await ingestF01(dir)
+    await ingestBodyF(dir)
     const file = await draw(dir, 'bot.png', sourceSvg(ANTENNA), SRC.w, SRC.h)
     await ingest({ file, target: { kind: 'bot', bot: 3, expr: 'neutral' }, dir, targets: targetsOf(dir) })
     const manifest = manifestIn(dir)
@@ -2025,13 +2562,14 @@ describe('auras, frames and bots', () => {
     // Exactly what the kit draws for a bot (`layersFor`): a body and six faces — no hair layers, no icon.
     expect(Object.keys(manifest.files).filter((name) => name.startsWith('bot_')).sort()).toEqual(['bot_3_L30', ...botFaces(3)].sort())
     expect(Object.keys(manifest.icons ?? {})).toEqual([])
-    expect(Object.keys(manifest.bases ?? {})).toEqual(['f01'])
-    // F01's transform, not its own box: the antenna makes the bot's box taller, yet its feet and its width land
-    // on f01's pixels — and the antenna stays, since a bot has no front-hair layer to move it to.
-    const f01 = alphaBBox(await readPicture(join(dir, 'base_f01_L30@1x.png')))!
+    expect(Object.keys(manifest.bodies ?? {})).toEqual(['f'])
+    for (const name of ['bot_3_L30', ...botFaces(3)]) expect((manifest.files[name] as { cutOn?: string }).cutOn, name).toBe('f')
+    // Body f's transform, not its own box: the antenna makes the bot's box taller, yet its feet and its width land
+    // on body f's pixels — and the antenna stays: a bot wears nothing that could hide it.
+    const body = alphaBBox(await readPicture(join(dir, 'body_f_L30@1x.png')))!
     const bot = alphaBBox(await readPicture(join(dir, 'bot_3_L30@1x.png')))!
-    expect([bot.x, bot.w, bot.y + bot.h]).toEqual([f01.x, f01.w, f01.y + f01.h])
-    expect(bot.y).toBeLessThan(f01.y - 20)
+    expect([bot.x, bot.w, bot.y + bot.h]).toEqual([body.x, body.w, body.y + body.h])
+    expect(bot.y).toBeLessThan(body.y - 20)
     await allPass(dir, ['bot_3_L30', ...botFaces(3)])
     // Eight bots, 0–7: a ninth has nowhere to go.
     await expect(ingest({ file, target: { kind: 'bot', bot: 9, expr: 'neutral' }, dir, targets: targetsOf(dir) })).rejects.toThrow(/bot 9/)
@@ -2039,7 +2577,7 @@ describe('auras, frames and bots', () => {
 
   it('replaces only the happy face with a happy picture, and a later neutral ingest keeps it', async () => {
     const dir = caseDir('bot-happy')
-    await ingestF01(dir)
+    await ingestBodyF(dir)
     const neutralFile = await draw(dir, 'bot.png', sourceSvg(ANTENNA), SRC.w, SRC.h)
     await ingest({ file: neutralFile, target: { kind: 'bot', bot: 3, expr: 'neutral' }, dir, targets: targetsOf(dir) })
     const others = ['bot_3_L30', ...botFaces(3).filter((name) => name !== 'bot_3_face_happy_L50')]
@@ -2105,7 +2643,8 @@ describe('auras, frames and bots', () => {
     const frame = await draw(dir, 'frame.png', ringSvg(1024, 440, 80), 1024, 1024)
     const bot = await draw(dir, 'bot.png', sourceSvg(ANTENNA), SRC.w, SRC.h)
     const happy = await draw(dir, 'bot-happy.png', sourceSvg(ANTENNA + SMILE), SRC.w, SRC.h)
-    run(['ingest', base, '--as', 'base:f01', '--out', dir])
+    seedCanvas(dir)
+    run(['ingest', base, '--as', 'body:f', '--out', dir])
     // The exact lines docs/avatar-2d.md §4 gives.
     run(['ingest', aura, '--as', 'item:aura:fire01', '--out', dir])
     run(['ingest', frame, '--as', 'item:frame:silver', '--out', dir])
@@ -2128,4 +2667,798 @@ describe('auras, frames and bots', () => {
       bytesOf(dir, name).forEach((now, index) => expect(now.equals(was[index]!), `${name} was redrawn`).toBe(true))
     }
   }, 600_000)
+})
+
+// ──────────────────────────────── v4: bodies, faces, two-layer hair (Plan 19 A2a) ──
+
+/**
+ * The v4 targets of `ingest` (Plan 19 A2a): a bald body and its faces, a hairstyle cut into a front and a back layer,
+ * items and bots cut on a body, and C6 routed by an outfit's `cutOn`.
+ *
+ * Every picture is synthetic and drawn in **frame units**, then mapped onto the source canvas through the canvas's
+ * stored transform (`onCanvas`) — the grey FIGURE's, ingested first as body f on the canvas's own transform (`seedCanvas`:
+ * the figure's box, as the first flat base f01 set it before D1). A shape drawn at frame (x, y) therefore lands on frame (x, y) once a body cut
+ * on that transform has ingested it — which is what puts this body's eyes and chin exactly where C12 wants F01's, and
+ * what lets every assertion below name its pixels by the shapes that drew them.
+ *
+ * The shared state is built lazily (`setup`), once per run, and every case works in its own copy of it.
+ */
+describe('v4 ingest (Plan 19 A2a)', () => {
+  type Transform = { scale: number; offsetX: number; offsetY: number }
+  type V4Entry = ManifestEntry & { cutOn?: string; copyOf?: string; tintSeed?: { x: number; y: number }; recolouredTo?: string }
+  type V4Manifest = Omit<Manifest, 'files'> & {
+    files: Record<string, V4Entry>
+    bodies?: Record<string, { transform: Transform; anchor?: string }>
+  }
+
+  const CREAM = '#f1d2b6'
+  const SHADE = '#d9a47a'
+  const TANK = '#9aa3ad'
+  const SHORTS = '#4a4f57'
+  const IRIS_BLUE = '#2f4f80'
+  const IRIS_BROWN = '#8a5a3c'
+  const MOUTH = '#c0505a'
+  const BROW = '#7a4a32'
+  /** What a hair picture redraws the mouth and the brows in: another pink (43 from `MOUTH`), a darker brown (51). */
+  const MOUTH_REDRAWN = '#d9607a'
+  const BROW_REDRAWN = '#4e3226'
+  const PURPLE = '#5e3e6f'
+  const DARK_BROWN = '#4a2e20'
+  const RED = '#cc2222'
+  /** The two eyes' centres, on `HEAD_REFERENCE`: midpoint (190.9, 194.0), 60.6 apart. */
+  const EYE_XS = [HEAD_REFERENCE.eyeMidX - HEAD_REFERENCE.eyeSpan / 2, HEAD_REFERENCE.eyeMidX + HEAD_REFERENCE.eyeSpan / 2]
+  const EYE_Y = HEAD_REFERENCE.eyeMidY
+  const IRIS_RADIUS = 6.5
+  /** A shaded patch on the left cheek: skin by the skin mask's hue rule, and a hair picture may paint it out. */
+  const SHADE_AT = { cx: 150, cy: 212, rx: 10, ry: 6 }
+  /**
+   * The mouth as the body draws it, and as a hair picture redraws it: bigger, 8 units lower, another pink — down to
+   * y 239, past y 236, below which the face layer gives up the torso column (`keepOnlyFace`) while the chin is at 244.
+   */
+  const MOUTH_AT = { cx: 192, cy: 226, rx: 7, ry: 2.5 }
+  const MOUTH_REDRAWN_AT = { cx: 192, cy: 234, rx: 10, ry: 5 }
+  /** The brows as the body draws them (thin, y 177) and as a hair picture redraws them (bolder, 5 units higher). */
+  const BROW_AT = { y: 177, width: 2.5 }
+  const BROW_REDRAWN_AT = { y: 172, width: 5 }
+  /** A fringe hanging from the cap down over both eyes. */
+  const FRINGE_AT = { x: 140, y: 120, w: 104, h: 90 }
+  /** The hair: a cap over the head top (inside the crown band) and two strips beside the torso (off the body). */
+  const CAP = { cx: 192, cy: 150, rx: 78, ry: 75, bottom: 132 }
+  const PANELS = [{ x: 92, y: 240, w: 30, h: 90 }, { x: 262, y: 240, w: 30, h: 90 }]
+  /** A hat over the head top: beanie01's real tint seed (191, 98) is inside it. */
+  const HAT_AT = { x: 150, y: 62, w: 84, h: 50 }
+  /** Hairline wisps: one hanging from the foot of each panel, one rising from the crown — a pixel wide at @2x, and long. */
+  const WISPS = [{ x: 106.5, y: 320, w: 1, h: 34 }, { x: 276.5, y: 320, w: 1, h: 34 }, { x: 191.5, y: 52, w: 1, h: 30 }]
+
+  /**
+   * A bald body as the v4 template asks for one, in frame units: a cream head whose eyes sit on `HEAD_REFERENCE` and
+   * whose chin (where the head narrows into the 30-wide neck) is at y ≈ 244, thin brown brows, a pink mouth, a grey
+   * tank top, charcoal shorts, cream arms and legs, the feet on `BASELINE_Y`. `dy` moves all of it down; `iris`,
+   * `shade` and `redrawn` (the mouth and the brows) are what a hair picture redraws; `cream` is the skin.
+   */
+  function body({ dy = 0, iris = IRIS_BLUE, shade = true, redrawn = false, extra = '', cream = CREAM } = {}): string {
+    const eye = (cx: number): string =>
+      `<ellipse cx="${cx}" cy="${EYE_Y}" rx="10" ry="12" fill="#ffffff"/><circle cx="${cx}" cy="${EYE_Y}" r="${IRIS_RADIUS}" fill="${iris}"/>`
+    const brow = redrawn ? BROW_REDRAWN_AT : BROW_AT
+    const brows = EYE_XS.map((cx) =>
+      `<path d="M${cx - 10.5} ${brow.y} Q${cx} ${brow.y - 5} ${cx + 10.5} ${brow.y}" stroke="${redrawn ? BROW_REDRAWN : BROW}" stroke-width="${brow.width}" fill="none" stroke-linecap="round"/>`).join('')
+    const mouth = redrawn ? MOUTH_REDRAWN_AT : MOUTH_AT
+    return `<g transform="translate(0 ${dy})">` +
+      `<rect x="148" y="250" width="88" height="80" rx="12" fill="${TANK}"/>` +
+      `<rect x="150" y="318" width="84" height="34" rx="6" fill="${SHORTS}"/>` +
+      `<rect x="128" y="254" width="18" height="78" rx="9" fill="${cream}"/>` +
+      `<rect x="238" y="254" width="18" height="78" rx="9" fill="${cream}"/>` +
+      `<rect x="160" y="348" width="26" height="54" rx="10" fill="${cream}"/>` +
+      `<rect x="198" y="348" width="26" height="54" rx="10" fill="${cream}"/>` +
+      `<ellipse cx="172" cy="402" rx="16" ry="6" fill="${cream}"/>` +
+      `<ellipse cx="212" cy="402" rx="16" ry="6" fill="${cream}"/>` +
+      `<rect x="177" y="225" width="30" height="30" fill="${cream}"/>` +
+      `<ellipse cx="192" cy="165" rx="74" ry="80" fill="${cream}"/>` +
+      (shade ? `<ellipse cx="${SHADE_AT.cx}" cy="${SHADE_AT.cy}" rx="${SHADE_AT.rx}" ry="${SHADE_AT.ry}" fill="${SHADE}"/>` : '') +
+      eye(EYE_XS[0]!) + eye(EYE_XS[1]!) + brows +
+      `<ellipse cx="${mouth.cx}" cy="${mouth.cy}" rx="${mouth.rx}" ry="${mouth.ry}" fill="${redrawn ? MOUTH_REDRAWN : MOUTH}"/>` +
+      `${extra}</g>`
+  }
+  const hair = (fill: string): string =>
+    `<clipPath id="cap"><rect x="0" y="0" width="${FRAME.w}" height="${CAP.bottom}"/></clipPath>` +
+    `<ellipse clip-path="url(#cap)" cx="${CAP.cx}" cy="${CAP.cy}" rx="${CAP.rx}" ry="${CAP.ry}" fill="${fill}"/>` +
+    PANELS.map((p) => `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="8" fill="${fill}"/>`).join('')
+  const HAT = `<rect x="${HAT_AT.x}" y="${HAT_AT.y}" width="${HAT_AT.w}" height="${HAT_AT.h}" rx="10" fill="${RED}"/>`
+  const OUTFIT = '<rect x="140" y="238" width="104" height="116" rx="8" fill="#2244cc"/>'
+  const ANTENNA = '<rect x="189" y="60" width="6" height="26" fill="#606060"/>'
+  const SMILE = `<path d="M182 224 Q192 232 202 224" stroke="${MOUTH}" stroke-width="3" fill="none"/>`
+
+  /** Frame-unit shapes on the green source canvas, through `t`: frame (x, y) is source ((x − offsetX) / scale, …). */
+  function onCanvas(shapes: string, t: Transform): string {
+    const k = 1 / t.scale
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${SRC.w}" height="${SRC.h}">` +
+      `<rect width="${SRC.w}" height="${SRC.h}" fill="#00ff00"/>` +
+      `<g transform="matrix(${k} 0 0 ${k} ${-t.offsetX * k} ${-t.offsetY * k})">${shapes}</g></svg>`
+  }
+
+  const targetsOf = (dir: string): string[] => [join(dir, MANIFEST_NAME)]
+  const manifestIn = (dir: string): V4Manifest => JSON.parse(readFileSync(join(dir, MANIFEST_NAME), 'utf8')) as V4Manifest
+  const bytesOf = (dir: string, name: string): Buffer[] => DENSITIES.map((density: number) => readFileSync(join(dir, `${name}@${density}x.png`)))
+  /** A case's own copy of a set-up directory. */
+  function copyCase(from: string, name: string): string {
+    const dir = join(temp, name)
+    cpSync(from, dir, { recursive: true })
+    return dir
+  }
+  /** An empty hand-drawn-mask directory, so no committed override reaches a case that ingests through `ingest()`. */
+  const noOverrides = (): string => caseDir('v4-no-overrides')
+  async function draw(dir: string, name: string, shapes: string): Promise<string> {
+    const file = join(dir, name)
+    await writePicture(await renderSvg(onCanvas(shapes, await canvasTransform()), SRC.w, SRC.h), file)
+    return file
+  }
+  const run = (args: string[]): string => {
+    try {
+      return execFileSync(process.execPath, [SCRIPT, ...args], { cwd: PACKAGE_ROOT, encoding: 'utf8' })
+    } catch (error) {
+      throw new Error(`${(error as { stdout?: string }).stdout ?? ''}\n${(error as { stderr?: string }).stderr ?? ''}\n${(error as Error).message}`)
+    }
+  }
+  /** A run that has to exit non-zero, and what it printed. */
+  const runFailing = (args: string[]): string => {
+    try {
+      execFileSync(process.execPath, [SCRIPT, ...args], { cwd: PACKAGE_ROOT, encoding: 'utf8' })
+    } catch (error) {
+      return `${(error as { stdout?: string }).stdout ?? ''}${(error as { stderr?: string }).stderr ?? ''}`
+    }
+    throw new Error(`${args.join(' ')} exited 0`)
+  }
+  async function allPass(dir: string, names: string[]): Promise<Map<string, Map<string, { ok: boolean; detail: string }>>> {
+    const rows = await runChecks({ dir, manifest: manifestIn(dir), names }) as { name: string; results: { id: string; ok: boolean; detail: string }[] }[]
+    expect(rows.map((row) => row.name)).toEqual(names)
+    for (const row of rows) {
+      for (const result of row.results) expect(result.ok, `${row.name} ${result.id}: ${result.detail}`).toBe(true)
+    }
+    return new Map(rows.map((row) => [row.name, new Map(row.results.map((result) => [result.id, { ok: result.ok, detail: result.detail }]))]))
+  }
+
+  /** Every @2x pixel whose centre, in frame units, `inside` accepts. */
+  function at2x(inside: (x: number, y: number) => boolean): Uint8Array {
+    const W = FRAME.w * 2
+    const out = new Uint8Array(W * FRAME.h * 2)
+    for (let p = 0; p < out.length; p++) if (inside((p % W + 0.5) / 2, (Math.floor(p / W) + 0.5) / 2)) out[p] = 1
+    return out
+  }
+  /** The share of `region`'s pixels where `pic` is solid (alpha ≥ 128), and how many there are at all. */
+  function solidShare(pic: Picture, region: Uint8Array): number {
+    let inside = 0
+    let held = 0
+    for (let p = 0; p < region.length; p++) {
+      if (!region[p]) continue
+      inside++
+      if (pic.data[p * 4 + 3]! >= 128) held++
+    }
+    return inside === 0 ? 0 : held / inside
+  }
+  /** How many of `region`'s pixels `pic` has any alpha on. */
+  function inked(pic: Picture, region: Uint8Array): number {
+    let n = 0
+    for (let p = 0; p < region.length; p++) if (region[p] && pic.data[p * 4 + 3]! > 0) n++
+    return n
+  }
+  /** Solid pixels of `pic` within 30 of `hex`. */
+  function solidOf(pic: Picture, hex: string): number {
+    const n = Number.parseInt(hex.slice(1), 16)
+    const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+    let count = 0
+    for (let p = 0; p < pic.width * pic.height; p++) {
+      const at = p * 4
+      if (pic.data[at + 3]! < 128) continue
+      if (Math.hypot(pic.data[at]! - r, pic.data[at + 1]! - g, pic.data[at + 2]! - b) <= 30) count++
+    }
+    return count
+  }
+  const inCap = (shrink: number) => (x: number, y: number): boolean =>
+    y <= CAP.bottom - shrink && ((x - CAP.cx) / (CAP.rx - shrink)) ** 2 + ((y - CAP.cy) / (CAP.ry - shrink)) ** 2 <= 1
+  const inPanels = (shrink: number) => (x: number, y: number): boolean =>
+    PANELS.some((p) => x >= p.x + shrink && x <= p.x + p.w - shrink && y >= p.y + shrink && y <= p.y + p.h - shrink)
+  const inEllipse = (e: { cx: number; cy: number; rx: number; ry: number }, grow: number) => (x: number, y: number): boolean =>
+    ((x - e.cx) / (e.rx + grow)) ** 2 + ((y - e.cy) / (e.ry + grow)) ** 2 <= 1
+  /** The pixels a hair picture redraws on the face: the cheek's shading and both irises, each grown by a unit. */
+  const redrawnFace = at2x((x, y) => inEllipse(SHADE_AT, 1)(x, y) || EYE_XS.some((ex) => Math.hypot(x - ex, y - EYE_Y) <= IRIS_RADIUS + 1))
+  /** …and the mouth and the brows it redraws, where the body had them and where the picture puts them, grown by a unit. */
+  const redrawnMouth = at2x((x, y) => inEllipse(MOUTH_AT, 1)(x, y) || inEllipse(MOUTH_REDRAWN_AT, 1)(x, y))
+  const redrawnBrows = at2x((x, y) => EYE_XS.some((cx) => x >= cx - 13 && x <= cx + 13 && y >= BROW_REDRAWN_AT.y - 9 && y <= BROW_AT.y + 3))
+
+  function memo<T>(make: () => Promise<T>): () => Promise<T> {
+    let made: Promise<T> | null = null
+    return () => (made ??= make())
+  }
+  /**
+   * The canvas every v4 picture is drawn on (`f01_candidate_1.png`'s role): the grey FIGURE ingested as body f on the
+   * canvas's own transform (`seedCanvas`, the figure's own box) — whose stored transform the real bald body then keeps.
+   */
+  const canvasDir = memo(async () => {
+    const dir = caseDir('v4-canvas')
+    const file = join(dir, 'canvas.png')
+    await writePicture(await renderSvg(sourceSvg(), SRC.w, SRC.h), file)
+    seedCanvas(dir)
+    await ingest({ file, target: { kind: 'body', gender: 'f' }, dir, targets: targetsOf(dir), overridesDir: noOverrides() })
+    return dir
+  })
+  const canvasTransform = async (): Promise<Transform> => manifestIn(await canvasDir()).bodies!.f!.transform
+  /** The canvas, then the bald body as `body:f` over it. */
+  const bodyDir = memo(async () => {
+    const dir = copyCase(await canvasDir(), 'v4-body')
+    await ingest({ file: await draw(dir, 'body.png', body()), target: { kind: 'body', gender: 'f' }, dir, targets: targetsOf(dir), overridesDir: noOverrides() })
+    return dir
+  })
+  /**
+   * …then `hair:f_bob01`: the same body with the cap and the panels — its cheek painted out, its irises brown, its
+   * mouth and brows drawn again a little elsewhere.
+   */
+  const hairCase = memo(async () => {
+    const dir = copyCase(await bodyDir(), 'v4-hair')
+    const lines: string[] = []
+    const file = await draw(dir, 'hair.png', body({ iris: IRIS_BROWN, shade: false, redrawn: true }) + hair(PURPLE))
+    await ingest({ file, target: { kind: 'hair', code: 'f_bob01' }, dir, targets: targetsOf(dir), overridesDir: noOverrides(), log: (line: string) => lines.push(line) })
+    return { dir, lines }
+  })
+
+  it('1. ingests a bald body on its stored transform (the canvas’s): its body and neutral face, real and masked, pass C1–C13', async () => {
+    const dir = await bodyDir()
+    const manifest = manifestIn(dir)
+    expect(manifest.bodies?.f).toEqual({ transform: await canvasTransform() })
+    // The canvas's transform is the grey figure's own box (`seedCanvas`): the same transform `anchorBase` gives the
+    // picture, kept by both bodies cut on it.
+    const { scale, offsetX, offsetY } = anchorBase(removeChroma(await renderSvg(sourceSvg(), SRC.w, SRC.h), { tolerance: 40 }))
+    expect(await canvasTransform()).toEqual({ scale, offsetX, offsetY })
+    for (const [name, kinds] of [['body_f_L30', ['skin']], ['body_f_face_neutral_L50', ['eyes', 'skin']]] as const) {
+      expect(manifest.files[name], name).toMatchObject({ real: true })
+      expect(manifest.files[name]!.placeholder).toBeUndefined()
+      expect(Object.keys(manifest.files[name]!.masks ?? {}).sort(), name).toEqual([...kinds])
+      for (const kind of kinds) expect(manifest.files[name]!.masks![kind]!.empty, `${name} ${kind}`).toBeUndefined()
+    }
+    // The other five faces are not this ingest's: nothing but the body and its neutral face was written.
+    expect(Object.keys(manifest.files).filter((name) => name.startsWith('body_')).sort()).toEqual(['body_f_L30', 'body_f_face_neutral_L50'])
+    const rows = await allPass(dir, ['body_f_L30', 'body_f_face_neutral_L50'])
+    // C12 measured the head (it is not an n/a): the eyes and the chin sit on F01's.
+    expect(rows.get('body_f_L30')!.get('C12')!.detail).toMatch(/^eyes \(/)
+  }, 300_000)
+
+  it('places a body with no transform of its own on F01’s — in an empty folder, and beside a body moved by its eyes (Plan 19 final review)', async () => {
+    // F01's transform, pinned as a constant beside HEAD_REFERENCE: the committed manifest's, verbatim, for both bodies.
+    const committed = JSON.parse(readFileSync(WEB_MANIFEST, 'utf8')) as Manifest
+    expect(committed.bodies!.f!.transform).toEqual({ ...F01_TRANSFORM })
+    expect(committed.bodies!.m!.transform).toEqual({ ...F01_TRANSFORM })
+    expect(F01_TRANSFORM.scale).toBeCloseTo(0.2467, 4)
+    expect(F01_TRANSFORM.offsetX).toBeCloseTo(65.6, 1)
+    expect(F01_TRANSFORM.offsetY).toBeCloseTo(52.0, 1)
+
+    // An empty folder: the body lands on F01's canvas, not on its own box (anchorBase put the real bald body_f at 0.2725).
+    const dir = caseDir('v4-f01-transform')
+    const file = join(dir, 'body.png')
+    await writePicture(await renderSvg(sourceSvg(), SRC.w, SRC.h), file)
+    const lines: string[] = []
+    await ingest({ file, target: { kind: 'body', gender: 'f' }, dir, targets: targetsOf(dir), overridesDir: noOverrides(), log: (line: string) => lines.push(line) })
+    expect(manifestIn(dir).bodies).toEqual({ f: { transform: { ...F01_TRANSFORM } } })
+    expect(lines.join('\n')).toMatch(/body f has no transform of its own yet: placed on F01's canvas — scale 0\.2467, offset 65\.6, 52\.0/)
+    expect(transform.scale, 'the figure’s own box would have placed it elsewhere').not.toBeCloseTo(F01_TRANSFORM.scale, 3)
+
+    // Body f moved 6 units up by its eyes (as `--anchor head` stores it): body m still lands on F01's, not on body f's.
+    const moved = manifestIn(dir)
+    moved.bodies!.f = { transform: { ...F01_TRANSFORM, offsetY: F01_TRANSFORM.offsetY - 6 }, anchor: 'head' }
+    writeFileSync(join(dir, MANIFEST_NAME), serialiseManifest(moved))
+    await ingest({ file, target: { kind: 'body', gender: 'm' }, dir, targets: targetsOf(dir), overridesDir: noOverrides() })
+    expect(manifestIn(dir).bodies!.m).toEqual({ transform: { ...F01_TRANSFORM } })
+    // …and a body ingested again keeps its own, anchor and all.
+    await ingest({ file, target: { kind: 'body', gender: 'f' }, dir, targets: targetsOf(dir), overridesDir: noOverrides() })
+    expect(manifestIn(dir).bodies!.f).toEqual(moved.bodies!.f)
+  }, 300_000)
+
+  it('2. cuts a hairstyle into a front cap (L60) and a back panel (L20), and leaves the face it redrew out of both', async () => {
+    const { dir, lines } = await hairCase()
+    const manifest = manifestIn(dir)
+    const front = manifest.files.item_hair_f_bob01_L60!
+    const back = manifest.files.item_hair_f_bob01_L20!
+    expect(front).toMatchObject({ layer: LAYERS.hairFront, real: true })
+    expect(back).toMatchObject({ layer: LAYERS.hairBack, real: true })
+    expect(front.empty).toBeUndefined()
+    expect(back.empty).toBeUndefined()
+    expect(front.split!.region).toBeGreaterThan(0)
+    expect(front.split!.front + front.split!.back).toBe(front.split!.region)
+    expect(back.split).toBeUndefined()
+    for (const entry of [front, back]) expect(Object.keys(entry.masks ?? {})).toEqual(['hair'])
+
+    const l60 = await readPicture(join(dir, 'item_hair_f_bob01_L60@2x.png'))
+    const l20 = await readPicture(join(dir, 'item_hair_f_bob01_L20@2x.png'))
+    // L60 is the cap and nothing of the panels; L20 the panels and nothing of the cap.
+    expect(solidShare(l60, at2x(inCap(2)))).toBeGreaterThan(0.98)
+    expect(solidShare(l20, at2x(inPanels(2)))).toBeGreaterThan(0.98)
+    expect(inked(l60, at2x(inPanels(0)))).toBe(0)
+    expect(inked(l20, at2x(inCap(0)))).toBe(0)
+    // The cheek the picture painted out and the irises it recoloured are in neither layer (the hair face rule)…
+    expect(inked(l60, redrawnFace), 'L60 holds the redrawn cheek or irises').toBe(0)
+    expect(inked(l20, redrawnFace), 'L20 holds the redrawn cheek or irises').toBe(0)
+    // …nor the mouth and the brows it drew again: neither skin-coloured nor near the eyes, islands inside the face —
+    // the mouth across y 236 too, where the face interior has the body's own skin to reach the chin with (A2a review).
+    expect(MOUTH_REDRAWN_AT.cy + MOUTH_REDRAWN_AT.ry).toBeGreaterThan(TORSO_COLUMN.y0)
+    for (const [part, region] of [['mouth', redrawnMouth], ['brows', redrawnBrows]] as const) {
+      expect(inked(l60, region), `L60 holds the redrawn ${part}`).toBe(0)
+      expect(inked(l20, region), `L20 holds the redrawn ${part}`).toBe(0)
+    }
+    expect(lines.some((line) => /^hair face rule: dropped \d+ px .*\([1-9]\d* of skin, [1-9]\d* in islands inside the face\)/.test(line)), lines.join('\n')).toBe(true)
+
+    const rows = await allPass(dir, ['item_hair_f_bob01_L60', 'item_hair_f_bob01_L20'])
+    expect(rows.get('item_hair_f_bob01_L60')!.get('C13')!.detail).toContain('the front on 0.0 % of the eyes')
+  }, 300_000)
+
+  it('clears the faint litter a split leaves in a hair layer away from its solid part, so C3 holds (Plan 19 C2)', async () => {
+    // A wisp that thin is joined to the hair by the region (it is connected to it), but the mask's feather leaves it
+    // under alpha 128 along its whole length: faint pixels well past STRAY_MARGIN from the solid part of whichever layer
+    // the split gave them to — the back's two below the panels, the front's above the cap. Without the clearing C3
+    // fails both layers, at both densities: the @1x too, which the halving makes new litter in even from a clean @2x
+    // (the clip, `hairClip`).
+    const dir = copyCase(await bodyDir(), 'v4-wisps')
+    const wisps = WISPS.map((w) => `<rect x="${w.x}" y="${w.y}" width="${w.w}" height="${w.h}" fill="${PURPLE}"/>`).join('')
+    const file = await draw(dir, 'wisps.png', body({ iris: IRIS_BROWN, shade: false, redrawn: true }) + hair(PURPLE) + wisps)
+    const lines: string[] = []
+    await ingest({ file, target: { kind: 'hair', code: 'f_bob01' }, dir, targets: targetsOf(dir), overridesDir: noOverrides(), log: (line: string) => lines.push(line) })
+    const names = ['item_hair_f_bob01_L60', 'item_hair_f_bob01_L20']
+    const rows = await allPass(dir, names)
+    for (const name of names) expect(rows.get(name)!.get('C3')!.detail, name).toBe('empty where it should be')
+
+    // The litter was there (a test whose wisps were lost on the way would pass for nothing), and was logged, per layer.
+    for (const name of names) {
+      const cleared = lines.filter((line) => new RegExp(`^${name}: dropped [1-9]\\d* px of faint litter away from its solid part @2x$`).test(line))
+      expect(cleared, `${name}: no litter cleared @2x\n${lines.join('\n')}`).toHaveLength(1)
+    }
+    // The hair itself stays whole, and the split still adds up: what was cleared was alpha < 128, which `split` never counted.
+    const l60 = await readPicture(join(dir, 'item_hair_f_bob01_L60@2x.png'))
+    const l20 = await readPicture(join(dir, 'item_hair_f_bob01_L20@2x.png'))
+    expect(solidShare(l60, at2x(inCap(2)))).toBeGreaterThan(0.98)
+    expect(solidShare(l20, at2x(inPanels(2)))).toBeGreaterThan(0.98)
+    const { split } = manifestIn(dir).files.item_hair_f_bob01_L60!
+    expect(split!.front + split!.back).toBe(split!.region)
+  }, 300_000)
+
+  it('dropStrays clears what C3 flags and nothing else, at the density’s own margin', () => {
+    // A 20 × 10 solid block at (40, 30), a faint pixel just inside C3's margin on each side, one just outside, and a
+    // soft rim beside the block. Margin: STRAY_MARGIN × density.
+    for (const density of DENSITIES) {
+      const margin = STRAY_MARGIN * density
+      const pic = blankPicture(120, 100)
+      const put = (x: number, y: number, alpha: number): void => pic.data.set([200, 100, 50, alpha], (y * pic.width + x) * 4)
+      for (let y = 30; y < 40; y++) for (let x = 40; x < 60; x++) put(x, y, 255)
+      const kept = [[39, 35, 90], [60 + margin - 1, 35, 40], [50, 30 - margin, 25], [50, 39 + margin, 60]]
+      const litter = [[60 + margin, 35, 31], [39 - margin, 35, 10], [50, 29 - margin, 70], [50, 40 + margin, 20], [5, 5, 1]]
+      for (const [x, y, alpha] of [...kept, ...litter]) put(x!, y!, alpha!)
+      expect(dropStrays(pic, density), `@${density}x`).toBe(litter.length)
+      expect(dropStrays(pic, density), `@${density}x, again`).toBe(0)
+      for (const [x, y, alpha] of kept) expect(pic.data[(y! * pic.width + x!) * 4 + 3], `@${density}x kept (${x}, ${y})`).toBe(alpha)
+      for (const [x, y] of litter) expect([...pic.data.subarray((y! * pic.width + x!) * 4, (y! * pic.width + x!) * 4 + 4)], `@${density}x cleared (${x}, ${y})`).toEqual([0, 0, 0, 0])
+      let strays = 0
+      eachStray(pic, density, () => strays++)
+      expect(strays, `@${density}x strays left`).toBe(0)
+    }
+  })
+
+  it('splits a hairstyle by its hand-drawn front mask instead of the rule, when there is one', async () => {
+    // item_hair_<code>_frontmask.png, frame-sized (@1x) and black and white: here it says the panels are the front.
+    const { dir: from } = await hairCase()
+    const dir = copyCase(from, 'v4-front-mask')
+    const overridesDir = caseDir('v4-front-mask-overrides')
+    const drawing = blankPicture(FRAME.w, FRAME.h)
+    for (let y = 0; y < FRAME.h; y++) {
+      for (let x = 0; x < FRAME.w; x++) {
+        const white = inPanels(-4)(x + 0.5, y + 0.5)
+        drawing.data.set(white ? [255, 255, 255, 255] : [0, 0, 0, 255], (y * FRAME.w + x) * 4)
+      }
+    }
+    await writePicture(drawing, join(overridesDir, 'item_hair_f_bob01_frontmask.png'))
+    const lines: string[] = []
+    await ingest({ file: join(from, 'hair.png'), target: { kind: 'hair', code: 'f_bob01' }, dir, targets: targetsOf(dir), overridesDir, log: (line: string) => lines.push(line) })
+    expect(lines.some((line) => line.startsWith('front mask:')), lines.join('\n')).toBe(true)
+    const l60 = await readPicture(join(dir, 'item_hair_f_bob01_L60@2x.png'))
+    const l20 = await readPicture(join(dir, 'item_hair_f_bob01_L20@2x.png'))
+    expect(solidShare(l60, at2x(inPanels(2)))).toBeGreaterThan(0.98)
+    expect(solidShare(l20, at2x(inCap(2)))).toBeGreaterThan(0.98)
+    expect(inked(l60, at2x(inCap(0)))).toBe(0)
+    await allPass(dir, ['item_hair_f_bob01_L60', 'item_hair_f_bob01_L20'])
+  }, 300_000)
+
+  it('keeps a fringe hanging from the cap over the eyes in L60, where C13 fails it (A2a ruling)', async () => {
+    // The hair face rule drops islands inside the face, not everything near the eyes: a fringe hangs from hair outside
+    // the face, so it is hair, and it is C13's to judge.
+    const dir = copyCase(await bodyDir(), 'v4-fringe')
+    const fringe = `<rect x="${FRINGE_AT.x}" y="${FRINGE_AT.y}" width="${FRINGE_AT.w}" height="${FRINGE_AT.h}" rx="6" fill="${PURPLE}"/>`
+    const file = await draw(dir, 'fringe.png', body() + hair(PURPLE) + fringe)
+    await ingest({ file, target: { kind: 'hair', code: 'f_bob01' }, dir, targets: targetsOf(dir), overridesDir: noOverrides() })
+    const l60 = await readPicture(join(dir, 'item_hair_f_bob01_L60@2x.png'))
+    const inFringe = (x: number, y: number): boolean => x >= FRINGE_AT.x + 2 && x <= FRINGE_AT.x + FRINGE_AT.w - 2 && y >= FRINGE_AT.y + 2 && y <= FRINGE_AT.y + FRINGE_AT.h - 2
+    expect(solidShare(l60, at2x(inFringe))).toBeGreaterThan(0.98)
+    expect(solidShare(l60, at2x((x, y) => EYE_XS.some((ex) => Math.hypot(x - ex, y - EYE_Y) <= IRIS_RADIUS))), 'the fringe over the irises').toBeGreaterThan(0.98)
+    const c13 = (await checkOne(dir, 'item_hair_f_bob01_L60', manifestIn(dir) as unknown as Manifest)).get('C13')!
+    expect(c13.ok).toBe(false)
+    expect(c13.detail).toMatch(/the front lies over the eyes on \d+\.\d % of the eye mask/)
+  }, 300_000)
+
+  it('3. cuts an outfit on body f: cutOn f, and C6 measures it against body_f_L30 — and fails it without cutOn', async () => {
+    const dir = copyCase(await bodyDir(), 'v4-outfit')
+    const file = await draw(dir, 'outfit.png', body() + OUTFIT)
+    await ingest({ file, target: { kind: 'item', slot: 'outfit', code: 'casual01' }, dir, targets: targetsOf(dir), baseId: 'f', overridesDir: noOverrides() })
+    const name = 'item_outfit_casual01_L40'
+    const manifest = manifestIn(dir)
+    expect(manifest.files[name]).toMatchObject({ layer: LAYERS.outfit, real: true, cutOn: 'f' })
+    const rows = await allPass(dir, [name])
+    expect(rows.get(name)!.get('C6')!.detail).toContain('body_f_L30')
+
+    // The same layer without `cutOn` was measured on the old bases before D1; now it is cut on no body, and fails.
+    const legacy = structuredClone(manifest)
+    delete legacy.files[name]!.cutOn
+    const old = (await checkOne(dir, name, legacy as unknown as Manifest)).get('C6')!
+    expect(old.ok).toBe(false)
+    expect(old.detail).toMatch(/^cut on no body \(cutOn missing\)/)
+    // …and with no real body to wear it, there is nothing to measure yet.
+    const standIn = structuredClone(manifest)
+    const { real: _real, ...drawn } = standIn.files.body_f_L30!
+    standIn.files.body_f_L30 = { ...drawn, placeholder: true }
+    const none = (await checkOne(dir, name, standIn as unknown as Manifest)).get('C6')!
+    expect(none).toEqual({ ok: true, detail: 'n/a — no real body wears it yet' })
+  }, 300_000)
+
+  it('4. keeps an item’s tint seed, and with it its tint masks, when the item is ingested again without one', async () => {
+    const dir = copyCase(await bodyDir(), 'v4-tint-seed')
+    const file = await draw(dir, 'beanie.png', body() + HAT)
+    const name = 'item_head_beanie01_L80'
+    const target = { kind: 'item', slot: 'head', code: 'beanie01' }
+    await ingest({ file, target, dir, targets: targetsOf(dir), baseId: 'f', tintSeed: { x: 191, y: 98 }, overridesDir: noOverrides() })
+    const first = manifestIn(dir)
+    expect(first.files[name]).toMatchObject({ tintSeed: { x: 191, y: 98 }, cutOn: 'f' })
+    expect(first.files[name]!.masks?.tint).toBeDefined()
+
+    const lines: string[] = []
+    await ingest({ file, target, dir, targets: targetsOf(dir), baseId: 'f', overridesDir: noOverrides(), log: (line: string) => lines.push(line) })
+    const again = manifestIn(dir)
+    expect(again.files[name]!.tintSeed).toEqual({ x: 191, y: 98 })
+    expect(again.files[name]!.masks?.tint).toBeDefined()
+    expect(again.files[name]!.masks!.tint!.empty).toBeUndefined()
+    expect(again.icons?.item_head_beanie01_icon?.tintMask).toBe(true)
+    for (const density of DENSITIES) {
+      expect(existsSync(join(dir, `${name}_tintmask@${density}x.png`))).toBe(true)
+      expect(existsSync(join(dir, `item_head_beanie01_icon_tintmask@${density}x.png`))).toBe(true)
+    }
+    expect(lines.some((line) => line.includes('keeps its tint seed (191, 98)')), lines.join('\n')).toBe(true)
+  }, 300_000)
+
+  it('5. cuts a bot on body f’s transform by default (D1), with cutOn f on all seven layers — and on body m’s when told', async () => {
+    const dir = copyCase(await bodyDir(), 'v4-bot')
+    // Body f's stored transform moved 4 units right of the canvas's: the bot lands there only if it reads bodies.f.
+    const moved = manifestIn(dir)
+    moved.bodies!.f!.transform.offsetX += 4
+    writeFileSync(join(dir, MANIFEST_NAME), serialiseManifest(moved))
+    const lines: string[] = []
+    const file = await draw(dir, 'bot.png', body() + ANTENNA)
+    await ingest({ file, target: { kind: 'bot', bot: 3, expr: 'neutral' }, dir, targets: targetsOf(dir), overridesDir: noOverrides(), log: (line: string) => lines.push(line) })
+    expect(lines.some((line) => line.startsWith('transform taken from f:')), lines.join('\n')).toBe(true)
+    const manifest = manifestIn(dir)
+    const names = ['bot_3_L30', ...EXPRESSIONS.map((expr: string) => `bot_3_face_${expr}_L50`)]
+    for (const name of names) expect(manifest.files[name], name).toMatchObject({ real: true, cutOn: 'f' })
+    const bot = alphaBBox(await readPicture(join(dir, 'bot_3_L30@2x.png')))!
+    const bodyBox = alphaBBox(await readPicture(join(dir, 'body_f_L30@2x.png')))!
+    expect([bot.x, bot.w, bot.y + bot.h]).toEqual([bodyBox.x + 8, bodyBox.w, bodyBox.y + bodyBox.h])
+    // `--transform-from m` reads body m's, which this directory has not ingested; an old base's id names no body at all.
+    const cut = (transformFrom: string): Promise<unknown> => ingest({ file, target: { kind: 'bot', bot: 3, expr: 'neutral' }, dir, targets: targetsOf(dir), transformFrom })
+    await expect(cut('m')).rejects.toThrow(/no transform stored for body m — a bot is cut on it; ingest it with --as body:m first/)
+    await expect(cut('f01')).rejects.toThrow(/f01 is not a body/)
+  }, 300_000)
+
+  it('6. refuses --variant m on body f, naming the body', async () => {
+    const dir = caseDir('v4-variant')
+    const file = join(dir, 'outfit.png')
+    await writePicture(await renderSvg(sourceSvg(CLOTHES), SRC.w, SRC.h), file)
+    const cut = (baseId: string, variant: string): Promise<unknown> =>
+      ingest({ file, target: { kind: 'item', slot: 'outfit', code: 'dealer01' }, dir, targets: targetsOf(dir), baseId, variant })
+    await expect(cut('f', 'm')).rejects.toThrow(/--variant m does not match body f/)
+    await expect(cut('m', 'f')).rejects.toThrow(/--variant f does not match body m/)
+    expect(() => run(['ingest', file, '--as', 'item:outfit:dealer01', '--base', 'f', '--variant', 'm', '--out', dir])).toThrow(/--variant m does not match body f/)
+    expect(existsSync(join(dir, MANIFEST_NAME))).toBe(false)
+    // The gender is the body's wear (pre-flight #28); an old base has none since D1.
+    expect([wearOf('f'), wearOf('m'), wearOf('f01'), wearOf('m02'), wearOf('x')]).toEqual(['f', 'm', null, null, null])
+  }, 60_000)
+
+  it('7. a body drawn 6 units low fails C12 on the canvas’s transform and passes anchored by its head, which is recorded', async () => {
+    const dir = copyCase(await canvasDir(), 'v4-anchor')
+    const file = await draw(dir, 'low.png', body({ dy: 6 }))
+    const canvas = await canvasTransform()
+
+    // --dry-run: D02 §8's measurements, then C12's on a cut into a temporary copy — a failing one exits 1 — and
+    // nothing written here.
+    const before = readFileSync(join(dir, MANIFEST_NAME))
+    const dry = runFailing(['ingest', file, '--as', 'body:f', '--dry-run', '--out', dir])
+    expect(dry).toContain('head height')
+    expect(dry).toMatch(/C12 +FAIL — .*eye line \d+\.\d from F01's \(want within 4\.16\)/)
+    expect(run(['ingest', file, '--as', 'body:f', '--anchor', 'head', '--dry-run', '--out', dir])).toMatch(/C12 +PASS — eyes \(/)
+    expect(readFileSync(join(dir, MANIFEST_NAME)).equals(before)).toBe(true)
+    // (The canvas's own body_f_L30 is the grey figure; the dry runs left it as it was.)
+    const canvasBody = readFileSync(join(dir, 'body_f_L30@2x.png'))
+    expect(readFileSync(join(await canvasDir(), 'body_f_L30@2x.png')).equals(canvasBody)).toBe(true)
+
+    run(['ingest', file, '--as', 'body:f', '--out', dir])
+    const plain = (await checkOne(dir, 'body_f_L30', manifestIn(dir) as unknown as Manifest)).get('C12')!
+    expect(plain.ok).toBe(false)
+    expect(plain.detail).toMatch(/eye line \d+\.\d from F01's \(want within 4\.16\)/)
+    // The chin moved by about as much (6) and is inside its own 12: only the eyes fail.
+    expect(plain.detail).not.toMatch(/chin \d+\.\d from F01's/)
+
+    const out = run(['ingest', file, '--as', 'body:f', '--anchor', 'head', '--out', dir])
+    expect(out).toContain('anchored on the head')
+    const manifest = manifestIn(dir)
+    expect(manifest.bodies?.f?.anchor).toBe('head')
+    // The head moved up 6 units at the same size: the transform is the canvas's, 6 units higher.
+    expect(manifest.bodies!.f!.transform.scale / canvas.scale).toBeCloseTo(1, 2)
+    // (Scaling about the eyes moves the offset by up to (1 − scale ratio) × 190 — a unit or so — on top of the 6.)
+    expect(Math.abs(manifest.bodies!.f!.transform.offsetY - (canvas.offsetY - 6))).toBeLessThan(1.5)
+    expect(Math.abs(manifest.bodies!.f!.transform.offsetX - canvas.offsetX)).toBeLessThan(1.5)
+    await allPass(dir, ['body_f_L30', 'body_f_face_neutral_L50'])
+  }, 300_000)
+
+  it('8. --recolour-to brings a hairstyle drawn in another colour within ΔE 5 of that colour, as colours measures it', async () => {
+    const dir = copyCase(await bodyDir(), 'v4-recolour')
+    const file = await draw(dir, 'brown.png', body() + hair(DARK_BROWN))
+    const names = ['item_hair_f_bob01_L60', 'item_hair_f_bob01_L20']
+    const items = [{ id: hairItemId('f_bob01'), naturalColour: PURPLE }]
+    const deltas = async (): Promise<number[]> => (await describeColours({ dir, manifest: manifestIn(dir), names, items }) as string[])
+      .map((line) => Number(/ΔE (\d+\.\d)$/.exec(line)?.[1] ?? Number.NaN))
+
+    // As drawn, the hair is far from the hairstyle's natural colour…
+    run(['ingest', file, '--as', 'hair:f_bob01', '--out', dir])
+    for (const delta of await deltas()) expect(delta).toBeGreaterThan(15)
+    expect(manifestIn(dir).files[names[0]!]!.recolouredTo).toBeUndefined()
+
+    // …and recoloured to it, it is that colour.
+    run(['ingest', file, '--as', 'hair:f_bob01', '--recolour-to', PURPLE, '--out', dir])
+    const after = await deltas()
+    expect(after).toHaveLength(2)
+    for (const delta of after) expect(delta).toBeLessThanOrEqual(5)
+    const manifest = manifestIn(dir)
+    expect(manifest.files[names[0]!]!.recolouredTo).toBe(PURPLE)
+    expect(manifest.files[names[1]!]!.recolouredTo).toBeUndefined()
+    await allPass(dir, names)
+
+    // Ingested again without the flag, it stays recoloured, as an item keeps its tint seed (A2a review).
+    expect(run(['ingest', file, '--as', 'hair:f_bob01', '--out', dir])).toContain(`item_hair_f_bob01_L60 keeps its recolour to ${PURPLE}`)
+    for (const delta of await deltas()) expect(delta).toBeLessThanOrEqual(5)
+    expect(manifestIn(dir).files[names[0]!]!.recolouredTo).toBe(PURPLE)
+  }, 300_000)
+
+  it('anchors a body by the eyes its cut finds, not by a hand-drawn eye mask drawn for another placement (A2a review)', async () => {
+    // A hand-drawn neutral eye mask, drawn where the eyes sit once the body is anchored (on HEAD_REFERENCE). The cut
+    // on the canvas's transform has them 6 units lower; measured through the drawing, the anchor would see nothing to move.
+    const dir = copyCase(await canvasDir(), 'v4-anchor-hand-eyes')
+    const overridesDir = caseDir('v4-anchor-hand-eyes-masks')
+    const drawing = blankPicture(FRAME.w, FRAME.h)
+    for (let y = 0; y < FRAME.h; y++) {
+      for (let x = 0; x < FRAME.w; x++) {
+        if (EYE_XS.some((ex) => Math.hypot(x + 0.5 - ex, y + 0.5 - EYE_Y) <= IRIS_RADIUS)) drawing.data.set([255, 255, 255, 255], (y * FRAME.w + x) * 4)
+      }
+    }
+    await writePicture(drawing, join(overridesDir, 'body_f_face_neutral_L50_eyemask.png'))
+    const lines: string[] = []
+    const file = await draw(dir, 'low.png', body({ dy: 6 }))
+    await ingest({ file, target: { kind: 'body', gender: 'f' }, dir, targets: targetsOf(dir), anchor: 'head', overridesDir, log: (line: string) => lines.push(line) })
+    const measured = /on body f's transform the eyes are at \([\d.]+, ([\d.]+)\)/.exec(lines.join('\n'))
+    expect(Number(measured?.[1]), lines.join('\n')).toBeGreaterThan(HEAD_REFERENCE.eyeMidY + 5)
+    const canvas = await canvasTransform()
+    const manifest = manifestIn(dir)
+    expect(Math.abs(manifest.bodies!.f!.transform.offsetY - (canvas.offsetY - 6))).toBeLessThan(1.5)
+    // The written face does take the drawing, which now sits on the anchored eyes: C12 passes through it.
+    expect(manifest.files.body_f_face_neutral_L50!.masks!.eyes!.override).toBe(true)
+    const c12 = (await checkOne(dir, 'body_f_L30', manifest as unknown as Manifest)).get('C12')!
+    expect(c12.ok, c12.detail).toBe(true)
+  }, 300_000)
+
+  it('cuts one of a body’s faces on the body’s transform (face:<g>:<expr>), and refuses it before the body', async () => {
+    const dir = copyCase(await bodyDir(), 'v4-face')
+    const file = await draw(dir, 'happy.png', body({ extra: SMILE }))
+    run(['ingest', file, '--as', 'face:f:happy', '--out', dir])
+    const name = 'body_f_face_happy_L50'
+    const manifest = manifestIn(dir)
+    expect(manifest.files[name]).toMatchObject({ layer: LAYERS.face, real: true })
+    expect(Object.keys(manifest.files[name]!.masks ?? {}).sort()).toEqual(['eyes', 'skin'])
+    for (const density of DENSITIES) {
+      const outside = inkOutsideHead(await readPicture(join(dir, `${name}@${density}x.png`)), density)
+      expect(outside.length, `@${density}x has ink outside the head region`).toBe(0)
+    }
+    // C11 compares a real face with the real neutral one, and it holds.
+    const rows = await allPass(dir, [name])
+    expect(rows.get(name)!.get('C11')!.detail).not.toContain('n/a')
+
+    const bare = caseDir('v4-face-bare')
+    await expect(ingest({ file, target: { kind: 'bodyFace', gender: 'f', expr: 'happy' }, dir: bare, targets: targetsOf(bare) })).rejects.toThrow(/no transform stored for body f — a face is cut on it; ingest it with --as body:f first/)
+  }, 300_000)
+
+  it('measures a hat drawn over a hairstyle against the body wearing that hairstyle (--hair)', async () => {
+    const { dir: from } = await hairCase()
+    const file = await draw(from, 'hat-on-hair.png', body() + hair(PURPLE) + HAT)
+    const target = { kind: 'item', slot: 'head', code: 'tophat01' }
+    const name = 'item_head_tophat01_L80'
+
+    const dir = copyCase(from, 'v4-hat-hair')
+    const lines: string[] = []
+    await ingest({ file, target, dir, targets: targetsOf(dir), baseId: 'f', hair: 'f_bob01', overridesDir: noOverrides(), log: (line: string) => lines.push(line) })
+    expect(lines.some((line) => line.includes('item_hair_f_bob01')), lines.join('\n')).toBe(true)
+    expect(manifestIn(dir).files[name]).toMatchObject({ real: true, cutOn: 'f' })
+    const hat = await readPicture(join(dir, `${name}@2x.png`))
+    expect(solidOf(hat, RED)).toBeGreaterThan(5000)
+    expect(solidOf(hat, PURPLE), 'the hat layer holds the hair round it').toBe(0)
+
+    // The control: on the bald body, the cap round the hat is new to the picture, so it joins the hat.
+    const bald = copyCase(from, 'v4-hat-bald')
+    await ingest({ file, target, dir: bald, targets: targetsOf(bald), baseId: 'f', overridesDir: noOverrides() })
+    expect(solidOf(await readPicture(join(bald, `${name}@2x.png`)), PURPLE)).toBeGreaterThan(1000)
+
+    // A hairstyle is worn on its own gender's body.
+    await expect(ingest({ file, target, dir, targets: targetsOf(dir), baseId: 'f', hair: 'm_tousled01' })).rejects.toThrow(/m_tousled01/)
+  }, 300_000)
+
+  it('placeholder keeps the bodies key and every real body, face and hair layer exactly as ingested', async () => {
+    const { dir: from } = await hairCase()
+    const dir = copyCase(from, 'v4-placeholder')
+    const names = ['body_f_L30', 'body_f_face_neutral_L50', 'item_hair_f_bob01_L60', 'item_hair_f_bob01_L20']
+    const before = manifestIn(dir)
+    const bytes = Object.fromEntries(names.map((name) => [name, bytesOf(dir, name)]))
+    await buildPlaceholders({ dir, targets: targetsOf(dir) })
+    const after = manifestIn(dir)
+    expect(after.bodies).toEqual(before.bodies)
+    for (const name of names) {
+      expect(after.files[name], name).toEqual(before.files[name])
+      bytesOf(dir, name).forEach((now, index) => expect(now.equals(bytes[name]![index]!), `${name} was redrawn`).toBe(true))
+    }
+  }, 600_000)
+
+  // ── The body-skin rule (Plan 19 style gate): a hair or outfit picture's redraw of the body's own skin stays out ──
+
+  /** The real v4 bodies' cream. A platinum blonde is ΔE 10 from it: a darker cream, which the difference reads as its shadow. */
+  const REAL_CREAM = '#fce5cf'
+  const PLATINUM = '#e0c9b3'
+  const PLATINUM_SHADE = '#c8ae96'
+  /** The body's outline round its ears, arms and hands. */
+  const LINE = '#7a3e2a'
+  /** Skin in the hair's shadow, between the fringe strands (L* 78, C* 28, h 55°), and a redrawn ear's (L* 74, C* 30, h 54°). */
+  const SHADOW_SKIN = '#eab496'
+  const EAR_SHADE = '#e2a88a'
+  const BLUE = '#2244cc'
+  const GOLD = '#d4af37'
+  const GOLD_DEEP = '#b8860b'
+  /** The ears (on the head's edge), the arms' outline and the hands; `grow` widens the arms outwards and drops the hands. */
+  const EARS_AT = [{ cx: 119, cy: 196 }, { cx: 265, cy: 196 }]
+  const ears = (): string => EARS_AT.map((e) => `<ellipse cx="${e.cx}" cy="${e.cy}" rx="7" ry="12" fill="${REAL_CREAM}" stroke="${LINE}" stroke-width="1.5"/>`).join('')
+  /** The shading inside each ear's lower half, as a hair picture redraws it — the ear's own cream round it. */
+  const EAR_SHADES = EARS_AT.map((e) => ({ cx: e.cx, cy: e.cy + 2, rx: 3.5, ry: 6 }))
+  const limbs = (grow = 0): string =>
+    `<rect x="${128 - grow}" y="254" width="${18 + grow}" height="78" rx="9" fill="${REAL_CREAM}" stroke="${LINE}" stroke-width="1.5"/>` +
+    `<rect x="238" y="254" width="${18 + grow}" height="78" rx="9" fill="${REAL_CREAM}" stroke="${LINE}" stroke-width="1.5"/>` +
+    [137, 247].map((cx) => `<ellipse cx="${cx}" cy="${334 + grow}" rx="9" ry="7" fill="${REAL_CREAM}" stroke="${LINE}" stroke-width="1.5"/>`).join('')
+  /** A bald body in the real cream, with ears and outlined arms and hands. */
+  const skinBody = ({ grow = 0, extra = '' } = {}): string => body({ cream: REAL_CREAM, extra: ears() + limbs(grow) + extra })
+  const skinBodyDir = memo(async () => {
+    const dir = copyCase(await canvasDir(), 'v4-skin-body')
+    await ingest({ file: await draw(dir, 'body.png', skinBody()), target: { kind: 'body', gender: 'f' }, dir, targets: targetsOf(dir), overridesDir: noOverrides() })
+    return dir
+  })
+  /** Four fringe strands hanging from the cap over the forehead to y 150 (`tips`), and the cap and the side locks over the ears' tops. */
+  const STRANDS = [150, 171, 192, 213].map((x) => ({ x, y: 120, w: 17, h: 30 }))
+  const strands = (fill: string, line: string): string => STRANDS.map((s) =>
+    `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${fill}"/><rect x="${s.x + 7.5}" y="${s.y}" width="2" height="${s.h - 4}" fill="${line}"/>`).join('')
+  const sideLocks = (fill: string): string => EARS_AT.map((e) => `<rect x="${e.cx - 13}" y="120" width="20" height="${e.cy - 6 - 120}" fill="${fill}"/>`).join('')
+  /** Solid pixels of `pic` within 30 of `hex` inside `region`. */
+  function solidOfIn(pic: Picture, hex: string, region: Uint8Array): number {
+    const n = Number.parseInt(hex.slice(1), 16)
+    const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+    let count = 0
+    for (let p = 0; p < region.length; p++) {
+      const at = p * 4
+      if (!region[p] || pic.data[at + 3]! < 128) continue
+      if (Math.hypot(pic.data[at]! - r, pic.data[at + 1]! - g, pic.data[at + 2]! - b) <= 30) count++
+    }
+    return count
+  }
+  const everywhere = new Uint8Array(FRAME.w * 2 * FRAME.h * 2).fill(1)
+  const keptOut = (lines: string[]): number => Number(/^body skin kept out: (\d+) px$/m.exec(lines.join('\n'))?.[1] ?? Number.NaN)
+
+  it('keeps the skin a hair picture redraws between the fringe strands and on the ears out of both hair layers', async () => {
+    // The picture shades the forehead between the strand tips and the ears below the side locks in the hair's shadow:
+    // not the body's colour there, so the difference takes them, and they touch the hair, so the face rule keeps them.
+    const dir = copyCase(await skinBodyDir(), 'v4-skin-hair')
+    const band = `<rect x="148" y="128" width="84" height="18" fill="${SHADOW_SKIN}"/>`
+    const earShades = EAR_SHADES.map((e) => `<ellipse cx="${e.cx}" cy="${e.cy}" rx="${e.rx}" ry="${e.ry}" fill="${EAR_SHADE}"/>`).join('')
+    const file = await draw(dir, 'hair.png', skinBody({ extra: earShades }) + band + hair(PURPLE) + strands(PURPLE, BROW_REDRAWN) + sideLocks(PURPLE))
+    const lines: string[] = []
+    await ingest({ file, target: { kind: 'hair', code: 'f_bob01' }, dir, targets: targetsOf(dir), overridesDir: noOverrides(), log: (line: string) => lines.push(line) })
+    const l60 = await readPicture(join(dir, 'item_hair_f_bob01_L60@2x.png'))
+    const l20 = await readPicture(join(dir, 'item_hair_f_bob01_L20@2x.png'))
+    for (const [name, layer] of [['L60', l60], ['L20', l20]] as const) {
+      expect(solidOfIn(layer, SHADOW_SKIN, everywhere), `${name} holds the skin between the strands`).toBe(0)
+      expect(solidOfIn(layer, EAR_SHADE, everywhere), `${name} holds the redrawn ears`).toBe(0)
+    }
+    // The hair itself is all there: the cap, every strand to its tip, the side locks.
+    expect(solidShare(l60, at2x(inCap(2)))).toBeGreaterThan(0.98)
+    const inStrands = (x: number, y: number): boolean => STRANDS.some((s) => x >= s.x + 1.5 && x <= s.x + s.w - 1.5 && y >= CAP.bottom && y <= s.y + s.h - 1.5)
+    expect(solidShare(l60, at2x(inStrands)), 'the strands').toBeGreaterThan(0.98)
+    expect(keptOut(lines), lines.join('\n')).toBeGreaterThan(0)
+  }, 300_000)
+
+  it('takes nothing of a platinum-blonde fringe over the cream forehead: blonde does not redden as skin does', async () => {
+    // Measured on the difference itself, with the rule and without: a flat platinum over the cream is a darker cream,
+    // which the difference reads as the skin's shadow and drops whether or not the rule runs. The fringe below is held
+    // because its strands are outlined — the outline encloses each one, and the clean-up fills it — and it reaches past
+    // the head's sides, so it is not an island of the face. What the rule may not do is take any more of it.
+    const dir = await skinBodyDir()
+    const outline = '#8c6e58'
+    const CELLS = Array.from({ length: 14 }, (_, i) => 120 + i * 10)
+    const fringe = `<rect x="118" y="120" width="148" height="26" fill="${PLATINUM}" stroke="${outline}" stroke-width="1.5"/>` +
+      CELLS.map((x) => `<rect x="${x + 4}" y="122" width="2" height="22" fill="${PLATINUM_SHADE}"/><rect x="${x + 9.25}" y="120" width="1.5" height="26" fill="${outline}"/>`).join('')
+    const file = await draw(caseDir('v4-skin-blonde'), 'blonde.png', skinBody() + hair(PLATINUM) + fringe)
+    const bodyPic = await readPicture(join(dir, 'body_f_L30@2x.png'))
+    const keyed = removeChroma(await readPicture(file), { tolerance: 40 })
+    const { picture } = registerToBase(await applyTransform(keyed, manifestIn(dir).bodies!.f!.transform, 2), bodyPic, { slot: 'hair', density: 2 })
+    const alphaOf = async (name: string): Promise<Uint8Array> => {
+      const pic = await readPicture(join(dir, `${name}@2x.png`))
+      return Uint8Array.from({ length: pic.width * pic.height }, (_, p) => pic.data[p * 4 + 3]!)
+    }
+    const faceRule = {
+      skin: await alphaOf('body_f_face_neutral_L50_skinmask'),
+      eyes: await alphaOf('body_f_face_neutral_L50_eyemask'),
+      face: await readPicture(join(dir, 'body_f_face_neutral_L50@2x.png')),
+      bodySkin: await alphaOf('body_f_L30_skinmask'),
+    }
+    const skin = Uint8Array.from(faceRule.skin, (value, p) => Math.max(value, faceRule.bodySkin[p]!))
+    const without = diffAgainstBase(picture, bodyPic, { slot: 'hair', density: 2, faceRule })
+    const withRule = diffAgainstBase(picture, bodyPic, { slot: 'hair', density: 2, faceRule, ownSkin: { skin, ...BODY_SKIN_RULE.hair } })
+    const inFringe = at2x((x, y) => CELLS.some((left) => x >= left + 1.5 && x <= left + 7.5) && y >= CAP.bottom && y <= 144.5)
+    let held = 0
+    let inside = 0
+    let lost = 0
+    for (let p = 0; p < inFringe.length; p++) {
+      if (inFringe[p]) inside++
+      if (inFringe[p] && without.mask[p]! >= 128) held++
+      if (without.mask[p]! >= 128 && withRule.mask[p]! < 128) lost++
+    }
+    expect(held / inside, 'the fringe, cut without the rule').toBeGreaterThan(0.98)
+    expect(lost, 'blonde the rule took').toBe(0)
+    expect(withRule.skinDropped).toBe(0)
+  }, 300_000)
+
+  /** A t-shirt over the tank top, short sleeves over the arms' tops; the arms bare below y 278. */
+  const TSHIRT = `<rect x="147" y="238" width="90" height="116" rx="6" fill="${BLUE}"/>`
+  const sleeves = (fill: string, bottom: number): string => [124, 234].map((x) => `<rect x="${x}" y="248" width="26" height="${bottom - 248}" rx="3" fill="${fill}"/>`).join('')
+  /** The bare arms and hands below the sleeves, on both sides. */
+  const bareArms = (top: number): Uint8Array => at2x((x, y) => y >= top && y <= 345 && (x < 147 || x > 237))
+
+  it('keeps an outfit picture’s cream rim and finger edges out of its layer, and still covers the underwear (C6)', async () => {
+    // The picture draws the arms 1.5 units wider on the outside and the hands 1.5 lower: the body's own outline then
+    // lies under the picture's cream, which the union with the body takes — a cream rim round the arms and the hands.
+    // And it shades the arms in the sleeves' shadow just below them.
+    const dir = copyCase(await skinBodyDir(), 'v4-skin-outfit')
+    const shadow = [127.5, 239].map((x) => `<rect x="${x}" y="278" width="17.5" height="4" fill="${SHADOW_SKIN}"/>`).join('')
+    const file = await draw(dir, 'outfit.png', skinBody({ grow: 1.5, extra: shadow }) + TSHIRT + sleeves(BLUE, 278))
+    const lines: string[] = []
+    await ingest({ file, target: { kind: 'item', slot: 'outfit', code: 'casual01' }, dir, targets: targetsOf(dir), baseId: 'f', overridesDir: noOverrides(), log: (line: string) => lines.push(line) })
+    const name = 'item_outfit_casual01_L40'
+    const l40 = await readPicture(join(dir, `${name}@2x.png`))
+    expect(solidOfIn(l40, REAL_CREAM, bareArms(278)), 'the cream rim round the arms and hands').toBe(0)
+    expect(solidOfIn(l40, SHADOW_SKIN, bareArms(278)), 'the skin in the sleeves’ shadow').toBe(0)
+    expect(solidOfIn(l40, BLUE, everywhere), 'the t-shirt and the sleeves').toBeGreaterThan(10_000)
+    expect(keptOut(lines), lines.join('\n')).toBeGreaterThan(0)
+    const rows = await allPass(dir, [name])
+    expect(rows.get(name)!.get('C6')!.detail).toContain('body_f_L30')
+  }, 300_000)
+
+  it('keeps a gold sleeve over the arm whole, cuff and all: gold is not the body’s skin', async () => {
+    const dir = copyCase(await skinBodyDir(), 'v4-skin-gold')
+    const cuffs = [124, 234].map((x) => `<rect x="${x}" y="294" width="26" height="6" fill="${GOLD_DEEP}"/>`).join('')
+    const file = await draw(dir, 'gold.png', skinBody() + TSHIRT + sleeves(GOLD, 300) + cuffs)
+    await ingest({ file, target: { kind: 'item', slot: 'outfit', code: 'champion01' }, dir, targets: targetsOf(dir), baseId: 'f', overridesDir: noOverrides() })
+    const l40 = await readPicture(join(dir, 'item_outfit_champion01_L40@2x.png'))
+    const inSleeves = (x: number, y: number): boolean => [124, 234].some((left) => x >= left + 1.5 && x <= left + 26 - 1.5 && y >= 249.5 && y <= 298.5)
+    expect(solidShare(l40, at2x(inSleeves)), 'the gold sleeves').toBeGreaterThan(0.98)
+    const inCuffs = (x: number, y: number): boolean => [124, 234].some((left) => x >= left + 1.5 && x <= left + 26 - 1.5 && y >= 295 && y <= 299)
+    expect(solidShare(l40, at2x(inCuffs)), 'the deep-gold cuffs on the bare forearm').toBeGreaterThan(0.98)
+  }, 300_000)
 })

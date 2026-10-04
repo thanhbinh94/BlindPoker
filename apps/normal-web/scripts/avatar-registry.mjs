@@ -4,9 +4,10 @@
  * `docs/superpowers/specs/2026-09-24-avatar-asset-registry-design.md`; procedure in `docs/avatar-2d.md`,
  * "Sổ tài sản và vòng lặp sinh ảnh").
  *
- *   node scripts/avatar-registry.mjs next [--limit n] [--json]
+ *   node scripts/avatar-registry.mjs next [--limit n] [--json] [--only <id,…>]
  *       The assets ready to generate, in priority order: id, file, the reference picture's absolute path
- *       (or "none"), the attempt number, and the rendered prompt in a fenced block.
+ *       (or "none"), the attempt number, and the rendered prompt in a fenced block. `--only` (Plan 19, the
+ *       style gate) hands out only those ids — each still only once it is ready — in the same order.
  *
  *   node scripts/avatar-registry.mjs status
  *       How many assets are in each status, and every blocked asset with its reasons.
@@ -24,17 +25,25 @@
  *
  *   node scripts/avatar-registry.mjs verify [<id…>] [--keep-tmp]
  *   node scripts/avatar-registry.mjs verify --picture <png> --as <spec> [--reference <png>] [--base <id>] [--variant <f|m>]
+ *                                           [--hair <code>] [--anchor head] [--recolour-to <#rrggbb>] [--transform-from <id>]
  *       Score every generated asset (or the named ones) against spec §5 and record ok / ng / blocked. The
- *       second form scores one file without touching the registry. Never writes into public/avatar/.
+ *       second form scores one file without touching the registry: the reference defaults to the owner's
+ *       picture (`f01_candidate_1.png` for a body, the canvas both are drawn from; `body_<g>.png` for a body's
+ *       face, a hairstyle, an item on a body or a bot — body f's unless `--base` says otherwise), and
+ *       `--transform-from` names a bot's or a body's transform source where the reference's name cannot (a v4
+ *       bot drawn from another bot's picture: `--transform-from f`). Never writes into public/avatar/.
  *
  *   node scripts/avatar-registry.mjs ingest [<id…>]
- *       Put every ok or approved asset not yet ingested into public/avatar/ with the real pipeline, and
- *       report what a new base still needs by hand.
+ *       Put every ok or approved asset not yet ingested into public/avatar/ with the real pipeline.
+ *
+ * Plan 12's flat bases and expressions (`base:<id>`, `expr:<id>:<expr>`) stay in the registry as history and are
+ * refused by `verify` and `ingest` (Plan 19 D1).
  *
  * Every command takes `--registry <file>` (default assets/avatar-src/registry.json). The work is in
  * `scripts/avatar-registry/`; this file only reads the command line.
  */
 import { dirname, resolve } from 'node:path'
+import { GENDERS } from './avatar-pipeline/manifest.mjs'
 import { DEFAULT_DOWNLOADS, collect } from './avatar-registry/collect.mjs'
 import { ingestAssets } from './avatar-registry/ingest.mjs'
 import { approve, describeNext, formatNext, formatStatus, nextAssets, reject } from './avatar-registry/queue.mjs'
@@ -94,7 +103,9 @@ try {
     } else {
       const limit = option('limit') === null ? Infinity : Number(option('limit'))
       if (Number.isNaN(limit) || limit < 1) die('--limit needs a positive number')
-      const assets = nextAssets(registry, { limit, srcDir })
+      const only = option('only') === null ? null : option('only').split(',').map((id) => id.trim()).filter(Boolean)
+      if (only !== null && only.length === 0) die('--only needs asset ids, comma-separated')
+      const assets = nextAssets(registry, { limit, srcDir, only })
       console.log(flag('json') ? JSON.stringify(assets.map((asset) => describeNext(asset, registry, srcDir)), null, 2) : formatNext(assets, registry, srcDir))
     }
   } else if (command === 'status') {
@@ -134,15 +145,20 @@ try {
       if (!spec) die('verify --picture needs --as <spec>')
       const { kind, slot } = kindOfSpec(spec)
       const target = parseSpec(spec)
-      const base = option('base') ?? (target.kind === 'expr' ? target.base : 'f01')
-      const reference = option('reference') ?? (kind === 'aura' || kind === 'frame' ? null : `${kind === 'base' ? 'f01' : base}_candidate_1.png`)
-      const flags = [...(flag('hides-hair-front') ? ['--hides-hair-front'] : []), ...(flag('hides-hair-back') ? ['--hides-hair-back'] : []), ...(flag('white') ? ['--white'] : [])]
+      // The body whose picture is the default reference: a body face's or a hairstyle's own (Plan 19); an item's or a
+      // bot's --base; otherwise body f. A body itself is drawn from F01's picture, the canvas both bodies share.
+      const base = option('base') ?? (target.kind === 'bodyFace' || target.kind === 'hair' ? target.gender : 'f')
+      if (!GENDERS.includes(base)) die(`--base ${base} is not a body — f or m`)
+      const reference = option('reference') ?? (kind === 'aura' || kind === 'frame' ? null : kind === 'body' ? 'f01_candidate_1.png' : `body_${base}.png`)
+      const words = ['hair', 'anchor', 'recolour-to'].flatMap((name) => (option(name) === null ? [] : [`--${name}`, option(name)]))
+      const flags = [...(flag('hides-hair-front') ? ['--hides-hair-front'] : []), ...(flag('hides-hair-back') ? ['--hides-hair-back'] : []), ...(flag('white') ? ['--white'] : []), ...words]
       const result = await scorePicture({
         file: resolve(process.cwd(), option('picture')),
         kind,
         slot,
         referenceFile: reference === null ? null : resolve(srcDir, reference),
         ingest: { as: spec, base: option('base'), variant: option('variant'), flags },
+        ...(option('transform-from') === null ? {} : { transformFrom: option('transform-from') }),
         keepTmp: flag('keep-tmp'),
         log,
       })

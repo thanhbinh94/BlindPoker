@@ -1,18 +1,17 @@
-import { Chibi, type ChibiConfig } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { BaseDto, BaseId, ItemDto, Rarity } from '../../api.js'
+import type { ItemDto, Rarity } from '../../api.js'
 import { itemName } from '../../catalog-i18n.js'
 import { ItemPreview } from './ItemTab.js'
 import s from './wardrobe.module.css'
 
 /**
  * The right column's cards (design §4, §7): one accessible-name recipe and one "wearing/locked" chrome,
- * shared by every card shape the wardrobe draws — a picture (`ItemCard`), a colour swatch (`ColourCard`),
- * plain text (`WordCard`) or a base's portrait (`BaseCard`, which has neither rarity nor a lock and so
- * does not share the recipe at all).
+ * shared by every card shape the wardrobe draws — a picture (`ItemCard`), a colour swatch (`ColourCard`) or
+ * plain text (`WordCard`).
  *
- * Every card but `BaseCard` calls `onPick` unconditionally when it is owned — including the one already
+ * Every card calls `onPick` unconditionally when it is owned — including the one already
  * worn — so a second press on an equipped optional slot's card can unequip it; that toggle is the
  * caller's decision (`WardrobeScreen.pick`), not this file's, exactly as `ItemTab` already worked.
  */
@@ -76,7 +75,7 @@ export interface ItemCardProps {
   item: ItemDto
   /** The family's original, which names the dot row; `item` itself when omitted (a lone card, or the original shown). */
   family?: ItemDto
-  /** The draft base's wear (design §4.1's gendered cut), forwarded straight to `ItemPreview`. */
+  /** The draft's gender (design §4.1's gendered cut; a base's `wear` until Plan 19), forwarded straight to `ItemPreview`. */
   wear?: string
   owned: boolean
   wearing: boolean
@@ -89,11 +88,14 @@ export interface ItemCardProps {
   /** Keeps the dot row's height on a card that has no variants of its own, so that in a tab where some cards do
    * have them every card's lock hint ends on the same line (No8b). `ItemTab` sets it; a lone card never needs it. */
   reserveDots?: boolean
+  /** The card's picture, drawn in place of the item's icon (`ItemPreview`): a hairstyle's head portrait (Kiểu tóc,
+   * avatar v4 — a hairstyle has no icon of its own, and is only worth seeing on a head). */
+  thumb?: ReactNode
   onPick: (id: string) => void
 }
 
 /**
- * A pictured item (Mũ, Phụ kiện mặt, Trang phục, Hào quang, Khung — design §4.1).
+ * A pictured item (Kiểu tóc, Mũ, Phụ kiện mặt, Trang phục, Hào quang, Khung — design §4.1).
  *
  * Two elements, not one (V3 fix, 2026-09-27): a colour-variant dot is its own `<button>`, and a `<button>`
  * cannot contain another, so the card's visual chrome — border, background, `data-rarity` — lives on a
@@ -101,7 +103,7 @@ export interface ItemCardProps {
  * lock hint) moves into an inner `.cardPick` button beside the dot row, both now inside the same bordered
  * box instead of the dots sitting below/outside it.
  */
-export function ItemCard({ item, family = item, wear, owned, wearing, hint, variants, reserveDots = false, onPick }: ItemCardProps) {
+export function ItemCard({ item, family = item, wear, owned, wearing, hint, variants, reserveDots = false, thumb, onPick }: ItemCardProps) {
   const { t } = useTranslation('normal')
   const name = itemName(item.id, t)
   const hasVariants = variants !== undefined && variants.length > 0
@@ -120,8 +122,8 @@ export function ItemCard({ item, family = item, wear, owned, wearing, hint, vari
           }}
         >
           {wearing ? <WearingPill /> : null}
-          <span className={s.cardThumb} data-locked={!owned}>
-            <ItemPreview item={item} wear={wear} />
+          <span className={thumb === undefined ? s.cardThumb : `${s.cardThumb} ${s.cardPortrait}`} data-locked={!owned}>
+            {thumb === undefined ? <ItemPreview item={item} wear={wear} /> : thumb}
           </span>
           <span className={s.cardName} data-locked={!owned}>
             {name}
@@ -162,17 +164,20 @@ export function ItemCard({ item, family = item, wear, owned, wearing, hint, vari
 }
 
 export interface ColourCardProps {
-  /** `null` is the "Natural" swatch — the base's own colour, never locked, never anyone's rarity. */
+  /** `null` is the "Natural" swatch — the hairstyle's or the body's own colour, never locked, never anyone's rarity. */
   item: ItemDto | null
   owned: boolean
   wearing: boolean
   hint: string
+  /** The "Natural" swatch's fill, when that colour is known (Màu da: the body's own skin); left out, the swatch is the
+   * half-and-half mark. Ignored on any other swatch. */
+  naturalColour?: string
   onPick: (id: string | undefined) => void
 }
 
-/** A colour swatch (Màu tóc, Màu mắt — design §4.3): same wearing/lock chrome as `ItemCard`, a round
+/** A colour swatch (Màu tóc, Màu da, Màu mắt — design §4.3): same wearing/lock chrome as `ItemCard`, a round
  * swatch of `item.colour` instead of a picture. */
-export function ColourCard({ item, owned, wearing, hint, onPick }: ColourCardProps) {
+export function ColourCard({ item, owned, wearing, hint, naturalColour, onPick }: ColourCardProps) {
   const { t } = useTranslation('normal')
   const name = item === null ? t('wardrobe.natural') : itemName(item.id, t)
   const clickable = item === null || owned
@@ -192,7 +197,7 @@ export function ColourCard({ item, owned, wearing, hint, onPick }: ColourCardPro
     >
       {wearing ? <WearingPill /> : null}
       {item === null ? (
-        <span className={s.naturalSwatch} aria-hidden="true" />
+        <span className={s.naturalSwatch} style={naturalColour === undefined ? undefined : { background: naturalColour }} aria-hidden="true" />
       ) : (
         <span className={s.colourSwatchBig} style={{ background: item.colour }} aria-hidden="true" />
       )}
@@ -237,32 +242,6 @@ export function WordCard({ item, owned, wearing, hint, onPick }: WordCardProps) 
       </span>
       <RarityLabel rarity={item.rarity} />
       {owned ? null : <LockHint hint={hint} />}
-    </button>
-  )
-}
-
-export interface BaseCardProps {
-  base: BaseDto
-  /** The base wearing the draft's current outfit (design §4.2) — computed by the caller (`BaseTab`),
-   * which is the one that knows the rest of the draft. */
-  portrait: ChibiConfig
-  selected: boolean
-  onPick: (id: BaseId) => void
-  /** The portrait's own width (V5 fix, 2026-09-27): a fixed 96 px overflowed a phone's 3-column grid —
-   * `.baseCard`'s minimum content width (padding plus this fixed-width chibi) exceeded the column's own
-   * share, so the grid — the whole page — scrolled sideways. Defaults to 96, the desktop/tablet value;
-   * `BaseTab` passes a smaller one on phone. */
-  portraitSize?: number
-}
-
-/** A figure tile (tab Thân — design §4.2): chosen, not owned, so it has neither a rarity nor a lock —
- * only ever a gold border when it is the draft's current base. */
-export function BaseCard({ base, portrait, selected, onPick, portraitSize = 96 }: BaseCardProps) {
-  const { t } = useTranslation('normal')
-  return (
-    <button type="button" className={s.baseCard} aria-pressed={selected} onClick={() => onPick(base.id)}>
-      <Chibi subject={portrait} frame="head" size={portraitSize} />
-      <span className={s.cardName}>{t(base.nameKey)}</span>
     </button>
   )
 }

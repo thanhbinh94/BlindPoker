@@ -29,7 +29,9 @@ export const LITE_VERSION = '0.1.0'
 /**
  * Every human seat draws a chibi seeded from their own display name (design 08 §6.4) — Lite has no
  * wardrobe and no per-account config to fetch, so `defaultChibi` is the whole story: the same name
- * always seeds the same figure, on this device and on every other one at the table.
+ * always seeds the same figure, on this device and on every other one at the table. That figure is a v4
+ * body (`body_<g>_L30` and its faces), its gender's default hairstyle (two layers) and the default outfit;
+ * `apps/lite/scripts/avatar-files.mjs` copies exactly those files, and the Lite e2e checks every one decodes.
  */
 function chibiForLite(player: RoomPlayerView): ChibiSubject {
   return defaultChibi(player.displayName)
@@ -115,8 +117,8 @@ export function App({ api, socketFactory, version = LITE_VERSION }: AppProps) {
   const { state } = client
 
   return (
-    // Lite packs its own `base_*`/`bot_*` PNGs next to the app shell rather than serving `/avatar/` from a
-    // server root the way Normal does — see `apps/lite/scripts/build.mjs`.
+    // Lite packs its own chibi PNGs (`body_*`, `bot_*`, the default hairs and outfit) next to the app shell rather
+    // than serving `/avatar/` from a server root the way Normal does — see `apps/lite/scripts/build.mjs`.
     <AvatarAssets base="./avatar/">
       <GameClientProvider client={client}>
         <Shell

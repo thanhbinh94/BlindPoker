@@ -2,8 +2,8 @@
  * The build output Task 1's asset pipeline emits: the list of every PNG layer that actually exists,
  * by name, with its layer number and pixel size (design §3, §4.4).
  *
- * `loadItemCatalog` (`items.ts`) and `loadBases` (`bases.ts`) both hold their own `asset.file`
- * references against this — an item or a base that names a file the pipeline never produced would
+ * `loadItemCatalog` (`items.ts`) and `loadBodies` (`bodies.ts`) both hold their own `asset.file`
+ * references against this — an item or a body that names a file the pipeline never produced would
  * otherwise be an invisible layer on somebody's chibi, caught only by looking. Loaded once, at boot,
  * the same way `items.json` is: refused loudly rather than degraded, because every avatar this
  * server renders is built from what this file says exists.
@@ -39,8 +39,11 @@ export interface AvatarManifestFile {
    *  catalogue's own flags must agree (bug 7). */
   hidesHairFront?: boolean
   hidesHairBack?: boolean
-  /** The tint masks this layer carries, if any (design §4.1): at most one of each kind. */
-  masks?: { hair?: MaskInfo; eyes?: MaskInfo; tint?: MaskInfo }
+  /**
+   * The tint masks this layer carries, if any (design §4.1): at most one of each kind. `skin` is v4's
+   * (Plan 19): a body and its faces carry one, for `skinColor` to paint (`bodies.ts`).
+   */
+  masks?: { hair?: MaskInfo; eyes?: MaskInfo; tint?: MaskInfo; skin?: MaskInfo }
 }
 
 export interface AvatarManifest {
@@ -75,7 +78,7 @@ function unitInterval(path: string, value: unknown, what: string): number {
   return value
 }
 
-const MASK_KINDS = ['hair', 'eyes', 'tint'] as const
+const MASK_KINDS = ['hair', 'eyes', 'tint', 'skin'] as const
 type MaskKind = (typeof MASK_KINDS)[number]
 
 function parseMaskInfo(path: string, name: string, kind: MaskKind, raw: unknown): MaskInfo {
@@ -140,7 +143,7 @@ function parseFile(path: string, name: string, raw: unknown): AvatarManifestFile
  * Reads and validates `data/avatar-manifest.json`.
  *
  * Refuses rather than defaults: a manifest that failed to parse would otherwise let every
- * `asset.file` check in `items.ts`/`bases.ts` pass vacuously (nothing to compare against), which is
+ * `asset.file` check in `items.ts`/`bodies.ts` pass vacuously (nothing to compare against), which is
  * a worse failure than a container that will not boot.
  */
 export function loadAvatarManifest(path: string = defaultManifestPath()): AvatarManifest {

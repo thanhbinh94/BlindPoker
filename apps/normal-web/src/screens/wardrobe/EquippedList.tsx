@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
-import type { AvatarConfigDto, BaseDto, ItemDto, ItemSlot, Rarity } from '../../api.js'
+import type { AvatarConfigDto, ItemDto, ItemSlot, Rarity } from '../../api.js'
 import { itemName } from '../../catalog-i18n.js'
 import { tabOfSlot, type TabId } from './categories.js'
 import { Icon, type IconName } from './icons.js'
@@ -9,27 +9,30 @@ import s from './wardrobe.module.css'
 export interface EquippedListProps {
   config: AvatarConfigDto
   items: ReadonlyMap<string, ItemDto>
-  bases: ReadonlyMap<string, BaseDto>
   onRemove: (slot: ItemSlot) => void
   onJump: (tab: TabId) => void
 }
 
-/** The row order design §3.1 item 3 lists: base first, the two colours, the five drawn slots, then the
- * two word slots — `base` is not an `ItemSlot` (it is chosen, not owned), so it gets its own row kind. */
-type RowId = 'base' | ItemSlot
-const ROWS: readonly RowId[] = ['base', 'hairColor', 'eyeColor', 'head', 'face', 'outfit', 'aura', 'frame', 'title', 'badge']
+/** The row order (design §3.1 item 3; avatar v4, spec §6.3): the look first — Giới tính, Kiểu tóc, Màu da, Màu tóc,
+ * Màu mắt — then the five drawn slots and the two word slots. `gender` is not an `ItemSlot` (it is chosen, not
+ * owned), so it gets its own row kind. */
+type RowId = 'gender' | ItemSlot
+const ROWS: readonly RowId[] = ['gender', 'hairStyle', 'skinColor', 'hairColor', 'eyeColor', 'head', 'face', 'outfit', 'aura', 'frame', 'title', 'badge']
 
-const COLOUR_SLOTS: ReadonlySet<RowId> = new Set(['hairColor', 'eyeColor'])
-/** Design §3.1 item 3: Thân and Trang phục never carry a "×" — one is chosen rather than worn, the other
- * is the one slot a figure can never go without. Every other row's "×" only shows once it holds something. */
-const NEVER_REMOVABLE: ReadonlySet<RowId> = new Set(['base', 'outfit'])
+const COLOUR_SLOTS: ReadonlySet<RowId> = new Set(['hairColor', 'eyeColor', 'skinColor'])
+/** Design §3.1 item 3: Giới tính, Kiểu tóc and Trang phục never carry a "×" — the first is chosen rather than
+ * worn, the other two are slots a figure can never go without. Every other row's "×" only shows once it holds
+ * something. */
+const NEVER_REMOVABLE: ReadonlySet<RowId> = new Set(['gender', 'hairStyle', 'outfit'])
 
 /** Each row's label reuses an existing tab/group string (brief: no new per-row vocabulary) — `words` has
  * none of its own, so title/badge borrow the two sub-headings `ItemTab` already shows inside that tab. */
 const ROW_LABEL_KEY: Record<RowId, string> = {
-  base: 'wardrobe.tabs.base',
+  gender: 'wardrobe.gender.legend',
+  hairStyle: 'wardrobe.tabs.hairStyle',
   hairColor: 'wardrobe.tabs.hairColor',
   eyeColor: 'wardrobe.tabs.eyeColor',
+  skinColor: 'wardrobe.tabs.skinColor',
   head: 'wardrobe.tabs.head',
   face: 'wardrobe.tabs.face',
   outfit: 'wardrobe.tabs.outfit',
@@ -42,9 +45,11 @@ const ROW_LABEL_KEY: Record<RowId, string> = {
 /** Small monochrome line icons (V2 fix, `./icons.js`) — aria-hidden, the row's own label already names
  * the slot. */
 const ROW_ICON: Record<RowId, IconName> = {
-  base: 'person',
+  gender: 'person',
+  hairStyle: 'hair',
   hairColor: 'drop',
   eyeColor: 'eye',
+  skinColor: 'palm',
   head: 'hat',
   face: 'glasses',
   outfit: 'shirt',
@@ -62,12 +67,12 @@ interface RowContent {
   filled: boolean
 }
 
-function baseRow(config: AvatarConfigDto, bases: ReadonlyMap<string, BaseDto>, t: TFunction<'normal'>): RowContent {
-  const base = bases.get(config.base)
-  return { value: base === undefined ? t('wardrobe.equipped.none') : t(base.nameKey), filled: base !== undefined }
+/** The gender row: always filled — every figure is drawn on one body or the other — and named "Nữ"/"Nam". */
+function genderRow(config: AvatarConfigDto, t: TFunction<'normal'>): RowContent {
+  return { value: t(`wardrobe.gender.${config.gender}`), filled: true }
 }
 
-function colourRow(slot: 'hairColor' | 'eyeColor', config: AvatarConfigDto, items: ReadonlyMap<string, ItemDto>, t: TFunction<'normal'>): RowContent {
+function colourRow(slot: 'hairColor' | 'eyeColor' | 'skinColor', config: AvatarConfigDto, items: ReadonlyMap<string, ItemDto>, t: TFunction<'normal'>): RowContent {
   const id = config[slot]
   const item = id === undefined ? undefined : items.get(id)
   if (item === undefined) return { value: t('wardrobe.natural'), filled: false }
@@ -75,7 +80,7 @@ function colourRow(slot: 'hairColor' | 'eyeColor', config: AvatarConfigDto, item
 }
 
 function itemRow(
-  slot: Exclude<ItemSlot, 'hairColor' | 'eyeColor'>,
+  slot: Exclude<ItemSlot, 'hairColor' | 'eyeColor' | 'skinColor'>,
   config: AvatarConfigDto,
   items: ReadonlyMap<string, ItemDto>,
   t: TFunction<'normal'>,
@@ -93,16 +98,18 @@ function itemRow(
  * to that slot's group/tab (`tabOfSlot`); the "×" is a sibling button, not nested inside it, since a
  * button cannot contain another.
  */
-export function EquippedList({ config, items, bases, onRemove, onJump }: EquippedListProps) {
+export function EquippedList({ config, items, onRemove, onJump }: EquippedListProps) {
   const { t } = useTranslation('normal')
 
   const contentFor = (row: RowId): RowContent => {
-    if (row === 'base') return baseRow(config, bases, t)
-    if (COLOUR_SLOTS.has(row)) return colourRow(row as 'hairColor' | 'eyeColor', config, items, t)
-    return itemRow(row as Exclude<ItemSlot, 'hairColor' | 'eyeColor'>, config, items, t)
+    if (row === 'gender') return genderRow(config, t)
+    if (COLOUR_SLOTS.has(row)) return colourRow(row as 'hairColor' | 'eyeColor' | 'skinColor', config, items, t)
+    return itemRow(row as Exclude<ItemSlot, 'hairColor' | 'eyeColor' | 'skinColor'>, config, items, t)
   }
 
-  const jumpTarget = (row: RowId): TabId => (row === 'base' ? 'base' : tabOfSlot(row))
+  // The gender has no tab of its own: its switch heads the look group, so its row opens that group's first tab, Kiểu
+  // tóc — the tab the gender changes.
+  const jumpTarget = (row: RowId): TabId => (row === 'gender' ? 'hairStyle' : tabOfSlot(row))
 
   return (
     <div className={s.equippedList}>

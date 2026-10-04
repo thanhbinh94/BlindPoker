@@ -307,7 +307,7 @@ export function ProfileScreen({ api, lang, balance, onRenamed }: ProfileScreenPr
         () => [] as ItemDto[],
       ),
       api.avatarCatalog().catch(
-        () => ({ frame: { w: 0, h: 0 }, crop: { x: 0, y: 0, size: 0 }, bases: [], manifestVersion: 0 }) as AvatarCatalogDto,
+        () => ({ frame: { w: 0, h: 0 }, crop: { x: 0, y: 0, size: 0 }, bodies: [], manifestVersion: 0 }) as AvatarCatalogDto,
       ),
     ]),
   )
@@ -317,7 +317,7 @@ export function ProfileScreen({ api, lang, balance, onRenamed }: ProfileScreenPr
   const loaded = bundle.data
   const [me, stats, history, catalogItems, avatarCatalog] = loaded ?? [undefined, undefined, undefined, undefined, undefined]
   const items = useMemo(() => new Map((catalogItems ?? []).map((item) => [item.id, item])), [catalogItems])
-  const bases = useMemo(() => new Map((avatarCatalog?.bases ?? []).map((base) => [base.id, base])), [avatarCatalog])
+  const bodies = useMemo(() => new Map((avatarCatalog?.bodies ?? []).map((body) => [body.gender, body])), [avatarCatalog])
 
   if (bundle.loading && loaded === null) {
     return (
@@ -349,7 +349,7 @@ export function ProfileScreen({ api, lang, balance, onRenamed }: ProfileScreenPr
   const badgeId = me.avatar.badge
   // Amount and unit stay one string, exactly as the rail and the kit's `PlayerBar` print it.
   const balanceText = `${formatPoints(balance, lang)} ${t('common:units.pointsShort')}`
-  const chibi = chibiFromApi(me.avatar, items, bases) ?? defaultChibi(displayName)
+  const chibi = chibiFromApi(me.avatar, items, bodies) ?? defaultChibi(displayName)
 
   return (
     <main className={s.page}>

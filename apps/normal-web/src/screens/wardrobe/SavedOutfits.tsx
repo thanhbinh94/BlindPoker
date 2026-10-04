@@ -1,7 +1,7 @@
 import { Button, Chibi, Field, Modal } from '@bp/ui-kit'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { AvatarConfigDto, BaseDto, ItemDto, NormalApi, OutfitDto } from '../../api.js'
+import type { AvatarConfigDto, BodyDto, ItemDto, NormalApi, OutfitDto } from '../../api.js'
 import { chibiFromApi } from '../../avatar/chibi.js'
 import s from './wardrobe.module.css'
 
@@ -25,7 +25,8 @@ export interface OutfitBarProps {
   outfits: (OutfitDto | null)[]
   draft: AvatarConfigDto
   items: ReadonlyMap<string, ItemDto>
-  bases: ReadonlyMap<string, BaseDto>
+  /** `/api/catalog/avatar`'s bodies, keyed by `gender` — what each portrait is drawn on. */
+  bodies: ReadonlyMap<string, BodyDto>
   onOutfitsChanged: (next: (OutfitDto | null)[]) => void
   /** The server's own answer to `apply` — the config now equipped — so the caller can push it straight
    * into the draft without a second round trip. */
@@ -46,7 +47,7 @@ export interface OutfitBarProps {
  * name is numbered ("Ô {{n}} trống") — otherwise a screen reader announces five identical buttons with no
  * way to tell them apart.
  */
-export function SavedOutfits({ api, outfits, draft, items, bases, onOutfitsChanged, onApplied }: OutfitBarProps) {
+export function SavedOutfits({ api, outfits, draft, items, bodies, onOutfitsChanged, onApplied }: OutfitBarProps) {
   const { t } = useTranslation('normal')
   const [dialog, setDialog] = useState<DialogState | null>(null)
   const [busy, setBusy] = useState(false)
@@ -154,7 +155,7 @@ export function SavedOutfits({ api, outfits, draft, items, bases, onOutfitsChang
       <div className={s.outfitGrid}>
         {outfits.map((outfit, at) => {
           const slot = at + 1
-          const chibi = outfit === null ? null : chibiFromApi(outfit.config, items, bases)
+          const chibi = outfit === null ? null : chibiFromApi(outfit.config, items, bodies)
           const menuOpen = openMenu === slot
           return (
             <div
