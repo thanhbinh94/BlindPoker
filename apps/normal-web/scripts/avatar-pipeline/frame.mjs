@@ -137,10 +137,11 @@ export const HEAD_TOLERANCE = 4.16
  */
 export const CHIN_TOLERANCE = 12
 /**
- * C11 on a body L30 (Plan 19, spec §5.5): the share of the layer's own ink its skin mask may cover. Provisional —
- * the stand-ins measure 0.57 — until the style gate measures the two real bodies and sets it to theirs ± 0.10 (B5).
+ * C11 on a body L30 (Plan 19, spec §5.5): the share of the layer's own ink its skin mask may cover. The style gate
+ * measured the two real bodies at 0.651 (f) and 0.646 (m), with the tank top and shorts out of the mask; this is
+ * theirs ± 0.10 (B5). The stand-ins measure 0.57.
  */
-export const SKIN_AREA = { min: 0.35, max: 0.85 }
+export const SKIN_AREA = { min: 0.55, max: 0.75 }
 
 /** The base's skin colour, in the frame's own units at `density`, or `null` on an empty window. */
 export function baseSkinColour(pic, density = 1) {

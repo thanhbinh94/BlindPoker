@@ -3777,8 +3777,118 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T07:09:14.237Z",
+          "chat": "https://chatgpt.com/c/6ac1fae9-17ec-83ec-bd8d-8168c8bf7e92",
+          "file": "body_f.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 0.729,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 5,
+              "centre": 0
+            },
+            "heads": 2.38,
+            "checks": {
+              "body_f_L30": [
+                "C12"
+              ],
+              "body_f_face_neutral_L50": []
+            }
+          },
+          "reason": "check:C12",
+          "by": "verify",
+          "notes": [
+            "body_f_L30 C12: chin 10.0 from F01's, want each within 4.16 — eyes (191.1, 191.9) 58.0 apart, chin 233"
+          ]
+        },
+        {
+          "n": 2,
+          "at": "2026-10-04T07:15:02.919Z",
+          "chat": "https://chatgpt.com/c/6ac1fc85-b51c-83ec-b0a5-8b5689856cda",
+          "file": "body_f.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 0.743,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 16,
+              "centre": 0
+            }
+          },
+          "reason": "drift",
+          "by": "verify"
+        },
+        {
+          "n": 3,
+          "at": "2026-10-04T07:28:24.668Z",
+          "chat": "https://chatgpt.com/c/6ac1fae9-17ec-83ec-bd8d-8168c8bf7e92",
+          "file": "body_f.png",
+          "verdict": "ok",
+          "notes": [
+            "re-judges attempt 1 picture (chat 6ac1fae9…) after the C12 chin ruling (CHIN_TOLERANCE 12, edfa9cf); attempt 2 failed drift"
+          ],
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 0.729,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 5,
+              "centre": 0
+            },
+            "heads": 2.38,
+            "checks": {
+              "body_f_L30": [],
+              "body_f_face_neutral_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "body_m",
@@ -3803,8 +3913,48 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T07:12:05.498Z",
+          "chat": "https://chatgpt.com/c/6ac1fbc0-476c-83ec-889f-90cab1bfef06",
+          "file": "body_m.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 0.706,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 12,
+              "centre": 0
+            },
+            "heads": 2.436,
+            "checks": {
+              "body_m_L30": [],
+              "body_m_face_neutral_L50": []
+            }
+          },
+          "reason": null,
+          "by": "verify",
+          "notes": [
+            "body_m_L30 C12: chin 9.0 from F01's, want each within 4.16 — eyes (191.2, 192.7) 57.5 apart, chin 234"
+          ]
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "item_hair_f_bob01",
@@ -3825,8 +3975,85 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T07:33:56.391Z",
+          "chat": "https://chatgpt.com/c/6ac200cd-b480-83ec-85d6-0f059fa7836d",
+          "file": "item_hair_f_bob01.png",
+          "verdict": "ng",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 1,
+              "centre": 0
+            },
+            "scope": 0.002,
+            "checks": {
+              "item_hair_f_bob01_L20": [],
+              "item_hair_f_bob01_L60": [
+                "C13"
+              ]
+            }
+          },
+          "reason": "check:C13",
+          "by": "verify",
+          "notes": [
+            "item_hair_f_bob01_L60 C13: the front lies over the eyes on 1.9 % of the eye mask, want ≤ 1 %"
+          ]
+        },
+        {
+          "n": 2,
+          "at": "2026-10-04T07:53:19.518Z",
+          "chat": "https://chatgpt.com/c/6ac20574-a368-83ec-813e-aed598dec8f9",
+          "file": "item_hair_f_bob01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 0,
+              "centre": 0
+            },
+            "scope": 0.002,
+            "checks": {
+              "item_hair_f_bob01_L20": [],
+              "item_hair_f_bob01_L60": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "item_hair_m_tousled01",
@@ -3847,8 +4074,45 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T07:36:07.188Z",
+          "chat": "https://chatgpt.com/c/6ac20172-e094-83ec-bc70-f74ac62f8f50",
+          "file": "item_hair_m_tousled01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 1,
+            "widthRatio": 1.004,
+            "drift": {
+              "left": null,
+              "top": null,
+              "right": null,
+              "bottom": 1,
+              "centre": 1
+            },
+            "scope": 0.001,
+            "checks": {
+              "item_hair_m_tousled01_L20": [],
+              "item_hair_m_tousled01_L60": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "v4/item_outfit_casual01",
@@ -3870,8 +4134,44 @@
         "variant": null,
         "flags": []
       },
-      "status": "todo",
-      "attempts": []
+      "status": "ok",
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-10-04T07:39:00.202Z",
+          "chat": "https://chatgpt.com/c/6ac20212-9518-83ec-8220-21aa8c4a1111",
+          "file": "v4_item_outfit_casual01.png",
+          "verdict": "ok",
+          "measure": {
+            "size": "1024×1536",
+            "width": 1024,
+            "height": 1536,
+            "corners": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "checker": 0,
+            "scale": 0.995,
+            "widthRatio": 0.999,
+            "drift": {
+              "left": -1,
+              "top": 0,
+              "right": 1,
+              "bottom": 6
+            },
+            "heads": 2.398,
+            "hairDelta": 1.607,
+            "checks": {
+              "item_outfit_casual01_L40": []
+            }
+          },
+          "reason": null,
+          "by": "verify"
+        }
+      ],
+      "ingested": true
     },
     {
       "id": "item_hair_f_hime01",

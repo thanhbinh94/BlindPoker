@@ -227,7 +227,7 @@ describe('the shipped catalogue', () => {
   it('ships six free skin colours with lowercase hex colours', () => {
     const skins = catalog.all().filter((d) => d.slot === 'skinColor')
     expect(skins.map((d) => [d.id, d.colour])).toEqual([
-      ['skin_porcelain01', '#f3dccb'],
+      ['skin_porcelain01', '#fcefe6'],
       ['skin_fair01', '#ecc9ad'],
       ['skin_lighttan01', '#d9a47a'],
       ['skin_tan01', '#b9835a'],

@@ -849,12 +849,12 @@
       "layer": 30,
       "w": 384,
       "h": 448,
-      "bytes2x": 24191,
-      "placeholder": true,
+      "bytes2x": 182871,
+      "real": true,
       "masks": {
         "skin": {
-          "bytes2x": 11313,
-          "meanL": 0.8293
+          "bytes2x": 7487,
+          "meanL": 0.8881
         }
       }
     },
@@ -897,16 +897,16 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 9271,
-      "placeholder": true,
+      "bytes2x": 92347,
+      "real": true,
       "masks": {
-        "skin": {
-          "bytes2x": 7362,
-          "meanL": 0.8294
-        },
         "eyes": {
-          "bytes2x": 4752,
-          "meanL": 0.1844
+          "bytes2x": 4496,
+          "meanL": 0.3876
+        },
+        "skin": {
+          "bytes2x": 5615,
+          "meanL": 0.8917
         }
       }
     },
@@ -966,12 +966,12 @@
       "layer": 30,
       "w": 384,
       "h": 448,
-      "bytes2x": 24496,
-      "placeholder": true,
+      "bytes2x": 179057,
+      "real": true,
       "masks": {
         "skin": {
-          "bytes2x": 11313,
-          "meanL": 0.8293
+          "bytes2x": 7397,
+          "meanL": 0.8819
         }
       }
     },
@@ -1014,16 +1014,16 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 9373,
-      "placeholder": true,
+      "bytes2x": 87807,
+      "real": true,
       "masks": {
-        "skin": {
-          "bytes2x": 7362,
-          "meanL": 0.8294
-        },
         "eyes": {
-          "bytes2x": 4752,
-          "meanL": 0.1844
+          "bytes2x": 4518,
+          "meanL": 0.3708
+        },
+        "skin": {
+          "bytes2x": 5544,
+          "meanL": 0.8872
         }
       }
     },
@@ -1633,12 +1633,12 @@
       "layer": 20,
       "w": 384,
       "h": 448,
-      "bytes2x": 13856,
-      "placeholder": true,
+      "bytes2x": 15909,
+      "real": true,
       "masks": {
         "hair": {
-          "bytes2x": 9146,
-          "meanL": 0.355
+          "bytes2x": 4945,
+          "meanL": 0.2799
         }
       }
     },
@@ -1646,18 +1646,18 @@
       "layer": 60,
       "w": 384,
       "h": 448,
-      "bytes2x": 10132,
-      "placeholder": true,
+      "bytes2x": 100960,
+      "real": true,
+      "split": {
+        "region": 41212,
+        "front": 38827,
+        "back": 2385
+      },
       "masks": {
         "hair": {
-          "bytes2x": 6694,
-          "meanL": 0.3355
+          "bytes2x": 6029,
+          "meanL": 0.3406
         }
-      },
-      "split": {
-        "region": 79567,
-        "front": 36211,
-        "back": 43356
       }
     },
     "item_hair_f_hime01_L20": {
@@ -1850,12 +1850,12 @@
       "layer": 20,
       "w": 384,
       "h": 448,
-      "bytes2x": 13761,
-      "placeholder": true,
+      "bytes2x": 10655,
+      "real": true,
       "masks": {
         "hair": {
-          "bytes2x": 9146,
-          "meanL": 0.3501
+          "bytes2x": 4572,
+          "meanL": 0.2602
         }
       }
     },
@@ -1863,18 +1863,18 @@
       "layer": 60,
       "w": 384,
       "h": 448,
-      "bytes2x": 10185,
-      "placeholder": true,
+      "bytes2x": 86942,
+      "real": true,
+      "split": {
+        "region": 35751,
+        "front": 34175,
+        "back": 1576
+      },
       "masks": {
         "hair": {
-          "bytes2x": 6694,
-          "meanL": 0.3318
+          "bytes2x": 5689,
+          "meanL": 0.3204
         }
-      },
-      "split": {
-        "region": 79567,
-        "front": 36211,
-        "back": 43356
       }
     },
     "item_head_beanie01_L80": {
@@ -1976,16 +1976,17 @@
       "layer": 40,
       "w": 384,
       "h": 448,
-      "bytes2x": 98872,
+      "bytes2x": 92782,
       "real": true,
+      "cutOn": "f",
       "tintSeed": {
         "x": 191,
         "y": 276
       },
       "masks": {
         "tint": {
-          "bytes2x": 4516,
-          "meanL": 0.9546
+          "bytes2x": 4526,
+          "meanL": 0.953
         }
       }
     },
@@ -2260,7 +2261,7 @@
       "of": "item_outfit_casual01_L40",
       "w": 96,
       "h": 96,
-      "bytes2x": 25213,
+      "bytes2x": 24619,
       "real": true,
       "tintMask": true
     },
@@ -2368,6 +2369,22 @@
         "offsetY": 52.29325513196481
       },
       "strandY": 93
+    }
+  },
+  "bodies": {
+    "f": {
+      "transform": {
+        "scale": 0.24669603524229075,
+        "offsetX": 65.568281938326,
+        "offsetY": 52.01762114537445
+      }
+    },
+    "m": {
+      "transform": {
+        "scale": 0.24669603524229075,
+        "offsetX": 65.568281938326,
+        "offsetY": 52.01762114537445
+      }
     }
   }
 }

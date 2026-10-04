@@ -64,7 +64,7 @@ const FEMALE_HAIRS = HAIR_PAIRS.map(([f]) => f)
 const MALE_HAIRS = HAIR_PAIRS.map(([, m]) => m)
 
 /** Two skin tones, `free` like all six (spec §4.2). */
-const SKIN_PORCELAIN = item({ id: 'skin_porcelain01', slot: 'skinColor', rarity: 'common', free: true, colour: '#f3dccb' })
+const SKIN_PORCELAIN = item({ id: 'skin_porcelain01', slot: 'skinColor', rarity: 'common', free: true, colour: '#fcefe6' })
 const SKIN_DEEP = item({ id: 'skin_deep01', slot: 'skinColor', rarity: 'common', free: true, colour: '#5c3a28' })
 
 const OUTFIT_CASUAL = item({
@@ -440,7 +440,7 @@ describe('WardrobeScreen', () => {
     const natural = panel.getByRole('button', { name: viNormal.wardrobe.natural })
     expect(natural).toHaveAttribute('aria-pressed', 'true')
     // "Tự nhiên" is the body's own cream, filled in — not the checker the hair and eye tabs draw.
-    expect((natural.querySelector('span[style]') as HTMLElement).style.background).toBe('rgb(241, 210, 182)')
+    expect((natural.querySelector('span[style]') as HTMLElement).style.background).toBe('rgb(243, 220, 203)')
     // Then the tones, in catalogue order.
     expect(cardNames()).toEqual([viNormal.items.skin_porcelain01, viNormal.items.skin_deep01])
 

@@ -55,9 +55,9 @@ const UNDO_GLYPH = '↺'
  * own — it is "not phone, not desktop", the same branch as desktop for markup, told apart only by CSS. */
 const DESKTOP_QUERY = '(min-width: 1024px)'
 
-/** The body's own skin, which "Tự nhiên" on Màu da shows (spec §4.2's "cream"). A stand-in value until the real
- * bodies are drawn and their skin measured (Phase C, C6; pre-flight #42): then it is the body's measured colour. */
-const NATURAL_SKIN = '#f1d2b6'
+/** The body's own skin, which "Tự nhiên" on Màu da shows (spec §4.2's "cream"): the real body f's skin as the style
+ * gate measured it (`colours body_f_L30`, B5; body m's is #f5dcc7). C6 re-measures it with the final tone ladder. */
+const NATURAL_SKIN = '#f3dccb'
 
 /** The two genders, in the order the switch draws them: Nữ | Nam (spec §6.1). */
 const GENDER_ORDER: readonly Gender[] = ['f', 'm']

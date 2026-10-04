@@ -147,7 +147,7 @@
   { "id": "hair_m_spiky01", "slot": "hairStyle", "rarity": "common", "nameKey": "items.hair_m_spiky01", "assetKey": "hairStyle/hair_m_spiky01", "isDefault": false, "free": true, "gender": "m", "counterpart": "hair_f_ponytail01", "naturalColour": "#4a2c1d",
     "asset": { "layer": 60, "file": "item_hair_m_spiky01_L60", "back": "item_hair_m_spiky01_L20", "fitsAvatarCrop": true } },
 
-  { "id": "skin_porcelain01", "slot": "skinColor", "rarity": "common", "nameKey": "items.skin_porcelain01", "assetKey": "skinColor/skin_porcelain01", "isDefault": false, "free": true, "colour": "#f3dccb" },
+  { "id": "skin_porcelain01", "slot": "skinColor", "rarity": "common", "nameKey": "items.skin_porcelain01", "assetKey": "skinColor/skin_porcelain01", "isDefault": false, "free": true, "colour": "#fcefe6" },
   { "id": "skin_fair01", "slot": "skinColor", "rarity": "common", "nameKey": "items.skin_fair01", "assetKey": "skinColor/skin_fair01", "isDefault": false, "free": true, "colour": "#ecc9ad" },
   { "id": "skin_lighttan01", "slot": "skinColor", "rarity": "common", "nameKey": "items.skin_lighttan01", "assetKey": "skinColor/skin_lighttan01", "isDefault": false, "free": true, "colour": "#d9a47a" },
   { "id": "skin_tan01", "slot": "skinColor", "rarity": "common", "nameKey": "items.skin_tan01", "assetKey": "skinColor/skin_tan01", "isDefault": false, "free": true, "colour": "#b9835a" },
