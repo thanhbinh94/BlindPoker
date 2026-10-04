@@ -50,7 +50,7 @@ describe('loadBodies', () => {
   it('reads the shipped bodies against the shipped manifest', () => {
     const bodies = loadBodies()
     expect(Object.keys(bodies).sort()).toEqual(['f', 'm'])
-    expect(bodies.f).toMatchObject({ gender: 'f', body: 'body_f_L30', naturalEyeColour: '#2e6a9b' })
+    expect(bodies.f).toMatchObject({ gender: 'f', body: 'body_f_L30', naturalEyeColour: '#2a6492' })
     for (const expr of EXPRESSIONS) expect(bodies.m.faces[expr]).toBe(`body_m_face_${expr}_L50`)
     // The stand-ins already carry skin and eye masks (A1a), so both bodies are tintable from day one:
     // skin at the body's own lightness, eyes at face_neutral's.

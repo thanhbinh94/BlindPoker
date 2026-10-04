@@ -219,8 +219,8 @@ describe('GET /api/config', () => {
     // Exactly these keys: a v3 client still reading `bases` finds nothing rather than a stale registry (spec §4.3).
     expect(Object.keys(answer).sort()).toEqual(['bodies', 'crop', 'frame', 'manifestVersion'])
     expect(answer.bodies.map((body) => body.gender)).toEqual(['f', 'm'])
-    expect(answer.bodies[0]).toMatchObject({ gender: 'f', body: 'body_f_L30', naturalEyeColour: '#2e6a9b', faces: { neutral: 'body_f_face_neutral_L50' } })
-    expect(answer.bodies[1]).toMatchObject({ gender: 'm', body: 'body_m_L30', naturalEyeColour: '#cc924c', faces: { sleep: 'body_m_face_sleep_L50' } })
+    expect(answer.bodies[0]).toMatchObject({ gender: 'f', body: 'body_f_L30', naturalEyeColour: '#2a6492', faces: { neutral: 'body_f_face_neutral_L50' } })
+    expect(answer.bodies[1]).toMatchObject({ gender: 'm', body: 'body_m_L30', naturalEyeColour: '#945e26', faces: { sleep: 'body_m_face_sleep_L50' } })
     // The derived tint travels with it (ruling 5): the client never measures a body itself.
     for (const body of answer.bodies) expect(body.tint?.skin, body.gender).toBeDefined()
     expect(h.app.services.bodies.f.gender).toBe('f')

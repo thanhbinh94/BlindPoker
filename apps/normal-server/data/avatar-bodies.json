@@ -5,7 +5,7 @@
       "neutral": "body_f_face_neutral_L50", "happy": "body_f_face_happy_L50", "sad": "body_f_face_sad_L50",
       "surprised": "body_f_face_surprised_L50", "closed": "body_f_face_closed_L50", "sleep": "body_f_face_sleep_L50"
     },
-    "naturalEyeColour": "#2e6a9b"
+    "naturalEyeColour": "#2a6492"
   },
   "m": {
     "body": "body_m_L30",
@@ -13,6 +13,6 @@
       "neutral": "body_m_face_neutral_L50", "happy": "body_m_face_happy_L50", "sad": "body_m_face_sad_L50",
       "surprised": "body_m_face_surprised_L50", "closed": "body_m_face_closed_L50", "sleep": "body_m_face_sleep_L50"
     },
-    "naturalEyeColour": "#cc924c"
+    "naturalEyeColour": "#945e26"
   }
 }

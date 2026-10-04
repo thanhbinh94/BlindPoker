@@ -862,17 +862,17 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 8844,
-      "placeholder": true,
+      "bytes2x": 81115,
+      "real": true,
       "masks": {
-        "skin": {
-          "bytes2x": 7056,
-          "meanL": 0.8294
-        },
         "eyes": {
           "bytes2x": 4015,
           "meanL": 0,
           "empty": true
+        },
+        "skin": {
+          "bytes2x": 5428,
+          "meanL": 0.891
         }
       }
     },
@@ -880,16 +880,17 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 9222,
-      "placeholder": true,
+      "bytes2x": 82992,
+      "real": true,
       "masks": {
-        "skin": {
-          "bytes2x": 7390,
-          "meanL": 0.8294
-        },
         "eyes": {
-          "bytes2x": 4548,
-          "meanL": 0.2001
+          "bytes2x": 4015,
+          "meanL": 0,
+          "empty": true
+        },
+        "skin": {
+          "bytes2x": 5537,
+          "meanL": 0.8935
         }
       }
     },
@@ -914,16 +915,16 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 9292,
-      "placeholder": true,
+      "bytes2x": 90986,
+      "real": true,
       "masks": {
-        "skin": {
-          "bytes2x": 7521,
-          "meanL": 0.8294
-        },
         "eyes": {
-          "bytes2x": 4627,
-          "meanL": 0.1865
+          "bytes2x": 4472,
+          "meanL": 0.4203
+        },
+        "skin": {
+          "bytes2x": 5521,
+          "meanL": 0.8967
         }
       }
     },
@@ -931,17 +932,17 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 8847,
-      "placeholder": true,
+      "bytes2x": 80624,
+      "real": true,
       "masks": {
-        "skin": {
-          "bytes2x": 7010,
-          "meanL": 0.8294
-        },
         "eyes": {
           "bytes2x": 4015,
           "meanL": 0,
           "empty": true
+        },
+        "skin": {
+          "bytes2x": 5401,
+          "meanL": 0.8975
         }
       }
     },
@@ -949,16 +950,16 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 9829,
-      "placeholder": true,
+      "bytes2x": 94357,
+      "real": true,
       "masks": {
-        "skin": {
-          "bytes2x": 7424,
-          "meanL": 0.8294
-        },
         "eyes": {
-          "bytes2x": 4867,
-          "meanL": 0.1831
+          "bytes2x": 4634,
+          "meanL": 0.4161
+        },
+        "skin": {
+          "bytes2x": 5625,
+          "meanL": 0.8934
         }
       }
     },
@@ -979,17 +980,17 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 8937,
-      "placeholder": true,
+      "bytes2x": 74613,
+      "real": true,
       "masks": {
-        "skin": {
-          "bytes2x": 7056,
-          "meanL": 0.8294
-        },
         "eyes": {
           "bytes2x": 4015,
           "meanL": 0,
           "empty": true
+        },
+        "skin": {
+          "bytes2x": 5375,
+          "meanL": 0.8905
         }
       }
     },
@@ -997,16 +998,17 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 9302,
-      "placeholder": true,
+      "bytes2x": 76939,
+      "real": true,
       "masks": {
-        "skin": {
-          "bytes2x": 7390,
-          "meanL": 0.8294
-        },
         "eyes": {
-          "bytes2x": 4548,
-          "meanL": 0.2001
+          "bytes2x": 4015,
+          "meanL": 0,
+          "empty": true
+        },
+        "skin": {
+          "bytes2x": 5499,
+          "meanL": 0.8852
         }
       }
     },
@@ -1031,16 +1033,16 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 9369,
-      "placeholder": true,
+      "bytes2x": 87477,
+      "real": true,
       "masks": {
-        "skin": {
-          "bytes2x": 7521,
-          "meanL": 0.8294
-        },
         "eyes": {
-          "bytes2x": 4627,
-          "meanL": 0.1865
+          "bytes2x": 4555,
+          "meanL": 0.4191
+        },
+        "skin": {
+          "bytes2x": 5487,
+          "meanL": 0.8914
         }
       }
     },
@@ -1048,17 +1050,17 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 8926,
-      "placeholder": true,
+      "bytes2x": 75795,
+      "real": true,
       "masks": {
-        "skin": {
-          "bytes2x": 7010,
-          "meanL": 0.8294
-        },
         "eyes": {
           "bytes2x": 4015,
           "meanL": 0,
           "empty": true
+        },
+        "skin": {
+          "bytes2x": 5296,
+          "meanL": 0.8911
         }
       }
     },
@@ -1066,16 +1068,16 @@
       "layer": 50,
       "w": 384,
       "h": 448,
-      "bytes2x": 9881,
-      "placeholder": true,
+      "bytes2x": 89369,
+      "real": true,
       "masks": {
-        "skin": {
-          "bytes2x": 7424,
-          "meanL": 0.8294
-        },
         "eyes": {
-          "bytes2x": 4867,
-          "meanL": 0.1831
+          "bytes2x": 4651,
+          "meanL": 0.3982
+        },
+        "skin": {
+          "bytes2x": 5570,
+          "meanL": 0.8889
         }
       }
     },
