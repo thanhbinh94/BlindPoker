@@ -139,8 +139,8 @@ export interface ItemDto {
   gender?: Gender
   /** The hairstyle of the other gender a gender swap changes this one to. Present on `hairStyle`, absent elsewhere. */
   counterpart?: string
-  /** The colour this hairstyle is drawn in, a lowercase hex — what the "Tự nhiên" hair swatch shows. Present on
-   * `hairStyle`, absent elsewhere. */
+  /** The colour this hairstyle is drawn in, a lowercase hex. Present on `hairStyle`, absent elsewhere. Nothing here
+   * draws it: the Màu tóc tab's "Tự nhiên" swatch is the half-and-half mark (only Màu da's is filled, `NATURAL_SKIN`). */
   naturalColour?: string
 }
 

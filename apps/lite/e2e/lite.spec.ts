@@ -1,6 +1,8 @@
 import { mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { expect, test, type BrowserContext, type Locator, type Page } from '@playwright/test'
+import { defaultChibi } from '../../../packages/ui-kit/src/avatar2d/defaults.js'
+import type { Gender } from '../../../packages/ui-kit/src/avatar2d/types.js'
 
 /**
  * The Lite edition, driven through a real browser against the real `dist/server.cjs`.
@@ -30,6 +32,18 @@ const TOKEN_KEY = 'bp.lite.token'
 /** Display names must be unique for the life of the server, and this file creates several per run. */
 let seq = 0
 const unique = (stem: string): string => `${stem}${(Date.now() % 100_000).toString(36)}${seq++}`
+
+/**
+ * A unique display name whose chibi is of `gender`. A Lite seat's figure is `defaultChibi(displayName)` — the gender by
+ * the parity of the name's FNV-1a hash — so a random name decides it, and a run could seat two of one gender and never
+ * load the other's files. Asking the kit's own rule picks names that seat one of each, every run.
+ */
+function nameOf(stem: string, gender: Gender): string {
+  for (;;) {
+    const name = unique(stem)
+    if (defaultChibi(name).body.gender === gender) return name
+  }
+}
 
 /** `formatPoints` prints `1.000` in Vietnamese; every digit group is one number. */
 const parsePoints = (text: string): number => Number(text.replace(/\D/g, ''))
@@ -188,8 +202,9 @@ async function tourStart(context: BrowserContext, name: string, suffix: string):
 
 test.describe('Blind Luck Poker Lite', () => {
   test('hai người chơi và một bot chơi trọn một ván Blind', async ({ browser }) => {
-    const nameA = unique('An')
-    const nameB = unique('Bình')
+    // One female and one male figure at the table, so both genders' bodies and hairstyles load (Plan 19 final review).
+    const nameA = nameOf('An', 'f')
+    const nameB = nameOf('Bình', 'm')
 
     const contextA = await browser.newContext()
     const contextB = await browser.newContext()
@@ -215,10 +230,19 @@ test.describe('Blind Luck Poker Lite', () => {
     // The chibi Lite bundles for itself (the v4 `body_*`, `bot_*`, the two default hairs and the default outfit, copied
     // into the build — `apps/lite/scripts/avatar-files.mjs`, spec §6.4) draws from the same seat plate as Normal's.
     // This is the one place Lite checks it does not ship faceless, bald or bodiless: every layer of every chibi on the
-    // table must decode in a real browser, and a human's own seat must be standing on a v4 body.
+    // table must decode in a real browser, and each human seat must be standing on its v4 body in its gender's default
+    // hairstyle — seat 0 the female body and the bob, seat 1 the male body and the tousled cut, so both genders' files
+    // are among the layers that decode.
     await expect(pageA.locator('[data-seat="0"] [data-chibi-hash]')).toBeVisible()
+    await expect(pageA.locator('[data-seat="1"] [data-chibi-hash]')).toBeVisible()
     await expectChibisDecode(pageA)
-    expect(await chibiLayers(pageA, 0), 'seat 0 stands on a v4 body').toEqual(expect.arrayContaining([expect.stringMatching(/\/body_[fm]_L30@/)]))
+    const figures = { 0: { body: 'body_f_L30', hair: 'item_hair_f_bob01' }, 1: { body: 'body_m_L30', hair: 'item_hair_m_tousled01' } } as const
+    for (const [seat, { body, hair }] of Object.entries(figures)) {
+      const layers = await chibiLayers(pageA, Number(seat))
+      for (const file of [body, `${hair}_L20`, `${hair}_L60`]) {
+        expect(layers, `seat ${seat} draws ${file}`).toEqual(expect.arrayContaining([expect.stringContaining(`/${file}@`)]))
+      }
+    }
     await pageA.getByRole('button', { name: 'Sẵn sàng', exact: true }).click()
     await pageB.getByRole('button', { name: 'Sẵn sàng', exact: true }).click()
     // Three ready of three seated: the bot holds a seat of its own and is ready from the moment the room exists.

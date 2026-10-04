@@ -110,8 +110,11 @@ export interface ItemDef {
   /** The hairstyle of the other gender a gender swap changes this one to. Required on `hairStyle`, forbidden elsewhere. */
   counterpart?: string
   /**
-   * The colour this hairstyle is drawn in — the old base's hair, measured — which the wardrobe's "Tự nhiên"
-   * swatch shows. A lowercase hex; required on `hairStyle`, forbidden elsewhere.
+   * The colour this hairstyle is drawn in — the old base's hair, measured — a lowercase hex; required on `hairStyle`,
+   * forbidden elsewhere. Data for the art, not for the screen: the pipeline holds each hairstyle's drawn hair to it
+   * (`avatar-pipeline.mjs colours`, `--recolour-to`), and a migrated old base keeps its hair colour by wearing the
+   * hairstyle in it. The client receives it but draws nothing from it — the Màu tóc tab's "Tự nhiên" swatch is the
+   * half-and-half mark, and only Màu da's is filled (`NATURAL_SKIN`, the body's skin).
    */
   naturalColour?: string
   /**

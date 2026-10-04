@@ -27,6 +27,7 @@ import { EquippedList } from './EquippedList.js'
 import { swapGender } from './gender.js'
 import { HairStyleTab } from './HairStyleTab.js'
 import { ItemTab } from './ItemTab.js'
+import { NATURAL_SKIN } from './natural-skin.js'
 import { SavedOutfits } from './SavedOutfits.js'
 import { StagePanel } from './StagePanel.js'
 import w from './wardrobe.module.css'
@@ -54,10 +55,6 @@ const UNDO_GLYPH = '↺'
  * floor; desktop is the point the stage stops being `compact` (design §3.1–§3.3). Tablet has no query of its
  * own — it is "not phone, not desktop", the same branch as desktop for markup, told apart only by CSS. */
 const DESKTOP_QUERY = '(min-width: 1024px)'
-
-/** The body's own skin, which "Tự nhiên" on Màu da shows (spec §4.2's "cream"): the real body f's skin as measured on
- * its final skin mask (`colours body_f_L30`, C6; body m's is #fbe0c7). It sits between Da sáng and Da sáng ấm. */
-const NATURAL_SKIN = '#fbe0ca'
 
 /** The two genders, in the order the switch draws them: Nữ | Nam (spec §6.1). */
 const GENDER_ORDER: readonly Gender[] = ['f', 'm']

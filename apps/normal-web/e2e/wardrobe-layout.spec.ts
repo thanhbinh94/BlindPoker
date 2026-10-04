@@ -401,6 +401,25 @@ test.describe('Blind Luck Poker Normal — bố cục tủ đồ (Kế hoạch 1
     await expect(dots).toHaveCount(5)
     for (const dot of await dots.all()) await expectDotTarget(dot, `wardrobe, Quần áo, the "${await dot.getAttribute('title')}" dot, phone`)
 
+    // Plan 19 final review: on a phone the "✓ Đang dùng" pill spans most of a ~100 px card. On Màu da it used to cover the
+    // top of the worn swatch — "Tự nhiên", on a fresh account — so the swatch now starts below it.
+    await goToWardrobeTab(page, 'Ngoại hình', 'Màu da')
+    const natural = page.getByRole('tabpanel').getByRole('button', { name: 'Tự nhiên', exact: true })
+    await expect(natural).toHaveAttribute('aria-pressed', 'true')
+    const boxes = await natural.evaluate((card) => {
+      const parts = Array.from(card.children) as HTMLElement[]
+      const box = (part?: HTMLElement): { top: number; bottom: number } | null => (part ? { top: part.getBoundingClientRect().top, bottom: part.getBoundingClientRect().bottom } : null)
+      return {
+        pill: box(parts.find((part) => (part.textContent ?? '').includes('Đang dùng'))),
+        swatch: box(parts.find((part) => part.getAttribute('aria-hidden') === 'true' && (part.textContent ?? '') === '')),
+      }
+    })
+    expect(boxes.pill, 'the worn card has its pill').not.toBeNull()
+    expect(boxes.swatch, 'the card has its swatch').not.toBeNull()
+    expect(boxes.swatch!.top, 'the swatch starts below the "Đang dùng" pill, 375×812').toBeGreaterThanOrEqual(boxes.pill!.bottom)
+    await natural.scrollIntoViewIfNeeded()
+    await page.screenshot({ path: `${SHOTS}wardrobe-mobile-mau-da.png` })
+
     // No11a on the phone: this mount came from Settings, so the box is unticked and "Mũ" — nothing owned on a
     // fresh account — is one line in place of the grid, clear of every other text on the page.
     await goToWardrobeTab(page, 'Trang phục', 'Mũ')
