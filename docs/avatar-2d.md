@@ -80,11 +80,15 @@ the head rose through the hats that cover it: the ponytail's tie above the nón 
 cut's spikes, the tousled cut's tuft, the bob's ahoge, the wavy cut's volume above the brim. So the hats in `HAIR_CLIP`
 (`masks.mjs`: `beanie01`, `beret_red01`, `conical_hat01`, and so every colour of them) carry a **hair clip**,
 `<hat>_hairclipmask` (`masks.hairClip`, §4.4): opaque where hair may still show, clear where the hat covers it — above the
-lower edge of the hat's main shape (its solid ink opened by 4 px @2x, so a chin strap is no edge) in every column the
-hat reaches, and beside the hat above the edge of its nearest side, because hair that comes out from under a hat comes
-out below its edge. The kit draws both hair layers through it as a CSS mask (§7). The top hat, the visor, the crown and
-the party cone sit on the hair rather than over it, and a high ponytail rising behind the small top hat reads as one;
-clipped, its tail was cut flat, so they carry none.
+hat's lower edge in every column the hat reaches, and beside the hat above the edge of its nearest side, because hair
+that comes out from under a hat comes out below its edge. A column's edge (`hatEdges`) is the bottom of its **longest**
+run of solid ink — the brim or the cuff, not a strap hanging below it or a stalk standing on it — read on the ink opened
+by 4 px @2x, or on the raw ink where that is higher. (The first cut took the column's lowest pixel; the nón lá's chin
+straps are about 8 px thick and diagonal, survive the opening, and so cut the side locks beside the face away. C11 now
+fails any clip that hides hair the hat leaves uncovered below its edge.) The kit draws both hair layers through it as a
+CSS mask (§7) — once the clip has loaded, so the hair is never hidden by a clip still on its way or one that failed. The
+top hat, the visor, the crown and the party cone sit on the hair rather than over it, and a high ponytail rising
+behind the small top hat reads as one; clipped, its tail was cut flat, so they carry none.
 
 **The face layer gives up the torso column**: below y 236 it holds nothing in x ∈ [150, 234] (`TORSO_COLUMN`), because
 layer 50 sits above the outfit and the body's tank-top straps there would show over every collar (`keepOnlyFace`, §4.6).
@@ -1143,7 +1147,11 @@ region's `meanL` — `skinColor` on the body and the faces its skin set lists, `
 Under a head item that `clipsHair` (2026-10-06, §2 — the server reads it off the hat's `masks.hairClip`) both hair
 layers carry `LayerRef.clip`, the hat's `<file>_hairclipmask`, and `Chibi` sets its `@2x` as the `<img>`'s CSS
 `mask-image` (and `-webkit-mask-image`), stretched over the frame the layer fills — so a tinted hair's `blob:` is drawn
-through it unchanged, and the sheets apply the same clip when they compose a card.
+through it unchanged, and the sheets apply the same clip when they compose a card. The mask is set only once
+`useLoadedClip` (`clip.ts`) has loaded the clip: a CSS mask still loading draws its element as nothing, and one that
+fails to load as nothing for good, so until then — and for good if it fails — the hair is drawn unclipped. A clip loaded
+once masks every later chibi from its first render; a failed one is tried again on the next mount. A sheet whose
+manifest lists a clip the directory lacks is refused rather than drawn unclipped.
 Each layer ships `srcset` at both densities and loads lazily; a table can hold up to nine seats' worth
 at once (up to 72 `<img>` elements), which stage 1 accepts and a canvas-based seat composite is left for
 later (design §7).

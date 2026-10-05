@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react'
 import { cx } from '../primitives/cx.js'
 import { assetUrl, useAvatarAssetsBase } from './AvatarAssets.js'
+import { useLoadedClip } from './clip.js'
 import { hashChibi, layersFor } from './layers.js'
 import { useTintedLayer } from './tinted.js'
 import type { ChibiFrame, ChibiSubject, Expression, LayerRef } from './types.js'
@@ -14,7 +15,8 @@ const FRAME_BORDER_ORDER = 90
  * A hair layer under a hat that clips the hair (2026-10-06): the hat's hair clip as the `<img>`'s CSS mask, stretched
  * over the whole frame the layer is — the clip is cut on that same frame — so the hair shows only where the clip is
  * opaque. Always the @2x clip: the mask is a few kilobytes at either density, and a 1x one would soften the edge on
- * a 2x screen. Masked rather than painted on a canvas, so a tinted layer's blob is drawn through it unchanged.
+ * a 2x screen. Masked rather than painted on a canvas, so a tinted layer's blob is drawn through it unchanged. Set only
+ * once `useLoadedClip` has the clip in hand: until then, or if it never loads, the hair is drawn unclipped, not hidden.
  */
 function clipMask(url: string): CSSProperties {
   const image = `url("${url}")`
@@ -35,10 +37,11 @@ function clipMask(url: string): CSSProperties {
  */
 function ChibiLayer({ base, layer, className }: { base: string; layer: LayerRef; className?: string }) {
   const tinted = useTintedLayer(base, layer)
+  const clip = useLoadedClip(layer.clip === undefined ? null : assetUrl(base, layer.clip, 2))
   const [failedUrl, setFailedUrl] = useState<string | null>(null)
   const common = {
     className: cx(s.layer, className),
-    style: layer.clip === undefined ? { zIndex: layer.order } : { zIndex: layer.order, ...clipMask(assetUrl(base, layer.clip, 2)) },
+    style: clip === null ? { zIndex: layer.order } : { zIndex: layer.order, ...clipMask(clip) },
     loading: 'lazy' as const,
     decoding: 'async' as const,
     alt: '',

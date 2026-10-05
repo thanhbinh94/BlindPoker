@@ -25,7 +25,7 @@ import { STRAY_MARGIN, eachStray, headMetrics, runChecks } from '../scripts/avat
 import { BODY_SKIN_RULE, OUTFIT_TOP_Y, cutItem, diffAgainstBase, dropStrays, ingest, measure, recolourHair, registerBySilhouette, registerToBase, shiftPicture } from '../scripts/avatar-pipeline/extract.mjs'
 import { AURA_CY, AURA_SIZE, AXIS_X, BASELINE_Y, BODY, CHIN_TOLERANCE, CROP, DENSITIES, F01_TRANSFORM, FACE_LIMIT_Y, FRAME, HEAD_REFERENCE, HEAD_TOLERANCE, LAYERS, RING, SKIN_AREA, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
 import { EXPRESSIONS, FIT_SHEET_FILE, HAIR_CODES, ICON, ITEMS_FILE, MANIFEST_NAME, NAME_PATTERN, SHEET_FILE, WEARS, bodyFaceFile, bodyFile, buildPlaceholders, hairFile, hairItemId, iconName, itemFile, parseName, serialiseManifest, stageOneFiles, variantFile, wearOf, writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
-import { MASK_FILE_KIND, bodyLineCopy, describeColours, headBottom, writeMasks } from '../scripts/avatar-pipeline/masks.mjs'
+import { HAIR_CLIP, MASK_FILE_KIND, bodyLineCopy, describeColours, hatEdges, headBottom, writeMasks } from '../scripts/avatar-pipeline/masks.mjs'
 import { alphaBBox, blankPicture, cropPicture, overPicture, readPicture, removeChroma, renderSvg, writeDensities, writePicture } from '../scripts/avatar-pipeline/png.mjs'
 import { FIT_GRID, SHEET_GRID, composeCard, fitCards, sheetCards, sheetLayout } from '../scripts/avatar-pipeline/sheet.mjs'
 
@@ -1767,6 +1767,48 @@ describe('the v4 review sheet and the fit sheet (Plan 19 A1d, spec §5.6)', () =
     }
     expect(changed, 'the tie is clipped').toBeGreaterThan(500)
     expect(kept, 'a pixel changed where the clip keeps the hair').toBe(0)
+  })
+
+  it('keeps the kit playground’s clipping hats in step with HAIR_CLIP — the playground cannot import the pipeline', () => {
+    const playground = readFileSync(resolve(PACKAGE_ROOT, '../../packages/ui-kit/playground/avatar2d.tsx'), 'utf8')
+    const listed = /const CLIPPING_HATS = \[([^\]]*)\]/.exec(playground)?.[1]
+    expect(listed, 'CLIPPING_HATS in the playground').toBeDefined()
+    expect([...listed!.matchAll(/'([^']+)'/g)].map((m) => m[1]).sort()).toEqual([...HAIR_CLIP.hats].sort())
+  })
+
+  it('never takes a covering hat’s hair from below the hat’s edge, on any hairstyle — the side locks under the nón lá’s brim stay (fix round 1)', async () => {
+    const fit = fitCards(committed)
+    for (const code of ['beanie01', 'beret_red01', 'conical_hat01']) {
+      const hat = itemFile('head', code, 80)
+      // The hat's edge per @1x column: its raw solid ink's longest run, halved, and two rows of slack for the feather —
+      // over the @2x columns the @1x clip was scaled down from, three either side (the downscale's kernel reaches that
+      // far, so on a steep brim a neighbour's lower edge shows a row down). Beside the hat, its nearest side's.
+      const raw = await readPicture(join(OUT_DIR, `${hat}@2x.png`))
+      const solid = new Uint8Array(raw.width * raw.height)
+      for (let p = 0; p < solid.length; p++) solid[p] = raw.data[p * 4 + 3]! > 128 ? 1 : 0
+      const edges2x = hatEdges(solid, raw.width, raw.height)
+      const reached = [...edges2x.keys()].filter((x) => edges2x[x]! >= 0)
+      const edgeAt = (x2: number) => edges2x[edges2x[x2]! >= 0 ? x2 : x2 < reached[0]! ? reached[0]! : reached[reached.length - 1]!]!
+      const { masks: _masks, ...unmasked } = committed.files[hat]!
+      for (const hair of HAIR_CODES) {
+        const card = fit.find((c) => c.item === hat && c.hair === hair)!
+        const [withClip, without] = await Promise.all([
+          composeCard(card, { dir: OUT_DIR, manifest: committed }),
+          composeCard(card, { dir: OUT_DIR, manifest: { ...committed, files: { ...committed.files, [hat]: unmasked } } }),
+        ])
+        // A change of a level or two is the feather's last step down a diagonal edge (the clip at 254), not hair taken.
+        let low = 0
+        for (let p = 0; p < withClip.width * withClip.height; p++) {
+          if (![0, 1, 2, 3].some((c) => Math.abs(withClip.data[p * 4 + c]! - without.data[p * 4 + c]!) > 2)) continue
+          const x = p % withClip.width
+          let deepest = -1
+          for (let x2 = Math.max(0, 2 * x - 3); x2 <= Math.min(raw.width - 1, 2 * x + 4); x2++) deepest = Math.max(deepest, edgeAt(x2))
+          const edge = Math.floor(deepest / 2) + 2
+          if (Math.floor(p / withClip.width) > edge) low++
+        }
+        expect(low, `${hair} under ${code}: hair taken below the hat's edge`).toBe(0)
+      }
+    }
   })
 
   it('paints a tone over skin and its line art only: the body, its face, the outfit’s copy of the outline and the hair’s redrawn skin, by their masks', async () => {

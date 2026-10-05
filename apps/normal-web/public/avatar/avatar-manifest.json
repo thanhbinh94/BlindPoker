@@ -1239,7 +1239,7 @@
       "real": true,
       "masks": {
         "hairClip": {
-          "bytes2x": 5820,
+          "bytes2x": 5440,
           "meanL": 0
         }
       }

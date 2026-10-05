@@ -1374,7 +1374,8 @@ export async function describeColours({ dir, manifest, names, items = [], log = 
   for (const name of names) {
     const entry = manifest.files?.[name]
     if (!entry) throw new Error(`no layer ${name} in the manifest`)
-    const kinds = Object.keys(entry.masks ?? {})
+    // A hat's hair clip (2026-10-06) covers no colour of its own — it lies mostly off the hat — so it has no line here.
+    const kinds = Object.keys(entry.masks ?? {}).filter((kind) => kind !== 'hairClip')
     if (!kinds.length) { log(`${name} has no masks`); continue }
     const parsed = parseName(name)
     const layer2x = await readPicture(join(dir, `${name}@2x.png`))
@@ -1403,10 +1404,40 @@ export async function describeColours({ dir, manifest, names, items = [], log = 
  * spiky cut's spikes, the tousled cut's tuft, the bob's ahoge, the wavy cut's volume — rose through the beret, the
  * beanie and the nón lá. The top hat, the visor, the crown and the party cone sit on the hair rather than over it, and
  * a high ponytail rising behind the small top hat reads as one; clipping there cuts the tail flat. `open` and `feather`
- * are @2x pixels: the hat's main shape is its solid ink opened by `open`, so a chin strap or a beret's stalk is not a
- * hat edge, and the clip's edge is softened over `feather`.
+ * are @2x pixels: the hat's solid ink is opened by `open` before its edge is read (`hatEdges`), and the clip's edge is
+ * softened over `feather`.
  */
 export const HAIR_CLIP = { hats: ['beanie01', 'beret_red01', 'conical_hat01'], open: 4, feather: 1 }
+
+/**
+ * A hat's lower edge in each column (2026-10-06): the last row of the column's **longest** run of `mask`, or -1 where the
+ * column has none — the brim or the cuff, never a strap hanging below it or a stalk standing on it, both shorter runs
+ * in their columns. The nón lá's chin straps are diagonal and about 8 px thick @2x, so opening alone does not drop them:
+ * at x 250 the brim runs 260–298 and the strap 372–388, and the strap's end read as the edge cut the side locks beside
+ * the face away (fix round 1). A tie keeps the upper run. `hairClipMask` reads it on the hat's opened ink, C11 on its raw
+ * ink.
+ *
+ * @param {ArrayLike<number>} mask non-zero where the hat is solid
+ * @param {number} width
+ * @param {number} height
+ * @returns {Int32Array}
+ */
+export function hatEdges(mask, width, height) {
+  const edges = new Int32Array(width).fill(-1)
+  for (let x = 0; x < width; x++) {
+    let best = 0
+    let start = -1
+    for (let y = 0; y <= height; y++) {
+      const on = y < height && mask[y * width + x]
+      if (on && start < 0) start = y
+      if (!on && start >= 0) {
+        if (y - start > best) { best = y - start; edges[x] = y - 1 }
+        start = -1
+      }
+    }
+  }
+  return edges
+}
 
 /** Whether `parsed` (a `parseName`) names a hat in `HAIR_CLIP` — one `writeMasks` cuts a hair clip for, and C11 requires it of. */
 export function clipsHair(parsed) {
@@ -1416,14 +1447,16 @@ export function clipsHair(parsed) {
 /**
  * Where a hairstyle may still show under `hat` (2026-10-06), as 0–255 a pixel: 255 where hair is drawn as it is, 0 where
  * the hat covers it, so the kit can use it as the hair layers' CSS mask as it stands. Hair cannot be above a covering
- * hat's lower edge — the hat sits on the head there — so a column the hat's main shape reaches is clipped above that
- * shape's lowest pixel, and a column beside the hat above the lowest pixel of the hat's nearest side column: hair that
- * comes out from under a hat comes out below its edge. (Only the beside-the-hat part shows: above the edge within the
- * hat, the hat is drawn over the hair anyway.) A column inside the hat that its main shape misses takes the higher of
- * its two neighbours' edges. A hat with no main shape at all clips nothing.
+ * hat's lower edge — the hat sits on the head there — so a column the hat reaches is clipped above its edge there
+ * (`hatEdges` of the hat's solid ink opened by `open`, or of its raw ink where that is higher), and a column beside the
+ * hat above the edge of the hat's nearest
+ * side column: hair that comes out from under a hat comes out below its edge. (Only the beside-the-hat part shows: above
+ * the edge within the hat, the hat is drawn over the hair anyway.) A column inside the hat that the opened ink misses
+ * takes the higher of its two neighbours' edges. A hat with no ink left after opening clips nothing.
  *
- * Measured on the three hats (@2x): the nón lá's shape spans x 188–578 with its brim's ends at y 339–340, the beanie's
- * 225–540 with its cuff's corners at 345 and 329, the beret's 284–555 from 202 to 295.
+ * Measured on the three hats (@2x): the nón lá spans x 187–579 with its brim's ends at y 337–338, the beanie 224–540
+ * with its cuff's corners at 342 and 329, the beret 283–555 from 195 to 295. Against the hat's raw ink (C11's guard),
+ * none of the three hides a hair pixel the hat does not cover below its edge.
  *
  * @param {{ data: Buffer, width: number, height: number }} hat
  * @param {{ open?: number, feather?: number }} [options]
@@ -1434,10 +1467,10 @@ export function hairClipMask(hat, { open = HAIR_CLIP.open, feather = HAIR_CLIP.f
   const solid = new Uint8Array(width * height)
   for (let i = 0; i < solid.length; i++) solid[i] = data[i * 4 + 3] > ALPHA_SOLID ? 1 : 0
   const shape = open > 0 ? dilate(erode(solid, width, height, open), width, height, open) : solid
-  const bottom = new Int32Array(width).fill(-1)
-  for (let x = 0; x < width; x++) {
-    for (let y = height - 1; y >= 0; y--) if (shape[y * width + x]) { bottom[x] = y; break }
-  }
+  // The higher of the opened ink's edge and the raw ink's: opening drops a thin piece hung on the brim, but it also
+  // thins the brim where it meets a strap, which can leave the strap the longer run there (the nón lá's right strap root).
+  const raw = hatEdges(solid, width, height)
+  const bottom = hatEdges(shape, width, height).map((edge, x) => (edge < 0 ? -1 : Math.min(edge, raw[x])))
   const keep = new Uint8Array(width * height).fill(255)
   const reached = [...bottom.keys()].filter((x) => bottom[x] >= 0)
   if (reached.length === 0) return keep

@@ -24,6 +24,7 @@ import {
   eyeZone,
   hairClipMask,
   hairMask,
+  hatEdges,
   labOf,
   layerSkinMask,
   maskColour,
@@ -1471,6 +1472,21 @@ describe('maskTargets', () => {
 // ──────────────────────────────────────────────────────────────── hair clip ──
 
 describe('hairClipMask and a covering hat’s hair clip (2026-10-06)', () => {
+  it('reads a hat’s edge in each column off its longest run, so a strap below or a stalk above is no edge', () => {
+    const w = 3
+    const h = 20
+    const mask = new Uint8Array(w * h)
+    const fill = (x: number, from: number, to: number) => { for (let y = from; y <= to; y++) mask[y * w + x] = 1 }
+    fill(0, 2, 9) // a brim, rows 2–9…
+    fill(0, 13, 16) // …and a strap below it
+    fill(1, 0, 1) // a stalk…
+    fill(1, 4, 12) // …above the body
+    fill(2, 5, 7) // two runs alike: the upper one
+    fill(2, 10, 12)
+    expect([...hatEdges(mask, w, h)]).toEqual([9, 12, 7])
+    expect([...hatEdges(new Uint8Array(w * h), w, h)]).toEqual([-1, -1, -1])
+  })
+
   let temp = ''
   let overridesDir = ''
 
@@ -1481,11 +1497,16 @@ describe('hairClipMask and a covering hat’s hair clip (2026-10-06)', () => {
   })
   afterAll(() => rmSync(temp, { recursive: true, force: true }))
 
-  /** A hat: a trapezoid from x 200 to 568 whose lowest row is y 339, and a 3 px chin strap hanging from it to y 450. */
+  /**
+   * A hat: a trapezoid from x 200 to 568 whose lowest row is y 339, a 3 px chin strap hanging from it to y 450, and — as
+   * the nón lá's are — a diagonal strap 10 px thick, from (480, 356) to (540, 444), clear of the brim in its own columns
+   * by a gap: opening by `HAIR_CLIP.open` keeps it, so only reading each column's longest run keeps it from being an edge.
+   */
   async function hatPicture(): Promise<Picture> {
     return renderSvg(
       `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">` +
-        `<polygon points="200,340 568,340 450,200 318,200" fill="#d8c08a"/><rect x="250" y="340" width="3" height="110" fill="#5a3a20"/></svg>`,
+        `<polygon points="200,340 568,340 450,200 318,200" fill="#d8c08a"/><rect x="250" y="340" width="3" height="110" fill="#5a3a20"/>` +
+        `<line x1="480" y1="356" x2="540" y2="444" stroke="#5a3a20" stroke-width="10"/></svg>`,
       W,
       H,
     )
@@ -1501,6 +1522,10 @@ describe('hairClipMask and a covering hat’s hair clip (2026-10-06)', () => {
     expect(at(keep, 100, 300), 'beside the hat, above its end’s edge').toBe(0)
     expect(at(keep, 700, 300), 'beside the hat on the other side').toBe(0)
     expect(at(keep, 100, 360), 'beside the hat, below its end’s edge').toBe(255)
+    // The diagonal strap survives the opening but is not the edge: under the brim, beside it and on it, the hair shows.
+    expect(at(keep, 510, 350), 'under the brim, above the diagonal strap').toBe(255)
+    expect(at(keep, 510, 380), 'beside the diagonal strap').toBe(255)
+    expect(at(keep, 510, 400), 'on the diagonal strap').toBe(255)
     expect(keep.subarray(345 * W).filter((v) => v !== 255).length, 'hidden pixels below the edge').toBe(0)
     // The edge is softened over `feather`: a row of partial values where hidden meets kept.
     const edge = [...Array(10).keys()].map((d) => at(keep, 384, 334 + d)!)
@@ -1557,11 +1582,12 @@ describe('hairClipMask and a covering hat’s hair clip (2026-10-06)', () => {
     const clipFile = join(where, `${hat}_hairclipmask@2x.png`)
     const clip = await readPicture(clipFile)
     const low = { ...clip, data: Buffer.from(clip.data) }
-    low.data[(600 * W + 384) * 4 + 3] = 0
+    // One hidden pixel just under the brim, beside where a face would be — far above the straps' ends.
+    low.data[(350 * W + 300) * 4 + 3] = 0
     await writePicture(low, clipFile)
     const below = await c11Of(manifest)
     expect(below.ok).toBe(false)
-    expect(below.detail).toContain("below the hat's lowest solid row")
+    expect(below.detail).toContain('hair clip hides 1 pixel the hat leaves uncovered below its edge')
 
     const open = { ...clip, data: Buffer.from(clip.data) }
     for (let i = 3; i < open.data.length; i += 4) open.data[i] = 255

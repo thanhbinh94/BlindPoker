@@ -72,7 +72,7 @@ import {
 // extract.mjs imports this file in turn (`headMetrics`, `judgeHead`, A2a), so `measure` may only be used at call time, never at load.
 import { measure } from './extract.mjs'
 import { HAIR_COVERAGE, HAIR_EYE_LIMIT } from './hair.mjs'
-import { EYE_GROUP_MERGE_RADIUS, MASK_FILE_KIND, clipsHair, eyeZone } from './masks.mjs'
+import { EYE_GROUP_MERGE_RADIUS, HAIR_CLIP, MASK_FILE_KIND, clipsHair, eyeZone, hatEdges } from './masks.mjs'
 import { GENDERS, NAME_PATTERN, bodyFaceFile, bodyFile, hairFile, itemFile, parseName } from './manifest.mjs'
 
 /** C10, and spec §8's 6 MB stage-1 footprint divided by the files that have to fit in it. */
@@ -674,6 +674,36 @@ function eyeBlobs(maskPic) {
 }
 
 /**
+ * C11 on a hat's hair clip (2026-10-06), override or not — the one mask that is not a region of its own layer, so it is
+ * not held to the layer's ink. It belongs on a hat in `HAIR_CLIP`; it hides some hair (a pixel below alpha 128); and it
+ * hides no pixel the hat leaves uncovered more than `feather + 1` rows below the hat's edge in that column — the bottom
+ * of the column's longest run of the hat's **raw** solid ink (`hatEdges`), and beside the hat its nearest side's. So the
+ * fringe, the side locks and the face beneath a hat always show, whatever a strap or a hand-drawn clip does (fix round 1:
+ * the nón lá's straps had cut 4279 px of side hair this way, and a rule held only to the hat's lowest row let it pass).
+ */
+function hairClipProblem(parsed, layer, clip) {
+  if (!clipsHair(parsed)) return 'a hair clip on a layer that is not a hat in HAIR_CLIP'
+  const { width, height } = layer
+  const solid = new Uint8Array(width * height)
+  for (let i = 0; i < solid.length; i++) solid[i] = layer.data[i * 4 + 3] > ALPHA_SOLID ? 1 : 0
+  const edges = hatEdges(solid, width, height)
+  const reached = [...edges.keys()].filter((x) => edges[x] >= 0)
+  let hidden = 0
+  let below = 0
+  for (let i = 0; i < width * height; i++) {
+    if (clip.data[i * 4 + 3] >= 128) continue
+    hidden++
+    if (reached.length === 0 || layer.data[i * 4 + 3] >= 128) continue
+    const x = i % width
+    const edge = edges[x] >= 0 ? edges[x] : edges[x < reached[0] ? reached[0] : reached[reached.length - 1]]
+    if (Math.floor(i / width) > edge + HAIR_CLIP.feather + 1) below++
+  }
+  if (hidden === 0) return 'hair clip hides no hair'
+  if (below) return `hair clip hides ${below} pixel${below === 1 ? '' : 's'} the hat leaves uncovered below its edge`
+  return null
+}
+
+/**
  * C11 (spec §4.3): every mask a layer's manifest entry lists — eyes, tint, skin, hair — sits on the layer's own
  * ink, at the layer's own size, and, unless it is a hand-drawn `override`, has a plausible shape:
  *
@@ -709,27 +739,6 @@ function eyeBlobs(maskPic) {
  * (nothing has been through `masks`/`ingest` for it yet) reports `n/a`, same as every other check that has nothing
  * to judge.
  */
-/**
- * C11 on a hat's hair clip (2026-10-06), override or not — the one mask that is not a region of its own layer, so it is
- * not held to the layer's ink: it belongs on a hat in `HAIR_CLIP`, it hides some hair (a pixel below alpha 128), and it
- * hides none below the hat's lowest solid pixel — the fringe and the face beneath a hat always show.
- */
-function hairClipProblem(parsed, layer, clip) {
-  if (!clipsHair(parsed)) return 'a hair clip on a layer that is not a hat in HAIR_CLIP'
-  let lowest = -1
-  for (let i = 0; i < layer.width * layer.height; i++) if (layer.data[i * 4 + 3] > ALPHA_SOLID) lowest = Math.floor(i / layer.width)
-  let hidden = 0
-  let below = 0
-  for (let i = 0; i < clip.width * clip.height; i++) {
-    if (clip.data[i * 4 + 3] >= 128) continue
-    hidden++
-    if (Math.floor(i / clip.width) > lowest) below++
-  }
-  if (hidden === 0) return 'hair clip hides no hair'
-  if (below) return `hair clip hides ${below} pixel${below === 1 ? '' : 's'} below the hat's lowest solid row (${lowest})`
-  return null
-}
-
 function maskChecks(context) {
   const { entry, parsed, pictures, masks, neutralSkin } = context
   // A layer marked `empty: true` (a short hairstyle's blank L20, since A2a) has nothing for a mask to sit on.

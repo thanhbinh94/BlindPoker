@@ -43,7 +43,8 @@ function body(gender: Gender): BodyRef {
 
 const BODIES: Record<Gender, BodyRef> = { f: body('f'), m: body('m') }
 
-/** The hats whose layer carries a hair clip (2026-10-06, the pipeline's `HAIR_CLIP`): the ones that cover the crown. */
+/** The hats whose layer carries a hair clip (2026-10-06): the ones that cover the crown. A copy of the pipeline's
+ * `HAIR_CLIP.hats` (`apps/normal-web/scripts/avatar-pipeline/masks.mjs`) — `avatar-pipeline.test.ts` holds the two equal. */
 const CLIPPING_HATS = ['beanie01', 'beret_red01', 'conical_hat01']
 
 /** `item_<slot>_<code>_L<layer>` — the pipeline's naming convention. `hood_black01` is the one item drawn here with
