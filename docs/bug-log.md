@@ -494,7 +494,7 @@ cam nhạt vẽ sẵn của chính tóc đuôi ngựa, và hai chấm mờ của
 3 px nằm ngoài cả da lẫn nét viền của thân, chỉ thấy khi phóng 8× ở tông sâu); huy hiệu xanh ngọc
 ở dòng đầu của một bảng tối `.panel.ink` rất cao sẽ rơi xuống 4,3–4,4:1, và hiện không chỗ nào đặt như vậy.
 
-**Mũ lộ tóc (06/10) — merge `MERGE`.** Người dùng (06/10, kèm ảnh nón lá + tóc đuôi ngựa đỏ): "khi đổi item mũ, thì
+**Mũ lộ tóc (06/10) — merge `7841e1b`.** Người dùng (06/10, kèm ảnh nón lá + tóc đuôi ngựa đỏ): "khi đổi item mũ, thì
 có item bị lộ tóc, trông không tự nhiên".
 
 | # | Mức | Mô tả | Nguyên nhân / hướng | Trạng thái |
