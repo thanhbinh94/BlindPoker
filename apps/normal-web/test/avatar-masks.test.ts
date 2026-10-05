@@ -12,8 +12,11 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { runChecks } from '../scripts/avatar-pipeline/checks.mjs'
 import {
+  HAIR_BODY_LINE,
   LAYER_SKIN,
   OUTFIT_LINE,
+  bodyLineCopy,
+  headBottom,
   SKIN_MASK,
   eyeEllipses,
   eyeMask,
@@ -1004,6 +1007,37 @@ describe('layerSkinMask: the skin a hair or outfit picture redrew (2026-10-05)',
     expect(mask.every((v: number) => v === 0 || v === 255)).toBe(true)
   })
 
+  it('grows an instep into its shadow where the outfit drew it over the body’s outline, not its skin (fix round 1)', async () => {
+    // The royal robe redrew its left instep over the body's own outline there: a crescent of shadow (L* 70–77, C* 42–47)
+    // where the body's skin mask is 0 and its skin line 255. Built here by cutting a strip of the leg's skin out of the
+    // skin mask and calling it line.
+    const { pic: body } = await syntheticBody()
+    const skin = skinMask(body, { eyes: null })
+    const line = new Uint8Array(W * H)
+    const strip = boxPixels(366, 800, 371, 814)
+    for (let i = 0; i < strip.length; i++) if (strip[i]) { skin[i] = 0; line[i] = 255 }
+    const outfit = await renderSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+        <rect x="300" y="430" width="168" height="220" fill="${TAN}"/>
+        <rect x="326" y="800" width="40" height="15" fill="${INSTEP}"/>
+        <rect x="366" y="800" width="4" height="15" fill="${HEM_SHADOW}"/>
+        <rect x="370" y="800" width="2" height="15" fill="${GOLD}"/>
+        <rect x="316" y="815" width="60" height="45" fill="${SLIPPER}"/>
+      </svg>`,
+      W,
+      H,
+    )
+    const shadow = boxPixels(366, 800, 369, 814)
+    const gold = boxPixels(370, 800, 371, 814)
+    expect(coverage(skin, shadow), 'the shadow lies over no skin').toBe(0)
+    const without = layerSkinMask(outfit, { kind: 'outfit', body, skin })
+    expect(coverage(without, shadow), 'without the line, the growth stops at the skin').toBe(0)
+    const mask = layerSkinMask(outfit, { kind: 'outfit', body, skin, line })
+    expect(coverage(mask, boxPixels(326, 800, 365, 814)), 'the instep').toBeGreaterThan(0.95)
+    expect(coverage(mask, shadow), 'the shadow over the outline').toBe(1)
+    expect(coverage(mask, gold), 'gold over the outline').toBe(0)
+  })
+
   /**
    * A hand-built hair layer on an all-cream body whose skin is the left part of the frame (x < 400): a dark block of
    * hair from x 200 to 499 — over no skin past x 399, which makes its palette — with a strand tip at its left edge
@@ -1066,6 +1100,56 @@ describe('layerSkinMask: the skin a hair or outfit picture redrew (2026-10-05)',
     const { body, skin, layer } = hairFixture('#f6dcc6')
     const mask = layerSkinMask(layer, { kind: 'hair', body, skin, beneath: body })
     expect(sum(mask)).toBe(0)
+  })
+})
+
+describe('bodyLineCopy: the body’s line a front hair redrew below the head (fix round 1)', () => {
+  // The hime's L60 carried a copy of the body's arm, hand and tank-top outline (3141 px below y 470 @2x), drawn above
+  // every outfit: thin orange-brown and navy lines along the sleeves. Built by hand: a body whose skin line is a
+  // red-brown column and whose tank top is outlined in navy, a face that ends at y 400, and a hair layer.
+  const LINE = '#832e13' // the body's skin line
+  const NAVY = '#0c1222' // the tank top's outline, L* < 50: line art that is not the skin's
+  const VIOLET = '#302c39' // the hime's hair
+  function fixture() {
+    const body = { data: Buffer.alloc(W * H * 4), width: W, height: H }
+    const line = new Uint8Array(W * H)
+    paintBox(body, 200, 300, 260, 700, CREAM) // an arm
+    paintBox(body, 261, 300, 262, 700, LINE) // its outline
+    for (let y = 300; y <= 700; y++) for (let x = 261; x <= 262; x++) line[y * W + x] = 255
+    paintBox(body, 400, 300, 401, 700, NAVY) // the tank top's side
+    paintBox(body, 402, 300, 500, 700, '#cecdd5')
+    const face = { data: Buffer.alloc(W * H * 4), width: W, height: H }
+    paintBox(face, 300, 100, 460, 399, CREAM)
+    const layer = { data: Buffer.alloc(W * H * 4), width: W, height: H }
+    return { body, line, face, layer }
+  }
+
+  it('pins its numbers, and finds where the head ends', () => {
+    expect(HAIR_BODY_LINE).toEqual({ reach: 3, tolerance: 20, inkReach: 1, inkTolerance: 10, window: 3, maxSolid: 0.5, leftoverReach: 2, minPiece: 32 })
+    const { face } = fixture()
+    expect(headBottom(face)).toBe(400)
+    expect(headBottom({ data: Buffer.alloc(W * H * 4), width: W, height: H })).toBeNull()
+  })
+
+  it('drops a copy of the skin line and of the tank top’s outline below the head, and their specks, and keeps the hair', () => {
+    const { body, line, layer } = fixture()
+    const darker = '#5a1e0c' // the copy is inked darker than the line: ΔE ~16, and darker
+    paintBox(layer, 262, 420, 263, 690, darker) // the skin line's copy, 1 px off
+    paintBox(layer, 400, 420, 401, 690, NAVY) // the tank top's outline, redrawn
+    paintBox(layer, 265, 500, 266, 502, '#7a6a60') // a speck of the copy's rim, off its colour, 2 px from it
+    paintBox(layer, 240, 300, 280, 395, VIOLET) // hair above the head's end, across the line: never looked at
+    paintBox(layer, 380, 420, 420, 470, VIOLET) // a lock below the head, across the tank top's outline: a mass, not a line
+    paintBox(layer, 250, 600, 275, 640, LINE) // an auburn lock the line's own colour across it: a mass too
+    paintBox(layer, 600, 600, 602, 602, LINE) // a speck far from any copy
+    const copy = bodyLineCopy(layer, { body, line, fromY: 400 })
+    const box = (x0: number, y0: number, x1: number, y1: number) => boxPixels(x0, y0, x1, y1)
+    expect(coverage(copy, box(262, 420, 263, 590)), 'the skin line’s copy').toBe(1)
+    expect(coverage(copy, box(400, 420, 401, 690).map((v, i) => (v && Math.floor(i / W) > 472 ? 1 : 0))), 'the outline’s copy below the lock').toBe(1)
+    expect(coverage(copy, box(265, 500, 266, 502)), 'the copy’s speck').toBe(1)
+    expect(sum(copy.map((v: number, i: number) => (v && box(240, 300, 280, 395)[i] ? 1 : 0))), 'hair above the head’s end').toBe(0)
+    expect(coverage(copy, box(384, 424, 416, 466)), 'a lock across the outline').toBe(0)
+    expect(coverage(copy, box(254, 604, 271, 636)), 'an auburn lock across the line').toBe(0)
+    expect(coverage(copy, box(600, 600, 602, 602)), 'a speck far from any copy').toBe(0)
   })
 })
 

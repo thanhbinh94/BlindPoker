@@ -739,7 +739,10 @@ reached them. The art does not change; every real front hair (`L60`) and v4 outf
   is Lab ≈ 66–84 / 1–19 / 52–62 (C* 52–65), inside the body's hue window; the insteps are C* 14–21. An outfit's skin is
   then opened (3 × 3) and kept in pieces of ≥ 40 px, and the pieces grow up to 4 px into the shaded skin at their edge
   (the body's rule, C* ≤ 48): the hem's and the slipper's shadow on the instep (L* 70–84, C* 27–47) otherwise stayed a
-  light rim round it.
+  light rim round it. The growth may cross the body's skin line as well as its skin (fix round 1): the royal robe drew
+  its left instep's shadow over the body's own outline (26 px at x 356–357, y 777–789 `@2x`, C* 42–47), which stayed a
+  peach streak. An outfit's palette leaves out its pixels over the body's skin line too. The C* 48 margin is measured,
+  not general: the highest C* in an outfit's skin mask is 46.7 (that shadow), the gold beside it from about 50.
 - A hair's strand tips, beside the skin found or beside shown skin, take a soft value: their share of skin, projected
   between the nearest pure hair pixel (≤ 4 px) and the skin drawn beneath (the face over the body), when they lie within
   ΔE 12 of that line and the two ends are at least `gap` apart. A binary mask left cream specks at the tips.
@@ -752,10 +755,11 @@ reached them. The art does not change; every real front hair (`L60`) and v4 outf
   every front hair and outfit layer whose skin mask is not empty under `tint.layerSkin` of each body (`bodies.ts`), and
   `layersFor` paints it after the outfit's own colour and before its line, and after the front hair's colour. C11 holds
   it clear of the hair and the tint (it may be empty, and is not required).
-- Measured on the committed art (`@2x`): the outfits' masks hold only the insteps — `royal_robe01` 549 px (one instep;
-  the other foot shows the body's own skin), `tet_red01` 219 + 218, `tet_red01_m` 142 + 153 — and `casual01`,
+- Measured on the committed art (`@2x`): the outfits' masks hold only the insteps — `royal_robe01` 577 px (one instep;
+  the other foot shows the body's own skin), `tet_red01` 219 + 218, `tet_red01_m` 142 + 154 — and `casual01`,
   `champion01`, `dealer01` (f, m) and `tuxedo01` are empty. Every hairstyle's mask has a binary part (bob 601 px, hime
-  427, ponytail 130, tousled 143, neat 301, curly 329, spiky 218) and soft strand tips (255–1048 px), except the wavy
+  273 since its copy of the body's line went, ponytail 130, tousled 143, neat 301, curly 329, spiky 218) and soft strand
+  tips (255–1048 px), except the wavy
   platinum, whose binary part is empty by design and which keeps 255 px of soft tips. Hair pixels over skin that are
   ΔE ≥ 10 from the hair's palette and read light (L* ≥ 62, C* 8–40) under `#643e2b` / `#9c6140`, before → after: bob
   180 → 0 / 199 → 1, hime 94 → 0 / 96 → 0, ponytail 35 → 0 / 36 → 0, tousled 69 → 0 / 71 → 0, neat 64 → 0 / 70 → 0,
@@ -896,14 +900,32 @@ then writes does take the hand-drawn mask, as every mask does.
    the skin between the fringe strands, in the hair's shadow, and an ear between two locks.
 3. `splitHair(region, body, { density: 2, override })` splits it (§4.5); `override` is the hand-drawn
    `item_hair_<code>_frontmask.png` from `assets/avatar-src/masks/` when one is there, read as any hand-drawn mask is.
+   **Below the head, the front then loses any copy of the body's own line** (`bodyLineCopy`, `HAIR_BODY_LINE`; Plan 20
+   task 5, fix round 1). The picture redraws the whole figure, and the difference keeps an outline drawn a pixel off or
+   darker; in the L60 it is drawn over every outfit. The hime's L60 carried one — the arms', the hands' and the tank
+   top's outline, 2 356 px below y 472 — as thin orange-brown and navy lines along the sleeves of the tuxedo, the dealer
+   uniform and the royal robe. From the row below the neutral face's ink (the head's end, `headBottom`; `FACE_LIMIT_Y`
+   × 2 without a face), a pixel goes when it is part of a line (at most half of the 7 × 7 round it solid) and matches
+   the body's line beside it: within 3 px of the body's skin line and ΔE 20 of its colour there, or darker and within 20
+   in a\*b\* (as an outfit's copy is found, §4.4.1); or within 1 px of the body's other dark ink (L\* < 50: the tank
+   top's and the shorts' outline) and ΔE 10 of it. Small or faint pieces left beside what went go with it, and the rules
+   run again on what is left until nothing more goes. A lock of hair across the outline is a mass, not a line, and
+   stays. The step needs the body's skin-line mask, and logs what it dropped. On the committed art it was applied to
+   the hime alone (the controller's ruling); it would also take a short copy of a shoulder's line out of the ponytail's
+   L60 (102 px) and the wavy's (151 px) on their next ingest.
 4. `item_hair_<code>_L60` (front) and `_L20` (back) are written, the back `empty: true` when the split leaves nothing
    behind (a short style); the L60's entry records `split: { region, front, back }` — the pixels at alpha ≥ 128 of the
    hair as the two layers hold it, at the picture's own alpha, and of each. Both are masked (hair = ink).
 5. **`--recolour-to #rrggbb`** (pre-flight #43), only when `colours` (§4.4.2) shows a mapped hairstyle more than
    15 ΔE from its `naturalColour`, and on the user's word: both layers' hair-masked pixels are recoloured to it with
-   the shared `recolour`, each at its own hair `meanL` (the shading is kept, the mean lands on the colour), written
-   again at both densities and masked again; the L60 records `recolouredTo`. A synthetic hair drawn `#4a2e20` reads
-   ΔE 40.6 from `#5e3e6f` before and 0.0 after. Like an item's tint seed, the recolour is **kept**: the hairstyle
+   the shared `recolour`, both at the front's hair `meanL` (the shading is kept, the front's mean lands on the colour),
+   written again at both densities and masked again; the L60 records `recolouredTo`. One reference for both halves, as
+   the kit tints a hair colour (fix round 1): each at its own `meanL` moved the wavy's back half (0.565 against the
+   front's 0.654) 0.089 lighter than its front, and it showed through a notch in the split as two hard-edged light
+   rectangles at the temples. The committed wavy L20 was brought in line by the same `recolour`, the reference moved by
+   that difference (a pinned script in the task's SDD folder, `t5-fix1/fix1-art.mjs`); it now matches a re-ingest by the
+   fixed code at the median, and the lightness step where the halves meet went from 0.097 to 0.008. A synthetic hair
+   drawn `#4a2e20` reads ΔE 40.6 from `#5e3e6f` before and 0.0 after. Like an item's tint seed, the recolour is **kept**: the hairstyle
    ingested again without the flag is recoloured to its L60's `recolouredTo` once more, and the ingest says so
    (`item_hair_f_wavy01_L60 keeps its recolour to #e0c9b3`). To drop it, delete `recolouredTo` from the L60's entry in
    both manifests first. The one hairstyle that needed it is `f_wavy01` (batch 2): its natural colour is platinum

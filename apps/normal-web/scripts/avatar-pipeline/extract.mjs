@@ -48,7 +48,7 @@ import { recolour } from '../../../../packages/ui-kit/src/avatar2d/recolour.mjs'
 // uses anything of this file at load.
 import { eachStray, headMetrics, judgeHead, underwearRegion } from './checks.mjs'
 import { splitHair } from './hair.mjs'
-import { MASK_FILE_KIND, MASK_OVERRIDE_DIR, SKIN_MASK, eyeZone, labOf, maskTargets, readHandMask, writeMasks } from './masks.mjs'
+import { MASK_FILE_KIND, MASK_OVERRIDE_DIR, SKIN_MASK, bodyLineCopy, eyeZone, headBottom, labOf, maskTargets, readHandMask, writeMasks } from './masks.mjs'
 import {
   ALPHA_INK,
   ALPHA_SOLID,
@@ -71,7 +71,7 @@ import {
   writeDensities,
 } from './png.mjs'
 import { AURA_CY, AURA_SIZE, AXIS_X, BASELINE_Y, CROP, F01_TRANSFORM, FACE_LIMIT_Y, FRAME, HEAD_LIMIT_Y, HEAD_REFERENCE, LAYERS, RING, RING_HOLLOW, SKIN_TOLERANCE, TORSO_COLUMN, UNDERWEAR_BAND, applyTransform, baseSkinColour, isSkin, placeByInk } from './frame.mjs'
-import { BOTS, EXPRESSIONS, GENDERS, HAIR_CODES, ICON, MANIFEST_NAME, SLOT_LAYER, WEARS, bodyFaceFile, bodyFile, botFaceFile, botFile, entryFor, hairFile, hairGender, itemFile, readManifest, writeIcon, writeManifest } from './manifest.mjs'
+import { BOTS, EXPRESSIONS, GENDERS, HAIR_CODES, ICON, MANIFEST_NAME, SLOT_LAYER, WEARS, bodyFaceFile, bodyFile, botFaceFile, botFile, entryFor, hairFile, hairGender, itemFile, parseName, readManifest, writeIcon, writeManifest } from './manifest.mjs'
 
 /** D02 §8.3: a chibi is between two and two and a half heads tall, or it is not this character. */
 export const HEADS_RANGE = [2, 2.5]
@@ -2250,7 +2250,8 @@ async function maskAlpha(dir, name, entry, kind) {
  * `registerToBase` searched wide, measured on the rows the hair leaves alone, y ≥ `HEAD_LIMIT_Y` — from `keyed` on
  * `transform`), its difference against the body — no area limit, the hair face rule
  * (`hairFaceRule`, on the body's neutral face and its masks) — and that region split (`splitHair`), or split by a hand-drawn
- * `item_hair_<code>_frontmask.png` in `overridesDir` when one is there.
+ * `item_hair_<code>_frontmask.png` in `overridesDir` when one is there. Below the head the front then loses any copy of
+ * the body's own line (`bodyLineCopy`, fix round 1 of Plan 20 task 5), which it would draw over every outfit.
  *
  * The L60 is the front, with `split: { region, front, back }` — the pixels at alpha ≥ 128 of the hair as the two
  * layers hold it (the region at the picture's own alpha), and of each — and the L20 the back, `empty: true` when the
@@ -2294,6 +2295,18 @@ async function hairLayers({ keyed, transform, anchored, code, dir, manifest, dif
   }
   const frontPicture = dropFaint(cutItem(registered.picture, { mask: front, core: coreOf(front) }))
   const backPicture = dropFaint(cutItem(registered.picture, { mask: back, core: coreOf(back) }))
+  // Below the head, the front holds no copy of the body's own line (fix round 1): the picture redraws the whole figure,
+  // and a copy of the arms' or the tank top's outline in the L60 is drawn over every outfit (`bodyLineCopy`).
+  const bodyLine = await maskAlpha(dir, bodyName, manifest.files[bodyName], 'skinLine')
+  if (bodyLine) {
+    const fromY = (faceRule.face && headBottom(faceRule.face)) ?? FACE_LIMIT_Y * 2
+    const copy = bodyLineCopy(frontPicture, { body: bodyPicture, line: bodyLine, fromY })
+    let dropped = 0
+    for (let p = 0; p < copy.length; p++) if (copy[p] && frontPicture.data[p * 4 + 3]) { frontPicture.data[p * 4 + 3] = 0; dropped++ }
+    if (dropped) log(`${hairFile(code, LAYERS.hairFront)}: dropped ${dropped} px of the body's own line below the head (y ≥ ${fromY} @2x)`)
+  } else {
+    log(`${bodyName} has no skin-line mask: a copy of its line below the head stays in the front`)
+  }
   // The split hands each layer the feathered rim of the hair beside it too, and a rim pixel can land far from the layer's
   // own solid part: litter, which C3 fails. Cleared here by C3's rule, before the layers are counted (`split` is what is
   // written) — and again at @1x by the clip, which the halving would otherwise have made new litter in.
@@ -2387,21 +2400,32 @@ async function wearingHair(bodyPicture, { dir, manifest, code, log }) {
 
 /**
  * `--recolour-to` (pre-flight #43): every hair-masked pixel of the named hair layers recoloured to `colour` with the
- * shared `recolour`, at the layer's own hair `meanL` — so the hair's shading is kept and its mean lands on the colour
- * — then both densities written again and the masks cut again (their `meanL` is the new hair's). Only when `colours`
- * shows a mapped hairstyle more than 15 ΔE from its `naturalColour`, on the user's word.
+ * shared `recolour` — so the hair's shading is kept and the front's mean lands on the colour — then both densities
+ * written again and the masks cut again (their `meanL` is the new hair's). Only when `colours` shows a mapped hairstyle
+ * more than 15 ΔE from its `naturalColour`, on the user's word.
+ *
+ * Both halves of a split hairstyle are recoloured at **one** reference lightness, the front's hair `meanL` (the back's
+ * when the front has none), as the kit tints them (`hairTint`, `items.ts`). Each at its own `meanL` (until fix round 1,
+ * 2026-10-05) shifted the two by different amounts: the wavy's back, darker on average (0.565 against the front's
+ * 0.654), came out 0.09 lighter, and showed as two light rectangles at the temples where it shows through the front.
  */
-async function recolourHair({ dir, manifest, names, colour, overridesDir, log }) {
+export async function recolourHair({ dir, manifest, names, colour, overridesDir, log }) {
+  const hairOf = (name) => {
+    const entry = manifest.files[name]
+    return entry && !entry.empty && entry.masks?.hair && !entry.masks.hair.empty ? entry.masks.hair : null
+  }
+  const front = names.find((name) => parseName(name)?.layer === LAYERS.hairFront && hairOf(name))
+  const reference = hairOf(front ?? names.find((name) => hairOf(name)))?.meanL
   const done = []
   for (const name of names) {
     const entry = manifest.files[name]
-    if (entry.empty || !entry.masks?.hair) continue
+    if (!hairOf(name)) continue
     const pic = await readPicture(join(dir, `${name}@2x.png`))
     const mask = await maskAlpha(dir, name, entry, 'hair')
     if (mask === null) continue
-    recolour(pic.data, mask, colour, entry.masks.hair.meanL)
+    recolour(pic.data, mask, colour, reference)
     entry.bytes2x = await writeDensities(pic, dir, name, hairClip(name, log))
-    log(`${name} — recoloured to ${colour} at its hair meanL ${entry.masks.hair.meanL}`)
+    log(`${name} — recoloured to ${colour} at ${name === front || !front ? 'its' : "the front's"} hair meanL ${reference}`)
     done.push(name)
   }
   await writeMasks({ dir, manifest, names: done, overridesDir, log })

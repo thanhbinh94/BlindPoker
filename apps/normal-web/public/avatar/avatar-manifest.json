@@ -960,21 +960,21 @@
       "layer": 60,
       "w": 384,
       "h": 448,
-      "bytes2x": 104360,
+      "bytes2x": 102513,
       "real": true,
       "split": {
-        "region": 61158,
-        "front": 38300,
+        "region": 59980,
+        "front": 37122,
         "back": 22858
       },
       "masks": {
         "hair": {
-          "bytes2x": 9402,
-          "meanL": 0.2289
+          "bytes2x": 7863,
+          "meanL": 0.2274
         },
         "skin": {
-          "bytes2x": 6971,
-          "meanL": 0.6093
+          "bytes2x": 6531,
+          "meanL": 0.5493
         }
       }
     },
@@ -1017,12 +1017,12 @@
       "layer": 20,
       "w": 384,
       "h": 448,
-      "bytes2x": 39391,
+      "bytes2x": 38401,
       "real": true,
       "masks": {
         "hair": {
           "bytes2x": 5838,
-          "meanL": 0.7898
+          "meanL": 0.7012
         }
       }
     },
@@ -1377,8 +1377,8 @@
           "meanL": 0.2299
         },
         "skin": {
-          "bytes2x": 4078,
-          "meanL": 0.8407
+          "bytes2x": 4085,
+          "meanL": 0.838
         }
       }
     },
@@ -1416,7 +1416,7 @@
         },
         "skin": {
           "bytes2x": 4092,
-          "meanL": 0.8377
+          "meanL": 0.838
         }
       }
     },
