@@ -20,7 +20,8 @@ describe('NATURAL_SKIN', () => {
     expect([bodies.f.body, bodies.m.body]).toEqual(['body_f_L30', 'body_m_L30'])
     const manifest = readManifest(join(PUBLIC_DIR, MANIFEST_NAME))
     const lines = await describeColours({ dir: PUBLIC_DIR, manifest, names: [bodies.f.body, bodies.m.body] })
-    expect(lines).toEqual([`body_f_L30 skin ${NATURAL_SKIN}`, 'body_m_L30 skin #fbe0c7'])
+    // The skin lines only: each body also prints its line art's colour (`skinLine`, 2026-10-05), not a swatch.
+    expect(lines.filter((line) => line.split(' ')[1] === 'skin')).toEqual([`body_f_L30 skin ${NATURAL_SKIN}`, 'body_m_L30 skin #fbe0c7'])
     expect(NATURAL_SKIN).toBe('#fbe0ca')
   }, 60_000)
 })

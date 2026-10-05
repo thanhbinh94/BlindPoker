@@ -1,13 +1,21 @@
 import { fnv1a } from './bot.js'
-import type { ChibiConfig, ChibiFrame, ChibiSubject, Expression, LayerRef, MaskSet, TintRef, WearRef } from './types.js'
+import type { BodyRef, ChibiConfig, ChibiFrame, ChibiSubject, Expression, LayerRef, MaskSet, TintRef, WearRef } from './types.js'
 
 const ORDER = { aura: 10, hairBack: 20, body: 30, outfit: 40, face: 50, hairFront: 60, faceAcc: 70, head: 80, frame: 90 } as const
 
 /** One region's paint job on `file`, if it has one: the colour is set and `file` is listed in the region's
- * `MaskSet` — then `<file>_<suffix>` is painted with `colour` at the region's own `meanL`. */
-function regionTint(file: string, set: MaskSet | undefined, colour: string | undefined, suffix: 'skinmask' | 'eyemask' | 'hairmask'): TintRef[] {
+ * `MaskSet` — then `<file>_<suffix>` is painted with `colour` at the region's own `meanL` (shaded rather than
+ * recoloured for the skin's line art). */
+function regionTint(file: string, set: MaskSet | undefined, colour: string | undefined, suffix: 'skinmask' | 'skinlinemask' | 'eyemask' | 'hairmask'): TintRef[] {
   if (colour === undefined || set?.files.includes(file) !== true) return []
-  return [{ mask: `${file}_${suffix}`, colour, meanL: set.meanL }]
+  const tint: TintRef = { mask: `${file}_${suffix}`, colour, meanL: set.meanL }
+  if (suffix === 'skinlinemask') tint.mode = 'shade'
+  return [tint]
+}
+
+/** The skin colour's jobs on a body or face layer: its skin, then its line art (2026-10-05). */
+function skinTints(file: string, body: BodyRef, colour: string | undefined): TintRef[] {
+  return [...regionTint(file, body.tint?.skin, colour, 'skinmask'), ...regionTint(file, body.tint?.skinLine, colour, 'skinlinemask')]
 }
 
 /** `tints`, or undefined for none — a layer with nothing to paint carries no `tints` key at all. */
@@ -36,9 +44,10 @@ function layer(order: number, file: string, tints: TintRef[] | undefined): Layer
  *   exactly this picture); the full-body view drops the frame border (90, avatar-only decoration) and keeps aura.
  * - Colours land only where a mask says they may: `skinColor` on the body and on each face listed in
  *   `body.tint.skin`, `eyeColor` on each face listed in `body.tint.eyes` (skin first, then eyes, on one face), and
- *   `hairColor` on each hair layer listed in `hair.tint` — each at its own region's `meanL`. A worn item's own
- *   colour variant lands on that item's layer. A body, hairstyle or item with no masks, or a subject with no
- *   colours set, gets none.
+ *   `hairColor` on each hair layer listed in `hair.tint` — each at its own region's `meanL`. `skinColor` also
+ *   shades the skin's line art on each layer listed in `body.tint.skinLine`, right after that layer's skin, so a
+ *   cream outline does not glow round a darker skin (2026-10-05) — the outfit too, whose picture redrew the hands'
+ *   outline, after the outfit's own colour. A worn item's own colour variant lands on that item's layer. A body, hairstyle or item with no masks, or a subject with no colours set, gets none.
  *
  * Bots have no wardrobe at all — just their body (30) and expression face (50), and never carry tints.
  */
@@ -51,16 +60,15 @@ export function layersFor(subject: ChibiSubject, expression: Expression, frame: 
   }
 
   const { body, hair, outfit, head, face, aura, frame: frameItem, hairColor, eyeColor, skinColor } = subject
-  const skin = body.tint?.skin
   const eyes = body.tint?.eyes
   const layers: LayerRef[] = []
 
   if (aura !== undefined && frame !== 'head') layers.push(layer(ORDER.aura, aura.file, itemTints(aura)))
   if (head?.hidesHairBack !== true) layers.push(layer(ORDER.hairBack, hair.back, orNone(regionTint(hair.back, hair.tint, hairColor, 'hairmask'))))
-  layers.push(layer(ORDER.body, body.body, orNone(regionTint(body.body, skin, skinColor, 'skinmask'))))
-  layers.push(layer(ORDER.outfit, outfit.file, itemTints(outfit)))
+  layers.push(layer(ORDER.body, body.body, orNone(skinTints(body.body, body, skinColor))))
+  layers.push(layer(ORDER.outfit, outfit.file, orNone([...(itemTints(outfit) ?? []), ...regionTint(outfit.file, body.tint?.skinLine, skinColor, 'skinlinemask')])))
   const faceFile = body.faces[expression]
-  layers.push(layer(ORDER.face, faceFile, orNone([...regionTint(faceFile, skin, skinColor, 'skinmask'), ...regionTint(faceFile, eyes, eyeColor, 'eyemask')])))
+  layers.push(layer(ORDER.face, faceFile, orNone([...skinTints(faceFile, body, skinColor), ...regionTint(faceFile, eyes, eyeColor, 'eyemask')])))
   if (head?.hidesHairFront !== true) layers.push(layer(ORDER.hairFront, hair.front, orNone(regionTint(hair.front, hair.tint, hairColor, 'hairmask'))))
   if (face !== undefined) layers.push(layer(ORDER.faceAcc, face.file, itemTints(face)))
   if (head !== undefined) layers.push(layer(ORDER.head, head.file, itemTints(head)))

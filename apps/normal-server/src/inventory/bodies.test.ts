@@ -60,6 +60,11 @@ describe('loadBodies', () => {
       expect(tint?.skin?.files[0], gender).toBe(`body_${gender}_L30`)
       expect(tint?.skin?.meanL, gender).toBe(shipped.files[`body_${gender}_L30`]?.masks?.skin?.meanL)
       expect(tint?.eyes?.meanL, gender).toBe(shipped.files[faceFile(gender, 'neutral')]?.masks?.eyes?.meanL)
+      // The skin's line art (2026-10-05): the body, all six faces and every outfit's copy of the outline (eight outfit
+      // layers, the two male cuts included — any of them can be drawn over either body), at the skin's meanL.
+      const outfits = Object.keys(shipped.files).filter((file) => file.startsWith('item_outfit_')).sort()
+      expect(outfits, gender).toHaveLength(8)
+      expect(tint?.skinLine, gender).toEqual({ meanL: tint?.skin?.meanL, files: [`body_${gender}_L30`, ...EXPRESSIONS.map((expr) => faceFile(gender, expr)), ...outfits] })
     }
   })
 
@@ -126,6 +131,32 @@ describe('loadBodies', () => {
           files: ['body_f_L30', faceFile('f', 'neutral'), faceFile('f', 'happy'), faceFile('f', 'sad'), faceFile('f', 'surprised'), faceFile('f', 'closed')],
         },
       })
+    })
+
+    it('derives the skin’s line art from every layer with a skin-line mask, at the skin’s meanL, and only beside skin (2026-10-05)', () => {
+      const line = (empty?: true): MaskInfo => (empty ? { bytes2x: 1, meanL: 0, empty } : { bytes2x: 1, meanL: 0.31 })
+      const withLines: AvatarManifest = {
+        ...withMasks,
+        files: {
+          ...withMasks.files,
+          body_f_L30: entry(30, { skin: skin(0.82), skinLine: line() }),
+          [faceFile('f', 'neutral')]: entry(50, { skin: skin(0.83), skinLine: line(), eyes: { bytes2x: 1, meanL: 0.18 } }),
+          [faceFile('f', 'happy')]: entry(50, { skin: skin(0.84), skinLine: line(true), eyes: { bytes2x: 1, meanL: 0.2 } }),
+          // An outfit's copy of the outline, and one with none: the first is the body's to shade, wherever it was cut.
+          item_outfit_tuxedo01_L40: entry(40, { skinLine: line() }),
+          item_outfit_casual01_L40: entry(40, { tint: { bytes2x: 1, meanL: 0.9 } }),
+          item_head_tophat01_L80: entry(80, { skinLine: line() }),
+        },
+      }
+      expect(loadBodies(fixture(VALID), withLines).f.tint?.skinLine).toEqual({
+        meanL: 0.82, // the skin's, which the shading is a ratio against — not the line's own 0.31
+        files: ['body_f_L30', faceFile('f', 'neutral'), 'item_outfit_tuxedo01_L40'], // an outfit layer (40) only — not a hat
+      })
+      // No skin reference, no line shading: the two go together.
+      const noSkin: AvatarManifest = { ...withLines, files: { ...withLines.files, body_f_L30: entry(30, { skin: skin(0, true), skinLine: line() }) } }
+      expect(loadBodies(fixture(VALID), noSkin).f.tint?.skinLine).toBeUndefined()
+      // A manifest with no line masks at all (before 2026-10-05) still serves skin and eyes, with no skinLine key.
+      expect(loadBodies(fixture(VALID), withMasks).f.tint).not.toHaveProperty('skinLine')
     })
 
     it('gives a body with no masks no tint key, and never reads one from the file', () => {

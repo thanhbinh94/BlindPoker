@@ -21,7 +21,7 @@
 import { existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { FACE_LIMIT_Y, FRAME, SKIN_WINDOW, baseSkinColour } from './frame.mjs'
-import { PACKAGE_ROOT, hairItemId, parseName, writeIconTintMask } from './manifest.mjs'
+import { GENDERS, PACKAGE_ROOT, bodyFile, hairItemId, parseName, writeIconTintMask } from './manifest.mjs'
 import { ALPHA_INK, ALPHA_SOLID, readPicture, resizePicture, writePicture } from './png.mjs'
 import { meanLightness } from '../../../../packages/ui-kit/src/avatar2d/recolour.mjs'
 
@@ -801,6 +801,120 @@ export function skinMask(pic, { eyes = null } = {}) {
   return out
 }
 
+/**
+ * How `skinLineMask` tells the skin's line art (2026-10-05), in @2x px:
+ *
+ * - `reach` — how far from the skin a line pixel may be. The real bodies' outline is 1–2 px of ink, L* 25–40,
+ *   C* 40–53, h 30–60° (a saturated red-brown, `#832e13`), plus 1 px of soft rim to transparency at alpha 50–200;
+ *   a finger's dividing line is 1–3 px; all of it is within 4 px of skin on one side or both;
+ * - `eyeMargin` — how far round the eye mask the line keeps off, `SKIN_MASK.eyeMargin`'s: the iris's dark rim and
+ *   the lashes are the eye's.
+ */
+export const SKIN_LINE = { reach: 4, eyeMargin: SKIN_MASK.eyeMargin }
+
+/**
+ * The skin's line art on a body or a body face, at @2x (2026-10-05) — what a skin colour *shades* (`shade` in
+ * `recolour.mjs`), right after it recolours `skin`. The outline was drawn for cream: under a deep tone it kept its
+ * red-brown, about as light as the new skin and far more saturated, and glowed round the hands, the ears and the jaw,
+ * while the skin's own antialiased edge, shifted by the tone, went black beside it.
+ *
+ * A pixel is line art when it is not skin (`skin`, any non-zero pixel — the skin mask as written, an override
+ * included), lies within `SKIN_LINE.reach` of skin, carries ink (alpha over `ALPHA_INK`), is either soft (alpha at
+ * most `ALPHA_SOLID`) or dark (L* under `SKIN_MASK.minL`, the line `skinMask` leaves out), and keeps
+ * `SKIN_LINE.eyeMargin` clear of `eyes` (any non-zero pixel). No colour rule beyond that: shading only ever darkens,
+ * by the skin colour's lightness over the skin's `meanL` and never past 1, so a lash, a mouth line or a seam of the
+ * underwear that comes along is darkened on a deep skin — as a line beside it should be — and is left exactly as drawn
+ * on any skin as light as the cream. Returns 0/255 per pixel; empty when there is no skin.
+ *
+ * @param {{ data: Buffer, width: number, height: number }} pic
+ * @param {{ skin: ArrayLike<number>, eyes?: ArrayLike<number> | null }} options
+ */
+export function skinLineMask(pic, { skin, eyes = null }) {
+  const { width, height, data } = pic
+  const scale = width / 768
+  const out = new Uint8Array(width * height)
+  const skinPixels = new Uint8Array(width * height)
+  let any = false
+  for (let i = 0; i < skinPixels.length; i++) if (skin[i]) { skinPixels[i] = 1; any = true }
+  if (!any) return out
+  const near = dilate(skinPixels, width, height, Math.max(1, Math.round(SKIN_LINE.reach * scale)))
+  let nearEyes = null
+  if (eyes) {
+    const eyePixels = new Uint8Array(width * height)
+    for (let i = 0; i < eyePixels.length; i++) eyePixels[i] = eyes[i] ? 1 : 0
+    nearEyes = dilate(eyePixels, width, height, Math.max(1, Math.round(SKIN_LINE.eyeMargin * scale)))
+  }
+  for (let i = 0; i < out.length; i++) {
+    if (!near[i] || skinPixels[i] || nearEyes?.[i]) continue
+    const alpha = data[i * 4 + 3]
+    if (alpha <= ALPHA_INK) continue
+    if (alpha > ALPHA_SOLID && labOf(data[i * 4], data[i * 4 + 1], data[i * 4 + 2])[0] >= SKIN_MASK.minL) continue
+    out[i] = 255
+  }
+  return out
+}
+
+/**
+ * How `outfitLineMask` tells an outfit's copy of the body's outline (2026-10-05), in @2x px:
+ *
+ * - `reach` — how far from a line pixel of the body the copy may lie. ChatGPT redraws the whole figure in an outfit
+ *   picture, and the cut keeps the arms' and hands' outline where the outfit leaves them bare; registration puts it
+ *   within 1–3 px of the body's own (measured on the eight v4 outfits);
+ * - `tolerance` — ΔE76 to that body line pixel: the copy is drawn in the same red-brown, while the nearest cloth that
+ *   meets the outline (the Tết áo dài's red, `#c0392b` against the line's `#832e13`, ΔE ~25) is further;
+ * - `shown` — how far from skin the outfit leaves showing (the body's skin where the outfit is transparent) the copy
+ *   may lie: a 2–3 px line and its 1 px soft rim, which is what glows on a dark background (3 left the rim of the
+ *   royal robe's and the Tết áo dài's fingertips). Cloth lying over skin it covers — a sleeve over the arm's outline
+ *   beneath, trousers over the shorts' — never touches shown skin, so a dark cloth the colour of the line is not
+ *   taken for it.
+ */
+export const OUTFIT_LINE = { reach: 3, tolerance: 20, shown: 4 }
+
+/**
+ * An outfit layer's copy of the body's outline, at @2x (2026-10-05): what a skin colour shades on the outfit, as it
+ * shades the body's own line (`skinLineMask`). The copy is drawn over the body, so without it the hands kept the old
+ * red-brown rim under a deep tone however the body's own line was shaded.
+ *
+ * A pixel of `item` is in when it carries ink (alpha over `ALPHA_INK`), lies within `OUTFIT_LINE.shown` of skin the
+ * outfit leaves showing (`skin` non-zero where `item` is at most `ALPHA_INK`), and within `OUTFIT_LINE.reach` of a
+ * pixel of the body's line (`line` non-zero) whose colour on `body` is within `OUTFIT_LINE.tolerance` of its own.
+ * `body`, `skin` and `line` are the body the outfit was cut on (`cutOn`), its skin mask and its skin-line mask as
+ * written. Returns 0/255 per pixel; empty when the outfit leaves no skin showing.
+ *
+ * @param {{ data: Buffer, width: number, height: number }} item
+ * @param {{ body: { data: Buffer }, skin: ArrayLike<number>, line: ArrayLike<number> }} reference
+ */
+export function outfitLineMask(item, { body, skin, line }) {
+  const { width, height, data } = item
+  const scale = width / 768
+  const out = new Uint8Array(width * height)
+  const shown = new Uint8Array(width * height)
+  let any = false
+  for (let i = 0; i < shown.length; i++) if (skin[i] && data[i * 4 + 3] <= ALPHA_INK) { shown[i] = 1; any = true }
+  if (!any) return out
+  const nearShown = dilate(shown, width, height, Math.max(1, Math.round(OUTFIT_LINE.shown * scale)))
+  const lineLab = new Array(width * height)
+  for (let i = 0; i < lineLab.length; i++) if (line[i]) lineLab[i] = labOf(body.data[i * 4], body.data[i * 4 + 1], body.data[i * 4 + 2])
+  const reach = Math.max(1, Math.round(OUTFIT_LINE.reach * scale))
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = y * width + x
+      if (!nearShown[i] || data[i * 4 + 3] <= ALPHA_INK) continue
+      const p = labOf(data[i * 4], data[i * 4 + 1], data[i * 4 + 2])
+      search: for (let dy = -reach; dy <= reach; dy++) {
+        for (let dx = -reach; dx <= reach; dx++) {
+          const nx = x + dx
+          const ny = y + dy
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height || dx * dx + dy * dy > reach * reach) continue
+          const q = lineLab[ny * width + nx]
+          if (q !== undefined && labDist(p, q) <= OUTFIT_LINE.tolerance) { out[i] = 255; break search }
+        }
+      }
+    }
+  }
+  return out
+}
+
 // ────────────────────────────────────────────────────────────────── colour ──
 
 /**
@@ -888,10 +1002,16 @@ export async function describeColours({ dir, manifest, names, items = [], log = 
 
 // ──────────────────────────────────────────────────────────────── writing ──
 
+/** A v4 outfit layer, cut on a body (`cutOn`), whose copy of that body's outline a skin colour shades (2026-10-05). */
+function isOutfitOnBody(parsed, entry) {
+  return parsed.kind === 'item' && parsed.slot === 'outfit' && GENDERS.includes(entry.cutOn)
+}
+
 /**
- * Every manifest name `writeMasks` can cut a mask for: every tintable item and (Plan 19) every real v4 body, body face
- * and hair layer that is not marked empty. A stand-in's masks are drawn with it, never cut. (The flat bases' L30, L60
- * and faces were targets too, until the switch-over retired them, D1.)
+ * Every manifest name `writeMasks` can cut a mask for: every tintable item, every v4 outfit cut on a body (its copy of
+ * the body's outline, 2026-10-05) and (Plan 19) every real v4 body, body face and hair layer that is not marked empty. A
+ * stand-in's masks are drawn with it, never cut. (The flat bases' L30, L60 and faces were targets too, until the
+ * switch-over retired them, D1.)
  */
 export function maskTargets(manifest) {
   const names = []
@@ -899,7 +1019,7 @@ export function maskTargets(manifest) {
     if (!entry?.real) continue
     const parsed = parseName(name)
     if (!parsed) continue
-    if (parsed.kind === 'item' && entry.tintSeed) {
+    if (parsed.kind === 'item' && (entry.tintSeed || isOutfitOnBody(parsed, entry))) {
       names.push(name)
     } else if (parsed.kind === 'body' || parsed.kind === 'bodyFace' || parsed.kind === 'hair') {
       if (!entry.empty) names.push(name)
@@ -943,11 +1063,11 @@ export async function readHandMask(file, width, height) {
 }
 
 /**
- * `hair`/`eyes`/`tint`/`skin` in the manifest (`entry.masks`) are `hairmask`/`eyemask`/`tintmask`/`skinmask` on
- * disk (spec §4.1: file names say "eye", the manifest says "eyes"; Plan 19 adds skin, spec §5.5) — the one place
- * the two spellings have to meet.
+ * `hair`/`eyes`/`tint`/`skin`/`skinLine` in the manifest (`entry.masks`) are `hairmask`/`eyemask`/`tintmask`/
+ * `skinmask`/`skinlinemask` on disk (spec §4.1: file names say "eye", the manifest says "eyes"; Plan 19 adds skin,
+ * spec §5.5, and 2026-10-05 the skin's line art) — the one place the two spellings have to meet.
  */
-export const MASK_FILE_KIND = { hair: 'hair', eyes: 'eye', tint: 'tint', skin: 'skin' }
+export const MASK_FILE_KIND = { hair: 'hair', eyes: 'eye', tint: 'tint', skin: 'skin', skinLine: 'skinline' }
 
 /**
  * The mask to write for one `<name>_<kind>` (`kind` a manifest key: `hair`, `eyes`, `tint` or `skin`): a hand-drawn
@@ -989,6 +1109,15 @@ async function writeOneMask({ dir, name, kind, computed, layer2x, entry, manifes
   }
 }
 
+/** The `kind` mask `writeOneMask` just wrote for `name`, read back at @2x as one alpha byte a pixel — so what is cut
+ * next sees a hand-drawn override exactly as it was written. */
+async function writtenMask(dir, name, kind) {
+  const written = await readPicture(join(dir, `${name}_${MASK_FILE_KIND[kind]}mask@2x.png`))
+  const alpha = new Uint8Array(written.width * written.height)
+  for (let i = 0; i < alpha.length; i++) alpha[i] = written.data[i * 4 + 3]
+  return alpha
+}
+
 /** The ink of a layer as a mask: a hair layer's hair (Plan 19) — the layer *is* the hair. */
 function inkMask(layer2x) {
   const ink = new Uint8Array(layer2x.width * layer2x.height)
@@ -1004,10 +1133,16 @@ function inkMask(layer2x) {
  * Plan 19 (spec §5.5): a body L30 gets **skin**, cut clear of the eyes `eyeMask` finds on it (not written); a body
  * face gets **eyes** and then **skin**, cut clear of the eye mask as written (a hand-drawn `_eyemask` included), and
  * never hair — the head is bald, so `eyeMask` is handed an empty hair array (pre-flight #21); a hair layer's **hair**
- * is its ink.
+ * is its ink. Both then get **skinLine** (2026-10-05), cut beside the skin mask as written (an override included)
+ * and clear of the same eyes. Its manifest `meanL` is the line's own and goes unused: the line is shaded against the
+ * skin's (`bodies.ts`). A v4 outfit cut on a body gets **skinLine** too: its copy of that body's outline
+ * (`outfitLineMask`), against the body's skin and line as written — so bodies are cut first, whatever order `names`
+ * gives.
  */
 export async function writeMasks({ dir, manifest, names, overridesDir = MASK_OVERRIDE_DIR, log = () => {} }) {
-  for (const name of names) {
+  // Bodies first: an outfit's line is cut against its body's skin and line as written in this same run.
+  const bodyFirst = (name) => (/^body_/.test(name) ? 0 : 1)
+  for (const name of [...names].sort((a, b) => bodyFirst(a) - bodyFirst(b))) {
     const parsed = parseName(name)
     if (!parsed) continue
     const entry = manifest.files[name]
@@ -1015,23 +1150,33 @@ export async function writeMasks({ dir, manifest, names, overridesDir = MASK_OVE
     const layer2x = await readPicture(join(dir, `${name}@2x.png`))
     const shut = parsed.expr === 'closed' || parsed.expr === 'sleep'
 
-    if (parsed.kind === 'item' && entry.tintSeed) {
-      const tint = tintMask(layer2x, entry.tintSeed)
-      await writeOneMask({ dir, name, kind: 'tint', computed: tint, layer2x, entry, manifest, overridesDir, log })
+    if (parsed.kind === 'item') {
+      if (entry.tintSeed) {
+        const tint = tintMask(layer2x, entry.tintSeed)
+        await writeOneMask({ dir, name, kind: 'tint', computed: tint, layer2x, entry, manifest, overridesDir, log })
+      }
+      if (isOutfitOnBody(parsed, entry)) {
+        const bodyName = bodyFile(entry.cutOn)
+        const body = await readPicture(join(dir, `${bodyName}@2x.png`))
+        const reference = { body, skin: await writtenMask(dir, bodyName, 'skin'), line: await writtenMask(dir, bodyName, 'skinLine') }
+        await writeOneMask({ dir, name, kind: 'skinLine', computed: outfitLineMask(layer2x, reference), layer2x, entry, manifest, overridesDir, log })
+      }
     } else if (parsed.kind === 'body') {
       // The body carries the neutral face too (under the face layer): its own eyes, found the way a face's are and
       // never written, keep an amber iris out of its skin.
       const { width, height } = layer2x
       const eyes = eyeMask(layer2x, new Uint8Array(width * height))
       await writeOneMask({ dir, name, kind: 'skin', computed: skinMask(layer2x, { eyes }), layer2x, entry, manifest, overridesDir, log })
+      const skin = await writtenMask(dir, name, 'skin')
+      await writeOneMask({ dir, name, kind: 'skinLine', computed: skinLineMask(layer2x, { skin, eyes }), layer2x, entry, manifest, overridesDir, log })
     } else if (parsed.kind === 'bodyFace') {
       const { width, height } = layer2x
       const eyes = shut ? new Uint8Array(width * height) : eyeMask(layer2x, new Uint8Array(width * height))
       await writeOneMask({ dir, name, kind: 'eyes', computed: eyes, layer2x, entry, manifest, overridesDir, log })
-      const written = await readPicture(join(dir, `${name}_${MASK_FILE_KIND.eyes}mask@2x.png`))
-      const writtenEyes = new Uint8Array(width * height)
-      for (let i = 0; i < writtenEyes.length; i++) writtenEyes[i] = written.data[i * 4 + 3]
+      const writtenEyes = await writtenMask(dir, name, 'eyes')
       await writeOneMask({ dir, name, kind: 'skin', computed: skinMask(layer2x, { eyes: writtenEyes }), layer2x, entry, manifest, overridesDir, log })
+      const skin = await writtenMask(dir, name, 'skin')
+      await writeOneMask({ dir, name, kind: 'skinLine', computed: skinLineMask(layer2x, { skin, eyes: writtenEyes }), layer2x, entry, manifest, overridesDir, log })
     } else if (parsed.kind === 'hair') {
       await writeOneMask({ dir, name, kind: 'hair', computed: inkMask(layer2x), layer2x, entry, manifest, overridesDir, log })
     }

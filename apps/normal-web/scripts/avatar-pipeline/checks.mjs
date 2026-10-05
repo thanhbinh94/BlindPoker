@@ -101,7 +101,7 @@ const FACE_GUARDS = { skinFloor: 0.8, eyeZoneCap: 1.5 }
 /** C11 (Plan 19): how much of a hair layer's own ink its hair mask covers. The ink *is* the hair; the slack is the rim. */
 const HAIR_INK_SHARE = 0.9
 /** C11 (Plan 19): the masks a *real* v4 layer must carry — what the skin, eye and hair colours tint it through. */
-const REQUIRED_MASKS = { body: ['skin'], bodyFace: ['skin', 'eyes'], hair: ['hair'] }
+const REQUIRED_MASKS = { body: ['skin', 'skinLine'], bodyFace: ['skin', 'skinLine', 'eyes'], hair: ['hair'] }
 
 const ok = (detail) => ({ ok: true, detail })
 const bad = (detail) => ({ ok: false, detail })
@@ -696,17 +696,19 @@ function eyeBlobs(maskPic) {
  *   and so does one whose neutral face has no skin to compare with — a stand-in pair only notes it;
  * - hair on a hair layer: at least `HAIR_INK_SHARE` of the layer's own ink — the layer *is* the hair;
  * - and on any layer with both, skin and eyes share no pixel at alpha ≥ 128, override or not: a pixel tinted
- *   twice is two colours fighting.
+ *   twice is two colours fighting. The skin's line art (`skinLine`, 2026-10-05) shares none with either.
  *
  * A **real** v4 layer must carry the masks of its kind (`REQUIRED_MASKS`): a body or a face the skin colour cannot
- * reach is a failure, not something with nothing to judge. Any other file the manifest lists no `masks` for
+ * reach, or whose outline it cannot shade, is a failure, not something with nothing to judge. Any other file the manifest lists no `masks` for
  * (nothing has been through `masks`/`ingest` for it yet) reports `n/a`, same as every other check that has nothing
  * to judge.
  */
 function maskChecks(context) {
   const { entry, parsed, pictures, masks, neutralSkin } = context
   // A layer marked `empty: true` (a short hairstyle's blank L20, since A2a) has nothing for a mask to sit on.
-  const absent = entry?.real === true && entry.empty !== true ? (REQUIRED_MASKS[parsed?.kind] ?? []).filter((kind) => !entry.masks?.[kind]) : []
+  // A v4 outfit cut on a body carries its copy of that body's outline (2026-10-05).
+  const required = parsed?.kind === 'item' && parsed.slot === 'outfit' && entry?.cutOn ? ['skinLine'] : (REQUIRED_MASKS[parsed?.kind] ?? [])
+  const absent = entry?.real === true && entry.empty !== true ? required.filter((kind) => !entry.masks?.[kind]) : []
   const missing = absent.map((kind) => `no ${kind} mask cut for this real layer`)
   if (!entry?.masks) return missing.length ? bad(missing.join('; ')) : ok('n/a — no masks cut for this layer')
   const layer = pictures[2]
@@ -792,13 +794,16 @@ function maskChecks(context) {
     }
   }
 
-  // Skin and eyes never meet — however either was drawn (Plan 19, spec §5.5).
-  const skin = masks.skin
-  const eyes = masks.eyes
-  if (skin && eyes && skin.width === eyes.width && skin.height === eyes.height) {
+  // Skin and eyes never meet — however either was drawn (Plan 19, spec §5.5) — and the skin's line art meets neither
+  // (2026-10-05): a pixel recoloured as skin and shaded as line, or shaded and given an eye colour, is painted twice.
+  const pairs = [['skin', 'eyes', 'skin and eyes'], ['skinLine', 'skin', 'skin line and skin'], ['skinLine', 'eyes', 'skin line and eyes'], ['skinLine', 'tint', 'skin line and tint']]
+  for (const [a, b, label] of pairs) {
+    const first = masks[a]
+    const second = masks[b]
+    if (!first || !second || first.width !== second.width || first.height !== second.height) continue
     let shared = 0
-    for (let i = 3; i < skin.data.length; i += 4) if (skin.data[i] >= 128 && eyes.data[i] >= 128) shared++
-    if (shared) problems.push(`skin and eyes share ${shared} pixel${shared === 1 ? '' : 's'}`)
+    for (let i = 3; i < first.data.length; i += 4) if (first.data[i] >= 128 && second.data[i] >= 128) shared++
+    if (shared) problems.push(`${label} share ${shared} pixel${shared === 1 ? '' : 's'}`)
   }
 
   if (problems.length) return bad(problems.join('; '))
