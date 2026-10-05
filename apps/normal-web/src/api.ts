@@ -156,7 +156,7 @@ export interface BodyDto {
   naturalEyeColour: string
   /** Where this body can be recoloured — skin by `skinColor`, eyes by `eyeColor` — derived from the manifest's masks,
    * absent until the pipeline has cut them. */
-  tint?: { skin?: MaskSetDto; eyes?: MaskSetDto }
+  tint?: { skin?: MaskSetDto; skinLine?: MaskSetDto; eyes?: MaskSetDto }
 }
 
 /** `GET /api/catalog/avatar`: the frame, the crop and the two bodies, `f` then `m` — public, like

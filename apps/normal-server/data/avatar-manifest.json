@@ -20,6 +20,10 @@
         "skin": {
           "bytes2x": 7487,
           "meanL": 0.8881
+        },
+        "skinLine": {
+          "bytes2x": 8057,
+          "meanL": 0.2988
         }
       }
     },
@@ -38,6 +42,10 @@
         "skin": {
           "bytes2x": 5428,
           "meanL": 0.891
+        },
+        "skinLine": {
+          "bytes2x": 5618,
+          "meanL": 0.2791
         }
       }
     },
@@ -56,6 +64,10 @@
         "skin": {
           "bytes2x": 5537,
           "meanL": 0.8935
+        },
+        "skinLine": {
+          "bytes2x": 5733,
+          "meanL": 0.2681
         }
       }
     },
@@ -73,6 +85,10 @@
         "skin": {
           "bytes2x": 5615,
           "meanL": 0.8917
+        },
+        "skinLine": {
+          "bytes2x": 5613,
+          "meanL": 0.2928
         }
       }
     },
@@ -90,6 +106,10 @@
         "skin": {
           "bytes2x": 5521,
           "meanL": 0.8967
+        },
+        "skinLine": {
+          "bytes2x": 5446,
+          "meanL": 0.2695
         }
       }
     },
@@ -108,6 +128,10 @@
         "skin": {
           "bytes2x": 5401,
           "meanL": 0.8975
+        },
+        "skinLine": {
+          "bytes2x": 5570,
+          "meanL": 0.2676
         }
       }
     },
@@ -125,6 +149,10 @@
         "skin": {
           "bytes2x": 5625,
           "meanL": 0.8934
+        },
+        "skinLine": {
+          "bytes2x": 5580,
+          "meanL": 0.2751
         }
       }
     },
@@ -138,6 +166,10 @@
         "skin": {
           "bytes2x": 7397,
           "meanL": 0.8819
+        },
+        "skinLine": {
+          "bytes2x": 7984,
+          "meanL": 0.3006
         }
       }
     },
@@ -156,6 +188,10 @@
         "skin": {
           "bytes2x": 5375,
           "meanL": 0.8905
+        },
+        "skinLine": {
+          "bytes2x": 5572,
+          "meanL": 0.2797
         }
       }
     },
@@ -174,6 +210,10 @@
         "skin": {
           "bytes2x": 5499,
           "meanL": 0.8852
+        },
+        "skinLine": {
+          "bytes2x": 5700,
+          "meanL": 0.268
         }
       }
     },
@@ -191,6 +231,10 @@
         "skin": {
           "bytes2x": 5544,
           "meanL": 0.8872
+        },
+        "skinLine": {
+          "bytes2x": 5490,
+          "meanL": 0.3037
         }
       }
     },
@@ -208,6 +252,10 @@
         "skin": {
           "bytes2x": 5487,
           "meanL": 0.8914
+        },
+        "skinLine": {
+          "bytes2x": 5456,
+          "meanL": 0.3002
         }
       }
     },
@@ -226,6 +274,10 @@
         "skin": {
           "bytes2x": 5296,
           "meanL": 0.8911
+        },
+        "skinLine": {
+          "bytes2x": 5453,
+          "meanL": 0.2677
         }
       }
     },
@@ -243,6 +295,10 @@
         "skin": {
           "bytes2x": 5570,
           "meanL": 0.8889
+        },
+        "skinLine": {
+          "bytes2x": 5469,
+          "meanL": 0.2853
         }
       }
     },
@@ -1205,6 +1261,10 @@
         "tint": {
           "bytes2x": 4526,
           "meanL": 0.953
+        },
+        "skinLine": {
+          "bytes2x": 4932,
+          "meanL": 0.3411
         }
       }
     },
@@ -1214,7 +1274,13 @@
       "h": 448,
       "bytes2x": 123715,
       "real": true,
-      "cutOn": "f"
+      "cutOn": "f",
+      "masks": {
+        "skinLine": {
+          "bytes2x": 4455,
+          "meanL": 0.2801
+        }
+      }
     },
     "item_outfit_dealer01_L40": {
       "layer": 40,
@@ -1222,7 +1288,13 @@
       "h": 448,
       "bytes2x": 94794,
       "real": true,
-      "cutOn": "f"
+      "cutOn": "f",
+      "masks": {
+        "skinLine": {
+          "bytes2x": 5059,
+          "meanL": 0.2615
+        }
+      }
     },
     "item_outfit_dealer01_m_L40": {
       "layer": 40,
@@ -1232,7 +1304,13 @@
       "real": true,
       "variantOf": "item_outfit_dealer01_L40",
       "wear": "m",
-      "cutOn": "m"
+      "cutOn": "m",
+      "masks": {
+        "skinLine": {
+          "bytes2x": 4522,
+          "meanL": 0.2659
+        }
+      }
     },
     "item_outfit_royal_robe01_L40": {
       "layer": 40,
@@ -1240,7 +1318,13 @@
       "h": 448,
       "bytes2x": 129517,
       "real": true,
-      "cutOn": "f"
+      "cutOn": "f",
+      "masks": {
+        "skinLine": {
+          "bytes2x": 4724,
+          "meanL": 0.2299
+        }
+      }
     },
     "item_outfit_tet_red01_L40": {
       "layer": 40,
@@ -1248,7 +1332,13 @@
       "h": 448,
       "bytes2x": 118138,
       "real": true,
-      "cutOn": "f"
+      "cutOn": "f",
+      "masks": {
+        "skinLine": {
+          "bytes2x": 4585,
+          "meanL": 0.3352
+        }
+      }
     },
     "item_outfit_tet_red01_m_L40": {
       "layer": 40,
@@ -1258,7 +1348,13 @@
       "real": true,
       "variantOf": "item_outfit_tet_red01_L40",
       "wear": "m",
-      "cutOn": "m"
+      "cutOn": "m",
+      "masks": {
+        "skinLine": {
+          "bytes2x": 4519,
+          "meanL": 0.2672
+        }
+      }
     },
     "item_outfit_tuxedo01_L40": {
       "layer": 40,
@@ -1266,7 +1362,13 @@
       "h": 448,
       "bytes2x": 94987,
       "real": true,
-      "cutOn": "f"
+      "cutOn": "f",
+      "masks": {
+        "skinLine": {
+          "bytes2x": 4546,
+          "meanL": 0.3451
+        }
+      }
     }
   },
   "icons": {

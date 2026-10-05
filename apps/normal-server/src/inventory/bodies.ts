@@ -47,13 +47,15 @@ export interface BodyDef {
   /** The iris colour the face layers were drawn with, a lowercase `#rrggbb` (ruling 6; provisional until C1). */
   naturalEyeColour: string
   /** Derived from the manifest at load (ruling 5); absent until the pipeline has cut a mask. */
-  tint?: { skin?: MaskSet; eyes?: MaskSet }
+  tint?: { skin?: MaskSet; skinLine?: MaskSet; eyes?: MaskSet }
 }
 
 export type Bodies = Readonly<Record<Gender, BodyDef>>
 
 const BODY_LAYER = 30
 const FACE_LAYER = 50
+/** Where an outfit is drawn: over the body, under the face — and with it, its copy of the body's outline (2026-10-05). */
+const OUTFIT_LAYER = 40
 
 /** A colour is always a lowercase 6-digit hex (design §3.2), the same rule `items.ts` holds a colour item to. */
 const HEX_COLOUR = /^#[0-9a-f]{6}$/
@@ -116,9 +118,15 @@ function parseBody(path: string, manifest: AvatarManifest, gender: Gender, raw: 
  * eyes — so every layer of the body is tinted against the same reference lightness and no seam shows where a
  * face overlaps the body. The canonical layer has to carry a non-empty mask itself for there to be a
  * reference at all; without one the kind is left out rather than tinted against an empty region's 0.
+ *
+ * `skinLine` (2026-10-05) lists the body, the faces and the outfit layers (layer 40) that carry a non-empty skin-line
+ * mask — the skin's own outline, and an outfit's redrawn copy of it round the hands — which `skinColor` shades so it
+ * does not glow round a darker skin. Every outfit layer that carries one is listed for both bodies: a shared outfit
+ * is drawn over either. Its `meanL` is the skin's, not the line's: the shading is the skin colour's lightness over the
+ * skin's. No skin reference, no `skinLine` either.
  */
 function deriveTint(manifest: AvatarManifest, body: string, faces: Record<Expression, string>): BodyDef['tint'] {
-  const maskOf = (file: string, kind: 'skin' | 'eyes'): MaskInfo | undefined => {
+  const maskOf = (file: string, kind: 'skin' | 'skinLine' | 'eyes'): MaskInfo | undefined => {
     const mask = manifest.files[file]?.masks?.[kind]
     return mask !== undefined && mask.empty !== true ? mask : undefined
   }
@@ -127,6 +135,11 @@ function deriveTint(manifest: AvatarManifest, body: string, faces: Record<Expres
   const tint: NonNullable<BodyDef['tint']> = {}
   const bodySkin = maskOf(body, 'skin')
   if (bodySkin !== undefined) tint.skin = { meanL: bodySkin.meanL, files: [body, ...faceFiles].filter((file) => maskOf(file, 'skin') !== undefined) }
+  const outfitFiles = Object.keys(manifest.files)
+    .filter((file) => file.startsWith('item_outfit_') && manifest.files[file]?.layer === OUTFIT_LAYER)
+    .sort()
+  const lineFiles = [body, ...faceFiles, ...outfitFiles].filter((file) => maskOf(file, 'skinLine') !== undefined)
+  if (bodySkin !== undefined && lineFiles.length > 0) tint.skinLine = { meanL: bodySkin.meanL, files: lineFiles }
   const neutralEyes = maskOf(faces.neutral, 'eyes')
   if (neutralEyes !== undefined) tint.eyes = { meanL: neutralEyes.meanL, files: faceFiles.filter((file) => maskOf(file, 'eyes') !== undefined) }
 

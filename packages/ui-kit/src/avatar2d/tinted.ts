@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { assetUrl } from './AvatarAssets.js'
-import { recolour } from './recolour.mjs'
+import { recolour, shade } from './recolour.mjs'
 import type { LayerRef, TintRef } from './types.js'
 
 /** How many rendered blob URLs to keep alive at once (spec §5.2). Past this, the oldest *settled* entry is
@@ -20,10 +20,12 @@ interface CacheEntry {
  * page — and every re-render of the same one — shares it. */
 const cache = new Map<string, CacheEntry>()
 
-/** The cache key for one layer's tinted render: same file, same density, same tints (in order and by colour) →
- * same key, so two chibis wearing the same coloured hair only ever pay for the canvas work once. */
+/** The cache key for one layer's tinted render: same file, same density, same tints (in order, by colour and by
+ * `meanL`) → same key, so two chibis wearing the same coloured hair only ever pay for the canvas work once. `meanL` is
+ * in it because one file can be painted against two: a shared outfit's line is shaded at the wearer's body's skin
+ * `meanL` (2026-10-05). A tint's `mode` needs no place in it: the mask names it (a `_skinlinemask` is always shaded). */
 export function tintKey(file: string, density: 1 | 2, tints: TintRef[]): string {
-  return `${file}|${density}|${tints.map((t) => `${t.mask}:${t.colour}`).join(',')}`
+  return `${file}|${density}|${tints.map((t) => `${t.mask}:${t.colour}:${t.meanL}`).join(',')}`
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -80,7 +82,8 @@ async function renderTintedLayer(prefix: string, layer: LayerRef, density: 1 | 2
       const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height).data
       const maskAlpha = new Uint8Array(maskCanvas.width * maskCanvas.height)
       for (let i = 0; i < maskAlpha.length; i++) maskAlpha[i] = maskData[i * 4 + 3] ?? 0
-      recolour(imageData.data, maskAlpha, tint.colour, tint.meanL)
+      if (tint.mode === 'shade') shade(imageData.data, maskAlpha, tint.colour, tint.meanL)
+      else recolour(imageData.data, maskAlpha, tint.colour, tint.meanL)
     }
 
     ctx.putImageData(imageData, 0, 0)

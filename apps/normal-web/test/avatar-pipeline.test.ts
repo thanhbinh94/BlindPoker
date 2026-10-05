@@ -1239,7 +1239,7 @@ function stageOnePngs(
 
   // Add mask files for each layer that has masks in the manifest.
   if (manifest) {
-    const maskFileKind = { hair: 'hair', eyes: 'eye', tint: 'tint', skin: 'skin' }
+    const maskFileKind = { hair: 'hair', eyes: 'eye', tint: 'tint', skin: 'skin', skinLine: 'skinline' }
     for (const layerName of layers) {
       const entry = manifest.files[layerName]
       if (entry?.masks) {
@@ -1641,10 +1641,13 @@ describe('the v4 review sheet and the fit sheet (Plan 19 A1d, spec §5.6)', () =
     }
   })
 
-  it('paints a tone over skin only: the body and its face, by their skin masks', async () => {
+  it('paints a tone over skin and its line art only: the body, its face and the outfit’s copy of the outline, by their masks', async () => {
     const cards = grid(sheetCards(committed, { items: skinItems, hairs: ['f_bob01'], outfits: ['casual01'] }))
     const [porcelain, natural, deep] = await Promise.all(cards.map((card) => composeCard(card, { dir: OUT_DIR, manifest: committed })))
-    const masks = await Promise.all([bodyFile('f'), bodyFaceFile('f', 'neutral')].map((name) => readPicture(join(OUT_DIR, `${name}_skinmask@1x.png`))))
+    const masks = await Promise.all([
+      ...[bodyFile('f'), bodyFaceFile('f', 'neutral')].flatMap((name) => ['skin', 'skinline'].map((kind) => readPicture(join(OUT_DIR, `${name}_${kind}mask@1x.png`)))),
+      readPicture(join(OUT_DIR, 'item_outfit_casual01_L40_skinlinemask@1x.png')),
+    ])
     for (const toned of [porcelain!, deep!]) {
       let changed = 0
       let outside = 0
@@ -1657,6 +1660,18 @@ describe('the v4 review sheet and the fit sheet (Plan 19 A1d, spec §5.6)', () =
       expect(changed, 'the tone changed nothing').toBeGreaterThan(1000)
       expect(outside, 'the tone reached past the skin masks').toBe(0)
     }
+    // The lines (2026-10-05): untouched on porcelain, lighter than the cream they were drawn for; darker on deep.
+    const [bodySkin, , faceSkin, , outfitLine] = masks
+    const lineOnly = (p: number) => masks.some((mask) => mask.data[p * 4 + 3]! > 0) && bodySkin!.data[p * 4 + 3] === 0 && faceSkin!.data[p * 4 + 3] === 0
+    let porcelainMoved = 0
+    let deepDarker = 0
+    for (let p = 0; p < natural!.width * natural!.height; p++) {
+      if (!lineOnly(p)) continue
+      if ([0, 1, 2].some((c) => porcelain!.data[p * 4 + c] !== natural!.data[p * 4 + c])) porcelainMoved++
+      if (outfitLine!.data[p * 4 + 3]! >= 128 && deep!.data[p * 4]! < natural!.data[p * 4]!) deepDarker++
+    }
+    expect(porcelainMoved, 'porcelain moved a line pixel').toBe(0)
+    expect(deepDarker, 'deep left the outfit’s copy of the outline as drawn').toBeGreaterThan(100)
   }, 30_000)
 })
 
@@ -1827,7 +1842,7 @@ describe('C12 and the v4 rules of C11 (Plan 19 A1b, spec §5.1, §5.5)', () => {
     const happy = 'body_f_face_happy_L50'
     // Between B3 and C1 the neutral face is real art and the other five are still stand-ins (pre-flight #7, R26).
     const mixed = caseDir('c11-mixed')
-    for (const face of [neutral, happy]) copyLayer(mixed, face, ['skin', 'eye'])
+    for (const face of [neutral, happy]) copyLayer(mixed, face, ['skin', 'skinline', 'eye'])
     const mixedRow = (await checkOne(mixed, happy, manifestFor(mixed, { [neutral]: flagged(neutral, true), [happy]: flagged(happy, false) }))).get('C11')!
     expect(mixedRow.ok, mixedRow.detail).toBe(true)
     expect(mixedRow.detail).toContain('n/a — neutral is real, this face is a stand-in')
@@ -1836,7 +1851,7 @@ describe('C12 and the v4 rules of C11 (Plan 19 A1b, spec §5.1, §5.5)', () => {
 
     // Both real, and the happy face has lost half its skin: measured, and too small.
     const halved = caseDir('c11-halved')
-    for (const face of [neutral, happy]) copyLayer(halved, face, ['skin', 'eye'])
+    for (const face of [neutral, happy]) copyLayer(halved, face, ['skin', 'skinline', 'eye'])
     await editMask(halved, happy, 'skin', (alpha) => {
       const total = alpha.reduce((n, a) => n + (a >= 128 ? 1 : 0), 0)
       let cleared = 0
@@ -1851,7 +1866,7 @@ describe('C12 and the v4 rules of C11 (Plan 19 A1b, spec §5.1, §5.5)', () => {
     const neutral = 'body_f_face_neutral_L50'
     const happy = 'body_f_face_happy_L50'
     const dir = caseDir('c11-no-skin')
-    for (const face of [neutral, happy]) copyLayer(dir, face, ['skin', 'eye'])
+    for (const face of [neutral, happy]) copyLayer(dir, face, ['skin', 'skinline', 'eye'])
     const c11Of = async (entries: Record<string, ManifestEntry>) => (await checkOne(dir, happy, manifestFor(dir, entries))).get('C11')!
     const withoutSkin = (name: string): ManifestEntry => {
       const entry = flagged(name, true)
@@ -1895,8 +1910,8 @@ describe('C12 and the v4 rules of C11 (Plan 19 A1b, spec §5.1, §5.5)', () => {
     const face = 'body_m_face_neutral_L50'
     const hair = 'item_hair_m_spiky01_L60'
     const dir = caseDir('c11-v4')
-    copyLayer(dir, body, ['skin'])
-    copyLayer(dir, face, ['skin', 'eye'])
+    copyLayer(dir, body, ['skin', 'skinline'])
+    copyLayer(dir, face, ['skin', 'skinline', 'eye'])
     copyLayer(dir, hair, ['hair'])
     const manifest = manifestFor(dir, { [body]: flagged(body, true), [face]: flagged(face, true), [hair]: flagged(hair, true) })
     for (const name of [body, face, hair]) {
@@ -1934,6 +1949,43 @@ describe('C12 and the v4 rules of C11 (Plan 19 A1b, spec §5.1, §5.5)', () => {
     const over = (await checkOne(dir, face, manifest)).get('C11')!
     expect(over.ok).toBe(false)
     expect(over.detail).toMatch(/skin and eyes share \d+ pixels/)
+
+    // A body whose skin-line mask runs onto its skin (2026-10-05): a pixel both recoloured and shaded.
+    copyLayer(dir, body, ['skin', 'skinline']) // the masks as committed again, undoing the thin skin above
+    const skin = await readPicture(join(dir, `${body}_skinmask@2x.png`))
+    await editMask(dir, body, 'skinline', (alpha) => {
+      for (let p = 0; p < alpha.length; p++) if (skin.data[p * 4 + 3]! >= 128 && p % 97 === 0) alpha[p] = 255
+    })
+    const onSkin = (await checkOne(dir, body, manifest)).get('C11')!
+    expect(onSkin.ok).toBe(false)
+    expect(onSkin.detail).toMatch(/skin line and skin share \d+ pixels/)
+
+    // A real body with no skin-line mask at all: the skin colour would leave its outline glowing.
+    const { skinLine: _line, ...bodyMasks } = manifest.files[body]!.masks!
+    const lineless = manifestFor(dir, { ...manifest.files, [body]: { ...manifest.files[body]!, masks: bodyMasks } })
+    const missing = (await checkOne(dir, body, lineless)).get('C11')!
+    expect(missing.ok).toBe(false)
+    expect(missing.detail).toContain('no skinLine mask cut for this real layer')
+
+    // A v4 outfit (cut on a body) carries its copy of the outline: as committed it passes; without it, or with the
+    // line run onto its own colour variant's tint mask, it fails.
+    const outfit = 'item_outfit_casual01_L40'
+    copyLayer(dir, outfit, ['skinline', 'tint'])
+    const dressed = manifestFor(dir, { ...manifest.files, [outfit]: flagged(outfit, true) })
+    const fine = (await checkOne(dir, outfit, dressed)).get('C11')!
+    expect(fine.ok, fine.detail).toBe(true)
+    const { skinLine: _outfitLine, ...outfitMasks } = dressed.files[outfit]!.masks!
+    const bare = manifestFor(dir, { ...dressed.files, [outfit]: { ...dressed.files[outfit]!, masks: outfitMasks } })
+    const unlined = (await checkOne(dir, outfit, bare)).get('C11')!
+    expect(unlined.ok).toBe(false)
+    expect(unlined.detail).toContain('no skinLine mask cut for this real layer')
+    const tint = await readPicture(join(dir, `${outfit}_tintmask@2x.png`))
+    await editMask(dir, outfit, 'skinline', (alpha) => {
+      for (let p = 0; p < alpha.length; p++) if (tint.data[p * 4 + 3]! >= 128 && p % 53 === 0) alpha[p] = 255
+    })
+    const onTint = (await checkOne(dir, outfit, dressed)).get('C11')!
+    expect(onTint.ok).toBe(false)
+    expect(onTint.detail).toMatch(/skin line and tint share \d+ pixels/)
   }, 60_000)
 
   it('colours prints one line per mask: a body’s skin, a face’s skin and the iris of its eyes', () => {
@@ -2908,7 +2960,7 @@ describe('v4 ingest (Plan 19 A2a)', () => {
     // picture, kept by both bodies cut on it.
     const { scale, offsetX, offsetY } = anchorBase(removeChroma(await renderSvg(sourceSvg(), SRC.w, SRC.h), { tolerance: 40 }))
     expect(await canvasTransform()).toEqual({ scale, offsetX, offsetY })
-    for (const [name, kinds] of [['body_f_L30', ['skin']], ['body_f_face_neutral_L50', ['eyes', 'skin']]] as const) {
+    for (const [name, kinds] of [['body_f_L30', ['skin', 'skinLine']], ['body_f_face_neutral_L50', ['eyes', 'skin', 'skinLine']]] as const) {
       expect(manifest.files[name], name).toMatchObject({ real: true })
       expect(manifest.files[name]!.placeholder).toBeUndefined()
       expect(Object.keys(manifest.files[name]!.masks ?? {}).sort(), name).toEqual([...kinds])
@@ -3260,7 +3312,7 @@ describe('v4 ingest (Plan 19 A2a)', () => {
     const name = 'body_f_face_happy_L50'
     const manifest = manifestIn(dir)
     expect(manifest.files[name]).toMatchObject({ layer: LAYERS.face, real: true })
-    expect(Object.keys(manifest.files[name]!.masks ?? {}).sort()).toEqual(['eyes', 'skin'])
+    expect(Object.keys(manifest.files[name]!.masks ?? {}).sort()).toEqual(['eyes', 'skin', 'skinLine'])
     for (const density of DENSITIES) {
       const outside = inkOutsideHead(await readPicture(join(dir, `${name}@${density}x.png`)), density)
       expect(outside.length, `@${density}x has ink outside the head region`).toBe(0)

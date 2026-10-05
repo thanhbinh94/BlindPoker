@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { runChecks } from '../scripts/avatar-pipeline/checks.mjs'
-import { SKIN_MASK, eyeEllipses, eyeMask, eyeZone, hairMask, maskColour, maskTargets, skinMask, tintMask, writeMasks } from '../scripts/avatar-pipeline/masks.mjs'
+import { OUTFIT_LINE, SKIN_MASK, eyeEllipses, eyeMask, eyeZone, hairMask, maskColour, maskTargets, outfitLineMask, skinLineMask, skinMask, tintMask, writeMasks } from '../scripts/avatar-pipeline/masks.mjs'
 import { writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
 import { readPicture, renderSvg, resizePicture, writePicture } from '../scripts/avatar-pipeline/png.mjs'
 import { buildTintSheet } from '../scripts/avatar-pipeline/tint-sheet.mjs'
@@ -616,6 +616,112 @@ describe('skinMask, and eyes on a bald face (Plan 19 A1b, spec §5.5)', () => {
     expect(SKIN_MASK.hue).toEqual([44, 100])
   })
 
+  it('cuts the skin’s line art — the outline and its soft rim — and none of the skin, the eyes, the mouth or the underwear (2026-10-05)', async () => {
+    // A dark blob far from any skin: line art of something else, which the skin colour has no business shading.
+    const extra = `<rect x="600" y="780" width="40" height="40" fill="${OUTLINE}"/>`
+    const { pic, parts } = await syntheticBody({ extra })
+    const eyes = new Uint8Array(W * H)
+    for (let i = 0; i < eyes.length; i++) eyes[i] = parts.eyes[i] ? 255 : 0
+    const skin = skinMask(pic, { eyes })
+    const line = skinLineMask(pic, { skin, eyes })
+
+    const ring = new Uint8Array(W * H) // the head's outline, which `parts.outline` also finds in the far blob
+    for (let i = 0; i < ring.length; i++) ring[i] = parts.outline[i] && i < 700 * W ? 1 : 0
+    expect(sum(ring), 'the fixture draws the head outline').toBeGreaterThan(2000)
+    expect(coverage(line, ring), 'the head outline').toBeGreaterThan(0.95)
+    expect(coverage(line, colourPixels(pic, OUTLINE).map((v, i) => (v && i >= 700 * W ? 1 : 0))), 'a line far from skin').toBe(0)
+    for (const part of ['skin', 'shading', 'eyes', 'mouth', 'underwear'] as const) expect(coverage(line, parts[part]), part).toBe(0)
+    // The soft rim outside the outline, where the head meets transparency, is in: it is the outline's own antialiasing.
+    let rim = 0
+    let rimIn = 0
+    for (let i = 0; i < W * H; i++) {
+      const a = pic.data[i * 4 + 3]!
+      if (a > 8 && a < 200 && i < 470 * W) { rim++; if (line[i]) rimIn++ }
+    }
+    expect(rim).toBeGreaterThan(200)
+    expect(rimIn / rim).toBeGreaterThan(0.9)
+    // Never a pixel of the skin itself, nor within the eyes' margin.
+    for (let i = 0; i < W * H; i++) {
+      if (line[i] && skin[i]) throw new Error(`line and skin share pixel ${i}`)
+      if (line[i] && eyes[i]) throw new Error(`line and eyes share pixel ${i}`)
+    }
+  })
+
+  it('finds an outfit’s copy of the body’s outline beside skin the outfit leaves showing, and no cloth (2026-10-05)', async () => {
+    const { pic: body, parts } = await syntheticBody()
+    const eyes = new Uint8Array(W * H)
+    for (let i = 0; i < eyes.length; i++) eyes[i] = parts.eyes[i] ? 255 : 0
+    const skin = skinMask(body, { eyes })
+    const line = skinLineMask(body, { skin, eyes })
+    // The outfit picture redraws the head's outline where it leaves the head bare; it adds a red collar against the
+    // outline's bottom (cloth of another colour), a block of cloth in the outline's own colour over the head's lower left
+    // (cloth over skin it covers), and the same colour far from any skin.
+    const RED = '#c0392b'
+    const outfit = await renderSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+        <ellipse cx="384" cy="300" rx="160" ry="150" fill="none" stroke="${OUTLINE}" stroke-width="3"/>
+        <rect x="330" y="440" width="108" height="30" fill="${RED}"/>
+        <rect x="200" y="330" width="90" height="90" fill="${OUTLINE}"/>
+        <rect x="600" y="780" width="40" height="40" fill="${OUTLINE}"/>
+      </svg>`,
+      W,
+      H,
+    )
+    const copy = outfitLineMask(outfit, { body, skin, line })
+
+    // The redrawn ring, away from the block: in.
+    const outlineColoured = colourPixels(outfit, OUTLINE)
+    const ring = new Uint8Array(W * H)
+    for (let i = 0; i < 330 * W; i++) if (outlineColoured[i]) ring[i] = 1
+    expect(sum(ring)).toBeGreaterThan(1000)
+    expect(coverage(copy, ring), 'the redrawn outline').toBeGreaterThan(0.95)
+    // Cloth: the red collar, the block's inside (4 px in from its edge, where no skin shows), the far square.
+    expect(coverage(copy, colourPixels(outfit, RED)), 'the red collar').toBe(0)
+    const inside = new Uint8Array(W * H)
+    for (let y = 334; y < 416; y++) for (let x = 204; x < 286; x++) inside[y * W + x] = 1
+    expect(coverage(copy, inside), 'cloth in the outline’s colour over skin it covers').toBe(0)
+    const far = new Uint8Array(W * H)
+    for (let y = 780; y < 820; y++) for (let x = 600; x < 640; x++) far[y * W + x] = 1
+    expect(coverage(copy, far), 'the outline’s colour far from the body’s outline').toBe(0)
+    expect(OUTFIT_LINE).toEqual({ reach: 3, tolerance: 20, shown: 4, minShown: 24, nearLarge: 8 })
+  })
+
+  it('keeps a lone finger’s sliver of shown skin, drops a stray speck far from the hand, and takes a darker copy (skin-line review)', () => {
+    // Built by hand: a body whose every pixel is solid, its line where the test says, and an outfit that redraws that line.
+    const OUT = hexToRgb(OUTLINE) // the body's line, Lab ≈ (37, 17, 22)
+    const DARKER = hexToRgb('#3a1c10') // a darker brown, Lab ≈ (14, 13, 14): ΔE 24 — past the tolerance — but a*b* 9.5 off
+    const BROWN_CLOTH = DARKER // the same brown as trouser cloth beside a stray speck of thigh
+    const body = { data: Buffer.alloc(W * H * 4, 255), width: W, height: H }
+    const item = { data: Buffer.alloc(W * H * 4), width: W, height: H }
+    const skin = new Uint8Array(W * H)
+    const line = new Uint8Array(W * H)
+    const fill = (x0: number, y0: number, x1: number, y1: number, f: (i: number) => void) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) f(y * W + x) }
+    const paint = (pic: { data: Buffer }, i: number, [r, g, b]: [number, number, number]) => { pic.data[i * 4] = r; pic.data[i * 4 + 1] = g; pic.data[i * 4 + 2] = b; pic.data[i * 4 + 3] = 255 }
+    // The hand: a 100 × 100 piece of shown skin; a lone finger: a 4 × 5 = 20 px piece 6 px to its right, under `minShown`.
+    fill(100, 100, 199, 199, (i) => { skin[i] = 255 })
+    fill(205, 150, 208, 154, (i) => { skin[i] = 255 })
+    // The finger's outer outline, 2–3 px from the finger and 11 from the hand: the body's line and the outfit's copy of it,
+    // the copy partly darker.
+    fill(210, 148, 211, 156, (i) => { line[i] = 255; paint(body, i, OUT); paint(item, i, i % 2 ? DARKER : OUT) })
+    // A stray 16 px speck of thigh far from the hand, with brown trouser cloth over the body's line beside it.
+    fill(400, 400, 403, 403, (i) => { skin[i] = 255 })
+    fill(405, 395, 405, 410, (i) => { line[i] = 255; paint(body, i, OUT) })
+    fill(405, 395, 406, 410, (i) => paint(item, i, BROWN_CLOTH))
+
+    const copy = outfitLineMask(item, { body, skin, line })
+    const finger = new Uint8Array(W * H)
+    fill(210, 148, 211, 156, (i) => { finger[i] = 1 })
+    expect(coverage(copy, finger), 'the lone finger’s outline, darker pixels too').toBe(1)
+    const cloth = new Uint8Array(W * H)
+    fill(405, 395, 406, 410, (i) => { cloth[i] = 1 })
+    expect(coverage(copy, cloth), 'trouser cloth beside a stray speck of thigh').toBe(0)
+  })
+
+  it('cuts no line art where there is no skin', async () => {
+    const { pic } = await syntheticBody()
+    expect(sum(skinLineMask(pic, { skin: new Uint8Array(W * H), eyes: null }))).toBe(0)
+  })
+
   it('takes a hand-drawn _skinmask override over the computed one', async () => {
     const name = 'body_f_L30'
     const { pic } = await syntheticBody()
@@ -730,8 +836,8 @@ describe('skinMask, and eyes on a bald face (Plan 19 A1b, spec §5.5)', () => {
 
     await writeMasks({ dir, manifest, names: [body, face, hair], overridesDir })
 
-    expect(Object.keys(manifest.files[body]!.masks!)).toEqual(['skin'])
-    expect(Object.keys(manifest.files[face]!.masks!).sort()).toEqual(['eyes', 'skin'])
+    expect(Object.keys(manifest.files[body]!.masks!)).toEqual(['skin', 'skinLine'])
+    expect(Object.keys(manifest.files[face]!.masks!).sort()).toEqual(['eyes', 'skin', 'skinLine'])
     expect(Object.keys(manifest.files[hair]!.masks!)).toEqual(['hair'])
     const alphaOf = async (file: string) => {
       const pic = await readPicture(join(dir, file))
@@ -739,10 +845,14 @@ describe('skinMask, and eyes on a bald face (Plan 19 A1b, spec §5.5)', () => {
       for (let i = 0; i < alpha.length; i++) alpha[i] = pic.data[i * 4 + 3]!
       return alpha
     }
-    const [skin, eyes] = await Promise.all([alphaOf(`${face}_skinmask@2x.png`), alphaOf(`${face}_eyemask@2x.png`)])
+    const [skin, eyes, line] = await Promise.all([alphaOf(`${face}_skinmask@2x.png`), alphaOf(`${face}_eyemask@2x.png`), alphaOf(`${face}_skinlinemask@2x.png`)])
     let both = 0
     for (let i = 0; i < skin.length; i++) if (skin[i]! >= 128 && eyes[i]! >= 128) both++
     expect(both).toBe(0)
+    // The skin's line art (2026-10-05): cut beside the skin as written, never on it or on the eyes.
+    expect(sum(line)).toBeGreaterThan(200)
+    expect(existsSync(join(dir, `${body}_skinlinemask@1x.png`))).toBe(true)
+    for (let i = 0; i < line.length; i++) if (line[i] && (skin[i] || eyes[i])) throw new Error(`line overlaps skin or eyes at ${i}`)
     expect(blobsPerSide(eyes)).toEqual([1, 1])
     // The hair layer's mask is its ink, as a base L60's is.
     const item = await syntheticItem()
@@ -794,6 +904,32 @@ describe('writeMasks', () => {
     mkdirSync(overridesDir, { recursive: true })
   })
   afterAll(() => rmSync(temp, { recursive: true, force: true }))
+
+  it('cuts a v4 outfit’s line against its body’s masks, the body first whatever the order, and refuses one without them (2026-10-05)', async () => {
+    const where = join(temp, 'outfit-line')
+    mkdirSync(where, { recursive: true })
+    const body = 'body_f_L30'
+    const outfit = 'item_outfit_tuxedo01_L40'
+    await writePicture((await syntheticBody()).pic, join(where, `${body}@2x.png`))
+    // The outfit redraws the head's outline over the body, and nothing else.
+    const redrawn = await renderSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><ellipse cx="384" cy="300" rx="160" ry="150" fill="none" stroke="${OUTLINE}" stroke-width="3"/></svg>`,
+      W,
+      H,
+    )
+    await writePicture(redrawn, join(where, `${outfit}@2x.png`))
+    const lonely = { files: { [outfit]: { real: true, cutOn: 'f' } } } as unknown as Manifest
+    await expect(writeMasks({ dir: where, manifest: lonely, names: [outfit], overridesDir })).rejects.toThrow(/cut the body's masks first/)
+    expect(lonely.files[outfit]!.masks, 'nothing written for a refused outfit').toBeUndefined()
+
+    const manifest = { files: { [outfit]: { real: true, cutOn: 'f' }, [body]: { real: true } } } as unknown as Manifest
+    await writeMasks({ dir: where, manifest, names: [outfit, body], overridesDir })
+    expect(Object.keys(manifest.files[outfit]!.masks!)).toEqual(['skinLine'])
+    const line = await readPicture(join(where, `${outfit}_skinlinemask@2x.png`))
+    let n = 0
+    for (let i = 3; i < line.data.length; i += 4) if (line.data[i]! >= 128) n++
+    expect(n, 'the redrawn outline is cut').toBeGreaterThan(1000)
+  })
 
   it('lets a hand-drawn override win and marks it', async () => {
     const name = 'body_f_face_neutral_L50'
@@ -904,12 +1040,14 @@ describe('maskTargets', () => {
         base_f01_face_neutral_L50: { real: true, layer: 50 },
         item_outfit_casual01_L40: { real: true, layer: 40 },
         item_outfit_dealer01_L40: { real: true, layer: 40, tintSeed: { x: 10, y: 10 } },
+        item_outfit_champion01_L40: { real: true, layer: 40, cutOn: 'f' },
         item_head_tophat01_L80: { placeholder: true, layer: 80 },
       },
     }
     const targets = maskTargets(manifest)
-    expect(targets).toEqual(['item_outfit_dealer01_L40'])
-    expect(targets).not.toContain('item_outfit_casual01_L40') // no tintSeed
+    // A v4 outfit, cut on a body, carries that body's outline (2026-10-05), with or without a tint seed.
+    expect(targets).toEqual(['item_outfit_dealer01_L40', 'item_outfit_champion01_L40'])
+    expect(targets).not.toContain('item_outfit_casual01_L40') // no tintSeed, cut on no body
     expect(targets).not.toContain('item_head_tophat01_L80') // placeholder, not real
   })
 

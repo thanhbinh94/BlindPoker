@@ -48,6 +48,29 @@ export function meanLightness(pixels, mask) {
   return weight === 0 ? 0 : sum / weight
 }
 
+/**
+ * Line art under a region's colour (2026-10-05, the skin's outline): every masked pixel darkened by
+ * k = min(1, colour's lightness / `meanL`), its own hue and saturation kept, blended by the mask like `recolour`.
+ * `recolour` would hand a dark line the colour's hue and saturation and shift it by the region's lightness — on a
+ * light skin a saturated orange line, on a deep one black. Darkening keeps the line as drawn on any colour at least as
+ * light as the region it was drawn for, and darker by the same ratio as the skin on a darker one. Alpha is untouched;
+ * a `meanL` of 0 (no reference) leaves the pixels as they are.
+ */
+export function shade(pixels, mask, colour, meanL) {
+  if (!(meanL > 0)) return
+  const k = Math.min(1, hexToHsl(colour)[2] / meanL)
+  if (k === 1) return
+  for (let i = 0; i < mask.length; i++) {
+    const a = mask[i]
+    if (!a) continue
+    const o = i * 4
+    const f = 1 - (a / 255) * (1 - k)
+    pixels[o] = Math.round(pixels[o] * f)
+    pixels[o + 1] = Math.round(pixels[o + 1] * f)
+    pixels[o + 2] = Math.round(pixels[o + 2] * f)
+  }
+}
+
 export function recolour(pixels, mask, colour, meanL) {
   const [hue, sat, lc] = hexToHsl(colour)
   const shift = lc - meanL

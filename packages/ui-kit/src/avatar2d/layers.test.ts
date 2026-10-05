@@ -121,6 +121,47 @@ describe('layersFor — tints (spec 2026-10-03-avatar-v4-design.md §6.3)', () =
     expect(layers.find((l) => l.order === 60)?.tints).toBeUndefined()
   })
 
+  it('shades the skin’s line art after its skin, at the skin’s meanL, on the body and each listed face (2026-10-05)', () => {
+    const body: BodyRef = {
+      ...BODY_F,
+      tint: {
+        skin: { meanL: 0.78, files: ['body_f_L30', 'body_f_face_neutral_L50'] },
+        skinLine: { meanL: 0.78, files: ['body_f_L30', 'body_f_face_neutral_L50'] },
+        eyes: { meanL: 0.41, files: ['body_f_face_neutral_L50'] },
+      },
+    }
+    const layers = layersFor({ ...bare(), body, skinColor: '#5c3a28', eyeColor: '#2f7fd6' }, 'neutral', 'full')
+    expect(layers.find((l) => l.order === 30)?.tints).toEqual([
+      { mask: 'body_f_L30_skinmask', colour: '#5c3a28', meanL: 0.78 },
+      { mask: 'body_f_L30_skinlinemask', colour: '#5c3a28', meanL: 0.78, mode: 'shade' },
+    ])
+    expect(layers.find((l) => l.order === 50)?.tints).toEqual([
+      { mask: 'body_f_face_neutral_L50_skinmask', colour: '#5c3a28', meanL: 0.78 },
+      { mask: 'body_f_face_neutral_L50_skinlinemask', colour: '#5c3a28', meanL: 0.78, mode: 'shade' },
+      { mask: 'body_f_face_neutral_L50_eyemask', colour: '#2f7fd6', meanL: 0.41 },
+    ])
+    // The outfit's copy of the outline, when the set lists the outfit's file: shaded after the outfit's own colour.
+    const withOutfit: BodyRef = { ...body, tint: { ...body.tint, skinLine: { meanL: 0.78, files: ['body_f_L30', CASUAL.file] } } }
+    const red: WearRef = { ...CASUAL, tint: { colour: '#c0392b', meanL: 0.5 } }
+    const dressed = layersFor({ ...bare(), body: withOutfit, outfit: red, skinColor: '#5c3a28' }, 'neutral', 'full')
+    expect(dressed.find((l) => l.order === 40)?.tints).toEqual([
+      { mask: `${CASUAL.file}_tintmask`, colour: '#c0392b', meanL: 0.5 },
+      { mask: `${CASUAL.file}_skinlinemask`, colour: '#5c3a28', meanL: 0.78, mode: 'shade' },
+    ])
+    // An outfit the set does not list keeps only its own colour; no skin colour, nothing at all.
+    expect(layers.find((l) => l.order === 40)?.tints).toBeUndefined()
+    expect(layersFor({ ...bare(), body: withOutfit }, 'neutral', 'full').find((l) => l.order === 40)?.tints).toBeUndefined()
+    // A tone as light as the skin's meanL or lighter leaves the line as drawn (`shade` would multiply by 1): no job at all,
+    // so a porcelain outfit is not re-rendered for nothing, nor lost if its line mask fails to load.
+    const porcelain = layersFor({ ...bare(), body: withOutfit, outfit: CASUAL, skinColor: '#fcf0e9' }, 'neutral', 'full')
+    expect(porcelain.find((l) => l.order === 30)?.tints).toEqual([{ mask: 'body_f_L30_skinmask', colour: '#fcf0e9', meanL: 0.78 }])
+    expect(porcelain.find((l) => l.order === 40)?.tints).toBeUndefined()
+    // No skin colour, no line shading either: the eye colour alone on the face.
+    const eyesOnly = layersFor({ ...bare(), body, eyeColor: '#2f7fd6' }, 'neutral', 'full')
+    expect(eyesOnly.find((l) => l.order === 30)?.tints).toBeUndefined()
+    expect(eyesOnly.find((l) => l.order === 50)?.tints).toEqual([{ mask: 'body_f_face_neutral_L50_eyemask', colour: '#2f7fd6', meanL: 0.41 }])
+  })
+
   it('paints the hair colour on both hair layers at the hairstyle’s own meanL', () => {
     const hair: HairRef = { ...BOB, tint: { meanL: 0.31, files: [BOB.back, BOB.front] } }
     const body: BodyRef = { ...BODY_F, tint: { skin: { meanL: 0.78, files: ['body_f_L30'] } } }

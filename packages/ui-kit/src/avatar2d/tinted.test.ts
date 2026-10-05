@@ -18,6 +18,12 @@ describe('tintKey', () => {
     expect(a).not.toBe(b)
   })
 
+  it('differs when the meanL differs: one outfit file shaded against either body’s skin (2026-10-05)', () => {
+    const a = tintKey('item_outfit_casual01_L40', 2, [{ mask: 'item_outfit_casual01_L40_skinlinemask', colour: '#643e2b', meanL: 0.8881, mode: 'shade' }])
+    const b = tintKey('item_outfit_casual01_L40', 2, [{ mask: 'item_outfit_casual01_L40_skinlinemask', colour: '#643e2b', meanL: 0.8819, mode: 'shade' }])
+    expect(a).not.toBe(b)
+  })
+
   it('is stable for the same file, density and tints', () => {
     expect(tintKey('body_f_L30', 1, [SKIN_TINT])).toBe(tintKey('body_f_L30', 1, [{ ...SKIN_TINT }]))
   })
@@ -136,6 +142,25 @@ describe('useTintedLayer — with a faked canvas pipeline', () => {
     // Let layerB's own render settle before the test ends, so its `setUrl` lands inside this test's `act()`
     // scope rather than firing, unobserved, sometime during the next test.
     await waitFor(() => expect(result.current).not.toBeNull())
+  })
+
+  it('shades a `shade` tint’s mask instead of recolouring it (the skin’s line art, 2026-10-05)', async () => {
+    // Every faked layer and mask pixel is opaque white; record what each render hands to `putImageData`.
+    const written: Uint8ClampedArray[] = []
+    vi.mocked(HTMLCanvasElement.prototype.getContext).mockImplementation(
+      () =>
+        ({
+          drawImage: vi.fn(),
+          getImageData: vi.fn(() => ({ data: new Uint8ClampedArray(2 * 2 * 4).fill(255), width: 2, height: 2 })),
+          putImageData: vi.fn((data: ImageData) => written.push(data.data)),
+          clearRect: vi.fn(),
+        }) as unknown as CanvasRenderingContext2D,
+    )
+    const shadeTint: TintRef = { mask: 'tint_stub_shade_skinlinemask', colour: '#643e2b', meanL: 0.8819, mode: 'shade' }
+    const { result } = renderHook(() => useTintedLayer('/avatar/', { order: 30, file: 'tint_stub_shade', tints: [shadeTint] }))
+    await waitFor(() => expect(result.current).not.toBeNull())
+    // White × (0.2804 / 0.8819): darkened grey with white's own (absent) hue — `recolour` would have given it #643e2b's.
+    expect([...written[0]!.slice(0, 4)]).toEqual([81, 81, 81, 255])
   })
 
   it('returns null immediately when a layer loses its tints', async () => {

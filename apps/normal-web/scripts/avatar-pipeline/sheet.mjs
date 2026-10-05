@@ -48,7 +48,7 @@ import {
   parseName,
 } from './manifest.mjs'
 import { blankPicture, clonePicture, cropPicture, overPicture, readPicture, renderSvg, resizePicture, writePicture } from './png.mjs'
-import { recolour } from '../../../../packages/ui-kit/src/avatar2d/recolour.mjs'
+import { recolour, shade } from '../../../../packages/ui-kit/src/avatar2d/recolour.mjs'
 
 /**
  * @typedef {{ files: Record<string, any> }} SheetManifest
@@ -296,7 +296,8 @@ async function maskAlpha(dir, name, kind) {
  * The @1x layers a sheet reads, each read once: as drawn, or — for a toned card's body and body faces — painted
  * with `recolour` under the layer's own skin mask at the **body's** skin `meanL`, the one number both layers are
  * tinted at so the seam between body and face stays invisible (as `tint-sheet` does for a hairstyle's two layers).
- * A layer with no skin mask is drawn as it is.
+ * Its skin-line mask, when it has one, is then shaded at the same `meanL` (`shade`, 2026-10-05), as the kit does — on
+ * an outfit too, whose copy of the hands' outline is the wearer's skin's to shade. A layer with neither is drawn as it is.
  */
 function layerReader(dir, manifest) {
   const cache = new Map()
@@ -305,16 +306,20 @@ function layerReader(dir, manifest) {
     return cache.get(name)
   }
   const toned = async (name, tone) => {
-    const key = `${name} ${tone.colour}`
+    const key = `${name} ${tone.colour} ${tone.gender}` // the gender too: a shared outfit is shaded at either body's meanL
     if (!cache.has(key)) {
       cache.set(key, (async () => {
         const picture = await plain(name)
         const meanL = manifest.files[bodyFile(tone.gender)]?.masks?.skin?.meanL
+        if (meanL === undefined) return picture
         const skin = manifest.files[name]?.masks?.skin
-        const mask = meanL === undefined || !skin || skin.empty ? null : await maskAlpha(dir, name, 'skin')
-        if (!mask) return picture
+        const line = manifest.files[name]?.masks?.skinLine
+        const skinMask = !skin || skin.empty ? null : await maskAlpha(dir, name, 'skin')
+        const lineMask = !line || line.empty ? null : await maskAlpha(dir, name, 'skinLine')
+        if (!skinMask && !lineMask) return picture
         const painted = clonePicture(picture)
-        recolour(painted.data, mask, tone.colour, meanL)
+        if (skinMask) recolour(painted.data, skinMask, tone.colour, meanL)
+        if (lineMask) shade(painted.data, lineMask, tone.colour, meanL)
         return painted
       })())
     }
@@ -324,7 +329,9 @@ function layerReader(dir, manifest) {
     if (!tone) return plain(name)
     const parsed = parseName(name)
     const skinOfBody = (parsed?.kind === 'body' || parsed?.kind === 'bodyFace') && parsed.gender === tone.gender
-    return skinOfBody ? toned(name, tone) : plain(name)
+    // An outfit's copy of the outline is the wearer's to shade, whichever body it was cut on.
+    const outfitLine = parsed?.kind === 'item' && parsed.slot === 'outfit' && manifest.files[name]?.masks?.skinLine !== undefined
+    return skinOfBody || outfitLine ? toned(name, tone) : plain(name)
   }
 }
 
