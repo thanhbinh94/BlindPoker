@@ -8,7 +8,7 @@ below are the real history.
 
 ---
 
-## Plan 20 — the open defects: keyed money writes, AA contrast, wardrobe, table and lobby, redrawn skin — merged `MERGE` (2026-10-05)
+## Plan 20 — the open defects: keyed money writes, AA contrast, wardrobe, table and lobby, redrawn skin — merged `eb2fcc0` (2026-10-05)
 
 The user asked for every bug still on record to be fixed ("có, hãy fix các bug còn tồn đọng đi. không cần hỏi lại",
 2026-10-05). That is each note left open in `docs/bug-log.md` §7, the four real defects that sat in

@@ -375,7 +375,7 @@ Ghi nhận từ final review Plan 16. R2-5 sửa ngày 30/09; R2-1 … R2-4 sử
     Thẻ hẹp nhất là 304 px, chính là sàn của lưới, không phải lỗi. Việc đo lộ ra lỗi cuộn ngang ở 320 px (xem bảng bên dưới).
 | R2-5 | P2 | **Host LAN tắt im lặng** hai lần (29/09 và đêm 30/09): `run.ps1` chạy node bằng `Start-Process -NoNewWindow`, gắn vào cửa sổ console đã gọi nó; cửa sổ/phiên đó đóng thì node chết theo, không để lại dòng lỗi | (a) chạy `run.ps1` từ cửa sổ PowerShell của người vận hành và để mở; (b) thêm tuỳ chọn chạy tách hẳn (cửa sổ riêng ẩn, hoặc Task Scheduler/NSSM như Lite). **Đã sửa (b) — `5931218`, review `6f776f6` + `fecbf57`, merge `5228244`, host LAN chạy qua task từ 30/09** (không bao giờ dừng/gỡ/ghi đè task hay node không phải của bộ kit; `-TaskName` không nhận wildcard): mặc định `run.ps1` đăng ký và chạy scheduled task theo người dùng `BlindLuckPoker-Normal` (không cần admin, không giới hạn thời gian; action là `run.ps1 -Serve` ẩn, chỉ chứa đường dẫn, không bí mật); `-Foreground` giữ cách cũ, `-AutoStart` thêm trigger đăng nhập, `stop.ps1` dừng node rồi dừng task, `stop.ps1 -Remove` gỡ task. Thử tay trên :8099: `taskkill /T /F` cửa sổ đã gọi `run.ps1`, `/health` vẫn trả lời |
 
-**Bug tồn đọng đã sửa (05/10) — Plan 20, merge `MERGE`.** Người dùng: "có, hãy fix các bug còn tồn đọng đi. không cần hỏi lại.
+**Bug tồn đọng đã sửa (05/10) — Plan 20, merge `eb2fcc0`.** Người dùng: "có, hãy fix các bug còn tồn đọng đi. không cần hỏi lại.
 lúc nào xác nhận đã hoàn thành toàn bộ rồi thì báo".
 
 Plan: `docs/superpowers/plans/2026-10-05-plan20-open-bugs.md`. Phạm vi: mọi ghi chú "chưa làm" của §7 ở trên, bốn lỗi thật còn
