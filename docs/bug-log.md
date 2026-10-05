@@ -400,14 +400,27 @@ Ghi chú kỹ thuật:
     đúng khoá và số tiền đó; gỡ người hoặc tắt máy thì phát lại rồi hoàn. Pot cộng dồn thả không xong nằm riêng
     (`Room.pendingRelease`, cả lô), không bị chia vào ván sau; `view().carryOverPot` và sổ cân đều tính nó. Mọi dòng log lỗi tiền
     đều ghi khoá.
-  - Phí bàn (`table_fee`) không khoá vì không bao giờ được thử lại. Bảng `ledger_keys` chưa có chỗ dọn (khoảng hai dòng mỗi lượt
-    ngồi): `docs/known-limitations.md`. Tài liệu: `docs/server-kit.md` (Repositories → Keys).
+  - Phí bàn (`table_fee`) không khoá vì không bao giờ được thử lại. Bảng `ledger_keys` (khoảng hai dòng mỗi lượt ngồi) được dọn
+    sạch mỗi khi server khởi động (đợt sửa sau rà soát toàn nhánh, bên dưới). Tài liệu: `docs/server-kit.md` (Repositories → Keys).
   - Đợt sửa cuối — `834870c`. Phòng đang đóng mà lần thả pot cũ vẫn lỗi thì pot mới hơn nằm sau nó cũng được ghi log
     (`carry-over not released at close`: phòng, số tiền, khoá của lần thả đang chờ); trước đó nó rời sổ không một dòng. Hoàn
     buy-in lỗi lúc tắt máy từng ghi là `shutdown cash-out failed` với `stack: 0`; nay dòng đó tên `shutdown settlement failed`
     (cash-out hoặc hoàn buy-in), vẫn có khoá, thêm số buy-in khi là hoàn. Test tiền thêm `books() === 0` ở hai ca buy-in chờ,
     và ca "Chơi tiếp sau khi quét tạm nghỉ" nay chia một ván khi ghế vẫn đang chờ, kiểm `SITTING_OUT` trước khi kiểm không được
     chia bài.
+  - Sau rà soát toàn nhánh — `417ef2e`.
+    - Đuổi một người mà cash-out lỗi: người đó đã nhận thông báo bị mời ra, nhưng lần thử lại cuối ván chỉ trả tiền về rồi để
+      họ ở lại làm khán giả. Nay lần đuổi lỗi đặt `leaveAfterHand`, nên cuối ván sau phòng gỡ hẳn người đó (vẫn đúng các khoá
+      cũ). Vào lại trước khi ván xong thì huỷ lệnh đuổi, như một lần Rời phòng giữa ván.
+    - Buy-in lỗi (có thể đã ghi xong) nay đẩy `BALANCE` ngay, nên thanh số dư không còn hiện số điểm sổ đã trừ. Lần Ngồi phát
+      lại buy-in đó vẫn đẩy thêm một lần khi đã có ghế, như mọi lần Ngồi; test nay giữ cả hai.
+    - `ledger_keys` được dọn sạch khi server khởi động (`pruneLedgerKeys`): phòng sống trong bộ nhớ, nên không khoá nào còn
+      được thử lại sau khi khởi động lại. Normal dọn trong `buildApp`, trước khi có game server. Lite dọn trong `listen()` của
+      bản giữ thư mục dữ liệu (có run file), không bao giờ ở lần chạy `--smoke`. Cách này dựa trên việc mỗi database chỉ có
+      một server (`docs/known-limitations.md`).
+    - Khay hành động ở giao diện sáng: luật `[data-surface='night'] { color: var(--ink) }` không đổi màu chữ nào trong khay.
+      Đã so bản dựng thật của `8873fd6` với nhánh này, cùng playground, ở 1920×940 và 375×812; chữ nào trong khay cũng tự đặt
+      màu riêng.
 - **Tương phản (T2) — `fc306c3`, `fa88116`.**
   - `--red` tách thành mực và tô như `--teal`. `--red` là mực: ở giao diện tối, đêm và nền felt là `#e0737b`, 6,23 / 5,60 / 5,43:1
     (trước đó 3,59 / 3,22 / 3,13). `--red-fill` giữ `#c8323c` cũ cho mọi thứ được tô, nên nút, chấm kết nối và vòng đếm không
@@ -474,7 +487,7 @@ Ghi chú kỹ thuật:
 - Bảy advisory npm chỉ có ở công cụ dev: dọn cần nâng Vitest 3 và Vite 6 trên cả tám package.
 - Ghi chú pipeline "cắt lại một ảnh lệch 1–2 px": chuyện tái lập, không phải lỗi người chơi nhìn thấy.
 
-**Còn lại sau Plan 20**, đã ghi ở `docs/known-limitations.md` và `docs/ui-kit.md`: bảng `ledger_keys` không được dọn; vài chấm
+**Còn lại sau Plan 20**, đã ghi ở `docs/known-limitations.md` và `docs/ui-kit.md`: vài chấm
 sáng nhỏ ở tông sâu (điểm nhấn trắng vẽ sẵn trên mu bàn chân áo Tết, vài điểm mép sợi gần màu của một kiểu tóc sáng, điểm nhấn
 cam nhạt vẽ sẵn của chính tóc đuôi ngựa, và hai chấm mờ của long bào: 5 px dưới mép trái gấu áo, không qua kiểm bảng màu, và
 3 px nằm ngoài cả da lẫn nét viền của thân, chỉ thấy khi phóng 8× ở tông sâu); huy hiệu xanh ngọc

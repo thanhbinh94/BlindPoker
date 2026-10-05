@@ -25,7 +25,11 @@ no protocol change and there is one additive migration: `0003_ledger_keys`, a ne
   - A seat whose cash-out is pending is frozen: it keeps its stack, sits out, is never dealt in, and every end of hand
     retries it. A buy-in that failed is replayed on the next Sit, or refunded on a removal; a carry-over release that
     failed is held aside instead of being dealt again.
-  - `ledger_keys` is not pruned (about two rows per sitting); it is a follow-up.
+  - A kick whose cash-out fails is finished at the end of the next hand: the player, already told they were removed,
+    is no longer left behind watching. A buy-in that fails pushes the balance at once, so the bar shows a debit that
+    landed.
+  - `ledger_keys` (about two rows per sitting) is emptied when a server starts: rooms live in memory, so no key can be
+    retried across a restart. A `--smoke` run of Lite never empties it.
 - **Contrast reaches AA.**
   - `--red` is split into ink and fill, the way teal already was: red ink on the dark page goes from 3.6:1 to 6.2:1
     (3.2 to 5.6 on a raised panel, 3.1 to 5.4 on the felt panel), and everything painted with `--red-fill` is
