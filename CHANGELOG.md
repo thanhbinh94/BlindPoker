@@ -73,6 +73,16 @@ no protocol change and there is one additive migration: `0003_ledger_keys`, a ne
   - A buy-in refund that fails at shutdown is logged as `shutdown settlement failed`, with its key and the buy-in,
     rather than as a cash-out with `stack: 0`.
   - The locked original's hint line in the wardrobe is worded by a `wardrobe.familyHint` template in both languages.
+- **Follow-up 2026-10-06: a hat that covers the crown keeps the hair under it** (user: "khi đổi item mũ, thì có item bị
+  lộ tóc, trông không tự nhiên"; merge `MERGE`).
+  - Since Plan 19 no hat hides any hair. A hairstyle's front layer is the whole crown, so hair standing above the head
+    rose through the hats that cover it: the ponytail's tie above the nón lá, the beanie and the beret, the spiky cut's
+    spikes, the tousled cut's tuft, the bob's ahoge and the wavy cut's volume above the brim.
+  - The beret, the beanie and the nón lá, in every colour, now carry a hair clip (`<hat>_hairclipmask`). The pipeline
+    cuts it from the hat's own shape.
+  - Hair shows only below the hat's lower edge. Beside the hat, it shows only below the edge of the hat's nearest side.
+  - The kit draws both hair layers through the clip as a CSS mask. The sheets apply the same clip.
+  - The top hat, the visor, the crown and the party cone sit on the hair rather than over it, and are unchanged.
 
 ---
 

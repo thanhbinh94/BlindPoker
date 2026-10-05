@@ -59,6 +59,21 @@ describe('layersFor', () => {
     expect(onlyBack).toContain(60)
   })
 
+  it('a hat that clips the hair draws both hair layers through its hair clip, and nothing else (2026-10-06)', () => {
+    const clipping: WearRef = { ...BERET, clipsHair: true }
+    const layers = layersFor({ ...bare(), head: clipping, face: FACE_ACC }, 'neutral', 'full')
+    const clipOf = (order: number) => layers.find((l) => l.order === order)?.clip
+    expect(clipOf(20)).toBe('item_head_beret_red01_L80_hairclipmask')
+    expect(clipOf(60)).toBe('item_head_beret_red01_L80_hairclipmask')
+    for (const order of [30, 40, 50, 70, 80]) expect(layers.find((l) => l.order === order)).not.toHaveProperty('clip')
+    // A hat that does not clip leaves every layer without the key at all.
+    for (const layer of layersFor({ ...bare(), head: BERET }, 'neutral', 'full')) expect(layer).not.toHaveProperty('clip')
+    // Hair the hat hides is not drawn at all, clip or not.
+    const hidden = layersFor({ ...bare(), head: { ...clipping, hidesHairFront: true } }, 'neutral', 'full')
+    expect(hidden.find((l) => l.order === 60)).toBeUndefined()
+    expect(hidden.find((l) => l.order === 20)?.clip).toBe('item_head_beret_red01_L80_hairclipmask')
+  })
+
   it('a hood hides both hair layers', () => {
     const config: ChibiConfig = { ...bare(), head: HOOD }
     const layers = layersFor(config, 'neutral', 'full')

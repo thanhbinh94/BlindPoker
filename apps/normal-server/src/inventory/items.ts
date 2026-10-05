@@ -78,6 +78,12 @@ export interface AssetRef {
   /** A head that hides the base's hair layers (design §3). */
   hidesHairFront?: boolean
   hidesHairBack?: boolean
+  /**
+   * A head that covers the crown (2026-10-06): the client draws both of a hairstyle's layers through the
+   * `<file>_hairclipmask` the pipeline cut for it, so hair shows only below the hat's lower edge. Set from the
+   * manifest's `masks.hairClip` on `file`, which a hat's colour variants share; absent on every other item.
+   */
+  clipsHair?: boolean
   /** Whether this layer falls inside the 208×208 avatar crop the portrait is cut from. */
   fitsAvatarCrop: boolean
   /**
@@ -274,6 +280,8 @@ function parseAsset(path: string, id: string, slot: ItemSlot, manifest: AvatarMa
       fail(path, `item ${id} has ${flag} ${String(asset[flag] ?? false)} but its layer ${file} has ${String(manifestEntry[flag] ?? false)} in the avatar manifest`)
     }
   }
+  // 2026-10-06: read off the manifest only, the way `tintMeanL` is — the catalogue has nothing to say about it.
+  if (manifestEntry.masks?.hairClip !== undefined) asset.clipsHair = true
   return asset
 }
 

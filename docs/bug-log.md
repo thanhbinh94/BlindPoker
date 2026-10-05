@@ -493,3 +493,10 @@ sáng nhỏ ở tông sâu (điểm nhấn trắng vẽ sẵn trên mu bàn châ
 cam nhạt vẽ sẵn của chính tóc đuôi ngựa, và hai chấm mờ của long bào: 5 px dưới mép trái gấu áo, không qua kiểm bảng màu, và
 3 px nằm ngoài cả da lẫn nét viền của thân, chỉ thấy khi phóng 8× ở tông sâu); huy hiệu xanh ngọc
 ở dòng đầu của một bảng tối `.panel.ink` rất cao sẽ rơi xuống 4,3–4,4:1, và hiện không chỗ nào đặt như vậy.
+
+**Mũ lộ tóc (06/10) — merge `MERGE`.** Người dùng (06/10, kèm ảnh nón lá + tóc đuôi ngựa đỏ): "khi đổi item mũ, thì
+có item bị lộ tóc, trông không tự nhiên".
+
+| # | Mức | Mô tả | Nguyên nhân / hướng | Trạng thái |
+|---|---|---|---|---|
+| H1 | P2 | Đội mũ che đỉnh đầu mà tóc vẫn thò lên trên mũ: chỏm buộc của tóc đuôi ngựa nhô trên nón lá, mũ len và mũ nồi; gai tóc spiky, chỏm tóc tousled, sợi ahoge của bob, phần tóc phồng của wavy nhô qua vành nón lá | từ Plan 19, lớp tóc trước (L60) là cả đỉnh đầu nên không mũ nào được ẩn tóc (ẩn thì đầu trọc dưới mũ); phần tóc cao hơn đầu vì thế lộ ra ngoài mũ | đã sửa: mũ nồi, mũ len, nón lá (mọi màu) có thêm mặt nạ cắt tóc `<mũ>_hairclipmask`, pipeline tự cắt từ hình mũ. Tóc chỉ hiện dưới mép dưới của mũ, bên cạnh mũ thì dưới mép của cạnh gần nhất. Kit vẽ hai lớp tóc qua mặt nạ đó bằng CSS mask; C11 kiểm mặt nạ; tờ thử mũ vẽ đúng như kit. Mũ chóp, lưỡi trai, vương miện, mũ sinh nhật ngồi trên tóc nên giữ nguyên: tóc đuôi ngựa vươn sau mũ chóp nhỏ vẫn tự nhiên, cắt thì đuôi tóc bị bằng phẳng |

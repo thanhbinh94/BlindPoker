@@ -109,6 +109,8 @@ export interface AssetRefDto {
   /** A head that hides the hairstyle's front (L60) or back (L20) half. */
   hidesHairFront?: boolean
   hidesHairBack?: boolean
+  /** A head that covers the crown (2026-10-06): both hair layers are drawn through its `<file>_hairclipmask`. */
+  clipsHair?: boolean
   /** Whether this layer falls inside the 208×208 avatar crop the portrait is cut from. */
   fitsAvatarCrop: boolean
   /** A colour variant (design §3.3): draw `file`, then tint the `<file>_tintmask` region with this hex.

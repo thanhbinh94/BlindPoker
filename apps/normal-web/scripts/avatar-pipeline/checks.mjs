@@ -18,8 +18,9 @@
  *   C10 the @2x is inside the per-file budget, and the manifest says what is on disk
  *   C11 every mask the layer lists sits on its ink and has a plausible shape (Plan 13 §4.3) — since Plan 19
  *       (spec §5.5) skin on bodies and body faces too (a face's skin ∪ eye zone held to its neutral face's, and on a
- *       real pair its skin alone and its eye zone as well), skin never on the eyes, a hair layer's hair its ink, and
- *       a real v4 layer never without its masks
+ *       real pair its skin alone and its eye zone as well), skin never on the eyes, a hair layer's hair its ink,
+ *       a real v4 layer never without its masks, and (2026-10-06) a covering hat's hair clip hiding hair above its
+ *       edge only
  *   C12 a real v4 body's head sits where F01's does: the eyes within 2 % of the crop and the chin within 12 units
  *       (Plan 19 spec §5.1, rulings 1–2; the chin's own limit is the gate ruling — a bald face is drawn shorter), so
  *       every hat, glasses, aura and frame cut on F01 still fits it
@@ -71,7 +72,7 @@ import {
 // extract.mjs imports this file in turn (`headMetrics`, `judgeHead`, A2a), so `measure` may only be used at call time, never at load.
 import { measure } from './extract.mjs'
 import { HAIR_COVERAGE, HAIR_EYE_LIMIT } from './hair.mjs'
-import { EYE_GROUP_MERGE_RADIUS, MASK_FILE_KIND, eyeZone } from './masks.mjs'
+import { EYE_GROUP_MERGE_RADIUS, HAIR_CLIP, MASK_FILE_KIND, clipsHair, eyeZone, frameEdges, hatEdges } from './masks.mjs'
 import { GENDERS, NAME_PATTERN, bodyFaceFile, bodyFile, hairFile, itemFile, parseName } from './manifest.mjs'
 
 /** C10, and spec §8's 6 MB stage-1 footprint divided by the files that have to fit in it. */
@@ -673,6 +674,34 @@ function eyeBlobs(maskPic) {
 }
 
 /**
+ * C11 on a hat's hair clip (2026-10-06), override or not — the one mask that is not a region of its own layer, so it is
+ * not held to the layer's ink. It belongs on a hat in `HAIR_CLIP`; it hides some hair (a pixel below alpha 128); and it
+ * hides no pixel the hat leaves uncovered more than `feather + 1` rows below the hat's edge in that column — the bottom
+ * of the column's longest run of the hat's **raw** solid ink (`hatEdges`), across the frame as the clip reads it
+ * (`frameEdges`: beside the hat its nearest side's, in a gap the higher neighbour's). So the
+ * fringe, the side locks and the face beneath a hat always show, whatever a strap or a hand-drawn clip does (fix round 1:
+ * the nón lá's straps had cut 4279 px of side hair this way, and a rule held only to the hat's lowest row let it pass).
+ */
+function hairClipProblem(parsed, layer, clip) {
+  if (!clipsHair(parsed)) return 'a hair clip on a layer that is not a hat in HAIR_CLIP'
+  const { width, height } = layer
+  const solid = new Uint8Array(width * height)
+  for (let i = 0; i < solid.length; i++) solid[i] = layer.data[i * 4 + 3] > ALPHA_SOLID ? 1 : 0
+  const edges = frameEdges(hatEdges(solid, width, height))
+  let hidden = 0
+  let below = 0
+  for (let i = 0; i < width * height; i++) {
+    if (clip.data[i * 4 + 3] >= 128) continue
+    hidden++
+    if (edges === null || layer.data[i * 4 + 3] >= 128) continue
+    if (Math.floor(i / width) > edges[i % width] + HAIR_CLIP.feather + 1) below++
+  }
+  if (hidden === 0) return 'hair clip hides no hair'
+  if (below) return `hair clip hides ${below} pixel${below === 1 ? '' : 's'} the hat leaves uncovered below its edge`
+  return null
+}
+
+/**
  * C11 (spec §4.3): every mask a layer's manifest entry lists — eyes, tint, skin, hair — sits on the layer's own
  * ink, at the layer's own size, and, unless it is a hand-drawn `override`, has a plausible shape:
  *
@@ -700,6 +729,9 @@ function eyeBlobs(maskPic) {
  *   or outfit layer the skin its picture redrew (2026-10-05) shares none with the hair or the item's tint. That skin may
  *   be empty — most of those pictures redrew none — and is not required: the skin of a real body or face is.
  *
+ * A hat's hair clip (2026-10-06) is the exception to sitting on the ink — it says where the *hair* shows — and is held
+ * to `hairClipProblem` instead; a hat in `HAIR_CLIP` must carry one.
+ *
  * A **real** v4 layer must carry the masks of its kind (`REQUIRED_MASKS`): a body or a face the skin colour cannot
  * reach, or whose outline it cannot shade, is a failure, not something with nothing to judge. Any other file the manifest lists no `masks` for
  * (nothing has been through `masks`/`ingest` for it yet) reports `n/a`, same as every other check that has nothing
@@ -709,7 +741,8 @@ function maskChecks(context) {
   const { entry, parsed, pictures, masks, neutralSkin } = context
   // A layer marked `empty: true` (a short hairstyle's blank L20, since A2a) has nothing for a mask to sit on.
   // A v4 outfit cut on a body carries its copy of that body's outline (2026-10-05).
-  const required = parsed?.kind === 'item' && parsed.slot === 'outfit' && GENDERS.includes(entry?.cutOn) ? ['skinLine'] : (REQUIRED_MASKS[parsed?.kind] ?? [])
+  // A hat that covers the crown carries the clip its hairstyle is drawn through (2026-10-06).
+  const required = parsed?.kind === 'item' && parsed.slot === 'outfit' && GENDERS.includes(entry?.cutOn) ? ['skinLine'] : clipsHair(parsed) ? ['hairClip'] : (REQUIRED_MASKS[parsed?.kind] ?? [])
   const absent = entry?.real === true && entry.empty !== true ? required.filter((kind) => !entry.masks?.[kind]) : []
   const missing = absent.map((kind) => `no ${kind} mask cut for this real layer`)
   if (!entry?.masks) return missing.length ? bad(missing.join('; ')) : ok('n/a — no masks cut for this layer')
@@ -725,6 +758,11 @@ function maskChecks(context) {
     if (!maskPic) { problems.push(`${kind} mask file is missing from disk`); continue }
     if (maskPic.width !== layer.width || maskPic.height !== layer.height) {
       problems.push(`${kind} mask is ${maskPic.width} × ${maskPic.height}, the layer is ${layer.width} × ${layer.height}`)
+      continue
+    }
+    if (kind === 'hairClip') {
+      const problem = hairClipProblem(parsed, layer, maskPic)
+      if (problem !== null) problems.push(problem)
       continue
     }
 

@@ -21,7 +21,8 @@
  *
  * The fit sheet tries every hat and every face item on each of the eight hairstyles, on the hairstyle's gender, in
  * `casual01` — 96 cards, one row per item, each cut to the portrait crop at @1x so a brim that misses the head
- * shows. A hat's hide rules drop the hair layer they name (R2, R12).
+ * shows. A hat's hide rules drop the hair layer they name (R2, R12), and a covering hat's hair clip (2026-10-06)
+ * cuts both hair layers to where hair can still show under it.
  *
  * Both compose through the same layer order and hide rules the renderer uses, and paint a tone with the shared
  * `recolour` at the body's own skin `meanL`, so a sheet that looks wrong is telling you about the assets or the
@@ -218,10 +219,11 @@ export function sheetCards(manifest, { items = [], hairs = null, outfits = null 
   return list
 }
 
-/** What a head item's hide rules drop, for its fit-sheet caption. */
+/** What a head item's hide rules drop, for its fit-sheet caption — and whether it clips the hair (2026-10-06). */
 function hidesCaption(entry) {
   const parts = [entry?.hidesHairFront ? 'front' : null, entry?.hidesHairBack ? 'back' : null].filter(Boolean)
-  return parts.length ? `hides ${parts.join('+')}` : 'hides none'
+  if (!entry?.masks?.hairClip) return parts.length ? `hides ${parts.join('+')}` : 'hides none'
+  return parts.length ? `hides ${parts.join('+')} · clips hair` : 'clips hair'
 }
 
 /**
@@ -351,8 +353,34 @@ function layerReader(dir, manifest) {
  */
 export async function composeCard(each, { dir, manifest, read = layerReader(dir, manifest) }) {
   const composed = blankPicture(FRAME.w, FRAME.h)
-  for (const layer of layersOf(manifest, each.names)) overPicture(composed, await read(layer.name, each.tone))
+  const clip = await hairClipOf(dir, manifest, each.names)
+  for (const layer of layersOf(manifest, each.names)) {
+    const picture = await read(layer.name, each.tone)
+    overPicture(composed, clip !== null && parseName(layer.name)?.kind === 'hair' ? clipped(picture, clip) : picture)
+  }
   return composed
+}
+
+/**
+ * The hair clip a card's hat carries (2026-10-06), as its @1x alpha, or null — both hair layers are drawn through it, as
+ * the kit does. A clip the manifest lists but the directory lacks is refused rather than drawn unclipped: the kit would
+ * draw that hair unclipped too, but only after failing to load it, and a sheet that hides the gap shows nobody the bug.
+ */
+async function hairClipOf(dir, manifest, names) {
+  for (const name of names) {
+    if (!manifest.files[name]?.masks?.hairClip) continue
+    const clip = await maskAlpha(dir, name, 'hairClip')
+    if (clip === null) throw new Error(`${name} lists a hair clip, and ${name}_${MASK_FILE_KIND.hairClip}mask@1x.png is not in ${dir}: run masks for it`)
+    return clip
+  }
+  return null
+}
+
+/** `picture` with its alpha multiplied by `clip`'s — a CSS mask, on the sheet. */
+function clipped(picture, clip) {
+  const out = clonePicture(picture)
+  for (let p = 0; p < clip.length; p++) out.data[p * 4 + 3] = Math.round((out.data[p * 4 + 3] * clip[p]) / 255)
+  return out
 }
 
 /** Alpha-over one picture onto another at an offset, clipping what falls outside. Shared with `tint-sheet.mjs`. */

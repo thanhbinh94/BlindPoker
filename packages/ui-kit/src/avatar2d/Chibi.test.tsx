@@ -1,8 +1,9 @@
-import { render } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { render, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AvatarAssets } from './AvatarAssets.js'
 import AVATAR2D_CSS from './avatar2d.module.css?raw'
 import { Chibi } from './Chibi.js'
+import { resetLoadedClips } from './clip.js'
 import { defaultChibi } from './defaults.js'
 import { hashChibi, layersFor } from './layers.js'
 import type { BodyRef, BotChibi, ChibiConfig, HairRef, WearRef } from './types.js'
@@ -181,6 +182,87 @@ describe('Chibi', () => {
     const { container: still } = render(<Chibi subject={SUBJECT} />)
     const { container: bouncing } = render(<Chibi subject={SUBJECT} bounce />)
     expect(bouncing.firstElementChild!.className).not.toBe(still.firstElementChild!.className)
+  })
+
+  describe('a hat that clips the hair (2026-10-06)', () => {
+    const conical: WearRef = { id: 'head_conical_hat01', order: 80, file: 'item_head_conical_hat01_L80', clipsHair: true }
+    const CLIP = 'https://cdn.example/avatar/item_head_conical_hat01_L80_hairclipmask@2x.png'
+    const styleOf = (img: Element) => (img as HTMLImageElement).style as CSSStyleDeclaration & Record<string, string>
+    const hairImgs = (root: Element) => [...root.querySelectorAll('img')].filter((img) => ['20', '60'].includes((img as HTMLImageElement).style.zIndex))
+    const otherImgs = (root: Element) => [...root.querySelectorAll('img')].filter((img) => !['20', '60'].includes((img as HTMLImageElement).style.zIndex))
+    const drawn = (subject: ChibiConfig = { ...SUBJECT, head: conical }) =>
+      render(
+        <AvatarAssets base="https://cdn.example/avatar/">
+          <Chibi subject={subject} />
+        </AvatarAssets>,
+      ).container
+
+    /** jsdom loads no image: this one settles a tick after its `src` is set — failing for a URL with `missing` in it. */
+    let made: { crossOrigin: string | null; src: string }[] = []
+    class FakeImage {
+      crossOrigin: string | null = null
+      onload: (() => void) | null = null
+      onerror: (() => void) | null = null
+      private url = ''
+      constructor() {
+        made.push(this)
+      }
+      get src(): string {
+        return this.url
+      }
+      set src(url: string) {
+        this.url = url
+        setTimeout(() => (url.includes('missing') ? this.onerror?.() : this.onload?.()), 0)
+      }
+    }
+    beforeEach(() => {
+      made = []
+      resetLoadedClips()
+      vi.stubGlobal('Image', FakeImage)
+    })
+    afterEach(() => vi.unstubAllGlobals())
+
+    it('draws both hair layers through its @2x clip as a CSS mask over the frame once the clip has loaded, and no other layer', async () => {
+      const root = drawn()
+      // Loading: the hair is drawn as it is — a mask still loading would draw it as nothing.
+      expect(hairImgs(root)).toHaveLength(2)
+      for (const img of root.querySelectorAll('img')) expect(styleOf(img).maskImage ?? '').toBe('')
+      expect(made.map((img) => [img.src, img.crossOrigin])).toEqual([[CLIP, 'anonymous']])
+
+      const url = `url("${CLIP}")`
+      await waitFor(() => expect(styleOf(hairImgs(root)[0]!).maskImage).toBe(url))
+      for (const img of hairImgs(root)) {
+        const style = styleOf(img)
+        expect(style.maskImage).toBe(url)
+        expect(style.WebkitMaskImage ?? style.webkitMaskImage).toBe(url)
+        expect(style.maskSize).toBe('100% 100%')
+        expect(style.maskRepeat).toBe('no-repeat')
+      }
+      for (const img of otherImgs(root)) expect(styleOf(img).maskImage ?? '').toBe('')
+
+      // A chibi drawn later is masked from its first render, with no second load.
+      const later = drawn()
+      for (const img of hairImgs(later)) expect(styleOf(img).maskImage).toBe(url)
+      expect(made).toHaveLength(1)
+    })
+
+    it('leaves the hair drawn and unmasked when the clip fails to load, and tries again on the next mount', async () => {
+      const missing: WearRef = { ...conical, file: 'item_head_missing_L80' }
+      const root = drawn({ ...SUBJECT, head: missing })
+      await waitFor(() => expect(made).toHaveLength(1))
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      expect(hairImgs(root)).toHaveLength(2)
+      for (const img of root.querySelectorAll('img')) expect(styleOf(img).maskImage ?? '').toBe('')
+      drawn({ ...SUBJECT, head: missing })
+      expect(made).toHaveLength(2)
+    })
+
+    it('masks nothing under a hat that does not clip', async () => {
+      const root = drawn({ ...SUBJECT, head: { ...conical, clipsHair: undefined } })
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      for (const img of root.querySelectorAll('img')) expect(styleOf(img).maskImage ?? '').toBe('')
+      expect(made).toHaveLength(0)
+    })
   })
 
   it('a tinted layer renders the plain layer src while no tinted URL exists yet (no canvas in jsdom)', () => {

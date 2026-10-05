@@ -1203,6 +1203,10 @@
         "tint": {
           "bytes2x": 4952,
           "meanL": 0.1949
+        },
+        "hairClip": {
+          "bytes2x": 5167,
+          "meanL": 0
         }
       }
     },
@@ -1220,6 +1224,10 @@
         "tint": {
           "bytes2x": 4605,
           "meanL": 0.4519
+        },
+        "hairClip": {
+          "bytes2x": 5034,
+          "meanL": 0
         }
       }
     },
@@ -1228,7 +1236,13 @@
       "w": 384,
       "h": 448,
       "bytes2x": 82263,
-      "real": true
+      "real": true,
+      "masks": {
+        "hairClip": {
+          "bytes2x": 5440,
+          "meanL": 0
+        }
+      }
     },
     "item_head_crown_gold01_L80": {
       "layer": 80,

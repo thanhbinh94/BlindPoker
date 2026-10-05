@@ -43,11 +43,16 @@ function body(gender: Gender): BodyRef {
 
 const BODIES: Record<Gender, BodyRef> = { f: body('f'), m: body('m') }
 
+/** The hats whose layer carries a hair clip (2026-10-06): the ones that cover the crown. A copy of the pipeline's
+ * `HAIR_CLIP.hats` (`apps/normal-web/scripts/avatar-pipeline/masks.mjs`) — `avatar-pipeline.test.ts` holds the two equal. */
+const CLIPPING_HATS = ['beanie01', 'beret_red01', 'conical_hat01']
+
 /** `item_<slot>_<code>_L<layer>` — the pipeline's naming convention. `hood_black01` is the one item drawn here with
- * both hide flags, so it is the one row that shows the hairstyle disappearing. */
+ * both hide flags, so it is the one row that shows the hairstyle disappearing; `CLIPPING_HATS` clip it instead. */
 function wear(slot: string, code: string, order: number): WearRef {
   const hides = code === 'hood_black01' ? { hidesHairFront: true, hidesHairBack: true } : {}
-  return { id: `${slot}_${code}`, order, file: `item_${slot}_${code}_L${order}`, ...hides }
+  const clips = slot === 'head' && CLIPPING_HATS.includes(code) ? { clipsHair: true } : {}
+  return { id: `${slot}_${code}`, order, file: `item_${slot}_${code}_L${order}`, ...hides, ...clips }
 }
 
 /** A figure of `gender` in that gender's cut of the casual outfit, wearing `hair` (its default unless given). */
@@ -116,14 +121,16 @@ export function Avatar2dPage() {
           </div>
         ))}
 
-        <h2 style={heading}>Head</h2>
-        {GENDERS.map((gender) => (
-          <div key={gender} style={row}>
-            {HEAD_ITEMS.map((code) => (
-              <Cell key={code} config={chibi(gender, { head: wear('head', code, 80) })} caption={`${gender} · ${code}`} />
-            ))}
-          </div>
-        ))}
+        <h2 style={heading}>Head × hairstyles</h2>
+        {GENDERS.flatMap((gender) =>
+          HAIR_STYLES[gender].map((hair) => (
+            <div key={hair} style={row} data-hair-row={hair}>
+              {HEAD_ITEMS.map((code) => (
+                <Cell key={code} config={chibi(gender, { head: wear('head', code, 80) }, hair)} caption={`${hair.slice(5)} · ${code}`} />
+              ))}
+            </div>
+          )),
+        )}
 
         <h2 style={heading}>Face</h2>
         {GENDERS.map((gender) => (
