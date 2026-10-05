@@ -77,7 +77,7 @@ If neither hook resolves an identity, the socket is closed
 interface PlayerRepository { findById(playerId): Promise<PlayerRecord | null> }
 interface BalanceRepository {
   get(playerId): Promise<number>
-  apply(entries: BalanceEntry[], meta?: SettlementMeta): Promise<void>
+  apply(entries: BalanceEntry[], meta?: SettlementMeta, opts?: { key?: string }): Promise<{ applied: boolean }>
 }
 interface GameHistoryRepository { recordHand(summary: HandSummary): Promise<void> }
 ```
@@ -89,7 +89,7 @@ go negative, before writing anything. `Room` relies on this to write
 buy-ins, cash-outs, refunds and carry-over releases each as a single
 unit — a partial write would let points leak or be created.
 
-Two further rules the implementation must honor:
+Three further rules the implementation must honor:
 
 - **Netting.** Entries are grouped by player and their deltas summed
   *before* the negativity check, so a batch that debits and re-credits the
@@ -106,6 +106,51 @@ Two further rules the implementation must honor:
   settles no player entries in either mode (chips move on the table), so
   its fee arrives as `apply([], { kind: 'table_fee', ... })` — an empty
   batch that exists purely to write the sink row.
+- **Keys.** A write that may be retried carries `opts.key`, and the
+  implementation claims that key first, inside the batch's own
+  transaction (Normal and Lite: a `ledger_keys(key primary key,
+  created_at)` table; the in-memory repositories: `repos.keys`). A key
+  that is already claimed makes the call a no-op that resolves
+  `{ applied: false }` — no balance check, no write — so a write that
+  committed but reported an error (the acknowledgement lost after
+  `COMMIT`) is not applied a second time when it is retried. A rejected
+  batch (insufficient balance, any error) rolls its claim back with it,
+  so its key is free for the next attempt. Without a key every call
+  behaves as it always has and resolves `{ applied: true }`; so does a
+  batch with nothing to write, which claims no key.
+
+`Room` keys every write it may retry, and treats `applied: false` as
+success (an earlier attempt landed):
+
+| Write | Key |
+|---|---|
+| cash-out (`standUpNow`) | `cash_out:<roomId>:<sitId>` — one per sitting, no amount in it |
+| buy-in (`sitDown`) | `buy_in:<roomId>:<sitId>` |
+| refund of a buy-in that never got its seat | `buy_in_refund:<roomId>:<sitId>` |
+| carry-over release | `carry_over:<roomId>:<id>` — one per release |
+
+A write that failed may still have landed, so the room never acts on it
+as if it had not:
+
+- **Cash-out.** The seat is frozen (`cashOutPending`) from before the
+  write until it is acknowledged: it keeps its stack, sits out, is never
+  dealt in, and neither a rejoin nor Sit In thaws it. The end of every
+  hand retries every pending cash-out (as do another Stand Up, Leave or
+  kick, the reconnect expiry and a shutdown), under the same key.
+- **Buy-in.** The player is not seated, and the attempt is kept
+  (`pendingBuyIn`): the next Sit replays it — same key, same amount,
+  before any amount or balance check — and seats the player with it. A
+  removal or a shutdown replays it and then refunds it, so nobody is
+  left debited and unseated.
+- **Carry-over release.** The pot is held aside (`Room.pendingRelease`)
+  with its batch, out of `carryOverPot`, and is settled first by the next
+  release, by the next deal (which deals without it if it still cannot be
+  settled) and by a close or shutdown. The room's view and the invariant
+  below count it.
+
+Every error line about one of these writes names its key, so an operator
+can reconcile it against `ledger_keys`. The table fee is not keyed: it is
+never retried.
 
 Sink rows are what make the money invariant checkable:
 `Σ player balances + Σ sinks (+ live table stacks and carry-over pots) `

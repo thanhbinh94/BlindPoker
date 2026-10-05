@@ -24,6 +24,26 @@ export interface RoomPlayer {
   standAfterHand: boolean
   /** Remove from the room as soon as the current hand ends (implies standAfterHand). */
   leaveAfterHand: boolean
+  /**
+   * A new id per sitting, set by `sitDown` and cleared by the stand-up that cashes it out. It names the cash-out's
+   * ledger key, `cash_out:<roomId>:<sitId>` — no amount in it — so one sitting is cashed out once, however often the
+   * write is retried. `null` while not seated, and always for a bot.
+   */
+  sitId: string | null
+  /**
+   * The seat's cash-out was written and not acknowledged, so it may have landed. Until a retry under the same key
+   * settles it the seat is frozen: sitting out, never dealt in, its stack untouched — a stack already paid out must
+   * not be played again. Neither a rejoin nor Sit In clears it; `onHandComplete`, another Stand Up, Leave, kick or
+   * reconnect expiry, and a shutdown all retry it.
+   */
+  cashOutPending: boolean
+  /**
+   * A buy-in written and not acknowledged, so it may have landed. The next Sit replays it — the same key
+   * `buy_in:<roomId>:<sitId>`, the same amount — rather than debiting again; a removal or a shutdown replays it and
+   * gives it back under `buy_in_refund:<roomId>:<sitId>` (`refunding` once that has begun, after which it can no
+   * longer pay for a seat).
+   */
+  pendingBuyIn?: { sitId: string; amount: number; refunding?: boolean }
   cosmetics?: unknown
 }
 
