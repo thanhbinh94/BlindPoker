@@ -1066,7 +1066,7 @@ export function bodyLineCopy(layer, { body, line, fromY }) {
   }
   // The copy's leftovers: small or faint pieces of what is left below the head, beside a pixel dropped. A piece is taken
   // over the whole layer, so one joined (8-connected) to the hair above the head's end is that hair — a lock's soft end
-  // hanging across the row (the wavy's jaw, 45 px), not a piece of the copy — and stays (final wave, 2026-10-05).
+  // hanging across the row (the wavy's jaw: 28 px), not a piece of the copy — and stays (final wave, 2026-10-05).
   const leftovers = () => {
     const leftover = new Uint8Array(width * height)
     for (let i = 0; i < leftover.length; i++) if (inked(i)) leftover[i] = 1

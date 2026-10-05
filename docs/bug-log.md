@@ -402,6 +402,12 @@ Ghi chú kỹ thuật:
     đều ghi khoá.
   - Phí bàn (`table_fee`) không khoá vì không bao giờ được thử lại. Bảng `ledger_keys` chưa có chỗ dọn (khoảng hai dòng mỗi lượt
     ngồi): `docs/known-limitations.md`. Tài liệu: `docs/server-kit.md` (Repositories → Keys).
+  - Đợt sửa cuối — `834870c`. Phòng đang đóng mà lần thả pot cũ vẫn lỗi thì pot mới hơn nằm sau nó cũng được ghi log
+    (`carry-over not released at close`: phòng, số tiền, khoá của lần thả đang chờ); trước đó nó rời sổ không một dòng. Hoàn
+    buy-in lỗi lúc tắt máy từng ghi là `shutdown cash-out failed` với `stack: 0`; nay dòng đó tên `shutdown settlement failed`
+    (cash-out hoặc hoàn buy-in), vẫn có khoá, thêm số buy-in khi là hoàn. Test tiền thêm `books() === 0` ở hai ca buy-in chờ,
+    và ca "Chơi tiếp sau khi quét tạm nghỉ" nay chia một ván khi ghế vẫn đang chờ, kiểm `SITTING_OUT` trước khi kiểm không được
+    chia bài.
 - **Tương phản (T2) — `fc306c3`, `fa88116`.**
   - `--red` tách thành mực và tô như `--teal`. `--red` là mực: ở giao diện tối, đêm và nền felt là `#e0737b`, 6,23 / 5,60 / 5,43:1
     (trước đó 3,59 / 3,22 / 3,13). `--red-fill` giữ `#c8323c` cũ cho mọi thứ được tô, nên nút, chấm kết nối và vòng đếm không
@@ -413,25 +419,41 @@ Ghi chú kỹ thuật:
   - Vùng giấy của Lite có test riêng (`lite.contrast.test.ts`). Hàm đo tương phản xuất ra `@bp/ui-kit/testing`; cấu hình vitest của
     Lite và Normal thêm `test.css.include` vì vitest làm trống mọi CSS `?raw`. Chi tiết: `docs/ui-kit.md` (Theming).
 - **Phòng thay đồ (T3) — `d673828`:** viên thuốc "Đang dùng" cách ô màu da ở mọi độ rộng; thẻ hiện thêm dòng gợi ý của món gốc
-  chưa có (hai ghi chú ở Đợt 2 và Đợt 3 ở trên).
+  chưa có (hai ghi chú ở Đợt 2 và Đợt 3 ở trên). Đợt sửa cuối — `c0dcdb2`: dòng gợi ý lấy chữ từ khoá `wardrobe.familyHint`
+  (`{{name}}: {{hint}}`, vi và en) thay cho dấu `: ` ghép trong mã; một test giữ rằng họ món chưa có món nào (mũ chóp) chỉ hiện
+  món gốc với dòng khoá của chính nó, không thêm dòng thứ hai.
 - **Bàn và sảnh (T4) — `e97cf34`:** lớp tối sau thẻ kết quả không còn bậc ở mép, tên phòng chỉ có `title` khi bị cắt và đang
   rê chuột, thẻ phòng hẹp nhất được đo ở ba cỡ cửa sổ (ba ghi chú ở Plan 17 ở trên), và lỗi cuộn ngang ở 320 px (bảng bên dưới).
-- **Nhân vật (T5) — `651e47b`, `bcac539`, `e16852a`.** Tranh không đổi.
+- **Nhân vật (T5) — `651e47b`, `bcac539`, `e16852a`; vòng sửa 1 `888831f`; đợt sửa cuối `3df003d`.** Bước đầu chỉ thêm mặt nạ,
+  tranh không đổi; hai vòng sửa sau đổi bốn ảnh lớp có chủ đích (xem mục cuối).
   - Mỗi lớp tóc trước (L60) thật và mỗi bộ quần áo v4 có thêm một **mặt nạ da** của riêng nó, `<lớp>_skinmask@1x/@2x.png`
     (`masks.skin`), cắt bằng `layerSkinMask`: 32 mặt nạ mới (8 tóc, 8 áo) và 16 mặt nạ tóc cắt lại (nay là mực trừ phần da).
-    Không ảnh lớp nào đổi: `git diff` chỉ có mặt nạ và manifest.
+    Ở bước này không ảnh lớp nào đổi: `git diff` chỉ có mặt nạ và manifest.
   - Chế độ tô thứ tư của kit, `ratio`: giữ sắc độ và độ bão hoà của tông, độ sáng HSL từng điểm nhân với (độ sáng tông ÷ `meanL`
     của da). `recolour` cộng dịch nên bị kẹp về đen ở tông sâu và để lại chấm tối. `layersFor` tô nó sau màu của lớp và trước nét
     viền; server liệt kê `tint.layerSkin` của mỗi thân.
-  - Áo: mặt nạ chỉ chứa mu bàn chân (long bào 549 px, một chiếc; áo dài Tết nữ 219 + 218, nam 142 + 153); các bộ khác để rỗng.
-    Viền vàng của áo Tết không bị lấy nhầm (vàng có C* 50–65, ngưỡng mọc thêm là 48). Phần mọc thêm tối đa 4 px là bóng của gấu
-    áo và hài trên mu bàn chân; thiếu nó còn lại một viền hồng nhạt quanh đó.
+  - Áo: mặt nạ chỉ chứa mu bàn chân (long bào 577 px, một chiếc, gồm cả lưỡi liềm 26 px vẽ đè lên nét viền của thân từ vòng
+    sửa 1; áo dài Tết nữ 219 + 218, nam 142 + 154); các bộ khác để rỗng. Viền vàng không bị lấy nhầm, nhờ hai luật: khoảng cách
+    tới bảng màu của áo giữ mép vàng sẫm (C* 43–48, cách mu bàn chân 2–4 px) ở ngoài, còn trần C* 48 giữ thân viền vàng
+    (C* 50–65) ở ngoài. Phần mọc thêm tối đa 4 px là bóng của gấu áo và hài trên mu bàn chân; thiếu nó còn lại một viền hồng
+    nhạt quanh đó.
   - Đo ở `@2x` dưới nâu `#643e2b` và `#9c6140`, số điểm sáng ở chân tóc trước → sau: spiky 164 → 0 và 177 → 0, bob 180 → 0 và
     199 → 1, hime 94 → 0 và 96 → 0, neat 64 → 0 và 70 → 0, curly 53 → 0 và 59 → 0, tousled 69 → 0 và 71 → 0, ponytail 35 → 0 và
-    36 → 0 (mỗi kiểu giảm ≥ 99 %). Kiểu gợn sóng đo 0 → 0; mặt nạ của nó chỉ có 255 px đầu sợi mềm, phần rõ để rỗng.
-  - Tông tự nhiên giữ nguyên từng byte: 65 thẻ tự nhiên của bảng duyệt không đổi, ảnh đầu trước và sau giống hệt. Khi chỉ đổi màu
-    tóc, mọi điểm ảnh đổi đều nằm trong mặt nạ da. `avatar:check` 1560 kiểm, 0 lỗi (C11 thêm hai cặp: da với tóc, da với màu tô).
-    Chi tiết: `docs/avatar-2d.md` §4.4.1.
+    36 → 0 (mỗi kiểu giảm ≥ 99 %). Kiểu gợn sóng đo 0 → 0; mặt nạ của nó chỉ có đầu sợi mềm (245 px, 255 trước đợt sửa cuối),
+    phần rõ để rỗng.
+  - Ở bước mặt nạ, tông tự nhiên giữ nguyên từng byte: 65 thẻ tự nhiên của bảng duyệt không đổi, ảnh đầu trước và sau giống hệt.
+    Khi chỉ đổi màu tóc, mọi điểm ảnh đổi đều nằm trong mặt nạ da. `avatar:check` 1560 kiểm, 0 lỗi (C11 thêm hai cặp: da với tóc,
+    da với màu tô). Chi tiết: `docs/avatar-2d.md` §4.4.1.
+  - Vòng sửa 1 và đợt sửa cuối: ba đường nối trong tranh, thấy khi review, được người điều phối cho vào phạm vi (ở tông tự nhiên
+    chúng cũng đổi, có chủ đích).
+    - Nửa sau của tóc gợn sóng (L20) nay sáng như nửa trước. Pipeline từng tô lại mỗi nửa theo `meanL` riêng của nó, nên nửa sau
+      sáng hơn 0,089 và lộ qua một khấc của đường chia thành hai hình chữ nhật sáng ở thái dương, ở mọi tông. Nay cả hai nửa tô
+      theo độ sáng tham chiếu của nửa trước; bước nhảy độ sáng chỗ hai nửa gặp nhau 0,097 → 0,008.
+    - Lớp tóc trước của hime, đuôi ngựa và gợn sóng không còn bản sao nét viền của thân bên dưới đầu (`bodyLineCopy`): hime
+      2 356 px (vòng sửa 1), đuôi ngựa 102 px và gợn sóng 103 px (đợt sửa cuối). Đó là những đường mảnh nâu cam và xanh than dọc
+      vai và tay áo tuxedo, đồng phục chia bài và long bào. Đợt sửa cuối giữ lại đầu lọn tóc vắt qua hàng cuối của đầu: với
+      luật cũ, kiểu gợn sóng mất 49 px đầu lọn ở cổ (152 px thay vì 103).
+    - Viền mu bàn chân trái của long bào: lưỡi liềm hồng đào 26 px vẽ đè lên nét viền của thân nay theo tông da.
 
 | # | Mức | Mô tả | Nguyên nhân / hướng | Trạng thái |
 |---|---|---|---|---|
@@ -439,7 +461,7 @@ Ghi chú kỹ thuật:
 | P20-2 | P3 | Sảnh ở 320 px cuộn ngang 14 px, nút "Tạo phòng" nhô ra ngoài cửa sổ (đầu phải ở x = 334). Thấy 05/10 khi đo thẻ phòng hẹp nhất | tiêu đề 154 + nút 124 + sàn của đường kẻ 24 + hai khoảng cách = 326 px, trong khi sảnh chỉ để lại 304 px | đã sửa — `e97cf34`: `.sectionHead` cho xuống dòng, dưới khoảng 342 px nút nằm dưới tiêu đề, từ 342 px vẫn một dòng; Lite dùng chung, đo 320/320 |
 | P20-3 | P3 | Chữ gợi ý (placeholder) của ô nhập dưới AA: Lite 3,43:1, Normal giao diện sáng 3,29:1 | `::placeholder` chỉ ở 76 % `--ink-muted` | đã sửa — `fc306c3`, `fa88116`: 94 % `--ink-muted` và `opacity: 1` (Firefox vẽ `::placeholder` ở 0,54); nay Lite 5,03, Normal 4,69 sáng và 6,82 tối |
 | P20-4 | P3 | Hai ô ở form vào phòng của kit (mã phòng, mật khẩu) hiện chữ gợi ý mặc định của trình duyệt, `#757575`: 3,98:1 sáng, 4,11:1 tối | không có luật `::placeholder` nào | đã sửa — `fa88116`: cùng luật 94 % và `opacity: 1`; test `placeholderColour` mô hình trình duyệt khó nhất |
-| P20-5 | P3 | Tông nâu và nâu đậm: đốm kem và một đường sáng răng cưa dọc chân tóc (rõ nhất ở spiky, neat, curly); mu bàn chân kem trong hài long bào và áo dài Tết (mục "mới thấy" ở Đợt 3) | tranh tóc và quần áo vẽ lại một phần da của thân; bước tách "da của thân" lúc nhập chỉ bỏ phần vẽ lại chạm vào da mà lớp để trống, nên phần còn lại ở trong lớp tóc hay áo, nơi màu da không với tới | đã sửa — `651e47b`, `bcac539`, `e16852a` (ghi chú T5 ở trên) |
+| P20-5 | P3 | Tông nâu và nâu đậm: đốm kem và một đường sáng răng cưa dọc chân tóc (rõ nhất ở spiky, neat, curly); mu bàn chân kem trong hài long bào và áo dài Tết (mục "mới thấy" ở Đợt 3) | tranh tóc và quần áo vẽ lại một phần da của thân; bước tách "da của thân" lúc nhập chỉ bỏ phần vẽ lại chạm vào da mà lớp để trống, nên phần còn lại ở trong lớp tóc hay áo, nơi màu da không với tới | đã sửa — `651e47b`, `bcac539`, `e16852a`, cộng `888831f` (lưỡi liềm ở mu bàn chân long bào) (ghi chú T5 ở trên) |
 
 **Ngoài phạm vi Plan 20**, mỗi mục một lý do:
 - Tính năng roadmap, không phải lỗi: người chơi tự đăng ảnh đại diện (R1), thông báo qua email (No7, spec §34 mục 14), web font
@@ -453,5 +475,7 @@ Ghi chú kỹ thuật:
 - Ghi chú pipeline "cắt lại một ảnh lệch 1–2 px": chuyện tái lập, không phải lỗi người chơi nhìn thấy.
 
 **Còn lại sau Plan 20**, đã ghi ở `docs/known-limitations.md` và `docs/ui-kit.md`: bảng `ledger_keys` không được dọn; vài chấm
-sáng nhỏ ở tông sâu (điểm nhấn trắng vẽ sẵn trên mu bàn chân áo Tết, vài điểm mép sợi gần màu tóc sáng); huy hiệu xanh ngọc
+sáng nhỏ ở tông sâu (điểm nhấn trắng vẽ sẵn trên mu bàn chân áo Tết, vài điểm mép sợi gần màu của một kiểu tóc sáng, điểm nhấn
+cam nhạt vẽ sẵn của chính tóc đuôi ngựa, và hai chấm mờ của long bào: 5 px dưới mép trái gấu áo, không qua kiểm bảng màu, và
+3 px nằm ngoài cả da lẫn nét viền của thân, chỉ thấy khi phóng 8× ở tông sâu); huy hiệu xanh ngọc
 ở dòng đầu của một bảng tối `.panel.ink` rất cao sẽ rơi xuống 4,3–4,4:1, và hiện không chỗ nào đặt như vậy.

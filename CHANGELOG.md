@@ -50,9 +50,25 @@ no protocol change and there is one additive migration: `0003_ledger_keys`, a ne
     the royal robe's and the Tết áo dài's slippers: those pictures repaint some of the body's skin, which no skin colour
     reached.
   - Every real front hair and every v4 outfit gets a skin mask of its own (32 new masks, 16 hair masks re-cut; no picture
-    changed), painted by a fourth tint mode, `ratio`. The hairline specks drop by 99 % or more (the wavy style had none
-    to drop); the natural tone is byte for byte what it was.
-  - A few light specks remain at deep tones, as drawn white highlights and strand edges close to a light hair's colour.
+    changed by this step), painted by a fourth tint mode, `ratio`. The hairline specks drop by 99 % or more (the wavy
+    style had none to drop); this step leaves the natural tone byte for byte what it was.
+  - The royal robe's left instep kept a peach rim where its shadow was drawn over the body's outline; it takes the tone
+    now too.
+  - Three seams in the art itself, found in review, are mended, and these do change the natural tone:
+    - the wavy hairstyle's back half has its front's lightness: the pipeline recolours both halves against the front's
+      reference, so the two light rectangles that showed at the temples at every tone are gone;
+    - the hime's, the ponytail's and the wavy's front layers no longer carry a copy of the body's line below the head,
+      which drew thin orange-brown lines along an outfit's shoulders and sleeves (2 356, 102 and 103 px). The step that
+      finds it keeps a lock's end that hangs across the head's last row.
+  - A few light specks remain at deep tones, all drawn by the pictures themselves: the Tết insteps' white highlights,
+    strand edges close to a light hair's colour, the ponytail's own light-orange highlights, and two faint leftovers on
+    the royal robe (5 px and 3 px, seen only at 8×).
+- **Logs and labels.**
+  - A room that closes while an earlier carry-over release still fails now also logs the newer pot it cannot release
+    (`carry-over not released at close`, with the room and the amount) instead of losing it from the books unsaid.
+  - A buy-in refund that fails at shutdown is logged as `shutdown settlement failed`, with its key and the buy-in,
+    rather than as a cash-out with `stack: 0`.
+  - The locked original's hint line in the wardrobe is worded by a `wardrobe.familyHint` template in both languages.
 
 ---
 

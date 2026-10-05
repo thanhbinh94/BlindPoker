@@ -341,9 +341,16 @@ skin tones are the cream body recoloured through a skin mask, not six drawings. 
 tone (a fifth mask, `skinLine`, 2026-10-05: darker by the tone's lightness over the cream's, never lighter), so a
 brown or deep hand no longer carries the cream's orange rim; and the skin that a hair or outfit picture redrew — the
 forehead between strands, the instep inside a slipper — takes the tone too (Plan 20: the `ratio` tint of a mask of
-its own). The natural tone is exactly what it was. What a tint still leaves alone is a near-white highlight under
-chroma 8, which stays white, as the body's own do: at deep tones a few light specks remain — the Tết insteps' drawn
-highlights, and a handful of strand-edge pixels within ΔE 10 of a light hair's own colour. Hairstyles belong to a
+its own; the royal robe's instep shadow drawn over the body's outline included). Plan 20 also mended three seams in
+the art itself, which change the natural tone on purpose: the wavy hairstyle's back half has its front's lightness
+(the pipeline recolours both halves against the front's reference, so the two light rectangles at the temples are
+gone), and the hime's, the ponytail's and the wavy's front layers no longer carry a copy of the body's line below
+the head (thin orange-brown lines along an outfit's shoulders and sleeves). What a tint still leaves alone is what a
+picture drew as its own: at deep tones a few light specks remain, visible when zoomed — the Tết insteps' drawn white
+highlights (under chroma 8, which stays white, as the body's own highlights do), a handful of strand-edge pixels
+within ΔE 10 of a light hair's own colour, the ponytail's own light-orange highlights, and two faint leftovers on
+the royal robe (5 px under the hem's left side, which the palette check keeps out, and 3 px outside the body's skin
+and line), the last two seen only at 8×. Hairstyles belong to a
 gender (four each); there is no hairstyle both genders can wear, and no rare hairstyle exists yet (the system
 allows one: a hairstyle is an item).
 *Why it stays:* the user chose one new pose for this round (spec 2026-10-03 Q1) and a tint over six drawn bodies
