@@ -1395,6 +1395,92 @@ export async function describeColours({ dir, manifest, names, items = [], log = 
   return lines
 }
 
+// ─────────────────────────────────────────────────────────────── hair clip ──
+
+/**
+ * The hats a hairstyle is clipped under (2026-10-06): the ones that cover the crown. Since Plan 19 every hairstyle's L60
+ * is the whole crown and no hat hides a hair layer, so whatever hair stands above the head — the ponytail's tie, the
+ * spiky cut's spikes, the tousled cut's tuft, the bob's ahoge, the wavy cut's volume — rose through the beret, the
+ * beanie and the nón lá. The top hat, the visor, the crown and the party cone sit on the hair rather than over it, and
+ * a high ponytail rising behind the small top hat reads as one; clipping there cuts the tail flat. `open` and `feather`
+ * are @2x pixels: the hat's main shape is its solid ink opened by `open`, so a chin strap or a beret's stalk is not a
+ * hat edge, and the clip's edge is softened over `feather`.
+ */
+export const HAIR_CLIP = { hats: ['beanie01', 'beret_red01', 'conical_hat01'], open: 4, feather: 1 }
+
+/** Whether `parsed` (a `parseName`) names a hat in `HAIR_CLIP` — one `writeMasks` cuts a hair clip for, and C11 requires it of. */
+export function clipsHair(parsed) {
+  return parsed?.kind === 'item' && parsed.slot === 'head' && HAIR_CLIP.hats.includes(parsed.code)
+}
+
+/**
+ * Where a hairstyle may still show under `hat` (2026-10-06), as 0–255 a pixel: 255 where hair is drawn as it is, 0 where
+ * the hat covers it, so the kit can use it as the hair layers' CSS mask as it stands. Hair cannot be above a covering
+ * hat's lower edge — the hat sits on the head there — so a column the hat's main shape reaches is clipped above that
+ * shape's lowest pixel, and a column beside the hat above the lowest pixel of the hat's nearest side column: hair that
+ * comes out from under a hat comes out below its edge. (Only the beside-the-hat part shows: above the edge within the
+ * hat, the hat is drawn over the hair anyway.) A column inside the hat that its main shape misses takes the higher of
+ * its two neighbours' edges. A hat with no main shape at all clips nothing.
+ *
+ * Measured on the three hats (@2x): the nón lá's shape spans x 188–578 with its brim's ends at y 339–340, the beanie's
+ * 225–540 with its cuff's corners at 345 and 329, the beret's 284–555 from 202 to 295.
+ *
+ * @param {{ data: Buffer, width: number, height: number }} hat
+ * @param {{ open?: number, feather?: number }} [options]
+ * @returns {Uint8Array}
+ */
+export function hairClipMask(hat, { open = HAIR_CLIP.open, feather = HAIR_CLIP.feather } = {}) {
+  const { width, height, data } = hat
+  const solid = new Uint8Array(width * height)
+  for (let i = 0; i < solid.length; i++) solid[i] = data[i * 4 + 3] > ALPHA_SOLID ? 1 : 0
+  const shape = open > 0 ? dilate(erode(solid, width, height, open), width, height, open) : solid
+  const bottom = new Int32Array(width).fill(-1)
+  for (let x = 0; x < width; x++) {
+    for (let y = height - 1; y >= 0; y--) if (shape[y * width + x]) { bottom[x] = y; break }
+  }
+  const keep = new Uint8Array(width * height).fill(255)
+  const reached = [...bottom.keys()].filter((x) => bottom[x] >= 0)
+  if (reached.length === 0) return keep
+  const lo = reached[0]
+  const hi = reached[reached.length - 1]
+  const edge = new Int32Array(width)
+  for (let x = 0; x < width; x++) {
+    if (x < lo) edge[x] = bottom[lo]
+    else if (x > hi) edge[x] = bottom[hi]
+    else if (bottom[x] >= 0) edge[x] = bottom[x]
+    else {
+      let left = x
+      while (bottom[left] < 0) left--
+      let right = x
+      while (bottom[right] < 0) right++
+      edge[x] = Math.min(bottom[left], bottom[right])
+    }
+  }
+  const hidden = new Uint8Array(width * height)
+  for (let x = 0; x < width; x++) for (let y = 0; y < edge[x]; y++) hidden[y * width + x] = 255
+  if (feather <= 0) {
+    for (let i = 0; i < keep.length; i++) keep[i] = 255 - hidden[i]
+    return keep
+  }
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let sum = 0
+      let n = 0
+      for (let dy = -feather; dy <= feather; dy++) {
+        for (let dx = -feather; dx <= feather; dx++) {
+          const nx = x + dx
+          const ny = y + dy
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue
+          sum += hidden[ny * width + nx]
+          n++
+        }
+      }
+      keep[y * width + x] = 255 - Math.round(sum / n)
+    }
+  }
+  return keep
+}
+
 // ──────────────────────────────────────────────────────────────── writing ──
 
 /** A v4 outfit layer, cut on a body (`cutOn`), whose copy of that body's outline a skin colour shades (2026-10-05). */
@@ -1404,7 +1490,7 @@ function isOutfitOnBody(parsed, entry) {
 
 /**
  * Every manifest name `writeMasks` can cut a mask for: every tintable item, every v4 outfit cut on a body (its copy of
- * the body's outline, 2026-10-05) and (Plan 19) every real v4 body, body face and hair layer that is not marked empty. A
+ * the body's outline, 2026-10-05), every hat in `HAIR_CLIP` (2026-10-06) and (Plan 19) every real v4 body, body face and hair layer that is not marked empty. A
  * stand-in's masks are drawn with it, never cut. (The flat bases' L30, L60 and faces were targets too, until the
  * switch-over retired them, D1.)
  */
@@ -1414,7 +1500,7 @@ export function maskTargets(manifest) {
     if (!entry?.real) continue
     const parsed = parseName(name)
     if (!parsed) continue
-    if (parsed.kind === 'item' && (entry.tintSeed || isOutfitOnBody(parsed, entry))) {
+    if (parsed.kind === 'item' && (entry.tintSeed || isOutfitOnBody(parsed, entry) || clipsHair(parsed))) {
       names.push(name)
     } else if (parsed.kind === 'body' || parsed.kind === 'bodyFace' || parsed.kind === 'hair') {
       if (!entry.empty) names.push(name)
@@ -1458,11 +1544,12 @@ export async function readHandMask(file, width, height) {
 }
 
 /**
- * `hair`/`eyes`/`tint`/`skin`/`skinLine` in the manifest (`entry.masks`) are `hairmask`/`eyemask`/`tintmask`/
- * `skinmask`/`skinlinemask` on disk (spec §4.1: file names say "eye", the manifest says "eyes"; Plan 19 adds skin,
- * spec §5.5, and 2026-10-05 the skin's line art) — the one place the two spellings have to meet.
+ * `hair`/`eyes`/`tint`/`skin`/`skinLine`/`hairClip` in the manifest (`entry.masks`) are `hairmask`/`eyemask`/
+ * `tintmask`/`skinmask`/`skinlinemask`/`hairclipmask` on disk (spec §4.1: file names say "eye", the manifest says
+ * "eyes"; Plan 19 adds skin, spec §5.5, 2026-10-05 the skin's line art and 2026-10-06 a covering hat's hair clip) — the
+ * one place the two spellings have to meet.
  */
-export const MASK_FILE_KIND = { hair: 'hair', eyes: 'eye', tint: 'tint', skin: 'skin', skinLine: 'skinline' }
+export const MASK_FILE_KIND = { hair: 'hair', eyes: 'eye', tint: 'tint', skin: 'skin', skinLine: 'skinline', hairClip: 'hairclip' }
 
 /**
  * The mask to write for one `<name>_<kind>` (`kind` a manifest key: `hair`, `eyes`, `tint` or `skin`): a hand-drawn
@@ -1557,6 +1644,9 @@ async function writtenUnion(dir, name, entry, kinds) {
  * gives, and an outfit whose body has no such masks on disk is refused. Re-cutting a body does not re-cut the outfits
  * cut on it: name them in the same run (`masks body_f_L30 item_outfit_…`) when the body's line moves.
  *
+ * 2026-10-06: a hat in `HAIR_CLIP` gets **hairClip** — where a hairstyle may still show under it (`hairClipMask`), the
+ * one mask that is not a region of its own layer: the kit draws both hair layers through it.
+ *
  * 2026-10-05: a v4 outfit and a real front hair (L60) also get **skin** — the skin their picture redrew
  * (`layerSkinMask`) — the outfit's against its body's skin, after its line and clear of its tint and line as written;
  * the hair's against its gender's body and neutral face skin, which are then required on disk as an outfit's body
@@ -1591,6 +1681,10 @@ export async function writeMasks({ dir, manifest, names, overridesDir = MASK_OVE
         const exclude = await writtenUnion(dir, name, entry, ['tint', 'skinLine'])
         const redrawn = layerSkinMask(layer2x, { kind: 'outfit', body, skin, line: reference.line, exclude })
         await writeOneMask({ dir, name, kind: 'skin', computed: redrawn, layer2x, entry, manifest, overridesDir, log })
+      }
+      if (clipsHair(parsed)) {
+        // Its `meanL` would be the hat's lightness under a mask that lies mostly off the hat: nothing is painted by it.
+        await writeOneMask({ dir, name, kind: 'hairClip', computed: hairClipMask(layer2x), layer2x, entry, manifest, overridesDir, log, meanL: 0 })
       }
       continue
     }

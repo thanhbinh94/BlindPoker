@@ -1743,6 +1743,32 @@ describe('the v4 review sheet and the fit sheet (Plan 19 A1d, spec §5.6)', () =
     }
   })
 
+  it('draws both hair layers through a covering hat’s clip on the fit sheet, and says so in its caption (2026-10-06)', async () => {
+    const fit = fitCards(committed) as { names: string[]; hair: string; item: string; caption: string[] }[]
+    const card = (item: string, hair: string) => fit.find((c) => c.item === item && c.hair === hair)!
+    for (const code of ['beanie01', 'beret_red01', 'conical_hat01']) expect(card(itemFile('head', code, 80), 'f_bob01').caption[1]).toBe(`${code} · clips hair`)
+    for (const code of ['tophat01', 'dealer_visor01', 'crown_gold01', 'party_cone01']) expect(card(itemFile('head', code, 80), 'f_bob01').caption[1]).toBe(`${code} · hides none`)
+
+    // The ponytail's tie stood above the nón lá: drawn without the clip, gone with it, and nothing else moves.
+    const hat = 'item_head_conical_hat01_L80'
+    const { masks: _masks, ...unmasked } = committed.files[hat]!
+    const ponytail = card(hat, 'f_ponytail01')
+    const [withClip, without] = await Promise.all([
+      composeCard(ponytail, { dir: OUT_DIR, manifest: committed }),
+      composeCard(ponytail, { dir: OUT_DIR, manifest: { ...committed, files: { ...committed.files, [hat]: unmasked } } }),
+    ])
+    const clip = await readPicture(join(OUT_DIR, `${hat}_hairclipmask@1x.png`))
+    let changed = 0
+    let kept = 0
+    for (let p = 0; p < clip.width * clip.height; p++) {
+      if (![0, 1, 2, 3].some((c) => withClip.data[p * 4 + c] !== without.data[p * 4 + c])) continue
+      changed++
+      if (clip.data[p * 4 + 3] === 255) kept++
+    }
+    expect(changed, 'the tie is clipped').toBeGreaterThan(500)
+    expect(kept, 'a pixel changed where the clip keeps the hair').toBe(0)
+  })
+
   it('paints a tone over skin and its line art only: the body, its face, the outfit’s copy of the outline and the hair’s redrawn skin, by their masks', async () => {
     const cards = grid(sheetCards(committed, { items: skinItems, hairs: ['f_bob01'], outfits: ['casual01'] }))
     const [porcelain, natural, deep] = await Promise.all(cards.map((card) => composeCard(card, { dir: OUT_DIR, manifest: committed })))

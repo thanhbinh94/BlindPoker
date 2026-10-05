@@ -13,6 +13,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { runChecks } from '../scripts/avatar-pipeline/checks.mjs'
 import {
   HAIR_BODY_LINE,
+  HAIR_CLIP,
   LAYER_SKIN,
   OUTFIT_LINE,
   bodyLineCopy,
@@ -21,6 +22,7 @@ import {
   eyeEllipses,
   eyeMask,
   eyeZone,
+  hairClipMask,
   hairMask,
   labOf,
   layerSkinMask,
@@ -1463,6 +1465,118 @@ describe('maskTargets', () => {
       },
     }
     expect(maskTargets(manifest).sort()).toEqual(['body_f_L30', 'body_f_face_happy_L50', 'item_hair_f_bob01_L20', 'item_hair_f_bob01_L60'])
+  })
+})
+
+// ──────────────────────────────────────────────────────────────── hair clip ──
+
+describe('hairClipMask and a covering hat’s hair clip (2026-10-06)', () => {
+  let temp = ''
+  let overridesDir = ''
+
+  beforeAll(() => {
+    temp = mkdtempSync(join(tmpdir(), 'avatar-hairclip-'))
+    overridesDir = join(temp, 'overrides')
+    mkdirSync(overridesDir, { recursive: true })
+  })
+  afterAll(() => rmSync(temp, { recursive: true, force: true }))
+
+  /** A hat: a trapezoid from x 200 to 568 whose lowest row is y 339, and a 3 px chin strap hanging from it to y 450. */
+  async function hatPicture(): Promise<Picture> {
+    return renderSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">` +
+        `<polygon points="200,340 568,340 450,200 318,200" fill="#d8c08a"/><rect x="250" y="340" width="3" height="110" fill="#5a3a20"/></svg>`,
+      W,
+      H,
+    )
+  }
+  const at = (mask: Uint8Array, x: number, y: number) => mask[y * W + x]
+
+  it('hides hair above the hat’s lower edge, within the hat and beside it, and nowhere below it — the strap is not an edge', async () => {
+    const keep = hairClipMask(await hatPicture())
+    expect(at(keep, 384, 100), 'above the hat').toBe(0)
+    expect(at(keep, 384, 330), 'behind the hat').toBe(0)
+    expect(at(keep, 384, 345), 'below the edge').toBe(255)
+    expect(at(keep, 251, 400), 'beside the strap, below the edge').toBe(255)
+    expect(at(keep, 100, 300), 'beside the hat, above its end’s edge').toBe(0)
+    expect(at(keep, 700, 300), 'beside the hat on the other side').toBe(0)
+    expect(at(keep, 100, 360), 'beside the hat, below its end’s edge').toBe(255)
+    expect(keep.subarray(345 * W).filter((v) => v !== 255).length, 'hidden pixels below the edge').toBe(0)
+    // The edge is softened over `feather`: a row of partial values where hidden meets kept.
+    const edge = [...Array(10).keys()].map((d) => at(keep, 384, 334 + d)!)
+    expect(edge.some((v) => v > 0 && v < 255), `edge ${edge.join(',')}`).toBe(true)
+    expect(HAIR_CLIP.feather).toBeGreaterThan(0)
+  })
+
+  it('clips nothing for a hat with no main shape — a strap alone is opened away', async () => {
+    const strap = await renderSvg(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><rect x="250" y="340" width="3" height="110" fill="#5a3a20"/></svg>`, W, H)
+    expect(hairClipMask(strap).every((v) => v === 255)).toBe(true)
+  })
+
+  it('is cut for the hats in HAIR_CLIP and no other, at both densities, recorded with meanL 0', async () => {
+    expect([...HAIR_CLIP.hats].sort()).toEqual(['beanie01', 'beret_red01', 'conical_hat01'])
+    const targets = maskTargets({
+      files: {
+        item_head_beanie01_L80: { real: true, layer: 80 },
+        item_head_tophat01_L80: { real: true, layer: 80 },
+        item_head_crown_gold01_L80: { real: true, layer: 80 },
+      },
+    })
+    expect(targets).toEqual(['item_head_beanie01_L80'])
+
+    const where = join(temp, 'write')
+    mkdirSync(where, { recursive: true })
+    const hat = 'item_head_conical_hat01_L80'
+    await writePicture(await hatPicture(), join(where, `${hat}@2x.png`))
+    const manifest = { files: { [hat]: { real: true, layer: 80 } } } as unknown as Manifest
+    await writeMasks({ dir: where, manifest, names: [hat], overridesDir })
+    expect(Object.keys(manifest.files[hat]!.masks!)).toEqual(['hairClip'])
+    expect(manifest.files[hat]!.masks!.hairClip!.meanL).toBe(0)
+    for (const density of [1, 2]) expect(existsSync(join(where, `${hat}_hairclipmask@${density}x.png`)), `@${density}x`).toBe(true)
+    const written = await readPicture(join(where, `${hat}_hairclipmask@2x.png`))
+    expect(written.data[(100 * W + 384) * 4 + 3]).toBe(0)
+    expect(written.data[(400 * W + 384) * 4 + 3]).toBe(255)
+  })
+
+  it('C11 requires the clip of a hat in HAIR_CLIP, and holds it to hiding some hair, none below the hat, on a covering hat only', async () => {
+    const where = join(temp, 'c11')
+    mkdirSync(where, { recursive: true })
+    const hat = 'item_head_conical_hat01_L80'
+    await writePicture(await hatPicture(), join(where, `${hat}@2x.png`))
+    const manifest = { files: { [hat]: { real: true, layer: 80 } } } as unknown as Manifest
+    const c11Of = async (m: Manifest, name = hat) => (await runChecks({ dir: where, manifest: m, names: [name] }))[0]!.results.find((r) => r.id === 'C11')!
+
+    const uncut = await c11Of(manifest)
+    expect(uncut.ok).toBe(false)
+    expect(uncut.detail).toContain('no hairClip mask cut for this real layer')
+
+    await writeMasks({ dir: where, manifest, names: [hat], overridesDir })
+    const cut = await c11Of(manifest)
+    expect(cut.ok, cut.detail).toBe(true)
+
+    const clipFile = join(where, `${hat}_hairclipmask@2x.png`)
+    const clip = await readPicture(clipFile)
+    const low = { ...clip, data: Buffer.from(clip.data) }
+    low.data[(600 * W + 384) * 4 + 3] = 0
+    await writePicture(low, clipFile)
+    const below = await c11Of(manifest)
+    expect(below.ok).toBe(false)
+    expect(below.detail).toContain("below the hat's lowest solid row")
+
+    const open = { ...clip, data: Buffer.from(clip.data) }
+    for (let i = 3; i < open.data.length; i += 4) open.data[i] = 255
+    await writePicture(open, clipFile)
+    const none = await c11Of(manifest)
+    expect(none.ok).toBe(false)
+    expect(none.detail).toContain('hides no hair')
+
+    // The same clip on the top hat, which is not in HAIR_CLIP.
+    const tophat = 'item_head_tophat01_L80'
+    await writePicture(await hatPicture(), join(where, `${tophat}@2x.png`))
+    await writePicture(clip, join(where, `${tophat}_hairclipmask@2x.png`))
+    const stray = await c11Of({ files: { [tophat]: { real: true, layer: 80, masks: { hairClip: { bytes2x: 1, meanL: 0 } } } } } as unknown as Manifest, tophat)
+    expect(stray.ok).toBe(false)
+    expect(stray.detail).toContain('not a hat in HAIR_CLIP')
   })
 })
 
