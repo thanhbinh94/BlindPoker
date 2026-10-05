@@ -1,4 +1,4 @@
-import { AA, NON_TEXT, THEME_PALETTES, contrast, declarationsOf, declarationsUsing, over, parseColor, toHex, tokensOf } from '@bp/ui-kit/testing'
+import { AA, NON_TEXT, THEME_PALETTES, contrast, declarationsOf, declarationsUsing, over, parseColor, placeholderColour, toHex, tokensOf } from '@bp/ui-kit/testing'
 import { describe, expect, it } from 'vitest'
 import LITE_CSS from './lite.module.css?raw'
 
@@ -61,16 +61,17 @@ describe('the Lite ticket (parchment island)', () => {
 
   /**
    * The name field is a translucent white over the paper, and its placeholder a share of `--ink-muted` — at 76 % it
-   * was 3.44:1 on the darker end. A placeholder is text, and the one a first-time player reads to learn what to type.
+   * was 3.44:1 on the darker end. A placeholder is text, and the one a first-time player reads to learn what to type;
+   * it is held in any engine (Firefox draws a placeholder at opacity 0.54 unless the rule says otherwise).
    */
   it('prints the name field’s placeholder at AA, on either end of the paper and under either theme', () => {
     const field = declarationsOf(LITE_CSS, /^\.input$/).background!
-    const placeholder = declarationsOf(LITE_CSS, /^\.input::placeholder$/).color!
+    const placeholder = declarationsOf(LITE_CSS, /^\.input::placeholder$/)
     for (const theme of ['dark', 'light'] as const) {
       const palette = ticketUnder(theme)
       for (const [end, paper] of Object.entries(PAPER)) {
         const ground = over(parseColor(field, palette), paper)
-        const text = over(parseColor(placeholder, palette), ground)
+        const text = over(placeholderColour(placeholder, palette), ground)
         const ratio = contrast(text, ground)
         expect(ratio, `${theme}: the placeholder ${text} on the field ${ground} (paper's ${end}) is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA)
       }

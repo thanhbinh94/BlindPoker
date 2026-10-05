@@ -4,7 +4,7 @@ import LOBBY_CSS from '../lobby/lobby.module.css?raw'
 import PRIMITIVES_CSS from '../primitives/primitives.module.css?raw'
 import SCREENS_CSS from '../screens/screens.module.css?raw'
 import TABLE_CSS from '../table/table.module.css?raw'
-import { AA, NON_TEXT, THEME_PALETTES, contrast, declarationsOf, declarationsUsing, over, parseColor, toHex, tokensOf } from './contrast.js'
+import { AA, NON_TEXT, THEME_PALETTES, contrast, declarationsOf, declarationsUsing, over, parseColor, placeholderColour, toHex, tokensOf } from './contrast.js'
 import GLOBAL_CSS from './global.css?raw'
 import CSS from './tokens.css?raw'
 
@@ -299,6 +299,33 @@ describe('the red split: --red is the ink, --red-fill the paint', () => {
   })
 })
 
+describe('the contrast helpers', () => {
+  /** A vitest config that blanks `*.css?raw` hands every reader `''`, and a guard over no declarations passes. */
+  it('refuse an empty stylesheet, so a blanked *.css?raw cannot make a test pass on nothing', () => {
+    expect(() => declarationsOf('', /x/)).toThrow(/css\?raw/)
+    expect(() => tokensOf('  \n', /x/)).toThrow(/css\?raw/)
+    expect(() => declarationsUsing('', '--red')).toThrow(/css\?raw/)
+  })
+})
+
+describe('the kit’s text field placeholder', () => {
+  /**
+   * The lobby's fields — `JoinByCode`'s code and password — had no `::placeholder` rule, so the browser's own grey
+   * showed: `#757575`, 3.98:1 on the light `--bg` and 4.11 on the dark. A placeholder is text, and Firefox would draw
+   * even an AA colour at opacity 0.54 unless the rule says otherwise.
+   */
+  it('reaches AA on the field in either theme, in any engine', () => {
+    const field = declarationsOf(LOBBY_CSS, /^\.input$/)['background-color']!
+    const placeholder = declarationsOf(LOBBY_CSS, /^\.input::placeholder$/)
+    for (const theme of ['dark', 'light'] as const) {
+      const ground = toHex(parseColor(field, THEME_PALETTES[theme]))
+      const text = over(placeholderColour(placeholder, THEME_PALETTES[theme]), ground)
+      const ratio = contrast(text, ground)
+      expect(ratio, `${theme}: the placeholder ${text} on the field ${ground} is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA)
+    }
+  })
+})
+
 describe('the night surface', () => {
   /**
    * `night` above is this block read over the dark root, so a red the block forgot would pass as the dark root's —
@@ -342,10 +369,46 @@ describe('badge text', () => {
     ...declarationsOf(css, selector),
   })
 
+  /**
+   * The page is not flat `--bg` but `--bg-mesh`: radial washes over a linear gradient. The room header's badges sit
+   * at its top-left, under the first wash, which is centred above the page's top-left corner and so is strongest on
+   * the page at the top edge straight below its centre. Its alpha falls linearly from the centre to the stop where it
+   * turns transparent — `alpha × (1 − (−y / ry) / stop)` there — and it lies over the linear gradient's first stop.
+   * In the light theme that is `#f0e2d8`; the real build, sampled beside the header's badges, shows `#efe4d8`.
+   */
+  const meshTopLeft = (palette: Record<string, string>): string => {
+    const mesh = palette['--bg-mesh'] ?? ''
+    const wash = /^radial-gradient\(([\d.]+)% ([\d.]+)% at (-?[\d.]+)% (-?[\d.]+)%, (rgba\([^)]*\)), transparent ([\d.]+)%\)/.exec(mesh)
+    const first = /linear-gradient\(\d+deg, (#[0-9a-f]{6}) 0%/.exec(mesh)
+    if (wash === null || first === null) throw new Error(`--bg-mesh is no longer a radial wash over a linear gradient: ${mesh}`)
+    const [, , ry, x, y, colour, stop] = wash as unknown as [string, string, string, string, string, string, string]
+    if (Number(x) >= 50 || Number(y) > 0) throw new Error(`--bg-mesh's first wash is no longer above the top-left corner: ${wash[0]}`)
+    const [r, g, b, a] = parseColor(colour, {})
+    return over([r, g, b, a * Math.max(0, 1 - -Number(y) / Number(ry) / (Number(stop) / 100))], first[1]!)
+  }
+
+  /**
+   * `.panel.ink` lays a white highlight over `--bg-elev`, fading from its top edge to nothing at 42 % of the panel. A
+   * badge never sits on that edge: it is below the panel's padding, and in a titled panel below the title and its
+   * rule. Lite's "claimed" badge on the daily card, measured on the real build, sits where the highlight is 1.4 % at
+   * the badge's top edge and 0.8 % at its middle (none on a phone). Half the peak, 2 %, is the ground held here.
+   */
+  const inkPanelHighlight = (palette: Record<string, string>): string => {
+    const background = declarationsOf(PRIMITIVES_CSS, /^\.panel\.ink$/).background ?? ''
+    const highlight = /linear-gradient\(180deg, (rgba\([^)]*\)) 0%, transparent [\d.]+%\)/.exec(background)
+    if (highlight === null) throw new Error(`.panel.ink no longer lays a highlight over its ground: ${background}`)
+    const [r, g, b, a] = parseColor(highlight[1]!, {})
+    return over([r, g, b, a / 2], toHex(parseColor('var(--bg-elev)', palette)))
+  }
+
   const GROUNDS: Ground[] = [
     ...(['dark', 'light', 'night'] as const).flatMap((theme): Ground[] => [
       { where: `${theme} on --bg`, palette: THEME_PALETTES[theme], ground: 'var(--bg)' },
       { where: `${theme} on --bg-elev`, palette: THEME_PALETTES[theme], ground: 'var(--bg-elev)' },
+    ]),
+    ...(['dark', 'light'] as const).flatMap((theme): Ground[] => [
+      { where: `${theme} page under the room header (--bg-mesh)`, palette: THEME_PALETTES[theme], ground: meshTopLeft(THEME_PALETTES[theme]) },
+      { where: `${theme} .panel.ink under its highlight`, palette: THEME_PALETTES[theme], ground: inkPanelHighlight(THEME_PALETTES[theme]) },
     ]),
     ...(['dark', 'light'] as const).flatMap((theme): Ground[] => [
       ...ISLANDS.flatMap(({ name, css, selector }): Ground[] => [
@@ -358,20 +421,22 @@ describe('badge text', () => {
   ]
 
   /**
-   * Badges on record below AA, with the ratio measured when they were recorded — asserted both ways, like `BELOW_AA`.
+   * Badges on record below AA, with the ratio measured when they were recorded — none, now. Asserted both ways, like
+   * `BELOW_AA`: a badge that gets worse fails, and so does one that is fixed — fix it and delete its line.
    *
-   * `.panel.felt` keeps the night palette's teal, `#3f938a`, which even as plain ink is only 4.52:1 on the panel's own
-   * ground; drawn 17 % toward `--ink` and set on its own teal tint it reaches 4.45. No screen prints a badge on a
-   * felt panel — no screen uses the panel at all — so the share the page, the panels, the paper and the table are
-   * held to stays, and this is on record until the felt gets a teal of its own.
+   * (It held the teal badge on `.panel.felt`, 4.45:1 while teal was drawn 17 % toward `--ink`; at 20 % it reads.)
    */
-  const BADGES_BELOW_AA: Record<string, number> = {
-    '.badge.teal, .panel.felt (dark theme) on its --bg': 4.45,
-    '.badge.teal, .panel.felt (light theme) on its --bg': 4.45,
-  }
+  const BADGES_BELOW_AA: Record<string, number> = {}
 
   it('reads the table’s opaque tint out of its stylesheet', () => {
     expect(TABLE_TINT).toMatch(/^color-mix\(in srgb, currentColor \d+%, var\(--bg\)\)$/)
+  })
+
+  it('derives the page’s ground under the room header from --bg-mesh, where the real build shows it', () => {
+    // Sampled on the real build (light theme, beside the header's badges): #efe4d8. The model lands within two levels.
+    const [r, g, b] = parseColor(meshTopLeft(THEME_PALETTES.light), {})
+    const [sr, sg, sb] = parseColor('#efe4d8', {})
+    expect(Math.max(Math.abs(r - sr), Math.abs(g - sg), Math.abs(b - sb))).toBeLessThanOrEqual(2)
   })
 
   it('clears AA on its own tint, wherever a badge is printed, except the badges on record', () => {

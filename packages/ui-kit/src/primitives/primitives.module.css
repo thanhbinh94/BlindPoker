@@ -267,10 +267,11 @@
 }
 
 /* ---------- Badge ----------
-   12 px at weight 600 is not large text, so a badge's ink needs 4.5:1 on its own tint over whatever is under it. The
-   tints stay; the inks are drawn a little toward --ink instead — 17 % for teal, 14 % for gold, 8 % for the muted
-   grey — which is what lifts teal on a raised dark panel (3.8 → 4.6:1) and gold and grey on the paper's darker
-   end (4.0 → 4.6, 4.3 → 4.6). Red is the --red ink. The border and the table's opaque tint follow currentColor. */
+   12 px at weight 600 is not large text, so a badge's ink needs 4.5:1 on its own tint over whatever is under it — the
+   paper's darker end, the page's mesh where it is reddest (under the room header), a raised panel's highlight. The
+   tints stay; the inks are drawn toward --ink instead — 20 % for teal and gold, 12 % for the muted grey — so teal
+   reads 4.6:1 under a dark panel's highlight and gold and grey 4.7 and 4.6 on the light mesh, their worst grounds.
+   Red is the --red ink. The border and the table's opaque tint follow currentColor. */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -286,7 +287,7 @@
 }
 
 .badge.gold {
-  color: color-mix(in srgb, var(--gold) 86%, var(--ink));
+  color: color-mix(in srgb, var(--gold) 80%, var(--ink));
   background: var(--gold-soft);
 }
 
@@ -296,12 +297,12 @@
 }
 
 .badge.teal {
-  color: color-mix(in srgb, var(--teal) 83%, var(--ink));
+  color: color-mix(in srgb, var(--teal) 80%, var(--ink));
   background: color-mix(in srgb, var(--teal) 16%, transparent);
 }
 
 .badge.muted {
-  color: color-mix(in srgb, var(--ink-muted) 92%, var(--ink));
+  color: color-mix(in srgb, var(--ink-muted) 88%, var(--ink));
   background: color-mix(in srgb, var(--ink-muted) 14%, transparent);
 }
 

@@ -35,6 +35,11 @@ export function contrast(fg: string, bg: string): number {
  *  and would otherwise be read as part of the next selector). A block is everything between a selector and the next
  *  `}`, so a rule nested in an at-rule is read as its own block and the at-rule's head is never a selector. */
 function blocks(css: string): [string, string][] {
+  // A vitest config that does not let `*.css?raw` through hands over '' (or, for a CSS module, a class-name proxy):
+  // read as no declarations at all, every guard over them would pass on nothing.
+  if (typeof css !== 'string' || css.trim() === '') {
+    throw new Error('an empty stylesheet: the vitest config must let *.css?raw through (test.css.include)')
+  }
   return [...css.replaceAll(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => [
     (m[1] ?? '').replace(/\s+/g, ' ').trim(),
     m[2] ?? '',
@@ -162,6 +167,19 @@ export function over(fg: Rgba, bg: string | Rgba): string {
   const a = fg[3]
   const lay = (top: number, under: number): number => top * a + under * (1 - a)
   return toHex([lay(fg[0], ground[0]), lay(fg[1], ground[1]), lay(fg[2], ground[2]), 1])
+}
+
+/** What a browser draws a placeholder in when no rule says: Chromium's grey, and Firefox's default opacity. */
+export const UA_PLACEHOLDER = '#757575'
+export const UA_PLACEHOLDER_OPACITY = 0.54
+
+/**
+ * A `::placeholder` rule's text colour as the least forgiving engine draws it: the rule's `color` (Chromium's
+ * `#757575` without one), at the rule's `opacity` — or at Firefox's own default, 0.54, without one.
+ */
+export function placeholderColour(rule: Record<string, string>, palette: Record<string, string>): Rgba {
+  const [r, g, b, a] = parseColor(rule.color ?? UA_PLACEHOLDER, palette)
+  return [r, g, b, a * (rule.opacity === undefined ? UA_PLACEHOLDER_OPACITY : Number(rule.opacity))]
 }
 
 /**

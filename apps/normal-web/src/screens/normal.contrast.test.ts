@@ -1,4 +1,4 @@
-import { AA, THEME_PALETTES, contrast, declarationsOf, declarationsUsing, over, parseColor, toHex } from '@bp/ui-kit/testing'
+import { AA, THEME_PALETTES, contrast, declarationsOf, declarationsUsing, over, parseColor, placeholderColour, toHex } from '@bp/ui-kit/testing'
 import { describe, expect, it } from 'vitest'
 import AVATAR_CSS from '../avatar/avatar.module.css?raw'
 import NORMAL_CSS from './normal.module.css?raw'
@@ -13,14 +13,15 @@ describe('the text field’s placeholder', () => {
   /**
    * The sign-in card's fields (e-mail, display name) and the profile's name field are `.input`: an opaque `--bg`
    * with a placeholder in a share of `--ink-muted`. At 76 % that share was 3.29:1 in the light theme. A placeholder is
-   * text — on the sign-in card, the only hint of what a field wants before anything is typed.
+   * text — on the sign-in card, the only hint of what a field wants before anything is typed — and it is held in any
+   * engine: Firefox draws a placeholder at opacity 0.54 unless the rule says otherwise.
    */
-  it('reaches AA on the field in either theme', () => {
+  it('reaches AA on the field in either theme, in any engine', () => {
     const field = declarationsOf(NORMAL_CSS, /^\.input$/).background!
-    const placeholder = declarationsOf(NORMAL_CSS, /^\.input::placeholder$/).color!
+    const placeholder = declarationsOf(NORMAL_CSS, /^\.input::placeholder$/)
     for (const theme of ['dark', 'light'] as const) {
       const ground = toHex(parseColor(field, THEME_PALETTES[theme]))
-      const text = over(parseColor(placeholder, THEME_PALETTES[theme]), ground)
+      const text = over(placeholderColour(placeholder, THEME_PALETTES[theme]), ground)
       const ratio = contrast(text, ground)
       expect(ratio, `${theme}: the placeholder ${text} on the field ${ground} is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA)
     }

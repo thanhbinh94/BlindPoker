@@ -312,6 +312,13 @@
   border-radius: var(--radius-md);
 }
 
+/* A step softer than the hint, no softer than AA allows: 94 % of --ink-muted is 4.7:1 on the light --bg (the
+   browser's own grey, which the join fields used to show, is 4.0). `opacity: 1`, or Firefox draws it at 0.54. */
+.input::placeholder {
+  color: color-mix(in srgb, var(--ink-muted) 94%, transparent);
+  opacity: 1;
+}
+
 .input[aria-invalid='true'] {
   border-color: var(--red-fill);
   background-color: var(--red-soft);

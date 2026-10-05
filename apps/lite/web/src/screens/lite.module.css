@@ -370,9 +370,10 @@
 }
 
 /* A step softer than the hint, no softer than AA allows: 94 % of --ink-muted is 5.0:1 on the field over the darker
-   end of the paper (76 % was 3.4:1). */
+   end of the paper (76 % was 3.4:1). `opacity: 1`, or Firefox draws it at 0.54. */
 .input::placeholder {
   color: color-mix(in srgb, var(--ink-muted) 94%, transparent);
+  opacity: 1;
 }
 
 .input:focus-visible {
