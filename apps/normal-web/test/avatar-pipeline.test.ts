@@ -1239,12 +1239,12 @@ function stageOnePngs(
 
   // Add mask files for each layer that has masks in the manifest.
   if (manifest) {
-    const maskFileKind = { hair: 'hair', eyes: 'eye', tint: 'tint', skin: 'skin', skinLine: 'skinline' }
+    // The pipeline's own spelling of each kind on disk — a hat's hair clip (2026-10-06) included.
     for (const layerName of layers) {
       const entry = manifest.files[layerName]
       if (entry?.masks) {
         for (const kind of Object.keys(entry.masks)) {
-          const fileKind = maskFileKind[kind as keyof typeof maskFileKind]
+          const fileKind = MASK_FILE_KIND[kind as keyof typeof MASK_FILE_KIND]
           if (fileKind) {
             pngs.push(...DENSITIES.map((density: number) => `${layerName}_${fileKind}mask@${density}x.png`))
           }
