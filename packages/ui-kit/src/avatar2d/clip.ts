@@ -9,9 +9,13 @@ import { useEffect, useReducer } from 'react'
  * hats clipped it, never no hair at all.
  *
  * Module-level, like `useTintedLayer`'s cache, so every chibi on a page shares one load per clip and a clip loaded once
- * masks every later mount from its first render. A failed load is forgotten, so the next mount tries again.
+ * masks every later mount from its first render. The loaded image itself is kept, not just its URL: the browser reuses
+ * an image's fetch for a CSS mask only while that image is alive, and `/avatar/` is served `no-cache` with no
+ * validators, so once the last masked chibi was gone and the image collected, the next one re-downloaded its clip and
+ * drew its hair as nothing meanwhile (review, round 2). Three clips of about 5 KB each. A failed load is forgotten, so
+ * the next mount tries again.
  */
-const loaded = new Set<string>()
+const loaded = new Map<string, HTMLImageElement>()
 const pending = new Map<string, Set<() => void>>()
 
 function load(url: string, onSettled: () => void): () => void {
@@ -23,7 +27,7 @@ function load(url: string, onSettled: () => void): () => void {
     // The mask is fetched in CORS mode; loading it the same way lets the browser reuse this fetch for the mask.
     img.crossOrigin = 'anonymous'
     const settle = (ok: boolean) => {
-      if (ok) loaded.add(url)
+      if (ok) loaded.set(url, img)
       const done = pending.get(url)
       pending.delete(url)
       for (const notify of done ?? []) notify()

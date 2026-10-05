@@ -22,6 +22,7 @@ import {
   eyeEllipses,
   eyeMask,
   eyeZone,
+  frameEdges,
   hairClipMask,
   hairMask,
   hatEdges,
@@ -1485,6 +1486,11 @@ describe('hairClipMask and a covering hat’s hair clip (2026-10-06)', () => {
     fill(2, 10, 12)
     expect([...hatEdges(mask, w, h)]).toEqual([9, 12, 7])
     expect([...hatEdges(new Uint8Array(w * h), w, h)]).toEqual([-1, -1, -1])
+  })
+
+  it('reads the edge across the frame one way for the clip and for C11: beside the hat its nearest side’s, in a gap the higher neighbour’s', () => {
+    expect([...frameEdges(Int32Array.from([-1, 10, -1, -1, 14, 12, -1]))!]).toEqual([10, 10, 10, 10, 14, 12, 12])
+    expect(frameEdges(Int32Array.from([-1, -1]))).toBeNull()
   })
 
   let temp = ''

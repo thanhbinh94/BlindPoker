@@ -1445,6 +1445,36 @@ export function clipsHair(parsed) {
 }
 
 /**
+ * A hat's edge (`hatEdges`, -1 where it has none) across the whole frame (2026-10-06): a column beside the hat takes
+ * its nearest side's edge, and a column inside the hat with none (a gap) the higher of its two neighbours'. `null` for
+ * a hat with no edge anywhere. One rule for the clip and for C11's guard on it, so the check holds the cut to the
+ * edges it was cut to.
+ *
+ * @param {Int32Array} edges
+ * @returns {Int32Array | null}
+ */
+export function frameEdges(edges) {
+  const reached = [...edges.keys()].filter((x) => edges[x] >= 0)
+  if (reached.length === 0) return null
+  const lo = reached[0]
+  const hi = reached[reached.length - 1]
+  const out = new Int32Array(edges.length)
+  for (let x = 0; x < edges.length; x++) {
+    if (x < lo) out[x] = edges[lo]
+    else if (x > hi) out[x] = edges[hi]
+    else if (edges[x] >= 0) out[x] = edges[x]
+    else {
+      let left = x
+      while (edges[left] < 0) left--
+      let right = x
+      while (edges[right] < 0) right++
+      out[x] = Math.min(edges[left], edges[right])
+    }
+  }
+  return out
+}
+
+/**
  * Where a hairstyle may still show under `hat` (2026-10-06), as 0–255 a pixel: 255 where hair is drawn as it is, 0 where
  * the hat covers it, so the kit can use it as the hair layers' CSS mask as it stands. Hair cannot be above a covering
  * hat's lower edge — the hat sits on the head there — so a column the hat reaches is clipped above its edge there
@@ -1472,23 +1502,8 @@ export function hairClipMask(hat, { open = HAIR_CLIP.open, feather = HAIR_CLIP.f
   const raw = hatEdges(solid, width, height)
   const bottom = hatEdges(shape, width, height).map((edge, x) => (edge < 0 ? -1 : Math.min(edge, raw[x])))
   const keep = new Uint8Array(width * height).fill(255)
-  const reached = [...bottom.keys()].filter((x) => bottom[x] >= 0)
-  if (reached.length === 0) return keep
-  const lo = reached[0]
-  const hi = reached[reached.length - 1]
-  const edge = new Int32Array(width)
-  for (let x = 0; x < width; x++) {
-    if (x < lo) edge[x] = bottom[lo]
-    else if (x > hi) edge[x] = bottom[hi]
-    else if (bottom[x] >= 0) edge[x] = bottom[x]
-    else {
-      let left = x
-      while (bottom[left] < 0) left--
-      let right = x
-      while (bottom[right] < 0) right++
-      edge[x] = Math.min(bottom[left], bottom[right])
-    }
-  }
+  const edge = frameEdges(bottom)
+  if (edge === null) return keep
   const hidden = new Uint8Array(width * height)
   for (let x = 0; x < width; x++) for (let y = 0; y < edge[x]; y++) hidden[y * width + x] = 255
   if (feather <= 0) {
