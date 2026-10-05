@@ -709,9 +709,9 @@ fair, natural), are 14 % darker on light tan, and about a third as light on deep
   that pixel's colour — or, when it is darker, within 20 in a*b* alone (the royal robe's fingertips are inked darker,
   L* 16) — and within `shown` (4) of skin the outfit leaves showing. That last condition keeps cloth out: a sleeve over
   the arm's outline beneath, or trousers over the shorts', touches no shown skin, and the Tết red (ΔE ~25) is past the
-  tolerance anyway. A piece of shown skin under `minShown` (24 px) counts only within `nearShown` (8) of a larger one: a
+  tolerance anyway. A piece of shown skin under `minShown` (24 px) counts only within `nearLarge` (8) of a larger one: a
   few pixels of thigh past a trouser edge (30–39 px from any larger piece) would shade the champion's brown side panel,
-  while a lone finger's 18–23 px sliver (2–6 px from the hand) is all the skin beside that finger's outline. Re-cutting
+  while a lone finger's sliver (18 and 23 px on the royal robe, 2–6 px from the hand) is all the skin beside that finger's outline. Re-cutting
   a body does not re-cut the outfits cut on it: name them in the same `masks` run.
 - The server lists every layer carrying one under `tint.skinLine` of each body, at the skin's `meanL` (`bodies.ts`); the
   kit shades it right after the layer's skin, and on an outfit after the outfit's own colour (`layersFor`). C11 requires

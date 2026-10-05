@@ -870,13 +870,14 @@ export function skinLineMask(pic, { skin, eyes = null }) {
  *   royal robe's and the Tết áo dài's fingertips). Cloth lying over skin it covers — a sleeve over the arm's outline
  *   beneath, trousers over the shorts' — never touches shown skin, so a dark cloth the colour of the line is not
  *   taken for it;
- * - `minShown`, `nearShown` — a piece of shown skin under `minShown` px counts only within `nearShown` of a piece that
+ * - `minShown`, `nearLarge` — a piece of shown skin under `minShown` px counts only within `nearLarge` of a piece that
  *   size or over. A few pixels of thigh showing past a trouser edge (6 and 16 px on the champion's, 30–39 px from any
  *   larger piece) would otherwise make the trouser's brown side panel "beside shown skin" and shade it into notches on
- *   a deep tone; a lone finger's sliver of skin (18–23 px on the royal robe and the Tết áo dài, 2–6 px from the hand)
- *   is the only shown skin within `shown` of that finger's outline, so it has to stay (the re-review, 2026-10-05).
+ *   a deep tone; a lone finger's sliver of skin (18 and 23 px on the royal robe, 1–5 px slivers on the Tết áo dài,
+ *   2–6 px from the hand) is the only shown skin within `shown` of that finger's outline, so it has to stay (the
+ *   re-review, 2026-10-05).
  */
-export const OUTFIT_LINE = { reach: 3, tolerance: 20, shown: 4, minShown: 24, nearShown: 8 }
+export const OUTFIT_LINE = { reach: 3, tolerance: 20, shown: 4, minShown: 24, nearLarge: 8 }
 
 /**
  * An outfit layer's copy of the body's outline, at @2x (2026-10-05): what a skin colour shades on the outfit, as it
@@ -885,8 +886,9 @@ export const OUTFIT_LINE = { reach: 3, tolerance: 20, shown: 4, minShown: 24, ne
  *
  * A pixel of `item` is in when it carries ink (alpha over `ALPHA_INK`), lies within `OUTFIT_LINE.shown` of skin the
  * outfit leaves showing (`skin` non-zero where `item` is at most `ALPHA_INK`, in pieces of at least
- * `OUTFIT_LINE.minShown` px or within `OUTFIT_LINE.nearShown` of one), and within `OUTFIT_LINE.reach` of a pixel of the body's line (`line` non-zero) whose
- * colour on `body` is within `OUTFIT_LINE.tolerance` of its own — or in a*b* alone, when the pixel is darker.
+ * `OUTFIT_LINE.minShown` px or within `OUTFIT_LINE.nearLarge` of one), and within `OUTFIT_LINE.reach` of a pixel of
+ * the body's line (`line` non-zero) whose colour on `body` is within `OUTFIT_LINE.tolerance` of its own — or in a*b*
+ * alone, when the pixel is darker.
  * `body`, `skin` and `line` are the body the outfit was cut on (`cutOn`), its skin mask and its skin-line mask as
  * written. Returns 0/255 per pixel; empty when the outfit leaves no skin showing.
  *
@@ -901,12 +903,12 @@ export function outfitLineMask(item, { body, skin, line }) {
   let any = false
   for (let i = 0; i < shown.length; i++) if (skin[i] && data[i * 4 + 3] <= ALPHA_INK) { shown[i] = 1; any = true }
   if (!any) return out
-  // Small pieces of shown skin stay only near a large one (`OUTFIT_LINE.minShown`, `nearShown`).
+  // Small pieces of shown skin stay only near a large one (`OUTFIT_LINE.minShown`, `nearLarge`).
   const minShown = Math.max(1, Math.round(OUTFIT_LINE.minShown * scale * scale))
   const pieces = components(shown, width, height)
   const large = new Uint8Array(width * height)
   for (let i = 0; i < shown.length; i++) if (shown[i] && pieces.sizes[pieces.label[i]] >= minShown) large[i] = 1
-  const nearLarge = dilate(large, width, height, Math.max(1, Math.round(OUTFIT_LINE.nearShown * scale)))
+  const nearLarge = dilate(large, width, height, Math.max(1, Math.round(OUTFIT_LINE.nearLarge * scale)))
   const keep = new Uint8Array(pieces.sizes.length)
   for (let i = 0; i < shown.length; i++) if (shown[i] && (large[i] || nearLarge[i])) keep[pieces.label[i]] = 1
   for (let i = 0; i < shown.length; i++) if (shown[i] && !keep[pieces.label[i]]) shown[i] = 0

@@ -683,7 +683,7 @@ describe('skinMask, and eyes on a bald face (Plan 19 A1b, spec §5.5)', () => {
     const far = new Uint8Array(W * H)
     for (let y = 780; y < 820; y++) for (let x = 600; x < 640; x++) far[y * W + x] = 1
     expect(coverage(copy, far), 'the outline’s colour far from the body’s outline').toBe(0)
-    expect(OUTFIT_LINE).toEqual({ reach: 3, tolerance: 20, shown: 4, minShown: 24, nearShown: 8 })
+    expect(OUTFIT_LINE).toEqual({ reach: 3, tolerance: 20, shown: 4, minShown: 24, nearLarge: 8 })
   })
 
   it('keeps a lone finger’s sliver of shown skin, drops a stray speck far from the hand, and takes a darker copy (skin-line review)', () => {
@@ -700,7 +700,7 @@ describe('skinMask, and eyes on a bald face (Plan 19 A1b, spec §5.5)', () => {
     // The hand: a 100 × 100 piece of shown skin; a lone finger: a 4 × 5 = 20 px piece 6 px to its right, under `minShown`.
     fill(100, 100, 199, 199, (i) => { skin[i] = 255 })
     fill(205, 150, 208, 154, (i) => { skin[i] = 255 })
-    // The finger's outer outline, 1–2 px from the finger and 11 from the hand: the body's line and the outfit's copy of it,
+    // The finger's outer outline, 2–3 px from the finger and 11 from the hand: the body's line and the outfit's copy of it,
     // the copy partly darker.
     fill(210, 148, 211, 156, (i) => { line[i] = 255; paint(body, i, OUT); paint(item, i, i % 2 ? DARKER : OUT) })
     // A stray 16 px speck of thigh far from the hand, with brown trouser cloth over the body's line beside it.
