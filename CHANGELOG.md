@@ -8,6 +8,54 @@ below are the real history.
 
 ---
 
+## Plan 20 — the open defects: keyed money writes, AA contrast, wardrobe, table and lobby, redrawn skin — merged `MERGE` (2026-10-05)
+
+The user asked for every bug still on record to be fixed ("có, hãy fix các bug còn tồn đọng đi. không cần hỏi lại",
+2026-10-05). That is each note left open in `docs/bug-log.md` §7, the four real defects that sat in
+`docs/known-limitations.md`, and what turned up on the way. Roadmap features, rule changes, trade-offs with a recorded
+reason and infrastructure facts were left alone; the bug log's Plan 20 block lists them with one reason each. There is
+no protocol change and there is one additive migration: `0003_ledger_keys`, a new table (Lite schema v3).
+
+- **Money: a keyed ledger write is applied once.**
+  - A cash-out that had committed but lost its reply was credited a second time when the room retried it.
+    `apply(entries, meta, { key })` now claims the key in a `ledger_keys` table inside the write's own transaction; a
+    repeat is a no-op that reports `applied: false`. A rejected batch gives its claim back.
+  - The room keys every write it may retry: buy-in, cash-out, the refund of a buy-in that never got a seat, and a
+    carry-over release.
+  - A seat whose cash-out is pending is frozen: it keeps its stack, sits out, is never dealt in, and every end of hand
+    retries it. A buy-in that failed is replayed on the next Sit, or refunded on a removal; a carry-over release that
+    failed is held aside instead of being dealt again.
+  - `ledger_keys` is not pruned (about two rows per sitting); it is a follow-up.
+- **Contrast reaches AA.**
+  - `--red` is split into ink and fill, the way teal already was: red ink on the dark page goes from 3.6:1 to 6.2:1
+    (3.2 to 5.6 on a raised panel, 3.1 to 5.4 on the felt panel), and everything painted with `--red-fill` is
+    pixel-identical.
+  - A badge's text is measured as a composite, on every ground a badge is printed on, and clears 4.5:1 (it was 4.1 to
+    4.4).
+  - On the light theme the names on the hand-result card read the page's dark ink on a night card, about 1.1:1; they are
+    light now.
+  - Input placeholders reach AA in Lite, Normal and the kit's join-by-code fields.
+  - Lite's parchment island has a contrast test, and the helpers are exported as `@bp/ui-kit/testing`.
+- **Wardrobe.**
+  - The "Đang dùng" pill no longer overlaps the skin swatch at desktop and tablet widths.
+  - With "Hiện cả món chưa có" ticked, a card showing an owned colour variant keeps the unlock hint of its locked
+    original, and a locked dot is named "name, Chưa có: hint".
+- **Table and lobby.**
+  - The hand-result card's backdrop fades out at all four edges instead of ending in a visible step.
+  - A room name carries a tooltip only while it is hovered *and* cut, so screen readers no longer read it twice.
+  - The lobby heading wraps at 320 px; the "create a room" button used to push the page 14 px sideways.
+  - The narrowest room ticket is measured at three window widths.
+- **Avatar: the skin a hair or outfit picture redrew takes the tone.**
+  - Under brown and deep tones, cream specks and a light jagged line showed along the hairline, and a cream instep inside
+    the royal robe's and the Tết áo dài's slippers: those pictures repaint some of the body's skin, which no skin colour
+    reached.
+  - Every real front hair and every v4 outfit gets a skin mask of its own (32 new masks, 16 hair masks re-cut; no picture
+    changed), painted by a fourth tint mode, `ratio`. The hairline specks drop by 99 % or more (the wavy style had none
+    to drop); the natural tone is byte for byte what it was.
+  - A few light specks remain at deep tones, as drawn white highlights and strand edges close to a light hair's colour.
+
+---
+
 ## Plan 19 — avatar v4: gender, hairstyle and skin tone chosen separately; a natural pose with fingers (No13, No14) — merged `76555ef` (2026-10-05)
 
 This is round 3 of the 2026-09-29 review, the new-generation character the user approved on 2026-10-03 ("lập plan và

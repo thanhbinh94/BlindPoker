@@ -230,15 +230,15 @@ arise — `docker compose stop app` is a graceful stop, and the server refunds e
 cashes table stacks back into balances before it exits.
 *Tracked:* `deploy/normal-windows/README.md`; the free-tier deployment design §3 and Appendix D3.
 
-**An automatic cash-out retry after a write that committed but reported an error credits twice.**
-When a `cash_out` throws, the room keeps the seat and tries again on its own — at the end of the
-next hand, at the spectator-grace removal, in the shutdown sweep — each time with a fresh row. If
-the first write had in fact committed and only the reply was lost (a connection dropped on the
-`COMMIT` acknowledgement), the stack is credited twice. The same risk already existed in Hold'em for
-a player who pressed Stand Up again after an error.
-*Why it stays:* telling "did not write" from "wrote, then failed to say so" needs an idempotency key
-on the ledger row, which neither repository has; the window is a lost commit acknowledgement.
-*Tracked:* here.
+**The ledger's idempotency keys are never pruned.** Since Plan 20 every money write the room may retry
+— a buy-in, a cash-out, a carry-over release — carries a key, and the ledger claims it in `ledger_keys`
+inside the write's own transaction, so a repeat is a no-op (`docs/server-kit.md` → Repositories →
+Keys). Nothing deletes a row afterwards, in either edition: a sitting leaves about two (its buy-in and
+its cash-out), and a released pot one more.
+*Why it stays:* a few rows per sitting is negligible at this scale. A key is only ever replayed by the
+process that made it — a room's pending writes live in memory — so pruning rows at boot, or by age,
+would be safe; it was left as a follow-up rather than add a retention rule to the migration.
+*Tracked:* here; `apps/normal-server/drizzle/0003_ledger_keys.sql`, Lite schema v3.
 
 **The suite has never been run against a real PostgreSQL.** Every `apps/normal-server` test runs on
 in-process **PGlite** through the same driver-neutral `AppDb` the production code uses, so the
@@ -282,25 +282,16 @@ deterministic for the convenience of a test.
 
 ## UI
 
-**`--red` as ink is below WCAG AA on dark surfaces.** Five entries covering three distinct token
-pairs are on record: `--red` on `--bg` (3.59:1) and on `--bg-elev` (3.22:1) in **both** the dark and
-the night palette — that is four of the five — and the same defect repeated on the felt's own darker
-ground, `.panel.felt`'s `--red` on its local `--bg` (**3.13:1**). One token cannot fix it — on `#0b1020` an ink needs a luminance
-above ~0.20 to reach 4.5:1, while the same token used as a *fill* under `--red-ink` needs one below
-~0.17. Everything else in all three palettes is at or above AA, including the light-theme gold that
-Plan 7 corrected (3.93 → 4.93 on `--bg`, 4.26 → 5.34 on `--bg-elev`, 4.30 → 5.39 for `--gold-ink`).
-*Why it stays:* closing it means splitting `--red` into ink and fill the way `--teal` / `--teal-fill`
-already are — a palette change across `ui-kit`, `lite-web` and `normal-web`.
-*Tracked:* the pairs are pinned as `BELOW_AA` in `packages/ui-kit/src/theme/tokens.test.ts`, which
-fails if any of them gets *worse* — or if one is fixed and its line is left behind; roadmap §34
-item 10; `docs/ui-kit.md` Known gaps.
-
-**Badges are ink on their own tint, at roughly 4.1–4.4:1.** `--gold` on `--gold-soft`, and the same
-for red and teal. The contrast test measures flat token pairs; a composited translucent tint is not
-asserted.
-*Why:* the pattern is used for decoration that always has a text label beside it, and the alert in
-`lobby.module.css` already avoids it by keeping `--ink` text and letting the rule and the tint carry
-the signal.
+**Badge contrast is measured on the grounds a badge sits on today.** `packages/ui-kit/src/theme/tokens.test.ts`
+→ "badge text" composites each badge's ink over its own tint over every ground the app puts one on — the page,
+a raised panel, the page's mesh under the room header, a dark panel's highlight, both ends of the paper islands,
+`.panel.felt`, a seat on the table — and every one clears AA (4.5:1). A badge placed on a ground the test does
+not list is not measured. The tightest is teal: a dark `.panel.ink` lays a white highlight along its top edge,
+which the test holds at 2 %, above where any badge sits (Lite's "claimed" badge is at 0.8–1.4 %, none on a
+phone); a teal badge on the very first line of a tall dark panel, at 3–4 %, would read 4.3–4.4:1. No such
+placement exists.
+*Why it stays:* paling the teal further would buy margin for a place nothing uses, at the cost of a visibly
+washed-out badge everywhere.
 *Tracked:* `docs/ui-kit.md` Known gaps.
 
 **No Vietnamese web font is bundled.** `--font-display` names a face and then falls back to
@@ -346,8 +337,13 @@ item.
 
 **The chibi stands in one pose, and a skin colour is a tint of one body.** Since avatar v4 (No14) every body is
 the same relaxed standing pose with five-fingered hands — there is no second pose or emote to choose — and the six
-skin tones are the cream body recoloured through a skin mask, not six drawings: the outlines keep their warm
-brown on every tone, and a near-white highlight under chroma 8 stays white under a tint. Hairstyles belong to a
+skin tones are the cream body recoloured through a skin mask, not six drawings. The outlines are shaded with the
+tone (a fifth mask, `skinLine`, 2026-10-05: darker by the tone's lightness over the cream's, never lighter), so a
+brown or deep hand no longer carries the cream's orange rim; and the skin that a hair or outfit picture redrew — the
+forehead between strands, the instep inside a slipper — takes the tone too (Plan 20: the `ratio` tint of a mask of
+its own). The natural tone is exactly what it was. What a tint still leaves alone is a near-white highlight under
+chroma 8, which stays white, as the body's own do: at deep tones a few light specks remain — the Tết insteps' drawn
+highlights, and a handful of strand-edge pixels within ΔE 10 of a light hair's own colour. Hairstyles belong to a
 gender (four each); there is no hairstyle both genders can wear, and no rare hairstyle exists yet (the system
 allows one: a hairstyle is an item).
 *Why it stays:* the user chose one new pose for this round (spec 2026-10-03 Q1) and a tint over six drawn bodies
@@ -362,18 +358,6 @@ does not also move on every turn.
 two-row opponent strip does not — and freezing the felt to the taller of them would waste a phone's
 vertical space on every hand to spare a one-off jump at a breakpoint few sessions ever cross.
 *Tracked:* `docs/ui-kit.md` Known gaps.
-
-**The Lite parchment island has no contrast test of its own.**
-`apps/lite/web/src/screens/lite.module.css` re-declares `--ink`, `--ink-muted`, `--gold` and `--red`
-on the same printed-paper gradient as ui-kit's `.ticket` and `.panel.parchment`, and Plan 7 had to
-correct its `--gold` by hand. `packages/ui-kit/src/theme/tokens.test.ts` → "keeps the parchment
-islands at AA on the darker end of their paper" covers the two ui-kit islands, but it reads
-`ui-kit`'s own stylesheets and cannot reach an app's CSS, so a future edit to the Lite copy could
-regress AA with nothing turning red.
-*Why it stays:* the fix is a small contrast test under `apps/lite/web` (or exporting `contrast` /
-`tokensOf` from ui-kit so the app can reuse them rather than copy eight lines) — worth doing, and
-not worth doing in the last fix wave of a hardening milestone.
-*Tracked:* here, and `docs/ui-kit.md` Known gaps.
 
 **Playground and e2e screenshots are not committed.** `packages/ui-kit/playground/screenshots/README.md`
 describes what each shot should show; the e2e runs write real ones into

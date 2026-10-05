@@ -212,6 +212,6 @@ Tổng kết trạng thái: **61 ✓ · 3 partial · 0 ✗** trên 64 mục (21 
 
 ## Những gì bảng này **không** khẳng định
 
-Các hạn chế đã biết — gồm ba dòng `partial` ở trên, việc Blind Poker cho thấy số dư của đối thủ, độ
-tương phản của `--red`, và những tính năng cố ý để lại cho roadmap — được liệt kê đầy đủ ở
+Các hạn chế đã biết — gồm ba dòng `partial` ở trên, việc Blind Poker cho thấy số dư của đối thủ, và
+những tính năng cố ý để lại cho roadmap — được liệt kê đầy đủ ở
 [`known-limitations.md`](known-limitations.md). Lịch sử từng plan ở [`../CHANGELOG.md`](../CHANGELOG.md).
