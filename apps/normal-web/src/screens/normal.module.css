@@ -206,7 +206,7 @@
 }
 
 .conn[data-status='closed'] .connDot {
-  background: var(--red);
+  background: var(--red-fill);
 }
 
 .main {
@@ -451,7 +451,7 @@
 }
 
 .alert {
-  border-left-color: var(--red);
+  border-left-color: var(--red-fill);
   background: var(--red-soft);
 }
 
@@ -467,8 +467,10 @@
   font-size: 1rem;
 }
 
+/* A step softer than the hint, no softer than AA allows: 94 % of --ink-muted is 4.7:1 on the light theme's field
+   (76 % was 3.3:1 — the sign-in card's e-mail and display-name placeholders). */
 .input::placeholder {
-  color: color-mix(in srgb, var(--ink-muted) 76%, transparent);
+  color: color-mix(in srgb, var(--ink-muted) 94%, transparent);
 }
 
 .input:focus-visible {

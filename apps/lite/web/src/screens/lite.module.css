@@ -174,7 +174,7 @@
 }
 
 .conn[data-status='closed'] .connDot {
-  background: var(--red);
+  background: var(--red-fill);
 }
 
 .main {
@@ -246,6 +246,8 @@
   --gold-soft: rgba(133, 96, 17, 0.14);
   --gold-ink: #fff8e8;
   --red: #a9242d;
+  /* re-declared beside --red, or the notice's rule would take the theme's — the dark theme's #c8323c on paper */
+  --red-fill: #a9242d;
   --focus: #8a5b12;
 
   position: relative;
@@ -349,7 +351,7 @@
 
 .notice {
   padding: var(--space-2) var(--space-3);
-  border-left: 3px solid var(--red);
+  border-left: 3px solid var(--red-fill);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   background: rgba(169, 36, 45, 0.1);
   font-size: 0.875rem;
@@ -367,8 +369,10 @@
   font-size: 1rem;
 }
 
+/* A step softer than the hint, no softer than AA allows: 94 % of --ink-muted is 5.0:1 on the field over the darker
+   end of the paper (76 % was 3.4:1). */
 .input::placeholder {
-  color: color-mix(in srgb, var(--ink-muted) 76%, transparent);
+  color: color-mix(in srgb, var(--ink-muted) 94%, transparent);
 }
 
 .input:focus-visible {
@@ -538,7 +542,7 @@
 }
 
 .alert {
-  border-left-color: var(--red);
+  border-left-color: var(--red-fill);
   background: var(--red-soft);
 }
 

@@ -37,6 +37,8 @@
      the light theme's deep one, and its ink is light: #856011 under #fff8e8 is 5.4:1, under the dark ink 3.1:1 */
   --gold-ink: #fff8e8;
   --red: #a9242d;
+  /* re-declared beside --red, or a fill inside would take the theme's — the dark theme's #c8323c on paper */
+  --red-fill: #a9242d;
   --teal: #15544c;
   --teal-fill: #124a43;
   --teal-ink: #f2f7f5;
@@ -243,7 +245,7 @@
   color: var(--red);
 }
 
-/* Forms. The alert keeps ink text: --red on its tint is 2.8:1; rule + tint carry the signal. */
+/* Forms. The alert keeps ink text; its rule and its tint carry the signal. */
 .form,
 .join,
 .grid {
@@ -311,7 +313,7 @@
 }
 
 .input[aria-invalid='true'] {
-  border-color: var(--red);
+  border-color: var(--red-fill);
   background-color: var(--red-soft);
 }
 
@@ -378,7 +380,7 @@
   font-size: 0.875rem;
   color: var(--ink);
   background: var(--red-soft);
-  border: 1px solid var(--red);
+  border: 1px solid var(--red-fill);
   border-left-width: 4px;
   border-radius: var(--radius-md);
 }
@@ -480,7 +482,7 @@
 }
 
 .conn[data-status='closed'] .connDot {
-  background: var(--red);
+  background: var(--red-fill);
 }
 
 @keyframes blip {

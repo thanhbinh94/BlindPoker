@@ -163,7 +163,7 @@
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-4);
-  border: 1px solid color-mix(in srgb, var(--red) 45%, transparent);
+  border: 1px solid color-mix(in srgb, var(--red-fill) 45%, transparent);
   border-radius: var(--radius-pill);
   background: var(--red-soft);
   color: var(--ink);
@@ -175,7 +175,7 @@
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--red);
+  background: var(--red-fill);
   animation: bpBeacon 1.4s var(--ease) infinite;
 }
 
@@ -306,7 +306,7 @@
 }
 
 .toastError {
-  border-left-color: var(--red);
+  border-left-color: var(--red-fill);
 }
 
 @keyframes bpToastIn {
