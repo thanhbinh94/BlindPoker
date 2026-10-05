@@ -206,6 +206,9 @@ drawn-per-gender item, below):
    `asset.file` must name an entry in `data/avatar-manifest.json` (Task 1's asset pipeline output,
    mirrored from `normal-web`) whose own `layer` agrees. A `head` may set `hidesHairFront`/`hidesHairBack`
    when it should cover the hair layers, and the manifest entry of its layer must say the same (bug 7).
+   `asset.clipsHair` (2026-10-06) is never written in `items.json`: it is set on any item whose layer's manifest
+   entry carries a `masks.hairClip` (the beret, the beanie and the nón lá, so every colour of them), and tells the
+   client to draw both hair layers through that `<file>_hairclipmask`.
 
    A **colour** (`hairColor`, `eyeColor`, `skinColor`) is an item with no asset and a required `colour`, a
    lowercase `#rrggbb`; the client paints it over the figure's own masked pixels. `free: true` (only ever on

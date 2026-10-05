@@ -256,6 +256,24 @@ describe('the shipped catalogue', () => {
     }
   })
 
+  it('clips the hair under the hats that cover the crown, colour variants included, and under no other (2026-10-06)', () => {
+    // The beret, the beanie and the nón lá: a ponytail's tie, the spiky cut's spikes and the tousled cut's tuft
+    // rose through them. Read off the manifest's `masks.hairClip` of the hat's layer, which its colours share.
+    const clipping = catalog.all().filter((def) => def.asset?.clipsHair === true).map((def) => def.id).sort()
+    expect(clipping).toEqual([
+      'head_beanie01',
+      'head_beanie_grey01',
+      'head_beanie_mustard01',
+      'head_beanie_red01',
+      'head_beret_black01',
+      'head_beret_blue01',
+      'head_beret_green01',
+      'head_beret_red01',
+      'head_conical_hat01',
+    ])
+    for (const def of catalog.all()) if (def.asset?.clipsHair !== true) expect(def.asset?.clipsHair, def.id).toBeUndefined()
+  })
+
   it('leaves enough unowned commons and rares for the daily tiers to draw several before running dry', () => {
     expect(catalog.byRarity('common').length).toBeGreaterThanOrEqual(5)
     expect(catalog.byRarity('rare').length).toBeGreaterThanOrEqual(5)

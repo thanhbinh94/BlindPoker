@@ -11,6 +11,17 @@ import s from './avatar2d.module.css'
 const FRAME_BORDER_ORDER = 90
 
 /**
+ * A hair layer under a hat that clips the hair (2026-10-06): the hat's hair clip as the `<img>`'s CSS mask, stretched
+ * over the whole frame the layer is — the clip is cut on that same frame — so the hair shows only where the clip is
+ * opaque. Always the @2x clip: the mask is a few kilobytes at either density, and a 1x one would soften the edge on
+ * a 2x screen. Masked rather than painted on a canvas, so a tinted layer's blob is drawn through it unchanged.
+ */
+function clipMask(url: string): CSSProperties {
+  const image = `url("${url}")`
+  return { maskImage: image, WebkitMaskImage: image, maskSize: '100% 100%', WebkitMaskSize: '100% 100%', maskRepeat: 'no-repeat', WebkitMaskRepeat: 'no-repeat' }
+}
+
+/**
  * One layer's `<img>`. A layer with `tints` (spec §5.2) asks `useTintedLayer` for its recoloured blob URL and
  * renders that — with no `srcSet`, since the hook already picked the screen's own density — the instant it is
  * ready; until then, and for a layer with no tints at all, it renders the plain two-density layer exactly as
@@ -27,7 +38,7 @@ function ChibiLayer({ base, layer, className }: { base: string; layer: LayerRef;
   const [failedUrl, setFailedUrl] = useState<string | null>(null)
   const common = {
     className: cx(s.layer, className),
-    style: { zIndex: layer.order },
+    style: layer.clip === undefined ? { zIndex: layer.order } : { zIndex: layer.order, ...clipMask(assetUrl(base, layer.clip, 2)) },
     loading: 'lazy' as const,
     decoding: 'async' as const,
     alt: '',

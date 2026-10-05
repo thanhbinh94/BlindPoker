@@ -183,6 +183,29 @@ describe('Chibi', () => {
     expect(bouncing.firstElementChild!.className).not.toBe(still.firstElementChild!.className)
   })
 
+  it('draws both hair layers through a clipping hat’s @2x hair clip as a CSS mask over the whole frame, and no other layer (2026-10-06)', () => {
+    const conical: WearRef = { id: 'head_conical_hat01', order: 80, file: 'item_head_conical_hat01_L80', clipsHair: true }
+    const { container } = render(
+      <AvatarAssets base="https://cdn.example/avatar/">
+        <Chibi subject={{ ...SUBJECT, head: conical }} />
+      </AvatarAssets>,
+    )
+    const url = 'url("https://cdn.example/avatar/item_head_conical_hat01_L80_hairclipmask@2x.png")'
+    for (const img of container.querySelectorAll('img')) {
+      const hair = img.style.zIndex === '20' || img.style.zIndex === '60'
+      const style = img.style as CSSStyleDeclaration & Record<string, string>
+      expect(style.maskImage ?? '', img.getAttribute('src')!).toBe(hair ? url : '')
+      expect(style.WebkitMaskImage ?? style.webkitMaskImage ?? '', img.getAttribute('src')!).toBe(hair ? url : '')
+      if (hair) {
+        expect(style.maskSize).toBe('100% 100%')
+        expect(style.maskRepeat).toBe('no-repeat')
+      }
+    }
+    // A hat that does not clip leaves the hair unmasked.
+    const plain = render(<Chibi subject={{ ...SUBJECT, head: { ...conical, clipsHair: undefined } }} />)
+    for (const img of plain.container.querySelectorAll('img')) expect((img.style as CSSStyleDeclaration & Record<string, string>).maskImage ?? '').toBe('')
+  })
+
   it('a tinted layer renders the plain layer src while no tinted URL exists yet (no canvas in jsdom)', () => {
     const tintedBody: BodyRef = { ...SUBJECT.body, tint: { skin: { meanL: 0.78, files: [SUBJECT.body.body] } } }
     const tintedHair: HairRef = { ...SUBJECT.hair, tint: { meanL: 0.4, files: [SUBJECT.hair.front] } }

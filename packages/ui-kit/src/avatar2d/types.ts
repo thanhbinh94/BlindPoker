@@ -30,11 +30,13 @@ export interface TintRef {
 /** One stacked layer: `order` is the z-index (10 aura … 90 frame), `file` the filename stem without `@Nx.png`.
  * `tints`, when `layersFor` sets it, lists the paint jobs this layer needs — skin then eyes on a face, skin on the
  * body, the hair colour on a hair layer, the item's own tint for a worn item — in the order `useTintedLayer`
- * should apply them. */
+ * should apply them. `clip`, set on a hair layer under a hat that clips the hair (2026-10-06), is the stem of the
+ * mask the layer is drawn through: opaque where the hair shows, clear where the hat covers it. */
 export interface LayerRef {
   order: number
   file: string
   tints?: TintRef[]
+  clip?: string
 }
 
 /** The mask files one recolourable region carries (a body's skin or eyes, a hairstyle's hair): `meanL` is that
@@ -78,6 +80,8 @@ export interface WearRef extends LayerRef {
   id: string
   hidesHairFront?: boolean
   hidesHairBack?: boolean
+  /** A head item that covers the crown (2026-10-06): both hair layers are drawn through its `<file>_hairclipmask`. */
+  clipsHair?: boolean
   tint?: { colour: string; meanL: number }
 }
 

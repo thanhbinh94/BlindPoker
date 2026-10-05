@@ -1744,7 +1744,7 @@ describe('the v4 review sheet and the fit sheet (Plan 19 A1d, spec §5.6)', () =
   })
 
   it('draws both hair layers through a covering hat’s clip on the fit sheet, and says so in its caption (2026-10-06)', async () => {
-    const fit = fitCards(committed) as { names: string[]; hair: string; item: string; caption: string[] }[]
+    const fit = fitCards(committed)
     const card = (item: string, hair: string) => fit.find((c) => c.item === item && c.hair === hair)!
     for (const code of ['beanie01', 'beret_red01', 'conical_hat01']) expect(card(itemFile('head', code, 80), 'f_bob01').caption[1]).toBe(`${code} · clips hair`)
     for (const code of ['tophat01', 'dealer_visor01', 'crown_gold01', 'party_cone01']) expect(card(itemFile('head', code, 80), 'f_bob01').caption[1]).toBe(`${code} · hides none`)

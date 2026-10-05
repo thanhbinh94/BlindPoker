@@ -110,10 +110,11 @@ function toFirstHairOf(items: ReadonlyMap<string, ItemDto>, gender: string): Hai
  * equipped" rather than as an error. */
 function toWearRef(item: ItemDto | undefined, slot: ItemDto['slot'], gender: string): WearRef | null {
   if (item === undefined || item.slot !== slot || item.asset === undefined) return null
-  const { layer: order, hidesHairFront, hidesHairBack, tint, tintMeanL } = item.asset
+  const { layer: order, hidesHairFront, hidesHairBack, clipsHair, tint, tintMeanL } = item.asset
   const wear: WearRef = { id: item.id, order, file: layerFileFor(item.asset, gender)! }
   if (hidesHairFront !== undefined) wear.hidesHairFront = hidesHairFront
   if (hidesHairBack !== undefined) wear.hidesHairBack = hidesHairBack
+  if (clipsHair === true) wear.clipsHair = true
   // `tintMeanL` is always set alongside `tint` — the server's `parseAsset` refuses one without the
   // other — so it is trusted here the same way `faces` is trusted above.
   if (tint !== undefined) wear.tint = { colour: tint, meanL: tintMeanL! }

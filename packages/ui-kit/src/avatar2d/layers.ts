@@ -39,8 +39,10 @@ function itemTints(item: WearRef): TintRef[] | undefined {
   return item.tint === undefined ? undefined : [{ mask: `${item.file}_tintmask`, colour: item.tint.colour, meanL: item.tint.meanL }]
 }
 
-function layer(order: number, file: string, tints: TintRef[] | undefined): LayerRef {
-  return tints === undefined ? { order, file } : { order, file, tints }
+function layer(order: number, file: string, tints: TintRef[] | undefined, clip?: string): LayerRef {
+  const ref: LayerRef = tints === undefined ? { order, file } : { order, file, tints }
+  if (clip !== undefined) ref.clip = clip
+  return ref
 }
 
 /**
@@ -50,6 +52,8 @@ function layer(order: number, file: string, tints: TintRef[] | undefined): Layer
  * - L10 aura (full frame only) · L20 the hairstyle's back half · L30 the body · L40 the outfit · L50 the face for
  *   `expression` · L60 the hairstyle's front half · L70 face item · L80 head item · L90 frame (head frame only).
  * - A `head` item's `hidesHairFront`/`hidesHairBack` drop layers 60/20 — a hood covers the hair, a beret does not.
+ *   One that `clipsHair` (2026-10-06) — the beret, the beanie, the nón lá — draws whichever of 20 and 60 it keeps
+ *   through its `<file>_hairclipmask` (`clip`), so no tie, spike or tuft rises above the hat's lower edge.
  * - The `frame` *parameter* (the crop mode, not the layer) governs the outermost two layers: the head-crop avatar
  *   drops the aura (10, it would just bleed off the circular edge) but keeps the frame border (90, drawn for
  *   exactly this picture); the full-body view drops the frame border (90, avatar-only decoration) and keeps aura.
@@ -75,10 +79,11 @@ export function layersFor(subject: ChibiSubject, expression: Expression, frame: 
 
   const { body, hair, outfit, head, face, aura, frame: frameItem, hairColor, eyeColor, skinColor } = subject
   const eyes = body.tint?.eyes
+  const hairClip = head?.clipsHair === true ? `${head.file}_hairclipmask` : undefined
   const layers: LayerRef[] = []
 
   if (aura !== undefined && frame !== 'head') layers.push(layer(ORDER.aura, aura.file, itemTints(aura)))
-  if (head?.hidesHairBack !== true) layers.push(layer(ORDER.hairBack, hair.back, orNone(regionTint(hair.back, hair.tint, hairColor, 'hairmask'))))
+  if (head?.hidesHairBack !== true) layers.push(layer(ORDER.hairBack, hair.back, orNone(regionTint(hair.back, hair.tint, hairColor, 'hairmask')), hairClip))
   layers.push(layer(ORDER.body, body.body, orNone(skinTints(body.body, body, skinColor))))
   const outfitLine = regionTint(outfit.file, body.tint?.skinLine, skinColor, 'skinlinemask')
   layers.push(layer(ORDER.outfit, outfit.file, orNone([...(itemTints(outfit) ?? []), ...layerSkinTints(outfit.file, body, skinColor), ...outfitLine])))
@@ -86,7 +91,7 @@ export function layersFor(subject: ChibiSubject, expression: Expression, frame: 
   layers.push(layer(ORDER.face, faceFile, orNone([...skinTints(faceFile, body, skinColor), ...regionTint(faceFile, eyes, eyeColor, 'eyemask')])))
   if (head?.hidesHairFront !== true) {
     const front = [...regionTint(hair.front, hair.tint, hairColor, 'hairmask'), ...layerSkinTints(hair.front, body, skinColor)]
-    layers.push(layer(ORDER.hairFront, hair.front, orNone(front)))
+    layers.push(layer(ORDER.hairFront, hair.front, orNone(front), hairClip))
   }
   if (face !== undefined) layers.push(layer(ORDER.faceAcc, face.file, itemTints(face)))
   if (head !== undefined) layers.push(layer(ORDER.head, head.file, itemTints(head)))

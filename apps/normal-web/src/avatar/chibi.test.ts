@@ -58,6 +58,12 @@ const HEAD_HOOD = item({
   slot: 'head',
   asset: { layer: 80, file: 'item_head_hood_black01_L80', hidesHairFront: true, hidesHairBack: true, fitsAvatarCrop: true },
 })
+/** A hat that covers the crown (2026-10-06): the server reads `clipsHair` off the manifest's hair clip. */
+const HEAD_CONICAL = item({
+  id: 'head_conical_hat01',
+  slot: 'head',
+  asset: { layer: 80, file: 'item_head_conical_hat01_L80', clipsHair: true, fitsAvatarCrop: true },
+})
 const FACE_GLASSES = item({
   id: 'face_glasses_round_gold01',
   slot: 'face',
@@ -78,7 +84,7 @@ const TITLE_ROOKIE = item({ id: 'title_rookie', slot: 'title' })
 // Catalogue order: both female hairstyles first, so "the first hairstyle of that gender" is not simply the first
 // hairstyle in the map.
 const items = new Map(
-  [HAIR_F_BOB, HAIR_F_HIME, HAIR_M_TOUSLED, HAIR_M_NEAT, OUTFIT_CASUAL, OUTFIT_DEALER, OUTFIT_TET, HEAD_HOOD, FACE_GLASSES, AURA_FIRE, FRAME_GOLD, TITLE_ROOKIE].map(
+  [HAIR_F_BOB, HAIR_F_HIME, HAIR_M_TOUSLED, HAIR_M_NEAT, OUTFIT_CASUAL, OUTFIT_DEALER, OUTFIT_TET, HEAD_HOOD, HEAD_CONICAL, FACE_GLASSES, AURA_FIRE, FRAME_GOLD, TITLE_ROOKIE].map(
     (i) => [i.id, i],
   ),
 )
@@ -133,6 +139,11 @@ describe('chibiFromApi', () => {
     const chibi = chibiFromApi(config({ head: 'head_hood_black01' }), items, bodies)
 
     expect(chibi?.head).toEqual(expect.objectContaining({ hidesHairFront: true, hidesHairBack: true }))
+  })
+
+  it('carries clipsHair from the asset, and leaves it off a hat without one (2026-10-06)', () => {
+    expect(chibiFromApi(config({ head: 'head_conical_hat01' }), items, bodies)?.head).toEqual({ id: 'head_conical_hat01', order: 80, file: 'item_head_conical_hat01_L80', clipsHair: true })
+    expect(chibiFromApi(config({ head: 'head_hood_black01' }), items, bodies)?.head).not.toHaveProperty('clipsHair')
   })
 
   it('returns null for an unknown gender — there is no body to draw it on', () => {

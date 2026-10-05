@@ -41,9 +41,10 @@ export interface AvatarManifestFile {
   hidesHairBack?: boolean
   /**
    * The tint masks this layer carries, if any (design §4.1): at most one of each kind. `skin` is v4's
-   * (Plan 19): a body and its faces carry one, for `skinColor` to paint (`bodies.ts`).
+   * (Plan 19): a body and its faces carry one, for `skinColor` to paint (`bodies.ts`). `hairClip`
+   * (2026-10-06) paints nothing: a covering hat's, it is where a hairstyle may still show under it (`items.ts`).
    */
-  masks?: { hair?: MaskInfo; eyes?: MaskInfo; tint?: MaskInfo; skin?: MaskInfo; skinLine?: MaskInfo }
+  masks?: { hair?: MaskInfo; eyes?: MaskInfo; tint?: MaskInfo; skin?: MaskInfo; skinLine?: MaskInfo; hairClip?: MaskInfo }
 }
 
 export interface AvatarManifest {
@@ -78,7 +79,8 @@ function unitInterval(path: string, value: unknown, what: string): number {
   return value
 }
 
-const MASK_KINDS = ['hair', 'eyes', 'tint', 'skin', 'skinLine'] as const
+/** `hairClip` (2026-10-06) is a covering hat's: where a hairstyle may still show under it — not a region it paints. */
+const MASK_KINDS = ['hair', 'eyes', 'tint', 'skin', 'skinLine', 'hairClip'] as const
 type MaskKind = (typeof MASK_KINDS)[number]
 
 function parseMaskInfo(path: string, name: string, kind: MaskKind, raw: unknown): MaskInfo {
