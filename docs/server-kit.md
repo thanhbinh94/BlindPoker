@@ -136,12 +136,17 @@ as if it had not:
   write until it is acknowledged: it keeps its stack, sits out, is never
   dealt in, and neither a rejoin nor Sit In thaws it. The end of every
   hand retries every pending cash-out (as do another Stand Up, Leave or
-  kick, the reconnect expiry and a shutdown), under the same key.
+  kick, the reconnect expiry and a shutdown), under the same key. A kick
+  that fails is finished, not just cashed out: the player has already been
+  told `KICKED`, so the end of the next hand retries the whole removal
+  (`leaveAfterHand`); a rejoin before then calls it off.
 - **Buy-in.** The player is not seated, and the attempt is kept
   (`pendingBuyIn`): the next Sit replays it — same key, same amount,
   before any amount or balance check — and seats the player with it. A
   removal or a shutdown replays it and then refunds it, so nobody is
-  left debited and unseated.
+  left debited and unseated. The failed attempt pushes `BALANCE` (re-read,
+  so it shows the debit if the write landed), and the Sit that replays it
+  pushes again once seated, as every Sit does.
 - **Carry-over release.** The pot is held aside (`Room.pendingRelease`)
   with its batch, out of `carryOverPot`, and is settled first by the next
   release, by the next deal (which deals without it if it still cannot be
@@ -154,6 +159,13 @@ as if it had not:
 Every error line about one of these writes names its key, so an operator
 can reconcile it against `ledger_keys`. The table fee is not keyed: it is
 never retried.
+
+A key is only ever replayed by the room that claimed it, and rooms live in
+the server's memory, so no key can be retried across a restart. Both
+editions empty `ledger_keys` when a server starts (`pruneLedgerKeys`):
+Normal in `buildApp`, before the game server exists; Lite in `listen()`,
+for the instance that owns the data directory (never a `--smoke` run).
+This assumes one server per database (`docs/known-limitations.md`).
 
 Sink rows are what make the money invariant checkable:
 `Σ player balances + Σ sinks (+ live table stacks and carry-over pots) `

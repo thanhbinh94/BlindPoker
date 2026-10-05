@@ -1198,7 +1198,7 @@ describe('A ledger write is applied once, however often it is retried (Plan 20)'
     expect(await books(h, { h: 100_000, a: 100_000 })).toBe(0)
   })
 
-  it('a kick whose cash-out landed but reported an error is settled when the next hand ends, once', async () => {
+  it('a kick whose cash-out landed but reported an error is settled when the next hand ends, once, and the player removed', async () => {
     const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 1 } })
     await h.room.join(h.identity('a'))
     await h.room.sitDown('h', 0)
@@ -1206,6 +1206,7 @@ describe('A ledger write is applied once, however often it is retried (Plan 20)'
     await h.room.setReady('a', true)
     ackLostOnce(h, isCashOut)
     expect(await code(h.room.kick('h', 'a'))).toBe('Error: ack lost')
+    expect(h.last('a', 'NOTIFICATION')).toMatchObject({ kind: 'KICKED' }) // told before the write
     expect(errors(h)).toEqual([
       { level: 'error', msg: 'kick failed', data: expect.objectContaining({ playerId: 'a', key: expect.stringMatching(/^cash_out:room-1:/) }) },
     ])
@@ -1213,7 +1214,32 @@ describe('A ledger write is applied once, however often it is retried (Plan 20)'
     await h.room.startGame('h')
     expect(dealtIn(h, 'a')).toBe(false)
     await playOut(h, () => ({ kind: 'fold' }))
-    expect(h.room.players.get('a')!.seat).toBeNull() // retried with every other pending cash-out
+    // Retried with every other pending cash-out — and the kick goes through with it: a player told KICKED is not
+    // left behind as a spectator.
+    expect(h.room.hasPlayer('a')).toBe(false)
+    expect(h.last('a', 'ROOM_EVENT')?.event).toEqual({ type: 'PLAYER_LEFT', playerId: 'a' })
+    expect(rowsOf(h, 'a', 'cash_out')).toEqual([5_000])
+    expect(await h.repos.balances.get('a')).toBe(100_000)
+    expect(await books(h, { h: 100_000, a: 100_000 })).toBe(0)
+  })
+
+  it('a kick whose cash-out failed outright is finished when the next hand ends: credited once, and the player removed', async () => {
+    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 1 } })
+    await h.room.join(h.identity('a'))
+    await h.room.sitDown('h', 0)
+    await h.room.sitDown('a', 1)
+    await h.room.setReady('a', true)
+    failOnce(h, isCashOut)
+    expect(await code(h.room.kick('h', 'a'))).toBe('Error: ledger unavailable')
+    expect(h.last('a', 'NOTIFICATION')).toMatchObject({ kind: 'KICKED' })
+    expect(await h.repos.balances.get('a')).toBe(95_000) // nothing landed: the 5.000 is still on the table
+    expect(h.room.hasPlayer('a')).toBe(true)
+    await h.room.setReady('h', true)
+    await h.room.startGame('h')
+    expect(dealtIn(h, 'a')).toBe(false)
+    await playOut(h, () => ({ kind: 'fold' }))
+    expect(h.room.hasPlayer('a')).toBe(false)
+    expect(h.last('a', 'ROOM_EVENT')?.event).toEqual({ type: 'PLAYER_LEFT', playerId: 'a' })
     expect(rowsOf(h, 'a', 'cash_out')).toEqual([5_000])
     expect(await h.repos.balances.get('a')).toBe(100_000)
     expect(await books(h, { h: 100_000, a: 100_000 })).toBe(0)
@@ -1371,12 +1397,15 @@ describe('A ledger write is applied once, however often it is retried (Plan 20)'
     // be refused as INSUFFICIENT_BALANCE for a buy-in that is already paid.
     const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 1 } }, { players: [['h', 100_000], ['poor', 5_000]] })
     await h.room.join(h.identity('poor'))
+    const pushed = () => h.ofType('poor', 'BALANCE').map((m) => m.balance)
     ackLostOnce(h, isBuyIn)
     expect(await code(h.room.sitDown('poor', 1))).toBe('Error: ack lost')
     expect(await h.repos.balances.get('poor')).toBe(0)
     expect(h.room.players.get('poor')!.seat).toBeNull()
+    expect(pushed()).toEqual([0]) // the bar says what the ledger holds, landed or not, before the error
     await h.room.sitDown('poor', 2) // pressed again, on another seat even
     expect(h.room.players.get('poor')).toMatchObject({ seat: 2, stack: 5_000 })
+    expect(pushed()).toEqual([0, 0]) // the replay seats the player and refreshes the bar, as a first Sit does
     expect(rowsOf(h, 'poor', 'buy_in')).toEqual([-5_000])
     expect(await h.repos.balances.get('poor')).toBe(0)
     await h.room.sitDown('h', 0)
@@ -1390,13 +1419,16 @@ describe('A ledger write is applied once, however often it is retried (Plan 20)'
   it('Sit pressed again after a Hold’em buy-in that landed but reported an error debits once', async () => {
     const h = createRoomHarness(HOLDEM)
     await h.room.join(h.identity('a'))
+    const pushed = () => h.ofType('a', 'BALANCE').map((m) => m.balance)
     ackLostOnce(h, isBuyIn)
     expect(await code(h.room.sitDown('a', 1, 20_000))).toBe('Error: ack lost')
     expect(errors(h)).toEqual([
       { level: 'error', msg: 'buy-in failed', data: expect.objectContaining({ playerId: 'a', key: expect.stringMatching(/^buy_in:room-1:/) }) },
     ])
+    expect(pushed()).toEqual([80_000])
     await h.room.sitDown('a', 1, 20_000)
     expect(h.room.players.get('a')).toMatchObject({ seat: 1, stack: 20_000 })
+    expect(pushed()).toEqual([80_000, 80_000])
     expect(rowsOf(h, 'a', 'buy_in')).toEqual([-20_000])
     expect(await h.repos.balances.get('a')).toBe(80_000)
     expect(await books(h, { h: 100_000, a: 100_000 })).toBe(0)

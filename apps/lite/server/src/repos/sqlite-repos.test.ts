@@ -303,6 +303,21 @@ describe('balances.apply with a key', () => {
   })
 })
 
+describe('pruneLedgerKeys', () => {
+  it('empties ledger_keys and says how many keys went, touching no balance or sink', async () => {
+    const r = repos()
+    const a = r.createPlayer('Alice', 'ha', 1000).playerId
+    await r.balances.apply([{ playerId: a, delta: -400, reason: 'buy_in', refId: 'room-1' }], undefined, { key: 'buy_in:room-1:s1' })
+    await r.balances.apply([{ playerId: a, delta: 400, reason: 'cash_out', refId: 'room-1' }], { kind: 'carry_over', refId: 'room-1', fee: 3 }, { key: 'cash_out:room-1:s1' })
+    expect(keyRows(r)).toHaveLength(2)
+    expect(r.pruneLedgerKeys()).toBe(2)
+    expect(keyRows(r)).toEqual([])
+    await expect(r.balances.get(a)).resolves.toBe(1000)
+    expect(r.sinks()).toHaveLength(1)
+    expect(r.pruneLedgerKeys()).toBe(0)
+  })
+})
+
 describe('history.recordHand', () => {
   it('bumps hands_played/hands_won for humans only and skips bots', async () => {
     const r = repos()

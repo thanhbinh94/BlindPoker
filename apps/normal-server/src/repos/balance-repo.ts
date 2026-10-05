@@ -199,6 +199,19 @@ export function createBalanceRepository(db: AppDb): NormalBalanceRepository {
   }
 }
 
+/**
+ * Empties `ledger_keys` and resolves how many keys went. Called once at boot, before any room exists.
+ *
+ * A key is only ever replayed by the room that claimed it — the pending buy-in, cash-out or release lives in that
+ * room, in this process's memory — so once the process that claimed a key is gone, nothing can retry it. Normal
+ * runs as one process (`docs/known-limitations.md`): at boot every key in the table belongs to a process that has
+ * ended. A second server on the same database would lose its keys to this one's boot.
+ */
+export async function pruneLedgerKeys(db: AppDb): Promise<number> {
+  const [row] = rowsOf<{ n: number | string }>(await db.execute(sql`with gone as (delete from ${ledgerKeys} returning 1) select count(*) as n from gone`))
+  return Number(row?.n ?? 0)
+}
+
 export function createLedgerReader(db: AppDb): LedgerReader {
   return {
     async list(playerId, opts) {

@@ -46,6 +46,12 @@ export interface LiteRepositories extends Repositories {
   updateDaily(playerId: string, patch: { streak: number; lastDailyClaim: string }): void
   updateRelief(playerId: string, at: number): void
   sinks(): LiteSinkRow[]
+  /**
+   * Empties `ledger_keys` and returns how many keys went. The instance that owns the data directory runs it once,
+   * before it listens: a key is only ever replayed by the room that claimed it, and rooms live in the memory of the
+   * process that ran them, so no key claimed before this start can be retried.
+   */
+  pruneLedgerKeys(): number
   close(): void
 }
 
@@ -101,6 +107,7 @@ export function createSqliteRepositories(db: DatabaseSync, opts: { handLog: bool
   const addBalance = db.prepare('UPDATE players SET balance = balance + ? WHERE id = ?')
   const insertSink = db.prepare('INSERT INTO sinks (kind, ref_id, amount, created_at) VALUES (?, ?, ?, ?)')
   const claimKey = db.prepare('INSERT OR IGNORE INTO ledger_keys (key, created_at) VALUES (?, ?)')
+  const deleteKeys = db.prepare('DELETE FROM ledger_keys')
   const selectSinks = db.prepare('SELECT id, kind, ref_id, amount, created_at FROM sinks ORDER BY id')
   const bumpHands = db.prepare('UPDATE players SET hands_played = hands_played + 1, hands_won = hands_won + ? WHERE id = ?')
   const insertHandLog = db.prepare('INSERT INTO hand_log (hand_id, room_id, mode, fee, cancelled, summary, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
@@ -279,6 +286,10 @@ export function createSqliteRepositories(db: DatabaseSync, opts: { handLog: bool
     sinks() {
       const rows = selectSinks.all() as { id: number; kind: string; ref_id: string; amount: number; created_at: number }[]
       return rows.map((r) => ({ id: Number(r.id), kind: r.kind, refId: r.ref_id, amount: Number(r.amount), createdAt: Number(r.created_at) }))
+    },
+
+    pruneLedgerKeys() {
+      return Number(deleteKeys.run().changes)
     },
 
     close() {

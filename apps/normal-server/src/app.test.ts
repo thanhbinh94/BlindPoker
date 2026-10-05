@@ -24,7 +24,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { FONTS_FILE_HOST, FONTS_STYLESHEET_HOST, logSettlementFailure, normalCsp, SCRIPT_SRC, SESSION_SWEEP_INTERVAL_MS, UPGRADE_RATE_LIMIT } from './app.js'
 import { CONFIG_DEFAULTS } from './config.js'
 import { rowsOf, type AppDb } from './db/client.js'
-import { sessions as sessionsTable, users } from './db/schema.js'
+import { ledgerKeys, sessions as sessionsTable, users } from './db/schema.js'
 import { createTestDb, type TestDb } from './db/test-db.js'
 import { HEALTH_PING_TIMEOUT_MS, OWN_LIMITER, READ_RATE_LIMIT, WRITE_IP_RATE_LIMIT, WRITE_RATE_LIMIT } from './http/routes.js'
 import { buildTestApp, ORIGIN, resetDb, START, XRW, type Harness, type HarnessOptions } from './test-harness.js'
@@ -880,6 +880,16 @@ describe('a whole hand between two registered players', () => {
 })
 
 describe('a real boot', () => {
+  /**
+   * Rooms live in this process's memory, and only a room retries a keyed write, so no key claimed before a start can
+   * ever be replayed after it: the boot empties `ledger_keys` rather than let it grow by a row or two per sitting.
+   */
+  it('starts with ledger_keys empty: no key outlives the process that claimed it', async () => {
+    await db.insert(ledgerKeys).values([{ key: 'buy_in:room-1:s1' }, { key: 'cash_out:room-1:s1' }, { key: 'carry_over:room-2:x' }])
+    await harness()
+    expect(await db.select().from(ledgerKeys)).toEqual([])
+  })
+
   it('listens, answers over HTTP, refuses an anonymous upgrade, and closes twice without complaint', async () => {
     const h = await harness()
     const base = await listen(h)

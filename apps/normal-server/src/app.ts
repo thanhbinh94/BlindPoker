@@ -70,7 +70,7 @@ import { loadAvatarManifest, type AvatarManifest } from './inventory/manifest.js
 import { createOutfitsService, type OutfitsService } from './inventory/outfits-service.js'
 import { WS_PATH } from './http/routes-catalog.js'
 import { registerRoutes } from './http/routes.js'
-import { createRepositories, type NormalRepositories } from './repos/index.js'
+import { createRepositories, pruneLedgerKeys, type NormalRepositories } from './repos/index.js'
 import { sessions as sessionsTable } from './db/schema.js'
 import { createStatsService, type StatsService } from './stats/stats-service.js'
 import { createTrustedPeerCheck, upgradeAddress } from './trust-proxy.js'
@@ -254,6 +254,9 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
   const defs = loadAchievements(catalog)
   // Before anything reads or grants an item: every reward is a foreign key into this table.
   await catalog.seed(db)
+  // Before any room exists: the keys a past process claimed can never be retried — its rooms went with it.
+  const pruned = await pruneLedgerKeys(db)
+  if (pruned > 0) log.info('ledger keys pruned', { count: pruned })
 
   const repos = createRepositories(db)
   const sessions = createSessionService(db, { secret: config.sessionSecret, ...(deps.now ? { now: deps.now } : {}) })

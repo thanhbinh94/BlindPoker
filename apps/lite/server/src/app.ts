@@ -153,6 +153,13 @@ export function buildApp(deps: BuildAppDeps): LiteApp {
     },
 
     async listen() {
+      if (runFilePath) {
+        // This instance owns the data directory, and no room exists before the listener binds: every key in
+        // `ledger_keys` was claimed by a process that has ended, and its rooms went with it. A smoke run is given no
+        // run file — it may share a live server's database — so it never gets here.
+        const pruned = repos.pruneLedgerKeys()
+        if (pruned > 0) log.info('ledger keys pruned', { count: pruned })
+      }
       const address = await fastify.listen({ port: config.port, host: config.host })
       if (!upgradeAttached) {
         upgradeAttached = true

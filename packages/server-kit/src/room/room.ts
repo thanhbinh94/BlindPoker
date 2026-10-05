@@ -232,7 +232,18 @@ export class Room {
       if (targetId === hostId) throw new RoomError('ILLEGAL_ACTION', 'cannot kick this player')
       if (this.inCurrentHand(target)) throw new RoomError('GAME_IN_PROGRESS', 'player is in the current hand')
       if (!target.identity.isBot) this.deps.outbox.send(targetId, { t: 'NOTIFICATION', kind: 'KICKED', payload: { roomId: this.roomId } })
-      return this.loggingMoney('kick failed', target, () => this.removePlayer(target, 'kicked'))
+      return this.loggingMoney('kick failed', target, async () => {
+        try {
+          await this.removePlayer(target, 'kicked')
+        } catch (err) {
+          // The player has been told KICKED, so a write that failed (and may have landed) must not leave them behind
+          // as a spectator: the end of the next hand retries the whole removal, under the same keys, not just the
+          // cash-out. A rejoin calls it off, as it calls off a Leave pressed mid-hand.
+          target.leaveAfterHand = true
+          target.standAfterHand = true
+          throw err
+        }
+      })
     })
   }
 
@@ -279,6 +290,9 @@ export class Room {
           throw new RoomError('INSUFFICIENT_BALANCE')
         }
         this.deps.log.error('buy-in failed', { roomId: this.roomId, playerId, amount, key: this.buyInKey(sitId), err: String(err) })
+        // It may have landed: the bar is re-read now rather than left showing points the ledger no longer holds until
+        // the next Sit (which replays it, and pushes again once seated) or the refund on the way out.
+        await this.pushBalance(playerId)
         throw err
       }
       if (this.seatPlayer(seat)) {
@@ -750,7 +764,8 @@ export class Room {
     for (const p of [...this.players.values()]) {
       // One player's ledger failure must not take the next deal down with it: logged with its key, and retried after
       // the next hand (the seat is frozen meanwhile: `cashOutPending`). Every pending cash-out is retried here — a
-      // failed Stand Up, Leave or kick as much as the stand-ups this loop starts itself — under its own key.
+      // failed Stand Up, Leave or kick as much as the stand-ups this loop starts itself — under its own key; a failed
+      // kick retries the whole removal (`leaveAfterHand`).
       try {
         if (!p.identity.isBot && p.consecutiveTimeouts >= this.deps.options.consecutiveTimeoutsToStand) {
           p.standAfterHand = true

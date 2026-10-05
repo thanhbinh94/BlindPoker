@@ -6,7 +6,7 @@ import { ledgerKeys, players, pointTransactions, users } from '../db/schema.js'
 import type { TestDb } from '../db/test-db.js'
 import { createTestDb } from '../db/test-db.js'
 import type { NormalRepositories } from './index.js'
-import { createRepositories, UnknownPlayerError } from './index.js'
+import { createRepositories, pruneLedgerKeys, UnknownPlayerError } from './index.js'
 
 /** One PGlite per file: the first boot costs seconds, every table reset after it costs milliseconds. */
 let test: TestDb
@@ -277,6 +277,20 @@ describe('balances.apply with a key', () => {
     expect(await repos.balances.apply([{ playerId: id, delta: 5, reason: 'refund', refId: 'r' }])).toEqual({ applied: true })
     expect(await repos.balances.get(id)).toBe(10)
     expect(await keyRows()).toEqual([])
+  })
+})
+
+describe('pruneLedgerKeys', () => {
+  it('empties ledger_keys and says how many keys went, touching no balance or ledger row', async () => {
+    const id = await seedPlayer(1000)
+    await repos.balances.apply([{ playerId: id, delta: -400, reason: 'buy_in', refId: 'room-1' }], undefined, { key: 'buy_in:room-1:s1' })
+    await repos.balances.apply([{ playerId: id, delta: 400, reason: 'cash_out', refId: 'room-1' }], undefined, { key: 'cash_out:room-1:s1' })
+    expect(await keyRows()).toHaveLength(2)
+    expect(await pruneLedgerKeys(db)).toBe(2)
+    expect(await keyRows()).toEqual([])
+    expect(await repos.balances.get(id)).toBe(1000)
+    expect(await ledgerRows()).toHaveLength(2)
+    expect(await pruneLedgerKeys(db)).toBe(0) // nothing left: a second boot finds an empty table
   })
 })
 

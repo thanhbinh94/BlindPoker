@@ -230,15 +230,19 @@ arise — `docker compose stop app` is a graceful stop, and the server refunds e
 cashes table stacks back into balances before it exits.
 *Tracked:* `deploy/normal-windows/README.md`; the free-tier deployment design §3 and Appendix D3.
 
-**The ledger's idempotency keys are never pruned.** Since Plan 20 every money write the room may retry
-— a buy-in, a cash-out, a carry-over release — carries a key, and the ledger claims it in `ledger_keys`
-inside the write's own transaction, so a repeat is a no-op (`docs/server-kit.md` → Repositories →
-Keys). Nothing deletes a row afterwards, in either edition: a sitting leaves about two (its buy-in and
-its cash-out), and a released pot one more.
-*Why it stays:* a few rows per sitting is negligible at this scale. A key is only ever replayed by the
-process that made it — a room's pending writes live in memory — so pruning rows at boot, or by age,
-would be safe; it was left as a follow-up rather than add a retention rule to the migration.
-*Tracked:* here; `apps/normal-server/drizzle/0003_ledger_keys.sql`, Lite schema v3.
+**The ledger's idempotency keys last one server process.** Since Plan 20 every money write the room may
+retry — a buy-in, a cash-out, a carry-over release — carries a key, and the ledger claims it in
+`ledger_keys` inside the write's own transaction, so a repeat is a no-op (`docs/server-kit.md` →
+Repositories → Keys). A sitting leaves about two rows (its buy-in and its cash-out), a released pot one
+more, and the table is emptied when a server starts (`pruneLedgerKeys`): Normal's `buildApp` before the
+game server exists, Lite's `listen()` in the instance that owns the data directory (a `--smoke` run never
+prunes — it may share a live server's database).
+*Why it is safe, and its cost:* a key is only ever replayed by the room that claimed it, and rooms live
+in memory, so no key outlives the process that could retry it. That rests on one server per database:
+Normal is a single process (above), and Lite refuses a second instance on one data directory. A second
+Normal process pointed at the same database would empty the first one's keys when it booted.
+*Tracked:* here; `apps/normal-server/src/repos/balance-repo.ts` and `apps/lite/server/src/repos/sqlite-repos.ts`
+(`pruneLedgerKeys`), `apps/normal-server/drizzle/0003_ledger_keys.sql`, Lite schema v3.
 
 **The suite has never been run against a real PostgreSQL.** Every `apps/normal-server` test runs on
 in-process **PGlite** through the same driver-neutral `AppDb` the production code uses, so the
