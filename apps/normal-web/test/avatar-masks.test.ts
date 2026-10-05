@@ -1062,7 +1062,7 @@ describe('layerSkinMask: the skin a hair or outfit picture redrew (2026-10-05)',
     expect(sum(boxPixels(200, 100, 398, 199).map((v, i) => (v && mask[i]! > 0 ? 1 : 0))), 'the hair').toBe(0)
   })
 
-  it('gives a hair as light as the skin (the wavy platinum) no skin at all, its strand tips included', () => {
+  it('gives a hair within ΔE 10 of the skin no skin at all, its strand tips included (the real wavy platinum keeps soft tips where its tan strand lines meet the skin)', () => {
     const { body, skin, layer } = hairFixture('#f6dcc6')
     const mask = layerSkinMask(layer, { kind: 'hair', body, skin, beneath: body })
     expect(sum(mask)).toBe(0)
