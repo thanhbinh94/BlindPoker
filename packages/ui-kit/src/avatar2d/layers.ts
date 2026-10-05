@@ -23,6 +23,12 @@ function skinTints(file: string, body: BodyRef, colour: string | undefined): Tin
   return [...regionTint(file, body.tint?.skin, colour, 'skinmask'), ...regionTint(file, body.tint?.skinLine, colour, 'skinlinemask')]
 }
 
+/** The skin colour's job on the skin a front hair or outfit picture redrew (2026-10-05): its `<file>_skinmask`, by
+ * `ratio` at the body's skin `meanL` — on any tone, a light one too, since `ratio` also gives it the tone's hue. */
+function layerSkinTints(file: string, body: BodyRef, colour: string | undefined): TintRef[] {
+  return regionTint(file, body.tint?.layerSkin, colour, 'skinmask').map((tint) => ({ ...tint, mode: 'ratio' as const }))
+}
+
 /** `tints`, or undefined for none — a layer with nothing to paint carries no `tints` key at all. */
 function orNone(tints: TintRef[]): TintRef[] | undefined {
   return tints.length === 0 ? undefined : tints
@@ -52,8 +58,10 @@ function layer(order: number, file: string, tints: TintRef[] | undefined): Layer
  *   `hairColor` on each hair layer listed in `hair.tint` — each at its own region's `meanL`. `skinColor` also
  *   shades the skin's line art on each layer listed in `body.tint.skinLine`, right after that layer's skin, so a
  *   cream outline does not glow round a darker skin (2026-10-05) — the outfit too, whose picture redrew the hands'
- *   outline, after the outfit's own colour. A worn item's own colour variant lands on that item's layer. A body,
- *   hairstyle or item with no masks, or a subject with no colours set, gets none.
+ *   outline, after the outfit's own colour. The skin an outfit or front hair picture redrew (an instep, the forehead
+ *   between strands) takes `skinColor` on each layer listed in `body.tint.layerSkin`, by `ratio`: on the outfit after
+ *   its own colour and before its line, on the front hair after the hair colour. A worn item's own colour variant
+ *   lands on that item's layer. A body, hairstyle or item with no masks, or a subject with no colours set, gets none.
  *
  * Bots have no wardrobe at all — just their body (30) and expression face (50), and never carry tints.
  */
@@ -73,10 +81,13 @@ export function layersFor(subject: ChibiSubject, expression: Expression, frame: 
   if (head?.hidesHairBack !== true) layers.push(layer(ORDER.hairBack, hair.back, orNone(regionTint(hair.back, hair.tint, hairColor, 'hairmask'))))
   layers.push(layer(ORDER.body, body.body, orNone(skinTints(body.body, body, skinColor))))
   const outfitLine = regionTint(outfit.file, body.tint?.skinLine, skinColor, 'skinlinemask')
-  layers.push(layer(ORDER.outfit, outfit.file, orNone([...(itemTints(outfit) ?? []), ...outfitLine])))
+  layers.push(layer(ORDER.outfit, outfit.file, orNone([...(itemTints(outfit) ?? []), ...layerSkinTints(outfit.file, body, skinColor), ...outfitLine])))
   const faceFile = body.faces[expression]
   layers.push(layer(ORDER.face, faceFile, orNone([...skinTints(faceFile, body, skinColor), ...regionTint(faceFile, eyes, eyeColor, 'eyemask')])))
-  if (head?.hidesHairFront !== true) layers.push(layer(ORDER.hairFront, hair.front, orNone(regionTint(hair.front, hair.tint, hairColor, 'hairmask'))))
+  if (head?.hidesHairFront !== true) {
+    const front = [...regionTint(hair.front, hair.tint, hairColor, 'hairmask'), ...layerSkinTints(hair.front, body, skinColor)]
+    layers.push(layer(ORDER.hairFront, hair.front, orNone(front)))
+  }
   if (face !== undefined) layers.push(layer(ORDER.faceAcc, face.file, itemTints(face)))
   if (head !== undefined) layers.push(layer(ORDER.head, head.file, itemTints(head)))
   if (frameItem !== undefined && frame !== 'full') layers.push(layer(ORDER.frame, frameItem.file, itemTints(frameItem)))

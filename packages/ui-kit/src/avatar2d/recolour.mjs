@@ -71,6 +71,35 @@ export function shade(pixels, mask, colour, meanL) {
   }
 }
 
+/**
+ * Skin that a hair or outfit picture redrew (2026-10-05): every masked pixel takes the colour's hue and saturation, and
+ * its own HSL lightness l becomes l × k, k = the colour's lightness lc over `meanL` (the body's skin), clamped to 1 — the
+ * colour's RGB scaled by min(1, l·k) / lc, blended by the mask like `recolour`. `recolour` shifts lightness by lc − meanL
+ * instead, which on a deep tone clamps skin drawn in a hair's shadow to black; scaling keeps its shading in proportion,
+ * and a pixel exactly as light as `meanL` becomes the colour itself. The body's own skin keeps `recolour`. Alpha is
+ * untouched; a `meanL` of 0 (no reference) leaves the pixels as they are.
+ */
+export function ratio(pixels, mask, colour, meanL) {
+  if (!(meanL > 0)) return
+  const n = Number.parseInt(colour.slice(1), 16)
+  const rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+  const lc = hexToHsl(colour)[2]
+  const k = lc / meanL
+  for (let i = 0; i < mask.length; i++) {
+    const a = mask[i]
+    if (!a) continue
+    const o = i * 4
+    const l = rgbToHsl(pixels[o], pixels[o + 1], pixels[o + 2])[2]
+    // A black colour (lc 0) paints black: every target channel is 0 however far it would be scaled.
+    const f = lc > 0 ? Math.min(1, l * k) / lc : 0
+    const t = a / 255
+    for (let c = 0; c < 3; c++) {
+      const target = Math.min(255, rgb[c] * f)
+      pixels[o + c] = Math.round(pixels[o + c] * (1 - t) + target * t)
+    }
+  }
+}
+
 export function recolour(pixels, mask, colour, meanL) {
   const [hue, sat, lc] = hexToHsl(colour)
   const shift = lc - meanL

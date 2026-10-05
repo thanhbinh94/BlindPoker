@@ -163,6 +163,24 @@ describe('useTintedLayer — with a faked canvas pipeline', () => {
     expect([...written[0]!.slice(0, 4)]).toEqual([81, 81, 81, 255])
   })
 
+  it('paints a `ratio` tint’s mask by ratio, not by recolour (a layer’s redrawn skin, 2026-10-05)', async () => {
+    const written: Uint8ClampedArray[] = []
+    vi.mocked(HTMLCanvasElement.prototype.getContext).mockImplementation(
+      () =>
+        ({
+          drawImage: vi.fn(),
+          getImageData: vi.fn(() => ({ data: new Uint8ClampedArray(2 * 2 * 4).fill(255), width: 2, height: 2 })),
+          putImageData: vi.fn((data: ImageData) => written.push(data.data)),
+          clearRect: vi.fn(),
+        }) as unknown as CanvasRenderingContext2D,
+    )
+    const ratioTint: TintRef = { mask: 'tint_stub_ratio_skinmask', colour: '#643e2b', meanL: 0.8819, mode: 'ratio' }
+    const { result } = renderHook(() => useTintedLayer('/avatar/', { order: 60, file: 'tint_stub_ratio', tints: [ratioTint] }))
+    await waitFor(() => expect(result.current).not.toBeNull())
+    // White (l = 1) at 0.2804 / 0.8819 of it: #643e2b × 1.134 — `recolour` would have shifted it to l 0.40, `shade` left it grey.
+    expect([...written[0]!.slice(0, 4)]).toEqual([113, 70, 49, 255])
+  })
+
   it('returns null immediately when a layer loses its tints', async () => {
     const tinted: LayerRef = { order: 30, file: 'tint_stub_c', tints: [RED] }
     const { result, rerender } = renderHook(({ layer }) => useTintedLayer('/avatar/', layer), { initialProps: { layer: tinted } })
