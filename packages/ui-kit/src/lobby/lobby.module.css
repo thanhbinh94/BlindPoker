@@ -171,10 +171,11 @@
 }
 
 /* Two lines at most — the server takes 30 characters, and one with no space in it still wraps (`anywhere`); a name
-   the clamp cuts gets the whole of itself as a tooltip on hover (`RoomList`). The clamp needs `overflow: hidden`, which shaves whatever a glyph draws
-   outside the box: at the headings' 1.15 that was the tail of a "y" and the top of a capital's stacked marks ("Ổ").
-   At 1.3 a line holds the deepest descender, and the padding above the first line (given back by the margin) holds
-   those marks; a one-line name (23.4 px) is still no taller than the badge beside it. */
+   the clamp cuts gets the whole of itself as a tooltip on hover (`RoomList`). The clamp needs `overflow: hidden`,
+   which shaves whatever a glyph draws outside the box: at the headings' 1.15 that was the tail of a "y" and the top
+   of a capital's stacked marks ("Ổ"). At 1.3 a line holds the deepest descender, and the padding above the first
+   line (given back by the margin) holds those marks; a one-line name (23.4 px) is still no taller than the badge
+   beside it. */
 .roomName {
   display: -webkit-box;
   -webkit-box-orient: vertical;
