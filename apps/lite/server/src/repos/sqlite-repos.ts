@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { displayNameKey, normalizeDisplayName } from '@bp/core'
-import { InsufficientBalanceError, type BalanceEntry, type HandSummary, type PlayerRecord, type Repositories, type SettlementMeta } from '@bp/server-kit'
+import { InsufficientBalanceError, type ApplyOptions, type ApplyResult, type BalanceEntry, type HandSummary, type PlayerRecord, type Repositories, type SettlementMeta } from '@bp/server-kit'
 
 /** The full `players` row — everything Lite stores about a player, not just what `server-kit` needs. */
 export interface LitePlayerRecord {
@@ -100,6 +100,7 @@ export function createSqliteRepositories(db: DatabaseSync, opts: { handLog: bool
   const selectBalance = db.prepare('SELECT balance FROM players WHERE id = ?')
   const addBalance = db.prepare('UPDATE players SET balance = balance + ? WHERE id = ?')
   const insertSink = db.prepare('INSERT INTO sinks (kind, ref_id, amount, created_at) VALUES (?, ?, ?, ?)')
+  const claimKey = db.prepare('INSERT OR IGNORE INTO ledger_keys (key, created_at) VALUES (?, ?)')
   const selectSinks = db.prepare('SELECT id, kind, ref_id, amount, created_at FROM sinks ORDER BY id')
   const bumpHands = db.prepare('UPDATE players SET hands_played = hands_played + 1, hands_won = hands_won + ? WHERE id = ?')
   const insertHandLog = db.prepare('INSERT INTO hand_log (hand_id, room_id, mode, fee, cancelled, summary, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
@@ -157,14 +158,20 @@ export function createSqliteRepositories(db: DatabaseSync, opts: { handLog: bool
      * Contract (`docs/server-kit.md` → Repositories): all entries commit or none do; deltas are
      * netted per player *before* the negativity check; a `meta.fee > 0` sink row lands in the same
      * transaction — including for an empty batch, which is how Hold'em's table fee arrives.
+     *
+     * `opts.key` is claimed first, inside the same transaction: a key already in `ledger_keys` makes
+     * the call a no-op (`{ applied: false }`, nothing checked or written), and a rejected batch rolls
+     * its claim back with everything else.
      */
-    async apply(entries: BalanceEntry[], meta?: SettlementMeta): Promise<void> {
+    async apply(entries: BalanceEntry[], meta?: SettlementMeta, opts?: ApplyOptions): Promise<ApplyResult> {
       const nets = new Map<string, number>()
       for (const e of entries) nets.set(e.playerId, (nets.get(e.playerId) ?? 0) + e.delta)
       const writesSink = meta !== undefined && meta.fee > 0
-      if (nets.size === 0 && !writesSink) return
+      if (nets.size === 0 && !writesSink) return { applied: true }
+      const key = opts?.key
 
-      transact(() => {
+      return transact(() => {
+        if (key !== undefined && Number(claimKey.run(key, now()).changes) === 0) return { applied: false }
         for (const [playerId, net] of nets) {
           const row = selectBalance.get(playerId) as { balance: number } | undefined
           if (!row) throw new Error(`unknown player ${playerId}`)
@@ -174,6 +181,7 @@ export function createSqliteRepositories(db: DatabaseSync, opts: { handLog: bool
           if (net !== 0) addBalance.run(net, playerId)
         }
         if (meta && writesSink) insertSink.run(meta.kind, meta.refId, meta.fee, now())
+        return { applied: true }
       })
     },
   }

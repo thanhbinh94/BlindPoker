@@ -105,6 +105,19 @@ export const pointTransactions = pgTable('point_transactions', {
   index('point_transactions_ref_idx').on(t.refId),
 ])
 
+/**
+ * The keys `BalanceRepository.apply` has claimed (Plan 20). A room names every write it may retry —
+ * `cash_out:<room>:<sitting>`, `buy_in:…`, `buy_in_refund:…`, `carry_over:<room>:<release>` — and `apply`
+ * inserts the key first, in the batch's own transaction: a key already here makes the call a no-op, so a
+ * write that committed but whose acknowledgement was lost is not applied again when it is retried. A
+ * rejected batch rolls its key back with it. Additive on purpose: no ledger row carries a key, so
+ * `point_transactions` and everything that reads it are untouched.
+ */
+export const ledgerKeys = pgTable('ledger_keys', {
+  key: text('key').primaryKey(),
+  createdAt: createdAt(),
+})
+
 /** One row per completed (or cancelled) hand — `id` is the engine's `handId`. */
 export const games = pgTable('games', {
   id: text('id').primaryKey(),

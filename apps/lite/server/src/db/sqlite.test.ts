@@ -31,7 +31,7 @@ describe('openDatabase / migrate', () => {
   it('creates the schema and stamps user_version to MIGRATIONS.length', () => {
     const db = openDatabase(':memory:')
     expect(userVersion(db)).toBe(MIGRATIONS.length)
-    expect(tableNames(db)).toEqual(expect.arrayContaining(['hand_log', 'players', 'sinks']))
+    expect(tableNames(db)).toEqual(expect.arrayContaining(['hand_log', 'ledger_keys', 'players', 'sinks']))
     db.close()
   })
 
@@ -41,7 +41,38 @@ describe('openDatabase / migrate', () => {
     expect(cols('players')).toEqual(['id', 'display_name', 'token_hash', 'balance', 'hands_played', 'hands_won', 'streak', 'last_daily_claim', 'last_relief_at', 'created_at', 'name_key'])
     expect(cols('sinks')).toEqual(['id', 'kind', 'ref_id', 'amount', 'created_at'])
     expect(cols('hand_log')).toEqual(['id', 'hand_id', 'room_id', 'mode', 'fee', 'cancelled', 'summary', 'created_at'])
+    expect(cols('ledger_keys')).toEqual(['key', 'created_at'])
     db.close()
+  })
+
+  it('keeps a ledger key unique', () => {
+    const db = openDatabase(':memory:')
+    db.prepare('INSERT INTO ledger_keys (key, created_at) VALUES (?, ?)').run('cash_out:room-1:s1', 1)
+    expect(() => db.prepare('INSERT INTO ledger_keys (key, created_at) VALUES (?, ?)').run('cash_out:room-1:s1', 2)).toThrow(/UNIQUE|PRIMARY KEY/i)
+    db.close()
+  })
+
+  it('upgrades a v2 database to v3: ledger_keys is added and every balance is kept', () => {
+    const path = tempDbPath()
+    const v2 = openDatabase(path)
+    // Rewind to what a v2 server left on disk, with players in it.
+    v2.exec('DROP TABLE ledger_keys; PRAGMA user_version = 2')
+    const insert = v2.prepare('INSERT INTO players (id, display_name, name_key, token_hash, balance, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    insert.run('p1', 'Alice', 'alice', 'h1', 95_000, 1)
+    insert.run('p2', 'Bình', 'bình', 'h2', 104_000, 2)
+    v2.prepare('INSERT INTO sinks (kind, ref_id, amount, created_at) VALUES (?, ?, ?, ?)').run('table_fee', 'hand-1', 40, 3)
+    v2.close()
+
+    const v3 = openDatabase(path)
+    expect(userVersion(v3)).toBe(3)
+    expect(tableNames(v3)).toContain('ledger_keys')
+    expect(v3.prepare('SELECT id, balance, name_key FROM players ORDER BY id').all()).toEqual([
+      { id: 'p1', balance: 95_000, name_key: 'alice' },
+      { id: 'p2', balance: 104_000, name_key: 'bình' },
+    ])
+    expect(v3.prepare('SELECT kind, ref_id, amount FROM sinks').all()).toEqual([{ kind: 'table_fee', ref_id: 'hand-1', amount: 40 }])
+    expect(v3.prepare('SELECT * FROM ledger_keys').all()).toEqual([])
+    v3.close()
   })
 
   it('enforces the non-negative balance CHECK', () => {
@@ -63,9 +94,18 @@ describe('openDatabase / migrate', () => {
 
   it('re-applies the whole schema after the tables are dropped and user_version is rewound', () => {
     const db = openDatabase(':memory:')
-    db.exec('DROP INDEX idx_players_name_key; DROP TABLE players; DROP TABLE sinks; DROP TABLE hand_log; PRAGMA user_version = 0')
+    db.exec('DROP INDEX idx_players_name_key; DROP TABLE players; DROP TABLE sinks; DROP TABLE hand_log; DROP TABLE ledger_keys; PRAGMA user_version = 0')
     expect(migrate(db)).toBe(MIGRATIONS.length)
-    expect(tableNames(db)).toEqual(expect.arrayContaining(['hand_log', 'players', 'sinks']))
+    expect(tableNames(db)).toEqual(expect.arrayContaining(['hand_log', 'ledger_keys', 'players', 'sinks']))
+    db.close()
+  })
+
+  it('re-runs v3 over a ledger_keys table that is already there without losing a key (CREATE TABLE IF NOT EXISTS)', () => {
+    const db = openDatabase(':memory:')
+    db.prepare('INSERT INTO ledger_keys (key, created_at) VALUES (?, ?)').run('buy_in:room-1:s1', 1)
+    db.exec('PRAGMA user_version = 2')
+    expect(migrate(db)).toBe(MIGRATIONS.length)
+    expect(db.prepare('SELECT key FROM ledger_keys').all()).toEqual([{ key: 'buy_in:room-1:s1' }])
     db.close()
   })
 

@@ -59,6 +59,25 @@ export interface PlayerRepository {
   findById(playerId: string): Promise<PlayerRecord | null>
 }
 
+/**
+ * `key` makes a write idempotent: the first batch that commits under a key claims it, and every later
+ * call with that key is a no-op. The room names each write it may have to retry — `cash_out:<room>:<sitting>`,
+ * `buy_in:<room>:<sitting>`, `buy_in_refund:<room>:<sitting>`, `carry_over:<room>:<release>` — so a write
+ * that committed but whose acknowledgement was lost (a dropped connection after `COMMIT`) is not applied
+ * a second time when it is retried.
+ */
+export interface ApplyOptions {
+  key?: string
+}
+
+export interface ApplyResult {
+  /**
+   * `false` only when `key` had already been claimed: nothing was checked and nothing was written,
+   * because the batch that claimed it already did. A batch with nothing to write is `true`.
+   */
+  applied: boolean
+}
+
 export interface BalanceRepository {
   get(playerId: string): Promise<number>
   /**
@@ -75,8 +94,15 @@ export interface BalanceRepository {
    * player (Normal: a `point_transactions` row with a null `player_id`; the in-memory repositories
    * push the meta onto `sinks`). This is what keeps
    * `Σ balances + Σ sinks (+ live table stacks and carry-over pots)` constant.
+   *
+   * Keys (`opts.key`): the key is claimed first, inside the same transaction as the batch. A key that
+   * is already claimed makes the call a no-op that resolves `{ applied: false }` — no balance check,
+   * no write — so a retry of a write that committed but reported an error cannot apply it twice. A
+   * batch that is rejected (insufficient balance, any error) rolls back with its claim, leaving the
+   * key free for the next attempt. Without a key every call behaves as it always has. A batch with
+   * nothing to write (no entries, no fee) claims nothing and resolves `{ applied: true }`.
    */
-  apply(entries: BalanceEntry[], meta?: SettlementMeta): Promise<void>
+  apply(entries: BalanceEntry[], meta?: SettlementMeta, opts?: ApplyOptions): Promise<ApplyResult>
 }
 
 export interface HandSummaryPlayer {

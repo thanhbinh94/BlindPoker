@@ -7,6 +7,8 @@ export interface MemoryRepositories extends Repositories {
   entries: { entry: BalanceEntry; meta?: SettlementMeta }[]
   /** Every `apply` meta with `fee > 0`: the points that left player balances and went to no player. */
   sinks: SettlementMeta[]
+  /** Every key a committed `apply` has claimed (the editions' `ledger_keys` table). */
+  keys: Set<string>
 }
 
 export function createMemoryRepositories(): MemoryRepositories {
@@ -14,6 +16,7 @@ export function createMemoryRepositories(): MemoryRepositories {
   const hands: HandSummary[] = []
   const entries: { entry: BalanceEntry; meta?: SettlementMeta }[] = []
   const sinks: SettlementMeta[] = []
+  const keys = new Set<string>()
   const must = (playerId: string): PlayerRecord => {
     const r = records.get(playerId)
     if (!r) throw new Error(`unknown player ${playerId}`)
@@ -24,6 +27,7 @@ export function createMemoryRepositories(): MemoryRepositories {
     hands,
     entries,
     sinks,
+    keys,
     addPlayer(playerId, displayName, balance) {
       const rec = { playerId, displayName, balance }
       records.set(playerId, rec)
@@ -41,7 +45,11 @@ export function createMemoryRepositories(): MemoryRepositories {
       },
       // Contract: net the deltas per player first, then check `balance + net >= 0` — a batch that
       // debits and re-credits the same player is judged on its net effect, not on intermediates.
-      async apply(batch, meta) {
+      // A claimed key makes the call a no-op before anything is checked; a rejected batch claims nothing.
+      async apply(batch, meta, opts) {
+        if (batch.length === 0 && !(meta && meta.fee > 0)) return { applied: true }
+        const key = opts?.key
+        if (key !== undefined && keys.has(key)) return { applied: false }
         const nets = new Map<string, number>()
         for (const e of batch) nets.set(e.playerId, (nets.get(e.playerId) ?? 0) + e.delta)
         const next = new Map<string, number>()
@@ -50,9 +58,11 @@ export function createMemoryRepositories(): MemoryRepositories {
           if (after < 0) throw new InsufficientBalanceError(playerId)
           next.set(playerId, after)
         }
+        if (key !== undefined) keys.add(key)
         for (const [playerId, balance] of next) must(playerId).balance = balance
         for (const entry of batch) entries.push(meta ? { entry, meta } : { entry })
         if (meta && meta.fee > 0) sinks.push(meta)
+        return { applied: true }
       },
     },
     history: {

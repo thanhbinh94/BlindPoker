@@ -17,12 +17,17 @@
  * The lock is a `SELECT … FOR UPDATE` ordered by id: two settlements touching the same two players
  * from opposite ends would otherwise each hold what the other needs. Ordering the rows makes that
  * deadlock impossible rather than merely unlikely.
+ *
+ * A keyed `apply` claims its key in `ledger_keys` before anything else in the transaction. Two calls
+ * with one key serialise on that primary key — the second insert waits for the first transaction and,
+ * once it commits, finds the key taken — and each transaction claims a single key while holding no
+ * other lock yet, so the claim cannot deadlock with the player-row lock either.
  */
-import { InsufficientBalanceError, type BalanceEntry, type BalanceRepository, type SettlementMeta } from '@bp/server-kit'
+import { InsufficientBalanceError, type ApplyOptions, type ApplyResult, type BalanceEntry, type BalanceRepository, type SettlementMeta } from '@bp/server-kit'
 import { and, desc, eq, gte, lt, sql } from 'drizzle-orm'
 import type { AppDb, AppTx } from '../db/client.js'
 import { rowsOf } from '../db/client.js'
-import { players, pointTransactions } from '../db/schema.js'
+import { ledgerKeys, players, pointTransactions } from '../db/schema.js'
 import { clampLimit, cursorOf, isUuid } from './util.js'
 
 /** A ledger row as stored: `playerId` null means a sink (points that went to no player). */
@@ -65,8 +70,12 @@ export interface NormalBalanceRepository extends BalanceRepository {
    * transaction on the same `db`: the outer transaction may already hold a lock on a `players` row
    * this one needs, and the two connections would then wait on each other until a timeout. Use
    * `creditWithin(tx, …)` from inside a transaction — that is what it is for.
+   *
+   * `opts.key` is claimed in `ledger_keys` first, in the same transaction: a key already claimed
+   * resolves `{ applied: false }` with nothing checked or written, and a rejected batch rolls its
+   * claim back with it (`docs/server-kit.md` → Repositories).
    */
-  apply(entries: BalanceEntry[], meta?: SettlementMeta): Promise<void>
+  apply(entries: BalanceEntry[], meta?: SettlementMeta, opts?: ApplyOptions): Promise<ApplyResult>
   /**
    * The whole of `apply`, minus the transaction, so a service that already has one — the daily
    * reward stamping a claim day, relief stamping its cooldown, an achievement granting an item —
@@ -170,12 +179,19 @@ export function createBalanceRepository(db: AppDb): NormalBalanceRepository {
       return row.balance
     },
 
-    async apply(entries, meta) {
+    async apply(entries, meta, opts) {
       // No transaction for a batch that writes nothing — `apply([])` is a normal outcome of a hand
-      // where every seat broke even and no fee was due.
-      if (isNoop(entries, meta)) return
-      await db.transaction(async (tx) => {
+      // where every seat broke even and no fee was due. It claims no key either: there is nothing to
+      // apply twice.
+      if (isNoop(entries, meta)) return { applied: true }
+      const key = opts?.key
+      return db.transaction(async (tx) => {
+        if (key !== undefined) {
+          const claimed = await tx.insert(ledgerKeys).values({ key }).onConflictDoNothing().returning({ key: ledgerKeys.key })
+          if (claimed.length === 0) return { applied: false }
+        }
         await creditWithin(tx, entries, meta)
+        return { applied: true }
       })
     },
 
