@@ -28,6 +28,13 @@ function cardLabel(name: string, rarity: Rarity, owned: boolean, wearing: boolea
   return `${name}, ${rarityLabel}`
 }
 
+/** A colour dot's label and tooltip (Plan 20, T3): the member's name — and, for one the player does not own, "<name>,
+ * Chưa có: <hint>", `cardLabel`'s wording without the rarity (a dot draws no rarity line). With the box ticked an owned
+ * variant's card hides the original's own lock line, and its dot is the one place left that says how to get it. */
+function dotLabel(name: string, owned: boolean, hint: string, t: TFunction<'normal'>): string {
+  return owned ? name : `${name}, ${t('wardrobe.filter.locked')}: ${hint}`
+}
+
 /** Decorative glyphs kept out of JSX text (`react/jsx-no-literals`, `eslint.config.js`) the same way
  * `TableChrome`'s badge glyphs are — a named value referenced by identifier, not a literal in the markup. */
 const CHECK_GLYPH = '✓ '
@@ -83,8 +90,14 @@ export interface ItemCardProps {
   /** This card's dots (design §4.1's dot row): the family, the original first (No8a) — each one owned/worn
    * independently of the card itself, so with the box ticked an owned variant's card still shows the locked original's
    * dot, and a locked variant's. A member with no `asset.tint` (the original) is drawn as the untinted natural swatch.
-   * Only the dots to draw: the caller has already dropped the ones not owned while the box is unticked. */
-  variants?: { item: ItemDto; owned: boolean; wearing: boolean }[]
+   * Only the dots to draw: the caller has already dropped the ones not owned while the box is unticked. `hint` is how to
+   * get a member the player does not own (`hintFor`'s text, `''` for one that is owned): its dot's label and title carry it. */
+  variants?: { item: ItemDto; owned: boolean; wearing: boolean; hint: string }[]
+  /** The family's original is locked while the card shows another member — the box ticked over an owned colour variant
+   * (Plan 20, T3) — and this is how to get that original (`hintFor`'s text): drawn as one line, "<original name>: <hint>",
+   * under the pick button and over the dot row, for a touch screen that has no tooltip to read the dot's hint from. It is
+   * outside the pick button, so it is not part of what the button says, and the even-row rule still lines the bottoms up. */
+  familyHint?: string
   /** Keeps the dot row's height on a card that has no variants of its own, so that in a tab where some cards do
    * have them every card's lock hint ends on the same line (No8b). `ItemTab` sets it; a lone card never needs it. */
   reserveDots?: boolean
@@ -101,9 +114,10 @@ export interface ItemCardProps {
  * cannot contain another, so the card's visual chrome — border, background, `data-rarity` — lives on a
  * plain outer `<div>`, and everything that used to be the *whole* clickable card (picture, name, rarity,
  * lock hint) moves into an inner `.cardPick` button beside the dot row, both now inside the same bordered
- * box instead of the dots sitting below/outside it.
+ * box instead of the dots sitting below/outside it. Between the two, outside the button, can sit the locked original's
+ * hint line (`familyHint`, Plan 20 T3).
  */
-export function ItemCard({ item, family = item, wear, owned, wearing, hint, variants, reserveDots = false, thumb, onPick }: ItemCardProps) {
+export function ItemCard({ item, family = item, wear, owned, wearing, hint, variants, familyHint, reserveDots = false, thumb, onPick }: ItemCardProps) {
   const { t } = useTranslation('normal')
   const name = itemName(item.id, t)
   const hasVariants = variants !== undefined && variants.length > 0
@@ -131,21 +145,22 @@ export function ItemCard({ item, family = item, wear, owned, wearing, hint, vari
           <RarityLabel rarity={item.rarity} />
           {owned ? null : <LockHint hint={hint} />}
         </button>
+        {familyHint === undefined ? null : <LockHint hint={`${itemName(family.id, t)}: ${familyHint}`} />}
         {!hasVariants ? (
           reserveDots ? <div className={s.dotsSpacer} aria-hidden="true" /> : null
         ) : (
           <div className={s.colourDots} role="group" aria-label={itemName(family.id, t)}>
-            {variants!.map(({ item: member, owned: memberOwned, wearing: memberWearing }) => {
+            {variants!.map(({ item: member, owned: memberOwned, wearing: memberWearing, hint: memberHint }) => {
               const tint = member.asset?.tint
-              const memberName = itemName(member.id, t)
+              const memberLabel = dotLabel(itemName(member.id, t), memberOwned, memberHint, t)
               return (
                 <button
                   key={member.id}
                   type="button"
                   className={tint === undefined ? `${s.colourDot} ${s.colourDotNatural}` : s.colourDot}
                   style={tint === undefined ? undefined : { background: tint }}
-                  aria-label={memberName}
-                  title={memberName}
+                  aria-label={memberLabel}
+                  title={memberLabel}
                   aria-pressed={memberWearing}
                   aria-disabled={!memberOwned}
                   onClick={() => {

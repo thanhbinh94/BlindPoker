@@ -248,10 +248,12 @@ const genderButton = (gender: Gender): HTMLElement =>
 /** A card in the open tab by its item's name: "<name>, <rarity>[, …]" (design §7). */
 const card = (name: string): HTMLElement => within(screen.getByRole('tabpanel')).getByRole('button', { name: new RegExp(`^${name}, `) })
 
-/** The open tab's card names, in order (the part of each accessible name before its first comma). */
+/** The open tab's card names, in order (the part of each accessible name before its first comma). A card's pick button
+ * only: a colour dot sits in its own `group` and, when it is not owned, is named "<name>, Chưa có: <hint>" too. */
 const cardNames = (): string[] =>
   within(screen.getByRole('tabpanel'))
     .getAllByRole('button', { name: /,/ })
+    .filter((each) => each.closest('[role="group"]') === null)
     .map((each) => each.getAttribute('aria-label')!.split(',')[0]!)
 
 /** The stage's own figure: the first `Chibi` on the screen (the left column comes before the cards). */
@@ -820,6 +822,9 @@ describe('WardrobeScreen', () => {
       const rare = viNormal.inventory.rarity.rare
       const panel = within(screen.getByRole('tabpanel'))
       const card = panel.getByRole('button', { name: `${viNormal.items.head_beret_blue01}, ${rare}` })
+      // Plan 20 (T3): the original's hint line belongs to the ticked box — unticked, the original is not on the screen at all.
+      const originalHint = new RegExp(`^${viNormal.items.head_beret_red01}: `)
+      expect(panel.queryByText(originalHint)).toBeNull()
 
       await user.click(showLockedBox())
 
@@ -828,20 +833,29 @@ describe('WardrobeScreen', () => {
       expect(card).toHaveAttribute('aria-disabled', 'false')
       expect(card.querySelector('img')).toHaveAttribute('src', 'blob:http://localhost/#3f6fd8')
       expect(panel.queryByText(viNormal.items.head_beret_red01)).toBeNull()
-      const cardCount = panel.getAllByRole('button', { name: /,/ }).length
+      const cardCount = cardNames().length
+
+      // Plan 20 (T3): the owned variant's card hides the original's own lock line, so the original's hint is written out
+      // on the card (touch has no tooltip), outside the pick button — "<original name>: <hint>".
+      const hint = viNormal.wardrobe.hint.daily.rare
+      const hintLine = panel.getByText(`${viNormal.items.head_beret_red01}: ${hint}`)
+      expect(hintLine).toBeVisible()
+      expect(card).not.toContainElement(hintLine)
+      expect(card, 'the pick button says nothing of it').toHaveAccessibleName(`${viNormal.items.head_beret_blue01}, ${rare}`)
 
       // No8a: the dot row is the whole family, the original first, each dot titled with its member's name; the box adds
-      // the two the player does not own, locked.
+      // the two the player does not own, locked — and a locked dot says how to get it, as its card would ("Chưa có: …").
+      const locked = (name: string) => `${name}, ${viNormal.wardrobe.filter.locked}: ${hint}`
       const row = panel.getByRole('group', { name: viNormal.items.head_beret_red01 })
       expect(within(row).getAllByRole('button').map((each) => each.getAttribute('title'))).toEqual([
-        viNormal.items.head_beret_red01,
+        locked(viNormal.items.head_beret_red01),
         viNormal.items.head_beret_blue01,
-        viNormal.items.head_beret_green01,
+        locked(viNormal.items.head_beret_green01),
       ])
-      expect(within(row).getByRole('button', { name: viNormal.items.head_beret_red01 })).toHaveAttribute('aria-disabled', 'true')
+      expect(within(row).getByRole('button', { name: locked(viNormal.items.head_beret_red01) })).toHaveAttribute('aria-disabled', 'true')
       const dot = within(row).getByRole('button', { name: viNormal.items.head_beret_blue01 })
       expect(dot).toHaveAttribute('aria-disabled', 'false')
-      const green = within(row).getByRole('button', { name: viNormal.items.head_beret_green01 })
+      const green = within(row).getByRole('button', { name: locked(viNormal.items.head_beret_green01) })
       expect(green).toHaveAttribute('aria-disabled', 'true')
 
       await user.click(green)
@@ -853,7 +867,7 @@ describe('WardrobeScreen', () => {
       expect(card).toHaveAccessibleName(`${viNormal.items.head_beret_blue01}, ${rare}, ${viNormal.wardrobe.wearingBadge}`)
       expect(card).toHaveAttribute('aria-pressed', 'true')
       expect(card.querySelector('img')).toHaveAttribute('src', 'blob:http://localhost/#3f6fd8')
-      expect(panel.getAllByRole('button', { name: /,/ })).toHaveLength(cardCount)
+      expect(cardNames()).toHaveLength(cardCount)
 
       await user.click(screen.getByRole('button', { name: viNormal.wardrobe.save }))
 
@@ -931,6 +945,15 @@ describe('WardrobeScreen', () => {
       expect(card).toHaveAccessibleName(`${viNormal.items.head_beret_red01}, ${rare}`)
       expect(card).toHaveAttribute('aria-pressed', 'false')
       expect(original).toHaveAttribute('aria-pressed', 'false')
+
+      // Plan 20 (T3): with the box ticked the original is owned, so there is nothing to explain — no hint line — while the
+      // green variant, which is not owned, still carries its hint on its dot.
+      await user.click(showLockedBox())
+      expect(panel.queryByText(new RegExp(`^${viNormal.items.head_beret_red01}: `))).toBeNull()
+      const green = within(row).getByRole('button', {
+        name: `${viNormal.items.head_beret_green01}, ${viNormal.wardrobe.filter.locked}: ${viNormal.wardrobe.hint.daily.rare}`,
+      })
+      expect(green).toHaveAttribute('aria-disabled', 'true')
     })
 
     // Final fix wave (B1): the outfit slot is required, so a press on the worn tee keeps it on — the original's dot is
@@ -1047,10 +1070,6 @@ describe('WardrobeScreen', () => {
 
       await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
       expect(showLockedBox()).not.toBeChecked()
-      const cardNames = (): string[] =>
-        within(screen.getByRole('tabpanel'))
-          .getAllByRole('button', { name: /,/ })
-          .map((card) => card.getAttribute('aria-label')!.split(',')[0]!)
       // Owned: the beanie, and the beret family through its blue variant. Not owned: the top hat.
       expect(cardNames()).toEqual([viNormal.items.head_beanie01, viNormal.items.head_beret_blue01])
       expect(screen.queryByText(viNormal.items.head_tophat01)).toBeNull()

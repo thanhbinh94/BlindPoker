@@ -442,14 +442,14 @@
   background: repeating-conic-gradient(var(--line) 0% 25%, transparent 0% 50%);
 }
 
-/* On a phone a card is about 100 px wide and the "✓ Đang dùng" pill (`.wearingPill`, 8 px from the top) spans most of
-   it, so a worn card's swatch started under the pill — Màu da's "Tự nhiên" on a fresh account (Plan 19 final review). The
-   swatch starts below the pill there, on every colour card alike, so a row's cards keep one height. */
-@media (max-width: 767px) {
-  .colourSwatchBig,
-  .naturalSwatch {
-    margin-top: 1.25rem;
-  }
+/* The "✓ Đang dùng" pill (`.wearingPill`) sits 9–30 px from the card's top edge, and the swatch — 56 px, centred — would
+   start at 13 px: under the pill, on a card of any width. On a phone it spans most of a ~100 px card, so a worn card's
+   swatch started under it (Màu da's "Tự nhiên" on a fresh account, Plan 19 final review); on a desktop the circle's
+   top-right was covered by it, 16 px of it (Plan 20, T3: the rule used to be phone-only). The swatch starts below the pill
+   at every width, on every colour card alike, so a row's cards keep one height — about 20 px taller than before. */
+.colourSwatchBig,
+.naturalSwatch {
+  margin-top: 1.25rem;
 }
 
 /* An item's own icon: square, transparent, already centred and padded by the pipeline. Fixed 4rem as the base
