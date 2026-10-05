@@ -48,7 +48,7 @@ import {
   parseName,
 } from './manifest.mjs'
 import { blankPicture, clonePicture, cropPicture, overPicture, readPicture, renderSvg, resizePicture, writePicture } from './png.mjs'
-import { recolour, shade } from '../../../../packages/ui-kit/src/avatar2d/recolour.mjs'
+import { ratio, recolour, shade } from '../../../../packages/ui-kit/src/avatar2d/recolour.mjs'
 
 /**
  * @typedef {{ files: Record<string, any> }} SheetManifest
@@ -297,7 +297,9 @@ async function maskAlpha(dir, name, kind) {
  * with `recolour` under the layer's own skin mask at the **body's** skin `meanL`, the one number both layers are
  * tinted at so the seam between body and face stays invisible (as `tint-sheet` does for a hairstyle's two layers).
  * Its skin-line mask, when it has one, is then shaded at the same `meanL` (`shade`, 2026-10-05), as the kit does — on
- * an outfit too, whose copy of the hands' outline is the wearer's skin's to shade. A layer with neither is drawn as it is.
+ * an outfit too, whose copy of the hands' outline is the wearer's skin's to shade. The skin an outfit or a front hair
+ * picture redrew (its skin mask, 2026-10-05) is painted by `ratio` rather than `recolour`, at the same `meanL`, before
+ * the line, as the kit does. A layer with none of these is drawn as it is.
  */
 function layerReader(dir, manifest) {
   const cache = new Map()
@@ -318,7 +320,9 @@ function layerReader(dir, manifest) {
         const lineMask = !line || line.empty ? null : await maskAlpha(dir, name, 'skinLine')
         if (!skinMask && !lineMask) return picture
         const painted = clonePicture(picture)
-        if (skinMask) recolour(painted.data, skinMask, tone.colour, meanL)
+        const parsed = parseName(name)
+        const ownSkin = parsed?.kind === 'body' || parsed?.kind === 'bodyFace'
+        if (skinMask) (ownSkin ? recolour : ratio)(painted.data, skinMask, tone.colour, meanL)
         if (lineMask) shade(painted.data, lineMask, tone.colour, meanL)
         return painted
       })())
@@ -329,9 +333,12 @@ function layerReader(dir, manifest) {
     if (!tone) return plain(name)
     const parsed = parseName(name)
     const skinOfBody = (parsed?.kind === 'body' || parsed?.kind === 'bodyFace') && parsed.gender === tone.gender
-    // An outfit's copy of the outline is the wearer's to shade, whichever body it was cut on.
-    const outfitLine = parsed?.kind === 'item' && parsed.slot === 'outfit' && manifest.files[name]?.masks?.skinLine !== undefined
-    return skinOfBody || outfitLine ? toned(name, tone) : plain(name)
+    // An outfit's copy of the outline and its redrawn skin are the wearer's, whichever body it was cut on; a front
+    // hair's redrawn skin is its gender's, the only body it is worn on.
+    const masks = manifest.files[name]?.masks
+    const outfitSkin = parsed?.kind === 'item' && parsed.slot === 'outfit' && (masks?.skinLine !== undefined || masks?.skin !== undefined)
+    const hairSkin = parsed?.kind === 'hair' && parsed.layer === LAYERS.hairFront && masks?.skin !== undefined
+    return skinOfBody || outfitSkin || hairSkin ? toned(name, tone) : plain(name)
   }
 }
 

@@ -11,15 +11,33 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { runChecks } from '../scripts/avatar-pipeline/checks.mjs'
-import { OUTFIT_LINE, SKIN_MASK, eyeEllipses, eyeMask, eyeZone, hairMask, maskColour, maskTargets, outfitLineMask, skinLineMask, skinMask, tintMask, writeMasks } from '../scripts/avatar-pipeline/masks.mjs'
+import {
+  LAYER_SKIN,
+  OUTFIT_LINE,
+  SKIN_MASK,
+  eyeEllipses,
+  eyeMask,
+  eyeZone,
+  hairMask,
+  labOf,
+  layerSkinMask,
+  maskColour,
+  maskTargets,
+  outfitLineMask,
+  skinLineMask,
+  skinMask,
+  tintMask,
+  writeMasks,
+} from '../scripts/avatar-pipeline/masks.mjs'
 import { writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
 import { readPicture, renderSvg, resizePicture, writePicture } from '../scripts/avatar-pipeline/png.mjs'
 import { buildTintSheet } from '../scripts/avatar-pipeline/tint-sheet.mjs'
 
 // Every case renders a synthetic 768 × 896 picture and runs the real mask algorithm on it — a few seconds
 // each once k-means and the morphology are counted, and past vitest's 5 s default when the suite shares
-// the CPU. The budget is the work, not a hang (avatar-registry-verify.test.ts sets the same ceiling).
-vi.setConfig({ testTimeout: 60_000 })
+// the CPU. The budget is the work, not a hang (avatar-registry-verify.test.ts sets the same ceiling). The same for a
+// `beforeAll` that cuts a set of masks (the tint sheet's: since 2026-10-05 a front hair also cuts the skin it redrew).
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 })
 
 const W = 768
 const H = 896
@@ -838,7 +856,9 @@ describe('skinMask, and eyes on a bald face (Plan 19 A1b, spec §5.5)', () => {
 
     expect(Object.keys(manifest.files[body]!.masks!)).toEqual(['skin', 'skinLine'])
     expect(Object.keys(manifest.files[face]!.masks!).sort()).toEqual(['eyes', 'skin', 'skinLine'])
-    expect(Object.keys(manifest.files[hair]!.masks!)).toEqual(['hair'])
+    // A front hair also gets the skin its picture redrew (2026-10-05) — none here: the item has no cream in it.
+    expect(Object.keys(manifest.files[hair]!.masks!).sort()).toEqual(['hair', 'skin'])
+    expect(manifest.files[hair]!.masks!.skin!.empty).toBe(true)
     const alphaOf = async (file: string) => {
       const pic = await readPicture(join(dir, file))
       const alpha = new Uint8Array(pic.width * pic.height)
@@ -878,6 +898,174 @@ describe('skinMask, and eyes on a bald face (Plan 19 A1b, spec §5.5)', () => {
     expect(away(maskColour(pic, whole, { iris: true }), IRIS)).toBeLessThan(12)
     expect(away(maskColour(pic, whole), IRIS), 'the white and the pupil pull a plain mean off the iris').toBeGreaterThan(40)
     expect(maskColour(pic, new Uint8Array(W * H))).toBeNull()
+  })
+})
+
+// ───────────────────────────────────────────── a layer's redrawn skin (2026-10-05) ──
+
+/** An opaque `W` × `H` picture of one flat colour. */
+function flatPicture(hex: string): Picture {
+  const [r, g, b] = hexToRgb(hex)
+  const data = Buffer.alloc(W * H * 4)
+  for (let i = 0; i < W * H; i++) data.set([r, g, b, 255], i * 4)
+  return { data, width: W, height: H }
+}
+/** Paint `hex` (or an RGB triple) at alpha 255 into `pic` over the box x0–x1 × y0–y1, inclusive. */
+function paintBox(pic: Picture, x0: number, y0: number, x1: number, y1: number, colour: string | [number, number, number]): void {
+  const [r, g, b] = typeof colour === 'string' ? hexToRgb(colour) : colour
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) pic.data.set([r, g, b, 255], (y * W + x) * 4)
+}
+function boxPixels(x0: number, y0: number, x1: number, y1: number): Uint8Array {
+  const out = new Uint8Array(W * H)
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) out[y * W + x] = 1
+  return out
+}
+/** HSL lightness, weighted by `mask` — `meanLightness` in `recolour.mjs`, which the manifest's `meanL` is. */
+function meanL(pic: Picture, mask: ArrayLike<number>): number {
+  let sum = 0
+  let weight = 0
+  for (let i = 0; i < mask.length; i++) {
+    if (!mask[i]) continue
+    const [r, g, b] = [pic.data[i * 4]!, pic.data[i * 4 + 1]!, pic.data[i * 4 + 2]!]
+    sum += ((Math.max(r, g, b) + Math.min(r, g, b)) / 510) * mask[i]!
+    weight += mask[i]!
+  }
+  return weight === 0 ? 0 : sum / weight
+}
+
+describe('layerSkinMask: the skin a hair or outfit picture redrew (2026-10-05)', () => {
+  // Measured on the real art (task 5, Plan 20): the insteps Lab ≈ (90, 6, 14), C* 14–17; the gold trim the Tết áo dài
+  // repainted over the body's skin Lab ≈ 66–84 / 1–19 / 52–62, C* 52–65; the bob's skin in the bangs' shadow L* 63–75,
+  // C* 13–36, h 16–44° — under `SKIN_MASK.hue`'s 44°.
+  const PINK_SHADOW = '#cd9188' // Lab ≈ (66, 21.5, 14), h 33°: ΔE 25.5 from the cream, so only the hue window takes it
+  const GOLD = '#e2b24a' // Lab ≈ (75, 7, 58), C* 58, h 83°: inside SKIN_MASK's hue window, far past the outfits' C* ceiling
+  const TAN = '#c9a27c' // Lab ≈ (69, 9, 25): ΔE 18.5 from the cream, C* 27 — skin by colour, cloth by the palette
+  const WHITE_CLOTH = '#f4f4f4'
+  const INSTEP = '#f3d5bb'
+  const SLIPPER = '#8b1a1a'
+  const HEM_SHADOW = '#efa577' // Lab ≈ (74, 22, 35), C* 41, ΔE 26: skin in a hem's shadow, past the outfit rule's ΔE and C*
+
+  it('pins its numbers', () => {
+    expect(LAYER_SKIN).toEqual({ gap: 10, palette: 12, hairHue: [15, 100], outfitMaxChroma: 35, minPiece: 40, outfitGrow: 4, outfitGrowMaxChroma: 48, softReach: 4, softOffLine: 12 })
+    const pink = labOf(...hexToRgb(PINK_SHADOW))
+    const hue = (Math.atan2(pink[2]!, pink[1]!) * 180) / Math.PI
+    expect(hue).toBeGreaterThan(LAYER_SKIN.hairHue[0]!)
+    expect(hue).toBeLessThan(SKIN_MASK.hue[0]!)
+    const gold = labOf(...hexToRgb(GOLD))
+    expect(Math.hypot(gold[1]!, gold[2]!)).toBeGreaterThan(LAYER_SKIN.outfitMaxChroma)
+  })
+
+  it('takes an outfit’s redrawn instep and the shadow at its edge, and no gold band, white or tan cloth, thin seam, speck, shadow elsewhere or masked pixel', async () => {
+    const { pic: body } = await syntheticBody()
+    const skin = skinMask(body, { eyes: null })
+    const outfit = await renderSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+        <rect x="300" y="430" width="168" height="220" fill="${TAN}"/>
+        <rect x="250" y="450" width="44" height="90" fill="${TAN}"/>
+        <rect x="490" y="470" width="5" height="90" fill="${GOLD}"/>
+        <rect x="480" y="580" width="32" height="40" fill="${WHITE_CLOTH}"/>
+        <rect x="326" y="794" width="40" height="3" fill="${GOLD}"/>
+        <rect x="326" y="797" width="40" height="3" fill="${HEM_SHADOW}"/>
+        <rect x="326" y="800" width="40" height="15" fill="${INSTEP}"/>
+        <rect x="316" y="815" width="60" height="45" fill="${SLIPPER}"/>
+        <rect x="420" y="730" width="2" height="70" fill="${INSTEP}"/>
+        <rect x="440" y="830" width="5" height="5" fill="${INSTEP}"/>
+        <rect x="258" y="600" width="28" height="30" fill="${INSTEP}"/>
+        <rect x="260" y="650" width="30" height="20" fill="${HEM_SHADOW}"/>
+      </svg>`,
+      W,
+      H,
+    )
+    // The patch at y 600 is the layer's own tint (or line): never skin, whatever colour it is.
+    const exclude = boxPixels(258, 600, 285, 629)
+    const mask = layerSkinMask(outfit, { kind: 'outfit', body, skin, exclude })
+
+    const instep = boxPixels(326, 800, 365, 814)
+    expect(coverage(skin, instep), 'the fixture puts the instep over skin').toBe(1)
+    expect(coverage(mask, instep), 'the instep').toBeGreaterThan(0.95)
+    // The hem's shadow along the instep's top edge (pre-flight follow-up, task 5): grown into from the instep, though
+    // the rule alone leaves it out — it stayed a light rim round the instep under a deep tone.
+    expect(coverage(mask, boxPixels(326, 797, 365, 799)), 'the shadow at the instep’s edge').toBe(1)
+    const out: [string, Uint8Array][] = [
+      ['a 5 px gold band, 90 px long', boxPixels(490, 470, 494, 559)],
+      ['white cloth', boxPixels(480, 580, 511, 619)],
+      ['tan cloth, which the outfit also wears over no skin', boxPixels(254, 455, 290, 535)],
+      ['a 2 px seam', boxPixels(420, 730, 421, 799)],
+      ['a 25 px speck', boxPixels(440, 830, 444, 834)],
+      ['a masked patch', exclude],
+      ['the gold hem beside the shadow, within the growth', boxPixels(326, 794, 365, 796)],
+      ['the same shadow away from any instep', boxPixels(260, 650, 289, 669)],
+    ]
+    for (const [label, part] of out) {
+      expect(coverage(skin, part), `${label} lies over skin`).toBeGreaterThan(0.9)
+      expect(coverage(mask, part), label).toBe(0)
+    }
+    // An outfit's mask is hard-edged: 0 or 255.
+    expect(mask.every((v: number) => v === 0 || v === 255)).toBe(true)
+  })
+
+  /**
+   * A hand-built hair layer on an all-cream body whose skin is the left part of the frame (x < 400): a dark block of
+   * hair from x 200 to 499 — over no skin past x 399, which makes its palette — with a strand tip at its left edge
+   * that is 70 % hair and 30 % cream (a half-and-half one is light and warm enough to be skin outright, by the hue
+   * window), and shown skin round it.
+   */
+  function hairFixture(hair = HAIR) {
+    const body = flatPicture(CREAM)
+    const skin = new Uint8Array(W * H)
+    for (let i = 0; i < skin.length; i++) if (i % W < 400) skin[i] = 255
+    const layer = { data: Buffer.alloc(W * H * 4), width: W, height: H }
+    paintBox(layer, 200, 100, 499, 199, hair)
+    const [h, c] = [hexToRgb(hair), hexToRgb(CREAM)]
+    paintBox(layer, 199, 100, 199, 199, [0, 1, 2].map((k) => Math.round(0.7 * h[k]! + 0.3 * c[k]!)) as [number, number, number])
+    return { body, skin, layer }
+  }
+
+  it('takes a front hair’s redrawn cream and the pink of skin in its shadow, and leaves the hair alone', () => {
+    const { body, skin, layer } = hairFixture()
+    paintBox(layer, 220, 120, 239, 139, '#eccbb0')
+    paintBox(layer, 260, 120, 279, 139, PINK_SHADOW)
+    const mask = layerSkinMask(layer, { kind: 'hair', body, skin, beneath: body })
+    expect(coverage(mask, boxPixels(220, 120, 239, 139)), 'cream between strands').toBe(1)
+    expect(coverage(mask, boxPixels(260, 120, 279, 139)), 'skin in the hair’s shadow').toBe(1)
+    // The hair itself, away from the patches and its edges: nothing at all.
+    const hairOnly = boxPixels(300, 110, 398, 190)
+    expect(sum(hairOnly.map((v, i) => (v && mask[i]! > 0 ? 1 : 0)))).toBe(0)
+    // The pink is the hair rule's: an outfit's own rule (ΔE and a C* ceiling, no hue window) leaves it out.
+    const outfitRule = layerSkinMask(layer, { kind: 'outfit', body, skin })
+    expect(coverage(outfitRule, boxPixels(260, 120, 279, 139)), 'pink under the outfit rule').toBe(0)
+    expect(coverage(outfitRule, boxPixels(220, 120, 239, 139)), 'cream under the outfit rule').toBe(1)
+  })
+
+  it('leaves out a hair the colour of skin, by its palette, but not the cream redrawn inside it', () => {
+    // A light orange, Lab ≈ (73, 16, 33): ΔE 21.8 from the cream and inside the hue window — skin by colour — worn over
+    // no skin too.
+    const ORANGE = '#e2a878'
+    const { body, skin, layer } = hairFixture(ORANGE)
+    paintBox(layer, 220, 120, 239, 139, '#eccbb0')
+    const mask = layerSkinMask(layer, { kind: 'hair', body, skin, beneath: body })
+    expect(coverage(mask, boxPixels(300, 110, 398, 190)), 'the orange hair over skin').toBe(0)
+    expect(coverage(mask, boxPixels(220, 120, 239, 139)), 'the cream inside it').toBe(1)
+  })
+
+  it('gives a strand tip of 30 % cream about that share of skin, and an edge off the line between hair and skin none', () => {
+    const { body, skin, layer } = hairFixture()
+    // A blue edge along the bottom of the hair, beside shown skin: not a blend of the hair and the skin at all.
+    paintBox(layer, 200, 200, 398, 200, '#3050a0')
+    const mask = layerSkinMask(layer, { kind: 'hair', body, skin, beneath: body })
+    for (let y = 100; y <= 199; y++) {
+      const v = mask[y * W + 199]!
+      expect(v, `strand tip at y ${y}`).toBeGreaterThan(0.3 * 255 - 30)
+      expect(v, `strand tip at y ${y}`).toBeLessThan(0.3 * 255 + 30)
+    }
+    expect(sum(boxPixels(200, 200, 398, 200).map((v, i) => (v && mask[i]! > 0 ? 1 : 0))), 'the blue edge').toBe(0)
+    expect(sum(boxPixels(200, 100, 398, 199).map((v, i) => (v && mask[i]! > 0 ? 1 : 0))), 'the hair').toBe(0)
+  })
+
+  it('gives a hair as light as the skin (the wavy platinum) no skin at all, its strand tips included', () => {
+    const { body, skin, layer } = hairFixture('#f6dcc6')
+    const mask = layerSkinMask(layer, { kind: 'hair', body, skin, beneath: body })
+    expect(sum(mask)).toBe(0)
   })
 })
 
@@ -924,11 +1112,102 @@ describe('writeMasks', () => {
 
     const manifest = { files: { [outfit]: { real: true, cutOn: 'f' }, [body]: { real: true } } } as unknown as Manifest
     await writeMasks({ dir: where, manifest, names: [outfit, body], overridesDir })
-    expect(Object.keys(manifest.files[outfit]!.masks!)).toEqual(['skinLine'])
+    // …and the skin it redrew (2026-10-05), cut after the line and clear of it: none here.
+    expect(Object.keys(manifest.files[outfit]!.masks!)).toEqual(['skinLine', 'skin'])
+    expect(manifest.files[outfit]!.masks!.skin!.empty).toBe(true)
     const line = await readPicture(join(where, `${outfit}_skinlinemask@2x.png`))
     let n = 0
     for (let i = 3; i < line.data.length; i += 4) if (line.data[i]! >= 128) n++
     expect(n, 'the redrawn outline is cut').toBeGreaterThan(1000)
+  })
+
+  /** A `<name>_<kind>mask@2x.png` in `where`, as one alpha byte a pixel. */
+  async function alphaIn(where: string, name: string, kind: string): Promise<Uint8Array> {
+    const pic = await readPicture(join(where, `${name}_${kind}mask@2x.png`))
+    const alpha = new Uint8Array(pic.width * pic.height)
+    for (let i = 0; i < alpha.length; i++) alpha[i] = pic.data[i * 4 + 3]!
+    return alpha
+  }
+
+  it('cuts a front hair’s redrawn skin on its gender’s body and face, its hair the ink less that skin at the ink’s meanL, and refuses one without them (2026-10-05)', async () => {
+    const where = join(temp, 'hair-skin')
+    mkdirSync(where, { recursive: true })
+    const body = 'body_f_L30'
+    const face = 'body_f_face_neutral_L50'
+    const front = 'item_hair_f_bob01_L60'
+    const back = 'item_hair_f_bob01_L20'
+    await writePicture((await syntheticBody()).pic, join(where, `${body}@2x.png`))
+    await writePicture(await syntheticBase({ bald: true, skinColour: CREAM }), join(where, `${face}@2x.png`))
+    // A cap of hair over the top of the head and past it (over no skin), with cream and pink redrawn between strands.
+    const cap = await renderSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+        <rect x="200" y="130" width="368" height="100" fill="${HAIR}"/>
+        <rect x="350" y="200" width="30" height="20" fill="#eccbb0"/>
+        <rect x="400" y="200" width="30" height="20" fill="#cd9188"/>
+      </svg>`,
+      W,
+      H,
+    )
+    await writePicture(cap, join(where, `${front}@2x.png`))
+    await writePicture(cap, join(where, `${back}@2x.png`))
+
+    // Without the body's and the face's skin masks there is nothing to cut against: refused, nothing written.
+    const lonely = { files: { [front]: { real: true } } } as Manifest
+    await expect(writeMasks({ dir: where, manifest: lonely, names: [front], overridesDir })).rejects.toThrow(/cut the body's masks first/)
+    expect(lonely.files[front]!.masks).toBeUndefined()
+
+    const manifest = { files: { [front]: { real: true }, [back]: { real: true }, [body]: { real: true }, [face]: { real: true } } } as Manifest
+    await writeMasks({ dir: where, manifest, names: [front, back, body, face], overridesDir })
+    expect(Object.keys(manifest.files[front]!.masks!).sort()).toEqual(['hair', 'skin'])
+    expect(Object.keys(manifest.files[back]!.masks!), 'the back half is behind the body: hair only').toEqual(['hair'])
+    const [skin, hair] = await Promise.all([alphaIn(where, front, 'skin'), alphaIn(where, front, 'hair')])
+    expect(coverage(skin, boxPixels(352, 202, 377, 217)), 'the cream').toBe(1)
+    expect(coverage(skin, boxPixels(402, 202, 427, 217)), 'the pink').toBe(1)
+    expect(coverage(skin, boxPixels(210, 140, 340, 190)), 'the hair').toBe(0)
+    // The hair is the ink less the skin's share, pixel by pixel; nothing off the ink.
+    let mismatched = 0
+    const ink = new Uint8Array(W * H)
+    for (let i = 0; i < ink.length; i++) {
+      ink[i] = cap.data[i * 4 + 3]! > 8 ? 255 : 0
+      if (hair[i] !== (ink[i] ? 255 - skin[i]! : 0)) mismatched++
+    }
+    expect(mismatched).toBe(0)
+    // Its manifest meanL is still the ink's (I8): the hair colour is drawn against it, so cutting skin out must not move it.
+    expect(manifest.files[front]!.masks!.hair!.meanL).toBe(Math.round(meanL(cap, ink) * 10000) / 10000)
+    expect(manifest.files[front]!.masks!.hair!.meanL).not.toBe(Math.round(meanL(cap, hair) * 10000) / 10000)
+
+    // A face's skin mask missing on its own is refused too.
+    rmSync(join(where, `${face}_skinmask@2x.png`))
+    const again = { files: { [front]: { real: true } } } as Manifest
+    await expect(writeMasks({ dir: where, manifest: again, names: [front], overridesDir })).rejects.toThrow(new RegExp(`${face}'s skin mask`))
+  })
+
+  it('cuts an outfit’s redrawn skin clear of its own tint and line (2026-10-05)', async () => {
+    const where = join(temp, 'outfit-skin')
+    mkdirSync(where, { recursive: true })
+    const body = 'body_f_L30'
+    const outfit = 'item_outfit_tet_red01_L40'
+    await writePicture((await syntheticBody()).pic, join(where, `${body}@2x.png`))
+    // Two cream insteps on the legs, the right one the outfit's own colour variant (its tint seed sits on it).
+    const feet = await renderSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+        <rect x="300" y="430" width="168" height="220" fill="#8b1a1a"/>
+        <rect x="326" y="800" width="40" height="15" fill="#f3d5bb"/>
+        <rect x="402" y="800" width="40" height="15" fill="#f3d5bb"/>
+      </svg>`,
+      W,
+      H,
+    )
+    await writePicture(feet, join(where, `${outfit}@2x.png`))
+    const manifest = { files: { [body]: { real: true }, [outfit]: { real: true, cutOn: 'f', tintSeed: { x: 211, y: 403 } } } } as unknown as Manifest
+    await writeMasks({ dir: where, manifest, names: [outfit, body], overridesDir })
+    expect(Object.keys(manifest.files[outfit]!.masks!)).toEqual(['tint', 'skinLine', 'skin'])
+    const [skin, tint] = await Promise.all([alphaIn(where, outfit, 'skin'), alphaIn(where, outfit, 'tint')])
+    expect(coverage(tint, boxPixels(404, 802, 439, 812)), 'the tint seed found the right instep').toBe(1)
+    expect(coverage(skin, boxPixels(328, 802, 363, 812)), 'the left instep').toBe(1)
+    let shared = 0
+    for (let i = 0; i < skin.length; i++) if (skin[i] && tint[i]) shared++
+    expect(shared, 'skin on the tint').toBe(0)
   })
 
   it('lets a hand-drawn override win and marks it', async () => {
@@ -1205,6 +1484,46 @@ describe('C11 (checks.mjs, spec §4.3)', () => {
     const c11 = await c11Of(manifest, name, where)
     expect(c11.ok).toBe(true)
     expect(c11.detail).toContain('n/a')
+  })
+
+  it('keeps a layer’s redrawn skin off its hair and its tint, and lets it be empty (2026-10-05)', async () => {
+    const where = caseIn('fc-layer-skin')
+    /** A white mask file whose alpha is `alphaAt(i)`. */
+    const maskFile = async (file: string, alphaAt: (i: number) => number) => {
+      const data = Buffer.alloc(W * H * 4, 255)
+      for (let i = 0; i < W * H; i++) data[i * 4 + 3] = alphaAt(i)
+      await writePicture({ data, width: W, height: H }, join(where, file))
+    }
+    const patch = (i: number) => i % W >= 300 && i % W < 320 && Math.floor(i / W) >= 300 && Math.floor(i / W) < 320
+    const hair = 'item_hair_f_bob01_L60'
+    const outfit = 'item_outfit_test05_L40'
+    for (const name of [hair, outfit]) await writePicture(solidPicture(), join(where, `${name}@2x.png`))
+    const entry = (kinds: string[], empty: string[] = []) => ({
+      real: true,
+      masks: Object.fromEntries(kinds.map((kind) => [kind, { bytes2x: 1, meanL: 0.5, ...(empty.includes(kind) ? { empty: true } : {}) }])),
+    })
+
+    // The hair is the ink less the skin: the two never both reach 128.
+    await maskFile(`${hair}_skinmask@2x.png`, (i) => (patch(i) ? 255 : 0))
+    await maskFile(`${hair}_hairmask@2x.png`, (i) => (patch(i) ? 0 : 255))
+    const split = await c11Of({ files: { [hair]: entry(['hair', 'skin']) } }, hair, where)
+    expect(split.ok, split.detail).toBe(true)
+    // A hair mask left whole under the skin paints those pixels twice.
+    await maskFile(`${hair}_hairmask@2x.png`, () => 255)
+    const twice = await c11Of({ files: { [hair]: entry(['hair', 'skin']) } }, hair, where)
+    expect(twice.ok).toBe(false)
+    expect(twice.detail).toContain('skin and hair share 400 pixels')
+    // An empty skin mask is no failure on a hair or an outfit layer: most redraw no skin.
+    await maskFile(`${hair}_skinmask@2x.png`, () => 0)
+    const none = await c11Of({ files: { [hair]: entry(['hair', 'skin'], ['skin']) } }, hair, where)
+    expect(none.ok, none.detail).toBe(true)
+
+    // An outfit's skin on its own colour variant's tint.
+    await maskFile(`${outfit}_skinmask@2x.png`, (i) => (patch(i) ? 255 : 0))
+    await maskFile(`${outfit}_tintmask@2x.png`, (i) => (i % W >= 310 && i % W < 400 ? 255 : 0))
+    const onTint = await c11Of({ files: { [outfit]: entry(['tint', 'skin']) } }, outfit, where)
+    expect(onTint.ok).toBe(false)
+    expect(onTint.detail).toContain('skin and tint share 200 pixels')
   })
 
   // Plan 19 A1b fix round 2 (controller ruling): a body face's skin is compared with its neutral face's as skin ∪ eye
