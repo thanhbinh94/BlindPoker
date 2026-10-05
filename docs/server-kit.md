@@ -139,7 +139,8 @@ as if it had not:
   kick, the reconnect expiry and a shutdown), under the same key. A kick
   that fails is finished, not just cashed out: the player has already been
   told `KICKED`, so the end of the next hand retries the whole removal
-  (`leaveAfterHand`); a rejoin before then calls it off.
+  (`leaveAfterHand`). Only a `Room.join` before then calls it off, and the gateway never sends one for a player who is
+  still a member (`ALREADY_IN_ROOM`), so over the wire the kick stands.
 - **Buy-in.** The player is not seated, and the attempt is kept
   (`pendingBuyIn`): the next Sit replays it — same key, same amount,
   before any amount or balance check — and seats the player with it. A

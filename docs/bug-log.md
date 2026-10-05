@@ -411,7 +411,8 @@ Ghi chú kỹ thuật:
   - Sau rà soát toàn nhánh — `417ef2e`.
     - Đuổi một người mà cash-out lỗi: người đó đã nhận thông báo bị mời ra, nhưng lần thử lại cuối ván chỉ trả tiền về rồi để
       họ ở lại làm khán giả. Nay lần đuổi lỗi đặt `leaveAfterHand`, nên cuối ván sau phòng gỡ hẳn người đó (vẫn đúng các khoá
-      cũ). Vào lại trước khi ván xong thì huỷ lệnh đuổi, như một lần Rời phòng giữa ván.
+      cũ). Người bị mời ra không thể vào lại phòng trước lúc đó (vẫn là thành viên, máy chủ từ chối `ALREADY_IN_ROOM`),
+      nên lệnh mời ra luôn được thực hiện.
     - Buy-in lỗi (có thể đã ghi xong) nay đẩy `BALANCE` ngay, nên thanh số dư không còn hiện số điểm sổ đã trừ. Lần Ngồi phát
       lại buy-in đó vẫn đẩy thêm một lần khi đã có ghế, như mọi lần Ngồi; test nay giữ cả hai.
     - `ledger_keys` được dọn sạch khi server khởi động (`pruneLedgerKeys`): phòng sống trong bộ nhớ, nên không khoá nào còn

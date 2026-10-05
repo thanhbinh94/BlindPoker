@@ -1167,6 +1167,8 @@ describe('A ledger write is applied once, however often it is retried (Plan 20)'
     ackLostOnce(h, isCashOut)
     expect(await code(h.room.standUp('a'))).toBe('Error: ack lost') // the player is told it failed…
     expect(await h.repos.balances.get('a')).toBe(100_000) // …though the 20.000 is home
+    // …and the bar is re-read on the failure, not left at 80.000 until the retry settles it.
+    expect(h.last('a', 'BALANCE')).toEqual({ t: 'BALANCE', balance: 100_000 })
     expect(h.room.snapshot(null).room.players.find((p) => p.playerId === 'a')).toMatchObject({ seat: 1, status: 'SITTING_OUT' })
     for (const id of ['h', 'a', 'b']) await h.room.setReady(id, true)
     await h.room.startGame('h')

@@ -945,6 +945,8 @@ export class Room {
         await this.deps.repos.balances.apply([{ playerId: p.identity.playerId, delta: p.stack, reason: 'cash_out', refId: this.roomId }], undefined, { key: this.cashOutKey(sitId) })
       } catch (err) {
         this.setSittingOut(p, true) // out of every deal, and nobody waits on it to start one
+        // It may have landed: the bar is re-read now, as for a failed buy-in, rather than left short until the retry.
+        await this.pushBalance(p.identity.playerId)
         throw err
       }
       await this.pushBalance(p.identity.playerId)
