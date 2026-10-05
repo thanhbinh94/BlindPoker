@@ -683,7 +683,38 @@ describe('skinMask, and eyes on a bald face (Plan 19 A1b, spec §5.5)', () => {
     const far = new Uint8Array(W * H)
     for (let y = 780; y < 820; y++) for (let x = 600; x < 640; x++) far[y * W + x] = 1
     expect(coverage(copy, far), 'the outline’s colour far from the body’s outline').toBe(0)
-    expect(OUTFIT_LINE).toEqual({ reach: 3, tolerance: 20, shown: 4, minShown: 24 })
+    expect(OUTFIT_LINE).toEqual({ reach: 3, tolerance: 20, shown: 4, minShown: 24, nearShown: 8 })
+  })
+
+  it('keeps a lone finger’s sliver of shown skin, drops a stray speck far from the hand, and takes a darker copy (skin-line review)', () => {
+    // Built by hand: a body whose every pixel is solid, its line where the test says, and an outfit that redraws that line.
+    const OUT = hexToRgb(OUTLINE) // the body's line, Lab ≈ (37, 17, 22)
+    const DARKER = hexToRgb('#3a1c10') // a darker brown, Lab ≈ (14, 13, 14): ΔE 24 — past the tolerance — but a*b* 9.5 off
+    const BROWN_CLOTH = DARKER // the same brown as trouser cloth beside a stray speck of thigh
+    const body = { data: Buffer.alloc(W * H * 4, 255), width: W, height: H }
+    const item = { data: Buffer.alloc(W * H * 4), width: W, height: H }
+    const skin = new Uint8Array(W * H)
+    const line = new Uint8Array(W * H)
+    const fill = (x0: number, y0: number, x1: number, y1: number, f: (i: number) => void) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) f(y * W + x) }
+    const paint = (pic: { data: Buffer }, i: number, [r, g, b]: [number, number, number]) => { pic.data[i * 4] = r; pic.data[i * 4 + 1] = g; pic.data[i * 4 + 2] = b; pic.data[i * 4 + 3] = 255 }
+    // The hand: a 100 × 100 piece of shown skin; a lone finger: a 4 × 5 = 20 px piece 6 px to its right, under `minShown`.
+    fill(100, 100, 199, 199, (i) => { skin[i] = 255 })
+    fill(205, 150, 208, 154, (i) => { skin[i] = 255 })
+    // The finger's outer outline, 1–2 px from the finger and 11 from the hand: the body's line and the outfit's copy of it,
+    // the copy partly darker.
+    fill(210, 148, 211, 156, (i) => { line[i] = 255; paint(body, i, OUT); paint(item, i, i % 2 ? DARKER : OUT) })
+    // A stray 16 px speck of thigh far from the hand, with brown trouser cloth over the body's line beside it.
+    fill(400, 400, 403, 403, (i) => { skin[i] = 255 })
+    fill(405, 395, 405, 410, (i) => { line[i] = 255; paint(body, i, OUT) })
+    fill(405, 395, 406, 410, (i) => paint(item, i, BROWN_CLOTH))
+
+    const copy = outfitLineMask(item, { body, skin, line })
+    const finger = new Uint8Array(W * H)
+    fill(210, 148, 211, 156, (i) => { finger[i] = 1 })
+    expect(coverage(copy, finger), 'the lone finger’s outline, darker pixels too').toBe(1)
+    const cloth = new Uint8Array(W * H)
+    fill(405, 395, 406, 410, (i) => { cloth[i] = 1 })
+    expect(coverage(copy, cloth), 'trouser cloth beside a stray speck of thigh').toBe(0)
   })
 
   it('cuts no line art where there is no skin', async () => {

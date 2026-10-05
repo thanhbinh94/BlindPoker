@@ -1264,7 +1264,7 @@
         },
         "skinLine": {
           "bytes2x": 4932,
-          "meanL": 0.341
+          "meanL": 0.3411
         }
       }
     },
@@ -1321,8 +1321,8 @@
       "cutOn": "f",
       "masks": {
         "skinLine": {
-          "bytes2x": 4664,
-          "meanL": 0.2349
+          "bytes2x": 4724,
+          "meanL": 0.2299
         }
       }
     },
@@ -1335,8 +1335,8 @@
       "cutOn": "f",
       "masks": {
         "skinLine": {
-          "bytes2x": 4538,
-          "meanL": 0.3353
+          "bytes2x": 4585,
+          "meanL": 0.3352
         }
       }
     },
@@ -1365,8 +1365,8 @@
       "cutOn": "f",
       "masks": {
         "skinLine": {
-          "bytes2x": 4547,
-          "meanL": 0.3448
+          "bytes2x": 4546,
+          "meanL": 0.3451
         }
       }
     }
