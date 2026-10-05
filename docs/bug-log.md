@@ -288,8 +288,29 @@ Ghi chú kỹ thuật:
   - Kiểu dài mái bằng (hime) được duyệt tay: mép thân đè lên tóc dài phía sau, không phải vẽ lại thân.
   - Bot 0 nay mặt là màn hình tối kiểu kính che.
 - **Ghi nhận, chưa làm:**
-  - Ở tông nâu đậm (và phần nào tông nâu), viền tay và kẽ ngón còn nét vẽ màu nâu cam của thân gốc, nhìn gần thấy một
-    quầng sáng quanh tay. Ở cỡ ghế và thẻ thì khó thấy. Cách sửa nếu cần: tô cả nét viền theo tông da (mặt nạ nét riêng).
+  - Viền tay ở tông nâu đậm (và phần nào tông nâu) còn nét vẽ màu nâu cam của thân gốc, thành một quầng sáng quanh tay:
+    **đã sửa 05/10** (người dùng: "sửa luôn viền tay ở tông nâu đậm") — merge `d04276e`, đã lên host LAN. Ghi chú kỹ
+    thuật:
+    - Nguyên nhân 1: đường viền của da (nâu đỏ đậm `#832e13`, vẽ cho da kem) nằm ngoài mặt nạ da nên giữ nguyên màu.
+      Trên da nâu đậm, nó sáng ngang da và đậm màu hơn nhiều, thành quầng cam quanh tay, tai và cằm.
+    - Nguyên nhân 2: tranh quần áo vẽ lại cả viền cánh tay và bàn tay, nằm đè lên thân. Vì vậy dù viền của thân đã sửa,
+      viền cam vẫn hiện.
+    - Cách sửa: thêm loại mặt nạ thứ năm, `skinLine` (`<layer>_skinlinemask`), cho 2 thân, 12 nét mặt và 8 bộ quần áo.
+      Màu da **làm tối** vùng này theo tỉ lệ độ sáng màu da / độ sáng da kem (`shade`): giữ sắc độ của nét, không bao giờ
+      làm sáng hơn.
+      - Tông trắng sứ, sáng và tự nhiên giữ nguyên nét vẽ.
+      - Tông sáng ấm tối hơn khoảng 14 %.
+      - Tông nâu đậm còn khoảng 1/3 độ sáng.
+    - Trên quần áo chỉ lấy bản vẽ lại của viền thân: cách viền thân ≤ 3 px, cùng màu (ΔE ≤ 20, hoặc tối hơn mà cùng sắc),
+      sát chỗ da lộ ra. Mẩu da lộ dưới 24 px chỉ tính khi cách bàn tay ≤ 8 px. Vải không bị tô: đã kiểm Tết đỏ, quần bộ
+      nhà vô địch, tuxedo.
+    - Kiểm:
+      - ảnh bản build thật ở 1920×940, cả nam lẫn nữ, bốn tông;
+      - C11 bắt buộc có mặt nạ này trên thân, mặt và quần áo v4, và không được chồng lên da, mắt hay mặt nạ màu;
+      - review độc lập hai vòng.
+  - **Mới thấy, chưa sửa (05/10):** ở tông nâu đậm, đôi hài của long bào và áo dài Tết để lộ mu bàn chân màu kem. Tranh
+    quần áo vẽ lại phần chân trong hài bằng da kem, và lớp đó không được tô màu da. Lỗi có từ Plan 19, khác với lỗi viền
+    tay.
   - Viên thuốc "Đang dùng" trên desktop còn che vài px góc ô màu da.
   - Cắt lại một ảnh đã căn sẽ lệch 1–2 px so với bản đã commit; vẫn qua mọi kiểm tra.
   - Chưa có e2e đo pixel rằng viên thuốc "Đang dùng" nằm trên ảnh chân dung kiểu tóc ở điện thoại; đã kiểm bằng ảnh chụp.

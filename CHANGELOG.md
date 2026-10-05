@@ -50,6 +50,13 @@ player saves.
   - checks C11 (face skin), C12 (the head stays put) and C13 (a clean hair split);
   - registration before cutting, so a slightly zoomed ChatGPT picture no longer costs an attempt;
   - a hair or outfit picture's redraw of the body's skin is kept out of its layer, so the skin tone shows through.
+- **Follow-up 2026-10-05: brown and deep hands lose their orange rim** (user: "sửa luôn viền tay ở tông nâu đậm"; merge
+  `d04276e`).
+  - The skin's outline was drawn for cream, and kept its saturated red-brown under every tone.
+  - Every outfit picture also carries a redrawn copy of the arms' and hands' outline, drawn over the body.
+  - A fifth mask kind, `skinLine`, covers both, and a skin colour now *shades* it rather than recolouring it: darker by
+    the tone's lightness over the cream's, never lighter, keeping its own hue. Porcelain, fair and natural look exactly
+    as before.
 
 ---
 
