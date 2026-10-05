@@ -3,6 +3,7 @@ import { fireEvent, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ItemDto } from '../../api.js'
+import enNormal from '../../locales/en/normal.json'
 import viNormal from '../../locales/vi/normal.json'
 import { makeI18n, renderWithI18n } from '../../test-i18n.js'
 import { ColourCard, ItemCard, WordCard } from './cards.js'
@@ -300,6 +301,16 @@ describe('cards', () => {
         expect(line.compareDocumentPosition(dotRow) & Node.DOCUMENT_POSITION_FOLLOWING, 'before the dot row').toBeTruthy()
         // It is a line of text beside the button, not part of what the button says.
         expect(pick).toHaveAccessibleName(`${viNormal.items.head_beret_blue01}, ${viNormal.inventory.rarity.rare}, ${viNormal.wardrobe.wearingBadge}`)
+      })
+
+      it('words the line by the `wardrobe.familyHint` template, in either language', () => {
+        const i18n = makeI18n('vi')
+        i18n.addResource('vi', 'normal', 'wardrobe.familyHint', '{{hint}} ({{name}})')
+        renderWithI18n(<ItemCard item={HEAD_BERET_BLUE} family={HEAD_BERET} owned wearing hint="" familyHint={HINT} variants={variants} onPick={vi.fn()} />, i18n)
+        expect(screen.getByText(`${HINT} (${viNormal.items.head_beret_red01})`)).toBeInTheDocument()
+
+        renderWithI18n(<ItemCard item={HEAD_BERET_BLUE} family={HEAD_BERET} owned wearing hint="" familyHint={HINT} variants={variants} onPick={vi.fn()} />, makeI18n('en'))
+        expect(screen.getByText(`${enNormal.items.head_beret_red01}: ${HINT}`)).toBeInTheDocument()
       })
 
       it('draws no line without a familyHint', () => {

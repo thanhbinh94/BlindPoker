@@ -267,6 +267,7 @@
     },
     "showLocked": "Show items you don't own yet",
     "emptyOwned": "You don't own anything here yet.",
+    "familyHint": "{{name}}: {{hint}}",
     "ownedCount": "{{owned}}/{{total}} owned",
     "wearingBadge": "Wearing",
     "words": {

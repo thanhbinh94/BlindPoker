@@ -94,9 +94,10 @@ export interface ItemCardProps {
    * get a member the player does not own (`hintFor`'s text, `''` for one that is owned): its dot's label and title carry it. */
   variants?: { item: ItemDto; owned: boolean; wearing: boolean; hint: string }[]
   /** The family's original is locked while the card shows another member — the box ticked over an owned colour variant
-   * (Plan 20, T3) — and this is how to get that original (`hintFor`'s text): drawn as one line, "<original name>: <hint>",
-   * under the pick button and over the dot row, for a touch screen that has no tooltip to read the dot's hint from. It is
-   * outside the pick button, so it is not part of what the button says, and the even-row rule still lines the bottoms up. */
+   * (Plan 20, T3) — and this is how to get that original (`hintFor`'s text): drawn as one line, "<original name>: <hint>"
+   * (`wardrobe.familyHint`), under the pick button and over the dot row, for a touch screen that has no tooltip to read
+   * the dot's hint from. It is outside the pick button, so it is not part of what the button says, and the even-row rule
+   * still lines the bottoms up. */
   familyHint?: string
   /** Keeps the dot row's height on a card that has no variants of its own, so that in a tab where some cards do
    * have them every card's lock hint ends on the same line (No8b). `ItemTab` sets it; a lone card never needs it. */
@@ -145,7 +146,7 @@ export function ItemCard({ item, family = item, wear, owned, wearing, hint, vari
           <RarityLabel rarity={item.rarity} />
           {owned ? null : <LockHint hint={hint} />}
         </button>
-        {familyHint === undefined ? null : <LockHint hint={`${itemName(family.id, t)}: ${familyHint}`} />}
+        {familyHint === undefined ? null : <LockHint hint={t('wardrobe.familyHint', { name: itemName(family.id, t), hint: familyHint })} />}
         {!hasVariants ? (
           reserveDots ? <div className={s.dotsSpacer} aria-hidden="true" /> : null
         ) : (

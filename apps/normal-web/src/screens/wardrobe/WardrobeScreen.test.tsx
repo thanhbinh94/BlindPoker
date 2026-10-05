@@ -249,12 +249,15 @@ const genderButton = (gender: Gender): HTMLElement =>
 const card = (name: string): HTMLElement => within(screen.getByRole('tabpanel')).getByRole('button', { name: new RegExp(`^${name}, `) })
 
 /** The open tab's card names, in order (the part of each accessible name before its first comma). A card's pick button
- * only: a colour dot sits in its own `group` and, when it is not owned, is named "<name>, Chưa có: <hint>" too. */
-const cardNames = (): string[] =>
-  within(screen.getByRole('tabpanel'))
+ * only: a colour dot sits in its own `group` and, when it is not owned, is named "<name>, Chưa có: <hint>" too. Only a
+ * group inside the panel counts — one the panel itself sits in would otherwise hide every card. */
+const cardNames = (): string[] => {
+  const panel = screen.getByRole('tabpanel')
+  return within(panel)
     .getAllByRole('button', { name: /,/ })
-    .filter((each) => each.closest('[role="group"]') === null)
+    .filter((each) => !panel.contains(each.closest('[role="group"]')))
     .map((each) => each.getAttribute('aria-label')!.split(',')[0]!)
+}
 
 /** The stage's own figure: the first `Chibi` on the screen (the left column comes before the cards). */
 const stage = (): HTMLElement => document.querySelector('[data-chibi-hash]') as HTMLElement
@@ -872,6 +875,23 @@ describe('WardrobeScreen', () => {
       await user.click(screen.getByRole('button', { name: viNormal.wardrobe.save }))
 
       await waitFor(() => expect(setAvatar).toHaveBeenCalledWith(expect.objectContaining({ head: 'head_beret_blue01' })))
+    })
+
+    it('with the box ticked, a family the player owns nothing of shows its locked original with its own lock line, and no second hint line', async () => {
+      // Plan 20, final wave: the "<original name>: <hint>" line is for a card that shows another member. The top hat is
+      // a family of one the player does not own, so its card is the original, and its own lock line already says how.
+      const user = userEvent.setup()
+      renderScreen()
+      await opened()
+      await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
+      await user.click(showLockedBox())
+      const panel = within(screen.getByRole('tabpanel'))
+      const hint = viNormal.achievements.login_days_100.name
+      const card = panel.getByRole('button', { name: `${viNormal.items.head_tophat01}, ${viNormal.inventory.rarity.epic}, ${viNormal.wardrobe.filter.locked}: ${hint}` })
+      expect(card).toHaveAttribute('aria-disabled', 'true')
+      expect(within(card).getByText(hint), 'the card’s own lock line').toBeVisible()
+      expect(panel.queryByText(new RegExp(`^${viNormal.items.head_tophat01}: `)), 'no family hint line').toBeNull()
+      expect(panel.getAllByText(hint), 'the hint once, on the card').toHaveLength(1)
     })
 
     it('with the box unticked, a family whose original is not owned shows its first owned variant — named, owned, a click equips it — and hides the dots not owned', async () => {
