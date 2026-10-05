@@ -271,8 +271,8 @@ on resize), so a ledger below the fold reads as more to come; scrolled to the en
 **The card stops above the viewer's own seat** (review round 2, R2-3: on a short stage it covered that seat whole, and
 at 1920 × 940 its plate). The overlay still spans the stage, but its bottom padding grows by `--seat-clearance`, and
 its scrim paints the padded content box alone — the card's stage — so the scrim's centre rises with the card and the
-seat below is not darkened (the ellipse is as tall as that box, so it is transparent by the box's foot and draws no
-line across the felt). `RoomScreen` sets the clearance from `useSeatClearance(stageRef, active, seat)`
+seat below is not darkened (the ellipse is as tall and as wide as that box — `50% 50%`, closest-side — so it is
+transparent by all four of the box's edges and draws no line across the felt, nor a step at either side). `RoomScreen` sets the clearance from `useSeatClearance(stageRef, active, seat)`
 (`src/screens/seat-clearance.ts`) while a card is up; `seat` is the viewer's seat number, `null` while they watch. The
 hook finds the seat and its plate by `Seat`'s markers, `data-me="true"` on the viewer's own seat and `data-plate` on a
 plate — a contract of their own, not the hashed class names — and measures before paint, on a `ResizeObserver` over

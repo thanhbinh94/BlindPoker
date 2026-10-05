@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import type { RoomSummary } from '@bp/core'
 import { expect, type Locator, type Page } from '@playwright/test'
+import sharp from 'sharp'
 import { expectNoTextOverlap } from './overlap.js'
 
 /**
@@ -510,6 +511,69 @@ export async function expectCardClearsMySeat(page: Page, card: Locator, who: str
     if (original !== null) await page.setViewportSize(original)
   }
   expect(problems, `the result card and the viewer's own seat:\n  ${problems.join('\n  ')}`).toEqual([])
+}
+
+/**
+ * The mean brightness (0–255, the mean of R, G and B) of a `height`-px column of `png`, one pixel wide at column `x`
+ * from row `top`.
+ */
+async function columnBrightness(png: Buffer, x: number, top: number, height: number): Promise<number> {
+  // Not `.stats()`: it reads the whole input and ignores `extract`. The raw pixels of the column, alpha dropped, are RGB triples.
+  const pixels = await sharp(png).extract({ left: x, top, width: 1, height }).removeAlpha().raw().toBuffer()
+  return pixels.reduce((sum, level) => sum + level, 0) / pixels.length
+}
+
+/**
+ * Plan 20, T4 (inv-ui 3): the scrim behind the held result card leaves no edge on the felt beside it. The scrim is
+ * painted in the overlay's content box — the box less its padding — and used to be an ellipse 70 % as wide as that box,
+ * so at the box's side it still held about 0.3 of its alpha and a clip cut it off: a hard-edged slab of grey, 70 levels
+ * darker than the page beside it on the light theme (about 5 on the dark). It is `transparent` at all four edges now.
+ *
+ * `overlay` is that box. At each of `viewports` the box is measured — its bounding rect less its border and padding, not
+ * a hard-coded x — and the screenshot's pixels 3 px outside and 3 px inside its left and right edges are read, each a 41
+ * px column of the box's vertical middle (the card, narrower than the stage at these sizes, is nowhere near). The two
+ * means of a side may differ by 3 levels at most. Every size is measured before anything fails, and the page's own
+ * viewport comes back. `label` names the theme in the message.
+ */
+export async function expectScrimLeavesNoEdge(page: Page, overlay: Locator, label: string, viewports = OVERLAP_SCREENS): Promise<void> {
+  const original = page.viewportSize()
+  const problems: string[] = []
+  try {
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport)
+      await twoFrames(page)
+      const box = await overlay.evaluate((el) => {
+        const rect = el.getBoundingClientRect()
+        const style = getComputedStyle(el)
+        const edge = (side: 'Left' | 'Right' | 'Top' | 'Bottom'): number => parseFloat(style[`border${side}Width`]) + parseFloat(style[`padding${side}`])
+        return {
+          left: rect.left + edge('Left'),
+          right: rect.right - edge('Right'),
+          top: rect.top + edge('Top'),
+          bottom: rect.bottom - edge('Bottom'),
+          scale: window.devicePixelRatio,
+        }
+      })
+      const png = await page.screenshot()
+      const rows = Math.round(41 * box.scale)
+      const middle = Math.round(((box.top + box.bottom) / 2) * box.scale)
+      const top = Math.max(0, Math.min(middle - Math.floor(rows / 2), viewport.height * box.scale - rows))
+      const at = (cssPx: number): number => Math.round(cssPx * box.scale)
+      const sides = [
+        { side: 'left', inside: at(box.left + 3), outside: at(box.left - 3), edge: box.left },
+        { side: 'right', inside: at(box.right - 4), outside: at(box.right + 3), edge: box.right },
+      ]
+      for (const { side, inside, outside, edge } of sides) {
+        const [within, beyond] = [await columnBrightness(png, inside, top, rows), await columnBrightness(png, outside, top, rows)]
+        if (Math.abs(within - beyond) > 3) {
+          problems.push(`${viewport.width}×${viewport.height}, ${side} edge (x ${Math.round(edge)}): ${within.toFixed(1)} inside, ${beyond.toFixed(1)} outside — a step of ${Math.abs(within - beyond).toFixed(1)}`)
+        }
+      }
+    }
+  } finally {
+    if (original !== null) await page.setViewportSize(original)
+  }
+  expect(problems, `the result card's scrim (${label} theme) has an edge at its box:\n  ${problems.join('\n  ')}`).toEqual([])
 }
 
 /** Takes the given seat; the index is explicit so nothing ever races the bot for one. */

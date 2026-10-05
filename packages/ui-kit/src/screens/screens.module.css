@@ -40,10 +40,15 @@
   min-width: 0; /* grid children default to min-content: without this the ticket list pushes the page wide */
 }
 
+/* The title, the hairline and the way to make a room. They wrap when they do not fit: at 320 px the title (154 px), the
+   hairline's floor (24) and the button (124) with their gaps are 326 px in the 304 the lobby leaves them, and the
+   button hung 14 px past the window — the page scrolled sideways (Plan 20, T4). The button drops to a line of its own
+   there, under the title, and the hairline fills the line the title is on; from 342 px up it is one line. */
 .sectionHead {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2) var(--space-3);
   margin-bottom: var(--space-4);
 }
 
@@ -123,8 +128,10 @@
    it sets nothing and the card keeps the whole felt. The box itself stays `inset: 0` and only its padding grows; the
    scrim is painted in the content box alone — the card's stage — so its centre rises with the card and the viewer's
    seat below it is not darkened (it lay under the scrim's darker band while the scrim was centred on the whole
-   stage). Its ellipse is as tall as that box (50 %), so it is `transparent` by the box's foot and leaves no edge on
-   the felt beside the card: at 60 % it still had about 0.15 of its alpha there, a visible line at 1280 × 720. */
+   stage). Its ellipse is as tall and as wide as that box (50 % each, `closest-side`), so it is `transparent` by all four
+   of the box's edges and leaves no step on the felt beside the card or under it. At 60 % tall it still had about 0.15
+   of its alpha at the foot, a visible line at 1280 × 720; at 70 % wide it had about 0.3 at each side, where the clip cut
+   it off — a hard-edged grey slab on the light page, 16 px in from either side of the stage (Plan 20, T4). */
 .overlay {
   position: absolute;
   inset: 0;
@@ -136,7 +143,7 @@
   padding: var(--space-4);
   padding-bottom: calc(var(--space-4) + var(--seat-clearance, 0px));
   pointer-events: none;
-  background-image: radial-gradient(70% 50% at 50% 50%, rgba(4, 7, 18, 0.72), rgba(4, 7, 18, 0.32) 70%, transparent 100%);
+  background-image: radial-gradient(50% 50% at 50% 50%, rgba(4, 7, 18, 0.72), rgba(4, 7, 18, 0.32) 70%, transparent 100%);
   background-origin: content-box;
   background-clip: content-box;
   background-repeat: no-repeat;

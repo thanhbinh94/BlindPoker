@@ -13,6 +13,7 @@ import {
   expectNoTextOverlapDown,
   expectPageFits,
   expectRoomFits,
+  expectScrimLeavesNoEdge,
   LAPTOP_SCREEN,
   lobbyAvatar,
   OVERLAP_SCREENS,
@@ -60,6 +61,12 @@ const PLAY_COST = WAGER * 2
  * stack comes home at stand-up. A hand moves the stack only, so the balance is read after leaving.
  */
 const LIMIT = 5 * WAGER
+/** The window sizes at which the lobby's tickets are as narrow as they get (see the busy-lobby step of the first test). */
+const TICKET_FLOOR_SCREENS = [
+  { width: 656, height: 900 },
+  { width: 976, height: 900 },
+  { width: 320, height: 640 },
+]
 
 /* ── the session ─────────────────────────────────────────────────────────────────────────────────── */
 
@@ -409,6 +416,20 @@ test.describe('Blind Luck Poker Normal', () => {
     await expectCardClearsMySeat(page, card, who.displayName)
     await expectNoTextOverlapAt(page, 'room, result card', OVERLAP_SCREENS)
     await shot(page, 'room-result-desktop')
+    // Plan 20, T4: the scrim behind the held card fades out by the edge of its box, so the felt beside the card is not
+    // cut by a step there — on the dark page, and on the light one (the card keeps its night palette in either; the
+    // held card stays through the switch, which is no navigation).
+    const scrimBox = page.locator('main [data-surface="night"]').filter({ has: card })
+    await expect(scrimBox, 'the result card sits in one overlay').toHaveCount(1)
+    await expectScrimLeavesNoEdge(page, scrimBox, 'dark')
+    const theme = await page.evaluate(() => document.documentElement.dataset.theme ?? null)
+    await page.evaluate(() => void (document.documentElement.dataset.theme = 'light'))
+    try {
+      await shot(page, 'room-result-desktop-light')
+      await expectScrimLeavesNoEdge(page, scrimBox, 'light')
+    } finally {
+      await page.evaluate((was) => (was === null ? delete document.documentElement.dataset.theme : void (document.documentElement.dataset.theme = was)), theme)
+    }
 
     await page.getByRole('button', { name: 'Rời phòng' }).click()
     await expect(page).toHaveURL(/#\/lobby$/)
@@ -427,6 +448,20 @@ test.describe('Blind Luck Poker Normal', () => {
     for (const ticket of await tickets.all()) await expect(ticket, `${await ticket.getAttribute('aria-label')} is whole on screen`).toBeInViewport({ ratio: 1 })
     await shot(page, 'lobby-busy-desktop')
     await expectNoTextOverlapAt(page, 'lobby, six rooms', OVERLAP_SCREENS)
+    // Plan 20, T4 (inv-ui 5): the narrowest a ticket gets is the grid's floor, 19 rem = 304 px, and it is reached at the
+    // widths where the columns just fit — 656 (two of them), 976 (three) and 320 (the narrowest phone, one column under
+    // 8 px of padding a side). The weak point there is the name column, 76 px wide for the longest name, so the lobby
+    // is held to the page rules at those widths: nothing wider than the window (at 320 the heading's "Tạo phòng" pushed
+    // the page 14 px sideways) and no text over text. The 305 is the proof the test stands on the floor, not above it.
+    for (const size of TICKET_FLOOR_SCREENS) {
+      const where = `${size.width}×${size.height}`
+      await page.setViewportSize(size)
+      const widths = await tickets.evaluateAll((buttons) => buttons.map((button) => button.closest('li')?.getBoundingClientRect().width ?? Number.NaN))
+      expect(Math.min(...widths), `the narrowest ticket at ${where} is the grid's floor (${widths.map((w) => Math.round(w)).join(', ')} px)`).toBeLessThanOrEqual(305)
+      await expectNoSidewaysScroll(page)
+      await expectNoTextOverlapDown(page, `lobby, six rooms, ${where}`)
+      await shot(page, `lobby-busy-${size.width}`)
+    }
     // A phone holds them in one column, taller than the window: it scrolls down, never sideways, and is read all the way.
     await page.setViewportSize(PHONE_SCREEN)
     await expectNoSidewaysScroll(page)

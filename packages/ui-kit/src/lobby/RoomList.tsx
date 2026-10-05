@@ -86,10 +86,20 @@ function RoomTicket({ room, onJoin, lang, busy }: RoomTicketProps) {
       <span className={cx(s.notch, s.notchBottom)} aria-hidden="true" />
 
       <div className={s.body}>
-        {/* The name wraps in a column of its own, two lines at most (the whole of it in the tooltip); the lock and the
-            status stay on its first line at the right, so a long name never pushes them onto a row of their own (R2-1). */}
+        {/* The name wraps in a column of its own, two lines at most; the lock and the status stay on its first line at the
+            right, so a long name never pushes them onto a row of their own (R2-1). The clamp only hides the lines, so a
+            screen reader reads the whole name (and the join button's label carries it too). A name the clamp cuts says
+            the rest in a tooltip, set while the pointer is over it: a static `title` equal to the text was read twice
+            and put a pointless tooltip on every ticket. */}
         <div className={s.ticketHead}>
-          <h3 className={s.roomName} title={room.name}>
+          <h3
+            className={s.roomName}
+            onMouseEnter={(event) => {
+              const name = event.currentTarget
+              if (name.scrollHeight > name.clientHeight + 1) name.title = room.name
+            }}
+            onMouseLeave={(event) => event.currentTarget.removeAttribute('title')}
+          >
             {room.name}
           </h3>
           <span className={s.ticketStatus}>
