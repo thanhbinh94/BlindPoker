@@ -56,6 +56,20 @@
   - **Dev-only npm advisories.**
   - **The pipeline note "a re-cut lands 1–2 px off".** It is a reproducibility note, not a user-visible defect.
 
+**Pre-flight review (2026-10-05, opus):** 3 blockers, 7 important and 7 minor amendments.
+- They are folded into each task as **"Amendments (pre-flight)"** blocks. Where an amendment and the task text differ, the amendment wins.
+- **Verified correct:**
+  - every T3/T4 line reference;
+  - all 22 `var(--red)` classifications and every contrast number;
+  - the ui-kit testing subpath is feasible;
+  - the night `color` is safe (`.table` already sets it);
+  - the scrim change doesn't touch `useSeatClearance`;
+  - C13 and C11's HAIR_INK_SHARE are unaffected by T5;
+  - Lite never draws masks;
+  - the ops pack doesn't depend on the old money behaviour;
+  - the economy services use `creditWithin`, which doesn't change.
+- **Order:** T1, T2, T3, T4, T5, T6. T2 must land before T4, because T4's light result-card shot needs T2's night `color`.
+
 ## Global Constraints
 
 - **Worktree.**
@@ -91,6 +105,34 @@
 ---
 
 ### Task 1: A ledger write is applied once, however often it is retried
+
+**Amendments (pre-flight):**
+- **(B3) Carry-over.**
+  - A pot whose release failed is held in a separate `pendingRelease: { key, pot }`, not left in `carryOverPot`: `room.ts:645` assigns `this.carryOverPot = result.carryOverOut` and would overwrite it.
+  - `releaseCarryOver` first settles `pendingRelease` under its own key. Then, if `carryOverPot` > 0, it releases that under a fresh key.
+  - A key that replays as `applied: false` clears only its own `pendingRelease`, never a newer pot.
+  - `wrapUp`, the conservation sum `books()` (`room-hands.test.ts:793`) and the room's carry-over view all include `pendingRelease.pot`.
+- **(I4) Buy-in.**
+  - The `pendingBuyIn` reuse runs before Hold'em's amount validation (`room.ts:240`) and before the Blind balance pre-check (`243-245`). A committed buy-in leaves the balance below the requirement, and the retry must not throw INSUFFICIENT_BALANCE.
+  - Clear `pendingBuyIn` on `InsufficientBalanceError`: the key is unclaimed.
+  - On `removePlayer` or shutdown with a `pendingBuyIn`, replay the buy-in key, then refund with key `buy_in_refund:${roomId}:${sitId}`. The player is never left "debited, never seated".
+- **(I5) Frozen seat.**
+  - A `cashOutPending` seat is also set sitting out, so `maybeAutoStart` (`766`) is not stalled by it.
+  - `onHandComplete` (`666-680`) retries every pending cash-out, including those from a failed manual Stand Up, Leave or kick, not only `standAfterHand`, `leaveAfterHand` and short stacks.
+  - `applied: false` counts as success: clear the flag and `sitId`.
+- **(I6) Lite v3** uses `CREATE TABLE IF NOT EXISTS ledger_keys …`. `sqlite.test.ts:64-103` rewinds `user_version` and re-runs the migrations.
+- **(M11) Paths and callers.**
+  - Paths:
+    - `apps/normal-server/src/repos/balance-repo.ts` (also the override at :69);
+    - `apps/lite/server/src/db/migrations.ts`;
+    - `apps/lite/server/src/repos/sqlite-repos.ts`.
+  - `balance-repo.test.ts:170` (`(): Promise<void> =>`) must follow the new return type.
+  - The four `room-hands` fakes return the real result, not only pass `opts` through.
+  - Add `ledger_keys` to the truncate list at `balance-repo.test.ts:30` and to the table list at `schema.test.ts:51`.
+  - The concurrent-key test proves the race only on real Postgres; PGlite serialises transactions. Say so in the test.
+- **(M12) Conservation:** assert `books(h) === 0` after the retry has settled. While a cash-out is pending, the committed credit and the seat's stack are counted twice.
+- **(M16) Docs:** the `docs/known-limitations.md` removal happens in T6 only, not here.
+- **(M17) Deploy:** the `run.ps1` step is the controller's, after merge. Implementers never touch :8080.
 
 **Why.** `docs/known-limitations.md`, "An automatic cash-out retry after a write that committed but reported an error credits twice". The investigation (`inv-cashout.md`) found more:
 - **Carry-over release:** the same hole.
@@ -175,6 +217,15 @@
 
 ### Task 2: Red ink, badges, light-theme result names and the Lite parchment reach AA
 
+**Amendments (pre-flight):**
+- **(I7) Parchment islands.** Each one declares `--red-fill: #a9242d` next to its `--red`:
+  - lobby `.ticket` (`lobby.module.css:39`);
+  - `.panel.parchment` (`primitives.module.css:220`);
+  - Lite `.ticket` (`lite.module.css:248`).
+
+  Otherwise Lite `.notice` (`lite.module.css:352`, inside the Lite `.ticket`), once moved to `var(--red-fill)`, would pick up the theme's `#c8323c` in dark. Assert the islands declare it.
+- **(I10) Normal placeholder.** `apps/normal-web/src/screens/normal.module.css:470` `.input::placeholder` uses the same 76 % mix as Lite's. It is 3.29:1 in the light theme, on the AuthScreen e-mail and display-name placeholders. Fix it together with Lite's (`lite.module.css:370`) and assert both.
+
 **Why.** `docs/known-limitations.md` UI section. The investigation (`inv-contrast.md`) also found the light-theme result-card names at about 1.1:1, invisible: `[data-surface='night']` resets `--ink` but not `color`.
 
 **Changes** (values from `inv-contrast.md`; recompute and pin them in tests):
@@ -242,6 +293,17 @@
 
 ### Task 4: Table and lobby — scrim edge, room-name tooltip, the narrowest ticket, 320 px
 
+**Amendments (pre-flight):**
+- **(M13) The 320 px fix location:**
+  - CSS: `packages/ui-kit/src/screens/screens.module.css` `.sectionHead`, `.rule` (`min-width: var(--space-6)`) and `.createBtn` (43–66);
+  - markup: `packages/ui-kit/src/screens/LobbyScreen.tsx:88-96`.
+
+  Lite shares this lobby; check it at 320 too.
+- **(M14) Measuring and shots.**
+  - Measure the scrim edge from the overlay's bounding rect plus its computed padding, not a hard-coded x≈32.
+  - Runs after T2 (the light shot needs the night `color`).
+  - Shots also at 375×812.
+
 **Why.** `inv-ui.md` items 3–5, plus the 320 px sideways scroll it found.
 
 1. **Scrim.**
@@ -269,6 +331,45 @@
 **Shots:** the result card in dark and light at 1920×940 and 1366×768; the lobby at 656, 976 and 320.
 
 ### Task 5: Hair and outfit pictures' redrawn skin takes the skin colour
+
+**Amendments (pre-flight), these win over the text below:**
+- **(B1) Outfits: the mask must not take gold trim.**
+  - The prototype's `tet_red01` mask holds 5 gold-trim pieces (collar, cuffs, slit edge; Lab ≈ 66–84 / 1–19 / 52–62, about 306 px). They lie only over body skin, so the palette "over no skin" never sees gold, and gold passes SKIN_MASK's hue window.
+  - For outfits, a pixel needs ΔE ≤ 22 to the body's seed *and* C* ≤ 35 (insteps measure C* ≈ 21, trim 52–65). Drop the hue-window alternative for outfits.
+  - Replace the "thin 1 px trim" fixture with a 5 px gold band of 60 px or more, which must stay out.
+  - Acceptance:
+    - `tet_red01` (f and m) and `royal_robe01` masks hold only the insteps;
+    - `champion01`, `casual01`, `dealer01` (f, m) and `tuxedo01` masks are empty.
+- **(B2) Hairline acceptance metric.**
+  - Count only hair-layer pixels (hair L60 alpha > 8) over body or face skin (mask ≥ 128) whose colour is at least `GAP` from the hair's own palette and reads light at the deep tone.
+  - Require a drop of at least 80 % at `#643e2b` and `#9c6140` for every style except wavy.
+  - Add a visual sign-off on 4× head crops at deep, brown and natural, in the shots folder.
+  - Eye whites and the ponytail's own light-orange highlights are not in scope.
+- **(I8) Hair `meanL`.**
+  - Cutting skin out of the hair mask must not move the hair mask's manifest `meanL`: `deriveHairTint` (`items.ts:287`) uses it, so every hair-colour render would shift.
+  - Keep the ink's `meanL` for the hair mask (a `meanL` override in `writeOneMask`) and pin it in a test.
+  - Byte-identical acceptance is scoped to no skin colour and no hair colour. With a hair colour only, the only changed pixels are the masked redrawn skin, which now keeps its own colour instead of taking the hair's.
+- **(I9) Edge blends: decided.**
+  - Strand-tip pixels next to the binary mask or to shown skin get a soft mask value, the skin share. It comes from projecting the pixel between its nearest pure hair neighbour (≤ 4 px) and the skin beneath, with an off-line distance ≤ 12.
+  - The binary prototype leaves specks at strand tips (`lskin/hair-deep-after.png`).
+- **(I9) Sheet:** `sheet.mjs` `toned()` (311–325) applies layer skin with `ratio`, not `recolour`, and routes hair L60 through `toned()` as well as outfits.
+- **(M15) Pipeline details.**
+  - `writeMasks` refuses a hair L60 whose body or face skin masks are missing, as it does for outfits.
+  - The skin cut excludes the layer's tint and skinLine pixels.
+  - Update the pinned mask-key lists (`avatar-masks.test.ts` ~841, ~927; `avatar-pipeline.test.ts` ~3018).
+  - Re-cut only hair L60 and outfit L40 names.
+- **(M15) The `ratio` formula:**
+  - per pixel, l = HSL lightness of the source pixel, k = lc / meanL (lc = HSL lightness of the colour);
+  - the target is the colour's own RGB scaled by min(1, l·k) / lc, so hue and saturation are the colour's and lightness is l·k;
+  - blended by the mask's alpha.
+
+  The test pins, within ±2 per channel:
+  - a pixel at l = meanL becomes exactly the colour;
+  - a pixel at l = meanL / 2 becomes the colour's hue at lightness lc / 2;
+  - mask alpha 128 lands halfway;
+  - meanL 0 is a no-op.
+
+  The text's earlier "light tones unchanged within rounding" does not apply to `ratio`.
 
 **Why.**
 - Under brown and deep tones, the forehead shows cream specks and a light jagged line along every hairline (spiky, neat and curly the most): `scratchpad/cream/hairline-deep.png`.
