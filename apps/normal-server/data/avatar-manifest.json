@@ -995,20 +995,20 @@
       "layer": 60,
       "w": 384,
       "h": 448,
-      "bytes2x": 112318,
+      "bytes2x": 112198,
       "real": true,
       "split": {
-        "region": 53098,
-        "front": 39973,
+        "region": 53055,
+        "front": 39930,
         "back": 13125
       },
       "masks": {
         "hair": {
-          "bytes2x": 7488,
-          "meanL": 0.3579
+          "bytes2x": 7385,
+          "meanL": 0.358
         },
         "skin": {
-          "bytes2x": 5677,
+          "bytes2x": 5673,
           "meanL": 0.5759
         }
       }
@@ -1030,21 +1030,21 @@
       "layer": 60,
       "w": 384,
       "h": 448,
-      "bytes2x": 75573,
+      "bytes2x": 75426,
       "real": true,
       "split": {
-        "region": 48980,
-        "front": 38728,
+        "region": 48931,
+        "front": 38679,
         "back": 10252
       },
       "masks": {
         "hair": {
-          "bytes2x": 6575,
-          "meanL": 0.7899
+          "bytes2x": 6459,
+          "meanL": 0.7906
         },
         "skin": {
-          "bytes2x": 4930,
-          "meanL": 0.7071
+          "bytes2x": 4896,
+          "meanL": 0.7114
         }
       },
       "recolouredTo": "#e0c9b3"

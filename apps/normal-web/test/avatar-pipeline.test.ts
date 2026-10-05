@@ -1424,9 +1424,10 @@ describe('the committed placeholder set', () => {
     }
     // A hair mask is its ink less the skin's share, and its meanL the ink's as committed before the skin was cut out (I8):
     // `hairTint` paints every hair colour against it. (The hime's is its ink's since fix round 1 took the copy of the body's
-    // line out of it: 0.2289 → 0.2274.)
+    // line out of it: 0.2289 → 0.2274; the ponytail's and the wavy's since the final wave did theirs: 0.3579 → 0.3580,
+    // 0.7899 → 0.7906.)
     const committedMeanL: Record<string, number> = {
-      item_hair_f_bob01_L60: 0.3406, item_hair_f_hime01_L60: 0.2274, item_hair_f_ponytail01_L60: 0.3579, item_hair_f_wavy01_L60: 0.7899,
+      item_hair_f_bob01_L60: 0.3406, item_hair_f_hime01_L60: 0.2274, item_hair_f_ponytail01_L60: 0.358, item_hair_f_wavy01_L60: 0.7906,
       item_hair_m_curly01_L60: 0.1851, item_hair_m_neat01_L60: 0.2473, item_hair_m_spiky01_L60: 0.2585, item_hair_m_tousled01_L60: 0.3204,
     }
     for (const name of fronts) {
@@ -1453,7 +1454,7 @@ describe('the committed placeholder set', () => {
     expect(crescent, 'the robe’s instep shadow over the body’s outline').toBe(26)
   }, 60_000)
 
-  it('meets each hairstyle’s two halves without a step in lightness, and leaves no copy of the body’s line in the hime’s front (fix round 1)', async () => {
+  it('meets each hairstyle’s two halves without a step in lightness, and leaves no copy of the body’s line in any front (fix round 1, final wave)', async () => {
     // Across every boundary where an opaque L60 pixel meets an opaque L20 pixel the L60 leaves bare: the mean step in HSL
     // lightness. The wavy's was 0.097 — its back half recoloured at its own meanL, two light rectangles at the temples —
     // and the others' are under 0.025.
@@ -1481,15 +1482,22 @@ describe('the committed placeholder set', () => {
       expect(pairs, code).toBeGreaterThan(0)
       expect(Math.abs(step / pairs), `${code}: the back half against the front where they meet`).toBeLessThan(0.03)
     }
-    // The hime's front, below the head, holds no copy of the body's line.
-    const [front, body, face, line] = await Promise.all(
-      ['item_hair_f_hime01_L60@2x.png', 'body_f_L30@2x.png', 'body_f_face_neutral_L50@2x.png', 'body_f_L30_skinlinemask@2x.png'].map((file) => readPicture(join(OUT_DIR, file))),
-    )
-    const lineAlpha = new Uint8Array(line!.width * line!.height)
-    for (let p = 0; p < lineAlpha.length; p++) lineAlpha[p] = line!.data[p * 4 + 3]!
-    const copy = bodyLineCopy(front!, { body: body!, line: lineAlpha, fromY: headBottom(face!)! })
-    expect(copy.reduce((n: number, v: number) => n + (v ? 1 : 0), 0)).toBe(0)
-  }, 60_000)
+    // No front, below the head, holds a copy of its body's line: the hime's went in fix round 1 (2356 px), the ponytail's
+    // (102) and the wavy's (103) in the final wave. The 3 px the step used to find in the bob, and 49 of the wavy's, were
+    // lock ends at the jaw row (y 472–474), joined to the hair above: the final wave's rules keep them.
+    for (const gender of ['f', 'm']) {
+      const [body, face, line] = await Promise.all(
+        [`body_${gender}_L30@2x.png`, `body_${gender}_face_neutral_L50@2x.png`, `body_${gender}_L30_skinlinemask@2x.png`].map((file) => readPicture(join(OUT_DIR, file))),
+      )
+      const lineAlpha = new Uint8Array(line!.width * line!.height)
+      for (let p = 0; p < lineAlpha.length; p++) lineAlpha[p] = line!.data[p * 4 + 3]!
+      for (const code of HAIR_CODES.filter((each: string) => each.startsWith(`${gender}_`))) {
+        const front = await readPicture(join(OUT_DIR, `${hairFile(code, LAYERS.hairFront)}@2x.png`))
+        const copy = bodyLineCopy(front, { body: body!, line: lineAlpha, fromY: headBottom(face!)! })
+        expect(copy.reduce((n: number, v: number) => n + (v ? 1 : 0), 0), `${code}: a copy of the body's line below the head`).toBe(0)
+      }
+    }
+  }, 120_000)
 
   it('describes each of them in the manifest', () => {
     expect(manifest.version).toBe(1)

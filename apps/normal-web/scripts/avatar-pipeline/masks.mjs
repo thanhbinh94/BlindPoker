@@ -952,12 +952,17 @@ export function outfitLineMask(item, { body, skin, line }) {
  * - `window`, `maxSolid` — only a line: at most `maxSolid` of the (2·`window` + 1)² pixels round it solid. A lock of hair
  *   across the body's outline is a mass, however close its colour;
  * - `leftoverReach`, `minPiece` — what the copy leaves: a piece of ink below the head within `leftoverReach` of a pixel
- *   dropped, under `minPiece` px or never solid, goes with it.
+ *   dropped, under `minPiece` px or never solid, goes with it — unless it is joined to the hair above the head's end
+ *   (final wave): a lock's soft end hanging across that row is hair;
+ * - `tipReach` — a lock's tip (final wave): ink in the first `tipReach` rows from the head's end down, joined to the
+ *   hair above through them, is never a copy, whatever its colour. The wavy's lock tips end on the neck's outline at
+ *   y 472–474, their edge the line's colour (21 px the colour rule took); unbounded, the rule would keep the hime's
+ *   copy, 1824 of whose 2356 px touch its side locks.
  *
  * Measured on the hime's L60 (ingested 2026-10-04): below the head, 2959 px of ink; the copy of the arms', hands' and tank
  * top's outline is 2120 px by the two colour rules and 198 px of leftovers, the side locks' tips (y 472–486) stay.
  */
-export const HAIR_BODY_LINE = { reach: 3, tolerance: 20, inkReach: 1, inkTolerance: 10, window: 3, maxSolid: 0.5, leftoverReach: 2, minPiece: 32 }
+export const HAIR_BODY_LINE = { reach: 3, tolerance: 20, inkReach: 1, inkTolerance: 10, window: 3, maxSolid: 0.5, leftoverReach: 2, minPiece: 32, tipReach: 3 }
 
 /** The first row below a face layer's ink — where the head ends, and the body below it begins — or `null` when it has none. */
 export function headBottom(face) {
@@ -977,7 +982,8 @@ export function headBottom(face) {
  * A pixel of `layer` at row `fromY` or below (the head's end, `headBottom` of the neutral face) is a copy when it carries
  * ink, is part of a line (`HAIR_BODY_LINE.maxSolid`), and matches the body's line beside it: the skin line `line` (any
  * non-zero pixel) by `reach`/`tolerance` or darker, or the body's other dark ink by `inkReach`/`inkTolerance`. Leftover
- * specks of the copy go with it (`leftoverReach`, `minPiece`). Returns 0/255 per pixel: the pixels to drop.
+ * specks of the copy go with it (`leftoverReach`, `minPiece`), but never a piece joined to the hair above `fromY`, and a
+ * lock's tip just below `fromY` is never a copy (`tipReach`). Returns 0/255 per pixel: the pixels to drop.
  *
  * @param {{ data: Buffer, width: number, height: number }} layer
  * @param {{ body: { data: Buffer }, line: ArrayLike<number>, fromY: number }} reference
@@ -1004,7 +1010,32 @@ export function bodyLineCopy(layer, { body, line, fromY }) {
     return lab
   }
   const top = Math.max(0, fromY)
+  // A lock's tip (final wave): ink in the `tipReach` rows from the head's end down, joined to the hair above through those
+  // rows, is the hair's whatever its colour — the wavy's lock tips end on the neck's outline there, darker at the edge.
+  const tipEnd = Math.min(height, top + Math.max(1, Math.round(C.tipReach * scale)))
+  const tip = new Uint8Array(width * height)
+  if (top > 0) {
+    const queue = []
+    for (let x = 0; x < width; x++) {
+      const i = top * width + x
+      if (!inked(i)) continue
+      for (let dx = -1; dx <= 1; dx++) if (x + dx >= 0 && x + dx < width && inked(i - width + dx)) { tip[i] = 1; queue.push(i); break }
+    }
+    while (queue.length) {
+      const i = queue.pop()
+      const x = i % width
+      const y = (i - x) / width
+      for (const [dx, dy] of NEIGHBOURS8) {
+        const nx = x + dx
+        const ny = y + dy
+        if (nx < 0 || nx >= width || ny < top || ny >= tipEnd) continue
+        const q = ny * width + nx
+        if (!tip[q] && inked(q)) { tip[q] = 1; queue.push(q) }
+      }
+    }
+  }
   const isCopy = (x, y, i) => {
+    if (tip[i]) return false
     let solid = 0
     for (let dy = -win; dy <= win; dy++) {
       for (let dx = -win; dx <= win; dx++) {
@@ -1033,25 +1064,29 @@ export function bodyLineCopy(layer, { body, line, fromY }) {
     }
     return false
   }
-  // The copy's leftovers: small or faint pieces of what is left below the head, beside a pixel dropped.
+  // The copy's leftovers: small or faint pieces of what is left below the head, beside a pixel dropped. A piece is taken
+  // over the whole layer, so one joined (8-connected) to the hair above the head's end is that hair — a lock's soft end
+  // hanging across the row (the wavy's jaw, 45 px), not a piece of the copy — and stays (final wave, 2026-10-05).
   const leftovers = () => {
     const leftover = new Uint8Array(width * height)
-    for (let i = top * width; i < leftover.length; i++) if (inked(i)) leftover[i] = 1
+    for (let i = 0; i < leftover.length; i++) if (inked(i)) leftover[i] = 1
     const { label, sizes } = components(leftover, width, height)
     const near = dilate(out.map((v) => (v ? 1 : 0)), width, height, Math.max(1, Math.round(C.leftoverReach * scale)))
     const minPiece = Math.max(1, Math.round(C.minPiece * scale * scale))
     const beside = new Uint8Array(sizes.length)
     const solidPiece = new Uint8Array(sizes.length)
+    const hair = new Uint8Array(sizes.length)
     for (let i = 0; i < leftover.length; i++) {
       const l = label[i]
       if (l < 0) continue
+      if (i < top * width) hair[l] = 1
       if (near[i]) beside[l] = 1
       if (alpha[i] > ALPHA_SOLID) solidPiece[l] = 1
     }
     const found = []
-    for (let i = 0; i < leftover.length; i++) {
+    for (let i = top * width; i < leftover.length; i++) {
       const l = label[i]
-      if (l >= 0 && beside[l] && (sizes[l] < minPiece || !solidPiece[l])) found.push(i)
+      if (l >= 0 && !hair[l] && beside[l] && (sizes[l] < minPiece || !solidPiece[l])) found.push(i)
     }
     return found
   }
@@ -1090,11 +1125,12 @@ export function bodyLineCopy(layer, { body, line, fromY }) {
  * - `outfitGrow`, `outfitGrowMaxChroma` — the pieces kept then grow, up to `outfitGrow` px, into the skin at their edge
  *   by the body's own rule (`SKIN_MASK`'s ΔE or hue window, L* at least `minL`) with C* at most `outfitGrowMaxChroma`:
  *   the shadow a hem or a slipper casts on the instep (L* 70–84, C* 27–47, ΔE up to 40) stayed a light rim round it
- *   under a deep tone, while the gold beside it (C* 50–65) stays out. Only a kept piece grows, so no trim does. The
- *   growth may also cross the body's skin line (fix round 1): the royal robe drew its left instep's shadow over the
- *   body's own outline there (skin mask 0, skin line 255). The margin of 48 was measured on the art of 2026-10-05: the
- *   highest C* in any outfit's skin mask is 46.7 (the royal robe's instep shadow), the gold next to it from about 50 — a
- *   picture drawn with a paler gold or a more saturated shadow needs measuring again;
+ *   under a deep tone. Only a kept piece grows, so no trim does. The growth may also cross the body's skin line (fix
+ *   round 1): the royal robe drew its left instep's shadow over the body's own outline there (skin mask 0, skin line
+ *   255). The gold beside an instep stays out by two rules, not by the cap alone: its darker edge (C* 43–48, 2–4 px from
+ *   the instep) is under the cap and is kept out by the palette gap, and the cap keeps its body (C* 50–65) out. The
+ *   margin of 48 was measured on the art of 2026-10-05 — the highest C* in any outfit's skin mask is 46.7 (the royal
+ *   robe's instep shadow) — so a picture drawn with a paler gold or a more saturated shadow needs measuring again;
  * - `softReach`, `softOffLine` — a front hair's strand tips (pre-flight I9): a pixel beside the skin found or beside
  *   shown skin takes the skin share of its colour — projected onto the line from the nearest pure hair pixel within
  *   `softReach` to the skin drawn beneath it, at most `softOffLine` off that line.

@@ -741,8 +741,10 @@ reached them. The art does not change; every real front hair (`L60`) and v4 outf
   (the body's rule, C* ≤ 48): the hem's and the slipper's shadow on the instep (L* 70–84, C* 27–47) otherwise stayed a
   light rim round it. The growth may cross the body's skin line as well as its skin (fix round 1): the royal robe drew
   its left instep's shadow over the body's own outline (26 px at x 356–357, y 777–789 `@2x`, C* 42–47), which stayed a
-  peach streak. An outfit's palette leaves out its pixels over the body's skin line too. The C* 48 margin is measured,
-  not general: the highest C* in an outfit's skin mask is 46.7 (that shadow), the gold beside it from about 50.
+  peach streak. An outfit's palette leaves out its pixels over the body's skin line too. The gold beside an instep
+  stays out by two rules: the palette gap keeps its darker edge (C* 43–48, 2–4 px from the instep, under the cap) out,
+  and the cap keeps its body (C* 50–65) out. The C* 48 margin is measured, not general: the highest C* in an outfit's
+  skin mask is 46.7 (that shadow).
 - A hair's strand tips, beside the skin found or beside shown skin, take a soft value: their share of skin, projected
   between the nearest pure hair pixel (≤ 4 px) and the skin drawn beneath (the face over the body), when they lie within
   ΔE 12 of that line and the two ends are at least `gap` apart. A binary mask left cream specks at the tips.
@@ -759,8 +761,8 @@ reached them. The art does not change; every real front hair (`L60`) and v4 outf
   the other foot shows the body's own skin), `tet_red01` 219 + 218, `tet_red01_m` 142 + 154 — and `casual01`,
   `champion01`, `dealer01` (f, m) and `tuxedo01` are empty. Every hairstyle's mask has a binary part (bob 601 px, hime
   273 since its copy of the body's line went, ponytail 130, tousled 143, neat 301, curly 329, spiky 218) and soft strand
-  tips (255–1048 px), except the wavy
-  platinum, whose binary part is empty by design and which keeps 255 px of soft tips. Hair pixels over skin that are
+  tips (455–1048 px), except the wavy platinum, whose binary part is empty by design and which keeps 245 px of soft tips
+  (255 before the final wave took the copy of the shoulder's line out of its front). Hair pixels over skin that are
   ΔE ≥ 10 from the hair's palette and read light (L* ≥ 62, C* 8–40) under `#643e2b` / `#9c6140`, before → after: bob
   180 → 0 / 199 → 1, hime 94 → 0 / 96 → 0, ponytail 35 → 0 / 36 → 0, tousled 69 → 0 / 71 → 0, neat 64 → 0 / 70 → 0,
   curly 53 → 0 / 59 → 0, spiky 164 → 0 / 177 → 0 (wavy 0 → 0). Left as drawn: the white highlights on the Tết insteps
@@ -910,9 +912,15 @@ then writes does take the hand-drawn mask, as every mask does.
    in a\*b\* (as an outfit's copy is found, §4.4.1); or within 1 px of the body's other dark ink (L\* < 50: the tank
    top's and the shorts' outline) and ΔE 10 of it. Small or faint pieces left beside what went go with it, and the rules
    run again on what is left until nothing more goes. A lock of hair across the outline is a mass, not a line, and
-   stays. The step needs the body's skin-line mask, and logs what it dropped. On the committed art it was applied to
-   the hime alone (the controller's ruling); it would also take a short copy of a shoulder's line out of the ponytail's
-   L60 (102 px) and the wavy's (151 px) on their next ingest.
+   stays. So does a lock's end that hangs across the head's end (final wave): a leftover piece joined (8-connected) to
+   the hair above that row is the hair's, and ink in the first 3 rows below it joined to the hair above through them
+   (`tipReach`) is never a copy, whatever its colour. The wavy's lock tips end there on the neck's outline, darker at
+   the edge: without the two rules the step took 49 px of them at y 472–474 (28 as loose pieces, 21 by colour). The
+   reach is bounded because a copy touches the hair too: 1 824 of the hime's 2 356 copy pixels are joined to its side
+   locks. The step needs the body's skin-line mask, and logs what it dropped. On the committed art it was applied to
+   the hime (2 356 px, fix round 1), then to the ponytail's L60 (102 px, a short copy of the right shoulder's line) and
+   the wavy's (103 px, the left shoulder's) in the final wave; it finds nothing in any front now (the 3 px it used to
+   find in the bob are at the jaw row, joined to a lock above).
 4. `item_hair_<code>_L60` (front) and `_L20` (back) are written, the back `empty: true` when the split leaves nothing
    behind (a short style); the L60's entry records `split: { region, front, back }` — the pixels at alpha ≥ 128 of the
    hair as the two layers hold it, at the picture's own alpha, and of each. Both are masked (hair = ink).
@@ -922,9 +930,14 @@ then writes does take the hand-drawn mask, as every mask does.
    written again at both densities and masked again; the L60 records `recolouredTo`. One reference for both halves, as
    the kit tints a hair colour (fix round 1): each at its own `meanL` moved the wavy's back half (0.565 against the
    front's 0.654) 0.089 lighter than its front, and it showed through a notch in the split as two hard-edged light
-   rectangles at the temples. The committed wavy L20 was brought in line by the same `recolour`, the reference moved by
-   that difference (a pinned script in the task's SDD folder, `t5-fix1/fix1-art.mjs`); it now matches a re-ingest by the
-   fixed code at the median, and the lightness step where the halves meet went from 0.097 to 0.008. A synthetic hair
+   rectangles at the temples. The committed wavy L20 was brought in line without a re-ingest (which would also have
+   moved about 0.3 % of the split): the same `recolour` to `#e0c9b3`, under its hair mask, with the reference moved by
+   that difference — `meanL` 0.8791, the colour's lightness plus 0.0889 — so every pixel's lightness dropped by 0.0889.
+   That is exact except for the 1.2 % of highlights the old recolour had clipped at white, which come out about 0.089
+   darker than a re-ingest would draw them. It matches a re-ingest by the fixed code at the median (Δ 0.0000, p10–p90
+   ±0.006), and the lightness step where the halves meet went from 0.097 to 0.008. `colours` reads the L20 `#d2b294`,
+   ΔE 9.9 from the natural `#e0c9b3`, by design: the back half is darker than the front, as every hairstyle's is, and
+   only the front's mean lands on the colour (the L60 reads ΔE 0.0). A synthetic hair
    drawn `#4a2e20` reads ΔE 40.6 from `#5e3e6f` before and 0.0 after. Like an item's tint seed, the recolour is **kept**: the hairstyle
    ingested again without the flag is recoloured to its L60's `recolouredTo` once more, and the ingest says so
    (`item_hair_f_wavy01_L60 keeps its recolour to #e0c9b3`). To drop it, delete `recolouredTo` from the L60's entry in

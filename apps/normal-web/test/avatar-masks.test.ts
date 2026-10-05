@@ -1125,7 +1125,7 @@ describe('bodyLineCopy: the body’s line a front hair redrew below the head (fi
   }
 
   it('pins its numbers, and finds where the head ends', () => {
-    expect(HAIR_BODY_LINE).toEqual({ reach: 3, tolerance: 20, inkReach: 1, inkTolerance: 10, window: 3, maxSolid: 0.5, leftoverReach: 2, minPiece: 32 })
+    expect(HAIR_BODY_LINE).toEqual({ reach: 3, tolerance: 20, inkReach: 1, inkTolerance: 10, window: 3, maxSolid: 0.5, leftoverReach: 2, minPiece: 32, tipReach: 3 })
     const { face } = fixture()
     expect(headBottom(face)).toBe(400)
     expect(headBottom({ data: Buffer.alloc(W * H * 4), width: W, height: H })).toBeNull()
@@ -1150,6 +1150,41 @@ describe('bodyLineCopy: the body’s line a front hair redrew below the head (fi
     expect(coverage(copy, box(384, 424, 416, 466)), 'a lock across the outline').toBe(0)
     expect(coverage(copy, box(254, 604, 271, 636)), 'an auburn lock across the line').toBe(0)
     expect(coverage(copy, box(600, 600, 602, 602)), 'a speck far from any copy').toBe(0)
+  })
+
+  it('keeps a lock’s soft end that hangs across the head’s end beside a copy: it is joined to the hair above, not a loose piece (final wave, 8a)', () => {
+    // The wavy's jaw row: a lock's anti-aliased bottom edge crosses y 472, never solid, 1–2 px from the copy of the
+    // shoulder line. Its rows from the head's end down are a piece of their own unless the hair above counts.
+    const { body, line, layer } = fixture()
+    /** `paintBox` at a soft alpha: anti-aliased ink, never solid. */
+    const paintSoft = (x0: number, y0: number, x1: number, y1: number, hex: string) => {
+      paintBox(layer, x0, y0, x1, y1, hex)
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) layer.data[(y * W + x) * 4 + 3] = 90
+    }
+    paintBox(layer, 262, 404, 263, 600, '#5a1e0c') // the skin line's copy, as above
+    paintBox(layer, 250, 330, 275, 399, VIOLET) // a lock above the head's end…
+    paintSoft(250, 400, 275, 402, VIOLET) // …and its soft end below it, 2 px over the copy: 78 px, never solid
+    paintSoft(265, 500, 272, 504, '#7a6a60') // the copy's faint rim, 2 px from it and joined to nothing above: 40 px
+    const copy = bodyLineCopy(layer, { body, line, fromY: 400 })
+    expect(coverage(copy, boxPixels(262, 404, 263, 600)), 'the copy').toBe(1)
+    expect(coverage(copy, boxPixels(250, 400, 275, 402)), 'the lock’s soft end').toBe(0)
+    expect(coverage(copy, boxPixels(265, 500, 272, 504)), 'the copy’s faint rim').toBe(1)
+  })
+
+  it('keeps a lock’s tip that ends on the body’s line in the rows just below the head’s end, whatever its colour, and still drops the copy below them (final wave, 8a)', () => {
+    // The wavy's lock tips end on the neck's outline at y 472–474, their edge darker, the line's colour: the colour rule
+    // alone would take 21 px of their corners. Ink in the `tipReach` rows from the head's end down, joined to the hair
+    // above through those rows, is the hair's.
+    const { body, line, layer } = fixture()
+    paintBox(layer, 240, 330, 263, 399, VIOLET) // a lock above the head's end, its right edge on the body's line…
+    paintBox(layer, 258, 400, 263, 402, '#5a1e0c') // …and its tip's edge in the line's own colour, across the head's end
+    for (let y = 400; y <= 402; y++) for (let x = 258; x <= 263; x++) layer.data[(y * W + x) * 4 + 3] = 90
+    paintBox(layer, 262, 403, 263, 600, '#5a1e0c') // the copy of the line, from the row below the tip on
+    paintBox(layer, 400, 400, 401, 600, NAVY) // a copy of the tank top's outline from the head's end, joined to nothing above
+    const copy = bodyLineCopy(layer, { body, line, fromY: 400 })
+    expect(coverage(copy, boxPixels(258, 400, 263, 402)), 'the lock’s tip').toBe(0)
+    expect(coverage(copy, boxPixels(262, 403, 263, 600)), 'the copy below it').toBe(1)
+    expect(coverage(copy, boxPixels(400, 400, 401, 600)), 'a copy that starts at the head’s end').toBe(1)
   })
 })
 
