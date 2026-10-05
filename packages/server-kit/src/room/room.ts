@@ -457,13 +457,21 @@ export class Room {
       await this.wrapUp(reason)
       for (const p of this.humans()) {
         // One player's ledger failure must not strand everyone after them, nor keep the room from closing (and the
-        // server from closing its sockets): their stack and the key of the write are logged for an operator to
-        // reconcile, and the room goes on. A buy-in still pending (written, never acknowledged, no seat) goes back.
+        // server from closing its sockets): their stack (or the buy-in owed back) and the key of the write are logged for
+        // an operator to reconcile, and the room goes on. A buy-in still pending (written, never acknowledged, no seat)
+        // goes back — so the line names a settlement, which is a cash-out or that refund.
         try {
           await this.standUpNow(p)
           await this.refundPendingBuyIn(p)
         } catch (err) {
-          this.deps.log.error('shutdown cash-out failed', { roomId: this.roomId, playerId: p.identity.playerId, stack: p.stack, key: this.pendingKeyOf(p), err: String(err) })
+          this.deps.log.error('shutdown settlement failed', {
+            roomId: this.roomId,
+            playerId: p.identity.playerId,
+            stack: p.stack,
+            ...(p.pendingBuyIn === undefined ? {} : { buyIn: p.pendingBuyIn.amount }),
+            key: this.pendingKeyOf(p),
+            err: String(err),
+          })
         }
       }
       this.status = 'CLOSED'
@@ -543,7 +551,14 @@ export class Room {
   private async releaseCarryOver(): Promise<void> {
     this.carryOverReleaseTimer?.cancel()
     this.carryOverReleaseTimer = null
-    if (!(await this.settlePendingRelease())) return
+    if (!(await this.settlePendingRelease())) {
+      // A room that is closing gets no later attempt: the older pot is logged with its key above, and a newer one held
+      // behind it would leave with the room unsaid — so it is logged too, for an operator to reconcile.
+      if (this.closing && this.carryOverPot > 0) {
+        this.deps.log.error('carry-over not released at close', { roomId: this.roomId, pot: this.carryOverPot, behind: this.pendingRelease?.key })
+      }
+      return
+    }
     const pot = this.carryOverPot
     if (pot <= 0) {
       this.carryOverClaimants.clear()

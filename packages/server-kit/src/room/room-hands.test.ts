@@ -489,7 +489,7 @@ describe('Leaving, disconnecting, shutting down', () => {
     // 'a' sits between the two in cash-out order, so 'b' is proof the failure did not stop the sweep.
     expect(h.repos.entries.filter((e) => e.entry.reason === 'cash_out').map((e) => [e.entry.playerId, e.entry.delta])).toEqual([['h', 5_000], ['b', 5_000]])
     expect(h.logs.filter((l) => l.level === 'error')).toEqual([
-      { level: 'error', msg: 'shutdown cash-out failed', data: expect.objectContaining({ playerId: 'a', stack: 5_000 }) },
+      { level: 'error', msg: 'shutdown settlement failed', data: expect.objectContaining({ playerId: 'a', stack: 5_000, key: expect.stringMatching(/^cash_out:room-1:/) }) },
     ])
   })
 
@@ -1257,16 +1257,24 @@ describe('A ledger write is applied once, however often it is retried (Plan 20)'
     expect(errors(h)).toEqual([
       { level: 'error', msg: 'sit-out stand-up failed', data: expect.objectContaining({ playerId: 'a', key: expect.stringMatching(/^cash_out:room-1:/) }) },
     ])
+    const statusOfA = () => h.room.snapshot(null).room.players.find((p) => p.playerId === 'a')!.status
     await h.room.sitOut('a', false) // Sit In
-    expect(h.room.snapshot(null).room.players.find((p) => p.playerId === 'a')!.status).toBe('SITTING_OUT')
+    expect(statusOfA()).toBe('SITTING_OUT')
+    // The retry when this hand ends fails as well, so the next deal is the first one after the Sit In to find the seat
+    // still held: that deal is the one that must leave it out.
+    failOnce(h, isCashOut)
     await playOut(h, () => ({ kind: 'fold' }))
+    expect(errors(h).at(-1)).toEqual({ level: 'error', msg: 'stand-up after hand failed', data: expect.objectContaining({ playerId: 'a', key: expect.stringMatching(/^cash_out:room-1:/) }) })
     h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
     await tick(h)
+    expect(h.room.handActive).toBe(true)
+    expect(h.room.players.get('a')!.seat).toBe(1)
+    expect(statusOfA()).toBe('SITTING_OUT')
     expect(dealtIn(h, 'a')).toBe(false)
+    await playOut(h, () => ({ kind: 'fold' }))
     expect(h.room.players.get('a')!.seat).toBeNull() // settled when the hand it sat out ended
     expect(rowsOf(h, 'a', 'cash_out')).toEqual([4_000])
     expect(await h.repos.balances.get('a')).toBe(99_000)
-    await playOut(h, () => ({ kind: 'fold' }))
     expect(await books(h, { h: 100_000, a: 100_000 })).toBe(0)
   })
 
@@ -1331,6 +1339,33 @@ describe('A ledger write is applied once, however often it is retried (Plan 20)'
     expect(await books(h, { h: 100_000, poor: 2_500 })).toBe(0)
   })
 
+  it('a close whose older release fails again logs the newer pot it cannot release behind it, with the room and the amount', async () => {
+    const h = await carriedAndOpen()
+    ackLostOnce(h, isRelease)
+    h.clock.advance(TEST_ROOM_OPTIONS.carryOverReleaseMs) // the first 2.000 is owed from here (paid, not acknowledged)
+    await tick(h)
+    const real = h.repos.balances.apply.bind(h.repos.balances)
+    h.repos.balances.apply = async (batch, meta, opts) => {
+      if (isRelease(batch, meta)) throw new Error('ledger unavailable') // every release from here to the close
+      return real(batch, meta, opts)
+    }
+    await h.room.sitDown('poor', 1)
+    await h.room.setReady('h', true)
+    await h.room.setReady('poor', true)
+    await h.room.startGame('h')
+    await playOut(h, () => ({ kind: 'fold' })) // a newer 2.000 is carried behind it
+    expect(h.room.pendingRelease?.pot).toBe(2_000)
+    expect(h.room.carryOverPot).toBe(2_000)
+    const pendingKey = h.room.pendingRelease!.key
+    await h.room.shutdown('maintenance') // the older release fails again, so nothing newer is released behind it
+    expect(h.room.status).toBe('CLOSED')
+    expect(refunds(h)).toEqual([['h', 1_000], ['poor', 1_000]]) // the older pot's, once; the newer one is not paid
+    expect(errors(h).slice(-2)).toEqual([
+      { level: 'error', msg: 'carry-over release failed', data: expect.objectContaining({ roomId: 'room-1', pot: 2_000, key: pendingKey }) },
+      { level: 'error', msg: 'carry-over not released at close', data: { roomId: 'room-1', pot: 2_000, behind: pendingKey } },
+    ])
+  })
+
   it('Sit pressed again after a Blind buy-in that landed but reported an error seats the player with that buy-in, not a second one', async () => {
     // The whole 5.000 goes to the table, so the balance left (0) is under the 2.000 a hand needs: the retry must not
     // be refused as INSUFFICIENT_BALANCE for a buy-in that is already paid.
@@ -1386,6 +1421,22 @@ describe('A ledger write is applied once, however often it is retried (Plan 20)'
     expect(await h.repos.balances.get('b')).toBe(100_000) // the replay takes it, the refund gives it back
     expect(h.repos.entries.filter((e) => e.entry.playerId === 'b').map((e) => [e.entry.reason, e.entry.delta])).toEqual([['buy_in', -20_000], ['refund', 20_000]])
     expect([...h.repos.keys].filter((k) => k.startsWith('buy_in_refund:room-1:'))).toHaveLength(2)
+    expect(await books(h, { h: 100_000, a: 100_000, b: 100_000 })).toBe(0)
+  })
+
+  it('a buy-in refund that fails during a shutdown is logged as a settlement, with its key and amount, and the room still closes', async () => {
+    const h = createRoomHarness(HOLDEM)
+    await h.room.join(h.identity('b'))
+    failOnce(h, isBuyIn)
+    expect(await code(h.room.sitDown('b', 2, 20_000))).toBe('Error: ledger unavailable')
+    failOnce(h, (batch) => batch.some((e) => e.reason === 'refund')) // the replay lands, the refund does not
+    await h.room.shutdown('maintenance')
+    expect(h.room.status).toBe('CLOSED')
+    expect(errors(h).at(-1)).toEqual({
+      level: 'error',
+      msg: 'shutdown settlement failed',
+      data: expect.objectContaining({ roomId: 'room-1', playerId: 'b', buyIn: 20_000, key: expect.stringMatching(/^buy_in_refund:room-1:/) }),
+    })
   })
 
   it('a buy-in whose refund landed but reported an error is never reused for a seat: the next Sit finishes the refund, then buys in afresh', async () => {
@@ -1415,6 +1466,7 @@ describe('A ledger write is applied once, however often it is retried (Plan 20)'
     await h.room.sitDown('a', 1, 20_000)
     expect(h.room.players.get('a')).toMatchObject({ seat: 1, stack: 20_000 })
     expect(await h.repos.balances.get('a')).toBe(10_000)
+    expect(await books(h, { h: 100_000, a: 30_000 })).toBe(0) // from the 30.000 left once the rest was spent elsewhere
   })
 })
 

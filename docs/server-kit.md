@@ -146,7 +146,10 @@ as if it had not:
   with its batch, out of `carryOverPot`, and is settled first by the next
   release, by the next deal (which deals without it if it still cannot be
   settled) and by a close or shutdown. The room's view and the invariant
-  below count it.
+  below count it. Nothing newer is released behind it; a close or
+  shutdown that still cannot settle it also logs the newer pot it leaves
+  unreleased (`carry-over not released at close`, with the room, the
+  amount and the pending release's key).
 
 Every error line about one of these writes names its key, so an operator
 can reconcile it against `ledger_keys`. The table fee is not keyed: it is
@@ -412,11 +415,14 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
 
 After `shutdown` resolves, every point that was ever in a stack or a
 carry-over pot has been returned to a `BalanceRepository` balance or
-recorded as a sink row — nothing is left in RAM. The one exception is a
-cash-out the repository refuses: it is logged (`shutdown cash-out failed`,
-with the player and the stack) for an operator to reconcile, and the room
-still closes and the other seats are still cashed out, so one bad row
-cannot hold up the rest of the shutdown.
+recorded as a sink row — nothing is left in RAM. The exceptions are a
+write the repository refuses. A cash-out, or the refund of a buy-in that
+never got its seat, is logged (`shutdown settlement failed`, with the
+player, the stack, the buy-in when it is a refund, and the write's key)
+for an operator to reconcile, and the room still closes and the other
+seats are still cashed out, so one bad row cannot hold up the rest of the
+shutdown. A carry-over release that fails is logged with its pot and key
+(and the newer pot held behind it, `carry-over not released at close`).
 
 ## Testing utilities
 
