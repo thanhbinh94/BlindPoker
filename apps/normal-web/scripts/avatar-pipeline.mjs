@@ -43,7 +43,7 @@
  *                               body wearing it (its L20 under, its L60 over) — a hat or glasses
  *         --anchor head         a body: place it by its eyes instead of its stored transform, onto HEAD_REFERENCE —
  *                               only on the user's word, when C12 fails on position or scale alone
- *         --recolour-to <hex>   a hairstyle: recolour both layers' hair to #rrggbb at each layer's own meanL and
+ *         --recolour-to <hex>   a hairstyle: recolour both layers' hair to #rrggbb at the front layer's meanL and
  *                               record `recolouredTo` — only when `colours` shows it > 15 ΔE from its natural colour;
  *                               a later ingest of the hairstyle without the flag recolours it to that again
  *         --tolerance <n>       how wide the background key is (default 40)

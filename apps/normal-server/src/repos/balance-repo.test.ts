@@ -1,12 +1,12 @@
-import { InsufficientBalanceError } from '@bp/server-kit'
+import { InsufficientBalanceError, type ApplyResult } from '@bp/server-kit'
 import { asc, sql } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { AppDb } from '../db/client.js'
-import { players, pointTransactions, users } from '../db/schema.js'
+import { ledgerKeys, players, pointTransactions, users } from '../db/schema.js'
 import type { TestDb } from '../db/test-db.js'
 import { createTestDb } from '../db/test-db.js'
 import type { NormalRepositories } from './index.js'
-import { createRepositories, UnknownPlayerError } from './index.js'
+import { createRepositories, pruneLedgerKeys, UnknownPlayerError } from './index.js'
 
 /** One PGlite per file: the first boot costs seconds, every table reset after it costs milliseconds. */
 let test: TestDb
@@ -27,7 +27,7 @@ async function seedPlayer(balance: number): Promise<string> {
 
 /** `restart identity` so the ledger's `id` cursor is predictable from one test to the next. */
 async function reset(): Promise<void> {
-  await db.execute(sql`truncate table game_players, games, point_transactions, players, users restart identity cascade`)
+  await db.execute(sql`truncate table game_players, games, point_transactions, ledger_keys, players, users restart identity cascade`)
 }
 
 /** Every ledger row in insertion order, snake-cased so the assertions read like the table. */
@@ -167,7 +167,7 @@ describe('balances.apply', () => {
 
   it('serialises two applies racing for the same balance', async () => {
     const id = await seedPlayer(100)
-    const attempt = (): Promise<void> => repos.balances.apply([{ playerId: id, delta: -60, reason: 'buy_in', refId: 'room' }])
+    const attempt = (): Promise<ApplyResult> => repos.balances.apply([{ playerId: id, delta: -60, reason: 'buy_in', refId: 'room' }])
     // PGlite is a single in-process connection, so a real `FOR UPDATE` race can only be observed
     // against a server: `TEST_DATABASE_URL` runs the two overlapping, everywhere else back to back.
     // Either way exactly one of the two may succeed — that is what the lock is for.
@@ -181,6 +181,116 @@ describe('balances.apply', () => {
     expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(InsufficientBalanceError)
     expect(await repos.balances.get(id)).toBe(40)
     expect(await ledgerRows()).toHaveLength(1)
+  })
+})
+
+/**
+ * A `db` whose first transaction commits and *then* throws — a connection dropped after `COMMIT`, before
+ * the acknowledgement came back. Everything else goes straight to the real handle.
+ */
+function ackLostOnce(real: AppDb): AppDb {
+  let once = true
+  return new Proxy(real, {
+    get(target, prop) {
+      if (prop === 'transaction') {
+        return async (...args: Parameters<AppDb['transaction']>) => {
+          const result = await target.transaction(...args)
+          if (once) {
+            once = false
+            throw new Error('connection lost after COMMIT')
+          }
+          return result
+        }
+      }
+      const value: unknown = Reflect.get(target, prop)
+      return typeof value === 'function' ? (value as (...a: unknown[]) => unknown).bind(target) : value
+    },
+  })
+}
+
+async function keyRows(): Promise<string[]> {
+  return (await db.select({ key: ledgerKeys.key }).from(ledgerKeys).orderBy(asc(ledgerKeys.key))).map((r) => r.key)
+}
+
+describe('balances.apply with a key', () => {
+  it('moves the balance once for the same key, and says the replay was not applied', async () => {
+    const id = await seedPlayer(1000)
+    const batch = [{ playerId: id, delta: 400, reason: 'cash_out' as const, refId: 'room-1' }]
+    expect(await repos.balances.apply(batch, undefined, { key: 'cash_out:room-1:s1' })).toEqual({ applied: true })
+    expect(await repos.balances.apply(batch, undefined, { key: 'cash_out:room-1:s1' })).toEqual({ applied: false })
+    expect(await repos.balances.get(id)).toBe(1400)
+    expect(await ledgerRows()).toEqual([{ player_id: id, amount: 400, reason: 'cash_out', ref_id: 'room-1', kind: null }])
+    expect(await keyRows()).toEqual(['cash_out:room-1:s1'])
+  })
+
+  it('writes no sink row on a replay of a keyed carry-over release', async () => {
+    const id = await seedPlayer(0)
+    const meta = { refId: 'room-1', fee: 3, kind: 'carry_over' as const }
+    await repos.balances.apply([{ playerId: id, delta: 10, reason: 'refund', refId: 'room-1' }], meta, { key: 'carry_over:room-1:x' })
+    expect(await repos.balances.apply([{ playerId: id, delta: 10, reason: 'refund', refId: 'room-1' }], meta, { key: 'carry_over:room-1:x' })).toEqual({ applied: false })
+    expect((await ledgerRows()).map((r) => [r.player_id, r.amount])).toEqual([[id, 10], [null, 3]])
+  })
+
+  it('skips the balance check on a replay: a committed buy-in retried with the balance now short is not refused', async () => {
+    const id = await seedPlayer(5000)
+    const buyIn = [{ playerId: id, delta: -5000, reason: 'buy_in' as const, refId: 'room-1' }]
+    await repos.balances.apply(buyIn, undefined, { key: 'buy_in:room-1:s1' })
+    expect(await repos.balances.apply(buyIn, undefined, { key: 'buy_in:room-1:s1' })).toEqual({ applied: false })
+    expect(await repos.balances.get(id)).toBe(0)
+  })
+
+  it('leaves the key of a rejected batch unclaimed, so a later attempt can still apply', async () => {
+    const id = await seedPlayer(100)
+    const buyIn = [{ playerId: id, delta: -500, reason: 'buy_in' as const, refId: 'room-1' }]
+    await expect(repos.balances.apply(buyIn, undefined, { key: 'buy_in:room-1:s1' })).rejects.toBeInstanceOf(InsufficientBalanceError)
+    expect(await keyRows()).toEqual([])
+    await db.update(players).set({ balance: 1000 }).where(sql`${players.id} = ${id}`)
+    expect(await repos.balances.apply(buyIn, undefined, { key: 'buy_in:room-1:s1' })).toEqual({ applied: true })
+    expect(await repos.balances.get(id)).toBe(500)
+  })
+
+  it('applies a write that committed but reported an error only once when it is retried', async () => {
+    const id = await seedPlayer(1000)
+    const flaky = createRepositories(ackLostOnce(db))
+    const cashOut = [{ playerId: id, delta: 4000, reason: 'cash_out' as const, refId: 'room-1' }]
+    await expect(flaky.balances.apply(cashOut, undefined, { key: 'cash_out:room-1:s1' })).rejects.toThrow('connection lost after COMMIT')
+    expect(await flaky.balances.apply(cashOut, undefined, { key: 'cash_out:room-1:s1' })).toEqual({ applied: false })
+    expect(await repos.balances.get(id)).toBe(5000)
+    expect(await ledgerRows()).toHaveLength(1)
+  })
+
+  it('applies two same-key calls racing each other exactly once', async () => {
+    const id = await seedPlayer(100)
+    const attempt = (): Promise<ApplyResult> => repos.balances.apply([{ playerId: id, delta: 50, reason: 'cash_out', refId: 'room-1' }], undefined, { key: 'cash_out:room-1:s1' })
+    // Only a real server (`TEST_DATABASE_URL`) runs these two transactions truly overlapping: the second insert of
+    // the key then waits on the first's uncommitted row and, once it commits, finds the key taken. PGlite serialises
+    // transactions on its one connection, so here this proves the outcome, not the race.
+    const results = await Promise.all([attempt(), attempt()])
+    expect(results.map((r) => r.applied).sort()).toEqual([false, true])
+    expect(await repos.balances.get(id)).toBe(150)
+    expect(await ledgerRows()).toHaveLength(1)
+  })
+
+  it('behaves exactly as before without a key: every call applies, and no key is stored', async () => {
+    const id = await seedPlayer(0)
+    expect(await repos.balances.apply([{ playerId: id, delta: 5, reason: 'refund', refId: 'r' }])).toEqual({ applied: true })
+    expect(await repos.balances.apply([{ playerId: id, delta: 5, reason: 'refund', refId: 'r' }])).toEqual({ applied: true })
+    expect(await repos.balances.get(id)).toBe(10)
+    expect(await keyRows()).toEqual([])
+  })
+})
+
+describe('pruneLedgerKeys', () => {
+  it('empties ledger_keys and says how many keys went, touching no balance or ledger row', async () => {
+    const id = await seedPlayer(1000)
+    await repos.balances.apply([{ playerId: id, delta: -400, reason: 'buy_in', refId: 'room-1' }], undefined, { key: 'buy_in:room-1:s1' })
+    await repos.balances.apply([{ playerId: id, delta: 400, reason: 'cash_out', refId: 'room-1' }], undefined, { key: 'cash_out:room-1:s1' })
+    expect(await keyRows()).toHaveLength(2)
+    expect(await pruneLedgerKeys(db)).toBe(2)
+    expect(await keyRows()).toEqual([])
+    expect(await repos.balances.get(id)).toBe(1000)
+    expect(await ledgerRows()).toHaveLength(2)
+    expect(await pruneLedgerKeys(db)).toBe(0) // nothing left: a second boot finds an empty table
   })
 })
 

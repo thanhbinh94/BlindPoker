@@ -12,7 +12,8 @@
  *
  * A mask here is a `Uint8Array` of `width * height`, 0 or 255 per pixel (hard-edged: `writeMasks` softens
  * nothing, the @1x copy's own downscale gives the soft edge — D01 §8.3's antialiasing is a property of a
- * *picture*, not of a mask cut from one).
+ * *picture*, not of a mask cut from one). The one exception (2026-10-05) is a front hair's: the skin it redrew takes a
+ * soft share at the strand tips (`layerSkinMask`), and its hair mask is the ink less that share.
  *
  * Plan 19 (spec §5.5) adds the v4 set: a **skin** mask on every body and body face (`skinMask`), the eyes of a
  * body face found on a bald head, the ink of a hair layer as its hair — and `maskColour`, the colour a mask
@@ -20,9 +21,9 @@
  */
 import { existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { FACE_LIMIT_Y, FRAME, SKIN_WINDOW, baseSkinColour } from './frame.mjs'
-import { GENDERS, PACKAGE_ROOT, bodyFile, hairItemId, parseName, writeIconTintMask } from './manifest.mjs'
-import { ALPHA_INK, ALPHA_SOLID, readPicture, resizePicture, writePicture } from './png.mjs'
+import { FACE_LIMIT_Y, FRAME, LAYERS, SKIN_WINDOW, baseSkinColour } from './frame.mjs'
+import { GENDERS, PACKAGE_ROOT, bodyFaceFile, bodyFile, hairItemId, parseName, writeIconTintMask } from './manifest.mjs'
+import { ALPHA_INK, ALPHA_SOLID, clonePicture, overPicture, readPicture, resizePicture, writePicture } from './png.mjs'
 import { meanLightness } from '../../../../packages/ui-kit/src/avatar2d/recolour.mjs'
 
 /** Where a hand-drawn mask overrides the automatic one (spec §4.1). Committed — see `.gitignore` there. */
@@ -937,6 +938,378 @@ export function outfitLineMask(item, { body, skin, line }) {
   return out
 }
 
+// ──────────────────────────────────────────── the body's line a front hair redrew ──
+
+/**
+ * How `bodyLineCopy` tells the body's line a front hair picture redrew below the head (fix round 1, 2026-10-05), in
+ * ΔE76 and @2x px:
+ *
+ * - `reach`, `tolerance` — a copy of the skin's line: within `reach` of a pixel of the body's skin line whose colour is
+ *   within `tolerance` of its own — or darker and within `tolerance` in a*b* — as `OUTFIT_LINE` has it for an outfit's;
+ * - `inkReach`, `inkTolerance` — a copy of the body's other line art (ink darker than `SKIN_MASK.minL`: the tank top's
+ *   and the shorts' outline): within `inkReach` of such a pixel and `inkTolerance` of its colour. Tighter, because a dark
+ *   hair is close to a navy outline (the hime's violet is ΔE ~14 from it) and only a redraw lies on it exactly;
+ * - `window`, `maxSolid` — only a line: at most `maxSolid` of the (2·`window` + 1)² pixels round it solid. A lock of hair
+ *   across the body's outline is a mass, however close its colour;
+ * - `leftoverReach`, `minPiece` — what the copy leaves: a piece of ink below the head within `leftoverReach` of a pixel
+ *   dropped, under `minPiece` px or never solid, goes with it — unless it is joined to the hair above the head's end
+ *   (final wave): a lock's soft end hanging across that row is hair;
+ * - `tipReach` — a lock's tip (final wave): ink in the first `tipReach` rows from the head's end down, joined to the
+ *   hair above through them, is never a copy, whatever its colour. The wavy's lock tips end on the neck's outline at
+ *   y 472–474, their edge the line's colour (21 px the colour rule took); unbounded, the rule would keep the hime's
+ *   copy, 1824 of whose 2356 px touch its side locks.
+ *
+ * Measured on the hime's L60 (ingested 2026-10-04): below the head, 2959 px of ink; the copy of the arms', hands' and tank
+ * top's outline is 2120 px by the two colour rules and 198 px of leftovers, the side locks' tips (y 472–486) stay.
+ */
+export const HAIR_BODY_LINE = { reach: 3, tolerance: 20, inkReach: 1, inkTolerance: 10, window: 3, maxSolid: 0.5, leftoverReach: 2, minPiece: 32, tipReach: 3 }
+
+/** The first row below a face layer's ink — where the head ends, and the body below it begins — or `null` when it has none. */
+export function headBottom(face) {
+  const { width, height, data } = face
+  for (let y = height - 1; y >= 0; y--) {
+    for (let x = 0; x < width; x++) if (data[(y * width + x) * 4 + 3] > ALPHA_INK) return y + 1
+  }
+  return null
+}
+
+/**
+ * The body's own line that a front hair picture redrew below the head, at @2x (fix round 1, 2026-10-05): what `ingest`
+ * takes out of a hairstyle's L60. The image model redraws the whole figure with the hair; the diff against the body keeps
+ * whatever moved a pixel or was inked darker, so a copy of the body's outline (the arms, the hands, the tank top's sides)
+ * could land in the front layer — above every outfit, as thin orange-brown and navy lines along the sleeves.
+ *
+ * A pixel of `layer` at row `fromY` or below (the head's end, `headBottom` of the neutral face) is a copy when it carries
+ * ink, is part of a line (`HAIR_BODY_LINE.maxSolid`), and matches the body's line beside it: the skin line `line` (any
+ * non-zero pixel) by `reach`/`tolerance` or darker, or the body's other dark ink by `inkReach`/`inkTolerance`. Leftover
+ * specks of the copy go with it (`leftoverReach`, `minPiece`), but never a piece joined to the hair above `fromY`, and a
+ * lock's tip just below `fromY` is never a copy (`tipReach`). Returns 0/255 per pixel: the pixels to drop.
+ *
+ * @param {{ data: Buffer, width: number, height: number }} layer
+ * @param {{ body: { data: Buffer }, line: ArrayLike<number>, fromY: number }} reference
+ * @returns {Uint8Array}
+ */
+export function bodyLineCopy(layer, { body, line, fromY }) {
+  const { width, height, data } = layer
+  const scale = width / 768
+  const out = new Uint8Array(width * height)
+  const C = HAIR_BODY_LINE
+  const reach = Math.max(1, Math.round(C.reach * scale))
+  const inkReach = Math.max(1, Math.round(C.inkReach * scale))
+  const win = Math.max(1, Math.round(C.window * scale))
+  const maxSolid = C.maxSolid * (2 * win + 1) ** 2
+  // The layer's alpha as the copy is taken out of it: a line's last pixels read as a line only once the rest has gone,
+  // so the rules run again on what is left until nothing more goes — taking the copy out twice takes nothing.
+  const alpha = new Uint8Array(width * height)
+  for (let i = 0; i < alpha.length; i++) alpha[i] = data[i * 4 + 3]
+  const inked = (i) => alpha[i] > ALPHA_INK
+  const bodyLab = new Map()
+  const bodyAt = (q) => {
+    let lab = bodyLab.get(q)
+    if (lab === undefined) { lab = labOf(body.data[q * 4], body.data[q * 4 + 1], body.data[q * 4 + 2]); bodyLab.set(q, lab) }
+    return lab
+  }
+  const top = Math.max(0, fromY)
+  // A lock's tip (final wave): ink in the `tipReach` rows from the head's end down, joined to the hair above through those
+  // rows, is the hair's whatever its colour — the wavy's lock tips end on the neck's outline there, darker at the edge.
+  const tipEnd = Math.min(height, top + Math.max(1, Math.round(C.tipReach * scale)))
+  const tip = new Uint8Array(width * height)
+  if (top > 0) {
+    const queue = []
+    for (let x = 0; x < width; x++) {
+      const i = top * width + x
+      if (!inked(i)) continue
+      for (let dx = -1; dx <= 1; dx++) if (x + dx >= 0 && x + dx < width && inked(i - width + dx)) { tip[i] = 1; queue.push(i); break }
+    }
+    while (queue.length) {
+      const i = queue.pop()
+      const x = i % width
+      const y = (i - x) / width
+      for (const [dx, dy] of NEIGHBOURS8) {
+        const nx = x + dx
+        const ny = y + dy
+        if (nx < 0 || nx >= width || ny < top || ny >= tipEnd) continue
+        const q = ny * width + nx
+        if (!tip[q] && inked(q)) { tip[q] = 1; queue.push(q) }
+      }
+    }
+  }
+  const isCopy = (x, y, i) => {
+    if (tip[i]) return false
+    let solid = 0
+    for (let dy = -win; dy <= win; dy++) {
+      for (let dx = -win; dx <= win; dx++) {
+        const nx = x + dx
+        const ny = y + dy
+        if (nx >= 0 && ny >= 0 && nx < width && ny < height && alpha[ny * width + nx] > ALPHA_SOLID) solid++
+      }
+    }
+    if (solid > maxSolid) return false
+    const p = labOf(data[i * 4], data[i * 4 + 1], data[i * 4 + 2])
+    for (let dy = -reach; dy <= reach; dy++) {
+      for (let dx = -reach; dx <= reach; dx++) {
+        const nx = x + dx
+        const ny = y + dy
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue
+        const q = ny * width + nx
+        if (line[q] && dx * dx + dy * dy <= reach * reach) {
+          const b = bodyAt(q)
+          if (labDist(p, b) <= C.tolerance || (p[0] <= b[0] && Math.hypot(p[1] - b[1], p[2] - b[2]) <= C.tolerance)) return true
+        }
+        if (Math.abs(dx) <= inkReach && Math.abs(dy) <= inkReach && body.data[q * 4 + 3] > ALPHA_INK) {
+          const b = bodyAt(q)
+          if (b[0] < SKIN_MASK.minL && labDist(p, b) <= C.inkTolerance) return true
+        }
+      }
+    }
+    return false
+  }
+  // The copy's leftovers: small or faint pieces of what is left below the head, beside a pixel dropped. A piece is taken
+  // over the whole layer, so one joined (8-connected) to the hair above the head's end is that hair — a lock's soft end
+  // hanging across the row (the wavy's jaw: 28 px), not a piece of the copy — and stays (final wave, 2026-10-05).
+  const leftovers = () => {
+    const leftover = new Uint8Array(width * height)
+    for (let i = 0; i < leftover.length; i++) if (inked(i)) leftover[i] = 1
+    const { label, sizes } = components(leftover, width, height)
+    const near = dilate(out.map((v) => (v ? 1 : 0)), width, height, Math.max(1, Math.round(C.leftoverReach * scale)))
+    const minPiece = Math.max(1, Math.round(C.minPiece * scale * scale))
+    const beside = new Uint8Array(sizes.length)
+    const solidPiece = new Uint8Array(sizes.length)
+    const hair = new Uint8Array(sizes.length)
+    for (let i = 0; i < leftover.length; i++) {
+      const l = label[i]
+      if (l < 0) continue
+      if (i < top * width) hair[l] = 1
+      if (near[i]) beside[l] = 1
+      if (alpha[i] > ALPHA_SOLID) solidPiece[l] = 1
+    }
+    const found = []
+    for (let i = top * width; i < leftover.length; i++) {
+      const l = label[i]
+      if (l >= 0 && !hair[l] && beside[l] && (sizes[l] < minPiece || !solidPiece[l])) found.push(i)
+    }
+    return found
+  }
+  // Until nothing more goes: the rules, then the leftovers, again on what is left.
+  for (let round = 0; round < 16; round++) {
+    const found = []
+    for (let y = top; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = y * width + x
+        if (inked(i) && isCopy(x, y, i)) found.push(i)
+      }
+    }
+    for (const i of found) { out[i] = 255; alpha[i] = 0 }
+    const rest = leftovers()
+    for (const i of rest) { out[i] = 255; alpha[i] = 0 }
+    if (!found.length && !rest.length) break
+  }
+  return out
+}
+
+// ─────────────────────────────────────────────────────── a layer's redrawn skin ──
+
+/**
+ * How `layerSkinMask` tells the skin a hair or outfit picture redrew (2026-10-05), in ΔE76 and @2x px:
+ *
+ * - `gap` — how far from every colour of the layer's own palette a pixel must be to be skin: k-means (`palette`
+ *   centres) over the layer's solid pixels lying over no skin. Keeps hair or cloth the colour of skin out — the wavy
+ *   platinum, the ponytail's orange, the outfits' tan;
+ * - `hairHue` — a front hair's hue window, `SKIN_MASK.hue` extended down to the pink of skin in a hair's shadow: the
+ *   bob's between its bangs measured L* 63–75, C* 13–36, h 16–44°;
+ * - `outfitMaxChroma` — an outfit's pixel needs C* at most this as well as ΔE `SKIN_MASK.tolerance` to the body's seed,
+ *   and no hue window: the gold trim the Tết áo dài repainted over the body's skin (collar, cuffs, slit) measured
+ *   Lab ≈ 66–84 / 1–19 / 52–62, C* 52–65, inside `SKIN_MASK.hue`; its insteps C* ≈ 14–21;
+ * - `minPiece` — an outfit's skin is opened (a 3 × 3 erosion, then a dilation within the candidates) and kept in pieces
+ *   of at least this: thin trim edges go, an instep or a patch through a cuff stays;
+ * - `outfitGrow`, `outfitGrowMaxChroma` — the pieces kept then grow, up to `outfitGrow` px, into the skin at their edge
+ *   by the body's own rule (`SKIN_MASK`'s ΔE or hue window, L* at least `minL`) with C* at most `outfitGrowMaxChroma`:
+ *   the shadow a hem or a slipper casts on the instep (L* 70–84, C* 27–47, ΔE up to 40) stayed a light rim round it
+ *   under a deep tone. Only a kept piece grows, so no trim does. The growth may also cross the body's skin line (fix
+ *   round 1): the royal robe drew its left instep's shadow over the body's own outline there (skin mask 0, skin line
+ *   255). The gold beside an instep stays out by two rules, not by the cap alone: its darker edge (C* 43–48, 2–4 px from
+ *   the instep) is under the cap and is kept out by the palette gap, and the cap keeps its body (C* 50–65) out. The
+ *   margin of 48 was measured on the art of 2026-10-05 — the highest C* in any outfit's skin mask is 46.7 (the royal
+ *   robe's instep shadow) — so a picture drawn with a paler gold or a more saturated shadow needs measuring again;
+ * - `softReach`, `softOffLine` — a front hair's strand tips (pre-flight I9): a pixel beside the skin found or beside
+ *   shown skin takes the skin share of its colour — projected onto the line from the nearest pure hair pixel within
+ *   `softReach` to the skin drawn beneath it, at most `softOffLine` off that line.
+ */
+export const LAYER_SKIN = { gap: 10, palette: 12, hairHue: [15, 100], outfitMaxChroma: 35, minPiece: 40, outfitGrow: 4, outfitGrowMaxChroma: 48, softReach: 4, softOffLine: 12 }
+
+/**
+ * The skin a front hair (L60) or an outfit (L40) picture redrew, at @2x (2026-10-05): the forehead between strands in
+ * the hair's shadow, an instep inside a slipper. These pixels sit in the item's layer, so the body's skin colour never
+ * reached them: under a deep tone they stayed cream. What a skin colour paints by `ratio` (`recolour.mjs`).
+ *
+ * A pixel of `layer` with ink (alpha over `ALPHA_INK`), over skin (`skin` ≥ 128: the body's skin mask, and for a hair
+ * the neutral face's too) and outside `exclude` (any non-zero pixel: the layer's own tint and skin line) is skin when:
+ *
+ * - its C* is at least `SKIN_MASK.minChroma`;
+ * - a hair's: it is within `SKIN_MASK.tolerance` of the body's seed (`baseSkinColour` of `body`), or its hue is in
+ *   `LAYER_SKIN.hairHue` and its L* at least `SKIN_MASK.minL`; an outfit's: within the tolerance *and* C* at most
+ *   `LAYER_SKIN.outfitMaxChroma`;
+ * - it is at least `LAYER_SKIN.gap` from the layer's own palette (`LAYER_SKIN` above).
+ *
+ * An outfit's is then opened, kept in pieces of `LAYER_SKIN.minPiece` px or more and grown into the shaded skin at their
+ * edge (`LAYER_SKIN.outfitGrow`; 0 or 255 a pixel) — over the body's skin, or over its skin line (`line`, any non-zero
+ * pixel) when given. A hair's strand
+ * tips get a soft value when `beneath` (the body and face as drawn under the hair) is given: a pixel next to the skin
+ * found or to shown skin (skin the layer leaves bare) is projected between its nearest pure hair pixel — solid, not
+ * skin, within `gap` of the palette — and `beneath`'s colour there, and takes the share of the skin end, 0–255, when
+ * it lies within `LAYER_SKIN.softOffLine` of that line and the two ends are at least `gap` apart (a hair as light as
+ * the skin cannot be told from it). Returns 0–255 per pixel; empty when the layer redrew no skin.
+ *
+ * @param {{ data: Buffer, width: number, height: number }} layer
+ * @param {{ kind: 'hair' | 'outfit', body: { data: Buffer, width: number, height: number }, skin: ArrayLike<number>, line?: ArrayLike<number> | null, beneath?: { data: Buffer } | null, exclude?: ArrayLike<number> | null }} reference
+ * @returns {Uint8Array}
+ */
+export function layerSkinMask(layer, { kind, body, skin, line = null, beneath = null, exclude = null }) {
+  const { width, height, data } = layer
+  const scale = width / 768
+  const out = new Uint8Array(width * height)
+  const seed = baseSkinColour(body, width / FRAME.w)
+  if (seed === null) return out
+  const seedLab = labOf(seed[0], seed[1], seed[2])
+  const hair = kind === 'hair'
+  const inked = (i) => data[i * 4 + 3] > ALPHA_INK
+  const LAB = new Float32Array(width * height * 3)
+  const own = []
+  for (let i = 0; i < width * height; i++) {
+    if (!inked(i)) continue
+    const [L, a, b] = labOf(data[i * 4], data[i * 4 + 1], data[i * 4 + 2])
+    LAB[i * 3] = L; LAB[i * 3 + 1] = a; LAB[i * 3 + 2] = b
+    // The palette: the layer's solid pixels over no skin, every other one (as measured) — and, given the body's skin
+    // line, over none of it either: the skin's own edge, where a picture that redrew the skin redrew it too.
+    if (i % 2 === 0 && data[i * 4 + 3] >= 250 && skin[i] < 128 && !line?.[i]) own.push([L, a, b])
+  }
+  const palette = own.length ? kmeans(own, LAYER_SKIN.palette) : []
+  const labAt = (i) => [LAB[i * 3], LAB[i * 3 + 1], LAB[i * 3 + 2]]
+  const paletteGap = (p) => (palette.length ? Math.min(...palette.map((c) => labDist(c, p))) : Infinity)
+  const open = (i) => inked(i) && skin[i] >= 128 && !exclude?.[i]
+
+  const found = new Uint8Array(width * height)
+  for (let i = 0; i < found.length; i++) {
+    if (!open(i)) continue
+    const p = labAt(i)
+    const chroma = Math.hypot(p[1], p[2])
+    if (chroma < SKIN_MASK.minChroma) continue
+    const near = labDist(p, seedLab) <= SKIN_MASK.tolerance
+    let skinLike
+    if (hair) {
+      let hue = (Math.atan2(p[2], p[1]) * 180) / Math.PI
+      if (hue < 0) hue += 360
+      skinLike = near || (hue >= LAYER_SKIN.hairHue[0] && hue <= LAYER_SKIN.hairHue[1] && p[0] >= SKIN_MASK.minL)
+    } else {
+      skinLike = near && chroma <= LAYER_SKIN.outfitMaxChroma
+    }
+    if (skinLike && paletteGap(p) >= LAYER_SKIN.gap) found[i] = 1
+  }
+
+  if (!hair) {
+    // The opening: a 3 × 3 erosion, then a dilation back within the candidates — and pieces of `minPiece` or more.
+    const at = (x, y) => (x < 0 || y < 0 || x >= width || y >= height ? 0 : found[y * width + x])
+    const core = new Uint8Array(width * height)
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (!found[y * width + x]) continue
+        let whole = 1
+        for (let dy = -1; dy <= 1 && whole; dy++) for (let dx = -1; dx <= 1; dx++) if (!at(x + dx, y + dy)) { whole = 0; break }
+        core[y * width + x] = whole
+      }
+    }
+    const opened = new Uint8Array(width * height)
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (!core[y * width + x]) continue
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (at(x + dx, y + dy)) opened[(y + dy) * width + x + dx] = 1
+      }
+    }
+    const minPiece = Math.max(1, Math.round(LAYER_SKIN.minPiece * scale * scale))
+    const { label, sizes } = components(opened, width, height)
+    for (let i = 0; i < out.length; i++) out[i] = label[i] >= 0 && sizes[label[i]] >= minPiece ? 255 : 0
+    // The growth into the shaded skin at a kept piece's edge, one pixel a step — over the body's skin or its skin line.
+    const shaded = (i) => {
+      if (!inked(i) || exclude?.[i] || !(skin[i] >= 128 || line?.[i])) return false
+      const p = labAt(i)
+      const chroma = Math.hypot(p[1], p[2])
+      if (chroma < SKIN_MASK.minChroma || chroma > LAYER_SKIN.outfitGrowMaxChroma || p[0] < SKIN_MASK.minL) return false
+      let hue = (Math.atan2(p[2], p[1]) * 180) / Math.PI
+      if (hue < 0) hue += 360
+      const skinLike = labDist(p, seedLab) <= SKIN_MASK.tolerance || (hue >= SKIN_MASK.hue[0] && hue <= SKIN_MASK.hue[1])
+      return skinLike && paletteGap(p) >= LAYER_SKIN.gap
+    }
+    for (let step = 0; step < Math.max(1, Math.round(LAYER_SKIN.outfitGrow * scale)); step++) {
+      const grown = []
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const i = y * width + x
+          if (out[i]) continue
+          let beside = false
+          for (const [dx, dy] of NEIGHBOURS8) {
+            const nx = x + dx
+            const ny = y + dy
+            if (nx >= 0 && ny >= 0 && nx < width && ny < height && out[ny * width + nx]) { beside = true; break }
+          }
+          if (beside && shaded(i)) grown.push(i)
+        }
+      }
+      if (!grown.length) break
+      for (const i of grown) out[i] = 255
+    }
+    return out
+  }
+
+  for (let i = 0; i < out.length; i++) out[i] = found[i] ? 255 : 0
+  if (!beneath) return out
+
+  // The strand tips: a share of skin, by projection (pre-flight I9).
+  const shown = (i) => skin[i] >= 128 && !inked(i)
+  const pure = (i) => data[i * 4 + 3] > ALPHA_SOLID && !found[i] && !exclude?.[i] && paletteGap(labAt(i)) < LAYER_SKIN.gap
+  const reach = Math.max(1, Math.round(LAYER_SKIN.softReach * scale))
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = y * width + x
+      if (found[i] || !open(i)) continue
+      let beside = false
+      for (const [dx, dy] of NEIGHBOURS8) {
+        const nx = x + dx
+        const ny = y + dy
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue
+        const q = ny * width + nx
+        if (found[q] || shown(q)) { beside = true; break }
+      }
+      if (!beside) continue
+      let hairEnd = null
+      let best = Infinity
+      for (let dy = -reach; dy <= reach; dy++) {
+        for (let dx = -reach; dx <= reach; dx++) {
+          const d2 = dx * dx + dy * dy
+          if (d2 === 0 || d2 > reach * reach || d2 >= best) continue
+          const nx = x + dx
+          const ny = y + dy
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue
+          const q = ny * width + nx
+          if (!pure(q)) continue
+          best = d2
+          hairEnd = labAt(q)
+        }
+      }
+      if (!hairEnd) continue
+      const skinEnd = labOf(beneath.data[i * 4], beneath.data[i * 4 + 1], beneath.data[i * 4 + 2])
+      const span = [skinEnd[0] - hairEnd[0], skinEnd[1] - hairEnd[1], skinEnd[2] - hairEnd[2]]
+      const length2 = span[0] * span[0] + span[1] * span[1] + span[2] * span[2]
+      if (length2 < LAYER_SKIN.gap * LAYER_SKIN.gap) continue
+      const p = labAt(i)
+      const t = Math.max(0, Math.min(1, ((p[0] - hairEnd[0]) * span[0] + (p[1] - hairEnd[1]) * span[1] + (p[2] - hairEnd[2]) * span[2]) / length2))
+      const onLine = [hairEnd[0] + t * span[0], hairEnd[1] + t * span[1], hairEnd[2] + t * span[2]]
+      if (labDist(p, onLine) > LAYER_SKIN.softOffLine) continue
+      out[i] = Math.round(255 * t)
+    }
+  }
+  return out
+}
+
 // ────────────────────────────────────────────────────────────────── colour ──
 
 /**
@@ -1094,12 +1467,14 @@ export const MASK_FILE_KIND = { hair: 'hair', eyes: 'eye', tint: 'tint', skin: '
 /**
  * The mask to write for one `<name>_<kind>` (`kind` a manifest key: `hair`, `eyes`, `tint` or `skin`): a hand-drawn
  * override if one exists at `overridesDir`, else `computed`. Writes both densities and records the manifest
- * entry — `{ bytes2x, meanL, empty?, override? }` — into `entry.masks[kind]`.
+ * entry — `{ bytes2x, meanL, empty?, override? }` — into `entry.masks[kind]`. `meanL` is the mask's own mean lightness
+ * on the layer unless the caller gives the one to record for `computed` (a front hair's hair mask keeps its ink's,
+ * 2026-10-05); a hand-drawn override is always measured.
  *
  * A `tint` mask also gives the item's icon its own (2026-10-01, Plan 18 No8a): `writeIconTintMask` cuts this very
  * mask — override and all — with the icon's fit, as `<icon>_tintmask`, and flags the icon in `manifest.icons`.
  */
-async function writeOneMask({ dir, name, kind, computed, layer2x, entry, manifest, overridesDir, log }) {
+async function writeOneMask({ dir, name, kind, computed, layer2x, entry, manifest, overridesDir, log, meanL: givenMeanL = null }) {
   const { width, height } = layer2x
   const fileKind = MASK_FILE_KIND[kind]
   let mask = computed
@@ -1121,7 +1496,7 @@ async function writeOneMask({ dir, name, kind, computed, layer2x, entry, manifes
   const bytes2x = statSync(file2x).size
   let sum = 0
   for (let i = 0; i < mask.length; i++) sum += mask[i] > 0 ? 1 : 0
-  const meanL = Math.round(meanLightness(layer2x.data, mask) * 10000) / 10000
+  const meanL = givenMeanL !== null && !override ? givenMeanL : Math.round(meanLightness(layer2x.data, mask) * 10000) / 10000
   entry.masks ??= {}
   entry.masks[kind] = { bytes2x, meanL, ...(sum === 0 ? { empty: true } : {}), ...(override ? { override: true } : {}) }
   log(`${name}_${fileKind}mask — ${(bytes2x / 1024).toFixed(1)} KB${override ? ', hand-drawn' : ''}${sum === 0 ? ', empty' : ''}`)
@@ -1147,6 +1522,26 @@ function inkMask(layer2x) {
   return ink
 }
 
+/** Refuse `name` before writing anything for it when one of `masks` (`[layer, kind]`) it is cut against is not on disk. */
+function requireMasks(dir, name, masks) {
+  for (const [other, kind] of masks) {
+    const file = join(dir, `${other}_${MASK_FILE_KIND[kind]}mask@2x.png`)
+    if (!existsSync(file)) throw new Error(`${name} is cut against ${other}'s ${kind} mask, and ${file} is missing: cut the body's masks first`)
+  }
+}
+
+/** The union of `kinds` masks `name` carries as written (any non-zero pixel), for `layerSkinMask` to keep clear of. */
+async function writtenUnion(dir, name, entry, kinds) {
+  let union = null
+  for (const kind of kinds) {
+    if (!entry.masks?.[kind]) continue
+    const mask = await writtenMask(dir, name, kind)
+    union ??= new Uint8Array(mask.length)
+    for (let i = 0; i < mask.length; i++) if (mask[i]) union[i] = 1
+  }
+  return union
+}
+
 /**
  * Cut and write the masks for `names` (from `maskTargets`, or a caller's own subset), into `dir`. Mutates
  * `manifest.files[name].masks` for each; does not write the manifest — the caller does, alongside whatever
@@ -1161,37 +1556,70 @@ function inkMask(layer2x) {
  * (`outfitLineMask`), against the body's skin and line as written — so bodies are cut first, whatever order `names`
  * gives, and an outfit whose body has no such masks on disk is refused. Re-cutting a body does not re-cut the outfits
  * cut on it: name them in the same run (`masks body_f_L30 item_outfit_…`) when the body's line moves.
+ *
+ * 2026-10-05: a v4 outfit and a real front hair (L60) also get **skin** — the skin their picture redrew
+ * (`layerSkinMask`) — the outfit's against its body's skin, after its line and clear of its tint and line as written;
+ * the hair's against its gender's body and neutral face skin, which are then required on disk as an outfit's body
+ * masks are. A front hair's **hair** is then its ink less that skin's share (any override included), with the ink's
+ * `meanL` kept: the hair colour is drawn against it, so cutting the skin out must not move it.
  */
 export async function writeMasks({ dir, manifest, names, overridesDir = MASK_OVERRIDE_DIR, log = () => {} }) {
-  // Bodies first: an outfit's line is cut against its body's skin and line as written in this same run.
+  // Bodies first: an outfit's line, and an outfit's or a front hair's skin, are cut against the body's (and face's)
+  // masks as written in this same run.
   const bodyFirst = (name) => (/^body_/.test(name) ? 0 : 1)
   for (const name of [...names].sort((a, b) => bodyFirst(a) - bodyFirst(b))) {
     const parsed = parseName(name)
     if (!parsed) continue
     const entry = manifest.files[name]
     if (!entry?.real || entry.empty) continue
-    const layer2x = await readPicture(join(dir, `${name}@2x.png`))
     const shut = parsed.expr === 'closed' || parsed.expr === 'sleep'
 
     if (parsed.kind === 'item') {
       // An outfit's line is cut against its body's masks as written; refuse before writing anything for it without them.
       const bodyName = isOutfitOnBody(parsed, entry) ? bodyFile(entry.cutOn) : null
-      if (bodyName) {
-        for (const kind of ['skin', 'skinLine']) {
-          const file = join(dir, `${bodyName}_${MASK_FILE_KIND[kind]}mask@2x.png`)
-          if (!existsSync(file)) throw new Error(`${name} is cut against ${bodyName}'s ${kind} mask, and ${file} is missing: cut the body's masks first`)
-        }
-      }
+      if (bodyName) requireMasks(dir, name, [[bodyName, 'skin'], [bodyName, 'skinLine']])
+      const layer2x = await readPicture(join(dir, `${name}@2x.png`))
       if (entry.tintSeed) {
         const tint = tintMask(layer2x, entry.tintSeed)
         await writeOneMask({ dir, name, kind: 'tint', computed: tint, layer2x, entry, manifest, overridesDir, log })
       }
       if (bodyName) {
         const body = await readPicture(join(dir, `${bodyName}@2x.png`))
-        const reference = { body, skin: await writtenMask(dir, bodyName, 'skin'), line: await writtenMask(dir, bodyName, 'skinLine') }
+        const skin = await writtenMask(dir, bodyName, 'skin')
+        const reference = { body, skin, line: await writtenMask(dir, bodyName, 'skinLine') }
         await writeOneMask({ dir, name, kind: 'skinLine', computed: outfitLineMask(layer2x, reference), layer2x, entry, manifest, overridesDir, log })
+        const exclude = await writtenUnion(dir, name, entry, ['tint', 'skinLine'])
+        const redrawn = layerSkinMask(layer2x, { kind: 'outfit', body, skin, line: reference.line, exclude })
+        await writeOneMask({ dir, name, kind: 'skin', computed: redrawn, layer2x, entry, manifest, overridesDir, log })
       }
-    } else if (parsed.kind === 'body') {
+      continue
+    }
+
+    const front = parsed.kind === 'hair' && parsed.layer === LAYERS.hairFront
+    const bodyName = front ? bodyFile(parsed.gender) : null
+    const faceName = front ? bodyFaceFile(parsed.gender, 'neutral') : null
+    if (front) requireMasks(dir, name, [[bodyName, 'skin'], [faceName, 'skin']])
+    const layer2x = await readPicture(join(dir, `${name}@2x.png`))
+    if (front) {
+      // The skin beneath the hair: the neutral face over the body, as drawn and as masked.
+      const body = await readPicture(join(dir, `${bodyName}@2x.png`))
+      const face = await readPicture(join(dir, `${faceName}@2x.png`))
+      const [bodySkin, faceSkin] = [await writtenMask(dir, bodyName, 'skin'), await writtenMask(dir, faceName, 'skin')]
+      const skin = new Uint8Array(bodySkin.length)
+      for (let i = 0; i < skin.length; i++) skin[i] = Math.max(bodySkin[i], faceSkin[i])
+      const beneath = overPicture(clonePicture(body), face)
+      const redrawn = layerSkinMask(layer2x, { kind: 'hair', body, skin, beneath })
+      await writeOneMask({ dir, name, kind: 'skin', computed: redrawn, layer2x, entry, manifest, overridesDir, log })
+      const share = await writtenMask(dir, name, 'skin')
+      const ink = inkMask(layer2x)
+      const hair = new Uint8Array(ink.length)
+      for (let i = 0; i < hair.length; i++) hair[i] = ink[i] ? 255 - share[i] : 0
+      const inkMeanL = Math.round(meanLightness(layer2x.data, ink) * 10000) / 10000
+      await writeOneMask({ dir, name, kind: 'hair', computed: hair, layer2x, entry, manifest, overridesDir, log, meanL: inkMeanL })
+      continue
+    }
+
+    if (parsed.kind === 'body') {
       // The body carries the neutral face too (under the face layer): its own eyes, found the way a face's are and
       // never written, keep an amber iris out of its skin.
       const { width, height } = layer2x

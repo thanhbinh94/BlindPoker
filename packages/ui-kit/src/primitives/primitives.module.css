@@ -82,10 +82,11 @@
   background-color: var(--gold);
 }
 
-/* red: fold, leave, kick */
+/* red: fold, leave, kick. The fill, not the ink: `--red` is lifted to read as text on the dark ground, and under
+   --red-ink it would be too light a ground for the label. */
 .btn.danger {
   color: var(--red-ink);
-  background-color: var(--red);
+  background-color: var(--red-fill);
 }
 
 .btn.ghost {
@@ -169,7 +170,7 @@
 }
 
 .select[aria-invalid='true'] {
-  border-color: var(--red);
+  border-color: var(--red-fill);
   background-color: var(--red-soft);
 }
 
@@ -218,6 +219,8 @@
   --gold-soft: rgba(133, 96, 17, 0.14);
   --gold-ink: #fff8e8;
   --red: #a9242d;
+  /* re-declared beside --red, or a fill inside would take the theme's — the dark theme's #c8323c on paper */
+  --red-fill: #a9242d;
   --red-soft: rgba(169, 36, 45, 0.12);
   --teal: #15544c;
   --teal-fill: #124a43;
@@ -236,7 +239,9 @@
   --gold: #d9a441;
   --gold-soft: rgba(217, 164, 65, 0.16);
   --gold-ink: #201607;
-  --red: #c8323c;
+  /* the night palette's pair: the ink is 5.4:1 on this panel's own --bg, the fill keeps the lacquer red */
+  --red: #e0737b;
+  --red-fill: #c8323c;
   --red-soft: rgba(200, 50, 60, 0.16);
   --red-ink: #fdf3f0;
   --teal: #3f938a;
@@ -261,7 +266,12 @@
   border-bottom: 1px solid var(--line);
 }
 
-/* ---------- Badge ---------- */
+/* ---------- Badge ----------
+   12 px at weight 600 is not large text, so a badge's ink needs 4.5:1 on its own tint over whatever is under it — the
+   paper's darker end, the page's mesh where it is reddest (under the room header), a raised panel's highlight. The
+   tints stay; the inks are drawn toward --ink instead — 20 % for teal and gold, 12 % for the muted grey — so teal
+   reads 4.6:1 under a dark panel's highlight and gold and grey 4.7 and 4.6 on the light mesh, their worst grounds.
+   Red is the --red ink. The border and the table's opaque tint follow currentColor. */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -277,7 +287,7 @@
 }
 
 .badge.gold {
-  color: var(--gold);
+  color: color-mix(in srgb, var(--gold) 80%, var(--ink));
   background: var(--gold-soft);
 }
 
@@ -287,12 +297,12 @@
 }
 
 .badge.teal {
-  color: var(--teal);
+  color: color-mix(in srgb, var(--teal) 80%, var(--ink));
   background: color-mix(in srgb, var(--teal) 16%, transparent);
 }
 
 .badge.muted {
-  color: var(--ink-muted);
+  color: color-mix(in srgb, var(--ink-muted) 88%, var(--ink));
   background: color-mix(in srgb, var(--ink-muted) 14%, transparent);
 }
 

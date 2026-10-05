@@ -14,7 +14,7 @@ import { createHistoryRepository, type NormalGameHistoryRepository } from './his
 import { createPlayerRepository, type NormalPlayerRepository } from './player-repo.js'
 
 export type { LedgerListOptions, LedgerReader, LedgerRow, LedgerSum, NormalBalanceRepository } from './balance-repo.js'
-export { createBalanceRepository, createLedgerReader, creditWithin, UnknownPlayerError } from './balance-repo.js'
+export { createBalanceRepository, createLedgerReader, creditWithin, pruneLedgerKeys, UnknownPlayerError } from './balance-repo.js'
 export type { GameRow, NormalGameHistoryRepository } from './history-repo.js'
 export { createHistoryRepository } from './history-repo.js'
 export type { NormalPlayerRepository, PlayerRow } from './player-repo.js'

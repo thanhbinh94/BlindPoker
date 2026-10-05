@@ -267,6 +267,7 @@
     },
     "showLocked": "Hiện cả món chưa có",
     "emptyOwned": "Bạn chưa có món nào ở mục này.",
+    "familyHint": "{{name}}: {{hint}}",
     "ownedCount": "{{owned}}/{{total}} đã có",
     "wearingBadge": "Đang dùng",
     "words": {

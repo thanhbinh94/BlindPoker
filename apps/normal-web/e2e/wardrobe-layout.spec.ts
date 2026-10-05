@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { expectRailFits } from './rail.js'
 import {
   account,
@@ -109,6 +109,50 @@ async function assertNavNeverWraps(page: Page): Promise<void> {
 }
 
 /**
+ * Plan 20 (T3): the worn card's "✓ Đang dùng" pill is the topmost thing where it is drawn. A hairstyle portrait is a
+ * `Chibi` whose layers stack by their own `z-index` (20–90) and once painted over the pill (A6 review, 5ab72be); the
+ * pill's own `z-index` and the portrait's `isolation` keep it above. Probed the way a pointer meets it: `elementFromPoint`
+ * at the pill's centre and at both ends, each inset by half the pill's height so its rounded corners are not asked.
+ * Every hit has to be the pill or something inside it.
+ */
+async function expectPillOnTop(card: Locator, where: string): Promise<void> {
+  const pill = card.locator('span', { hasText: 'Đang dùng' }).first()
+  await expect(pill, `${where}: the worn card has its pill`).toBeVisible()
+  const probes = await pill.evaluate((el) => {
+    el.scrollIntoView({ block: 'center', behavior: 'instant' })
+    const box = el.getBoundingClientRect()
+    const y = box.top + box.height / 2
+    const inset = box.height / 2
+    return [box.left + inset, box.left + box.width / 2, box.right - inset].map((x) => {
+      const hit = document.elementFromPoint(x, y)
+      return { x: Math.round(x), onPill: hit !== null && el.contains(hit), hit: hit === null ? 'nothing' : `<${hit.tagName.toLowerCase()} class="${String(hit.className)}">` }
+    })
+  })
+  for (const probe of probes) expect(probe.onPill, `${where}: at x=${probe.x} the pill is on top, not ${probe.hit}`).toBe(true)
+}
+
+/**
+ * Plan 20 (T3): the "✓ Đang dùng" pill is pinned 9–30 px from the card's top edge, so a colour card's swatch (centred, 56 px)
+ * starts below it at every width — at 768 px and wider it used to start under it (16 px of the circle covered; the rule
+ * that pushed it down was phone-only). Checked on the card the fresh account wears on Màu da: "Tự nhiên".
+ */
+async function expectSwatchClearsPill(panel: Locator, where: string): Promise<void> {
+  const natural = panel.getByRole('button', { name: 'Tự nhiên', exact: true })
+  await expect(natural, `${where}: the fresh account wears Tự nhiên`).toHaveAttribute('aria-pressed', 'true')
+  const boxes = await natural.evaluate((card) => {
+    const parts = Array.from(card.children) as HTMLElement[]
+    const bottomOf = (part?: HTMLElement): number | null => (part ? part.getBoundingClientRect().bottom : null)
+    const topOf = (part?: HTMLElement): number | null => (part ? part.getBoundingClientRect().top : null)
+    const pill = parts.find((part) => (part.textContent ?? '').includes('Đang dùng'))
+    const swatch = parts.find((part) => part.getAttribute('aria-hidden') === 'true' && (part.textContent ?? '') === '')
+    return { pillBottom: bottomOf(pill), swatchTop: topOf(swatch) }
+  })
+  expect(boxes.pillBottom, `${where}: the worn card has its pill`).not.toBeNull()
+  expect(boxes.swatchTop, `${where}: the card has its swatch`).not.toBeNull()
+  expect(boxes.swatchTop!, `${where}: the swatch (top ${boxes.swatchTop}) starts below the "Đang dùng" pill (bottom ${boxes.pillBottom})`).toBeGreaterThanOrEqual(boxes.pillBottom!)
+}
+
+/**
  * The card grids at the page's current viewport (No8b, No11b): the views of the user's screenshots — the old
  * inventory's "Trang phục" group (No8-1; the inventory has since folded into the wardrobe, No5, whose "Quần áo" tab
  * is that view now), the wardrobe's hats (No8-2), "Danh hiệu & Huy hiệu" (No11-1) — and the other tabs that draw
@@ -128,6 +172,8 @@ async function expectCardGrids(page: Page): Promise<void> {
   // nothing here.
   await expect(page.getByRole('tablist', { name: 'Ngoại hình' }).getByRole('tab', { name: /^Kiểu tóc/ })).toHaveAttribute('aria-selected', 'true')
   await expectEvenCardRows(panel, `wardrobe, Ngoại hình → Kiểu tóc, ${where}`)
+  // Plan 20 (T3): the worn bob's pill sits above its portrait.
+  await expectPillOnTop(panel.getByRole('button', { name: /^Tóc bob, / }), `wardrobe, Ngoại hình → Kiểu tóc, ${where}`)
   await expectNoTextOverlapDown(page, `wardrobe, Ngoại hình, ${where}`)
 
   await goToWardrobeTab(page, 'Ngoại hình', 'Màu tóc')
@@ -137,6 +183,8 @@ async function expectCardGrids(page: Page): Promise<void> {
   await expectEvenCardRows(panel, `wardrobe, Ngoại hình → Màu tóc, ${where}`)
   await goToWardrobeTab(page, 'Ngoại hình', 'Màu da')
   await expectEvenCardRows(panel, `wardrobe, Ngoại hình → Màu da, ${where}`)
+  // Plan 20 (T3): at every width, not on a phone alone.
+  await expectSwatchClearsPill(panel, `wardrobe, Ngoại hình → Màu da, ${where}`)
   await goToWardrobeTab(page, 'Ngoại hình', 'Màu mắt')
   await expectEvenCardRows(panel, `wardrobe, Ngoại hình → Màu mắt, ${where}`)
 
@@ -402,22 +450,11 @@ test.describe('Blind Luck Poker Normal — bố cục tủ đồ (Kế hoạch 1
     for (const dot of await dots.all()) await expectDotTarget(dot, `wardrobe, Quần áo, the "${await dot.getAttribute('title')}" dot, phone`)
 
     // Plan 19 final review: on a phone the "✓ Đang dùng" pill spans most of a ~100 px card. On Màu da it used to cover the
-    // top of the worn swatch — "Tự nhiên", on a fresh account — so the swatch now starts below it.
+    // top of the worn swatch — "Tự nhiên", on a fresh account — so the swatch now starts below it. (Plan 20, T3: at every
+    // width, which `expectCardGrids` measures with the box ticked; this is the same card as a new visit finds it, unticked.)
     await goToWardrobeTab(page, 'Ngoại hình', 'Màu da')
-    const natural = page.getByRole('tabpanel').getByRole('button', { name: 'Tự nhiên', exact: true })
-    await expect(natural).toHaveAttribute('aria-pressed', 'true')
-    const boxes = await natural.evaluate((card) => {
-      const parts = Array.from(card.children) as HTMLElement[]
-      const box = (part?: HTMLElement): { top: number; bottom: number } | null => (part ? { top: part.getBoundingClientRect().top, bottom: part.getBoundingClientRect().bottom } : null)
-      return {
-        pill: box(parts.find((part) => (part.textContent ?? '').includes('Đang dùng'))),
-        swatch: box(parts.find((part) => part.getAttribute('aria-hidden') === 'true' && (part.textContent ?? '') === '')),
-      }
-    })
-    expect(boxes.pill, 'the worn card has its pill').not.toBeNull()
-    expect(boxes.swatch, 'the card has its swatch').not.toBeNull()
-    expect(boxes.swatch!.top, 'the swatch starts below the "Đang dùng" pill, 375×812').toBeGreaterThanOrEqual(boxes.pill!.bottom)
-    await natural.scrollIntoViewIfNeeded()
+    await expectSwatchClearsPill(page.getByRole('tabpanel'), 'wardrobe, Ngoại hình → Màu da, phone 375×812, box unticked')
+    await page.getByRole('tabpanel').getByRole('button', { name: 'Tự nhiên', exact: true }).scrollIntoViewIfNeeded()
     await page.screenshot({ path: `${SHOTS}wardrobe-mobile-mau-da.png` })
 
     // No11a on the phone: this mount came from Settings, so the box is unticked and "Mũ" — nothing owned on a

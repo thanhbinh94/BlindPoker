@@ -603,6 +603,28 @@ describe('the run file', () => {
     expect(JSON.parse(readFileSync(path, 'utf8')) as RunFile).toEqual(live)
   })
 
+  /**
+   * The instance that takes the data directory (the one with a run file) starts with `ledger_keys` empty: its rooms,
+   * and every write they could retry, live in memory, so no key claimed before it started can ever be replayed. A
+   * smoke-style app, which may share a live server's database, leaves the table alone.
+   */
+  it('owning the data directory, starts with ledger_keys empty; a smoke-style app leaves the keys alone', async () => {
+    const seedKeys = (h: Harness): void => {
+      for (const key of ['buy_in:room-1:s1', 'cash_out:room-1:s1', 'carry_over:room-2:x']) h.repos.db.prepare('INSERT INTO ledger_keys (key, created_at) VALUES (?, 1)').run(key)
+    }
+    const countKeys = (h: Harness): number => Number((h.repos.db.prepare('SELECT count(*) AS n FROM ledger_keys').get() as { n: number }).n)
+
+    const owner = makeApp({ runFilePath: join(tempDir('bp-run-'), RUN_FILE_NAME) })
+    seedKeys(owner)
+    await owner.app.listen()
+    expect(countKeys(owner)).toBe(0)
+
+    const smoke = makeApp()
+    seedKeys(smoke)
+    await smoke.app.listen()
+    expect(countKeys(smoke)).toBe(3)
+  })
+
   it('is not removed on close when another instance has taken it over', async () => {
     const path = join(tempDir('bp-run-'), RUN_FILE_NAME)
     const h = makeApp({ runFilePath: path })

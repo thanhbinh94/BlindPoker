@@ -75,14 +75,43 @@ describe('RoomList', () => {
   })
   // Review round 2, R2-1 (final fix wave): a name that wraps used to push the badge and the lock onto a row of their
   // own, and a busy lobby then scrolled at 1920×940. The name is clamped to two lines beside them now, and says the
-  // rest in its tooltip.
+  // rest in a tooltip — only while it is cut: a static `title` equal to the text was read twice by a screen reader and
+  // put a pointless tooltip on every ticket (Plan 20, T4).
   describe('a long room name', () => {
     const LONG = 'Bàn_Đại_Gia_Phố_Núi_Sài_Gòn_01'
     const long: RoomSummary = { ...rooms[0]!, name: LONG, config: { ...rooms[0]!.config, name: LONG } }
 
-    it('carries the whole name in the heading’s title, since the heading may cut it after two lines', () => {
+    /** jsdom lays nothing out, so the clamp is modelled by the two heights the component reads. */
+    const heights = (heading: HTMLElement, scrollHeight: number, clientHeight: number): void => {
+      Object.defineProperty(heading, 'scrollHeight', { configurable: true, value: scrollHeight })
+      Object.defineProperty(heading, 'clientHeight', { configurable: true, value: clientHeight })
+    }
+
+    it('has no title to begin with, so nothing reads the name twice and no ticket carries a pointless tooltip', () => {
       wrap(<RoomList rooms={[long]} onJoin={vi.fn()} lang="vi" />)
-      expect(screen.getByRole('heading', { level: 3, name: LONG })).toHaveAttribute('title', LONG)
+      expect(screen.getByRole('heading', { level: 3, name: LONG })).not.toHaveAttribute('title')
+    })
+
+    it('puts the whole name in the title while the pointer is over a name the clamp cuts, and takes it away after', async () => {
+      wrap(<RoomList rooms={[long]} onJoin={vi.fn()} lang="vi" />)
+      const heading = screen.getByRole('heading', { level: 3, name: LONG })
+      heights(heading, 62, 47) // three lines of text in a two-line box
+      await userEvent.hover(heading)
+      expect(heading).toHaveAttribute('title', LONG)
+      await userEvent.unhover(heading)
+      expect(heading).not.toHaveAttribute('title')
+    })
+
+    it('puts nothing on a name that is whole, one pixel of rounding over its box included', async () => {
+      wrap(<RoomList rooms={[long]} onJoin={vi.fn()} lang="vi" />)
+      const heading = screen.getByRole('heading', { level: 3, name: LONG })
+      heights(heading, 47, 47)
+      await userEvent.hover(heading)
+      expect(heading).not.toHaveAttribute('title')
+      await userEvent.unhover(heading)
+      heights(heading, 48, 47)
+      await userEvent.hover(heading)
+      expect(heading).not.toHaveAttribute('title')
     })
 
     it('keeps the lock and the status badge together in one box beside the name, not in the name’s own flow', () => {

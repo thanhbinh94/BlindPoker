@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hexToHsl, meanLightness, recolour, shade } from './recolour.mjs'
+import { hexToHsl, meanLightness, ratio, recolour, shade } from './recolour.mjs'
 
 const px = (...rgba: number[][]) => new Uint8ClampedArray(rgba.flat())
 
@@ -82,5 +82,60 @@ describe('shade', () => {
     const pixels = px(OUTLINE)
     shade(pixels, [255], '#643e2b', 0)
     expect([...pixels]).toEqual(OUTLINE)
+  })
+})
+
+describe('ratio', () => {
+  // The skin a hair or outfit picture redrew (2026-10-05): the colour's hue and saturation, and the pixel's own lightness
+  // scaled by the colour's over the skin's `meanL` — so a pixel exactly as light as `meanL` becomes the colour, and its
+  // shading keeps its proportion on any tone.
+  const COLOUR = '#643e2b' // (100, 62, 43): HSL l = 0.2804
+  const near = (got: Uint8ClampedArray, want: number[], label: string) => {
+    for (const [c, value] of want.entries()) expect(Math.abs(got[c]! - value), `${label} channel ${c}: ${[...got]} vs ${want}`).toBeLessThanOrEqual(2)
+  }
+
+  it('paints a pixel as light as meanL exactly the colour, whatever its own hue, and leaves alpha alone', () => {
+    // A grey and a warm pixel, both HSL l = 0.4 (102 + 102, 140 + 64 over 510).
+    const pixels = px([102, 102, 102, 255], [140, 90, 64, 200])
+    ratio(pixels, [255, 255], COLOUR, 0.4)
+    near(pixels.slice(0, 3), [100, 62, 43], 'grey')
+    near(pixels.slice(4, 7), [100, 62, 43], 'warm')
+    expect([pixels[3], pixels[7]]).toEqual([255, 200])
+  })
+
+  it('paints a pixel at half meanL the colour’s hue at half its lightness', () => {
+    const pixels = px([51, 51, 51, 255]) // l = 0.2
+    ratio(pixels, [255], COLOUR, 0.4)
+    // #643e2b at l 0.1402: under 0.5, so halving every channel halves the lightness and keeps the hue and saturation.
+    near(pixels, [50, 31, 21.5], 'half')
+    const [hue, sat] = hexToHsl(`#${[...pixels.slice(0, 3)].map((v) => v.toString(16).padStart(2, '0')).join('')}`)
+    const [hueC, satC] = hexToHsl(COLOUR)
+    expect(Math.abs(hue - hueC)).toBeLessThan(3)
+    expect(Math.abs(sat - satC)).toBeLessThan(0.05)
+  })
+
+  it('blends by the mask: alpha 128 lands halfway', () => {
+    const pixels = px([102, 102, 102, 255])
+    ratio(pixels, [128], COLOUR, 0.4)
+    near(pixels, [101, 82, 72.5], 'halfway')
+  })
+
+  it('leaves unmasked pixels alone, and does nothing against a meanL of 0', () => {
+    const pixels = px([102, 102, 102, 255], [40, 50, 60, 90])
+    ratio(pixels, [255, 0], COLOUR, 0)
+    expect([...pixels]).toEqual([102, 102, 102, 255, 40, 50, 60, 90])
+    ratio(pixels, [0, 0], COLOUR, 0.4)
+    expect([...pixels]).toEqual([102, 102, 102, 255, 40, 50, 60, 90])
+  })
+
+  it('keeps shaded skin a shade of a deep tone, where recolour’s shift clamps it to black', () => {
+    // Skin in a hair's shadow, l = 0.5, on a cream of meanL 0.88: recolour shifts it by 0.28 − 0.88 to below 0.
+    const additive = px([150, 105, 105, 255])
+    recolour(additive, [255], COLOUR, 0.88)
+    expect([...additive.slice(0, 3)]).toEqual([0, 0, 0])
+    const scaled = px([150, 105, 105, 255])
+    ratio(scaled, [255], COLOUR, 0.88)
+    // l × 0.2804 / 0.88 = 0.159: the colour scaled by 0.159 / 0.2804.
+    near(scaled, [57, 35, 24], 'scaled')
   })
 })

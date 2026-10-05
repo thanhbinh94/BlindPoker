@@ -696,7 +696,9 @@ function eyeBlobs(maskPic) {
  *   and so does one whose neutral face has no skin to compare with — a stand-in pair only notes it;
  * - hair on a hair layer: at least `HAIR_INK_SHARE` of the layer's own ink — the layer *is* the hair;
  * - and on any layer with both, skin and eyes share no pixel at alpha ≥ 128, override or not: a pixel tinted
- *   twice is two colours fighting. The skin's line art (`skinLine`, 2026-10-05) shares none with either.
+ *   twice is two colours fighting. The skin's line art (`skinLine`, 2026-10-05) shares none with either, and on a hair
+ *   or outfit layer the skin its picture redrew (2026-10-05) shares none with the hair or the item's tint. That skin may
+ *   be empty — most of those pictures redrew none — and is not required: the skin of a real body or face is.
  *
  * A **real** v4 layer must carry the masks of its kind (`REQUIRED_MASKS`): a body or a face the skin colour cannot
  * reach, or whose outline it cannot shade, is a failure, not something with nothing to judge. Any other file the manifest lists no `masks` for
@@ -796,7 +798,15 @@ function maskChecks(context) {
 
   // Skin and eyes never meet — however either was drawn (Plan 19, spec §5.5) — and the skin's line art meets neither
   // (2026-10-05): a pixel recoloured as skin and shaded as line, or shaded and given an eye colour, is painted twice.
-  const pairs = [['skin', 'eyes', 'skin and eyes'], ['skinLine', 'skin', 'skin line and skin'], ['skinLine', 'eyes', 'skin line and eyes'], ['skinLine', 'tint', 'skin line and tint']]
+  // The skin a hair or outfit picture redrew (2026-10-05) meets neither the hair nor the item's own tint either.
+  const pairs = [
+    ['skin', 'eyes', 'skin and eyes'],
+    ['skinLine', 'skin', 'skin line and skin'],
+    ['skinLine', 'eyes', 'skin line and eyes'],
+    ['skinLine', 'tint', 'skin line and tint'],
+    ['skin', 'hair', 'skin and hair'],
+    ['skin', 'tint', 'skin and tint'],
+  ]
   for (const [a, b, label] of pairs) {
     const first = masks[a]
     const second = masks[b]

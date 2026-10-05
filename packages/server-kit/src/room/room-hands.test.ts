@@ -1,5 +1,6 @@
 import type { BotStrategy, LegalActions, PlayerAction, RoomConfig } from '@bp/core'
 import { describe, expect, it } from 'vitest'
+import type { BalanceEntry, SettlementMeta } from '../repositories.js'
 import { createRoomHarness, TEST_ROOM_OPTIONS, type RoomHarness } from '../testing/room-harness.js'
 import { RoomError } from './types.js'
 
@@ -220,9 +221,9 @@ describe('Blind hands', () => {
     const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 1 } })
     await seatAndStart(h, ['h', 'a'])
     const real = h.repos.balances.apply.bind(h.repos.balances)
-    h.repos.balances.apply = async (batch, meta) => {
+    h.repos.balances.apply = async (batch, meta, opts) => {
       if (meta?.kind === 'table_fee') throw new Error('ledger unavailable')
-      return real(batch, meta)
+      return real(batch, meta, opts)
     }
     const pushedBefore = h.ofType('h', 'BALANCE').length
     await playOut(h, (id) => ({ kind: id === 'h' ? 'play' : 'fold' }))
@@ -478,9 +479,9 @@ describe('Leaving, disconnecting, shutting down', () => {
       await h.room.sitDown(id, i)
     }
     const real = h.repos.balances.apply.bind(h.repos.balances)
-    h.repos.balances.apply = async (batch, meta) => {
+    h.repos.balances.apply = async (batch, meta, opts) => {
       if (batch.some((e) => e.reason === 'cash_out' && e.playerId === 'a')) throw new Error('ledger unavailable')
-      return real(batch, meta)
+      return real(batch, meta, opts)
     }
     await h.room.shutdown('maintenance') // resolves: one player's ledger row is not the whole server's shutdown
     expect(h.room.status).toBe('CLOSED')
@@ -488,7 +489,7 @@ describe('Leaving, disconnecting, shutting down', () => {
     // 'a' sits between the two in cash-out order, so 'b' is proof the failure did not stop the sweep.
     expect(h.repos.entries.filter((e) => e.entry.reason === 'cash_out').map((e) => [e.entry.playerId, e.entry.delta])).toEqual([['h', 5_000], ['b', 5_000]])
     expect(h.logs.filter((l) => l.level === 'error')).toEqual([
-      { level: 'error', msg: 'shutdown cash-out failed', data: expect.objectContaining({ playerId: 'a', stack: 5_000 }) },
+      { level: 'error', msg: 'shutdown settlement failed', data: expect.objectContaining({ playerId: 'a', stack: 5_000, key: expect.stringMatching(/^cash_out:room-1:/) }) },
     ])
   })
 
@@ -499,12 +500,12 @@ describe('Leaving, disconnecting, shutting down', () => {
     await playOut(h, () => ({ kind: 'fold' })) // a folds: 4.000 left on the table
     const real = h.repos.balances.apply.bind(h.repos.balances)
     let failOnce = true
-    h.repos.balances.apply = async (batch, meta) => {
+    h.repos.balances.apply = async (batch, meta, opts) => {
       if (failOnce && batch.some((e) => e.reason === 'cash_out')) {
         failOnce = false
         throw new Error('ledger unavailable')
       }
-      return real(batch, meta)
+      return real(batch, meta, opts)
     }
     await h.room.onDisconnect('a')
     h.clock.advance(50)
@@ -615,12 +616,12 @@ describe('Blind table limit (spec 2026-09-29)', () => {
     await seatAndStart(h, ['h', 'poor'])
     const real = h.repos.balances.apply.bind(h.repos.balances)
     let failOnce = true
-    h.repos.balances.apply = async (batch, meta) => {
+    h.repos.balances.apply = async (batch, meta, opts) => {
       if (failOnce && batch.some((e) => e.reason === 'cash_out')) {
         failOnce = false
         throw new Error('ledger unavailable')
       }
-      return real(batch, meta)
+      return real(batch, meta, opts)
     }
     const notices = () => h.ofType('poor', 'NOTIFICATION').filter((m) => m.kind === 'TABLE_LIMIT_SPENT')
     await playOut(h, (id) => ({ kind: id === 'poor' ? 'fold' : 'play' }))
@@ -787,13 +788,17 @@ describe('Blind table limit (spec 2026-09-29)', () => {
 const folding: BotStrategy = { decide: () => ({ kind: 'fold' }) }
 
 /**
- * The conservation test's sum, for one human `h` who started with 100.000: their balance change, what is still on
- * the table for them, every bot's net, every sink and the pot still carried add up to nothing.
+ * The conservation test's sum, by default for one human `h` who started with 100.000 (`humans` names everyone else
+ * and what they started with): their balance changes, what is still on the table for them, every bot's net, every
+ * sink, the pot still carried and a carried pot whose release is not yet settled add up to nothing. Taken between
+ * hands, and never while a cash-out is pending: its credit has landed and its seat still holds the stack, so the
+ * two would be counted twice until the retry settles it.
  */
-async function books(h: RoomHarness): Promise<number> {
-  const humanDelta = (await h.repos.balances.get('h')) + (h.room.players.get('h')?.stack ?? 0) - 100_000
+async function books(h: RoomHarness, humans: Record<string, number> = { h: 100_000 }): Promise<number> {
+  let humanDelta = 0
+  for (const [id, start] of Object.entries(humans)) humanDelta += (await h.repos.balances.get(id)) + (h.room.players.get(id)?.stack ?? 0) - start
   const botNet = h.repos.hands.flatMap((x) => x.players).filter((p) => p.isBot).reduce((s, p) => s + p.net, 0)
-  return humanDelta + botNet + h.repos.sinks.reduce((s, x) => s + x.fee, 0) + h.room.carryOverPot
+  return humanDelta + botNet + h.repos.sinks.reduce((s, x) => s + x.fee, 0) + h.room.carryOverPot + (h.room.pendingRelease?.pot ?? 0)
 }
 
 describe('The last person out of a room that still seats bots (No3)', () => {
@@ -1065,6 +1070,437 @@ describe('Closing a room whose hand has just ended', () => {
     expect(g.logs.filter((l) => l.level === 'error')).toEqual([
       { level: 'error', msg: 'room close step failed', data: expect.objectContaining({ step: 'onClosed', reason: 'empty' }) },
     ])
+  })
+})
+
+/**
+ * Plan 20's "committed but threw": the first write that `when` picks lands — the real `apply` resolves — and the
+ * call throws anyway, the way a connection dropped after `COMMIT` reports a write that is in fact durable. Every
+ * other write passes straight through, key and all.
+ */
+function ackLostOnce(h: RoomHarness, when: (batch: BalanceEntry[], meta?: SettlementMeta) => boolean): void {
+  const real = h.repos.balances.apply.bind(h.repos.balances)
+  let once = true
+  h.repos.balances.apply = async (batch, meta, opts) => {
+    const result = await real(batch, meta, opts)
+    if (once && when(batch, meta)) {
+      once = false
+      throw new Error('ack lost')
+    }
+    return result
+  }
+}
+
+/** The first write that `when` picks fails without writing anything: an ordinary outage. */
+function failOnce(h: RoomHarness, when: (batch: BalanceEntry[], meta?: SettlementMeta) => boolean): void {
+  const real = h.repos.balances.apply.bind(h.repos.balances)
+  let once = true
+  h.repos.balances.apply = async (batch, meta, opts) => {
+    if (once && when(batch, meta)) {
+      once = false
+      throw new Error('ledger unavailable')
+    }
+    return real(batch, meta, opts)
+  }
+}
+
+const isCashOut = (batch: BalanceEntry[]) => batch.some((e) => e.reason === 'cash_out')
+const isBuyIn = (batch: BalanceEntry[]) => batch.some((e) => e.reason === 'buy_in')
+const isRelease = (_batch: BalanceEntry[], meta?: SettlementMeta) => meta?.kind === 'carry_over'
+const rowsOf = (h: RoomHarness, id: string, reason: string) => h.repos.entries.filter((e) => e.entry.playerId === id && e.entry.reason === reason).map((e) => e.entry.delta)
+const dealtIn = (h: RoomHarness, id: string) => h.room.snapshot(null).hand?.seats.some((s) => s.playerId === id) ?? false
+const errors = (h: RoomHarness) => h.logs.filter((l) => l.level === 'error')
+
+describe('A ledger write is applied once, however often it is retried (Plan 20)', () => {
+  it('reconnect expiry: a cash-out that landed but reported an error is credited once, and the seat is not dealt in meanwhile', async () => {
+    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 1 } }, { options: { reconnectWindowMs: 50 } })
+    await seatAndStart(h, ['h', 'a'])
+    await playOut(h, () => ({ kind: 'fold' })) // a folds: 4.000 left on the table
+    ackLostOnce(h, isCashOut)
+    await h.room.onDisconnect('a')
+    h.clock.advance(50)
+    await tick(h)
+    expect(await h.repos.balances.get('a')).toBe(99_000) // the credit landed…
+    expect(h.room.players.get('a')!.seat).toBe(1) // …but was reported failed, so the seat is held until a retry settles it
+    expect(errors(h)).toEqual([
+      { level: 'error', msg: 'reconnect-expiry stand-up failed', data: expect.objectContaining({ playerId: 'a', key: expect.stringMatching(/^cash_out:room-1:/) }) },
+    ])
+    h.clock.advance(50)
+    await tick(h)
+    expect(h.room.handActive).toBe(true)
+    expect(dealtIn(h, 'a')).toBe(false)
+    await playOut(h, () => ({ kind: 'fold' }))
+    expect(h.room.players.get('a')!.seat).toBeNull() // retried when that hand ended: the key says it is done
+    expect(rowsOf(h, 'a', 'cash_out')).toEqual([4_000])
+    expect(await h.repos.balances.get('a')).toBe(99_000)
+    expect(await books(h, { h: 100_000, a: 100_000 })).toBe(0)
+  })
+
+  it('end of hand: a spent seat whose cash-out landed but reported an error is credited once, and told once', async () => {
+    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 1 } }, { players: [['h', 100_000], ['poor', 2_500]] })
+    await seatAndStart(h, ['h', 'poor'])
+    ackLostOnce(h, isCashOut)
+    const notices = () => h.ofType('poor', 'NOTIFICATION').filter((m) => m.kind === 'TABLE_LIMIT_SPENT')
+    await playOut(h, (id) => ({ kind: id === 'poor' ? 'fold' : 'play' })) // 1.500 left: spent
+    expect(await h.repos.balances.get('poor')).toBe(1_500)
+    expect(h.room.players.get('poor')!.seat).toBe(1)
+    expect(errors(h)).toEqual([
+      { level: 'error', msg: 'stand-up after hand failed', data: expect.objectContaining({ playerId: 'poor', key: expect.stringMatching(/^cash_out:room-1:/) }) },
+    ])
+    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
+    await tick(h)
+    expect(dealtIn(h, 'poor')).toBe(false)
+    await playOut(h, () => ({ kind: 'fold' }))
+    expect(h.room.players.get('poor')!.seat).toBeNull()
+    expect(rowsOf(h, 'poor', 'cash_out')).toEqual([1_500])
+    expect(await h.repos.balances.get('poor')).toBe(1_500)
+    expect(notices()).toHaveLength(1)
+    expect(await books(h, { h: 100_000, poor: 2_500 })).toBe(0)
+  })
+
+  it('Stand Up pressed twice in Hold’em: the second press settles the first, and the seat sat the hand out between them', async () => {
+    const h = createRoomHarness(HOLDEM)
+    for (const [i, id] of ['h', 'a', 'b'].entries()) {
+      if (id !== 'h') await h.room.join(h.identity(id))
+      await h.room.sitDown(id, i, 20_000)
+    }
+    ackLostOnce(h, isCashOut)
+    expect(await code(h.room.standUp('a'))).toBe('Error: ack lost') // the player is told it failed…
+    expect(await h.repos.balances.get('a')).toBe(100_000) // …though the 20.000 is home
+    // …and the bar is re-read on the failure, not left at 80.000 until the retry settles it.
+    expect(h.last('a', 'BALANCE')).toEqual({ t: 'BALANCE', balance: 100_000 })
+    expect(h.room.snapshot(null).room.players.find((p) => p.playerId === 'a')).toMatchObject({ seat: 1, status: 'SITTING_OUT' })
+    for (const id of ['h', 'a', 'b']) await h.room.setReady(id, true)
+    await h.room.startGame('h')
+    expect(dealtIn(h, 'a')).toBe(false) // a stack already paid out cannot be played
+    await h.room.standUp('a') // pressed again
+    expect(h.room.players.get('a')!.seat).toBeNull()
+    expect(rowsOf(h, 'a', 'cash_out')).toEqual([20_000])
+    expect(await h.repos.balances.get('a')).toBe(100_000)
+    await playOut(h)
+    expect(await books(h, { h: 100_000, a: 100_000, b: 100_000 })).toBe(0)
+  })
+
+  it('Stand Up pressed twice in Blind: an auto-start table deals on without the frozen seat, which the second press settles', async () => {
+    const h = createRoomHarness({ ...BLIND, autoStart: true, blind: { ...BLIND.blind!, botCount: 1 } })
+    await h.room.join(h.identity('a'))
+    await h.room.sitDown('h', 0)
+    await h.room.sitDown('a', 1)
+    ackLostOnce(h, isCashOut)
+    expect(await code(h.room.standUp('a'))).toBe('Error: ack lost')
+    expect(await h.repos.balances.get('a')).toBe(100_000)
+    await h.room.setReady('h', true) // nobody waits on a seat that is sitting out
+    expect(h.room.handActive).toBe(true)
+    expect(dealtIn(h, 'a')).toBe(false)
+    await h.room.standUp('a')
+    expect(h.room.players.get('a')!.seat).toBeNull()
+    expect(rowsOf(h, 'a', 'cash_out')).toEqual([5_000])
+    expect(await h.repos.balances.get('a')).toBe(100_000)
+    await playOut(h, () => ({ kind: 'fold' }))
+    expect(await books(h, { h: 100_000, a: 100_000 })).toBe(0)
+  })
+
+  it('a kick whose cash-out landed but reported an error is settled when the next hand ends, once, and the player removed', async () => {
+    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 1 } })
+    await h.room.join(h.identity('a'))
+    await h.room.sitDown('h', 0)
+    await h.room.sitDown('a', 1)
+    await h.room.setReady('a', true)
+    ackLostOnce(h, isCashOut)
+    expect(await code(h.room.kick('h', 'a'))).toBe('Error: ack lost')
+    expect(h.last('a', 'NOTIFICATION')).toMatchObject({ kind: 'KICKED' }) // told before the write
+    expect(errors(h)).toEqual([
+      { level: 'error', msg: 'kick failed', data: expect.objectContaining({ playerId: 'a', key: expect.stringMatching(/^cash_out:room-1:/) }) },
+    ])
+    await h.room.setReady('h', true)
+    await h.room.startGame('h')
+    expect(dealtIn(h, 'a')).toBe(false)
+    await playOut(h, () => ({ kind: 'fold' }))
+    // Retried with every other pending cash-out — and the kick goes through with it: a player told KICKED is not
+    // left behind as a spectator.
+    expect(h.room.hasPlayer('a')).toBe(false)
+    expect(h.last('a', 'ROOM_EVENT')?.event).toEqual({ type: 'PLAYER_LEFT', playerId: 'a' })
+    expect(rowsOf(h, 'a', 'cash_out')).toEqual([5_000])
+    expect(await h.repos.balances.get('a')).toBe(100_000)
+    expect(await books(h, { h: 100_000, a: 100_000 })).toBe(0)
+  })
+
+  it('a kick whose cash-out failed outright is finished when the next hand ends: credited once, and the player removed', async () => {
+    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 1 } })
+    await h.room.join(h.identity('a'))
+    await h.room.sitDown('h', 0)
+    await h.room.sitDown('a', 1)
+    await h.room.setReady('a', true)
+    failOnce(h, isCashOut)
+    expect(await code(h.room.kick('h', 'a'))).toBe('Error: ledger unavailable')
+    expect(h.last('a', 'NOTIFICATION')).toMatchObject({ kind: 'KICKED' })
+    expect(await h.repos.balances.get('a')).toBe(95_000) // nothing landed: the 5.000 is still on the table
+    expect(h.room.hasPlayer('a')).toBe(true)
+    await h.room.setReady('h', true)
+    await h.room.startGame('h')
+    expect(dealtIn(h, 'a')).toBe(false)
+    await playOut(h, () => ({ kind: 'fold' }))
+    expect(h.room.hasPlayer('a')).toBe(false)
+    expect(h.last('a', 'ROOM_EVENT')?.event).toEqual({ type: 'PLAYER_LEFT', playerId: 'a' })
+    expect(rowsOf(h, 'a', 'cash_out')).toEqual([5_000])
+    expect(await h.repos.balances.get('a')).toBe(100_000)
+    expect(await books(h, { h: 100_000, a: 100_000 })).toBe(0)
+  })
+
+  it('a Leave whose removal landed but reported an error, then a rejoin: the seat stays out of the deal and is cashed out once', async () => {
+    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 1 } })
+    await seatAndStart(h, ['h', 'a'])
+    await h.room.leave('a') // mid-hand: out when the hand ends
+    ackLostOnce(h, isCashOut)
+    await playOut(h, (id) => ({ kind: id === 'h' ? 'play' : 'fold' }))
+    expect(h.room.hasPlayer('a')).toBe(true)
+    expect(await h.repos.balances.get('a')).toBe(99_000)
+    expect(errors(h)).toEqual([
+      { level: 'error', msg: 'stand-up after hand failed', data: expect.objectContaining({ playerId: 'a', key: expect.stringMatching(/^cash_out:room-1:/) }) },
+    ])
+    await h.room.join(h.identity('a')) // back before the next deal, which calls the Leave off…
+    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
+    await tick(h)
+    expect(h.room.handActive).toBe(true)
+    expect(dealtIn(h, 'a')).toBe(false) // …but not the pending cash-out: that stack is already home
+    await playOut(h, () => ({ kind: 'fold' }))
+    expect(h.room.players.get('a')!.seat).toBeNull()
+    expect(h.room.hasPlayer('a')).toBe(true) // they came back to watch
+    expect(rowsOf(h, 'a', 'cash_out')).toEqual([4_000])
+    expect(await h.repos.balances.get('a')).toBe(99_000)
+    expect(await books(h, { h: 100_000, a: 100_000 })).toBe(0)
+  })
+
+  it('Sit In after a sit-out sweep whose cash-out landed but reported an error does not deal the seat back in', async () => {
+    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 2 } }, { options: { handsSatOutToStand: 1 } })
+    await seatAndStart(h, ['h', 'a'])
+    await h.room.sitOut('a', true)
+    await playOut(h, () => ({ kind: 'fold' })) // the hand a was already in: 4.000 left
+    ackLostOnce(h, isCashOut)
+    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs) // the next deal skips a once: the sweep stands it up
+    await tick(h)
+    expect(h.room.handActive).toBe(true)
+    expect(await h.repos.balances.get('a')).toBe(99_000)
+    expect(h.room.players.get('a')!.seat).toBe(1)
+    expect(errors(h)).toEqual([
+      { level: 'error', msg: 'sit-out stand-up failed', data: expect.objectContaining({ playerId: 'a', key: expect.stringMatching(/^cash_out:room-1:/) }) },
+    ])
+    const statusOfA = () => h.room.snapshot(null).room.players.find((p) => p.playerId === 'a')!.status
+    await h.room.sitOut('a', false) // Sit In
+    expect(statusOfA()).toBe('SITTING_OUT')
+    // The retry when this hand ends fails as well, so the next deal is the first one after the Sit In to find the seat
+    // still held: that deal is the one that must leave it out.
+    failOnce(h, isCashOut)
+    await playOut(h, () => ({ kind: 'fold' }))
+    expect(errors(h).at(-1)).toEqual({ level: 'error', msg: 'stand-up after hand failed', data: expect.objectContaining({ playerId: 'a', key: expect.stringMatching(/^cash_out:room-1:/) }) })
+    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
+    await tick(h)
+    expect(h.room.handActive).toBe(true)
+    expect(h.room.players.get('a')!.seat).toBe(1)
+    expect(statusOfA()).toBe('SITTING_OUT')
+    expect(dealtIn(h, 'a')).toBe(false)
+    await playOut(h, () => ({ kind: 'fold' }))
+    expect(h.room.players.get('a')!.seat).toBeNull() // settled when the hand it sat out ended
+    expect(rowsOf(h, 'a', 'cash_out')).toEqual([4_000])
+    expect(await h.repos.balances.get('a')).toBe(99_000)
+    expect(await books(h, { h: 100_000, a: 100_000 })).toBe(0)
+  })
+
+  /** h and `poor` fold one hand: 2.000 carried, `poor` stood up at 1.500 with a claim, the room back to OPEN. */
+  async function carriedAndOpen(): Promise<RoomHarness> {
+    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 0 } }, { players: [['h', 100_000], ['poor', 2_500]] })
+    await seatAndStart(h, ['h', 'poor'])
+    await playOut(h, () => ({ kind: 'fold' }))
+    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
+    await tick(h)
+    expect(h.room.status).toBe('OPEN')
+    expect(h.room.carryOverPot).toBe(2_000)
+    return h
+  }
+  const refunds = (h: RoomHarness) => h.repos.entries.filter((e) => e.entry.reason === 'refund').map((e) => [e.entry.playerId, e.entry.delta])
+
+  it('a carry-over release that landed but reported an error is not dealt into the next hand', async () => {
+    const h = await carriedAndOpen()
+    ackLostOnce(h, isRelease)
+    h.clock.advance(TEST_ROOM_OPTIONS.carryOverReleaseMs)
+    await tick(h)
+    expect(refunds(h)).toEqual([['h', 1_000], ['poor', 1_000]]) // landed…
+    expect(errors(h)).toEqual([
+      { level: 'error', msg: 'carry-over release failed', data: expect.objectContaining({ pot: 2_000, key: expect.stringMatching(/^carry_over:room-1:/) }) },
+    ])
+    expect(h.room.view().carryOverPot).toBe(2_000) // …but not settled: still the room's, as far as anyone can tell
+    expect(await books(h, { h: 100_000, poor: 2_500 })).toBe(2_000) // paid out and still held: counted twice until settled
+    await h.room.sitDown('poor', 1) // 2.500: enough for a hand
+    await h.room.setReady('h', true)
+    await h.room.setReady('poor', true)
+    await h.room.startGame('h') // the deal settles the release first, under its key
+    expect(h.room.snapshot(null).hand!.carryOverIn).toBe(0)
+    expect(h.room.pendingRelease).toBeNull()
+    expect(h.room.view().carryOverPot).toBe(0)
+    expect(refunds(h)).toEqual([['h', 1_000], ['poor', 1_000]])
+    await playOut(h, (id) => ({ kind: id === 'h' ? 'play' : 'fold' }))
+    expect(await books(h, { h: 100_000, poor: 2_500 })).toBe(0)
+  })
+
+  it('a release that keeps failing keeps its pot aside: the hand deals without it, a newer pot is not overwritten, and each is paid once', async () => {
+    const h = await carriedAndOpen()
+    ackLostOnce(h, isRelease)
+    h.clock.advance(TEST_ROOM_OPTIONS.carryOverReleaseMs)
+    await tick(h)
+    failOnce(h, isRelease) // the deal's retry fails too
+    await h.room.sitDown('poor', 1)
+    await h.room.setReady('h', true)
+    await h.room.setReady('poor', true)
+    await h.room.startGame('h')
+    expect(h.room.snapshot(null).hand!.carryOverIn).toBe(0) // aside, not in this hand
+    expect(h.room.pendingRelease?.pot).toBe(2_000)
+    await playOut(h, () => ({ kind: 'fold' })) // a new 2.000 is carried; poor is spent again at 1.500
+    expect(h.room.carryOverPot).toBe(2_000)
+    expect(h.room.pendingRelease?.pot).toBe(2_000) // the older pot is still aside
+    expect(h.room.view().carryOverPot).toBe(4_000)
+    await h.room.shutdown('maintenance') // settles the older pot (already paid), then releases the newer one
+    expect(h.room.pendingRelease).toBeNull()
+    expect(h.room.carryOverPot).toBe(0)
+    expect(refunds(h)).toEqual([['h', 1_000], ['poor', 1_000], ['h', 1_000], ['poor', 1_000]])
+    expect(await h.repos.balances.get('h')).toBe(100_000)
+    expect(await h.repos.balances.get('poor')).toBe(2_500)
+    expect(await books(h, { h: 100_000, poor: 2_500 })).toBe(0)
+  })
+
+  it('a close whose older release fails again logs the newer pot it cannot release behind it, with the room and the amount', async () => {
+    const h = await carriedAndOpen()
+    ackLostOnce(h, isRelease)
+    h.clock.advance(TEST_ROOM_OPTIONS.carryOverReleaseMs) // the first 2.000 is owed from here (paid, not acknowledged)
+    await tick(h)
+    const real = h.repos.balances.apply.bind(h.repos.balances)
+    h.repos.balances.apply = async (batch, meta, opts) => {
+      if (isRelease(batch, meta)) throw new Error('ledger unavailable') // every release from here to the close
+      return real(batch, meta, opts)
+    }
+    await h.room.sitDown('poor', 1)
+    await h.room.setReady('h', true)
+    await h.room.setReady('poor', true)
+    await h.room.startGame('h')
+    await playOut(h, () => ({ kind: 'fold' })) // a newer 2.000 is carried behind it
+    expect(h.room.pendingRelease?.pot).toBe(2_000)
+    expect(h.room.carryOverPot).toBe(2_000)
+    const pendingKey = h.room.pendingRelease!.key
+    await h.room.shutdown('maintenance') // the older release fails again, so nothing newer is released behind it
+    expect(h.room.status).toBe('CLOSED')
+    expect(refunds(h)).toEqual([['h', 1_000], ['poor', 1_000]]) // the older pot's, once; the newer one is not paid
+    expect(errors(h).slice(-2)).toEqual([
+      { level: 'error', msg: 'carry-over release failed', data: expect.objectContaining({ roomId: 'room-1', pot: 2_000, key: pendingKey }) },
+      { level: 'error', msg: 'carry-over not released at close', data: { roomId: 'room-1', pot: 2_000, behind: pendingKey } },
+    ])
+  })
+
+  it('Sit pressed again after a Blind buy-in that landed but reported an error seats the player with that buy-in, not a second one', async () => {
+    // The whole 5.000 goes to the table, so the balance left (0) is under the 2.000 a hand needs: the retry must not
+    // be refused as INSUFFICIENT_BALANCE for a buy-in that is already paid.
+    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 1 } }, { players: [['h', 100_000], ['poor', 5_000]] })
+    await h.room.join(h.identity('poor'))
+    const pushed = () => h.ofType('poor', 'BALANCE').map((m) => m.balance)
+    ackLostOnce(h, isBuyIn)
+    expect(await code(h.room.sitDown('poor', 1))).toBe('Error: ack lost')
+    expect(await h.repos.balances.get('poor')).toBe(0)
+    expect(h.room.players.get('poor')!.seat).toBeNull()
+    expect(pushed()).toEqual([0]) // the bar says what the ledger holds, landed or not, before the error
+    await h.room.sitDown('poor', 2) // pressed again, on another seat even
+    expect(h.room.players.get('poor')).toMatchObject({ seat: 2, stack: 5_000 })
+    expect(pushed()).toEqual([0, 0]) // the replay seats the player and refreshes the bar, as a first Sit does
+    expect(rowsOf(h, 'poor', 'buy_in')).toEqual([-5_000])
+    expect(await h.repos.balances.get('poor')).toBe(0)
+    await h.room.sitDown('h', 0)
+    await h.room.setReady('h', true)
+    await h.room.setReady('poor', true)
+    await h.room.startGame('h')
+    await playOut(h, () => ({ kind: 'fold' }))
+    expect(await books(h, { h: 100_000, poor: 5_000 })).toBe(0)
+  })
+
+  it('Sit pressed again after a Hold’em buy-in that landed but reported an error debits once', async () => {
+    const h = createRoomHarness(HOLDEM)
+    await h.room.join(h.identity('a'))
+    const pushed = () => h.ofType('a', 'BALANCE').map((m) => m.balance)
+    ackLostOnce(h, isBuyIn)
+    expect(await code(h.room.sitDown('a', 1, 20_000))).toBe('Error: ack lost')
+    expect(errors(h)).toEqual([
+      { level: 'error', msg: 'buy-in failed', data: expect.objectContaining({ playerId: 'a', key: expect.stringMatching(/^buy_in:room-1:/) }) },
+    ])
+    expect(pushed()).toEqual([80_000])
+    await h.room.sitDown('a', 1, 20_000)
+    expect(h.room.players.get('a')).toMatchObject({ seat: 1, stack: 20_000 })
+    expect(pushed()).toEqual([80_000, 80_000])
+    expect(rowsOf(h, 'a', 'buy_in')).toEqual([-20_000])
+    expect(await h.repos.balances.get('a')).toBe(80_000)
+    expect(await books(h, { h: 100_000, a: 100_000 })).toBe(0)
+  })
+
+  it('a buy-in left pending by a Leave or a shutdown is given back — landed or not, the player is never debited and unseated', async () => {
+    const h = createRoomHarness(HOLDEM)
+    await h.room.join(h.identity('a'))
+    await h.room.join(h.identity('b'))
+    ackLostOnce(h, (batch) => batch.some((e) => e.reason === 'buy_in' && e.playerId === 'a'))
+    expect(await code(h.room.sitDown('a', 1, 20_000))).toBe('Error: ack lost')
+    expect(await h.repos.balances.get('a')).toBe(80_000) // landed
+    await h.room.leave('a')
+    expect(h.room.hasPlayer('a')).toBe(false)
+    expect(await h.repos.balances.get('a')).toBe(100_000)
+    expect(h.repos.entries.filter((e) => e.entry.playerId === 'a').map((e) => [e.entry.reason, e.entry.delta])).toEqual([['buy_in', -20_000], ['refund', 20_000]])
+
+    failOnce(h, (batch) => batch.some((e) => e.reason === 'buy_in' && e.playerId === 'b'))
+    expect(await code(h.room.sitDown('b', 2, 20_000))).toBe('Error: ledger unavailable')
+    expect(await h.repos.balances.get('b')).toBe(100_000) // never landed
+    await h.room.shutdown('maintenance')
+    expect(await h.repos.balances.get('b')).toBe(100_000) // the replay takes it, the refund gives it back
+    expect(h.repos.entries.filter((e) => e.entry.playerId === 'b').map((e) => [e.entry.reason, e.entry.delta])).toEqual([['buy_in', -20_000], ['refund', 20_000]])
+    expect([...h.repos.keys].filter((k) => k.startsWith('buy_in_refund:room-1:'))).toHaveLength(2)
+    expect(await books(h, { h: 100_000, a: 100_000, b: 100_000 })).toBe(0)
+  })
+
+  it('a buy-in refund that fails during a shutdown is logged as a settlement, with its key and amount, and the room still closes', async () => {
+    const h = createRoomHarness(HOLDEM)
+    await h.room.join(h.identity('b'))
+    failOnce(h, isBuyIn)
+    expect(await code(h.room.sitDown('b', 2, 20_000))).toBe('Error: ledger unavailable')
+    failOnce(h, (batch) => batch.some((e) => e.reason === 'refund')) // the replay lands, the refund does not
+    await h.room.shutdown('maintenance')
+    expect(h.room.status).toBe('CLOSED')
+    expect(errors(h).at(-1)).toEqual({
+      level: 'error',
+      msg: 'shutdown settlement failed',
+      data: expect.objectContaining({ roomId: 'room-1', playerId: 'b', buyIn: 20_000, key: expect.stringMatching(/^buy_in_refund:room-1:/) }),
+    })
+  })
+
+  it('a buy-in whose refund landed but reported an error is never reused for a seat: the next Sit finishes the refund, then buys in afresh', async () => {
+    const h = createRoomHarness(HOLDEM)
+    await h.room.join(h.identity('a'))
+    ackLostOnce(h, isBuyIn)
+    expect(await code(h.room.sitDown('a', 1, 20_000))).toBe('Error: ack lost')
+    ackLostOnce(h, (batch) => batch.some((e) => e.reason === 'refund'))
+    expect(await code(h.room.leave('a'))).toBe('Error: ack lost') // the 20.000 went back, but the Leave was told it failed
+    expect(errors(h).at(-1)).toEqual({ level: 'error', msg: 'leave failed', data: expect.objectContaining({ playerId: 'a', key: expect.stringMatching(/^buy_in_refund:room-1:/) }) })
+    expect(h.room.hasPlayer('a')).toBe(true)
+    expect(await h.repos.balances.get('a')).toBe(100_000)
+    await h.room.sitDown('a', 1, 20_000)
+    expect(h.room.players.get('a')).toMatchObject({ seat: 1, stack: 20_000 })
+    expect(await h.repos.balances.get('a')).toBe(80_000) // one buy-in on the table, not one refunded and played as well
+    expect(h.repos.entries.filter((e) => e.entry.playerId === 'a').map((e) => [e.entry.reason, e.entry.delta])).toEqual([['buy_in', -20_000], ['refund', 20_000], ['buy_in', -20_000]])
+    expect(await books(h, { h: 100_000, a: 100_000 })).toBe(0)
+  })
+
+  it('a pending buy-in that never landed and can no longer be paid is dropped, and the next Sit is a fresh buy-in', async () => {
+    const h = createRoomHarness(HOLDEM)
+    await h.room.join(h.identity('a'))
+    failOnce(h, isBuyIn)
+    expect(await code(h.room.sitDown('a', 1, 40_000))).toBe('Error: ledger unavailable')
+    h.repos.records.get('a')!.balance = 30_000 // spent elsewhere meanwhile
+    expect(await code(h.room.sitDown('a', 1, 40_000))).toBe('INSUFFICIENT_BALANCE')
+    await h.room.sitDown('a', 1, 20_000)
+    expect(h.room.players.get('a')).toMatchObject({ seat: 1, stack: 20_000 })
+    expect(await h.repos.balances.get('a')).toBe(10_000)
+    expect(await books(h, { h: 100_000, a: 30_000 })).toBe(0) // from the 30.000 left once the rest was spent elsewhere
   })
 })
 

@@ -249,7 +249,11 @@ Ghi chú kỹ thuật:
   không có viền sáng người thắng, lá bài chung chưa tô vàng. Tất cả hiện cùng lúc với phiếu
   (`PokerTable` prop `resultPending`). Từ 03/10 (người dùng: "cho số tiền chờ luôn", `88c79be`, `ecd117e`, merge `11ea2e1`) số tiền trên tấm tên cũng giữ số trước khi chia pot cho tới khi phiếu hiện (`ClientSeat.stackBeforeResult`); phần cược dư được hoàn lại thì hiện ngay vì không phải kết quả. Nét mặt vui/buồn cũng chờ, bắt đầu khi phiếu kết quả hiện (từ 03/10, sau khi sửa E1 bên dưới).
 - **Ghi nhận, chưa làm:**
-  - Khi đã tích ô, thẻ một bản màu đang có không còn hiện gợi ý mở khoá của món gốc.
+  - Khi đã tích ô, thẻ một bản màu đang có không còn hiện gợi ý mở khoá của món gốc. **Đã sửa 05/10 (Plan 20, T3) —
+    `d673828`.** Thẻ có thêm một dòng "🔒 `<tên món gốc>`: `<gợi ý>`" giữa nút chọn và hàng chấm màu, nằm ngoài nút chọn
+    nên tên của thẻ không đổi; chỉ hiện khi đã tích ô, món gốc chưa có và thẻ đang hiện một bản màu khác. Chấm màu chưa có
+    đọc là "`<tên>`, Chưa có: `<gợi ý>`" (cả `aria-label` lẫn `title`). Không thêm khoá i18n: câu ghép từ các khoá sẵn có,
+    như `cardLabel` vẫn làm. Tích ô vẫn chỉ thêm thẻ.
 
 | # | Mức | Mô tả | Nguyên nhân / hướng | Trạng thái |
 |---|---|---|---|---|
@@ -310,10 +314,17 @@ Ghi chú kỹ thuật:
       - review độc lập hai vòng.
   - **Mới thấy, chưa sửa (05/10):** ở tông nâu đậm, đôi hài của long bào và áo dài Tết để lộ mu bàn chân màu kem. Tranh
     quần áo vẽ lại phần chân trong hài bằng da kem, và lớp đó không được tô màu da. Lỗi có từ Plan 19, khác với lỗi viền
-    tay.
-  - Viên thuốc "Đang dùng" trên desktop còn che vài px góc ô màu da.
-  - Cắt lại một ảnh đã căn sẽ lệch 1–2 px so với bản đã commit; vẫn qua mọi kiểm tra.
+    tay. **Đã sửa 05/10 (Plan 20, T5) — `651e47b`, `bcac539`, `e16852a`**, cùng với đốm kem ở chân tóc (cùng nguyên nhân,
+    xem khối Plan 20 bên dưới).
+  - Viên thuốc "Đang dùng" trên desktop còn che vài px góc ô màu da. **Đã sửa 05/10 (Plan 20, T3) — `d673828`:** ô màu da
+    bắt đầu dưới viên thuốc ở mọi độ rộng; trước đó chỉ điện thoại đúng, desktop và máy tính bảng chồng 16,5 px.
+  - Cắt lại một ảnh đã căn sẽ lệch 1–2 px so với bản đã commit; vẫn qua mọi kiểm tra. **Không sửa (ngoài phạm vi Plan 20):**
+    đó là chuyện tái lập của pipeline, không phải lỗi người chơi nhìn thấy.
   - Chưa có e2e đo pixel rằng viên thuốc "Đang dùng" nằm trên ảnh chân dung kiểu tóc ở điện thoại; đã kiểm bằng ảnh chụp.
+    **Đã thêm 05/10 (Plan 20, T3) — `d673828`:** `expectPillOnTop` (`wardrobe-layout.spec.ts`) lấy `elementFromPoint` ở giữa
+    và hai đầu viên thuốc, cả ba phải thuộc viên thuốc; thêm `expectSwatchClearsPill` cho ô màu da. Giới hạn: `expectPillOnTop`
+    chỉ phân biệt được ở độ rộng điện thoại (ở desktop ảnh 96 px bắt đầu dưới đường giữa viên thuốc, nên phép đo vẫn qua
+    nếu bỏ hai dòng CSS của `5ab72be`, chính là hai dòng đặt viên thuốc lên trên ảnh).
 
 Ghi nhận từ final review Plan 16. R2-5 sửa ngày 30/09; R2-1 … R2-4 sửa ngày 01/10 trong **Plan 17** (`docs/superpowers/plans/2026-10-01-plan17-review-round-2-notes.md`, merge `f6fe2f3`, đã lên host LAN):
 
@@ -347,8 +358,138 @@ Ghi nhận từ final review Plan 16. R2-5 sửa ngày 30/09; R2-1 … R2-4 sử
   - Ba bộ e2e (Normal, Lite, ops) tìm thẻ theo nhóm có tên.
 - **R2-1, ca kiểm.** Ca sảnh sáu phòng thay mọi khung `ROOM_LIST` bằng sáu phòng cố định: Hold'em/Blind, đang chờ/đang chơi/đang đóng, có khoá, 3/9 và 6/6, và hai tên dài xuống dòng, một tên 30 ký tự. Ca này kiểm sảnh vừa 1920×940 và không có chữ đè ở 1920×940, 1366×768 và 375×812.
 - **R2-1, lỗi ca kiểm bắt được.** Khi tên phòng xuống dòng, nhãn trạng thái rơi xuống một dòng riêng; hai tên như vậy làm trang cuộn 3 px ở 1920×940. Nay tên phòng xuống dòng cạnh nhãn và tối đa hai dòng (tên đầy đủ ở `title`). Sảnh sáu phòng còn trống khoảng 30 px ở 1920×940.
+  Từ 05/10 (Plan 20, T4) `title` đó chỉ xuất hiện khi rê chuột vào một tên đang bị cắt, không còn gắn sẵn trên mọi tên phòng.
 - **Ghi nhận, chưa làm:**
   - Mép trái/phải của lớp tối sau thẻ vẫn có một bậc mờ. Bậc này đã có từ trước, nay nằm lùi vào 16 px; ở giao diện sáng có thể rõ hơn.
-  - `title` trên tên phòng có thể khiến một số trình đọc màn hình đọc tên hai lần.
-  - Thẻ phòng ở bề rộng lưới nhỏ nhất chưa được chụp.
+    **Đã sửa 05/10 (Plan 20, T4) — `e97cf34`:** lớp tối là `radial-gradient(70% 50% …)`, elip rộng hơn hộp một khoảng nên bị
+    cắt ở hai cạnh bên; nay là `50% 50%` (closest-side), trong suốt ở cả bốn mép. Đo trên bản build thật, bậc tại mép trái
+    và phải là 6,7–8,9 mức xám ở giao diện tối và 61–67 mức ở giao diện sáng (1920×940 và 1366×768); sau khi sửa ≤ 0,8.
+    e2e `expectScrimLeavesNoEdge` đọc điểm ảnh 3 px hai bên mép, cả hai giao diện, cho phép bậc ≤ 3. Đổi lại, vùng gần
+    mép tối nhạt hơn một chút (alpha 0,42 thay vì 0,51 ở giữa cạnh bên). Ở điện thoại thẻ phủ hết sân bàn nên chỉ có ảnh chụp.
+  - `title` trên tên phòng có thể khiến một số trình đọc màn hình đọc tên hai lần. **Đã sửa 05/10 (Plan 20, T4) — `e97cf34`:**
+    tên phòng không còn `title` mặc định; `title` chỉ được gắn khi rê chuột vào **và** tên đang bị cắt
+    (`scrollHeight > clientHeight + 1`), bỏ khi chuột rời. Màn cảm ứng không có tooltip, như trước (`title` chưa bao giờ hiện
+    ở đó). Lite dùng chung `RoomList`.
+  - Thẻ phòng ở bề rộng lưới nhỏ nhất chưa được chụp. **Đã sửa 05/10 (Plan 20, T4) — `e97cf34`:** ở bước sảnh đông của test
+    e2e đầu tiên, ba cỡ cửa sổ 656, 976 và 320 px đo thẻ hẹp nhất (≤ 305 px), cuộn ngang, chữ đè, và chụp `lobby-busy-<rộng>`.
+    Thẻ hẹp nhất là 304 px, chính là sàn của lưới, không phải lỗi. Việc đo lộ ra lỗi cuộn ngang ở 320 px (xem bảng bên dưới).
 | R2-5 | P2 | **Host LAN tắt im lặng** hai lần (29/09 và đêm 30/09): `run.ps1` chạy node bằng `Start-Process -NoNewWindow`, gắn vào cửa sổ console đã gọi nó; cửa sổ/phiên đó đóng thì node chết theo, không để lại dòng lỗi | (a) chạy `run.ps1` từ cửa sổ PowerShell của người vận hành và để mở; (b) thêm tuỳ chọn chạy tách hẳn (cửa sổ riêng ẩn, hoặc Task Scheduler/NSSM như Lite). **Đã sửa (b) — `5931218`, review `6f776f6` + `fecbf57`, merge `5228244`, host LAN chạy qua task từ 30/09** (không bao giờ dừng/gỡ/ghi đè task hay node không phải của bộ kit; `-TaskName` không nhận wildcard): mặc định `run.ps1` đăng ký và chạy scheduled task theo người dùng `BlindLuckPoker-Normal` (không cần admin, không giới hạn thời gian; action là `run.ps1 -Serve` ẩn, chỉ chứa đường dẫn, không bí mật); `-Foreground` giữ cách cũ, `-AutoStart` thêm trigger đăng nhập, `stop.ps1` dừng node rồi dừng task, `stop.ps1 -Remove` gỡ task. Thử tay trên :8099: `taskkill /T /F` cửa sổ đã gọi `run.ps1`, `/health` vẫn trả lời |
+
+**Bug tồn đọng đã sửa (05/10) — Plan 20, merge `MERGE`.** Người dùng: "có, hãy fix các bug còn tồn đọng đi. không cần hỏi lại.
+lúc nào xác nhận đã hoàn thành toàn bộ rồi thì báo".
+
+Plan: `docs/superpowers/plans/2026-10-05-plan20-open-bugs.md`. Phạm vi: mọi ghi chú "chưa làm" của §7 ở trên, bốn lỗi thật còn
+nằm trong `docs/known-limitations.md` (cộng tiền hai lần khi thử lại, `--red` dưới AA, huy hiệu, vùng giấy của Lite chưa có
+test tương phản) và các lỗi thấy thêm trong lúc làm. Không đổi giao thức; một migration cộng thêm (`0003_ledger_keys`, Lite
+schema v3).
+
+Ghi chú kỹ thuật:
+
+- **Tiền (T1) — `9187aa6`, `d1337d6`.** Khi `cash_out` ném lỗi, phòng giữ ghế và tự thử lại (cuối ván sau, lúc gỡ khán giả, lúc
+  tắt máy), mỗi lần một dòng sổ mới; nếu lần đầu thực ra đã commit và chỉ mất phản hồi (rớt kết nối đúng lúc `COMMIT`), stack bị
+  cộng hai lần. Người bấm Đứng dậy lần nữa sau một lỗi cũng gặp như vậy.
+  - `apply(entries, meta, { key })` nhận một khoá và giữ nó trong bảng `ledger_keys`, ngay trong giao dịch của lần ghi. Khoá đã
+    có thì lần gọi không làm gì và trả `{ applied: false }` (không kiểm số dư, không ghi). Lô bị từ chối lùi cả khoá; không khoá
+    thì chạy như cũ. Normal: migration `0003_ledger_keys`, chỉ thêm một bảng (`IF NOT EXISTS`), `run.ps1` áp dụng khi không có
+    `-NoMigrate`. Lite: schema v3. Bản in-memory có `keys`. Test chạy migration thật trên PGlite mới và trên bản đã ở 0002, và
+    Lite từ v2 lên v3.
+  - Phòng khoá mọi lần ghi tiền có thể thử lại (`cash_out:<phòng>:<sitId>`, `buy_in:…`, `buy_in_refund:…`,
+    `carry_over:<phòng>:<id>`) và coi `applied: false` là đã xong.
+  - Ghế có cash-out đang chờ bị đóng băng (`cashOutPending`): giữ stack, tạm nghỉ, không được chia bài; vào lại hay Chơi tiếp
+    không gỡ được; cuối mỗi ván phòng thử lại mọi cash-out đang chờ. Buy-in lỗi được giữ lại (`pendingBuyIn`): lần Ngồi sau dùng
+    đúng khoá và số tiền đó; gỡ người hoặc tắt máy thì phát lại rồi hoàn. Pot cộng dồn thả không xong nằm riêng
+    (`Room.pendingRelease`, cả lô), không bị chia vào ván sau; `view().carryOverPot` và sổ cân đều tính nó. Mọi dòng log lỗi tiền
+    đều ghi khoá.
+  - Phí bàn (`table_fee`) không khoá vì không bao giờ được thử lại. Bảng `ledger_keys` (khoảng hai dòng mỗi lượt ngồi) được dọn
+    sạch mỗi khi server khởi động (đợt sửa sau rà soát toàn nhánh, bên dưới). Tài liệu: `docs/server-kit.md` (Repositories → Keys).
+  - Đợt sửa cuối — `834870c`. Phòng đang đóng mà lần thả pot cũ vẫn lỗi thì pot mới hơn nằm sau nó cũng được ghi log
+    (`carry-over not released at close`: phòng, số tiền, khoá của lần thả đang chờ); trước đó nó rời sổ không một dòng. Hoàn
+    buy-in lỗi lúc tắt máy từng ghi là `shutdown cash-out failed` với `stack: 0`; nay dòng đó tên `shutdown settlement failed`
+    (cash-out hoặc hoàn buy-in), vẫn có khoá, thêm số buy-in khi là hoàn. Test tiền thêm `books() === 0` ở hai ca buy-in chờ,
+    và ca "Chơi tiếp sau khi quét tạm nghỉ" nay chia một ván khi ghế vẫn đang chờ, kiểm `SITTING_OUT` trước khi kiểm không được
+    chia bài.
+  - Sau rà soát toàn nhánh — `417ef2e`.
+    - Đuổi một người mà cash-out lỗi: người đó đã nhận thông báo bị mời ra, nhưng lần thử lại cuối ván chỉ trả tiền về rồi để
+      họ ở lại làm khán giả. Nay lần đuổi lỗi đặt `leaveAfterHand`, nên cuối ván sau phòng gỡ hẳn người đó (vẫn đúng các khoá
+      cũ). Người bị mời ra không thể vào lại phòng trước lúc đó (vẫn là thành viên, máy chủ từ chối `ALREADY_IN_ROOM`),
+      nên lệnh mời ra luôn được thực hiện.
+    - Buy-in lỗi (có thể đã ghi xong) nay đẩy `BALANCE` ngay, nên thanh số dư không còn hiện số điểm sổ đã trừ. Lần Ngồi phát
+      lại buy-in đó vẫn đẩy thêm một lần khi đã có ghế, như mọi lần Ngồi; test nay giữ cả hai.
+    - `ledger_keys` được dọn sạch khi server khởi động (`pruneLedgerKeys`): phòng sống trong bộ nhớ, nên không khoá nào còn
+      được thử lại sau khi khởi động lại. Normal dọn trong `buildApp`, trước khi có game server. Lite dọn trong `listen()` của
+      bản giữ thư mục dữ liệu (có run file), không bao giờ ở lần chạy `--smoke`. Cách này dựa trên việc mỗi database chỉ có
+      một server (`docs/known-limitations.md`).
+    - Khay hành động ở giao diện sáng: luật `[data-surface='night'] { color: var(--ink) }` không đổi màu chữ nào trong khay.
+      Đã so bản dựng thật của `8873fd6` với nhánh này, cùng playground, ở 1920×940 và 375×812; chữ nào trong khay cũng tự đặt
+      màu riêng.
+- **Tương phản (T2) — `fc306c3`, `fa88116`.**
+  - `--red` tách thành mực và tô như `--teal`. `--red` là mực: ở giao diện tối, đêm và nền felt là `#e0737b`, 6,23 / 5,60 / 5,43:1
+    (trước đó 3,59 / 3,22 / 3,13). `--red-fill` giữ `#c8323c` cũ cho mọi thứ được tô, nên nút, chấm kết nối và vòng đếm không
+    đổi một điểm ảnh (18 ảnh cắt, 0 px khác). Mỗi vùng giấy hay đêm khai báo `--red-fill` cạnh `--red` của nó. 22 chỗ dùng
+    `var(--red)` đều được phân loại, và một test chặn dùng sai ở cả ba gói. `BELOW_AA` rỗng, vẫn là chốt hai chiều.
+  - Huy hiệu: mực kéo về `--ink` (vàng và xanh ngọc 20 %, xám 12 %); test đo trên mọi nền huy hiệu đứng thật, gồm nền mesh dưới
+    header phòng (review bắt được 4,46:1 trên nền thật khi test chỉ đo nền phẳng) và vệt sáng của `.panel.ink`.
+    `BADGES_BELOW_AA` rỗng.
+  - Vùng giấy của Lite có test riêng (`lite.contrast.test.ts`). Hàm đo tương phản xuất ra `@bp/ui-kit/testing`; cấu hình vitest của
+    Lite và Normal thêm `test.css.include` vì vitest làm trống mọi CSS `?raw`. Chi tiết: `docs/ui-kit.md` (Theming).
+- **Phòng thay đồ (T3) — `d673828`:** viên thuốc "Đang dùng" cách ô màu da ở mọi độ rộng; thẻ hiện thêm dòng gợi ý của món gốc
+  chưa có (hai ghi chú ở Đợt 2 và Đợt 3 ở trên). Đợt sửa cuối — `c0dcdb2`: dòng gợi ý lấy chữ từ khoá `wardrobe.familyHint`
+  (`{{name}}: {{hint}}`, vi và en) thay cho dấu `: ` ghép trong mã; một test giữ rằng họ món chưa có món nào (mũ chóp) chỉ hiện
+  món gốc với dòng khoá của chính nó, không thêm dòng thứ hai.
+- **Bàn và sảnh (T4) — `e97cf34`:** lớp tối sau thẻ kết quả không còn bậc ở mép, tên phòng chỉ có `title` khi bị cắt và đang
+  rê chuột, thẻ phòng hẹp nhất được đo ở ba cỡ cửa sổ (ba ghi chú ở Plan 17 ở trên), và lỗi cuộn ngang ở 320 px (bảng bên dưới).
+- **Nhân vật (T5) — `651e47b`, `bcac539`, `e16852a`; vòng sửa 1 `888831f`; đợt sửa cuối `3df003d`.** Bước đầu chỉ thêm mặt nạ,
+  tranh không đổi; hai vòng sửa sau đổi bốn ảnh lớp có chủ đích (xem mục cuối).
+  - Mỗi lớp tóc trước (L60) thật và mỗi bộ quần áo v4 có thêm một **mặt nạ da** của riêng nó, `<lớp>_skinmask@1x/@2x.png`
+    (`masks.skin`), cắt bằng `layerSkinMask`: 32 mặt nạ mới (8 tóc, 8 áo) và 16 mặt nạ tóc cắt lại (nay là mực trừ phần da).
+    Ở bước này không ảnh lớp nào đổi: `git diff` chỉ có mặt nạ và manifest.
+  - Chế độ tô thứ tư của kit, `ratio`: giữ sắc độ và độ bão hoà của tông, độ sáng HSL từng điểm nhân với (độ sáng tông ÷ `meanL`
+    của da). `recolour` cộng dịch nên bị kẹp về đen ở tông sâu và để lại chấm tối. `layersFor` tô nó sau màu của lớp và trước nét
+    viền; server liệt kê `tint.layerSkin` của mỗi thân.
+  - Áo: mặt nạ chỉ chứa mu bàn chân (long bào 577 px, một chiếc, gồm cả lưỡi liềm 26 px vẽ đè lên nét viền của thân từ vòng
+    sửa 1; áo dài Tết nữ 219 + 218, nam 142 + 154); các bộ khác để rỗng. Viền vàng không bị lấy nhầm, nhờ hai luật: khoảng cách
+    tới bảng màu của áo giữ mép vàng sẫm (C* 43–48, cách mu bàn chân 2–4 px) ở ngoài, còn trần C* 48 giữ thân viền vàng
+    (C* 50–65) ở ngoài. Phần mọc thêm tối đa 4 px là bóng của gấu áo và hài trên mu bàn chân; thiếu nó còn lại một viền hồng
+    nhạt quanh đó.
+  - Đo ở `@2x` dưới nâu `#643e2b` và `#9c6140`, số điểm sáng ở chân tóc trước → sau: spiky 164 → 0 và 177 → 0, bob 180 → 0 và
+    199 → 1, hime 94 → 0 và 96 → 0, neat 64 → 0 và 70 → 0, curly 53 → 0 và 59 → 0, tousled 69 → 0 và 71 → 0, ponytail 35 → 0 và
+    36 → 0 (mỗi kiểu giảm ≥ 99 %). Kiểu gợn sóng đo 0 → 0; mặt nạ của nó chỉ có đầu sợi mềm (245 px, 255 trước đợt sửa cuối),
+    phần rõ để rỗng.
+  - Ở bước mặt nạ, tông tự nhiên giữ nguyên từng byte: 65 thẻ tự nhiên của bảng duyệt không đổi, ảnh đầu trước và sau giống hệt.
+    Khi chỉ đổi màu tóc, mọi điểm ảnh đổi đều nằm trong mặt nạ da. `avatar:check` 1560 kiểm, 0 lỗi (C11 thêm hai cặp: da với tóc,
+    da với màu tô). Chi tiết: `docs/avatar-2d.md` §4.4.1.
+  - Vòng sửa 1 và đợt sửa cuối: ba đường nối trong tranh, thấy khi review, được người điều phối cho vào phạm vi (ở tông tự nhiên
+    chúng cũng đổi, có chủ đích).
+    - Nửa sau của tóc gợn sóng (L20) nay sáng như nửa trước. Pipeline từng tô lại mỗi nửa theo `meanL` riêng của nó, nên nửa sau
+      sáng hơn 0,089 và lộ qua một khấc của đường chia thành hai hình chữ nhật sáng ở thái dương, ở mọi tông. Nay cả hai nửa tô
+      theo độ sáng tham chiếu của nửa trước; bước nhảy độ sáng chỗ hai nửa gặp nhau 0,097 → 0,008.
+    - Lớp tóc trước của hime, đuôi ngựa và gợn sóng không còn bản sao nét viền của thân bên dưới đầu (`bodyLineCopy`): hime
+      2 356 px (vòng sửa 1), đuôi ngựa 102 px và gợn sóng 103 px (đợt sửa cuối). Đó là những đường mảnh nâu cam và xanh than dọc
+      vai và tay áo tuxedo, đồng phục chia bài và long bào. Đợt sửa cuối giữ lại đầu lọn tóc vắt qua hàng cuối của đầu: với
+      luật cũ, kiểu gợn sóng mất 49 px đầu lọn ở cổ (152 px thay vì 103).
+    - Viền mu bàn chân trái của long bào: lưỡi liềm hồng đào 26 px vẽ đè lên nét viền của thân nay theo tông da.
+
+| # | Mức | Mô tả | Nguyên nhân / hướng | Trạng thái |
+|---|---|---|---|---|
+| P20-1 | P2 | Giao diện sáng: tên người chơi trên thẻ kết quả gần như không đọc được — mực tối `#1b1f2e` trên thẻ đêm, khoảng 1,1:1. Thấy 05/10 khi rà tương phản | `[data-surface='night']` khai báo lại `--ink` mà không đặt `color`, nên chữ chỉ kế thừa (tên) giữ mực tối của trang | đã sửa — `fc306c3`: khối đặt `color: var(--ink)`; đo trên bản build thật `rgb(27,31,46)` → `rgb(237,231,216)` |
+| P20-2 | P3 | Sảnh ở 320 px cuộn ngang 14 px, nút "Tạo phòng" nhô ra ngoài cửa sổ (đầu phải ở x = 334). Thấy 05/10 khi đo thẻ phòng hẹp nhất | tiêu đề 154 + nút 124 + sàn của đường kẻ 24 + hai khoảng cách = 326 px, trong khi sảnh chỉ để lại 304 px | đã sửa — `e97cf34`: `.sectionHead` cho xuống dòng, dưới khoảng 342 px nút nằm dưới tiêu đề, từ 342 px vẫn một dòng; Lite dùng chung, đo 320/320 |
+| P20-3 | P3 | Chữ gợi ý (placeholder) của ô nhập dưới AA: Lite 3,43:1, Normal giao diện sáng 3,29:1 | `::placeholder` chỉ ở 76 % `--ink-muted` | đã sửa — `fc306c3`, `fa88116`: 94 % `--ink-muted` và `opacity: 1` (Firefox vẽ `::placeholder` ở 0,54); nay Lite 5,03, Normal 4,69 sáng và 6,82 tối |
+| P20-4 | P3 | Hai ô ở form vào phòng của kit (mã phòng, mật khẩu) hiện chữ gợi ý mặc định của trình duyệt, `#757575`: 3,98:1 sáng, 4,11:1 tối | không có luật `::placeholder` nào | đã sửa — `fa88116`: cùng luật 94 % và `opacity: 1`; test `placeholderColour` mô hình trình duyệt khó nhất |
+| P20-5 | P3 | Tông nâu và nâu đậm: đốm kem và một đường sáng răng cưa dọc chân tóc (rõ nhất ở spiky, neat, curly); mu bàn chân kem trong hài long bào và áo dài Tết (mục "mới thấy" ở Đợt 3) | tranh tóc và quần áo vẽ lại một phần da của thân; bước tách "da của thân" lúc nhập chỉ bỏ phần vẽ lại chạm vào da mà lớp để trống, nên phần còn lại ở trong lớp tóc hay áo, nơi màu da không với tới | đã sửa — `651e47b`, `bcac539`, `e16852a`, cộng `888831f` (lưỡi liềm ở mu bàn chân long bào) (ghi chú T5 ở trên) |
+
+**Ngoài phạm vi Plan 20**, mỗi mục một lý do:
+- Tính năng roadmap, không phải lỗi: người chơi tự đăng ảnh đại diện (R1), thông báo qua email (No7, spec §34 mục 14), web font
+  tiếng Việt đóng gói, thêm dáng đứng.
+- Đổi luật, thuộc quyền người dùng quyết: pot cộng dồn thả cho cả ghế đã tạm nghỉ (spec §8.4); Relief chỉ nhìn số dư (§12.4).
+- Đánh đổi thiết kế đã ghi lý do ở `docs/known-limitations.md`: `SIT_OUT` không tự đứng dậy được ở bàn hai ghế; sân bàn đổi cỡ
+  ở điểm gãy; đổi tên hay trang phục chỉ tới bàn ở lần vào sau; một dáng đứng.
+- Sự thật về hạ tầng, không sửa được bằng mã: ảnh Docker chưa từng được build, bộ test chưa chạy trên PostgreSQL thật, Postgres
+  miễn phí ngủ và Oracle thu hồi VM rảnh, dừng server Normal ở kit Windows là kill cứng, sao lưu do người vận hành chạy.
+- Bảy advisory npm chỉ có ở công cụ dev: dọn cần nâng Vitest 3 và Vite 6 trên cả tám package.
+- Ghi chú pipeline "cắt lại một ảnh lệch 1–2 px": chuyện tái lập, không phải lỗi người chơi nhìn thấy.
+
+**Còn lại sau Plan 20**, đã ghi ở `docs/known-limitations.md` và `docs/ui-kit.md`: vài chấm
+sáng nhỏ ở tông sâu (điểm nhấn trắng vẽ sẵn trên mu bàn chân áo Tết, vài điểm mép sợi gần màu của một kiểu tóc sáng, điểm nhấn
+cam nhạt vẽ sẵn của chính tóc đuôi ngựa, và hai chấm mờ của long bào: 5 px dưới mép trái gấu áo, không qua kiểm bảng màu, và
+3 px nằm ngoài cả da lẫn nét viền của thân, chỉ thấy khi phóng 8× ở tông sâu); huy hiệu xanh ngọc
+ở dòng đầu của một bảng tối `.panel.ink` rất cao sẽ rơi xuống 4,3–4,4:1, và hiện không chỗ nào đặt như vậy.

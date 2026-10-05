@@ -220,7 +220,14 @@ wardrobe's "n/m đã có" counts remain.
   only adds cards and dots (final fix wave, B2). The card is that member's picture, name, "Đang dùng" and click, and
   its dot row lists the whole family, the original first as a checkered dot; after a coloured outfit, that dot is the
   way back, the outfit slot being required. On a phone or under a finger every dot keeps its 16 px look inside a
-  44 px touch target, and the row wraps to keep those targets apart (B1). A tab with nothing to list keeps its
+  44 px touch target, and the row wraps to keep those targets apart (B1). A dot the player does not own is named
+  `<name>, Chưa có: <hint>` (its `aria-label` and `title`). With the box ticked, a card that shows an owned member
+  while the family's original is locked carries one more line, `🔒 <original's name>: <hint>` (`familyHint`, worded by
+  the `wardrobe.familyHint` template), between the picture and the dots and outside the pick button, so a colour variant
+  no longer hides how to unlock the original and the card's own name does not change (Plan 20). A family the player
+  owns nothing of shows its locked original, whose own lock line already says how, so it gets no second line. The "Đang
+  dùng" pill clears the skin swatch at every width. A tab
+  with nothing to list keeps its
   `tabpanel`, focusable then, with one line in it.
 - **`OutfitBar`** is a bookmark of a *whole* `AvatarConfigDto`, not of one item — "Mặc bộ này" replaces the
   draft outright, "Lưu vào đây" snapshots whatever is currently equipped into that slot under a name up

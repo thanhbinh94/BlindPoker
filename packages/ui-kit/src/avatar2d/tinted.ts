@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { assetUrl } from './AvatarAssets.js'
-import { recolour, shade } from './recolour.mjs'
+import { ratio, recolour, shade } from './recolour.mjs'
 import type { LayerRef, TintRef } from './types.js'
 
 /** How many rendered blob URLs to keep alive at once (spec §5.2). Past this, the oldest *settled* entry is
@@ -23,7 +23,8 @@ const cache = new Map<string, CacheEntry>()
 /** The cache key for one layer's tinted render: same file, same density, same tints (in order, by colour and by
  * `meanL`) → same key, so two chibis wearing the same coloured hair only ever pay for the canvas work once. `meanL` is
  * in it because one file can be painted against two: a shared outfit's line is shaded at the wearer's body's skin
- * `meanL` (2026-10-05). A tint's `mode` needs no place in it: the mask names it (a `_skinlinemask` is always shaded). */
+ * `meanL` (2026-10-05). A tint's `mode` needs no place in it: the mask names it (a `_skinlinemask` is always shaded,
+ * and a hair's or outfit's `_skinmask` always painted by `ratio`, a body's or face's by `recolour`). */
 export function tintKey(file: string, density: 1 | 2, tints: TintRef[]): string {
   return `${file}|${density}|${tints.map((t) => `${t.mask}:${t.colour}:${t.meanL}`).join(',')}`
 }
@@ -83,6 +84,7 @@ async function renderTintedLayer(prefix: string, layer: LayerRef, density: 1 | 2
       const maskAlpha = new Uint8Array(maskCanvas.width * maskCanvas.height)
       for (let i = 0; i < maskAlpha.length; i++) maskAlpha[i] = maskData[i * 4 + 3] ?? 0
       if (tint.mode === 'shade') shade(imageData.data, maskAlpha, tint.colour, tint.meanL)
+      else if (tint.mode === 'ratio') ratio(imageData.data, maskAlpha, tint.colour, tint.meanL)
       else recolour(imageData.data, maskAlpha, tint.colour, tint.meanL)
     }
 

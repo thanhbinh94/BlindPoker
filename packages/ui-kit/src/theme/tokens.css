@@ -23,7 +23,12 @@
   --gold: #d9a441;
   --gold-soft: rgba(217, 164, 65, 0.16);
   --gold-ink: #201607; /* text on a gold fill */
-  --red: #c8323c;
+  /* Red is split the way teal is. `--red` is the ink — an error line, a loss, a full table — lifted along its own
+     hue until it reads on the dark ground (6.2:1 on --bg, 5.6 on --bg-elev); the old lacquer value could not, at
+     3.6 and 3.2. `--red-fill` keeps that old value for everything painted rather than read — the fold button under
+     --red-ink, a closed connection's dot, the urgent timer's ring, every red rule — which only has to clear 3:1. */
+  --red: #e0737b;
+  --red-fill: #c8323c; /* red as a *fill* or a rule: --red-ink on it is 4.8:1 */
   --red-soft: rgba(200, 50, 60, 0.16);
   --red-ink: #fdf3f0; /* text on a red fill */
   --teal: #3f938a; /* teal as ink/hairline on a dark ground */
@@ -70,6 +75,7 @@
   --gold-soft: rgba(133, 96, 17, 0.14);
   --gold-ink: #fff8e8;
   --red: #a9242d;
+  --red-fill: #a9242d; /* on parchment the deep red already reads as ink: ink and fill are one value */
   --red-soft: rgba(169, 36, 45, 0.12);
   --red-ink: #fdf3f0;
   --teal: #15544c;
@@ -96,9 +102,12 @@
 
 /* The felt and the tray are physical objects in a night room: `--felt` stays dark in the light theme on purpose, and
    so must everything printed on them. `data-surface="night"` re-declares the ink half of the palette on such a
-   surface. `PokerTable` and `ActionBar` set it themselves; an app can put it on any panel it lays over the felt. */
+   surface. `PokerTable` and `ActionBar` set it themselves; an app can put it on any panel it lays over the felt.
+   It sets `color` too: re-declaring `--ink` alone left the text that merely inherits — the result card's names — in
+   the page's own colour, which under the light theme is its dark ink on a night card (about 1.1:1). */
 [data-surface='night'] {
   color-scheme: dark;
+  color: var(--ink);
   --line: rgba(237, 231, 216, 0.12);
   --ink: #ede7d8;
   --ink-muted: #9aa4c0;
@@ -107,7 +116,8 @@
   --gold: #d9a441;
   --gold-soft: rgba(217, 164, 65, 0.16);
   --gold-ink: #201607;
-  --red: #c8323c;
+  --red: #e0737b;
+  --red-fill: #c8323c;
   --red-soft: rgba(200, 50, 60, 0.16);
   --red-ink: #fdf3f0;
   --teal: #3f938a;

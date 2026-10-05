@@ -5,7 +5,7 @@ import {
 } from '@bp/core'
 import type { TimerHandle } from '../infra/clock.js'
 import { newId } from '../infra/ids.js'
-import { InsufficientBalanceError, type BalanceEntry, type HandSummary } from '../repositories.js'
+import { InsufficientBalanceError, type BalanceEntry, type HandSummary, type SettlementMeta } from '../repositories.js'
 import { HandRunner } from './hand-runner.js'
 import { RoomError, type RoomDeps, type RoomPlayer } from './types.js'
 
@@ -15,6 +15,19 @@ export interface RoomInit {
   config: RoomConfig
   host: PlayerIdentity
   deps: RoomDeps
+}
+
+/**
+ * A carried pot whose release was written and not acknowledged — it may have landed. Held apart from `carryOverPot`
+ * (which the next hand's `carryOverOut` overwrites) until a retry of the very same batch, under the same key, settles
+ * it. `recipients` are everyone the release was for, told their balance once it is settled.
+ */
+export interface PendingRelease {
+  key: string
+  pot: number
+  entries: BalanceEntry[]
+  meta: SettlementMeta
+  recipients: string[]
 }
 
 type Snapshot = Extract<ServerMessage, { t: 'ROOM_SNAPSHOT' }>
@@ -29,6 +42,8 @@ export class Room {
   readonly players = new Map<string, RoomPlayer>()
   seq = 0
   carryOverPot = 0
+  /** Still the room's until it is settled: the room's view and the money invariant count it beside `carryOverPot`. */
+  pendingRelease: PendingRelease | null = null
   button: number | null = null
   nextHandAt: number | null = null
   deadlineAt: number | null = null
@@ -141,7 +156,7 @@ export class Room {
       ...this.summary(),
       hostPlayerId: this.hostPlayerId,
       players: [...this.players.values()].map((p) => this.playerView(p)),
-      carryOverPot: this.carryOverPot,
+      carryOverPot: this.carryOverPot + (this.pendingRelease?.pot ?? 0),
       nextHandAt: this.nextHandAt,
     }
   }
@@ -197,7 +212,7 @@ export class Room {
         this.runner!.markAutoFold(p.seat!)
         return
       }
-      return this.removePlayer(p, 'left')
+      return this.loggingMoney('leave failed', p, () => this.removePlayer(p, 'left'))
     })
   }
 
@@ -217,7 +232,18 @@ export class Room {
       if (targetId === hostId) throw new RoomError('ILLEGAL_ACTION', 'cannot kick this player')
       if (this.inCurrentHand(target)) throw new RoomError('GAME_IN_PROGRESS', 'player is in the current hand')
       if (!target.identity.isBot) this.deps.outbox.send(targetId, { t: 'NOTIFICATION', kind: 'KICKED', payload: { roomId: this.roomId } })
-      return this.removePlayer(target, 'kicked')
+      return this.loggingMoney('kick failed', target, async () => {
+        try {
+          await this.removePlayer(target, 'kicked')
+        } catch (err) {
+          // The player has been told KICKED, so a write that failed (and may have landed) must not leave them behind
+          // as a spectator: the end of the next hand retries the whole removal, under the same keys, not just the
+          // cash-out. A rejoin calls it off, as it calls off a Leave pressed mid-hand.
+          target.leaveAfterHand = true
+          target.standAfterHand = true
+          throw err
+        }
+      })
     })
   }
 
@@ -230,31 +256,53 @@ export class Room {
       if (!Number.isInteger(seat) || seat < 0 || seat >= this.config.maxPlayers) throw new RoomError('ILLEGAL_ACTION', 'seat out of range')
       if (p.seat !== null) throw new RoomError('ILLEGAL_ACTION', 'already seated')
       if (this.seatPlayer(seat)) throw new RoomError('SEAT_TAKEN')
-      // Both modes bring a table stack out of the balance (spec 2026-09-29): Hold'em the buy-in the player chose, Blind
-      // the table limit — or the whole balance when that is less, as long as it covers one hand.
-      let amount: number
-      if (this.rules.mode === 'holdem') {
-        const bb = this.rules.bigBlind
-        const min = (this.config.holdem?.minBuyInBB ?? 0) * bb
-        const max = (this.config.holdem?.maxBuyInBB ?? 0) * bb
-        if (buyIn === undefined || !Number.isInteger(buyIn) || buyIn < min || buyIn > max) throw new RoomError('INVALID_AMOUNT', `buy-in must be ${min}–${max}`)
-        amount = buyIn
-      } else {
-        const balance = await this.deps.repos.balances.get(playerId)
-        if (balance < blindRequiredStack(this.rules)) throw new RoomError('INSUFFICIENT_BALANCE')
-        amount = Math.min(balance, blindTableLimit(this.rules))
+      // A buy-in already on its way back (a removal that failed half-way through its refund) is finished first: it
+      // can no longer pay for a seat.
+      if (p.pendingBuyIn?.refunding) await this.loggingMoney('buy-in refund failed', p, () => this.refundPendingBuyIn(p))
+      // A buy-in that was written and not acknowledged is replayed — the same key, the same amount — before anything is
+      // checked: if it landed, the balance left may no longer cover a fresh one, and must not have to.
+      let pending = p.pendingBuyIn
+      if (pending === undefined) {
+        // Both modes bring a table stack out of the balance (spec 2026-09-29): Hold'em the buy-in the player chose, Blind
+        // the table limit — or the whole balance when that is less, as long as it covers one hand.
+        let amount: number
+        if (this.rules.mode === 'holdem') {
+          const bb = this.rules.bigBlind
+          const min = (this.config.holdem?.minBuyInBB ?? 0) * bb
+          const max = (this.config.holdem?.maxBuyInBB ?? 0) * bb
+          if (buyIn === undefined || !Number.isInteger(buyIn) || buyIn < min || buyIn > max) throw new RoomError('INVALID_AMOUNT', `buy-in must be ${min}–${max}`)
+          amount = buyIn
+        } else {
+          const balance = await this.deps.repos.balances.get(playerId)
+          if (balance < blindRequiredStack(this.rules)) throw new RoomError('INSUFFICIENT_BALANCE')
+          amount = Math.min(balance, blindTableLimit(this.rules))
+        }
+        pending = { sitId: newId(), amount }
+        p.pendingBuyIn = pending
       }
+      const { sitId, amount } = pending
       try {
-        await this.deps.repos.balances.apply([{ playerId, delta: -amount, reason: 'buy_in', refId: this.roomId }])
+        // Landed now, or by the attempt that was not acknowledged (`applied: false`): either way it is paid, once.
+        await this.deps.repos.balances.apply([{ playerId, delta: -amount, reason: 'buy_in', refId: this.roomId }], undefined, { key: this.buyInKey(sitId) })
       } catch (err) {
-        if (err instanceof InsufficientBalanceError) throw new RoomError('INSUFFICIENT_BALANCE')
+        if (err instanceof InsufficientBalanceError) {
+          p.pendingBuyIn = undefined // refused, so its key was never claimed: nothing landed
+          throw new RoomError('INSUFFICIENT_BALANCE')
+        }
+        this.deps.log.error('buy-in failed', { roomId: this.roomId, playerId, amount, key: this.buyInKey(sitId), err: String(err) })
+        // It may have landed: the bar is re-read now rather than left showing points the ledger no longer holds until
+        // the next Sit (which replays it, and pushes again once seated) or the refund on the way out.
+        await this.pushBalance(playerId)
         throw err
       }
       if (this.seatPlayer(seat)) {
-        // lost the race while awaiting: refund
-        await this.deps.repos.balances.apply([{ playerId, delta: amount, reason: 'refund', refId: this.roomId }])
+        // lost the race while awaiting: refund (unreachable while `sitDown` runs on the room's queue)
+        pending.refunding = true
+        await this.refundPendingBuyIn(p)
         throw new RoomError('SEAT_TAKEN')
       }
+      p.pendingBuyIn = undefined
+      p.sitId = sitId
       p.stack = amount
       p.seat = seat
       p.ready = false
@@ -279,7 +327,7 @@ export class Room {
         this.runner!.markAutoFold(p.seat)
         return
       }
-      await this.standUpNow(p)
+      await this.loggingMoney('stand-up failed', p, () => this.standUpNow(p))
     })
   }
 
@@ -299,7 +347,8 @@ export class Room {
       if (p.seat === null) throw new RoomError('NOT_SEATED')
       if (p.sitOutRequested !== out) p.handsSatOut = 0
       p.sitOutRequested = out
-      this.setSittingOut(p, out || p.stack < this.requiredStack())
+      // A seat whose cash-out is pending stays out whatever is asked: its stack may already be home.
+      this.setSittingOut(p, out || p.cashOutPending || p.stack < this.requiredStack())
       // Sitting back in can be the move that completes the table, so it gets the same look autoStart
       // takes when someone readies up — otherwise the room waits for a ready toggle it does not need.
       return out ? undefined : this.maybeAutoStart()
@@ -386,13 +435,13 @@ export class Room {
         this.runner!.markAutoFold(p.seat)
       } else {
         // This runs from a timer, where a rejection would vanish without a word and skip the grace timer below. A
-        // cash-out that cannot write keeps the seat but takes it out of the deal (`standAfterHand`): the stand-up is
-        // retried when the next hand ends, and the removal below tries again at the latest.
+        // cash-out that cannot write keeps the seat but takes it out of the deal (`standAfterHand`, and the frozen
+        // `cashOutPending`): the stand-up is retried when the next hand ends, and the removal below tries again at the latest.
         try {
           await this.standUpNow(p)
         } catch (err) {
           p.standAfterHand = true
-          this.deps.log.error('reconnect-expiry stand-up failed', { roomId: this.roomId, playerId, stack: p.stack, err: String(err) })
+          this.deps.log.error('reconnect-expiry stand-up failed', { roomId: this.roomId, playerId, stack: p.stack, key: this.pendingKeyOf(p), err: String(err) })
         }
       }
     }
@@ -408,7 +457,7 @@ export class Room {
       } catch (err) {
         // Same reason: logged, and left to the end of the next hand to retry.
         still.leaveAfterHand = true
-        this.deps.log.error('spectator-grace removal failed', { roomId: this.roomId, playerId, stack: still.stack, err: String(err) })
+        this.deps.log.error('spectator-grace removal failed', { roomId: this.roomId, playerId, stack: still.stack, key: this.pendingKeyOf(still), err: String(err) })
       }
     })
   }
@@ -420,13 +469,23 @@ export class Room {
       if (this.status === 'CLOSED') return
       this.closing = true
       await this.wrapUp(reason)
-      for (const p of this.seatedHumans()) {
+      for (const p of this.humans()) {
         // One player's ledger failure must not strand everyone after them, nor keep the room from closing (and the
-        // server from closing its sockets): their stack is logged for an operator to reconcile, and the room goes on.
+        // server from closing its sockets): their stack (or the buy-in owed back) and the key of the write are logged for
+        // an operator to reconcile, and the room goes on. A buy-in still pending (written, never acknowledged, no seat)
+        // goes back — so the line names a settlement, which is a cash-out or that refund.
         try {
           await this.standUpNow(p)
+          await this.refundPendingBuyIn(p)
         } catch (err) {
-          this.deps.log.error('shutdown cash-out failed', { roomId: this.roomId, playerId: p.identity.playerId, stack: p.stack, err: String(err) })
+          this.deps.log.error('shutdown settlement failed', {
+            roomId: this.roomId,
+            playerId: p.identity.playerId,
+            stack: p.stack,
+            ...(p.pendingBuyIn === undefined ? {} : { buyIn: p.pendingBuyIn.amount }),
+            key: this.pendingKeyOf(p),
+            err: String(err),
+          })
         }
       }
       this.status = 'CLOSED'
@@ -498,10 +557,22 @@ export class Room {
    * person counted once), with the indivisible remainder (or the whole pot when there is nobody to pay)
    * recorded as a `carry_over` sink so `Σ balances + Σ sinks` stays constant. Called from the release
    * timer, `close()` and `shutdown()`; always runs on the room queue.
+   *
+   * Each release is one batch under a key of its own (`carry_over:<roomId>:<id>`). A batch that is not acknowledged —
+   * it may have landed — is kept aside as `pendingRelease` and settled first next time, under that same key, so a
+   * release is paid once however often it is retried. Until it is settled nothing newer is released behind it.
    */
   private async releaseCarryOver(): Promise<void> {
     this.carryOverReleaseTimer?.cancel()
     this.carryOverReleaseTimer = null
+    if (!(await this.settlePendingRelease())) {
+      // A room that is closing gets no later attempt: the older pot is logged with its key above, and a newer one held
+      // behind it would leave with the room unsaid — so it is logged too, for an operator to reconcile.
+      if (this.closing && this.carryOverPot > 0) {
+        this.deps.log.error('carry-over not released at close', { roomId: this.roomId, pot: this.carryOverPot, behind: this.pendingRelease?.key })
+      }
+      return
+    }
     const pot = this.carryOverPot
     if (pot <= 0) {
       this.carryOverClaimants.clear()
@@ -513,25 +584,45 @@ export class Room {
     const entries: BalanceEntry[] = share > 0
       ? recipients.map((p) => ({ playerId: p.identity.playerId, delta: share, reason: 'refund' as const, refId: this.roomId }))
       : []
-    this.carryOverPot = 0
-    try {
-      await this.deps.repos.balances.apply(entries, { refId: this.roomId, fee: remainder, kind: 'carry_over' })
-    } catch (err) {
-      this.carryOverPot = pot // nothing was written: keep the pot (and its claims) so a later attempt can release it
-      this.deps.log.error('carry-over release failed', { roomId: this.roomId, pot, err: String(err) })
-      return
+    // From here the pot is this batch's: its shares (the claimants' included) are fixed, and a retry writes exactly them.
+    this.pendingRelease = {
+      key: `carry_over:${this.roomId}:${newId()}`,
+      pot,
+      entries,
+      meta: { refId: this.roomId, fee: remainder, kind: 'carry_over' },
+      recipients: recipients.map((p) => p.identity.playerId),
     }
+    this.carryOverPot = 0
     this.carryOverClaimants.clear()
-    this.deps.log.info('carry-over released', { roomId: this.roomId, pot, recipients: recipients.length, sink: remainder })
-    for (const p of recipients) await this.pushBalance(p.identity.playerId)
+    await this.settlePendingRelease()
+  }
+
+  /**
+   * Writes `pendingRelease` under its key. `true` once it is settled — landed now, or by an earlier attempt that was not
+   * acknowledged (`applied: false`, which clears that release and nothing newer) — and `false` while it is still owed,
+   * its pot kept aside. Also how `startHand` makes sure a pot already paid out is never dealt.
+   */
+  private async settlePendingRelease(): Promise<boolean> {
+    const pending = this.pendingRelease
+    if (pending === null) return true
+    try {
+      await this.deps.repos.balances.apply(pending.entries, pending.meta, { key: pending.key })
+    } catch (err) {
+      this.deps.log.error('carry-over release failed', { roomId: this.roomId, pot: pending.pot, key: pending.key, err: String(err) })
+      return false
+    }
+    if (this.pendingRelease === pending) this.pendingRelease = null
+    this.deps.log.info('carry-over released', { roomId: this.roomId, pot: pending.pot, key: pending.key, recipients: pending.recipients.length, sink: pending.meta.fee })
+    for (const playerId of pending.recipients) await this.pushBalance(playerId)
     // status is unchanged; the event exists so every view refreshes `carryOverPot`.
     this.broadcastRoomEvent({ type: 'ROOM_STATUS', status: this.status === 'IN_GAME' ? 'IN_GAME' : 'OPEN', nextHandAt: this.nextHandAt })
+    return true
   }
 
   private armCarryOverRelease(): void {
     this.carryOverReleaseTimer?.cancel()
     this.carryOverReleaseTimer = null
-    if (this.carryOverPot <= 0 || this.status === 'CLOSED') return
+    if ((this.carryOverPot <= 0 && this.pendingRelease === null) || this.status === 'CLOSED') return
     this.carryOverReleaseTimer = this.deps.clock.setTimeout(() => void this.enqueue(() => this.releaseCarryOver()), this.deps.options.carryOverReleaseMs)
   }
 
@@ -544,6 +635,10 @@ export class Room {
     this.nextHandTimer = null
     this.carryOverReleaseTimer?.cancel()
     this.carryOverReleaseTimer = null
+    // A release that was not acknowledged is settled before anything is dealt: a pot that may already be in the
+    // players' balances must not be played as well. If it still cannot be settled it stays aside, out of this hand
+    // (`carryOverIn` is only `carryOverPot`), until the release timer, a close or a shutdown settles it.
+    if (this.pendingRelease !== null) await this.settlePendingRelease()
     const required = this.requiredStack()
     if (this.rules.mode === 'blind') {
       // Humans play from the stack they brought; only bots are topped up — back to the limit, never the ledger.
@@ -553,8 +648,9 @@ export class Room {
     // A seated human who cannot cover the requirement sits the hand out rather than silently
     // vanishing from the table: playerView reports SITTING_OUT. Since the table limit (spec 2026-09-29)
     // such a seat only exists when its stand-up in `onHandComplete` could not write, and it is retried
-    // when this hand ends. A player who *asked* to sit out stays out whatever their stack says.
-    for (const p of this.seated()) if (!p.identity.isBot) this.setSittingOut(p, p.sitOutRequested || p.stack < required)
+    // when this hand ends. A player who *asked* to sit out stays out whatever their stack says, and so does a seat
+    // whose cash-out is pending (its stack may already be home).
+    for (const p of this.seated()) if (!p.identity.isBot) this.setSittingOut(p, p.sitOutRequested || p.cashOutPending || p.stack < required)
     const eligible = this.eligibleForHand()
     if (eligible.length < 2 || eligible.every((p) => p.identity.isBot)) {
       this.toOpen()
@@ -563,16 +659,18 @@ export class Room {
     // This hand is going ahead without them, so every voluntary sitter has been skipped once more.
     // Spec §11.3: after `handsSatOutToStand` in a row the seat goes back to the table, stack returned,
     // down the same path as the timeout stand-up — nobody parks on a seat they are not using.
-    // A stand-up writes to the ledger; a ledger blip must not take the starting hand down with it, so the
-    // whole sweep is guarded the way `onHandComplete`'s settlement is. A missed stand-up retries next hand.
-    try {
-      for (const p of this.seated()) {
-        if (p.identity.isBot || !p.sitOutRequested) continue
-        p.handsSatOut += 1
-        if (p.handsSatOut >= this.deps.options.handsSatOutToStand) await this.standUpNow(p)
+    // A stand-up writes to the ledger; a ledger blip must not take the starting hand down with it, so each stand-up is
+    // guarded the way `onHandComplete`'s are. A missed one leaves the seat frozen (`cashOutPending`) and is retried when
+    // this hand ends.
+    for (const p of this.seated()) {
+      if (p.identity.isBot || !p.sitOutRequested) continue
+      p.handsSatOut += 1
+      if (p.handsSatOut < this.deps.options.handsSatOutToStand) continue
+      try {
+        await this.standUpNow(p)
+      } catch (err) {
+        this.deps.log.error('sit-out stand-up failed', { roomId: this.roomId, playerId: p.identity.playerId, key: this.pendingKeyOf(p), err: String(err) })
       }
-    } catch (err) {
-      this.deps.log.error('sit-out stand-up failed', { roomId: this.roomId, err: String(err) })
     }
     const seats = eligible.map((p) => p.seat!)
     this.button = nextButton(this.button, seats, this.deps.rng)
@@ -664,8 +762,10 @@ export class Room {
 
     const required = this.requiredStack()
     for (const p of [...this.players.values()]) {
-      // One player's ledger failure must not take the next deal down with it: logged, and retried after the next hand
-      // (a short seat sits that hand out in `startHand`).
+      // One player's ledger failure must not take the next deal down with it: logged with its key, and retried after
+      // the next hand (the seat is frozen meanwhile: `cashOutPending`). Every pending cash-out is retried here — a
+      // failed Stand Up, Leave or kick as much as the stand-ups this loop starts itself — under its own key; a failed
+      // kick retries the whole removal (`leaveAfterHand`).
       try {
         if (!p.identity.isBot && p.consecutiveTimeouts >= this.deps.options.consecutiveTimeoutsToStand) {
           p.standAfterHand = true
@@ -674,8 +774,9 @@ export class Room {
         if (p.leaveAfterHand) await this.removePlayer(p, 'left')
         else if (p.standAfterHand) await this.standUpNow(p)
         else if (p.seat !== null && !p.identity.isBot && p.stack < required) await this.standUpSpent(p)
+        else if (p.cashOutPending) await this.standUpNow(p)
       } catch (err) {
-        this.deps.log.error('stand-up after hand failed', { roomId: this.roomId, playerId: p.identity.playerId, err: String(err) })
+        this.deps.log.error('stand-up after hand failed', { roomId: this.roomId, playerId: p.identity.playerId, key: this.pendingKeyOf(p), err: String(err) })
       }
     }
     if (this.status === 'CLOSED') return
@@ -700,6 +801,7 @@ export class Room {
       identity, seat: null, stack: 0, ready: false, connected: true, joinedAt: this.deps.clock.now(), sittingOut: false,
       sitOutRequested: false, handsSatOut: 0,
       consecutiveTimeouts: 0, disconnectDeadline: null, standAfterHand: false, leaveAfterHand: false,
+      sitId: null, cashOutPending: false,
     }
     this.players.set(identity.playerId, p)
     this.everJoined.add(identity.playerId)
@@ -783,7 +885,7 @@ export class Room {
 
   private eligibleForHand(): RoomPlayer[] {
     const required = this.requiredStack()
-    return this.seated().filter((p) => !p.sittingOut && !p.standAfterHand && !p.leaveAfterHand && p.stack >= required && (p.identity.isBot || this.status !== 'OPEN' || p.ready))
+    return this.seated().filter((p) => !p.sittingOut && !p.standAfterHand && !p.leaveAfterHand && !p.cashOutPending && p.stack >= required && (p.identity.isBot || this.status !== 'OPEN' || p.ready))
   }
 
   private playerView(p: RoomPlayer): RoomPlayerView {
@@ -826,13 +928,31 @@ export class Room {
     }
   }
 
+  /**
+   * Cashes the seat's stack out under `cash_out:<roomId>:<sitId>` and frees the seat. The seat is frozen
+   * (`cashOutPending`) from before the write until it is acknowledged: a write that fails may still have landed, so the
+   * seat keeps its stack, sits out and is never dealt in until a retry — under the same key, so it is credited at
+   * most once — settles it. `applied: false` (an earlier attempt landed) settles it as well as `true` does.
+   */
   private async standUpNow(p: RoomPlayer): Promise<void> {
     if (p.seat === null) return
     const seat = p.seat
     if (!p.identity.isBot && p.stack > 0) {
-      await this.deps.repos.balances.apply([{ playerId: p.identity.playerId, delta: p.stack, reason: 'cash_out', refId: this.roomId }])
+      // Every human seat gets its id in `sitDown`; this only guarantees the key never names a missing sitting.
+      const sitId = (p.sitId ??= newId())
+      p.cashOutPending = true
+      try {
+        await this.deps.repos.balances.apply([{ playerId: p.identity.playerId, delta: p.stack, reason: 'cash_out', refId: this.roomId }], undefined, { key: this.cashOutKey(sitId) })
+      } catch (err) {
+        this.setSittingOut(p, true) // out of every deal, and nobody waits on it to start one
+        // It may have landed: the bar is re-read now, as for a failed buy-in, rather than left short until the retry.
+        await this.pushBalance(p.identity.playerId)
+        throw err
+      }
       await this.pushBalance(p.identity.playerId)
     }
+    p.cashOutPending = false
+    p.sitId = null
     p.seat = null
     p.stack = 0
     p.ready = false
@@ -845,8 +965,70 @@ export class Room {
     this.changed()
   }
 
+  /**
+   * Gives back a buy-in that was written and never acknowledged, for a player leaving (or a room shutting down) without
+   * the seat it was for. The buy-in is replayed under its own key first, so it has landed exactly once either way, and
+   * then refunded under `buy_in_refund:<roomId>:<sitId>`; a player is never left debited and unseated. From the replay
+   * on (`refunding`) the buy-in can no longer pay for a seat, so a refund that fails half-way is finished, never undone.
+   */
+  private async refundPendingBuyIn(p: RoomPlayer): Promise<void> {
+    const pending = p.pendingBuyIn
+    if (pending === undefined) return
+    const playerId = p.identity.playerId
+    if (pending.refunding !== true) {
+      try {
+        await this.deps.repos.balances.apply([{ playerId, delta: -pending.amount, reason: 'buy_in', refId: this.roomId }], undefined, { key: this.buyInKey(pending.sitId) })
+      } catch (err) {
+        // Refused: a claimed key is never checked, so this one was never claimed — the buy-in never landed, nothing is owed.
+        if (err instanceof InsufficientBalanceError) {
+          p.pendingBuyIn = undefined
+          return
+        }
+        throw err
+      }
+      pending.refunding = true
+    }
+    await this.deps.repos.balances.apply([{ playerId, delta: pending.amount, reason: 'refund', refId: this.roomId }], undefined, { key: this.buyInRefundKey(pending.sitId) })
+    p.pendingBuyIn = undefined
+    await this.pushBalance(playerId)
+  }
+
+  private cashOutKey(sitId: string): string {
+    return `cash_out:${this.roomId}:${sitId}`
+  }
+
+  private buyInKey(sitId: string): string {
+    return `buy_in:${this.roomId}:${sitId}`
+  }
+
+  private buyInRefundKey(sitId: string): string {
+    return `buy_in_refund:${this.roomId}:${sitId}`
+  }
+
+  /** The key of the ledger write this player is waiting on, for the error line an operator reconciles by. */
+  private pendingKeyOf(p: RoomPlayer): string | undefined {
+    if (p.cashOutPending && p.sitId !== null) return this.cashOutKey(p.sitId)
+    const buyIn = p.pendingBuyIn
+    if (buyIn !== undefined) return buyIn.refunding === true ? this.buyInRefundKey(buyIn.sitId) : this.buyInKey(buyIn.sitId)
+    return undefined
+  }
+
+  /**
+   * A Stand Up, Leave, kick or buy-in refund asked for by a client: a ledger failure goes back to the client (the
+   * gateway logs it without knowing the key), so it is said here too, with the key of the write that may have landed.
+   */
+  private async loggingMoney(what: string, p: RoomPlayer, fn: () => Promise<void>): Promise<void> {
+    try {
+      await fn()
+    } catch (err) {
+      if (!(err instanceof RoomError)) this.deps.log.error(what, { roomId: this.roomId, playerId: p.identity.playerId, key: this.pendingKeyOf(p), err: String(err) })
+      throw err
+    }
+  }
+
   private async removePlayer(p: RoomPlayer, reason: string): Promise<void> {
     await this.standUpNow(p)
+    await this.refundPendingBuyIn(p)
     // Said while the player is still on the list, so a connected player hears their own departure too. Without it
     // a player removed later than they asked — a Leave pressed mid-hand, then a reconnect that put them back on
     // the room screen before the hand ended — was dropped in silence and left looking at a frozen table.

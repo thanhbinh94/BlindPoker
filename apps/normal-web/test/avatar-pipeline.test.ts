@@ -22,10 +22,10 @@ import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { STRAY_MARGIN, eachStray, headMetrics, runChecks } from '../scripts/avatar-pipeline/checks.mjs'
-import { BODY_SKIN_RULE, OUTFIT_TOP_Y, cutItem, diffAgainstBase, dropStrays, ingest, measure, registerBySilhouette, registerToBase, shiftPicture } from '../scripts/avatar-pipeline/extract.mjs'
+import { BODY_SKIN_RULE, OUTFIT_TOP_Y, cutItem, diffAgainstBase, dropStrays, ingest, measure, recolourHair, registerBySilhouette, registerToBase, shiftPicture } from '../scripts/avatar-pipeline/extract.mjs'
 import { AURA_CY, AURA_SIZE, AXIS_X, BASELINE_Y, BODY, CHIN_TOLERANCE, CROP, DENSITIES, F01_TRANSFORM, FACE_LIMIT_Y, FRAME, HEAD_REFERENCE, HEAD_TOLERANCE, LAYERS, RING, SKIN_AREA, TORSO_COLUMN, UNDERWEAR_BAND, anchorBase, applyTransform, baseSkinColour, placeholderSvg } from '../scripts/avatar-pipeline/frame.mjs'
 import { EXPRESSIONS, FIT_SHEET_FILE, HAIR_CODES, ICON, ITEMS_FILE, MANIFEST_NAME, NAME_PATTERN, SHEET_FILE, WEARS, bodyFaceFile, bodyFile, buildPlaceholders, hairFile, hairItemId, iconName, itemFile, parseName, serialiseManifest, stageOneFiles, variantFile, wearOf, writeIcon } from '../scripts/avatar-pipeline/manifest.mjs'
-import { MASK_FILE_KIND, describeColours } from '../scripts/avatar-pipeline/masks.mjs'
+import { MASK_FILE_KIND, bodyLineCopy, describeColours, headBottom, writeMasks } from '../scripts/avatar-pipeline/masks.mjs'
 import { alphaBBox, blankPicture, cropPicture, overPicture, readPicture, removeChroma, renderSvg, writeDensities, writePicture } from '../scripts/avatar-pipeline/png.mjs'
 import { FIT_GRID, SHEET_GRID, composeCard, fitCards, sheetCards, sheetLayout } from '../scripts/avatar-pipeline/sheet.mjs'
 
@@ -1397,6 +1397,108 @@ describe('the committed placeholder set', () => {
     }
   }, 60_000)
 
+  it('gives every real front hair and v4 outfit the skin its picture redrew — the outfits’ only at the insteps — and keeps each hair mask at its ink’s meanL (2026-10-05)', async () => {
+    const fronts = committedLayers.filter((name) => parseName(name)?.kind === 'hair' && parseName(name)?.layer === LAYERS.hairFront && manifest.files[name]!.real === true)
+    const outfits = committedLayers.filter((name) => name.startsWith('item_outfit_') && manifest.files[name]!.cutOn !== undefined && manifest.files[name]!.real === true)
+    expect(fronts).toHaveLength(8)
+    expect(outfits).toHaveLength(8)
+    for (const name of [...fronts, ...outfits]) {
+      expect(manifest.files[name]!.masks?.skin, `${name} has no skin mask`).toBeDefined()
+      for (const density of DENSITIES) expect(existsSync(join(OUT_DIR, `${name}_skinmask@${density}x.png`)), `${name}_skinmask@${density}x.png`).toBe(true)
+    }
+    const alphaOf = async (file: string) => {
+      const pic = await readPicture(join(OUT_DIR, file))
+      const alpha = new Uint8Array(pic.width * pic.height)
+      for (let p = 0; p < alpha.length; p++) alpha[p] = pic.data[p * 4 + 3]!
+      return { alpha, width: pic.width }
+    }
+    // The Tết áo dài (both cuts) and the royal robe redrew an instep inside a slipper; no outfit redrew any other skin —
+    // not the gold trim the Tết's collar, cuffs and slit lay over the body's skin (pre-flight B1).
+    const withSkin = outfits.filter((name) => manifest.files[name]!.masks!.skin!.empty !== true)
+    expect(withSkin.sort()).toEqual(['item_outfit_royal_robe01_L40', 'item_outfit_tet_red01_L40', 'item_outfit_tet_red01_m_L40'])
+    for (const name of withSkin) {
+      const { alpha, width } = await alphaOf(`${name}_skinmask@2x.png`)
+      let off = 0
+      for (let p = 0; p < alpha.length; p++) if (alpha[p] && Math.floor(p / width) < 760) off++
+      expect(off, `${name}'s skin above the feet`).toBe(0)
+    }
+    // A hair mask is its ink less the skin's share, and its meanL the ink's as committed before the skin was cut out (I8):
+    // `hairTint` paints every hair colour against it. (The hime's is its ink's since fix round 1 took the copy of the body's
+    // line out of it: 0.2289 → 0.2274; the ponytail's and the wavy's since the final wave did theirs: 0.3579 → 0.3580,
+    // 0.7899 → 0.7906.)
+    const committedMeanL: Record<string, number> = {
+      item_hair_f_bob01_L60: 0.3406, item_hair_f_hime01_L60: 0.2274, item_hair_f_ponytail01_L60: 0.358, item_hair_f_wavy01_L60: 0.7906,
+      item_hair_m_curly01_L60: 0.1851, item_hair_m_neat01_L60: 0.2473, item_hair_m_spiky01_L60: 0.2585, item_hair_m_tousled01_L60: 0.3204,
+    }
+    for (const name of fronts) {
+      const [layer, hair, skin] = await Promise.all([readPicture(join(OUT_DIR, `${name}@2x.png`)), alphaOf(`${name}_hairmask@2x.png`), alphaOf(`${name}_skinmask@2x.png`)])
+      let mismatched = 0
+      let sum = 0
+      let weight = 0
+      for (let p = 0; p < hair.alpha.length; p++) {
+        const ink = layer.data[p * 4 + 3]! > 8
+        if (hair.alpha[p] !== (ink ? 255 - skin.alpha[p]! : 0)) mismatched++
+        if (!ink) continue
+        const [r, g, b] = [layer.data[p * 4]!, layer.data[p * 4 + 1]!, layer.data[p * 4 + 2]!]
+        sum += (Math.max(r, g, b) + Math.min(r, g, b)) / 510
+        weight++
+      }
+      expect(mismatched, `${name}: hair ≠ ink less skin`).toBe(0)
+      expect(manifest.files[name]!.masks!.hair!.meanL, name).toBe(Math.round((sum / weight) * 10000) / 10000)
+      expect(manifest.files[name]!.masks!.hair!.meanL, name).toBe(committedMeanL[name])
+    }
+    // Fix round 1: the royal robe's left instep shadow, drawn over the body's outline (x 356–357, y 777–789 @2x), is in.
+    const robe = await alphaOf('item_outfit_royal_robe01_L40_skinmask@2x.png')
+    let crescent = 0
+    for (let y = 777; y <= 789; y++) for (let x = 356; x <= 357; x++) if (robe.alpha[y * robe.width + x]) crescent++
+    expect(crescent, 'the robe’s instep shadow over the body’s outline').toBe(26)
+  }, 60_000)
+
+  it('meets each hairstyle’s two halves without a step in lightness, and leaves no copy of the body’s line in any front (fix round 1, final wave)', async () => {
+    // Across every boundary where an opaque L60 pixel meets an opaque L20 pixel the L60 leaves bare: the mean step in HSL
+    // lightness. The wavy's was 0.097 — its back half recoloured at its own meanL, two light rectangles at the temples —
+    // and the others' are under 0.025.
+    const lightness = (pic: Picture, p: number) => {
+      const [r, g, b] = [pic.data[p * 4]!, pic.data[p * 4 + 1]!, pic.data[p * 4 + 2]!]
+      return (Math.max(r, g, b) + Math.min(r, g, b)) / 510
+    }
+    for (const code of HAIR_CODES) {
+      const back = hairFile(code, LAYERS.hairBack)
+      if (manifest.files[back]!.empty) continue
+      const [f, b] = await Promise.all([readPicture(join(OUT_DIR, `${hairFile(code, LAYERS.hairFront)}@2x.png`)), readPicture(join(OUT_DIR, `${back}@2x.png`))])
+      let pairs = 0
+      let step = 0
+      for (let y = 1; y < f.height - 1; y++) {
+        for (let x = 1; x < f.width - 1; x++) {
+          const p = y * f.width + x
+          if (f.data[p * 4 + 3]! < 250) continue
+          for (const q of [p - 1, p + 1, p - f.width, p + f.width]) {
+            if (f.data[q * 4 + 3]! > 8 || b.data[q * 4 + 3]! < 250) continue
+            pairs++
+            step += lightness(b, q) - lightness(f, p)
+          }
+        }
+      }
+      expect(pairs, code).toBeGreaterThan(0)
+      expect(Math.abs(step / pairs), `${code}: the back half against the front where they meet`).toBeLessThan(0.03)
+    }
+    // No front, below the head, holds a copy of its body's line: the hime's went in fix round 1 (2356 px), the ponytail's
+    // (102) and the wavy's (103) in the final wave. The 3 px the step used to find in the bob, and 49 of the wavy's, were
+    // lock ends at the jaw row (y 472–474), joined to the hair above: the final wave's rules keep them.
+    for (const gender of ['f', 'm']) {
+      const [body, face, line] = await Promise.all(
+        [`body_${gender}_L30@2x.png`, `body_${gender}_face_neutral_L50@2x.png`, `body_${gender}_L30_skinlinemask@2x.png`].map((file) => readPicture(join(OUT_DIR, file))),
+      )
+      const lineAlpha = new Uint8Array(line!.width * line!.height)
+      for (let p = 0; p < lineAlpha.length; p++) lineAlpha[p] = line!.data[p * 4 + 3]!
+      for (const code of HAIR_CODES.filter((each: string) => each.startsWith(`${gender}_`))) {
+        const front = await readPicture(join(OUT_DIR, `${hairFile(code, LAYERS.hairFront)}@2x.png`))
+        const copy = bodyLineCopy(front, { body: body!, line: lineAlpha, fromY: headBottom(face!)! })
+        expect(copy.reduce((n: number, v: number) => n + (v ? 1 : 0), 0), `${code}: a copy of the body's line below the head`).toBe(0)
+      }
+    }
+  }, 120_000)
+
   it('describes each of them in the manifest', () => {
     expect(manifest.version).toBe(1)
     expect(manifest.frame).toEqual(FRAME)
@@ -1641,12 +1743,14 @@ describe('the v4 review sheet and the fit sheet (Plan 19 A1d, spec §5.6)', () =
     }
   })
 
-  it('paints a tone over skin and its line art only: the body, its face and the outfit’s copy of the outline, by their masks', async () => {
+  it('paints a tone over skin and its line art only: the body, its face, the outfit’s copy of the outline and the hair’s redrawn skin, by their masks', async () => {
     const cards = grid(sheetCards(committed, { items: skinItems, hairs: ['f_bob01'], outfits: ['casual01'] }))
     const [porcelain, natural, deep] = await Promise.all(cards.map((card) => composeCard(card, { dir: OUT_DIR, manifest: committed })))
     const masks = await Promise.all([
       ...[bodyFile('f'), bodyFaceFile('f', 'neutral')].flatMap((name) => ['skin', 'skinline'].map((kind) => readPicture(join(OUT_DIR, `${name}_${kind}mask@1x.png`)))),
       readPicture(join(OUT_DIR, 'item_outfit_casual01_L40_skinlinemask@1x.png')),
+      readPicture(join(OUT_DIR, 'item_outfit_casual01_L40_skinmask@1x.png')),
+      readPicture(join(OUT_DIR, 'item_hair_f_bob01_L60_skinmask@1x.png')),
     ])
     for (const toned of [porcelain!, deep!]) {
       let changed = 0
@@ -1661,8 +1765,9 @@ describe('the v4 review sheet and the fit sheet (Plan 19 A1d, spec §5.6)', () =
       expect(outside, 'the tone reached past the skin masks').toBe(0)
     }
     // The lines (2026-10-05): untouched on porcelain, lighter than the cream they were drawn for; darker on deep.
-    const [bodySkin, , faceSkin, , outfitLine] = masks
-    const lineOnly = (p: number) => masks.some((mask) => mask.data[p * 4 + 3]! > 0) && bodySkin!.data[p * 4 + 3] === 0 && faceSkin!.data[p * 4 + 3] === 0
+    const [bodySkin, bodyLine, faceSkin, faceLine, outfitLine, outfitSkin, hairSkin] = masks
+    const lineOnly = (p: number) =>
+      [bodyLine, faceLine, outfitLine].some((mask) => mask!.data[p * 4 + 3]! > 0) && [bodySkin, faceSkin, outfitSkin, hairSkin].every((mask) => mask!.data[p * 4 + 3] === 0)
     let porcelainMoved = 0
     let deepDarker = 0
     for (let p = 0; p < natural!.width * natural!.height; p++) {
@@ -1672,6 +1777,27 @@ describe('the v4 review sheet and the fit sheet (Plan 19 A1d, spec §5.6)', () =
     }
     expect(porcelainMoved, 'porcelain moved a line pixel').toBe(0)
     expect(deepDarker, 'deep left the outfit’s copy of the outline as drawn').toBeGreaterThan(100)
+
+    // The bob's redrawn skin (2026-10-05) takes the deep tone by `ratio` at the body's skin meanL, where the hair is the
+    // top layer and opaque: the tone's own RGB scaled by min(1, l × lc / meanL) / lc, blended by the mask's alpha (the
+    // @1x mask is the @2x one halved, so between the bangs it is rarely whole).
+    const hair = await readPicture(join(OUT_DIR, 'item_hair_f_bob01_L60@1x.png'))
+    const bodyMeanL = committed.files[bodyFile('f')]!.masks!.skin!.meanL!
+    const deepRgb = [1, 3, 5].map((at) => Number.parseInt(SKIN.deep.slice(at, at + 2), 16))
+    const lc = (Math.max(...deepRgb) + Math.min(...deepRgb)) / 510
+    let painted = 0
+    let off = 0
+    for (let p = 0; p < hair.width * hair.height; p++) {
+      const t = hairSkin!.data[p * 4 + 3]! / 255
+      if (t === 0 || hair.data[p * 4 + 3] !== 255) continue
+      painted++
+      const [r, g, b] = [hair.data[p * 4]!, hair.data[p * 4 + 1]!, hair.data[p * 4 + 2]!]
+      const f = Math.min(1, ((Math.max(r, g, b) + Math.min(r, g, b)) / 510) * (lc / bodyMeanL)) / lc
+      const want = deepRgb.map((v, c) => hair.data[p * 4 + c]! * (1 - t) + Math.min(255, v * f) * t)
+      if (want.some((v, c) => Math.abs(deep!.data[p * 4 + c]! - v) > 1)) off++
+    }
+    expect(painted, 'the bob redrew skin under its bangs').toBeGreaterThan(100)
+    expect(off, 'redrawn skin not painted by ratio').toBe(0)
   }, 30_000)
 })
 
@@ -1912,7 +2038,7 @@ describe('C12 and the v4 rules of C11 (Plan 19 A1b, spec §5.1, §5.5)', () => {
     const dir = caseDir('c11-v4')
     copyLayer(dir, body, ['skin', 'skinline'])
     copyLayer(dir, face, ['skin', 'skinline', 'eye'])
-    copyLayer(dir, hair, ['hair'])
+    copyLayer(dir, hair, ['hair', 'skin'])
     const manifest = manifestFor(dir, { [body]: flagged(body, true), [face]: flagged(face, true), [hair]: flagged(hair, true) })
     for (const name of [body, face, hair]) {
       const c11 = (await checkOne(dir, name, manifest)).get('C11')!
@@ -1970,7 +2096,7 @@ describe('C12 and the v4 rules of C11 (Plan 19 A1b, spec §5.1, §5.5)', () => {
     // A v4 outfit (cut on a body) carries its copy of the outline: as committed it passes; without it, or with the
     // line run onto its own colour variant's tint mask, it fails.
     const outfit = 'item_outfit_casual01_L40'
-    copyLayer(dir, outfit, ['skinline', 'tint'])
+    copyLayer(dir, outfit, ['skinline', 'tint', 'skin'])
     const dressed = manifestFor(dir, { ...manifest.files, [outfit]: flagged(outfit, true) })
     const fine = (await checkOne(dir, outfit, dressed)).get('C11')!
     expect(fine.ok, fine.detail).toBe(true)
@@ -1998,7 +2124,7 @@ describe('C12 and the v4 rules of C11 (Plan 19 A1b, spec §5.1, §5.5)', () => {
   it('colours adds a hairstyle’s natural colour and how far its hair is from it, once items.json names one', async () => {
     const name = 'item_hair_f_bob01_L60'
     const dir = caseDir('colours-natural')
-    copyLayer(dir, name, ['hair'])
+    copyLayer(dir, name, ['hair', 'skin'])
     const manifest = { files: { [name]: committed.files[name]! } }
     const [plain] = await describeColours({ dir, manifest, names: [name], items: [] })
     expect(plain).toMatch(new RegExp(`^${name} hair #[0-9a-f]{6}$`))
@@ -2735,6 +2861,42 @@ describe('auras, frames and bots', () => {
  *
  * The shared state is built lazily (`setup`), once per run, and every case works in its own copy of it.
  */
+describe('recolourHair: one hairstyle, one reference lightness (fix round 1)', () => {
+  it('recolours the back half at the front’s hair meanL, so a pixel the two halves share a lightness with stays one colour', async () => {
+    // The wavy's two light rectangles at the temples (2026-10-05): `--recolour-to` recoloured each half at its own
+    // meanL — the front's 0.654 and the back's 0.565 — so the back came out 0.09 lighter where the halves meet.
+    const dir = caseDir('recolour-one-meanL')
+    const [W2, H2] = [FRAME.w * 2, FRAME.h * 2]
+    const front = 'item_hair_f_bob01_L60'
+    const back = 'item_hair_f_bob01_L20'
+    const paint = (boxes: [number, number, number, number, number][]): Picture => {
+      const pic = blankPicture(W2, H2)
+      for (const [x0, y0, x1, y1, grey] of boxes) for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) pic.data.set([grey, grey, grey, 255], (y * W2 + x) * 4)
+      return pic
+    }
+    // The front: a dark grey (l 0.3) and a light one (l 0.5); the back: the light grey alone.
+    await writePicture(paint([[100, 100, 200, 200, 77], [200, 100, 300, 200, 128]]), join(dir, `${front}@2x.png`))
+    await writePicture(paint([[400, 100, 500, 200, 128]]), join(dir, `${back}@2x.png`))
+    // The body and face the front's skin is cut against: blank, with empty skin masks.
+    for (const name of [bodyFile('f'), bodyFaceFile('f', 'neutral')]) {
+      await writePicture(blankPicture(W2, H2), join(dir, `${name}@2x.png`))
+      await writePicture(blankPicture(W2, H2), join(dir, `${name}_skinmask@2x.png`))
+    }
+    const manifest = { files: { [front]: { real: true }, [back]: { real: true } } } as unknown as Manifest
+    const noOverrides = caseDir('recolour-one-meanL-overrides')
+    await writeMasks({ dir, manifest, names: [front, back], overridesDir: noOverrides })
+    expect(manifest.files[front]!.masks!.hair!.meanL).toBeCloseTo(0.4, 2)
+    expect(manifest.files[back]!.masks!.hair!.meanL).toBeCloseTo(0.502, 2)
+
+    const lines: string[] = []
+    await recolourHair({ dir, manifest, names: [front, back], colour: '#e0c9b3', overridesDir: noOverrides, log: (line: string) => lines.push(line) })
+    const [f, b] = await Promise.all([readPicture(join(dir, `${front}@2x.png`)), readPicture(join(dir, `${back}@2x.png`))])
+    const rgb = (pic: Picture, x: number, y: number) => [...pic.data.subarray((y * W2 + x) * 4, (y * W2 + x) * 4 + 3)]
+    expect(rgb(b, 450, 150), 'the back’s light grey is the front’s light grey').toEqual(rgb(f, 250, 150))
+    expect(lines.join('\n')).toMatch(/item_hair_f_bob01_L20 — recoloured to #e0c9b3 at the front's hair meanL 0\.4/)
+  })
+})
+
 describe('v4 ingest (Plan 19 A2a)', () => {
   type Transform = { scale: number; offsetX: number; offsetY: number }
   type V4Entry = ManifestEntry & { cutOn?: string; copyOf?: string; tintSeed?: { x: number; y: number }; recolouredTo?: string }
@@ -3015,7 +3177,10 @@ describe('v4 ingest (Plan 19 A2a)', () => {
     expect(front.split!.region).toBeGreaterThan(0)
     expect(front.split!.front + front.split!.back).toBe(front.split!.region)
     expect(back.split).toBeUndefined()
-    for (const entry of [front, back]) expect(Object.keys(entry.masks ?? {})).toEqual(['hair'])
+    // The front also carries the skin its picture redrew (2026-10-05), cut against the body ingested before it; the back is
+    // behind the body, so its hair is all it carries.
+    expect(Object.keys(front.masks ?? {}).sort()).toEqual(['hair', 'skin'])
+    expect(Object.keys(back.masks ?? {})).toEqual(['hair'])
 
     const l60 = await readPicture(join(dir, 'item_hair_f_bob01_L60@2x.png'))
     const l20 = await readPicture(join(dir, 'item_hair_f_bob01_L20@2x.png'))
@@ -3255,7 +3420,9 @@ describe('v4 ingest (Plan 19 A2a)', () => {
     const file = await draw(dir, 'brown.png', body() + hair(DARK_BROWN))
     const names = ['item_hair_f_bob01_L60', 'item_hair_f_bob01_L20']
     const items = [{ id: hairItemId('f_bob01'), naturalColour: PURPLE }]
+    // The hair lines only: the front also prints the skin it redrew (2026-10-05), which has no natural colour.
     const deltas = async (): Promise<number[]> => (await describeColours({ dir, manifest: manifestIn(dir), names, items }) as string[])
+      .filter((line) => line.split(' ')[1] === 'hair')
       .map((line) => Number(/ΔE (\d+\.\d)$/.exec(line)?.[1] ?? Number.NaN))
 
     // As drawn, the hair is far from the hairstyle's natural colour…

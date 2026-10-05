@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { DatabaseSync } from 'node:sqlite'
 import { InsufficientBalanceError, type HandSummary, type HandSummaryPlayer } from '@bp/server-kit'
 import { afterEach, describe, expect, it } from 'vitest'
 import { openDatabase } from '../db/sqlite.js'
@@ -210,6 +211,110 @@ describe('balances.apply', () => {
     const a = r.createPlayer('Alice', 'ha', 100).playerId
     await r.balances.apply([{ playerId: a, delta: -100, reason: 'buy_in' }])
     await expect(r.balances.get(a)).resolves.toBe(0)
+  })
+})
+
+/**
+ * A database whose first `COMMIT` lands and *then* throws — the acknowledgement lost after the write was durable.
+ * `node:sqlite` commits in-process, so this is all but impossible in Lite; the room code is shared, though, so the
+ * contract is the same as Normal's and is held to the same test.
+ */
+function ackLostOnce(real: DatabaseSync): DatabaseSync {
+  let once = true
+  return new Proxy(real, {
+    get(target, prop) {
+      if (prop === 'exec') {
+        return (sql: string) => {
+          target.exec(sql)
+          if (sql === 'COMMIT' && once) {
+            once = false
+            throw new Error('acknowledgement lost after COMMIT')
+          }
+        }
+      }
+      const value: unknown = Reflect.get(target, prop)
+      return typeof value === 'function' ? (value as (...a: unknown[]) => unknown).bind(target) : value
+    },
+  })
+}
+
+const keyRows = (r: LiteRepositories): string[] => (r.db.prepare('SELECT key FROM ledger_keys ORDER BY key').all() as { key: string }[]).map((row) => row.key)
+
+describe('balances.apply with a key', () => {
+  it('moves the balance once for the same key, and says the replay was not applied', async () => {
+    const r = repos({ now: () => 9 })
+    const a = r.createPlayer('Alice', 'ha', 1000).playerId
+    const batch = [{ playerId: a, delta: 400, reason: 'cash_out' as const, refId: 'room-1' }]
+    expect(await r.balances.apply(batch, undefined, { key: 'cash_out:room-1:s1' })).toEqual({ applied: true })
+    expect(await r.balances.apply(batch, undefined, { key: 'cash_out:room-1:s1' })).toEqual({ applied: false })
+    await expect(r.balances.get(a)).resolves.toBe(1400)
+    expect(r.db.prepare('SELECT key, created_at FROM ledger_keys').all()).toEqual([{ key: 'cash_out:room-1:s1', created_at: 9 }])
+  })
+
+  it('writes no sink on a replay of a keyed carry-over release', async () => {
+    const r = repos()
+    const a = r.createPlayer('Alice', 'ha', 0).playerId
+    const meta = { kind: 'carry_over' as const, refId: 'room-1', fee: 3 }
+    await r.balances.apply([{ playerId: a, delta: 10, reason: 'refund' }], meta, { key: 'carry_over:room-1:x' })
+    expect(await r.balances.apply([{ playerId: a, delta: 10, reason: 'refund' }], meta, { key: 'carry_over:room-1:x' })).toEqual({ applied: false })
+    expect(r.sinks()).toHaveLength(1)
+    await expect(r.balances.get(a)).resolves.toBe(10)
+  })
+
+  it('skips the balance check on a replay: a committed buy-in retried with the balance now short is not refused', async () => {
+    const r = repos()
+    const a = r.createPlayer('Alice', 'ha', 5000).playerId
+    const buyIn = [{ playerId: a, delta: -5000, reason: 'buy_in' as const, refId: 'room-1' }]
+    await r.balances.apply(buyIn, undefined, { key: 'buy_in:room-1:s1' })
+    expect(await r.balances.apply(buyIn, undefined, { key: 'buy_in:room-1:s1' })).toEqual({ applied: false })
+    await expect(r.balances.get(a)).resolves.toBe(0)
+  })
+
+  it('leaves the key of a rejected batch unclaimed, so a later attempt can still apply', async () => {
+    const r = repos()
+    const a = r.createPlayer('Alice', 'ha', 100).playerId
+    const buyIn = [{ playerId: a, delta: -500, reason: 'buy_in' as const, refId: 'room-1' }]
+    await expect(r.balances.apply(buyIn, undefined, { key: 'buy_in:room-1:s1' })).rejects.toBeInstanceOf(InsufficientBalanceError)
+    expect(keyRows(r)).toEqual([])
+    r.db.prepare('UPDATE players SET balance = 1000 WHERE id = ?').run(a)
+    expect(await r.balances.apply(buyIn, undefined, { key: 'buy_in:room-1:s1' })).toEqual({ applied: true })
+    await expect(r.balances.get(a)).resolves.toBe(500)
+  })
+
+  it('applies a write that committed but reported an error only once when it is retried', async () => {
+    const db = openDatabase(':memory:')
+    const r = createSqliteRepositories(ackLostOnce(db), { handLog: false })
+    open.push(r)
+    const a = r.createPlayer('Alice', 'ha', 1000).playerId
+    const cashOut = [{ playerId: a, delta: 4000, reason: 'cash_out' as const, refId: 'room-1' }]
+    await expect(r.balances.apply(cashOut, undefined, { key: 'cash_out:room-1:s1' })).rejects.toThrow('acknowledgement lost after COMMIT')
+    expect(await r.balances.apply(cashOut, undefined, { key: 'cash_out:room-1:s1' })).toEqual({ applied: false })
+    await expect(r.balances.get(a)).resolves.toBe(5000)
+  })
+
+  it('behaves exactly as before without a key: every call applies, and no key is stored', async () => {
+    const r = repos()
+    const a = r.createPlayer('Alice', 'ha', 0).playerId
+    expect(await r.balances.apply([{ playerId: a, delta: 5, reason: 'refund' }])).toEqual({ applied: true })
+    expect(await r.balances.apply([{ playerId: a, delta: 5, reason: 'refund' }])).toEqual({ applied: true })
+    expect(await r.balances.apply([])).toEqual({ applied: true })
+    await expect(r.balances.get(a)).resolves.toBe(10)
+    expect(keyRows(r)).toEqual([])
+  })
+})
+
+describe('pruneLedgerKeys', () => {
+  it('empties ledger_keys and says how many keys went, touching no balance or sink', async () => {
+    const r = repos()
+    const a = r.createPlayer('Alice', 'ha', 1000).playerId
+    await r.balances.apply([{ playerId: a, delta: -400, reason: 'buy_in', refId: 'room-1' }], undefined, { key: 'buy_in:room-1:s1' })
+    await r.balances.apply([{ playerId: a, delta: 400, reason: 'cash_out', refId: 'room-1' }], { kind: 'carry_over', refId: 'room-1', fee: 3 }, { key: 'cash_out:room-1:s1' })
+    expect(keyRows(r)).toHaveLength(2)
+    expect(r.pruneLedgerKeys()).toBe(2)
+    expect(keyRows(r)).toEqual([])
+    await expect(r.balances.get(a)).resolves.toBe(1000)
+    expect(r.sinks()).toHaveLength(1)
+    expect(r.pruneLedgerKeys()).toBe(0)
   })
 })
 

@@ -65,6 +65,14 @@ describe('loadBodies', () => {
       const outfits = Object.keys(shipped.files).filter((file) => file.startsWith('item_outfit_')).sort()
       expect(outfits.length, gender).toBeGreaterThan(0)
       expect(tint?.skinLine, gender).toEqual({ meanL: tint?.skin?.meanL, files: [`body_${gender}_L30`, ...EXPRESSIONS.map((expr) => faceFile(gender, expr)), ...outfits] })
+      // The skin the pictures redrew (2026-10-05), at the skin's meanL: the Tết áo dài's and the royal robe's insteps,
+      // and every front hair whose skin mask is not empty — at least the seven whose hair is darker than the skin.
+      expect(tint?.layerSkin?.meanL, gender).toBe(tint?.skin?.meanL)
+      expect(tint?.layerSkin?.files.filter((file) => file.startsWith('item_outfit_')), gender).toEqual(['item_outfit_royal_robe01_L40', 'item_outfit_tet_red01_L40', 'item_outfit_tet_red01_m_L40'])
+      const fronts = Object.keys(shipped.files).filter((file) => file.startsWith('item_hair_') && file.endsWith('_L60')).sort()
+      const redrew = fronts.filter((file) => shipped.files[file]?.masks?.skin !== undefined && shipped.files[file]?.masks?.skin?.empty !== true)
+      expect(redrew, gender).toEqual(expect.arrayContaining(fronts.filter((file) => file !== 'item_hair_f_wavy01_L60')))
+      expect(tint?.layerSkin?.files.filter((file) => file.startsWith('item_hair_')), gender).toEqual(redrew)
     }
   })
 
@@ -157,6 +165,35 @@ describe('loadBodies', () => {
       expect(loadBodies(fixture(VALID), noSkin).f.tint?.skinLine).toBeUndefined()
       // A manifest with no line masks at all (before 2026-10-05) still serves skin and eyes, with no skinLine key.
       expect(loadBodies(fixture(VALID), withMasks).f.tint).not.toHaveProperty('skinLine')
+    })
+
+    it('lists every front hair and outfit layer whose picture redrew skin, at the skin’s meanL (2026-10-05)', () => {
+      const mask = (meanL: number, empty?: true): MaskInfo => (empty ? { bytes2x: 1, meanL, empty } : { bytes2x: 1, meanL })
+      const withLayerSkin: AvatarManifest = {
+        ...withMasks,
+        files: {
+          ...withMasks.files,
+          // A front hair with redrawn skin, one with an empty skin mask (a hair the colour of skin), and a back half —
+          // behind the body, never listed.
+          item_hair_f_bob01_L60: entry(60, { hair: mask(0.34), skin: mask(0.71) }),
+          item_hair_f_wavy01_L60: entry(60, { hair: mask(0.79), skin: mask(0, true) }),
+          item_hair_m_spiky01_L60: entry(60, { hair: mask(0.26), skin: mask(0.66) }),
+          item_hair_f_bob01_L20: entry(20, { hair: mask(0.3), skin: mask(0.7) }),
+          // An outfit with a redrawn instep, one with an empty skin mask, and a hat — not an outfit layer.
+          item_outfit_tet_red01_L40: entry(40, { skinLine: mask(0.33), skin: mask(0.86) }),
+          item_outfit_casual01_L40: entry(40, { skinLine: mask(0.34), skin: mask(0, true) }),
+          item_head_tophat01_L80: entry(80, { skin: mask(0.8) }),
+        },
+      }
+      // Files are membership only: every listed layer is painted at the wearer's skin meanL, whichever body it was cut on.
+      expect(loadBodies(fixture(VALID), withLayerSkin).f.tint?.layerSkin).toEqual({
+        meanL: 0.82,
+        files: ['item_hair_f_bob01_L60', 'item_hair_m_spiky01_L60', 'item_outfit_tet_red01_L40'],
+      })
+      // No skin reference, no layer skin; no such masks at all, no key.
+      const noSkin: AvatarManifest = { ...withLayerSkin, files: { ...withLayerSkin.files, body_f_L30: entry(30, { skin: skin(0, true) }) } }
+      expect(loadBodies(fixture(VALID), noSkin).f.tint?.layerSkin).toBeUndefined()
+      expect(loadBodies(fixture(VALID), withMasks).f.tint).not.toHaveProperty('layerSkin')
     })
 
     it('gives a body with no masks no tint key, and never reads one from the file', () => {

@@ -271,8 +271,10 @@ on resize), so a ledger below the fold reads as more to come; scrolled to the en
 **The card stops above the viewer's own seat** (review round 2, R2-3: on a short stage it covered that seat whole, and
 at 1920 × 940 its plate). The overlay still spans the stage, but its bottom padding grows by `--seat-clearance`, and
 its scrim paints the padded content box alone — the card's stage — so the scrim's centre rises with the card and the
-seat below is not darkened (the ellipse is as tall as that box, so it is transparent by the box's foot and draws no
-line across the felt). `RoomScreen` sets the clearance from `useSeatClearance(stageRef, active, seat)`
+seat below is not darkened (the ellipse is as tall and as wide as that box — `50% 50%`, closest-side — so it is
+transparent by all four of the box's edges and draws no line across the felt, nor a step at either side; the e2e
+reads the pixels 3 px either side of each edge and allows a step of 3 levels, and the shade near the rim is a little
+lighter for it). `RoomScreen` sets the clearance from `useSeatClearance(stageRef, active, seat)`
 (`src/screens/seat-clearance.ts`) while a card is up; `seat` is the viewer's seat number, `null` while they watch. The
 hook finds the seat and its plate by `Seat`'s markers, `data-me="true"` on the viewer's own seat and `data-plate` on a
 plate — a contract of their own, not the hashed class names — and measures before paint, on a `ResizeObserver` over
@@ -363,6 +365,15 @@ seat's `ChibiConfig`; a bot never asks it — `PokerTable` draws `botChibi` for 
 `CreateRoomForm` only offers values from `ECONOMY` and still runs the draft through `validateRoomConfig`; it is the
 *validated* config that reaches `onSubmit`.
 
+`RoomList` lets a long room name wrap beside its status badge, two lines at most. The name carries no `title`
+until the pointer is over it *and* it is cut (`scrollHeight > clientHeight + 1`), and loses it again on leaving — a
+static `title` equal to the visible text is read twice by some screen readers. A touch screen therefore has no
+tooltip, as before. The lobby's heading row (`.sectionHead`: title, hairline, "create a room") wraps: under about
+342 px of window the button drops to a line of its own below the title, which is what keeps a 320 px page from
+scrolling sideways; from 342 px it is one line. The narrowest ticket is the grid's floor, 304 px at 320, 656 and
+976 px, and the busy-lobby step of `normal.spec.ts` checks it (≤ 305, no sideways scroll, no overlapping text) at
+those three windows.
+
 `HoldemFields` (blind tier plus the buy-in window in big blinds) and `BlindFields` (hole cards, decision mode, fixed
 wager — whose field carries the table-limit hint, "Table limit per player: … (5× the wager)" — and bot filler) are the mode-specific building blocks `CreateRoomForm` swaps between; both are fully controlled,
 and an app only reaches for them directly when it builds its own room form. The swap happens in a box that reserves
@@ -399,7 +410,7 @@ Tokens live in `src/theme/tokens.css` and are all an app needs to restyle the ki
 | --- | --- |
 | Surfaces | `--bg`, `--bg-elev`, `--bg-mesh`, `--line` |
 | Ink | `--ink`, `--ink-muted` |
-| Accents | `--gold`, `--gold-soft`, `--gold-ink`, `--red`, `--red-soft`, `--red-ink`, `--teal`, `--teal-fill`, `--teal-ink` |
+| Accents | `--gold`, `--gold-soft`, `--gold-ink`, `--red` (ink), `--red-fill` (paint), `--red-soft`, `--red-ink`, `--teal`, `--teal-fill`, `--teal-ink` |
 | Table | `--felt`, `--felt-edge` |
 | Cards | `--card-face`, `--card-ink`, `--card-red` |
 | Type | `--font-display`, `--font-body` |
@@ -410,8 +421,10 @@ Tokens live in `src/theme/tokens.css` and are all an app needs to restyle the ki
 **Dark is the default**; `data-theme="light"` on the root swaps the page to parchment. The felt does not follow it —
 a card table is a physical object and stays night-side in both themes. Anything printed on it therefore has to keep
 dark-theme contrast, which is what `data-surface="night"` does: put it on an element and the ink half of the palette
-is re-declared for that subtree. `PokerTable`, `ActionBar` and the hand-result overlay set it themselves; an app can
-put it on any panel it lays over the felt.
+is re-declared for that subtree — the red pair and the text `color` too, so text the subtree merely inherits (the
+hand-result card's names) stays light under the light theme instead of reading the page's dark ink on the night card.
+`PokerTable`, `ActionBar` and the hand-result overlay set it themselves; an app can put it on any panel it lays over
+the felt.
 
 **The atmosphere covers the whole page, not one screenful.** `body` carries the mesh background and two
 pseudo-element layers (grain, vignette); `background-attachment: fixed` used to pin all three to the
@@ -430,11 +443,51 @@ the night palette again over `--felt`. Adding an accent means adding its pair th
 theme's `--gold` was darkened from `#9a6e15` to `#856011` (same 40° hue) because the lighter value
 reached only 3.93:1 as ink on parchment and 4.30:1 under `--gold-ink`; `--gold-soft` follows it.
 
-A few components are **parchment islands** — a room ticket, `.panel.parchment` — that re-declare the
-light inks locally so they stay printed paper whatever the page theme is (`.panel.felt` is the
-mirror image for the night side). They carry their own paper gradient rather than `--bg`, so the
+A few components are **parchment islands** — a room ticket, `.panel.parchment`, and Lite's copy of the ticket
+(`lite.module.css`) — that re-declare the light inks locally so they stay printed paper whatever the page theme is
+(`.panel.felt` is the mirror image for the night side). They carry their own paper gradient rather than `--bg`, so the
 test checks them separately against its darker stop; a value copied there has to be one that clears
-AA on paper, not merely the one the theme happens to use today.
+AA on paper, not merely the one the theme happens to use today. An app's own island is covered the same way: the
+helpers the test uses (`luminance`, `contrast`, `tokensOf`, `parseColor`, `over`, `declarationsOf`, `placeholderColour`
+and the palettes read out of `tokens.css`) live in `src/theme/contrast.ts` and are exported as **`@bp/ui-kit/testing`**
+(`package.json` → `exports["./testing"]`; not from `src/index.ts`, only tests import it).
+`apps/lite/web/src/screens/lite.contrast.test.ts` checks Lite's island with them, and
+`apps/normal-web/src/screens/normal.contrast.test.ts` Normal's placeholder. Vitest blanks every CSS import,
+`?raw` included, so an app that reads a stylesheet in a test needs `test.css.include: [/\.css\?raw$/]` in its
+`vitest.config.ts` (Lite and Normal have it); the helpers throw on a blank stylesheet rather than pass on nothing.
+
+**Red is split the way teal is** (Plan 20, T2). One value cannot be both an ink that clears 4.5:1 on `#0b1020` and a fill
+dark enough for `--red-ink` to read on it, so:
+
+- **`--red` is ink** — an error line, a loss (`.amount[data-sign='down']`), a full table's count, `.badge.red`, a toast's
+  glyph. Dark, night and `.panel.felt`: `#e0737b`, 6.23:1 on `--bg`, 5.60:1 on `--bg-elev`, 5.43:1 on the felt's own
+  ground (it was 3.59, 3.22 and 3.13). Light: `#a9242d`, unchanged.
+- **`--red-fill` is paint** — the danger button, a connection's dot, the urgent timer's ring, and every red rule or
+  border (an invalid field, an alert, a banner, a toast, Lite's notice). Dark and night: `#c8323c`, the old value, which
+  holds 3:1 as a non-text mark on every ground it is painted on, with `--red-ink` at AA on it (4.84:1). Light: the same
+  `#a9242d` as `--red`, since on paper one value already does both. The fills measure 0 px different from before.
+- **An island that re-declares `--red` declares `--red-fill` beside it**, or a fill inside takes the page theme's:
+  the dark theme's `#c8323c` on paper. The room ticket, `.panel.parchment` and Lite's ticket declare `#a9242d` for
+  both; `.panel.felt` declares `#e0737b` and `#c8323c`; `[data-surface='night']` the same pair.
+- A usage guard enforces the split in every stylesheet the kit ships, and in Lite's and Normal's own: `--red` may only
+  be a `color`, `--red-fill` never. A fill left on `--red` fails (it would turn pink on the dark ground), and so does
+  an ink moved onto `--red-fill` (it would fall back to 3.6:1).
+
+**Badge text is a composite, and is tested as one.** A badge is 12 px at weight 600, so its ink needs 4.5:1 on its
+own translucent tint over whatever is under it. The inks are drawn toward `--ink` — gold and teal 20 %, the muted
+grey 12 % — and red is the `--red` ink; the tints are unchanged, and the border and the table's opaque tint follow
+`currentColor`. `tokens.test.ts` → "badge text" measures every tone on every ground a badge is printed on: `--bg`
+and `--bg-elev` in the dark, light and night palettes; the page's mesh under the room header (`--bg-mesh`, derived
+from the token and pinned to a pixel sampled on the real build); a dark `.panel.ink` under its highlight (held at
+2 %); both ends of both paper islands under both themes; `.panel.felt`; and a seat on the table. Its
+`BADGES_BELOW_AA` is empty, and guarded both ways like `BELOW_AA`: a badge that gets worse fails, and so does one that
+is fixed while its line is left behind.
+
+**Placeholders.** A placeholder is text, so it is held to AA too: `color-mix(in srgb, var(--ink-muted) 94%, transparent)`
+(Lite's name field 5.03:1 on the paper, Normal's fields 4.69 light and 6.82 dark, the kit's `JoinByCode` fields the
+same as Normal's), with `opacity: 1` because Firefox draws `::placeholder` at 0.54 by default and would undo it. The
+browser's own default, `#757575`, is 3.98 on the light field and 4.11 on the dark one. `placeholderColour(rule,
+palette)` in the testing export models the least forgiving engine for that test.
 
 The one layout knob is `--bp-stage` (see [Embedding](#embedding-it-in-an-app)).
 
@@ -646,15 +699,10 @@ full-viewport, for measuring a layout against a screen size.
   is reserved from 768 px up so it does not also move on every turn.
 - Playground screenshots are described in `packages/ui-kit/playground/screenshots/README.md` rather than committed
   as images.
-- **`--red` as ink on the dark ground is 3.6:1 (`--bg`) and 3.2:1 (`--bg-elev`)**, below AA — an error line or a
-  red badge in the dark theme. One token cannot fix it: on `#0b1020` an ink needs a luminance above ~0.20 to reach
-  4.5:1, while the same token used as a fill under `--red-ink` needs one below ~0.17. Closing it means splitting
-  the token the way `--teal` / `--teal-fill` already are, which is a palette change across `ui-kit`, `lite-web`
-  and `normal-web`. The same defect repeats on `.panel.felt`'s own `--bg` (`#0c2226`, darker than the theme's
-  `#0b1020`), at **3.13:1**. `tokens.test.ts` (`BELOW_AA`) records five entries covering those three distinct
-  token pairs — `--bg` and `--bg-elev` in *both* the dark and the night palette, plus the felt — and fails if any
-  of them gets worse, or if one is fixed and its line is left behind.
-- A badge is ink on its own tint (`--gold` on `--gold-soft`, and the same for red and teal), which lands near
-  4.1–4.4:1 rather than 4.5:1. The contrast test covers flat token pairs only; the composited tints are not
-  asserted. The alert in `lobby.module.css` already avoids the pattern by keeping `--ink` text and letting the
-  rule and the tint carry the signal.
+- **The badge test measures the grounds a badge sits on today** (see Theming → Badge text). A badge on a ground it
+  does not list is not measured, and one place is tight: teal under a dark `.panel.ink`'s highlight. The test holds
+  that highlight at 2 %, above anywhere a badge is (Lite's "claimed" badge: 0.8–1.4 %, none on a phone; titled panels put
+  their content below the title and its rule). A teal badge on the first line of a tall dark panel, at 3–4 %, would
+  read 4.44–4.32:1; no such placement exists, and a lighter teal would buy the margin for it at the price of a paler
+  badge everywhere. The page's mesh is modelled where a badge is (under the room header, top-left), not at its other
+  washes.

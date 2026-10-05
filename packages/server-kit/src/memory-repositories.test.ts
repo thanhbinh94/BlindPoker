@@ -49,6 +49,58 @@ describe('memory repositories', () => {
     await repos.balances.apply([], { refId: 'r1', fee: 7, kind: 'carry_over' })
     expect(repos.sinks).toEqual([{ refId: 'r1', fee: 7, kind: 'carry_over' }])
   })
+  describe('a keyed batch (applied once, however often it is retried)', () => {
+    it('moves the balance once for the same key, and says the replay was not applied', async () => {
+      const repos = createMemoryRepositories()
+      repos.addPlayer('p1', 'Ann', 1000)
+      const batch = [{ playerId: 'p1', delta: 400, reason: 'cash_out' as const, refId: 'room-1' }]
+      expect(await repos.balances.apply(batch, undefined, { key: 'cash_out:room-1:s1' })).toEqual({ applied: true })
+      expect(await repos.balances.apply(batch, undefined, { key: 'cash_out:room-1:s1' })).toEqual({ applied: false })
+      expect(await repos.balances.get('p1')).toBe(1400)
+      expect(repos.entries).toHaveLength(1)
+      // A different key is a different write.
+      expect(await repos.balances.apply(batch, undefined, { key: 'cash_out:room-1:s2' })).toEqual({ applied: true })
+      expect(await repos.balances.get('p1')).toBe(1800)
+    })
+
+    it('writes no sink on a replay either', async () => {
+      const repos = createMemoryRepositories()
+      repos.addPlayer('p1', 'Ann', 0)
+      const meta = { refId: 'room-1', fee: 3, kind: 'carry_over' as const }
+      await repos.balances.apply([{ playerId: 'p1', delta: 10, reason: 'refund' }], meta, { key: 'carry_over:room-1:x' })
+      await repos.balances.apply([{ playerId: 'p1', delta: 10, reason: 'refund' }], meta, { key: 'carry_over:room-1:x' })
+      expect(repos.sinks).toEqual([meta])
+      expect(await repos.balances.get('p1')).toBe(10)
+    })
+
+    it('skips the balance check on a replay: a committed buy-in retried with the balance now short is not refused', async () => {
+      const repos = createMemoryRepositories()
+      repos.addPlayer('p1', 'Ann', 5000)
+      const buyIn = [{ playerId: 'p1', delta: -5000, reason: 'buy_in' as const, refId: 'room-1' }]
+      await repos.balances.apply(buyIn, undefined, { key: 'buy_in:room-1:s1' })
+      expect(await repos.balances.apply(buyIn, undefined, { key: 'buy_in:room-1:s1' })).toEqual({ applied: false })
+      expect(await repos.balances.get('p1')).toBe(0)
+    })
+
+    it('leaves the key of a rejected batch unclaimed, so a later attempt can still apply', async () => {
+      const repos = createMemoryRepositories()
+      repos.addPlayer('p1', 'Ann', 100)
+      const buyIn = [{ playerId: 'p1', delta: -500, reason: 'buy_in' as const, refId: 'room-1' }]
+      await expect(repos.balances.apply(buyIn, undefined, { key: 'buy_in:room-1:s1' })).rejects.toBeInstanceOf(InsufficientBalanceError)
+      repos.records.get('p1')!.balance = 1000
+      expect(await repos.balances.apply(buyIn, undefined, { key: 'buy_in:room-1:s1' })).toEqual({ applied: true })
+      expect(await repos.balances.get('p1')).toBe(500)
+    })
+
+    it('behaves exactly as before without a key: every call applies', async () => {
+      const repos = createMemoryRepositories()
+      repos.addPlayer('p1', 'Ann', 0)
+      expect(await repos.balances.apply([{ playerId: 'p1', delta: 5, reason: 'refund' }])).toEqual({ applied: true })
+      expect(await repos.balances.apply([{ playerId: 'p1', delta: 5, reason: 'refund' }])).toEqual({ applied: true })
+      expect(await repos.balances.get('p1')).toBe(10)
+    })
+  })
+
   it('rejects unknown players and records hands', async () => {
     const repos = createMemoryRepositories()
     await expect(repos.balances.get('ghost')).rejects.toThrow(/unknown player/)

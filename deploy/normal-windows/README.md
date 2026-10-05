@@ -151,7 +151,7 @@ Tham số có thể dùng:
 | `-LanIp 192.168.1.50` | Bỏ qua bước tự dò card mạng, dùng thẳng địa chỉ này. Xem mục "IP LAN tự dò sai" ngay dưới. |
 | `-AutoStart` | Cho task tự chạy mỗi lần bạn **đăng nhập** Windows (trigger *At log on*). Lần chạy sau không có `-AutoStart` thì trigger bị bỏ — task luôn khớp với lần chạy gần nhất. |
 | `-Foreground` | Cách chạy cũ: server gắn vào cửa sổ PowerShell này. Chỉ dùng để gỡ lỗi — **đóng cửa sổ là server dừng**, không để lại dòng lỗi nào. |
-| `-TaskName Tên` | Đặt tên khác cho scheduled task (mặc định `BlindLuckPoker-Normal`; chỉ chữ, số và `. _ -`). Khi đó `stop.ps1` cũng phải có `-TaskName Tên`. Muốn chạy **hai bản cùng lúc** thì cần **hai bản checkout** (hai thư mục kit), mỗi bản một `-TaskName` và một cổng — hai lần chạy từ cùng một thư mục dùng chung `normal.pid` và log nên bản thứ hai bị từ chối. |
+| `-TaskName Tên` | Đặt tên khác cho scheduled task (mặc định `BlindLuckPoker-Normal`; chỉ chữ, số và `. _ -`). Khi đó `stop.ps1` cũng phải có `-TaskName Tên`. Muốn chạy **hai bản cùng lúc** thì cần **hai bản checkout** (hai thư mục kit), mỗi bản một `-TaskName` và một cổng — hai lần chạy từ cùng một thư mục dùng chung `normal.pid` và log nên bản thứ hai bị từ chối. Hai bản cũng phải dùng **hai database khác nhau** (`DATABASE_URL` khác nhau): mỗi lần khởi động, server xoá bảng `ledger_keys`, nên hai server cùng một database có thể làm một lần ghi tiền bị cộng hai lần. |
 
 Log của server nằm ở `normal.log` và `normal.err.log` cạnh script. Cảnh báo và lỗi của chính cửa sổ
 PowerShell ẩn (trước khi `node` chạy — ví dụ không tìm thấy `node`, `.env` hỏng, chưa có mạng) nằm ở

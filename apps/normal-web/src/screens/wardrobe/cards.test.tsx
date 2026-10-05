@@ -3,6 +3,7 @@ import { fireEvent, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ItemDto } from '../../api.js'
+import enNormal from '../../locales/en/normal.json'
 import viNormal from '../../locales/vi/normal.json'
 import { makeI18n, renderWithI18n } from '../../test-i18n.js'
 import { ColourCard, ItemCard, WordCard } from './cards.js'
@@ -102,7 +103,7 @@ describe('cards', () => {
           owned={false}
           wearing={false}
           hint="hint"
-          variants={[{ item: HEAD_BERET_BLUE, owned: true, wearing: false }]}
+          variants={[{ item: HEAD_BERET_BLUE, owned: true, wearing: false, hint: '' }]}
           onPick={onPick}
         />,
       )
@@ -135,12 +136,13 @@ describe('cards', () => {
           owned
           wearing={false}
           hint=""
-          variants={[{ item: HEAD_BERET_BLUE, owned: false, wearing: false }]}
+          variants={[{ item: HEAD_BERET_BLUE, owned: false, wearing: false, hint: 'daily hint' }]}
           onPick={onPick}
         />,
       )
 
-      const dot = screen.getByRole('button', { name: viNormal.items.head_beret_blue01 })
+      // A locked dot says how to get it, in the card's own wording (no rarity: the dot has no rarity line).
+      const dot = screen.getByRole('button', { name: `${viNormal.items.head_beret_blue01}, ${viNormal.wardrobe.filter.locked}: daily hint` })
       expect(dot).toHaveAttribute('aria-disabled', 'true')
 
       await user.click(dot)
@@ -198,8 +200,8 @@ describe('cards', () => {
           wearing
           hint=""
           variants={[
-            { item: HEAD_BERET, owned: false, wearing: false },
-            { item: HEAD_BERET_BLUE, owned: true, wearing: true },
+            { item: HEAD_BERET, owned: false, wearing: false, hint: 'daily hint' },
+            { item: HEAD_BERET_BLUE, owned: true, wearing: true, hint: '' },
           ]}
           onPick={onPick}
         />,
@@ -230,8 +232,8 @@ describe('cards', () => {
           wearing
           hint=""
           variants={[
-            { item: HEAD_BERET, owned: true, wearing: false },
-            { item: HEAD_BERET_BLUE, owned: true, wearing: true },
+            { item: HEAD_BERET, owned: true, wearing: false, hint: '' },
+            { item: HEAD_BERET_BLUE, owned: true, wearing: true, hint: '' },
           ]}
           onPick={onPick}
         />,
@@ -249,6 +251,73 @@ describe('cards', () => {
       await user.click(dots[0]!)
 
       expect(onPick).toHaveBeenCalledWith('head_beret_red01')
+    })
+
+    // Plan 20 (T3): a locked dot carries the same "<name>, Chưa có: <hint>" its card would, in its label and its title —
+    // an owned variant's card hides the original's own lock line, and the dot is where the original shows up.
+    it('names a locked dot "<name>, Chưa có: <hint>" in its label and its title, and an owned one by its name alone', () => {
+      const lockedName = `${viNormal.items.head_beret_red01}, ${viNormal.wardrobe.filter.locked}: how to get it`
+      render(
+        <ItemCard
+          item={HEAD_BERET_BLUE}
+          family={HEAD_BERET}
+          owned
+          wearing={false}
+          hint=""
+          variants={[
+            { item: HEAD_BERET, owned: false, wearing: false, hint: 'how to get it' },
+            { item: HEAD_BERET_BLUE, owned: true, wearing: false, hint: '' },
+          ]}
+          onPick={vi.fn()}
+        />,
+      )
+
+      const dots = within(screen.getByRole('group', { name: viNormal.items.head_beret_red01 })).getAllByRole('button')
+      expect(dots.map((dot) => [dot.getAttribute('aria-label'), dot.getAttribute('title')])).toEqual([
+        [lockedName, lockedName],
+        [viNormal.items.head_beret_blue01, viNormal.items.head_beret_blue01],
+      ])
+      expect(dots[0]).toHaveAttribute('aria-disabled', 'true')
+      expect(dots[1]).toHaveAttribute('aria-disabled', 'false')
+    })
+
+    // Plan 20 (T3): with the box ticked the card shows an owned variant, and the original it varies is locked. Touch has no
+    // tooltip, so the dot's hint is not enough: one visible line names the original and says how to get it.
+    describe('the locked original’s hint line', () => {
+      const HINT = 'how to get it'
+      const variants = [
+        { item: HEAD_BERET, owned: false, wearing: false, hint: HINT },
+        { item: HEAD_BERET_BLUE, owned: true, wearing: true, hint: '' },
+      ]
+
+      it('draws "<original name>: <hint>" between the pick button and the dot row — outside the button', () => {
+        render(<ItemCard item={HEAD_BERET_BLUE} family={HEAD_BERET} owned wearing hint="" familyHint={HINT} variants={variants} onPick={vi.fn()} />)
+
+        const line = screen.getByText(`${viNormal.items.head_beret_red01}: ${HINT}`)
+        const pick = screen.getByRole('button', { name: `${viNormal.items.head_beret_blue01}, ${viNormal.inventory.rarity.rare}, ${viNormal.wardrobe.wearingBadge}` })
+        const dotRow = screen.getByRole('group', { name: viNormal.items.head_beret_red01 })
+        expect(pick.contains(line), 'not inside the pick button').toBe(false)
+        expect(pick.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING, 'after the pick button').toBeTruthy()
+        expect(line.compareDocumentPosition(dotRow) & Node.DOCUMENT_POSITION_FOLLOWING, 'before the dot row').toBeTruthy()
+        // It is a line of text beside the button, not part of what the button says.
+        expect(pick).toHaveAccessibleName(`${viNormal.items.head_beret_blue01}, ${viNormal.inventory.rarity.rare}, ${viNormal.wardrobe.wearingBadge}`)
+      })
+
+      it('words the line by the `wardrobe.familyHint` template, in either language', () => {
+        const i18n = makeI18n('vi')
+        i18n.addResource('vi', 'normal', 'wardrobe.familyHint', '{{hint}} ({{name}})')
+        renderWithI18n(<ItemCard item={HEAD_BERET_BLUE} family={HEAD_BERET} owned wearing hint="" familyHint={HINT} variants={variants} onPick={vi.fn()} />, i18n)
+        expect(screen.getByText(`${HINT} (${viNormal.items.head_beret_red01})`)).toBeInTheDocument()
+
+        renderWithI18n(<ItemCard item={HEAD_BERET_BLUE} family={HEAD_BERET} owned wearing hint="" familyHint={HINT} variants={variants} onPick={vi.fn()} />, makeI18n('en'))
+        expect(screen.getByText(`${enNormal.items.head_beret_red01}: ${HINT}`)).toBeInTheDocument()
+      })
+
+      it('draws no line without a familyHint', () => {
+        render(<ItemCard item={HEAD_BERET_BLUE} family={HEAD_BERET} owned wearing hint="" variants={variants} onPick={vi.fn()} />)
+
+        expect(screen.queryByText(new RegExp(`^${viNormal.items.head_beret_red01}: `))).toBeNull()
+      })
     })
   })
 

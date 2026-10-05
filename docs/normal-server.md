@@ -58,7 +58,8 @@ src/
 
 data/                items.json, item-aliases.json, avatar-bodies.json, achievements.json — content, not code
                       avatar-manifest.json — Task 1's asset pipeline output, mirrored from normal-web
-drizzle/             committed migration SQL (0000 generated; 0001_avatar_v2, 0002_outfits hand-written, data only)
+drizzle/             committed migration SQL (0000 generated; 0001_avatar_v2, 0002_outfits hand-written, data only;
+                      0003_ledger_keys generated, then guarded with IF NOT EXISTS — the keys `balances.apply` claims)
 test/build.test.ts   the build itself, as a test
 ```
 

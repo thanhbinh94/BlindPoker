@@ -298,7 +298,7 @@
 }
 
 .timerUrgent::before {
-  background: conic-gradient(from 0deg, var(--red) var(--pct, 0%), rgba(237, 231, 216, 0.18) 0);
+  background: conic-gradient(from 0deg, var(--red-fill) var(--pct, 0%), rgba(237, 231, 216, 0.18) 0);
 }
 
 .timerUrgent .timerText {
@@ -1371,7 +1371,7 @@
 
 .conn[data-status='closed'] .connDot,
 .conn[data-status='idle'] .connDot {
-  background: var(--red);
+  background: var(--red-fill);
 }
 
 /* On a phone the identity bar is competing with the felt for the same 800 px of screen: same information, less

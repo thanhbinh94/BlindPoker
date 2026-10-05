@@ -80,4 +80,15 @@ export const MIGRATIONS: readonly (readonly MigrationStep[])[] = [
     backfillNameKeys,
     `CREATE UNIQUE INDEX idx_players_name_key ON players (name_key)`,
   ],
+
+  // v3 — the keys `balances.apply` claims (Plan 20), the same table Normal's `0003_ledger_keys.sql` adds: a write the
+  // room may retry carries a key, and a key already here makes the retry a no-op. Purely additive. `IF NOT EXISTS`
+  // because a database rewound to an older `user_version` (the migration tests do this) re-runs this step over a
+  // table it already has.
+  [
+    `CREATE TABLE IF NOT EXISTS ledger_keys (
+      key TEXT PRIMARY KEY,
+      created_at INTEGER NOT NULL
+    )`,
+  ],
 ]

@@ -37,6 +37,8 @@
      the light theme's deep one, and its ink is light: #856011 under #fff8e8 is 5.4:1, under the dark ink 3.1:1 */
   --gold-ink: #fff8e8;
   --red: #a9242d;
+  /* re-declared beside --red, or a fill inside would take the theme's — the dark theme's #c8323c on paper */
+  --red-fill: #a9242d;
   --teal: #15544c;
   --teal-fill: #124a43;
   --teal-ink: #f2f7f5;
@@ -168,11 +170,12 @@
   overflow-wrap: anywhere;
 }
 
-/* Two lines at most — the server takes 30 characters, and one with no space in it still wraps (`anywhere`); the
-   whole name is the heading's tooltip. The clamp needs `overflow: hidden`, which shaves whatever a glyph draws
-   outside the box: at the headings' 1.15 that was the tail of a "y" and the top of a capital's stacked marks ("Ổ").
-   At 1.3 a line holds the deepest descender, and the padding above the first line (given back by the margin) holds
-   those marks; a one-line name (23.4 px) is still no taller than the badge beside it. */
+/* Two lines at most — the server takes 30 characters, and one with no space in it still wraps (`anywhere`); a name
+   the clamp cuts gets the whole of itself as a tooltip on hover (`RoomList`). The clamp needs `overflow: hidden`,
+   which shaves whatever a glyph draws outside the box: at the headings' 1.15 that was the tail of a "y" and the top
+   of a capital's stacked marks ("Ổ"). At 1.3 a line holds the deepest descender, and the padding above the first
+   line (given back by the margin) holds those marks; a one-line name (23.4 px) is still no taller than the badge
+   beside it. */
 .roomName {
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -243,7 +246,7 @@
   color: var(--red);
 }
 
-/* Forms. The alert keeps ink text: --red on its tint is 2.8:1; rule + tint carry the signal. */
+/* Forms. The alert keeps ink text; its rule and its tint carry the signal. */
 .form,
 .join,
 .grid {
@@ -310,8 +313,15 @@
   border-radius: var(--radius-md);
 }
 
+/* A step softer than the hint, no softer than AA allows: 94 % of --ink-muted is 4.7:1 on the light --bg (the
+   browser's own grey, which the join fields used to show, is 4.0). `opacity: 1`, or Firefox draws it at 0.54. */
+.input::placeholder {
+  color: color-mix(in srgb, var(--ink-muted) 94%, transparent);
+  opacity: 1;
+}
+
 .input[aria-invalid='true'] {
-  border-color: var(--red);
+  border-color: var(--red-fill);
   background-color: var(--red-soft);
 }
 
@@ -378,7 +388,7 @@
   font-size: 0.875rem;
   color: var(--ink);
   background: var(--red-soft);
-  border: 1px solid var(--red);
+  border: 1px solid var(--red-fill);
   border-left-width: 4px;
   border-radius: var(--radius-md);
 }
@@ -480,7 +490,7 @@
 }
 
 .conn[data-status='closed'] .connDot {
-  background: var(--red);
+  background: var(--red-fill);
 }
 
 @keyframes blip {

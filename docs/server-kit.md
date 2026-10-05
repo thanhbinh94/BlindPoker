@@ -77,7 +77,7 @@ If neither hook resolves an identity, the socket is closed
 interface PlayerRepository { findById(playerId): Promise<PlayerRecord | null> }
 interface BalanceRepository {
   get(playerId): Promise<number>
-  apply(entries: BalanceEntry[], meta?: SettlementMeta): Promise<void>
+  apply(entries: BalanceEntry[], meta?: SettlementMeta, opts?: { key?: string }): Promise<{ applied: boolean }>
 }
 interface GameHistoryRepository { recordHand(summary: HandSummary): Promise<void> }
 ```
@@ -89,7 +89,7 @@ go negative, before writing anything. `Room` relies on this to write
 buy-ins, cash-outs, refunds and carry-over releases each as a single
 unit — a partial write would let points leak or be created.
 
-Two further rules the implementation must honor:
+Three further rules the implementation must honor:
 
 - **Netting.** Entries are grouped by player and their deltas summed
   *before* the negativity check, so a batch that debits and re-credits the
@@ -106,6 +106,67 @@ Two further rules the implementation must honor:
   settles no player entries in either mode (chips move on the table), so
   its fee arrives as `apply([], { kind: 'table_fee', ... })` — an empty
   batch that exists purely to write the sink row.
+- **Keys.** A write that may be retried carries `opts.key`, and the
+  implementation claims that key first, inside the batch's own
+  transaction (Normal and Lite: a `ledger_keys(key primary key,
+  created_at)` table; the in-memory repositories: `repos.keys`). A key
+  that is already claimed makes the call a no-op that resolves
+  `{ applied: false }` — no balance check, no write — so a write that
+  committed but reported an error (the acknowledgement lost after
+  `COMMIT`) is not applied a second time when it is retried. A rejected
+  batch (insufficient balance, any error) rolls its claim back with it,
+  so its key is free for the next attempt. Without a key every call
+  behaves as it always has and resolves `{ applied: true }`; so does a
+  batch with nothing to write, which claims no key.
+
+`Room` keys every write it may retry, and treats `applied: false` as
+success (an earlier attempt landed):
+
+| Write | Key |
+|---|---|
+| cash-out (`standUpNow`) | `cash_out:<roomId>:<sitId>` — one per sitting, no amount in it |
+| buy-in (`sitDown`) | `buy_in:<roomId>:<sitId>` |
+| refund of a buy-in that never got its seat | `buy_in_refund:<roomId>:<sitId>` |
+| carry-over release | `carry_over:<roomId>:<id>` — one per release |
+
+A write that failed may still have landed, so the room never acts on it
+as if it had not:
+
+- **Cash-out.** The seat is frozen (`cashOutPending`) from before the
+  write until it is acknowledged: it keeps its stack, sits out, is never
+  dealt in, and neither a rejoin nor Sit In thaws it. The end of every
+  hand retries every pending cash-out (as do another Stand Up, Leave or
+  kick, the reconnect expiry and a shutdown), under the same key. A kick
+  that fails is finished, not just cashed out: the player has already been
+  told `KICKED`, so the end of the next hand retries the whole removal
+  (`leaveAfterHand`). Only a `Room.join` before then calls it off, and the gateway never sends one for a player who is
+  still a member (`ALREADY_IN_ROOM`), so over the wire the kick stands.
+- **Buy-in.** The player is not seated, and the attempt is kept
+  (`pendingBuyIn`): the next Sit replays it — same key, same amount,
+  before any amount or balance check — and seats the player with it. A
+  removal or a shutdown replays it and then refunds it, so nobody is
+  left debited and unseated. The failed attempt pushes `BALANCE` (re-read,
+  so it shows the debit if the write landed), and the Sit that replays it
+  pushes again once seated, as every Sit does.
+- **Carry-over release.** The pot is held aside (`Room.pendingRelease`)
+  with its batch, out of `carryOverPot`, and is settled first by the next
+  release, by the next deal (which deals without it if it still cannot be
+  settled) and by a close or shutdown. The room's view and the invariant
+  below count it. Nothing newer is released behind it; a close or
+  shutdown that still cannot settle it also logs the newer pot it leaves
+  unreleased (`carry-over not released at close`, with the room, the
+  amount and the pending release's key).
+
+Every error line about one of these writes names its key, so an operator
+can reconcile it against `ledger_keys`. The table fee is not keyed: it is
+never retried.
+
+A key is only ever replayed by the room that claimed it, and rooms live in
+the server's memory, so no key can be retried across a restart. Both
+editions empty `ledger_keys` when a server starts (`pruneLedgerKeys`):
+Normal in `buildApp`, before the game server exists; Lite in `listen()`,
+for the instance that owns the data directory (never a `--smoke` run).
+This assumes one server per database (`docs/known-limitations.md`).
 
 Sink rows are what make the money invariant checkable:
 `Σ player balances + Σ sinks (+ live table stacks and carry-over pots) `
@@ -367,11 +428,14 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
 
 After `shutdown` resolves, every point that was ever in a stack or a
 carry-over pot has been returned to a `BalanceRepository` balance or
-recorded as a sink row — nothing is left in RAM. The one exception is a
-cash-out the repository refuses: it is logged (`shutdown cash-out failed`,
-with the player and the stack) for an operator to reconcile, and the room
-still closes and the other seats are still cashed out, so one bad row
-cannot hold up the rest of the shutdown.
+recorded as a sink row — nothing is left in RAM. The exceptions are a
+write the repository refuses. A cash-out, or the refund of a buy-in that
+never got its seat, is logged (`shutdown settlement failed`, with the
+player, the stack, the buy-in when it is a refund, and the write's key)
+for an operator to reconcile, and the room still closes and the other
+seats are still cashed out, so one bad row cannot hold up the rest of the
+shutdown. A carry-over release that fails is logged with its pot and key
+(and the newer pot held behind it, `carry-over not released at close`).
 
 ## Testing utilities
 

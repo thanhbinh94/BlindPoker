@@ -22,8 +22,9 @@ export interface TintRef {
   colour: string
   meanL: number
   /** `shade` darkens the masked line art by the colour's lightness over `meanL` instead of recolouring it (the
-   * skin's outline, 2026-10-05); absent, `recolour`. */
-  mode?: 'shade'
+   * skin's outline, 2026-10-05); `ratio` scales the masked pixels' lightness by it, in the colour's hue (the skin a
+   * hair or outfit picture redrew, 2026-10-05); absent, `recolour`. */
+  mode?: 'shade' | 'ratio'
 }
 
 /** One stacked layer: `order` is the z-index (10 aura … 90 frame), `file` the filename stem without `@Nx.png`.
@@ -48,12 +49,14 @@ export interface MaskSet {
 /** A body of one gender (avatar v4): bald, drawn at layer 30, with a face per expression at layer 50
  * (`body_<g>_L30`, `body_<g>_face_<expr>_L50`). `tint`, present only when the server found the masks, says which
  * of those layers `skinColor` (`<file>_skinmask`) and `eyeColor` (`<file>_eyemask`) may recolour, and on which
- * `skinColor` also shades the skin's line art (`<file>_skinlinemask`, at the skin's `meanL`). */
+ * `skinColor` also shades the skin's line art (`<file>_skinlinemask`, at the skin's `meanL`). `layerSkin` lists the
+ * front hair and outfit layers whose picture redrew some of the body's skin (`<file>_skinmask`, 2026-10-05), which
+ * `skinColor` paints by `ratio` at the skin's `meanL`. */
 export interface BodyRef {
   gender: Gender
   body: string
   faces: Record<Expression, string>
-  tint?: { skin?: MaskSet; skinLine?: MaskSet; eyes?: MaskSet }
+  tint?: { skin?: MaskSet; skinLine?: MaskSet; layerSkin?: MaskSet; eyes?: MaskSet }
 }
 
 /** A hairstyle (avatar v4): one item, two layers — `back` at 20, behind the body, and `front` at 60, in front of

@@ -934,8 +934,12 @@
       },
       "masks": {
         "hair": {
-          "bytes2x": 6029,
+          "bytes2x": 9012,
           "meanL": 0.3406
+        },
+        "skin": {
+          "bytes2x": 7642,
+          "meanL": 0.5852
         }
       }
     },
@@ -956,17 +960,21 @@
       "layer": 60,
       "w": 384,
       "h": 448,
-      "bytes2x": 104360,
+      "bytes2x": 102513,
       "real": true,
       "split": {
-        "region": 61158,
-        "front": 38300,
+        "region": 59980,
+        "front": 37122,
         "back": 22858
       },
       "masks": {
         "hair": {
-          "bytes2x": 7026,
-          "meanL": 0.2289
+          "bytes2x": 7863,
+          "meanL": 0.2274
+        },
+        "skin": {
+          "bytes2x": 6531,
+          "meanL": 0.5493
         }
       }
     },
@@ -987,17 +995,21 @@
       "layer": 60,
       "w": 384,
       "h": 448,
-      "bytes2x": 112318,
+      "bytes2x": 112198,
       "real": true,
       "split": {
-        "region": 53098,
-        "front": 39973,
+        "region": 53055,
+        "front": 39930,
         "back": 13125
       },
       "masks": {
         "hair": {
-          "bytes2x": 6186,
-          "meanL": 0.3579
+          "bytes2x": 7385,
+          "meanL": 0.358
+        },
+        "skin": {
+          "bytes2x": 5673,
+          "meanL": 0.5759
         }
       }
     },
@@ -1005,12 +1017,12 @@
       "layer": 20,
       "w": 384,
       "h": 448,
-      "bytes2x": 39391,
+      "bytes2x": 38401,
       "real": true,
       "masks": {
         "hair": {
           "bytes2x": 5838,
-          "meanL": 0.7898
+          "meanL": 0.7012
         }
       }
     },
@@ -1018,17 +1030,21 @@
       "layer": 60,
       "w": 384,
       "h": 448,
-      "bytes2x": 75573,
+      "bytes2x": 75426,
       "real": true,
       "split": {
-        "region": 48980,
-        "front": 38728,
+        "region": 48931,
+        "front": 38679,
         "back": 10252
       },
       "masks": {
         "hair": {
-          "bytes2x": 5781,
-          "meanL": 0.7899
+          "bytes2x": 6459,
+          "meanL": 0.7906
+        },
+        "skin": {
+          "bytes2x": 4896,
+          "meanL": 0.7114
         }
       },
       "recolouredTo": "#e0c9b3"
@@ -1059,8 +1075,12 @@
       },
       "masks": {
         "hair": {
-          "bytes2x": 5544,
+          "bytes2x": 7454,
           "meanL": 0.1851
+        },
+        "skin": {
+          "bytes2x": 6429,
+          "meanL": 0.5197
         }
       }
     },
@@ -1090,8 +1110,12 @@
       },
       "masks": {
         "hair": {
-          "bytes2x": 5449,
+          "bytes2x": 7341,
           "meanL": 0.2473
+        },
+        "skin": {
+          "bytes2x": 6465,
+          "meanL": 0.5134
         }
       }
     },
@@ -1121,8 +1145,12 @@
       },
       "masks": {
         "hair": {
-          "bytes2x": 5690,
+          "bytes2x": 6996,
           "meanL": 0.2585
+        },
+        "skin": {
+          "bytes2x": 5786,
+          "meanL": 0.6436
         }
       }
     },
@@ -1152,8 +1180,12 @@
       },
       "masks": {
         "hair": {
-          "bytes2x": 5689,
+          "bytes2x": 7214,
           "meanL": 0.3204
+        },
+        "skin": {
+          "bytes2x": 5945,
+          "meanL": 0.5926
         }
       }
     },
@@ -1265,6 +1297,11 @@
         "skinLine": {
           "bytes2x": 4932,
           "meanL": 0.3411
+        },
+        "skin": {
+          "bytes2x": 4015,
+          "meanL": 0,
+          "empty": true
         }
       }
     },
@@ -1279,6 +1316,11 @@
         "skinLine": {
           "bytes2x": 4455,
           "meanL": 0.2801
+        },
+        "skin": {
+          "bytes2x": 4015,
+          "meanL": 0,
+          "empty": true
         }
       }
     },
@@ -1293,6 +1335,11 @@
         "skinLine": {
           "bytes2x": 5059,
           "meanL": 0.2615
+        },
+        "skin": {
+          "bytes2x": 4015,
+          "meanL": 0,
+          "empty": true
         }
       }
     },
@@ -1309,6 +1356,11 @@
         "skinLine": {
           "bytes2x": 4522,
           "meanL": 0.2659
+        },
+        "skin": {
+          "bytes2x": 4015,
+          "meanL": 0,
+          "empty": true
         }
       }
     },
@@ -1323,6 +1375,10 @@
         "skinLine": {
           "bytes2x": 4724,
           "meanL": 0.2299
+        },
+        "skin": {
+          "bytes2x": 4085,
+          "meanL": 0.838
         }
       }
     },
@@ -1337,6 +1393,10 @@
         "skinLine": {
           "bytes2x": 4585,
           "meanL": 0.3352
+        },
+        "skin": {
+          "bytes2x": 4109,
+          "meanL": 0.8422
         }
       }
     },
@@ -1353,6 +1413,10 @@
         "skinLine": {
           "bytes2x": 4519,
           "meanL": 0.2672
+        },
+        "skin": {
+          "bytes2x": 4092,
+          "meanL": 0.838
         }
       }
     },
@@ -1367,6 +1431,11 @@
         "skinLine": {
           "bytes2x": 4546,
           "meanL": 0.3451
+        },
+        "skin": {
+          "bytes2x": 4015,
+          "meanL": 0,
+          "empty": true
         }
       }
     }

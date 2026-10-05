@@ -15,5 +15,9 @@ export default defineConfig({
     environmentMatchGlobs: [['test/**', 'node']],
     setupFiles: ['src/test-setup.ts'],
     globals: true,
+    // Vitest blanks every stylesheet import by default, `?raw` included. A contrast test reads a stylesheet's text
+    // (`normal.contrast.test.ts`, and `@bp/ui-kit/testing`'s own `tokens.css?raw`), so the raw text is let through;
+    // a CSS module imported for its class names is still the usual stand-in.
+    css: { include: [/\.css\?raw$/] },
   },
 })

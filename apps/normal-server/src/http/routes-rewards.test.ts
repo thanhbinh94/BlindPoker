@@ -21,8 +21,9 @@ let h: Harness
 let me: Account
 
 const balance = (): Promise<number> => h.app.services.repos.balances.get(me.playerId)
-const spend = (amount: number): Promise<void> =>
-  h.app.services.repos.balances.apply([{ playerId: me.playerId, delta: -amount, reason: 'settlement', refId: `test:${String(amount)}` }])
+const spend = async (amount: number): Promise<void> => {
+  await h.app.services.repos.balances.apply([{ playerId: me.playerId, delta: -amount, reason: 'settlement', refId: `test:${String(amount)}` }])
+}
 
 beforeAll(async () => {
   test = await createTestDb()

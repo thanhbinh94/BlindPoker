@@ -162,6 +162,44 @@ describe('layersFor — tints (spec 2026-10-03-avatar-v4-design.md §6.3)', () =
     expect(eyesOnly.find((l) => l.order === 50)?.tints).toEqual([{ mask: 'body_f_face_neutral_L50_eyemask', colour: '#2f7fd6', meanL: 0.41 }])
   })
 
+  it('paints the skin colour on the skin an outfit or the front hair redrew, by ratio, after the layer’s own colour (2026-10-05)', () => {
+    const body: BodyRef = {
+      ...BODY_F,
+      tint: {
+        skin: { meanL: 0.88, files: ['body_f_L30'] },
+        skinLine: { meanL: 0.88, files: ['body_f_L30', CASUAL.file] },
+        layerSkin: { meanL: 0.88, files: [CASUAL.file, BOB.front] },
+      },
+    }
+    const hair: HairRef = { ...BOB, tint: { meanL: 0.31, files: [BOB.back, BOB.front] } }
+    const red: WearRef = { ...CASUAL, tint: { colour: '#c0392b', meanL: 0.5 } }
+    const layers = layersFor({ ...bare(), body, hair, outfit: red, hairColor: '#b3261e', skinColor: '#643e2b' }, 'neutral', 'full')
+    // The outfit: its own colour, then its redrawn skin, then its copy of the outline.
+    expect(layers.find((l) => l.order === 40)?.tints).toEqual([
+      { mask: `${CASUAL.file}_tintmask`, colour: '#c0392b', meanL: 0.5 },
+      { mask: `${CASUAL.file}_skinmask`, colour: '#643e2b', meanL: 0.88, mode: 'ratio' },
+      { mask: `${CASUAL.file}_skinlinemask`, colour: '#643e2b', meanL: 0.88, mode: 'shade' },
+    ])
+    // The front hair: its hair colour, then its redrawn skin. The back hair is behind the body: no skin of its own.
+    expect(layers.find((l) => l.order === 60)?.tints).toEqual([
+      { mask: 'item_hair_f_bob01_L60_hairmask', colour: '#b3261e', meanL: 0.31 },
+      { mask: 'item_hair_f_bob01_L60_skinmask', colour: '#643e2b', meanL: 0.88, mode: 'ratio' },
+    ])
+    expect(layers.find((l) => l.order === 20)?.tints).toEqual([{ mask: 'item_hair_f_bob01_L20_hairmask', colour: '#b3261e', meanL: 0.31 }])
+    // A light tone still gets the job: `ratio` gives the redrawn skin the tone's hue, as `recolour` gives the body's.
+    const porcelain = layersFor({ ...bare(), body, skinColor: '#fcf0e9' }, 'neutral', 'full')
+    expect(porcelain.find((l) => l.order === 60)?.tints).toEqual([{ mask: 'item_hair_f_bob01_L60_skinmask', colour: '#fcf0e9', meanL: 0.88, mode: 'ratio' }])
+    // No skin colour, no job; a hair colour alone keeps only its own.
+    const hairOnly = layersFor({ ...bare(), body, hair, hairColor: '#b3261e' }, 'neutral', 'full')
+    expect(hairOnly.find((l) => l.order === 60)?.tints).toEqual([{ mask: 'item_hair_f_bob01_L60_hairmask', colour: '#b3261e', meanL: 0.31 }])
+    expect(hairOnly.find((l) => l.order === 40)?.tints).toBeUndefined()
+    // A layer the set does not list redrew no skin: nothing.
+    const unlisted: BodyRef = { ...body, tint: { ...body.tint, layerSkin: { meanL: 0.88, files: ['item_outfit_tuxedo01_L40'] } } }
+    const plain = layersFor({ ...bare(), body: unlisted, skinColor: '#643e2b' }, 'neutral', 'full')
+    expect(plain.find((l) => l.order === 60)?.tints).toBeUndefined()
+    expect(plain.find((l) => l.order === 40)?.tints).toEqual([{ mask: `${CASUAL.file}_skinlinemask`, colour: '#643e2b', meanL: 0.88, mode: 'shade' }])
+  })
+
   it('paints the hair colour on both hair layers at the hairstyle’s own meanL', () => {
     const hair: HairRef = { ...BOB, tint: { meanL: 0.31, files: [BOB.back, BOB.front] } }
     const body: BodyRef = { ...BODY_F, tint: { skin: { meanL: 0.78, files: ['body_f_L30'] } } }

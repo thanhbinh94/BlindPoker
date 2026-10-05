@@ -161,9 +161,19 @@ export function ItemTab({ slot, catalog, owned, achievements, draft, wear, showL
             return <WordCard key={original.id} item={shown} owned={isOwned} wearing={wearing} hint={hint} onPick={onPick} />
           }
 
-          // The original's dot included (No8a): `dots` is the family, original first, as `slotCards` filtered it.
+          // The original's dot included (No8a): `dots` is the family, original first, as `slotCards` filtered it. A dot not
+          // owned carries its own hint (Plan 20, T3) — not `shown`'s, which is the owned variant the card draws.
           const variantProps =
-            dots.length === 0 ? undefined : dots.map((member) => ({ item: member, owned: owned.has(member.id), wearing: draft[slot] === member.id }))
+            dots.length === 0
+              ? undefined
+              : dots.map((member) => {
+                  const memberOwned = owned.has(member.id)
+                  return { item: member, owned: memberOwned, wearing: draft[slot] === member.id, hint: memberOwned ? '' : hintFor(member, achievements, t) }
+                })
+          // The box ticked, the original locked and the card showing another member (Plan 20, T3): ticking only adds, so the
+          // card stays on the owned variant — and the original's hint, which its own lock line used to carry, goes on a line
+          // of its own. Unticked, the original is not listed at all.
+          const familyHint = showLocked && !owned.has(original.id) && shown.id !== original.id ? hintFor(original, achievements, t) : undefined
 
           return (
             <ItemCard
@@ -175,6 +185,7 @@ export function ItemTab({ slot, catalog, owned, achievements, draft, wear, showL
               wearing={wearing}
               hint={hint}
               variants={variantProps}
+              familyHint={familyHint}
               reserveDots={reserveDots}
               onPick={onPick}
             />
