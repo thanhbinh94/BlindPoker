@@ -1668,7 +1668,7 @@ describe('the v4 review sheet and the fit sheet (Plan 19 A1d, spec §5.6)', () =
     for (let p = 0; p < natural!.width * natural!.height; p++) {
       if (!lineOnly(p)) continue
       if ([0, 1, 2].some((c) => porcelain!.data[p * 4 + c] !== natural!.data[p * 4 + c])) porcelainMoved++
-      if (outfitLine!.data[p * 4 + 3]! >= 128 && deep!.data[p * 4] < natural!.data[p * 4]!) deepDarker++
+      if (outfitLine!.data[p * 4 + 3]! >= 128 && deep!.data[p * 4]! < natural!.data[p * 4]!) deepDarker++
     }
     expect(porcelainMoved, 'porcelain moved a line pixel').toBe(0)
     expect(deepDarker, 'deep left the outfit’s copy of the outline as drawn').toBeGreaterThan(100)
