@@ -151,6 +151,11 @@ describe('layersFor — tints (spec 2026-10-03-avatar-v4-design.md §6.3)', () =
     // An outfit the set does not list keeps only its own colour; no skin colour, nothing at all.
     expect(layers.find((l) => l.order === 40)?.tints).toBeUndefined()
     expect(layersFor({ ...bare(), body: withOutfit }, 'neutral', 'full').find((l) => l.order === 40)?.tints).toBeUndefined()
+    // A tone as light as the skin's meanL or lighter leaves the line as drawn (`shade` would multiply by 1): no job at all,
+    // so a porcelain outfit is not re-rendered for nothing, nor lost if its line mask fails to load.
+    const porcelain = layersFor({ ...bare(), body: withOutfit, outfit: CASUAL, skinColor: '#fcf0e9' }, 'neutral', 'full')
+    expect(porcelain.find((l) => l.order === 30)?.tints).toEqual([{ mask: 'body_f_L30_skinmask', colour: '#fcf0e9', meanL: 0.78 }])
+    expect(porcelain.find((l) => l.order === 40)?.tints).toBeUndefined()
     // No skin colour, no line shading either: the eye colour alone on the face.
     const eyesOnly = layersFor({ ...bare(), body, eyeColor: '#2f7fd6' }, 'neutral', 'full')
     expect(eyesOnly.find((l) => l.order === 30)?.tints).toBeUndefined()

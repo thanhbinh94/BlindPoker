@@ -18,6 +18,12 @@ describe('tintKey', () => {
     expect(a).not.toBe(b)
   })
 
+  it('differs when the meanL differs: one outfit file shaded against either body’s skin (2026-10-05)', () => {
+    const a = tintKey('item_outfit_casual01_L40', 2, [{ mask: 'item_outfit_casual01_L40_skinlinemask', colour: '#643e2b', meanL: 0.8881, mode: 'shade' }])
+    const b = tintKey('item_outfit_casual01_L40', 2, [{ mask: 'item_outfit_casual01_L40_skinlinemask', colour: '#643e2b', meanL: 0.8819, mode: 'shade' }])
+    expect(a).not.toBe(b)
+  })
+
   it('is stable for the same file, density and tints', () => {
     expect(tintKey('body_f_L30', 1, [SKIN_TINT])).toBe(tintKey('body_f_L30', 1, [{ ...SKIN_TINT }]))
   })

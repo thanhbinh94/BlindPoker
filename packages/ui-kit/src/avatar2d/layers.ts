@@ -1,15 +1,20 @@
 import { fnv1a } from './bot.js'
+import { hexToHsl } from './recolour.mjs'
 import type { BodyRef, ChibiConfig, ChibiFrame, ChibiSubject, Expression, LayerRef, MaskSet, TintRef, WearRef } from './types.js'
 
 const ORDER = { aura: 10, hairBack: 20, body: 30, outfit: 40, face: 50, hairFront: 60, faceAcc: 70, head: 80, frame: 90 } as const
 
 /** One region's paint job on `file`, if it has one: the colour is set and `file` is listed in the region's
- * `MaskSet` — then `<file>_<suffix>` is painted with `colour` at the region's own `meanL` (shaded rather than
- * recoloured for the skin's line art). */
+ * `MaskSet` — then `<file>_<suffix>` is painted with `colour` at the region's own `meanL`. The skin's line art is
+ * shaded rather than recoloured, and gets no job at all for a colour at least as light as `meanL`, which `shade` would
+ * leave as drawn: a light tone then costs no render for the line, and cannot lose a layer to a line mask that fails. */
 function regionTint(file: string, set: MaskSet | undefined, colour: string | undefined, suffix: 'skinmask' | 'skinlinemask' | 'eyemask' | 'hairmask'): TintRef[] {
   if (colour === undefined || set?.files.includes(file) !== true) return []
   const tint: TintRef = { mask: `${file}_${suffix}`, colour, meanL: set.meanL }
-  if (suffix === 'skinlinemask') tint.mode = 'shade'
+  if (suffix === 'skinlinemask') {
+    if (hexToHsl(colour)[2] >= set.meanL) return []
+    tint.mode = 'shade'
+  }
   return [tint]
 }
 
@@ -47,7 +52,8 @@ function layer(order: number, file: string, tints: TintRef[] | undefined): Layer
  *   `hairColor` on each hair layer listed in `hair.tint` — each at its own region's `meanL`. `skinColor` also
  *   shades the skin's line art on each layer listed in `body.tint.skinLine`, right after that layer's skin, so a
  *   cream outline does not glow round a darker skin (2026-10-05) — the outfit too, whose picture redrew the hands'
- *   outline, after the outfit's own colour. A worn item's own colour variant lands on that item's layer. A body, hairstyle or item with no masks, or a subject with no colours set, gets none.
+ *   outline, after the outfit's own colour. A worn item's own colour variant lands on that item's layer. A body,
+ *   hairstyle or item with no masks, or a subject with no colours set, gets none.
  *
  * Bots have no wardrobe at all — just their body (30) and expression face (50), and never carry tints.
  */
@@ -66,7 +72,8 @@ export function layersFor(subject: ChibiSubject, expression: Expression, frame: 
   if (aura !== undefined && frame !== 'head') layers.push(layer(ORDER.aura, aura.file, itemTints(aura)))
   if (head?.hidesHairBack !== true) layers.push(layer(ORDER.hairBack, hair.back, orNone(regionTint(hair.back, hair.tint, hairColor, 'hairmask'))))
   layers.push(layer(ORDER.body, body.body, orNone(skinTints(body.body, body, skinColor))))
-  layers.push(layer(ORDER.outfit, outfit.file, orNone([...(itemTints(outfit) ?? []), ...regionTint(outfit.file, body.tint?.skinLine, skinColor, 'skinlinemask')])))
+  const outfitLine = regionTint(outfit.file, body.tint?.skinLine, skinColor, 'skinlinemask')
+  layers.push(layer(ORDER.outfit, outfit.file, orNone([...(itemTints(outfit) ?? []), ...outfitLine])))
   const faceFile = body.faces[expression]
   layers.push(layer(ORDER.face, faceFile, orNone([...skinTints(faceFile, body, skinColor), ...regionTint(faceFile, eyes, eyeColor, 'eyemask')])))
   if (head?.hidesHairFront !== true) layers.push(layer(ORDER.hairFront, hair.front, orNone(regionTint(hair.front, hair.tint, hairColor, 'hairmask'))))

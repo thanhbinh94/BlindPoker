@@ -720,8 +720,10 @@ The stand-ins keep the masks they were drawn with (§6); only real art is cut.
 ```bash
 pnpm --filter @bp/normal-web exec node scripts/avatar-pipeline.mjs colours body_f_L30 body_f_face_neutral_L50 item_hair_f_bob01_L60
 # body_f_L30 skin #fbe0ca
+# body_f_L30 skinLine #793620
 # body_f_face_neutral_L50 eyes #2a6492
 # body_f_face_neutral_L50 skin #fbe1cb
+# body_f_face_neutral_L50 skinLine #7b341c
 # item_hair_f_bob01_L60 hair #654269 natural #5e3e6f ΔE 6.6
 ```
 

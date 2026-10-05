@@ -1660,6 +1660,18 @@ describe('the v4 review sheet and the fit sheet (Plan 19 A1d, spec §5.6)', () =
       expect(changed, 'the tone changed nothing').toBeGreaterThan(1000)
       expect(outside, 'the tone reached past the skin masks').toBe(0)
     }
+    // The lines (2026-10-05): untouched on porcelain, lighter than the cream they were drawn for; darker on deep.
+    const [bodySkin, , faceSkin, , outfitLine] = masks
+    const lineOnly = (p: number) => masks.some((mask) => mask.data[p * 4 + 3]! > 0) && bodySkin!.data[p * 4 + 3] === 0 && faceSkin!.data[p * 4 + 3] === 0
+    let porcelainMoved = 0
+    let deepDarker = 0
+    for (let p = 0; p < natural!.width * natural!.height; p++) {
+      if (!lineOnly(p)) continue
+      if ([0, 1, 2].some((c) => porcelain!.data[p * 4 + c] !== natural!.data[p * 4 + c])) porcelainMoved++
+      if (outfitLine!.data[p * 4 + 3]! >= 128 && deep!.data[p * 4] < natural!.data[p * 4]!) deepDarker++
+    }
+    expect(porcelainMoved, 'porcelain moved a line pixel').toBe(0)
+    expect(deepDarker, 'deep left the outfit’s copy of the outline as drawn').toBeGreaterThan(100)
   }, 30_000)
 })
 
@@ -1954,6 +1966,26 @@ describe('C12 and the v4 rules of C11 (Plan 19 A1b, spec §5.1, §5.5)', () => {
     const missing = (await checkOne(dir, body, lineless)).get('C11')!
     expect(missing.ok).toBe(false)
     expect(missing.detail).toContain('no skinLine mask cut for this real layer')
+
+    // A v4 outfit (cut on a body) carries its copy of the outline: as committed it passes; without it, or with the
+    // line run onto its own colour variant's tint mask, it fails.
+    const outfit = 'item_outfit_casual01_L40'
+    copyLayer(dir, outfit, ['skinline', 'tint'])
+    const dressed = manifestFor(dir, { ...manifest.files, [outfit]: flagged(outfit, true) })
+    const fine = (await checkOne(dir, outfit, dressed)).get('C11')!
+    expect(fine.ok, fine.detail).toBe(true)
+    const { skinLine: _outfitLine, ...outfitMasks } = dressed.files[outfit]!.masks!
+    const bare = manifestFor(dir, { ...dressed.files, [outfit]: { ...dressed.files[outfit]!, masks: outfitMasks } })
+    const unlined = (await checkOne(dir, outfit, bare)).get('C11')!
+    expect(unlined.ok).toBe(false)
+    expect(unlined.detail).toContain('no skinLine mask cut for this real layer')
+    const tint = await readPicture(join(dir, `${outfit}_tintmask@2x.png`))
+    await editMask(dir, outfit, 'skinline', (alpha) => {
+      for (let p = 0; p < alpha.length; p++) if (tint.data[p * 4 + 3]! >= 128 && p % 53 === 0) alpha[p] = 255
+    })
+    const onTint = (await checkOne(dir, outfit, dressed)).get('C11')!
+    expect(onTint.ok).toBe(false)
+    expect(onTint.detail).toMatch(/skin line and tint share \d+ pixels/)
   }, 60_000)
 
   it('colours prints one line per mask: a body’s skin, a face’s skin and the iris of its eyes', () => {

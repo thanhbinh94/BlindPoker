@@ -20,11 +20,12 @@ interface CacheEntry {
  * page — and every re-render of the same one — shares it. */
 const cache = new Map<string, CacheEntry>()
 
-/** The cache key for one layer's tinted render: same file, same density, same tints (in order and by colour) →
- * same key, so two chibis wearing the same coloured hair only ever pay for the canvas work once. A tint's `mode`
- * needs no place in it: the mask names it (a `_skinlinemask` is always shaded). */
+/** The cache key for one layer's tinted render: same file, same density, same tints (in order, by colour and by
+ * `meanL`) → same key, so two chibis wearing the same coloured hair only ever pay for the canvas work once. `meanL` is
+ * in it because one file can be painted against two: a shared outfit's line is shaded at the wearer's body's skin
+ * `meanL` (2026-10-05). A tint's `mode` needs no place in it: the mask names it (a `_skinlinemask` is always shaded). */
 export function tintKey(file: string, density: 1 | 2, tints: TintRef[]): string {
-  return `${file}|${density}|${tints.map((t) => `${t.mask}:${t.colour}`).join(',')}`
+  return `${file}|${density}|${tints.map((t) => `${t.mask}:${t.colour}:${t.meanL}`).join(',')}`
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {

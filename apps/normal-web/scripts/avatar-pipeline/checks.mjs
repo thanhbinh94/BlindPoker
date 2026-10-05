@@ -707,7 +707,7 @@ function maskChecks(context) {
   const { entry, parsed, pictures, masks, neutralSkin } = context
   // A layer marked `empty: true` (a short hairstyle's blank L20, since A2a) has nothing for a mask to sit on.
   // A v4 outfit cut on a body carries its copy of that body's outline (2026-10-05).
-  const required = parsed?.kind === 'item' && parsed.slot === 'outfit' && entry?.cutOn ? ['skinLine'] : (REQUIRED_MASKS[parsed?.kind] ?? [])
+  const required = parsed?.kind === 'item' && parsed.slot === 'outfit' && GENDERS.includes(entry?.cutOn) ? ['skinLine'] : (REQUIRED_MASKS[parsed?.kind] ?? [])
   const absent = entry?.real === true && entry.empty !== true ? required.filter((kind) => !entry.masks?.[kind]) : []
   const missing = absent.map((kind) => `no ${kind} mask cut for this real layer`)
   if (!entry?.masks) return missing.length ? bad(missing.join('; ')) : ok('n/a — no masks cut for this layer')

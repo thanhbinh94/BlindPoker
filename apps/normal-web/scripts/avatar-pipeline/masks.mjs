@@ -861,14 +861,21 @@ export function skinLineMask(pic, { skin, eyes = null }) {
  *   picture, and the cut keeps the arms' and hands' outline where the outfit leaves them bare; registration puts it
  *   within 1–3 px of the body's own (measured on the eight v4 outfits);
  * - `tolerance` — ΔE76 to that body line pixel: the copy is drawn in the same red-brown, while the nearest cloth that
- *   meets the outline (the Tết áo dài's red, `#c0392b` against the line's `#832e13`, ΔE ~25) is further;
+ *   meets the outline (the Tết áo dài's red, `#c0392b` against the line's `#832e13`, ΔE ~25) is further. A pixel
+ *   *darker* than the line pixel needs only its a*b* within `tolerance` (the review, 2026-10-05): the royal robe's
+ *   fingertips are inked darker still (L* 16, ΔE 20.5 from the line), and darkening what is already darker is harmless,
+ *   while black or navy cloth is still far off in a*b*;
  * - `shown` — how far from skin the outfit leaves showing (the body's skin where the outfit is transparent) the copy
  *   may lie: a 2–3 px line and its 1 px soft rim, which is what glows on a dark background (3 left the rim of the
  *   royal robe's and the Tết áo dài's fingertips). Cloth lying over skin it covers — a sleeve over the arm's outline
  *   beneath, trousers over the shorts' — never touches shown skin, so a dark cloth the colour of the line is not
- *   taken for it.
+ *   taken for it;
+ * - `minShown` — the smallest piece of shown skin that counts. A few pixels of thigh showing past a trouser edge
+ *   (6 and 16 px on the champion's) would otherwise make the trouser's brown side panel "beside shown skin" and shade
+ *   it into notches on a deep tone; the skin between a robe's fingers is in pieces of 8–23 px, but the fingers' outline
+ *   lies within `shown` of the hand's own skin anyway.
  */
-export const OUTFIT_LINE = { reach: 3, tolerance: 20, shown: 4 }
+export const OUTFIT_LINE = { reach: 3, tolerance: 20, shown: 4, minShown: 24 }
 
 /**
  * An outfit layer's copy of the body's outline, at @2x (2026-10-05): what a skin colour shades on the outfit, as it
@@ -876,8 +883,9 @@ export const OUTFIT_LINE = { reach: 3, tolerance: 20, shown: 4 }
  * red-brown rim under a deep tone however the body's own line was shaded.
  *
  * A pixel of `item` is in when it carries ink (alpha over `ALPHA_INK`), lies within `OUTFIT_LINE.shown` of skin the
- * outfit leaves showing (`skin` non-zero where `item` is at most `ALPHA_INK`), and within `OUTFIT_LINE.reach` of a
- * pixel of the body's line (`line` non-zero) whose colour on `body` is within `OUTFIT_LINE.tolerance` of its own.
+ * outfit leaves showing (`skin` non-zero where `item` is at most `ALPHA_INK`, in pieces of at least
+ * `OUTFIT_LINE.minShown` px), and within `OUTFIT_LINE.reach` of a pixel of the body's line (`line` non-zero) whose
+ * colour on `body` is within `OUTFIT_LINE.tolerance` of its own — or in a*b* alone, when the pixel is darker.
  * `body`, `skin` and `line` are the body the outfit was cut on (`cutOn`), its skin mask and its skin-line mask as
  * written. Returns 0/255 per pixel; empty when the outfit leaves no skin showing.
  *
@@ -892,6 +900,9 @@ export function outfitLineMask(item, { body, skin, line }) {
   let any = false
   for (let i = 0; i < shown.length; i++) if (skin[i] && data[i * 4 + 3] <= ALPHA_INK) { shown[i] = 1; any = true }
   if (!any) return out
+  const minShown = Math.max(1, Math.round(OUTFIT_LINE.minShown * scale * scale))
+  const pieces = components(shown, width, height)
+  for (let i = 0; i < shown.length; i++) if (shown[i] && pieces.sizes[pieces.label[i]] < minShown) shown[i] = 0
   const nearShown = dilate(shown, width, height, Math.max(1, Math.round(OUTFIT_LINE.shown * scale)))
   const lineLab = new Array(width * height)
   for (let i = 0; i < lineLab.length; i++) if (line[i]) lineLab[i] = labOf(body.data[i * 4], body.data[i * 4 + 1], body.data[i * 4 + 2])
@@ -907,7 +918,9 @@ export function outfitLineMask(item, { body, skin, line }) {
           const ny = y + dy
           if (nx < 0 || ny < 0 || nx >= width || ny >= height || dx * dx + dy * dy > reach * reach) continue
           const q = lineLab[ny * width + nx]
-          if (q !== undefined && labDist(p, q) <= OUTFIT_LINE.tolerance) { out[i] = 255; break search }
+          if (q === undefined) continue
+          const close = labDist(p, q) <= OUTFIT_LINE.tolerance || (p[0] <= q[0] && Math.hypot(p[1] - q[1], p[2] - q[2]) <= OUTFIT_LINE.tolerance)
+          if (close) { out[i] = 255; break search }
         }
       }
     }
@@ -1137,7 +1150,8 @@ function inkMask(layer2x) {
  * and clear of the same eyes. Its manifest `meanL` is the line's own and goes unused: the line is shaded against the
  * skin's (`bodies.ts`). A v4 outfit cut on a body gets **skinLine** too: its copy of that body's outline
  * (`outfitLineMask`), against the body's skin and line as written — so bodies are cut first, whatever order `names`
- * gives.
+ * gives, and an outfit whose body has no such masks on disk is refused. Re-cutting a body does not re-cut the outfits
+ * cut on it: name them in the same run (`masks body_f_L30 item_outfit_…`) when the body's line moves.
  */
 export async function writeMasks({ dir, manifest, names, overridesDir = MASK_OVERRIDE_DIR, log = () => {} }) {
   // Bodies first: an outfit's line is cut against its body's skin and line as written in this same run.
@@ -1151,12 +1165,19 @@ export async function writeMasks({ dir, manifest, names, overridesDir = MASK_OVE
     const shut = parsed.expr === 'closed' || parsed.expr === 'sleep'
 
     if (parsed.kind === 'item') {
+      // An outfit's line is cut against its body's masks as written; refuse before writing anything for it without them.
+      const bodyName = isOutfitOnBody(parsed, entry) ? bodyFile(entry.cutOn) : null
+      if (bodyName) {
+        for (const kind of ['skin', 'skinLine']) {
+          const file = join(dir, `${bodyName}_${MASK_FILE_KIND[kind]}mask@2x.png`)
+          if (!existsSync(file)) throw new Error(`${name} is cut against ${bodyName}'s ${kind} mask, and ${file} is missing: cut the body's masks first`)
+        }
+      }
       if (entry.tintSeed) {
         const tint = tintMask(layer2x, entry.tintSeed)
         await writeOneMask({ dir, name, kind: 'tint', computed: tint, layer2x, entry, manifest, overridesDir, log })
       }
-      if (isOutfitOnBody(parsed, entry)) {
-        const bodyName = bodyFile(entry.cutOn)
+      if (bodyName) {
         const body = await readPicture(join(dir, `${bodyName}@2x.png`))
         const reference = { body, skin: await writtenMask(dir, bodyName, 'skin'), line: await writtenMask(dir, bodyName, 'skinLine') }
         await writeOneMask({ dir, name, kind: 'skinLine', computed: outfitLineMask(layer2x, reference), layer2x, entry, manifest, overridesDir, log })

@@ -683,7 +683,7 @@ describe('skinMask, and eyes on a bald face (Plan 19 A1b, spec §5.5)', () => {
     const far = new Uint8Array(W * H)
     for (let y = 780; y < 820; y++) for (let x = 600; x < 640; x++) far[y * W + x] = 1
     expect(coverage(copy, far), 'the outline’s colour far from the body’s outline').toBe(0)
-    expect(OUTFIT_LINE).toEqual({ reach: 3, tolerance: 20, shown: 4 })
+    expect(OUTFIT_LINE).toEqual({ reach: 3, tolerance: 20, shown: 4, minShown: 24 })
   })
 
   it('cuts no line art where there is no skin', async () => {
@@ -873,6 +873,32 @@ describe('writeMasks', () => {
     mkdirSync(overridesDir, { recursive: true })
   })
   afterAll(() => rmSync(temp, { recursive: true, force: true }))
+
+  it('cuts a v4 outfit’s line against its body’s masks, the body first whatever the order, and refuses one without them (2026-10-05)', async () => {
+    const where = join(temp, 'outfit-line')
+    mkdirSync(where, { recursive: true })
+    const body = 'body_f_L30'
+    const outfit = 'item_outfit_tuxedo01_L40'
+    await writePicture((await syntheticBody()).pic, join(where, `${body}@2x.png`))
+    // The outfit redraws the head's outline over the body, and nothing else.
+    const redrawn = await renderSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><ellipse cx="384" cy="300" rx="160" ry="150" fill="none" stroke="${OUTLINE}" stroke-width="3"/></svg>`,
+      W,
+      H,
+    )
+    await writePicture(redrawn, join(where, `${outfit}@2x.png`))
+    const lonely = { files: { [outfit]: { real: true, cutOn: 'f' } } } as unknown as Manifest
+    await expect(writeMasks({ dir: where, manifest: lonely, names: [outfit], overridesDir })).rejects.toThrow(/cut the body's masks first/)
+    expect(lonely.files[outfit]!.masks, 'nothing written for a refused outfit').toBeUndefined()
+
+    const manifest = { files: { [outfit]: { real: true, cutOn: 'f' }, [body]: { real: true } } } as unknown as Manifest
+    await writeMasks({ dir: where, manifest, names: [outfit, body], overridesDir })
+    expect(Object.keys(manifest.files[outfit]!.masks!)).toEqual(['skinLine'])
+    const line = await readPicture(join(where, `${outfit}_skinlinemask@2x.png`))
+    let n = 0
+    for (let i = 3; i < line.data.length; i += 4) if (line.data[i]! >= 128) n++
+    expect(n, 'the redrawn outline is cut').toBeGreaterThan(1000)
+  })
 
   it('lets a hand-drawn override win and marks it', async () => {
     const name = 'body_f_face_neutral_L50'

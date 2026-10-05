@@ -306,7 +306,7 @@ function layerReader(dir, manifest) {
     return cache.get(name)
   }
   const toned = async (name, tone) => {
-    const key = `${name} ${tone.colour}`
+    const key = `${name} ${tone.colour} ${tone.gender}` // the gender too: a shared outfit is shaded at either body's meanL
     if (!cache.has(key)) {
       cache.set(key, (async () => {
         const picture = await plain(name)

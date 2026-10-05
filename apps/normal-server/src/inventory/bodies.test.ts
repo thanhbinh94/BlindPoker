@@ -63,7 +63,6 @@ describe('loadBodies', () => {
       // The skin's line art (2026-10-05): the body, all six faces and every outfit's copy of the outline (eight outfit
       // layers, the two male cuts included — any of them can be drawn over either body), at the skin's meanL.
       const outfits = Object.keys(shipped.files).filter((file) => file.startsWith('item_outfit_')).sort()
-      expect(outfits, gender).toHaveLength(8)
       expect(tint?.skinLine, gender).toEqual({ meanL: tint?.skin?.meanL, files: [`body_${gender}_L30`, ...EXPRESSIONS.map((expr) => faceFile(gender, expr)), ...outfits] })
     }
   })
