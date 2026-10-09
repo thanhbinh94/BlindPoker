@@ -327,6 +327,29 @@
   background-color: var(--red-soft);
 }
 
+/* The room name's row: the field and, beside it, the 🎲 that rolls another name. The field takes the width the button
+   leaves (`min-width: 0`, or its own intrinsic width would hold the row open on a phone) and the button is as tall as the
+   field, a tap height, so the row — and the create-room dialog under it — is as tall as the field alone was. The two-class
+   selectors out-rank the button's `.sm` size, whichever of the two style sheets loads last. */
+.nameRow {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.nameRow .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.nameRow .rollName {
+  flex: none;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: 0;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
 .code {
   font-family: var(--font-display);
   font-size: 1.0625rem;

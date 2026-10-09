@@ -199,6 +199,7 @@
   "create": {
     "title": "Tạo phòng mới",
     "name": "Tên phòng",
+    "rollName": "Tên khác",
     "mode": "Chế độ chơi",
     "maxPlayers": "Số người tối đa",
     "turnTimer": "Thời gian mỗi lượt",

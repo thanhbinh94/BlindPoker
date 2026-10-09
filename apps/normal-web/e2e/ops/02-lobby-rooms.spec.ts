@@ -166,7 +166,8 @@ test('D-01 D-02 D-03 D-04: the create form refuses what it cannot build and buil
   await page.getByRole('button', { name: 'Tạo phòng' }).click()
   const dialog = page.getByRole('dialog')
 
-  // D-03: no name; and the field itself stops at thirty characters.
+  // D-03: no name (the dialog opens with a random one, so the field is emptied first); and the field itself stops at thirty characters.
+  await dialog.getByLabel('Tên phòng').fill('')
   await dialog.getByRole('button', { name: 'Tạo phòng' }).click()
   await expect(dialog.getByText('Tên phòng cần 1–30 ký tự.')).toBeVisible()
   await dialog.getByLabel('Tên phòng').fill('x'.repeat(31))
