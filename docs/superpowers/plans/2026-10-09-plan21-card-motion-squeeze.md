@@ -278,6 +278,11 @@ git add packages/core/src/hand
 git commit -m "feat(core): squeeze mode — a SQUEEZE phase, REVEALED per seat, bots revealed from the deal (spec 2026-10-08)"
 ```
 
+**Amendments (pre-flight 2026-10-09):**
+- Hold'em's command switch is exhaustive: add `case 'REVEALED': return { state, events }` to `applyHoldemCommand` (`packages/core/src/hand/holdem.ts`), and in `holdem.test.ts` assert that `REVEALED` returns no events and leaves the state unchanged, and that every player of a fresh Hold'em hand has `revealed: true`.
+- `packages/core/src/hand/common.test.ts` builds a `HandPlayer` literal: add `revealed: true` there.
+- So that `pnpm typecheck` passes at this commit, this task also makes the kit's types follow: in `packages/ui-kit/src/client/types.ts` `ClientPhase` gains `'SQUEEZE'`, and in `packages/ui-kit/src/client/reducer.ts` `applyHandEvent` gains the three cases exactly as Task 4 Step 3 writes them (`SQUEEZE_PHASE` → phase `'SQUEEZE'`, `actingSeat: null`, `legal: null`, `deadlineAt`; `PLAYER_REVEALED` → `revealed: true` on that seat; `SQUEEZE_ENDED` → phase `'REVEAL'`, `deadlineAt: null`). `ClientSeat` gains the optional `revealed?: boolean` now (Task 4's doc comment). Task 4 keeps the rest and all the tests.
+
 ---
 
 ### Task 2: Protocol — `blind.squeeze`, the forced 20 s timer, the `REVEAL` message
@@ -406,6 +411,10 @@ Expected: PASS.
 git add packages/core/src/constants/economy.ts packages/core/src/protocol
 git commit -m "feat(protocol): blind.squeeze on a room, the 20 s round it forces, and the REVEAL message"
 ```
+
+**Amendments (pre-flight 2026-10-09):**
+- `validate.test.ts:18` compares the ruleset with `toEqual`: add `squeeze: false` to that expected object.
+- `validate.test.ts` does not import `ECONOMY`: add `import { ECONOMY } from '../constants/economy.js'`.
 
 ---
 
@@ -588,6 +597,11 @@ git add packages/server-kit/src
 git commit -m "feat(server-kit): the squeeze round — a 20 s deadline, the forced turn at its end, Room.reveal and the REVEAL message"
 ```
 
+**Amendments (pre-flight 2026-10-09):**
+- A `REVEAL` outside a squeeze round must not touch the hand's timers (`afterCommand` re-arms them on every submit). In `Room.reveal`, after the seat checks, return without submitting unless `state.phase === 'SQUEEZE'` or (`state.phase === 'DECISION'` and `this.rules.mode === 'blind' && this.rules.squeeze === true`). Tests: in `REVEAL` phase, `reveal('h')` then `clock.advance(revealDelayMs)` — the next `COMMUNITY_REVEALED` arrives on time; on a Hold'em table during a turn, `reveal` leaves `snapshot().deadlineAt` unchanged and sends no event.
+- A seat that leaves or stands up mid-squeeze must not hold the round (spec §6): in `HandRunner.applyAutoFolds`, when `s.phase === 'SQUEEZE'`, submit `{ type: 'REVEALED', seat }` for every `autoFold` seat with `!revealed` (loop until none). Test: two humans, `a` leaves mid-squeeze, `h` reveals → `SQUEEZE_ENDED` at once.
+- Ledger note: `Room.reveal` answers `NOT_SEATED` for a spectator (as `action` does), where the spec's §5.2 says `NOT_IN_HAND` — keep `NOT_SEATED`.
+
 ---
 
 ### Task 4: Client state — the phase, `revealed`, `restored`, `client.reveal()`
@@ -761,6 +775,12 @@ Expected: PASS. Fix any `ClientSeat`/`ClientHand` literal that `typecheck` flags
 git add packages/ui-kit/src
 git commit -m "feat(ui-kit): the client follows the squeeze round — SQUEEZE phase, revealed per seat, restored hands, client.reveal and auto-play turning"
 ```
+
+**Amendments (pre-flight 2026-10-09):**
+- Task 1 already added `'SQUEEZE'` to `ClientPhase`, `revealed?` to `ClientSeat` and the three reducer cases; keep them, add the tests here.
+- The hand remembers when things arrived, for the motion (Task 5 reads them): `ClientHand` gains `dealtAt: number | null` (the client time of the hand's first `CARDS_DEALT`, from the action's `now`), `boardAt: number | null` (the latest `COMMUNITY_REVEALED`), and `showdownAt: number | null` (the `SHOWDOWN`) — all `null` from `handFromView` and on `HAND_STARTED`. Set them in `applyHandEvent` (`now` is passed down from `applyServerMessage`; thread it into `applyGameEvent`/`applyHandEvent`). Tests: the stamps equal the `now` passed with the message; a snapshot leaves them `null`.
+- Required-field fallout: `GameClientApi.reveal` and `ClientHand`'s new fields break literals in `screens/LobbyScreen.test.tsx`, `screens/RoomScreen.test.tsx` (`fakeClient`), `playground/mock-client.ts`, `playground/scenarios.tsx`, `test-fixtures.ts` (`holdemHand`), `table/ActionBar.test.tsx` — update them (`restored: true`, stamps `null`, `reveal: vi.fn().mockResolvedValue(…)` or a no-op). `playground/` is in ui-kit's tsconfig `include`.
+- Auto-play (spec §4.2.5): the `Tự động chơi` toggle in `ActionBar` is offered only in play-or-fold; also offer it when `room.config.blind?.squeeze === true` (a pure-luck squeeze table's auto-play means "turn my cards at once").
 
 ---
 
@@ -1128,6 +1148,18 @@ Start `pnpm --filter @bp/ui-kit playground` (launch config `ui-kit-playground`, 
 git add packages/ui-kit/src
 git commit -m "feat(ui-kit): a deck on the felt; cards slide from it and turn where they land; opponents' cards lift and turn at the showdown"
 ```
+
+**Amendments (pre-flight 2026-10-09):**
+- The deck anchor context lives in a new `packages/ui-kit/src/table/deck-anchor.ts` (`DeckAnchorProvider`, `useDeckAnchor`), imported by `Card.tsx`; `Deck.tsx` imports `CardBack` from `Card.tsx` and re-exports nothing of the context (ledger ruling 1). Export `useDealFrom(ref, dealt)` from `Card.tsx` — the measurement hook — for Task 6 (ruling 2).
+- **Measure without the entrance keyframe skewing the box:** inside the layout effect, set `self.style.animation = 'none'` before reading both rects, then clear it (`self.style.animation = ''`) before setting the vars — all before paint. The `.card` fade's `from` frame (`rotateY(-82deg) translateY(-8px)`) would otherwise shift the measurement.
+- **The turn has its own delay.** `.cardTurn` and `.cardLift` use `animation-delay: var(--turn-delay, 0ms)`. `Card` sets `--turn-delay` to `delayMs + DEAL_MS` for a dealt face-up card, and to a new prop `turnDelayMs?: number` (default 0) for a card revealed later. Never change `--deal-delay` after mount. `Seat` passes `turnDelayMs={liftAfter + i * SHOWDOWN_STAGGER_MS}` where `liftAfter` is a new `Seat` prop (below). Test (PokerTable): at a showdown that arrived alone, opponents' cards carry `--turn-delay` 0 and 200 ms.
+- **The lift waits for the river** (spec §1, §4.1.3): the engine sends the river's `COMMUNITY_REVEALED` and `SHOWDOWN` in one batch. `PokerTable` computes `liftAfter = hand.showdownAt !== null && hand.boardAt !== null && hand.showdownAt - hand.boardAt < 1000 ? DEAL_MS + FLIP_MS : 0` and passes it to each `Seat`. `useRevealHold` reads the same condition from the hand and adds `DEAL_MS + FLIP_MS` to its wait in that case (export `REVEAL_HOLD_AFTER_BOARD_MS = DEAL_MS + FLIP_MS` and test both values: 1270 alone, 2230 after the board).
+- **"Dealt" means "arrived just now."** `export const DEAL_WINDOW_MS = 1500` in `Card.tsx`. `PokerTable` passes `dealt={!hand.restored && hand.dealtAt !== null && now - hand.dealtAt < DEAL_WINDOW_MS}` to seats (`now` = `serverNow()` is server time; use `Date.now()` here — the stamps are client time) and `dealt={hand.boardAt !== null && now - hand.boardAt < DEAL_WINDOW_MS}` to `CommunityCards`. A layout switch or a remount later in the hand then re-deals nothing. Test: a hand whose `dealtAt` is 10 s ago renders no `.cardDealt`.
+- **Key cards by hand:** `PokerTable` passes `handId` to `Seat`; `Seat` keys cards `\`${handId}:${i}\`` (the result card is unaffected). Test: re-rendering with a new `handId` and the same card count mounts fresh cards (a `.cardDealt` is present again).
+- **Existing assertions:** `PokerTable.test.tsx:72,153,209` and `RoomScreen.test.tsx:700,749,756,761` expect `.cardTurn` on an opponent's revealed cards — they become `.cardLift`. Shared fixtures (`test-fixtures.ts` `holdemHand`, `ActionBar.test.tsx:24`, `playground/scenarios.tsx:151`) are `restored: true` with null stamps (Task 4 set them); the new deal tests opt in with `restored: false` and `dealtAt: Date.now()`. The first PokerTable test's fixture has seats 0 and 2, button 0: the delays are seat 2 → 0 / 240 ms, seat 0 → 120 / 360 ms; a delay of 0 sets no `--deal-delay` (read with `style.getPropertyValue` and treat `''` as 0).
+- **The lift widens the shadow** (spec §3): add `.cardLifting` on the wrapper (set alongside `.cardLift`) with `animation: liftShadow var(--dur-lift) …` whose 45 % frame is `filter: drop-shadow(0 10px 10px rgba(3,6,16,.55))`, resting on the wrapper's usual shadow; include it in the reduced-motion list.
+- **The deck's place and the phone:** in the ring layout the deck sits above the board as planned; in the stack layout (`mode === 'stack'`) it sits in one row with the pot (a flex row `.centreRow`), so the felt gains no height (layout audit L1). Screenshots for this task (ruling 6): a six-seat Blind table at 1920×940, 1366×768 and 375×812 from the playground, with the deck visible and the viewer's plate on screen.
+- Locale keys: `labels.deck` as planned. Do not rename any test title the docs cite (`tooling/arch/acceptance-links.test.ts` pins them).
 
 ---
 
@@ -1616,6 +1648,16 @@ git add packages/ui-kit/src packages/ui-kit/playground
 git commit -m "feat(ui-kit): PeelCard — the squeeze, a 2D peel from the pressed point with a flick, a snap-back and an outside open"
 ```
 
+**Amendments (pre-flight 2026-10-09):**
+- Rename the prop `onOpened` → `onRevealed` (the spec's name) everywhere in this task; `PEEL.snapMs` is `200` (spec: 0.2 s).
+- Geometry (ledger rulings 3–4): `fold.angle = Math.atan2(u[0], -u[1])` and the test asserts `Math.abs(angle) ≈ π/4` for the bottom-right diagonal; `peelDirection` and `faceShift` normalise `-0` to `0`; `keepBeyond` returns the empty polygon when the shoelace area of the result is below `1e-6`.
+- Add a geometry test looping over the 8 unit directions plus one skewed vector (0.28, −0.96): `|faceShift| ≈ |2pL − L|`, the fold point satisfies `s = sMin + pL`, and at p = 0 / p = 1 the clips are `none` or the empty polygon.
+- **Stable callbacks:** keep `onRevealed` in a ref; `report`/`finish` then have stable identities. Run the outside open once, from the `open` transition (a `finishing` ref guards it); never restart a running finish on a re-render. Test: `rerender` with a new `onRevealed` function mid-open — the card still ends `up` and reports once.
+- **Reduced motion:** `const reduce = useMediaQuery('(prefers-reduced-motion: reduce)')` (`./useMediaQuery.js`); when true, `tween` sets the target and calls `done` synchronously. Test with `matchMedia` mocked to match: an outside open ends `up` with no timers advanced.
+- Loose ends: no unused imports (`useLayoutEffect`, `DEAL_MS`) — lint runs with `--max-warnings=0`; add `sliding && s.cardDealt` from `useDealFrom` to the root class; drop the root `aria-label`/`role` once `up` (the face names itself); clamp `k ≥ 0` in `tween`; keep the live `p` in `drag.current` so `onPointerUp` never reads a stale one.
+- Tests: `vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })`; set `window.PointerEvent = window.MouseEvent` before rendering (ruling 5); `'Át cơ'` is whatever `cardLabel(parseCard('Ah'), t)` gives in `vi` — read `i18n/index.ts`.
+- Locale key `labels.peelHint` as planned.
+
 ---
 
 ### Task 7: Squeeze on the table — seats, the "Lật" pill, "Đã lật", the timer, the tray
@@ -1759,6 +1801,14 @@ git add packages/ui-kit/src
 git commit -m "feat(ui-kit): squeeze on the table — PeelCards for the viewer, the Lật pill, the Đã lật badge, the round's timer on my plate, the tray's wait line"
 ```
 
+**Amendments (pre-flight 2026-10-09):**
+- In a squeeze room the viewer's own cards are `PeelCard`s **for the whole hand** (never swapped for `Card`s mid-hand, which would remount and re-deal them): `peeling = squeezeRoom && isMe && seat.holeCards !== null`, where `squeezeRoom` is a new `Seat` prop meaning "this hand is on a squeeze table" (true for every phase of the hand), distinct from `squeezeRound` (the round is on). `open={openAll || seat.revealed === true || !squeezeRound}` — a decision taken without peeling, the server's forced turn and the round's end all open what is still down (spec §4.2.4). The "Lật" pill shows while `squeezeRound && isMe && !(openAll || seat.revealed)`. Keys follow Task 5 (`handId:i`). The prop is `onRevealed` (Task 6's rename).
+- `trayWaitKey`: a spectator (`mine === undefined`) in `SQUEEZE` gets `labels.waitReveal`, not `labels.waitSqueeze`.
+- `RoomScreen` sends the reveal as `client.reveal().catch(() => undefined)` (not through `request.run`, which disables the tray and toasts a late `NOT_IN_HAND`).
+- Locale key names: `actions.revealCards` (not `actions.reveal`), `labels.revealed`, `labels.waitSqueeze`, `labels.waitOthersReveal`; there is no `phases.*` namespace — add `phase.squeeze` only if `phase.*` is read anywhere (it is not: skip it).
+- Tests: `Seat.test.tsx` does not exist — create it; `RoomScreen.test.tsx` has no socket fixture but a `fakeClient` — assert `client.reveal` (a `vi.fn().mockResolvedValue({ t: 'ACK', reqId: 'x' })`) was called once; PeelCard animations need the fake rAF set from Task 6.
+- Screenshots (ruling 6): the squeeze round at 1920×940, 1366×768 and 375×812 from the playground (add a scenario with a squeeze-room hand), into `<workspace>/shots/t7/`.
+
 ---
 
 ### Task 8: The lobby — the "Nặn bài" option, the hidden timer, the badges
@@ -1816,6 +1866,11 @@ Expected: PASS.
 git add packages/ui-kit/src
 git commit -m "feat(ui-kit): the Nặn bài option when creating a Blind table, its fixed round, and the badge in the list and the header"
 ```
+
+**Amendments (pre-flight 2026-10-09):**
+- Do not wrap the checkbox in `Field` (it re-labels its child): use the form's own checkbox markup — `<label className={cx(s.check, s.wide)}><input className={s.checkbox} type="checkbox" checked={squeeze} disabled={disabled} aria-describedby={hintId} onChange={…} />{t('create.squeeze')}</label>` followed by `<span id={hintId} className={s.hint}>{t('create.squeezeHint')}</span>` (match the classes `CreateRoomForm.tsx` uses for "Phòng riêng tư"). Drop `create.squeezeOn`. Testing Library's `getByLabelText('Nặn bài')` and Playwright's `getByLabel('Nặn bài')` must both find the input.
+- `.modeFields { min-height }` in `lobby.module.css` keeps the dialog's edge still across modes (No12): the Blind box gains a row — re-measure and raise it so Hold'em ↔ Blind never moves the edge; keep `expectCreateRoomKeepsItsHeight` green.
+- Screenshots (ruling 6): the create dialog in Blind mode with the box checked, at 1920×940, 1366×768 and 375×812, into `<workspace>/shots/t8/`.
 
 ---
 
@@ -1914,6 +1969,12 @@ git add apps/normal-web/e2e apps/lite/e2e
 git commit -m "test(e2e): the squeeze round across two browsers and on a phone; the Lite create dialog's Nặn bài"
 ```
 
+**Amendments (pre-flight 2026-10-09):**
+- After b presses "Lật" the round ends and b's PeelCards open where they are (Task 7 keeps them mounted): assert `b`'s own two cards are face up with the file's `FACE_UP` helper, then that the flop appears.
+- The ops desktop project is 1440×900: call `a.page.setViewportSize({ width: 1920, height: 940 })` before the 1920 shot and name files by the real size; take the 1366×768 shot on `b` (its viewport).
+- A dealt card is still travelling for `(i·n + k) × 120 + 360` ms: before measuring `boundingBox()` for the drag, wait with `expect.poll(() => el.evaluate((e) => e.getAnimations({ subtree: true }).length)).toBe(0)`.
+- Do not add registrations to the normal e2e suite (10 sign-ups/min); the ops pack's `registerPatiently` is the only place a new account may be made.
+
 ---
 
 ### Task 10: Documentation
@@ -1940,6 +2001,10 @@ test-matrix: rows for §8.3 2b (core `blind.test.ts` "squeeze mode", server `roo
 git add docs CHANGELOG.md
 git commit -m "docs: the squeeze mode and the card motion — spec §8 amendments, server-kit, ui-kit, test matrix, checklist, changelog"
 ```
+
+**Amendments (pre-flight 2026-10-09):**
+- Run `pnpm --filter @bp/tooling test` (or the repo's `tooling/arch/acceptance-links.test.ts`) after editing the checklist and the matrix: every citation must match an exact `it()` title.
+- The CHANGELOG entry also records the deviations the ledger lists (the spec's names vs the code's: `NOT_SEATED`, `onRevealed`/`actions.revealCards`, the deck measured by `Card` through a context, the squeeze timer drawn on the viewer's plate, the deck beside the pot on phones).
 
 ---
 
