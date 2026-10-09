@@ -178,7 +178,7 @@
   "status": {
     "connecting": "Đang kết nối",
     "reconnecting": "Đang kết nối lại",
-    "offline": "Mất mạng",
+    "offline": "Mất kết nối",
     "replaced": "Đã đăng nhập ở nơi khác",
     "online": "Trực tuyến"
   },
@@ -216,7 +216,7 @@
     "wager": "Mức cược cố định",
     "botCount": "Số lượng bot",
     "squeeze": "Nặn bài",
-    "squeezeHint": "Mỗi vòng tối đa 20 giây, hết sớm khi mọi người đã lật.",
+    "squeezeHint": "Mỗi vòng tối đa 20 giây, kết thúc sớm khi mọi người đã lật.",
     "squeezeTimer": "{{time}} · nặn bài",
     "submit": "Tạo phòng",
     "hint": {
@@ -249,7 +249,7 @@
     "sitFirst": "Chọn một ghế trống để vào chơi."
   },
   "cancel": {
-    "shutdown": "Máy chủ đang tắt",
+    "shutdown": "Máy chủ sắp tắt",
     "serverRestart": "Máy chủ vừa khởi động lại",
     "roomClosed": "Phòng đã đóng",
     "maintenance": "Máy chủ đang bảo trì",
