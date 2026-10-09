@@ -205,6 +205,12 @@ function applyHandEvent(state: ClientState, hand: ClientHand, event: GameEvent &
         }),
       })
     }
+    case 'SQUEEZE_PHASE':
+      return { ...state, deadlineAt: event.deadlineAt ?? null, hand: { ...hand, phase: 'SQUEEZE', actingSeat: null, legal: null } }
+    case 'PLAYER_REVEALED':
+      return withHand(state, hand, { seats: mapSeat(hand, event.seat, (s) => ({ ...s, revealed: true })) })
+    case 'SQUEEZE_ENDED':
+      return { ...state, deadlineAt: null, hand: { ...hand, phase: 'REVEAL' } }
     case 'COMMUNITY_REVEALED':
       return withHand(state, hand, {
         community: event.community.slice(), phase: 'REVEAL', actingSeat: null,

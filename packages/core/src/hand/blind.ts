@@ -46,13 +46,16 @@ export function createBlindHand(input: CreateBlindInput, rng: Rng): EngineResult
   if (!seats.some((s) => s.seat === input.button)) throw new EngineError('INVALID_SETUP', 'button must be a seated player')
   if (input.carryOverIn < 0) throw new EngineError('INVALID_SETUP', 'carryOverIn must be >= 0')
 
+  const squeeze = input.rules.squeeze === true
   const state: HandState = {
     handId: input.handId,
     rules: input.rules,
-    phase: input.rules.decisionMode === 'playOrFold' ? 'DECISION' : 'REVEAL',
+    phase: input.rules.decisionMode === 'playOrFold' ? 'DECISION' : squeeze ? 'SQUEEZE' : 'REVEAL',
     players: seats.map((s) => ({
       seat: s.seat, playerId: s.playerId, isBot: s.isBot, stack: s.stack, holeCards: [], betThisStreet: 0,
       totalCommitted: 0, folded: false, allIn: false, hasActed: false, cannotRaise: false, decision: null,
+      // Squeeze mode waits only on humans: a bot has nothing to turn by hand (spec 2026-10-08 §4.2.3).
+      revealed: !squeeze || s.isBot,
     })),
     deck: shuffle(createDeck(), rng),
     deckIndex: 0,
@@ -82,6 +85,10 @@ export function createBlindHand(input: CreateBlindInput, rng: Rng): EngineResult
   if (state.phase === 'DECISION') {
     state.turnSeq += 1
     events.push({ type: 'DECISION_PHASE', seats: state.players.map((p) => p.seat), turnSeq: state.turnSeq })
+  } else if (state.phase === 'SQUEEZE') {
+    state.turnSeq += 1
+    events.push({ type: 'SQUEEZE_PHASE', seats: state.players.filter((p) => !p.revealed).map((p) => p.seat), turnSeq: state.turnSeq })
+    endSqueezeIfDone(state, events) // a table of bots has nobody to wait for
   }
   return { state, events }
 }
@@ -115,6 +122,10 @@ export function applyBlindCommand(input: HandState, cmd: HandCommand, _rng: Rng)
       decide(state, events, cmd.seat, { kind: 'fold' })
       return { state, events }
     }
+    case 'REVEALED': {
+      reveal(state, events, cmd.seat)
+      return { state, events }
+    }
     case 'ACTION': {
       decide(state, events, cmd.seat, cmd.action)
       return { state, events }
@@ -131,12 +142,38 @@ function decide(state: HandState, events: GameEvent[], seat: number, action: Pla
   const legal = blindLegalActions(state, seat)
   if (legal.kinds.length === 0) throw new EngineError('NOT_YOUR_TURN', `seat ${seat} has nothing to decide`)
   if (!legal.kinds.includes(action.kind)) throw new EngineError('ILLEGAL_ACTION', `${action.kind} is not legal in blind poker`)
+  // In a squeeze room a decision shows the cards it was made on: the seat counts as turned from here (§4.2.4).
+  if (rulesOf(state).squeeze === true && !p.revealed) {
+    p.revealed = true
+    events.push({ type: 'PLAYER_REVEALED', seat })
+  }
   p.decision = action.kind === 'play' ? 'play' : 'fold'
   p.hasActed = true
   events.push({ type: 'DECISION_MADE', seat })
 
   if (state.players.some((x) => x.decision === null)) return
   resolveDecisions(state, events)
+}
+
+/**
+ * Squeeze mode: `seat` has turned its cards over (by hand, by its "Lật" button, or by the server when the round ran
+ * out). Outside squeezing — a plain table, another phase, a seat that had turned already — it is nothing, not an
+ * error: a client that sends it late or twice is doing no harm (spec 2026-10-08 §6).
+ */
+function reveal(state: HandState, events: GameEvent[], seat: number): void {
+  const p = getPlayer(state, seat)
+  const squeezing = state.phase === 'SQUEEZE' || (state.phase === 'DECISION' && rulesOf(state).squeeze === true)
+  if (!squeezing || p.revealed) return
+  p.revealed = true
+  events.push({ type: 'PLAYER_REVEALED', seat })
+  if (state.phase === 'SQUEEZE') endSqueezeIfDone(state, events)
+}
+
+/** The squeeze round is over once every seat has turned: on to the community cards, as a pure-luck hand goes. */
+function endSqueezeIfDone(state: HandState, events: GameEvent[]): void {
+  if (state.phase !== 'SQUEEZE' || state.players.some((p) => !p.revealed)) return
+  events.push({ type: 'SQUEEZE_ENDED' })
+  state.phase = 'REVEAL'
 }
 
 /** All seats have decided: apply the wagers in seat order, reveal, then branch on how many are still playing. */

@@ -36,7 +36,7 @@ export function createHoldemHand(input: CreateHoldemInput, rng: Rng): EngineResu
     phase: 'BETTING',
     players: seats.map((s) => ({
       seat: s.seat, playerId: s.playerId, isBot: s.isBot, stack: s.stack, holeCards: [], betThisStreet: 0,
-      totalCommitted: 0, folded: false, allIn: false, hasActed: false, cannotRaise: false, decision: null,
+      totalCommitted: 0, folded: false, allIn: false, hasActed: false, cannotRaise: false, decision: null, revealed: true,
     })),
     deck: shuffle(createDeck(), rng),
     deckIndex: 0,
@@ -111,6 +111,10 @@ export function applyHoldemCommand(input: HandState, cmd: HandCommand, _rng: Rng
       if (state.phase !== 'REVEAL') throw new EngineError('INVALID_COMMAND', 'ADVANCE only during REVEAL')
       revealNext(state, events)
       if (state.revealQueue.length === 0) settle(state, events, { showdown: true, feeCap: feeCap(state) })
+      return { state, events }
+    }
+    // Squeeze mode is a Blind rule: a Hold'em seat is revealed from the deal, so there is nothing to turn.
+    case 'REVEALED': {
       return { state, events }
     }
     case 'TIMEOUT': {

@@ -17,6 +17,8 @@ export interface SeatView {
   holeCards: Card[] | null
   hasDecided: boolean
   decision: Decision | null
+  /** Squeeze mode: this seat has turned every card over (always true outside squeeze mode, and for a bot). */
+  revealed: boolean
 }
 
 export interface HandView {
@@ -89,6 +91,7 @@ export function playerView(state: HandState, viewerSeat: number | null): HandVie
         holeCards: mine || shownAtShowdown.has(p.seat) ? p.holeCards.slice() : null,
         hasDecided: p.decision !== null,
         decision: mine || decisionsPublic ? p.decision : null,
+        revealed: p.revealed,
       }
     }),
   }

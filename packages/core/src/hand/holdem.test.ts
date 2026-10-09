@@ -74,6 +74,14 @@ describe('createHoldemHand', () => {
     expect(t.state.street).toBe('FLOP')
     expect(t.state.actingSeat).toBe(0) // non-button acts first postflop
   })
+  it('every player is revealed from the deal: there is nothing to turn by hand, and REVEALED is a no-op', () => {
+    const t = new Table([1000, 1000, 1000])
+    expect(t.state.players.every((p) => p.revealed)).toBe(true)
+    const before = structuredClone(t.state)
+    const r = applyHoldemCommand(t.state, { type: 'REVEALED', seat: 1 }, identityRng)
+    expect(r.events).toEqual([])
+    expect(r.state).toEqual(before)
+  })
   it('does not mutate the caller state', () => {
     const t = new Table([1000, 1000, 1000])
     const before = structuredClone(t.state)

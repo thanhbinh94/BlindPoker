@@ -6,7 +6,7 @@ import type { PreActionKind } from './preaction.js'
 export type ConnectionStatus = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed'
 
 /** `HandPhase` plus `DEALING`, the purely visual window before the first betting/decision frame arrives. */
-export type ClientPhase = 'DEALING' | 'BETTING' | 'DECISION' | 'REVEAL' | 'COMPLETE'
+export type ClientPhase = 'DEALING' | 'BETTING' | 'DECISION' | 'SQUEEZE' | 'REVEAL' | 'COMPLETE'
 
 export interface ClientSeat {
   seat: number
@@ -21,6 +21,11 @@ export interface ClientSeat {
   holeCards: Card[] | null
   hasDecided: boolean
   decision: Decision | null
+  /**
+   * Squeeze mode (spec 2026-10-08): whether this seat has turned every card. Present only in a squeeze room — `true`
+   * for a bot from the deal — and absent on a plain table, where cards are never anyone's to turn.
+   */
+  revealed?: boolean
   /** What this seat did last, for action bubbles; the engine's view never carries it. */
   lastAction: PlayerAction | null
   timedOut: boolean

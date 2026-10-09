@@ -7,7 +7,7 @@ import type { GameEvent, HandPlayer, HandState } from './types.js'
 function player(seat: number, stack: number, extra: Partial<HandPlayer> = {}): HandPlayer {
   return {
     seat, playerId: `p${seat}`, isBot: false, stack, holeCards: [], betThisStreet: 0, totalCommitted: 0,
-    folded: false, allIn: false, hasActed: false, cannotRaise: false, decision: null, ...extra,
+    folded: false, allIn: false, hasActed: false, cannotRaise: false, decision: null, revealed: true, ...extra,
   }
 }
 
