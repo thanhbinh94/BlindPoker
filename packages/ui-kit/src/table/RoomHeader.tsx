@@ -50,6 +50,7 @@ export function RoomHeader({ room, status, onLeave, lang, right }: RoomHeaderPro
             <Badge tone="gold">{t(`mode.${room.mode}`)}</Badge>
             {blind === undefined ? null : <Badge tone="teal">{t(blind.holeCards === 3 ? 'blind.cards3' : 'blind.cards2')}</Badge>}
             {blind === undefined ? null : <Badge tone="muted">{t(`blind.decision.${blind.decisionMode}`)}</Badge>}
+            {blind?.squeeze === true ? <Badge tone="gold">{t('labels.squeezeMode')}</Badge> : null}
             <span className={s.code} aria-label={t('labels.code')}>
               {room.code}
             </span>

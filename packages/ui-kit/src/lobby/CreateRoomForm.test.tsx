@@ -77,4 +77,86 @@ describe('CreateRoomForm', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Thiết lập phòng không hợp lệ')
     expect(screen.getByRole('alert')).toHaveTextContent('Tên phòng cần 1–30 ký tự.')
   })
+
+  // Plan 21: a Blind table may be a squeeze table — the cards come face down and are turned by hand in a round of a fixed
+  // 20 s. The round's length is the server's, so the box takes the turn-timer control away rather than leave a choice it
+  // would ignore.
+  describe('the "Nặn bài" option', () => {
+    const wrapVi = (ui: React.ReactElement) =>
+      render(<I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>{ui}</I18nextProvider>)
+    const create = () => screen.getByRole('button', { name: /^tạo phòng/i })
+
+    it('is a checkbox in Blind mode, unchecked to begin with, and says what it costs the timer', () => {
+      wrapVi(<CreateRoomForm onSubmit={vi.fn()} lang="vi" initialMode="blind" />)
+      const box = screen.getByLabelText('Nặn bài')
+      expect(box).toHaveAttribute('type', 'checkbox')
+      expect(box).not.toBeChecked()
+      expect(box).toHaveAccessibleDescription('Mỗi vòng tối đa 20 giây, hết sớm khi mọi người đã lật.')
+    })
+
+    it('is not offered at a Hold’em table, and appears when the mode is flipped to Blind', async () => {
+      const user = userEvent.setup()
+      wrapVi(<CreateRoomForm onSubmit={vi.fn()} lang="vi" />)
+      expect(screen.queryByLabelText('Nặn bài')).toBeNull()
+      await user.click(screen.getByRole('button', { name: 'Blind Poker' }))
+      expect(screen.getByLabelText('Nặn bài')).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: "Texas Hold'em" }))
+      expect(screen.queryByLabelText('Nặn bài')).toBeNull()
+    })
+
+    it('takes the turn-timer select away when it is checked, and gives it back when it is not', async () => {
+      const user = userEvent.setup()
+      wrapVi(<CreateRoomForm onSubmit={vi.fn()} lang="vi" initialMode="blind" />)
+      expect(screen.getByLabelText('Thời gian mỗi lượt')).toBeInTheDocument()
+      await user.click(screen.getByLabelText('Nặn bài'))
+      expect(screen.getByLabelText('Nặn bài')).toBeChecked()
+      expect(screen.queryByLabelText('Thời gian mỗi lượt')).toBeNull()
+      await user.click(screen.getByLabelText('Nặn bài'))
+      expect(screen.getByLabelText('Thời gian mỗi lượt')).toBeInTheDocument()
+    })
+
+    it('submits blind.squeeze true and a 20 s round, whatever timer was picked before the box was ticked', async () => {
+      const user = userEvent.setup()
+      const onSubmit = vi.fn()
+      wrapVi(<CreateRoomForm onSubmit={onSubmit} lang="vi" initialMode="blind" />)
+      await user.type(screen.getByLabelText('Tên phòng'), 'Nặn')
+      await user.selectOptions(screen.getByLabelText('Thời gian mỗi lượt'), '30')
+      await user.click(screen.getByLabelText('Nặn bài'))
+      await user.click(create())
+      expect(onSubmit).toHaveBeenCalledTimes(1)
+      const cfg = onSubmit.mock.calls[0]![0]
+      expect(validateRoomConfig(cfg).ok).toBe(true)
+      expect(cfg).toMatchObject({ mode: 'blind', turnTimerSec: 20, blind: { squeeze: true } })
+    })
+
+    it('submits blind.squeeze false and the chosen timer when it is not checked — or was ticked and then cleared', async () => {
+      const user = userEvent.setup()
+      const onSubmit = vi.fn()
+      wrapVi(<CreateRoomForm onSubmit={onSubmit} lang="vi" initialMode="blind" />)
+      await user.type(screen.getByLabelText('Tên phòng'), 'Thường')
+      await user.selectOptions(screen.getByLabelText('Thời gian mỗi lượt'), '30')
+      await user.click(create())
+      expect(onSubmit.mock.calls[0]![0]).toMatchObject({ turnTimerSec: 30, blind: { squeeze: false } })
+
+      await user.click(screen.getByLabelText('Nặn bài'))
+      await user.click(screen.getByLabelText('Nặn bài'))
+      await user.click(create())
+      expect(onSubmit.mock.calls[1]![0]).toMatchObject({ turnTimerSec: 30, blind: { squeeze: false } })
+    })
+
+    it('does not follow the host to a Hold’em table: ticked, then flipped to Hold’em, the timer and the config are Hold’em’s own', async () => {
+      const user = userEvent.setup()
+      const onSubmit = vi.fn()
+      wrapVi(<CreateRoomForm onSubmit={onSubmit} lang="vi" initialMode="blind" />)
+      await user.type(screen.getByLabelText('Tên phòng'), 'Đổi')
+      await user.selectOptions(screen.getByLabelText('Thời gian mỗi lượt'), '30') // a timer both modes offer
+      await user.click(screen.getByLabelText('Nặn bài'))
+      await user.click(screen.getByRole('button', { name: "Texas Hold'em" }))
+      expect(screen.getByLabelText('Thời gian mỗi lượt')).toHaveValue('30')
+      await user.click(create())
+      const cfg = onSubmit.mock.calls[0]![0]
+      expect(cfg).toMatchObject({ mode: 'holdem', turnTimerSec: 30 }) // not the squeeze round's 20
+      expect(cfg.blind).toBeUndefined()
+    })
+  })
 })

@@ -90,6 +90,7 @@
     "sidePot": "Pot phụ {{n}}",
     "sittingOut": "Tạm nghỉ",
     "split": "Chia đều",
+    "squeezeMode": "Nặn bài",
     "stack": "Stack",
     "table": "Bàn",
     "tie": "Hòa",
@@ -214,6 +215,8 @@
     "decisionMode": "Cách chơi",
     "wager": "Mức cược cố định",
     "botCount": "Số lượng bot",
+    "squeeze": "Nặn bài",
+    "squeezeHint": "Mỗi vòng tối đa 20 giây, hết sớm khi mọi người đã lật.",
     "submit": "Tạo phòng",
     "hint": {
       "name": "Tên phòng cần 1–30 ký tự.",

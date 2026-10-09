@@ -1,9 +1,10 @@
 import { blindTableLimit, ECONOMY } from '@bp/core'
-import type { ChangeEvent } from 'react'
+import { useId, type ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatPoints, type Language } from '../i18n/index.js'
 import { Field } from '../primitives/Field.js'
 import { Select } from '../primitives/Select.js'
+import { cx } from '../primitives/cx.js'
 import s from './lobby.module.css'
 
 export interface HoldemFieldsProps {
@@ -90,11 +91,16 @@ export interface BlindFieldsProps {
   botCount: number
   onBotCount: (n: number) => void
   maxBots: number
+  squeeze: boolean
+  onSqueeze: (on: boolean) => void
   disabled: boolean
   lang: Language
 }
 
-/** Blind Poker: how many face-down cards, whether players may fold, the fixed wager and the bot filler. */
+/**
+ * Blind Poker: how many face-down cards, whether players may fold, the fixed wager, the bot filler and whether the
+ * cards are turned by hand ("Nặn bài", Plan 21).
+ */
 export function BlindFields({
   holeCards,
   onHoleCards,
@@ -105,10 +111,13 @@ export function BlindFields({
   botCount,
   onBotCount,
   maxBots,
+  squeeze,
+  onSqueeze,
   disabled,
   lang,
 }: BlindFieldsProps) {
   const { t } = useTranslation()
+  const hintId = useId()
   const wagers = ECONOMY.blindWagerTiers.map((n) => ({ value: n, label: formatPoints(n, lang) }))
   const bots = Array.from({ length: maxBots + 1 }, (_, n) => ({ value: n, label: String(n) }))
 
@@ -145,6 +154,25 @@ export function BlindFields({
       <Field label={t('create.botCount')}>
         <Select value={botCount} options={bots} disabled={disabled} onChange={onBotCount} />
       </Field>
+      {/* Not a `Field`: that would re-label the box with its own caption. The box is its own label, like the form's other
+          checkboxes, and the hint hangs under it as its description — the round's fixed length, which is why the form
+          drops the timer control while this is on. */}
+      <div className={cx(s.wide, s.checkField)}>
+        <label className={s.check}>
+          <input
+            className={s.checkbox}
+            type="checkbox"
+            checked={squeeze}
+            disabled={disabled}
+            aria-describedby={hintId}
+            onChange={(event) => onSqueeze(event.target.checked)}
+          />
+          {t('create.squeeze')}
+        </label>
+        <span id={hintId} className={s.hint}>
+          {t('create.squeezeHint')}
+        </span>
+      </div>
     </>
   )
 }

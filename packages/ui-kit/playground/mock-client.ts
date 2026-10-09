@@ -92,7 +92,7 @@ const configFor = (mode: PlaygroundMode, seats: number): RoomSummary['config'] =
       }),
 })
 
-/** Two tickets for the lobby view: one open hold'em table, one locked blind room. */
+/** Two tickets for the lobby view: one open hold'em table, one locked blind room — a squeeze table (the "Nặn bài" badge). */
 export const SAMPLE_ROOMS: RoomSummary[] = [
   { roomId: 'r1', code: 'ABC234', name: 'Đêm Sài Gòn', mode: 'holdem', config: configFor('holdem', 6), playerCount: 3, maxPlayers: 6, status: 'OPEN' },
   {
@@ -100,7 +100,7 @@ export const SAMPLE_ROOMS: RoomSummary[] = [
     code: 'XYZ789',
     name: 'Chiếu Bạc',
     mode: 'blind',
-    config: { ...configFor('blindB', 4), isPrivate: true, hasPassword: true },
+    config: { ...configFor('blindBS', 4), isPrivate: true, hasPassword: true },
     playerCount: 2,
     maxPlayers: 4,
     status: 'IN_GAME',
