@@ -138,10 +138,12 @@ export function PokerTable({
   const liftAfter = showdownWithBoard(hand) ? DEAL_MS + FLIP_MS : 0
 
   // Squeeze mode (spec 2026-10-08 §4.2): a hand on a squeeze table, and its round — a pure-luck hand's `SQUEEZE`, or a
-  // play-or-fold hand's `DECISION`, which runs the same 20 s with the cards to turn. The round's countdown is drawn on the
-  // viewer's own plate (ruling 14): nobody is acting in it, so no other seat gets the deadline.
+  // play-or-fold hand's `DECISION`, which runs the same 20 s with the cards to turn and then the choice to make. The
+  // round's countdown is drawn on the viewer's own plate (rulings 14, 21): nobody is acting in it, so no other seat gets
+  // the deadline.
   const squeezeRoom = hand !== null && hand.mode === 'blind' && room.config.blind?.squeeze === true
   const squeezeRound = squeezeRoom && (hand.phase === 'SQUEEZE' || hand.phase === 'DECISION')
+  const squeezeDecides = squeezeRound && hand.phase === 'DECISION'
 
   const renderSeat = (index: number): ReactNode => {
     const player = seated.get(index)
@@ -207,6 +209,7 @@ export function PokerTable({
         liftAfter={liftAfter}
         squeezeRoom={squeezeRoom}
         squeezeRound={squeezeRound}
+        squeezeDecides={squeezeDecides}
         onReveal={onReveal}
       />
     )

@@ -18,6 +18,7 @@ const MODE_LABEL: Record<PlaygroundMode, string> = {
   blindA: 'Blind A (pure luck)',
   blindB: 'Blind B (play or fold)',
   blindS: 'Blind A · nặn bài',
+  blindBS: 'Blind B · nặn bài',
 }
 
 function App() {

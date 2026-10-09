@@ -8,6 +8,7 @@ import { createI18n } from '../i18n/index.js'
 import { makePlayer, makeSeat } from '../test-fixtures.js'
 import { Seat, type SeatProps } from './Seat.js'
 import s from './table.module.css'
+import TABLE_CSS from './table.module.css?raw'
 
 /** Ann's queens, in Vietnamese: the two faces once they are up, and the name a card to peel carries while it is down. */
 const QUEENS = ['Đầm bích', 'Đầm rô']
@@ -43,6 +44,7 @@ const props = (patch: Partial<SeatProps> = {}): SeatProps => ({
   liftAfter: 0,
   squeezeRoom: true,
   squeezeRound: true,
+  squeezeDecides: false,
   onReveal: vi.fn(),
   ...patch,
 })
@@ -208,9 +210,42 @@ describe('Seat in a squeeze room', () => {
     expect(screen.queryByText('Đã lật'), 'not one that is still to turn').toBeNull()
   })
 
+  // Ruling 21: on a play-or-fold squeeze table the round's 20 s is the decision's too — the peel and then the choice — so
+  // the ring stays on my plate until I have chosen, cards up or not; a pure-luck round has nothing left once they are up.
+  it('keeps the round’s ring on a play-or-fold table until I have chosen, not just until my cards are up', () => {
+    const three: ClientSeat = { ...ann, holeCards: parseCards('Qs Qd 7c') }
+    const p = props({ seat: three, squeezeDecides: true })
+    const view = wrap(p)
+    for (const card of peelCards()) peel(card)
+    expect(faces()).toEqual(['up', 'up', 'up'])
+    expect(p.onReveal).toHaveBeenCalledTimes(1)
+    expect(pill(), 'nothing left to turn').toBeNull()
+    const plate = () => document.querySelector('[data-plate]') as HTMLElement
+    expect(within(plate()).getByRole('timer'), 'the decision is still to make').toHaveTextContent('15')
+    // the server has the seat turned (my REVEAL is back): still undecided, still counting
+    view.rerender({ ...p, seat: { ...three, revealed: true } })
+    expect(within(plate()).getByRole('timer')).toBeInTheDocument()
+    view.rerender({ ...p, seat: { ...three, revealed: true, hasDecided: true } })
+    expect(screen.queryByRole('timer'), 'chosen: nothing left to count down').toBeNull()
+  })
+
+  // Task 7 review M1: deciding turns the seat (spec §4.2.4), so "Đã chọn" already says "Đã lật" — and two badges with the
+  // bet ran the line under a plate past its width at seven seats and up.
+  it('lets "Đã chọn" stand for "Đã lật" on another seat that has decided', () => {
+    const decided = { ...bot, hasDecided: true }
+    wrap(props({ seat: decided, player: makePlayer({ playerId: 'bot2', displayName: 'Bảo', isBot: true, seat: 2 }), isMe: false, deadlineAt: null, squeezeDecides: true }))
+    expect(screen.getByText('Đã chọn')).toBeInTheDocument()
+    expect(screen.queryByText('Đã lật')).toBeNull()
+  })
+
+  // Ruling 22: the pill is a touch target — at least 28 px tall, its label centred.
+  it('gives the pill a 28 px tap height', () => {
+    expect(TABLE_CSS).toMatch(/\.revealBtn\s*\{[^}]*min-height:\s*28px/)
+  })
+
   it('keeps the viewer’s cards plain cards on a table that is no squeeze table', () => {
     const { revealed: _absent, ...plain } = ann
-    wrap(props({ seat: plain, squeezeRoom: false, squeezeRound: false, deadlineAt: null }))
+    wrap(props({ seat: plain, squeezeRoom: false, squeezeRound: false, squeezeDecides: false, deadlineAt: null }))
     expect(peelCards()).toHaveLength(0)
     for (const name of QUEENS) expect(screen.getByRole('img', { name })).toBeInTheDocument()
     expect(document.querySelector(`.${s.revealBtn}`), 'no pill, nor its place').toBeNull()

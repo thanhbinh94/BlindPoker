@@ -466,9 +466,14 @@
   order: -1;
 }
 
-/* Squeeze mode's "Lật": a small gold pill under the viewer's own cards (spec 2026-10-08 §4.2.2). */
+/* Squeeze mode's "Lật": a small gold pill under the viewer's own cards (spec 2026-10-08 §4.2.2), 28 px tall at the least
+   for a thumb (ruling 22), its label centred in it. */
 .revealBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   align-self: center;
+  min-height: 28px;
   margin-top: 2px;
   padding: 4px 12px;
   border: 1px solid var(--gold);

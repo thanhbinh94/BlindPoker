@@ -22,17 +22,24 @@ import { initialClientState, reduceClient } from '../src/client/reducer.js'
 import type { ClientState } from '../src/client/types.js'
 import type { GameClientApi } from '../src/client/useGameClient.js'
 
-/** `blindS` is Blind A on a squeeze table (Plan 21): the viewer's cards come face down, to peel or turn with "Lật". */
-export type PlaygroundMode = 'holdem' | 'blindA' | 'blindB' | 'blindS'
+/**
+ * `blindS` and `blindBS` are Blind A and Blind B on a squeeze table (Plan 21): the viewer's cards come face down, to peel
+ * or turn with "Lật" — in pure luck inside the `SQUEEZE` round, in play-or-fold before the choice.
+ */
+export type PlaygroundMode = 'holdem' | 'blindA' | 'blindB' | 'blindS' | 'blindBS'
 
-export const PLAYGROUND_MODES: readonly PlaygroundMode[] = ['holdem', 'blindA', 'blindB', 'blindS']
+export const PLAYGROUND_MODES: readonly PlaygroundMode[] = ['holdem', 'blindA', 'blindB', 'blindS', 'blindBS']
+
+const isSqueeze = (mode: PlaygroundMode): boolean => mode === 'blindS' || mode === 'blindBS'
+const isPlayOrFold = (mode: PlaygroundMode): boolean => mode === 'blindB' || mode === 'blindBS'
 
 const MY_ID = 'me'
 const MY_SEAT = 0
 const BOTS = ['Bảo', 'Chi', 'Dũng', 'Hằng', 'Khánh', 'Liên', 'Minh', 'Phúc']
 /**
- * On the squeeze table the seat after mine is a person, not a bot: one who never turns by hand, so the round runs to its
- * deadline and the server's turn — and once mine are up the table still has someone to wait for, as a real one would.
+ * On the pure-luck squeeze table the seat after mine is a person, not a bot: one who never turns by hand, so the round
+ * runs to its deadline and the server's turn — and once mine are up the table still has someone to wait for, as a real
+ * one would. (Play-or-fold needs none: the bots decide after me, so the round waits on me anyway.)
  */
 const OTHER_HUMAN_SEAT = 1
 export const PLAYGROUND_SEAT_COUNTS = [4, 6, 9] as const
@@ -54,15 +61,15 @@ const rulesFor = (mode: PlaygroundMode): Ruleset =>
     ? { mode: 'holdem', smallBlind: SMALL_BLIND, bigBlind: BIG_BLIND, tableFeeRate: ECONOMY.tableFeeRate, tableFeeCapBB: ECONOMY.tableFeeCapBB }
     : {
         mode: 'blind',
-        holeCards: mode === 'blindB' ? 3 : 2,
-        decisionMode: mode === 'blindB' ? 'playOrFold' : 'none',
+        holeCards: isPlayOrFold(mode) ? 3 : 2,
+        decisionMode: isPlayOrFold(mode) ? 'playOrFold' : 'none',
         fixedWager: FIXED_WAGER,
         tableFeeRate: ECONOMY.tableFeeRate,
-        ...(mode === 'blindS' ? { squeeze: true } : {}),
+        ...(isSqueeze(mode) ? { squeeze: true } : {}),
       }
 
 /** A squeeze table's round is the server's fixed 20 s, whatever the room asked for (spec 2026-10-08 §4.2.1). */
-const timerSecFor = (mode: PlaygroundMode): number => (mode === 'blindS' ? ECONOMY.squeezeTurnTimerSec : TURN_TIMER_SEC)
+const timerSecFor = (mode: PlaygroundMode): number => (isSqueeze(mode) ? ECONOMY.squeezeTurnTimerSec : TURN_TIMER_SEC)
 
 const configFor = (mode: PlaygroundMode, seats: number): RoomSummary['config'] => ({
   name: mode === 'holdem' ? 'Đêm Sài Gòn' : 'Chiếu Bạc',
@@ -74,9 +81,15 @@ const configFor = (mode: PlaygroundMode, seats: number): RoomSummary['config'] =
   hasPassword: false,
   ...(mode === 'holdem'
     ? { holdem: { smallBlind: SMALL_BLIND, bigBlind: BIG_BLIND, minBuyInBB: 50, maxBuyInBB: 200 } }
-    : mode === 'blindS'
-      ? { blind: { holeCards: 2 as const, decisionMode: 'none' as const, fixedWager: FIXED_WAGER, botCount: seats - 2, squeeze: true } }
-      : { blind: { holeCards: mode === 'blindB' ? (3 as const) : (2 as const), decisionMode: mode === 'blindB' ? ('playOrFold' as const) : ('none' as const), fixedWager: FIXED_WAGER, botCount: seats - 1 } }),
+    : {
+        blind: {
+          holeCards: isPlayOrFold(mode) ? (3 as const) : (2 as const),
+          decisionMode: isPlayOrFold(mode) ? ('playOrFold' as const) : ('none' as const),
+          fixedWager: FIXED_WAGER,
+          botCount: seats - (mode === 'blindS' ? 2 : 1),
+          ...(isSqueeze(mode) ? { squeeze: true } : {}),
+        },
+      }),
 })
 
 /** Two tickets for the lobby view: one open hold'em table, one locked blind room. */
@@ -106,8 +119,9 @@ export interface MockClient {
  *
  * The state comes out of `reduceClient`, fed by real `@bp/core` events: the driver creates a hand with `createHand`,
  * drives every other seat with `createBotStrategy`, runs each event through `filterEvent` for my seat and wraps it in
- * the `GAME_EVENT` frame a server would send. When it is my turn it simply stops and waits for `act()`; in a squeeze
- * round it waits for `reveal()` or the round's deadline, and turns what is still down then. So the
+ * the `GAME_EVENT` frame a server would send. When it is my turn it simply stops and waits for `act()` (at a squeeze
+ * table's decision `reveal()` turns my cards meanwhile); in a pure-luck squeeze round it waits for `reveal()` or the
+ * round's deadline, and turns what is still down then. So the
  * playground exercises the same reducer, the same views and the same hole-card hiding as production.
  */
 export function createMockClient(mode: PlaygroundMode, seatCount: number, onChange: (state: ClientState) => void): MockClient {
@@ -122,7 +136,8 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
   let button = 0
   let carryOver = 0
   let timer: ReturnType<typeof setTimeout> | null = null
-  let waiting: ((action: PlayerAction) => void) | null = null
+  /** Waiting on me: my action from `act()`, or — at a squeeze table's decision — `'reveal'` from `reveal()`. */
+  let waiting: ((choice: PlayerAction | 'reveal') => void) | null = null
   /** In a squeeze round: wakes the driver with the seat `reveal()` turned, or `null` when the round's deadline is up. */
   let revealing: ((seat: number | null) => void) | null = null
   /** The latest deadline sent with a turn, a decision or a squeeze round: the round's driver waits it out. */
@@ -242,9 +257,18 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
       const seat = pendingSeat(hand)
       let action: PlayerAction
       if (seat === MY_SEAT) {
-        action = await new Promise<PlayerAction>((resolve) => {
+        const choice = await new Promise<PlayerAction | 'reveal'>((resolve) => {
           waiting = resolve
         })
+        if (gen !== generation) return
+        // A squeeze table's decision: my cards turned before my choice (spec 2026-10-08 §4.2.4) — the engine marks the
+        // seat, and the decision is still mine to make.
+        if (choice === 'reveal') {
+          ;({ state: hand, events } = applyCommand(hand, { type: 'REVEALED', seat: MY_SEAT }, RNG))
+          emit(events)
+          continue
+        }
+        action = choice
       } else {
         await sleep(STEP_MS)
         action = bot.decide(playerView(hand, seat), legalActions(hand, seat), RNG)
@@ -314,9 +338,15 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
       resolve(action)
       return ACK
     },
-    // Outside a squeeze round there is nothing to turn: an ACK that changes nothing, as the server's.
+    // In the pure-luck round it wakes the round's wait, in a squeeze table's decision the wait for my choice; anywhere
+    // else there is nothing to turn: an ACK that changes nothing, as the server's.
     reveal: async () => {
-      revealing?.(MY_SEAT)
+      if (revealing !== null) revealing(MY_SEAT)
+      else if (isSqueeze(mode) && waiting !== null) {
+        const resolve = waiting
+        waiting = null
+        resolve('reveal')
+      }
       return ACK
     },
     setPreAction: (kind) => publish(reduceClient(state, { type: 'preAction', kind })),

@@ -67,6 +67,11 @@ export interface SeatProps {
   squeezeRoom: boolean
   /** The squeeze round is on — `SQUEEZE`, or a squeeze table's `DECISION`: a seat that has turned says so to the others. */
   squeezeRound: boolean
+  /**
+   * The round is a play-or-fold decision (a squeeze table's `DECISION`): its 20 s covers the peel and then the choice, so
+   * the viewer's ring stays until they have chosen, not just until their cards are up (ruling 21).
+   */
+  squeezeDecides: boolean
   /** Every one of my cards is up, by hand or by the "Lật" pill, while the round is on: tell the server. Once per hand. */
   onReveal?: () => void
 }
@@ -97,6 +102,7 @@ export function Seat({
   liftAfter,
   squeezeRoom,
   squeezeRound,
+  squeezeDecides,
   onReveal,
 }: SeatProps) {
   const { t } = useTranslation()
@@ -120,21 +126,28 @@ export function Seat({
   const faces = seat.holeCards ?? Array.from({ length: seat.cardCount }, () => null)
   const cardSize = isMe ? 'md' : 'sm'
   const payoutText = winnerPayout === null ? '' : `+${formatPoints(winnerPayout, lang)}`
+  /** When card `i` comes out of the deck: round the table, one card per seat at a time; at once when not dealt just now. */
+  const dealDelay = (i: number): number => (dealt ? (i * dealCount + dealIndex) * DEAL_STAGGER_MS : 0)
 
   // Squeeze mode (spec 2026-10-08 §4.2): on a squeeze table the viewer's own cards are `PeelCard`s for the whole hand —
   // swapped for `Card`s mid-hand they would remount and come out of the deck again. They open by hand, all at once on the
   // "Lật" pill, once the server has the seat turned (a decision, the forced turn at the deadline) and when the round is
-  // over (§4.2.4). The pill and the round's ring on the plate (ruling 14) stay while a card is still to turn. The server
-  // is told once a hand, when the last card is up — unless it turned the seat itself, or the round is over.
+  // over (§4.2.4). The pill stays while a card is still to turn, and the round's ring on the plate (ruling 14) as long —
+  // or, on a play-or-fold table, until the viewer has chosen (ruling 21). The server is told once a hand, when the last
+  // card is up — unless it turned the seat itself, or the round is over.
   const peeling = squeezeRoom && isMe && seat.holeCards !== null
   // Kept by hand, so the next hand starts afresh: the hand whose cards the pill opened, the one whose cards are all up,
-  // and — read only when a card reports — which of this hand's cards are up and whether the server has been told.
+  // and — read only when a card reports — which of this hand's cards are up and whether the server has been told. All of
+  // it lives with this seat: a ring↔stack switch mid-round remounts it, a card peeled but not yet reported comes back
+  // down, and the next "Lật" may send a second REVEAL — which the engine takes as the no-op it is (spec §6).
   const [pressedIn, setPressedIn] = useState<string | null>(null)
   const [upIn, setUpIn] = useState<string | null>(null)
   const turnedUp = useRef<{ handId: string | null; cards: Set<number>; told: boolean }>({ handId: null, cards: new Set(), told: false })
   const openAll = pressedIn !== null && pressedIn === handId
   const allUp = upIn !== null && upIn === handId
   const toTurn = peeling && squeezeRound && !openAll && !allUp && seat.revealed !== true
+  // Not keyed on `revealed`: a REVEAL during the decision turns the seat with the choice still to make.
+  const ring = isActing || toTurn || (isMe && squeezeDecides && !seat.hasDecided)
   const onCardUp = (i: number): void => {
     if (turnedUp.current.handId !== handId) turnedUp.current = { handId, cards: new Set(), told: false }
     const mine = turnedUp.current
@@ -175,7 +188,7 @@ export function Seat({
                 open={openAll || seat.revealed === true || !squeezeRound}
                 onRevealed={() => onCardUp(i)}
                 dealt={dealt}
-                delayMs={dealt ? (i * dealCount + dealIndex) * DEAL_STAGGER_MS : 0}
+                delayMs={dealDelay(i)}
               />
             ) : (
               <Card
@@ -185,7 +198,7 @@ export function Seat({
                 size={cardSize}
                 dealt={dealt}
                 reveal={reveal}
-                delayMs={dealt ? (i * dealCount + dealIndex) * DEAL_STAGGER_MS : 0}
+                delayMs={dealDelay(i)}
                 turnDelayMs={liftAfter + i * SHOWDOWN_STAGGER_MS}
               />
             ),
@@ -221,7 +234,7 @@ export function Seat({
               the seat is; its bets and payouts still show like anyone else's. */}
           {seat.isBot ? null : <span className={s.seatStack}>{formatPoints(seat.stack, lang)}</span>}
         </span>
-        {isActing || toTurn ? <TurnTimer deadlineAt={deadlineAt} serverNow={serverNow} totalMs={turnTimerMs} size={38} /> : null}
+        {ring ? <TurnTimer deadlineAt={deadlineAt} serverNow={serverNow} totalMs={turnTimerMs} size={38} /> : null}
         {isButton ? (
           <span className={s.dealer} role="img" aria-label={t('labels.dealer')}>
             {DEALER_GLYPH}
@@ -244,8 +257,9 @@ export function Seat({
         ) : null}
         {seat.isBot ? <Badge tone="muted">{t('labels.bot')}</Badge> : null}
         {pill === null ? null : <Badge tone={pill.tone}>{pill.text}</Badge>}
-        {/* Squeeze mode (§4.2.6): who has turned, for the others to see whom the round still waits on. */}
-        {!isMe && squeezeRound && seat.revealed === true ? <Badge tone="teal">{t('labels.revealed')}</Badge> : null}
+        {/* Squeeze mode (§4.2.6): who has turned, for the others to see whom the round still waits on. A seat that has
+            decided has turned with it (§4.2.4): its "Đã chọn" says both, and keeps the line under the plate to one. */}
+        {!isMe && squeezeRound && seat.revealed === true && !seat.hasDecided ? <Badge tone="teal">{t('labels.revealed')}</Badge> : null}
         {seat.betThisStreet > 0 ? <span className={s.bet}>{formatPoints(seat.betThisStreet, lang)}</span> : null}
       </div>
 

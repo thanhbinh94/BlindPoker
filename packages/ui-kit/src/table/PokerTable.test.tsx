@@ -307,24 +307,28 @@ describe('PokerTable', () => {
   // Spec 2026-10-08 §4.2: on a squeeze table the viewer's own cards are theirs to turn, the round's countdown is on their
   // own plate (ruling 14), and a seat that has turned says so to the others.
   describe('on a squeeze table', () => {
-    const squeezeRoom = makeRoom({
-      mode: 'blind',
-      config: {
-        name: 'Nặn',
+    /** A squeeze room with Ann (host, seat 0) and a bot in seat 2: pure luck with two cards, or play-or-fold with three. */
+    const roomOf = (decisionMode: 'none' | 'playOrFold') =>
+      makeRoom({
         mode: 'blind',
-        maxPlayers: 4,
-        isPrivate: false,
-        turnTimerSec: 20,
-        autoStart: true,
-        hasPassword: false,
-        blind: { holeCards: 2, decisionMode: 'none', fixedWager: 5_000, botCount: 1, squeeze: true },
-      },
-      players: [
-        makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'IN_HAND', stack: 20_000 }),
-        makePlayer({ playerId: 'bot2', displayName: 'Bảo', isBot: true, seat: 2, status: 'IN_HAND', stack: 25_000 }),
-      ],
-    })
-    /** The squeeze round, from Ann's seat: her queens still down, the bot turned from the deal. */
+        config: {
+          name: 'Nặn',
+          mode: 'blind',
+          maxPlayers: 4,
+          isPrivate: false,
+          turnTimerSec: 20,
+          autoStart: true,
+          hasPassword: false,
+          blind: { holeCards: decisionMode === 'none' ? 2 : 3, decisionMode, fixedWager: 5_000, botCount: 1, squeeze: true },
+        },
+        players: [
+          makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'IN_HAND', stack: 20_000 }),
+          makePlayer({ playerId: 'bot2', displayName: 'Bảo', isBot: true, seat: 2, status: 'IN_HAND', stack: 25_000 }),
+        ],
+      })
+    const luckRoom = roomOf('none')
+    const playOrFoldRoom = roomOf('playOrFold')
+    /** A pure-luck hand's round, from Ann's seat: her queens still down, the bot turned from the deal. */
     const squeezing: ClientHand = {
       ...hand,
       mode: 'blind',
@@ -336,10 +340,20 @@ describe('PokerTable', () => {
         { ...hand.seats[1]!, playerId: 'bot2', displayName: 'Bảo', isBot: true, revealed: true },
       ],
     }
+    /** A play-or-fold hand's round: three cards each, Ann's still down and her choice still to make. */
+    const deciding: ClientHand = {
+      ...squeezing,
+      phase: 'DECISION',
+      legal: { seat: 0, kinds: ['play', 'fold'], callAmount: 5_000, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 },
+      seats: [
+        { ...squeezing.seats[0]!, cardCount: 3, holeCards: parseCards('Qs Qd 7c') },
+        { ...squeezing.seats[1]!, cardCount: 3 },
+      ],
+    }
     const table = (h: ClientHand, extra: { myPlayerId?: string; onReveal?: () => void } = {}) => (
       <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
         <PokerTable
-          room={squeezeRoom}
+          room={h.phase === 'DECISION' ? playOrFoldRoom : luckRoom}
           hand={h}
           myPlayerId={extra.myPlayerId ?? 'a'}
           deadlineAt={1_015_000}
@@ -362,14 +376,36 @@ describe('PokerTable', () => {
       vi.useRealTimers()
     })
 
-    it.each(['SQUEEZE', 'DECISION'] as const)('gives my seat cards to peel and the round’s ring, and no one else either (%s)', (phase) => {
-      render(table({ ...squeezing, phase }))
-      expect(seatOf(1).querySelectorAll('[data-peel]')).toHaveLength(2)
+    it.each([
+      ['SQUEEZE', squeezing, 2],
+      ['DECISION', deciding, 3],
+    ] as const)('gives my seat cards to peel and the round’s ring, and no one else either (%s)', (_, h, cards) => {
+      render(table(h))
+      expect(seatOf(1).querySelectorAll('[data-peel]')).toHaveLength(cards)
       expect(seatOf(3).querySelectorAll('[data-peel]')).toHaveLength(0)
       expect(within(seatOf(1)).getByRole('button', { name: 'Turn' })).toBeInTheDocument()
       expect(screen.getAllByRole('timer')).toHaveLength(1)
       expect(within(seatOf(1)).getByRole('timer')).toHaveTextContent('15')
       expect(within(seatOf(3)).getByText('Turned')).toBeInTheDocument()
+    })
+
+    // Ruling 21: the play-or-fold round's 20 s covers the peel and the choice; pure luck has only the peel.
+    it('keeps my ring through a play-or-fold decision once my cards are up, until I have chosen', () => {
+      const view = render(table(deciding))
+      fireEvent.click(screen.getByRole('button', { name: 'Turn' }))
+      act(() => vi.advanceTimersByTime(1000))
+      const turned: ClientHand = { ...deciding, seats: deciding.seats.map((seat) => (seat.seat === 0 ? { ...seat, revealed: true } : seat)) }
+      view.rerender(table(turned))
+      expect(seatOf(1).querySelectorAll('[data-peel][data-face="up"]')).toHaveLength(3)
+      expect(within(seatOf(1)).getByRole('timer'), 'the choice is still to make').toBeInTheDocument()
+      view.rerender(table({ ...turned, legal: null, seats: turned.seats.map((seat) => (seat.seat === 0 ? { ...seat, hasDecided: true } : seat)) }))
+      expect(screen.queryByRole('timer')).toBeNull()
+      view.unmount()
+
+      render(table(squeezing))
+      fireEvent.click(screen.getByRole('button', { name: 'Turn' }))
+      act(() => vi.advanceTimersByTime(1000))
+      expect(screen.queryByRole('timer'), 'pure luck: up is done').toBeNull()
     })
 
     it('keeps my cards as they are once the round is over, and says "Turned" no more', () => {
