@@ -392,11 +392,17 @@ the release gives the run one sample, no speed, and the card opens only if that 
 would make a slow drag that ends in a twitch a flick, which is the error the pause rule exists to prevent.
 *Tracked:* `packages/ui-kit/src/table/PeelCard.tsx` (`releaseSpeed`); `docs/ui-kit.md` (The squeeze).
 
-**On a 375 × 812 squeeze table the stage overflows by 3 px while the cards are dealt.** The room header's badge row —
-the mode, the limit and the gold "Nặn bài" badge — wraps one line longer at that width, or else the tray's wait line does (the Task 9 report names both and did
-not settle which); either takes 3 px more than the stage has. The page itself still fits and does not scroll sideways, and that is what F-12 asserts, not the stage.
-*Why it stays:* 3 px, in one state at one phone size, would be paid for with a second header layout.
-*Tracked:* `apps/normal-web/e2e/ops/04-blind.spec.ts` → F-12.
+**On a 375 × 812 phone a play-or-fold squeeze table's stage scrolls 11 px in the round.** Measured on the built app
+(six seats, one bot, the cards dealt): a squeeze table's header takes a third line — the gold "Nặn bài" badge fills the
+first, and the code, the stakes and the head-count no longer fit two — and the viewer's seat carries the "Lật" pill's
+row, so the content needs 462 px where the stage has 451. The page does not scroll; the viewer's seat is sticky at the
+foot of the stage, so their cards, the pill and the round's timer stay on screen while the strip and the felt scroll
+behind. A pure-luck squeeze table had the same problem by 3 px (the tray's wait line is its third cost); the final fix
+wave halved that line's padding on phones (8 px back), and F-12 asserts that its stage fits again (467 of 467 px).
+*Why it stays:* the header's third line is the badge row at its widths (the second line misses the head-count by 5 px,
+and the stakes grow with the wager), and the pill keeps its row on purpose (`Seat`: taken out, the cards opening above
+it would move); either would be paid for with a second phone layout of the header or of the viewer's seat.
+*Tracked:* `apps/normal-web/e2e/ops/04-blind.spec.ts` → F-12 (pure luck); `docs/ui-kit.md` Known gaps.
 
 **A ring↔stack switch in the middle of a squeeze round can send a second `REVEAL`.** The seat remounts: a card peeled but
 not yet reported comes back down, and the next "Lật" tells the table again. The server takes a repeated `REVEAL` as the

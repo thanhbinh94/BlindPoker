@@ -6,8 +6,8 @@ import { I18nextProvider } from 'react-i18next'
 import { defaultChibi, type ChibiConfig, type ChibiSubject, type WearRef } from '../avatar2d/index.js'
 import type { ClientHand } from '../client/types.js'
 import { createI18n } from '../i18n/index.js'
-import { holdemHand as hand, holdemRoom as room, makePlayer, makeRoom } from '../test-fixtures.js'
-import { BOARD_STAGGER_MS, DEAL_MS, DEAL_STAGGER_MS, FLIP_MS, SHOWDOWN_STAGGER_MS } from './motion.js'
+import { holdemHand as hand, holdemRoom as room, makePlayer, makeRoom, makeSeat } from '../test-fixtures.js'
+import { BOARD_STAGGER_MS, DEAL_MS, DEAL_SPAN_MS, DEAL_STAGGER_MS, FLIP_MS, SHOWDOWN_STAGGER_MS, dealStaggerMs } from './motion.js'
 import { PokerTable } from './PokerTable.js'
 import s from './table.module.css'
 
@@ -81,7 +81,8 @@ describe('PokerTable', () => {
       expect(dealtCards()).toHaveLength(4 + 3)
       expect(board.querySelectorAll(`.${s.cardDealt}`)).toHaveLength(3)
       // Spec 2026-10-08 §4.1.1: round the table from the seat after the button — Bob (seat 2) first, then Ann on the
-      // button, then each one's second card; the flop's three come BOARD_STAGGER_MS apart.
+      // button, then each one's second card (four cards: the full step fits DEAL_SPAN_MS); the flop's three come
+      // BOARD_STAGGER_MS apart.
       expect(dealDelays(2)).toEqual([0, 2 * DEAL_STAGGER_MS])
       expect(dealDelays(0)).toEqual([DEAL_STAGGER_MS, 3 * DEAL_STAGGER_MS])
       expect([...board.querySelectorAll<HTMLElement>(`.${s.card}`)].map((el) => Number.parseInt(el.style.getPropertyValue('--deal-delay') || '0', 10))).toEqual([
@@ -92,6 +93,28 @@ describe('PokerTable', () => {
       // mine turn up once they land; Bob's stay backs
       expect(screen.getByRole('group', { name: 'Seat 1' }).querySelectorAll(`.${s.cardTurn}`)).toHaveLength(2)
       expect(screen.getByRole('group', { name: 'Seat 3' }).querySelectorAll(`.${s.cardTurn}`)).toHaveLength(0)
+    })
+
+    // Ruling 26: the whole deal leaves the deck within DEAL_SPAN_MS. Nine seats of two cards at 120 ms apiece would take
+    // 2 s; the step shrinks to 58 ms, and the viewer's own cards, dealt last, still turn DEAL_MS after each one leaves.
+    it('spaces a full table’s deal so its last card leaves the deck within DEAL_SPAN_MS', () => {
+      const nineSeats = fullRoom.players.map((p) =>
+        makeSeat({ seat: p.seat!, playerId: p.playerId, displayName: p.displayName, holeCards: p.seat === 0 ? parseCards('Qs Qd') : null }),
+      )
+      const full = (h: ClientHand) => (
+        <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+          <PokerTable room={fullRoom} hand={h} myPlayerId="p0" deadlineAt={null} serverNow={() => 0} turnTimerMs={30000} lang="en" layout="ring" canSit={false} />
+        </I18nextProvider>
+      )
+      const view = render(full({ ...hand, community: [], actingSeat: null, seats: nineSeats.map((seat) => ({ ...seat, cardCount: 0, holeCards: null })) }))
+      view.rerender(full({ ...hand, community: [], actingSeat: null, restored: false, dealtAt: Date.now(), seats: nineSeats }))
+      const step = dealStaggerMs(9 * 2)
+      expect(step).toBe(58)
+      // the button is on seat 0: seat 1 is dealt first, the viewer (seat 0) last
+      expect(dealDelays(1)).toEqual([0, 9 * step])
+      expect(dealDelays(0)).toEqual([8 * step, 17 * step])
+      expect(17 * step).toBeLessThanOrEqual(DEAL_SPAN_MS)
+      expect(turnDelays(0), 'mine turn once each has slid in').toEqual([8 * step + DEAL_MS, 17 * step + DEAL_MS])
     })
 
     // Pre-flight 2026-10-09: "dealt" means "arrived just now" — a layout switch or a remount later in the hand re-deals nothing.

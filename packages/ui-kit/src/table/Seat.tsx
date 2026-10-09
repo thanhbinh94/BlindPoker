@@ -1,5 +1,5 @@
 import type { RoomPlayerView } from '@bp/core'
-import { useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Chibi, type ChibiSubject, type Expression } from '../avatar2d/index.js'
 import type { ClientSeat } from '../client/types.js'
@@ -7,7 +7,7 @@ import { formatPoints, type Language } from '../i18n/index.js'
 import { Badge, type BadgeTone } from '../primitives/Badge.js'
 import { cx } from '../primitives/cx.js'
 import { Card } from './Card.js'
-import { DEAL_STAGGER_MS, SHOWDOWN_STAGGER_MS } from './motion.js'
+import { SHOWDOWN_STAGGER_MS, dealStaggerMs } from './motion.js'
 import { PeelCard } from './PeelCard.js'
 import { TurnTimer } from './TurnTimer.js'
 import s from './table.module.css'
@@ -54,7 +54,10 @@ export interface SeatProps {
   dealt: boolean
   /** This seat's place in the deal, 0 for the first seat after the button. */
   dealIndex: number
-  /** How many seats are dealt in. A dealt card `i` waits `(i × dealCount + dealIndex) × DEAL_STAGGER_MS`. */
+  /**
+   * How many seats are dealt in. A dealt card `i` waits `(i × dealCount + dealIndex) × dealStaggerMs(dealCount × cards)`:
+   * a step of `DEAL_STAGGER_MS`, shorter when the whole deal would take longer than `DEAL_SPAN_MS` (ruling 26).
+   */
   dealCount: number
   /** How a card that was face down turns when it is revealed: the viewer's own in place, an opponent's lifted. */
   reveal: 'flip' | 'lift'
@@ -72,9 +75,32 @@ export interface SeatProps {
    * the viewer's ring stays until they have chosen, not just until their cards are up (ruling 21).
    */
   squeezeDecides: boolean
-  /** Every one of my cards is up, by hand or by the "Lật" pill, while the round is on: tell the server. Once per hand. */
+  /**
+   * The hand was rebuilt from a snapshot (`ClientHand.restored`): after a reconnect, the server may not have the `REVEAL`
+   * this seat sent before the socket dropped. Defaults to `false`.
+   */
+  restored?: boolean
+  /**
+   * Every one of my cards is up, by hand or by the "Lật" pill, while the round is on: tell the server. Once per hand —
+   * and once more if the hand comes back from a snapshot that has my seat still unturned after I told it (`restored`).
+   */
   onReveal?: () => void
 }
+
+/** What a seat knows of its own cards in a squeeze round, for one hand (see `Seat`). */
+interface TurnedUp {
+  handId: string | null
+  /** The cards seen up. */
+  cards: Set<number>
+  /** All of them have been: `setUpIn` has run, and the server was told if it had to be. */
+  allUp: boolean
+  /** The server was told while the hand was live, not rebuilt from a snapshot: what a reconnect may have lost. */
+  toldLive: boolean
+  /** …and told once more after the snapshot. */
+  retold: boolean
+}
+
+const turnedUpIn = (handId: string | null): TurnedUp => ({ handId, cards: new Set(), allUp: false, toldLive: false, retold: false })
 
 /** One seat plaque: cards, name, stack, bet, state pill, dealer button, turn ring and winner glow. */
 export function Seat({
@@ -103,6 +129,7 @@ export function Seat({
   squeezeRoom,
   squeezeRound,
   squeezeDecides,
+  restored = false,
   onReveal,
 }: SeatProps) {
   const { t } = useTranslation()
@@ -126,8 +153,12 @@ export function Seat({
   const faces = seat.holeCards ?? Array.from({ length: seat.cardCount }, () => null)
   const cardSize = isMe ? 'md' : 'sm'
   const payoutText = winnerPayout === null ? '' : `+${formatPoints(winnerPayout, lang)}`
-  /** When card `i` comes out of the deck: round the table, one card per seat at a time; at once when not dealt just now. */
-  const dealDelay = (i: number): number => (dealt ? (i * dealCount + dealIndex) * DEAL_STAGGER_MS : 0)
+  /**
+   * When card `i` comes out of the deck: round the table, one card per seat at a time, the whole deal within
+   * `DEAL_SPAN_MS` (every seat holds as many cards as this one); at once when not dealt just now.
+   */
+  const dealStep = dealStaggerMs(dealCount * faces.length)
+  const dealDelay = (i: number): number => (dealt ? (i * dealCount + dealIndex) * dealStep : 0)
 
   // Squeeze mode (spec 2026-10-08 §4.2): on a squeeze table the viewer's own cards are `PeelCard`s for the whole hand —
   // swapped for `Card`s mid-hand they would remount and come out of the deck again. They open by hand, all at once on the
@@ -137,29 +168,54 @@ export function Seat({
   // card is up — unless it turned the seat itself, or the round is over.
   const peeling = squeezeRoom && isMe && seat.holeCards !== null
   // Kept by hand, so the next hand starts afresh: the hand whose cards the pill opened, the one whose cards are all up,
-  // and — read only when a card reports — which of this hand's cards are up and whether the server has been told. All of
-  // it lives with this seat: a ring↔stack switch mid-round remounts it, a card peeled but not yet reported comes back
-  // down, and the next "Lật" may send a second REVEAL — which the engine takes as the no-op it is (spec §6).
+  // and — read only when a card reports — which of this hand's cards are up, whether they have all been seen up, and
+  // whether the server was told while the hand was live (and told again since). All of it lives with this seat: a
+  // ring↔stack switch mid-round remounts it, a card peeled but not yet reported comes back down, and the next "Lật" may
+  // send a second REVEAL — which the engine takes as the no-op it is (spec §6).
   const [pressedIn, setPressedIn] = useState<string | null>(null)
   const [upIn, setUpIn] = useState<string | null>(null)
-  const turnedUp = useRef<{ handId: string | null; cards: Set<number>; told: boolean }>({ handId: null, cards: new Set(), told: false })
+  const turnedUp = useRef<TurnedUp>(turnedUpIn(null))
   const openAll = pressedIn !== null && pressedIn === handId
   const allUp = upIn !== null && upIn === handId
   const toTurn = peeling && squeezeRound && !openAll && !allUp && seat.revealed !== true
   // Not keyed on `revealed`: a REVEAL during the decision turns the seat with the choice still to make.
   const ring = isActing || toTurn || (isMe && squeezeDecides && !seat.hasDecided)
   const onCardUp = (i: number): void => {
-    if (turnedUp.current.handId !== handId) turnedUp.current = { handId, cards: new Set(), told: false }
+    if (turnedUp.current.handId !== handId) turnedUp.current = turnedUpIn(handId)
     const mine = turnedUp.current
     mine.cards.add(i)
-    if (mine.told || mine.cards.size < faces.length) return
-    mine.told = true
+    if (mine.allUp || mine.cards.size < faces.length) return
+    mine.allUp = true
     setUpIn(handId)
-    if (squeezeRound && seat.revealed !== true) onReveal?.()
+    if (squeezeRound && seat.revealed !== true) {
+      mine.toldLive = !restored
+      onReveal?.()
+    }
   }
+
+  // A REVEAL lost with the socket (final fix wave M2): sent while the hand was live, it never reached the server, and the
+  // reconnect's snapshot rebuilds the hand with my seat unturned — while my cards, in this same seat, stay up and the pill
+  // stays hidden. Told once more, then. Not for a hand that was already a snapshot when I told: nothing was lost there.
+  const retell = restored && peeling && squeezeRound && allUp && seat.revealed === false
+  useEffect(() => {
+    const mine = turnedUp.current
+    if (!retell || mine.handId !== handId || !mine.toldLive || mine.retold) return
+    mine.retold = true
+    onReveal?.()
+  }, [retell, handId, onReveal])
+
+  // The pill goes out of reach (disabled, hidden) the moment there is nothing left to turn — pressed, the last card
+  // peeled, the server's turn, the round's end. Focus on it would fall to the page (final fix wave M4): it moves to the
+  // seat itself, before the browser drops it.
+  const seatRef = useRef<HTMLDivElement>(null)
+  const pillRef = useRef<HTMLButtonElement>(null)
+  useLayoutEffect(() => {
+    if (!toTurn && pillRef.current !== null && document.activeElement === pillRef.current) seatRef.current?.focus({ preventScroll: true })
+  }, [toTurn])
 
   return (
     <div
+      ref={seatRef}
       className={cx(
         s.seat,
         isMe && s.seatMe,
@@ -176,6 +232,8 @@ export function Seat({
       data-me={isMe ? 'true' : undefined}
       role="group"
       aria-label={seatLabel}
+      // where the pill hands focus on when it hides: reachable from a script, never by Tab
+      tabIndex={peeling ? -1 : undefined}
     >
       {faces.length > 0 ? (
         <div className={s.seatCards}>
@@ -210,6 +268,7 @@ export function Seat({
           point, and by all of it on the phone. */}
       {peeling ? (
         <button
+          ref={pillRef}
           type="button"
           className={cx(s.revealBtn, !toTurn && s.revealBtnIdle)}
           disabled={!toTurn}

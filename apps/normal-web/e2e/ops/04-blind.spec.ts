@@ -9,7 +9,7 @@ import {
   expectMySeatLines,
   expectNoSidewaysScroll,
   expectNoTextOverlapAt,
-  expectPageFits,
+  expectRoomFits,
   handOver,
   historyOf,
   joinByCode,
@@ -61,8 +61,8 @@ const faceUp = (scope: ReturnType<Page['locator']>) => scope.getByRole('img', { 
 /** The result card of a hand that was played out — it has a winner — and not "Ván bị hủy", which `resultCard` takes as well. */
 const winnerCard = (page: Page) => page.getByRole('group', { name: 'Người thắng', exact: true })
 /**
- * Nothing under `el` is animating: a card dealt from the deck is still travelling for up to (i·n + k) × 120 + 360 ms, and a
- * box measured on its way is not where a press has to land.
+ * Nothing under `el` is animating: a card dealt from the deck is still travelling for up to 1 000 + 360 ms (the whole deal
+ * leaves the deck within a second, ruling 26), and a box measured on its way is not where a press has to land.
  */
 const settled = (el: Locator) =>
   expect.poll(() => el.evaluate((node) => node.getAnimations({ subtree: true }).length), { message: 'the card has come in from the deck' }).toBe(0)
@@ -467,10 +467,10 @@ test('F-12: @mobile the squeeze fits a phone — the viewer’s cards, the Lật
     expect(box!.x + box!.width, `${what} ends inside the screen`).toBeLessThanOrEqual(PHONE_SCREEN.width)
     expect(box!.y + box!.height, `${what} ends above the tray`).toBeLessThanOrEqual(tray.y + 1)
   }
-  // And the room holds on the phone: nothing scrolls sideways or down the page (the stage itself may — by design on a
-  // phone), the viewer's plate keeps to its lines with the name whole beside the round's timer, and no text lands on text.
+  // And the room holds on the phone: nothing scrolls sideways, neither the page nor the stage scrolls down, the viewer's
+  // plate keeps to its lines with the name whole beside the round's timer, and no text lands on text.
   await expectNoSidewaysScroll(page)
-  await expectPageFits(page, 'a squeeze table, dealt')
+  await expectRoomFits(page, 'a squeeze table, dealt', [PHONE_SCREEN])
   await expectMySeatLines(page, a.who.displayName, 'a squeeze table, dealt')
   await expectMyNameWhole(page, a.who.displayName, 'a squeeze table, dealt', [PHONE_SCREEN])
   await expectNoTextOverlapAt(page, 'Blind, squeeze, dealt')

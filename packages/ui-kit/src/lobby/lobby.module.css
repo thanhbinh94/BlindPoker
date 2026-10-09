@@ -382,6 +382,12 @@
   cursor: default;
 }
 
+/* While the form is busy it dims as the select it stands in for does (`primitives.module.css`'s `.select:disabled`). */
+.inputFixed:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* The settings list is longer than a phone screen, so the dialog scrolls — but the button that finishes the job
    rides along at the foot of it instead of hiding below the fold.
    It sticks to the dialog's *border*, not to the top of its bottom padding: stuck at `bottom: 0` it left the

@@ -403,14 +403,17 @@ export class Room {
 
   /**
    * Squeeze mode: the player has turned every one of its cards (spec 2026-10-08 §5.2). Nothing when there is no
-   * squeeze round to turn them in — a submit would re-arm the hand's timers, so it is not sent at all.
+   * squeeze round to turn them in — a submit would re-arm the hand's timers, so it is not sent at all. Nothing either,
+   * for a seated player, when no hand is running: a REVEAL sent as the last card opened can land after the hand is over
+   * (a slow link, a decision taken within the card's last animation), and it must not come back as an error the client
+   * shows. A player with no seat is still refused, as is a seat that was not dealt into the hand that is running.
    */
   reveal(playerId: string): Promise<void> {
     return this.enqueue(() => {
       this.assertOpen()
       const p = this.mustPlayer(playerId)
-      if (!this.runner || this.runner.isComplete) throw new RoomError('NOT_IN_HAND', 'no hand in progress')
       if (p.seat === null) throw new RoomError('NOT_SEATED')
+      if (!this.runner || this.runner.isComplete) return
       if (!this.runner.state.players.some((hp) => hp.seat === p.seat)) throw new RoomError('NOT_IN_HAND')
       const { phase } = this.runner.state
       const squeezing = phase === 'SQUEEZE' || (phase === 'DECISION' && this.rules.mode === 'blind' && this.rules.squeeze === true)

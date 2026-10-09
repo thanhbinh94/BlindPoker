@@ -110,10 +110,14 @@
    against the `Deck` anchor into `--deal-dx`/`--deal-dy`, and grows from the pile's size (`--deal-scale`, the deck's
    width over the card's) to its own as it travels; a card that is to be seen then turns (`.cardTurn`, above),
    `--turn-delay` after the slide began. It replaces the fade above, which a card with no deck to come from, or a
-   restored hand, still gets. Reduced motion lands on the resting style like everything else: the card at its seat. */
+   restored hand, still gets. Reduced motion lands on the resting style like everything else: the card at its seat.
+   The slide's scale and tilt pivot on the card's centre — the point `useDealFrom` measured to the deck's — not on the
+   fade's low pivot (`.card`'s 50% 62%), which set the pile-sized card down a few px below the deck. Nothing else
+   transforms the wrapper: the turn and the lift are the flipper's, the lift's shadow a filter. */
 .cardDealt {
   animation: dealSlide var(--dur-deal, 360ms) var(--ease) backwards;
   animation-delay: var(--deal-delay, 0ms);
+  transform-origin: 50% 50%;
 }
 
 @keyframes dealSlide {
@@ -1240,6 +1244,13 @@
     min-width: 0;
     padding: 0 var(--space-2);
     font-size: 0.875rem;
+  }
+
+  /* The wait line keeps half its air: the tray's own padding and gap already set it off. On a squeeze table the header
+     takes a third line and the viewer's seat the "Lật" pill's row, and the 8 px this gives back is what lets the stage
+     fit a 375 × 812 phone in the round (final fix wave F3: it scrolled 3 px). */
+  .trayWait {
+    padding: var(--space-1) 0;
   }
 
   .presets {

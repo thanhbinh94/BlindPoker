@@ -210,6 +210,7 @@ export function PokerTable({
         squeezeRoom={squeezeRoom}
         squeezeRound={squeezeRound}
         squeezeDecides={squeezeDecides}
+        restored={hand?.restored ?? false}
         onReveal={onReveal}
       />
     )

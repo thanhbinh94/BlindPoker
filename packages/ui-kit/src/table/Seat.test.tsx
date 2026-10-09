@@ -196,6 +196,75 @@ describe('Seat in a squeeze room', () => {
     expect(p.onReveal).toHaveBeenCalledTimes(2)
   })
 
+  // Final fix wave M2: a REVEAL lost with the socket. The reconnect's snapshot rebuilds the hand (`restored`) with my seat
+  // still unturned, while my cards — in this same seat — stay up and the pill stays hidden: nothing would ever tell it again.
+  it('tells the table once more when a reconnect rebuilds the hand with my cards up and my seat unturned', () => {
+    const p = props()
+    const view = wrap(p)
+    fireEvent.click(pill()!)
+    advance(1000)
+    expect(p.onReveal, 'told while the hand was live').toHaveBeenCalledTimes(1)
+    const again = vi.fn()
+    view.rerender({ ...p, restored: true, onReveal: again })
+    expect(faces(), 'my cards are still up').toEqual(['up', 'up'])
+    expect(again).toHaveBeenCalledTimes(1)
+    // later frames of the same hand, and the ring that went with the round, change nothing
+    view.rerender({ ...p, restored: true, onReveal: again, deadlineAt: 1_014_000 })
+    advance(1000)
+    expect(again).toHaveBeenCalledTimes(1)
+    // the server has it now
+    view.rerender({ ...p, restored: true, onReveal: again, seat: { ...ann, revealed: true } })
+    expect(again).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not tell the table again when the rebuilt hand has my seat turned', () => {
+    const p = props()
+    const view = wrap(p)
+    fireEvent.click(pill()!)
+    advance(1000)
+    const again = vi.fn()
+    view.rerender({ ...p, restored: true, onReveal: again, seat: { ...ann, revealed: true } })
+    advance(1000)
+    expect(again).not.toHaveBeenCalled()
+  })
+
+  it('tells the table once for a hand that was already a snapshot when my cards came up', () => {
+    const p = props({ restored: true })
+    wrap(p)
+    fireEvent.click(pill()!)
+    advance(1000)
+    expect(faces()).toEqual(['up', 'up'])
+    expect(p.onReveal, 'nothing was lost: one REVEAL').toHaveBeenCalledTimes(1)
+  })
+
+  // Final fix wave M4: the pill goes disabled and hidden as it is used; focus on it would fall to the page.
+  it('hands keyboard focus to the seat when the pill hides under it', () => {
+    const view = wrap(props())
+    const seat = screen.getByRole('group', { name: 'Ghế 1' })
+    pill()!.focus()
+    expect(document.activeElement).toBe(pill())
+    fireEvent.click(pill()!)
+    expect(document.activeElement, 'not the page').not.toBe(document.body)
+    expect(document.activeElement).toBe(seat)
+    expect(seat).toHaveAttribute('tabindex', '-1')
+    // the next hand's pill, focused, then turned by the server: the same
+    view.rerender(props({ handId: 'h2', seat: { ...ann, holeCards: parseCards('2c 7d') } }))
+    const next = screen.getByRole('button', { name: 'Lật' })
+    next.focus()
+    view.rerender(props({ handId: 'h2', seat: { ...ann, holeCards: parseCards('2c 7d'), revealed: true } }))
+    expect(document.activeElement).toBe(seat)
+  })
+
+  it('leaves focus where it is when the pill hides without it', () => {
+    wrap(props())
+    const elsewhere = document.createElement('button')
+    document.body.append(elsewhere)
+    elsewhere.focus()
+    fireEvent.click(pill()!)
+    expect(document.activeElement).toBe(elsewhere)
+    elsewhere.remove()
+  })
+
   // Spec §4.2.6: the others see "Đã lật" on a seat that has turned, during the round — to know whom they are waiting on.
   it('says "Đã lật" on another seat that has turned, during the round only', () => {
     const other = (patch: Partial<SeatProps>) => props({ seat: bot, player: makePlayer({ playerId: 'bot2', displayName: 'Bảo', isBot: true, seat: 2 }), isMe: false, deadlineAt: null, ...patch })

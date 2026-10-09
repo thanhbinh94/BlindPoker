@@ -556,7 +556,7 @@ function createHand(config: RulesetConfig, seats: SeatInput[], rng: Rng): HandSt
 function legalActions(state: HandState, seat: number): LegalActions
 function applyAction(state: HandState, cmd: HandCommand, rng: Rng): { state: HandState; events: GameEvent[] }
 // HandCommand = PlayerAction{seat, action} | TimerExpired | AdvanceReveal (server đẩy để tạo nhịp lật bài)
-//              | { type: 'REVEALED'; seat } (2026-10-08, spec card-motion-squeeze: ghế đã lật hết lá; hợp lệ trong SQUEEZE và trong DECISION của bàn nặn, ngoài ra và khi lặp lại là no-op, không lỗi; riêng ván đã COMPLETE thì chốt chung của engine ném `HAND_COMPLETE`, nhưng `Room.reveal` trả `NOT_IN_HAND` trước nên lệnh không bao giờ tới đó)
+//              | { type: 'REVEALED'; seat } (2026-10-08, spec card-motion-squeeze: ghế đã lật hết lá; hợp lệ trong SQUEEZE và trong DECISION của bàn nặn, ngoài ra và khi lặp lại là no-op, không lỗi; riêng ván đã COMPLETE thì chốt chung của engine ném `HAND_COMPLETE`, nhưng `Room.reveal` dừng trước khi ván đã xong nên lệnh không bao giờ tới đó)
 //              | { type: 'CANCEL'; reason } (hủy ván: hoàn lại mọi chip đã cược, không thu phí)
 ```
 Reducer thuần, không đồng hồ: nhịp lật bài và timeout là lệnh do server-kit gửi. Điều này khiến mọi kịch bản test là danh sách lệnh → so sánh state/events.
@@ -737,7 +737,7 @@ Mọi message: `{ t: string, ...payload }`. Client→server có `reqId?: string`
 | `STAND_UP` | — | |
 | `SIT_OUT` | — | Giữ ghế, bỏ qua từ ván sau (ván đang chơi vẫn đánh hết); chưa có ghế → `NOT_SEATED` |
 | `SIT_IN` | — | Trở lại từ ván sau; stack dưới mức tối thiểu thì vẫn `SITTING_OUT` |
-| `REVEAL` | — | Bàn nặn bài: người gửi đã lật hết lá riêng (2026-10-08, spec card-motion-squeeze; server chỉ nhận tín hiệu, không biết lá nào bị bóc). Trong `SQUEEZE` hoặc `DECISION` của bàn nặn: đặt `revealed`; ngoài pha đó hoặc ở bàn không nặn: no-op, `ACK`. Không có ván đang chạy, hoặc có ghế mà không được chia vào ván → `NOT_IN_HAND`; chưa có ghế khi có ván → `NOT_SEATED` |
+| `REVEAL` | — | Bàn nặn bài: người gửi đã lật hết lá riêng (2026-10-08, spec card-motion-squeeze; server chỉ nhận tín hiệu, không biết lá nào bị bóc). Trong `SQUEEZE` hoặc `DECISION` của bàn nặn: đặt `revealed`; ngoài pha đó hoặc ở bàn không nặn: no-op, `ACK`. Chưa có ghế → `NOT_SEATED` (có ván hay không); có ghế mà không được chia vào ván đang chạy → `NOT_IN_HAND`; có ghế mà không có ván nào đang chạy — trước ván đầu, hoặc `REVEAL` tới sau khi ván nó gửi cho đã xong (đường truyền chậm, chọn ngay trong lúc lá cuối đang mở) → no-op, `ACK`, để client không hiện lỗi "không tham gia ván này" (2026-10-09, đợt sửa cuối Plan 21) |
 | `READY` | `{ ready: boolean }` | |
 | `START_GAME` | — | Host |
 | `KICK` | `{ playerId }` | Host, chỉ người chưa trong ván |

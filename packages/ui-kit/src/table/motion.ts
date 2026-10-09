@@ -2,7 +2,7 @@ import type { ClientHand } from '../client/types.js'
 
 /**
  * The table's card motion in numbers (spec 2026-10-08 §3, §4.1): how long each move takes — the CSS tokens' twins, which
- * `Card.test` holds equal — how far apart the cards go, and the two rules `PokerTable` and `useRevealHold` time it by.
+ * `Card.test` holds equal — how far apart the cards go, and the rules `PokerTable`, `Seat` and `useRevealHold` time it by.
  */
 
 /** How long a revealed card takes to turn over in place: the `--dur-flip` token in `tokens.css`. */
@@ -13,8 +13,16 @@ export const DEAL_MS = 360
 export const LIFT_MS = 720
 /** The step between the result card's cards: card `i` waits `i × CARD_STAGGER_MS`. */
 export const CARD_STAGGER_MS = 60
-/** The step between cards dealt around the table: card `i` of the seat `k`-th from the button waits `(i × n + k) × this`. */
+/**
+ * The step between cards dealt around the table: card `i` of the seat `k`-th from the button waits `(i × n + k) × this` —
+ * at most; a deal of many cards takes a shorter one (`dealStaggerMs`).
+ */
 export const DEAL_STAGGER_MS = 120
+/**
+ * The longest a deal may take, from the first card leaving the deck to the last (ruling 26): the hand's timer
+ * is already running, so eight seats of three cards at the full step — 2.8 s — would eat into a 10 s decision.
+ */
+export const DEAL_SPAN_MS = 1000
 /** The step between the flop's three cards. */
 export const BOARD_STAGGER_MS = 300
 /** The step between one seat's cards at the showdown. */
@@ -37,6 +45,16 @@ const WITH_THE_BOARD_MS = 1000
  */
 export const showdownWithBoard = (hand: ClientHand | null): boolean =>
   hand !== null && hand.showdownAt !== null && hand.boardAt !== null && hand.showdownAt - hand.boardAt < WITH_THE_BOARD_MS
+
+/**
+ * The step between the hole cards of a deal of `totalCards` cards round the table (seats dealt in × cards each):
+ * `DEAL_STAGGER_MS`, or less when that would have the last card leave the deck more than `DEAL_SPAN_MS` after the first.
+ * A single card (or none) has no step.
+ */
+export function dealStaggerMs(totalCards: number): number {
+  if (totalCards <= 1) return 0
+  return Math.min(DEAL_STAGGER_MS, Math.floor(DEAL_SPAN_MS / (totalCards - 1)))
+}
 
 /** The hand's seats in the order a dealer deals to them: clockwise (seat numbers up), from the first after the button. */
 export function dealOrderOf(hand: ClientHand | null): number[] {

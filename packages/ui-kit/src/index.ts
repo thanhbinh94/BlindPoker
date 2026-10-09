@@ -20,11 +20,13 @@ export * from './avatar2d/index.js'
 export * from './table/geometry.js'
 export * from './table/useMediaQuery.js'
 export * from './table/Card.js'
-// The motion's numbers are public as they were from `Card.js`; its two hand rules stay the table's own.
+// The motion's numbers are public as they were from `Card.js`; its rules (the deal's order and step, the showdown's
+// wait for the river) stay the table's own.
 export {
   BOARD_STAGGER_MS,
   CARD_STAGGER_MS,
   DEAL_MS,
+  DEAL_SPAN_MS,
   DEAL_STAGGER_MS,
   DEAL_WINDOW_MS,
   FLIP_MS,

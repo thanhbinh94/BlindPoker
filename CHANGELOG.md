@@ -21,8 +21,10 @@ schema change or migration: a room's config is not stored. No library was added.
 - **Cards come out of a deck and are turned where they land (every table, both editions).**
   - A three-card deck is drawn on the felt, beside the pot. Every card slides out of it face down (0.36 s) and, if it is to
     be seen, turns where it lands (0.6 s).
-  - Hole cards go round the table clockwise from the seat after the button, one card per seat at a time, 0.12 s apart. The
-    flop's three cards come 0.3 s apart, each sliding in while the one before it turns; the turn and the river come alone.
+  - Hole cards go round the table clockwise from the seat after the button, one card per seat at a time, 0.12 s apart — closer
+    on a big table, so the last card leaves the deck within 1 s of the first while the hand's timer runs (eight seats of three
+    cards: 43 ms). The flop's three cards come 0.3 s apart, each sliding in while the one before it turns; the turn and the
+    river come alone.
     The server's 1.5 s pace between steps is as it was.
   - At the showdown an opponent's face-down cards lift off the felt, turn in the air and set down: 0.72 s a card, 0.2 s
     between one seat's cards. The engine settles in the same step that deals the river, so when the two arrive together the
@@ -45,6 +47,9 @@ schema change or migration: a room's config is not stored. No library was added.
     or stood up for it.
   - Other seats show "Đã lật" once they have turned (a seat that has decided shows "Đã chọn"); the tray says what the seat is
     waiting for; auto-play turns the cards the moment they are dealt.
+  - A `REVEAL` lost with a dropped socket is sent again, once, when the reconnect's snapshot still has the seat unturned. The
+    "Lật" pill hands keyboard focus to the seat as it hides, and the create dialog's read-only "20 giây · nặn bài" is out of
+    the Tab order and dims with the form while it is busy.
 - **Under it.**
   - `@bp/core`: `BlindRules.squeeze`, the `SQUEEZE` phase, `HandPlayer.revealed` and `SeatView.revealed`, the `REVEALED { seat }`
     command, the events `SQUEEZE_PHASE`, `PLAYER_REVEALED` and `SQUEEZE_ENDED`. A Hold'em seat is revealed from the deal and
@@ -54,7 +59,7 @@ schema change or migration: a room's config is not stored. No library was added.
     deadline (guarded by the phase and `turnSeq`); an auto-fold seat is turned for. `Room.reveal`, the gateway's `REVEAL`
     case, and `SQUEEZE_PHASE` going out stamped with `deadlineAt` like `DECISION_PHASE`.
   - `@bp/ui-kit`: `Deck` and `DeckAnchorProvider`; `Card` learns `dealt`, `reveal="lift"` and its latched delays; `motion.ts`
-    holds the numbers and the two rules the table times by; `PeelCard` with the geometry in `peel.ts`; `Seat`, `PokerTable` and
+    holds the numbers and the three rules the table times by; `PeelCard` with the geometry in `peel.ts`; `Seat`, `PokerTable` and
     `RoomScreen` carry the round; `GameClientApi.reveal()`; the lobby's box and badges; ten locale keys in both languages.
   - The playground gains "Blind A · nặn bài", "Blind B · nặn bài" and a `#peel` page.
 - **Replaced.** The first design made squeeze a per-device switch in Settings; the user chose a mode of the table instead
@@ -74,10 +79,11 @@ schema change or migration: a room's config is not stored. No library was added.
     and, on the phone, pushed the pot onto the viewer's cards. It is still mid-table, as the user chose.
   - The deck is measured by the **card** through a context (`DeckAnchorProvider` / `useDeckAnchor`, `Card`'s `dealt` and
     `useDealFrom`), not by `PokerTable` measuring every slot and passing each card a `dealFrom` (spec §5.3).
-  - A `REVEAL` from a player with no seat is answered `NOT_SEATED` while a hand is running; the spec said `NOT_IN_HAND` for
-    "not seated or not in the hand". With no hand running it is `NOT_IN_HAND` for everyone, and `NOT_IN_HAND` is also what a
-    seat that was not dealt in gets. Outside a squeeze round the room
-    answers `ACK` without sending the engine anything: a submit would re-arm the hand's timers for nothing.
+  - A `REVEAL` from a player with no seat is answered `NOT_SEATED`; the spec said `NOT_IN_HAND` for "not seated or not in the
+    hand". `NOT_IN_HAND` is what a seat that was not dealt into the running hand gets. With no hand running a seated player's
+    `REVEAL` is answered `ACK` and does nothing: one sent as the last card opened can land after its hand is over, and must
+    not come back as "Bạn không tham gia ván này". Outside a squeeze round the room also answers `ACK` without sending the
+    engine anything: a submit would re-arm the hand's timers for nothing.
   - `PEEL.snapMs` is 200 (spec: 0.2 s; the plan had 220). The flick is read from the pointer's real and coalesced positions
     over its last 100 ms, with a 40 ms pause rule, not from "the last six samples": a real flick did not open on six.
   - The squeeze timer is drawn **on the viewer's own plate** while their cards are not all turned. The spec says "như pha
@@ -101,8 +107,9 @@ schema change or migration: a room's config is not stored. No library was added.
     that held the touch implicitly) are guarded in `PeelCard` and unit-tested, never run in those browsers.
   - On a device that does not coalesce pointer events, a single quick move after a rest is not read as a flick: the card opens
     only past half.
-  - On a 375 × 812 squeeze table the stage overflows by 3 px while the cards are dealt (the header's badge row wraps a line
-    longer, or the tray's wait line does — the Task 9 report names both); F-12 asserts that the page fits, not the stage.
+  - On a 375 × 812 phone a play-or-fold squeeze table's stage scrolls 11 px in the round (six seats, one bot: the header's
+    third line and the "Lật" pill's row); the viewer's seat stays on screen. A pure-luck one fits: it was 3 px over, until
+    the phone's tray wait line gave back 8 px, and F-12 asserts the stage again, not just the page.
   - A switch between the ring and the stack in the middle of a round can send a second `REVEAL`, which is a no-op.
   - All five are written up in `docs/known-limitations.md` (the first two as one entry). `docs/ui-kit.md`'s Footprint table
     was not re-measured.

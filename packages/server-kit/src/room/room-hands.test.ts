@@ -1545,16 +1545,43 @@ describe('squeeze mode (spec 2026-10-08)', () => {
     expect(h.repos.hands).toHaveLength(1)
   })
 
+  // Final fix wave M1: "no hand" is a seat with no cards in the hand that is running. With no hand running at all, a
+  // seated player's REVEAL is a no-op (next test); a player with no seat is refused either way.
   it('REVEAL is refused with no hand or no seat, and is nothing when sent again', async () => {
-    const h = createRoomHarness(SQUEEZE, { players: [['h', 100_000], ['w', 100_000]] })
-    expect(await code(h.room.reveal('h'))).toBe('NOT_IN_HAND')
+    const h = createRoomHarness(SQUEEZE, { players: [['h', 100_000], ['w', 100_000], ['x', 100_000]] })
+    expect(await code(h.room.reveal('h')), 'no seat, no hand').toBe('NOT_SEATED')
     await seatAndStart(h, ['h'])
     await h.room.join(h.identity('w'))
     expect(await code(h.room.reveal('w'))).toBe('NOT_SEATED')
+    // a seat taken after the deal holds no cards in the hand that is running
+    await h.room.join(h.identity('x'))
+    const taken = new Set([...h.room.players.values()].map((p) => p.seat))
+    await h.room.sitDown('x', [0, 1, 2, 3].find((seat) => !taken.has(seat))!)
+    expect(await code(h.room.reveal('x'))).toBe('NOT_IN_HAND')
     await h.room.reveal('h')
     const before = h.ofType('h', 'GAME_EVENT').length
     await h.room.reveal('h')
     expect(h.ofType('h', 'GAME_EVENT').length).toBe(before)
+  })
+
+  // Final fix wave M1: the client sends REVEAL as the last card opens; on a slow link, or with the choice made within that
+  // card's animation, it lands after the hand is over. It must not come back as "you are not in this hand".
+  it('a REVEAL from a seated player with no hand running is answered with nothing: no error, no event, no timer', async () => {
+    const h = createRoomHarness(SQUEEZE, { players: [['h', 100_000]] })
+    await h.room.sitDown('h', 0)
+    expect(h.room.handActive).toBe(false)
+    expect(await code(h.room.reveal('h')), 'seated, before the first hand').toBeNull()
+    await h.room.setReady('h', true)
+    await h.room.startGame('h')
+    await h.room.reveal('h')
+    await playOut(h)
+    expect(h.room.handActive).toBe(false)
+    const sent = h.ofType('h', 'GAME_EVENT').length
+    const nextHandAt = h.room.nextHandAt
+    expect(await code(h.room.reveal('h')), 'after the hand is over').toBeNull()
+    expect(h.ofType('h', 'GAME_EVENT')).toHaveLength(sent)
+    expect(h.ofType('h', 'ERROR')).toHaveLength(0)
+    expect(h.room.nextHandAt).toBe(nextHandAt)
   })
 
   it('play or fold on a squeeze table keeps its decision round: the deadline comes from the config, and deciding turns the cards', async () => {
@@ -1565,6 +1592,43 @@ describe('squeeze mode (spec 2026-10-08)', () => {
     expect(types(h, 'h')).toContain('PLAYER_REVEALED')
     await playOut(h)
     expect(h.repos.hands).toHaveLength(1)
+  })
+
+  // Final fix wave F4: on a play-or-fold squeeze table the decision is the round (spec §4.2.4) — a REVEAL turns the seat
+  // there, for the others to see, and the decision goes on to its own deadline; it does not end anything.
+  it('a REVEAL in a play-or-fold squeeze DECISION turns the seat for the others and leaves the decision running', async () => {
+    const h = createRoomHarness({ ...SQUEEZE, blind: { ...SQUEEZE.blind!, decisionMode: 'playOrFold', botCount: 0 } }, { players: [['h', 100_000], ['a', 100_000]] })
+    await seatAndStart(h, ['h', 'a'])
+    expect(h.room.snapshot('h').hand?.phase).toBe('DECISION')
+    const deadlineAt = h.room.snapshot('h').deadlineAt
+    expect(deadlineAt).not.toBeNull()
+    const seat = h.room.players.get('h')!.seat!
+    h.clock.advance(1_000)
+    await h.room.reveal('h')
+    const seen = h.ofType('a', 'GAME_EVENT').at(-1)!.event
+    expect(seen, 'the other player sees h turned').toEqual({ type: 'PLAYER_REVEALED', seat })
+    expect(h.room.snapshot('a').hand).toMatchObject({ phase: 'DECISION' })
+    expect(h.room.snapshot('a').hand?.seats.find((s) => s.seat === seat)).toMatchObject({ revealed: true, hasDecided: false })
+    expect(h.room.snapshot('h').deadlineAt, 'the decision keeps its deadline').toBe(deadlineAt)
+    expect(types(h, 'h')).not.toContain('SQUEEZE_ENDED')
+    // and the choice is still h's to make
+    await h.room.action('h', { kind: 'play' }, h.room.seq)
+    await playOut(h)
+    expect(h.repos.hands).toHaveLength(1)
+  })
+
+  it('a REVEAL in the DECISION of a plain play-or-fold table sends nothing and leaves the deadline where it was', async () => {
+    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 0 } }, { players: [['h', 100_000], ['a', 100_000]] })
+    await seatAndStart(h, ['h', 'a'])
+    expect(h.room.snapshot('h').hand?.phase).toBe('DECISION')
+    const deadlineAt = h.room.snapshot('h').deadlineAt
+    expect(deadlineAt).not.toBeNull()
+    const sent = { h: h.ofType('h', 'GAME_EVENT').length, a: h.ofType('a', 'GAME_EVENT').length }
+    h.clock.advance(1_000)
+    expect(await code(h.room.reveal('h'))).toBeNull()
+    expect(h.ofType('h', 'GAME_EVENT')).toHaveLength(sent.h)
+    expect(h.ofType('a', 'GAME_EVENT')).toHaveLength(sent.a)
+    expect(h.room.snapshot('h').deadlineAt).toBe(deadlineAt)
   })
 
   it('a REVEAL after the round is over leaves the hand’s timers alone: the next card comes on time', async () => {

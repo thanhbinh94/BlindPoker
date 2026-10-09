@@ -224,6 +224,12 @@ describe('Card', () => {
     expect(/--dur-lift:\s*(\d+)ms;/.exec(TOKENS_CSS)?.[1]).toBe(String(LIFT_MS))
   })
 
+  // Final fix wave P1: `useDealFrom` measures centre to centre, so the slide's scale and tilt pivot on the card's centre —
+  // on the fade's low pivot (50% 62%) the pile-sized card started a few px below the deck.
+  it('pivots the slide from the deck on the card’s centre', () => {
+    expect(TABLE_CSS).toMatch(/\.cardDealt\s*\{[^}]*transform-origin:\s*50% 50%/)
+  })
+
   // `global.css` switches every animation off under reduced motion; this file's own list says so for each moving class.
   it('lists every moving class of the card under reduced motion', () => {
     const off = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(TABLE_CSS)?.[1] ?? ''

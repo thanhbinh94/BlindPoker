@@ -212,6 +212,39 @@ describe('useGameClient squeeze mode', () => {
     expect(reveals(sock)).toHaveLength(2)
   })
 
+  // Final fix wave M2: a REVEAL lost with the socket. The reconnect's snapshot has my seat unturned; auto-play asks again,
+  // once — and not after a snapshot that has it turned, nor for a snapshot that is no reconnect.
+  it('auto-play sends the REVEAL once more when a reconnect finds my seat still unturned', () => {
+    const { result, sock } = seatedAtTable(true)
+    act(() => result.current.setAutoPlay(true))
+    startHand(sock, 8, 'h1')
+    dealTo(sock, 9, 0)
+    expect(reveals(sock)).toHaveLength(1)
+    const seatView = (seat: number, revealed: boolean) => ({
+      seat, playerId: seat === 0 ? 'a' : 'b', isBot: false, stack: 19_000, betThisStreet: 1000, totalCommitted: 1000, folded: false, allIn: false,
+      cardCount: 2, holeCards: seat === 0 ? parseCards('As Ks') : null, hasDecided: false, decision: null, revealed,
+    })
+    const handView = (revealed: boolean) => ({
+      handId: 'h1', mode: 'blind' as const, phase: 'SQUEEZE' as const, street: 'PREFLOP' as const, community: [], pot: 2000, carryOverIn: 0,
+      currentBet: 0, minRaise: 0, button: 0, actingSeat: null, turnSeq: 1, seats: [seatView(0, revealed), seatView(1, false)], mySeat: 0, legal: null, result: null,
+    })
+    /** The socket drops before the REVEAL gets through; the next one comes back to a snapshot of the hand. */
+    const reconnect = (revealed: boolean, seq: number) => {
+      act(() => sock().serverClose(1006))
+      act(() => { vi.advanceTimersByTime(30_000) })
+      act(() => sock().open())
+      act(() => sock().receive({ t: 'WELCOME', playerId: 'a', displayName: 'A', balance: 100, serverTime: Date.now() }))
+      act(() => sock().receive({ t: 'ROOM_SNAPSHOT', seq, room: roomOf(true), hand: handView(revealed), deadlineAt: Date.now() + 15_000 }))
+    }
+    reconnect(false, 10)
+    expect(reveals(sock), 'asked again on the new socket').toHaveLength(1)
+    // a snapshot that answers a RESYNC on the same socket is no reconnect: nothing was lost
+    act(() => sock().receive({ t: 'ROOM_SNAPSHOT', seq: 11, room: roomOf(true), hand: handView(false), deadlineAt: Date.now() + 14_000 }))
+    expect(reveals(sock)).toHaveLength(1)
+    reconnect(true, 12)
+    expect(reveals(sock), 'the server has it: nothing to ask').toHaveLength(0)
+  })
+
   it('does not ask again once my cards are turned, and asks for nothing in a plain room', () => {
     const squeeze = seatedAtTable(true)
     startHand(squeeze.sock, 8, 'h1')

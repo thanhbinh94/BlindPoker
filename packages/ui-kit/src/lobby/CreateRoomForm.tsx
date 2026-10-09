@@ -151,10 +151,14 @@ export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem',
         </Field>
         <Field label={t('create.turnTimer')}>
           {squeezing ? (
+            // A value, not a control: out of the Tab order (its label and the squeeze box's hint say it to a screen
+            // reader), and dimmed with the rest of the form while it is busy.
             <input
               className={cx(s.input, s.inputFixed)}
               type="text"
               readOnly
+              tabIndex={-1}
+              disabled={busy}
               value={t('create.squeezeTimer', { time: t('common:time.seconds', { count: ECONOMY.squeezeTurnTimerSec }) })}
             />
           ) : (

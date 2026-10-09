@@ -213,7 +213,7 @@ dropping the oldest, so a chatty server cannot stack slips off the top of the sc
 | Component | Props |
 | --- | --- |
 | `PokerTable` | `room`, `hand`, `myPlayerId`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `canSit`, `layout?`, `chibiFor?`, `expressionFor?`, `captionFor?`, `onSeatClick?`, `resultPending?`, `onReveal?` |
-| `Seat` | `seat`, `player`, `isMe`, `isActing`, `isButton`, `winnerPayout`, `showdownLabel`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `position`, `chibi`, `expression`, `bounce`, `caption?`, and for the motion and the squeeze (`PokerTable` fills them): `handId`, `dealt`, `dealIndex`, `dealCount`, `reveal`, `liftAfter`, `squeezeRoom`, `squeezeRound`, `squeezeDecides`, `onReveal?` |
+| `Seat` | `seat`, `player`, `isMe`, `isActing`, `isButton`, `winnerPayout`, `showdownLabel`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `position`, `chibi`, `expression`, `bounce`, `caption?`, and for the motion and the squeeze (`PokerTable` fills them): `handId`, `dealt`, `dealIndex`, `dealCount`, `reveal`, `liftAfter`, `squeezeRoom`, `squeezeRound`, `squeezeDecides`, `restored?`, `onReveal?` |
 | `Card` | `card?`, `faceDown?`, `size?` (`sm`/`md`/`lg`), `delayMs?`, `highlighted?`, `className?`, `dealt?`, `reveal?` (`'flip'`/`'lift'`), `turnDelayMs?` |
 | `Deck` | none (`forwardRef` to its `div`) — the pile every card is dealt from; `DeckAnchorProvider` / `useDeckAnchor` (`deck-anchor.ts`) hand its ref to the cards |
 | `PeelCard` | `card`, `size?`, `open`, `onRevealed`, `dealt?`, `delayMs?`, `className?` — the viewer's own card in a squeeze room, turned by dragging it |
@@ -370,7 +370,7 @@ No library: CSS 3D and keyframes for the cards, and a small `requestAnimationFra
 | Move | What the player sees | Numbers |
 | --- | --- | --- |
 | **Deal** | A card `dealt` slides from the deck to its place, back up, leaving at the pile's size (`--deal-scale`, the deck's width over the card's) and growing as it travels, a little rotated. A card that will be face up then turns where it landed, `DEAL_MS` after the slide began. | `DEAL_MS` 360 (`--dur-deal`, the `--ease` curve); `FLIP_MS` 600 (`--dur-flip`, ease-in-out) |
-| **Hole cards, round the table** | Clockwise from the seat after the button, one card per seat at a time (`dealOrderOf`): card `i` of the seat `k`-th in that order waits `(i × seats + k) × DEAL_STAGGER_MS`. | `DEAL_STAGGER_MS` 120 |
+| **Hole cards, round the table** | Clockwise from the seat after the button, one card per seat at a time (`dealOrderOf`): card `i` of the seat `k`-th in that order waits `(i × seats + k) × dealStaggerMs(seats × cards)` — `DEAL_STAGGER_MS`, or less when the last card would leave the deck more than `DEAL_SPAN_MS` after the first (ruling 26: the hand's timer runs during the deal; six seats of two get 90 ms, eight of three 43 ms). | `DEAL_STAGGER_MS` 120; `DEAL_SPAN_MS` 1000 |
 | **Board** | The flop's three cards come in `BOARD_STAGGER_MS` apart, each sliding in while the one before it turns; the turn and the river come alone. The server's 1.5 s pace between steps (spec §8.3 step 5) is unchanged: one card takes about a second, so it is at rest before the next. | `BOARD_STAGGER_MS` 300 |
 | **Showdown** | An opponent's face-down cards **lift** off the felt (rise by about a fifth of their height, grow by a tenth, the shadow spreads), turn in the air, and set down with a small overshoot (`reveal="lift"`: `.cardLift` with `liftShadow` on the wrapper, `--ease-lift`). One seat's cards go `SHOWDOWN_STAGGER_MS` apart. | `LIFT_MS` 720 (`--dur-lift`); `SHOWDOWN_STAGGER_MS` 200 |
 | **The result card's cards** | Unchanged: they fade in on the old stagger. | `CARD_STAGGER_MS` 60 |
@@ -466,7 +466,12 @@ card is up** (`onCardUp`, then `onReveal` → `PokerTable` → `RoomScreen`'s `c
 turns and not at all if the server turned the seat itself. The "Lật" pill is 28 px tall at least, and it keeps its place for
 the whole hand (out of sight and reach once nothing is left to turn): taken out, it would move the seat's block and the
 cards opening in it. A ring↔stack switch in the middle of a round remounts the seat; a card peeled but not yet reported
-comes back down, and the next "Lật" may send a second `REVEAL`, which the engine takes as the no-op it is.
+comes back down, and the next "Lật" may send a second `REVEAL`, which the engine takes as the no-op it is. A `REVEAL` lost
+with the socket is sent once more: when the reconnect's snapshot rebuilds the hand (`restored`, which `PokerTable` passes
+on) with the seat still unturned while this seat's cards are up from before, `Seat` tells the table again — not for a hand
+that was already a snapshot when it told. Auto-play's own `REVEAL` (`useGameClient`) is keyed on the hand and the
+reconnect (`roomReturns`) the same way. The pill hands keyboard focus to the seat (a `tabIndex={-1}` group) as it hides,
+so a player who pressed it from the keyboard is not dropped to the page.
 
 **The round's clock.** The squeeze round's countdown (`TurnTimer`) is drawn on the **viewer's own plate**, while their
 cards are not all turned — in a pure-luck round, until they are; in a play-or-fold one, until they have *chosen* too (its
@@ -859,10 +864,11 @@ full-viewport, for measuring a layout against a screen size.
   as images.
 - **The squeeze peel** is driven in Chromium only, and not yet on a real phone: Firefox's and WebKit's touch-capture
   semantics are guarded in `PeelCard` and unit-tested with synthetic events, never run in those browsers. On a device
-  that does not coalesce pointer events a single quick move after a rest is not read as a flick. On a 375 × 812 squeeze
-  table the stage overflows by 3 px while the cards are dealt (the header's badge row or the tray's wait line wraps a line
-  longer), and a ring↔stack switch in
-  the middle of a round can send a second, harmless `REVEAL`. All four are written up in `docs/known-limitations.md`.
+  that does not coalesce pointer events a single quick move after a rest is not read as a flick. A play-or-fold squeeze
+  table on a 375 × 812 phone (six seats, one bot) scrolls its stage 11 px in the round (its header takes a third line and
+  the viewer's seat the "Lật" pill's row; the seat stays on screen); a pure-luck one fits since the phone's tray wait
+  line gave back 8 px (the final fix wave: it was 3 px over). A ring↔stack switch in the middle of a round can send a
+  second, harmless `REVEAL`. All four are written up in `docs/known-limitations.md`.
 - **The badge test measures the grounds a badge sits on today** (see Theming → Badge text). A badge on a ground it
   does not list is not measured, and one place is tight: teal under a dark `.panel.ink`'s highlight. The test holds
   that highlight at 2 %, above anywhere a badge is (Lite's "claimed" badge: 0.8–1.4 %, none on a phone; titled panels put

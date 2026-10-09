@@ -6,6 +6,7 @@ import { validateRoomConfig } from '@bp/core'
 import { createI18n } from '../i18n/index.js'
 import { CreateRoomForm } from './CreateRoomForm.js'
 import s from './lobby.module.css'
+import LOBBY_CSS from './lobby.module.css?raw'
 
 const wrap = (ui: React.ReactElement) =>
   render(<I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>{ui}</I18nextProvider>)
@@ -134,6 +135,27 @@ describe('CreateRoomForm', () => {
       expect(fixed).toHaveAttribute('readonly')
       await user.click(screen.getByLabelText('Nặn bài'))
       expect(screen.getByRole('combobox', { name: 'Thời gian mỗi lượt' })).toBeInTheDocument()
+    })
+
+    // Final fix wave P2: the fixed length is a value, not a control — no Tab stop — and it dims with the form while busy.
+    it('keeps the fixed length out of the Tab order, and disables it with the form while it is busy', async () => {
+      const user = userEvent.setup()
+      const i18n = createI18n({ language: 'vi', storage: null })
+      const form = (busy: boolean) => (
+        <I18nextProvider i18n={i18n}>
+          <CreateRoomForm onSubmit={vi.fn()} lang="vi" initialMode="blind" busy={busy} />
+        </I18nextProvider>
+      )
+      const view = render(form(false))
+      await user.click(screen.getByLabelText('Nặn bài'))
+      const fixed = screen.getByLabelText('Thời gian mỗi lượt')
+      expect(fixed).toHaveAttribute('tabindex', '-1')
+      expect(fixed).toBeEnabled()
+      expect(fixed).toHaveClass(s.inputFixed!)
+      view.rerender(form(true))
+      expect(screen.getByLabelText('Thời gian mỗi lượt')).toBeDisabled()
+      expect(screen.getByLabelText('Số người tối đa'), 'as the select beside it').toBeDisabled()
+      expect(LOBBY_CSS).toMatch(/\.inputFixed:disabled\s*\{[^}]*opacity:\s*0\.5/)
     })
 
     it('says the fixed length in English too', async () => {

@@ -124,17 +124,21 @@ export function useGameClient(opts: UseGameClientOptions): GameClientApi {
   }, [legal, preAction, autoPlay, request])
 
   // Squeeze mode with auto-play on: the cards are turned the moment they land, once per hand. Keyed on the hand id like
-  // the tick above is keyed on `legal` — a re-render, StrictMode's double invoke or a later frame never sends it twice.
+  // the tick above is keyed on `legal` — a re-render, StrictMode's double invoke or a later frame never sends it twice —
+  // and on the reconnect it was sent after (`roomReturns`): a REVEAL lost with the socket comes back in the snapshot as a
+  // seat still unturned, and is sent once more (final fix wave M2).
   const revealedFor = useRef<string | null>(null)
   const current = state.hand
   const squeeze = state.room?.config.blind?.squeeze === true
   const myCards = current !== null && current.mySeat !== null ? current.seats.find((s) => s.seat === current.mySeat) : undefined
+  const returns = state.roomReturns
   useEffect(() => {
     if (!autoPlay || !squeeze || current === null || myCards === undefined || myCards.revealed !== false || myCards.cardCount === 0) return
-    if (revealedFor.current === current.handId) return
-    revealedFor.current = current.handId
+    const key = `${current.handId}#${returns}`
+    if (revealedFor.current === key) return
+    revealedFor.current = key
     request({ t: 'REVEAL' }).catch(() => undefined)
-  }, [autoPlay, squeeze, current, myCards, request])
+  }, [autoPlay, squeeze, current, myCards, returns, request])
 
   return useMemo<GameClientApi>(
     () => ({
