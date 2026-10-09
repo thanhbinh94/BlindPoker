@@ -98,7 +98,7 @@ async function createBlindRoom(page: Page, roomName: string, bots: number, squee
   await dialog.getByLabel('Mức cược cố định').selectOption({ label: '1.000' })
   await dialog.getByLabel('Số lượng bot').selectOption({ label: String(bots) })
   if (squeeze) {
-    await dialog.getByLabel('Nặn bài').check()
+    await dialog.getByLabel('Nặn bài', { exact: true }).check()
     await expect(dialog.getByRole('combobox', { name: 'Thời gian mỗi lượt' }), 'the timer select is hidden while the box is ticked').toHaveCount(0)
     await expect(dialog.getByLabel('Thời gian mỗi lượt'), 'the timer reads the fixed round').toHaveValue('20 giây · nặn bài')
   }
@@ -338,6 +338,10 @@ test.describe('Blind Luck Poker Lite', () => {
     await page.getByRole('button', { name: 'Lật', exact: true }).click()
     await expect(page.locator('[data-me="true"] [data-peel][data-face="up"]')).toHaveCount(2)
     await shot(page, 'room-squeeze-desktop')
+
+    // The hand plays out from there: the decision of a play-or-fold table (the bot's may be either), then the result.
+    await page.getByRole('button', { name: 'Bỏ bài', exact: true }).click()
+    await expect(resultCard(page)).toBeVisible()
 
     await page.getByRole('button', { name: 'Rời phòng' }).click()
     await expect(page).toHaveURL(/#\/lobby$/)
