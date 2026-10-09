@@ -204,8 +204,12 @@ export function Card({ card, faceDown = false, size = 'md', delayMs = 0, highlig
   )
 }
 
-/** The ivory face: the card's one named image while it is up (`role="img"`, its label, `data-card`, `data-face="up"`). */
-export function CardFace({ card, uid, label }: { card: CardId; uid: string; label: string }): ReactElement {
+/**
+ * The ivory face: the card's one named image while it is up (`role="img"`, its label, `data-card`, `data-face="up"`).
+ * `hidden` — a `PeelCard`'s face while the card is still down — it is artwork only: `aria-hidden`, with no role, label or
+ * `data-card`/`data-face`, as a `CardBack` drawn with no label.
+ */
+export function CardFace({ card, uid, label, hidden = false }: { card: CardId; uid: string; label: string; hidden?: boolean }): ReactElement {
   const rank = rankOf(card)
   const suit = suitOf(card)
   const rankChar = RANK_CHARS[rank]!
@@ -225,7 +229,15 @@ export function CardFace({ card, uid, label }: { card: CardId; uid: string; labe
   )
 
   return (
-    <svg className={s.cardSide} viewBox="0 0 60 84" role="img" aria-label={label} data-card={cardToString(card)} data-face="up">
+    <svg
+      className={s.cardSide}
+      viewBox="0 0 60 84"
+      role={hidden ? undefined : 'img'}
+      aria-label={hidden ? undefined : label}
+      aria-hidden={hidden ? true : undefined}
+      data-card={hidden ? undefined : cardToString(card)}
+      data-face={hidden ? undefined : 'up'}
+    >
       <defs>
         <g id={pipId}>
           <SuitShape suit={suit} />

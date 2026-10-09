@@ -222,6 +222,64 @@
   fill: #8f2029;
 }
 
+/* ---------------- Peel (squeeze mode, spec 2026-10-08) ---------------- */
+/* The viewer's own face-down card, peeled from where it is pressed (`PeelCard`): the back clipped at the fold, the face
+   slid along the peel and clipped to what has lifted, a thin band along the fold. Sized and dealt in by `.card`. */
+.peel {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+  perspective: none;
+}
+
+.peel[data-face='up'] {
+  cursor: default;
+}
+
+.peelSheet,
+.peelBack,
+.peelFlap,
+.peelArt,
+.peelClip {
+  position: absolute;
+  inset: 0;
+}
+
+.peelSheet {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 60 / 84;
+}
+
+.peelBack > svg,
+.peelArt > svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.peelFlap {
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.peelClip {
+  overflow: hidden;
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+/* The bend: a thin light-then-dark band along the fold, inside the card only. */
+.peelCurl {
+  position: absolute;
+  height: 10px;
+  transform-origin: 50% 50%;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.22) 40%, rgba(255, 255, 255, 0.5) 50%, rgba(0, 0, 0, 0.38) 60%, rgba(0, 0, 0, 0) 100%);
+  transition: opacity 120ms;
+}
+
 /* ---------------- Community ---------------- */
 .community {
   display: flex;
@@ -1548,5 +1606,10 @@
   .result,
   .seatWin .plate {
     animation: none;
+  }
+
+  /* The peel's own motion is a script, which `PeelCard` jumps to its end; the band only fades. */
+  .peelCurl {
+    transition: none;
   }
 }

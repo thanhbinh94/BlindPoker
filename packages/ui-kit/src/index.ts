@@ -33,6 +33,7 @@ export {
 } from './table/motion.js'
 export * from './table/deck-anchor.js'
 export * from './table/Deck.js'
+export * from './table/PeelCard.js'
 export * from './table/CommunityCards.js'
 export * from './table/Pot.js'
 export * from './table/TurnTimer.js'

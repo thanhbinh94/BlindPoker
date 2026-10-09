@@ -7,6 +7,7 @@ import { RoomScreen } from '../src/screens/RoomScreen.js'
 import { THEME_MODES, applyTheme, type ThemeMode } from '../src/theme/index.js'
 import { Avatar2dPage } from './avatar2d.js'
 import { PLAYGROUND_MODES, PLAYGROUND_SEAT_COUNTS, createMockClient, type PlaygroundMode, type PlaygroundSeats } from './mock-client.js'
+import { PeelPage } from './peel.js'
 import { WorstPage, parseWorstHash } from './scenarios.js'
 import '../src/theme/index.css'
 
@@ -104,9 +105,9 @@ function App() {
 
 // `#avatar2d` is a static gallery of every placeholder PNG layer T1 produced — no mock client, no rooms, nothing
 // the rest of this harness sets up. `#worst/<state>/<seats>/<lang>` is the room frozen at its tallest, for measuring
-// a layout against a screen size (`scenarios.tsx`). A plain hash check is enough: these are dev-only pages reached
-// by typing the URL, not routes `useHashRoute` needs to know about — but a hash-only change does not reload the
-// page, so the hash is followed here.
+// a layout against a screen size (`scenarios.tsx`); `#peel` is the squeeze's peelable card alone (`peel.tsx`). A plain
+// hash check is enough: these are dev-only pages reached by typing the URL, not routes `useHashRoute` needs to know
+// about — but a hash-only change does not reload the page, so the hash is followed here.
 function Root() {
   const [hash, setHash] = useState(window.location.hash)
   useEffect(() => {
@@ -115,6 +116,7 @@ function Root() {
     return () => window.removeEventListener('hashchange', follow)
   }, [])
   if (hash === '#avatar2d') return <Avatar2dPage />
+  if (hash === '#peel') return <PeelPage />
   const worst = parseWorstHash(hash)
   return worst === null ? <App /> : <WorstPage key={hash} spec={worst} />
 }
