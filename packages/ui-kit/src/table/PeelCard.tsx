@@ -28,7 +28,10 @@ export interface PeelCardProps {
 
 type Face = 'down' | 'peeling' | 'up'
 
-/** Where the pointer was, and when (on `performance.now()`'s clock). */
+/**
+ * Where the pointer was, and when: the event's own `timeStamp`, so every position of a drag is on one clock — when it
+ * happened, not when its handler ran (the native event's: React's stand-in turns a stamp of 0 into `Date.now()`).
+ */
 interface Sample {
   x: number
   y: number
@@ -60,13 +63,16 @@ const STILL_MS = 40
 
 const px = (n: number): string => `${n.toFixed(2)}px`
 
+/** Where the event put the pointer, and when it happened. */
+const sampleOf = (e: ReactPointerEvent<HTMLSpanElement>): Sample => ({ x: e.clientX, y: e.clientY, t: e.nativeEvent.timeStamp })
+
 /**
  * The pointer's positions since the last event: the raw ones the browser coalesced into it (a 120–240 Hz touch screen
  * or mouse reports several per frame), or the event's own where it keeps none (jsdom, older Safari).
  */
 function samplesOf(e: ReactPointerEvent<HTMLSpanElement>): Sample[] {
   const raw = e.nativeEvent.getCoalescedEvents?.() ?? []
-  if (raw.length === 0) return [{ x: e.clientX, y: e.clientY, t: performance.now() }]
+  if (raw.length === 0) return [sampleOf(e)]
   return raw.map((c) => ({ x: c.clientX, y: c.clientY, t: c.timeStamp }))
 }
 
@@ -215,8 +221,7 @@ export function PeelCard({ card, size = 'md', open, onRevealed, dealt = false, d
     // A fresh peel runs from the press into the centre; one caught on its way back keeps its direction.
     const dir = pNow.current === 0 ? peelDirection(e.clientX - midX, e.clientY - midY) : u
     setU(dir)
-    const at = { x: e.clientX, y: e.clientY, t: performance.now() }
-    drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, from: pNow.current, u: dir, L: peelExtent(dir, w, h).L, samples: [at] }
+    drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, from: pNow.current, u: dir, L: peelExtent(dir, w, h).L, samples: [sampleOf(e)] }
     setFace('peeling')
   }
 
@@ -224,10 +229,7 @@ export function PeelCard({ card, size = 'md', open, onRevealed, dealt = false, d
     const d = drag.current
     if (d === null || e.pointerId !== d.id) return
     peelTo(Math.max(0, Math.min(1, d.from + inward(d.u, e.clientX - d.x, e.clientY - d.y) / (PEEL.travel * d.L))))
-    for (const next of samplesOf(e)) {
-      // a raw stamp can fall before the press's, read when its handler ran: the clock never runs back
-      d.samples.push({ ...next, t: Math.max(next.t, d.samples[d.samples.length - 1]!.t) })
-    }
+    d.samples.push(...samplesOf(e))
     const latest = d.samples[d.samples.length - 1]!.t
     while (latest - d.samples[0]!.t > FLICK_WINDOW_MS) d.samples.shift()
   }
@@ -239,7 +241,7 @@ export function PeelCard({ card, size = 'md', open, onRevealed, dealt = false, d
     const d = drag.current
     if (d === null || e.pointerId !== d.id) return
     drag.current = null
-    if (shouldOpen(pNow.current, releaseSpeed(d.u, d.samples, performance.now()))) finish()
+    if (shouldOpen(pNow.current, releaseSpeed(d.u, d.samples, e.nativeEvent.timeStamp))) finish()
     else dropBack()
   }
 
@@ -251,6 +253,12 @@ export function PeelCard({ card, size = 'md', open, onRevealed, dealt = false, d
     if (d === null || e.pointerId !== d.id) return
     drag.current = null
     dropBack()
+  }
+
+  // Only the card's own capture counts. A touch starts out captured by the element under the finger, so the card taking
+  // it on the press makes that child lose it — a `lostpointercapture` that bubbles up here mid-drag (Firefox, Safari).
+  const onLostPointerCapture = (e: ReactPointerEvent<HTMLSpanElement>) => {
+    if (e.target === e.currentTarget) onPointerCancel(e)
   }
 
   const up = face === 'up'
@@ -278,7 +286,7 @@ export function PeelCard({ card, size = 'md', open, onRevealed, dealt = false, d
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerCancel}
-      onLostPointerCapture={onPointerCancel}
+      onLostPointerCapture={onLostPointerCapture}
     >
       <span
         className={s.peelSheet}

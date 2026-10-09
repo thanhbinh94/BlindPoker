@@ -203,6 +203,52 @@ describe('PeelCard (spec 2026-10-08 §3, §4.2.2)', () => {
     expect(onRevealed).toHaveBeenCalledTimes(1)
   })
 
+  // Task 6 review M8: a touch starts out captured by the element under the finger, so the card taking the capture on the
+  // press makes that child lose it — a `lostpointercapture` that bubbles up mid-drag (Firefox, Safari) and is no loss of
+  // the card's.
+  it('a capture lost by a child of the card, as the card takes the pointer, leaves the peel alone', () => {
+    const onRevealed = vi.fn()
+    const { container } = wrap(<PeelCard card={ACE} open={false} onRevealed={onRevealed} />)
+    const root = rootOf(container)
+    const backClip = () => root.querySelector<HTMLElement>(`.${s.peelBack}`)!.style.clipPath
+    press(root, 80)
+    moveTo(root, 60)
+    const peeled = backClip()
+    fireEvent.lostPointerCapture(root.querySelector(`.${s.peelBack}`)!, { pointerId: 1 })
+    advance(1000)
+    expect(root).toHaveAttribute('data-face', 'peeling')
+    expect(backClip()).toBe(peeled)
+    fireEvent.lostPointerCapture(root, { pointerId: 1 })
+    advance(1000)
+    expect(root, 'the card losing it still drops back').toHaveAttribute('data-face', 'down')
+    expect(onRevealed).not.toHaveBeenCalled()
+  })
+
+  // Task 6 review M9: every position is read on the events' own clock. A press stamped when its handler ran — late, on a
+  // busy page — would start the run late and make an unhurried drag look like a flick.
+  it('reads the speed on the events’ own clock: a drag whose press was handled late is no flick', () => {
+    const onRevealed = vi.fn()
+    const { container } = wrap(<PeelCard card={ACE} open={false} onRevealed={onRevealed} />)
+    const root = rootOf(container)
+    const t0 = performance.now()
+    const down = createEvent.pointerDown(root, { clientX: 30, clientY: 80, pointerId: 1, buttons: 1 }) // happens at t0
+    advance(30) // the page busy: handled 30 ms later
+    fireEvent(root, down)
+    advance(2)
+    // 19.2 px (p ≈ 0.3) over the 32 ms since the press: 0.6 px/ms, four positions 8 ms apart
+    moveThrough(root, [
+      { y: 75.2, at: t0 + 8 },
+      { y: 70.4, at: t0 + 16 },
+      { y: 65.6, at: t0 + 24 },
+      { y: 60.8, at: t0 + 32 },
+    ])
+    advance(4)
+    release(root, 60.8)
+    advance(1000)
+    expect(root).toHaveAttribute('data-face', 'down')
+    expect(onRevealed).not.toHaveBeenCalled()
+  })
+
   // Task 6 review M2: the stand-in event keeps `pointerId`, so the guards are tested for real.
   it('follows the pointer that pressed it: a second finger meanwhile is ignored', () => {
     const onRevealed = vi.fn()
