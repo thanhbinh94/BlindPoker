@@ -383,8 +383,8 @@ test('F-11: a squeeze table — one peels by hand, the other presses Lật, and 
     await expect(his).toHaveCount(2)
     await expect(mine.first()).toHaveAttribute('data-face', 'down')
     await expect(his.first()).toHaveAttribute('data-face', 'down')
-    await expect(a.page.getByText('Nặn bài của bạn')).toBeVisible()
-    await expect(sq.page.getByText('Nặn bài của bạn')).toBeVisible()
+    await expect(a.page.getByText('Mời nặn bài')).toBeVisible()
+    await expect(sq.page.getByText('Mời nặn bài')).toBeVisible()
     await expect(a.page.locator('[data-me="true"]').getByRole('timer')).toBeVisible()
     await expect(sq.page.locator('[data-me="true"]').getByRole('timer')).toBeVisible()
     await settled(mine.first())
@@ -408,7 +408,7 @@ test('F-11: a squeeze table — one peels by hand, the other presses Lật, and 
         // One card up does not turn the seat: the other is still down, Đào's tray still waits, and the other player does
         // not see her seat turned (the seat is told once, when its last card is up).
         await expect(mine.nth(1)).toHaveAttribute('data-face', 'down')
-        await expect(a.page.getByText('Nặn bài của bạn')).toBeVisible()
+        await expect(a.page.getByText('Mời nặn bài')).toBeVisible()
         await expect(sq.page.locator('[data-seat="0"]').getByText('Đã lật')).toHaveCount(0)
       }
     }
@@ -452,7 +452,7 @@ test('F-12: @mobile the squeeze fits a phone — the viewer’s cards, the Lật
   await expect(mine).toHaveCount(2)
   await expect(pill).toBeVisible()
   await expect(timer).toBeVisible()
-  await expect(page.getByText('Nặn bài của bạn')).toBeVisible()
+  await expect(page.getByText('Mời nặn bài')).toBeVisible()
   await settled(mine.first())
   await settled(mine.last())
 
@@ -495,7 +495,7 @@ test('F-12: @mobile the squeeze fits a phone — the viewer’s cards, the Lật
   // One card up does not turn the seat: the other is still down, the pill and the tray still wait for it.
   await expect(mine.last()).toHaveAttribute('data-face', 'down')
   await expect(pill).toBeEnabled()
-  await expect(page.getByText('Nặn bài của bạn')).toBeVisible()
+  await expect(page.getByText('Mời nặn bài')).toBeVisible()
 
   // The pill, by tap, turns the other one; with the bot already turned the round ends on the human's turn.
   await pill.tap()

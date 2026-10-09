@@ -185,7 +185,7 @@ test('E-06: a player who only ever arms "Theo mọi mức" plays a whole hand wi
 
   // Chi (re-)arms the call-any toggle whenever it is showing and off, and presses a real button only when her turn
   // arrives with nothing armed — which can happen once, heads-up, if she is first to act before she could arm.
-  const armed = c.page.getByRole('group', { name: 'Trước lượt của bạn' }).getByRole('button', { name: 'Theo mọi mức' })
+  const armed = c.page.getByRole('group', { name: 'Chọn sẵn trước lượt' }).getByRole('button', { name: 'Theo mọi mức' })
   const bar = c.page.getByRole('group', { name: 'Hành động' })
   const manual = bar.locator('button:not([aria-pressed])', { hasText: /^(Xem|Theo( [\d.]+)?)$/ })
   let pressed = 0

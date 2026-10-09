@@ -244,7 +244,7 @@ describe('CreateRoomForm', () => {
       expect(box).toHaveAttribute('type', 'checkbox')
       expect(box).not.toBeChecked()
       expect(box).toHaveAccessibleName('Nặn bài')
-      expect(box).toHaveAccessibleDescription('Mỗi vòng tối đa 20 giây, hết sớm khi mọi người đã lật.')
+      expect(box).toHaveAccessibleDescription('Mỗi vòng tối đa 20 giây, kết thúc sớm khi mọi người đã lật.')
     })
 
     it('sits under the bot count, in its cell of the wager row, and shows no hint line of its own', () => {

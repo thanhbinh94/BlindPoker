@@ -37,7 +37,7 @@
     "error": "Không tải được thông tin điểm danh",
     "errors": {
       "ALREADY_CLAIMED": "Hôm nay bạn đã nhận thưởng rồi",
-      "NOT_ELIGIBLE": "Chưa đủ điều kiện nhận cứu trợ lúc này"
+      "NOT_ELIGIBLE": "Chưa thể nhận cứu trợ lúc này"
     },
     "relief": {
       "title": "Cứu trợ",
@@ -55,11 +55,11 @@
     "language": "Ngôn ngữ",
     "account": "Tài khoản",
     "playerId": "Mã người chơi",
-    "signOut": "Đăng xuất khỏi thiết bị",
+    "signOut": "Đăng xuất khỏi thiết bị này",
     "signOutConfirm": "Bạn sẽ không thể quay lại tài khoản này vì không có mật khẩu, và tên hiển thị hiện tại cũng không dùng lại được nữa.",
     "version": "Phiên bản"
   },
   "session": {
-    "expired": "Phiên chơi đã hết hạn. Vui lòng nhập lại tên hiển thị."
+    "expired": "Phiên đăng nhập đã hết hạn. Vui lòng nhập lại tên hiển thị."
   }
 }

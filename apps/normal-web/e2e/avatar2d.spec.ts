@@ -165,8 +165,8 @@ test.describe('Blind Luck Poker Normal — nhân vật chibi', () => {
 
     await openWardrobe(page)
     // A filled slot's portrait opens a small menu instead (design §3.1 item 4: Áp dụng · Lưu đè vào đây ·
-    // Đổi tên · Xoá) — the button's own accessible name is "Bộ đồ <name>" (`outfits.menu`).
-    await page.getByRole('button', { name: 'Bộ đồ Đi làm' }).click()
+    // Đổi tên · Xoá) — the button's own accessible name is "Tùy chọn cho <name>" (`outfits.menu`).
+    await page.getByRole('button', { name: 'Tùy chọn cho Đi làm' }).click()
     await page.getByRole('button', { name: 'Mặc bộ này' }).click()
     await toLobby(page)
     const restored = await barHashAfter(page, third)

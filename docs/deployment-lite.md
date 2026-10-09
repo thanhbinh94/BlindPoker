@@ -288,7 +288,7 @@ hoặc chấp nhận các ván đang dở bị huỷ và hoàn điểm — `--st
 | `Warning: …`, `ExperimentalWarning: …` | `Warning: Currently the require()…` (đóng gói một-file) và cảnh báo `node:sqlite` được lọc ngay khi exe khởi động (`server/src/warnings.ts`, nạp đầu tiên qua `quiet-start.ts`), kể cả với `--status`/`--stop`. Dòng nào khác vẫn hiện là cảnh báo thật |
 | Máy khác không vào được | Theo thứ tự: server còn chạy?; `HOST` ≠ `127.0.0.1`?; firewall đã mở?; cùng mạng?; dùng IP chứ không phải `localhost`? |
 | Trang trắng sau khi nâng cấp | `Ctrl`+`F5`. `index.html` luôn `no-cache`, chỉ file trong `assets/` (đã gắn hash) mới cache vĩnh viễn |
-| Người chơi bị "Phiên chơi đã hết hạn" | Token trong `localStorage` không còn khớp database — thường vì database đã bị xoá/thay. Nhập lại tên mới |
+| Người chơi bị "Phiên đăng nhập đã hết hạn" | Token trong `localStorage` không còn khớp database — thường vì database đã bị xoá/thay. Nhập lại tên mới |
 
 ---
 
