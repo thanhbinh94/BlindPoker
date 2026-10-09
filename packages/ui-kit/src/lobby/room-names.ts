@@ -4,7 +4,8 @@ import type { Language } from '../i18n/index.js'
  * The words a room name is made of: a head and a tail, joined by a space ("Góc Phố Cổ", "Lotus Lounge"). Each language
  * builds its names its own way — Vietnamese puts a kind of gathering before a place or a mood, English an adjective or a
  * place before a kind of room — so the two lists are not translations of each other. Capitalised like proper names, the
- * way a host would write one; no numbers, and nothing that says gambling.
+ * way a host would write one; no numbers, and nothing that says gambling. Every head meets every tail, so a new word is
+ * read against all of the other list before it goes in ("Bàn" + "Cầu …" is a toilet bowl, and is why no tail starts so).
  *
  * The longest pair must fit the protocol's room name, 1–30 characters (`validateRoomConfig`); `room-names.test.ts` walks
  * every pair in both languages, so a word added here that breaks the limit fails there, not in a host's dialog.
@@ -20,8 +21,8 @@ export const ROOM_NAME_WORDS: Readonly<Record<Language, { readonly heads: readon
       'Sóng Biển',
       'Mưa Rào',
       'Hồ Gươm',
-      'Cầu Rồng',
-      'Đà Lạt Sương',
+      'Hoa Phượng',
+      'Sương Đà Lạt',
       'Hạ Long',
       'Mây Trắng',
       'Lúa Chín',
@@ -41,8 +42,9 @@ export const ROOM_NAME_WORDS: Readonly<Record<Language, { readonly heads: readon
       'Rặng Dừa',
       'Chợ Nổi',
       'Nón Lá',
-      'Cầu Vồng',
+      'Mây Hồng',
       'Đồi Chè',
+      'Biển Xanh',
     ],
   },
   en: {
@@ -87,8 +89,12 @@ export const ROOM_NAME_WORDS: Readonly<Record<Language, { readonly heads: readon
  */
 export function randomRoomName(lang: Language, rng: () => number = Math.random, avoid?: string): string {
   const { heads, tails } = ROOM_NAME_WORDS[lang]
-  // `Math.random` stays below 1, but a stub need not: the last word, not a missing one.
-  const draw = (words: readonly string[]): number => Math.min(words.length - 1, Math.floor(rng() * words.length))
+  // `Math.random` stays in [0, 1), but a stub need not: a draw is clamped into it (negative and NaN to 0, 1 and up to the
+  // largest double below 1), so it names the first word or the last, never a missing one.
+  const draw = (words: readonly string[]): number => {
+    const x = rng()
+    return Math.floor((x > 0 ? Math.min(x, 1 - Number.EPSILON) : 0) * words.length)
+  }
   const head = heads[draw(heads)]!
   let tail = draw(tails)
   const taken = avoid?.trim()

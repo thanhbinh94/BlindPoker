@@ -53,6 +53,11 @@ describe('the room-name word lists', () => {
         expect(new Set(combinations(lang)).size).toBe(combinations(lang).length)
       })
 
+      it('makes no pair that reads as something else', () => {
+        // "bàn cầu" is a toilet bowl: no tail may follow "Bàn" in a way that says it, whatever the language of the list.
+        for (const name of combinations(lang)) expect(name, name).not.toMatch(/^Bàn Cầu\b/)
+      })
+
       it('keeps to letters: no numbers, no gambling words, and composed (NFC) Vietnamese', () => {
         const gambling = /poker|casino|bet\b|chip|jackpot|cược|cờ bạc|sòng|bài/i
         for (const word of [...ROOM_NAME_WORDS[lang].heads, ...ROOM_NAME_WORDS[lang].tails]) {
@@ -83,6 +88,16 @@ describe('randomRoomName', () => {
         const name = randomRoomName(lang, () => edge)
         expect(all.has(name), `${lang} at ${edge}: ${name}`).toBe(true)
       }
+    }
+  })
+
+  it('treats a draw outside [0, 1) as the nearest end: negative, NaN and -Infinity are the first word, 1 and up the last', () => {
+    for (const lang of SUPPORTED_LANGUAGES) {
+      const { heads, tails } = ROOM_NAME_WORDS[lang]
+      const first = `${heads[0]} ${tails[0]}`
+      const last = `${heads[heads.length - 1]} ${tails[tails.length - 1]}`
+      for (const low of [-0.5, -1, -Infinity, NaN]) expect(randomRoomName(lang, () => low), `${lang} at ${low}`).toBe(first)
+      for (const high of [1, 1.5, 2, Infinity]) expect(randomRoomName(lang, () => high), `${lang} at ${high}`).toBe(last)
     }
   })
 

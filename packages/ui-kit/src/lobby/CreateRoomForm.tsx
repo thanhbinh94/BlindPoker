@@ -1,5 +1,5 @@
 import { ECONOMY, validateRoomConfig, type ErrorCode, type RoomConfig } from '@bp/core'
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import type { FormEvent, InputHTMLAttributes } from 'react'
 import { useTranslation } from 'react-i18next'
 import { errorLabel, type Language } from '../i18n/index.js'
@@ -61,7 +61,7 @@ const ROLL_GLYPH = '\u{1F3B2}'
 interface RoomNameInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> {
   value: string
   onChange: (name: string) => void
-  /** Puts another name in the field; the field takes focus after it. */
+  /** Puts another name in the field; the field takes focus after it, with the new name selected. */
   onRoll: () => void
   /** Accessible name of the 🎲 (i18n string from the host). */
   rollLabel: string
@@ -71,10 +71,18 @@ interface RoomNameInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>,
  * The name field and the 🎲 that rolls another name, in one row. It is the single control `Field` wires its label onto
  * — the `id` and the aria props `Field` hands down go to the input, as with `Select` — so the label points at the field
  * and not at the row. The button is as tall as the field (`--tap`), so the row, and with it the dialog, is as tall as the
- * field alone was. Focus returns to the field after a roll, so the host can type over the name at once.
+ * field alone was. Focus returns to the field after a roll, with the new name selected, so the host can type over it at once.
  */
 function RoomNameInput({ value, onChange, onRoll, rollLabel, disabled, ...rest }: RoomNameInputProps) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const [rolls, setRolls] = useState(0)
+  // Selecting waits for the commit: the field still holds the old name when the click handler runs, and React's write of
+  // the new one would move the caret to the end, undoing a selection made earlier.
+  useLayoutEffect(() => {
+    if (rolls === 0) return
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  }, [rolls])
   return (
     <span className={s.nameRow}>
       <input
@@ -94,7 +102,7 @@ function RoomNameInput({ value, onChange, onRoll, rollLabel, disabled, ...rest }
         disabled={disabled}
         onClick={() => {
           onRoll()
-          inputRef.current?.focus()
+          setRolls((n) => n + 1)
         }}
       >
         {ROLL_GLYPH}

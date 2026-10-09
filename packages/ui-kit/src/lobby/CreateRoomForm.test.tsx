@@ -103,7 +103,7 @@ describe('CreateRoomForm', () => {
     const nameField = () => screen.getByLabelText('Room name') as HTMLInputElement
     const roll = () => screen.getByRole('button', { name: 'Another name' })
 
-    it('opens with a name already in the field, one the generator can offer — in English and in Vietnamese', () => {
+    it('opens with an enabled name field already holding one of the generator’s English names, thirty characters at most', () => {
       wrap(<CreateRoomForm onSubmit={vi.fn()} lang="en" />)
       expect(nameField().value).not.toBe('')
       expect(offered('en')).toContain(nameField().value)
@@ -146,6 +146,29 @@ describe('CreateRoomForm', () => {
         expect(nameField()).toHaveFocus()
         previous = nameField().value
       }
+    })
+
+    it('selects the rolled name, so what the host types next replaces it, and leaves the focus in the field', async () => {
+      const user = userEvent.setup()
+      wrap(<CreateRoomForm onSubmit={vi.fn()} lang="en" />)
+      for (let i = 0; i < 3; i++) {
+        await user.click(roll())
+        const field = nameField()
+        expect(field).toHaveFocus()
+        expect(field.selectionStart, `roll ${i + 1}: from the first character`).toBe(0)
+        expect(field.selectionEnd, `roll ${i + 1}: to the last`).toBe(field.value.length)
+      }
+      await user.keyboard('Quán Ba Đình')
+      expect(nameField().value).toBe('Quán Ba Đình')
+    })
+
+    it('never submits the form: pressing the 🎲 only changes the name', async () => {
+      const user = userEvent.setup()
+      const onSubmit = vi.fn()
+      wrap(<CreateRoomForm onSubmit={onSubmit} lang="en" />)
+      for (let i = 0; i < 3; i++) await user.click(roll())
+      expect(onSubmit).not.toHaveBeenCalled()
+      expect(screen.queryByRole('alert')).toBeNull()
     })
 
     it('replaces a name the host typed, and a name the host cleared', async () => {
@@ -295,7 +318,6 @@ describe('CreateRoomForm', () => {
       const user = userEvent.setup()
       const onSubmit = vi.fn()
       wrapVi(<CreateRoomForm onSubmit={onSubmit} lang="vi" initialMode="blind" />)
-      await user.type(screen.getByLabelText('Tên phòng'), 'Nặn')
       await user.selectOptions(screen.getByLabelText('Thời gian mỗi lượt'), '30')
       await user.click(screen.getByLabelText('Nặn bài'))
       await user.click(create())
@@ -309,7 +331,6 @@ describe('CreateRoomForm', () => {
       const user = userEvent.setup()
       const onSubmit = vi.fn()
       wrapVi(<CreateRoomForm onSubmit={onSubmit} lang="vi" initialMode="blind" />)
-      await user.type(screen.getByLabelText('Tên phòng'), 'Thường')
       await user.selectOptions(screen.getByLabelText('Thời gian mỗi lượt'), '30')
       await user.click(create())
       expect(onSubmit.mock.calls[0]![0]).toMatchObject({ turnTimerSec: 30, blind: { squeeze: false } })
@@ -324,7 +345,6 @@ describe('CreateRoomForm', () => {
       const user = userEvent.setup()
       const onSubmit = vi.fn()
       wrapVi(<CreateRoomForm onSubmit={onSubmit} lang="vi" initialMode="blind" />)
-      await user.type(screen.getByLabelText('Tên phòng'), 'Đổi')
       await user.selectOptions(screen.getByLabelText('Thời gian mỗi lượt'), '30') // a timer both modes offer
       await user.click(screen.getByLabelText('Nặn bài'))
       await user.click(screen.getByRole('button', { name: "Texas Hold'em" }))
