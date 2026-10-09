@@ -735,7 +735,7 @@ The helper's `ignore` option (CSS selectors skipped entirely) is for the same ki
 What the rule does **not** catch:
 
 - **Text against a box.** Text touching or crossing a card's or a badge's edge is a box-spacing problem: `No11-1`'s
-  "Tay nóng" card sitting on the "HUY HIỆU" heading is one, and it is the grid spacing assertion (group gap ≥ 16 px,
+  "Tay nóng" card (now "Vận đỏ") sitting on the "HUY HIỆU" heading is one, and it is the grid spacing assertion (group gap ≥ 16 px,
   equal card heights in a row) that covers it. Likewise text over a badge's pill that stays clear of the badge's own
   text.
 - **Words inside `aria-hidden`.** An `aria-hidden="true"` subtree is skipped even when it shows real words to the eye

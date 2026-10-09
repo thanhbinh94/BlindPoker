@@ -138,11 +138,12 @@ Tôi grep từng chuỗi cũ trong `packages`, `apps`, `docs` và `tooling`. Nh�
   - `apps/normal-web/e2e/wardrobe-layout.spec.ts` và `apps/normal-web/e2e/support.ts`: chữ "Danh hiệu & huy hiệu" trong comment và nhãn báo lỗi. Bước chọn tab vẫn tìm theo `'Danh hiệu'`, nên không đổi.
 - **Tài liệu:**
   - `docs/ui-kit.md`: dòng nặn bài.
-  - `docs/operation-test-plan.md`: F-11, J-08, J-09 và đoạn đo bố cục.
+  - `docs/operation-test-plan.md`: F-11 (dòng nặn bài); J-08 (tên tab, và thẻ danh hiệu nằm trên tiêu đề "Huy hiệu" đổi thành "Vận đỏ"); J-09 và đoạn đo bố cục (tên tab).
   - `docs/normal-web.md` và `docs/test-matrix.md`: tên tab.
   - `docs/deployment-lite.md`: bảng xử lý sự cố, đổi thành "Phiên đăng nhập đã hết hạn".
   - Comment `apps/normal-web/src/screens/wardrobe/natural-skin.ts`: đổi thành "Da bánh mật".
+- **Ghi chú lỗi No11-1** ("Tay nóng" sát "HUY HIỆU") trong `wardrobe-layout.spec.ts`, `wardrobe.module.css` và `docs/ui-kit.md`: vẫn giữ tên cũ vì đó là lỗi đã xảy ra, chỉ ghi thêm tên mới "Vận đỏ" để người đọc tìm được thẻ trên màn.
 - **Không sửa, vì đây là bản ghi lịch sử:**
   - `docs/copy-review-2026-10.md`, `docs/bug-log.md`, `CHANGELOG.md`;
-  - các file trong `docs/superpowers/` (spec và plan cũ);
-  - comment kể lại lỗi No11-1 ("Tay nóng" sát "HUY HIỆU") trong `wardrobe-layout.spec.ts`, `wardrobe.module.css` và `docs/ui-kit.md`.
+  - các file trong `docs/superpowers/` và `docs/test-runs/` (spec, plan và biên bản chạy thử cũ).
+- **`docs/acceptance-checklist.md` mục 66.12** ("Hành động không hợp lệ bị từ chối phía server"): đây là câu mô tả yêu cầu, không trích chữ trên giao diện, nên giữ nguyên.

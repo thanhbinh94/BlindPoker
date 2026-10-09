@@ -203,7 +203,7 @@ async function expectCardGrids(page: Page): Promise<void> {
   await goToWardrobeTab(page, 'Trang trí', 'Khung')
   await expectEvenCardRows(panel, `wardrobe, Trang trí → Khung, ${where}`)
 
-  // "Tay nóng" ended a row of its own and "Huy hiệu" printed straight under it (No11-1).
+  // "Tay nóng" (now "Vận đỏ") ended a row of its own and "Huy hiệu" printed straight under it (No11-1).
   await goToWardrobeTab(page, 'Trang trí', 'Danh hiệu')
   await expect(page.getByRole('heading', { name: 'Huy hiệu', level: 3 })).toBeVisible()
   await expectEvenCardRows(panel, `wardrobe, Trang trí → Danh hiệu & huy hiệu, ${where}`, 2)
