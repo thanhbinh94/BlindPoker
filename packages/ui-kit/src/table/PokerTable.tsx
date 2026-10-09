@@ -45,6 +45,11 @@ export interface PokerTableProps {
    * plays. All of it appears in the render that drops the flag. Defaults to `false`.
    */
   resultPending?: boolean
+  /**
+   * Squeeze mode (spec 2026-10-08 §4.2): the viewer has turned every one of their cards — peeled by hand or opened with
+   * the "Lật" pill — while the round is on. Called once per hand; the room sends the `REVEAL`.
+   */
+  onReveal?: () => void
 }
 
 /* The ring needs roughly 310 px of stage to seat everyone around it without the plates running into the board, and a
@@ -96,6 +101,7 @@ export function PokerTable({
   onSeatClick,
   canSit,
   resultPending = false,
+  onReveal,
 }: PokerTableProps) {
   const { t } = useTranslation()
   const narrow = useMediaQuery(STACKED)
@@ -130,6 +136,12 @@ export function PokerTable({
   const boardDealt = hand !== null && hand.boardAt !== null && now - hand.boardAt < DEAL_WINDOW_MS
   const dealOrder = dealOrderOf(hand)
   const liftAfter = showdownWithBoard(hand) ? DEAL_MS + FLIP_MS : 0
+
+  // Squeeze mode (spec 2026-10-08 §4.2): a hand on a squeeze table, and its round — a pure-luck hand's `SQUEEZE`, or a
+  // play-or-fold hand's `DECISION`, which runs the same 20 s with the cards to turn. The round's countdown is drawn on the
+  // viewer's own plate (ruling 14): nobody is acting in it, so no other seat gets the deadline.
+  const squeezeRoom = hand !== null && hand.mode === 'blind' && room.config.blind?.squeeze === true
+  const squeezeRound = squeezeRoom && (hand.phase === 'SQUEEZE' || hand.phase === 'DECISION')
 
   const renderSeat = (index: number): ReactNode => {
     const player = seated.get(index)
@@ -178,7 +190,7 @@ export function PokerTable({
         isButton={hand !== null && hand.button === index}
         winnerPayout={payouts.get(index) ?? null}
         showdownLabel={hit === undefined ? null : handLabel(hit.category, t)}
-        deadlineAt={acting ? deadlineAt : null}
+        deadlineAt={acting || (squeezeRound && index === hand.mySeat) ? deadlineAt : null}
         serverNow={serverNow}
         turnTimerMs={turnTimerMs}
         lang={lang}
@@ -193,6 +205,9 @@ export function PokerTable({
         dealCount={dealOrder.length}
         reveal={index === hand?.mySeat ? 'flip' : 'lift'}
         liftAfter={liftAfter}
+        squeezeRoom={squeezeRoom}
+        squeezeRound={squeezeRound}
+        onReveal={onReveal}
       />
     )
   }

@@ -850,6 +850,77 @@ describe('RoomScreen', () => {
     })
   })
 
+  // Spec 2026-10-08 §4.2.2: the "Lật" pill turns the viewer's cards on their own screen, and the room tells the server once
+  // they are up — one REVEAL, off to the side of the tray's requests (pre-flight 2026-10-09, 23).
+  describe('a squeeze round', () => {
+    const room = makeRoom({
+      mode: 'blind',
+      config: {
+        name: 'Nặn',
+        mode: 'blind',
+        maxPlayers: 4,
+        isPrivate: false,
+        turnTimerSec: 20,
+        autoStart: true,
+        hasPassword: false,
+        blind: { holeCards: 2, decisionMode: 'none', fixedWager: 5_000, botCount: 1, squeeze: true },
+      },
+      players: [
+        makePlayer({ playerId: 'me', displayName: 'Mai', isHost: true, seat: 0, status: 'IN_HAND', stack: 20_000 }),
+        makePlayer({ playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true, seat: 1, status: 'IN_HAND', stack: 25_000 }),
+      ],
+    })
+    const hand = makeHand({
+      mode: 'blind',
+      phase: 'SQUEEZE',
+      community: [],
+      actingSeat: null,
+      mySeat: 0,
+      seats: [
+        makeSeat({ seat: 0, playerId: 'me', displayName: 'Mai', holeCards: parseCards('Qs Qd'), revealed: false }),
+        makeSeat({ seat: 1, playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true, revealed: true }),
+      ],
+    })
+    const squeezing = (overrides: Partial<GameClientApi> = {}) => fakeClient(makeState({ room, hand, deadlineAt: 1_015_000 }), overrides)
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('sends one reveal once "Lật" has turned my cards', () => {
+      const client = squeezing()
+      wrap(client)
+      expect(screen.getByRole('status')).toHaveTextContent('Squeeze your cards — they turn when time is up')
+      expect(within(screen.getByRole('group', { name: 'Seat 1' })).getByRole('timer')).toHaveTextContent('15')
+      fireEvent.click(screen.getByRole('button', { name: 'Turn' }))
+      act(() => vi.advanceTimersByTime(1000))
+      expect(client.reveal).toHaveBeenCalledTimes(1)
+      expect(client.act).not.toHaveBeenCalled()
+    })
+
+    it('keeps the controls live while the reveal is out, and swallows a refused or dropped one', async () => {
+      const pending = squeezing({ reveal: vi.fn(() => new Promise<never>(() => {})) })
+      const { view } = wrap(pending)
+      fireEvent.click(screen.getByRole('button', { name: 'Turn' }))
+      act(() => vi.advanceTimersByTime(1000))
+      expect(pending.reveal).toHaveBeenCalledTimes(1)
+      expect(screen.getByRole('button', { name: 'Stand up' }), 'the reveal is no tray request').toBeEnabled()
+      view.unmount()
+
+      const dropped = squeezing({ reveal: vi.fn().mockRejectedValue(new Error('socket closed')) })
+      wrap(dropped)
+      fireEvent.click(screen.getByRole('button', { name: 'Turn' }))
+      await act(async () => {
+        vi.advanceTimersByTime(1000)
+      })
+      expect(dropped.reveal).toHaveBeenCalledTimes(1)
+      expect(screen.queryByRole('alert')).toBeNull()
+    })
+  })
+
   it('waits for the reconnect answer before deciding the room is gone', () => {
     const onLeft = vi.fn()
     const view = render(screenFor(fakeClient(makeState({ room: null, roomStale: true })), onLeft))

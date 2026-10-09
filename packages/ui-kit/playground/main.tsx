@@ -13,7 +13,12 @@ import '../src/theme/index.css'
 
 type View = 'room' | 'lobby'
 
-const MODE_LABEL: Record<PlaygroundMode, string> = { holdem: "Hold'em", blindA: 'Blind A (pure luck)', blindB: 'Blind B (play or fold)' }
+const MODE_LABEL: Record<PlaygroundMode, string> = {
+  holdem: "Hold'em",
+  blindA: 'Blind A (pure luck)',
+  blindB: 'Blind B (play or fold)',
+  blindS: 'Blind A · nặn bài',
+}
 
 function App() {
   const [mode, setMode] = useState<PlaygroundMode>('holdem')

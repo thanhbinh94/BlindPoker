@@ -22,13 +22,19 @@ import { initialClientState, reduceClient } from '../src/client/reducer.js'
 import type { ClientState } from '../src/client/types.js'
 import type { GameClientApi } from '../src/client/useGameClient.js'
 
-export type PlaygroundMode = 'holdem' | 'blindA' | 'blindB'
+/** `blindS` is Blind A on a squeeze table (Plan 21): the viewer's cards come face down, to peel or turn with "Lật". */
+export type PlaygroundMode = 'holdem' | 'blindA' | 'blindB' | 'blindS'
 
-export const PLAYGROUND_MODES: readonly PlaygroundMode[] = ['holdem', 'blindA', 'blindB']
+export const PLAYGROUND_MODES: readonly PlaygroundMode[] = ['holdem', 'blindA', 'blindB', 'blindS']
 
 const MY_ID = 'me'
 const MY_SEAT = 0
 const BOTS = ['Bảo', 'Chi', 'Dũng', 'Hằng', 'Khánh', 'Liên', 'Minh', 'Phúc']
+/**
+ * On the squeeze table the seat after mine is a person, not a bot: one who never turns by hand, so the round runs to its
+ * deadline and the server's turn — and once mine are up the table still has someone to wait for, as a real one would.
+ */
+const OTHER_HUMAN_SEAT = 1
 export const PLAYGROUND_SEAT_COUNTS = [4, 6, 9] as const
 export type PlaygroundSeats = (typeof PLAYGROUND_SEAT_COUNTS)[number]
 const START_STACK = 40_000
@@ -52,19 +58,25 @@ const rulesFor = (mode: PlaygroundMode): Ruleset =>
         decisionMode: mode === 'blindB' ? 'playOrFold' : 'none',
         fixedWager: FIXED_WAGER,
         tableFeeRate: ECONOMY.tableFeeRate,
+        ...(mode === 'blindS' ? { squeeze: true } : {}),
       }
+
+/** A squeeze table's round is the server's fixed 20 s, whatever the room asked for (spec 2026-10-08 §4.2.1). */
+const timerSecFor = (mode: PlaygroundMode): number => (mode === 'blindS' ? ECONOMY.squeezeTurnTimerSec : TURN_TIMER_SEC)
 
 const configFor = (mode: PlaygroundMode, seats: number): RoomSummary['config'] => ({
   name: mode === 'holdem' ? 'Đêm Sài Gòn' : 'Chiếu Bạc',
   mode: mode === 'holdem' ? 'holdem' : 'blind',
   maxPlayers: seats,
   isPrivate: false,
-  turnTimerSec: TURN_TIMER_SEC,
+  turnTimerSec: timerSecFor(mode),
   autoStart: true,
   hasPassword: false,
   ...(mode === 'holdem'
     ? { holdem: { smallBlind: SMALL_BLIND, bigBlind: BIG_BLIND, minBuyInBB: 50, maxBuyInBB: 200 } }
-    : { blind: { holeCards: mode === 'blindB' ? (3 as const) : (2 as const), decisionMode: mode === 'blindB' ? ('playOrFold' as const) : ('none' as const), fixedWager: FIXED_WAGER, botCount: seats - 1 } }),
+    : mode === 'blindS'
+      ? { blind: { holeCards: 2 as const, decisionMode: 'none' as const, fixedWager: FIXED_WAGER, botCount: seats - 2, squeeze: true } }
+      : { blind: { holeCards: mode === 'blindB' ? (3 as const) : (2 as const), decisionMode: mode === 'blindB' ? ('playOrFold' as const) : ('none' as const), fixedWager: FIXED_WAGER, botCount: seats - 1 } }),
 })
 
 /** Two tickets for the lobby view: one open hold'em table, one locked blind room. */
@@ -94,7 +106,8 @@ export interface MockClient {
  *
  * The state comes out of `reduceClient`, fed by real `@bp/core` events: the driver creates a hand with `createHand`,
  * drives every other seat with `createBotStrategy`, runs each event through `filterEvent` for my seat and wraps it in
- * the `GAME_EVENT` frame a server would send. When it is my turn it simply stops and waits for `act()`. So the
+ * the `GAME_EVENT` frame a server would send. When it is my turn it simply stops and waits for `act()`; in a squeeze
+ * round it waits for `reveal()` or the round's deadline, and turns what is still down then. So the
  * playground exercises the same reducer, the same views and the same hole-card hiding as production.
  */
 export function createMockClient(mode: PlaygroundMode, seatCount: number, onChange: (state: ClientState) => void): MockClient {
@@ -110,6 +123,12 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
   let carryOver = 0
   let timer: ReturnType<typeof setTimeout> | null = null
   let waiting: ((action: PlayerAction) => void) | null = null
+  /** In a squeeze round: wakes the driver with the seat `reveal()` turned, or `null` when the round's deadline is up. */
+  let revealing: ((seat: number | null) => void) | null = null
+  /** The latest deadline sent with a turn, a decision or a squeeze round: the round's driver waits it out. */
+  let deadlineAt = 0
+  const timerSec = timerSecFor(mode)
+  const isBotSeat = (seat: number): boolean => seat !== MY_SEAT && !(mode === 'blindS' && seat === OTHER_HUMAN_SEAT)
   /** No server here to skip a hand, but the tray's toggle is a real one: it flips my seat's status. */
   let sittingOut = false
   const stacks = new Map<number, number>(Array.from({ length: SEATS }, (_, i) => [i, START_STACK]))
@@ -131,7 +150,7 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
     Array.from({ length: SEATS }, (_, seat) => ({
       playerId: seat === MY_SEAT ? MY_ID : `bot${seat}`,
       displayName: seat === MY_SEAT ? 'Bạn' : (BOTS[seat - 1] ?? `Bot ${seat}`),
-      isBot: seat !== MY_SEAT,
+      isBot: isBotSeat(seat),
       isHost: seat === MY_SEAT,
       connected: true,
       seat,
@@ -160,10 +179,9 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
     for (const event of events) {
       seq += 1
       const seen = filterEvent(event, MY_SEAT)
-      const framed =
-        seen.type === 'TURN_CHANGED' || seen.type === 'DECISION_PHASE'
-          ? { ...seen, deadlineAt: Date.now() + TURN_TIMER_SEC * 1000 }
-          : seen
+      const timed = seen.type === 'TURN_CHANGED' || seen.type === 'DECISION_PHASE' || seen.type === 'SQUEEZE_PHASE'
+      if (timed) deadlineAt = Date.now() + timerSec * 1000
+      const framed = timed ? { ...seen, deadlineAt } : seen
       push({ t: 'GAME_EVENT', seq, event: framed })
     }
   }
@@ -184,7 +202,7 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
       seat,
       playerId: seat === MY_SEAT ? MY_ID : `bot${seat}`,
       stack: stacks.get(seat) ?? START_STACK,
-      isBot: seat !== MY_SEAT,
+      isBot: isBotSeat(seat),
     }))
 
     let hand: HandState
@@ -200,6 +218,24 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
         if (gen !== generation) return
         ;({ state: hand, events } = applyCommand(hand, { type: 'ADVANCE' }, RNG))
         emit(events)
+        continue
+      }
+
+      // The squeeze round, as the server runs it (spec 2026-10-08 §5.2): `reveal()` turns my cards — the round ends at once
+      // when nobody else is left to turn — and at the deadline every seat still down is turned for it.
+      if (hand.phase === 'SQUEEZE') {
+        const seat = await new Promise<number | null>((resolve) => {
+          revealing = resolve
+          timer = setTimeout(() => resolve(null), Math.max(0, deadlineAt - Date.now()))
+        })
+        revealing = null
+        if (timer !== null) clearTimeout(timer)
+        if (gen !== generation) return
+        const down = seat === null ? hand.players.filter((p) => !p.revealed).map((p) => p.seat) : [seat]
+        for (const s of down) {
+          ;({ state: hand, events } = applyCommand(hand, { type: 'REVEALED', seat: s }, RNG))
+          emit(events)
+        }
         continue
       }
 
@@ -245,6 +281,7 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
     generation += 1
     if (timer !== null) clearTimeout(timer)
     waiting = null
+    revealing = null
     void runHand(generation)
   }
 
@@ -277,7 +314,11 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
       resolve(action)
       return ACK
     },
-    reveal: async () => ACK,
+    // Outside a squeeze round there is nothing to turn: an ACK that changes nothing, as the server's.
+    reveal: async () => {
+      revealing?.(MY_SEAT)
+      return ACK
+    },
     setPreAction: (kind) => publish(reduceClient(state, { type: 'preAction', kind })),
     setAutoPlay: (on) => publish(reduceClient(state, { type: 'autoPlay', on })),
     resync: () => {},
@@ -296,6 +337,7 @@ export function createMockClient(mode: PlaygroundMode, seatCount: number, onChan
     stop: () => {
       generation += 1
       waiting = null
+      revealing = null
       if (timer !== null) clearTimeout(timer)
     },
   }

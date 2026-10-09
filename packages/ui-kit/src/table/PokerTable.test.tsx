@@ -1,7 +1,7 @@
 import { HandCategory, parseCards, type RoomPlayerView } from '@bp/core'
-import { render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nextProvider } from 'react-i18next'
 import { defaultChibi, type ChibiConfig, type ChibiSubject, type WearRef } from '../avatar2d/index.js'
 import type { ClientHand } from '../client/types.js'
@@ -301,6 +301,101 @@ describe('PokerTable', () => {
       expect(winnerGlows()).toHaveLength(1)
       expect(goldEdges()).toHaveLength(3)
       expect(seatOf(3).querySelectorAll(`.${s.cardLift}`), 'the turn is not cut short or played twice').toHaveLength(2)
+    })
+  })
+
+  // Spec 2026-10-08 §4.2: on a squeeze table the viewer's own cards are theirs to turn, the round's countdown is on their
+  // own plate (ruling 14), and a seat that has turned says so to the others.
+  describe('on a squeeze table', () => {
+    const squeezeRoom = makeRoom({
+      mode: 'blind',
+      config: {
+        name: 'Nặn',
+        mode: 'blind',
+        maxPlayers: 4,
+        isPrivate: false,
+        turnTimerSec: 20,
+        autoStart: true,
+        hasPassword: false,
+        blind: { holeCards: 2, decisionMode: 'none', fixedWager: 5_000, botCount: 1, squeeze: true },
+      },
+      players: [
+        makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'IN_HAND', stack: 20_000 }),
+        makePlayer({ playerId: 'bot2', displayName: 'Bảo', isBot: true, seat: 2, status: 'IN_HAND', stack: 25_000 }),
+      ],
+    })
+    /** The squeeze round, from Ann's seat: her queens still down, the bot turned from the deal. */
+    const squeezing: ClientHand = {
+      ...hand,
+      mode: 'blind',
+      phase: 'SQUEEZE',
+      community: [],
+      actingSeat: null,
+      seats: [
+        { ...hand.seats[0]!, revealed: false },
+        { ...hand.seats[1]!, playerId: 'bot2', displayName: 'Bảo', isBot: true, revealed: true },
+      ],
+    }
+    const table = (h: ClientHand, extra: { myPlayerId?: string; onReveal?: () => void } = {}) => (
+      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+        <PokerTable
+          room={squeezeRoom}
+          hand={h}
+          myPlayerId={extra.myPlayerId ?? 'a'}
+          deadlineAt={1_015_000}
+          serverNow={() => 1_000_000}
+          turnTimerMs={20_000}
+          lang="en"
+          layout="ring"
+          canSit={false}
+          onReveal={extra.onReveal}
+        />
+      </I18nextProvider>
+    )
+    const seatOf = (n: number) => screen.getByRole('group', { name: `Seat ${n}` })
+
+    // The peel's tweens run on rAF and the round's ring on an interval: all of it on the test's clock.
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it.each(['SQUEEZE', 'DECISION'] as const)('gives my seat cards to peel and the round’s ring, and no one else either (%s)', (phase) => {
+      render(table({ ...squeezing, phase }))
+      expect(seatOf(1).querySelectorAll('[data-peel]')).toHaveLength(2)
+      expect(seatOf(3).querySelectorAll('[data-peel]')).toHaveLength(0)
+      expect(within(seatOf(1)).getByRole('button', { name: 'Turn' })).toBeInTheDocument()
+      expect(screen.getAllByRole('timer')).toHaveLength(1)
+      expect(within(seatOf(1)).getByRole('timer')).toHaveTextContent('15')
+      expect(within(seatOf(3)).getByText('Turned')).toBeInTheDocument()
+    })
+
+    it('keeps my cards as they are once the round is over, and says "Turned" no more', () => {
+      const view = render(table(squeezing))
+      const mine = [...seatOf(1).querySelectorAll('[data-peel]')]
+      view.rerender(table({ ...squeezing, phase: 'REVEAL', seats: squeezing.seats.map((seat) => ({ ...seat, revealed: true })) }))
+      expect([...seatOf(1).querySelectorAll('[data-peel]')], 'the same cards, not dealt again').toEqual(mine)
+      expect(screen.queryByRole('button', { name: 'Turn' })).toBeNull()
+      expect(screen.queryByRole('timer')).toBeNull()
+      expect(screen.queryByText('Turned')).toBeNull()
+    })
+
+    it('shows a spectator who has turned, and gives no one cards to peel', () => {
+      render(table(squeezing, { myPlayerId: 'zed' }))
+      expect(document.querySelectorAll('[data-peel]')).toHaveLength(0)
+      expect(screen.queryByRole('button', { name: 'Turn' })).toBeNull()
+      expect(within(seatOf(3)).getByText('Turned')).toBeInTheDocument()
+    })
+
+    it('hands the room the reveal once my cards are up', () => {
+      const onReveal = vi.fn()
+      render(table(squeezing, { onReveal }))
+      fireEvent.click(screen.getByRole('button', { name: 'Turn' }))
+      expect(onReveal, 'not before the cards are up').not.toHaveBeenCalled()
+      act(() => vi.advanceTimersByTime(1000))
+      expect(onReveal).toHaveBeenCalledTimes(1)
     })
   })
 

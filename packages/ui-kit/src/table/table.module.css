@@ -466,6 +466,24 @@
   order: -1;
 }
 
+/* Squeeze mode's "Lật": a small gold pill under the viewer's own cards (spec 2026-10-08 §4.2.2). */
+.revealBtn {
+  align-self: center;
+  margin-top: 2px;
+  padding: 4px 12px;
+  border: 1px solid var(--gold);
+  border-radius: var(--radius-pill);
+  background: var(--gold);
+  color: #16181d;
+  font: 600 0.8rem/1 var(--font-body);
+  cursor: pointer;
+}
+
+/* Nothing left to turn: the pill's place stays, so the cards above it do not move as they open (see `Seat`). */
+.revealBtnIdle {
+  visibility: hidden;
+}
+
 .plate {
   position: relative;
   display: flex;
