@@ -187,7 +187,9 @@ describe('docs/acceptance-checklist.md', () => {
 
   it('gives every requirement row one of the three statuses', () => {
     const rows = rowStatuses(markdown)
-    expect(rows).toHaveLength(64) // 21 items in §40, 43 in §66 — a row that stops parsing is a row that stops being checked
+    // 21 items in §40, 43 in §66, and the three rows of Plan 21 (P21.1–P21.3), which are not requirement.txt's — a row that
+    // stops parsing is a row that stops being checked
+    expect(rows).toHaveLength(64 + 3)
     const wrong = rows.filter((r) => !STATUSES.has(r.status))
     expect(wrong.map((r) => `line ${r.line}: ${r.status}`)).toEqual([])
   })
@@ -256,9 +258,10 @@ describe('docs/test-matrix.md', () => {
   const { citations, titleless, rows } = parseMatrixRows(markdown)
 
   it('covers the whole matrix, so a parser that stopped matching would be caught', () => {
-    // 16 rows of §29.2, 1 of §29.3, 25 of §30 — the counts the document's own summary gives — and the text-overlap
-    // rule of the 2026-09-29 review (No11b), the one row that is not the spec's
-    expect(rows).toBe(43)
+    // 16 rows of §29.2, 1 of §29.3, 25 of §30 — the counts the document's own summary gives — the text-overlap
+    // rule of the 2026-09-29 review (No11b), the one row of Plan 16 that is not the spec's, and the ten rows of Plan 21's
+    // section (the squeeze round and the card motion, spec 2026-10-08)
+    expect(rows).toBe(43 + 10)
     expect(citations.length).toBeGreaterThanOrEqual(40)
   })
 

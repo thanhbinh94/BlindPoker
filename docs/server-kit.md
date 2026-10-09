@@ -247,6 +247,32 @@ as if still seated. The claim ends when the pot goes into a new hand
 (`startHand` takes it as `carryOverIn`), when it is released, or when
 the claimant leaves the room.
 
+### The squeeze round (spec 2026-10-08)
+
+A Blind room created with `blind.squeeze: true` is a squeeze table: each seat's hole cards go out at the deal as they
+always did, but the player turns them by hand on their own screen, and the table waits for that inside one 20 s round.
+`validateRoomConfig` forces `turnTimerSec` to `ECONOMY.squeezeTurnTimerSec` (20) whatever the client sent — ignored,
+not refused — so `config.turnTimerSec * 1000` is already the round's length and the runner needs no option of its own
+(`turnTimerMsOverride` still wins, as everywhere). What the server knows is one flag per seat, `HandPlayer.revealed`:
+`false` for a human at the deal, `true` for a bot, a Hold'em seat and every seat of a plain Blind table.
+
+| Piece | What it does |
+|---|---|
+| `REVEAL` (client → server) | `{ t: 'REVEAL', reqId? }`: "I have turned every one of my cards". It carries nothing else — the server cannot tell which card was peeled, and does not need to. The gateway hands it to `Room.reveal(playerId)` and answers `ACK`. |
+| `Room.reveal(playerId)` | Queued like every other call. Refused with `NOT_IN_HAND` when no hand is running or the seat was not dealt into it, and with `NOT_SEATED` for a player with no seat (the spec said `NOT_IN_HAND` for both; the wire has an exact code for the second). Outside a squeeze round — a plain table, a Hold'em one, the reveal, a turn — it returns without touching the runner: submitting would re-arm the hand's timers for nothing, and a late or repeated `REVEAL` must cost nothing. In a round it submits `REVEALED { seat }`. |
+| `SQUEEZE_PHASE` | Opens a pure-luck round (Blind A on a squeeze table) between the deal and the reveal. `seats` is the humans who have not turned; with none (a hand of bots alone) it names nobody and `SQUEEZE_ENDED` follows at once. It is turn-scoped like `DECISION_PHASE`: it takes `turnStartSeq` and goes out stamped with the round's `deadlineAt`, and a `ROOM_SNAPSHOT` taken mid-round carries the same `deadlineAt`. |
+| Play-or-fold on a squeeze table | No new phase: the `DECISION` round stays, and its `turnTimer` is the 20 s. `REVEAL` marks the seat without ending it, and a `play`/`fold` turns the seat too (`PLAYER_REVEALED`). |
+
+`HandRunner` arms one deadline per squeeze round, on entering `SQUEEZE`, and no bot timer (a bot is turned from the
+deal). `PLAYER_REVEALED` does not bump `turnSeq`, so seats turning one after another leave the shared deadline alone,
+exactly as `DECISION_MADE` does; the round ends the moment the last human has turned (`SQUEEZE_ENDED`, then the board
+comes at `revealDelayMs` as any reveal does). When the deadline passes, `onSqueezeTimeout(turnSeq)` — guarded by the
+phase and the `turnSeq` it was armed for, so a timer that outlives its round or its hand does nothing — submits
+`REVEALED` for every seat still down. That is **not** a `TIMEOUT`: no `PLAYER_ACTED` with `timedOut`, so
+`consecutiveTimeoutsToStand` does not move (spec §8.7). A seat marked auto-fold (it left or stood up mid-round) is turned
+for in the same breath (`applyAutoFolds`), so the round never waits on a seat with nobody behind it. `REVEALED` outside
+a squeeze round is a no-op in the engine, never an error.
+
 ### Sitting out (spec §11.3)
 
 `SIT_OUT` keeps the seat and asks to be skipped; `SIT_IN` takes it back.

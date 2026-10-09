@@ -74,7 +74,8 @@ máy, ngay sau `pnpm build:lite` và `pnpm build:normal`:
 Sáu dòng dẫn e2e (40.13, 40.14, 66.2, 66.18, 66.35, 66.36) trỏ vào đúng lần chạy này và ghi lại kết
 quả ấy.
 
-Tổng kết trạng thái: **61 ✓ · 3 partial · 0 ✗** trên 64 mục (21 của mục 40, 43 của mục 66).
+Tổng kết trạng thái: **61 ✓ · 3 partial · 0 ✗** trên 64 mục (21 của mục 40, 43 của mục 66). Plan 21 (2026-10-09) thêm ba
+dòng ngoài `requirement.txt` — P21.1 đến P21.3, ở cuối bảng: 2 ✓ · 1 partial — không tính vào 64 mục trên.
 
 ---
 
@@ -210,8 +211,23 @@ Tổng kết trạng thái: **61 ✓ · 3 partial · 0 ✗** trên 64 mục (21 
 
 ---
 
+# Sau requirement.txt — Plan 21: chuyển động bài và chế độ nặn bài
+
+Ba dòng dưới đây **không** thuộc mục 40 hay mục 66 (và không nằm trong tổng 64 ở trên): chúng ghi lại điều người dùng yêu
+cầu sau khi bản thiết kế đã giao (06–08/10: lật bài có chuyển động từ từ, và chế độ nặn bài riêng cho Blind Poker), với
+cùng cách đọc cột bằng chứng. Thiết kế: `docs/superpowers/specs/2026-10-08-card-motion-squeeze-design.md`; ma trận kiểm
+thử đầy đủ của phần này ở cuối `docs/test-matrix.md`. Bước e2e của chúng nằm ngoài `pnpm test`, như mọi e2e.
+
+| # | Yêu cầu | Bằng chứng (evidence) | Trạng thái |
+|---|---|---|---|
+| P21.1 | Bài chia từ một bộ bài trên bàn: lá riêng chia lần lượt quanh bàn, lá chung trượt ra rồi lật tại chỗ; mở bàn giữa ván hay vào lại thì không chia lại.<br>_Cards are dealt from a deck on the table and turned where they land; a restored hand is not dealt again._ | The deal and the board: `packages/ui-kit/src/table/PokerTable.test.tsx` → `slides the hole cards and the newest board cards in from the deck when they have just arrived`; `packages/ui-kit/src/table/Card.test.tsx` → `a dealt face-up card slides in from the deck anchor and then turns — the back drawn as artwork for the slide`; `packages/ui-kit/src/table/CommunityCards.test.tsx` → `staggers the flop by BOARD_STAGGER_MS and starts the turn and river at once`. A hand that was already on the table is not replayed: `packages/ui-kit/src/table/PokerTable.test.tsx` → `deals nothing for cards that arrived a while ago, nor for a hand rebuilt from a snapshot`; and with the system's reduced-motion setting every card is simply where it ends up: `packages/ui-kit/src/table/Card.test.tsx` → `lists every moving class of the card under reduced motion`. Manual: `pnpm --filter @bp/ui-kit playground`, "Next hand" — the cards leave the pile beside the pot, go round the table from the seat after the button and turn where they land. | ✓ |
+| P21.2 | Khi so bài, bài đối thủ nhấc lên rồi lật, sau khi lá river nằm yên; thẻ kết quả chỉ mở sau đó.<br>_At the showdown an opponent's cards lift and turn, after the river has settled; the result card opens after that._ | `packages/ui-kit/src/table/Card.test.tsx` → `reveal="lift" turns a revealed card with the lift keyframes instead of the flat turn`; the order and the wait for the river: `packages/ui-kit/src/table/PokerTable.test.tsx` → `lifts the cards of a showdown that %s on their own delays`; the result card held until the last card has turned: `packages/ui-kit/src/screens/reveal-hold.test.ts` → `grows by the river’s slide and turn when the showdown came with it`. Manual: the same playground in "Blind A", play a hand to its end — the other seats' cards lift one seat at a time, and the result card comes after the last has landed. | ✓ |
+| P21.3 | Bàn Blind Poker có chế độ nặn bài: bài của mình chia úp, tự tay bóc hoặc bấm "Lật"; vòng nặn tối đa 20 giây, hết sớm khi mọi người đã lật, hết giờ server lật hộ.<br>_A Blind table can be a squeeze table: your cards come face down and you turn them by hand or with "Lật"; the round lasts 20 s at most, ends early once everyone has turned, and the server turns the rest at the deadline._ | The phase and the early end: `packages/core/src/hand/blind.test.ts` → `pure luck: deals into a SQUEEZE phase, bots already revealed, ending when every human has turned`; the deadline and the forced turn, with no action timed out: `packages/server-kit/src/room/room-hands.test.ts` → `turns the seats that have not turned when the round runs out, and goes on`; the room's option and its fixed round: `packages/ui-kit/src/lobby/CreateRoomForm.test.tsx` → `submits blind.squeeze true and a 20 s round, whatever timer was picked before the box was ticked`; the gesture: `packages/ui-kit/src/table/PeelCard.test.tsx` → `starts face down and named as a card to peel; a drag past half opens it and reports once`. E2E, two real browsers, one peeling with the mouse and one pressing "Lật": `apps/normal-web/e2e/ops/04-blind.spec.ts` → `F-11: a squeeze table — one peels by hand, the other presses Lật, and the round ends before its 20 s`; and on the Lite edition: `apps/lite/e2e/lite.spec.ts` → `bàn nặn bài: huy hiệu "Nặn bài", vòng 20 giây thay ô giờ, và nút Lật mở các lá úp`. | partial — the peel by touch has been driven only on an emulated phone in Chromium (`apps/normal-web/e2e/ops/04-blind.spec.ts` → `F-12: @mobile the squeeze fits a phone — the viewer’s cards, the Lật pill and the timer are on screen`); the check on a real phone the spec asks for (peel by touch, a quick flick then a quick tap on "Lật", iOS Safari) is still to be done — `docs/known-limitations.md`. |
+
+---
+
 ## Những gì bảng này **không** khẳng định
 
-Các hạn chế đã biết — gồm ba dòng `partial` ở trên, việc Blind Poker cho thấy số dư của đối thủ, và
+Các hạn chế đã biết — gồm ba dòng `partial` của mục 40 và 66 ở trên cùng dòng P21.3, việc Blind Poker cho thấy số dư của đối thủ, và
 những tính năng cố ý để lại cho roadmap — được liệt kê đầy đủ ở
 [`known-limitations.md`](known-limitations.md). Lịch sử từng plan ở [`../CHANGELOG.md`](../CHANGELOG.md).

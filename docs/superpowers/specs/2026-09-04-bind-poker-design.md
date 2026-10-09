@@ -216,7 +216,8 @@ Royal flush (là straight flush cao nhất), Straight flush, Four of a kind, Ful
 | Hạn mức (L) | 5 × `fixedWager` — cố định, không chọn khi tạo phòng (sửa đổi 2026-09-29) |
 | `maxPlayers` | 2–8 |
 | `botCount` | 0 … maxPlayers − 1 |
-| `turnTimer` | 10/15/30 giây, mặc định 15 (chỉ dùng cho pha DECISION) |
+| `turnTimer` | 10/15/30 giây, mặc định 15 (chỉ dùng cho pha DECISION; bàn nặn bài: xem `squeeze`) |
+| `squeeze` | `true`/`false`, mặc định `false` (2026-10-08, spec card-motion-squeeze). Bật thì `turnTimer` cố định 20 s — server ép, giá trị client gửi bị bỏ qua — và 20 s đó là độ dài tối đa của vòng nặn bài (§8.3 bước 2b). Đi với cả hai cách chơi; Hold'em không có |
 
 ### 8.2 Điều kiện tham gia ván
 - Ghế đủ điều kiện vào ván khi **chồng trên bàn** ≥ W (kiểu A) hoặc ≥ 2W (kiểu B, đủ ante + Play). Vào bàn cần số dư ≥ mức đó (§8.8).
@@ -226,6 +227,9 @@ Royal flush (là straight flush cao nhất), Straight flush, Four of a kind, Ful
 ### 8.3 Luồng ván
 1. `STARTING`: dealer marker chuyển ghế kế tiếp (chỉ ảnh hưởng thứ tự chia bài và chip lẻ). Mỗi người đủ điều kiện bị trừ W từ chồng vào pot. Nếu có pot cộng dồn từ ván trước, cộng vào pot.
 2. `DEALING`: chia `holeCards` lá riêng cho mỗi người.
+
+2b. **Nặn bài + kiểu A — `SQUEEZE`** (2026-10-08, spec card-motion-squeeze; chỉ khi `squeeze`): tối đa 20 s; kết thúc sớm khi mọi ghế người thật đã lật (`REVEALED`); hết giờ server lật hộ. Kiểu B: không có pha riêng; chọn Chơi/Bỏ cũng tính là đã lật. Bài riêng vẫn gửi cho từng người từ lúc chia; "lật" là việc của máy người đó (bóc tay hoặc nút "Lật"), server chỉ nhận tín hiệu đã lật. Ván chỉ có bot thì không có ai để chờ: pha kết thúc ngay khi vừa mở.
+
 3. **Kiểu A**: bỏ qua bước 4.
 4. **Kiểu B — `DECISION`**: tất cả quyết định **đồng thời** trong `turnTimer` giây: `play` (trừ thêm W vào pot) hoặc `fold`. Lựa chọn giấu kín tới khi pha kết thúc (mọi người đã chọn hoặc hết giờ). Hết giờ chưa chọn = `fold`. Kết thúc pha: công bố lựa chọn.
    - 0 người play: pot **cộng dồn** sang ván sau (`carryOverPot`), ván kết thúc, không lật bài, không phí bàn.
@@ -247,12 +251,14 @@ Royal flush (là straight flush cao nhất), Straight flush, Four of a kind, Ful
 - Bot **chiếm ghế thật**: chúng tính vào `maxPlayers`. Sức chứa người thật = `maxPlayers − botCount đang ngồi`; vượt quá → `ROOM_FULL`. `RoomSummary.playerCount` đếm cả người thật lẫn bot đang ngồi, để danh sách phòng không hứa hẹn những ghế không tồn tại.
 - Bot có chồng ảo = L, tự nạp lại về L khi < mức cần cho một ván; không ghi vào kinh tế người chơi.
 - Kiểu A: bot không có quyết định. Kiểu B: xem mục 9.
+- Bàn nặn: bot tính là đã lật từ đầu pha (2026-10-08, spec card-motion-squeeze) — pha `SQUEEZE` chỉ chờ người thật.
 
 ### 8.6 Hàng ranking
 Như mục 7.7.
 
 ### 8.7 Timer và hành động mặc định
-- Chỉ pha `DECISION` có timer. Hết giờ = `fold`.
+- Chỉ pha `DECISION` có timer hành động. Hết giờ = `fold`.
+- Pha `SQUEEZE` hết giờ không tính là timeout hành động (2026-10-08, spec card-motion-squeeze): server lật hộ các ghế còn úp, không đếm vào 3 timeout liên tiếp và không ai bị mời đứng dậy vì pha này.
 - 3 timeout liên tiếp → đứng dậy sau ván (như Normal).
 
 ### 8.8 Hạn mức bàn (sửa đổi 2026-09-29)
@@ -540,6 +546,7 @@ Native WebSocket (`ws`) thay Socket.IO: protocol tự định nghĩa đã bao g�
 ```
 - Hold'em: `BETTING` lặp qua `street ∈ {PREFLOP, FLOP, TURN, RIVER}`; `REVEAL` chỉ dùng khi run-out do all-in.
 - Blind: `DECISION` (kiểu B) hoặc bỏ qua (kiểu A); `REVEAL` lật 3 lá chung + 1 + 1.
+- Pha `SQUEEZE` (2026-10-08, spec card-motion-squeeze): chỉ có ở Blind kiểu A trên bàn nặn bài, nằm giữa `DEALING` và `REVEAL` ở chỗ kiểu A vốn bỏ qua; kết thúc (`SQUEEZE_ENDED`) khi mọi ghế trong ván đã `revealed`, rồi sang `REVEAL`. Kiểu B trên bàn nặn không có pha mới: vẫn là `DECISION`, và `revealed` được đặt trong đó.
 
 ### 17.2 Reducer
 ```ts
@@ -548,14 +555,17 @@ function createHand(config: RulesetConfig, seats: SeatInput[], rng: Rng): HandSt
 function legalActions(state: HandState, seat: number): LegalActions
 function applyAction(state: HandState, cmd: HandCommand, rng: Rng): { state: HandState; events: GameEvent[] }
 // HandCommand = PlayerAction{seat, action} | TimerExpired | AdvanceReveal (server đẩy để tạo nhịp lật bài)
+//              | { type: 'REVEALED'; seat } (2026-10-08, spec card-motion-squeeze: ghế đã lật hết lá; hợp lệ trong SQUEEZE và trong DECISION của bàn nặn, ngoài ra và khi lặp lại là no-op, không lỗi)
 //              | { type: 'CANCEL'; reason } (hủy ván: hoàn lại mọi chip đã cược, không thu phí)
 ```
 Reducer thuần, không đồng hồ: nhịp lật bài và timeout là lệnh do server-kit gửi. Điều này khiến mọi kịch bản test là danh sách lệnh → so sánh state/events.
 
 ### 17.3 Events
-`HAND_STARTED{handId, button, blinds|wager, carryOver}`, `CARDS_DEALT{seat, cards, cardCount}`, `BLINDS_POSTED`, `DECISION_PHASE{deadlineAt}`, `TURN_CHANGED{seat, legal, deadlineAt}`, `PLAYER_ACTED{seat, action, amount}`, `DECISION_MADE{seat}`, `DECISIONS_REVEALED{seat→play|fold}`, `COMMUNITY_REVEALED{cards}`, `POT_UPDATED{pot}`, `SHOWDOWN{hands: {seat, cards, rank, label}}`, `SETTLEMENT{payouts, fee, carryOver, uncalledReturned}`, `HAND_CANCELLED{reason, refunds, carryOverOut}`, `HAND_COMPLETE{nextHandAt?}`.
+`HAND_STARTED{handId, button, blinds|wager, carryOver}`, `CARDS_DEALT{seat, cards, cardCount}`, `BLINDS_POSTED`, `DECISION_PHASE{deadlineAt}`, `TURN_CHANGED{seat, legal, deadlineAt}`, `PLAYER_ACTED{seat, action, amount}`, `DECISION_MADE{seat}`, `DECISIONS_REVEALED{seat→play|fold}`, `SQUEEZE_PHASE{seats, turnSeq, deadlineAt}`, `PLAYER_REVEALED{seat}`, `SQUEEZE_ENDED`, `COMMUNITY_REVEALED{cards}`, `POT_UPDATED{pot}`, `SHOWDOWN{hands: {seat, cards, rank, label}}`, `SETTLEMENT{payouts, fee, carryOver, uncalledReturned}`, `HAND_CANCELLED{reason, refunds, carryOverOut}`, `HAND_COMPLETE{nextHandAt?}`.
 
 `CARDS_DEALT` mang `cardCount` và được lọc theo từng người xem bằng `filterEvent(event, viewerSeat)`: lá của ghế khác trả về `cards: []`, chỉ còn `cardCount` để client vẽ lưng bài.
+
+**Nặn bài (2026-10-08, spec card-motion-squeeze).** `SQUEEZE_PHASE{seats}` liệt kê các ghế người thật chưa lật và mang `turnSeq`, `deadlineAt` như `DECISION_PHASE`. `PLAYER_REVEALED{seat}` phát khi một ghế lật hết lá riêng của mình: bằng lệnh `REVEALED` (client gửi message `REVEAL`, §20.1) hoặc, ở bàn kiểu B, bằng `ACTION play/fold`. `SQUEEZE_ENDED` phát khi ghế cuối đã lật; hết giờ, server gửi `REVEALED` thay cho từng ghế còn úp (không phải `TIMEOUT`). `HandView` mỗi ghế thêm `revealed` — công khai (ai cũng thấy ghế nào đã lật, không thấy lá), luôn `true` ở bàn không nặn và với bot. `REVEAL` ngoài pha nặn/quyết định của bàn nặn là no-op và được `ACK`.
 
 ## 18. Database
 
@@ -726,6 +736,7 @@ Mọi message: `{ t: string, ...payload }`. Client→server có `reqId?: string`
 | `STAND_UP` | — | |
 | `SIT_OUT` | — | Giữ ghế, bỏ qua từ ván sau (ván đang chơi vẫn đánh hết); chưa có ghế → `NOT_SEATED` |
 | `SIT_IN` | — | Trở lại từ ván sau; stack dưới mức tối thiểu thì vẫn `SITTING_OUT` |
+| `REVEAL` | — | Bàn nặn bài: người gửi đã lật hết lá riêng (2026-10-08, spec card-motion-squeeze; server chỉ nhận tín hiệu, không biết lá nào bị bóc). Trong `SQUEEZE` hoặc `DECISION` của bàn nặn: đặt `revealed`; ngoài pha đó hoặc ở bàn không nặn: no-op, `ACK`. Không có ván đang chạy, hoặc có ghế mà không được chia vào ván → `NOT_IN_HAND`; chưa có ghế khi có ván → `NOT_SEATED` |
 | `READY` | `{ ready: boolean }` | |
 | `START_GAME` | — | Host |
 | `KICK` | `{ playerId }` | Host, chỉ người chưa trong ván |

@@ -9,7 +9,8 @@ It is not a bug list. A bug is something that is supposed to work and does not; 
 either works as designed and the design has a cost, or was scoped out on purpose.
 
 The three rows of [`acceptance-checklist.md`](acceptance-checklist.md) that are not a plain ✓
-(40.8, 66.21 and 66.40) appear here too, under **Operations**.
+(40.8, 66.21 and 66.40) appear here too, under **Operations**; so does the one Plan 21 added
+(P21.3, the squeeze peel not yet tried on a real phone), under **UI**.
 
 ---
 
@@ -369,6 +370,38 @@ does not also move on every turn.
 two-row opponent strip does not — and freezing the felt to the taller of them would waste a phone's
 vertical space on every hand to spare a one-off jump at a breakpoint few sessions ever cross.
 *Tracked:* `docs/ui-kit.md` Known gaps.
+
+**The squeeze peel is proven in Chromium, and has not yet been tried on a real phone.** The gesture (`PeelCard`, spec
+2026-10-08 §3) is driven in a browser twice — a mouse drag on the desktop (`apps/normal-web/e2e/ops/04-blind.spec.ts` →
+F-11) and touch events on an emulated 375 × 812 phone (F-12) — and both are Desktop Chrome; the unit tests use synthetic
+pointer events under jsdom. Firefox and WebKit differ on pointer capture for touch: a touch starts out implicitly
+captured by the element under the finger, so the card taking the capture makes that child *lose* it, and the
+`lostpointercapture` bubbles up mid-drag. The card ignores a lost capture that is not its own and always drops back on one
+that is, which `PeelCard.test.tsx` checks with synthetic events; no Firefox or WebKit build drives it. The user's own
+check on a real device (spec §8: peel by touch, a quick flick then a quick tap on "Lật", iOS Safari) is still to do.
+*Why it stays:* a device is needed, and the e2e projects are Chromium only.
+*Tracked:* `docs/superpowers/specs/2026-10-08-card-motion-squeeze-design.md` §8; `CHANGELOG.md` (Plan 21).
+
+**A flick needs a run of movement to be read as one, on a device that does not coalesce pointer events.** The flick's
+speed is taken from the pointer's real and coalesced positions (`getCoalescedEvents`) over its last 100 ms, and a pointer
+with no new position for 40 ms has stopped — what came before the pause is no part of the flick. Where the browser
+reports one position per frame and coalesces nothing, a finger that rests and then makes a single quick move before
+the release gives the run one sample, no speed, and the card opens only if that drag took it past half.
+*Why it stays:* Chromium, which the project's e2e runs in, does coalesce; counting the rest into the speed instead
+would make a slow drag that ends in a twitch a flick, which is the error the pause rule exists to prevent.
+*Tracked:* `packages/ui-kit/src/table/PeelCard.tsx` (`releaseSpeed`); `docs/ui-kit.md` (The squeeze).
+
+**On a 375 × 812 squeeze table the stage overflows by 3 px while the cards are dealt.** The room header's badge row —
+the mode, the limit and the gold "Nặn bài" badge — wraps one line longer at that width, which takes 3 px more than
+the stage has. The page itself still fits and does not scroll sideways, and that is what F-12 asserts, not the stage.
+*Why it stays:* 3 px, in one state at one phone size, would be paid for with a second header layout.
+*Tracked:* `apps/normal-web/e2e/ops/04-blind.spec.ts` → F-12.
+
+**A ring↔stack switch in the middle of a squeeze round can send a second `REVEAL`.** The seat remounts: a card peeled but
+not yet reported comes back down, and the next "Lật" tells the table again. The server takes a repeated `REVEAL` as the
+no-op it is (spec 2026-10-08 §6), so the cost is one frame.
+*Why it stays:* harmless by design, and a window crossing the breakpoint during a 20 s round is rare.
+*Tracked:* `packages/ui-kit/src/table/Seat.tsx` (`onCardUp`).
 
 **Playground and e2e screenshots are not committed.** `packages/ui-kit/playground/screenshots/README.md`
 describes what each shot should show; the e2e runs write real ones into
