@@ -25,6 +25,9 @@ export function simulateHand(input: CreateHandInput, policy: Policy, rng: Rng): 
     if (++guard > 10_000) throw new Error('simulateHand: hand did not finish')
     if (state.phase === 'REVEAL') {
       ;({ state, events } = applyCommand(state, { type: 'ADVANCE' }, rng))
+    } else if (state.phase === 'SQUEEZE') {
+      const seat = state.players.find((p) => !p.revealed)!.seat
+      ;({ state, events } = applyCommand(state, { type: 'REVEALED', seat }, rng))
     } else if (state.phase === 'DECISION') {
       const seat = state.players.find((p) => p.decision === null)!.seat
       const action = policy(playerView(state, seat), legalActions(state, seat), rng)
