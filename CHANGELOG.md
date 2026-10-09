@@ -8,7 +8,7 @@ below are the real history.
 
 ---
 
-## Plan 21 — cards dealt from a deck and turned, the showdown's lift, and the Blind squeeze mode — merged `MERGE` (2026-10-09)
+## Plan 21 — cards dealt from a deck and turned, the showdown's lift, and the Blind squeeze mode — merged `440997e` (2026-10-09)
 
 The user looked at how the table turns a card — "chỉ hiển thị sấp ngửa, chứ không có hiệu ứng lật từ từ" (2026-10-06) —
 and asked for a way to play with the cards in hand: "tôi muốn game trở nên vui hơn (khi không dùng auto) bằng cách bổ sung
@@ -98,6 +98,9 @@ schema change or migration: a room's config is not stored. No library was added.
   - The auto-play toggle is also offered on a pure-luck squeeze table, where it means "turn my cards at once".
   - The lift waits for the river when the showdown comes with it, and the result card's hold grows by the same 960 ms. The
     spec took the river's 1.5 s pacing to leave it at rest first, but the engine settles in the `ADVANCE` that deals it.
+  - The deal's whole span is capped at 1 s (`DEAL_SPAN_MS`): the step between cards is `min(120 ms, floor(1000 / (cards - 1)))`,
+    so an 8-seat, 3-card deal steps about 43 ms. The spec's 0.12 s step was written for one card at a time, and the 10 s
+    play-or-fold timer runs from the deal.
   - No `phases.squeeze` string (spec §5.3): nothing prints the round's name. `BlindRules.squeeze` and `ClientSeat.revealed` are
     optional, so existing fixtures stay valid; a validated `BlindRoomConfig` always carries `squeeze`.
 - **Still open.**
