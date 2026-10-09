@@ -28,7 +28,7 @@ export function parseClientMessage(raw: unknown): ParseResult<ClientMessage> {
   switch (raw.t) {
     case 'HELLO':
       return isStr(raw.sessionToken) && raw.sessionToken.length > 0 ? { ok: true, value: withReq({ t: 'HELLO', sessionToken: raw.sessionToken }) } : fail('INVALID_MESSAGE', 'HELLO needs sessionToken')
-    case 'LIST_ROOMS': case 'LEAVE_ROOM': case 'STAND_UP': case 'SIT_OUT': case 'SIT_IN': case 'START_GAME': case 'RESYNC': case 'PONG':
+    case 'LIST_ROOMS': case 'LEAVE_ROOM': case 'STAND_UP': case 'SIT_OUT': case 'SIT_IN': case 'START_GAME': case 'RESYNC': case 'PONG': case 'REVEAL':
       return { ok: true, value: withReq({ t: raw.t }) }
     case 'CREATE_ROOM': {
       const cfg = validateRoomConfig(raw.config)
@@ -82,8 +82,10 @@ export function validateRoomConfig(raw: unknown): ParseResult<RoomConfig> {
   const autoStart = raw.autoStart === undefined ? false : raw.autoStart
   if (!isBool(autoStart)) return bad('autoStart must be boolean')
   const timers: readonly number[] = mode === 'holdem' ? ECONOMY.holdemTurnTimers : ECONOMY.blindTurnTimers
-  const turnTimerSec = raw.turnTimerSec === undefined ? (mode === 'holdem' ? 30 : 15) : raw.turnTimerSec
-  if (!isInt(turnTimerSec) || !timers.includes(turnTimerSec)) return bad(`turnTimerSec must be one of ${timers.join(', ')}`)
+  // A squeeze table's round is fixed (spec 2026-10-08 §4.2.1): the timer a client sends with it is ignored, not refused.
+  const squeezeWanted = mode === 'blind' && isObj(raw.blind) && raw.blind.squeeze === true
+  const turnTimerSec = (squeezeWanted ? ECONOMY.squeezeTurnTimerSec : raw.turnTimerSec === undefined ? (mode === 'holdem' ? 30 : 15) : raw.turnTimerSec) as number
+  if (!squeezeWanted && (!isInt(turnTimerSec) || !timers.includes(turnTimerSec))) return bad(`turnTimerSec must be one of ${timers.join(', ')}`)
   let password: string | undefined
   if (raw.password !== undefined && raw.password !== '') {
     if (!isStr(raw.password) || raw.password.length < 4 || raw.password.length > 20) return bad('password must be 4–20 characters')
@@ -112,7 +114,9 @@ export function validateRoomConfig(raw: unknown): ParseResult<RoomConfig> {
     if (!isInt(b.fixedWager) || !(ECONOMY.blindWagerTiers as readonly number[]).includes(b.fixedWager)) return bad('fixedWager must match a wager tier')
     const botCount = b.botCount === undefined ? 0 : b.botCount
     if (!isInt(botCount) || botCount < 0 || botCount > maxPlayers - 1) return bad('botCount must be 0..maxPlayers-1')
-    const blind: BlindRoomConfig = { holeCards: b.holeCards, decisionMode, fixedWager: b.fixedWager, botCount }
+    const squeeze = b.squeeze === undefined ? false : b.squeeze
+    if (!isBool(squeeze)) return bad('squeeze must be boolean')
+    const blind: BlindRoomConfig = { holeCards: b.holeCards, decisionMode, fixedWager: b.fixedWager, botCount, squeeze }
     config.blind = blind
   }
   return { ok: true, value: config }
@@ -124,7 +128,7 @@ export function roomConfigToRuleset(config: RoomConfig): Ruleset {
     return { mode: 'holdem', smallBlind: h.smallBlind, bigBlind: h.bigBlind, tableFeeRate: ECONOMY.tableFeeRate, tableFeeCapBB: ECONOMY.tableFeeCapBB }
   }
   const b = config.blind!
-  return { mode: 'blind', holeCards: b.holeCards, decisionMode: b.decisionMode, fixedWager: b.fixedWager, tableFeeRate: ECONOMY.tableFeeRate }
+  return { mode: 'blind', holeCards: b.holeCards, decisionMode: b.decisionMode, fixedWager: b.fixedWager, tableFeeRate: ECONOMY.tableFeeRate, squeeze: b.squeeze === true }
 }
 
 const ENGINE_ERROR_TO_CODE: Record<EngineErrorCode, ErrorCode> = {

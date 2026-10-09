@@ -5,7 +5,8 @@ import type { ClientHand } from '../client/types.js'
 import { formatPoints, handLabel, type Language } from '../i18n/index.js'
 import { Button } from '../primitives/Button.js'
 import { cx } from '../primitives/cx.js'
-import { CARD_STAGGER_MS, Card } from './Card.js'
+import { Card } from './Card.js'
+import { CARD_STAGGER_MS } from './motion.js'
 import s from './table.module.css'
 
 export interface HandResultProps {

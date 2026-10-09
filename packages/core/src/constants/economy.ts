@@ -16,6 +16,8 @@ export const ECONOMY = {
   ],
   holdemTurnTimers: [15, 30, 45, 60],
   blindTurnTimers: [10, 15, 30],
+  /** A squeeze table's round (spec 2026-10-08 §4.2.1): fixed, not one of `blindTurnTimers`. */
+  squeezeTurnTimerSec: 20,
   maxPlayersHoldem: 9,
   maxPlayersBlind: 8,
   buyInBBRange: { min: 20, max: 500 },

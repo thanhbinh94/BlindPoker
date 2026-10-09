@@ -6,7 +6,7 @@ import type { PreActionKind } from './preaction.js'
 export type ConnectionStatus = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed'
 
 /** `HandPhase` plus `DEALING`, the purely visual window before the first betting/decision frame arrives. */
-export type ClientPhase = 'DEALING' | 'BETTING' | 'DECISION' | 'REVEAL' | 'COMPLETE'
+export type ClientPhase = 'DEALING' | 'BETTING' | 'DECISION' | 'SQUEEZE' | 'REVEAL' | 'COMPLETE'
 
 export interface ClientSeat {
   seat: number
@@ -21,6 +21,11 @@ export interface ClientSeat {
   holeCards: Card[] | null
   hasDecided: boolean
   decision: Decision | null
+  /**
+   * Squeeze mode (spec 2026-10-08): whether this seat has turned every card. Present only in a squeeze room — `true`
+   * for a bot from the deal — and absent on a plain table, where cards are never anyone's to turn.
+   */
+  revealed?: boolean
   /** What this seat did last, for action bubbles; the engine's view never carries it. */
   lastAction: PlayerAction | null
   timedOut: boolean
@@ -64,6 +69,18 @@ export interface ClientHand {
   result: ClientHandResult | null
   /** Bumped on every `POT_UPDATED` so views can fire a chips-to-pot animation without diffing amounts. */
   potPulse: number
+  /** Built from a `ROOM_SNAPSHOT` rather than followed from `HAND_STARTED`: the cards are already on the table, so nothing is dealt in. */
+  restored: boolean
+  /**
+   * When things arrived, in client time (the `now` of the frame that carried them), for the card motion to pace itself
+   * by. `null` until the event comes, on every new hand, and on a hand built from a snapshot — a snapshot is no
+   * arrival, and the motion must not replay what the player never saw happen. This one is the hand's first `CARDS_DEALT`.
+   */
+  dealtAt: number | null
+  /** The latest `COMMUNITY_REVEALED`; see `dealtAt`. */
+  boardAt: number | null
+  /** The `SHOWDOWN`; see `dealtAt`. */
+  showdownAt: number | null
 }
 
 export interface ClientError {

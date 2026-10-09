@@ -1,9 +1,10 @@
 import { blindTableLimit, ECONOMY } from '@bp/core'
-import type { ChangeEvent } from 'react'
+import { useId, type ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatPoints, type Language } from '../i18n/index.js'
 import { Field } from '../primitives/Field.js'
 import { Select } from '../primitives/Select.js'
+import { cx } from '../primitives/cx.js'
 import s from './lobby.module.css'
 
 export interface HoldemFieldsProps {
@@ -90,11 +91,16 @@ export interface BlindFieldsProps {
   botCount: number
   onBotCount: (n: number) => void
   maxBots: number
+  squeeze: boolean
+  onSqueeze: (on: boolean) => void
   disabled: boolean
   lang: Language
 }
 
-/** Blind Poker: how many face-down cards, whether players may fold, the fixed wager and the bot filler. */
+/**
+ * Blind Poker: how many face-down cards, whether players may fold, the fixed wager, the bot filler and whether the
+ * cards are turned by hand ("Nặn bài", Plan 21).
+ */
 export function BlindFields({
   holeCards,
   onHoleCards,
@@ -105,10 +111,13 @@ export function BlindFields({
   botCount,
   onBotCount,
   maxBots,
+  squeeze,
+  onSqueeze,
   disabled,
   lang,
 }: BlindFieldsProps) {
   const { t } = useTranslation()
+  const hintId = useId()
   const wagers = ECONOMY.blindWagerTiers.map((n) => ({ value: n, label: formatPoints(n, lang) }))
   const bots = Array.from({ length: maxBots + 1 }, (_, n) => ({ value: n, label: String(n) }))
 
@@ -142,9 +151,31 @@ export function BlindFields({
       >
         <Select value={fixedWager} options={wagers} disabled={disabled} onChange={onFixedWager} />
       </Field>
-      <Field label={t('create.botCount')}>
-        <Select value={botCount} options={bots} disabled={disabled} onChange={onBotCount} />
-      </Field>
+      {/* The wager's hint runs two lines, so its row is taller than the bot count by about a line and a half: the "Nặn bài"
+          box takes that slack, under the bots and level with the hint's last line, and Blind's fields end where they did.
+          Not a `Field`, which would re-label the box with its own caption: the box is its own label, as the form's other
+          checkboxes are, so its name is just "Nặn bài". What it does to the round (a fixed 20 s, over early when everyone
+          has turned) is its description, said to a screen reader and not drawn: the timer's cell, which turns into that
+          length while the box is ticked, shows it. */}
+      <div className={s.botsCell}>
+        <Field label={t('create.botCount')}>
+          <Select value={botCount} options={bots} disabled={disabled} onChange={onBotCount} />
+        </Field>
+        <label className={cx(s.check, s.checkCompact)}>
+          <input
+            className={s.checkbox}
+            type="checkbox"
+            checked={squeeze}
+            disabled={disabled}
+            aria-describedby={hintId}
+            onChange={(event) => onSqueeze(event.target.checked)}
+          />
+          {t('create.squeeze')}
+        </label>
+        <span id={hintId} className="visually-hidden">
+          {t('create.squeezeHint')}
+        </span>
+      </div>
     </>
   )
 }

@@ -23,6 +23,8 @@ export interface GameClientApi {
   startGame(): Promise<AckOrError>
   kick(playerId: string): Promise<AckOrError>
   act(action: PlayerAction): Promise<AckOrError>
+  /** Squeeze mode: tell the table every one of my cards is turned (spec 2026-10-08). Harmless on a plain table. */
+  reveal(): Promise<AckOrError>
   /**
    * Tick (or clear, with `null`) what to do when the turn comes: the hook sends the matching legal action the
    * moment the server says it is this seat's turn, exactly as if the player had pressed the button then. Only
@@ -121,6 +123,23 @@ export function useGameClient(opts: UseGameClientOptions): GameClientApi {
     request({ t: 'ACTION', reqId: '', baseSeq: stateRef.current.seq, action }).catch(() => undefined)
   }, [legal, preAction, autoPlay, request])
 
+  // Squeeze mode with auto-play on: the cards are turned the moment they land, once per hand. Keyed on the hand id like
+  // the tick above is keyed on `legal` — a re-render, StrictMode's double invoke or a later frame never sends it twice —
+  // and on the reconnect it was sent after (`roomReturns`): a REVEAL lost with the socket comes back in the snapshot as a
+  // seat still unturned, and is sent once more (final fix wave M2).
+  const revealedFor = useRef<string | null>(null)
+  const current = state.hand
+  const squeeze = state.room?.config.blind?.squeeze === true
+  const myCards = current !== null && current.mySeat !== null ? current.seats.find((s) => s.seat === current.mySeat) : undefined
+  const returns = state.roomReturns
+  useEffect(() => {
+    if (!autoPlay || !squeeze || current === null || myCards === undefined || myCards.revealed !== false || myCards.cardCount === 0) return
+    const key = `${current.handId}#${returns}`
+    if (revealedFor.current === key) return
+    revealedFor.current = key
+    request({ t: 'REVEAL' }).catch(() => undefined)
+  }, [autoPlay, squeeze, current, myCards, returns, request])
+
   return useMemo<GameClientApi>(
     () => ({
       state,
@@ -143,6 +162,7 @@ export function useGameClient(opts: UseGameClientOptions): GameClientApi {
       kick: (playerId) => request({ t: 'KICK', playerId }),
       // `reqId` is a placeholder: `connection.request` always overwrites it with the id it correlates on.
       act: (action) => request({ t: 'ACTION', reqId: '', baseSeq: stateRef.current.seq, action }),
+      reveal: () => request({ t: 'REVEAL' }),
       setPreAction: (kind) => dispatch({ type: 'preAction', kind }),
       setAutoPlay: (on) => dispatch({ type: 'autoPlay', on }),
       resync: () => void connection.send({ t: 'RESYNC' }),

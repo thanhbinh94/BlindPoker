@@ -192,6 +192,29 @@ describe('blind hand against a bot over the wire', () => {
   })
 })
 
+describe('squeeze round over the wire', () => {
+  const SQUEEZE_BOT: RoomConfig = { ...BLIND_BOT, turnTimerSec: 20, blind: { ...BLIND_BOT.blind!, decisionMode: 'none', squeeze: true } }
+
+  it('answers REVEAL with ACK in the round, sends the deadline with its opening event, and ends the round on the turn', async () => {
+    ts = await startTestServer({ roomOptions: { handIntervalMs: 60_000 } })
+    const a = await connect('a')
+    a.send({ t: 'CREATE_ROOM', config: SQUEEZE_BOT })
+    await a.next('ROOM_SNAPSHOT')
+    expect(await a.request({ t: 'REVEAL', reqId: rid() })).toMatchObject({ t: 'ERROR', code: 'NOT_SEATED' })
+    a.send({ t: 'SIT_DOWN', seat: 0 })
+    // seated, with no hand running: nothing to turn, and nothing to complain of (final fix wave M1)
+    expect(await a.request({ t: 'REVEAL', reqId: rid() })).toMatchObject({ t: 'ACK' })
+    a.send({ t: 'READY', ready: true })
+    a.send({ t: 'START_GAME' })
+    const phase = await a.next('GAME_EVENT', (m) => m.event.type === 'SQUEEZE_PHASE')
+    expect(phase.event).toMatchObject({ type: 'SQUEEZE_PHASE', seats: [0] })
+    expect(phase.event.deadlineAt).toBeGreaterThan(Date.now())
+    expect(await a.request({ t: 'REVEAL', reqId: rid() })).toMatchObject({ t: 'ACK' })
+    await a.next('GAME_EVENT', (m) => m.event.type === 'SQUEEZE_ENDED')
+    await a.next('GAME_EVENT', (m) => m.event.type === 'HAND_COMPLETE', 5000)
+  })
+})
+
 describe('hold’em between two clients', () => {
   it('enforces turn order, staleness, duplicates and legality', async () => {
     ts = await startTestServer()

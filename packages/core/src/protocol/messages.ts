@@ -25,6 +25,8 @@ export interface BlindRoomConfig {
   decisionMode: 'none' | 'playOrFold'
   fixedWager: number
   botCount: number
+  /** Squeeze mode (spec 2026-10-08): hole cards are turned by hand inside a 20 s round. A validated config always sets it. */
+  squeeze?: boolean
 }
 
 export interface RoomConfig {
@@ -114,6 +116,8 @@ export type ClientMessage =
   | { t: 'SIT_OUT'; reqId?: string }
   /** Take the seat back from the next hand onwards; a stack below the minimum keeps it `SITTING_OUT`. */
   | { t: 'SIT_IN'; reqId?: string }
+  /** Squeeze mode: the sender has turned every one of its cards (spec 2026-10-08 §5.2). Harmless anywhere else. */
+  | { t: 'REVEAL'; reqId?: string }
   | { t: 'READY'; reqId?: string; ready: boolean }
   | { t: 'START_GAME'; reqId?: string }
   | { t: 'KICK'; reqId?: string; playerId: string }

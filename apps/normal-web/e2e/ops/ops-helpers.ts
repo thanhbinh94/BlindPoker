@@ -1,12 +1,38 @@
 import { expect, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test'
-import { account, expectNoTextOverlapAt, OVERLAP_SCREENS, parsePoints, PHONE_SCREEN, register, unique, type Account } from '../support.js'
+import {
+  account,
+  expectMyNameWhole,
+  expectMySeatLines,
+  expectNoSidewaysScroll,
+  expectNoTextOverlapAt,
+  expectRoomFits,
+  OVERLAP_SCREENS,
+  parsePoints,
+  PHONE_SCREEN,
+  register,
+  unique,
+  type Account,
+} from '../support.js'
 
 /**
  * What the operation-test pack (`docs/operation-test-plan.md`) needs beyond `../support.js`: several players in
  * several browsers, rooms of every shape, the API as each player sees it, and a player that plays by itself.
  */
 
-export { account, expectNoTextOverlapAt, OVERLAP_SCREENS, parsePoints, PHONE_SCREEN, register, unique, type Account }
+export {
+  account,
+  expectMyNameWhole,
+  expectMySeatLines,
+  expectNoSidewaysScroll,
+  expectNoTextOverlapAt,
+  expectRoomFits,
+  OVERLAP_SCREENS,
+  parsePoints,
+  PHONE_SCREEN,
+  register,
+  unique,
+  type Account,
+}
 
 export interface Player {
   who: Account
@@ -205,7 +231,10 @@ export interface BlindRoomOptions {
   mode?: 'Hoàn toàn may rủi' | 'Chơi hoặc bỏ'
   /** The fixed wager's label, e.g. `1.000`. */
   wager?: string
+  /** Ignored with `squeeze`: a squeeze table's round is a fixed 20 s, and the form shows it instead of the select. */
   timer?: '10 giây' | '15 giây' | '30 giây'
+  /** A squeeze table ("Nặn bài"): the cards are turned by hand, over a 20 s round that ends when everyone has turned. */
+  squeeze?: boolean
   password?: string
   autoStart?: boolean
 }
@@ -216,9 +245,10 @@ export async function createBlind(page: Page, o: BlindRoomOptions): Promise<stri
   await dialog.getByRole('button', { name: 'Blind Poker' }).click()
   await dialog.getByLabel('Tên phòng').fill(o.name)
   if (o.maxPlayers !== undefined) await dialog.getByLabel('Số người tối đa').selectOption({ label: String(o.maxPlayers) })
-  await dialog.getByLabel('Thời gian mỗi lượt').selectOption({ label: o.timer ?? '15 giây' })
+  if (o.squeeze !== true) await dialog.getByLabel('Thời gian mỗi lượt').selectOption({ label: o.timer ?? '15 giây' })
   await dialog.getByLabel('Số lá mỗi người').selectOption({ label: `${o.cards ?? 2} lá` })
   await dialog.getByLabel('Cách chơi').selectOption({ label: o.mode ?? 'Chơi hoặc bỏ' })
+  if (o.squeeze === true) await dialog.getByLabel('Nặn bài', { exact: true }).check()
   await dialog.getByLabel('Mức cược cố định').selectOption({ label: o.wager ?? '1.000' })
   await dialog.getByLabel('Số lượng bot').selectOption({ label: String(o.bots) })
   if (o.password !== undefined) {

@@ -79,6 +79,10 @@ export const holdemHand: ClientHand = {
   legal: null,
   result: null,
   potPulse: 1,
+  restored: true,
+  dealtAt: null,
+  boardAt: null,
+  showdownAt: null,
   seats: [
     makeSeat({ seat: 0, playerId: 'a', displayName: 'Ann', stack: 19800, holeCards: parseCards('Qs Qd') }),
     makeSeat({ seat: 2, playerId: 'b', displayName: 'Bob', stack: 19900 }),

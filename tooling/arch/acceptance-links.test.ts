@@ -116,13 +116,13 @@ interface MatrixCitation {
  *
  * A cell holds one or more citations separated by ` · `, each of which may be `describe › it`, may
  * be abbreviated to `…` at either end or in the middle, and may carry a parenthesised aside that is
- * the document's own commentary rather than anything in the source. So: drop the parentheses, cut
+ * the document's own commentary rather than anything in the source. So: drop the parenthesised asides (set off by a space; a call's own `()` is part of a title), cut
  * the cell at every separator, strip the backticks a cell puts around error codes, and trim the
  * punctuation an abbreviation leaves dangling. What survives is literal test text.
  */
 function matrixFragments(cell: string): string[] {
   return cell
-    .replace(/\([^)]*\)/g, ' ') // commentary, never part of a title
+    .replace(/\s\([^)]*\)/g, ' ') // commentary (set off by a space), never part of a title; a call's own `()` stays
     .split(/\s·\s|›|…/)
     .map((piece) => piece.replace(/`/g, '').replace(/^[\s,;:—-]+/, '').replace(/[\s,;:—-]+$/, ''))
     .filter((piece) => piece.length >= MIN_FRAGMENT)
@@ -187,7 +187,9 @@ describe('docs/acceptance-checklist.md', () => {
 
   it('gives every requirement row one of the three statuses', () => {
     const rows = rowStatuses(markdown)
-    expect(rows).toHaveLength(64) // 21 items in §40, 43 in §66 — a row that stops parsing is a row that stops being checked
+    // 21 items in §40, 43 in §66, and the three rows of Plan 21 (P21.1–P21.3), which are not requirement.txt's — a row that
+    // stops parsing is a row that stops being checked
+    expect(rows).toHaveLength(64 + 3)
     const wrong = rows.filter((r) => !STATUSES.has(r.status))
     expect(wrong.map((r) => `line ${r.line}: ${r.status}`)).toEqual([])
   })
@@ -256,9 +258,10 @@ describe('docs/test-matrix.md', () => {
   const { citations, titleless, rows } = parseMatrixRows(markdown)
 
   it('covers the whole matrix, so a parser that stopped matching would be caught', () => {
-    // 16 rows of §29.2, 1 of §29.3, 25 of §30 — the counts the document's own summary gives — and the text-overlap
-    // rule of the 2026-09-29 review (No11b), the one row that is not the spec's
-    expect(rows).toBe(43)
+    // 16 rows of §29.2, 1 of §29.3, 25 of §30 — the counts the document's own summary gives — the text-overlap
+    // rule of the 2026-09-29 review (No11b), the one row of Plan 16 that is not the spec's, and the ten rows of Plan 21's
+    // section (the squeeze round and the card motion, spec 2026-10-08)
+    expect(rows).toBe(43 + 10)
     expect(citations.length).toBeGreaterThanOrEqual(40)
   })
 
@@ -290,6 +293,10 @@ describe('docs/test-matrix.md', () => {
         'lobby and rooms',
         'lists public rooms live, joins by code',
       ])
+    })
+
+    it('keeps the parentheses of a call that is part of a title, and drops an aside set off by a space', () => {
+      expect(matrixFragments('client.reveal() sends REVEAL with a request id (the ACK comes back)')).toEqual(['client.reveal() sends REVEAL with a request id'])
     })
 
     it('splits several citations in one cell, and unwraps a backticked error code', () => {

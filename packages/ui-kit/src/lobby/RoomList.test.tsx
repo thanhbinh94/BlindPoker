@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { I18nextProvider } from 'react-i18next'
 import type { RoomSummary } from '@bp/core'
 import { createI18n } from '../i18n/index.js'
+import badge from '../primitives/primitives.module.css'
 import { RoomList } from './RoomList.js'
 
 const rooms: RoomSummary[] = [
@@ -122,6 +123,26 @@ describe('RoomList', () => {
       const status = heading.nextElementSibling!
       expect(status).toContainElement(screen.getByRole('img', { name: /mật khẩu/i }))
       expect(status).toContainElement(screen.getByText('Đang chờ'))
+    })
+  })
+
+  // Plan 21: a squeeze table is told apart in the list before anyone joins it.
+  describe('the squeeze badge', () => {
+    const squeezeRoom: RoomSummary = {
+      ...rooms[1]!,
+      config: { ...rooms[1]!.config, blind: { holeCards: 3, decisionMode: 'none', fixedWager: 5000, botCount: 1, squeeze: true } },
+    }
+
+    it('marks a Blind room that is a squeeze table "Nặn bài"', () => {
+      wrap(<RoomList rooms={[squeezeRoom]} onJoin={vi.fn()} lang="vi" />)
+      expect(screen.getByText('Nặn bài')).toBeInTheDocument()
+      expect(screen.getByText('Nặn bài')).toHaveClass(badge.badge!, badge.gold!) // gold: it is the table's money-side mark, not an idle tag
+    })
+
+    it('puts nothing on a Blind room without the option, or with it false, nor on a Hold’em room', () => {
+      const off: RoomSummary = { ...squeezeRoom, config: { ...squeezeRoom.config, blind: { ...squeezeRoom.config.blind!, squeeze: false } } }
+      wrap(<RoomList rooms={[rooms[0]!, rooms[1]!, { ...off, roomId: '4', code: 'DDDDDD' }]} onJoin={vi.fn()} lang="vi" />)
+      expect(screen.queryByText('Nặn bài')).toBeNull()
     })
   })
 

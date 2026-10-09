@@ -166,3 +166,75 @@ describe('mode B (play or fold)', () => {
     expect(() => t.fold(0)).toThrow(/HAND_COMPLETE/)
   })
 })
+
+describe('squeeze mode (spec 2026-10-08)', () => {
+  const squeezeRules = (decisionMode: BlindRules['decisionMode']) => rules({ decisionMode, squeeze: true })
+  /** Three seats; `bots` names the bot seats. */
+  const deal = (decisionMode: BlindRules['decisionMode'], bots: number[] = []) => {
+    const seats = [0, 1, 2].map((seat) => ({ seat, playerId: `p${seat}`, stack: 5000, isBot: bots.includes(seat) }))
+    return createBlindHand({ handId: 'sq', rules: squeezeRules(decisionMode), seats, button: 0, carryOverIn: 0 }, seededRng(3))
+  }
+  const step = (state: HandState, cmd: Parameters<typeof applyBlindCommand>[1]) => applyBlindCommand(state, cmd, identityRng)
+
+  it('pure luck: deals into a SQUEEZE phase, bots already revealed, ending when every human has turned', () => {
+    const { state, events } = deal('none', [2])
+    expect(state.phase).toBe('SQUEEZE')
+    expect(state.players.map((p) => p.revealed)).toEqual([false, false, true])
+    expect(events.at(-1)).toEqual({ type: 'SQUEEZE_PHASE', seats: [0, 1], turnSeq: 1 })
+    expect(state.turnSeq).toBe(1)
+
+    const r1 = step(state, { type: 'REVEALED', seat: 0 })
+    expect(r1.events).toEqual([{ type: 'PLAYER_REVEALED', seat: 0 }])
+    expect(r1.state.phase).toBe('SQUEEZE')
+    const again = step(r1.state, { type: 'REVEALED', seat: 0 })
+    expect(again.events).toEqual([]) // a second REVEALED from the same seat is nothing
+    const r2 = step(again.state, { type: 'REVEALED', seat: 1 })
+    expect(r2.events).toEqual([{ type: 'PLAYER_REVEALED', seat: 1 }, { type: 'SQUEEZE_ENDED' }])
+    expect(r2.state.phase).toBe('REVEAL')
+    // From here the hand runs out as any pure-luck hand does.
+    let s = r2.state
+    while (s.phase === 'REVEAL') s = step(s, { type: 'ADVANCE' }).state
+    expect(s.phase).toBe('COMPLETE')
+    expect(s.result?.showdown).not.toBeNull()
+  })
+
+  it('a table of bots only skips the phase: SQUEEZE_PHASE names nobody and the hand is in REVEAL at once', () => {
+    const { state, events } = deal('none', [0, 1, 2])
+    expect(events.filter((e) => e.type === 'SQUEEZE_PHASE' || e.type === 'SQUEEZE_ENDED')).toEqual([
+      { type: 'SQUEEZE_PHASE', seats: [], turnSeq: 1 },
+      { type: 'SQUEEZE_ENDED' },
+    ])
+    expect(state.phase).toBe('REVEAL')
+  })
+
+  it('play or fold: no SQUEEZE phase; REVEALED marks the seat without ending the round; a decision turns the cards too', () => {
+    const { state } = deal('playOrFold')
+    expect(state.phase).toBe('DECISION')
+    expect(state.players.map((p) => p.revealed)).toEqual([false, false, false])
+    const r1 = step(state, { type: 'REVEALED', seat: 1 })
+    expect(r1.events).toEqual([{ type: 'PLAYER_REVEALED', seat: 1 }])
+    expect(r1.state.phase).toBe('DECISION')
+    // Deciding without having turned: the engine turns the cards for the seat, before the decision is recorded.
+    const r2 = step(r1.state, { type: 'ACTION', seat: 0, action: { kind: 'play' } })
+    expect(r2.events).toEqual([{ type: 'PLAYER_REVEALED', seat: 0 }, { type: 'DECISION_MADE', seat: 0 }])
+    // A seat that had turned already decides with no second PLAYER_REVEALED.
+    const r3 = step(r2.state, { type: 'ACTION', seat: 1, action: { kind: 'fold' } })
+    expect(r3.events).toEqual([{ type: 'DECISION_MADE', seat: 1 }])
+  })
+
+  it('REVEALED is a no-op outside squeezing, and ADVANCE is refused during SQUEEZE', () => {
+    const plain = new Table(rules({ decisionMode: 'none' }), [5000, 5000])
+    expect(plain.state.players.every((p) => p.revealed)).toBe(true)
+    expect(plain.apply({ type: 'REVEALED', seat: 0 })).toEqual([])
+    const { state } = deal('none', [2])
+    expect(() => step(state, { type: 'ADVANCE' })).toThrow(EngineError)
+    expect(() => step(state, { type: 'REVEALED', seat: 7 })).toThrow(EngineError) // NOT_IN_HAND
+  })
+
+  it('the view carries revealed per seat, and a Hold’em or plain Blind seat is always revealed', () => {
+    const { state } = deal('none', [2])
+    const r = step(state, { type: 'REVEALED', seat: 0 })
+    expect(playerView(r.state, 1).seats.map((s) => s.revealed)).toEqual([true, false, true])
+    expect(playerView(r.state, 1).phase).toBe('SQUEEZE')
+  })
+})

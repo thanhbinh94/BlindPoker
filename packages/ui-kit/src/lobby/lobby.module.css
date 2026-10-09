@@ -279,10 +279,12 @@
 
    Two columns (the dialog on a desktop or tablet): Hold'em measures 214 px and Blind 206 px in the real build,
    Vietnamese and English alike, so the reserve is 14rem — a little over the taller of the two, so a line of
-   slack in the hint text does not undo it. The columns are the grid's `auto-fit` ones, so the box is a size
-   container and the reserve applies from the width at which they turn into two: 2 × 10.5rem + the 1rem gap.
-   A change to a field that makes either mode taller than the reserve fails the create-room height check in
-   e2e/normal.spec.ts.
+   slack in the hint text does not undo it. Blind's "Nặn bài" box adds nothing to that: it sits under the bot count,
+   in the slack the wager's two-line hint leaves in the row (`.botsCell`), so it must stay within that slack (a 28 px
+   row, with the gap and the bot field's 72 px, against the wager field's 119). The columns are the grid's
+   `auto-fit` ones, so the box is a size container and the reserve applies from the width at which they turn into
+   two: 2 × 10.5rem + the 1rem gap. A change to a field that makes either mode taller than the reserve fails the
+   create-room height check in e2e/normal.spec.ts.
 
    One column (a phone) reserves nothing: there the dialog is as tall as its `max-height` (86dvh) in both modes —
    the fields are taller than the screen — so its outer box already does not move, and a reserve would only add
@@ -355,6 +357,35 @@
   width: 20px;
   height: 20px;
   accent-color: var(--gold);
+}
+
+/* The bot count and the "Nặn bài" box under it, in one cell of the Blind grid. The wager's hint takes two lines, so the
+   cell next to it is taller than the bot field: the box goes to the foot of the cell (`margin-top: auto`), level with
+   the hint's last line, and where the cell is as tall as the field alone (one column) it follows it by the gap. The
+   box's row is 28 px, not a full tap height: the 44 px one would not fit in that slack. */
+.botsCell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.checkCompact {
+  min-height: 1.75rem;
+  margin-top: auto;
+}
+
+/* The timer's cell while the squeeze box is ticked: the length is not a choice, so the select gives way to a
+   read-only value drawn as a field that cannot be edited (dashed border, no tint), in the select's own place and height. */
+.inputFixed {
+  background-color: transparent;
+  border-style: dashed;
+  cursor: default;
+}
+
+/* While the form is busy it dims as the select it stands in for does (`primitives.module.css`'s `.select:disabled`). */
+.inputFixed:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* The settings list is longer than a phone screen, so the dialog scrolls — but the button that finishes the job

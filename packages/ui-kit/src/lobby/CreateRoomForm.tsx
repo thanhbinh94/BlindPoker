@@ -75,6 +75,7 @@ export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem',
   const [decisionMode, setDecisionMode] = useState<'none' | 'playOrFold'>('playOrFold')
   const [fixedWager, setFixedWager] = useState<number>(ECONOMY.blindWagerTiers[0])
   const [botCount, setBotCount] = useState(0)
+  const [squeeze, setSqueeze] = useState(false)
   const [error, setError] = useState<{ code: ErrorCode; hintKey: string | null } | null>(null)
 
   // Switching mode narrows the seat cap, the timer set and the bot ceiling: derive rather than reset,
@@ -83,6 +84,10 @@ export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem',
   const maxPlayers = Math.min(seats, seatCap)
   const timers: readonly number[] = mode === 'holdem' ? ECONOMY.holdemTurnTimers : ECONOMY.blindTurnTimers
   const turnTimerSec = timers.includes(timer) ? timer : DEFAULT_TIMER[mode]
+  // A squeeze table's round is the server's fixed 20 s (spec 2026-10-08 §4.2.1): the timer's select gives way to that
+  // length, read-only, and the config carries it. The box is Blind's own, so a Hold'em table never sees it, and a trip
+  // through Hold'em keeps it ticked, like the rest of the draft.
+  const squeezing = mode === 'blind' && squeeze
   const bots = Math.min(botCount, maxPlayers - 1)
 
   const submit = (event: FormEvent<HTMLFormElement>): void => {
@@ -94,11 +99,11 @@ export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem',
       mode,
       maxPlayers,
       isPrivate,
-      turnTimerSec,
+      turnTimerSec: squeezing ? ECONOMY.squeezeTurnTimerSec : turnTimerSec,
       autoStart,
       password: isPrivate && password !== '' ? password : undefined,
       holdem: mode === 'holdem' ? { ...tier, minBuyInBB, maxBuyInBB } : undefined,
-      blind: mode === 'blind' ? { holeCards, decisionMode, fixedWager, botCount: bots } : undefined,
+      blind: mode === 'blind' ? { holeCards, decisionMode, fixedWager, botCount: bots, squeeze } : undefined,
     })
     if (!parsed.ok) {
       setError({ code: parsed.code, hintKey: hintKeyFor({ name, isPrivate, password, mode, minBuyInBB, maxBuyInBB, botCount: bots, maxPlayers }) })
@@ -145,12 +150,25 @@ export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem',
           />
         </Field>
         <Field label={t('create.turnTimer')}>
-          <Select<number>
-            value={turnTimerSec}
-            options={timers.map((n) => ({ value: n, label: t('common:time.seconds', { count: n }) }))}
-            disabled={busy}
-            onChange={setTimer}
-          />
+          {squeezing ? (
+            // A value, not a control: out of the Tab order (its label and the squeeze box's hint say it to a screen
+            // reader), and dimmed with the rest of the form while it is busy.
+            <input
+              className={cx(s.input, s.inputFixed)}
+              type="text"
+              readOnly
+              tabIndex={-1}
+              disabled={busy}
+              value={t('create.squeezeTimer', { time: t('common:time.seconds', { count: ECONOMY.squeezeTurnTimerSec }) })}
+            />
+          ) : (
+            <Select<number>
+              value={turnTimerSec}
+              options={timers.map((n) => ({ value: n, label: t('common:time.seconds', { count: n }) }))}
+              disabled={busy}
+              onChange={setTimer}
+            />
+          )}
         </Field>
 
         {/* One box for both modes' fields, as tall as the taller of the two, so flipping the mode never moves the
@@ -179,6 +197,8 @@ export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem',
                 botCount={bots}
                 onBotCount={setBotCount}
                 maxBots={maxPlayers - 1}
+                squeeze={squeeze}
+                onSqueeze={setSqueeze}
                 disabled={busy}
                 lang={lang}
               />

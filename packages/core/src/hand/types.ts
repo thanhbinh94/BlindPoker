@@ -17,6 +17,11 @@ export interface BlindRules {
   decisionMode: 'none' | 'playOrFold'
   fixedWager: number
   tableFeeRate: number
+  /**
+   * Squeeze mode (spec 2026-10-08): each seat's hole cards stay face down on its own screen until it turns them, and
+   * the table waits — a `SQUEEZE` phase in pure luck, the 20 s decision round in play-or-fold. Absent means off.
+   */
+  squeeze?: boolean
 }
 
 export type Ruleset = HoldemRules | BlindRules
@@ -30,7 +35,7 @@ export interface SeatInput {
 }
 
 export type Street = 'PREFLOP' | 'FLOP' | 'TURN' | 'RIVER'
-export type HandPhase = 'BETTING' | 'DECISION' | 'REVEAL' | 'COMPLETE'
+export type HandPhase = 'BETTING' | 'DECISION' | 'SQUEEZE' | 'REVEAL' | 'COMPLETE'
 export type Decision = 'play' | 'fold'
 
 export interface HandPlayer {
@@ -49,6 +54,8 @@ export interface HandPlayer {
   cannotRaise: boolean
   /** Blind mode B decision, hidden from others until DECISIONS_REVEALED. */
   decision: Decision | null
+  /** Squeeze mode: this seat has turned every one of its cards over. Always true outside squeeze mode, and for a bot. */
+  revealed: boolean
 }
 
 export type ActionKind = 'fold' | 'check' | 'call' | 'bet' | 'raise' | 'allIn' | 'play'
@@ -71,6 +78,7 @@ export type HandCommand =
   | { type: 'ACTION'; seat: number; action: PlayerAction }
   | { type: 'TIMEOUT'; seat: number }
   | { type: 'ADVANCE' }
+  | { type: 'REVEALED'; seat: number }
   | { type: 'CANCEL'; reason: string }
 
 export interface ShowdownHand {
@@ -104,7 +112,7 @@ export interface HandState {
   button: number
   street: Street
   actingSeat: number | null
-  /** Increments on every TURN_CHANGED / DECISION_PHASE; timers must carry it. */
+  /** Increments on every TURN_CHANGED / DECISION_PHASE / SQUEEZE_PHASE; timers must carry it. */
   turnSeq: number
   currentBet: number
   minRaise: number
@@ -130,6 +138,9 @@ export type GameEvent =
   | { type: 'DECISION_PHASE'; seats: number[]; turnSeq: number }
   | { type: 'DECISION_MADE'; seat: number }
   | { type: 'DECISIONS_REVEALED'; decisions: { seat: number; decision: Decision }[] }
+  | { type: 'SQUEEZE_PHASE'; seats: number[]; turnSeq: number }
+  | { type: 'PLAYER_REVEALED'; seat: number }
+  | { type: 'SQUEEZE_ENDED' }
   | { type: 'COMMUNITY_REVEALED'; street: Street; cards: Card[]; community: Card[] }
   | { type: 'POT_UPDATED'; pot: number }
   | { type: 'SHOWDOWN'; hands: ShowdownHand[] }

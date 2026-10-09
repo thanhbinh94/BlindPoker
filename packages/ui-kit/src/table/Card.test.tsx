@@ -1,11 +1,13 @@
 import { parseCard } from '@bp/core'
 import { render, screen } from '@testing-library/react'
 import { StrictMode } from 'react'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { I18nextProvider } from 'react-i18next'
 import { createI18n } from '../i18n/index.js'
 import TOKENS_CSS from '../theme/tokens.css?raw'
-import { Card, FLIP_MS } from './Card.js'
+import { Card } from './Card.js'
+import { DeckAnchorProvider } from './deck-anchor.js'
+import { DEAL_MS, FLIP_MS, LIFT_MS } from './motion.js'
 import s from './table.module.css'
 import TABLE_CSS from './table.module.css?raw'
 
@@ -108,5 +110,129 @@ describe('Card', () => {
   // `RoomScreen` holds the result card for as long as the turn takes (`REVEAL_HOLD_MS`), counted from `FLIP_MS`.
   it('turns for FLIP_MS, the duration the --dur-flip token gives the CSS', () => {
     expect(/--dur-flip:\s*(\d+)ms;/.exec(TOKENS_CSS)?.[1]).toBe(String(FLIP_MS))
+  })
+
+  // Spec 2026-10-08 §3: a card comes out of the deck face down and, if it is to be seen, turns over where it lands.
+  it('a dealt face-up card slides in from the deck anchor and then turns — the back drawn as artwork for the slide', () => {
+    const anchor = { current: document.createElement('div') }
+    const { container } = wrap(
+      <DeckAnchorProvider value={anchor}>
+        <Card card={parseCard('Qh')} dealt delayMs={300} />
+      </DeckAnchorProvider>,
+    )
+    const wrapper = container.querySelector(`.${s.card}`)!
+    expect(wrapper).toHaveClass(s.cardDealt!)
+    expect(wrapper.getAttribute('style')).toContain('--deal-delay: 300ms')
+    expect(wrapper.getAttribute('style')).toMatch(/--deal-dx: -?\d+(\.\d+)?px/)
+    // the turn has its own delay: it starts once the slide is over
+    expect(wrapper.getAttribute('style')).toContain(`--turn-delay: ${300 + DEAL_MS}ms`)
+    expect(container.querySelector(`.${s.cardTurn}`)).not.toBeNull()
+    expect(container.querySelector('[aria-hidden="true"] pattern')).not.toBeNull()
+    expect(named(container)).toHaveLength(1)
+    expect(screen.getByRole('img')).toHaveAttribute('data-card', 'Qh')
+  })
+
+  it('a dealt face-down card slides in and stays a back; with no deck anchor a dealt card fades in as before', () => {
+    const anchor = { current: document.createElement('div') }
+    const down = wrap(
+      <DeckAnchorProvider value={anchor}>
+        <Card faceDown dealt />
+      </DeckAnchorProvider>,
+    )
+    expect(down.container.querySelector(`.${s.cardDealt}`)).not.toBeNull()
+    expect(down.container.querySelector(`.${s.cardTurn}`)).toBeNull()
+    const alone = wrap(<Card card={parseCard('Qh')} dealt />)
+    expect(alone.container.querySelector(`.${s.cardDealt}`)).toBeNull()
+    expect(alone.container.querySelector(`.${s.cardTurn}`)).toBeNull()
+  })
+
+  describe('measuring the deck', () => {
+    afterEach(() => vi.restoreAllMocks())
+
+    // Pre-flight 2026-10-09: the `.card` fade starts at `rotateY(-82deg) translateY(-8px)`, which would skew the box.
+    it('measures from where the card lands to the deck, with the entrance keyframe off while it reads the boxes', () => {
+      const box = (left: number, top: number, width: number, height: number) => ({ left, top, width, height }) as DOMRect
+      const deck = document.createElement('div')
+      deck.getBoundingClientRect = () => box(100, 40, 40, 56)
+      const seen: string[] = []
+      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+        seen.push(this.style.animation)
+        return box(300, 400, 46, 64)
+      })
+      const { container } = wrap(
+        <DeckAnchorProvider value={{ current: deck }}>
+          <Card faceDown dealt />
+        </DeckAnchorProvider>,
+      )
+      const wrapper = container.querySelector<HTMLElement>(`.${s.card}`)!
+      // the deck's centre (120, 68) less the card's (323, 432)
+      expect(wrapper.style.getPropertyValue('--deal-dx')).toBe('-203.0px')
+      expect(wrapper.style.getPropertyValue('--deal-dy')).toBe('-364.0px')
+      // and it leaves the pile at the pile's size: 40 px of deck over 46 px of card
+      expect(wrapper.style.getPropertyValue('--deal-scale')).toBe('0.870')
+      expect(seen).toEqual(['none'])
+      expect(wrapper.style.animation, 'and back on before the paint').toBe('')
+    })
+  })
+
+  // Task 5 review: `dealt` (and with it the stagger a seat passes) runs out 1.5 s after the deal, mid-deal on a full table;
+  // an `animation-delay` moved after mount would jump a card that is still waiting, or put one that landed back on the deck.
+  it('keeps the delay it mounted with, for the slide and for the turn after it', () => {
+    const anchor = { current: document.createElement('div') }
+    const at = (delayMs: number) => (
+      <DeckAnchorProvider value={anchor}>
+        <Card card={parseCard('Qh')} dealt delayMs={delayMs} />
+      </DeckAnchorProvider>
+    )
+    const { container, rerender } = wrap(at(480))
+    rerender(at(0))
+    const wrapper = container.querySelector<HTMLElement>(`.${s.card}`)!
+    expect(wrapper.style.getPropertyValue('--deal-delay')).toBe('480ms')
+    expect(wrapper.style.getPropertyValue('--turn-delay')).toBe(`${480 + DEAL_MS}ms`)
+  })
+
+  it('reveal="lift" turns a revealed card with the lift keyframes instead of the flat turn', () => {
+    const { container, rerender } = wrap(<Card faceDown reveal="lift" />)
+    rerender(<Card card={parseCard('Qh')} reveal="lift" />)
+    expect(container.querySelector(`.${s.cardLift}`)).not.toBeNull()
+    expect(container.querySelector(`.${s.cardTurn}`)).toBeNull()
+    expect(screen.getByRole('img')).toHaveAttribute('data-card', 'Qh')
+  })
+
+  // Pre-flight 2026-10-09: a card revealed later turns on its own delay (`turnDelayMs`), never by moving its deal delay.
+  it('lifts on its own delay with the shadow widening on the wrapper, and leaves the deal delay as it mounted', () => {
+    const { container, rerender } = wrap(<Card faceDown reveal="lift" delayMs={480} turnDelayMs={200} />)
+    rerender(<Card card={parseCard('Qh')} reveal="lift" delayMs={480} turnDelayMs={200} />)
+    const wrapper = container.querySelector<HTMLElement>(`.${s.card}`)!
+    expect(wrapper).toHaveClass(s.cardLifting!)
+    expect(wrapper.style.getPropertyValue('--turn-delay')).toBe('200ms')
+    expect(wrapper.style.getPropertyValue('--deal-delay')).toBe('480ms')
+    const flat = wrap(<Card faceDown delayMs={480} />)
+    flat.rerender(<Card card={parseCard('Qh')} delayMs={480} />)
+    expect(flat.container.querySelector(`.${s.cardLifting}`), 'only the lift widens the shadow').toBeNull()
+  })
+
+  it('keeps the resting face out of the lift and slide keyframes, and the constants match the tokens', () => {
+    const lift = /@keyframes\s+lift\s*\{([\s\S]*?)\n\}/.exec(TABLE_CSS)?.[1] ?? ''
+    expect(lift).toMatch(/0%\s*\{[^}]*rotateY\(180deg\)/)
+    expect(lift).not.toMatch(/100%/)
+    const slide = /@keyframes\s+dealSlide\s*\{([\s\S]*?)\n\}/.exec(TABLE_CSS)?.[1] ?? ''
+    expect(slide).toMatch(/^\s*from\s*\{/)
+    expect(slide).not.toMatch(/\bto\b/)
+    expect(slide, 'the card grows from the pile’s size as it travels').toMatch(/scale\(var\(--deal-scale/)
+    expect(/--dur-deal:\s*(\d+)ms;/.exec(TOKENS_CSS)?.[1]).toBe(String(DEAL_MS))
+    expect(/--dur-lift:\s*(\d+)ms;/.exec(TOKENS_CSS)?.[1]).toBe(String(LIFT_MS))
+  })
+
+  // Final fix wave P1: `useDealFrom` measures centre to centre, so the slide's scale and tilt pivot on the card's centre —
+  // on the fade's low pivot (50% 62%) the pile-sized card started a few px below the deck.
+  it('pivots the slide from the deck on the card’s centre', () => {
+    expect(TABLE_CSS).toMatch(/\.cardDealt\s*\{[^}]*transform-origin:\s*50% 50%/)
+  })
+
+  // `global.css` switches every animation off under reduced motion; this file's own list says so for each moving class.
+  it('lists every moving class of the card under reduced motion', () => {
+    const off = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(TABLE_CSS)?.[1] ?? ''
+    for (const name of ['card', 'cardDealt', 'cardTurn', 'cardLift', 'cardLifting']) expect(off, name).toMatch(new RegExp(`\\.${name}\\b`))
   })
 })

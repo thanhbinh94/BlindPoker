@@ -30,6 +30,11 @@ export function handFromView(view: HandView, room: RoomView): ClientHand {
     mySeat: view.mySeat,
     legal: view.legal,
     potPulse: 0,
+    // A snapshot is no arrival: the cards are already on the table and nothing was seen being dealt, so no stamps either.
+    restored: true,
+    dealtAt: null,
+    boardAt: null,
+    showdownAt: null,
     seats: view.seats.map((sv) => ({
       seat: sv.seat,
       playerId: sv.playerId,
@@ -45,6 +50,8 @@ export function handFromView(view: HandView, room: RoomView): ClientHand {
       decision: sv.decision,
       lastAction: null,
       timedOut: false,
+      // The view always carries the flag (true on a plain table); only a squeeze room lets the client keep it.
+      ...(room.config.blind?.squeeze === true ? { revealed: sv.revealed } : {}),
     })),
     result: view.result ? { ...NO_RESULT, payouts: view.result.payouts, pots: view.result.pots, fee: view.result.fee, showdown: view.result.showdown, carryOverOut: view.result.carryOverOut, uncalledReturned: view.result.uncalledReturned } : null,
   }
@@ -55,17 +62,21 @@ function startHand(state: ClientState, event: Extract<GameEvent, { type: 'HAND_S
   if (!room) return state
   const seated = state.me ? room.players.find((p) => p.playerId === state.me!.playerId)?.seat ?? null : null
   const mySeat = seated !== null && event.seats.includes(seated) ? seated : null
-  const phase = event.mode === 'holdem' ? 'BETTING' : room.config.blind?.decisionMode === 'playOrFold' ? 'DECISION' : 'REVEAL'
+  const squeeze = event.mode === 'blind' && room.config.blind?.squeeze === true
+  const phase: ClientHand['phase'] = event.mode === 'holdem' ? 'BETTING' : room.config.blind?.decisionMode === 'playOrFold' ? 'DECISION' : squeeze ? 'SQUEEZE' : 'REVEAL'
   const seats: ClientSeat[] = event.seats.map((seat) => {
     const p = room.players.find((x) => x.seat === seat)
     return {
       seat, playerId: p?.playerId ?? '', displayName: p?.displayName ?? '', isBot: p?.isBot ?? false, stack: p?.stack ?? 0,
       betThisStreet: 0, folded: false, allIn: false, cardCount: 0, holeCards: null, hasDecided: false, decision: null, lastAction: null, timedOut: false,
+      // A bot's cards are turned from the deal (the engine's `revealed`); a person's wait for them to do it.
+      ...(squeeze ? { revealed: p?.isBot ?? false } : {}),
     }
   })
   const hand: ClientHand = {
     handId: event.handId, mode: event.mode, phase, community: [], pot: event.carryOverIn, carryOverIn: event.carryOverIn,
     button: event.button, actingSeat: null, seats, mySeat, legal: null, result: null, potPulse: 0,
+    restored: false, dealtAt: null, boardAt: null, showdownAt: null,
   }
   return { ...state, hand, deadlineAt: null, preAction: null }
 }
@@ -144,15 +155,16 @@ function closesPreAction(hand: ClientHand, event: GameEvent): boolean {
   }
 }
 
-function applyGameEvent(state: ClientState, event: GameEvent & { deadlineAt?: number }): ClientState {
+function applyGameEvent(state: ClientState, event: GameEvent & { deadlineAt?: number }, now: number): ClientState {
   if (event.type === 'HAND_STARTED') return startHand(state, event)
   const hand = state.hand
   if (!hand) return state
-  const next = applyHandEvent(state, hand, event)
+  const next = applyHandEvent(state, hand, event, now)
   return state.preAction !== null && (state.preAction.handId !== hand.handId || closesPreAction(hand, event)) ? { ...next, preAction: null } : next
 }
 
-function applyHandEvent(state: ClientState, hand: ClientHand, event: GameEvent & { deadlineAt?: number }): ClientState {
+/** `now` is the client clock at the frame's arrival; it only ever goes into the hand's arrival stamps. */
+function applyHandEvent(state: ClientState, hand: ClientHand, event: GameEvent & { deadlineAt?: number }, now: number): ClientState {
   switch (event.type) {
     case 'BLINDS_POSTED': {
       const posted = new Map<number, number>()
@@ -166,6 +178,7 @@ function applyHandEvent(state: ClientState, hand: ClientHand, event: GameEvent &
     }
     case 'CARDS_DEALT':
       return withHand(state, hand, {
+        dealtAt: hand.dealtAt ?? now,
         seats: mapSeat(hand, event.seat, (s) => ({ ...s, cardCount: event.cardCount, holeCards: event.cards.length > 0 ? event.cards.slice() : s.holeCards })),
       })
     case 'TURN_CHANGED':
@@ -205,9 +218,15 @@ function applyHandEvent(state: ClientState, hand: ClientHand, event: GameEvent &
         }),
       })
     }
+    case 'SQUEEZE_PHASE':
+      return { ...state, deadlineAt: event.deadlineAt ?? null, hand: { ...hand, phase: 'SQUEEZE', actingSeat: null, legal: null } }
+    case 'PLAYER_REVEALED':
+      return withHand(state, hand, { seats: mapSeat(hand, event.seat, (s) => ({ ...s, revealed: true })) })
+    case 'SQUEEZE_ENDED':
+      return { ...state, deadlineAt: null, hand: { ...hand, phase: 'REVEAL' } }
     case 'COMMUNITY_REVEALED':
       return withHand(state, hand, {
-        community: event.community.slice(), phase: 'REVEAL', actingSeat: null,
+        community: event.community.slice(), phase: 'REVEAL', actingSeat: null, boardAt: now,
         seats: bettingResumes(hand) ? hand.seats.map((s) => (s.betThisStreet === 0 ? s : { ...s, betThisStreet: 0 })) : hand.seats,
       })
     case 'POT_UPDATED':
@@ -215,6 +234,7 @@ function applyHandEvent(state: ClientState, hand: ClientHand, event: GameEvent &
     case 'SHOWDOWN': {
       const shown = new Map(event.hands.map((h) => [h.seat, h.cards]))
       return withHand(state, hand, {
+        showdownAt: now,
         seats: hand.seats.map((s) => (shown.has(s.seat) ? { ...s, holeCards: shown.get(s.seat)!.slice() } : s)),
         result: { ...(hand.result ?? NO_RESULT), showdown: event.hands.slice() },
       })
@@ -361,7 +381,7 @@ function applyServerMessage(state: ClientState, msg: ServerMessage, now: number)
     case 'SESSION_REPLACED':
       return { ...state, replaced: true }
     case 'GAME_EVENT': {
-      const next = applyGameEvent(state, msg.event)
+      const next = applyGameEvent(state, msg.event, now)
       return { ...next, seq: msg.seq, resyncNeeded: next.resyncNeeded || orphan(state, msg.event.type) || gap(state, msg.seq) }
     }
     case 'ROOM_EVENT': {

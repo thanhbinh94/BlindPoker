@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { EngineErrorCode } from '../hand/types.js'
+import { ECONOMY } from '../constants/economy.js'
 import { engineErrorToErrorCode, parseClientMessage, roomConfigToRuleset, validateRoomConfig } from './validate.js'
 
 const holdem = { name: 'Table 1', mode: 'holdem', maxPlayers: 6, isPrivate: false, turnTimerSec: 30, autoStart: false, holdem: { smallBlind: 100, bigBlind: 200, minBuyInBB: 50, maxBuyInBB: 200 } }
@@ -15,7 +16,7 @@ describe('validateRoomConfig', () => {
     const r = validateRoomConfig(blind)
     expect(r.ok).toBe(true)
     if (!r.ok) return
-    expect(roomConfigToRuleset(r.value)).toEqual({ mode: 'blind', holeCards: 3, decisionMode: 'playOrFold', fixedWager: 5000, tableFeeRate: 0.02 })
+    expect(roomConfigToRuleset(r.value)).toEqual({ mode: 'blind', holeCards: 3, decisionMode: 'playOrFold', fixedWager: 5000, tableFeeRate: 0.02, squeeze: false })
     const h = validateRoomConfig(holdem)
     if (h.ok) expect(roomConfigToRuleset(h.value)).toEqual({ mode: 'holdem', smallBlind: 100, bigBlind: 200, tableFeeRate: 0.02, tableFeeCapBB: 1 })
   })
@@ -95,6 +96,44 @@ describe('parseClientMessage', () => {
     const r = parseClientMessage(input)
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.code).toBe('INVALID_MESSAGE')
+  })
+})
+
+describe('squeeze mode (spec 2026-10-08)', () => {
+  const squeeze = { ...blind, blind: { ...blind.blind, squeeze: true } }
+
+  it('is off unless asked for, and comes back on a validated config either way', () => {
+    const off = validateRoomConfig(blind)
+    expect(off.ok && off.value.blind).toMatchObject({ squeeze: false })
+    const on = validateRoomConfig(squeeze)
+    expect(on.ok && on.value.blind).toMatchObject({ squeeze: true })
+  })
+
+  it('forces the round to 20 s on a squeeze table, whatever timer was sent — and refuses 20 s elsewhere', () => {
+    for (const turnTimerSec of [undefined, 10, 15, 20, 30, 999]) {
+      const r = validateRoomConfig({ ...squeeze, turnTimerSec })
+      expect(r.ok && r.value.turnTimerSec, String(turnTimerSec)).toBe(20)
+    }
+    expect(validateRoomConfig({ ...blind, turnTimerSec: 20 }).ok).toBe(false)
+    expect(ECONOMY.squeezeTurnTimerSec).toBe(20)
+  })
+
+  it('refuses a squeeze flag that is not a boolean, and never on a Hold\'em table', () => {
+    expect(validateRoomConfig({ ...blind, blind: { ...blind.blind, squeeze: 'yes' } }).ok).toBe(false)
+    const h = validateRoomConfig(holdem)
+    expect(h.ok && h.value.blind).toBeUndefined()
+  })
+
+  it('carries squeeze into the ruleset', () => {
+    const r = validateRoomConfig(squeeze)
+    expect(r.ok && roomConfigToRuleset(r.value)).toMatchObject({ mode: 'blind', squeeze: true })
+    const plain = validateRoomConfig(blind)
+    expect(plain.ok && roomConfigToRuleset(plain.value)).toMatchObject({ mode: 'blind', squeeze: false })
+  })
+
+  it('parses REVEAL as a bare message with an optional reqId', () => {
+    expect(parseClientMessage({ t: 'REVEAL' })).toEqual({ ok: true, value: { t: 'REVEAL' } })
+    expect(parseClientMessage({ t: 'REVEAL', reqId: 'r1' })).toEqual({ ok: true, value: { t: 'REVEAL', reqId: 'r1' } })
   })
 })
 

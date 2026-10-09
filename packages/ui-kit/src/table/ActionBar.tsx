@@ -37,6 +37,8 @@ export type TrayWaitKey =
   | 'labels.waitAllIn'
   | 'labels.waitDecided'
   | 'labels.waitReveal'
+  | 'labels.waitSqueeze'
+  | 'labels.waitOthersReveal'
   | 'labels.waitingForTurn'
 
 /**
@@ -46,11 +48,13 @@ export type TrayWaitKey =
  *  1. the hand is complete — the result card may still be held on the felt, but nothing is left to wait for;
  *  2. the seat folded — it waits for the next deal;
  *  3. the seat is all in — it waits for the result;
- *  4. Blind, deciding, and this seat has already chosen — it waits for the others;
- *  5. Blind, deciding, and it has not chosen — its own decision is on its way, the old line still fits;
- *  6. Blind, any other phase (the reveal; a pure-luck hand never enters the decision) — it waits for the cards;
- *  7. Hold'em, revealing, with fewer than two seats that can still act — a run-out: no turn is coming;
- *  8. anything else is Hold'em between turns — the old line.
+ *  4. Blind, a pure-luck squeeze round (spec 2026-10-08 §4.2.3) — its own cards to turn, or, turned, the others; a
+ *     spectator has none to turn and waits for the cards like row 7;
+ *  5. Blind, deciding, and this seat has already chosen — it waits for the others;
+ *  6. Blind, deciding, and it has not chosen — its own decision is on its way, the old line still fits;
+ *  7. Blind, any other phase (the reveal; a pure-luck hand never enters the decision) — it waits for the cards;
+ *  8. Hold'em, revealing, with fewer than two seats that can still act — a run-out: no turn is coming;
+ *  9. anything else is Hold'em between turns — the old line.
  *
  * `mine` is the viewer's own seat and is `undefined` for a spectator (or before the seat is in the hand).
  */
@@ -59,6 +63,7 @@ export function trayWaitKey(hand: ClientHand, mine: ClientSeat | undefined): Tra
   if (mine?.folded === true) return 'labels.waitFolded'
   if (mine?.allIn === true) return 'labels.waitAllIn'
   if (hand.mode === 'blind') {
+    if (hand.phase === 'SQUEEZE') return mine === undefined ? 'labels.waitReveal' : mine.revealed === true ? 'labels.waitOthersReveal' : 'labels.waitSqueeze'
     if (hand.phase !== 'DECISION') return 'labels.waitReveal'
     return mine?.hasDecided === true ? 'labels.waitDecided' : 'labels.waitingForTurn'
   }
@@ -140,7 +145,9 @@ export function ActionBar({ hand, room, onAct, disabled = false, lang, preAction
   const mine = hand.mySeat === null ? undefined : hand.seats.find((seat) => seat.seat === hand.mySeat)
   const live = mine !== undefined && !mine.folded && !mine.allIn && hand.phase !== 'COMPLETE'
   const offersPreActions = hand.mode === 'holdem' && live && onPreAction !== undefined
-  const offersAutoPlay = hand.mode === 'blind' && mine !== undefined && onAutoPlay !== undefined && room.config.blind?.decisionMode === 'playOrFold'
+  // Play-or-fold has a question to answer; a pure-luck squeeze table has cards to turn — there, auto-play means "turn mine at once".
+  const offersAutoPlay =
+    hand.mode === 'blind' && mine !== undefined && onAutoPlay !== undefined && (room.config.blind?.decisionMode === 'playOrFold' || room.config.blind?.squeeze === true)
 
   const autoPlayToggle = offersAutoPlay ? (
     <button

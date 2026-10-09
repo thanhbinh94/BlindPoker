@@ -8,6 +8,114 @@ below are the real history.
 
 ---
 
+## Plan 21 — cards dealt from a deck and turned, the showdown's lift, and the Blind squeeze mode — merged `MERGE` (2026-10-09)
+
+The user looked at how the table turns a card — "chỉ hiển thị sấp ngửa, chứ không có hiệu ứng lật từ từ" (2026-10-06) —
+and asked for a way to play with the cards in hand: "tôi muốn game trở nên vui hơn (khi không dùng auto) bằng cách bổ sung
+chế độ nặn bài", which on 2026-10-08 became "mode riêng, chỉ dành cho blind poker", a round of 20 s at most or until
+everyone has turned. Each choice was approved in turn in a brainstorming session (06–08/10) against prototypes that ran
+in a browser; the record is `docs/superpowers/specs/2026-10-08-card-motion-squeeze-design.md`, which amends §8 and §17
+of the main spec. There is one additive protocol change (a `squeeze` flag on a Blind room, a `REVEAL` message) and no
+schema change or migration: a room's config is not stored. No library was added.
+
+- **Cards come out of a deck and are turned where they land (every table, both editions).**
+  - A three-card deck is drawn on the felt, beside the pot. Every card slides out of it face down (0.36 s) and, if it is to
+    be seen, turns where it lands (0.6 s).
+  - Hole cards go round the table clockwise from the seat after the button, one card per seat at a time, 0.12 s apart — closer
+    on a big table, so the last card leaves the deck within 1 s of the first while the hand's timer runs (eight seats of three
+    cards: 43 ms). The flop's three cards come 0.3 s apart, each sliding in while the one before it turns; the turn and the
+    river come alone.
+    The server's 1.5 s pace between steps is as it was.
+  - At the showdown an opponent's face-down cards lift off the felt, turn in the air and set down: 0.72 s a card, 0.2 s
+    between one seat's cards. The engine settles in the same step that deals the river, so when the two arrive together the
+    lift waits for the river to slide in and turn.
+  - The result card waits for the lift: 1270 ms (it was 870), 2230 ms when the showdown came with the river.
+  - A hand that was already on the table — a refresh, a reconnect, a switch between the ring and the stack mid-hand — is not
+    dealt again. "Dealt" means arrived within 1.5 s by the client's clock; `ClientHand` gains `restored` and the arrival
+    stamps `dealtAt`, `boardAt` and `showdownAt`.
+  - `prefers-reduced-motion` turns all of it off.
+- **The squeeze mode (Blind only).**
+  - Creating a Blind room offers a "Nặn bài" box, off by default, for both ways of playing. Ticked, the round is a fixed 20 s
+    (the server forces it, whatever the client sends) and the room list and the room header carry a gold "Nặn bài" badge.
+  - On a squeeze table the viewer's cards are dealt face down and are theirs to turn. Pressing a card and dragging towards its
+    centre peels it from the pressed point — past half, or flicked, it opens; let go early, or lose the pointer, and it drops
+    back — or the "Lật" pill turns both. Turning is local: the server sent the cards at the deal and learns only that the seat
+    has turned (`REVEAL`, sent once, after the last card is up).
+  - Pure luck: a `SQUEEZE` phase of at most 20 s follows the deal, over early when every human has turned. Bots count as turned
+    from the start; at the deadline the server turns the rest. Play or fold: no new phase — the 20 s decision round is the
+    round, and choosing Play or Fold turns the seat too. The round is never an action timeout: nobody is charged one, folded
+    or stood up for it.
+  - Other seats show "Đã lật" once they have turned (a seat that has decided shows "Đã chọn"); the tray says what the seat is
+    waiting for; auto-play turns the cards the moment they are dealt.
+  - A `REVEAL` lost with a dropped socket is sent again, once, when the reconnect's snapshot still has the seat unturned. The
+    "Lật" pill hands keyboard focus to the seat as it hides, and the create dialog's read-only "20 giây · nặn bài" is out of
+    the Tab order and dims with the form while it is busy.
+- **Under it.**
+  - `@bp/core`: `BlindRules.squeeze`, the `SQUEEZE` phase, `HandPlayer.revealed` and `SeatView.revealed`, the `REVEALED { seat }`
+    command, the events `SQUEEZE_PHASE`, `PLAYER_REVEALED` and `SQUEEZE_ENDED`. A Hold'em seat is revealed from the deal and
+    ignores `REVEALED`; `simulateHand` turns every unturned seat. `BlindRoomConfig.squeeze` (validated, default `false`),
+    `ECONOMY.squeezeTurnTimerSec` and the `REVEAL` client message are in the protocol.
+  - `@bp/server-kit`: `HandRunner` arms one table-wide deadline per round, no bot timer, and turns the unturned seats at the
+    deadline (guarded by the phase and `turnSeq`); an auto-fold seat is turned for. `Room.reveal`, the gateway's `REVEAL`
+    case, and `SQUEEZE_PHASE` going out stamped with `deadlineAt` like `DECISION_PHASE`.
+  - `@bp/ui-kit`: `Deck` and `DeckAnchorProvider`; `Card` learns `dealt`, `reveal="lift"` and its latched delays; `motion.ts`
+    holds the numbers and the three rules the table times by; `PeelCard` with the geometry in `peel.ts`; `Seat`, `PokerTable` and
+    `RoomScreen` carry the round; `GameClientApi.reveal()`; the lobby's box and badges; ten locale keys in both languages.
+  - The playground gains "Blind A · nặn bài", "Blind B · nặn bài" and a `#peel` page.
+- **Replaced.** The first design made squeeze a per-device switch in Settings; the user chose a mode of the table instead
+  (2026-10-08), so there is no setting and no stored preference: everyone at a squeeze table plays it.
+- **Tests and docs.**
+  - New tests at every layer: the engine, config validation, the runner, the room, the gateway, the reducer and the client hook,
+    `Card`, `PeelCard`, `peel`, `Seat`, `PokerTable`, the lobby form and list, the reveal hold.
+  - Operation pack: F-11 (two browsers; one peels by mouse, one presses "Lật"; the round ends before 20 s) and F-12 (a 375 × 812
+    touch phone: the layout whole, one card peeled by finger). The Lite smoke creates a squeeze room and plays it out.
+  - Docs: main spec §8.1, §8.3 (step 2b), §8.5, §8.7, §17 and §20.1; `docs/server-kit.md`, `docs/ui-kit.md`;
+    `docs/test-matrix.md` (ten rows) and `docs/acceptance-checklist.md` (P21.1–P21.3), whose row counts
+    `tooling/arch/acceptance-links.test.ts` now pins at 53 and 67; `docs/known-limitations.md`; and
+    `docs/operation-test-plan.md` (F-11 and F-12, and the two rows whose timing changed).
+- **Khác với spec / Deviations from the spec.**
+  - The deck sits **beside the pot, under the board, in both layouts**; the spec and the plan put it above the board. A layout
+    probe showed that on a ring it runs into the top seat's lines on every short window (1366 × 768, 1536 × 730, 1280 × 720)
+    and, on the phone, pushed the pot onto the viewer's cards. It is still mid-table, as the user chose.
+  - The deck is measured by the **card** through a context (`DeckAnchorProvider` / `useDeckAnchor`, `Card`'s `dealt` and
+    `useDealFrom`), not by `PokerTable` measuring every slot and passing each card a `dealFrom` (spec §5.3).
+  - A `REVEAL` from a player with no seat is answered `NOT_SEATED`; the spec said `NOT_IN_HAND` for "not seated or not in the
+    hand". `NOT_IN_HAND` is what a seat that was not dealt into the running hand gets. With no hand running a seated player's
+    `REVEAL` is answered `ACK` and does nothing: one sent as the last card opened can land after its hand is over, and must
+    not come back as "Bạn không tham gia ván này". Outside a squeeze round the room also answers `ACK` without sending the
+    engine anything: a submit would re-arm the hand's timers for nothing.
+  - `PEEL.snapMs` is 200 (spec: 0.2 s; the plan had 220). The flick is read from the pointer's real and coalesced positions
+    over its last 100 ms, with a 40 ms pause rule, not from "the last six samples": a real flick did not open on six.
+  - The squeeze timer is drawn **on the viewer's own plate** while their cards are not all turned. The spec says "như pha
+    quyết định", but the decision phase shows no countdown to copy. On a play-or-fold squeeze table it stays until the viewer
+    has chosen, since its 20 s covers the peel and the choice.
+  - `REVEAL` goes out when the viewer's **last** card is up, once per hand — not when the first turns.
+  - The "Nặn bài" checkbox sits **under "Số lượng bot"**, its hint read by screen readers only (`aria-describedby`); while it is
+    ticked the timer's cell reads, read-only, "20 giây · nặn bài" instead of disappearing. This keeps the create dialog whole
+    at 1920 × 940 and `.modeFields` at 14rem.
+  - A seat that has decided shows "Đã chọn", which stands for "Đã lật": never both badges. The "Lật" pill is 28 px tall at
+    least and keeps its place for the whole hand.
+  - The auto-play toggle is also offered on a pure-luck squeeze table, where it means "turn my cards at once".
+  - The lift waits for the river when the showdown comes with it, and the result card's hold grows by the same 960 ms. The
+    spec took the river's 1.5 s pacing to leave it at rest first, but the engine settles in the `ADVANCE` that deals it.
+  - No `phases.squeeze` string (spec §5.3): nothing prints the round's name. `BlindRules.squeeze` and `ClientSeat.revealed` are
+    optional, so existing fixtures stay valid; a validated `BlindRoomConfig` always carries `squeeze`.
+- **Still open.**
+  - The user's hand test on a real phone (spec §8 asks for one) is still to be done. What to try comes from the Plan 21
+    ledger (the Task 6 and Task 9 reviews): peel by touch, a quick flick then a quick tap on "Lật", iOS Safari.
+  - The peel is driven in Chromium only. Firefox's and WebKit's touch-capture semantics (a `lostpointercapture` from the child
+    that held the touch implicitly) are guarded in `PeelCard` and unit-tested, never run in those browsers.
+  - On a device that does not coalesce pointer events, a single quick move after a rest is not read as a flick: the card opens
+    only past half.
+  - On a 375 × 812 phone a play-or-fold squeeze table's stage scrolls 11 px in the round (six seats, one bot: the header's
+    third line and the "Lật" pill's row); the viewer's seat stays on screen. A pure-luck one fits: it was 3 px over, until
+    the phone's tray wait line gave back 8 px, and F-12 asserts the stage again, not just the page.
+  - A switch between the ring and the stack in the middle of a round can send a second `REVEAL`, which is a no-op.
+  - All five are written up in `docs/known-limitations.md` (the first two as one entry). `docs/ui-kit.md`'s Footprint table
+    was not re-measured.
+
+---
+
 ## Plan 20 — the open defects: keyed money writes, AA contrast, wardrobe, table and lobby, redrawn skin — merged `eb2fcc0` (2026-10-05)
 
 The user asked for every bug still on record to be fixed ("có, hãy fix các bug còn tồn đọng đi. không cần hỏi lại",

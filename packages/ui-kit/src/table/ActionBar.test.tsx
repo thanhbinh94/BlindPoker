@@ -22,6 +22,10 @@ const hand = (legal: LegalActions | null, extra: Partial<ClientHand> = {}): Clie
   legal,
   result: null,
   potPulse: 0,
+  restored: true,
+  dealtAt: null,
+  boardAt: null,
+  showdownAt: null,
   ...extra,
 })
 const wrap = (ui: React.ReactElement) =>
@@ -201,6 +205,14 @@ describe('ActionBar pre-actions', () => {
     wrap(<ActionBar hand={seated({ mode: 'blind', phase: 'REVEAL' })} room={blindRoom} onAct={() => {}} lang="en" autoPlay={false} onAutoPlay={() => {}} />)
     expect(screen.queryByRole('button', { name: 'Auto play' })).toBeNull()
   })
+
+  it('offers auto-play in a pure-luck squeeze room, where it means turning the cards at once', async () => {
+    const onAutoPlay = vi.fn()
+    const squeezeRoom = { config: { mode: 'blind', blind: { fixedWager: 2000, decisionMode: 'none', squeeze: true } } } as unknown as RoomView
+    wrap(<ActionBar hand={seated({ mode: 'blind', phase: 'SQUEEZE' })} room={squeezeRoom} onAct={() => {}} lang="en" autoPlay={false} onAutoPlay={onAutoPlay} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Auto play' }))
+    expect(onAutoPlay).toHaveBeenLastCalledWith(true)
+  })
 })
 
 // With no legal action the tray names what the seat is waiting for (review round 2, R2-3): one line per situation,
@@ -262,6 +274,36 @@ describe('ActionBar waiting line', () => {
     const luck = { config: { mode: 'blind', blind: { fixedWager: 2000, decisionMode: 'none' } } } as unknown as RoomView
     expect(said(table({}, [{}, {}], { mode: 'blind', phase: 'REVEAL' }), luck)).toBe('Waiting for the reveal')
     expect(said(table({}, [{}, {}], { mode: 'blind', phase: 'DEALING' }), luck), 'any phase that is not the decision').toBe('Waiting for the reveal')
+  })
+
+  // Spec 2026-10-08 §4.2.3: a pure-luck squeeze hand's round — the seat has its cards to turn, then waits for the others.
+  it('asks a squeeze seat to turn its cards, then says it waits for the others', () => {
+    const squeeze = { config: { mode: 'blind', blind: { fixedWager: 2000, decisionMode: 'none', squeeze: true } } } as unknown as RoomView
+    const round = (mine: Partial<ClientSeat>) => table(mine, [{ isBot: true, revealed: true }, { revealed: false }], { mode: 'blind', phase: 'SQUEEZE' })
+    expect(said(round({ revealed: false }), squeeze)).toBe('Squeeze your cards — they turn when time is up')
+    expect(said(round({ revealed: true }), squeeze)).toBe('Turned — waiting for the others')
+    const unturned = round({ revealed: false })
+    expect(trayWaitKey(unturned, unturned.seats[0])).toBe('labels.waitSqueeze')
+    const turned = round({ revealed: true })
+    expect(trayWaitKey(turned, turned.seats[0])).toBe('labels.waitOthersReveal')
+    // a spectator has nothing to squeeze: the cards it waits for are the table's
+    expect(trayWaitKey(hand(null, { mode: 'blind', phase: 'SQUEEZE', mySeat: null }), undefined)).toBe('labels.waitReveal')
+  })
+
+  it('says the squeeze lines in Vietnamese too', () => {
+    const squeeze = { config: { mode: 'blind', blind: { fixedWager: 2000, decisionMode: 'none', squeeze: true } } } as unknown as RoomView
+    for (const [revealed, line] of [
+      [false, 'Nặn bài của bạn — hết giờ sẽ tự lật'],
+      [true, 'Đã lật — chờ người chơi khác'],
+    ] as const) {
+      const { unmount } = render(
+        <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+          <ActionBar hand={table({ revealed }, [{}], { mode: 'blind', phase: 'SQUEEZE' })} room={squeeze} onAct={() => {}} lang="vi" />
+        </I18nextProvider>,
+      )
+      expect(screen.getByRole('status')).toHaveTextContent(line)
+      unmount()
+    }
   })
 
   it("says a Hold'em run-out is waiting for the reveal, since no turn is coming", () => {

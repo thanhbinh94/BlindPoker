@@ -38,6 +38,7 @@ function fakeClient(state: ClientState, overrides: Partial<GameClientApi> = {}):
     startGame: vi.fn().mockResolvedValue(ACK),
     kick: vi.fn().mockResolvedValue(ACK),
     act: vi.fn().mockResolvedValue(ACK),
+    reveal: vi.fn().mockResolvedValue(ACK),
     resync: vi.fn(),
     renamed: vi.fn(),
     clearError: vi.fn(),
@@ -697,7 +698,7 @@ describe('RoomScreen', () => {
       playTo(shownDown)
       const ann = screen.getByRole('group', { name: 'Seat 1' })
       expect(within(ann).getByRole('img', { name: 'Jack of spades' }), 'Ann’s cards are up from the first render').toBeInTheDocument()
-      expect(ann.querySelectorAll(`.${s.cardTurn}`), 'and turning').toHaveLength(2)
+      expect(ann.querySelectorAll(`.${s.cardLift}`), 'and turning').toHaveLength(2)
       expect(resultCard(), 'no card over the turn').toBeNull()
       // The countdown waits with the card: printed in the tray for the hold, it would jump onto the card a moment
       // later and shift the tray's buttons as it went.
@@ -746,19 +747,19 @@ describe('RoomScreen', () => {
       it('shows the cards turning and nothing of the result, then everything together with the card', () => {
         playTo(shownDown)
         expect(within(seatOf(1)).getByRole('img', { name: 'Jack of spades' }), 'Ann’s cards are up from the first render').toBeInTheDocument()
-        expect(seatOf(1).querySelectorAll(`.${s.cardTurn}`), 'and turning').toHaveLength(2)
+        expect(seatOf(1).querySelectorAll(`.${s.cardLift}`), 'and turning').toHaveLength(2)
         expect(resultCard()).toBeNull()
         tableSaysNothing()
 
         act(() => vi.advanceTimersByTime(REVEAL_HOLD_MS - 1))
         expect(resultCard()).toBeNull()
         tableSaysNothing()
-        expect(seatOf(1).querySelectorAll(`.${s.cardTurn}`), 'the turn is still playing').toHaveLength(2)
+        expect(seatOf(1).querySelectorAll(`.${s.cardLift}`), 'the turn is still playing').toHaveLength(2)
 
         act(() => vi.advanceTimersByTime(1))
         expect(resultCard()).toBeInTheDocument()
         tableSaysItAll()
-        expect(seatOf(1).querySelectorAll(`.${s.cardTurn}`), 'the turn is left alone').toHaveLength(2)
+        expect(seatOf(1).querySelectorAll(`.${s.cardLift}`), 'the turn is left alone').toHaveLength(2)
       })
 
       it('shows all of it at once under reduced motion, where nothing turns', () => {
@@ -846,6 +847,77 @@ describe('RoomScreen', () => {
 
       act(() => vi.advanceTimersByTime(REVEAL_HOLD_MS))
       expect(resultCard(), 'the hold does not bring a waved-off card back').toBeNull()
+    })
+  })
+
+  // Spec 2026-10-08 §4.2.2: the "Lật" pill turns the viewer's cards on their own screen, and the room tells the server once
+  // they are up — one REVEAL, off to the side of the tray's requests (pre-flight 2026-10-09, 23).
+  describe('a squeeze round', () => {
+    const room = makeRoom({
+      mode: 'blind',
+      config: {
+        name: 'Nặn',
+        mode: 'blind',
+        maxPlayers: 4,
+        isPrivate: false,
+        turnTimerSec: 20,
+        autoStart: true,
+        hasPassword: false,
+        blind: { holeCards: 2, decisionMode: 'none', fixedWager: 5_000, botCount: 1, squeeze: true },
+      },
+      players: [
+        makePlayer({ playerId: 'me', displayName: 'Mai', isHost: true, seat: 0, status: 'IN_HAND', stack: 20_000 }),
+        makePlayer({ playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true, seat: 1, status: 'IN_HAND', stack: 25_000 }),
+      ],
+    })
+    const hand = makeHand({
+      mode: 'blind',
+      phase: 'SQUEEZE',
+      community: [],
+      actingSeat: null,
+      mySeat: 0,
+      seats: [
+        makeSeat({ seat: 0, playerId: 'me', displayName: 'Mai', holeCards: parseCards('Qs Qd'), revealed: false }),
+        makeSeat({ seat: 1, playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true, revealed: true }),
+      ],
+    })
+    const squeezing = (overrides: Partial<GameClientApi> = {}) => fakeClient(makeState({ room, hand, deadlineAt: 1_015_000 }), overrides)
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('sends one reveal once "Lật" has turned my cards', () => {
+      const client = squeezing()
+      wrap(client)
+      expect(screen.getByRole('status')).toHaveTextContent('Squeeze your cards — they turn when time is up')
+      expect(within(screen.getByRole('group', { name: 'Seat 1' })).getByRole('timer')).toHaveTextContent('15')
+      fireEvent.click(screen.getByRole('button', { name: 'Turn' }))
+      act(() => vi.advanceTimersByTime(1000))
+      expect(client.reveal).toHaveBeenCalledTimes(1)
+      expect(client.act).not.toHaveBeenCalled()
+    })
+
+    it('keeps the controls live while the reveal is out, and swallows a refused or dropped one', async () => {
+      const pending = squeezing({ reveal: vi.fn(() => new Promise<never>(() => {})) })
+      const { view } = wrap(pending)
+      fireEvent.click(screen.getByRole('button', { name: 'Turn' }))
+      act(() => vi.advanceTimersByTime(1000))
+      expect(pending.reveal).toHaveBeenCalledTimes(1)
+      expect(screen.getByRole('button', { name: 'Stand up' }), 'the reveal is no tray request').toBeEnabled()
+      view.unmount()
+
+      const dropped = squeezing({ reveal: vi.fn().mockRejectedValue(new Error('socket closed')) })
+      wrap(dropped)
+      fireEvent.click(screen.getByRole('button', { name: 'Turn' }))
+      await act(async () => {
+        vi.advanceTimersByTime(1000)
+      })
+      expect(dropped.reveal).toHaveBeenCalledTimes(1)
+      expect(screen.queryByRole('alert')).toBeNull()
     })
   })
 

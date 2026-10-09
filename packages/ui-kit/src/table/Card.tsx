@@ -1,27 +1,34 @@
 import { RANK_CHARS, cardToString, rankOf, suitOf, type Card as CardId } from '@bp/core'
-import { useId, useState } from 'react'
-import type { CSSProperties, ReactElement } from 'react'
+import { useId, useLayoutEffect, useRef, useState } from 'react'
+import type { CSSProperties, ReactElement, RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cardLabel } from '../i18n/index.js'
 import { cx } from '../primitives/cx.js'
+import { useDeckAnchor } from './deck-anchor.js'
+import { DEAL_MS } from './motion.js'
 import s from './table.module.css'
 
 export type CardSize = 'sm' | 'md' | 'lg'
-
-/** How long a revealed card takes to turn over: the `--dur-flip` token in `tokens.css` (`Card.test` holds them equal). */
-export const FLIP_MS = 600
-/** The step between the cards of one hand, for the deal-in and the turn: card `i` waits `i × CARD_STAGGER_MS`. */
-export const CARD_STAGGER_MS = 60
 
 export interface CardProps {
   /** Omit (or pass `null`) to draw the back. */
   card?: CardId | null
   faceDown?: boolean
   size?: CardSize
-  /** Stagger for the deal-in, and for the turn when the card is revealed; the caller multiplies by `CARD_STAGGER_MS`. */
+  /**
+   * When the card comes in — slid from the deck, or faded in with no deck to come from. Read once, when the card mounts:
+   * a later value is ignored, since an `animation-delay` moved after mount would jump a card still waiting on the deck,
+   * or put one that has landed back where its animation starts.
+   */
   delayMs?: number
   highlighted?: boolean
   className?: string
+  /** Dealt from the deck in this render: slides in face down from the `Deck` anchor (none → the plain fade), then, face up, turns. */
+  dealt?: boolean
+  /** How a card that was face down turns when revealed: in place (the default) or lifted off the felt (the showdown). */
+  reveal?: 'flip' | 'lift'
+  /** When a card that was face down starts to turn once it is revealed. The deal delay is the arrival's and stays as it was. */
+  turnDelayMs?: number
 }
 
 /** Suit shapes live in a −5.4…5.4 box centred on the origin, so one `<use>` transform places any of them. */
@@ -71,9 +78,9 @@ const ACE = 12
 /**
  * The lacquered back. While it is what the card shows, it is the card's one named image (`role="img"`, the face-down
  * label, `data-face="down"`). Drawn behind a face that has just turned up, it is artwork only: `aria-hidden`, with no
- * role, label or `data-*`, so nothing that counts or names cards ever finds it.
+ * role, label or `data-*`, so nothing that counts or names cards ever finds it — as are the `Deck`'s.
  */
-function CardBack({ uid, label }: { uid: string; label: string | null }): ReactElement {
+export function CardBack({ uid, label }: { uid: string; label: string | null }): ReactElement {
   const lattice = `lat-${uid}`
   const named = label !== null
   return (
@@ -100,6 +107,44 @@ function CardBack({ uid, label }: { uid: string; label: string | null }): ReactE
 }
 
 /**
+ * Where the deck is from the card at `ref` (spec 2026-10-08 §3), for the slide that deals it: measured once, when the card
+ * mounts `dealt` under a `DeckAnchorProvider`, before the first paint. `sliding` says the card has somewhere to come from
+ * (the wrapper takes `.cardDealt`), and `vars` carries the offset as `--deal-dx`/`--deal-dy` and the deck's width over the
+ * card's as `--deal-scale`, so the card leaves the pile at the pile's size and grows as it travels. With no deck, or not
+ * dealt, nothing slides and `vars` is empty. Both hold for the card's life: the slide is its arrival, never replayed.
+ */
+export function useDealFrom(ref: RefObject<HTMLElement | null>, dealt: boolean): { sliding: boolean; vars: CSSProperties } {
+  const anchor = useDeckAnchor()
+  const [from, setFrom] = useState<{ dx: number; dy: number; scale: number | null } | null>(null)
+  useLayoutEffect(() => {
+    const deck = anchor?.current
+    const self = ref.current
+    if (!dealt || !deck || !self) return
+    // The wrapper's entrance keyframe (the plain fade starts turned and raised) would skew its box, so it is measured
+    // with no animation at all — put back before the paint, which then starts the slide instead.
+    self.style.animation = 'none'
+    const a = deck.getBoundingClientRect()
+    const b = self.getBoundingClientRect()
+    self.style.animation = ''
+    setFrom({
+      dx: a.left + a.width / 2 - (b.left + b.width / 2),
+      dy: a.top + a.height / 2 - (b.top + b.height / 2),
+      // no box to compare (a card not laid out): the keyframe's own fallback
+      scale: a.width > 0 && b.width > 0 ? a.width / b.width : null,
+    })
+    // Only on mount: the slide is the card's arrival, never replayed on a re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  if (from === null) return { sliding: false, vars: {} }
+  const vars = {
+    '--deal-dx': `${from.dx.toFixed(1)}px`,
+    '--deal-dy': `${from.dy.toFixed(1)}px`,
+    ...(from.scale === null ? {} : { '--deal-scale': from.scale.toFixed(3) }),
+  } as CSSProperties
+  return { sliding: true, vars }
+}
+
+/**
  * One playing card (60 × 84): ivory face, corner indices, classic pip layouts, a lacquered medallion for the court
  * cards and a gold-lattice back. Every pip carries `data-pip` so views can count/animate them.
  *
@@ -108,10 +153,17 @@ function CardBack({ uid, label }: { uid: string; label: string | null }): ReactE
  * 2026-09-29, No1): the flipper starts the turn from 180° with the back towards the viewer and comes to rest on the
  * face. Whichever side is showing carries the role, label and `data-card`/`data-face`, and it changes in the render
  * that reveals the card — never at the turn's midpoint, and never on `animationend`. The resting style is the face,
- * so under `prefers-reduced-motion` (every animation off) the reveal is instant. A card that mounts face up — the
- * viewer's own, the board, the result card's — has nothing to turn from and keeps only its deal-in.
+ * so under `prefers-reduced-motion` (every animation off) the reveal is instant. With `reveal="lift"` (the showdown,
+ * spec 2026-10-08 §3) the card lifts off the felt as it turns, its shadow widening, and lands with a small overshoot;
+ * it waits `turnDelayMs`.
+ *
+ * A card `dealt` under a `Deck` comes out of it (spec 2026-10-08 §3): the wrapper slides in from the deck, back up,
+ * after `delayMs`, and a face-up card then turns over where it landed — the flat turn, `DEAL_MS` after its slide began,
+ * whatever `reveal` says: the lift is for a card that was lying face down. A face-down card stays a back. With no deck to
+ * come from, or not dealt, a card that mounts face up — the viewer's own after a refresh, the result card's — keeps only
+ * its plain fade-in. Both wait the `delayMs` the card mounted with, whatever it is given later.
  */
-export function Card({ card, faceDown = false, size = 'md', delayMs = 0, highlighted = false, className }: CardProps) {
+export function Card({ card, faceDown = false, size = 'md', delayMs = 0, highlighted = false, className, dealt = false, reveal = 'flip', turnDelayMs = 0 }: CardProps) {
   const { t } = useTranslation()
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '')
   const shown = faceDown || card === undefined || card === null ? null : card
@@ -122,19 +174,42 @@ export function Card({ card, faceDown = false, size = 'md', delayMs = 0, highlig
   const [was, setWas] = useState({ down, turned: false })
   if (was.down !== down) setWas({ down, turned: was.down })
   const turned = !down && was.turned
-  const style = delayMs > 0 ? ({ '--deal-delay': `${delayMs}ms` } as CSSProperties) : undefined
+  const ref = useRef<HTMLSpanElement>(null)
+  const { sliding, vars } = useDealFrom(ref, dealt)
+  // The arrival's delay, latched: the caller's "dealt just now" runs out mid-deal on a full table, and a delay that
+  // moved with it would jump a card still waiting on the deck.
+  const [arrivalDelay] = useState(delayMs)
+  // A card dealt face up turns once it has slid in (the back is what travels); a revealed card turns where it lies.
+  const turning = turned || (sliding && !down)
+  const lifting = turned && reveal === 'lift'
+  // The turn has a delay of its own, so revealing a card never touches the deal delay its slide ran on.
+  const turnDelay = turned ? turnDelayMs : arrivalDelay + DEAL_MS
+  const style = {
+    ...(arrivalDelay > 0 ? { '--deal-delay': `${arrivalDelay}ms` } : {}),
+    ...vars,
+    ...(turning && turnDelay > 0 ? { '--turn-delay': `${turnDelay}ms` } : {}),
+  } as CSSProperties
 
   return (
-    <span className={cx(s.card, s[SIZE_CLASS[size]], down && s.cardDown, highlighted && s.cardHi, className)} style={style}>
-      <span className={cx(s.cardFlip, turned && s.cardTurn)}>
+    <span
+      ref={ref}
+      className={cx(s.card, s[SIZE_CLASS[size]], down && s.cardDown, highlighted && s.cardHi, sliding && s.cardDealt, lifting && s.cardLifting, className)}
+      style={style}
+    >
+      <span className={cx(s.cardFlip, turning && (lifting ? s.cardLift : s.cardTurn))}>
         {shown === null ? null : <CardFace card={shown} uid={uid} label={cardLabel(shown, t)} />}
-        {down || turned ? <CardBack uid={uid} label={down ? t('labels.faceDown') : null} /> : null}
+        {down || turning ? <CardBack uid={uid} label={down ? t('labels.faceDown') : null} /> : null}
       </span>
     </span>
   )
 }
 
-function CardFace({ card, uid, label }: { card: CardId; uid: string; label: string }): ReactElement {
+/**
+ * The ivory face: the card's one named image while it is up (`role="img"`, its label, `data-card`, `data-face="up"`).
+ * `hidden` — a `PeelCard`'s face while the card is still down — it is artwork only: `aria-hidden`, with no role, label or
+ * `data-card`/`data-face`, as a `CardBack` drawn with no label.
+ */
+export function CardFace({ card, uid, label, hidden = false }: { card: CardId; uid: string; label: string; hidden?: boolean }): ReactElement {
   const rank = rankOf(card)
   const suit = suitOf(card)
   const rankChar = RANK_CHARS[rank]!
@@ -154,7 +229,15 @@ function CardFace({ card, uid, label }: { card: CardId; uid: string; label: stri
   )
 
   return (
-    <svg className={s.cardSide} viewBox="0 0 60 84" role="img" aria-label={label} data-card={cardToString(card)} data-face="up">
+    <svg
+      className={s.cardSide}
+      viewBox="0 0 60 84"
+      role={hidden ? undefined : 'img'}
+      aria-label={hidden ? undefined : label}
+      aria-hidden={hidden ? true : undefined}
+      data-card={hidden ? undefined : cardToString(card)}
+      data-face={hidden ? undefined : 'up'}
+    >
       <defs>
         <g id={pipId}>
           <SuitShape suit={suit} />

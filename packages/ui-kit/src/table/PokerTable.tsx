@@ -1,11 +1,14 @@
 import type { Card as CardId, RoomPlayerView, RoomView, ShowdownHand } from '@bp/core'
-import type { CSSProperties, ReactNode } from 'react'
+import { useRef, type CSSProperties, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { botChibi, type ChibiSubject, type Expression } from '../avatar2d/index.js'
 import type { ClientHand, ClientSeat } from '../client/types.js'
 import { handLabel, type Language } from '../i18n/index.js'
 import { cx } from '../primitives/cx.js'
 import { CommunityCards } from './CommunityCards.js'
+import { Deck } from './Deck.js'
+import { DeckAnchorProvider } from './deck-anchor.js'
+import { DEAL_MS, DEAL_WINDOW_MS, FLIP_MS, dealOrderOf, showdownWithBoard } from './motion.js'
 import { Pot } from './Pot.js'
 import { Seat } from './Seat.js'
 import { ringPositions } from './geometry.js'
@@ -42,6 +45,11 @@ export interface PokerTableProps {
    * plays. All of it appears in the render that drops the flag. Defaults to `false`.
    */
   resultPending?: boolean
+  /**
+   * Squeeze mode (spec 2026-10-08 §4.2): the viewer has turned every one of their cards — peeled by hand or opened with
+   * the "Lật" pill — while the round is on. Called once per hand; the room sends the `REVEAL`.
+   */
+  onReveal?: () => void
 }
 
 /* The ring needs roughly 310 px of stage to seat everyone around it without the plates running into the board, and a
@@ -71,6 +79,12 @@ const seatFromPlayer = (seat: number, player: RoomPlayerView): ClientSeat => ({
  * the middle. On a screen too narrow or too short for that it becomes a vertical stack — opponents on top, board in
  * the middle, the viewer pinned to the bottom — which is the same components in a different grid, not a second
  * implementation.
+ *
+ * Every card comes out of the `Deck` on the felt (spec 2026-10-08 §3, §4.1): the hole cards round the table from the
+ * seat after the button, one card per seat at a time, and each street's cards to the board — but only cards that have
+ * just arrived (`DEAL_WINDOW_MS`). A hand rebuilt from a snapshot, or a table remounted later in the hand, shows its
+ * cards where they lie, all at once. At the showdown an opponent's cards lift and turn, one seat's cards
+ * `SHOWDOWN_STAGGER_MS` apart, after the river when it came with the showdown (`showdownWithBoard`).
  */
 export function PokerTable({
   room,
@@ -87,10 +101,12 @@ export function PokerTable({
   onSeatClick,
   canSit,
   resultPending = false,
+  onReveal,
 }: PokerTableProps) {
   const { t } = useTranslation()
   const narrow = useMediaQuery(STACKED)
   const mode: TableLayout = layout ?? (narrow ? 'stack' : 'ring')
+  const deckRef = useRef<HTMLDivElement>(null)
 
   const seated = new Map<number, RoomPlayerView>()
   for (const p of room.players) if (p.seat !== null) seated.set(p.seat, p)
@@ -112,6 +128,22 @@ export function PokerTable({
   const best = topSeat === undefined ? undefined : showdown.get(topSeat)?.best
   const community = hand?.community ?? []
   const highlight: CardId[] | undefined = best === undefined ? undefined : best.filter((c) => community.includes(c))
+
+  // The motion. "Dealt" is "arrived just now", by the client clock the arrival stamps are in (not `serverNow`); a card
+  // reads it when it mounts, so the window running out later changes nothing on the table.
+  const now = Date.now()
+  const dealt = hand !== null && !hand.restored && hand.dealtAt !== null && now - hand.dealtAt < DEAL_WINDOW_MS
+  const boardDealt = hand !== null && hand.boardAt !== null && now - hand.boardAt < DEAL_WINDOW_MS
+  const dealOrder = dealOrderOf(hand)
+  const liftAfter = showdownWithBoard(hand) ? DEAL_MS + FLIP_MS : 0
+
+  // Squeeze mode (spec 2026-10-08 §4.2): a hand on a squeeze table, and its round — a pure-luck hand's `SQUEEZE`, or a
+  // play-or-fold hand's `DECISION`, which runs the same 20 s with the cards to turn and then the choice to make. The
+  // round's countdown is drawn on the viewer's own plate (rulings 14, 21): nobody is acting in it, so no other seat gets
+  // the deadline.
+  const squeezeRoom = hand !== null && hand.mode === 'blind' && room.config.blind?.squeeze === true
+  const squeezeRound = squeezeRoom && (hand.phase === 'SQUEEZE' || hand.phase === 'DECISION')
+  const squeezeDecides = squeezeRound && hand.phase === 'DECISION'
 
   const renderSeat = (index: number): ReactNode => {
     const player = seated.get(index)
@@ -160,7 +192,7 @@ export function PokerTable({
         isButton={hand !== null && hand.button === index}
         winnerPayout={payouts.get(index) ?? null}
         showdownLabel={hit === undefined ? null : handLabel(hit.category, t)}
-        deadlineAt={acting ? deadlineAt : null}
+        deadlineAt={acting || (squeezeRound && index === hand.mySeat) ? deadlineAt : null}
         serverNow={serverNow}
         turnTimerMs={turnTimerMs}
         lang={lang}
@@ -169,17 +201,35 @@ export function PokerTable({
         expression={expressionFor?.(index) ?? 'neutral'}
         bounce={bounce}
         caption={captionFor?.(player)}
+        handId={hand?.handId ?? null}
+        dealt={dealt}
+        dealIndex={Math.max(0, dealOrder.indexOf(index))}
+        dealCount={dealOrder.length}
+        reveal={index === hand?.mySeat ? 'flip' : 'lift'}
+        liftAfter={liftAfter}
+        squeezeRoom={squeezeRoom}
+        squeezeRound={squeezeRound}
+        squeezeDecides={squeezeDecides}
+        restored={hand?.restored ?? false}
+        onReveal={onReveal}
       />
     )
   }
 
   const showPot = hand !== null || room.carryOverPot > 0
+  // The deck shares the pot's row, as tall as the pot, so it adds no height to the centre: above the board it ran into
+  // the top seat's lines on the ring and pushed the pot onto the viewer's cards on a short one (1366 × 768). Its ref is
+  // set in tree order, so a card mounting in the same commit as the table and ahead of the deck — the board, the phone's
+  // strip — finds no deck and fades in: a table that has just mounted shows its cards where they lie.
   const centre = (
     <div className={s.centre}>
-      <CommunityCards cards={community} highlight={highlight} />
-      {showPot ? (
-        <Pot pot={hand?.pot ?? 0} carryOver={hand?.carryOverIn ?? room.carryOverPot} pulse={hand?.potPulse ?? 0} lang={lang} />
-      ) : null}
+      <CommunityCards cards={community} highlight={highlight} dealt={boardDealt} handId={hand?.handId ?? null} />
+      <div className={s.centreRow}>
+        <Deck ref={deckRef} />
+        {showPot ? (
+          <Pot pot={hand?.pot ?? 0} carryOver={hand?.carryOverIn ?? room.carryOverPot} pulse={hand?.potPulse ?? 0} lang={lang} />
+        ) : null}
+      </div>
     </div>
   )
 
@@ -190,25 +240,29 @@ export function PokerTable({
     // cards were out); seven or more and the plates also give up the app's caption so the third row fits.
     const opponents = order.filter((i) => i !== mySeat)
     return (
-      <section className={cx(s.table, s.stack)} data-surface="night" aria-label={t('labels.table')}>
-        <div
-          className={cx(s.others, opponents.length > 3 && s.othersTwoRow, opponents.length > 3 && s.othersChip, opponents.length > 6 && s.othersDense)}
-          role="group"
-          aria-label={t('labels.players')}
-        >
-          {opponents.map(renderSeat)}
-        </div>
-        <div className={s.stackFelt}>{centre}</div>
-        {mySeat === null ? null : <div className={s.mine}>{renderSeat(mySeat)}</div>}
-      </section>
+      <DeckAnchorProvider value={deckRef}>
+        <section className={cx(s.table, s.stack)} data-surface="night" aria-label={t('labels.table')}>
+          <div
+            className={cx(s.others, opponents.length > 3 && s.othersTwoRow, opponents.length > 3 && s.othersChip, opponents.length > 6 && s.othersDense)}
+            role="group"
+            aria-label={t('labels.players')}
+          >
+            {opponents.map(renderSeat)}
+          </div>
+          <div className={s.stackFelt}>{centre}</div>
+          {mySeat === null ? null : <div className={s.mine}>{renderSeat(mySeat)}</div>}
+        </section>
+      </DeckAnchorProvider>
     )
   }
 
   return (
-    <section className={cx(s.table, s.ring)} data-seats={room.maxPlayers} data-surface="night" aria-label={t('labels.table')}>
-      <div className={s.felt} aria-hidden="true" />
-      {centre}
-      {order.map(renderSeat)}
-    </section>
+    <DeckAnchorProvider value={deckRef}>
+      <section className={cx(s.table, s.ring)} data-seats={room.maxPlayers} data-surface="night" aria-label={t('labels.table')}>
+        <div className={s.felt} aria-hidden="true" />
+        {centre}
+        {order.map(renderSeat)}
+      </section>
+    </DeckAnchorProvider>
   )
 }

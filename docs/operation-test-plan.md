@@ -137,7 +137,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 |---|---|---|---|
 | E-01 | Ngồi vào bàn, chọn mức mang vào | Số dư trừ đúng số mang vào, stack hiện trên ghế | P1 |
 | E-02 | Bấm Bắt đầu khi chưa ai Sẵn sàng | Nút khoá, có gợi ý phải Sẵn sàng trước | P2 |
-| E-03 | Chơi một ván đến showdown | Button/SB/BB đúng vị trí; lá chung lật đủ 3–1–1; lá của đối thủ lật từ từ (~0,6 giây) rồi phiếu kết quả mới hiện — dòng kết quả dưới các ghế (tên tay bài, tiền thắng), viền sáng và số tiền trên tấm tên của người thắng cũng đợi đến lúc đó; tắt khi bật giảm chuyển động; người thắng được cộng pot trừ phí bàn 2% (tối đa 1 BB) | P1 |
+| E-03 | Chơi một ván đến showdown | Button/SB/BB đúng vị trí; lá chung ra đủ 3–1–1, mỗi lá trượt từ bộ bài cạnh pot rồi lật tại chỗ; lá của đối thủ nhấc lên rồi lật (~0,7 giây một lá, cách nhau 0,2 giây) rồi phiếu kết quả mới hiện — dòng kết quả dưới các ghế (tên tay bài, tiền thắng), viền sáng và số tiền trên tấm tên của người thắng cũng đợi đến lúc đó; tắt khi bật giảm chuyển động; người thắng được cộng pot trừ phí bàn 2% (tối đa 1 BB) | P1 |
 | E-04 | Xem / Theo / Cược / Tố / Tất tay; dùng nút Min, ½, Pot, Max | Chỉ hiện hành động hợp lệ; tố thấp hơn mức tối thiểu bị chặn | P1 |
 | E-05 | 3 người, stack khác nhau, hai người tất tay | Có pot phụ; mỗi pot chia đúng người đủ điều kiện | P1 |
 | E-06 | Chọn trước "Xem/Bỏ", "Theo mọi mức", "Bỏ bài" khi chưa tới lượt | Tới lượt thì tự làm đúng lựa chọn; lựa chọn bị huỷ nếu có người tố làm nó không còn hợp lệ | P2 |
@@ -152,7 +152,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 
 | Mã | Bước | Kỳ vọng | Ưu tiên |
 |---|---|---|---|
-| F-01 | Kiểu Hoàn toàn may rủi, 2 lá, 3 bot | Mỗi ván trừ đúng mức cược cố định **từ chồng trên bàn**; không có lượt quyết định; lật bài và chia pot trừ 2% phí; lá của đối thủ lật từ từ (~0,6 giây) rồi phiếu kết quả mới hiện — dòng kết quả dưới các ghế và số tiền trên tấm tên cũng đợi đến lúc đó; tắt khi bật giảm chuyển động | P1 |
+| F-01 | Kiểu Hoàn toàn may rủi, 2 lá, 3 bot | Mỗi ván trừ đúng mức cược cố định **từ chồng trên bàn**; không có lượt quyết định; lật bài và chia pot trừ 2% phí; lá của đối thủ nhấc lên rồi lật (~0,7 giây một lá, cách nhau 0,2 giây; sau lá river thì đợi lá ấy nằm yên) rồi phiếu kết quả mới hiện — dòng kết quả dưới các ghế và số tiền trên tấm tên cũng đợi đến lúc đó; tắt khi bật giảm chuyển động | P1 |
 | F-02 | Kiểu 3 lá | Mỗi người nhận 3 lá; xếp hạng dùng 5 lá tốt nhất trong 8 | P2 |
 | F-03 | Kiểu Chơi hoặc bỏ, 2 người thật | Hai người quyết định cùng lúc, không ai thấy lựa chọn của người kia trước khi hết pha | P1 |
 | F-04 | Cả hai chọn Bỏ | Pot chuyển sang ván sau, bàn hiện "Cộng dồn" | P1 |
@@ -162,6 +162,8 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 | F-08 | Chủ phòng bấm Mời ra một bot | Bot rời ghế, ghế trống | P2 |
 | F-09 | Bật "Tự động chơi" | Tự quyết định mỗi ván cho tới khi tắt | P3 |
 | F-10 | Phòng mức cược 1.000, Chơi hoặc bỏ, 1 bot; ngồi vào bàn rồi Bỏ mọi ván | Ngồi: số dư −5.000 (hạn mức 5×), đầu phòng ghi "Hạn mức 5.000"; sau 4 ván chồng còn 1.000 < 2.000 → bị mời đứng dậy, thông báo "Bạn đã dùng hết hạn mức…", 1.000 về số dư, vẫn ở trong phòng; bấm ghế lại → hạn mức mới 5.000 | P1 |
+| F-11 | Phòng Blind "Hoàn toàn may rủi" có tick "Nặn bài", 2 người thật; vào ván; người thứ nhất bóc cả hai lá bằng chuột (kéo từ mép dưới vào), người thứ hai bấm "Lật" | Đầu phòng có huy hiệu "Nặn bài"; mỗi người thấy bài của mình úp, dòng "Nặn bài của bạn…" và đồng hồ vòng ngay trên tấm tên của mình; bóc một lá chưa tính là đã lật (ghế kia chưa thấy "Đã lật"), bóc lá thứ hai thì ghế kia thấy "Đã lật" và khay báo "Đã lật — chờ người chơi khác"; người thứ hai bấm "Lật" thì cả hai lá mở, vòng nặn kết thúc **trước 20 giây**, lá chung ra và phiếu kết quả hiện | P1 |
+| F-12 | Như F-11 trên điện thoại 375 × 812 có cảm ứng, 1 người thật + 1 bot; bóc một lá bằng ngón tay, lá còn lại bằng "Lật" | Hai lá, nút "Lật" và đồng hồ nằm trọn trong màn hình, trên khay; trang không cuộn ngang, trang và bàn không cuộn dọc, tên người chơi hiện đủ cạnh đồng hồ vòng, không chữ nào đè lên chữ khác; cú chạm là `pointerType: touch` và bóc được lá; bot đã lật từ đầu nên vòng kết thúc ngay khi người thật lật nốt | P2 |
 
 ### G. Kết nối
 

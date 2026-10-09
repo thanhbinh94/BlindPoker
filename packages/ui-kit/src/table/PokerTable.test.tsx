@@ -1,12 +1,13 @@
 import { HandCategory, parseCards, type RoomPlayerView } from '@bp/core'
-import { render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nextProvider } from 'react-i18next'
 import { defaultChibi, type ChibiConfig, type ChibiSubject, type WearRef } from '../avatar2d/index.js'
 import type { ClientHand } from '../client/types.js'
 import { createI18n } from '../i18n/index.js'
-import { holdemHand as hand, holdemRoom as room, makePlayer, makeRoom } from '../test-fixtures.js'
+import { holdemHand as hand, holdemRoom as room, makePlayer, makeRoom, makeSeat } from '../test-fixtures.js'
+import { BOARD_STAGGER_MS, DEAL_MS, DEAL_SPAN_MS, DEAL_STAGGER_MS, FLIP_MS, SHOWDOWN_STAGGER_MS, dealStaggerMs } from './motion.js'
 import { PokerTable } from './PokerTable.js'
 import s from './table.module.css'
 
@@ -24,6 +25,12 @@ const fullRoom = makeRoom({
 
 const wrap = (ui: React.ReactElement) =>
   render(<I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>{ui}</I18nextProvider>)
+
+/** A custom property of each card in seat `seat`, in ms; a delay of 0 is not set at all. */
+const cardDelays = (seat: number, name: string): number[] =>
+  [...document.querySelectorAll<HTMLElement>(`[data-seat="${seat}"] .${s.card}`)].map((el) => Number.parseInt(el.style.getPropertyValue(name) || '0', 10))
+const dealDelays = (seat: number) => cardDelays(seat, '--deal-delay')
+const turnDelays = (seat: number) => cardDelays(seat, '--turn-delay')
 
 describe('PokerTable', () => {
   it('renders seats, my cards face up, opponents face down, community, pot, empty seats to sit on', async () => {
@@ -49,6 +56,116 @@ describe('PokerTable', () => {
     expect(screen.getByText('300')).toBeInTheDocument()
     expect(screen.getByText(/disconnected/i)).toBeInTheDocument()
     expect(screen.queryAllByRole('button', { name: /sit down/i })).toHaveLength(0) // canSit false
+    // Spec 2026-10-08 §3: the deck is on the felt. This hand was rebuilt from a snapshot, so its cards were already on the
+    // table: nothing comes out of the deck, and they show at once, with no deal stagger (ruling 18, Task 5 review).
+    expect(document.querySelector('[data-deck]')).not.toBeNull()
+    expect(document.querySelectorAll(`.${s.cardDealt}`)).toHaveLength(0)
+    expect(dealDelays(2)).toEqual([0, 0])
+    expect(dealDelays(0)).toEqual([0, 0])
+  })
+
+  describe('dealing from the deck', () => {
+    const table = (h: ClientHand) => (
+      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+        <PokerTable room={room} hand={h} myPlayerId="a" deadlineAt={null} serverNow={() => 0} turnTimerMs={30000} lang="en" layout="ring" canSit={false} />
+      </I18nextProvider>
+    )
+    const dealtCards = () => document.querySelectorAll(`.${s.cardDealt}`)
+
+    it('slides the hole cards and the newest board cards in from the deck when they have just arrived', () => {
+      // The table is up before the cards arrive, as at a real table: a card measures the deck when it mounts.
+      const view = render(table({ ...hand, restored: false, community: [], seats: hand.seats.map((seat) => ({ ...seat, cardCount: 0, holeCards: null })) }))
+      expect(dealtCards()).toHaveLength(0)
+      view.rerender(table({ ...hand, restored: false, dealtAt: Date.now(), boardAt: Date.now() }))
+      const board = screen.getByRole('group', { name: 'Community cards' })
+      expect(dealtCards()).toHaveLength(4 + 3)
+      expect(board.querySelectorAll(`.${s.cardDealt}`)).toHaveLength(3)
+      // Spec 2026-10-08 §4.1.1: round the table from the seat after the button — Bob (seat 2) first, then Ann on the
+      // button, then each one's second card (four cards: the full step fits DEAL_SPAN_MS); the flop's three come
+      // BOARD_STAGGER_MS apart.
+      expect(dealDelays(2)).toEqual([0, 2 * DEAL_STAGGER_MS])
+      expect(dealDelays(0)).toEqual([DEAL_STAGGER_MS, 3 * DEAL_STAGGER_MS])
+      expect([...board.querySelectorAll<HTMLElement>(`.${s.card}`)].map((el) => Number.parseInt(el.style.getPropertyValue('--deal-delay') || '0', 10))).toEqual([
+        0,
+        BOARD_STAGGER_MS,
+        2 * BOARD_STAGGER_MS,
+      ])
+      // mine turn up once they land; Bob's stay backs
+      expect(screen.getByRole('group', { name: 'Seat 1' }).querySelectorAll(`.${s.cardTurn}`)).toHaveLength(2)
+      expect(screen.getByRole('group', { name: 'Seat 3' }).querySelectorAll(`.${s.cardTurn}`)).toHaveLength(0)
+    })
+
+    // Ruling 26: the whole deal leaves the deck within DEAL_SPAN_MS. Nine seats of two cards at 120 ms apiece would take
+    // 2 s; the step shrinks to 58 ms, and the viewer's own cards, dealt last, still turn DEAL_MS after each one leaves.
+    it('spaces a full table’s deal so its last card leaves the deck within DEAL_SPAN_MS', () => {
+      const nineSeats = fullRoom.players.map((p) =>
+        makeSeat({ seat: p.seat!, playerId: p.playerId, displayName: p.displayName, holeCards: p.seat === 0 ? parseCards('Qs Qd') : null }),
+      )
+      const full = (h: ClientHand) => (
+        <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+          <PokerTable room={fullRoom} hand={h} myPlayerId="p0" deadlineAt={null} serverNow={() => 0} turnTimerMs={30000} lang="en" layout="ring" canSit={false} />
+        </I18nextProvider>
+      )
+      const view = render(full({ ...hand, community: [], actingSeat: null, seats: nineSeats.map((seat) => ({ ...seat, cardCount: 0, holeCards: null })) }))
+      view.rerender(full({ ...hand, community: [], actingSeat: null, restored: false, dealtAt: Date.now(), seats: nineSeats }))
+      const step = dealStaggerMs(9 * 2)
+      expect(step).toBe(58)
+      // the button is on seat 0: seat 1 is dealt first, the viewer (seat 0) last
+      expect(dealDelays(1)).toEqual([0, 9 * step])
+      expect(dealDelays(0)).toEqual([8 * step, 17 * step])
+      expect(17 * step).toBeLessThanOrEqual(DEAL_SPAN_MS)
+      expect(turnDelays(0), 'mine turn once each has slid in').toEqual([8 * step + DEAL_MS, 17 * step + DEAL_MS])
+    })
+
+    // Pre-flight 2026-10-09: "dealt" means "arrived just now" — a layout switch or a remount later in the hand re-deals nothing.
+    it('deals nothing for cards that arrived a while ago, nor for a hand rebuilt from a snapshot', () => {
+      const view = render(table({ ...hand, restored: false, dealtAt: Date.now() - 10_000, boardAt: Date.now() - 10_000 }))
+      expect(dealtCards()).toHaveLength(0)
+      view.unmount()
+      render(table({ ...hand, restored: true, dealtAt: Date.now() }))
+      expect(screen.getByRole('group', { name: 'Seat 1' }).querySelectorAll(`.${s.cardDealt}`)).toHaveLength(0)
+    })
+
+    // Pre-flight 2026-10-09: the next hand's cards are new cards, even when the two hands' frames land in one render.
+    it('deals the next hand afresh though it has as many cards as the last', () => {
+      const view = render(table({ ...hand, restored: false, dealtAt: Date.now() - 10_000, boardAt: Date.now() - 10_000 }))
+      expect(dealtCards()).toHaveLength(0)
+      view.rerender(table({ ...hand, handId: 'h2', restored: false, dealtAt: Date.now(), boardAt: Date.now() }))
+      expect(screen.getByRole('group', { name: 'Seat 1' }).querySelectorAll(`.${s.cardDealt}`)).toHaveLength(2)
+      // the board too: the same three slots hold the new hand's flop
+      expect(screen.getByRole('group', { name: 'Community cards' }).querySelectorAll(`.${s.cardDealt}`)).toHaveLength(3)
+    })
+
+    // Spec 2026-10-08 §4.1.3: at the showdown an opponent's cards lift one after the other, 200 ms apart — after the river
+    // has landed and turned when the showdown came with it.
+    it.each([
+      ['arrived alone', 30_000, [0, SHOWDOWN_STAGGER_MS]],
+      ['came with the river', 0, [DEAL_MS + FLIP_MS, DEAL_MS + FLIP_MS + SHOWDOWN_STAGGER_MS]],
+    ] as const)('lifts the cards of a showdown that %s on their own delays', (_, gap, delays) => {
+      const live: ClientHand = { ...hand, restored: false, dealtAt: Date.now() }
+      const view = render(table(live))
+      const before = dealDelays(2)
+      view.rerender(
+        table({ ...live, boardAt: 10_000, showdownAt: 10_000 + gap, seats: live.seats.map((seat) => (seat.seat === 2 ? { ...seat, holeCards: parseCards('Jc Td') } : seat)) }),
+      )
+      const bob = screen.getByRole('group', { name: 'Seat 3' })
+      expect(bob.querySelectorAll(`.${s.cardLift}`)).toHaveLength(2)
+      expect(turnDelays(2)).toEqual(delays)
+      expect(dealDelays(2), 'the deal delays are left as they mounted').toEqual(before)
+    })
+
+    // Layout audit L1 and the 1366 × 768 ring: the deck shares the pot's row under the board, so the felt gains no height.
+    it.each(['ring', 'stack'] as const)('puts the deck in one row with the pot, under the board (%s)', (layout) => {
+      render(
+        <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+          <PokerTable room={room} hand={hand} myPlayerId="a" deadlineAt={null} serverNow={() => 0} turnTimerMs={30000} lang="en" layout={layout} canSit={false} />
+        </I18nextProvider>,
+      )
+      const row = document.querySelector('[data-deck]')!.parentElement!
+      expect(row).toHaveClass(s.centreRow!)
+      expect(within(row).getByText('300')).toBeInTheDocument()
+      expect(row.previousElementSibling).toBe(screen.getByRole('group', { name: 'Community cards' }))
+    })
   })
   // Review 2026-09-29, No1: at the showdown an opponent's cards turn over where they lie. For the first half of the turn
   // each card's back is drawn behind its face — as artwork: every card is still named once, and no back is left to count.
@@ -69,7 +186,7 @@ describe('PokerTable', () => {
     expect(within(bob).getAllByRole('img', { name: / of / })).toHaveLength(2)
     for (const name of ['Jack of clubs', '10 of diamonds', 'Queen of spades', 'Queen of diamonds', 'Ace of hearts'])
       expect(screen.getAllByLabelText(name), name).toHaveLength(1)
-    expect(bob.querySelectorAll(`.${s.cardTurn}`), "Bob's two cards turn").toHaveLength(2)
+    expect(bob.querySelectorAll(`.${s.cardLift}`), "Bob's two cards turn").toHaveLength(2)
     expect(me.querySelectorAll(`.${s.cardTurn}`), 'mine were dealt face up and do not').toHaveLength(0)
   })
   // Review 2026-09-29, No2: a badge, the bet chip, the hand's name and the payout used to take a line each, and the
@@ -150,7 +267,7 @@ describe('PokerTable', () => {
       view.rerender(table(showdown, layout, true))
       // the cards are as they are without the flag: Bob's turn over where they lie, and the whole board is out
       expect(within(seatOf(3)).getAllByRole('img', { name: / of / }), 'Bob’s hand is face up').toHaveLength(2)
-      expect(seatOf(3).querySelectorAll(`.${s.cardTurn}`), 'and turning').toHaveLength(2)
+      expect(seatOf(3).querySelectorAll(`.${s.cardLift}`), 'and turning').toHaveLength(2)
       expect(within(seatOf(1)).getAllByRole('img', { name: / of / }), 'mine are up').toHaveLength(2)
       for (const name of ['Ace of hearts', 'King of diamonds', '2 of clubs', '9 of spades', '5 of spades'])
         expect(screen.getAllByLabelText(name), name).toHaveLength(1)
@@ -206,7 +323,138 @@ describe('PokerTable', () => {
       expect(within(seatOf(3)).getByText('High card')).toBeInTheDocument()
       expect(winnerGlows()).toHaveLength(1)
       expect(goldEdges()).toHaveLength(3)
-      expect(seatOf(3).querySelectorAll(`.${s.cardTurn}`), 'the turn is not cut short or played twice').toHaveLength(2)
+      expect(seatOf(3).querySelectorAll(`.${s.cardLift}`), 'the turn is not cut short or played twice').toHaveLength(2)
+    })
+  })
+
+  // Spec 2026-10-08 §4.2: on a squeeze table the viewer's own cards are theirs to turn, the round's countdown is on their
+  // own plate (ruling 14), and a seat that has turned says so to the others.
+  describe('on a squeeze table', () => {
+    /** A squeeze room with Ann (host, seat 0) and a bot in seat 2: pure luck with two cards, or play-or-fold with three. */
+    const roomOf = (decisionMode: 'none' | 'playOrFold') =>
+      makeRoom({
+        mode: 'blind',
+        config: {
+          name: 'Nặn',
+          mode: 'blind',
+          maxPlayers: 4,
+          isPrivate: false,
+          turnTimerSec: 20,
+          autoStart: true,
+          hasPassword: false,
+          blind: { holeCards: decisionMode === 'none' ? 2 : 3, decisionMode, fixedWager: 5_000, botCount: 1, squeeze: true },
+        },
+        players: [
+          makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'IN_HAND', stack: 20_000 }),
+          makePlayer({ playerId: 'bot2', displayName: 'Bảo', isBot: true, seat: 2, status: 'IN_HAND', stack: 25_000 }),
+        ],
+      })
+    const luckRoom = roomOf('none')
+    const playOrFoldRoom = roomOf('playOrFold')
+    /** A pure-luck hand's round, from Ann's seat: her queens still down, the bot turned from the deal. */
+    const squeezing: ClientHand = {
+      ...hand,
+      mode: 'blind',
+      phase: 'SQUEEZE',
+      community: [],
+      actingSeat: null,
+      seats: [
+        { ...hand.seats[0]!, revealed: false },
+        { ...hand.seats[1]!, playerId: 'bot2', displayName: 'Bảo', isBot: true, revealed: true },
+      ],
+    }
+    /** A play-or-fold hand's round: three cards each, Ann's still down and her choice still to make. */
+    const deciding: ClientHand = {
+      ...squeezing,
+      phase: 'DECISION',
+      legal: { seat: 0, kinds: ['play', 'fold'], callAmount: 5_000, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 },
+      seats: [
+        { ...squeezing.seats[0]!, cardCount: 3, holeCards: parseCards('Qs Qd 7c') },
+        { ...squeezing.seats[1]!, cardCount: 3 },
+      ],
+    }
+    const table = (h: ClientHand, extra: { myPlayerId?: string; onReveal?: () => void } = {}) => (
+      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+        <PokerTable
+          room={h.phase === 'DECISION' ? playOrFoldRoom : luckRoom}
+          hand={h}
+          myPlayerId={extra.myPlayerId ?? 'a'}
+          deadlineAt={1_015_000}
+          serverNow={() => 1_000_000}
+          turnTimerMs={20_000}
+          lang="en"
+          layout="ring"
+          canSit={false}
+          onReveal={extra.onReveal}
+        />
+      </I18nextProvider>
+    )
+    const seatOf = (n: number) => screen.getByRole('group', { name: `Seat ${n}` })
+
+    // The peel's tweens run on rAF and the round's ring on an interval: all of it on the test's clock.
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it.each([
+      ['SQUEEZE', squeezing, 2],
+      ['DECISION', deciding, 3],
+    ] as const)('gives my seat cards to peel and the round’s ring, and no one else either (%s)', (_, h, cards) => {
+      render(table(h))
+      expect(seatOf(1).querySelectorAll('[data-peel]')).toHaveLength(cards)
+      expect(seatOf(3).querySelectorAll('[data-peel]')).toHaveLength(0)
+      expect(within(seatOf(1)).getByRole('button', { name: 'Turn' })).toBeInTheDocument()
+      expect(screen.getAllByRole('timer')).toHaveLength(1)
+      expect(within(seatOf(1)).getByRole('timer')).toHaveTextContent('15')
+      expect(within(seatOf(3)).getByText('Turned')).toBeInTheDocument()
+    })
+
+    // Ruling 21: the play-or-fold round's 20 s covers the peel and the choice; pure luck has only the peel.
+    it('keeps my ring through a play-or-fold decision once my cards are up, until I have chosen', () => {
+      const view = render(table(deciding))
+      fireEvent.click(screen.getByRole('button', { name: 'Turn' }))
+      act(() => vi.advanceTimersByTime(1000))
+      const turned: ClientHand = { ...deciding, seats: deciding.seats.map((seat) => (seat.seat === 0 ? { ...seat, revealed: true } : seat)) }
+      view.rerender(table(turned))
+      expect(seatOf(1).querySelectorAll('[data-peel][data-face="up"]')).toHaveLength(3)
+      expect(within(seatOf(1)).getByRole('timer'), 'the choice is still to make').toBeInTheDocument()
+      view.rerender(table({ ...turned, legal: null, seats: turned.seats.map((seat) => (seat.seat === 0 ? { ...seat, hasDecided: true } : seat)) }))
+      expect(screen.queryByRole('timer')).toBeNull()
+      view.unmount()
+
+      render(table(squeezing))
+      fireEvent.click(screen.getByRole('button', { name: 'Turn' }))
+      act(() => vi.advanceTimersByTime(1000))
+      expect(screen.queryByRole('timer'), 'pure luck: up is done').toBeNull()
+    })
+
+    it('keeps my cards as they are once the round is over, and says "Turned" no more', () => {
+      const view = render(table(squeezing))
+      const mine = [...seatOf(1).querySelectorAll('[data-peel]')]
+      view.rerender(table({ ...squeezing, phase: 'REVEAL', seats: squeezing.seats.map((seat) => ({ ...seat, revealed: true })) }))
+      expect([...seatOf(1).querySelectorAll('[data-peel]')], 'the same cards, not dealt again').toEqual(mine)
+      expect(screen.queryByRole('button', { name: 'Turn' })).toBeNull()
+      expect(screen.queryByRole('timer')).toBeNull()
+      expect(screen.queryByText('Turned')).toBeNull()
+    })
+
+    it('shows a spectator who has turned, and gives no one cards to peel', () => {
+      render(table(squeezing, { myPlayerId: 'zed' }))
+      expect(document.querySelectorAll('[data-peel]')).toHaveLength(0)
+      expect(screen.queryByRole('button', { name: 'Turn' })).toBeNull()
+      expect(within(seatOf(3)).getByText('Turned')).toBeInTheDocument()
+    })
+
+    it('hands the room the reveal once my cards are up', () => {
+      const onReveal = vi.fn()
+      render(table(squeezing, { onReveal }))
+      fireEvent.click(screen.getByRole('button', { name: 'Turn' }))
+      expect(onReveal, 'not before the cards are up').not.toHaveBeenCalled()
+      act(() => vi.advanceTimersByTime(1000))
+      expect(onReveal).toHaveBeenCalledTimes(1)
     })
   })
 

@@ -98,6 +98,7 @@ fills the window without adding the bar's height as a scrollbar (a bare `100vh` 
 | `leaveRoom()`, `sitDown(seat, buyIn?)`, `standUp()`, `setReady(r)`, `startGame()`, `kick(playerId)` | the matching frame |
 | `sitOut()` / `sitIn()` | `SIT_OUT` / `SIT_IN` — keep the seat but skip the hands from the next one on, and take it back. The seat's own `sittingOut` flag is the state (`status` only shows `SITTING_OUT` once the hand on the table is over); `ERROR{NOT_SEATED}` if there is no seat. |
 | `act(action)` | `ACTION` with `baseSeq` = the latest applied `seq` |
+| `reveal()` | `REVEAL` — squeeze mode: "every one of my cards is turned" (spec 2026-10-08). Resolves with the `ACK` or `ERROR`; `RoomScreen` swallows a refusal or a dropped socket, since a late or repeated `REVEAL` is a no-op on the server. With auto-play on in a squeeze room the hook sends it by itself, once per hand, as soon as my cards are dealt face down (keyed on the hand id, so a re-render or StrictMode never sends it twice). |
 | `resync()` | `RESYNC` |
 | `clearError()`, `dismissNotification(id)` | local state only |
 | `renamed(displayName)` | local state only — `state.me` takes the new name at once, for an app whose own rename just succeeded; it came from `WELCOME` and would otherwise keep the old one until the next. The table roster is left as the server named it: the room the player is in keeps the old name, and the server's `renameIdentity` gives the new one to the next room they create or join. |
@@ -137,6 +138,26 @@ room the player creates, joins or has just left never counts.
 
 A frame the reducer cannot apply to anything — a game event with no hand, a `HAND_STARTED` or room event with no
 room — takes its `seq` and sets `resyncNeeded` rather than being dropped.
+
+### What the hand carries for the motion and the squeeze
+
+Three additions to `ClientHand` and `ClientSeat` (Plan 21, spec 2026-10-08), all read by the table rather than decided
+by it:
+
+- **`restored`.** `true` for a hand built from a `ROOM_SNAPSHOT` (a refresh, a reconnect, a `RESYNC`), `false` for one
+  followed from its `HAND_STARTED`. A snapshot is no arrival: its cards were already on the table, so nothing is dealt
+  and nothing turns for it (spec §4.1.4).
+- **`dealtAt`, `boardAt`, `showdownAt`.** When the hand's first `CARDS_DEALT`, its latest `COMMUNITY_REVEALED` and its
+  `SHOWDOWN` arrived, in **client** time (the `now` of the frame that carried them — not `serverNow()`, which is the
+  server's clock). `null` until the event comes, on every new hand, and on any hand built from a snapshot, a reconnect
+  snapshot of a hand that was being followed included. The table paces its motion by these (see **Card motion** below).
+- **Squeeze.** `ClientPhase` gains `'SQUEEZE'`. `SQUEEZE_PHASE` sets the phase and `deadlineAt` (the event arrives
+  stamped, as `DECISION_PHASE` does), `PLAYER_REVEALED` sets the seat's `revealed`, and `SQUEEZE_ENDED` moves to `REVEAL`
+  and clears the deadline. `ClientSeat.revealed?` exists **only in a squeeze room** (`room.config.blind.squeeze`): `true`
+  for a bot from the deal, `false` for a person until they turn their cards, and a snapshot copies the view's flag. The
+  engine's view always has one (`true` on a plain table), so the reducer drops it outside a squeeze room — plain hands and
+  existing fixtures stay byte for byte what they were. A play-or-fold squeeze room starts its hand in `DECISION`, a
+  pure-luck one in `SQUEEZE`.
 
 ### Authentication is terminal
 
@@ -191,10 +212,12 @@ dropping the oldest, so a chatty server cannot stack slips off the top of the sc
 
 | Component | Props |
 | --- | --- |
-| `PokerTable` | `room`, `hand`, `myPlayerId`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `canSit`, `layout?`, `chibiFor?`, `expressionFor?`, `captionFor?`, `onSeatClick?`, `resultPending?` |
-| `Seat` | `seat`, `player`, `isMe`, `isActing`, `isButton`, `winnerPayout`, `showdownLabel`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `position`, `chibi`, `expression`, `bounce`, `caption?` |
-| `Card` | `card?`, `faceDown?`, `size?` (`sm`/`md`/`lg`), `delayMs?`, `highlighted?`, `className?` |
-| `CommunityCards` | `cards`, `highlight?` |
+| `PokerTable` | `room`, `hand`, `myPlayerId`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `canSit`, `layout?`, `chibiFor?`, `expressionFor?`, `captionFor?`, `onSeatClick?`, `resultPending?`, `onReveal?` |
+| `Seat` | `seat`, `player`, `isMe`, `isActing`, `isButton`, `winnerPayout`, `showdownLabel`, `deadlineAt`, `serverNow`, `turnTimerMs`, `lang`, `position`, `chibi`, `expression`, `bounce`, `caption?`, and for the motion and the squeeze (`PokerTable` fills them): `handId`, `dealt`, `dealIndex`, `dealCount`, `reveal`, `liftAfter`, `squeezeRoom`, `squeezeRound`, `squeezeDecides`, `restored?`, `onReveal?` |
+| `Card` | `card?`, `faceDown?`, `size?` (`sm`/`md`/`lg`), `delayMs?`, `highlighted?`, `className?`, `dealt?`, `reveal?` (`'flip'`/`'lift'`), `turnDelayMs?` |
+| `Deck` | none (`forwardRef` to its `div`) — the pile every card is dealt from; `DeckAnchorProvider` / `useDeckAnchor` (`deck-anchor.ts`) hand its ref to the cards |
+| `PeelCard` | `card`, `size?`, `open`, `onRevealed`, `dealt?`, `delayMs?`, `className?` — the viewer's own card in a squeeze room, turned by dragging it |
+| `CommunityCards` | `cards`, `highlight?`, `dealt?`, `handId?` |
 | `Pot` | `pot`, `carryOver`, `pulse`, `lang` |
 | `TurnTimer` | `deadlineAt`, `serverNow`, `totalMs`, `size?` |
 | `ActionBar` | `hand`, `room`, `onAct`, `disabled?`, `lang` |
@@ -209,8 +232,12 @@ advertised through `aria-keyshortcuts`. With no legal action it stays in place r
 still be held on the felt), "Bạn đã bỏ bài — chờ ván sau" for a folded seat, "Bạn đã tất tay — chờ kết quả" for an
 all-in seat, "Đã chọn — chờ người chơi khác" for a Blind seat that has decided, "Chờ lật bài" for a Blind hand past its
 decision and for a Hold'em run-out (fewer than two seats that can still act: no turn is coming), and "Đang chờ đến lượt
-bạn" otherwise — Hold'em between turns, or a Blind seat whose own decision is on its way. The pre-action and auto-play
-rows under the line are unchanged.
+bạn" otherwise — Hold'em between turns, or a Blind seat whose own decision is on its way. In a pure-luck squeeze round
+(Plan 21) the line comes before those Blind rows: "Nặn bài của bạn — hết giờ sẽ tự lật" (`labels.waitSqueeze`) while the
+viewer's cards are down, "Đã lật — chờ người chơi khác" (`labels.waitOthersReveal`) once they are up, and a spectator,
+who has none to turn, "Chờ lật bài". The pre-action and auto-play rows under the line are unchanged, except that
+auto-play is offered in a squeeze room too, where it means "turn my cards the moment they are dealt" (in a play-or-fold
+room it still answers `play`).
 
 `RoomHeader` shows the blinds for a Hold'em room and "wager · limit" for a Blind one ("Mức cược 5.000 · Hạn mức 25.000"; the
 limit is `blindTableLimit`, five wagers).
@@ -238,14 +265,18 @@ navigation. The countdown is never inside a row's `<li>` or the fee line, which 
 opponent's cards over, it covered the very turn it was meant to follow: the top-centre seat's at 1920 × 940, every
 opponent's on a 375 × 812 phone. `RoomScreen` now holds it back with `useRevealHold(hand)`
 (`src/screens/reveal-hold.ts`) for `REVEAL_HOLD_MS` when a hand completes with a showdown in which a seat other than the
-viewer's had been drawn face down on this screen. That is 870 ms, counted from the numbers the CSS turns by: the 600 ms
-turn (`FLIP_MS` in `Card.tsx`, the `--dur-flip` token — `Card.test` holds the two equal), the stagger to the last of
-three cards (2 × `CARD_STAGGER_MS`, the 60 ms `Seat` multiplies by), and 150 ms to settle. The card shows at once under
+viewer's had been drawn face down on this screen. That is 1270 ms since Plan 21, counted from the numbers the CSS moves
+by (`motion.ts`): the 720 ms lift-and-turn (`LIFT_MS`, the `--dur-lift` token — `Card.test` holds the two equal), the
+stagger to the last of three cards (2 × `SHOWDOWN_STAGGER_MS`, the 200 ms `Seat` multiplies by), and 150 ms to settle
+(it was 870 ms: a 600 ms flat turn on a 60 ms stagger). When the showdown arrived together with the river — the engine
+settles in the `ADVANCE` that deals it, so a Blind hand and a Hold'em run-out always do (`showdownWithBoard`) — the
+opponents' cards wait for the river to slide in and turn, and the hold grows by that much, `REVEAL_HOLD_AFTER_BOARD_MS`
+(`DEAL_MS + FLIP_MS` = 960 ms): 2230 ms in all. The card shows at once under
 `prefers-reduced-motion: reduce` (nothing turns), for a hand won by a fold (no showdown), and for a hand that was
 already over when the screen first saw it (the snapshot that rebuilds the room after a refresh draws the shown cards
 face up). Everything that follows the card follows the card actually drawn: the seat clearance, the close button and
 the countdown's place. While the card is held, the countdown is not printed in the tray either — it would sit there
-for under a second, then jump onto the card and shift the tray's buttons after it.
+for a moment, then jump onto the card and shift the tray's buttons after it.
 
 **The table waits with it** (the same fix wave, follow-up to No1). With the card held, the seats must not give the result
 away either — the hand's name and the payout under each seat, the winner's glow, the gold edge on the best hand's board
@@ -255,7 +286,7 @@ the seats are given, so no result line, no `.seatWin` and no `highlight` for the
 stack it had before the settlement paid it (`ClientSeat.stackBeforeResult`, kept by the reducer), while every card is drawn exactly
 as without it and the turn still plays. The faces take the same flag, as the third argument of
 `useTableExpressions(state, serverNow, resultPending)`: it does not fold the state in while the flag is up, so the
-reaction (4 s happy, 3 s sad) starts when the hold ends and runs its full length rather than losing 870 ms of it. A seat
+reaction (4 s happy, 3 s sad) starts when the hold ends and runs its full length rather than losing the hold's time. A seat
 still shows what its own state says in the meantime (folded, sitting out, disconnected). Everything appears in the one
 render that deals the card, and nothing else about the hold changes. (Until bug-log §7 E1 was fixed on 03/10, the
 happy and sad reactions only fired for a hand first seen already complete: `advanceExpressionMemory` recorded the hand
@@ -330,6 +361,128 @@ Under 768 px the table becomes the vertical stack (spec §27.1): opponents, felt
 strip never scrolls inside itself** — it wraps, holds a floor of two plate rows, and from seven seats up the plates
 go compact (avatar, name, stack, then bet and state badge side by side) so a third row of three fits at 360 px.
 
+### Card motion (Plan 21, spec 2026-10-08 §3, §4.1)
+
+Every card on the table comes out of a **deck** and is turned where it lands. The numbers live in `table/motion.ts`
+(twins of the CSS tokens, which `Card.test` holds equal); the rest is CSS keyframes on the card's wrapper and flipper.
+No library: CSS 3D and keyframes for the cards, and a small `requestAnimationFrame` tween for the peel.
+
+| Move | What the player sees | Numbers |
+| --- | --- | --- |
+| **Deal** | A card `dealt` slides from the deck to its place, back up, leaving at the pile's size (`--deal-scale`, the deck's width over the card's) and growing as it travels, a little rotated. A card that will be face up then turns where it landed, `DEAL_MS` after the slide began. | `DEAL_MS` 360 (`--dur-deal`, the `--ease` curve); `FLIP_MS` 600 (`--dur-flip`, ease-in-out) |
+| **Hole cards, round the table** | Clockwise from the seat after the button, one card per seat at a time (`dealOrderOf`): card `i` of the seat `k`-th in that order waits `(i × seats + k) × dealStaggerMs(seats × cards)` — `DEAL_STAGGER_MS`, or less when the last card would leave the deck more than `DEAL_SPAN_MS` after the first (ruling 26: the hand's timer runs during the deal; six seats of two get 90 ms, eight of three 43 ms). | `DEAL_STAGGER_MS` 120; `DEAL_SPAN_MS` 1000 |
+| **Board** | The flop's three cards come in `BOARD_STAGGER_MS` apart, each sliding in while the one before it turns; the turn and the river come alone. The server's 1.5 s pace between steps (spec §8.3 step 5) is unchanged: one card takes about a second, so it is at rest before the next. | `BOARD_STAGGER_MS` 300 |
+| **Showdown** | An opponent's face-down cards **lift** off the felt (rise by about a fifth of their height, grow by a tenth, the shadow spreads), turn in the air, and set down with a small overshoot (`reveal="lift"`: `.cardLift` with `liftShadow` on the wrapper, `--ease-lift`). One seat's cards go `SHOWDOWN_STAGGER_MS` apart. | `LIFT_MS` 720 (`--dur-lift`); `SHOWDOWN_STAGGER_MS` 200 |
+| **The result card's cards** | Unchanged: they fade in on the old stagger. | `CARD_STAGGER_MS` 60 |
+
+**The deck** (`Deck`, in `PokerTable`) is three stacked backs, one `role="img"` named `labels.deck` and no card of any
+count (its backs are `aria-hidden` artwork, as the back behind a turned face is). It sits **beside the pot, under the
+board, in both layouts** — the spec put it above the board, but a layout probe showed that on a ring a deck there runs
+into the top seat's lines on a short window (1366 × 768, 1536 × 730, 1280 × 720) and on the phone pushes the pot onto
+the viewer's cards. Sharing the pot's row, at the pot's height (38 px), it adds no height to the felt (`.centreRow`).
+`PokerTable` hands its ref to every card under it through `DeckAnchorProvider` (`deck-anchor.ts`); `Card` and `Deck`
+never import each other, which is why the context is a module of its own. The *card* does the measuring: a `Card`
+(or a `PeelCard`) mounted `dealt` reads the deck's box and its own in a layout effect — through `useDealFrom(ref,
+dealt)`, with its entrance keyframe switched off for the read, because the wrapper's fade starts turned and raised and
+would skew the box — and sets `--deal-dx`, `--deal-dy`, `--deal-scale`. The measure is the card's arrival and is never
+repeated. With no deck under it (the result card, the playground's lone cards, a test) a card has nothing to come
+from and keeps its plain fade-in.
+
+**Which cards are "dealt".** A card slides out of the deck only if it *arrived just now*, and a card reads that once, when
+it mounts:
+
+- The hole cards are dealt when the hand is not `restored` and its `dealtAt` is within `DEAL_WINDOW_MS` (1500 ms) of
+  now; the board when `boardAt` is. A hand rebuilt from a snapshot, or a table remounted later in the hand (a switch
+  between the ring and the stack, say), shows its cards where they lie: they fade in with no stagger, and the deck does
+  not replay anything the player never saw happen (spec §4.1.4).
+- Cards are keyed `${handId}:${i}`, so the next hand's cards are new cards, dealt afresh, even with as many as the last
+  hand had.
+- A card keeps the delay it mounted with (`delayMs` is latched, in `Card` and `PeelCard` alike): on a full table the
+  "dealt just now" window runs out while the last cards are still waiting on the deck, and a delay that followed it would
+  jump them. Revealing a card never touches its deal delay either: the turn has its own, `--turn-delay`.
+- The showdown's lift waits for the river when the two arrived together (`showdownWithBoard`: the `SHOWDOWN` within 1 s of
+  the latest board card): `Seat` gets `liftAfter = DEAL_MS + FLIP_MS` and card `i` turns after `liftAfter + i ×
+  SHOWDOWN_STAGGER_MS`. `useRevealHold` adds the same wait to the result card's (see `HandResult` above).
+
+**The turn is two-sided.** A card that turns — a dealt face-up card, a board card, an opponent's at the showdown — is a
+turn about the vertical axis (review 2026-09-29, No1): `Card` is an HTML wrapper (`.card`: size, drop shadow, the slide
+or fade-in, `perspective`), a flipper and the side(s) it shows. The 3D is the turning state's alone: `.cardTurn` (or
+`.cardLift`) puts the flipper in `preserve-3d` and gives its sides `backface-visibility: hidden`, and it stays on while
+the turned face is up, so the back rotated behind it stays hidden; a card that never turns draws one side and stays flat.
+The face is the flipper's resting style and the keyframe holds only the start, so with motion off the reveal is instant.
+The side that shows is the card's one `role="img"` with the label and `data-card` / `data-face`, from the render that
+reveals it; the back behind a turned face is `aria-hidden` with none of them, so counts by role or label never see it,
+and nothing waits on `animationend`. A card that mounts face up under no deck does not turn.
+
+**Reduced motion.** `prefers-reduced-motion: reduce` switches every moving class off (`.cardDealt`, `.cardTurn`,
+`.cardLift`, `.cardLifting`, the fade-in; `Card.test` lists them), so every card is where it ends up at once, and the
+result card is not held (nothing turns). The peel keeps working (below).
+
+### The squeeze: `PeelCard` and the room's round (Plan 21, spec 2026-10-08 §3, §4.2)
+
+A Blind room created with "Nặn bài" (`room.config.blind.squeeze`) deals the viewer's cards face down, and the viewer
+turns them by hand. The server knows only the outcome (`REVEAL`, see `docs/server-kit.md`); the peel is a gesture on
+the viewer's own screen.
+
+`PeelCard` (`table/PeelCard.tsx`, props `{ card, size?, open, onRevealed, dealt?, delayMs?, className? }`) is a face-down
+card that is pressed anywhere and dragged inward. Its geometry is pure, in `table/peel.ts`:
+
+- **Direction and fold.** The card peels *from the pressed point into its centre* (`peelDirection`: not snapped to an edge
+  or a corner; a press within `centreDead` = 16 px of the centre peels from the bottom edge). The fold is a line
+  perpendicular to that, a distance from the pressed edge proportional to the drag: dragging `travel` = 0.75 of the
+  card's length along the peel peels it right over. `peelFrame(u, p, w, h)` gives, for the peel `p` ∈ [0, 1], the back's
+  clip (the part not yet lifted), the face's clip and its shift (the face that was *under* the card, slid along the peel
+  by 2f − L, upright — not mirrored) and the fold line for the thin light-then-dark band (10 px) along it, which stays
+  inside the card. 2D only — clip and translate, no `rotate3d`: Chrome stacks the layers wrongly when the fold is diagonal.
+- **The numbers**, `PEEL = { threshold 0.5, flick 0.9, travel 0.75, snapMs 200, finishMs 260, slideMs 220, centreDead 16 }`.
+  Let go past `threshold`, or moving inward at `flick` px/ms once `p` > 0.12 (`shouldOpen`), and the card peels the rest
+  of the way (`finishMs`, scaled by what is left of the peel) and slides back into place face up (`slideMs`); let go
+  earlier and it snaps back face down (`snapMs`: the spec's 0.2 s, where the plan had written 220 ms).
+- **The flick** is read from the pointer's real and coalesced positions (`getCoalescedEvents`, the raw 120–240 Hz samples
+  a touch screen reports between frames) over the last 100 ms of its run, on the events' own clock
+  (`event.timeStamp`); a pointer that has paused for 40 ms has stopped, so a drag that ends in a rest is no flick. Where
+  the browser coalesces nothing (jsdom, older Safari) it reads the events it gets — see Known gaps.
+- **Pointer handling.** `setPointerCapture`, and `touch-action: none` while the card is down so the page does not scroll
+  under the finger, `auto` once it is up (a face-up card lets a touch scroll the room). One pointer at a time: a second
+  finger is ignored. A pointer the system takes away (`pointercancel`, a lost capture — a phone's home swipe starts at
+  the bottom edge, where the viewer's cards sit) *always* snaps the card back, however far or fast it went; a
+  `lostpointercapture` from a child as the card takes a touch is not the card's own and changes nothing.
+- **From outside.** `open` turning true (the "Lật" pill, a decision, the server's forced turn, the round ending) opens the
+  card once, from wherever the peel is, taking over a drag in progress; a card dealt from the deck waits to land first.
+  A card mounted with `open` true is simply up. `onRevealed` is called once when the card is face up and at rest,
+  however it got there, and is read when called, so a new arrow each render neither restarts the open nor reports twice.
+- **Names.** While down (or mid-peel) the card's root is the one `role="img"` named `labels.peelHint` ("Lá úp — kéo để
+  lật"; it carries `data-peel` and `data-face="down|peeling|up"`); once up, the face names itself with `cardLabel` and the
+  root has no role. Under reduced motion every tween jumps to its end: a drag still peels, and opens or drops back the
+  moment it is let go.
+
+The playground's `#peel` page is the card alone on the felt, for trying the gesture at any edge or corner.
+
+**On the table.** `Seat` draws the viewer's own cards as `PeelCard`s *for the whole hand* of a squeeze room (swapped for
+`Card`s mid-hand they would remount and come out of the deck again), each `open = openAll || seat.revealed || !squeezeRound`:
+the "Lật" pill below the cards turns both at once, the server turning the seat (a decision, the forced turn at the
+deadline) opens what is still down, and so does the round ending. `REVEAL` goes out **once per hand, after the viewer's last
+card is up** (`onCardUp`, then `onReveal` → `PokerTable` → `RoomScreen`'s `client.reveal()`), not when the first card
+turns and not at all if the server turned the seat itself. The "Lật" pill is 28 px tall at least, and it keeps its place for
+the whole hand (out of sight and reach once nothing is left to turn): taken out, it would move the seat's block and the
+cards opening in it. A ring↔stack switch in the middle of a round remounts the seat; a card peeled but not yet reported
+comes back down, and the next "Lật" may send a second `REVEAL`, which the engine takes as the no-op it is. A `REVEAL` lost
+with the socket is sent once more: when the reconnect's snapshot rebuilds the hand (`restored`, which `PokerTable` passes
+on) with the seat still unturned while this seat's cards are up from before, `Seat` tells the table again — not for a hand
+that was already a snapshot when it told. Auto-play's own `REVEAL` (`useGameClient`) is keyed on the hand and the
+reconnect (`roomReturns`) the same way. The pill hands keyboard focus to the seat (a `tabIndex={-1}` group) as it hides,
+so a player who pressed it from the keyboard is not dropped to the page.
+
+**The round's clock.** The squeeze round's countdown (`TurnTimer`) is drawn on the **viewer's own plate**, while their
+cards are not all turned — in a pure-luck round, until they are; in a play-or-fold one, until they have *chosen* too (its
+20 s covers the peel and then the choice). Nobody is acting in a squeeze round, so no other seat gets the deadline.
+Opponents show "Đã lật" (`labels.revealed`) while the round is on and they have turned; a seat that has decided shows
+only "Đã chọn", which stands for both (the line under the plate stays one badge long).
+
+**Strings.** `labels.deck`, `labels.peelHint`, `actions.revealCards` ("Lật"), `labels.revealed`, `labels.waitSqueeze`,
+`labels.waitOthersReveal`, `labels.squeezeMode` ("Nặn bài", the badge), `create.squeeze`, `create.squeezeHint` and
+`create.squeezeTimer` ("{{time}} · nặn bài"); no `phase.squeeze` — nothing prints the round's name.
+
 ### Avatars (`src/avatar2d/`)
 
 The kit does render an avatar — a **chibi**: pre-rendered PNG layers on a shared frame, not a 3D rig or anything
@@ -360,7 +513,7 @@ seat's `ChibiConfig`; a bot never asks it — `PokerTable` draws `botChibi` for 
 | `PlayerBar` | `displayName`, `balance`, `status`, `lang`, `avatar?` (the initial in a gold disc when absent) |
 | `LanguageSwitch` | `lang`, `onChange` |
 | `HoldemFields` | `tierIndex`, `onTierIndex`, `minBuyInBB`, `maxBuyInBB`, `onMinBuyInBB`, `onMaxBuyInBB`, `disabled`, `lang` |
-| `BlindFields` | `holeCards`, `onHoleCards`, `decisionMode`, `onDecisionMode`, `fixedWager`, `onFixedWager`, `botCount`, `onBotCount`, `maxBots`, `disabled`, `lang` |
+| `BlindFields` | `holeCards`, `onHoleCards`, `decisionMode`, `onDecisionMode`, `fixedWager`, `onFixedWager`, `botCount`, `onBotCount`, `maxBots`, `squeeze`, `onSqueeze`, `disabled`, `lang` |
 
 `CreateRoomForm` only offers values from `ECONOMY` and still runs the draft through `validateRoomConfig`; it is the
 *validated* config that reaches `onSubmit`.
@@ -375,13 +528,26 @@ scrolling sideways; from 342 px it is one line. The narrowest ticket is the grid
 those three windows.
 
 `HoldemFields` (blind tier plus the buy-in window in big blinds) and `BlindFields` (hole cards, decision mode, fixed
-wager — whose field carries the table-limit hint, "Table limit per player: … (5× the wager)" — and bot filler) are the mode-specific building blocks `CreateRoomForm` swaps between; both are fully controlled,
+wager — whose field carries the table-limit hint, "Table limit per player: … (5× the wager)" — bot filler and the
+"Nặn bài" box) are the mode-specific building blocks `CreateRoomForm` swaps between; both are fully controlled,
 and an app only reaches for them directly when it builds its own room form. The swap happens in a box that reserves
 the taller mode's height in the two-column layout (`.modeFields`: 14rem from 22rem of form width up), so the
 create-room dialog does not change height when the host flips the mode; a field added to either set must fit that
 height or raise it (the create-room height check in `apps/normal-web/e2e/normal.spec.ts` fails when it does not).
 On a phone (one column) nothing is reserved: the dialog is as tall as its `max-height` in both modes, so it does not
 move either.
+
+**The "Nặn bài" box** (Plan 21, spec 2026-10-08 §4.2.1) is a checkbox in the Blind fields, off to begin with, under "Số
+lượng bot" in the same cell (`.botsCell`): the wager's hint runs two lines, so that row is taller than the bot count by
+about a line and a half, and the box takes the slack — Blind's fields end where they did and `.modeFields` stays 14rem.
+It is its own label (not a `Field`, which would re-caption it), so its accessible name is just "Nặn bài"; what it does to
+the round ("each round lasts up to 20 s, less once everyone has turned") is its description, `aria-describedby` text that
+is screen-reader-only (`visually-hidden`) rather than a line of the dialog. While it is ticked the turn-timer cell — the
+box's visible consequence — stops being a select and reads, read-only, "20 giây · nặn bài" (`create.squeezeTimer`); the
+form submits `turnTimerSec: 20` and `blind.squeeze: true` whatever timer was picked before (the server forces it anyway),
+and unticking gives the select back with the timer that was chosen. The box belongs to Blind only: ticked and then
+flipped to Hold'em, the timer and the config are Hold'em's own. A Blind room with `config.blind.squeeze === true` wears
+a gold "Nặn bài" badge (`labels.squeezeMode`) in `RoomList` and in `RoomHeader`.
 
 ### Primitives
 
@@ -415,7 +581,7 @@ Tokens live in `src/theme/tokens.css` and are all an app needs to restyle the ki
 | Cards | `--card-face`, `--card-ink`, `--card-red` |
 | Type | `--font-display`, `--font-body` |
 | Space | `--space-1`…`--space-8` (4 px scale), `--radius-sm/md/lg/pill`, `--tap` (44 px), `--measure-wide` (1180 px: lobby, wardrobe) and `--measure-narrow` (44rem: pages read top to bottom) — content widths, padding not included |
-| Motion | `--dur-1`, `--dur-2`, `--dur-flip` (a revealed card's turn), `--ease` |
+| Motion | `--dur-1`, `--dur-2`, `--dur-flip` (a card's turn), `--dur-deal` (the slide out of the deck), `--dur-lift` (the showdown's lift and turn), `--ease`, `--ease-lift` |
 | Misc | `--focus`, `--shadow-1`, `--shadow-2`, `--z-modal` |
 
 **Dark is the default**; `data-theme="light"` on the root swaps the page to parchment. The felt does not follow it —
@@ -491,22 +657,14 @@ palette)` in the testing export models the least forgiving engine for that test.
 
 The one layout knob is `--bp-stage` (see [Embedding](#embedding-it-in-an-app)).
 
-**Motion** is CSS only — dealt cards flip in on a 60 ms stagger, the turn ring is a conic-gradient countdown, the pot
-pulses once per `POT_UPDATED`, the winner seat glows. `prefers-reduced-motion: reduce` switches every animation and
-transition off in `global.css`; there is no JS animation loop to disable.
-
-A face-down card that is revealed where it lies — an opponent's hand at the showdown — **turns over** (review
-2026-09-29, No1): a two-sided turn about the vertical axis, `--dur-flip` (600 ms), ease-in-out so the back shows for
-the first half and the face for the second, on the same 60 ms stagger. `Card` is an HTML wrapper (`.card`: size, drop
-shadow, deal-in, `perspective`), a flipper and the side(s) it shows. The 3D is the turning state's alone: `.cardTurn`
-puts the flipper in `preserve-3d` and gives its sides `backface-visibility: hidden`, and it stays on while the turned
-face is up, so the back rotated behind it stays hidden; a card that never turns — the board, the viewer's own, the
-result card's, most of the table — draws one side and stays flat. The face is the flipper's resting style and the
-keyframe holds only the start (`from { rotateY(180deg) }`), so with motion off the reveal is instant. The side that
-shows is the card's one `role="img"` with the label and `data-card` / `data-face`, from the render that reveals it; the
-back behind a turned face is `aria-hidden` with none of them, so counts by role or label never see it, and nothing
-waits on `animationend`. A card that mounts face up does not turn; it keeps its deal-in. The result card waits for the
-turn to end (`REVEAL_HOLD_MS`, see `HandResult` above), and so do the table's own result cues (`resultPending`, same place).
+**Motion** is CSS, and one script. The cards' slide out of the deck, their turn and the showdown's lift are keyframes —
+**Card motion**, under the table above, has them and their numbers (`--dur-flip` 600 ms, `--dur-deal` 360 ms,
+`--dur-lift` 720 ms, `--ease-lift`); the turn ring is a conic-gradient countdown, the pot pulses once per `POT_UPDATED`,
+the winner seat glows. The script is `PeelCard`'s `requestAnimationFrame` tween (the squeeze's peel, snap and slide).
+`prefers-reduced-motion: reduce` switches every animation and transition off in `global.css` and in the card's own list in
+`table.module.css`, and `PeelCard` reads the same media query and jumps each of its tweens to its end — the gesture still
+works, the card opens or drops back at once. The result card waits for the showdown's turn to end (`REVEAL_HOLD_MS`, see
+`HandResult` above), and so do the table's own result cues (`resultPending`, same place).
 
 ---
 
@@ -642,7 +800,8 @@ budget here — it is what a browser actually downloads. Raw sizes are recorded 
 a regression, not because anything is measured against them.
 
 `pnpm --filter @bp/ui-kit build:playground` builds the playground (React 18 + i18next + the whole of `@bp/ui-kit`,
-plus `@bp/core`'s engine and bot, which only the harness needs). Re-measured after the final-review fix wave:
+plus `@bp/core`'s engine and bot, which only the harness needs). Re-measured after the final-review fix wave (before
+Plan 21: the deck, `PeelCard` and the new styles are not in these figures, and the table has not been measured since):
 
 | Bundle | Raw (informational) | Gzip (**budgeted**) |
 | --- | --- | --- |
@@ -682,8 +841,12 @@ Exported for consumers' tests as well as the kit's own:
 The kit's own tests run under jsdom with `@testing-library/react`: `pnpm --filter @bp/ui-kit test`.
 
 For eyeballing changes, `pnpm --filter @bp/ui-kit playground` starts Vite on port 5175 with an engine-driven mock
-server — real `@bp/core` hands, real `filterEvent` hole-card hiding, real reducer. Controls: game mode, room/lobby
-view, seat count (4/6/9), theme, language, forced stack layout, and "next hand". `#worst/<state>/<seats>/<lang>`
+server — real `@bp/core` hands, real `filterEvent` hole-card hiding, real reducer. Controls: game mode (Hold'em,
+Blind A, Blind B, and — Plan 21 — "Blind A · nặn bài" and "Blind B · nặn bài", `blindS` / `blindBS`: squeeze rooms whose
+viewer's cards come face down to peel or turn with "Lật"; the first also seats a second, non-bot player who turns in
+their own time), room/lobby view, seat count
+(4/6/9), theme, language, forced stack layout, and "next hand". `#peel` is the squeeze's `PeelCard` alone on the felt, for
+trying the gesture from any edge or corner. `#worst/<state>/<seats>/<lang>`
 (`playground/scenarios.tsx`) skips the engine and freezes the room at its tallest — `waiting`, `turn` (the Hold'em
 sizing tray, my turn ring running) or `result` (every seat shown down, two side pots, the countdown on the card) —
 full-viewport, for measuring a layout against a screen size.
@@ -699,6 +862,13 @@ full-viewport, for measuring a layout against a screen size.
   is reserved from 768 px up so it does not also move on every turn.
 - Playground screenshots are described in `packages/ui-kit/playground/screenshots/README.md` rather than committed
   as images.
+- **The squeeze peel** is driven in Chromium only, and not yet on a real phone: Firefox's and WebKit's touch-capture
+  semantics are guarded in `PeelCard` and unit-tested with synthetic events, never run in those browsers. On a device
+  that does not coalesce pointer events a single quick move after a rest is not read as a flick. A play-or-fold squeeze
+  table on a 375 × 812 phone (six seats, one bot) scrolls its stage 11 px in the round (its header takes a third line and
+  the viewer's seat the "Lật" pill's row; the seat stays on screen); a pure-luck one fits since the phone's tray wait
+  line gave back 8 px (the final fix wave: it was 3 px over). A ring↔stack switch in the middle of a round can send a
+  second, harmless `REVEAL`. All four are written up in `docs/known-limitations.md`.
 - **The badge test measures the grounds a badge sits on today** (see Theming → Badge text). A badge on a ground it
   does not list is not measured, and one place is tight: teal under a dark `.panel.ink`'s highlight. The test holds
   that highlight at 2 %, above anywhere a badge is (Lite's "claimed" badge: 0.8–1.4 %, none on a phone; titled panels put

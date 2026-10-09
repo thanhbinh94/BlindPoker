@@ -154,4 +154,11 @@ describe('simulation invariants', () => {
       expect(state.phase).toBe('COMPLETE')
     }
   })
+  it('a squeeze hand is stepped through by turning every unturned seat', () => {
+    const rules: BlindRules = { ...BLIND_B, decisionMode: 'none', squeeze: true }
+    const { state, events } = simulateHand({ handId: 's', rules, seats: seats([5000, 5000, 5000]), button: 0 }, randomPolicy, seededRng(4))
+    expect(state.phase).toBe('COMPLETE')
+    expect(events.filter((e) => e.type === 'PLAYER_REVEALED')).toHaveLength(3)
+    expect(events.filter((e) => e.type === 'SQUEEZE_ENDED')).toHaveLength(1)
+  })
 })

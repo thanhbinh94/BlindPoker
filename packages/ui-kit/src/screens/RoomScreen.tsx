@@ -103,6 +103,10 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
   )
 
   const act = useCallback((action: PlayerAction) => void request.run(() => client.act(action)), [request, client])
+  // Squeeze mode: my cards are all up (the seat asks only while the round is on). Not through `request`, which would grey
+  // the controls while it is out for something the player did not ask the tray for; a refusal reaches the reducer like
+  // any other, and the rejection a socket closing mid-request produces has no one to report to, as with auto-play's.
+  const reveal = useCallback(() => void client.reveal().catch(() => undefined), [client])
   const closeBuyIn = useCallback(() => setBuyInSeat(null), [])
   const closeManage = useCallback(() => setManagingAfter(null), [])
   const clearError = useCallback(() => {
@@ -242,6 +246,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
           expressionFor={expressionFor}
           captionFor={captionFor}
           resultPending={held}
+          onReveal={reveal}
         />
 
         {/* The result card is dealt onto the felt, so it keeps the felt's night palette in either theme. The countdown

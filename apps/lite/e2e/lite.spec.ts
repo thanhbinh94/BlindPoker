@@ -81,19 +81,27 @@ async function signIn(page: Page, displayName: string): Promise<string> {
   return token!
 }
 
-/** Fills the create-room dialog for a Blind table and returns the room code from the room header. */
-async function createBlindRoom(page: Page, roomName: string, bots: number): Promise<string> {
+/**
+ * Fills the create-room dialog for a Blind table and returns the room code from the room header. A `squeeze` table
+ * ("Nặn bài") has a fixed 20 s round, so the timer's select is left alone: ticking the box turns it into a read-only cell.
+ */
+async function createBlindRoom(page: Page, roomName: string, bots: number, squeeze = false): Promise<string> {
   await page.getByRole('button', { name: 'Tạo phòng' }).click()
   const dialog = page.getByRole('dialog')
   await expect(dialog).toBeVisible()
 
   await dialog.getByRole('button', { name: 'Blind Poker' }).click()
   await dialog.getByLabel('Tên phòng').fill(roomName)
-  await dialog.getByLabel('Thời gian mỗi lượt').selectOption({ label: '30 giây' })
+  if (!squeeze) await dialog.getByLabel('Thời gian mỗi lượt').selectOption({ label: '30 giây' })
   await dialog.getByLabel('Số lá mỗi người').selectOption({ label: '2 lá' })
   await dialog.getByLabel('Cách chơi').selectOption({ label: 'Chơi hoặc bỏ' })
   await dialog.getByLabel('Mức cược cố định').selectOption({ label: '1.000' })
   await dialog.getByLabel('Số lượng bot').selectOption({ label: String(bots) })
+  if (squeeze) {
+    await dialog.getByLabel('Nặn bài', { exact: true }).check()
+    await expect(dialog.getByRole('combobox', { name: 'Thời gian mỗi lượt' }), 'the timer select is hidden while the box is ticked').toHaveCount(0)
+    await expect(dialog.getByLabel('Thời gian mỗi lượt'), 'the timer reads the fixed round').toHaveValue('20 giây · nặn bài')
+  }
   await dialog.getByRole('button', { name: 'Tạo phòng' }).click()
 
   await expect(page).toHaveURL(/#\/room$/)
@@ -312,6 +320,31 @@ test.describe('Blind Luck Poker Lite', () => {
 
     await contextA.close()
     await contextB.close()
+  })
+
+  test('bàn nặn bài: huy hiệu "Nặn bài", vòng 20 giây thay ô giờ, và nút Lật mở các lá úp', async ({ page }) => {
+    await signIn(page, unique('Giang'))
+
+    await createBlindRoom(page, unique('Bàn '), 1, true)
+    await expect(page.locator('header').getByText('Nặn bài', { exact: true }), 'the room header badges the squeeze table').toBeVisible()
+
+    // One human and a bot (turned from the deal): a hand deals the viewer's two cards face down, and Lật turns both.
+    await sit(page, 0)
+    await page.getByRole('button', { name: 'Sẵn sàng', exact: true }).click()
+    await page.getByRole('button', { name: 'Bắt đầu', exact: true }).click()
+    const mine = page.locator('[data-me="true"] [data-peel]')
+    await expect(mine).toHaveCount(2)
+    await expect(mine.first()).toHaveAttribute('data-face', 'down')
+    await page.getByRole('button', { name: 'Lật', exact: true }).click()
+    await expect(page.locator('[data-me="true"] [data-peel][data-face="up"]')).toHaveCount(2)
+    await shot(page, 'room-squeeze-desktop')
+
+    // The hand plays out from there: the decision of a play-or-fold table (the bot's may be either), then the result.
+    await page.getByRole('button', { name: 'Bỏ bài', exact: true }).click()
+    await expect(resultCard(page)).toBeVisible()
+
+    await page.getByRole('button', { name: 'Rời phòng' }).click()
+    await expect(page).toHaveURL(/#\/lobby$/)
   })
 
   test('điểm danh và cài đặt', async ({ page }) => {
