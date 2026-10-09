@@ -29,7 +29,7 @@
     "submitRegister": "Tạo tài khoản",
     "name": {
       "length": "Tên hiển thị cần 2–20 ký tự",
-      "chars": "Tên hiển thị chỉ gồm chữ, số, dấu cách và _ - .",
+      "chars": "Tên hiển thị chỉ được dùng chữ, số, dấu cách và _ - .",
       "edges": "Tên hiển thị không được bắt đầu hoặc kết thúc bằng _ - ."
     },
     "errors": {
@@ -81,7 +81,7 @@
     "relief": {
       "title": "Cứu trợ",
       "lead": "Khi số dư dưới {{threshold}}, bạn có thể nhận cứu trợ để số dư trở lại {{target}}.",
-      "error": "Không tải được trạng thái cứu trợ",
+      "error": "Không tải được thông tin cứu trợ",
       "eligible": "Bạn có thể nhận cứu trợ ngay bây giờ.",
       "claim": "Nhận cứu trợ",
       "claiming": "Đang nhận…",
@@ -260,7 +260,7 @@
       "frame": "Khung",
       "hairColor": "Màu tóc",
       "eyeColor": "Màu mắt",
-      "words": "Danh hiệu & Huy hiệu"
+      "words": "Danh hiệu & huy hiệu"
     },
     "filter": {
       "locked": "Chưa có"
@@ -330,7 +330,7 @@
     "head_dealer_visor01": "Mũ chia bài",
     "head_beret_red01": "Mũ nồi đỏ",
     "head_conical_hat01": "Nón lá",
-    "head_party_cone01": "Mũ chóp tiệc",
+    "head_party_cone01": "Mũ sinh nhật",
     "head_tophat01": "Mũ chóp quý ông",
     "head_crown_gold01": "Vương miện vàng",
     "face_glasses_round_gold01": "Kính tròn gọng vàng",
@@ -360,8 +360,8 @@
     "title_rookie": "Tân binh",
     "title_regular": "Khách quen",
     "title_night_owl": "Cú đêm",
-    "title_devoted": "Bền bỉ",
-    "title_hot_hand": "Tay nóng",
+    "title_devoted": "Chuyên cần",
+    "title_hot_hand": "Vận đỏ",
     "badge_bronze": "Huy hiệu đồng",
     "badge_silver": "Huy hiệu bạc",
     "badge_gold": "Huy hiệu vàng",
@@ -379,7 +379,7 @@
     "haircolor_blue01": "Tóc xanh dương",
     "haircolor_green01": "Tóc xanh lá",
     "haircolor_purple01": "Tóc tím",
-    "haircolor_lavender01": "Tóc bạc tím",
+    "haircolor_lavender01": "Tóc tím pastel",
     "eyecolor_brown01": "Mắt nâu",
     "eyecolor_blue01": "Mắt xanh dương",
     "eyecolor_green01": "Mắt xanh lá",
@@ -399,8 +399,8 @@
     "head_beanie_red01": "Mũ len đỏ",
     "head_beanie_grey01": "Mũ len xám",
     "head_beanie_mustard01": "Mũ len vàng mù tạt",
-    "head_party_cone_blue01": "Mũ chóp tiệc xanh dương",
-    "head_party_cone_green01": "Mũ chóp tiệc xanh lá",
+    "head_party_cone_blue01": "Mũ sinh nhật xanh dương",
+    "head_party_cone_green01": "Mũ sinh nhật xanh lá",
     "hair_f_bob01": "Tóc bob",
     "hair_f_hime01": "Tóc dài mái bằng",
     "hair_f_wavy01": "Tóc gợn sóng",
@@ -411,7 +411,7 @@
     "hair_m_spiky01": "Tóc vuốt dựng",
     "skin_porcelain01": "Da trắng sứ",
     "skin_fair01": "Da sáng",
-    "skin_lighttan01": "Da sáng ấm",
+    "skin_lighttan01": "Da bánh mật",
     "skin_tan01": "Da ngăm",
     "skin_brown01": "Da nâu",
     "skin_deep01": "Da nâu đậm"

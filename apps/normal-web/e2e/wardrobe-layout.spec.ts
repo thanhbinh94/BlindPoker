@@ -99,7 +99,7 @@ async function assertNavNeverWraps(page: Page): Promise<void> {
   await goToWardrobeTab(page, 'Trang phục')
   await assertTablistOnOneLine(page, 'Trang phục')
 
-  // "Danh hiệu & Huy hiệu" (design §4.4) is the longest sub-tab label in the whole screen — the one most
+  // "Danh hiệu & huy hiệu" (design §4.4) is the longest sub-tab label in the whole screen — the one most
   // likely to force a wrap on a narrow phone.
   await goToWardrobeTab(page, 'Trang trí')
   await assertTablistOnOneLine(page, 'Trang trí')
@@ -155,7 +155,7 @@ async function expectSwatchClearsPill(panel: Locator, where: string): Promise<vo
 /**
  * The card grids at the page's current viewport (No8b, No11b): the views of the user's screenshots — the old
  * inventory's "Trang phục" group (No8-1; the inventory has since folded into the wardrobe, No5, whose "Quần áo" tab
- * is that view now), the wardrobe's hats (No8-2), "Danh hiệu & Huy hiệu" (No11-1) — and the other tabs that draw
+ * is that view now), the wardrobe's hats (No8-2), "Danh hiệu & huy hiệu" (No11-1) — and the other tabs that draw
  * cards. Fresh account: every card is the starter set, so all the words are locked and the hats carry colour dots,
  * which is where the rows were uneven. The grids are measured with "Hiện cả món chưa có" ticked (No11a): unticked, a
  * fresh account's hats, faces, auras, frames and words are one line each, not a grid.
@@ -206,9 +206,9 @@ async function expectCardGrids(page: Page): Promise<void> {
   // "Tay nóng" ended a row of its own and "Huy hiệu" printed straight under it (No11-1).
   await goToWardrobeTab(page, 'Trang trí', 'Danh hiệu')
   await expect(page.getByRole('heading', { name: 'Huy hiệu', level: 3 })).toBeVisible()
-  await expectEvenCardRows(panel, `wardrobe, Trang trí → Danh hiệu & Huy hiệu, ${where}`, 2)
-  await expectHeadingsClearOfCards(panel, `wardrobe, Trang trí → Danh hiệu & Huy hiệu, ${where}`)
-  await expectNoTextOverlapDown(page, `wardrobe, Trang trí → Danh hiệu & Huy hiệu, ${where}`)
+  await expectEvenCardRows(panel, `wardrobe, Trang trí → Danh hiệu & huy hiệu, ${where}`, 2)
+  await expectHeadingsClearOfCards(panel, `wardrobe, Trang trí → Danh hiệu & huy hiệu, ${where}`)
+  await expectNoTextOverlapDown(page, `wardrobe, Trang trí → Danh hiệu & huy hiệu, ${where}`)
 }
 
 /** Fills the naming dialog's default name and saves — the empty-slot flow (design §3.1 item 4): a click on
