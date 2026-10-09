@@ -474,12 +474,12 @@ test.describe('Blind Luck Poker Normal — bố cục tủ đồ (Kế hoạch 1
     await page.locator('summary', { hasText: 'Bộ đồ đã lưu' }).click()
 
     await saveOutfitInEmptySlot(page, 1)
-    await page.getByRole('button', { name: 'Bộ đồ Bộ 1' }).click()
+    await page.getByRole('button', { name: 'Tùy chọn cho Bộ 1' }).click()
     await assertOutfitMenuWithinViewport(page)
     await expectNoSidewaysScroll(page)
 
     await saveOutfitInEmptySlot(page, 5)
-    await page.getByRole('button', { name: 'Bộ đồ Bộ 5' }).click()
+    await page.getByRole('button', { name: 'Tùy chọn cho Bộ 5' }).click()
     await assertOutfitMenuWithinViewport(page)
     await expectNoSidewaysScroll(page)
   })

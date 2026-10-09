@@ -71,7 +71,7 @@
       "title": "Đã nhận thưởng ngày {{day}}",
       "points": "Điểm",
       "item": "Vật phẩm",
-      "fallback": "Bạn đã có hết vật phẩm của mốc này nên nhận {{amount}} thay thế.",
+      "fallback": "Bạn đã có hết vật phẩm của mốc này nên được nhận {{amount}} thay vào đó.",
       "balance": "Số dư mới",
       "streak": "Chuỗi điểm danh: {{streak}} ngày"
     },
@@ -173,7 +173,7 @@
       "bestLoginStreak": "Chuỗi điểm danh dài nhất",
       "botHands": "Số ván có bot",
       "roomsJoined": "Số phòng đã vào",
-      "gamesCompleted": "Số ván chơi trọn"
+      "gamesCompleted": "Số ván chơi trọn vẹn"
     },
     "history": {
       "title": "Ván gần đây",
@@ -320,7 +320,7 @@
     "apply": "Mặc bộ này",
     "saveHere": "Lưu vào đây",
     "overwrite": "Lưu đè",
-    "menu": "Bộ đồ {{name}}",
+    "menu": "Tùy chọn cho {{name}}",
     "rename": "Đổi tên",
     "delete": "Xóa",
     "error": "Không thực hiện được thao tác, vui lòng thử lại"
@@ -341,7 +341,7 @@
     "outfit_dealer01": "Đồng phục chia bài",
     "outfit_tet_red01": "Áo dài Tết đỏ",
     "outfit_tuxedo01": "Bộ tuxedo",
-    "outfit_royal_robe01": "Long bào hoàng gia",
+    "outfit_royal_robe01": "Áo bào hoàng gia",
     "outfit_champion01": "Bộ nhà vô địch",
     "aura_water01": "Hào quang nước",
     "aura_wind01": "Hào quang gió",
@@ -447,7 +447,7 @@
       "desc": "Đăng nhập đủ 100 ngày."
     },
     "login_streak_7": {
-      "name": "Chuỗi bảy ngày",
+      "name": "Chuỗi 7 ngày",
       "desc": "Điểm danh liên tục 7 ngày."
     },
     "login_streak_28": {
