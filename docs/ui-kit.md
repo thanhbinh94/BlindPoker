@@ -233,7 +233,7 @@ still be held on the felt), "Bạn đã bỏ bài — chờ ván sau" for a fold
 all-in seat, "Đã chọn — chờ người chơi khác" for a Blind seat that has decided, "Chờ lật bài" for a Blind hand past its
 decision and for a Hold'em run-out (fewer than two seats that can still act: no turn is coming), and "Đang chờ đến lượt
 bạn" otherwise — Hold'em between turns, or a Blind seat whose own decision is on its way. In a pure-luck squeeze round
-(Plan 21) the line comes before those Blind rows: "Nặn bài của bạn — hết giờ sẽ tự lật" (`labels.waitSqueeze`) while the
+(Plan 21) the line comes before those Blind rows: "Mời nặn bài — hết giờ sẽ tự lật" (`labels.waitSqueeze`) while the
 viewer's cards are down, "Đã lật — chờ người chơi khác" (`labels.waitOthersReveal`) once they are up, and a spectator,
 who has none to turn, "Chờ lật bài". The pre-action and auto-play rows under the line are unchanged, except that
 auto-play is offered in a squeeze room too, where it means "turn my cards the moment they are dealt" (in a play-or-fold

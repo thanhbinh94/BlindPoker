@@ -36,7 +36,7 @@
     "retry": "Thử lại"
   },
   "preActions": {
-    "label": "Trước lượt của bạn",
+    "label": "Chọn sẵn trước lượt",
     "checkFold": "Xem/Bỏ",
     "callAny": "Theo mọi mức",
     "fold": "Bỏ bài",
@@ -68,7 +68,7 @@
     "handCancelled": "Ván bị hủy",
     "handOver": "Ván đã kết thúc",
     "handResult": "Kết quả ván",
-    "holeCards": "Số lá riêng",
+    "holeCards": "Số lá mỗi người",
     "host": "Chủ phòng",
     "inHand": "Đang chơi",
     "mainPot": "Pot chính",
@@ -105,7 +105,7 @@
     "waitFolded": "Bạn đã bỏ bài — chờ ván sau",
     "waitOthersReveal": "Đã lật — chờ người chơi khác",
     "waitReveal": "Chờ lật bài",
-    "waitSqueeze": "Nặn bài của bạn — hết giờ sẽ tự lật",
+    "waitSqueeze": "Mời nặn bài — hết giờ sẽ tự lật",
     "waiting": "Đang chờ",
     "waitingForTurn": "Đang chờ đến lượt bạn",
     "winner": "Người thắng",
@@ -237,8 +237,8 @@
     "shortToSit": "Số dư không đủ để vào bàn (cần {{amount}} điểm)",
     "leaveConfirm": "Bạn có chắc muốn rời phòng?",
     "closed": "Phòng đã đóng",
-    "kicked": "Bạn đã bị đuổi khỏi phòng",
-    "hostLeft": "Chủ phòng đã rời đi",
+    "kicked": "Bạn đã bị mời ra khỏi phòng",
+    "hostLeft": "Chủ phòng đã rời phòng",
     "reconnecting": "Mất kết nối — đang kết nối lại…",
     "sitOut": "Tạm nghỉ",
     "sitIn": "Chơi tiếp",
@@ -250,7 +250,7 @@
   },
   "cancel": {
     "shutdown": "Máy chủ đang tắt",
-    "serverRestart": "Máy chủ khởi động lại",
+    "serverRestart": "Máy chủ vừa khởi động lại",
     "roomClosed": "Phòng đã đóng",
     "maintenance": "Máy chủ đang bảo trì",
     "other": "Không rõ lý do"
