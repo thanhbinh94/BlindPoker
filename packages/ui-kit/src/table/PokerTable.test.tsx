@@ -7,7 +7,7 @@ import { defaultChibi, type ChibiConfig, type ChibiSubject, type WearRef } from 
 import type { ClientHand } from '../client/types.js'
 import { createI18n } from '../i18n/index.js'
 import { holdemHand as hand, holdemRoom as room, makePlayer, makeRoom } from '../test-fixtures.js'
-import { DEAL_MS, DEAL_STAGGER_MS, FLIP_MS, SHOWDOWN_STAGGER_MS } from './Card.js'
+import { BOARD_STAGGER_MS, DEAL_MS, DEAL_STAGGER_MS, FLIP_MS, SHOWDOWN_STAGGER_MS } from './motion.js'
 import { PokerTable } from './PokerTable.js'
 import s from './table.module.css'
 
@@ -56,13 +56,12 @@ describe('PokerTable', () => {
     expect(screen.getByText('300')).toBeInTheDocument()
     expect(screen.getByText(/disconnected/i)).toBeInTheDocument()
     expect(screen.queryAllByRole('button', { name: /sit down/i })).toHaveLength(0) // canSit false
-    // Spec 2026-10-08 §4.1.1: the deck is on the felt, and the cards are dealt from the seat after the button round the
-    // table — Bob (seat 2) first, then Ann on the button, then each one's second card.
+    // Spec 2026-10-08 §3: the deck is on the felt. This hand was rebuilt from a snapshot, so its cards were already on the
+    // table: nothing comes out of the deck, and they show at once, with no deal stagger (ruling 18, Task 5 review).
     expect(document.querySelector('[data-deck]')).not.toBeNull()
-    expect(dealDelays(2)).toEqual([0, 2 * DEAL_STAGGER_MS])
-    expect(dealDelays(0)).toEqual([DEAL_STAGGER_MS, 3 * DEAL_STAGGER_MS])
-    // …but a hand rebuilt from a snapshot was already on the table: nothing comes out of the deck.
     expect(document.querySelectorAll(`.${s.cardDealt}`)).toHaveLength(0)
+    expect(dealDelays(2)).toEqual([0, 0])
+    expect(dealDelays(0)).toEqual([0, 0])
   })
 
   describe('dealing from the deck', () => {
@@ -81,6 +80,15 @@ describe('PokerTable', () => {
       const board = screen.getByRole('group', { name: 'Community cards' })
       expect(dealtCards()).toHaveLength(4 + 3)
       expect(board.querySelectorAll(`.${s.cardDealt}`)).toHaveLength(3)
+      // Spec 2026-10-08 §4.1.1: round the table from the seat after the button — Bob (seat 2) first, then Ann on the
+      // button, then each one's second card; the flop's three come BOARD_STAGGER_MS apart.
+      expect(dealDelays(2)).toEqual([0, 2 * DEAL_STAGGER_MS])
+      expect(dealDelays(0)).toEqual([DEAL_STAGGER_MS, 3 * DEAL_STAGGER_MS])
+      expect([...board.querySelectorAll<HTMLElement>(`.${s.card}`)].map((el) => Number.parseInt(el.style.getPropertyValue('--deal-delay') || '0', 10))).toEqual([
+        0,
+        BOARD_STAGGER_MS,
+        2 * BOARD_STAGGER_MS,
+      ])
       // mine turn up once they land; Bob's stay backs
       expect(screen.getByRole('group', { name: 'Seat 1' }).querySelectorAll(`.${s.cardTurn}`)).toHaveLength(2)
       expect(screen.getByRole('group', { name: 'Seat 3' }).querySelectorAll(`.${s.cardTurn}`)).toHaveLength(0)
@@ -97,10 +105,12 @@ describe('PokerTable', () => {
 
     // Pre-flight 2026-10-09: the next hand's cards are new cards, even when the two hands' frames land in one render.
     it('deals the next hand afresh though it has as many cards as the last', () => {
-      const view = render(table({ ...hand, restored: false, dealtAt: Date.now() - 10_000 }))
+      const view = render(table({ ...hand, restored: false, dealtAt: Date.now() - 10_000, boardAt: Date.now() - 10_000 }))
       expect(dealtCards()).toHaveLength(0)
-      view.rerender(table({ ...hand, handId: 'h2', restored: false, dealtAt: Date.now() }))
+      view.rerender(table({ ...hand, handId: 'h2', restored: false, dealtAt: Date.now(), boardAt: Date.now() }))
       expect(screen.getByRole('group', { name: 'Seat 1' }).querySelectorAll(`.${s.cardDealt}`)).toHaveLength(2)
+      // the board too: the same three slots hold the new hand's flop
+      expect(screen.getByRole('group', { name: 'Community cards' }).querySelectorAll(`.${s.cardDealt}`)).toHaveLength(3)
     })
 
     // Spec 2026-10-08 §4.1.3: at the showdown an opponent's cards lift one after the other, 200 ms apart — after the river

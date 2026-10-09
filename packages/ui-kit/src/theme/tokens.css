@@ -168,5 +168,7 @@
   /* A card sliding out of the deck, and an opponent's card lifted and turned at the showdown (spec 2026-10-08 §3). */
   --dur-deal: 360ms;
   --dur-lift: 720ms;
+  /* The lift's curve: quick off the felt, slow into the landing, so its overshoot frame reads as settling. */
+  --ease-lift: cubic-bezier(0.3, 0.1, 0.25, 1);
   --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
 }

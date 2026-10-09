@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ClientHand } from '../client/types.js'
-import { DEAL_MS, FLIP_MS, LIFT_MS, SHOWDOWN_STAGGER_MS } from '../table/Card.js'
-import { showdownWithBoard } from '../table/PokerTable.js'
+import { DEAL_MS, FLIP_MS, LIFT_MS, SHOWDOWN_STAGGER_MS, showdownWithBoard } from '../table/motion.js'
 import { useMediaQuery } from '../table/useMediaQuery.js'
 
 /** The most cards one seat turns over: a Blind table deals two or three (`BlindRules.holeCards`), Hold'em two. */

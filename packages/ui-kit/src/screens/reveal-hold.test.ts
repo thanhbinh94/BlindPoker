@@ -2,7 +2,7 @@ import { HandCategory, parseCards } from '@bp/core'
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClientHand } from '../client/types.js'
-import { DEAL_MS, FLIP_MS, LIFT_MS, SHOWDOWN_STAGGER_MS } from '../table/Card.js'
+import { DEAL_MS, FLIP_MS, LIFT_MS, SHOWDOWN_STAGGER_MS } from '../table/motion.js'
 import { makeHand } from '../test-fixtures.js'
 import { REVEAL_HOLD_AFTER_BOARD_MS, REVEAL_HOLD_MS, useRevealHold } from './reveal-hold.js'
 

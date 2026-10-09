@@ -5,29 +5,10 @@ import { useTranslation } from 'react-i18next'
 import { cardLabel } from '../i18n/index.js'
 import { cx } from '../primitives/cx.js'
 import { useDeckAnchor } from './deck-anchor.js'
+import { DEAL_MS } from './motion.js'
 import s from './table.module.css'
 
 export type CardSize = 'sm' | 'md' | 'lg'
-
-/** How long a revealed card takes to turn over in place: the `--dur-flip` token in `tokens.css` (`Card.test` holds them equal). */
-export const FLIP_MS = 600
-/** The slide from the deck (spec 2026-10-08 §3): the `--dur-deal` token. */
-export const DEAL_MS = 360
-/** The showdown's lift-and-turn: the `--dur-lift` token. */
-export const LIFT_MS = 720
-/** The step between the result card's cards (and any other plain fade-in): card `i` waits `i × CARD_STAGGER_MS`. */
-export const CARD_STAGGER_MS = 60
-/** The step between cards dealt around the table: card `i` of the seat `k`-th from the button waits `(i × n + k) × this`. */
-export const DEAL_STAGGER_MS = 120
-/** The step between the flop's three cards. */
-export const BOARD_STAGGER_MS = 300
-/** The step between one seat's cards at the showdown. */
-export const SHOWDOWN_STAGGER_MS = 200
-/**
- * How long after its arrival a card still counts as dealt (pre-flight 2026-10-09): a card that mounts later in the hand —
- * a layout switch, a remount — was already on the table and comes out of no deck.
- */
-export const DEAL_WINDOW_MS = 1500
 
 export interface CardProps {
   /** Omit (or pass `null`) to draw the back. */
@@ -35,8 +16,9 @@ export interface CardProps {
   faceDown?: boolean
   size?: CardSize
   /**
-   * When the card comes in — slid from the deck, or faded in with no deck to come from. Keep it fixed for the card's life:
-   * an `animation-delay` moved after its animation has run can put the card back where the animation starts.
+   * When the card comes in — slid from the deck, or faded in with no deck to come from. Read once, when the card mounts:
+   * a later value is ignored, since an `animation-delay` moved after mount would jump a card still waiting on the deck,
+   * or put one that has landed back where its animation starts.
    */
   delayMs?: number
   highlighted?: boolean
@@ -127,12 +109,13 @@ export function CardBack({ uid, label }: { uid: string; label: string | null }):
 /**
  * Where the deck is from the card at `ref` (spec 2026-10-08 §3), for the slide that deals it: measured once, when the card
  * mounts `dealt` under a `DeckAnchorProvider`, before the first paint. `sliding` says the card has somewhere to come from
- * (the wrapper takes `.cardDealt`), and `vars` carries the offset as `--deal-dx`/`--deal-dy` for its style. With no deck,
- * or not dealt, nothing slides and `vars` is empty. Both hold for the card's life: the slide is its arrival, never replayed.
+ * (the wrapper takes `.cardDealt`), and `vars` carries the offset as `--deal-dx`/`--deal-dy` and the deck's width over the
+ * card's as `--deal-scale`, so the card leaves the pile at the pile's size and grows as it travels. With no deck, or not
+ * dealt, nothing slides and `vars` is empty. Both hold for the card's life: the slide is its arrival, never replayed.
  */
 export function useDealFrom(ref: RefObject<HTMLElement | null>, dealt: boolean): { sliding: boolean; vars: CSSProperties } {
   const anchor = useDeckAnchor()
-  const [from, setFrom] = useState<{ dx: number; dy: number } | null>(null)
+  const [from, setFrom] = useState<{ dx: number; dy: number; scale: number | null } | null>(null)
   useLayoutEffect(() => {
     const deck = anchor?.current
     const self = ref.current
@@ -143,12 +126,22 @@ export function useDealFrom(ref: RefObject<HTMLElement | null>, dealt: boolean):
     const a = deck.getBoundingClientRect()
     const b = self.getBoundingClientRect()
     self.style.animation = ''
-    setFrom({ dx: a.left + a.width / 2 - (b.left + b.width / 2), dy: a.top + a.height / 2 - (b.top + b.height / 2) })
+    setFrom({
+      dx: a.left + a.width / 2 - (b.left + b.width / 2),
+      dy: a.top + a.height / 2 - (b.top + b.height / 2),
+      // no box to compare (a card not laid out): the keyframe's own fallback
+      scale: a.width > 0 && b.width > 0 ? a.width / b.width : null,
+    })
     // Only on mount: the slide is the card's arrival, never replayed on a re-render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   if (from === null) return { sliding: false, vars: {} }
-  return { sliding: true, vars: { '--deal-dx': `${from.dx.toFixed(1)}px`, '--deal-dy': `${from.dy.toFixed(1)}px` } as CSSProperties }
+  const vars = {
+    '--deal-dx': `${from.dx.toFixed(1)}px`,
+    '--deal-dy': `${from.dy.toFixed(1)}px`,
+    ...(from.scale === null ? {} : { '--deal-scale': from.scale.toFixed(3) }),
+  } as CSSProperties
+  return { sliding: true, vars }
 }
 
 /**
@@ -168,7 +161,7 @@ export function useDealFrom(ref: RefObject<HTMLElement | null>, dealt: boolean):
  * after `delayMs`, and a face-up card then turns over where it landed — the flat turn, `DEAL_MS` after its slide began,
  * whatever `reveal` says: the lift is for a card that was lying face down. A face-down card stays a back. With no deck to
  * come from, or not dealt, a card that mounts face up — the viewer's own after a refresh, the result card's — keeps only
- * its plain fade-in.
+ * its plain fade-in. Both wait the `delayMs` the card mounted with, whatever it is given later.
  */
 export function Card({ card, faceDown = false, size = 'md', delayMs = 0, highlighted = false, className, dealt = false, reveal = 'flip', turnDelayMs = 0 }: CardProps) {
   const { t } = useTranslation()
@@ -183,13 +176,16 @@ export function Card({ card, faceDown = false, size = 'md', delayMs = 0, highlig
   const turned = !down && was.turned
   const ref = useRef<HTMLSpanElement>(null)
   const { sliding, vars } = useDealFrom(ref, dealt)
+  // The arrival's delay, latched: the caller's "dealt just now" runs out mid-deal on a full table, and a delay that
+  // moved with it would jump a card still waiting on the deck.
+  const [arrivalDelay] = useState(delayMs)
   // A card dealt face up turns once it has slid in (the back is what travels); a revealed card turns where it lies.
   const turning = turned || (sliding && !down)
   const lifting = turned && reveal === 'lift'
   // The turn has a delay of its own, so revealing a card never touches the deal delay its slide ran on.
-  const turnDelay = turned ? turnDelayMs : delayMs + DEAL_MS
+  const turnDelay = turned ? turnDelayMs : arrivalDelay + DEAL_MS
   const style = {
-    ...(delayMs > 0 ? { '--deal-delay': `${delayMs}ms` } : {}),
+    ...(arrivalDelay > 0 ? { '--deal-delay': `${arrivalDelay}ms` } : {}),
     ...vars,
     ...(turning && turnDelay > 0 ? { '--turn-delay': `${turnDelay}ms` } : {}),
   } as CSSProperties

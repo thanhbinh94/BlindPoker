@@ -33,32 +33,32 @@
   height: auto;
 }
 
-/* A face-down card revealed in place turns over: two-sided, about 0.6 s, the back for the first half and the face for
-   the second (an ease-in-out, so the card is edge-on at the midpoint). It waits a delay of its own, `--turn-delay` —
-   a dealt card's slide, the showdown's stagger — never the deal's, which its slide has already run on. Only the start
-   of the turn is a keyframe; the face is the resting style, so with every animation off (reduced motion) it simply
-   shows. The 3D is this state's alone: the flipper keeps its sides in 3D and each hides whichever faces away, and the
-   class stays on while the turned face is up, so the back rotated behind it stays hidden. */
-.cardTurn {
+/* A card turning over — in place (`.cardTurn`) or lifted (`.cardLift`) — is two-sided. The 3D is this state's alone: the
+   flipper keeps its sides in 3D and each hides whichever faces away, and the class stays on while the turned face is up,
+   so the back rotated behind it stays hidden. Either turn waits a delay of its own, `--turn-delay` — a dealt card's
+   slide, the showdown's stagger — never the deal's, which its slide has already run on. Only the start of a turn (and
+   the lift's middle) are keyframes; the face is the resting style, so with every animation off (reduced motion) it
+   simply shows. */
+:is(.cardTurn, .cardLift) {
   transform-style: preserve-3d;
+}
+
+:is(.cardTurn, .cardLift) > .cardSide {
+  backface-visibility: hidden;
+}
+
+/* A face-down card revealed in place turns over: about 0.6 s, the back for the first half and the face for the second
+   (an ease-in-out, so the card is edge-on at the midpoint). */
+.cardTurn {
   animation: flip var(--dur-flip, 600ms) ease-in-out backwards;
   animation-delay: var(--turn-delay, 0ms);
 }
 
-.cardTurn > .cardSide {
-  backface-visibility: hidden;
-}
-
 /* The showdown's turn (spec 2026-10-08 §3, mẫu B): the card lifts off the felt, turns in the air and lands with a small
-   overshoot. The resting style is the face, as for `.cardTurn`; only the start and the middle are keyframes. */
+   overshoot. */
 .cardLift {
-  transform-style: preserve-3d;
-  animation: lift var(--dur-lift, 720ms) cubic-bezier(0.3, 0.1, 0.25, 1) backwards;
+  animation: lift var(--dur-lift, 720ms) var(--ease-lift) backwards;
   animation-delay: var(--turn-delay, 0ms);
-}
-
-.cardLift > .cardSide {
-  backface-visibility: hidden;
 }
 
 .cardUnder {
@@ -107,7 +107,8 @@
 }
 
 /* Dealt from the deck (spec 2026-10-08 §3): the wrapper slides in face down from the deck's place, measured by `Card`
-   against the `Deck` anchor into `--deal-dx`/`--deal-dy`; a card that is to be seen then turns (`.cardTurn`, above),
+   against the `Deck` anchor into `--deal-dx`/`--deal-dy`, and grows from the pile's size (`--deal-scale`, the deck's
+   width over the card's) to its own as it travels; a card that is to be seen then turns (`.cardTurn`, above),
    `--turn-delay` after the slide began. It replaces the fade above, which a card with no deck to come from, or a
    restored hand, still gets. Reduced motion lands on the resting style like everything else: the card at its seat. */
 .cardDealt {
@@ -117,14 +118,14 @@
 
 @keyframes dealSlide {
   from {
-    transform: translate(var(--deal-dx, 0px), var(--deal-dy, -40px)) rotate(-7deg);
+    transform: translate(var(--deal-dx, 0px), var(--deal-dy, -40px)) rotate(-7deg) scale(var(--deal-scale, 0.6));
   }
 }
 
 /* The lift widens the card's shadow as it rises (spec 2026-10-08 §3): on the wrapper, since a filter on the flipper
    would flatten its 3D, and timed with the lift; the rest is the wrapper's usual shadow. */
 .cardLifting {
-  animation: liftShadow var(--dur-lift, 720ms) cubic-bezier(0.3, 0.1, 0.25, 1);
+  animation: liftShadow var(--dur-lift, 720ms) var(--ease-lift);
   animation-delay: var(--turn-delay, 0ms);
 }
 

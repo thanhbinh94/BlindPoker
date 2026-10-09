@@ -6,7 +6,8 @@ import type { ClientSeat } from '../client/types.js'
 import { formatPoints, type Language } from '../i18n/index.js'
 import { Badge, type BadgeTone } from '../primitives/Badge.js'
 import { cx } from '../primitives/cx.js'
-import { Card, DEAL_STAGGER_MS, SHOWDOWN_STAGGER_MS } from './Card.js'
+import { Card } from './Card.js'
+import { DEAL_STAGGER_MS, SHOWDOWN_STAGGER_MS } from './motion.js'
 import { TurnTimer } from './TurnTimer.js'
 import s from './table.module.css'
 
@@ -45,11 +46,14 @@ export interface SeatProps {
   caption?: ReactNode
   /** The hand the cards belong to: each hand's cards are new cards, dealt afresh even when the count is the same. */
   handId: string | null
-  /** The cards have just been dealt: they come out of the deck (spec 2026-10-08 §4.1.1). */
+  /**
+   * The cards have just been dealt: they come out of the deck one at a time round the table (spec 2026-10-08 §4.1.1).
+   * Otherwise — a snapshot, a remount — they show at once, with no stagger (ruling 18).
+   */
   dealt: boolean
   /** This seat's place in the deal, 0 for the first seat after the button. */
   dealIndex: number
-  /** How many seats are dealt in. Card `i` waits `(i × dealCount + dealIndex) × DEAL_STAGGER_MS`. */
+  /** How many seats are dealt in. A dealt card `i` waits `(i × dealCount + dealIndex) × DEAL_STAGGER_MS`. */
   dealCount: number
   /** How a card that was face down turns when it is revealed: the viewer's own in place, an opponent's lifted. */
   reveal: 'flip' | 'lift'
@@ -133,7 +137,7 @@ export function Seat({
               size={cardSize}
               dealt={dealt}
               reveal={reveal}
-              delayMs={(i * dealCount + dealIndex) * DEAL_STAGGER_MS}
+              delayMs={dealt ? (i * dealCount + dealIndex) * DEAL_STAGGER_MS : 0}
               turnDelayMs={liftAfter + i * SHOWDOWN_STAGGER_MS}
             />
           ))}

@@ -5,10 +5,10 @@ import { botChibi, type ChibiSubject, type Expression } from '../avatar2d/index.
 import type { ClientHand, ClientSeat } from '../client/types.js'
 import { handLabel, type Language } from '../i18n/index.js'
 import { cx } from '../primitives/cx.js'
-import { DEAL_MS, DEAL_WINDOW_MS, FLIP_MS } from './Card.js'
 import { CommunityCards } from './CommunityCards.js'
 import { Deck } from './Deck.js'
 import { DeckAnchorProvider } from './deck-anchor.js'
+import { DEAL_MS, DEAL_WINDOW_MS, FLIP_MS, dealOrderOf, showdownWithBoard } from './motion.js'
 import { Pot } from './Pot.js'
 import { Seat } from './Seat.js'
 import { ringPositions } from './geometry.js'
@@ -69,27 +69,6 @@ const seatFromPlayer = (seat: number, player: RoomPlayerView): ClientSeat => ({
   timedOut: false,
 })
 
-/** A showdown this close behind the latest board card came in the same batch. */
-const WITH_THE_BOARD_MS = 1000
-
-/**
- * Whether the hand's `SHOWDOWN` came together with a board card (pre-flight 2026-10-09): the engine settles in the
- * `ADVANCE` that deals the river, so the river's `COMMUNITY_REVEALED` and the `SHOWDOWN` land in one batch on every Blind
- * hand and every Hold'em run-out. The opponents' cards then lift only once the river has slid in and turned
- * (`DEAL_MS + FLIP_MS`, spec 2026-10-08 §1, §4.1.3), and `useRevealHold` holds the result card that much longer.
- * Never for a hand rebuilt from a snapshot, which has no stamps.
- */
-export const showdownWithBoard = (hand: ClientHand | null): boolean =>
-  hand !== null && hand.showdownAt !== null && hand.boardAt !== null && hand.showdownAt - hand.boardAt < WITH_THE_BOARD_MS
-
-/** The seats in the order a dealer deals to them: clockwise (seat numbers up), starting with the first after the button. */
-const dealOrderOf = (hand: ClientHand | null): number[] => {
-  if (hand === null) return []
-  const seats = hand.seats.map((hs) => hs.seat).sort((a, b) => a - b)
-  const first = seats.findIndex((seat) => seat > hand.button)
-  return first <= 0 ? seats : [...seats.slice(first), ...seats.slice(0, first)]
-}
-
 /**
  * The table: seats on the rim of a lacquered ellipse with the viewer always at the bottom, community cards and pot in
  * the middle. On a screen too narrow or too short for that it becomes a vertical stack — opponents on top, board in
@@ -99,7 +78,8 @@ const dealOrderOf = (hand: ClientHand | null): number[] => {
  * Every card comes out of the `Deck` on the felt (spec 2026-10-08 §3, §4.1): the hole cards round the table from the
  * seat after the button, one card per seat at a time, and each street's cards to the board — but only cards that have
  * just arrived (`DEAL_WINDOW_MS`). A hand rebuilt from a snapshot, or a table remounted later in the hand, shows its
- * cards where they lie. At the showdown an opponent's cards lift and turn, one seat's cards `SHOWDOWN_STAGGER_MS` apart.
+ * cards where they lie, all at once. At the showdown an opponent's cards lift and turn, one seat's cards
+ * `SHOWDOWN_STAGGER_MS` apart, after the river when it came with the showdown (`showdownWithBoard`).
  */
 export function PokerTable({
   room,
@@ -224,7 +204,7 @@ export function PokerTable({
   // strip — finds no deck and fades in: a table that has just mounted shows its cards where they lie.
   const centre = (
     <div className={s.centre}>
-      <CommunityCards cards={community} highlight={highlight} dealt={boardDealt} />
+      <CommunityCards cards={community} highlight={highlight} dealt={boardDealt} handId={hand?.handId ?? null} />
       <div className={s.centreRow}>
         <Deck ref={deckRef} />
         {showPot ? (
