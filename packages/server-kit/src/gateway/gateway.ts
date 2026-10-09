@@ -371,6 +371,9 @@ export class Gateway {
         case 'ACTION':
           await this.roomOf(playerId).action(playerId, msg.action, msg.baseSeq)
           break
+        case 'REVEAL':
+          await this.roomOf(playerId).reveal(playerId)
+          break
         case 'RESYNC':
           conn.send(this.roomOf(playerId).snapshot(playerId))
           break

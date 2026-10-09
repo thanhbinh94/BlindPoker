@@ -30,10 +30,10 @@ export class HandRunner {
   private readonly autoFold = new Set<number>()
   private completed = false
   /**
-   * `turnSeq` of the DECISION round the current decision/bot timers were scheduled for, or `null` when not in a
-   * DECISION round. DECISION_MADE does not bump `turnSeq`, so several players can decide independently without
-   * disturbing each other's still-pending timers (or the shared deadline) — only a real phase/round change should
-   * cancel and reschedule them.
+   * `turnSeq` of the DECISION or SQUEEZE round the current round/bot timers were scheduled for, or `null` when not
+   * in one. DECISION_MADE and PLAYER_REVEALED do not bump `turnSeq`, so several players can decide (or turn their
+   * cards) independently without disturbing each other's still-pending timers (or the shared deadline) — only a real
+   * phase/round change should cancel and reschedule them.
    */
   private decisionScheduledTurnSeq: number | null = null
   private currentDeadlineAt: number | null = null
@@ -98,9 +98,9 @@ export class HandRunner {
       this.deps.onComplete()
       return
     }
-    // A DECISION_MADE from one seat doesn't bump turnSeq and doesn't need to disturb the shared decision
-    // deadline or the other undecided seats' still-pending bot timers — only reschedule on an actual round change.
-    if (s.phase === 'DECISION' && this.decisionScheduledTurnSeq === s.turnSeq) {
+    // A DECISION_MADE or PLAYER_REVEALED from one seat doesn't bump turnSeq and doesn't need to disturb the shared
+    // deadline or the other seats' still-pending bot timers — only reschedule on an actual round change.
+    if ((s.phase === 'DECISION' || s.phase === 'SQUEEZE') && this.decisionScheduledTurnSeq === s.turnSeq) {
       this.deps.onEvents(events, this.currentDeadlineAt)
       this.applyAutoFolds()
       return
@@ -120,6 +120,12 @@ export class HandRunner {
       deadlineAt = this.deps.clock.now() + this.deps.turnTimerMs
       this.schedule(this.deps.turnTimerMs, () => this.onDecisionTimeout(turnSeq))
       for (const p of s.players) if (p.decision === null && this.deps.isBotSeat(p.seat)) this.scheduleBot(p.seat, turnSeq)
+    } else if (s.phase === 'SQUEEZE') {
+      // Squeeze mode (spec 2026-10-08 §4.2.3): one table-wide deadline; bots are revealed from the deal, so no bot timer.
+      const turnSeq = s.turnSeq
+      this.decisionScheduledTurnSeq = turnSeq
+      deadlineAt = this.deps.clock.now() + this.deps.turnTimerMs
+      this.schedule(this.deps.turnTimerMs, () => this.onSqueezeTimeout(turnSeq))
     } else if (s.phase === 'REVEAL') {
       this.decisionScheduledTurnSeq = null
       this.schedule(this.deps.revealDelayMs, () => {
@@ -148,8 +154,10 @@ export class HandRunner {
       let seat: number | null = null
       if (s.phase === 'BETTING' && s.actingSeat !== null && this.autoFold.has(s.actingSeat)) seat = s.actingSeat
       else if (s.phase === 'DECISION') seat = s.players.find((p) => p.decision === null && this.autoFold.has(p.seat))?.seat ?? null
+      else if (s.phase === 'SQUEEZE') seat = s.players.find((p) => !p.revealed && this.autoFold.has(p.seat))?.seat ?? null
       if (seat === null) return
-      this.submit({ type: 'ACTION', seat, action: { kind: 'fold' } })
+      // A seat that left or stood up has nobody to turn its cards, so the squeeze round must not wait for it (§6).
+      this.submit(s.phase === 'SQUEEZE' ? { type: 'REVEALED', seat } : { type: 'ACTION', seat, action: { kind: 'fold' } })
     }
   }
 
@@ -165,6 +173,15 @@ export class HandRunner {
     for (const seat of undecided) {
       if (this.completed || this.current.phase !== 'DECISION') return
       this.submit({ type: 'TIMEOUT', seat })
+    }
+  }
+
+  /** The squeeze round ran out: the server turns whoever has not (§4.2.3). Not a timeout — no seat is charged one. */
+  private onSqueezeTimeout(turnSeq: number): void {
+    if (this.completed || this.current.phase !== 'SQUEEZE' || this.current.turnSeq !== turnSeq) return
+    for (const seat of this.current.players.filter((p) => !p.revealed).map((p) => p.seat)) {
+      if (this.completed || this.current.phase !== 'SQUEEZE') return
+      this.submit({ type: 'REVEALED', seat })
     }
   }
 

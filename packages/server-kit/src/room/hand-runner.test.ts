@@ -126,3 +126,52 @@ describe('HandRunner — blind mode B', () => {
     expect(all().length).toBe(before)
   })
 })
+
+describe('HandRunner — squeeze round', () => {
+  const SQUEEZE: BlindRules = { mode: 'blind', holeCards: 2, decisionMode: 'none', fixedWager: 1000, tableFeeRate: 0.02, squeeze: true }
+  const seats = [{ seat: 0, stack: 20000, isBot: false }, { seat: 1, stack: 20000, isBot: false }, { seat: 2, stack: 20000, isBot: true }]
+
+  it('arms one table-wide deadline and no bot timer, and a seat turning its cards leaves it alone', () => {
+    const { clock, runner, batches } = setup(SQUEEZE, seats, { turnTimerMs: 20_000 })
+    const deadlineAt = clock.now() + 20_000
+    expect(batches[0]!.events.map((e) => e.type)).toContain('SQUEEZE_PHASE')
+    expect(batches[0]!.deadlineAt).toBe(deadlineAt)
+    expect(clock.pending).toBe(1)
+    clock.advance(5_000)
+    runner.submit({ type: 'REVEALED', seat: 0 })
+    expect(clock.pending).toBe(1)
+    expect(batches.at(-1)).toEqual({ events: [{ type: 'PLAYER_REVEALED', seat: 0 }], deadlineAt })
+  })
+
+  it('turns exactly the seats that have not turned when the deadline passes, and goes on to the reveal', () => {
+    const { clock, runner, all } = setup(SQUEEZE, seats, { turnTimerMs: 20_000 })
+    runner.submit({ type: 'REVEALED', seat: 0 })
+    clock.advance(20_000)
+    expect(all().filter((e) => e.type === 'PLAYER_REVEALED')).toEqual([{ type: 'PLAYER_REVEALED', seat: 0 }, { type: 'PLAYER_REVEALED', seat: 1 }])
+    expect(all().filter((e) => e.type === 'SQUEEZE_ENDED')).toHaveLength(1)
+    expect(runner.state.phase).toBe('REVEAL')
+    expect(all().some((e) => e.type === 'PLAYER_ACTED')).toBe(false) // nobody was timed out
+    expect(clock.pending).toBe(1) // the squeeze timer is gone; the reveal pacing is armed
+  })
+
+  it('a squeeze timer that fires after the hand was cancelled does nothing', () => {
+    const queue: (() => void)[] = []
+    const { clock, runner, all } = setup(SQUEEZE, seats, { turnTimerMs: 20_000, enqueue: (fn) => queue.push(fn) })
+    clock.advance(20_000) // the timer fires; its work waits on the room's queue
+    expect(queue).toHaveLength(1)
+    runner.cancel('closed')
+    const before = all().length
+    expect(() => queue[0]!()).not.toThrow()
+    expect(all().length).toBe(before)
+  })
+
+  it('a seat marked auto-fold is turned for, so the round does not wait on it', () => {
+    const { runner, all } = setup(SQUEEZE, seats)
+    runner.markAutoFold(1)
+    expect(all().filter((e) => e.type === 'PLAYER_REVEALED')).toEqual([{ type: 'PLAYER_REVEALED', seat: 1 }])
+    expect(runner.state.phase).toBe('SQUEEZE')
+    runner.submit({ type: 'REVEALED', seat: 0 })
+    expect(runner.state.phase).toBe('REVEAL')
+    expect(all().filter((e) => e.type === 'SQUEEZE_ENDED')).toHaveLength(1)
+  })
+})

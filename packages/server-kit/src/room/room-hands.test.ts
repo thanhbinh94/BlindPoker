@@ -23,6 +23,11 @@ async function playOut(h: RoomHarness, policy: Policy = passive, opts: { humanTi
       await tick(h)
       continue
     }
+    if (hand.phase === 'SQUEEZE') {
+      for (const s of hand.seats) if (!s.isBot && !s.revealed) await h.room.reveal(s.playerId)
+      await tick(h)
+      continue
+    }
     const humanSeat = hand.phase === 'DECISION'
       ? hand.seats.find((s) => !s.hasDecided && !s.isBot)
       : hand.seats.find((s) => s.seat === hand.actingSeat && !s.isBot)
@@ -1501,6 +1506,103 @@ describe('A ledger write is applied once, however often it is retried (Plan 20)'
     expect(h.room.players.get('a')).toMatchObject({ seat: 1, stack: 20_000 })
     expect(await h.repos.balances.get('a')).toBe(10_000)
     expect(await books(h, { h: 100_000, a: 30_000 })).toBe(0) // from the 30.000 left once the rest was spent elsewhere
+  })
+})
+
+describe('squeeze mode (spec 2026-10-08)', () => {
+  const SQUEEZE: RoomConfig = { ...BLIND, turnTimerSec: 20, blind: { ...BLIND.blind!, decisionMode: 'none', botCount: 1, squeeze: true } }
+  const types = (h: RoomHarness, id: string) => h.ofType(id, 'GAME_EVENT').map((m) => m.event.type)
+
+  it('opens a SQUEEZE round with a deadline and ends it the moment the one human has turned', async () => {
+    const h = createRoomHarness(SQUEEZE, { players: [['h', 100_000]] })
+    await seatAndStart(h, ['h'])
+    const phase = h.ofType('h', 'GAME_EVENT').find((m) => m.event.type === 'SQUEEZE_PHASE')!
+    expect(phase.event).toMatchObject({ type: 'SQUEEZE_PHASE', seats: [0], deadlineAt: h.clock.now() + TEST_ROOM_OPTIONS.turnTimerMsOverride! })
+    expect(h.room.snapshot('h').hand).toMatchObject({ phase: 'SQUEEZE', seats: [{ revealed: false }, { revealed: true }] })
+    expect(h.room.snapshot('h').deadlineAt).toBe((phase.event as { deadlineAt?: number }).deadlineAt)
+
+    await h.room.reveal('h')
+    expect(types(h, 'h').slice(-2)).toEqual(['PLAYER_REVEALED', 'SQUEEZE_ENDED'])
+    expect(h.room.snapshot('h').deadlineAt).toBeNull()
+    await playOut(h)
+    expect(h.repos.hands).toHaveLength(1)
+  })
+
+  it('turns the seats that have not turned when the round runs out, and goes on', async () => {
+    const h = createRoomHarness({ ...SQUEEZE, blind: { ...SQUEEZE.blind!, botCount: 0 } }, { players: [['h', 100_000], ['a', 100_000]] })
+    await seatAndStart(h, ['h', 'a'])
+    await h.room.reveal('h')
+    expect(types(h, 'a').slice(-1)).toEqual(['PLAYER_REVEALED'])
+    h.clock.advance(TEST_ROOM_OPTIONS.turnTimerMsOverride!)
+    await tick(h)
+    const tail = types(h, 'a')
+    expect(tail.slice(tail.indexOf('SQUEEZE_PHASE') + 1, tail.indexOf('SQUEEZE_ENDED') + 1)).toEqual(['PLAYER_REVEALED', 'PLAYER_REVEALED', 'SQUEEZE_ENDED'])
+    expect(h.room.snapshot('a').hand?.phase).toBe('REVEAL')
+    // No action timed out: the squeeze round is not a turn (spec §4.2.9).
+    expect(h.room.players.get('a')!.consecutiveTimeouts).toBe(0)
+    expect(h.ofType('a', 'GAME_EVENT').some((m) => m.event.type === 'PLAYER_ACTED' && m.event.timedOut)).toBe(false)
+    await playOut(h)
+    expect(h.repos.hands).toHaveLength(1)
+  })
+
+  it('REVEAL is refused with no hand or no seat, and is nothing when sent again', async () => {
+    const h = createRoomHarness(SQUEEZE, { players: [['h', 100_000], ['w', 100_000]] })
+    expect(await code(h.room.reveal('h'))).toBe('NOT_IN_HAND')
+    await seatAndStart(h, ['h'])
+    await h.room.join(h.identity('w'))
+    expect(await code(h.room.reveal('w'))).toBe('NOT_SEATED')
+    await h.room.reveal('h')
+    const before = h.ofType('h', 'GAME_EVENT').length
+    await h.room.reveal('h')
+    expect(h.ofType('h', 'GAME_EVENT').length).toBe(before)
+  })
+
+  it('play or fold on a squeeze table keeps its decision round: the deadline comes from the config, and deciding turns the cards', async () => {
+    const h = createRoomHarness({ ...SQUEEZE, blind: { ...SQUEEZE.blind!, decisionMode: 'playOrFold' } }, { players: [['h', 100_000]] })
+    await seatAndStart(h, ['h'])
+    expect(h.room.snapshot('h').hand?.phase).toBe('DECISION')
+    await h.room.action('h', { kind: 'play' }, h.room.seq)
+    expect(types(h, 'h')).toContain('PLAYER_REVEALED')
+    await playOut(h)
+    expect(h.repos.hands).toHaveLength(1)
+  })
+
+  it('a REVEAL after the round is over leaves the hand’s timers alone: the next card comes on time', async () => {
+    const h = createRoomHarness(SQUEEZE, { players: [['h', 100_000]] })
+    await seatAndStart(h, ['h'])
+    await h.room.reveal('h')
+    expect(h.room.snapshot('h').hand?.phase).toBe('REVEAL')
+    h.clock.advance(TEST_ROOM_OPTIONS.revealDelayMs / 2)
+    await h.room.reveal('h') // late; a submit would re-arm the reveal timer from here
+    h.clock.advance(TEST_ROOM_OPTIONS.revealDelayMs / 2)
+    await tick(h)
+    expect(types(h, 'h')).toContain('COMMUNITY_REVEALED')
+  })
+
+  it('a REVEAL at a Hold’em table, in the middle of a turn, sends nothing and leaves the deadline where it was', async () => {
+    const h = createRoomHarness(HOLDEM)
+    await seatAndStart(h, ['h', 'a'], 20_000)
+    const deadlineAt = h.room.snapshot('h').deadlineAt
+    expect(deadlineAt).not.toBeNull()
+    const sent = h.ofType('h', 'GAME_EVENT').length
+    h.clock.advance(1_000)
+    await h.room.reveal('h')
+    expect(h.room.snapshot('h').deadlineAt).toBe(deadlineAt)
+    expect(h.ofType('h', 'GAME_EVENT')).toHaveLength(sent)
+  })
+
+  it('a seat that leaves in the middle of the round does not hold it: it is turned for them, and the round ends with the rest', async () => {
+    const h = createRoomHarness({ ...SQUEEZE, blind: { ...SQUEEZE.blind!, botCount: 0 } }, { players: [['h', 100_000], ['a', 100_000]] })
+    await seatAndStart(h, ['h', 'a'])
+    await h.room.leave('a')
+    expect(types(h, 'h').slice(-1)).toEqual(['PLAYER_REVEALED'])
+    expect(h.room.snapshot('h').hand?.phase).toBe('SQUEEZE')
+    await h.room.reveal('h')
+    expect(types(h, 'h').slice(-2)).toEqual(['PLAYER_REVEALED', 'SQUEEZE_ENDED'])
+    expect(h.room.snapshot('h').hand?.phase).toBe('REVEAL')
+    await playOut(h)
+    expect(h.repos.hands).toHaveLength(1)
+    expect(h.room.hasPlayer('a')).toBe(false)
   })
 })
 

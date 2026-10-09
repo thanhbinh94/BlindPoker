@@ -401,6 +401,29 @@ export class Room {
     })
   }
 
+  /**
+   * Squeeze mode: the player has turned every one of its cards (spec 2026-10-08 §5.2). Nothing when there is no
+   * squeeze round to turn them in — a submit would re-arm the hand's timers, so it is not sent at all.
+   */
+  reveal(playerId: string): Promise<void> {
+    return this.enqueue(() => {
+      this.assertOpen()
+      const p = this.mustPlayer(playerId)
+      if (!this.runner || this.runner.isComplete) throw new RoomError('NOT_IN_HAND', 'no hand in progress')
+      if (p.seat === null) throw new RoomError('NOT_SEATED')
+      if (!this.runner.state.players.some((hp) => hp.seat === p.seat)) throw new RoomError('NOT_IN_HAND')
+      const { phase } = this.runner.state
+      const squeezing = phase === 'SQUEEZE' || (phase === 'DECISION' && this.rules.mode === 'blind' && this.rules.squeeze === true)
+      if (!squeezing) return
+      try {
+        this.runner.submit({ type: 'REVEALED', seat: p.seat })
+      } catch (err) {
+        if (err instanceof EngineError) throw new RoomError(engineErrorToErrorCode(err.code), err.message)
+        throw err
+      }
+    })
+  }
+
   // ---------- connection lifecycle ----------
 
   onDisconnect(playerId: string): Promise<void> {
@@ -710,7 +733,7 @@ export class Room {
         if (p && !p.identity.isBot) p.consecutiveTimeouts = event.timedOut ? p.consecutiveTimeouts + 1 : 0
       }
       this.seq += 1
-      const isTurn = event.type === 'TURN_CHANGED' || event.type === 'DECISION_PHASE'
+      const isTurn = event.type === 'TURN_CHANGED' || event.type === 'DECISION_PHASE' || event.type === 'SQUEEZE_PHASE'
       if (isTurn) this.turnStartSeq = this.seq
       const outbound = isTurn && deadlineAt !== null ? { ...event, deadlineAt } : event
       for (const p of this.connectedHumans()) this.deps.outbox.send(p.identity.playerId, { t: 'GAME_EVENT', seq: this.seq, event: filterEvent(outbound, p.seat) })
