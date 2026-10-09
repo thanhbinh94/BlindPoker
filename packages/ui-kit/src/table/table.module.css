@@ -233,8 +233,10 @@
   perspective: none;
 }
 
+/* Up, it is a card like any other: a touch that starts on it scrolls the room again. */
 .peel[data-face='up'] {
   cursor: default;
+  touch-action: auto;
 }
 
 .peelSheet,

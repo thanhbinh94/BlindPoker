@@ -1,5 +1,5 @@
 import type { Card as CardId } from '@bp/core'
-import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cardLabel } from '../i18n/index.js'
 import { cx } from '../primitives/cx.js'
@@ -28,7 +28,14 @@ export interface PeelCardProps {
 
 type Face = 'down' | 'peeling' | 'up'
 
-/** A drag on the card: where it started, the peel it drives, and its latest moves for the flick's speed. */
+/** Where the pointer was, and when (on `performance.now()`'s clock). */
+interface Sample {
+  x: number
+  y: number
+  t: number
+}
+
+/** A drag on the card: where it started, the peel it drives, and its latest positions for the flick's speed. */
 interface Drag {
   id: number
   x: number
@@ -36,26 +43,54 @@ interface Drag {
   /** The peel's `p` when the press landed: a card caught on its way back is taken from there. */
   from: number
   u: Vec
-  /** The card's length along `u`, in screen px. */
+  /** The card's length along `u`, in layout px (the screen's on an unscaled table). */
   L: number
-  /** The press and the moves of the last `FLICK_WINDOW_MS`, oldest first. */
-  moves: { x: number; y: number; t: number }[]
+  /** The press and every position since, within `FLICK_WINDOW_MS` of the latest, oldest first. */
+  samples: Sample[]
 }
 
 const SIZE_CLASS: Record<CardSize, string> = { sm: 'cardSm', md: 'cardMd', lg: 'cardLg' }
-/**
- * How far back a flick's speed is read, from the release: the pointer's travel over its last 100 ms. A drag held still
- * that long before it is let go has no speed left; one that rested after the press and then flicked is still a flick.
- */
+/** How far back a flick's speed is read: the pointer's last 100 ms of travel. */
 const FLICK_WINDOW_MS = 100
+/**
+ * A pointer with no new position for this long has stopped: what came before a longer gap is no part of the flick, and a
+ * release this long after the last position has no speed. (The 40 ms Android's and Flutter's velocity trackers assume.)
+ */
+const STILL_MS = 40
 
 const px = (n: number): string => `${n.toFixed(2)}px`
 
 /**
+ * The pointer's positions since the last event: the raw ones the browser coalesced into it (a 120–240 Hz touch screen
+ * or mouse reports several per frame), or the event's own where it keeps none (jsdom, older Safari).
+ */
+function samplesOf(e: ReactPointerEvent<HTMLSpanElement>): Sample[] {
+  const raw = e.nativeEvent.getCoalescedEvents?.() ?? []
+  if (raw.length === 0) return [{ x: e.clientX, y: e.clientY, t: performance.now() }]
+  return raw.map((c) => ({ x: c.clientX, y: c.clientY, t: c.timeStamp }))
+}
+
+/**
+ * How fast the pointer was moving inward along `u` when it was let go at `now`, in px/ms: over its run of positions
+ * since it last stopped, within the last `FLICK_WINDOW_MS`; nothing if it had stopped before the release.
+ */
+function releaseSpeed(u: Vec, samples: readonly Sample[], now: number): number {
+  const last = samples[samples.length - 1]
+  if (last === undefined || now - last.t > STILL_MS) return 0
+  let first = last
+  for (let i = samples.length - 2; i >= 0; i--) {
+    const s = samples[i]!
+    if (first.t - s.t > STILL_MS || last.t - s.t > FLICK_WINDOW_MS) break
+    first = s
+  }
+  return last.t > first.t ? inward(u, last.x - first.x, last.y - first.y) / (last.t - first.t) : 0
+}
+
+/**
  * The viewer's own face-down card in a squeeze room (spec 2026-10-08 §3): pressed anywhere and dragged inward, it peels
  * from the pressed point towards the centre — a 2D peel, clip and translate, so it draws the same in every browser —
- * past half (or flicked) it finishes and slides back into place face up; let go early it snaps back. The wrapper is
- * `Card`'s, so it sizes, shadows and deals in like one.
+ * past half (or flicked) it finishes and slides back into place face up; let go early, or taken away by the system (a
+ * cancelled pointer, a lost capture), it snaps back. The wrapper is `Card`'s, so it sizes, shadows and deals in like one.
  *
  * The motion is a JavaScript tween on `requestAnimationFrame`; under `prefers-reduced-motion` it jumps to its end, so
  * the gesture still works but the card opens or drops back at once (spec §6). While the card is down its root is the one
@@ -106,7 +141,7 @@ export function PeelCard({ card, size = 'md', open, onRevealed, dealt = false, d
     const w = el?.offsetWidth || r?.width || 60
     const h = el?.offsetHeight || r?.height || 84
     setBox({ w, h })
-    return { w, h, cx: (r?.left ?? 0) + (r?.width || w) / 2, cy: (r?.top ?? 0) + (r?.height || h) / 2 }
+    return { w, h, midX: (r?.left ?? 0) + (r?.width || w) / 2, midY: (r?.top ?? 0) + (r?.height || h) / 2 }
   }, [])
 
   /** `set` eased from `from` to `to` over `ms`, then `done`; at once under reduced motion. One tween runs at a time. */
@@ -176,12 +211,12 @@ export function PeelCard({ card, size = 'md', open, onRevealed, dealt = false, d
       /* no pointer capture here (jsdom), or the pointer is already gone */
     }
     cancelAnimationFrame(raf.current) // a snap-back in flight: the card is taken from where it is
-    const { w, h, cx, cy } = measure()
+    const { w, h, midX, midY } = measure()
     // A fresh peel runs from the press into the centre; one caught on its way back keeps its direction.
-    const dir = pNow.current === 0 ? peelDirection(e.clientX - cx, e.clientY - cy) : u
+    const dir = pNow.current === 0 ? peelDirection(e.clientX - midX, e.clientY - midY) : u
     setU(dir)
     const at = { x: e.clientX, y: e.clientY, t: performance.now() }
-    drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, from: pNow.current, u: dir, L: peelExtent(dir, w, h).L, moves: [at] }
+    drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, from: pNow.current, u: dir, L: peelExtent(dir, w, h).L, samples: [at] }
     setFace('peeling')
   }
 
@@ -189,28 +224,41 @@ export function PeelCard({ card, size = 'md', open, onRevealed, dealt = false, d
     const d = drag.current
     if (d === null || e.pointerId !== d.id) return
     peelTo(Math.max(0, Math.min(1, d.from + inward(d.u, e.clientX - d.x, e.clientY - d.y) / (PEEL.travel * d.L))))
-    const now = performance.now()
-    d.moves.push({ x: e.clientX, y: e.clientY, t: now })
-    while (now - d.moves[0]!.t > FLICK_WINDOW_MS) d.moves.shift()
+    for (const next of samplesOf(e)) {
+      // a raw stamp can fall before the press's, read when its handler ran: the clock never runs back
+      d.samples.push({ ...next, t: Math.max(next.t, d.samples[d.samples.length - 1]!.t) })
+    }
+    const latest = d.samples[d.samples.length - 1]!.t
+    while (latest - d.samples[0]!.t > FLICK_WINDOW_MS) d.samples.shift()
   }
 
-  // A release, or a pointer the browser takes away: past the threshold or flicked it opens, else it drops back.
+  const dropBack = () => tween(pNow.current, 0, PEEL.snapMs, peelTo, () => setFace('down'))
+
+  // Let go on the card: past the threshold, or flicked inward, it opens; else it drops back.
   const onPointerUp = (e: ReactPointerEvent<HTMLSpanElement>) => {
     const d = drag.current
     if (d === null || e.pointerId !== d.id) return
     drag.current = null
-    // The speed over the window up to the release, measured inward along the peel.
-    const now = performance.now()
-    const recent = d.moves.filter((m) => now - m.t <= FLICK_WINDOW_MS)
-    const first = recent[0]
-    const last = recent[recent.length - 1]
-    const v = first !== undefined && last !== undefined && now > first.t ? inward(d.u, last.x - first.x, last.y - first.y) / (now - first.t) : 0
-    if (shouldOpen(pNow.current, v)) finish()
-    else tween(pNow.current, 0, PEEL.snapMs, peelTo, () => setFace('down'))
+    if (shouldOpen(pNow.current, releaseSpeed(d.u, d.samples, performance.now()))) finish()
+    else dropBack()
+  }
+
+  // The pointer taken away — the system's own swipe (a phone's home gesture starts at the screen's bottom edge, where the
+  // viewer's cards sit), a capture lost without a release: never a reveal, however far or fast it went (ruling 20). A
+  // capture lost after a release finds no drag left, so it does nothing.
+  const onPointerCancel = (e: ReactPointerEvent<HTMLSpanElement>) => {
+    const d = drag.current
+    if (d === null || e.pointerId !== d.id) return
+    drag.current = null
+    dropBack()
   }
 
   const up = face === 'up'
   const peeling = face === 'peeling'
+  // The art never changes in a drag, which re-renders at the pointer's rate: kept, not redrawn.
+  const faceLabel = cardLabel(card, t)
+  const faceArt = useMemo(() => <CardFace card={card} uid={uid} label={faceLabel} hidden={!up} />, [card, uid, faceLabel, up])
+  const backArt = useMemo(() => <CardBack uid={`${uid}-b`} label={null} />, [uid])
   const frame = peelFrame(u, p, box.w, box.h)
   const reach = Math.max(box.w, box.h)
   const style = {
@@ -229,7 +277,8 @@ export function PeelCard({ card, size = 'md', open, onRevealed, dealt = false, d
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      onLostPointerCapture={onPointerCancel}
     >
       <span
         className={s.peelSheet}
@@ -237,7 +286,7 @@ export function PeelCard({ card, size = 'md', open, onRevealed, dealt = false, d
       >
         {up ? null : (
           <span className={s.peelBack} style={{ clipPath: frame.backClip }}>
-            <CardBack uid={`${uid}-b`} label={null} />
+            {backArt}
           </span>
         )}
         {/* At rest the face is in place: face down it is clipped to nothing, and a face slid a card length off would
@@ -254,7 +303,7 @@ export function PeelCard({ card, size = 'md', open, onRevealed, dealt = false, d
           }
         >
           <span className={s.peelArt} style={{ clipPath: up ? undefined : frame.faceClip }}>
-            <CardFace card={card} uid={uid} label={cardLabel(card, t)} hidden={!up} />
+            {faceArt}
           </span>
         </span>
         {up ? null : (

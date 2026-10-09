@@ -1,5 +1,5 @@
 import { parseCard } from '@bp/core'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, createEvent, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,9 +7,9 @@ import { createI18n } from '../i18n/index.js'
 import { DeckAnchorProvider } from './deck-anchor.js'
 import { PeelCard } from './PeelCard.js'
 import s from './table.module.css'
+import TABLE_CSS from './table.module.css?raw'
 
-// jsdom has no `PointerEvent`; a `MouseEvent` carries the `clientX`/`clientY` that `fireEvent.pointer*` passes (ruling 5).
-window.PointerEvent = window.MouseEvent as unknown as typeof PointerEvent
+// `fireEvent.pointer*` builds the `PointerEvent` stand-in from `test-setup.ts`: coordinates and `pointerId` both carry.
 
 const ACE = parseCard('Ah')
 /** `cardLabel(Ah)` in Vietnamese, and the face-down card's name. */
@@ -31,6 +31,21 @@ const rootOf = (container: HTMLElement): HTMLElement => {
 }
 
 const advance = (ms: number) => act(() => vi.advanceTimersByTime(ms))
+
+/** Pointer 1 pressing, moving to, and let go at (30, y) — the middle of the 60 × 84 card's width. */
+const press = (root: HTMLElement, y: number) => fireEvent.pointerDown(root, { clientX: 30, clientY: y, pointerId: 1, buttons: 1 })
+const moveTo = (root: HTMLElement, y: number) => fireEvent.pointerMove(root, { clientX: 30, clientY: y, pointerId: 1, buttons: 1 })
+const release = (root: HTMLElement, y: number) => fireEvent.pointerUp(root, { clientX: 30, clientY: y, pointerId: 1 })
+
+/**
+ * A pointermove of pointer 1 that carries `raw`, the positions a fast screen reported since the last frame, stamped `at`
+ * on `performance.now()`'s clock — what `getCoalescedEvents()` gives a page.
+ */
+const moveThrough = (root: HTMLElement, raw: { y: number; at: number }[]) => {
+  const ev = createEvent.pointerMove(root, { clientX: 30, clientY: raw[raw.length - 1]!.y, pointerId: 1, buttons: 1 })
+  Object.defineProperty(ev, 'getCoalescedEvents', { value: () => raw.map(({ y, at }) => ({ clientX: 30, clientY: y, timeStamp: at })) })
+  fireEvent(root, ev)
+}
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
@@ -92,29 +107,129 @@ describe('PeelCard (spec 2026-10-08 §3, §4.2.2)', () => {
     expect(root.querySelector<HTMLElement>(`.${s.peelBack}`)!.style.clipPath).toBe('polygon(0.00px 0.00px, 60.00px 0.00px, 60.00px 42.00px, 0.00px 42.00px)')
   })
 
-  it('a flick opens a card barely begun; the same drag held still before letting go drops back', () => {
-    /** Pressed, `restMs` still, 19 px up in 20 ms (0.95 px/ms, p ≈ 0.3), `holdMs` still, then let go. */
-    const flick = ({ restMs = 0, holdMs = 0 }) => {
+  // Task 6 review M1: the speed is read from the positions a real pointer reports — one move a frame at 60 Hz, several
+  // coalesced into each frame on a fast screen — never from a move a test made up.
+  it('a flick opens a card barely begun; a drag as far but slow, or one that stopped before it was let go, drops back', () => {
+    /** Presses at the bottom edge at `t0`, runs `gesture`, and says how the card ended. */
+    const run = (gesture: (root: HTMLElement, t0: number) => void) => {
       const onRevealed = vi.fn()
       const { container, unmount } = wrap(<PeelCard card={ACE} open={false} onRevealed={onRevealed} />)
       const root = rootOf(container)
-      fireEvent.pointerDown(root, { clientX: 30, clientY: 80, pointerId: 1, buttons: 1 })
-      advance(restMs)
-      fireEvent.pointerMove(root, { clientX: 30, clientY: 80, pointerId: 1, buttons: 1 })
-      advance(10)
-      fireEvent.pointerMove(root, { clientX: 30, clientY: 70, pointerId: 1, buttons: 1 })
-      advance(10)
-      fireEvent.pointerMove(root, { clientX: 30, clientY: 61, pointerId: 1, buttons: 1 })
-      advance(holdMs)
-      fireEvent.pointerUp(root, { clientX: 30, clientY: 61, pointerId: 1 })
+      const t0 = performance.now()
+      press(root, 80)
+      gesture(root, t0)
       advance(1000)
       const seen = [root.getAttribute('data-face'), onRevealed.mock.calls.length]
       unmount()
       return seen
     }
-    expect(flick({})).toEqual(['up', 1])
-    expect(flick({ holdMs: 400 }), 'held still before it is let go').toEqual(['down', 0])
-    expect(flick({ restMs: 400 }), 'the press rested before the flick').toEqual(['up', 1])
+    // 60 Hz, nothing coalesced: 30 px up (p ≈ 0.48) in two frames, 0.94 px/ms, let go in the next
+    const twoFrames = (root: HTMLElement) => {
+      advance(16)
+      moveTo(root, 65)
+      advance(16)
+      moveTo(root, 50)
+      advance(4)
+      release(root, 50)
+    }
+    expect(run(twoFrames), 'flicked').toEqual(['up', 1])
+    // the same 30 px over six frames: 0.31 px/ms
+    const sixFrames = (root: HTMLElement) => {
+      for (let i = 1; i <= 6; i++) {
+        advance(16)
+        moveTo(root, 80 - 5 * i)
+      }
+      advance(4)
+      release(root, 50)
+    }
+    expect(run(sixFrames), 'dragged').toEqual(['down', 0])
+    // a press that rests, then 16 px (p ≈ 0.25) in one frame, which a 240 Hz screen reports as four positions 4 ms apart
+    const restThenFlick = (holdMs: number) => (root: HTMLElement, t0: number) => {
+      advance(416)
+      moveThrough(root, [
+        { y: 76, at: t0 + 404 },
+        { y: 72, at: t0 + 408 },
+        { y: 68, at: t0 + 412 },
+        { y: 64, at: t0 + 416 },
+      ])
+      advance(2 + holdMs)
+      release(root, 64)
+    }
+    expect(run(restThenFlick(0)), 'rested, then flicked').toEqual(['up', 1])
+    expect(run(restThenFlick(100)), 'flicked, then held still before it was let go').toEqual(['down', 0])
+  })
+
+  // Ruling 20: on a phone a fast swipe up from the screen's bottom edge — where the viewer's cards sit — is also the
+  // system's home gesture. The page then gets a `pointercancel`, never a release, and the card must not turn for it.
+  it('a pointer the system takes away always drops the card back, however far or fast it went', () => {
+    const onRevealed = vi.fn()
+    const { container } = wrap(<PeelCard card={ACE} open={false} onRevealed={onRevealed} />)
+    const root = rootOf(container)
+    press(root, 80)
+    moveTo(root, 42) // p ≈ 0.6, past the threshold
+    fireEvent.pointerCancel(root, { pointerId: 1 })
+    advance(1000)
+    expect(root).toHaveAttribute('data-face', 'down')
+    press(root, 80)
+    advance(16)
+    moveTo(root, 65)
+    advance(16)
+    moveTo(root, 50) // mid-flick, 0.94 px/ms
+    fireEvent.pointerCancel(root, { pointerId: 1 })
+    advance(1000)
+    expect(root).toHaveAttribute('data-face', 'down')
+    expect(onRevealed).not.toHaveBeenCalled()
+  })
+
+  // Task 6 review M3: a capture lost with no release (the card pulled from under the pointer, a release the page missed)
+  // would leave the card stuck half peeled.
+  it('a capture lost without a release drops the card back; the one every release brings changes nothing', () => {
+    const onRevealed = vi.fn()
+    const { container } = wrap(<PeelCard card={ACE} open={false} onRevealed={onRevealed} />)
+    const root = rootOf(container)
+    press(root, 80)
+    moveTo(root, 42)
+    fireEvent.lostPointerCapture(root, { pointerId: 1 })
+    advance(1000)
+    expect(root).toHaveAttribute('data-face', 'down')
+    expect(onRevealed).not.toHaveBeenCalled()
+    // a browser's release: `pointerup`, then `lostpointercapture`
+    press(root, 80)
+    moveTo(root, 40)
+    release(root, 40)
+    fireEvent.lostPointerCapture(root, { pointerId: 1 })
+    advance(1000)
+    expect(root).toHaveAttribute('data-face', 'up')
+    expect(onRevealed).toHaveBeenCalledTimes(1)
+  })
+
+  // Task 6 review M2: the stand-in event keeps `pointerId`, so the guards are tested for real.
+  it('follows the pointer that pressed it: a second finger meanwhile is ignored', () => {
+    const onRevealed = vi.fn()
+    const { container } = wrap(<PeelCard card={ACE} open={false} onRevealed={onRevealed} />)
+    const root = rootOf(container)
+    const backClip = () => root.querySelector<HTMLElement>(`.${s.peelBack}`)!.style.clipPath
+    press(root, 80)
+    moveTo(root, 70)
+    const peeled = backClip()
+    fireEvent.pointerDown(root, { clientX: 2, clientY: 2, pointerId: 2, buttons: 1 })
+    fireEvent.pointerMove(root, { clientX: 2, clientY: 60, pointerId: 2, buttons: 1 })
+    expect(backClip(), 'the second finger does not drive the peel').toBe(peeled)
+    fireEvent.pointerUp(root, { clientX: 2, clientY: 60, pointerId: 2 })
+    fireEvent.pointerCancel(root, { pointerId: 2 })
+    advance(1000)
+    expect(root, 'nor does it let go of it').toHaveAttribute('data-face', 'peeling')
+    moveTo(root, 40)
+    release(root, 40)
+    advance(1000)
+    expect(root).toHaveAttribute('data-face', 'up')
+    expect(onRevealed).toHaveBeenCalledTimes(1)
+  })
+
+  // Task 6 review M5: `touch-action: none` is the peel's; a card that is up must not trap a touch meant to scroll.
+  it('lets a touch on a card that is up scroll the room', () => {
+    expect(TABLE_CSS).toMatch(/\.peel\s*\{[^}]*touch-action:\s*none/)
+    expect(TABLE_CSS).toMatch(/\.peel\[data-face='up'\]\s*\{[^}]*touch-action:\s*auto/)
   })
 
   it('opens when told to (the "Lật" button, the server turning it), and still reports once', () => {
