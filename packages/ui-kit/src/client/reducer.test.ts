@@ -569,3 +569,106 @@ describe('pre-actions', () => {
     expect(someoneElse).toMatchObject({ preAction: { kind: 'fold' }, autoPlay: true })
   })
 })
+
+describe('squeeze mode (spec 2026-10-08)', () => {
+  const SQUEEZE: BlindRules = { ...BLIND_A, holeCards: 2, squeeze: true }
+  const squeezeRoom = (stacks: number[]): RoomView => {
+    const room = roomView('blind', SQUEEZE, stacks)
+    return { ...room, config: { ...room.config, turnTimerSec: 20, blind: { ...room.config.blind!, squeeze: true } } }
+  }
+
+  it('starts a pure-luck squeeze hand in SQUEEZE with my seat unrevealed and the bot revealed, then follows the round', () => {
+    let s = reduceClient(initialClientState, { type: 'server', msg: { t: 'WELCOME', playerId: 'p0', displayName: 'P0', balance: 0, serverTime: 0 }, now: 0 })
+    const room = squeezeRoom([5000, 5000])
+    room.players[1]!.isBot = true
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_SNAPSHOT', seq: 1, room, hand: null, deadlineAt: null }, now: 0 })
+    s = reduceClient(s, { type: 'server', msg: { t: 'GAME_EVENT', seq: 2, event: { type: 'HAND_STARTED', handId: 'h1', mode: 'blind', button: 0, seats: [0, 1], carryOverIn: 0 } }, now: 0 })
+    expect(s.hand).toMatchObject({ phase: 'SQUEEZE', restored: false, seats: [{ seat: 0, revealed: false }, { seat: 1, revealed: true }] })
+    s = reduceClient(s, { type: 'server', msg: { t: 'GAME_EVENT', seq: 3, event: { type: 'SQUEEZE_PHASE', seats: [0], turnSeq: 1, deadlineAt: 20_000 } }, now: 0 })
+    expect(s.deadlineAt).toBe(20_000)
+    expect(s.hand?.phase).toBe('SQUEEZE')
+    s = reduceClient(s, { type: 'server', msg: { t: 'GAME_EVENT', seq: 4, event: { type: 'PLAYER_REVEALED', seat: 0 } }, now: 0 })
+    expect(s.hand?.seats[0]?.revealed).toBe(true)
+    s = reduceClient(s, { type: 'server', msg: { t: 'GAME_EVENT', seq: 5, event: { type: 'SQUEEZE_ENDED' } }, now: 0 })
+    expect(s.hand?.phase).toBe('REVEAL')
+    expect(s.deadlineAt).toBeNull()
+  })
+
+  it('a hand from a snapshot is restored, and keeps the view’s revealed flags', () => {
+    const s = start('blind', SQUEEZE, [5000, 5000], 0)
+    const room = squeezeRoom([5000, 5000])
+    const res = createHand({ handId: 'h2', rules: SQUEEZE, seats: [{ seat: 0, playerId: 'p0', stack: 5000, isBot: false }, { seat: 1, playerId: 'p1', stack: 5000, isBot: false }], button: 0, carryOverIn: 0 }, seededRng(1))
+    const turned = applyCommand(res.state, { type: 'REVEALED', seat: 1 }, seededRng(1)).state
+    const next = reduceClient(s, { type: 'server', msg: { t: 'ROOM_SNAPSHOT', seq: 9, room, hand: playerView(turned, 0), deadlineAt: 20_000 }, now: 0 })
+    expect(next.hand).toMatchObject({ phase: 'SQUEEZE', restored: true, seats: [{ revealed: false }, { revealed: true }] })
+  })
+
+  it('a plain hand carries no revealed flag at all', () => {
+    const s = start('blind', BLIND_A, [5000, 5000], 0)
+    const next = reduceClient(s, { type: 'server', msg: { t: 'GAME_EVENT', seq: 2, event: { type: 'HAND_STARTED', handId: 'h3', mode: 'blind', button: 0, seats: [0, 1], carryOverIn: 0 } }, now: 0 })
+    expect(next.hand?.seats.every((seat) => seat.revealed === undefined)).toBe(true)
+    expect(next.hand?.phase).toBe('REVEAL')
+  })
+
+  it('a snapshot of a plain hand carries no revealed flag either, although the view always has one', () => {
+    const s = start('blind', BLIND_A, [5000, 5000], 0)
+    const res = createHand({ handId: 'h4', rules: BLIND_A, seats: [{ seat: 0, playerId: 'p0', stack: 5000, isBot: false }, { seat: 1, playerId: 'p1', stack: 5000, isBot: false }], button: 0, carryOverIn: 0 }, seededRng(1))
+    const next = reduceClient(s, { type: 'server', msg: { t: 'ROOM_SNAPSHOT', seq: 9, room: s.room!, hand: playerView(res.state, 0), deadlineAt: null }, now: 0 })
+    expect(next.hand?.restored).toBe(true)
+    expect(next.hand?.seats.every((seat) => seat.revealed === undefined)).toBe(true)
+  })
+
+  it('a squeeze room that plays or folds opens in DECISION, with the seats still unrevealed', () => {
+    const room = squeezeRoom([5000, 5000])
+    room.config.blind!.decisionMode = 'playOrFold'
+    let s = reduceClient(initialClientState, { type: 'server', msg: { t: 'WELCOME', playerId: 'p0', displayName: 'P0', balance: 0, serverTime: 0 }, now: 0 })
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_SNAPSHOT', seq: 1, room, hand: null, deadlineAt: null }, now: 0 })
+    s = reduceClient(s, { type: 'server', msg: { t: 'GAME_EVENT', seq: 2, event: { type: 'HAND_STARTED', handId: 'h5', mode: 'blind', button: 0, seats: [0, 1], carryOverIn: 0 } }, now: 0 })
+    expect(s.hand).toMatchObject({ phase: 'DECISION', seats: [{ revealed: false }, { revealed: false }] })
+  })
+})
+
+describe('arrival stamps (the card motion reads them)', () => {
+  const event = (seq: number, e: GameEvent): ServerMessage => ({ t: 'GAME_EVENT', seq, event: e })
+  const flop = parseCards('Ah Kd 2c')
+  const turn = parseCards('Ah Kd 2c 9s')
+
+  it('stamps the first deal, the latest board and the showdown with the client time they arrived, and a new hand starts clean', () => {
+    let s = start('holdem', HOLDEM_RULES, [20000, 20000], 0)
+    s = reduceClient(s, { type: 'server', msg: event(11, { type: 'HAND_STARTED', handId: 'h1', mode: 'holdem', button: 0, seats: [0, 1], carryOverIn: 0 }), now: 1000 })
+    expect(s.hand).toMatchObject({ dealtAt: null, boardAt: null, showdownAt: null })
+
+    s = reduceClient(s, { type: 'server', msg: event(12, { type: 'CARDS_DEALT', seat: 0, cards: parseCards('As Ks'), cardCount: 2 }), now: 1100 })
+    s = reduceClient(s, { type: 'server', msg: event(13, { type: 'CARDS_DEALT', seat: 1, cards: [], cardCount: 2 }), now: 1150 })
+    expect(s.hand).toMatchObject({ dealtAt: 1100, boardAt: null, showdownAt: null })
+
+    s = reduceClient(s, { type: 'server', msg: event(14, { type: 'COMMUNITY_REVEALED', street: 'FLOP', cards: flop, community: flop }), now: 2000 })
+    expect(s.hand).toMatchObject({ dealtAt: 1100, boardAt: 2000 })
+    s = reduceClient(s, { type: 'server', msg: event(15, { type: 'COMMUNITY_REVEALED', street: 'TURN', cards: parseCards('9s'), community: turn }), now: 3000 })
+    expect(s.hand).toMatchObject({ dealtAt: 1100, boardAt: 3000, showdownAt: null })
+
+    s = reduceClient(s, { type: 'server', msg: event(16, { type: 'SHOWDOWN', hands: [] }), now: 4000 })
+    expect(s.hand).toMatchObject({ dealtAt: 1100, boardAt: 3000, showdownAt: 4000 })
+
+    s = reduceClient(s, { type: 'server', msg: event(17, { type: 'HAND_STARTED', handId: 'h2', mode: 'holdem', button: 1, seats: [0, 1], carryOverIn: 0 }), now: 9000 })
+    expect(s.hand).toMatchObject({ handId: 'h2', dealtAt: null, boardAt: null, showdownAt: null })
+  })
+
+  it('a hand built from a snapshot has no stamps: nothing was seen arriving', () => {
+    const res = createHand({ handId: 'h3', rules: HOLDEM_RULES, seats: seatsOf([20000, 20000]), button: 0, carryOverIn: 0 }, seededRng(2))
+    const s = reduceClient(start('holdem', HOLDEM_RULES, [20000, 20000], 0), {
+      type: 'server', msg: { t: 'ROOM_SNAPSHOT', seq: 11, room: roomView('holdem', HOLDEM_RULES, [20000, 20000]), hand: playerView(res.state, 0), deadlineAt: null }, now: 5000,
+    })
+    expect(s.hand).toMatchObject({ restored: true, dealtAt: null, boardAt: null, showdownAt: null })
+  })
+
+  it('a reconnect snapshot stamps nothing, even on a hand that was being followed', () => {
+    let s = start('holdem', HOLDEM_RULES, [20000, 20000], 0)
+    s = reduceClient(s, { type: 'server', msg: event(11, { type: 'HAND_STARTED', handId: 'h4', mode: 'holdem', button: 0, seats: [0, 1], carryOverIn: 0 }), now: 1000 })
+    s = reduceClient(s, { type: 'server', msg: event(12, { type: 'CARDS_DEALT', seat: 0, cards: parseCards('As Ks'), cardCount: 2 }), now: 1100 })
+    expect(s.hand?.dealtAt).toBe(1100)
+    const res = createHand({ handId: 'h4', rules: HOLDEM_RULES, seats: seatsOf([20000, 20000]), button: 0, carryOverIn: 0 }, seededRng(2))
+    s = reduceClient(s, { type: 'server', msg: { t: 'ROOM_SNAPSHOT', seq: 20, room: s.room!, hand: playerView(res.state, 0), deadlineAt: null }, now: 8000 })
+    expect(s.hand).toMatchObject({ restored: true, dealtAt: null, boardAt: null, showdownAt: null })
+  })
+})

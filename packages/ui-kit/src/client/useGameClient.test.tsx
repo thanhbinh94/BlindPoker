@@ -1,3 +1,4 @@
+import { parseCards } from '@bp/core'
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FakeSocket, fakeSocketFactory } from './fake-socket.js'
@@ -158,5 +159,83 @@ describe('useGameClient pre-actions', () => {
     act(() => sock().receive({ t: 'GAME_EVENT', seq: 10, event: { type: 'HAND_STARTED', handId: 'h2', mode: 'holdem', seats: [0, 1], button: 0, carryOverIn: 0 } }))
     act(() => sock().receive({ t: 'GAME_EVENT', seq: 11, event: { type: 'DECISION_PHASE', seats: [0, 1], turnSeq: 1 } }))
     expect(actions(sock)).toHaveLength(1)
+  })
+})
+
+describe('useGameClient squeeze mode', () => {
+  beforeEach(() => { vi.useFakeTimers(); FakeSocket.reset() })
+  afterEach(() => { vi.useRealTimers() })
+
+  const roomOf = (squeeze: boolean) => ({
+    roomId: 'r', code: 'C', name: 'n', mode: 'blind' as const,
+    config: { name: 'n', mode: 'blind' as const, maxPlayers: 3, isPrivate: false, turnTimerSec: 20, autoStart: false, hasPassword: false, blind: { holeCards: 2 as const, decisionMode: 'none' as const, fixedWager: 1000, botCount: 0, squeeze } },
+    playerCount: 2, maxPlayers: 3, status: 'IN_GAME' as const, hostPlayerId: 'a', carryOverPot: 0, nextHandAt: null,
+    players: [
+      { playerId: 'a', displayName: 'A', isBot: false, isHost: true, connected: true, seat: 0, status: 'IN_HAND' as const, sittingOut: false, stack: 20000, ready: true },
+      { playerId: 'b', displayName: 'B', isBot: false, isHost: false, connected: true, seat: 1, status: 'IN_HAND' as const, sittingOut: false, stack: 20000, ready: true },
+    ],
+  })
+
+  function seatedAtTable(squeeze: boolean) {
+    const rendered = renderHook(() => useGameClient({ url: 'ws://x/ws', token: 'tok:a', socketFactory: fakeSocketFactory }))
+    const sock = () => FakeSocket.instances.at(-1)!
+    act(() => sock().open())
+    act(() => sock().receive({ t: 'WELCOME', playerId: 'a', displayName: 'A', balance: 100, serverTime: Date.now() }))
+    act(() => sock().receive({ t: 'ROOM_SNAPSHOT', seq: 7, room: roomOf(squeeze), hand: null, deadlineAt: null }))
+    return { ...rendered, sock }
+  }
+  const startHand = (sock: () => FakeSocket, seq: number, handId: string) =>
+    act(() => sock().receive({ t: 'GAME_EVENT', seq, event: { type: 'HAND_STARTED', handId, mode: 'blind', seats: [0, 1], button: 0, carryOverIn: 0 } }))
+  const dealTo = (sock: () => FakeSocket, seq: number, seat: number) =>
+    act(() => sock().receive({ t: 'GAME_EVENT', seq, event: { type: 'CARDS_DEALT', seat, cards: seat === 0 ? parseCards('As Ks') : [], cardCount: 2 } }))
+  const reveals = (sock: () => FakeSocket) => sock().sent.filter((m) => (m as { t: string }).t === 'REVEAL')
+
+  it('auto-play turns the cards at once in a squeeze room: one REVEAL per hand, none when off', () => {
+    const { result, sock } = seatedAtTable(true)
+    act(() => result.current.setAutoPlay(true))
+    startHand(sock, 8, 'h1')
+    expect(reveals(sock)).toHaveLength(0) // nothing is dealt yet, so there is nothing to turn
+    dealTo(sock, 9, 0)
+    expect(reveals(sock)).toHaveLength(1)
+    dealTo(sock, 10, 0)
+    dealTo(sock, 11, 1)
+    expect(reveals(sock)).toHaveLength(1) // the same hand never asks twice
+
+    act(() => result.current.setAutoPlay(false))
+    startHand(sock, 12, 'h2')
+    dealTo(sock, 13, 0)
+    expect(reveals(sock)).toHaveLength(1) // auto-play is off: the player turns the cards by hand
+
+    act(() => result.current.setAutoPlay(true))
+    expect(reveals(sock)).toHaveLength(2) // switched on with the cards already down: they are turned now, once
+    dealTo(sock, 14, 1)
+    expect(reveals(sock)).toHaveLength(2)
+  })
+
+  it('does not ask again once my cards are turned, and asks for nothing in a plain room', () => {
+    const squeeze = seatedAtTable(true)
+    startHand(squeeze.sock, 8, 'h1')
+    dealTo(squeeze.sock, 9, 0)
+    act(() => squeeze.sock().receive({ t: 'GAME_EVENT', seq: 10, event: { type: 'PLAYER_REVEALED', seat: 0 } }))
+    act(() => squeeze.result.current.setAutoPlay(true))
+    expect(reveals(squeeze.sock)).toHaveLength(0)
+    squeeze.unmount()
+
+    const plain = seatedAtTable(false)
+    act(() => plain.result.current.setAutoPlay(true))
+    startHand(plain.sock, 8, 'h1')
+    dealTo(plain.sock, 9, 0)
+    expect(reveals(plain.sock)).toHaveLength(0)
+  })
+
+  it('client.reveal() sends REVEAL with a request id and resolves on the ACK', async () => {
+    const { result, sock } = seatedAtTable(true)
+    let p!: Promise<{ t: string }>
+    act(() => { p = result.current.reveal() })
+    const sent = sock().sent.at(-1) as { t: string; reqId: string }
+    expect(sent.t).toBe('REVEAL')
+    expect(sent.reqId).toEqual(expect.any(String))
+    act(() => sock().receive({ t: 'ACK', reqId: sent.reqId }))
+    await act(async () => { await expect(p).resolves.toMatchObject({ t: 'ACK' }) })
   })
 })

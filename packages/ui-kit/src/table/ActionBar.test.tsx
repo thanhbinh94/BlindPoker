@@ -22,6 +22,10 @@ const hand = (legal: LegalActions | null, extra: Partial<ClientHand> = {}): Clie
   legal,
   result: null,
   potPulse: 0,
+  restored: true,
+  dealtAt: null,
+  boardAt: null,
+  showdownAt: null,
   ...extra,
 })
 const wrap = (ui: React.ReactElement) =>
@@ -200,6 +204,14 @@ describe('ActionBar pre-actions', () => {
     const blindRoom = { config: { mode: 'blind', blind: { fixedWager: 2000, decisionMode: 'none' } } } as unknown as RoomView
     wrap(<ActionBar hand={seated({ mode: 'blind', phase: 'REVEAL' })} room={blindRoom} onAct={() => {}} lang="en" autoPlay={false} onAutoPlay={() => {}} />)
     expect(screen.queryByRole('button', { name: 'Auto play' })).toBeNull()
+  })
+
+  it('offers auto-play in a pure-luck squeeze room, where it means turning the cards at once', async () => {
+    const onAutoPlay = vi.fn()
+    const squeezeRoom = { config: { mode: 'blind', blind: { fixedWager: 2000, decisionMode: 'none', squeeze: true } } } as unknown as RoomView
+    wrap(<ActionBar hand={seated({ mode: 'blind', phase: 'SQUEEZE' })} room={squeezeRoom} onAct={() => {}} lang="en" autoPlay={false} onAutoPlay={onAutoPlay} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Auto play' }))
+    expect(onAutoPlay).toHaveBeenLastCalledWith(true)
   })
 })
 

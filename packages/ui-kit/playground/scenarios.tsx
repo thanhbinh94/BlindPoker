@@ -165,6 +165,10 @@ function hand(n: number, state: WorstState, long: boolean): ClientHand | null {
         : null,
     result: null,
     potPulse: 1,
+    restored: true,
+    dealtAt: null,
+    boardAt: null,
+    showdownAt: null,
   }
   if (state === 'turn') return base
   const others = all.slice(1)
@@ -209,6 +213,7 @@ function frozenClient(state: ClientState): GameClientApi {
     startGame: ack,
     kick: ack,
     act: ack,
+    reveal: ack,
     setPreAction: () => {},
     setAutoPlay: () => {},
     resync: () => {},

@@ -140,7 +140,9 @@ export function ActionBar({ hand, room, onAct, disabled = false, lang, preAction
   const mine = hand.mySeat === null ? undefined : hand.seats.find((seat) => seat.seat === hand.mySeat)
   const live = mine !== undefined && !mine.folded && !mine.allIn && hand.phase !== 'COMPLETE'
   const offersPreActions = hand.mode === 'holdem' && live && onPreAction !== undefined
-  const offersAutoPlay = hand.mode === 'blind' && mine !== undefined && onAutoPlay !== undefined && room.config.blind?.decisionMode === 'playOrFold'
+  // Play-or-fold has a question to answer; a pure-luck squeeze table has cards to turn — there, auto-play means "turn mine at once".
+  const offersAutoPlay =
+    hand.mode === 'blind' && mine !== undefined && onAutoPlay !== undefined && (room.config.blind?.decisionMode === 'playOrFold' || room.config.blind?.squeeze === true)
 
   const autoPlayToggle = offersAutoPlay ? (
     <button
