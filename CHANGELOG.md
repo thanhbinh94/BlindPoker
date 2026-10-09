@@ -74,8 +74,9 @@ schema change or migration: a room's config is not stored. No library was added.
     and, on the phone, pushed the pot onto the viewer's cards. It is still mid-table, as the user chose.
   - The deck is measured by the **card** through a context (`DeckAnchorProvider` / `useDeckAnchor`, `Card`'s `dealt` and
     `useDealFrom`), not by `PokerTable` measuring every slot and passing each card a `dealFrom` (spec §5.3).
-  - A `REVEAL` from a player with no seat is answered `NOT_SEATED`; the spec said `NOT_IN_HAND` for "not seated or not in the
-    hand". `NOT_IN_HAND` is for no hand running and for a seat that was not dealt in. Outside a squeeze round the room
+  - A `REVEAL` from a player with no seat is answered `NOT_SEATED` while a hand is running; the spec said `NOT_IN_HAND` for
+    "not seated or not in the hand". With no hand running it is `NOT_IN_HAND` for everyone, and `NOT_IN_HAND` is also what a
+    seat that was not dealt in gets. Outside a squeeze round the room
     answers `ACK` without sending the engine anything: a submit would re-arm the hand's timers for nothing.
   - `PEEL.snapMs` is 200 (spec: 0.2 s; the plan had 220). The flick is read from the pointer's real and coalesced positions
     over its last 100 ms, with a 40 ms pause rule, not from "the last six samples": a real flick did not open on six.
@@ -94,14 +95,14 @@ schema change or migration: a room's config is not stored. No library was added.
   - No `phases.squeeze` string (spec §5.3): nothing prints the round's name. `BlindRules.squeeze` and `ClientSeat.revealed` are
     optional, so existing fixtures stay valid; a validated `BlindRoomConfig` always carries `squeeze`.
 - **Still open.**
-  - The user's check on a real phone (spec §8) is still to be done: peel by touch, a quick flick then a quick tap on "Lật",
-    iOS Safari.
+  - The user's hand test on a real phone (spec §8 asks for one) is still to be done. What to try comes from the Plan 21
+    ledger (the Task 6 and Task 9 reviews): peel by touch, a quick flick then a quick tap on "Lật", iOS Safari.
   - The peel is driven in Chromium only. Firefox's and WebKit's touch-capture semantics (a `lostpointercapture` from the child
     that held the touch implicitly) are guarded in `PeelCard` and unit-tested, never run in those browsers.
   - On a device that does not coalesce pointer events, a single quick move after a rest is not read as a flick: the card opens
     only past half.
   - On a 375 × 812 squeeze table the stage overflows by 3 px while the cards are dealt (the header's badge row wraps a line
-    longer); F-12 asserts that the page fits, not the stage.
+    longer, or the tray's wait line does — the Task 9 report names both); F-12 asserts that the page fits, not the stage.
   - A switch between the ring and the stack in the middle of a round can send a second `REVEAL`, which is a no-op.
   - All five are written up in `docs/known-limitations.md` (the first two as one entry). `docs/ui-kit.md`'s Footprint table
     was not re-measured.

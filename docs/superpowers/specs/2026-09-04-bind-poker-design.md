@@ -334,10 +334,11 @@ interface RoomConfig {
   maxPlayers: number                 // holdem 2–9, blind 2–8
   isPrivate: boolean                 // private: không hiện trong danh sách, vào bằng mã
   password?: string                  // 4–20 ký tự, tùy chọn, lưu hash trong RAM
-  turnTimerSec: number               // holdem 15/30/45/60; blind 10/15/30
+  turnTimerSec: number               // holdem 15/30/45/60; blind 10/15/30; bàn nặn bài (blind.squeeze) bị ép 20 (2026-10-08, spec card-motion-squeeze)
   autoStart: boolean                 // tự start khi tất cả ready (≥2)
   holdem?: { smallBlind: number; bigBlind: number; minBuyInBB: number; maxBuyInBB: number }
-  blind?:  { holeCards: 2 | 3; decisionMode: 'none' | 'playOrFold'; fixedWager: number; botCount: number }
+  blind?:  { holeCards: 2 | 3; decisionMode: 'none' | 'playOrFold'; fixedWager: number; botCount: number; squeeze?: boolean }
+                                     // squeeze (2026-10-08, spec card-motion-squeeze): mặc định false; config đã kiểm luôn mang giá trị này
 }
 ```
 Server kiểm tra từng giá trị thuộc tập cho phép; sai → `ERROR INVALID_ROOM_CONFIG`. `blind.decisionMode` **bắt buộc**, không có giá trị mặc định: thiếu nó → `INVALID_ROOM_CONFIG`. `INVALID_ROOM_CONFIG` là một yêu cầu bị từ chối, **không** phải frame hỏng: nó không tính vào `maxInvalidMessages` và không làm đóng kết nối.
@@ -555,7 +556,7 @@ function createHand(config: RulesetConfig, seats: SeatInput[], rng: Rng): HandSt
 function legalActions(state: HandState, seat: number): LegalActions
 function applyAction(state: HandState, cmd: HandCommand, rng: Rng): { state: HandState; events: GameEvent[] }
 // HandCommand = PlayerAction{seat, action} | TimerExpired | AdvanceReveal (server đẩy để tạo nhịp lật bài)
-//              | { type: 'REVEALED'; seat } (2026-10-08, spec card-motion-squeeze: ghế đã lật hết lá; hợp lệ trong SQUEEZE và trong DECISION của bàn nặn, ngoài ra và khi lặp lại là no-op, không lỗi)
+//              | { type: 'REVEALED'; seat } (2026-10-08, spec card-motion-squeeze: ghế đã lật hết lá; hợp lệ trong SQUEEZE và trong DECISION của bàn nặn, ngoài ra và khi lặp lại là no-op, không lỗi; riêng ván đã COMPLETE thì chốt chung của engine ném `HAND_COMPLETE`, nhưng `Room.reveal` trả `NOT_IN_HAND` trước nên lệnh không bao giờ tới đó)
 //              | { type: 'CANCEL'; reason } (hủy ván: hoàn lại mọi chip đã cược, không thu phí)
 ```
 Reducer thuần, không đồng hồ: nhịp lật bài và timeout là lệnh do server-kit gửi. Điều này khiến mọi kịch bản test là danh sách lệnh → so sánh state/events.

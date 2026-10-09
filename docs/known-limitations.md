@@ -378,7 +378,8 @@ pointer events under jsdom. Firefox and WebKit differ on pointer capture for tou
 captured by the element under the finger, so the card taking the capture makes that child *lose* it, and the
 `lostpointercapture` bubbles up mid-drag. The card ignores a lost capture that is not its own and always drops back on one
 that is, which `PeelCard.test.tsx` checks with synthetic events; no Firefox or WebKit build drives it. The user's own
-check on a real device (spec §8: peel by touch, a quick flick then a quick tap on "Lật", iOS Safari) is still to do.
+check on a real device is still to do: the spec's §8 asks for a hand test of the touch gesture, and the Plan 21 ledger
+(the Task 6 and Task 9 reviews) says what to try — peel by touch, a quick flick then a quick tap on "Lật", iOS Safari.
 *Why it stays:* a device is needed, and the e2e projects are Chromium only.
 *Tracked:* `docs/superpowers/specs/2026-10-08-card-motion-squeeze-design.md` §8; `CHANGELOG.md` (Plan 21).
 
@@ -392,8 +393,8 @@ would make a slow drag that ends in a twitch a flick, which is the error the pau
 *Tracked:* `packages/ui-kit/src/table/PeelCard.tsx` (`releaseSpeed`); `docs/ui-kit.md` (The squeeze).
 
 **On a 375 × 812 squeeze table the stage overflows by 3 px while the cards are dealt.** The room header's badge row —
-the mode, the limit and the gold "Nặn bài" badge — wraps one line longer at that width, which takes 3 px more than
-the stage has. The page itself still fits and does not scroll sideways, and that is what F-12 asserts, not the stage.
+the mode, the limit and the gold "Nặn bài" badge — wraps one line longer at that width, or else the tray's wait line does (the Task 9 report names both and did
+not settle which); either takes 3 px more than the stage has. The page itself still fits and does not scroll sideways, and that is what F-12 asserts, not the stage.
 *Why it stays:* 3 px, in one state at one phone size, would be paid for with a second header layout.
 *Tracked:* `apps/normal-web/e2e/ops/04-blind.spec.ts` → F-12.
 

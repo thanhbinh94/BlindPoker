@@ -271,7 +271,8 @@ phase and the `turnSeq` it was armed for, so a timer that outlives its round or 
 `REVEALED` for every seat still down. That is **not** a `TIMEOUT`: no `PLAYER_ACTED` with `timedOut`, so
 `consecutiveTimeoutsToStand` does not move (spec §8.7). A seat marked auto-fold (it left or stood up mid-round) is turned
 for in the same breath (`applyAutoFolds`), so the round never waits on a seat with nobody behind it. `REVEALED` outside
-a squeeze round is a no-op in the engine, never an error.
+a squeeze round is a no-op in the engine, never an error — except on a hand that is already `COMPLETE`, where the engine's
+common guard throws `HAND_COMPLETE`; `Room.reveal` never reaches it, since it answers `NOT_IN_HAND` first.
 
 ### Sitting out (spec §11.3)
 

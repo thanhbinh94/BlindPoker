@@ -795,7 +795,8 @@ budget here — it is what a browser actually downloads. Raw sizes are recorded 
 a regression, not because anything is measured against them.
 
 `pnpm --filter @bp/ui-kit build:playground` builds the playground (React 18 + i18next + the whole of `@bp/ui-kit`,
-plus `@bp/core`'s engine and bot, which only the harness needs). Re-measured after the final-review fix wave:
+plus `@bp/core`'s engine and bot, which only the harness needs). Re-measured after the final-review fix wave (before
+Plan 21: the deck, `PeelCard` and the new styles are not in these figures, and the table has not been measured since):
 
 | Bundle | Raw (informational) | Gzip (**budgeted**) |
 | --- | --- | --- |
@@ -859,7 +860,8 @@ full-viewport, for measuring a layout against a screen size.
 - **The squeeze peel** is driven in Chromium only, and not yet on a real phone: Firefox's and WebKit's touch-capture
   semantics are guarded in `PeelCard` and unit-tested with synthetic events, never run in those browsers. On a device
   that does not coalesce pointer events a single quick move after a rest is not read as a flick. On a 375 × 812 squeeze
-  table the stage overflows by 3 px while the cards are dealt (the header's badge row wraps), and a ring↔stack switch in
+  table the stage overflows by 3 px while the cards are dealt (the header's badge row or the tray's wait line wraps a line
+  longer), and a ring↔stack switch in
   the middle of a round can send a second, harmless `REVEAL`. All four are written up in `docs/known-limitations.md`.
 - **The badge test measures the grounds a badge sits on today** (see Theming → Badge text). A badge on a ground it
   does not list is not measured, and one place is tight: teal under a dark `.panel.ink`'s highlight. The test holds
