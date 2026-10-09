@@ -165,5 +165,8 @@
   --dur-2: 220ms;
   /* A card turning over when it is revealed (review 2026-09-29, No1). */
   --dur-flip: 600ms;
+  /* A card sliding out of the deck, and an opponent's card lifted and turned at the showdown (spec 2026-10-08 §3). */
+  --dur-deal: 360ms;
+  --dur-lift: 720ms;
   --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
 }

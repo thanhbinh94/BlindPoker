@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ClientHand } from '../client/types.js'
-import { CARD_STAGGER_MS, FLIP_MS } from '../table/Card.js'
+import { DEAL_MS, FLIP_MS, LIFT_MS, SHOWDOWN_STAGGER_MS } from '../table/Card.js'
+import { showdownWithBoard } from '../table/PokerTable.js'
 import { useMediaQuery } from '../table/useMediaQuery.js'
 
 /** The most cards one seat turns over: a Blind table deals two or three (`BlindRules.holeCards`), Hold'em two. */
@@ -10,10 +11,17 @@ const SETTLE_MS = 150
 
 /**
  * How long the result card waits after a hand ends by turning an opponent's cards over where they lie (review round 2,
- * fix wave, No1): the turn itself (`FLIP_MS`, the `--dur-flip` token), the stagger to the last of three cards (`Seat`
- * passes card `i` a delay of `i × CARD_STAGGER_MS`) and a margin — 600 + 2 × 60 + 150 = 870 ms.
+ * fix wave, No1; spec 2026-10-08 §4.1.3): the lift itself (`LIFT_MS`, the `--dur-lift` token), the stagger to the last
+ * of three cards (`Seat` gives card `i` a turn delay of `i × SHOWDOWN_STAGGER_MS`) and a margin —
+ * 720 + 2 × 200 + 150 = 1270 ms.
  */
-export const REVEAL_HOLD_MS = FLIP_MS + (MOST_HOLE_CARDS - 1) * CARD_STAGGER_MS + SETTLE_MS
+export const REVEAL_HOLD_MS = LIFT_MS + (MOST_HOLE_CARDS - 1) * SHOWDOWN_STAGGER_MS + SETTLE_MS
+
+/**
+ * Added to the hold when the showdown came with the river (`showdownWithBoard`): the lift waits for the river to slide in
+ * and turn first — 360 + 600 = 960 ms, so 2230 ms in all.
+ */
+export const REVEAL_HOLD_AFTER_BOARD_MS = DEAL_MS + FLIP_MS
 
 /** The seats other than the viewer's that `hand` draws face down: hole cards dealt, none of them known. */
 const faceDownSeats = (hand: ClientHand | null): number[] =>
@@ -31,7 +39,8 @@ interface SeenDown {
  * seat's at 1920 × 940, every opponent's on a 375 × 812 phone.
  *
  * It holds for `REVEAL_HOLD_MS` when a hand completes with a showdown in which at least one seat other than the viewer's
- * had been drawn face down on this screen — so its cards turn over in place (`Card`). It never holds:
+ * had been drawn face down on this screen — so its cards turn over in place (`Card`) — and `REVEAL_HOLD_AFTER_BOARD_MS`
+ * longer when that showdown came with the river, whose landing the lift waits for. It never holds:
  * - under `prefers-reduced-motion: reduce`, where nothing turns;
  * - for a hand with no showdown (everyone else folded), or one whose shown hands were never drawn face down here;
  * - for a hand that was already over when this screen first saw it — the snapshot that rebuilds the room after a
@@ -59,12 +68,13 @@ export function useRevealHold(hand: ClientHand | null): boolean {
   /** The hand whose hold has run out; a hand's hold runs once. */
   const [waited, setWaited] = useState<string | null>(null)
   const holding = turns && !reduceMotion && waited !== handId
+  const holdMs = REVEAL_HOLD_MS + (showdownWithBoard(hand) ? REVEAL_HOLD_AFTER_BOARD_MS : 0)
 
   useEffect(() => {
     if (!holding || handId === null) return
-    const timer = setTimeout(() => setWaited(handId), REVEAL_HOLD_MS)
+    const timer = setTimeout(() => setWaited(handId), holdMs)
     return () => clearTimeout(timer)
-  }, [holding, handId])
+  }, [holding, handId, holdMs])
 
   return holding
 }

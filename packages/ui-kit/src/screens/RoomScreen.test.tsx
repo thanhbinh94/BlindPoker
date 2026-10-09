@@ -698,7 +698,7 @@ describe('RoomScreen', () => {
       playTo(shownDown)
       const ann = screen.getByRole('group', { name: 'Seat 1' })
       expect(within(ann).getByRole('img', { name: 'Jack of spades' }), 'Ann’s cards are up from the first render').toBeInTheDocument()
-      expect(ann.querySelectorAll(`.${s.cardTurn}`), 'and turning').toHaveLength(2)
+      expect(ann.querySelectorAll(`.${s.cardLift}`), 'and turning').toHaveLength(2)
       expect(resultCard(), 'no card over the turn').toBeNull()
       // The countdown waits with the card: printed in the tray for the hold, it would jump onto the card a moment
       // later and shift the tray's buttons as it went.
@@ -747,19 +747,19 @@ describe('RoomScreen', () => {
       it('shows the cards turning and nothing of the result, then everything together with the card', () => {
         playTo(shownDown)
         expect(within(seatOf(1)).getByRole('img', { name: 'Jack of spades' }), 'Ann’s cards are up from the first render').toBeInTheDocument()
-        expect(seatOf(1).querySelectorAll(`.${s.cardTurn}`), 'and turning').toHaveLength(2)
+        expect(seatOf(1).querySelectorAll(`.${s.cardLift}`), 'and turning').toHaveLength(2)
         expect(resultCard()).toBeNull()
         tableSaysNothing()
 
         act(() => vi.advanceTimersByTime(REVEAL_HOLD_MS - 1))
         expect(resultCard()).toBeNull()
         tableSaysNothing()
-        expect(seatOf(1).querySelectorAll(`.${s.cardTurn}`), 'the turn is still playing').toHaveLength(2)
+        expect(seatOf(1).querySelectorAll(`.${s.cardLift}`), 'the turn is still playing').toHaveLength(2)
 
         act(() => vi.advanceTimersByTime(1))
         expect(resultCard()).toBeInTheDocument()
         tableSaysItAll()
-        expect(seatOf(1).querySelectorAll(`.${s.cardTurn}`), 'the turn is left alone').toHaveLength(2)
+        expect(seatOf(1).querySelectorAll(`.${s.cardLift}`), 'the turn is left alone').toHaveLength(2)
       })
 
       it('shows all of it at once under reduced motion, where nothing turns', () => {

@@ -6,7 +6,7 @@ import type { ClientSeat } from '../client/types.js'
 import { formatPoints, type Language } from '../i18n/index.js'
 import { Badge, type BadgeTone } from '../primitives/Badge.js'
 import { cx } from '../primitives/cx.js'
-import { CARD_STAGGER_MS, Card } from './Card.js'
+import { Card, DEAL_STAGGER_MS, SHOWDOWN_STAGGER_MS } from './Card.js'
 import { TurnTimer } from './TurnTimer.js'
 import s from './table.module.css'
 
@@ -43,6 +43,18 @@ export interface SeatProps {
    * a couple of words belongs somewhere else on the screen.
    */
   caption?: ReactNode
+  /** The hand the cards belong to: each hand's cards are new cards, dealt afresh even when the count is the same. */
+  handId: string | null
+  /** The cards have just been dealt: they come out of the deck (spec 2026-10-08 §4.1.1). */
+  dealt: boolean
+  /** This seat's place in the deal, 0 for the first seat after the button. */
+  dealIndex: number
+  /** How many seats are dealt in. Card `i` waits `(i × dealCount + dealIndex) × DEAL_STAGGER_MS`. */
+  dealCount: number
+  /** How a card that was face down turns when it is revealed: the viewer's own in place, an opponent's lifted. */
+  reveal: 'flip' | 'lift'
+  /** When the showdown's first card turns — later when the river came with it; card `i` waits `i × SHOWDOWN_STAGGER_MS` more. */
+  liftAfter: number
 }
 
 /** One seat plaque: cards, name, stack, bet, state pill, dealer button, turn ring and winner glow. */
@@ -63,6 +75,12 @@ export function Seat({
   expression,
   bounce,
   caption,
+  handId,
+  dealt,
+  dealIndex,
+  dealCount,
+  reveal,
+  liftAfter,
 }: SeatProps) {
   const { t } = useTranslation()
   const name = seat.displayName === '' ? (player?.displayName ?? '') : seat.displayName
@@ -108,7 +126,16 @@ export function Seat({
       {faces.length > 0 ? (
         <div className={s.seatCards}>
           {faces.map((card, i) => (
-            <Card key={i} card={card} faceDown={card === null} size={cardSize} delayMs={i * CARD_STAGGER_MS} />
+            <Card
+              key={`${handId}:${i}`}
+              card={card}
+              faceDown={card === null}
+              size={cardSize}
+              dealt={dealt}
+              reveal={reveal}
+              delayMs={(i * dealCount + dealIndex) * DEAL_STAGGER_MS}
+              turnDelayMs={liftAfter + i * SHOWDOWN_STAGGER_MS}
+            />
           ))}
         </div>
       ) : null}

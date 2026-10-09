@@ -1,11 +1,14 @@
 import type { Card as CardId, RoomPlayerView, RoomView, ShowdownHand } from '@bp/core'
-import type { CSSProperties, ReactNode } from 'react'
+import { useRef, type CSSProperties, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { botChibi, type ChibiSubject, type Expression } from '../avatar2d/index.js'
 import type { ClientHand, ClientSeat } from '../client/types.js'
 import { handLabel, type Language } from '../i18n/index.js'
 import { cx } from '../primitives/cx.js'
+import { DEAL_MS, DEAL_WINDOW_MS, FLIP_MS } from './Card.js'
 import { CommunityCards } from './CommunityCards.js'
+import { Deck } from './Deck.js'
+import { DeckAnchorProvider } from './deck-anchor.js'
 import { Pot } from './Pot.js'
 import { Seat } from './Seat.js'
 import { ringPositions } from './geometry.js'
@@ -66,11 +69,37 @@ const seatFromPlayer = (seat: number, player: RoomPlayerView): ClientSeat => ({
   timedOut: false,
 })
 
+/** A showdown this close behind the latest board card came in the same batch. */
+const WITH_THE_BOARD_MS = 1000
+
+/**
+ * Whether the hand's `SHOWDOWN` came together with a board card (pre-flight 2026-10-09): the engine settles in the
+ * `ADVANCE` that deals the river, so the river's `COMMUNITY_REVEALED` and the `SHOWDOWN` land in one batch on every Blind
+ * hand and every Hold'em run-out. The opponents' cards then lift only once the river has slid in and turned
+ * (`DEAL_MS + FLIP_MS`, spec 2026-10-08 §1, §4.1.3), and `useRevealHold` holds the result card that much longer.
+ * Never for a hand rebuilt from a snapshot, which has no stamps.
+ */
+export const showdownWithBoard = (hand: ClientHand | null): boolean =>
+  hand !== null && hand.showdownAt !== null && hand.boardAt !== null && hand.showdownAt - hand.boardAt < WITH_THE_BOARD_MS
+
+/** The seats in the order a dealer deals to them: clockwise (seat numbers up), starting with the first after the button. */
+const dealOrderOf = (hand: ClientHand | null): number[] => {
+  if (hand === null) return []
+  const seats = hand.seats.map((hs) => hs.seat).sort((a, b) => a - b)
+  const first = seats.findIndex((seat) => seat > hand.button)
+  return first <= 0 ? seats : [...seats.slice(first), ...seats.slice(0, first)]
+}
+
 /**
  * The table: seats on the rim of a lacquered ellipse with the viewer always at the bottom, community cards and pot in
  * the middle. On a screen too narrow or too short for that it becomes a vertical stack — opponents on top, board in
  * the middle, the viewer pinned to the bottom — which is the same components in a different grid, not a second
  * implementation.
+ *
+ * Every card comes out of the `Deck` on the felt (spec 2026-10-08 §3, §4.1): the hole cards round the table from the
+ * seat after the button, one card per seat at a time, and each street's cards to the board — but only cards that have
+ * just arrived (`DEAL_WINDOW_MS`). A hand rebuilt from a snapshot, or a table remounted later in the hand, shows its
+ * cards where they lie. At the showdown an opponent's cards lift and turn, one seat's cards `SHOWDOWN_STAGGER_MS` apart.
  */
 export function PokerTable({
   room,
@@ -91,6 +120,7 @@ export function PokerTable({
   const { t } = useTranslation()
   const narrow = useMediaQuery(STACKED)
   const mode: TableLayout = layout ?? (narrow ? 'stack' : 'ring')
+  const deckRef = useRef<HTMLDivElement>(null)
 
   const seated = new Map<number, RoomPlayerView>()
   for (const p of room.players) if (p.seat !== null) seated.set(p.seat, p)
@@ -112,6 +142,14 @@ export function PokerTable({
   const best = topSeat === undefined ? undefined : showdown.get(topSeat)?.best
   const community = hand?.community ?? []
   const highlight: CardId[] | undefined = best === undefined ? undefined : best.filter((c) => community.includes(c))
+
+  // The motion. "Dealt" is "arrived just now", by the client clock the arrival stamps are in (not `serverNow`); a card
+  // reads it when it mounts, so the window running out later changes nothing on the table.
+  const now = Date.now()
+  const dealt = hand !== null && !hand.restored && hand.dealtAt !== null && now - hand.dealtAt < DEAL_WINDOW_MS
+  const boardDealt = hand !== null && hand.boardAt !== null && now - hand.boardAt < DEAL_WINDOW_MS
+  const dealOrder = dealOrderOf(hand)
+  const liftAfter = showdownWithBoard(hand) ? DEAL_MS + FLIP_MS : 0
 
   const renderSeat = (index: number): ReactNode => {
     const player = seated.get(index)
@@ -169,17 +207,30 @@ export function PokerTable({
         expression={expressionFor?.(index) ?? 'neutral'}
         bounce={bounce}
         caption={captionFor?.(player)}
+        handId={hand?.handId ?? null}
+        dealt={dealt}
+        dealIndex={Math.max(0, dealOrder.indexOf(index))}
+        dealCount={dealOrder.length}
+        reveal={index === hand?.mySeat ? 'flip' : 'lift'}
+        liftAfter={liftAfter}
       />
     )
   }
 
   const showPot = hand !== null || room.carryOverPot > 0
+  // The deck shares the pot's row, as tall as the pot, so it adds no height to the centre: above the board it ran into
+  // the top seat's lines on the ring and pushed the pot onto the viewer's cards on a short one (1366 × 768). Its ref is
+  // set in tree order, so a card mounting in the same commit as the table and ahead of the deck — the board, the phone's
+  // strip — finds no deck and fades in: a table that has just mounted shows its cards where they lie.
   const centre = (
     <div className={s.centre}>
-      <CommunityCards cards={community} highlight={highlight} />
-      {showPot ? (
-        <Pot pot={hand?.pot ?? 0} carryOver={hand?.carryOverIn ?? room.carryOverPot} pulse={hand?.potPulse ?? 0} lang={lang} />
-      ) : null}
+      <CommunityCards cards={community} highlight={highlight} dealt={boardDealt} />
+      <div className={s.centreRow}>
+        <Deck ref={deckRef} />
+        {showPot ? (
+          <Pot pot={hand?.pot ?? 0} carryOver={hand?.carryOverIn ?? room.carryOverPot} pulse={hand?.potPulse ?? 0} lang={lang} />
+        ) : null}
+      </div>
     </div>
   )
 
@@ -190,25 +241,29 @@ export function PokerTable({
     // cards were out); seven or more and the plates also give up the app's caption so the third row fits.
     const opponents = order.filter((i) => i !== mySeat)
     return (
-      <section className={cx(s.table, s.stack)} data-surface="night" aria-label={t('labels.table')}>
-        <div
-          className={cx(s.others, opponents.length > 3 && s.othersTwoRow, opponents.length > 3 && s.othersChip, opponents.length > 6 && s.othersDense)}
-          role="group"
-          aria-label={t('labels.players')}
-        >
-          {opponents.map(renderSeat)}
-        </div>
-        <div className={s.stackFelt}>{centre}</div>
-        {mySeat === null ? null : <div className={s.mine}>{renderSeat(mySeat)}</div>}
-      </section>
+      <DeckAnchorProvider value={deckRef}>
+        <section className={cx(s.table, s.stack)} data-surface="night" aria-label={t('labels.table')}>
+          <div
+            className={cx(s.others, opponents.length > 3 && s.othersTwoRow, opponents.length > 3 && s.othersChip, opponents.length > 6 && s.othersDense)}
+            role="group"
+            aria-label={t('labels.players')}
+          >
+            {opponents.map(renderSeat)}
+          </div>
+          <div className={s.stackFelt}>{centre}</div>
+          {mySeat === null ? null : <div className={s.mine}>{renderSeat(mySeat)}</div>}
+        </section>
+      </DeckAnchorProvider>
     )
   }
 
   return (
-    <section className={cx(s.table, s.ring)} data-seats={room.maxPlayers} data-surface="night" aria-label={t('labels.table')}>
-      <div className={s.felt} aria-hidden="true" />
-      {centre}
-      {order.map(renderSeat)}
-    </section>
+    <DeckAnchorProvider value={deckRef}>
+      <section className={cx(s.table, s.ring)} data-seats={room.maxPlayers} data-surface="night" aria-label={t('labels.table')}>
+        <div className={s.felt} aria-hidden="true" />
+        {centre}
+        {order.map(renderSeat)}
+      </section>
+    </DeckAnchorProvider>
   )
 }

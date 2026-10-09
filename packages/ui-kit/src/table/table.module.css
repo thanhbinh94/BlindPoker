@@ -1,6 +1,6 @@
 /* Đêm Sài Gòn — the table. Teal-black felt under a gold rail, ivory cards, lacquer-red backs.
-   All motion is CSS: a dealt-card flip, a revealed card turning over, a conic turn ring, one pot pulse, one winner
-   glow. */
+   All motion is CSS: a card dealt from the deck, a revealed card turning over (lifted off the felt at the showdown), a
+   conic turn ring, one pot pulse, one winner glow. */
 
 /* ---------------- Card ---------------- */
 /* The wrapper: size, drop shadow and the deal-in. It is an HTML box now (the card turns over inside it), so it takes
@@ -34,17 +34,30 @@
 }
 
 /* A face-down card revealed in place turns over: two-sided, about 0.6 s, the back for the first half and the face for
-   the second (an ease-in-out, so the card is edge-on at the midpoint), staggered like the deal. Only the start of the
-   turn is a keyframe; the face is the resting style, so with every animation off (reduced motion) it simply shows.
-   The 3D is this state's alone: the flipper keeps its sides in 3D and each hides whichever faces away, and the class
-   stays on while the turned face is up, so the back rotated behind it stays hidden. */
+   the second (an ease-in-out, so the card is edge-on at the midpoint). It waits a delay of its own, `--turn-delay` —
+   a dealt card's slide, the showdown's stagger — never the deal's, which its slide has already run on. Only the start
+   of the turn is a keyframe; the face is the resting style, so with every animation off (reduced motion) it simply
+   shows. The 3D is this state's alone: the flipper keeps its sides in 3D and each hides whichever faces away, and the
+   class stays on while the turned face is up, so the back rotated behind it stays hidden. */
 .cardTurn {
   transform-style: preserve-3d;
   animation: flip var(--dur-flip, 600ms) ease-in-out backwards;
-  animation-delay: var(--deal-delay, 0ms);
+  animation-delay: var(--turn-delay, 0ms);
 }
 
 .cardTurn > .cardSide {
+  backface-visibility: hidden;
+}
+
+/* The showdown's turn (spec 2026-10-08 §3, mẫu B): the card lifts off the felt, turns in the air and lands with a small
+   overshoot. The resting style is the face, as for `.cardTurn`; only the start and the middle are keyframes. */
+.cardLift {
+  transform-style: preserve-3d;
+  animation: lift var(--dur-lift, 720ms) cubic-bezier(0.3, 0.1, 0.25, 1) backwards;
+  animation-delay: var(--turn-delay, 0ms);
+}
+
+.cardLift > .cardSide {
   backface-visibility: hidden;
 }
 
@@ -55,6 +68,18 @@
 @keyframes flip {
   from {
     transform: rotateY(180deg);
+  }
+}
+
+@keyframes lift {
+  0% {
+    transform: translateY(0) rotateY(180deg) scale(1);
+  }
+  45% {
+    transform: translateY(-18%) rotateY(90deg) scale(1.1);
+  }
+  82% {
+    transform: translateY(-3%) rotateY(-9deg) scale(1.02);
   }
 }
 
@@ -78,6 +103,34 @@
   from {
     opacity: 0;
     transform: perspective(420px) rotateY(-82deg) translateY(-8px);
+  }
+}
+
+/* Dealt from the deck (spec 2026-10-08 §3): the wrapper slides in face down from the deck's place, measured by `Card`
+   against the `Deck` anchor into `--deal-dx`/`--deal-dy`; a card that is to be seen then turns (`.cardTurn`, above),
+   `--turn-delay` after the slide began. It replaces the fade above, which a card with no deck to come from, or a
+   restored hand, still gets. Reduced motion lands on the resting style like everything else: the card at its seat. */
+.cardDealt {
+  animation: dealSlide var(--dur-deal, 360ms) var(--ease) backwards;
+  animation-delay: var(--deal-delay, 0ms);
+}
+
+@keyframes dealSlide {
+  from {
+    transform: translate(var(--deal-dx, 0px), var(--deal-dy, -40px)) rotate(-7deg);
+  }
+}
+
+/* The lift widens the card's shadow as it rises (spec 2026-10-08 §3): on the wrapper, since a filter on the flipper
+   would flatten its 3D, and timed with the lift; the rest is the wrapper's usual shadow. */
+.cardLifting {
+  animation: liftShadow var(--dur-lift, 720ms) cubic-bezier(0.3, 0.1, 0.25, 1);
+  animation-delay: var(--turn-delay, 0ms);
+}
+
+@keyframes liftShadow {
+  45% {
+    filter: drop-shadow(0 10px 10px rgba(3, 6, 16, 0.55));
   }
 }
 
@@ -185,6 +238,33 @@
 }
 
 /* ---------------- Pot ---------------- */
+/* The deck (spec 2026-10-08 §3, Q5): a fixed stack in the middle of the table, beside the pot, that every card comes
+   out of. It is as tall as the pot pill (38 px: its 1.25rem figure's line and its padding), so the row the two share
+   (`.centreRow`) is no taller than the pot alone and the felt gains no height — on the phone, where the viewer's own
+   plate must stay on screen (layout audit L1), and on a short ring, where a deck above the board ran into the top
+   seat's lines and pushed the pot onto the viewer's cards (1366 × 768, 1536 × 730, 1280 × 720). */
+.deck {
+  position: relative;
+  height: 2.375rem;
+  aspect-ratio: 60 / 84;
+}
+
+.deckCard {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 1px 2px rgba(3, 6, 16, 0.5));
+}
+
+.deckCard:nth-child(2) {
+  transform: translate(2px, -2px);
+}
+
+.deckCard:nth-child(3) {
+  transform: translate(4px, -4px);
+}
+
 .pot {
   display: flex;
   align-items: center;
@@ -615,6 +695,14 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: var(--space-3);
+}
+
+/* Under the board: the deck and the pot, side by side (see `.deck`). */
+.centreRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   gap: var(--space-3);
 }
 
@@ -1449,7 +1537,10 @@
 /* ---------------- Motion off ---------------- */
 @media (prefers-reduced-motion: reduce) {
   .card,
+  .cardDealt,
   .cardTurn,
+  .cardLift,
+  .cardLifting,
   .potChips,
   .potValue,
   .payout,
