@@ -5,6 +5,7 @@ import { I18nextProvider } from 'react-i18next'
 import { validateRoomConfig } from '@bp/core'
 import { createI18n } from '../i18n/index.js'
 import { CreateRoomForm } from './CreateRoomForm.js'
+import s from './lobby.module.css'
 
 const wrap = (ui: React.ReactElement) =>
   render(<I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>{ui}</I18nextProvider>)
@@ -79,19 +80,35 @@ describe('CreateRoomForm', () => {
   })
 
   // Plan 21: a Blind table may be a squeeze table — the cards come face down and are turned by hand in a round of a fixed
-  // 20 s. The round's length is the server's, so the box takes the turn-timer control away rather than leave a choice it
-  // would ignore.
+  // 20 s. The round's length is the server's, so the box swaps the turn-timer control for that length, read-only, rather
+  // than leave a choice it would ignore. The box sits under the bot count (the slack in the wager row), and its hint is
+  // read by a screen reader, not shown, so Blind's fields end where they did and the dialog does not grow for it.
   describe('the "Nặn bài" option', () => {
     const wrapVi = (ui: React.ReactElement) =>
       render(<I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>{ui}</I18nextProvider>)
     const create = () => screen.getByRole('button', { name: /^tạo phòng/i })
 
-    it('is a checkbox in Blind mode, unchecked to begin with, and says what it costs the timer', () => {
+    it('is a checkbox in Blind mode, unchecked to begin with, named just "Nặn bài" and described by its hint', () => {
       wrapVi(<CreateRoomForm onSubmit={vi.fn()} lang="vi" initialMode="blind" />)
       const box = screen.getByLabelText('Nặn bài')
       expect(box).toHaveAttribute('type', 'checkbox')
       expect(box).not.toBeChecked()
+      expect(box).toHaveAccessibleName('Nặn bài')
       expect(box).toHaveAccessibleDescription('Mỗi vòng tối đa 20 giây, hết sớm khi mọi người đã lật.')
+    })
+
+    it('sits under the bot count, in its cell of the wager row, and shows no hint line of its own', () => {
+      wrapVi(<CreateRoomForm onSubmit={vi.fn()} lang="vi" initialMode="blind" />)
+      const box = screen.getByLabelText('Nặn bài')
+      const cell = box.closest(`.${s.botsCell}`)
+      expect(cell).not.toBeNull()
+      expect(cell).toContainElement(screen.getByLabelText('Số lượng bot'))
+      // after the bot count's select, not before it
+      expect(screen.getByLabelText('Số lượng bot').compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      // the hint is for a screen reader: in the page, described-by, but not drawn
+      const hint = document.getElementById(box.getAttribute('aria-describedby')!)!
+      expect(hint).toHaveClass('visually-hidden')
+      expect(cell).toContainElement(hint)
     })
 
     it('is not offered at a Hold’em table, and appears when the mode is flipped to Blind', async () => {
@@ -104,15 +121,26 @@ describe('CreateRoomForm', () => {
       expect(screen.queryByLabelText('Nặn bài')).toBeNull()
     })
 
-    it('takes the turn-timer select away when it is checked, and gives it back when it is not', async () => {
+    it('swaps the turn-timer select for the round’s fixed length when it is checked, and gives the select back when it is not', async () => {
       const user = userEvent.setup()
       wrapVi(<CreateRoomForm onSubmit={vi.fn()} lang="vi" initialMode="blind" />)
-      expect(screen.getByLabelText('Thời gian mỗi lượt')).toBeInTheDocument()
+      expect(screen.getByRole('combobox', { name: 'Thời gian mỗi lượt' })).toBeInTheDocument()
       await user.click(screen.getByLabelText('Nặn bài'))
       expect(screen.getByLabelText('Nặn bài')).toBeChecked()
-      expect(screen.queryByLabelText('Thời gian mỗi lượt')).toBeNull()
+      // the cell is not left empty: the same caption over a value that cannot be edited
+      expect(screen.queryByRole('combobox', { name: 'Thời gian mỗi lượt' })).toBeNull()
+      const fixed = screen.getByLabelText('Thời gian mỗi lượt')
+      expect(fixed).toHaveValue('20 giây · nặn bài')
+      expect(fixed).toHaveAttribute('readonly')
       await user.click(screen.getByLabelText('Nặn bài'))
-      expect(screen.getByLabelText('Thời gian mỗi lượt')).toBeInTheDocument()
+      expect(screen.getByRole('combobox', { name: 'Thời gian mỗi lượt' })).toBeInTheDocument()
+    })
+
+    it('says the fixed length in English too', async () => {
+      const user = userEvent.setup()
+      wrap(<CreateRoomForm onSubmit={vi.fn()} lang="en" initialMode="blind" />)
+      await user.click(screen.getByLabelText('Squeeze'))
+      expect(screen.getByLabelText('Turn timer')).toHaveValue('20 sec · squeeze')
     })
 
     it('submits blind.squeeze true and a 20 s round, whatever timer was picked before the box was ticked', async () => {

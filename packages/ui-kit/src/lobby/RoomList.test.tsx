@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { I18nextProvider } from 'react-i18next'
 import type { RoomSummary } from '@bp/core'
 import { createI18n } from '../i18n/index.js'
+import badge from '../primitives/primitives.module.css'
 import { RoomList } from './RoomList.js'
 
 const rooms: RoomSummary[] = [
@@ -135,6 +136,7 @@ describe('RoomList', () => {
     it('marks a Blind room that is a squeeze table "Nặn bài"', () => {
       wrap(<RoomList rooms={[squeezeRoom]} onJoin={vi.fn()} lang="vi" />)
       expect(screen.getByText('Nặn bài')).toBeInTheDocument()
+      expect(screen.getByText('Nặn bài')).toHaveClass(badge.badge!, badge.gold!) // gold: it is the table's money-side mark, not an idle tag
     })
 
     it('puts nothing on a Blind room without the option, or with it false, nor on a Hold’em room', () => {

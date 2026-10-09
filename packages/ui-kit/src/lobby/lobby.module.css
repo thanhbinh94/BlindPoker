@@ -272,16 +272,16 @@
 }
 
 /* The fields that depend on the mode (No12). Hold'em brings three (blind tier, buy-in min and max, each buy-in with a
-   hint line) and Blind Poker four (its table-limit hint runs two lines) and a row for the "Nặn bài" box with its hint
-   (Plan 21), so the dialog used to grow or shrink when the host flipped between them. They sit in a grid of their
-   own — the form's own `.grid`, so the rows come out as they did when the fields were direct children — and this
-   grid reserves the taller of the two heights. `align-content: start` keeps the reserved height from stretching the
-   rows apart.
+   hint line) and Blind Poker four (its table-limit hint runs two lines), so the dialog used to grow or shrink
+   when the host flipped between them. They sit in a grid of their own — the form's own `.grid`, so the rows come
+   out as they did when the fields were direct children — and this grid reserves the taller of the two heights.
+   `align-content: start` keeps the reserved height from stretching the rows apart.
 
-   Two columns (the dialog on a desktop or tablet): Hold'em measures 214 px and Blind 286 px (the box's row is 64 of
-   them) in the real build, Vietnamese and English alike. Where the mode box is narrowest, 22rem to about 25rem, the
-   box's hint wraps to a second line and Blind measures 305 px, so the reserve is 19.5rem — a little over the taller of
-   the two at its tallest, so a line of slack in the hint text does not undo it. The columns are the grid's
+   Two columns (the dialog on a desktop or tablet): Hold'em measures 214 px and Blind 206 px in the real build,
+   Vietnamese and English alike, so the reserve is 14rem — a little over the taller of the two, so a line of
+   slack in the hint text does not undo it. Blind's "Nặn bài" box adds nothing to that: it sits under the bot count,
+   in the slack the wager's two-line hint leaves in the row (`.botsCell`), so it must stay within that slack (a 28 px
+   row, with the gap and the bot field's 72 px, against the wager field's 119). The columns are the grid's
    `auto-fit` ones, so the box is a size container and the reserve applies from the width at which they turn into
    two: 2 × 10.5rem + the 1rem gap. A change to a field that makes either mode taller than the reserve fails the
    create-room height check in e2e/normal.spec.ts.
@@ -299,7 +299,7 @@
 
 @container (min-width: 22rem) {
   .modeFields {
-    min-height: 19.5rem;
+    min-height: 14rem;
   }
 }
 
@@ -359,21 +359,27 @@
   accent-color: var(--gold);
 }
 
-/* A checkbox with a line of explanation under it (Nặn bài): the line hangs under the caption, not under the box, and
-   is the same quiet size as the hint a `Field` puts under its control. The caption starts after the box (20 px), the
-   4 px and 3 px of margin every browser gives a checkbox, and the label's gap. */
-.checkField {
+/* The bot count and the "Nặn bài" box under it, in one cell of the Blind grid. The wager's hint takes two lines, so the
+   cell next to it is taller than the bot field: the box goes to the foot of the cell (`margin-top: auto`), level with
+   the hint's last line, and where the cell is as tall as the field alone (one column) it follows it by the gap. The
+   box's row is 28 px, not a full tap height: the 44 px one would not fit in that slack. */
+.botsCell {
   display: flex;
   flex-direction: column;
+  gap: var(--space-2);
 }
 
-.hint {
-  font-size: 0.8125rem;
-  color: var(--ink-muted);
+.checkCompact {
+  min-height: 1.75rem;
+  margin-top: auto;
 }
 
-.checkField .hint {
-  padding-left: calc(20px + 7px + var(--space-3));
+/* The timer's cell while the squeeze box is ticked: the length is not a choice, so the select gives way to a
+   read-only value drawn as a field that cannot be edited (dashed border, no tint), in the select's own place and height. */
+.inputFixed {
+  background-color: transparent;
+  border-style: dashed;
+  cursor: default;
 }
 
 /* The settings list is longer than a phone screen, so the dialog scrolls — but the button that finishes the job

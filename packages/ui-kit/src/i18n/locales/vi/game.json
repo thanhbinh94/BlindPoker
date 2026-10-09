@@ -217,6 +217,7 @@
     "botCount": "Số lượng bot",
     "squeeze": "Nặn bài",
     "squeezeHint": "Mỗi vòng tối đa 20 giây, hết sớm khi mọi người đã lật.",
+    "squeezeTimer": "{{time}} · nặn bài",
     "submit": "Tạo phòng",
     "hint": {
       "name": "Tên phòng cần 1–30 ký tự.",

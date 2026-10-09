@@ -84,9 +84,9 @@ export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem',
   const maxPlayers = Math.min(seats, seatCap)
   const timers: readonly number[] = mode === 'holdem' ? ECONOMY.holdemTurnTimers : ECONOMY.blindTurnTimers
   const turnTimerSec = timers.includes(timer) ? timer : DEFAULT_TIMER[mode]
-  // A squeeze table's round is the server's fixed 20 s (spec 2026-10-08 §4.2.1): the timer's control is not offered and
-  // the config carries that length. The box is Blind's own, so a Hold'em table never sees it, and a trip through
-  // Hold'em keeps it ticked, like the rest of the draft.
+  // A squeeze table's round is the server's fixed 20 s (spec 2026-10-08 §4.2.1): the timer's select gives way to that
+  // length, read-only, and the config carries it. The box is Blind's own, so a Hold'em table never sees it, and a trip
+  // through Hold'em keeps it ticked, like the rest of the draft.
   const squeezing = mode === 'blind' && squeeze
   const bots = Math.min(botCount, maxPlayers - 1)
 
@@ -149,16 +149,23 @@ export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem',
             onChange={setSeats}
           />
         </Field>
-        {squeezing ? null : (
-          <Field label={t('create.turnTimer')}>
+        <Field label={t('create.turnTimer')}>
+          {squeezing ? (
+            <input
+              className={cx(s.input, s.inputFixed)}
+              type="text"
+              readOnly
+              value={t('create.squeezeTimer', { time: t('common:time.seconds', { count: ECONOMY.squeezeTurnTimerSec }) })}
+            />
+          ) : (
             <Select<number>
               value={turnTimerSec}
               options={timers.map((n) => ({ value: n, label: t('common:time.seconds', { count: n }) }))}
               disabled={busy}
               onChange={setTimer}
             />
-          </Field>
-        )}
+          )}
+        </Field>
 
         {/* One box for both modes' fields, as tall as the taller of the two, so flipping the mode never moves the
             dialog's edge (No12; the heights are in lobby.module.css). */}

@@ -217,6 +217,7 @@
     "botCount": "Bots",
     "squeeze": "Squeeze",
     "squeezeHint": "Each round lasts up to 20 s, less once everyone has turned.",
+    "squeezeTimer": "{{time}} · squeeze",
     "submit": "Create room",
     "hint": {
       "name": "The room name must be 1–30 characters.",

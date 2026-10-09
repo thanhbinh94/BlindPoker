@@ -151,14 +151,17 @@ export function BlindFields({
       >
         <Select value={fixedWager} options={wagers} disabled={disabled} onChange={onFixedWager} />
       </Field>
-      <Field label={t('create.botCount')}>
-        <Select value={botCount} options={bots} disabled={disabled} onChange={onBotCount} />
-      </Field>
-      {/* Not a `Field`: that would re-label the box with its own caption. The box is its own label, like the form's other
-          checkboxes, and the hint hangs under it as its description — the round's fixed length, which is why the form
-          drops the timer control while this is on. */}
-      <div className={cx(s.wide, s.checkField)}>
-        <label className={s.check}>
+      {/* The wager's hint runs two lines, so its row is taller than the bot count by about a line and a half: the "Nặn bài"
+          box takes that slack, under the bots and level with the hint's last line, and Blind's fields end where they did.
+          Not a `Field`, which would re-label the box with its own caption: the box is its own label, as the form's other
+          checkboxes are, so its name is just "Nặn bài". What it does to the round (a fixed 20 s, over early when everyone
+          has turned) is its description, said to a screen reader and not drawn: the timer's cell, which turns into that
+          length while the box is ticked, shows it. */}
+      <div className={s.botsCell}>
+        <Field label={t('create.botCount')}>
+          <Select value={botCount} options={bots} disabled={disabled} onChange={onBotCount} />
+        </Field>
+        <label className={cx(s.check, s.checkCompact)}>
           <input
             className={s.checkbox}
             type="checkbox"
@@ -169,7 +172,7 @@ export function BlindFields({
           />
           {t('create.squeeze')}
         </label>
-        <span id={hintId} className={s.hint}>
+        <span id={hintId} className="visually-hidden">
           {t('create.squeezeHint')}
         </span>
       </div>

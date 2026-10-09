@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { I18nextProvider } from 'react-i18next'
 import type { RoomView } from '@bp/core'
 import { createI18n } from '../i18n/index.js'
+import badge from '../primitives/primitives.module.css'
 import { RoomHeader } from './RoomHeader.js'
 
 const blindRoom = (squeeze?: boolean): RoomView => ({
@@ -67,6 +68,7 @@ describe('RoomHeader', () => {
     it('marks a squeeze table "Nặn bài"', () => {
       wrap(blindRoom(true))
       expect(screen.getByText('Nặn bài')).toBeInTheDocument()
+      expect(screen.getByText('Nặn bài')).toHaveClass(badge.badge!, badge.gold!)
     })
 
     it('puts nothing on a Blind table without the option, or with it false, nor on a Hold’em table', () => {
