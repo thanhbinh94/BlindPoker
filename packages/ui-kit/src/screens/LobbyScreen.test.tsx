@@ -120,6 +120,8 @@ describe('LobbyScreen', () => {
     const dialog = screen.getByRole('dialog')
     expect(dialog).toBeInTheDocument()
 
+    // The form opens with a name of its own; the host types over it.
+    await userEvent.clear(screen.getByLabelText('Room name'))
     await userEvent.type(screen.getByLabelText('Room name'), 'Night Room')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Create room' }))
 

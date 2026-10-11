@@ -688,7 +688,7 @@ const RARITY_WORDS = { common: 'Thường', rare: 'Hiếm', epic: 'Cực hiếm'
 
 /**
  * Measures the card grids inside `scope`: the wardrobe's item, hairstyle, colour and word cards (a tab's grid, or the two
- * grids of "Danh hiệu & Huy hiệu"). A grid counts when every item draws a border —
+ * grids of "Danh hiệu & huy hiệu"). A grid counts when every item draws a border —
  * itself, or through its first child (`.cardCell`) — so the wardrobe's other grids are not picked up. Nothing
  * here knows a CSS-module class name.
  */
@@ -812,7 +812,7 @@ export function rarityGroups(row: MeasuredCard[]): MeasuredCard[][] {
  * under their glyphs; it is not a misaligned row. Cards with no rarity line (the "Tự nhiên" swatch) are compared on
  * height only, and one with nothing under its rarity has no footer.
  *
- * `grids` is how many grids `scope` must hold (a tab has one, "Danh hiệu & Huy hiệu" two): a grid that could not be
+ * `grids` is how many grids `scope` must hold (a tab has one, "Danh hiệu & huy hiệu" two): a grid that could not be
  * measured, or that measured no row, fails instead of passing unseen. Returns what it measured, for a caller that
  * wants to report it.
  */

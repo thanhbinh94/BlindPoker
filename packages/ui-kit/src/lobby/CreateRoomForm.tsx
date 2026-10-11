@@ -1,6 +1,6 @@
 import { ECONOMY, validateRoomConfig, type ErrorCode, type RoomConfig } from '@bp/core'
-import { useState } from 'react'
-import type { FormEvent } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
+import type { FormEvent, InputHTMLAttributes } from 'react'
 import { useTranslation } from 'react-i18next'
 import { errorLabel, type Language } from '../i18n/index.js'
 import { Button } from '../primitives/Button.js'
@@ -10,6 +10,7 @@ import { Select } from '../primitives/Select.js'
 import { cx } from '../primitives/cx.js'
 import { BlindFields, HoldemFields } from './CreateRoomFields.js'
 import s from './lobby.module.css'
+import { randomRoomName } from './room-names.js'
 
 export type RoomMode = 'holdem' | 'blind'
 
@@ -54,6 +55,62 @@ function hintKeyFor(draft: ConfigDraft): string | null {
   return null
 }
 
+/** The 🎲's face, a named value rather than a literal in the markup (`react/jsx-no-literals`, `eslint.config.js`). */
+const ROLL_GLYPH = '\u{1F3B2}'
+
+interface RoomNameInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> {
+  value: string
+  onChange: (name: string) => void
+  /** Puts another name in the field; the field takes focus after it, with the new name selected. */
+  onRoll: () => void
+  /** Accessible name of the 🎲 (i18n string from the host). */
+  rollLabel: string
+}
+
+/**
+ * The name field and the 🎲 that rolls another name, in one row. It is the single control `Field` wires its label onto
+ * — the `id` and the aria props `Field` hands down go to the input, as with `Select` — so the label points at the field
+ * and not at the row. The button is as tall as the field (`--tap`), so the row, and with it the dialog, is as tall as the
+ * field alone was. Focus returns to the field after a roll, with the new name selected, so the host can type over it at once.
+ */
+function RoomNameInput({ value, onChange, onRoll, rollLabel, disabled, ...rest }: RoomNameInputProps) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [rolls, setRolls] = useState(0)
+  // Selecting waits for the commit: the field still holds the old name when the click handler runs, and React's write of
+  // the new one would move the caret to the end, undoing a selection made earlier.
+  useLayoutEffect(() => {
+    if (rolls === 0) return
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  }, [rolls])
+  return (
+    <span className={s.nameRow}>
+      <input
+        ref={inputRef}
+        className={s.input}
+        type="text"
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        {...rest}
+      />
+      <Button
+        variant="ghost"
+        size="sm"
+        className={s.rollName}
+        aria-label={rollLabel}
+        disabled={disabled}
+        onClick={() => {
+          onRoll()
+          setRolls((n) => n + 1)
+        }}
+      >
+        {ROLL_GLYPH}
+      </Button>
+    </span>
+  )
+}
+
 /**
  * Room settings per spec §11.2. Every option comes from `ECONOMY`, so the form can only offer values the
  * server accepts; the raw draft still goes through `validateRoomConfig`, and it is the *validated* config
@@ -61,7 +118,9 @@ function hintKeyFor(draft: ConfigDraft): string | null {
  */
 export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem', lang }: CreateRoomFormProps) {
   const { t } = useTranslation()
-  const [name, setName] = useState('')
+  // The dialog opens with a name already in the field, drawn once in the form's language: the host may type over it, roll
+  // another with the 🎲, or press "Create room" at once.
+  const [name, setName] = useState(() => randomRoomName(lang))
   const [mode, setMode] = useState<RoomMode>(initialMode)
   const [seats, setSeats] = useState<number>(ECONOMY.defaultMaxPlayers)
   const [timer, setTimer] = useState<number>(DEFAULT_TIMER[initialMode])
@@ -118,14 +177,14 @@ export function CreateRoomForm({ onSubmit, busy = false, initialMode = 'holdem',
       <div className={s.grid}>
         <span className={s.wide}>
           <Field label={t('create.name')}>
-            <input
-              className={s.input}
-              type="text"
+            <RoomNameInput
               value={name}
+              onChange={setName}
+              onRoll={() => setName(randomRoomName(lang, Math.random, name))}
+              rollLabel={t('create.rollName')}
               maxLength={30}
               autoComplete="off"
               disabled={busy}
-              onChange={(event) => setName(event.target.value)}
             />
           </Field>
         </span>

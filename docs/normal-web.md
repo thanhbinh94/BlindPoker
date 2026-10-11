@@ -186,7 +186,7 @@ wrapping at both ends, ArrowLeft/ArrowRight too, each button described by the na
 slots. Giới tính, Kiểu tóc and Quần áo are never removable; the phone's "Đang dùng (n)" counts those three plus
 every optional slot filled. On the right, ten tabs in three groups: **Ngoại hình** (Kiểu tóc, Màu tóc, Màu da, Màu
 mắt — the screen opens on Kiểu tóc), **Trang phục** (Mũ, Phụ kiện mặt, Quần áo) and **Trang trí** (Hào quang,
-Khung, Danh hiệu & Huy hiệu — title and badge together, the two slots with no picture).
+Khung, Danh hiệu & huy hiệu — title and badge together, the two slots with no picture).
 
 **The look (avatar v4, Plan 19; spec `2026-10-03-avatar-v4-design.md` §6.1–6.3).** The body is the gender, chosen
 rather than owned: the **Nữ | Nam** switch (the kit's `Segmented`, a `group` named "Giới tính", passed to

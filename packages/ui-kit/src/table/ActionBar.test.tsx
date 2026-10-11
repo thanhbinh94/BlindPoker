@@ -293,7 +293,7 @@ describe('ActionBar waiting line', () => {
   it('says the squeeze lines in Vietnamese too', () => {
     const squeeze = { config: { mode: 'blind', blind: { fixedWager: 2000, decisionMode: 'none', squeeze: true } } } as unknown as RoomView
     for (const [revealed, line] of [
-      [false, 'Nặn bài của bạn — hết giờ sẽ tự lật'],
+      [false, 'Mời nặn bài — hết giờ sẽ tự lật'],
       [true, 'Đã lật — chờ người chơi khác'],
     ] as const) {
       const { unmount } = render(

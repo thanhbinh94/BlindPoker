@@ -199,6 +199,7 @@
   "create": {
     "title": "Create a room",
     "name": "Room name",
+    "rollName": "Another name",
     "mode": "Game mode",
     "maxPlayers": "Max players",
     "turnTimer": "Turn timer",

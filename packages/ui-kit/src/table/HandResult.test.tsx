@@ -105,7 +105,7 @@ describe('HandResult', () => {
         <HandResult hand={cancelled('server restart')} room={room} myPlayerId="a" lang="vi" />
       </I18nextProvider>,
     )
-    expect(screen.getByText('Máy chủ khởi động lại')).toBeInTheDocument()
+    expect(screen.getByText('Máy chủ vừa khởi động lại')).toBeInTheDocument()
     expect(view.container.textContent).not.toContain('server restart')
 
     view.rerender(
@@ -205,7 +205,7 @@ describe('HandResult', () => {
       renderWith(undefined, undefined, cancelled)
       const card = screen.getByRole('group', { name: 'Ván bị hủy' })
       // the note on why is part of what is announced, so it sits in the region with the title
-      expect(within(within(card).getByRole('status')).getByText('Máy chủ khởi động lại')).toBeInTheDocument()
+      expect(within(within(card).getByRole('status')).getByText('Máy chủ vừa khởi động lại')).toBeInTheDocument()
     })
 
     it('keeps the fee, the carry-over, the uncalled return and the countdown outside every live region', () => {

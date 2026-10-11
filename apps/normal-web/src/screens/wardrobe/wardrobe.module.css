@@ -820,7 +820,7 @@
 
 /* The words tab draws its two headings ("Danh hiệu", "Huy hiệu") and their grids in one tabpanel. A heading that
    follows a grid opens a new group and keeps clear of that grid's last card (No11b: "Huy hiệu" printed straight
-   under "Tay nóng"); the first heading sits under the filter row as it always did. Two classes beat
+   under "Tay nóng", now "Vận đỏ"); the first heading sits under the filter row as it always did. Two classes beat
    `.groupTitle`'s `margin: 0 0 …` on specificity, whichever sheet loads last. */
 .wordHeading:not(:first-child) {
   margin-top: var(--space-5);

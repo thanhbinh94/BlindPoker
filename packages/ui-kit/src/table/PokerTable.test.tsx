@@ -556,7 +556,7 @@ describe('PokerTable', () => {
   })
 
   it('hangs the app caption under each seated player, and asks about that player alone', () => {
-    const captionFor = vi.fn((p: RoomPlayerView) => (p.playerId === 'a' ? 'Tay nóng' : null))
+    const captionFor = vi.fn((p: RoomPlayerView) => (p.playerId === 'a' ? 'Vận đỏ' : null))
     wrap(
       <PokerTable
         room={room}
@@ -574,14 +574,14 @@ describe('PokerTable', () => {
 
     const ann = screen.getByText('Ann').parentElement
     expect(ann).not.toBeNull()
-    expect(within(ann!).getByText('Tay nóng')).toBeInTheDocument()
+    expect(within(ann!).getByText('Vận đỏ')).toBeInTheDocument()
     // The name is still the plate's first line; the caption sits under it.
-    expect(within(ann!).getByText('Ann').nextElementSibling).toHaveTextContent('Tay nóng')
+    expect(within(ann!).getByText('Ann').nextElementSibling).toHaveTextContent('Vận đỏ')
 
     // Only seated players are asked about, and a `null` answer leaves that plate alone.
     expect(captionFor.mock.calls.map(([p]) => p.playerId)).toEqual(['a', 'b'])
     const bob = screen.getByText('Bob').parentElement
-    expect(within(bob!).queryByText('Tay nóng')).toBeNull()
+    expect(within(bob!).queryByText('Vận đỏ')).toBeNull()
   })
 
   it('draws no caption line at all when the app supplies no slot', () => {

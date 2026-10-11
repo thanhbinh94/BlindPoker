@@ -3,19 +3,31 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { I18nextProvider } from 'react-i18next'
 import { validateRoomConfig } from '@bp/core'
-import { createI18n } from '../i18n/index.js'
+import { createI18n, type Language } from '../i18n/index.js'
 import { CreateRoomForm } from './CreateRoomForm.js'
 import s from './lobby.module.css'
 import LOBBY_CSS from './lobby.module.css?raw'
+import { ROOM_NAME_WORDS } from './room-names.js'
 
 const wrap = (ui: React.ReactElement) =>
   render(<I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>{ui}</I18nextProvider>)
+
+/** The form opens with a name of its own, so a test that wants its own words replaces it first. */
+const typeName = async (text: string): Promise<void> => {
+  const input = screen.getByLabelText('Room name')
+  await userEvent.clear(input)
+  await userEvent.type(input, text)
+}
+
+/** Every name the generator can offer in `lang`. */
+const offered = (lang: Language): string[] =>
+  ROOM_NAME_WORDS[lang].heads.flatMap((head) => ROOM_NAME_WORDS[lang].tails.map((tail) => `${head} ${tail}`))
 
 describe('CreateRoomForm', () => {
   it('submits a valid hold’em config with defaults', async () => {
     const onSubmit = vi.fn()
     wrap(<CreateRoomForm onSubmit={onSubmit} lang="en" />)
-    await userEvent.type(screen.getByLabelText(/name/i), 'My table')
+    await typeName('My table')
     await userEvent.click(screen.getByRole('button', { name: /^create/i }))
     expect(onSubmit).toHaveBeenCalledTimes(1)
     const cfg = onSubmit.mock.calls[0]![0]
@@ -35,7 +47,7 @@ describe('CreateRoomForm', () => {
   it('switches to blind, exposes blind fields, and rejects a bad bot count', async () => {
     const onSubmit = vi.fn()
     wrap(<CreateRoomForm onSubmit={onSubmit} lang="en" initialMode="blind" />)
-    await userEvent.type(screen.getByLabelText(/name/i), 'B')
+    await typeName('B')
     expect(screen.getByLabelText(/wager/i)).toBeInTheDocument()
     await userEvent.selectOptions(screen.getByLabelText(/max players/i), '3')
     await userEvent.selectOptions(screen.getByLabelText(/bots/i), '2')
@@ -55,9 +67,11 @@ describe('CreateRoomForm', () => {
     await user.selectOptions(screen.getByLabelText('Fixed wager'), '5000')
     expect(screen.getByText('Table limit per player: 25,000 pts (5× the wager)')).toBeInTheDocument()
   })
-  it('shows a localized validation error instead of submitting when the name is empty', async () => {
+  it('shows a localized validation error instead of submitting when the name is cleared', async () => {
     const onSubmit = vi.fn()
     wrap(<CreateRoomForm onSubmit={onSubmit} lang="en" />)
+    // The form opens with a name of its own, so only a name emptied by hand is refused.
+    await userEvent.clear(screen.getByLabelText('Room name'))
     await userEvent.click(screen.getByRole('button', { name: /^create/i }))
     expect(onSubmit).not.toHaveBeenCalled()
     const alert = screen.getByRole('alert')
@@ -72,12 +86,147 @@ describe('CreateRoomForm', () => {
         <CreateRoomForm onSubmit={onSubmit} lang="vi" />
       </I18nextProvider>,
     )
+    await userEvent.clear(screen.getByLabelText('Tên phòng'))
     await userEvent.click(screen.getByRole('button', { name: /tạo phòng/i }))
     const raw = validateRoomConfig({ name: '', mode: 'holdem' })
     expect(raw.ok).toBe(false)
     if (!raw.ok) expect(container.textContent).not.toContain(raw.message)
     expect(screen.getByRole('alert')).toHaveTextContent('Thiết lập phòng không hợp lệ')
     expect(screen.getByRole('alert')).toHaveTextContent('Tên phòng cần 1–30 ký tự.')
+  })
+
+  // The dialog opens with a name already in the field, so a host who only wants a table can press "Create room" at once;
+  // the 🎲 beside the field draws another, and the field stays an ordinary text field the host may type over.
+  describe('the room name', () => {
+    const wrapVi = (ui: React.ReactElement) =>
+      render(<I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>{ui}</I18nextProvider>)
+    const nameField = () => screen.getByLabelText('Room name') as HTMLInputElement
+    const roll = () => screen.getByRole('button', { name: 'Another name' })
+
+    it('opens with an enabled name field already holding one of the generator’s English names, thirty characters at most', () => {
+      wrap(<CreateRoomForm onSubmit={vi.fn()} lang="en" />)
+      expect(nameField().value).not.toBe('')
+      expect(offered('en')).toContain(nameField().value)
+      expect(nameField().value.length).toBeLessThanOrEqual(30)
+      expect(nameField()).toBeEnabled()
+    })
+
+    it('draws the opening name in the form’s own language', () => {
+      wrapVi(<CreateRoomForm onSubmit={vi.fn()} lang="vi" />)
+      const field = screen.getByLabelText('Tên phòng') as HTMLInputElement
+      expect(offered('vi')).toContain(field.value)
+    })
+
+    it('has a 🎲 button in the name’s row: a plain button named "Another name" (Tên khác), after the field', () => {
+      wrap(<CreateRoomForm onSubmit={vi.fn()} lang="en" />)
+      const button = roll()
+      expect(button).toHaveAttribute('type', 'button')
+      expect(button).toHaveTextContent('🎲')
+      expect(button).toHaveAccessibleName('Another name')
+      // the same row as the field (inside the one Field), and after it in the Tab order
+      expect(nameField().parentElement).toContainElement(button)
+      expect(nameField().compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      // it does not take over the field's label
+      expect(screen.getByLabelText('Room name')).toBe(nameField())
+    })
+
+    it('is named "Tên khác" in Vietnamese', () => {
+      wrapVi(<CreateRoomForm onSubmit={vi.fn()} lang="vi" />)
+      expect(screen.getByRole('button', { name: 'Tên khác' })).toHaveTextContent('🎲')
+    })
+
+    it('rolls another name each time it is pressed, and keeps focus in the field', async () => {
+      const user = userEvent.setup()
+      wrap(<CreateRoomForm onSubmit={vi.fn()} lang="en" />)
+      let previous = nameField().value
+      for (let i = 0; i < 12; i++) {
+        await user.click(roll())
+        expect(nameField().value, `roll ${i + 1}`).not.toBe(previous)
+        expect(offered('en')).toContain(nameField().value)
+        expect(nameField()).toHaveFocus()
+        previous = nameField().value
+      }
+    })
+
+    it('selects the rolled name, so what the host types next replaces it, and leaves the focus in the field', async () => {
+      const user = userEvent.setup()
+      wrap(<CreateRoomForm onSubmit={vi.fn()} lang="en" />)
+      for (let i = 0; i < 3; i++) {
+        await user.click(roll())
+        const field = nameField()
+        expect(field).toHaveFocus()
+        expect(field.selectionStart, `roll ${i + 1}: from the first character`).toBe(0)
+        expect(field.selectionEnd, `roll ${i + 1}: to the last`).toBe(field.value.length)
+      }
+      await user.keyboard('Quán Ba Đình')
+      expect(nameField().value).toBe('Quán Ba Đình')
+    })
+
+    it('never submits the form: pressing the 🎲 only changes the name', async () => {
+      const user = userEvent.setup()
+      const onSubmit = vi.fn()
+      wrap(<CreateRoomForm onSubmit={onSubmit} lang="en" />)
+      for (let i = 0; i < 3; i++) await user.click(roll())
+      expect(onSubmit).not.toHaveBeenCalled()
+      expect(screen.queryByRole('alert')).toBeNull()
+    })
+
+    it('replaces a name the host typed, and a name the host cleared', async () => {
+      const user = userEvent.setup()
+      wrap(<CreateRoomForm onSubmit={vi.fn()} lang="en" />)
+      await typeName('Quán Nhà Tôi')
+      await user.click(roll())
+      expect(offered('en')).toContain(nameField().value)
+      await user.clear(nameField())
+      await user.click(roll())
+      expect(offered('en')).toContain(nameField().value)
+    })
+
+    it('submits the opening name when the host types nothing, the validated config and all', async () => {
+      const user = userEvent.setup()
+      const onSubmit = vi.fn()
+      wrap(<CreateRoomForm onSubmit={onSubmit} lang="en" />)
+      const opening = nameField().value
+      await user.click(screen.getByRole('button', { name: /^create/i }))
+      expect(onSubmit).toHaveBeenCalledTimes(1)
+      const cfg = onSubmit.mock.calls[0]![0]
+      expect(cfg.name).toBe(opening)
+      expect(validateRoomConfig(cfg).ok).toBe(true)
+      expect(screen.queryByRole('alert')).toBeNull()
+    })
+
+    it('submits the name that was rolled, not the one the dialog opened with', async () => {
+      const user = userEvent.setup()
+      const onSubmit = vi.fn()
+      wrap(<CreateRoomForm onSubmit={onSubmit} lang="en" />)
+      const opening = nameField().value
+      await user.click(roll())
+      const rolled = nameField().value
+      expect(rolled).not.toBe(opening)
+      await user.click(screen.getByRole('button', { name: /^create/i }))
+      expect(onSubmit.mock.calls[0]![0].name).toBe(rolled)
+    })
+
+    it('stays an ordinary field: typed words are what is submitted, trimmed, up to thirty characters', async () => {
+      const user = userEvent.setup()
+      const onSubmit = vi.fn()
+      wrap(<CreateRoomForm onSubmit={onSubmit} lang="en" />)
+      await typeName('  Bàn của Bình  ')
+      await user.click(screen.getByRole('button', { name: /^create/i }))
+      expect(onSubmit.mock.calls[0]![0].name).toBe('Bàn của Bình')
+      expect(nameField()).toHaveAttribute('maxlength', '30')
+    })
+
+    it('is switched off while the form is busy, with the rest of the controls', () => {
+      wrap(<CreateRoomForm onSubmit={vi.fn()} lang="en" busy />)
+      expect(roll()).toBeDisabled()
+      expect(nameField()).toBeDisabled()
+    })
+
+    it('does not move the row: the button is as tall as the field beside it', () => {
+      expect(LOBBY_CSS).toMatch(/\.nameRow\s*\{[^}]*display:\s*flex/)
+      expect(LOBBY_CSS).toMatch(/\.rollName\s*\{[^}]*min-height:\s*var\(--tap\)/)
+    })
   })
 
   // Plan 21: a Blind table may be a squeeze table — the cards come face down and are turned by hand in a round of a fixed
@@ -95,7 +244,7 @@ describe('CreateRoomForm', () => {
       expect(box).toHaveAttribute('type', 'checkbox')
       expect(box).not.toBeChecked()
       expect(box).toHaveAccessibleName('Nặn bài')
-      expect(box).toHaveAccessibleDescription('Mỗi vòng tối đa 20 giây, hết sớm khi mọi người đã lật.')
+      expect(box).toHaveAccessibleDescription('Mỗi vòng tối đa 20 giây, kết thúc sớm khi mọi người đã lật.')
     })
 
     it('sits under the bot count, in its cell of the wager row, and shows no hint line of its own', () => {
@@ -169,7 +318,6 @@ describe('CreateRoomForm', () => {
       const user = userEvent.setup()
       const onSubmit = vi.fn()
       wrapVi(<CreateRoomForm onSubmit={onSubmit} lang="vi" initialMode="blind" />)
-      await user.type(screen.getByLabelText('Tên phòng'), 'Nặn')
       await user.selectOptions(screen.getByLabelText('Thời gian mỗi lượt'), '30')
       await user.click(screen.getByLabelText('Nặn bài'))
       await user.click(create())
@@ -183,7 +331,6 @@ describe('CreateRoomForm', () => {
       const user = userEvent.setup()
       const onSubmit = vi.fn()
       wrapVi(<CreateRoomForm onSubmit={onSubmit} lang="vi" initialMode="blind" />)
-      await user.type(screen.getByLabelText('Tên phòng'), 'Thường')
       await user.selectOptions(screen.getByLabelText('Thời gian mỗi lượt'), '30')
       await user.click(create())
       expect(onSubmit.mock.calls[0]![0]).toMatchObject({ turnTimerSec: 30, blind: { squeeze: false } })
@@ -198,7 +345,6 @@ describe('CreateRoomForm', () => {
       const user = userEvent.setup()
       const onSubmit = vi.fn()
       wrapVi(<CreateRoomForm onSubmit={onSubmit} lang="vi" initialMode="blind" />)
-      await user.type(screen.getByLabelText('Tên phòng'), 'Đổi')
       await user.selectOptions(screen.getByLabelText('Thời gian mỗi lượt'), '30') // a timer both modes offer
       await user.click(screen.getByLabelText('Nặn bài'))
       await user.click(screen.getByRole('button', { name: "Texas Hold'em" }))
