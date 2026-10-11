@@ -132,7 +132,7 @@ Những chuỗi sau thoạt nhìn giống dịch sát nhưng tôi giữ lại:
 - **`settings.about.edition` "Ấn bản":** nghe hơi sách vở, nhưng Plan 18 đã để người duyệt quyết, vì phương án sạch hơn (gộp với dòng "Phiên bản" hoặc bỏ dòng) là thay đổi bố cục.
 - **`auth.submitSignIn` / Lite `prompt.submit` "Vào sảnh":** giữ theo Plan 18, cùng nghĩa với bản tiếng Anh "Enter the lobby".
 - **`wardrobe.tabs.face` "Phụ kiện mặt":** game thời trang Việt vẫn gọi như vậy. Tab gồm kính, mặt nạ và bịt mắt, nên khó có tên ngắn hơn mà vẫn đủ nghĩa.
-- **`items.frame_founder` "Khung sáng lập":** tên này đúng nghĩa "Founder frame" của bản tiếng Anh.
+- **`items.frame_founder` "Khung sáng lập" → "Khung một năm"** (tiếng Anh "Founder frame" → "One-year frame", đổi cùng lúc theo quyết định của người dùng ngày 11/10): khung này là phần thưởng của thành tựu đăng nhập đủ một năm (`login_days_365`), không liên quan "người sáng lập".
   - **Cần người dùng quyết:** khung này là phần thưởng của thành tựu một năm ghé bàn (`login_days_365`), không dành cho người chơi từ ngày đầu.
   - Muốn tên khớp với cách nhận (ví dụ "Khung một năm") thì phải đổi cả bản tiếng Anh. Đó là quyết định sản phẩm, không phải sửa câu chữ.
 - **`items.frame_monthly` "Khung tháng", `badge_monthly` "Huy hiệu tháng":** cùng kiểu với cách gọi "thẻ tháng" quen thuộc trong game Việt.
