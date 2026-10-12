@@ -4,9 +4,9 @@
 # `VM.Standard.A1.Flex`) for the Normal edition's Compose stack.
 #
 #     sudo ./bootstrap.sh <REPO_URL> [BRANCH]
-#     curl -fsSL <raw-url-of-this-file> | sudo bash -s -- <REPO_URL> master
+#     curl -fsSL <raw-url-of-this-file> | sudo bash -s -- <REPO_URL> main
 #
-# `BRANCH` defaults to `master`.
+# `BRANCH` defaults to `main`.
 #
 # Six things, and nothing else. It never starts the stack, never writes a `.env` and never touches
 # DNS, because each of those needs a secret or a decision this script has no business making:
@@ -32,7 +32,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------- parameters
 
 REPO_URL="${1:-}"
-BRANCH="${2:-master}"
+BRANCH="${2:-main}"
 
 # Oracle's Ubuntu images log you in as `ubuntu`; this is the account that will own the checkout and
 # run `docker compose`. It is an environment variable rather than a third positional argument
@@ -55,7 +55,7 @@ die()  { printf 'bootstrap: %s\n' "$*" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------- preconditions
 
-[ -n "$REPO_URL" ] || die "usage: sudo $0 <REPO_URL> [BRANCH]   — BRANCH defaults to master"
+[ -n "$REPO_URL" ] || die "usage: sudo $0 <REPO_URL> [BRANCH]   — BRANCH defaults to main"
 [ "$(id -u)" -eq 0 ] || die "must run as root: sudo $0 $REPO_URL $BRANCH"
 command -v apt-get >/dev/null 2>&1 || die "this script is for Ubuntu/Debian — no apt-get here"
 id -u "$DEPLOY_USER" >/dev/null 2>&1 ||
