@@ -28,8 +28,11 @@ async function playOut(h: RoomHarness, policy: Policy = passive, opts: { humanTi
       await tick(h)
       continue
     }
+    // The decision round is table-wide: whoever is not letting the timer run decides first, or the timer would take
+    // them along with the seat that is.
+    const undecided = hand.phase === 'DECISION' ? hand.seats.filter((s) => !s.hasDecided && !s.isBot) : []
     const humanSeat = hand.phase === 'DECISION'
-      ? hand.seats.find((s) => !s.hasDecided && !s.isBot)
+      ? undecided.find((s) => !opts.humanTimeouts?.has(s.playerId)) ?? undecided[0]
       : hand.seats.find((s) => s.seat === hand.actingSeat && !s.isBot)
     if (!humanSeat) {
       h.clock.advance(10) // bot delay
@@ -325,6 +328,132 @@ describe('Hold’em hands', () => {
     expect(await h.repos.balances.get(busted!.identity.playerId)).toBe(90_000)
     await h.room.sitDown(busted!.identity.playerId, 3, 10_000)
     expect(h.room.players.get(busted!.identity.playerId)!.seat).toBe(3)
+  })
+})
+
+describe('Blind decision timeouts (spec §8.7)', () => {
+  const PLAY_OR_FOLD: RoomConfig = { ...BLIND, blind: { ...BLIND.blind!, botCount: 0 } }
+  const nextHand = async (h: RoomHarness) => {
+    h.clock.advance(TEST_ROOM_OPTIONS.handIntervalMs)
+    await tick(h)
+  }
+  const strikes = (h: RoomHarness, id: string) => h.room.players.get(id)!.consecutiveTimeouts
+  const timedOutActs = (h: RoomHarness, id: string) =>
+    h.ofType(id, 'GAME_EVENT').filter((m) => m.event.type === 'PLAYER_ACTED' && m.event.timedOut)
+  const stoodNotices = (h: RoomHarness, watcher: string, id: string) =>
+    h.ofType(watcher, 'ROOM_EVENT').filter((m) => m.event.type === 'PLAYER_STOOD' && m.event.playerId === id)
+  /** `a` plays every hand, so the one the timer folds is `h`. */
+  const aPlays = (id: string, legal: LegalActions): PlayerAction => ({ kind: id === 'a' && legal.kinds.includes('play') ? 'play' : 'fold' })
+
+  it('three play-or-fold decisions in a row that run out of time stand a player up after the hand, stack returned', async () => {
+    const h = createRoomHarness(PLAY_OR_FOLD)
+    await seatAndStart(h, ['h', 'a'])
+    for (const expected of [1, 2]) {
+      await playOut(h, aPlays, { humanTimeouts: new Set(['h']) })
+      expect(h.room.players.get('h')!.seat).toBe(0)
+      expect(strikes(h, 'h')).toBe(expected)
+      expect(strikes(h, 'a')).toBe(0)
+      await nextHand(h)
+    }
+    await playOut(h, aPlays, { humanTimeouts: new Set(['h']) })
+
+    expect(timedOutActs(h, 'a').map((m) => m.event.type === 'PLAYER_ACTED' && m.event.seat)).toEqual([0, 0, 0]) // each hand told the table
+    expect(h.room.players.get('h')!.seat).toBeNull()
+    expect(stoodNotices(h, 'a', 'h')).toHaveLength(1)
+    expect(h.room.players.get('a')!.seat).toBe(1) // the other seat is not touched
+    // Three antes went into the pot; the other 2.000 of the 5.000 limit came home, once. It was the timeouts that stood
+    // them up: the table limit was not spent (2.000 still covers a hand), so no notice says it was.
+    expect(h.repos.entries.filter((e) => e.entry.playerId === 'h' && e.entry.reason === 'cash_out').map((e) => e.entry.delta)).toEqual([2_000])
+    expect(await h.repos.balances.get('h')).toBe(97_000)
+    expect(h.ofType('h', 'NOTIFICATION').some((m) => m.kind === 'TABLE_LIMIT_SPENT')).toBe(false)
+    expect(strikes(h, 'h')).toBe(0) // and the count goes with the seat
+
+    h.clock.advance(100)
+    await tick(h)
+    expect(h.room.status).toBe('OPEN') // only one seat left → back to OPEN, ready cleared
+    expect(h.room.players.get('a')!.ready).toBe(false)
+  })
+
+  it('a decision made in between starts the count over: three timeouts that are not in a row stand nobody up', async () => {
+    const h = createRoomHarness(PLAY_OR_FOLD)
+    await seatAndStart(h, ['h', 'a'])
+    const timeOut = () => playOut(h, aPlays, { humanTimeouts: new Set(['h']) })
+    await timeOut()
+    await nextHand(h)
+    await timeOut()
+    expect(strikes(h, 'h')).toBe(2)
+    await nextHand(h)
+    // h chooses to play and wins the hand `a` folds (Tự động chơi sends this same play): a real action, not a timeout.
+    await playOut(h, (id) => ({ kind: id === 'h' ? 'play' : 'fold' }))
+    expect(strikes(h, 'h')).toBe(0)
+    expect(h.room.players.get('h')!.seat).toBe(0)
+    await nextHand(h)
+    await timeOut() // the third timeout, but not the third in a row
+    expect(strikes(h, 'h')).toBe(1)
+    expect(h.room.players.get('h')!.seat).toBe(0)
+    expect(timedOutActs(h, 'a')).toHaveLength(3)
+    expect(stoodNotices(h, 'a', 'h')).toHaveLength(0)
+  })
+
+  it('a chosen fold is a real action as well: it too starts the count over', async () => {
+    const h = createRoomHarness(PLAY_OR_FOLD)
+    await seatAndStart(h, ['h', 'a'])
+    await playOut(h, aPlays, { humanTimeouts: new Set(['h']) })
+    await nextHand(h)
+    await playOut(h, aPlays, { humanTimeouts: new Set(['h']) })
+    expect(strikes(h, 'h')).toBe(2)
+    await nextHand(h)
+    await playOut(h, aPlays) // h folds by its own hand this time: aPlays folds everyone but `a`
+    expect(strikes(h, 'h')).toBe(0)
+    expect(h.room.players.get('h')!.seat).toBe(0)
+    expect(timedOutActs(h, 'a')).toHaveLength(2)
+  })
+
+  it('a bot the timer folds is never counted, and is never stood up for it', async () => {
+    // The bot answers a minute after the round has closed, so the timer folds it every hand.
+    const h = createRoomHarness({ ...BLIND, blind: { ...BLIND.blind!, botCount: 1 } }, { options: { botDelayMs: [60_000, 60_000] } })
+    await seatAndStart(h, ['h'])
+    for (let i = 0; i < 4; i++) {
+      await h.room.action('h', { kind: 'play' }, h.room.seq)
+      h.clock.advance(TEST_ROOM_OPTIONS.turnTimerMsOverride!)
+      await tick(h)
+      await playOut(h)
+      await nextHand(h)
+    }
+    const bot = [...h.room.players.values()].find((p) => p.identity.isBot)!
+    const botSeat = bot.seat!
+    expect(timedOutActs(h, 'h').filter((m) => m.event.type === 'PLAYER_ACTED' && m.event.seat === botSeat)).toHaveLength(4) // the engine did say so
+    expect(bot.consecutiveTimeouts).toBe(0)
+    expect(bot.seat).toBe(botSeat)
+    expect(strikes(h, 'h')).toBe(0)
+  })
+
+  it('play or fold with Nặn bài: the decision round is the timed one, so a decision that runs out counts', async () => {
+    const h = createRoomHarness({ ...PLAY_OR_FOLD, turnTimerSec: 20, blind: { ...PLAY_OR_FOLD.blind!, squeeze: true } })
+    await seatAndStart(h, ['h', 'a'])
+    expect(h.room.snapshot(null).hand?.phase).toBe('DECISION') // no SQUEEZE phase in this kind of room
+    await playOut(h, aPlays, { humanTimeouts: new Set(['h']) })
+    expect(strikes(h, 'h')).toBe(1)
+    expect(timedOutActs(h, 'a')).toHaveLength(1)
+  })
+
+  it('the squeeze round running out is no timeout: it counts nothing, resets nothing and stands nobody up', async () => {
+    const h = createRoomHarness({ ...BLIND, turnTimerSec: 20, blind: { ...BLIND.blind!, decisionMode: 'none', botCount: 0, squeeze: true } })
+    await seatAndStart(h, ['h', 'a'])
+    // A count of two, as a play-or-fold table could have left it: were the forced turn counted, h would be stood up
+    // below; were it a real action, the count would drop to nothing.
+    h.room.players.get('h')!.consecutiveTimeouts = 2
+    for (let i = 0; i < 3; i++) {
+      expect(h.room.snapshot(null).hand?.phase).toBe('SQUEEZE')
+      h.clock.advance(TEST_ROOM_OPTIONS.turnTimerMsOverride!) // nobody turned: the server does it for both
+      await tick(h)
+      await playOut(h)
+      expect(h.room.players.get('h')).toMatchObject({ seat: 0, consecutiveTimeouts: 2 })
+      expect(h.room.players.get('a')).toMatchObject({ seat: 1, consecutiveTimeouts: 0 })
+      await nextHand(h)
+    }
+    expect(h.ofType('a', 'GAME_EVENT').some((m) => m.event.type === 'PLAYER_ACTED')).toBe(false)
+    expect(h.ofType('h', 'ROOM_EVENT').some((m) => m.event.type === 'PLAYER_STOOD')).toBe(false)
   })
 })
 
