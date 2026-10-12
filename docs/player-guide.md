@@ -215,7 +215,7 @@ Không muốn nặn thì bấm nút nhỏ "Lật" dưới bài để mở hết 
 
 - Kiểu "Hoàn toàn may rủi": vòng **kết thúc sớm** ngay khi mọi người thật trong ván đã lật (bot được coi là đã lật từ đầu). Hết 20 giây, trò chơi lật hộ những lá còn úp, rồi lá chung được lật và so bài như thường.
 - Kiểu "Chơi hoặc bỏ": 20 giây này cũng là lúc chọn. Bạn nặn rồi chọn "Chơi" hoặc "Bỏ bài"; chọn khi chưa nặn thì bài tự mở. Vòng kết thúc sớm khi mọi người đã chọn. Ở kiểu này, ghế đã chọn hiện "Đã chọn" (chọn rồi cũng là đã lật).
-- Bạn vẫn được chọn mà không cần nặn, tức là *chơi mù*; chưa nặn mà đã chọn kịp giờ thì không sao. Ở kiểu "Hoàn toàn may rủi", vòng nặn hết giờ không tính là một lượt hết giờ, không lật cũng không bị mời đứng dậy. Ở kiểu "Chơi hoặc bỏ", hết giờ mà chưa chọn thì bạn bỏ bài ván đó và tính là một lượt hết giờ (3 lượt liên tiếp thì bạn bị mời đứng dậy, như ở Hold'em).
+- Bạn vẫn được chọn mà không cần nặn, tức là *chơi mù*; chưa nặn mà đã chọn kịp giờ thì không sao. Ở kiểu "Hoàn toàn may rủi", vòng nặn hết giờ không tính là một lượt hết giờ, không nặn kịp cũng không bị mời đứng dậy. Ở kiểu "Chơi hoặc bỏ", hết giờ mà chưa chọn thì bạn bỏ bài ván đó và tính là một lượt hết giờ (3 lượt liên tiếp thì bạn bị mời đứng dậy, như ở Hold'em).
 - Bật "Tự động chơi" thì bài của bạn mở ngay khi chia.
 - Vào lại giữa vòng (tải lại trang, mất kết nối): lá đã mở vẫn ngửa, lá chưa mở vẫn úp và nặn được.
 
@@ -230,7 +230,7 @@ Không muốn nặn thì bấm nút nhỏ "Lật" dưới bài để mở hết 
 | Tình huống | Điều gì xảy ra |
 |---|---|
 | Mất kết nối giữa ván | Trang hiện "Mất kết nối — đang kết nối lại…" và tự kết nối lại; người khác thấy "Mất kết nối" ở ghế bạn. Ván vẫn chạy và đồng hồ vẫn chạy; hết giờ, trò chơi xử lý như mọi lần hết giờ (Hold'em: xem hoặc bỏ bài; "Chơi hoặc bỏ": bỏ bài; vòng nặn: lật hộ, không tính là hết giờ). |
-| Quay lại trong 90 giây | Bạn về đúng ghế, đúng bài, đúng lượt. Tải lại trang (F5) giữa ván cũng vậy. |
+| Quay lại trong 90 giây | Bạn về đúng ghế, đúng bài, đúng lượt. Tải lại trang (F5) giữa ván cũng vậy. Nhưng ở bàn Blind Poker kiểu "Chơi hoặc bỏ" có thời gian mỗi lượt ngắn, 3 lượt hết giờ có thể rơi vào ngay trong 90 giây đó; khi đó hết ván thứ ba bạn bị mời đứng dậy, stack về số dư, như ở Hold'em. |
 | Mất kết nối quá 90 giây | Bạn bị bỏ bài ở các lượt còn lại của ván; hết ván thì bị mời đứng dậy, stack về số dư. Nếu vẫn chưa quay lại, bạn còn ở trong phòng (đứng xem) thêm 5 phút rồi mới bị đưa ra. |
 | Bấm "Đứng dậy" | Giữa hai ván: rời ghế ngay, stack về số dư. Giữa ván: bạn bỏ bài khi đến lượt, hết ván thì rời ghế. Bạn vẫn ở trong phòng. |
 | Bấm "Rời phòng" | Giữa hai ván: ra sảnh ngay, stack về số dư. Giữa ván: như "Đứng dậy", rồi ra khỏi phòng khi ván kết thúc. |
