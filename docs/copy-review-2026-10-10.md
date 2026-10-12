@@ -17,6 +17,7 @@ Người dùng yêu cầu ngày 10/10: "check đa ngôn ngữ … có những đ
 - **Bản tiếng Anh:** giữ nguyên. Bộ khóa vi/en vẫn trùng nhau; ba test so khóa kiểm tra điều này: `packages/ui-kit/src/i18n/i18n.test.ts`, `apps/normal-web/src/locales/locales.test.ts` và `apps/lite/web/src/App.test.tsx`.
 - **Chuỗi tiếng Việt viết thẳng trong `.ts/.tsx` (không qua i18n, ngoài test):** không có. Grep dấu tiếng Việt trong `packages/*/src` và `apps/*/src` cho ra khoảng 90 dòng ở 30 file, và tất cả đều nằm trong comment.
 - **Các nhãn ổn định** (Bỏ bài, Chơi, Theo, Tố, Lật, Nặn bài, Tạm nghỉ, Hoàn toàn may rủi, Chơi hoặc bỏ, tên lá bài…): không đổi nhãn nào.
+- **Bổ sung 2026-10-12 (mục 7):** đợt bổ sung này có đổi cả bản tiếng Anh (bốn mô tả thành tựu `login_days_*`) và thêm đúng một khóa, `wardrobe.hint.dailyFixed`, ở cả hai ngôn ngữ, nên hai ý "giữ nguyên bản tiếng Anh" và "không thêm khóa nào" ở trên chỉ đúng cho các mục 1 đến 6.
 
 ## 2. Quy tắc đã áp dụng
 
@@ -175,3 +176,33 @@ Tôi grep từng chuỗi cũ trong `packages`, `apps`, `docs` và `tooling`. Nh�
   - `docs/copy-review-2026-10.md`, `docs/bug-log.md`, `CHANGELOG.md`;
   - các file trong `docs/superpowers/` và `docs/test-runs/` (spec, plan và biên bản chạy thử cũ).
 - **`docs/acceptance-checklist.md` mục 66.12** ("Hành động không hợp lệ bị từ chối phía server"): đây là câu mô tả yêu cầu, không trích chữ trên giao diện, nên giữ nguyên.
+
+## 7. Bổ sung 2026-10-12
+
+Rà lại khi đọc hướng dẫn người chơi: bốn mô tả thành tựu nói "đăng nhập" nhưng đếm số lần điểm danh, và một dòng gợi ý trong tủ đồ hứa điều mà quà điểm danh không bao giờ cho. Không thêm hay bỏ khóa nào trong các dòng sửa chữ; riêng gợi ý có thêm một khóa mới, `wardrobe.hint.dailyFixed`, ở cả hai ngôn ngữ.
+
+### 7.1 `apps/normal-web/src/locales/vi/normal.json` và `en/normal.json`
+
+| khóa | hiện tại | sửa thành | lý do |
+|---|---|---|---|
+| achievements.login_days_7.desc | Đăng nhập đủ 7 ngày. (en: Sign in on 7 days.) | Điểm danh đủ 7 ngày. (en: Check in on 7 days.) | `totalLoginDays` chỉ tăng khi server nhận `DAILY_CLAIMED` (`apps/normal-server/src/stats/stats-service.ts`): đăng nhập hai lần trong ngày hay đăng nhập mà không bấm nhận quà đều không tính. Chữ "điểm danh" khớp với việc thật sự được đếm, và với hai thành tựu chuỗi cùng nhóm ("Điểm danh liên tục 7 ngày."). |
+| achievements.login_days_30.desc | Đăng nhập đủ 30 ngày. (en: Sign in on 30 days.) | Điểm danh đủ 30 ngày. (en: Check in on 30 days.) | Như trên. |
+| achievements.login_days_100.desc | Đăng nhập đủ 100 ngày. (en: Sign in on 100 days.) | Điểm danh đủ 100 ngày. (en: Check in on 100 days.) | Như trên. |
+| achievements.login_days_365.desc | Đăng nhập đủ 365 ngày. (en: Sign in on 365 days.) | Điểm danh đủ 365 ngày. (en: Check in on 365 days.) | Như trên. |
+| wardrobe.hint.dailyFixed (khóa mới) | không có | Quà điểm danh ngày 28 (en: The day-28 check-in gift) | Huy hiệu tháng (`badge_monthly`) được tặng thẳng ở ngày 28 (`DAILY_FIXED_ITEM_IDS` trong `daily-rules.ts`), nhưng thẻ khóa của nó ghi "Chưa có cách nhận món này". Danh hiệu "Chuyên cần" cũng thuộc cặp quà ngày 28, nhưng cũng là phần thưởng của thành tựu "Chuỗi 28 ngày", và thành tựu vẫn được ưu tiên nên thẻ của nó giữ tên thành tựu. |
+
+Tên thành tựu (`name`) không đổi: "Bảy ngày ghé bàn", "Một năm ghé bàn"… vẫn đúng nghĩa "ghé bàn" (đợt trước, `docs/copy-review-2026-10.md`, đã giữ "Bảy ngày ghé bàn" vì câu tự nhiên), nên chỉ sửa phần mô tả.
+
+### 7.2 Gợi ý "cách nhận" trong tủ đồ (`apps/normal-web/src/screens/catalog.ts`, `hintFor`)
+
+Thay đổi về logic, không phải về chữ: trước đây mọi món ở ô có thể rút (`head`, `face`, `aura`, `frame`, `hairColor`, `eyeColor`) đều nhận `wardrobe.hint.daily.<độ hiếm>`. Quà điểm danh chỉ rút **thường** (ngày 7) và **hiếm** (ngày 14, 21), xem `itemRuleForDay` trong `apps/normal-server/src/economy/daily-rules.ts`; không có ngày nào rút món cực hiếm. Sáu món cực hiếm không thuộc thành tựu nào (`head_tophat01`, `face_eyepatch01`, `aura_lightning01`, `frame_gold`, `haircolor_lavender01`, `eyecolor_gold01`) vì thế đang mang một lời hứa sai.
+
+- Món cực hiếm ở ô rút, không phải phần thưởng thành tựu: **"Chưa có cách nhận món này"** (`wardrobe.hint.unavailable`), thay cho "Có thể nhận từ quà điểm danh (cực hiếm)".
+- `badge_monthly`: **"Quà điểm danh ngày 28"** (`wardrobe.hint.dailyFixed`), thay cho "Chưa có cách nhận món này".
+- Món thường và hiếm ở ô rút: giữ "Có thể nhận từ quà điểm danh (thường)" và "(hiếm)". Món là phần thưởng thành tựu: vẫn là tên thành tựu.
+- Khóa `wardrobe.hint.daily.epic` không còn được dùng nữa, giữ lại trong bundle để khỏi đổi bộ khóa; xóa khi có dịp dọn cả hai ngôn ngữ cùng lúc.
+- Test: `apps/normal-web/src/screens/catalog.test.ts` (mới).
+
+### 7.3 Test, e2e và tài liệu trích các chuỗi cũ
+
+Tôi grep các chuỗi cũ ("Đăng nhập đủ", "Sign in on") trong `packages`, `apps`, `docs` và `tooling`. Ngoài hai file ngôn ngữ ở trên không có test, e2e hay tài liệu nào trích nguyên văn (`docs/operation-test-plan.md`, `docs/acceptance-checklist.md` và `docs/test-matrix.md` đều không). Câu "thành tựu đăng nhập đủ một năm" ở mục 5 là lời văn của bản rà soát, không phải chuỗi trên giao diện, nên giữ như một bản ghi lịch sử.

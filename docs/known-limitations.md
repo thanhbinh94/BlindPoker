@@ -25,12 +25,28 @@ in as many words when a rename succeeds (`apps/normal-web/src/screens/ProfileScr
 "shows the 409 on the field, then updates the header and warns about the table on success").
 *Tracked:* `docs/normal-web.md`.
 
-**No spectators, no chat, no emotes, no leaderboard, no replay.** None of these is in the protocol.
-Spectating in particular exists only as a *view* — `playerView` correctly blanks every hole card for
-a viewer who is not seated (`packages/core/src/hand/engine.test.ts` → "hides every hand from a
-spectator") — but there is no way to enter a room as one, and no spectator chrome.
+**No chat, no emotes, no leaderboard, no replay.** None of these is in the protocol.
 *Why:* MVP scope (spec §33 puts all of them under COULD).
 *Tracked:* roadmap §34 item 4; `docs/ui-kit.md` Known gaps.
+
+**Watching a table is what joining a room does before you sit, not a mode of its own.** `join`
+adds the player with no seat (`packages/server-kit/src/room/room.ts`, `addPlayer`), so they see the
+live table — every hole card blanked by `playerView`, `packages/core/src/hand/engine.test.ts` →
+"hides every hand from a spectator" — until they take a seat (`packages/ui-kit/src/screens/RoomScreen.tsx`'s `room.sitFirst` line,
+"Chọn một ghế trống để vào chơi."). A Blind seat stood up for a spent table limit goes back to
+watching the same way. What is still missing:
+- **A watcher takes a place.** Room capacity counts every human in the room, seated or not, against
+  `maxPlayers` less the seats bots hold, so a table with empty seats can answer `ROOM_FULL` while
+  watchers fill the room, and the players count in the lobby and the room header (`n/max`) includes
+  them (`room.test.ts` → "join: password, capacity net of seated bots, duplicates…").
+- **No watch-only way in, and no spectator UI.** Joining is the only way to watch, and it spends a
+  place like any other join. Nothing on the table says who is watching; only the host's "ask to
+  leave" list names them. A watcher who drops is removed once the reconnect window and then
+  `spectatorGraceMs` have run out (`docs/server-kit.md`).
+
+*Why:* MVP scope — a separate spectator role would need its own capacity, its own join path and
+its own chrome, none of which the first release needed.
+*Tracked:* roadmap §34 item 4; `docs/ui-kit.md` Known gaps ("Spectators see the table read-only").
 
 **No top-up at the table.** `TOP_UP` is not in the protocol, so a Hold'em player whose stack is
 short has to stand up and sit back down with a fresh buy-in. The stand-up returns the stack to the
