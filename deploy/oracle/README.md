@@ -146,8 +146,8 @@ Hai cách, chọn một.
 **Cách A — repo public, chạy thẳng từ Internet:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<user>/<repo>/master/deploy/oracle/bootstrap.sh \
-  | sudo bash -s -- https://github.com/<user>/<repo>.git master
+curl -fsSL https://raw.githubusercontent.com/<user>/<repo>/main/deploy/oracle/bootstrap.sh \
+  | sudo bash -s -- https://github.com/<user>/<repo>.git main
 ```
 
 **Cách B — repo private, hoặc bạn muốn đọc script trước khi chạy (nên):**
@@ -159,13 +159,13 @@ scp -i ~/.ssh/bind-poker deploy/oracle/bootstrap.sh ubuntu@<IP>:~/
 # trên VM
 less bootstrap.sh
 chmod +x bootstrap.sh
-sudo ./bootstrap.sh git@github.com:<user>/<repo>.git master
+sudo ./bootstrap.sh git@github.com:<user>/<repo>.git main
 ```
 
 Repo private thì khoá deploy phải nằm sẵn trong `~/.ssh` của user `ubuntu` **trước khi** chạy — script
 clone bằng chính user đó.
 
-Tham số: `<REPO_URL>` bắt buộc, `<BRANCH>` mặc định `master`.
+Tham số: `<REPO_URL>` bắt buộc, `<BRANCH>` mặc định `main`.
 
 ### Nó làm gì
 
@@ -508,7 +508,7 @@ Muốn cập nhật cả phần hệ thống của máy (Docker, gói apt, firew
 nó chỉ làm những gì còn thiếu:
 
 ```bash
-sudo /opt/bind-poker/deploy/oracle/bootstrap.sh https://github.com/<user>/<repo>.git master
+sudo /opt/bind-poker/deploy/oracle/bootstrap.sh https://github.com/<user>/<repo>.git main
 ```
 
 ---
