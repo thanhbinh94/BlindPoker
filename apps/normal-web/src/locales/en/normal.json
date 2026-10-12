@@ -298,6 +298,7 @@
         "rare": "May be drawn from the daily check-in (rare)",
         "epic": "May be drawn from the daily check-in (epic)"
       },
+      "dailyFixed": "The day-28 check-in gift",
       "unavailable": "No way to earn this yet"
     },
     "save": "Save wardrobe",
