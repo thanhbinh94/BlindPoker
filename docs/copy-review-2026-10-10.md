@@ -17,6 +17,7 @@ Người dùng yêu cầu ngày 10/10: "check đa ngôn ngữ … có những đ
 - **Bản tiếng Anh:** giữ nguyên. Bộ khóa vi/en vẫn trùng nhau; ba test so khóa kiểm tra điều này: `packages/ui-kit/src/i18n/i18n.test.ts`, `apps/normal-web/src/locales/locales.test.ts` và `apps/lite/web/src/App.test.tsx`.
 - **Chuỗi tiếng Việt viết thẳng trong `.ts/.tsx` (không qua i18n, ngoài test):** không có. Grep dấu tiếng Việt trong `packages/*/src` và `apps/*/src` cho ra khoảng 90 dòng ở 30 file, và tất cả đều nằm trong comment.
 - **Các nhãn ổn định** (Bỏ bài, Chơi, Theo, Tố, Lật, Nặn bài, Tạm nghỉ, Hoàn toàn may rủi, Chơi hoặc bỏ, tên lá bài…): không đổi nhãn nào.
+- **Bổ sung 2026-10-12 (mục 7):** đợt bổ sung này có đổi cả bản tiếng Anh (bốn mô tả thành tựu `login_days_*`) và thêm đúng một khóa, `wardrobe.hint.dailyFixed`, ở cả hai ngôn ngữ, nên hai ý "giữ nguyên bản tiếng Anh" và "không thêm khóa nào" ở trên chỉ đúng cho các mục 1 đến 6.
 
 ## 2. Quy tắc đã áp dụng
 

@@ -32,7 +32,7 @@ in as many words when a rename succeeds (`apps/normal-web/src/screens/ProfileScr
 **Watching a table is what joining a room does before you sit, not a mode of its own.** `join`
 adds the player with no seat (`packages/server-kit/src/room/room.ts`, `addPlayer`), so they see the
 live table — every hole card blanked by `playerView`, `packages/core/src/hand/engine.test.ts` →
-"hides every hand from a spectator" — until they take a seat (`RoomScreen`'s `room.sitFirst` line,
+"hides every hand from a spectator" — until they take a seat (`packages/ui-kit/src/screens/RoomScreen.tsx`'s `room.sitFirst` line,
 "Chọn một ghế trống để vào chơi."). A Blind seat stood up for a spent table limit goes back to
 watching the same way. What is still missing:
 - **A watcher takes a place.** Room capacity counts every human in the room, seated or not, against
@@ -43,6 +43,7 @@ watching the same way. What is still missing:
   place like any other join. Nothing on the table says who is watching; only the host's "ask to
   leave" list names them. A watcher who drops is removed once the reconnect window and then
   `spectatorGraceMs` have run out (`docs/server-kit.md`).
+
 *Why:* MVP scope — a separate spectator role would need its own capacity, its own join path and
 its own chrome, none of which the first release needed.
 *Tracked:* roadmap §34 item 4; `docs/ui-kit.md` Known gaps ("Spectators see the table read-only").
