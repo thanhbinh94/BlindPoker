@@ -33,9 +33,14 @@ deposits, no withdrawals, no payment gateway and no marketplace, by design and p
 - [`docs/known-limitations.md`](docs/known-limitations.md) — what this does not do, why, and where
   each one is tracked.
 - [`CHANGELOG.md`](CHANGELOG.md) — one section per plan, with the merge commit.
+- [`CLAUDE.md`](CLAUDE.md) — operating instructions for AI sessions and new developers: the toolchain, the gates,
+  deploying the LAN host, and the rules a change has to keep.
+- [`docs/lessons-learned.md`](docs/lessons-learned.md) — the lessons behind each plan, with Plan 21's rulings word for
+  word and earlier plans' as far as their notes survive; each merged plan appends its own.
 
 **Reference**
 
+- [`docs/player-guide.md`](docs/player-guide.md) — Hướng dẫn chơi: how to play, for players. Vietnamese.
 - [`docs/test-matrix.md`](docs/test-matrix.md) — which test holds up which requirement of spec
   §29.2, §29.3 and §30.
 - [`docs/security.md`](docs/security.md) — what each threat is defended by, which test proves it,
@@ -53,8 +58,8 @@ deposits, no withdrawals, no payment gateway and no marketplace, by design and p
   `placeholder`/`ingest`/`check`/`sheet` commands, and how to add an item.
 - [`deploy/normal/restore.md`](deploy/normal/restore.md) — the restore procedure.
 
-Developer docs are in English; the two deployment guides and the Lite operator README are in
-Vietnamese, because that is who runs them.
+Developer docs are in English; the two deployment guides, the Lite operator README and the player guide
+are in Vietnamese, because that is who reads them.
 
 ## Development
 
