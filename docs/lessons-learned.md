@@ -46,8 +46,10 @@ session's scratchpad, is deleted with the worktree. This file stays.
   bytes (`\xE2\x80\x94` for —). Vietnamese legitimately contains `â`, so `grep -c â` is no test for mojibake: read a
   heading back.
 - **PowerShell 5.1 has no `&&`.** Use `A; if ($?) { B }`. Piping a command into `Select-Object -First N` ends it early
-  and loses its exit code, so write output to a log and read the log. `stop.ps1` prints its hard-kill warning on
-  stderr, which makes the PowerShell tool report exit 1 on a successful stop.
+  and loses its exit code, so write output to a log and read the log. The PowerShell tool has reported exit 1 after a
+  successful `stop.ps1`. The script prints its warning on stdout and ends `exit 0`, so the cause is unconfirmed (a
+  truncated pipeline such as `| Select-Object -First` would do it). Read the output (`Đã dừng.`), not the exit code.
+  `curl` there is an alias of `Invoke-WebRequest`, so use `curl.exe`, which works in both shells.
 - **Playwright under pnpm 9 (Plan 21 gate).** `pnpm --filter @bp/normal-web e2e:ops -- --project=…` passes a literal
   `--` to Playwright, which then runs the whole pack. Pass filters with no `--`, or use
   `pnpm --filter @bp/normal-web exec playwright test -c <config> …`.
@@ -160,10 +162,9 @@ session's scratchpad, is deleted with the worktree. This file stays.
 - **When the server forces a value, validate the rest as usual and test both paths.** `blind.squeeze` forces the
   20 s timer whatever the client sends. The tests reject `'abc'`, `null` and `1.5` on a plain room, force the timer on
   a squeeze room, and refuse a Hold'em config that carries `blind.squeeze`.
-- **Casts are allowed only right beside their runtime check.** In `packages/core/src/protocol/validate.ts` an
-  `as number` stays (Ruling 15),
-  because the reviewer's cast-free version did not typecheck and `isInt`/`includes` guard the value on the same path.
-  Try a proposed rewrite before you mandate it.
+- **A cast is acceptable when the runtime check is on the same path. Try a rewrite before mandating it.** In
+  `packages/core/src/protocol/validate.ts` an `as number` was accepted at Task 2's gate (Ruling 15): the reviewer's
+  cast-free version did not typecheck, and `isInt`/`includes` guard the value on the same path.
 - **Never `ACK` a request that did nothing.** Bug 3: Start with only bots ready answered `ACK` and opened no hand.
   The server now refuses with `NOT_ENOUGH_PLAYERS`.
 - **Money writes that may be retried carry a key** (Plan 20). A cash-out that committed but lost its reply was
@@ -294,9 +295,10 @@ session's scratchpad, is deleted with the worktree. This file stays.
     corrected one of the first pass's own (`errors.NOT_IN_ROOM`).
   - A name that matches its English but misdescribes the item ("Khung sáng lập" for a one-year login reward) is the
     user's call; it became "Khung một năm" (`628ebb7`).
-- **The gate runs on the merged tree, with the full end-to-end suites on built bundles.** Plan 21's final review
-  caught that the e2e suites had not been run on the branch, and that the result card's visible window had shrunk
-  without anyone noticing.
+- **The full gate runs on the branch's final tree, with every end-to-end suite on built bundles.** If `main` has moved,
+  merge it into the branch first; when it has not, that tree is identical to what the `--no-ff` merge produces. Plan
+  21's final review caught that the e2e suites had not been run on the branch, and that the result card's visible
+  window had shrunk without anyone noticing.
 - **Keep one writer per worktree.** A reviewer may read while another task's implementer writes disjoint files, but a
   fix round waits until the implementer reports (Plan 20).
 - **"Docs must be true" is a ruling, not a nicety** (Plan 16). A doc that cites, measures or promises something wrong
@@ -373,7 +375,7 @@ Base `c12bf90`, ten tasks.
    1. The deal's span (24 cards × 120 ms ≈ 2.8 s) ate into the 10 s play-or-fold timer, and no ruling covered it. That
       became **Ruling 26**.
    2. The full e2e suites had not run on the branch, and the result card's visible window had shrunk from 4.1 s to
-      2.8 s. The first part became the master gate after the wave; the second became **Ruling 27**, reported for the
+      2.8 s. The first part became the full gate after the wave; the second became **Ruling 27**, reported for the
       user to decide.
    3. A 3 px stage overflow on 375×812 squeeze tables, with F-12 weakened to `expectPageFits` and a "by design"
       comment. Fixed for pure-luck tables (the tray's wait line gave back 8 px, and F-12 asserts the stage again). The

@@ -35,13 +35,12 @@ deposits, no withdrawals, no payment gateway and no marketplace, by design and p
 - [`CHANGELOG.md`](CHANGELOG.md) — one section per plan, with the merge commit.
 - [`CLAUDE.md`](CLAUDE.md) — operating instructions for AI sessions and new developers: the toolchain, the gates,
   deploying the LAN host, and the rules a change has to keep.
-- [`docs/lessons-learned.md`](docs/lessons-learned.md) — every plan's rulings, word for word, and the lessons behind
-  them; each merged plan appends its own.
+- [`docs/lessons-learned.md`](docs/lessons-learned.md) — the lessons behind each plan, with Plan 21's rulings word for
+  word and earlier plans' as far as their notes survive; each merged plan appends its own.
 
 **Reference**
 
 - [`docs/player-guide.md`](docs/player-guide.md) — Hướng dẫn chơi: how to play, for players. Vietnamese.
-
 - [`docs/test-matrix.md`](docs/test-matrix.md) — which test holds up which requirement of spec
   §29.2, §29.3 and §30.
 - [`docs/security.md`](docs/security.md) — what each threat is defended by, which test proves it,

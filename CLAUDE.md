@@ -33,8 +33,10 @@ database) and **Lite** (one Windows `.exe` with SQLite). Internal ids keep the o
 - **Bash heredocs are unreliable** in that tool (long ones with quotes fail with "unexpected EOF"). Write files with the
   Write/Edit tools and keep Bash commands short. Never put backticks inside a double-quoted `node -e "…"`: bash runs them.
 - **PowerShell 5.1:** no `&&` or `||` (use `A; if ($?) { B }`). Piping into `Select-Object -First N` stops the
-  producer early and loses its exit code, so send long output to a log file and read the file. `stop.ps1` writes its
-  hard-kill warning to stderr, so the tool may say exit 1 on success. Read the output before you believe the exit code.
+  producer early and loses its exit code, so send long output to a log file and read the file. The PowerShell tool has
+  reported exit 1 after a successful `stop.ps1`. The script prints its warning on stdout and ends `exit 0`, so the
+  cause is unconfirmed (a truncated pipeline such as `| Select-Object -First` would do it). Read the output
+  (`Đã dừng.`), not the exit code. Here `curl` is an alias of `Invoke-WebRequest`, so write `curl.exe`.
 - **Playwright under pnpm 9:** `pnpm <script> -- --flag` hands Playwright a literal `--`, which drops your filter and
   runs the whole suite. Pass filters without `--`, or call Playwright directly:
   `pnpm --filter @bp/normal-web exec playwright test -c e2e/ops/ops.config.ts -g "F-12"`.
@@ -43,7 +45,8 @@ database) and **Lite** (one Windows `.exe` with SQLite). Internal ids keep the o
   heading back. `grep â` proves nothing, because `â` is a Vietnamese letter.
 - Git: the default branch is **`main`** (renamed from `master` on 2026-10-11; older docs still say `master`). LF→CRLF
   warnings are noise. There is a GitHub remote, `origin`. **Never push unless the user asks.** Never use a bare
-  `git stash`.
+  `git stash`: the stash stack is shared by every worktree and session of this repo, so a bare `pop` can take someone
+  else's. Use `git stash push -u -m <tag>`, then `git stash apply <sha>`.
 
 ## 3. Gates
 
@@ -69,9 +72,10 @@ database) and **Lite** (one Windows `.exe` with SQLite). Internal ids keep the o
   which wait out the limit.
 - **Browsers.** Only Chromium is installed. `pnpm --filter <pkg> exec playwright install chromium` is about 150 MB, and
   Firefox or WebKit builds are more. Ask the user before you download any of them.
-- **The full gate before a merge to `main`**, on the merged tree, one step at a time, in this order: typecheck → lint →
-  test → build:normal → build:lite → avatar:check → e2e Normal → e2e Lite → ops. It takes about 35 min. Write each
-  step's output to a log, and report the numbers.
+- **The full gate before a merge to `main`** runs on the branch's final tree. If `main` has moved, merge it into the
+  branch first; when it has not, that tree is the one the `--no-ff` merge produces. Run one step at a time, in this
+  order: typecheck → lint → test → build:normal → build:lite → avatar:check → e2e Normal → e2e Lite → ops. It takes
+  about 35 min. Write each step's output to a log, and report the numbers.
 
 ## 4. Deploying the LAN host (Normal, Windows)
 
@@ -81,21 +85,23 @@ The host is the per-user scheduled task `BlindLuckPoker-Normal` (`deploy/normal-
 The kit's `.env` (gitignored) holds the user's Neon `DATABASE_URL` and `SESSION_SECRET`. Deploy from the main checkout
 after the merge:
 
-1. `pnpm build:normal` replaces the bundle the live host serves, so finish the next steps right away. If anyone may be
-   playing, do step 2 first.
-2. `curl -s http://localhost:8080/health` must show `"rooms":0`. **`stop.ps1` is a hard kill**, and it loses every
-   stack on a table and any carried-over pot. With rooms open, wait or ask.
+1. Run `curl.exe -s http://localhost:8080/health`. If `rooms` is not 0, wait or ask. **`stop.ps1` is a hard kill**,
+   and it loses every stack on a table and any carried-over pot.
+2. `pnpm build:normal`. This replaces the bundle the live host serves, so do the next steps right away.
 3. In the PowerShell tool: `& 'deploy\normal-windows\stop.ps1'`. It checks that the pid is our `node`, kills it, then
    stops the task.
 4. `& 'deploy\normal-windows\run.ps1' -NoMigrate`. Drop `-NoMigrate` only when `apps/normal-server/drizzle/` gained a
    migration, because that writes the user's Neon database. **Ask first.**
-5. Run `curl -s http://localhost:8080/health` again and expect `"status":"ok"` and `"db":"ok"`. Report the new pid.
+5. Run `curl.exe -s http://localhost:8080/health` again and expect `"status":"ok"` and `"db":"ok"`. Report the new
+   pid.
 
 An open browser tab keeps the old bundle until F5. `index.html` is `no-cache` and the hashed assets are immutable, and
 `apps/normal-web/src/stale-chunk.ts` reloads once when a chunk is gone. The task stops when the user logs off Windows
 (`-AutoStart` adds a log-on trigger), so before you assume the host is running, check `/health`. Never start the Lite
-exe while the host runs, because it also defaults to port 8080. **Lite:** `pnpm build:lite` writes `apps/lite/release/lite/`. Nothing
-ships it automatically: record it as "rebuilt locally, not shipped".
+exe while the host runs, because it also defaults to port 8080.
+
+**Lite:** `pnpm build:lite` writes `apps/lite/release/lite/`. Nothing ships it automatically: record it as "rebuilt
+locally, not shipped".
 
 ## 5. Security rules
 
@@ -103,11 +109,13 @@ ships it automatically: record it as "rebuilt locally, not shipped".
   database dump or the original pictures in `assets/avatar-src/`. `other/` is not in `.gitignore`, so stage files by
   name. Never use `git add -A` or `git add .` without first reading `git status`.
 - **Never print** `DATABASE_URL`, `SESSION_SECRET` or the contents of any `.env`: no `cat`, `Get-Content` or echo.
-  `run.ps1 -DryRun` masks them. If a host `.env` needs a change, change only that one key and never echo the file.
+  `run.ps1 -DryRun` masks the password, but its output still shows the database user and host, so never paste it
+  anywhere public. If a host `.env` needs a change, change only that one key and never echo the file.
 - An API key that a task needs lives in a gitignored `.env`, never in a commit or a log. Tell the user to revoke it when
   the task is done.
-- Never type a password into a browser, and never sign in with the test account (`neon.test@example.com`). The user
-  checks the UI themselves. Never write that account's password anywhere.
+- Never type a password into a browser session on the live host or on any third-party site, and never sign in with the
+  test account (`neon.test@example.com`). The user checks the UI themselves. Never write that account's password
+  anywhere. The e2e suites register throwaway accounts on a local PGlite server, and that is fine.
 - No write to the user's Neon database or to any external service without the user's yes. That covers a migration
   (`run.ps1` without `-NoMigrate`), `grant-wardrobe-cli`, a push, and any upload. No CAPTCHA solving and no account
   sign-ups on third-party services: Neon, Oracle and the like are the user's to register.
