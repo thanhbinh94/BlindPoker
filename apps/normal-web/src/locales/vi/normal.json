@@ -437,15 +437,15 @@
     },
     "login_days_7": {
       "name": "Bảy ngày ghé bàn",
-      "desc": "Đăng nhập đủ 7 ngày."
+      "desc": "Điểm danh đủ 7 ngày."
     },
     "login_days_30": {
       "name": "Ba mươi ngày ghé bàn",
-      "desc": "Đăng nhập đủ 30 ngày."
+      "desc": "Điểm danh đủ 30 ngày."
     },
     "login_days_100": {
       "name": "Trăm ngày ghé bàn",
-      "desc": "Đăng nhập đủ 100 ngày."
+      "desc": "Điểm danh đủ 100 ngày."
     },
     "login_streak_7": {
       "name": "Chuỗi 7 ngày",
@@ -457,7 +457,7 @@
     },
     "login_days_365": {
       "name": "Một năm ghé bàn",
-      "desc": "Đăng nhập đủ 365 ngày."
+      "desc": "Điểm danh đủ 365 ngày."
     },
     "holdem_hands_10": {
       "name": "Mười ván Hold'em",

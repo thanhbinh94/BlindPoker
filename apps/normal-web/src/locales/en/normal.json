@@ -437,15 +437,15 @@
     },
     "login_days_7": {
       "name": "Seven days in",
-      "desc": "Sign in on 7 days."
+      "desc": "Check in on 7 days."
     },
     "login_days_30": {
       "name": "Thirty days in",
-      "desc": "Sign in on 30 days."
+      "desc": "Check in on 30 days."
     },
     "login_days_100": {
       "name": "A hundred days in",
-      "desc": "Sign in on 100 days."
+      "desc": "Check in on 100 days."
     },
     "login_streak_7": {
       "name": "Seven-day streak",
@@ -457,7 +457,7 @@
     },
     "login_days_365": {
       "name": "A year in",
-      "desc": "Sign in on 365 days."
+      "desc": "Check in on 365 days."
     },
     "holdem_hands_10": {
       "name": "Ten Hold'em hands",
