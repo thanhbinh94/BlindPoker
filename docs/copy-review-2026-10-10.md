@@ -17,7 +17,7 @@ Người dùng yêu cầu ngày 10/10: "check đa ngôn ngữ … có những đ
 - **Bản tiếng Anh:** giữ nguyên. Bộ khóa vi/en vẫn trùng nhau; ba test so khóa kiểm tra điều này: `packages/ui-kit/src/i18n/i18n.test.ts`, `apps/normal-web/src/locales/locales.test.ts` và `apps/lite/web/src/App.test.tsx`.
 - **Chuỗi tiếng Việt viết thẳng trong `.ts/.tsx` (không qua i18n, ngoài test):** không có. Grep dấu tiếng Việt trong `packages/*/src` và `apps/*/src` cho ra khoảng 90 dòng ở 30 file, và tất cả đều nằm trong comment.
 - **Các nhãn ổn định** (Bỏ bài, Chơi, Theo, Tố, Lật, Nặn bài, Tạm nghỉ, Hoàn toàn may rủi, Chơi hoặc bỏ, tên lá bài…): không đổi nhãn nào.
-- **Bổ sung 2026-10-12 (mục 7):** đợt bổ sung này có đổi cả bản tiếng Anh (bốn mô tả thành tựu `login_days_*`) và thêm đúng một khóa, `wardrobe.hint.dailyFixed`, ở cả hai ngôn ngữ, nên hai ý "giữ nguyên bản tiếng Anh" và "không thêm khóa nào" ở trên chỉ đúng cho các mục 1 đến 6.
+- **Bổ sung 2026-10-12 (mục 7):** đợt bổ sung này có đổi cả bản tiếng Anh (bốn mô tả thành tựu `login_days_*`) và thêm đúng một khóa, `wardrobe.hint.dailyFixed`, ở cả hai ngôn ngữ, nên hai ý "giữ nguyên bản tiếng Anh" và "không thêm khóa nào" ở trên chỉ đúng cho các mục 1 đến 6. Mục 8 (cùng ngày, Plan 22) đổi thêm một khóa, thêm hai khóa và bỏ một khóa.
 
 ## 2. Quy tắc đã áp dụng
 
@@ -179,6 +179,8 @@ Tôi grep từng chuỗi cũ trong `packages`, `apps`, `docs` và `tooling`. Nh�
 
 ## 7. Bổ sung 2026-10-12
 
+> Cập nhật cùng ngày, Plan 22: `DAILY_FIXED_ITEM_IDS` và `itemRuleForDay` trong `daily-rules.ts`, được nhắc ở 7.1 và 7.2, không còn nữa (lịch quà nay là `apps/normal-server/data/daily-gifts.json`), và `wardrobe.hint.dailyFixed` nhận thêm tham số ngày. Mục 8 ghi lại thay đổi; mục này giữ nguyên như lúc viết.
+
 Rà lại khi đọc hướng dẫn người chơi: bốn mô tả thành tựu nói "đăng nhập" nhưng đếm số lần điểm danh, và một dòng gợi ý trong tủ đồ hứa điều mà quà điểm danh không bao giờ cho. Không thêm hay bỏ khóa nào trong các dòng sửa chữ; riêng gợi ý có thêm một khóa mới, `wardrobe.hint.dailyFixed`, ở cả hai ngôn ngữ.
 
 ### 7.1 `apps/normal-web/src/locales/vi/normal.json` và `en/normal.json`
@@ -206,3 +208,18 @@ Thay đổi về logic, không phải về chữ: trước đây mọi món ở 
 ### 7.3 Test, e2e và tài liệu trích các chuỗi cũ
 
 Tôi grep các chuỗi cũ ("Đăng nhập đủ", "Sign in on") trong `packages`, `apps`, `docs` và `tooling`. Ngoài hai file ngôn ngữ ở trên không có test, e2e hay tài liệu nào trích nguyên văn (`docs/operation-test-plan.md`, `docs/acceptance-checklist.md` và `docs/test-matrix.md` đều không). Câu "thành tựu đăng nhập đủ một năm" ở mục 5 là lời văn của bản rà soát, không phải chuỗi trên giao diện, nên giữ như một bản ghi lịch sử.
+
+## 8. Bổ sung 2026-10-12, Plan 22 — quà điểm danh theo tháng
+
+`DAILY_FIXED_ITEM_IDS` không còn nữa: cặp quà ngày 28 nay nằm trong lịch quà `apps/normal-server/data/daily-gifts.json`
+(spec `docs/superpowers/specs/2026-10-12-monthly-daily-gifts-design.md`). Các khóa thay đổi:
+
+| khóa | trước | sau |
+|---|---|---|
+| wardrobe.hint.dailyFixed | Quà điểm danh ngày 28 (en: The day-28 check-in gift) | Quà điểm danh ngày {{day}} (en: The day-{{day}} check-in gift). Với ngày 28, chữ hiện ra không đổi |
+| wardrobe.hint.dailyMonth (khóa mới) | không có | Quà điểm danh ngày {{day}} tháng {{month}} (en: The day-{{day}} check-in gift of {{month}}); tháng viết `MM/YYYY` |
+| daily.marker.fixedDay (khóa mới) | không có | Ngày {{day}} tháng {{month}}: {{items}} (en: Day {{day}} of {{month}}: {{items}}), là dòng chú thích dưới lịch |
+| daily.marker.monthly (bỏ) | Huy hiệu + danh hiệu tháng (en: Monthly badge + title) | không còn: ô ngày có quà định sẵn ghi tên từng món, nối bằng " + " |
+
+Sáu món cực hiếm ở mục 7.2 nay đã có cách nhận: quà ngày 28, mỗi tháng một món từ 11/2026. Thẻ khóa của chúng ghi "Quà
+điểm danh ngày 28 tháng 11/2026"…, rồi trở lại "Chưa có cách nhận món này" khi tháng của món đã qua.

@@ -342,6 +342,31 @@ Thêm `--dry-run` để chỉ xem sẽ cấp gì. Chạy lại lần nữa khôn
 
 ---
 
+## 9c. Đổi quà điểm danh theo tháng
+
+Quà vật phẩm của điểm danh (ngày 7, 14, 21, 28 của chuỗi) nằm trong `apps/normal-server/data/daily-gifts.json`: phần
+`default` là quà của mọi tháng, phần `months` ghi đè từng ngày cho một tháng `YYYY-MM`. Ví dụ, tặng lại "Khung vàng" vào
+ngày 28 tháng 05/2027:
+
+```json
+"2027-05": { "28": { "fixed": ["badge_monthly", "title_devoted", "frame_gold"] } }
+```
+
+Danh sách `fixed` của một tháng là danh sách **đầy đủ**: muốn giữ "Huy hiệu tháng" và "Chuyên cần" thì phải ghi lại cả
+hai.
+
+1. Sửa file ở bản checkout chính (làm trên một nhánh rồi gộp như mọi thay đổi khác).
+2. Kiểm tra: `pnpm --filter @bp/normal-server exec vitest run src/economy/daily-gifts.test.ts`. Test đọc đúng file này
+   cùng catalogue thật và chỉ ra chỗ sai.
+3. Đợi `/health` báo `"rooms":0`, rồi chạy `.\stop.ps1` và `.\run.ps1 -NoMigrate`. Nếu chỉ sửa file này thì không cần
+   `pnpm build:normal` (server đọc thư mục `data/` lúc khởi động), và không cần migration.
+4. Nếu file sai mà bạn vẫn chạy `run.ps1`, server từ chối khởi động: nó dừng ngay và `normal.err.log` ghi
+   `invalid daily gift schedule …: …`. Sửa file rồi chạy lại.
+
+Chi tiết (tiếng Anh): `docs/normal-server.md`, mục "Changing the daily gifts".
+
+---
+
 ## 10. Giới hạn
 
 - **Không có HTTPS.** Mật khẩu đi qua mạng ở dạng rõ. Chỉ dùng trong mạng bạn tin được.

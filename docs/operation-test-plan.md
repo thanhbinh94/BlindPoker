@@ -191,6 +191,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 | I-02 | Nhận thưởng hai lần | Lần hai bị khoá | P1 |
 | I-03 | Xem "Lần điểm danh tiếp theo" | 00:00 giờ Việt Nam hôm sau | P3 |
 | I-04 | Ngày 7, 14, 21, 28 của chuỗi | Nhận thêm vật phẩm (không thử được trong một ngày — đã có test tự động; nếu có người chơi đủ chuỗi thì ghi lại) | P3 |
+| I-05 | Trang Điểm danh: đọc dòng chú thích dưới lịch, rồi rê chuột lên biểu tượng quà ở ô Ngày 28 | Có dòng "Ngày 28 tháng <tháng này>: Huy hiệu tháng + Chuyên cần" (tháng 10/2026); từ 01/11/2026 dòng đó có thêm "+ Mũ chóp quý ông", từ 01/12/2026 "+ Bịt mắt cướp biển"…; tooltip của ô Ngày 28 ghi đúng chuỗi tên ấy. Trên điện thoại dòng chú thích xuống dòng gọn trong trang | P2 |
 
 ### J. Tủ đồ (ngoại hình)
 
@@ -205,6 +206,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 | J-07 | Trên điện thoại: cuộn trang tủ đồ, mở "Đang dùng", "Bộ đồ đã lưu" | Không tràn ngang, bấm được mọi thẻ | P2 |
 | J-08 | Tủ đồ: nhìn các hàng thẻ trong từng tab (Mũ, Quần áo, Danh hiệu & huy hiệu…; tích "Hiện cả món chưa có" để thấy cả thẻ chưa có) | Thẻ cùng hàng cao bằng nhau, độ hiếm nằm ngay dưới tên; tiêu đề "Huy hiệu" không dính vào thẻ "Vận đỏ" phía trên (review 29/09 No8b, No11b) | P3 |
 | J-09 | Tài khoản mới: mở tủ đồ → tab Mũ → Quần áo → tích "Hiện cả món chưa có" → đổi sang Mũ, Danh hiệu & huy hiệu → rời tủ đồ rồi mở lại | Mặc định chỉ hiện món đã có: Mũ ghi "Bạn chưa có món nào ở mục này.", Quần áo có bộ thường ngày với 5 chấm: chấm không màu của chính bộ gốc rồi 4 màu áo phông. Tích ô thì hiện cả món chưa có (có khóa) và ô vẫn tích khi đổi tab; mở lại tủ đồ thì ô bỏ tích. Có biến thể màu mà chưa có món gốc (ví dụ được tặng "Mũ nồi xanh dương"): thẻ hiện chính biến thể đó, ảnh tô đúng màu của nó, bấm là mặc (review 29/09 No11a, No8a). Mặc một biến thể (ví dụ chấm "Áo phông đỏ"): thẻ đổi sang tên và màu của biến thể đó, có nhãn "✓ Đang dùng"; bấm chấm ô cờ đầu hàng (bộ gốc) thì về lại "Bộ thường ngày" — trên điện thoại chấm vẫn nhỏ nhưng chạm hơi lệch vẫn trúng. Tích ô chỉ thêm thẻ và chấm: thẻ "Mũ nồi xanh dương" vẫn là chính nó, không đổi thành mũ gốc bị khóa (đợt sửa cuối Plan 18) | P2 |
+| J-10 | Tủ đồ → Trang phục → Mũ, tích "Hiện cả món chưa có"; rồi Trang trí → Khung, và Trang trí → Danh hiệu & huy hiệu | Thẻ "Mũ chóp quý ông" ghi "Quà điểm danh ngày 28 tháng 11/2026", "Khung vàng" ghi "… tháng 02/2027", "Huy hiệu tháng" ghi "Quà điểm danh ngày 28". Khi tháng của một món đã qua, thẻ của món đó ghi "Chưa có cách nhận món này" | P2 |
 
 ### K. Thành tựu, Hồ sơ
 
@@ -246,6 +248,7 @@ màn nào, trạng thái nào, cỡ nào và test nào: `docs/test-matrix.md`. N
 | N-03 | `stop.ps1` khi đang có người ở bàn | Cảnh báo tắt cứng; số dư đã ghi trong database còn nguyên sau khi chạy lại | P2 |
 | N-04 | Xem `deploy/normal-windows/normal.log` sau đợt test | Không có dòng lỗi lặp lại, không có mật khẩu hay cookie trong log | P1 |
 | N-05 | Deploy bản mới trong lúc có tab đang mở (cùng B-04) | Người dùng tự nhận bản mới, không trang trắng | P1 |
+| N-06 | Trên một nhánh: sửa `daily-gifts.json` (ví dụ thêm mục `2027-05`), chạy `pnpm --filter @bp/normal-server exec vitest run src/economy/daily-gifts.test.ts` → xanh; đổi một id thành id sai → test đỏ và chỉ đúng id sai. Không khởi động host LAN với bản nháp sai. Khôi phục file nếu đây không phải thay đổi thật. Chỉ với một thay đổi thật đã gộp: khi `/health` báo `"rooms":0` thì `stop.ps1` và `run.ps1 -NoMigrate` | Test xanh với file đúng; với id sai, test báo đúng id sai (`… grants …, which is not in the item catalogue`) và không có bản nháp sai nào chạm tới host LAN. Với thay đổi thật đã gộp: server chạy lại, `/health` báo ok, lịch điểm danh của tháng đó ghi quà mới | P2 |
 
 ### O. Bản Lite (exe)
 

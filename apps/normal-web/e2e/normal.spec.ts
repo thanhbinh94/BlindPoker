@@ -484,6 +484,9 @@ test.describe('Blind Luck Poker Normal', () => {
     await expect(page.getByRole('heading', { name: 'Điểm danh hằng ngày' })).toBeVisible()
     const claim = page.getByRole('button', { name: 'Nhận thưởng' })
     await expect(claim).toBeEnabled()
+    // Spec 2026-10-12 §4.3: under the calendar, day 28 is named with its month and its gifts. The names themselves are
+    // pinned by the unit tests; this only asks that the legend line is there, so it holds whichever month the run falls in.
+    await expect(page.getByText(/^Ngày \d{1,2} tháng \d{2}\/\d{4}: \S/), 'the legend names day 28 and its gifts').toBeVisible()
     // No11b: the page before the claim and with its receipt, on the player's screen and a laptop's.
     await expectNoTextOverlapAt(page, 'daily, the reward waiting', OVERLAP_SCREENS)
     await claim.click()

@@ -14,6 +14,7 @@ import { ECONOMY } from '@bp/core'
 import type { FastifyInstance } from 'fastify'
 import type { AchievementDef } from '../achievements/definitions.js'
 import type { NormalConfig } from '../config.js'
+import type { DailyGiftNotice } from '../economy/daily-gifts.js'
 import type { AvatarManifest } from '../inventory/manifest.js'
 import type { Bodies } from '../inventory/bodies.js'
 import type { ItemCatalog } from '../inventory/items.js'
@@ -25,6 +26,11 @@ export interface CatalogRouteDeps {
   manifest: AvatarManifest
   /** The v4 bodies, one per gender (Plan 19). */
   bodies: Bodies
+  /**
+   * What the check-in schedule names from the current month on (spec 2026-10-12 §4.4) — the economy service's, which
+   * owns the timezone the month is read in. The same for every player, so it rides on the catalogue.
+   */
+  dailyGifts: () => DailyGiftNotice[]
 }
 
 /** The languages `normal-web` ships strings for (spec §21). */
@@ -48,7 +54,12 @@ export function registerCatalogRoutes(app: FastifyInstance, deps: CatalogRouteDe
       reconnectWindowSec: deps.config.reconnectWindowSec,
     }))
 
-  app.get('/api/catalog/items', async (_req, reply) => reply.send({ items: deps.catalog.all() }))
+  /**
+   * The catalogue, and beside it what the check-in will hand out by name from this month on (spec 2026-10-12 §4.4):
+   * the wardrobe's locked tiles read their "Quà điểm danh ngày 28 tháng 11/2026" from it. It rides on this response
+   * rather than a route of its own because the wardrobe already asks for exactly this, and it is the same for everyone.
+   */
+  app.get('/api/catalog/items', async (_req, reply) => reply.send({ items: deps.catalog.all(), dailyGifts: deps.dailyGifts() }))
 
   /**
    * The rig every chibi is drawn on (design §5.1): the frame and profile crop the pipeline built to,

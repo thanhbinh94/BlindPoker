@@ -44,7 +44,7 @@ src/
     index.ts         createRepositories(db) → NormalRepositories
 
   auth/              password.ts (argon2id) · session-service.ts · cookie.ts · auth-service.ts
-  economy/           daily-rules.ts (pure) · economy-service.ts (daily claim, relief)
+  economy/           daily-rules.ts (pure) · daily-gifts.ts (the gift schedule, loaded and checked) · economy-service.ts (daily claim, relief)
   inventory/         slots.ts (the slot and gender vocabulary) · manifest.ts (loads avatar-manifest.json)
                      bodies.ts (the v4 bodies, one per gender, held against the manifest) · items.ts (catalogue)
                      aliases.ts (old wardrobe ids → current ones, or null when dropped)
@@ -56,7 +56,7 @@ src/
   history/           history-service.ts (writes a settled hand, reads a player's last N)
   http/              routes.ts + routes-auth/-me/-rewards/-catalog/-outfits.ts · auth-guard.ts · types.ts
 
-data/                items.json, item-aliases.json, avatar-bodies.json, achievements.json — content, not code
+data/                items.json, item-aliases.json, avatar-bodies.json, achievements.json, daily-gifts.json — content, not code
                       avatar-manifest.json — Task 1's asset pipeline output, mirrored from normal-web
 drizzle/             committed migration SQL (0000 generated; 0001_avatar_v2, 0002_outfits hand-written, data only;
                       0003_ledger_keys generated, then guarded with IF NOT EXISTS — the keys `balances.apply` claims)
@@ -81,8 +81,10 @@ Most of it is arbitrary. Three steps are not, and each one is a bug if moved:
    subscription order and awaits each one, so the counters are written before the achievement layer
    reads them. Reversed, "did the counter land yet" becomes a race with no fix at the call site.
 3. **`economy` is constructed with `reservedItemIds` = every `reward.itemId` in the achievement
-   definitions.** That is what stops the daily random draw from handing out an item somebody was
-   supposed to earn.
+   definitions, and with `gifts` = `loadDailyGifts(catalog)`.** Both are kept off the daily random
+   draw: an item somebody was supposed to earn, or one the schedule promises for a month.
+   `loadDailyGifts` runs right after `loadAchievements` and before `seed`, so a bad schedule stops
+   the boot before anything is written.
 
 `buildApp` does not listen — `main.ts` calls `fastify.listen`. The WebSocket upgrade handler is
 already attached when it returns.
@@ -253,9 +255,9 @@ drawn-per-gender item, below):
 3. Restart. `loadItemCatalog` validates the file against the manifest and **refuses to start** on a
    duplicate id, an unknown slot or rarity, a drawn slot with no asset (or a `title`/`badge` with
    one), an asset naming a file the manifest does not have or whose layer disagrees, a required slot
-   with no default or with two, a default in an optional slot, or an absent `badge_monthly` /
-   `title_devoted` — each of those would otherwise surface much later and much worse (a day-28 claim
-   failing on a foreign key, on the 28th). Then, last, the two hairstyle cross-checks: each
+   with no default or with two, or a default in an optional slot — each of those would otherwise
+   surface much later and much worse. (Whether the gifts the check-in names exist is `loadDailyGifts`'
+   to check since Plan 22 — see "Changing the daily gifts".) Then, last, the two hairstyle cross-checks: each
    `DEFAULT_HAIR` id (`hair_f_bob01`, `hair_m_tousled01` — `inventory/slots.ts`) must be a free hairstyle
    of its gender, and every hairstyle's `counterpart` must be a hairstyle of the other gender (the pairing
    need not be symmetric: a future rare style may point at a free one). `inventory/items.test.ts` holds
@@ -263,12 +265,13 @@ drawn-per-gender item, below):
 
 Things worth knowing before you pick a rarity:
 
-- The **daily random draw** (days 7, 14, 21) picks an unowned item of that rarity, restricted to
+- The **daily random draw** (the tiers `data/daily-gifts.json` makes draws — days 7, 14 and 21 by
+  default) picks an unowned item of that rarity, restricted to
   `DAILY_DRAW_SLOTS` (`head`/`face`/`aura`/`frame`/`hairColor`/`eyeColor` — `outfit` is drawable
   geometry but chosen deliberately, not handed out at random, and a `hairStyle` or a `skinColor` is a
-  look the player picks, never a prize) and excluding every item named as an achievement reward and
-  every `free` item. A new `common` or `rare` in one of those slots enlarges that pool; an `epic` never
-  enters it.
+  look the player picks, never a prize) and excluding every item named as an achievement reward, every
+  item the gift schedule names, and every `free` item. A new `common` or `rare` in one of those slots
+  enlarges that pool; an `epic` never enters it.
 - Making an item `isDefault: true` grants it to every **new** account. Existing players do not get
   it retroactively — that is what a data migration is for, and `drizzle/0002_outfits.sql` is the
   worked example: it inserts `outfit_casual01` and grants it to every `players` row, because
@@ -405,6 +408,75 @@ key `INVALID_BASE`; `GET /api/me`, `GET /api/me/inventory`, `GET /api/players/:i
 `POST /api/me/outfits/:slot/apply` answer v4 through `readAvatarConfig`; a new account is registered wearing
 `catalog.defaultAvatar()` (v4). The database is written only by a save, an apply and `PUT /api/me/avatar` — a read
 never rewrites a row (spec §4.5).
+
+## Changing the daily gifts
+
+The check-in's item column is data: `data/daily-gifts.json` (spec
+`docs/superpowers/specs/2026-10-12-monthly-daily-gifts-design.md`).
+The points column is not — it is `DAILY_REWARD_POINTS` in `@bp/core`, shared with Lite, which has no item column at all
+(§13.3).
+
+```json
+{
+  "default": { "7": { "draw": "common" }, "14": { "draw": "rare" }, "21": { "draw": "rare" },
+               "28": { "fixed": ["badge_monthly", "title_devoted"] } },
+  "months": {
+    "2026-11": { "28": { "fixed": ["badge_monthly", "title_devoted", "head_tophat01"] } }
+  }
+}
+```
+
+- A key under `default` or a month is a **streak tier** (1–31), not a calendar date. The streak restarts every month,
+  so tier 28 is claimed on the 28th to the 31st, depending on when the streak began.
+- A rule is `{ "draw": "common" | "rare" }` — an unowned item of that rarity from `DAILY_DRAW_SLOTS`, minus every
+  reserved id, or `NO_ITEM_FALLBACK_POINTS` under `daily_item_fallback` when none is left — or `{ "fixed": [ids] }`,
+  exactly those items, skipping any the player owns and never paid for.
+- A month's rule for a tier **replaces** the default's for that tier. Write a `fixed` list in full: to add a gift to
+  day 28, list `badge_monthly` and `title_devoted` again.
+- A gift named in the `default` is always listed to the wardrobe with no month ("Quà điểm danh ngày 28"), even during a
+  month whose own entry drops it. So a month entry should keep the default's pair (the shipped months all do), or the
+  hint stays as it is.
+- The claim reads the month it is made in (`monthKey` in `ECONOMY_TIMEZONE`). `GET /api/rewards/daily` serves the
+  current month's calendar (`month`, and each fixed tier's `items`). `GET /api/catalog/items` carries `dailyGifts`:
+  each named item's first tier and month from the current month on, `month: null` for the default's — what the
+  wardrobe's locked tiles say.
+- Every id in any `fixed` list, past months included, is kept off the random draw, like the achievements' rewards.
+- Prefer an epic, or an item outside the draw slots, for a dated month's `fixed` list. A common or a rare of
+  `head`/`face`/`aura`/`frame`/`hairColor`/`eyeColor` that only a past month names stays off the draw for good, while
+  `dailyGifts` stops listing it once its month is over — so its locked tile falls back to "Có thể nhận từ quà điểm danh
+  (thường/hiếm)", which the draw will never keep. Put such an item in the `default`, or schedule it again, or accept the
+  wrong hint (`docs/known-limitations.md`, UI).
+- Each `draw` tier pays `NO_ITEM_FALLBACK_POINTS` (10,000, `daily_item_fallback`) to a player who owns its whole pool:
+  adding draw tiers raises what a month can pay (conservation is unaffected).
+- The calendar always shows 31 tiers, so a `default` tier 29–31 is advertised in a 30-day month and in February, where
+  the streak never reaches it. Prefer month entries for those tiers.
+
+To add or change a month:
+
+1. Edit the file. An item new to the catalogue goes in first (`items.json` and both locales — "Adding a cosmetic item").
+2. Check it: `pnpm --filter @bp/normal-server exec vitest run src/economy/daily-gifts.test.ts`. That suite loads this
+   very file against the real catalogue. It also pins what the user decided on 12/10: October 2026 as it was — read
+   through the `default`, so **a change to the default turns it red** — and the six months 11/2026 to 04/2027, which
+   `src/http/routes-rewards.test.ts` (`grants the shipped November gift over HTTP`, `serves the calendar of the
+   current month, with the item ids of a fixed day`) and `src/app.test.ts` (`serves the named daily gifts beside the
+   catalogue, from the current month on`) also read. (The service tests in `economy-service.test.ts` write their own
+   schedule out, so an edit to the file never reaches them.) Adding a month, or
+   giving an item again in a later month, turns none of them red. Changing the default or one of those months changes
+   a promise: do it on the user's word, and in the same commit either write today's column out as an explicit
+   `"2026-10"` entry or update the test.
+3. Merge as usual, then restart. The file is read at boot, not built in: on the LAN host check `/health` for
+   `"rooms":0` (`stop.ps1` is a hard kill), then `stop.ps1` and `run.ps1 -NoMigrate` — no `build:normal` is needed for
+   a change to this file alone. In Docker `data/` is inside the image, so `up -d --build`. No migration either way.
+
+`loadDailyGifts` **refuses to start** — `invalid daily gift schedule <path>: <problem>` — on: an id the catalogue does
+not hold, or one every player already owns (`isDefault`, `free`); a tier outside 1–31, written with a leading zero, or
+past the end of its month (`2027-02` has no tier 29); an empty `fixed` list; the same id twice in a tier, or on two
+tiers of one month (the default's tiers included); a draw that is not `common` or `rare`, or a rule that is not exactly
+one of `draw` and `fixed`; a month key that is not `YYYY-MM`; the same month key written twice (`month 2026-11 appears
+twice`: JSON keeps only the last of two equal keys, so a copied month whose key was not renamed would otherwise replace
+the first); a top-level key other than `default` and `months`; no `default`. A file that is not JSON is
+`could not read daily gift schedule <path>: …`. One thing it cannot see: two equal *tier* keys inside one month — JSON
+again keeps the last, silently.
 
 ## Adding an achievement
 

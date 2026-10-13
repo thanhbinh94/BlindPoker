@@ -1065,7 +1065,7 @@
   color: var(--rarity-rare);
 }
 
-.calGift[data-kind='monthly'] {
+.calGift[data-kind='fixed'] {
   color: var(--gold);
 }
 
@@ -1105,10 +1105,23 @@
   color: var(--ink-muted);
 }
 
+/* `flex-start`, not `center`: a fixed day's line wraps on a phone, and its icon belongs beside the first line rather
+   than halfway down the block. A one-line row does not visibly move (an 18 px icon on a ~19.5 px line). */
 .calLegend li {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
+}
+
+/* Each fixed-gift day on a line of its own (spec 2026-10-12 §4.3), while the draw kinds share the first row. */
+.calLegendDay {
+  flex-basis: 100%;
+}
+
+/* The icon keeps its 18 px beside a line that wraps: as a flex item it would otherwise give width up to the text
+   (measured at 375 px: 11 px wide beside "Ngày 28 tháng 11/2026: … + Mũ chóp quý ông"). */
+.calLegend .calGift {
+  flex-shrink: 0;
 }
 
 .calCell[data-claimed='true'] {

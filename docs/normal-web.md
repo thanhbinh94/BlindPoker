@@ -54,8 +54,8 @@ apps/normal-web/
         ItemTab.tsx          one slot's tiles: owned and clickable, or locked with a reason
         OutfitBar.tsx        five saved snapshots — apply / save here / rename / delete
       TableChrome.tsx   makeChibiFor / makeCaptionFor — the two slots RoomScreen takes from this app
-      catalog.ts        rarity → kit tone, and the category order, shared by two separate chunks
-      format.ts         dates, moments and signed amounts in the player's language
+      catalog.ts        hintFor — how a locked card is won (achievements, the check-in's named gifts, the draw)
+      format.ts         dates, moments, signed amounts and the server's month keys
       useAsync.ts       load once, expose { data, loading, reload, set } — every account screen's spine
     locales/{vi,en}/normal.json
   public/avatar/             the chibi's PNG layers + avatar-manifest.json (committed; see avatar-2d.md)
@@ -212,9 +212,11 @@ wardrobe's "n/m đã có" counts remain.
 
 - **`ItemTab`** lists what the player owns — a colour-variant family shows when any member is owned
   (`slotCards`, `categories.ts`; review 2026-09-29 No11a) — and, with **Hiện cả món chưa có** ticked, the whole
-  catalogue for its slot, locking anything the player does not own (`aria-disabled`, with a hint: the achievement
-  that grants it, or a daily-calendar rarity, or "chưa mở"). A tile's own picture (`ItemPreview`) is the item's
-  pipeline icon (`docs/avatar-2d.md` §4.2), and a colour variant's is that icon tinted to the variant's colour
+  catalogue for its slot, locking anything the player does not own (`aria-disabled`, with a hint — `hintFor` in
+  `screens/catalog.ts`: the achievement that grants it; else the check-in gift that names it, "Quà điểm danh ngày
+  28" or, for one month's, "Quà điểm danh ngày 28 tháng 11/2026", read from `GET /api/catalog/items`'s
+  `dailyGifts`; else a daily-draw rarity; else "Chưa có cách nhận món này"). A tile's own picture (`ItemPreview`)
+  is the item's pipeline icon (`docs/avatar-2d.md` §4.2), and a colour variant's is that icon tinted to the variant's colour
   through `useTintedLayer` (review 2026-09-29 No8a). A family's card is one member — the one worn; else the
   original, if owned; else the first owned variant; else the original — whichever way the box is ticked: ticking it
   only adds cards and dots (final fix wave, B2). The card is that member's picture, name, "Đang dùng" and click, and
@@ -257,9 +259,10 @@ and every seat plate pick the new face up without a reload.
    the other does not, or if a name exists for an id the server does not serve. Renaming an id that ships
    already needs a row in `apps/normal-server/data/item-aliases.json` too, so an account that equipped the
    old id keeps wearing something rather than losing the slot.
-4. **How it is won.** A grant in `data/achievements.json` or the daily calendar (`head`/`face`/`aura`/
-   `frame` only — design §5.2), or nothing — an item nobody owns is an item nobody sees, because the
-   wardrobe lists the inventory and not the catalogue.
+4. **How it is won.** A grant in `data/achievements.json`; a `fixed` gift in `apps/normal-server/data/daily-gifts.json`
+   (any slot, one month or every month — `normal-server.md`, "Changing the daily gifts"); the daily draw (a common or a
+   rare in `head`/`face`/`aura`/`frame`/`hairColor`/`eyeColor`); or nothing — an item nobody owns is an item nobody
+   sees, because the wardrobe lists the inventory and not the catalogue.
 5. **The contact sheets.** `pnpm --filter @bp/normal-web avatar:sheet` re-composites the whole set into
    `docs/avatar-2d-sheet.png` — the eyeballed gate before a picture is committed — through the renderer's own
    layer order and hide rules. Since avatar v4 (Plan 19) it is a grid of each gender's hairstyles × three skin tones
@@ -292,6 +295,20 @@ marked; every other seat keeps the 60 s the header is there for.
 `resetAvatarCache()` empties it. One caller in the app — a session ending — because the cache is
 module scope and keyed by player id, so the account that just signed out would otherwise sit there
 and be re-read as a 401 once per TTL.
+
+---
+
+## The Daily screen
+
+`screens/DailyScreen.tsx` draws `GET /api/rewards/daily`: today's card and its claim, the receipt, and the month's 31
+tiers. The calendar is the **current month's**: the server sends `month` (`YYYY-MM`, the economy timezone) with it,
+because the gift schedule may differ month to month (spec 2026-10-12). A tier's gift icon (`markerOf`) is coloured by
+kind. A draw day carries `item` = `common` / `rare` and says "Vật phẩm thường" / "Vật phẩm hiếm"; a day with named gifts
+carries `items` and says their names joined by " + " (`giftNames`, through `itemName`) — "Huy hiệu tháng + Chuyên cần +
+Mũ chóp quý ông". A marker this bundle has no words for draws nothing. The icon's words are a tooltip and a visually
+hidden span, so the legend under the calendar repeats them where a phone can read them: the draw kinds this month has,
+then one line per named-gift day, "Ngày 28 tháng 11/2026: …" (`daily.marker.fixedDay`, the month through
+`formatMonthKey`). The relief panel underneath is fed by `GET /api/me`.
 
 ---
 

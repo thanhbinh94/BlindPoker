@@ -14,11 +14,11 @@ import { makeI18n, renderWithI18n } from '../test-i18n.js'
 import { DailyScreen } from './DailyScreen.js'
 import { formatMoment } from './format.js'
 
-/** The server's own schedule: a common on 7, a rare on 14 and 21, the month's badge on 28. */
+/** The server's own schedule for October 2026: a common on 7, a rare on 14 and 21, the badge and the title on 28. */
 const CALENDAR: CalendarEntryDto[] = Array.from({ length: 31 }, (_, i) => {
   const day = i + 1
   const item = day === 7 ? 'common' : day === 14 || day === 21 ? 'rare' : day === 28 ? 'badge_monthly' : null
-  return { day, points: day * 1_000, item }
+  return { day, points: day * 1_000, item, items: day === 28 ? ['badge_monthly', 'title_devoted'] : [] }
 })
 
 const RESET_AT = Date.UTC(2026, 8, 5, 17, 0)
@@ -31,6 +31,7 @@ const STATUS: DailyStatusDto = {
   reward: 5_000,
   item: null,
   nextResetAt: RESET_AT,
+  month: '2026-10',
   calendar: CALENDAR,
 }
 
@@ -68,6 +69,9 @@ const interpolate = (template: string, values: Record<string, string>): string =
 /** The fallback line up to its first placeholder — enough to spot the sentence, whatever amount it names. */
 const FALLBACK_PREFIX = viNormal.daily.receipt.fallback.split('{{')[0] as string
 
+/** Day 28 of October, by name: what its cell says, and what the legend's line for it ends with. */
+const PAIR_LABEL = `${viNormal.items.badge_monthly} + ${viNormal.items.title_devoted}`
+
 describe('DailyScreen — the calendar', () => {
   it('shows a status line while the day is in flight', async () => {
     renderScreen(stubApi({ daily: vi.fn(() => new Promise<DailyStatusDto>(() => undefined)) }))
@@ -97,7 +101,7 @@ describe('DailyScreen — the calendar', () => {
     expect(calendar().getAllByRole('listitem')).toHaveLength(31)
     expect(calendar().getAllByText(viNormal.daily.marker.common)).toHaveLength(1)
     expect(calendar().getAllByText(viNormal.daily.marker.rare)).toHaveLength(2)
-    expect(calendar().getAllByText(viNormal.daily.marker.monthly)).toHaveLength(1)
+    expect(calendar().getAllByText(PAIR_LABEL)).toHaveLength(1)
     // Points are printed per tier, in the language's own grouping.
     expect(calendar().getByText(/^31\.000/)).toBeInTheDocument()
   })
@@ -159,8 +163,43 @@ describe('DailyScreen — the calendar', () => {
 
     // Silence beats a confident promise of the wrong prize; the tier's points still show.
     expect(calendar().queryAllByText(viNormal.daily.marker.common)).toHaveLength(0)
-    expect(calendar().queryAllByText(viNormal.daily.marker.monthly)).toHaveLength(1)
+    expect(calendar().queryAllByText(PAIR_LABEL)).toHaveLength(1)
     expect(calendar().getByText(/^7\.000/)).toBeInTheDocument()
+  })
+
+  it('names every gift of a fixed day in its cell and in the legend, with the month', async () => {
+    const november = {
+      ...STATUS,
+      month: '2026-11',
+      calendar: CALENDAR.map((e) => (e.day === 28 ? { ...e, items: ['badge_monthly', 'title_devoted', 'head_tophat01'] } : e)),
+    }
+    renderScreen(stubApi({ daily: vi.fn().mockResolvedValue(november) }))
+    await screen.findByRole('list', { name: viNormal.daily.calendarTitle })
+
+    const names = `${PAIR_LABEL} + ${viNormal.items.head_tophat01}`
+    expect(names).toBe('Huy hiệu tháng + Chuyên cần + Mũ chóp quý ông')
+    const gift = calendar().getByText(names).closest('[title]') as HTMLElement
+    expect(gift).toHaveAttribute('title', names)
+    expect(gift).toHaveAttribute('data-kind', 'fixed')
+    // The legend is what a phone reads, having no tooltip: the day, the month and the names.
+    expect(screen.getByText(`Ngày 28 tháng 11/2026: ${names}`)).toBeInTheDocument()
+  })
+
+  it('names a fixed gift on any day the schedule puts one, and lists in the legend only the draws the month has', async () => {
+    const odd = {
+      ...STATUS,
+      calendar: CALENDAR.map((e) =>
+        e.day === 14 ? { ...e, item: 'frame_gold', items: ['frame_gold'] } : e.day === 21 ? { ...e, item: 'common' } : e,
+      ),
+    }
+    renderScreen(stubApi({ daily: vi.fn().mockResolvedValue(odd) }))
+    await screen.findByRole('list', { name: viNormal.daily.calendarTitle })
+
+    expect(calendar().getByText(viNormal.items.frame_gold)).toBeInTheDocument()
+    expect(screen.getByText(`Ngày 14 tháng 10/2026: ${viNormal.items.frame_gold}`)).toBeInTheDocument()
+    // No rare day is left this month, so the legend explains none; the common one is days 7 and 21, and the legend.
+    expect(screen.queryByText(viNormal.daily.marker.rare)).toBeNull()
+    expect(screen.getAllByText(viNormal.daily.marker.common)).toHaveLength(3)
   })
 })
 

@@ -418,16 +418,18 @@ Bất biến kiểm tra trong test: `Σ balance + Σ chồng trên bàn + pot c�
 | 15–20 | 10.000 | |
 | 21 | 25.000 | 1 item `rare` |
 | 22–27 | 12.000 | |
-| 28 | 40.000 | Badge tháng (`badge_monthly`) + title `title_devoted` nếu chưa có |
+| 28 | 40.000 | Badge tháng (`badge_monthly`) + title `title_devoted` nếu chưa có; từ 11/2026 mỗi tháng thêm một món cực hiếm (2026-10-12, spec monthly-daily-gifts — xem "Lịch quà theo tháng" dưới bảng) |
 | 29–31 | 12.000 | |
 
 Tổng tối đa 376.000/tháng.
 
-**Fallback 10.000 điểm chỉ áp dụng cho các bậc rút ngẫu nhiên** (ngày 7, 14, 21). Khi không còn item nào chưa sở hữu ở đúng rarity đó, lần nhận ghi thêm một dòng ledger `daily_item_fallback` cùng `refId` với lần nhận — một lần nhận, hai dòng, để §12.5 đo được catalogue đang cạn tới đâu. Ngày 28 là bậc **cố định**: nó cấp `badge_monthly` + `title_devoted`, và nếu người chơi đã có sẵn thì **không** trả thay bằng điểm — một phần thưởng cố định đã trao rồi không phải là catalogue cạn, trả 10.000 mỗi năm cho nó là một lỗ rò chậm.
+**Lịch quà theo tháng (2026-10-12, spec monthly-daily-gifts).** Cột Item của Normal không còn nằm trong code mà là file `apps/normal-server/data/daily-gifts.json`, gồm `default` — đúng cột Item của bảng trên (7 rút `common`, 14 và 21 rút `rare`, 28 tặng `badge_monthly` + `title_devoted`) — và `months` theo khóa `YYYY-MM`, mỗi tháng ghi đè từng bậc bằng `{ "draw": "common" | "rare" }` hoặc `{ "fixed": [itemId, …] }`. Luật của tháng cho một bậc **thay hẳn** luật mặc định của bậc đó (danh sách `fixed` của tháng là danh sách đầy đủ). Lần nhận dùng tháng của chính nó (theo `ECONOMY_TIMEZONE`). File được kiểm tra lúc khởi động: id có trong catalogue và không phải món ai cũng có sẵn; bậc từ 1 đến 31 và không vượt số ngày của tháng; không trùng id trong một ngày hay trong một tháng; mức rút hợp lệ. File sai thì server không khởi động. Lịch giao kèm giữ tháng 10/2026 như cũ và thêm vào ngày 28: 11/2026 `head_tophat01`, 12/2026 `face_eyepatch01`, 01/2027 `aura_lightning01`, 02/2027 `frame_gold`, 03/2027 `haircolor_lavender01`, 04/2027 `eyecolor_gold01`. Đổi lịch là sửa file rồi khởi động lại, không cần migration (`docs/normal-server.md`, mục "Changing the daily gifts").
+
+**Fallback 10.000 điểm chỉ áp dụng cho các bậc rút ngẫu nhiên** (ngày 7, 14, 21). Khi không còn item nào chưa sở hữu ở đúng rarity đó, lần nhận ghi thêm một dòng ledger `daily_item_fallback` cùng `refId` với lần nhận — một lần nhận, hai dòng, để §12.5 đo được catalogue đang cạn tới đâu. Ngày 28 là bậc **cố định**: nó cấp `badge_monthly` + `title_devoted` (từ 11/2026 cộng món của tháng; mọi bậc `fixed` của lịch quà theo cùng luật này — 2026-10-12, spec monthly-daily-gifts), và nếu người chơi đã có sẵn thì **không** trả thay bằng điểm — một phần thưởng cố định đã trao rồi không phải là catalogue cạn, trả 10.000 mỗi năm cho nó là một lỗ rò chậm.
 
 Bậc ngẫu nhiên **không bao giờ rút** hai nhóm sau, để phần thưởng cố định giữ được lời hứa của nó:
 - **category `title` và `badge`** — chúng là phần thưởng của achievement và của ngày 28, rút trúng bằng may rủi sẽ làm mất chỗ kiếm được.
-- **mọi item nằm trong `reward.itemId` của `achievements.json`, cộng `badge_monthly` và `title_devoted`** — nếu ngày 14 rút trúng `badge_monthly` thì ngày 28 của người đó không còn gì để cấp và (đúng theo luật trên) cũng không trả bù, nên chuỗi 28 ngày trọn vẹn sẽ âm thầm đáng giá ít hơn bảng thưởng nói.
+- **mọi item nằm trong `reward.itemId` của `achievements.json`, cộng mọi id nằm trong một danh sách `fixed` của lịch quà** (tháng đã qua hay chưa tới; 2026-10-12, spec monthly-daily-gifts — trước đó là `badge_monthly` và `title_devoted`) — nếu ngày 14 rút trúng `badge_monthly` thì ngày 28 của người đó không còn gì để cấp và (đúng theo luật trên) cũng không trả bù, nên chuỗi 28 ngày trọn vẹn sẽ âm thầm đáng giá ít hơn bảng thưởng nói.
 
 ### 13.3 Lite
 Cùng bảng, chỉ cột Điểm. Lưu `streak`, `last_daily_claim` trong `players`.
@@ -671,7 +673,7 @@ Auth = cookie phiên `bp_session` (`HttpOnly`, `SameSite=Lax`, `Secure` khi `COO
 |---|---|---|---|---|
 | GET | `/health` | — | `200 {status:"ok", uptime, connections, rooms, db:"ok", edition:"normal", version}` | `503` cùng shape với `status:"degraded", db:"error"` |
 | GET | `/api/config` | — | `200 {edition:"normal", wsPath:"/ws", economy{startingBalance, blindWagerTiers, holdemBlindTiers, reliefThreshold, reliefTarget}, languages:["vi","en"], reconnectWindowSec}` | `429 RATE_LIMITED` |
-| GET | `/api/catalog/items` | — | `200 {items: ItemDef[]}` | `429` |
+| GET | `/api/catalog/items` | — | `200 {items: ItemDef[], dailyGifts: [{itemId, day, month}]}` (`dailyGifts`, 2026-10-12, spec monthly-daily-gifts: lần tặng đầu tiên của mỗi quà có tên trong lịch, tính từ tháng hiện tại; `month` là `null` = mọi tháng) | `429` |
 | GET | `/api/catalog/achievements` | — | `200 {achievements:[{id, category, metric, threshold, reward}]}` | `429` |
 | POST | `/api/auth/register` | XRW | `201 {playerId, displayName, balance}` + cookie; tạo `users` + `players` + inventory mặc định + `daily_logins` trong một transaction | `400 INVALID_EMAIL`/`INVALID_PASSWORD`/`INVALID_NAME` · `409 EMAIL_TAKEN`/`DISPLAY_NAME_TAKEN` · `429` (10/phút/IP) · `403` |
 | POST | `/api/auth/login` | XRW | `200` cùng shape + cookie **id mới** (xoay id, §23) | `400` · `401 BAD_CREDENTIALS` · `429` (5/phút/IP+email) · `403` |
@@ -686,7 +688,7 @@ Auth = cookie phiên `bp_session` (`HttpOnly`, `SameSite=Lax`, `Secure` khi `COO
 | PUT | `/api/me/avatar` | ✔ XRW | `200 {config}` (`AvatarView`); chỉ nhận cấu hình v2 | `400 MISSING_LAYER` (không phải v2, thiếu slot bắt buộc, `body` lạ) / `INVALID_COLOR` (`skin`/`eyes` ngoài bảng, `hairColor` sai) / `INVALID_ITEM` (id lạ hoặc không có `variants[body]`) / `WRONG_CATEGORY` (sai slot) · `403 NOT_OWNED` · `401` · `403` XRW · `429` |
 | GET | `/api/players/:id/avatar` | ✔ | `200 {playerId, displayName, avatar}` (v2), `cache-control: private, max-age=60` | `404 NOT_FOUND` (id lạ **và** id sai định dạng — không phân biệt để không dò được id) · `401` · `429` |
 | GET | `/api/me/achievements` | ✔ | `200 [{id, category, metric, threshold, reward, progress, unlockedAt}]` | `401` · `429` |
-| GET | `/api/rewards/daily` | ✔ | `200 DailyStatus {claimable, day, streak, reward, item, nextResetAt, calendar[31]}` | `401` · `429` |
+| GET | `/api/rewards/daily` | ✔ | `200 DailyStatus {claimable, day, streak, reward, item, nextResetAt, month, calendar[31]: {day, points, item, items}}` (`month`, `items`: 2026-10-12, spec monthly-daily-gifts — lịch của tháng hiện tại; `items` là các món của bậc có quà định sẵn) | `401` · `429` |
 | POST | `/api/rewards/daily/claim` | ✔ XRW | `200 {claimed:true, day, points, item, items, fallbackPoints, balance, streak}` | `409 ALREADY_CLAIMED` (kèm `claimed:false`) · `401` · `403` · `429` |
 | POST | `/api/economy/relief` | ✔ XRW | `200 {granted:true, amount, balance}` | `409 NOT_ELIGIBLE` (kèm `granted:false, reason:"balance"\|"cooldown", retryAt`) · `401` · `403` · `429` |
 | GET | `/*` | — | Static `PUBLIC_DIR` (đường dẫn không có phần mở rộng rơi về `index.html`) | `404 NOT_FOUND` (prefix giữ chỗ `api`/`ws`/`health`, đường dẫn có đuôi mà không có file, hoặc không cấu hình `PUBLIC_DIR`) |

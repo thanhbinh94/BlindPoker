@@ -14,7 +14,8 @@
  *    already written. Reversed, every threshold would be one hand behind.
  * 3. **The achievements' reward items are what the daily draw may not hand out.** They are read from
  *    the loaded definitions rather than listed again here, so `achievements.json` stays the only
- *    place a promised item id is written down.
+ *    place a promised item id is written down. The gift schedule's named items are kept off it too —
+ *    the economy reads them from the schedule itself.
  *
  * The WebSocket is authenticated at the upgrade, from the same session cookie the REST routes use:
  * `resolver.fromUpgrade` is handed the raw `IncomingMessage`, so there is no second credential, no
@@ -58,6 +59,7 @@ import { createSessionService, type SessionService } from './auth/session-servic
 import type { NormalConfig } from './config.js'
 import type { AppDb } from './db/client.js'
 import { packageRoot } from './db/migrate.js'
+import { loadDailyGifts, type DailyGiftSchedule } from './economy/daily-gifts.js'
 import { createEconomyService, type EconomyService } from './economy/economy-service.js'
 import { createEventBus, type AppEventBus } from './events.js'
 import { createHistoryService, type HistoryService } from './history/history-service.js'
@@ -195,6 +197,8 @@ export interface AppServices {
   bus: AppEventBus
   catalog: ItemCatalog
   defs: AchievementDef[]
+  /** The check-in's gift schedule — `data/daily-gifts.json`, checked at boot. */
+  gifts: DailyGiftSchedule
   repos: NormalRepositories
   sessions: SessionService
   auth: AuthService
@@ -252,6 +256,9 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
   const aliases = loadAliases()
   const catalog = loadItemCatalog(undefined, manifest)
   const defs = loadAchievements(catalog)
+  // Checked against the catalogue it names, before anything is seeded: a bad schedule stops the boot here, with its
+  // file and its problem in the message (spec 2026-10-12 §6).
+  const gifts = loadDailyGifts(catalog)
   // Before anything reads or grants an item: every reward is a foreign key into this table.
   await catalog.seed(db)
   // Before any room exists: the keys a past process claimed can never be retried — its rooms went with it.
@@ -303,6 +310,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     repos,
     inventory,
     catalog,
+    gifts,
     bus,
     timezone: config.timezone,
     // Points credited outside a hand still have to reach a live session, so this goes through the game
@@ -474,7 +482,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
   return {
     fastify,
     game,
-    services: { bus, catalog, defs, repos, sessions, auth, inventory, outfits, stats, achievements, economy, history, aliases, manifest, bodies },
+    services: { bus, catalog, defs, gifts, repos, sessions, auth, inventory, outfits, stats, achievements, economy, history, aliases, manifest, bodies },
     close,
   }
 }

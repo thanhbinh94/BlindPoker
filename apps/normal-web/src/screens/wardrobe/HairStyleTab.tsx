@@ -1,8 +1,8 @@
 import { Chibi } from '@bp/ui-kit'
 import { useTranslation } from 'react-i18next'
-import type { AchievementDefDto, AvatarConfigDto, BodyDto, ItemDto } from '../../api.js'
+import type { AvatarConfigDto, BodyDto, ItemDto } from '../../api.js'
 import { chibiFromApi } from '../../avatar/chibi.js'
-import { hintFor } from '../catalog.js'
+import { hintFor, type HintSources } from '../catalog.js'
 import { ItemCard } from './cards.js'
 import { slotCards } from './categories.js'
 import s from './wardrobe.module.css'
@@ -14,7 +14,8 @@ export interface HairStyleTabProps {
   /** `/api/catalog/avatar`'s bodies, keyed by `gender`. */
   bodies: ReadonlyMap<string, BodyDto>
   owned: ReadonlySet<string>
-  achievements: readonly AchievementDefDto[]
+  /** What a locked card's hint is worked out from (`hintFor`): the achievements and the check-in's named gifts. */
+  hints: HintSources
   draft: AvatarConfigDto
   /** "Hiện cả món chưa có" (No11a): unticked, only the hairstyles the player owns. */
   showLocked: boolean
@@ -37,7 +38,7 @@ export interface HairStyleTabProps {
  * (`WardrobeScreen.pick`, which treats `hairStyle` as required, like `outfit`). Nothing owned to list (No11a): the
  * panel stays and says so in one line, as on every tab.
  */
-export function HairStyleTab({ catalog, items, bodies, owned, achievements, draft, showLocked, onPick, portraitSize, panelId, labelledBy }: HairStyleTabProps) {
+export function HairStyleTab({ catalog, items, bodies, owned, hints, draft, showLocked, onPick, portraitSize, panelId, labelledBy }: HairStyleTabProps) {
   const { t } = useTranslation('normal')
   const cards = slotCards('hairStyle', catalog, owned, showLocked, draft.hairStyle, draft.gender)
   const empty = cards.length === 0
@@ -66,7 +67,7 @@ export function HairStyleTab({ catalog, items, bodies, owned, achievements, draf
             item={shown}
             owned={isOwned}
             wearing={draft.hairStyle === shown.id}
-            hint={isOwned ? '' : hintFor(shown, achievements, t)}
+            hint={isOwned ? '' : hintFor(shown, hints, t)}
             thumb={portraitOf(shown.id)}
             onPick={onPick}
           />

@@ -16,7 +16,7 @@ import { DAILY_DRAW_SLOTS } from '../inventory/slots.js'
 import { loadAchievements } from '../achievements/definitions.js'
 import type { NormalRepositories } from '../repos/index.js'
 import { createRepositories } from '../repos/index.js'
-import { DAILY_FIXED_ITEM_IDS } from './daily-rules.js'
+import { parseDailyGifts, type DailyGiftSchedule } from './daily-gifts.js'
 import type { EconomyService } from './economy-service.js'
 import { createEconomyService } from './economy-service.js'
 
@@ -27,8 +27,9 @@ let inv: InventoryService
 let catalog: ItemCatalog
 let bus: AppEventBus
 let economy: EconomyService
-/** Every id the random tiers must not draw: the day-28 pair plus every achievement's item reward. */
+/** Every id the random tiers must not draw: the schedule's named gifts plus every achievement's item reward. */
 let reserved: Set<string>
+let gifts: DailyGiftSchedule
 
 let published: AppEvent[] = []
 let balanceCalls: { playerId: string; balance: number }[] = []
@@ -45,6 +46,16 @@ beforeAll(async () => {
   db = test.db
   repos = createRepositories(db)
   catalog = loadItemCatalog()
+  // Written out here rather than read from `data/daily-gifts.json`, so an operator's edit to the shipped schedule can
+  // never move these tests: today's default, and one month whose day 28 adds a third gift (spec 2026-10-12).
+  gifts = parseDailyGifts(
+    {
+      default: { '7': { draw: 'common' }, '14': { draw: 'rare' }, '21': { draw: 'rare' }, '28': { fixed: ['badge_monthly', 'title_devoted'] } },
+      months: { '2026-11': { '28': { fixed: ['badge_monthly', 'title_devoted', 'head_tophat01'] } } },
+    },
+    catalog,
+    'economy-service.test',
+  )
   // `freeIds` wired the way `app.ts` wires it: a free colour must never surface as a drawable prize.
   inv = createInventoryService(db, undefined, catalog.freeIds())
   await catalog.seed(db)
@@ -53,7 +64,7 @@ beforeAll(async () => {
   const rewardItemIds = loadAchievements(catalog)
     .map((d) => d.reward.itemId)
     .filter((id): id is string => id !== undefined)
-  reserved = new Set([...DAILY_FIXED_ITEM_IDS, ...rewardItemIds])
+  reserved = new Set([...gifts.fixedItemIds(), ...rewardItemIds])
   bus = createEventBus(silentLogger)
   bus.subscribe((e) => {
     published.push(e)
@@ -68,6 +79,7 @@ beforeAll(async () => {
     onBalanceChanged: (playerId, balance) => balanceCalls.push({ playerId, balance }),
     rng: () => rng(),
     reservedItemIds: rewardItemIds,
+    gifts,
   })
 })
 afterAll(async () => {
@@ -297,13 +309,13 @@ describe('claimDaily', () => {
       })
       expect((await grantedOf(playerId)).sort()).toEqual(['badge_monthly', 'title_devoted'])
 
-      // A month later, already owning both: nothing is granted and — unlike the random tiers —
-      // nothing is paid in their place.
+      // A month later — December, whose day 28 is the default's — already owning both: nothing is granted and —
+      // unlike the random tiers — nothing is paid in their place.
       await db
         .update(dailyLogins)
-        .set({ streak: 27, lastClaimDate: '2026-11-27', month: '2026-11', claimedDays: 27 })
+        .set({ streak: 27, lastClaimDate: '2026-12-27', month: '2026-12', claimedDays: 27 })
         .where(eq(dailyLogins.playerId, playerId))
-      expect(await economy.claimDaily(playerId, Date.UTC(2026, 10, 28, 12, 0))).toMatchObject({
+      expect(await economy.claimDaily(playerId, Date.UTC(2026, 11, 28, 12, 0))).toMatchObject({
         day: 28,
         points: 40_000,
         item: null,
@@ -312,6 +324,35 @@ describe('claimDaily', () => {
       })
       expect(await db.select().from(inventory).where(eq(inventory.playerId, playerId))).toHaveLength(2)
       expect((await ledger(playerId)).every((r) => r.reason === 'daily_login')).toBe(true)
+    })
+
+    it('grants the third gift of 11/2026 on day 28, and only the pair on day 28 of 10/2026', async () => {
+      const october = await seedPlayer()
+      await seedStreak(october, 27, 27)
+      expect(await economy.claimDaily(october, OCT(28))).toMatchObject({ day: 28, items: ['badge_monthly', 'title_devoted'], fallbackPoints: 0 })
+
+      // A player whose first full streak is November's gets all three…
+      const november = await seedPlayer()
+      await db
+        .update(dailyLogins)
+        .set({ streak: 27, lastClaimDate: '2026-11-27', month: '2026-11', claimedDays: 27 })
+        .where(eq(dailyLogins.playerId, november))
+      expect(await economy.claimDaily(november, Date.UTC(2026, 10, 28, 12, 0))).toMatchObject({
+        day: 28,
+        points: 40_000,
+        item: 'badge_monthly',
+        items: ['badge_monthly', 'title_devoted', 'head_tophat01'],
+        fallbackPoints: 0,
+      })
+      expect((await grantedOf(november)).sort()).toEqual(['badge_monthly', 'head_tophat01', 'title_devoted'])
+
+      // …and October's player, who has the pair already, gets the top hat alone, with nothing paid for the pair.
+      await db
+        .update(dailyLogins)
+        .set({ streak: 27, lastClaimDate: '2026-11-27', month: '2026-11', claimedDays: 27 })
+        .where(eq(dailyLogins.playerId, october))
+      expect(await economy.claimDaily(october, Date.UTC(2026, 10, 28, 12, 0))).toMatchObject({ items: ['head_tophat01'], fallbackPoints: 0 })
+      expect((await ledger(october)).every((r) => r.reason === 'daily_login')).toBe(true)
     })
   })
 
@@ -422,6 +463,7 @@ describe('claimDaily', () => {
         onBalanceChanged: () => {},
         rng: () => 0,
         reservedItemIds: ['aura_ice01'],
+        gifts,
       })
       const pool = drawable('rare').filter((id) => id !== 'aura_ice01')
 
@@ -437,6 +479,50 @@ describe('claimDaily', () => {
       await seedStreak(playerId, 13, 13)
       expect(await withReservation.claimDaily(playerId, OCT(14))).toMatchObject({ item: null, fallbackPoints: 10_000 })
     })
+
+    it('never draws an item a later month schedules as a gift, in a month the schedule does not name (Q8)', async () => {
+      const playerId = await seedPlayer()
+      // `aura_ice01` is a rare aura: drawable in every respect, and named by January 2027's day 28 alone. No
+      // `reservedItemIds` here, so the schedule is the only thing keeping it out of the pool.
+      const scheduled = parseDailyGifts(
+        {
+          default: { '7': { draw: 'common' }, '14': { draw: 'rare' }, '21': { draw: 'rare' }, '28': { fixed: ['badge_monthly', 'title_devoted'] } },
+          months: { '2027-01': { '28': { fixed: ['aura_ice01'] } } },
+        },
+        catalog,
+        'economy-service.test (later month)',
+      )
+      const service = createEconomyService({
+        db,
+        repos,
+        inventory: inv,
+        catalog,
+        bus,
+        timezone: 'UTC',
+        onBalanceChanged: () => {},
+        rng: () => 0,
+        gifts: scheduled,
+      })
+      const pool = catalog
+        .byRarity('rare')
+        .filter((d) => (DAILY_DRAW_SLOTS as readonly string[]).includes(d.slot) && !d.free && d.id !== 'aura_ice01')
+        .map((d) => d.id)
+        .sort()
+      expect(pool.length).toBeGreaterThan(0)
+
+      // Day 14 of October, a month the schedule does not name: a sweep of the whole pool hands out each of its items…
+      for (let i = 0; i < pool.length; i += 1) {
+        await seedStreak(playerId, 13, 13)
+        await service.claimDaily(playerId, OCT(14))
+      }
+      const owned = new Set(await grantedOf(playerId))
+      expect(owned.has('aura_ice01')).toBe(false)
+      expect([...owned].sort()).toEqual(pool)
+
+      // …and then pays the fallback rather than reach for the one item January has promised.
+      await seedStreak(playerId, 13, 13)
+      expect(await service.claimDaily(playerId, OCT(14))).toMatchObject({ item: null, items: [], fallbackPoints: 10_000 })
+    })
   })
 
   describe('the configured timezone', () => {
@@ -451,6 +537,7 @@ describe('claimDaily', () => {
         timezone: 'Asia/Ho_Chi_Minh',
         onBalanceChanged: () => {},
         rng: () => 0,
+        gifts,
       })
 
       // 17:30 UTC on the 4th is already 00:30 on the 5th in Ho Chi Minh City.
@@ -498,6 +585,38 @@ describe('dailyStatus', () => {
     await economy.claimDaily(playerId, OCT(1))
     expect(await economy.dailyStatus(playerId, OCT(1))).toMatchObject({ claimable: false, day: 1, streak: 1 })
     expect(await economy.dailyStatus(playerId, OCT(2))).toMatchObject({ claimable: true, day: 2, streak: 2, reward: 6_000 })
+  })
+
+  it('describes the calendar of the month it is asked in: October names the pair on day 28, November adds the top hat', async () => {
+    const playerId = await seedPlayer()
+    const october = await economy.dailyStatus(playerId, OCT(5))
+    expect(october.month).toBe('2026-10')
+    expect(october.calendar[27]).toEqual({ day: 28, points: 40_000, item: 'badge_monthly', items: ['badge_monthly', 'title_devoted'] })
+    expect(october.calendar[6]).toEqual({ day: 7, points: 15_000, item: 'common', items: [] })
+
+    const november = await economy.dailyStatus(playerId, Date.UTC(2026, 10, 5, 12, 0))
+    expect(november.month).toBe('2026-11')
+    expect(november.calendar[27]).toMatchObject({ item: 'badge_monthly', items: ['badge_monthly', 'title_devoted', 'head_tophat01'] })
+    // The month turns at the economy timezone's midnight (UTC in this suite), as the streak does.
+    expect((await economy.dailyStatus(playerId, Date.UTC(2026, 9, 31, 23, 59))).month).toBe('2026-10')
+    expect((await economy.dailyStatus(playerId, Date.UTC(2026, 10, 1, 0, 0))).month).toBe('2026-11')
+
+    // …and where ECONOMY_TIMEZONE says: 23:59 on 31/10 in Ho Chi Minh City is 16:59 UTC, 00:00 on 01/11 is 17:00 UTC.
+    const hcm = createEconomyService({ db, repos, inventory: inv, catalog, bus, timezone: 'Asia/Ho_Chi_Minh', onBalanceChanged: () => {}, gifts })
+    expect((await hcm.dailyStatus(playerId, Date.UTC(2026, 9, 31, 16, 59))).month).toBe('2026-10')
+    expect((await hcm.dailyStatus(playerId, Date.UTC(2026, 9, 31, 17, 0))).month).toBe('2026-11')
+    expect(hcm.dailyGiftNotices(Date.UTC(2026, 10, 30, 16, 59)).find((n) => n.itemId === 'head_tophat01')).toMatchObject({ month: '2026-11' })
+    expect(hcm.dailyGiftNotices(Date.UTC(2026, 10, 30, 17, 0)).map((n) => n.itemId)).not.toContain('head_tophat01')
+  })
+
+  it('tells the wardrobe which named gifts are still to come, from the month it is asked in', () => {
+    expect(economy.dailyGiftNotices(OCT(12))).toEqual([
+      { itemId: 'badge_monthly', day: 28, month: null },
+      { itemId: 'title_devoted', day: 28, month: null },
+      { itemId: 'head_tophat01', day: 28, month: '2026-11' },
+    ])
+    // Once November is over, no month to come promises the top hat.
+    expect(economy.dailyGiftNotices(Date.UTC(2026, 11, 1, 12, 0)).map((n) => n.itemId)).toEqual(['badge_monthly', 'title_devoted'])
   })
 
   it('marks the item day it is about to reach', async () => {
