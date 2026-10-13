@@ -131,9 +131,14 @@ locally, not shipped".
   written `docs(spec)` and `docs(plan)`). After the colon, write one sentence in the repo's voice that says what a
   player or operator now gets, e.g. `fix(ui-kit, normal-web): the result scrim leaves no edge, a room name's tooltip
   only when cut, the lobby heading wraps at 320 px`. Read `git log` before your first commit. End with the attribution trailer the session prescribes.
-- **Branches and merges:** use branches like `plan21/card-motion-squeeze`, `fix/hat-hair` or `docs/<topic>`, in
-  worktrees under `.worktrees/` (gitignored). Each worktree needs its own `pnpm install`. Merge to `main` with
-  `git merge --no-ff`, using the message `Merge <branch>: <one sentence>`.
+- **Branches and merges (gitflow, since 2026-10-13):** `<prefix>/BP-<n>-<slug>` — the prefix is `feature/` for a
+  plan or a new capability, `bugfix/` for a fix, `hotfix/` for an urgent fix on what is deployed, `release/` when a
+  release branch is ever needed, `docs/` for documentation-only work; `BP-<n>` is the plan number for a plan and
+  otherwise the next free number (the last used one is in the CHANGELOG); the slug is short and kebab-case, e.g.
+  `feature/BP-22-monthly-daily-gifts`, `bugfix/BP-23-blind-timeout-standup`. Branches older than this date keep their
+  old names in history (`plan21/…`, `fix/…`). There is no `develop` branch: features merge `--no-ff` into `main`,
+  with the message `Merge <branch>: <one sentence>`. Work in worktrees under `.worktrees/` (gitignored); each
+  worktree needs its own `pnpm install`. The user pushes; the assistant never does.
 - **CHANGELOG:** one section per plan, newest first, titled ``## Plan N — <title> — merged `MERGE` (date)``. Replace
   `MERGE` with the merge hash in a `docs:` commit right after merging. The body lists what changed (what the player
   sees first), what is under it, tests and docs, **"Khác với spec / Deviations from the spec"**, and **"Still open"**.

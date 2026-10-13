@@ -138,6 +138,37 @@ describe('mode B (play or fold)', () => {
     expect(t.state.phase).toBe('REVEAL')
     expect(t.state.players[2]!.folded).toBe(true)
   })
+  it('a seat the timer folds is reported timedOut once the decisions resolve; a chosen play or fold is not (spec §8.7)', () => {
+    const t = new Table(rules(), [5000, 5000, 5000, 5000])
+    // Nothing about a timer may leave the engine while the round is open: DECISION_MADE stays as bare as for a choice.
+    expect(t.play(0)).toEqual([{ type: 'DECISION_MADE', seat: 0 }])
+    expect(t.fold(1)).toEqual([{ type: 'DECISION_MADE', seat: 1 }])
+    expect(t.apply({ type: 'TIMEOUT', seat: 2 })).toEqual([{ type: 'DECISION_MADE', seat: 2 }])
+    const ev = t.apply({ type: 'TIMEOUT', seat: 3 })
+    expect(ev.filter((e) => e.type === 'PLAYER_ACTED')).toMatchObject([
+      { seat: 0, action: { kind: 'play' }, timedOut: false },
+      { seat: 1, action: { kind: 'fold' }, timedOut: false }, // an explicit fold is a real action
+      { seat: 2, action: { kind: 'fold' }, timedOut: true },
+      { seat: 3, action: { kind: 'fold' }, timedOut: true },
+    ])
+  })
+  it('nothing of the timer reaches a client before the reveal: a timed-out seat reads like any other decided seat', () => {
+    const timed = new Table(rules(), [5000, 5000, 5000])
+    timed.apply({ type: 'TIMEOUT', seat: 2 })
+    const chosen = new Table(rules(), [5000, 5000, 5000])
+    chosen.fold(2)
+    expect(playerView(timed.state, 0)).toEqual(playerView(chosen.state, 0))
+    expect(JSON.stringify(playerView(timed.state, 0))).not.toContain('timedOut')
+  })
+  it('a hand every seat times out of folds them all and carries the pot, each reported timedOut', () => {
+    const t = new Table(rules(), [5000, 5000])
+    t.apply({ type: 'TIMEOUT', seat: 0 })
+    const ev = t.apply({ type: 'TIMEOUT', seat: 1 })
+    expect(ev.filter((e) => e.type === 'PLAYER_ACTED')).toMatchObject([{ seat: 0, timedOut: true }, { seat: 1, timedOut: true }])
+    expect(t.state.phase).toBe('COMPLETE')
+    expect(t.state.result!.carryOverOut).toBe(2000)
+    t.assertMoney()
+  })
   it('timeout for an already-decided seat is a no-op', () => {
     const t = new Table(rules(), [5000, 5000, 5000])
     t.play(0)
@@ -220,6 +251,38 @@ describe('squeeze mode (spec 2026-10-08)', () => {
     // A seat that had turned already decides with no second PLAYER_REVEALED.
     const r3 = step(r2.state, { type: 'ACTION', seat: 1, action: { kind: 'fold' } })
     expect(r3.events).toEqual([{ type: 'DECISION_MADE', seat: 1 }])
+  })
+
+  it('play or fold: a decision the timer folds still counts as a timeout, the squeeze riding on the decision round (§8.7)', () => {
+    const { state } = deal('playOrFold', [2])
+    const r1 = step(state, { type: 'TIMEOUT', seat: 0 })
+    expect(r1.events).toEqual([{ type: 'PLAYER_REVEALED', seat: 0 }, { type: 'DECISION_MADE', seat: 0 }]) // cards turned, nothing else said
+    const r2 = step(r1.state, { type: 'ACTION', seat: 1, action: { kind: 'play' } })
+    const r3 = step(r2.state, { type: 'ACTION', seat: 2, action: { kind: 'fold' } })
+    expect(r3.events.filter((e) => e.type === 'PLAYER_ACTED')).toMatchObject([
+      { seat: 0, action: { kind: 'fold' }, timedOut: true },
+      { seat: 1, action: { kind: 'play' }, timedOut: false },
+      { seat: 2, action: { kind: 'fold' }, timedOut: false },
+    ])
+  })
+
+  it('pure luck: the squeeze round runs out on REVEALED, which is no action at all — no PLAYER_ACTED, so no timeout (§8.7)', () => {
+    const { state, events } = deal('none', [2])
+    const all: GameEvent[] = [...events]
+    let s = state
+    for (const seat of [0, 1]) { // the server turning the seats that were still down
+      const r = step(s, { type: 'REVEALED', seat })
+      all.push(...r.events)
+      s = r.state
+    }
+    while (s.phase === 'REVEAL') {
+      const r = step(s, { type: 'ADVANCE' })
+      all.push(...r.events)
+      s = r.state
+    }
+    expect(s.phase).toBe('COMPLETE')
+    expect(all.some((e) => e.type === 'PLAYER_ACTED')).toBe(false)
+    expect(all.some((e) => e.type === 'DECISION_MADE')).toBe(false)
   })
 
   it('REVEALED is a no-op outside squeezing, and ADVANCE is refused during SQUEEZE', () => {

@@ -96,9 +96,9 @@ describe('deploy/oracle/bootstrap.sh', () => {
     expect(source).toContain(needle)
   })
 
-  it('takes REPO_URL as a required argument and defaults BRANCH to master', () => {
+  it('takes REPO_URL as a required argument and defaults BRANCH to main', () => {
     expect(source).toContain('REPO_URL="${1:-}"')
-    expect(source).toContain('BRANCH="${2:-master}"')
+    expect(source).toContain('BRANCH="${2:-main}"')
   })
 
   it('clones into /opt/bind-poker', () => {

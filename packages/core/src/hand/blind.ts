@@ -53,7 +53,7 @@ export function createBlindHand(input: CreateBlindInput, rng: Rng): EngineResult
     phase: input.rules.decisionMode === 'playOrFold' ? 'DECISION' : squeeze ? 'SQUEEZE' : 'REVEAL',
     players: seats.map((s) => ({
       seat: s.seat, playerId: s.playerId, isBot: s.isBot, stack: s.stack, holeCards: [], betThisStreet: 0,
-      totalCommitted: 0, folded: false, allIn: false, hasActed: false, cannotRaise: false, decision: null,
+      totalCommitted: 0, folded: false, allIn: false, hasActed: false, cannotRaise: false, decision: null, timedOut: false,
       // Squeeze mode waits only on humans: a bot has nothing to turn by hand (spec 2026-10-08 §4.2.3).
       revealed: !squeeze || s.isBot,
     })),
@@ -119,7 +119,7 @@ export function applyBlindCommand(input: HandState, cmd: HandCommand, _rng: Rng)
       // A table-wide timer may fire for seats that already decided: treat those as a no-op so timers stay idempotent.
       const p = getPlayer(state, cmd.seat)
       if (state.phase !== 'DECISION' || p.decision !== null) return { state, events }
-      decide(state, events, cmd.seat, { kind: 'fold' })
+      decide(state, events, cmd.seat, { kind: 'fold' }, true)
       return { state, events }
     }
     case 'REVEALED': {
@@ -135,9 +135,11 @@ export function applyBlindCommand(input: HandState, cmd: HandCommand, _rng: Rng)
 
 /**
  * Records one seat's hidden decision. Nothing but `DECISION_MADE{seat}` is emitted and no chips move while the
- * phase is still `DECISION`: stacks, `totalCommitted` and the pot would otherwise reveal who played.
+ * phase is still `DECISION`: stacks, `totalCommitted` and the pot would otherwise reveal who played. `timedOut` (the
+ * `TIMEOUT` command, which folds the seat) is kept on the seat and told with its `PLAYER_ACTED` once every seat has
+ * decided — the room counts those towards the three that stand a player up (spec §8.7), exactly as in Hold'em.
  */
-function decide(state: HandState, events: GameEvent[], seat: number, action: PlayerAction): void {
+function decide(state: HandState, events: GameEvent[], seat: number, action: PlayerAction, timedOut = false): void {
   const p = getPlayer(state, seat)
   const legal = blindLegalActions(state, seat)
   if (legal.kinds.length === 0) throw new EngineError('NOT_YOUR_TURN', `seat ${seat} has nothing to decide`)
@@ -148,6 +150,7 @@ function decide(state: HandState, events: GameEvent[], seat: number, action: Pla
     events.push({ type: 'PLAYER_REVEALED', seat })
   }
   p.decision = action.kind === 'play' ? 'play' : 'fold'
+  p.timedOut = timedOut
   p.hasActed = true
   events.push({ type: 'DECISION_MADE', seat })
 
@@ -182,10 +185,10 @@ function resolveDecisions(state: HandState, events: GameEvent[]): void {
   for (const x of state.players) {
     if (x.decision === 'play') {
       const amount = commit(state, x, wager)
-      events.push({ type: 'PLAYER_ACTED', seat: x.seat, action: { kind: 'play' }, amount, stack: x.stack, allIn: x.allIn, timedOut: false })
+      events.push({ type: 'PLAYER_ACTED', seat: x.seat, action: { kind: 'play' }, amount, stack: x.stack, allIn: x.allIn, timedOut: x.timedOut })
     } else {
       x.folded = true
-      events.push({ type: 'PLAYER_ACTED', seat: x.seat, action: { kind: 'fold' }, amount: 0, stack: x.stack, allIn: x.allIn, timedOut: false })
+      events.push({ type: 'PLAYER_ACTED', seat: x.seat, action: { kind: 'fold' }, amount: 0, stack: x.stack, allIn: x.allIn, timedOut: x.timedOut })
     }
   }
   events.push({ type: 'POT_UPDATED', pot: state.pot })
