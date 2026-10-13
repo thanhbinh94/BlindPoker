@@ -299,6 +299,16 @@ and why the observed hand count is a floor (60–62 for a 3 × 20 target) rather
 deterministic for the convenience of a test.
 *Tracked:* `docs/server-kit.md` (soak driver) and `docs/test-matrix.md` §29.3.
 
+**Changing the daily gifts needs a restart.** `data/daily-gifts.json` is read once, at boot (`loadDailyGifts`), like
+`items.json` and `achievements.json`; there is no reload and no admin screen. On the Windows LAN host a restart is
+`stop.ps1`, a hard kill that loses every stack on a table, so a schedule change waits for an empty host (`/health`
+`"rooms":0`).
+*Why:* the schedule changes a few times a year, and a reload path would be a second way for a bad file to reach a
+running server; the boot check is what keeps a wrong id from failing on the 28th.
+*What to do:* edit, run `daily-gifts.test.ts`, restart when the host is empty — `docs/normal-server.md`, "Changing the
+daily gifts".
+*Tracked:* spec `2026-10-12-monthly-daily-gifts-design.md` §10.
+
 ---
 
 ## UI
@@ -431,6 +441,16 @@ describes what each shot should show; the e2e runs write real ones into
 `apps/normal-web/e2e/screenshots/` and `apps/lite/e2e/screenshots/`, neither of which is in git.
 *Why:* binary churn in review diffs, for images nothing asserts against.
 *Tracked:* `docs/ui-kit.md`, `docs/normal-web.md`.
+
+**A common or rare that only a past month gave is promised from the daily draw.** The random draw leaves alone every id
+any month of `data/daily-gifts.json` names, past months included (spec 2026-10-12 Q8), but `GET /api/catalog/items`
+lists only the gifts still to come (Q12), so the wardrobe's `hintFor` falls through to "Có thể nhận từ quà điểm danh".
+*Why:* the shipped schedule names only epics (which the hint never promises from the draw) and the day-28 pair (outside
+the draw slots, and in every month). The case needs an operator to schedule a drawable common or rare in one month.
+*What to do:* schedule epics or non-draw-slot items by month (`docs/normal-server.md`, "Changing the daily gifts"). If a
+drawable item is ever wanted in one month, have the server also list past-only gifts so the hint can say "Chưa có cách
+nhận món này".
+*Tracked:* spec `2026-10-12-monthly-daily-gifts-design.md` Q8/Q13; Plan 22 ruling.
 
 ---
 

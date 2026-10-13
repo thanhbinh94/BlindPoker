@@ -49,12 +49,25 @@ Mỗi ngày, mở tab "Điểm danh" và bấm "Nhận thưởng" một lần. N
 | 15 → 20 | 10.000 mỗi ngày | |
 | 21 | 25.000 | một món hiếm ngẫu nhiên |
 | 22 → 27 | 12.000 mỗi ngày | |
-| 28 | 40.000 | "Huy hiệu tháng" và danh hiệu "Chuyên cần" |
+| 28 | 40.000 | "Huy hiệu tháng" và danh hiệu "Chuyên cần"; từ tháng 11/2026 thêm một món cực hiếm mỗi tháng (xem dưới) |
 | 29 → 31 | 12.000 mỗi ngày | |
 
-Đủ một tháng 31 ngày là 376.000 điểm. Vì chuỗi tính lại từ ngày 1 mỗi tháng, muốn chạm mốc ngày 28 bạn phải bắt đầu từ những ngày đầu tháng; tháng Hai có 28 ngày thì phải điểm danh từ ngày 1, không bỏ ngày nào. Ở bản Normal, "Lịch điểm danh" đánh dấu trước các ngày có quà: "Vật phẩm thường", "Vật phẩm hiếm", "Huy hiệu + danh hiệu tháng".
+Đủ một tháng 31 ngày là 376.000 điểm. Vì chuỗi tính lại từ ngày 1 mỗi tháng, muốn chạm mốc ngày 28 bạn phải bắt đầu từ những ngày đầu tháng; tháng Hai có 28 ngày thì phải điểm danh từ ngày 1, không bỏ ngày nào. Ở bản Normal, "Lịch điểm danh" là lịch của tháng hiện tại và đánh dấu trước các ngày có quà: "Vật phẩm thường", "Vật phẩm hiếm"; ngày có quà định sẵn thì ghi tên từng món. Dòng chú thích dưới lịch ghi lại quà định sẵn kèm tháng, ví dụ "Ngày 28 tháng 11/2026: Huy hiệu tháng + Chuyên cần + Mũ chóp quý ông".
 
 Món ngẫu nhiên ngày 7, 14 và 21 luôn là món bạn chưa có, lấy từ các mục "Mũ", "Phụ kiện mặt", "Hào quang", "Khung", "Màu tóc" và "Màu mắt". Nếu bạn đã có hết món ở mức đó, bạn được 10.000 điểm thay cho món đồ. Quà ngày 28 là quà cố định: bạn đã có rồi thì không được đổi thành điểm.
+
+**Quà ngày 28 theo tháng (bản Normal).** Quà ngày 28 có thể khác nhau giữa các tháng. Từ tháng 11/2026, ngoài "Huy hiệu tháng" và "Chuyên cần", mỗi tháng tặng thêm một món cực hiếm mà trước đây chưa có cách nhận:
+
+| Tháng | Món thêm |
+|---|---|
+| 11/2026 | "Mũ chóp quý ông" |
+| 12/2026 | "Bịt mắt cướp biển" |
+| 01/2027 | "Hào quang sấm sét" |
+| 02/2027 | "Khung vàng" |
+| 03/2027 | "Tóc tím pastel" |
+| 04/2027 | "Mắt vàng kim" |
+
+Quà được tính theo tháng của ngày bạn bấm nhận. Tháng 2/2027 có 28 ngày, nên muốn có "Khung vàng" bạn phải điểm danh từ ngày 1/2 và không bỏ ngày nào. Nếu bạn đã có "Huy hiệu tháng" và "Chuyên cần", ngày 28 bạn chỉ nhận thêm món của tháng đó. Quà của những tháng sau sẽ được ghi trên lịch điểm danh của từng tháng.
 
 **Đầu tháng** chỉ có chuỗi điểm danh quay về ngày 1. Số dư, vật phẩm, trang phục, thành tựu, thống kê và tổng số ngày điểm danh giữ nguyên; điểm không bị xóa theo tháng.
 
@@ -267,10 +280,10 @@ Khung "Đang dùng" liệt kê các món đang mặc. Mặc định mỗi mục 
 **Cách nhận đồ.** Mỗi món có độ hiếm "Thường", "Hiếm" hoặc "Cực hiếm". Không có cửa hàng; đồ đến từ:
 
 - **Có sẵn**: mọi kiểu tóc, màu da, các màu tóc và màu mắt thường, "Bộ thường ngày" và các màu áo phông.
-- **Quà điểm danh**: ngày 7 (một món thường), ngày 14 và 21 (một món hiếm), ngày 28 ("Huy hiệu tháng" và "Chuyên cần"), xem mục 2.
+- **Quà điểm danh**: ngày 7 (một món thường), ngày 14 và 21 (một món hiếm), ngày 28 ("Huy hiệu tháng" và "Chuyên cần", từ 11/2026 thêm một món cực hiếm mỗi tháng), xem mục 2.
 - **Thành tựu**: ví dụ danh hiệu "Vận đỏ" khi thắng 10 ván liên tiếp, "Khung một năm" khi điểm danh đủ 365 ngày; danh sách ở mục 9.
 
-Thẻ của món còn khóa ghi cách nhận: tên thành tựu, hoặc "Có thể nhận từ quà điểm danh" kèm độ hiếm. Một số món hiện chưa có cách nhận, thẻ ghi "Chưa có cách nhận món này".
+Thẻ của món còn khóa ghi cách nhận: tên thành tựu; "Quà điểm danh ngày 28", hoặc kèm tháng như "Quà điểm danh ngày 28 tháng 11/2026"; hoặc "Có thể nhận từ quà điểm danh" kèm độ hiếm. Món chưa có cách nhận, kể cả món chỉ được tặng ở một tháng đã qua, ghi "Chưa có cách nhận món này".
 
 **Biểu cảm.** Khu "Xem thử biểu cảm" dưới hình nhân vật có hai nút ‹ › để xem các biểu cảm "Bình thường", "Vui", "Buồn", "Ngạc nhiên", "Nhắm mắt", "Ngủ". Bạn không cần chọn gì: ở bàn (cả ở bản Lite), nhân vật tự "Vui" khi thắng ván, "Buồn" khi thua lúc so bài, "Ngạc nhiên" khi có người tất tay, "Nhắm mắt" khi đã bỏ bài, và "Ngủ" khi đang tạm nghỉ, mất kết nối hoặc bàn hơn một phút không có ván.
 

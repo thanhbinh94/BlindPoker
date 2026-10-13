@@ -187,9 +187,9 @@ describe('docs/acceptance-checklist.md', () => {
 
   it('gives every requirement row one of the three statuses', () => {
     const rows = rowStatuses(markdown)
-    // 21 items in §40, 43 in §66, and the three rows of Plan 21 (P21.1–P21.3), which are not requirement.txt's — a row that
-    // stops parsing is a row that stops being checked
-    expect(rows).toHaveLength(64 + 3)
+    // 21 items in §40, 43 in §66, the three rows of Plan 21 (P21.1–P21.3) and the two of Plan 22 (P22.1, P22.2), which
+    // are not requirement.txt's — a row that stops parsing is a row that stops being checked
+    expect(rows).toHaveLength(64 + 3 + 2)
     const wrong = rows.filter((r) => !STATUSES.has(r.status))
     expect(wrong.map((r) => `line ${r.line}: ${r.status}`)).toEqual([])
   })
@@ -259,9 +259,10 @@ describe('docs/test-matrix.md', () => {
 
   it('covers the whole matrix, so a parser that stopped matching would be caught', () => {
     // 16 rows of §29.2, 1 of §29.3, 25 of §30 — the counts the document's own summary gives — the text-overlap
-    // rule of the 2026-09-29 review (No11b), the one row of Plan 16 that is not the spec's, and the ten rows of Plan 21's
-    // section (the squeeze round and the card motion, spec 2026-10-08)
-    expect(rows).toBe(43 + 10)
+    // rule of the 2026-09-29 review (No11b), the one row of Plan 16 that is not the spec's, the ten rows of Plan 21's
+    // section (the squeeze round and the card motion, spec 2026-10-08), and the four of Plan 22's (the monthly daily
+    // gifts, spec 2026-10-12)
+    expect(rows).toBe(43 + 10 + 4)
     expect(citations.length).toBeGreaterThanOrEqual(40)
   })
 

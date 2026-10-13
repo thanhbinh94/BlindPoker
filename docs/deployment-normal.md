@@ -270,6 +270,10 @@ socket, rồi đóng pool. Nó tự cho mình 15 giây trước khi thoát khác
 cả những việc đó: số dư đã ghi vẫn an toàn (mọi bút toán nằm trong transaction) nhưng mọi chồng đang
 trên bàn — buy-in Hold'em và hạn mức bàn Blind, tới 250.000 mỗi ghế — cùng pot cộng dồn thì mất.
 
+**Đổi quà điểm danh theo tháng.** Lịch quà là `apps/normal-server/data/daily-gifts.json` và nằm trong image: sửa file,
+kiểm tra bằng `pnpm --filter @bp/normal-server exec vitest run src/economy/daily-gifts.test.ts`, rồi `docker compose up -d
+--build` như mục 7. Cách viết file: `docs/normal-server.md`, mục "Changing the daily gifts".
+
 ### Vài truy vấn kinh tế hữu ích
 
 ```sql
