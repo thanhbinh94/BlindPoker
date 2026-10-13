@@ -9,6 +9,53 @@ below are the real history.
 
 ---
 
+## Plan 22 — the day-28 check-in gift becomes a month-by-month schedule; the six epics go out one a month from 11/2026 — merged `aa0709f` (2026-10-13)
+
+The user's decision of 2026-10-12, after the player-guide review found six epic items with no way to be earned: hand
+them out through the day-28 check-in gift, one per month, and "thiết kế điểm danh theo hướng có thể mở rộng quà tặng vật
+phẩm trong tương lai (thay đổi theo tháng)". Spec `docs/superpowers/specs/2026-10-12-monthly-daily-gifts-design.md`,
+plan `docs/superpowers/plans/2026-10-12-plan22-monthly-daily-gifts.md` (with its pre-flight amendments), branch
+`feature/BP-22-monthly-daily-gifts`. Gate on the branch's final tree with `main` merged in: GATE.
+
+- **What a player sees.** The Điểm danh calendar's day-28 cell keeps its gold gift icon, and a legend line under the
+  calendar names the month's gifts by their item names — in October 2026 "Ngày 28 tháng 10/2026: Huy hiệu tháng +
+  Chuyên cần", from November "… + Mũ chóp quý ông" and so on. In Phòng thay đồ a locked tile says when it comes:
+  "Quà điểm danh ngày 28 tháng 11/2026" for a scheduled month, "Quà điểm danh ngày 28" for the pair every month gives;
+  an achievement reward keeps its achievement hint; a common or rare in a draw slot keeps "Có thể nhận từ quà điểm
+  danh"; anything nothing lists says "Chưa có cách nhận món này".
+- **The schedule.** `apps/normal-server/data/daily-gifts.json`: a `default` (today's column — day 7 a common draw, days
+  14 and 21 a rare draw, day 28 `badge_monthly` + `title_devoted`) and `months` keyed `YYYY-MM`, each overriding any
+  day with `{ "draw": "common" | "rare" }` or `{ "fixed": [ids] }`; a month's `fixed` list is complete (it replaces the
+  default's, so the shipped months repeat the pair). Shipped: 2026-11 `head_tophat01`, 2026-12 `face_eyepatch01`,
+  2027-01 `aura_lightning01`, 2027-02 `frame_gold`, 2027-03 `haircolor_lavender01`, 2027-04 `eyecolor_gold01`.
+  October 2026 is unchanged. The operator extends it by editing the file (`docs/normal-server.md`, "Changing the daily
+  gifts"); no code, no migration.
+- **Under it.** `loadDailyGifts(catalog)` runs at boot inside `buildApp`, right after the achievements, and refuses a bad
+  file with a message naming the month, day and id (unknown id, a free or default item, a day outside 1–31 or one the
+  month never reaches, an id twice in a day or on two days of a month, a draw of any rarity but common or rare, a
+  malformed month key, a month key written twice). The claim grants the claim's month's rule (`monthKey(now,
+  Asia/Ho_Chi_Minh)`); already-owned fixed gifts grant nothing extra; the 10.000 fallback stays with the random tiers;
+  the random draw leaves alone every id any month names as fixed (pinned by a test that fails without it). `GET
+  /api/rewards/daily` carries `month` and each day's `items`; `GET /api/catalog/items` carries `dailyGifts` (the gifts
+  still to come, past months dropped) — both additive, an open tab on the old bundle keeps working. The client keeps no
+  copy of the day-28 pair any more. `formatMonthKey` (`MM/YYYY`) in `apps/normal-web/src/screens/format.ts`.
+- **Tests and docs.** 13 schedule tests (every refusal, the shipped six months, 10/2026 as the default), the claim in
+  11/2026 over HTTP and in the service, the month boundary at 23:59/00:00 Asia/Ho_Chi_Minh, the calendar DTO, the
+  Daily screen (oct/nov legends, a fixed day other than 28), the wardrobe hint (default, month, achievement precedence,
+  draw fallback, past month), `formatMonthKey`, i18n parity. Tests pin the user's decisions, not the file's shape:
+  adding a month or giving an item again later turns nothing red; the operator doc says which edits do. SRS §13
+  amended; `docs/normal-server.md`, `docs/normal-web.md`, `docs/player-guide.md` §2, the test matrix (+4 rows) and the
+  acceptance checklist (+2 rows, P22), `docs/known-limitations.md`, the operation test plan (J-10, N-06).
+- **Khác với spec / Deviations from the spec.** A month key written twice in the JSON is refused (not in §4.1.3; the
+  loader needs the raw text for it, so `parseDailyGifts` alone cannot). Repeated tier keys inside one month are not
+  detected (the last wins) — documented, not fixed. A drawable common or rare that only a past month named would still
+  show the draw hint although the draw leaves it alone (Ruling 4: docs only, since the shipped file names only epics
+  and the pair). `formatMonthKey` lives in normal-web, not ui-kit (Ruling 7). The legend icons got `flex-shrink: 0` at
+  375 px (found in the screenshots).
+- **Still open.** The build must reach the LAN host before 01/11/2026 for November's gift to be given (it is deployed
+  with this merge). Parked minors: a test for the `items ?? []` guard, the legend's day order asserted, the en legend
+  rendered once, a few untested loader branches, `formatMonthKey` on malformed input.
+
 ## BP-23 — a Blind Poker player who lets three decisions time out in a row is asked to stand up — merged `bb02070` (2026-10-13)
 
 Found by the player-guide review: SRS §8.7 asks for the three-timeout stand-up in both modes, but `blind.ts`

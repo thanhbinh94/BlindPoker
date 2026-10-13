@@ -727,6 +727,57 @@ gate with real pictures comes before the rest of the art.
 
 ---
 
+## Plan 22 — monthly daily-check-in gifts (merged `aa0709f`, 2026-10-13)
+
+Spec `docs/superpowers/specs/2026-10-12-monthly-daily-gifts-design.md`; plan
+`docs/superpowers/plans/2026-10-12-plan22-monthly-daily-gifts.md`; branch `feature/BP-22-monthly-daily-gifts` — the first
+under the `<prefix>/BP-<n>-<slug>` convention. Four tasks, a pre-flight review (0 blockers, 2 important, 14 minor, all
+spliced as amendments), one fix round (Task 2, test-only), a final whole-branch review with one fix wave.
+
+### Rulings
+
+- Ruling 1: the day-28 calendar cell and the legend name the gifts by their item names ("Huy hiệu tháng + Chuyên cần +
+  Mũ chóp quý ông"), not the generic "Huy hiệu + danh hiệu tháng + …" wording from the design chat — the wardrobe and
+  the receipt already use the item names. Costs if wrong: one locale string.
+- Ruling 2: a gift whose scheduled month has passed keeps the wardrobe hint "Chưa có cách nhận món này" (it may return
+  in a later month's schedule). Costs if wrong: a hint that under-promises.
+- Ruling 3: the visible legend line under the calendar for fixed-gift days stays (the only place a phone shows the
+  names). Costs if wrong: one line of UI.
+- Ruling 4 (pre-flight I1): no code for the past-month drawable hint — the shipped schedule names only epics and the
+  day-28 pair; the operator doc warns against scheduling a drawable common/rare in a single month, and
+  `docs/known-limitations.md` records the latent wrong hint. Costs if wrong: a future operator edit shows a hint the
+  draw never keeps.
+- Ruling 5 (pre-flight I2): tests pin the user's decisions, not the data file's shape — `arrayContaining` for the
+  default pair, the top hat asserted "not promised for 2026-11" rather than absent; the operator doc says which edits
+  turn the suite red. Costs if wrong: a data-only edit going red at the gate.
+- Ruling 6 (M3): the legend under the calendar is left-aligned with the calendar lead, one line per fixed-gift day.
+  Costs if wrong: one CSS rule.
+- Ruling 7 (M12): month labels in hints use a shared `formatMonthKey` (`MM/YYYY`) in
+  `apps/normal-web/src/screens/format.ts` beside the `formatDay` re-export (ui-kit untouched), so vi and en read the
+  same key. Costs if wrong: one helper to move.
+- Ruling 8: no separate re-review for a test-only fix round that the implementer mutation-checked (removing
+  `fixedItemIds()` from the draw exclusion failed exactly the new test); the final whole-branch review reads it.
+  Costs if wrong: a weak test slips to the final review. (The final review confirmed the test.)
+- Ruling 9: the docs task (Task 4) is reviewed inside the final whole-branch review rather than by a separate task
+  review, since its output is what the final reviewer reads anyway. Costs if wrong: a docs slip reaches the final
+  review one step later. (It did: the stale `CLAUDE.md` pins sentence, fixed in the fix wave.)
+
+### Lessons
+
+- A schedule that an operator edits must be validated at boot with messages naming the offending month, day and id,
+  and the tests that read the shipped file must pin the user's decisions (which months give what), never the file's
+  shape — otherwise a legitimate data edit turns the gate red.
+- Keep the client free of copies of server data (the day-28 pair used to be mirrored in `catalog.ts`); serve the
+  list and let the client render it.
+- An e2e assertion on live data pins whatever the calendar shows this month; make it structural (`/^Ngày \d+ tháng
+  \d{2}\/\d{4}: \S/`) and leave the names to the unit tests.
+- Pinned counts in a tooling test must be mirrored wherever they are quoted (`CLAUDE.md` §3): a docs-only task that is
+  told not to touch `CLAUDE.md` leaves it stale.
+- When the e2e server has no clock override, a throwaway spec can still show a future month's screen by rewriting the
+  `/api/rewards/daily` response — good enough for screenshots, not for the gate.
+- Screenshots at 375 px caught the legend icons shrinking to 11 px (`flex-shrink: 0` fixed it); the reviewers did not
+  see it in the code.
+
 ## 5. Open items
 
 The single list is `docs/known-limitations.md`. As of this writing, the items a next session is most likely to meet:
