@@ -15,7 +15,7 @@ The user's decision of 2026-10-12, after the player-guide review found six epic 
 them out through the day-28 check-in gift, one per month, and "thiết kế điểm danh theo hướng có thể mở rộng quà tặng vật
 phẩm trong tương lai (thay đổi theo tháng)". Spec `docs/superpowers/specs/2026-10-12-monthly-daily-gifts-design.md`,
 plan `docs/superpowers/plans/2026-10-12-plan22-monthly-daily-gifts.md` (with its pre-flight amendments), branch
-`feature/BP-22-monthly-daily-gifts`. Gate on the branch's final tree with `main` merged in: GATE.
+`feature/BP-22-monthly-daily-gifts`. Gate on the branch's final tree with `main` merged in: typecheck, lint, 2690 unit tests (14 skipped), both builds, e2e normal 24/24, Lite 4/4, ops 34/34.
 
 - **What a player sees.** The Điểm danh calendar's day-28 cell keeps its gold gift icon, and a legend line under the
   calendar names the month's gifts by their item names — in October 2026 "Ngày 28 tháng 10/2026: Huy hiệu tháng +
