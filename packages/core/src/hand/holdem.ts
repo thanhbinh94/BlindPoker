@@ -36,7 +36,7 @@ export function createHoldemHand(input: CreateHoldemInput, rng: Rng): EngineResu
     phase: 'BETTING',
     players: seats.map((s) => ({
       seat: s.seat, playerId: s.playerId, isBot: s.isBot, stack: s.stack, holeCards: [], betThisStreet: 0,
-      totalCommitted: 0, folded: false, allIn: false, hasActed: false, cannotRaise: false, decision: null, revealed: true,
+      totalCommitted: 0, folded: false, allIn: false, hasActed: false, cannotRaise: false, decision: null, timedOut: false, revealed: true,
     })),
     deck: shuffle(createDeck(), rng),
     deckIndex: 0,

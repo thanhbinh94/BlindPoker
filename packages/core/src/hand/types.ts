@@ -54,6 +54,12 @@ export interface HandPlayer {
   cannotRaise: boolean
   /** Blind mode B decision, hidden from others until DECISIONS_REVEALED. */
   decision: Decision | null
+  /**
+   * Blind mode B: `decision` was forced by the timer (`TIMEOUT`), not chosen. Server-side only — `playerView` never
+   * carries it. It is told with the seat's `PLAYER_ACTED` when the decisions resolve, never earlier: a `DECISION_MADE`
+   * that said "the timer folded this seat" would give the fold away before the reveal.
+   */
+  timedOut: boolean
   /** Squeeze mode: this seat has turned every one of its cards over. Always true outside squeeze mode, and for a bot. */
   revealed: boolean
 }

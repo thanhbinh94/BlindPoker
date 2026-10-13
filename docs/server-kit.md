@@ -310,7 +310,7 @@ falls back to `OPEN`.
 | `spectatorGraceMs` | 300,000 | After the reconnect window, how long before the player is removed from the room entirely |
 | `emptyRoomCloseMs` | 60,000 | How long a room with nobody in it — no humans and no bots — stays open (listed as `closing`) before closing; a room whose last human leaves while bots are seated closes at once |
 | `carryOverReleaseMs` | 60,000 | How long a room may sit unable to start a hand before its carry-over pot is released (spec §8.4) |
-| `consecutiveTimeoutsToStand` | 3 | Timed-out actions in a row before a human is stood up automatically |
+| `consecutiveTimeoutsToStand` | 3 | Timed-out actions in a row before a human is stood up automatically: a Hold'em turn, or a Blind play-or-fold decision the timer folded (`PLAYER_ACTED{timedOut}`, told with the other decisions when the round resolves — never earlier, which would give the fold away). Any other action resets the count; the squeeze round running out is neither |
 | `handsSatOutToStand` | 5 | Hands started without a player who asked to sit out before the seat is taken back (spec §11.3) |
 | `turnTimerMsOverride` | — | Test hook: overrides `config.turnTimerSec * 1000` when set |
 
