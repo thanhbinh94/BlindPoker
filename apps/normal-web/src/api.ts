@@ -222,12 +222,14 @@ export interface AvatarConfigDto {
   badge?: string
 }
 
-/** One day of the monthly check-in schedule; the same 31 rows for every player. */
+/** One day of a month's check-in schedule; the same 31 rows for every player (spec 2026-10-12 §4.3). */
 export interface CalendarEntryDto {
   day: number
   points: number
-  /** A rarity label for the random tiers, an item id for day 28, `null` for a points-only day. */
+  /** A rarity label for a draw day, the first item id for a fixed day, `null` for a points-only day. */
   item: string | null
+  /** Every item a fixed day grants, in the schedule's order — what the calendar names; empty on any other day. */
+  items: string[]
 }
 
 /** `GET /api/rewards/daily`, and the `daily` block of `GET /api/me`. */
@@ -239,7 +241,27 @@ export interface DailyStatusDto {
   item: string | null
   /** The instant the next local day begins, so the client can count down to it. */
   nextResetAt: number
+  /** `YYYY-MM` in the server's economy timezone: the month `calendar` describes. */
+  month: string
   calendar: CalendarEntryDto[]
+}
+
+/**
+ * An item the check-in schedule names, at its first tier and month from this month on (spec 2026-10-12 §4.4) —
+ * `apps/normal-server/src/economy/daily-gifts.ts`'s `DailyGiftNotice`, verbatim.
+ */
+export interface DailyGiftNoticeDto {
+  itemId: string
+  /** The streak tier whose claim grants it, 1–31. */
+  day: number
+  /** `YYYY-MM` of the first month, this one or later, that names it; `null` for a gift of every month (the default). */
+  month: string | null
+}
+
+/** `GET /api/catalog/items`. `dailyGifts` is absent from a server older than Plan 22: read it as none. */
+export interface CatalogItemsDto {
+  items: ItemDto[]
+  dailyGifts?: DailyGiftNoticeDto[]
 }
 
 /** `POST /api/rewards/daily/claim`. The refusal is a 409 `ALREADY_CLAIMED` carrying `claimed: false`. */
@@ -436,7 +458,7 @@ export class ApiError extends Error {
 
 export interface NormalApi {
   config(): Promise<ConfigDto>
-  catalogItems(): Promise<{ items: ItemDto[] }>
+  catalogItems(): Promise<CatalogItemsDto>
   catalogAchievements(): Promise<{ achievements: AchievementDefDto[] }>
   /** The rig every chibi is drawn on: the frame, the avatar crop and the two bodies (spec §4.3). */
   avatarCatalog(): Promise<AvatarCatalogDto>
@@ -552,7 +574,7 @@ export function createApi(fetchImpl?: typeof fetch, base = ''): NormalApi {
 
   return {
     config: () => call<ConfigDto>({ method: 'GET', path: '/api/config' }),
-    catalogItems: () => call<{ items: ItemDto[] }>({ method: 'GET', path: '/api/catalog/items' }),
+    catalogItems: () => call<CatalogItemsDto>({ method: 'GET', path: '/api/catalog/items' }),
     catalogAchievements: () => call<{ achievements: AchievementDefDto[] }>({ method: 'GET', path: '/api/catalog/achievements' }),
     avatarCatalog: () => call<AvatarCatalogDto>({ method: 'GET', path: '/api/catalog/avatar' }),
 

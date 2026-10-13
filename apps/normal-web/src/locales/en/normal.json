@@ -65,7 +65,7 @@
     "marker": {
       "common": "Common item",
       "rare": "Rare item",
-      "monthly": "Monthly badge + title"
+      "fixedDay": "Day {{day}} of {{month}}: {{items}}"
     },
     "receipt": {
       "title": "Day {{day}} claimed",
@@ -298,7 +298,8 @@
         "rare": "May be drawn from the daily check-in (rare)",
         "epic": "May be drawn from the daily check-in (epic)"
       },
-      "dailyFixed": "The day-28 check-in gift",
+      "dailyFixed": "The day-{{day}} check-in gift",
+      "dailyMonth": "The day-{{day}} check-in gift of {{month}}",
       "unavailable": "No way to earn this yet"
     },
     "save": "Save wardrobe",

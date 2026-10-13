@@ -601,7 +601,7 @@ describe('App — the daily reminder', () => {
     window.history.replaceState(null, '', '/')
   })
 
-  const status = (claimable: boolean) => ({ claimable, day: 3, streak: 2, reward: 7000, item: null, nextResetAt: 1_800_000_000_000, calendar: [] })
+  const status = (claimable: boolean) => ({ claimable, day: 3, streak: 2, reward: 7000, item: null, nextResetAt: 1_800_000_000_000, month: '2027-01', calendar: [] })
   /** `/daily` itself asks for the same status and hangs on it; only the reminder's answer matters here. */
   const apiWith = (claimable: boolean) => stubApi({ daily: vi.fn().mockResolvedValue(status(claimable)) })
 

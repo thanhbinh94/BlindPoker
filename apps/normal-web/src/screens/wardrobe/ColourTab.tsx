@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
-import type { AchievementDefDto, AvatarConfigDto, ItemDto } from '../../api.js'
-import { hintFor } from '../catalog.js'
+import type { AvatarConfigDto, ItemDto } from '../../api.js'
+import { hintFor, type HintSources } from '../catalog.js'
 import { ColourCard } from './cards.js'
 import { slotCards } from './categories.js'
 import s from './wardrobe.module.css'
@@ -9,7 +9,8 @@ export interface ColourTabProps {
   slot: 'hairColor' | 'eyeColor' | 'skinColor'
   catalog: readonly ItemDto[]
   owned: ReadonlySet<string>
-  achievements: readonly AchievementDefDto[]
+  /** What a locked card's hint is worked out from (`hintFor`): the achievements and the check-in's named gifts. */
+  hints: HintSources
   draft: AvatarConfigDto
   /** "Hiện cả món chưa có" (No11a): unticked, only the owned swatches (and "Natural", always). */
   showLocked: boolean
@@ -32,7 +33,7 @@ export interface ColourTabProps {
  * about — so this tab never needs the empty line `ItemTab` draws (No11a). Every other swatch is a family of one,
  * in catalogue order: shown when owned or when the box is ticked, and locked exactly like `ItemTab`'s cards.
  */
-export function ColourTab({ slot, catalog, owned, achievements, draft, showLocked, onPick, naturalColour, panelId, labelledBy }: ColourTabProps) {
+export function ColourTab({ slot, catalog, owned, hints, draft, showLocked, onPick, naturalColour, panelId, labelledBy }: ColourTabProps) {
   const { t } = useTranslation('normal')
   const shown = slotCards(slot, catalog, owned, showLocked).map((card) => card.shown)
   const natural = draft[slot] === undefined
@@ -49,7 +50,7 @@ export function ColourTab({ slot, catalog, owned, achievements, draft, showLocke
             item={item}
             owned={isOwned}
             wearing={wearing}
-            hint={isOwned ? '' : hintFor(item, achievements, t)}
+            hint={isOwned ? '' : hintFor(item, hints, t)}
             onPick={onPick}
           />
         )

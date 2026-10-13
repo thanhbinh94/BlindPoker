@@ -9,6 +9,7 @@ import {
   type AchievementDefDto,
   type AvatarCatalogDto,
   type AvatarConfigDto,
+  type DailyGiftNoticeDto,
   type Gender,
   type InventoryDto,
   type ItemDto,
@@ -18,6 +19,7 @@ import {
 } from '../../api.js'
 import { chibiFromApi } from '../../avatar/chibi.js'
 import { useAvatars } from '../../avatar/useAvatars.js'
+import type { HintSources } from '../catalog.js'
 import s from '../normal.module.css'
 import { useAsync } from '../useAsync.js'
 import { counts, GROUPS, PHONE_QUERY, panelId, slotCards, subTabId, type TabId } from './categories.js'
@@ -73,6 +75,8 @@ interface WardrobeData {
   avatarCatalog: AvatarCatalogDto
   outfits: (OutfitDto | null)[]
   achievements: AchievementDefDto[]
+  /** What the check-in schedule names from this month on — absent from an older server, read as none. */
+  gifts: DailyGiftNoticeDto[]
 }
 
 /** Sets a slot, or drops it entirely when `itemId` is `undefined` — the same rule `PUT /api/me/avatar`
@@ -132,6 +136,8 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
       avatarCatalog,
       outfits: outfitsAnswer.outfits,
       achievements: achievementsAnswer.achievements,
+      // Read on every mount, so a wardrobe opened after midnight on the 1st reads the new month's list.
+      gifts: catalogAnswer.dailyGifts ?? [],
     }
   })
   const { invalidate } = useAvatars(api, NO_IDS)
@@ -203,6 +209,8 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
   const items = useMemo(() => new Map((loaded?.catalog ?? []).map((item) => [item.id, item])), [loaded])
   const bodies = useMemo(() => new Map((loaded?.avatarCatalog.bodies ?? []).map((body) => [body.gender, body])), [loaded])
   const owned = useMemo(() => new Set((loaded?.inventory.items ?? []).map((item) => item.itemId)), [loaded])
+  /** What a locked card's hint is worked out from (`hintFor`): the achievements, and the check-in's named gifts. */
+  const hints = useMemo<HintSources>(() => ({ achievements: loaded?.achievements ?? [], gifts: loaded?.gifts ?? [] }), [loaded])
   /** Every tab's "n/m đã có" (design §3.1) — computed for all of them up front so `CategoryNav` has a
    * count ready the moment its active group changes, not just for whichever group is showing now. Kiểu tóc counts
    * the draft's gender's hairstyles, the only ones it lists, so it is counted again when the gender changes. */
@@ -375,7 +383,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
           items={items}
           bodies={bodies}
           owned={owned}
-          achievements={loaded.achievements}
+          hints={hints}
           draft={config}
           showLocked={showLocked}
           onPick={(id) => pick('hairStyle', id)}
@@ -396,7 +404,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
             slot="title"
             catalog={loaded.catalog}
             owned={owned}
-            achievements={loaded.achievements}
+            hints={hints}
             draft={config}
             wear={wear}
             showLocked={showLocked}
@@ -406,7 +414,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
             slot="badge"
             catalog={loaded.catalog}
             owned={owned}
-            achievements={loaded.achievements}
+            hints={hints}
             draft={config}
             wear={wear}
             showLocked={showLocked}
@@ -418,7 +426,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
           slot={tab}
           catalog={loaded.catalog}
           owned={owned}
-          achievements={loaded.achievements}
+          hints={hints}
           draft={config}
           showLocked={showLocked}
           onPick={(id) => commit(withSlot(config, tab, id))}
@@ -431,7 +439,7 @@ export function WardrobeScreen({ api, playerId }: WardrobeScreenProps) {
           slot={tab}
           catalog={loaded.catalog}
           owned={owned}
-          achievements={loaded.achievements}
+          hints={hints}
           draft={config}
           wear={wear}
           showLocked={showLocked}

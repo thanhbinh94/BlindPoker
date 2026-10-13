@@ -65,7 +65,7 @@
     "marker": {
       "common": "Vật phẩm thường",
       "rare": "Vật phẩm hiếm",
-      "monthly": "Huy hiệu + danh hiệu tháng"
+      "fixedDay": "Ngày {{day}} tháng {{month}}: {{items}}"
     },
     "receipt": {
       "title": "Đã nhận thưởng ngày {{day}}",
@@ -298,7 +298,8 @@
         "rare": "Có thể nhận từ quà điểm danh (hiếm)",
         "epic": "Có thể nhận từ quà điểm danh (cực hiếm)"
       },
-      "dailyFixed": "Quà điểm danh ngày 28",
+      "dailyFixed": "Quà điểm danh ngày {{day}}",
+      "dailyMonth": "Quà điểm danh ngày {{day}} tháng {{month}}",
       "unavailable": "Chưa có cách nhận món này"
     },
     "save": "Lưu trang phục",

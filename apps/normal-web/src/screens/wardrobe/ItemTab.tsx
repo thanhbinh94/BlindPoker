@@ -1,8 +1,8 @@
 import { assetUrl, useAvatarAssetsBase, useTintedLayer, type LayerRef } from '@bp/ui-kit'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { AchievementDefDto, AssetRefDto, AvatarConfigDto, ItemDto, ItemSlot } from '../../api.js'
-import { hintFor } from '../catalog.js'
+import type { AssetRefDto, AvatarConfigDto, ItemDto, ItemSlot } from '../../api.js'
+import { hintFor, type HintSources } from '../catalog.js'
 import shared from '../normal.module.css'
 import { ItemCard, WordCard } from './cards.js'
 import { slotCards } from './categories.js'
@@ -92,7 +92,8 @@ export interface ItemTabProps {
   slot: ItemSlot
   catalog: readonly ItemDto[]
   owned: ReadonlySet<string>
-  achievements: readonly AchievementDefDto[]
+  /** What a locked card's hint is worked out from (`hintFor`): the achievements and the check-in's named gifts. */
+  hints: HintSources
   draft: AvatarConfigDto
   /** The draft's gender, so a gendered item's tile shows the cut the preview is wearing. */
   wear?: string
@@ -124,7 +125,7 @@ const WORD_HEADING: Partial<Record<ItemSlot, string>> = { title: 'wardrobe.words
  * and says so in one line in place of the grid; a word slot draws nothing at all, heading included, and the words
  * panel says it once when both are empty (`WardrobeScreen`).
  */
-export function ItemTab({ slot, catalog, owned, achievements, draft, wear, showLocked, onPick, panelId, labelledBy }: ItemTabProps) {
+export function ItemTab({ slot, catalog, owned, hints, draft, wear, showLocked, onPick, panelId, labelledBy }: ItemTabProps) {
   const { t } = useTranslation('normal')
   // A family card is the member worn in this slot, when it is one of the family (No8a).
   const cards = slotCards(slot, catalog, owned, showLocked, draft[slot])
@@ -155,7 +156,7 @@ export function ItemTab({ slot, catalog, owned, achievements, draft, wear, showL
         {cards.map(({ original, shown, dots }) => {
           const isOwned = owned.has(shown.id)
           const wearing = draft[slot] === shown.id
-          const hint = isOwned ? '' : hintFor(shown, achievements, t)
+          const hint = isOwned ? '' : hintFor(shown, hints, t)
 
           if (heading !== undefined) {
             return <WordCard key={original.id} item={shown} owned={isOwned} wearing={wearing} hint={hint} onPick={onPick} />
@@ -168,12 +169,12 @@ export function ItemTab({ slot, catalog, owned, achievements, draft, wear, showL
               ? undefined
               : dots.map((member) => {
                   const memberOwned = owned.has(member.id)
-                  return { item: member, owned: memberOwned, wearing: draft[slot] === member.id, hint: memberOwned ? '' : hintFor(member, achievements, t) }
+                  return { item: member, owned: memberOwned, wearing: draft[slot] === member.id, hint: memberOwned ? '' : hintFor(member, hints, t) }
                 })
           // The box ticked, the original locked and the card showing another member (Plan 20, T3): ticking only adds, so the
           // card stays on the owned variant — and the original's hint, which its own lock line used to carry, goes on a line
           // of its own. Unticked, the original is not listed at all.
-          const familyHint = showLocked && !owned.has(original.id) && shown.id !== original.id ? hintFor(original, achievements, t) : undefined
+          const familyHint = showLocked && !owned.has(original.id) && shown.id !== original.id ? hintFor(original, hints, t) : undefined
 
           return (
             <ItemCard

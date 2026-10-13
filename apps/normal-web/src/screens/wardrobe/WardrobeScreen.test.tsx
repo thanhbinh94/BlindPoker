@@ -649,6 +649,24 @@ describe('WardrobeScreen', () => {
     expect(within(locked as HTMLElement).getByText(viNormal.achievements.login_days_100.name)).toBeInTheDocument()
   })
 
+  it('names the check-in month on a locked tile the schedule hands out', async () => {
+    // No achievement here rewards the top hat, so the schedule's line is the one that shows (spec 2026-10-12 §4.4).
+    const user = userEvent.setup()
+    renderScreen(
+      stubApi({
+        catalogItems: vi.fn().mockResolvedValue({ items: CATALOG, dailyGifts: [{ itemId: 'head_tophat01', day: 28, month: '2026-11' }] }),
+        catalogAchievements: vi.fn().mockResolvedValue({ achievements: [] }),
+      }),
+    )
+    await opened()
+    await goTo(user, 'wear', viNormal.wardrobe.tabs.head)
+    await user.click(showLockedBox())
+
+    const locked = screen.getByText(viNormal.items.head_tophat01).closest('button') as HTMLElement
+    expect(locked).toHaveAttribute('aria-disabled', 'true')
+    expect(within(locked).getByText('Quà điểm danh ngày 28 tháng 11/2026')).toBeInTheDocument()
+  })
+
   it('equips an owned tile, and a second click on the equipped one unequips it', async () => {
     const user = userEvent.setup()
     renderScreen()
