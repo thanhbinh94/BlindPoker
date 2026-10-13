@@ -479,6 +479,50 @@ describe('claimDaily', () => {
       await seedStreak(playerId, 13, 13)
       expect(await withReservation.claimDaily(playerId, OCT(14))).toMatchObject({ item: null, fallbackPoints: 10_000 })
     })
+
+    it('never draws an item a later month schedules as a gift, in a month the schedule does not name (Q8)', async () => {
+      const playerId = await seedPlayer()
+      // `aura_ice01` is a rare aura: drawable in every respect, and named by January 2027's day 28 alone. No
+      // `reservedItemIds` here, so the schedule is the only thing keeping it out of the pool.
+      const scheduled = parseDailyGifts(
+        {
+          default: { '7': { draw: 'common' }, '14': { draw: 'rare' }, '21': { draw: 'rare' }, '28': { fixed: ['badge_monthly', 'title_devoted'] } },
+          months: { '2027-01': { '28': { fixed: ['aura_ice01'] } } },
+        },
+        catalog,
+        'economy-service.test (later month)',
+      )
+      const service = createEconomyService({
+        db,
+        repos,
+        inventory: inv,
+        catalog,
+        bus,
+        timezone: 'UTC',
+        onBalanceChanged: () => {},
+        rng: () => 0,
+        gifts: scheduled,
+      })
+      const pool = catalog
+        .byRarity('rare')
+        .filter((d) => (DAILY_DRAW_SLOTS as readonly string[]).includes(d.slot) && !d.free && d.id !== 'aura_ice01')
+        .map((d) => d.id)
+        .sort()
+      expect(pool.length).toBeGreaterThan(0)
+
+      // Day 14 of October, a month the schedule does not name: a sweep of the whole pool hands out each of its items…
+      for (let i = 0; i < pool.length; i += 1) {
+        await seedStreak(playerId, 13, 13)
+        await service.claimDaily(playerId, OCT(14))
+      }
+      const owned = new Set(await grantedOf(playerId))
+      expect(owned.has('aura_ice01')).toBe(false)
+      expect([...owned].sort()).toEqual(pool)
+
+      // …and then pays the fallback rather than reach for the one item January has promised.
+      await seedStreak(playerId, 13, 13)
+      expect(await service.claimDaily(playerId, OCT(14))).toMatchObject({ item: null, items: [], fallbackPoints: 10_000 })
+    })
   })
 
   describe('the configured timezone', () => {

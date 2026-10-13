@@ -141,7 +141,7 @@ describe('the shipped catalogue', () => {
   })
 
   it('contains every id the daily reward and the achievements promise, in its v3 slot', () => {
-    for (const id of ['badge_monthly', 'title_devoted', 'head_crown_gold01', 'outfit_champion01', 'aura_gold_cards01', 'badge_veteran', 'title_devoted', 'title_hot_hand', 'frame_founder', 'frame_veteran']) {
+    for (const id of ['badge_monthly', 'title_devoted', 'head_crown_gold01', 'outfit_champion01', 'aura_gold_cards01', 'badge_veteran', 'title_hot_hand', 'frame_founder', 'frame_veteran']) {
       expect(catalog.get(id), id).toBeDefined()
     }
     expect(catalog.get('head_crown_gold01')).toMatchObject({ slot: 'head', rarity: 'epic' })
