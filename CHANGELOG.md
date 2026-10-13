@@ -1,10 +1,59 @@
 # Changelog
 
-Blind Luck Poker (called Just a Normal Poker until 2026-09-28) is built one plan at a time; each plan lands on `master` as a single merge commit. This
-file has one section per plan, newest first, with the merge commit that carried it.
+Blind Luck Poker (called Just a Normal Poker until 2026-09-28) is built one plan at a time; each plan lands on `main`
+(named `master` until 2026-10-11) as a single merge commit. This file has one section per plan, newest first, with the
+merge commit that carried it. Branches follow `<prefix>/BP-<n>-<slug>` since 2026-10-13 (`CLAUDE.md` §6).
 
 Nothing here has been released. Versions in `package.json` are `0.1.0` throughout; the sections
 below are the real history.
+
+---
+
+## BP-23 — a Blind Poker player who lets three decisions time out in a row is asked to stand up — merged `bb02070` (2026-10-13)
+
+Found by the player-guide review: SRS §8.7 asks for the three-timeout stand-up in both modes, but `blind.ts`
+hard-coded `timedOut: false` on every `PLAYER_ACTED`, so the room's counter reset every hand and the rule only ever
+fired in Hold'em (the test-matrix row covered Hold'em only). The user chose to follow the spec.
+
+- **What changes:** on a "Chơi hoặc bỏ" table, a human whose decision runs out three hands in a row is stood up after
+  the third hand through the ordinary `PLAYER_STOOD` path, stack returned. Any real decision resets the count — a chosen
+  fold, a pre-action tick and "Tự động chơi" are all real `ACTION`s. Bots never count. Pure-luck tables have no
+  decision. The squeeze round's forced turn neither counts nor resets (spec 2026-10-08 §4.2); a play-or-fold squeeze
+  table's decision round does count.
+- **Under it:** the engine keeps the flag on `HandPlayer.timedOut` (new, Blind-only state) and emits it at the resolve, so
+  `DECISION_MADE` stays bare and a fold is not given away before the reveal. `room.ts` and the runner needed no change.
+  Three new core tests, six room tests (one pins the squeeze exemption with the counter set by hand, since a pure-luck
+  table can never reach 2 on its own). `docs/test-matrix.md` row cites both modes; `docs/player-guide.md` and
+  `docs/server-kit.md` say so.
+- **Worth knowing:** a disconnected human's decisions count until the 90 s reconnect window expires, so on a 10–15 s
+  table the seat can be freed by this rule before the window ends — the same outcome either way (seat freed after that
+  hand, stack home), as in Hold'em. An all-AFK Blind table used to carry its pot over for ever; it now opens after three
+  hands and the carry-over goes through the existing claimant path.
+- Gate on the branch tree: typecheck, lint, 2659 unit tests (one slow avatar-registry test timed out under load and
+  passed alone, 73/73; a stale Oracle bootstrap test on `main` fixed in `c31ec08`), both builds, e2e normal 24/24, Lite
+  4/4, ops 34/34.
+
+## 2026-10-12 — CLAUDE.md, lessons-learned, the player guide, and three wardrobe/copy fixes — merged `278b9db`, `d876db4`, `840f22d`
+
+The user asked whether the repo carried its own operating instructions, lessons and a user guide as `requirement.txt`
+§64 expects. It did not; it does now.
+
+- **`CLAUDE.md`** (`278b9db`) — what an AI session or a new developer reads first: the docs map, toolchain pitfalls,
+  the gates with their durations, the LAN-host deploy routine, the security rules, conventions (commits, branches,
+  CHANGELOG, i18n, the stable Vietnamese terms), how plans are run, pitfalls.
+- **`docs/lessons-learned.md`** (`278b9db`) — every lesson by group, all 28 Plan 21 rulings word for word, one block per
+  earlier plan; each merged plan appends its rulings there, since the SDD workspace is deleted.
+- **`docs/player-guide.md`** (`d876db4`) — Hướng dẫn chơi for players, in Vietnamese: points and account, the lobby and
+  the create dialog, Hold'em, Blind A/B, the squeeze mode (with the OS-animation tip), disconnects, the wardrobe,
+  achievements, settings, FAQ, Normal vs Lite. 250 quoted UI strings verified against the locale files; 36 claims
+  checked against the code by a second reviewer.
+- **Fixes the guide's review found** (`840f22d`): the wardrobe's "how to get this" hint promised epic items from the
+  daily draw, which only gives common and rare — the hint now promises what the draw gives and names the day-28 gift
+  ("Quà điểm danh ngày 28"); the check-in achievements say "Điểm danh đủ N ngày" (the metric counts claims, not
+  sign-ins); `docs/known-limitations.md` no longer says a room cannot be watched.
+- **Still open, decided by the user on 2026-10-12:** the six epics with no way to be earned go out through the day-28
+  gift one per month from 11/2026 (Plan 22, `feature/BP-22-monthly-daily-gifts`); Blind Poker's three-timeout stand-up
+  (BP-23, above).
 
 ---
 
