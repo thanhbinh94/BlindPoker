@@ -11,6 +11,7 @@
  * them diverging on purpose — Lite pays the points column only, Normal also hands out cosmetics.
  */
 import { dailyRewardPoints, ECONOMY } from '@bp/core'
+import type { DailyGiftSchedule } from './daily-gifts.js'
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
@@ -19,9 +20,6 @@ export const MAX_STREAK = 31
 
 /** §13.2: what a day whose cosmetic tier has nothing unowned left pays instead. */
 export const NO_ITEM_FALLBACK_POINTS = 10_000
-
-/** §13.2, day 28: granted outright rather than drawn, so this pair is a promise the catalogue must keep. */
-export const DAILY_FIXED_ITEM_IDS = ['badge_monthly', 'title_devoted'] as const
 
 /** Renders `nowMs` as the calendar day (`YYYY-MM-DD`) it falls on in `timeZone`. */
 export function dayKey(nowMs: number, timeZone: string): string {
@@ -144,23 +142,12 @@ export type DailyItemRule =
   | { kind: 'randomUnowned'; rarity: 'rare' }
   | { kind: 'fixed'; itemIds: readonly string[] }
 
-/** §13.2's item column: day 7 a common, days 14 and 21 a rare, day 28 the month's badge and title. */
-export function itemRuleForDay(day: number): DailyItemRule | null {
-  if (day === 7) return { kind: 'randomUnowned', rarity: 'common' }
-  if (day === 14 || day === 21) return { kind: 'randomUnowned', rarity: 'rare' }
-  if (day === 28) return { kind: 'fixed', itemIds: DAILY_FIXED_ITEM_IDS }
-  return null
-}
-
 /**
- * The calendar's item column as a label, for a client drawing the 31-day grid.
- *
- * A random tier cannot name its item in advance — that is decided against the player's inventory at
- * the moment of the claim — so what a day advertises is the *rarity* it will draw; day 28, which
- * draws nothing, advertises the badge by id.
+ * A tier's item column as a label (spec 2026-10-12 §4.3): the *rarity* a draw will draw — the item itself is decided
+ * against the player's inventory at the moment of the claim — or the first id a fixed list grants. A client reads a
+ * fixed tier's whole list from `CalendarEntry.items`; `item` stays for a client that predates it.
  */
-export function itemMarkerForDay(day: number): string | null {
-  const rule = itemRuleForDay(day)
+export function itemMarker(rule: DailyItemRule | null): string | null {
   if (rule === null) return null
   return rule.kind === 'fixed' ? (rule.itemIds[0] ?? null) : rule.rarity
 }
@@ -168,14 +155,18 @@ export function itemMarkerForDay(day: number): string | null {
 export interface CalendarEntry {
   day: number
   points: number
+  /** The marker: a rarity on a draw day, the first id on a fixed day, null on a points-only day. */
   item: string | null
+  /** Every item a fixed day grants, in the schedule's order; empty on any other day. */
+  items: string[]
 }
 
-/** The whole month's schedule, days 1…31 — constant, and the same for every player. */
-export function dailyCalendar(): CalendarEntry[] {
+/** The schedule of `month` (`YYYY-MM`), days 1…31 — the same for every player, and a fresh array on every call. */
+export function dailyCalendar(gifts: Pick<DailyGiftSchedule, 'itemRuleForDay'>, month: string): CalendarEntry[] {
   return Array.from({ length: MAX_STREAK }, (_, i) => {
     const day = i + 1
-    return { day, points: rewardForDay(day), item: itemMarkerForDay(day) }
+    const rule = gifts.itemRuleForDay(day, month)
+    return { day, points: rewardForDay(day), item: itemMarker(rule), items: rule?.kind === 'fixed' ? [...rule.itemIds] : [] }
   })
 }
 

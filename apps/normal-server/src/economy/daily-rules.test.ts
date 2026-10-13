@@ -5,9 +5,7 @@ import {
   dailyCalendar,
   daysBetween,
   dayKey,
-  DAILY_FIXED_ITEM_IDS,
-  itemMarkerForDay,
-  itemRuleForDay,
+  itemMarker,
   MAX_STREAK,
   monthKey,
   nextDayStartMs,
@@ -15,6 +13,7 @@ import {
   NO_ITEM_FALLBACK_POINTS,
   reliefEligible,
   rewardForDay,
+  type DailyItemRule,
 } from './daily-rules.js'
 
 const HCM = 'Asia/Ho_Chi_Minh'
@@ -95,22 +94,36 @@ describe('the reward table', () => {
     expect(DAILY_REWARD_POINTS.reduce((a, b) => a + b, 0)).toBe(376_000)
   })
 
-  it('hands out a common on day 7, a rare on 14 and 21, and the fixed pair on 28', () => {
-    expect(itemRuleForDay(7)).toEqual({ kind: 'randomUnowned', rarity: 'common' })
-    expect(itemRuleForDay(14)).toEqual({ kind: 'randomUnowned', rarity: 'rare' })
-    expect(itemRuleForDay(21)).toEqual({ kind: 'randomUnowned', rarity: 'rare' })
-    expect(itemRuleForDay(28)).toEqual({ kind: 'fixed', itemIds: DAILY_FIXED_ITEM_IDS })
-    for (const day of [1, 6, 8, 13, 15, 20, 22, 27, 29, 31]) expect(itemRuleForDay(day)).toBeNull()
+  it('builds the 31-day calendar of a month: the rarity on a draw day, the first id and the whole list on a fixed day', () => {
+    const rules: Record<number, DailyItemRule> = {
+      7: { kind: 'randomUnowned', rarity: 'common' },
+      14: { kind: 'randomUnowned', rarity: 'rare' },
+      28: { kind: 'fixed', itemIds: ['badge_monthly', 'title_devoted', 'head_tophat01'] },
+    }
+    const asked = new Set<string>()
+    const calendar = dailyCalendar(
+      {
+        itemRuleForDay: (day, month) => {
+          asked.add(month)
+          return rules[day] ?? null
+        },
+      },
+      '2026-11',
+    )
+    expect(calendar).toHaveLength(31)
+    // Every tier is read from the one month asked for.
+    expect([...asked]).toEqual(['2026-11'])
+    expect(calendar[0]).toEqual({ day: 1, points: 5_000, item: null, items: [] })
+    expect(calendar[6]).toEqual({ day: 7, points: 15_000, item: 'common', items: [] })
+    expect(calendar[13]).toMatchObject({ day: 14, item: 'rare', items: [] })
+    expect(calendar[27]).toEqual({ day: 28, points: 40_000, item: 'badge_monthly', items: ['badge_monthly', 'title_devoted', 'head_tophat01'] })
+    expect(calendar.filter((d) => d.item !== null).map((d) => d.day)).toEqual([7, 14, 28])
   })
 
-  it('builds a 31-day calendar whose item column marks exactly the four item days', () => {
-    const calendar = dailyCalendar()
-    expect(calendar).toHaveLength(31)
-    expect(calendar[0]).toEqual({ day: 1, points: 5_000, item: null })
-    expect(calendar.filter((d) => d.item !== null).map((d) => d.day)).toEqual([7, 14, 21, 28])
-    expect(itemMarkerForDay(7)).toBe('common')
-    expect(itemMarkerForDay(21)).toBe('rare')
-    expect(itemMarkerForDay(28)).toBe('badge_monthly')
+  it('labels a tier by its rule: the rarity a draw will draw, the first id a fixed list grants, nothing for none', () => {
+    expect(itemMarker({ kind: 'randomUnowned', rarity: 'rare' })).toBe('rare')
+    expect(itemMarker({ kind: 'fixed', itemIds: ['badge_monthly', 'title_devoted'] })).toBe('badge_monthly')
+    expect(itemMarker(null)).toBeNull()
   })
 
   it('substitutes 10,000 points when a tier has nothing left', () => {

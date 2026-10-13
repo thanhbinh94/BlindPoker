@@ -7,7 +7,6 @@ import type { AppDb } from '../db/client.js'
 import { items } from '../db/schema.js'
 import type { TestDb } from '../db/test-db.js'
 import { createTestDb } from '../db/test-db.js'
-import { DAILY_FIXED_ITEM_IDS } from '../economy/daily-rules.js'
 import type { AvatarManifest } from './manifest.js'
 import { loadAvatarManifest } from './manifest.js'
 import type { AssetRef, ItemDef } from './items.js'
@@ -97,8 +96,9 @@ function drawable(id: string, slot: ItemSlot, isDefault: boolean, file: string):
 }
 
 /**
- * The smallest catalogue `loadItemCatalog` accepts: the default outfit, what the day-28 reward pays, and the
- * two `DEFAULT_HAIR` styles, each the other's counterpart (pre-flight #6). The hairstyles come last so that
+ * The smallest catalogue `loadItemCatalog` accepts: the default outfit, the day-28 pair (kept so the fixture reads
+ * like `items.json`; the catalogue no longer insists on it — `loadDailyGifts` does), and the two `DEFAULT_HAIR`
+ * styles, each the other's counterpart (pre-flight #6). The hairstyles come last so that
  * `MINIMAL[0..2]` keep the meaning every case below was written against.
  */
 const MINIMAL: ItemDef[] = [
@@ -141,7 +141,7 @@ describe('the shipped catalogue', () => {
   })
 
   it('contains every id the daily reward and the achievements promise, in its v3 slot', () => {
-    for (const id of [...DAILY_FIXED_ITEM_IDS, 'head_crown_gold01', 'outfit_champion01', 'aura_gold_cards01', 'badge_veteran', 'title_devoted', 'title_hot_hand', 'frame_founder', 'frame_veteran']) {
+    for (const id of ['badge_monthly', 'title_devoted', 'head_crown_gold01', 'outfit_champion01', 'aura_gold_cards01', 'badge_veteran', 'title_devoted', 'title_hot_hand', 'frame_founder', 'frame_veteran']) {
       expect(catalog.get(id), id).toBeDefined()
     }
     expect(catalog.get('head_crown_gold01')).toMatchObject({ slot: 'head', rarity: 'epic' })
@@ -301,10 +301,6 @@ describe('loadItemCatalog', () => {
   it('refuses a default in an optional slot, which nothing would ever wear', () => {
     const def = drawable('head_default', 'head', true, 'item_head_beanie01_L80')
     expect(() => loadItemCatalog(fixtureWith(def), MANIFEST)).toThrow(/head_default is a default in the optional slot head/)
-  })
-
-  it('refuses a catalogue the day-28 reward could not be paid from', () => {
-    expect(() => loadItemCatalog(fixture(MINIMAL.filter((d) => d.id !== 'badge_monthly')), MANIFEST)).toThrow(/badge_monthly, which is not in the catalogue/)
   })
 
   it('refuses an unknown slot or rarity', () => {
@@ -595,7 +591,6 @@ describe('hairStyle items', () => {
     expect(() => loadItemCatalog(fixture([{ ...NO_HAIR[0]!, isDefault: false }, ...NO_HAIR.slice(1)]), MANIFEST)).toThrow(/no default item for the required slot outfit/)
     expect(() => loadItemCatalog(fixture([...NO_HAIR, drawable('outfit_other', 'outfit', true, 'item_outfit_casual01_L40')]), MANIFEST)).toThrow(/the required slot outfit has 2 defaults/)
     expect(() => loadItemCatalog(fixture([...NO_HAIR, drawable('head_default', 'head', true, 'item_head_beanie01_L80')]), MANIFEST)).toThrow(/head_default is a default in the optional slot head/)
-    expect(() => loadItemCatalog(fixture(NO_HAIR.filter((d) => d.id !== 'badge_monthly')), MANIFEST)).toThrow(/badge_monthly, which is not in the catalogue/)
     // …and once those are fixed, the missing hairstyles are what it names.
     expect(() => loadItemCatalog(fixture(NO_HAIR), MANIFEST)).toThrow(/DEFAULT_HAIR\.f names hair_f_bob01, which is not in the catalogue/)
   })

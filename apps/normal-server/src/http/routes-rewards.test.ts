@@ -6,14 +6,23 @@
  * *outside* the error envelope, and the fact that the money actually moved.
  */
 import { ECONOMY } from '@bp/core'
+import { eq } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { AppDb } from '../db/client.js'
+import { dailyLogins } from '../db/schema.js'
 import { createTestDb, type TestDb } from '../db/test-db.js'
 import { buildTestApp, resetDb, START, XRW, type Account, type Harness } from '../test-harness.js'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 /** Day 1 of a streak is worth 5,000 points and grants no item (§13.2's item column starts at day 7). */
 const DAY_1_POINTS = 5_000
+/** 10:00 on 28 November 2026 in Asia/Ho_Chi_Minh, the harness's zone: day 28 of the first month with a third gift. */
+const NOV_28 = Date.UTC(2026, 10, 28, 3, 0)
+/**
+ * An account made on the day itself. `me` signed in at `START` (September), and a session lasts 30 days, so after
+ * the clock jumps to November only a fresh sign-up still has one.
+ */
+const LATE = { email: 'late@example.com', password: 'a good password', displayName: 'Khach Thang 11' }
 
 let test: TestDb
 let db: AppDb
@@ -49,6 +58,43 @@ describe('the daily reward', () => {
     expect(body).toMatchObject({ claimable: true, day: 1, streak: 1, reward: DAY_1_POINTS, item: null })
     expect(body.calendar).toHaveLength(31)
     expect(body.nextResetAt).toBeGreaterThan(START)
+  })
+
+  it('serves the calendar of the current month, with the item ids of a fixed day', async () => {
+    const res = await h.app.fastify.inject({ url: '/api/rewards/daily', headers: { cookie: me.cookie } })
+    const body = res.json() as { month: string; calendar: { day: number; item: string | null; items: string[] }[] }
+    expect(body.month).toBe('2026-09')
+    expect(body.calendar[27]).toMatchObject({ day: 28, item: 'badge_monthly', items: ['badge_monthly', 'title_devoted'] })
+    expect(body.calendar[6]).toMatchObject({ day: 7, item: 'common', items: [] })
+
+    h.setNow(NOV_28)
+    const late = await h.register(LATE)
+    const november = (await h.app.fastify.inject({ url: '/api/rewards/daily', headers: { cookie: late.cookie } })).json() as typeof body
+    expect(november.month).toBe('2026-11')
+    expect(november.calendar[27]!.items).toEqual(['badge_monthly', 'title_devoted', 'head_tophat01'])
+  })
+
+  it('grants the shipped November gift over HTTP: day 28 of 11/2026 pays the badge, the title and the top hat', async () => {
+    h.setNow(NOV_28)
+    const late = await h.register(LATE)
+    await db
+      .update(dailyLogins)
+      .set({ streak: 27, lastClaimDate: '2026-11-27', month: '2026-11', claimedDays: 27 })
+      .where(eq(dailyLogins.playerId, late.playerId))
+
+    const claim = await h.app.fastify.inject({ method: 'POST', url: '/api/rewards/daily/claim', headers: h.auth(late) })
+    expect(claim.statusCode).toBe(200)
+    expect(claim.json()).toMatchObject({
+      claimed: true,
+      day: 28,
+      points: 40_000,
+      items: ['badge_monthly', 'title_devoted', 'head_tophat01'],
+      fallbackPoints: 0,
+    })
+    const inventory = (await h.app.fastify.inject({ url: '/api/me/inventory', headers: { cookie: late.cookie } })).json() as {
+      items: { itemId: string; source: string }[]
+    }
+    expect(inventory.items.filter((i) => i.source === 'daily').map((i) => i.itemId).sort()).toEqual(['badge_monthly', 'head_tophat01', 'title_devoted'])
   })
 
   it('credits the claim once and answers the second with 409 ALREADY_CLAIMED', async () => {

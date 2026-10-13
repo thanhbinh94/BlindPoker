@@ -209,6 +209,28 @@ describe('GET /api/config', () => {
     expect((achievements.json() as { achievements: unknown[] }).achievements).toHaveLength(h.app.services.defs.length)
   })
 
+  it('serves the named daily gifts beside the catalogue, from the current month on', async () => {
+    const h = await harness()
+    type Gifts = { dailyGifts: { itemId: string; day: number; month: string | null }[] }
+    const before = (await h.app.fastify.inject('/api/catalog/items')).json() as Gifts
+    // September 2026 (the harness's START): the pair every month gives, then the six epics, one a month from November.
+    expect(before.dailyGifts).toEqual(
+      expect.arrayContaining([
+        { itemId: 'badge_monthly', day: 28, month: null },
+        { itemId: 'title_devoted', day: 28, month: null },
+      ]),
+    )
+    expect(before.dailyGifts.find((g) => g.itemId === 'head_tophat01')).toEqual({ itemId: 'head_tophat01', day: 28, month: '2026-11' })
+    expect(before.dailyGifts.find((g) => g.itemId === 'eyecolor_gold01')).toEqual({ itemId: 'eyecolor_gold01', day: 28, month: '2027-04' })
+
+    // December: November's top hat is no longer promised for November (a later month may give it again); the eyepatch
+    // is this month's.
+    h.setNow(Date.UTC(2026, 11, 2, 3, 0))
+    const later = (await h.app.fastify.inject('/api/catalog/items')).json() as Gifts
+    expect(later.dailyGifts.find((g) => g.itemId === 'head_tophat01')?.month ?? null).not.toBe('2026-11')
+    expect(later.dailyGifts.find((g) => g.itemId === 'face_eyepatch01')).toEqual({ itemId: 'face_eyepatch01', day: 28, month: '2026-12' })
+  })
+
   it('answers the avatar rig: the frame, the crop and the v4 bodies, f then m — and no bases any more', async () => {
     const h = await harness()
     const res = await h.app.fastify.inject('/api/catalog/avatar')

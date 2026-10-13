@@ -17,10 +17,10 @@
  * item is still one row with one id, and the base being drawn picks the cut.
  *
  * `loadItemCatalog` refuses a file rather than degrading, the same reasons as before: a duplicate id
- * silently shadowing an item, a missing default leaving new accounts with nothing to wear, an absent
- * `badge_monthly` turning the day-28 reward into a foreign-key violation on the 28th of the month —
- * and now, an `asset.file` the manifest never produced, which is a catalogue entry the wardrobe would
- * offer and the stage could never draw.
+ * silently shadowing an item, a missing default leaving new accounts with nothing to wear — and now, an
+ * `asset.file` the manifest never produced, which is a catalogue entry the wardrobe would offer and the
+ * stage could never draw. (Whether the check-in's gifts exist is `loadDailyGifts`' question since Plan 22:
+ * the schedule names them, so the schedule's loader checks them, every month's.)
  *
  * 2026-10-03 (Plan 19, avatar v4): the hair leaves the body and becomes an item, `hairStyle` — two layers,
  * `asset.file` at 60 in front of the face and `asset.back` at 20 behind the body — with a `gender`, a
@@ -33,7 +33,6 @@ import { sql } from 'drizzle-orm'
 import type { AppDb } from '../db/client.js'
 import { packageRoot } from '../db/migrate.js'
 import { items } from '../db/schema.js'
-import { DAILY_FIXED_ITEM_IDS } from '../economy/daily-rules.js'
 import type { AvatarConfigV4 } from './avatar.js'
 import { defaultAvatar } from './avatar.js'
 import type { MaskSet } from './bodies.js'
@@ -400,9 +399,6 @@ export function loadItemCatalog(path: string = defaultItemsPath(), manifest: Ava
     // A default in an optional slot would be granted to every new account and worn by none of them:
     // `defaultAvatar` fills the required slot only, on purpose.
     if (def.isDefault && !(REQUIRED_SLOTS as readonly string[]).includes(def.slot)) fail(path, `item ${def.id} is a default in the optional slot ${def.slot}`)
-  }
-  for (const id of DAILY_FIXED_ITEM_IDS) {
-    if (!byId.has(id)) fail(path, `the day-28 daily reward grants ${id}, which is not in the catalogue`)
   }
 
   // Plan 19's two hairstyle checks run last (pre-flight #6): after every check that existed before them, so

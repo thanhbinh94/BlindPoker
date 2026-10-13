@@ -185,5 +185,12 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
   registerMeRoutes(app, { ...deps, requireUser })
   registerRewardRoutes(app, { economy: deps.economy, requireUser })
   registerOutfitRoutes(app, { outfits: deps.outfits, catalog: deps.catalog, requireUser })
-  registerCatalogRoutes(app, { config: deps.config, catalog: deps.catalog, defs: deps.defs, manifest: deps.manifest, bodies: deps.bodies })
+  registerCatalogRoutes(app, {
+    config: deps.config,
+    catalog: deps.catalog,
+    defs: deps.defs,
+    manifest: deps.manifest,
+    bodies: deps.bodies,
+    dailyGifts: () => deps.economy.dailyGiftNotices(),
+  })
 }
