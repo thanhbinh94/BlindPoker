@@ -433,6 +433,9 @@ The points column is not — it is `DAILY_REWARD_POINTS` in `@bp/core`, shared w
   exactly those items, skipping any the player owns and never paid for.
 - A month's rule for a tier **replaces** the default's for that tier. Write a `fixed` list in full: to add a gift to
   day 28, list `badge_monthly` and `title_devoted` again.
+- A gift named in the `default` is always listed to the wardrobe with no month ("Quà điểm danh ngày 28"), even during a
+  month whose own entry drops it. So a month entry should keep the default's pair (the shipped months all do), or the
+  hint stays as it is.
 - The claim reads the month it is made in (`monthKey` in `ECONOMY_TIMEZONE`). `GET /api/rewards/daily` serves the
   current month's calendar (`month`, and each fixed tier's `items`). `GET /api/catalog/items` carries `dailyGifts`:
   each named item's first tier and month from the current month on, `month: null` for the default's — what the

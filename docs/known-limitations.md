@@ -452,6 +452,16 @@ drawable item is ever wanted in one month, have the server also list past-only g
 nhận món này".
 *Tracked:* spec `2026-10-12-monthly-daily-gifts-design.md` Q8/Q13; Plan 22 ruling.
 
+**Two equal tier keys inside one month of `daily-gifts.json` are not detected.** `loadDailyGifts` refuses a month key
+written twice, but `JSON.parse` keeps only the last of two equal *tier* keys in a month (or in the default) without a
+word, so a tier copied and not renamed silently replaces the first.
+*Why:* the month check scans the raw text for `"YYYY-MM":` keys, and a month key is unique in the whole file. A tier key
+such as `"28":` repeats legitimately across the default and every month, so a text scan cannot tell a copy from a
+neighbour without a real JSON tokenizer; the file is short and hand-edited, and the operator reads it back before the
+restart.
+*What to do:* after editing a month, read its block once more for a tier written twice.
+*Tracked:* `docs/normal-server.md`, "Changing the daily gifts"; Plan 22 final review.
+
 ---
 
 ## Not limitations — things that were never in scope

@@ -115,7 +115,10 @@ function refuseRepeats(source: string, where: string, days: Days): void {
   }
 }
 
-/** Builds and checks a schedule from parsed JSON. `source` names it in every refusal. */
+/**
+ * Builds and checks a schedule from parsed JSON. `source` names it in every refusal. Duplicate month keys are not seen
+ * here (JSON.parse has already dropped all but the last): only `loadDailyGifts`, which has the raw text, detects them.
+ */
 export function parseDailyGifts(raw: unknown, catalog: ItemCatalog, source = 'daily-gifts.json'): DailyGiftSchedule {
   if (!isRecord(raw)) fail(source, 'the file is not a JSON object')
   for (const key of Object.keys(raw)) {

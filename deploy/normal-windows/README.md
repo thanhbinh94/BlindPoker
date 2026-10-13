@@ -360,8 +360,8 @@ hai.
    cùng catalogue thật và chỉ ra chỗ sai.
 3. Đợi `/health` báo `"rooms":0`, rồi chạy `.\stop.ps1` và `.\run.ps1 -NoMigrate`. Nếu chỉ sửa file này thì không cần
    `pnpm build:normal` (server đọc thư mục `data/` lúc khởi động), và không cần migration.
-4. Nếu file sai mà bạn vẫn chạy `run.ps1`, server từ chối khởi động: nó dừng ngay và `normal.err.log` ghi `invalid daily gift schedule …: …`. Sửa
-   file rồi chạy lại.
+4. Nếu file sai mà bạn vẫn chạy `run.ps1`, server từ chối khởi động: nó dừng ngay và `normal.err.log` ghi
+   `invalid daily gift schedule …: …`. Sửa file rồi chạy lại.
 
 Chi tiết (tiếng Anh): `docs/normal-server.md`, mục "Changing the daily gifts".
 
