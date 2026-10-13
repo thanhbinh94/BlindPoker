@@ -21,6 +21,7 @@
 - Test titles written here are cited verbatim by Task 4 (`docs/test-matrix.md`, `docs/acceptance-checklist.md`). Do not reword a title without changing both docs in the same commit.
 - No new e2e test that registers (10 sign-ups a minute per address, and `pnpm e2e:normal` is close to it). Task 3 adds one assertion to an existing test; the preview spec is throwaway, run on its own and deleted before the commit.
 - Commit after every task. Before each commit run `pnpm typecheck` and `pnpm lint`; in the Bash tool start with `export PATH="$PATH:$(npm prefix -g)"`. Stage files by name (`other/` is untracked and must never be committed).
+- Deadline (spec §11; pre-flight 2026-10-13, M14): the new build must run on the LAN host before 01/11/2026, so the November calendar and the top hat's lock hint read right from the first day, and at the latest before 28/11/2026, so the day-28 claim can grant the top hat. The controller's deploy step and final report carry it.
 
 ---
 
@@ -468,6 +469,38 @@ git add apps/normal-server/data/daily-gifts.json apps/normal-server/src/economy/
 git commit -m "feat(normal-server): the daily gift schedule as data — data/daily-gifts.json, checked against the catalogue at load, the six epics on day 28 from 11/2026 (spec 2026-10-12)"
 ```
 
+**Amendments (pre-flight 2026-10-13):**
+- **I1 (Ruling 4) — no code here.** `fixedItemIds()` keeps covering every month's `fixed` list, past months included (spec Q8), and `noticesFrom` stays as written (spec §4.4.1: a month already over is not listed). The one consequence, a common or a rare that only a past month named being promised later by the wardrobe's draw hint, is documented and not coded: Task 4 carries the operator warning and a `docs/known-limitations.md` entry. Do not add past-only notices to `noticesFrom`.
+- **I2 (Ruling 5).** The test `keeps the October 2026 calendar as it was` stays as written: it pins what the user decided on 12/10, read through the `default`. Task 4's operator doc tells whoever edits the default that this test turns red on purpose, and what to do in that commit.
+- **M1.** Delete the paragraph after the loader's code block ("If `tsc` refuses `return { kind: 'randomUnowned', rarity }` …"). The snippet type-checks under the repo's options (TypeScript 5.9.3, `strict`, `noUncheckedIndexedAccess`, `verbatimModuleSyntax`, `bundler`), so the implementer has one branch less. The Self-review's "Watch for" mention of that fallback is moot.
+- **M4.** `JSON.parse` keeps the last of two equal keys without a word, so an operator who copies a month's entry to make the next one and forgets to rename the key would silently replace the first month. Replace the body of `loadDailyGifts` (signature unchanged) with:
+
+  ```ts
+    let text: string
+    let parsed: unknown
+    try {
+      text = readFileSync(path, 'utf8')
+      parsed = JSON.parse(text)
+    } catch (err) {
+      throw new Error(`could not read daily gift schedule ${path}: ${err instanceof Error ? err.message : String(err)}`)
+    }
+    // JSON.parse keeps the last of two equal keys without a word: a month copied and not renamed would replace the first.
+    const keys = [...text.matchAll(/"(\d{4}-\d{2})"\s*:/g)].map((m) => m[1]!)
+    const twice = keys.find((key, i) => keys.indexOf(key) !== i)
+    if (twice !== undefined) throw new Error(`invalid daily gift schedule ${path}: month ${twice} appears twice`)
+    return parseDailyGifts(parsed, catalog, path)
+  ```
+
+  (It compiles under the same options: checked in scratch.) And add a third case to the test `says which file could not be read` (title unchanged), inside its `try`, after the second `expect`, with two `"2026-11"` keys written as raw text, since `JSON.stringify` cannot produce them:
+
+  ```ts
+      writeFileSync(path, '{ "default": { "28": { "fixed": ["badge_monthly"] } }, "months": { "2026-11": {}, "2026-11": {} } }', 'utf8')
+      expect(() => loadDailyGifts(catalog, path)).toThrow(/month 2026-11 appears twice/)
+  ```
+
+  Task 4's refusal list in `docs/normal-server.md` names this check.
+- **M5.** End the commit with the attribution trailer your session prescribes (CLAUDE.md §6); the `git commit -m` line above is the subject only. Stage by name, as written.
+
 ---
 
 ### Task 2: The server reads it — the claim, the month's calendar, the wardrobe's notices
@@ -900,6 +933,54 @@ Expected: PASS. Then `pnpm --filter @bp/normal-server test` (the whole package, 
 git add apps/normal-server/src/economy apps/normal-server/src/inventory/items.ts apps/normal-server/src/inventory/items.test.ts apps/normal-server/src/app.ts apps/normal-server/src/app.test.ts apps/normal-server/src/http/routes.ts apps/normal-server/src/http/routes-catalog.ts apps/normal-server/src/http/routes-rewards.test.ts
 git commit -m "feat(normal-server): the check-in reads the month's gifts — day 28 of 11/2026 grants the top hat too, /api/rewards/daily serves the month's calendar with each fixed day's items, /api/catalog/items says what the schedule still names (spec 2026-10-12)"
 ```
+
+**Amendments (pre-flight 2026-10-13):**
+- **I2 (Ruling 5) — Step 1(d), `app.test.ts`: pin the user's decisions, not the data file's shape.** The rule "a passed month is dropped" is already pinned on a hand-built schedule by Task 1's `tells the wardrobe the first month from a given one…`, and spec §4.4.3 lets an operator schedule the top hat again in a later month, so two assertions of `serves the named daily gifts beside the catalogue, from the current month on` (title unchanged) must not break on a data-only edit. Replace
+
+  ```ts
+      expect(before.dailyGifts.slice(0, 2)).toEqual([
+        { itemId: 'badge_monthly', day: 28, month: null },
+        { itemId: 'title_devoted', day: 28, month: null },
+      ])
+  ```
+
+  with
+
+  ```ts
+      expect(before.dailyGifts).toEqual(
+        expect.arrayContaining([
+          { itemId: 'badge_monthly', day: 28, month: null },
+          { itemId: 'title_devoted', day: 28, month: null },
+        ]),
+      )
+  ```
+
+  and, in the December block, replace the comment line `// December: November's top hat is no longer promised; the eyepatch is this month's.` with
+
+  ```ts
+      // December: November's top hat is no longer promised for November (a later month may give it again); the eyepatch
+      // is this month's.
+  ```
+
+  and the line `expect(later.dailyGifts.map((g) => g.itemId)).not.toContain('head_tophat01')` with
+
+  ```ts
+      expect(later.dailyGifts.find((g) => g.itemId === 'head_tophat01')?.month ?? null).not.toBe('2026-11')
+  ```
+
+  (the lines between them stay). Task 4's operator doc says which edits turn the suite red.
+- **M2 — Step 1(b): the month boundary in `Asia/Ho_Chi_Minh` had no test.** Every new month assertion runs in the UTC-zoned suite, and spec Q9 and §4.3.4 are about `ECONOMY_TIMEZONE`. Append to the test `describes the calendar of the month it is asked in` (title unchanged, so Task 4 is unaffected), after its last assertion. `hcm` here is a new local of this test; the one in `the configured timezone` is another scope.
+
+  ```ts
+      // …and where ECONOMY_TIMEZONE says: 23:59 on 31/10 in Ho Chi Minh City is 16:59 UTC, 00:00 on 01/11 is 17:00 UTC.
+      const hcm = createEconomyService({ db, repos, inventory: inv, catalog, bus, timezone: 'Asia/Ho_Chi_Minh', onBalanceChanged: () => {}, gifts })
+      expect((await hcm.dailyStatus(playerId, Date.UTC(2026, 9, 31, 16, 59))).month).toBe('2026-10')
+      expect((await hcm.dailyStatus(playerId, Date.UTC(2026, 9, 31, 17, 0))).month).toBe('2026-11')
+      expect(hcm.dailyGiftNotices(Date.UTC(2026, 10, 30, 16, 59)).find((n) => n.itemId === 'head_tophat01')).toMatchObject({ month: '2026-11' })
+      expect(hcm.dailyGiftNotices(Date.UTC(2026, 10, 30, 17, 0)).map((n) => n.itemId)).not.toContain('head_tophat01')
+  ```
+- **M5 — Step 8.** Stage by name: replace the directory `apps/normal-server/src/economy` in the `git add` with `apps/normal-server/src/economy/daily-rules.ts apps/normal-server/src/economy/daily-rules.test.ts apps/normal-server/src/economy/economy-service.ts apps/normal-server/src/economy/economy-service.test.ts`. End the commit with the attribution trailer your session prescribes (CLAUDE.md §6); the `git commit -m` line is the subject only.
+- **M9 — Step 4.** The comment on `DailyClaimOk.item` (`economy-service.ts:63`) reads "`items` has all of them (day 28 grants two)". From 11/2026 day 28 grants three: change it to "`items` has all of them (a fixed tier may grant several)".
 
 ---
 
@@ -1423,6 +1504,19 @@ git add apps/normal-web/src/api.ts apps/normal-web/src/screens/format.ts apps/no
 git commit -m "feat(normal-web): the Daily calendar names each month's gifts — 'Ngày 28 tháng 11/2026: Huy hiệu tháng + Chuyên cần + Mũ chóp quý ông' — and a locked tile names its check-in month, both from the server's schedule (spec 2026-10-12)"
 ```
 
+**Amendments (pre-flight 2026-10-13):**
+- **I1 (Ruling 4) — no code here.** `hintFor`'s last-but-one step (a common or a rare in a draw slot is "a gift of the daily draw") stays as written, and the server does not list past-only gifts: do not add an `unavailable` branch for them. The latent wrong hint, a drawable common or rare that only a past month named, is documented in Task 4 (the operator warning and a `docs/known-limitations.md` entry).
+- **M3 + Ruling 6 — Steps 6 and 10: the legend's alignment is decided now, not left conditional.** At 375 px the line "Ngày 28 tháng 11/2026: Huy hiệu tháng + Chuyên cần + Mũ chóp quý ông" (about 70 characters at 0.8125 rem, roughly 450 px) is wider than the panel and wraps; with `.calLegend li { align-items: center }` (`normal.module.css:1108–1112`) the 18 px icon would centre on the wrapped block. Step 6: also change `align-items: center` to `align-items: flex-start` in `.calLegend li` (a one-line row does not move visibly: the icon is 18 px and the line about 19.5 px). Ruling 6 adds that the legend is left-aligned with the calendar lead (the `<p className={s.footnote}>` above the calendar: no centring, no inline margin or padding on `.calLegend`) and that each fixed-gift day is a line of its own: give the fixed-day `<li>` a CSS-module class, `s.calLegendDay`, with `flex-basis: 100%`, so it takes a whole row of the wrapping legend while the draw kinds stay together on the first row (the tests find the lines by text and do not care). Step 10: drop the sentence "If the legend's icon centres on a wrapped two-line row, add `align-items: flex-start` to `.calLegend li` in `normal.module.css` and retake." and check in the PNGs instead that the icon sits against the first line of a wrapped row, that the legend's left edge is the lead's, and that each fixed-gift day is on its own line.
+- **M5.** End the commit with the attribution trailer your session prescribes (CLAUDE.md §6); the `git commit -m` line is the subject only. The `git add` list already stages by name, and `normal.module.css` (the legend's rules) is on it.
+- **M6 — Step 6: read `items` defensively.** The DTO comment and spec §6 treat an older server as possible for `dailyGifts` (`?? []`), but the calendar's `items` is read unguarded, so a bundle that meets an un-rebuilt server (a `vite dev` session, say) would crash the whole Daily page instead of degrading. In `markerOf` write `const items = entry.items ?? []` and use `items` (`if (items.length > 0) return { kind: 'fixed', label: giftNames(items, t) }`), and in both legend filters use `(entry.items ?? []).length` instead of `entry.items.length`. The DTO can stay required.
+- **M7 — Step 9: also run the wardrobe e2e specs.** On the real server the six epics' lock hints grow from "Chưa có cách nhận món này" (25 characters) to "Quà điểm danh ngày 28 tháng 11/2026" (35 characters). That reflows card rows that `wardrobe-layout.spec.ts` measures (`expectEvenCardRows`) and `avatar2d.spec.ts` drives. The design absorbs it (`.cardRarity + * { margin-top: auto }`), but it is better found here than at the gate. After the existing Playwright command, run:
+
+  ```bash
+  pnpm --filter @bp/normal-web exec playwright test -c e2e/playwright.config.ts wardrobe-layout avatar2d
+  ```
+- **M8 — Step 10: reuse the wardrobe helper.** The zz-preview spec clicks the wardrobe tablists by hand. Import `goToWardrobeTab` with the others (`import { account, goToWardrobeTab, register, shot } from './support.js'`) and replace the two `getByRole('tablist', …)…click()` lines with `await goToWardrobeTab(page, 'Trang phục', 'Mũ')` from `e2e/support.ts` (same selectors, one place to update, already used by `avatar2d.spec.ts` and the mobile specs).
+- **M12 (Ruling 7) — a ruling, not a change.** `formatMonthKey` (Step 5) is the one shared helper for a month label: `hintFor` (`wardrobe.hint.dailyMonth`) and the Daily legend (`daily.marker.fixedDay`) both call it, so `vi` and `en` read the same `MM/YYYY` (pinned in both languages by `catalog.test.ts`, `names the month of a scheduled epic, as the server gives it`); nobody formats a month key inline. It sits where Step 5 puts it, in `apps/normal-web/src/screens/format.ts` beside the re-exports of the kit's `formatDay` and `formatMoment`, and it does not use `Intl`: a month key has no instant to format (spec §5.2). That departs from CLAUDE.md §6's "dates through `formatDay` / `formatMoment`" for this one case; it is not a spec deviation. The controller lists it as Ruling 7 in the final report.
+
 ---
 
 ### Task 4: Documentation
@@ -1727,6 +1821,59 @@ Expected: PASS — every checklist title occurs in its file, every matrix fragme
 git add docs/superpowers/specs/2026-09-04-bind-poker-design.md docs/normal-server.md docs/normal-web.md docs/player-guide.md docs/operation-test-plan.md deploy/normal-windows/README.md docs/deployment-normal.md docs/copy-review-2026-10-10.md docs/known-limitations.md docs/test-matrix.md docs/acceptance-checklist.md tooling/arch/acceptance-links.test.ts CLAUDE.md
 git commit -m "docs: the monthly daily gifts — SRS §13.2/§19.2 amendments, how an operator changes a month (normal-server.md, the LAN README), the player guide's month table, ops rows I-05/J-10/N-06, the matrix and checklist rows with their pins"
 ```
+
+**Amendments (pre-flight 2026-10-13):**
+- **I1 (Ruling 4) — no code: the operator doc warns, and `known-limitations.md` records it.** A common or a rare that only a past month named stays off the random draw for good (spec Q8), while `dailyGifts` stops listing it once its month is over (spec Q12, ruling 2), so its locked tile would say "Có thể nhận từ quà điểm danh (hiếm)", a promise the draw never keeps. The shipped schedule cannot hit this (it names only epics and the day-28 pair). (a) Step 2, in "Changing the daily gifts", right after the bullet "Every id in any `fixed` list, past months included, is kept off the random draw, like the achievements' rewards.", add:
+
+  ```markdown
+  - Prefer an epic, or an item outside the draw slots, for a dated month's `fixed` list. A common or a rare of
+    `head`/`face`/`aura`/`frame`/`hairColor`/`eyeColor` that only a past month names stays off the draw for good, while
+    `dailyGifts` stops listing it once its month is over — so its locked tile falls back to "Có thể nhận từ quà điểm danh
+    (thường/hiếm)", which the draw will never keep. Put such an item in the `default`, or schedule it again, or accept the
+    wrong hint (`docs/known-limitations.md`, UI).
+  ```
+
+  (b) Step 5, add an entry to `docs/known-limitations.md`, section "## UI" (the "Changing the daily gifts needs a restart" entry stays in "## Operations"):
+
+  ```markdown
+  **A common or rare that only a past month gave is promised from the daily draw.** The random draw leaves alone every id
+  any month of `data/daily-gifts.json` names, past months included (spec 2026-10-12 Q8), but `GET /api/catalog/items`
+  lists only the gifts still to come (Q12), so the wardrobe's `hintFor` falls through to "Có thể nhận từ quà điểm danh".
+  *Why:* the shipped schedule names only epics (which the hint never promises from the draw) and the day-28 pair (outside
+  the draw slots, and in every month). The case needs an operator to schedule a drawable common or rare in one month.
+  *What to do:* schedule epics or non-draw-slot items by month (`docs/normal-server.md`, "Changing the daily gifts"). If a
+  drawable item is ever wanted in one month, have the server also list past-only gifts so the hint can say "Chưa có cách
+  nhận món này".
+  *Tracked:* spec `2026-10-12-monthly-daily-gifts-design.md` Q8/Q13; Plan 22 ruling.
+  ```
+- **I2 (Ruling 5) — Step 2: say which edits turn the suite red.** In "Changing the daily gifts", replace step 2 of "To add or change a month" with:
+
+  ```markdown
+  2. Check it: `pnpm --filter @bp/normal-server exec vitest run src/economy/daily-gifts.test.ts`. That suite loads this
+     very file against the real catalogue. It also pins what the user decided on 12/10: October 2026 as it was — read
+     through the `default`, so **a change to the default turns it red** — and the six months 11/2026 to 04/2027, which
+     `src/http/routes-rewards.test.ts` (`grants the shipped November gift over HTTP`) and `src/app.test.ts`
+     (`serves the named daily gifts beside the catalogue, from the current month on`) also read. Adding a month, or
+     giving an item again in a later month, turns none of them red. Changing the default or one of those months changes
+     a promise: do it on the user's word, and in the same commit either write today's column out as an explicit
+     `"2026-10"` entry or update the test.
+  ```
+- **M4 — Step 2: name the new refusal.** In the paragraph that begins "`loadDailyGifts` **refuses to start**", add to the list "the same month key written twice (`month 2026-11 appears twice`: JSON keeps only the last of two equal keys, so a copied month whose key was not renamed would otherwise replace the first)", before "a top-level key other than `default` and `months`".
+- **M5.** End the commit with the attribution trailer your session prescribes (CLAUDE.md §6); the `git commit -m` line is the subject only. The CHANGELOG section stays the controller's.
+- **M10 — Step 5: ops rows J-10 and N-06.** "Huy hiệu tháng" sits under Trang trí → "Danh hiệu & huy hiệu", not under "Khung"; and N-06 as written edits the production schedule in the main checkout (a real gift change once restarted) and invites restarting the live host with a bad file, which leaves it down until someone reverts. Replace the two rows with (Edit tool; read a Vietnamese line back afterwards):
+
+  ```
+  | J-10 | Tủ đồ → Trang phục → Mũ, tích "Hiện cả món chưa có"; rồi Trang trí → Khung, và Trang trí → Danh hiệu & huy hiệu | Thẻ "Mũ chóp quý ông" ghi "Quà điểm danh ngày 28 tháng 11/2026", "Khung vàng" ghi "… tháng 02/2027", "Huy hiệu tháng" ghi "Quà điểm danh ngày 28". Khi tháng của một món đã qua, thẻ của món đó ghi "Chưa có cách nhận món này" | P2 |
+  ```
+
+  ```
+  | N-06 | Trên một nhánh: sửa `daily-gifts.json` (ví dụ thêm mục `2027-05`), chạy `pnpm --filter @bp/normal-server exec vitest run src/economy/daily-gifts.test.ts` → xanh; đổi một id thành id sai → test đỏ và chỉ đúng id sai. Không khởi động host LAN với bản nháp sai. Khôi phục file nếu đây không phải thay đổi thật. Chỉ với một thay đổi thật đã gộp: khi `/health` báo `"rooms":0` thì `stop.ps1` và `run.ps1 -NoMigrate` | Test xanh với file đúng; với id sai, test báo đúng id sai (`… grants …, which is not in the item catalogue`) và không có bản nháp sai nào chạm tới host LAN. Với thay đổi thật đã gộp: server chạy lại, `/health` báo ok, lịch điểm danh của tháng đó ghi quà mới | P2 |
+  ```
+- **M11 — Steps 2 and 3: match the wrapped text.** The quoted passages wrap across lines in the files; the Edit tool needs the wrapped text, not the single line this plan quotes. Known cases: `docs/normal-server.md` "Adding a cosmetic item" step 3, "…a default in an optional slot, or an absent `badge_monthly` / `title_devoted` — …" (lines 256–258); `docs/normal-server.md` "Things worth knowing", the daily-draw bullet (lines 266–270, a paragraph and not a heading); `docs/normal-web.md`, the `ItemTab` bullet (lines 215–216). Read each passage before editing it.
+- **M13 — Step 2: two economy notes for the operator.** Add both as bullets to "Changing the daily gifts", after the bullets above:
+  - "Each `draw` tier pays `NO_ITEM_FALLBACK_POINTS` (10,000, `daily_item_fallback`) to a player who owns its whole pool: adding draw tiers raises what a month can pay (conservation is unaffected)."
+  - "The calendar always shows 31 tiers, so a `default` tier 29–31 is advertised in a 30-day month and in February, where the streak never reaches it. Prefer month entries for those tiers." (The loader rightly allows 29–31 in the `default`; Task 1's test pins that.)
+- **M14 — the deploy deadline, for the controller.** Spec §11: the new build must run on the LAN host before 01/11/2026 (so the November calendar and the top hat's lock hint read right from the first day), and at the latest before 28/11/2026 (so the day-28 claim can grant the top hat). It is also a line in Global Constraints; the controller's deploy step and final report carry it, and the CHANGELOG's "Still open" lists it if the deploy has not happened by then. No Task 4 edit. The SDD briefs `task-1..4-brief.md` are re-extracted from this plan after these amendments.
 
 ---
 
