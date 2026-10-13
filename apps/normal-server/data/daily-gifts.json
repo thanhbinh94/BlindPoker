@@ -1,0 +1,16 @@
+{
+  "default": {
+    "7": { "draw": "common" },
+    "14": { "draw": "rare" },
+    "21": { "draw": "rare" },
+    "28": { "fixed": ["badge_monthly", "title_devoted"] }
+  },
+  "months": {
+    "2026-11": { "28": { "fixed": ["badge_monthly", "title_devoted", "head_tophat01"] } },
+    "2026-12": { "28": { "fixed": ["badge_monthly", "title_devoted", "face_eyepatch01"] } },
+    "2027-01": { "28": { "fixed": ["badge_monthly", "title_devoted", "aura_lightning01"] } },
+    "2027-02": { "28": { "fixed": ["badge_monthly", "title_devoted", "frame_gold"] } },
+    "2027-03": { "28": { "fixed": ["badge_monthly", "title_devoted", "haircolor_lavender01"] } },
+    "2027-04": { "28": { "fixed": ["badge_monthly", "title_devoted", "eyecolor_gold01"] } }
+  }
+}
