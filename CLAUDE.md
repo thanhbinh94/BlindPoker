@@ -106,8 +106,9 @@ locally, not shipped".
 ## 5. Security rules
 
 - Never commit `other/`, the user's untracked scratch folder (review notes, screenshots), or any `.env`, secret,
-  database dump or the original pictures in `assets/avatar-src/`. `other/` is not in `.gitignore`, so stage files by
-  name. Never use `git add -A` or `git add .` without first reading `git status`.
+  database dump or the original pictures in `assets/avatar-src/`. `other/` is in `.gitignore` since 2026-10-14 (an
+  editor had staged it once); still stage files by name, and never use `git add -A` or `git add .` without first
+  reading `git status`.
 - **Never print** `DATABASE_URL`, `SESSION_SECRET` or the contents of any `.env`: no `cat`, `Get-Content` or echo.
   `run.ps1 -DryRun` masks the password, but its output still shows the database user and host, so never paste it
   anywhere public. If a host `.env` needs a change, change only that one key and never echo the file.
