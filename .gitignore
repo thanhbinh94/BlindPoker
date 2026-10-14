@@ -45,3 +45,6 @@ deploy/normal-windows/*.log
 # Plan worktrees (superpowers:using-git-worktrees)
 .worktrees/
 .superpowers/
+
+# The user's private scratch (review notes, screenshots). Never committed.
+other/
