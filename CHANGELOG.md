@@ -9,7 +9,7 @@ below are the real history.
 
 ---
 
-## BP-24 — the Normal Docker image builds and boots; esbuild goes through its API — merged `MERGE` (2026-10-16)
+## BP-24 — the Normal Docker image builds and boots; esbuild goes through its API — merged `7e7b53f` (2026-10-16)
 
 The user installed Docker Desktop to prepare for hosting, and the image's first `docker build` ever — `docs/known-limitations.md`
 had said "never been built" since Plan 5 — failed in five seconds at `pnpm --filter @bp/normal-server build`:
@@ -32,8 +32,13 @@ shim, which is why no gate had seen it. Branch `bugfix/BP-24-docker-build-esbuil
   `docs/deployment-normal.md` §2 and §10, `deploy/oracle/README.md` §8, `docs/lessons-learned.md` (four rulings).
 - **Khác với spec / Deviations from the spec.** None: spec §22.4 names esbuild and the outputs, not how it is invoked.
 - **Still open.** The Compose stack has never run as a whole, Caddy's certificate flow has never run, and the ARM build the
-  Oracle kit needs is still ahead. The image's `src/` payload is a residual. On this machine the gate could not run to the
-  end: `pnpm build:lite` needs Node 22 (the machine has 24) and the e2e suites need Chromium (not installed).
+  Oracle kit needs is still ahead. The image's `src/` payload is a residual. Not deployed: the LAN host was not running
+  and its `.env` is not on this checkout.
+- **Gate** on the branch tree (`main` had not moved): typecheck, lint, 2694 unit tests (10 skipped) in 491 s,
+  build:normal, Lite web + server, avatar:check 1560/1560, e2e Normal 24/24, e2e Lite 4/4, ops 34/34 in 10.8 min. The
+  Lite exe step was skipped by the user's decision (it needs Node 22; the machine has 24). Chromium was installed for
+  the e2e suites with the user's approval. On this machine `pnpm` exists only through corepack, so the root scripts
+  need a shim on PATH (`corepack enable --install-directory <dir> pnpm`).
 
 ## Plan 22 — the day-28 check-in gift becomes a month-by-month schedule; the six epics go out one a month from 11/2026 — merged `aa0709f` (2026-10-13)
 
