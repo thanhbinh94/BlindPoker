@@ -9,6 +9,32 @@ below are the real history.
 
 ---
 
+## BP-24 — the Normal Docker image builds and boots; esbuild goes through its API — merged `MERGE` (2026-10-16)
+
+The user installed Docker Desktop to prepare for hosting, and the image's first `docker build` ever — `docs/known-limitations.md`
+had said "never been built" since Plan 5 — failed in five seconds at `pnpm --filter @bp/normal-server build`:
+`scripts/build.mjs` ran `node …/esbuild/bin/esbuild`, and on Linux that file is esbuild's native binary (its install step
+replaces the JS shim), so Node printed `SyntaxError: Invalid or unexpected token` on a line reading `ELF`. Windows keeps the
+shim, which is why no gate had seen it. Branch `bugfix/BP-24-docker-build-esbuild`.
+
+- **What an operator gets.** `docker build -f apps/normal-server/Dockerfile .` succeeds (x86, Docker Desktop 29.8.2, 331 MB).
+  Run against a real PostgreSQL 16 the image applies the committed migrations, answers `GET /health` with `"db":"ok"`,
+  serves `index.html` at `/` and at a deep link, and its HEALTHCHECK turns healthy — the `service_healthy` condition
+  `caddy` waits on in Compose. The same day the `normal-server` suite ran once on that PostgreSQL: 37 files, 586 tests,
+  0 skipped (the two overlapping-transaction cases included), 46 s.
+- **Under it.** `apps/normal-server/scripts/build.mjs`, `apps/normal-server/scripts/e2e-server.mjs` and
+  `apps/lite/scripts/build.mjs` call esbuild's `build()` with the options the CLI form took (`logLevel: 'info'` keeps the
+  same summary); `tsc`, `vite` and `postject` are still spawned through `process.execPath`, since their entries are
+  JavaScript. No dependency, protocol or schema change.
+- **Docs.** Acceptance checklist 40.8 and 66.21 → ✓ with the dated runs (63 ✓ · 1 partial · 0 ✗); `docs/known-limitations.md`
+  rewrites the two entries (what has run, what has not: the Compose stack as a whole, ACME, ARM) and adds one (the image
+  carries `src/` and the tests beside `dist/`, since `pnpm deploy` has no `files` list to go by); README, SRS Appendix B,
+  `docs/deployment-normal.md` §2 and §10, `deploy/oracle/README.md` §8, `docs/lessons-learned.md` (four rulings).
+- **Khác với spec / Deviations from the spec.** None: spec §22.4 names esbuild and the outputs, not how it is invoked.
+- **Still open.** The Compose stack has never run as a whole, Caddy's certificate flow has never run, and the ARM build the
+  Oracle kit needs is still ahead. The image's `src/` payload is a residual. On this machine the gate could not run to the
+  end: `pnpm build:lite` needs Node 22 (the machine has 24) and the e2e suites need Chromium (not installed).
+
 ## Plan 22 — the day-28 check-in gift becomes a month-by-month schedule; the six epics go out one a month from 11/2026 — merged `aa0709f` (2026-10-13)
 
 The user's decision of 2026-10-12, after the player-guide review found six epic items with no way to be earned: hand

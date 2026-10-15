@@ -8,9 +8,10 @@ guide.
 It is not a bug list. A bug is something that is supposed to work and does not; everything below
 either works as designed and the design has a cost, or was scoped out on purpose.
 
-The three rows of [`acceptance-checklist.md`](acceptance-checklist.md) that are not a plain ✓
-(40.8, 66.21 and 66.40) appear here too, under **Operations**; so does the one Plan 21 added
-(P21.3, the squeeze peel not yet tried on a real phone), under **UI**.
+The one row of [`acceptance-checklist.md`](acceptance-checklist.md) that is not a plain ✓ (66.40)
+appears here too, under **Operations** — 40.8 and 66.21 joined the ✓ rows on 2026-10-16, and what is
+left of them (the ARM build, the real-server run as an operator step) is written up there as well; so
+does the one Plan 21 added (P21.3, the squeeze peel not yet tried on a real phone), under **UI**.
 
 ---
 
@@ -180,19 +181,34 @@ is worth; building once before a session of Lite UI work is a one-line fix.
 
 ## Operations
 
-**The Normal Docker image has never been built.** `deploy/normal/docker-compose.yml` is validated by
-`docker compose config` (which substitutes every variable and fails loudly on a missing one), and the
-server bundle has been run standalone against its production-only `node_modules` — but no
-`docker build` has been executed, because the development machine has no Docker daemon.
-*Why:* an environment limitation, not a decision.
-*What to do:* treat the first deploy as a supervised trial and follow the pre-flight in
-`docs/deployment-normal.md` §2 — `docker compose config`, then `up -d --build`, then read
-`docker compose logs migrate` before `app`.
-*Tracked:* acceptance checklist row 40.8; README's Normal-edition warning; `docs/deployment-normal.md` §2.
+**The Normal Docker image has been built once, on x86, and never by Compose.** Until 2026-10-16 it had
+never been built at all (the development machine had no Docker daemon); that day `docker build -f
+apps/normal-server/Dockerfile .` ran on Docker Desktop 29.8.2 (linux/x86_64), the 331 MB image booted
+against a `postgres:16-alpine` container, applied the committed migrations, answered `/health` with
+`"db":"ok"`, served `index.html` at `/` and `/lobby`, and its own HEALTHCHECK turned healthy (BP-24).
+The first attempt failed in `apps/normal-server/scripts/build.mjs`: it ran `node …/esbuild/bin/esbuild`,
+and on Linux that file is esbuild's native binary, not a script — fixed by going through esbuild's JS
+API in that script, Lite's and the e2e server's. What has still not run: `docker compose up -d --build`
+as a stack (`db` → `migrate` → `app` → `caddy`, with `service_completed_successfully`), Caddy's ACME
+flow, and any build on ARM (next entry).
+*Why:* the stack needs a host with ports 80/443 and a DNS name; the development machine has neither.
+*What to do:* treat the first Compose deploy as a supervised trial — `docker compose config`, then
+`up -d --build`, then read `docker compose logs migrate` before `app` (`docs/deployment-normal.md` §2).
+*Tracked:* acceptance checklist row 40.8 (✓ since 2026-10-16, with this caveat); `docs/deployment-normal.md` §2.
+
+**The image carries the server's sources and tests beside `dist/`.** `pnpm deploy --prod` copies a
+package's *files*, and `@bp/normal-server`'s `package.json` has no `files` list, so `/app` in the image
+holds `src/` (about 1 MB, test files included), `scripts/`, `tsconfig*.json`, `vitest.config.ts` and
+the Dockerfile itself next to `dist/`, `drizzle/`, `data/` and the six production dependencies
+(seen in the 2026-10-16 run). Nothing secret is among them — `.env` files are excluded by
+`Dockerfile.dockerignore` — and nothing at run time reads them.
+*Why it stays:* a `files` list changes what `pnpm deploy` emits, which `build.test.ts` and the
+Dockerfile's layout comments describe; it is a tidy-up for a release, not for the fix that found it.
+*Tracked:* here; `apps/normal-server/Dockerfile` (the `pnpm deploy` step).
 
 **…and the first build the project's own runbook recommends is an `arm64` one.** `deploy/oracle`
-targets an Oracle Always Free `VM.Standard.A1.Flex`, which is ARM, so the first `docker build` is
-likely to be both the image's first build anywhere *and* its first build off x86. `argon2` 0.45.1
+targets an Oracle Always Free `VM.Standard.A1.Flex`, which is ARM, so the first `docker build` there
+is the image's first build off x86 (the x86 build happened on 2026-10-16, previous entry). `argon2` 0.45.1
 ships musl prebuilds for **both** `linux-x64` and `linux-arm64`
 (`prebuilds/linux-arm64/argon2.armv8.musl.node`), so `node-gyp-build` unpacks a binary on arm64 the
 same way it does on x86 — there is no known source-compile step at this point. The builder stage's
@@ -200,7 +216,7 @@ same way it does on x86 — there is no known source-compile step at this point.
 the expected path. No other difference between the ARM and x86 build is known in advance; this is
 still the image's first build on this architecture, and "should build the same way" is a reading of
 `node-gyp-build`'s prebuild matching, not an observation.
-*Why:* the same missing Docker daemon, plus no ARM machine of any kind here.
+*Why:* no ARM machine of any kind here.
 *What to do:* build it with `docker compose build --progress=plain 2>&1 | tee /tmp/build.log` the
 first time, and read the log rather than the summary. `deploy/oracle/README.md` §8 has a symptom
 table for this build specifically.
@@ -261,16 +277,19 @@ Normal process pointed at the same database would empty the first one's keys whe
 *Tracked:* here; `apps/normal-server/src/repos/balance-repo.ts` and `apps/lite/server/src/repos/sqlite-repos.ts`
 (`pruneLedgerKeys`), `apps/normal-server/drizzle/0003_ledger_keys.sql`, Lite schema v3.
 
-**The suite has never been run against a real PostgreSQL.** Every `apps/normal-server` test runs on
-in-process **PGlite** through the same driver-neutral `AppDb` the production code uses, so the
-queries under test are the production queries. PGlite is single-connection, though, which means the
-row-lock serialization tests (`SELECT … FOR UPDATE` — what the whole money design rests on) only
-genuinely execute when `TEST_DATABASE_URL` points at a real server, and that run has not happened
-here.
-*Why:* an environment limitation (same missing Docker daemon), plus a deliberate design choice —
-spec Appendix A explains why PGlite was preferred to Testcontainers for the default path.
-*What to do:* run it once before deploying; exact commands in `docs/deployment-normal.md` §2.
-*Tracked:* acceptance checklist row 66.21; spec Appendix A.
+**`pnpm test` runs on PGlite; the real-PostgreSQL run is a step, not the default.** Every
+`apps/normal-server` test runs on in-process **PGlite** through the same driver-neutral `AppDb` the
+production code uses, so the queries under test are the production queries. PGlite is
+single-connection, though, which means the row-lock serialization tests (`SELECT … FOR UPDATE` — what
+the whole money design rests on) only genuinely execute when `TEST_DATABASE_URL` points at a real
+server. That run happened on 2026-10-16 (BP-24): a `postgres:16-alpine` container, 37 files, 586
+tests, 0 skipped, 46 s. It is not part of the gate, so a change to the money path after that date is
+proven on PGlite only until somebody runs it again.
+*Why:* a deliberate design choice — spec Appendix A explains why PGlite was preferred to
+Testcontainers for the default path — and Docker is not required by any gate.
+*What to do:* run it once before every deploy that touches `repos/` or `economy/`; exact commands in
+`docs/deployment-normal.md` §2.
+*Tracked:* acceptance checklist row 66.21 (✓ since 2026-10-16); spec Appendix A.
 
 **Seven npm advisories are deferred.** `pnpm audit --prod` is clean across 634 production
 dependencies. The full `pnpm audit` reports seven, every one of them against a build- or test-only
