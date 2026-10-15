@@ -31,6 +31,12 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } fr
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+// esbuild through its JS API, never `node <esbuild>/bin/esbuild`: on Linux and macOS esbuild's
+// install step replaces that JS shim with the native binary itself (an ELF file), and `node` cannot
+// run one — the first `docker build` of this image died there with `SyntaxError: Invalid or
+// unexpected token` on a line reading `ELF` (BP-24, 2026-10-16). On Windows the shim stays
+// JavaScript, which is why the bug never showed on the development machine.
+import { build as esbuild } from 'esbuild'
 
 const require = createRequire(import.meta.url)
 
@@ -161,25 +167,28 @@ function typecheck() {
 
 // ---------------------------------------------------------------------------- bundle
 
-function bundle() {
+async function bundle() {
   rmSync(DIST, { recursive: true, force: true })
   mkdirSync(DIST, { recursive: true })
   log(`bundle: esbuild ${ENTRIES.join(' + ')} → dist/ (external: ${EXTERNAL.join(', ')})`)
-  node([
-    cli('esbuild'),
-    ...ENTRIES,
-    '--bundle',
-    '--platform=node',
-    '--format=esm',
-    '--target=node22',
-    '--outdir=dist',
-    ...EXTERNAL.map((name) => `--external:${name}`),
-    `--banner:js=${BANNER}`,
-    '--define:process.env.NODE_ENV="production"',
-    '--legal-comments=none',
-    // No `--minify`: a stack trace out of a production container is worth more than the kilobytes,
+  // The same options the CLI form took, one to one. `logLevel: 'info'` keeps esbuild's own summary
+  // (each output file and its size) and its diagnostics on our stdio, as the child process had.
+  await esbuild({
+    absWorkingDir: ROOT,
+    entryPoints: ENTRIES,
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    target: 'node22',
+    outdir: 'dist',
+    external: EXTERNAL,
+    banner: { js: BANNER },
+    define: { 'process.env.NODE_ENV': '"production"' },
+    legalComments: 'none',
+    logLevel: 'info',
+    // No `minify`: a stack trace out of a production container is worth more than the kilobytes,
     // and nothing about this bundle is downloaded over a network.
-  ])
+  })
 
   const dependencies = new Set(Object.keys(JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).dependencies ?? {}))
   for (const rel of OUTPUTS) {
@@ -220,10 +229,10 @@ const args = process.argv.slice(2)
 const started = Date.now()
 try {
   if (!args.includes('--no-typecheck')) typecheck()
-  bundle()
+  await bundle()
   verifySidecars()
 } catch (err) {
-  // A failing child has already printed its own diagnostics through the inherited stdio; re-throwing
+  // A failing child (or esbuild, through `logLevel`) has already printed its own diagnostics; re-throwing
   // would bury them under an `execFileSync` stack that says nothing about what went wrong.
   die(`failed — ${err instanceof Error ? err.message.split('\n')[0] : String(err)}`)
 }

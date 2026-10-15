@@ -16,13 +16,13 @@
  * on purpose, so it must never share a directory with the shipped artefacts, let alone be mistaken
  * for one: it goes to `.e2e/`, which is gitignored and is not `dist`.
  */
-import { execFileSync, spawn } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
-import { createRequire } from 'node:module'
-import { dirname, join, resolve } from 'node:path'
+import { spawn } from 'node:child_process'
+import { existsSync, mkdirSync, rmSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-
-const require = createRequire(import.meta.url)
+// The JS API, not `node <esbuild>/bin/esbuild`: see the note in `build.mjs` (BP-24) — on Linux that
+// file is the native binary, not a script.
+import { build as esbuild } from 'esbuild'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const OUT_DIR = resolve(ROOT, '.e2e')
@@ -45,15 +45,6 @@ function die(message) {
   process.exit(1)
 }
 
-/** Absolute path to a dependency's CLI entry point — `node_modules/.bin` holds `.cmd` shims on Windows. */
-function cli(pkg, name = pkg) {
-  const manifest = require.resolve(`${pkg}/package.json`)
-  const bin = JSON.parse(readFileSync(manifest, 'utf8')).bin
-  const rel = typeof bin === 'string' ? bin : bin?.[name]
-  if (!rel) die(`${pkg} declares no "${name}" binary`)
-  return resolve(dirname(manifest), rel)
-}
-
 // The suite drives a browser against the *web build*, so a missing one is not a warning to be found
 // later in twenty failed selectors. `buildApp` would happily start API-only and answer /health.
 if (!existsSync(PUBLIC_DIR)) {
@@ -63,27 +54,24 @@ if (!existsSync(PUBLIC_DIR)) {
 rmSync(OUT_DIR, { recursive: true, force: true })
 mkdirSync(OUT_DIR, { recursive: true })
 try {
-  execFileSync(
-    process.execPath,
-    [
-      cli('esbuild'),
-      ENTRY,
-      '--bundle',
-      '--platform=node',
-      '--format=esm',
-      '--target=node22',
-      `--outfile=${OUT}`,
-      ...EXTERNAL.map((name) => `--external:${name}`),
-      `--banner:js=${BANNER}`,
-      '--legal-comments=none',
-    ],
-    { cwd: ROOT, stdio: 'inherit' },
-  )
+  await esbuild({
+    absWorkingDir: ROOT,
+    entryPoints: [ENTRY],
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    target: 'node22',
+    outfile: OUT,
+    external: EXTERNAL,
+    banner: { js: BANNER },
+    legalComments: 'none',
+    logLevel: 'info',
+  })
 } catch {
-  // esbuild has already printed the file, the line and the reason through the inherited stdio.
-  // Re-throwing would bury all of that under an `execFileSync` stack that says nothing about it —
-  // the same reason `scripts/build.mjs` ends in a `catch` that only names the step. Playwright shows
-  // this as the last line of `[WebServer]` output before it gives up on the URL.
+  // esbuild has already printed the file, the line and the reason (`logLevel: 'info'`). Re-throwing
+  // would bury all of that under a stack that says nothing about it — the same reason
+  // `scripts/build.mjs` ends in a `catch` that only names the step. Playwright shows this as the
+  // last line of `[WebServer]` output before it gives up on the URL.
   die(`esbuild failed to bundle ${ENTRY} — see the diagnostics above`)
 }
 

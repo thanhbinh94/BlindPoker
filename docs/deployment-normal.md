@@ -82,13 +82,19 @@ Kiểm tra file được hiểu đúng trước khi khởi động thứ gì. L�
 docker compose config
 ```
 
-### ⚠️ Đọc trước khi chạy `up -d --build`: image này **chưa từng được build**
+### ⚠️ Đọc trước khi chạy `up -d --build`: image đã build **một lần trên x86**, stack Compose thì chưa chạy trọn
 
-Nói thẳng, vì lần triển khai thật đầu tiên rất có thể là **lần đầu tiên trên đời** những dòng đó
-được thực thi. Máy làm ra bộ file này không có Docker daemon chạy được.
+Tới 2026-10-16 image này chưa từng được build (máy dev không có Docker daemon). Ngày đó nó đã build
+thật trên Docker Desktop (linux/x86_64, 331 MB), chạy với PostgreSQL 16 thật, tự áp migration, trả
+`/health` `"db":"ok"`, phục vụ `index.html` ở `/` và `/lobby`, và HEALTHCHECK của image báo healthy.
+Lần build đầu tiên hỏng ở `pnpm --filter @bp/normal-server build`: script gọi `node` lên
+`esbuild/bin/esbuild`, mà trên Linux file đó là binary gốc chứ không phải script — đã sửa (BP-24).
+Vậy nên phần còn lại dưới đây vẫn là lần đầu: **stack Compose như một khối**, và **ARM**.
 
 **Đã kiểm chứng thật:**
 
+- `docker build -f apps/normal-server/Dockerfile .` trên x86 (2026-10-16), và image chạy độc lập với
+  một PostgreSQL 16 thật.
 - `docker compose config` — cú pháp compose file, mọi phép thay thế biến, thứ tự `depends_on`, mount
   của Caddyfile, tên volume.
 - `pnpm --filter @bp/normal-server deploy --prod <dir>` chạy thật trên pnpm 9.15.9: kết quả có đúng
@@ -104,8 +110,8 @@ Nói thẳng, vì lần triển khai thật đầu tiên rất có thể là **l
   `PUBLIC_DIR`: `GET /` trả `index.html`, `GET /lobby` (deep link) cũng trả `index.html`. Đó chính
   là hai dòng `COPY` + `ENV PUBLIC_DIR` của runtime stage, chỉ khác là chạy ngoài container.
 
-**Chưa từng chạy:** bản thân `docker build`, `pnpm install` bên trong Alpine, quy trình xin chứng chỉ
-ACME của Caddy, và `service_completed_successfully` lúc chạy thật.
+**Chưa từng chạy:** `docker compose up -d --build` như một stack (`db` → `migrate` → `app` → `caddy`,
+với `service_completed_successfully`), quy trình xin chứng chỉ ACME của Caddy, và build trên ARM.
 
 Vì vậy hãy coi lần triển khai đầu là một lần chạy thử có giám sát: đừng làm nó lúc nửa đêm, và khi
 có sự cố thì đọc log **theo đúng thứ tự khởi động** — `docker compose logs migrate` trước, rồi
@@ -441,4 +447,4 @@ docker compose up -d    # tạo lại app và migrate với DATABASE_URL mới
 | WebSocket kết nối rồi đóng ngay | `ALLOWED_ORIGINS` không chứa origin mà trang được phục vụ từ đó. Nó suy ra từ `DOMAIN`; trình duyệt ở `https://www.example.com` cần đúng origin đó trong danh sách. |
 | Mọi người bị đăng xuất sau một lần deploy | `SESSION_SECRET` đã đổi. Nó phải ổn định qua các lần triển khai. |
 | `docker compose down -v` | Xoá `pgdata` **và** `caddy_data`. Tức là toàn bộ database. `down` không kèm `-v` mới là thứ bạn định làm. |
-| Build hỏng ở bước `pnpm install` trong Alpine | Đây là một trong những phần chưa từng chạy (xem cảnh báo ở mục 2). Đọc dòng log ngay phía trên chỗ hỏng; nếu là argon2 thì stage builder đã có sẵn `python3 make g++` cho đường biên dịch, và nguyên nhân thường là hết RAM trên máy chủ nhỏ. |
+| Build hỏng ở bước `pnpm install` trong Alpine | Bước này đã chạy được trên x86 (mục 2); trên ARM thì vẫn là lần đầu. Đọc dòng log ngay phía trên chỗ hỏng; nếu là argon2 thì stage builder đã có sẵn `python3 make g++` cho đường biên dịch, và nguyên nhân thường là hết RAM trên máy chủ nhỏ. |

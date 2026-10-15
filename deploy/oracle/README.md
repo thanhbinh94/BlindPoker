@@ -302,12 +302,12 @@ docker compose up -d --build
 > Compose tìm `.env` theo thư mục dự án, nên hoặc bạn đứng sẵn ở đây, hoặc phải thêm
 > `--env-file /opt/bind-poker/deploy/normal/.env`. Cứ `cd` cho gọn.
 
-### ⚠️ Đây rất có thể là lần đầu tiên image này được build, ở bất cứ đâu
+### ⚠️ Đây là lần đầu tiên image này được build trên ARM
 
-Máy làm ra repo này không có Docker daemon chạy được: `docker compose config` đã chạy thật, artefact
-`pnpm deploy --prod` đã chạy thật và đã được chạy độc lập, nhưng **`docker build` thì chưa bao giờ**
-(`docs/known-limitations.md`, và mục 2 của `docs/deployment-normal.md`). Bạn còn đang build nó cho
-**ARM**. Vì vậy: đừng làm bước này lúc nửa đêm, và hãy nhìn nó chạy.
+Image đã build thật **một lần, trên x86** (2026-10-16, BP-24: Docker Desktop trên máy dev, chạy được
+với PostgreSQL 16 thật — `docs/known-limitations.md`, và mục 2 của `docs/deployment-normal.md`).
+Nhưng bạn đang build nó cho **ARM**, và stack Compose trọn vẹn (`db` → `migrate` → `app` → `caddy`)
+chưa từng chạy ở đâu. Vì vậy: đừng làm bước này lúc nửa đêm, và hãy nhìn nó chạy.
 
 **Dự kiến 15–30 phút** trên 2 OCPU (lâu hơn nhiều trên 1 OCPU). Phần lớn thời gian nằm ở
 `pnpm install` trong Alpine, một lượt typecheck TypeScript, và vite build.

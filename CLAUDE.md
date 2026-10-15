@@ -223,6 +223,8 @@ locally, not shipped".
 - **Removing a worktree:** `git worktree remove` refuses one that holds untracked or ignored files (`node_modules`).
   Check that `git -C <wt> status` is clean, then `Remove-Item -Recurse -Force <wt>` and `git worktree prune`.
 - **The e2e `--` trap** (§2), and **`pnpm --filter @bp/tooling test` matches nothing** (§3).
+- **Never spawn `node <pkg>/bin/esbuild`.** On Linux that file is the native binary (esbuild swaps its shim at install),
+  so the Docker build dies with `SyntaxError … ELF`. The three build scripts use esbuild's JS API (BP-24).
 - **Ports:** 8080 is the LAN host and the Lite exe, 8090 the Lite e2e, 8091 the Normal e2e, 8093 the ops pack, 5173
   Vite dev and 5175 the playground.
 - Everything else, with its story, is in `docs/lessons-learned.md`.

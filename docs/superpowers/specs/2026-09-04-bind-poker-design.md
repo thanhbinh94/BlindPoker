@@ -1199,6 +1199,8 @@ Ba dòng `partial` và lý do:
 | 66.21 Persistent database works | Toàn bộ suite chạy trên PGlite; đường `pg` thật và `SELECT … FOR UPDATE` chỉ thực thi khi có `TEST_DATABASE_URL` |
 | 66.40 Security checks pass | `pnpm audit --prod` sạch; `pnpm audit` đầy đủ còn 7 advisory, tất cả thuộc gói chỉ dùng khi build/test — `docs/security.md` §2 |
 
+**Cập nhật 2026-10-16 (BP-24).** Máy dev có Docker Desktop: image Normal đã build thật trên x86 (331 MB), chạy được với PostgreSQL 16 thật (migration, `/health`, giao diện), và suite `normal-server` đã chạy trên PostgreSQL thật với 0 test bị bỏ qua. Hai dòng 40.8 và 66.21 thành ✓; bảng kiểm nay **63 ✓, 1 partial (66.40), 0 ✗**. Lần build đầu lộ một lỗi ở `scripts/build.mjs` (gọi `node` lên `bin/esbuild`, trên Linux là binary gốc) — sửa bằng cách dùng API JS của esbuild. Còn lại: build trên ARM (kit Oracle) và chạy stack Compose trọn vẹn chưa từng làm — `docs/known-limitations.md`.
+
 Bảng kiểm không tự mục nát được: `tooling/arch/acceptance-links.test.ts` đọc chính tệp markdown đó và kiểm rằng mọi tệp test được trích dẫn có thật, mọi tên test được trích dẫn nằm trong tệp đó, mọi dòng có đúng một trong ba trạng thái, và đủ cả 21 + 43 mục. Đổi tên một test mà quên sửa bảng thì `pnpm test` đỏ.
 
 Danh sách hạn chế đã biết — gồm cả ba dòng trên — ở `docs/known-limitations.md`. Lịch sử theo từng plan ở `CHANGELOG.md`.

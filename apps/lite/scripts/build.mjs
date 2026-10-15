@@ -11,8 +11,11 @@
  * `--smoke` runs the finished exe with `--smoke`, which boots the whole server on an ephemeral port
  * and prints its `/health` JSON; a non-zero exit fails the build.
  *
- * Everything runs through `process.execPath` on the packages' JS entry points rather than the
+ * Vite and postject run through `process.execPath` on the packages' JS entry points rather than the
  * `node_modules/.bin` shims, which on Windows are `.cmd` files that `execFileSync` cannot start.
+ * esbuild is the exception and goes through its JS API: on Linux and macOS its install step replaces
+ * `bin/esbuild` with the native binary, which `node` cannot run (BP-24 — the Normal image's first
+ * `docker build` failed exactly there; this script shares the pattern and is fixed with it).
  */
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -21,6 +24,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { build as esbuild } from 'esbuild'
 import { isLiteAvatarFile, readDefaultHairLayers, readDefaultOutfitLayers } from './avatar-files.mjs'
 
 const require = createRequire(import.meta.url)
@@ -126,24 +130,25 @@ function copyAvatarAssets() {
 
 // ---------------------------------------------------------------------------- server
 
-function buildServer() {
+async function buildServer() {
   log('server: esbuild bundle')
-  // `--external:node:*` keeps the `node:`-prefixed built-ins as runtime requires — nothing else may
+  // `external: ['node:*']` keeps the `node:`-prefixed built-ins as runtime requires — nothing else may
   // stay external, because inside the exe there is no `node_modules` left to resolve against.
-  node([
-    cli('esbuild'),
-    'server/src/main.ts',
-    '--bundle',
-    '--platform=node',
-    '--target=node22',
-    '--format=cjs',
-    '--outfile=dist/server.cjs',
-    '--external:node:*',
-    '--define:process.env.NODE_ENV="production"',
-    '--minify-syntax',
-    '--legal-comments=none',
-    // No `--sourcemap`: esbuild emits none by default, and a map would be dead weight inside the exe.
-  ])
+  await esbuild({
+    absWorkingDir: ROOT,
+    entryPoints: ['server/src/main.ts'],
+    bundle: true,
+    platform: 'node',
+    target: 'node22',
+    format: 'cjs',
+    outfile: 'dist/server.cjs',
+    external: ['node:*'],
+    define: { 'process.env.NODE_ENV': '"production"' },
+    minifySyntax: true,
+    legalComments: 'none',
+    logLevel: 'info',
+    // No `sourcemap`: esbuild emits none by default, and a map would be dead weight inside the exe.
+  })
   log(`server: dist/server.cjs ${kb(statSync(join(DIST, 'server.cjs')).size)}`)
 }
 
@@ -264,14 +269,14 @@ try {
       buildWeb()
       break
     case 'server':
-      buildServer()
+      await buildServer()
       break
     case 'exe':
       buildExe({ smoke })
       break
     case 'all':
       buildWeb()
-      buildServer()
+      await buildServer()
       buildExe({ smoke })
       break
     default:

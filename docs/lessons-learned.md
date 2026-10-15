@@ -778,6 +778,39 @@ spliced as amendments), one fix round (Task 2, test-only), a final whole-branch 
 - Screenshots at 375 px caught the legend icons shrinking to 11 px (`flex-shrink: 0` fixed it); the reviewers did not
   see it in the code.
 
+## BP-24 — the Normal image builds; esbuild through its API (2026-10-16)
+
+Branch `bugfix/BP-24-docker-build-esbuild`. The user installed Docker Desktop (WSL 2, Windows 11 Home) to prepare for
+hosting; the first `docker build` of `apps/normal-server/Dockerfile` — the first anywhere — died in
+`scripts/build.mjs` at the esbuild step with `SyntaxError: Invalid or unexpected token` on a line reading `ELF`.
+
+### Rulings
+
+- Ruling 1: fix the scripts, not the Dockerfile — `build.mjs` (Normal), `build.mjs` (Lite) and `e2e-server.mjs` all ran
+  `node <esbuild>/bin/esbuild`; on Linux and macOS esbuild's install step replaces that JS shim with the native binary,
+  which `node` cannot execute, while on Windows the shim stays JavaScript. All three now call esbuild's JS API
+  (`build()` with the same options, `logLevel: 'info'` for the same summary). Costs if wrong: none known; the Windows
+  builds, the real-build test and the e2e server were re-run on the branch.
+- Ruling 2: no new unit test pins the ELF case — it cannot be reproduced on the Windows gate, and a test on the
+  scripts' text would pin their shape, not the decision. The proof is the Docker build itself, recorded with its date
+  in the acceptance checklist (40.8) and in `docs/known-limitations.md`. Costs if wrong: a future script that goes back
+  to spawning `bin/esbuild` is caught only by the next Docker build.
+- Ruling 3: 40.8 and 66.21 move from `partial` to ✓ on the x86 build and the real-Postgres run; the ARM build and the
+  whole Compose stack stay in `docs/known-limitations.md` as what has not run. Costs if wrong: a reader takes ✓ as
+  "deployed"; the rows and the README say what remains.
+- Ruling 4: the image ships `src/`, the tests and the tsconfigs beside `dist/` (`pnpm deploy` copies a package with no
+  `files` list). Logged as a residual, not fixed here.
+
+### Lessons
+
+- A build script that spawns a dependency's `bin/` entry with `process.execPath` works only while that entry is a
+  script. esbuild (and any package that swaps its shim for the binary at install) breaks it on the first non-Windows
+  machine. Prefer the package's JS API; spawn `node` only on files you know are JavaScript (`tsc`, `vite`, `postject`).
+- "Has never been built" is one `docker build` away from being false, and the first one found a bug in five seconds
+  that no test on Windows could. When a Docker daemon becomes available, build the image before anything else.
+- A background command's exit code is the exit code of its last pipeline stage: `… > log; echo "exit=$?" >> log; tail
+  log` reports `tail`'s 0. Read the `exit=` line, not the task status.
+
 ## 5. Open items
 
 The single list is `docs/known-limitations.md`. As of this writing, the items a next session is most likely to meet:
@@ -788,8 +821,9 @@ The single list is `docs/known-limitations.md`. As of this writing, the items a 
   - the deck's position (Ruling 17, reported as a deviation);
   - the 11 px phone scroll on play-or-fold squeeze tables (Ruling 28);
   - the human test rounds in `docs/operation-test-plan.md` (real phones, a LAN session, Lite on a second PC).
-- **Environment:** the Normal Docker image has never been built, the suite has never run on a real PostgreSQL, the
-  Oracle kit has never been executed, and seven dev-only npm advisories are deferred.
+- **Environment:** the Normal Docker image has been built once on x86 and the suite has run once on a real PostgreSQL
+  (both 2026-10-16, BP-24); the Compose stack as a whole, the ARM build and the Oracle kit have never been executed,
+  and seven dev-only npm advisories are deferred.
 - **Roadmap (spec §34):** avatar upload (R1), email (No7), a bundled Vietnamese font, more poses, spectators and chat,
   top-up at the table.
 - **Rule changes the user has not asked for:** a carry-over pot paying seats that sat out (spec §8.4); relief that
