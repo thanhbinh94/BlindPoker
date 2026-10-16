@@ -50,5 +50,7 @@ deploy/normal-windows/*.log
 other/
 
 # A VPS credential note the user keeps beside the docs: never staged.
-docs/vps_acc.txt
-vps_acc.txt
+docs/vps*.*
+vps*.*
+docs/my_root.txt
+my_root.txt
