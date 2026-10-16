@@ -130,11 +130,11 @@ DNS for `$DOMAIN` must already point at the host, and ports 80 and 443 must be r
 gets a Let's Encrypt certificate on its first start. Start-up order is enforced, not timed: `db`
 becomes healthy, the `migrate` service applies the committed migrations and exits, then `app` starts.
 
-> **This image has been built once, on x86 (2026-10-16), and the Compose stack has not yet run as a
-> whole.** The image boots against a real PostgreSQL 16 and answers `/health`; `db → migrate → app →
-> caddy`, Caddy's certificate flow and the ARM build the Oracle kit needs are still untried. Treat the
-> first deploy as a supervised trial and read `docker compose logs migrate` before `app`. Details in
-> the deployment guide, §2, and in [`docs/known-limitations.md`](docs/known-limitations.md).
+> **This stack has run once, on x86 with `DOMAIN=localhost` (2026-10-16): `db → migrate → app → caddy`,
+> a sign-up and a WebSocket through Caddy.** Caddy's Let's Encrypt flow against a public name and the
+> ARM build the Oracle kit needs are still untried. Treat the first public deploy as a supervised trial
+> and read `docker compose logs migrate`, then `caddy`. Details in the deployment guide, §2, and in
+> [`docs/known-limitations.md`](docs/known-limitations.md).
 
 Without Docker, for development:
 

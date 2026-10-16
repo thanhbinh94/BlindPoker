@@ -306,8 +306,9 @@ docker compose up -d --build
 
 Image đã build thật **một lần, trên x86** (2026-10-16, BP-24: Docker Desktop trên máy dev, chạy được
 với PostgreSQL 16 thật — `docs/known-limitations.md`, và mục 2 của `docs/deployment-normal.md`).
-Nhưng bạn đang build nó cho **ARM**, và stack Compose trọn vẹn (`db` → `migrate` → `app` → `caddy`)
-chưa từng chạy ở đâu. Vì vậy: đừng làm bước này lúc nửa đêm, và hãy nhìn nó chạy.
+Stack Compose trọn vẹn (`db` → `migrate` → `app` → `caddy`) cũng đã chạy một lần trên máy dev với
+`DOMAIN=localhost`. Nhưng bạn đang build nó cho **ARM**, và chứng chỉ Let's Encrypt với tên miền thật thì
+chưa ai xin lần nào. Vì vậy: đừng làm bước này lúc nửa đêm, và hãy nhìn nó chạy.
 
 **Dự kiến 15–30 phút** trên 2 OCPU (lâu hơn nhiều trên 1 OCPU). Phần lớn thời gian nằm ở
 `pnpm install` trong Alpine, một lượt typecheck TypeScript, và vite build.

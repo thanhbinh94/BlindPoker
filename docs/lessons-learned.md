@@ -822,8 +822,9 @@ The single list is `docs/known-limitations.md`. As of this writing, the items a 
   - the 11 px phone scroll on play-or-fold squeeze tables (Ruling 28);
   - the human test rounds in `docs/operation-test-plan.md` (real phones, a LAN session, Lite on a second PC).
 - **Environment:** the Normal Docker image has been built once on x86 and the suite has run once on a real PostgreSQL
-  (both 2026-10-16, BP-24); the Compose stack as a whole, the ARM build and the Oracle kit have never been executed,
-  and seven dev-only npm advisories are deferred.
+  (both 2026-10-16, BP-24), and the Compose stack ran once with `DOMAIN=localhost` the same day; Caddy's ACME flow on
+  a public name, the ARM build and the Oracle kit have never been executed, and seven dev-only npm advisories are
+  deferred.
 - **Roadmap (spec §34):** avatar upload (R1), email (No7), a bundled Vietnamese font, more poses, spectators and chat,
   top-up at the table.
 - **Rule changes the user has not asked for:** a carry-over pot paying seats that sat out (spec §8.4); relief that

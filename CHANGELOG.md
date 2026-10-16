@@ -31,8 +31,12 @@ shim, which is why no gate had seen it. Branch `bugfix/BP-24-docker-build-esbuil
   carries `src/` and the tests beside `dist/`, since `pnpm deploy` has no `files` list to go by); README, SRS Appendix B,
   `docs/deployment-normal.md` §2 and §10, `deploy/oracle/README.md` §8, `docs/lessons-learned.md` (four rulings).
 - **Khác với spec / Deviations from the spec.** None: spec §22.4 names esbuild and the outputs, not how it is invoked.
-- **Still open.** The Compose stack has never run as a whole, Caddy's certificate flow has never run, and the ARM build the
-  Oracle kit needs is still ahead. The image's `src/` payload is a residual. Not deployed: the LAN host was not running
+- **After the merge (same day).** The Compose stack ran on the development machine with `DOMAIN=localhost`: `db` →
+  `migrate` (exit 0) → `app` (healthy) → `caddy`; through Caddy a 308 to https, `/health` ok, the UI with HSTS and the
+  CSP, a sign-up with a `HttpOnly; Secure; SameSite=Lax` cookie, `wss://` answered `WELCOME`, a foreign `Origin` 403.
+  Taken down with `down -v`; the throwaway `.env` deleted.
+- **Still open.** Caddy's certificate flow against a public name has never run, and the ARM build the Oracle kit needs
+  is still ahead. The image's `src/` payload is a residual. Not deployed: the LAN host was not running
   and its `.env` is not on this checkout.
 - **Gate** on the branch tree (`main` had not moved): typecheck, lint, 2694 unit tests (10 skipped) in 491 s,
   build:normal, Lite web + server, avatar:check 1560/1560, e2e Normal 24/24, e2e Lite 4/4, ops 34/34 in 10.8 min. The

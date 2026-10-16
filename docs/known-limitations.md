@@ -181,19 +181,25 @@ is worth; building once before a session of Lite UI work is a one-line fix.
 
 ## Operations
 
-**The Normal Docker image has been built once, on x86, and never by Compose.** Until 2026-10-16 it had
+**The Normal Docker image and its Compose stack have run once, on x86 and `localhost`; never on a public name.** Until 2026-10-16 it had
 never been built at all (the development machine had no Docker daemon); that day `docker build -f
 apps/normal-server/Dockerfile .` ran on Docker Desktop 29.8.2 (linux/x86_64), the 331 MB image booted
 against a `postgres:16-alpine` container, applied the committed migrations, answered `/health` with
 `"db":"ok"`, served `index.html` at `/` and `/lobby`, and its own HEALTHCHECK turned healthy (BP-24).
 The first attempt failed in `apps/normal-server/scripts/build.mjs`: it ran `node …/esbuild/bin/esbuild`,
 and on Linux that file is esbuild's native binary, not a script — fixed by going through esbuild's JS
-API in that script, Lite's and the e2e server's. What has still not run: `docker compose up -d --build`
-as a stack (`db` → `migrate` → `app` → `caddy`, with `service_completed_successfully`), Caddy's ACME
-flow, and any build on ARM (next entry).
-*Why:* the stack needs a host with ports 80/443 and a DNS name; the development machine has neither.
-*What to do:* treat the first Compose deploy as a supervised trial — `docker compose config`, then
-`up -d --build`, then read `docker compose logs migrate` before `app` (`docs/deployment-normal.md` §2).
+API in that script, Lite's and the e2e server's. Later the same day the whole stack ran on the
+development machine with `DOMAIN=localhost` (Caddy's internal certificate, so ACME was not exercised):
+`docker compose up -d --build` brought up `db` (healthy) → `migrate` (exit 0, migrations applied) →
+`app` (healthy) → `caddy`; through Caddy, `http://` answered 308 to `https://`, `/health` said
+`"db":"ok"`, `/` and `/lobby` came back as `index.html` with HSTS, the CSP and `X-Frame-Options`, gzip
+was on, a sign-up returned 201 with a `HttpOnly; Secure; SameSite=Lax` cookie, `wss://localhost/ws`
+with that cookie received `WELCOME`, and an upgrade with a foreign `Origin` was refused 403. The stack
+was then taken down with its volumes. What has still not run: Caddy's ACME flow against a public DNS
+name on ports 80/443, and any build on ARM (next entry).
+*Why:* ACME needs a public name that resolves to the host; the development machine has none.
+*What to do:* treat the first public deploy as a supervised trial — `docker compose config`, then
+`up -d --build`, then read `docker compose logs caddy` for the certificate (`docs/deployment-normal.md` §2).
 *Tracked:* acceptance checklist row 40.8 (✓ since 2026-10-16, with this caveat); `docs/deployment-normal.md` §2.
 
 **The image carries the server's sources and tests beside `dist/`.** `pnpm deploy --prod` copies a
