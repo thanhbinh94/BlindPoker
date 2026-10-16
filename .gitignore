@@ -48,3 +48,7 @@ deploy/normal-windows/*.log
 
 # The user's private scratch (review notes, screenshots). Never committed.
 other/
+
+# A VPS credential note the user keeps beside the docs: never staged.
+docs/vps_acc.txt
+vps_acc.txt
