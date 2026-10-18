@@ -1,4 +1,4 @@
-import type { BotStrategy, ErrorCode, PlayerIdentity, Rng, ServerMessage } from '@bp/core'
+import type { BotStrategy, ErrorCode, GameMode, PlayerIdentity, Rng, ServerMessage } from '@bp/core'
 import type { DomainEvent } from '../domain-events.js'
 import type { Clock } from '../infra/clock.js'
 import type { Logger } from '../infra/logger.js'
@@ -45,6 +45,25 @@ export interface RoomPlayer {
    */
   pendingBuyIn?: { sitId: string; amount: number; refunding?: boolean }
   cosmetics?: unknown
+}
+
+/** A room as the GM screen lists it (Plan 25): what the lobby summary hides, and no cards. */
+export interface AdminRoomSummary {
+  roomId: string
+  code: string
+  name: string
+  mode: GameMode
+  status: 'OPEN' | 'IN_GAME'
+  isPrivate: boolean
+  hasPassword: boolean
+  players: number
+  maxPlayers: number
+  hostPlayerId: string
+  hostDisplayName: string
+  carryOverPot: number
+  handInProgress: boolean
+  createdAt: number
+  members: { playerId: string; displayName: string; isBot: boolean; seat: number | null; stack: number; connected: boolean }[]
 }
 
 export interface RoomOptions {

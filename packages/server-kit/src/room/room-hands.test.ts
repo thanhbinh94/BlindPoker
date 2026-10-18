@@ -1822,3 +1822,55 @@ describe('Money conservation over many hands', () => {
     expect(seqs.every((s, i) => i === 0 || s > seqs[i - 1]!)).toBe(true)
   })
 })
+
+describe('adminKick (Plan 25)', () => {
+  it('removes a seated player between hands at once, host included, and the host moves on', async () => {
+    const h = createRoomHarness(BLIND)
+    await h.room.join(h.identity('a'))
+    await h.room.sitDown('h', 0)
+    await h.room.sitDown('a', 1)
+    expect(await h.room.adminKick('h')).toBe('now')
+    expect(h.room.hasPlayer('h')).toBe(false)
+    expect(h.room.hostPlayerId).toBe('a')
+    expect(await h.repos.balances.get('h')).toBe(100_000) // the stack went home
+    expect(h.last('h', 'NOTIFICATION')).toMatchObject({ kind: 'KICKED' })
+    expect(await books(h, { h: 100_000, a: 100_000 })).toBe(0)
+  })
+
+  it('folds a player in the current hand now and removes them when it ends, the money conserved', async () => {
+    const h = createRoomHarness(BLIND)
+    await seatAndStart(h, ['h', 'a'])
+    expect(await h.room.adminKick('a')).toBe('after_hand')
+    expect(h.room.players.get('a')?.leaveAfterHand).toBe(true)
+    expect(h.room.hasPlayer('a')).toBe(true) // still in the hand until it ends
+    await playOut(h)
+    await tick(h)
+    expect(h.room.hasPlayer('a')).toBe(false)
+    expect(await books(h, { h: 100_000, a: 100_000 })).toBe(0)
+  })
+
+  it('refuses a bot', async () => {
+    const h = createRoomHarness(BLIND)
+    expect(await code(h.room.adminKick('bot:room-1:0'))).toBe('ILLEGAL_ACTION')
+    expect(h.room.hasPlayer('bot:room-1:0')).toBe(true)
+  })
+})
+
+describe('adminSummary (Plan 25)', () => {
+  it('lists the room as the GM screen reads it: counts, flags, members, whether a hand is running', async () => {
+    const h = createRoomHarness({ ...BLIND, isPrivate: true, password: 'pw' })
+    await h.room.join(h.identity('a'), 'pw')
+    await h.room.sitDown('h', 0)
+    await h.room.sitDown('a', 1)
+    const before = h.room.adminSummary()
+    expect(before).toMatchObject({ roomId: h.room.roomId, code: h.room.code, name: 'B', mode: 'blind', status: 'OPEN', isPrivate: true, hasPassword: true, players: 4, maxPlayers: 4, hostPlayerId: 'h', hostDisplayName: h.identity('h').displayName, carryOverPot: 0, handInProgress: false })
+    expect(typeof before.createdAt).toBe('number')
+    expect(before.members.map((m) => m.playerId).sort()).toEqual(['a', 'bot:room-1:0', 'bot:room-1:1', 'h'])
+    expect(before.members.find((m) => m.playerId === 'a')).toMatchObject({ isBot: false, seat: 1, connected: true })
+    expect(before.members.filter((m) => m.isBot)).toHaveLength(2)
+    await h.room.setReady('h', true)
+    await h.room.setReady('a', true)
+    await h.room.startGame('h')
+    expect(h.room.adminSummary()).toMatchObject({ status: 'IN_GAME', handInProgress: true })
+  })
+})
