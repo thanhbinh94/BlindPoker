@@ -62,6 +62,8 @@ import { packageRoot } from './db/migrate.js'
 import { loadDailyGifts, type DailyGiftSchedule } from './economy/daily-gifts.js'
 import { createEconomyService, type EconomyService } from './economy/economy-service.js'
 import { createEventBus, type AppEventBus } from './events.js'
+import { createGmRoomService, type GmRoomService } from './gm/gm-rooms.js'
+import { createGmService, type GmService } from './gm/gm-service.js'
 import { createHistoryService, type HistoryService } from './history/history-service.js'
 import { loadAliases } from './inventory/aliases.js'
 import { readAvatarConfig } from './inventory/avatar-migrate.js'
@@ -208,6 +210,9 @@ export interface AppServices {
   achievements: AchievementService
   economy: EconomyService
   history: HistoryService
+  /** What a GM may do to an account, and the façade over live rooms (Plan 25). */
+  gm: GmService
+  gmRooms: GmRoomService
   /** Old wardrobe ids, kept readable — see `inventory/aliases.ts`. */
   aliases: ReadonlyMap<string, string>
   manifest: AvatarManifest
@@ -335,6 +340,8 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     ...(deps.now ? { now: deps.now } : {}),
   })
   const history = createHistoryService({ db, repos })
+  const gm = createGmService({ db, repos, sessions, inventory, catalog, history, stats, game, log, ...(deps.now ? { now: deps.now } : {}) })
+  const gmRooms = createGmRoomService(game)
 
   // Order matters: the counters must be written before the thresholds are compared against them.
   const unsubscribes = [stats.start(), achievements.start()]
@@ -364,6 +371,8 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     inventory,
     outfits,
     history,
+    gm,
+    gmRooms,
     catalog,
     defs,
     aliases,
@@ -482,7 +491,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
   return {
     fastify,
     game,
-    services: { bus, catalog, defs, gifts, repos, sessions, auth, inventory, outfits, stats, achievements, economy, history, aliases, manifest, bodies },
+    services: { bus, catalog, defs, gifts, repos, sessions, auth, inventory, outfits, stats, achievements, economy, history, gm, gmRooms, aliases, manifest, bodies },
     close,
   }
 }

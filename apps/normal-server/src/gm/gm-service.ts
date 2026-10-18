@@ -131,7 +131,7 @@ const DAY_MS = 24 * 60 * 60 * 1000
 const SEARCH_LIMIT = { def: 20, max: 100 }
 const ACTIONS_LIMIT = { def: 50, max: 200 }
 
-function checkReason(reason: unknown): string {
+export function checkReason(reason: unknown): string {
   if (typeof reason !== 'string') throw new ServiceError('INVALID_REASON', 'reason must be a string')
   const trimmed = reason.trim()
   if (trimmed.length < REASON_MIN || trimmed.length > REASON_MAX) throw new ServiceError('INVALID_REASON', `reason must be ${String(REASON_MIN)}–${String(REASON_MAX)} characters`)

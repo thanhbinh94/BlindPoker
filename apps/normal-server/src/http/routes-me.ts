@@ -55,16 +55,16 @@ export interface MeRouteDeps {
 }
 
 /** `?limit=` / `?before=`: a query string is text, and `Number('')` is 0, which is not "unset". */
-function numberParam(query: unknown, key: string): number | undefined {
+export function numberParam(query: unknown, key: string): number | undefined {
   const raw = (query as Record<string, unknown> | null | undefined)?.[key]
   if (typeof raw !== 'string' || raw.trim() === '') return undefined
   return Number(raw)
 }
 
 /** §19.2 asks for the last 20 hands; the service caps a page at 50 whatever is asked for. */
-const HISTORY_DEFAULT = 20
-const LEDGER_DEFAULT = 50
-const LEDGER_MAX = 200
+export const HISTORY_DEFAULT = 20
+export const LEDGER_DEFAULT = 50
+export const LEDGER_MAX = 200
 /** A profile is a cheap read but a per-player one, so it may be cached in the player's own browser only. */
 const AVATAR_CACHE = 'private, max-age=60'
 
