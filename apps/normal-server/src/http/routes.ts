@@ -192,7 +192,7 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
   registerMeRoutes(app, { ...deps, requireUser })
   registerRewardRoutes(app, { economy: deps.economy, requireUser })
   registerOutfitRoutes(app, { outfits: deps.outfits, catalog: deps.catalog, requireUser })
-  registerGmRoutes(app, { gm: deps.gm, gmRooms: deps.gmRooms, history: deps.history, repos: deps.repos, requireGm })
+  registerGmRoutes(app, { gm: deps.gm, gmRooms: deps.gmRooms, history: deps.history, repos: deps.repos, requireGm, log: deps.log })
   registerCatalogRoutes(app, {
     config: deps.config,
     catalog: deps.catalog,

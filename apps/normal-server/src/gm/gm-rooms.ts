@@ -6,7 +6,7 @@
  * player is told with a `GM_NOTICE` that carries the GM's reason; the room's own frames (`KICKED`, the closing
  * events, the cash-out) say what happened at the table.
  */
-import type { AdminRoomSummary, GameServer } from '@bp/server-kit'
+import { RoomError, type AdminRoomSummary, type GameServer } from '@bp/server-kit'
 import { ServiceError } from '../errors.js'
 
 /** What the server tells a room's `shutdown` — the GM's reason stays in the log, not in the broadcast. */
@@ -43,8 +43,10 @@ export function createGmRoomService(game: Pick<GameServer, 'rooms' | 'notify'>):
     async kick(roomId, playerId, reason) {
       const room = must(roomId)
       if (!room.players.has(playerId)) throw new ServiceError('NOT_IN_ROOM')
-      const effective = await room.adminKick(playerId).catch((err: { code?: string; message?: string }) => {
-        throw new ServiceError(err.code ?? 'ILLEGAL_ACTION', err.message)
+      // Only the room's own refusals (a bot, …) become a 4xx; anything else is a bug and stays a 500.
+      const effective = await room.adminKick(playerId).catch((err: unknown) => {
+        if (err instanceof RoomError) throw new ServiceError(err.code, err.message)
+        throw err
       })
       notice(playerId, { action: 'kick', reason })
       return effective

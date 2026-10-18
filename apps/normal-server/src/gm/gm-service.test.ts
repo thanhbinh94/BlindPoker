@@ -177,6 +177,28 @@ describe('GmService — lock and role', () => {
     expect(calls).toEqual(['notify', 'disconnect'])
   })
 
+  it('warns a revocation that failed during a lock, and still kicks, notifies and closes the socket, in order', async () => {
+    const calls: string[] = []
+    const warn = vi.fn()
+    const room = {
+      adminKick: (id: string) => { calls.push(`adminKick:${id}`); return Promise.resolve('now' as const) },
+      adminSummary: () => ({ roomId: 'r1', code: 'ABC123', name: 'Bàn', members: [] }),
+    }
+    const game: GmServiceDeps['game'] = {
+      connectionCount: 0,
+      notify: (id) => { calls.push(`notify:${id}`) },
+      balanceChanged: () => Promise.resolve(),
+      rooms: { size: 1, roomOf: () => room },
+      gateway: { disconnect: (id) => { calls.push(`disconnect:${id}`); return 1 } },
+    }
+    const sessions = { ...h.app.services.sessions, revokeAll: () => Promise.reject(new Error('sessions down')) }
+    await createGmService(deps({ game, sessions, log: { warn } })).lock(actor(boss), me.playerId, 'spam')
+    expect(warn).toHaveBeenCalledWith('gm lock: revoking the sessions failed', expect.objectContaining({ playerId: me.playerId, error: 'sessions down' }))
+    const id = me.playerId
+    expect(calls).toEqual([`adminKick:${id}`, `notify:${id}`, `disconnect:${id}`])
+    expect((await actionsOf(id)).map((a) => a.action)).toEqual(['lock'])
+  })
+
   it('never locks a gm, and never lets a gm change their own role', async () => {
     await expect(gm.lock(actor(boss), boss.playerId, 'myself')).rejects.toMatchObject({ code: 'SELF_TARGET' })
     await promote(me.playerId)
@@ -194,6 +216,27 @@ describe('GmService — lock and role', () => {
     const [still] = rowsOf<{ role: string }>(await db.execute(sql`select role from users where id = ${boss.playerId}`))
     expect(still?.role).toBe('gm')
     await expect(gm.setRole(actor(boss), me.playerId, 'admin' as 'gm', 'bad role')).rejects.toMatchObject({ code: 'INVALID_ROLE' })
+  })
+
+  it('two gms demoting each other — the gm set locked before the target — one wins and the other answers LAST_GM', async () => {
+    await gm.setRole(actor(boss), me.playerId, 'gm', 'help wanted')
+    const results = await Promise.allSettled([
+      gm.setRole(actor(me), boss.playerId, 'player', 'coup'),
+      gm.setRole(actor(boss), me.playerId, 'player', 'counter-coup'),
+    ])
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+    const refused = results.find((r) => r.status === 'rejected')
+    expect(refused?.reason).toMatchObject({ code: 'LAST_GM' })
+    const gms = rowsOf<{ id: string }>(await db.execute(sql`select id from users where role = 'gm'`))
+    expect(gms).toHaveLength(1)
+  })
+
+  it('refuses to promote a locked account (TARGET_IS_LOCKED) and writes no log line; after the unlock it promotes', async () => {
+    await gm.lock(actor(boss), me.playerId, 'spam')
+    await expect(gm.setRole(actor(boss), me.playerId, 'gm', 'help wanted')).rejects.toMatchObject({ code: 'TARGET_IS_LOCKED' })
+    expect((await actionsOf(me.playerId)).map((a) => a.action)).toEqual(['lock'])
+    await gm.unlock(actor(boss), me.playerId, 'ok now')
+    expect((await gm.setRole(actor(boss), me.playerId, 'gm', 'help wanted')).role).toBe('gm')
   })
 })
 

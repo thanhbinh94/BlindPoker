@@ -11,10 +11,12 @@
  *   line is the reason check); the two room routes check it here, because their service is a façade over memory.
  * - **A room action is logged around the deed, not inside a transaction** (a room lives in memory). Closing logs
  *   first, and a failed close adds a second line with `details.error`; a kick is logged once, after it, with how it
- *   took effect (`details.effective`) or why it failed. A lookup that finds nothing (no such room, not in it) is not
- *   an action and is not logged.
+ *   took effect (`details.effective`) or why it failed; a log write that fails after a kick that happened is warned,
+ *   and the GM still gets `200 { effective }`. A lookup that finds nothing (no such room, not in it) is not an action
+ *   and is not logged.
  */
 import { HttpError } from '@bp/http-kit'
+import type { Logger } from '@bp/server-kit'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { ServiceError } from '../errors.js'
 import type { GmRoomService } from '../gm/gm-rooms.js'
@@ -31,6 +33,8 @@ export interface GmRouteDeps {
   history: HistoryService
   repos: NormalRepositories
   requireGm: RequireUser
+  /** Where a kick that happened but could not be logged is reported. */
+  log: Pick<Logger, 'warn'>
 }
 
 /** How a deliberate service refusal reaches the client. Anything not listed is a bug, not a 4xx. */
@@ -48,6 +52,7 @@ const SERVICE_STATUS: Record<string, number> = {
   ALREADY_LOCKED: 409,
   NOT_LOCKED: 409,
   LAST_GM: 409,
+  TARGET_IS_LOCKED: 409,
   INSUFFICIENT_BALANCE: 409,
   ILLEGAL_ACTION: 400,
   GAME_IN_PROGRESS: 409,
@@ -187,7 +192,11 @@ export function registerGmRoutes(app: FastifyInstance, deps: GmRouteDeps): void 
       }
       return translateServiceError(err)
     }
-    await deps.gm.recordRoomAction(actorOf(req), 'kick', roomId, playerId, reason, { effective })
+    // The kick has happened and cannot be undone: a log write that fails now is an operator's to look at, and the GM
+    // still hears that the kick took effect — a 500 would invite a retry of something already done.
+    await deps.gm.recordRoomAction(actorOf(req), 'kick', roomId, playerId, reason, { effective }).catch((err: unknown) => {
+      deps.log.warn('gm kick not logged', { roomId, playerId, effective, error: errorCodeOf(err) })
+    })
     return reply.send({ effective })
   })
 

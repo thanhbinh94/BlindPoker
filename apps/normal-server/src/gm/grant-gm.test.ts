@@ -4,7 +4,7 @@ import { rowsOf, type AppDb } from '../db/client.js'
 import { createTestDb, type TestDb } from '../db/test-db.js'
 import { UnknownAccountError } from '../inventory/grant-wardrobe.js'
 import { buildTestApp, GOOD_ACCOUNT, resetDb, type Account, type Harness } from '../test-harness.js'
-import { grantGm, LastGmError } from './grant-gm.js'
+import { grantGm, LastGmError, LockedAccountError } from './grant-gm.js'
 
 const SECOND_ACCOUNT = { email: 'boss@example.com', password: 'a boss password', displayName: 'Ông Chủ' }
 
@@ -67,6 +67,23 @@ describe('grantGm — the CLI behind grant-gm-cli', () => {
     await expect(grantGm(db, GOOD_ACCOUNT.email, { revoke: true })).rejects.toBeInstanceOf(LastGmError)
     expect(await roleOf(me.playerId)).toBe('gm')
     expect(await logOf(me.playerId)).toHaveLength(1)
+  })
+
+  it('--revoke, which locks the gm set before the target row, still refuses the last gm and still demotes one of two', async () => {
+    const other = await h.register(SECOND_ACCOUNT)
+    await grantGm(db, GOOD_ACCOUNT.email)
+    await grantGm(db, SECOND_ACCOUNT.email)
+    await grantGm(db, SECOND_ACCOUNT.email, { revoke: true })
+    await expect(grantGm(db, GOOD_ACCOUNT.email, { revoke: true })).rejects.toBeInstanceOf(LastGmError)
+    expect(await roleOf(me.playerId)).toBe('gm')
+    expect(await roleOf(other.playerId)).toBe('player')
+  })
+
+  it('refuses to promote a locked account (LockedAccountError) and writes nothing', async () => {
+    await db.execute(sql`update users set locked_at = now(), locked_reason = 'spam' where id = ${me.playerId}`)
+    await expect(grantGm(db, GOOD_ACCOUNT.email)).rejects.toBeInstanceOf(LockedAccountError)
+    expect(await roleOf(me.playerId)).toBe('player')
+    expect(await logOf(me.playerId)).toEqual([])
   })
 
   it('refuses an email no account has', async () => {

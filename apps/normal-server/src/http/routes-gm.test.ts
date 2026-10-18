@@ -4,13 +4,15 @@
  */
 import type { AddressInfo } from 'node:net'
 import { ECONOMY, type RoomConfig } from '@bp/core'
+import { enumerateRoutes } from '@bp/http-kit/testing'
+import { silentLogger } from '@bp/server-kit'
 import { TestClient } from '@bp/server-kit/testing'
 import { sql } from 'drizzle-orm'
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppDb } from '../db/client.js'
 import { createTestDb, type TestDb } from '../db/test-db.js'
 import { POINTS_CAP } from '../gm/gm-service.js'
-import { buildTestApp, GOOD_ACCOUNT, ORIGIN, resetDb, type Account, type Harness } from '../test-harness.js'
+import { buildTestApp, GOOD_ACCOUNT, ORIGIN, resetDb, XRW, type Account, type Harness } from '../test-harness.js'
 
 let test: TestDb
 let db: AppDb
@@ -70,12 +72,24 @@ afterEach(async () => {
 })
 
 describe('the guard', () => {
-  it('answers 401 to nobody and 403 FORBIDDEN to a player on every route', async () => {
-    for (const [method, url] of [['GET', '/api/gm/overview'], ['GET', '/api/gm/rooms'], ['GET', '/api/gm/actions'], ['GET', `/api/gm/players/${me.playerId}`]] as const) {
-      expect((await h.app.fastify.inject({ method, url })).statusCode, url).toBe(401)
-      const res = await h.app.fastify.inject({ method, url, headers: h.auth(me) })
-      expect(res.statusCode, url).toBe(403)
-      expect(code(res), url).toBe('FORBIDDEN')
+  it('answers 401 to nobody and 403 FORBIDDEN to a player on every /api/gm/ route the app serves', async () => {
+    const routes = enumerateRoutes(h.app.fastify).filter((r) => r.path.startsWith('/api/gm/'))
+    // The fifteen `/api/gm/` labels `app.test.ts` pins in the exact surface: a route added there must be guarded here.
+    expect(routes).toHaveLength(15)
+    for (const route of routes) {
+      const url = route.path.replace(':id', route.path.startsWith('/api/gm/rooms/') ? 'some-room' : me.playerId)
+      const label = `${route.method} ${route.path}`
+      // Every GM route is a GET or a POST (`app.test.ts` pins the surface); narrowed for `inject`'s own method type.
+      expect(['GET', 'POST'], label).toContain(route.method)
+      const method = route.method === 'GET' ? 'GET' : 'POST'
+      const write = method === 'POST'
+      // The CSRF header on a write, so the guard — not the CSRF check — is what answers; an empty body is fine,
+      // since the guard runs before the handler reads it.
+      const anon = await h.app.fastify.inject({ method, url, ...(write ? { headers: XRW, payload: {} } : {}) })
+      expect(anon.statusCode, label).toBe(401)
+      const res = await h.app.fastify.inject({ method, url, headers: h.auth(me), ...(write ? { payload: {} } : {}) })
+      expect(res.statusCode, label).toBe(403)
+      expect(code(res), label).toBe('FORBIDDEN')
     }
   })
 
@@ -234,5 +248,23 @@ describe('rooms', () => {
 
     const log = (await gmReq('GET', `/api/gm/actions?player=${me.playerId}`)).json().actions as { action: string; roomId: string; details: unknown }[]
     expect(log[0]).toMatchObject({ action: 'kick', roomId, details: { effective: 'now' } })
+  })
+
+  it('a kick whose log write fails is still a 200 with how it took effect, and the failure is warned', async () => {
+    // The same database and accounts, on an app whose logger the test can read.
+    const warn = vi.fn()
+    await h.app.close()
+    h = await buildTestApp(db, { log: { ...silentLogger, warn } })
+    const url = await listen()
+    const ws = await connect(url, me)
+    const roomId = await createPrivateBlindAndSit(ws)
+
+    vi.spyOn(h.app.services.gm, 'recordRoomAction').mockRejectedValueOnce(new Error('log table gone'))
+    const res = await gmReq('POST', `/api/gm/rooms/${roomId}/kick`, { playerId: me.playerId, reason: 'phá bàn' })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ effective: 'now' })
+    expect(warn).toHaveBeenCalledWith('gm kick not logged', expect.objectContaining({ roomId, playerId: me.playerId, effective: 'now', error: 'log table gone' }))
+    expect(h.app.game.rooms.roomOf(me.playerId)).toBeUndefined()
+    expect(await h.app.services.repos.balances.get(me.playerId)).toBe(ECONOMY.startingBalance)
   })
 })

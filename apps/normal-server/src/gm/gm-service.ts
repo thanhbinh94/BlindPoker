@@ -328,7 +328,9 @@ export function createGmService(deps: GmServiceDeps): GmService {
         return logAction(tx, { actorUserId: actor.userId, action: 'lock', targetPlayerId: t.id, reason: why })
       })
       // Spec §4, in this order: no new request gets through, the seat goes home, the player is told, the socket closes.
-      await deps.sessions.revokeAll(playerId)
+      // A failing revocation is warned, not thrown: the lock is committed, and the auth guard refuses a locked account
+      // on every request anyway, so the kick and the disconnect must still run.
+      await deps.sessions.revokeAll(playerId).catch((err: unknown) => { log.warn('gm lock: revoking the sessions failed', { playerId, error: messageOf(err) }) })
       const room = deps.game.rooms.roomOf(playerId)
       if (room !== undefined) {
         // The lock is committed whatever the room says; a failed kick is an operator's to look at, not the GM's to retry.
@@ -355,14 +357,15 @@ export function createGmService(deps: GmServiceDeps): GmService {
       const why = checkReason(reason)
       if (role !== 'player' && role !== 'gm') throw new ServiceError('INVALID_ROLE', 'role must be player or gm')
       const actionId = await deps.db.transaction(async (tx) => {
+        // Lock order, the same as `grantGm`: a demotion first locks every gm row in id order, and only then the
+        // target's row (already held when the target is a gm — locking it again is a no-op). Every demotion takes
+        // its locks in that one global order, so two mutual demotions serialise on the gm set — the second sees only
+        // one gm left and answers LAST_GM — instead of each holding a row the other waits on.
+        const gms = role === 'player' ? rowsOf<{ id: string }>(await tx.execute(sql`select id from users where role = 'gm' order by id for update`)) : []
         const t = await target(tx, playerId, { lock: true })
         if (actor.userId === t.id) throw new ServiceError('SELF_TARGET', 'a gm cannot change their own role')
-        if (role === 'player' && t.role === 'gm') {
-          // Every gm row locked in id order: two demotions of the last two gms serialise here, and the second sees
-          // only one left. Ordered so two of them can never each hold a row the other wants.
-          const gms = rowsOf<{ id: string }>(await tx.execute(sql`select id from users where role = 'gm' order by id for update`))
-          if (gms.every((g) => g.id === t.id)) throw new ServiceError('LAST_GM', 'the last gm cannot be demoted')
-        }
+        if (role === 'gm' && t.role !== 'gm' && t.lockedAt !== null) throw new ServiceError('TARGET_IS_LOCKED', 'a locked account cannot be promoted; unlock first')
+        if (role === 'player' && t.role === 'gm' && gms.every((g) => g.id === t.id)) throw new ServiceError('LAST_GM', 'the last gm cannot be demoted')
         await tx.update(users).set({ role }).where(eq(users.id, t.id))
         return logAction(tx, { actorUserId: actor.userId, action: role === 'gm' ? 'promote' : 'demote', targetPlayerId: t.id, reason: why, details: { from: t.role } })
       })
