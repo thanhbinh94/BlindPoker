@@ -811,6 +811,55 @@ hosting; the first `docker build` of `apps/normal-server/Dockerfile` — the fir
 - A background command's exit code is the exit code of its last pipeline stage: `… > log; echo "exit=$?" >> log; tail
   log` reports `tail`'s 0. Read the `exit=` line, not the task status.
 
+## Plan 25 — the GM role (merged `MERGE`, 2026-10-18)
+
+Spec `docs/superpowers/specs/2026-10-18-gm-role-design.md`; plan `docs/superpowers/plans/2026-10-18-plan25-gm-role.md`;
+branch `feature/BP-25-gm-role`. Eleven tasks (schema and ledger; the guard and the lock; server-kit; the GM service; the
+routes; the CLI and the e2e hook; the web session and route; the player screens; the room and log screens; two ops cases;
+the docs), a pre-flight review with 9 blockers (all spliced as amendments A1–A16), review rounds per task, and a final
+whole-branch review. The user's decisions are the spec's Q-table (§1); the first six rulings below are the session's
+(spec §13), made while the user was away.
+
+### Rulings
+
+- Ruling 1 (spec R1): the way in is a "Quản trị" row in Settings, not a rail tab — the rail already has four. Costs if
+  wrong: add a conditional tab later.
+- Ruling 2 (R2): player search is a `POST`, so an address never sits in a URL or an access log. Costs if wrong: a one-line
+  change to `GET`.
+- Ruling 3 (R3): removing a player mid-hand is **not refused**; it folds them now and takes effect when the hand ends
+  (unlike the host's `kick`, which answers `GAME_IN_PROGRESS`). Costs if wrong: return `GAME_IN_PROGRESS` instead.
+- Ruling 4 (R4): a GM cannot lock another GM; the role must be taken back first, leaving two log lines. Costs if wrong:
+  drop one check.
+- Ruling 5 (R5): no account deletion in this batch — it would break the ledger invariant (`point_transactions` is
+  `ON DELETE restrict`). Costs if wrong: a separate design.
+- Ruling 6 (R6): the plan number is 25 (branch `BP-25`) and the second batch is 26, so plan numbers stay equal to branch
+  numbers after BP-23 and BP-24 were used for bug fixes. Costs if wrong: a renumbering in docs.
+- Ruling 7: `search('')` lists every account (newest first, capped at 100) instead of refusing an empty query — the
+  console needs a first screen before anything is typed. Costs if wrong: require a query.
+- Ruling 8: a redirect that moves a signed-in player away from `#/gm` calls `window.location.replace`, not a push, so Back
+  cannot be trapped on an entry that redirects again. Costs if wrong: none known; two tests pin it.
+- Ruling 9: the Players tab stays mounted (hidden) while a player's page is open, so Back returns to the same search,
+  results and cursor with no request. Costs if wrong: a remount that re-asks the server.
+- Ruling 10 (to be completed at merge): the rulings of the final fix wave.
+
+### Lessons
+
+- The pre-flight review found nine blockers before any code was written: an `AppDeps` hook the e2e server needed before
+  `ready()`, a PGlite rule (inside a transaction only `tx` may be used, because `query()` and `transaction()` share one
+  lock), the kit's `Toasts` not interpolating `reason`, and test helpers the plan named wrongly. Each would have cost a
+  fix round; the review cost one pass. Keep doing it against the real code.
+- Every UI task's screenshots changed the layout (the rooms table dropped to five columns, tables became cards at 375 px,
+  the player page needed a back path). The reviewers who opened the screenshots found what the code review could not.
+- A red run was skipped once in TDD and caught afterwards by mutation checks (break the code, see the new test fail).
+  Do the red run; the mutation check is the backstop, not the plan.
+- An implementer subagent prescribes its own commit trailer; the controller normalises it. State the trailer in the brief.
+- A refusal that the client must interpret needs distinct codes: a bare `403 FORBIDDEN` meant "you are no longer a GM",
+  so refusals about the target got their own (`SELF_TARGET`, `TARGET_IS_GM`) and the console leaves only on the first.
+- Side effects follow the commit, in a fixed order (sessions, room, notice, socket). A rolled-back grant must never
+  announce itself, and a socket closed before its notice would swallow it.
+- A route is a convenience and the server is the lock: the role is read from the database on every request, and the
+  client only uses it to decide whether to show an entry.
+
 ## 5. Open items
 
 The single list is `docs/known-limitations.md`. As of this writing, the items a next session is most likely to meet:
@@ -820,7 +869,9 @@ The single list is `docs/known-limitations.md`. As of this writing, the items a 
   - whether to lengthen the Blind result card (Ruling 27, `handIntervalMs`);
   - the deck's position (Ruling 17, reported as a deviation);
   - the 11 px phone scroll on play-or-fold squeeze tables (Ruling 28);
-  - the human test rounds in `docs/operation-test-plan.md` (real phones, a LAN session, Lite on a second PC).
+  - the human test rounds in `docs/operation-test-plan.md` (real phones, a LAN session, Lite on a second PC);
+  - Plan 25's deploy: migration `0004_gm` on the user's Neon database (`run.ps1` without `-NoMigrate`; ask first), then
+    the first GM by `grant-gm-cli`, then section Q of the test plan by hand.
 - **Environment:** the Normal Docker image has been built once on x86 and the suite has run once on a real PostgreSQL
   (both 2026-10-16, BP-24), and the Compose stack ran once with `DOMAIN=localhost` the same day; Caddy's ACME flow on
   a public name, the ARM build and the Oracle kit have never been executed, and seven dev-only npm advisories are

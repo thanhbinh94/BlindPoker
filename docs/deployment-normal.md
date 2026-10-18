@@ -287,6 +287,27 @@ trên bàn — buy-in Hold'em và hạn mức bàn Blind, tới 250.000 mỗi gh
 kiểm tra bằng `pnpm --filter @bp/normal-server exec vitest run src/economy/daily-gifts.test.ts`, rồi `docker compose up -d
 --build` như mục 7. Cách viết file: `docs/normal-server.md`, mục "Changing the daily gifts".
 
+### Trao quyền GM
+
+Quản trị viên (GM) có màn "Quản trị" ở Cài đặt: tìm người chơi, cộng/trừ điểm (kèm lý do), cấp món đồ, khóa tài khoản,
+xem và đóng phòng, xem nhật ký. GM đầu tiên chỉ có thể do bạn trao ngay trên máy chủ, vì chỉ GM mới trao quyền cho người
+khác trong game được. Tài khoản phải **đã đăng ký** trên trang web trước, rồi chạy:
+
+```bash
+cd /srv/bind-poker/deploy/normal
+docker compose exec app node dist/grant-gm-cli.js ten@example.com             # trao quyền
+docker compose exec app node dist/grant-gm-cli.js ten@example.com --revoke    # thu quyền
+```
+
+Lệnh đọc `DATABASE_URL` từ môi trường của container `app`, nên không cần gõ gì thêm. Chạy lại lần nữa không đổi gì; thu
+quyền của GM cuối cùng bị từ chối. Mỗi lần trao hay thu được ghi vào nhật ký (`gm_actions`) với lý do `cli` và không có
+người thực hiện. Người đó tải lại trang (F5) để thấy hàng "Quản trị". Sau đó GM trao hoặc thu quyền người khác ngay trong
+màn "Quản trị", không cần dùng lệnh nữa.
+
+Một GM dùng chung mật khẩu với tài khoản chơi và không có xác thực hai lớp, nên đặt cho tài khoản ấy một mật khẩu dài,
+không dùng ở nơi khác. Không có hạn mức cấp điểm theo ngày; ô "Điểm 24 giờ qua, theo lý do" ở tab "Tổng quan" là chỗ để
+xem các khoản `gm_grant` và `gm_adjust` (`docs/known-limitations.md`, "Quản trị").
+
 ### Vài truy vấn kinh tế hữu ích
 
 ```sql
@@ -372,7 +393,9 @@ docker compose logs -f app
 ```
 
 `migrate` chạy lại như một phần của bước 3, trước khi `app` khởi động; drizzle ghi lại những
-migration đã áp, nên một schema không đổi khiến bước đó thành no-op.
+migration đã áp, nên một schema không đổi khiến bước đó thành no-op. Bản có vai trò quản trị (Plan 25) thêm migration
+`0004_gm` (các cột `role`, `locked_at`, `locked_reason` của `users` và bảng `gm_actions`): nó chỉ thêm, không đổi dữ liệu
+cũ, và mọi tài khoản hiện có thành "Người chơi" chưa bị khóa. Sau lần nâng cấp đó, trao GM đầu tiên theo mục 5.
 
 **Ván đang chơi không sống qua lần khởi động lại** (spec §32.8). Chúng bị huỷ và mọi khoản cược được
 hoàn, nên không ai mất điểm — nhưng người đang ngồi bàn sẽ thấy ván biến mất. Nâng cấp lúc bàn trống

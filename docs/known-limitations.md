@@ -336,6 +336,81 @@ daily gifts".
 
 ---
 
+## Quản trị — the GM role (Plan 25)
+
+**A GM shares the player's password and session; there is no 2FA.** A GM account is an ordinary account with
+`users.role = 'gm'`. Whoever holds that one password (and the session cookie) holds the console: it can move points,
+grant items, lock accounts and close rooms.
+*Why it stays:* the game has one operator and a handful of GMs; a second factor is its own feature (a store for secrets,
+a recovery path), and a GM is trusted by construction. Every action needs a reason and is logged, and the player is told.
+*What to do:* give a GM a long password used nowhere else (`docs/security.md` §4, item 9).
+*Tracked:* spec `2026-10-18-gm-role-design.md` §8, §11; `docs/security.md`.
+
+**There is no daily cap on a GM's grants.** One grant is limited to ±10,000,000 points, but a GM may make as many as they
+like.
+*Why it stays:* a cap per day needs a number nobody has asked for, and it would block the cases the console exists for
+(a refund, a prize). The overview's 24-hour totals by reason (`gm_grant`, `gm_adjust`) and the log are the check.
+*Tracked:* spec `2026-10-18-gm-role-design.md` §11.
+
+**Accounts cannot be deleted from the console.** A GM locks an account; nothing removes it.
+*Why:* `point_transactions.player_id` is `ON DELETE restrict`, so that deleting a player cannot turn their credits into
+sink rows and break `Σ balances + Σ sinks` (SRS §18.2, §18.4).
+*Tracked:* spec `2026-10-18-gm-role-design.md` §4, §11.
+
+**`gm_actions.action` is free text in SQL.** The kinds (`grant_points`, `adjust_points`, `grant_item`, `grant_wardrobe`,
+`lock`, `unlock`, `kick`, `close_room`, `promote`, `demote`) are held by `GmActionKind` in TypeScript and by the web's
+label table, not by a database CHECK, so a hand-written row with another word shows as its raw key in the log.
+*Why it stays:* a CHECK would make adding a kind a migration, and the table is written by one service.
+*Tracked:* `apps/normal-server/src/db/schema.ts`.
+
+**The CLI can promote a locked account.** `grant-gm-cli` sets `role` without looking at `locked_at`, so the result is a GM
+who cannot sign in until someone unlocks the account.
+*Why it stays:* a lock is stronger than a role, so the result is harmless, and the operator sees the address they typed.
+*What to do:* unlock first (another GM can), or promote after the unlock.
+*Tracked:* `apps/normal-server/src/gm/grant-gm.ts`.
+
+**Two GMs demoting each other at the same moment may deadlock into a 500.** `setRole` locks the target row and then the
+ordered set of GM rows for the last-GM check, so two simultaneous mutual demotions can take the locks in opposite order and
+Postgres answers one of them with a deadlock error. The invariant holds (a GM is left); the loser sees an error and tries
+again. PGlite is single-connection, so no test reaches it.
+*Why it stays:* it takes two GMs pressing the button within a few milliseconds. *Status:* to be fixed in the plan's final
+wave if time allows (lock the GM set first, then the target); if it is, this entry goes.
+*Tracked:* `apps/normal-server/src/gm/gm-service.ts`, `setRole`.
+
+**The `role` shown in Settings changes only on reload or sign-in.** The entry row reads `MeDto.role` from the boot probe.
+A GM who is promoted sees the row after F5, and one who is demoted keeps the row until a call to `/api/gm/*` comes back 403
+and sends them to the lobby.
+*Why it stays:* the row is a convenience and the server is the lock; pushing a role change over the socket is more
+machinery than the case deserves.
+*Tracked:* `docs/normal-web.md`, "The Quản trị screen".
+
+**Removing a player from a room mid-hand takes effect when the hand ends, and a rejoin cancels it.** `Room.adminKick`
+folds the player now and marks them to leave after the hand. If they rejoin before it ends, the ordinary rejoin path
+clears the mark and they stay. The after-hand removal is also written to the room log as `'left'`, not `'kicked_by_gm'`.
+*Why it stays:* the player is out of the hand at once and their money is safe either way; the GM action log, not the room
+log, is the audit trail, and it says `after_hand`. A GM who needs them gone for certain locks the account or closes the
+room.
+*Tracked:* `docs/server-kit.md`, "Moderation: reaching a room or a socket from an edition".
+
+**On a phone the GM screen's tables become cards, which drops table semantics for some screen readers.** At 640 px and
+below each row's cells stack with their labels, and some assistive technology then no longer announces a table.
+*Why it stays:* the console is an operator tool used mostly on a desktop, and cards are the layout that keeps a
+five-column table readable at 375 px. The labels are real text, so nothing is lost to a sighted user.
+*Tracked:* `docs/normal-web.md`, "The Quản trị screen".
+
+**The ops pack has no `@mobile` case for the GM screen.** Q-01 and Q-02 run on `desktop` only. The card layout at 375 px
+was checked by screenshot during the plan (at 1920 × 940, 1366 × 768 and 375 × 812), not by a test that fails when it
+breaks.
+*Tracked:* `docs/operation-test-plan.md`, section Q.
+
+**`refunded` in the close-room answer counts spectators too.** It is the number of humans in the room, seated or not; a
+spectator holds no stack, so it counts people sent back to the lobby, not stacks paid.
+*Why it stays:* the number is a courtesy in the dialog's success line; the money is exact (it comes from the room's own
+cash-out, and the conservation test covers it).
+*Tracked:* `apps/normal-server/src/gm/gm-rooms.ts`.
+
+---
+
 ## UI
 
 **Badge contrast is measured on the grounds a badge sits on today.** `packages/ui-kit/src/theme/tokens.test.ts`

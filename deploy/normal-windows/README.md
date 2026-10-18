@@ -367,6 +367,26 @@ Chi tiết (tiếng Anh): `docs/normal-server.md`, mục "Changing the daily gif
 
 ---
 
+## 9d. Trao quyền quản trị (GM)
+
+Quản trị viên (GM) xem được mọi người chơi và mọi phòng, cộng/trừ điểm, cấp món, khóa tài khoản và đóng phòng ở màn
+"Quản trị" (Cài đặt, hàng "Quản trị"). GM đầu tiên phải do bạn trao ngay trên máy chủ, vì chỉ GM mới trao quyền cho người
+khác được. Tài khoản phải **đã đăng ký** trên trang web trước:
+
+```powershell
+$env:DATABASE_URL = ((Get-Content .env) -match '^DATABASE_URL=' | Select-Object -First 1) -replace '^DATABASE_URL=', ''
+node ..\..\apps\normal-server\dist\grant-gm-cli.js ten@example.com
+```
+
+Chạy lại lần nữa không đổi gì. Thêm `--revoke` để thu quyền (không thu được quyền của GM cuối cùng). Mỗi lần trao hay thu
+đều vào nhật ký với lý do `cli`. Người đó cần tải lại trang (F5) hoặc đăng nhập lại để thấy hàng "Quản trị". GM dùng chung
+mật khẩu với tài khoản chơi, nên đặt cho tài khoản ấy một mật khẩu dài và không dùng ở nơi khác.
+
+Bản cập nhật có Plan 25 thêm migration `0004_gm`, nên lần chạy `run.ps1` đầu tiên sau khi cập nhật phải **bỏ** `-NoMigrate`
+(migration chỉ thêm cột và bảng, không đụng dữ liệu cũ).
+
+---
+
 ## 10. Giới hạn
 
 - **Không có HTTPS.** Mật khẩu đi qua mạng ở dạng rõ. Chỉ dùng trong mạng bạn tin được.

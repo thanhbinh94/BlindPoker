@@ -41,6 +41,12 @@ Two facts frame everything below.
 | Admin shutdown abuse *(Lite)* | Three guards, cheapest refusal first: 5/min rate limit → the socket peer must be on the loopback → the run token compared in constant time (`apps/lite/server/src/http/routes.ts`, `packages/http-kit/src/auth-headers.ts`). The token is 32 fresh random bytes per boot, published in `bind-poker.run.json` beside the data file. | `apps/lite/server/src/app.test.ts` → "refuses a caller that is not on the loopback with 403", "refuses a wrong run token with 401, even from the loopback", "rate limits to 5 attempts per minute" |
 | Oversized request bodies | 16 KiB `bodyLimit` in both editions (`app.ts`); Fastify's 413 is translated into the shared `PAYLOAD_TOO_LARGE` envelope. | `packages/http-kit/src/http-errors.test.ts` → "gives Fastify’s own 4xx a stable code and keeps its status" |
 | Lite has no password | Accepted and documented, not mitigated: whoever holds the token is that player, and the edition is meant for one trusted LAN. `ALLOWED_ORIGINS` empty means `'same-host'`, and `HOST=127.0.0.1` limits it to the one machine. An optional PIN is on the roadmap (§34). | — (a stated limitation, §23) |
+| **Quản trị** — a player reaches the GM routes *(Normal, Plan 25)* | Every `/api/gm/*` route sits behind `requireGm` (`apps/normal-server/src/http/auth-guard.ts`): `requireUser`, then the role read from the database **on that request** (`RequestUser.role`), never from the cookie or the client. The web client only uses the role to show the entry; the `#/gm` route and the Settings row are a convenience, and the server is the lock. | `apps/normal-server/src/http/auth-guard.test.ts` → "answers 403 FORBIDDEN to a player and 200 to a gm, reading the role on every request"; `apps/normal-server/src/http/routes-gm.test.ts` → "answers 401 to nobody and 403 FORBIDDEN to a player on every route" |
+| **Quản trị** — a demoted or locked GM keeps working | No cache: a demotion or a lock is effective on the next request. A locked account is refused at sign-in (`ACCOUNT_LOCKED`, only after the password was checked, so the code does not reveal that an address exists), its sessions are revoked and its socket is closed (close code 4003), and `identityForToken` refuses a session that survived. | `apps/normal-server/src/http/auth-guard.test.ts` → "treats a locked account as signed out, whatever cookie it still holds"; `apps/normal-server/src/http/routes-auth.test.ts` → "is refused at sign-in with 403 ACCOUNT_LOCKED and the reason, after the password was checked"; `apps/normal-server/src/auth/auth-service.test.ts` → "returns null for a locked account whose session survived, so it cannot open a socket" |
+| **Quản trị** — a GM abuses the power, or an account is taken over | Every write has a reason of 3 to 200 characters and a `gm_actions` row **in the same transaction** as its effect (no grant without its log line, no log line for a rolled-back grant); the log is append-only, with no route that edits or deletes it. One grant moves at most 10,000,000 points; a deduction cannot overdraw; `gm_grant` and `gm_adjust` are ledger sources, so `Σ balances + Σ sinks` stays true. A GM cannot lock themselves or another GM, cannot change their own role, and the last GM cannot be demoted. The player is told of every action (`GM_NOTICE`). | `apps/normal-server/src/gm/gm-service.test.ts` → "takes points back with reason gm_adjust, and refuses all of it when the balance is short — no action row either", "never locks a gm, and never lets a gm change their own role", "promotes and demotes with a log line, and refuses to demote the last gm"; `apps/normal-server/src/http/routes-gm.test.ts` → "every POST without a reason is exactly 400 INVALID_REASON, whatever else the body or the target is" |
+| **Quản trị** — personal data leaks through the console | The player search returns a masked address (`t***@gmail.com`); the full one only on one player's page. Search is a `POST`, so the address typed never sits in a URL or an access log. | `apps/normal-server/src/gm/mask-email.test.ts` → "keeps the first letter and the domain"; `apps/normal-server/src/http/routes-gm.test.ts` → "searches by POST and masks emails; the detail shows the full one; a player gets 403" |
+| **Quản trị** — the first GM, and the test hook | The first GM is made only by the operator's CLI on the server (`grant-gm-cli`, `DATABASE_URL` only; no environment variable and no API can create one). The e2e-only `POST /e2e/promote` is mounted through `AppDeps.extraRoutes` by the e2e entry alone, is loopback-only and CSRF-guarded, and the production bundle contains no such route. | `apps/normal-server/src/e2e-promote.test.ts` → "has no /e2e/promote route", "refuses a request that did not come from loopback, and promotes nobody"; `apps/normal-server/src/gm/grant-gm.test.ts` → "--revoke of a player is a no-op, and --revoke of the only gm throws LastGmError" |
+| **Quản trị** — a GM shares the player's password | Accepted and documented, not mitigated: a GM account is an ordinary account with a role, so one password (and a session cookie) is all it takes, and there is no 2FA. Advice to the operator: a long password used nowhere else. The overview's 24 h totals by reason are the check on grants, since there is no daily cap. | — (a stated limitation; `docs/known-limitations.md`) |
 
 ### What Normal's CSP adds beyond the default
 
@@ -102,6 +108,10 @@ limiter each carries (`OWN_LIMITER`, exported from both editions' `http/routes.t
 | `PUT /api/me/avatar` | general write bucket |
 | `POST /api/rewards/daily/claim` | general write bucket |
 | `POST /api/economy/relief` | general write bucket |
+| the eight `POST /api/gm/*` routes (player search, points, items, lock, unlock, role; room kick and close), all behind `requireGm` (Plan 25) | general write bucket |
+
+The table names the account routes and the GM routes; the enumeration out of the finished app in the guard tests is the
+complete list.
 
 **Lite** — mutating `/api` routes, all CSRF-guarded, all metered:
 
@@ -231,6 +241,10 @@ None of this is in the code, and all of it is load-bearing.
 8. **Read the settlement alerts.** A hand recorded but never paid logs `hand settlement failed` with
    its `handId` — the one condition where §18.4's invariant has drifted and somebody has to reconcile
    by hand. The query is in [`normal-server.md`](normal-server.md).
+9. **Give a GM a long password used nowhere else, and make the first GM yourself.** A GM account is an ordinary account
+   with a role: one password and one session cookie, no 2FA. Run `node dist/grant-gm-cli.js <email>` on the server for the
+   first one ([`normal-server.md`](normal-server.md), "Granting the first GM"), and read the Quản trị overview's 24-hour
+   points by reason now and then: there is no daily cap on grants, so that is the check.
 
 ---
 

@@ -46,7 +46,10 @@ apps/normal-web/
     screens/
       Shell.tsx         the rail and the page under it; publishes --bp-stage for the table
       AuthScreen.tsx    sign in and register, one card, two modes
-      {Profile,Achievements,Daily,Settings}Screen.tsx   four of the five lazy account screens
+      {Profile,Achievements,Daily,Settings}Screen.tsx   four of the lazy account screens
+      LedgerPanel.tsx   the points ledger list, shared by the profile and the GM's player page
+      gm/               the Quản trị screen (GM only, a lazy chunk): GmScreen · OverviewTab · PlayersTab · PlayerDetail
+                        · RoomsTab · ActionsTab · ReasonDialog · CopyId · tabProps.ts · gm.module.css
       wardrobe/
         WardrobeScreen.tsx   the fifth — preview + expression stepper + Nữ | Nam + ten tabs + saved outfits
         HairStyleTab.tsx     Kiểu tóc: the gender's hairstyles, each card a head portrait of the draft
@@ -309,6 +312,40 @@ Mũ chóp quý ông". A marker this bundle has no words for draws nothing. The i
 hidden span, so the legend under the calendar repeats them where a phone can read them: the draw kinds this month has,
 then one line per named-gift day, "Ngày 28 tháng 11/2026: …" (`daily.marker.fixedDay`, the month through
 `formatMonthKey`). The relief panel underneath is fed by `GET /api/me`.
+
+---
+
+## The Quản trị screen
+
+`screens/gm/` (route `#/gm`, spec 2026-10-18, SRS §27.2) is the game master's console. It is a lazy chunk like the other
+account screens, and its entry is a "Quản trị" row in Settings that shows only for `role === 'gm'` (`AuthMeDto.role`,
+`MeDto.role`; read at login or on reload, so a promotion shows after F5). **The route is a convenience and the server is
+the lock.** A player who types `#/gm` is sent to the lobby before the chunk is requested (`Redirect`, which uses
+`window.location.replace` so Back is not trapped on a redirecting entry), and a GM demoted or locked since the page loaded
+finds out on the next call.
+
+- **Four tabs** — Tổng quan, Người chơi, Phòng, Nhật ký. The Players tab stays mounted (hidden) while one player's page is
+  open, so Back returns to the same search, results and cursor with no request.
+- **The 403 proxy.** `useAsync` swallows the cause of a failure, so a tab cannot notice that the role is gone. `GmScreen`
+  wraps the api in a `Proxy` that checks each call's rejection: a `403 FORBIDDEN` calls `onForbidden` once (a tab firing
+  three requests gets three refusals and must leave once). `SELF_TARGET` and `TARGET_IS_GM` are also 403 but are about the
+  target, so they stay in the dialog that asked. A `401` is the session gate's business and never gets here.
+- **`ReasonDialog`** sits behind every action. The reason (3 to 200 characters, spaces not counted) is required before
+  Confirm enables; points take a whole non-zero amount within the cap (the field asks for no numeric keypad, so a minus
+  can be typed on a phone); a server refusal prints in the dialog, which stays open. The words come from
+  `gm.errors.<CODE>`, with the generic line as the fallback.
+- **`CopyId`** copies a room or player id with `navigator.clipboard`, then `document.execCommand`, then leaves the id
+  selectable: a plain-HTTP LAN host has no clipboard API.
+- **Narrow screens.** At 640 px and below the tables become cards (each row's cells stack with their labels). That drops
+  table semantics for some screen readers (`docs/known-limitations.md`).
+- **`LedgerPanel`** was lifted out of `ProfileScreen` so the GM's player page shows the same ledger list. The two new
+  reasons read "Quản trị viên cộng điểm" and "Quản trị viên trừ điểm" (`ledger.reason.gm_grant`, `gm_adjust`).
+- **What a player sees.** A `NOTIFICATION` of kind `GM_NOTICE` goes through `notifications.ts`, which writes the signed
+  amount (or the item's name) in front of the GM's reason; the kit's `Toasts` interpolates `reason`
+  (`notify.GM_NOTICE`). A locked account is refused at sign-in with `ACCOUNT_LOCKED` and the reason
+  (`auth.errors.ACCOUNT_LOCKED`).
+
+Tests: `screens/gm/*.test.tsx`, `notifications.test.ts`, and the ops pack's section Q (`e2e/ops/06-gm.spec.ts`).
 
 ---
 
