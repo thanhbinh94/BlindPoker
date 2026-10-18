@@ -26,6 +26,23 @@ export interface GrantWardrobeResult {
 }
 
 /**
+ * Every item a wardrobe grant can give (`all`, catalogue order) and the ones this player lacks (`missing`, same order).
+ *
+ * Free items (design §3.2) are owned by everyone already and never get an `inventory` row, so "every catalogue item"
+ * means every item a grant can actually give. A read on `db`, never inside a transaction: the CLI below and the GM
+ * service share it, and the service calls it *before* opening its own transaction — PGlite serialises `query()` and
+ * `transaction()` through one lock, so a plain-`db` read inside an open transaction would wait on itself (Plan 25 A7).
+ */
+export async function missingWardrobe(db: AppDb, catalog: ItemCatalog, playerId: string): Promise<{ all: string[]; missing: string[] }> {
+  const all = catalog
+    .all()
+    .filter((d) => !d.free)
+    .map((d) => d.id)
+  const missing = await createInventoryService(db, undefined, catalog.freeIds()).missingOf(playerId, all)
+  return { all, missing: all.filter((id) => missing.includes(id)) }
+}
+
+/**
  * Gives one account every item in the catalogue — the test account's "full wardrobe" (bug-log CR1 §8).
  *
  * A tool for operators, never reachable from the API: it writes no ledger row because no points move,
@@ -43,17 +60,10 @@ export async function grantWardrobe(db: AppDb, catalog: ItemCatalog, email: stri
     .where(eq(users.email, normalised))
   if (!account) throw new UnknownAccountError(normalised)
 
-  const inventory = createInventoryService(db, undefined, catalog.freeIds())
-  // Free items (design §3.2) are owned by everyone already and never get an `inventory` row — "every
-  // catalogue item" here means every item a grant can actually give.
-  const all = catalog
-    .all()
-    .filter((d) => !d.free)
-    .map((d) => d.id)
-  const missing = await inventory.missingOf(account.id, all)
-  const granted = all.filter((id) => missing.includes(id))
+  const { all, missing: granted } = await missingWardrobe(db, catalog, account.id)
   if (opts.dryRun !== true && granted.length > 0) {
     await catalog.seed(db)
+    const inventory = createInventoryService(db, undefined, catalog.freeIds())
     await db.transaction(async (tx) => {
       for (const id of granted) await inventory.grant(tx, account.id, id, GRANT_SOURCE)
     })
