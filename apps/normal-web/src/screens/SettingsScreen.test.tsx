@@ -24,7 +24,7 @@ function renderScreen(props: Partial<Parameters<typeof SettingsScreen>[0]> = {})
   const onLanguage = props.onLanguage ?? vi.fn()
   const onSignedOut = props.onSignedOut ?? vi.fn()
   const result = renderWithI18n(
-    <SettingsScreen api={api} lang={props.lang ?? 'vi'} onLanguage={onLanguage} onSignedOut={onSignedOut} version={props.version ?? '0.1.0'} />,
+    <SettingsScreen api={api} lang={props.lang ?? 'vi'} onLanguage={onLanguage} onSignedOut={onSignedOut} version={props.version ?? '0.1.0'} role={props.role ?? 'player'} />,
     makeI18n(props.lang ?? 'vi'),
   )
   return { ...result, api, onLanguage, onSignedOut }
@@ -121,5 +121,20 @@ describe('SettingsScreen', () => {
     expect(onSignedOut).toHaveBeenCalledTimes(1)
     // The screen never calls `logout` itself: one session ends in exactly one place, and that place is the app.
     expect((api as { logout?: unknown }).logout).toBeUndefined()
+  })
+
+  it('shows a game master the way into the console, under the sign-out', async () => {
+    renderScreen({ role: 'gm' })
+    await screen.findByText(ME.displayName)
+
+    const link = screen.getByRole('link', { name: viNormal.settings.gm })
+    expect(link).toHaveAttribute('href', '#/gm')
+  })
+
+  it('shows an ordinary player no trace of it', async () => {
+    renderScreen({ role: 'player' })
+    await screen.findByText(ME.displayName)
+
+    expect(screen.queryByRole('link', { name: viNormal.settings.gm })).toBeNull()
   })
 })

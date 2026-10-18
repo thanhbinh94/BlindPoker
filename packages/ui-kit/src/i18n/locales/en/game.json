@@ -261,6 +261,7 @@
     "ROOM_CLOSED": "The room was closed",
     "DAILY_REWARD": "Daily reward: {{amount}} points",
     "ACHIEVEMENT_UNLOCKED": "Achievement unlocked: {{id}}",
+    "GM_NOTICE": "Game master: {{reason}}",
     "TABLE_LIMIT_SPENT": "You have used up your table limit here — the {{amount}} left went back to your balance. Pick an empty seat to play again.",
     "TABLE_LIMIT_SPENT_none": "You have used up your table limit here. Pick an empty seat to play again.",
     "other": "New notification"

@@ -29,6 +29,8 @@ const REASONS = new Set([
   'daily_item_fallback',
   'relief',
   'achievement',
+  'gm_grant',
+  'gm_adjust',
 ])
 
 /** A reason the server invented after this bundle shipped still reads as *something*, never as a raw key. */

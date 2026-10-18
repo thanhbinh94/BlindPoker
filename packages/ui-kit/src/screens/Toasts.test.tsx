@@ -130,6 +130,32 @@ describe('Toasts', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Achievement unlocked: hand_royal')
   })
 
+  it('interpolates the payload reason, so a game master’s notice carries what they wrote', () => {
+    wrap(
+      <Toasts
+        error={null}
+        notifications={[{ id: 1, kind: 'GM_NOTICE', payload: { action: 'lock', reason: 'cheating' }, at: 0 }]}
+        onClearError={vi.fn()}
+        onDismiss={vi.fn()}
+        lang="en"
+      />,
+    )
+    expect(screen.getByRole('status')).toHaveTextContent('Game master: cheating')
+  })
+
+  it('leaves the reason empty rather than printing "undefined" when the payload carries none', () => {
+    wrap(
+      <Toasts
+        error={null}
+        notifications={[{ id: 1, kind: 'GM_NOTICE', payload: { action: 'promote' }, at: 0 }]}
+        onClearError={vi.fn()}
+        onDismiss={vi.fn()}
+        lang="en"
+      />,
+    )
+    expect(screen.getByRole('status')).not.toHaveTextContent('undefined')
+  })
+
   it('leaves the placeholder empty rather than printing "undefined" when the payload carries no id', () => {
     wrap(
       <Toasts

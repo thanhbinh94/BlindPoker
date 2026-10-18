@@ -1,7 +1,7 @@
 import { Button, LanguageSwitch, Modal, Panel, Segmented, type Language } from '@bp/ui-kit'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { MeDto, NormalApi } from '../api.js'
+import type { MeDto, NormalApi, Role } from '../api.js'
 import { useThemePref } from '../prefs.js'
 import s from './normal.module.css'
 import { useAsync } from './useAsync.js'
@@ -19,6 +19,11 @@ export interface SettingsScreenProps {
   onSignedOut: () => void
   /** `NORMAL_VERSION`, passed rather than imported: importing it from `App.tsx` would pull the app into this chunk. */
   version: string
+  /**
+   * The gate's word for what this account is. A `gm` is shown the way into the console; the route and the server
+   * both refuse anyone else, so this link is a convenience and never the lock.
+   */
+  role: Role
 }
 
 /**
@@ -28,7 +33,7 @@ export interface SettingsScreenProps {
  * Only the account section needs the network, so only it has a loading state; the theme and the language are
  * device preferences that are already known before the first render.
  */
-export function SettingsScreen({ api, lang, onLanguage, onSignedOut, version }: SettingsScreenProps) {
+export function SettingsScreen({ api, lang, onLanguage, onSignedOut, version, role }: SettingsScreenProps) {
   const { t } = useTranslation('normal')
   const { theme, setTheme } = useThemePref()
   const account = useAsync<MeDto>(() => api.me())
@@ -100,6 +105,13 @@ export function SettingsScreen({ api, lang, onLanguage, onSignedOut, version }: 
             {t('settings.account.signOut')}
           </Button>
         </p>
+        {role === 'gm' ? (
+          <p>
+            <a className={s.quickLink} href="#/gm">
+              {t('settings.gm')}
+            </a>
+          </p>
+        ) : null}
       </Panel>
 
       <Panel title={t('settings.about.title')}>

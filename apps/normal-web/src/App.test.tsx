@@ -14,7 +14,7 @@ import { makeI18n, renderWithI18n } from './test-i18n.js'
 /** ui-kit's `game` namespace, quoted rather than imported: the app must not reach into the kit's sources. */
 const ROOMS_HEADING = 'Phòng chơi'
 
-const ME: AuthMeDto = { playerId: 'p1', displayName: 'Bình', balance: 123_000 }
+const ME: AuthMeDto = { playerId: 'p1', displayName: 'Bình', balance: 123_000, role: 'player' }
 const UNAUTHORIZED = new ApiError(401, 'UNAUTHENTICATED', 'a valid session cookie is required')
 
 function stubApi(overrides: Partial<NormalApi> = {}): NormalApi {
@@ -447,7 +447,7 @@ describe('App — a session that ends under the player', () => {
     // A shared machine: A signs out, B signs in, and the socket has not greeted yet. Everything the bar
     // draws — the name, the points — must already be B's, because the alternative is showing B the
     // stranger's name and balance for as long as the new socket takes to open.
-    const other: AuthMeDto = { playerId: 'p2', displayName: 'Lan', balance: 7_000 }
+    const other: AuthMeDto = { playerId: 'p2', displayName: 'Lan', balance: 7_000, role: 'player' }
     const api = stubApi({ login: vi.fn().mockResolvedValue(other) })
     window.history.replaceState(null, '', '/#/settings')
     const user = userEvent.setup()
@@ -703,5 +703,48 @@ describe('websocketUrl', () => {
   it('follows the page it was served from, upgrading to wss over https', () => {
     expect(websocketUrl({ protocol: 'https:', host: 'bind.example' })).toBe('wss://bind.example/ws')
     expect(websocketUrl({ protocol: 'http:', host: 'localhost:5173' })).toBe('ws://localhost:5173/ws')
+  })
+})
+
+describe('App — the GM console route', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    FakeSocket.reset()
+    window.history.replaceState(null, '', '/')
+  })
+
+  it('is an account route, so it sits behind the rail and out of the entry bundle', () => {
+    expect(ACCOUNT_ROUTES).toContain('/gm')
+  })
+
+  it('sends a player who types #/gm to the lobby', async () => {
+    window.history.replaceState(null, '', '/#/gm')
+    renderApp()
+    await settled()
+    await welcome()
+
+    await waitFor(() => expect(window.location.hash).toBe('#/lobby'))
+    expect(await screen.findByRole('heading', { name: ROOMS_HEADING })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: viNormal.gm.title })).toBeNull()
+  })
+
+  it('opens the console for a game master', async () => {
+    window.history.replaceState(null, '', '/#/gm')
+    renderApp(stubApi({ authMe: vi.fn().mockResolvedValue({ ...ME, role: 'gm' }) }))
+    await settled()
+    await welcome()
+
+    expect(await screen.findByRole('heading', { name: viNormal.gm.title })).toBeInTheDocument()
+    expect(window.location.hash).toBe('#/gm')
+    expect(screen.getByRole('navigation', { name: viNormal.nav.main })).toBeInTheDocument()
+  })
+
+  it('hands a game master the entry in Settings, and a player none', async () => {
+    window.history.replaceState(null, '', '/#/settings')
+    renderApp(stubApi({ authMe: vi.fn().mockResolvedValue({ ...ME, role: 'gm' }) }))
+    await settled()
+    await welcome()
+
+    expect(await screen.findByRole('link', { name: viNormal.settings.gm })).toHaveAttribute('href', '#/gm')
   })
 })

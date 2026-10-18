@@ -42,6 +42,16 @@ const idOf = (payload: unknown): string | null => {
 }
 
 /**
+ * The payload's `reason` — what a game master wrote beside a `GM_NOTICE` — passed through as `{{reason}}`, under the
+ * same rule as `idOf`: one named field, never the whole payload.
+ */
+const reasonOf = (payload: unknown): string | null => {
+  if (typeof payload !== 'object' || payload === null || !('reason' in payload)) return null
+  const { reason } = payload as { reason: unknown }
+  return typeof reason === 'string' ? reason : null
+}
+
+/**
  * The one place the screens speak up: a bottom-right stack of lacquered slips. Errors are assertive (`role="alert"`,
  * red edge), notifications are polite (`role="status"`, gold edge) — the colour is never the only signal, each slip
  * also carries its own icon glyph and its own dismissal affordance.
@@ -71,6 +81,7 @@ export function Toasts({ error, notifications, onClearError, onDismiss, lang }: 
       defaultValue: t('notify.other'),
       amount: amount === null ? '' : formatPoints(amount, lang),
       id: idOf(n.payload) ?? '',
+      reason: reasonOf(n.payload) ?? '',
     })
   }
 

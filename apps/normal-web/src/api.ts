@@ -186,11 +186,15 @@ export interface AchievementDefDto {
 
 /* ── identity ──────────────────────────────────────────────────────────────── */
 
+/** What an account may do beyond playing (spec 2026-10-18): a `gm` gets the console behind `#/gm`. */
+export type Role = 'player' | 'gm'
+
 /** `POST /api/auth/register`, `POST /api/auth/login` and `GET /api/auth/me` all answer with this. */
 export interface AuthMeDto {
   playerId: string
   displayName: string
   balance: number
+  role: Role
 }
 
 /**
@@ -301,6 +305,7 @@ export interface MeDto {
   displayName: string
   email: string | null
   balance: number
+  role: Role
   avatar: AvatarConfigDto
   stats: { handsPlayed: number; handsWon: number }
   daily: DailyStatusDto
@@ -424,6 +429,84 @@ export interface AchievementProgressDto {
   unlockedAt: number | null
 }
 
+/* ── the game master's console (`apps/normal-server/src/http/routes-gm.ts`) ─────────────────── */
+
+/** One row of a player search: the address is masked, because a list is read over a shoulder. */
+export interface GmPlayerSummaryDto {
+  playerId: string
+  displayName: string
+  emailMasked: string
+  role: Role
+  locked: boolean
+  balance: number
+  createdAt: number
+  lastLoginAt: number | null
+}
+
+/** `GET /api/gm/players/:id`: the whole account, the address unmasked. */
+export interface GmPlayerDetailDto {
+  playerId: string
+  displayName: string
+  email: string
+  role: Role
+  locked: { at: number; reason: string } | null
+  balance: number
+  createdAt: number
+  lastLoginAt: number | null
+  stats: PlayerStatsDto
+  room: { roomId: string; code: string; name: string; seat: number | null } | null
+  inventoryCount: number
+}
+
+/** A room as the console lists it — `GET /api/gm/rooms` rows and `GET /api/gm/rooms/:id` alike. */
+export interface GmRoomDto {
+  roomId: string
+  code: string
+  name: string
+  mode: 'holdem' | 'blind'
+  status: 'OPEN' | 'IN_GAME'
+  isPrivate: boolean
+  hasPassword: boolean
+  players: number
+  maxPlayers: number
+  hostPlayerId: string
+  hostDisplayName: string
+  carryOverPot: number
+  handInProgress: boolean
+  createdAt: number
+  members: { playerId: string; displayName: string; isBot: boolean; seat: number | null; stack: number; connected: boolean }[]
+}
+
+/** One line of the append-only log; `actor` is `null` for an action taken from the server's own command line. */
+export interface GmActionDto {
+  id: number
+  at: number
+  actor: { userId: string; displayName: string } | null
+  action: string
+  target: { playerId: string; displayName: string } | null
+  roomId: string | null
+  amount: number | null
+  itemId: string | null
+  reason: string
+  details: Record<string, unknown> | null
+}
+
+export interface GmOverviewDto {
+  online: number
+  rooms: number
+  accounts: number
+  locked: number
+  gms: number
+  /** The last 24 hours of the ledger: what came into the economy, what left it, and the same by reason. */
+  points24h: { sources: number; sinks: number; byReason: { reason: string; total: number }[] }
+}
+
+/** What a grant of items answers: the ids that were new, and how many the player already had. */
+export interface GmGrantDto {
+  granted: string[]
+  alreadyOwned: number
+}
+
 /**
  * Every REST failure, including the ones that never left the browser. `status` is `0` and `code` is
  * `NETWORK` when `fetch` itself rejected — the screens need to tell "the server said no" apart from
@@ -500,6 +583,27 @@ export interface NormalApi {
   deleteOutfit(slot: number): Promise<{ removed: boolean }>
   /** Wears a saved outfit — the server's answer is the config now equipped, mirroring `setAvatar`'s reply. */
   applyOutfit(slot: number): Promise<{ config: AvatarConfigDto }>
+
+  /* The game master's console. Every call below is refused `403 FORBIDDEN` to a player: the server is the gate, and
+   * this client does not pretend otherwise. Every POST carries the GM's reason, which the server validates and logs. */
+  gmOverview(): Promise<GmOverviewDto>
+  /** A POST, not a GET, on purpose: a search string in a URL ends up in logs and in history. Metered as a write. */
+  gmSearch(q: string, opts?: { limit?: number; before?: string }): Promise<{ players: GmPlayerSummaryDto[]; nextBefore: string | null }>
+  gmPlayer(playerId: string): Promise<GmPlayerDetailDto>
+  gmPlayerLedger(playerId: string, opts?: { limit?: number; before?: number }): Promise<LedgerPageDto>
+  gmPlayerHistory(playerId: string, limit?: number): Promise<HistoryEntryDto[]>
+  /** A positive amount credits, a negative one debits; the server logs it as `grant_points` or `adjust_points`. */
+  gmPoints(playerId: string, amount: number, reason: string): Promise<{ balance: number; actionId: number }>
+  gmGrantItem(playerId: string, itemId: string, reason: string): Promise<GmGrantDto>
+  gmGrantWardrobe(playerId: string, reason: string): Promise<GmGrantDto>
+  gmLock(playerId: string, reason: string): Promise<{ locked: true }>
+  gmUnlock(playerId: string, reason: string): Promise<{ locked: false }>
+  gmSetRole(playerId: string, role: Role, reason: string): Promise<{ role: Role }>
+  gmRooms(): Promise<{ rooms: GmRoomDto[] }>
+  gmRoom(roomId: string): Promise<GmRoomDto>
+  gmKick(roomId: string, playerId: string, reason: string): Promise<{ effective: 'now' | 'after_hand' }>
+  gmCloseRoom(roomId: string, reason: string): Promise<{ closed: true; refunded: number }>
+  gmActions(opts?: { limit?: number; before?: number; player?: string; room?: string }): Promise<{ actions: GmActionDto[]; nextBefore: number | null }>
 }
 
 interface Call {
@@ -536,7 +640,7 @@ async function readJson(res: Response): Promise<unknown> {
 }
 
 /** `?limit=20&before=41` — only the parameters that were actually given. */
-function query(params: Record<string, number | undefined>): string {
+function query(params: Record<string, number | string | undefined>): string {
   const search = new URLSearchParams()
   for (const [key, value] of Object.entries(params)) if (value !== undefined) search.set(key, String(value))
   const text = search.toString()
@@ -614,5 +718,42 @@ export function createApi(fetchImpl?: typeof fetch, base = ''): NormalApi {
       call<OutfitDto>({ method: 'PUT', path: `/api/me/outfits/${slot}`, body: { name, config } }),
     deleteOutfit: (slot) => call<{ removed: boolean }>({ method: 'DELETE', path: `/api/me/outfits/${slot}` }),
     applyOutfit: (slot) => call<{ config: AvatarConfigDto }>({ method: 'POST', path: `/api/me/outfits/${slot}/apply` }),
+
+    gmOverview: () => call<GmOverviewDto>({ method: 'GET', path: '/api/gm/overview' }),
+    gmSearch: (q, opts) =>
+      call<{ players: GmPlayerSummaryDto[]; nextBefore: string | null }>({
+        method: 'POST',
+        path: '/api/gm/players/search',
+        body: { q, ...(opts?.limit === undefined ? {} : { limit: opts.limit }), ...(opts?.before === undefined ? {} : { before: opts.before }) },
+      }),
+    gmPlayer: (playerId) => call<GmPlayerDetailDto>({ method: 'GET', path: `/api/gm/players/${encodeURIComponent(playerId)}` }),
+    gmPlayerLedger: (playerId, opts) =>
+      call<LedgerPageDto>({
+        method: 'GET',
+        path: `/api/gm/players/${encodeURIComponent(playerId)}/ledger${query({ limit: opts?.limit, before: opts?.before })}`,
+      }),
+    gmPlayerHistory: (playerId, limit) =>
+      call<HistoryEntryDto[]>({ method: 'GET', path: `/api/gm/players/${encodeURIComponent(playerId)}/history${query({ limit })}` }),
+    gmPoints: (playerId, amount, reason) =>
+      call<{ balance: number; actionId: number }>({ method: 'POST', path: `/api/gm/players/${encodeURIComponent(playerId)}/points`, body: { amount, reason } }),
+    gmGrantItem: (playerId, itemId, reason) =>
+      call<GmGrantDto>({ method: 'POST', path: `/api/gm/players/${encodeURIComponent(playerId)}/items`, body: { itemId, reason } }),
+    gmGrantWardrobe: (playerId, reason) =>
+      call<GmGrantDto>({ method: 'POST', path: `/api/gm/players/${encodeURIComponent(playerId)}/items`, body: { all: true, reason } }),
+    gmLock: (playerId, reason) => call<{ locked: true }>({ method: 'POST', path: `/api/gm/players/${encodeURIComponent(playerId)}/lock`, body: { reason } }),
+    gmUnlock: (playerId, reason) => call<{ locked: false }>({ method: 'POST', path: `/api/gm/players/${encodeURIComponent(playerId)}/unlock`, body: { reason } }),
+    gmSetRole: (playerId, role, reason) =>
+      call<{ role: Role }>({ method: 'POST', path: `/api/gm/players/${encodeURIComponent(playerId)}/role`, body: { role, reason } }),
+    gmRooms: () => call<{ rooms: GmRoomDto[] }>({ method: 'GET', path: '/api/gm/rooms' }),
+    gmRoom: (roomId) => call<GmRoomDto>({ method: 'GET', path: `/api/gm/rooms/${encodeURIComponent(roomId)}` }),
+    gmKick: (roomId, playerId, reason) =>
+      call<{ effective: 'now' | 'after_hand' }>({ method: 'POST', path: `/api/gm/rooms/${encodeURIComponent(roomId)}/kick`, body: { playerId, reason } }),
+    gmCloseRoom: (roomId, reason) =>
+      call<{ closed: true; refunded: number }>({ method: 'POST', path: `/api/gm/rooms/${encodeURIComponent(roomId)}/close`, body: { reason } }),
+    gmActions: (opts) =>
+      call<{ actions: GmActionDto[]; nextBefore: number | null }>({
+        method: 'GET',
+        path: `/api/gm/actions${query({ player: opts?.player, room: opts?.room, limit: opts?.limit, before: opts?.before })}`,
+      }),
   }
 }

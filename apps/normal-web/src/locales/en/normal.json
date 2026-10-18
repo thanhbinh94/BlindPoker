@@ -41,6 +41,7 @@
       "BAD_CREDENTIALS": "That email and password do not match an account",
       "RATE_LIMITED": "Too many attempts — please wait {{seconds}} seconds",
       "FORBIDDEN": "The request was refused — please reload the page",
+      "ACCOUNT_LOCKED": "This account is locked: {{reason}}",
       "NETWORK": "Could not reach the server"
     }
   },
@@ -119,10 +120,137 @@
       "cancel": "Stay signed in",
       "close": "Close"
     },
+    "gm": "Game master",
     "about": {
       "title": "About",
       "edition": "Edition",
       "version": "Version"
+    }
+  },
+  "gm": {
+    "title": "Game master",
+    "tabs": { "overview": "Overview", "players": "Players", "rooms": "Rooms", "actions": "Log" },
+    "overview": {
+      "online": "Connected now",
+      "rooms": "Open rooms",
+      "accounts": "Accounts",
+      "locked": "Locked",
+      "gms": "Game masters",
+      "points24h": "Points in the last 24 hours, by reason",
+      "refresh": "Refresh"
+    },
+    "players": {
+      "search": "Search by email or name",
+      "searchButton": "Search",
+      "empty": "No results",
+      "more": "Load more",
+      "name": "Name",
+      "email": "Email",
+      "balance": "Balance",
+      "role": "Role",
+      "status": "Status",
+      "lockedBadge": "Locked",
+      "open": "Open"
+    },
+    "player": {
+      "back": "Back to the list",
+      "inRoom": "In room {{name}} ({{code}})",
+      "notInRoom": "Not in any room",
+      "inventory": "{{count}} items in the wardrobe",
+      "lastLogin": "Last sign-in",
+      "created": "Created on",
+      "lockedSince": "Locked since {{at}}: {{reason}}",
+      "ledger": "Points ledger",
+      "history": "Recent hands"
+    },
+    "actions": {
+      "points": "Add or remove points",
+      "item": "Grant an item",
+      "wardrobe": "Grant the whole wardrobe",
+      "lock": "Lock the account",
+      "unlock": "Unlock",
+      "promote": "Make a game master",
+      "demote": "Remove game master rights",
+      "kick": "Remove from room",
+      "close": "Close room"
+    },
+    "dialog": {
+      "reason": "Reason (required, 3–200 characters)",
+      "amount": "Points (negative to deduct, at most ±10,000,000)",
+      "item": "Item id",
+      "confirm": "Confirm",
+      "cancel": "Cancel",
+      "closeBody": "A hand in progress is cancelled, the bets are refunded, and each player's stack goes back to their balance.",
+      "lockBody": "This player is signed out of every device, leaves the table they are sitting at, and cannot sign in until the account is unlocked."
+    },
+    "rooms": {
+      "name": "Room",
+      "mode": "Mode",
+      "players": "Players",
+      "host": "Host",
+      "status": "Status",
+      "private": "Private",
+      "inHand": "In a hand",
+      "carry": "Carried-over pot",
+      "members": "Members",
+      "bot": "Bot",
+      "offline": "Disconnected",
+      "empty": "No rooms",
+      "refresh": "Refresh"
+    },
+    "log": {
+      "when": "When",
+      "who": "Who",
+      "what": "Action",
+      "target": "To whom",
+      "amount": "Points",
+      "reason": "Reason",
+      "cli": "Server (CLI)",
+      "filterPlayer": "Filter by player",
+      "filterRoom": "Filter by room",
+      "more": "Load more",
+      "kind": {
+        "grant_points": "Points added",
+        "adjust_points": "Points deducted",
+        "grant_item": "Item granted",
+        "grant_wardrobe": "Wardrobe granted",
+        "lock": "Locked",
+        "unlock": "Unlocked",
+        "kick": "Removed",
+        "close_room": "Room closed",
+        "promote": "Promoted",
+        "demote": "Demoted"
+      }
+    },
+    "done": {
+      "points": "Balance updated: {{balance}}",
+      "item": "Granted {{count}} items",
+      "lock": "Account locked",
+      "unlock": "Account unlocked",
+      "role": "Role changed",
+      "kick": "Removed ({{when}})",
+      "kickNow": "now",
+      "kickAfterHand": "after this hand",
+      "close": "Room closed, refunded {{count}} players"
+    },
+    "errors": {
+      "INVALID_REASON": "The reason must be 3–200 characters",
+      "INVALID_AMOUNT": "That is not a valid amount",
+      "INVALID_ITEM": "There is no such item, or everyone already has it",
+      "INSUFFICIENT_BALANCE": "The balance is too low to deduct that",
+      "ALREADY_LOCKED": "The account is already locked",
+      "NOT_LOCKED": "The account is not locked",
+      "LAST_GM": "The last game master cannot be demoted",
+      "FORBIDDEN": "You are not allowed to do this",
+      "NOT_FOUND": "Not found",
+      "ROOM_NOT_FOUND": "The room no longer exists",
+      "GAME_IN_PROGRESS": "A hand is in progress",
+      "SELF_TARGET": "You cannot do this to yourself",
+      "TARGET_IS_GM": "This player is a game master; demote first"
+    },
+    "notice": {
+      "points": "{{amount}} points — {{reason}}",
+      "item": "{{item}} — {{reason}}"
     }
   },
   "screens": {
@@ -207,6 +335,8 @@
       "daily_item_fallback": "Daily reward, no item left",
       "relief": "Relief grant",
       "achievement": "Achievement reward",
+      "gm_grant": "Points from the game master",
+      "gm_adjust": "Points taken by the game master",
       "other": "Other"
     }
   },

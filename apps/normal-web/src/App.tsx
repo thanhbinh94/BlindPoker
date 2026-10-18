@@ -43,13 +43,13 @@ const NO_ITEMS: ItemDto[] = []
 export const NORMAL_VERSION = typeof __NORMAL_VERSION__ === 'string' ? __NORMAL_VERSION__ : 'dev'
 
 /**
- * The five account screens, split out of the entry bundle.
+ * The six account screens, split out of the entry bundle.
  *
  * They are the right things to split and the lobby is not: a player reaches the lobby on every visit, these
  * on some visits and several of them never. Between them they carry the stats tables, the ledger, the
  * month's calendar and the achievement list — none of which the sign-in card or the lobby has any use for.
  * (`Chibi` is not among them: the lobby bar and the seat plates draw faces, so it belongs in the entry
- * chunk and ships there.) Splitting these five keeps the first paint small on the phone connection this game
+ * chunk and ships there.) Splitting these six keeps the first paint small on the phone connection this game
  * is mostly played on, and each screen then costs one request, once.
  */
 const ProfileScreen = lazyScreen(async () => ({ default: (await import('./screens/ProfileScreen.js')).ProfileScreen }))
@@ -57,9 +57,10 @@ const WardrobeScreen = lazyScreen(async () => ({ default: (await import('./scree
 const AchievementsScreen = lazyScreen(async () => ({ default: (await import('./screens/AchievementsScreen.js')).AchievementsScreen }))
 const DailyScreen = lazyScreen(async () => ({ default: (await import('./screens/DailyScreen.js')).DailyScreen }))
 const SettingsScreen = lazyScreen(async () => ({ default: (await import('./screens/SettingsScreen.js')).SettingsScreen }))
+const GmScreen = lazyScreen(async () => ({ default: (await import('./screens/gm/GmScreen.js')).GmScreen }))
 
 /** The routes served by a lazy chunk rather than by the entry bundle. */
-export const ACCOUNT_ROUTES = ['/profile', '/avatar', '/achievements', '/daily', '/settings']
+export const ACCOUNT_ROUTES = ['/profile', '/avatar', '/achievements', '/daily', '/settings', '/gm']
 
 /**
  * The inventory's old route. The inventory folded into the wardrobe (review 2026-09-29, No5), but a bookmark, a
@@ -75,6 +76,19 @@ export function websocketUrl(loc: Pick<Location, 'protocol' | 'host'> = window.l
 
 /** `#/register` opens the register tab; every other route reached while signed out opens sign-in. */
 const modeOf = (path: string): AuthMode => (path === '/register' ? 'register' : 'signIn')
+
+/**
+ * Renders nothing and moves the address bar: the route a signed-in account is not allowed to see (`#/gm` for a
+ * player) hands over to one it is. It is a component rather than a call during render because navigating is a side
+ * effect, and the effect's dependencies are both stable (`navigate` is a `useCallback`, `to` a literal), so it fires
+ * once per visit.
+ */
+function Redirect({ to, navigate }: { to: string; navigate: (path: string) => void }) {
+  useEffect(() => {
+    navigate(to)
+  }, [navigate, to])
+  return null
+}
 
 export interface AppProps {
   api: NormalApi
@@ -192,9 +206,10 @@ export function App({ api, socketFactory }: AppProps) {
   // `ACHIEVEMENT_UNLOCKED` arrives naming an achievement *id*, and the kit's toast interpolates it verbatim
   // because achievement names live in this app's namespace, not the kit's. The lobby and the room each render
   // their own `Toasts` out of `client.state`, so the translation is done once here — on the list the client
-  // hands them — rather than twice, on two screens this app does not own.
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- `lang` is a deliberate cache-buster: `t` is bound to the i18n instance and can keep its identity across a language switch, so without it a toast already on screen would stay in the language it was raised in.
-  const notifications = useMemo(() => mapNotifications(client.state.notifications, t), [client.state.notifications, t, lang])
+  // hands them — rather than twice, on two screens this app does not own. A game master's notice is rewritten here for the
+  // same reason: the amount and the item name are this app's words. `lang` is a real input now (the amount is formatted in it),
+  // and `t` can keep its identity across a language switch, so it is also what re-renders a toast already on screen.
+  const notifications = useMemo(() => mapNotifications(client.state.notifications, t, lang), [client.state.notifications, t, lang])
 
   // The socket's identity is usable only while it agrees with the gate's. It disagrees for exactly one
   // window — a sign-out followed by a sign-in in the same tab, until the new socket's `WELCOME` — and in that
@@ -287,7 +302,7 @@ export function App({ api, socketFactory }: AppProps) {
             <RoomScreen client={viewClient} lang={lang} onLeft={() => navigate('/lobby')} chibiFor={chibiFor} captionFor={captionFor} />
           ) : ACCOUNT_ROUTES.includes(path) ? (
             <>
-              {/* One fallback for all five: the chunk is a single request on a page the rail has already drawn, so
+              {/* One fallback for all six: the chunk is a single request on a page the rail has already drawn, so
                   what the player waits for is a line under the rail, not a blank screen with a spinner in the middle. */}
               {/* Bug 4: a chunk that vanished in a deploy reloads the page once (`lazyScreen`); if that does not help,
                   the boundary says a new version is out instead of leaving the page blank. */}
@@ -306,13 +321,29 @@ export function App({ api, socketFactory }: AppProps) {
                 ) : path === '/daily' ? (
                   <DailyScreen api={guarded} lang={lang} />
                 ) : path === '/settings' ? (
-                  <SettingsScreen api={guarded} lang={lang} onLanguage={setLang} onSignedOut={onSignedOut} version={NORMAL_VERSION} />
+                  <SettingsScreen
+                    api={guarded}
+                    lang={lang}
+                    onLanguage={setLang}
+                    onSignedOut={onSignedOut}
+                    version={NORMAL_VERSION}
+                    role={gate.me?.role ?? 'player'}
+                  />
+                ) : path === '/gm' ? (
+                  // The route is a convenience and the server is the lock: a player who types the address is sent to the lobby
+                  // before the console's chunk is ever asked for, and a GM demoted since the page loaded is sent there on their
+                  // next 403 (`onForbidden`).
+                  gate.me?.role === 'gm' ? (
+                    <GmScreen api={guarded} lang={lang} onForbidden={() => navigate('/lobby')} />
+                  ) : (
+                    <Redirect to="/lobby" navigate={navigate} />
+                  )
                 ) : (
                   <AchievementsScreen api={guarded} lang={lang} />
                 )}
               </Suspense>
               </UpdateBoundary>
-              {/* The lobby and the room bring their own stack; these five have none, and `/daily` is precisely
+              {/* The lobby and the room bring their own stack; these six have none, and `/daily` is precisely
                   where the login-day achievements unlock. Without this the slip would sit undelivered in the state
                   until the player wandered back to the lobby, and then fire there, out of context. It sits outside
                   the `Suspense` so a frame that lands while the chunk is still in flight is not swallowed. */}

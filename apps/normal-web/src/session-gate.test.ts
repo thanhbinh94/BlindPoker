@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ApiError, type AuthMeDto, type NormalApi } from './api.js'
 import { useSessionGate } from './session-gate.js'
 
-const ME: AuthMeDto = { playerId: 'p1', displayName: 'Bình', balance: 100_000 }
+const ME: AuthMeDto = { playerId: 'p1', displayName: 'Bình', balance: 100_000, role: 'player' }
 const UNAUTHORIZED = new ApiError(401, 'UNAUTHENTICATED', 'a valid session cookie is required')
 
 const apiWith = (authMe: NormalApi['authMe']): NormalApi => ({ authMe }) as unknown as NormalApi
