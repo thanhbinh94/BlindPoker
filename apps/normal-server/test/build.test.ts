@@ -23,7 +23,7 @@ const execFileAsync = promisify(execFile)
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const DIST = join(ROOT, 'dist')
 /** The bundles `scripts/build.mjs` emits: the server, the migrate job, and the wardrobe grant tool. */
-const ENTRY_FILES = ['main.js', 'migrate-cli.js', 'grant-wardrobe-cli.js']
+const ENTRY_FILES = ['main.js', 'migrate-cli.js', 'grant-wardrobe-cli.js', 'grant-gm-cli.js']
 
 /** Long enough for a cold `tsc` on a loaded machine; a build that needs more than this is broken. */
 const BUILD_TIMEOUT_MS = 240_000

@@ -83,6 +83,7 @@ export interface HarnessOptions
       | 'upgradeRateLimit'
       | 'sessionSweepIntervalMs'
       | 'log'
+      | 'extraRoutes'
     >
   > {
   config?: Partial<NormalConfig>
@@ -120,6 +121,7 @@ export async function buildTestApp(db: AppDb, opts: HarnessOptions = {}): Promis
     gatewayOptions: { heartbeatIntervalMs: 60_000, heartbeatTimeoutMs: 120_000, ...opts.gatewayOptions },
     ...(opts.roomOptions ? { roomOptions: opts.roomOptions } : {}),
     ...(opts.rng ? { rng: opts.rng } : {}),
+    ...(opts.extraRoutes ? { extraRoutes: opts.extraRoutes } : {}),
     ...(opts.writeRateLimit ? { writeRateLimit: opts.writeRateLimit } : {}),
     ...(opts.readRateLimit ? { readRateLimit: opts.readRateLimit } : {}),
     ...(opts.writeIpRateLimit ? { writeIpRateLimit: opts.writeIpRateLimit } : {}),

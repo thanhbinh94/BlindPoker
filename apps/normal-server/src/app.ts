@@ -192,6 +192,8 @@ export interface AppDeps {
   upgradeRateLimit?: { limit: number; windowMs: number }
   /** Shortened by the sweep test; production runs `SESSION_SWEEP_INTERVAL_MS`. */
   sessionSweepIntervalMs?: number
+  /** Test-only: mounts extra routes before `ready()` (the e2e entry's loopback promote). Production passes none. */
+  extraRoutes?: (fastify: FastifyInstance) => void
 }
 
 /** Everything `buildApp` constructed, for tests and for anything Task 7 mounts beside it. */
@@ -387,6 +389,8 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     ...(deps.readRateLimit ? { readRateLimit: deps.readRateLimit } : {}),
     ...(deps.writeIpRateLimit ? { writeIpRateLimit: deps.writeIpRateLimit } : {}),
   })
+
+  deps.extraRoutes?.(fastify)
 
   // Last: `/*` matches everything the routes above did not claim. The reserved list is exactly the
   // surface mounted here — `/api`, `/ws`, `/health` — which is `DEFAULT_RESERVED`.
