@@ -717,8 +717,13 @@ describe('App — the GM console route', () => {
     expect(ACCOUNT_ROUTES).toContain('/gm')
   })
 
-  it('sends a player who types #/gm to the lobby', async () => {
+  it('sends a player who types #/gm to the lobby, replacing the entry so Back is not trapped', async () => {
     window.history.replaceState(null, '', '/#/gm')
+    const entries = window.history.length
+    const heard: string[] = []
+    const onHashChange = (event: HashChangeEvent): void => void heard.push(new URL(event.newURL).hash)
+    window.addEventListener('hashchange', onHashChange)
+    onTestFinished(() => window.removeEventListener('hashchange', onHashChange))
     renderApp()
     await settled()
     await welcome()
@@ -726,6 +731,9 @@ describe('App — the GM console route', () => {
     await waitFor(() => expect(window.location.hash).toBe('#/lobby'))
     expect(await screen.findByRole('heading', { name: ROOMS_HEADING })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: viNormal.gm.title })).toBeNull()
+    expect(heard).toEqual(['#/lobby'])
+    // A pushed entry would leave `#/gm` one step back, and Back would redirect the player forward again.
+    expect(window.history.length).toBe(entries)
   })
 
   it('opens the console for a game master', async () => {

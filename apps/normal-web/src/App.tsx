@@ -80,13 +80,16 @@ const modeOf = (path: string): AuthMode => (path === '/register' ? 'register' : 
 /**
  * Renders nothing and moves the address bar: the route a signed-in account is not allowed to see (`#/gm` for a
  * player) hands over to one it is. It is a component rather than a call during render because navigating is a side
- * effect, and the effect's dependencies are both stable (`navigate` is a `useCallback`, `to` a literal), so it fires
- * once per visit.
+ * effect.
+ *
+ * It *replaces* the history entry instead of pushing one, as the `/inventory` swap in `App` does: with a push, "Back"
+ * from the lobby would land on `#/gm`, which redirects again, and the player could never go back past it.
+ * `location.replace` fires `hashchange`, so the router reads the new route like any other.
  */
-function Redirect({ to, navigate }: { to: string; navigate: (path: string) => void }) {
+function Redirect({ to }: { to: string }) {
   useEffect(() => {
-    navigate(to)
-  }, [navigate, to])
+    window.location.replace(`#${to}`)
+  }, [to])
   return null
 }
 
@@ -336,7 +339,7 @@ export function App({ api, socketFactory }: AppProps) {
                   gate.me?.role === 'gm' ? (
                     <GmScreen api={guarded} lang={lang} onForbidden={() => navigate('/lobby')} />
                   ) : (
-                    <Redirect to="/lobby" navigate={navigate} />
+                    <Redirect to="/lobby" />
                   )
                 ) : (
                   <AchievementsScreen api={guarded} lang={lang} />
