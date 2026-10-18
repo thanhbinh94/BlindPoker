@@ -129,6 +129,8 @@
   },
   "gm": {
     "title": "Game master",
+    "copyId": "Copy id",
+    "copied": "Copied",
     "tabs": { "overview": "Overview", "players": "Players", "rooms": "Rooms", "actions": "Log" },
     "overview": {
       "online": "Connected now",
@@ -194,7 +196,8 @@
       "cancel": "Cancel",
       "close": "Close",
       "closeBody": "A hand in progress is cancelled, the bets are refunded, and each player's stack goes back to their balance.",
-      "lockBody": "This player is signed out of every device, leaves the table they are sitting at, and cannot sign in until the account is unlocked."
+      "lockBody": "This player is signed out of every device, leaves the table they are sitting at, and cannot sign in until the account is unlocked.",
+      "kickBody": "Remove {{name}} from the room. In the middle of a hand, they leave when the hand ends."
     },
     "rooms": {
       "name": "Room",
@@ -209,7 +212,11 @@
       "bot": "Bot",
       "offline": "Disconnected",
       "empty": "No rooms",
-      "refresh": "Refresh"
+      "refresh": "Refresh",
+      "error": "Could not load the rooms",
+      "seat": "Seat",
+      "stack": "Stack",
+      "modes": { "holdem": "Texas Hold'em", "blind": "Blind Poker" }
     },
     "log": {
       "when": "When",
@@ -221,6 +228,9 @@
       "cli": "Server (CLI)",
       "filterPlayer": "Filter by player",
       "filterRoom": "Filter by room",
+      "filter": "Filter",
+      "empty": "Nothing in the log yet",
+      "error": "Could not load the log",
       "more": "Load more",
       "kind": {
         "grant_points": "Points added",

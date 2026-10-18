@@ -68,6 +68,9 @@
 /* ── tables ───────────────────────────────────────────────────────────────── */
 
 .tableWrap {
+  /* The containing block of the tables' visually-hidden headings: an absolutely placed span is clipped by an
+     overflow box only when that box is its containing block, and one left to the page would widen it. */
+  position: relative;
   overflow-x: auto;
 }
 
@@ -167,8 +170,107 @@
   margin: 0;
 }
 
+/* ── rooms and the log ────────────────────────────────────────────────────── */
+
+/* A second, quieter line under a name: a room's code, an item's id. */
+.sub {
+  display: block;
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.roomCell {
+  min-width: 8rem;
+}
+
+.when {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.rowActions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+/* The members of an opened room sit in the room's own cell, set in from the edge so they read as its children. */
+td.members {
+  padding-left: var(--space-5);
+  background: var(--bg-elev);
+}
+
+.filterForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+/* A cell that holds more than one thing (a name and its sub-lines, badges and a note) keeps them in one box, so a
+   phone's card layout below can lay the box out and not each thing in it. */
+.value {
+  display: block;
+  min-width: 0;
+}
+
 @media (max-width: 640px) {
   .tiles {
     grid-template-columns: 1fr 1fr;
+  }
+
+  /* A table of six columns does not fit 343 px: squeezed, its words break one letter to a line, and scrolled, its
+     buttons sit off the edge where nobody looks. On a phone each row is a card instead: the headings step aside
+     (still read to a screen reader), every cell with a `data-label` prints it before its value, and a cell without
+     one (the row's name, its buttons) takes the full width. */
+  .cards thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+  }
+
+  .cards,
+  .cards tbody,
+  .cards tr {
+    display: block;
+  }
+
+  .cards tr {
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .cards td {
+    display: block;
+    padding: var(--space-1) var(--space-2);
+    border-bottom: 0;
+  }
+
+  .cards td:empty,
+  .cards td[data-label]:empty {
+    display: none;
+  }
+
+  .cards td[data-label] {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-3);
+    text-align: right;
+  }
+
+  .cards td[data-label]::before {
+    content: attr(data-label);
+    flex: none;
+    font-size: 0.8125rem;
+    color: var(--ink-muted);
+    text-align: left;
+  }
+
+  .cards td.members {
+    padding-left: var(--space-2);
   }
 }

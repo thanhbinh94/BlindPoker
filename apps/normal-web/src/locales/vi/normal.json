@@ -129,6 +129,8 @@
   },
   "gm": {
     "title": "Quản trị",
+    "copyId": "Chép mã",
+    "copied": "Đã chép",
     "tabs": { "overview": "Tổng quan", "players": "Người chơi", "rooms": "Phòng", "actions": "Nhật ký" },
     "overview": {
       "online": "Đang kết nối",
@@ -194,7 +196,8 @@
       "cancel": "Hủy",
       "close": "Đóng",
       "closeBody": "Ván đang chơi sẽ bị hủy, cược hoàn lại, chồng trên bàn về số dư của từng người.",
-      "lockBody": "Người này bị đăng xuất khỏi mọi thiết bị, rời bàn đang ngồi và không đăng nhập được cho tới khi mở khóa."
+      "lockBody": "Người này bị đăng xuất khỏi mọi thiết bị, rời bàn đang ngồi và không đăng nhập được cho tới khi mở khóa.",
+      "kickBody": "Mời {{name}} ra khỏi phòng. Đang giữa ván thì người này rời sau khi ván kết thúc."
     },
     "rooms": {
       "name": "Phòng",
@@ -209,7 +212,11 @@
       "bot": "Bot",
       "offline": "Mất kết nối",
       "empty": "Không có phòng nào",
-      "refresh": "Làm mới"
+      "refresh": "Làm mới",
+      "error": "Không tải được danh sách phòng",
+      "seat": "Ghế",
+      "stack": "Chồng",
+      "modes": { "holdem": "Texas Hold'em", "blind": "Blind Poker" }
     },
     "log": {
       "when": "Lúc",
@@ -221,6 +228,9 @@
       "cli": "Máy chủ (CLI)",
       "filterPlayer": "Lọc theo người",
       "filterRoom": "Lọc theo phòng",
+      "filter": "Lọc",
+      "empty": "Chưa có việc nào trong nhật ký",
+      "error": "Không tải được nhật ký",
       "more": "Tải thêm",
       "kind": {
         "grant_points": "Cộng điểm",

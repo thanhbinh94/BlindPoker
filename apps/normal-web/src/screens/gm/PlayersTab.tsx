@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { GmPlayerSummaryDto } from '../../api.js'
 import s from '../normal.module.css'
+import { CopyId } from './CopyId.js'
 import g from './gm.module.css'
 import type { GmTabProps } from './tabProps.js'
 
@@ -91,7 +92,7 @@ export function PlayersTab({ api, lang, onOpen }: PlayersTabProps) {
 
       {players.length === 0 ? null : (
         <div className={g.tableWrap}>
-          <table className={g.table}>
+          <table className={`${g.table} ${g.cards}`}>
             <thead>
               <tr>
                 <th scope="col">{t('gm.players.name')}</th>
@@ -110,14 +111,21 @@ export function PlayersTab({ api, lang, onOpen }: PlayersTabProps) {
               {players.map((player) => (
                 <tr key={player.playerId}>
                   <td className={g.rowName}>{player.displayName}</td>
-                  <td>{player.emailMasked}</td>
-                  <td className={g.num}>{formatPoints(player.balance, lang)}</td>
-                  <td>{t(`gm.player.roles.${player.role}`)}</td>
-                  <td>{player.locked ? <Badge tone="muted">{t('gm.players.lockedBadge')}</Badge> : null}</td>
+                  <td data-label={t('gm.players.email')}>{player.emailMasked}</td>
+                  <td className={g.num} data-label={t('gm.players.balance')}>
+                    {formatPoints(player.balance, lang)}
+                  </td>
+                  <td data-label={t('gm.players.role')}>{t(`gm.player.roles.${player.role}`)}</td>
+                  <td data-label={t('gm.players.status')}>
+                    {player.locked ? <Badge tone="muted">{t('gm.players.lockedBadge')}</Badge> : null}
+                  </td>
                   <td>
-                    <Button variant="ghost" size="sm" onClick={() => onOpen(player.playerId)}>
-                      {t('gm.players.open')}
-                    </Button>
+                    <span className={g.rowActions}>
+                      <Button variant="ghost" size="sm" onClick={() => onOpen(player.playerId)}>
+                        {t('gm.players.open')}
+                      </Button>
+                      <CopyId id={player.playerId} />
+                    </span>
                   </td>
                 </tr>
               ))}
