@@ -128,7 +128,7 @@ export function ReasonDialog({ open, title, body, fields, confirmLabel, onConfir
               id={amountId}
               className={s.input}
               type="text"
-              inputMode="numeric"
+              // No `inputMode`: iOS's numeric keypad has no minus sign, and a deduction is a minus.
               autoComplete="off"
               value={amountText}
               onChange={(event) => setAmountText(event.target.value)}

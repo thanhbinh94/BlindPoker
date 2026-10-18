@@ -97,11 +97,14 @@ export function GmScreen({ api, lang, onForbidden }: GmScreenProps) {
       />
       {tab === 'overview' ? <OverviewTab {...shared} /> : null}
       {tab === 'players' ? (
-        playerId === null ? (
-          <PlayersTab {...shared} onOpen={setPlayerId} />
-        ) : (
-          <PlayerDetail key={playerId} {...shared} playerId={playerId} onBack={() => setPlayerId(null)} />
-        )
+        <>
+          {/* Kept mounted, only hidden, while a player is open: Back returns to the same query, the same pages and
+              the same scroll, and costs no new search (a search is a metered write on the server). */}
+          <div hidden={playerId !== null}>
+            <PlayersTab {...shared} onOpen={setPlayerId} />
+          </div>
+          {playerId === null ? null : <PlayerDetail key={playerId} {...shared} playerId={playerId} onBack={() => setPlayerId(null)} />}
+        </>
       ) : null}
       {tab === 'rooms' ? <RoomsTab {...shared} /> : null}
       {tab === 'actions' ? <ActionsTab {...shared} /> : null}

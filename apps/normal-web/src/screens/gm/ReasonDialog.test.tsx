@@ -61,6 +61,12 @@ describe('ReasonDialog', () => {
     }
   })
 
+  it('lets a minus be typed on a phone: the amount field asks for no numeric keypad', () => {
+    renderDialog({ fields: { amount: true } })
+
+    expect(amountBox()).not.toHaveAttribute('inputmode')
+  })
+
   it('with an item field, wants an item id', async () => {
     const user = userEvent.setup()
     renderDialog({ fields: { item: true } })

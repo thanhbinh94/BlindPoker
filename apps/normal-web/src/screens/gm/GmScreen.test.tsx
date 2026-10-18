@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError, type GmOverviewDto, type NormalApi } from '../../api.js'
@@ -108,32 +108,118 @@ describe('GmScreen', () => {
 
     expect(onForbidden).toHaveBeenCalledTimes(1)
   })
+})
 
-  it('opens a player from the list and comes back to it', async () => {
-    const user = userEvent.setup()
-    const gmSearch = vi.fn().mockResolvedValue({
-      players: [{ playerId: 'p1', displayName: 'Bình', emailMasked: 'b***@example.com', role: 'player', locked: false, balance: 5, createdAt: 1, lastLoginAt: null }],
-      nextBefore: null,
-    })
-    const gmPlayer = vi.fn().mockResolvedValue({
+const BINH = { playerId: 'p1', displayName: 'Bình', emailMasked: 'b***@example.com', role: 'player', locked: false, balance: 5, createdAt: 1, lastLoginAt: null }
+
+/** An api whose search lists one player and whose player page answers; `overrides` replaces any of it. */
+function playerApi(overrides: Partial<Record<keyof NormalApi, unknown>> = {}): Stub {
+  return stubApi({
+    gmSearch: vi.fn().mockResolvedValue({ players: [BINH], nextBefore: null }),
+    gmPlayer: vi.fn().mockResolvedValue({
       playerId: 'p1', displayName: 'Bình', email: 'binh@example.com', role: 'player', locked: null, balance: 5, createdAt: 1, lastLoginAt: null,
       stats: {}, room: null, inventoryCount: 0,
+    }),
+    gmPlayerLedger: vi.fn().mockResolvedValue({ entries: [], nextBefore: null }),
+    gmPlayerHistory: vi.fn().mockResolvedValue([]),
+    ...overrides,
+  })
+}
+
+async function openPlayer(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  await user.click(screen.getByRole('button', { name: viNormal.gm.tabs.players }))
+  await user.click(await screen.findByRole('button', { name: viNormal.gm.players.open }))
+  await screen.findByText('binh@example.com')
+}
+
+describe('GmScreen — the player pages', () => {
+  it('opens a player from the list and comes back to it', async () => {
+    const user = userEvent.setup()
+    const api = playerApi()
+    setup(api)
+    await openPlayer(user)
+    expect(api.gmPlayer).toHaveBeenCalledWith('p1')
+
+    await user.click(screen.getByRole('button', { name: viNormal.gm.player.back }))
+
+    expect(await screen.findByText('b***@example.com')).toBeVisible()
+  })
+
+  it('keeps the search, its results and its cursor across a visit to a player, and asks the server nothing on Back', async () => {
+    const user = userEvent.setup()
+    const api = playerApi({
+      gmSearch: vi
+        .fn()
+        .mockResolvedValueOnce({ players: [], nextBefore: null })
+        .mockResolvedValueOnce({ players: [BINH], nextBefore: 'p1' }),
     })
-    setup(
-      stubApi({
-        gmSearch,
-        gmPlayer,
-        gmPlayerLedger: vi.fn().mockResolvedValue({ entries: [], nextBefore: null }),
-        gmPlayerHistory: vi.fn().mockResolvedValue([]),
-      }),
-    )
+    setup(api)
+    await user.click(screen.getByRole('button', { name: viNormal.gm.tabs.players }))
+    await user.type(await screen.findByRole('searchbox', { name: viNormal.gm.players.search }), 'binh')
+    await user.click(screen.getByRole('button', { name: viNormal.gm.players.searchButton }))
+    await user.click(await screen.findByRole('button', { name: viNormal.gm.players.open }))
+    await screen.findByText('binh@example.com')
+    expect(screen.getByText('b***@example.com')).not.toBeVisible()
+    expect(api.gmSearch).toHaveBeenCalledTimes(2)
+
+    await user.click(screen.getByRole('button', { name: viNormal.gm.player.back }))
+
+    expect(screen.getByText('b***@example.com')).toBeVisible()
+    expect(screen.getByRole('searchbox', { name: viNormal.gm.players.search })).toHaveValue('binh')
+    expect(screen.getByRole('button', { name: viNormal.gm.players.more })).toBeVisible()
+    expect(api.gmSearch).toHaveBeenCalledTimes(2)
+  })
+
+  it('leaves the console when the player list itself is refused', async () => {
+    const user = userEvent.setup()
+    const gmSearch = vi.fn().mockRejectedValue(new ApiError(403, 'FORBIDDEN', ''))
+    const { onForbidden } = setup(playerApi({ gmSearch }))
+
+    await user.click(screen.getByRole('button', { name: viNormal.gm.tabs.players }))
+
+    await waitFor(() => expect(onForbidden).toHaveBeenCalledTimes(1))
+    expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.gm.players.error)
+  })
+
+  it('leaves once, and the dialog says why, when an action on a player is refused for the role', async () => {
+    const user = userEvent.setup()
+    const gmPoints = vi.fn().mockRejectedValue(new ApiError(403, 'FORBIDDEN', ''))
+    const { onForbidden } = setup(playerApi({ gmPoints }))
+    await openPlayer(user)
+
+    await user.click(screen.getByRole('button', { name: viNormal.gm.actions.points }))
+    const dialog = within(screen.getByRole('dialog'))
+    await user.type(dialog.getByLabelText(viNormal.gm.dialog.amount), '-500')
+    await user.type(dialog.getByLabelText(viNormal.gm.dialog.reason), 'sửa')
+    await user.click(dialog.getByRole('button', { name: viNormal.gm.dialog.confirm }))
+
+    expect(await dialog.findByRole('alert')).toHaveTextContent(viNormal.gm.errors.FORBIDDEN)
+    expect(onForbidden).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves when the player page itself is refused', async () => {
+    const user = userEvent.setup()
+    const gmPlayer = vi.fn().mockRejectedValue(new ApiError(403, 'FORBIDDEN', ''))
+    const { onForbidden } = setup(playerApi({ gmPlayer }))
     await user.click(screen.getByRole('button', { name: viNormal.gm.tabs.players }))
     await user.click(await screen.findByRole('button', { name: viNormal.gm.players.open }))
 
-    expect(await screen.findByText('binh@example.com')).toBeInTheDocument()
-    expect(gmPlayer).toHaveBeenCalledWith('p1')
-    await user.click(screen.getByRole('button', { name: viNormal.gm.player.back }))
+    await waitFor(() => expect(onForbidden).toHaveBeenCalledTimes(1))
+    await screen.findByRole('alert')
+  })
 
-    expect(await screen.findByText('b***@example.com')).toBeInTheDocument()
+  it('does not leave for a target refusal raised by an action', async () => {
+    const user = userEvent.setup()
+    const gmLock = vi.fn().mockRejectedValue(new ApiError(403, 'SELF_TARGET', ''))
+    const { onForbidden } = setup(playerApi({ gmLock }))
+    await openPlayer(user)
+
+    await user.click(screen.getByRole('button', { name: viNormal.gm.actions.lock }))
+    const dialog = within(screen.getByRole('dialog'))
+    await user.type(dialog.getByLabelText(viNormal.gm.dialog.reason), 'thử')
+    await user.click(dialog.getByRole('button', { name: viNormal.gm.dialog.confirm }))
+
+    expect(await dialog.findByRole('alert')).toHaveTextContent(viNormal.gm.errors.SELF_TARGET)
+    expect(onForbidden).not.toHaveBeenCalled()
   })
 })
