@@ -137,7 +137,12 @@
       "locked": "Đang khóa",
       "gms": "Quản trị viên",
       "points24h": "Điểm 24 giờ qua, theo lý do",
-      "refresh": "Làm mới"
+      "refresh": "Làm mới",
+      "sources": "Vào nền kinh tế",
+      "sinks": "Ra khỏi nền kinh tế",
+      "reasonColumn": "Lý do",
+      "total": "Tổng",
+      "error": "Không tải được tổng quan"
     },
     "players": {
       "search": "Tìm theo email hoặc tên",
@@ -150,7 +155,8 @@
       "role": "Vai trò",
       "status": "Trạng thái",
       "lockedBadge": "Đã khóa",
-      "open": "Mở"
+      "open": "Mở",
+      "error": "Không tải được danh sách"
     },
     "player": {
       "back": "Quay lại danh sách",
@@ -161,7 +167,13 @@
       "created": "Tạo ngày",
       "lockedSince": "Khóa từ {{at}}: {{reason}}",
       "ledger": "Sổ điểm",
-      "history": "Ván gần đây"
+      "history": "Ván gần đây",
+      "neverSignedIn": "Chưa từng",
+      "email": "Email",
+      "balance": "Số dư",
+      "role": "Vai trò",
+      "error": "Không tải được người chơi này",
+      "roles": { "gm": "Quản trị viên", "player": "Người chơi" }
     },
     "actions": {
       "points": "Cộng/trừ điểm",
@@ -180,6 +192,7 @@
       "item": "Mã món",
       "confirm": "Xác nhận",
       "cancel": "Hủy",
+      "close": "Đóng",
       "closeBody": "Ván đang chơi sẽ bị hủy, cược hoàn lại, chồng trên bàn về số dư của từng người.",
       "lockBody": "Người này bị đăng xuất khỏi mọi thiết bị, rời bàn đang ngồi và không đăng nhập được cho tới khi mở khóa."
     },

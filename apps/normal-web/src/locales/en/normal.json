@@ -137,7 +137,12 @@
       "locked": "Locked",
       "gms": "Game masters",
       "points24h": "Points in the last 24 hours, by reason",
-      "refresh": "Refresh"
+      "refresh": "Refresh",
+      "sources": "Into the economy",
+      "sinks": "Out of the economy",
+      "reasonColumn": "Reason",
+      "total": "Total",
+      "error": "Could not load the overview"
     },
     "players": {
       "search": "Search by email or name",
@@ -150,7 +155,8 @@
       "role": "Role",
       "status": "Status",
       "lockedBadge": "Locked",
-      "open": "Open"
+      "open": "Open",
+      "error": "Could not load the list"
     },
     "player": {
       "back": "Back to the list",
@@ -161,7 +167,13 @@
       "created": "Created on",
       "lockedSince": "Locked since {{at}}: {{reason}}",
       "ledger": "Points ledger",
-      "history": "Recent hands"
+      "history": "Recent hands",
+      "neverSignedIn": "Never",
+      "email": "Email",
+      "balance": "Balance",
+      "role": "Role",
+      "error": "Could not load this player",
+      "roles": { "gm": "Game master", "player": "Player" }
     },
     "actions": {
       "points": "Add or remove points",
@@ -180,6 +192,7 @@
       "item": "Item id",
       "confirm": "Confirm",
       "cancel": "Cancel",
+      "close": "Close",
       "closeBody": "A hand in progress is cancelled, the bets are refunded, and each player's stack goes back to their balance.",
       "lockBody": "This player is signed out of every device, leaves the table they are sitting at, and cannot sign in until the account is unlocked."
     },

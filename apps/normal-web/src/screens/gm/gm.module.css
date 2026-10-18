@@ -1,0 +1,174 @@
+/* The game master's console. Layout only: the type scale, panels, buttons and the fields' look come from the
+   kit and from `normal.module.css`; every colour and space here is a token. The page is narrow (`.page` is capped
+   at 46rem), so anything wider than that scrolls inside its own wrapper and never moves the page. */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* A form field: the label above its control, the same gap everywhere. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.reasonBox {
+  min-height: calc(var(--tap) * 1.5);
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+  resize: vertical;
+}
+
+/* ── overview ─────────────────────────────────────────────────────────────── */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+
+.tile dt {
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+}
+
+.tile dd {
+  margin: 0;
+}
+
+.tileValue {
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.up {
+  color: var(--teal);
+}
+
+.down {
+  color: var(--red);
+}
+
+/* ── tables ───────────────────────────────────────────────────────────────── */
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.table th,
+.table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.table th {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.table td {
+  overflow-wrap: anywhere;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.table th.num {
+  text-align: right;
+}
+
+/* ── players ──────────────────────────────────────────────────────────────── */
+
+.searchForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.searchField {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.rowName {
+  font-weight: 600;
+}
+
+/* ── one player ───────────────────────────────────────────────────────────── */
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.fact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fact dt {
+  font-size: 0.8125rem;
+  color: var(--ink-muted);
+}
+
+.fact dd {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.actionsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.lockNote {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .tiles {
+    grid-template-columns: 1fr 1fr;
+  }
+}

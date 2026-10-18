@@ -1,11 +1,12 @@
 import { validateDisplayName, type HandCategory } from '@bp/core'
 import { Badge, Button, Chibi, Field, Panel, defaultChibi, formatPoints, handLabel, type Language } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { AvatarCatalogDto, HistoryEntryDto, ItemDto, LedgerEntryDto, MeDto, NormalApi, PlayerStatsDto } from '../api.js'
+import type { AvatarCatalogDto, HistoryEntryDto, ItemDto, MeDto, NormalApi, PlayerStatsDto } from '../api.js'
 import { chibiFromApi } from '../avatar/chibi.js'
 import { itemName } from '../catalog-i18n.js'
+import { LedgerPanel } from './LedgerPanel.js'
 import { formatDay, formatMoment, formatSigned } from './format.js'
 import s from './normal.module.css'
 import { refusalText } from './refusal.js'
@@ -13,30 +14,6 @@ import { useAsync } from './useAsync.js'
 
 /** §19.2 serves the last twenty hands by default, and twenty is what a profile page is for. */
 export const HISTORY_LIMIT = 20
-
-/** One ledger page. Fifty rows is roughly a screen and a half on a phone — enough to scroll, short to fetch. */
-export const LEDGER_PAGE = 50
-
-/** `TxReason` in `@bp/server-kit`, which this app may not import: the values, copied, with a fallback under them. */
-const REASONS = new Set([
-  'starting_balance',
-  'settlement',
-  'buy_in',
-  'cash_out',
-  'refund',
-  'daily_reward',
-  'daily_login',
-  'daily_item_fallback',
-  'relief',
-  'achievement',
-  'gm_grant',
-  'gm_adjust',
-])
-
-/** A reason the server invented after this bundle shipped still reads as *something*, never as a raw key. */
-export function reasonLabel(reason: string, t: TFunction): string {
-  return t(REASONS.has(reason) ? `ledger.reason.${reason}` : 'ledger.reason.other')
-}
 
 type StatKey = keyof PlayerStatsDto
 
@@ -186,101 +163,6 @@ function RenameForm({ api, current, onRenamed }: RenameFormProps) {
         {t('profile.rename.submit')}
       </Button>
     </form>
-  )
-}
-
-/* ── the ledger ────────────────────────────────────────────────────────────── */
-
-interface LedgerPanelProps {
-  api: NormalApi
-  lang: Language
-}
-
-/**
- * Where the points came from and went.
- *
- * It pages on the server's own cursor (`nextBefore`, the ledger's sequence id) rather than on an offset,
- * because rows arrive at the top while the player reads: an offset would show them the same row twice, and a
- * cursor cannot. A page shorter than the limit *is* the end of the history, which is why the absence of a
- * cursor — not the length of the last page — is what puts the button away.
- */
-function LedgerPanel({ api, lang }: LedgerPanelProps) {
-  const { t } = useTranslation('normal')
-  const [entries, setEntries] = useState<LedgerEntryDto[]>([])
-  const [nextBefore, setNextBefore] = useState<number | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [failed, setFailed] = useState(false)
-
-  const pull = useCallback(
-    async (before: number | null): Promise<void> => {
-      setLoading(true)
-      setFailed(false)
-      try {
-        const page = await api.ledger(before === null ? { limit: LEDGER_PAGE } : { limit: LEDGER_PAGE, before })
-        setEntries((prev) => (before === null ? page.entries : [...prev, ...page.entries]))
-        setNextBefore(page.nextBefore)
-      } catch {
-        setFailed(true)
-      } finally {
-        setLoading(false)
-      }
-    },
-    [api],
-  )
-
-  useEffect(() => {
-    void pull(null)
-  }, [pull])
-
-  return (
-    <Panel title={t('profile.ledger.title')}>
-      {/* The panel's own words, not the page's: this alert fires under a profile that rendered perfectly
-          well, and "could not load your profile" read out over one is simply untrue. */}
-      {failed ? (
-        <p className={s.alert} role="alert">
-          {t('profile.ledger.error')}
-        </p>
-      ) : null}
-
-      {entries.length === 0 && !loading && !failed ? <p className={s.footnote}>{t('profile.ledger.empty')}</p> : null}
-
-      {entries.length === 0 ? null : (
-        <ul className={s.rows} aria-label={t('profile.ledger.title')}>
-          {entries.map((entry) => (
-            // The reference id is a row in someone's database, not something a player reads (layout audit C7):
-            // it stays on the row as a hover title, for the bug report that needs it.
-            <li
-              className={s.ledgerRow}
-              key={entry.id}
-              title={entry.refId === null ? undefined : t('profile.ledger.ref', { id: entry.refId })}
-            >
-              <span className={s.rowMain}>
-                <span className={s.rowTitle}>{reasonLabel(entry.reason, t)}</span>
-                <time className={s.rowMeta} dateTime={new Date(entry.createdAt).toISOString()}>
-                  {formatMoment(entry.createdAt, lang)}
-                </time>
-              </span>
-              <span className={s.amount} data-sign={entry.amount < 0 ? 'down' : 'up'}>
-                {formatSigned(entry.amount, lang)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {/* A first page that failed leaves `nextBefore` at `null`, which is also how "you have read it all"
-          looks — so without this branch the only way out of a failed first page is a full page reload.
-          A *later* page that failed keeps its cursor, and "load more" retries that same page. */}
-      {failed && entries.length === 0 ? (
-        <Button variant="ghost" loading={loading} onClick={() => void pull(null)}>
-          {t('screens.retry')}
-        </Button>
-      ) : nextBefore === null ? null : (
-        <Button variant="ghost" loading={loading} onClick={() => void pull(nextBefore)}>
-          {t('profile.ledger.loadMore')}
-        </Button>
-      )}
-    </Panel>
   )
 }
 
@@ -489,7 +371,7 @@ export function ProfileScreen({ api, lang, balance, onRenamed }: ProfileScreenPr
         )}
       </Panel>
 
-      <LedgerPanel api={api} lang={lang} />
+      <LedgerPanel load={api.ledger} lang={lang} />
     </main>
   )
 }

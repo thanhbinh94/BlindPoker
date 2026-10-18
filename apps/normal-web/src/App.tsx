@@ -335,9 +335,9 @@ export function App({ api, socketFactory }: AppProps) {
                 ) : path === '/gm' ? (
                   // The route is a convenience and the server is the lock: a player who types the address is sent to the lobby
                   // before the console's chunk is ever asked for, and a GM demoted since the page loaded is sent there on their
-                  // next 403 (`onForbidden`).
+                  // next 403 (`onForbidden`, which replaces the history entry like `Redirect` does, so Back is not trapped).
                   gate.me?.role === 'gm' ? (
-                    <GmScreen api={guarded} lang={lang} onForbidden={() => navigate('/lobby')} />
+                    <GmScreen api={guarded} lang={lang} onForbidden={() => window.location.replace('#/lobby')} />
                   ) : (
                     <Redirect to="/lobby" />
                   )

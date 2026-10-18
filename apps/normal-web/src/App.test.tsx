@@ -28,6 +28,8 @@ function stubApi(overrides: Partial<NormalApi> = {}): NormalApi {
     // are about the shell and the session, and a screen that never resolves still draws its own heading.
     me: vi.fn(() => new Promise<never>(() => undefined)),
     daily: vi.fn(() => new Promise<never>(() => undefined)),
+    // The console's first tab asks for this on arrival; hanging draws the heading, which is all the route test reads.
+    gmOverview: vi.fn(() => new Promise<never>(() => undefined)),
     // The rig every chibi is drawn on: fetched once for the app's whole lifetime, and irrelevant to every
     // case in this file — none of them ever look at a face.
     avatarCatalog: vi.fn().mockResolvedValue({ frame: { w: 384, h: 448 }, crop: { x: 88, y: 40, size: 208 }, bodies: [], manifestVersion: 1 }),
