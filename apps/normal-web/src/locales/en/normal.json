@@ -269,11 +269,15 @@
       "ROOM_NOT_FOUND": "The room no longer exists",
       "GAME_IN_PROGRESS": "A hand is in progress",
       "SELF_TARGET": "You cannot do this to yourself",
-      "TARGET_IS_GM": "This player is a game master; demote first"
+      "TARGET_IS_GM": "This player is a game master; demote first",
+      "TARGET_IS_LOCKED": "This account is locked; unlock it first"
     },
     "notice": {
       "points": "{{amount}} points — {{reason}}",
-      "item": "{{item}} — {{reason}}"
+      "item": "{{item}} — {{reason}}",
+      "promote": "You are now a game master — {{reason}}",
+      "demote": "Your game-master role was removed — {{reason}}",
+      "wardrobe": "You were given the whole wardrobe — {{reason}}"
     }
   },
   "screens": {

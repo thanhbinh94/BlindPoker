@@ -39,6 +39,13 @@ export interface SessionGate {
    * that only updated the profile page would leave the old name on every other screen until the next reload.
    */
   renamed: (displayName: string) => void
+  /**
+   * Re-reads the account from `GET /api/auth/me`. A GM's promotion or demotion changes `role` under a live session,
+   * and the Settings row that links the console and the `#/gm` route both read it from here — so the app asks again
+   * when such a notice lands rather than at the next reload. A 401 ends the session like any other; any other failure
+   * keeps what the gate had.
+   */
+  refresh: () => void
   /** Any screen's 401. The single place a session ends against the player's wishes. */
   onUnauthenticated: () => void
 }
@@ -91,6 +98,18 @@ export function useSessionGate({ api, socketStatus, onEnded }: SessionGateOption
   const renamed = useCallback((displayName: string) => {
     setMe((current) => (current === null ? null : { ...current, displayName }))
   }, [])
+
+  const refresh = useCallback(() => {
+    void apiRef.current
+      .authMe()
+      .then((account) => {
+        // Only the same account: a sign-out and a sign-in while this was in flight must not be overwritten.
+        setMe((current) => (current !== null && current.playerId === account.playerId ? account : current))
+      })
+      .catch((cause: unknown) => {
+        if (cause instanceof ApiError && cause.unauthenticated) onUnauthenticated()
+      })
+  }, [onUnauthenticated])
 
   // The boot probe. One request, and the answer decides which half of the app renders at all.
   useEffect(() => {
@@ -149,5 +168,5 @@ export function useSessionGate({ api, socketStatus, onEnded }: SessionGateOption
     }
   }, [signedIn, socketStatus, onUnauthenticated])
 
-  return { state, signedIn, me, expired, signIn, signOut, renamed, onUnauthenticated }
+  return { state, signedIn, me, expired, signIn, signOut, renamed, refresh, onUnauthenticated }
 }

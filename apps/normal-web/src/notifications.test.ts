@@ -2,7 +2,7 @@ import type { ClientNotification } from '@bp/ui-kit'
 import { describe, expect, it } from 'vitest'
 import enNormal from './locales/en/normal.json'
 import viNormal from './locales/vi/normal.json'
-import { mapNotifications } from './notifications.js'
+import { gmNoticeAction, mapNotifications } from './notifications.js'
 import { makeI18n } from './test-i18n.js'
 
 const t = makeI18n('vi').getFixedT(null, 'normal')
@@ -67,6 +67,31 @@ describe('mapNotifications — a game master’s notice', () => {
     const [mapped] = mapNotifications([note('GM_NOTICE', { action: 'grant_item', itemId: 'title_hot_hand', reason: 'prize' })], en, 'en')
 
     expect(reasonOf(mapped)).toBe(`${enNormal.items.title_hot_hand} — prize`)
+  })
+
+  it('says what a promotion, a demotion and the whole wardrobe are, in both languages', () => {
+    const en = makeI18n('en').getFixedT(null, 'normal')
+    const list = [
+      note('GM_NOTICE', { action: 'promote', reason: 'giúp việc' }, 1),
+      note('GM_NOTICE', { action: 'demote', reason: 'xong việc' }, 2),
+      note('GM_NOTICE', { action: 'grant_wardrobe', reason: 'quà' }, 3),
+    ]
+    expect(mapNotifications(list, t, 'vi').map(reasonOf)).toEqual([
+      'Bạn đã được trao quyền quản trị — giúp việc',
+      'Quyền quản trị của bạn đã được thu — xong việc',
+      'Bạn được cấp toàn bộ tủ đồ — quà',
+    ])
+    expect(mapNotifications(list, en, 'en').map(reasonOf)).toEqual([
+      'You are now a game master — giúp việc',
+      'Your game-master role was removed — xong việc',
+      'You were given the whole wardrobe — quà',
+    ])
+  })
+
+  it('reads the action of a GM notice, and nothing from any other kind', () => {
+    expect(gmNoticeAction(note('GM_NOTICE', { action: 'promote', reason: 'x' }))).toBe('promote')
+    expect(gmNoticeAction(note('GM_NOTICE', null))).toBeNull()
+    expect(gmNoticeAction(note('BALANCE_CHANGED', { action: 'promote' }))).toBeNull()
   })
 
   it('leaves a notice with no amount to print, and every other action, as the server wrote it', () => {

@@ -9,6 +9,7 @@ import {
   useGameClient,
   useHashRoute,
   useRoomReturn,
+  type ClientNotification,
   type SocketFactory,
 } from '@bp/ui-kit'
 import { Suspense, useCallback, useEffect, useMemo, useRef } from 'react'
@@ -18,7 +19,7 @@ import a from './avatar/avatar.module.css'
 import { chibiFromApi } from './avatar/chibi.js'
 import { resetAvatarCache, useAvatars } from './avatar/useAvatars.js'
 import { guardApi } from './guarded-api.js'
-import { mapNotifications } from './notifications.js'
+import { gmNoticeAction, mapNotifications, ROLE_ACTIONS } from './notifications.js'
 import { useLanguagePref } from './prefs.js'
 import { AuthScreen, type AuthMode } from './screens/AuthScreen.js'
 import { Shell } from './screens/Shell.js'
@@ -213,6 +214,23 @@ export function App({ api, socketFactory }: AppProps) {
   // same reason: the amount and the item name are this app's words. `lang` is a real input now (the amount is formatted in it),
   // and `t` can keep its identity across a language switch, so it is also what re-renders a toast already on screen.
   const notifications = useMemo(() => mapNotifications(client.state.notifications, t, lang), [client.state.notifications, t, lang])
+
+  // A promotion or a demotion changes the role under a live session: the gate asks the server again, so the Settings
+  // row that links the console and the `#/gm` route follow at once instead of at the next reload. Each notice is handled
+  // once, by object — the reducer reuses ids after a dismissal, but never a notification object.
+  const rawNotifications = client.state.notifications
+  const { refresh: refreshGate } = gate
+  const roleNoticesSeen = useRef(new WeakSet<ClientNotification>())
+  useEffect(() => {
+    let changed = false
+    for (const n of rawNotifications) {
+      if (roleNoticesSeen.current.has(n)) continue
+      roleNoticesSeen.current.add(n)
+      const action = gmNoticeAction(n)
+      if (action !== null && ROLE_ACTIONS.has(action)) changed = true
+    }
+    if (changed) refreshGate()
+  }, [rawNotifications, refreshGate])
 
   // The socket's identity is usable only while it agrees with the gate's. It disagrees for exactly one
   // window — a sign-out followed by a sign-in in the same tab, until the new socket's `WELCOME` — and in that

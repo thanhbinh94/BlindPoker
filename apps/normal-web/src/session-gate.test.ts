@@ -88,6 +88,44 @@ describe('useSessionGate', () => {
     expect(authMe).toHaveBeenCalledTimes(1)
   })
 
+  it('refresh re-reads the account, so a role changed under a live session shows without a reload', async () => {
+    const authMe = vi.fn().mockResolvedValueOnce(ME).mockResolvedValueOnce({ ...ME, role: 'gm' })
+    const { result } = mount(authMe)
+    await settle()
+    expect(result.current.me?.role).toBe('player')
+
+    act(() => result.current.refresh())
+    await settle()
+
+    expect(authMe).toHaveBeenCalledTimes(2)
+    expect(result.current.me).toEqual({ ...ME, role: 'gm' })
+    expect(result.current.state).toBe('signedIn')
+  })
+
+  it('refresh keeps the account on a network failure, ignores another account, and ends the session on a 401', async () => {
+    const authMe = vi.fn()
+      .mockResolvedValueOnce(ME)
+      .mockRejectedValueOnce(new ApiError(0, 'NETWORK', 'Failed to fetch'))
+      .mockResolvedValueOnce({ ...ME, playerId: 'p2', role: 'gm' })
+      .mockRejectedValueOnce(UNAUTHORIZED)
+    const { result, onEnded } = mount(authMe)
+    await settle()
+
+    act(() => result.current.refresh())
+    await settle()
+    expect(result.current.me).toEqual(ME)
+
+    act(() => result.current.refresh())
+    await settle()
+    expect(result.current.me).toEqual(ME)
+
+    act(() => result.current.refresh())
+    await settle()
+    expect(result.current.state).toBe('anonymous')
+    expect(result.current.expired).toBe(true)
+    expect(onEnded).toHaveBeenCalledTimes(1)
+  })
+
   it('clears an expiry notice once a new session begins', async () => {
     const { result } = mount(vi.fn().mockRejectedValue(UNAUTHORIZED))
     await settle()

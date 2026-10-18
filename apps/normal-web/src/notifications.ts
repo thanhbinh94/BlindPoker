@@ -41,10 +41,19 @@ function gmFields(payload: unknown): { action: string | null; reason: string | n
   }
 }
 
+/** The `GM_NOTICE` actions that change what the player may do, so the app re-reads the account's role. */
+export const ROLE_ACTIONS: ReadonlySet<string> = new Set(['promote', 'demote'])
+
+/** The `action` of a `GM_NOTICE`, or `null` for any other notification or a payload without one. */
+export function gmNoticeAction(n: ClientNotification): string | null {
+  return n.kind === GM_NOTICE ? gmFields(n.payload).action : null
+}
+
 /**
  * A GM's notice with the reason the player should read: `+12.000 điểm — thưởng` for points, `Mũ vương miện — tặng`
- * for an item. Any other action (a lock, a kick, a promotion) says only what the GM wrote, so it comes back
- * unchanged — and so does a points notice that lost its amount, because "0 điểm" would be a lie.
+ * for an item, and a sentence that names what happened for a promotion, a demotion or the whole wardrobe. Any other
+ * action (a lock, a kick) says only what the GM wrote, so it comes back unchanged — and so does a points notice that
+ * lost its amount, because "0 điểm" would be a lie.
  */
 function gmNoticeText(n: ClientNotification, t: TFunction, lang: Language): ClientNotification {
   const { action, reason, amount, itemId } = gmFields(n.payload)
@@ -54,6 +63,12 @@ function gmNoticeText(n: ClientNotification, t: TFunction, lang: Language): Clie
     written = t('gm.notice.points', { amount: formatSigned(amount, lang), reason })
   } else if (action === 'grant_item' && itemId !== null) {
     written = t('gm.notice.item', { item: itemName(itemId, t), reason })
+  } else if (action === 'promote') {
+    written = t('gm.notice.promote', { reason })
+  } else if (action === 'demote') {
+    written = t('gm.notice.demote', { reason })
+  } else if (action === 'grant_wardrobe') {
+    written = t('gm.notice.wardrobe', { reason })
   }
   return written === null ? n : { ...n, payload: { ...(n.payload as object), reason: written } }
 }

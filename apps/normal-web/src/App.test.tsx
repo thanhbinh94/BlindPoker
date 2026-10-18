@@ -757,4 +757,27 @@ describe('App — the GM console route', () => {
 
     expect(await screen.findByRole('link', { name: viNormal.settings.gm })).toHaveAttribute('href', '#/gm')
   })
+
+  it('re-reads the role when a promotion lands, so the Settings entry appears without a reload — and only then', async () => {
+    window.history.replaceState(null, '', '/#/settings')
+    const authMe = vi.fn().mockResolvedValueOnce(ME).mockResolvedValue({ ...ME, role: 'gm' })
+    renderApp(stubApi({ authMe }))
+    await settled()
+    await welcome()
+    expect(screen.queryByRole('link', { name: viNormal.settings.gm })).toBeNull()
+
+    // A notice that changes no role asks nothing.
+    await act(async () => {
+      socket().receive({ t: 'NOTIFICATION', kind: 'GM_NOTICE', payload: { action: 'grant_wardrobe', reason: 'quà' } })
+    })
+    expect(authMe).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      socket().receive({ t: 'NOTIFICATION', kind: 'GM_NOTICE', payload: { action: 'promote', reason: 'giúp việc' } })
+    })
+    expect(await screen.findByRole('link', { name: viNormal.settings.gm })).toHaveAttribute('href', '#/gm')
+    expect(authMe).toHaveBeenCalledTimes(2)
+    // The toast says what happened, in the app's words.
+    expect(await screen.findByText(/Bạn đã được trao quyền quản trị — giúp việc/)).toBeInTheDocument()
+  })
 })

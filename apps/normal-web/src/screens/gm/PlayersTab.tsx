@@ -16,7 +16,8 @@ export interface PlayersTabProps extends GmTabProps {
  *
  * A search is a write as far as the server's limiter is concerned (60 a minute per session), so it runs on the
  * button or on Enter and never on a keystroke. The list is the first page of everybody on arrival: an empty
- * query is a legitimate search, and "who signed up lately" is the most common reason to open this tab.
+ * query is a legitimate search. It is ordered by player id — a random UUID, so in no meaningful order, and not
+ * newest first; it pages by that id, and finding someone means typing a name or an address.
  */
 export function PlayersTab({ api, lang, onOpen }: PlayersTabProps) {
   const { t } = useTranslation('normal')

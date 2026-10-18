@@ -269,11 +269,15 @@
       "ROOM_NOT_FOUND": "Phòng không còn",
       "GAME_IN_PROGRESS": "Đang trong ván",
       "SELF_TARGET": "Không tự làm việc này với chính mình được",
-      "TARGET_IS_GM": "Người này là quản trị viên, thu quyền trước"
+      "TARGET_IS_GM": "Người này là quản trị viên, thu quyền trước",
+      "TARGET_IS_LOCKED": "Tài khoản đang bị khóa, mở khóa trước"
     },
     "notice": {
       "points": "{{amount}} điểm — {{reason}}",
-      "item": "{{item}} — {{reason}}"
+      "item": "{{item}} — {{reason}}",
+      "promote": "Bạn đã được trao quyền quản trị — {{reason}}",
+      "demote": "Quyền quản trị của bạn đã được thu — {{reason}}",
+      "wardrobe": "Bạn được cấp toàn bộ tủ đồ — {{reason}}"
     }
   },
   "screens": {
