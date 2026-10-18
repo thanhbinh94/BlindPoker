@@ -104,6 +104,14 @@ describe.skipIf(SKIP)('the production build', () => {
     }
   })
 
+  it('never ships the e2e promote route', async () => {
+    // `/e2e/promote` makes any account a GM and is mounted only by `e2e-entry.ts` through `extraRoutes`. Nothing in
+    // the build's own guards would notice if `main.ts` ever imported it, so every shipped bundle is searched for it.
+    for (const name of ENTRY_FILES) {
+      expect(await readFile(join(DIST, name), 'utf8'), `dist/${name}`).not.toContain('/e2e/promote')
+    }
+  })
+
   it('inlines the workspace packages instead of importing them', async () => {
     for (const name of ENTRY_FILES) {
       const { eager, deferred } = await specifiersOf(name)
