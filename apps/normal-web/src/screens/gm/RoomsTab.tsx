@@ -38,14 +38,30 @@ export function RoomsTab({ api, lang }: GmTabProps) {
 
   const confirm = async (values: ReasonValues): Promise<void> => {
     if (pending === null) return
-    if (pending.kind === 'close') {
-      const result = await api.gmCloseRoom(pending.room.roomId, values.reason)
-      setDone(t('gm.done.close', { count: result.refunded }))
-    } else {
-      const result = await api.gmKick(pending.room.roomId, pending.member.playerId, values.reason)
-      const when = result.effective === 'now' ? t('gm.done.kickNow') : t('gm.done.kickAfterHand')
-      setDone(t('gm.done.kick', { when }))
+    try {
+      if (pending.kind === 'close') {
+        const result = await api.gmCloseRoom(pending.room.roomId, values.reason)
+        setDone(t('gm.done.close', { count: result.refunded }))
+      } else {
+        const result = await api.gmKick(pending.room.roomId, pending.member.playerId, values.reason)
+        const when = result.effective === 'now' ? t('gm.done.kickNow') : t('gm.done.kickAfterHand')
+        setDone(t('gm.done.kick', { when }))
+      }
+    } finally {
+      // A refusal ("the room is gone") is news about the list too: the row it names is stale, so the list is
+      // asked again whether or not the action went through. The dialog keeps printing the refusal meanwhile.
+      rooms.reload()
     }
+  }
+
+  /** A new action, or a new look at the list, starts a clean slate: last action's success line is not this one's. */
+  const ask = (next: Pending): void => {
+    setDone(null)
+    setPending(next)
+  }
+
+  const refresh = (): void => {
+    setDone(null)
     rooms.reload()
   }
 
@@ -54,7 +70,7 @@ export function RoomsTab({ api, lang }: GmTabProps) {
   return (
     <div className={g.stack}>
       <p>
-        <Button variant="ghost" loading={rooms.loading && list !== null} onClick={rooms.reload}>
+        <Button variant="ghost" loading={rooms.loading && list !== null} onClick={refresh}>
           {t('gm.rooms.refresh')}
         </Button>
       </p>
@@ -144,7 +160,7 @@ export function RoomsTab({ api, lang }: GmTabProps) {
                           >
                             {t('gm.rooms.members')}
                           </Button>
-                          <Button variant="danger" size="sm" onClick={() => setPending({ kind: 'close', room })}>
+                          <Button variant="danger" size="sm" onClick={() => ask({ kind: 'close', room })}>
                             {t('gm.actions.close')}
                           </Button>
                         </span>
@@ -153,7 +169,7 @@ export function RoomsTab({ api, lang }: GmTabProps) {
                     {expanded ? (
                       <tr id={membersId}>
                         <td colSpan={COLUMNS} className={g.members}>
-                          <MemberList room={room} lang={lang} onKick={(member) => setPending({ kind: 'kick', room, member })} />
+                          <MemberList room={room} lang={lang} onKick={(member) => ask({ kind: 'kick', room, member })} />
                         </td>
                       </tr>
                     ) : null}

@@ -189,6 +189,15 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* An id the clipboard would not take, printed whole: one tap selects all of it. */
+.idLine {
+  display: block;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
 .rowActions {
   display: inline-flex;
   flex-wrap: wrap;

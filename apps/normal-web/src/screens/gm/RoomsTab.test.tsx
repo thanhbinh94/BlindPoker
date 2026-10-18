@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError, type GmRoomDto, type NormalApi } from '../../api.js'
@@ -143,6 +143,61 @@ describe('RoomsTab', () => {
     await user.click(within(dialog).getByRole('button', { name: viNormal.gm.dialog.confirm }))
 
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(viNormal.gm.errors.ROOM_NOT_FOUND)
+  })
+
+  it('reloads the list after a refusal that says the room is gone, so its row goes too', async () => {
+    const user = userEvent.setup()
+    const gmCloseRoom = vi.fn().mockRejectedValue(new ApiError(404, 'ROOM_NOT_FOUND', 'x'))
+    const { gmRooms } = setup({ gmCloseRoom })
+    const secret = (await screen.findByText('Bàn kín')).closest('tr')!
+    gmRooms.mockResolvedValue({ rooms: [OPEN] })
+
+    await user.click(within(secret).getByRole('button', { name: viNormal.gm.actions.close }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText(viNormal.gm.dialog.reason), 'bàn bị treo')
+    await user.click(within(dialog).getByRole('button', { name: viNormal.gm.dialog.confirm }))
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(viNormal.gm.errors.ROOM_NOT_FOUND)
+    await waitFor(() => expect(screen.queryByText('Bàn kín')).toBeNull())
+    expect(screen.getByText('Bàn một')).toBeInTheDocument()
+  })
+
+  it('drops the last success line when the list is refreshed', async () => {
+    const user = userEvent.setup()
+    setup()
+    const secret = (await screen.findByText('Bàn kín')).closest('tr')!
+    await user.click(within(secret).getByRole('button', { name: viNormal.gm.actions.close }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText(viNormal.gm.dialog.reason), 'bàn bị treo')
+    await user.click(within(dialog).getByRole('button', { name: viNormal.gm.dialog.confirm }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Đã đóng phòng')
+
+    await user.click(screen.getByRole('button', { name: viNormal.gm.rooms.refresh }))
+
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  it('does not show an old success next to a new failure', async () => {
+    const user = userEvent.setup()
+    const gmKick = vi.fn().mockRejectedValue(new ApiError(404, 'NOT_FOUND', 'x'))
+    setup({ gmKick })
+    const secret = (await screen.findByText('Bàn kín')).closest('tr')!
+    await user.click(within(secret).getByRole('button', { name: viNormal.gm.actions.close }))
+    let dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText(viNormal.gm.dialog.reason), 'bàn bị treo')
+    await user.click(within(dialog).getByRole('button', { name: viNormal.gm.dialog.confirm }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Đã đóng phòng')
+
+    const again = (await screen.findByText('Bàn kín')).closest('tr')!
+    await user.click(within(again).getByRole('button', { name: viNormal.gm.rooms.members }))
+    await user.click(screen.getAllByRole('button', { name: viNormal.gm.actions.kick })[0]!)
+    dialog = await screen.findByRole('dialog')
+
+    expect(screen.queryByRole('status')).toBeNull()
+    await user.type(within(dialog).getByLabelText(viNormal.gm.dialog.reason), 'làm phiền')
+    await user.click(within(dialog).getByRole('button', { name: viNormal.gm.dialog.confirm }))
+    await within(dialog).findByRole('alert')
+    expect(screen.queryByRole('status')).toBeNull()
   })
 
   it('says so when there are no rooms, and when the list cannot be loaded', async () => {
