@@ -355,7 +355,7 @@ like.
 **Accounts cannot be deleted from the console.** A GM locks an account; nothing removes it.
 *Why:* `point_transactions.player_id` is `ON DELETE restrict`, so that deleting a player cannot turn their credits into
 sink rows and break `Σ balances + Σ sinks` (SRS §18.2, §18.4).
-*Tracked:* spec `2026-10-18-gm-role-design.md` §4, §11.
+*Tracked:* spec `2026-10-18-gm-role-design.md` §13 (R5), §11.
 
 **`gm_actions.action` is free text in SQL.** The kinds (`grant_points`, `adjust_points`, `grant_item`, `grant_wardrobe`,
 `lock`, `unlock`, `kick`, `close_room`, `promote`, `demote`) are held by `GmActionKind` in TypeScript and by the web's

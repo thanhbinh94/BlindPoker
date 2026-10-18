@@ -59,6 +59,8 @@ rulings §13), plan `docs/superpowers/plans/2026-10-18-plan25-gm-role.md` (with 
   - A GM acting on themselves or on another GM answers `403 SELF_TARGET` / `403 TARGET_IS_GM` instead of a bare
     `FORBIDDEN`, so the screen can tell "not allowed on this target" from "you are no longer a GM" (only a bare `FORBIDDEN`
     sends the console back to the lobby). `GmService` also adds `INVALID_ROLE`.
+  - A locked account is treated as signed out: the guard answers `401 UNAUTHENTICATED` (spec §3 said `403 FORBIDDEN`),
+    so a locked GM is not sent to the lobby by a 403 but ends the session like any expired one.
   - The two `gm_actions` indexes are named `gm_actions_created_idx` and `gm_actions_target_idx`.
   - `AppDeps.extraRoutes` is a test-only hook (the spec had no way for the ops pack to promote an account).
   - The kit's `Toasts` interpolates the notice's `reason`, and `ui-kit` gained `notify.GM_NOTICE` (the spec named the
