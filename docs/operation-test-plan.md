@@ -261,6 +261,16 @@ màn nào, trạng thái nào, cỡ nào và test nào: `docs/test-matrix.md`. N
 | O-05 | Chạy exe thứ hai trên cùng thư mục dữ liệu | Từ chối: `another instance is already running (pid …)` | P2 |
 | O-06 | Tắt rồi mở lại exe | Số dư và tên còn nguyên (SQLite) | P1 |
 
+### Q. Quản trị (GM)
+
+Cần một tài khoản có quyền quản trị (người vận hành trao bằng `grant-gm-cli`; bộ test tự động dùng lối riêng của
+server thử). Mục "Quản trị" chỉ hiện trong Cài đặt cho tài khoản đó.
+
+| Mã | Bước | Kỳ vọng | Ưu tiên |
+|---|---|---|---|
+| Q-01 | **Tự động — `06-gm.spec.ts`.** GM: Cài đặt → Quản trị → tab Người chơi → tìm một người chơi theo tên → bấm Mở → "Cộng/trừ điểm", nhập 10.000 điểm: nút Xác nhận còn khóa cho tới khi nhập lý do; nhập lý do rồi Xác nhận. Người chơi kia đang mở sảnh. Rồi GM mở tab Nhật ký | Trong danh sách, email bị che; trang người chơi hiện email đầy đủ. GM thấy "Đã cập nhật số dư". Người chơi thấy ngay thông báo "Quản trị viên: +10.000 điểm — `<lý do>`" và số dư tăng 10.000 mà không cần tải lại trang. Nhật ký có dòng "Cộng điểm" kèm lý do. Không chữ đè chữ, không cuộn ngang ở 1920×940 và 1366×768 | P1 |
+| Q-02 | **Tự động — `06-gm.spec.ts`.** Hai người chơi vào một bàn Blind (Chơi hoặc bỏ, hai ghế, không bot), bắt đầu ván và dừng ở vòng quyết định Chơi/Bỏ. GM: Quản trị → tab Phòng → Làm mới → bàn hiện "Đang ván" → Đóng phòng, nhập lý do, Xác nhận. Rồi GM mở tab Nhật ký | Hộp thoại ghi rõ "Ván đang chơi sẽ bị hủy". GM thấy "Đã đóng phòng, hoàn cho 2 người". Cả hai người chơi tự về sảnh, điểm mỗi người bằng đúng số trước khi ngồi vào bàn (không mất cược). Nhật ký có dòng "Đóng phòng" kèm lý do | P1 |
+
 ## 6. Kịch bản nhiều người (vòng 3, 3–4 người, ~45 phút)
 
 1. Cả nhóm đăng nhập; A tạo phòng Hold'em 100/200, buy-in 50–200 BB, 30 giây, 6 ghế.
