@@ -120,6 +120,6 @@ describe('0003_ledger_keys', () => {
     expect(await rows(`SELECT 1 FROM information_schema.tables WHERE "table_name" = 'ledger_keys'`)).toHaveLength(1)
     expect(await snapshot()).toEqual(before)
     await migrate(db, { migrationsFolder: migrationsFolder() }) // nothing left to apply
-    expect(await rows(`SELECT "hash" FROM "drizzle"."__drizzle_migrations"`)).toHaveLength(4)
+    expect(await rows(`SELECT "hash" FROM "drizzle"."__drizzle_migrations"`)).toHaveLength(5)
   })
 })

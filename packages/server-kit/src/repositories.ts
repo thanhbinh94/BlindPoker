@@ -24,6 +24,9 @@ export type TxReason =
   | 'daily_item_fallback'
   | 'relief'
   | 'achievement'
+  /** Plan 25: points a GM gave (`gm_grant`, positive) or took back (`gm_adjust`, negative). Sources, not sinks: a player row each. */
+  | 'gm_grant'
+  | 'gm_adjust'
 
 export interface BalanceEntry {
   playerId: string

@@ -30,6 +30,11 @@ export const users = pgTable('users', {
   /** Stored lowercased, so the unique index is case-insensitive in effect — see the CHECK below. */
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
+  /** Plan 25: who may open `/api/gm/*`. Read on every guarded request, so a change takes effect at once. */
+  role: text('role').$type<'player' | 'gm'>().notNull().default('player'),
+  /** Plan 25: set = the account may not sign in; its sessions were revoked when it was set. */
+  lockedAt: timestamp('locked_at', { withTimezone: true }),
+  lockedReason: text('locked_reason'),
   createdAt: createdAt(),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
 }, (t) => [
@@ -37,6 +42,7 @@ export const users = pgTable('users', {
   // — a seed script, an admin tool, a future OAuth link — is two accounts for one address and a login
   // that resolves to whichever row the query folds to. The database keeps the promise instead.
   check('users_email_lowercase', sql`${t.email} = lower(${t.email})`),
+  check('users_role_known', sql`${t.role} in ('player', 'gm')`),
 ])
 
 /** The game profile: one row per account, sharing its id. `balance` is the single source of points. */
@@ -117,6 +123,26 @@ export const ledgerKeys = pgTable('ledger_keys', {
   key: text('key').primaryKey(),
   createdAt: createdAt(),
 })
+
+/** Everything a GM did (Plan 25). Append-only: no API updates or deletes a row. `actorUserId` null = the server CLI. */
+export const GM_ACTION_KINDS = ['grant_points', 'adjust_points', 'grant_item', 'grant_wardrobe', 'lock', 'unlock', 'kick', 'close_room', 'promote', 'demote'] as const
+export type GmActionKind = (typeof GM_ACTION_KINDS)[number]
+
+export const gmActions = pgTable('gm_actions', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+  action: text('action').$type<GmActionKind>().notNull(),
+  targetPlayerId: uuid('target_player_id').references(() => players.id, { onDelete: 'set null' }),
+  targetRoomId: text('target_room_id'),
+  amount: bigint('amount', { mode: 'number' }),
+  itemId: text('item_id'),
+  reason: text('reason').notNull(),
+  details: jsonb('details').$type<Record<string, unknown>>(),
+  createdAt: createdAt(),
+}, (t) => [
+  index('gm_actions_created_idx').on(t.createdAt),
+  index('gm_actions_target_idx').on(t.targetPlayerId, t.createdAt),
+])
 
 /** One row per completed (or cancelled) hand — `id` is the engine's `handId`. */
 export const games = pgTable('games', {

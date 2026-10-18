@@ -58,6 +58,22 @@ describe('schema', () => {
     await expect(runMigrations(db, process.env.TEST_DATABASE_URL ? 'pg' : 'pglite')).resolves.toBeUndefined()
   })
 
+  it('adds the GM role, the lock and the action log (0004_gm), idempotently', async () => {
+    const { runMigrations } = await import('./migrate.js')
+    await runMigrations(db, process.env.TEST_DATABASE_URL ? 'pg' : 'pglite')
+    const cols = rowsOf<{ column_name: string; column_default: string | null }>(
+      await db.execute(sql`select column_name, column_default from information_schema.columns where table_name = 'users' and column_name in ('role','locked_at','locked_reason') order by column_name`),
+    )
+    expect(cols.map((c) => c.column_name)).toEqual(['locked_at', 'locked_reason', 'role'])
+    expect(cols.find((c) => c.column_name === 'role')?.column_default).toContain('player')
+    const tables = rowsOf<{ table_name: string }>(await db.execute(sql`select table_name from information_schema.tables where table_name = 'gm_actions'`))
+    expect(tables).toHaveLength(1)
+    // CHECK: only the two roles
+    await expect(db.execute(sql`insert into users (email, password_hash, role) values ('x@example.com', 'h', 'king')`)).rejects.toThrow()
+    // second run applies nothing
+    await expect(runMigrations(db, process.env.TEST_DATABASE_URL ? 'pg' : 'pglite')).resolves.toBeUndefined()
+  })
+
   it('refuses a negative balance', async () => {
     const id = await seedPlayer(db, { email: 'check@example.com', nameKey: 'check', balance: 100 })
     const failure = await failureOf(() => db.update(schema.players).set({ balance: -1 }).where(sql`${schema.players.id} = ${id}`))
