@@ -112,6 +112,7 @@ export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void 
       playerId: player.playerId,
       displayName: player.displayName,
       email: account?.email ?? null,
+      role: currentUser(req).role,
       balance: player.balance,
       avatar: readAvatarConfig(player.avatarConfig, deps.catalog, deps.aliases, deps.bodies),
       // The summary Lite publishes under the same key: both modes folded into one pair, because

@@ -37,6 +37,7 @@ export type AuthErrorCode =
   | 'INVALID_PASSWORD'
   | 'INVALID_NAME'
   | 'BAD_CREDENTIALS'
+  | 'ACCOUNT_LOCKED'
 
 const MESSAGES: Record<AuthErrorCode, string> = {
   EMAIL_TAKEN: 'that email address already has an account',
@@ -45,10 +46,12 @@ const MESSAGES: Record<AuthErrorCode, string> = {
   INVALID_PASSWORD: 'a password of 8 to 128 characters, different from your email address, is required',
   INVALID_NAME: 'a display name of 2 to 20 letters, digits, spaces, _ - or . is required',
   BAD_CREDENTIALS: 'that email and password do not match an account',
+  ACCOUNT_LOCKED: 'this account is locked',
 }
 
 export class AuthError extends Error {
-  constructor(readonly code: AuthErrorCode) {
+  /** Extra fields for the response body, next to `error` (`ACCOUNT_LOCKED` carries the `reason`). */
+  constructor(readonly code: AuthErrorCode, readonly extra?: Record<string, unknown>) {
     super(MESSAGES[code])
     this.name = 'AuthError'
   }
@@ -217,7 +220,10 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
       // Same reasoning as `register`: this statement's parameter is the address, and the update
       // below runs after a password has been verified — neither belongs in a 5xx log line.
       const [account] = await sanitizing('login', () =>
-        deps.db.select({ id: users.id, passwordHash: users.passwordHash }).from(users).where(eq(users.email, email)),
+        deps.db
+          .select({ id: users.id, passwordHash: users.passwordHash, lockedAt: users.lockedAt, lockedReason: users.lockedReason })
+          .from(users)
+          .where(eq(users.email, email)),
       )
 
       // Both branches verify a password against a real argon2id hash, so they cost the same and
@@ -227,6 +233,9 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
         throw new AuthError('BAD_CREDENTIALS')
       }
       if (!(await verifyPassword(account.passwordHash, input.password))) throw new AuthError('BAD_CREDENTIALS')
+      // After the password, not before: a stranger who does not know it learns nothing about the lock.
+      // And before the last-login stamp and the session rotation, so a refused sign-in changes nothing.
+      if (account.lockedAt !== null) throw new AuthError('ACCOUNT_LOCKED', { reason: account.lockedReason ?? '' })
 
       const at = now()
       await sanitizing('login', () => deps.db.update(users).set({ lastLoginAt: new Date(at) }).where(eq(users.id, account.id)))
@@ -246,9 +255,10 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
     async identityForToken(token) {
       const session = await deps.sessions.resolve(token)
       if (!session) return null
-      const player = await deps.repos.players.findById(session.userId)
-      // A session whose player is gone is not an identity: the account was erased under it.
-      return player ? { playerId: player.playerId, displayName: player.displayName, isBot: false } : null
+      const player = await deps.repos.players.findAuth(session.userId)
+      // A session whose player is gone is not an identity: the account was erased under it. Nor is
+      // one whose account is locked: a session that survived the revoke race still cannot open a socket.
+      return player && player.lockedAt === null ? { playerId: player.playerId, displayName: player.displayName, isBot: false } : null
     },
   }
 }

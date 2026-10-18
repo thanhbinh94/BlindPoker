@@ -17,7 +17,7 @@ export type { LedgerListOptions, LedgerReader, LedgerRow, LedgerSum, NormalBalan
 export { createBalanceRepository, createLedgerReader, creditWithin, pruneLedgerKeys, UnknownPlayerError } from './balance-repo.js'
 export type { GameRow, NormalGameHistoryRepository } from './history-repo.js'
 export { createHistoryRepository } from './history-repo.js'
-export type { NormalPlayerRepository, PlayerRow } from './player-repo.js'
+export type { AuthRow, NormalPlayerRepository, PlayerRow } from './player-repo.js'
 export { createPlayerRepository, DisplayNameTakenError } from './player-repo.js'
 export { clampLimit, cursorOf, isUuid } from './util.js'
 

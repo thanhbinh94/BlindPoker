@@ -13,6 +13,8 @@ export interface RequestUser {
   userId: string
   playerId: string
   displayName: string
+  /** `users.role`, read from the database by `requireUser` on this very request (Plan 25). */
+  role: 'player' | 'gm'
 }
 
 declare module 'fastify' {
