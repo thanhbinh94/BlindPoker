@@ -319,7 +319,9 @@ then one line per named-gift day, "Ngày 28 tháng 11/2026: …" (`daily.marker.
 
 `screens/gm/` (route `#/gm`, spec 2026-10-18, SRS §27.2) is the game master's console. It is a lazy chunk like the other
 account screens, and its entry is a "Quản trị" row in Settings that shows only for `role === 'gm'` (`AuthMeDto.role`,
-`MeDto.role`; read at login or on reload, so a promotion shows after F5). **The route is a convenience and the server is
+`MeDto.role`, held by the session gate). A promotion or a demotion made in the console sends a `GM_NOTICE`, and `App`
+calls the gate's `refresh()` (a fresh `GET /api/auth/me`) when one with `action` `promote` or `demote` lands, so the row
+and the route follow without a reload; a role changed by the CLI shows after F5. **The route is a convenience and the server is
 the lock.** A player who types `#/gm` is sent to the lobby before the chunk is requested (`Redirect`, which uses
 `window.location.replace` so Back is not trapped on a redirecting entry), and a GM demoted or locked since the page loaded
 finds out on the next call.
@@ -328,7 +330,8 @@ finds out on the next call.
   open, so Back returns to the same search, results and cursor with no request.
 - **The 403 proxy.** `useAsync` swallows the cause of a failure, so a tab cannot notice that the role is gone. `GmScreen`
   wraps the api in a `Proxy` that checks each call's rejection: a `403 FORBIDDEN` calls `onForbidden` once (a tab firing
-  three requests gets three refusals and must leave once). `SELF_TARGET` and `TARGET_IS_GM` are also 403 but are about the
+  three requests gets three refusals and must leave once). `SELF_TARGET` and `TARGET_IS_GM` are also 403 (and
+  `TARGET_IS_LOCKED` a 409) but are about the
   target, so they stay in the dialog that asked. A `401` is the session gate's business and never gets here.
 - **`ReasonDialog`** sits behind every action. The reason (3 to 200 characters, spaces not counted) is required before
   Confirm enables; points take a whole non-zero amount within the cap (the field asks for no numeric keypad, so a minus
@@ -341,7 +344,8 @@ finds out on the next call.
 - **`LedgerPanel`** was lifted out of `ProfileScreen` so the GM's player page shows the same ledger list. The two new
   reasons read "Quản trị viên cộng điểm" and "Quản trị viên trừ điểm" (`ledger.reason.gm_grant`, `gm_adjust`).
 - **What a player sees.** A `NOTIFICATION` of kind `GM_NOTICE` goes through `notifications.ts`, which writes the signed
-  amount (or the item's name) in front of the GM's reason; the kit's `Toasts` interpolates `reason`
+  amount (or the item's name) in front of the GM's reason, and names a promotion, a demotion or the whole wardrobe
+  (`gm.notice.promote`, `demote`, `wardrobe`); a lock or a kick keeps the GM's words alone. The kit's `Toasts` interpolates `reason`
   (`notify.GM_NOTICE`). A locked account is refused at sign-in with `ACCOUNT_LOCKED` and the reason
   (`auth.errors.ACCOUNT_LOCKED`).
 

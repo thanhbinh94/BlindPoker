@@ -14,7 +14,7 @@ below are the real history.
 The user's request of 2026-10-17/18: a game-master (GM) role on the Normal edition, in two batches (Q3). This is the first
 batch; the second (Plan 26) is unlocking achievements, resetting a check-in, editing the monthly gifts on screen and
 per-day source/sink charts. Spec `docs/superpowers/specs/2026-10-18-gm-role-design.md` (the Q-table is §1, the session's
-rulings §13), plan `docs/superpowers/plans/2026-10-18-plan25-gm-role.md` (with its pre-flight amendments, A1–A16), branch
+rulings §13), plan `docs/superpowers/plans/2026-10-18-plan25-gm-role.md` (with its pre-flight amendments, A1–A17), branch
 `feature/BP-25-gm-role`. Gate on the branch's final tree: to be filled at merge.
 
 - **What a GM sees.** An account whose `role` is `gm` gets a "Quản trị" row in Settings and a screen at `#/gm` with four
@@ -30,7 +30,9 @@ rulings §13), plan `docs/superpowers/plans/2026-10-18-plan25-gm-role.md` (with 
 - **What a player sees.** A points or item grant arrives as a toast, "Quản trị viên: +10.000 điểm — <reason>", the balance
   moves with no reload, and the ledger line reads "Quản trị viên cộng điểm" / "trừ điểm". A removal says "Bạn đã bị mời ra
   khỏi phòng"; a closed room sends everyone to the lobby with their stacks back. A locked account is signed out
-  everywhere, leaves its table and, at the next sign-in, reads "Tài khoản đã bị khóa" with the reason.
+  everywhere, leaves its table and, at the next sign-in, reads "Tài khoản đã bị khóa" with the reason. A promotion, a
+  demotion or the whole wardrobe gets a sentence of its own ("Bạn đã được trao quyền quản trị — <reason>"), and a
+  promotion or demotion made in the console updates the Settings row at once (the app re-reads `/api/auth/me`).
 - **Under it.** Migration `0004_gm` (additive, guarded): `users.role` (`player` | `gm`, CHECK), `locked_at`,
   `locked_reason`, and the append-only `gm_actions` (actor `ON DELETE SET NULL`, NULL meaning the CLI). The ledger knows
   `gm_grant` and `gm_adjust` as **sources**, with `ref_id = gm:<action id>`; `Σ balances + Σ sinks` is unchanged and the
@@ -74,11 +76,15 @@ rulings §13), plan `docs/superpowers/plans/2026-10-18-plan25-gm-role.md` (with 
     layout under 640 px (the screenshots changed both); `CopyId` falls back from the clipboard API to `execCommand` to a
     selectable id, because the LAN host is plain HTTP.
   - After-hand removal is written to the room log as `left`, not `kicked_by_gm` (it goes through the ordinary leave path).
+    A rejoin cannot cancel it: the gateway refuses `JOIN_ROOM` while the player is still a member.
+  - A kick is logged once, after the deed, with `details.effective`; a failing log write is warned, not surfaced (the
+    spec logs before acting, §5).
+  - Promoting a locked account is refused: `409 TARGET_IS_LOCKED` on the screen, `LockedAccountError` (exit 1) from the
+    CLI. A demotion locks the GM set before the target row, so two GMs demoting each other cannot deadlock.
 - **Still open.** Deploying needs the migration: on the Windows LAN host drop `-NoMigrate` for the first `run.ps1` (the
   user's Neon database; ask first), and make the first GM with `grant-gm-cli`. A GM shares the player's password with no
-  2FA; no daily cap on grants; no account deletion; `gm_actions.action` is free text in SQL; a CLI promote of a locked
-  account makes a GM who cannot sign in; two simultaneous mutual demotions may deadlock into a 500 (the invariant holds);
-  the Settings row changes only on reload; an after-hand removal is cancelled by a rejoin; the card layout drops table
+  2FA; no daily cap on grants; no account deletion; `gm_actions.action` is free text in SQL; a role changed by the CLI
+  shows in Settings only on reload; an after-hand removal is logged by the room as `left`; the card layout drops table
   semantics for some screen readers; no `@mobile` ops case; `refunded` counts spectators — all in
   `docs/known-limitations.md`, "Quản trị". Plan 26 is the second batch.
 

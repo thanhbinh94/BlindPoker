@@ -300,7 +300,7 @@ docker compose exec app node dist/grant-gm-cli.js ten@example.com --revoke    # 
 ```
 
 Lệnh đọc `DATABASE_URL` từ môi trường của container `app`, nên không cần gõ gì thêm. Chạy lại lần nữa không đổi gì; thu
-quyền của GM cuối cùng bị từ chối. Mỗi lần trao hay thu được ghi vào nhật ký (`gm_actions`) với lý do `cli` và không có
+quyền của GM cuối cùng bị từ chối, và trao quyền cho một tài khoản đang bị khóa cũng bị từ chối (mở khóa trước). Mỗi lần trao hay thu được ghi vào nhật ký (`gm_actions`) với lý do `cli` và không có
 người thực hiện. Người đó tải lại trang (F5) để thấy hàng "Quản trị". Sau đó GM trao hoặc thu quyền người khác ngay trong
 màn "Quản trị", không cần dùng lệnh nữa.
 

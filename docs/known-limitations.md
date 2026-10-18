@@ -363,33 +363,25 @@ label table, not by a database CHECK, so a hand-written row with another word sh
 *Why it stays:* a CHECK would make adding a kind a migration, and the table is written by one service.
 *Tracked:* `apps/normal-server/src/db/schema.ts`.
 
-**The CLI can promote a locked account.** `grant-gm-cli` sets `role` without looking at `locked_at`, so the result is a GM
-who cannot sign in until someone unlocks the account.
-*Why it stays:* a lock is stronger than a role, so the result is harmless, and the operator sees the address they typed.
-*What to do:* unlock first (another GM can), or promote after the unlock.
-*Tracked:* `apps/normal-server/src/gm/grant-gm.ts`.
+**A locked account cannot be made a GM; unlock it first.** Both the console (`409 TARGET_IS_LOCKED`) and `grant-gm-cli`
+(`LockedAccountError`, exit 1) refuse to promote a locked account, because a GM who cannot sign in is no GM. A GM cannot
+be locked either (`TARGET_IS_GM`), so the operator demotes before locking and unlocks before promoting.
+*Tracked:* `apps/normal-server/src/gm/gm-service.ts` (`setRole`), `apps/normal-server/src/gm/grant-gm.ts`.
 
-**Two GMs demoting each other at the same moment may deadlock into a 500.** `setRole` locks the target row and then the
-ordered set of GM rows for the last-GM check, so two simultaneous mutual demotions can take the locks in opposite order and
-Postgres answers one of them with a deadlock error. The invariant holds (a GM is left); the loser sees an error and tries
-again. PGlite is single-connection, so no test reaches it.
-*Why it stays:* it takes two GMs pressing the button within a few milliseconds. *Status:* to be fixed in the plan's final
-wave if time allows (lock the GM set first, then the target); if it is, this entry goes.
-*Tracked:* `apps/normal-server/src/gm/gm-service.ts`, `setRole`.
-
-**The `role` shown in Settings changes only on reload or sign-in.** The entry row reads `MeDto.role` from the boot probe.
-A GM who is promoted sees the row after F5, and one who is demoted keeps the row until a call to `/api/gm/*` comes back 403
+**A role changed by the CLI shows in Settings only on reload or sign-in.** The entry row reads `role` from the session
+gate. A promotion or a demotion made in the console sends the player a `GM_NOTICE`, and the app re-reads `GET
+/api/auth/me` when it lands, so the row follows at once. `grant-gm-cli` runs outside the game server and sends no notice:
+a player it promotes sees the row after F5, and one it demotes keeps the row until a call to `/api/gm/*` comes back 403
 and sends them to the lobby.
-*Why it stays:* the row is a convenience and the server is the lock; pushing a role change over the socket is more
-machinery than the case deserves.
+*Why it stays:* the CLI is the operator's bootstrap tool, the row is a convenience, and the server is the lock.
 *Tracked:* `docs/normal-web.md`, "The Quản trị screen".
 
-**Removing a player from a room mid-hand takes effect when the hand ends, and a rejoin cancels it.** `Room.adminKick`
-folds the player now and marks them to leave after the hand. If they rejoin before it ends, the ordinary rejoin path
-clears the mark and they stay. The after-hand removal is also written to the room log as `'left'`, not `'kicked_by_gm'`.
+**Removing a player from a room mid-hand takes effect when the hand ends, and the room log calls it `'left'`.**
+`Room.adminKick` folds the player now and marks them to leave after the hand. A rejoin cannot cancel the mark: the
+player is still a member until the hand ends, and the gateway refuses `JOIN_ROOM` from a member (`ALREADY_IN_ROOM`). The
+after-hand removal goes through the ordinary leave path, so the room log writes `'left'`, not `'kicked_by_gm'`.
 *Why it stays:* the player is out of the hand at once and their money is safe either way; the GM action log, not the room
-log, is the audit trail, and it says `after_hand`. A GM who needs them gone for certain locks the account or closes the
-room.
+log, is the audit trail, and it says `after_hand`.
 *Tracked:* `docs/server-kit.md`, "Moderation: reaching a room or a socket from an edition".
 
 **On a phone the GM screen's tables become cards, which drops table semantics for some screen readers.** At 640 px and

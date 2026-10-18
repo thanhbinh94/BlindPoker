@@ -68,8 +68,9 @@ are public, small, and held by tests; an edition passes them on and decides noth
   the hand ends and folded now (`markAutoFold`), the money is conserved, and the answer is `'after_hand'`. The target
   always receives `NOTIFICATION { kind: 'KICKED' }`. A bot is refused with `ILLEGAL_ACTION`. The removal is logged in the
   room log as `'kicked_by_gm'` between hands; the after-hand removal goes through the ordinary leave path and is logged
-  as `'left'`, so the edition's own action log is the audit trail. A player who rejoins before the hand ends cancels the
-  after-hand removal (`docs/known-limitations.md`).
+  as `'left'`, so the edition's own action log is the audit trail. A rejoin cannot cancel the after-hand removal: the
+  player is still a member until the hand ends, and the gateway refuses `JOIN_ROOM` from a member (`ALREADY_IN_ROOM`)
+  before `Room.join`'s rejoin branch is reached (`docs/known-limitations.md`).
 - **`Room.adminSummary(): AdminRoomSummary`** — the room as a GM lists it, with everything `summary()` hides from the
   lobby and no cards: `roomId`, `code`, `name`, `mode`, `status`, `isPrivate`, `hasPassword`, `players`, `maxPlayers`,
   `hostPlayerId`, `hostDisplayName`, `carryOverPot` (a release still pending counts), `handInProgress`, `createdAt`, and

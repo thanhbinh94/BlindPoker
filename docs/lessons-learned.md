@@ -816,7 +816,7 @@ hosting; the first `docker build` of `apps/normal-server/Dockerfile` — the fir
 Spec `docs/superpowers/specs/2026-10-18-gm-role-design.md`; plan `docs/superpowers/plans/2026-10-18-plan25-gm-role.md`;
 branch `feature/BP-25-gm-role`. Eleven tasks (schema and ledger; the guard and the lock; server-kit; the GM service; the
 routes; the CLI and the e2e hook; the web session and route; the player screens; the room and log screens; two ops cases;
-the docs), a pre-flight review with 9 blockers (all spliced as amendments A1–A16), review rounds per task, and a final
+the docs), a pre-flight review with 9 blockers (all spliced as amendments A1–A17), review rounds per task, and a final
 whole-branch review. The user's decisions are the spec's Q-table (§1); the first six rulings below are the session's
 (spec §13), made while the user was away.
 
@@ -834,8 +834,10 @@ whole-branch review. The user's decisions are the spec's Q-table (§1); the firs
   `ON DELETE restrict`). Costs if wrong: a separate design.
 - Ruling 6 (R6): the plan number is 25 (branch `BP-25`) and the second batch is 26, so plan numbers stay equal to branch
   numbers after BP-23 and BP-24 were used for bug fixes. Costs if wrong: a renumbering in docs.
-- Ruling 7: `search('')` lists every account (newest first, capped at 100) instead of refusing an empty query — the
-  console needs a first screen before anything is typed. Costs if wrong: require a query.
+- Ruling 7: `search('')` lists every account instead of refusing an empty query — the console needs a first screen
+  before anything is typed. The list is ordered and paged by `players.id`, a random UUID, so it is in no meaningful order
+  (not newest first); a page holds at most 100. Costs if wrong: require a query, or order by `created_at` with a
+  compound cursor.
 - Ruling 8: a redirect that moves a signed-in player away from `#/gm` calls `window.location.replace`, not a push, so Back
   cannot be trapped on an entry that redirects again. Costs if wrong: none known; two tests pin it.
 - Ruling 9: the Players tab stays mounted (hidden) while a player's page is open, so Back returns to the same search,

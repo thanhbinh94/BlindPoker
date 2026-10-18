@@ -378,7 +378,8 @@ $env:DATABASE_URL = ((Get-Content .env) -match '^DATABASE_URL=' | Select-Object 
 node ..\..\apps\normal-server\dist\grant-gm-cli.js ten@example.com
 ```
 
-Chạy lại lần nữa không đổi gì. Thêm `--revoke` để thu quyền (không thu được quyền của GM cuối cùng). Mỗi lần trao hay thu
+Chạy lại lần nữa không đổi gì. Thêm `--revoke` để thu quyền (không thu được quyền của GM cuối cùng). Tài khoản đang bị khóa thì không trao quyền được,
+phải mở khóa trước. Mỗi lần trao hay thu
 đều vào nhật ký với lý do `cli`. Người đó cần tải lại trang (F5) hoặc đăng nhập lại để thấy hàng "Quản trị". GM dùng chung
 mật khẩu với tài khoản chơi, nên đặt cho tài khoản ấy một mật khẩu dài và không dùng ở nơi khác.
 
