@@ -181,8 +181,9 @@ checks the Daily screen's legend on the real build, outside `pnpm test`.
 Not rows of §29.2, §29.3 or §30: the user asked (18/10) for a game-master role on the Normal edition, and the spec
 amends §10.2, §18.2, §19.2, §20.2, §23 and §27.2 of the main design. Each rule below is held by the layer that owns
 it, from the migration up to the browser. Q-01 and Q-02 are the ops pack's section Q (`docs/operation-test-plan.md`)
-and run outside `pnpm test`, as every e2e does. What no test drives — a GM on a real phone, a deadlock between two
-simultaneous mutual demotions — is `docs/known-limitations.md`.
+and run outside `pnpm test`, as every e2e does. What no test drives — a GM on a real phone — is
+`docs/known-limitations.md`; the lock order two mutual demotions take is a code comment in `gm-service.ts`, and the
+outcome (one wins, the other answers `LAST_GM`) is pinned in `gm-service.test.ts`.
 
 | Rule | Test file | Test name | Status |
 |---|---|---|---|
