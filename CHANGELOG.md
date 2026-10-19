@@ -9,7 +9,7 @@ below are the real history.
 
 ---
 
-## Plan 25 — a game-master role: Quản trị searches players, moves points, grants items, locks accounts, lists and closes rooms, and keeps a log — merged `MERGE` (2026-10-18)
+## Plan 25 — a game-master role: Quản trị searches players, moves points, grants items, locks accounts, lists and closes rooms, and keeps a log — merged `23d64a7` (2026-10-19)
 
 The user's request of 2026-10-17/18: a game-master (GM) role on the Normal edition, in two batches (Q3). This is the first
 batch; the second (Plan 26) is unlocking achievements, resetting a check-in, editing the monthly gifts on screen and

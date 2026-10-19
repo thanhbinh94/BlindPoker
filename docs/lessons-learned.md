@@ -811,7 +811,7 @@ hosting; the first `docker build` of `apps/normal-server/Dockerfile` — the fir
 - A background command's exit code is the exit code of its last pipeline stage: `… > log; echo "exit=$?" >> log; tail
   log` reports `tail`'s 0. Read the `exit=` line, not the task status.
 
-## Plan 25 — the GM role (merged `MERGE`, 2026-10-18)
+## Plan 25 — the GM role (merged `23d64a7`, 2026-10-19)
 
 Spec `docs/superpowers/specs/2026-10-18-gm-role-design.md`; plan `docs/superpowers/plans/2026-10-18-plan25-gm-role.md`;
 branch `feature/BP-25-gm-role`. Eleven tasks (schema and ledger; the guard and the lock; server-kit; the GM service; the
