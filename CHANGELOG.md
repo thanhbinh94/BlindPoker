@@ -15,7 +15,9 @@ The user's request of 2026-10-17/18: a game-master (GM) role on the Normal editi
 batch; the second (Plan 26) is unlocking achievements, resetting a check-in, editing the monthly gifts on screen and
 per-day source/sink charts. Spec `docs/superpowers/specs/2026-10-18-gm-role-design.md` (the Q-table is §1, the session's
 rulings §13), plan `docs/superpowers/plans/2026-10-18-plan25-gm-role.md` (with its pre-flight amendments, A1–A17), branch
-`feature/BP-25-gm-role`. Gate on the branch's final tree: to be filled at merge.
+`feature/BP-25-gm-role`. Gate on the branch's final tree (`main` had not moved): typecheck, lint, 2861 unit tests (14
+skipped) in 466 s, build:normal, Lite web + server (the exe step needs Node 22, the machine has 24), avatar:check
+1560/1560, e2e Normal 24/24, e2e Lite 4/4, ops 36/36 in 10.6 min.
 
 - **What a GM sees.** An account whose `role` is `gm` gets a "Quản trị" row in Settings and a screen at `#/gm` with four
   tabs. *Tổng quan*: accounts, locked, GMs, sockets, open rooms and the last 24 hours of points by reason, split into what

@@ -842,7 +842,20 @@ whole-branch review. The user's decisions are the spec's Q-table (§1); the firs
   cannot be trapped on an entry that redirects again. Costs if wrong: none known; two tests pin it.
 - Ruling 9: the Players tab stays mounted (hidden) while a player's page is open, so Back returns to the same search,
   results and cursor with no request. Costs if wrong: a remount that re-asks the server.
-- Ruling 10 (to be completed at merge): the rulings of the final fix wave.
+- Ruling 10: the empty search stays ordered by `players.id` (a random v4 UUID) — it is "a page of accounts", not
+  "newest first"; the texts that said otherwise were corrected rather than adding a two-part `created_at` cursor. Costs if
+  wrong: a GM browsing the roster sees an arbitrary order; the search box is the intended path.
+- Ruling 11: a GM may grant points or items to themselves — the spec is silent, the action is logged with actor = target,
+  and the overview's 24 h totals show it. Raised to the user as a policy question. Costs if wrong: a dishonest GM
+  enriches themselves, visibly, in the log.
+- Ruling 12: no idempotency key on `POST /api/gm/players/:id/points` — a manual retry after a lost response grants twice;
+  every grant is logged and no client auto-retries. Costs if wrong: a duplicate grant, visible and reversible by a
+  negative adjustment.
+- Final fix wave (after the whole-branch review): the demotion path takes the ordered GM-set lock before the target row
+  (`setRole` and `grant-gm`), a kick that happened answers 200 even when its log write fails (warned), the guard test
+  walks all 15 `/api/gm/` routes, `revokeAll` failing no longer skips the kick and the disconnect, promote/demote/wardrobe
+  notices say what happened and a promote/demote re-reads the session's role, `gm-rooms` maps only `RoomError`, a locked
+  account cannot be promoted (`TARGET_IS_LOCKED`), and the docs no longer claim a rejoin cancels a GM removal.
 
 ### Lessons
 
