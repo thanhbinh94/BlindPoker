@@ -433,6 +433,21 @@ describe('ProfileScreen', () => {
     expect(screen.getByText(viNormal.ledger.reason.settlement).closest('li')).toHaveAttribute('title', viNormal.profile.ledger.ref.replace('{{id}}', 'h1'))
   })
 
+  it('labels the points a game master moved, rather than filing them under "other"', async () => {
+    const ledger = vi.fn().mockResolvedValue({
+      entries: [
+        { id: 51, amount: 12_000, reason: 'gm_grant', refId: null, createdAt: Date.UTC(2026, 8, 4, 10, 0) },
+        { id: 50, amount: -3_000, reason: 'gm_adjust', refId: null, createdAt: Date.UTC(2026, 8, 4, 9, 0) },
+      ],
+      nextBefore: null,
+    })
+    renderScreen(stubApi({ ledger }))
+
+    expect(await screen.findByText(viNormal.ledger.reason.gm_grant)).toBeInTheDocument()
+    expect(screen.getByText(viNormal.ledger.reason.gm_adjust)).toBeInTheDocument()
+    expect(screen.queryByText(viNormal.ledger.reason.other)).toBeNull()
+  })
+
   it('pages the ledger on the cursor the server handed back, and puts the button away at the end', async () => {
     const ledger = vi.fn().mockResolvedValueOnce(PAGE_ONE).mockResolvedValue(PAGE_TWO)
     const user = userEvent.setup()

@@ -83,6 +83,7 @@ export interface HarnessOptions
       | 'upgradeRateLimit'
       | 'sessionSweepIntervalMs'
       | 'log'
+      | 'extraRoutes'
     >
   > {
   config?: Partial<NormalConfig>
@@ -120,6 +121,7 @@ export async function buildTestApp(db: AppDb, opts: HarnessOptions = {}): Promis
     gatewayOptions: { heartbeatIntervalMs: 60_000, heartbeatTimeoutMs: 120_000, ...opts.gatewayOptions },
     ...(opts.roomOptions ? { roomOptions: opts.roomOptions } : {}),
     ...(opts.rng ? { rng: opts.rng } : {}),
+    ...(opts.extraRoutes ? { extraRoutes: opts.extraRoutes } : {}),
     ...(opts.writeRateLimit ? { writeRateLimit: opts.writeRateLimit } : {}),
     ...(opts.readRateLimit ? { readRateLimit: opts.readRateLimit } : {}),
     ...(opts.writeIpRateLimit ? { writeIpRateLimit: opts.writeIpRateLimit } : {}),
@@ -149,6 +151,6 @@ export async function buildTestApp(db: AppDb, opts: HarnessOptions = {}): Promis
 /** Everything a test may have written, in foreign-key order. `restart identity` keeps ledger ids comparable across tests. */
 export async function resetDb(db: AppDb): Promise<void> {
   await db.execute(
-    sql`truncate table sessions, inventory, items, daily_logins, player_stats, player_achievements, point_transactions, game_players, games, players, users restart identity cascade`,
+    sql`truncate table sessions, inventory, items, daily_logins, player_stats, player_achievements, gm_actions, ledger_keys, point_transactions, game_players, games, players, users restart identity cascade`,
   )
 }

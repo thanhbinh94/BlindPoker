@@ -10,7 +10,7 @@ import { eq } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { AppDb } from '../db/client.js'
 import { createTestDb, type TestDb } from '../db/test-db.js'
-import { inventory, items, players } from '../db/schema.js'
+import { inventory, items, players, users } from '../db/schema.js'
 import { buildTestApp, resetDb, XRW, type Account, type Harness } from '../test-harness.js'
 
 /** What a fresh account is wearing (spec §4.1): the female body, her default bob and the one default outfit. */
@@ -61,6 +61,12 @@ describe('GET /api/me', () => {
       lastLoginAt: null,
     })
     expect((res.json() as { createdAt: number }).createdAt).toBeGreaterThan(0)
+  })
+
+  it('reports the account role, read from the database on each request', async () => {
+    expect((await h.app.fastify.inject({ url: '/api/me', headers: { cookie: me.cookie } })).json()).toMatchObject({ role: 'player' })
+    await db.update(users).set({ role: 'gm' }).where(eq(users.id, me.playerId))
+    expect((await h.app.fastify.inject({ url: '/api/me', headers: { cookie: me.cookie } })).json()).toMatchObject({ role: 'gm' })
   })
 
   it('refuses a request with no cookie, a stale one, or a cookie for a revoked session', async () => {

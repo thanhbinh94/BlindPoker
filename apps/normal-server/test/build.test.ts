@@ -23,7 +23,7 @@ const execFileAsync = promisify(execFile)
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const DIST = join(ROOT, 'dist')
 /** The bundles `scripts/build.mjs` emits: the server, the migrate job, and the wardrobe grant tool. */
-const ENTRY_FILES = ['main.js', 'migrate-cli.js', 'grant-wardrobe-cli.js']
+const ENTRY_FILES = ['main.js', 'migrate-cli.js', 'grant-wardrobe-cli.js', 'grant-gm-cli.js']
 
 /** Long enough for a cold `tsc` on a loaded machine; a build that needs more than this is broken. */
 const BUILD_TIMEOUT_MS = 240_000
@@ -101,6 +101,14 @@ describe.skipIf(SKIP)('the production build', () => {
       const info = await stat(join(DIST, name))
       expect(info.isFile(), `dist/${name}`).toBe(true)
       expect(info.size).toBeGreaterThan(1024)
+    }
+  })
+
+  it('never ships the e2e promote route', async () => {
+    // `/e2e/promote` makes any account a GM and is mounted only by `e2e-entry.ts` through `extraRoutes`. Nothing in
+    // the build's own guards would notice if `main.ts` ever imported it, so every shipped bundle is searched for it.
+    for (const name of ENTRY_FILES) {
+      expect(await readFile(join(DIST, name), 'utf8'), `dist/${name}`).not.toContain('/e2e/promote')
     }
   })
 

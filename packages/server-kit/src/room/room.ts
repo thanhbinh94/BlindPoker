@@ -7,7 +7,7 @@ import type { TimerHandle } from '../infra/clock.js'
 import { newId } from '../infra/ids.js'
 import { InsufficientBalanceError, type BalanceEntry, type HandSummary, type SettlementMeta } from '../repositories.js'
 import { HandRunner } from './hand-runner.js'
-import { RoomError, type RoomDeps, type RoomPlayer } from './types.js'
+import { RoomError, type AdminRoomSummary, type RoomDeps, type RoomPlayer } from './types.js'
 
 export interface RoomInit {
   roomId: string
@@ -56,6 +56,8 @@ export class Room {
    */
   onMembership: ((playerId: string, joined: boolean) => void) | null = null
 
+  /** When the room was made (ms, the injected clock); the GM screen lists it. */
+  readonly createdAt: number
   private readonly deps: RoomDeps
   private runner: HandRunner | null = null
   private queue: Promise<unknown> = Promise.resolve()
@@ -89,6 +91,7 @@ export class Room {
     this.code = init.code
     this.config = init.config
     this.deps = init.deps
+    this.createdAt = init.deps.clock.now()
     this.rules = roomConfigToRuleset(init.config)
     this.hostPlayerId = init.host.playerId
     this.addPlayer(init.host)
@@ -245,6 +248,68 @@ export class Room {
         }
       })
     })
+  }
+
+  /**
+   * A GM's removal (Plan 25). Unlike `kick`, nobody is "the host" here: the host can be removed (the room passes to
+   * the next player, as when a host leaves), and a player inside the current hand is not refused — they fold now and
+   * leave when the hand ends, exactly as if they had pressed Leave (spec §7.10, §8.8), so their stack goes home
+   * through the same cash-out. Bots are not players of this kind.
+   */
+  adminKick(targetId: string): Promise<'now' | 'after_hand'> {
+    return this.enqueue<'now' | 'after_hand'>(async () => {
+      this.assertOpen()
+      const target = this.mustPlayer(targetId)
+      if (target.identity.isBot) throw new RoomError('ILLEGAL_ACTION', 'cannot remove a bot this way')
+      this.deps.outbox.send(targetId, { t: 'NOTIFICATION', kind: 'KICKED', payload: { roomId: this.roomId } })
+      if (this.inCurrentHand(target)) {
+        target.leaveAfterHand = true
+        target.standAfterHand = true
+        this.runner!.markAutoFold(target.seat!)
+        return 'after_hand'
+      }
+      await this.loggingMoney('admin kick failed', target, async () => {
+        try {
+          await this.removePlayer(target, 'kicked_by_gm')
+        } catch (err) {
+          // As in `kick`: the player has been told KICKED, so a failed write must not leave them behind as a
+          // spectator; the end of the next hand retries the removal.
+          target.leaveAfterHand = true
+          target.standAfterHand = true
+          throw err
+        }
+      })
+      return 'now'
+    })
+  }
+
+  /** The room as the GM screen lists it (Plan 25): everything `summary()` hides from the lobby, no cards. */
+  adminSummary(): AdminRoomSummary {
+    const host = this.players.get(this.hostPlayerId)
+    return {
+      roomId: this.roomId,
+      code: this.code,
+      name: this.config.name,
+      mode: this.config.mode,
+      status: this.status === 'IN_GAME' ? 'IN_GAME' : 'OPEN',
+      isPrivate: this.config.isPrivate,
+      hasPassword: this.config.password !== undefined,
+      players: this.humanCount + this.seatedBotCount,
+      maxPlayers: this.config.maxPlayers,
+      hostPlayerId: this.hostPlayerId,
+      hostDisplayName: host?.identity.displayName ?? '',
+      carryOverPot: this.carryOverPot + (this.pendingRelease?.pot ?? 0),
+      handInProgress: this.handActive,
+      createdAt: this.createdAt,
+      members: [...this.players.values()].map((p) => ({
+        playerId: p.identity.playerId,
+        displayName: p.identity.displayName,
+        isBot: p.identity.isBot,
+        seat: p.seat,
+        stack: p.stack,
+        connected: p.connected,
+      })),
+    }
   }
 
   // ---------- seats ----------

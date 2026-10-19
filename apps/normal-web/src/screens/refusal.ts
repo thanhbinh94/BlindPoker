@@ -21,6 +21,7 @@ export const KNOWN_CODES = new Set([
   'BAD_CREDENTIALS',
   'RATE_LIMITED',
   'FORBIDDEN',
+  'ACCOUNT_LOCKED',
 ])
 
 /**
@@ -34,6 +35,8 @@ export function refusalText(cause: unknown, t: TFunction): string {
   if (cause instanceof ApiError) {
     if (cause.code === NETWORK_ERROR_CODE) return t('auth.errors.NETWORK')
     if (cause.code === 'RATE_LIMITED') return t('auth.errors.RATE_LIMITED', { seconds: cause.retryAfterSec ?? 60 })
+    // A locked account is told the GM's own reason (the server puts it beside the envelope, like `retryAfterSec`).
+    if (cause.code === 'ACCOUNT_LOCKED') return t('auth.errors.ACCOUNT_LOCKED', { reason: String(cause.extra.reason ?? '') })
     if (KNOWN_CODES.has(cause.code)) return t(`auth.errors.${cause.code}`)
   }
   return t('common:errors.INTERNAL')

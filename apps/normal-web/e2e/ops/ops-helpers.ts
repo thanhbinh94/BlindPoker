@@ -373,3 +373,13 @@ export async function keepPlaying(page: Page, seat: number): Promise<void> {
 export async function closeAll(players: (Player | undefined)[]): Promise<void> {
   for (const p of players) if (p !== undefined) await p.context.close().catch(() => undefined)
 }
+
+/**
+ * Makes `email` a GM through the e2e server's loopback-only `POST /e2e/promote`, then reloads so the session gate
+ * re-reads `role` (the "Quản trị" link and `#/gm` need it).
+ */
+export async function promoteToGm(page: Page, email: string): Promise<void> {
+  const res = await page.request.post('/e2e/promote', { data: { email }, headers: { 'x-requested-with': 'bind-poker' } })
+  expect(res.status(), `POST /e2e/promote returned ${res.status()}`).toBe(200)
+  await page.reload()
+}

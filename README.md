@@ -13,7 +13,7 @@ Two editions from one codebase, sharing the engine, the room layer and the HTTP 
 | Database | PostgreSQL 16 (Drizzle) | SQLite (`node:sqlite`), beside the exe |
 | Identity | Email + password (argon2id), session cookie | A display name and a bearer token |
 | Web UI | Built into the image, served at `/` from the same origin | Embedded in the exe |
-| Has | Cosmetics, inventory, avatars, achievements, points ledger | Points, daily reward, relief |
+| Has | Cosmetics, inventory, avatars, achievements, points ledger, a game-master console (Quản trị) | Points, daily reward, relief |
 | Needs | A host, a domain, TLS | A double-click |
 | Deploy guide | [`docs/deployment-normal.md`](docs/deployment-normal.md) | [`docs/deployment-lite.md`](docs/deployment-lite.md) |
 

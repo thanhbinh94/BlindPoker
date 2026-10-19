@@ -56,12 +56,14 @@ const STATUS: Record<AuthErrorCode, number> = {
   EMAIL_TAKEN: 409,
   DISPLAY_NAME_TAKEN: 409,
   BAD_CREDENTIALS: 401,
+  ACCOUNT_LOCKED: 403,
 }
 
 interface AccountBody {
   playerId: string
   displayName: string
   balance: number
+  role: 'player' | 'gm'
 }
 
 /**
@@ -72,7 +74,7 @@ async function translating<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn()
   } catch (err) {
-    if (err instanceof AuthError) throw new HttpError(STATUS[err.code], err.code, err.message)
+    if (err instanceof AuthError) throw new HttpError(STATUS[err.code], err.code, err.message, err.extra)
     throw err
   }
 }
@@ -126,11 +128,11 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   }
 
   async function accountBody(userId: string): Promise<AccountBody> {
-    const player = await deps.repos.players.findById(userId)
+    const player = await deps.repos.players.findAuth(userId)
     // The profile was written in the same transaction as the account; its absence here is a bug in
     // this server, not a bad request.
     if (player === null) throw new HttpError(500, 'INTERNAL', 'the account has no player profile')
-    return { playerId: player.playerId, displayName: player.displayName, balance: player.balance }
+    return { playerId: player.playerId, displayName: player.displayName, balance: player.balance, role: player.role }
   }
 
   app.post('/api/auth/register', {

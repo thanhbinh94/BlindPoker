@@ -363,6 +363,13 @@ describe('every mutating route is guarded', () => {
       'GET /api/catalog/avatar',
       'GET /api/catalog/items',
       'GET /api/config',
+      'GET /api/gm/actions',
+      'GET /api/gm/overview',
+      'GET /api/gm/players/:id',
+      'GET /api/gm/players/:id/history',
+      'GET /api/gm/players/:id/ledger',
+      'GET /api/gm/rooms',
+      'GET /api/gm/rooms/:id',
       'GET /api/me',
       'GET /api/me/achievements',
       'GET /api/me/history',
@@ -378,6 +385,14 @@ describe('every mutating route is guarded', () => {
       'POST /api/auth/logout',
       'POST /api/auth/register',
       'POST /api/economy/relief',
+      'POST /api/gm/players/:id/items',
+      'POST /api/gm/players/:id/lock',
+      'POST /api/gm/players/:id/points',
+      'POST /api/gm/players/:id/role',
+      'POST /api/gm/players/:id/unlock',
+      'POST /api/gm/players/search',
+      'POST /api/gm/rooms/:id/close',
+      'POST /api/gm/rooms/:id/kick',
       'POST /api/me/outfits/:slot/apply',
       'POST /api/rewards/daily/claim',
       'PUT /api/me/avatar',
@@ -816,6 +831,9 @@ describe('a whole hand between two registered players', () => {
     const h = await harness({ roomOptions: FAST_ROOM })
     const alice = await h.register()
     const mai = await h.register(SECOND_ACCOUNT)
+    // The GM's hand on the books (Plan 25): both movements are ledger sources, counted in the sum further down.
+    await h.app.services.gm.adjustPoints({ userId: null }, alice.playerId, 5_000, 'test credit')
+    await h.app.services.gm.adjustPoints({ userId: null }, mai.playerId, -2_000, 'test debit')
     const base = await listen(h)
 
     const a = await connect(base, { cookie: alice.cookie })
@@ -876,8 +894,8 @@ describe('a whole hand between two registered players', () => {
       expect(settled.reduce((sum, row) => sum + Number(row.amount), 0)).toBe(0)
 
       // …and the balances are the whole ledger, read back: what they started with, less the fee,
-      // plus anything an achievement paid out on the way.
-      const credited = rowsOf<{ amount: string | number }>(await db.execute(sql`select amount from point_transactions where reason = 'achievement'`))
+      // plus anything an achievement or a GM paid out (or took) on the way.
+      const credited = rowsOf<{ amount: string | number }>(await db.execute(sql`select amount from point_transactions where reason in ('achievement', 'gm_grant', 'gm_adjust')`))
       const fees = sinks.reduce((sum, row) => sum + Number(row.amount), 0)
       const rewards = credited.reduce((sum, row) => sum + Number(row.amount), 0)
       const balances = await Promise.all([alice, mai].map((p) => h.app.services.repos.balances.get(p.playerId)))

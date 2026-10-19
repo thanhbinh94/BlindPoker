@@ -41,6 +41,7 @@
       "BAD_CREDENTIALS": "Email hoặc mật khẩu không đúng",
       "RATE_LIMITED": "Bạn thử quá nhiều lần, vui lòng đợi {{seconds}} giây",
       "FORBIDDEN": "Yêu cầu bị từ chối, vui lòng tải lại trang",
+      "ACCOUNT_LOCKED": "Tài khoản đã bị khóa: {{reason}}",
       "NETWORK": "Không kết nối được máy chủ"
     }
   },
@@ -119,10 +120,164 @@
       "cancel": "Hủy",
       "close": "Đóng"
     },
+    "gm": "Quản trị",
     "about": {
       "title": "Thông tin",
       "edition": "Ấn bản",
       "version": "Phiên bản"
+    }
+  },
+  "gm": {
+    "title": "Quản trị",
+    "copyId": "Chép mã",
+    "copied": "Đã chép",
+    "tabs": { "overview": "Tổng quan", "players": "Người chơi", "rooms": "Phòng", "actions": "Nhật ký" },
+    "overview": {
+      "online": "Đang kết nối",
+      "rooms": "Phòng đang mở",
+      "accounts": "Tài khoản",
+      "locked": "Đang khóa",
+      "gms": "Quản trị viên",
+      "points24h": "Điểm 24 giờ qua, theo lý do",
+      "refresh": "Làm mới",
+      "sources": "Vào nền kinh tế",
+      "sinks": "Ra khỏi nền kinh tế",
+      "reasonColumn": "Lý do",
+      "total": "Tổng",
+      "error": "Không tải được tổng quan"
+    },
+    "players": {
+      "search": "Tìm theo email hoặc tên",
+      "searchButton": "Tìm",
+      "empty": "Không có kết quả",
+      "more": "Tải thêm",
+      "name": "Tên",
+      "email": "Email",
+      "balance": "Số dư",
+      "role": "Vai trò",
+      "status": "Trạng thái",
+      "lockedBadge": "Đã khóa",
+      "open": "Mở",
+      "error": "Không tải được danh sách"
+    },
+    "player": {
+      "back": "Quay lại danh sách",
+      "inRoom": "Đang ở phòng {{name}} ({{code}})",
+      "notInRoom": "Không ở phòng nào",
+      "inventory": "{{count}} món trong tủ đồ",
+      "lastLogin": "Đăng nhập lần cuối",
+      "created": "Tạo ngày",
+      "lockedSince": "Khóa từ {{at}}: {{reason}}",
+      "ledger": "Sổ điểm",
+      "history": "Ván gần đây",
+      "neverSignedIn": "Chưa từng",
+      "email": "Email",
+      "balance": "Số dư",
+      "role": "Vai trò",
+      "error": "Không tải được người chơi này",
+      "roles": { "gm": "Quản trị viên", "player": "Người chơi" }
+    },
+    "actions": {
+      "points": "Cộng/trừ điểm",
+      "item": "Cấp món",
+      "wardrobe": "Cấp toàn bộ tủ đồ",
+      "lock": "Khóa tài khoản",
+      "unlock": "Mở khóa",
+      "promote": "Trao quyền quản trị",
+      "demote": "Thu quyền quản trị",
+      "kick": "Mời ra",
+      "close": "Đóng phòng"
+    },
+    "dialog": {
+      "reason": "Lý do (bắt buộc, 3–200 ký tự)",
+      "amount": "Số điểm (âm để trừ, tối đa ±10.000.000)",
+      "item": "Mã món",
+      "confirm": "Xác nhận",
+      "cancel": "Hủy",
+      "close": "Đóng",
+      "closeBody": "Ván đang chơi sẽ bị hủy, cược hoàn lại, chồng trên bàn về số dư của từng người.",
+      "lockBody": "Người này bị đăng xuất khỏi mọi thiết bị, rời bàn đang ngồi và không đăng nhập được cho tới khi mở khóa.",
+      "kickBody": "Mời {{name}} ra khỏi phòng. Đang giữa ván thì người này rời sau khi ván kết thúc."
+    },
+    "rooms": {
+      "name": "Phòng",
+      "mode": "Chế độ",
+      "players": "Người",
+      "host": "Chủ phòng",
+      "status": "Trạng thái",
+      "private": "Riêng tư",
+      "inHand": "Đang ván",
+      "carry": "Pot cộng dồn",
+      "members": "Thành viên",
+      "bot": "Bot",
+      "offline": "Mất kết nối",
+      "empty": "Không có phòng nào",
+      "refresh": "Làm mới",
+      "error": "Không tải được danh sách phòng",
+      "seat": "Ghế",
+      "stack": "Chồng",
+      "modes": { "holdem": "Texas Hold'em", "blind": "Blind Poker" }
+    },
+    "log": {
+      "when": "Lúc",
+      "who": "Ai",
+      "what": "Việc",
+      "target": "Với ai",
+      "amount": "Số điểm",
+      "reason": "Lý do",
+      "cli": "Máy chủ (CLI)",
+      "filterPlayer": "Lọc theo người",
+      "filterRoom": "Lọc theo phòng",
+      "filter": "Lọc",
+      "empty": "Chưa có việc nào trong nhật ký",
+      "error": "Không tải được nhật ký",
+      "more": "Tải thêm",
+      "kind": {
+        "grant_points": "Cộng điểm",
+        "adjust_points": "Trừ điểm",
+        "grant_item": "Cấp món",
+        "grant_wardrobe": "Cấp tủ đồ",
+        "lock": "Khóa",
+        "unlock": "Mở khóa",
+        "kick": "Mời ra",
+        "close_room": "Đóng phòng",
+        "promote": "Trao quyền",
+        "demote": "Thu quyền"
+      }
+    },
+    "done": {
+      "points": "Đã cập nhật số dư: {{balance}}",
+      "item": "Đã cấp {{count}} món",
+      "lock": "Đã khóa tài khoản",
+      "unlock": "Đã mở khóa",
+      "role": "Đã đổi vai trò",
+      "kick": "Đã mời ra ({{when}})",
+      "kickNow": "ngay",
+      "kickAfterHand": "sau ván này",
+      "close": "Đã đóng phòng, hoàn cho {{count}} người"
+    },
+    "errors": {
+      "INVALID_REASON": "Lý do phải dài 3–200 ký tự",
+      "INVALID_AMOUNT": "Số điểm không hợp lệ",
+      "INVALID_ITEM": "Không có món này, hoặc món ai cũng có",
+      "INSUFFICIENT_BALANCE": "Số dư không đủ để trừ",
+      "ALREADY_LOCKED": "Tài khoản đã bị khóa rồi",
+      "NOT_LOCKED": "Tài khoản không bị khóa",
+      "LAST_GM": "Không thể thu quyền của quản trị viên cuối cùng",
+      "FORBIDDEN": "Không được phép làm việc này",
+      "NOT_FOUND": "Không tìm thấy",
+      "ROOM_NOT_FOUND": "Phòng không còn",
+      "GAME_IN_PROGRESS": "Đang trong ván",
+      "SELF_TARGET": "Không tự làm việc này với chính mình được",
+      "TARGET_IS_GM": "Người này là quản trị viên, thu quyền trước",
+      "TARGET_IS_LOCKED": "Tài khoản đang bị khóa, mở khóa trước"
+    },
+    "notice": {
+      "points": "{{amount}} điểm — {{reason}}",
+      "item": "{{item}} — {{reason}}",
+      "promote": "Bạn đã được trao quyền quản trị — {{reason}}",
+      "demote": "Quyền quản trị của bạn đã được thu — {{reason}}",
+      "wardrobe": "Bạn được cấp toàn bộ tủ đồ — {{reason}}"
     }
   },
   "screens": {
@@ -207,6 +362,8 @@
       "daily_item_fallback": "Điểm danh (điểm thay vật phẩm)",
       "relief": "Điểm cứu trợ",
       "achievement": "Thưởng thành tựu",
+      "gm_grant": "Quản trị viên cộng điểm",
+      "gm_adjust": "Quản trị viên trừ điểm",
       "other": "Khác"
     }
   },

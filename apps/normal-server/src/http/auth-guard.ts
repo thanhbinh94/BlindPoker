@@ -44,9 +44,20 @@ export function createRequireUser(deps: AuthGuardDeps): RequireUser {
     const token = readSessionCookie(req)
     const session = token === null ? null : await deps.sessions.resolve(token)
     if (session === null) throw new HttpError(401, 'UNAUTHENTICATED', UNAUTHENTICATED)
-    const player = await deps.repos.players.findById(session.userId)
-    if (player === null) throw new HttpError(401, 'UNAUTHENTICATED', UNAUTHENTICATED)
-    req.user = { userId: session.userId, playerId: player.playerId, displayName: player.displayName }
+    const auth = await deps.repos.players.findAuth(session.userId)
+    // A locked account's sessions are revoked when it is locked; a cookie that still resolves is a
+    // race, and the answer is the same as for any dead session: sign in again (and then meet
+    // ACCOUNT_LOCKED).
+    if (auth === null || auth.lockedAt !== null) throw new HttpError(401, 'UNAUTHENTICATED', UNAUTHENTICATED)
+    req.user = { userId: session.userId, playerId: auth.playerId, displayName: auth.displayName, role: auth.role }
+  }
+}
+
+/** "...and signed in as a GM." The role was read from the database by `requireUser` on this very request. */
+export function createRequireGm(requireUser: RequireUser): RequireUser {
+  return async (req) => {
+    await requireUser(req)
+    if (currentUser(req).role !== 'gm') throw new HttpError(403, 'FORBIDDEN', 'this action needs the gm role')
   }
 }
 

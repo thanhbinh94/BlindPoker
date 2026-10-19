@@ -150,6 +150,17 @@ export class Gateway {
     await new Promise<void>((resolve) => this.wss.close(() => resolve()))
   }
 
+  /**
+   * Closes the socket this player holds (Plan 25: a locked account). `bound` keeps one connection per player (a
+   * second one replaces the first), so the count is 0 or 1. Returns how many closed.
+   */
+  disconnect(playerId: string, code = 4003, reason = 'LOCKED'): number {
+    const conn = this.bound.get(playerId)
+    if (conn === undefined) return 0
+    conn.close(code, reason)
+    return 1
+  }
+
   dispose(): void {
     this.heartbeat?.cancel()
     this.heartbeat = null

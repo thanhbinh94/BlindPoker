@@ -316,6 +316,8 @@ Server-kit nhận identity từ `SessionResolver` do edition cung cấp (cookie 
 | avatarConfig, equippedTitle, equippedBadge | ✓ | — |
 | createdAt, lastLoginAt | ✓ | ✓ |
 
+**Vai trò và khóa (2026-10-18, spec gm-role).** Mỗi tài khoản Normal có thêm `role` (`player` mặc định, hoặc `gm`) và khóa (`locked_at`, `locked_reason`), nằm ở `users` chứ không ở `players`: khóa chặn đăng nhập, vai trò là của người cầm mật khẩu. Lite không có tài khoản nên không có vai trò. Một GM tìm người chơi, cộng/trừ điểm, tặng món đồ, khóa/mở khóa và trao/thu vai trò ở màn "Quản trị"; người dùng chỉ thấy `role` để hiện lối vào, còn server đọc lại vai trò ở mỗi request. Chi tiết: `docs/superpowers/specs/2026-10-18-gm-role-design.md`.
+
 ### 10.3 Thống kê
 - Lite: `handsPlayed`, `handsWon`.
 - Normal (`player_stats`): `hands_played_holdem`, `hands_won_holdem`, `hands_played_blind`, `hands_won_blind`, `bot_hands`, `current_win_streak`, `best_win_streak`, `current_lose_streak`, `best_lose_streak`, `best_hand_rank` (mã category cao nhất từng thắng), `biggest_win` (điểm ròng lớn nhất một ván), `rooms_joined`, `games_completed`, `total_login_days`, `login_streak`, `best_login_streak`.
@@ -627,6 +629,8 @@ Ba điểm khác bản phác thảo ban đầu, đều có lý do:
 
 `point_transactions` là `ON DELETE restrict` chứ không cascade: xóa một player còn dòng ledger sẽ biến toàn bộ lịch sử của họ — cả các dòng cộng — thành dòng sink và làm sai bất biến §18.4. Không có bảng rooms.
 
+**Quản trị (2026-10-18, spec gm-role; migration `0004_gm`).** `users` thêm `role text NOT NULL DEFAULT 'player' CHECK (role IN ('player','gm'))`, `locked_at timestamptz` và `locked_reason text`. Bảng mới `gm_actions(id bigserial pk, actor_user_id fk users on delete set null — NULL là CLI trên máy chủ, action text, target_player_id fk players on delete set null, target_room_id text, amount bigint, item_id text, reason text not null, details jsonb, created_at)` với hai index `gm_actions_created_idx (created_at)` và `gm_actions_target_idx (target_player_id, created_at)`; bảng chỉ ghi, không có đường sửa hay xóa, và một dòng sống lâu hơn tài khoản nó nhắc tới. `point_transactions.reason` có thêm `gm_grant` (cộng) và `gm_adjust` (trừ), cả hai là **nguồn** như `daily`, dòng sổ mang `ref_id = gm:<gm_actions.id>`, nên bất biến `Σ số dư + Σ sink` ở §18.4 không đổi. Không có xóa tài khoản.
+
 ### 18.3 Lite — SQLite (`node:sqlite`), WAL mode, `PRAGMA user_version` để migrate
 File dữ liệu mở với `journal_mode = WAL` (trừ `:memory:`), `foreign_keys = ON`, `busy_timeout = 5000`. Migration là mảng append-only trong `db/migrations.ts`: phần tử `i` là version `i + 1`, mỗi lần khởi động chạy tiếp những version còn thiếu trong một transaction rồi đặt `PRAGMA user_version`.
 ```sql
@@ -700,6 +704,8 @@ Auth = cookie phiên `bp_session` (`HttpOnly`, `SameSite=Lax`, `Secure` khi `COO
 - `PATCH /api/me` **không** đổi tên trên bàn đang chơi: RoomActor giữ định danh nhận lúc bind, tên mới xuất hiện ở lần vào phòng kế tiếp.
 - Upgrade WebSocket `/ws` xác thực bằng chính cookie đó; thiếu/sai → HTTP `401` ngay ở bước upgrade (không phải close code), `Origin` phải nằm trong `ALLOWED_ORIGINS`.
 
+**Quản trị (2026-10-18, spec gm-role).** Mười lăm route dưới `/api/gm/` (tổng quan, tìm người chơi bằng `POST` để email không nằm trên URL, hồ sơ, sổ điểm, lịch sử, cộng/trừ điểm, tặng món, khóa, mở khóa, vai trò, danh sách phòng và chi tiết một phòng, mời ra, đóng phòng, nhật ký) đi sau `requireGm`, thứ chạy `requireUser` rồi đọc lại `users.role` và `locked_at` ở mỗi request: không phải GM là `403 FORBIDDEN`; tài khoản đã khóa được coi như chưa đăng nhập (`401 UNAUTHENTICATED`). Mọi `POST` ghi (mọi `POST` trừ tìm kiếm) cần `reason` 3–200 ký tự, thiếu là `400 INVALID_REASON`; điểm tối đa ±10.000.000 mỗi lần; lỗi riêng gồm `SELF_TARGET` và `TARGET_IS_GM` (403), `ALREADY_LOCKED`, `NOT_LOCKED`, `LAST_GM`, `TARGET_IS_LOCKED` (409; không trao quyền GM cho tài khoản đang bị khóa). `POST /api/auth/login` trả `403 ACCOUNT_LOCKED` kèm `reason` (cạnh `error`) sau khi mật khẩu đã đúng. `GET /api/auth/me` và `GET /api/me` thêm `role`. Phía vận hành có CLI `node dist/grant-gm-cli.js <email> [--revoke]`.
+
 ### 19.3 Lite
 Đã triển khai trong `apps/lite/server/src/http/routes.ts`; client `apps/lite/web/src/api.ts` phản chiếu đúng bảng này.
 
@@ -765,6 +771,8 @@ Mọi message client → server có thể mang `reqId?`; server trả lại nó 
 | `PING` | — |
 
 `RoomView.players[]` (`RoomPlayerView`) = `{ playerId, displayName, isBot, isHost, connected, seat, status, sittingOut, stack, ready, cosmetics? }`. `status` là trạng thái ghế (mục 11.3, một giá trị, `IN_HAND` xếp trên `SITTING_OUT`); `sittingOut` là cờ sit-out riêng, độc lập với `status`, để client không phải suy ra yêu cầu sit-out từ một enum loại trừ nhau.
+
+**Quản trị (2026-10-18, spec gm-role).** `NOTIFICATION` có thêm `kind: 'GM_NOTICE'` với `payload { action, amount?, itemId?, reason }` (`action` là `grant_points`, `adjust_points`, `grant_item`, `grant_wardrobe`, `lock`, `kick`, `close_room`, …): người bị tác động nhận nó nếu đang nối, và cộng/trừ điểm còn phát `BALANCE`. Khóa tài khoản gửi `GM_NOTICE` rồi đóng mọi socket của người đó bằng close code **4003** `LOCKED` (`Gateway.disconnect`). Đóng phòng phát `ROOM_CLOSED` với lý do `closed_by_gm`; lý do của GM nằm trong nhật ký chứ không trong sự kiện phòng. Không thêm message nào khác.
 
 ### 20.3 Mã lỗi
 `UNAUTHENTICATED, INVALID_MESSAGE, RATE_LIMITED, ROOM_NOT_FOUND, ROOM_FULL, WRONG_PASSWORD, INVALID_ROOM_CONFIG, NOT_HOST, SEAT_TAKEN, INSUFFICIENT_BALANCE, NOT_YOUR_TURN, ILLEGAL_ACTION, INVALID_AMOUNT, STALE_STATE, DUPLICATE_REQUEST, NOT_IN_HAND, NOT_IN_ROOM, ALREADY_IN_ROOM, NOT_SEATED, GAME_IN_PROGRESS, NOT_ENOUGH_PLAYERS, DISPLAY_NAME_TAKEN, SERVER_SHUTDOWN, INTERNAL`.
@@ -905,6 +913,8 @@ Lite đọc theo thứ tự: biến môi trường thắng, sau đó `.env` **c�
 | Secret | Env; `.env.example` mẫu; kiểm tra khởi động từ chối `SESSION_SECRET` yếu |
 | Lite không mật khẩu | Ghi giới hạn: ai có token là người đó; mạng nội bộ tin cậy; roadmap PIN tùy chọn |
 
+**Quản trị (2026-10-18, spec gm-role).** Quyền GM là quyền nặng nhất của Normal, nên: vai trò đọc lại từ database ở **mỗi** request (thu quyền và khóa có hiệu lực ngay, không chờ phiên hết hạn); tài khoản bị khóa không đăng nhập được và phiên cũ bị thu hồi cùng socket; mọi hành động bắt buộc có lý do và vào `gm_actions` cùng transaction với tác động; không tự khóa mình, không khóa GM khác, không hạ GM cuối cùng; email trên màn tìm kiếm bị che; tìm kiếm là `POST` để không để email trong URL hay access log; hạn mức ±10.000.000 mỗi lần cấp. Cấp GM đầu tiên chỉ bằng CLI trên máy chủ, không bằng biến môi trường. Giới hạn đã biết: GM dùng chung mật khẩu và phiên với người chơi, không có 2FA (`docs/known-limitations.md`).
+
 ## 24. Performance
 
 | Mục tiêu | Normal (2 vCPU, 2 GB) | Lite (1 vCPU, 512 MB RAM cho tiến trình) |
@@ -963,6 +973,8 @@ từ `@bp/ui-kit` thì dùng nguyên component của kit chứ không viết l�
 | 11 | Daily reward | ✓ | ✓ (điểm) | Đã triển khai (Plan 6) — `screens/DailyScreen.tsx` (lịch 31 ngày, biên nhận, cứu trợ) |
 | 12 | Settings | ✓ | ✓ | Đã triển khai (Plan 6) — `screens/SettingsScreen.tsx` |
 | 13 | Language selection (trong Settings và header) | ✓ | ✓ | Đã triển khai (Plan 6) — `LanguageSwitch` của ui-kit, trong rail của `Shell` và trong Settings |
+
+**Quản trị (2026-10-18, spec gm-role).** Thêm màn thứ 14, "Quản trị" (`#/gm`, chỉ bản Normal, chỉ GM; lối vào là một hàng trong Settings, và người không phải GM bị đưa về sảnh khi server trả 403): bốn tab Tổng quan, Người chơi, Phòng, Nhật ký, mỗi hành động qua một hộp thoại buộc nhập lý do. Từ 640 px trở xuống các bảng đổi thành thẻ. Code: `apps/normal-web/src/screens/gm/`.
 
 ### 27.3 Bàn chơi phải hiển thị
 Người chơi (tên, stack, avatar/chữ cái, badge/title ở Normal), lá riêng, lá chung, pot (+ side pot, + pot cộng dồn), cược hiện tại của từng người, lượt (viền sáng + timer vòng tròn), trạng thái fold/all-in/sitting-out/disconnected, người thắng + bài thắng + số điểm nhận, mode và variant, mã phòng.

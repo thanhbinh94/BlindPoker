@@ -16,7 +16,7 @@ import type { PlayerRecord, PlayerRepository } from '@bp/server-kit'
 import { eq } from 'drizzle-orm'
 import type { AppDb } from '../db/client.js'
 import { isUniqueViolation } from '../db/pg-errors.js'
-import { players } from '../db/schema.js'
+import { players, users } from '../db/schema.js'
 import { UnknownPlayerError } from './balance-repo.js'
 import { isUuid } from './util.js'
 
@@ -34,7 +34,18 @@ export interface PlayerRow {
   createdAt: Date
 }
 
+/** What the request guard needs in one query: the profile plus the account's role and lock (Plan 25). */
+export interface AuthRow {
+  playerId: string
+  displayName: string
+  balance: number
+  role: 'player' | 'gm'
+  lockedAt: Date | null
+}
+
 export interface NormalPlayerRepository extends PlayerRepository {
+  /** The profile with the account's role and lock, joined in one query. `null` for an unknown or malformed id. */
+  findAuth(userId: string): Promise<AuthRow | null>
   findByIdFull(playerId: string): Promise<PlayerRow | null>
   /**
    * Renames a player, keeping `name_key` in step. Throws `DisplayNameTakenError` on a collision.
@@ -84,6 +95,16 @@ export function createPlayerRepository(db: AppDb): NormalPlayerRepository {
     },
 
     findByIdFull: fullRow,
+
+    async findAuth(userId) {
+      if (!isUuid(userId)) return null
+      const [row] = await db
+        .select({ playerId: players.id, displayName: players.displayName, balance: players.balance, role: users.role, lockedAt: users.lockedAt })
+        .from(players)
+        .innerJoin(users, eq(users.id, players.id))
+        .where(eq(players.id, userId))
+      return row === undefined ? null : { ...row, balance: Number(row.balance) }
+    },
 
     async updateProfile(playerId, patch) {
       if (patch.displayName === undefined) return

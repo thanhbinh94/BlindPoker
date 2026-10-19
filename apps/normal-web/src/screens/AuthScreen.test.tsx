@@ -7,7 +7,7 @@ import { LAST_EMAIL_KEY } from '../session.js'
 import { makeI18n, renderWithI18n } from '../test-i18n.js'
 import { AuthScreen, type AuthMode } from './AuthScreen.js'
 
-const ME: AuthMeDto = { playerId: 'p1', displayName: 'Bình', balance: 100_000 }
+const ME: AuthMeDto = { playerId: 'p1', displayName: 'Bình', balance: 100_000, role: 'player' }
 const PASSWORD = 'con-meo-den-1'
 
 function stubApi(overrides: Partial<NormalApi> = {}): NormalApi {
@@ -322,6 +322,17 @@ describe('AuthScreen — where a refusal lands', () => {
     // Saying which half of a credential was wrong is how an address gets enumerated.
     expect(emailBox()).not.toHaveAttribute('aria-invalid')
     expect(passwordBox()).not.toHaveAttribute('aria-invalid')
+    expect(onSignedIn).not.toHaveBeenCalled()
+  })
+
+  it('tells a locked account why, in the GM’s own words', async () => {
+    const api = stubApi({ login: vi.fn().mockRejectedValue(new ApiError(403, 'ACCOUNT_LOCKED', 'locked', { reason: 'gian lận' })) })
+    const { user, onSignedIn } = setup(api)
+
+    await fill(user)
+    await user.click(submit(t.submitSignIn))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.auth.errors.ACCOUNT_LOCKED.replace('{{reason}}', 'gian lận'))
     expect(onSignedIn).not.toHaveBeenCalled()
   })
 

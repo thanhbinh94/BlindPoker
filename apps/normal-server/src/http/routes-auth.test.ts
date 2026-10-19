@@ -102,7 +102,7 @@ describe('POST /api/auth/register', () => {
     const res = await register()
     expect(res.statusCode).toBe(201)
     const body = res.json() as { playerId: string; displayName: string; balance: number }
-    expect(body).toEqual({ playerId: expect.any(String), displayName: 'Bình An', balance: ECONOMY.startingBalance })
+    expect(body).toEqual({ playerId: expect.any(String), displayName: 'Bình An', balance: ECONOMY.startingBalance, role: 'player' })
 
     const cookie = setCookie(res)
     expect(cookie).toContain('HttpOnly')
@@ -194,7 +194,7 @@ describe('POST /api/auth/login', () => {
     nowMs += 60_000
     const res = await login({ email: 'BINH@example.com ', password: GOOD.password })
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual({ playerId: (registered.json() as { playerId: string }).playerId, displayName: 'Bình An', balance: ECONOMY.startingBalance })
+    expect(res.json()).toEqual({ playerId: (registered.json() as { playerId: string }).playerId, displayName: 'Bình An', balance: ECONOMY.startingBalance, role: 'player' })
     expect(cookieValue(res)).not.toBe(cookieValue(registered))
     expect(setCookie(res)).toContain('HttpOnly')
   })
@@ -277,7 +277,7 @@ describe('GET /api/auth/me', () => {
     const registered = await register()
     const res = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie: `${SESSION_COOKIE}=${cookieValue(registered)}` } })
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual({ playerId: (registered.json() as { playerId: string }).playerId, displayName: 'Bình An', balance: ECONOMY.startingBalance })
+    expect(res.json()).toEqual({ playerId: (registered.json() as { playerId: string }).playerId, displayName: 'Bình An', balance: ECONOMY.startingBalance, role: 'player' })
   })
 
   it('answers 401 UNAUTHENTICATED with no cookie, a nonsense cookie, or one that has been logged out', async () => {
@@ -300,5 +300,17 @@ describe('GET /api/auth/me', () => {
     nowMs += 31 * 86_400_000
     const res = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie: `${SESSION_COOKIE}=${cookieValue(registered)}` } })
     expect(res.statusCode).toBe(401)
+  })
+})
+
+describe('a locked account', () => {
+  it('is refused at sign-in with 403 ACCOUNT_LOCKED and the reason, after the password was checked', async () => {
+    const id = (await register().then((r) => r.json())).playerId as string
+    await db.execute(sql`update users set locked_at = now(), locked_reason = 'gian lận' where id = ${id}`)
+    const res = await login({ email: GOOD.email, password: GOOD.password })
+    expect(res.statusCode).toBe(403)
+    expect(res.json()).toMatchObject({ error: { code: 'ACCOUNT_LOCKED' }, reason: 'gian lận' })
+    expect(setCookie(res)).toBe('')
+    expect((await login({ email: GOOD.email, password: 'not it at all' })).json()).toMatchObject({ error: { code: 'BAD_CREDENTIALS' } })
   })
 })

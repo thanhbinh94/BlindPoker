@@ -70,8 +70,8 @@ const AVATAR_DIR = join(PACKAGE_ROOT, 'public', 'avatar')
  */
 const MAX_AVATAR_2X_TOTAL = 32 * 1024 * 1024
 
-/** `App.tsx`'s five `React.lazy` screens; vite names each chunk after the module it split. */
-const LAZY_SCREENS = ['ProfileScreen', 'WardrobeScreen', 'AchievementsScreen', 'DailyScreen', 'SettingsScreen']
+/** `App.tsx`'s six `React.lazy` screens; vite names each chunk after the module it split. */
+const LAZY_SCREENS = ['ProfileScreen', 'WardrobeScreen', 'AchievementsScreen', 'DailyScreen', 'SettingsScreen', 'GmScreen']
 
 /**
  * Whether there is a build to measure — and, when there is not, a warning nobody can mistake for green.
@@ -143,8 +143,8 @@ describe.skipIf(!hasDist)('normal-web bundle', () => {
   })
 
   it('splits the account screens out of the entry chunk', () => {
-    // The five lazy screens are `App.tsx`'s only `import()`s, and the reason the entry stays small. Counting
-    // chunks is not enough — one stray lazy import satisfies "more than one" while four screens sit in the
+    // The six lazy screens are `App.tsx`'s only `import()`s, and the reason the entry stays small. Counting
+    // chunks is not enough — one stray lazy import satisfies "more than one" while five screens sit in the
     // entry — so this names them. Vite derives a lazy chunk's name from the module it split, so a screen
     // that rejoined the entry is a chunk that stopped being emitted under its own name.
     //
@@ -159,7 +159,7 @@ describe.skipIf(!hasDist)('normal-web bundle', () => {
         `${screen} must be a chunk of its own — something in the entry has started importing it eagerly`,
       ).toHaveLength(1)
     }
-    expect(names.length, 'the entry plus the five screens, at least').toBeGreaterThanOrEqual(1 + LAZY_SCREENS.length)
+    expect(names.length, 'the entry plus the six screens, at least').toBeGreaterThanOrEqual(1 + LAZY_SCREENS.length)
   })
 })
 

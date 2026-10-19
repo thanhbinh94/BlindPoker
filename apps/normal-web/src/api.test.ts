@@ -313,3 +313,95 @@ describe('createApi — failures', () => {
     expect(err.unauthenticated).toBe(false)
   })
 })
+
+describe('createApi — the GM routes', () => {
+  const body = (mock: Mock): unknown => JSON.parse(String(init(mock).body))
+
+  it('searches with a POST, the CSRF header and only the fields that were given', async () => {
+    const fetchImpl = ok({ players: [], nextBefore: null })
+    await apiOf(fetchImpl).gmSearch('x')
+
+    expect(url(fetchImpl)).toBe('/api/gm/players/search')
+    expect(init(fetchImpl).method).toBe('POST')
+    expect(headers(fetchImpl)['x-requested-with']).toBe(REQUESTED_WITH)
+    expect(body(fetchImpl)).toEqual({ q: 'x' })
+  })
+
+  it('sends the page size and the cursor of a search when it has them', async () => {
+    const fetchImpl = ok({ players: [], nextBefore: null })
+    await apiOf(fetchImpl).gmSearch('x', { limit: 20, before: 'p9' })
+
+    expect(body(fetchImpl)).toEqual({ q: 'x', limit: 20, before: 'p9' })
+  })
+
+  it('moves points with the amount and the reason in the body', async () => {
+    const fetchImpl = ok({ balance: 5, actionId: 1 })
+    await apiOf(fetchImpl).gmPoints('p1', 12_000, 'thưởng')
+
+    expect(url(fetchImpl)).toBe('/api/gm/players/p1/points')
+    expect(init(fetchImpl).method).toBe('POST')
+    expect(headers(fetchImpl)['x-requested-with']).toBe(REQUESTED_WITH)
+    expect(body(fetchImpl)).toEqual({ amount: 12_000, reason: 'thưởng' })
+  })
+
+  it('reads the action log with only the filters that were given, newest page first', async () => {
+    const fetchImpl = ok({ actions: [], nextBefore: null })
+    await apiOf(fetchImpl).gmActions({ player: 'p1', before: 7 })
+
+    expect(url(fetchImpl)).toBe('/api/gm/actions?player=p1&before=7')
+    expect(init(fetchImpl).method).toBe('GET')
+    expect(headers(fetchImpl)['x-requested-with']).toBeUndefined()
+  })
+
+  it('asks for the bare log when no filter is given', async () => {
+    const fetchImpl = ok({ actions: [], nextBefore: null })
+    await apiOf(fetchImpl).gmActions()
+
+    expect(url(fetchImpl)).toBe('/api/gm/actions')
+  })
+
+  it.each([
+    ['gmGrantItem', ['p1', 'head_crown', 'tặng'], '/api/gm/players/p1/items', { itemId: 'head_crown', reason: 'tặng' }],
+    ['gmGrantWardrobe', ['p1', 'tặng'], '/api/gm/players/p1/items', { all: true, reason: 'tặng' }],
+    ['gmLock', ['p1', 'gian lận'], '/api/gm/players/p1/lock', { reason: 'gian lận' }],
+    ['gmUnlock', ['p1', 'nhầm'], '/api/gm/players/p1/unlock', { reason: 'nhầm' }],
+    ['gmSetRole', ['p1', 'gm', 'tin cậy'], '/api/gm/players/p1/role', { role: 'gm', reason: 'tin cậy' }],
+    ['gmKick', ['r1', 'p2', 'ồn ào'], '/api/gm/rooms/r1/kick', { playerId: 'p2', reason: 'ồn ào' }],
+    ['gmCloseRoom', ['r1', 'bảo trì'], '/api/gm/rooms/r1/close', { reason: 'bảo trì' }],
+  ])('%s POSTs %s with the CSRF header', async (method, args, path, expected) => {
+    const fetchImpl = ok({})
+    await (apiOf(fetchImpl) as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>)[method]!(...(args as unknown[]))
+
+    expect(url(fetchImpl)).toBe(path)
+    expect(init(fetchImpl).method).toBe('POST')
+    expect(headers(fetchImpl)['x-requested-with']).toBe(REQUESTED_WITH)
+    expect(body(fetchImpl)).toEqual(expected)
+  })
+
+  it.each([
+    ['gmOverview', [], '/api/gm/overview'],
+    ['gmPlayer', ['p 1'], '/api/gm/players/p%201'],
+    ['gmPlayerLedger', ['p1', { limit: 50, before: 41 }], '/api/gm/players/p1/ledger?limit=50&before=41'],
+    ['gmPlayerHistory', ['p1', 20], '/api/gm/players/p1/history?limit=20'],
+    ['gmRooms', [], '/api/gm/rooms'],
+    ['gmRoom', ['r1'], '/api/gm/rooms/r1'],
+  ])('%s GETs %s with no CSRF header', async (method, args, path) => {
+    const fetchImpl = ok({})
+    await (apiOf(fetchImpl) as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>)[method]!(...(args as unknown[]))
+
+    expect(url(fetchImpl)).toBe(path)
+    expect(init(fetchImpl).method).toBe('GET')
+    expect(headers(fetchImpl)['x-requested-with']).toBeUndefined()
+  })
+
+  it('keeps the reason a locked account is refused with, beside the code', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(403, { error: { code: 'ACCOUNT_LOCKED', message: 'locked' }, reason: 'gian lận' }))
+
+    const err = (await apiOf(fetchImpl)
+      .login({ email: 'a@b.c', password: 'x' })
+      .catch((e: unknown) => e)) as ApiError
+
+    expect(err.code).toBe('ACCOUNT_LOCKED')
+    expect(err.extra).toEqual({ reason: 'gian lận' })
+  })
+})

@@ -298,4 +298,10 @@ describe('identityForToken', () => {
     const { token } = await sessionService.create(user!.id, undefined)
     expect(await auth.identityForToken(token)).toBeNull()
   })
+
+  it('returns null for a locked account whose session survived, so it cannot open a socket', async () => {
+    const { userId, token } = await auth.register(GOOD)
+    await db.update(users).set({ lockedAt: new Date(), lockedReason: 'test' }).where(eq(users.id, userId))
+    expect(await auth.identityForToken(token)).toBeNull()
+  })
 })

@@ -26,6 +26,7 @@ import { buildApp } from './app.js'
 import { CONFIG_DEFAULTS, type NormalConfig } from './config.js'
 import { packageRoot } from './db/migrate.js'
 import { createTestDb } from './db/test-db.js'
+import { promoteRoute } from './e2e-promote.js'
 import { CHEAP_ARGON2 } from './test-harness.js'
 
 /** Kept in step with `apps/normal-web/e2e/playwright.config.ts`, which is the only caller. */
@@ -68,6 +69,8 @@ const app = await buildApp({
   pingDb: () => Promise.resolve(true),
   log,
   argon2Params: CHEAP_ARGON2,
+  // Test-only (the ops pack has no CLI on the browser side): never part of dist/.
+  extraRoutes: promoteRoute(db),
 })
 
 const address = await app.fastify.listen({ port: config.port, host: config.host })

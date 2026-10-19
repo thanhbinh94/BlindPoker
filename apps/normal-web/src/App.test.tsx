@@ -14,7 +14,7 @@ import { makeI18n, renderWithI18n } from './test-i18n.js'
 /** ui-kit's `game` namespace, quoted rather than imported: the app must not reach into the kit's sources. */
 const ROOMS_HEADING = 'Phòng chơi'
 
-const ME: AuthMeDto = { playerId: 'p1', displayName: 'Bình', balance: 123_000 }
+const ME: AuthMeDto = { playerId: 'p1', displayName: 'Bình', balance: 123_000, role: 'player' }
 const UNAUTHORIZED = new ApiError(401, 'UNAUTHENTICATED', 'a valid session cookie is required')
 
 function stubApi(overrides: Partial<NormalApi> = {}): NormalApi {
@@ -28,6 +28,8 @@ function stubApi(overrides: Partial<NormalApi> = {}): NormalApi {
     // are about the shell and the session, and a screen that never resolves still draws its own heading.
     me: vi.fn(() => new Promise<never>(() => undefined)),
     daily: vi.fn(() => new Promise<never>(() => undefined)),
+    // The console's first tab asks for this on arrival; hanging draws the heading, which is all the route test reads.
+    gmOverview: vi.fn(() => new Promise<never>(() => undefined)),
     // The rig every chibi is drawn on: fetched once for the app's whole lifetime, and irrelevant to every
     // case in this file — none of them ever look at a face.
     avatarCatalog: vi.fn().mockResolvedValue({ frame: { w: 384, h: 448 }, crop: { x: 88, y: 40, size: 208 }, bodies: [], manifestVersion: 1 }),
@@ -447,7 +449,7 @@ describe('App — a session that ends under the player', () => {
     // A shared machine: A signs out, B signs in, and the socket has not greeted yet. Everything the bar
     // draws — the name, the points — must already be B's, because the alternative is showing B the
     // stranger's name and balance for as long as the new socket takes to open.
-    const other: AuthMeDto = { playerId: 'p2', displayName: 'Lan', balance: 7_000 }
+    const other: AuthMeDto = { playerId: 'p2', displayName: 'Lan', balance: 7_000, role: 'player' }
     const api = stubApi({ login: vi.fn().mockResolvedValue(other) })
     window.history.replaceState(null, '', '/#/settings')
     const user = userEvent.setup()
@@ -703,5 +705,79 @@ describe('websocketUrl', () => {
   it('follows the page it was served from, upgrading to wss over https', () => {
     expect(websocketUrl({ protocol: 'https:', host: 'bind.example' })).toBe('wss://bind.example/ws')
     expect(websocketUrl({ protocol: 'http:', host: 'localhost:5173' })).toBe('ws://localhost:5173/ws')
+  })
+})
+
+describe('App — the GM console route', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    FakeSocket.reset()
+    window.history.replaceState(null, '', '/')
+  })
+
+  it('is an account route, so it sits behind the rail and out of the entry bundle', () => {
+    expect(ACCOUNT_ROUTES).toContain('/gm')
+  })
+
+  it('sends a player who types #/gm to the lobby, replacing the entry so Back is not trapped', async () => {
+    window.history.replaceState(null, '', '/#/gm')
+    const entries = window.history.length
+    const heard: string[] = []
+    const onHashChange = (event: HashChangeEvent): void => void heard.push(new URL(event.newURL).hash)
+    window.addEventListener('hashchange', onHashChange)
+    onTestFinished(() => window.removeEventListener('hashchange', onHashChange))
+    renderApp()
+    await settled()
+    await welcome()
+
+    await waitFor(() => expect(window.location.hash).toBe('#/lobby'))
+    expect(await screen.findByRole('heading', { name: ROOMS_HEADING })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: viNormal.gm.title })).toBeNull()
+    expect(heard).toEqual(['#/lobby'])
+    // A pushed entry would leave `#/gm` one step back, and Back would redirect the player forward again.
+    expect(window.history.length).toBe(entries)
+  })
+
+  it('opens the console for a game master', async () => {
+    window.history.replaceState(null, '', '/#/gm')
+    renderApp(stubApi({ authMe: vi.fn().mockResolvedValue({ ...ME, role: 'gm' }) }))
+    await settled()
+    await welcome()
+
+    expect(await screen.findByRole('heading', { name: viNormal.gm.title })).toBeInTheDocument()
+    expect(window.location.hash).toBe('#/gm')
+    expect(screen.getByRole('navigation', { name: viNormal.nav.main })).toBeInTheDocument()
+  })
+
+  it('hands a game master the entry in Settings, and a player none', async () => {
+    window.history.replaceState(null, '', '/#/settings')
+    renderApp(stubApi({ authMe: vi.fn().mockResolvedValue({ ...ME, role: 'gm' }) }))
+    await settled()
+    await welcome()
+
+    expect(await screen.findByRole('link', { name: viNormal.settings.gm })).toHaveAttribute('href', '#/gm')
+  })
+
+  it('re-reads the role when a promotion lands, so the Settings entry appears without a reload — and only then', async () => {
+    window.history.replaceState(null, '', '/#/settings')
+    const authMe = vi.fn().mockResolvedValueOnce(ME).mockResolvedValue({ ...ME, role: 'gm' })
+    renderApp(stubApi({ authMe }))
+    await settled()
+    await welcome()
+    expect(screen.queryByRole('link', { name: viNormal.settings.gm })).toBeNull()
+
+    // A notice that changes no role asks nothing.
+    await act(async () => {
+      socket().receive({ t: 'NOTIFICATION', kind: 'GM_NOTICE', payload: { action: 'grant_wardrobe', reason: 'quà' } })
+    })
+    expect(authMe).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      socket().receive({ t: 'NOTIFICATION', kind: 'GM_NOTICE', payload: { action: 'promote', reason: 'giúp việc' } })
+    })
+    expect(await screen.findByRole('link', { name: viNormal.settings.gm })).toHaveAttribute('href', '#/gm')
+    expect(authMe).toHaveBeenCalledTimes(2)
+    // The toast says what happened, in the app's words.
+    expect(await screen.findByText(/Bạn đã được trao quyền quản trị — giúp việc/)).toBeInTheDocument()
   })
 })

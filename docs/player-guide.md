@@ -85,6 +85,17 @@ Bản Normal: mở "Hồ sơ".
 
 Bản Lite: máy chủ giữ tên hiển thị, số dư và chuỗi điểm danh của bạn, nhưng không có hồ sơ, lịch sử hay thống kê để xem. Máy chủ nhận ra bạn nhờ một mã lưu trong trình duyệt. Nếu bạn xóa dữ liệu trang, đổi trình duyệt hay đổi thiết bị, bạn sẽ thành người chơi mới với 100.000 điểm, còn tên cũ vẫn bị giữ nên không dùng lại được.
 
+### Tài khoản bị khóa và thông báo từ quản trị
+
+Bản Normal có **quản trị viên**: những người được người quản lý máy chủ giao việc trông coi trò chơi. Họ không chơi thay bạn và không xem được bài của bạn. Việc họ làm được và bạn sẽ thấy:
+
+- **Cộng hoặc trừ điểm, cấp một món đồ.** Bạn nhận một thông báo nhỏ kiểu "Quản trị viên: +12.000 điểm — thưởng giải" (hoặc tên món đồ kèm lý do). Lý do luôn có: quản trị viên không làm được gì mà không ghi lý do. Dòng tương ứng hiện trong "Hồ sơ", mục "Lịch sử điểm", là "Quản trị viên cộng điểm" hoặc "Quản trị viên trừ điểm". Số dư không bao giờ bị trừ xuống dưới 0.
+- **Mời bạn ra khỏi phòng.** Bạn thấy "Bạn đã bị mời ra khỏi phòng" và thông báo của quản trị viên kèm lý do. Nếu lúc đó bạn đang giữa một ván, bạn bị bỏ bài ngay và rời bàn khi ván kết thúc; điểm trên bàn vẫn về số dư của bạn như mọi lần rời bàn.
+- **Đóng phòng.** Mọi người trong phòng được báo "Phòng đã đóng" và trở về "Sảnh chờ". Ván đang chơi bị hủy, cược được hoàn lại và stack của từng người về số dư.
+- **Khóa tài khoản.** Bạn bị đăng xuất khỏi mọi thiết bị, rời bàn đang ngồi (điểm trên bàn về số dư) và không đăng nhập được nữa. Khi thử đăng nhập, màn hình báo "Tài khoản đã bị khóa" kèm lý do. Số dư, đồ và thành tựu vẫn nguyên; khi quản trị viên "Mở khóa", bạn đăng nhập lại bình thường.
+
+Nếu bạn nghĩ mình bị khóa nhầm, hoặc thấy một khoản điểm không rõ, hãy hỏi người quản lý máy chủ và nhắc đúng lý do hiện trên màn hình. Mọi việc quản trị viên làm đều nằm trong một nhật ký mà người quản lý có thể xem lại. Bản Lite không có tài khoản nên không có quản trị viên và không có khóa.
+
 ## 3. Sảnh và phòng
 
 "Sảnh chờ" hiện các phòng công khai dưới mục "Phòng chơi", tự cập nhật, lọc được bằng "Tất cả", "Texas Hold'em" hoặc "Blind Poker". Mỗi phòng hiện thành một thẻ, ghi:
@@ -341,6 +352,7 @@ Trang "Cài đặt" của **bản Lite** có "Giao diện", "Ngôn ngữ", "Phi�
 | Bạn gặp | Lý do và cách xử lý |
 |---|---|
 | (bản Normal) "Email hoặc mật khẩu không đúng" | Kiểm tra lại email và mật khẩu. Chưa có chức năng lấy lại mật khẩu. |
+| (bản Normal) "Tài khoản đã bị khóa" kèm một lý do | Quản trị viên đã khóa tài khoản này. Số dư, đồ và thành tựu vẫn còn. Hỏi người quản lý máy chủ; khi tài khoản được mở khóa, bạn đăng nhập lại như bình thường (mục 2, "Tài khoản bị khóa và thông báo từ quản trị"). |
 | "Bạn thử quá nhiều lần" | Bạn đã thử đăng nhập, đăng ký (hoặc nhập tên ở bản Lite) quá nhiều lần liền; đợi một lát (bản Normal ghi số giây) rồi thử lại. |
 | (bản Normal) "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại." | Đăng nhập lại bằng email và mật khẩu; điểm và đồ của bạn vẫn còn nguyên. |
 | Bài hiện ra ngay, không trượt hay lật | Máy đang bật giảm chuyển động. Xem cách bật lại hiệu ứng ở cuối mục 6. |

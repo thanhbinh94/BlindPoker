@@ -16,7 +16,7 @@ import { makeI18n, renderWithI18n } from './test-i18n.js'
  * every case here stops at the lobby, so none of it depends on how the sign-in card is spelled.
  */
 
-const ME: AuthMeDto = { playerId: 'p1', displayName: 'Bình', balance: 123_000 }
+const ME: AuthMeDto = { playerId: 'p1', displayName: 'Bình', balance: 123_000, role: 'player' }
 
 const EXPRESSIONS = ['neutral', 'happy', 'sad', 'surprised', 'closed', 'sleep'] as const
 const facesOf = (g: 'f' | 'm'): Record<string, string> => Object.fromEntries(EXPRESSIONS.map((e) => [e, `body_${g}_face_${e}_L50`]))

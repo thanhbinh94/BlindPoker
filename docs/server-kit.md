@@ -56,6 +56,36 @@ await server.balanceChanged(playerId) // after crediting points elsewhere
   next room they create or join seats them under the new name. A room they
   are already in keeps the name its seat was given.
 
+### Moderation: reaching a room or a socket from an edition (Plan 25)
+
+The Normal edition's GM console (spec 2026-10-18) needs three things `server-kit` owns and an edition cannot reach. They
+are public, small, and held by tests; an edition passes them on and decides nothing about rooms itself.
+
+- **`Room.adminKick(targetId): Promise<'now' | 'after_hand'>`** — like the host's `kick`, with the host check gone, and
+  with a different answer to a hand in progress. A host may be removed (the room passes to the next player, as when a
+  host leaves). A player seated between hands is removed at once through the usual cash-out, the stack going home. A
+  player dealt into the current hand is **not** refused (`kick` answers `GAME_IN_PROGRESS`): they are marked to leave when
+  the hand ends and folded now (`markAutoFold`), the money is conserved, and the answer is `'after_hand'`. The target
+  always receives `NOTIFICATION { kind: 'KICKED' }`. A bot is refused with `ILLEGAL_ACTION`. The removal is logged in the
+  room log as `'kicked_by_gm'` between hands; the after-hand removal goes through the ordinary leave path and is logged
+  as `'left'`, so the edition's own action log is the audit trail. A rejoin cannot cancel the after-hand removal: the
+  player is still a member until the hand ends, and the gateway refuses `JOIN_ROOM` from a member (`ALREADY_IN_ROOM`)
+  before `Room.join`'s rejoin branch is reached (`docs/known-limitations.md`).
+- **`Room.adminSummary(): AdminRoomSummary`** — the room as a GM lists it, with everything `summary()` hides from the
+  lobby and no cards: `roomId`, `code`, `name`, `mode`, `status`, `isPrivate`, `hasPassword`, `players`, `maxPlayers`,
+  `hostPlayerId`, `hostDisplayName`, `carryOverPot` (a release still pending counts), `handInProgress`, `createdAt`, and
+  `members` (`playerId`, `displayName`, `isBot`, `seat`, `stack`, `connected`). `Room.createdAt` is new for it.
+- **`Gateway.disconnect(playerId, code = 4003, reason = 'LOCKED'): number`** — closes the socket that player holds and
+  returns how many it closed (the gateway keeps one bound connection per player, so 0 or 1). **Close code 4003
+  `LOCKED`** is the new one beside 4001 `UNAUTHENTICATED`: the account was locked. The kit's client has no special case
+  for it: the edition has revoked the sessions too, so the reconnect is refused at the upgrade, and the web client's
+  reconnect probe (`GET /api/auth/me`) gets a 401 and ends the session. The edition sends its notice first and
+  disconnects after.
+
+Closing a room needs nothing new: `Room.shutdown(reason)` already refunds every stack and releases the carried pot.
+`TxReason` gained `gm_grant` and `gm_adjust` for the edition's ledger; core and the wire protocol are untouched (a new
+`NOTIFICATION` `kind` rides the open channel of spec §20.4).
+
 ### `SessionResolver`
 
 Two independent, optional hooks turn a connection into a `PlayerIdentity`;

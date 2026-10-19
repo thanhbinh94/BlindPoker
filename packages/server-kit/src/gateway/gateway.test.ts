@@ -454,3 +454,13 @@ describe('shutdown', () => {
     await expect(TestClient.connect(ts.url)).rejects.toThrow(/503/) // no new sockets after shutdown
   })
 })
+
+describe('Gateway.disconnect (Plan 25)', () => {
+  it('disconnect(playerId) closes that player’s socket with the code given and returns how many it closed', async () => {
+    ts = await startTestServer()
+    const a = await connect('a')
+    expect(ts.server.gateway.disconnect('a')).toBe(1)
+    expect(await a.closed).toMatchObject({ code: 4003, reason: 'LOCKED' })
+    expect(ts.server.gateway.disconnect('nobody')).toBe(0)
+  })
+})

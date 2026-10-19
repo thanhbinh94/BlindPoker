@@ -24,6 +24,8 @@ src/
   main.ts            entry point: env → config → pool → migrate → buildApp → listen → SIGTERM
   migrate-cli.ts     the same config load, then migrations only, then exit
   grant-wardrobe-cli.ts  operator tool: give one account every catalogue item (DATABASE_URL only)
+  grant-gm-cli.ts    operator tool: make an account a GM, or take the role back (--revoke); DATABASE_URL only
+  e2e-entry.ts       the e2e server's own entry; e2e-promote.ts is its one extra route (never in dist/)
   app.ts             buildApp(): wiring, in the one order that works (below)
   config.ts          loadConfig(env) — reports every problem at once, then throws
   trust-proxy.ts     TRUST_PROXY parsing, and the client address for the WS upgrade Fastify never sees
@@ -54,12 +56,15 @@ src/
   achievements/      definitions.ts (loader) · achievement-service.ts (listens, grants)
   stats/             player-stats.ts (the 16 counters) · stats-service.ts (listens, counts)
   history/           history-service.ts (writes a settled hand, reads a player's last N)
-  http/              routes.ts + routes-auth/-me/-rewards/-catalog/-outfits.ts · auth-guard.ts · types.ts
+  gm/                gm-service.ts (points, items, lock, role, reads, the action log) · gm-rooms.ts (list, kick, close:
+                     a thin layer over the live rooms) · grant-gm.ts (the CLI's logic) · mask-email.ts
+  http/              routes.ts + routes-auth/-me/-rewards/-catalog/-outfits/-gm.ts · auth-guard.ts · types.ts
 
 data/                items.json, item-aliases.json, avatar-bodies.json, achievements.json, daily-gifts.json — content, not code
                       avatar-manifest.json — Task 1's asset pipeline output, mirrored from normal-web
 drizzle/             committed migration SQL (0000 generated; 0001_avatar_v2, 0002_outfits hand-written, data only;
-                      0003_ledger_keys generated, then guarded with IF NOT EXISTS — the keys `balances.apply` claims)
+                      0003_ledger_keys generated, then guarded with IF NOT EXISTS — the keys `balances.apply` claims;
+                      0004_gm generated, then guarded with IF NOT EXISTS — users.role, locked_at, locked_reason and gm_actions)
 test/build.test.ts   the build itself, as a test
 ```
 
@@ -135,7 +140,7 @@ inside a transaction, and the `players.balance` update and its ledger rows are w
 | --- | --- |
 | `player_id` | The player, **or NULL for a sink row**: points that left balances and went to no player. |
 | `amount` | Signed, from the player's point of view. A sink row records the amount *positively* — "this many points left player balances". |
-| `reason` | What kind of movement this was. `settlement`, `table_fee`, `daily`, `daily_item_fallback`, `relief`, `achievement`, … |
+| `reason` | What kind of movement this was. `settlement`, `table_fee`, `daily`, `daily_item_fallback`, `relief`, `achievement`, `gm_grant`, `gm_adjust`, … The last two are a GM's (Plan 25): both are **sources** like `daily`, and their `ref_id` is `gm:<gm_actions.id>`, so the ledger row and the log row point at each other. |
 | `ref_id` | What it was about: a `handId`, a room id, a claim id. Indexed, because "did this hand's settlement already land?" is a question reconciliation asks. |
 | `kind` | Set on sink rows only. |
 
@@ -477,6 +482,75 @@ twice`: JSON keeps only the last of two equal keys, so a copied month whose key 
 the first); a top-level key other than `default` and `months`; no `default`. A file that is not JSON is
 `could not read daily gift schedule <path>: …`. One thing it cannot see: two equal *tier* keys inside one month — JSON
 again keeps the last, silently.
+
+## The GM role
+
+Spec: `docs/superpowers/specs/2026-10-18-gm-role-design.md`; SRS §10.2, §18.2, §19.2, §20.2, §23, §27.2.
+
+**Tables.** `users` carries `role` (`player` | `gm`, a CHECK), `locked_at` and `locked_reason`: the login account holds
+them, not `players`, because a lock blocks sign-in and a role belongs to whoever holds the password. `gm_actions` is the
+append-only log (`actor_user_id` NULL means the CLI; `target_player_id` and `actor_user_id` are `ON DELETE SET NULL`, so a
+row outlives the accounts it names; `action` is free text in SQL, with the kinds held by `GmActionKind` in TypeScript).
+Migration `drizzle/0004_gm.sql` is additive and guarded with `IF NOT EXISTS`; the index names carry `_idx`
+(`gm_actions_created_idx`, `gm_actions_target_idx`).
+
+**The guard.** `requireGm` (`http/auth-guard.ts`) runs `requireUser` and then checks `req.user.role`, which `requireUser`
+read from the database on this very request (`RequestUser.role`). A locked account is treated as signed out by the same
+path, and `identityForToken` refuses it, so a session that survived a lock still cannot open a socket. Nothing is cached:
+a demotion or a lock is effective on the player's next request.
+
+**`gm/gm-service.ts`.** Every write validates first (a reason of 3 to 200 characters, an amount within `POINTS_CAP`
+10,000,000, a known non-free item), then does the effect and its `gm_actions` row in **one transaction**, and only after
+the commit sends `BALANCE`, the `GM_NOTICE`, revokes sessions, kicks and closes the socket. A lock runs in that order:
+`sessions.revokeAll`, `Room.adminKick`, the notice, `Gateway.disconnect` (close code 4003 `LOCKED`); a failing revocation
+or kick is warned and the remaining steps still run, because the lock is committed. Points move through
+`creditWithin` with reason `gm_grant` (positive) or `gm_adjust` (negative); a deduction past the balance is refused whole,
+no log row either. Refusals worth knowing: `INVALID_REASON` (400, any POST without a usable reason), `INVALID_AMOUNT`,
+`INVALID_ITEM`, `INVALID_ROLE`, `INSUFFICIENT_BALANCE` (409), `ALREADY_LOCKED` / `NOT_LOCKED` / `LAST_GM` (409),
+`TARGET_IS_LOCKED` (409, promoting a locked account), `SELF_TARGET` and `TARGET_IS_GM` (403). **Lock order of a role
+change:** a demotion first locks every GM row in id order (`select id from users where role = 'gm' order by id for
+update`) and only then the target's row, the same as `grantGm --revoke`; every demotion takes its locks in that one order,
+so two GMs demoting each other serialise and the second answers `LAST_GM` instead of deadlocking. Search takes a lowercase email prefix or part of a display name, masks the address
+(`mask-email.ts`), and lists every account for an empty query (capped at 100). Inside a transaction only `tx` is used:
+PGlite serves `query()` and `transaction()` through one lock, so a plain-`db` read there would wait on itself.
+
+**`gm/gm-rooms.ts`** is a thin layer over the live rooms: `list()` (private rooms included, closed ones skipped), `get()`,
+`kick()` (`Room.adminKick`, so `'now'` or `'after_hand'`; a bot is refused) and `close()` (`Room.shutdown('closed_by_gm')`,
+which returns every stack and any carried pot through the room's own cash-out). Rooms are in memory, so these are not
+transactional: a close is logged first and a failed close adds a second line with `details.error`; a kick is logged once,
+after the deed, with `details.effective` (`now` or `after_hand`) or the reason it failed; if that log write fails after a
+kick that happened, the route warns (`gm kick not logged`) and still answers `200 { effective }`. Only a `RoomError` from
+the room becomes a 4xx; anything else is rethrown and stays a 500. The GM's reason stays in the
+log; the broadcast reason is the fixed string `closed_by_gm`.
+
+**Routes.** `http/routes-gm.ts` mounts fifteen routes under `/api/gm/` behind `requireGm`, with CSRF and the `/api/*`
+rate limits as usual. `GET /api/gm/rooms/:id` returns the `AdminRoomSummary` (members included), not `room.view()`.
+Search is a `POST` so an address never sits in a URL or an access log.
+
+**Test hook.** `AppDeps.extraRoutes` mounts extra routes on the built app. Only the e2e entry uses it, for
+`POST /e2e/promote` (`src/e2e-promote.ts`, loopback only, behind CSRF); that file is not in `tsconfig.build.json` and
+`test/build.test.ts` proves `dist/` has no such route.
+
+### Granting the first GM
+
+Only a GM can promote, so the first one is made on the server, with the CLI. It reads `DATABASE_URL` from the environment
+or from `.env` in the working directory, and writes a `gm_actions` row with no actor and the reason `cli`:
+
+```bash
+node dist/grant-gm-cli.js <email>             # make the account a GM (a second run changes nothing)
+node dist/grant-gm-cli.js <email> --revoke    # take the role back; refused for the only GM
+```
+
+The account must already exist: sign up on the site first. On the VPS stack run it inside the container:
+`docker compose exec app node dist/grant-gm-cli.js <email>` (`docs/deployment-normal.md` §5). On the Windows LAN host, set
+`DATABASE_URL` from the kit's `.env` the way `deploy/normal-windows/README.md` §9b does for `grant-wardrobe-cli`, then run
+the same command (§9d there). Exit code 1 for an unknown address, the last GM or a locked account (unlock it first), 2 for a
+usage or configuration problem. It writes the user's database, so the operator runs it, not an automated session.
+
+A GM then promotes and demotes others on the "Quản trị" screen. A GM cannot change their own role, and the last GM cannot
+be demoted.
+
+---
 
 ## Adding an achievement
 
