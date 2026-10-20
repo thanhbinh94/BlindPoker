@@ -94,8 +94,11 @@ trượt ("the dealer's left hand has six fingers; draw five"), tối đa ba l�
 3. Duyệt theo §5. Đạt thì tải về (người dùng cho phép từng lần) vào `assets/login-hero-src/`, đặt tên
    `YYYY-MM-DD-vN.png`; trượt thì thêm dòng sửa và gửi tiếp trong cùng cuộc trò chuyện.
 4. Hết lượt sinh ảnh hoặc gặp CAPTCHA: dừng, báo người dùng. Không giải CAPTCHA.
-5. Xuất bản dùng: `sharp`/`squoosh` ra `hero.webp` (1536) và `hero@768.webp`, kiểm cỡ tệp, rồi ghi tên tệp và
-   địa chỉ cuộc trò chuyện vào §7.
+5. Xuất bản dùng: chạy `pnpm --filter @bp/normal-web login:hero` (`apps/normal-web/scripts/login-hero.mjs`, `sharp`,
+   WebP chất lượng 82). Lệnh ra hai tệp trong `apps/normal-web/public/login/`: `hero-1536.webp` (1536 × 1024, ngân
+   sách 250 KB) và `hero-768.webp` (768 × 512, ngân sách 90 KB), và in cỡ từng tệp; quá ngân sách thì lệnh thoát với
+   mã 1, khi đó hạ `QUALITY` trong tệp lệnh xuống 76 và ghi lại vào §7. Muốn dùng bản khác thì đổi `SRC` trong tệp lệnh.
+   Rồi ghi tên tệp và địa chỉ cuộc trò chuyện vào §7.
 
 ## 7. Nhật ký các lần sinh
 
@@ -103,6 +106,10 @@ trượt ("the dealer's left hand has six fingers; draw five"), tối đa ba l�
 |---|---|---|---|---|
 | 2026-10-20 | V1 | `https://chatgpt.com/c/6ad65e04-f7d0-83ec-816e-b3dbff11deb6` | đạt 5/7: năm lá bài chung có chấm không khớp số; mép dưới và 1/3 phải nhiều phỉnh | `assets/login-hero-src/2026-10-20-v1.png` (ChatGPT đặt tên "Midnight Poker_ Aces and Intrigue") |
 | 2026-10-20 | V2 | `https://chatgpt.com/c/6ad65f6c-91e4-83ec-b0d8-4664da333c82` | đạt 7/7 (ghế trống hơi to, chấp nhận); **đề xuất dùng** | `assets/login-hero-src/2026-10-20-v2.png` ("Midnight Poker in Golden Light") |
+
+Xuất bản dùng (2026-10-20, từ V2, `login:hero`, chất lượng 82): `apps/normal-web/public/login/hero-1536.webp`
+(1536 × 1024, 178,0 KB) và `apps/normal-web/public/login/hero-768.webp` (768 × 512, 66,4 KB); cả hai nằm trong git và
+được phục vụ ở `/login/hero-1536.webp`, `/login/hero-768.webp`. Không cần hạ xuống chất lượng 76.
 
 Prompt V2 đã gửi khác prompt chính ở ô 3 (tâm điểm nặn bài, "few cards on the table, no community cards face up; a
 modest pot of chips in the centre") và thêm "no numbers" vào dòng loại trừ. Việc bỏ bài chung ngửa là lý do V2 sạch
