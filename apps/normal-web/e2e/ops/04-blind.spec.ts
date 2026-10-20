@@ -460,13 +460,13 @@ async function squeezeFitsPhone({ id, mode, what, shot }: { id: string; mode: 'H
   // Both cards, the pill and the timer sit whole inside the screen, above the tray (which covers the foot of the stage).
   const tray = (await page.locator('footer').last().boundingBox())!
   const parts: [string, Locator][] = [['card 1', mine.first()], ['card 2', mine.last()], ['the Lật pill', pill], ['the timer', timer]]
-  for (const [what, part] of parts) {
+  for (const [label, part] of parts) {
     const box = await part.boundingBox()
-    expect(box, `${what} has a box`).not.toBeNull()
-    expect(box!.x, `${what} starts inside the screen`).toBeGreaterThanOrEqual(0)
-    expect(box!.y, `${what} starts inside the screen`).toBeGreaterThanOrEqual(0)
-    expect(box!.x + box!.width, `${what} ends inside the screen`).toBeLessThanOrEqual(PHONE_SCREEN.width)
-    expect(box!.y + box!.height, `${what} ends above the tray`).toBeLessThanOrEqual(tray.y + 1)
+    expect(box, `${label} has a box`).not.toBeNull()
+    expect(box!.x, `${label} starts inside the screen`).toBeGreaterThanOrEqual(0)
+    expect(box!.y, `${label} starts inside the screen`).toBeGreaterThanOrEqual(0)
+    expect(box!.x + box!.width, `${label} ends inside the screen`).toBeLessThanOrEqual(PHONE_SCREEN.width)
+    expect(box!.y + box!.height, `${label} ends above the tray`).toBeLessThanOrEqual(tray.y + 1)
   }
   // And the room holds on the phone: nothing scrolls sideways, neither the page nor the stage scrolls down, the viewer's
   // plate keeps to its lines with the name whole beside the round's timer, and no text lands on text.

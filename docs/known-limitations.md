@@ -537,6 +537,19 @@ check on a real device is still to do: the spec's §8 asks for a hand test of th
 *Why it stays:* a device is needed, and the e2e projects are Chromium only.
 *Tracked:* `docs/superpowers/specs/2026-10-08-card-motion-squeeze-design.md` §8; `CHANGELOG.md` (Plan 21).
 
+**The squeeze table's "Lật" pill is small, and it lies over the cards (Plan 26, B6).** The pill no longer takes a row of its
+own: it is laid over the foot of the viewer's card pair, centred, so that a play-or-fold squeeze table fits a 375 × 812
+phone (its stage scrolled 11 px). On a phone it is 40 × 28 px, under the 44 px tap rule, and it covers the inner bottom
+corners of the two cards, so a peel cannot start there. A touch started 9 px from the pill still reaches the card in
+Chromium (F-12 and F-12b start the peel at the left card's bottom-left corner); a real thumb, with a bigger contact patch,
+is untested. On a desktop the pill overlays the bottom centre of the pair: while the other card is still down, the
+bottom index of a face-up card can be hidden, and its top index stays readable. The squeeze header on a phone is still
+three lines (the badge now sits beside the room's name, and the head-count is hidden under 481 px); the stage fits anyway.
+*Why it stays:* a wider pill, or hit-slop around it, brings back the peel/pill hit-test conflict F-12 found (a touch 6 px
+from a 48 px pill landed on the pill and the peel never started); a two-line header needs a second phone layout of it.
+*Tracked:* `apps/normal-web/e2e/ops/04-blind.spec.ts` → F-12 / F-12b; `docs/ui-kit.md` (The squeeze). By hand: start a peel at
+the bottom-left of the left card on a real phone (iOS Safari, Chrome on Android).
+
 **A flick needs a run of movement to be read as one, on a device that does not coalesce pointer events.** The flick's
 speed is taken from the pointer's real and coalesced positions (`getCoalescedEvents`) over its last 100 ms, and a pointer
 with no new position for 40 ms has stopped — what came before the pause is no part of the flick. Where the browser
