@@ -1433,7 +1433,7 @@
    a box of a fixed width that stops short of the viewer's plate: that plate and its badge line are at most 30cqw of the
    ring, which is at most the room's width, so they reach at most 15 % either side of the centre, and each corner gets
    `35 %` of the room less its inset and an 8 px gap. The box is a size container: when the labels do not fit at full
-   size, the container queries below shrink them and drop the call's figure (the button's name keeps it). The box
+   size, the container queries below put each amount on a second line under its verb and tighten the type. The box
    itself lets taps through to the felt; only its children take them. */
 .tray[data-frame='landscape'] {
   position: static;
@@ -1531,19 +1531,39 @@
   }
 }
 
+/* A verb and its figure ("Theo 104.000", "Tố 208.000", "Chơi 1.000"), two spans in landscape: one line while the corner
+   has the width. */
+.btnAmount {
+  margin-left: 0.3em;
+  font-variant-numeric: tabular-nums;
+}
+
 /* The corner is narrower than "Bỏ bài · Theo 104.000 · Tố · Tất tay" (a 915 px phone gives 300 px, 844 px 275, 740 px
-   239): the call keeps its word and gives up its figure, which stays in the button's name and tooltip. */
+   239): the figure goes under its verb, on a second line in the same 48 px button (14 px + 12 px), so the button gets
+   narrower and the amount stays on screen — a phone has no hover for a tooltip. */
 @container (max-width: 330px) {
-  .trayCallFigure {
-    display: none;
+  .trayRight .trayRow > button {
+    flex-direction: column;
+    gap: 0;
+    line-height: 1.1;
+  }
+
+  .btnAmount {
+    margin-left: 0;
+    font-size: 0.75rem;
   }
 }
 
 /* Narrower still (a 740 × 360 phone): tighter padding and type, so the row and the presets each stay one line. */
 @container (max-width: 260px) {
+  /* "Bỏ bài · Theo/104.000 · Tố · Tất tay" in 239 px at 740 × 360: 6 px sides, 3 px gaps, 12.5 px type */
+  .trayRight .trayRow {
+    gap: 3px;
+  }
+
   .trayRight .trayRow > button {
-    padding: 0 var(--space-2);
-    font-size: 0.8125rem;
+    padding: 0 6px;
+    font-size: 0.78125rem;
   }
 
   .trayLeft .preset {

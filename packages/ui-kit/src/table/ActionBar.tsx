@@ -1,6 +1,6 @@
 import type { PlayerAction, RoomView } from '@bp/core'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ChangeEvent } from 'react'
+import type { ChangeEvent, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { PreActionKind } from '../client/preaction.js'
 import type { ClientHand, ClientSeat } from '../client/types.js'
@@ -243,22 +243,28 @@ export function ActionBar({
   const step = Math.max(1, Math.round((max - min) / SLIDER_STEPS))
 
   const wager = legal !== null && legal.callAmount > 0 ? legal.callAmount : (room.config.blind?.fixedWager ?? 0)
-  const playText = `${t('actions.play')} ${formatPoints(wager, lang)}`
   const callAmount = legal?.callAmount ?? 0
-  const callFull = callAmount > 0 ? `${t('actions.call')} ${formatPoints(callAmount, lang)}` : t('actions.call')
-  // Landscape: the figure is its own span, which a narrow corner hides (`.trayCallFigure`); the name and the tooltip
-  // keep the whole "Theo 104.000", so neither a screen reader nor a long press loses it.
-  const callFigure = callAmount > 0 ? ` ${formatPoints(callAmount, lang)}` : ''
-  const callText = landscape ? (
-    <>
-      {t('actions.call')}
-      {callFigure === '' ? null : <span className={s.trayCallFigure}>{callFigure}</span>}
-    </>
-  ) : (
-    callFull
-  )
-  const callLabel = landscape ? callFull : undefined
-  const submitText = `${t(canRaise ? 'actions.raise' : 'actions.bet')} ${formatPoints(value, lang)}`
+  /**
+   * A verb with its figure: "Theo 104.000". On the desktop it is one string, as it always was. In landscape the two are
+   * spans, so a narrow corner can stack the figure under the verb (`.btnAmount`, a container query) — the figure stays
+   * on screen, since a phone has no hover to show a tooltip — and the button's name is the whole phrase.
+   */
+  const labelled = (verb: string, amount: number | null): { children: ReactNode; label: string | undefined } => {
+    const full = amount === null ? verb : `${verb} ${formatPoints(amount, lang)}`
+    if (!landscape || amount === null) return { children: full, label: undefined }
+    return {
+      children: (
+        <>
+          <span>{verb}</span>
+          <span className={s.btnAmount}>{formatPoints(amount, lang)}</span>
+        </>
+      ),
+      label: full,
+    }
+  }
+  const play = labelled(t('actions.play'), wager)
+  const call = labelled(t('actions.call'), callAmount > 0 ? callAmount : null)
+  const submitLabel = labelled(t(canRaise ? 'actions.raise' : 'actions.bet'), value)
 
   const presetButtons = (
     <>
@@ -283,8 +289,8 @@ export function ActionBar({
       <Button variant="danger" size="lg" disabled={disabled} aria-keyshortcuts="F" onClick={() => emit({ kind: 'fold' })}>
         {t('actions.fold')}
       </Button>
-      <Button variant="gold" size="lg" disabled={disabled} className={s.grow} onClick={() => emit({ kind: 'play' })}>
-        {playText}
+      <Button variant="gold" size="lg" disabled={disabled} className={s.grow} aria-label={play.label} onClick={() => emit({ kind: 'play' })}>
+        {play.children}
       </Button>
     </div>
   )
@@ -309,11 +315,10 @@ export function ActionBar({
           size="lg"
           disabled={disabled}
           aria-keyshortcuts="C"
-          aria-label={callLabel}
-          title={callLabel}
+          aria-label={call.label}
           onClick={() => emit({ kind: 'call' })}
         >
-          {callText}
+          {call.children}
         </Button>
       ) : null}
       {sizing ? (
@@ -323,9 +328,10 @@ export function ActionBar({
           disabled={disabled}
           className={s.grow}
           aria-keyshortcuts="Enter"
+          aria-label={sizerShut ? undefined : submitLabel.label}
           onClick={sizerShut ? () => setSizerOpen(true) : submit}
         >
-          {sizerShut ? t(canRaise ? 'actions.raise' : 'actions.bet') : submitText}
+          {sizerShut ? t(canRaise ? 'actions.raise' : 'actions.bet') : submitLabel.children}
         </Button>
       ) : null}
       {/* Landscape, sizing: "Max" in the left corner raises everything, and the corner has no width for a fifth label. */}

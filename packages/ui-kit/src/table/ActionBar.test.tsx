@@ -213,14 +213,43 @@ describe('ActionBar in the landscape frame', () => {
     expect(within(inHand).getByRole('button', { name: 'Tự động chơi' })).toBeInTheDocument()
   })
 
-  it('keeps the call figure in the name and tooltip when a narrow corner hides it', () => {
-    // The right corner stops short of the viewer's plate; a container query hides `.trayCallFigure` when it is narrow.
-    wrap(<ActionBar hand={hand({ ...raiseLegal, callAmount: 104_000 })} room={room} onAct={() => {}} lang="en" frame="landscape" />)
+  it('shows the call and raise figures as visible text on a second line under the verb', async () => {
+    // A narrow corner stacks `.btnAmount` under its verb (a container query on `.trayRight`); it never hides it, since a
+    // phone has no hover for a tooltip. The button's name is the whole phrase.
+    const secondLine = (button: HTMLElement): HTMLElement => {
+      const [verb, amount] = Array.from(button.children) as HTMLElement[]
+      expect(verb, 'the verb comes first').toBeDefined()
+      expect(amount?.className).toMatch(/btnAmount/)
+      return amount!
+    }
+    wrap(<ActionBar hand={hand({ ...raiseLegal, callAmount: 104_000, minRaiseTo: 208_000, maxRaiseTo: 500_000 })} room={room} onAct={() => {}} lang="en" frame="landscape" />)
     const call = screen.getByRole('button', { name: 'Call 104,000' })
-    expect(call).toHaveAttribute('title', 'Call 104,000')
-    const figure = call.querySelector('[class*="trayCallFigure"]')
-    expect(figure).toHaveTextContent('104,000')
     expect(call.closest('[class*="trayRight"]')).not.toBeNull()
+    expect(call.children[0]).toHaveTextContent(/^Call$/)
+    const callFigure = secondLine(call)
+    expect(callFigure).toHaveTextContent(/^104,000$/)
+    expect(callFigure).toBeVisible()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Raise' }))
+    const raise = screen.getByRole('button', { name: 'Raise 208,000' })
+    expect(raise.children[0]).toHaveTextContent(/^Raise$/)
+    const raiseFigure = secondLine(raise)
+    expect(raiseFigure).toHaveTextContent(/^208,000$/)
+    expect(raiseFigure).toBeVisible()
+  })
+
+  it('stacks the Blind wager the same way, and leaves the desktop labels as one string', () => {
+    const blindRoom = { config: { mode: 'blind', blind: { fixedWager: 2000, decisionMode: 'playOrFold' } } } as unknown as RoomView
+    const deciding = hand({ seat: 1, kinds: ['play', 'fold'], callAmount: 2000, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 }, { mode: 'blind', phase: 'DECISION' })
+    const { unmount } = wrap(<ActionBar hand={deciding} room={blindRoom} onAct={() => {}} lang="en" frame="landscape" />)
+    const play = screen.getByRole('button', { name: 'Play 2,000' })
+    expect(play.querySelector('[class*="btnAmount"]')).toHaveTextContent('2,000')
+    unmount()
+
+    wrap(<ActionBar hand={hand({ ...raiseLegal, callAmount: 104_000 })} room={room} onAct={() => {}} lang="en" />)
+    const call = screen.getByRole('button', { name: 'Call 104,000' })
+    expect(call.querySelector('[class*="btnAmount"]')).toBeNull()
+    expect(call).not.toHaveAttribute('aria-label')
   })
 
   it('R opens the amount dialog in landscape', async () => {
