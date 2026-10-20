@@ -1,0 +1,7 @@
+# The AI-generated source pictures for the sign-in screen's hero image (docs/login-hero-art.md).
+# They are inputs, not project state: what ships is the resized WebP under
+# `apps/normal-web/public/login/`. The generation log (chat URL, variant, verdict) is in the doc.
+#
+# `!.gitignore` keeps this file committable; without it the rule would ignore itself.
+*
+!.gitignore
