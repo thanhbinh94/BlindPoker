@@ -547,9 +547,38 @@ kick that happened, the route warns (`gm kick not logged`) and still answers `20
 the room becomes a 4xx; anything else is rethrown and stays a 500. The GM's reason stays in the
 log; the broadcast reason is the fixed string `closed_by_gm`.
 
-**Routes.** `http/routes-gm.ts` mounts fifteen routes under `/api/gm/` behind `requireGm`, with CSRF and the `/api/*`
+**Routes.** `http/routes-gm.ts` mounts twenty-two routes under `/api/gm/` behind `requireGm`, with CSRF and the `/api/*`
 rate limits as usual. `GET /api/gm/rooms/:id` returns the `AdminRoomSummary` (members included), not `room.view()`.
 Search is a `POST` so an address never sits in a URL or an access log.
+
+**The second batch (Plan 26, spec 2026-10-20 Part A).** Four capabilities, seven of the twenty-two routes, all through the
+same door as the first batch: a reason of 3 to 200 characters first, the effect and its `gm_actions` row in one
+transaction, the player's `BALANCE` and `GM_NOTICE` only after the commit.
+
+- **Unlock an achievement.** `POST /api/gm/players/:id/achievements/:achievementId/unlock`. `unlockWithin`
+  (`achievements/achievement-service.ts`, the same function a self-earned unlock runs) pays the *full* reward under the
+  reason `gm_achievement` (ref `gm:<id>`) and grants the reward item through the inventory service. Refused: `INVALID_ACHIEVEMENT` (400), `ALREADY_UNLOCKED` (409), a locked target (409). The notice names the
+  achievement (`GM_NOTICE` with `achievementId`). `GmPlayerDetail.unlockedAchievementIds` lets the screen's picker grey out
+  what the player already has.
+- **Reset today's check-in.** `GET /api/gm/players/:id/checkin` previews it (`{ claimedToday, day, streak, points,
+  itemIds }`: what today's claim paid, so the dialog can name it); `POST …/checkin/reset` undoes it. Today's claim is the
+  **latest** one for the ref `daily:<playerId>:<date>`: its `daily_login` / `daily_item_fallback` rows are taken back as one
+  negative row `gm_checkin_undo` (a **negative source**, like `gm_adjust`: balance and ledger fall by the same amount, so
+  `Σ balances + Σ sinks` is conserved), its items are revoked (`InventoryService.revoke`, which also clears the slot, the
+  equipped title or badge, and strips the item from the player's saved outfits), `last_claim_date` is cleared and
+  `total_login_days` steps back by one (never below 0); the streak keeps its value, so the next claim is the same day and
+  draws afresh. Items found by `inventory.ref` (`findByRef`, set since migration 0005). Refused whole, nothing written, no
+  log row: `NOT_CLAIMED_TODAY`, `INSUFFICIENT_BALANCE` (the player has spent the points). A second reset after a reclaim
+  takes back one claim, not two.
+- **Edit the gift schedule.** The three `/api/gm/gifts` routes above, backed by `gift_months` and `GiftScheduleStore`.
+- **Sources and sinks per day.** `GET /api/gm/stats/daily?days=7|30` → exactly `days` entries, ascending, the last one
+  today, each `{ day, sources: { <reason>: n }, sinks: { <reason>: n }, net }` with empty days as zeros; any other span is
+  `400 INVALID_DAYS`.
+  `LedgerReader.sumsByDay` (`repos/balance-repo.ts`) groups `point_transactions` by `(created_at at time zone <tz>)::date`,
+  the same economy day the check-in uses; `GmService.dailyStats` classifies each reason as a source or a sink.
+
+Migration `drizzle/0005_plan26.sql` is additive and guarded: `gift_months`, `inventory.ref` and an index on
+`point_transactions(created_at)`. A deploy writes it once (`run.ps1` without `-NoMigrate`; Docker runs it at boot).
 
 **Test hook.** `AppDeps.extraRoutes` mounts extra routes on the built app. Only the e2e entry uses it, for
 `POST /e2e/promote` (`src/e2e-promote.ts`, loopback only, behind CSRF); that file is not in `tsconfig.build.json` and

@@ -326,7 +326,7 @@ the lock.** A player who types `#/gm` is sent to the lobby before the chunk is r
 `window.location.replace` so Back is not trapped on a redirecting entry), and a GM demoted or locked since the page loaded
 finds out on the next call.
 
-- **Four tabs** — Tổng quan, Người chơi, Phòng, Nhật ký. The Players tab stays mounted (hidden) while one player's page is
+- **Five tabs** — Tổng quan, Người chơi, Phòng, Quà tháng, Nhật ký. The Players tab stays mounted (hidden) while one player's page is
   open, so Back returns to the same search, results and cursor with no request.
 - **The 403 proxy.** `useAsync` swallows the cause of a failure, so a tab cannot notice that the role is gone. `GmScreen`
   wraps the api in a `Proxy` that checks each call's rejection: a `403 FORBIDDEN` calls `onForbidden` once (a tab firing
@@ -348,8 +348,31 @@ finds out on the next call.
   (`gm.notice.promote`, `demote`, `wardrobe`); a lock or a kick keeps the GM's words alone. The kit's `Toasts` interpolates `reason`
   (`notify.GM_NOTICE`). A locked account is refused at sign-in with `ACCOUNT_LOCKED` and the reason
   (`auth.errors.ACCOUNT_LOCKED`).
+- **Two more actions on a player's page (Plan 26).** "Mở thành tựu" opens the `ReasonDialog` with a native `<select>`
+  labelled "Thành tựu" (`fields.achievement`: every definition by its Vietnamese name, the ones the player already has
+  disabled, from `GmPlayerDetailDto.unlockedAchievementIds`). "Đặt lại điểm danh" is enabled only once
+  `GET /api/gm/players/:id/checkin` says the player has claimed today; its dialog body is computed, not keyed: it names
+  the points (`formatPoints`) and the items the reset takes back (`gm.dialog.checkinBody`, `gm.dialog.noItems`). The
+  player's toast reads "GM đã mở thành tựu "…" cho bạn." / "Lượt điểm danh hôm nay đã được mở lại." (`gm.notice.*`).
+  The Daily screen reads its status on entry and does not refresh on the notice: the player sees the reopened button
+  after leaving and returning (or F5).
+- **The Quà tháng tab (`GiftsTab.tsx`).** A month `Select` (this month and 12 more, an edited month marked "(đã sửa)"),
+  the month on `DailyCalendar` with each editable day a button "Ngày N" (days up to today in the current month are
+  greyed: the server decides by its own zone with `TIER_LOCKED`, the tab by `Asia/Ho_Chi_Minh`), a `Segmented` for the day's
+  rule ("Như mặc định" / "Ngẫu nhiên thường" / "Ngẫu nhiên hiếm" / "Cố định"), and for a fixed day a list of items with
+  an item `Select` ("Chọn món" / "Thêm món"; it offers only items a gift may be: not default or free, a slot a claim can
+  revoke, not already named in the month). "Lưu" opens the `ReasonDialog`; "Về mặc định" appears for a month that has a
+  database row. The component keeps the month's edits in local state and is remounted when the saved month changes.
+- **`DailyCalendar` is shared.** The Daily screen and the Quà tháng tab draw the same component
+  (`screens/DailyCalendar.tsx`: `entries`, `month`, optional `day`/`claimable`, `onPick`, `lockedThrough`,
+  `showPoints`), so what a GM saves looks exactly as a player will see it.
+- **"Theo ngày" on the overview (`OverviewTab.tsx`, `ByDayPanel`).** A 7-day / 30-day `Segmented` over
+  `GET /api/gm/stats/daily`: a table with a row per economy day (Ngày, Nguồn, Bể, Ròng) whose last column draws the day's
+  sources (gold) and sinks (red) as bars on one scale, the largest single sum of the range; no chart library. At 375 px the
+  table scrolls inside its wrapper (`docs/known-limitations.md`).
 
-Tests: `screens/gm/*.test.tsx`, `notifications.test.ts`, and the ops pack's section Q (`e2e/ops/06-gm.spec.ts`).
+Tests: `screens/gm/*.test.tsx`, `screens/DailyCalendar.test.tsx`, `notifications.test.ts`, and the ops pack's section Q
+(`e2e/ops/06-gm.spec.ts`, Q-01 to Q-03).
 
 ---
 

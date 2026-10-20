@@ -390,9 +390,10 @@ below each row's cells stack with their labels, and some assistive technology th
 five-column table readable at 375 px. The labels are real text, so nothing is lost to a sighted user.
 *Tracked:* `docs/normal-web.md`, "The Quản trị screen".
 
-**The ops pack has no `@mobile` case for the GM screen.** Q-01 and Q-02 run on `desktop` only. The card layout at 375 px
+**The ops pack has no `@mobile` case for the GM screen.** Q-01 to Q-03 run on `desktop` only. The card layout at 375 px
 was checked by screenshot during the plan (at 1920 × 940, 1366 × 768 and 375 × 812), not by a test that fails when it
-breaks.
+breaks; Q-03 does resize the page to those three widths for the Quà tháng tab and the "Theo ngày" table, and asserts no
+text overlap and no sideways scroll at each.
 *Tracked:* `docs/operation-test-plan.md`, section Q.
 
 **`refunded` in the close-room answer counts spectators too.** It is the number of humans in the room, seated or not; a
@@ -400,6 +401,41 @@ spectator holds no stack, so it counts people sent back to the lobby, not stacks
 *Why it stays:* the number is a courtesy in the dialog's success line; the money is exact (it comes from the room's own
 cash-out, and the conservation test covers it).
 *Tracked:* `apps/normal-server/src/gm/gm-rooms.ts`.
+
+**An achievement unlocked by a claim that a GM then undoes stays unlocked, and its reward stays paid (Plan 26).** "Đặt lại
+điểm danh" takes back the check-in's points and items and steps `total_login_days` back, but `login_days_7`, say, may
+have been unlocked by that claim and is not locked again; its 5.000 points or item stay with the player. The player
+claims again and the counter climbs to the same figure.
+*Why it stays:* undoing a reward chain means undoing every reward that fired from it, and an achievement is a record of
+something that happened; the GM can spot it in the log and use "Cộng/trừ điểm" with a reason.
+*Tracked:* `apps/normal-server/src/gm/gm-service.ts` (`resetCheckin`), spec `2026-10-20-plan26-gm-round2-phone-landscape-login-design.md` Part A.
+
+**Items granted by a check-in made before migration 0005 carry no `ref`, so a reset does not take them back (Plan 26).**
+`inventory.ref` records which claim granted an item; rows written before the migration have `NULL`. On the day a deploy
+brings 0005, a player who already claimed that day and is reset by a GM gets the points back but keeps that day's item
+(the dialog names none).
+*Why it stays:* a one-day edge at deploy that nobody can recover from the data, and the GM can revoke by hand.
+*Tracked:* `apps/normal-server/drizzle/0005_plan26.sql`, `apps/normal-server/src/inventory/inventory-service.ts` (`findByRef`).
+
+**The Quà tháng tab greys the days up to today by the Ho Chi Minh zone, while the server decides by its own zone (Plan 26).**
+In the current month, tiers up to today's date cannot be edited. The tab computes "today" on `Asia/Ho_Chi_Minh`, the
+economy's clock; the server answers `TIER_LOCKED` by `ECONOMY_TIMEZONE` (`apps/normal-server/src/config.ts`, default Ho Chi Minh). They agree on the
+LAN host and on the VPS, which both run the economy on Ho Chi Minh time; a deployment on another zone would grey a
+different day than it refuses, and the server's answer is the one that holds (the dialog prints it as "Ngày đó đã qua trong tháng này.").
+*Why it stays:* cosmetic, the server is the lock, and the web client has no `ECONOMY_TIMEZONE` to read.
+*Tracked:* `apps/normal-web/src/screens/gm/GiftsTab.tsx` (`economyToday`).
+
+**The "Theo ngày" table at 375 px scrolls sideways inside its own box, so the bars are off-screen (Plan 26).** The last
+two columns (Ròng, Tỉ lệ) sit past the phone's edge until the table is swiped; the page itself does not scroll
+sideways.
+*Why it stays:* the console is an operator tool read mostly on a desktop, and the numbers a GM needs (Nguồn, Bể) are in
+view.
+*Tracked:* `apps/normal-web/src/screens/gm/OverviewTab.tsx` (`ByDayPanel`), `apps/normal-web/src/screens/gm/gm.module.css`.
+
+**The Daily screen does not refresh when a GM reopens the check-in (Plan 26).** The player gets the toast and the points
+leave at once, but the open "Điểm danh" page still shows "claimed" until they leave and return or press F5.
+*Why it stays:* the screen reads its status on entry, as it always has, and the reopen is rare.
+*Tracked:* `apps/normal-web/src/screens/DailyScreen.tsx`; Q-03 reloads the page between the reset and the second claim.
 
 ---
 
