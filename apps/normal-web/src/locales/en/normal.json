@@ -242,7 +242,11 @@
         "kick": "Removed",
         "close_room": "Room closed",
         "promote": "Promoted",
-        "demote": "Demoted"
+        "demote": "Demoted",
+        "unlock_achievement": "Unlock achievement",
+        "reset_checkin": "Reset check-in",
+        "set_gift_month": "Set gift month",
+        "clear_gift_month": "Clear gift month"
       }
     },
     "done": {
@@ -364,6 +368,8 @@
       "achievement": "Achievement reward",
       "gm_grant": "Points from the game master",
       "gm_adjust": "Points taken by the game master",
+      "gm_achievement": "GM unlocked an achievement",
+      "gm_checkin_undo": "GM undid a check-in",
       "other": "Other"
     }
   },

@@ -895,7 +895,7 @@ describe('a whole hand between two registered players', () => {
 
       // …and the balances are the whole ledger, read back: what they started with, less the fee,
       // plus anything an achievement or a GM paid out (or took) on the way.
-      const credited = rowsOf<{ amount: string | number }>(await db.execute(sql`select amount from point_transactions where reason in ('achievement', 'gm_grant', 'gm_adjust')`))
+      const credited = rowsOf<{ amount: string | number }>(await db.execute(sql`select amount from point_transactions where reason in ('achievement', 'gm_grant', 'gm_adjust', 'gm_achievement', 'gm_checkin_undo')`))
       const fees = sinks.reduce((sum, row) => sum + Number(row.amount), 0)
       const rewards = credited.reduce((sum, row) => sum + Number(row.amount), 0)
       const balances = await Promise.all([alice, mai].map((p) => h.app.services.repos.balances.get(p.playerId)))

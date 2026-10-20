@@ -242,7 +242,11 @@
         "kick": "Mời ra",
         "close_room": "Đóng phòng",
         "promote": "Trao quyền",
-        "demote": "Thu quyền"
+        "demote": "Thu quyền",
+        "unlock_achievement": "Mở thành tựu",
+        "reset_checkin": "Đặt lại điểm danh",
+        "set_gift_month": "Đổi quà tháng",
+        "clear_gift_month": "Về quà mặc định"
       }
     },
     "done": {
@@ -364,6 +368,8 @@
       "achievement": "Thưởng thành tựu",
       "gm_grant": "Quản trị viên cộng điểm",
       "gm_adjust": "Quản trị viên trừ điểm",
+      "gm_achievement": "GM mở thành tựu",
+      "gm_checkin_undo": "GM hoàn tác điểm danh",
       "other": "Khác"
     }
   },

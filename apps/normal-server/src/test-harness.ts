@@ -151,6 +151,6 @@ export async function buildTestApp(db: AppDb, opts: HarnessOptions = {}): Promis
 /** Everything a test may have written, in foreign-key order. `restart identity` keeps ledger ids comparable across tests. */
 export async function resetDb(db: AppDb): Promise<void> {
   await db.execute(
-    sql`truncate table sessions, inventory, items, daily_logins, player_stats, player_achievements, gm_actions, ledger_keys, point_transactions, game_players, games, players, users restart identity cascade`,
+    sql`truncate table sessions, inventory, items, daily_logins, player_stats, player_achievements, gm_actions, ledger_keys, gift_months, point_transactions, game_players, games, players, users restart identity cascade`,
   )
 }
