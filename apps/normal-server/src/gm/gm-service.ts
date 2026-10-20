@@ -17,11 +17,13 @@
  */
 import { displayNameKey } from '@bp/core'
 import { consoleLogger, InsufficientBalanceError, type AdminRoomSummary, type GameServer, type Logger } from '@bp/server-kit'
-import { and, count, desc, eq, gt, like, lt, or, sql, type SQL } from 'drizzle-orm'
+import { and, count, desc, eq, gt, isNotNull, like, lt, or, sql, type SQL } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
+import { unlockWithin } from '../achievements/achievement-service.js'
+import type { AchievementDef, AchievementReward } from '../achievements/definitions.js'
 import type { SessionService } from '../auth/session-service.js'
 import { rowsOf, type AppDb, type AppTx } from '../db/client.js'
-import { gmActions, inventory as inventoryTable, players, users, type GmActionKind } from '../db/schema.js'
+import { gmActions, inventory as inventoryTable, playerAchievements, players, users, type GmActionKind } from '../db/schema.js'
 import { ServiceError } from '../errors.js'
 import type { HistoryService } from '../history/history-service.js'
 import { missingWardrobe } from '../inventory/grant-wardrobe.js'
@@ -60,6 +62,8 @@ export interface GmPlayerDetail extends Omit<GmPlayerSummary, 'emailMasked' | 'l
   stats: PlayerStats
   room: { roomId: string; code: string; name: string; seat: number | null } | null
   inventoryCount: number
+  /** Every achievement this player has unlocked, so the GM's picker can grey those out. */
+  unlockedAchievementIds: string[]
 }
 
 export interface GmActionRow {
@@ -93,6 +97,8 @@ export interface GmService {
   adjustPoints(actor: GmActor, playerId: string, amount: number, reason: string): Promise<{ balance: number; actionId: number }>
   grantItem(actor: GmActor, playerId: string, itemId: string, reason: string): Promise<GmGrantResult>
   grantWardrobe(actor: GmActor, playerId: string, reason: string): Promise<GmGrantResult>
+  /** Unlocks one achievement with its whole reward, through the code path that earning it uses. */
+  unlockAchievement(actor: GmActor, playerId: string, achievementId: string, reason: string): Promise<{ actionId: number; reward: AchievementReward; balance: number }>
   lock(actor: GmActor, playerId: string, reason: string): Promise<{ actionId: number }>
   unlock(actor: GmActor, playerId: string, reason: string): Promise<{ actionId: number }>
   setRole(actor: GmActor, playerId: string, role: GmRole, reason: string): Promise<{ role: GmRole; actionId: number }>
@@ -113,6 +119,8 @@ export interface GmServiceDeps {
   sessions: SessionService
   inventory: InventoryService
   catalog: ItemCatalog
+  /** The loaded achievement catalogue: the only ids `unlockAchievement` accepts. */
+  defs: AchievementDef[]
   history: HistoryService
   stats: StatsService
   game: Pick<GameServer, 'notify' | 'balanceChanged' | 'connectionCount'> & {
@@ -242,6 +250,11 @@ export function createGmService(deps: GmServiceDeps): GmService {
         .where(eq(users.id, playerId))
       if (row === undefined) return null
       const [owned] = await deps.db.select({ n: count() }).from(inventoryTable).where(eq(inventoryTable.playerId, playerId))
+      const unlocked = await deps.db
+        .select({ id: playerAchievements.achievementId })
+        .from(playerAchievements)
+        .where(and(eq(playerAchievements.playerId, playerId), isNotNull(playerAchievements.unlockedAt)))
+        .orderBy(playerAchievements.achievementId)
       const stats = await deps.stats.get(playerId)
       const live = deps.game.rooms.roomOf(playerId)?.adminSummary()
       return {
@@ -256,6 +269,7 @@ export function createGmService(deps: GmServiceDeps): GmService {
         stats,
         room: live === undefined ? null : { roomId: live.roomId, code: live.code, name: live.name, seat: live.members.find((m) => m.playerId === playerId)?.seat ?? null },
         inventoryCount: Number(owned?.n ?? 0),
+        unlockedAchievementIds: unlocked.map((u) => u.id),
       }
     },
 
@@ -314,6 +328,26 @@ export function createGmService(deps: GmServiceDeps): GmService {
         return { granted, alreadyOwned: all.length - granted.length, actionId }
       })
       if (result.granted.length > 0) notice(playerId, { action: 'grant_wardrobe', reason: why })
+      return result
+    },
+
+    async unlockAchievement(actor, playerId, achievementId, reason) {
+      const why = checkReason(reason)
+      const def = deps.defs.find((d) => d.id === achievementId)
+      if (def === undefined) throw new ServiceError('INVALID_ACHIEVEMENT', `not an achievement: ${achievementId}`)
+      const result = await deps.db.transaction(async (tx) => {
+        const t = await target(tx, playerId)
+        // A locked account earns nothing and is handed nothing: unlock the account first.
+        if (t.lockedAt !== null) throw new ServiceError('TARGET_IS_LOCKED', 'a locked account cannot be given an achievement; unlock first')
+        const actionId = await logAction(tx, { actorUserId: actor.userId, action: 'unlock_achievement', targetPlayerId: t.id, itemId: def.id, amount: def.reward.points ?? null, reason: why })
+        // The same code path as earning it, so the reward is the full one; a second unlock rolls the log line back too.
+        const outcome = await unlockWithin(tx, t.id, def, new Date(now()), { inventory: deps.inventory, reason: 'gm_achievement', refId: `gm:${String(actionId)}` })
+        if (outcome === 'already') throw new ServiceError('ALREADY_UNLOCKED', 'the achievement is already unlocked')
+        const [after] = await tx.select({ balance: players.balance }).from(players).where(eq(players.id, t.id))
+        return { actionId, reward: def.reward, balance: Number(after!.balance) }
+      })
+      if (def.reward.points !== undefined) void deps.game.balanceChanged(playerId)
+      notice(playerId, { action: 'unlock_achievement', achievementId: def.id, reason: why })
       return result
     },
 

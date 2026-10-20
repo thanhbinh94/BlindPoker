@@ -385,6 +385,7 @@ describe('every mutating route is guarded', () => {
       'POST /api/auth/logout',
       'POST /api/auth/register',
       'POST /api/economy/relief',
+      'POST /api/gm/players/:id/achievements/:achievementId/unlock',
       'POST /api/gm/players/:id/items',
       'POST /api/gm/players/:id/lock',
       'POST /api/gm/players/:id/points',

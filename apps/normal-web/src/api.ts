@@ -456,6 +456,8 @@ export interface GmPlayerDetailDto {
   stats: PlayerStatsDto
   room: { roomId: string; code: string; name: string; seat: number | null } | null
   inventoryCount: number
+  /** Ids of every achievement this player has unlocked, so the GM's picker can disable them. */
+  unlockedAchievementIds: string[]
 }
 
 /** A room as the console lists it — `GET /api/gm/rooms` rows and `GET /api/gm/rooms/:id` alike. */

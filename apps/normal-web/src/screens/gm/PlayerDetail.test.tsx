@@ -19,6 +19,7 @@ const DETAIL: GmPlayerDetailDto = {
   stats: { handsPlayedHoldem: 12, handsPlayedBlind: 3 } as unknown as PlayerStatsDto,
   room: null,
   inventoryCount: 7,
+  unlockedAchievementIds: [],
 }
 
 type Stub = NormalApi & Record<string, ReturnType<typeof vi.fn>>

@@ -20,7 +20,7 @@ import type { NormalRepositories } from '../repos/index.js'
 import { createRepositories } from '../repos/index.js'
 import { createStatsService, type StatsService } from '../stats/stats-service.js'
 import type { AchievementService } from './achievement-service.js'
-import { createAchievementService } from './achievement-service.js'
+import { createAchievementService, unlockWithin } from './achievement-service.js'
 import type { AchievementDef } from './definitions.js'
 import { loadAchievements } from './definitions.js'
 
@@ -261,6 +261,30 @@ describe('unlocking', () => {
     expect(byId.get('holdem_hands_1000')).toMatchObject({ progress: 1, unlockedAt: null })
     // Nothing is written for a metric this hand could not have moved.
     expect(byId.has('rooms_10')).toBe(false)
+  })
+})
+
+describe('unlockWithin', () => {
+  it('unlockWithin pays once and reports already on the second call, even with no progress row', async () => {
+    const playerId = await seedPlayer()
+    const points = defs.find((d) => d.id === 'login_streak_7')!
+    const item = defs.find((d) => d.id === 'login_days_100')!
+    const at = new Date(NOW)
+    const run = (def: AchievementDef) =>
+      db.transaction((tx) => unlockWithin(tx, playerId, def, at, { inventory: inv, reason: 'gm_achievement', refId: `gm:${def.id}` }))
+
+    // The seeded player has no `player_achievements` row at all: the guarded UPDATE alone would match nothing.
+    expect(await db.select().from(playerAchievements).where(eq(playerAchievements.playerId, playerId))).toEqual([])
+    expect(await run(points)).toBe('unlocked')
+    expect(await run(points)).toBe('already')
+    expect(await run(item)).toBe('unlocked')
+    expect(await run(item)).toBe('already')
+
+    expect(await ledger(playerId)).toEqual([{ amount: points.reward.points, reason: 'gm_achievement', refId: 'gm:login_streak_7' }])
+    expect(await repos.balances.get(playerId)).toBe(points.reward.points)
+    expect(await inv.list(playerId)).toEqual([{ itemId: item.reward.itemId, source: 'achievement', acquiredAt: expect.any(Number) }])
+    expect(await find(playerId, 'login_streak_7')).toMatchObject({ unlockedAt: NOW })
+    expect(await find(playerId, 'login_days_100')).toMatchObject({ unlockedAt: NOW })
   })
 })
 

@@ -74,15 +74,18 @@ afterEach(async () => {
 describe('the guard', () => {
   it('answers 401 to nobody and 403 FORBIDDEN to a player on every /api/gm/ route the app serves', async () => {
     const routes = enumerateRoutes(h.app.fastify).filter((r) => r.path.startsWith('/api/gm/'))
-    // The fifteen `/api/gm/` labels `app.test.ts` pins in the exact surface: a route added there must be guarded here.
-    expect(routes).toHaveLength(15)
+    // The sixteen `/api/gm/` labels `app.test.ts` pins in the exact surface: a route added there must be guarded here.
+    expect(routes).toHaveLength(16)
     for (const route of routes) {
-      const url = route.path.replace(':id', route.path.startsWith('/api/gm/rooms/') ? 'some-room' : me.playerId)
+      const url = route.path
+        .replace(':id', route.path.startsWith('/api/gm/rooms/') ? 'some-room' : me.playerId)
+        .replace(':achievementId', 'login_streak_7')
+        .replace(':month', '2026-11')
       const label = `${route.method} ${route.path}`
-      // Every GM route is a GET or a POST (`app.test.ts` pins the surface); narrowed for `inject`'s own method type.
-      expect(['GET', 'POST'], label).toContain(route.method)
-      const method = route.method === 'GET' ? 'GET' : 'POST'
-      const write = method === 'POST'
+      // Every GM route is a GET or a write (`app.test.ts` pins the surface); narrowed for `inject`'s own method type.
+      expect(['GET', 'POST', 'PUT', 'DELETE'], label).toContain(route.method)
+      const method = route.method as 'GET' | 'POST' | 'PUT' | 'DELETE'
+      const write = method !== 'GET'
       // The CSRF header on a write, so the guard — not the CSRF check — is what answers; an empty body is fine,
       // since the guard runs before the handler reads it.
       const anon = await h.app.fastify.inject({ method, url, ...(write ? { headers: XRW, payload: {} } : {}) })
@@ -107,6 +110,7 @@ describe('reasons', () => {
       `/api/gm/players/${me.playerId}/lock`,
       `/api/gm/players/${me.playerId}/unlock`,
       `/api/gm/players/${me.playerId}/role`,
+      `/api/gm/players/${me.playerId}/achievements/login_streak_7/unlock`,
       '/api/gm/rooms/nope/kick',
       '/api/gm/rooms/nope/close',
     ]
@@ -165,6 +169,24 @@ describe('players', () => {
     const all = await gmReq('POST', `/api/gm/players/${me.playerId}/items`, { all: true, reason: 'tặng cả tủ' })
     expect(all.statusCode).toBe(200)
     expect(all.json().granted.length).toBeGreaterThan(0)
+  })
+
+  it('unlocks an achievement over HTTP: the reward is paid, a repeat is 409, an unknown id 400, a locked account 409', async () => {
+    const url = (id: string) => `/api/gm/players/${me.playerId}/achievements/${id}/unlock`
+    const done = await gmReq('POST', url('login_streak_7'), { reason: 'quên điểm danh' })
+    expect(done.statusCode).toBe(200)
+    expect(done.json()).toEqual({ actionId: expect.any(Number), reward: { points: 5_000 }, balance: ECONOMY.startingBalance + 5_000 })
+    const again = await gmReq('POST', url('login_streak_7'), { reason: 'lần nữa' })
+    expect(again.statusCode).toBe(409)
+    expect(code(again)).toBe('ALREADY_UNLOCKED')
+    const unknown = await gmReq('POST', url('no_such_achievement'), { reason: 'không có' })
+    expect(unknown.statusCode).toBe(400)
+    expect(code(unknown)).toBe('INVALID_ACHIEVEMENT')
+    expect((await gmReq('POST', `/api/gm/players/${me.playerId}/lock`, { reason: 'gian lận' })).statusCode).toBe(200)
+    const locked = await gmReq('POST', url('login_streak_28'), { reason: 'đang khóa' })
+    expect(locked.statusCode).toBe(409)
+    expect(code(locked)).toBe('TARGET_IS_LOCKED')
+    expect(code(await gmReq('POST', `/api/gm/players/not-a-uuid/achievements/login_streak_7/unlock`, { reason: 'sai id' }))).toBe('NOT_FOUND')
   })
 
   it('locks and unlocks, signs the player out, and refuses the self, a gm, a double lock', async () => {

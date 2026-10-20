@@ -118,7 +118,7 @@ function playerApi(overrides: Partial<Record<keyof NormalApi, unknown>> = {}): S
     gmSearch: vi.fn().mockResolvedValue({ players: [BINH], nextBefore: null }),
     gmPlayer: vi.fn().mockResolvedValue({
       playerId: 'p1', displayName: 'Bình', email: 'binh@example.com', role: 'player', locked: null, balance: 5, createdAt: 1, lastLoginAt: null,
-      stats: {}, room: null, inventoryCount: 0,
+      stats: {}, room: null, inventoryCount: 0, unlockedAchievementIds: [],
     }),
     gmPlayerLedger: vi.fn().mockResolvedValue({ entries: [], nextBefore: null }),
     gmPlayerHistory: vi.fn().mockResolvedValue([]),

@@ -46,10 +46,12 @@ const SERVICE_STATUS: Record<string, number> = {
   INVALID_REASON: 400,
   INVALID_ITEM: 400,
   INVALID_ROLE: 400,
+  INVALID_ACHIEVEMENT: 400,
   FORBIDDEN: 403,
   SELF_TARGET: 403,
   TARGET_IS_GM: 403,
   ALREADY_LOCKED: 409,
+  ALREADY_UNLOCKED: 409,
   NOT_LOCKED: 409,
   LAST_GM: 409,
   TARGET_IS_LOCKED: 409,
@@ -150,6 +152,11 @@ export function registerGmRoutes(app: FastifyInstance, deps: GmRouteDeps): void 
       ? deps.gm.grantWardrobe(actorOf(req), idOf(req), reason)
       : deps.gm.grantItem(actorOf(req), idOf(req), body.itemId as string, reason))
     return reply.send({ granted: granted.granted, alreadyOwned: granted.alreadyOwned })
+  })
+
+  app.post('/api/gm/players/:id/achievements/:achievementId/unlock', gmOnly, async (req, reply) => {
+    const achievementId = (req.params as { achievementId: string }).achievementId
+    return reply.send(await translated(() => deps.gm.unlockAchievement(actorOf(req), idOf(req), achievementId, bodyOf(req).reason as string)))
   })
 
   app.post('/api/gm/players/:id/lock', gmOnly, async (req, reply) => {

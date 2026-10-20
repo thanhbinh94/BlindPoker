@@ -116,6 +116,55 @@ describe('GmService — items', () => {
   })
 })
 
+describe('GmService — achievements', () => {
+  it('unlockAchievement pays the full reward under gm_achievement, logs unlock_achievement, refuses a second time and refuses a locked target', async () => {
+    const pointsDef = h.app.services.defs.find((d) => d.id === 'login_streak_7')!
+    const itemDef = h.app.services.defs.find((d) => d.id === 'login_days_100')!
+    const pushed = vi.spyOn(h.app.game, 'balanceChanged')
+    const notified = vi.spyOn(h.app.game, 'notify')
+    expect((await gm.get(me.playerId))?.unlockedAchievementIds).toEqual([])
+
+    const r = await gm.unlockAchievement(actor(boss), me.playerId, pointsDef.id, 'quên điểm danh')
+    expect(r).toEqual({ actionId: expect.any(Number), reward: pointsDef.reward, balance: ECONOMY.startingBalance + pointsDef.reward.points! })
+    const ledger = await h.app.services.repos.ledger.list(me.playerId, { limit: 1 })
+    expect(ledger[0]).toMatchObject({ amount: pointsDef.reward.points, reason: 'gm_achievement', refId: `gm:${String(r.actionId)}` })
+    expect(pushed).toHaveBeenCalledWith(me.playerId)
+    expect(notified).toHaveBeenCalledWith(me.playerId, { t: 'NOTIFICATION', kind: 'GM_NOTICE', payload: { action: 'unlock_achievement', achievementId: pointsDef.id, reason: 'quên điểm danh' } })
+    const [log] = rowsOf<{ action: string; item_id: string | null; amount: string | number | null; reason: string }>(
+      await db.execute(sql`select action, item_id, amount, reason from gm_actions where id = ${r.actionId}`),
+    )
+    expect(log).toMatchObject({ action: 'unlock_achievement', item_id: pointsDef.id, reason: 'quên điểm danh' })
+    expect(Number(log?.amount)).toBe(pointsDef.reward.points)
+
+    // An item reward: the inventory row is there, no ledger row, and the log's amount is null.
+    pushed.mockClear()
+    const item = await gm.unlockAchievement(actor(boss), me.playerId, itemDef.id, 'quà dài hạn')
+    expect(item.reward).toEqual(itemDef.reward)
+    expect(item.balance).toBe(ECONOMY.startingBalance + pointsDef.reward.points!)
+    expect(pushed).not.toHaveBeenCalled()
+    expect(rowsOf<{ item_id: string }>(await db.execute(sql`select item_id from inventory where player_id = ${me.playerId} and item_id = ${itemDef.reward.itemId!}`))).toHaveLength(1)
+    const [itemLog] = rowsOf<{ amount: string | null }>(await db.execute(sql`select amount from gm_actions where id = ${item.actionId}`))
+    expect(itemLog?.amount).toBeNull()
+
+    // Both show on the player's detail, and a repeat is refused without paying or logging again.
+    expect((await gm.get(me.playerId))?.unlockedAchievementIds.sort()).toEqual([itemDef.id, pointsDef.id].sort())
+    const before = (await actionsOf(me.playerId)).length
+    await expect(gm.unlockAchievement(actor(boss), me.playerId, pointsDef.id, 'lần hai')).rejects.toMatchObject({ code: 'ALREADY_UNLOCKED' })
+    expect(await actionsOf(me.playerId)).toHaveLength(before)
+    expect(await h.app.services.repos.balances.get(me.playerId)).toBe(ECONOMY.startingBalance + pointsDef.reward.points!)
+
+    await expect(gm.unlockAchievement(actor(boss), me.playerId, 'no_such_achievement', 'không có')).rejects.toMatchObject({ code: 'INVALID_ACHIEVEMENT' })
+    await expect(gm.unlockAchievement(actor(boss), me.playerId, pointsDef.id, 'ab')).rejects.toMatchObject({ code: 'INVALID_REASON' })
+    await expect(gm.unlockAchievement(actor(boss), '00000000-0000-4000-8000-000000000000', itemDef.id, 'ai đó')).rejects.toMatchObject({ code: 'NOT_FOUND' })
+
+    // A locked account is refused before anything is paid.
+    const other = h.app.services.defs.find((d) => d.id === 'login_streak_28')!
+    await gm.lock(actor(boss), me.playerId, 'spam')
+    await expect(gm.unlockAchievement(actor(boss), me.playerId, other.id, 'đang khóa')).rejects.toMatchObject({ code: 'TARGET_IS_LOCKED' })
+    expect((await gm.get(me.playerId))?.unlockedAchievementIds).not.toContain(other.id)
+  })
+})
+
 describe('GmService — lock and role', () => {
   it('locks: columns set, sessions revoked, socket closed, kicked from the room; unlock clears; double lock refused', async () => {
     const ws = await connect(await listen(), me.cookie)
