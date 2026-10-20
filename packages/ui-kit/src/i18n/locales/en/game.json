@@ -46,6 +46,7 @@
     "actions": "Actions",
     "allIn": "All-in",
     "amount": "Bet amount",
+    "amountDialog": "Enter an amount",
     "amountSlider": "Amount slider",
     "autoStart": "Auto-start",
     "balance": "Balance",

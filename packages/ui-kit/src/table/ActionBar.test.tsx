@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { I18nextProvider } from 'react-i18next'
@@ -135,6 +135,94 @@ describe('ActionBar', () => {
     expect(play).toHaveTextContent('2,000')
     await userEvent.click(play)
     expect(onAct).toHaveBeenLastCalledWith({ kind: 'play' })
+  })
+})
+
+// Plan 26 (B4): a phone on its side keeps its height for the table. The betting buttons sit in a bottom-right dock, the
+// toggles in a bottom-left one, presets replace the slider, and a typed amount opens a small dialog near the top (R11).
+describe('ActionBar in the landscape frame', () => {
+  const raiseLegal: LegalActions = { seat: 1, kinds: ['fold', 'call', 'raise', 'allIn'], callAmount: 200, minBet: 0, maxBet: 0, minRaiseTo: 400, maxRaiseTo: 5000 }
+  const me: ClientSeat = { seat: 1, playerId: 'me', displayName: 'Me', isBot: false, stack: 5000, betThisStreet: 0, folded: false, allIn: false, cardCount: 2, holeCards: null, hasDecided: false, decision: null, lastAction: null, timedOut: false }
+  const blindRoom = { config: { mode: 'blind', blind: { fixedWager: 2000, decisionMode: 'playOrFold' } } } as unknown as RoomView
+  const wrapVi = (ui: React.ReactElement) =>
+    render(<I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>{ui}</I18nextProvider>)
+
+  it('in the landscape frame there is no slider; ✎ opens the amount dialog and confirm sets the raise amount', async () => {
+    const onAct = vi.fn()
+    wrap(<ActionBar hand={hand(raiseLegal)} room={room} onAct={onAct} lang="en" frame="landscape" />)
+    const tray = screen.getByRole('group', { name: 'Actions' })
+    expect(tray).toHaveAttribute('data-frame', 'landscape')
+    expect(screen.queryByRole('slider')).toBeNull()
+    expect(screen.queryByRole('spinbutton'), 'no inline amount').toBeNull()
+    // One row until the player asks to size: the raise button opens the presets instead of raising at once.
+    expect(screen.queryByRole('button', { name: 'Pot' })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Raise' }))
+    expect(onAct).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Pot' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Raise 400' })).toBeInTheDocument()
+    // The presets sit in the left corner (the toggles' place, empty on the player's own turn); "Max" stands in for All-in.
+    expect(screen.getByRole('group', { name: 'Bet size' }).parentElement?.className).toMatch(/trayLeft/)
+    expect(screen.queryByRole('button', { name: /all.?in/i })).toBeNull()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Enter an amount' }))
+    const dialog = screen.getByRole('dialog', { name: 'Enter an amount' })
+    expect(dialog.className).toMatch(/dialogTop/)
+    const amount = within(dialog).getByRole('spinbutton', { name: 'Bet amount' })
+    expect(amount).toHaveAttribute('min', '400')
+    expect(amount).toHaveAttribute('max', '5000')
+    expect(amount).toHaveAttribute('inputmode', 'numeric')
+    await userEvent.clear(amount)
+    await userEvent.type(amount, '2500')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(onAct).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Raise 2,500' }))
+    expect(onAct).toHaveBeenLastCalledWith({ kind: 'raise', amount: 2500 })
+
+    // Enter in the dialog confirms, and an amount past the range is clamped into it.
+    await userEvent.click(screen.getByRole('button', { name: 'Enter an amount' }))
+    const again = within(screen.getByRole('dialog')).getByRole('spinbutton')
+    await userEvent.clear(again)
+    await userEvent.type(again, '99999{Enter}')
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(onAct).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: 'Raise 5,000' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Pot' }))
+    expect(screen.getByRole('button', { name: 'Raise 1,000' })).toBeInTheDocument()
+  })
+
+  it('between hands in landscape the right part is hidden but Tự động chơi stays', async () => {
+    const onAutoPlay = vi.fn()
+    const over = hand(null, { mode: 'blind', phase: 'COMPLETE', seats: [me] })
+    const { unmount } = wrapVi(<ActionBar hand={over} room={blindRoom} onAct={() => {}} lang="vi" frame="landscape" betweenHands autoPlay onAutoPlay={onAutoPlay} />)
+    const tray = screen.getByRole('group', { name: 'Hành động' })
+    expect(within(tray).queryByRole('status'), 'no "hand over" line beside the dock').toBeNull()
+    const toggle = within(tray).getByRole('button', { name: 'Tự động chơi' })
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(toggle)
+    expect(onAutoPlay).toHaveBeenLastCalledWith(false)
+    unmount()
+
+    // In the hand the right part is back: Bỏ bài and Chơi, with the toggle still in the left dock.
+    const deciding = hand({ seat: 1, kinds: ['play', 'fold'], callAmount: 2000, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 }, { mode: 'blind', phase: 'DECISION', seats: [me] })
+    wrapVi(<ActionBar hand={deciding} room={blindRoom} onAct={() => {}} lang="vi" frame="landscape" autoPlay onAutoPlay={onAutoPlay} />)
+    const inHand = screen.getByRole('group', { name: 'Hành động' })
+    expect(within(inHand).getByRole('button', { name: 'Bỏ bài' })).toBeInTheDocument()
+    expect(within(inHand).getByRole('button', { name: 'Chơi 2.000' })).toBeInTheDocument()
+    expect(within(inHand).getByRole('button', { name: 'Tự động chơi' })).toBeInTheDocument()
+  })
+
+  it('R opens the amount dialog in landscape', async () => {
+    const onAct = vi.fn()
+    wrap(<ActionBar hand={hand(raiseLegal)} room={room} onAct={onAct} lang="en" frame="landscape" />)
+    await userEvent.keyboard('r')
+    const amount = within(screen.getByRole('dialog', { name: 'Enter an amount' })).getByRole('spinbutton')
+    expect(amount).toHaveFocus()
+    await userEvent.clear(amount)
+    await userEvent.type(amount, '700{Enter}')
+    expect(onAct, 'Enter in the dialog sets the amount; it does not raise').not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Raise 700' })).toBeInTheDocument()
   })
 })
 

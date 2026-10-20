@@ -279,8 +279,9 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
    * A phone on its side (Plan 26, B2) has no height for a row of buttons under the felt. The seat's own controls go
    * into the header's "More" menu — each only when the desktop row would show it — and what starts a hand into a dock
    * in the bottom-right corner, the one the action tray takes during a hand. The two never share it: while the dock is
-   * up (the room is waiting, or the countdown runs with the result card closed) no hand is being played, and the tray,
-   * which would only say the hand is over, waits for the next deal.
+   * up (the room is waiting, or the countdown runs with the result card closed) no hand is being played, and the tray's
+   * right part, which would only say the hand is over, waits for the next deal (`betweenHands`). Its left part — the
+   * toggles, "Tự động chơi" among them — stays, so auto-play can be turned off during the countdown (B4).
    */
   const landscape = frame === 'landscape'
   const dockShown = landscape && (waiting || countdownHere)
@@ -339,7 +340,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
           captionFor={captionFor}
           resultPending={held}
           onReveal={reveal}
-          note={landscape ? hint : null}
+          note={landscape && waiting ? hint : null}
         />
 
         {/* The result card is dealt onto the felt, so it keeps the felt's night palette in either theme. The countdown
@@ -399,7 +400,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
 
         {/* The tray belongs to a seated player in a live hand — it holds its place between turns rather than
             appearing and disappearing under the felt. */}
-        {hand === null || hand.mySeat === null || dockShown ? null : (
+        {hand === null || hand.mySeat === null ? null : (
           <ActionBar
             hand={hand}
             room={room}
@@ -410,6 +411,8 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
             onPreAction={client.setPreAction}
             autoPlay={state.autoPlay}
             onAutoPlay={client.setAutoPlay}
+            frame={frame}
+            betweenHands={dockShown}
           />
         )}
       </footer>

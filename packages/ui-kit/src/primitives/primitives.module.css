@@ -374,6 +374,28 @@
   margin-top: var(--space-5);
 }
 
+/* `anchor="top"` (Plan 26, R11): a phone on its side opens its soft keyboard over the bottom half of a page that does not
+   scroll, so the dialog hangs from the top instead of centring, and gives back the vertical air that would push its
+   input and its answer under the keys. At 915 × 260 (a 412 px-tall phone with the keyboard up) both stay on screen. */
+.backdropTop {
+  align-items: flex-start;
+  padding-top: var(--space-4);
+}
+
+.dialogTop {
+  max-height: calc(100dvh - 2 * var(--space-4));
+  padding: var(--space-3) var(--space-4);
+}
+
+.dialogTop .dialogHead {
+  margin-bottom: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+
+.dialogTop .dialogFoot {
+  margin-top: var(--space-3);
+}
+
 @keyframes fade {
   from {
     opacity: 0;

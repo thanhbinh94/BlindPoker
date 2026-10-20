@@ -1415,6 +1415,116 @@
   }
 }
 
+/* ---------------- Action tray, phone held sideways ---------------- */
+/* Plan 26, B4. A phone on its side has no height for a strip under the felt, so the tray stops being one: it keeps its
+   place in the room's footer (and its "Hành động" group) but draws nothing of its own, and its two parts sit over the
+   room's bottom corners. Keyed on the tray's own `data-frame` (`ActionBar`'s `frame`), the value `RoomScreen` puts on
+   the room: this module cannot name `.room`. The ring keeps its seats out of the stage's bottom 56 px (B3), with the
+   viewer's plate dipping into it at the centre only, so each corner gets one row:
+
+   - right (`.trayRight`): the action buttons, one row 48 px tall, 12 px from the room's foot — the corner the pre-hand
+     dock holds between hands, so the two never show together. Off the player's turn, the line saying what the seat
+     waits for.
+   - left (`.trayLeft`): the pre-action toggles and "Tự động chơi" as 34 px pills — or, on the player's own turn once
+     the bet/raise button has been pressed, the presets and "✎" (a typed amount opens `AmountDialog`). There is no
+     slider (Q7). `fixed`, not `absolute`: the tray is no box to hang it from, and it stays inside the tray's markup so
+     the "Hành động" group still holds it. */
+.tray[data-frame='landscape'] {
+  position: static;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.trayLeft {
+  position: fixed;
+  left: max(var(--space-3), env(safe-area-inset-left));
+  bottom: max(var(--space-3), env(safe-area-inset-bottom));
+  z-index: 5;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.trayLeft .preRow {
+  flex-wrap: nowrap;
+}
+
+.trayRight {
+  position: absolute;
+  right: max(var(--space-3), env(safe-area-inset-right));
+  bottom: max(var(--space-3), env(safe-area-inset-bottom));
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+}
+
+/* Compact, so four buttons fit between the viewer's plate and the corner at 844 px: the row is as wide as its labels. */
+.trayRight .trayRow {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+.trayRight .trayRow > button {
+  flex: none;
+  min-height: 48px;
+  padding: 0 10px;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.trayLeft .presets {
+  gap: var(--space-1);
+}
+
+/* Pills over the felt: a night wash under each, so their gold reads over the felt or the page in either theme. */
+.trayLeft .preset {
+  min-width: 44px;
+  min-height: 34px;
+  padding: 0 var(--space-3);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.trayLeft .preset:not([aria-pressed='true']) {
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+}
+
+.trayRight .trayWait {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+/* A thumb still gets a full tap target; the corner grows for it rather than the target shrinking. */
+@media (pointer: coarse) {
+  .trayLeft .preset {
+    min-height: var(--tap);
+  }
+}
+
+/* The typed amount's field, in `AmountDialog`. */
+.amountField {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(5, 9, 20, 0.8);
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  color: var(--gold);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------------- Hand result ---------------- */
 /* Never taller than the felt it is dealt onto (review 2026-09-29, No2): past that the body scrolls inside the card,
    and the card no longer pushes a scrollbar onto the whole stage. */

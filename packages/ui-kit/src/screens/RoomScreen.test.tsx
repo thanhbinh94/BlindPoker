@@ -1067,7 +1067,103 @@ describe('RoomScreen', () => {
       const later = screen.getByRole('group', { name: 'Điều khiển bàn' })
       expect(within(later).getByText((_, el) => el?.tagName === 'P' && /5 giây/.test(el.textContent ?? ''))).toBeInTheDocument()
       expect(within(later).queryByRole('button', { name: 'Sẵn sàng' })).toBeNull()
-      expect(screen.queryByRole('group', { name: 'Hành động' }), 'the tray waits for the next deal').toBeNull()
+      // The tray stays for its left dock (B4), but its right part — the corner the dock holds — waits for the next deal.
+      const tray = screen.getByRole('group', { name: 'Hành động' })
+      expect(within(tray).queryByRole('status'), 'no "hand over" line beside the countdown').toBeNull()
+      expect(within(tray).queryByRole('button'), 'nothing to press in a Hold’em tray between hands').toBeNull()
+    })
+
+    it('passes betweenHands to the tray in landscape and keeps the toggles during the countdown', () => {
+      // Play-or-fold with Tự động chơi on: between hands the dock holds the countdown, and the left dock keeps the
+      // toggle, so the player can turn auto-play off before the next deal.
+      const room = makeRoom({
+        mode: 'blind',
+        status: 'IN_GAME',
+        nextHandAt: 1_005_000,
+        config: {
+          name: 'B',
+          mode: 'blind',
+          maxPlayers: 4,
+          isPrivate: false,
+          turnTimerSec: 15,
+          autoStart: false,
+          hasPassword: false,
+          blind: { holeCards: 3, decisionMode: 'playOrFold', fixedWager: 5_000, botCount: 1 },
+        },
+        players: [
+          makePlayer({ playerId: 'me', displayName: 'Mai', isHost: true, seat: 0, status: 'IN_HAND', stack: 20_000 }),
+          makePlayer({ playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true, seat: 3, status: 'IN_HAND', stack: 25_000 }),
+        ],
+      })
+      const seats = [makeSeat({ seat: 0, playerId: 'me', displayName: 'Mai' }), makeSeat({ seat: 3, playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true })]
+      const over = makeHand({
+        mode: 'blind',
+        phase: 'COMPLETE',
+        mySeat: 0,
+        actingSeat: null,
+        community: [],
+        seats,
+        result: { payouts: [{ seat: 0, amount: 600 }], pots: [], fee: 12, showdown: null, carryOverOut: 0, uncalledReturned: null, cancelled: false, reason: null },
+      })
+      const client = fakeClient(makeState({ room, hand: over, autoPlay: true }))
+      const view = landscape(client)
+      fireEvent.click(screen.getByRole('button', { name: 'Đóng' }))
+      expect(screen.getByRole('group', { name: 'Điều khiển bàn' })).toBeInTheDocument()
+      const tray = screen.getByRole('group', { name: 'Hành động' })
+      expect(tray).toHaveAttribute('data-frame', 'landscape')
+      expect(within(tray).queryByRole('status'), 'the right part waits for the deal').toBeNull()
+      const toggle = within(tray).getByRole('button', { name: 'Tự động chơi' })
+      expect(toggle).toHaveAttribute('aria-pressed', 'true')
+      fireEvent.click(toggle)
+      expect(client.setAutoPlay).toHaveBeenCalledWith(false)
+      view.unmount()
+
+      // The next deal, my decision: the dock goes and the right part offers Bỏ bài and Chơi.
+      const deciding = makeHand({
+        ...over,
+        handId: 'h2',
+        phase: 'DECISION',
+        result: null,
+        legal: { seat: 0, kinds: ['play', 'fold'], callAmount: 5_000, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 },
+      })
+      landscape(fakeClient(makeState({ room: { ...room, nextHandAt: null }, hand: deciding, autoPlay: true })))
+      expect(screen.queryByRole('group', { name: 'Điều khiển bàn' })).toBeNull()
+      const inHand = screen.getByRole('group', { name: 'Hành động' })
+      expect(within(inHand).getByRole('button', { name: 'Bỏ bài' })).toBeInTheDocument()
+      expect(within(inHand).getByRole('button', { name: 'Chơi 5.000' })).toBeInTheDocument()
+      expect(within(inHand).getByRole('button', { name: 'Tự động chơi' })).toBeInTheDocument()
+    })
+
+    it('shows the felt note only while waiting', () => {
+      // A spectator short of a Blind hand's stake hears it in the hint while the room waits; once cards are out the
+      // felt holds the board and the pot, and the note would sit on them.
+      const blind = (status: 'OPEN' | 'IN_GAME') =>
+        makeRoom({
+          mode: 'blind',
+          status,
+          hostPlayerId: 'bot:r:0',
+          config: {
+            name: 'B',
+            mode: 'blind',
+            maxPlayers: 4,
+            isPrivate: false,
+            turnTimerSec: 15,
+            autoStart: false,
+            hasPassword: false,
+            blind: { holeCards: 3, decisionMode: 'playOrFold', fixedWager: 5_000, botCount: 1 },
+          },
+          players: [
+            makePlayer({ playerId: 'me', displayName: 'Mai', seat: null, status: null, stack: 0 }),
+            makePlayer({ playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true, isHost: true, seat: 3, status: 'READY', stack: 25_000, ready: true }),
+          ],
+        })
+      const short = 'Số dư không đủ để vào bàn (cần 10.000 điểm)'
+      const open = landscape(fakeClient(makeState({ balance: 7_000, room: blind('OPEN') })))
+      expect(within(screen.getByRole('region', { name: 'Bàn' })).getByText(short)).toBeInTheDocument()
+      open.unmount()
+
+      landscape(fakeClient(makeState({ balance: 7_000, room: blind('IN_GAME') })))
+      expect(within(screen.getByRole('region', { name: 'Bàn' })).queryByText(short)).toBeNull()
     })
 
     it('lays the pre-hand hint on the felt, so the dock in the corner stays one row', () => {
