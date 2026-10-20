@@ -342,7 +342,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     ...(deps.now ? { now: deps.now } : {}),
   })
   const history = createHistoryService({ db, repos })
-  const gm = createGmService({ db, repos, sessions, inventory, catalog, defs, history, stats, game, log, ...(deps.now ? { now: deps.now } : {}) })
+  const gm = createGmService({ db, repos, sessions, inventory, catalog, defs, history, stats, game, log, timezone: config.timezone, ...(deps.now ? { now: deps.now } : {}) })
   const gmRooms = createGmRoomService(game)
 
   // Order matters: the counters must be written before the thresholds are compared against them.

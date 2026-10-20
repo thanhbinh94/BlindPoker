@@ -52,6 +52,7 @@ const SERVICE_STATUS: Record<string, number> = {
   TARGET_IS_GM: 403,
   ALREADY_LOCKED: 409,
   ALREADY_UNLOCKED: 409,
+  NOT_CLAIMED_TODAY: 409,
   NOT_LOCKED: 409,
   LAST_GM: 409,
   TARGET_IS_LOCKED: 409,
@@ -157,6 +158,14 @@ export function registerGmRoutes(app: FastifyInstance, deps: GmRouteDeps): void 
   app.post('/api/gm/players/:id/achievements/:achievementId/unlock', gmOnly, async (req, reply) => {
     const achievementId = (req.params as { achievementId: string }).achievementId
     return reply.send(await translated(() => deps.gm.unlockAchievement(actorOf(req), idOf(req), achievementId, bodyOf(req).reason as string)))
+  })
+
+  // Today's check-in: what the latest claim granted, and the undo that lets the player claim again.
+  app.get('/api/gm/players/:id/checkin', gmOnly, async (req, reply) => reply.send(await translated(() => deps.gm.checkinPreview(idOf(req)))))
+
+  app.post('/api/gm/players/:id/checkin/reset', gmOnly, async (req, reply) => {
+    const { undone, actionId, balance } = await translated(() => deps.gm.resetCheckin(actorOf(req), idOf(req), bodyOf(req).reason as string))
+    return reply.send({ actionId, undone, balance })
   })
 
   app.post('/api/gm/players/:id/lock', gmOnly, async (req, reply) => {

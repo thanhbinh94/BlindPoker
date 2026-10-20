@@ -6,7 +6,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { rowsOf, type AppDb } from '../db/client.js'
 import { createTestDb, type TestDb } from '../db/test-db.js'
 import { ServiceError } from '../errors.js'
-import { buildTestApp, ORIGIN, resetDb, type Account, type Harness } from '../test-harness.js'
+import { buildTestApp, ORIGIN, resetDb, START, testConfig, type Account, type Harness } from '../test-harness.js'
 import { createGmService, GM_ITEM_SOURCE, POINTS_CAP, type GmActor, type GmService, type GmServiceDeps } from './gm-service.js'
 
 /** A Blind room nobody plays in: the lock test only needs the player seated, with a stack on the table. */
@@ -30,7 +30,7 @@ const actionsOf = async (p: string) =>
   rowsOf<{ action: string; amount: string | number | null; reason: string }>(
     await db.execute(sql`select action, amount, reason from gm_actions where target_player_id = ${p} order by id`),
   )
-const deps = (over: Partial<GmServiceDeps> = {}): GmServiceDeps => ({ ...h.app.services, db, game: h.app.game, ...over })
+const deps = (over: Partial<GmServiceDeps> = {}): GmServiceDeps => ({ ...h.app.services, db, game: h.app.game, timezone: testConfig().timezone, ...over })
 
 async function listen(): Promise<string> {
   await h.app.fastify.listen({ port: 0, host: '127.0.0.1' })
@@ -162,6 +162,156 @@ describe('GmService — achievements', () => {
     await gm.lock(actor(boss), me.playerId, 'spam')
     await expect(gm.unlockAchievement(actor(boss), me.playerId, other.id, 'đang khóa')).rejects.toMatchObject({ code: 'TARGET_IS_LOCKED' })
     expect((await gm.get(me.playerId))?.unlockedAchievementIds).not.toContain(other.id)
+  })
+})
+
+describe('GmService — check-in', () => {
+  /** The harness clock sits on 2026-09-04 10:00 in Asia/Ho_Chi_Minh; the GM service under test must read the same one. */
+  let clock = START
+  let gmAt: GmService
+  const TODAY = '2026-09-04'
+  const YESTERDAY = '2026-09-03'
+  beforeEach(() => {
+    clock = START
+    h.setNow(START)
+    gmAt = createGmService(deps({ now: () => clock }))
+  })
+
+  /** Day 7 of a streak: points 15,000 and a random common, so one claim moves points, an item and the counters. */
+  async function seedStreak(playerId: string, streak: number, lastClaimDate: string): Promise<void> {
+    await db.execute(sql`update daily_logins set streak = ${streak}, last_claim_date = ${lastClaimDate}, month = '2026-09', claimed_days = ${streak} where player_id = ${playerId}`)
+  }
+  const loginRow = async (playerId: string) =>
+    (rowsOf<{ streak: number; last: string | null; days: number }>(await db.execute(sql`select streak, to_char(last_claim_date, 'YYYY-MM-DD') as last, claimed_days as days from daily_logins where player_id = ${playerId}`)))[0]
+  const loginDays = async (playerId: string) =>
+    Number((rowsOf<{ n: number | string }>(await db.execute(sql`select total_login_days as n from player_stats where player_id = ${playerId}`)))[0]?.n)
+  const itemRows = async (playerId: string) =>
+    rowsOf<{ item_id: string; ref: string | null }>(await db.execute(sql`select item_id, ref from inventory where player_id = ${playerId} and source = 'daily'`))
+  /**
+   * Streak 7 also earns the `login_streak_7` achievement, whose 5,000 points a check-in undo deliberately leaves alone
+   * (it is the player's by another rule). Unlocking it first keeps these tests about the check-in; returns the balance.
+   */
+  const settle = async (): Promise<number> => {
+    await gmAt.unlockAchievement(actor(boss), me.playerId, 'login_streak_7', 'chuẩn bị')
+    return h.app.services.repos.balances.get(me.playerId)
+  }
+  const totals = async () => {
+    const [b] = rowsOf<{ n: string | number }>(await db.execute(sql`select coalesce(sum(balance), 0) as n from players`))
+    const [l] = rowsOf<{ n: string | number }>(await db.execute(sql`select coalesce(sum(amount), 0) as n from point_transactions where player_id is not null`))
+    const [s] = rowsOf<{ n: string | number }>(await db.execute(sql`select coalesce(sum(amount), 0) as n from point_transactions where player_id is null`))
+    return { balances: Number(b?.n), ledger: Number(l?.n), sinks: Number(s?.n) }
+  }
+
+  it('resetCheckin undoes today\'s points and item, steps the streak back, and a reclaim restores it with a fresh draw', async () => {
+    await seedStreak(me.playerId, 6, YESTERDAY)
+    const base = await settle()
+    const before = await totals()
+    const days0 = await loginDays(me.playerId)
+    const pushed = vi.spyOn(h.app.game, 'balanceChanged')
+    const notified = vi.spyOn(h.app.game, 'notify')
+
+    const claim = await h.app.services.economy.claimDaily(me.playerId, clock)
+    if (!claim.ok) throw new Error('the claim was refused')
+    expect(claim).toMatchObject({ day: 7, streak: 7, points: 15_000 })
+    expect(claim.items).toHaveLength(1)
+    expect(await loginDays(me.playerId)).toBe(days0 + 1)
+    const afterClaim = await totals()
+    expect(afterClaim.balances - before.balances).toBe(15_000)
+
+    const preview = await gmAt.checkinPreview(me.playerId)
+    expect(preview).toEqual({ claimedToday: true, day: 7, streak: 7, points: 15_000, itemIds: claim.items })
+
+    pushed.mockClear()
+    const r = await gmAt.resetCheckin(actor(boss), me.playerId, 'điểm danh nhầm tài khoản')
+    expect(r).toEqual({ actionId: expect.any(Number), undone: { points: 15_000, itemIds: claim.items }, balance: base })
+    expect(await h.app.services.repos.balances.get(me.playerId)).toBe(base)
+    expect(await itemRows(me.playerId)).toEqual([])
+    expect(await loginRow(me.playerId)).toEqual({ streak: 6, last: YESTERDAY, days: 6 })
+    expect(await loginDays(me.playerId)).toBe(days0)
+    const ledger = await h.app.services.repos.ledger.list(me.playerId, { limit: 1 })
+    expect(ledger[0]).toMatchObject({ amount: -15_000, reason: 'gm_checkin_undo', refId: `gm:${String(r.actionId)}` })
+    const [log] = rowsOf<{ action: string; amount: string | number | null; reason: string; details: Record<string, unknown> }>(
+      await db.execute(sql`select action, amount, reason, details from gm_actions where id = ${r.actionId}`),
+    )
+    expect(log).toMatchObject({ action: 'reset_checkin', reason: 'điểm danh nhầm tài khoản', details: { previousStreak: 7, previousLastClaimDate: TODAY, undone: { points: 15_000, itemIds: claim.items } } })
+    expect(Number(log?.amount)).toBe(15_000)
+    expect(pushed).toHaveBeenCalledWith(me.playerId)
+    expect(notified).toHaveBeenCalledWith(me.playerId, { t: 'NOTIFICATION', kind: 'GM_NOTICE', payload: { action: 'reset_checkin', reason: 'điểm danh nhầm tài khoản' } })
+    // Undone, the whole sequence leaves the books exactly as they were before the claim.
+    const afterReset = await totals()
+    expect(afterReset).toEqual(before)
+    expect(afterReset.balances).toBe(afterReset.ledger)
+    expect((await gmAt.checkinPreview(me.playerId)).claimedToday).toBe(false)
+
+    // The player can claim again: the same streak and points, a fresh draw, and the books move by the same 15,000.
+    const again = await h.app.services.economy.claimDaily(me.playerId, clock)
+    if (!again.ok) throw new Error('the reclaim was refused')
+    expect(again).toMatchObject({ day: 7, streak: 7, points: 15_000 })
+    expect(again.items).toHaveLength(1)
+    expect(await loginRow(me.playerId)).toEqual({ streak: 7, last: TODAY, days: 7 })
+    expect(await loginDays(me.playerId)).toBe(days0 + 1)
+    const afterReclaim = await totals()
+    expect(afterReclaim.balances - before.balances).toBe(15_000)
+    expect(afterReclaim.balances).toBe(afterReclaim.ledger)
+    expect(afterReclaim.sinks).toBe(before.sinks)
+  })
+
+  it('resetCheckin refuses NOT_CLAIMED_TODAY and INSUFFICIENT_BALANCE and writes no log row in either case', async () => {
+    const resets = async () => (await actionsOf(me.playerId)).filter((a) => a.action === 'reset_checkin')
+
+    // Never claimed, and claimed yesterday: neither is "today's claim".
+    await expect(gmAt.resetCheckin(actor(boss), me.playerId, 'chưa điểm danh')).rejects.toMatchObject({ code: 'NOT_CLAIMED_TODAY' })
+    await seedStreak(me.playerId, 3, YESTERDAY)
+    await expect(gmAt.resetCheckin(actor(boss), me.playerId, 'hôm qua thôi')).rejects.toMatchObject({ code: 'NOT_CLAIMED_TODAY' })
+    expect(await gmAt.checkinPreview(me.playerId)).toMatchObject({ claimedToday: false, points: 0, itemIds: [] })
+    expect(await resets()).toEqual([])
+
+    // Claim, then spend the points: the undo would overdraw the balance, so it is refused whole.
+    await seedStreak(me.playerId, 6, YESTERDAY)
+    await settle()
+    const claim = await h.app.services.economy.claimDaily(me.playerId, clock)
+    if (!claim.ok) throw new Error('the claim was refused')
+    await gmAt.adjustPoints(actor(boss), me.playerId, -claim.balance, 'tiêu hết')
+    const actionsBefore = (await actionsOf(me.playerId)).length
+    await expect(gmAt.resetCheckin(actor(boss), me.playerId, 'không đủ điểm')).rejects.toMatchObject({ code: 'INSUFFICIENT_BALANCE' })
+    expect(await actionsOf(me.playerId)).toHaveLength(actionsBefore)
+    expect(await resets()).toEqual([])
+    // Nothing else moved either: the item, the streak and the counters are still the claim's.
+    expect(await itemRows(me.playerId)).toHaveLength(1)
+    expect(await loginRow(me.playerId)).toEqual({ streak: 7, last: TODAY, days: 7 })
+    expect(await h.app.services.repos.balances.get(me.playerId)).toBe(0)
+
+    // Validation and lookups.
+    await expect(gmAt.resetCheckin(actor(boss), me.playerId, 'ab')).rejects.toMatchObject({ code: 'INVALID_REASON' })
+    await expect(gmAt.resetCheckin(actor(boss), '00000000-0000-4000-8000-000000000000', 'ai đó')).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    await expect(gmAt.checkinPreview('00000000-0000-4000-8000-000000000000')).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    await gmAt.adjustPoints(actor(boss), me.playerId, 20_000, 'trả lại')
+    await gmAt.lock(actor(boss), me.playerId, 'spam')
+    await expect(gmAt.resetCheckin(actor(boss), me.playerId, 'đang khóa')).rejects.toMatchObject({ code: 'TARGET_IS_LOCKED' })
+    expect(await resets()).toEqual([])
+  })
+
+  it('a second reset after a reclaim takes back one claim, not two', async () => {
+    await seedStreak(me.playerId, 6, YESTERDAY)
+    const base = await settle()
+    const before = await totals()
+    const first = await h.app.services.economy.claimDaily(me.playerId, clock)
+    if (!first.ok) throw new Error('the claim was refused')
+    // The reclaim happens later in the same day, so its rows are newer than the undone claim's.
+    await gmAt.resetCheckin(actor(boss), me.playerId, 'lần một')
+    clock += 60_000
+    h.setNow(clock)
+    const second = await h.app.services.economy.claimDaily(me.playerId, clock)
+    if (!second.ok) throw new Error('the reclaim was refused')
+    const preview = await gmAt.checkinPreview(me.playerId)
+    expect(preview).toMatchObject({ claimedToday: true, points: 15_000, itemIds: second.items })
+
+    const r = await gmAt.resetCheckin(actor(boss), me.playerId, 'lần hai')
+    expect(r.undone).toEqual({ points: 15_000, itemIds: second.items })
+    expect(await totals()).toEqual(before)
+    expect(await h.app.services.repos.balances.get(me.playerId)).toBe(base)
+    expect(await itemRows(me.playerId)).toEqual([])
+    expect(await loginRow(me.playerId)).toEqual({ streak: 6, last: YESTERDAY, days: 6 })
   })
 })
 

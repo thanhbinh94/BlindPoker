@@ -23,7 +23,8 @@ import { unlockWithin } from '../achievements/achievement-service.js'
 import type { AchievementDef, AchievementReward } from '../achievements/definitions.js'
 import type { SessionService } from '../auth/session-service.js'
 import { rowsOf, type AppDb, type AppTx } from '../db/client.js'
-import { gmActions, inventory as inventoryTable, playerAchievements, players, users, type GmActionKind } from '../db/schema.js'
+import { dailyLogins, gmActions, inventory as inventoryTable, playerAchievements, playerStats, players, users, type GmActionKind } from '../db/schema.js'
+import { addDaysKey, dayKey, MAX_STREAK } from '../economy/daily-rules.js'
 import { ServiceError } from '../errors.js'
 import type { HistoryService } from '../history/history-service.js'
 import { missingWardrobe } from '../inventory/grant-wardrobe.js'
@@ -91,6 +92,9 @@ export interface GmOverview {
 
 export interface GmGrantResult { granted: string[]; alreadyOwned: number; actionId: number }
 
+/** What undoing today's check-in would take back: the latest claim's points and items, and where the streak stands. */
+export interface GmCheckinPreview { claimedToday: boolean; day: number; streak: number; points: number; itemIds: string[] }
+
 export interface GmService {
   search(q: string, opts?: { limit?: number; before?: string }): Promise<{ players: GmPlayerSummary[]; nextBefore: string | null }>
   get(playerId: string): Promise<GmPlayerDetail | null>
@@ -99,6 +103,13 @@ export interface GmService {
   grantWardrobe(actor: GmActor, playerId: string, reason: string): Promise<GmGrantResult>
   /** Unlocks one achievement with its whole reward, through the code path that earning it uses. */
   unlockAchievement(actor: GmActor, playerId: string, achievementId: string, reason: string): Promise<{ actionId: number; reward: AchievementReward; balance: number }>
+  /** What today's check-in granted (the latest claim only), for the GM to see before undoing it. */
+  checkinPreview(playerId: string): Promise<GmCheckinPreview>
+  /**
+   * Takes today's check-in back — its points, its items — and steps the streak back so the player can claim again
+   * (and draw afresh). Refused whole when the player has already spent the points.
+   */
+  resetCheckin(actor: GmActor, playerId: string, reason: string): Promise<{ actionId: number; undone: { points: number; itemIds: string[] }; balance: number }>
   lock(actor: GmActor, playerId: string, reason: string): Promise<{ actionId: number }>
   unlock(actor: GmActor, playerId: string, reason: string): Promise<{ actionId: number }>
   setRole(actor: GmActor, playerId: string, role: GmRole, reason: string): Promise<{ role: GmRole; actionId: number }>
@@ -127,9 +138,14 @@ export interface GmServiceDeps {
     rooms: { readonly size: number; roomOf(playerId: string): GmRoomHandle | undefined }
     gateway: { disconnect(playerId: string): number }
   }
+  /** The economy's time zone: "today" for a check-in is a calendar day there. */
+  timezone: string
   log?: Pick<Logger, 'warn'>
   now?: () => number
 }
+
+/** The ledger reasons one daily claim writes, under the claim's shared `ref_id`. */
+const CLAIM_REASONS = sql`('daily_login', 'daily_item_fallback')`
 
 /** Sources: the reasons that create points. Transfers (buy-in, cash-out, settlement, refund) only move them. */
 const SOURCE_REASONS: ReadonlySet<string> = new Set(['starting_balance', 'daily_reward', 'daily_login', 'daily_item_fallback', 'relief', 'achievement', 'gm_grant', 'gm_adjust', 'gm_achievement', 'gm_checkin_undo'])
@@ -188,6 +204,22 @@ export function createGmService(deps: GmServiceDeps): GmService {
 
   function notice(playerId: string, payload: Record<string, unknown>): void {
     deps.game.notify(playerId, { t: 'NOTIFICATION', kind: 'GM_NOTICE', payload })
+  }
+
+  /**
+   * Today's claim: the points and items of the **latest** claim under `daily:<player>:<day>`. A reclaim after an undo
+   * reuses that ref, so summing every row under it would count the undone claim again; the rows of one claim share
+   * the claim transaction's timestamp, and the newest timestamp is the claim that is standing.
+   */
+  async function latestClaim(tx: AppTx, playerId: string, day: string): Promise<{ points: number; itemIds: string[] }> {
+    const refId = `daily:${playerId}:${day}`
+    const [row] = rowsOf<{ points: string | number }>(
+      await tx.execute(sql`
+        select coalesce(sum(amount), 0) as points from point_transactions
+        where ref_id = ${refId} and reason in ${CLAIM_REASONS}
+          and created_at = (select max(created_at) from point_transactions where ref_id = ${refId} and reason in ${CLAIM_REASONS})`),
+    )
+    return { points: Number(row?.points ?? 0), itemIds: await deps.inventory.findByRef(tx, playerId, refId) }
   }
 
   return {
@@ -348,6 +380,61 @@ export function createGmService(deps: GmServiceDeps): GmService {
       })
       if (def.reward.points !== undefined) void deps.game.balanceChanged(playerId)
       notice(playerId, { action: 'unlock_achievement', achievementId: def.id, reason: why })
+      return result
+    },
+
+    async checkinPreview(playerId) {
+      if (!isUuid(playerId)) throw new ServiceError('NOT_FOUND')
+      const today = dayKey(now(), deps.timezone)
+      return deps.db.transaction(async (tx): Promise<GmCheckinPreview> => {
+        await target(tx, playerId)
+        const [login] = await tx.select({ streak: dailyLogins.streak, lastClaimDate: dailyLogins.lastClaimDate }).from(dailyLogins).where(eq(dailyLogins.playerId, playerId))
+        const streak = login?.streak ?? 0
+        const claimedToday = login?.lastClaimDate === today
+        const claim = claimedToday ? await latestClaim(tx, playerId, today) : { points: 0, itemIds: [] }
+        return { claimedToday, day: Math.min(Math.max(streak, 1), MAX_STREAK), streak, ...claim }
+      })
+    },
+
+    async resetCheckin(actor, playerId, reason) {
+      const why = checkReason(reason)
+      const today = dayKey(now(), deps.timezone)
+      let result: { actionId: number; undone: { points: number; itemIds: string[] }; balance: number }
+      try {
+        result = await deps.db.transaction(async (tx) => {
+          const t = await target(tx, playerId)
+          // A locked account is handed nothing and has nothing undone: unlock it first.
+          if (t.lockedAt !== null) throw new ServiceError('TARGET_IS_LOCKED', 'a locked account cannot have its check-in undone; unlock first')
+          // The row a concurrent claim would lock: the claim and this undo cannot interleave.
+          const [login] = await tx.select().from(dailyLogins).where(eq(dailyLogins.playerId, t.id)).for('update')
+          if (login === undefined || login.lastClaimDate !== today) throw new ServiceError('NOT_CLAIMED_TODAY', 'the player has not checked in today')
+          const undone = await latestClaim(tx, t.id, today)
+          const actionId = await logAction(tx, {
+            actorUserId: actor.userId,
+            action: 'reset_checkin',
+            targetPlayerId: t.id,
+            amount: undone.points,
+            reason: why,
+            details: { previousStreak: login.streak, previousLastClaimDate: login.lastClaimDate, undone },
+          })
+          // The debit is the first thing that can fail: points already spent roll back the log line with it.
+          if (undone.points > 0) await creditWithin(tx, [{ playerId: t.id, delta: -undone.points, reason: 'gm_checkin_undo', refId: `gm:${String(actionId)}` }])
+          for (const itemId of undone.itemIds) await deps.inventory.revoke(tx, t.id, itemId)
+          // Yesterday and one step back: the next claim is then exactly the one just undone (same day, same points).
+          await tx
+            .update(dailyLogins)
+            .set({ lastClaimDate: addDaysKey(today, -1), streak: Math.max(login.streak - 1, 0), claimedDays: Math.max(login.claimedDays - 1, 0) })
+            .where(eq(dailyLogins.playerId, t.id))
+          await tx.update(playerStats).set({ totalLoginDays: sql`greatest(${playerStats.totalLoginDays} - 1, 0)` }).where(eq(playerStats.playerId, t.id))
+          const [after] = await tx.select({ balance: players.balance }).from(players).where(eq(players.id, t.id))
+          return { actionId, undone, balance: Number(after!.balance) }
+        })
+      } catch (err) {
+        if (err instanceof InsufficientBalanceError) throw new ServiceError('INSUFFICIENT_BALANCE', 'the player has spent the points of this check-in')
+        throw err
+      }
+      void deps.game.balanceChanged(playerId)
+      notice(playerId, { action: 'reset_checkin', reason: why })
       return result
     },
 

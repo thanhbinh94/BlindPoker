@@ -74,8 +74,8 @@ afterEach(async () => {
 describe('the guard', () => {
   it('answers 401 to nobody and 403 FORBIDDEN to a player on every /api/gm/ route the app serves', async () => {
     const routes = enumerateRoutes(h.app.fastify).filter((r) => r.path.startsWith('/api/gm/'))
-    // The sixteen `/api/gm/` labels `app.test.ts` pins in the exact surface: a route added there must be guarded here.
-    expect(routes).toHaveLength(16)
+    // The eighteen `/api/gm/` labels `app.test.ts` pins in the exact surface: a route added there must be guarded here.
+    expect(routes).toHaveLength(18)
     for (const route of routes) {
       const url = route.path
         .replace(':id', route.path.startsWith('/api/gm/rooms/') ? 'some-room' : me.playerId)
@@ -111,6 +111,7 @@ describe('reasons', () => {
       `/api/gm/players/${me.playerId}/unlock`,
       `/api/gm/players/${me.playerId}/role`,
       `/api/gm/players/${me.playerId}/achievements/login_streak_7/unlock`,
+      `/api/gm/players/${me.playerId}/checkin/reset`,
       '/api/gm/rooms/nope/kick',
       '/api/gm/rooms/nope/close',
     ]
@@ -187,6 +188,31 @@ describe('players', () => {
     expect(locked.statusCode).toBe(409)
     expect(code(locked)).toBe('TARGET_IS_LOCKED')
     expect(code(await gmReq('POST', `/api/gm/players/not-a-uuid/achievements/login_streak_7/unlock`, { reason: 'sai id' }))).toBe('NOT_FOUND')
+  })
+
+  it('previews and undoes today\'s check-in over HTTP: 409 NOT_CLAIMED_TODAY before a claim, then the points come back and the player can claim again', async () => {
+    const preview = `/api/gm/players/${me.playerId}/checkin`
+    const reset = `${preview}/reset`
+    expect((await gmReq('GET', preview)).json()).toEqual({ claimedToday: false, day: 1, streak: 0, points: 0, itemIds: [] })
+    const none = await gmReq('POST', reset, { reason: 'chưa điểm danh' })
+    expect(none.statusCode).toBe(409)
+    expect(code(none)).toBe('NOT_CLAIMED_TODAY')
+
+    const claim = await h.app.services.economy.claimDaily(me.playerId)
+    if (!claim.ok) throw new Error('the claim was refused')
+    expect((await gmReq('GET', preview)).json()).toEqual({ claimedToday: true, day: 1, streak: 1, points: claim.points, itemIds: claim.items })
+    const done = await gmReq('POST', reset, { reason: 'nhầm tài khoản' })
+    expect(done.statusCode).toBe(200)
+    expect(done.json()).toEqual({ actionId: expect.any(Number), undone: { points: claim.points, itemIds: claim.items }, balance: ECONOMY.startingBalance })
+    expect((await h.app.services.economy.claimDaily(me.playerId)).ok).toBe(true)
+
+    // The reason comes first, an unknown id is a 404, and spent points are a 409.
+    expect(code(await gmReq('GET', `/api/gm/players/not-a-uuid/checkin`))).toBe('NOT_FOUND')
+    expect(code(await gmReq('POST', `/api/gm/players/not-a-uuid/checkin/reset`, { reason: 'sai id' }))).toBe('NOT_FOUND')
+    await gmReq('POST', `/api/gm/players/${me.playerId}/points`, { amount: -(ECONOMY.startingBalance + claim.points), reason: 'tiêu hết' })
+    const spent = await gmReq('POST', reset, { reason: 'không đủ điểm' })
+    expect(spent.statusCode).toBe(409)
+    expect(code(spent)).toBe('INSUFFICIENT_BALANCE')
   })
 
   it('locks and unlocks, signs the player out, and refuses the self, a gm, a double lock', async () => {

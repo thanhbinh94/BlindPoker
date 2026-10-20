@@ -255,6 +255,20 @@ describe('claimDaily', () => {
       expect(await ledger(playerId)).toHaveLength(1)
     })
 
+    it('a daily item carries the claim ref', async () => {
+      const playerId = await seedPlayer()
+      await own(playerId, catalog.defaults())
+      await seedStreak(playerId, 6, 6)
+      const unowned = unownedCommons()
+      rng = () => 0
+
+      await economy.claimDaily(playerId, OCT(7))
+
+      const [row] = await db.select({ ref: inventory.ref }).from(inventory).where(sql`${inventory.playerId} = ${playerId} and ${inventory.itemId} = ${unowned[0]!}`)
+      expect(row?.ref).toBe(`daily:${playerId}:${octKey(7)}`)
+      expect(await db.transaction((tx) => inv.findByRef(tx, playerId, `daily:${playerId}:${octKey(7)}`))).toEqual([unowned[0]])
+    })
+
     it('draws the last of the unowned items when the rng lands at the top of its range', async () => {
       const playerId = await seedPlayer()
       await own(playerId, catalog.defaults())

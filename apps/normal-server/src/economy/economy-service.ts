@@ -188,7 +188,7 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
         // Guard rather than trust: `loadDailyGifts` already refuses a schedule naming an id the catalogue lacks, so
         // this only fires for a hand-built catalog, and a missing row would be a foreign-key error.
         if (deps.catalog.get(itemId) === undefined) continue
-        if (await deps.inventory.grant(tx, playerId, itemId, DAILY_SOURCE)) granted.push(itemId)
+        if (await deps.inventory.grant(tx, playerId, itemId, DAILY_SOURCE, refId)) granted.push(itemId)
       }
       return { items: granted, fallbackPoints: 0 }
     }
@@ -204,7 +204,7 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
       return { items: [], fallbackPoints: NO_ITEM_FALLBACK_POINTS }
     }
     const pick = unowned[Math.min(Math.floor(rng() * unowned.length), unowned.length - 1)]!
-    await deps.inventory.grant(tx, playerId, pick, DAILY_SOURCE)
+    await deps.inventory.grant(tx, playerId, pick, DAILY_SOURCE, refId)
     return { items: [pick], fallbackPoints: 0 }
   }
 
