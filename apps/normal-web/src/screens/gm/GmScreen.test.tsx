@@ -41,13 +41,20 @@ function setup(api: Stub = stubApi()) {
 }
 
 describe('GmScreen', () => {
-  it('has the four tabs, on the overview first', async () => {
+  it('has the five tabs, in order, on the overview first', async () => {
     setup()
 
     expect(screen.getByRole('heading', { name: viNormal.gm.title, level: 1 })).toBeInTheDocument()
     for (const name of Object.values(viNormal.gm.tabs)) {
       expect(screen.getByRole('button', { name })).toBeInTheDocument()
     }
+    expect(screen.getAllByRole('button').slice(0, 5).map((tab) => tab.textContent)).toEqual([
+      viNormal.gm.tabs.overview,
+      viNormal.gm.tabs.players,
+      viNormal.gm.tabs.rooms,
+      viNormal.gm.tabs.gifts,
+      viNormal.gm.tabs.actions,
+    ])
     expect(screen.getByRole('button', { name: viNormal.gm.tabs.overview })).toHaveAttribute('aria-pressed', 'true')
     expect(await screen.findByText('41')).toBeInTheDocument()
   })

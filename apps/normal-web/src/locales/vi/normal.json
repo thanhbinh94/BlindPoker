@@ -131,7 +131,32 @@
     "title": "Quản trị",
     "copyId": "Chép mã",
     "copied": "Đã chép",
-    "tabs": { "overview": "Tổng quan", "players": "Người chơi", "rooms": "Phòng", "actions": "Nhật ký" },
+    "tabs": { "overview": "Tổng quan", "players": "Người chơi", "rooms": "Phòng", "gifts": "Quà tháng", "actions": "Nhật ký" },
+    "gifts": {
+      "month": "Tháng",
+      "edited": "(đã sửa)",
+      "lead": "Mỗi ô là tier của chuỗi điểm danh. Tháng hiện tại chỉ sửa được các ngày sau hôm nay.",
+      "error": "Không tải được lịch quà",
+      "rule": {
+        "default": "Như mặc định",
+        "none": "Không có quà",
+        "common": "Ngẫu nhiên thường",
+        "rare": "Ngẫu nhiên hiếm",
+        "fixed": "Cố định"
+      },
+      "ruleOf": "Quà của ngày {{day}}",
+      "items": "Món của ngày {{day}}",
+      "pickItem": "Chọn món",
+      "addItem": "Thêm món",
+      "removeItem": "Bỏ món",
+      "needItem": "Ngày cố định cần ít nhất một món.",
+      "save": "Lưu",
+      "reset": "Về mặc định",
+      "saveTitle": "Lưu quà tháng {{month}}",
+      "resetTitle": "Bỏ bản sửa của tháng {{month}}",
+      "editDay": "Ngày {{day}}",
+      "locked": "Đã qua, không sửa được"
+    },
     "overview": {
       "online": "Đang kết nối",
       "rooms": "Phòng đang mở",
@@ -262,6 +287,8 @@
       "role": "Đã đổi vai trò",
       "unlockAchievement": "Đã mở thành tựu và trả thưởng.",
       "resetCheckin": "Đã mở lại lượt điểm danh hôm nay.",
+      "setGiftMonth": "Đã lưu quà tháng.",
+      "clearGiftMonth": "Đã về quà mặc định.",
       "kick": "Đã mời ra ({{when}})",
       "kickNow": "ngay",
       "kickAfterHand": "sau ván này",
@@ -284,7 +311,12 @@
       "TARGET_IS_LOCKED": "Tài khoản đang bị khóa, mở khóa trước",
       "INVALID_ACHIEVEMENT": "Thành tựu không tồn tại.",
       "ALREADY_UNLOCKED": "Người chơi đã mở thành tựu này.",
-      "NOT_CLAIMED_TODAY": "Hôm nay người chơi chưa điểm danh."
+      "NOT_CLAIMED_TODAY": "Hôm nay người chơi chưa điểm danh.",
+      "TIER_LOCKED": "Ngày đó đã qua trong tháng này.",
+      "MONTH_IN_PAST": "Tháng đã qua.",
+      "INVALID_GIFTS": "Lịch quà không hợp lệ: {{message}}",
+      "NOTHING_TO_CLEAR": "Tháng này chưa có bản sửa.",
+      "INVALID_MONTH": "Tháng không hợp lệ."
     },
     "notice": {
       "points": "{{amount}} điểm — {{reason}}",

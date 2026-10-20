@@ -1150,6 +1150,30 @@
   overflow-wrap: anywhere;
 }
 
+/* The game master's gift editor makes each open tier a button: a transparent sheet over the whole cell, so the cell
+   keeps its layout and its whole area is the tap target (a tier is ~80 px square on a phone, over `--tap`). */
+.calPick {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.calPick:hover {
+  background: var(--gold-soft);
+}
+
+.calPick:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+.calCell[aria-disabled='true'] {
+  opacity: 0.55;
+}
+
 /* A quarter of a phone is ~60 px of text, and nothing in a tier may break: "NGÀY 20" stays one line, "40.000"
    one number, "Hôm nay" one word — tighter gaps, padding and type buy the room. */
 @media (max-width: 640px) {

@@ -100,7 +100,7 @@ export function ReasonDialog({ open, title, body, fields, confirmLabel, onConfir
       setBusy(false)
       setError(
         cause instanceof ApiError
-          ? t(`gm.errors.${cause.code}`, { defaultValue: refusalText(cause, t) })
+          ? t(`gm.errors.${cause.code}`, { defaultValue: refusalText(cause, t), message: cause.message })
           : refusalText(cause, t),
       )
     }

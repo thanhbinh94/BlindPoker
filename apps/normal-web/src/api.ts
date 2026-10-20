@@ -532,6 +532,21 @@ export interface GmResetCheckinDto {
   balance: number
 }
 
+/** One day's check-in rule in a gift schedule: a random draw of a rarity, or a fixed list of items. */
+export type GiftRuleDto = { draw: 'common' | 'rare' } | { fixed: string[] }
+
+/** One month of the gift schedule as `GET /api/gm/gifts` lists it; `days` holds only that month's own rules. */
+export interface GiftMonthDto {
+  /** `YYYY-MM`. */
+  month: string
+  /** The rules this month sets, keyed by streak day ("7", "28"…); a day not named here falls back to the default. */
+  days: Record<string, GiftRuleDto>
+  /** `db` when a game master edited it, `file` when it comes from `daily-gifts.json`. */
+  source: 'file' | 'db'
+  updatedAt: number | null
+  updatedBy: string | null
+}
+
 /**
  * Every REST failure, including the ones that never left the browser. `status` is `0` and `code` is
  * `NETWORK` when `fetch` itself rejected — the screens need to tell "the server said no" apart from
@@ -627,6 +642,12 @@ export interface NormalApi {
   gmCheckin(playerId: string): Promise<GmCheckinDto>
   /** Undoes today's check-in (points and items) so the player can claim again; refused `NOT_CLAIMED_TODAY` otherwise. */
   gmResetCheckin(playerId: string, reason: string): Promise<GmResetCheckinDto>
+  /** The default schedule and one row per month from this one on (a month's own rules, and where they came from). */
+  gmGifts(): Promise<{ default: Record<string, GiftRuleDto>; months: GiftMonthDto[] }>
+  /** Replaces the month's own rules; refused `TIER_LOCKED` for a day already past this month, `INVALID_GIFTS` for a bad list. */
+  gmSetGiftMonth(month: string, days: Record<string, GiftRuleDto>, reason: string): Promise<{ actionId: number }>
+  /** Drops the month's edits back to the default; refused `NOTHING_TO_CLEAR` when it has none. */
+  gmClearGiftMonth(month: string, reason: string): Promise<{ actionId: number }>
   gmLock(playerId: string, reason: string): Promise<{ locked: true }>
   gmUnlock(playerId: string, reason: string): Promise<{ locked: false }>
   gmSetRole(playerId: string, role: Role, reason: string): Promise<{ role: Role }>
@@ -780,6 +801,11 @@ export function createApi(fetchImpl?: typeof fetch, base = ''): NormalApi {
     gmCheckin: (playerId) => call<GmCheckinDto>({ method: 'GET', path: `/api/gm/players/${encodeURIComponent(playerId)}/checkin` }),
     gmResetCheckin: (playerId, reason) =>
       call<GmResetCheckinDto>({ method: 'POST', path: `/api/gm/players/${encodeURIComponent(playerId)}/checkin/reset`, body: { reason } }),
+    gmGifts: () => call<{ default: Record<string, GiftRuleDto>; months: GiftMonthDto[] }>({ method: 'GET', path: '/api/gm/gifts' }),
+    gmSetGiftMonth: (month, days, reason) =>
+      call<{ actionId: number }>({ method: 'PUT', path: `/api/gm/gifts/${encodeURIComponent(month)}`, body: { days, reason } }),
+    gmClearGiftMonth: (month, reason) =>
+      call<{ actionId: number }>({ method: 'DELETE', path: `/api/gm/gifts/${encodeURIComponent(month)}`, body: { reason } }),
     gmLock: (playerId, reason) => call<{ locked: true }>({ method: 'POST', path: `/api/gm/players/${encodeURIComponent(playerId)}/lock`, body: { reason } }),
     gmUnlock: (playerId, reason) => call<{ locked: false }>({ method: 'POST', path: `/api/gm/players/${encodeURIComponent(playerId)}/unlock`, body: { reason } }),
     gmSetRole: (playerId, role, reason) =>

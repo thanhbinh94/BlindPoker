@@ -131,7 +131,32 @@
     "title": "Game master",
     "copyId": "Copy id",
     "copied": "Copied",
-    "tabs": { "overview": "Overview", "players": "Players", "rooms": "Rooms", "actions": "Log" },
+    "tabs": { "overview": "Overview", "players": "Players", "rooms": "Rooms", "gifts": "Gift months", "actions": "Log" },
+    "gifts": {
+      "month": "Month",
+      "edited": "(edited)",
+      "lead": "Each cell is a check-in streak tier. In the current month only the days after today can change.",
+      "error": "Could not load the gift schedule",
+      "rule": {
+        "default": "As default",
+        "none": "No gift",
+        "common": "Random common",
+        "rare": "Random rare",
+        "fixed": "Fixed"
+      },
+      "ruleOf": "Gift of day {{day}}",
+      "items": "Items of day {{day}}",
+      "pickItem": "Choose an item",
+      "addItem": "Add item",
+      "removeItem": "Remove item",
+      "needItem": "A fixed day needs at least one item.",
+      "save": "Save",
+      "reset": "Back to default",
+      "saveTitle": "Save the gifts of {{month}}",
+      "resetTitle": "Drop the edits of {{month}}",
+      "editDay": "Day {{day}}",
+      "locked": "Past, cannot change"
+    },
     "overview": {
       "online": "Connected now",
       "rooms": "Open rooms",
@@ -262,6 +287,8 @@
       "role": "Role changed",
       "unlockAchievement": "Achievement unlocked and rewarded.",
       "resetCheckin": "Today's check-in has been reopened.",
+      "setGiftMonth": "Gift month saved.",
+      "clearGiftMonth": "Back to the default gifts.",
       "kick": "Removed ({{when}})",
       "kickNow": "now",
       "kickAfterHand": "after this hand",
@@ -284,7 +311,12 @@
       "TARGET_IS_LOCKED": "This account is locked; unlock it first",
       "INVALID_ACHIEVEMENT": "No such achievement.",
       "ALREADY_UNLOCKED": "The player already has this achievement.",
-      "NOT_CLAIMED_TODAY": "The player has not checked in today."
+      "NOT_CLAIMED_TODAY": "The player has not checked in today.",
+      "TIER_LOCKED": "That day has already passed this month.",
+      "MONTH_IN_PAST": "That month is over.",
+      "INVALID_GIFTS": "Invalid gift schedule: {{message}}",
+      "NOTHING_TO_CLEAR": "This month has no edits.",
+      "INVALID_MONTH": "Invalid month."
     },
     "notice": {
       "points": "{{amount}} points — {{reason}}",
