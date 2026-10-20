@@ -1427,8 +1427,14 @@
      waits for.
    - left (`.trayLeft`): the pre-action toggles and "Tự động chơi" as 34 px pills — or, on the player's own turn once
      the bet/raise button has been pressed, the presets and "✎" (a typed amount opens `AmountDialog`). There is no
-     slider (Q7). `fixed`, not `absolute`: the tray is no box to hang it from, and it stays inside the tray's markup so
-     the "Hành động" group still holds it. */
+     slider (Q7). It stays inside the tray's markup, so the "Hành động" group still holds it.
+
+   The tray is `static`, so both parts hang from the room (`.room[data-frame='landscape']` is `relative`). Each part is
+   a box of a fixed width that stops short of the viewer's plate: that plate and its badge line are at most 30cqw of the
+   ring, which is at most the room's width, so they reach at most 15 % either side of the centre, and each corner gets
+   `35 %` of the room less its inset and an 8 px gap. The box is a size container: when the labels do not fit at full
+   size, the container queries below shrink them and drop the call's figure (the button's name keeps it). The box
+   itself lets taps through to the felt; only its children take them. */
 .tray[data-frame='landscape'] {
   position: static;
   min-height: 0;
@@ -1439,46 +1445,61 @@
   box-shadow: none;
 }
 
-.trayLeft {
-  position: fixed;
-  left: max(var(--space-3), env(safe-area-inset-left));
+.trayLeft,
+.trayRight {
+  position: absolute;
   bottom: max(var(--space-3), env(safe-area-inset-bottom));
   z-index: 5;
+  container-type: inline-size;
+  pointer-events: none;
+}
+
+.trayLeft > *,
+.trayRight > * {
+  pointer-events: auto;
+}
+
+.trayLeft {
+  left: max(var(--space-3), env(safe-area-inset-left));
+  width: calc(35% - var(--space-2) - max(var(--space-3), env(safe-area-inset-left)));
   display: flex;
   gap: var(--space-2);
 }
 
 .trayLeft .preRow {
+  flex: none;
   flex-wrap: nowrap;
 }
 
 .trayRight {
-  position: absolute;
   right: max(var(--space-3), env(safe-area-inset-right));
-  bottom: max(var(--space-3), env(safe-area-inset-bottom));
-  z-index: 5;
+  width: calc(35% - var(--space-2) - max(var(--space-3), env(safe-area-inset-right)));
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: var(--space-1);
 }
 
-/* Compact, so four buttons fit between the viewer's plate and the corner at 844 px: the row is as wide as its labels. */
 .trayRight .trayRow {
   flex-wrap: nowrap;
   justify-content: flex-end;
+  max-width: 100%;
   gap: var(--space-1);
 }
 
+/* `overflow: hidden` is the last resort for a figure no query foresaw: a clipped label, never one over the plate. */
 .trayRight .trayRow > button {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: var(--tap);
   min-height: 48px;
   padding: 0 10px;
+  overflow: hidden;
   font-size: 0.875rem;
   white-space: nowrap;
 }
 
 .trayLeft .presets {
+  flex: none;
   gap: var(--space-1);
 }
 
@@ -1500,13 +1521,34 @@
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--bg) 78%, transparent);
   font-size: 0.8125rem;
-  white-space: nowrap;
+  text-align: right;
 }
 
 /* A thumb still gets a full tap target; the corner grows for it rather than the target shrinking. */
 @media (pointer: coarse) {
   .trayLeft .preset {
     min-height: var(--tap);
+  }
+}
+
+/* The corner is narrower than "Bỏ bài · Theo 104.000 · Tố · Tất tay" (a 915 px phone gives 300 px, 844 px 275, 740 px
+   239): the call keeps its word and gives up its figure, which stays in the button's name and tooltip. */
+@container (max-width: 330px) {
+  .trayCallFigure {
+    display: none;
+  }
+}
+
+/* Narrower still (a 740 × 360 phone): tighter padding and type, so the row and the presets each stay one line. */
+@container (max-width: 260px) {
+  .trayRight .trayRow > button {
+    padding: 0 var(--space-2);
+    font-size: 0.8125rem;
+  }
+
+  .trayLeft .preset {
+    padding: 0 var(--space-2);
+    font-size: 0.75rem;
   }
 }
 

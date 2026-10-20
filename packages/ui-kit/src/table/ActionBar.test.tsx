@@ -213,6 +213,16 @@ describe('ActionBar in the landscape frame', () => {
     expect(within(inHand).getByRole('button', { name: 'Tự động chơi' })).toBeInTheDocument()
   })
 
+  it('keeps the call figure in the name and tooltip when a narrow corner hides it', () => {
+    // The right corner stops short of the viewer's plate; a container query hides `.trayCallFigure` when it is narrow.
+    wrap(<ActionBar hand={hand({ ...raiseLegal, callAmount: 104_000 })} room={room} onAct={() => {}} lang="en" frame="landscape" />)
+    const call = screen.getByRole('button', { name: 'Call 104,000' })
+    expect(call).toHaveAttribute('title', 'Call 104,000')
+    const figure = call.querySelector('[class*="trayCallFigure"]')
+    expect(figure).toHaveTextContent('104,000')
+    expect(call.closest('[class*="trayRight"]')).not.toBeNull()
+  })
+
   it('R opens the amount dialog in landscape', async () => {
     const onAct = vi.fn()
     wrap(<ActionBar hand={hand(raiseLegal)} room={room} onAct={onAct} lang="en" frame="landscape" />)

@@ -245,7 +245,19 @@ export function ActionBar({
   const wager = legal !== null && legal.callAmount > 0 ? legal.callAmount : (room.config.blind?.fixedWager ?? 0)
   const playText = `${t('actions.play')} ${formatPoints(wager, lang)}`
   const callAmount = legal?.callAmount ?? 0
-  const callText = callAmount > 0 ? `${t('actions.call')} ${formatPoints(callAmount, lang)}` : t('actions.call')
+  const callFull = callAmount > 0 ? `${t('actions.call')} ${formatPoints(callAmount, lang)}` : t('actions.call')
+  // Landscape: the figure is its own span, which a narrow corner hides (`.trayCallFigure`); the name and the tooltip
+  // keep the whole "Theo 104.000", so neither a screen reader nor a long press loses it.
+  const callFigure = callAmount > 0 ? ` ${formatPoints(callAmount, lang)}` : ''
+  const callText = landscape ? (
+    <>
+      {t('actions.call')}
+      {callFigure === '' ? null : <span className={s.trayCallFigure}>{callFigure}</span>}
+    </>
+  ) : (
+    callFull
+  )
+  const callLabel = landscape ? callFull : undefined
   const submitText = `${t(canRaise ? 'actions.raise' : 'actions.bet')} ${formatPoints(value, lang)}`
 
   const presetButtons = (
@@ -292,7 +304,15 @@ export function ActionBar({
         </Button>
       ) : null}
       {kinds.includes('call') ? (
-        <Button variant="primary" size="lg" disabled={disabled} aria-keyshortcuts="C" onClick={() => emit({ kind: 'call' })}>
+        <Button
+          variant="primary"
+          size="lg"
+          disabled={disabled}
+          aria-keyshortcuts="C"
+          aria-label={callLabel}
+          title={callLabel}
+          onClick={() => emit({ kind: 'call' })}
+        >
           {callText}
         </Button>
       ) : null}
