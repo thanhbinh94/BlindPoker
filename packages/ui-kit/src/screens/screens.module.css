@@ -427,3 +427,13 @@
   font-size: 0.75rem;
   white-space: nowrap;
 }
+
+/* The result overlay (Plan 26, B5): keyed on the overlay's own `data-frame`, after the base rules. The card is centred
+   over the felt, and the bottom 60 px stay free, so the corner docks (pre-hand dock, action tray, z-index 3 and 5) stay
+   visible and tappable beside it, below the scrim. No `--seat-clearance` here: the viewer's plate is small and the card
+   is on the felt, not under it. */
+.overlay[data-frame='landscape'] {
+  inset: 0 0 60px 0;
+  padding: var(--space-2);
+  align-items: center;
+}

@@ -495,6 +495,30 @@ describe('RoomScreen', () => {
     expect(screen.queryByRole('heading', { name: 'Winner' })).toBeNull()
   })
 
+  // Plan 26 (B5): both the overlay (it frees the dock row) and the card (it compacts) key their landscape rules on it.
+  it('stamps the frame on the result overlay too', () => {
+    const room = makeRoom({
+      players: [
+        makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'IN_HAND', stack: 19_800 }),
+        makePlayer({ playerId: 'me', displayName: 'Mai', seat: 2, status: 'IN_HAND', stack: 20_400 }),
+      ],
+    })
+    const hand = makeHand({
+      phase: 'COMPLETE',
+      mySeat: 2,
+      actingSeat: null,
+      result: { payouts: [{ seat: 2, amount: 600 }], pots: [], fee: 0, showdown: null, carryOverOut: 0, uncalledReturned: null, cancelled: false, reason: null },
+    })
+    render(
+      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+        <RoomScreen client={fakeClient(makeState({ room, hand }))} lang="en" onLeft={vi.fn()} frame="landscape" />
+      </I18nextProvider>,
+    )
+    const card = screen.getByRole('group', { name: 'Winner' })
+    expect(card).toHaveAttribute('data-frame', 'landscape')
+    expect(card.parentElement).toHaveAttribute('data-frame', 'landscape')
+  })
+
   // Review round 2, R2-3: on a short stage the result card covered the viewer's own seat. The overlay's foot now stops
   // above that seat when there is room for the card there — jsdom lays nothing out, so the boxes are pinned here.
   describe('the result card stops above the viewer’s own seat', () => {

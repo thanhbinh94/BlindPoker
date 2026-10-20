@@ -44,6 +44,36 @@ describe('HandResult', () => {
     expect(screen.queryByText(/Pot chính/)).toBeNull() // one pot needs no breakdown
   })
 
+  // Plan 26 (B5): the module cannot name the room's hashed class, so the card keys its landscape rules on its own attribute.
+  it('stamps the frame on the card root', () => {
+    const room = { players: [{ playerId: 'a', displayName: 'Ann', seat: 0 }] } as unknown as RoomView
+    const hand = {
+      phase: 'COMPLETE',
+      mode: 'holdem',
+      seats: [{ seat: 0, playerId: 'a', displayName: 'Ann' }],
+      result: {
+        payouts: [{ seat: 0, amount: 100 }],
+        pots: [{ amount: 100, eligibleSeats: [0], winners: [{ seat: 0, amount: 100 }] }],
+        fee: 0,
+        showdown: null,
+        carryOverOut: 0,
+        uncalledReturned: null,
+        cancelled: false,
+        reason: null,
+      },
+    } as unknown as ClientHand
+    const card = (frame?: 'desktop' | 'landscape') => (
+      <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+        <HandResult hand={hand} room={room} myPlayerId="a" lang="vi" frame={frame} />
+      </I18nextProvider>
+    )
+    const view = render(card('landscape'))
+    expect(screen.getByRole('group', { name: 'Người thắng' })).toHaveAttribute('data-frame', 'landscape')
+    view.unmount()
+    render(card())
+    expect(screen.getByRole('group', { name: 'Người thắng' })).toHaveAttribute('data-frame', 'desktop')
+  })
+
   it('breaks a short all-in down into main and side pots, naming who was eligible for each', () => {
     const room = {
       players: [

@@ -347,7 +347,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
             to the next deal is the card's own footer line: printed under the card, it landed on the viewer's seat
             (review 2026-09-29, No2). Its stage stops above the viewer's own seat when that leaves it room (R2-3). */}
         {resultCard === null ? null : (
-          <div className={s.overlay} data-surface="night" style={overlayStyle}>
+          <div className={s.overlay} data-surface="night" data-frame={frame} style={overlayStyle}>
             <HandResult
               hand={resultCard}
               room={room}
@@ -355,6 +355,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
               lang={lang}
               onDismiss={() => setDismissedHandId(resultCard.handId)}
               countdown={nextHandText}
+              frame={frame}
             />
           </div>
         )}

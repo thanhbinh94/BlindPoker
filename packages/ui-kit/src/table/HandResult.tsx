@@ -6,6 +6,7 @@ import { formatPoints, handLabel, type Language } from '../i18n/index.js'
 import { Button } from '../primitives/Button.js'
 import { cx } from '../primitives/cx.js'
 import { Card } from './Card.js'
+import type { RoomFrame } from './frame.js'
 import { CARD_STAGGER_MS } from './motion.js'
 import s from './table.module.css'
 
@@ -23,6 +24,11 @@ export interface HandResultProps {
    * the footer — this line included — follows it. It needs no `aria-live` of its own.
    */
   countdown?: ReactNode
+  /**
+   * The room's frame (Plan 26, B5). It is stamped on the card as `data-frame`: this module cannot name the room's own
+   * hashed class, so the compact card of a phone held sideways keys its rules on the card's own attribute.
+   */
+  frame?: RoomFrame
 }
 
 /**
@@ -60,7 +66,7 @@ function useMoreBelow(ref: RefObject<HTMLElement>, key: unknown): boolean {
 }
 
 /** Showdown card: who won, with what, and for how much. Renders only for a completed hand that carries a result. */
-export function HandResult({ hand, room, myPlayerId, lang, onDismiss, countdown }: HandResultProps) {
+export function HandResult({ hand, room, myPlayerId, lang, onDismiss, countdown, frame = 'desktop' }: HandResultProps) {
   const { t } = useTranslation()
   const titleId = useId()
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -89,7 +95,7 @@ export function HandResult({ hand, room, myPlayerId, lang, onDismiss, countdown 
     uncalled === null ? '' : `${t('labels.uncalledReturned')} ${nameOf(uncalled.seat)} ${formatPoints(uncalled.amount, lang)}`
 
   return (
-    <div className={s.result} role="group" aria-labelledby={titleId}>
+    <div className={s.result} role="group" aria-labelledby={titleId} data-frame={frame}>
       {/* The live region stops short of the footer (review round 2, R2-4): what a screen reader announces when the card
           appears is the title, the reason a hand was cancelled, and the rows and the pot ledger. The fee, the
           carry-over, the uncalled return and the countdown that ticks every second follow it, outside every live
