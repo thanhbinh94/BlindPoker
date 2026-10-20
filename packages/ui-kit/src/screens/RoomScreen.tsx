@@ -339,6 +339,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
           captionFor={captionFor}
           resultPending={held}
           onReveal={reveal}
+          note={landscape ? hint : null}
         />
 
         {/* The result card is dealt onto the felt, so it keeps the felt's night palette in either theme. The countdown
@@ -365,7 +366,6 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
               {readyButton}
               {startButton}
               {readyLine}
-              {hintLine}
               {countdownLine}
             </div>
           ) : null

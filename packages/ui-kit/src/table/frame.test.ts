@@ -21,6 +21,11 @@ afterEach(() => {
 })
 
 describe('useRoomFrame', () => {
+  it('asks for a phone on its side: landscape, at most 500 px tall and at least 700 px wide', () => {
+    // A narrower short window (a 640 × 360 phone) keeps the stacked layout: the ring needs the width (ruling 8).
+    expect(LANDSCAPE_PHONE).toBe('(orientation: landscape) and (max-height: 500px) and (min-width: 700px)')
+  })
+
   it('returns the override when given', () => {
     stubMatchMedia([LANDSCAPE_PHONE])
     expect(renderHook(() => useRoomFrame('desktop')).result.current).toBe('desktop')

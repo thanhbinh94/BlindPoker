@@ -1070,6 +1070,20 @@ describe('RoomScreen', () => {
       expect(screen.queryByRole('group', { name: 'Hành động' }), 'the tray waits for the next deal').toBeNull()
     })
 
+    it('lays the pre-hand hint on the felt, so the dock in the corner stays one row', () => {
+      // The ring's lower seats end where a one-row dock begins (Plan 26, B3): the hint wrapped under the buttons made
+      // the dock twice as tall and it covered the seat beside the viewer's.
+      const notReady = makeRoom({
+        ...readyRoom,
+        players: readyRoom.players.map((p) => (p.playerId === 'me' ? { ...p, ready: false, status: 'SEATED' as const } : p)),
+      })
+      landscape(fakeClient(makeState({ room: notReady })))
+      const hint = 'Cần ít nhất 2 người sẵn sàng để bắt đầu'
+      const dock = screen.getByRole('group', { name: 'Điều khiển bàn' })
+      expect(within(dock).queryByText(hint)).toBeNull()
+      expect(within(screen.getByRole('region', { name: 'Bàn' })).getByText(hint)).toBeInTheDocument()
+    })
+
     it('leaves the desktop frame’s footer row as it was', () => {
       wrap(fakeClient(makeState({ room: readyRoom })))
       const controls = screen.getByRole('group', { name: 'Table controls' })

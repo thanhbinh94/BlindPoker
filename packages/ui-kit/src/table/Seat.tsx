@@ -227,6 +227,9 @@ export function Seat({
       style={style}
       data-seat={seat.seat}
       data-half={position !== null && position.y < 50 ? 'top' : 'bottom'}
+      // The ring's flanks: a line under the plate wider than the seat runs onto the felt from there instead of
+      // centring past the stage's edge (the landscape ring, Plan 26 B3).
+      data-edge={position === null ? undefined : position.x < 15 ? 'left' : position.x > 85 ? 'right' : undefined}
       // `RoomScreen` measures the viewer's own seat and its plate to stop the result card above them (review round 2,
       // R2-3). These two markers are that contract; the CSS modules' class names are hashed and are not.
       data-me={isMe ? 'true' : undefined}

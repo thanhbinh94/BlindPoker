@@ -896,6 +896,159 @@
   }
 }
 
+/* A phone held sideways (Plan 26, B3): 915 × 355 to 915 × 412 leaves a stage of 290–350 px under the 32 px header,
+   and the docks take the bottom corners (Sẵn sàng / Bắt đầu, later the betting tray, at the right; the pre-action
+   toggles at the left). So the ring is sized from the seats in, not from the stage out:
+   - every rim seat but the viewer's keeps out of the stage's bottom `--dock-row`, where a one-row dock sits. The
+     lowest of them (beside the viewer, 82–83 % down the ellipse, `geometry.ts`) ends half a seat block below its
+     point, and the top seat (12 %) begins half a block above its point, `--top-gap` under the stage's top edge (room
+     for the dealer's chip, which pokes 7 px above a plate). So the box is (stage − dock row − one block − top gap)
+     ÷ 0.712 tall (0.832 − 0.12) and starts `--top-gap` + `--seat-half` − 12 % of itself down the stage. Both are `%`
+     of the stage — `height` and a relative `top` both resolve against the containing block's height — so one custom
+     property carries the formula: 200 px at 915 × 355, 282 px at 915 × 412.
+   - its width follows from a 10 : 3 box, capped by the stage's width; the box's real shape is measured
+     (`PokerTable`'s `useRingBox`), so the seats stay evenly spaced on the drawn rim when the cap bites (915 × 412).
+   - a seat on the top rim hangs from its point by its plate, and one on the bottom rim stands on it by its foot, so a
+     badge line that wraps grows towards the felt — never above the stage, never down into the docks.
+   - the viewer's own block ends 14 px above the stage's foot: its plate dips 22 px into the dock row, between the two
+     docks, and its cards rise onto the felt above it, so taller cards (a squeeze table's 60 px peel) grow upwards.
+     The point sits at top gap + `--seat-half` + 0.76 × the box below the stage's top and the foot at 0.712 × the box
+     + 142 px + top gap, so the distance from the point down to "foot − 14 px" is 85 px − 4.8 % of the box (`cqh`: the
+     ring is a size container).
+   - the deck, the board and the pot share one row in the middle: stacked, they needed more height than the felt has
+     between the top seat and the viewer's cards.
+   Keyed on the ring's own `data-frame`, the same value `RoomScreen` puts on the room (`.room[data-frame]`): the
+   room's class lives in another CSS module, whose hashed name this file cannot spell. */
+.ring[data-frame='landscape'] {
+  /* half a rim seat block in a hand: 28 px cards, the 36 px plate, an 18 px badge line, two 2 px gaps */
+  --seat-half: 43px;
+  --dock-row: 56px;
+  --top-gap: 6px;
+  --ring-h: calc((100% - var(--dock-row) - 2 * var(--seat-half) - var(--top-gap)) / 0.712);
+  align-self: flex-start;
+  top: calc(var(--top-gap) + var(--seat-half) - 0.12 * var(--ring-h));
+  height: var(--ring-h);
+  min-height: 0;
+  max-height: none;
+  width: auto;
+  max-width: 100%;
+  margin: 0 auto;
+  aspect-ratio: 10 / 3;
+}
+
+.ring[data-frame='landscape'] .felt {
+  inset: 4% 2%;
+}
+
+/* The room's line on the felt (`PokerTable`'s `note`): the pre-hand hint, under the board, where the felt is bare
+   while no hand is dealt — the viewer's own seat has no cards yet, so its plate starts well below this. */
+.ring .note {
+  position: absolute;
+  left: 50%;
+  top: 60%;
+  width: max-content;
+  max-width: 46cqw;
+  margin: 0;
+  transform: translateX(-50%);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--ink-muted);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.ring[data-frame='landscape'] .centre {
+  top: 45%;
+  flex-direction: row;
+  gap: var(--space-2);
+  --card-lg: clamp(28px, 10cqh, 48px);
+}
+
+/* deck · board · pot, the board in the middle: the deck and the pot are as tall as one board card */
+.ring[data-frame='landscape'] .centreRow {
+  display: contents;
+}
+
+.ring[data-frame='landscape'] .deck {
+  order: -1;
+}
+
+.ring[data-frame='landscape'] .pot {
+  padding: 2px var(--space-2) 2px 4px;
+}
+
+.ring[data-frame='landscape'] .chipStack {
+  width: 22px;
+}
+
+.ring[data-frame='landscape'] .potValue {
+  font-size: 0.8rem;
+}
+
+.ring[data-frame='landscape'] .potLabel {
+  font-size: 0.625rem;
+}
+
+/* Set on the seats, as the short-ring block above does: they are the ring's container children. The badge line may
+   run past its plate (24 % of the table, 160 px at 915 × 355), so "Bot · Đã chọn · 1.000" stays one line. */
+.ring[data-frame='landscape'] .seat {
+  --seat-w: 13%;
+  --seat-min: 94px;
+  --seat-gap: 2px;
+  --seat-disc: 30px;
+  --seat-name: 0.75rem;
+  --seat-line: 24cqw;
+}
+
+/* at the flanks the line starts at the plate's outer edge and runs onto the felt: centred, it ran off the stage */
+.ring[data-frame='landscape'] .seat[data-edge='left'] :is(.tags, .seatResult) {
+  align-self: flex-start;
+  justify-content: flex-start;
+}
+
+.ring[data-frame='landscape'] .seat[data-edge='right'] :is(.tags, .seatResult) {
+  align-self: flex-end;
+  justify-content: flex-end;
+}
+
+.ring[data-frame='landscape'] .seat[data-half='top'] {
+  transform: translate(-50%, calc(-1 * var(--seat-half)));
+}
+
+.ring[data-frame='landscape'] .seat[data-half='bottom'] {
+  transform: translate(-50%, calc(var(--seat-half) - 100%));
+}
+
+.ring[data-frame='landscape'] .plate {
+  padding: 2px 6px;
+}
+
+/* the badge line under a plate, one size down: 18 px instead of 24 */
+.ring[data-frame='landscape'] .tags > * {
+  gap: 4px;
+  padding: 1px 5px;
+  font-size: 0.6875rem;
+  line-height: 1.3;
+}
+
+.ring[data-frame='landscape'] .cardSm {
+  --card-w: 20px;
+}
+
+.ring[data-frame='landscape'] .seat.seatMe {
+  --seat-line: 30cqw;
+  transform: translate(-50%, calc(-100% + 85px - 4.8cqh));
+}
+
+.ring[data-frame='landscape'] .seatMe .cardMd {
+  --card-w: clamp(50px, 24cqh, 56px);
+}
+
+/* a card that is dragged open needs a thumb's width under it */
+.ring[data-frame='landscape'] .seatMe .peel {
+  --card-w: 60px;
+}
+
 /* vertical layout under 768 px: opponents / board / me (spec §27.1 two-row grid, §27.3 "must show" list).
    Every seat at the table has to be *visible*. An opponent parked behind an inner scrollbar is an opponent the
    player does not know is at the table — so the strip never scrolls inside itself: it wraps as far as it needs to,

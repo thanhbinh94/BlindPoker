@@ -392,21 +392,24 @@
   padding: var(--space-2) max(var(--space-3), env(safe-area-inset-right)) var(--space-2) max(var(--space-3), env(safe-area-inset-left));
 }
 
-/* The pre-hand dock (Plan 26, B2): Ready, Start, the ready count, the hint, and the countdown once the result card is
-   closed, in the bottom-right corner where the right thumb rests and where the action tray sits during a hand (the two
-   never show together). A night pill of its own, so its muted lines read over the felt or the page in either theme. */
+/* The pre-hand dock (Plan 26, B2): Ready, Start, the ready count, and the countdown once the result card is closed, in
+   the bottom-right corner where the right thumb rests and where the action tray sits during a hand (the two never show
+   together). One row, 60 px tall at most: the ring keeps its seats out of the stage's bottom 56 px (B3), and the dock
+   sits 12 px from the room's foot, which is 16 px below the stage's. The hint that wrapped under the buttons now lies
+   on the felt (`PokerTable`'s `note`). A night pill of its own, so its muted lines read over the felt or the page in
+   either theme. */
 .room[data-frame='landscape'] .dock {
   position: absolute;
   right: max(var(--space-3), env(safe-area-inset-right));
   bottom: max(var(--space-3), env(safe-area-inset-bottom));
   z-index: 3;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-2);
-  /* A wrapping row takes all the width it is allowed, so the cap is what keeps the corner small: Ready, Start and the
-     count fit one row in it, and the hint wraps under them instead of stretching the pill across the seats. */
+  /* the cap keeps the corner small, clear of the viewer's plate: "Hủy sẵn sàng", "Bắt đầu" and "8/8 sẵn sàng" fit one
+     row in it with the buttons' side padding at 12 px */
   max-width: min(60%, 22rem);
   padding: var(--space-2);
   border-radius: var(--radius-md);
@@ -414,6 +417,13 @@
   text-align: right;
 }
 
-.room[data-frame='landscape'] .dock .hint {
+.room[data-frame='landscape'] .dock > button {
+  flex: none;
+  white-space: nowrap;
+  padding-inline: var(--space-3);
+}
+
+.room[data-frame='landscape'] .dock .readyCount {
   font-size: 0.75rem;
+  white-space: nowrap;
 }
