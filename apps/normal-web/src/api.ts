@@ -503,6 +503,14 @@ export interface GmOverviewDto {
   points24h: { sources: number; sinks: number; byReason: { reason: string; total: number }[] }
 }
 
+/** One economy day of the ledger: sources signed per reason, sinks positive per reason, and what is left (`net`). */
+export interface DaySumsDto {
+  day: string
+  sources: Record<string, number>
+  sinks: Record<string, number>
+  net: number
+}
+
 /** What a grant of items answers: the ids that were new, and how many the player already had. */
 export interface GmGrantDto {
   granted: string[]
@@ -627,6 +635,8 @@ export interface NormalApi {
   /* The game master's console. Every call below is refused `403 FORBIDDEN` to a player: the server is the gate, and
    * this client does not pretend otherwise. Every POST carries the GM's reason, which the server validates and logs. */
   gmOverview(): Promise<GmOverviewDto>
+  /** The ledger per economy day, oldest first: exactly `days` entries ending today. */
+  gmDailyStats(days: 7 | 30): Promise<DaySumsDto[]>
   /** A POST, not a GET, on purpose: a search string in a URL ends up in logs and in history. Metered as a write. */
   gmSearch(q: string, opts?: { limit?: number; before?: string }): Promise<{ players: GmPlayerSummaryDto[]; nextBefore: string | null }>
   gmPlayer(playerId: string): Promise<GmPlayerDetailDto>
@@ -772,6 +782,7 @@ export function createApi(fetchImpl?: typeof fetch, base = ''): NormalApi {
     applyOutfit: (slot) => call<{ config: AvatarConfigDto }>({ method: 'POST', path: `/api/me/outfits/${slot}/apply` }),
 
     gmOverview: () => call<GmOverviewDto>({ method: 'GET', path: '/api/gm/overview' }),
+    gmDailyStats: (days) => call<DaySumsDto[]>({ method: 'GET', path: `/api/gm/stats/daily?days=${days}` }),
     gmSearch: (q, opts) =>
       call<{ players: GmPlayerSummaryDto[]; nextBefore: string | null }>({
         method: 'POST',

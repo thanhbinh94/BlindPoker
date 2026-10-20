@@ -169,7 +169,17 @@
       "sinks": "Out of the economy",
       "reasonColumn": "Reason",
       "total": "Total",
-      "error": "Could not load the overview"
+      "error": "Could not load the overview",
+      "byDay": "By day",
+      "days7": "7 days",
+      "days30": "30 days",
+      "colDay": "Day",
+      "colSources": "Sources",
+      "colSinks": "Sinks",
+      "colNet": "Net",
+      "colBar": "Share",
+      "byDayEmpty": "No transactions in this range.",
+      "byDayError": "Could not load the figures by day"
     },
     "players": {
       "search": "Search by email or name",

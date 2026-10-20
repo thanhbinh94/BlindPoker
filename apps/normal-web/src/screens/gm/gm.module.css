@@ -109,6 +109,49 @@
   text-align: right;
 }
 
+/* ── overview, by day ─────────────────────────────────────────────────────── */
+
+/* One line per day at 375 px: the date and three short numbers take their own width and the bar cell takes the rest
+   (never less than 5rem), so the table scrolls sideways before a row wraps. */
+.byDay td,
+.byDay th {
+  white-space: nowrap;
+}
+
+.byDay .barHead {
+  /* The heading names the column for a screen reader only: the bars carry their own title. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+}
+
+.barCell {
+  width: 100%;
+  min-width: 5rem;
+}
+
+.bar {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  min-width: 0;
+}
+
+.bar + .bar {
+  margin-top: 2px;
+}
+
+.barSources {
+  background: var(--gold);
+}
+
+.barSinks {
+  background: var(--red-fill);
+}
+
 /* ── players ──────────────────────────────────────────────────────────────── */
 
 .searchForm {

@@ -169,7 +169,17 @@
       "sinks": "Ra khỏi nền kinh tế",
       "reasonColumn": "Lý do",
       "total": "Tổng",
-      "error": "Không tải được tổng quan"
+      "error": "Không tải được tổng quan",
+      "byDay": "Theo ngày",
+      "days7": "7 ngày",
+      "days30": "30 ngày",
+      "colDay": "Ngày",
+      "colSources": "Nguồn",
+      "colSinks": "Bể",
+      "colNet": "Ròng",
+      "colBar": "Tỉ lệ",
+      "byDayEmpty": "Chưa có giao dịch trong khoảng này.",
+      "byDayError": "Không tải được số liệu theo ngày"
     },
     "players": {
       "search": "Tìm theo email hoặc tên",

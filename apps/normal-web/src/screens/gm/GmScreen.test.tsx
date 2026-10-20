@@ -27,6 +27,7 @@ type Stub = NormalApi & Record<string, ReturnType<typeof vi.fn>>
 function stubApi(overrides: Partial<Record<keyof NormalApi, unknown>> = {}): Stub {
   return {
     gmOverview: vi.fn().mockResolvedValue(OVERVIEW),
+    gmDailyStats: vi.fn().mockResolvedValue([]),
     gmSearch: vi.fn().mockResolvedValue({ players: [], nextBefore: null }),
     gmRooms: vi.fn().mockResolvedValue({ rooms: [] }),
     gmActions: vi.fn().mockResolvedValue({ actions: [], nextBefore: null }),

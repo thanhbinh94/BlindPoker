@@ -382,6 +382,7 @@ describe('createApi — the GM routes', () => {
 
   it.each([
     ['gmOverview', [], '/api/gm/overview'],
+    ['gmDailyStats', [30], '/api/gm/stats/daily?days=30'],
     ['gmPlayer', ['p 1'], '/api/gm/players/p%201'],
     ['gmPlayerLedger', ['p1', { limit: 50, before: 41 }], '/api/gm/players/p1/ledger?limit=50&before=41'],
     ['gmPlayerHistory', ['p1', 20], '/api/gm/players/p1/history?limit=20'],
