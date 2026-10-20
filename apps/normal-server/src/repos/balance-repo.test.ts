@@ -145,6 +145,31 @@ describe('balances.apply', () => {
     ])
   })
 
+  it('sumsByDay buckets by the economy day: 23:30 and 00:30 Ho Chi Minh land on different days', async () => {
+    // 16:30Z is 23:30 on the 4th in Ho Chi Minh (UTC+7), 17:30Z is 00:30 on the 5th: one hour apart, two days.
+    const id = await seedPlayer(0)
+    await db.insert(pointTransactions).values([
+      { playerId: id, amount: 100, reason: 'daily_reward', refId: 'a', createdAt: new Date('2026-09-04T16:30:00Z') },
+      { playerId: id, amount: 40, reason: 'daily_reward', refId: 'b', createdAt: new Date('2026-09-04T17:30:00Z') },
+      { playerId: id, amount: 2, reason: 'daily_reward', refId: 'c', createdAt: new Date('2026-09-04T17:45:00Z') },
+      { playerId: null, amount: 7, reason: 'table_fee', kind: 'table_fee', refId: 'd', createdAt: new Date('2026-09-04T17:50:00Z') },
+      { playerId: id, amount: 999, reason: 'daily_reward', refId: 'old', createdAt: new Date('2026-09-01T00:00:00Z') },
+    ])
+    const since = Date.parse('2026-09-04T00:00:00Z')
+    const rows = await repos.ledger.sumsByDay(since, 'Asia/Ho_Chi_Minh')
+    expect(rows).toEqual([
+      { day: '2026-09-04', reason: 'daily_reward', playerless: false, total: 100 },
+      { day: '2026-09-05', reason: 'daily_reward', playerless: false, total: 42 },
+      { day: '2026-09-05', reason: 'table_fee', playerless: true, total: 7 },
+    ])
+    expect(typeof rows[0]!.total).toBe('number')
+    // The zone is what moves the line: by UTC's clock the same four rows are all one day.
+    expect(await repos.ledger.sumsByDay(since, 'UTC')).toEqual([
+      { day: '2026-09-04', reason: 'daily_reward', playerless: false, total: 142 },
+      { day: '2026-09-04', reason: 'table_fee', playerless: true, total: 7 },
+    ])
+  })
+
   it('throws UnknownPlayerError rather than silently skipping an id that is not there', async () => {
     const known = await seedPlayer(100)
     const missing = '00000000-0000-4000-8000-000000000000'

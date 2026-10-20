@@ -512,6 +512,37 @@ describe('GmService — reads', () => {
   })
 })
 
+describe('GmService — daily stats', () => {
+  /** Moves every ledger row of one reason to an exact instant, so the days the test reads are not "whenever it ran". */
+  const stamp = (reason: string, iso: string) => db.execute(sql`update point_transactions set created_at = ${iso}::timestamptz where reason = ${reason}`)
+
+  it('dailyStats fills 7 zero days and counts gm_checkin_undo against the sources', async () => {
+    const gmAt = createGmService(deps({ now: () => START })) // 2026-09-04 10:00 in Ho Chi Minh
+    await gm.adjustPoints(actor(boss), me.playerId, 5_000, 'thưởng')
+    await gm.adjustPoints(actor(boss), me.playerId, -2_000, 'thu hồi')
+    await db.execute(sql`insert into point_transactions (player_id, amount, reason, ref_id) values (${me.playerId}, -1500, 'gm_checkin_undo', 'daily:x')`)
+    await db.execute(sql`insert into point_transactions (player_id, amount, reason, ref_id, kind) values (null, 300, 'table_fee', 'room-1', 'table_fee')`)
+    await db.execute(sql`insert into point_transactions (player_id, amount, reason, ref_id) values (${me.playerId}, 700, 'cash_out', 'room-1')`)
+    // The two accounts' starting balances land before the window; the rest are spread over the three latest days.
+    await stamp('starting_balance', '2026-08-28T10:00:00Z')
+    await stamp('gm_grant', '2026-09-04T03:00:00Z')
+    await stamp('gm_adjust', '2026-09-03T05:00:00Z')
+    await stamp('gm_checkin_undo', '2026-09-03T06:00:00Z')
+    await stamp('cash_out', '2026-09-04T04:00:00Z') // a transfer: it moves points, so it is in neither column
+    await stamp('table_fee', '2026-09-02T16:59:00Z') // 23:59 on the 2nd in Ho Chi Minh
+
+    const days = await gmAt.dailyStats(7)
+
+    expect(days.map((d) => d.day)).toEqual(['2026-08-29', '2026-08-30', '2026-08-31', '2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04'])
+    expect(days.slice(0, 4)).toEqual(days.slice(0, 4).map((d) => ({ day: d.day, sources: {}, sinks: {}, net: 0 })))
+    expect(days[4]).toEqual({ day: '2026-09-02', sources: {}, sinks: { table_fee: 300 }, net: -300 })
+    // The undo and the negative adjustment are signed sources: they pull the day's sources below zero, not its sinks up.
+    expect(days[5]).toEqual({ day: '2026-09-03', sources: { gm_adjust: -2_000, gm_checkin_undo: -1_500 }, sinks: {}, net: -3_500 })
+    expect(days[6]).toEqual({ day: '2026-09-04', sources: { gm_grant: 5_000 }, sinks: {}, net: 5_000 })
+    expect(await gmAt.dailyStats(30)).toHaveLength(30)
+  })
+})
+
 describe('GmService — gift schedule', () => {
   const logged = async () =>
     rowsOf<{ action: string; target_player_id: string | null; reason: string; details: Record<string, unknown> | null }>(

@@ -74,8 +74,8 @@ afterEach(async () => {
 describe('the guard', () => {
   it('answers 401 to nobody and 403 FORBIDDEN to a player on every /api/gm/ route the app serves', async () => {
     const routes = enumerateRoutes(h.app.fastify).filter((r) => r.path.startsWith('/api/gm/'))
-    // The twenty-one `/api/gm/` labels `app.test.ts` pins in the exact surface: a route added there must be guarded here.
-    expect(routes).toHaveLength(21)
+    // The twenty-two `/api/gm/` labels `app.test.ts` pins in the exact surface: a route added there must be guarded here.
+    expect(routes).toHaveLength(22)
     for (const route of routes) {
       const url = route.path
         .replace(':id', route.path.startsWith('/api/gm/rooms/') ? 'some-room' : me.playerId)
@@ -315,6 +315,24 @@ describe('players', () => {
     const res = await gmReq('GET', '/api/gm/overview')
     expect(res.statusCode).toBe(200)
     expect(res.json()).toMatchObject({ online: 0, rooms: 0, accounts: 2, locked: 0, gms: 1, points24h: { sources: 2 * ECONOMY.startingBalance } })
+  })
+
+  it('reports the sources and sinks per day for 7 or 30 days, and refuses any other span', async () => {
+    await db.execute(sql`update point_transactions set created_at = '2026-09-04T03:00:00Z'::timestamptz`)
+    for (const days of [7, 30]) {
+      const res = await gmReq('GET', `/api/gm/stats/daily?days=${String(days)}`)
+      expect(res.statusCode).toBe(200)
+      const body = res.json() as { day: string; sources: Record<string, number>; sinks: Record<string, number>; net: number }[]
+      expect(body).toHaveLength(days)
+      expect(body.map((d) => d.day)).toEqual([...body.map((d) => d.day)].sort())
+      // The harness clock stands at 2026-09-04: the starting balances are stamped onto that day.
+      expect(body[days - 1]).toMatchObject({ sources: { starting_balance: 2 * ECONOMY.startingBalance }, sinks: {}, net: 2 * ECONOMY.startingBalance })
+    }
+    for (const query of ['days=10', 'days=', 'days=7.5', '']) {
+      const res = await gmReq('GET', `/api/gm/stats/daily${query === '' ? '' : `?${query}`}`)
+      expect(res.statusCode, query).toBe(400)
+      expect(code(res), query).toBe('INVALID_DAYS')
+    }
   })
 })
 

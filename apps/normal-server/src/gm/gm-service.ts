@@ -24,7 +24,7 @@ import type { AchievementDef, AchievementReward } from '../achievements/definiti
 import type { SessionService } from '../auth/session-service.js'
 import { rowsOf, type AppDb, type AppTx } from '../db/client.js'
 import { dailyLogins, gmActions, inventory as inventoryTable, playerAchievements, playerStats, players, users, type GmActionKind } from '../db/schema.js'
-import { addDaysKey, dayKey, MAX_STREAK, monthKey } from '../economy/daily-rules.js'
+import { addDaysKey, dayKey, dayStartMs, MAX_STREAK, monthKey } from '../economy/daily-rules.js'
 import type { GiftMonthRow, GiftScheduleStore } from '../economy/gift-schedule-store.js'
 import { ServiceError } from '../errors.js'
 import type { HistoryService } from '../history/history-service.js'
@@ -91,6 +91,16 @@ export interface GmOverview {
   points24h: { sources: number; sinks: number; byReason: { reason: string; total: number }[] }
 }
 
+/** One economy day of the ledger: the points created by reason (signed), the points sunk by reason, and what is left. */
+export interface DaySums {
+  /** `YYYY-MM-DD` in the economy time zone. */
+  day: string
+  sources: Record<string, number>
+  sinks: Record<string, number>
+  /** Σ sources − Σ sinks. */
+  net: number
+}
+
 export interface GmGrantResult { granted: string[]; alreadyOwned: number; actionId: number }
 
 /** What undoing today's check-in would take back: the latest claim's points and items, and where the streak stands. */
@@ -126,6 +136,8 @@ export interface GmService {
   recordRoomAction(actor: GmActor, action: 'kick' | 'close_room', roomId: string, targetPlayerId: string | null, reason: string, details?: Record<string, unknown>): Promise<number>
   actions(opts?: { limit?: number; before?: number; playerId?: string; roomId?: string }): Promise<{ actions: GmActionRow[]; nextBefore: number | null }>
   overview(): Promise<GmOverview>
+  /** The ledger's sources and sinks per economy day: exactly `days` entries ascending, the last one today, empty days as zeros. */
+  dailyStats(days: 7 | 30): Promise<DaySums[]>
 }
 
 /** The part of a live `Room` the service touches — narrow, so a test can hand in a stub. */
@@ -618,6 +630,27 @@ export function createGmService(deps: GmServiceDeps): GmService {
         gms: Number(counts?.gms ?? 0),
         points24h: { sources: total(SOURCE_REASONS), sinks: total(SINK_REASONS), byReason },
       }
+    },
+
+    async dailyStats(days) {
+      const today = dayKey(now(), deps.timezone)
+      const keys = Array.from({ length: days }, (_, i) => addDaysKey(today, i - (days - 1)))
+      const byDay = new Map<string, DaySums>(keys.map((day) => [day, { day, sources: {}, sinks: {}, net: 0 }]))
+      const rows = await deps.repos.ledger.sumsByDay(dayStartMs(keys[0]!, deps.timezone), deps.timezone)
+      for (const row of rows) {
+        const sums = byDay.get(row.day)
+        if (!sums) continue // a row dated after "today", which only a clock set back can leave
+        if (row.playerless || SINK_REASONS.has(row.reason)) {
+          const sunk = Math.abs(row.total)
+          sums.sinks[row.reason] = (sums.sinks[row.reason] ?? 0) + sunk
+          sums.net -= sunk
+        } else if (SOURCE_REASONS.has(row.reason)) {
+          // Signed: a negative adjustment or a check-in undo is points taken back, and lowers the day's sources.
+          sums.sources[row.reason] = (sums.sources[row.reason] ?? 0) + row.total
+          sums.net += row.total
+        } // else a transfer (buy-in, cash-out, settlement, refund): it moves points, it neither makes nor sinks them
+      }
+      return keys.map((day) => byDay.get(day)!)
     },
   }
 }

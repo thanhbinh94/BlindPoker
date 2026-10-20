@@ -124,6 +124,13 @@ export function registerGmRoutes(app: FastifyInstance, deps: GmRouteDeps): void 
 
   app.get('/api/gm/overview', gmOnly, async (_req, reply) => reply.send(await deps.gm.overview()))
 
+  app.get('/api/gm/stats/daily', gmOnly, async (req, reply) => {
+    // Exactly the two spans the panel offers: anything else (including `7.5` or nothing at all) is the client's slip.
+    const raw = stringQuery(req.query, 'days')
+    if (raw !== '7' && raw !== '30') throw new HttpError(400, 'INVALID_DAYS', 'days must be 7 or 30')
+    return reply.send(await deps.gm.dailyStats(raw === '7' ? 7 : 30))
+  })
+
   // ---------- players ----------
 
   app.post('/api/gm/players/search', gmOnly, async (req, reply) => {

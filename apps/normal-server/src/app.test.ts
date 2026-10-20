@@ -372,6 +372,7 @@ describe('every mutating route is guarded', () => {
       'GET /api/gm/players/:id/ledger',
       'GET /api/gm/rooms',
       'GET /api/gm/rooms/:id',
+      'GET /api/gm/stats/daily',
       'GET /api/me',
       'GET /api/me/achievements',
       'GET /api/me/history',

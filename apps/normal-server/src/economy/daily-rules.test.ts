@@ -5,6 +5,7 @@ import {
   dailyCalendar,
   daysBetween,
   dayKey,
+  dayStartMs,
   itemMarker,
   MAX_STREAK,
   monthKey,
@@ -39,6 +40,17 @@ describe('day keys', () => {
     const at = Date.UTC(2026, 8, 4, 3, 0) // 10:00 on the 4th in HCM
     expect(nextDayStartMs(at, HCM)).toBe(Date.UTC(2026, 8, 4, 17, 0)) // midnight on the 5th, HCM
     expect(nextDayStartMs(at, 'UTC')).toBe(Date.UTC(2026, 8, 5, 0, 0))
+  })
+
+  it('reports the start of a given local day as an instant', () => {
+    expect(dayStartMs('2026-09-04', HCM)).toBe(Date.UTC(2026, 8, 3, 17, 0)) // midnight at the start of the 4th, HCM
+    expect(dayStartMs('2026-09-04', 'UTC')).toBe(Date.UTC(2026, 8, 4, 0, 0))
+    // The start of today and the next day's start are one local day apart, in the zone's own days.
+    const at = Date.UTC(2026, 8, 4, 3, 0)
+    expect(dayStartMs(dayKey(at, HCM), HCM)).toBe(nextDayStartMs(at, HCM) - 24 * HOUR)
+    // Europe/London's 29 March is a 23-hour day: it starts at 00:00 UTC, and 30 March starts at 23:00 UTC on the 29th.
+    expect(dayStartMs('2026-03-29', 'Europe/London')).toBe(Date.UTC(2026, 2, 29, 0, 0))
+    expect(dayStartMs('2026-03-30', 'Europe/London')).toBe(Date.UTC(2026, 2, 29, 23, 0))
   })
 
   it('places the next midnight correctly across a DST change', () => {

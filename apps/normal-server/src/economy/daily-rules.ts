@@ -93,6 +93,16 @@ export function nextDayStartMs(nowMs: number, timeZone: string): number {
   return tomorrowUtc - zoneOffsetMs(first, timeZone)
 }
 
+/**
+ * The instant the local day `key` (`YYYY-MM-DD`) begins in `timeZone` — the other end of the day `nextDayStartMs` closes.
+ * Read the offset twice for the same reason: once at the UTC guess, then at the boundary it lands on.
+ */
+export function dayStartMs(key: string, timeZone: string): number {
+  const startUtc = Date.parse(`${key}T00:00:00Z`)
+  const first = startUtc - zoneOffsetMs(startUtc, timeZone)
+  return startUtc - zoneOffsetMs(first, timeZone)
+}
+
 /** The stored half of a player's check-in state — the `daily_logins` row, as the rules see it. */
 export interface DailyState {
   streak: number

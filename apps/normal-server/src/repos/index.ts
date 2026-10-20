@@ -13,7 +13,7 @@ import { createBalanceRepository, createLedgerReader, type LedgerReader, type No
 import { createHistoryRepository, type NormalGameHistoryRepository } from './history-repo.js'
 import { createPlayerRepository, type NormalPlayerRepository } from './player-repo.js'
 
-export type { LedgerListOptions, LedgerReader, LedgerRow, LedgerSum, NormalBalanceRepository } from './balance-repo.js'
+export type { DayReasonRow, LedgerListOptions, LedgerReader, LedgerRow, LedgerSum, NormalBalanceRepository } from './balance-repo.js'
 export { createBalanceRepository, createLedgerReader, creditWithin, pruneLedgerKeys, UnknownPlayerError } from './balance-repo.js'
 export type { GameRow, NormalGameHistoryRepository } from './history-repo.js'
 export { createHistoryRepository } from './history-repo.js'
