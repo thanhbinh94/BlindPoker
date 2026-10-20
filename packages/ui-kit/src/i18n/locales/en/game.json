@@ -247,7 +247,10 @@
     "controls": "Table controls",
     "manage": "Manage table",
     "manageTitle": "People in the room",
-    "sitFirst": "Take a seat to play."
+    "sitFirst": "Take a seat to play.",
+    "more": "More",
+    "fullscreen": "Full screen",
+    "exitFullscreen": "Exit full screen"
   },
   "cancel": {
     "shutdown": "The server is shutting down",

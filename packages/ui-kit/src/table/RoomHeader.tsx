@@ -5,6 +5,7 @@ import type { ConnectionStatus } from '../client/types.js'
 import { formatPoints, type Language } from '../i18n/index.js'
 import { Badge } from '../primitives/Badge.js'
 import { Button } from '../primitives/Button.js'
+import { cx } from '../primitives/cx.js'
 import s from './table.module.css'
 
 export interface RoomHeaderProps {
@@ -14,6 +15,13 @@ export interface RoomHeaderProps {
   lang: Language
   /** Slot for app-specific controls (language switch, balance, settings). */
   right?: ReactNode
+  /**
+   * One line for a phone held sideways: the connection, the name, the squeeze badge, the code and the stakes, then
+   * `menu` and the way out. The head-count and the mode badges are left to the lobby's card.
+   */
+  compact?: boolean
+  /** The compact line's menu (`MenuButton`), drawn just before "Leave room". */
+  menu?: ReactNode
 }
 
 const MODE_GLYPH: Record<string, string> = { holdem: '♠', blind: '⚄' }
@@ -26,7 +34,7 @@ const STATUS_KEY: Record<ConnectionStatus, string> = {
 }
 
 /** Room identity bar: name, mode/variant, code, stakes, connection state and the way out. */
-export function RoomHeader({ room, status, onLeave, lang, right }: RoomHeaderProps) {
+export function RoomHeader({ room, status, onLeave, lang, right, compact = false, menu }: RoomHeaderProps) {
   const { t } = useTranslation()
   const holdem = room.config.holdem
   const blind = room.config.blind
@@ -37,6 +45,39 @@ export function RoomHeader({ room, status, onLeave, lang, right }: RoomHeaderPro
         ? ''
         : `${t('labels.wager')} ${formatPoints(blind.fixedWager, lang)} · ${t('labels.tableLimit')} ${formatPoints(blindTableLimit(blind), lang)}`
   const players = t('lobby.playersOf', { current: room.playerCount, max: room.maxPlayers })
+  const conn = (
+    <span className={s.conn} data-status={status}>
+      <span className={s.connDot} aria-hidden="true" />
+      <span className={s.connText}>{t(STATUS_KEY[status])}</span>
+    </span>
+  )
+  const squeezeBadge = blind?.squeeze === true ? <Badge tone="gold">{t('labels.squeezeMode')}</Badge> : null
+  const code = (
+    <span className={s.code} aria-label={t('labels.code')}>
+      {room.code}
+    </span>
+  )
+  const leave = (
+    <Button variant="danger" size="sm" onClick={onLeave}>
+      {t('actions.leave')}
+    </Button>
+  )
+
+  if (compact) {
+    return (
+      <header className={cx(s.header, s.headerCompact)}>
+        {conn}
+        <h1 className={s.roomName}>{room.name}</h1>
+        {squeezeBadge}
+        {code}
+        {stakes === '' ? null : <span className={s.stakes}>{stakes}</span>}
+        <div className={s.headRight}>
+          {menu}
+          {leave}
+        </div>
+      </header>
+    )
+  }
 
   return (
     <header className={s.header}>
@@ -50,10 +91,8 @@ export function RoomHeader({ room, status, onLeave, lang, right }: RoomHeaderPro
             <Badge tone="gold">{t(`mode.${room.mode}`)}</Badge>
             {blind === undefined ? null : <Badge tone="teal">{t(blind.holeCards === 3 ? 'blind.cards3' : 'blind.cards2')}</Badge>}
             {blind === undefined ? null : <Badge tone="muted">{t(`blind.decision.${blind.decisionMode}`)}</Badge>}
-            {blind?.squeeze === true ? <Badge tone="gold">{t('labels.squeezeMode')}</Badge> : null}
-            <span className={s.code} aria-label={t('labels.code')}>
-              {room.code}
-            </span>
+            {squeezeBadge}
+            {code}
             {stakes === '' ? null : <span className={s.stakes}>{stakes}</span>}
             <span className={s.players}>{players}</span>
           </div>
@@ -61,14 +100,9 @@ export function RoomHeader({ room, status, onLeave, lang, right }: RoomHeaderPro
       </div>
 
       <div className={s.headRight}>
-        <span className={s.conn} data-status={status}>
-          <span className={s.connDot} aria-hidden="true" />
-          <span className={s.connText}>{t(STATUS_KEY[status])}</span>
-        </span>
+        {conn}
         {right}
-        <Button variant="danger" size="sm" onClick={onLeave}>
-          {t('actions.leave')}
-        </Button>
+        {leave}
       </div>
     </header>
   )

@@ -958,4 +958,123 @@ describe('RoomScreen', () => {
     const { view } = wrap(fakeClient(makeState({ room: standingRoom })))
     expect(view.container.firstElementChild).toHaveAttribute('data-frame', 'desktop')
   })
+
+  // Plan 26 (B2): a phone on its side has no height for a row of buttons under the felt. The seat's own controls go
+  // into a "Thêm" menu in the one-line header; what starts a hand sits in a dock in the bottom-right corner.
+  describe('the landscape frame', () => {
+    const landscape = (client: GameClientApi) =>
+      render(
+        <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+          <RoomScreen client={client} lang="vi" onLeft={vi.fn()} frame="landscape" />
+        </I18nextProvider>,
+      )
+
+    const setFullscreenEnabled = (value: boolean | undefined): void => {
+      if (value === undefined) Reflect.deleteProperty(document, 'fullscreenEnabled')
+      else Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, get: () => value })
+    }
+    afterEach(() => setFullscreenEnabled(undefined))
+
+    it('in the landscape frame the footer row is gone and Đứng dậy, Tạm nghỉ, Quản lý bàn live in the Thêm menu', async () => {
+      const client = fakeClient(makeState({ room: readyRoom }))
+      const { container } = landscape(client)
+
+      for (const group of screen.queryAllByRole('group', { name: 'Điều khiển bàn' })) {
+        expect(within(group).queryByRole('button', { name: 'Đứng dậy' })).toBeNull()
+        expect(within(group).queryByRole('button', { name: 'Tạm nghỉ' })).toBeNull()
+        expect(within(group).queryByRole('button', { name: 'Quản lý bàn' })).toBeNull()
+      }
+      expect(screen.queryByRole('button', { name: 'Đứng dậy' })).toBeNull()
+
+      const header = container.querySelector('header')!
+      expect(within(header).getByRole('button', { name: 'Rời phòng' })).toBeVisible()
+      expect(within(header).getByLabelText('Mã phòng')).toBeInTheDocument()
+
+      await userEvent.click(within(header).getByRole('button', { name: 'Thêm' }))
+      const menu = screen.getByRole('menu', { name: 'Thêm' })
+      const names = Array.from(menu.querySelectorAll('[role^="menuitem"]'), (item) => item.textContent)
+      expect(names).toEqual(['Đứng dậy', 'Tạm nghỉ', 'Quản lý bàn'])
+      expect(within(menu).getByRole('menuitemcheckbox', { name: 'Tạm nghỉ' })).toHaveAttribute('aria-checked', 'false')
+
+      await userEvent.click(within(menu).getByRole('menuitem', { name: 'Đứng dậy' }))
+      expect(client.standUp).toHaveBeenCalledTimes(1)
+
+      await userEvent.click(within(header).getByRole('button', { name: 'Thêm' }))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Quản lý bàn' }))
+      expect(within(screen.getByRole('dialog')).getAllByRole('button', { name: /^Mời ra/ })).toHaveLength(1)
+    })
+
+    it('offers Toàn màn hình only when document.fullscreenEnabled', async () => {
+      setFullscreenEnabled(false)
+      const off = landscape(fakeClient(makeState({ room: readyRoom })))
+      await userEvent.click(screen.getByRole('button', { name: 'Thêm' }))
+      expect(screen.queryByRole('menuitem', { name: 'Toàn màn hình' })).toBeNull()
+      off.unmount()
+
+      setFullscreenEnabled(true)
+      const requestFullscreen = vi.fn().mockResolvedValue(undefined)
+      document.documentElement.requestFullscreen = requestFullscreen
+      landscape(fakeClient(makeState({ room: readyRoom })))
+      await userEvent.click(screen.getByRole('button', { name: 'Thêm' }))
+      const items = Array.from(screen.getByRole('menu').querySelectorAll('[role^="menuitem"]'))
+      expect(items.at(-1)).toHaveTextContent('Toàn màn hình')
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Toàn màn hình' }))
+      expect(requestFullscreen).toHaveBeenCalledTimes(1)
+      Reflect.deleteProperty(document.documentElement, 'requestFullscreen')
+
+      // The browser goes full screen and says so: the item now offers the way back.
+      Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => document.documentElement })
+      act(() => {
+        document.dispatchEvent(new Event('fullscreenchange'))
+      })
+      await userEvent.click(screen.getByRole('button', { name: 'Thêm' }))
+      expect(screen.getByRole('menuitem', { name: 'Thoát toàn màn hình' })).toBeInTheDocument()
+      Reflect.deleteProperty(document, 'fullscreenElement')
+    })
+
+    it('shows Sẵn sàng and Bắt đầu in the dock while waiting, and the countdown between hands', () => {
+      // Seated, not ready yet, and the host: the dock offers Ready and a Start that waits for a second ready seat.
+      const notReady = makeRoom({
+        ...readyRoom,
+        players: readyRoom.players.map((p) => (p.playerId === 'me' ? { ...p, ready: false, status: 'SEATED' as const } : p)),
+      })
+      const view = landscape(fakeClient(makeState({ room: notReady })))
+      const dock = screen.getByRole('group', { name: 'Điều khiển bàn' })
+      expect(within(dock).getByRole('button', { name: 'Sẵn sàng' })).toHaveAttribute('aria-pressed', 'false')
+      expect(within(dock).getByRole('button', { name: 'Bắt đầu' })).toBeDisabled()
+      expect(within(dock).getByText('1/2 sẵn sàng')).toBeInTheDocument()
+      expect(dock.closest('footer')).not.toBeNull()
+      view.unmount()
+
+      // Between hands, once the result card is closed: the countdown, and no tray beside it in the same corner.
+      const between = makeRoom({
+        status: 'IN_GAME',
+        nextHandAt: 1_005_000,
+        players: [
+          makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'IN_HAND', stack: 19_800 }),
+          makePlayer({ playerId: 'me', displayName: 'Mai', seat: 2, status: 'IN_HAND', stack: 20_400 }),
+        ],
+      })
+      const hand = makeHand({
+        phase: 'COMPLETE',
+        mySeat: 2,
+        actingSeat: null,
+        result: { payouts: [{ seat: 2, amount: 600 }], pots: [], fee: 12, showdown: null, carryOverOut: 0, uncalledReturned: null, cancelled: false, reason: null },
+      })
+      landscape(fakeClient(makeState({ room: between, hand })))
+      expect(screen.queryByRole('group', { name: 'Điều khiển bàn' }), 'no dock while the card prints the countdown').toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'Đóng' }))
+      const later = screen.getByRole('group', { name: 'Điều khiển bàn' })
+      expect(within(later).getByText((_, el) => el?.tagName === 'P' && /5 giây/.test(el.textContent ?? ''))).toBeInTheDocument()
+      expect(within(later).queryByRole('button', { name: 'Sẵn sàng' })).toBeNull()
+      expect(screen.queryByRole('group', { name: 'Hành động' }), 'the tray waits for the next deal').toBeNull()
+    })
+
+    it('leaves the desktop frame’s footer row as it was', () => {
+      wrap(fakeClient(makeState({ room: readyRoom })))
+      const controls = screen.getByRole('group', { name: 'Table controls' })
+      expect(within(controls).getByRole('button', { name: 'Stand up' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'More' })).toBeNull()
+    })
+  })
 })

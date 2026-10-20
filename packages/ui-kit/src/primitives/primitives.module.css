@@ -429,3 +429,107 @@
   cursor: not-allowed;
   opacity: 0.55;
 }
+
+/* ---------- MenuButton ---------- */
+/* A quiet `⋯` square that opens a short list of actions under it. The list is drawn on the night surface, so it reads
+   the same over the felt in either theme, and sits above the table (seats and chibis) but below a dialog. */
+.menuWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.menuTrigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color var(--dur-1) var(--ease);
+}
+
+.menuTrigger:hover,
+.menuTrigger[aria-expanded='true'] {
+  background: var(--gold-soft);
+}
+
+@media (pointer: coarse) {
+  .menuTrigger {
+    min-width: var(--tap);
+    min-height: var(--tap);
+  }
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  z-index: calc(var(--z-modal) - 1);
+  display: flex;
+  flex-direction: column;
+  min-width: 12rem;
+  max-width: min(20rem, 80vw);
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-elev);
+  box-shadow: var(--shadow-2);
+}
+
+.menuRight {
+  right: 0;
+}
+
+.menuLeft {
+  left: 0;
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.menuItem:hover:not(:disabled),
+.menuItem:focus-visible {
+  background: var(--gold-soft);
+}
+
+.menuItem:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* a list with an on/off item in it keeps a column for the tick on every row, so the labels stay in line */
+.menu:has([role='menuitemcheckbox']) .menuItem::before {
+  content: '';
+  width: 1em;
+  flex: none;
+  color: var(--gold);
+  text-align: center;
+}
+
+.menuItem[aria-checked='true']::before {
+  content: '✓';
+}

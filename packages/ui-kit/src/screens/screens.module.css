@@ -391,3 +391,29 @@
   gap: var(--space-2);
   padding: var(--space-2) max(var(--space-3), env(safe-area-inset-right)) var(--space-2) max(var(--space-3), env(safe-area-inset-left));
 }
+
+/* The pre-hand dock (Plan 26, B2): Ready, Start, the ready count, the hint, and the countdown once the result card is
+   closed, in the bottom-right corner where the right thumb rests and where the action tray sits during a hand (the two
+   never show together). A night pill of its own, so its muted lines read over the felt or the page in either theme. */
+.room[data-frame='landscape'] .dock {
+  position: absolute;
+  right: max(var(--space-3), env(safe-area-inset-right));
+  bottom: max(var(--space-3), env(safe-area-inset-bottom));
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  /* A wrapping row takes all the width it is allowed, so the cap is what keeps the corner small: Ready, Start and the
+     count fit one row in it, and the hint wraps under them instead of stretching the pill across the seats. */
+  max-width: min(60%, 22rem);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  text-align: right;
+}
+
+.room[data-frame='landscape'] .dock .hint {
+  font-size: 0.75rem;
+}

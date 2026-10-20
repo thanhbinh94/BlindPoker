@@ -1635,6 +1635,65 @@
   }
 }
 
+/* A phone on its side (Plan 26, B2): the identity bar is one 32 px strip, so the felt keeps the height. The connection,
+   the name (cut with an ellipsis before anything else gives), the squeeze badge, the code and the stakes, then the
+   menu and the way out. It sits after the phone block, whose two-row grid would otherwise take it under 768 px; the
+   two classes outweigh that block's single ones either way. Its two buttons are drawn 30 px tall inside the strip,
+   and an invisible pad above and below keeps each one a full 44 px to the thumb. */
+.header.headerCompact {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--space-2);
+  height: 32px;
+  padding: 0;
+}
+
+.headerCompact .conn {
+  flex: none;
+  min-height: 0;
+}
+
+.headerCompact .roomName {
+  flex: 0 1 auto;
+  min-width: 3em;
+  font-size: 0.9375rem;
+  line-height: 1.2;
+}
+
+.headerCompact .code {
+  flex: none;
+  font-size: 0.75rem;
+}
+
+.headerCompact .stakes {
+  flex: 0 1000 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+}
+
+.headerCompact .headRight {
+  flex: none;
+  margin-left: auto;
+}
+
+.headerCompact .headRight > button,
+.headerCompact [aria-haspopup='menu'] {
+  position: relative;
+  min-height: 30px;
+  height: 30px;
+}
+
+.headerCompact .headRight > button::after,
+.headerCompact [aria-haspopup='menu']::after {
+  content: '';
+  position: absolute;
+  inset: -7px -2px;
+}
+
 /* ---------------- Motion off ---------------- */
 @media (prefers-reduced-motion: reduce) {
   .card,

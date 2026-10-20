@@ -247,7 +247,10 @@
     "controls": "Điều khiển bàn",
     "manage": "Quản lý bàn",
     "manageTitle": "Người trong phòng",
-    "sitFirst": "Chọn một ghế trống để vào chơi."
+    "sitFirst": "Chọn một ghế trống để vào chơi.",
+    "more": "Thêm",
+    "fullscreen": "Toàn màn hình",
+    "exitFullscreen": "Thoát toàn màn hình"
   },
   "cancel": {
     "shutdown": "Máy chủ sắp tắt",
