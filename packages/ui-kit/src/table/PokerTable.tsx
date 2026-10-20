@@ -11,6 +11,7 @@ import { DeckAnchorProvider } from './deck-anchor.js'
 import { DEAL_MS, DEAL_WINDOW_MS, FLIP_MS, dealOrderOf, showdownWithBoard } from './motion.js'
 import { Pot } from './Pot.js'
 import { Seat } from './Seat.js'
+import type { RoomFrame } from './frame.js'
 import { ringPositions } from './geometry.js'
 import { useMediaQuery } from './useMediaQuery.js'
 import s from './table.module.css'
@@ -27,6 +28,9 @@ export interface PokerTableProps {
   lang: Language
   /** Defaults to `stack` under 768 px wide or 620 px tall, and `ring` above both. */
   layout?: TableLayout
+  /** The room's frame. In `landscape` (a phone on its side) the table is always the ring: the stack needs height the
+   * frame does not have. Defaults to `desktop`. */
+  frame?: RoomFrame
   /** A human seat's chibi; `null` (or no answer) falls back to the name's initial. Bots always draw their own
    * `botChibi` and never ask this — a bot has no wardrobe for the app to answer for. */
   chibiFor?: (player: RoomPlayerView) => ChibiSubject | null
@@ -95,6 +99,7 @@ export function PokerTable({
   turnTimerMs,
   lang,
   layout,
+  frame = 'desktop',
   chibiFor,
   expressionFor,
   captionFor,
@@ -105,7 +110,7 @@ export function PokerTable({
 }: PokerTableProps) {
   const { t } = useTranslation()
   const narrow = useMediaQuery(STACKED)
-  const mode: TableLayout = layout ?? (narrow ? 'stack' : 'ring')
+  const mode: TableLayout = layout ?? (frame === 'landscape' ? 'ring' : narrow ? 'stack' : 'ring')
   const deckRef = useRef<HTMLDivElement>(null)
 
   const seated = new Map<number, RoomPlayerView>()

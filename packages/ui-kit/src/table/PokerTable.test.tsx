@@ -663,4 +663,31 @@ describe('PokerTable', () => {
     const seat = screen.getByRole('group', { name: 'Seat 1' })
     expect(seat.querySelector('img[src*="item_frame_gold_L90"]')).not.toBeNull()
   })
+
+  it('renders the ring in the landscape frame even under the STACKED query', () => {
+    const original = window.matchMedia
+    // A phone held sideways is both short and (under 768 px) possibly narrow: every query answers yes.
+    window.matchMedia = ((query: string) => ({
+      matches: true,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+    })) as unknown as typeof window.matchMedia
+    try {
+      const view = wrap(
+        <PokerTable room={fullRoom} hand={null} myPlayerId="p0" deadlineAt={null} serverNow={() => 0} turnTimerMs={30000} lang="en" canSit={false} />,
+      )
+      expect(screen.getByRole('group', { name: 'Players' }), 'without the frame the query stacks the table').toBeInTheDocument()
+      view.unmount()
+      wrap(
+        <PokerTable room={fullRoom} hand={null} myPlayerId="p0" deadlineAt={null} serverNow={() => 0} turnTimerMs={30000} lang="en" frame="landscape" canSit={false} />,
+      )
+      expect(screen.queryByRole('group', { name: 'Players' })).toBeNull()
+      expect(document.querySelector('[data-seats="9"]')).not.toBeNull()
+    } finally {
+      window.matchMedia = original
+    }
+  })
 })

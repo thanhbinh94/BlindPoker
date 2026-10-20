@@ -10,6 +10,7 @@ import { Modal } from '../primitives/Modal.js'
 import { cx } from '../primitives/cx.js'
 import { ActionBar } from '../table/ActionBar.js'
 import { HandResult } from '../table/HandResult.js'
+import { useRoomFrame, type RoomFrame } from '../table/frame.js'
 import { PokerTable, type TableLayout } from '../table/PokerTable.js'
 import { RoomHeader } from '../table/RoomHeader.js'
 import { useRevealHold } from './reveal-hold.js'
@@ -32,6 +33,8 @@ export interface RoomScreenProps {
   header?: ReactNode
   /** Forces the table layout; by default the table picks ring or stack from the viewport. */
   layout?: TableLayout
+  /** Forces the room's frame; by default a phone held sideways gets `landscape` and everything else `desktop`. */
+  frame?: RoomFrame
 }
 
 const MIN_TO_START = 2
@@ -62,7 +65,7 @@ function useCountdown(target: number | null, now: () => number): number | null {
  * Everything shown is derived from `client.state`; every button is one `GameClientApi` call. The screen decides
  * nothing about the game — not whose turn it is, not what a legal bet is, not who may start.
  */
-export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header, layout }: RoomScreenProps) {
+export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header, layout, frame: frameOverride }: RoomScreenProps) {
   const { t } = useTranslation()
   const { state } = client
   const room = state.room
@@ -125,6 +128,8 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
   // a hook — and worked out from `resultCard` itself, so what is measured for and what is drawn cannot disagree.
   const stageRef = useRef<HTMLElement>(null)
   const clearance = useSeatClearance(stageRef, resultCard !== null, me?.seat ?? null)
+  // Also a hook, so also above the early return: the frame is what every landscape rule of the room keys on.
+  const frame = useRoomFrame(frameOverride)
 
   if (room === null) return null
 
@@ -219,7 +224,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
   const overlayStyle = clearance === null ? undefined : ({ '--seat-clearance': `${clearance}px` } as CSSProperties)
 
   return (
-    <div className={s.room}>
+    <div className={s.room} data-frame={frame}>
       {header}
       <RoomHeader room={room} status={state.status} onLeave={() => void request.run(() => client.leaveRoom())} lang={lang} />
 
@@ -242,6 +247,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
           canSit={canSit}
           onSeatClick={onSeatClick}
           layout={layout}
+          frame={frame}
           chibiFor={chibiFor}
           expressionFor={expressionFor}
           captionFor={captionFor}

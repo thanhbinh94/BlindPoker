@@ -1290,9 +1290,14 @@
   gap: var(--space-3);
   flex: 0 1 auto;
   min-height: 0;
+  /* Without this the live part kept its content's height at a short stage and the head spilled over the footer:
+     clipped, it can shrink with the card, and the body's own scroll takes up the slack. The head and the footer
+     (`flex-shrink: 0`) keep their rows. */
+  overflow: hidden;
 }
 
 .resultHead {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1437,6 +1442,7 @@
 }
 
 .resultFoot {
+  flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;

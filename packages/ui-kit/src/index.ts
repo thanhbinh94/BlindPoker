@@ -19,6 +19,7 @@ export * from './client/useRoomReturn.js'
 export * from './avatar2d/index.js'
 export * from './table/geometry.js'
 export * from './table/useMediaQuery.js'
+export * from './table/frame.js'
 export * from './table/Card.js'
 // The motion's numbers are public as they were from `Card.js`; its rules (the deal's order and step, the showdown's
 // wait for the river) stay the table's own.

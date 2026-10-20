@@ -376,3 +376,18 @@
     width: auto;
   }
 }
+
+/* ── room, phone held sideways ────────────────────────────────────────────── */
+
+/* The frame the room is told about by `data-frame` (`useRoomFrame`). A phone on its side has 320–430 px of height, so
+   the stage is the screen itself: no minimum, nothing that scrolls the page, and the safe-area insets keep the notch
+   off the table. Every later landscape rule keys on this attribute, after the base rules it overrides. */
+.room[data-frame='landscape'] {
+  position: relative;
+  height: var(--bp-stage, 100dvh);
+  min-height: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  gap: var(--space-2);
+  padding: var(--space-2) max(var(--space-3), env(safe-area-inset-right)) var(--space-2) max(var(--space-3), env(safe-area-inset-left));
+}

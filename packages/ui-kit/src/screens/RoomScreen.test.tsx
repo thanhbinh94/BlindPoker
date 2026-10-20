@@ -940,4 +940,22 @@ describe('RoomScreen', () => {
     view.rerender(screenFor(fakeClient(makeState({ room: null, roomStale: false })), onLeft))
     expect(onLeft).toHaveBeenCalledTimes(1)
   })
+
+  it('stamps the frame on the room root and forces the ring in the landscape frame', () => {
+    const client = fakeClient(makeState({ room: standingRoom }))
+    const { container } = render(
+      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+        <RoomScreen client={client} lang="en" onLeft={vi.fn()} frame="landscape" />
+      </I18nextProvider>,
+    )
+    const root = container.firstElementChild as HTMLElement
+    expect(root).toHaveAttribute('data-frame', 'landscape')
+    expect(container.querySelector('[data-seats]'), 'the ring section').not.toBeNull()
+    expect(screen.queryByRole('group', { name: 'Players' }), 'not the stack strip').toBeNull()
+  })
+
+  it('stamps the desktop frame when nothing says otherwise', () => {
+    const { view } = wrap(fakeClient(makeState({ room: standingRoom })))
+    expect(view.container.firstElementChild).toHaveAttribute('data-frame', 'desktop')
+  })
 })
