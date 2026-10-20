@@ -47,6 +47,8 @@ const SERVICE_STATUS: Record<string, number> = {
   INVALID_ITEM: 400,
   INVALID_ROLE: 400,
   INVALID_ACHIEVEMENT: 400,
+  INVALID_MONTH: 400,
+  INVALID_GIFTS: 400,
   FORBIDDEN: 403,
   SELF_TARGET: 403,
   TARGET_IS_GM: 403,
@@ -57,9 +59,14 @@ const SERVICE_STATUS: Record<string, number> = {
   LAST_GM: 409,
   TARGET_IS_LOCKED: 409,
   INSUFFICIENT_BALANCE: 409,
+  MONTH_IN_PAST: 409,
+  TIER_LOCKED: 409,
+  NOTHING_TO_CLEAR: 409,
   ILLEGAL_ACTION: 400,
   GAME_IN_PROGRESS: 409,
 }
+
+const MONTH_KEY = /^\d{4}-(0[1-9]|1[0-2])$/
 
 /** A refusal that means "there was nothing to act on" — no action happened, so none is logged. */
 const LOOKUP_REFUSALS: ReadonlySet<string> = new Set(['ROOM_NOT_FOUND', 'NOT_IN_ROOM'])
@@ -99,6 +106,12 @@ export function registerGmRoutes(app: FastifyInstance, deps: GmRouteDeps): void 
     const id = idOf(req)
     if (!isUuid(id)) throw new HttpError(404, 'NOT_FOUND', 'no such player')
     return id
+  }
+  /** The `:month` of a gift route, `YYYY-MM`: the store refuses anything else too, but the client should hear which part was wrong. */
+  const monthOf = (req: FastifyRequest): string => {
+    const month = (req.params as { month: string }).month
+    if (!MONTH_KEY.test(month)) throw new HttpError(400, 'INVALID_MONTH', 'month must be YYYY-MM')
+    return month
   }
   /** `reason` of a room POST, checked before the room is looked up. */
   const roomReason = (req: FastifyRequest): string => {
@@ -182,6 +195,21 @@ export function registerGmRoutes(app: FastifyInstance, deps: GmRouteDeps): void 
     const body = bodyOf(req)
     const done = await translated(() => deps.gm.setRole(actorOf(req), idOf(req), body.role as 'player' | 'gm', body.reason as string))
     return reply.send({ role: done.role })
+  })
+
+  // ---------- the gift schedule ----------
+
+  app.get('/api/gm/gifts', gmOnly, async (_req, reply) => reply.send(await deps.gm.giftMonths()))
+
+  // The reason is checked before the month, as everywhere in this file: a refusal never depends on what else is wrong.
+  app.put('/api/gm/gifts/:month', gmOnly, async (req, reply) => {
+    const reason = roomReason(req)
+    return reply.send(await translated(() => deps.gm.setGiftMonth(actorOf(req), monthOf(req), bodyOf(req).days, reason)))
+  })
+
+  app.delete('/api/gm/gifts/:month', gmOnly, async (req, reply) => {
+    const reason = roomReason(req)
+    return reply.send(await translated(() => deps.gm.clearGiftMonth(actorOf(req), monthOf(req), reason)))
   })
 
   // ---------- rooms ----------

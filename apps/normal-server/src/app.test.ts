@@ -364,6 +364,7 @@ describe('every mutating route is guarded', () => {
       'GET /api/catalog/items',
       'GET /api/config',
       'GET /api/gm/actions',
+      'GET /api/gm/gifts',
       'GET /api/gm/overview',
       'GET /api/gm/players/:id',
       'GET /api/gm/players/:id/checkin',
@@ -398,8 +399,10 @@ describe('every mutating route is guarded', () => {
       'POST /api/gm/rooms/:id/kick',
       'POST /api/me/outfits/:slot/apply',
       'POST /api/rewards/daily/claim',
+      'PUT /api/gm/gifts/:month',
       'PUT /api/me/avatar',
       'PUT /api/me/outfits/:slot',
+      'DELETE /api/gm/gifts/:month',
       'DELETE /api/me/outfits/:slot',
     ].sort())
   })

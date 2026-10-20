@@ -24,7 +24,8 @@ import type { AchievementDef, AchievementReward } from '../achievements/definiti
 import type { SessionService } from '../auth/session-service.js'
 import { rowsOf, type AppDb, type AppTx } from '../db/client.js'
 import { dailyLogins, gmActions, inventory as inventoryTable, playerAchievements, playerStats, players, users, type GmActionKind } from '../db/schema.js'
-import { addDaysKey, dayKey, MAX_STREAK } from '../economy/daily-rules.js'
+import { addDaysKey, dayKey, MAX_STREAK, monthKey } from '../economy/daily-rules.js'
+import type { GiftMonthRow, GiftScheduleStore } from '../economy/gift-schedule-store.js'
 import { ServiceError } from '../errors.js'
 import type { HistoryService } from '../history/history-service.js'
 import { missingWardrobe } from '../inventory/grant-wardrobe.js'
@@ -95,6 +96,9 @@ export interface GmGrantResult { granted: string[]; alreadyOwned: number; action
 /** What undoing today's check-in would take back: the latest claim's points and items, and where the streak stands. */
 export interface GmCheckinPreview { claimedToday: boolean; day: number; streak: number; points: number; itemIds: string[] }
 
+/** What the Quà tháng tab shows: the default tiers every month falls back to, and the months from this one on. */
+export interface GmGiftSchedule { default: Record<string, unknown>; months: GiftMonthRow[] }
+
 export interface GmService {
   search(q: string, opts?: { limit?: number; before?: string }): Promise<{ players: GmPlayerSummary[]; nextBefore: string | null }>
   get(playerId: string): Promise<GmPlayerDetail | null>
@@ -110,6 +114,12 @@ export interface GmService {
    * (and draw afresh). Refused whole when the player has already spent the points.
    */
   resetCheckin(actor: GmActor, playerId: string, reason: string): Promise<{ actionId: number; undone: { points: number; itemIds: string[] }; balance: number }>
+  /** The gift schedule: the file's default, and one row per month from this one on (13 of them, plus any later month the file or a GM names). */
+  giftMonths(): Promise<GmGiftSchedule>
+  /** Replaces a month's entry of the schedule; effective for the next claim, no restart. Logged with the month and its tiers. */
+  setGiftMonth(actor: GmActor, month: string, days: unknown, reason: string): Promise<{ actionId: number }>
+  /** Drops a GM's entry for a month so the file's applies again. `NOTHING_TO_CLEAR` when the month has none (and nothing is logged). */
+  clearGiftMonth(actor: GmActor, month: string, reason: string): Promise<{ actionId: number }>
   lock(actor: GmActor, playerId: string, reason: string): Promise<{ actionId: number }>
   unlock(actor: GmActor, playerId: string, reason: string): Promise<{ actionId: number }>
   setRole(actor: GmActor, playerId: string, role: GmRole, reason: string): Promise<{ role: GmRole; actionId: number }>
@@ -138,6 +148,8 @@ export interface GmServiceDeps {
     rooms: { readonly size: number; roomOf(playerId: string): GmRoomHandle | undefined }
     gateway: { disconnect(playerId: string): number }
   }
+  /** The monthly gift schedule: the file's default with the months a GM has set over it. */
+  gifts: GiftScheduleStore
   /** The economy's time zone: "today" for a check-in is a calendar day there. */
   timezone: string
   log?: Pick<Logger, 'warn'>
@@ -436,6 +448,43 @@ export function createGmService(deps: GmServiceDeps): GmService {
       void deps.game.balanceChanged(playerId)
       notice(playerId, { action: 'reset_checkin', reason: why })
       return result
+    },
+
+    async giftMonths() {
+      const stored = await deps.gifts.months()
+      const [year, mon] = monthKey(now(), deps.timezone).split('-').map(Number) as [number, number]
+      const window = Array.from({ length: 13 }, (_, i) => {
+        const at = new Date(Date.UTC(year, mon - 1 + i, 1))
+        return `${String(at.getUTCFullYear())}-${String(at.getUTCMonth() + 1).padStart(2, '0')}`
+      })
+      const byMonth = new Map(stored.map((row) => [row.month, row]))
+      // A month with neither entry is shown empty, as the file's: it falls back to the default tier by tier.
+      const months = window.map((month) => byMonth.get(month) ?? { month, days: {}, source: 'file' as const, updatedAt: null, updatedBy: null })
+      // Past the window, a month the file or a GM already names is still the GM's to see.
+      for (const row of stored) if (row.month > window[12]!) months.push(row)
+      return { default: deps.gifts.defaults(), months }
+    },
+
+    async setGiftMonth(actor, month, days, reason) {
+      const why = checkReason(reason)
+      const actionId = await deps.db.transaction(async (tx) => {
+        // The store validates first (and reads through `tx`): a refused month leaves no log line behind.
+        await deps.gifts.setMonth(tx, month, days, actor.userId)
+        return logAction(tx, { actorUserId: actor.userId, action: 'set_gift_month', targetPlayerId: null, reason: why, details: { month, days } })
+      })
+      // After the commit, so a rolled-back write never changes what the next claim reads.
+      await deps.gifts.reload()
+      return { actionId }
+    },
+
+    async clearGiftMonth(actor, month, reason) {
+      const why = checkReason(reason)
+      const actionId = await deps.db.transaction(async (tx) => {
+        if (!(await deps.gifts.clearMonth(tx, month))) throw new ServiceError('NOTHING_TO_CLEAR', `${month} has no entry of its own to clear`)
+        return logAction(tx, { actorUserId: actor.userId, action: 'clear_gift_month', targetPlayerId: null, reason: why, details: { month } })
+      })
+      await deps.gifts.reload()
+      return { actionId }
     },
 
     async lock(actor, playerId, reason) {

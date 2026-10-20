@@ -4,7 +4,8 @@
  * Until Plan 22 the column was code — `itemRuleForDay` in `daily-rules.ts`, with the day-28 pair a constant — so a
  * month with a different gift meant a commit and a deploy. It is a schedule now: a `default` that every month falls
  * back to, and `months`, keyed `YYYY-MM`, each overriding single tiers. An operator adds a month by editing the JSON and
- * restarting; no code and no database row changes (`docs/normal-server.md`, "Changing the daily gifts").
+ * restarting; no code changes (`docs/normal-server.md`, "Changing the daily gifts"). Since Plan 26 a GM can also set a
+ * month at run time: `gift-schedule-store.ts` lays the `gift_months` rows over this file, and this file stays the default.
  *
  * A month's rule for a tier **replaces** the default's (spec Q5). A `fixed` list there is the whole list, written out in
  * full — `2026-11` names the badge and the title again beside the top hat — so what a tier gives is readable in one
@@ -164,8 +165,11 @@ export function parseDailyGifts(raw: unknown, catalog: ItemCatalog, source = 'da
   }
 }
 
-/** Reads and checks `data/daily-gifts.json` against the item catalogue. Throws, naming the file, on anything wrong. */
-export function loadDailyGifts(catalog: ItemCatalog, path: string = defaultDailyGiftsPath()): DailyGiftSchedule {
+/**
+ * Reads `data/daily-gifts.json` as parsed JSON, unchecked: the default every month falls back to, and the file's own
+ * months. Throws, naming the file, when it cannot be read or a month key appears twice.
+ */
+export function readDailyGiftsRaw(path: string = defaultDailyGiftsPath()): unknown {
   let text: string
   let parsed: unknown
   try {
@@ -178,5 +182,10 @@ export function loadDailyGifts(catalog: ItemCatalog, path: string = defaultDaily
   const keys = [...text.matchAll(/"(\d{4}-\d{2})"\s*:/g)].map((m) => m[1]!)
   const twice = keys.find((key, i) => keys.indexOf(key) !== i)
   if (twice !== undefined) throw new Error(`invalid daily gift schedule ${path}: month ${twice} appears twice`)
-  return parseDailyGifts(parsed, catalog, path)
+  return parsed
+}
+
+/** Reads and checks `data/daily-gifts.json` against the item catalogue. Throws, naming the file, on anything wrong. */
+export function loadDailyGifts(catalog: ItemCatalog, path: string = defaultDailyGiftsPath()): DailyGiftSchedule {
+  return parseDailyGifts(readDailyGiftsRaw(path), catalog, path)
 }

@@ -511,3 +511,53 @@ describe('GmService — reads', () => {
     expect(o.points24h.sinks).toBe(0)
   })
 })
+
+describe('GmService — gift schedule', () => {
+  const logged = async () =>
+    rowsOf<{ action: string; target_player_id: string | null; reason: string; details: Record<string, unknown> | null }>(
+      await db.execute(sql`select action, target_player_id, reason, details from gm_actions where action in ('set_gift_month', 'clear_gift_month') order by id`),
+    )
+
+  it('setGiftMonth and clearGiftMonth log with the month in details', async () => {
+    // START is 4 September 2026: October is a later month, free to set.
+    const days = { '7': { fixed: ['aura_ice01'] } }
+    const set = await gm.setGiftMonth(actor(boss), '2026-10', days, 'quà tháng mười')
+    expect(set.actionId).toBeGreaterThan(0)
+    // Effective at once, with no restart: the schedule the economy reads has it.
+    expect(h.app.services.gifts.current().itemRuleForDay(7, '2026-10')).toEqual({ kind: 'fixed', itemIds: ['aura_ice01'] })
+    // The view reads the service's own clock: pinned to the app's, so the window starts in the month the store calls current.
+    const shown = await createGmService(deps({ now: () => START })).giftMonths()
+    expect(shown.months).toHaveLength(13)
+    expect(shown.months[0]).toMatchObject({ month: '2026-09', source: 'file' })
+    expect(shown.months[1]).toMatchObject({ month: '2026-10', source: 'db', days, updatedBy: boss.playerId })
+    expect(shown.default).toHaveProperty('28')
+
+    const cleared = await gm.clearGiftMonth(actor(boss), '2026-10', 'bỏ quà tháng mười')
+    expect(cleared.actionId).toBeGreaterThan(set.actionId)
+    expect(h.app.services.gifts.current().itemRuleForDay(7, '2026-10')).toEqual({ kind: 'randomUnowned', rarity: 'common' })
+
+    const rows = await logged()
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toMatchObject({ action: 'set_gift_month', target_player_id: null, reason: 'quà tháng mười', details: { month: '2026-10', days } })
+    expect(rows[1]).toMatchObject({ action: 'clear_gift_month', target_player_id: null, reason: 'bỏ quà tháng mười', details: { month: '2026-10' } })
+  })
+
+  it('writes no log line for a month it refuses, and NOTHING_TO_CLEAR for a month with no entry of its own', async () => {
+    const refused = async (run: () => Promise<unknown>): Promise<string> => {
+      try {
+        await run()
+      } catch (err) {
+        return (err as ServiceError).code
+      }
+      return 'NO_ERROR'
+    }
+    expect(await refused(() => gm.setGiftMonth(actor(boss), '2026-08', {}, 'tháng đã qua'))).toBe('MONTH_IN_PAST')
+    expect(await refused(() => gm.setGiftMonth(actor(boss), '2026-09', { '3': { draw: 'rare' } }, 'tầng đã qua'))).toBe('TIER_LOCKED')
+    expect(await refused(() => gm.setGiftMonth(actor(boss), '2026-10', { '3': { fixed: ['nope'] } }, 'sai vật phẩm'))).toBe('INVALID_GIFTS')
+    expect(await refused(() => gm.setGiftMonth(actor(boss), '2026-10', {}, 'ab'))).toBe('INVALID_REASON')
+    expect(await refused(() => gm.clearGiftMonth(actor(boss), '2026-10', 'không có gì để bỏ'))).toBe('NOTHING_TO_CLEAR')
+    expect(await logged()).toEqual([])
+    // Nothing reached the table either.
+    expect(rowsOf(await db.execute(sql`select 1 from gift_months`))).toEqual([])
+  })
+})

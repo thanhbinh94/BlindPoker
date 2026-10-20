@@ -113,10 +113,11 @@ export interface EconomyServiceDeps {
    */
   reservedItemIds?: Iterable<string>
   /**
-   * The check-in's item column — `data/daily-gifts.json` through `loadDailyGifts` (spec 2026-10-12): what each tier
-   * draws or grants, month by month.
+   * The check-in's item column (spec 2026-10-12): what each tier draws or grants, month by month. A getter, because a
+   * GM may replace a month while the server runs (Plan 26): each operation calls it **once** and keeps that copy, so a
+   * claim never sees two schedules.
    */
-  gifts: DailyGiftSchedule
+  gifts: () => DailyGiftSchedule
 }
 
 /** The `source` recorded in `inventory` for anything the check-in hands out. */
@@ -126,22 +127,24 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
   const now = deps.now ?? Date.now
   const rng = deps.rng ?? Math.random
   /**
-   * What the random tiers may not draw, settled once at wiring time.
+   * What the random tiers may not draw, settled per claim from the schedule that claim holds (Plan 26: a GM can change
+   * the schedule while the server runs, so it is no longer fixed at wiring time).
    *
    * Every id the gift schedule names first — in any month, past or future (spec Q8): a day-14 draw that took
    * `badge_monthly` would leave day 28 with nothing to grant and — correctly, since the fallback belongs to the random
    * tiers only — nothing to pay in its place, so a full 28-day streak would quietly be worth less than the schedule
    * says. The same argument covers every achievement reward: an item handed out by chance is one a player can no
    * longer earn.
-   */
-  const excludedIds: readonly string[] = [...new Set([...deps.gifts.fixedItemIds(), ...(deps.reservedItemIds ?? [])])]
-  /**
+   *
    * `withinSlots: DAILY_DRAW_SLOTS` rather than excluding `title`/`badge`/`outfit` by name: an
    * allow-list also keeps out anything `items` still carries for a slot the current catalogue no
    * longer offers (`0001_avatar_v2.sql`'s four v2 rows, kept forever for `inventory`'s foreign key)
    * — a deny-list could never name those, because they are not even a current `ItemSlot`.
    */
-  const drawExclusion = { ids: excludedIds, withinSlots: DAILY_DRAW_SLOTS }
+  const drawExclusionOf = (gifts: DailyGiftSchedule) => ({
+    ids: [...new Set([...gifts.fixedItemIds(), ...(deps.reservedItemIds ?? [])])] as readonly string[],
+    withinSlots: DAILY_DRAW_SLOTS,
+  })
 
   /** The `daily_logins` row, locked for the duration of the caller's transaction. */
   async function lockDaily(tx: AppTx, playerId: string): Promise<{ streak: number; lastClaimDate: string | null; month: string; claimedDays: number }> {
@@ -177,9 +180,10 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
     month: string,
     refId: string,
     entries: BalanceEntry[],
+    gifts: DailyGiftSchedule,
   ): Promise<{ items: string[]; fallbackPoints: number }> {
     // The month of the claim, not of whatever calendar the player last looked at (spec 2026-10-12 §4.2).
-    const rule = deps.gifts.itemRuleForDay(day, month)
+    const rule = gifts.itemRuleForDay(day, month)
     if (rule === null) return { items: [], fallbackPoints: 0 }
 
     if (rule.kind === 'fixed') {
@@ -196,7 +200,7 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
     // `items` keeps every row it was ever seeded with (inventory's foreign key needs them), so an item the
     // catalogue has since withdrawn — `head_hood_black01`, bug 6 — is still a row of the right slot and
     // rarity. Only what the catalogue still offers is a prize.
-    const unowned = (await deps.inventory.unownedOfRarity(tx, playerId, rule.rarity, drawExclusion)).filter((id) => deps.catalog.get(id) !== undefined)
+    const unowned = (await deps.inventory.unownedOfRarity(tx, playerId, rule.rarity, drawExclusionOf(gifts))).filter((id) => deps.catalog.get(id) !== undefined)
     if (unowned.length === 0) {
       // A second ledger entry under its own reason, sharing the claim's refId: one claim, two rows,
       // and §12.5's report can see how often the catalogue is failing to keep up.
@@ -213,6 +217,7 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
       const nowMs = at ?? now()
       const today = dayKey(nowMs, deps.timezone)
       const month = monthKey(nowMs, deps.timezone)
+      const gifts = deps.gifts()
       // A malformed id reads as "has never claimed" rather than reaching the driver as a `22P02`:
       // this is a status read, and the caller above answers 404 on the profile, not 500 here.
       const [row] = isUuid(playerId)
@@ -228,12 +233,12 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
         day: outcome.day,
         streak: outcome.streak,
         reward: outcome.points,
-        item: itemMarker(deps.gifts.itemRuleForDay(outcome.day, month)),
+        item: itemMarker(gifts.itemRuleForDay(outcome.day, month)),
         nextResetAt: nextDayStartMs(nowMs, deps.timezone),
         month,
         // Built per call, for this month: the schedule may differ month to month, and a fresh array also means one
         // caller decorating an entry can never rewrite the calendar another response carries.
-        calendar: dailyCalendar(deps.gifts, month),
+        calendar: dailyCalendar(gifts, month),
       }
     },
 
@@ -242,6 +247,8 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
       const nowMs = at ?? now()
       const today = dayKey(nowMs, deps.timezone)
       const month = monthKey(nowMs, deps.timezone)
+      // Once, before the transaction: a `setMonth` that commits while this claim runs applies to the next claim.
+      const gifts = deps.gifts()
 
       const result = await deps.db.transaction(async (tx): Promise<DailyClaimResult> => {
         const state = await lockDaily(tx, playerId)
@@ -251,7 +258,7 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
         const points = rewardForDay(outcome.day)
         const refId = `daily:${playerId}:${today}`
         const entries: BalanceEntry[] = [{ playerId, delta: points, reason: 'daily_login', refId }]
-        const { items, fallbackPoints } = await applyItemRule(tx, playerId, outcome.day, month, refId, entries)
+        const { items, fallbackPoints } = await applyItemRule(tx, playerId, outcome.day, month, refId, entries, gifts)
 
         await deps.repos.balances.creditWithin(tx, entries)
         await tx
@@ -286,7 +293,7 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
     },
 
     dailyGiftNotices(at) {
-      return deps.gifts.noticesFrom(monthKey(at ?? now(), deps.timezone))
+      return deps.gifts().noticesFrom(monthKey(at ?? now(), deps.timezone))
     },
 
     async reliefStatus(playerId, at) {

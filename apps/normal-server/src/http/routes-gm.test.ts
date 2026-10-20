@@ -22,7 +22,7 @@ let boss: Account
 const clients: TestClient[] = []
 
 const code = (res: { json(): unknown }): string => (res.json() as { error: { code: string } }).error.code
-const gmReq = (method: 'GET' | 'POST', url: string, payload?: object) =>
+const gmReq = (method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, payload?: object) =>
   h.app.fastify.inject({ method, url, headers: h.auth(boss), ...(payload === undefined ? {} : { payload }) })
 
 const PRIVATE_BLIND: RoomConfig = {
@@ -74,8 +74,8 @@ afterEach(async () => {
 describe('the guard', () => {
   it('answers 401 to nobody and 403 FORBIDDEN to a player on every /api/gm/ route the app serves', async () => {
     const routes = enumerateRoutes(h.app.fastify).filter((r) => r.path.startsWith('/api/gm/'))
-    // The eighteen `/api/gm/` labels `app.test.ts` pins in the exact surface: a route added there must be guarded here.
-    expect(routes).toHaveLength(18)
+    // The twenty-one `/api/gm/` labels `app.test.ts` pins in the exact surface: a route added there must be guarded here.
+    expect(routes).toHaveLength(21)
     for (const route of routes) {
       const url = route.path
         .replace(':id', route.path.startsWith('/api/gm/rooms/') ? 'some-room' : me.playerId)
@@ -123,6 +123,70 @@ describe('reasons', () => {
     // Too short is the same refusal.
     const short = await gmReq('POST', `/api/gm/players/${me.playerId}/lock`, { reason: 'ab' })
     expect(code(short)).toBe('INVALID_REASON')
+  })
+})
+
+describe('the gift schedule', () => {
+  // START is 4 September 2026 in the test economy: October is a later month, September the current one.
+  it('the two writes, a PUT and a DELETE, are also 400 INVALID_REASON without a reason, before the month is looked at', async () => {
+    for (const method of ['PUT', 'DELETE'] as const) {
+      for (const url of ['/api/gm/gifts/2026-10', '/api/gm/gifts/not-a-month']) {
+        const res = await gmReq(method, url, { days: {} })
+        expect(res.statusCode, `${method} ${url}`).toBe(400)
+        expect(code(res), `${method} ${url}`).toBe('INVALID_REASON')
+      }
+    }
+  })
+
+  it('lists the default and thirteen months, sets one, shows it from the database, clears it, and logs both', async () => {
+    const before = await gmReq('GET', '/api/gm/gifts')
+    expect(before.statusCode).toBe(200)
+    const listed = before.json() as { default: Record<string, unknown>; months: { month: string; source: string }[] }
+    expect(Object.keys(listed.default)).toEqual(['7', '14', '21', '28'])
+    expect(listed.months).toHaveLength(13)
+    expect(listed.months[0]).toMatchObject({ month: '2026-09', source: 'file' })
+
+    const days = { '14': { fixed: ['aura_ice01'] } }
+    const put = await gmReq('PUT', '/api/gm/gifts/2026-10', { days, reason: 'quà tháng mười' })
+    expect(put.statusCode).toBe(200)
+    expect(put.json()).toEqual({ actionId: expect.any(Number) })
+    const after = (await gmReq('GET', '/api/gm/gifts')).json() as { months: { month: string; source: string; days: unknown }[] }
+    expect(after.months.find((m) => m.month === '2026-10')).toMatchObject({ source: 'db', days })
+
+    const del = await gmReq('DELETE', '/api/gm/gifts/2026-10', { reason: 'bỏ quà tháng mười' })
+    expect(del.statusCode).toBe(200)
+    expect(del.json()).toEqual({ actionId: expect.any(Number) })
+    const log = (await gmReq('GET', '/api/gm/actions')).json().actions as { action: string; details: unknown; target: unknown }[]
+    expect(log.slice(0, 2)).toMatchObject([
+      { action: 'clear_gift_month', target: null, details: { month: '2026-10' } },
+      { action: 'set_gift_month', target: null, details: { month: '2026-10', days } },
+    ])
+  })
+
+  it('answers INVALID_MONTH, INVALID_GIFTS with the parser’s words, MONTH_IN_PAST, TIER_LOCKED and NOTHING_TO_CLEAR with their statuses', async () => {
+    const put = (month: string, days: unknown) => gmReq('PUT', `/api/gm/gifts/${month}`, { days, reason: 'thử các lỗi' })
+    for (const bad of ['2026-13', '2026-1', '26-10', 'tháng']) {
+      const res = await put(bad, {})
+      expect([res.statusCode, code(res)], bad).toEqual([400, 'INVALID_MONTH'])
+    }
+    const gifts = await put('2026-10', { '28': { fixed: ['no_such_item'] } })
+    expect([gifts.statusCode, code(gifts)]).toEqual([400, 'INVALID_GIFTS'])
+    expect((gifts.json() as { error: { message: string } }).error.message).toContain('no_such_item')
+    // Days is a field the body must carry: without it the candidate is not an object.
+    expect(code(await gmReq('PUT', '/api/gm/gifts/2026-10', { reason: 'thiếu days' }))).toBe('INVALID_GIFTS')
+
+    const past = await put('2026-08', {})
+    expect([past.statusCode, code(past)]).toEqual([409, 'MONTH_IN_PAST'])
+    const locked = await put('2026-09', { '3': { draw: 'rare' } })
+    expect([locked.statusCode, code(locked)]).toEqual([409, 'TIER_LOCKED'])
+    const nothing = await gmReq('DELETE', '/api/gm/gifts/2026-10', { reason: 'không có gì để bỏ' })
+    expect([nothing.statusCode, code(nothing)]).toEqual([409, 'NOTHING_TO_CLEAR'])
+    const badMonth = await gmReq('DELETE', '/api/gm/gifts/2026-13', { reason: 'tháng sai' })
+    expect([badMonth.statusCode, code(badMonth)]).toEqual([400, 'INVALID_MONTH'])
+
+    // None of the refusals wrote a line.
+    const log = (await gmReq('GET', '/api/gm/actions')).json().actions as unknown[]
+    expect(log).toEqual([])
   })
 })
 

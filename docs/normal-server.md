@@ -46,7 +46,7 @@ src/
     index.ts         createRepositories(db) → NormalRepositories
 
   auth/              password.ts (argon2id) · session-service.ts · cookie.ts · auth-service.ts
-  economy/           daily-rules.ts (pure) · daily-gifts.ts (the gift schedule, loaded and checked) · economy-service.ts (daily claim, relief)
+  economy/           daily-rules.ts (pure) · daily-gifts.ts (the gift schedule, loaded and checked) · gift-schedule-store.ts (the file plus a GM's months) · economy-service.ts (daily claim, relief)
   inventory/         slots.ts (the slot and gender vocabulary) · manifest.ts (loads avatar-manifest.json)
                      bodies.ts (the v4 bodies, one per gender, held against the manifest) · items.ts (catalogue)
                      aliases.ts (old wardrobe ids → current ones, or null when dropped)
@@ -473,7 +473,31 @@ To add or change a month:
    `"rooms":0` (`stop.ps1` is a hard kill), then `stop.ps1` and `run.ps1 -NoMigrate` — no `build:normal` is needed for
    a change to this file alone. In Docker `data/` is inside the image, so `up -d --build`. No migration either way.
 
-`loadDailyGifts` **refuses to start** — `invalid daily gift schedule <path>: <problem>` — on: an id the catalogue does
+**A GM edits a month without a restart (Plan 26).** The JSON file is the *default*; the months a GM sets live in the
+table `gift_months` (`month` text primary key, `days` jsonb — the same `{ "<tier>": rule }` object a month holds in the
+file — `updated_at`, `updated_by`, migration 0005) and **replace** that month's entry in the file as a whole. The old way
+above still works and still sets the default and the file's months; a month with no row falls back to it, and deleting a
+row brings the file's entry back. `GiftScheduleStore` (`src/economy/gift-schedule-store.ts`) builds the schedule the
+economy reads from the file and the rows (`current()`), and rebuilds it after a write commits (`reload()`). The economy
+takes `current()` once per claim and keeps that copy, so a claim that began before a change finishes under the schedule it
+began with and the next claim sees the new one.
+
+- `GET /api/gm/gifts` → `{ default, months }`: the file's default, and one row per month from the current one for 13
+  months (each `{ month, days, source: 'file' | 'db', updatedAt, updatedBy }`, plus any later month the file or a GM
+  names). `PUT /api/gm/gifts/:month` `{ days, reason }` replaces a month; `DELETE /api/gm/gifts/:month` `{ reason }` drops
+  the GM's row. Each is a `gm_actions` row in the same transaction (`set_gift_month`, with `details: { month, days }`;
+  `clear_gift_month`, with `details: { month }`), so the Nhật ký shows who changed what and why.
+- Refused, before any row is written: `INVALID_MONTH` (400, not `YYYY-MM`); `INVALID_GIFTS` (400, with the parser's own
+  message — the checks above, run against the file with the rows laid over it — or a fixed item whose slot is not one of
+  `DAILY_DRAW_SLOTS`, `title`, `badge`, because a required slot cannot be taken back when a check-in is undone);
+  `MONTH_IN_PAST` (409); `TIER_LOCKED` (409: in the current month, a tier up to today's date has been reached, so its
+  rule cannot change — later tiers can, and saying what is already so is no change); `NOTHING_TO_CLEAR` (409, a `DELETE`
+  of a month that has no row; nothing is logged).
+- A stored month that no longer validates at boot (the catalogue changed under it) is logged at `warn`, skipped — the
+  file's entry or the default applies — and the boot goes on. The file alone is still refused, as below.
+
+The file is checked at boot — `readDailyGiftsRaw` reads it, `parseDailyGifts` (through `loadDailyGifts` in the tests) checks it —
+and the server **refuses to start** — `invalid daily gift schedule <path>: <problem>` — on: an id the catalogue does
 not hold, or one every player already owns (`isDefault`, `free`); a tier outside 1–31, written with a leading zero, or
 past the end of its month (`2027-02` has no tier 29); an empty `fixed` list; the same id twice in a tier, or on two
 tiers of one month (the default's tiers included); a draw that is not `common` or `rare`, or a rule that is not exactly

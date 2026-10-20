@@ -79,7 +79,7 @@ beforeAll(async () => {
     onBalanceChanged: (playerId, balance) => balanceCalls.push({ playerId, balance }),
     rng: () => rng(),
     reservedItemIds: rewardItemIds,
-    gifts,
+    gifts: () => gifts,
   })
 })
 afterAll(async () => {
@@ -477,7 +477,7 @@ describe('claimDaily', () => {
         onBalanceChanged: () => {},
         rng: () => 0,
         reservedItemIds: ['aura_ice01'],
-        gifts,
+        gifts: () => gifts,
       })
       const pool = drawable('rare').filter((id) => id !== 'aura_ice01')
 
@@ -515,7 +515,7 @@ describe('claimDaily', () => {
         timezone: 'UTC',
         onBalanceChanged: () => {},
         rng: () => 0,
-        gifts: scheduled,
+        gifts: () => scheduled,
       })
       const pool = catalog
         .byRarity('rare')
@@ -551,7 +551,7 @@ describe('claimDaily', () => {
         timezone: 'Asia/Ho_Chi_Minh',
         onBalanceChanged: () => {},
         rng: () => 0,
-        gifts,
+        gifts: () => gifts,
       })
 
       // 17:30 UTC on the 4th is already 00:30 on the 5th in Ho Chi Minh City.
@@ -616,7 +616,7 @@ describe('dailyStatus', () => {
     expect((await economy.dailyStatus(playerId, Date.UTC(2026, 10, 1, 0, 0))).month).toBe('2026-11')
 
     // …and where ECONOMY_TIMEZONE says: 23:59 on 31/10 in Ho Chi Minh City is 16:59 UTC, 00:00 on 01/11 is 17:00 UTC.
-    const hcm = createEconomyService({ db, repos, inventory: inv, catalog, bus, timezone: 'Asia/Ho_Chi_Minh', onBalanceChanged: () => {}, gifts })
+    const hcm = createEconomyService({ db, repos, inventory: inv, catalog, bus, timezone: 'Asia/Ho_Chi_Minh', onBalanceChanged: () => {}, gifts: () => gifts })
     expect((await hcm.dailyStatus(playerId, Date.UTC(2026, 9, 31, 16, 59))).month).toBe('2026-10')
     expect((await hcm.dailyStatus(playerId, Date.UTC(2026, 9, 31, 17, 0))).month).toBe('2026-11')
     expect(hcm.dailyGiftNotices(Date.UTC(2026, 10, 30, 16, 59)).find((n) => n.itemId === 'head_tophat01')).toMatchObject({ month: '2026-11' })
