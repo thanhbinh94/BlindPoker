@@ -1798,8 +1798,8 @@
    leaves the bottom dock row free, so the card is a compact block over the felt: at most 560 px wide, 12 px of padding
    above and below, and each part on one line —
 
-   - head: the title and "Đóng", a 44 px tap that is allowed to stand 4 px out of the head's rows so it does not make
-     the head taller than it needs to be;
+   - head: the title and "Đóng", a full 44 px tap (the head is as tall as the button: `.resultLive` clips its overflow,
+     so the button may not stand out of the head);
    - body: the rows (one line each: name and hand name ellipsised, the cards, the payout) and the side-pot ledger. The
      only part that scrolls, as on a desktop;
    - foot: the fee, the carry-over and the uncalled return as ellipsised pieces, and the countdown pushed right and
@@ -1826,7 +1826,6 @@
   flex: none;
   min-width: var(--tap);
   min-height: var(--tap);
-  margin-block: -4px;
 }
 
 .result[data-frame='landscape'] .resultTitle {
