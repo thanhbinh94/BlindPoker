@@ -432,14 +432,14 @@ test('F-11: a squeeze table — one peels by hand, the other presses Lật, and 
   }
 })
 
-test('F-12: @mobile the squeeze fits a phone — the viewer’s cards, the Lật pill and the timer are on screen', async () => {
-  test.setTimeout(180_000)
+/** F-12 and F-12b: a squeeze table on the mobile project's phone (375 × 812, touch), from the deal to the winner card. */
+async function squeezeFitsPhone({ id, mode, what, shot }: { id: string; mode: 'Hoàn toàn may rủi' | 'Chơi hoặc bỏ'; what: string; shot: string }) {
   // The mobile project's own phone: 375 × 812, with a touch screen (`a` is made in this project's context).
   const page = a.page
   expect(page.viewportSize(), 'the mobile project’s phone').toEqual(PHONE_SCREEN)
   expect(await page.evaluate(() => navigator.maxTouchPoints), 'a touch screen').toBeGreaterThan(0)
 
-  await createBlind(page, { name: unique('Bàn F12 '), bots: 1, mode: 'Hoàn toàn may rủi', squeeze: true })
+  await createBlind(page, { name: unique(`Bàn ${id} `), bots: 1, mode, squeeze: true })
   await expect(page.locator('header').getByText('Nặn bài', { exact: true })).toBeVisible()
   await takeSeat(page, 0)
   await ready(page)
@@ -452,7 +452,8 @@ test('F-12: @mobile the squeeze fits a phone — the viewer’s cards, the Lật
   await expect(mine).toHaveCount(2)
   await expect(pill).toBeVisible()
   await expect(timer).toBeVisible()
-  await expect(page.getByText('Mời nặn bài')).toBeVisible()
+  // The hint belongs to the pure-luck table; a play-or-fold one asks for its choice in the tray instead.
+  if (mode === 'Hoàn toàn may rủi') await expect(page.getByText('Mời nặn bài')).toBeVisible()
   await settled(mine.first())
   await settled(mine.last())
 
@@ -470,11 +471,11 @@ test('F-12: @mobile the squeeze fits a phone — the viewer’s cards, the Lật
   // And the room holds on the phone: nothing scrolls sideways, neither the page nor the stage scrolls down, the viewer's
   // plate keeps to its lines with the name whole beside the round's timer, and no text lands on text.
   await expectNoSidewaysScroll(page)
-  await expectRoomFits(page, 'a squeeze table, dealt', [PHONE_SCREEN])
-  await expectMySeatLines(page, a.who.displayName, 'a squeeze table, dealt')
-  await expectMyNameWhole(page, a.who.displayName, 'a squeeze table, dealt', [PHONE_SCREEN])
-  await expectNoTextOverlapAt(page, 'Blind, squeeze, dealt')
-  await page.screenshot({ path: 'test-results/shots/375x812-squeeze-dealt.png' })
+  await expectRoomFits(page, `${what} table, dealt`, [PHONE_SCREEN])
+  await expectMySeatLines(page, a.who.displayName, `${what} table, dealt`)
+  await expectMyNameWhole(page, a.who.displayName, `${what} table, dealt`, [PHONE_SCREEN])
+  await expectNoTextOverlapAt(page, `Blind, ${what}, dealt`)
+  await page.screenshot({ path: `test-results/shots/375x812-${shot}-dealt.png` })
 
   // One card by finger: from its bottom-left corner, along the diagonal, past the middle. Pointer Events of type `touch`.
   await page.evaluate(() => {
@@ -487,7 +488,7 @@ test('F-12: @mobile the squeeze fits a phone — the viewer’s cards, the Lật
   const cdp = await a.context.newCDPSession(page)
   await touchDrag(cdp, corner, { x: corner.x + (card.width - 8) * 0.8, y: corner.y - (card.height - 8) * 0.8 }, async () => {
     await expect(mine.first()).toHaveAttribute('data-face', 'peeling', { timeout: 5_000 })
-    await page.screenshot({ path: 'test-results/shots/375x812-squeeze-peeling.png' })
+    await page.screenshot({ path: `test-results/shots/375x812-${shot}-peeling.png` })
   })
   // 5 s: a drag that did not take must fail as itself, not wait for the server's forced turn at 20 s.
   await expect(mine.first()).toHaveAttribute('data-face', 'up', { timeout: 5_000 })
@@ -495,15 +496,29 @@ test('F-12: @mobile the squeeze fits a phone — the viewer’s cards, the Lật
   // One card up does not turn the seat: the other is still down, the pill and the tray still wait for it.
   await expect(mine.last()).toHaveAttribute('data-face', 'down')
   await expect(pill).toBeEnabled()
-  await expect(page.getByText('Mời nặn bài')).toBeVisible()
+  if (mode === 'Hoàn toàn may rủi') await expect(page.getByText('Mời nặn bài')).toBeVisible()
 
   // The pill, by tap, turns the other one; with the bot already turned the round ends on the human's turn.
   await pill.tap()
   await expect(mine.last()).toHaveAttribute('data-face', 'up', { timeout: 5_000 })
   await expect(faceUp(page.locator('[data-me="true"]'))).toHaveCount(2)
+  // A play-or-fold table asks for the choice after the peel; the round then ends on the human's Chơi.
+  if (mode === 'Chơi hoặc bỏ') await page.getByRole('button', { name: /^Chơi\b/ }).click()
   await expect.poll(() => faceUp(page.getByRole('group', { name: 'Bài chung' })).count(), { message: 'the flop is on the felt' }).toBeGreaterThanOrEqual(3)
   await expect(winnerCard(page)).toBeVisible({ timeout: 15_000 })
   expect(Date.now() - t0).toBeLessThan(20_000)
   await leave(page)
+}
+
+test('F-12: @mobile the squeeze fits a phone — the viewer’s cards, the Lật pill and the timer are on screen', async () => {
+  test.setTimeout(180_000)
+  await squeezeFitsPhone({ id: 'F12', mode: 'Hoàn toàn may rủi', what: 'a squeeze', shot: 'squeeze' })
+})
+
+// Plan 26 (B6): the play-or-fold squeeze has the header's gold badge and the viewer's Lật pill too; both used to cost a row,
+// and the stage scrolled 11 px in the round.
+test('F-12b: @mobile the play-or-fold squeeze also fits a phone — no 11 px scroll in the round', async () => {
+  test.setTimeout(180_000)
+  await squeezeFitsPhone({ id: 'F12b', mode: 'Chơi hoặc bỏ', what: 'a play-or-fold squeeze', shot: 'squeeze-pof' })
 })
 

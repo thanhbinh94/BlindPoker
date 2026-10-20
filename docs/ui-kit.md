@@ -460,12 +460,13 @@ The playground's `#peel` page is the card alone on the felt, for trying the gest
 
 **On the table.** `Seat` draws the viewer's own cards as `PeelCard`s *for the whole hand* of a squeeze room (swapped for
 `Card`s mid-hand they would remount and come out of the deck again), each `open = openAll || seat.revealed || !squeezeRound`:
-the "Lật" pill below the cards turns both at once, the server turning the seat (a decision, the forced turn at the
+the "Lật" pill at the foot of the cards turns both at once, the server turning the seat (a decision, the forced turn at the
 deadline) opens what is still down, and so does the round ending. `REVEAL` goes out **once per hand, after the viewer's last
 card is up** (`onCardUp`, then `onReveal` → `PokerTable` → `RoomScreen`'s `client.reveal()`), not when the first card
 turns and not at all if the server turned the seat itself. The "Lật" pill is 28 px tall at least, and it keeps its place for
-the whole hand (out of sight and reach once nothing is left to turn): taken out, it would move the seat's block and the
-cards opening in it. A ring↔stack switch in the middle of a round remounts the seat; a card peeled but not yet reported
+the whole hand (out of sight and reach once nothing is left to turn), inside the cards' box (`.seatCards`), laid over their
+bottom edge with no row of its own (Plan 26, B6) and 40 px wide, so that a finger starting a peel at a card's corner does
+not land on it. Hidden it stays, so the cards opening beside it do not move. A ring↔stack switch in the middle of a round remounts the seat; a card peeled but not yet reported
 comes back down, and the next "Lật" may send a second `REVEAL`, which the engine takes as the no-op it is. A `REVEAL` lost
 with the socket is sent once more: when the reconnect's snapshot rebuilds the hand (`restored`, which `PokerTable` passes
 on) with the seat still unturned while this seat's cards are up from before, `Seat` tells the table again — not for a hand
@@ -864,11 +865,11 @@ full-viewport, for measuring a layout against a screen size.
   as images.
 - **The squeeze peel** is driven in Chromium only, and not yet on a real phone: Firefox's and WebKit's touch-capture
   semantics are guarded in `PeelCard` and unit-tested with synthetic events, never run in those browsers. On a device
-  that does not coalesce pointer events a single quick move after a rest is not read as a flick. A play-or-fold squeeze
-  table on a 375 × 812 phone (six seats, one bot) scrolls its stage 11 px in the round (its header takes a third line and
-  the viewer's seat the "Lật" pill's row; the seat stays on screen); a pure-luck one fits since the phone's tray wait
-  line gave back 8 px (the final fix wave: it was 3 px over). A ring↔stack switch in the middle of a round can send a
-  second, harmless `REVEAL`. All four are written up in `docs/known-limitations.md`.
+  that does not coalesce pointer events a single quick move after a rest is not read as a flick. (A squeeze table on a
+  375 × 812 phone used to scroll its stage by 11 px, play-or-fold, or 3 px, pure luck; Plan 26 lifted the header's gold
+  badge up beside the room's name and laid the "Lật" pill over the foot of the cards, and F-12 / F-12b assert that both
+  fit.) A ring↔stack switch in the middle of a round can send a second, harmless `REVEAL`. The three are written up in
+  `docs/known-limitations.md`.
 - **The badge test measures the grounds a badge sits on today** (see Theming → Badge text). A badge on a ground it
   does not list is not measured, and one place is tight: teal under a dark `.panel.ink`'s highlight. The test holds
   that highlight at 2 %, above anywhere a badge is (Lite's "claimed" badge: 0.8–1.4 %, none on a phone; titled panels put

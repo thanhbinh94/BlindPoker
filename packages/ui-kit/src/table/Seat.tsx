@@ -264,22 +264,23 @@ export function Seat({
               />
             ),
           )}
+          {/* The pill keeps its place for the whole hand and shows while a card is still to turn. It lies over the foot of the
+              cards, centred, and takes no row of its own (Plan 26, B6): a row cost a squeeze table's stage 11 px on a 375 px
+              phone, where the seat is the tallest thing in the felt. Hidden, it stays in the box, so nothing about the cards
+              moves as the last one opens. */}
+          {peeling ? (
+            <button
+              ref={pillRef}
+              type="button"
+              className={cx(s.revealBtn, !toTurn && s.revealBtnIdle)}
+              disabled={!toTurn}
+              aria-hidden={toTurn ? undefined : true}
+              onClick={() => setPressedIn(handId)}
+            >
+              {t('actions.revealCards')}
+            </button>
+          ) : null}
         </div>
-      ) : null}
-      {/* The pill keeps its place for the whole hand and shows while a card is still to turn: taken out, it would move
-          the seat's block — and the cards opening in it — by half its height on the ring, where a seat is centred on its
-          point, and by all of it on the phone. */}
-      {peeling ? (
-        <button
-          ref={pillRef}
-          type="button"
-          className={cx(s.revealBtn, !toTurn && s.revealBtnIdle)}
-          disabled={!toTurn}
-          aria-hidden={toTurn ? undefined : true}
-          onClick={() => setPressedIn(handId)}
-        >
-          {t('actions.revealCards')}
-        </button>
       ) : null}
 
       <div className={s.plate} data-plate="">

@@ -51,7 +51,8 @@ export function RoomHeader({ room, status, onLeave, lang, right, compact = false
       <span className={s.connText}>{t(STATUS_KEY[status])}</span>
     </span>
   )
-  const squeezeBadge = blind?.squeeze === true ? <Badge tone="gold">{t('labels.squeezeMode')}</Badge> : null
+  const squeeze = blind?.squeeze === true
+  const squeezeBadge = squeeze ? <Badge tone="gold">{t('labels.squeezeMode')}</Badge> : null
   const code = (
     <span className={s.code} aria-label={t('labels.code')}>
       {room.code}
@@ -80,21 +81,29 @@ export function RoomHeader({ room, status, onLeave, lang, right, compact = false
   }
 
   return (
-    <header className={s.header}>
+    <header className={cx(s.header, squeeze && s.headerSqueeze)}>
       <div className={s.headMain}>
         <span className={s.modeGlyph} aria-hidden="true">
           {MODE_GLYPH[room.mode]}
         </span>
         <div className={s.headText}>
           <h1 className={s.roomName}>{room.name}</h1>
+          {/* One line of facts on a desktop. On a phone the squeeze badge steps up beside the name (the first row of the
+              header's grid) and the rest of the line (`metaFlow`) is the second row: a squeeze table's gold badge no longer
+              fills a row of its own, which is what scrolled its stage by 11 px (Plan 26, B6). On a desktop `metaFlow` steps
+              aside and `order` puts the badge back between the badges and the code. */}
           <div className={s.headMeta}>
-            <Badge tone="gold">{t(`mode.${room.mode}`)}</Badge>
-            {blind === undefined ? null : <Badge tone="teal">{t(blind.holeCards === 3 ? 'blind.cards3' : 'blind.cards2')}</Badge>}
-            {blind === undefined ? null : <Badge tone="muted">{t(`blind.decision.${blind.decisionMode}`)}</Badge>}
-            {squeezeBadge}
-            {code}
-            {stakes === '' ? null : <span className={s.stakes}>{stakes}</span>}
-            <span className={s.players}>{players}</span>
+            <div className={s.metaFlow}>
+              <Badge tone="gold">{t(`mode.${room.mode}`)}</Badge>
+              {blind === undefined ? null : <Badge tone="teal">{t(blind.holeCards === 3 ? 'blind.cards3' : 'blind.cards2')}</Badge>}
+              {blind === undefined ? null : <Badge tone="muted">{t(`blind.decision.${blind.decisionMode}`)}</Badge>}
+              <span className={cx(s.code, s.metaTail)} aria-label={t('labels.code')}>
+                {room.code}
+              </span>
+              {stakes === '' ? null : <span className={cx(s.stakes, s.metaTail)}>{stakes}</span>}
+              <span className={cx(s.players, s.metaTail)}>{players}</span>
+            </div>
+            {squeeze ? <Badge tone="gold" className={s.squeezeBadge}>{t('labels.squeezeMode')}</Badge> : null}
           </div>
         </div>
       </div>

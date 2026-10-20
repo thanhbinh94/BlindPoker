@@ -115,7 +115,7 @@ describe('Seat in a squeeze room', () => {
     const view = wrap(props())
     const slot = document.querySelector<HTMLButtonElement>(`.${s.revealBtn}`)!
     fireEvent.click(pill()!)
-    expect(document.querySelector(`.${s.revealBtn}`), 'the same pill, still taking its row').toBe(slot)
+    expect(document.querySelector(`.${s.revealBtn}`), 'the same pill, still in its place').toBe(slot)
     expect(slot).toHaveClass(s.revealBtnIdle!)
     expect(slot).toBeDisabled()
     expect(slot).toHaveAttribute('aria-hidden', 'true')
@@ -305,6 +305,23 @@ describe('Seat in a squeeze room', () => {
     wrap(props({ seat: decided, player: makePlayer({ playerId: 'bot2', displayName: 'Bảo', isBot: true, seat: 2 }), isMe: false, deadlineAt: null, squeezeDecides: true }))
     expect(screen.getByText('Đã chọn')).toBeInTheDocument()
     expect(screen.queryByText('Đã lật')).toBeNull()
+  })
+
+  // Plan 26 (B6): the pill is laid over the foot of the cards, so it no longer costs the seat a row (the play-or-fold
+  // squeeze table's stage scrolled 11 px on a 375 px phone). Its place stays for the whole hand all the same.
+  it('keeps the reveal pill inside the cards box and hidden-but-present when idle', () => {
+    wrap(props())
+    const box = document.querySelector<HTMLElement>(`.${s.seatCards}`)!
+    const slot = document.querySelector<HTMLButtonElement>(`.${s.revealBtn}`)!
+    expect(box.contains(slot), 'inside the cards box, not a row of the seat').toBe(true)
+    expect(slot.parentElement).toBe(box)
+    expect(slot).not.toHaveClass(s.revealBtnIdle!)
+    expect(TABLE_CSS).toMatch(/\.seatCards\s*\{[^}]*position:\s*relative/)
+    expect(TABLE_CSS).toMatch(/\.revealBtn\s*\{[^}]*position:\s*absolute/)
+    fireEvent.click(slot)
+    expect(box.contains(document.querySelector(`.${s.revealBtn}`)), 'still there once nothing is left to turn').toBe(true)
+    expect(document.querySelector(`.${s.revealBtn}`)).toHaveClass(s.revealBtnIdle!)
+    expect(TABLE_CSS).toMatch(/\.revealBtnIdle\s*\{[^}]*visibility:\s*hidden/)
   })
 
   // Ruling 22: the pill is a touch target — at least 28 px tall, its label centred.

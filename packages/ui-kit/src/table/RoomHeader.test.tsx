@@ -81,6 +81,22 @@ describe('RoomHeader', () => {
     })
   })
 
+  // Plan 26 (B6): on a phone the badge sits beside the name on the header's first line. jsdom draws no grid, so this holds
+  // the structure the grid area hangs on: the badge is in the header, outside the meta line that takes the second row.
+  it('keeps the squeeze badge inside the header on a phone', () => {
+    const { container } = wrap(blindRoom(true))
+    const header = container.querySelector('header')!
+    const squeeze = within(header).getByText('Nặn bài')
+    expect(header.contains(squeeze)).toBe(true)
+    expect(header).toHaveClass(s.headerSqueeze!)
+    expect(squeeze.closest(`.${s.metaFlow}`), 'not in the meta line, which takes the second row').toBeNull()
+    expect(squeeze.parentElement).toHaveClass(s.headMeta!)
+    expect(within(header).getByLabelText('Mã phòng'), 'the code stays on the meta line').toHaveClass(s.code!)
+    expect(within(header).getByLabelText('Mã phòng').closest(`.${s.metaFlow}`)).not.toBeNull()
+    const plain = wrap(blindRoom())
+    expect(plain.container.querySelector('header')).not.toHaveClass(s.headerSqueeze!)
+  })
+
   // Plan 26 (B2): a phone on its side gives the header one line — the code, the squeeze badge and the way out stay in
   // it; the head-count and the mode badges go.
   describe('compact', () => {
