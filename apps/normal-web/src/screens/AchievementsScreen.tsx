@@ -93,7 +93,8 @@ export function AchievementsScreen({ api, lang }: AchievementsScreenProps) {
             {rows
               .filter((row) => row.category === category)
               .map((row) => {
-                const done = Math.min(row.progress, row.threshold)
+                // A row a game master unlocked may have a counter short of its threshold; it is done all the same.
+                const done = row.unlockedAt !== null ? row.threshold : Math.min(row.progress, row.threshold)
                 // No shipped definition has a threshold of 0, but `NaN%` is what one would paint, so the
                 // degenerate case reads as "there was nothing to do" rather than as a broken bar.
                 const filled = row.threshold === 0 ? 100 : (done / row.threshold) * 100

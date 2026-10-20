@@ -1,8 +1,8 @@
 import { formatPoints } from '@bp/ui-kit'
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { ApiError, type GmPlayerDetailDto, type NormalApi, type PlayerStatsDto } from '../../api.js'
+import { ApiError, type AchievementDefDto, type GmPlayerDetailDto, type NormalApi, type PlayerStatsDto } from '../../api.js'
 import viNormal from '../../locales/vi/normal.json'
 import { renderWithI18n } from '../../test-i18n.js'
 import { PlayerDetail } from './PlayerDetail.js'
@@ -22,6 +22,13 @@ const DETAIL: GmPlayerDetailDto = {
   unlockedAchievementIds: [],
 }
 
+const ACHIEVEMENTS: AchievementDefDto[] = [
+  { id: 'login_days_7', category: 'login', metric: 'totalLoginDays', threshold: 7, reward: { points: 5_000 } },
+  { id: 'login_days_30', category: 'login', metric: 'totalLoginDays', threshold: 30, reward: { points: 20_000 } },
+]
+
+const CLAIMED = { claimedToday: true, day: 3, streak: 3, points: 2_000, itemIds: ['head_crown_gold01', 'badge_bronze'] }
+
 type Stub = NormalApi & Record<string, ReturnType<typeof vi.fn>>
 
 function stubApi(detail: GmPlayerDetailDto = DETAIL, overrides: Partial<Record<keyof NormalApi, unknown>> = {}): Stub {
@@ -38,6 +45,10 @@ function stubApi(detail: GmPlayerDetailDto = DETAIL, overrides: Partial<Record<k
     gmLock: vi.fn().mockResolvedValue({ locked: true }),
     gmUnlock: vi.fn().mockResolvedValue({ locked: false }),
     gmSetRole: vi.fn().mockResolvedValue({ role: 'gm' }),
+    gmCheckin: vi.fn().mockResolvedValue({ claimedToday: false, day: 0, streak: 0, points: 0, itemIds: [] }),
+    gmUnlockAchievement: vi.fn().mockResolvedValue({ actionId: 11, reward: { points: 5_000 }, balance: 128_000 }),
+    gmResetCheckin: vi.fn().mockResolvedValue({ actionId: 12, undone: { points: 2_000, itemIds: [] }, balance: 121_000 }),
+    catalogAchievements: vi.fn().mockResolvedValue({ achievements: ACHIEVEMENTS }),
     ...overrides,
   } as unknown as Stub
 }
@@ -188,6 +199,67 @@ describe('PlayerDetail', () => {
     expect(await dialog().findByRole('alert')).toHaveTextContent(viNormal.gm.errors.LAST_GM)
     expect(api.gmPlayer).toHaveBeenCalledTimes(1)
     expect(screen.getByRole('status')).toBeEmptyDOMElement()
+  })
+
+  it('unlocks an achievement from a picker that disables what the player already has', async () => {
+    const user = userEvent.setup()
+    const { api } = setup(stubApi({ ...DETAIL, unlockedAchievementIds: ['login_days_7'] }))
+    await screen.findByText('binh@example.com')
+
+    await user.click(action(viNormal.gm.actions.unlockAchievement))
+    const picker = await dialog().findByLabelText(viNormal.gm.dialog.achievement)
+    expect(within(picker).getByRole('option', { name: viNormal.achievements.login_days_7.name })).toBeDisabled()
+    await user.selectOptions(picker, 'login_days_30')
+    await user.type(dialog().getByLabelText(viNormal.gm.dialog.reason), 'thiếu thưởng')
+    await user.click(dialog().getByRole('button', { name: viNormal.gm.dialog.confirm }))
+
+    expect(api.gmUnlockAchievement).toHaveBeenCalledWith('p1', 'login_days_30', 'thiếu thưởng')
+    expect(await screen.findByText(viNormal.gm.done.unlockAchievement)).toBeInTheDocument()
+    expect(api.gmPlayer).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps Đặt lại điểm danh off until the preview says the player has claimed today', async () => {
+    setup()
+    await screen.findByText('binh@example.com')
+
+    await waitFor(() => expect(screen.getByRole('button', { name: viNormal.gm.actions.resetCheckin })).toBeDisabled())
+  })
+
+  it('spells out what the reset takes back, then resets and reads the preview again', async () => {
+    const user = userEvent.setup()
+    const gmCheckin = vi
+      .fn()
+      .mockResolvedValueOnce(CLAIMED)
+      .mockResolvedValue({ claimedToday: false, day: 0, streak: 3, points: 0, itemIds: [] })
+    const { api } = setup(stubApi(DETAIL, { gmCheckin }))
+    await screen.findByText('binh@example.com')
+
+    await waitFor(() => expect(action(viNormal.gm.actions.resetCheckin)).toBeEnabled())
+    await user.click(action(viNormal.gm.actions.resetCheckin))
+    const body = viNormal.gm.dialog.checkinBody
+      .replace('{{points}}', formatPoints(2_000, 'vi'))
+      .replace('{{items}}', `${viNormal.items.head_crown_gold01}, ${viNormal.items.badge_bronze}`)
+    expect(screen.getByText(body)).toBeInTheDocument()
+    await user.type(dialog().getByLabelText(viNormal.gm.dialog.reason), 'bấm nhầm')
+    await user.click(dialog().getByRole('button', { name: viNormal.gm.dialog.confirm }))
+
+    expect(api.gmResetCheckin).toHaveBeenCalledWith('p1', 'bấm nhầm')
+    expect(await screen.findByText(viNormal.gm.done.resetCheckin)).toBeInTheDocument()
+    expect(api.gmCheckin).toHaveBeenCalledTimes(2)
+    await waitFor(() => expect(action(viNormal.gm.actions.resetCheckin)).toBeDisabled())
+  })
+
+  it('says "no items" when the claim gave only points', async () => {
+    const user = userEvent.setup()
+    setup(stubApi(DETAIL, { gmCheckin: vi.fn().mockResolvedValue({ ...CLAIMED, itemIds: [] }) }))
+    await screen.findByText('binh@example.com')
+
+    await waitFor(() => expect(action(viNormal.gm.actions.resetCheckin)).toBeEnabled())
+    await user.click(action(viNormal.gm.actions.resetCheckin))
+
+    expect(
+      screen.getByText(viNormal.gm.dialog.checkinBody.replace('{{points}}', formatPoints(2_000, 'vi')).replace('{{items}}', viNormal.gm.dialog.noItems)),
+    ).toBeInTheDocument()
   })
 
   it('goes back to the list', async () => {

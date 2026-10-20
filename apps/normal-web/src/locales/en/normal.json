@@ -185,6 +185,8 @@
       "unlock": "Unlock",
       "promote": "Make a game master",
       "demote": "Remove game master rights",
+      "unlockAchievement": "Unlock achievement",
+      "resetCheckin": "Reset check-in",
       "kick": "Remove from room",
       "close": "Close room"
     },
@@ -192,6 +194,9 @@
       "reason": "Reason (required, 3–200 characters)",
       "amount": "Points (negative to deduct, at most ±10,000,000)",
       "item": "Item id",
+      "achievement": "Achievement",
+      "checkinBody": "Undo today's check-in: take back {{points}} points and {{items}}; the streak is kept and the player can claim again at once.",
+      "noItems": "no items",
       "confirm": "Confirm",
       "cancel": "Cancel",
       "close": "Close",
@@ -255,6 +260,8 @@
       "lock": "Account locked",
       "unlock": "Account unlocked",
       "role": "Role changed",
+      "unlockAchievement": "Achievement unlocked and rewarded.",
+      "resetCheckin": "Today's check-in has been reopened.",
       "kick": "Removed ({{when}})",
       "kickNow": "now",
       "kickAfterHand": "after this hand",
@@ -274,14 +281,19 @@
       "GAME_IN_PROGRESS": "A hand is in progress",
       "SELF_TARGET": "You cannot do this to yourself",
       "TARGET_IS_GM": "This player is a game master; demote first",
-      "TARGET_IS_LOCKED": "This account is locked; unlock it first"
+      "TARGET_IS_LOCKED": "This account is locked; unlock it first",
+      "INVALID_ACHIEVEMENT": "No such achievement.",
+      "ALREADY_UNLOCKED": "The player already has this achievement.",
+      "NOT_CLAIMED_TODAY": "The player has not checked in today."
     },
     "notice": {
       "points": "{{amount}} points — {{reason}}",
       "item": "{{item}} — {{reason}}",
       "promote": "You are now a game master — {{reason}}",
       "demote": "Your game-master role was removed — {{reason}}",
-      "wardrobe": "You were given the whole wardrobe — {{reason}}"
+      "wardrobe": "You were given the whole wardrobe — {{reason}}",
+      "unlock_achievement": "A GM unlocked the achievement \"{{name}}\" for you.",
+      "reset_checkin": "Today's check-in has been reopened."
     }
   },
   "screens": {

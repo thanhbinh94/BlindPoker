@@ -1,7 +1,8 @@
 import { Button, Modal } from '@bp/ui-kit'
 import { useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ApiError } from '../../api.js'
+import { ApiError, type AchievementDefDto } from '../../api.js'
+import { achievementName } from '../../catalog-i18n.js'
 import s from '../normal.module.css'
 import { refusalText } from '../refusal.js'
 import g from './gm.module.css'
@@ -17,6 +18,7 @@ export interface ReasonValues {
   reason: string
   amount?: number
   itemId?: string
+  achievementId?: string
 }
 
 export interface ReasonDialogProps {
@@ -25,7 +27,12 @@ export interface ReasonDialogProps {
   /** One paragraph of consequence, shown above the form: what the action does to the person it lands on. */
   body?: string
   /** Which extra inputs the action needs; the reason is always asked. */
-  fields: { amount?: boolean; item?: boolean }
+  fields: {
+    amount?: boolean
+    item?: boolean
+    /** A picker of definitions; the ids in `disabledIds` (already unlocked) are listed but cannot be chosen. */
+    achievement?: { options: AchievementDefDto[]; disabledIds: ReadonlySet<string> }
+  }
   confirmLabel: string
   /** Rejects with the server's refusal, which the dialog prints; resolves and the dialog closes. */
   onConfirm: (values: ReasonValues) => Promise<void>
@@ -52,6 +59,7 @@ export function ReasonDialog({ open, title, body, fields, confirmLabel, onConfir
   const [reason, setReason] = useState('')
   const [amountText, setAmountText] = useState('')
   const [itemId, setItemId] = useState('')
+  const [achievementId, setAchievementId] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -62,6 +70,7 @@ export function ReasonDialog({ open, title, body, fields, confirmLabel, onConfir
     setReason('')
     setAmountText('')
     setItemId('')
+    setAchievementId('')
     setBusy(false)
     setError(null)
   }, [open])
@@ -72,13 +81,15 @@ export function ReasonDialog({ open, title, body, fields, confirmLabel, onConfir
   const valid =
     cleanReason.length >= MIN_REASON &&
     (fields.amount !== true || amount !== null) &&
-    (fields.item !== true || cleanItem !== '')
+    (fields.item !== true || cleanItem !== '') &&
+    (fields.achievement === undefined || achievementId !== '')
 
   const submit = async (): Promise<void> => {
     if (!valid || busy) return
     const values: ReasonValues = { reason: cleanReason }
     if (fields.amount === true && amount !== null && amount !== undefined) values.amount = amount
     if (fields.item === true) values.itemId = cleanItem
+    if (fields.achievement !== undefined) values.achievementId = achievementId
     setBusy(true)
     setError(null)
     try {
@@ -98,6 +109,7 @@ export function ReasonDialog({ open, title, body, fields, confirmLabel, onConfir
   const reasonId = useId()
   const amountId = useId()
   const itemFieldId = useId()
+  const achievementFieldId = useId()
 
   return (
     <Modal
@@ -152,6 +164,27 @@ export function ReasonDialog({ open, title, body, fields, confirmLabel, onConfir
             />
           </div>
         ) : null}
+
+        {fields.achievement === undefined ? null : (
+          <div className={g.field}>
+            <label className={s.label} htmlFor={achievementFieldId}>
+              {t('gm.dialog.achievement')}
+            </label>
+            <select
+              id={achievementFieldId}
+              className={s.input}
+              value={achievementId}
+              onChange={(event) => setAchievementId(event.target.value)}
+            >
+              <option value="" />
+              {fields.achievement.options.map((def) => (
+                <option key={def.id} value={def.id} disabled={fields.achievement?.disabledIds.has(def.id) === true}>
+                  {achievementName(def.id, t)}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className={g.field}>
           <label className={s.label} htmlFor={reasonId}>

@@ -115,6 +115,27 @@ describe('AchievementsScreen', () => {
     expect(past).toHaveAttribute('aria-valuetext', viNormal.achievements.ui.progress.replace('{{progress}}', '10').replace('{{threshold}}', '10'))
   })
 
+  it('draws an unlocked row full even when its counter has not reached the threshold (a GM unlocked it)', async () => {
+    const forced: AchievementProgressDto = {
+      id: 'login_days_30',
+      category: 'login',
+      metric: 'totalLoginDays',
+      threshold: 30,
+      reward: { points: 20_000 },
+      progress: 12,
+      unlockedAt: Date.UTC(2026, 9, 20),
+    }
+    renderScreen(stubApi({ achievements: vi.fn().mockResolvedValue([forced]) }))
+    await screen.findByText(viNormal.achievements.login_days_30.name)
+
+    const bar = screen.getByRole('progressbar', { name: viNormal.achievements.login_days_30.name })
+    const full = viNormal.achievements.ui.progress.replace('{{progress}}', '30').replace('{{threshold}}', '30')
+    expect(bar).toHaveAttribute('aria-valuenow', '30')
+    expect(bar).toHaveAttribute('aria-valuetext', full)
+    expect(bar.firstElementChild).toHaveStyle({ width: '100%' })
+    expect(screen.getByText(full)).toBeInTheDocument()
+  })
+
   it('groups the digits of a large counter the way every other number on screen is grouped', async () => {
     const big: AchievementProgressDto = {
       id: 'big_win_100k',

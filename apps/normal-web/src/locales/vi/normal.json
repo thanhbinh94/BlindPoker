@@ -185,6 +185,8 @@
       "unlock": "Mở khóa",
       "promote": "Trao quyền quản trị",
       "demote": "Thu quyền quản trị",
+      "unlockAchievement": "Mở thành tựu",
+      "resetCheckin": "Đặt lại điểm danh",
       "kick": "Mời ra",
       "close": "Đóng phòng"
     },
@@ -192,6 +194,9 @@
       "reason": "Lý do (bắt buộc, 3–200 ký tự)",
       "amount": "Số điểm (âm để trừ, tối đa ±10.000.000)",
       "item": "Mã món",
+      "achievement": "Thành tựu",
+      "checkinBody": "Hoàn tác lượt điểm danh hôm nay: trừ lại {{points}} điểm, thu lại {{items}}; chuỗi ngày giữ nguyên và người chơi nhận lại được ngay.",
+      "noItems": "không có món nào",
       "confirm": "Xác nhận",
       "cancel": "Hủy",
       "close": "Đóng",
@@ -255,6 +260,8 @@
       "lock": "Đã khóa tài khoản",
       "unlock": "Đã mở khóa",
       "role": "Đã đổi vai trò",
+      "unlockAchievement": "Đã mở thành tựu và trả thưởng.",
+      "resetCheckin": "Đã mở lại lượt điểm danh hôm nay.",
       "kick": "Đã mời ra ({{when}})",
       "kickNow": "ngay",
       "kickAfterHand": "sau ván này",
@@ -274,14 +281,19 @@
       "GAME_IN_PROGRESS": "Đang trong ván",
       "SELF_TARGET": "Không tự làm việc này với chính mình được",
       "TARGET_IS_GM": "Người này là quản trị viên, thu quyền trước",
-      "TARGET_IS_LOCKED": "Tài khoản đang bị khóa, mở khóa trước"
+      "TARGET_IS_LOCKED": "Tài khoản đang bị khóa, mở khóa trước",
+      "INVALID_ACHIEVEMENT": "Thành tựu không tồn tại.",
+      "ALREADY_UNLOCKED": "Người chơi đã mở thành tựu này.",
+      "NOT_CLAIMED_TODAY": "Hôm nay người chơi chưa điểm danh."
     },
     "notice": {
       "points": "{{amount}} điểm — {{reason}}",
       "item": "{{item}} — {{reason}}",
       "promote": "Bạn đã được trao quyền quản trị — {{reason}}",
       "demote": "Quyền quản trị của bạn đã được thu — {{reason}}",
-      "wardrobe": "Bạn được cấp toàn bộ tủ đồ — {{reason}}"
+      "wardrobe": "Bạn được cấp toàn bộ tủ đồ — {{reason}}",
+      "unlock_achievement": "GM đã mở thành tựu \"{{name}}\" cho bạn.",
+      "reset_checkin": "Lượt điểm danh hôm nay đã được mở lại."
     }
   },
   "screens": {

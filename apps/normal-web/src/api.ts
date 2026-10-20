@@ -509,6 +509,29 @@ export interface GmGrantDto {
   alreadyOwned: number
 }
 
+/** `GET /api/gm/players/:id/checkin`: what today's check-in gave. `day` is the stored streak tier, meaningful only when `claimedToday`. */
+export interface GmCheckinDto {
+  claimedToday: boolean
+  day: number
+  streak: number
+  points: number
+  itemIds: string[]
+}
+
+/** What unlocking an achievement for a player answers: the reward paid through the same path as earning it. */
+export interface GmUnlockDto {
+  actionId: number
+  reward: { points?: number; itemId?: string }
+  balance: number
+}
+
+/** What reopening today's check-in took back. */
+export interface GmResetCheckinDto {
+  actionId: number
+  undone: { points: number; itemIds: string[] }
+  balance: number
+}
+
 /**
  * Every REST failure, including the ones that never left the browser. `status` is `0` and `code` is
  * `NETWORK` when `fetch` itself rejected — the screens need to tell "the server said no" apart from
@@ -598,6 +621,12 @@ export interface NormalApi {
   gmPoints(playerId: string, amount: number, reason: string): Promise<{ balance: number; actionId: number }>
   gmGrantItem(playerId: string, itemId: string, reason: string): Promise<GmGrantDto>
   gmGrantWardrobe(playerId: string, reason: string): Promise<GmGrantDto>
+  /** Unlocks one achievement with its full reward; refused `ALREADY_UNLOCKED` when the player has it. */
+  gmUnlockAchievement(playerId: string, achievementId: string, reason: string): Promise<GmUnlockDto>
+  /** A read-only preview of today's check-in, so the console can say what a reset would take back. */
+  gmCheckin(playerId: string): Promise<GmCheckinDto>
+  /** Undoes today's check-in (points and items) so the player can claim again; refused `NOT_CLAIMED_TODAY` otherwise. */
+  gmResetCheckin(playerId: string, reason: string): Promise<GmResetCheckinDto>
   gmLock(playerId: string, reason: string): Promise<{ locked: true }>
   gmUnlock(playerId: string, reason: string): Promise<{ locked: false }>
   gmSetRole(playerId: string, role: Role, reason: string): Promise<{ role: Role }>
@@ -742,6 +771,15 @@ export function createApi(fetchImpl?: typeof fetch, base = ''): NormalApi {
       call<GmGrantDto>({ method: 'POST', path: `/api/gm/players/${encodeURIComponent(playerId)}/items`, body: { itemId, reason } }),
     gmGrantWardrobe: (playerId, reason) =>
       call<GmGrantDto>({ method: 'POST', path: `/api/gm/players/${encodeURIComponent(playerId)}/items`, body: { all: true, reason } }),
+    gmUnlockAchievement: (playerId, achievementId, reason) =>
+      call<GmUnlockDto>({
+        method: 'POST',
+        path: `/api/gm/players/${encodeURIComponent(playerId)}/achievements/${encodeURIComponent(achievementId)}/unlock`,
+        body: { reason },
+      }),
+    gmCheckin: (playerId) => call<GmCheckinDto>({ method: 'GET', path: `/api/gm/players/${encodeURIComponent(playerId)}/checkin` }),
+    gmResetCheckin: (playerId, reason) =>
+      call<GmResetCheckinDto>({ method: 'POST', path: `/api/gm/players/${encodeURIComponent(playerId)}/checkin/reset`, body: { reason } }),
     gmLock: (playerId, reason) => call<{ locked: true }>({ method: 'POST', path: `/api/gm/players/${encodeURIComponent(playerId)}/lock`, body: { reason } }),
     gmUnlock: (playerId, reason) => call<{ locked: false }>({ method: 'POST', path: `/api/gm/players/${encodeURIComponent(playerId)}/unlock`, body: { reason } }),
     gmSetRole: (playerId, role, reason) =>

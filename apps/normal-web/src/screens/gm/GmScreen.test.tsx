@@ -122,6 +122,8 @@ function playerApi(overrides: Partial<Record<keyof NormalApi, unknown>> = {}): S
     }),
     gmPlayerLedger: vi.fn().mockResolvedValue({ entries: [], nextBefore: null }),
     gmPlayerHistory: vi.fn().mockResolvedValue([]),
+    gmCheckin: vi.fn().mockResolvedValue({ claimedToday: false, day: 0, streak: 0, points: 0, itemIds: [] }),
+    catalogAchievements: vi.fn().mockResolvedValue({ achievements: [] }),
     ...overrides,
   })
 }

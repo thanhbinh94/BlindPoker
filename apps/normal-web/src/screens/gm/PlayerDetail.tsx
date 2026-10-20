@@ -2,6 +2,7 @@ import { Badge, Button, Panel, formatPoints } from '@bp/ui-kit'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { GmPlayerDetailDto } from '../../api.js'
+import { itemName } from '../../catalog-i18n.js'
 import { formatDay, formatMoment, formatSigned } from '../format.js'
 import { LedgerPanel } from '../LedgerPanel.js'
 import s from '../normal.module.css'
@@ -13,10 +14,19 @@ import type { GmTabProps } from './tabProps.js'
 /** The hands the console shows under a player: enough to see what they have been doing, not a report. */
 const HISTORY_LIMIT = 20
 
-type ActionKind = 'points' | 'item' | 'wardrobe' | 'lock' | 'unlock' | 'promote' | 'demote'
+type ActionKind =
+  | 'points'
+  | 'item'
+  | 'wardrobe'
+  | 'lock'
+  | 'unlock'
+  | 'promote'
+  | 'demote'
+  | 'unlockAchievement'
+  | 'resetCheckin'
 
 /** What each action asks for besides the reason, and the sentence of consequence shown above the form. */
-const ACTIONS: Record<ActionKind, { fields: { amount?: boolean; item?: boolean }; body?: string }> = {
+const ACTIONS: Record<ActionKind, { fields: { amount?: boolean; item?: boolean; achievement?: boolean }; body?: string }> = {
   points: { fields: { amount: true } },
   item: { fields: { item: true } },
   wardrobe: { fields: {} },
@@ -24,6 +34,9 @@ const ACTIONS: Record<ActionKind, { fields: { amount?: boolean; item?: boolean }
   unlock: { fields: {} },
   promote: { fields: {} },
   demote: { fields: {} },
+  unlockAchievement: { fields: { achievement: true } },
+  // Its sentence names the points and items, so it is computed from the preview rather than keyed.
+  resetCheckin: { fields: {} },
 }
 
 export interface PlayerDetailProps extends GmTabProps {
@@ -43,6 +56,10 @@ export function PlayerDetail({ api, lang, playerId, onBack }: PlayerDetailProps)
   const { t } = useTranslation('normal')
   const detail = useAsync(() => api.gmPlayer(playerId))
   const history = useAsync(() => api.gmPlayerHistory(playerId, HISTORY_LIMIT))
+  // What today's check-in gave, read before the button is offered: a reset with nothing to undo is refused anyway.
+  const checkin = useAsync(() => api.gmCheckin(playerId))
+  // The picker's options, read once.
+  const catalog = useAsync(() => api.catalogAchievements())
   const [action, setAction] = useState<ActionKind | null>(null)
   const [done, setDone] = useState<string | null>(null)
   /** Bumped by every successful action; the ledger is keyed on it, so it starts over from the newest row. */
@@ -77,6 +94,13 @@ export function PlayerDetail({ api, lang, playerId, onBack }: PlayerDetailProps)
       case 'demote':
         await api.gmSetRole(playerId, 'player', values.reason)
         return t('gm.done.role')
+      case 'unlockAchievement':
+        if (values.achievementId === undefined) throw new Error('achievementId')
+        await api.gmUnlockAchievement(playerId, values.achievementId, values.reason)
+        return t('gm.done.unlockAchievement')
+      case 'resetCheckin':
+        await api.gmResetCheckin(playerId, values.reason)
+        return t('gm.done.resetCheckin')
     }
   }
 
@@ -86,6 +110,21 @@ export function PlayerDetail({ api, lang, playerId, onBack }: PlayerDetailProps)
     setDone(message)
     setLedgerKey((n) => n + 1)
     detail.reload()
+    if (action === 'resetCheckin') checkin.reload()
+  }
+
+  /** The sentence above the reset form: what leaves the player's balance and wardrobe. */
+  const dialogBody = (kind: ActionKind): string | undefined => {
+    if (kind === 'resetCheckin') {
+      const given = checkin.data
+      if (given === null) return undefined
+      return t('gm.dialog.checkinBody', {
+        points: formatPoints(given.points, lang),
+        items: given.itemIds.length === 0 ? t('gm.dialog.noItems') : given.itemIds.map((id) => itemName(id, t)).join(', '),
+      })
+    }
+    const key = ACTIONS[kind].body
+    return key === undefined ? undefined : t(key)
   }
 
   const open = (kind: ActionKind): void => {
@@ -168,6 +207,16 @@ export function PlayerDetail({ api, lang, playerId, onBack }: PlayerDetailProps)
                 {t('gm.actions.promote')}
               </Button>
             )}
+            <Button variant="ghost" onClick={() => open('unlockAchievement')}>
+              {t('gm.actions.unlockAchievement')}
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={checkin.loading || checkin.data?.claimedToday !== true}
+              onClick={() => open('resetCheckin')}
+            >
+              {t('gm.actions.resetCheckin')}
+            </Button>
           </div>
         </div>
       </Panel>
@@ -212,8 +261,13 @@ export function PlayerDetail({ api, lang, playerId, onBack }: PlayerDetailProps)
         <ReasonDialog
           open
           title={t(`gm.actions.${action}`)}
-          body={ACTIONS[action].body === undefined ? undefined : t(ACTIONS[action].body)}
-          fields={ACTIONS[action].fields}
+          body={dialogBody(action)}
+          fields={{
+            ...ACTIONS[action].fields,
+            achievement: ACTIONS[action].fields.achievement
+              ? { options: catalog.data?.achievements ?? [], disabledIds: new Set(player.unlockedAchievementIds) }
+              : undefined,
+          }}
           confirmLabel={t('gm.dialog.confirm')}
           onConfirm={confirm}
           onClose={() => setAction(null)}

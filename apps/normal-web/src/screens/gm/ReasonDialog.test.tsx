@@ -1,8 +1,8 @@
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import { describe, expect, it, vi } from 'vitest'
-import { ApiError } from '../../api.js'
+import { ApiError, type AchievementDefDto } from '../../api.js'
 import viNormal from '../../locales/vi/normal.json'
 import { renderWithI18n } from '../../test-i18n.js'
 import { ReasonDialog, type ReasonDialogProps } from './ReasonDialog.js'
@@ -144,6 +144,37 @@ describe('ReasonDialog', () => {
     )
 
     expect(reasonBox()).toHaveValue('')
+  })
+
+  describe('with an achievement field', () => {
+    const OPTIONS: AchievementDefDto[] = [
+      { id: 'login_days_7', category: 'login', metric: 'totalLoginDays', threshold: 7, reward: { points: 5_000 } },
+      { id: 'login_days_30', category: 'login', metric: 'totalLoginDays', threshold: 30, reward: { points: 20_000 } },
+    ]
+    const achievement = { options: OPTIONS, disabledIds: new Set(['login_days_7']) as ReadonlySet<string> }
+    const picker = () => screen.getByLabelText(viNormal.gm.dialog.achievement)
+
+    it('lists the definitions by name, the ones the player already has disabled', () => {
+      renderDialog({ fields: { achievement } })
+
+      const first = within(picker()).getByRole('option', { name: viNormal.achievements.login_days_7.name })
+      const second = within(picker()).getByRole('option', { name: viNormal.achievements.login_days_30.name })
+      expect(first).toBeDisabled()
+      expect(second).toBeEnabled()
+    })
+
+    it('keeps Confirm off until one is chosen, then hands its id to onConfirm', async () => {
+      const user = userEvent.setup()
+      const { onConfirm } = renderDialog({ fields: { achievement } })
+      await user.type(reasonBox(), 'thiếu thưởng')
+      expect(confirmButton()).toBeDisabled()
+
+      await user.selectOptions(picker(), 'login_days_30')
+      expect(confirmButton()).toBeEnabled()
+      await user.click(confirmButton())
+
+      expect(onConfirm).toHaveBeenCalledWith({ reason: 'thiếu thưởng', achievementId: 'login_days_30' })
+    })
   })
 
   it('shows the body text when it has one, and Cancel closes without confirming', async () => {

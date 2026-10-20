@@ -30,7 +30,13 @@ function payloadId(payload: unknown): string | null {
 }
 
 /** What a `GM_NOTICE` carries that this app rewrites; every field is untrusted until it has been checked. */
-function gmFields(payload: unknown): { action: string | null; reason: string | null; amount: number | null; itemId: string | null } {
+function gmFields(payload: unknown): {
+  action: string | null
+  reason: string | null
+  amount: number | null
+  itemId: string | null
+  achievementId: string | null
+} {
   const bag = typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : {}
   const text = (key: string): string | null => (typeof bag[key] === 'string' ? (bag[key] as string) : null)
   return {
@@ -38,6 +44,7 @@ function gmFields(payload: unknown): { action: string | null; reason: string | n
     reason: text('reason'),
     amount: typeof bag.amount === 'number' && Number.isFinite(bag.amount) ? bag.amount : null,
     itemId: text('itemId'),
+    achievementId: text('achievementId'),
   }
 }
 
@@ -56,7 +63,7 @@ export function gmNoticeAction(n: ClientNotification): string | null {
  * lost its amount, because "0 điểm" would be a lie.
  */
 function gmNoticeText(n: ClientNotification, t: TFunction, lang: Language): ClientNotification {
-  const { action, reason, amount, itemId } = gmFields(n.payload)
+  const { action, reason, amount, itemId, achievementId } = gmFields(n.payload)
   if (reason === null) return n
   let written: string | null = null
   if ((action === 'grant_points' || action === 'adjust_points') && amount !== null) {
@@ -69,6 +76,10 @@ function gmNoticeText(n: ClientNotification, t: TFunction, lang: Language): Clie
     written = t('gm.notice.demote', { reason })
   } else if (action === 'grant_wardrobe') {
     written = t('gm.notice.wardrobe', { reason })
+  } else if (action === 'unlock_achievement' && achievementId !== null) {
+    written = t('gm.notice.unlock_achievement', { name: achievementName(achievementId, t) })
+  } else if (action === 'reset_checkin') {
+    written = t('gm.notice.reset_checkin')
   }
   return written === null ? n : { ...n, payload: { ...(n.payload as object), reason: written } }
 }
