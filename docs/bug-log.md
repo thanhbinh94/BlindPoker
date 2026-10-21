@@ -543,3 +543,16 @@ bốn cạnh; `screen.orientation.lock()` không dùng được trên iOS Safari
 - (c) **Chặn xoay ngang** (màn "xoay dọc để chơi"). Không khuyến nghị: WCAG F100 coi là lỗi, và người dùng muốn chơi ngang.
 
 **Đề xuất:** (a), gộp vào Plan 26 cùng đợt 2 của vai GM (mở thành tựu, cho nhận lại điểm danh, sửa lịch quà, biểu đồ).
+
+## 9. Yêu cầu kế tiếp (2026-10-21) — chờ brainstorm sau Plan 26
+
+Người dùng gửi trong lúc Plan 26 đang chạy; ghi lại nguyên văn ý, chưa phân loại, chưa có đề xuất. Mỗi mục sẽ được
+brainstorm (superpowers:brainstorming) sau khi Plan 26 merge và deploy, rồi lên spec/plan riêng.
+
+| # | Yêu cầu | Ghi chú ban đầu của Claude |
+|---|---|---|
+| K1 | **Hai máy cùng một tài khoản.** "Đã giải quyết vấn đề multithread chưa? Giả sử đăng nhập trên 2 máy và 1 máy đang chơi dở thì máy còn lại sẽ như nào, có bị cấm chơi không hay là gì?" | Cần dò mã: phiên theo thiết bị (`sessions`), một socket mỗi phiên hay mỗi tài khoản, ghế trong phòng gắn với `playerId`; trả lời bằng hành vi thật hiện nay (máy thứ hai thấy gì, có vào được bàn khác không, có bị đuổi không) rồi mới đề xuất luật (một bàn một lúc, máy sau "tiếp quản" ghế, hay chỉ xem). |
+| K2 | **Blind Poker không thu phí bàn**, để chơi được tới khi tài khoản về 0: "hiện tại nhiều case account còn 5–6k lẻ vẫn bị văng khỏi phòng, phải cho cược về 0". | Liên quan `table_fee` (sink), luật "số dư tối thiểu để ngồi" (`shortToSit`, hạn mức), và cách bàn Blind xử lý người không đủ mức cược cố định (tất tay phần còn lại?). Đổi luật tiền → bảo toàn `Σ balances + Σ sink rows` vẫn phải giữ; spec §8/§12. |
+| K3 | **Cửa hàng bán đồ:** mua trang phục/phụ kiện bằng **điểm (gold)** + **điểm danh vọng** kiếm trong game, giá theo độ hiếm; giá và danh vọng từng món **quản lý trong database, sửa được** (GM); lý do: "hiện tại không ai dùng kho đồ do chi phí kiếm trang phục hơi khó". | "Gold"/"tiền" = điểm trong game, không bao giờ là tiền thật (requirement.txt §3, spec §33). Cần: loại tiền tệ thứ hai `danh vọng` (nguồn: thắng ván? điểm danh? thành tựu?), bảng `item_prices(item_id, points, reputation, enabled, updated_by)`, màn Cửa hàng dùng chung khung thẻ với Phòng thay đồ, ledger cho danh vọng và sink cho tiền mua đồ, tab GM để sửa giá. |
+| K4 | **Quà lập tài khoản lần đầu:** tiền + danh vọng + một bộ trang phục. | Gắn với `starting_balance` hiện có; thêm nguồn ledger `welcome` cho danh vọng và một món quà; cân nhắc với người đã có tài khoản (có tặng bù không). |
+| K5 | **Kho đồ tải chậm lần đầu** (ảnh nhân vật, tóc, phụ kiện): cần lazy-load. (Gửi 2026-10-20.) | Hơn 490 tệp PNG `@1x/@2x` 384×448; tủ đồ vẽ nhiều chibi cùng lúc. Hướng: `loading="lazy"` + `IntersectionObserver` cho thẻ ngoài màn, ảnh đại diện nhỏ cho thẻ (icon 96 px đã có), tải trước theo ô đang mở, giới hạn số ảnh cùng lúc, WebP/sprite cho lớp. |
