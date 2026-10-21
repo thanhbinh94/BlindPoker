@@ -336,7 +336,8 @@
       "demote": "Quyền quản trị của bạn đã được thu — {{reason}}",
       "wardrobe": "Bạn được cấp toàn bộ tủ đồ — {{reason}}",
       "unlock_achievement": "GM đã mở thành tựu \"{{name}}\" cho bạn.",
-      "reset_checkin": "Lượt điểm danh hôm nay đã được mở lại."
+      "reset_checkin": "Lượt điểm danh hôm nay đã được mở lại: trừ lại {{amount}} điểm — {{reason}}",
+      "reset_checkin_plain": "Lượt điểm danh hôm nay đã được mở lại — {{reason}}"
     }
   },
   "screens": {

@@ -458,7 +458,8 @@ export function createGmService(deps: GmServiceDeps): GmService {
         throw err
       }
       void deps.game.balanceChanged(playerId)
-      notice(playerId, { action: 'reset_checkin', reason: why })
+      // The amount taken back rides along, so the player's toast can say it (Ruling 11).
+      notice(playerId, { action: 'reset_checkin', amount: result.undone.points, reason: why })
       return result
     },
 

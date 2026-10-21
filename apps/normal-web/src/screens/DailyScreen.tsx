@@ -1,6 +1,6 @@
 import { Button, Panel, formatPoints, type Language } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ApiError,
@@ -150,6 +150,12 @@ function ReliefPanel({ api, lang, handle }: ReliefPanelProps) {
 export interface DailyScreenProps {
   api: NormalApi
   lang: Language
+  /**
+   * How many `reset_checkin` notices from a game master this tab has seen (the app counts them). A change means
+   * today's claim was taken back while the page was open: the page forgets its receipt and reads its status again,
+   * so the claim button comes back without a reload (Plan 26, Ruling 11).
+   */
+  checkinResets?: number
 }
 
 /**
@@ -163,7 +169,7 @@ export interface DailyScreenProps {
  * frame and the rail draws it; a second copy fetched here would disagree with the rail the moment a hand
  * settled in another tab.
  */
-export function DailyScreen({ api, lang }: DailyScreenProps) {
+export function DailyScreen({ api, lang, checkinResets = 0 }: DailyScreenProps) {
   const { t } = useTranslation('normal')
   const daily = useAsync<DailyStatusDto>(() => api.daily())
   const relief = useAsync<ReliefStatusDto>(async () => (await api.me()).relief)
@@ -171,6 +177,19 @@ export function DailyScreen({ api, lang }: DailyScreenProps) {
   const [receipt, setReceipt] = useState<DailyClaimDto | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  // The count the page mounted with is already in what it fetched; only a later one is news.
+  const resetsSeen = useRef(checkinResets)
+  const { reload: reloadDaily } = daily
+  const { reload: reloadRelief } = relief
+  useEffect(() => {
+    if (resetsSeen.current === checkinResets) return
+    resetsSeen.current = checkinResets
+    setReceipt(null)
+    setNote(null)
+    reloadDaily()
+    reloadRelief()
+  }, [checkinResets, reloadDaily, reloadRelief])
 
   const status = daily.data
 

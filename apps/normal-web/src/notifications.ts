@@ -1,4 +1,4 @@
-import type { ClientNotification, Language } from '@bp/ui-kit'
+import { formatPoints, type ClientNotification, type Language } from '@bp/ui-kit'
 import type { TFunction } from 'i18next'
 import { achievementName, itemName } from './catalog-i18n.js'
 import { formatSigned } from './screens/format.js'
@@ -79,7 +79,11 @@ function gmNoticeText(n: ClientNotification, t: TFunction, lang: Language): Clie
   } else if (action === 'unlock_achievement' && achievementId !== null) {
     written = t('gm.notice.unlock_achievement', { name: achievementName(achievementId, t) })
   } else if (action === 'reset_checkin') {
-    written = t('gm.notice.reset_checkin')
+    // The amount taken back and the GM's reason (Ruling 11); a notice without an amount still names the reopening.
+    written =
+      amount === null
+        ? t('gm.notice.reset_checkin_plain', { reason })
+        : t('gm.notice.reset_checkin', { amount: formatPoints(amount, lang), reason })
   }
   return written === null ? n : { ...n, payload: { ...(n.payload as object), reason: written } }
 }

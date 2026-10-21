@@ -336,7 +336,8 @@
       "demote": "Your game-master role was removed — {{reason}}",
       "wardrobe": "You were given the whole wardrobe — {{reason}}",
       "unlock_achievement": "A GM unlocked the achievement \"{{name}}\" for you.",
-      "reset_checkin": "Today's check-in has been reopened."
+      "reset_checkin": "Today's check-in has been reopened: {{amount}} points taken back — {{reason}}",
+      "reset_checkin_plain": "Today's check-in has been reopened — {{reason}}"
     }
   },
   "screens": {

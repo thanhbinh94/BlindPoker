@@ -236,7 +236,7 @@ describe('GmService — check-in', () => {
     expect(log).toMatchObject({ action: 'reset_checkin', reason: 'điểm danh nhầm tài khoản', details: { previousStreak: 7, previousLastClaimDate: TODAY, undone: { points: 15_000, itemIds: claim.items } } })
     expect(Number(log?.amount)).toBe(15_000)
     expect(pushed).toHaveBeenCalledWith(me.playerId)
-    expect(notified).toHaveBeenCalledWith(me.playerId, { t: 'NOTIFICATION', kind: 'GM_NOTICE', payload: { action: 'reset_checkin', reason: 'điểm danh nhầm tài khoản' } })
+    expect(notified).toHaveBeenCalledWith(me.playerId, { t: 'NOTIFICATION', kind: 'GM_NOTICE', payload: { action: 'reset_checkin', amount: 15_000, reason: 'điểm danh nhầm tài khoản' } })
     // Undone, the whole sequence leaves the books exactly as they were before the claim.
     const afterReset = await totals()
     expect(afterReset).toEqual(before)
@@ -252,6 +252,44 @@ describe('GmService — check-in', () => {
     expect(await loginDays(me.playerId)).toBe(days0 + 1)
     const afterReclaim = await totals()
     expect(afterReclaim.balances - before.balances).toBe(15_000)
+    expect(afterReclaim.balances).toBe(afterReclaim.ledger)
+    expect(afterReclaim.sinks).toBe(before.sinks)
+  })
+
+  it('resetCheckin takes back both the tier points and the fallback points of a claim that drew nothing, and the reclaim conserves', async () => {
+    await seedStreak(me.playerId, 6, YESTERDAY)
+    // Day 7 draws a random common: owning every common first leaves the draw nothing, so the claim pays 10,000 under
+    // `daily_item_fallback` beside its 15,000 `daily_login`, both under the claim's one ref.
+    await db.execute(sql`insert into inventory (player_id, item_id, source) select ${me.playerId}, id, 'gm' from items where rarity = 'common' on conflict do nothing`)
+    const base = await settle()
+    const before = await totals()
+    const notified = vi.spyOn(h.app.game, 'notify')
+
+    const claim = await h.app.services.economy.claimDaily(me.playerId, clock)
+    if (!claim.ok) throw new Error('the claim was refused')
+    expect(claim).toMatchObject({ day: 7, points: 15_000, items: [], fallbackPoints: 10_000 })
+    expect((await totals()).balances - before.balances).toBe(25_000)
+    expect((await gmAt.checkinPreview(me.playerId)).points).toBe(25_000)
+
+    const r = await gmAt.resetCheckin(actor(boss), me.playerId, 'rút lại cả tiền bù')
+    expect(r.undone).toEqual({ points: 25_000, itemIds: [] })
+    expect(r.balance).toBe(base)
+    const ledger = await h.app.services.repos.ledger.list(me.playerId, { limit: 1 })
+    expect(ledger[0]).toMatchObject({ amount: -25_000, reason: 'gm_checkin_undo', refId: `gm:${String(r.actionId)}` })
+    expect(notified).toHaveBeenCalledWith(me.playerId, { t: 'NOTIFICATION', kind: 'GM_NOTICE', payload: { action: 'reset_checkin', amount: 25_000, reason: 'rút lại cả tiền bù' } })
+    const afterReset = await totals()
+    expect(afterReset).toEqual(before)
+    expect(afterReset.balances).toBe(afterReset.ledger)
+
+    // The reclaim pays the same 25,000 again, and only the latest claim's rows count for a later undo.
+    clock += 60_000
+    h.setNow(clock)
+    const again = await h.app.services.economy.claimDaily(me.playerId, clock)
+    if (!again.ok) throw new Error('the reclaim was refused')
+    expect(again).toMatchObject({ points: 15_000, items: [], fallbackPoints: 10_000 })
+    expect((await gmAt.checkinPreview(me.playerId)).points).toBe(25_000)
+    const afterReclaim = await totals()
+    expect(afterReclaim.balances - before.balances).toBe(25_000)
     expect(afterReclaim.balances).toBe(afterReclaim.ledger)
     expect(afterReclaim.sinks).toBe(before.sinks)
   })
