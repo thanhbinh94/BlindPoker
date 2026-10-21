@@ -9,7 +9,7 @@ below are the real history.
 
 ---
 
-## Plan 26 — GM round 2, a landscape table and a sign-in picture — merged `MERGE` (2026-10-21)
+## Plan 26 — GM round 2, a landscape table and a sign-in picture — merged `837485c` (2026-10-21)
 
 Three parts the user asked for on 2026-10-19/20. **A:** the second GM batch Plan 25 promised (unlock an achievement, undo
 and reclaim a check-in, edit the monthly gifts on screen, per-day source/sink figures). **B:** a table layout of its own for
@@ -17,8 +17,10 @@ a phone held sideways (the Normal web had only squeezed the portrait ellipse), w
 portrait debts. **C:** a sign-in screen with a generated hero picture. Spec
 `docs/superpowers/specs/2026-10-20-plan26-gm-round2-phone-landscape-login-design.md` (the Q-table is §1, Q1–Q11; the
 session's rulings are R1–R11, §7), plan `docs/superpowers/plans/2026-10-20-plan26-gm-round2-phone-landscape-login.md`
-(26 pre-flight amendments, P1–P26), branch `feature/BP-26-gm-round2-phone-landscape-login`. Gate: (numbers filled in after
-F2).
+(26 pre-flight amendments, P1–P26), branch `feature/BP-26-gm-round2-phone-landscape-login`. Gate on the branch's final
+tree (`main` had not moved): typecheck, lint, 2974 unit tests passed and 14 skipped (196 files, 393 s), build:normal,
+build:lite up to the exe step (skipped on Node 24, "rebuilt locally, not shipped"), avatar:check 1560/1560, e2e Normal
+24/24, e2e Lite 4/4, ops pack 43/43 across desktop, mobile and landscape (11.6 min).
 
 - **What a GM sees (Part A).** Four additions to Quản trị, which now has five tabs. On a player's page, "Mở thành tựu"
   picks an achievement from a list (ones already unlocked are disabled) and pays its **full reward** (points, item, title)
