@@ -154,12 +154,13 @@ test("Q-03: a GM reopens a claimed check-in, unlocks an achievement, and sets a 
   await dialog.getByRole('button', { name: 'Xác nhận' }).click()
   await expect(gm.page.getByText('Đã mở lại lượt điểm danh hôm nay.')).toBeVisible()
 
-  // The player is told and the points leave; she opens the screen again (the Daily page reads its status on entry)
-  // and the button is hers once more.
-  await expect(alice.page.getByText(/Lượt điểm danh hôm nay đã được mở lại/)).toBeVisible()
+  // The player is told how much is taken back and why, the points leave, and the Daily page she is still on reads its
+  // status again on the notice (Ruling 11): the button is hers once more without a reload.
+  const toast = alice.page.getByText(/Lượt điểm danh hôm nay đã được mở lại/)
+  await expect(toast).toBeVisible()
+  await expect(toast).toContainText(`trừ lại ${named?.[1] ?? ''} điểm — mở lại Q-03`)
   expect(await balanceWhen(alice.page, (n) => n === start0), 'the reward is taken back').toBe(start0)
-  await alice.page.reload()
-  await expect(claim).toBeEnabled()
+  await expect(claim, 'the claim button comes back on the notice').toBeEnabled({ timeout: 10_000 })
   await claim.click()
   expect(await balanceWhen(alice.page, (n) => n === afterClaim), 'the second claim pays the day again').toBe(afterClaim)
 

@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page, type WebSocketRoute } from '@playwright/test'
 import { shot } from '../support.js'
 import {
   closeAll,
@@ -101,6 +101,22 @@ test('L-01 @landscape a Hold’em room while waiting: one-line header with the c
   expect(page.viewportSize(), 'the landscape project’s phone').toEqual(LANDSCAPE_SCREEN)
   expect(await page.evaluate(() => navigator.maxTouchPoints), 'a touch screen').toBeGreaterThan(0)
 
+  // A switch on the page's socket, for the reconnect banner below: the route forwards the socket to the server untouched
+  // until `cut` is set, then closes it and every socket the page reopens, so the room stays on "Mất kết nối" until the
+  // switch is put back. A route only takes the sockets opened after it (hence the reload, in the lobby) and stays for the
+  // life of the page; forwarding is transparent to the later cases.
+  let cut = false
+  const live: { page: WebSocketRoute; server: WebSocketRoute }[] = []
+  await page.routeWebSocket(/\/ws$/, (ws) => {
+    if (cut) {
+      void ws.close()
+      return
+    }
+    live.push({ page: ws, server: ws.connectToServer() })
+  })
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Tạo phòng' })).toBeVisible()
+
   const code = await createHoldemRoom(page, { name: unique('Bàn L01 '), tier: '100/200' })
   await joinByCode(b.page, code) // someone to manage: "Quản lý bàn" is offered only with another player in the room
   await expect(b.page).toHaveURL(/#\/room$/)
@@ -154,6 +170,28 @@ test('L-01 @landscape a Hold’em room while waiting: one-line header with the c
   expect(dockBox.y + dockBox.height / 2, 'the dock sits at the bottom').toBeGreaterThan(LANDSCAPE_SCREEN.height / 2)
   await shot(page, 'landscape-L01-waiting')
 
+  // Spec B2: the reconnect banner lies over the felt under the header and pushes nothing — every seat stays where it was.
+  const seatBoxes = () => boxesOf(page.locator('[data-seat]'), 'the seat')
+  const seatsBefore = await seatBoxes()
+  expect(seatsBefore.length, 'the ring has seats to measure').toBeGreaterThan(0)
+  cut = true
+  for (const { page: side, server } of live.splice(0)) {
+    await server.close().catch(() => undefined)
+    await side.close().catch(() => undefined)
+  }
+  const banner = page.getByText('Mất kết nối — đang kết nối lại…')
+  await expect(banner).toBeVisible({ timeout: 15_000 })
+  await shot(page, 'landscape-L01-reconnecting')
+  expect(await seatBoxes(), 'the banner moves no seat').toEqual(seatsBefore)
+  const bannerBox = (await banner.boundingBox())!
+  expect(bannerBox.y + bannerBox.height, 'the banner stays on screen').toBeLessThanOrEqual(LANDSCAPE_SCREEN.height)
+  expect(bannerBox.y, 'the banner sits under the header').toBeGreaterThanOrEqual(headerBox.y + headerBox.height - 0.5)
+  // Over the felt, but clear of every seat: the top seat's plate is still whole to read and to tap.
+  expectLaidOut('the reconnect banner vs the seats', LANDSCAPE_SCREEN, await boxesOf(banner, 'the banner'), seatsBefore)
+  cut = false
+  await expect(banner, 'the room reconnects once the socket is back').toBeHidden({ timeout: 45_000 })
+  await expect(dock(page).getByRole('button', { name: 'Sẵn sàng', exact: true })).toBeVisible()
+
   await expectRoomFits(page, 'landscape, Hold’em, waiting', [LANDSCAPE_SCREEN])
   await expectNoTextOverlapAt(page, 'landscape, Hold’em, waiting')
   await leave(b.page)
@@ -163,8 +201,9 @@ test('L-01 @landscape a Hold’em room while waiting: one-line header with the c
 test('L-02 @landscape eight seats at 915×355: every seat plate on screen, no two plates intersect, no seat box meets the dock or tray, and an empty seat’s Ngồi vào bàn button is 44 px', async () => {
   test.setTimeout(240_000)
   const page = a.page
-  // Blind allows eight players at most and Hold'em has no bots (P22): eight occupied plates come from a Blind table with
-  // seven bots; nine empty seats from a nine-seat Hold'em room nobody sits at.
+  // Blind allows eight players at most, and Hold'em has no bots (P22): eight occupied plates come from a Blind table with
+  // seven bots. A nine-seat Hold'em room can hold nine people, but filling it takes nine accounts; this case measures its
+  // nine empty seats instead, and nine occupied plates stay a known limitation.
   await page.setViewportSize(SHORT_LANDSCAPE)
   try {
     await createBlind(page, { name: unique('Bàn L02 '), bots: 7, maxPlayers: 8, mode: 'Chơi hoặc bỏ', timer: '30 giây' })
@@ -203,6 +242,8 @@ test('L-02 @landscape eight seats at 915×355: every seat plate on screen, no tw
     await createHoldemRoom(page, { name: unique('Bàn L02 chín '), maxPlayers: 9, tier: '100/200' })
     const sitButtons = page.getByRole('button', { name: /Ngồi vào bàn/ })
     await expect(sitButtons).toHaveCount(9)
+    // The dock must be there to be measured against: an empty match would make the check below vacuous.
+    await expect(dock(page)).toBeVisible()
     const sitBoxes = await boxesOf(sitButtons, 'Ngồi vào bàn')
     for (const box of sitBoxes) {
       expect(box.bottom - box.top, `${fmt(box)} is at least 44 px tall`).toBeGreaterThanOrEqual(44)
