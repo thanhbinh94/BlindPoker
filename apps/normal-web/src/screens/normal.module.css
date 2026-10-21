@@ -466,8 +466,9 @@
 
 /* A landscape phone (915×412, 844×390): a 300 px band would push the form below the fold, so the band thins to a
    strip, the card tightens, and its mark and lead stand down — the heading stays, as the page's one `h1`. The whole
-   form, button included, is then inside 390 px. */
-@media (orientation: landscape) and (max-height: 500px) {
+   form, button included, is then inside 390 px. Capped at 1023 px wide: from 1024 the two-column desktop layout holds,
+   and a short desktop window must not get the phone's strip inside it. */
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 1023px) {
   .authHero {
     height: 72px;
   }

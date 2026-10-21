@@ -78,7 +78,7 @@ describe('OverviewTab by day', () => {
 
     const cells = within(rows[3]!).getAllByRole('cell')
     expect(cells[0]).toHaveTextContent('13')
-    expect(cells[1]).toHaveTextContent('0')
+    expect(cells[1]).toHaveTextContent(/^0$/)
     expect(cells[2]).toHaveTextContent('6.000')
     expect(cells[3]).toHaveTextContent('-6.000')
     expect(cells[4]!.getAttribute('title')).toContain('6.000')

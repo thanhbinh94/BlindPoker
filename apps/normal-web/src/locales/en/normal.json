@@ -267,6 +267,7 @@
       "amount": "Points",
       "reason": "Reason",
       "cli": "Server (CLI)",
+      "month": "Month {{month}}",
       "filterPlayer": "Filter by player",
       "filterRoom": "Filter by room",
       "filter": "Filter",

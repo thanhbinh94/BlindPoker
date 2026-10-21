@@ -2,7 +2,7 @@ import { Button } from '@bp/ui-kit'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { GmActionDto } from '../../api.js'
-import { formatMoment, formatSigned } from '../format.js'
+import { formatMoment, formatMonthKey, formatSigned } from '../format.js'
 import s from '../normal.module.css'
 import { CopyId } from './CopyId.js'
 import g from './gm.module.css'
@@ -20,6 +20,16 @@ function query(filters: Filters, before: number | null): { player?: string; room
   if (filters.room !== '') opts.room = filters.room
   if (before !== null) opts.before = before
   return opts
+}
+
+/**
+ * The month a gift-calendar action changed (`details.month`, `YYYY-MM`), shown where a player action names its
+ * player; `''` for every other action, and for a row whose details lack the month.
+ */
+function monthOf(action: GmActionDto): string {
+  if (action.action !== 'set_gift_month' && action.action !== 'clear_gift_month') return ''
+  const month = action.details?.month
+  return typeof month === 'string' ? month : ''
 }
 
 /**
@@ -142,7 +152,9 @@ export function ActionsTab({ api, lang }: GmTabProps) {
                     </span>
                   </td>
                   <td data-label={t('gm.log.target')}>
-                    {action.target === null && action.roomId === null ? null : (
+                    {monthOf(action) !== '' ? (
+                      <span className={g.rowName}>{t('gm.log.month', { month: formatMonthKey(monthOf(action)) })}</span>
+                    ) : action.target === null && action.roomId === null ? null : (
                       <span className={g.value}>
                         {action.target === null ? null : (
                           <>

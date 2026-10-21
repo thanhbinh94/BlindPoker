@@ -267,6 +267,7 @@
       "amount": "Số điểm",
       "reason": "Lý do",
       "cli": "Máy chủ (CLI)",
+      "month": "Tháng {{month}}",
       "filterPlayer": "Lọc theo người",
       "filterRoom": "Lọc theo phòng",
       "filter": "Lọc",

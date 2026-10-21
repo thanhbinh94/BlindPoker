@@ -54,6 +54,17 @@ describe('ActionsTab', () => {
     expect(within(close).getByText(viNormal.gm.log.kind.close_room)).toBeInTheDocument()
   })
 
+  it('names the month a gift-calendar change was about, where a player action names its player', async () => {
+    const SET: GmActionDto = { ...CLOSE, id: 6, action: 'set_gift_month', roomId: null, reason: 'quà tháng sau', details: { month: '2026-11', days: {} } }
+    const CLEAR: GmActionDto = { ...SET, id: 5, action: 'clear_gift_month', reason: 'bỏ bản sửa', details: { month: '2026-12' } }
+    setup(vi.fn().mockResolvedValue({ actions: [SET, CLEAR], nextBefore: null }))
+
+    const set = (await screen.findByText('quà tháng sau')).closest('tr')!
+    expect(within(set).getByText('Tháng 11/2026')).toBeInTheDocument()
+    const clear = screen.getByText('bỏ bản sửa').closest('tr')!
+    expect(within(clear).getByText('Tháng 12/2026')).toBeInTheDocument()
+  })
+
   it('prints a deduction with its minus', async () => {
     setup(vi.fn().mockResolvedValue({ actions: [DEDUCT], nextBefore: null }))
 
