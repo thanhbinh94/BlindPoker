@@ -951,7 +951,7 @@ Biện pháp: delta events thay vì gửi lại snapshot; PlayerView tính một
 - `768–1023`: elip hẹp, chữ nhỏ hơn, ActionBar nổi.
 - `< 768` dọc: lưới đối thủ 2 hàng trên cùng; community + pot giữa; bài mình + ActionBar ghim đáy (`position: sticky`), nút ≥ 44 px; slider cược thay bằng nút preset + input.
 - Hàng đối thủ luôn hiển thị đủ mọi ghế (tối thiểu 2 hàng, không cuộn ẩn): lưới tự xuống dòng, và khi cần nhiều hàng hơn thì thu nhỏ plate (avatar + tên + stack + cược + trạng thái) trước, tuyệt đối không cuộn bên trong hàng đối thủ.
-- `< 768` ngang (điện thoại xoay): dùng bố cục elip thu nhỏ, ẩn header.
+- Điện thoại xoay ngang (Plan 26; `(orientation: landscape) and (max-height: 500px) and (min-width: 700px)`, nghĩa là cao tối đa 500 và rộng tối thiểu 700; cửa sổ ngắn mà hẹp hơn 700 giữ bố cục dọc): bàn là một elip lấp đầy màn hình với plate thu gọn xếp theo chu vi đo được. Header chỉ còn một dòng 32 px (mã phòng, huy hiệu, "Rời phòng") và nút ⋯ ("Thêm") chứa "Đứng dậy", "Tạm nghỉ / Chơi tiếp", "Quản lý bàn" và "Toàn màn hình" (khi trình duyệt cho phép). "Sẵn sàng / Hủy sẵn sàng", "Bắt đầu" và đồng hồ giữa các ván nằm trong một dock ở góc dưới bên phải. Trong ván, khay hành động tách hai góc: bên trái là các nút chọn sẵn, "Tự động chơi" và các mức Min · ½ · Pot · Max · ✎ của Hold'em; bên phải là "Bỏ bài", "Xem / Theo", "Cược / Tố", "Tất tay", số điểm nằm ở dòng thứ hai; không có slider, "Tố" cần hai lần chạm, ✎ mở hộp thoại "Nhập số điểm". Thẻ kết quả là một khối gọn với nút "Đóng" cao 44 px. Trang và sân khấu của phòng không cuộn ở 915×412, 915×355 và 844×390.
 - Lá bài: `clamp(36px, 8vw, 72px)` chiều rộng.
 
 ### 27.2 Màn hình

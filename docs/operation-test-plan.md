@@ -46,6 +46,7 @@ Ngày lập: 2026-09-28. Bản kiểm: master sau merge `22d1905` (đổi tên B
 | T1 | Cửa sổ thu nhỏ hoặc máy tính bảng | ~900 px | |
 | P1 | Android Chrome | 360–412 px | dọc |
 | P2 | iPhone Safari | 375–430 px | dọc |
+| P3 | Android Chrome hoặc iPhone Safari xoay ngang | 844–915 × 355–412 px | ngang; mục L. Safari trên iPhone không có "Toàn màn hình" |
 
 ## 3. Cách chạy một đợt test
 
@@ -164,6 +165,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 | F-10 | Phòng mức cược 1.000, Chơi hoặc bỏ, 1 bot; ngồi vào bàn rồi Bỏ mọi ván | Ngồi: số dư −5.000 (hạn mức 5×), đầu phòng ghi "Hạn mức 5.000"; sau 4 ván chồng còn 1.000 < 2.000 → bị mời đứng dậy, thông báo "Bạn đã dùng hết hạn mức…", 1.000 về số dư, vẫn ở trong phòng; bấm ghế lại → hạn mức mới 5.000 | P1 |
 | F-11 | Phòng Blind "Hoàn toàn may rủi" có tick "Nặn bài", 2 người thật; vào ván; người thứ nhất bóc cả hai lá bằng chuột (kéo từ mép dưới vào), người thứ hai bấm "Lật" | Đầu phòng có huy hiệu "Nặn bài"; mỗi người thấy bài của mình úp, dòng "Mời nặn bài…" và đồng hồ vòng ngay trên tấm tên của mình; bóc một lá chưa tính là đã lật (ghế kia chưa thấy "Đã lật"), bóc lá thứ hai thì ghế kia thấy "Đã lật" và khay báo "Đã lật — chờ người chơi khác"; người thứ hai bấm "Lật" thì cả hai lá mở, vòng nặn kết thúc **trước 20 giây**, lá chung ra và phiếu kết quả hiện | P1 |
 | F-12 | Như F-11 trên điện thoại 375 × 812 có cảm ứng, 1 người thật + 1 bot; bóc một lá bằng ngón tay, lá còn lại bằng "Lật" | Hai lá, nút "Lật" và đồng hồ nằm trọn trong màn hình, trên khay; trang không cuộn ngang, trang và bàn không cuộn dọc, tên người chơi hiện đủ cạnh đồng hồ vòng, không chữ nào đè lên chữ khác; cú chạm là `pointerType: touch` và bóc được lá; bot đã lật từ đầu nên vòng kết thúc ngay khi người thật lật nốt | P2 |
+| F-12b | **Tự động — `04-blind.spec.ts`, project `mobile`.** Như F-12 nhưng phòng "Chơi hoặc bỏ" có "Nặn bài" (1 người thật + 1 bot), 375 × 812 | Huy hiệu vàng "Nặn bài" nằm cạnh tên phòng trong đầu phòng; nút "Lật" nằm trên đáy hai lá bài chứ không chiếm hàng riêng; trang và bàn không cuộn dọc (trước Plan 26 bàn này cuộn thừa 11 px); không chữ đè chữ. Nút "Lật" chỉ cao 40 × 28 px: thử bóc lá bằng ngón tay thật, bắt đầu ở góc dưới bên trái lá trái (`docs/known-limitations.md`) | P2 |
 
 ### G. Kết nối
 
@@ -217,6 +219,23 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 | K-03 | Vào 10 phòng khác nhau | Thành tựu "Mười phòng" mở | P3 |
 | K-04 | Hồ sơ → Thống kê sau vài ván | Số ván chơi/thắng tăng đúng; "Ván gần đây" ghi "Tại bàn `<tên phòng>`" (hoặc "Tại `<tên phòng>`" khi tên phòng đã bắt đầu bằng "Bàn", không lặp chữ), đối thủ là bot hiện "Bot 1", "Bot 2"… chứ không hiện mã kiểu `bot:…` (review 29/09 No4); tên bot in nghiêng, không có huy hiệu "bot" nhìn thấy (vòng 2 R2-2) | P2 |
 | K-05 | Hồ sơ → đổi tên hiển thị | Tên mới hiện ở sảnh, bàn, cài đặt; tên trùng người khác bị từ chối | P2 |
+
+### L. Bàn trên điện thoại xoay ngang (Plan 26)
+
+Chạy trên P3 (điện thoại xoay ngang). Cả năm ca là **tự động** — `07-landscape.spec.ts`, project `landscape` (915 × 412,
+cảm ứng, thẻ `@landscape`) — và kết thúc bằng hai phép đo: trang và bàn không cuộn, không chữ đè chữ. Người test vẫn thử
+trên máy thật, vì máy chỉ chạy Chromium và không có bàn phím ảo hay ngón tay thật.
+
+| Mã | Bước | Kỳ vọng | Ưu tiên |
+|---|---|---|---|
+| L-01 | Phòng Hold'em lúc chờ ván, xoay ngang | Header một dòng: mã phòng và "Rời phòng"; "Đứng dậy", "Tạm nghỉ" và "Quản lý bàn" (chủ phòng) nằm trong menu ⋯ "Thêm", thêm "Toàn màn hình" nếu trình duyệt cho phép; "Sẵn sàng" và "Bắt đầu" nằm ở góc dưới bên phải, câu gợi ý nằm trên bàn; menu đóng bằng Escape | P1 |
+| L-02 | Phòng Blind 8 ghế (7 bot) ở 915 × 355; phòng Hold'em 9 ghế để thử ghế trống | Tám tấm tên đều trong màn hình, không hai tấm nào chạm nhau, không ghế nào chạm góc dưới bên phải; nút "Ngồi vào bàn" ở ghế trống cao ít nhất 44 px | P1 |
+| L-03 | Hết ván, thẻ kết quả ở 915 × 412 và 844 × 390 | Thẻ gọn một khối, "Đóng" cao ít nhất 44 px và bấm được ở mép trên, "Ván tiếp theo sau…" đủ chữ, không chữ đè chữ; thẻ che các ghế hai bên (xem `docs/known-limitations.md`) | P1 |
+| L-04 | Hai người thật; đến lượt mình ở Hold'em: bấm "Tố" | Hai lần chạm: lần đầu mở các mức Min · ½ · Pot · Max · ✎ ở góc trái, không có thanh trượt; ✎ mở hộp thoại "Nhập số điểm" ở đầu màn hình, vẫn dùng được ở 915 × 260; nhập 600 rồi "Xác nhận" thì nút ghi "Tố 600"; chạm lần hai thì người kia có 400 để theo | P1 |
+| L-05 | Bàn Blind "Hoàn toàn may rủi" có "Nặn bài" và 1 bot: bóc một lá bằng ngón tay, bấm "Lật" cho lá còn lại, rồi "Rời phòng" ở header | Lá bóc mở; "Lật" mở nốt; vòng nặn kết thúc và người thắng hiện; "Rời phòng" ở header đưa về sảnh | P2 |
+
+Việc máy chưa làm được và người test thử bằng tay (`docs/known-limitations.md`, mục UI): xoay máy thật, mở ✎ và nhìn bàn
+phím ảo; chạm ghế trống bằng ngón tay; đọc thẻ kết quả khi nó che ghế hai bên.
 
 ### M. Giao diện trên nhiều cỡ màn hình
 

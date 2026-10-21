@@ -550,6 +550,47 @@ from a 48 px pill landed on the pill and the peel never started); a two-line hea
 *Tracked:* `apps/normal-web/e2e/ops/04-blind.spec.ts` → F-12 / F-12b; `docs/ui-kit.md` (The squeeze). By hand: start a peel at
 the bottom-left of the left card on a real phone (iOS Safari, Chrome on Android).
 
+**The landscape table cannot lock the phone's orientation, and a portrait soft keyboard can trip its query (Plan 26,
+B1–B4).** The room draws its landscape frame when the viewport matches `(orientation: landscape) and (max-height: 500px)
+and (min-width: 700px)`. Nothing asks the phone to stay sideways: iOS Safari has no orientation lock at all, and Chrome
+grants one only to a page in fullscreen. The menu offers "Toàn màn hình" instead (only where `document.fullscreenEnabled`
+is true, so not on iOS Safari on a phone). `(orientation)` is a *viewport* test: a portrait phone with the soft keyboard
+up has a short, wide viewport on some browsers and reads as landscape. The room has one text field on the table, the "✎"
+amount dialog, and it hangs from the top of the screen exactly because the keyboard covers the bottom half; the
+sign-in and lobby screens have no frame.
+*Why it stays:* a lock is not something a web page can ask for on the platform that needs it most; a keyboard-proof test
+would need a device to see which browsers resize the layout viewport.
+*Tracked:* `packages/ui-kit/src/table/frame.ts` (`LANDSCAPE_PHONE`); `docs/ui-kit.md` (The landscape frame). By hand: on a
+real phone, rotate, open "✎" and watch the keyboard; then rotate back with the keyboard open in the lobby.
+
+**On a landscape phone the opaque result card covers the side seats, and at 844 × 390 the top of the viewer's plate
+(Plan 26, B5).** The card needs the felt's width to keep the winners on one line each, so it lies over the seats at the
+flanks while it is up, and on the shortest iPhone-class frame (844 × 390) its lower edge reaches the top of the viewer's
+plate. Closing it (a 44 px "Đóng") or waiting out the countdown gives the table back.
+*Why it stays:* during the result the plates are not controls and the card is the thing to read; a card narrow enough to
+leave the flanks free would wrap every winner onto a second line and overflow the 412 px stage instead.
+*Tracked:* `apps/normal-web/e2e/ops/07-landscape.spec.ts` → L-03; `docs/ui-kit.md` (The landscape frame).
+
+**In the landscape frame the footer row exists only between hands, and 740 × 360 fits with thin margins (Plan 26,
+B2–B3).** On a desktop the room's control row stays up for the whole hand; in the landscape frame the bottom-right dock
+is drawn only while the table is waiting or counting down to the next hand, and the rest of the row's work lives in the
+"Thêm" menu. So a spectator (or a seat sitting out) watching a hand in progress sees the table and the menu, with no
+footer line of its own. A 740 × 360 window (the narrowest frame the query admits, a small Android phone under its browser
+bars) fits, but the plates at the flanks and the docks leave only a few pixels between them; below 700 px wide the room
+keeps the stacked layout.
+*Why it stays:* nothing in the footer row is needed mid-hand by someone who is not in it, and the thin margins are the
+width of 740 px, not a bug to fix without shrinking the plates the names live on.
+*Tracked:* `packages/ui-kit/src/screens/RoomScreen.tsx` (`dockShown`); `docs/ui-kit.md` (The landscape frame).
+
+**The nine-seat landscape table is a playground stress case, not a shipped one (Plan 26, B3).** Blind Poker caps a room at
+eight players and Hold'em has no bots, so a real table shows at most eight occupied plates in the landscape frame; the
+ring's geometry takes nine (spaced by equal arc length on the measured box) and the playground draws them at
+`#worst/waiting/9/vi/landscape`, with no test behind it. L-02 drives eight seats at 915 × 355 and the nine-seat
+Hold'em room only for its empty seats' "Ngồi vào bàn" buttons.
+*Why it stays:* a ninth occupied plate cannot happen with the current room limits; if one ever can, the playground frame
+is where to look first.
+*Tracked:* `packages/ui-kit/playground/scenarios.tsx`; `apps/normal-web/e2e/ops/07-landscape.spec.ts` → L-02.
+
 **A flick needs a run of movement to be read as one, on a device that does not coalesce pointer events.** The flick's
 speed is taken from the pointer's real and coalesced positions (`getCoalescedEvents`) over its last 100 ms, and a pointer
 with no new position for 40 ms has stopped — what came before the pause is no part of the flick. Where the browser

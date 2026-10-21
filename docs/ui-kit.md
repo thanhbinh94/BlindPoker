@@ -697,6 +697,55 @@ Breakpoints 480 / 768 / 1024, per spec §27.1. No horizontal page scroll at any 
   take its place full-width, and the room header and tray tighten so the viewer's own cards stay on screen.
 - Touch targets are ≥ 44 px (`--tap`) wherever the pointer is coarse.
 
+### The landscape frame (Plan 26, Part B)
+
+A phone held sideways has 320–430 px of height, and the desktop stage (header, felt, tray) leaves the table too little
+of it. So the room has two **frames**, `RoomFrame = 'desktop' | 'landscape'` (`table/frame.ts`):
+
+- **The trigger** is the constant `LANDSCAPE_PHONE = '(orientation: landscape) and (max-height: 500px) and (min-width:
+  700px)'`, read by `useRoomFrame(override?)`. `override` wins when given (a host app, the playground); without
+  `matchMedia` the answer is `desktop`. The 700 px floor is deliberate: a narrower short window (a 640 × 360 phone) has
+  no width for the ring's rim and keeps the stack. It is a *viewport* test (see Known gaps for what that means with a
+  soft keyboard), and there is no orientation lock to offer (iOS has none).
+- **The prop and the keys.** `RoomScreen` calls `useRoomFrame` above its early return and hands `frame` to `PokerTable`,
+  `ActionBar` and `HandResult`; each stamps it as `data-frame` on its own root, and the CSS is keyed on that attribute,
+  after the base rules it overrides: `.room[data-frame='landscape']` (screens.module.css), `.ring[…]`, `.tray[…]` and
+  `.result[…]` (table.module.css), `.overlay[…]` (the result overlay). A CSS module cannot name another module's hashed
+  class, which is why every piece carries its own attribute rather than inheriting from `.room`. In `landscape` the table
+  is always the ring (`layout` is ignored): the stack needs height the frame does not have.
+- **Header and menu.** `RoomHeader compact` is one 32 px line (the code, the squeeze badge, **Thêm**, Rời phòng). The
+  footer `.controls` row is gone: Đứng dậy, Tạm nghỉ / Chơi tiếp (a `menuitemcheckbox`), Quản lý bàn (the host's) and
+  Toàn màn hình / Thoát toàn màn hình (only where `document.fullscreenEnabled`) live in the `MenuButton` primitive
+  (`primitives/MenuButton.tsx`: a `⋯` trigger, `role="menu"` with `menuitem`s, the first item takes the focus, arrow keys
+  walk the enabled ones, Escape and a press outside close it, Escape and a pick give the focus back).
+- **The corner docks.** Bottom right, `.dock` in the room holds what starts a hand: Sẵn sàng / Hủy sẵn sàng, Bắt đầu,
+  the ready count and the between-hands countdown. During a hand the action tray takes the same corner and splits in two
+  (`.trayLeft`: the pre-action toggles, Tự động chơi and the Hold'em presets Min · ½ · Pot · Max · ✎; `.trayRight`: Bỏ bài ·
+  Xem/Theo · Cược/Tố · Tất tay), so the two never share it: between hands the tray gives up its right part and keeps its
+  left one. The waiting hint ("Cần ít nhất 2 người…") moves onto the felt (`PokerTable`'s `note`), which is what
+  keeps the dock one row. Amounts sit on a second line under their verb, and the raise takes two taps (the first opens
+  the presets in the left corner, in place of the toggles; the second sends; Enter is still one step). The slider is
+  gone, and Tất tay leaves the right row while the presets are open ("Max" does its job there).
+- **The ring.** Sized by the *measured* box (`ResizeObserver`; 2:1 without it): `ringPositions(seatOrder, anchor, box)`
+  spaces seats by equal arc length for that ratio, so a 2.5 : 1 felt gets different angles than a 2 : 1 one and equal
+  pixel gaps between neighbours. Plates are compact (94 px min, 30 px avatar), the seats at the flanks carry `data-edge`
+  so their badge lines can run onto the felt, and the viewer's block stands on the rim between the docks with a 56 px row
+  left free at the bottom. An occupied seat is no click target; the only one is the empty seat's `.sitBtn`, kept ≥ 44 px.
+- **The dialog.** "✎" (or the R key) opens `AmountDialog`, a `Modal anchor="top"` ("Nhập số điểm"): the soft keyboard
+  covers the bottom half of a page that does not scroll, so the dialog hangs from the top, with `max-height: calc(100dvh -
+  2 * var(--space-4))` and tight padding. Enter confirms the amount; it never raises by itself.
+- **The result card** (`HandResult frame="landscape"`) is one compact block over the felt: title and a 44 px Đóng in one
+  head, one-line winners, the fee and the countdown in a one-line foot, leaving the dock row free. Its live region clips
+  (`overflow: hidden`), and the head and foot do not shrink; both are root fixes for every frame, not only this one
+  (bug log, mục 8, N3).
+- **The playground** forces a frame without resizing: `#worst/<state>/<seats>/<lang>[/long][/landscape|/desktop]`, with
+  `blindS` (the squeeze table) among the states.
+- **What pins it.** `table/frame.test.ts` (the query, the override), `RoomScreen.test.tsx` and `HandResult.test.tsx` (the
+  stamps, the menu, the dock), `MenuButton.test.tsx`, `geometry.test.ts`, `PokerTable.test.tsx`, `ActionBar.test.tsx`; in a
+  browser, the ops pack's `landscape` project (915 × 412, touch; titles tagged `@landscape`), `07-landscape.spec.ts`
+  L-01 … L-05, each ending with `expectRoomFits` and `expectNoTextOverlapAt`. The rows are in `docs/test-matrix.md`
+  (Plan 26, Part B).
+
 ---
 
 ## The text-overlap rule
@@ -870,6 +919,11 @@ full-viewport, for measuring a layout against a screen size.
   badge up beside the room's name and laid the "Lật" pill over the foot of the cards, and F-12 / F-12b assert that both
   fit.) A ring↔stack switch in the middle of a round can send a second, harmless `REVEAL`. The three are written up in
   `docs/known-limitations.md`.
+- **The landscape frame is driven in Chromium only, at 915 × 412, 915 × 355 and 844 × 390** (740 × 360 fits, with thin
+  margins), never on a real phone. The query is a viewport test, so a portrait phone with its soft keyboard up can read as
+  landscape; the only text field on the table is the top-anchored "Nhập số điểm" dialog. The result card is opaque and
+  covers the side seats, and at 844 × 390 the top of the viewer's plate. A nine-seat landscape table (the playground's
+  `#worst/…/9/…/landscape`) is a stress case: Blind caps at eight. All in `docs/known-limitations.md`.
 - **The badge test measures the grounds a badge sits on today** (see Theming → Badge text). A badge on a ground it
   does not list is not measured, and one place is tight: teal under a dark `.panel.ink`'s highlight. The test holds
   that highlight at 2 %, above anywhere a badge is (Lite's "claimed" badge: 0.8–1.4 %, none on a phone; titled panels put

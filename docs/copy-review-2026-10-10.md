@@ -61,6 +61,7 @@ Người dùng yêu cầu ngày 10/10: "check đa ngôn ngữ … có những đ
 - **Tính năng và kinh tế:** Số dư (đơn vị luôn là "điểm"), Điểm danh, chuỗi điểm danh, quà điểm danh, Cứu trợ, Cộng dồn, Phí bàn, Chủ phòng, Bot, Cái.
 - **Thành tựu:** đạt / chưa đạt. Món đang trang bị: "Đang dùng".
 - **Quản trị (Plan 25, 2026-10-18):** màn và hàng ở Cài đặt tên là **"Quản trị"**; người giữ vai trò là **"Quản trị viên"** (số nhiều không đổi). Các tab: Tổng quan, Người chơi, Phòng, Nhật ký. Việc làm được: **Khóa tài khoản**, **Mở khóa**, **Cộng/trừ điểm**, **Cấp món**, **Đóng phòng**, **Mời ra** (cùng chữ với nút "Mời ra" của chủ phòng), Trao quyền quản trị / Thu quyền quản trị. Mỗi hành động cần **Lý do** (3–200 ký tự). Dòng sổ điểm: "Quản trị viên cộng điểm", "Quản trị viên trừ điểm". Trạng thái: "Đã khóa". Test e2e `06-gm.spec.ts` và `GmScreen`/`PlayerDetail` bám vào các chữ này.
+- **Bàn trên điện thoại xoay ngang (Plan 26, 2026-10-20):** nút ⋯ ở thanh trên có tên **"Thêm"** (menu chứa Đứng dậy, Tạm nghỉ / Chơi tiếp, Quản lý bàn); mục **"Toàn màn hình"** và **"Thoát toàn màn hình"** (chỉ hiện khi trình duyệt cho phép); hộp thoại gõ số điểm tự chọn là **"Nhập số điểm"**. Test e2e `07-landscape.spec.ts` và `RoomScreen`/`ActionBar` bám vào các chữ này.
 - **Mới chuẩn hóa đợt này:**
   - lỗi thao tác dùng **"Thao tác"** (nhóm nút trên bàn vẫn có aria-label "Hành động", xem mục 5);
   - danh hiệu thắng 10 ván liền là **"Vận đỏ"**;
