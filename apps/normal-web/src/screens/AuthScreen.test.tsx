@@ -61,6 +61,24 @@ describe('AuthScreen', () => {
     expect(screen.queryByLabelText(t.displayName)).toBeNull()
   })
 
+  it('renders the hero picture with both sources and the hero lead', () => {
+    const { container } = setup(stubApi())
+
+    // The picture is decoration (`alt=""`): the hero's own heading and lead say what the screen is.
+    const hero = container.querySelector('img')!
+    expect(hero).toHaveAttribute('alt', '')
+    expect(hero.getAttribute('srcset')).toContain('/login/hero-768.webp 768w')
+    expect(hero.getAttribute('srcset')).toContain('/login/hero-1536.webp 1536w')
+    expect(screen.getByText(t.heroLead)).toBeInTheDocument()
+
+    // Spec R10: one visible `h1` at a time, by CSS — the hero owns it from 1024 px up, the card below. jsdom applies
+    // no CSS module, so it sees both, and the test pins which class carries which.
+    const headings = screen.getAllByRole('heading', { level: 1, name: t.title })
+    expect(headings).toHaveLength(2)
+    expect(headings[0]!.className).toMatch(/heroTitle/)
+    expect(headings[1]!.className).toMatch(/authTitle/)
+  })
+
   it('marks the register link as the current page when that is the mode', () => {
     setup(stubApi(), 'register')
 
