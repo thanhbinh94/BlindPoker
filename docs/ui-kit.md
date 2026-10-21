@@ -717,7 +717,10 @@ of it. So the room has two **frames**, `RoomFrame = 'desktop' | 'landscape'` (`t
   footer `.controls` row is gone: Đứng dậy, Tạm nghỉ / Chơi tiếp (a `menuitemcheckbox`), Quản lý bàn (the host's) and
   Toàn màn hình / Thoát toàn màn hình (only where `document.fullscreenEnabled`) live in the `MenuButton` primitive
   (`primitives/MenuButton.tsx`: a `⋯` trigger, `role="menu"` with `menuitem`s, the first item takes the focus, arrow keys
-  walk the enabled ones, Escape and a press outside close it, Escape and a pick give the focus back).
+  walk the enabled ones, Escape and a press outside close it, Escape and a pick give the focus back). The reconnect
+  banner ("Mất kết nối — đang kết nối lại…") takes no row here: `.room[data-frame='landscape'] .banner` lays a slimmer
+  pill over the felt 40 px from the top, centred, at z-index 6 (over the felt and the docks, under the menu at
+  `--z-modal` − 1), so a dropped socket moves no seat (spec B2; L-01 cuts the socket and compares the seat boxes).
 - **The corner docks.** Bottom right, `.dock` in the room holds what starts a hand: Sẵn sàng / Hủy sẵn sàng, Bắt đầu,
   the ready count and the between-hands countdown. During a hand the action tray takes the same corner and splits in two
   (`.trayLeft`: the pre-action toggles and Tự động chơi, which the Hold'em presets Min · ½ · Pot · Max · ✎ replace after the first tap on Cược/Tố; `.trayRight`: Bỏ bài ·
@@ -726,7 +729,8 @@ of it. So the room has two **frames**, `RoomFrame = 'desktop' | 'landscape'` (`t
   keeps the dock one row. Amounts sit on a second line under their verb, and the raise takes two taps (the first opens
   the presets in the left corner, in place of the toggles; the second sends; Enter is still one step). The slider is
   gone, and Tất tay leaves the right row while the presets are open ("Max" does its job there).
-- **The ring.** Sized by the *measured* box (`ResizeObserver`; 2:1 without it): `ringPositions(seatOrder, anchor, box)`
+- **The ring.** Sized by the *measured* box (read once in the layout effect with `getBoundingClientRect`, so the first
+  paint already has it, then followed by `ResizeObserver`; 2:1 without it): `ringPositions(seatOrder, anchor, box)`
   spaces seats by equal arc length for that ratio, so a 2.5 : 1 felt gets different angles than a 2 : 1 one and equal
   pixel gaps between neighbours. Plates are compact (94 px min, 30 px avatar), the seats at the flanks carry `data-edge`
   so their badge lines can run onto the felt, and the viewer's block stands on the rim between the docks with a 56 px row

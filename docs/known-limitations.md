@@ -432,11 +432,6 @@ sideways.
 view.
 *Tracked:* `apps/normal-web/src/screens/gm/OverviewTab.tsx` (`ByDayPanel`), `apps/normal-web/src/screens/gm/gm.module.css`.
 
-**The Daily screen does not refresh when a GM reopens the check-in (Plan 26).** The player gets the toast and the points
-leave at once, but the open "Điểm danh" page still shows "claimed" until they leave and return or press F5.
-*Why it stays:* the screen reads its status on entry, as it always has, and the reopen is rare.
-*Tracked:* `apps/normal-web/src/screens/DailyScreen.tsx`; Q-03 reloads the page between the reset and the second claim.
-
 ---
 
 ## UI

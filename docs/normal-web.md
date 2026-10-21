@@ -316,7 +316,8 @@ a picture of a table of friends (spec 2026-10-20, Part C, layout A). The picture
     so the band frames the three middle faces: the áo dài peeking at her card, the tuxedo, the friend between them.
   - **768 to 1023 px (a tablet):** `object-fit: cover` at `34% 28%` shows the picture's whole width, cropped top and bottom.
     The phone's zoom is off there because at 768 × 1024 it cut the crowned girl's face off the top (Ruling C2-4).
-  - **A landscape phone** (`(orientation: landscape) and (max-height: 500px)`): the band thins to a 72 px strip and the
+  - **A landscape phone** (`(orientation: landscape) and (max-height: 500px) and (max-width: 1023px)`; a short window
+    1024 px or wider keeps the two columns): the band thins to a 72 px strip and the
     card overlaps it by 24 px. The card's mark and lead are hidden and its title is smaller, so the whole form, button
     included, fits at 915 × 412 and 844 × 390; the language switch sits below the fold there (Ruling C2-5).
 - **One heading (spec R10).** Exactly one `h1` is visible at a time, by CSS only: the hero's from 1024 px up, where the
@@ -399,9 +400,11 @@ finds out on the next call.
   disabled, from `GmPlayerDetailDto.unlockedAchievementIds`). "Đặt lại điểm danh" is enabled only once
   `GET /api/gm/players/:id/checkin` says the player has claimed today; its dialog body is computed, not keyed: it names
   the points (`formatPoints`) and the items the reset takes back (`gm.dialog.checkinBody`, `gm.dialog.noItems`). The
-  player's toast reads "GM đã mở thành tựu "…" cho bạn." / "Lượt điểm danh hôm nay đã được mở lại." (`gm.notice.*`).
-  The Daily screen reads its status on entry and does not refresh on the notice: the player sees the reopened button
-  after leaving and returning (or F5).
+  player's toast reads "GM đã mở thành tựu "…" cho bạn." / "Lượt điểm danh hôm nay đã được mở lại: trừ lại {{amount}}
+  điểm — {{reason}}" (`gm.notice.*`; the server's notice carries `amount`, and `gm.notice.reset_checkin_plain` covers a
+  payload without one). `App` counts the `reset_checkin` notices it sees (once per notification object, like the role
+  notices) and hands the count to `DailyScreen` as `checkinResets`; a change drops the receipt and reloads both panels,
+  so the "Nhận thưởng" button comes back without a reload (Ruling 11).
 - **The Quà tháng tab (`GiftsTab.tsx`).** A month `Select` (this month and 12 more, an edited month marked "(đã sửa)"),
   the month on `DailyCalendar` with each editable day a button "Ngày N" (days up to today in the current month are
   greyed: the server decides by its own zone with `TIER_LOCKED`, the tab by `Asia/Ho_Chi_Minh`), a `Segmented` for the day's

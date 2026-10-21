@@ -30,8 +30,10 @@ F2).
   see: per day "Như mặc định", a random draw, or a fixed list of items; a past month is refused and the current month only
   changes tiers after today (R7). The overview gained "Theo ngày": a 7- or 30-day table of what entered and what left per
   economy day (the check-in time zone, R8), each row with CSS bars and no chart library (Q4).
-- **What a player sees (Part A).** A GM-unlocked achievement arrives as a toast and its points; a reset check-in says what
-  was taken back and the Điểm danh button is live again.
+- **What a player sees (Part A).** A GM-unlocked achievement arrives as a toast and its points. A reset check-in arrives as
+  a toast naming the points taken back and the GM's reason ("Lượt điểm danh hôm nay đã được mở lại: trừ lại 15.000 điểm —
+  …"); a Điểm danh page left open reads its status again on that notice, so "Nhận thưởng" lights up without a reload
+  (Ruling 11). The items taken back are not named in the toast.
 - **What a player sees (Part B).** A phone held sideways (landscape, 700 px or wider, 500 px or less tall) no longer gets
   a squeezed portrait table. The room header is **one line**: Mã phòng, the blinds, and Rời phòng at the top right, with a
   **⋯ "Thêm" menu** holding Đứng dậy, Tạm nghỉ / Chơi tiếp, Quản lý bàn and, where the browser allows it, **Toàn màn hình**.
@@ -44,12 +46,16 @@ F2).
   second line under the verb when the corner is narrow. The pre-hand hint (Sẵn sàng, Bắt đầu, the countdown) sits on the
   felt, so the dock stays one row. The result card is one **compact block over the felt**: "Người thắng" and a 44 px Đóng,
   one-line winners in a scrolling middle, and a one-line foot (fee, refund, the countdown). Seat tap targets are 44 px.
+  When the socket drops, the "Mất kết nối — đang kết nối lại…" banner lies over the felt just under the header and moves
+  no seat (spec B2, Ruling 10).
 - **What a player sees (portrait).** Two debts paid: the play-or-fold squeeze table at 375×812 no longer scrolls 11 px (the
   gold "Nặn bài" badge sits beside the room's name, and the "Lật" pill lies over the cards instead of taking a row), and the
   player guide's sentence about turning the phone is now true.
 - **What a visitor sees (Part C).** The sign-in and sign-up screen seats the card **beside a hero picture**: from 1024 px,
   a left column holding the picture (a group of friends at a table, the "V2" render of 2026-10-20) with the title and a
-  line over its foot, the card in the right column; on a phone, a 300 px band of the picture crowns the card. Two WebP
+  line over its foot, the card in the right column. Below 1024 px a 300 px band of the picture crowns the card: up to
+  767 px it is zoomed 160 % on the three middle faces (spec C1, the mockup's crop), from 768 to 1023 px it shows the whole
+  width (`cover`), and on a landscape phone it thins to a 72 px strip so the whole form fits. Two WebP
   sizes, 1536 px (178 KB) and 768 px (66 KB), chosen by `srcset`. Exactly one `h1` is visible at a time (R10). The lead's
   contrast against the picture is at least 4.5:1, measured (6.17 at 1920, 7.29 at 1366, 5.36 at 1024).
 - **Under it (Part A).** Migration `0005_plan26` (additive): the `gift_months` table, `inventory.ref` (which claim or grant
@@ -63,12 +69,16 @@ F2).
   not group) behind `LedgerReader.sumsByDay`. Routes under `/api/gm/` went from 15 to 22: the achievement unlock, the check-in
   preview and its reset, the gift months (GET, PUT, DELETE) and the per-day stats. `GET /api/gm/gifts` returns one row per month
   from this one to 12 on (db row, else file entry; `source` says which). The log gained `unlock_achievement`,
-  `reset_checkin`, `set_gift_month` and `clear_gift_month`. `revoke` clears every optional slot, `title` and `badge`, and
-  strips the item from the player's saved outfits.
+  `reset_checkin`, `set_gift_month` and `clear_gift_month`; Nhật ký names the month of the last two in its "Với ai"
+  column. The `reset_checkin` notice carries `amount` (the points taken back, tier and fallback together) beside `reason`,
+  and `App` counts those notices into `DailyScreen`'s `checkinResets`. `revoke` clears every optional slot, `title` and
+  `badge`, and strips the item from the player's saved outfits.
 - **Under it (Part B).** `useRoomFrame` reads `(orientation: landscape) and (max-height: 500px) and (min-width: 700px)` and
   stamps `data-frame="desktop" | "landscape"` on the room, the ring and the result card (CSS modules hash per
   file, so each component keys on its own element). `ringPositions` takes the measured box ratio (the angle cache is keyed
-  `count:ratio`); `ResizeObserver` is guarded for jsdom. New primitive: `MenuButton` (menu / menuitem /
+  `count:ratio`); the ring reads its box synchronously in a layout effect, so its first frame is not drawn on the 2:1
+  fallback, and `ResizeObserver` is guarded for jsdom. The reconnect banner is absolutely placed in the landscape frame
+  (z-index 6: over the felt and the docks, under the Thêm menu). New primitive: `MenuButton` (menu / menuitem /
   menuitemcheckbox roles, arrow keys, Escape) and the ✎ dialog (`Modal` with `anchor="top"`). The result card's root
   fixes (N3) apply to **every** layout: `.resultLive` clips, `.resultHead` and `.resultFoot` no longer shrink, so the
   head cannot paint over the foot.
@@ -85,7 +95,9 @@ F2).
   compact result card at two sizes, the preset raise and the ✎ dialog at 915×260, a squeeze peel with the Lật pill), and
   `expectRoomFits` now also reads 915×412 in `normal.spec.ts`. Server: the migration (fresh and from 0004), the unlock,
   undo/reclaim (twice, conservation), gift store and `claimDaily` tests, the by-day stats (time zones, zero days), the
-  route guard over all 22 routes. Web: GM screens, `DailyCalendar`, `OverviewTab`, `AuthScreen` (hero), `locales`. Kit:
+  route guard over all 22 routes, and the undo of a claim that drew nothing (tier plus the 10,000 fallback, then a
+  conserving reclaim). L-01 also cuts the page's socket and checks the banner moves no seat; Q-03 waits for "Nhận thưởng"
+  to come back on the notice, with no reload. Web: GM screens, `DailyCalendar`, `OverviewTab`, `AuthScreen` (hero), `locales`. Kit:
   `frame`, `geometry`, `MenuButton`, the tray, the result card, `PokerTable`. SRS §27.1 (the landscape frame),
   `docs/ui-kit.md`, `docs/normal-web.md`, `docs/normal-server.md` (22 routes, gift months, migration), `docs/security.md`,
   `docs/known-limitations.md`, `docs/player-guide.md`, `docs/login-hero-art.md` (the export process), the operation test
@@ -117,8 +129,16 @@ F2).
   - The `landscape` Playwright project exists only in `e2e/ops/ops.config.ts`, not in `playwright.config.ts` (no
     `@landscape` test lives there; P22).
   - `fetchPriority` on the hero `img` was dropped: React-DOM 18.3 warns about the camel-case prop at runtime.
-  - The phone band shows the whole picture (five smaller faces) from `object-fit: cover`, not the mockup's 160 % zoom on the
-    three central faces; a one-rule change if the user wants the tighter crop.
+  - The phone band follows spec C1 (zoomed 160 % on the three middle faces) only up to 767 px. From 768 to 1023 px it keeps
+    `object-fit: cover`, the picture's whole width cropped top and bottom, because the zoom cut the crowned girl's face
+    off the top at 768 × 1024 (Ruling C2-4).
+  - On a landscape phone (`(orientation: landscape) and (max-height: 500px) and (max-width: 1023px)`) the band is a **72 px
+    strip**, not 300 px, and the card's mark and lead are hidden with a smaller title, so the whole form fits at 915 × 412
+    and 844 × 390 (Ruling C2-5). The language switch sits **below the fold** there; the page scrolls to it.
+  - `NOTHING_TO_UNDO` from the spec was not implemented: a day that counts as claimed always has its claim's rows, so the
+    refusal cannot be reached; "not claimed today" is `NOT_CLAIMED_TODAY`.
+  - The Lite edition's room renders the kit's `RoomScreen`, so it **also takes the landscape frame** on a phone held
+    sideways (after `pnpm build:lite`). No Lite e2e covers it; the ops pack's `landscape` project runs on Normal only.
   - R10's "one `h1` at a time" is met by CSS, not by rendering one: the hero's title is an `h1` and so is the card's, and a
     media query hides the card's from 1024 px and the hero's below it (jsdom, which has no media queries, sees two).
   - Items from check-ins made before `0005` carry `ref = null`, so an undo on the deploy day takes back the points but not
@@ -126,10 +146,9 @@ F2).
   - A `revoke` also strips the item from saved outfits (Ruling 3), and a db gift month that no longer validates at boot is
     skipped with a warning (Ruling 2).
 - **Still open.** VPS: see the final report (the migration and `grant-gm-cli` need the user's yes). Deferred minors, none
-  blocking: the Điểm danh screen does not reload when a GM resets a check-in (the player reloads; Q-03 does); the by-day
-  table clips its Ròng column inside its scroll box on a 375 px phone; `GET /api/gm/gifts` should return the server's today
-  instead of the client assuming `Asia/Ho_Chi_Minh`; a fixed gift list is lost on a fixed → common → fixed round trip in
-  one edit; the first frame of the landscape ring is 2:1 for one paint before the box is measured; the landscape sizer
+  blocking: the by-day table clips its Ròng column inside its scroll box on a 375 px phone; `GET /api/gm/gifts` should
+  return the server's today instead of the client assuming `Asia/Ho_Chi_Minh`; a fixed gift list is lost on a fixed →
+  common → fixed round trip in one edit; the landscape sizer
   cannot be closed without acting (a one-tap Tất tay is lost for that turn); a nine-human landscape Hold'em table (`maxPlayersHoldem`
   is 9) is verified only as nine empty seats and in the playground, never as nine occupied plates; Blind's nine-seat
   playground case is a stress case (the mode caps at 8); the squeeze peel, the dock and the sign-in picture have not been

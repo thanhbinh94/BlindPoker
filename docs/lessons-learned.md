@@ -919,6 +919,22 @@ rulings below are the SDD ledger's, in order.
     and crossed the hero's plate). Costs if wrong: a player who opened the sizer goes all-in in two taps instead of one.
   - B4-4: the left pills are 34 px (44 px on a coarse pointer), and the presets share it, not the brief's 30 px. Costs if
     wrong: none for layout.
+- C2-4 and C2-5, the C2 fix round's, accepted by the re-review as deviations:
+  - C2-4: from 768 to 1023 px the sign-in band keeps `object-fit: cover` (the whole width, cropped top and bottom); the
+    phone's 160 % zoom on the three middle faces (spec C1) applies only up to 767 px, because at 768 × 1024 it cut the
+    crowned girl's face off the top. Costs if wrong: a tablet shows five smaller faces instead of the mockup's crop.
+  - C2-5: on a landscape phone (`(orientation: landscape) and (max-height: 500px)`, capped at `max-width: 1023px` in the
+    fix wave) the band is a 72 px strip and the card's mark and lead are hidden with a smaller title, so the whole form,
+    button included, fits at 915 × 412 and 844 × 390; the language switch sits below the fold. Costs if wrong: the
+    picture is barely seen on a landscape phone, and the language switch needs a scroll.
+- Ruling 10 (final review): the landscape reconnect banner is fixed, not recorded as a deviation. It is absolutely placed
+  under the one-line header (top 40 px, z-index 6: over the felt and the docks, under the Thêm menu), a slimmer pill than
+  the desktop's, so a dropped socket moves no seat (spec B2). Costs if wrong: on a nine-seat or 355-px-tall ring the
+  banner may graze the top plate while it shows.
+- Ruling 11 (final review): the `reset_checkin` notice carries `amount` (tier plus fallback points) beside `reason`, the
+  toast names both, and the open Daily screen reloads its status on that notice (`App` counts the notices into
+  `DailyScreen`'s `checkinResets` prop rather than a new subscription API). Costs if wrong: none known; a notice from an
+  older server (no amount) falls back to `gm.notice.reset_checkin_plain`.
 - Smaller rulings in the tasks, all in the CHANGELOG's deviations: B3 keys the ring's CSS on its own `data-frame` and
   moves the pre-hand hint onto the felt (so the dock stays one row); B6 makes the Lật pill 40 px wide, so a peel that
   starts at the card's corner still wins; B8 raises 600 in L-04, not 300 (the lowest Hold'em raise is to 400); C2 drops
