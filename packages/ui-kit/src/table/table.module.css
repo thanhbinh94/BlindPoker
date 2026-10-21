@@ -461,6 +461,7 @@
 }
 
 .seatCards {
+  position: relative;
   display: flex;
   gap: 3px;
 }
@@ -470,16 +471,24 @@
   order: -1;
 }
 
-/* Squeeze mode's "Lật": a small gold pill under the viewer's own cards (spec 2026-10-08 §4.2.2), 28 px tall at the least
-   for a thumb (ruling 22), its label centred in it. */
+/* Squeeze mode's "Lật": a small gold pill at the foot of the viewer's own cards (spec 2026-10-08 §4.2.2), 28 px tall at the
+   least for a thumb (ruling 22), its label centred in it. Plan 26 (B6): it is laid over the cards' bottom edge, centred on
+   the gap between them, and takes no row of its own — the row it used to take was what scrolled a play-or-fold squeeze
+   table's stage by 11 px on a 375 px phone. A peel starts at a card's corner, and a finger within a few px of a button
+   lands on the button, so the pill is cut to 8 px of padding a side (40 px wide where a phone's card is 32): F-12 puts
+   the touch 9 px from its edge. */
 .revealBtn {
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  z-index: 1;
+  transform: translateX(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  align-self: center;
   min-height: 28px;
-  margin-top: 2px;
-  padding: 4px 12px;
+  padding: 4px 8px;
+  white-space: nowrap;
   border: 1px solid var(--gold);
   border-radius: var(--radius-pill);
   background: var(--gold);
@@ -488,7 +497,7 @@
   cursor: pointer;
 }
 
-/* Nothing left to turn: the pill's place stays, so the cards above it do not move as they open (see `Seat`). */
+/* Nothing left to turn: the pill stays in its box, out of sight and out of reach (see `Seat`). */
 .revealBtnIdle {
   visibility: hidden;
 }
@@ -896,6 +905,159 @@
   }
 }
 
+/* A phone held sideways (Plan 26, B3): 915 × 355 to 915 × 412 leaves a stage of 290–350 px under the 32 px header,
+   and the docks take the bottom corners (Sẵn sàng / Bắt đầu, later the betting tray, at the right; the pre-action
+   toggles at the left). So the ring is sized from the seats in, not from the stage out:
+   - every rim seat but the viewer's keeps out of the stage's bottom `--dock-row`, where a one-row dock sits. The
+     lowest of them (beside the viewer, 82–83 % down the ellipse, `geometry.ts`) ends half a seat block below its
+     point, and the top seat (12 %) begins half a block above its point, `--top-gap` under the stage's top edge (room
+     for the dealer's chip, which pokes 7 px above a plate). So the box is (stage − dock row − one block − top gap)
+     ÷ 0.712 tall (0.832 − 0.12) and starts `--top-gap` + `--seat-half` − 12 % of itself down the stage. Both are `%`
+     of the stage — `height` and a relative `top` both resolve against the containing block's height — so one custom
+     property carries the formula: 200 px at 915 × 355, 282 px at 915 × 412.
+   - its width follows from a 10 : 3 box, capped by the stage's width; the box's real shape is measured
+     (`PokerTable`'s `useRingBox`), so the seats stay evenly spaced on the drawn rim when the cap bites (915 × 412).
+   - a seat on the top rim hangs from its point by its plate, and one on the bottom rim stands on it by its foot, so a
+     badge line that wraps grows towards the felt — never above the stage, never down into the docks.
+   - the viewer's own block ends 14 px above the stage's foot: its plate dips 22 px into the dock row, between the two
+     docks, and its cards rise onto the felt above it, so taller cards (a squeeze table's 60 px peel) grow upwards.
+     The point sits at top gap + `--seat-half` + 0.76 × the box below the stage's top and the foot at 0.712 × the box
+     + 142 px + top gap, so the distance from the point down to "foot − 14 px" is 85 px − 4.8 % of the box (`cqh`: the
+     ring is a size container).
+   - the deck, the board and the pot share one row in the middle: stacked, they needed more height than the felt has
+     between the top seat and the viewer's cards.
+   Keyed on the ring's own `data-frame`, the same value `RoomScreen` puts on the room (`.room[data-frame]`): the
+   room's class lives in another CSS module, whose hashed name this file cannot spell. */
+.ring[data-frame='landscape'] {
+  /* half a rim seat block in a hand: 28 px cards, the 36 px plate, an 18 px badge line, two 2 px gaps */
+  --seat-half: 43px;
+  --dock-row: 56px;
+  --top-gap: 6px;
+  --ring-h: calc((100% - var(--dock-row) - 2 * var(--seat-half) - var(--top-gap)) / 0.712);
+  align-self: flex-start;
+  top: calc(var(--top-gap) + var(--seat-half) - 0.12 * var(--ring-h));
+  height: var(--ring-h);
+  min-height: 0;
+  max-height: none;
+  width: auto;
+  max-width: 100%;
+  margin: 0 auto;
+  aspect-ratio: 10 / 3;
+}
+
+.ring[data-frame='landscape'] .felt {
+  inset: 4% 2%;
+}
+
+/* The room's line on the felt (`PokerTable`'s `note`): the pre-hand hint, under the board, where the felt is bare
+   while no hand is dealt — the viewer's own seat has no cards yet, so its plate starts well below this. */
+.ring .note {
+  position: absolute;
+  left: 50%;
+  top: 60%;
+  width: max-content;
+  max-width: 46cqw;
+  margin: 0;
+  transform: translateX(-50%);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--ink-muted);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.ring[data-frame='landscape'] .centre {
+  top: 45%;
+  flex-direction: row;
+  gap: var(--space-2);
+  --card-lg: clamp(28px, 10cqh, 48px);
+}
+
+/* deck · board · pot, the board in the middle: the deck and the pot are as tall as one board card */
+.ring[data-frame='landscape'] .centreRow {
+  display: contents;
+}
+
+.ring[data-frame='landscape'] .deck {
+  order: -1;
+}
+
+.ring[data-frame='landscape'] .pot {
+  padding: 2px var(--space-2) 2px 4px;
+}
+
+.ring[data-frame='landscape'] .chipStack {
+  width: 22px;
+}
+
+.ring[data-frame='landscape'] .potValue {
+  font-size: 0.8rem;
+}
+
+.ring[data-frame='landscape'] .potLabel {
+  font-size: 0.625rem;
+}
+
+/* Set on the seats, as the short-ring block above does: they are the ring's container children. The badge line may
+   run past its plate (24 % of the table, 160 px at 915 × 355), so "Bot · Đã chọn · 1.000" stays one line. */
+.ring[data-frame='landscape'] .seat {
+  --seat-w: 13%;
+  --seat-min: 94px;
+  --seat-gap: 2px;
+  --seat-disc: 30px;
+  --seat-name: 0.75rem;
+  --seat-line: 24cqw;
+}
+
+/* at the flanks the line starts at the plate's outer edge and runs onto the felt: centred, it ran off the stage */
+.ring[data-frame='landscape'] .seat[data-edge='left'] :is(.tags, .seatResult) {
+  align-self: flex-start;
+  justify-content: flex-start;
+}
+
+.ring[data-frame='landscape'] .seat[data-edge='right'] :is(.tags, .seatResult) {
+  align-self: flex-end;
+  justify-content: flex-end;
+}
+
+.ring[data-frame='landscape'] .seat[data-half='top'] {
+  transform: translate(-50%, calc(-1 * var(--seat-half)));
+}
+
+.ring[data-frame='landscape'] .seat[data-half='bottom'] {
+  transform: translate(-50%, calc(var(--seat-half) - 100%));
+}
+
+.ring[data-frame='landscape'] .plate {
+  padding: 2px 6px;
+}
+
+/* the badge line under a plate, one size down: 18 px instead of 24 */
+.ring[data-frame='landscape'] .tags > * {
+  gap: 4px;
+  padding: 1px 5px;
+  font-size: 0.6875rem;
+  line-height: 1.3;
+}
+
+.ring[data-frame='landscape'] .cardSm {
+  --card-w: 20px;
+}
+
+.ring[data-frame='landscape'] .seat.seatMe {
+  --seat-line: 30cqw;
+  transform: translate(-50%, calc(-100% + 85px - 4.8cqh));
+}
+
+.ring[data-frame='landscape'] .seatMe .cardMd {
+  --card-w: clamp(50px, 24cqh, 56px);
+}
+
+/* a card that is dragged open needs a thumb's width under it */
+.ring[data-frame='landscape'] .seatMe .peel {
+  --card-w: 60px;
+}
+
 /* vertical layout under 768 px: opponents / board / me (spec §27.1 two-row grid, §27.3 "must show" list).
    Every seat at the table has to be *visible*. An opponent parked behind an inner scrollbar is an opponent the
    player does not know is at the table — so the strip never scrolls inside itself: it wraps as far as it needs to,
@@ -1246,9 +1408,9 @@
     font-size: 0.875rem;
   }
 
-  /* The wait line keeps half its air: the tray's own padding and gap already set it off. On a squeeze table the header
-     takes a third line and the viewer's seat the "Lật" pill's row, and the 8 px this gives back is what lets the stage
-     fit a 375 × 812 phone in the round (final fix wave F3: it scrolled 3 px). */
+  /* The wait line keeps half its air: the tray's own padding and gap already set it off. It was this 8 px that let a
+     pure-luck squeeze table's stage fit a 375 × 812 phone in the round (final fix wave F3: it scrolled 3 px); since
+     Plan 26 (B6) the header's badge and the "Lật" pill take no row of their own, and it stays as the tray's tidy air. */
   .trayWait {
     padding: var(--space-1) 0;
   }
@@ -1260,6 +1422,178 @@
   .preset {
     flex: 1 1 0;
   }
+}
+
+/* ---------------- Action tray, phone held sideways ---------------- */
+/* Plan 26, B4. A phone on its side has no height for a strip under the felt, so the tray stops being one: it keeps its
+   place in the room's footer (and its "Hành động" group) but draws nothing of its own, and its two parts sit over the
+   room's bottom corners. Keyed on the tray's own `data-frame` (`ActionBar`'s `frame`), the value `RoomScreen` puts on
+   the room: this module cannot name `.room`. The ring keeps its seats out of the stage's bottom 56 px (B3), with the
+   viewer's plate dipping into it at the centre only, so each corner gets one row:
+
+   - right (`.trayRight`): the action buttons, one row 48 px tall, 12 px from the room's foot — the corner the pre-hand
+     dock holds between hands, so the two never show together. Off the player's turn, the line saying what the seat
+     waits for.
+   - left (`.trayLeft`): the pre-action toggles and "Tự động chơi" as 34 px pills — or, on the player's own turn once
+     the bet/raise button has been pressed, the presets and "✎" (a typed amount opens `AmountDialog`). There is no
+     slider (Q7). It stays inside the tray's markup, so the "Hành động" group still holds it.
+
+   The tray is `static`, so both parts hang from the room (`.room[data-frame='landscape']` is `relative`). Each part is
+   a box of a fixed width that stops short of the viewer's plate: that plate and its badge line are at most 30cqw of the
+   ring, which is at most the room's width, so they reach at most 15 % either side of the centre, and each corner gets
+   `35 %` of the room less its inset and an 8 px gap. The box is a size container: when the labels do not fit at full
+   size, the container queries below put each amount on a second line under its verb and tighten the type. The box
+   itself lets taps through to the felt; only its children take them. */
+.tray[data-frame='landscape'] {
+  position: static;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.trayLeft,
+.trayRight {
+  position: absolute;
+  bottom: max(var(--space-3), env(safe-area-inset-bottom));
+  z-index: 5;
+  container-type: inline-size;
+  pointer-events: none;
+}
+
+.trayLeft > *,
+.trayRight > * {
+  pointer-events: auto;
+}
+
+.trayLeft {
+  left: max(var(--space-3), env(safe-area-inset-left));
+  width: calc(35% - var(--space-2) - max(var(--space-3), env(safe-area-inset-left)));
+  display: flex;
+  gap: var(--space-2);
+}
+
+.trayLeft .preRow {
+  flex: none;
+  flex-wrap: nowrap;
+}
+
+.trayRight {
+  right: max(var(--space-3), env(safe-area-inset-right));
+  width: calc(35% - var(--space-2) - max(var(--space-3), env(safe-area-inset-right)));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+}
+
+.trayRight .trayRow {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  max-width: 100%;
+  gap: var(--space-1);
+}
+
+/* `overflow: hidden` is the last resort for a figure no query foresaw: a clipped label, never one over the plate. */
+.trayRight .trayRow > button {
+  flex: 0 1 auto;
+  min-width: var(--tap);
+  min-height: 48px;
+  padding: 0 10px;
+  overflow: hidden;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.trayLeft .presets {
+  flex: none;
+  gap: var(--space-1);
+}
+
+/* Pills over the felt: a night wash under each, so their gold reads over the felt or the page in either theme. */
+.trayLeft .preset {
+  min-width: 44px;
+  min-height: 34px;
+  padding: 0 var(--space-3);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.trayLeft .preset:not([aria-pressed='true']) {
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+}
+
+.trayRight .trayWait {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  font-size: 0.8125rem;
+  text-align: right;
+}
+
+/* A thumb still gets a full tap target; the corner grows for it rather than the target shrinking. */
+@media (pointer: coarse) {
+  .trayLeft .preset {
+    min-height: var(--tap);
+  }
+}
+
+/* A verb and its figure ("Theo 104.000", "Tố 208.000", "Chơi 1.000"), two spans in landscape: one line while the corner
+   has the width. */
+.btnAmount {
+  margin-left: 0.3em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The corner is narrower than "Bỏ bài · Theo 104.000 · Tố · Tất tay" (a 915 px phone gives 300 px, 844 px 275, 740 px
+   239): the figure goes under its verb, on a second line in the same 48 px button (14 px + 12 px), so the button gets
+   narrower and the amount stays on screen — a phone has no hover for a tooltip. */
+@container (max-width: 330px) {
+  .trayRight .trayRow > button {
+    flex-direction: column;
+    gap: 0;
+    line-height: 1.1;
+  }
+
+  .btnAmount {
+    margin-left: 0;
+    font-size: 0.75rem;
+  }
+}
+
+/* Narrower still (a 740 × 360 phone): tighter padding and type, so the row and the presets each stay one line. */
+@container (max-width: 260px) {
+  /* "Bỏ bài · Theo/104.000 · Tố · Tất tay" in 239 px at 740 × 360: 6 px sides, 3 px gaps, 12.5 px type */
+  .trayRight .trayRow {
+    gap: 3px;
+  }
+
+  .trayRight .trayRow > button {
+    padding: 0 6px;
+    font-size: 0.78125rem;
+  }
+
+  .trayLeft .preset {
+    padding: 0 var(--space-2);
+    font-size: 0.75rem;
+  }
+}
+
+/* The typed amount's field, in `AmountDialog`. */
+.amountField {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(5, 9, 20, 0.8);
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  color: var(--gold);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------------- Hand result ---------------- */
@@ -1290,9 +1624,14 @@
   gap: var(--space-3);
   flex: 0 1 auto;
   min-height: 0;
+  /* Without this the live part kept its content's height at a short stage and the head spilled over the footer:
+     clipped, it can shrink with the card, and the body's own scroll takes up the slack. The head and the footer
+     (`flex-shrink: 0`) keep their rows. */
+  overflow: hidden;
 }
 
 .resultHead {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1437,6 +1776,7 @@
 }
 
 .resultFoot {
+  flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -1460,6 +1800,130 @@
 .resultNext strong {
   color: var(--gold);
   font-variant-numeric: tabular-nums;
+}
+
+/* ---------------- Hand result, phone held sideways ---------------- */
+/* Plan 26, B5. A phone on its side has 320–430 px of height, and the overlay (`screens.module.css`, keyed the same way)
+   leaves the bottom dock row free, so the card is a compact block over the felt: at most 560 px wide, 12 px of padding
+   above and below, and each part on one line —
+
+   - head: the title and "Đóng", a full 44 px tap (the head is as tall as the button: `.resultLive` clips its overflow,
+     so the button may not stand out of the head);
+   - body: the rows (one line each: name and hand name ellipsised, the cards, the payout) and the side-pot ledger. The
+     only part that scrolls, as on a desktop;
+   - foot: the fee, the carry-over and the uncalled return as ellipsised pieces, and the countdown pushed right and
+     never cut.
+
+   Keyed on the card's own `data-frame` (`HandResult`'s `frame`): this module cannot name the room's hashed class. */
+.result[data-frame='landscape'] {
+  width: min(560px, 100%);
+  max-height: 100%;
+  padding: var(--space-3) var(--space-4);
+  gap: var(--space-2);
+}
+
+.result[data-frame='landscape'] .resultLive {
+  gap: var(--space-2);
+}
+
+.result[data-frame='landscape'] .resultHead {
+  gap: var(--space-3);
+  padding-bottom: var(--space-1);
+}
+
+.result[data-frame='landscape'] .resultHead > button {
+  flex: none;
+  min-width: var(--tap);
+  min-height: var(--tap);
+}
+
+.result[data-frame='landscape'] .resultTitle {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 1.1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result[data-frame='landscape'] .resultNote {
+  font-size: 0.8125rem;
+}
+
+.result[data-frame='landscape'] .resultBody {
+  gap: var(--space-2);
+}
+
+.result[data-frame='landscape'] .resultRows {
+  gap: var(--space-1);
+}
+
+.result[data-frame='landscape'] .resultRow {
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  font-size: 0.85rem;
+}
+
+.result[data-frame='landscape'] .resultName {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result[data-frame='landscape'] .resultHand {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result[data-frame='landscape'] .resultCards {
+  flex: none;
+  margin-left: 0;
+}
+
+.result[data-frame='landscape'] .cardSm {
+  --card-w: 26px;
+}
+
+.result[data-frame='landscape'] .resultPayout {
+  flex: none;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.result[data-frame='landscape'] .pots {
+  gap: var(--space-1);
+  padding-top: var(--space-1);
+}
+
+.result[data-frame='landscape'] .potName,
+.result[data-frame='landscape'] .potAmount {
+  font-size: 0.85rem;
+}
+
+.result[data-frame='landscape'] .resultFoot {
+  flex-wrap: nowrap;
+  gap: var(--space-3);
+  overflow: hidden;
+}
+
+.result[data-frame='landscape'] .resultMeta {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result[data-frame='landscape'] .resultNext {
+  flex: none;
+  font-size: 0.8125rem;
+  white-space: nowrap;
 }
 
 /* ---------------- Room header ---------------- */
@@ -1516,6 +1980,21 @@
 .stakes,
 .players {
   white-space: nowrap;
+}
+
+/* The meta line is two things side by side in the markup — the facts (`metaFlow`) and, on a squeeze table, its gold badge —
+   so that a phone can lift the badge up beside the name. On a desktop the wrapper steps aside and the badge is put back by
+   `order`: after the mode badges (order 0), before the code, stakes and head-count (`metaTail`). */
+.metaFlow {
+  display: contents;
+}
+
+.squeezeBadge {
+  order: 1;
+}
+
+.metaTail {
+  order: 2;
 }
 
 .headRight {
@@ -1590,7 +2069,16 @@
   }
 
   .headMeta {
+    display: contents;
+  }
+
+  .metaFlow {
     grid-area: meta;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 1px;
   }
 
   .headRight {
@@ -1606,8 +2094,6 @@
   }
 
   .headMeta {
-    gap: 6px;
-    margin-top: 1px;
     font-size: 0.75rem;
   }
 
@@ -1627,6 +2113,89 @@
     clip-path: inset(50%);
     white-space: nowrap;
   }
+
+  /* A squeeze table (Plan 26, B6): the gold badge takes the first row beside the name, so the second row holds the
+     badges, the code and the stakes in one line less than the badge used to cost. The name keeps the room and gives way
+     with its ellipsis. */
+  .headerSqueeze {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      'glyph name badge right'
+      'meta meta meta meta';
+  }
+
+  .squeezeBadge {
+    grid-area: badge;
+    order: 0;
+    justify-self: start;
+  }
+}
+
+/* On the narrowest phones the head-count goes from a squeeze table's meta line (it is in the lobby's card and in the
+   seats themselves), which keeps the code and the stakes on one line together. */
+@media (max-width: 480px) {
+  .headerSqueeze .players {
+    display: none;
+  }
+}
+
+/* A phone on its side (Plan 26, B2): the identity bar is one 32 px strip, so the felt keeps the height. The connection,
+   the name (cut with an ellipsis before anything else gives), the squeeze badge, the code and the stakes, then the
+   menu and the way out. It sits after the phone block, whose two-row grid would otherwise take it under 768 px; the
+   two classes outweigh that block's single ones either way. Its two buttons are drawn 30 px tall inside the strip,
+   and an invisible pad above and below keeps each one a full 44 px to the thumb. */
+.header.headerCompact {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--space-2);
+  height: 32px;
+  padding: 0;
+}
+
+.headerCompact .conn {
+  flex: none;
+  min-height: 0;
+}
+
+.headerCompact .roomName {
+  flex: 0 1 auto;
+  min-width: 3em;
+  font-size: 0.9375rem;
+  line-height: 1.2;
+}
+
+.headerCompact .code {
+  flex: none;
+  font-size: 0.75rem;
+}
+
+.headerCompact .stakes {
+  flex: 0 1000 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+}
+
+.headerCompact .headRight {
+  flex: none;
+  margin-left: auto;
+}
+
+.headerCompact .headRight > button,
+.headerCompact [aria-haspopup='menu'] {
+  position: relative;
+  min-height: 30px;
+  height: 30px;
+}
+
+.headerCompact .headRight > button::after,
+.headerCompact [aria-haspopup='menu']::after {
+  content: '';
+  position: absolute;
+  inset: -7px -2px;
 }
 
 /* ---------------- Motion off ---------------- */

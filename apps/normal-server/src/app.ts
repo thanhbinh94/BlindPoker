@@ -59,7 +59,8 @@ import { createSessionService, type SessionService } from './auth/session-servic
 import type { NormalConfig } from './config.js'
 import type { AppDb } from './db/client.js'
 import { packageRoot } from './db/migrate.js'
-import { loadDailyGifts, type DailyGiftSchedule } from './economy/daily-gifts.js'
+import { readDailyGiftsRaw } from './economy/daily-gifts.js'
+import { createGiftScheduleStore, type GiftScheduleStore } from './economy/gift-schedule-store.js'
 import { createEconomyService, type EconomyService } from './economy/economy-service.js'
 import { createEventBus, type AppEventBus } from './events.js'
 import { createGmRoomService, type GmRoomService } from './gm/gm-rooms.js'
@@ -201,8 +202,8 @@ export interface AppServices {
   bus: AppEventBus
   catalog: ItemCatalog
   defs: AchievementDef[]
-  /** The check-in's gift schedule — `data/daily-gifts.json`, checked at boot. */
-  gifts: DailyGiftSchedule
+  /** The check-in's gift schedule: `data/daily-gifts.json` checked at boot, with the months a GM has set over it. */
+  gifts: GiftScheduleStore
   repos: NormalRepositories
   sessions: SessionService
   auth: AuthService
@@ -264,8 +265,9 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
   const catalog = loadItemCatalog(undefined, manifest)
   const defs = loadAchievements(catalog)
   // Checked against the catalogue it names, before anything is seeded: a bad schedule stops the boot here, with its
-  // file and its problem in the message (spec 2026-10-12 §6).
-  const gifts = loadDailyGifts(catalog)
+  // file and its problem in the message (spec 2026-10-12 §6). A month a GM set that no longer validates is warned about
+  // and skipped instead (Plan 26): the file is the operator's, the rows are history.
+  const gifts = await createGiftScheduleStore({ db, catalog, defaults: readDailyGiftsRaw(), timezone: config.timezone, log, ...(deps.now ? { now: deps.now } : {}) })
   // Before anything reads or grants an item: every reward is a foreign key into this table.
   await catalog.seed(db)
   // Before any room exists: the keys a past process claimed can never be retried — its rooms went with it.
@@ -317,7 +319,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     repos,
     inventory,
     catalog,
-    gifts,
+    gifts: () => gifts.current(),
     bus,
     timezone: config.timezone,
     // Points credited outside a hand still have to reach a live session, so this goes through the game
@@ -342,7 +344,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     ...(deps.now ? { now: deps.now } : {}),
   })
   const history = createHistoryService({ db, repos })
-  const gm = createGmService({ db, repos, sessions, inventory, catalog, history, stats, game, log, ...(deps.now ? { now: deps.now } : {}) })
+  const gm = createGmService({ db, repos, sessions, inventory, catalog, defs, history, stats, game, log, gifts, timezone: config.timezone, ...(deps.now ? { now: deps.now } : {}) })
   const gmRooms = createGmRoomService(game)
 
   // Order matters: the counters must be written before the thresholds are compared against them.

@@ -257,6 +257,51 @@ export const OVERLAP_SCREENS = [USER_SCREEN, LAPTOP_SCREEN]
 export const PHONE_SCREEN = { width: 375, height: 812 }
 
 /**
+ * Plan 26 (B8): a phone held sideways — the ops pack's `landscape` project. 915 × 412 is a large Android on its side;
+ * 915 × 355 the same phone with the browser's toolbars shown; 844 × 390 an iPhone 12–14 on its side. All three take the
+ * room's landscape frame (`(orientation: landscape) and (max-height: 500px) and (min-width: 700px)`).
+ */
+export const LANDSCAPE_SCREEN = { width: 915, height: 412 }
+export const SHORT_LANDSCAPE = { width: 915, height: 355 }
+export const IPHONE_LANDSCAPE = { width: 844, height: 390 }
+
+/**
+ * The room's "Thêm" (⋯) menu in the landscape frame (Plan 26, B2): opens it and returns the menu. The seat's own controls
+ * live there — "Đứng dậy" (`menuitem`), "Tạm nghỉ" / "Chơi tiếp" (`menuitemcheckbox`), "Quản lý bàn" — each only when the
+ * desktop row would show it. Close it with `closeRoomMenu` once read.
+ */
+export async function openRoomMenu(page: Page): Promise<Locator> {
+  await page.getByRole('button', { name: 'Thêm', exact: true }).click()
+  const menu = page.getByRole('menu', { name: 'Thêm' })
+  await expect(menu).toBeVisible()
+  return menu
+}
+
+/** Closes the room's "Thêm" menu with Escape (the menu-button pattern hands the focus back to the trigger). */
+export async function closeRoomMenu(page: Page): Promise<void> {
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('menu', { name: 'Thêm' })).toHaveCount(0)
+}
+
+/**
+ * The seat is taken. On the desktop and the upright phone "Đứng dậy" is a button under the felt; in the landscape frame
+ * (`via: 'menu'`) it is an item of the "Thêm" menu, which is opened, read and closed again.
+ */
+export async function expectSeated(page: Page, opts?: { via?: 'menu' }): Promise<void> {
+  if (opts?.via !== 'menu') {
+    await expect(page.getByRole('button', { name: 'Đứng dậy', exact: true })).toBeVisible()
+    return
+  }
+  // The seat arrives over the socket a moment after the click; the open menu redraws with it, "Đứng dậy" first.
+  const menu = await openRoomMenu(page)
+  try {
+    await expect(menu.getByRole('menuitem', { name: 'Đứng dậy', exact: true })).toBeVisible()
+  } finally {
+    await closeRoomMenu(page)
+  }
+}
+
+/**
  * `expectNoTextOverlap` measures only what is on screen, so a page taller than the window is walked down in
  * window-high steps (100 px of overlap between two steps, so no line falls between them) and left back at the top.
  * A page that fits is measured once, as it stands. Only the document is walked: a screen whose own box scrolls (the
@@ -576,10 +621,13 @@ export async function expectScrimLeavesNoEdge(page: Page, overlay: Locator, labe
   expect(problems, `the result card's scrim (${label} theme) has an edge at its box:\n  ${problems.join('\n  ')}`).toEqual([])
 }
 
-/** Takes the given seat; the index is explicit so nothing ever races the bot for one. */
-export async function sit(page: Page, seat: number): Promise<void> {
+/**
+ * Takes the given seat; the index is explicit so nothing ever races the bot for one. In the landscape frame pass
+ * `{ via: 'menu' }`: "Đứng dậy" is then an item of the header's "Thêm" menu (`expectSeated`).
+ */
+export async function sit(page: Page, seat: number, opts?: { via?: 'menu' }): Promise<void> {
   await page.locator(`[data-seat="${seat}"]`).getByRole('button', { name: 'Ngồi vào bàn' }).click()
-  await expect(page.getByRole('button', { name: 'Đứng dậy', exact: true })).toBeVisible()
+  await expectSeated(page, opts)
 }
 
 /**

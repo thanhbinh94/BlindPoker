@@ -23,6 +23,8 @@ const REASONS = new Set([
   'achievement',
   'gm_grant',
   'gm_adjust',
+  'gm_achievement',
+  'gm_checkin_undo',
 ])
 
 /** A reason the server invented after this bundle shipped still reads as *something*, never as a raw key. */

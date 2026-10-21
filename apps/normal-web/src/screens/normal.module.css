@@ -332,16 +332,73 @@
 
 /* ── the sign-in card ─────────────────────────────────────────────────────── */
 
+/* Layout A (spec Q8, picture V2). Below 1024 px — a phone, a tablet — one column: the picture is a 300 px band at
+   the top, the card overlaps its foot by 50 px, the language switch under the card. From 1024 px up (the block after
+   `.lead`) the picture fills the left column, full height, and the card sits centred in the right one. */
 .authStage {
   --ground: var(--bg);
 
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-5);
   min-height: 100dvh;
-  padding: var(--space-6) var(--space-4);
+}
+
+/* A night room in either theme: the section carries `data-surface="night"`, so `--bg` here is the night ground,
+   under the picture while it loads and in the shade that fades it out. */
+.authHero {
+  position: relative;
+  flex: none;
+  height: 300px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.heroImg {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* A tablet's band (768–1023 px) shows the picture whole across its width, cropped top and bottom. A phone's is
+     zoomed in on the three faces — see the `max-width: 767px` block after `.lead`. */
+  object-position: 34% 28%;
+}
+
+/* The picture's right edge and foot fade into the night ground, so neither ends on a hard cut. */
+.heroShade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, transparent 70%, var(--bg) 100%),
+    linear-gradient(0deg, var(--bg) 0%, transparent 18%);
+}
+
+/* Spec R10: below 1024 px the card's own heading is the page's one `h1`, so the hero's words stand down. */
+.heroText {
+  display: none;
+}
+
+.heroTitle {
+  font-size: 2.5rem;
+  line-height: 1.1;
+}
+
+.heroLead {
+  margin-top: var(--space-2);
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--ink);
+  text-wrap: pretty;
+}
+
+.authSide {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-5);
+  padding: 0 var(--space-4) var(--space-6);
 }
 
 .authLang {
@@ -363,6 +420,10 @@
   border-radius: var(--radius-md);
   background: var(--bg-elev);
   box-shadow: var(--shadow-2);
+  /* over the foot of the hero band (one column); the desktop block puts it back in flow */
+  position: relative;
+  z-index: 1;
+  margin-top: -50px;
 }
 
 /* The mark, the name and one line about the account, centred over a form that runs the card's full width. */
@@ -383,6 +444,91 @@
   font-size: 0.9375rem;
   color: var(--ink-muted);
   text-wrap: pretty;
+}
+
+/* A phone's band: the approved mockup's crop (spec §4 C1, V2: `background-size: 160% auto` at 34% 28%), the three
+   faces — the áo dài peeking at her card, the tuxedo, the friend between them — rather than the whole table at
+   thumbnail size. A background-position percentage aligns that point of the picture with the same point of the box,
+   which is `left`/`top` at the percentage plus a `translate` back by it. Not on a tablet: at 768 px the same zoom
+   cuts the crowned girl's face off the top. */
+@media (max-width: 767px) {
+  .heroImg {
+    inset: auto;
+    left: 34%;
+    top: 28%;
+    width: 160%;
+    max-width: none;
+    height: auto;
+    object-fit: fill;
+    transform: translate(-34%, -28%);
+  }
+}
+
+/* A landscape phone (915×412, 844×390): a 300 px band would push the form below the fold, so the band thins to a
+   strip, the card tightens, and its mark and lead stand down — the heading stays, as the page's one `h1`. The whole
+   form, button included, is then inside 390 px. Capped at 1023 px wide: from 1024 the two-column desktop layout holds,
+   and a short desktop window must not get the phone's strip inside it. */
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 1023px) {
+  .authHero {
+    height: 72px;
+  }
+
+  .authCard {
+    gap: var(--space-3);
+    margin-top: -24px;
+    padding: var(--space-4) var(--space-5);
+  }
+
+  .cardHead .markGlyph,
+  .cardHead .lead {
+    display: none;
+  }
+
+  .cardHead .authTitle {
+    font-size: 1.375rem;
+  }
+}
+
+/* Layout A from 1024 px up (the rail's own breakpoint): the picture is the left column, full height, its heading and
+   lead at the foot; the card is centred in the right column with the language switch under it. Spec R10: the hero
+   owns the page's one `h1` here, so the card keeps only its mark. */
+@media (min-width: 1024px) {
+  .authStage {
+    display: grid;
+    grid-template-columns: minmax(0, 62fr) minmax(26rem, 38fr);
+  }
+
+  .authHero {
+    height: auto;
+  }
+
+  .heroImg {
+    object-position: 42% 50%;
+  }
+
+  .heroText {
+    position: absolute;
+    left: var(--space-7);
+    right: var(--space-7);
+    bottom: var(--space-7);
+    display: block;
+    max-width: 28rem;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
+  }
+
+  .cardHead .authTitle,
+  .cardHead .lead {
+    display: none;
+  }
+
+  .authSide {
+    justify-content: center;
+    padding: var(--space-6) var(--space-5);
+  }
+
+  .authCard {
+    margin-top: 0;
+  }
 }
 
 /* two tabs on one lacquer rule; the chosen one is struck, never boxed */
@@ -1148,6 +1294,30 @@
   font-size: 0.875rem;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
+}
+
+/* The game master's gift editor makes each open tier a button: a transparent sheet over the whole cell, so the cell
+   keeps its layout and its whole area is the tap target (a tier is ~80 px square on a phone, over `--tap`). */
+.calPick {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.calPick:hover {
+  background: var(--gold-soft);
+}
+
+.calPick:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+.calCell[aria-disabled='true'] {
+  opacity: 0.55;
 }
 
 /* A quarter of a phone is ~60 px of text, and nothing in a tier may break: "NGÀY 20" stays one line, "40.000"

@@ -2,6 +2,7 @@ import { useEffect, useId, useRef } from 'react'
 import type { MouseEvent, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from './Button.js'
+import { cx } from './cx.js'
 import s from './primitives.module.css'
 
 const FOCUSABLE = 'button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])'
@@ -19,9 +20,15 @@ export interface ModalProps {
   footer?: ReactNode
   /** Accessible name for the close button (i18n string from the host). */
   closeLabel: string
+  /**
+   * Where the dialog sits: centred (the default), or near the top of the screen. `top` is for a field on a phone held
+   * sideways (Plan 26, R11): the soft keyboard covers the bottom half of a page that does not scroll, and a centred
+   * dialog would put its own input under it.
+   */
+  anchor?: 'center' | 'top'
 }
 
-export function Modal({ open, title, onClose, children, footer, closeLabel }: ModalProps) {
+export function Modal({ open, title, onClose, children, footer, closeLabel, anchor = 'center' }: ModalProps) {
   const titleId = useId()
   const dialogRef = useRef<HTMLDivElement>(null)
   // Callers pass an inline arrow, so `onClose` is a new function on every render. Depending on it here would move
@@ -76,10 +83,11 @@ export function Modal({ open, title, onClose, children, footer, closeLabel }: Mo
   const onBackdropClick = (event: MouseEvent<HTMLDivElement>): void => {
     if (event.target === event.currentTarget) onClose()
   }
+  const top = anchor === 'top'
 
   return createPortal(
-    <div className={s.backdrop} data-testid="modal-backdrop" onClick={onBackdropClick}>
-      <div className={s.dialog} ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}>
+    <div className={cx(s.backdrop, top && s.backdropTop)} data-testid="modal-backdrop" onClick={onBackdropClick}>
+      <div className={cx(s.dialog, top && s.dialogTop)} ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <div className={s.dialogHead}>
           <h2 className={s.dialogTitle} id={titleId}>
             {title}

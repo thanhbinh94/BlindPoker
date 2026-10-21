@@ -1,4 +1,4 @@
-import { expect, test, type CDPSession, type Locator, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import {
   autopilot,
   balanceOf,
@@ -21,10 +21,12 @@ import {
   postApi,
   ready,
   resultCard,
+  settled,
   start,
   statsOf,
   sumOf,
   takeSeat,
+  touchDrag,
   unique,
   type Player,
 } from './ops-helpers.js'
@@ -60,35 +62,6 @@ const FACE_UP = /^(\d+|Bồi|Đầm|Già|Át) (chuồn|rô|cơ|bích)$/
 const faceUp = (scope: ReturnType<Page['locator']>) => scope.getByRole('img', { name: FACE_UP })
 /** The result card of a hand that was played out — it has a winner — and not "Ván bị hủy", which `resultCard` takes as well. */
 const winnerCard = (page: Page) => page.getByRole('group', { name: 'Người thắng', exact: true })
-/**
- * Nothing under `el` is animating: a card dealt from the deck is still travelling for up to 1 000 + 360 ms (the whole deal
- * leaves the deck within a second, ruling 26), and a box measured on its way is not where a press has to land.
- */
-const settled = (el: Locator) =>
-  expect.poll(() => el.evaluate((node) => node.getAnimations({ subtree: true }).length), { message: 'the card has come in from the deck' }).toBe(0)
-
-/**
- * A touch drag the way a finger makes it: the browser's own touch input (`Input.dispatchTouchEvent`), which reaches the page
- * as Pointer Events of type `touch` and honours the card's `touch-action` — `page.touchscreen` can only tap. `midway` is
- * called with the finger down, half way.
- *
- * Paced like a hand (a move every frame, a rest before the lift): a drag sent in one burst reads to the browser as a fling,
- * and the tap that follows it — here the Lật pill — is then swallowed, with no `click` though the pointer events arrive.
- */
-async function touchDrag(cdp: CDPSession, from: { x: number; y: number }, to: { x: number; y: number }, midway?: () => Promise<void>): Promise<void> {
-  const steps = 10
-  const rest = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-  const send = (type: 'touchStart' | 'touchMove' | 'touchEnd', at?: { x: number; y: number }) =>
-    cdp.send('Input.dispatchTouchEvent', { type, touchPoints: at === undefined ? [] : [{ x: at.x, y: at.y }] })
-  await send('touchStart', from)
-  for (let k = 1; k <= steps; k++) {
-    await send('touchMove', { x: from.x + ((to.x - from.x) * k) / steps, y: from.y + ((to.y - from.y) * k) / steps })
-    if (k === steps / 2) await midway?.()
-    await rest(16)
-  }
-  await rest(64)
-  await send('touchEnd')
-}
 
 test('F-01 F-02 H-01: pure luck, three cards — the ante goes in, nobody decides, and the ledger writes the buy-in and the cash-out', async () => {
   const before = await balanceOf(a.page)
@@ -432,14 +405,14 @@ test('F-11: a squeeze table — one peels by hand, the other presses Lật, and 
   }
 })
 
-test('F-12: @mobile the squeeze fits a phone — the viewer’s cards, the Lật pill and the timer are on screen', async () => {
-  test.setTimeout(180_000)
+/** F-12 and F-12b: a squeeze table on the mobile project's phone (375 × 812, touch), from the deal to the winner card. */
+async function squeezeFitsPhone({ id, mode, what, shot }: { id: string; mode: 'Hoàn toàn may rủi' | 'Chơi hoặc bỏ'; what: string; shot: string }) {
   // The mobile project's own phone: 375 × 812, with a touch screen (`a` is made in this project's context).
   const page = a.page
   expect(page.viewportSize(), 'the mobile project’s phone').toEqual(PHONE_SCREEN)
   expect(await page.evaluate(() => navigator.maxTouchPoints), 'a touch screen').toBeGreaterThan(0)
 
-  await createBlind(page, { name: unique('Bàn F12 '), bots: 1, mode: 'Hoàn toàn may rủi', squeeze: true })
+  await createBlind(page, { name: unique(`Bàn ${id} `), bots: 1, mode, squeeze: true })
   await expect(page.locator('header').getByText('Nặn bài', { exact: true })).toBeVisible()
   await takeSeat(page, 0)
   await ready(page)
@@ -452,29 +425,33 @@ test('F-12: @mobile the squeeze fits a phone — the viewer’s cards, the Lật
   await expect(mine).toHaveCount(2)
   await expect(pill).toBeVisible()
   await expect(timer).toBeVisible()
-  await expect(page.getByText('Mời nặn bài')).toBeVisible()
+  // The hint belongs to the pure-luck table; a play-or-fold one asks for its choice in the tray instead.
+  if (mode === 'Hoàn toàn may rủi') await expect(page.getByText('Mời nặn bài')).toBeVisible()
   await settled(mine.first())
   await settled(mine.last())
 
   // Both cards, the pill and the timer sit whole inside the screen, above the tray (which covers the foot of the stage).
   const tray = (await page.locator('footer').last().boundingBox())!
   const parts: [string, Locator][] = [['card 1', mine.first()], ['card 2', mine.last()], ['the Lật pill', pill], ['the timer', timer]]
-  for (const [what, part] of parts) {
+  for (const [label, part] of parts) {
     const box = await part.boundingBox()
-    expect(box, `${what} has a box`).not.toBeNull()
-    expect(box!.x, `${what} starts inside the screen`).toBeGreaterThanOrEqual(0)
-    expect(box!.y, `${what} starts inside the screen`).toBeGreaterThanOrEqual(0)
-    expect(box!.x + box!.width, `${what} ends inside the screen`).toBeLessThanOrEqual(PHONE_SCREEN.width)
-    expect(box!.y + box!.height, `${what} ends above the tray`).toBeLessThanOrEqual(tray.y + 1)
+    expect(box, `${label} has a box`).not.toBeNull()
+    expect(box!.x, `${label} starts inside the screen`).toBeGreaterThanOrEqual(0)
+    expect(box!.y, `${label} starts inside the screen`).toBeGreaterThanOrEqual(0)
+    expect(box!.x + box!.width, `${label} ends inside the screen`).toBeLessThanOrEqual(PHONE_SCREEN.width)
+    expect(box!.y + box!.height, `${label} ends above the tray`).toBeLessThanOrEqual(tray.y + 1)
   }
   // And the room holds on the phone: nothing scrolls sideways, neither the page nor the stage scrolls down, the viewer's
   // plate keeps to its lines with the name whole beside the round's timer, and no text lands on text.
   await expectNoSidewaysScroll(page)
-  await expectRoomFits(page, 'a squeeze table, dealt', [PHONE_SCREEN])
-  await expectMySeatLines(page, a.who.displayName, 'a squeeze table, dealt')
-  await expectMyNameWhole(page, a.who.displayName, 'a squeeze table, dealt', [PHONE_SCREEN])
-  await expectNoTextOverlapAt(page, 'Blind, squeeze, dealt')
-  await page.screenshot({ path: 'test-results/shots/375x812-squeeze-dealt.png' })
+  await expectRoomFits(page, `${what} table, dealt`, [PHONE_SCREEN])
+  await expectMySeatLines(page, a.who.displayName, `${what} table, dealt`)
+  await expectMyNameWhole(page, a.who.displayName, `${what} table, dealt`, [PHONE_SCREEN])
+  await expectNoTextOverlapAt(page, `Blind, ${what}, dealt`)
+  await page.screenshot({ path: `test-results/shots/375x812-${shot}-dealt.png` })
+  // The overlap check above ran under reduced motion; motion back on deals the cards from the deck again (`settled`).
+  await settled(mine.first())
+  await settled(mine.last())
 
   // One card by finger: from its bottom-left corner, along the diagonal, past the middle. Pointer Events of type `touch`.
   await page.evaluate(() => {
@@ -487,7 +464,7 @@ test('F-12: @mobile the squeeze fits a phone — the viewer’s cards, the Lật
   const cdp = await a.context.newCDPSession(page)
   await touchDrag(cdp, corner, { x: corner.x + (card.width - 8) * 0.8, y: corner.y - (card.height - 8) * 0.8 }, async () => {
     await expect(mine.first()).toHaveAttribute('data-face', 'peeling', { timeout: 5_000 })
-    await page.screenshot({ path: 'test-results/shots/375x812-squeeze-peeling.png' })
+    await page.screenshot({ path: `test-results/shots/375x812-${shot}-peeling.png` })
   })
   // 5 s: a drag that did not take must fail as itself, not wait for the server's forced turn at 20 s.
   await expect(mine.first()).toHaveAttribute('data-face', 'up', { timeout: 5_000 })
@@ -495,15 +472,30 @@ test('F-12: @mobile the squeeze fits a phone — the viewer’s cards, the Lật
   // One card up does not turn the seat: the other is still down, the pill and the tray still wait for it.
   await expect(mine.last()).toHaveAttribute('data-face', 'down')
   await expect(pill).toBeEnabled()
-  await expect(page.getByText('Mời nặn bài')).toBeVisible()
+  if (mode === 'Hoàn toàn may rủi') await expect(page.getByText('Mời nặn bài')).toBeVisible()
 
   // The pill, by tap, turns the other one; with the bot already turned the round ends on the human's turn.
   await pill.tap()
   await expect(mine.last()).toHaveAttribute('data-face', 'up', { timeout: 5_000 })
   await expect(faceUp(page.locator('[data-me="true"]'))).toHaveCount(2)
-  await expect.poll(() => faceUp(page.getByRole('group', { name: 'Bài chung' })).count(), { message: 'the flop is on the felt' }).toBeGreaterThanOrEqual(3)
+  // A play-or-fold table asks for the choice after the peel; the round then ends on the human's Chơi. A board is dealt only
+  // when both play: a bot that folds hands the pot to the human at once, with no flop (F-06), so there the card is the end.
+  if (mode === 'Chơi hoặc bỏ') await page.getByRole('button', { name: /^Chơi\b/ }).click()
+  else await expect.poll(() => faceUp(page.getByRole('group', { name: 'Bài chung' })).count(), { message: 'the flop is on the felt' }).toBeGreaterThanOrEqual(3)
   await expect(winnerCard(page)).toBeVisible({ timeout: 15_000 })
   expect(Date.now() - t0).toBeLessThan(20_000)
   await leave(page)
+}
+
+test('F-12: @mobile the squeeze fits a phone — the viewer’s cards, the Lật pill and the timer are on screen', async () => {
+  test.setTimeout(180_000)
+  await squeezeFitsPhone({ id: 'F12', mode: 'Hoàn toàn may rủi', what: 'a squeeze', shot: 'squeeze' })
+})
+
+// Plan 26 (B6): the play-or-fold squeeze has the header's gold badge and the viewer's Lật pill too; both used to cost a row,
+// and the stage scrolled 11 px in the round.
+test('F-12b: @mobile the play-or-fold squeeze also fits a phone — no 11 px scroll in the round', async () => {
+  test.setTimeout(180_000)
+  await squeezeFitsPhone({ id: 'F12b', mode: 'Chơi hoặc bỏ', what: 'a play-or-fold squeeze', shot: 'squeeze-pof' })
 })
 

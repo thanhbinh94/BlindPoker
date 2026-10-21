@@ -14,6 +14,7 @@
   "auth": {
     "title": "Blind Luck Poker",
     "lead": "Một tài khoản, chơi trên mọi thiết bị — điểm, trang phục và thành tựu luôn đi theo bạn.",
+    "heroLead": "Poker điểm thưởng, chơi với bạn bè. Một tài khoản, mọi thiết bị: điểm, tủ đồ và thành tựu đi theo bạn.",
     "signIn": "Đăng nhập",
     "register": "Đăng ký",
     "email": "Email",
@@ -131,7 +132,32 @@
     "title": "Quản trị",
     "copyId": "Chép mã",
     "copied": "Đã chép",
-    "tabs": { "overview": "Tổng quan", "players": "Người chơi", "rooms": "Phòng", "actions": "Nhật ký" },
+    "tabs": { "overview": "Tổng quan", "players": "Người chơi", "rooms": "Phòng", "gifts": "Quà tháng", "actions": "Nhật ký" },
+    "gifts": {
+      "month": "Tháng",
+      "edited": "(đã sửa)",
+      "lead": "Mỗi ô là tier của chuỗi điểm danh. Tháng hiện tại chỉ sửa được các ngày sau hôm nay.",
+      "error": "Không tải được lịch quà",
+      "rule": {
+        "default": "Như mặc định",
+        "none": "Không có quà",
+        "common": "Ngẫu nhiên thường",
+        "rare": "Ngẫu nhiên hiếm",
+        "fixed": "Cố định"
+      },
+      "ruleOf": "Quà của ngày {{day}}",
+      "items": "Món của ngày {{day}}",
+      "pickItem": "Chọn món",
+      "addItem": "Thêm món",
+      "removeItem": "Bỏ món",
+      "needItem": "Ngày cố định cần ít nhất một món.",
+      "save": "Lưu",
+      "reset": "Về mặc định",
+      "saveTitle": "Lưu quà tháng {{month}}",
+      "resetTitle": "Bỏ bản sửa của tháng {{month}}",
+      "editDay": "Ngày {{day}}",
+      "locked": "Đã qua, không sửa được"
+    },
     "overview": {
       "online": "Đang kết nối",
       "rooms": "Phòng đang mở",
@@ -144,7 +170,17 @@
       "sinks": "Ra khỏi nền kinh tế",
       "reasonColumn": "Lý do",
       "total": "Tổng",
-      "error": "Không tải được tổng quan"
+      "error": "Không tải được tổng quan",
+      "byDay": "Theo ngày",
+      "days7": "7 ngày",
+      "days30": "30 ngày",
+      "colDay": "Ngày",
+      "colSources": "Nguồn",
+      "colSinks": "Bể",
+      "colNet": "Ròng",
+      "colBar": "Tỉ lệ",
+      "byDayEmpty": "Chưa có giao dịch trong khoảng này.",
+      "byDayError": "Không tải được số liệu theo ngày"
     },
     "players": {
       "search": "Tìm theo email hoặc tên",
@@ -185,6 +221,8 @@
       "unlock": "Mở khóa",
       "promote": "Trao quyền quản trị",
       "demote": "Thu quyền quản trị",
+      "unlockAchievement": "Mở thành tựu",
+      "resetCheckin": "Đặt lại điểm danh",
       "kick": "Mời ra",
       "close": "Đóng phòng"
     },
@@ -192,6 +230,9 @@
       "reason": "Lý do (bắt buộc, 3–200 ký tự)",
       "amount": "Số điểm (âm để trừ, tối đa ±10.000.000)",
       "item": "Mã món",
+      "achievement": "Thành tựu",
+      "checkinBody": "Hoàn tác lượt điểm danh hôm nay: trừ lại {{points}} điểm, thu lại {{items}}; chuỗi ngày giữ nguyên và người chơi nhận lại được ngay.",
+      "noItems": "không có món nào",
       "confirm": "Xác nhận",
       "cancel": "Hủy",
       "close": "Đóng",
@@ -226,6 +267,7 @@
       "amount": "Số điểm",
       "reason": "Lý do",
       "cli": "Máy chủ (CLI)",
+      "month": "Tháng {{month}}",
       "filterPlayer": "Lọc theo người",
       "filterRoom": "Lọc theo phòng",
       "filter": "Lọc",
@@ -242,7 +284,11 @@
         "kick": "Mời ra",
         "close_room": "Đóng phòng",
         "promote": "Trao quyền",
-        "demote": "Thu quyền"
+        "demote": "Thu quyền",
+        "unlock_achievement": "Mở thành tựu",
+        "reset_checkin": "Đặt lại điểm danh",
+        "set_gift_month": "Đổi quà tháng",
+        "clear_gift_month": "Về quà mặc định"
       }
     },
     "done": {
@@ -251,6 +297,10 @@
       "lock": "Đã khóa tài khoản",
       "unlock": "Đã mở khóa",
       "role": "Đã đổi vai trò",
+      "unlockAchievement": "Đã mở thành tựu và trả thưởng.",
+      "resetCheckin": "Đã mở lại lượt điểm danh hôm nay.",
+      "setGiftMonth": "Đã lưu quà tháng.",
+      "clearGiftMonth": "Đã về quà mặc định.",
       "kick": "Đã mời ra ({{when}})",
       "kickNow": "ngay",
       "kickAfterHand": "sau ván này",
@@ -270,14 +320,25 @@
       "GAME_IN_PROGRESS": "Đang trong ván",
       "SELF_TARGET": "Không tự làm việc này với chính mình được",
       "TARGET_IS_GM": "Người này là quản trị viên, thu quyền trước",
-      "TARGET_IS_LOCKED": "Tài khoản đang bị khóa, mở khóa trước"
+      "TARGET_IS_LOCKED": "Tài khoản đang bị khóa, mở khóa trước",
+      "INVALID_ACHIEVEMENT": "Thành tựu không tồn tại.",
+      "ALREADY_UNLOCKED": "Người chơi đã mở thành tựu này.",
+      "NOT_CLAIMED_TODAY": "Hôm nay người chơi chưa điểm danh.",
+      "TIER_LOCKED": "Ngày đó đã qua trong tháng này.",
+      "MONTH_IN_PAST": "Tháng đã qua.",
+      "INVALID_GIFTS": "Lịch quà không hợp lệ: {{message}}",
+      "NOTHING_TO_CLEAR": "Tháng này chưa có bản sửa.",
+      "INVALID_MONTH": "Tháng không hợp lệ."
     },
     "notice": {
       "points": "{{amount}} điểm — {{reason}}",
       "item": "{{item}} — {{reason}}",
       "promote": "Bạn đã được trao quyền quản trị — {{reason}}",
       "demote": "Quyền quản trị của bạn đã được thu — {{reason}}",
-      "wardrobe": "Bạn được cấp toàn bộ tủ đồ — {{reason}}"
+      "wardrobe": "Bạn được cấp toàn bộ tủ đồ — {{reason}}",
+      "unlock_achievement": "GM đã mở thành tựu \"{{name}}\" cho bạn.",
+      "reset_checkin": "Lượt điểm danh hôm nay đã được mở lại: trừ lại {{amount}} điểm — {{reason}}",
+      "reset_checkin_plain": "Lượt điểm danh hôm nay đã được mở lại — {{reason}}"
     }
   },
   "screens": {
@@ -364,6 +425,8 @@
       "achievement": "Thưởng thành tựu",
       "gm_grant": "Quản trị viên cộng điểm",
       "gm_adjust": "Quản trị viên trừ điểm",
+      "gm_achievement": "GM mở thành tựu",
+      "gm_checkin_undo": "GM hoàn tác điểm danh",
       "other": "Khác"
     }
   },

@@ -366,6 +366,8 @@ describe('createApi — the GM routes', () => {
     ['gmLock', ['p1', 'gian lận'], '/api/gm/players/p1/lock', { reason: 'gian lận' }],
     ['gmUnlock', ['p1', 'nhầm'], '/api/gm/players/p1/unlock', { reason: 'nhầm' }],
     ['gmSetRole', ['p1', 'gm', 'tin cậy'], '/api/gm/players/p1/role', { role: 'gm', reason: 'tin cậy' }],
+    ['gmUnlockAchievement', ['p1', 'login_days_7', 'thiếu thưởng'], '/api/gm/players/p1/achievements/login_days_7/unlock', { reason: 'thiếu thưởng' }],
+    ['gmResetCheckin', ['p1', 'bấm nhầm'], '/api/gm/players/p1/checkin/reset', { reason: 'bấm nhầm' }],
     ['gmKick', ['r1', 'p2', 'ồn ào'], '/api/gm/rooms/r1/kick', { playerId: 'p2', reason: 'ồn ào' }],
     ['gmCloseRoom', ['r1', 'bảo trì'], '/api/gm/rooms/r1/close', { reason: 'bảo trì' }],
   ])('%s POSTs %s with the CSRF header', async (method, args, path, expected) => {
@@ -380,9 +382,11 @@ describe('createApi — the GM routes', () => {
 
   it.each([
     ['gmOverview', [], '/api/gm/overview'],
+    ['gmDailyStats', [30], '/api/gm/stats/daily?days=30'],
     ['gmPlayer', ['p 1'], '/api/gm/players/p%201'],
     ['gmPlayerLedger', ['p1', { limit: 50, before: 41 }], '/api/gm/players/p1/ledger?limit=50&before=41'],
     ['gmPlayerHistory', ['p1', 20], '/api/gm/players/p1/history?limit=20'],
+    ['gmCheckin', ['p 1'], '/api/gm/players/p%201/checkin'],
     ['gmRooms', [], '/api/gm/rooms'],
     ['gmRoom', ['r1'], '/api/gm/rooms/r1'],
   ])('%s GETs %s with no CSRF header', async (method, args, path) => {

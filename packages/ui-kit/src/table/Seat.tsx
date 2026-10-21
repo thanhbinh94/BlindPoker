@@ -227,6 +227,9 @@ export function Seat({
       style={style}
       data-seat={seat.seat}
       data-half={position !== null && position.y < 50 ? 'top' : 'bottom'}
+      // The ring's flanks: a line under the plate wider than the seat runs onto the felt from there instead of
+      // centring past the stage's edge (the landscape ring, Plan 26 B3).
+      data-edge={position === null ? undefined : position.x < 15 ? 'left' : position.x > 85 ? 'right' : undefined}
       // `RoomScreen` measures the viewer's own seat and its plate to stop the result card above them (review round 2,
       // R2-3). These two markers are that contract; the CSS modules' class names are hashed and are not.
       data-me={isMe ? 'true' : undefined}
@@ -261,22 +264,23 @@ export function Seat({
               />
             ),
           )}
+          {/* The pill keeps its place for the whole hand and shows while a card is still to turn. It lies over the foot of the
+              cards, centred, and takes no row of its own (Plan 26, B6): a row cost a squeeze table's stage 11 px on a 375 px
+              phone, where the seat is the tallest thing in the felt. Hidden, it stays in the box, so nothing about the cards
+              moves as the last one opens. */}
+          {peeling ? (
+            <button
+              ref={pillRef}
+              type="button"
+              className={cx(s.revealBtn, !toTurn && s.revealBtnIdle)}
+              disabled={!toTurn}
+              aria-hidden={toTurn ? undefined : true}
+              onClick={() => setPressedIn(handId)}
+            >
+              {t('actions.revealCards')}
+            </button>
+          ) : null}
         </div>
-      ) : null}
-      {/* The pill keeps its place for the whole hand and shows while a card is still to turn: taken out, it would move
-          the seat's block — and the cards opening in it — by half its height on the ring, where a seat is centred on its
-          point, and by all of it on the phone. */}
-      {peeling ? (
-        <button
-          ref={pillRef}
-          type="button"
-          className={cx(s.revealBtn, !toTurn && s.revealBtnIdle)}
-          disabled={!toTurn}
-          aria-hidden={toTurn ? undefined : true}
-          onClick={() => setPressedIn(handId)}
-        >
-          {t('actions.revealCards')}
-        </button>
       ) : null}
 
       <div className={s.plate} data-plate="">

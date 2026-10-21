@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext, type Locator, type Page } from '@playwright/test'
+import sharp from 'sharp'
 import { expectNoTextOverlap } from './overlap.js'
 import {
   account,
@@ -14,6 +15,7 @@ import {
   expectPageFits,
   expectRoomFits,
   expectScrimLeavesNoEdge,
+  LANDSCAPE_SCREEN,
   LAPTOP_SCREEN,
   lobbyAvatar,
   OVERLAP_SCREENS,
@@ -224,6 +226,75 @@ async function expectRailFits(page: Page): Promise<void> {
   await expectNoSidewaysScroll(page)
 }
 
+/** The sign-in hero's lead (`auth.heroLead`), shown beside the card from 1024 px up. */
+const HERO_LEAD = 'Poker điểm thưởng, chơi với bạn bè. Một tài khoản, mọi thiết bị: điểm, tủ đồ và thành tựu đi theo bạn.'
+
+/** WCAG 2.x relative luminance of an sRGB colour, channels 0–255. */
+function luminance(r: number, g: number, b: number): number {
+  const lin = (c: number): number => {
+    const s = c / 255
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+  }
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+}
+
+/** The hero picture has arrived and decoded: a broken or blocked file (a CSP refusal, a 404) has no natural width. */
+async function expectHeroLoaded(page: Page): Promise<void> {
+  const hero = page.locator('img[src*="/login/hero"]')
+  await expect
+    .poll(() => hero.evaluate((img: HTMLImageElement) => (img.complete ? img.naturalWidth : 0)), { message: 'the sign-in hero picture loads' })
+    .toBeGreaterThan(0)
+}
+
+/**
+ * Spec R10 / Review Focus 5 — the hero's lead reads on the picture at 1024×700 in the light theme (the hero keeps its
+ * night surface in either theme, so the light page is the case where a slip would show). The text is hidden, the lead's
+ * own box is photographed, and every pixel under it is held to 4.5:1 against the lead's computed colour — the lightest
+ * one is the worst case for light ink. The text shadow goes with the text, so the picture and its shade carry it alone.
+ * The page's viewport and theme come back afterwards.
+ */
+async function expectHeroLeadContrast(page: Page): Promise<number> {
+  const original = page.viewportSize()
+  const theme = await page.evaluate(() => document.documentElement.dataset.theme ?? null)
+  try {
+    await page.setViewportSize({ width: 1024, height: 700 })
+    await page.evaluate(() => {
+      document.documentElement.dataset.theme = 'light'
+    })
+    await expectHeroLoaded(page)
+    // One `h1` at a time (R10): from 1024 px up it is the hero's, and the card's own is out of the way.
+    await expect(page.getByRole('heading', { level: 1, name: 'Blind Luck Poker' })).toHaveCount(1)
+    const lead = page.getByText(HERO_LEAD, { exact: true })
+    await expect(lead).toBeVisible()
+    const ink = await lead.evaluate((el) => getComputedStyle(el).color)
+    const [r, g, b] = (ink.match(/\d+(\.\d+)?/g) ?? []).map(Number)
+    const box = (await lead.boundingBox())!
+    await lead.evaluate((el) => {
+      ;(el.parentElement as HTMLElement).style.visibility = 'hidden'
+    })
+    const png = await page.screenshot({ clip: box, animations: 'disabled' })
+    await lead.evaluate((el) => {
+      ;(el.parentElement as HTMLElement).style.visibility = ''
+    })
+    const { data, info } = await sharp(png).removeAlpha().raw().toBuffer({ resolveWithObject: true })
+    let lightest = 0
+    for (let i = 0; i < info.width * info.height * info.channels; i += info.channels) {
+      lightest = Math.max(lightest, luminance(data[i]!, data[i + 1]!, data[i + 2]!))
+    }
+    const text = luminance(r!, g!, b!)
+    const ratio = (Math.max(text, lightest) + 0.05) / (Math.min(text, lightest) + 0.05)
+    expect(text, `the hero lead (${ink}) is light ink on the night picture`).toBeGreaterThan(lightest)
+    expect(ratio, `the hero lead (${ink}) against the lightest pixel under it: ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5)
+    return ratio
+  } finally {
+    await page.evaluate((value) => {
+      if (value === null) delete document.documentElement.dataset.theme
+      else document.documentElement.dataset.theme = value
+    }, theme)
+    if (original !== null) await page.setViewportSize(original)
+  }
+}
+
 /**
  * Register on a fresh page, capturing the sign-in card and the lobby on the way. The card is held to the text-overlap
  * rule (No11b) on both its tabs at `authViewports` — the page's own when omitted — before the account exists.
@@ -244,6 +315,14 @@ async function tourStart(context: BrowserContext, who: Account, suffix: string, 
   }
   await expectNoTextOverlapAt(page, 'sign-in card, create an account', authViewports)
   await shot(page, `auth-${suffix}`)
+  // Layout A (Plan 26, C2): the hero picture arrives, the narrowest phone never scrolls sideways under its band, and
+  // the hero's lead reads on the picture on a light page.
+  await expectHeroLoaded(page)
+  const own = page.viewportSize()
+  await page.setViewportSize({ width: 320, height: 812 })
+  await expectNoSidewaysScroll(page)
+  if (own !== null) await page.setViewportSize(own)
+  await expectHeroLeadContrast(page)
   await page.getByRole('navigation', { name: 'Blind Luck Poker' }).getByRole('link', { name: 'Đăng nhập' }).click()
   await expect(page.getByRole('button', { name: 'Vào sảnh' })).toBeVisible()
   await expectNoTextOverlapAt(page, 'sign-in card, sign in', authViewports)
@@ -392,11 +471,15 @@ test.describe('Blind Luck Poker Normal', () => {
     await page.getByRole('button', { name: 'Sẵn sàng', exact: true }).click()
     await expect(page.getByText('6/6 sẵn sàng')).toBeVisible()
     await expectRoomFits(page, 'taking seats')
+    // Plan 26 (B8): and on a phone held sideways, the room's landscape frame (the ops pack's `landscape` project plays it
+    // by touch; here the same three states are only measured, at 915 × 412, and the desktop comes back after each).
+    await expectRoomFits(page, 'landscape, taking seats', [LANDSCAPE_SCREEN])
     await expectNoTextOverlapAt(page, 'room, taking seats', OVERLAP_SCREENS)
 
     await page.getByRole('button', { name: 'Bắt đầu', exact: true }).click()
     await expect(page.getByRole('button', { name: /^Chơi\b/ })).toBeVisible()
     await expectRoomFits(page, 'in hand, the tray up')
+    await expectRoomFits(page, 'landscape, in hand, the tray up', [LANDSCAPE_SCREEN])
     await expectMySeatLines(page, who.displayName, 'in hand')
     // Review round 2, R2-3: the viewer's own name is whole on its plate at every size.
     await expectMyNameWhole(page, who.displayName, 'in hand')
@@ -410,6 +493,7 @@ test.describe('Blind Luck Poker Normal', () => {
     await expect(page.getByRole('button', { name: 'Bắt đầu', exact: true }), 'bots alone deal no hand: the room is taking seats').toBeVisible({ timeout: 15_000 })
     await expect(card, 'the card stays on the felt').toBeVisible()
     await expectRoomFits(page, 'the result card')
+    await expectRoomFits(page, 'landscape, the result card', [LANDSCAPE_SCREEN])
     await expectMySeatLines(page, who.displayName, 'the result card')
     // R2-3: and the held card stops above that seat on every desktop size, still tall enough to read.
     await expectMyNameWhole(page, who.displayName, 'the result card')

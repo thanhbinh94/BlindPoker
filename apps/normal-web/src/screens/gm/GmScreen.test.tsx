@@ -27,6 +27,7 @@ type Stub = NormalApi & Record<string, ReturnType<typeof vi.fn>>
 function stubApi(overrides: Partial<Record<keyof NormalApi, unknown>> = {}): Stub {
   return {
     gmOverview: vi.fn().mockResolvedValue(OVERVIEW),
+    gmDailyStats: vi.fn().mockResolvedValue([]),
     gmSearch: vi.fn().mockResolvedValue({ players: [], nextBefore: null }),
     gmRooms: vi.fn().mockResolvedValue({ rooms: [] }),
     gmActions: vi.fn().mockResolvedValue({ actions: [], nextBefore: null }),
@@ -41,13 +42,20 @@ function setup(api: Stub = stubApi()) {
 }
 
 describe('GmScreen', () => {
-  it('has the four tabs, on the overview first', async () => {
+  it('has the five tabs, in order, on the overview first', async () => {
     setup()
 
     expect(screen.getByRole('heading', { name: viNormal.gm.title, level: 1 })).toBeInTheDocument()
     for (const name of Object.values(viNormal.gm.tabs)) {
       expect(screen.getByRole('button', { name })).toBeInTheDocument()
     }
+    expect(screen.getAllByRole('button').slice(0, 5).map((tab) => tab.textContent)).toEqual([
+      viNormal.gm.tabs.overview,
+      viNormal.gm.tabs.players,
+      viNormal.gm.tabs.rooms,
+      viNormal.gm.tabs.gifts,
+      viNormal.gm.tabs.actions,
+    ])
     expect(screen.getByRole('button', { name: viNormal.gm.tabs.overview })).toHaveAttribute('aria-pressed', 'true')
     expect(await screen.findByText('41')).toBeInTheDocument()
   })
@@ -118,10 +126,12 @@ function playerApi(overrides: Partial<Record<keyof NormalApi, unknown>> = {}): S
     gmSearch: vi.fn().mockResolvedValue({ players: [BINH], nextBefore: null }),
     gmPlayer: vi.fn().mockResolvedValue({
       playerId: 'p1', displayName: 'Bình', email: 'binh@example.com', role: 'player', locked: null, balance: 5, createdAt: 1, lastLoginAt: null,
-      stats: {}, room: null, inventoryCount: 0,
+      stats: {}, room: null, inventoryCount: 0, unlockedAchievementIds: [],
     }),
     gmPlayerLedger: vi.fn().mockResolvedValue({ entries: [], nextBefore: null }),
     gmPlayerHistory: vi.fn().mockResolvedValue([]),
+    gmCheckin: vi.fn().mockResolvedValue({ claimedToday: false, day: 0, streak: 0, points: 0, itemIds: [] }),
+    catalogAchievements: vi.fn().mockResolvedValue({ achievements: [] }),
     ...overrides,
   })
 }

@@ -62,6 +62,20 @@ export interface LedgerReader {
   list(playerId: string, opts?: LedgerListOptions): Promise<LedgerRow[]>
   /** Grouped by `reason`, which is also where sinks land: a sink's reason *is* its kind. */
   sums(sinceMs: number): Promise<LedgerSum[]>
+  /**
+   * The same flow cut by economy day: one row per day, reason and side (`playerless` is a sink row, `player_id IS NULL`),
+   * ascending. A day is the calendar day in `timeZone` — the one a check-in is judged on — not the UTC one.
+   * Days without rows are absent; the caller fills them.
+   */
+  sumsByDay(sinceMs: number, timeZone: string): Promise<DayReasonRow[]>
+}
+
+export interface DayReasonRow {
+  /** `YYYY-MM-DD` in the zone asked for. */
+  day: string
+  reason: string
+  playerless: boolean
+  total: number
 }
 
 export interface NormalBalanceRepository extends BalanceRepository {
@@ -248,6 +262,24 @@ export function createLedgerReader(db: AppDb): LedgerReader {
       // `sum()` is `numeric`, which `pg` hands back as a string to protect precision it does not know
       // is unnecessary here — the economy's totals are integers well inside `Number.MAX_SAFE_INTEGER`.
       return rows.map((r) => ({ reason: r.reason, total: Number(r.total) }))
+    },
+
+    async sumsByDay(sinceMs, timeZone) {
+      // Raw SQL, not the builder: the builder binds the zone once in the select and once in the `groupBy`, and
+      // Postgres will not accept two parameters as the same expression. `group by 1, 2, 3` names the select list instead.
+      const rows = rowsOf<{ day: string; reason: string; playerless: boolean; total: string | number }>(
+        await db.execute(sql`
+          select (created_at at time zone ${timeZone})::date::text as day,
+                 reason,
+                 (player_id is null) as playerless,
+                 sum(amount)::bigint as total
+          from ${pointTransactions}
+          where created_at >= ${new Date(sinceMs)}
+          group by 1, 2, 3
+          order by 1, 2, 3`),
+      )
+      // `bigint` comes back from `pg` as a string, as `sum()` does above.
+      return rows.map((r) => ({ day: r.day, reason: r.reason, playerless: r.playerless, total: Number(r.total) }))
     },
   }
 }

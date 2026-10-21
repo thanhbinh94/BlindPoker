@@ -8,8 +8,10 @@ export interface BadgeProps {
   /** `gold` = money/turn, `red` = danger/host, `teal` = calm state, `muted` = idle. */
   tone: BadgeTone
   children: ReactNode
+  /** An extra class for a place the badge is laid out in (the room header's squeeze badge). */
+  className?: string
 }
 
-export function Badge({ tone, children }: BadgeProps) {
-  return <span className={cx(s.badge, s[tone])}>{children}</span>
+export function Badge({ tone, children, className }: BadgeProps) {
+  return <span className={cx(s.badge, s[tone], className)}>{children}</span>
 }

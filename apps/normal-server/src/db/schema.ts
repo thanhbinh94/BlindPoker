@@ -109,6 +109,8 @@ export const pointTransactions = pgTable('point_transactions', {
   index('point_transactions_reason_created_idx').on(t.reason, t.createdAt),
   // "Did this hand's settlement already land?" — reconciliation reads the ledger by reference.
   index('point_transactions_ref_idx').on(t.refId),
+  // The GM's per-day source/sink table (Plan 26) scans a time window without a player or a reason.
+  index('point_transactions_created_at_idx').on(t.createdAt),
 ])
 
 /**
@@ -125,7 +127,7 @@ export const ledgerKeys = pgTable('ledger_keys', {
 })
 
 /** Everything a GM did (Plan 25). Append-only: no API updates or deletes a row. `actorUserId` null = the server CLI. */
-export const GM_ACTION_KINDS = ['grant_points', 'adjust_points', 'grant_item', 'grant_wardrobe', 'lock', 'unlock', 'kick', 'close_room', 'promote', 'demote'] as const
+export const GM_ACTION_KINDS = ['grant_points', 'adjust_points', 'grant_item', 'grant_wardrobe', 'lock', 'unlock', 'kick', 'close_room', 'promote', 'demote', 'unlock_achievement', 'reset_checkin', 'set_gift_month', 'clear_gift_month'] as const
 export type GmActionKind = (typeof GM_ACTION_KINDS)[number]
 
 export const gmActions = pgTable('gm_actions', {
@@ -210,10 +212,23 @@ export const inventory = pgTable('inventory', {
   playerId: uuid('player_id').notNull().references(() => players.id, { onDelete: 'cascade' }),
   itemId: text('item_id').notNull().references(() => items.id, { onDelete: 'cascade' }),
   source: text('source').notNull(),
+  /** Which claim the item came from (`daily:<playerId>:<date>`), so a GM can take back exactly that claim (Plan 26). Null for older rows. */
+  ref: text('ref'),
   acquiredAt: timestamp('acquired_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   primaryKey({ columns: [t.playerId, t.itemId] }),
 ])
+
+/**
+ * A GM's override of one month of the daily-gift calendar (Plan 26). `month` is `YYYY-MM`; `days` is the same
+ * `{ "<day>": rule }` object `daily-gifts.json` holds for a month. A month with no row here falls back to the file.
+ */
+export const giftMonths = pgTable('gift_months', {
+  month: text('month').primaryKey(),
+  days: jsonb('days').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+})
 
 /** Achievement progress. `unlocked_at` is null while the achievement is still in progress. */
 export const playerAchievements = pgTable('player_achievements', {

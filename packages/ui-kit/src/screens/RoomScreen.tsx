@@ -6,10 +6,12 @@ import type { GameClientApi } from '../client/useGameClient.js'
 import { formatPoints, type Language } from '../i18n/index.js'
 import { Button } from '../primitives/Button.js'
 import { Field } from '../primitives/Field.js'
+import { MenuButton, type MenuItem } from '../primitives/MenuButton.js'
 import { Modal } from '../primitives/Modal.js'
 import { cx } from '../primitives/cx.js'
 import { ActionBar } from '../table/ActionBar.js'
 import { HandResult } from '../table/HandResult.js'
+import { useRoomFrame, type RoomFrame } from '../table/frame.js'
 import { PokerTable, type TableLayout } from '../table/PokerTable.js'
 import { RoomHeader } from '../table/RoomHeader.js'
 import { useRevealHold } from './reveal-hold.js'
@@ -32,6 +34,8 @@ export interface RoomScreenProps {
   header?: ReactNode
   /** Forces the table layout; by default the table picks ring or stack from the viewport. */
   layout?: TableLayout
+  /** Forces the room's frame; by default a phone held sideways gets `landscape` and everything else `desktop`. */
+  frame?: RoomFrame
 }
 
 const MIN_TO_START = 2
@@ -56,13 +60,34 @@ function useCountdown(target: number | null, now: () => number): number | null {
   return Math.max(0, Math.ceil((target - now()) / 1000))
 }
 
+/** Whether the page is full screen right now, kept in step with the browser (Esc, a swipe, our own menu item). */
+function useFullscreenActive(): boolean {
+  const [active, setActive] = useState(() => typeof document !== 'undefined' && document.fullscreenElement != null)
+  useEffect(() => {
+    const sync = (): void => setActive(document.fullscreenElement != null)
+    document.addEventListener('fullscreenchange', sync)
+    return () => document.removeEventListener('fullscreenchange', sync)
+  }, [])
+  return active
+}
+
+/** In or out of full screen. A refusal (no user gesture, a policy, an old browser) leaves the page as it was. */
+function toggleFullscreen(): void {
+  try {
+    const pending = document.fullscreenElement != null ? document.exitFullscreen() : document.documentElement.requestFullscreen()
+    void Promise.resolve(pending).catch(() => undefined)
+  } catch {
+    // a browser without the promise form throws instead; staying windowed is the answer either way
+  }
+}
+
 /**
  * The room: header, table, your seat's controls and the action tray.
  *
  * Everything shown is derived from `client.state`; every button is one `GameClientApi` call. The screen decides
  * nothing about the game — not whose turn it is, not what a legal bet is, not who may start.
  */
-export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header, layout }: RoomScreenProps) {
+export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header, layout, frame: frameOverride }: RoomScreenProps) {
   const { t } = useTranslation()
   const { state } = client
   const room = state.room
@@ -125,6 +150,9 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
   // a hook — and worked out from `resultCard` itself, so what is measured for and what is drawn cannot disagree.
   const stageRef = useRef<HTMLElement>(null)
   const clearance = useSeatClearance(stageRef, resultCard !== null, me?.seat ?? null)
+  // Also a hook, so also above the early return: the frame is what every landscape rule of the room keys on.
+  const frame = useRoomFrame(frameOverride)
+  const fullscreen = useFullscreenActive()
 
   if (room === null) return null
 
@@ -217,11 +245,75 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
   // Padding, not `bottom`: the overlay keeps the stage's box, and its scrim paints the padded content box alone — the
   // card's stage — so the scrim's centre rises with the card and the seat below it is not darkened.
   const overlayStyle = clearance === null ? undefined : ({ '--seat-clearance': `${clearance}px` } as CSSProperties)
+  // While the result card is up the countdown lives on it; here it covers the gap once it is dismissed. While the card
+  // is held it is on its way: printed here for the hold, the line would jump onto the card a moment later and shift the
+  // buttons after it.
+  const countdownHere = !waiting && resultCard === null && !held && nextHandText !== null
+
+  // The pieces both frames draw — under the felt on a desktop, in the corner dock on a phone held sideways.
+  const readyButton =
+    mySeated && waiting ? (
+      <Button
+        variant={me.ready ? 'ghost' : 'primary'}
+        disabled={request.busy}
+        aria-pressed={me.ready}
+        onClick={() => void request.run(() => client.setReady(!me.ready))}
+      >
+        {t(me.ready ? 'actions.notReady' : 'actions.ready')}
+      </Button>
+    ) : null
+  const readyLine = waiting ? <span className={s.readyCount}>{t('room.readyCount', { ready: readyCount, total: seated.length })}</span> : null
+  const countdownLine = countdownHere ? <p className={s.countdown}>{nextHandText}</p> : null
+  const startButton =
+    waiting && isHost ? (
+      <Button variant="gold" disabled={request.busy || !canStart} onClick={() => void request.run(() => client.startGame())}>
+        {t('actions.start')}
+      </Button>
+    ) : null
+  const hintLine = hint === null ? null : <span className={s.hint}>{hint}</span>
+  const standUp = (): void => void request.run(() => client.standUp())
+  const toggleSitOut = (): void => void request.run(() => (sittingOut ? client.sitIn() : client.sitOut()))
+  const openManage = (): void => setManagingAfter(manageKey)
+
+  /**
+   * A phone on its side (Plan 26, B2) has no height for a row of buttons under the felt. The seat's own controls go
+   * into the header's "More" menu — each only when the desktop row would show it — and what starts a hand into a dock
+   * in the bottom-right corner, the one the action tray takes during a hand. The two never share it: while the dock is
+   * up (the room is waiting, or the countdown runs with the result card closed) no hand is being played, and the tray's
+   * right part, which would only say the hand is over, waits for the next deal (`betweenHands`). Its left part — the
+   * toggles, "Tự động chơi" among them — stays, so auto-play can be turned off during the countdown (B4).
+   */
+  const landscape = frame === 'landscape'
+  const dockShown = landscape && (waiting || countdownHere)
+  const menuItems: MenuItem[] = []
+  if (landscape) {
+    if (mySeated) menuItems.push({ id: 'standUp', label: t('actions.standUp'), disabled: request.busy, onSelect: standUp })
+    menuItems.push({
+      id: 'sitOut',
+      label: t(sittingOut ? 'room.sitIn' : 'room.sitOut'),
+      checked: sittingOut,
+      disabled: request.busy || !mySeated,
+      onSelect: toggleSitOut,
+    })
+    if (canManage) menuItems.push({ id: 'manage', label: t('room.manage'), onSelect: openManage })
+    // R3: only where the browser offers it (iOS Safari on a phone does not).
+    if (typeof document !== 'undefined' && document.fullscreenEnabled === true) {
+      menuItems.push({ id: 'fullscreen', label: t(fullscreen ? 'room.exitFullscreen' : 'room.fullscreen'), onSelect: toggleFullscreen })
+    }
+  }
+  const leave = (): void => void request.run(() => client.leaveRoom())
 
   return (
-    <div className={s.room}>
+    <div className={s.room} data-frame={frame}>
       {header}
-      <RoomHeader room={room} status={state.status} onLeave={() => void request.run(() => client.leaveRoom())} lang={lang} />
+      <RoomHeader
+        room={room}
+        status={state.status}
+        onLeave={leave}
+        lang={lang}
+        compact={landscape}
+        menu={landscape ? <MenuButton label={t('room.more')} items={menuItems} /> : undefined}
+      />
 
       {state.status === 'open' ? null : (
         <p className={s.banner} role="status">
@@ -242,18 +334,20 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
           canSit={canSit}
           onSeatClick={onSeatClick}
           layout={layout}
+          frame={frame}
           chibiFor={chibiFor}
           expressionFor={expressionFor}
           captionFor={captionFor}
           resultPending={held}
           onReveal={reveal}
+          note={landscape && waiting ? hint : null}
         />
 
         {/* The result card is dealt onto the felt, so it keeps the felt's night palette in either theme. The countdown
             to the next deal is the card's own footer line: printed under the card, it landed on the viewer's seat
             (review 2026-09-29, No2). Its stage stops above the viewer's own seat when that leaves it room (R2-3). */}
         {resultCard === null ? null : (
-          <div className={s.overlay} data-surface="night" style={overlayStyle}>
+          <div className={s.overlay} data-surface="night" data-frame={frame} style={overlayStyle}>
             <HandResult
               hand={resultCard}
               room={room}
@@ -261,62 +355,49 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
               lang={lang}
               onDismiss={() => setDismissedHandId(resultCard.handId)}
               countdown={nextHandText}
+              frame={frame}
             />
           </div>
         )}
       </main>
 
       <footer className={s.roomFoot}>
-        <div className={s.controls} role="group" aria-label={t('room.controls')}>
-          {mySeated && waiting ? (
-            <Button
-              variant={me.ready ? 'ghost' : 'primary'}
-              disabled={request.busy}
-              aria-pressed={me.ready}
-              onClick={() => void request.run(() => client.setReady(!me.ready))}
-            >
-              {t(me.ready ? 'actions.notReady' : 'actions.ready')}
+        {landscape ? (
+          dockShown ? (
+            <div className={s.dock} role="group" aria-label={t('room.controls')} data-surface="night">
+              {readyButton}
+              {startButton}
+              {readyLine}
+              {countdownLine}
+            </div>
+          ) : null
+        ) : (
+          <div className={s.controls} role="group" aria-label={t('room.controls')}>
+            {readyButton}
+            {mySeated ? (
+              <Button variant="ghost" disabled={request.busy} onClick={standUp}>
+                {t('actions.standUp')}
+              </Button>
+            ) : null}
+            {/* Keep the seat, skip the hands. It stays put (disabled) while standing so the tray does not
+                reshuffle under the player the moment they take a seat. */}
+            <Button variant="ghost" disabled={request.busy || !mySeated} aria-pressed={mySeated ? sittingOut : undefined} onClick={toggleSitOut}>
+              {t(sittingOut ? 'room.sitIn' : 'room.sitOut')}
             </Button>
-          ) : null}
-          {mySeated ? (
-            <Button variant="ghost" disabled={request.busy} onClick={() => void request.run(() => client.standUp())}>
-              {t('actions.standUp')}
-            </Button>
-          ) : null}
-          {/* Keep the seat, skip the hands. It stays put (disabled) while standing so the tray does not
-              reshuffle under the player the moment they take a seat. */}
-          <Button
-            variant="ghost"
-            disabled={request.busy || !mySeated}
-            aria-pressed={mySeated ? sittingOut : undefined}
-            onClick={() => void request.run(() => (sittingOut ? client.sitIn() : client.sitOut()))}
-          >
-            {t(sittingOut ? 'room.sitIn' : 'room.sitOut')}
-          </Button>
 
-          {waiting ? (
-            <span className={s.readyCount}>{t('room.readyCount', { ready: readyCount, total: seated.length })}</span>
-          ) : // While the result card is up the countdown lives on it; here it covers the gap once it is dismissed. While
-          // the card is held it is on its way: printed here for the hold, the line would jump onto the card a moment
-          // later and shift the buttons after it.
-          resultCard === null && !held && nextHandText !== null ? (
-            <p className={s.countdown}>{nextHandText}</p>
-          ) : null}
+            {readyLine ?? countdownLine}
 
-          {waiting && isHost ? (
-            <Button variant="gold" disabled={request.busy || !canStart} onClick={() => void request.run(() => client.startGame())}>
-              {t('actions.start')}
-            </Button>
-          ) : null}
-          {/* The roster used to sit open in the tray, a red "Kick" per player, taking a row a phone did not
-              have; it is one quiet button now, and the list opens on demand (layout audit C5). */}
-          {canManage ? (
-            <Button variant="ghost" onClick={() => setManagingAfter(manageKey)}>
-              {t('room.manage')}
-            </Button>
-          ) : null}
-          {hint === null ? null : <span className={s.hint}>{hint}</span>}
-        </div>
+            {startButton}
+            {/* The roster used to sit open in the tray, a red "Kick" per player, taking a row a phone did not
+                have; it is one quiet button now, and the list opens on demand (layout audit C5). */}
+            {canManage ? (
+              <Button variant="ghost" onClick={openManage}>
+                {t('room.manage')}
+              </Button>
+            ) : null}
+            {hintLine}
+          </div>
+        )}
 
         {/* The tray belongs to a seated player in a live hand — it holds its place between turns rather than
             appearing and disappearing under the felt. */}
@@ -331,6 +412,8 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
             onPreAction={client.setPreAction}
             autoPlay={state.autoPlay}
             onAutoPlay={client.setAutoPlay}
+            frame={frame}
+            betweenHands={dockShown}
           />
         )}
       </footer>

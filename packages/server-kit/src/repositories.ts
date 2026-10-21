@@ -27,6 +27,9 @@ export type TxReason =
   /** Plan 25: points a GM gave (`gm_grant`, positive) or took back (`gm_adjust`, negative). Sources, not sinks: a player row each. */
   | 'gm_grant'
   | 'gm_adjust'
+  /** Plan 26: points a GM paid for unlocking an achievement (positive), or took back when undoing a check-in (`gm_checkin_undo`, negative). Both sources, signed, a player row each. */
+  | 'gm_achievement'
+  | 'gm_checkin_undo'
 
 export interface BalanceEntry {
   playerId: string

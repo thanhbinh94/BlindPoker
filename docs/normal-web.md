@@ -301,6 +301,53 @@ and be re-read as a 401 once per TTL.
 
 ---
 
+## The sign-in screen
+
+`screens/AuthScreen.tsx` (routes `#/login` and `#/register`, styles in `screens/normal.module.css`) seats the card beside
+a picture of a table of friends (spec 2026-10-20, Part C, layout A). The picture is decoration, not content.
+
+- **From 1024 px up** (the rail's own breakpoint) the stage is a two-column grid, `minmax(0, 62fr) minmax(26rem, 38fr)`.
+  The left column is `.authHero`, full height: the picture, a gradient shade that fades its right edge and foot into the
+  night ground, and at the foot the hero's `h1.heroTitle` ("Blind Luck Poker") and `p.heroLead` (`auth.heroLead`). The
+  card is centred in the right column with the language switch under it.
+- **Below 1024 px** it is one column: `.authHero` is a 300 px band at the top and the card overlaps its foot by 50 px
+  (`margin-top: -50px`). The hero's words are `display: none` there. What the band shows depends on the width:
+  - **At most 767 px (a phone):** the picture is zoomed to 160 % anchored at 34 % 28 % (the approved mockup's crop, spec C1),
+    so the band frames the three middle faces: the áo dài peeking at her card, the tuxedo, the friend between them.
+  - **768 to 1023 px (a tablet):** `object-fit: cover` at `34% 28%` shows the picture's whole width, cropped top and bottom.
+    The phone's zoom is off there because at 768 × 1024 it cut the crowned girl's face off the top (Ruling C2-4).
+  - **A landscape phone** (`(orientation: landscape) and (max-height: 500px) and (max-width: 1023px)`; a short window
+    1024 px or wider keeps the two columns): the band thins to a 72 px strip and the
+    card overlaps it by 24 px. The card's mark and lead are hidden and its title is smaller, so the whole form, button
+    included, fits at 915 × 412 and 844 × 390; the language switch sits below the fold there (Ruling C2-5).
+- **One heading (spec R10).** Exactly one `h1` is visible at a time, by CSS only: the hero's from 1024 px up, where the
+  card's own title and lead are hidden, and the card's below it. Both are in the DOM, so a unit test sees two and pins which
+  class is which.
+- **The picture** is `<img srcSet>` with two WebP sizes, `/login/hero-768.webp 768w` and `/login/hero-1536.webp 1536w`,
+  `alt=""`, `decoding="async"`. No `fetchPriority`: React-DOM 18.3 warned about the prop. No animation, so there is no
+  reduced-motion path to keep. The files are committed in `apps/normal-web/public/login/` (178 KB and 66 KB; budgets
+  250 KB and 90 KB) and built from the AI-generated source `assets/login-hero-src/2026-10-20-v2.png` (gitignored) by
+  `pnpm --filter @bp/normal-web login:hero` (`scripts/login-hero.mjs`, `sharp`, WebP quality 82, exits 1 over budget).
+  The prompt, the rubric and the log of generations are in `docs/login-hero-art.md`; the licence caveat is in
+  `docs/known-limitations.md`, with the avatar art's.
+- **Light theme.** The hero section carries `data-surface="night"`, so the picture, its shade and its text keep the night
+  palette in either theme, and `--bg` there is the night ground under the picture while it loads. The lead is light ink
+  on a dark picture whichever theme the page wears.
+- **Strings.** `auth.heroLead` in `src/locales/{vi,en}/normal.json`; the title is the existing `auth.title`.
+
+Tests that pin it:
+
+- `src/screens/AuthScreen.test.tsx` → `renders the hero picture with both sources and the hero lead`: the two `srcset`
+  entries, `alt=""`, the lead, and the two `h1`s with their classes (`heroTitle`, then `authTitle`).
+- `e2e/normal.spec.ts`, in `tourStart` (so in `một tài khoản chơi trọn một ván Blind với bot` and the other tours): the
+  hero image has decoded (`naturalWidth > 0`, which a CSP refusal or a 404 would fail); at 320 × 812 the page does not
+  scroll sideways under the band; at 1024 × 700 in the light theme the lead holds 4.5:1 against the lightest pixel under
+  it (measured by a screenshot of the lead's box with the text hidden, decoded with `sharp`; 5.36 when written); and
+  `expectNoTextOverlapAt` runs on both tabs, at 1920 × 940 and 1366 × 768 in the desktop tour
+  (`OVERLAP_SCREENS`) and at the tour's own viewport in the others (375 × 812 in the `@mobile` tour, project `mobile`).
+
+---
+
 ## The Daily screen
 
 `screens/DailyScreen.tsx` draws `GET /api/rewards/daily`: today's card and its claim, the receipt, and the month's 31
@@ -326,7 +373,7 @@ the lock.** A player who types `#/gm` is sent to the lobby before the chunk is r
 `window.location.replace` so Back is not trapped on a redirecting entry), and a GM demoted or locked since the page loaded
 finds out on the next call.
 
-- **Four tabs** — Tổng quan, Người chơi, Phòng, Nhật ký. The Players tab stays mounted (hidden) while one player's page is
+- **Five tabs** — Tổng quan, Người chơi, Phòng, Quà tháng, Nhật ký. The Players tab stays mounted (hidden) while one player's page is
   open, so Back returns to the same search, results and cursor with no request.
 - **The 403 proxy.** `useAsync` swallows the cause of a failure, so a tab cannot notice that the role is gone. `GmScreen`
   wraps the api in a `Proxy` that checks each call's rejection: a `403 FORBIDDEN` calls `onForbidden` once (a tab firing
@@ -348,8 +395,33 @@ finds out on the next call.
   (`gm.notice.promote`, `demote`, `wardrobe`); a lock or a kick keeps the GM's words alone. The kit's `Toasts` interpolates `reason`
   (`notify.GM_NOTICE`). A locked account is refused at sign-in with `ACCOUNT_LOCKED` and the reason
   (`auth.errors.ACCOUNT_LOCKED`).
+- **Two more actions on a player's page (Plan 26).** "Mở thành tựu" opens the `ReasonDialog` with a native `<select>`
+  labelled "Thành tựu" (`fields.achievement`: every definition by its Vietnamese name, the ones the player already has
+  disabled, from `GmPlayerDetailDto.unlockedAchievementIds`). "Đặt lại điểm danh" is enabled only once
+  `GET /api/gm/players/:id/checkin` says the player has claimed today; its dialog body is computed, not keyed: it names
+  the points (`formatPoints`) and the items the reset takes back (`gm.dialog.checkinBody`, `gm.dialog.noItems`). The
+  player's toast reads "GM đã mở thành tựu "…" cho bạn." / "Lượt điểm danh hôm nay đã được mở lại: trừ lại {{amount}}
+  điểm — {{reason}}" (`gm.notice.*`; the server's notice carries `amount`, and `gm.notice.reset_checkin_plain` covers a
+  payload without one). `App` counts the `reset_checkin` notices it sees (once per notification object, like the role
+  notices) and hands the count to `DailyScreen` as `checkinResets`; a change drops the receipt and reloads both panels,
+  so the "Nhận thưởng" button comes back without a reload (Ruling 11).
+- **The Quà tháng tab (`GiftsTab.tsx`).** A month `Select` (this month and 12 more, an edited month marked "(đã sửa)"),
+  the month on `DailyCalendar` with each editable day a button "Ngày N" (days up to today in the current month are
+  greyed: the server decides by its own zone with `TIER_LOCKED`, the tab by `Asia/Ho_Chi_Minh`), a `Segmented` for the day's
+  rule ("Như mặc định" / "Ngẫu nhiên thường" / "Ngẫu nhiên hiếm" / "Cố định"), and for a fixed day a list of items with
+  an item `Select` ("Chọn món" / "Thêm món"; it offers only items a gift may be: not default or free, a slot a claim can
+  revoke, not already named in the month). "Lưu" opens the `ReasonDialog`; "Về mặc định" appears for a month that has a
+  database row. The component keeps the month's edits in local state and is remounted when the saved month changes.
+- **`DailyCalendar` is shared.** The Daily screen and the Quà tháng tab draw the same component
+  (`screens/DailyCalendar.tsx`: `entries`, `month`, optional `day`/`claimable`, `onPick`, `lockedThrough`,
+  `showPoints`), so what a GM saves looks exactly as a player will see it.
+- **"Theo ngày" on the overview (`OverviewTab.tsx`, `ByDayPanel`).** A 7-day / 30-day `Segmented` over
+  `GET /api/gm/stats/daily`: a table with a row per economy day (Ngày, Nguồn, Bể, Ròng) whose last column draws the day's
+  sources (gold) and sinks (red) as bars on one scale, the largest single sum of the range; no chart library. At 375 px the
+  table scrolls inside its wrapper (`docs/known-limitations.md`).
 
-Tests: `screens/gm/*.test.tsx`, `notifications.test.ts`, and the ops pack's section Q (`e2e/ops/06-gm.spec.ts`).
+Tests: `screens/gm/*.test.tsx`, `screens/DailyCalendar.test.tsx`, `notifications.test.ts`, and the ops pack's section Q
+(`e2e/ops/06-gm.spec.ts`, Q-01 to Q-03).
 
 ---
 

@@ -15,7 +15,8 @@
     "avatar:ingest": "node scripts/avatar-pipeline.mjs ingest",
     "avatar:check": "node scripts/avatar-pipeline.mjs check",
     "avatar:sheet": "node scripts/avatar-pipeline.mjs sheet",
-    "avatar:registry": "node scripts/avatar-registry.mjs"
+    "avatar:registry": "node scripts/avatar-registry.mjs",
+    "login:hero": "node scripts/login-hero.mjs"
   },
   "dependencies": {
     "@bp/core": "workspace:*",

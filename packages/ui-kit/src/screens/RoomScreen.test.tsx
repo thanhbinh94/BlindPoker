@@ -495,6 +495,30 @@ describe('RoomScreen', () => {
     expect(screen.queryByRole('heading', { name: 'Winner' })).toBeNull()
   })
 
+  // Plan 26 (B5): both the overlay (it frees the dock row) and the card (it compacts) key their landscape rules on it.
+  it('stamps the frame on the result overlay too', () => {
+    const room = makeRoom({
+      players: [
+        makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'IN_HAND', stack: 19_800 }),
+        makePlayer({ playerId: 'me', displayName: 'Mai', seat: 2, status: 'IN_HAND', stack: 20_400 }),
+      ],
+    })
+    const hand = makeHand({
+      phase: 'COMPLETE',
+      mySeat: 2,
+      actingSeat: null,
+      result: { payouts: [{ seat: 2, amount: 600 }], pots: [], fee: 0, showdown: null, carryOverOut: 0, uncalledReturned: null, cancelled: false, reason: null },
+    })
+    render(
+      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+        <RoomScreen client={fakeClient(makeState({ room, hand }))} lang="en" onLeft={vi.fn()} frame="landscape" />
+      </I18nextProvider>,
+    )
+    const card = screen.getByRole('group', { name: 'Winner' })
+    expect(card).toHaveAttribute('data-frame', 'landscape')
+    expect(card.parentElement).toHaveAttribute('data-frame', 'landscape')
+  })
+
   // Review round 2, R2-3: on a short stage the result card covered the viewer's own seat. The overlay's foot now stops
   // above that seat when there is room for the card there — jsdom lays nothing out, so the boxes are pinned here.
   describe('the result card stops above the viewer’s own seat', () => {
@@ -939,5 +963,260 @@ describe('RoomScreen', () => {
 
     view.rerender(screenFor(fakeClient(makeState({ room: null, roomStale: false })), onLeft))
     expect(onLeft).toHaveBeenCalledTimes(1)
+  })
+
+  it('stamps the frame on the room root and forces the ring in the landscape frame', () => {
+    const client = fakeClient(makeState({ room: standingRoom }))
+    const { container } = render(
+      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+        <RoomScreen client={client} lang="en" onLeft={vi.fn()} frame="landscape" />
+      </I18nextProvider>,
+    )
+    const root = container.firstElementChild as HTMLElement
+    expect(root).toHaveAttribute('data-frame', 'landscape')
+    expect(container.querySelector('[data-seats]'), 'the ring section').not.toBeNull()
+    expect(screen.queryByRole('group', { name: 'Players' }), 'not the stack strip').toBeNull()
+  })
+
+  it('stamps the desktop frame when nothing says otherwise', () => {
+    const { view } = wrap(fakeClient(makeState({ room: standingRoom })))
+    expect(view.container.firstElementChild).toHaveAttribute('data-frame', 'desktop')
+  })
+
+  // Plan 26 (B2): a phone on its side has no height for a row of buttons under the felt. The seat's own controls go
+  // into a "Thêm" menu in the one-line header; what starts a hand sits in a dock in the bottom-right corner.
+  describe('the landscape frame', () => {
+    const landscape = (client: GameClientApi) =>
+      render(
+        <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+          <RoomScreen client={client} lang="vi" onLeft={vi.fn()} frame="landscape" />
+        </I18nextProvider>,
+      )
+
+    const setFullscreenEnabled = (value: boolean | undefined): void => {
+      if (value === undefined) Reflect.deleteProperty(document, 'fullscreenEnabled')
+      else Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, get: () => value })
+    }
+    afterEach(() => setFullscreenEnabled(undefined))
+
+    it('in the landscape frame the footer row is gone and Đứng dậy, Tạm nghỉ, Quản lý bàn live in the Thêm menu', async () => {
+      const client = fakeClient(makeState({ room: readyRoom }))
+      const { container } = landscape(client)
+
+      for (const group of screen.queryAllByRole('group', { name: 'Điều khiển bàn' })) {
+        expect(within(group).queryByRole('button', { name: 'Đứng dậy' })).toBeNull()
+        expect(within(group).queryByRole('button', { name: 'Tạm nghỉ' })).toBeNull()
+        expect(within(group).queryByRole('button', { name: 'Quản lý bàn' })).toBeNull()
+      }
+      expect(screen.queryByRole('button', { name: 'Đứng dậy' })).toBeNull()
+
+      const header = container.querySelector('header')!
+      expect(within(header).getByRole('button', { name: 'Rời phòng' })).toBeVisible()
+      expect(within(header).getByLabelText('Mã phòng')).toBeInTheDocument()
+
+      await userEvent.click(within(header).getByRole('button', { name: 'Thêm' }))
+      const menu = screen.getByRole('menu', { name: 'Thêm' })
+      const names = Array.from(menu.querySelectorAll('[role^="menuitem"]'), (item) => item.textContent)
+      expect(names).toEqual(['Đứng dậy', 'Tạm nghỉ', 'Quản lý bàn'])
+      expect(within(menu).getByRole('menuitemcheckbox', { name: 'Tạm nghỉ' })).toHaveAttribute('aria-checked', 'false')
+
+      await userEvent.click(within(menu).getByRole('menuitem', { name: 'Đứng dậy' }))
+      expect(client.standUp).toHaveBeenCalledTimes(1)
+
+      await userEvent.click(within(header).getByRole('button', { name: 'Thêm' }))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Quản lý bàn' }))
+      expect(within(screen.getByRole('dialog')).getAllByRole('button', { name: /^Mời ra/ })).toHaveLength(1)
+    })
+
+    it('keeps the reconnect banner as a status on the room root, where the landscape rule lays it over the felt', () => {
+      const { container } = landscape(fakeClient(makeState({ status: 'reconnecting', room: readyRoom })))
+      const banner = screen.getByText('Mất kết nối — đang kết nối lại…')
+      expect(banner).toHaveAttribute('role', 'status')
+      // A direct child of the positioned room root, so `position: absolute` anchors under its header, not in the stage.
+      expect(banner.parentElement).toBe(container.querySelector('[data-frame="landscape"]'))
+    })
+
+    it('offers Toàn màn hình only when document.fullscreenEnabled', async () => {
+      setFullscreenEnabled(false)
+      const off = landscape(fakeClient(makeState({ room: readyRoom })))
+      await userEvent.click(screen.getByRole('button', { name: 'Thêm' }))
+      expect(screen.queryByRole('menuitem', { name: 'Toàn màn hình' })).toBeNull()
+      off.unmount()
+
+      setFullscreenEnabled(true)
+      const requestFullscreen = vi.fn().mockResolvedValue(undefined)
+      document.documentElement.requestFullscreen = requestFullscreen
+      landscape(fakeClient(makeState({ room: readyRoom })))
+      await userEvent.click(screen.getByRole('button', { name: 'Thêm' }))
+      const items = Array.from(screen.getByRole('menu').querySelectorAll('[role^="menuitem"]'))
+      expect(items.at(-1)).toHaveTextContent('Toàn màn hình')
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Toàn màn hình' }))
+      expect(requestFullscreen).toHaveBeenCalledTimes(1)
+      Reflect.deleteProperty(document.documentElement, 'requestFullscreen')
+
+      // The browser goes full screen and says so: the item now offers the way back.
+      Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => document.documentElement })
+      act(() => {
+        document.dispatchEvent(new Event('fullscreenchange'))
+      })
+      await userEvent.click(screen.getByRole('button', { name: 'Thêm' }))
+      expect(screen.getByRole('menuitem', { name: 'Thoát toàn màn hình' })).toBeInTheDocument()
+      Reflect.deleteProperty(document, 'fullscreenElement')
+    })
+
+    it('shows Sẵn sàng and Bắt đầu in the dock while waiting, and the countdown between hands', () => {
+      // Seated, not ready yet, and the host: the dock offers Ready and a Start that waits for a second ready seat.
+      const notReady = makeRoom({
+        ...readyRoom,
+        players: readyRoom.players.map((p) => (p.playerId === 'me' ? { ...p, ready: false, status: 'SEATED' as const } : p)),
+      })
+      const view = landscape(fakeClient(makeState({ room: notReady })))
+      const dock = screen.getByRole('group', { name: 'Điều khiển bàn' })
+      expect(within(dock).getByRole('button', { name: 'Sẵn sàng' })).toHaveAttribute('aria-pressed', 'false')
+      expect(within(dock).getByRole('button', { name: 'Bắt đầu' })).toBeDisabled()
+      expect(within(dock).getByText('1/2 sẵn sàng')).toBeInTheDocument()
+      expect(dock.closest('footer')).not.toBeNull()
+      view.unmount()
+
+      // Between hands, once the result card is closed: the countdown, and no tray beside it in the same corner.
+      const between = makeRoom({
+        status: 'IN_GAME',
+        nextHandAt: 1_005_000,
+        players: [
+          makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'IN_HAND', stack: 19_800 }),
+          makePlayer({ playerId: 'me', displayName: 'Mai', seat: 2, status: 'IN_HAND', stack: 20_400 }),
+        ],
+      })
+      const hand = makeHand({
+        phase: 'COMPLETE',
+        mySeat: 2,
+        actingSeat: null,
+        result: { payouts: [{ seat: 2, amount: 600 }], pots: [], fee: 12, showdown: null, carryOverOut: 0, uncalledReturned: null, cancelled: false, reason: null },
+      })
+      landscape(fakeClient(makeState({ room: between, hand })))
+      expect(screen.queryByRole('group', { name: 'Điều khiển bàn' }), 'no dock while the card prints the countdown').toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'Đóng' }))
+      const later = screen.getByRole('group', { name: 'Điều khiển bàn' })
+      expect(within(later).getByText((_, el) => el?.tagName === 'P' && /5 giây/.test(el.textContent ?? ''))).toBeInTheDocument()
+      expect(within(later).queryByRole('button', { name: 'Sẵn sàng' })).toBeNull()
+      // The tray stays for its left dock (B4), but its right part — the corner the dock holds — waits for the next deal.
+      const tray = screen.getByRole('group', { name: 'Hành động' })
+      expect(within(tray).queryByRole('status'), 'no "hand over" line beside the countdown').toBeNull()
+      expect(within(tray).queryByRole('button'), 'nothing to press in a Hold’em tray between hands').toBeNull()
+    })
+
+    it('passes betweenHands to the tray in landscape and keeps the toggles during the countdown', () => {
+      // Play-or-fold with Tự động chơi on: between hands the dock holds the countdown, and the left dock keeps the
+      // toggle, so the player can turn auto-play off before the next deal.
+      const room = makeRoom({
+        mode: 'blind',
+        status: 'IN_GAME',
+        nextHandAt: 1_005_000,
+        config: {
+          name: 'B',
+          mode: 'blind',
+          maxPlayers: 4,
+          isPrivate: false,
+          turnTimerSec: 15,
+          autoStart: false,
+          hasPassword: false,
+          blind: { holeCards: 3, decisionMode: 'playOrFold', fixedWager: 5_000, botCount: 1 },
+        },
+        players: [
+          makePlayer({ playerId: 'me', displayName: 'Mai', isHost: true, seat: 0, status: 'IN_HAND', stack: 20_000 }),
+          makePlayer({ playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true, seat: 3, status: 'IN_HAND', stack: 25_000 }),
+        ],
+      })
+      const seats = [makeSeat({ seat: 0, playerId: 'me', displayName: 'Mai' }), makeSeat({ seat: 3, playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true })]
+      const over = makeHand({
+        mode: 'blind',
+        phase: 'COMPLETE',
+        mySeat: 0,
+        actingSeat: null,
+        community: [],
+        seats,
+        result: { payouts: [{ seat: 0, amount: 600 }], pots: [], fee: 12, showdown: null, carryOverOut: 0, uncalledReturned: null, cancelled: false, reason: null },
+      })
+      const client = fakeClient(makeState({ room, hand: over, autoPlay: true }))
+      const view = landscape(client)
+      fireEvent.click(screen.getByRole('button', { name: 'Đóng' }))
+      expect(screen.getByRole('group', { name: 'Điều khiển bàn' })).toBeInTheDocument()
+      const tray = screen.getByRole('group', { name: 'Hành động' })
+      expect(tray).toHaveAttribute('data-frame', 'landscape')
+      expect(within(tray).queryByRole('status'), 'the right part waits for the deal').toBeNull()
+      const toggle = within(tray).getByRole('button', { name: 'Tự động chơi' })
+      expect(toggle).toHaveAttribute('aria-pressed', 'true')
+      fireEvent.click(toggle)
+      expect(client.setAutoPlay).toHaveBeenCalledWith(false)
+      view.unmount()
+
+      // The next deal, my decision: the dock goes and the right part offers Bỏ bài and Chơi.
+      const deciding = makeHand({
+        ...over,
+        handId: 'h2',
+        phase: 'DECISION',
+        result: null,
+        legal: { seat: 0, kinds: ['play', 'fold'], callAmount: 5_000, minBet: 0, maxBet: 0, minRaiseTo: 0, maxRaiseTo: 0 },
+      })
+      landscape(fakeClient(makeState({ room: { ...room, nextHandAt: null }, hand: deciding, autoPlay: true })))
+      expect(screen.queryByRole('group', { name: 'Điều khiển bàn' })).toBeNull()
+      const inHand = screen.getByRole('group', { name: 'Hành động' })
+      expect(within(inHand).getByRole('button', { name: 'Bỏ bài' })).toBeInTheDocument()
+      expect(within(inHand).getByRole('button', { name: 'Chơi 5.000' })).toBeInTheDocument()
+      expect(within(inHand).getByRole('button', { name: 'Tự động chơi' })).toBeInTheDocument()
+    })
+
+    it('shows the felt note only while waiting', () => {
+      // A spectator short of a Blind hand's stake hears it in the hint while the room waits; once cards are out the
+      // felt holds the board and the pot, and the note would sit on them.
+      const blind = (status: 'OPEN' | 'IN_GAME') =>
+        makeRoom({
+          mode: 'blind',
+          status,
+          hostPlayerId: 'bot:r:0',
+          config: {
+            name: 'B',
+            mode: 'blind',
+            maxPlayers: 4,
+            isPrivate: false,
+            turnTimerSec: 15,
+            autoStart: false,
+            hasPassword: false,
+            blind: { holeCards: 3, decisionMode: 'playOrFold', fixedWager: 5_000, botCount: 1 },
+          },
+          players: [
+            makePlayer({ playerId: 'me', displayName: 'Mai', seat: null, status: null, stack: 0 }),
+            makePlayer({ playerId: 'bot:r:0', displayName: 'Bot 1', isBot: true, isHost: true, seat: 3, status: 'READY', stack: 25_000, ready: true }),
+          ],
+        })
+      const short = 'Số dư không đủ để vào bàn (cần 10.000 điểm)'
+      const open = landscape(fakeClient(makeState({ balance: 7_000, room: blind('OPEN') })))
+      expect(within(screen.getByRole('region', { name: 'Bàn' })).getByText(short)).toBeInTheDocument()
+      open.unmount()
+
+      landscape(fakeClient(makeState({ balance: 7_000, room: blind('IN_GAME') })))
+      expect(within(screen.getByRole('region', { name: 'Bàn' })).queryByText(short)).toBeNull()
+    })
+
+    it('lays the pre-hand hint on the felt, so the dock in the corner stays one row', () => {
+      // The ring's lower seats end where a one-row dock begins (Plan 26, B3): the hint wrapped under the buttons made
+      // the dock twice as tall and it covered the seat beside the viewer's.
+      const notReady = makeRoom({
+        ...readyRoom,
+        players: readyRoom.players.map((p) => (p.playerId === 'me' ? { ...p, ready: false, status: 'SEATED' as const } : p)),
+      })
+      landscape(fakeClient(makeState({ room: notReady })))
+      const hint = 'Cần ít nhất 2 người sẵn sàng để bắt đầu'
+      const dock = screen.getByRole('group', { name: 'Điều khiển bàn' })
+      expect(within(dock).queryByText(hint)).toBeNull()
+      expect(within(screen.getByRole('region', { name: 'Bàn' })).getByText(hint)).toBeInTheDocument()
+    })
+
+    it('leaves the desktop frame’s footer row as it was', () => {
+      wrap(fakeClient(makeState({ room: readyRoom })))
+      const controls = screen.getByRole('group', { name: 'Table controls' })
+      expect(within(controls).getByRole('button', { name: 'Stand up' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'More' })).toBeNull()
+    })
   })
 })

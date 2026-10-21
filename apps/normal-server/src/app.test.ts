@@ -364,12 +364,15 @@ describe('every mutating route is guarded', () => {
       'GET /api/catalog/items',
       'GET /api/config',
       'GET /api/gm/actions',
+      'GET /api/gm/gifts',
       'GET /api/gm/overview',
       'GET /api/gm/players/:id',
+      'GET /api/gm/players/:id/checkin',
       'GET /api/gm/players/:id/history',
       'GET /api/gm/players/:id/ledger',
       'GET /api/gm/rooms',
       'GET /api/gm/rooms/:id',
+      'GET /api/gm/stats/daily',
       'GET /api/me',
       'GET /api/me/achievements',
       'GET /api/me/history',
@@ -385,6 +388,8 @@ describe('every mutating route is guarded', () => {
       'POST /api/auth/logout',
       'POST /api/auth/register',
       'POST /api/economy/relief',
+      'POST /api/gm/players/:id/achievements/:achievementId/unlock',
+      'POST /api/gm/players/:id/checkin/reset',
       'POST /api/gm/players/:id/items',
       'POST /api/gm/players/:id/lock',
       'POST /api/gm/players/:id/points',
@@ -395,8 +400,10 @@ describe('every mutating route is guarded', () => {
       'POST /api/gm/rooms/:id/kick',
       'POST /api/me/outfits/:slot/apply',
       'POST /api/rewards/daily/claim',
+      'PUT /api/gm/gifts/:month',
       'PUT /api/me/avatar',
       'PUT /api/me/outfits/:slot',
+      'DELETE /api/gm/gifts/:month',
       'DELETE /api/me/outfits/:slot',
     ].sort())
   })
@@ -895,7 +902,7 @@ describe('a whole hand between two registered players', () => {
 
       // …and the balances are the whole ledger, read back: what they started with, less the fee,
       // plus anything an achievement or a GM paid out (or took) on the way.
-      const credited = rowsOf<{ amount: string | number }>(await db.execute(sql`select amount from point_transactions where reason in ('achievement', 'gm_grant', 'gm_adjust')`))
+      const credited = rowsOf<{ amount: string | number }>(await db.execute(sql`select amount from point_transactions where reason in ('achievement', 'gm_grant', 'gm_adjust', 'gm_achievement', 'gm_checkin_undo')`))
       const fees = sinks.reduce((sum, row) => sum + Number(row.amount), 0)
       const rewards = credited.reduce((sum, row) => sum + Number(row.amount), 0)
       const balances = await Promise.all([alice, mai].map((p) => h.app.services.repos.balances.get(p.playerId)))

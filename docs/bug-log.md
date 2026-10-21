@@ -500,3 +500,59 @@ có item bị lộ tóc, trông không tự nhiên".
 | # | Mức | Mô tả | Nguyên nhân / hướng | Trạng thái |
 |---|---|---|---|---|
 | H1 | P2 | Đội mũ che đỉnh đầu mà tóc vẫn thò lên trên mũ: chỏm buộc của tóc đuôi ngựa nhô trên nón lá, mũ len và mũ nồi; gai tóc spiky, chỏm tóc tousled, sợi ahoge của bob, phần tóc phồng của wavy nhô qua vành nón lá | từ Plan 19, lớp tóc trước (L60) là cả đỉnh đầu nên không mũ nào được ẩn tóc (ẩn thì đầu trọc dưới mũ); phần tóc cao hơn đầu vì thế lộ ra ngoài mũ | đã sửa: mũ nồi, mũ len, nón lá (mọi màu) có thêm mặt nạ cắt tóc `<mũ>_hairclipmask`, pipeline tự cắt từ hình mũ. Tóc chỉ hiện dưới mép dưới của mũ, bên cạnh mũ thì dưới mép của cạnh gần nhất. Kit vẽ hai lớp tóc qua mặt nạ đó bằng CSS mask; C11 kiểm mặt nạ; tờ thử mũ vẽ đúng như kit. Mũ chóp, lưỡi trai, vương miện, mũ sinh nhật ngồi trên tóc nên giữ nguyên: tóc đuôi ngựa vươn sau mũ chóp nhỏ vẫn tự nhiên, cắt thì đuôi tóc bị bằng phẳng |
+
+## 8. Review 2026-10-19 — điện thoại nằm ngang (`others/review/20261019`)
+
+Người dùng gửi 4 ảnh chụp bàn chơi trên điện thoại Android nằm ngang (2340×1080 vật lý, khoảng 891×411 CSS px, Chrome;
+có lúc còn thanh địa chỉ nên vùng nhìn chỉ còn khoảng 355 px cao), kèm nhận xét: "quan trọng nhất ở bàn chơi, lẽ ra phải
+thiết kế để tối ưu khung bàn, thì lại đang quá nhỏ khiến cho user không thao tác được", và yêu cầu tham khảo các app poker
+trên mạng. Nguyên nhân do Claude dò trong code ngày 19/10. Chưa có quy tắc nào cho điện thoại nằm ngang: ở cỡ này bàn
+rơi vào bố cục xếp dọc (`STACKED` bật vì cao dưới 620 px) nhưng mọi quy tắc "điện thoại" khác lại theo bề rộng
+(`max-width: 767px`) nên không bật; `.room` giữ `min-height: 30rem` (480 px) nên cả trang cuộn. Spec §27.1 ghi
+"< 768 ngang (điện thoại xoay): dùng bố cục elip thu nhỏ, ẩn header" nhưng chưa bao giờ được làm; `docs/player-guide.md`
+đang hứa đúng điều đó với người chơi.
+
+| # | Ảnh | Mức | Mô tả | Nguyên nhân | Trạng thái |
+|---|---|---|---|---|---|
+| N1 | 4, 2, 3 | P1 | Bàn chỉ còn một dải cao khoảng 250 px và bị cắt: ở ảnh 4 chỉ thấy đáy năm ô ghế bot và nhãn "Bot", năm ô bài chung khuất sau ghế mình; ở ảnh 2–3 bài đối thủ cắt ngang, không thấy ghế nào khác. Người chơi không nhìn được bàn, không bấm được ghế. | `.room { min-height: 30rem }` cao hơn màn hình (412/390 px) nên trang cuộn; `STACKED` (`(max-width: 767px), (max-height: 620px)`) chọn bố cục cột dọc vốn cần chiều cao; không có `orientation`/`max-height` nào trong CSS; không có `safe-area-inset-left/right` cho tai thỏ khi nằm ngang | chờ quyết định |
+| N2 | 3 | P1 | Thanh thao tác (Bỏ bài / Chơi 1.000 / Tự động chơi) và hàng nút phòng (Đứng dậy / Tạm nghỉ / Quản lý bàn) chiếm hơn nửa màn, bàn còn lại quá nhỏ. | Từ 768 px rộng `.tray` có `min-height: 8.25rem` (132 px) và dùng cách xếp của máy tính; "Tự động chơi" đứng một hàng riêng 44 px; hàng nút phòng 44 px luôn hiện; header hai hàng kiểu máy tính | chờ quyết định |
+| N3 | 1 | P1 | Thẻ kết quả: tiêu đề "Người thắng" đè lên dòng "Phí bàn 120 · Hoàn cược dư cho Binh La 1.000 · Ván tiếp theo sau 5 giây", nút "Đóng" đè "5 giây". Chữ đè chữ, vi phạm quy tắc của dự án. | Thẻ bị chặn `max-height: 100%` theo sân khấu chỉ còn khoảng 120–150 px; `.resultFoot` không co (`min-height: auto`) nên toàn bộ phần co dồn vào `.resultLive`, mà khối này không đặt `overflow`, nên phần đầu (45–53 px) tràn khỏi khối và vẽ đè lên chân thẻ; `seat-clearance.ts` bỏ cuộc (`null`) khi sân khấu thấp hơn `MIN_CARD` 216 px | chờ quyết định |
+| N4 | 2 | P2 | Hàng nhãn dưới ghế mình (Bạn · ♛ Chủ phòng · Đã chọn · ● 2.000) bị cắt ngang ở mép dưới vùng bàn. | Ghế mình `position: sticky; bottom: 0` trong `.roomMain`, nhưng hàng `.tags` nằm dưới `.plate` nên rơi ra ngoài phần nhìn thấy khi vùng bàn quá thấp (liên quan L1 ở mục 5) | chờ quyết định |
+| N5 | — | P3 | Hướng dẫn chơi (`docs/player-guide.md` dòng 27) viết "xoay ngang thì bàn trở lại hình bầu dục thu nhỏ", không đúng với phần mềm hiện tại. | Spec §27.1 chưa được làm | sửa cùng N1 |
+| N6 | — | P2 | Không bộ test nào chạy ở cỡ nằm ngang: ops pack chỉ có `desktop` 1440×900 và `mobile` 375×812; `expectNoTextOverlap` và `expectRoomFits` chưa từng đo 915×412 hay 844×390. Lỗi N1–N4 vì thế không bị bắt. | Thiếu project/viewport | sửa cùng N1 |
+
+**Tham khảo app poker (Claude tìm 19/10, nguồn ghi trong spec):** các app xã hội (Zynga Poker, WSOP, Texas Poker Việt Nam
+của Boyaa) chỉ chơi nằm ngang; các nhà cái lớn (GGPoker, partypoker, 888, PPPoker, PokerBros) chuyển sang bàn dọc chơi một
+tay từ 2019–2020, GGPoker và 888 hỗ trợ cả hai chiều. Không app nào dùng trang cuộn dọc cho bàn chơi. Mẫu chung: ghế
+mình cố định giữa đáy, bài tẩy ở đáy; một hàng ba nút lớn (Bỏ / Theo / Tố) sát mép dưới, cỡ cược bằng nút đặt sẵn (½ pot,
+pot, tất tay), thanh trượt chỉ để chỉnh chính xác; nút "tạm nghỉ / rời bàn" nằm trong menu góc, không thành hàng nút; bàn
+phủ kín màn hình, tỉ lệ bị chặn, ghế co thành huy hiệu nhỏ (avatar + tên + stack) khi màn thấp; không dựng "tường xoay
+máy" (WCAG F100). Kỹ thuật web: khoá trang theo `100dvh` + `overflow: hidden` + `overscroll-behavior: none`;
+`@media (orientation: landscape) and (max-height: 500px)` ghép với `(pointer: coarse)`; `env(safe-area-inset-*)` cả
+bốn cạnh; `screen.orientation.lock()` không dùng được trên iOS Safari và chỉ hoạt động khi toàn màn hình trên Chrome.
+
+**Lựa chọn:**
+- (a) **Bố cục nằm ngang riêng** cho điện thoại (`orientation: landscape` và cao ≤ 500 px): bàn elip thu nhỏ phủ kín
+  vùng nhìn, không cuộn trang; header gộp thành một dải mỏng (chấm kết nối, tên phòng, nút rời); Đứng dậy / Tạm nghỉ /
+  Quản lý bàn vào một menu góc; thanh thao tác một hàng 48 px ở góc phải dưới, "Tự động chơi" và các nút trước lượt là
+  công tắc nhỏ bên trái; cỡ cược bằng nút đặt sẵn, ô nhập mở ra khi cần; thẻ kết quả dạng nằm ngang gọn; thêm project
+  `landscape` (≈ 915×412 chạm) vào ops pack với `expectRoomFits` và `expectNoTextOverlap`; sửa luôn N3/N4 ở gốc
+  (`.resultLive` co được, hàng nhãn thuộc phần dính). Làm đúng spec §27.1 và lời hứa trong hướng dẫn chơi.
+- (b) **Vá tối thiểu**: bỏ `min-height: 30rem`, cho các quy tắc < 768 bật thêm theo chiều cao, sửa N3/N4. Rẻ, nhưng bàn
+  vẫn là một cột dọc nhỏ trên màn ngang: không giải quyết lời phàn nàn "khung bàn quá nhỏ".
+- (c) **Chặn xoay ngang** (màn "xoay dọc để chơi"). Không khuyến nghị: WCAG F100 coi là lỗi, và người dùng muốn chơi ngang.
+
+**Đề xuất:** (a), gộp vào Plan 26 cùng đợt 2 của vai GM (mở thành tựu, cho nhận lại điểm danh, sửa lịch quà, biểu đồ).
+
+## 9. Yêu cầu kế tiếp (2026-10-21) — chờ brainstorm sau Plan 26
+
+Người dùng gửi trong lúc Plan 26 đang chạy; ghi lại nguyên văn ý, chưa phân loại, chưa có đề xuất. Mỗi mục sẽ được
+brainstorm (superpowers:brainstorming) sau khi Plan 26 merge và deploy, rồi lên spec/plan riêng.
+
+| # | Yêu cầu | Ghi chú ban đầu của Claude |
+|---|---|---|
+| K1 | **Hai máy cùng một tài khoản.** "Đã giải quyết vấn đề multithread chưa? Giả sử đăng nhập trên 2 máy và 1 máy đang chơi dở thì máy còn lại sẽ như nào, có bị cấm chơi không hay là gì?" | Cần dò mã: phiên theo thiết bị (`sessions`), một socket mỗi phiên hay mỗi tài khoản, ghế trong phòng gắn với `playerId`; trả lời bằng hành vi thật hiện nay (máy thứ hai thấy gì, có vào được bàn khác không, có bị đuổi không) rồi mới đề xuất luật (một bàn một lúc, máy sau "tiếp quản" ghế, hay chỉ xem). |
+| K2 | **Blind Poker không thu phí bàn**, để chơi được tới khi tài khoản về 0: "hiện tại nhiều case account còn 5–6k lẻ vẫn bị văng khỏi phòng, phải cho cược về 0". | Liên quan `table_fee` (sink), luật "số dư tối thiểu để ngồi" (`shortToSit`, hạn mức), và cách bàn Blind xử lý người không đủ mức cược cố định (tất tay phần còn lại?). Đổi luật tiền → bảo toàn `Σ balances + Σ sink rows` vẫn phải giữ; spec §8/§12. |
+| K3 | **Cửa hàng bán đồ:** mua trang phục/phụ kiện bằng **điểm (gold)** + **điểm danh vọng** kiếm trong game, giá theo độ hiếm; giá và danh vọng từng món **quản lý trong database, sửa được** (GM); lý do: "hiện tại không ai dùng kho đồ do chi phí kiếm trang phục hơi khó". | "Gold"/"tiền" = điểm trong game, không bao giờ là tiền thật (requirement.txt §3, spec §33). Cần: loại tiền tệ thứ hai `danh vọng` (nguồn: thắng ván? điểm danh? thành tựu?), bảng `item_prices(item_id, points, reputation, enabled, updated_by)`, màn Cửa hàng dùng chung khung thẻ với Phòng thay đồ, ledger cho danh vọng và sink cho tiền mua đồ, tab GM để sửa giá. |
+| K4 | **Quà lập tài khoản lần đầu:** tiền + danh vọng + một bộ trang phục. | Gắn với `starting_balance` hiện có; thêm nguồn ledger `welcome` cho danh vọng và một món quà; cân nhắc với người đã có tài khoản (có tặng bù không). |
+| K5 | **Kho đồ tải chậm lần đầu** (ảnh nhân vật, tóc, phụ kiện): cần lazy-load. (Gửi 2026-10-20.) | Hơn 490 tệp PNG `@1x/@2x` 384×448; tủ đồ vẽ nhiều chibi cùng lúc. Hướng: `loading="lazy"` + `IntersectionObserver` cho thẻ ngoài màn, ảnh đại diện nhỏ cho thẻ (icon 96 px đã có), tải trước theo ô đang mở, giới hạn số ảnh cùng lúc, WebP/sprite cho lớp. |

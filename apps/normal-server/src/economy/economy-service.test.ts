@@ -79,7 +79,7 @@ beforeAll(async () => {
     onBalanceChanged: (playerId, balance) => balanceCalls.push({ playerId, balance }),
     rng: () => rng(),
     reservedItemIds: rewardItemIds,
-    gifts,
+    gifts: () => gifts,
   })
 })
 afterAll(async () => {
@@ -253,6 +253,20 @@ describe('claimDaily', () => {
       expect(result).toMatchObject({ ok: true, day: 7, points: 15_000, item: unowned[0], items: [unowned[0]], fallbackPoints: 0 })
       expect((await inv.list(playerId)).find((o) => o.itemId === unowned[0])).toMatchObject({ source: 'daily' })
       expect(await ledger(playerId)).toHaveLength(1)
+    })
+
+    it('a daily item carries the claim ref', async () => {
+      const playerId = await seedPlayer()
+      await own(playerId, catalog.defaults())
+      await seedStreak(playerId, 6, 6)
+      const unowned = unownedCommons()
+      rng = () => 0
+
+      await economy.claimDaily(playerId, OCT(7))
+
+      const [row] = await db.select({ ref: inventory.ref }).from(inventory).where(sql`${inventory.playerId} = ${playerId} and ${inventory.itemId} = ${unowned[0]!}`)
+      expect(row?.ref).toBe(`daily:${playerId}:${octKey(7)}`)
+      expect(await db.transaction((tx) => inv.findByRef(tx, playerId, `daily:${playerId}:${octKey(7)}`))).toEqual([unowned[0]])
     })
 
     it('draws the last of the unowned items when the rng lands at the top of its range', async () => {
@@ -463,7 +477,7 @@ describe('claimDaily', () => {
         onBalanceChanged: () => {},
         rng: () => 0,
         reservedItemIds: ['aura_ice01'],
-        gifts,
+        gifts: () => gifts,
       })
       const pool = drawable('rare').filter((id) => id !== 'aura_ice01')
 
@@ -501,7 +515,7 @@ describe('claimDaily', () => {
         timezone: 'UTC',
         onBalanceChanged: () => {},
         rng: () => 0,
-        gifts: scheduled,
+        gifts: () => scheduled,
       })
       const pool = catalog
         .byRarity('rare')
@@ -537,7 +551,7 @@ describe('claimDaily', () => {
         timezone: 'Asia/Ho_Chi_Minh',
         onBalanceChanged: () => {},
         rng: () => 0,
-        gifts,
+        gifts: () => gifts,
       })
 
       // 17:30 UTC on the 4th is already 00:30 on the 5th in Ho Chi Minh City.
@@ -602,7 +616,7 @@ describe('dailyStatus', () => {
     expect((await economy.dailyStatus(playerId, Date.UTC(2026, 10, 1, 0, 0))).month).toBe('2026-11')
 
     // …and where ECONOMY_TIMEZONE says: 23:59 on 31/10 in Ho Chi Minh City is 16:59 UTC, 00:00 on 01/11 is 17:00 UTC.
-    const hcm = createEconomyService({ db, repos, inventory: inv, catalog, bus, timezone: 'Asia/Ho_Chi_Minh', onBalanceChanged: () => {}, gifts })
+    const hcm = createEconomyService({ db, repos, inventory: inv, catalog, bus, timezone: 'Asia/Ho_Chi_Minh', onBalanceChanged: () => {}, gifts: () => gifts })
     expect((await hcm.dailyStatus(playerId, Date.UTC(2026, 9, 31, 16, 59))).month).toBe('2026-10')
     expect((await hcm.dailyStatus(playerId, Date.UTC(2026, 9, 31, 17, 0))).month).toBe('2026-11')
     expect(hcm.dailyGiftNotices(Date.UTC(2026, 10, 30, 16, 59)).find((n) => n.itemId === 'head_tophat01')).toMatchObject({ month: '2026-11' })

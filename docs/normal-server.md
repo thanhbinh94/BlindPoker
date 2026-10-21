@@ -46,7 +46,7 @@ src/
     index.ts         createRepositories(db) → NormalRepositories
 
   auth/              password.ts (argon2id) · session-service.ts · cookie.ts · auth-service.ts
-  economy/           daily-rules.ts (pure) · daily-gifts.ts (the gift schedule, loaded and checked) · economy-service.ts (daily claim, relief)
+  economy/           daily-rules.ts (pure) · daily-gifts.ts (the gift schedule, loaded and checked) · gift-schedule-store.ts (the file plus a GM's months) · economy-service.ts (daily claim, relief)
   inventory/         slots.ts (the slot and gender vocabulary) · manifest.ts (loads avatar-manifest.json)
                      bodies.ts (the v4 bodies, one per gender, held against the manifest) · items.ts (catalogue)
                      aliases.ts (old wardrobe ids → current ones, or null when dropped)
@@ -473,7 +473,31 @@ To add or change a month:
    `"rooms":0` (`stop.ps1` is a hard kill), then `stop.ps1` and `run.ps1 -NoMigrate` — no `build:normal` is needed for
    a change to this file alone. In Docker `data/` is inside the image, so `up -d --build`. No migration either way.
 
-`loadDailyGifts` **refuses to start** — `invalid daily gift schedule <path>: <problem>` — on: an id the catalogue does
+**A GM edits a month without a restart (Plan 26).** The JSON file is the *default*; the months a GM sets live in the
+table `gift_months` (`month` text primary key, `days` jsonb — the same `{ "<tier>": rule }` object a month holds in the
+file — `updated_at`, `updated_by`, migration 0005) and **replace** that month's entry in the file as a whole. The old way
+above still works and still sets the default and the file's months; a month with no row falls back to it, and deleting a
+row brings the file's entry back. `GiftScheduleStore` (`src/economy/gift-schedule-store.ts`) builds the schedule the
+economy reads from the file and the rows (`current()`), and rebuilds it after a write commits (`reload()`). The economy
+takes `current()` once per claim and keeps that copy, so a claim that began before a change finishes under the schedule it
+began with and the next claim sees the new one.
+
+- `GET /api/gm/gifts` → `{ default, months }`: the file's default, and one row per month from the current one for 13
+  months (each `{ month, days, source: 'file' | 'db', updatedAt, updatedBy }`, plus any later month the file or a GM
+  names). `PUT /api/gm/gifts/:month` `{ days, reason }` replaces a month; `DELETE /api/gm/gifts/:month` `{ reason }` drops
+  the GM's row. Each is a `gm_actions` row in the same transaction (`set_gift_month`, with `details: { month, days }`;
+  `clear_gift_month`, with `details: { month }`), so the Nhật ký shows who changed what and why.
+- Refused, before any row is written: `INVALID_MONTH` (400, not `YYYY-MM`); `INVALID_GIFTS` (400, with the parser's own
+  message — the checks above, run against the file with the rows laid over it — or a fixed item whose slot is not one of
+  `DAILY_DRAW_SLOTS`, `title`, `badge`, because a required slot cannot be taken back when a check-in is undone);
+  `MONTH_IN_PAST` (409); `TIER_LOCKED` (409: in the current month, a tier up to today's date has been reached, so its
+  rule cannot change — later tiers can, and saying what is already so is no change); `NOTHING_TO_CLEAR` (409, a `DELETE`
+  of a month that has no row; nothing is logged).
+- A stored month that no longer validates at boot (the catalogue changed under it) is logged at `warn`, skipped — the
+  file's entry or the default applies — and the boot goes on. The file alone is still refused, as below.
+
+The file is checked at boot — `readDailyGiftsRaw` reads it, `parseDailyGifts` (through `loadDailyGifts` in the tests) checks it —
+and the server **refuses to start** — `invalid daily gift schedule <path>: <problem>` — on: an id the catalogue does
 not hold, or one every player already owns (`isDefault`, `free`); a tier outside 1–31, written with a leading zero, or
 past the end of its month (`2027-02` has no tier 29); an empty `fixed` list; the same id twice in a tier, or on two
 tiers of one month (the default's tiers included); a draw that is not `common` or `rare`, or a rule that is not exactly
@@ -523,9 +547,38 @@ kick that happened, the route warns (`gm kick not logged`) and still answers `20
 the room becomes a 4xx; anything else is rethrown and stays a 500. The GM's reason stays in the
 log; the broadcast reason is the fixed string `closed_by_gm`.
 
-**Routes.** `http/routes-gm.ts` mounts fifteen routes under `/api/gm/` behind `requireGm`, with CSRF and the `/api/*`
+**Routes.** `http/routes-gm.ts` mounts twenty-two routes under `/api/gm/` behind `requireGm`, with CSRF and the `/api/*`
 rate limits as usual. `GET /api/gm/rooms/:id` returns the `AdminRoomSummary` (members included), not `room.view()`.
 Search is a `POST` so an address never sits in a URL or an access log.
+
+**The second batch (Plan 26, spec 2026-10-20 Part A).** Four capabilities, seven of the twenty-two routes, all through the
+same door as the first batch: a reason of 3 to 200 characters first, the effect and its `gm_actions` row in one
+transaction, the player's `BALANCE` and `GM_NOTICE` only after the commit.
+
+- **Unlock an achievement.** `POST /api/gm/players/:id/achievements/:achievementId/unlock`. `unlockWithin`
+  (`achievements/achievement-service.ts`, the same function a self-earned unlock runs) pays the *full* reward under the
+  reason `gm_achievement` (ref `gm:<id>`) and grants the reward item through the inventory service. Refused: `INVALID_ACHIEVEMENT` (400), `ALREADY_UNLOCKED` (409), a locked target (409). The notice names the
+  achievement (`GM_NOTICE` with `achievementId`). `GmPlayerDetail.unlockedAchievementIds` lets the screen's picker grey out
+  what the player already has.
+- **Reset today's check-in.** `GET /api/gm/players/:id/checkin` previews it (`{ claimedToday, day, streak, points,
+  itemIds }`: what today's claim paid, so the dialog can name it); `POST …/checkin/reset` undoes it. Today's claim is the
+  **latest** one for the ref `daily:<playerId>:<date>`: its `daily_login` / `daily_item_fallback` rows are taken back as one
+  negative row `gm_checkin_undo` (a **negative source**, like `gm_adjust`: balance and ledger fall by the same amount, so
+  `Σ balances + Σ sinks` is conserved), its items are revoked (`InventoryService.revoke`, which also clears the slot, the
+  equipped title or badge, and strips the item from the player's saved outfits), `last_claim_date` is cleared and
+  `total_login_days` steps back by one (never below 0); the streak keeps its value, so the next claim is the same day and
+  draws afresh. Items found by `inventory.ref` (`findByRef`, set since migration 0005). Refused whole, nothing written, no
+  log row: `NOT_CLAIMED_TODAY`, `INSUFFICIENT_BALANCE` (the player has spent the points). A second reset after a reclaim
+  takes back one claim, not two.
+- **Edit the gift schedule.** The three `/api/gm/gifts` routes above, backed by `gift_months` and `GiftScheduleStore`.
+- **Sources and sinks per day.** `GET /api/gm/stats/daily?days=7|30` → exactly `days` entries, ascending, the last one
+  today, each `{ day, sources: { <reason>: n }, sinks: { <reason>: n }, net }` with empty days as zeros; any other span is
+  `400 INVALID_DAYS`.
+  `LedgerReader.sumsByDay` (`repos/balance-repo.ts`) groups `point_transactions` by `(created_at at time zone <tz>)::date`,
+  the same economy day the check-in uses; `GmService.dailyStats` classifies each reason as a source or a sink.
+
+Migration `drizzle/0005_plan26.sql` is additive and guarded: `gift_months`, `inventory.ref` and an index on
+`point_transactions(created_at)`. A deploy writes it once (`run.ps1` without `-NoMigrate`; Docker runs it at boot).
 
 **Test hook.** `AppDeps.extraRoutes` mounts extra routes on the built app. Only the e2e entry uses it, for
 `POST /e2e/promote` (`src/e2e-promote.ts`, loopback only, behind CSRF); that file is not in `tsconfig.build.json` and

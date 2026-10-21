@@ -390,9 +390,10 @@ below each row's cells stack with their labels, and some assistive technology th
 five-column table readable at 375 px. The labels are real text, so nothing is lost to a sighted user.
 *Tracked:* `docs/normal-web.md`, "The Quản trị screen".
 
-**The ops pack has no `@mobile` case for the GM screen.** Q-01 and Q-02 run on `desktop` only. The card layout at 375 px
+**The ops pack has no `@mobile` case for the GM screen.** Q-01 to Q-03 run on `desktop` only. The card layout at 375 px
 was checked by screenshot during the plan (at 1920 × 940, 1366 × 768 and 375 × 812), not by a test that fails when it
-breaks.
+breaks; Q-03 does resize the page to those three widths for the Quà tháng tab and the "Theo ngày" table, and asserts no
+text overlap and no sideways scroll at each.
 *Tracked:* `docs/operation-test-plan.md`, section Q.
 
 **`refunded` in the close-room answer counts spectators too.** It is the number of humans in the room, seated or not; a
@@ -400,6 +401,36 @@ spectator holds no stack, so it counts people sent back to the lobby, not stacks
 *Why it stays:* the number is a courtesy in the dialog's success line; the money is exact (it comes from the room's own
 cash-out, and the conservation test covers it).
 *Tracked:* `apps/normal-server/src/gm/gm-rooms.ts`.
+
+**An achievement unlocked by a claim that a GM then undoes stays unlocked, and its reward stays paid (Plan 26).** "Đặt lại
+điểm danh" takes back the check-in's points and items and steps `total_login_days` back, but `login_days_7`, say, may
+have been unlocked by that claim and is not locked again; its 5.000 points or item stay with the player. The player
+claims again and the counter climbs to the same figure.
+*Why it stays:* undoing a reward chain means undoing every reward that fired from it, and an achievement is a record of
+something that happened; the GM can spot it in the log and use "Cộng/trừ điểm" with a reason.
+*Tracked:* `apps/normal-server/src/gm/gm-service.ts` (`resetCheckin`), spec `2026-10-20-plan26-gm-round2-phone-landscape-login-design.md` Part A.
+
+**Items granted by a check-in made before migration 0005 carry no `ref`, so a reset does not take them back (Plan 26).**
+`inventory.ref` records which claim granted an item; rows written before the migration have `NULL`. On the day a deploy
+brings 0005, a player who already claimed that day and is reset by a GM gets the points back but keeps that day's item
+(the dialog names none).
+*Why it stays:* a one-day edge at deploy that nobody can recover from the data, and the GM can revoke by hand.
+*Tracked:* `apps/normal-server/drizzle/0005_plan26.sql`, `apps/normal-server/src/inventory/inventory-service.ts` (`findByRef`).
+
+**The Quà tháng tab greys the days up to today by the Ho Chi Minh zone, while the server decides by its own zone (Plan 26).**
+In the current month, tiers up to today's date cannot be edited. The tab computes "today" on `Asia/Ho_Chi_Minh`, the
+economy's clock; the server answers `TIER_LOCKED` by `ECONOMY_TIMEZONE` (`apps/normal-server/src/config.ts`, default Ho Chi Minh). They agree on the
+LAN host and on the VPS, which both run the economy on Ho Chi Minh time; a deployment on another zone would grey a
+different day than it refuses, and the server's answer is the one that holds (the dialog prints it as "Ngày đó đã qua trong tháng này.").
+*Why it stays:* cosmetic, the server is the lock, and the web client has no `ECONOMY_TIMEZONE` to read.
+*Tracked:* `apps/normal-web/src/screens/gm/GiftsTab.tsx` (`economyToday`).
+
+**The "Theo ngày" table at 375 px scrolls sideways inside its own box, so the bars are off-screen (Plan 26).** The last
+two columns (Ròng, Tỉ lệ) sit past the phone's edge until the table is swiped; the page itself does not scroll
+sideways.
+*Why it stays:* the console is an operator tool read mostly on a desktop, and the numbers a GM needs (Nguồn, Bể) are in
+view.
+*Tracked:* `apps/normal-web/src/screens/gm/OverviewTab.tsx` (`ByDayPanel`), `apps/normal-web/src/screens/gm/gm.module.css`.
 
 ---
 
@@ -443,11 +474,15 @@ Every body, face, hairstyle, outfit, hat, bot and other picture starts from a pr
 locked block (`docs/avatar/02-mo-ta-nhan-vat-khoa-va-yeu-cau-sinh-anh.md`) run through a third-party image generator.
 No named character or artist's name is ever put in a prompt, but the commercial terms of whichever tool
 generates the final art are the operator's to read and accept — this codebase does not vendor a licence
-and cannot vouch for one on the operator's behalf.
+and cannot vouch for one on the operator's behalf. The sign-in screen's hero picture (Plan 26, a table of friends in
+the same style) is generated the same way: the two WebP sizes under `apps/normal-web/public/login/` are committed, and
+carry the same caveat.
 *Why it stays:* it is a legal question about a tool's terms of service, not an engineering one this
 repository can settle by writing code.
 *Tracked:* avatar-chibi-ai design §10 (risk table, "Pháp lý ảnh AI"); originals are kept at `assets/avatar-src/`
-(gitignored, with a README recording the tool, the seed and the date) rather than committed.
+(gitignored, with a README recording the tool, the seed and the date) rather than committed. The hero picture's source
+is kept at `assets/login-hero-src/` (gitignored the same way); its prompt, the generations tried and how to regenerate
+the two files (`pnpm --filter @bp/normal-web login:hero`) are in `docs/login-hero-art.md`.
 
 **The chibi has one view, and does not turn.** Unlike the 3D avatar it replaced, a chibi is a flat stack
 of `<img>` layers on a fixed 384×448 frame — there is no camera, no yaw, and nothing to drag or
@@ -501,6 +536,62 @@ check on a real device is still to do: the spec's §8 asks for a hand test of th
 *Why it stays:* a device is needed, and the e2e projects are Chromium only.
 *Tracked:* `docs/superpowers/specs/2026-10-08-card-motion-squeeze-design.md` §8; `CHANGELOG.md` (Plan 21).
 
+**The squeeze table's "Lật" pill is small, and it lies over the cards (Plan 26, B6).** The pill no longer takes a row of its
+own: it is laid over the foot of the viewer's card pair, centred, so that a play-or-fold squeeze table fits a 375 × 812
+phone (its stage scrolled 11 px). On a phone it is 40 × 28 px, under the 44 px tap rule, and it covers the inner bottom
+corners of the two cards, so a peel cannot start there. A touch started 9 px from the pill still reaches the card in
+Chromium (F-12 and F-12b start the peel at the left card's bottom-left corner); a real thumb, with a bigger contact patch,
+is untested. On a desktop the pill overlays the bottom centre of the pair: while the other card is still down, the
+bottom index of a face-up card can be hidden, and its top index stays readable. The squeeze header on a phone is still
+three lines (the badge now sits beside the room's name, and the head-count is hidden under 481 px); the stage fits anyway.
+*Why it stays:* a wider pill, or hit-slop around it, brings back the peel/pill hit-test conflict F-12 found (a touch 6 px
+from a 48 px pill landed on the pill and the peel never started); a two-line header needs a second phone layout of it.
+*Tracked:* `apps/normal-web/e2e/ops/04-blind.spec.ts` → F-12 / F-12b; `docs/ui-kit.md` (The squeeze). By hand: start a peel at
+the bottom-left of the left card on a real phone (iOS Safari, Chrome on Android).
+
+**The landscape table cannot lock the phone's orientation, and a portrait soft keyboard can trip its query (Plan 26,
+B1–B4).** The room draws its landscape frame when the viewport matches `(orientation: landscape) and (max-height: 500px)
+and (min-width: 700px)`. Nothing asks the phone to stay sideways: iOS Safari has no orientation lock at all, and Chrome
+grants one only to a page in fullscreen. The menu offers "Toàn màn hình" instead (only where `document.fullscreenEnabled`
+is true, so not on iOS Safari on a phone). `(orientation)` is a *viewport* test: a portrait phone with the soft keyboard
+up has a short, wide viewport on some browsers and reads as landscape. The room has one text field on the table, the "✎"
+amount dialog, and it hangs from the top of the screen exactly because the keyboard covers the bottom half; the
+sign-in and lobby screens have no frame.
+*Why it stays:* a lock is not something a web page can ask for on the platform that needs it most; a keyboard-proof test
+would need a device to see which browsers resize the layout viewport.
+*Tracked:* `packages/ui-kit/src/table/frame.ts` (`LANDSCAPE_PHONE`); `docs/ui-kit.md` (The landscape frame). By hand: on a
+real phone, rotate, open "✎" and watch the keyboard; then rotate back with the keyboard open in the lobby.
+
+**On a landscape phone the opaque result card covers the side seats, and at 844 × 390 the top of the viewer's plate
+(Plan 26, B5).** The card needs the felt's width to keep the winners on one line each, so it lies over the seats at the
+flanks while it is up, and on the shortest iPhone-class frame (844 × 390) its lower edge reaches the top of the viewer's
+plate. Closing it (a 44 px "Đóng") or waiting out the countdown gives the table back.
+*Why it stays:* during the result the plates are not controls and the card is the thing to read; a card narrow enough to
+leave the flanks free would wrap every winner onto a second line and overflow the 412 px stage instead.
+*Tracked:* `apps/normal-web/e2e/ops/07-landscape.spec.ts` → L-03; `docs/ui-kit.md` (The landscape frame).
+
+**In the landscape frame the footer row exists only between hands, and 740 × 360 fits with thin margins (Plan 26,
+B2–B3).** On a desktop the room's control row stays up for the whole hand; in the landscape frame the bottom-right dock
+is drawn only while the table is waiting or counting down to the next hand, and the rest of the row's work lives in the
+"Thêm" menu. So a spectator (or a seat sitting out) watching a hand in progress sees the table and the menu, with no
+footer line of its own. A 740 × 360 window (the narrowest frame the query admits, a small Android phone under its browser
+bars) fits, but the plates at the flanks and the docks leave only a few pixels between them; below 700 px wide the room
+keeps the stacked layout.
+*Why it stays:* nothing in the footer row is needed mid-hand by someone who is not in it, and the thin margins are the
+width of 740 px, not a bug to fix without shrinking the plates the names live on.
+*Tracked:* `packages/ui-kit/src/screens/RoomScreen.tsx` (`dockShown`); `docs/ui-kit.md` (The landscape frame).
+
+**A Hold'em table with nine people at it, on a landscape phone, has no browser test (Plan 26, B3).** A Hold'em room seats
+nine (`maxPlayersHoldem`), and nine humans can fill it; Blind caps at eight. L-02 drives eight occupied plates at
+915 × 355 and the nine-seat Hold'em room only for its empty seats' "Ngồi vào bàn" buttons. Nine occupied plates are seen
+only in the playground (`#worst/turn/9/vi/landscape`, `#worst/waiting/9/vi/landscape`). No two plates overlap there, but
+at 915 × 355 the left side is crowded: the deck sits close to a bet chip, a seat's cards touch another's chip, a folded
+seat's tag lies under the deck, and names are cut to three letters.
+*Why it stays:* nine humans around one landscape phone's table is rare, and the ops pack has no nine-human room (it would
+need nine accounts); the playground shot is the stress check.
+*Tracked:* `packages/ui-kit/playground/screenshots/README.md` (the `turn` · 9 seats · 915 × 355 row);
+`apps/normal-web/e2e/ops/07-landscape.spec.ts` → L-02.
+
 **A flick needs a run of movement to be read as one, on a device that does not coalesce pointer events.** The flick's
 speed is taken from the pointer's real and coalesced positions (`getCoalescedEvents`) over its last 100 ms, and a pointer
 with no new position for 40 ms has stopped — what came before the pause is no part of the flick. Where the browser
@@ -509,18 +600,6 @@ the release gives the run one sample, no speed, and the card opens only if that 
 *Why it stays:* Chromium, which the project's e2e runs in, does coalesce; counting the rest into the speed instead
 would make a slow drag that ends in a twitch a flick, which is the error the pause rule exists to prevent.
 *Tracked:* `packages/ui-kit/src/table/PeelCard.tsx` (`releaseSpeed`); `docs/ui-kit.md` (The squeeze).
-
-**On a 375 × 812 phone a play-or-fold squeeze table's stage scrolls 11 px in the round.** Measured on the built app
-(six seats, one bot, the cards dealt): a squeeze table's header takes a third line — the gold "Nặn bài" badge fills the
-first, and the code, the stakes and the head-count no longer fit two — and the viewer's seat carries the "Lật" pill's
-row, so the content needs 462 px where the stage has 451. The page does not scroll; the viewer's seat is sticky at the
-foot of the stage, so their cards, the pill and the round's timer stay on screen while the strip and the felt scroll
-behind. A pure-luck squeeze table had the same problem by 3 px (the tray's wait line is its third cost); the final fix
-wave halved that line's padding on phones (8 px back), and F-12 asserts that its stage fits again (467 of 467 px).
-*Why it stays:* the header's third line is the badge row at its widths (the second line misses the head-count by 5 px,
-and the stakes grow with the wager), and the pill keeps its row on purpose (`Seat`: taken out, the cards opening above
-it would move); either would be paid for with a second phone layout of the header or of the viewer's seat.
-*Tracked:* `apps/normal-web/e2e/ops/04-blind.spec.ts` → F-12 (pure luck); `docs/ui-kit.md` Known gaps.
 
 **A ring↔stack switch in the middle of a squeeze round can send a second `REVEAL`.** The seat remounts: a card peeled but
 not yet reported comes back down, and the next "Lật" tells the table again. The server takes a repeated `REVEAL` as the

@@ -7,6 +7,7 @@ import { defaultChibi, type ChibiConfig, type ChibiSubject, type WearRef } from 
 import type { ClientHand } from '../client/types.js'
 import { createI18n } from '../i18n/index.js'
 import { holdemHand as hand, holdemRoom as room, makePlayer, makeRoom, makeSeat } from '../test-fixtures.js'
+import { ringPositions } from './geometry.js'
 import { BOARD_STAGGER_MS, DEAL_MS, DEAL_SPAN_MS, DEAL_STAGGER_MS, FLIP_MS, SHOWDOWN_STAGGER_MS, dealStaggerMs } from './motion.js'
 import { PokerTable } from './PokerTable.js'
 import s from './table.module.css'
@@ -662,5 +663,110 @@ describe('PokerTable', () => {
     )
     const seat = screen.getByRole('group', { name: 'Seat 1' })
     expect(seat.querySelector('img[src*="item_frame_gold_L90"]')).not.toBeNull()
+  })
+
+  it('renders the ring in the landscape frame even under the STACKED query', () => {
+    const original = window.matchMedia
+    // A phone held sideways is both short and (under 768 px) possibly narrow: every query answers yes.
+    window.matchMedia = ((query: string) => ({
+      matches: true,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+    })) as unknown as typeof window.matchMedia
+    try {
+      const view = wrap(
+        <PokerTable room={fullRoom} hand={null} myPlayerId="p0" deadlineAt={null} serverNow={() => 0} turnTimerMs={30000} lang="en" canSit={false} />,
+      )
+      expect(screen.getByRole('group', { name: 'Players' }), 'without the frame the query stacks the table').toBeInTheDocument()
+      view.unmount()
+      wrap(
+        <PokerTable room={fullRoom} hand={null} myPlayerId="p0" deadlineAt={null} serverNow={() => 0} turnTimerMs={30000} lang="en" frame="landscape" canSit={false} />,
+      )
+      expect(screen.queryByRole('group', { name: 'Players' })).toBeNull()
+      expect(document.querySelector('[data-seats="9"]')).not.toBeNull()
+    } finally {
+      window.matchMedia = original
+    }
+  })
+
+  it('marks the seats at the ring’s flanks with data-edge, so their badge lines can run onto the felt', () => {
+    wrap(<PokerTable room={fullRoom} hand={null} myPlayerId="p0" deadlineAt={null} serverNow={() => 0} turnTimerMs={30000} lang="en" layout="ring" canSit={false} />)
+    const positions = ringPositions(Array.from({ length: 9 }, (_, i) => i), 0)
+    const edges = [...positions].map(([seat, p]) => [seat, p.x < 15 ? 'left' : p.x > 85 ? 'right' : null])
+    expect(edges.filter(([, edge]) => edge !== null).length, 'nine seats put one at each flank').toBe(2)
+    for (const [seat, edge] of edges) {
+      expect(document.querySelector(`[data-seat="${seat}"]`)!.getAttribute('data-edge'), `seat ${seat}`).toBe(edge)
+    }
+  })
+
+  it('passes the measured box ratio to ringPositions and falls back to 2:1 without ResizeObserver', () => {
+    const order = Array.from({ length: 9 }, (_, i) => i)
+    const left = (seat: number): string => document.querySelector<HTMLElement>(`[data-seat="${seat}"]`)!.style.left
+    const table = (
+      <PokerTable room={fullRoom} hand={null} myPlayerId="p0" deadlineAt={null} serverNow={() => 0} turnTimerMs={30000} lang="en" layout="ring" canSit={false} />
+    )
+    // jsdom: no ResizeObserver, so the ring keeps the 2:1 box its CSS pins on a desktop
+    vi.stubGlobal('ResizeObserver', undefined)
+    try {
+      const plain = wrap(table)
+      expect(left(1)).toBe(`${ringPositions(order, 0).get(1)!.x}%`)
+      plain.unmount()
+
+      // a landscape ring capped by its width: 750 × 250, a 3:1 box
+      const ctl: { fire?: () => void } = {}
+      const observed: Element[] = []
+      class FakeObserver {
+        constructor(callback: ResizeObserverCallback) {
+          ctl.fire = () =>
+            callback(
+              observed.map((target) => ({ target, contentRect: { width: 750, height: 250 } }) as unknown as ResizeObserverEntry),
+              this as unknown as ResizeObserver,
+            )
+        }
+        observe(el: Element): void {
+          observed.push(el)
+        }
+        unobserve(): void {}
+        disconnect(): void {
+          observed.length = 0
+        }
+      }
+      vi.stubGlobal('ResizeObserver', FakeObserver)
+      wrap(table)
+      expect(observed).toHaveLength(1)
+      expect(observed[0]).toBe(document.querySelector('[data-seats="9"]'))
+      act(() => ctl.fire!())
+      const wide = ringPositions(order, 0, { w: 750, h: 250 })
+      expect(left(1)).toBe(`${wide.get(1)!.x}%`)
+      expect(left(1)).not.toBe(`${ringPositions(order, 0).get(1)!.x}%`)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('draws the first frame on the measured box, before the observer has reported (no 2:1 flash)', () => {
+    const order = Array.from({ length: 9 }, (_, i) => i)
+    const left = (seat: number): string => document.querySelector<HTMLElement>(`[data-seat="${seat}"]`)!.style.left
+    class SilentObserver {
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    }
+    vi.stubGlobal('ResizeObserver', SilentObserver)
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ width: 750, height: 250 } as DOMRect)
+    try {
+      wrap(
+        <PokerTable room={fullRoom} hand={null} myPlayerId="p0" deadlineAt={null} serverNow={() => 0} turnTimerMs={30000} lang="en" layout="ring" canSit={false} />,
+      )
+      // the observer never fired: the seats already stand on the 3:1 box the layout effect read synchronously
+      expect(left(1)).toBe(`${ringPositions(order, 0, { w: 750, h: 250 }).get(1)!.x}%`)
+      expect(left(1)).not.toBe(`${ringPositions(order, 0).get(1)!.x}%`)
+    } finally {
+      rect.mockRestore()
+      vi.unstubAllGlobals()
+    }
   })
 })

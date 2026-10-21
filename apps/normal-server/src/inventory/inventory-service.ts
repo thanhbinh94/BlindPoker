@@ -18,13 +18,13 @@
  * the old row, and the daily draw's unowned pool never re-offers, under its current id, a cosmetic a
  * legacy player already owns under its old one.
  */
-import { and, asc, eq, inArray, notInArray } from 'drizzle-orm'
+import { and, asc, eq, inArray, notInArray, sql } from 'drizzle-orm'
 import type { AppDb, AppTx } from '../db/client.js'
-import { inventory, items } from '../db/schema.js'
+import { avatarOutfits, inventory, items, players } from '../db/schema.js'
 import { isUuid } from '../repos/util.js'
 import { loadAliases } from './aliases.js'
 import type { Rarity } from './items.js'
-import type { ItemSlot } from './slots.js'
+import { OPTIONAL_SLOTS, type ItemSlot } from './slots.js'
 
 /**
  * What a draw must not reach.
@@ -63,8 +63,22 @@ export interface OwnedItem {
 export interface InventoryService {
   /** Everything this player owns, oldest first. */
   list(playerId: string): Promise<OwnedItem[]>
-  /** Grants inside the caller's transaction. Returns false when the player already had it. */
-  grant(tx: AppTx, playerId: string, itemId: string, source: string): Promise<boolean>
+  /**
+   * Grants inside the caller's transaction. Returns false when the player already had it.
+   * `ref` names the claim the item came from (`daily:<playerId>:<date>`), so a GM can take back exactly that claim.
+   */
+  grant(tx: AppTx, playerId: string, itemId: string, source: string, ref?: string): Promise<boolean>
+  /**
+   * The items of the **latest** claim carrying `ref`: the rows with that ref whose `acquired_at` is the newest one.
+   * A reclaim after a GM's undo reuses the same ref, so only the newest claim counts as "today's".
+   */
+  findByRef(tx: AppTx, playerId: string, ref: string): Promise<string[]>
+  /**
+   * Takes an item back inside the caller's transaction: out of every optional slot of the worn figure, out of the
+   * equipped title and badge, out of every saved outfit — and only then the row itself. Returns false when the player
+   * did not own it.
+   */
+  revoke(tx: AppTx, playerId: string, itemId: string): Promise<boolean>
   owns(playerId: string, itemId: string): Promise<boolean>
   /**
    * The ids of every catalogue item of `rarity` this player does *not* own and `exclude` does not
@@ -92,6 +106,18 @@ function reverseAliases(aliases: ReadonlyMap<string, string>): Map<string, strin
     else list.push(oldId)
   }
   return reverse
+}
+
+/**
+ * `config` without every optional slot that names `itemId`, or `null` when none does. The required slots (hairstyle,
+ * outfit) are never touched: a GM can only take back what a daily draw or a fixed gift can hand out.
+ */
+function stripItem(config: Record<string, unknown>, itemId: string): Record<string, unknown> | null {
+  const keys = OPTIONAL_SLOTS.filter((slot) => config[slot] === itemId)
+  if (keys.length === 0) return null
+  const next = { ...config }
+  for (const key of keys) delete next[key]
+  return next
 }
 
 /**
@@ -126,13 +152,56 @@ export function createInventoryService(
       return [...owned, ...free]
     },
 
-    async grant(tx, playerId, itemId, source) {
+    async grant(tx, playerId, itemId, source, ref) {
       const granted = await tx
         .insert(inventory)
-        .values({ playerId, itemId, source })
+        .values({ playerId, itemId, source, ...(ref === undefined ? {} : { ref }) })
         .onConflictDoNothing({ target: [inventory.playerId, inventory.itemId] })
         .returning({ itemId: inventory.itemId })
       return granted.length > 0
+    },
+
+    async findByRef(tx, playerId, ref) {
+      if (!isUuid(playerId)) return []
+      const rows = await tx
+        .select({ itemId: inventory.itemId })
+        .from(inventory)
+        .where(
+          and(
+            eq(inventory.playerId, playerId),
+            eq(inventory.ref, ref),
+            sql`${inventory.acquiredAt} = (select max(i2.acquired_at) from inventory i2 where i2.player_id = ${playerId} and i2.ref = ${ref})`,
+          ),
+        )
+        .orderBy(asc(inventory.itemId))
+      return rows.map((r) => r.itemId)
+    },
+
+    async revoke(tx, playerId, itemId) {
+      if (!isUuid(playerId)) return false
+      const [worn] = await tx.select({ config: players.avatarConfig }).from(players).where(eq(players.id, playerId))
+      const strippedConfig = worn === undefined ? null : stripItem(worn.config, itemId)
+      if (strippedConfig !== null) {
+        // The denormalised title and badge are written in the same statement as the config they mirror.
+        await tx
+          .update(players)
+          .set({
+            avatarConfig: strippedConfig,
+            equippedTitle: typeof strippedConfig.title === 'string' ? strippedConfig.title : null,
+            equippedBadge: typeof strippedConfig.badge === 'string' ? strippedConfig.badge : null,
+          })
+          .where(eq(players.id, playerId))
+      }
+      const outfits = await tx.select({ slot: avatarOutfits.slot, config: avatarOutfits.config }).from(avatarOutfits).where(eq(avatarOutfits.playerId, playerId))
+      for (const outfit of outfits) {
+        const stripped = stripItem(outfit.config, itemId)
+        if (stripped !== null) await tx.update(avatarOutfits).set({ config: stripped }).where(and(eq(avatarOutfits.playerId, playerId), eq(avatarOutfits.slot, outfit.slot)))
+      }
+      const removed = await tx
+        .delete(inventory)
+        .where(and(eq(inventory.playerId, playerId), eq(inventory.itemId, itemId)))
+        .returning({ itemId: inventory.itemId })
+      return removed.length > 0
     },
 
     async owns(playerId, itemId) {

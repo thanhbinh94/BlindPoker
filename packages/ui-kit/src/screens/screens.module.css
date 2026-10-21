@@ -376,3 +376,80 @@
     width: auto;
   }
 }
+
+/* ── room, phone held sideways ────────────────────────────────────────────── */
+
+/* The frame the room is told about by `data-frame` (`useRoomFrame`). A phone on its side has 320–430 px of height, so
+   the stage is the screen itself: no minimum, nothing that scrolls the page, and the safe-area insets keep the notch
+   off the table. Every later landscape rule keys on this attribute, after the base rules it overrides. */
+.room[data-frame='landscape'] {
+  position: relative;
+  height: var(--bp-stage, 100dvh);
+  min-height: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  gap: var(--space-2);
+  padding: var(--space-2) max(var(--space-3), env(safe-area-inset-right)) var(--space-2) max(var(--space-3), env(safe-area-inset-left));
+}
+
+/* The pre-hand dock (Plan 26, B2): Ready, Start, the ready count, and the countdown once the result card is closed, in
+   the bottom-right corner where the right thumb rests and where the action tray sits during a hand (the two never show
+   together). One row, 60 px tall at most: the ring keeps its seats out of the stage's bottom 56 px (B3), and the dock
+   sits 12 px from the room's foot, which is 16 px below the stage's. The hint that wrapped under the buttons now lies
+   on the felt (`PokerTable`'s `note`). A night pill of its own, so its muted lines read over the felt or the page in
+   either theme. */
+.room[data-frame='landscape'] .dock {
+  position: absolute;
+  right: max(var(--space-3), env(safe-area-inset-right));
+  bottom: max(var(--space-3), env(safe-area-inset-bottom));
+  z-index: 3;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  /* the cap keeps the corner small, clear of the viewer's plate: "Hủy sẵn sàng", "Bắt đầu" and "8/8 sẵn sàng" fit one
+     row in it with the buttons' side padding at 12 px */
+  max-width: min(60%, 22rem);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  text-align: right;
+}
+
+.room[data-frame='landscape'] .dock > button {
+  flex: none;
+  white-space: nowrap;
+  padding-inline: var(--space-3);
+}
+
+.room[data-frame='landscape'] .dock .readyCount {
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+/* The reconnect banner (spec B2): it lies over the felt just under the one-line header instead of taking a row, so a
+   dropped socket does not push the ring down. Above the felt and the docks, below the Thêm menu (z-modal − 1). */
+.room[data-frame='landscape'] .banner {
+  position: absolute;
+  top: 40px;
+  left: 50%;
+  z-index: 6;
+  max-width: calc(100% - 2 * var(--space-3));
+  margin: 0;
+  /* a slimmer pill than the desktop's: it ends above the top seat's plate (about 75 px down at 915 × 412) */
+  padding: var(--space-1) var(--space-3);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+/* The result overlay (Plan 26, B5): keyed on the overlay's own `data-frame`, after the base rules. The card is centred
+   over the felt, and the bottom 60 px stay free, so the corner docks (pre-hand dock, action tray, z-index 3 and 5) stay
+   visible and tappable beside it, below the scrim. No `--seat-clearance` here: the viewer's plate is small and the card
+   is on the felt, not under it. */
+.overlay[data-frame='landscape'] {
+  inset: 0 0 60px 0;
+  padding: var(--space-2);
+  align-items: center;
+}

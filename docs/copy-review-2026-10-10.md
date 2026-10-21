@@ -61,6 +61,7 @@ Người dùng yêu cầu ngày 10/10: "check đa ngôn ngữ … có những đ
 - **Tính năng và kinh tế:** Số dư (đơn vị luôn là "điểm"), Điểm danh, chuỗi điểm danh, quà điểm danh, Cứu trợ, Cộng dồn, Phí bàn, Chủ phòng, Bot, Cái.
 - **Thành tựu:** đạt / chưa đạt. Món đang trang bị: "Đang dùng".
 - **Quản trị (Plan 25, 2026-10-18):** màn và hàng ở Cài đặt tên là **"Quản trị"**; người giữ vai trò là **"Quản trị viên"** (số nhiều không đổi). Các tab: Tổng quan, Người chơi, Phòng, Nhật ký. Việc làm được: **Khóa tài khoản**, **Mở khóa**, **Cộng/trừ điểm**, **Cấp món**, **Đóng phòng**, **Mời ra** (cùng chữ với nút "Mời ra" của chủ phòng), Trao quyền quản trị / Thu quyền quản trị. Mỗi hành động cần **Lý do** (3–200 ký tự). Dòng sổ điểm: "Quản trị viên cộng điểm", "Quản trị viên trừ điểm". Trạng thái: "Đã khóa". Test e2e `06-gm.spec.ts` và `GmScreen`/`PlayerDetail` bám vào các chữ này.
+- **Bàn trên điện thoại xoay ngang (Plan 26, 2026-10-20):** nút ⋯ ở thanh trên có tên **"Thêm"** (menu chứa Đứng dậy, Tạm nghỉ / Chơi tiếp, Quản lý bàn); mục **"Toàn màn hình"** và **"Thoát toàn màn hình"** (chỉ hiện khi trình duyệt cho phép); hộp thoại gõ số điểm tự chọn là **"Nhập số điểm"**. Test e2e `07-landscape.spec.ts` và `RoomScreen`/`ActionBar` bám vào các chữ này.
 - **Mới chuẩn hóa đợt này:**
   - lỗi thao tác dùng **"Thao tác"** (nhóm nút trên bàn vẫn có aria-label "Hành động", xem mục 5);
   - danh hiệu thắng 10 ván liền là **"Vận đỏ"**;
@@ -112,6 +113,7 @@ Người dùng yêu cầu ngày 10/10: "check đa ngôn ngữ … có những đ
 | items.haircolor_lavender01 | Tóc bạc tím | Tóc tím pastel | Màu này là tím nhạt (`#c7b8f0`), không có ánh bạc. Tiệm tóc Việt gọi là "tím pastel". Tên mới cũng tách rõ với "Tóc tím". |
 | items.skin_lighttan01 | Da sáng ấm | Da bánh mật | "sáng ấm" là ghép nghĩa "light" + "tan". Người Việt gọi tông da này là "da bánh mật". Dãy tông da đọc tự nhiên: trắng sứ, sáng, bánh mật, ngăm, nâu, nâu đậm. |
 | achievements.login_streak_7.name | Chuỗi bảy ngày | Chuỗi 7 ngày | Đứng ngay cạnh "Chuỗi 28 ngày" trong cùng danh sách, nên viết số cho đồng bộ. |
+| auth.heroLead (khóa mới, Plan 26, 2026-10-20) | (mới) | Poker điểm thưởng, chơi với bạn bè. Một tài khoản, mọi thiết bị: điểm, tủ đồ và thành tựu đi theo bạn. (en: Points poker with friends. One account, every device: your points, wardrobe and achievements go with you.) | Câu dẫn đặt trên tranh ở trang đăng nhập, dưới tiêu đề "Blind Luck Poker" (`AuthScreen.tsx`, `p.heroLead`), chỉ hiện từ 1024 px trở lên. Câu đầu nói đây là poker điểm thưởng chơi với bạn, câu sau trả lời "đăng nhập để được gì": mọi thiết bị dùng chung điểm, tủ đồ và thành tựu. Giữ "tủ đồ" và "thành tựu" như tên màn hình trong ứng dụng. Bản en chỉ dịch lại, không đổi ý. |
 
 ### 4.4 `apps/lite/web/src/locales/vi/lite.json`
 

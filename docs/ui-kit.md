@@ -460,12 +460,13 @@ The playground's `#peel` page is the card alone on the felt, for trying the gest
 
 **On the table.** `Seat` draws the viewer's own cards as `PeelCard`s *for the whole hand* of a squeeze room (swapped for
 `Card`s mid-hand they would remount and come out of the deck again), each `open = openAll || seat.revealed || !squeezeRound`:
-the "Lật" pill below the cards turns both at once, the server turning the seat (a decision, the forced turn at the
+the "Lật" pill at the foot of the cards turns both at once, the server turning the seat (a decision, the forced turn at the
 deadline) opens what is still down, and so does the round ending. `REVEAL` goes out **once per hand, after the viewer's last
 card is up** (`onCardUp`, then `onReveal` → `PokerTable` → `RoomScreen`'s `client.reveal()`), not when the first card
 turns and not at all if the server turned the seat itself. The "Lật" pill is 28 px tall at least, and it keeps its place for
-the whole hand (out of sight and reach once nothing is left to turn): taken out, it would move the seat's block and the
-cards opening in it. A ring↔stack switch in the middle of a round remounts the seat; a card peeled but not yet reported
+the whole hand (out of sight and reach once nothing is left to turn), inside the cards' box (`.seatCards`), laid over their
+bottom edge with no row of its own (Plan 26, B6) and 40 px wide, so that a finger starting a peel at a card's corner does
+not land on it. Hidden it stays, so the cards opening beside it do not move. A ring↔stack switch in the middle of a round remounts the seat; a card peeled but not yet reported
 comes back down, and the next "Lật" may send a second `REVEAL`, which the engine takes as the no-op it is. A `REVEAL` lost
 with the socket is sent once more: when the reconnect's snapshot rebuilds the hand (`restored`, which `PokerTable` passes
 on) with the seat still unturned while this seat's cards are up from before, `Seat` tells the table again — not for a hand
@@ -696,6 +697,59 @@ Breakpoints 480 / 768 / 1024, per spec §27.1. No horizontal page scroll at any 
   take its place full-width, and the room header and tray tighten so the viewer's own cards stay on screen.
 - Touch targets are ≥ 44 px (`--tap`) wherever the pointer is coarse.
 
+### The landscape frame (Plan 26, Part B)
+
+A phone held sideways has 320–430 px of height, and the desktop stage (header, felt, tray) leaves the table too little
+of it. So the room has two **frames**, `RoomFrame = 'desktop' | 'landscape'` (`table/frame.ts`):
+
+- **The trigger** is the constant `LANDSCAPE_PHONE = '(orientation: landscape) and (max-height: 500px) and (min-width:
+  700px)'`, read by `useRoomFrame(override?)`. `override` wins when given (a host app, the playground); without
+  `matchMedia` the answer is `desktop`. The 700 px floor is deliberate: a narrower short window (a 640 × 360 phone) has
+  no width for the ring's rim and keeps the stack. It is a *viewport* test (see Known gaps for what that means with a
+  soft keyboard), and there is no orientation lock to offer (iOS has none).
+- **The prop and the keys.** `RoomScreen` calls `useRoomFrame` above its early return and hands `frame` to `PokerTable`,
+  `ActionBar` and `HandResult`; each stamps it as `data-frame` on its own root, and the CSS is keyed on that attribute,
+  after the base rules it overrides: `.room[data-frame='landscape']` (screens.module.css), `.ring[…]`, `.tray[…]` and
+  `.result[…]` (table.module.css), `.overlay[…]` (the result overlay). A CSS module cannot name another module's hashed
+  class, which is why every piece carries its own attribute rather than inheriting from `.room`. In `landscape` the table
+  is always the ring (`layout` is ignored): the stack needs height the frame does not have.
+- **Header and menu.** `RoomHeader compact` is one 32 px line (the code, the squeeze badge, **Thêm**, Rời phòng). The
+  footer `.controls` row is gone: Đứng dậy, Tạm nghỉ / Chơi tiếp (a `menuitemcheckbox`), Quản lý bàn (the host's) and
+  Toàn màn hình / Thoát toàn màn hình (only where `document.fullscreenEnabled`) live in the `MenuButton` primitive
+  (`primitives/MenuButton.tsx`: a `⋯` trigger, `role="menu"` with `menuitem`s, the first item takes the focus, arrow keys
+  walk the enabled ones, Escape and a press outside close it, Escape and a pick give the focus back). The reconnect
+  banner ("Mất kết nối — đang kết nối lại…") takes no row here: `.room[data-frame='landscape'] .banner` lays a slimmer
+  pill over the felt 40 px from the top, centred, at z-index 6 (over the felt and the docks, under the menu at
+  `--z-modal` − 1), so a dropped socket moves no seat (spec B2; L-01 cuts the socket and compares the seat boxes).
+- **The corner docks.** Bottom right, `.dock` in the room holds what starts a hand: Sẵn sàng / Hủy sẵn sàng, Bắt đầu,
+  the ready count and the between-hands countdown. During a hand the action tray takes the same corner and splits in two
+  (`.trayLeft`: the pre-action toggles and Tự động chơi, which the Hold'em presets Min · ½ · Pot · Max · ✎ replace after the first tap on Cược/Tố; `.trayRight`: Bỏ bài ·
+  Xem/Theo · Cược/Tố · Tất tay), so the two never share it: between hands the tray gives up its right part and keeps its
+  left one. The waiting hint ("Cần ít nhất 2 người…") moves onto the felt (`PokerTable`'s `note`), which is what
+  keeps the dock one row. Amounts sit on a second line under their verb, and the raise takes two taps (the first opens
+  the presets in the left corner, in place of the toggles; the second sends; Enter is still one step). The slider is
+  gone, and Tất tay leaves the right row while the presets are open ("Max" does its job there).
+- **The ring.** Sized by the *measured* box (read once in the layout effect with `getBoundingClientRect`, so the first
+  paint already has it, then followed by `ResizeObserver`; 2:1 without it): `ringPositions(seatOrder, anchor, box)`
+  spaces seats by equal arc length for that ratio, so a 2.5 : 1 felt gets different angles than a 2 : 1 one and equal
+  pixel gaps between neighbours. Plates are compact (94 px min, 30 px avatar), the seats at the flanks carry `data-edge`
+  so their badge lines can run onto the felt, and the viewer's block stands on the rim between the docks with a 56 px row
+  left free at the bottom. An occupied seat is no click target; the only one is the empty seat's `.sitBtn`, kept ≥ 44 px.
+- **The dialog.** "✎" (or the R key) opens `AmountDialog`, a `Modal anchor="top"` ("Nhập số điểm"): the soft keyboard
+  covers the bottom half of a page that does not scroll, so the dialog hangs from the top, with `max-height: calc(100dvh -
+  2 * var(--space-4))` and tight padding. Enter confirms the amount; it never raises by itself.
+- **The result card** (`HandResult frame="landscape"`) is one compact block over the felt: title and a 44 px Đóng in one
+  head, one-line winners, the fee and the countdown in a one-line foot, leaving the dock row free. Its live region clips
+  (`overflow: hidden`), and the head and foot do not shrink; both are root fixes for every frame, not only this one
+  (bug log, mục 8, N3).
+- **The playground** forces a frame without resizing: `#worst/<state>/<seats>/<lang>[/long][/landscape|/desktop]`, with
+  `blindS` (the squeeze table) among the states.
+- **What pins it.** `table/frame.test.ts` (the query, the override), `RoomScreen.test.tsx` and `HandResult.test.tsx` (the
+  stamps, the menu, the dock), `MenuButton.test.tsx`, `geometry.test.ts`, `PokerTable.test.tsx`, `ActionBar.test.tsx`; in a
+  browser, the ops pack's `landscape` project (915 × 412, touch; titles tagged `@landscape`), `07-landscape.spec.ts`
+  L-01 … L-05, each ending with `expectRoomFits` and `expectNoTextOverlapAt`. The rows are in `docs/test-matrix.md`
+  (Plan 26, Part B).
+
 ---
 
 ## The text-overlap rule
@@ -864,11 +918,17 @@ full-viewport, for measuring a layout against a screen size.
   as images.
 - **The squeeze peel** is driven in Chromium only, and not yet on a real phone: Firefox's and WebKit's touch-capture
   semantics are guarded in `PeelCard` and unit-tested with synthetic events, never run in those browsers. On a device
-  that does not coalesce pointer events a single quick move after a rest is not read as a flick. A play-or-fold squeeze
-  table on a 375 × 812 phone (six seats, one bot) scrolls its stage 11 px in the round (its header takes a third line and
-  the viewer's seat the "Lật" pill's row; the seat stays on screen); a pure-luck one fits since the phone's tray wait
-  line gave back 8 px (the final fix wave: it was 3 px over). A ring↔stack switch in the middle of a round can send a
-  second, harmless `REVEAL`. All four are written up in `docs/known-limitations.md`.
+  that does not coalesce pointer events a single quick move after a rest is not read as a flick. (A squeeze table on a
+  375 × 812 phone used to scroll its stage by 11 px, play-or-fold, or 3 px, pure luck; Plan 26 lifted the header's gold
+  badge up beside the room's name and laid the "Lật" pill over the foot of the cards, and F-12 / F-12b assert that both
+  fit.) A ring↔stack switch in the middle of a round can send a second, harmless `REVEAL`. The three are written up in
+  `docs/known-limitations.md`.
+- **The landscape frame is driven in Chromium only, at 915 × 412, 915 × 355 and 844 × 390** (740 × 360 fits, with thin
+  margins), never on a real phone. The query is a viewport test, so a portrait phone with its soft keyboard up can read as
+  landscape; the only text field on the table is the top-anchored "Nhập số điểm" dialog. The result card is opaque and
+  covers the side seats, and at 844 × 390 the top of the viewer's plate. A Hold'em table with nine occupied plates in
+  landscape (a room seats nine) has no browser test, only the playground's `#worst/…/9/…/landscape`, which is crowded
+  on the left at 915 × 355. All in `docs/known-limitations.md`.
 - **The badge test measures the grounds a badge sits on today** (see Theming → Badge text). A badge on a ground it
   does not list is not measured, and one place is tight: teal under a dark `.panel.ink`'s highlight. The test holds
   that highlight at 2 %, above anywhere a badge is (Lite's "claimed" badge: 0.8–1.4 %, none on a phone; titled panels put

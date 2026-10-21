@@ -46,8 +46,9 @@ deploy/normal-windows/*.log
 .worktrees/
 .superpowers/
 
-# The user's private scratch (review notes, screenshots). Never committed.
+# The user's private scratch (review notes, screenshots). Never committed. Both spellings exist on disk.
 other/
+others/
 
 # A VPS credential note the user keeps beside the docs: never staged.
 docs/vps*.*

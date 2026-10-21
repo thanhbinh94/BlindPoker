@@ -14,6 +14,7 @@
   "auth": {
     "title": "Blind Luck Poker",
     "lead": "One account, every device. Your points, wardrobe and achievements follow the account, not the machine.",
+    "heroLead": "Points poker with friends. One account, every device: your points, wardrobe and achievements go with you.",
     "signIn": "Sign in",
     "register": "Register",
     "email": "Email",
@@ -131,7 +132,32 @@
     "title": "Game master",
     "copyId": "Copy id",
     "copied": "Copied",
-    "tabs": { "overview": "Overview", "players": "Players", "rooms": "Rooms", "actions": "Log" },
+    "tabs": { "overview": "Overview", "players": "Players", "rooms": "Rooms", "gifts": "Gift months", "actions": "Log" },
+    "gifts": {
+      "month": "Month",
+      "edited": "(edited)",
+      "lead": "Each cell is a check-in streak tier. In the current month only the days after today can change.",
+      "error": "Could not load the gift schedule",
+      "rule": {
+        "default": "As default",
+        "none": "No gift",
+        "common": "Random common",
+        "rare": "Random rare",
+        "fixed": "Fixed"
+      },
+      "ruleOf": "Gift of day {{day}}",
+      "items": "Items of day {{day}}",
+      "pickItem": "Choose an item",
+      "addItem": "Add item",
+      "removeItem": "Remove item",
+      "needItem": "A fixed day needs at least one item.",
+      "save": "Save",
+      "reset": "Back to default",
+      "saveTitle": "Save the gifts of {{month}}",
+      "resetTitle": "Drop the edits of {{month}}",
+      "editDay": "Day {{day}}",
+      "locked": "Past, cannot change"
+    },
     "overview": {
       "online": "Connected now",
       "rooms": "Open rooms",
@@ -144,7 +170,17 @@
       "sinks": "Out of the economy",
       "reasonColumn": "Reason",
       "total": "Total",
-      "error": "Could not load the overview"
+      "error": "Could not load the overview",
+      "byDay": "By day",
+      "days7": "7 days",
+      "days30": "30 days",
+      "colDay": "Day",
+      "colSources": "Sources",
+      "colSinks": "Sinks",
+      "colNet": "Net",
+      "colBar": "Share",
+      "byDayEmpty": "No transactions in this range.",
+      "byDayError": "Could not load the figures by day"
     },
     "players": {
       "search": "Search by email or name",
@@ -185,6 +221,8 @@
       "unlock": "Unlock",
       "promote": "Make a game master",
       "demote": "Remove game master rights",
+      "unlockAchievement": "Unlock achievement",
+      "resetCheckin": "Reset check-in",
       "kick": "Remove from room",
       "close": "Close room"
     },
@@ -192,6 +230,9 @@
       "reason": "Reason (required, 3–200 characters)",
       "amount": "Points (negative to deduct, at most ±10,000,000)",
       "item": "Item id",
+      "achievement": "Achievement",
+      "checkinBody": "Undo today's check-in: take back {{points}} points and {{items}}; the streak is kept and the player can claim again at once.",
+      "noItems": "no items",
       "confirm": "Confirm",
       "cancel": "Cancel",
       "close": "Close",
@@ -226,6 +267,7 @@
       "amount": "Points",
       "reason": "Reason",
       "cli": "Server (CLI)",
+      "month": "Month {{month}}",
       "filterPlayer": "Filter by player",
       "filterRoom": "Filter by room",
       "filter": "Filter",
@@ -242,7 +284,11 @@
         "kick": "Removed",
         "close_room": "Room closed",
         "promote": "Promoted",
-        "demote": "Demoted"
+        "demote": "Demoted",
+        "unlock_achievement": "Unlock achievement",
+        "reset_checkin": "Reset check-in",
+        "set_gift_month": "Set gift month",
+        "clear_gift_month": "Clear gift month"
       }
     },
     "done": {
@@ -251,6 +297,10 @@
       "lock": "Account locked",
       "unlock": "Account unlocked",
       "role": "Role changed",
+      "unlockAchievement": "Achievement unlocked and rewarded.",
+      "resetCheckin": "Today's check-in has been reopened.",
+      "setGiftMonth": "Gift month saved.",
+      "clearGiftMonth": "Back to the default gifts.",
       "kick": "Removed ({{when}})",
       "kickNow": "now",
       "kickAfterHand": "after this hand",
@@ -270,14 +320,25 @@
       "GAME_IN_PROGRESS": "A hand is in progress",
       "SELF_TARGET": "You cannot do this to yourself",
       "TARGET_IS_GM": "This player is a game master; demote first",
-      "TARGET_IS_LOCKED": "This account is locked; unlock it first"
+      "TARGET_IS_LOCKED": "This account is locked; unlock it first",
+      "INVALID_ACHIEVEMENT": "No such achievement.",
+      "ALREADY_UNLOCKED": "The player already has this achievement.",
+      "NOT_CLAIMED_TODAY": "The player has not checked in today.",
+      "TIER_LOCKED": "That day has already passed this month.",
+      "MONTH_IN_PAST": "That month is over.",
+      "INVALID_GIFTS": "Invalid gift schedule: {{message}}",
+      "NOTHING_TO_CLEAR": "This month has no edits.",
+      "INVALID_MONTH": "Invalid month."
     },
     "notice": {
       "points": "{{amount}} points — {{reason}}",
       "item": "{{item}} — {{reason}}",
       "promote": "You are now a game master — {{reason}}",
       "demote": "Your game-master role was removed — {{reason}}",
-      "wardrobe": "You were given the whole wardrobe — {{reason}}"
+      "wardrobe": "You were given the whole wardrobe — {{reason}}",
+      "unlock_achievement": "A GM unlocked the achievement \"{{name}}\" for you.",
+      "reset_checkin": "Today's check-in has been reopened: {{amount}} points taken back — {{reason}}",
+      "reset_checkin_plain": "Today's check-in has been reopened — {{reason}}"
     }
   },
   "screens": {
@@ -364,6 +425,8 @@
       "achievement": "Achievement reward",
       "gm_grant": "Points from the game master",
       "gm_adjust": "Points taken by the game master",
+      "gm_achievement": "GM unlocked an achievement",
+      "gm_checkin_undo": "GM undid a check-in",
       "other": "Other"
     }
   },

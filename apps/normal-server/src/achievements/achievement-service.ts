@@ -16,13 +16,13 @@
  * rather than a locked padlock with no number on it.
  */
 import type { ServerMessage } from '@bp/core'
-import type { Logger } from '@bp/server-kit'
+import type { Logger, TxReason } from '@bp/server-kit'
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
-import type { AppDb } from '../db/client.js'
+import type { AppDb, AppTx } from '../db/client.js'
 import { playerAchievements, players } from '../db/schema.js'
 import type { AppEvent, AppEventBus } from '../events.js'
 import type { InventoryService } from '../inventory/inventory-service.js'
-import type { NormalRepositories } from '../repos/index.js'
+import { creditWithin, type NormalRepositories } from '../repos/index.js'
 import { isUuid } from '../repos/util.js'
 import type { StatsService } from '../stats/stats-service.js'
 import { byMetric, type AchievementDef } from './definitions.js'
@@ -62,6 +62,46 @@ export interface AchievementServiceDeps {
 /** The `source` recorded in `inventory` for an item that came from an achievement. */
 const ACHIEVEMENT_SOURCE = 'achievement'
 
+/**
+ * Flips one achievement to unlocked and pays its whole reward inside the caller's transaction — the one code path
+ * both the earning of an achievement and a GM's unlock of it go through, so the two cannot drift apart.
+ *
+ * The row is upserted first: a player who never made progress on this metric has no `player_achievements` row, and the
+ * guarded UPDATE below would match nothing and report `'already'` for an achievement that was never unlocked.
+ * `'already'` means the UPDATE found the row unlocked (nothing was paid); `'unlocked'` means this call flipped it.
+ */
+export async function unlockWithin(
+  tx: AppTx,
+  playerId: string,
+  def: AchievementDef,
+  at: Date,
+  pay: { inventory: InventoryService; reason: TxReason; refId: string },
+): Promise<'unlocked' | 'already'> {
+  await tx.insert(playerAchievements).values({ playerId, achievementId: def.id }).onConflictDoNothing()
+  // The `unlocked_at IS NULL` predicate is the whole idempotency argument: a second attempt
+  // updates no rows and therefore pays nothing.
+  const claimed = await tx
+    .update(playerAchievements)
+    .set({ unlockedAt: at })
+    .where(
+      and(
+        eq(playerAchievements.playerId, playerId),
+        eq(playerAchievements.achievementId, def.id),
+        isNull(playerAchievements.unlockedAt),
+      ),
+    )
+    .returning({ id: playerAchievements.achievementId })
+  if (claimed.length === 0) return 'already'
+
+  if (def.reward.points !== undefined) {
+    await creditWithin(tx, [{ playerId, delta: def.reward.points, reason: pay.reason, refId: pay.refId }])
+  }
+  if (def.reward.itemId !== undefined) {
+    await pay.inventory.grant(tx, playerId, def.reward.itemId, ACHIEVEMENT_SOURCE)
+  }
+  return 'unlocked'
+}
+
 export function createAchievementService(deps: AchievementServiceDeps): AchievementService {
   const now = deps.now ?? Date.now
   const index = byMetric(deps.defs)
@@ -93,29 +133,8 @@ export function createAchievementService(deps: AchievementServiceDeps): Achievem
   async function unlock(playerId: string, def: AchievementDef): Promise<void> {
     const at = new Date(now())
     const outcome = await deps.db.transaction(async (tx) => {
-      // The `unlocked_at IS NULL` predicate is the whole idempotency argument: a second attempt
-      // updates no rows and therefore pays nothing.
-      const claimed = await tx
-        .update(playerAchievements)
-        .set({ unlockedAt: at })
-        .where(
-          and(
-            eq(playerAchievements.playerId, playerId),
-            eq(playerAchievements.achievementId, def.id),
-            isNull(playerAchievements.unlockedAt),
-          ),
-        )
-        .returning({ id: playerAchievements.achievementId })
-      if (claimed.length === 0) return null
-
-      if (def.reward.points !== undefined) {
-        await deps.repos.balances.creditWithin(tx, [
-          { playerId, delta: def.reward.points, reason: 'achievement', refId: `ach:${playerId}:${def.id}` },
-        ])
-      }
-      if (def.reward.itemId !== undefined) {
-        await deps.inventory.grant(tx, playerId, def.reward.itemId, ACHIEVEMENT_SOURCE)
-      }
+      const result = await unlockWithin(tx, playerId, def, at, { inventory: deps.inventory, reason: 'achievement', refId: `ach:${playerId}:${def.id}` })
+      if (result === 'already') return null
       if (def.reward.points === undefined) return { balance: null }
       // Read through `tx`, not `repos.balances.get`: that opens a connection of its own, which
       // under read-committed would still see the pre-credit balance this transaction has not

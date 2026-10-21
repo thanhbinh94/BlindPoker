@@ -12,7 +12,7 @@ import {
   type ClientNotification,
   type SocketFactory,
 } from '@bp/ui-kit'
-import { Suspense, useCallback, useEffect, useMemo, useRef } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AvatarCatalogDto, ItemDto, NormalApi } from './api.js'
 import a from './avatar/avatar.module.css'
@@ -217,19 +217,24 @@ export function App({ api, socketFactory }: AppProps) {
 
   // A promotion or a demotion changes the role under a live session: the gate asks the server again, so the Settings
   // row that links the console and the `#/gm` route follow at once instead of at the next reload. Each notice is handled
-  // once, by object — the reducer reuses ids after a dismissal, but never a notification object.
+  // once, by object — the reducer reuses ids after a dismissal, but never a notification object. A reopened check-in is
+  // counted the same way, and the daily page reads its status again when the count moves (Plan 26, Ruling 11).
   const rawNotifications = client.state.notifications
   const { refresh: refreshGate } = gate
   const roleNoticesSeen = useRef(new WeakSet<ClientNotification>())
+  const [checkinResets, setCheckinResets] = useState(0)
   useEffect(() => {
     let changed = false
+    let resets = 0
     for (const n of rawNotifications) {
       if (roleNoticesSeen.current.has(n)) continue
       roleNoticesSeen.current.add(n)
       const action = gmNoticeAction(n)
       if (action !== null && ROLE_ACTIONS.has(action)) changed = true
+      if (action === 'reset_checkin') resets += 1
     }
     if (changed) refreshGate()
+    if (resets > 0) setCheckinResets((count) => count + resets)
   }, [rawNotifications, refreshGate])
 
   // The socket's identity is usable only while it agrees with the gate's. It disagrees for exactly one
@@ -340,7 +345,7 @@ export function App({ api, socketFactory }: AppProps) {
                 ) : path === '/avatar' ? (
                   <WardrobeScreen api={guarded} playerId={myId} />
                 ) : path === '/daily' ? (
-                  <DailyScreen api={guarded} lang={lang} />
+                  <DailyScreen api={guarded} lang={lang} checkinResets={checkinResets} />
                 ) : path === '/settings' ? (
                   <SettingsScreen
                     api={guarded}

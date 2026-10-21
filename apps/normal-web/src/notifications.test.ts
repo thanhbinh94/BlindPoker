@@ -88,6 +88,32 @@ describe('mapNotifications — a game master’s notice', () => {
     ])
   })
 
+  it('names the achievement a GM unlocked and says a check-in was reopened, in both languages', () => {
+    const en = makeI18n('en').getFixedT(null, 'normal')
+    const list = [
+      note('GM_NOTICE', { action: 'unlock_achievement', achievementId: 'login_days_7', reason: 'thiếu thưởng' }, 1),
+      note('GM_NOTICE', { action: 'reset_checkin', amount: 15_000, reason: 'bấm nhầm' }, 2),
+      // An older server's notice, with no amount: the reopening is still named, and no "0 điểm" is made up.
+      note('GM_NOTICE', { action: 'reset_checkin', reason: 'bấm nhầm' }, 3),
+    ]
+    expect(mapNotifications(list, t, 'vi').map(reasonOf)).toEqual([
+      `GM đã mở thành tựu "${viNormal.achievements.login_days_7.name}" cho bạn.`,
+      'Lượt điểm danh hôm nay đã được mở lại: trừ lại 15.000 điểm — bấm nhầm',
+      'Lượt điểm danh hôm nay đã được mở lại — bấm nhầm',
+    ])
+    expect(mapNotifications(list, en, 'en').map(reasonOf)).toEqual([
+      `A GM unlocked the achievement "${enNormal.achievements.login_days_7.name}" for you.`,
+      "Today's check-in has been reopened: 15,000 points taken back — bấm nhầm",
+      "Today's check-in has been reopened — bấm nhầm",
+    ])
+  })
+
+  it('leaves an unlock notice with no achievement id as the server wrote it', () => {
+    const [mapped] = mapNotifications([note('GM_NOTICE', { action: 'unlock_achievement', reason: 'thiếu thưởng' })], t, 'vi')
+
+    expect(reasonOf(mapped)).toBe('thiếu thưởng')
+  })
+
   it('reads the action of a GM notice, and nothing from any other kind', () => {
     expect(gmNoticeAction(note('GM_NOTICE', { action: 'promote', reason: 'x' }))).toBe('promote')
     expect(gmNoticeAction(note('GM_NOTICE', null))).toBeNull()

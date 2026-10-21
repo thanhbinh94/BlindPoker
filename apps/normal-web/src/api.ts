@@ -456,6 +456,8 @@ export interface GmPlayerDetailDto {
   stats: PlayerStatsDto
   room: { roomId: string; code: string; name: string; seat: number | null } | null
   inventoryCount: number
+  /** Ids of every achievement this player has unlocked, so the GM's picker can disable them. */
+  unlockedAchievementIds: string[]
 }
 
 /** A room as the console lists it — `GET /api/gm/rooms` rows and `GET /api/gm/rooms/:id` alike. */
@@ -501,10 +503,56 @@ export interface GmOverviewDto {
   points24h: { sources: number; sinks: number; byReason: { reason: string; total: number }[] }
 }
 
+/** One economy day of the ledger: sources signed per reason, sinks positive per reason, and what is left (`net`). */
+export interface DaySumsDto {
+  day: string
+  sources: Record<string, number>
+  sinks: Record<string, number>
+  net: number
+}
+
 /** What a grant of items answers: the ids that were new, and how many the player already had. */
 export interface GmGrantDto {
   granted: string[]
   alreadyOwned: number
+}
+
+/** `GET /api/gm/players/:id/checkin`: what today's check-in gave. `day` is the stored streak tier, meaningful only when `claimedToday`. */
+export interface GmCheckinDto {
+  claimedToday: boolean
+  day: number
+  streak: number
+  points: number
+  itemIds: string[]
+}
+
+/** What unlocking an achievement for a player answers: the reward paid through the same path as earning it. */
+export interface GmUnlockDto {
+  actionId: number
+  reward: { points?: number; itemId?: string }
+  balance: number
+}
+
+/** What reopening today's check-in took back. */
+export interface GmResetCheckinDto {
+  actionId: number
+  undone: { points: number; itemIds: string[] }
+  balance: number
+}
+
+/** One day's check-in rule in a gift schedule: a random draw of a rarity, or a fixed list of items. */
+export type GiftRuleDto = { draw: 'common' | 'rare' } | { fixed: string[] }
+
+/** One month of the gift schedule as `GET /api/gm/gifts` lists it; `days` holds only that month's own rules. */
+export interface GiftMonthDto {
+  /** `YYYY-MM`. */
+  month: string
+  /** The rules this month sets, keyed by streak day ("7", "28"…); a day not named here falls back to the default. */
+  days: Record<string, GiftRuleDto>
+  /** `db` when a game master edited it, `file` when it comes from `daily-gifts.json`. */
+  source: 'file' | 'db'
+  updatedAt: number | null
+  updatedBy: string | null
 }
 
 /**
@@ -587,6 +635,8 @@ export interface NormalApi {
   /* The game master's console. Every call below is refused `403 FORBIDDEN` to a player: the server is the gate, and
    * this client does not pretend otherwise. Every POST carries the GM's reason, which the server validates and logs. */
   gmOverview(): Promise<GmOverviewDto>
+  /** The ledger per economy day, oldest first: exactly `days` entries ending today. */
+  gmDailyStats(days: 7 | 30): Promise<DaySumsDto[]>
   /** A POST, not a GET, on purpose: a search string in a URL ends up in logs and in history. Metered as a write. */
   gmSearch(q: string, opts?: { limit?: number; before?: string }): Promise<{ players: GmPlayerSummaryDto[]; nextBefore: string | null }>
   gmPlayer(playerId: string): Promise<GmPlayerDetailDto>
@@ -596,6 +646,18 @@ export interface NormalApi {
   gmPoints(playerId: string, amount: number, reason: string): Promise<{ balance: number; actionId: number }>
   gmGrantItem(playerId: string, itemId: string, reason: string): Promise<GmGrantDto>
   gmGrantWardrobe(playerId: string, reason: string): Promise<GmGrantDto>
+  /** Unlocks one achievement with its full reward; refused `ALREADY_UNLOCKED` when the player has it. */
+  gmUnlockAchievement(playerId: string, achievementId: string, reason: string): Promise<GmUnlockDto>
+  /** A read-only preview of today's check-in, so the console can say what a reset would take back. */
+  gmCheckin(playerId: string): Promise<GmCheckinDto>
+  /** Undoes today's check-in (points and items) so the player can claim again; refused `NOT_CLAIMED_TODAY` otherwise. */
+  gmResetCheckin(playerId: string, reason: string): Promise<GmResetCheckinDto>
+  /** The default schedule and one row per month from this one on (a month's own rules, and where they came from). */
+  gmGifts(): Promise<{ default: Record<string, GiftRuleDto>; months: GiftMonthDto[] }>
+  /** Replaces the month's own rules; refused `TIER_LOCKED` for a day already past this month, `INVALID_GIFTS` for a bad list. */
+  gmSetGiftMonth(month: string, days: Record<string, GiftRuleDto>, reason: string): Promise<{ actionId: number }>
+  /** Drops the month's edits back to the default; refused `NOTHING_TO_CLEAR` when it has none. */
+  gmClearGiftMonth(month: string, reason: string): Promise<{ actionId: number }>
   gmLock(playerId: string, reason: string): Promise<{ locked: true }>
   gmUnlock(playerId: string, reason: string): Promise<{ locked: false }>
   gmSetRole(playerId: string, role: Role, reason: string): Promise<{ role: Role }>
@@ -720,6 +782,7 @@ export function createApi(fetchImpl?: typeof fetch, base = ''): NormalApi {
     applyOutfit: (slot) => call<{ config: AvatarConfigDto }>({ method: 'POST', path: `/api/me/outfits/${slot}/apply` }),
 
     gmOverview: () => call<GmOverviewDto>({ method: 'GET', path: '/api/gm/overview' }),
+    gmDailyStats: (days) => call<DaySumsDto[]>({ method: 'GET', path: `/api/gm/stats/daily?days=${days}` }),
     gmSearch: (q, opts) =>
       call<{ players: GmPlayerSummaryDto[]; nextBefore: string | null }>({
         method: 'POST',
@@ -740,6 +803,20 @@ export function createApi(fetchImpl?: typeof fetch, base = ''): NormalApi {
       call<GmGrantDto>({ method: 'POST', path: `/api/gm/players/${encodeURIComponent(playerId)}/items`, body: { itemId, reason } }),
     gmGrantWardrobe: (playerId, reason) =>
       call<GmGrantDto>({ method: 'POST', path: `/api/gm/players/${encodeURIComponent(playerId)}/items`, body: { all: true, reason } }),
+    gmUnlockAchievement: (playerId, achievementId, reason) =>
+      call<GmUnlockDto>({
+        method: 'POST',
+        path: `/api/gm/players/${encodeURIComponent(playerId)}/achievements/${encodeURIComponent(achievementId)}/unlock`,
+        body: { reason },
+      }),
+    gmCheckin: (playerId) => call<GmCheckinDto>({ method: 'GET', path: `/api/gm/players/${encodeURIComponent(playerId)}/checkin` }),
+    gmResetCheckin: (playerId, reason) =>
+      call<GmResetCheckinDto>({ method: 'POST', path: `/api/gm/players/${encodeURIComponent(playerId)}/checkin/reset`, body: { reason } }),
+    gmGifts: () => call<{ default: Record<string, GiftRuleDto>; months: GiftMonthDto[] }>({ method: 'GET', path: '/api/gm/gifts' }),
+    gmSetGiftMonth: (month, days, reason) =>
+      call<{ actionId: number }>({ method: 'PUT', path: `/api/gm/gifts/${encodeURIComponent(month)}`, body: { days, reason } }),
+    gmClearGiftMonth: (month, reason) =>
+      call<{ actionId: number }>({ method: 'DELETE', path: `/api/gm/gifts/${encodeURIComponent(month)}`, body: { reason } }),
     gmLock: (playerId, reason) => call<{ locked: true }>({ method: 'POST', path: `/api/gm/players/${encodeURIComponent(playerId)}/lock`, body: { reason } }),
     gmUnlock: (playerId, reason) => call<{ locked: false }>({ method: 'POST', path: `/api/gm/players/${encodeURIComponent(playerId)}/unlock`, body: { reason } }),
     gmSetRole: (playerId, role, reason) =>

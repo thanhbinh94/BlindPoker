@@ -24,7 +24,7 @@ Một tài khoản dùng được trên mọi thiết bị. Không có email xá
 
 **Ngôn ngữ và giao diện.** Chọn "Tiếng Việt" hoặc "English" ở thanh điều hướng hay trong "Cài đặt", lúc nào cũng được, kể cả khi đang ngồi bàn. Lần đầu, trò chơi theo ngôn ngữ của trình duyệt. Giao diện "Tối" là mặc định, đổi sang "Sáng" trong "Cài đặt".
 
-**Máy tính hay điện thoại.** Trên máy tính, bàn hình bầu dục và ghế của bạn ở giữa phía dưới. Trên điện thoại dọc, đối thủ xếp thành hàng ở trên, bài chung và pot ở giữa, bài và hàng nút của bạn ghim ở đáy màn hình; xoay ngang thì bàn trở lại hình bầu dục thu nhỏ.
+**Máy tính hay điện thoại.** Trên máy tính, bàn hình bầu dục và ghế của bạn ở giữa phía dưới. Trên điện thoại dọc, đối thủ xếp thành hàng ở trên, bài chung và pot ở giữa, bài và hàng nút của bạn ghim ở đáy màn hình; xoay ngang thì bàn là một hình bầu dục lấp đầy màn hình, ghế của bạn ở giữa phía dưới. Các nút hành động (Bỏ bài, Theo, Tố…) ở góc dưới bên phải, các nút chọn sẵn trước lượt và "Tự động chơi" ở góc dưới bên trái; "Đứng dậy", "Tạm nghỉ" và "Quản lý bàn" (nếu bạn là chủ phòng) nằm dưới nút ⋯ ("Thêm") ở thanh trên, và trên Android có thêm "Toàn màn hình" ở đó.
 
 ## 2. Điểm và tài khoản
 
@@ -71,6 +71,8 @@ Quà được tính theo tháng của ngày bạn bấm nhận. Tháng 2/2027 c�
 
 **Đầu tháng** chỉ có chuỗi điểm danh quay về ngày 1. Số dư, vật phẩm, trang phục, thành tựu, thống kê và tổng số ngày điểm danh giữ nguyên; điểm không bị xóa theo tháng.
 
+Ở bản Normal, quản trị viên có thể mở lại lượt điểm danh hôm nay của bạn khi có lý do: điểm và món của lượt đó bị thu lại, chuỗi giữ nguyên, bạn nhận thông báo "Lượt điểm danh hôm nay đã được mở lại: trừ lại … điểm — …" (số điểm bị thu và lý do), nút "Nhận thưởng" sáng lại ngay để bạn bấm lần nữa; món ngẫu nhiên được rút lại từ đầu.
+
 ### Cứu trợ
 
 Khi số dư **dưới 5.000 điểm**, mở "Điểm danh" và bấm "Nhận cứu trợ" ở khung "Cứu trợ": số dư được nâng lên 5.000. Hai lần nhận phải cách nhau ít nhất 24 giờ. Chỉ số dư được xét; điểm đang nằm trên bàn không được tính.
@@ -90,6 +92,7 @@ Bản Lite: máy chủ giữ tên hiển thị, số dư và chuỗi điểm dan
 Bản Normal có **quản trị viên**: những người được người quản lý máy chủ giao việc trông coi trò chơi. Họ không chơi thay bạn và không xem được bài của bạn. Việc họ làm được và bạn sẽ thấy:
 
 - **Cộng hoặc trừ điểm, cấp một món đồ.** Bạn nhận một thông báo nhỏ kiểu "Quản trị viên: +12.000 điểm — thưởng giải" (hoặc tên món đồ kèm lý do). Lý do luôn có: quản trị viên không làm được gì mà không ghi lý do. Dòng tương ứng hiện trong "Hồ sơ", mục "Lịch sử điểm", là "Quản trị viên cộng điểm" hoặc "Quản trị viên trừ điểm". Số dư không bao giờ bị trừ xuống dưới 0.
+- **Mở một thành tựu, hoặc mở lại lượt điểm danh hôm nay.** Bạn nhận thông báo "GM đã mở thành tựu "…" cho bạn." (phần thưởng được trả đủ) hoặc "Lượt điểm danh hôm nay đã được mở lại: trừ lại … điểm — …" (xem mục "Điểm danh hằng ngày").
 - **Mời bạn ra khỏi phòng.** Bạn thấy "Bạn đã bị mời ra khỏi phòng" và thông báo của quản trị viên kèm lý do. Nếu lúc đó bạn đang giữa một ván, bạn bị bỏ bài ngay và rời bàn khi ván kết thúc; điểm trên bàn vẫn về số dư của bạn như mọi lần rời bàn.
 - **Đóng phòng.** Mọi người trong phòng được báo "Phòng đã đóng" và trở về "Sảnh chờ". Ván đang chơi bị hủy, cược được hoàn lại và stack của từng người về số dư.
 - **Khóa tài khoản.** Bạn bị đăng xuất khỏi mọi thiết bị, rời bàn đang ngồi (điểm trên bàn về số dư) và không đăng nhập được nữa. Khi thử đăng nhập, màn hình báo "Tài khoản đã bị khóa" kèm lý do. Số dư, đồ và thành tựu vẫn nguyên; khi quản trị viên "Mở khóa", bạn đăng nhập lại bình thường.

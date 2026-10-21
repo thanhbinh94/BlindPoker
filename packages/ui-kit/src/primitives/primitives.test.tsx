@@ -241,6 +241,23 @@ describe('Modal', () => {
     await userEvent.click(screen.getByText('body'))
     expect(onClose).not.toHaveBeenCalled()
   })
+  it('anchor top adds the top class', () => {
+    // A phone on its side (Plan 26, R11): the soft keyboard covers the bottom half, so a typed amount opens near the top.
+    const { rerender } = render(
+      <Modal open title="Hi" onClose={vi.fn()} closeLabel="Close">
+        {BODY}
+      </Modal>,
+    )
+    expect(screen.getByRole('dialog').className).not.toMatch(/dialogTop/)
+    expect(screen.getByTestId('modal-backdrop').className).not.toMatch(/backdropTop/)
+    rerender(
+      <Modal open anchor="top" title="Hi" onClose={vi.fn()} closeLabel="Close">
+        {BODY}
+      </Modal>,
+    )
+    expect(screen.getByRole('dialog').className).toMatch(/dialogTop/)
+    expect(screen.getByTestId('modal-backdrop').className).toMatch(/backdropTop/)
+  })
 })
 
 describe('Panel / Badge / theme', () => {

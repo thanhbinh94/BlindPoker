@@ -6,6 +6,7 @@ import { initialClientState, type ClientHand, type ClientSeat, type ClientState 
 import type { GameClientApi } from '../src/client/useGameClient.js'
 import { SUPPORTED_LANGUAGES, createI18n, type Language } from '../src/i18n/index.js'
 import { RoomScreen } from '../src/screens/RoomScreen.js'
+import type { RoomFrame } from '../src/table/frame.js'
 
 /**
  * `#worst/<state>/<seats>/<lang>` — the room at its tallest, frozen, for measuring a layout against a screen size
@@ -21,12 +22,16 @@ import { RoomScreen } from '../src/screens/RoomScreen.js'
  * Every player has a caption (the Normal edition prints a title there), so every plate runs three lines. The room
  * takes the whole viewport, as Normal's room route does; `seats` is 2–9 (6 by default), `lang` `vi` (default) or `en`.
  *
- * An optional fifth segment, `#worst/<state>/<seats>/<lang>/long`, gives the viewer a 30-character name
- * (`LONG_NAME`) — longer than the own plate's cap at any seat count, so it shows where the plate stops widening and
- * the name ends in "…" (review round 2, R2-3). Without it the viewer keeps `NAMES[0]`, which earlier measurements use.
+ * - `blindS`: a Blind Poker squeeze table (pure luck, two hole cards, one bot) in its `SQUEEZE` round — my two cards face
+ *   down with the Lật pill, the bot's turned, every third person's turned, the round's countdown on my plate.
+ *
+ * Optional segments after the language, in any order: `/long` gives the viewer a 30-character name (`LONG_NAME`) —
+ * longer than the own plate's cap at any seat count, so it shows where the plate stops widening and the name ends in
+ * "…" (review round 2, R2-3); without it the viewer keeps `NAMES[0]`, which earlier measurements use. `/landscape`
+ * or `/desktop` forces that room frame whatever the window is; without either, the window's own media query chooses.
  */
 
-export type WorstState = 'waiting' | 'turn' | 'result'
+export type WorstState = 'waiting' | 'turn' | 'result' | 'blindS'
 
 export interface WorstSpec {
   state: WorstState
@@ -34,20 +39,26 @@ export interface WorstSpec {
   lang: Language
   /** The viewer's own name is `LONG_NAME` rather than `NAMES[0]`. */
   long: boolean
+  /** A frame forced on the room whatever the window is; `null` leaves the choice to the window's own media query. */
+  frame: RoomFrame | null
 }
 
-const STATES: readonly WorstState[] = ['waiting', 'turn', 'result']
+const STATES: readonly WorstState[] = ['waiting', 'turn', 'result', 'blindS']
 
-/** Reads `#worst/<state>/<seats>/<lang>[/long]`; `null` for any other hash. */
+/**
+ * Reads `#worst/<state>/<seats>/<lang>[/long][/landscape|/desktop]`; `null` for any other hash. The tokens after the
+ * language are read by name, in any order, and one it does not know is ignored.
+ */
 export function parseWorstHash(hash: string): WorstSpec | null {
-  const [head, state, seats, lang, long] = hash.replace(/^#/, '').split('/')
+  const [head, state, seats, lang, ...flags] = hash.replace(/^#/, '').split('/')
   if (head !== 'worst') return null
   const n = Number(seats ?? 6)
   return {
     state: STATES.includes(state as WorstState) ? (state as WorstState) : 'result',
     seats: Number.isInteger(n) && n >= 2 && n <= 9 ? n : 6,
     lang: SUPPORTED_LANGUAGES.includes(lang as Language) ? (lang as Language) : 'vi',
-    long: long === 'long',
+    long: flags.includes('long'),
+    frame: flags.includes('landscape') ? 'landscape' : flags.includes('desktop') ? 'desktop' : null,
   }
 }
 
@@ -87,7 +98,7 @@ function players(n: number, state: WorstState, long: boolean): RoomPlayerView[] 
   return Array.from({ length: n }, (_, seat) => ({
     playerId: seat === 0 ? ME : `p${seat}`,
     displayName: nameOf(seat, long),
-    isBot: false,
+    isBot: state === 'blindS' && seat === BOT_SEAT,
     isHost: seat === 0,
     connected: seat !== 2,
     seat,
@@ -98,21 +109,29 @@ function players(n: number, state: WorstState, long: boolean): RoomPlayerView[] 
   }))
 }
 
+/** The one bot at the squeeze table. */
+const BOT_SEAT = 1
+const FIXED_WAGER = 1_000
+
 function room(n: number, state: WorstState, now: number, long: boolean): RoomView {
+  const squeeze = state === 'blindS'
   return {
     roomId: 'worst',
     code: 'WRST26',
     name: 'Đêm Sài Gòn — bàn đông nhất',
-    mode: 'holdem',
+    mode: squeeze ? 'blind' : 'holdem',
     config: {
       name: 'Đêm Sài Gòn — bàn đông nhất',
-      mode: 'holdem',
+      mode: squeeze ? 'blind' : 'holdem',
       maxPlayers: n,
       isPrivate: false,
-      turnTimerSec: 30,
+      // A squeeze table's round is the server's fixed 20 s, whatever the room asked for.
+      turnTimerSec: squeeze ? 20 : 30,
       autoStart: false,
       hasPassword: false,
-      holdem: { smallBlind: 1_000, bigBlind: 2_000, minBuyInBB: 50, maxBuyInBB: 200 },
+      ...(squeeze
+        ? { blind: { holeCards: 2 as const, decisionMode: 'none' as const, fixedWager: FIXED_WAGER, botCount: 1, squeeze: true } }
+        : { holdem: { smallBlind: 1_000, bigBlind: 2_000, minBuyInBB: 50, maxBuyInBB: 200 } }),
     },
     playerCount: n,
     maxPlayers: n,
@@ -125,6 +144,28 @@ function room(n: number, state: WorstState, now: number, long: boolean): RoomVie
 }
 
 function seat(n: number, i: number, state: WorstState, long: boolean): ClientSeat {
+  if (state === 'blindS') {
+    // The squeeze round: my two cards are mine to turn (face down), the bot's are turned from the deal, and every third
+    // person has turned theirs. Everyone has put the fixed wager in; nobody folds, nobody decides, nobody acts.
+    const turned = i === BOT_SEAT || (i > 0 && i % 3 === 0)
+    return {
+      seat: i,
+      playerId: i === 0 ? ME : `p${i}`,
+      displayName: nameOf(i, long),
+      isBot: i === BOT_SEAT,
+      stack: 118_000 - i * 7_777,
+      betThisStreet: FIXED_WAGER,
+      folded: false,
+      allIn: false,
+      cardCount: 2,
+      holeCards: i === 0 || turned ? cards(HANDS[i]!.hole) : null,
+      revealed: turned,
+      hasDecided: false,
+      decision: null,
+      lastAction: null,
+      timedOut: false,
+    }
+  }
   const shown = state === 'result' || i === 0
   return {
     seat: i,
@@ -148,6 +189,27 @@ function seat(n: number, i: number, state: WorstState, long: boolean): ClientSea
 function hand(n: number, state: WorstState, long: boolean): ClientHand | null {
   if (state === 'waiting') return null
   const all = Array.from({ length: n }, (_, i) => i)
+  if (state === 'blindS') {
+    return {
+      handId: 'worst-blindS',
+      mode: 'blind',
+      phase: 'SQUEEZE',
+      community: [],
+      pot: n * FIXED_WAGER,
+      carryOverIn: 0,
+      button: Math.min(3, n - 1),
+      actingSeat: null,
+      seats: all.map((i) => seat(n, i, state, long)),
+      mySeat: 0,
+      legal: null,
+      result: null,
+      potPulse: 1,
+      restored: true,
+      dealtAt: null,
+      boardAt: null,
+      showdownAt: null,
+    }
+  }
   const base: ClientHand = {
     handId: `worst-${state}`,
     mode: 'holdem',
@@ -237,15 +299,15 @@ export function WorstPage({ spec }: { spec: WorstSpec }) {
       roomStale: false,
       room: room(spec.seats, spec.state, now, spec.long),
       hand: hand(spec.seats, spec.state, spec.long),
-      deadlineAt: spec.state === 'turn' ? now + 25_000 : null,
+      deadlineAt: spec.state === 'turn' ? now + 25_000 : spec.state === 'blindS' ? now + 15_000 : null,
     })
   }, [spec])
   useEffect(() => {
-    document.title = `worst: ${spec.state}, ${spec.seats} seats, ${spec.lang}${spec.long ? ', long name' : ''}`
+    document.title = `worst: ${spec.state}, ${spec.seats} seats, ${spec.lang}${spec.long ? ', long name' : ''}${spec.frame === null ? '' : `, ${spec.frame} frame`}`
   }, [spec])
   return (
     <I18nextProvider i18n={i18n}>
-      <RoomScreen client={client} lang={spec.lang} onLeft={() => {}} captionFor={() => CAPTION} />
+      <RoomScreen client={client} lang={spec.lang} onLeft={() => {}} captionFor={() => CAPTION} frame={spec.frame ?? undefined} />
     </I18nextProvider>
   )
 }

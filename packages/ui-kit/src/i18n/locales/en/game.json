@@ -46,6 +46,7 @@
     "actions": "Actions",
     "allIn": "All-in",
     "amount": "Bet amount",
+    "amountDialog": "Enter an amount",
     "amountSlider": "Amount slider",
     "autoStart": "Auto-start",
     "balance": "Balance",
@@ -247,7 +248,10 @@
     "controls": "Table controls",
     "manage": "Manage table",
     "manageTitle": "People in the room",
-    "sitFirst": "Take a seat to play."
+    "sitFirst": "Take a seat to play.",
+    "more": "More",
+    "fullscreen": "Full screen",
+    "exitFullscreen": "Exit full screen"
   },
   "cancel": {
     "shutdown": "The server is shutting down",

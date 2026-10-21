@@ -13,6 +13,15 @@ const SPADE = '♠'
 const EYE_OPEN = '◉'
 const EYE_SHUT = '◎'
 
+/**
+ * The sign-in hero (Task C1: `public/login/`, served `no-cache`). The 768 px file is the phone band's and a narrow
+ * column's; the 1536 px one covers 62 % of a 1920 px desktop. The column is 62 vw from 1024 px up, the full width
+ * below.
+ */
+const HERO_SRC = '/login/hero-1536.webp'
+const HERO_SRCSET = '/login/hero-768.webp 768w, /login/hero-1536.webp 1536w'
+const HERO_SIZES = '(min-width: 1024px) 62vw, 100vw'
+
 /** Fixed ids rather than `useId`: this screen renders once, and the reveal button needs a stable target. */
 const PASSWORD_ID = 'bp-auth-password'
 const PASSWORD_HINT_ID = 'bp-auth-password-hint'
@@ -180,115 +189,139 @@ export function AuthScreen({ api, mode, onMode, onSignedIn, message = null }: Au
 
   return (
     <main className={s.authStage}>
-      <div className={s.authCard}>
-        <div className={s.cardHead}>
-          {/* The rail's own mark; the edition is not something a player needs to read here (layout audit U5). */}
-          <span className={s.markGlyph} aria-hidden="true">
-            {SPADE}
-          </span>
-          <h1 className={s.authTitle}>{t('auth.title')}</h1>
-          <p className={s.lead}>{t('auth.lead')}</p>
+      {/* Layout A (spec Q8, picture V2): a table of friends fills the left column on a desktop and crowns the card on
+          a phone. A night room in either theme, so it carries the night palette itself. The picture is decoration;
+          the hero's heading and lead are the words. Spec R10: one `h1` is visible at a time — this one from 1024 px
+          up, the card's below — and the other is `display: none` in the stylesheet. */}
+      <section className={s.authHero} data-surface="night">
+        <img
+          className={s.heroImg}
+          src={HERO_SRC}
+          srcSet={HERO_SRCSET}
+          sizes={HERO_SIZES}
+          // No `fetchPriority`: `@types/react` types it, but React-DOM 18.3 does not know the prop and warns
+          // (pre-flight P23). It comes back with React 19.
+          decoding="async"
+          alt=""
+        />
+        <div className={s.heroShade} aria-hidden="true" />
+        <div className={s.heroText}>
+          <h1 className={s.heroTitle}>{t('auth.title')}</h1>
+          <p className={s.heroLead}>{t('auth.heroLead')}</p>
         </div>
+      </section>
 
-        <nav className={s.tabs} aria-label={t('auth.title')}>
-          {modeLink('signIn', '/login', t('auth.signIn'))}
-          {modeLink('register', '/register', t('auth.register'))}
-        </nav>
-
-        {message === null ? null : (
-          <p className={s.notice} role="status">
-            {message}
-          </p>
-        )}
-        {refusal === null || refusal.field !== null ? null : (
-          <p className={s.alert} role="alert">
-            {refusal.text}
-          </p>
-        )}
-
-        <form className={s.form} onSubmit={submit} noValidate>
-          <Field label={t('auth.email')} error={errorFor('email')}>
-            <input
-              ref={emailRef}
-              className={s.input}
-              type="email"
-              value={email}
-              autoComplete="email"
-              autoCapitalize="none"
-              spellCheck={false}
-              placeholder={t('auth.emailPlaceholder')}
-              onChange={(event) => onEmail(event.target.value)}
-            />
-          </Field>
-
-          <div className={s.secretField}>
-            <label className={s.label} htmlFor={PASSWORD_ID}>
-              {t('auth.password')}
-            </label>
-            <div className={s.secret}>
-              <input
-                ref={passwordRef}
-                id={PASSWORD_ID}
-                className={s.input}
-                type={reveal ? 'text' : 'password'}
-                value={password}
-                minLength={PASSWORD_MIN_LENGTH}
-                aria-invalid={passwordError === undefined ? undefined : true}
-                aria-describedby={
-                  // The hint and the error both describe this box; both ids go on, in reading order.
-                  [registering ? PASSWORD_HINT_ID : '', passwordError === undefined ? '' : PASSWORD_ERROR_ID]
-                    .filter((id) => id !== '')
-                    .join(' ') || undefined
-                }
-                autoComplete={registering ? 'new-password' : 'current-password'}
-                onChange={(event) => onPassword(event.target.value)}
-              />
-              <button
-                type="button"
-                className={s.reveal}
-                aria-pressed={reveal}
-                aria-label={reveal ? t('auth.hidePassword') : t('auth.showPassword')}
-                onClick={() => setReveal(!reveal)}
-              >
-                <span aria-hidden="true">{reveal ? EYE_OPEN : EYE_SHUT}</span>
-              </button>
-            </div>
-            {registering ? (
-              <span className={s.hint} id={PASSWORD_HINT_ID}>
-                {t('auth.passwordHint')}
-              </span>
-            ) : null}
-            {passwordError === undefined ? null : (
-              <span className={s.fieldError} id={PASSWORD_ERROR_ID}>
-                {passwordError}
-              </span>
-            )}
+      <div className={s.authSide}>
+        <div className={s.authCard}>
+          <div className={s.cardHead}>
+            {/* The rail's own mark; the edition is not something a player needs to read here (layout audit U5). */}
+            <span className={s.markGlyph} aria-hidden="true">
+              {SPADE}
+            </span>
+            <h1 className={s.authTitle}>{t('auth.title')}</h1>
+            <p className={s.lead}>{t('auth.lead')}</p>
           </div>
 
-          {registering ? (
-            <Field label={t('auth.displayName')} hint={nameHint} error={errorFor('displayName')}>
+          <nav className={s.tabs} aria-label={t('auth.title')}>
+            {modeLink('signIn', '/login', t('auth.signIn'))}
+            {modeLink('register', '/register', t('auth.register'))}
+          </nav>
+
+          {message === null ? null : (
+            <p className={s.notice} role="status">
+              {message}
+            </p>
+          )}
+          {refusal === null || refusal.field !== null ? null : (
+            <p className={s.alert} role="alert">
+              {refusal.text}
+            </p>
+          )}
+
+          <form className={s.form} onSubmit={submit} noValidate>
+            <Field label={t('auth.email')} error={errorFor('email')}>
               <input
-                ref={nameRef}
+                ref={emailRef}
                 className={s.input}
-                type="text"
-                value={displayName}
-                autoComplete="nickname"
-                autoCapitalize="words"
+                type="email"
+                value={email}
+                autoComplete="email"
+                autoCapitalize="none"
                 spellCheck={false}
-                placeholder={t('auth.displayNamePlaceholder')}
-                onChange={(event) => onName(event.target.value)}
+                placeholder={t('auth.emailPlaceholder')}
+                onChange={(event) => onEmail(event.target.value)}
               />
             </Field>
-          ) : null}
 
-          <Button className={s.submit} type="submit" variant="gold" size="lg" loading={busy}>
-            {t(registering ? 'auth.submitRegister' : 'auth.submitSignIn')}
-          </Button>
-        </form>
-      </div>
+            <div className={s.secretField}>
+              <label className={s.label} htmlFor={PASSWORD_ID}>
+                {t('auth.password')}
+              </label>
+              <div className={s.secret}>
+                <input
+                  ref={passwordRef}
+                  id={PASSWORD_ID}
+                  className={s.input}
+                  type={reveal ? 'text' : 'password'}
+                  value={password}
+                  minLength={PASSWORD_MIN_LENGTH}
+                  aria-invalid={passwordError === undefined ? undefined : true}
+                  aria-describedby={
+                    // The hint and the error both describe this box; both ids go on, in reading order.
+                    [registering ? PASSWORD_HINT_ID : '', passwordError === undefined ? '' : PASSWORD_ERROR_ID]
+                      .filter((id) => id !== '')
+                      .join(' ') || undefined
+                  }
+                  autoComplete={registering ? 'new-password' : 'current-password'}
+                  onChange={(event) => onPassword(event.target.value)}
+                />
+                <button
+                  type="button"
+                  className={s.reveal}
+                  aria-pressed={reveal}
+                  aria-label={reveal ? t('auth.hidePassword') : t('auth.showPassword')}
+                  onClick={() => setReveal(!reveal)}
+                >
+                  <span aria-hidden="true">{reveal ? EYE_OPEN : EYE_SHUT}</span>
+                </button>
+              </div>
+              {registering ? (
+                <span className={s.hint} id={PASSWORD_HINT_ID}>
+                  {t('auth.passwordHint')}
+                </span>
+              ) : null}
+              {passwordError === undefined ? null : (
+                <span className={s.fieldError} id={PASSWORD_ERROR_ID}>
+                  {passwordError}
+                </span>
+              )}
+            </div>
 
-      <div className={s.authLang}>
-        <LanguageSwitch lang={lang} onChange={setLang} />
+            {registering ? (
+              <Field label={t('auth.displayName')} hint={nameHint} error={errorFor('displayName')}>
+                <input
+                  ref={nameRef}
+                  className={s.input}
+                  type="text"
+                  value={displayName}
+                  autoComplete="nickname"
+                  autoCapitalize="words"
+                  spellCheck={false}
+                  placeholder={t('auth.displayNamePlaceholder')}
+                  onChange={(event) => onName(event.target.value)}
+                />
+              </Field>
+            ) : null}
+
+            <Button className={s.submit} type="submit" variant="gold" size="lg" loading={busy}>
+              {t(registering ? 'auth.submitRegister' : 'auth.submitSignIn')}
+            </Button>
+          </form>
+        </div>
+
+        <div className={s.authLang}>
+          <LanguageSwitch lang={lang} onChange={setLang} />
+        </div>
       </div>
     </main>
   )

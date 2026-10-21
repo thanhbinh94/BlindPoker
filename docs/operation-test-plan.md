@@ -46,6 +46,7 @@ Ngày lập: 2026-09-28. Bản kiểm: master sau merge `22d1905` (đổi tên B
 | T1 | Cửa sổ thu nhỏ hoặc máy tính bảng | ~900 px | |
 | P1 | Android Chrome | 360–412 px | dọc |
 | P2 | iPhone Safari | 375–430 px | dọc |
+| P3 | Android Chrome hoặc iPhone Safari xoay ngang | 844–915 × 355–412 px | ngang; mục L. Safari trên iPhone không có "Toàn màn hình" |
 
 ## 3. Cách chạy một đợt test
 
@@ -95,6 +96,7 @@ mã phòng (nếu có), thiết bị, ảnh chụp màn hình. Claude chép vào
 | A-07 | Đăng nhập cùng tài khoản trên máy thứ hai | Cả hai máy dùng được, số dư như nhau | P2 |
 | A-08 | Đổi ngôn ngữ ở trang đăng nhập rồi đăng nhập | Ngôn ngữ giữ nguyên sau khi vào | P3 |
 | A-09 | Ở trang đăng nhập, bấm qua lại giữa hai tab Đăng nhập / Đăng ký | Đổi form ngay ở lần bấm đầu; dưới form không còn dòng "Chưa có tài khoản? Đăng ký" / "Đã có tài khoản? Đăng nhập" (đã bỏ, review 29/09 No6) | P3 |
+| A-10 | Mở trang đăng nhập trên D1 (từ 1024 px), rồi trên P1/P2; thử cả nền tối và nền sáng | D1: tranh bàn bạn bè nằm cột trái, thẻ đăng nhập ở cột phải, câu "Poker điểm thưởng, chơi với bạn bè…" đọc rõ trên tranh. P1/P2 dọc: tranh là dải cao 300 px phía trên, phóng để khung ba gương mặt giữa, thẻ đè lên chân dải, không cuộn ngang; máy tính bảng (T1): thấy cả bề ngang tranh, khuôn mặt cô gái đội vương miện không bị cắt. P1/P2 xoay ngang: dải tranh mỏng 72 px, cả form đăng nhập (gồm nút) nằm trong màn hình, nút đổi ngôn ngữ ở dưới nếp gập. Cả hai: chỉ một tiêu đề "Blind Luck Poker"; nền sáng thì tranh vẫn là bức đêm | P3 |
 
 ### B. Khung chung
 
@@ -164,6 +166,7 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 | F-10 | Phòng mức cược 1.000, Chơi hoặc bỏ, 1 bot; ngồi vào bàn rồi Bỏ mọi ván | Ngồi: số dư −5.000 (hạn mức 5×), đầu phòng ghi "Hạn mức 5.000"; sau 4 ván chồng còn 1.000 < 2.000 → bị mời đứng dậy, thông báo "Bạn đã dùng hết hạn mức…", 1.000 về số dư, vẫn ở trong phòng; bấm ghế lại → hạn mức mới 5.000 | P1 |
 | F-11 | Phòng Blind "Hoàn toàn may rủi" có tick "Nặn bài", 2 người thật; vào ván; người thứ nhất bóc cả hai lá bằng chuột (kéo từ mép dưới vào), người thứ hai bấm "Lật" | Đầu phòng có huy hiệu "Nặn bài"; mỗi người thấy bài của mình úp, dòng "Mời nặn bài…" và đồng hồ vòng ngay trên tấm tên của mình; bóc một lá chưa tính là đã lật (ghế kia chưa thấy "Đã lật"), bóc lá thứ hai thì ghế kia thấy "Đã lật" và khay báo "Đã lật — chờ người chơi khác"; người thứ hai bấm "Lật" thì cả hai lá mở, vòng nặn kết thúc **trước 20 giây**, lá chung ra và phiếu kết quả hiện | P1 |
 | F-12 | Như F-11 trên điện thoại 375 × 812 có cảm ứng, 1 người thật + 1 bot; bóc một lá bằng ngón tay, lá còn lại bằng "Lật" | Hai lá, nút "Lật" và đồng hồ nằm trọn trong màn hình, trên khay; trang không cuộn ngang, trang và bàn không cuộn dọc, tên người chơi hiện đủ cạnh đồng hồ vòng, không chữ nào đè lên chữ khác; cú chạm là `pointerType: touch` và bóc được lá; bot đã lật từ đầu nên vòng kết thúc ngay khi người thật lật nốt | P2 |
+| F-12b | **Tự động — `04-blind.spec.ts`, project `mobile`.** Như F-12 nhưng phòng "Chơi hoặc bỏ" có "Nặn bài" (1 người thật + 1 bot), 375 × 812 | Huy hiệu vàng "Nặn bài" nằm cạnh tên phòng trong đầu phòng; nút "Lật" nằm trên đáy hai lá bài chứ không chiếm hàng riêng; trang và bàn không cuộn dọc (trước Plan 26 bàn này cuộn thừa 11 px); không chữ đè chữ. Nút "Lật" chỉ cao 40 × 28 px: thử bóc lá bằng ngón tay thật, bắt đầu ở góc dưới bên trái lá trái (`docs/known-limitations.md`) | P2 |
 
 ### G. Kết nối
 
@@ -218,6 +221,23 @@ Phòng Hold'em không có bot: cần ít nhất 2 người thật.
 | K-04 | Hồ sơ → Thống kê sau vài ván | Số ván chơi/thắng tăng đúng; "Ván gần đây" ghi "Tại bàn `<tên phòng>`" (hoặc "Tại `<tên phòng>`" khi tên phòng đã bắt đầu bằng "Bàn", không lặp chữ), đối thủ là bot hiện "Bot 1", "Bot 2"… chứ không hiện mã kiểu `bot:…` (review 29/09 No4); tên bot in nghiêng, không có huy hiệu "bot" nhìn thấy (vòng 2 R2-2) | P2 |
 | K-05 | Hồ sơ → đổi tên hiển thị | Tên mới hiện ở sảnh, bàn, cài đặt; tên trùng người khác bị từ chối | P2 |
 
+### L. Bàn trên điện thoại xoay ngang (Plan 26)
+
+Chạy trên P3 (điện thoại xoay ngang). Cả năm ca là **tự động** — `07-landscape.spec.ts`, project `landscape` (915 × 412,
+cảm ứng, thẻ `@landscape`) — và kết thúc bằng hai phép đo: trang và bàn không cuộn, không chữ đè chữ. Người test vẫn thử
+trên máy thật, vì máy chỉ chạy Chromium và không có bàn phím ảo hay ngón tay thật.
+
+| Mã | Bước | Kỳ vọng | Ưu tiên |
+|---|---|---|---|
+| L-01 | Phòng Hold'em lúc chờ ván, xoay ngang | Header một dòng: mã phòng và "Rời phòng"; "Đứng dậy", "Tạm nghỉ" và "Quản lý bàn" (chủ phòng) nằm trong menu ⋯ "Thêm", thêm "Toàn màn hình" nếu trình duyệt cho phép; "Sẵn sàng" và "Bắt đầu" nằm ở góc dưới bên phải, câu gợi ý nằm trên bàn; menu đóng bằng Escape | P1 |
+| L-02 | Phòng Blind 8 ghế (7 bot) ở 915 × 355; phòng Hold'em 9 ghế để thử ghế trống | Tám tấm tên đều trong màn hình, không hai tấm nào chạm nhau, không ghế nào chạm góc dưới bên phải; nút "Ngồi vào bàn" ở ghế trống cao ít nhất 44 px | P1 |
+| L-03 | Hết ván, thẻ kết quả ở 915 × 412 và 844 × 390 | Thẻ gọn một khối, "Đóng" cao ít nhất 44 px và bấm được ở mép trên, "Ván tiếp theo sau…" đủ chữ, không chữ đè chữ; thẻ che các ghế hai bên (xem `docs/known-limitations.md`) | P1 |
+| L-04 | Hai người thật; đến lượt mình ở Hold'em: bấm "Tố" | Hai lần chạm: lần đầu mở các mức Min · ½ · Pot · Max · ✎ ở góc trái, không có thanh trượt; ✎ mở hộp thoại "Nhập số điểm" ở đầu màn hình, vẫn dùng được ở 915 × 260; nhập 600 rồi "Xác nhận" thì nút ghi "Tố 600"; chạm lần hai thì người kia có 400 để theo | P1 |
+| L-05 | Bàn Blind "Hoàn toàn may rủi" có "Nặn bài" và 1 bot: bóc một lá bằng ngón tay, bấm "Lật" cho lá còn lại, rồi "Rời phòng" ở header | Lá bóc mở; "Lật" mở nốt; vòng nặn kết thúc và người thắng hiện; "Rời phòng" ở header đưa về sảnh | P2 |
+
+Việc máy chưa làm được và người test thử bằng tay (`docs/known-limitations.md`, mục UI): xoay máy thật, mở ✎ và nhìn bàn
+phím ảo; chạm ghế trống bằng ngón tay; đọc thẻ kết quả khi nó che ghế hai bên.
+
 ### M. Giao diện trên nhiều cỡ màn hình
 
 Làm trên D1, T1, P1, P2 cho các màn: Đăng nhập, Sảnh, Tạo phòng, Bàn (trước và trong ván), Điểm danh, Hồ sơ,
@@ -270,6 +290,7 @@ server thử). Mục "Quản trị" chỉ hiện trong Cài đặt cho tài kho�
 |---|---|---|---|
 | Q-01 | **Tự động — `06-gm.spec.ts`.** GM: Cài đặt → Quản trị → tab Người chơi → tìm một người chơi theo tên → bấm Mở → "Cộng/trừ điểm", nhập 10.000 điểm: nút Xác nhận còn khóa cho tới khi nhập lý do; nhập lý do rồi Xác nhận. Người chơi kia đang mở sảnh. Rồi GM mở tab Nhật ký | Trong danh sách, email bị che; trang người chơi hiện email đầy đủ. GM thấy "Đã cập nhật số dư". Người chơi thấy ngay thông báo "Quản trị viên: +10.000 điểm — `<lý do>`" và số dư tăng 10.000 mà không cần tải lại trang. Nhật ký có dòng "Cộng điểm" kèm lý do. Không chữ đè chữ, không cuộn ngang: test tự động kiểm một lần ở 1440×900 (project `desktop`); 1920×940, 1366×768 và 375×812 do người test nhìn bằng mắt (mục M) | P1 |
 | Q-02 | **Tự động — `06-gm.spec.ts`.** Hai người chơi vào một bàn Blind (Chơi hoặc bỏ, hai ghế, không bot), bắt đầu ván và dừng ở vòng quyết định Chơi/Bỏ. GM: Quản trị → tab Phòng → Làm mới → bàn hiện "Đang ván" → Đóng phòng, nhập lý do, Xác nhận. Rồi GM mở tab Nhật ký | Hộp thoại ghi rõ "Ván đang chơi sẽ bị hủy". GM thấy "Đã đóng phòng, hoàn cho 2 người". Cả hai người chơi tự về sảnh, điểm mỗi người bằng đúng số trước khi ngồi vào bàn (không mất cược). Nhật ký có dòng "Đóng phòng" kèm lý do | P1 |
+| Q-03 | **Tự động — `06-gm.spec.ts`.** Người chơi A bấm "Nhận thưởng" ở "Điểm danh". GM: Quản trị → Người chơi → mở A → "Đặt lại điểm danh" (hộp thoại ghi số điểm sẽ trừ lại), nhập lý do, Xác nhận; A vẫn ở trang "Điểm danh", nút "Nhận thưởng" sáng lại không cần tải lại trang, A bấm lần nữa. Rồi GM bấm "Mở thành tựu", chọn "Bảy ngày ghé bàn", nhập lý do, Xác nhận. Rồi tab "Quà tháng": chọn tháng sau, bấm "Ngày 21", chọn "Cố định", thêm một món chưa có trong lịch, "Lưu", nhập lý do; tải lại trang và mở lại tab. Cuối cùng tab "Nhật ký". Ở 1920×940, 1366×768 và 375×812 xem tab "Quà tháng" và bảng "Theo ngày" ở tab "Tổng quan" | A thấy "Lượt điểm danh hôm nay đã được mở lại: trừ lại … điểm — <lý do>" và số dư giảm đúng bằng số điểm hộp thoại đã ghi, rồi tăng lại sau lần nhận thứ hai. GM thấy "Đã mở lại lượt điểm danh hôm nay.", "Đã mở thành tựu và trả thưởng." (A thấy thông báo và +5.000) và "Đã lưu quà tháng."; sau khi tải lại, tháng có chữ "(đã sửa)" và ô ngày 21 có món vừa thêm. Nhật ký có ba dòng "Đặt lại điểm danh", "Mở thành tựu", "Đổi quà tháng". Không chữ đè chữ và không cuộn ngang ở cả ba cỡ; ở 375 px bảng "Theo ngày" cuộn ngang trong khung của nó (`docs/known-limitations.md`) | P1 |
 
 ## 6. Kịch bản nhiều người (vòng 3, 3–4 người, ~45 phút)
 

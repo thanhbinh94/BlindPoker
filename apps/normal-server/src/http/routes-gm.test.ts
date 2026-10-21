@@ -22,7 +22,7 @@ let boss: Account
 const clients: TestClient[] = []
 
 const code = (res: { json(): unknown }): string => (res.json() as { error: { code: string } }).error.code
-const gmReq = (method: 'GET' | 'POST', url: string, payload?: object) =>
+const gmReq = (method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, payload?: object) =>
   h.app.fastify.inject({ method, url, headers: h.auth(boss), ...(payload === undefined ? {} : { payload }) })
 
 const PRIVATE_BLIND: RoomConfig = {
@@ -74,15 +74,18 @@ afterEach(async () => {
 describe('the guard', () => {
   it('answers 401 to nobody and 403 FORBIDDEN to a player on every /api/gm/ route the app serves', async () => {
     const routes = enumerateRoutes(h.app.fastify).filter((r) => r.path.startsWith('/api/gm/'))
-    // The fifteen `/api/gm/` labels `app.test.ts` pins in the exact surface: a route added there must be guarded here.
-    expect(routes).toHaveLength(15)
+    // The twenty-two `/api/gm/` labels `app.test.ts` pins in the exact surface: a route added there must be guarded here.
+    expect(routes).toHaveLength(22)
     for (const route of routes) {
-      const url = route.path.replace(':id', route.path.startsWith('/api/gm/rooms/') ? 'some-room' : me.playerId)
+      const url = route.path
+        .replace(':id', route.path.startsWith('/api/gm/rooms/') ? 'some-room' : me.playerId)
+        .replace(':achievementId', 'login_streak_7')
+        .replace(':month', '2026-11')
       const label = `${route.method} ${route.path}`
-      // Every GM route is a GET or a POST (`app.test.ts` pins the surface); narrowed for `inject`'s own method type.
-      expect(['GET', 'POST'], label).toContain(route.method)
-      const method = route.method === 'GET' ? 'GET' : 'POST'
-      const write = method === 'POST'
+      // Every GM route is a GET or a write (`app.test.ts` pins the surface); narrowed for `inject`'s own method type.
+      expect(['GET', 'POST', 'PUT', 'DELETE'], label).toContain(route.method)
+      const method = route.method as 'GET' | 'POST' | 'PUT' | 'DELETE'
+      const write = method !== 'GET'
       // The CSRF header on a write, so the guard — not the CSRF check — is what answers; an empty body is fine,
       // since the guard runs before the handler reads it.
       const anon = await h.app.fastify.inject({ method, url, ...(write ? { headers: XRW, payload: {} } : {}) })
@@ -107,6 +110,8 @@ describe('reasons', () => {
       `/api/gm/players/${me.playerId}/lock`,
       `/api/gm/players/${me.playerId}/unlock`,
       `/api/gm/players/${me.playerId}/role`,
+      `/api/gm/players/${me.playerId}/achievements/login_streak_7/unlock`,
+      `/api/gm/players/${me.playerId}/checkin/reset`,
       '/api/gm/rooms/nope/kick',
       '/api/gm/rooms/nope/close',
     ]
@@ -118,6 +123,70 @@ describe('reasons', () => {
     // Too short is the same refusal.
     const short = await gmReq('POST', `/api/gm/players/${me.playerId}/lock`, { reason: 'ab' })
     expect(code(short)).toBe('INVALID_REASON')
+  })
+})
+
+describe('the gift schedule', () => {
+  // START is 4 September 2026 in the test economy: October is a later month, September the current one.
+  it('the two writes, a PUT and a DELETE, are also 400 INVALID_REASON without a reason, before the month is looked at', async () => {
+    for (const method of ['PUT', 'DELETE'] as const) {
+      for (const url of ['/api/gm/gifts/2026-10', '/api/gm/gifts/not-a-month']) {
+        const res = await gmReq(method, url, { days: {} })
+        expect(res.statusCode, `${method} ${url}`).toBe(400)
+        expect(code(res), `${method} ${url}`).toBe('INVALID_REASON')
+      }
+    }
+  })
+
+  it('lists the default and thirteen months, sets one, shows it from the database, clears it, and logs both', async () => {
+    const before = await gmReq('GET', '/api/gm/gifts')
+    expect(before.statusCode).toBe(200)
+    const listed = before.json() as { default: Record<string, unknown>; months: { month: string; source: string }[] }
+    expect(Object.keys(listed.default)).toEqual(['7', '14', '21', '28'])
+    expect(listed.months).toHaveLength(13)
+    expect(listed.months[0]).toMatchObject({ month: '2026-09', source: 'file' })
+
+    const days = { '14': { fixed: ['aura_ice01'] } }
+    const put = await gmReq('PUT', '/api/gm/gifts/2026-10', { days, reason: 'quà tháng mười' })
+    expect(put.statusCode).toBe(200)
+    expect(put.json()).toEqual({ actionId: expect.any(Number) })
+    const after = (await gmReq('GET', '/api/gm/gifts')).json() as { months: { month: string; source: string; days: unknown }[] }
+    expect(after.months.find((m) => m.month === '2026-10')).toMatchObject({ source: 'db', days })
+
+    const del = await gmReq('DELETE', '/api/gm/gifts/2026-10', { reason: 'bỏ quà tháng mười' })
+    expect(del.statusCode).toBe(200)
+    expect(del.json()).toEqual({ actionId: expect.any(Number) })
+    const log = (await gmReq('GET', '/api/gm/actions')).json().actions as { action: string; details: unknown; target: unknown }[]
+    expect(log.slice(0, 2)).toMatchObject([
+      { action: 'clear_gift_month', target: null, details: { month: '2026-10' } },
+      { action: 'set_gift_month', target: null, details: { month: '2026-10', days } },
+    ])
+  })
+
+  it('answers INVALID_MONTH, INVALID_GIFTS with the parser’s words, MONTH_IN_PAST, TIER_LOCKED and NOTHING_TO_CLEAR with their statuses', async () => {
+    const put = (month: string, days: unknown) => gmReq('PUT', `/api/gm/gifts/${month}`, { days, reason: 'thử các lỗi' })
+    for (const bad of ['2026-13', '2026-1', '26-10', 'tháng']) {
+      const res = await put(bad, {})
+      expect([res.statusCode, code(res)], bad).toEqual([400, 'INVALID_MONTH'])
+    }
+    const gifts = await put('2026-10', { '28': { fixed: ['no_such_item'] } })
+    expect([gifts.statusCode, code(gifts)]).toEqual([400, 'INVALID_GIFTS'])
+    expect((gifts.json() as { error: { message: string } }).error.message).toContain('no_such_item')
+    // Days is a field the body must carry: without it the candidate is not an object.
+    expect(code(await gmReq('PUT', '/api/gm/gifts/2026-10', { reason: 'thiếu days' }))).toBe('INVALID_GIFTS')
+
+    const past = await put('2026-08', {})
+    expect([past.statusCode, code(past)]).toEqual([409, 'MONTH_IN_PAST'])
+    const locked = await put('2026-09', { '3': { draw: 'rare' } })
+    expect([locked.statusCode, code(locked)]).toEqual([409, 'TIER_LOCKED'])
+    const nothing = await gmReq('DELETE', '/api/gm/gifts/2026-10', { reason: 'không có gì để bỏ' })
+    expect([nothing.statusCode, code(nothing)]).toEqual([409, 'NOTHING_TO_CLEAR'])
+    const badMonth = await gmReq('DELETE', '/api/gm/gifts/2026-13', { reason: 'tháng sai' })
+    expect([badMonth.statusCode, code(badMonth)]).toEqual([400, 'INVALID_MONTH'])
+
+    // None of the refusals wrote a line.
+    const log = (await gmReq('GET', '/api/gm/actions')).json().actions as unknown[]
+    expect(log).toEqual([])
   })
 })
 
@@ -167,6 +236,49 @@ describe('players', () => {
     expect(all.json().granted.length).toBeGreaterThan(0)
   })
 
+  it('unlocks an achievement over HTTP: the reward is paid, a repeat is 409, an unknown id 400, a locked account 409', async () => {
+    const url = (id: string) => `/api/gm/players/${me.playerId}/achievements/${id}/unlock`
+    const done = await gmReq('POST', url('login_streak_7'), { reason: 'quên điểm danh' })
+    expect(done.statusCode).toBe(200)
+    expect(done.json()).toEqual({ actionId: expect.any(Number), reward: { points: 5_000 }, balance: ECONOMY.startingBalance + 5_000 })
+    const again = await gmReq('POST', url('login_streak_7'), { reason: 'lần nữa' })
+    expect(again.statusCode).toBe(409)
+    expect(code(again)).toBe('ALREADY_UNLOCKED')
+    const unknown = await gmReq('POST', url('no_such_achievement'), { reason: 'không có' })
+    expect(unknown.statusCode).toBe(400)
+    expect(code(unknown)).toBe('INVALID_ACHIEVEMENT')
+    expect((await gmReq('POST', `/api/gm/players/${me.playerId}/lock`, { reason: 'gian lận' })).statusCode).toBe(200)
+    const locked = await gmReq('POST', url('login_streak_28'), { reason: 'đang khóa' })
+    expect(locked.statusCode).toBe(409)
+    expect(code(locked)).toBe('TARGET_IS_LOCKED')
+    expect(code(await gmReq('POST', `/api/gm/players/not-a-uuid/achievements/login_streak_7/unlock`, { reason: 'sai id' }))).toBe('NOT_FOUND')
+  })
+
+  it('previews and undoes today\'s check-in over HTTP: 409 NOT_CLAIMED_TODAY before a claim, then the points come back and the player can claim again', async () => {
+    const preview = `/api/gm/players/${me.playerId}/checkin`
+    const reset = `${preview}/reset`
+    expect((await gmReq('GET', preview)).json()).toEqual({ claimedToday: false, day: 1, streak: 0, points: 0, itemIds: [] })
+    const none = await gmReq('POST', reset, { reason: 'chưa điểm danh' })
+    expect(none.statusCode).toBe(409)
+    expect(code(none)).toBe('NOT_CLAIMED_TODAY')
+
+    const claim = await h.app.services.economy.claimDaily(me.playerId)
+    if (!claim.ok) throw new Error('the claim was refused')
+    expect((await gmReq('GET', preview)).json()).toEqual({ claimedToday: true, day: 1, streak: 1, points: claim.points, itemIds: claim.items })
+    const done = await gmReq('POST', reset, { reason: 'nhầm tài khoản' })
+    expect(done.statusCode).toBe(200)
+    expect(done.json()).toEqual({ actionId: expect.any(Number), undone: { points: claim.points, itemIds: claim.items }, balance: ECONOMY.startingBalance })
+    expect((await h.app.services.economy.claimDaily(me.playerId)).ok).toBe(true)
+
+    // The reason comes first, an unknown id is a 404, and spent points are a 409.
+    expect(code(await gmReq('GET', `/api/gm/players/not-a-uuid/checkin`))).toBe('NOT_FOUND')
+    expect(code(await gmReq('POST', `/api/gm/players/not-a-uuid/checkin/reset`, { reason: 'sai id' }))).toBe('NOT_FOUND')
+    await gmReq('POST', `/api/gm/players/${me.playerId}/points`, { amount: -(ECONOMY.startingBalance + claim.points), reason: 'tiêu hết' })
+    const spent = await gmReq('POST', reset, { reason: 'không đủ điểm' })
+    expect(spent.statusCode).toBe(409)
+    expect(code(spent)).toBe('INSUFFICIENT_BALANCE')
+  })
+
   it('locks and unlocks, signs the player out, and refuses the self, a gm, a double lock', async () => {
     const locked = await gmReq('POST', `/api/gm/players/${me.playerId}/lock`, { reason: 'gian lận' })
     expect(locked.statusCode).toBe(200)
@@ -203,6 +315,24 @@ describe('players', () => {
     const res = await gmReq('GET', '/api/gm/overview')
     expect(res.statusCode).toBe(200)
     expect(res.json()).toMatchObject({ online: 0, rooms: 0, accounts: 2, locked: 0, gms: 1, points24h: { sources: 2 * ECONOMY.startingBalance } })
+  })
+
+  it('reports the sources and sinks per day for 7 or 30 days, and refuses any other span', async () => {
+    await db.execute(sql`update point_transactions set created_at = '2026-09-04T03:00:00Z'::timestamptz`)
+    for (const days of [7, 30]) {
+      const res = await gmReq('GET', `/api/gm/stats/daily?days=${String(days)}`)
+      expect(res.statusCode).toBe(200)
+      const body = res.json() as { day: string; sources: Record<string, number>; sinks: Record<string, number>; net: number }[]
+      expect(body).toHaveLength(days)
+      expect(body.map((d) => d.day)).toEqual([...body.map((d) => d.day)].sort())
+      // The harness clock stands at 2026-09-04: the starting balances are stamped onto that day.
+      expect(body[days - 1]).toMatchObject({ sources: { starting_balance: 2 * ECONOMY.startingBalance }, sinks: {}, net: 2 * ECONOMY.startingBalance })
+    }
+    for (const query of ['days=10', 'days=', 'days=7.5', '']) {
+      const res = await gmReq('GET', `/api/gm/stats/daily${query === '' ? '' : `?${query}`}`)
+      expect(res.statusCode, query).toBe(400)
+      expect(code(res), query).toBe('INVALID_DAYS')
+    }
   })
 })
 

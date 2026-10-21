@@ -1,5 +1,5 @@
 import type { Card as CardId, RoomPlayerView, RoomView, ShowdownHand } from '@bp/core'
-import { useRef, type CSSProperties, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { botChibi, type ChibiSubject, type Expression } from '../avatar2d/index.js'
 import type { ClientHand, ClientSeat } from '../client/types.js'
@@ -11,6 +11,7 @@ import { DeckAnchorProvider } from './deck-anchor.js'
 import { DEAL_MS, DEAL_WINDOW_MS, FLIP_MS, dealOrderOf, showdownWithBoard } from './motion.js'
 import { Pot } from './Pot.js'
 import { Seat } from './Seat.js'
+import type { RoomFrame } from './frame.js'
 import { ringPositions } from './geometry.js'
 import { useMediaQuery } from './useMediaQuery.js'
 import s from './table.module.css'
@@ -27,6 +28,9 @@ export interface PokerTableProps {
   lang: Language
   /** Defaults to `stack` under 768 px wide or 620 px tall, and `ring` above both. */
   layout?: TableLayout
+  /** The room's frame. In `landscape` (a phone on its side) the table is always the ring: the stack needs height the
+   * frame does not have. Defaults to `desktop`. */
+  frame?: RoomFrame
   /** A human seat's chibi; `null` (or no answer) falls back to the name's initial. Bots always draw their own
    * `botChibi` and never ask this — a bot has no wardrobe for the app to answer for. */
   chibiFor?: (player: RoomPlayerView) => ChibiSubject | null
@@ -50,12 +54,49 @@ export interface PokerTableProps {
    * the "Lật" pill — while the round is on. Called once per hand; the room sends the `REVEAL`.
    */
   onReveal?: () => void
+  /**
+   * One quiet line the room lays on the felt under the board, on the ring only: the landscape room's pre-hand hint
+   * ("Cần ít nhất 2 người sẵn sàng…"), which has no row of its own there — wrapped in the corner dock it doubled the
+   * dock's height over the seat beside the viewer's (Plan 26, B3). Nothing when not given.
+   */
+  note?: ReactNode
 }
 
 /* The ring needs roughly 310 px of stage to seat everyone around it without the plates running into the board, and a
    short window has no more to give than a narrow one — so a laptop with a 600 px-tall viewport gets the vertical
    layout for the same reason a phone does. */
 const STACKED = '(max-width: 767px), (max-height: 620px)'
+
+/**
+ * The ring's box, for `ringPositions` to space the seats evenly in its own pixels. The desktop ring pins a 2:1 box, but
+ * a phone held sideways caps a wider one by the viewport's width, so its shape is whatever the browser made of it —
+ * measured when it lays out and again on every resize. Where there is no `ResizeObserver` (jsdom) the box stays the
+ * desktop's 2:1. `active` is false while the table is the stack, which has no ring to measure.
+ */
+function useRingBox(ref: RefObject<HTMLElement>, active: boolean): { w: number; h: number } | undefined {
+  const [box, setBox] = useState<{ w: number; h: number } | undefined>(undefined)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!active || el === null || typeof ResizeObserver === 'undefined') return
+    // A new object only when the shape moved: the same box again must not render the table again.
+    const take = (width: number, height: number): void => {
+      if (width <= 0 || height <= 0) return
+      setBox((prev) => (prev !== undefined && prev.w === width && prev.h === height ? prev : { w: width, h: height }))
+    }
+    // Measured now, before the browser paints: the observer's first report comes after the first frame, which would
+    // otherwise draw the seats on the 2:1 fallback and then jump. The ring has no padding or border, so its border box
+    // is the content box the observer reports.
+    const first = el.getBoundingClientRect()
+    take(first.width, first.height)
+    const observer = new ResizeObserver((entries) => {
+      const rect = entries[entries.length - 1]?.contentRect
+      if (rect !== undefined) take(rect.width, rect.height)
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [ref, active])
+  return active ? box : undefined
+}
 
 const seatFromPlayer = (seat: number, player: RoomPlayerView): ClientSeat => ({
   seat,
@@ -95,6 +136,7 @@ export function PokerTable({
   turnTimerMs,
   lang,
   layout,
+  frame = 'desktop',
   chibiFor,
   expressionFor,
   captionFor,
@@ -102,11 +144,14 @@ export function PokerTable({
   canSit,
   resultPending = false,
   onReveal,
+  note,
 }: PokerTableProps) {
   const { t } = useTranslation()
   const narrow = useMediaQuery(STACKED)
-  const mode: TableLayout = layout ?? (narrow ? 'stack' : 'ring')
+  const mode: TableLayout = layout ?? (frame === 'landscape' ? 'ring' : narrow ? 'stack' : 'ring')
   const deckRef = useRef<HTMLDivElement>(null)
+  const ringRef = useRef<HTMLElement>(null)
+  const ringBox = useRingBox(ringRef, mode === 'ring')
 
   const seated = new Map<number, RoomPlayerView>()
   for (const p of room.players) if (p.seat !== null) seated.set(p.seat, p)
@@ -114,7 +159,7 @@ export function PokerTable({
   const mySeat =
     hand?.mySeat ?? (myPlayerId === null ? null : (room.players.find((p) => p.playerId === myPlayerId)?.seat ?? null))
   const order = Array.from({ length: room.maxPlayers }, (_, i) => i)
-  const positions = mode === 'ring' ? ringPositions(order, mySeat) : null
+  const positions = mode === 'ring' ? ringPositions(order, mySeat, ringBox) : null
 
   const handSeats = new Map<number, ClientSeat>((hand?.seats ?? []).map((hs) => [hs.seat, hs]))
   // While the result is pending the table has none to show — no payouts, no hands named, so no result line, no winner
@@ -258,9 +303,17 @@ export function PokerTable({
 
   return (
     <DeckAnchorProvider value={deckRef}>
-      <section className={cx(s.table, s.ring)} data-seats={room.maxPlayers} data-surface="night" aria-label={t('labels.table')}>
+      <section
+        ref={ringRef}
+        className={cx(s.table, s.ring)}
+        data-seats={room.maxPlayers}
+        data-frame={frame}
+        data-surface="night"
+        aria-label={t('labels.table')}
+      >
         <div className={s.felt} aria-hidden="true" />
         {centre}
+        {note === undefined || note === null ? null : <p className={s.note}>{note}</p>}
         {order.map(renderSeat)}
       </section>
     </DeckAnchorProvider>

@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { I18nextProvider } from 'react-i18next'
 import { describe, expect, it, vi } from 'vitest'
 import {
   ApiError,
@@ -256,6 +257,44 @@ describe('DailyScreen — claiming', () => {
     await waitFor(() => expect(api.daily).toHaveBeenCalledTimes(2))
     // A refusal is not a receipt: nothing was granted, so nothing is listed.
     expect(screen.queryByRole('heading', { name: interpolate(viNormal.daily.receipt.title, { day: '5' }) })).toBeNull()
+  })
+
+  it('reads its status again and drops the receipt when a GM reopens today’s check-in while the page is open', async () => {
+    // Claimable at first, claimed after the claim, claimable again once the GM has taken the claim back.
+    const daily = vi
+      .fn()
+      .mockResolvedValueOnce(STATUS)
+      .mockResolvedValueOnce({ ...STATUS, claimable: false })
+      .mockResolvedValue(STATUS)
+    const api = stubApi({ daily })
+    const user = userEvent.setup()
+    const i18n = makeI18n('vi')
+    const view = renderWithI18n(<DailyScreen api={api} lang="vi" checkinResets={0} />, i18n)
+    await screen.findByRole('list', { name: viNormal.daily.calendarTitle })
+    await user.click(screen.getByRole('button', { name: viNormal.daily.claim }))
+    const receiptHead = { name: interpolate(viNormal.daily.receipt.title, { day: '5' }) }
+    await screen.findByRole('heading', receiptHead)
+    await waitFor(() => expect(screen.getByRole('button', { name: viNormal.daily.claim })).toBeDisabled())
+    expect(daily).toHaveBeenCalledTimes(2)
+
+    // The app counted one `reset_checkin` notice.
+    view.rerender(
+      <I18nextProvider i18n={i18n}>
+        <DailyScreen api={api} lang="vi" checkinResets={1} />
+      </I18nextProvider>,
+    )
+    await waitFor(() => expect(daily).toHaveBeenCalledTimes(3))
+    await waitFor(() => expect(screen.getByRole('button', { name: viNormal.daily.claim })).toBeEnabled())
+    expect(screen.queryByRole('heading', receiptHead)).toBeNull()
+    expect(api.me).toHaveBeenCalledTimes(3)
+
+    // A re-render with the same count is not news.
+    view.rerender(
+      <I18nextProvider i18n={i18n}>
+        <DailyScreen api={api} lang="vi" checkinResets={1} />
+      </I18nextProvider>,
+    )
+    expect(daily).toHaveBeenCalledTimes(3)
   })
 })
 
