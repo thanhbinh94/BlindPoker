@@ -1,4 +1,4 @@
-import { expect, test, type CDPSession, type Locator, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import {
   autopilot,
   balanceOf,
@@ -21,10 +21,12 @@ import {
   postApi,
   ready,
   resultCard,
+  settled,
   start,
   statsOf,
   sumOf,
   takeSeat,
+  touchDrag,
   unique,
   type Player,
 } from './ops-helpers.js'
@@ -60,35 +62,6 @@ const FACE_UP = /^(\d+|Bồi|Đầm|Già|Át) (chuồn|rô|cơ|bích)$/
 const faceUp = (scope: ReturnType<Page['locator']>) => scope.getByRole('img', { name: FACE_UP })
 /** The result card of a hand that was played out — it has a winner — and not "Ván bị hủy", which `resultCard` takes as well. */
 const winnerCard = (page: Page) => page.getByRole('group', { name: 'Người thắng', exact: true })
-/**
- * Nothing under `el` is animating: a card dealt from the deck is still travelling for up to 1 000 + 360 ms (the whole deal
- * leaves the deck within a second, ruling 26), and a box measured on its way is not where a press has to land.
- */
-const settled = (el: Locator) =>
-  expect.poll(() => el.evaluate((node) => node.getAnimations({ subtree: true }).length), { message: 'the card has come in from the deck' }).toBe(0)
-
-/**
- * A touch drag the way a finger makes it: the browser's own touch input (`Input.dispatchTouchEvent`), which reaches the page
- * as Pointer Events of type `touch` and honours the card's `touch-action` — `page.touchscreen` can only tap. `midway` is
- * called with the finger down, half way.
- *
- * Paced like a hand (a move every frame, a rest before the lift): a drag sent in one burst reads to the browser as a fling,
- * and the tap that follows it — here the Lật pill — is then swallowed, with no `click` though the pointer events arrive.
- */
-async function touchDrag(cdp: CDPSession, from: { x: number; y: number }, to: { x: number; y: number }, midway?: () => Promise<void>): Promise<void> {
-  const steps = 10
-  const rest = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-  const send = (type: 'touchStart' | 'touchMove' | 'touchEnd', at?: { x: number; y: number }) =>
-    cdp.send('Input.dispatchTouchEvent', { type, touchPoints: at === undefined ? [] : [{ x: at.x, y: at.y }] })
-  await send('touchStart', from)
-  for (let k = 1; k <= steps; k++) {
-    await send('touchMove', { x: from.x + ((to.x - from.x) * k) / steps, y: from.y + ((to.y - from.y) * k) / steps })
-    if (k === steps / 2) await midway?.()
-    await rest(16)
-  }
-  await rest(64)
-  await send('touchEnd')
-}
 
 test('F-01 F-02 H-01: pure luck, three cards — the ante goes in, nobody decides, and the ledger writes the buy-in and the cash-out', async () => {
   const before = await balanceOf(a.page)
@@ -476,6 +449,9 @@ async function squeezeFitsPhone({ id, mode, what, shot }: { id: string; mode: 'H
   await expectMyNameWhole(page, a.who.displayName, `${what} table, dealt`, [PHONE_SCREEN])
   await expectNoTextOverlapAt(page, `Blind, ${what}, dealt`)
   await page.screenshot({ path: `test-results/shots/375x812-${shot}-dealt.png` })
+  // The overlap check above ran under reduced motion; motion back on deals the cards from the deck again (`settled`).
+  await settled(mine.first())
+  await settled(mine.last())
 
   // One card by finger: from its bottom-left corner, along the diagonal, past the middle. Pointer Events of type `touch`.
   await page.evaluate(() => {
@@ -502,9 +478,10 @@ async function squeezeFitsPhone({ id, mode, what, shot }: { id: string; mode: 'H
   await pill.tap()
   await expect(mine.last()).toHaveAttribute('data-face', 'up', { timeout: 5_000 })
   await expect(faceUp(page.locator('[data-me="true"]'))).toHaveCount(2)
-  // A play-or-fold table asks for the choice after the peel; the round then ends on the human's Chơi.
+  // A play-or-fold table asks for the choice after the peel; the round then ends on the human's Chơi. A board is dealt only
+  // when both play: a bot that folds hands the pot to the human at once, with no flop (F-06), so there the card is the end.
   if (mode === 'Chơi hoặc bỏ') await page.getByRole('button', { name: /^Chơi\b/ }).click()
-  await expect.poll(() => faceUp(page.getByRole('group', { name: 'Bài chung' })).count(), { message: 'the flop is on the felt' }).toBeGreaterThanOrEqual(3)
+  else await expect.poll(() => faceUp(page.getByRole('group', { name: 'Bài chung' })).count(), { message: 'the flop is on the felt' }).toBeGreaterThanOrEqual(3)
   await expect(winnerCard(page)).toBeVisible({ timeout: 15_000 })
   expect(Date.now() - t0).toBeLessThan(20_000)
   await leave(page)

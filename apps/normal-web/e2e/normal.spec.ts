@@ -14,6 +14,7 @@ import {
   expectPageFits,
   expectRoomFits,
   expectScrimLeavesNoEdge,
+  LANDSCAPE_SCREEN,
   LAPTOP_SCREEN,
   lobbyAvatar,
   OVERLAP_SCREENS,
@@ -392,11 +393,15 @@ test.describe('Blind Luck Poker Normal', () => {
     await page.getByRole('button', { name: 'Sẵn sàng', exact: true }).click()
     await expect(page.getByText('6/6 sẵn sàng')).toBeVisible()
     await expectRoomFits(page, 'taking seats')
+    // Plan 26 (B8): and on a phone held sideways, the room's landscape frame (the ops pack's `landscape` project plays it
+    // by touch; here the same three states are only measured, at 915 × 412, and the desktop comes back after each).
+    await expectRoomFits(page, 'landscape, taking seats', [LANDSCAPE_SCREEN])
     await expectNoTextOverlapAt(page, 'room, taking seats', OVERLAP_SCREENS)
 
     await page.getByRole('button', { name: 'Bắt đầu', exact: true }).click()
     await expect(page.getByRole('button', { name: /^Chơi\b/ })).toBeVisible()
     await expectRoomFits(page, 'in hand, the tray up')
+    await expectRoomFits(page, 'landscape, in hand, the tray up', [LANDSCAPE_SCREEN])
     await expectMySeatLines(page, who.displayName, 'in hand')
     // Review round 2, R2-3: the viewer's own name is whole on its plate at every size.
     await expectMyNameWhole(page, who.displayName, 'in hand')
@@ -410,6 +415,7 @@ test.describe('Blind Luck Poker Normal', () => {
     await expect(page.getByRole('button', { name: 'Bắt đầu', exact: true }), 'bots alone deal no hand: the room is taking seats').toBeVisible({ timeout: 15_000 })
     await expect(card, 'the card stays on the felt').toBeVisible()
     await expectRoomFits(page, 'the result card')
+    await expectRoomFits(page, 'landscape, the result card', [LANDSCAPE_SCREEN])
     await expectMySeatLines(page, who.displayName, 'the result card')
     // R2-3: and the held card stops above that seat on every desktop size, still tall enough to read.
     await expectMyNameWhole(page, who.displayName, 'the result card')

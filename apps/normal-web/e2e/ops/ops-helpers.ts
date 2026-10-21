@@ -1,15 +1,21 @@
-import { expect, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test'
+import { expect, type Browser, type BrowserContext, type CDPSession, type Locator, type Page } from '@playwright/test'
 import {
   account,
+  closeRoomMenu,
   expectMyNameWhole,
   expectMySeatLines,
   expectNoSidewaysScroll,
   expectNoTextOverlapAt,
   expectRoomFits,
+  expectSeated,
+  IPHONE_LANDSCAPE,
+  LANDSCAPE_SCREEN,
+  openRoomMenu,
   OVERLAP_SCREENS,
   parsePoints,
   PHONE_SCREEN,
   register,
+  SHORT_LANDSCAPE,
   unique,
   type Account,
 } from '../support.js'
@@ -21,15 +27,21 @@ import {
 
 export {
   account,
+  closeRoomMenu,
   expectMyNameWhole,
   expectMySeatLines,
   expectNoSidewaysScroll,
   expectNoTextOverlapAt,
   expectRoomFits,
+  expectSeated,
+  IPHONE_LANDSCAPE,
+  LANDSCAPE_SCREEN,
+  openRoomMenu,
   OVERLAP_SCREENS,
   parsePoints,
   PHONE_SCREEN,
   register,
+  SHORT_LANDSCAPE,
   unique,
   type Account,
 }
@@ -268,15 +280,18 @@ export async function joinByCode(page: Page, code: string, password?: string): P
   await form.getByRole('button', { name: 'Vào phòng' }).click()
 }
 
-/** Takes a seat; a Hold'em seat asks how much to bring, and `buyIn` answers (the minimum when omitted). */
-export async function takeSeat(page: Page, seat: number, buyIn?: number): Promise<void> {
+/**
+ * Takes a seat; a Hold'em seat asks how much to bring, and `buyIn` answers (the minimum when omitted). In the landscape
+ * frame pass `{ via: 'menu' }`: the seat is confirmed by "Đứng dậy" in the header's "Thêm" menu (`expectSeated`).
+ */
+export async function takeSeat(page: Page, seat: number, buyIn?: number, opts?: { via?: 'menu' }): Promise<void> {
   await page.locator(`[data-seat="${seat}"]`).getByRole('button', { name: /Ngồi vào bàn/ }).click()
   const dialog = page.getByRole('dialog', { name: 'Chọn số điểm mang vào bàn' })
   if (await dialog.isVisible().catch(() => false)) {
     if (buyIn !== undefined) await dialog.getByLabel('Buy-in').fill(String(buyIn))
     await dialog.getByRole('button', { name: 'Ngồi vào bàn' }).click()
   }
-  await expect(page.getByRole('button', { name: 'Đứng dậy', exact: true })).toBeVisible()
+  await expectSeated(page, opts)
 }
 
 export async function ready(page: Page): Promise<void> {
@@ -291,6 +306,39 @@ export async function start(page: Page): Promise<void> {
 }
 
 /* ── the hand ────────────────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Nothing under `el` is animating: a card dealt from the deck is still travelling for up to 1 000 + 360 ms (the whole deal
+ * leaves the deck within a second, ruling 26), and a box measured on its way is not where a press has to land. Call it
+ * again after `expectNoTextOverlapAt`: that check measures under reduced motion, and turning motion back on deals the
+ * cards from the deck once more (the card's slide restarts, its `backwards` fill holding it on the deck meanwhile).
+ */
+export async function settled(el: Locator): Promise<void> {
+  await expect.poll(() => el.evaluate((node) => node.getAnimations({ subtree: true }).length), { message: 'the card has come in from the deck' }).toBe(0)
+}
+
+/**
+ * A touch drag the way a finger makes it: the browser's own touch input (`Input.dispatchTouchEvent`), which reaches the page
+ * as Pointer Events of type `touch` and honours the card's `touch-action` — `page.touchscreen` can only tap. `midway` is
+ * called with the finger down, half way.
+ *
+ * Paced like a hand (a move every frame, a rest before the lift): a drag sent in one burst reads to the browser as a fling,
+ * and the tap that follows it — the squeeze's Lật pill — is then swallowed, with no `click` though the pointer events arrive.
+ */
+export async function touchDrag(cdp: CDPSession, from: { x: number; y: number }, to: { x: number; y: number }, midway?: () => Promise<void>): Promise<void> {
+  const steps = 10
+  const rest = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+  const send = (type: 'touchStart' | 'touchMove' | 'touchEnd', at?: { x: number; y: number }) =>
+    cdp.send('Input.dispatchTouchEvent', { type, touchPoints: at === undefined ? [] : [{ x: at.x, y: at.y }] })
+  await send('touchStart', from)
+  for (let k = 1; k <= steps; k++) {
+    await send('touchMove', { x: from.x + ((to.x - from.x) * k) / steps, y: from.y + ((to.y - from.y) * k) / steps })
+    if (k === steps / 2) await midway?.()
+    await rest(16)
+  }
+  await rest(64)
+  await send('touchEnd')
+}
 
 /**
  * The result card dealt over the felt once a hand completes: a group named by its title (review round 2, R2-4). Its

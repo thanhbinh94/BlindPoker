@@ -43,13 +43,20 @@ export default defineConfig({
   projects: [
     {
       name: 'desktop',
-      grepInvert: /@mobile/,
+      grepInvert: /@mobile|@landscape/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
     },
     {
       name: 'mobile',
       grep: /@mobile/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 375, height: 812 }, hasTouch: true, deviceScaleFactor: 2 },
+    },
+    {
+      // Plan 26 (B8): a phone held sideways — 915 × 412 (a Galaxy-class Android in landscape), touch, the room's
+      // landscape frame (`(orientation: landscape) and (max-height: 500px) and (min-width: 700px)`).
+      name: 'landscape',
+      grep: /@landscape/,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 915, height: 412 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2.6 },
     },
   ],
 })
