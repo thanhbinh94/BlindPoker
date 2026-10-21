@@ -875,6 +875,93 @@ whole-branch review. The user's decisions are the spec's Q-table (§1); the firs
 - A route is a convenience and the server is the lock: the role is read from the database on every request, and the
   client only uses it to decide whether to show an entry.
 
+## Plan 26 — GM round 2, a landscape table and a sign-in picture (merged `MERGE`, 2026-10-21)
+
+Spec `docs/superpowers/specs/2026-10-20-plan26-gm-round2-phone-landscape-login-design.md`; plan
+`docs/superpowers/plans/2026-10-20-plan26-gm-round2-phone-landscape-login.md`; branch
+`feature/BP-26-gm-round2-phone-landscape-login`. Twenty-six tasks in three parts (A: unlock, undo-and-reclaim, gift months,
+per-day figures; B: the landscape frame, its dock, tray and result card, two portrait debts; C: the hero picture and the
+sign-in layout) and an F wave for the docs, the whole-branch review, the gate and the VPS. The user's decisions are the
+spec's Q-table (Q1–Q11); the spec's own rulings are R1–R11 (§7), made while the user was away, and the pre-flight review
+(an independent opus agent that ran PGlite, sharp and the WebP export) spliced 26 amendments, P1–P26, into the plan. The
+rulings below are the SDD ledger's, in order.
+
+### Rulings
+
+- Ruling 1: `gm_checkin_undo` is a negative source reason (like `gm_adjust`), not a sink — `overview()` sums signed totals;
+  recorded as a spec deviation. Costs if wrong: the overview under-reports sinks by the undone amounts.
+- Ruling 2: a db gift month that fails validation at boot is logged at `warn` and skipped; boot continues. Costs if wrong:
+  a GM-edited month silently falls back to the default until re-saved.
+- Ruling 3: revoke strips the item from saved outfits too. Costs if wrong: none visible; a saved outfit loses one slot.
+- Ruling 4 (A4): `GET /api/gm/gifts` returns one row per month from the current month to current + 12 (days = db row, else
+  file entry, else `{}`; source `db` | `file`) so the Quà tháng tab can list months without a second call. Costs if wrong:
+  a slightly fatter payload (13 small rows).
+- Ruling 5 (A5): `dailyStats` counts only `SOURCE_REASONS` as sources (buy-in, cash-out and pot transfers are neither),
+  matching `overview()`. Costs if wrong: a future source reason missing from the set is invisible in the chart (same as
+  the overview today).
+- Ruling 6 (A7): `DailyCalendar` gets `showPoints?: boolean`; the GM preview hides points (the tier reward table is
+  server-side). Costs if wrong: the GM tab shows no point values per day.
+- Ruling 7 (A7): a month entry cannot express "no gift" where the default has one (the server's `parseRule` needs `draw`
+  or `fixed`); "none" is only the label of "Như mặc định" for days the default leaves empty. Costs if wrong: a GM cannot
+  remove a default tier for one month (they can change the default in the JSON).
+- Ruling 8 (B3): the landscape frame also requires `(min-width: 700px)` — `LANDSCAPE_PHONE` becomes
+  `(orientation: landscape) and (max-height: 500px) and (min-width: 700px)`; narrower short windows keep the stack layout.
+  Costs if wrong: a 640-px-wide landscape phone (rare) gets the scrolling stack instead of the ring.
+- Ruling 9 (B4): the call/raise amount must stay visible on a phone (a two-line label); a tooltip is not enough. Costs if
+  wrong: an extra round.
+- B4-1 to B4-4, the implementer's, accepted by the review as deviations:
+  - B4-1: the presets go in the **left** corner, not stacked above the action row. Stacked, the right part was 82 px tall
+    and 431 px wide and met the neighbouring seat and the hero at all three sizes; on the player's own turn the left
+    corner is empty. Costs if wrong: the presets move back above the row and the right corner needs another way to fit.
+  - B4-2: in landscape the bet/raise button first opens the sizer ("Tố" / "Cược"), then reads "Tố N" and raises; Enter
+    still raises at once. "Tố 10.000" in the default row crossed the hero plate at 844 px. Costs if wrong: one extra tap.
+  - B4-3: while the sizer is open, "Tất tay" leaves the row and "Max" stands in for it (with "Tố N" it was 375 px wide
+    and crossed the hero's plate). Costs if wrong: a player who opened the sizer goes all-in in two taps instead of one.
+  - B4-4: the left pills are 34 px (44 px on a coarse pointer), and the presets share it, not the brief's 30 px. Costs if
+    wrong: none for layout.
+- Smaller rulings in the tasks, all in the CHANGELOG's deviations: B3 keys the ring's CSS on its own `data-frame` and
+  moves the pre-hand hint onto the felt (so the dock stays one row); B6 makes the Lật pill 40 px wide, so a peel that
+  starts at the card's corner still wins; B8 raises 600 in L-04, not 300 (the lowest Hold'em raise is to 400); C2 drops
+  `fetchPriority` (React-DOM 18.3 warns) and wraps the card in `div.authSide`.
+
+### Lessons
+
+- The spec review found that `claimDaily` commits the gift in the **same transaction** as the claim and keeps no
+  `ledger_keys` row, so "reopen today's claim without undoing it" would have been useless: the player would claim a second
+  gift. That is why Q10 chose undo-and-reclaim. Read the code that the user's words name before writing the options.
+- The pre-flight review caught a double count before it was written: a reclaim reuses `ref_id = daily:<pid>:<day>`, so "sum
+  by ref" doubles on a second reset. Today's claim is the **latest** rows under that ref (and `acquired_at` for items); the
+  test resets twice and expects X back, not 2X.
+- Drizzle binds a parameter twice when the same value appears in `select` and `group by`, and Postgres then refuses the
+  grouping. A `GROUP BY` on an expression with a bound time zone is a raw `sql` query with `group by 1, 2, 3`.
+- CSS modules hash class names per file, so a component cannot write `.room[data-frame='landscape'] .ring` for a class from
+  another file. Each element keys on its own `data-frame` (`.ring[data-frame]`), and a test finds corner boxes with
+  `[class*="_trayLeft_"]` and a `toHaveCount`, so a rename fails loudly.
+- A Playwright `isMobile` plus `hasTouch` context inherits the project's `use`, so a `newPlayer` made in a project gets that
+  viewport; a project is the right place for a viewport, not a per-test `setViewportSize`.
+- A touch that starts within about 10 px of a pill loses to the pill, so the Lật pill is 40 px wide, not 48, and the peel
+  start is measured (about 9 px from the pill) rather than assumed.
+- `(orientation: landscape)` is a viewport test, not a device test: a short desktop window and a phone with the keyboard up
+  match it. Add `min-width` (Ruling 8) and say so in the limitations, rather than adding `pointer: coarse`, which would
+  make the layout untestable on a desktop (R1).
+- The reviewer found a false claim: the limitation and a test comment said Hold'em "has no bots, so nine seats cannot be
+  occupied". **No bots does not mean no nine players**: `maxPlayersHoldem` is 9 and nine people can sit. Check the cap in
+  the code before writing "cannot happen" in a limitation; the real state is "nine occupied plates are untested", recorded
+  as such.
+- `expectNoTextOverlapAt` measures under reduced motion and then turns motion back on, which **replays the deal**: the
+  card is back on the deck, scaled and rotated, and a touch started right after lands on the deck and is cancelled. Call
+  `settled()` again after the overlap check. And JS `\b` does not treat `ố` as a word character, so `/^Tố\b/` never
+  matches "Tố"; use `/^Tố( |$)/`.
+- F-12b was flaky one run in three because it asserted a flop after "Chơi", but when the bot folds the human wins at once
+  with no board. A test of a poker outcome must be valid for every legal outcome of the bot, or pin the outcome.
+- Keep the screenshots for the reviewer. B5's implementer deleted its own before the review, and the reviewer had to
+  re-take them from `#worst/result`. Leave `shots-*` in the SDD folder until the task is complete.
+- A session restart (a usage limit, 2026-10-20) in the middle of B5 and later B8's run lost nothing, because the ledger
+  names the last state ("review not yet run; resume: review-package 4749b65..758fd8b") and the logs name the last run.
+  Write the resume line into the ledger at every dispatch.
+- The reviews that opened screenshots again earned their cost: the dock covered seat 6 at 640×360, a 4 px clip hid Đóng
+  under `overflow: hidden`, and a six-digit raise crossed the hero's plate at 844×390. None showed in a unit test.
+
 ## 5. Open items
 
 The single list is `docs/known-limitations.md`. As of this writing, the items a next session is most likely to meet:
