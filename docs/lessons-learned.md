@@ -875,7 +875,7 @@ whole-branch review. The user's decisions are the spec's Q-table (§1); the firs
 - A route is a convenience and the server is the lock: the role is read from the database on every request, and the
   client only uses it to decide whether to show an entry.
 
-## Plan 26 — GM round 2, a landscape table and a sign-in picture (merged `MERGE`, 2026-10-21)
+## Plan 26 — GM round 2, a landscape table and a sign-in picture (merged `837485c`, 2026-10-21)
 
 Spec `docs/superpowers/specs/2026-10-20-plan26-gm-round2-phone-landscape-login-design.md`; plan
 `docs/superpowers/plans/2026-10-20-plan26-gm-round2-phone-landscape-login.md`; branch
@@ -988,8 +988,10 @@ The single list is `docs/known-limitations.md`. As of this writing, the items a 
   - the deck's position (Ruling 17, reported as a deviation);
   - the 11 px phone scroll on play-or-fold squeeze tables (Ruling 28);
   - the human test rounds in `docs/operation-test-plan.md` (real phones, a LAN session, Lite on a second PC);
-  - Plan 25's deploy: migration `0004_gm` on the user's Neon database (`run.ps1` without `-NoMigrate`; ask first), then
-    the first GM by `grant-gm-cli`, then section Q of the test plan by hand.
+  - Plans 25 and 26 are live on the VPS since 2026-10-21 (`0004_gm` and `0005_plan26` applied, the first GM made by
+    `grant-gm-cli`); the Windows LAN host still needs `run.ps1` without `-NoMigrate` once (the user's Neon database; ask
+    first), and section Q of the test plan plus the landscape and GM round-2 checks are the user's to run by hand;
+  - the next round, K1–K5 in `docs/bug-log.md` §9, is to be brainstormed before anything is built.
 - **Environment:** the Normal Docker image has been built once on x86 and the suite has run once on a real PostgreSQL
   (both 2026-10-16, BP-24), and the Compose stack ran once with `DOMAIN=localhost` the same day; Caddy's ACME flow on
   a public name, the ARM build and the Oracle kit have never been executed, and seven dev-only npm advisories are

@@ -147,7 +147,12 @@ build:lite up to the exe step (skipped on Node 24, "rebuilt locally, not shipped
     that day's item; achievements unlocked by the undone claim stay (both in `docs/known-limitations.md`).
   - A `revoke` also strips the item from saved outfits (Ruling 3), and a db gift month that no longer validates at boot is
     skipped with a warning (Ruling 2).
-- **Still open.** VPS: see the final report (the migration and `grant-gm-cli` need the user's yes). Deferred minors, none
+- **Deployed.** VPS (`play.14-225-254-250.sslip.io`) on 2026-10-21: `backup.sh` (`bp-2026-10-21-2230.dump`), `git pull`
+  to `c6a9c4b`, `docker compose up -d --build`; the migrate container applied `0004_gm` and `0005_plan26` (six rows in
+  `drizzle.__drizzle_migrations`, `gift_months` and `inventory.ref` present), `/health` `ok`/`db ok` with 0 rooms before and
+  after, and `grant-gm-cli` made the user's account the first GM. The two hero files are served (178 KB, 66 KB). The
+  Windows LAN host was not deployed (no kit `.env` on this machine); Lite was rebuilt locally, not shipped.
+- **Still open.** Deferred minors, none
   blocking: the by-day table clips its Ròng column inside its scroll box on a 375 px phone; `GET /api/gm/gifts` should
   return the server's today instead of the client assuming `Asia/Ho_Chi_Minh`; a fixed gift list is lost on a fixed →
   common → fixed round trip in one edit; the landscape sizer
@@ -230,8 +235,8 @@ skipped) in 466 s, build:normal, Lite web + server (the exe step needs Node 22, 
     spec logs before acting, §5).
   - Promoting a locked account is refused: `409 TARGET_IS_LOCKED` on the screen, `LockedAccountError` (exit 1) from the
     CLI. A demotion locks the GM set before the target row, so two GMs demoting each other cannot deadlock.
-- **Still open.** Deploying needs the migration: on the Windows LAN host drop `-NoMigrate` for the first `run.ps1` (the
-  user's Neon database; ask first), and make the first GM with `grant-gm-cli`. A GM shares the player's password with no
+- **Still open.** Deployed to the VPS with Plan 26 on 2026-10-21 (`0004_gm` applied, the first GM made by `grant-gm-cli`);
+  the Windows LAN host still needs `run.ps1` without `-NoMigrate` once (the user's Neon database; ask first). A GM shares the player's password with no
   2FA; no daily cap on grants; no account deletion; `gm_actions.action` is free text in SQL; a role changed by the CLI
   shows in Settings only on reload; an after-hand removal is logged by the room as `left`; the card layout drops table
   semantics for some screen readers; no `@mobile` ops case; `refunded` counts spectators — all in
