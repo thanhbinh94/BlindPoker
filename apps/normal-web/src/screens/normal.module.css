@@ -360,7 +360,8 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  /* the band's crop keeps three faces: the áo dài peeking at her card, the tuxedo, the friend between them */
+  /* A tablet's band (768–1023 px) shows the picture whole across its width, cropped top and bottom. A phone's is
+     zoomed in on the three faces — see the `max-width: 767px` block after `.lead`. */
   object-position: 34% 28%;
 }
 
@@ -443,6 +444,48 @@
   font-size: 0.9375rem;
   color: var(--ink-muted);
   text-wrap: pretty;
+}
+
+/* A phone's band: the approved mockup's crop (spec §4 C1, V2: `background-size: 160% auto` at 34% 28%), the three
+   faces — the áo dài peeking at her card, the tuxedo, the friend between them — rather than the whole table at
+   thumbnail size. A background-position percentage aligns that point of the picture with the same point of the box,
+   which is `left`/`top` at the percentage plus a `translate` back by it. Not on a tablet: at 768 px the same zoom
+   cuts the crowned girl's face off the top. */
+@media (max-width: 767px) {
+  .heroImg {
+    inset: auto;
+    left: 34%;
+    top: 28%;
+    width: 160%;
+    max-width: none;
+    height: auto;
+    object-fit: fill;
+    transform: translate(-34%, -28%);
+  }
+}
+
+/* A landscape phone (915×412, 844×390): a 300 px band would push the form below the fold, so the band thins to a
+   strip, the card tightens, and its mark and lead stand down — the heading stays, as the page's one `h1`. The whole
+   form, button included, is then inside 390 px. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .authHero {
+    height: 72px;
+  }
+
+  .authCard {
+    gap: var(--space-3);
+    margin-top: -24px;
+    padding: var(--space-4) var(--space-5);
+  }
+
+  .cardHead .markGlyph,
+  .cardHead .lead {
+    display: none;
+  }
+
+  .cardHead .authTitle {
+    font-size: 1.375rem;
+  }
 }
 
 /* Layout A from 1024 px up (the rail's own breakpoint): the picture is the left column, full height, its heading and
