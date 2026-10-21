@@ -720,7 +720,7 @@ of it. So the room has two **frames**, `RoomFrame = 'desktop' | 'landscape'` (`t
   walk the enabled ones, Escape and a press outside close it, Escape and a pick give the focus back).
 - **The corner docks.** Bottom right, `.dock` in the room holds what starts a hand: Sẵn sàng / Hủy sẵn sàng, Bắt đầu,
   the ready count and the between-hands countdown. During a hand the action tray takes the same corner and splits in two
-  (`.trayLeft`: the pre-action toggles, Tự động chơi and the Hold'em presets Min · ½ · Pot · Max · ✎; `.trayRight`: Bỏ bài ·
+  (`.trayLeft`: the pre-action toggles and Tự động chơi, which the Hold'em presets Min · ½ · Pot · Max · ✎ replace after the first tap on Cược/Tố; `.trayRight`: Bỏ bài ·
   Xem/Theo · Cược/Tố · Tất tay), so the two never share it: between hands the tray gives up its right part and keeps its
   left one. The waiting hint ("Cần ít nhất 2 người…") moves onto the felt (`PokerTable`'s `note`), which is what
   keeps the dock one row. Amounts sit on a second line under their verb, and the raise takes two taps (the first opens
@@ -922,8 +922,9 @@ full-viewport, for measuring a layout against a screen size.
 - **The landscape frame is driven in Chromium only, at 915 × 412, 915 × 355 and 844 × 390** (740 × 360 fits, with thin
   margins), never on a real phone. The query is a viewport test, so a portrait phone with its soft keyboard up can read as
   landscape; the only text field on the table is the top-anchored "Nhập số điểm" dialog. The result card is opaque and
-  covers the side seats, and at 844 × 390 the top of the viewer's plate. A nine-seat landscape table (the playground's
-  `#worst/…/9/…/landscape`) is a stress case: Blind caps at eight. All in `docs/known-limitations.md`.
+  covers the side seats, and at 844 × 390 the top of the viewer's plate. A Hold'em table with nine occupied plates in
+  landscape (a room seats nine) has no browser test, only the playground's `#worst/…/9/…/landscape`, which is crowded
+  on the left at 915 × 355. All in `docs/known-limitations.md`.
 - **The badge test measures the grounds a badge sits on today** (see Theming → Badge text). A badge on a ground it
   does not list is not measured, and one place is tight: teal under a dark `.panel.ink`'s highlight. The test holds
   that highlight at 2 %, above anywhere a badge is (Lite's "claimed" badge: 0.8–1.4 %, none on a phone; titled panels put

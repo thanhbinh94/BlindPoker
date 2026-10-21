@@ -582,14 +582,16 @@ keeps the stacked layout.
 width of 740 px, not a bug to fix without shrinking the plates the names live on.
 *Tracked:* `packages/ui-kit/src/screens/RoomScreen.tsx` (`dockShown`); `docs/ui-kit.md` (The landscape frame).
 
-**The nine-seat landscape table is a playground stress case, not a shipped one (Plan 26, B3).** Blind Poker caps a room at
-eight players and Hold'em has no bots, so a real table shows at most eight occupied plates in the landscape frame; the
-ring's geometry takes nine (spaced by equal arc length on the measured box) and the playground draws them at
-`#worst/waiting/9/vi/landscape`, with no test behind it. L-02 drives eight seats at 915 × 355 and the nine-seat
-Hold'em room only for its empty seats' "Ngồi vào bàn" buttons.
-*Why it stays:* a ninth occupied plate cannot happen with the current room limits; if one ever can, the playground frame
-is where to look first.
-*Tracked:* `packages/ui-kit/playground/scenarios.tsx`; `apps/normal-web/e2e/ops/07-landscape.spec.ts` → L-02.
+**A Hold'em table with nine people at it, on a landscape phone, has no browser test (Plan 26, B3).** A Hold'em room seats
+nine (`maxPlayersHoldem`), and nine humans can fill it; Blind caps at eight. L-02 drives eight occupied plates at
+915 × 355 and the nine-seat Hold'em room only for its empty seats' "Ngồi vào bàn" buttons. Nine occupied plates are seen
+only in the playground (`#worst/turn/9/vi/landscape`, `#worst/waiting/9/vi/landscape`). No two plates overlap there, but
+at 915 × 355 the left side is crowded: the deck sits close to a bet chip, a seat's cards touch another's chip, a folded
+seat's tag lies under the deck, and names are cut to three letters.
+*Why it stays:* nine humans around one landscape phone's table is rare, and the ops pack has no nine-human room (it would
+need nine accounts); the playground shot is the stress check.
+*Tracked:* `packages/ui-kit/playground/screenshots/README.md` (the `turn` · 9 seats · 915 × 355 row);
+`apps/normal-web/e2e/ops/07-landscape.spec.ts` → L-02.
 
 **A flick needs a run of movement to be read as one, on a device that does not coalesce pointer events.** The flick's
 speed is taken from the pointer's real and coalesced positions (`getCoalescedEvents`) over its last 100 ms, and a pointer
