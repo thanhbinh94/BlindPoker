@@ -428,6 +428,18 @@
   white-space: nowrap;
 }
 
+/* The reconnect banner (spec B2): it lies over the felt just under the one-line header instead of taking a row, so a
+   dropped socket does not push the ring down. Above the felt and the docks, below the Thêm menu (z-modal − 1). */
+.room[data-frame='landscape'] .banner {
+  position: absolute;
+  top: 40px;
+  left: 50%;
+  z-index: 6;
+  max-width: calc(100% - 2 * var(--space-3));
+  margin: 0;
+  transform: translateX(-50%);
+}
+
 /* The result overlay (Plan 26, B5): keyed on the overlay's own `data-frame`, after the base rules. The card is centred
    over the felt, and the bottom 60 px stay free, so the corner docks (pre-hand dock, action tray, z-index 3 and 5) stay
    visible and tappable beside it, below the scrim. No `--seat-clearance` here: the viewer's plate is small and the card

@@ -1028,6 +1028,14 @@ describe('RoomScreen', () => {
       expect(within(screen.getByRole('dialog')).getAllByRole('button', { name: /^Mời ra/ })).toHaveLength(1)
     })
 
+    it('keeps the reconnect banner as a status on the room root, where the landscape rule lays it over the felt', () => {
+      const { container } = landscape(fakeClient(makeState({ status: 'reconnecting', room: readyRoom })))
+      const banner = screen.getByText('Mất kết nối — đang kết nối lại…')
+      expect(banner).toHaveAttribute('role', 'status')
+      // A direct child of the positioned room root, so `position: absolute` anchors under its header, not in the stage.
+      expect(banner.parentElement).toBe(container.querySelector('[data-frame="landscape"]'))
+    })
+
     it('offers Toàn màn hình only when document.fullscreenEnabled', async () => {
       setFullscreenEnabled(false)
       const off = landscape(fakeClient(makeState({ room: readyRoom })))

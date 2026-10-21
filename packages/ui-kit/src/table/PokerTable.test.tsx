@@ -746,4 +746,27 @@ describe('PokerTable', () => {
       vi.unstubAllGlobals()
     }
   })
+
+  it('draws the first frame on the measured box, before the observer has reported (no 2:1 flash)', () => {
+    const order = Array.from({ length: 9 }, (_, i) => i)
+    const left = (seat: number): string => document.querySelector<HTMLElement>(`[data-seat="${seat}"]`)!.style.left
+    class SilentObserver {
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    }
+    vi.stubGlobal('ResizeObserver', SilentObserver)
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ width: 750, height: 250 } as DOMRect)
+    try {
+      wrap(
+        <PokerTable room={fullRoom} hand={null} myPlayerId="p0" deadlineAt={null} serverNow={() => 0} turnTimerMs={30000} lang="en" layout="ring" canSit={false} />,
+      )
+      // the observer never fired: the seats already stand on the 3:1 box the layout effect read synchronously
+      expect(left(1)).toBe(`${ringPositions(order, 0, { w: 750, h: 250 }).get(1)!.x}%`)
+      expect(left(1)).not.toBe(`${ringPositions(order, 0).get(1)!.x}%`)
+    } finally {
+      rect.mockRestore()
+      vi.unstubAllGlobals()
+    }
+  })
 })

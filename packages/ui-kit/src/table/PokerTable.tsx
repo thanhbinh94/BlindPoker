@@ -78,11 +78,19 @@ function useRingBox(ref: RefObject<HTMLElement>, active: boolean): { w: number; 
   useLayoutEffect(() => {
     const el = ref.current
     if (!active || el === null || typeof ResizeObserver === 'undefined') return
+    // A new object only when the shape moved: the same box again must not render the table again.
+    const take = (width: number, height: number): void => {
+      if (width <= 0 || height <= 0) return
+      setBox((prev) => (prev !== undefined && prev.w === width && prev.h === height ? prev : { w: width, h: height }))
+    }
+    // Measured now, before the browser paints: the observer's first report comes after the first frame, which would
+    // otherwise draw the seats on the 2:1 fallback and then jump. The ring has no padding or border, so its border box
+    // is the content box the observer reports.
+    const first = el.getBoundingClientRect()
+    take(first.width, first.height)
     const observer = new ResizeObserver((entries) => {
       const rect = entries[entries.length - 1]?.contentRect
-      if (rect === undefined || rect.width <= 0 || rect.height <= 0) return
-      // A new object only when the shape moved: the same box again must not render the table again.
-      setBox((prev) => (prev !== undefined && prev.w === rect.width && prev.h === rect.height ? prev : { w: rect.width, h: rect.height }))
+      if (rect !== undefined) take(rect.width, rect.height)
     })
     observer.observe(el)
     return () => observer.disconnect()
