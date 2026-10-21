@@ -311,8 +311,14 @@ a picture of a table of friends (spec 2026-10-20, Part C, layout A). The picture
   night ground, and at the foot the hero's `h1.heroTitle` ("Blind Luck Poker") and `p.heroLead` (`auth.heroLead`). The
   card is centred in the right column with the language switch under it.
 - **Below 1024 px** it is one column: `.authHero` is a 300 px band at the top and the card overlaps its foot by 50 px
-  (`margin-top: -50px`). The band shows all five faces (`object-fit: cover`, `object-position: 34% 28%`), not a zoom on
-  three. The hero's words are `display: none` there.
+  (`margin-top: -50px`). The hero's words are `display: none` there. What the band shows depends on the width:
+  - **At most 767 px (a phone):** the picture is zoomed to 160 % anchored at 34 % 28 % (the approved mockup's crop, spec C1),
+    so the band frames the three middle faces: the áo dài peeking at her card, the tuxedo, the friend between them.
+  - **768 to 1023 px (a tablet):** `object-fit: cover` at `34% 28%` shows the picture's whole width, cropped top and bottom.
+    The phone's zoom is off there because at 768 × 1024 it cut the crowned girl's face off the top (Ruling C2-4).
+  - **A landscape phone** (`(orientation: landscape) and (max-height: 500px)`): the band thins to a 72 px strip and the
+    card overlaps it by 24 px. The card's mark and lead are hidden and its title is smaller, so the whole form, button
+    included, fits at 915 × 412 and 844 × 390; the language switch sits below the fold there (Ruling C2-5).
 - **One heading (spec R10).** Exactly one `h1` is visible at a time, by CSS only: the hero's from 1024 px up, where the
   card's own title and lead are hidden, and the card's below it. Both are in the DOM, so a unit test sees two and pins which
   class is which.
@@ -336,8 +342,8 @@ Tests that pin it:
   hero image has decoded (`naturalWidth > 0`, which a CSP refusal or a 404 would fail); at 320 × 812 the page does not
   scroll sideways under the band; at 1024 × 700 in the light theme the lead holds 4.5:1 against the lightest pixel under
   it (measured by a screenshot of the lead's box with the text hidden, decoded with `sharp`; 5.36 when written); and
-  `expectNoTextOverlapAt` runs on both tabs, at 1920 × 940, 1366 × 768 and 375 × 812 in the desktop tour
-  (`OVERLAP_SCREENS`) and at the tour's own viewport in the others.
+  `expectNoTextOverlapAt` runs on both tabs, at 1920 × 940 and 1366 × 768 in the desktop tour
+  (`OVERLAP_SCREENS`) and at the tour's own viewport in the others (375 × 812 in the `@mobile` tour, project `mobile`).
 
 ---
 

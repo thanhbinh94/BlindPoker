@@ -232,7 +232,7 @@ landscape, the soft keyboard, the 740 × 360 margins — is `docs/known-limitati
 ## Plan 26 — the sign-in screen, Part C (spec 2026-10-20)
 
 Not rows of §29.2, §29.3 or §30: the user asked (20/10) for the sign-in page to seat the card beside a picture of a table
-of friends, and Part C of the spec amends §27.1 of the main design. The screen is `apps/normal-web/src/screens/AuthScreen.tsx`
+of friends, and Part C keeps the SRS's 1024 px two-column break (spec R5). The screen is `apps/normal-web/src/screens/AuthScreen.tsx`
 and its layout is in `docs/normal-web.md`, "The sign-in screen". The browser rows are the auth checks of `tourStart` in the
 Normal e2e (`pnpm e2e:normal`), which run outside `pnpm test` as every e2e does. The export script
 (`apps/normal-web/scripts/login-hero.mjs`) has no test of its own: it measures the two files against their budgets (250 KB
@@ -242,7 +242,7 @@ looks right, and a real phone — is the user's to try (`docs/operation-test-pla
 | Rule | Test file | Test name | Status |
 |---|---|---|---|
 | Spec C1 (the picture and the one heading): the sign-in screen draws a hero picture with two WebP sources (768 and 1536 px wide) as decoration, with an empty `alt`, and the hero's lead; the hero's `h1` and the card's both exist in the DOM, the hero's first, so that CSS can show exactly one at each width (R10) | `apps/normal-web/src/screens/AuthScreen.test.tsx` | renders the hero picture with both sources and the hero lead | added in Plan 26 |
-| Spec C2 (the layout in a browser): the hero picture has decoded (a blocked or missing file has no natural width); the narrowest phone, 320 px, does not scroll sideways under the 300 px band; the card and the hero's words never overlap text on either tab, at 1920 × 940, 1366 × 768 and 375 × 812 | `apps/normal-web/e2e/normal.spec.ts` | một tài khoản chơi trọn một ván Blind với bot | added in Plan 26 — runs outside `pnpm test` |
+| Spec C2 (the layout in a browser): the hero picture has decoded (a blocked or missing file has no natural width); the narrowest phone, 320 px, does not scroll sideways under the 300 px band; the card and the hero's words never overlap text on either tab, at 1920 × 940 and 1366 × 768 (the desktop tour) and at 375 × 812 (the `@mobile` tour) | `apps/normal-web/e2e/normal.spec.ts` | một tài khoản chơi trọn một ván Blind với bot | added in Plan 26 — runs outside `pnpm test` |
 | Spec C3 (the light theme): at 1024 × 700 on the light theme the hero keeps its night picture and its lead holds at least 4.5 : 1 against the lightest pixel under the text (measured by a screenshot of the lead's box with the text hidden, decoded with `sharp`; 5.36 when written), and exactly one `h1` is visible | `apps/normal-web/e2e/normal.spec.ts` | một tài khoản chơi trọn một ván Blind với bot | added in Plan 26 — runs outside `pnpm test` |
 
 ## Ruling recorded: the `reqId` cache is per connection

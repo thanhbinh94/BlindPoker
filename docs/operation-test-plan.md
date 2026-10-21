@@ -96,7 +96,7 @@ mã phòng (nếu có), thiết bị, ảnh chụp màn hình. Claude chép vào
 | A-07 | Đăng nhập cùng tài khoản trên máy thứ hai | Cả hai máy dùng được, số dư như nhau | P2 |
 | A-08 | Đổi ngôn ngữ ở trang đăng nhập rồi đăng nhập | Ngôn ngữ giữ nguyên sau khi vào | P3 |
 | A-09 | Ở trang đăng nhập, bấm qua lại giữa hai tab Đăng nhập / Đăng ký | Đổi form ngay ở lần bấm đầu; dưới form không còn dòng "Chưa có tài khoản? Đăng ký" / "Đã có tài khoản? Đăng nhập" (đã bỏ, review 29/09 No6) | P3 |
-| A-10 | Mở trang đăng nhập trên D1 (từ 1024 px), rồi trên P1/P2; thử cả nền tối và nền sáng | D1: tranh bàn bạn bè nằm cột trái, thẻ đăng nhập ở cột phải, câu "Poker điểm thưởng, chơi với bạn bè…" đọc rõ trên tranh. P1/P2: tranh là dải cao 300 px phía trên, thẻ đè lên chân dải, thấy đủ năm gương mặt, không cuộn ngang. Cả hai: chỉ một tiêu đề "Blind Luck Poker"; nền sáng thì tranh vẫn là bức đêm | P3 |
+| A-10 | Mở trang đăng nhập trên D1 (từ 1024 px), rồi trên P1/P2; thử cả nền tối và nền sáng | D1: tranh bàn bạn bè nằm cột trái, thẻ đăng nhập ở cột phải, câu "Poker điểm thưởng, chơi với bạn bè…" đọc rõ trên tranh. P1/P2 dọc: tranh là dải cao 300 px phía trên, phóng để khung ba gương mặt giữa, thẻ đè lên chân dải, không cuộn ngang; máy tính bảng (T1): thấy cả bề ngang tranh, khuôn mặt cô gái đội vương miện không bị cắt. P1/P2 xoay ngang: dải tranh mỏng 72 px, cả form đăng nhập (gồm nút) nằm trong màn hình, nút đổi ngôn ngữ ở dưới nếp gập. Cả hai: chỉ một tiêu đề "Blind Luck Poker"; nền sáng thì tranh vẫn là bức đêm | P3 |
 
 ### B. Khung chung
 
