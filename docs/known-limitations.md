@@ -479,11 +479,15 @@ Every body, face, hairstyle, outfit, hat, bot and other picture starts from a pr
 locked block (`docs/avatar/02-mo-ta-nhan-vat-khoa-va-yeu-cau-sinh-anh.md`) run through a third-party image generator.
 No named character or artist's name is ever put in a prompt, but the commercial terms of whichever tool
 generates the final art are the operator's to read and accept — this codebase does not vendor a licence
-and cannot vouch for one on the operator's behalf.
+and cannot vouch for one on the operator's behalf. The sign-in screen's hero picture (Plan 26, a table of friends in
+the same style) is generated the same way: the two WebP sizes under `apps/normal-web/public/login/` are committed, and
+carry the same caveat.
 *Why it stays:* it is a legal question about a tool's terms of service, not an engineering one this
 repository can settle by writing code.
 *Tracked:* avatar-chibi-ai design §10 (risk table, "Pháp lý ảnh AI"); originals are kept at `assets/avatar-src/`
-(gitignored, with a README recording the tool, the seed and the date) rather than committed.
+(gitignored, with a README recording the tool, the seed and the date) rather than committed. The hero picture's source
+is kept at `assets/login-hero-src/` (gitignored the same way); its prompt, the generations tried and how to regenerate
+the two files (`pnpm --filter @bp/normal-web login:hero`) are in `docs/login-hero-art.md`.
 
 **The chibi has one view, and does not turn.** Unlike the 3D avatar it replaced, a chibi is a flat stack
 of `<img>` layers on a fixed 384×448 frame — there is no camera, no yaw, and nothing to drag or

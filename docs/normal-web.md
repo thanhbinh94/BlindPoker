@@ -301,6 +301,46 @@ and be re-read as a 401 once per TTL.
 
 ---
 
+## The sign-in screen
+
+`screens/AuthScreen.tsx` (routes `#/login` and `#/register`, styles in `screens/normal.module.css`) seats the card beside
+a picture of a table of friends (spec 2026-10-20, Part C, layout A). The picture is decoration, not content.
+
+- **From 1024 px up** (the rail's own breakpoint) the stage is a two-column grid, `minmax(0, 62fr) minmax(26rem, 38fr)`.
+  The left column is `.authHero`, full height: the picture, a gradient shade that fades its right edge and foot into the
+  night ground, and at the foot the hero's `h1.heroTitle` ("Blind Luck Poker") and `p.heroLead` (`auth.heroLead`). The
+  card is centred in the right column with the language switch under it.
+- **Below 1024 px** it is one column: `.authHero` is a 300 px band at the top and the card overlaps its foot by 50 px
+  (`margin-top: -50px`). The band shows all five faces (`object-fit: cover`, `object-position: 34% 28%`), not a zoom on
+  three. The hero's words are `display: none` there.
+- **One heading (spec R10).** Exactly one `h1` is visible at a time, by CSS only: the hero's from 1024 px up, where the
+  card's own title and lead are hidden, and the card's below it. Both are in the DOM, so a unit test sees two and pins which
+  class is which.
+- **The picture** is `<img srcSet>` with two WebP sizes, `/login/hero-768.webp 768w` and `/login/hero-1536.webp 1536w`,
+  `alt=""`, `decoding="async"`. No `fetchPriority`: React-DOM 18.3 warned about the prop. No animation, so there is no
+  reduced-motion path to keep. The files are committed in `apps/normal-web/public/login/` (178 KB and 66 KB; budgets
+  250 KB and 90 KB) and built from the AI-generated source `assets/login-hero-src/2026-10-20-v2.png` (gitignored) by
+  `pnpm --filter @bp/normal-web login:hero` (`scripts/login-hero.mjs`, `sharp`, WebP quality 82, exits 1 over budget).
+  The prompt, the rubric and the log of generations are in `docs/login-hero-art.md`; the licence caveat is in
+  `docs/known-limitations.md`, with the avatar art's.
+- **Light theme.** The hero section carries `data-surface="night"`, so the picture, its shade and its text keep the night
+  palette in either theme, and `--bg` there is the night ground under the picture while it loads. The lead is light ink
+  on a dark picture whichever theme the page wears.
+- **Strings.** `auth.heroLead` in `src/locales/{vi,en}/normal.json`; the title is the existing `auth.title`.
+
+Tests that pin it:
+
+- `src/screens/AuthScreen.test.tsx` → `renders the hero picture with both sources and the hero lead`: the two `srcset`
+  entries, `alt=""`, the lead, and the two `h1`s with their classes (`heroTitle`, then `authTitle`).
+- `e2e/normal.spec.ts`, in `tourStart` (so in `một tài khoản chơi trọn một ván Blind với bot` and the other tours): the
+  hero image has decoded (`naturalWidth > 0`, which a CSP refusal or a 404 would fail); at 320 × 812 the page does not
+  scroll sideways under the band; at 1024 × 700 in the light theme the lead holds 4.5:1 against the lightest pixel under
+  it (measured by a screenshot of the lead's box with the text hidden, decoded with `sharp`; 5.36 when written); and
+  `expectNoTextOverlapAt` runs on both tabs, at 1920 × 940, 1366 × 768 and 375 × 812 in the desktop tour
+  (`OVERLAP_SCREENS`) and at the tour's own viewport in the others.
+
+---
+
 ## The Daily screen
 
 `screens/DailyScreen.tsx` draws `GET /api/rewards/daily`: today's card and its claim, the receipt, and the month's 31

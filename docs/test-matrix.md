@@ -200,7 +200,7 @@ outcome (one wins, the other answers `LAST_GM`) is pinned in `gm-service.test.ts
 Not rows of §29.2, §29.3 or §30: the user asked (20/10) for four more things a GM can do on the Normal edition, and
 Part A of the spec amends §13.2, §18.2 and §19.2 of the main design on top of Plan 22's gift schedule and Plan 25's
 console. Q-03 is the ops pack's section Q (`docs/operation-test-plan.md`) and runs outside `pnpm test`, as every e2e does.
-Part B (the landscape table and the portrait debts) has its own section below; Part C (the sign-in page) adds its rows after it.
+Part B (the landscape table and the portrait debts) has its own section below; Part C (the sign-in page) has its own section after it.
 
 | Rule | Test file | Test name | Status |
 |---|---|---|---|
@@ -228,6 +228,22 @@ landscape, the soft keyboard, the 740 × 360 margins — is `docs/known-limitati
 | Spec B6 (the portrait debts): the play-or-fold squeeze table no longer scrolls 11 px on a 375 × 812 phone — the gold badge sits beside the room's name inside the header and the Lật pill lies over the cards inside their box, hidden but present when idle; the pure-luck table still fits | `packages/ui-kit/src/table/Seat.test.tsx`, `packages/ui-kit/src/table/RoomHeader.test.tsx`, `apps/normal-web/e2e/ops/04-blind.spec.ts` | keeps the reveal pill inside the cards box and hidden-but-present when idle · keeps the squeeze badge inside the header on a phone · F-12: @mobile the squeeze fits a phone · F-12b: @mobile the play-or-fold squeeze also fits a phone — no 11 px scroll in the round | added in Plan 26 — F-12 and F-12b run outside `pnpm test` |
 | Spec B7 (the playground): `#worst` draws the squeeze table as a state and takes a forced `landscape` or `desktop` frame after the language, in either order with `/long`, so a landscape screenshot is one hash away; an unknown token is ignored | `packages/ui-kit/playground/scenarios.test.ts` | knows the squeeze table as a state · reads landscape and desktop as a forced frame · reads the tokens after the language by name, in either order · ignores a token it does not know · keeps /long working, read by name | added in Plan 26 |
 | Spec B8 (the browser): a Hold'em room while waiting shows the one-line header, the Thêm menu, the bottom-right dock and Rời phòng; a squeeze table takes a touch peel, Lật turns the rest, the round ends, and Rời phòng from the header leaves; every case ends with the room fitting and no text overlap | `apps/normal-web/e2e/ops/07-landscape.spec.ts` | L-01 @landscape a Hold’em room while waiting: one-line header with the code · L-05 @landscape a squeeze table: a touch peel turns a card, Lật turns the rest, the round ends | added in Plan 26 — runs outside `pnpm test` |
+
+## Plan 26 — the sign-in screen, Part C (spec 2026-10-20)
+
+Not rows of §29.2, §29.3 or §30: the user asked (20/10) for the sign-in page to seat the card beside a picture of a table
+of friends, and Part C of the spec amends §27.1 of the main design. The screen is `apps/normal-web/src/screens/AuthScreen.tsx`
+and its layout is in `docs/normal-web.md`, "The sign-in screen". The browser rows are the auth checks of `tourStart` in the
+Normal e2e (`pnpm e2e:normal`), which run outside `pnpm test` as every e2e does. The export script
+(`apps/normal-web/scripts/login-hero.mjs`) has no test of its own: it measures the two files against their budgets (250 KB
+and 90 KB) and exits 1 over them, and `docs/login-hero-art.md` records the sizes. What no test judges — whether the picture
+looks right, and a real phone — is the user's to try (`docs/operation-test-plan.md`, A-10).
+
+| Rule | Test file | Test name | Status |
+|---|---|---|---|
+| Spec C1 (the picture and the one heading): the sign-in screen draws a hero picture with two WebP sources (768 and 1536 px wide) as decoration, with an empty `alt`, and the hero's lead; the hero's `h1` and the card's both exist in the DOM, the hero's first, so that CSS can show exactly one at each width (R10) | `apps/normal-web/src/screens/AuthScreen.test.tsx` | renders the hero picture with both sources and the hero lead | added in Plan 26 |
+| Spec C2 (the layout in a browser): the hero picture has decoded (a blocked or missing file has no natural width); the narrowest phone, 320 px, does not scroll sideways under the 300 px band; the card and the hero's words never overlap text on either tab, at 1920 × 940, 1366 × 768 and 375 × 812 | `apps/normal-web/e2e/normal.spec.ts` | một tài khoản chơi trọn một ván Blind với bot | added in Plan 26 — runs outside `pnpm test` |
+| Spec C3 (the light theme): at 1024 × 700 on the light theme the hero keeps its night picture and its lead holds at least 4.5 : 1 against the lightest pixel under the text (measured by a screenshot of the lead's box with the text hidden, decoded with `sharp`; 5.36 when written), and exactly one `h1` is visible | `apps/normal-web/e2e/normal.spec.ts` | một tài khoản chơi trọn một ván Blind với bot | added in Plan 26 — runs outside `pnpm test` |
 
 ## Ruling recorded: the `reqId` cache is per connection
 

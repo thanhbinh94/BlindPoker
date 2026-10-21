@@ -188,9 +188,9 @@ describe('docs/acceptance-checklist.md', () => {
   it('gives every requirement row one of the three statuses', () => {
     const rows = rowStatuses(markdown)
     // 21 items in §40, 43 in §66, the three rows of Plan 21 (P21.1–P21.3) the two of Plan 22 (P22.1, P22.2), the three of Plan 25
-    // (P25.1–P25.3) and P26.1 and P26.2 of Plan 26 (C3 adds P26.3), which are not requirement.txt's — a row that stops
-    // parsing is a row that stops being checked
-    expect(rows).toHaveLength(64 + 3 + 2 + 3 + 2)
+    // (P25.1–P25.3) and P26.1 to P26.3 of Plan 26 (the GM's second batch, the landscape table, the sign-in screen), which
+    // are not requirement.txt's — a row that stops parsing is a row that stops being checked
+    expect(rows).toHaveLength(64 + 3 + 2 + 3 + 3)
     const wrong = rows.filter((r) => !STATUSES.has(r.status))
     expect(wrong.map((r) => `line ${r.line}: ${r.status}`)).toEqual([])
   })
@@ -263,9 +263,9 @@ describe('docs/test-matrix.md', () => {
     // rule of the 2026-09-29 review (No11b), the one row of Plan 16 that is not the spec's, the ten rows of Plan 21's
     // section (the squeeze round and the card motion, spec 2026-10-08), and the four of Plan 22's (the monthly daily
     // gifts, spec 2026-10-12), the seven of Plan 25's (the GM role, spec 2026-10-18) and the five of Plan 26's Part A (the GM's
-    // second batch, spec 2026-10-20), the eight of Plan 26's Part B (the landscape frame and the portrait debts, same spec;
-    // Part C adds its rows after them)
-    expect(rows).toBe(43 + 10 + 4 + 7 + 5 + 8)
+    // second batch, spec 2026-10-20), the eight of Plan 26's Part B (the landscape frame and the portrait debts, same spec)
+    // and the three of its Part C (the sign-in screen)
+    expect(rows).toBe(43 + 10 + 4 + 7 + 5 + 8 + 3)
     expect(citations.length).toBeGreaterThanOrEqual(40)
   })
 

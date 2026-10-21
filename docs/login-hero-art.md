@@ -109,7 +109,9 @@ trượt ("the dealer's left hand has six fingers; draw five"), tối đa ba l�
 
 Xuất bản dùng (2026-10-20, từ V2, `login:hero`, chất lượng 82): `apps/normal-web/public/login/hero-1536.webp`
 (1536 × 1024, 178,0 KB) và `apps/normal-web/public/login/hero-768.webp` (768 × 512, 66,4 KB); cả hai nằm trong git và
-được phục vụ ở `/login/hero-1536.webp`, `/login/hero-768.webp`. Không cần hạ xuống chất lượng 76.
+được phục vụ ở `/login/hero-1536.webp`, `/login/hero-768.webp`. Không cần hạ xuống chất lượng 76. Hai tệp này được dùng ở
+`AuthScreen` (C2, `apps/normal-web/src/screens/AuthScreen.tsx`, `srcSet` 768w/1536w), mô tả ở `docs/normal-web.md`, mục
+"The sign-in screen".
 
 Prompt V2 đã gửi khác prompt chính ở ô 3 (tâm điểm nặn bài, "few cards on the table, no community cards face up; a
 modest pot of chips in the centre") và thêm "no numbers" vào dòng loại trừ. Việc bỏ bài chung ngửa là lý do V2 sạch

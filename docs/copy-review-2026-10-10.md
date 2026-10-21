@@ -113,6 +113,7 @@ Người dùng yêu cầu ngày 10/10: "check đa ngôn ngữ … có những đ
 | items.haircolor_lavender01 | Tóc bạc tím | Tóc tím pastel | Màu này là tím nhạt (`#c7b8f0`), không có ánh bạc. Tiệm tóc Việt gọi là "tím pastel". Tên mới cũng tách rõ với "Tóc tím". |
 | items.skin_lighttan01 | Da sáng ấm | Da bánh mật | "sáng ấm" là ghép nghĩa "light" + "tan". Người Việt gọi tông da này là "da bánh mật". Dãy tông da đọc tự nhiên: trắng sứ, sáng, bánh mật, ngăm, nâu, nâu đậm. |
 | achievements.login_streak_7.name | Chuỗi bảy ngày | Chuỗi 7 ngày | Đứng ngay cạnh "Chuỗi 28 ngày" trong cùng danh sách, nên viết số cho đồng bộ. |
+| auth.heroLead (khóa mới, Plan 26, 2026-10-20) | (mới) | Poker điểm thưởng, chơi với bạn bè. Một tài khoản, mọi thiết bị: điểm, tủ đồ và thành tựu đi theo bạn. (en: Points poker with friends. One account, every device: your points, wardrobe and achievements go with you.) | Câu dẫn đặt trên tranh ở trang đăng nhập, dưới tiêu đề "Blind Luck Poker" (`AuthScreen.tsx`, `p.heroLead`), chỉ hiện từ 1024 px trở lên. Câu đầu nói đây là poker điểm thưởng chơi với bạn, câu sau trả lời "đăng nhập để được gì": mọi thiết bị dùng chung điểm, tủ đồ và thành tựu. Giữ "tủ đồ" và "thành tựu" như tên màn hình trong ứng dụng. Bản en chỉ dịch lại, không đổi ý. |
 
 ### 4.4 `apps/lite/web/src/locales/vi/lite.json`
 
