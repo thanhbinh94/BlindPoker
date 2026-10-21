@@ -544,10 +544,23 @@ bốn cạnh; `screen.orientation.lock()` không dùng được trên iOS Safari
 
 **Đề xuất:** (a), gộp vào Plan 26 cùng đợt 2 của vai GM (mở thành tựu, cho nhận lại điểm danh, sửa lịch quà, biểu đồ).
 
-## 9. Yêu cầu kế tiếp (2026-10-21) — chờ brainstorm sau Plan 26
+## 9. Yêu cầu kế tiếp (2026-10-21) — đã brainstorm, thành Plan 27
 
-Người dùng gửi trong lúc Plan 26 đang chạy; ghi lại nguyên văn ý, chưa phân loại, chưa có đề xuất. Mỗi mục sẽ được
-brainstorm (superpowers:brainstorming) sau khi Plan 26 merge và deploy, rồi lên spec/plan riêng.
+Người dùng gửi trong lúc Plan 26 đang chạy; ghi lại nguyên văn ý. Brainstorm xong 2026-10-21 (cùng ngày Plan 26
+deploy): K2–K5 vào spec `docs/superpowers/specs/2026-10-21-plan27-shop-reputation-welcome-blind-zero-design.md`
+(Q-table §1); K1 có câu trả lời từ mã và **không sửa** (spec §7, Q9); K6 mới ghi ở cuối bảng, hoãn.
+
+**K1, trả lời (2026-10-21):** mỗi tài khoản chỉ có một socket sống (`Gateway.bound`, `packages/server-kit/src/gateway/gateway.ts:200-217`).
+Máy đăng nhập sau nhận `WELCOME`, máy trước nhận `SESSION_REPLACED` ("Đã đăng nhập ở nơi khác"), bị đóng và không tự nối
+lại (`connection.ts:127`). Máy sau vào lại đúng phòng và ghế đang dở với snapshot (`gateway.ts:218-226`). Không ai bị cấm,
+không có hai ván song song, không mất stack. Phiên (`bp_session`) theo thiết bị, đăng nhập ở máy khác không thu hồi
+phiên cũ. Đề xuất: giữ nguyên, viết vào hướng dẫn chơi và known-limitations (không có nút "Tiếp quản", không có danh
+sách thiết bị). Người dùng đồng ý (spec Plan 27, Q9).
+
+**K2, nguyên nhân thật:** không phải phí bàn (2 % pot) mà là ngưỡng "stack tối thiểu để được chia" (`blindRequiredStack`
+= mức cược, gấp đôi ở Chơi hoặc bỏ): sau ván, ai dưới ngưỡng bị đứng dậy (`standUpSpent`, thông báo
+`TABLE_LIMIT_SPENT`), tiền lẻ về ví. Engine đã có pot phụ và `commit` đã cắt ở stack, nên chỉ cần bỏ chốt chặn. Người
+dùng chọn (a): tất tay phần còn lại + bỏ phí Blind (spec §5).
 
 | # | Yêu cầu | Ghi chú ban đầu của Claude |
 |---|---|---|
@@ -556,3 +569,4 @@ brainstorm (superpowers:brainstorming) sau khi Plan 26 merge và deploy, rồi l
 | K3 | **Cửa hàng bán đồ:** mua trang phục/phụ kiện bằng **điểm (gold)** + **điểm danh vọng** kiếm trong game, giá theo độ hiếm; giá và danh vọng từng món **quản lý trong database, sửa được** (GM); lý do: "hiện tại không ai dùng kho đồ do chi phí kiếm trang phục hơi khó". | "Gold"/"tiền" = điểm trong game, không bao giờ là tiền thật (requirement.txt §3, spec §33). Cần: loại tiền tệ thứ hai `danh vọng` (nguồn: thắng ván? điểm danh? thành tựu?), bảng `item_prices(item_id, points, reputation, enabled, updated_by)`, màn Cửa hàng dùng chung khung thẻ với Phòng thay đồ, ledger cho danh vọng và sink cho tiền mua đồ, tab GM để sửa giá. |
 | K4 | **Quà lập tài khoản lần đầu:** tiền + danh vọng + một bộ trang phục. | Gắn với `starting_balance` hiện có; thêm nguồn ledger `welcome` cho danh vọng và một món quà; cân nhắc với người đã có tài khoản (có tặng bù không). |
 | K5 | **Kho đồ tải chậm lần đầu** (ảnh nhân vật, tóc, phụ kiện): cần lazy-load. (Gửi 2026-10-20.) | Hơn 490 tệp PNG `@1x/@2x` 384×448; tủ đồ vẽ nhiều chibi cùng lúc. Hướng: `loading="lazy"` + `IntersectionObserver` cho thẻ ngoài màn, ảnh đại diện nhỏ cho thẻ (icon 96 px đã có), tải trước theo ô đang mở, giới hạn số ảnh cùng lúc, WebP/sprite cho lớp. |
+| K6 | **Dáng đứng của nhân vật quá cố định** (2026-10-21, trong brainstorm K3): "dáng đứng của nhân vật quá cố định nên cũng làm giảm hứng thú của người chơi". | **Hoãn.** Mỗi dáng mới là vẽ lại toàn bộ lớp thân, tay và mọi trang phục cho cả hai giới qua pipeline avatar (`docs/avatar-2d.md`, cổng kiểm phong cách), tức một dự án nghệ thuật riêng, không phụ thuộc cửa hàng. Brainstorm sau Plan 27; hướng khả dĩ: 2–3 dáng ngồi/tư thế cho ghế ở bàn, giữ một dáng chuẩn cho tủ đồ. |
