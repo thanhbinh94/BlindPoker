@@ -370,8 +370,9 @@
 
 /* A hairstyle card's head portrait (Kiểu tóc, avatar v4), drawn in the same thumb: 96 px from the tablet floor up,
    inside the 118 px thumb; 72 px on a phone (the old base cards' sizes, `HairStyleTab`'s `portraitSize`), where the
-   thumb grows from its 70 px to hold it rather than clip it. Its own stacking context: the `Chibi` inside opens none,
-   so without this its layers' `z-index` (20–90) would compete with the card's "Đang dùng" pill (`.wearingPill`). */
+   thumb grows from its 70 px to hold it rather than clip it. Its own stacking context: the `Chibi` inside opened none
+   before BP-29, so its layers' `z-index` (20–90) competed with the card's "Đang dùng" pill (`.wearingPill`). The chibi
+   root isolates itself now; this stays as a second guard. */
 .cardPortrait {
   isolation: isolate;
 }

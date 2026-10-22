@@ -17,12 +17,19 @@
    the root had shrunk to 114 px, cropping into the hair and one cheek instead of the head. A percentage always
    describes *whatever the root turns out to be*, so it is correct at every size, requested or not. Also why this
    is a `transform`-free `left`/`top`/`width`/`height` override rather than a `transform: translate(...)
-   scale(...)`: `scale` never magnifies a same-list `translate`'s own offset, landing the crop off-centre. */
+   scale(...)`: `scale` never magnifies a same-list `translate`'s own offset, landing the crop off-centre.
+
+   `isolation: isolate` (BP-29, bug log §10 E4): every layer carries its own `z-index` (10–90, `ORDER` in `layers.ts`),
+   and without a stacking context of its own the root let those numbers compete with the page around it — the lobby's
+   head, scrolled under the sticky rail (z-index 20), was painted over it. The root now keeps its layers to itself
+   wherever a `Chibi` is drawn; the seat disc and the wardrobe's portrait cards, which had learned this locally, keep
+   their own rules. */
 .chibi {
   position: relative;
   display: block;
   flex: none;
   width: 100%;
+  isolation: isolate;
   background: transparent;
 }
 
