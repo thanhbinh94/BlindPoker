@@ -54,7 +54,11 @@ async function playerState(browser: Browser, stem: string): Promise<{ who: Accou
   const welcome = await page.request.get('/api/welcome')
   if (welcome.ok()) {
     const status = (await welcome.json()) as { claimed?: boolean; choices?: { itemId: string; owned: boolean }[] }
-    if (status.claimed !== true) await postApi(page, '/api/welcome/claim', { itemId: status.choices?.find((c) => !c.owned)?.itemId ?? null })
+    if (status.claimed !== true) {
+      const claim = await postApi(page, '/api/welcome/claim', { itemId: status.choices?.find((c) => !c.owned)?.itemId ?? null })
+      // A refused claim would leave the gift waiting, and its dialog over the screen this player is measured on.
+      expect(claim.status, `the welcome claim: ${JSON.stringify(claim.body)}`).toBe(200)
+    }
   }
   const state = await context.storageState()
   await context.close()

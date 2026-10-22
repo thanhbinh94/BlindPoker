@@ -67,7 +67,8 @@ const priorities = (): Map<string, number> => {
 describe('ItemTab', () => {
   beforeEach(() => {
     tintedLayer.mockReset()
-    tintedLayer.mockImplementation((_prefix: string, layer: LayerRef) => (layer.tints === undefined ? null : `blob:http://localhost/${layer.file}`))  })
+    tintedLayer.mockImplementation((_prefix: string, layer: LayerRef) => (layer.tints === undefined ? null : `blob:http://localhost/${layer.file}`))
+  })
   afterEach(() => vi.unstubAllGlobals())
 
   // Plan 27 E2: a long tab of cards asks for no picture until a card comes on screen.

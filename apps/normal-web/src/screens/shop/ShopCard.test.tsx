@@ -43,7 +43,7 @@ const entry = (row: ItemDto, patch: Partial<ShopEntryDto> = {}): ShopEntryDto =>
 
 const dealerName = viNormal.items.outfit_dealer01
 
-function draw(props: { entry: ShopEntryDto; row?: ItemDto; balance?: number; rank?: number }) {
+function draw(props: { entry: ShopEntryDto; row?: ItemDto; balance?: number; rank?: number; trying?: boolean }) {
   const onTry = vi.fn()
   const onBuy = vi.fn()
   const utils = renderWithI18n(
@@ -53,7 +53,7 @@ function draw(props: { entry: ShopEntryDto; row?: ItemDto; balance?: number; ran
       lang="vi"
       balance={props.balance ?? 100_000}
       rank={props.rank ?? 3}
-      trying={false}
+      trying={props.trying ?? false}
       onTry={onTry}
       onBuy={onBuy}
     />,
@@ -74,6 +74,21 @@ describe('footerState', () => {
 })
 
 describe('ShopCard', () => {
+  it.each([
+    ['a pictured item', OUTFIT_DEALER],
+    ['a colour', HAIRCOLOR_BLUE],
+    ['a title', TITLE_ROOKIE],
+  ])('marks the card on the stage as the current one, never as worn: %s', (_, row) => {
+    const name = new RegExp(viNormal.items[row.id as keyof typeof viNormal.items])
+    const { unmount } = draw({ entry: entry(row), row, trying: true })
+    const pick = screen.getByRole('button', { pressed: false, name })
+    expect(pick).toHaveAttribute('aria-current', 'true')
+    expect(pick.getAttribute('aria-label')).not.toContain(viNormal.wardrobe.wearingBadge)
+    unmount()
+    draw({ entry: entry(row), row })
+    expect(screen.getByRole('button', { pressed: false, name })).not.toHaveAttribute('aria-current')
+  })
+
   it('offers "Mua · 30.000" when the rank allows and the balance covers it, and a press asks to buy', async () => {
     const user = userEvent.setup()
     const dealer = entry(OUTFIT_DEALER)

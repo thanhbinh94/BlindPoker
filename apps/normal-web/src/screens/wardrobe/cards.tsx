@@ -108,6 +108,9 @@ export interface ItemCardProps {
   /** Whether a press reaches `onPick` (Plan 27, P21): `owned` unless the caller says otherwise. The shop picks every
    * card — a press there is a try-on, not an equip — whoever owns it. */
   pickable?: boolean
+  /** The card on the shop's stage as a try-on (Plan 27 fix wave): `aria-current` on its pick button. Not `wearing`, which
+   * would say "Đang dùng" of an item the player may not even own. */
+  current?: boolean
   /** A row under the card's own content, inside its border, outside its pick button (Plan 27, P21): the shop's price,
    * "Mua" button or source label. A button may sit in it, since it is not inside the pick button. */
   footer?: ReactNode
@@ -136,6 +139,7 @@ export function ItemCard({
   reserveDots = false,
   thumb,
   pickable = owned,
+  current = false,
   footer,
   onPick,
 }: ItemCardProps) {
@@ -150,6 +154,7 @@ export function ItemCard({
           type="button"
           className={s.cardPick}
           aria-pressed={wearing}
+          aria-current={current ? true : undefined}
           aria-disabled={!pickable}
           aria-label={cardLabel(name, item.rarity, owned, wearing, hint, t)}
           onClick={() => {
@@ -211,6 +216,9 @@ export interface ColourCardProps {
   naturalColour?: string
   /** Whether a press reaches `onPick` (Plan 27, P21): `owned` unless the caller says otherwise (always for "Natural"). */
   pickable?: boolean
+  /** The card on the shop's stage as a try-on (Plan 27 fix wave): `aria-current` on its pick button. Not `wearing`, which
+   * would say "Đang dùng" of an item the player may not even own. */
+  current?: boolean
   /** A row under the swatch, inside the card's border and outside its pick button (Plan 27, P21) — see `ItemCard`. */
   footer?: ReactNode
   onPick: (id: string | undefined) => void
@@ -225,6 +233,7 @@ export interface ColourCardProps {
 function CardShell({
   rarity,
   wearing,
+  current,
   disabled,
   label,
   onClick,
@@ -233,6 +242,7 @@ function CardShell({
 }: {
   rarity: Rarity | undefined
   wearing: boolean
+  current: boolean
   disabled: boolean
   label: string
   onClick: () => void
@@ -246,6 +256,7 @@ function CardShell({
         className={s.card}
         data-rarity={rarity}
         aria-pressed={wearing}
+        aria-current={current ? true : undefined}
         aria-disabled={disabled}
         aria-label={label}
         onClick={onClick}
@@ -257,7 +268,15 @@ function CardShell({
   return (
     <div className={s.cardCell}>
       <div className={s.card} data-rarity={rarity} data-wearing={wearing}>
-        <button type="button" className={s.cardPick} aria-pressed={wearing} aria-disabled={disabled} aria-label={label} onClick={onClick}>
+        <button
+          type="button"
+          className={s.cardPick}
+          aria-pressed={wearing}
+          aria-current={current ? true : undefined}
+          aria-disabled={disabled}
+          aria-label={label}
+          onClick={onClick}
+        >
           {children}
         </button>
         {footer}
@@ -268,7 +287,7 @@ function CardShell({
 
 /** A colour swatch (Màu tóc, Màu da, Màu mắt — design §4.3): same wearing/lock chrome as `ItemCard`, a round
  * swatch of `item.colour` instead of a picture. */
-export function ColourCard({ item, owned, wearing, hint, naturalColour, pickable = owned, footer, onPick }: ColourCardProps) {
+export function ColourCard({ item, owned, wearing, hint, naturalColour, pickable = owned, current = false, footer, onPick }: ColourCardProps) {
   const { t } = useTranslation('normal')
   const name = item === null ? t('wardrobe.natural') : itemName(item.id, t)
   const clickable = item === null || pickable
@@ -279,6 +298,7 @@ export function ColourCard({ item, owned, wearing, hint, naturalColour, pickable
     <CardShell
       rarity={item?.rarity}
       wearing={wearing}
+      current={current}
       disabled={!clickable}
       label={label}
       footer={footer}
@@ -308,6 +328,9 @@ export interface WordCardProps {
   hint: string
   /** Whether a press reaches `onPick` (Plan 27, P21): `owned` unless the caller says otherwise. */
   pickable?: boolean
+  /** The card on the shop's stage as a try-on (Plan 27 fix wave): `aria-current` on its pick button. Not `wearing`, which
+   * would say "Đang dùng" of an item the player may not even own. */
+  current?: boolean
   /** A row under the words, inside the card's border and outside its pick button (Plan 27, P21) — see `ItemCard`. */
   footer?: ReactNode
   onPick: (id: string) => void
@@ -315,7 +338,7 @@ export interface WordCardProps {
 
 /** A text-only card (Danh hiệu, Huy hiệu — design §4.4): the same wearing/lock chrome as `ItemCard`
  * with no picture to draw. */
-export function WordCard({ item, owned, wearing, hint, pickable = owned, footer, onPick }: WordCardProps) {
+export function WordCard({ item, owned, wearing, hint, pickable = owned, current = false, footer, onPick }: WordCardProps) {
   const { t } = useTranslation('normal')
   const name = itemName(item.id, t)
 
@@ -323,6 +346,7 @@ export function WordCard({ item, owned, wearing, hint, pickable = owned, footer,
     <CardShell
       rarity={item.rarity}
       wearing={wearing}
+      current={current}
       disabled={!pickable}
       label={cardLabel(name, item.rarity, owned, wearing, hint, t)}
       footer={footer}

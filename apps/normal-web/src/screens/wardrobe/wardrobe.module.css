@@ -74,7 +74,9 @@
     border-radius: var(--radius-lg);
     background: var(--bg-elev);
     position: sticky;
-    top: var(--space-4);
+    /* Under the app's sticky top bar (`--bp-bar`, set on `.shell` in `normal.module.css`), not under the window's top
+       edge, where the bar (z-index 20) would hide the column's first 52–56 px — the shop's stage does the same. */
+    top: calc(var(--bp-bar, 0px) + var(--space-4));
     /* The column's own content — stage, wearing list, five saved-outfit portraits — runs close to 1000 px
        tall; pinned at `top: var(--space-4)` with no cap of its own, an 800–900 px window left the saved-
        outfit row (the *bottom* of the column) unreachable until the page's own end, since a sticky element
@@ -82,7 +84,7 @@
        own height (minus the same gap top and bottom) and scrolling the overflow internally keeps every row
        reachable without leaving `position: sticky` at all. Phone never sticks (see `.previewColumn` above,
        unscoped by this query), so it never needs this either — the whole page scrolls there instead. */
-    max-height: calc(100vh - 2 * var(--space-4));
+    max-height: calc(100vh - var(--bp-bar, 0px) - 2 * var(--space-4));
     overflow-y: auto;
   }
 }

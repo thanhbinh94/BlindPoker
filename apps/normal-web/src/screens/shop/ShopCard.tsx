@@ -115,11 +115,11 @@ export function ShopCard({ entry, item, lang, balance, rank, wear, trying, onTry
   return (
     <div className={s.slot} data-trying={trying} data-item={item.id}>
       {COLOUR_SLOTS.has(item.slot) ? (
-        <ColourCard item={item} owned wearing={false} hint="" pickable footer={footer} onPick={() => onTry(item)} />
+        <ColourCard item={item} owned wearing={false} hint="" pickable current={trying} footer={footer} onPick={() => onTry(item)} />
       ) : WORD_SLOTS.has(item.slot) ? (
-        <WordCard item={item} owned wearing={false} hint="" pickable footer={footer} onPick={() => onTry(item)} />
+        <WordCard item={item} owned wearing={false} hint="" pickable current={trying} footer={footer} onPick={() => onTry(item)} />
       ) : (
-        <ItemCard item={item} wear={wear} owned wearing={false} hint="" pickable footer={footer} onPick={() => onTry(item)} />
+        <ItemCard item={item} wear={wear} owned wearing={false} hint="" pickable current={trying} footer={footer} onPick={() => onTry(item)} />
       )}
     </div>
   )

@@ -1,9 +1,7 @@
 import { Button, defaultChibi, Modal, Segmented, useMediaQuery, type Expression } from '@bp/ui-kit'
-import type { TFunction } from 'i18next'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  ApiError,
   OPTIONAL_SLOTS,
   SLOTS,
   type AchievementDefDto,
@@ -22,6 +20,7 @@ import { useAvatars } from '../../avatar/useAvatars.js'
 import type { HintSources } from '../catalog.js'
 import s from '../normal.module.css'
 import { useAsync } from '../useAsync.js'
+import { avatarRefusal } from './avatar-refusal.js'
 import { counts, GROUPS, PHONE_QUERY, panelId, slotCards, subTabId, tabOfSlot, type TabId } from './categories.js'
 import { CategoryNav } from './CategoryNav.js'
 import { ColourTab } from './ColourTab.js'
@@ -33,14 +32,6 @@ import { NATURAL_SKIN } from './natural-skin.js'
 import { SavedOutfits } from './SavedOutfits.js'
 import { StagePanel } from './StagePanel.js'
 import w from './wardrobe.module.css'
-
-/** Refusals this screen has words for; anything else is the kit's generic failure. */
-const KNOWN_CODES = new Set(['NOT_OWNED', 'WRONG_CATEGORY', 'MISSING_LAYER', 'INVALID_ITEM', 'INVALID_BASE', 'WRONG_GENDER'])
-
-export function avatarRefusal(cause: unknown, t: TFunction): string {
-  if (cause instanceof ApiError && KNOWN_CODES.has(cause.code)) return t(`avatar.errors.${cause.code}`)
-  return t('common:errors.INTERNAL')
-}
 
 /** Every tab, flattened out of `GROUPS` (design §3.1) rather than re-listed here, so a tab added to a
  * group is automatically one this screen counts and offers a panel for. */
@@ -73,23 +64,21 @@ export interface WardrobeScreenProps {
   initialItem?: string | null
 }
 
-/** What the stage and the cards need: the screen draws as soon as these three reads have answered. */
+/** What the stage and the cards need: the screen draws as soon as these four reads have answered. */
 interface WardrobeData {
   inventory: InventoryDto
   catalog: ItemDto[]
   avatarCatalog: AvatarCatalogDto
   /** What the check-in schedule names from this month on — absent from an older server, read as none. */
   gifts: DailyGiftNoticeDto[]
-}
-
-/** What can come a moment later (plan 27 E2): the saved outfits, and the achievements a locked card's hint names. */
-interface WardrobeExtras {
-  outfits: (OutfitDto | null)[]
+  /** What a locked card's hint names: here, not later, so a hint is worded once and never changes under the player. */
   achievements: AchievementDefDto[]
 }
 
-/** The hints' achievements until `WardrobeExtras` has answered: none, so a hint reads as the catalogue alone says. */
-const NO_ACHIEVEMENTS: AchievementDefDto[] = []
+/** What can come a moment later (plan 27 E2): the saved outfits. */
+interface WardrobeExtras {
+  outfits: (OutfitDto | null)[]
+}
 
 /** Sets a slot, or drops it entirely when `itemId` is `undefined` — the same rule `PUT /api/me/avatar`
  * reads: an omitted key is an empty slot, a `''` id is a malformed one. */
@@ -134,21 +123,27 @@ type Note = 'saved' | null
  */
 export function WardrobeScreen({ api, playerId, initialItem = null }: WardrobeScreenProps) {
   const { t } = useTranslation('normal')
-  // Five reads, all sent at once, in two groups (plan 27 E2): the stage and the cards draw as soon as the first three
-  // answer, without waiting for the saved outfits or the achievements.
+  // Five reads, all sent at once, in two groups (plan 27 E2): the stage and the cards draw as soon as the first four
+  // answer, without waiting for the saved outfits.
   const wardrobe = useAsync<WardrobeData>(async () => {
-    const [inventory, catalogAnswer, avatarCatalog] = await Promise.all([api.inventory(), api.catalogItems(), api.avatarCatalog()])
+    const [inventory, catalogAnswer, avatarCatalog, achievementsAnswer] = await Promise.all([
+      api.inventory(),
+      api.catalogItems(),
+      api.avatarCatalog(),
+      api.catalogAchievements(),
+    ])
     return {
       inventory,
       catalog: catalogAnswer.items,
       avatarCatalog,
       // Read on every mount, so a wardrobe opened after midnight on the 1st reads the new month's list.
       gifts: catalogAnswer.dailyGifts ?? [],
+      achievements: achievementsAnswer.achievements,
     }
   })
   const extrasAsync = useAsync<WardrobeExtras>(async () => {
-    const [outfitsAnswer, achievementsAnswer] = await Promise.all([api.outfits(), api.catalogAchievements()])
-    return { outfits: outfitsAnswer.outfits, achievements: achievementsAnswer.achievements }
+    const outfitsAnswer = await api.outfits()
+    return { outfits: outfitsAnswer.outfits }
   })
   const { invalidate } = useAvatars(api, NO_IDS)
 
@@ -221,10 +216,7 @@ export function WardrobeScreen({ api, playerId, initialItem = null }: WardrobeSc
   const bodies = useMemo(() => new Map((loaded?.avatarCatalog.bodies ?? []).map((body) => [body.gender, body])), [loaded])
   const owned = useMemo(() => new Set((loaded?.inventory.items ?? []).map((item) => item.itemId)), [loaded])
   /** What a locked card's hint is worked out from (`hintFor`): the achievements, and the check-in's named gifts. */
-  const hints = useMemo<HintSources>(
-    () => ({ achievements: extras?.achievements ?? NO_ACHIEVEMENTS, gifts: loaded?.gifts ?? [] }),
-    [loaded, extras],
-  )
+  const hints = useMemo<HintSources>(() => ({ achievements: loaded?.achievements ?? [], gifts: loaded?.gifts ?? [] }), [loaded])
   /** Every tab's "n/m đã có" (design §3.1) — computed for all of them up front so `CategoryNav` has a
    * count ready the moment its active group changes, not just for whichever group is showing now. Kiểu tóc counts
    * the draft's gender's hairstyles, the only ones it lists, so it is counted again when the gender changes. */
@@ -265,7 +257,8 @@ export function WardrobeScreen({ api, playerId, initialItem = null }: WardrobeSc
   if (loaded === null || config === null || (extras === null && !extrasAsync.loading)) {
     const retry = (): void => {
       if (loaded === null) wardrobe.reload()
-      if (extras === null) extrasAsync.reload()
+      // Not while the saved outfits are still on their way: a second request would only race the first.
+      if (extras === null && !extrasAsync.loading) extrasAsync.reload()
     }
     return (
       <main className={s.page}>

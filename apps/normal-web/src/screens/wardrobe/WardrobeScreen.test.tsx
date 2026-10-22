@@ -281,27 +281,50 @@ describe('WardrobeScreen', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
-  // Plan 27 E2: the stage and the cards need only the inventory and the two catalogues; the saved outfits and the
-  // achievements come in after, without holding the screen up.
-  it('draws the stage and the cards before the saved outfits and the achievements answer', async () => {
+  // Plan 27 E2: the stage and the cards need the inventory, the two catalogues and the achievements a locked card's hint
+  // names (in the first group, so a hint never changes its words under the player); the saved outfits come in after,
+  // without holding the screen up.
+  it('draws the stage and the cards before the saved outfits answer', async () => {
     let answerOutfits: (value: { outfits: (OutfitDto | null)[] }) => void = () => {}
-    let answerAchievements: (value: { achievements: AchievementDefDto[] }) => void = () => {}
     const outfits = vi.fn(() => new Promise((resolve) => (answerOutfits = resolve)))
-    const catalogAchievements = vi.fn(() => new Promise((resolve) => (answerAchievements = resolve)))
+    const catalogAchievements = vi.fn().mockResolvedValue({ achievements: ACHIEVEMENTS })
     renderScreen(stubApi({ outfits, catalogAchievements } as Partial<NormalApi>))
 
     await opened()
     expect(stage()).not.toBeNull()
     expect(card(viNormal.items.hair_f_bob01)).toBeInTheDocument()
-    // Asked at once, alongside the other three — only the drawing waits less.
+    // Asked at once, alongside the other four — only the drawing waits less.
     expect(outfits).toHaveBeenCalledTimes(1)
     expect(catalogAchievements).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('heading', { name: viNormal.outfits.title })).toBeNull()
     expect(screen.queryByRole('alert')).toBeNull()
 
     answerOutfits({ outfits: noOutfits })
-    answerAchievements({ achievements: ACHIEVEMENTS })
     expect(await screen.findByRole('heading', { name: viNormal.outfits.title })).toBeInTheDocument()
+  })
+
+  it('waits for the achievements before drawing the cards, so a locked card’s hint is worded once', async () => {
+    let answerAchievements: (value: { achievements: AchievementDefDto[] }) => void = () => {}
+    const catalogAchievements = vi.fn(() => new Promise((resolve) => (answerAchievements = resolve)))
+    renderScreen(stubApi({ catalogAchievements } as Partial<NormalApi>))
+
+    expect(await screen.findByRole('status')).toHaveTextContent(viNormal.screens.loading)
+    expect(stage()).toBeNull()
+    answerAchievements({ achievements: ACHIEVEMENTS })
+    await opened()
+  })
+
+  it('does not ask for the saved outfits again on "Thử lại" while they are still on their way', async () => {
+    const inventory = vi.fn().mockRejectedValueOnce(new ApiError(500, 'INTERNAL', 'nope')).mockResolvedValue(INVENTORY)
+    const outfits = vi.fn(() => new Promise<never>(() => undefined))
+    const user = userEvent.setup()
+    renderScreen(stubApi({ inventory, outfits } as Partial<NormalApi>))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.inventory.error)
+    await user.click(screen.getByRole('button', { name: viNormal.screens.retry }))
+
+    await waitFor(() => expect(inventory).toHaveBeenCalledTimes(2))
+    expect(outfits).toHaveBeenCalledTimes(1)
   })
 
   it('says so when the saved outfits cannot be read, and asks again only for them', async () => {
