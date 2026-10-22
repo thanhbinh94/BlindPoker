@@ -192,7 +192,9 @@ test("Q-03: a GM reopens a claimed check-in, unlocks an achievement, and sets a 
   const options = await itemSelect
     .locator('option')
     .evaluateAll((os) => os.map((o) => ({ value: (o as HTMLOptionElement).value, label: (o.textContent ?? '').trim() })))
-  const chosen = options.find((o) => o.value !== '' && !NAMED_BY_FILE.has(o.value))
+  // Not Mũ len: a gift of a later month is locked in the shop (Q12) for the rest of the run, and Q-04 and P-02 price and
+  // buy exactly that common on the same server.
+  const chosen = options.find((o) => o.value !== '' && o.value !== 'head_beanie01' && !NAMED_BY_FILE.has(o.value))
   expect(chosen, 'the catalogue has a gift the shipped schedule does not already name').toBeDefined()
   await itemSelect.selectOption(chosen?.value ?? '')
   await gm.page.getByRole('button', { name: 'Thêm món' }).click()
