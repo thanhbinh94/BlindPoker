@@ -198,6 +198,21 @@ describe('Toasts', () => {
     expect(screen.getByText('You have used up your table limit here. Pick an empty seat to play again.')).toBeInTheDocument()
   })
 
+  it('names the rank a RANK_UP reached, in the player’s language', () => {
+    render(
+      <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+        <Toasts
+          error={null}
+          notifications={[{ id: 1, kind: 'RANK_UP', payload: { rank: 3 }, at: 0 }]}
+          onClearError={vi.fn()}
+          onDismiss={vi.fn()}
+          lang="vi"
+        />
+      </I18nextProvider>,
+    )
+    expect(screen.getByRole('status')).toHaveTextContent('Bạn vừa lên bậc Cao thủ')
+  })
+
   it('falls back to a generic line for a notification kind it does not know', () => {
     wrap(
       <Toasts

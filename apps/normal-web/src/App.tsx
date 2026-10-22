@@ -25,7 +25,7 @@ import { AuthScreen, type AuthMode } from './screens/AuthScreen.js'
 import { Shell } from './screens/Shell.js'
 import { UpdateBoundary } from './screens/UpdateBoundary.js'
 import { useDailyNudge } from './daily-nudge.js'
-import { makeCaptionFor, makeChibiFor } from './screens/TableChrome.js'
+import { makeCaptionFor, makeChibiFor, makeRankFor } from './screens/TableChrome.js'
 import s from './screens/normal.module.css'
 import { clearLastEmail } from './session.js'
 import { useSessionGate } from './session-gate.js'
@@ -189,6 +189,7 @@ export function App({ api, socketFactory }: AppProps) {
   }, [gate.signedIn, myId, seatedIds])
   const { avatars } = useAvatars(guarded, watched)
   const captionFor = useMemo(() => makeCaptionFor(avatars, t), [avatars, t])
+  const rankFor = useMemo(() => makeRankFor(avatars), [avatars])
   const myAvatar = myId === null ? null : (avatars.get(myId)?.avatar ?? null)
 
   // The rig every chibi is drawn on: fetched once, for the app's whole lifetime, from the two public
@@ -325,7 +326,7 @@ export function App({ api, socketFactory }: AppProps) {
           onLanguage={setLang}
         >
           {inRoom ? (
-            <RoomScreen client={viewClient} lang={lang} onLeft={() => navigate('/lobby')} chibiFor={chibiFor} captionFor={captionFor} />
+            <RoomScreen client={viewClient} lang={lang} onLeft={() => navigate('/lobby')} chibiFor={chibiFor} captionFor={captionFor} rankFor={rankFor} />
           ) : ACCOUNT_ROUTES.includes(path) ? (
             <>
               {/* One fallback for all six: the chunk is a single request on a page the rail has already drawn, so
@@ -393,6 +394,7 @@ export function App({ api, socketFactory }: AppProps) {
                   <Chibi subject={myChibi ?? defaultChibi(gate.me?.displayName ?? '')} frame="head" size={36} className={a.lobbyAvatar} />
                 </a>
               }
+              rank={myId === null ? null : (avatars.get(myId)?.rank ?? null)}
             />
           )}
         </Shell>

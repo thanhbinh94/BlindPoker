@@ -573,16 +573,48 @@ describe('PokerTable', () => {
       />,
     )
 
-    const ann = screen.getByText('Ann').parentElement
+    const ann = screen.getByText('Ann').closest<HTMLElement>(`.${s.plateText}`)
     expect(ann).not.toBeNull()
     expect(within(ann!).getByText('Vận đỏ')).toBeInTheDocument()
     // The name is still the plate's first line; the caption sits under it.
-    expect(within(ann!).getByText('Ann').nextElementSibling).toHaveTextContent('Vận đỏ')
+    expect(within(ann!).getByText('Ann').closest(`.${s.seatName}`)!.nextElementSibling).toHaveTextContent('Vận đỏ')
 
     // Only seated players are asked about, and a `null` answer leaves that plate alone.
     expect(captionFor.mock.calls.map(([p]) => p.playerId)).toEqual(['a', 'b'])
-    const bob = screen.getByText('Bob').parentElement
+    const bob = screen.getByText('Bob').closest<HTMLElement>(`.${s.plateText}`)
     expect(within(bob!).queryByText('Vận đỏ')).toBeNull()
+  })
+
+  it('puts each human’s rank after their name, never asks about a bot, and passes the frame down', () => {
+    const withBot = makeRoom({
+      players: [
+        makePlayer({ playerId: 'a', displayName: 'Ann', isHost: true, seat: 0, status: 'SEATED', stack: 20_000 }),
+        makePlayer({ playerId: 'bot-1', displayName: 'Bot 1', isBot: true, seat: 1, status: 'SEATED', stack: 1_000_000 }),
+      ],
+    })
+    const rankFor = vi.fn((_p: RoomPlayerView) => 5)
+    const at = (frame: 'desktop' | 'landscape') => (
+      <PokerTable
+        room={withBot}
+        hand={null}
+        myPlayerId="a"
+        deadlineAt={null}
+        serverNow={() => 0}
+        turnTimerMs={30000}
+        lang="en"
+        layout="ring"
+        frame={frame}
+        canSit={false}
+        rankFor={rankFor}
+      />
+    )
+    const view = wrap(at('desktop'))
+    expect(rankFor.mock.calls.map(([p]) => p.playerId)).toEqual(['a'])
+    expect(within(screen.getByText('Ann').closest<HTMLElement>(`.${s.seatName}`)!).getByText('Legend')).toBeInTheDocument()
+    expect(document.querySelectorAll(`.${s.rankLabel}, .${s.rankPill}`)).toHaveLength(1)
+    view.unmount()
+    wrap(at('landscape'))
+    expect(screen.getByRole('img', { name: 'Legend' })).toHaveTextContent('V')
   })
 
   it('draws no caption line at all when the app supplies no slot', () => {

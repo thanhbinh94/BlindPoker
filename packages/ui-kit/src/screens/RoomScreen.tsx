@@ -13,6 +13,7 @@ import { ActionBar } from '../table/ActionBar.js'
 import { HandResult } from '../table/HandResult.js'
 import { useRoomFrame, type RoomFrame } from '../table/frame.js'
 import { PokerTable, type TableLayout } from '../table/PokerTable.js'
+import { RankLabel } from '../table/RankLabel.js'
 import { RoomHeader } from '../table/RoomHeader.js'
 import { useRevealHold } from './reveal-hold.js'
 import { useSeatClearance } from './seat-clearance.js'
@@ -30,6 +31,9 @@ export interface RoomScreenProps {
   chibiFor?: (p: RoomPlayerView) => ChibiSubject | null
   /** One muted line under each seat's name — a title, a rank. Threaded straight to `PokerTable`. */
   captionFor?: (p: RoomPlayerView) => ReactNode
+  /** A human player's reputation rank 1..5 (Plan 27): after the name on their seat, and as a numeral in the host's
+   * "Mời ra" list. `null` (or no answer) shows nothing. Threaded to `PokerTable`. */
+  rankFor?: (p: RoomPlayerView) => number | null
   /** App-specific banner above the room (edition branding, announcements…). */
   header?: ReactNode
   /** Forces the table layout; by default the table picks ring or stack from the viewport. */
@@ -87,7 +91,7 @@ function toggleFullscreen(): void {
  * Everything shown is derived from `client.state`; every button is one `GameClientApi` call. The screen decides
  * nothing about the game — not whose turn it is, not what a legal bet is, not who may start.
  */
-export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header, layout, frame: frameOverride }: RoomScreenProps) {
+export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, rankFor, header, layout, frame: frameOverride }: RoomScreenProps) {
   const { t } = useTranslation()
   const { state } = client
   const room = state.room
@@ -338,6 +342,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
           chibiFor={chibiFor}
           expressionFor={expressionFor}
           captionFor={captionFor}
+          rankFor={rankFor}
           resultPending={held}
           onReveal={reveal}
           note={landscape && waiting ? hint : null}
@@ -459,6 +464,7 @@ export function RoomScreen({ client, lang, onLeft, chibiFor, captionFor, header,
           {others.map((p) => (
             <li key={p.playerId} className={cx(s.rosterRow, !p.connected && s.rosterOffline)}>
               <span className={s.rosterName}>{p.displayName}</span>
+              {p.isBot ? null : <RankLabel rank={rankFor?.(p)} lang={lang} compact />}
               {p.seat === null || p.isBot ? null : <span className={s.rosterStack}>{formatPoints(p.stack, lang)}</span>}
               <Button
                 variant="danger"

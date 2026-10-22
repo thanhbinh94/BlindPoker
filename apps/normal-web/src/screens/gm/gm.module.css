@@ -176,6 +176,14 @@
   font-weight: 600;
 }
 
+/* A member's name, then their rank as a numeral pill (Plan 27). */
+.nameWithRank {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
 /* ── one player ───────────────────────────────────────────────────────────── */
 
 .facts {

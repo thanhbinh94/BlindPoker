@@ -96,3 +96,15 @@ export function makeCaptionFor(avatars: AvatarCache, t: TFunction<'normal'>): (p
     )
   }
 }
+
+/**
+ * The seat's rank (Plan 27, spec 2026-10-21 §2 A4), read from the same avatar cache as the caption: a bot has none,
+ * and a player whose avatar has not arrived — or a server older than Plan 27 — answers `null`, which shows nothing.
+ * A rank that changes mid-hand shows when the cache refreshes (entering a room, F5), as an outfit does.
+ */
+export function makeRankFor(avatars: AvatarCache): (player: RoomPlayerView) => number | null {
+  return (player) => {
+    if (player.isBot) return null
+    return avatars.get(player.playerId)?.rank ?? null
+  }
+}

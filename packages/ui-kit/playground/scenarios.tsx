@@ -77,6 +77,9 @@ const NAMES = [
   'Dương Phúc',
 ]
 const CAPTION = 'Tay chơi lão luyện'
+/** Plan 27: a rank after some of the names — the viewer a Cao thủ (3), the seat after a Huyền thoại (5), then 4 and 2;
+ *  the rest are rank 1 and show nothing. */
+const RANKS: Record<string, number> = { [ME]: 3, p1: 5, p2: 4, p3: 2 }
 /** Two hole cards and a best five per seat — all different, so the result rows never repeat a card key. */
 const HANDS: { hole: string; best: string; category: ShowdownHand['category'] }[] = [
   { hole: 'Ah Kh', best: 'Ah Kh Qh Jh Th', category: HandCategory.ROYAL_FLUSH },
@@ -307,7 +310,7 @@ export function WorstPage({ spec }: { spec: WorstSpec }) {
   }, [spec])
   return (
     <I18nextProvider i18n={i18n}>
-      <RoomScreen client={client} lang={spec.lang} onLeft={() => {}} captionFor={() => CAPTION} frame={spec.frame ?? undefined} />
+      <RoomScreen client={client} lang={spec.lang} onLeft={() => {}} captionFor={() => CAPTION} rankFor={(p) => RANKS[p.playerId] ?? null} frame={spec.frame ?? undefined} />
     </I18nextProvider>
   )
 }

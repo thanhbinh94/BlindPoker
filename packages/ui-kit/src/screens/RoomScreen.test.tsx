@@ -143,18 +143,21 @@ describe('RoomScreen', () => {
           onLeft={vi.fn()}
           chibiFor={(p) => (p.playerId === 'a' ? defaultChibi(p.playerId) : null)}
           captionFor={(p) => (p.playerId === 'a' ? 'Hot Hand' : null)}
+          rankFor={(p) => (p.playerId === 'a' ? 4 : null)}
         />
       </I18nextProvider>,
     )
 
     // Ann's plate draws the app's chibi (data-face="app"); Mai's answered `null`, so hers falls back to her
     // initial the way a seat with no `chibiFor` at all would.
-    const ann = screen.getByText('Ann').parentElement
-    expect(within(ann!).getByText('Hot Hand')).toBeInTheDocument()
+    const ann = screen.getByText('Ann').closest(`.${s.plateText}`)
+    expect(within(ann as HTMLElement).getByText('Hot Hand')).toBeInTheDocument()
+    expect(within(ann as HTMLElement).getByText('Master')).toBeInTheDocument()
     expect(screen.getByText('Ann').closest(`.${s.plate}`)!.querySelector(`.${s.avatar}`)).toHaveAttribute('data-face', 'app')
     // Mai answered `null`, so her plate keeps the two lines it always had and falls back to her initial.
-    const mai = screen.getByText('Mai').parentElement
-    expect(within(mai!).queryByText('Hot Hand')).toBeNull()
+    const mai = screen.getByText('Mai').closest(`.${s.plateText}`)
+    expect(within(mai as HTMLElement).queryByText('Hot Hand')).toBeNull()
+    expect(mai!.querySelector(`.${s.rankLabel}, .${s.rankPill}`)).toBeNull()
     expect(screen.getByText('Mai').closest(`.${s.plate}`)!.querySelector(`.${s.avatar}`)).toHaveAttribute('data-face', 'default')
   })
 
@@ -266,6 +269,18 @@ describe('RoomScreen', () => {
     const dialog = screen.getByRole('dialog', { name: 'People in the room' })
     await userEvent.click(within(dialog).getByRole('button', { name: 'Kick — Ann' }))
     expect(client.kick).toHaveBeenCalledWith('a')
+  })
+
+  it('shows each human’s rank as a numeral in the kick roster', async () => {
+    const client = fakeClient(makeState({ room: readyRoom }))
+    render(
+      <I18nextProvider i18n={createI18n({ language: 'en', storage: null })}>
+        <RoomScreen client={client} lang="en" onLeft={vi.fn()} rankFor={(p) => (p.playerId === 'a' ? 3 : null)} />
+      </I18nextProvider>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Manage table' }))
+    const dialog = screen.getByRole('dialog', { name: 'People in the room' })
+    expect(within(dialog).getByRole('img', { name: 'Sharp' })).toHaveTextContent('III')
   })
 
   it("lists a bot in the kick roster without its virtual bankroll", async () => {

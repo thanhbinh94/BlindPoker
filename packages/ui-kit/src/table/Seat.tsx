@@ -1,5 +1,5 @@
 import type { RoomPlayerView } from '@bp/core'
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Chibi, type ChibiSubject, type Expression } from '../avatar2d/index.js'
 import type { ClientSeat } from '../client/types.js'
@@ -8,11 +8,38 @@ import { Badge, type BadgeTone } from '../primitives/Badge.js'
 import { cx } from '../primitives/cx.js'
 import { Card } from './Card.js'
 import { SHOWDOWN_STAGGER_MS, dealStaggerMs } from './motion.js'
+import type { RoomFrame } from './frame.js'
 import { PeelCard } from './PeelCard.js'
+import { RankLabel } from './RankLabel.js'
 import { TurnTimer } from './TurnTimer.js'
 import s from './table.module.css'
 
 const DEALER_GLYPH = 'D'
+/** Under this many pixels of plate text the rank's name gives way to its numeral (spec 2026-10-21 §2 A4). */
+export const RANK_WORD_MIN_PX = 120
+
+/**
+ * Whether the element is narrower than `min` px: measured before the first paint and again on every resize. Where there
+ * is nothing laid out (jsdom: a 0 px box) or no `ResizeObserver`, it is not — the full label is the default.
+ * The two answers cannot chase each other: the numeral never makes the box wider than the word did, nor the word narrower.
+ */
+function useNarrowerThan(ref: RefObject<HTMLElement>, min: number, active: boolean): boolean {
+  const [narrow, setNarrow] = useState(false)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!active || el === null) return
+    const measure = (): void => {
+      const width = el.getBoundingClientRect().width
+      setNarrow(width > 0 && width < min)
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => measure())
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [ref, min, active])
+  return active && narrow
+}
 /** Marks the host's badge apart from "you" when both are gold (layout audit C4). */
 const CROWN_GLYPH = '♛ '
 
@@ -45,6 +72,14 @@ export interface SeatProps {
    * a couple of words belongs somewhere else on the screen.
    */
   caption?: ReactNode
+  /**
+   * The player's reputation rank 1..5 (Plan 27, spec 2026-10-21 §2 A4), shown after the name: the rank's name on a wide
+   * plate, its roman numeral when the plate's text box is under 120 px or the room is in the `landscape` frame. Rank 1,
+   * `null` and a bot's seat show nothing.
+   */
+  rank?: number | null
+  /** The room's frame, as `PokerTable` has it: `landscape` always shortens the rank to its numeral. */
+  frame?: RoomFrame
   /** The hand the cards belong to: each hand's cards are new cards, dealt afresh even when the count is the same. */
   handId: string | null
   /**
@@ -120,6 +155,8 @@ export function Seat({
   expression,
   bounce,
   caption,
+  rank = null,
+  frame = 'desktop',
   handId,
   dealt,
   dealIndex,
@@ -209,6 +246,13 @@ export function Seat({
   // seat itself, before the browser drops it.
   const seatRef = useRef<HTMLDivElement>(null)
   const pillRef = useRef<HTMLButtonElement>(null)
+
+  // The rank after the name (Plan 27): a bot has none, rank 1 says nothing. The plate's text box is measured only while
+  // there is a rank to fit, and in the landscape frame the numeral is the rule whatever the width.
+  const shownRank = seat.isBot || rank === null || rank < 2 ? null : rank
+  const plateTextRef = useRef<HTMLSpanElement>(null)
+  const narrowPlate = useNarrowerThan(plateTextRef, RANK_WORD_MIN_PX, shownRank !== null && frame !== 'landscape')
+  const compactRank = frame === 'landscape' || narrowPlate
   useLayoutEffect(() => {
     if (!toTurn && pillRef.current !== null && document.activeElement === pillRef.current) seatRef.current?.focus({ preventScroll: true })
   }, [toTurn])
@@ -289,8 +333,11 @@ export function Seat({
         <span className={s.avatar} data-face={seat.isBot ? 'bot' : chibi === null ? 'default' : 'app'} aria-hidden="true">
           {chibi === null ? initial : <Chibi subject={chibi} expression={expression} frame="head" bounce={bounce} />}
         </span>
-        <span className={s.plateText}>
-          <span className={s.seatName}>{name}</span>
+        <span ref={plateTextRef} className={s.plateText}>
+          <span className={s.seatName}>
+            <span className={s.seatNameText}>{name}</span>
+            {shownRank === null ? null : <RankLabel rank={shownRank} lang={lang} compact={compactRank} />}
+          </span>
           {caption === undefined || caption === null ? null : <span className={s.seatCaption}>{caption}</span>}
           {/* A bot's stack is virtual — a table limit (5 × the wager) that is topped back up whenever it runs low, so
               a figure beside it would only read as a real balance to compare against. The Bot badge below says what

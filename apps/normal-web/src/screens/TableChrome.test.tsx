@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AvatarConfigDto, BodyDto, ItemDto, PlayerAvatarDto } from '../api.js'
 import viNormal from '../locales/vi/normal.json'
 import { makeI18n } from '../test-i18n.js'
-import { makeCaptionFor, makeChibiFor, type AvatarCache } from './TableChrome.js'
+import { makeCaptionFor, makeChibiFor, makeRankFor, type AvatarCache } from './TableChrome.js'
 
 const FACES = {
   neutral: 'body_f_face_neutral_L50',
@@ -167,5 +167,23 @@ describe('makeCaptionFor', () => {
 
     expect(container.textContent).not.toContain('items.')
     expect(container.querySelector('[data-rarity]')).toHaveAttribute('aria-label', viNormal.items.badge_gold)
+  })
+})
+
+describe('makeRankFor', () => {
+  it('returns the cached rank, and null for bots, for a player not cached yet and for a server that sends none', () => {
+    const avatars: AvatarCache = new Map<string, PlayerAvatarDto | null>([
+      ['a', { ...entry('a', {}), rank: 4 }],
+      ['b', entry('b', {})],
+      ['gone', null],
+    ])
+    const rankFor = makeRankFor(avatars)
+    expect(rankFor(player({ playerId: 'a' }))).toBe(4)
+    expect(rankFor(player({ playerId: 'b' }))).toBeNull()
+    expect(rankFor(player({ playerId: 'gone' }))).toBeNull()
+    expect(rankFor(player({ playerId: 'unknown' }))).toBeNull()
+    const get = vi.spyOn(avatars, 'get')
+    expect(rankFor(player({ playerId: 'a', isBot: true }))).toBeNull()
+    expect(get).not.toHaveBeenCalled()
   })
 })

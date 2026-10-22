@@ -338,3 +338,68 @@ describe('Seat in a squeeze room', () => {
     expect(screen.queryByText('Đã lật')).toBeNull()
   })
 })
+
+// Plan 27 (spec 2026-10-21 §2 A4): the player's rank stands after the name — its name on a wide plate, its roman numeral
+// on a narrow one and always in the landscape frame — and leaves the app's caption line as it was.
+describe('Seat with a rank', () => {
+  const plain = (patch: Partial<SeatProps> = {}): SeatProps =>
+    props({ squeezeRoom: false, squeezeRound: false, squeezeDecides: false, deadlineAt: null, caption: 'Vua bài', ...patch })
+
+  it('shows "Bậc thầy" after the name for rank 4, and the caption below is unchanged', () => {
+    wrap(plain({ rank: 4 }))
+    const label = screen.getByText('Bậc thầy')
+    expect(label).toHaveClass(s.rankLabel!)
+    const row = label.closest(`.${s.seatName}`)
+    expect(row, 'on the name’s own line').not.toBeNull()
+    expect(row!.textContent).toBe('AnnBậc thầy')
+    const caption = screen.getByText('Vua bài')
+    expect(caption).toHaveClass(s.seatCaption!)
+    expect(row!.contains(caption)).toBe(false)
+  })
+
+  it('shows "IV" in the landscape frame, with the name as its title', () => {
+    wrap(plain({ rank: 4, frame: 'landscape' }))
+    expect(screen.queryByText('Bậc thầy')).toBeNull()
+    expect(screen.getByText('IV')).toHaveAttribute('title', 'Bậc thầy')
+  })
+
+  it('shows nothing for rank 1, for no rank, and for a bot', () => {
+    const { rerender } = wrap(plain({ rank: 1 }))
+    expect(document.querySelector(`.${s.rankLabel}, .${s.rankPill}`)).toBeNull()
+    rerender(plain({ rank: null }))
+    expect(document.querySelector(`.${s.rankLabel}, .${s.rankPill}`)).toBeNull()
+    rerender(plain({ seat: bot, isMe: false, rank: 5 }))
+    expect(document.querySelector(`.${s.rankLabel}, .${s.rankPill}`)).toBeNull()
+  })
+
+  it('keeps the full name where nothing is laid out (jsdom: a 0 px plate is not a narrow one)', () => {
+    wrap(plain({ rank: 3 }))
+    expect(screen.getByText('Cao thủ')).toBeInTheDocument()
+  })
+
+  it('shortens to the numeral when the plate’s text box measures under 120 px, and back when it widens', () => {
+    let width = 96
+    let fire: () => void = () => {}
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+      () => ({ left: 0, top: 0, right: width, bottom: 30, width, height: 30, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect,
+    )
+    class FakeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        fire = () => callback([], this as unknown as ResizeObserver)
+      }
+      observe(): void {}
+      disconnect(): void {}
+      unobserve(): void {}
+    }
+    vi.stubGlobal('ResizeObserver', FakeObserver)
+    try {
+      wrap(plain({ rank: 3 }))
+      expect(screen.getByText('III')).toHaveAttribute('title', 'Cao thủ')
+      width = 160
+      act(() => fire())
+      expect(screen.getByText('Cao thủ')).toHaveClass(s.rankLabel!)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})

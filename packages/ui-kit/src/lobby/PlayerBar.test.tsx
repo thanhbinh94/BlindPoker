@@ -34,6 +34,21 @@ describe('PlayerBar', () => {
     expect(screen.queryByText('A')).toBeNull()
   })
 
+  it('puts the player’s rank after their name, and nothing at rank 1', () => {
+    const { rerender } = render(
+      <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+        <PlayerBar displayName="Mai" balance={0} status="open" lang="vi" rank={3} />
+      </I18nextProvider>,
+    )
+    expect(screen.getByText('Mai').nextElementSibling).toHaveTextContent('Cao thủ')
+    rerender(
+      <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>
+        <PlayerBar displayName="Mai" balance={0} status="open" lang="vi" rank={1} />
+      </I18nextProvider>,
+    )
+    expect(screen.queryByText('Tân binh')).toBeNull()
+  })
+
   it('states the balance in points, never as a currency amount', () => {
     const { container } = render(
       <I18nextProvider i18n={createI18n({ language: 'vi', storage: null })}>

@@ -312,6 +312,18 @@ export interface MeDto {
   relief: ReliefStatusDto
   createdAt: number
   lastLoginAt: number | null
+  /** Plan 27: lifetime reputation — only ever grows, never points (spec 2026-10-21 §2 A1). */
+  reputation: number
+  /** Plan 27: the highest rank 1..5 reached — a high-water mark, so it may sit above what `ranks` gives today (R15). */
+  rank: number
+  /** Plan 27: the ladder, ascending by rank, for the profile's "còn N tới <next>" bar. */
+  ranks: RankThresholdDto[]
+}
+
+/** One step of the reputation ladder (`reputation_ranks`). */
+export interface RankThresholdDto {
+  rank: number
+  threshold: number
 }
 
 /** `GET /api/me/stats` — all sixteen counters of §10.3. */
@@ -407,6 +419,8 @@ export interface PlayerAvatarDto {
   playerId: string
   displayName: string
   avatar: AvatarConfigDto
+  /** Plan 27: the player's rank 1..5, shown beside the name on their seat. Absent from a server older than Plan 27. */
+  rank?: number
 }
 
 /** One saved outfit slot (design §5.3) — `apps/normal-server/src/inventory/outfits-service.ts`'s row. */

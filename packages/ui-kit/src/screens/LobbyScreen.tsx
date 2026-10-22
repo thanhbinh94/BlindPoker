@@ -21,6 +21,8 @@ export interface LobbyScreenProps {
   onEnteredRoom: () => void
   /** The player's own face for the player bar; the name's initial when absent. */
   avatar?: ReactNode
+  /** The player's reputation rank for the player bar (Plan 27); nothing at rank 1 or when absent. */
+  rank?: number | null
   /** App-specific banner above the lobby (edition branding, announcements…). */
   header?: ReactNode
 }
@@ -31,7 +33,7 @@ export interface LobbyScreenProps {
  * Composition only. It owns three things — the mode filter, whether the create dialog is open, and the reply to its
  * own last request — and asks `GameClientApi` for everything else.
  */
-export function LobbyScreen({ client, lang, onEnteredRoom, avatar, header }: LobbyScreenProps) {
+export function LobbyScreen({ client, lang, onEnteredRoom, avatar, rank = null, header }: LobbyScreenProps) {
   const { t } = useTranslation()
   const { state } = client
   const [filter, setFilter] = useState<RoomFilter>('all')
@@ -78,6 +80,7 @@ export function LobbyScreen({ client, lang, onEnteredRoom, avatar, header }: Lob
         status={state.status}
         lang={lang}
         avatar={avatar}
+        rank={rank}
       />
       {header}
 

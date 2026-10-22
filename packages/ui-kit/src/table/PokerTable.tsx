@@ -39,6 +39,9 @@ export interface PokerTableProps {
   expressionFor?: (seat: number) => Expression
   /** One muted line under each seat's name — a title, a rank. Returning `null` leaves that plate as it was. */
   captionFor?: (player: RoomPlayerView) => ReactNode
+  /** A human seat's reputation rank 1..5, shown after the name (Plan 27); `null` (or no answer) shows nothing. Bots are
+   * never asked — a bot has no rank. */
+  rankFor?: (player: RoomPlayerView) => number | null
   onSeatClick?: (seat: number) => void
   canSit: boolean
   /**
@@ -140,6 +143,7 @@ export function PokerTable({
   chibiFor,
   expressionFor,
   captionFor,
+  rankFor,
   onSeatClick,
   canSit,
   resultPending = false,
@@ -246,6 +250,8 @@ export function PokerTable({
         expression={expressionFor?.(index) ?? 'neutral'}
         bounce={bounce}
         caption={captionFor?.(player)}
+        rank={player.isBot ? null : (rankFor?.(player) ?? null)}
+        frame={frame}
         handId={hand?.handId ?? null}
         dealt={dealt}
         dealIndex={Math.max(0, dealOrder.indexOf(index))}

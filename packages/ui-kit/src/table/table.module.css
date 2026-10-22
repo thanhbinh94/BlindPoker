@@ -557,13 +557,63 @@
   line-height: 1.2;
 }
 
+/* The name's line: the name, then the player's rank (Plan 27). The name is what gives when the line is short — it
+   truncates in "…" — and the rank keeps its whole word or numeral beside it. */
 .seatName {
-  overflow: hidden;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
   font-size: 0.8125rem;
   font-weight: 600;
   color: var(--ink);
-  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.seatNameText {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
+/* A player's reputation rank (Plan 27, spec 2026-10-21 §2 A4): on a wide plate its name, as small as the caption line
+   and in its own colour; on a narrow one, in the landscape frame and in a list row, its roman numeral in a pill. */
+.rankLabel,
+.rankPill {
+  flex: none;
+  font-family: var(--font-body);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rankLabel {
+  font-size: 0.6875rem;
+}
+
+.rankPill {
+  display: inline-block;
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+}
+
+.rankLabel[data-rank='2'], .rankPill[data-rank='2'] {
+  color: var(--rank-2);
+}
+
+.rankLabel[data-rank='3'], .rankPill[data-rank='3'] {
+  color: var(--rank-3);
+}
+
+.rankLabel[data-rank='4'], .rankPill[data-rank='4'] {
+  color: var(--rank-4);
+}
+
+.rankLabel[data-rank='5'], .rankPill[data-rank='5'] {
+  color: var(--rank-5);
 }
 
 /* The app's line under the name — a title, a rank. It is deliberately the quietest thing on the plate: one line,

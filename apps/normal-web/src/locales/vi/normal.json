@@ -353,6 +353,8 @@
     "title": "Hồ sơ",
     "memberSince": "Tham gia từ {{date}}",
     "balance": "Số dư",
+    "reputation": "Danh vọng {{points}} · {{rank}} · còn {{left}} tới {{next}}",
+    "reputationTop": "Danh vọng {{points}} · {{rank}}",
     "noTitle": "Chưa có danh hiệu",
     "toAvatar": "Phòng thay đồ",
     "toAchievements": "Thành tựu",

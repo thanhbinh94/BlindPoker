@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError, type GmRoomDto, type NormalApi } from '../../api.js'
 import viNormal from '../../locales/vi/normal.json'
+import { resetAvatarCache } from '../../avatar/useAvatars.js'
 import { renderWithI18n } from '../../test-i18n.js'
 import { RoomsTab } from './RoomsTab.js'
 
@@ -43,7 +44,7 @@ const SECRET: GmRoomDto = {
   ],
 }
 
-function setup(overrides: Partial<Record<'gmRooms' | 'gmKick' | 'gmCloseRoom', unknown>> = {}) {
+function setup(overrides: Partial<Record<'gmRooms' | 'gmKick' | 'gmCloseRoom' | 'playerAvatar', unknown>> = {}) {
   const gmRooms = vi.fn().mockResolvedValue({ rooms: [OPEN, SECRET] })
   const gmKick = vi.fn().mockResolvedValue({ effective: 'now' })
   const gmCloseRoom = vi.fn().mockResolvedValue({ closed: true, refunded: 2 })
@@ -89,6 +90,19 @@ describe('RoomsTab', () => {
     expect(within(bot).queryByRole('button', { name: viNormal.gm.actions.kick })).toBeNull()
     const person = screen.getAllByText('Lan').map((el) => el.closest('tr')!).find((tr) => within(tr).queryByRole('button', { name: viNormal.gm.actions.kick }) !== null)
     expect(person).toBeDefined()
+  })
+
+  it('shows each person’s rank as a numeral after their name, and asks about no bot', async () => {
+    resetAvatarCache()
+    const user = userEvent.setup()
+    const playerAvatar = vi.fn((id: string) => Promise.resolve({ playerId: id, displayName: id, avatar: { v: 4, gender: 'f' }, rank: 4 }))
+    setup({ playerAvatar })
+    const secret = (await screen.findByText('Bàn kín')).closest('tr')!
+    await user.click(within(secret).getByRole('button', { name: viNormal.gm.rooms.members }))
+
+    expect(await screen.findByRole('img', { name: 'Bậc thầy' })).toHaveTextContent('IV')
+    expect(playerAvatar.mock.calls.map(([id]) => id)).toEqual(['p2'])
+    resetAvatarCache()
   })
 
   it('closes a room only with a reason, then reloads the list and says who got refunded', async () => {

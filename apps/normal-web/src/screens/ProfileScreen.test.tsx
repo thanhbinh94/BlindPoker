@@ -171,6 +171,39 @@ describe('ProfileScreen', () => {
     expect(stage?.querySelectorAll('[data-chibi-hash]')).toHaveLength(1)
   })
 
+  it('shows the reputation, the rank and what is left to the next one, with a bar that far along', async () => {
+    const ranks = [
+      { rank: 1, threshold: 0 },
+      { rank: 2, threshold: 100 },
+      { rank: 3, threshold: 400 },
+      { rank: 4, threshold: 1800 },
+      { rank: 5, threshold: 5000 },
+    ]
+    renderScreen(stubApi({ me: vi.fn().mockResolvedValue({ ...ME, reputation: 455, rank: 3, ranks }) }))
+    await screen.findByRole('heading', { name: 'Bình', level: 2 })
+
+    const line = screen.getByText('Danh vọng 455 · Cao thủ · còn 1.345 tới Bậc thầy')
+    const bar = line.closest('[data-reputation]')!.querySelector<HTMLElement>('[data-progress]')
+    // (455 − 400) / (1 800 − 400) ≈ 3.9 %
+    expect(bar?.style.width).toBe('3.9%')
+  })
+
+  it('shows the top rank without a next step, and nothing at all from a server that sends no reputation', async () => {
+    const ranks = [
+      { rank: 1, threshold: 0 },
+      { rank: 5, threshold: 5000 },
+    ]
+    const view = renderScreen(stubApi({ me: vi.fn().mockResolvedValue({ ...ME, reputation: 5210, rank: 5, ranks }) }))
+    await screen.findByRole('heading', { name: 'Bình', level: 2 })
+    expect(screen.getByText('Danh vọng 5.210 · Huyền thoại')).toBeInTheDocument()
+    expect(document.querySelector('[data-progress]')).toBeNull()
+    view.unmount()
+
+    renderScreen()
+    await screen.findByRole('heading', { name: 'Bình', level: 2 })
+    expect(document.querySelector('[data-reputation]')).toBeNull()
+  })
+
   it('offers two quick links, the wardrobe and the achievements — the inventory has folded into the wardrobe (No5)', async () => {
     renderScreen()
     await screen.findByRole('heading', { name: 'Bình', level: 2 })

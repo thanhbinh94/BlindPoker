@@ -498,6 +498,19 @@
   font-size: 1rem;
 }
 
+/* The name, then the player's rank (Plan 27) on the same line; the name keeps its wrap, the rank its whole word. */
+.nameRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--space-2);
+  min-width: 0;
+}
+
+.nameRow .name {
+  margin-right: 0;
+}
+
 .balance {
   font-size: 0.8125rem;
   color: var(--ink-muted);

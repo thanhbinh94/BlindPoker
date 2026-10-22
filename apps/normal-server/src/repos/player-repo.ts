@@ -32,6 +32,9 @@ export interface PlayerRow {
   equippedBadge: string | null
   lastReliefAt: Date | null
   createdAt: Date
+  /** Plan 27: lifetime reputation, and the highest rank 1..5 it has reached (spec §2 A1, A4). */
+  reputation: number
+  rank: number
 }
 
 /** What the request guard needs in one query: the profile plus the account's role and lock (Plan 25). */
@@ -79,6 +82,8 @@ const COLUMNS = {
   equippedBadge: players.equippedBadge,
   lastReliefAt: players.lastReliefAt,
   createdAt: players.createdAt,
+  reputation: players.reputation,
+  rank: players.rank,
 }
 
 export function createPlayerRepository(db: AppDb): NormalPlayerRepository {

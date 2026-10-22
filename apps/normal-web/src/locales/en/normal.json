@@ -353,6 +353,8 @@
     "title": "Profile",
     "memberSince": "Member since {{date}}",
     "balance": "Balance",
+    "reputation": "Reputation {{points}} · {{rank}} · {{left}} to {{next}}",
+    "reputationTop": "Reputation {{points}} · {{rank}}",
     "noTitle": "No title yet",
     "toAvatar": "Edit wardrobe",
     "toAchievements": "Achievements",

@@ -268,7 +268,15 @@
     "GM_NOTICE": "Game master: {{reason}}",
     "TABLE_LIMIT_SPENT": "You have used up your table limit here — the {{amount}} left went back to your balance. Pick an empty seat to play again.",
     "TABLE_LIMIT_SPENT_none": "You have used up your table limit here. Pick an empty seat to play again.",
+    "RANK_UP": "You reached {{rank}}",
     "other": "New notification"
+  },
+  "rank": {
+    "1": "Rookie",
+    "2": "Card hand",
+    "3": "Sharp",
+    "4": "Master",
+    "5": "Legend"
   },
   "presets": {
     "min": "Min",

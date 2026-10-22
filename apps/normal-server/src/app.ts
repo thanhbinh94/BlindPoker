@@ -388,6 +388,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     history,
     gm,
     gmRooms,
+    reputation,
     catalog,
     defs,
     aliases,

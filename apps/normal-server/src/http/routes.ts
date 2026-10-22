@@ -37,6 +37,7 @@ import type { ItemCatalog } from '../inventory/items.js'
 import type { AvatarManifest } from '../inventory/manifest.js'
 import type { OutfitsService } from '../inventory/outfits-service.js'
 import type { NormalRepositories } from '../repos/index.js'
+import type { ReputationService } from '../reputation/reputation-service.js'
 import type { StatsService } from '../stats/stats-service.js'
 import { createRequireGm, createRequireUser, decorateRequestUser } from './auth-guard.js'
 import { LOGIN_RATE_LIMIT, REGISTER_RATE_LIMIT, registerAuthRoutes } from './routes-auth.js'
@@ -62,6 +63,8 @@ export interface RouteDeps {
   /** What a GM may do to an account (Plan 25), and the façade over live rooms the GM routes use. */
   gm: GmService
   gmRooms: GmRoomService
+  /** Plan 27: the rank ladder the profile reads. */
+  reputation: Pick<ReputationService, 'ranks'>
   catalog: ItemCatalog
   defs: AchievementDef[]
   /** Old wardrobe ids, kept readable — see `inventory/aliases.ts`. */
