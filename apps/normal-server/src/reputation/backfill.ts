@@ -40,6 +40,17 @@ export interface BackfillOptions {
   now?: Date
   /** The achievement catalogue, which decides what each unlocked achievement pays. */
   defs: readonly AchievementDef[]
+  /** Where a rank-up would be pushed. The backfill announces none (`grantWithin` leaves that to its caller); tests spy. */
+  notify?: (playerId: string, message: unknown) => void
+}
+
+/** What the CLI prints, with exit 2, for an argument it does not know. */
+export const BACKFILL_USAGE = 'usage: node dist/reputation-backfill-cli.js [--dry-run]'
+
+/** The CLI's arguments: none, or `--dry-run`; anything else is `null` — a typo of the flag must not run the real credit. */
+export function parseBackfillArgs(argv: readonly string[]): { dryRun: boolean } | null {
+  if (argv.some((arg) => arg !== '--dry-run')) return null
+  return { dryRun: argv.length > 0 }
 }
 
 export interface BackfillResult {
@@ -60,7 +71,7 @@ export async function backfillReputation(db: AppDb, opts: BackfillOptions): Prom
   const reputation = createReputationService({
     db,
     bus: createEventBus(silentLogger),
-    notify: () => undefined,
+    notify: opts.notify ?? (() => undefined),
     log: silentLogger,
     ...(opts.now ? { now: () => opts.now!.getTime() } : {}),
   })

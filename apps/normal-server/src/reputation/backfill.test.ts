@@ -1,11 +1,11 @@
 import { asc, eq, sql } from 'drizzle-orm'
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { AchievementDef } from '../achievements/definitions.js'
 import type { AppDb } from '../db/client.js'
 import { playerAchievements, players, playerStats, reputationEvents, users } from '../db/schema.js'
 import type { TestDb } from '../db/test-db.js'
 import { createTestDb } from '../db/test-db.js'
-import { backfillReputation } from './backfill.js'
+import { BACKFILL_USAGE, backfillReputation, MIRRORED_REASONS, parseBackfillArgs } from './backfill.js'
 import { seedDefaults } from './reputation-service.js'
 
 let test: TestDb
@@ -105,6 +105,37 @@ describe('backfillReputation', () => {
     expect(await standing(p)).toEqual({ reputation: 112 + 798, rank: 3 })
   })
 
+  it('subtracts every one of the four mirrored reasons, and neither a newcomer day nor a GM grant', async () => {
+    const p = await seedPlayer({ reputation: 4 + 3 + 10 + 500 + 200 + 1_000 })
+    await seedHistory(p)
+    await db.insert(reputationEvents).values([
+      { playerId: p, delta: 4, reason: 'hand_played', refId: 'h1' },
+      { playerId: p, delta: 3, reason: 'hand_won', refId: 'h1' },
+      { playerId: p, delta: 10, reason: 'daily_login', refId: 'daily:1' },
+      { playerId: p, delta: 500, reason: 'achievement', refId: 'ach:ach_item' },
+      // Not history `player_stats` counts: left alone.
+      { playerId: p, delta: 200, reason: 'newcomer_day', refId: 'newcomer:7' },
+      { playerId: p, delta: 1_000, reason: 'gm_grant', refId: 'gm:1' },
+    ])
+    expect(new Set(MIRRORED_REASONS)).toEqual(new Set(['hand_played', 'hand_won', 'daily_login', 'achievement']))
+
+    const result = await backfillReputation(db, { dryRun: false, defs: DEFS })
+
+    expect(result.applied).toBe(810 - (4 + 3 + 10 + 500))
+  })
+
+  it('announces no rank-up, even for a player the backfill lifts two ranks', async () => {
+    const p = await seedPlayer()
+    await seedHistory(p)
+    const notify = vi.fn()
+
+    await backfillReputation(db, { dryRun: false, defs: DEFS, notify })
+
+    expect(await standing(p)).toEqual({ reputation: 810, rank: 3 })
+    // A deploy-time credit: a toast for every old account at once, to nobody online, would only be noise.
+    expect(notify).not.toHaveBeenCalled()
+  })
+
   it('a second run applies 0', async () => {
     const p = await seedPlayer()
     await seedHistory(p)
@@ -157,5 +188,14 @@ describe('backfillReputation', () => {
     expect(second).toEqual({ players: 1, applied: 0, byRank: [1, 0, 0, 0, 0] })
     expect(await standing(p)).toEqual({ reputation: 50, rank: 1 })
     expect(await events(p)).toEqual([{ delta: 50, reason: 'hand_played', refId: 'h1' }])
+  })
+})
+
+describe('parseBackfillArgs (the CLI)', () => {
+  it('takes no flag or --dry-run, and refuses anything else so a typo never runs the real credit', () => {
+    expect(parseBackfillArgs([])).toEqual({ dryRun: false })
+    expect(parseBackfillArgs(['--dry-run'])).toEqual({ dryRun: true })
+    for (const argv of [['--dryrun'], ['--dry-run', 'extra'], ['-n'], ['--help']]) expect(parseBackfillArgs(argv), argv.join(' ')).toBeNull()
+    expect(BACKFILL_USAGE).toBe('usage: node dist/reputation-backfill-cli.js [--dry-run]')
   })
 })
