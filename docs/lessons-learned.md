@@ -979,7 +979,7 @@ rulings below are the SDD ledger's, in order.
 - The reviews that opened screenshots again earned their cost: the dock covered seat 6 at 640×360, a 4 px clip hid Đóng
   under `overflow: hidden`, and a six-digit raise crossed the hero's plate at 844×390. None showed in a unit test.
 
-## Plan 27 — the shop, reputation, the welcome gift, Blind to zero, a lazy wardrobe, a monthly check-in (merged `MERGE`, 2026-10-2x)
+## Plan 27 — the shop, reputation, the welcome gift, Blind to zero, a lazy wardrobe, a monthly check-in (merged `da8ca8a`, 2026-10-24)
 
 Spec `docs/superpowers/specs/2026-10-21-plan27-shop-reputation-welcome-blind-zero-design.md`; plan
 `docs/superpowers/plans/2026-10-22-plan27-shop-reputation-welcome-blind-zero.md`; branch

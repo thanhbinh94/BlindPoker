@@ -9,7 +9,7 @@ below are the real history.
 
 ---
 
-## Plan 27 — a shop for points behind a reputation rank, a welcome gift, Blind played to zero, a lazy wardrobe and a monthly check-in — merged `MERGE` (2026-10-2x)
+## Plan 27 — a shop for points behind a reputation rank, a welcome gift, Blind played to zero, a lazy wardrobe and a monthly check-in — merged `da8ca8a` (2026-10-24)
 
 The round the user asked for on 2026-10-20/21 (`docs/bug-log.md` §9, K1–K5, plus Q13 from the spec review): players saw
 many outfits and no way to earn them, Blind tables threw out accounts with 5–6k left, and the wardrobe loaded slowly.
@@ -21,7 +21,14 @@ month's claims; **F** wrote K1 (two devices) down as a rule. Spec
 session's rulings are R1–R21, §10), plan `docs/superpowers/plans/2026-10-22-plan27-shop-reputation-welcome-blind-zero.md`
 (36 pre-flight amendments, P1–P36, one rejected), branch `feature/BP-27-shop-reputation-welcome-blind-zero`. Points only,
 as always: "mua" in every screen and doc here means in-game points; there is no payment, conversion or trading.
-GATE
+Gate on the branch's final tree (`0f111ca`; `main` had not moved): typecheck, lint, 3296 unit tests passed and 14 skipped
+(216 files, 6 min 49 s), build:normal, build:lite up to the exe step (skipped on Node 24, "rebuilt locally, not shipped"),
+avatar:check 1560/1560, e2e Normal 24/24 (1.6 min), e2e Lite 4/4, ops pack 50/50 across desktop, mobile and landscape
+(12.6 min). The first ops run was 49/50: A-08 signs in with English chosen and the welcome box read "Later", which the
+e2e helper only knew as "Để sau"; the helper now dismisses it in either language (`0f111ca`). The final review's own fix
+wave also landed: a boot probe that meets the read limit waits the server's `retry-after` (at most 5 s) and asks once more
+before showing the sign-in card; an achievement unlock and the welcome claim lock the player's row first, so two of them
+on one player cannot deadlock on Postgres; the ops test server reads 2400 a minute because every browser shares one address.
 
 - **What a player sees first (Part C).** The first visit to the lobby — a new account or an old one — opens "Chào mừng
   đến Blind Luck Poker": three rare items ("Đồng phục chia bài", "Áo dài Tết đỏ", "Nón lá"), each worn by the player's
