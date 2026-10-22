@@ -538,6 +538,25 @@ always @2x. One exception (Ruling 16, Plan 27): a `head` chibi with a `size` who
 render the @1x `src` with no `srcset`. A 72 px portrait on a 2× phone is 144 device px, and @2x made a row of them
 about 440 KB.
 
+**Live figure (BP-30, spec K6 §3.1–§3.2).** `LiveFigure` (`LiveFigure.tsx`) is what a stage draws instead of a bare
+`Chibi`: the same `subject`, `frame`, `size`, `label`, `expression` and `lazy`, plus `live` (`'idle'` by default),
+`react`, `facing` (controlled, `'right'` by default), `greet` (on by default), `className` on the wrapper and
+`figureClassName` on the `Chibi` root. The wrapper (`position: relative; display: inline-block`) shrinks to the
+figure, so the figure needs its own width (`size`, or one set through `figureClassName`). Over it sit two siblings of
+the figure. The **greet** control is a transparent `<button>` covering the figure's box, named by `avatar.greet` ("Nhân
+vật của bạn, bấm để chào"), with the kit's `:focus-visible` ring. It is a sibling and not a wrapper, so the figure keeps
+its own `role="img"` and name (R6; the spec says "bọc", P10 chose the overlay). A tap waves. A wave during a cheer or a
+turn is `useChibiLife`'s to ignore. The **sparkle ring** is six `aria-hidden` marks at fixed spots over the figure's box
+that fade in and out once in `CHIBI_LIFE.sparkleMs` (700 ms). It is mounted for 700 ms from each cheer with a fresh
+`key`, so a second cheer starts it over, and a tap mid-cheer neither cuts it short nor adds to it. It is never mounted
+under `prefers-reduced-motion: reduce` or on a figure whose `live` is `off`. `LiveFigure` owns one sequence of
+reaction keys: a changed `react` key from the stage becomes the next key of that kind, a tap becomes the next `wave`, and
+the `react` already there at mount counts as seen, so a remount never replays the last cheer. A stage keeps its own
+`react` with `nextReaction(prev, 'cheer')` (`{ kind, key: (prev?.key ?? 0) + 1 }`). Turning is the stage's job: it
+keeps `facing`, hands it to the figure and places a `TurnButton` ("Xoay" / "Turn", `avatar.turn`; a ghost `sm` button
+with `aria-pressed` while the figure faces left) wherever it fits. The button calls `onTurn(flipFacing(facing))`.
+Under reduced motion the turn is an instant mirror with no spin, because `Chibi` never sets the spin then.
+
 ### Lobby
 
 | Component | Props |

@@ -282,5 +282,9 @@
     "half": "½",
     "pot": "Pot",
     "max": "Max"
+  },
+  "avatar": {
+    "turn": "Turn",
+    "greet": "Your figure, tap to say hi"
   }
 }
