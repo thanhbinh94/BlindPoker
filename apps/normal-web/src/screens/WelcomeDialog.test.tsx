@@ -1,8 +1,8 @@
-import { useTintedLayer } from '@bp/ui-kit'
-import { screen, waitFor, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { CHIBI_LIFE, useTintedLayer } from '@bp/ui-kit'
+import { act, screen, waitFor, within } from '@testing-library/react'
+import userEvent, { type UserEvent } from '@testing-library/user-event'
 import { useState } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, type AvatarConfigDto, type BodyDto, type Gender, type ItemDto, type NormalApi, type WelcomeStatusDto } from '../api.js'
 import viNormal from '../locales/vi/normal.json'
 import { makeI18n, renderWithI18n } from '../test-i18n.js'
@@ -178,5 +178,129 @@ describe('WelcomeDialog', () => {
     expect(api.welcome).toHaveBeenCalledTimes(1)
     await waitFor(() => expect(card('outfit_dealer01')).toBeDisabled())
     expect(claimButton()).toBeDisabled()
+  })
+
+  // BP-30 (spec K6 §3.2, R8, P16): the three figures stand still; the card just picked cheers once, on the pick, never
+  // on the claim. A cheer lasts `CHIBI_LIFE.cheerFaceMs`, so each test lets one end on fake timers before it looks for
+  // the next: no wall-clock wait to flake under load.
+  describe('the picked card cheers', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    const setup = (): UserEvent => userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    /** A card's figure: the chibi inside its button (decorative, so found by its hash, not by a role). */
+    const figureOf = (itemId: string): HTMLElement => card(itemId).querySelector('[data-chibi-hash]') as HTMLElement
+    /** Runs the cheer under way to its end. */
+    const cheerEnds = (): void => {
+      act(() => {
+        vi.advanceTimersByTime(CHIBI_LIFE.cheerFaceMs + 50)
+      })
+    }
+
+    /** Counts each time a figure starts a cheer: its `data-reacting` turning to "cheer". Records the observer has not
+     * delivered yet are taken when the count is read, so it never waits on the observer's microtask. A record holds the
+     * old value only: its new value is the next record's old one, or — for the latest — the attribute now. */
+    function countCheers(root: HTMLElement): { readonly count: number; stop: () => void } {
+      let count = 0
+      let latestOld: string | null | undefined
+      const step = (old: string | null, next: string | null): void => {
+        if (old !== 'cheer' && next === 'cheer') count += 1
+      }
+      const tally = (records: MutationRecord[]): void => {
+        for (const record of records) {
+          if (latestOld !== undefined) step(latestOld, record.oldValue)
+          latestOld = record.oldValue
+        }
+      }
+      const observer = new MutationObserver(tally)
+      observer.observe(root, { attributes: true, attributeFilter: ['data-reacting'], attributeOldValue: true })
+      return {
+        get count() {
+          tally(observer.takeRecords())
+          if (latestOld !== undefined) step(latestOld, root.getAttribute('data-reacting'))
+          latestOld = undefined
+          return count
+        },
+        stop: () => observer.disconnect(),
+      }
+    }
+
+    it('picking a card cheers it once; picking it again does not; claiming does not cheer', async () => {
+      const api = stubApi()
+      const user = setup()
+      renderDialog({ api })
+      const figure = figureOf('outfit_tet_red01')
+      // Still (P7): ready to react, but no breathing and no blinking — three figures at once.
+      expect(figure).toHaveAttribute('data-live', 'still')
+      expect(figure).toHaveAttribute('data-breathing', 'false')
+      expect(figure).not.toHaveAttribute('data-reacting')
+      const cheers = countCheers(figure)
+
+      await user.click(card('outfit_tet_red01'))
+      expect(figureOf('outfit_tet_red01'), 'the same figure, not a new one').toBe(figure)
+      expect(figure).toHaveAttribute('data-reacting', 'cheer')
+      expect(cheers.count).toBe(1)
+      cheerEnds()
+      expect(figure).not.toHaveAttribute('data-reacting')
+
+      // The same card again: it is already the pick, so nothing changes, its mood included.
+      await user.click(card('outfit_tet_red01'))
+      expect(figure).not.toHaveAttribute('data-reacting')
+      expect(cheers.count).toBe(1)
+
+      // Nhận (R8): the card is locked and the dialog is about to close — no cheer for the claim.
+      await user.click(claimButton())
+      await waitFor(() => expect(api.welcomeClaim).toHaveBeenCalledWith('outfit_tet_red01'))
+      await waitFor(() => expect(within(dialog()).getByRole('status')).not.toBeEmptyDOMElement())
+      expect(figure).not.toHaveAttribute('data-reacting')
+      expect(cheers.count).toBe(1)
+      cheers.stop()
+    })
+
+    it('the other cards stay still', async () => {
+      const user = setup()
+      renderDialog({ api: stubApi() })
+      const [first, middle, last] = [figureOf('outfit_dealer01'), figureOf('outfit_tet_red01'), figureOf('head_conical_hat01')]
+      const others = [countCheers(first), countCheers(last)]
+      const picked = countCheers(middle)
+
+      // The cards keep their names — the item's, nothing more: the figure is decorative and no greet button joins in
+      // (a button inside the card's button would be invalid, and the card itself is the control).
+      for (const id of CHOICES) expect(within(dialog()).getByRole('button', { name: viNormal.items[id as keyof typeof viNormal.items] })).toBe(card(id))
+      expect(within(dialog()).queryByRole('button', { name: 'Nhân vật của bạn, bấm để chào' })).toBeNull()
+      for (const figure of [first, middle, last]) expect(figure).toHaveAttribute('aria-hidden', 'true')
+
+      await user.click(card('outfit_tet_red01'))
+      expect(middle).toHaveAttribute('data-reacting', 'cheer')
+      expect(first).not.toHaveAttribute('data-reacting')
+      expect(last).not.toHaveAttribute('data-reacting')
+      cheerEnds()
+
+      // Another card: that one cheers, and the one left behind does not cheer again.
+      await user.click(card('outfit_dealer01'))
+      expect(first).toHaveAttribute('data-reacting', 'cheer')
+      expect(middle).not.toHaveAttribute('data-reacting')
+      cheerEnds()
+
+      expect(others.map((c) => c.count)).toEqual([1, 0])
+      expect(picked.count).toBe(1)
+      for (const c of [...others, picked]) c.stop()
+    })
+
+    it('Để sau closes the dialog without a cheer', async () => {
+      const user = setup()
+      renderDialog({ api: stubApi() })
+      const cheers = CHOICES.map((id) => countCheers(figureOf(id)))
+
+      await user.click(within(dialog()).getByRole('button', { name: viNormal.welcome.later }))
+
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(cheers.map((c) => c.count)).toEqual([0, 0, 0])
+      for (const c of cheers) c.stop()
+    })
   })
 })

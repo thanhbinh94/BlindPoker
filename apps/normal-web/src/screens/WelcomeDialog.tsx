@@ -1,4 +1,4 @@
-import { Button, Chibi, defaultChibi, formatPoints, Modal, type Language } from '@bp/ui-kit'
+import { Button, defaultChibi, formatPoints, LiveFigure, Modal, nextReaction, type ChibiReaction, type Language } from '@bp/ui-kit'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -63,6 +63,9 @@ export function WelcomeDialog({ api, lang, status, avatar, items, bodies, onClai
   /** The choices as they stood when the claim landed: the lobby's refresh then marks the new item owned, and the
    * dialog keeps showing what the player picked from rather than a row of "✓ Đã có". */
   const [claimedFrom, setClaimedFrom] = useState<WelcomeStatusDto | null>(null)
+  /** BP-30 (spec K6 §3.2, R8): the cheer of the card just picked — bumped on a pick that changes the pick, never on
+   * the claim, and handed only to that card's figure. */
+  const [pickReact, setPickReact] = useState<ChibiReaction | null>(null)
 
   const shown = claimedFrom ?? fresh ?? status
   const allOwned = shown.choices.every((choice) => choice.owned)
@@ -156,9 +159,23 @@ export function WelcomeDialog({ api, lang, status, avatar, items, bodies, onClai
                 className={w.card}
                 aria-pressed={picked === choice.itemId}
                 disabled={choice.owned || busy || result !== null}
-                onClick={() => setPicked(choice.itemId)}
+                onClick={() => {
+                  if (picked === choice.itemId) return
+                  setPicked(choice.itemId)
+                  setPickReact((prev) => nextReaction(prev, 'cheer'))
+                }}
               >
-                <Chibi subject={subjectFor(choice.itemId)} frame="full" size={FIGURE_SIZE} className={w.figure} />
+                {/* Still (P7, P16): three figures at once, so none breathes or blinks; the picked one cheers. No label
+                    (the card's button is named by the item) and no greet button (a button in a button is invalid). */}
+                <LiveFigure
+                  subject={subjectFor(choice.itemId)}
+                  frame="full"
+                  size={FIGURE_SIZE}
+                  live="still"
+                  greet={false}
+                  react={picked === choice.itemId ? pickReact : null}
+                  figureClassName={w.figure}
+                />
                 <span className={w.name}>{name}</span>
                 {choice.owned ? <span className={w.owned}>{t('welcome.owned')}</span> : null}
               </button>

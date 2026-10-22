@@ -1,5 +1,5 @@
-import type { Language } from '@bp/ui-kit'
-import { screen, waitFor, within } from '@testing-library/react'
+import { CHIBI_LIFE, type Language } from '@bp/ui-kit'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -231,6 +231,43 @@ describe('ProfileScreen', () => {
     for (const file of ['body_f_L30', 'item_hair_f_bob01_L60', 'item_outfit_royal_robe01_L40']) expect(sources.some((src) => src.includes(file)), file).toBe(true)
     const portrait = name.parentElement?.querySelector('[data-chibi-hash]')
     expect(portrait).toHaveAttribute('data-frame', 'head')
+  })
+
+  // BP-30 (spec K6 §3.2, P16): the large figure lives — it breathes, blinks and waves when tapped — and has no Xoay;
+  // the portrait beside the name stays a plain chibi. The wave runs out on fake timers, so nothing waits on the clock.
+  it('the large figure is live and greets; the small head is not', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      renderScreen()
+      const name = await screen.findByRole('heading', { name: 'Bình', level: 2 })
+
+      // One image named after the player, the large one, live (R6: the name a locator finds it by is unchanged).
+      const figure = screen.getByRole('img', { name: 'Bình' })
+      expect((document.querySelector('[data-title]') as HTMLElement).contains(figure)).toBe(true)
+      expect(figure).toHaveAttribute('data-frame', 'full')
+      expect(figure).toHaveAttribute('data-live', 'idle')
+      expect(figure).not.toHaveAttribute('data-reacting')
+
+      const portrait = name.parentElement?.querySelector('[data-chibi-hash]') as HTMLElement
+      expect(portrait).toHaveAttribute('data-frame', 'head')
+      expect(portrait).not.toHaveAttribute('data-live')
+
+      // One greet button, over the large figure; no Xoay on this page.
+      const greet = screen.getByRole('button', { name: 'Nhân vật của bạn, bấm để chào' })
+      expect(greet.parentElement?.contains(figure)).toBe(true)
+      expect(screen.queryByRole('button', { name: 'Xoay' })).toBeNull()
+
+      await user.click(greet)
+      expect(figure).toHaveAttribute('data-reacting', 'wave')
+      act(() => {
+        vi.advanceTimersByTime(CHIBI_LIFE.waveFaceMs + 50)
+      })
+      expect(figure).not.toHaveAttribute('data-reacting')
+      expect(portrait).not.toHaveAttribute('data-reacting')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('still draws the header, stats and history when the avatar catalogue fails — the stage falls back to a default chibi', async () => {
