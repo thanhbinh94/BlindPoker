@@ -159,11 +159,16 @@ describe('cards', () => {
     it("tints a colour variant's icon with its own colour, from the icon's tint mask, and draws the blob without srcset", () => {
       const { container } = render(<ItemCard item={HEAD_BERET_BLUE} family={HEAD_BERET} owned wearing hint="" onPick={vi.fn()} />)
 
-      expect(tintedLayer).toHaveBeenCalledWith('/avatar/', {
-        order: 80,
-        file: ICON,
-        tints: [{ mask: `${ICON}_tintmask`, colour: '#3f6fd8', meanL: 0.5 }],
-      })
+      // The third argument is the icon's place in the tint queue (plan 27 E2, `ItemTab.test.tsx`).
+      expect(tintedLayer).toHaveBeenCalledWith(
+        '/avatar/',
+        {
+          order: 80,
+          file: ICON,
+          tints: [{ mask: `${ICON}_tintmask`, colour: '#3f6fd8', meanL: 0.5 }],
+        },
+        expect.any(Number),
+      )
       const icon = container.querySelector('img')!
       expect(icon).toHaveAttribute('src', 'blob:http://localhost/#3f6fd8')
       expect(icon.hasAttribute('srcset')).toBe(false)
@@ -183,7 +188,7 @@ describe('cards', () => {
     it('asks for no tint for an untinted item, which keeps its two-density icon', () => {
       const { container } = render(<ItemCard item={HEAD_BERET} owned wearing={false} hint="" onPick={vi.fn()} />)
 
-      expect(tintedLayer).toHaveBeenCalledWith('/avatar/', { order: 80, file: ICON })
+      expect(tintedLayer).toHaveBeenCalledWith('/avatar/', { order: 80, file: ICON }, expect.any(Number))
       const icon = container.querySelector('img')!
       expect(icon).toHaveAttribute('src', `/avatar/${ICON}@1x.png`)
       expect(icon).toHaveAttribute('srcset', `/avatar/${ICON}@1x.png 1x, /avatar/${ICON}@2x.png 2x`)

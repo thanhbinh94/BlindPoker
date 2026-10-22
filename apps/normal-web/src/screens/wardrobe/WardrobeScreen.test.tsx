@@ -281,6 +281,43 @@ describe('WardrobeScreen', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
+  // Plan 27 E2: the stage and the cards need only the inventory and the two catalogues; the saved outfits and the
+  // achievements come in after, without holding the screen up.
+  it('draws the stage and the cards before the saved outfits and the achievements answer', async () => {
+    let answerOutfits: (value: { outfits: (OutfitDto | null)[] }) => void = () => {}
+    let answerAchievements: (value: { achievements: AchievementDefDto[] }) => void = () => {}
+    const outfits = vi.fn(() => new Promise((resolve) => (answerOutfits = resolve)))
+    const catalogAchievements = vi.fn(() => new Promise((resolve) => (answerAchievements = resolve)))
+    renderScreen(stubApi({ outfits, catalogAchievements } as Partial<NormalApi>))
+
+    await opened()
+    expect(stage()).not.toBeNull()
+    expect(card(viNormal.items.hair_f_bob01)).toBeInTheDocument()
+    // Asked at once, alongside the other three — only the drawing waits less.
+    expect(outfits).toHaveBeenCalledTimes(1)
+    expect(catalogAchievements).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('heading', { name: viNormal.outfits.title })).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+
+    answerOutfits({ outfits: noOutfits })
+    answerAchievements({ achievements: ACHIEVEMENTS })
+    expect(await screen.findByRole('heading', { name: viNormal.outfits.title })).toBeInTheDocument()
+  })
+
+  it('says so when the saved outfits cannot be read, and asks again only for them', async () => {
+    const outfits = vi.fn().mockRejectedValueOnce(new ApiError(500, 'INTERNAL', 'nope')).mockResolvedValue({ outfits: noOutfits })
+    const api = stubApi({ outfits })
+    const user = userEvent.setup()
+    renderScreen(api)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.inventory.error)
+    await user.click(screen.getByRole('button', { name: viNormal.screens.retry }))
+
+    expect(await screen.findByRole('heading', { name: viNormal.outfits.title })).toBeInTheDocument()
+    expect(outfits).toHaveBeenCalledTimes(2)
+    expect(api.inventory).toHaveBeenCalledTimes(1)
+  })
+
   // Plan 19 (avatar v4, spec §6.1): the base tab is gone. The look group opens on Kiểu tóc, under the Nữ | Nam switch,
   // and the wearing list's first row says which body the figure is drawn on.
   it('opens on Kiểu tóc under the Nữ | Nam switch, with Giới tính: Nữ first in Đang dùng', async () => {

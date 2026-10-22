@@ -1,5 +1,5 @@
-import { assetUrl, useAvatarAssetsBase, useTintedLayer, type LayerRef } from '@bp/ui-kit'
-import { useState } from 'react'
+import { assetUrl, useAvatarAssetsBase, useInView, useTintedLayer, type LayerRef } from '@bp/ui-kit'
+import { createContext, useContext, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AssetRefDto, AvatarConfigDto, ItemDto, ItemSlot } from '../../api.js'
 import { hintFor, type HintSources } from '../catalog.js'
@@ -30,6 +30,15 @@ function iconFile(layerFile: string): string {
 /** What `useTintedLayer` is asked for when there is no icon at all (`title`/`badge`): no tints, so it answers `null`
  * without painting anything — the hook is still called, every render, before `ItemPreview` returns nothing. */
 const NO_ICON: LayerRef = { order: 0, file: '' }
+
+/** Where a card icon's tint render waits in the kit's tint queue (plan 27 E2): behind every figure's layers — an eager
+ * `Chibi` ranks its layers −10 … −90, a lazy one −110 … −190 — and, among the icons, the first card first:
+ * `ICON_TINT_PRIORITY - rank`. */
+const ICON_TINT_PRIORITY = -200
+
+/** A card's place in its grid, so the tab's first icons are tinted before its last. `ItemTab` gives each card its index;
+ * an icon drawn anywhere else (the shop's cards) is rank 0, and its renders start in the order they were asked for. */
+const PreviewRank = createContext(0)
 
 /**
  * The icon as a layer for `useTintedLayer` (review 2026-09-29, No8a): a colour variant (`asset.tint`) is painted
@@ -66,14 +75,24 @@ export interface ItemPreviewProps {
  * tinted one is ready the card keeps the previous colour, or the plain icon on first paint (the hook holds its last
  * render over a colour change on the same file); and for good if the browser refuses it (`ChibiLayer`'s rule: a URL
  * that failed is never retried), the plain two-density icon is drawn instead.
+ *
+ * 2026-10-22 (plan 27 E2): an icon more than 200 px off screen draws an empty box and asks for nothing — no `<img>`, no
+ * tint render — until it comes near (`useInView`; at once in a browser without `IntersectionObserver`). Its tint render
+ * then waits behind every figure's, the first card of the grid first (`PreviewRank`).
  */
 export function ItemPreview({ item, wear }: ItemPreviewProps) {
   const base = useAvatarAssetsBase()
+  const rank = useContext(PreviewRank)
+  const ref = useRef<HTMLElement>(null)
+  // Plan 27 E2: a card's icon waits until it is within 200 px of the screen, like a lazy `Chibi` — no `<img>`, no tint.
+  const inView = useInView(ref)
   const asset = PICTURED.has(item.slot) ? item.asset : undefined
   const file = asset === undefined ? null : iconFile((wear === undefined ? undefined : asset.variants?.[wear]) ?? asset.file)
-  const tinted = useTintedLayer(base, asset === undefined || file === null ? NO_ICON : iconLayer(asset, file))
+  const tinted = useTintedLayer(base, !inView || asset === undefined || file === null ? NO_ICON : iconLayer(asset, file), ICON_TINT_PRIORITY - rank)
   const [failedUrl, setFailedUrl] = useState<string | null>(null)
   if (file === null) return null
+  // Not on screen yet: an empty box of the icon's own class, so the card does not change size when the icon comes in.
+  if (!inView) return <span ref={ref} className={s.tileIcon} aria-hidden="true" data-icon-pending={item.id} />
 
   const common = {
     className: s.tileIcon,
@@ -153,7 +172,7 @@ export function ItemTab({ slot, catalog, owned, hints, draft, wear, showLocked, 
         tabIndex={isOwnPanel && empty ? 0 : undefined}
       >
         {empty ? <p className={s.emptyOwned}>{t('wardrobe.emptyOwned')}</p> : null}
-        {cards.map(({ original, shown, dots }) => {
+        {cards.map(({ original, shown, dots }, index) => {
           const isOwned = owned.has(shown.id)
           const wearing = draft[slot] === shown.id
           const hint = isOwned ? '' : hintFor(shown, hints, t)
@@ -177,19 +196,20 @@ export function ItemTab({ slot, catalog, owned, hints, draft, wear, showLocked, 
           const familyHint = showLocked && !owned.has(original.id) && shown.id !== original.id ? hintFor(original, hints, t) : undefined
 
           return (
-            <ItemCard
-              key={original.id}
-              item={shown}
-              family={original}
-              wear={wear}
-              owned={isOwned}
-              wearing={wearing}
-              hint={hint}
-              variants={variantProps}
-              familyHint={familyHint}
-              reserveDots={reserveDots}
-              onPick={onPick}
-            />
+            <PreviewRank.Provider key={original.id} value={index}>
+              <ItemCard
+                item={shown}
+                family={original}
+                wear={wear}
+                owned={isOwned}
+                wearing={wearing}
+                hint={hint}
+                variants={variantProps}
+                familyHint={familyHint}
+                reserveDots={reserveDots}
+                onPick={onPick}
+              />
+            </PreviewRank.Provider>
           )
         })}
       </div>

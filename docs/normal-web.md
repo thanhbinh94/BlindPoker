@@ -245,6 +245,29 @@ server until **Lưu tủ đồ** is pressed. Saving is `PUT /api/me/avatar` with
 optional slot is *absent* from the object, not `''`), and on success `invalidate(myId)` so the lobby bar
 and every seat plate pick the new face up without a reload.
 
+#### Wardrobe loading (Plan 27, E2)
+
+The five reads still go out together, but in two groups: the stage and the cards draw as soon as the inventory, the
+item catalogue and the avatar catalogue have answered; the saved outfits (drawn only once they arrive, never as five
+empty slots in the meantime) and the achievements a locked card's hint names follow. If any of the five fails, the
+screen shows the same "Không tải được phòng thay đồ", and "Thử lại" asks again for the group that failed. Every picture
+below the stage waits until it is within 200 px of the screen: the saved-outfit heads and the Kiểu tóc portraits are
+`<Chibi lazy>`, and a card's icon (`ItemPreview`, in the wardrobe and the Cửa hàng alike) draws an empty box of the
+icon's size until then. A card icon's tint render queues behind every figure's, the first card of its grid first
+(priority `-200 - index`). The stage stays eager.
+
+Measured by the ops pack (`e2e/ops/08-shop.spec.ts`; Chromium, fresh HTTP cache):
+
+- **S-04** (375×812, DPR 2): opening the wardrobe asks for 11 `/avatar/` pictures, for the 5 figures and cards near the
+  screen. On Mũ with "Hiện cả món chưa có" ticked, 3 requests for the 4 hats near the screen out of 8, where loading
+  every card (`IntersectionObserver` removed, the old behaviour) asks for 7. Back on Kiểu tóc it asks for none.
+- **S-05** ("fast 3G": 1.6 Mbps down, 750 kbps up, 150 ms RTT, from a tap with the app already open): the stage is
+  drawn and the first row of cards is on screen in about 850 ms at both 1366×768 and 375×812. The first row's pictures
+  arrive in about 1.8 s at 1366×768, but about 3.2 s on the phone: at DPR 2 a 72 px Kiểu tóc portrait loads its hair
+  layers at @2x (about 440 KB for the row), because the kit picks the density by the screen and not by the drawn size.
+- In the desktop preview column (`overflow: auto`), the five saved-outfit heads draw on open at 1366×768 and 1920×940.
+  Nothing appears late when the column scrolls, even though `rootMargin` does not apply inside a scrolling ancestor.
+
 ### Adding an item, end to end
 
 1. **The picture.** Generate (or draw) it on the body of its gender per

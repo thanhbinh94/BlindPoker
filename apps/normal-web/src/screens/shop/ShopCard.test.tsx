@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { act, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useTintedLayer } from '@bp/ui-kit'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -133,6 +133,22 @@ describe('ShopCard', () => {
     expect(onTry).toHaveBeenCalledWith(OUTFIT_DEALER)
   })
 
+  // Plan 27 E2: a shelf of cards asks for no picture until a card comes on screen (`ItemPreview`'s own wait).
+  it('draws its icon only once it comes on screen, and an empty box until then', () => {
+    vi.stubGlobal('IntersectionObserver', FakeObserver)
+    FakeObserver.all = []
+    try {
+      const { container } = draw({ entry: entry(OUTFIT_DEALER) })
+      expect(container.querySelector('[data-icon-pending="outfit_dealer01"]')).not.toBeNull()
+      expect(container.querySelectorAll('img')).toHaveLength(0)
+
+      FakeObserver.fire()
+      expect(container.querySelector('img[data-item-icon="outfit_dealer01"]')).not.toBeNull()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('draws a colour as a swatch card and a title as a word card, each with the footer', async () => {
     const user = userEvent.setup()
     const { onTry, unmount } = draw({ entry: entry(HAIRCOLOR_BLUE), row: HAIRCOLOR_BLUE })
@@ -147,3 +163,31 @@ describe('ShopCard', () => {
     expect(screen.getByText('📅 Quà điểm danh')).toBeInTheDocument()
   })
 })
+
+/** A hand-driven `IntersectionObserver` (the pattern of the kit's own `lazy.test.tsx`): `fire` tells every observer its
+ * targets are on screen. jsdom has none, and without one every icon draws at once. */
+class FakeObserver {
+  static all: FakeObserver[] = []
+  readonly targets: Element[] = []
+  constructor(readonly callback: IntersectionObserverCallback) {
+    FakeObserver.all.push(this)
+  }
+  observe(target: Element) {
+    this.targets.push(target)
+  }
+  unobserve() {}
+  disconnect() {}
+  takeRecords() {
+    return []
+  }
+  static fire() {
+    act(() => {
+      for (const o of FakeObserver.all) {
+        o.callback(
+          o.targets.map((target) => ({ target, isIntersecting: true }) as IntersectionObserverEntry),
+          o as unknown as IntersectionObserver,
+        )
+      }
+    })
+  }
+}

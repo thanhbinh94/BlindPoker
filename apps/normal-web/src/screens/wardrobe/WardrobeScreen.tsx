@@ -73,15 +73,23 @@ export interface WardrobeScreenProps {
   initialItem?: string | null
 }
 
+/** What the stage and the cards need: the screen draws as soon as these three reads have answered. */
 interface WardrobeData {
   inventory: InventoryDto
   catalog: ItemDto[]
   avatarCatalog: AvatarCatalogDto
-  outfits: (OutfitDto | null)[]
-  achievements: AchievementDefDto[]
   /** What the check-in schedule names from this month on — absent from an older server, read as none. */
   gifts: DailyGiftNoticeDto[]
 }
+
+/** What can come a moment later (plan 27 E2): the saved outfits, and the achievements a locked card's hint names. */
+interface WardrobeExtras {
+  outfits: (OutfitDto | null)[]
+  achievements: AchievementDefDto[]
+}
+
+/** The hints' achievements until `WardrobeExtras` has answered: none, so a hint reads as the catalogue alone says. */
+const NO_ACHIEVEMENTS: AchievementDefDto[] = []
 
 /** Sets a slot, or drops it entirely when `itemId` is `undefined` — the same rule `PUT /api/me/avatar`
  * reads: an omitted key is an empty slot, a `''` id is a malformed one. */
@@ -126,23 +134,21 @@ type Note = 'saved' | null
  */
 export function WardrobeScreen({ api, playerId, initialItem = null }: WardrobeScreenProps) {
   const { t } = useTranslation('normal')
+  // Five reads, all sent at once, in two groups (plan 27 E2): the stage and the cards draw as soon as the first three
+  // answer, without waiting for the saved outfits or the achievements.
   const wardrobe = useAsync<WardrobeData>(async () => {
-    const [inventory, catalogAnswer, avatarCatalog, outfitsAnswer, achievementsAnswer] = await Promise.all([
-      api.inventory(),
-      api.catalogItems(),
-      api.avatarCatalog(),
-      api.outfits(),
-      api.catalogAchievements(),
-    ])
+    const [inventory, catalogAnswer, avatarCatalog] = await Promise.all([api.inventory(), api.catalogItems(), api.avatarCatalog()])
     return {
       inventory,
       catalog: catalogAnswer.items,
       avatarCatalog,
-      outfits: outfitsAnswer.outfits,
-      achievements: achievementsAnswer.achievements,
       // Read on every mount, so a wardrobe opened after midnight on the 1st reads the new month's list.
       gifts: catalogAnswer.dailyGifts ?? [],
     }
+  })
+  const extrasAsync = useAsync<WardrobeExtras>(async () => {
+    const [outfitsAnswer, achievementsAnswer] = await Promise.all([api.outfits(), api.catalogAchievements()])
+    return { outfits: outfitsAnswer.outfits, achievements: achievementsAnswer.achievements }
   })
   const { invalidate } = useAvatars(api, NO_IDS)
 
@@ -165,6 +171,7 @@ export function WardrobeScreen({ api, playerId, initialItem = null }: WardrobeSc
   const desktop = useMediaQuery(DESKTOP_QUERY)
 
   const loaded = wardrobe.data
+  const extras = extrasAsync.data
   const saved = committed ?? loaded?.inventory.avatar ?? null
   const config = draft ?? saved
   const dirty = draft !== null && saved !== null && !sameConfig(draft, saved)
@@ -214,7 +221,10 @@ export function WardrobeScreen({ api, playerId, initialItem = null }: WardrobeSc
   const bodies = useMemo(() => new Map((loaded?.avatarCatalog.bodies ?? []).map((body) => [body.gender, body])), [loaded])
   const owned = useMemo(() => new Set((loaded?.inventory.items ?? []).map((item) => item.itemId)), [loaded])
   /** What a locked card's hint is worked out from (`hintFor`): the achievements, and the check-in's named gifts. */
-  const hints = useMemo<HintSources>(() => ({ achievements: loaded?.achievements ?? [], gifts: loaded?.gifts ?? [] }), [loaded])
+  const hints = useMemo<HintSources>(
+    () => ({ achievements: extras?.achievements ?? NO_ACHIEVEMENTS, gifts: loaded?.gifts ?? [] }),
+    [loaded, extras],
+  )
   /** Every tab's "n/m đã có" (design §3.1) — computed for all of them up front so `CategoryNav` has a
    * count ready the moment its active group changes, not just for whichever group is showing now. Kiểu tóc counts
    * the draft's gender's hairstyles, the only ones it lists, so it is counted again when the gender changes. */
@@ -251,14 +261,19 @@ export function WardrobeScreen({ api, playerId, initialItem = null }: WardrobeSc
     )
   }
 
-  if (loaded === null || config === null) {
+  // Any of the five reads failing is still the one failure it always was; "Thử lại" asks again for the group that failed.
+  if (loaded === null || config === null || (extras === null && !extrasAsync.loading)) {
+    const retry = (): void => {
+      if (loaded === null) wardrobe.reload()
+      if (extras === null) extrasAsync.reload()
+    }
     return (
       <main className={s.page}>
         <p className={s.alert} role="alert">
           {t('inventory.error')}
         </p>
         <p>
-          <Button variant="ghost" onClick={wardrobe.reload}>
+          <Button variant="ghost" onClick={retry}>
             {t('screens.retry')}
           </Button>
         </p>
@@ -368,17 +383,19 @@ export function WardrobeScreen({ api, playerId, initialItem = null }: WardrobeSc
     />
   )
 
-  const savedNode = (
-    <SavedOutfits
-      api={api}
-      outfits={loaded.outfits}
-      draft={config}
-      items={items}
-      bodies={bodies}
-      onOutfitsChanged={(next) => wardrobe.set({ ...loaded, outfits: next })}
-      onApplied={onOutfitApplied}
-    />
-  )
+  // Nothing until the outfits have answered: five "Trống" slots in the meantime would offer to save over a filled one.
+  const savedNode =
+    extras === null ? null : (
+      <SavedOutfits
+        api={api}
+        outfits={extras.outfits}
+        draft={config}
+        items={items}
+        bodies={bodies}
+        onOutfitsChanged={(next) => extrasAsync.set({ ...extras, outfits: next })}
+        onApplied={onOutfitApplied}
+      />
+    )
 
   // The head of the look group (spec §6.1): Nữ | Nam, on every one of its tabs, and not a tab itself. A row no taller
   // than the sub-tabs' on a desktop; a thumb's `--tap` per button on a phone (`.genderSwitch`).

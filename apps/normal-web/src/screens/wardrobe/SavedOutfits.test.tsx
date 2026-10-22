@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { AvatarConfigDto, BodyDto, ItemDto, NormalApi, OutfitDto } from '../../api.js'
@@ -226,4 +226,52 @@ describe('SavedOutfits', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(viNormal.outfits.error)
   })
+
+  // Plan 27 E2: the five heads are lazy chibis — off screen, a box of the right size and not one image asked for.
+  it('draws a saved outfit’s head only once it comes on screen', () => {
+    vi.stubGlobal('IntersectionObserver', FakeObserver)
+    FakeObserver.all = []
+    try {
+      const outfitOne: OutfitDto = { slot: 1, name: 'Đi làm', config: DRAFT, updatedAt: 0 }
+      renderBar({ outfits: [outfitOne, null, null, null, null] })
+
+      const portrait = screen.getByRole('button', { name: viNormal.outfits.menu.replace('{{name}}', 'Đi làm') })
+      const head = portrait.querySelector('[data-chibi-hash]') as HTMLElement
+      expect(head).toHaveStyle({ width: '54px', height: '54px' })
+      expect(portrait.querySelectorAll('img')).toHaveLength(0)
+
+      FakeObserver.fire()
+      expect(portrait.querySelectorAll('img').length).toBeGreaterThan(0)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
 })
+
+/** A hand-driven `IntersectionObserver` (the pattern of the kit's own `lazy.test.tsx`): `fire` tells every observer its
+ * targets are on screen. jsdom has none, and without one a lazy `Chibi` draws at once. */
+class FakeObserver {
+  static all: FakeObserver[] = []
+  readonly targets: Element[] = []
+  constructor(readonly callback: IntersectionObserverCallback) {
+    FakeObserver.all.push(this)
+  }
+  observe(target: Element) {
+    this.targets.push(target)
+  }
+  unobserve() {}
+  disconnect() {}
+  takeRecords() {
+    return []
+  }
+  static fire() {
+    act(() => {
+      for (const o of FakeObserver.all) {
+        o.callback(
+          o.targets.map((target) => ({ target, isIntersecting: true }) as IntersectionObserverEntry),
+          o as unknown as IntersectionObserver,
+        )
+      }
+    })
+  }
+}

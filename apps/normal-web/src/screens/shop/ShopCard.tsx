@@ -75,6 +75,9 @@ export interface ShopCardProps {
  * Every card is drawn as the wardrobe draws an owned one — full colour, no lock line — and every card is pickable: in
  * the shop a press is a try-on, and an item worth selling is worth seeing in colour. What the player can do about it is
  * the footer's to say, so the card's own "locked" chrome would only repeat it, greyed.
+ *
+ * The picture is the wardrobe's `ItemPreview`, which waits until the card is near the screen (plan 27 E2): a shelf of
+ * cards asks for the icons the player can see, not for every one on the page.
  */
 export function ShopCard({ entry, item, lang, balance, rank, wear, trying, onTry, onBuy }: ShopCardProps) {
   const { t } = useTranslation('normal')

@@ -51,7 +51,8 @@ export function HairStyleTab({ catalog, items, bodies, owned, hints, draft, show
     if (draft.eyeColor !== undefined) look.eyeColor = draft.eyeColor
     if (draft.skinColor !== undefined) look.skinColor = draft.skinColor
     const subject = chibiFromApi(look, items, bodies)
-    return subject === null ? undefined : <Chibi subject={subject} frame="head" size={portraitSize} />
+    // Lazy (plan 27 E2): a portrait off screen asks for nothing until it comes near, and queues behind the stage.
+    return subject === null ? undefined : <Chibi subject={subject} frame="head" size={portraitSize} lazy />
   }
 
   return (

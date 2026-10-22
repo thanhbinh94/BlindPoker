@@ -180,7 +180,8 @@ export function SavedOutfits({ api, outfits, draft, items, bodies, onOutfitsChan
                     {PLUS_GLYPH}
                   </span>
                 ) : (
-                  <Chibi subject={chibi} frame="head" size={54} />
+                  // Lazy (plan 27 E2): the column can scroll, and the five heads wait behind the stage and the cards.
+                  <Chibi subject={chibi} frame="head" size={54} lazy />
                 )}
               </button>
               <span className={s.outfitName}>{outfit?.name ?? t('outfits.empty')}</span>
