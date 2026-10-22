@@ -17,15 +17,6 @@ export interface CreateBlindInput {
 }
 
 /**
- * What a seat needs to cover a whole Blind hand: the ante, plus the play in play-or-fold. Takes only the two fields
- * it reads, so a client can ask it of the room config it was sent (the "not enough points" hint). The engine no
- * longer reads it (plan 27 D1): any seat with points left is dealt and goes all in for what it has.
- */
-export function blindRequiredStack(rules: Pick<BlindRules, 'decisionMode' | 'fixedWager'>): number {
-  return rules.decisionMode === 'playOrFold' ? rules.fixedWager * 2 : rules.fixedWager
-}
-
-/**
  * The most a Blind seat brings to the table: five wagers (spec 2026-09-29). A player with less sits down with all of
  * it; a seat plays down to its last point and is stood up at 0 (Plan 27). Takes only the field it reads, so a client
  * can ask it of the room config it was sent.

@@ -533,12 +533,14 @@ its own.
 *Tracked:* `apps/normal-server/src/gm/gm-service.ts` (`setShopPrices`, `setShopFeatured`, `setWelcomeChoices`,
 `setReputationRules`, `setReputationRanks`).
 
-**`blindRequiredStack` is still exported from `@bp/core` and used by nothing but its own test.** Plan 27 dropped the
-rule it encoded (two wagers to play a play-or-fold hand); the table limit (`blindTableLimit`) and one wager to sit are
-what the room uses now.
-*Why it stays:* removing a public export is a cleanup with no behaviour; parked for the final wave of Plan 27, and this
-entry goes when it is removed.
-*Tracked:* `packages/core/src/hand/blind.ts`, `packages/core/src/index.ts`.
+**The featured-week editor offers items by today's locks, not by each week's.** "Kệ tuần này" lists, for every one of
+the nine weeks, the items that sell today (`GET /api/gm/shop` reuses the shop's view for the locks), while the server
+judges each week at its own start (`requireSellable`). So this month's gift, which sells from next month (R20), is not
+offered for a week in next month, though the server would take it there.
+*Why it stays:* per-week sellable lists would be a second lock computation per week for a rare case; the GM can set
+the later week once it is the current month (B4 review, accepted).
+*Tracked:* `apps/normal-web/src/screens/gm/FeaturedEditor.tsx`; `apps/normal-server/src/gm/gm-service.ts`
+(`setShopFeatured`).
 
 ---
 
