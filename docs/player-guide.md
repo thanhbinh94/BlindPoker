@@ -81,7 +81,7 @@ Quà được tính theo tháng của ngày bạn bấm nhận. Tháng 2/2027 c�
 
 ### Quà chào mừng (bản Normal)
 
-Lần đầu bạn vào "Sảnh chờ", hộp "Chào mừng đến Blind Luck Poker" mở ra: "Chọn một bộ đồ để bắt đầu", với ba món hiếm (mặc định là "Đồng phục chia bài", "Áo dài Tết đỏ" và "Nón lá"). Bấm một món để thấy nhân vật của bạn mặc thử, rồi bấm "Nhận": món đó vào tủ đồ, được mặc lên nhân vật ngay, và bạn được thêm **100 danh vọng** (đủ để lên bậc "Tay bài"). Bấm "Vào chơi" để đóng hộp.
+Lần đầu bạn vào "Sảnh chờ", hộp "Chào mừng đến Blind Luck Poker" mở ra: "Chọn một món đồ để bắt đầu", với ba món hiếm (mặc định là "Đồng phục chia bài", "Áo dài Tết đỏ" và "Nón lá"). Bấm một món để thấy nhân vật của bạn mặc thử, rồi bấm "Nhận": món đó vào tủ đồ, được mặc lên nhân vật ngay, và bạn được thêm **100 danh vọng** (đủ để lên bậc "Tay bài"). Bấm "Vào chơi" để đóng hộp.
 
 - Chưa muốn chọn thì bấm "Để sau". Sảnh giữ nút "🎁 Quà chào mừng" để bạn mở lại bất cứ lúc nào. Hộp chỉ tự mở một lần trên mỗi trình duyệt; sang trình duyệt hay thiết bị khác thì nó tự mở thêm một lần nữa cho tới khi bạn nhận.
 - Món bạn đã có hiện mờ với "✓ Đã có" và không chọn được. Nếu bạn đã có cả ba món, hộp chỉ còn nút "Nhận 100 danh vọng".

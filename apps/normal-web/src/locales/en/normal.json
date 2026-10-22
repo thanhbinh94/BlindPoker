@@ -705,7 +705,7 @@
   },
   "welcome": {
     "title": "Welcome to Blind Luck Poker",
-    "lead": "Pick an outfit to start with",
+    "lead": "Pick an item to start with",
     "leadAllOwned": "You already own all three welcome gifts, so take the reputation instead.",
     "choices": "Welcome gifts",
     "owned": "✓ Owned",
