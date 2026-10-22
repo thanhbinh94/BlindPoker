@@ -4,7 +4,8 @@
  * The migration is additive: reputation (two columns and a claim-once stamp on `players`, an event log, the rules and
  * the rank thresholds a GM edits), the shop's tables (prices, the weekly shelf, a key/value config holding the welcome
  * choices), the newcomer calendar, and `daily_logins.consecutive`. It seeds the rules, the ranks and the welcome
- * choices once, and lifts a check-in count broken by a missed day this month back to the month's claims (spec G).
+ * choices once, starts `consecutive` from the old `streak` (which was the consecutive run), and lifts a check-in count
+ * broken by a missed day this month back to the month's claims (spec G).
  * What is checked here is that the migrator picks 0006 up (its journal `when` must be newer than 0005's, or it is
  * skipped without a word), that every statement is guarded (a second run changes nothing) and that the seeds and the
  * data step land exactly once.
@@ -24,9 +25,13 @@ const ECONOMY_ZONE = 'Asia/Ho_Chi_Minh'
 
 const PLAYER_A = '11111111-1111-4111-8111-111111111111'
 const PLAYER_B = '22222222-2222-4222-8222-222222222222'
+const PLAYER_C = '33333333-3333-4333-8333-333333333333'
+const PLAYER_D = '44444444-4444-4444-8444-444444444444'
 /** The `when` of `0005_plan26` in the journal: 0006 must be newer, or an upgraded database never runs it. */
 const WHEN_0005 = 1792459114276
 const NEW_TABLES = ['newcomer_progress', 'reputation_events', 'reputation_ranks', 'reputation_rules', 'shop_config', 'shop_featured', 'shop_prices']
+/** The tables a GM edits, whose `updated_by` must not be a foreign key (see `schema.ts`). */
+const CONFIG_TABLES = ['reputation_rules', 'reputation_ranks', 'shop_prices', 'shop_featured', 'shop_config']
 /** Every table a second run must leave alone, row for row. */
 const COUNTED = ['players', 'daily_logins', ...NEW_TABLES]
 
@@ -166,24 +171,56 @@ describe('0006_plan27', () => {
     await migrateTo0005()
     await seedPlayer(PLAYER_A, 'a')
     await seedPlayer(PLAYER_B, 'b')
+    await seedPlayer(PLAYER_C, 'c')
+    await seedPlayer(PLAYER_D, 'd')
     const monthBefore = economyMonth()
     await client.exec(`INSERT INTO "daily_logins" ("player_id", "streak", "claimed_days", "month") VALUES ('${PLAYER_A}', 2, 9, '${monthBefore}')`)
     await client.exec(`INSERT INTO "daily_logins" ("player_id", "streak", "claimed_days", "month") VALUES ('${PLAYER_B}', 1, 5, '2026-01')`)
+    // Already above the month's claims (never lowered), and a row with no month yet (never matched).
+    await client.exec(`INSERT INTO "daily_logins" ("player_id", "streak", "claimed_days", "month") VALUES ('${PLAYER_C}', 5, 3, '${monthBefore}')`)
+    await client.exec(`INSERT INTO "daily_logins" ("player_id", "streak", "claimed_days", "month") VALUES ('${PLAYER_D}', 2, 4, '')`)
 
     await runMigrations(db(), 'pglite')
     await reapply0006()
     const monthAfter = economyMonth()
 
-    const after = await rows<{ player_id: string; streak: number; consecutive: number }>(`SELECT "player_id", "streak", "consecutive" FROM "daily_logins" ORDER BY "player_id"`)
+    const after = await rows<{ player_id: string; streak: number; claimed_days: number; month: string; consecutive: number }>(
+      `SELECT "player_id", "streak", "claimed_days", "month", "consecutive" FROM "daily_logins" ORDER BY "player_id"`,
+    )
+    expect(after.map((r) => r.player_id)).toEqual([PLAYER_A, PLAYER_B, PLAYER_C, PLAYER_D])
     // A run that straddles the economy's month boundary may have migrated under either month; only then is A's row allowed to stay at 2.
     const expectedA = monthBefore === monthAfter ? [9] : [2, 9]
     expect(expectedA).toContain(after[0]!.streak)
-    expect(after.map((r) => r.player_id)).toEqual([PLAYER_A, PLAYER_B])
-    expect(after[1]).toEqual({ player_id: PLAYER_B, streak: 1, consecutive: 0 })
-    expect(after[0]!.consecutive).toBe(0)
+    // Every row's old `streak` was its run of consecutive days, so that is where `consecutive` starts.
+    expect(after[0]!.consecutive).toBe(2)
+    expect(after[1]).toEqual({ player_id: PLAYER_B, streak: 1, claimed_days: 5, month: '2026-01', consecutive: 1 })
+    expect(after[2]).toEqual({ player_id: PLAYER_C, streak: 5, claimed_days: 3, month: monthBefore, consecutive: 5 })
+    expect(after[3]).toEqual({ player_id: PLAYER_D, streak: 2, claimed_days: 4, month: '', consecutive: 2 })
   })
 
-  it('refuses a non-positive reputation delta, a repeated event, a rank outside 1..5 and a negative price', async () => {
+  it('keeps a player\'s consecutive run when the streak is lifted, and a second run changes nothing', async () => {
+    await migrateTo0005()
+    await seedPlayer(PLAYER_A, 'a')
+    await seedPlayer(PLAYER_B, 'b')
+    const monthBefore = economyMonth()
+    // Six days in a row so far, nine claims this month: the run must survive the lift.
+    await client.exec(`INSERT INTO "daily_logins" ("player_id", "streak", "claimed_days", "month") VALUES ('${PLAYER_A}', 6, 9, '${monthBefore}')`)
+    // Never claimed: stays at zero.
+    await client.exec(`INSERT INTO "daily_logins" ("player_id") VALUES ('${PLAYER_B}')`)
+
+    await runMigrations(db(), 'pglite')
+    const monthAfter = economyMonth()
+    const read = () => rows<{ player_id: string; streak: number; consecutive: number }>(`SELECT "player_id", "streak", "consecutive" FROM "daily_logins" ORDER BY "player_id"`)
+    const once = await read()
+    expect(once[0]!.consecutive).toBe(6)
+    expect(monthBefore === monthAfter ? [9] : [6, 9]).toContain(once[0]!.streak)
+    expect(once[1]).toEqual({ player_id: PLAYER_B, streak: 0, consecutive: 0 })
+
+    await reapply0006()
+    expect(await read()).toEqual(once)
+  })
+
+  it('refuses a non-positive reputation delta, a repeated event, a rank outside 1..5, a negative price and a negative rule amount or threshold', async () => {
     await migrateTo0005()
     await runMigrations(db(), 'pglite')
     await seedPlayer(PLAYER_A, 'a')
@@ -195,6 +232,11 @@ describe('0006_plan27', () => {
     await expect(client.exec(`INSERT INTO "shop_prices" ("item_id", "price_points", "min_rank", "enabled") VALUES ('x', 10, 0, true)`)).rejects.toThrow()
     await expect(client.exec(`INSERT INTO "shop_prices" ("item_id", "price_points", "min_rank", "enabled") VALUES ('x', -1, 1, true)`)).rejects.toThrow()
     await client.exec(`INSERT INTO "shop_prices" ("item_id", "price_points", "min_rank", "enabled") VALUES ('x', 10000, 1, true)`)
+    await expect(client.exec(`UPDATE "reputation_rules" SET "amount" = -1 WHERE "key" = 'hand_won'`)).rejects.toThrow()
+    await expect(client.exec(`INSERT INTO "reputation_rules" ("key", "amount") VALUES ('custom', -5)`)).rejects.toThrow()
+    await expect(client.exec(`UPDATE "reputation_ranks" SET "threshold" = -1 WHERE "rank" = 2`)).rejects.toThrow()
+    // Zero is allowed: a GM may switch a source off, and rank 1 starts at 0.
+    await client.exec(`UPDATE "reputation_rules" SET "amount" = 0 WHERE "key" = 'hand_played'`)
 
     await client.exec(`INSERT INTO "newcomer_progress" ("player_id") VALUES ('${PLAYER_A}')`)
     expect(await rows(`SELECT "day", "claimed_days", "finished_at", "last_day_key" FROM "newcomer_progress"`)).toEqual([
@@ -204,6 +246,23 @@ describe('0006_plan27', () => {
     await client.exec(`DELETE FROM "users" WHERE "id" = '${PLAYER_A}'`)
     expect(await rows(`SELECT 1 FROM "reputation_events"`)).toEqual([])
     expect(await rows(`SELECT 1 FROM "newcomer_progress"`)).toEqual([])
+  })
+
+  it('the configuration tables carry no owner key, so deleting the GM who edited a row keeps the row', async () => {
+    await migrateTo0005()
+    await runMigrations(db(), 'pglite')
+    await reapply0006()
+    const keys = await rows<{ table_name: string; constraint_name: string }>(
+      `SELECT "table_name", "constraint_name" FROM information_schema.table_constraints
+       WHERE "constraint_type" = 'FOREIGN KEY' AND "table_name" = ANY('{${CONFIG_TABLES.join(',')}}')`,
+    )
+    expect(keys).toEqual([])
+
+    await seedPlayer(PLAYER_A, 'a')
+    await client.exec(`UPDATE "reputation_rules" SET "amount" = 4, "updated_by" = '${PLAYER_A}' WHERE "key" = 'hand_won'`)
+    await client.exec(`DELETE FROM "users" WHERE "id" = '${PLAYER_A}'`)
+    expect(await rows(`SELECT "amount", "updated_by" FROM "reputation_rules" WHERE "key" = 'hand_won'`)).toEqual([{ amount: 4, updated_by: PLAYER_A }])
+    expect(await rows(`SELECT 1 FROM "reputation_rules"`)).toHaveLength(8)
   })
 
   it('the journal entry is newer than 0005', () => {

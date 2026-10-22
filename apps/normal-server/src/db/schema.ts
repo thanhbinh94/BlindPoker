@@ -305,13 +305,18 @@ export const reputationEvents = pgTable('reputation_events', {
   index('reputation_events_player_created_idx').on(t.playerId, t.createdAt),
 ])
 
-/** Plan 27: how much reputation each source pays (`hand_played`, `hand_won`, `daily_login`, …). A GM edits it. */
+/**
+ * Plan 27: how much reputation each source pays (`hand_played`, `hand_won`, `daily_login`, …). A GM edits it; 0 turns a
+ * source off, and a negative amount is refused (reputation only grows).
+ */
 export const reputationRules = pgTable('reputation_rules', {
   key: text('key').primaryKey(),
   amount: integer('amount').notNull(),
   updatedBy: uuid('updated_by'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-})
+}, (t) => [
+  check('reputation_rules_amount_non_negative', sql`${t.amount} >= 0`),
+])
 
 /** Plan 27: the reputation each rank 1..5 starts at. A GM edits it; raising one never lowers `players.rank`. */
 export const reputationRanks = pgTable('reputation_ranks', {
@@ -321,6 +326,7 @@ export const reputationRanks = pgTable('reputation_ranks', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   check('reputation_ranks_rank_range', sql`${t.rank} BETWEEN 1 AND 5`),
+  check('reputation_ranks_threshold_non_negative', sql`${t.threshold} >= 0`),
 ])
 
 /**

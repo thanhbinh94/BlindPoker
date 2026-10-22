@@ -1407,6 +1407,10 @@
         "reputation_ranks_rank_range": {
           "name": "reputation_ranks_rank_range",
           "value": "\"reputation_ranks\".\"rank\" BETWEEN 1 AND 5"
+        },
+        "reputation_ranks_threshold_non_negative": {
+          "name": "reputation_ranks_threshold_non_negative",
+          "value": "\"reputation_ranks\".\"threshold\" >= 0"
         }
       },
       "isRLSEnabled": false
@@ -1446,7 +1450,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "reputation_rules_amount_non_negative": {
+          "name": "reputation_rules_amount_non_negative",
+          "value": "\"reputation_rules\".\"amount\" >= 0"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.sessions": {
