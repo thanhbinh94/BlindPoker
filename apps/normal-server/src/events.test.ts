@@ -14,7 +14,7 @@ function recorder(): { log: Logger; errors: { msg: string; data?: object }[] } {
   return { log, errors }
 }
 
-const CLAIMED: AppEvent = { type: 'DAILY_CLAIMED', playerId: 'p1', day: 1, streak: 1 }
+const CLAIMED: AppEvent = { type: 'DAILY_CLAIMED', playerId: 'p1', day: 1, streak: 1, consecutive: 1 }
 
 const tick = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
 

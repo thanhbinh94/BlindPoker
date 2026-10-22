@@ -439,15 +439,22 @@ export function createGmService(deps: GmServiceDeps): GmService {
             targetPlayerId: t.id,
             amount: undone.points,
             reason: why,
-            details: { previousStreak: login.streak, previousLastClaimDate: login.lastClaimDate, undone },
+            details: { previousStreak: login.streak, previousConsecutive: login.consecutive, previousLastClaimDate: login.lastClaimDate, undone },
           })
           // The debit is the first thing that can fail: points already spent roll back the log line with it.
           if (undone.points > 0) await creditWithin(tx, [{ playerId: t.id, delta: -undone.points, reason: 'gm_checkin_undo', refId: `gm:${String(actionId)}` }])
           for (const itemId of undone.itemIds) await deps.inventory.revoke(tx, t.id, itemId)
           // Yesterday and one step back: the next claim is then exactly the one just undone (same day, same points).
+          // The consecutive run steps back too, or the reclaim — "yesterday" now — would count today twice
+          // (§13.1 as amended by Plan 27 Part G).
           await tx
             .update(dailyLogins)
-            .set({ lastClaimDate: addDaysKey(today, -1), streak: Math.max(login.streak - 1, 0), claimedDays: Math.max(login.claimedDays - 1, 0) })
+            .set({
+              lastClaimDate: addDaysKey(today, -1),
+              streak: Math.max(login.streak - 1, 0),
+              consecutive: Math.max(login.consecutive - 1, 0),
+              claimedDays: Math.max(login.claimedDays - 1, 0),
+            })
             .where(eq(dailyLogins.playerId, t.id))
           await tx.update(playerStats).set({ totalLoginDays: sql`greatest(${playerStats.totalLoginDays} - 1, 0)` }).where(eq(playerStats.playerId, t.id))
           const [after] = await tx.select({ balance: players.balance }).from(players).where(eq(players.id, t.id))

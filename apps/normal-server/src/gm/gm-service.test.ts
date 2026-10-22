@@ -178,9 +178,15 @@ describe('GmService — check-in', () => {
   })
 
   /** Day 7 of a streak: points 15,000 and a random common, so one claim moves points, an item and the counters. */
-  async function seedStreak(playerId: string, streak: number, lastClaimDate: string): Promise<void> {
-    await db.execute(sql`update daily_logins set streak = ${streak}, last_claim_date = ${lastClaimDate}, month = '2026-09', claimed_days = ${streak} where player_id = ${playerId}`)
+  async function seedStreak(playerId: string, streak: number, lastClaimDate: string, consecutive = streak): Promise<void> {
+    await db.execute(
+      sql`update daily_logins set streak = ${streak}, consecutive = ${consecutive}, last_claim_date = ${lastClaimDate}, month = '2026-09', claimed_days = ${streak} where player_id = ${playerId}`,
+    )
   }
+  const consecutiveOf = async (playerId: string) =>
+    Number((rowsOf<{ n: number | string }>(await db.execute(sql`select consecutive as n from daily_logins where player_id = ${playerId}`)))[0]?.n)
+  const loginStreakOf = async (playerId: string) =>
+    Number((rowsOf<{ n: number | string }>(await db.execute(sql`select login_streak as n from player_stats where player_id = ${playerId}`)))[0]?.n)
   const loginRow = async (playerId: string) =>
     (rowsOf<{ streak: number; last: string | null; days: number }>(await db.execute(sql`select streak, to_char(last_claim_date, 'YYYY-MM-DD') as last, claimed_days as days from daily_logins where player_id = ${playerId}`)))[0]
   const loginDays = async (playerId: string) =>
@@ -350,6 +356,47 @@ describe('GmService — check-in', () => {
     expect(await h.app.services.repos.balances.get(me.playerId)).toBe(base)
     expect(await itemRows(me.playerId)).toEqual([])
     expect(await loginRow(me.playerId)).toEqual({ streak: 6, last: YESTERDAY, days: 6 })
+  })
+
+  it('resetCheckin steps the consecutive run back with the month count and logs it, so a reclaim counts the run once', async () => {
+    // Day 7 of the month after eleven days in a row (the run began last month).
+    await seedStreak(me.playerId, 6, YESTERDAY, 11)
+    await settle()
+    const claim = await h.app.services.economy.claimDaily(me.playerId, clock)
+    if (!claim.ok) throw new Error('the claim was refused')
+    expect(claim).toMatchObject({ day: 7, streak: 7, consecutive: 12 })
+    expect(await consecutiveOf(me.playerId)).toBe(12)
+
+    const r = await gmAt.resetCheckin(actor(boss), me.playerId, 'điểm danh nhầm tài khoản')
+    expect(await consecutiveOf(me.playerId)).toBe(11)
+    expect(await loginRow(me.playerId)).toEqual({ streak: 6, last: YESTERDAY, days: 6 })
+    const [log] = rowsOf<{ details: Record<string, unknown> }>(await db.execute(sql`select details from gm_actions where id = ${r.actionId}`))
+    expect(log?.details).toMatchObject({ previousStreak: 7, previousConsecutive: 12, previousLastClaimDate: TODAY })
+
+    clock += 60_000
+    h.setNow(clock)
+    const again = await h.app.services.economy.claimDaily(me.playerId, clock)
+    expect(again).toMatchObject({ ok: true, day: 7, streak: 7, consecutive: 12 })
+    expect(await consecutiveOf(me.playerId)).toBe(12)
+    expect(await loginStreakOf(me.playerId)).toBe(12)
+  })
+
+  it('resetCheckin never steps a run of one below zero, and the reclaim starts the run at one again', async () => {
+    // Claimed on the 1st, missed the 2nd and 3rd: today's claim is day 7 of the month but day 1 of a run.
+    await seedStreak(me.playerId, 6, '2026-09-01', 4)
+    await settle()
+    const claim = await h.app.services.economy.claimDaily(me.playerId, clock)
+    expect(claim).toMatchObject({ ok: true, day: 7, consecutive: 1 })
+
+    const r = await gmAt.resetCheckin(actor(boss), me.playerId, 'điểm danh nhầm tài khoản')
+    expect(await consecutiveOf(me.playerId)).toBe(0)
+    const [log] = rowsOf<{ details: Record<string, unknown> }>(await db.execute(sql`select details from gm_actions where id = ${r.actionId}`))
+    expect(log?.details).toMatchObject({ previousConsecutive: 1 })
+
+    clock += 60_000
+    h.setNow(clock)
+    expect(await h.app.services.economy.claimDaily(me.playerId, clock)).toMatchObject({ ok: true, day: 7, consecutive: 1 })
+    expect(await consecutiveOf(me.playerId)).toBe(1)
   })
 })
 

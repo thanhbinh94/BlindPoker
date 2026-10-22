@@ -207,15 +207,22 @@ describe('the other events', () => {
     expect(updates.at(-1)!.changedMetrics).toEqual(['roomsJoined'])
   })
 
-  it('counts login days from the check-in, taking the streak the economy service decided', async () => {
+  it('counts login days from the check-in, taking the consecutive run the economy service decided', async () => {
     const playerId = await seedPlayer()
-    await bus.publish({ type: 'DAILY_CLAIMED', playerId, day: 1, streak: 1 })
-    await bus.publish({ type: 'DAILY_CLAIMED', playerId, day: 2, streak: 2 })
-    await bus.publish({ type: 'DAILY_CLAIMED', playerId, day: 3, streak: 3 })
-    // A missed day: the current streak drops, the best one does not.
-    await bus.publish({ type: 'DAILY_CLAIMED', playerId, day: 1, streak: 1 })
+    await bus.publish({ type: 'DAILY_CLAIMED', playerId, day: 1, streak: 1, consecutive: 1 })
+    await bus.publish({ type: 'DAILY_CLAIMED', playerId, day: 2, streak: 2, consecutive: 2 })
+    await bus.publish({ type: 'DAILY_CLAIMED', playerId, day: 3, streak: 3, consecutive: 3 })
+    // A missed day: the month's count goes on, the current run drops, the best one does not.
+    await bus.publish({ type: 'DAILY_CLAIMED', playerId, day: 4, streak: 4, consecutive: 1 })
 
     expect(await stats.get(playerId)).toMatchObject({ totalLoginDays: 4, loginStreak: 1, bestLoginStreak: 3 })
+  })
+
+  it("login streak follows consecutive days, not the month's count", async () => {
+    const playerId = await seedPlayer()
+    await bus.publish({ type: 'DAILY_CLAIMED', playerId, day: 9, streak: 9, consecutive: 1 })
+
+    expect(await stats.get(playerId)).toMatchObject({ totalLoginDays: 1, loginStreak: 1, bestLoginStreak: 1 })
   })
 
   it('leaves the counters alone for an event it does not handle', async () => {

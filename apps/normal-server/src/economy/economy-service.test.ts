@@ -106,11 +106,11 @@ async function seedPlayer(balance = 0): Promise<string> {
   return id
 }
 
-/** Fast-forwards the check-in state instead of claiming twenty-seven times to reach day 28. */
-async function seedStreak(playerId: string, streak: number, lastClaimDay: number): Promise<void> {
+/** Fast-forwards the check-in state instead of claiming twenty-seven times to reach day 28 (a run of `consecutive` days, `streak` by default). */
+async function seedStreak(playerId: string, streak: number, lastClaimDay: number, consecutive = streak): Promise<void> {
   await db
     .update(dailyLogins)
-    .set({ streak, lastClaimDate: octKey(lastClaimDay), month: '2026-10', claimedDays: streak })
+    .set({ streak, consecutive, lastClaimDate: octKey(lastClaimDay), month: '2026-10', claimedDays: streak })
     .where(eq(dailyLogins.playerId, playerId))
 }
 
@@ -170,15 +170,15 @@ describe('claimDaily', () => {
 
     const result = await economy.claimDaily(playerId, OCT(1))
 
-    expect(result).toEqual({ ok: true, day: 1, points: 5_000, item: null, items: [], fallbackPoints: 0, balance: 5_000, streak: 1 })
+    expect(result).toEqual({ ok: true, day: 1, points: 5_000, item: null, items: [], fallbackPoints: 0, balance: 5_000, streak: 1, consecutive: 1 })
     expect(await ledger(playerId)).toEqual([{ amount: 5_000, reason: 'daily_login', refId: `daily:${playerId}:2026-10-01` }])
     expect(await balanceOf(playerId)).toBe(5_000)
 
     const [row] = await db.select().from(dailyLogins).where(eq(dailyLogins.playerId, playerId))
-    expect(row).toMatchObject({ streak: 1, lastClaimDate: '2026-10-01', month: '2026-10', claimedDays: 1 })
+    expect(row).toMatchObject({ streak: 1, consecutive: 1, lastClaimDate: '2026-10-01', month: '2026-10', claimedDays: 1 })
 
     // Announced only after the commit, so the stats module never counts a login day that rolled back.
-    expect(published).toEqual([{ type: 'DAILY_CLAIMED', playerId, day: 1, streak: 1 }])
+    expect(published).toEqual([{ type: 'DAILY_CLAIMED', playerId, day: 1, streak: 1, consecutive: 1 }])
     expect(balanceCalls).toEqual([{ playerId, balance: 5_000 }])
   })
 
@@ -201,28 +201,33 @@ describe('claimDaily', () => {
 
     expect(await balanceOf(playerId)).toBe(5_000 + 6_000 + 7_000)
     const [row] = await db.select().from(dailyLogins).where(eq(dailyLogins.playerId, playerId))
-    expect(row).toMatchObject({ streak: 3, claimedDays: 3 })
+    expect(row).toMatchObject({ streak: 3, consecutive: 3, claimedDays: 3 })
   })
 
-  it('restarts at day 1 after a missed day, but keeps counting the month’s claims', async () => {
+  it('a missed day lights the next tile of the month and restarts only the consecutive run', async () => {
     const playerId = await seedPlayer()
     await economy.claimDaily(playerId, OCT(1))
     await economy.claimDaily(playerId, OCT(2))
+    published = []
 
     const result = await economy.claimDaily(playerId, OCT(4))
-    expect(result).toMatchObject({ ok: true, day: 1, streak: 1, points: 5_000 })
+    expect(result).toMatchObject({ ok: true, day: 3, streak: 3, consecutive: 1, points: 7_000 })
     const [row] = await db.select().from(dailyLogins).where(eq(dailyLogins.playerId, playerId))
-    expect(row).toMatchObject({ streak: 1, claimedDays: 3 })
+    expect(row).toMatchObject({ streak: 3, consecutive: 1, claimedDays: 3 })
+    expect(published).toEqual([{ type: 'DAILY_CLAIMED', playerId, day: 3, streak: 3, consecutive: 1 }])
+
+    // The run then grows again from the day after.
+    expect(await economy.claimDaily(playerId, OCT(5))).toMatchObject({ day: 4, streak: 4, consecutive: 2 })
   })
 
-  it('restarts the streak and the month counter when the month rolls over', async () => {
+  it('restarts the month counter when the month rolls over, and carries the consecutive run across it', async () => {
     const playerId = await seedPlayer()
-    await seedStreak(playerId, 5, 31)
+    await seedStreak(playerId, 5, 31, 9)
 
     const result = await economy.claimDaily(playerId, Date.UTC(2026, 10, 1, 12, 0))
-    expect(result).toMatchObject({ ok: true, day: 1, streak: 1 })
+    expect(result).toMatchObject({ ok: true, day: 1, streak: 1, consecutive: 10 })
     const [row] = await db.select().from(dailyLogins).where(eq(dailyLogins.playerId, playerId))
-    expect(row).toMatchObject({ streak: 1, month: '2026-11', claimedDays: 1, lastClaimDate: '2026-11-01' })
+    expect(row).toMatchObject({ streak: 1, consecutive: 10, month: '2026-11', claimedDays: 1, lastClaimDate: '2026-11-01' })
   })
 
   it('pays days 29–31 what day 29 pays, and caps the streak at 31', async () => {
@@ -597,8 +602,10 @@ describe('dailyStatus', () => {
     expect((await economy.dailyStatus(playerId, OCT(1))).calendar[6]!.points).toBe(15_000)
 
     await economy.claimDaily(playerId, OCT(1))
-    expect(await economy.dailyStatus(playerId, OCT(1))).toMatchObject({ claimable: false, day: 1, streak: 1 })
-    expect(await economy.dailyStatus(playerId, OCT(2))).toMatchObject({ claimable: true, day: 2, streak: 2, reward: 6_000 })
+    expect(await economy.dailyStatus(playerId, OCT(1))).toMatchObject({ claimable: false, day: 1, streak: 1, consecutive: 1 })
+    expect(await economy.dailyStatus(playerId, OCT(2))).toMatchObject({ claimable: true, day: 2, streak: 2, consecutive: 2, reward: 6_000 })
+    // A day missed: the next tile is still day 2, and the run it would start is 1.
+    expect(await economy.dailyStatus(playerId, OCT(3))).toMatchObject({ claimable: true, day: 2, streak: 2, consecutive: 1, reward: 6_000 })
   })
 
   it('describes the calendar of the month it is asked in: October names the pair on day 28, November adds the top hat', async () => {
@@ -640,7 +647,7 @@ describe('dailyStatus', () => {
   })
 
   it('answers for a player with no row at all rather than throwing', async () => {
-    expect(await economy.dailyStatus('not-a-uuid', OCT(1))).toMatchObject({ claimable: true, day: 1, streak: 1 })
+    expect(await economy.dailyStatus('not-a-uuid', OCT(1))).toMatchObject({ claimable: true, day: 1, streak: 1, consecutive: 1 })
   })
 })
 

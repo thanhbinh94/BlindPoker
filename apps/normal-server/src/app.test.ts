@@ -998,7 +998,7 @@ describe('a real boot', () => {
     })
 
     // Nobody holds this promise, exactly as `onDomainEvent` publishes it.
-    void h.app.services.bus.publish({ type: 'DAILY_CLAIMED', playerId: 'p1', day: 1, streak: 1 })
+    void h.app.services.bus.publish({ type: 'DAILY_CLAIMED', playerId: 'p1', day: 1, streak: 1, consecutive: 1 })
     const closed = h.app.close().then(() => {
       // Read inside the continuation: the assertion is about ordering, not about a later poll.
       expect(landed).toBe(true)

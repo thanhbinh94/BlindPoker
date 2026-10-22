@@ -45,7 +45,10 @@ export interface DailyStatus {
   claimable: boolean
   /** The reward tier this claim is (or was) for. */
   day: number
+  /** The month's claim count this claim makes (or made) — §13.1 as amended by Plan 27 Part G; `day` is it, capped at 31. */
   streak: number
+  /** The run of consecutive calendar days this claim makes (or made), across month boundaries. */
+  consecutive: number
   reward: number
   /** The tier's item column as a marker — a rarity for a draw, the first id for a fixed gift (its calendar row's `items` has them all). */
   item: string | null
@@ -67,7 +70,10 @@ export interface DailyClaimOk {
   /** §13.2's substitute when a random tier had nothing unowned left; 0 otherwise. */
   fallbackPoints: number
   balance: number
+  /** The month's claim count after this claim (§13.1 as amended by Plan 27 Part G). */
   streak: number
+  /** The run of consecutive calendar days after this claim — what the login-streak achievements count. */
+  consecutive: number
 }
 
 export type DailyClaimResult = DailyClaimOk | { ok: false; code: 'ALREADY_CLAIMED' }
@@ -147,9 +153,18 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
   })
 
   /** The `daily_logins` row, locked for the duration of the caller's transaction. */
-  async function lockDaily(tx: AppTx, playerId: string): Promise<{ streak: number; lastClaimDate: string | null; month: string; claimedDays: number }> {
+  async function lockDaily(
+    tx: AppTx,
+    playerId: string,
+  ): Promise<{ streak: number; consecutive: number; lastClaimDate: string | null; month: string; claimedDays: number }> {
     const [row] = await tx
-      .select({ streak: dailyLogins.streak, lastClaimDate: dailyLogins.lastClaimDate, month: dailyLogins.month, claimedDays: dailyLogins.claimedDays })
+      .select({
+        streak: dailyLogins.streak,
+        consecutive: dailyLogins.consecutive,
+        lastClaimDate: dailyLogins.lastClaimDate,
+        month: dailyLogins.month,
+        claimedDays: dailyLogins.claimedDays,
+      })
       .from(dailyLogins)
       .where(eq(dailyLogins.playerId, playerId))
       .for('update')
@@ -222,16 +237,17 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
       // this is a status read, and the caller above answers 404 on the profile, not 500 here.
       const [row] = isUuid(playerId)
         ? await deps.db
-            .select({ streak: dailyLogins.streak, lastClaimDate: dailyLogins.lastClaimDate })
+            .select({ streak: dailyLogins.streak, consecutive: dailyLogins.consecutive, lastClaimDate: dailyLogins.lastClaimDate })
             .from(dailyLogins)
             .where(eq(dailyLogins.playerId, playerId))
         : []
-      const state = row ?? { streak: 0, lastClaimDate: null }
+      const state = row ?? { streak: 0, consecutive: 0, lastClaimDate: null }
       const outcome = nextStreak(state, today)
       return {
         claimable: !outcome.alreadyClaimed,
         day: outcome.day,
         streak: outcome.streak,
+        consecutive: outcome.consecutive,
         reward: outcome.points,
         item: itemMarker(gifts.itemRuleForDay(outcome.day, month)),
         nextResetAt: nextDayStartMs(nowMs, deps.timezone),
@@ -264,11 +280,12 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
         await tx
           .update(dailyLogins)
           .set({
+            // §13.1 as amended by Plan 27 Part G: `streak` is the month's claim count, so it now moves with
+            // `claimed_days`; the run of calendar days the two login-streak achievements read is `consecutive`.
             streak: outcome.streak,
+            consecutive: outcome.consecutive,
             lastClaimDate: today,
             month,
-            // `claimed_days` counts check-ins inside the current month, which is not the streak: a
-            // player who misses a day and comes back has claimed twice with a streak of 1.
             claimedDays: state.month === month ? state.claimedDays + 1 : 1,
           })
           .where(eq(dailyLogins.playerId, playerId))
@@ -282,11 +299,12 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
           fallbackPoints,
           balance: await balanceOf(tx, playerId),
           streak: outcome.streak,
+          consecutive: outcome.consecutive,
         }
       })
 
       if (result.ok) {
-        await deps.bus.publish({ type: 'DAILY_CLAIMED', playerId, day: result.day, streak: result.streak })
+        await deps.bus.publish({ type: 'DAILY_CLAIMED', playerId, day: result.day, streak: result.streak, consecutive: result.consecutive })
         deps.onBalanceChanged(playerId, result.balance)
       }
       return result

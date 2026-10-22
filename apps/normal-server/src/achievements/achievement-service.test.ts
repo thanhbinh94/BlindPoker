@@ -237,12 +237,12 @@ describe('unlocking', () => {
     expect(await repos.balances.get(playerId)).toBe(3_000 + 5_000 + 20_000)
   })
 
-  it('unlocks login_streak_7 from the streak the check-in reported', async () => {
+  it('unlocks login_streak_7 from the consecutive run the check-in reported', async () => {
     const playerId = await seedPlayer()
-    for (let streak = 1; streak <= 6; streak += 1) await bus.publish({ type: 'DAILY_CLAIMED', playerId, day: streak, streak })
+    for (let streak = 1; streak <= 6; streak += 1) await bus.publish({ type: 'DAILY_CLAIMED', playerId, day: streak, streak, consecutive: streak })
     expect(await find(playerId, 'login_streak_7')).toMatchObject({ progress: 6, unlockedAt: null })
 
-    await bus.publish({ type: 'DAILY_CLAIMED', playerId, day: 7, streak: 7 })
+    await bus.publish({ type: 'DAILY_CLAIMED', playerId, day: 7, streak: 7, consecutive: 7 })
 
     expect(await find(playerId, 'login_streak_7')).toMatchObject({ progress: 7, unlockedAt: NOW })
     // Day 7 is also the seventh login day, so both of that event's achievements land together.
