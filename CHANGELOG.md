@@ -180,7 +180,15 @@ on one player cannot deadlock on Postgres; the ops test server reads 2400 a minu
   - Tinted layers load @1x below DPR 1.5 everywhere, table seats included (P32), not only in the wardrobe.
   - F-10 became the Blind-to-zero case (P30), and the shop's ops cases take section P (Ruling 24, amending Ruling 15; `M` is the layout section).
   - The entry chunk's budget rose from 130 to 140 KB (Ruling 13).
-- **Deployed.** DEPLOY
+- **Deployed.** VPS (`play.14-225-254-250.sslip.io`) on 2026-10-24: `backup.sh` (`bp-2026-10-22-2142.dump`, the server's
+  clock), `git pull` to `3c853d6`, waited for the one open room to close (health polled to `rooms: 0`), `docker compose up
+  -d --build`; the migrate container applied `0006_plan27` (seven rows in `drizzle.__drizzle_migrations`; the seven new
+  tables present; boot seeded 8 reputation rules, 5 ranks and 89 shop prices); `reputation-backfill-cli --dry-run` then the
+  real run credited 3 572 reputation across the 6 accounts (ranks afterwards: 1 Tân binh, 2 Tay bài, 3 Cao thủ), `/health`
+  `ok`/`db ok` with 0 rooms; the served bundle carries Cửa hàng, Kệ tuần này and Quà chào mừng, and `/api/shop` and
+  `/api/welcome` answer 401 to an anonymous call. The Windows LAN host was **not** deployed: it still lacks `0004`–`0006` and
+  needs `run.ps1` with migrate plus the backfill (`deploy/normal-windows/README.md` §9e; the user's Neon database, ask
+  first). Lite was rebuilt locally up to the exe step, not shipped.
 - **Still open.**
   - **Parked minors, declined:** range checks on `players.reputation`, `players.rank` and `newcomer_progress.day`
     (the services already keep them in range; a CHECK constraint is a migration for no behaviour); a visually hidden

@@ -1085,8 +1085,8 @@ The single list is `docs/known-limitations.md`. As of this writing, the items a 
   - the deck's position (Ruling 17, reported as a deviation);
   - the 11 px phone scroll on play-or-fold squeeze tables (Ruling 28);
   - the human test rounds in `docs/operation-test-plan.md` (real phones, a LAN session, Lite on a second PC);
-  - Plans 25 and 26 are live on the VPS since 2026-10-21 (`0004_gm` and `0005_plan26` applied, the first GM made by
-    `grant-gm-cli`); Plan 27 brings `0006_plan27` and a one-shot `reputation-backfill-cli` run (`docs/deployment-normal.md`
+  - Plans 25, 26 and 27 are live on the VPS (25 and 26 since 2026-10-21; 27 since 2026-10-24 with `0006_plan27` applied
+    and the one-shot `reputation-backfill-cli` run, 3 572 reputation across 6 accounts — `docs/deployment-normal.md`
     §7). The Windows LAN host still needs `run.ps1` without `-NoMigrate` (the user's Neon database; ask first) and, after
     `0006`, the backfill once; section Q of the test plan plus the landscape, GM round-2 and Plan 27 checks (the welcome
     gift on a real account, a purchase, the rank on a phone seat, a Blind table played to zero, the Điểm danh page after a
