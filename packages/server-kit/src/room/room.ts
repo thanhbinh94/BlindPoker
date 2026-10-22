@@ -70,12 +70,7 @@ export class Room {
    */
   private closing = false
   private carryOverReleaseTimer: TimerHandle | null = null
-  /**
-   * Humans stood up by `standUpSpent` while a pot was carried over: their antes are in it, so a release still pays
-   * them as if they were seated (spec §8.4). A claim ends when that pot goes into a new hand, when it is released, or
-   * when the claimant leaves the room.
-   */
-  private readonly carryOverClaimants = new Set<string>()
+  // No claimants on a carried pot any more (Plan 27): a seat reaches 0 only by playing a hand, and a played hand is never carried over.
   private readonly playerTimers = new Map<string, TimerHandle>()
   private turnStartSeq = 0
   /**
@@ -644,9 +639,8 @@ export class Room {
   }
 
   /**
-   * Spec §8.4. Returns a carry-over pot to the table: an equal share to every seated human and to every
-   * claimant still in the room (a seat stood up for its spent limit while this pot was carried — each
-   * person counted once), with the indivisible remainder (or the whole pot when there is nobody to pay)
+   * Spec §8.4. Returns a carry-over pot to the table: an equal share to every seated human, with the
+   * indivisible remainder (or the whole pot when there is nobody to pay)
    * recorded as a `carry_over` sink so `Σ balances + Σ sinks` stays constant. Called from the release
    * timer, `close()` and `shutdown()`; always runs on the room queue.
    *
@@ -666,17 +660,14 @@ export class Room {
       return
     }
     const pot = this.carryOverPot
-    if (pot <= 0) {
-      this.carryOverClaimants.clear()
-      return
-    }
-    const recipients = this.humans().filter((p) => p.seat !== null || this.carryOverClaimants.has(p.identity.playerId))
+    if (pot <= 0) return
+    const recipients = this.humans().filter((p) => p.seat !== null)
     const share = recipients.length === 0 ? 0 : Math.floor(pot / recipients.length)
     const remainder = pot - share * recipients.length
     const entries: BalanceEntry[] = share > 0
       ? recipients.map((p) => ({ playerId: p.identity.playerId, delta: share, reason: 'refund' as const, refId: this.roomId }))
       : []
-    // From here the pot is this batch's: its shares (the claimants' included) are fixed, and a retry writes exactly them.
+    // From here the pot is this batch's: its shares are fixed, and a retry writes exactly them.
     this.pendingRelease = {
       key: `carry_over:${this.roomId}:${newId()}`,
       pot,
@@ -685,7 +676,6 @@ export class Room {
       recipients: recipients.map((p) => p.identity.playerId),
     }
     this.carryOverPot = 0
-    this.carryOverClaimants.clear()
     await this.settlePendingRelease()
   }
 
@@ -785,8 +775,7 @@ export class Room {
       { handId, rules: this.rules, seats: eligible.map((p) => ({ seat: p.seat!, playerId: p.identity.playerId, stack: p.stack, isBot: p.identity.isBot })), button: this.button, carryOverIn: this.carryOverPot },
     )
     this.runner = runner
-    this.carryOverPot = 0
-    this.carryOverClaimants.clear() // the pot is this hand's now: whoever wins it takes it
+    this.carryOverPot = 0 // the pot is this hand's now: whoever wins it takes it
     this.nextHandAt = null
     this.status = 'IN_GAME'
     this.broadcastRoomEvent({ type: 'ROOM_STATUS', status: 'IN_GAME', nextHandAt: null })
@@ -1007,14 +996,11 @@ export class Room {
   /**
    * Plan 27 D2: a seat that ends a hand at 0 — in either mode — goes back to the rail, and its player is told why,
    * with the way back: relief under `ECONOMY.reliefThreshold`, or an empty seat once there are points again. Nothing
-   * is left to cash out, so the stand-up writes no ledger row.
-   *
-   * A carried-over pot can no longer be pending here (a seat only reaches 0 by playing, and a hand someone plays is
-   * not carried over), but the claim is kept for safety: a release pays a claimant as if still seated.
+   * is left to cash out, so the stand-up writes no ledger row. No carried-over pot can be pending here either: a seat
+   * reaches 0 only by playing, and a hand someone plays is not carried over.
    */
   private async standUpSpent(p: RoomPlayer): Promise<void> {
     await this.standUpNow(p)
-    if (this.carryOverPot > 0) this.carryOverClaimants.add(p.identity.playerId)
     if (p.connected) {
       this.deps.outbox.send(p.identity.playerId, {
         t: 'NOTIFICATION',
@@ -1130,7 +1116,6 @@ export class Room {
     // the room screen before the hand ended — was dropped in silence and left looking at a frozen table.
     this.broadcastRoomEvent({ type: 'PLAYER_LEFT', playerId: p.identity.playerId })
     this.players.delete(p.identity.playerId)
-    this.carryOverClaimants.delete(p.identity.playerId) // a claim on a carried-over pot lasts only while in the room
     this.onMembership?.(p.identity.playerId, false)
     this.clearPlayerTimer(p.identity.playerId)
     if (p.identity.playerId === this.hostPlayerId) this.transferHost()

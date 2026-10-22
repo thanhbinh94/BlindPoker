@@ -224,7 +224,8 @@ test('F-10: a Blind seat plays down to zero and is stood up with the Cứu trợ
   // Em plays this one, not Đào: F-09 left Đào's auto-play table mid-hand, and her stack comes home only when that hand
   // ends — a cash-out that could land inside this case's money checks. Em's last table (F-06) was left between hands.
   // (It also keeps Đào's Blind hand count below ten for K-02, which is the case that has to reach it.) Em leaves this
-  // case at 0, which H-02 below wants anyway: it needs a balance under the relief line.
+  // case at 0 (or at what an achievement paid on the way), which H-02 below wants anyway: it needs a balance under the
+  // relief line.
   const page = b.page
   const gm = await newPlayer(browser, 'GmF10')
   try {
@@ -259,8 +260,9 @@ test('F-10: a Blind seat plays down to zero and is stood up with the Cứu trợ
   await expect(action(/^Chơi/)).toHaveCount(0)
   await allIn.click()
 
-  // From here: fold whatever can be folded and play all in whatever cannot, so every hand costs at least its ante and
-  // the stack only grows by winning an all-in. A loss there ends it; thirty hands is the cap.
+  // From here the autopilot presses "Tất tay" whenever it is shown and folds otherwise: a short seat goes all in, a
+  // seat that could make the full play folds it. Every hand costs at least its ante and the stack only grows by
+  // winning an all-in. A loss there ends it; thirty hands is the cap.
   const notice = page.getByText(/Bạn đã hết điểm ở bàn này/)
   const handsBefore = (await historyOf(page)).length
   let nextLook = 0
@@ -272,16 +274,23 @@ test('F-10: a Blind seat plays down to zero and is stood up with the Cứu trợ
     capped = (await historyOf(page)).length - handsBefore >= 30
     return capped
   }, 300_000)
-  test.skip(capped, 'thirty hands without losing an all-in: run the case again')
+  if (capped) {
+    await leave(page) // H-02 needs Em off the table
+    test.skip(true, 'thirty hands without losing an all-in: run the case again')
+  }
   await expect(notice).toContainText('Nhận Cứu trợ nếu số dư dưới 5.000 điểm')
   await expect(page.getByRole('button', { name: 'Đứng dậy', exact: true }), 'no longer seated').toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Rời phòng' }), 'still in the room').toBeVisible()
   // Nothing was left on the table, so nothing came home: the buy-in is the whole move, and the balance is 0.
   const fresh = (await ledgerSince(page, rowsBefore)).filter((row) => row.reason !== 'achievement')
   expect(fresh.map((row) => [row.reason, row.amount])).toEqual([['buy_in', -2_500]])
-  expect(await balanceOf(page), 'all of it was played').toBe(sumOf(await ledgerSince(page, rowsBefore), 'achievement'))
-  // A spectator with less than one wager is told what a seat needs before trying.
-  await expect(page.getByText('Số dư không đủ để vào bàn (cần 1.000 điểm)'), 'the hint under the controls').toBeVisible()
+  const left = await balanceOf(page)
+  expect(left, 'all of it was played').toBe(sumOf(await ledgerSince(page, rowsBefore), 'achievement'))
+  // A spectator with less than one wager is told what a seat needs before trying. An achievement paid during the run
+  // ("Mười ván Blind Poker" or a three-win streak) can lift the balance back over one wager, and then there is no hint.
+  const hint = page.getByText('Số dư không đủ để vào bàn (cần 1.000 điểm)')
+  if (left < 1_000) await expect(hint, 'the hint under the controls').toBeVisible()
+  else await expect(hint, 'no hint: an achievement paid for a seat').toHaveCount(0)
   await leave(page)
 })
 

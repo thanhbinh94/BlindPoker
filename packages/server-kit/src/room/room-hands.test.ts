@@ -328,6 +328,7 @@ describe('Hold’em hands', () => {
     const busted = [...h.room.players.values()].find((p) => p.stack === 0 && p.seat === null)
     expect(busted).toBeDefined() // one of them lost everything (if the seeded deck ties, change the harness seed)
     expect(await h.repos.balances.get(busted!.identity.playerId)).toBe(90_000)
+    expect(h.last(busted!.identity.playerId, 'NOTIFICATION')).toMatchObject({ kind: 'STACK_SPENT', payload: { threshold: 5_000 } })
     await h.room.sitDown(busted!.identity.playerId, 3, 10_000)
     expect(h.room.players.get(busted!.identity.playerId)!.seat).toBe(3)
   })
@@ -846,7 +847,7 @@ describe('Blind table limit (spec 2026-09-29)', () => {
     expect(h.ofType('poor', 'NOTIFICATION').some((m) => m.kind === 'STACK_SPENT')).toBe(false) // it stood up of its own accord
   })
 
-  it('a seat that runs short in the hand its player chose to stand or leave is cashed out once, and not told it is spent', async () => {
+  it('a seat that hits 0 in the hand its player chose to stand or leave is stood up or removed without a STACK_SPENT notice', async () => {
     // Pure luck: a lost hand takes all of the 1.000 each of 's' and 'l' brought.
     const h = createRoomHarness(
       { ...BLIND, blind: { ...BLIND.blind!, decisionMode: 'none', botCount: 0 } },
