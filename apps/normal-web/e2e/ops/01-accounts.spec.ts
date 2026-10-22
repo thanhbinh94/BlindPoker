@@ -1,6 +1,6 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { account, dismissWelcome, register, signIn } from '../support.js'
-import { balanceOf, closeAll, postApi, type Player } from './ops-helpers.js'
+import { balanceOf, closeAll, newPlayer, PHONE_SCREEN, postApi, type Player } from './ops-helpers.js'
 
 /**
  * Operation test plan §4 (S) and §5.A / §5.B / §5.I — accounts, the shared chrome, the daily reward. Every test
@@ -212,4 +212,55 @@ test('A-08 B-02 B-03 S-07 S-08: language and theme stick; every account screen o
   await page.goBack()
   await expect(page).toHaveURL(/#\/profile$/)
   await context.close()
+})
+
+/**
+ * Scrolls `face` (a chibi) up under the sticky rail until its middle sits at the rail's middle, then asks the browser what is
+ * painted on top there. The chibi's layers are `pointer-events: none`, which hit-testing skips, so they are made hit-testable
+ * first: `elementFromPoint` then answers with whatever is drawn on top, the rail or a layer of the face. The page gets a
+ * spacer at its foot, since a short page does not scroll that far by itself.
+ */
+async function expectRailOverFace(page: Page, face: Locator, what: string): Promise<void> {
+  const rail = page.locator('header').filter({ has: page.getByRole('navigation', { name: 'Điều hướng chính' }) })
+  await page.addStyleTag({ content: 'img { pointer-events: auto !important; }' })
+  await page.evaluate(() => {
+    document.body.style.paddingBottom = '1200px'
+    window.scrollTo(0, 0)
+  })
+  const railBox = (await rail.boundingBox())!
+  const railMid = railBox.y + railBox.height / 2
+  const resting = (await face.boundingBox())!
+  await page.evaluate((y) => window.scrollTo(0, y), Math.round(resting.y + resting.height / 2 - railMid))
+  const under = (await face.boundingBox())!
+  expect(under.y < railMid && under.y + under.height > railMid, `${what}: the face has scrolled under the rail`).toBe(true)
+  const hit = await rail.evaluate((el, [x, y]) => {
+    const top = document.elementFromPoint(x!, y!)
+    return { onRail: top !== null && el.contains(top), tag: top?.tagName ?? 'nothing' }
+  }, [under.x + under.width / 2, railMid])
+  expect(hit.onRail, `${what}: the rail is drawn over the face (found a ${hit.tag} on top)`).toBe(true)
+  await page.evaluate(() => {
+    document.body.style.paddingBottom = ''
+    window.scrollTo(0, 0)
+  })
+}
+
+// BP-29 (bug log §10 E4): the chibi's layers carry z-index 10–90 and its root opened no stacking context, so scrolled
+// under the sticky rail (z-index 20) the lobby's head drew its hair, hat and frame over the rail's "Sảnh chờ".
+test('B-05 @mobile scrolled under the sticky rail, the player’s face stays beneath it — the lobby and the profile', async ({ browser }) => {
+  const player = await newPlayer(browser, 'Cuon', PHONE_SCREEN)
+  try {
+    const { page } = player
+    await page.goto('/#/lobby')
+    const face = page.getByRole('link', { name: 'Ảnh đại diện của bạn' })
+    await expect(face.locator('img').first()).toBeVisible()
+    await expectRailOverFace(page, face, 'the lobby')
+
+    await page.goto('/#/profile')
+    await expect(page.getByRole('heading', { name: 'Hồ sơ', level: 1 })).toBeVisible()
+    const figure = page.getByRole('img', { name: player.who.displayName }).first()
+    await expect(figure.locator('img').first()).toBeVisible()
+    await expectRailOverFace(page, figure, 'the profile')
+  } finally {
+    await closeAll([player])
+  }
 })
