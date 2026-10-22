@@ -52,9 +52,10 @@
   },
   "daily": {
     "title": "Daily check-in",
-    "lead": "Once a day. The longer the streak the larger the reward, and a new month starts the streak again at day 1.",
+    "lead": "Once a day. Your Nth check-in of the month takes tile N, so no streak is needed and a missed day loses no tile. A new month starts again at tile 1.",
     "error": "Your check-in calendar could not be loaded",
-    "streak": "Current streak: {{streak}} days",
+    "summaryCount": "Check-in {{day}} of {{month}} · no streak needed",
+    "daysLeft": "{{days}} days left this month for {{cells}} tiles",
     "resetsAt": "The next day begins at {{at}}",
     "reward": "Today's reward: {{amount}}",
     "claim": "Claim",
@@ -75,7 +76,7 @@
       "item": "Item",
       "fallback": "This tier had no new item left for you — {{amount}} instead of an item.",
       "balance": "New balance",
-      "streak": "Streak after this claim: {{streak}} days",
+      "streak": "Check-in {{streak}} of the month",
       "newcomer": {
         "title": "First week",
         "day": "Day {{day}}/7",
@@ -113,7 +114,7 @@
         "other": "Relief is not available right now."
       }
     },
-    "calendarLead": "Points for each day of the streak; a gift means an item comes with them."
+    "calendarLead": "Points for each tile, where tile N is your Nth check-in of the month; a gift means an item comes with them."
   },
   "settings": {
     "title": "Settings",

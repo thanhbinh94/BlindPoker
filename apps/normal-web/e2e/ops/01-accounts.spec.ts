@@ -36,7 +36,7 @@ test('S-01 S-02 S-03 I-01 I-02 I-03: first visit, first sign-in, first reward', 
   await page.goto('/#/daily')
   const claim = page.getByRole('button', { name: 'Nhận thưởng' })
   await expect(claim).toBeEnabled()
-  await expect(page.getByText('Chuỗi hiện tại: 0 ngày')).toBeVisible()
+  await expect(page.getByText(/^Lần điểm danh thứ 1 của tháng \d{2}\/\d{4} · không cần liên tiếp$/u)).toBeVisible()
   await claim.click()
   await expect(claim).toBeDisabled()
   await expect.poll(() => balanceOf(page)).toBe(105_000)

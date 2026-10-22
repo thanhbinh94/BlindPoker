@@ -131,30 +131,53 @@ describe('DailyScreen — the calendar', () => {
     expect(calendar().getAllByText(viNormal.daily.claimedMark)).toHaveLength(5)
   })
 
-  it('prints the streak already earned, not the one today would reach', async () => {
-    renderScreen()
+  it('names the month’s check-in count, says no streak is needed, and what the rest of the month can still reach', async () => {
+    // The 12th claim of October, on 13 October (one day was missed): the next day begins at midnight in Hồ Chí Minh
+    // City, 17:00 UTC. 13–31 October is 19 days counting today, and eleven tiles are taken out of 31.
+    const october13 = { ...STATUS, day: 12, streak: 12, claimable: true, nextResetAt: Date.UTC(2026, 9, 13, 17, 0) }
+    renderScreen(stubApi({ daily: vi.fn().mockResolvedValue(october13) }))
     await screen.findByRole('list', { name: viNormal.daily.calendarTitle })
 
-    // The server sends `streak: 5` for a player who has claimed four days and not yet claimed today. Five is
-    // what the claim *would* make it; four is what the calendar beside this line is marking.
-    expect(screen.getByText(interpolate(viNormal.daily.streak, { streak: '4' }))).toBeInTheDocument()
-    expect(screen.getByText(interpolate(viNormal.daily.resetsAt, { at: formatMoment(RESET_AT, 'vi') }))).toBeInTheDocument()
+    expect(screen.getByText('Lần điểm danh thứ 12 của tháng 10/2026 · không cần liên tiếp')).toBeInTheDocument()
+    expect(screen.getByText('Còn 19 ngày trong tháng cho 20 ô')).toBeInTheDocument()
+    expect(calendar().getAllByText(viNormal.daily.claimedMark)).toHaveLength(11)
   })
 
-  it('greets a player who has never claimed with no streak at all', async () => {
-    const fresh = { ...STATUS, claimable: true, day: 1, streak: 1 }
+  it('keeps the count once today is taken, and leaves today out of the days left', async () => {
+    const taken = { ...STATUS, day: 12, streak: 12, claimable: false, nextResetAt: Date.UTC(2026, 9, 13, 17, 0) }
+    renderScreen(stubApi({ daily: vi.fn().mockResolvedValue(taken) }))
+    await screen.findByRole('list', { name: viNormal.daily.calendarTitle })
+
+    expect(screen.getByText('Lần điểm danh thứ 12 của tháng 10/2026 · không cần liên tiếp')).toBeInTheDocument()
+    expect(screen.getByText('Còn 18 ngày trong tháng cho 19 ô')).toBeInTheDocument()
+    expect(screen.getByText(interpolate(viNormal.daily.resetsAt, { at: formatMoment(taken.nextResetAt, 'vi') }))).toBeInTheDocument()
+  })
+
+  it('greets a player who has never claimed with their first check-in of the month', async () => {
+    const fresh = { ...STATUS, claimable: true, day: 1, streak: 1, nextResetAt: Date.UTC(2026, 9, 1, 17, 0) }
     renderScreen(stubApi({ daily: vi.fn().mockResolvedValue(fresh) }))
     await screen.findByRole('list', { name: viNormal.daily.calendarTitle })
 
-    expect(screen.getByText(interpolate(viNormal.daily.streak, { streak: '0' }))).toBeInTheDocument()
+    expect(screen.getByText('Lần điểm danh thứ 1 của tháng 10/2026 · không cần liên tiếp')).toBeInTheDocument()
+    expect(screen.getByText('Còn 31 ngày trong tháng cho 31 ô')).toBeInTheDocument()
     expect(calendar().queryAllByText(viNormal.daily.claimedMark)).toHaveLength(0)
   })
 
-  it('counts the streak whole once today has been taken', async () => {
-    renderScreen(stubApi({ daily: vi.fn().mockResolvedValue({ ...STATUS, claimable: false }) }))
+  it('drops the days-left line once the month has no day or no tile left', async () => {
+    // 31 October, already claimed: the next day is in November.
+    const last = { ...STATUS, day: 20, streak: 20, claimable: false, nextResetAt: Date.UTC(2026, 9, 31, 17, 0) }
+    renderScreen(stubApi({ daily: vi.fn().mockResolvedValue(last) }))
     await screen.findByRole('list', { name: viNormal.daily.calendarTitle })
 
-    expect(screen.getByText(interpolate(viNormal.daily.streak, { streak: '5' }))).toBeInTheDocument()
+    expect(screen.queryByText(/^Còn \d+ ngày trong tháng/u)).toBeNull()
+  })
+
+  it('promises no reset on a missed day anywhere on the page', async () => {
+    renderScreen()
+    await screen.findByRole('list', { name: viNormal.daily.calendarTitle })
+
+    // Plan 27 G: the month's claims are counted, not a run of days, so nothing on this page may say "chuỗi".
+    expect(document.body.textContent ?? '').not.toMatch(/chuỗi/iu)
   })
 
   it('draws no marker for an item tier this bundle has no words for', async () => {

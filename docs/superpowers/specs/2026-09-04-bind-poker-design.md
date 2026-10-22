@@ -405,6 +405,8 @@ Bất biến kiểm tra trong test: `Σ balance + Σ chồng trên bàn + pot c�
 - **Reset tháng**: nếu tháng của hôm nay ≠ tháng của `lastClaimDate` → streak = 1 (ngày 1 của tháng luôn là streak 1).
 - Streak tối đa 31; ngày 29–31 dùng giá trị ngày 29.
 
+> **Sửa đổi (Plan 27, Phần G — `docs/superpowers/specs/2026-10-21-plan27-shop-reputation-welcome-blind-zero-design.md` §6b):** ở bản Normal, `streak` không còn là chuỗi ngày liền nhau mà là **số lần đã nhận trong tháng**: lần trước cùng tháng → +1 dù bỏ bao nhiêu hôm ở giữa, sang tháng mới hoặc chưa nhận bao giờ → 1; ô thứ N của lịch là lần điểm danh thứ N trong tháng, bảng thưởng §13.2 giữ nguyên. Chuỗi ngày liền nhau vẫn được tính riêng ở cột `consecutive` (qua cả đầu tháng) cho hai thành tựu `login_streak_7` và `login_streak_28`. Màn Điểm danh ghi "Lần điểm danh thứ N của tháng MM/YYYY · không cần liên tiếp" và "Còn D ngày trong tháng cho C ô". Bản Lite giữ quy tắc chuỗi ở trên.
+
 ### 13.2 Bảng thưởng (`daily-rewards.json`)
 | Ngày | Điểm | Item (Normal) |
 |---|---|---|

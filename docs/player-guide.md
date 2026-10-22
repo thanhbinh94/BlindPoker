@@ -38,9 +38,15 @@ Tài khoản mới có **100.000 điểm**. "Số dư" hiện ở thanh trên c�
 
 Mỗi ngày, mở tab "Điểm danh" và bấm "Nhận thưởng" một lần. Ngày mới bắt đầu lúc 00:00 giờ Việt Nam (người quản lý máy chủ có thể đổi múi giờ). Ở bản Normal, lần đầu mở trò chơi trong ngày trên trình duyệt đó, nếu chưa nhận quà, trang "Điểm danh" tự mở; tab này cũng có chấm vàng khi còn quà chưa nhận.
 
-**Chuỗi điểm danh** tăng thêm 1 khi bạn điểm danh hai ngày liền nhau. Bỏ một ngày thì chuỗi về ngày 1. Sang tháng mới, chuỗi cũng về ngày 1, dù tháng trước bạn không bỏ ngày nào. Thưởng tăng theo chuỗi, cao nhất ở các mốc 7, 14, 21, 28:
+**Ở bản Normal, lịch đếm số lần bạn điểm danh trong tháng, không cần liên tiếp.** Lần điểm danh thứ 1 trong tháng nhận ô 1, lần thứ 2 nhận ô 2, cứ thế tới ô cuối tháng. Bỏ một hôm không đưa bạn về ô 1: lần sau bạn nhận ô kế tiếp. Một hôm bỏ lỡ chỉ làm bạn mất những ô cuối tháng không còn đủ ngày để tới. Màn "Điểm danh" ghi, ví dụ, "Lần điểm danh thứ 12 của tháng 10/2026 · không cần liên tiếp" và "Còn 19 ngày trong tháng cho 20 ô" (số ngày còn lại tính cả hôm nay nếu bạn chưa nhận), để bạn thấy mình còn kịp mốc nào; ô có chữ "Hôm nay" là ô lần bấm kế tiếp sẽ nhận. Sang tháng mới, lịch tính lại từ ô 1.
 
-| Ngày trong chuỗi | Điểm | Thêm vật phẩm (bản Normal) |
+Ở bản Lite vẫn là **chuỗi điểm danh**: tăng thêm 1 khi bạn điểm danh hai ngày liền nhau, bỏ một ngày thì về ngày 1, sang tháng mới cũng về ngày 1.
+
+Hai thành tựu "Chuỗi 7 ngày" và "Chuỗi 28 ngày" (bản Normal, mục 9) vẫn đếm số ngày điểm danh **liên tiếp**: bỏ một hôm thì hai thành tựu này đếm lại từ 1, còn ô trên lịch thì không mất. Số ngày liên tiếp này tính cả qua đầu tháng.
+
+Thưởng tăng theo ô (bản Lite: theo chuỗi), cao nhất ở các mốc 7, 14, 21, 28:
+
+| Ô (lần điểm danh thứ mấy trong tháng) | Điểm | Thêm vật phẩm (bản Normal) |
 |---|---|---|
 | 1 → 6 | 5.000 · 6.000 · 7.000 · 8.000 · 10.000 · 12.000 | |
 | 7 | 15.000 | một món thường ngẫu nhiên |
@@ -52,9 +58,9 @@ Mỗi ngày, mở tab "Điểm danh" và bấm "Nhận thưởng" một lần. N
 | 28 | 40.000 | "Huy hiệu tháng" và danh hiệu "Chuyên cần"; từ tháng 11/2026 thêm một món cực hiếm mỗi tháng (xem dưới) |
 | 29 → 31 | 12.000 mỗi ngày | |
 
-Đủ một tháng 31 ngày là 376.000 điểm. Vì chuỗi tính lại từ ngày 1 mỗi tháng, muốn chạm mốc ngày 28 bạn phải bắt đầu từ những ngày đầu tháng; tháng Hai có 28 ngày thì phải điểm danh từ ngày 1, không bỏ ngày nào. Ở bản Normal, "Lịch điểm danh" là lịch của tháng hiện tại và đánh dấu trước các ngày có quà: "Vật phẩm thường", "Vật phẩm hiếm"; ngày có quà định sẵn thì ghi tên từng món. Dòng chú thích dưới lịch ghi lại quà định sẵn kèm tháng, ví dụ "Ngày 28 tháng 11/2026: Huy hiệu tháng + Chuyên cần + Mũ chóp quý ông".
+Đủ một tháng 31 ngày là 376.000 điểm. Vì lịch tính lại từ ô 1 mỗi tháng, muốn chạm mốc ô 28 bạn cần điểm danh ít nhất 28 lần trong tháng: tháng 31 ngày được bỏ 3 hôm, tháng 30 ngày được bỏ 2 hôm, tháng Hai có 28 ngày thì phải điểm danh từ ngày 1, không bỏ ngày nào. Ở bản Lite, chuỗi phải liền nhau từ những ngày đầu tháng. Ở bản Normal, "Lịch điểm danh" là lịch của tháng hiện tại và đánh dấu trước các ô có quà: "Vật phẩm thường", "Vật phẩm hiếm"; ngày có quà định sẵn thì ghi tên từng món. Dòng chú thích dưới lịch ghi lại quà định sẵn kèm tháng, ví dụ "Ngày 28 tháng 11/2026: Huy hiệu tháng + Chuyên cần + Mũ chóp quý ông".
 
-Món ngẫu nhiên ngày 7, 14 và 21 luôn là món bạn chưa có, lấy từ các mục "Mũ", "Phụ kiện mặt", "Hào quang", "Khung", "Màu tóc" và "Màu mắt". Nếu bạn đã có hết món ở mức đó, bạn được 10.000 điểm thay cho món đồ. Quà ngày 28 là quà cố định: bạn đã có rồi thì không được đổi thành điểm.
+Món ngẫu nhiên ở ô 7, 14 và 21 luôn là món bạn chưa có, lấy từ các mục "Mũ", "Phụ kiện mặt", "Hào quang", "Khung", "Màu tóc" và "Màu mắt". Nếu bạn đã có hết món ở mức đó, bạn được 10.000 điểm thay cho món đồ. Quà ngày 28 là quà cố định: bạn đã có rồi thì không được đổi thành điểm.
 
 **Quà ngày 28 theo tháng (bản Normal).** Quà ngày 28 có thể khác nhau giữa các tháng. Từ tháng 11/2026, ngoài "Huy hiệu tháng" và "Chuyên cần", mỗi tháng tặng thêm một món cực hiếm mà trước đây chưa có cách nhận:
 
@@ -69,9 +75,9 @@ Món ngẫu nhiên ngày 7, 14 và 21 luôn là món bạn chưa có, lấy từ
 
 Quà được tính theo tháng của ngày bạn bấm nhận. Tháng 2/2027 có 28 ngày, nên muốn có "Khung vàng" bạn phải điểm danh từ ngày 1/2 và không bỏ ngày nào. Nếu bạn đã có "Huy hiệu tháng" và "Chuyên cần", ngày 28 bạn chỉ nhận thêm món của tháng đó. Quà của những tháng sau sẽ được ghi trên lịch điểm danh của từng tháng.
 
-**Đầu tháng** chỉ có chuỗi điểm danh quay về ngày 1. Số dư, vật phẩm, trang phục, thành tựu, thống kê và tổng số ngày điểm danh giữ nguyên; điểm không bị xóa theo tháng.
+**Đầu tháng** chỉ có lịch điểm danh quay về ô 1 (bản Lite: chuỗi về ngày 1). Số dư, vật phẩm, trang phục, thành tựu, thống kê và tổng số ngày điểm danh giữ nguyên; điểm không bị xóa theo tháng.
 
-Ở bản Normal, quản trị viên có thể mở lại lượt điểm danh hôm nay của bạn khi có lý do: điểm và món của lượt đó bị thu lại, chuỗi giữ nguyên, bạn nhận thông báo "Lượt điểm danh hôm nay đã được mở lại: trừ lại … điểm — …" (số điểm bị thu và lý do), nút "Nhận thưởng" sáng lại ngay để bạn bấm lần nữa; món ngẫu nhiên được rút lại từ đầu.
+Ở bản Normal, quản trị viên có thể mở lại lượt điểm danh hôm nay của bạn khi có lý do: điểm và món của lượt đó bị thu lại, lượt đó không còn được đếm cho tới khi bạn nhận lại, bạn nhận thông báo "Lượt điểm danh hôm nay đã được mở lại: trừ lại … điểm — …" (số điểm bị thu và lý do), nút "Nhận thưởng" sáng lại ngay để bạn bấm lần nữa; món ngẫu nhiên được rút lại từ đầu.
 
 ### Cứu trợ
 
@@ -312,8 +318,8 @@ Mở "Hồ sơ" rồi bấm "Thành tựu". Trang này cho biết bạn "Đã đ
 | "Bảy ngày ghé bàn", "Ba mươi ngày ghé bàn" | điểm danh đủ 7, 30 ngày | 5.000, 20.000 điểm |
 | "Trăm ngày ghé bàn" | điểm danh đủ 100 ngày | "Vương miện vàng" |
 | "Một năm ghé bàn" | điểm danh đủ 365 ngày | "Khung một năm" |
-| "Chuỗi 7 ngày" | chuỗi điểm danh 7 ngày | 5.000 điểm |
-| "Chuỗi 28 ngày" | chuỗi điểm danh 28 ngày (trong cùng một tháng) | danh hiệu "Chuyên cần" |
+| "Chuỗi 7 ngày" | điểm danh 7 ngày liên tiếp | 5.000 điểm |
+| "Chuỗi 28 ngày" | điểm danh 28 ngày liên tiếp (tính cả qua đầu tháng) | danh hiệu "Chuyên cần" |
 
 **"Texas Hold'em"**: chuỗi thắng/thua, bộ bài thắng và ván thắng lớn tính cả ván Blind Poker. Ván bạn bỏ bài là ván không thắng.
 

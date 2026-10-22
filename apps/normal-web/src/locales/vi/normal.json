@@ -52,9 +52,10 @@
   },
   "daily": {
     "title": "Điểm danh hằng ngày",
-    "lead": "Điểm danh mỗi ngày để nhận thưởng. Chuỗi càng dài, thưởng càng lớn; sang tháng mới, chuỗi tính lại từ ngày 1.",
+    "lead": "Điểm danh mỗi ngày để nhận thưởng. Lần điểm danh thứ mấy trong tháng thì nhận ô thứ đó, không cần liên tiếp: bỏ một hôm không mất ô nào. Sang tháng mới, lịch tính lại từ ô 1.",
     "error": "Không tải được lịch điểm danh",
-    "streak": "Chuỗi hiện tại: {{streak}} ngày",
+    "summaryCount": "Lần điểm danh thứ {{day}} của tháng {{month}} · không cần liên tiếp",
+    "daysLeft": "Còn {{days}} ngày trong tháng cho {{cells}} ô",
     "resetsAt": "Lần điểm danh tiếp theo: {{at}}",
     "reward": "Phần thưởng hôm nay: {{amount}}",
     "claim": "Nhận thưởng",
@@ -75,7 +76,7 @@
       "item": "Vật phẩm",
       "fallback": "Bạn đã có hết vật phẩm của mốc này nên được nhận {{amount}} thay vào đó.",
       "balance": "Số dư mới",
-      "streak": "Chuỗi điểm danh: {{streak}} ngày",
+      "streak": "Lần điểm danh thứ {{streak}} của tháng",
       "newcomer": {
         "title": "Tuần đầu tiên",
         "day": "Ngày {{day}}/7",
@@ -93,8 +94,8 @@
       "today": "Hôm nay",
       "claimed": "Đã nhận",
       "locked": "Chưa tới",
-      "common": "1 món common",
-      "rare": "1 món rare +{{amount}} danh vọng"
+      "common": "1 món thường",
+      "rare": "1 món hiếm +{{amount}} danh vọng"
     },
     "errors": {
       "ALREADY_CLAIMED": "Hôm nay bạn đã nhận thưởng rồi (có thể trên thiết bị khác)."
@@ -113,7 +114,7 @@
         "other": "Chưa thể nhận cứu trợ lúc này."
       }
     },
-    "calendarLead": "Số điểm thưởng cho từng ngày trong chuỗi."
+    "calendarLead": "Số điểm thưởng của từng ô; ô thứ N là lần điểm danh thứ N trong tháng."
   },
   "settings": {
     "title": "Cài đặt",

@@ -39,6 +39,28 @@ describe('DailyCalendar', () => {
     expect(list().getAllByText(viNormal.daily.todayMark)).toHaveLength(1)
   })
 
+  it('lights the tile of the next claim by count, not by date: after twelve claims, tile 13 is today', () => {
+    // Plan 27 G: `day` is the month's claim count the next claim reaches (the server sends 13 after twelve claims,
+    // whatever the date and however many days were missed), so tile 13 is today and tiles 1–12 are taken.
+    renderWithI18n(<DailyCalendar entries={ENTRIES} month="2026-10" day={13} claimable lang="vi" />)
+
+    const today = list()
+      .getAllByRole('listitem')
+      .filter((cell) => cell.getAttribute('aria-current') === 'date')
+    expect(today).toHaveLength(1)
+    expect(within(today[0] as HTMLElement).getByText(viNormal.daily.dayLabel.replace('{{day}}', '13'))).toBeInTheDocument()
+    expect(within(today[0] as HTMLElement).getByText(viNormal.daily.todayMark)).toBeInTheDocument()
+    expect(list().getAllByText(viNormal.daily.claimedMark)).toHaveLength(12)
+  })
+
+  it('marks no tile as today once today’s claim is taken', () => {
+    renderWithI18n(<DailyCalendar entries={ENTRIES} month="2026-10" day={13} claimable={false} lang="vi" />)
+
+    expect(list().queryAllByText(viNormal.daily.todayMark)).toHaveLength(0)
+    expect(list().getAllByRole('listitem').filter((cell) => cell.hasAttribute('aria-current'))).toHaveLength(0)
+    expect(list().getAllByText(viNormal.daily.claimedMark)).toHaveLength(13)
+  })
+
   it('hides the points line with showPoints={false}', () => {
     renderWithI18n(<DailyCalendar entries={ENTRIES} month="2026-10" showPoints={false} lang="vi" />)
 
