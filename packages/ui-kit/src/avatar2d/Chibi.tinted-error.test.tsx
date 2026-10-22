@@ -12,9 +12,11 @@ import type { BodyRef, ChibiConfig } from './types.js'
  */
 
 const mockTinted = vi.hoisted(() => ({ url: null as string | null }))
-vi.mock('./tinted.js', () => ({
-  useTintedLayer: (_prefix: string, layer: { tints?: unknown[] }) => (layer.tints === undefined || layer.tints.length === 0 ? null : mockTinted.url),
-}))
+vi.mock('./tinted.js', () => {
+  const useTintedLayer = (_prefix: string, layer: { tints?: unknown[] }) => (layer.tints === undefined || layer.tints.length === 0 ? null : mockTinted.url)
+  // `Chibi` reads the state form since BP-30; the URL is the same, and the render counts as settled.
+  return { useTintedLayer, useTintedLayerState: (prefix: string, layer: { tints?: unknown[] }) => ({ url: useTintedLayer(prefix, layer), settled: true }) }
+})
 
 const SUBJECT = defaultChibi('ann')
 const TINTED_BODY: BodyRef = { ...SUBJECT.body, tint: { skin: { meanL: 0.78, files: [SUBJECT.body.body] } } }

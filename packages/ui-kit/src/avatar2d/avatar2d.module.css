@@ -100,3 +100,112 @@
     animation: none;
   }
 }
+
+/* BP-30 (spec K6 §3.1): a live chibi. Everything below applies only to a root with `data-live` (or a class only a live
+   root gets), so a chibi that is not live — the table, every card — is styled exactly as before.
+
+   The motions use the individual transform properties (`scale`, `translate`, `rotate`), which compose with each other
+   and with the facing's static `transform: scaleX(-1)` instead of replacing it; only the turn animates `transform`
+   itself, from one facing's value to the other's. `useChibiLife` runs one animation at a time (it stops breathing
+   while a hop, tilt or turn runs), so no two `animation` declarations ever fight. All of them pivot on the feet. */
+.chibi[data-live] {
+  transform-origin: 50% 100%;
+}
+
+.chibi[data-facing='left'] {
+  transform: scaleX(-1);
+}
+
+/* A face mounted but not showing. Opacity only — never `visibility: hidden` or `display: none` — so the browser loads
+   and decodes it as it would a shown one, and a blink to it is instant. */
+.faceHidden {
+  opacity: 0;
+}
+
+@keyframes chibiBreathe {
+  0%,
+  100% {
+    scale: 1;
+  }
+  50% {
+    scale: 1.015;
+  }
+}
+
+.breathe {
+  animation: chibiBreathe 4000ms ease-in-out infinite;
+}
+
+/* `--chibi-hop` lets a stage whose figure already touches its top edge hop lower. */
+@keyframes chibiHop {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  45% {
+    translate: 0 var(--chibi-hop, -6%);
+  }
+}
+
+.hop {
+  animation: chibiHop 420ms ease-out;
+}
+
+@keyframes chibiTilt {
+  0%,
+  100% {
+    rotate: 0deg;
+  }
+  40% {
+    rotate: -4deg;
+  }
+}
+
+.tilt {
+  animation: chibiTilt 600ms ease-in-out;
+}
+
+/* The turn: squeezed to a sliver and opened out mirrored, ending on the new facing's own static transform. The root
+   already carries the new `data-facing` when it starts, which picks the direction. */
+@keyframes chibiSpinLeft {
+  0% {
+    transform: scaleX(1);
+  }
+  50% {
+    transform: scaleX(0.06);
+  }
+  100% {
+    transform: scaleX(-1);
+  }
+}
+
+@keyframes chibiSpinRight {
+  0% {
+    transform: scaleX(-1);
+  }
+  50% {
+    transform: scaleX(-0.06);
+  }
+  100% {
+    transform: scaleX(1);
+  }
+}
+
+.spin {
+  animation: chibiSpinRight 500ms ease-in-out;
+}
+
+.spin[data-facing='left'] {
+  animation-name: chibiSpinLeft;
+}
+
+/* `global.css` already stops every animation under reduced motion; this says so here too, and `useChibiLife` never
+   sets these classes then anyway (R4). */
+@media (prefers-reduced-motion: reduce) {
+  .breathe,
+  .hop,
+  .tilt,
+  .spin {
+    animation: none;
+  }
+}

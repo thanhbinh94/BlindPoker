@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AvatarAssets } from './AvatarAssets.js'
 import AVATAR2D_CSS from './avatar2d.module.css?raw'
@@ -7,7 +7,8 @@ import { Chibi } from './Chibi.js'
 import { resetLoadedClips } from './clip.js'
 import { defaultChibi } from './defaults.js'
 import { hashChibi, layersFor } from './layers.js'
-import type { BodyRef, BotChibi, ChibiConfig, HairRef, WearRef } from './types.js'
+import { CHIBI_LIFE } from './life.js'
+import type { BodyRef, BotChibi, ChibiConfig, ChibiReaction, HairRef, WearRef } from './types.js'
 
 const SUBJECT = defaultChibi('ann')
 const FRAME_ITEM: WearRef = { id: 'frame_gold', order: 90, file: 'item_frame_gold_L90' }
@@ -417,5 +418,219 @@ describe('live off renders the same markup as before', () => {
       "<div class="chibi full" style="width: 96px;" data-chibi-hash="c1598b6e" data-expression="neutral" data-frame="full" aria-hidden="true">
       </div>"
     `)
+  })
+})
+
+/** BP-30: a live chibi — three faces mounted, switched by opacity; the root carries the life state as data attributes. */
+describe('Chibi live', () => {
+  const FACE = SUBJECT.body.faces
+  const faceImgs = (root: ParentNode) => [...root.querySelectorAll<HTMLImageElement>('img[data-face-layer]')]
+  const faceOf = (img: HTMLImageElement) => img.getAttribute('data-face-layer')
+  const shownFaces = (root: ParentNode) => faceImgs(root).filter((img) => !img.hasAttribute('data-face-hidden'))
+  const classes = (el: Element) => el.className.split(/\s+/)
+  const LIFE_CLASSES = [s.breathe, s.hop, s.tilt, s.spin]
+  /** jsdom never loads an image: tell every face layer it has (the base first, which mounts the other two). */
+  const loadFaces = (root: ParentNode) => {
+    for (const img of faceImgs(root)) fireEvent.load(img)
+    for (const img of faceImgs(root)) fireEvent.load(img)
+  }
+
+  class CountingObserver {
+    static made = 0
+    constructor() {
+      CountingObserver.made++
+    }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return []
+    }
+  }
+
+  function stubReducedMotion(reduce: boolean) {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: reduce && query.includes('prefers-reduced-motion: reduce'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+    }))
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
+
+  it('live idle mounts the base, closed and happy faces once each, base first, and shows only data-face', () => {
+    vi.useFakeTimers()
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    const { container } = render(<Chibi subject={SUBJECT} live="idle" />)
+    const root = container.firstElementChild as HTMLElement
+    loadFaces(container)
+
+    const faces = faceImgs(container)
+    expect(faces.map(faceOf)).toEqual(['neutral', 'closed', 'happy'])
+    expect(faces.map((img) => img.getAttribute('src'))).toEqual([FACE.neutral, FACE.closed, FACE.happy].map((f) => `/avatar/${f}@1x.png`))
+    expect(faces.map((img) => img.style.zIndex)).toEqual(['50', '50', '50'])
+    // Right after the base face in the stack, before the front hair.
+    const all = [...container.querySelectorAll('img')]
+    expect(all.indexOf(faces[2]!) + 1).toBe(all.findIndex((img) => img.style.zIndex === '60'))
+    // Every other layer once.
+    expect(all).toHaveLength(layersFor(SUBJECT, 'neutral', 'full').length + 2)
+
+    expect(root).toHaveAttribute('data-live', 'idle')
+    expect(root).toHaveAttribute('data-face', 'base')
+    expect(root).toHaveAttribute('data-expression', 'neutral')
+    expect(root).toHaveAttribute('data-breathing', 'true')
+    expect(root).toHaveAttribute('data-motion', 'none')
+    expect(root).not.toHaveAttribute('data-reacting')
+    expect(classes(root)).toContain(s.breathe)
+    expect(shownFaces(container).map(faceOf)).toEqual(['neutral'])
+    for (const img of faces.slice(1)) expect(classes(img)).toContain(s.faceHidden)
+
+    // A blink: only the closed face shows, for 120 ms.
+    act(() => vi.advanceTimersByTime(CHIBI_LIFE.blinkMinGapMs))
+    expect(root).toHaveAttribute('data-face', 'closed')
+    expect(shownFaces(container).map(faceOf)).toEqual(['closed'])
+    act(() => vi.advanceTimersByTime(CHIBI_LIFE.blinkMs))
+    expect(root).toHaveAttribute('data-face', 'base')
+    expect(shownFaces(container).map(faceOf)).toEqual(['neutral'])
+  })
+
+  it('a base expression of happy or closed is not mounted twice', () => {
+    const { container } = render(<Chibi subject={SUBJECT} expression="happy" live="idle" />)
+    loadFaces(container)
+    expect(faceImgs(container).map(faceOf)).toEqual(['happy', 'closed'])
+  })
+
+  it('extras mount only after the base face is ready', () => {
+    const { container } = render(<Chibi subject={SUBJECT} live="idle" />)
+    expect(faceImgs(container).map(faceOf)).toEqual(['neutral'])
+    fireEvent.load(faceImgs(container)[0]!)
+    expect(faceImgs(container).map(faceOf)).toEqual(['neutral', 'closed', 'happy'])
+  })
+
+  it('onFacesReady fires once every face loaded', () => {
+    const onFacesReady = vi.fn()
+    const { container, rerender } = render(<Chibi subject={SUBJECT} live="idle" onFacesReady={onFacesReady} />)
+    fireEvent.load(faceImgs(container)[0]!)
+    expect(onFacesReady).not.toHaveBeenCalled()
+    const [, closed, happy] = faceImgs(container)
+    fireEvent.load(closed!)
+    expect(onFacesReady).not.toHaveBeenCalled()
+    fireEvent.load(happy!)
+    expect(onFacesReady).toHaveBeenCalledTimes(1)
+    rerender(<Chibi subject={SUBJECT} live="idle" onFacesReady={onFacesReady} />)
+    fireEvent.load(happy!)
+    expect(onFacesReady).toHaveBeenCalledTimes(1)
+  })
+
+  it('a face that fails to load still counts as settled', () => {
+    const onFacesReady = vi.fn()
+    const { container } = render(<Chibi subject={SUBJECT} live="idle" onFacesReady={onFacesReady} />)
+    fireEvent.error(faceImgs(container)[0]!)
+    for (const img of faceImgs(container).slice(1)) fireEvent.error(img)
+    expect(onFacesReady).toHaveBeenCalledTimes(1)
+  })
+
+  it('a cheer shows the happy face only once the faces are ready', () => {
+    const cheer = (key: number): ChibiReaction => ({ kind: 'cheer', key })
+    const { container, rerender } = render(<Chibi subject={SUBJECT} live="idle" react={null} />)
+    const root = container.firstElementChild as HTMLElement
+    rerender(<Chibi subject={SUBJECT} live="idle" react={cheer(1)} />)
+    expect(root).toHaveAttribute('data-face', 'base')
+    expect(root).toHaveAttribute('data-reacting', 'cheer')
+    loadFaces(container)
+    rerender(<Chibi subject={SUBJECT} live="idle" react={cheer(2)} />)
+    expect(root).toHaveAttribute('data-face', 'happy')
+    expect(root).toHaveAttribute('data-motion', 'hop')
+    expect(root).toHaveAttribute('data-breathing', 'false')
+    expect(classes(root)).toContain(s.hop)
+    expect(classes(root)).not.toContain(s.breathe)
+    expect(shownFaces(container).map(faceOf)).toEqual(['happy'])
+  })
+
+  it('facing left flips the root', () => {
+    const { container, rerender } = render(<Chibi subject={SUBJECT} live="idle" facing="left" />)
+    const root = container.firstElementChild as HTMLElement
+    expect(root).toHaveAttribute('data-facing', 'left')
+    expect(getComputedStyle(root).transform).toBe('scaleX(-1)')
+    // Mounted turned: no spin.
+    expect(root).toHaveAttribute('data-motion', 'none')
+
+    rerender(<Chibi subject={SUBJECT} live="idle" facing="right" />)
+    expect(root).toHaveAttribute('data-facing', 'right')
+    expect(root).toHaveAttribute('data-motion', 'spin')
+    expect(root).toHaveAttribute('data-reacting', 'spin')
+    expect(classes(root)).toContain(s.spin)
+    expect(getComputedStyle(root).transform).not.toBe('scaleX(-1)')
+  })
+
+  it('live idle watches the screen; still mode: no observer, no breathing, reacts to react', () => {
+    vi.stubGlobal('IntersectionObserver', CountingObserver)
+    CountingObserver.made = 0
+    const idle = render(<Chibi subject={SUBJECT} live="idle" />)
+    expect(CountingObserver.made).toBe(1)
+    idle.unmount()
+
+    CountingObserver.made = 0
+    const { container, rerender } = render(<Chibi subject={SUBJECT} live="still" react={null} />)
+    const root = container.firstElementChild as HTMLElement
+    expect(CountingObserver.made).toBe(0)
+    expect(root).toHaveAttribute('data-live', 'still')
+    expect(root).toHaveAttribute('data-breathing', 'false')
+    expect(classes(root)).not.toContain(s.breathe)
+    loadFaces(container)
+    expect(faceImgs(container)).toHaveLength(3)
+
+    rerender(<Chibi subject={SUBJECT} live="still" react={{ kind: 'cheer', key: 1 }} />)
+    expect(root).toHaveAttribute('data-reacting', 'cheer')
+    expect(root).toHaveAttribute('data-face', 'happy')
+    expect(classes(root)).toContain(s.hop)
+  })
+
+  it('reduce: no animation class, face stays base', () => {
+    stubReducedMotion(true)
+    vi.useFakeTimers()
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    const { container, rerender } = render(<Chibi subject={SUBJECT} live="idle" react={null} />)
+    const root = container.firstElementChild as HTMLElement
+    loadFaces(container)
+    rerender(<Chibi subject={SUBJECT} live="idle" react={{ kind: 'cheer', key: 1 }} />)
+    rerender(<Chibi subject={SUBJECT} live="idle" react={{ kind: 'wave', key: 2 }} facing="left" />)
+    act(() => vi.advanceTimersByTime(10_000))
+
+    expect(root).toHaveAttribute('data-face', 'base')
+    expect(root).toHaveAttribute('data-motion', 'none')
+    expect(root).toHaveAttribute('data-breathing', 'false')
+    expect(root).not.toHaveAttribute('data-reacting')
+    // The turn itself still lands, at once.
+    expect(root).toHaveAttribute('data-facing', 'left')
+    for (const name of LIFE_CLASSES) expect(classes(root)).not.toContain(name)
+    expect(shownFaces(container).map(faceOf)).toEqual(['neutral'])
+  })
+
+  it('the life styles: every animation stops under reduced motion, the origin only on a live root, no will-change', () => {
+    const css = AVATAR2D_CSS.replace(/\/\*[\s\S]*?\*\//g, '')
+    for (const name of ['chibiBreathe', 'chibiHop', 'chibiTilt', 'chibiSpinLeft', 'chibiSpinRight']) expect(css).toContain(`@keyframes ${name}`)
+    const reduce = [...css.matchAll(/@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/g)].map((m) => m[1]).join('\n')
+    for (const name of ['.breathe', '.hop', '.tilt', '.spin']) expect(reduce).toContain(name)
+    expect(reduce).toMatch(/animation:\s*none/)
+    expect(css).toMatch(/\.chibi\[data-live\]\s*\{[^}]*transform-origin:\s*50% 100%/)
+    expect(css.match(/\.chibi\s*\{[^}]*\}/)?.[0]).not.toContain('transform-origin')
+    expect(css).not.toContain('will-change')
+    expect(css).toMatch(/\.faceHidden\s*\{\s*opacity:\s*0;?\s*\}/)
+    expect(css).toMatch(/translate:\s*0 var\(--chibi-hop, -6%\)/)
+  })
+
+  it('live off draws one face and no life attribute', () => {
+    const { container } = render(<Chibi subject={SUBJECT} live="off" react={{ kind: 'cheer', key: 1 }} facing="left" />)
+    const root = container.firstElementChild as HTMLElement
+    expect(faceImgs(container)).toHaveLength(0)
+    for (const name of ['data-live', 'data-face', 'data-facing', 'data-reacting', 'data-breathing', 'data-motion']) expect(root).not.toHaveAttribute(name)
   })
 })
