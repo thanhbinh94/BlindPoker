@@ -685,8 +685,8 @@ B2–B3).** On a desktop the room's control row stays up for the whole hand; in 
 is drawn only while the table is waiting or counting down to the next hand, and the rest of the row's work lives in the
 "Thêm" menu. So a spectator (or a seat sitting out) watching a hand in progress sees the table and the menu, with no
 footer line of its own. A 740 × 360 window (the narrowest frame the query admits, a small Android phone under its browser
-bars) fits, but the plates at the flanks and the docks leave only a few pixels between them; below 700 px wide the room
-keeps the stacked layout.
+bars) has a 296 px stage and takes the short tier since BP-28; it fits, but the end seats and the docks leave only a few
+pixels between them; below 700 px wide the room keeps the stacked layout.
 *Why it stays:* nothing in the footer row is needed mid-hand by someone who is not in it, and the thin margins are the
 width of 740 px, not a bug to fix without shrinking the plates the names live on.
 *Tracked:* `packages/ui-kit/src/screens/RoomScreen.tsx` (`dockShown`); `docs/ui-kit.md` (The landscape frame).
@@ -694,13 +694,38 @@ width of 740 px, not a bug to fix without shrinking the plates the names live on
 **A Hold'em table with nine people at it, on a landscape phone, has no browser test (Plan 26, B3).** A Hold'em room seats
 nine (`maxPlayersHoldem`), and nine humans can fill it; Blind caps at eight. L-02 drives eight occupied plates at
 915 × 355 and the nine-seat Hold'em room only for its empty seats' "Ngồi vào bàn" buttons. Nine occupied plates are seen
-only in the playground (`#worst/turn/9/vi/landscape`, `#worst/waiting/9/vi/landscape`). No two plates overlap there, but
-at 915 × 355 the left side is crowded: the deck sits close to a bet chip, a seat's cards touch another's chip, a folded
-seat's tag lies under the deck, and names are cut to three letters.
+only in the playground (`#worst/turn/9/vi/short`, `#worst/waiting/9/vi/short`, and `/landscape` at 915 × 412). Since BP-28
+a stage under 300 px seats them on the short tier's stadium (six on the top line, two at the ends), where no two seat
+boxes meet at 855 × 319; names are cut to five or six letters, and a six-figure stack with a rank pill runs a few pixels
+past its 92 px plate (the pill does not wrap). On a stage narrower than about 800 px (740 × 300) six plates no longer fit
+between the end seats, and the top line passes over them with about 4 px to spare — a showdown's line under a top seat
+would reach the end seat's cards there.
 *Why it stays:* nine humans around one landscape phone's table is rare, and the ops pack has no nine-human room (it would
 need nine accounts); the playground shot is the stress check.
 *Tracked:* `packages/ui-kit/playground/screenshots/README.md` (the `turn` · 9 seats · 915 × 355 row);
 `apps/normal-web/e2e/ops/07-landscape.spec.ts` → L-02.
+
+**The short landscape tier is tight below a 255 px stage, and it trades some of a seat's words for room (BP-28).** A
+phone held sideways with its browser bars showing (the user's 855 × 319, a 255 px stage) takes the landscape frame's
+short tier: a stadium as wide as the stage, the viewer's cards beside the plate, the opponents' lines cut to their bet.
+What it gives up, and what it does not cover:
+- An opponent's "Bot" and "♛ Chủ phòng" badges are not drawn, and its state ("Đã chọn", "Đã bỏ bài", "Tất tay", "Mất kết
+  nối") is a 9 px dot of the state's colour (the words stay for a screen reader). A folded seat is still greyed, and the
+  viewer's own line keeps every badge.
+- After a showdown, with the result card closed, the viewer's block (cards, a line of badges and the hand's name with the
+  payout) ends about 1 px under the board at 855 × 319; on a shorter stage they touch. The card itself covers the table
+  while it is up (unchanged).
+- The tier has been driven at 855 × 319, 915 × 355 and 740 × 300 (a 236 px stage). Below about 230 px — no phone the query
+  admits has one with its bars, except one in split screen — the top line, the board and the viewer's block run into each
+  other. The fix is full screen, which the tier's one-time nudge offers where the browser has it (Android Chrome; not iOS
+  Safari).
+- The reconnect banner (40 px from the top, Plan 26 ruling 10) lies over the top line's plates while it shows.
+- No real phone has run it; the user's own Android is the check (`docs/operation-test-plan.md`, L-06).
+*Why it stays:* the stage is the screen the browser leaves; every pixel of it is already the table's, and full screen is
+the way to more.
+*Tracked:* `packages/ui-kit/src/table/frame.ts` (`SHORT_STAGE_PX`), `geometry.ts` (`shortRingPositions`),
+`table.module.css` (`[data-tier='short']`); `docs/ui-kit.md` (The landscape frame → The short tier); bug log §10, E1/E2;
+`apps/normal-web/e2e/ops/07-landscape.spec.ts` → L-06.
 
 **A flick needs a run of movement to be read as one, on a device that does not coalesce pointer events.** The flick's
 speed is taken from the pointer's real and coalesced positions (`getCoalescedEvents`) over its last 100 ms, and a pointer

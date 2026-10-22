@@ -9,6 +9,91 @@ below are the real history.
 
 ---
 
+## BP-28 — a landscape phone that keeps its browser bars seats the table on a stadium as wide as the screen — merged `MERGE` (2026-10-23)
+
+The user's review round of 2026-10-22 (bug log §10, E1 and E2, photos 1–4): "lỗi chủ yếu ở ảnh 1-4 là giao diện không hợp
+lý, bài đè lên nhau hoặc không hiển thị đúng vị trí chia ô người chơi khi xoay ngang". Held sideways with Chrome's bars
+showing, the user's Android leaves an 855 × 319 viewport and a 255 px stage, under the 290 px Plan 26's landscape frame
+was drawn for: the 10 : 3 ellipse came out 500 × 150 px, the flank seats stood on each other, "Bot · Đã chọn · 2.000" ran
+over the next plate, the viewer's 50 px cards covered the board, and the waiting hint lay on the viewer's own name. Branch
+`bugfix/BP-28-short-landscape-table`.
+
+- **What a player sees.** On a stage under 300 px the landscape frame takes a second tier, `short`. The table is a
+  stadium as wide as the screen: my seat at the bottom centre with my cards *beside* my plate, the two seats next to me
+  at the stadium's two ends, everyone else on one line along the top — no seat above or below another, the board alone
+  in the middle. The plates lose their caption; a bot's three face-down cards are 16 px, mine `clamp(40px, 16cqh,
+  56px)` (a peel card 48 px); under an opponent only the bet stays, the "Bot" and "Chủ phòng" badges go and "Đã chọn"
+  (or any state) becomes a dot of its colour. Before a hand the hint ("Bấm Sẵn sàng để bắt đầu — ván cần ít nhất một
+  người chơi thật.") is the corner dock's second line, under "N/M sẵn sàng". Where the browser offers full screen, a slim
+  "Dùng Toàn màn hình để bàn rộng hơn" sits once in the bottom-left corner: its words go full screen, its ✕ puts it away,
+  and either is remembered. 915 × 412, 844 × 390 and every desktop size look as before; 915 × 355 (a 291 px stage) is in
+  the short tier now.
+- **Under it.** `table/frame.ts`: `FrameTier`, `SHORT_STAGE_PX = 300`, `stageTier`, `useStageTier` (the stage, `.roomMain`,
+  measured before the first paint and on every resize). `table/geometry.ts`: `shortRingPositions(order, anchor, box)` and
+  `SHORT_SEAT`. `PokerTable` takes `tier`, stamps `data-tier` and gives an empty seat `data-half` / `data-edge` in the short
+  tier; `Seat` wraps the cards and the plate in `.seatTop` (`display: contents` except the short tier's own seat) and
+  marks its who-badges `.tagWho` and its state pill `.tagState`; the `[data-tier='short']` rules in `table.module.css` and
+  `screens.module.css`; `screens/fullscreen-nudge.ts` (`bp.fullscreenNudge` in `localStorage`); two strings in both
+  languages, `room.fullscreenNudge` and `room.fullscreenNudgeDismiss`. The playground gains `#worst/blindP`, `#worst/blindW`
+  and the `/short` 855 × 319 box, and its bots draw no caption, as in Normal. No protocol, schema or dependency change.
+- **Tests and docs.** Unit: `frame.test.ts` (+5), `geometry.test.ts` (+7, among them a block model at 855 × 319 and
+  915 × 355 with six and eight seats), `PokerTable.test.tsx` (+1), `Seat.test.tsx` (+2), `RoomScreen.test.tsx` (+6),
+  `scenarios.test.ts` (+1). Ops: L-06 (855 × 319: a seven-seat Blind play-or-fold table waiting and after every bot has
+  chosen, an eight-seat Hold'em table on the flop; every seat box against the others, the board, my cards, the dock, the
+  tray's corners and the nudge, the room fitting, no text over text). `docs/ui-kit.md` ("The short tier"),
+  `docs/known-limitations.md` (a new entry, two rewritten), `docs/test-matrix.md` (three rows), `docs/operation-test-plan.md`
+  (L-06), bug log §10 E1/E2, CLAUDE.md §3 (51 ops cases, the matrix count).
+- **Rulings** (the session lead's R1–R3, then the implementer's):
+  - R1: a second landscape tier, `short`, measured on the stage with `LANDSCAPE_PHONE` still the trigger; compact plates,
+    the bots' face-down cards shrunk rather than counted, the viewer's cards smaller, an opponent's line cut to the bet,
+    and seats placed so no seat box meets another or the board.
+  - R2: in the short tier the waiting hint moves into the corner dock beside "N/M sẵn sàng"; it stays on the felt in the
+    normal tier.
+  - R3: the result card and the menu's "Toàn màn hình" are unchanged; a one-time nudge, only in the short tier and only
+    where `document.fullscreenEnabled`, dismissable and remembered, with no motion.
+  - Ruling 1: the threshold is **300 px**, not R1's 290 — the stage at 915 × 355 measures 291 px, and there the normal tier
+    laid a bot's "Bot · Đã chọn · 2.000" over the pot's figure and another's over the deck on a six-seat Blind table (the
+    playground's `blindP`); from 915 × 365 (301 px) the ellipse is clear. Costs if wrong: 915 × 355 (and L-02) shows the
+    stadium instead of the ellipse.
+  - Ruling 2: an anchor layout (`shortRingPositions`: the viewer, two ends, a top line clear of the ends across), not a
+    re-measured ellipse — any ellipse of the stage's height puts two seats on one line of sight at each flank. Costs if
+    wrong: the table reads less like an oval on a short phone.
+  - Ruling 3: the viewer's cards go *beside* the plate in the short tier, with the line of badges under both, so the
+    viewer's block is one card tall and the board keeps the middle. Costs if wrong: the cards are no longer above the
+    plate, as everywhere else.
+  - Ruling 4: R1's "min 34 px" for the bots' cards could not be read as a card width (the landscape frame already drew
+    them at 20 px); the cards are 16 px wide (the bug log's 14–16 px), aspect kept, which makes a two-card hand 34 px
+    wide. Costs if wrong: three 16 px backs are small on a phone.
+  - Ruling 5: R1's `clamp(40px, 22cqh, 56px)` for the viewer's cards was a share of the old ring (≈ 150 px tall); the
+    short ring is the whole stage, so it is `clamp(40px, 16cqh, 56px)` — the same 40 px at 855 × 319. A peel card is 48 px
+    in the short tier (60 elsewhere): three 60 px cards beside a plate do not fit between the corner docks. Costs if
+    wrong: a narrower card to peel on a short phone.
+  - Ruling 6: "under 120 px plate width" is every opponent in the short tier (their plates are 92–110 px), so the rule is
+    keyed on the tier, not measured per seat. The state pill is a 9 px dot of its colour rather than dropped, its words
+    kept for a screen reader, and a showdown's hand name is cut short before its payout is. Costs if wrong: a player must
+    know the dot's colours (teal chosen or turned, gold all-in, red disconnected, grey folded or sitting out).
+  - Ruling 7: the hint is the dock's *second* line, under the buttons and the count, and the dock wraps capped at
+    `min(38%, 20rem)` — a column beside the count would have run four lines at 855 px. Costs if wrong: the dock is two
+    lines tall while the room waits.
+  - Ruling 8: the nudge sits in the bottom-left corner while no tray holds it (no hand, or a spectator), new copy "Dùng
+    Toàn màn hình để bàn rộng hơn" / "Use Full screen for a wider table" and its ✕ "Ẩn gợi ý Toàn màn hình" / "Hide the
+    Full screen tip"; using it also counts as done. Costs if wrong: a player who first sits down mid-hand sees it only at
+    the next pre-hand moment with no tray.
+  - Ruling 9: L-06 makes its rooms at the project's 915 × 412 and shrinks to 855 × 319 once inside: the lobby's create
+    dialog at 319 px is another screen, out of this fix. Costs if wrong: the create dialog on a short phone stays untested.
+- **Khác với spec / Deviations from the spec.** Plan 26's spec §3 B3 lays out one landscape frame from 290 px up; below
+  300 px it is now the short tier's stadium (Rulings 1–3). The waiting hint is in the dock there, as B3 had it before the
+  felt note (R2).
+- **Still open.** No real phone has run it (the user's Android is the check, L-06 in the operation test plan). Below a
+  230 px stage the lines run into each other; after a showdown with the card closed the viewer's block ends 1 px under the
+  board at 855 × 319; nine seats on a stage under about 800 px wide pass the top line over the end seats; the reconnect
+  banner lies over the top line while it shows (`docs/known-limitations.md`). The lobby's create dialog at 855 × 319 is
+  untested. Lite picks this up at its next `pnpm build:lite`.
+- **Gate** (on the branch, 2026-10-23, before the merge gate): typecheck and lint clean; unit ui-kit 649/649 (47 files),
+  normal-web 1071/1071 (55 files, `CI_SKIP_BUILD=1`), `tooling/arch` 42/42; build:normal; ops L-01 … L-06 6/6 in 1.7 min;
+  e2e Normal 24/24 in 2.1 min. Not yet run: the whole `pnpm test`, build:lite, avatar:check, e2e Lite and the whole ops
+  pack — the merge gate's.
+
 ## Plan 27 — a shop for points behind a reputation rank, a welcome gift, Blind played to zero, a lazy wardrobe and a monthly check-in — merged `da8ca8a` (2026-10-22)
 
 The round the user asked for on 2026-10-20/21 (`docs/bug-log.md` §9, K1–K5, plus Q13 from the spec review): players saw
