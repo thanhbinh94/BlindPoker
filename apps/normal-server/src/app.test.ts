@@ -838,7 +838,7 @@ describe('rooms joined', () => {
 })
 
 describe('a whole hand between two registered players', () => {
-  it('settles through the ledger, records a table_fee sink and moves both players’ counters', async () => {
+  it('settles through the ledger, takes no fee at a Blind table and moves both players’ counters', async () => {
     const h = await harness({ roomOptions: FAST_ROOM })
     const alice = await h.register()
     const mai = await h.register(SECOND_ACCOUNT)

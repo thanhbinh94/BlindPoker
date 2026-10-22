@@ -27,8 +27,8 @@ export function blindRequiredStack(rules: Pick<BlindRules, 'decisionMode' | 'fix
 
 /**
  * The most a Blind seat brings to the table: five wagers (spec 2026-09-29). A player with less sits down with all of
- * it, as long as that covers `blindRequiredStack`; a seat that can no longer cover a hand is stood up and must sit
- * down again. Takes only the field it reads, so a client can ask it of the room config it was sent.
+ * it; a seat plays down to its last point and is stood up at 0 (Plan 27). Takes only the field it reads, so a client
+ * can ask it of the room config it was sent.
  */
 export function blindTableLimit(rules: Pick<BlindRules, 'fixedWager'>): number {
   return rules.fixedWager * ECONOMY.blindTableLimitMultiplier
@@ -107,8 +107,8 @@ export function blindLegalActions(state: HandState, seat: number): LegalActions 
  * Play-or-fold, as the decision round opens: a seat the ante emptied has nothing left to put in, and folding would
  * only throw its ante away, so it is never asked (spec plan 27 R14). It is decided `play` on the spot — a bare
  * `DECISION_MADE`, as for any seat — and its `PLAYER_ACTED` (amount 0, all in, not timed out) comes with everyone
- * else's when the round resolves. Its cards stay as they are on a squeeze table, like a bot's. If every seat was
- * emptied, the round resolves here and then.
+ * else's when the round resolves. On a squeeze table it is never asked to turn; its cards open with the reveal. If
+ * every seat was emptied, the round resolves here and then.
  */
 function autoPlayAllIn(state: HandState, events: GameEvent[]): void {
   for (const p of state.players) {
@@ -201,17 +201,48 @@ function endSqueezeIfDone(state: HandState, events: GameEvent[]): void {
   state.phase = 'REVEAL'
 }
 
-/** All seats have decided: apply the wagers in seat order, reveal, then branch on how many are still playing. */
+/**
+ * A folded seat's ante above everything a live seat put in is money nobody still in the hand matched: it goes back
+ * to the folder (spec plan 27 D2, "người tất tay ít chỉ ăn pot chính phần mình"). Without this, `computePots` hands
+ * a pot no live seat reached to the live seats, so a short all-in seat whose every coverer folded won the folders'
+ * whole antes. One folder alone above the rest is left to `settle`'s `returnUncalled`, which hands back exactly the
+ * same and tells it in `SETTLEMENT.uncalledReturned`, so a heads-up hand reads as it always has. Nothing to do when
+ * every seat folded: the pot carries over whole.
+ */
+function returnDeadExcess(state: HandState): void {
+  const live = state.players.filter((p) => !p.folded)
+  if (live.length === 0) return
+  const maxLive = Math.max(...live.map((p) => p.totalCommitted))
+  const dead = state.players.filter((p) => p.folded && p.totalCommitted > maxLive)
+  if (dead.length < 2) return
+  for (const p of dead) {
+    const amount = p.totalCommitted - maxLive
+    p.totalCommitted -= amount
+    p.betThisStreet = Math.max(0, p.betThisStreet - amount)
+    p.stack += amount
+    state.pot -= amount
+    if (p.stack > 0) p.allIn = false
+  }
+}
+
+/**
+ * All seats have decided: apply the wagers in seat order, hand a dead excess back to its folders, reveal, then branch
+ * on how many are still playing. The `PLAYER_ACTED`s are told after the refund, so a folder's stack and the
+ * `POT_UPDATED` that follows already agree with it; no chips move after this in a Blind hand, so both `settle` paths
+ * (here, and the `ADVANCE` that ends the reveal) see the refunded pots.
+ */
 function resolveDecisions(state: HandState, events: GameEvent[]): void {
   const wager = rulesOf(state).fixedWager
+  const played = new Map<number, number>()
   for (const x of state.players) {
-    if (x.decision === 'play') {
-      const amount = commit(state, x, wager)
-      events.push({ type: 'PLAYER_ACTED', seat: x.seat, action: { kind: 'play' }, amount, stack: x.stack, allIn: x.allIn, timedOut: x.timedOut })
-    } else {
-      x.folded = true
-      events.push({ type: 'PLAYER_ACTED', seat: x.seat, action: { kind: 'fold' }, amount: 0, stack: x.stack, allIn: x.allIn, timedOut: x.timedOut })
-    }
+    if (x.decision === 'play') played.set(x.seat, commit(state, x, wager))
+    else x.folded = true
+  }
+  returnDeadExcess(state)
+  for (const x of state.players) {
+    const amount = played.get(x.seat)
+    const action = amount === undefined ? { kind: 'fold' as const } : { kind: 'play' as const }
+    events.push({ type: 'PLAYER_ACTED', seat: x.seat, action, amount: amount ?? 0, stack: x.stack, allIn: x.allIn, timedOut: x.timedOut })
   }
   events.push({ type: 'POT_UPDATED', pot: state.pot })
   events.push({ type: 'DECISIONS_REVEALED', decisions: state.players.map((x) => ({ seat: x.seat, decision: x.decision! })) })

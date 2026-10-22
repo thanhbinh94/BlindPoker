@@ -286,6 +286,59 @@ describe('mode B (play or fold)', () => {
     expect(t.state.result!.pots.map((p) => p.eligibleSeats)).toEqual([[0, 1, 2], [0, 2]])
     t.assertMoney()
   })
+  it('play-or-fold: a short seat whose every coverer folds wins only what it matched; the folders get their excess back', () => {
+    const t = new Table(rules({ tableFeeRate: 0 }), [500, 5000, 5000])
+    t.fold(1)
+    const ev = t.fold(2)
+    // The 500 of each folder's ante that seat 0 never matched goes back as the decisions are revealed (spec D2).
+    expect(ev.filter((e) => e.type === 'PLAYER_ACTED')).toMatchObject([
+      { seat: 0, action: { kind: 'play' }, amount: 0, stack: 0 },
+      { seat: 1, action: { kind: 'fold' }, amount: 0, stack: 4500 },
+      { seat: 2, action: { kind: 'fold' }, amount: 0, stack: 4500 },
+    ])
+    expect(ev.find((e) => e.type === 'POT_UPDATED')).toEqual({ type: 'POT_UPDATED', pot: 1500 })
+    expect(t.state.phase).toBe('COMPLETE')
+    expect(t.state.result!.pots).toMatchObject([{ amount: 1500, eligibleSeats: [0] }])
+    expect(t.state.result!.payouts).toEqual([{ seat: 0, amount: 1500 }])
+    expect(t.state.result!.stacks).toEqual([{ seat: 0, stack: 1500 }, { seat: 1, stack: 4500 }, { seat: 2, stack: 4500 }])
+    t.assertMoney()
+
+    // Heads-up the same hand pays the same way: the one folder's excess is the uncalled bet it already was.
+    const h = new Table(rules({ tableFeeRate: 0 }), [500, 5000])
+    h.fold(1)
+    expect(h.state.result!.uncalledReturned).toEqual({ seat: 1, amount: 500 })
+    expect(h.state.result!.stacks).toEqual([{ seat: 0, stack: 1000 }, { seat: 1, stack: 4500 }])
+    h.assertMoney()
+  })
+  it('play-or-fold: two short seats that both play and two folders — the folders get back what neither short seat matched', () => {
+    const t = new Table(rules({ tableFeeRate: 0 }), [500, 700, 5000, 5000])
+    t.fold(2)
+    const ev = t.fold(3)
+    expect(ev.find((e) => e.type === 'POT_UPDATED')).toEqual({ type: 'POT_UPDATED', pot: 500 + 700 + 700 + 700 })
+    expect(t.stack(2)).toBe(4300)
+    expect(t.stack(3)).toBe(4300)
+    expect(t.state.phase).toBe('REVEAL')
+    t.advanceAll()
+    // The main pot is what the 500 seat matched; the side pot is the 200 more each of the others put in up to 700.
+    expect(t.state.result!.pots).toMatchObject([{ amount: 2000, eligibleSeats: [0, 1] }, { amount: 600, eligibleSeats: [1] }])
+    expect(t.stack(0)).toBeLessThanOrEqual(2000)
+    expect(t.stack(0) + t.stack(1)).toBe(2600)
+    expect(t.state.result!.stacks.filter((s) => s.seat >= 2)).toEqual([{ seat: 2, stack: 4300 }, { seat: 3, stack: 4300 }])
+    t.assertMoney()
+  })
+  it('play-or-fold: a short seat with one coverer still playing — nothing goes back to the folder, the side pot is as before', () => {
+    const t = new Table(rules({ tableFeeRate: 0 }), [500, 5000, 5000])
+    t.play(1)
+    const ev = t.fold(2)
+    expect(ev.find((e) => e.type === 'POT_UPDATED')).toEqual({ type: 'POT_UPDATED', pot: 500 + 2000 + 1000 })
+    expect(t.stack(2)).toBe(4000)
+    t.advanceAll()
+    // Seat 1's second 1,000 nobody called goes back to it; the folder's 1,000 stays in the pots it reached.
+    expect(t.state.result!.uncalledReturned).toEqual({ seat: 1, amount: 1000 })
+    expect(t.state.result!.pots).toMatchObject([{ amount: 1500, eligibleSeats: [0, 1] }, { amount: 1000, eligibleSeats: [1] }])
+    expect(t.stack(2)).toBe(4000)
+    t.assertMoney()
+  })
 })
 
 describe('squeeze mode (spec 2026-10-08)', () => {
@@ -384,7 +437,7 @@ describe('squeeze mode (spec 2026-10-08)', () => {
     expect(() => step(state, { type: 'REVEALED', seat: 7 })).toThrow(EngineError) // NOT_IN_HAND
   })
 
-  it('play or fold: a seat emptied by the ante is auto-played without turning its cards, like a bot', () => {
+  it('play or fold: a seat emptied by the ante is auto-played and never asked to turn; its cards open with the reveal', () => {
     const seats = [0, 1, 2].map((seat) => ({ seat, playerId: `p${seat}`, stack: seat === 0 ? 1000 : 5000, isBot: false }))
     const { state, events } = createBlindHand({ handId: 'sq', rules: squeezeRules('playOrFold'), seats, button: 0, carryOverIn: 0 }, seededRng(3))
     expect(events.slice(-2)).toEqual([{ type: 'DECISION_PHASE', seats: [0, 1, 2], turnSeq: 1 }, { type: 'DECISION_MADE', seat: 0 }])
