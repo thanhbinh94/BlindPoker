@@ -413,29 +413,44 @@ describe('GmService — check-in', () => {
     expect(await consecutiveOf(me.playerId)).toBe(1)
   })
 
+  /** Newcomer day 2 was yesterday, so today's claim reaches day 3, which draws a common or pays its fallback. */
+  const seedNewcomerDay2 = (playerId: string) =>
+    db.execute(sql`insert into newcomer_progress (player_id, day, claimed_days, last_day_key) values (${playerId}, 2, '[1,2]'::jsonb, ${YESTERDAY})`)
+  /** Owning every common empties both draws, so day 3 pays the 10,000 fallback deterministically. */
+  const ownEveryCommon = (playerId: string) =>
+    db.execute(sql`insert into inventory (player_id, item_id, source) select ${playerId}, id, 'gm' from items where rarity = 'common' on conflict do nothing`)
+  const newcomerOf = async () =>
+    (rowsOf<{ day: number; claimed: number[]; last: string; finished: string | null }>(
+      await db.execute(sql`select day, claimed_days as claimed, last_day_key as last, finished_at as finished from newcomer_progress where player_id = ${me.playerId}`),
+    ))[0]
+  const newcomerGifts = async () => ({
+    items: rowsOf<{ item_id: string }>(await db.execute(sql`select item_id from inventory where player_id = ${me.playerId} and source = 'newcomer'`)),
+    points: rowsOf<{ amount: string | number }>(await db.execute(sql`select amount from point_transactions where ref_id = ${`newcomer:${me.playerId}:3`}`))
+      .map((p) => ({ amount: Number(p.amount) })),
+  })
+
   it('resetCheckin does not touch newcomer_progress', async () => {
-    // Newcomer day 2 was yesterday: today's claim reaches day 3, which hands out a common (or its fallback).
-    await db.execute(sql`insert into newcomer_progress (player_id, day, claimed_days, last_day_key) values (${me.playerId}, 2, '[1,2]'::jsonb, ${YESTERDAY})`)
-    const newcomerOf = async () =>
-      (rowsOf<{ day: number; claimed: number[]; last: string; finished: string | null }>(
-        await db.execute(sql`select day, claimed_days as claimed, last_day_key as last, finished_at as finished from newcomer_progress where player_id = ${me.playerId}`),
-      ))[0]
-    const newcomerGifts = async () => ({
-      items: rowsOf<{ item_id: string }>(await db.execute(sql`select item_id from inventory where player_id = ${me.playerId} and source = 'newcomer'`)),
-      points: rowsOf<{ amount: string | number }>(await db.execute(sql`select amount from point_transactions where ref_id = ${`newcomer:${me.playerId}:3`}`)),
-    })
+    await seedNewcomerDay2(me.playerId)
+    await ownEveryCommon(me.playerId)
+    const base = await h.app.services.repos.balances.get(me.playerId)
 
     const claim = await h.app.services.economy.claimDaily(me.playerId, clock)
     if (!claim.ok) throw new Error('the claim was refused')
-    expect(claim.newcomer).toMatchObject({ day: 3, finished: false })
+    // Month day 1 has no item rule, so its only fallback is the newcomer's.
+    expect(claim).toMatchObject({ day: 1, items: [], fallbackPoints: 0 })
+    expect(claim.newcomer).toMatchObject({ day: 3, item: null, fallbackPoints: 10_000, finished: false })
     const calendar = await newcomerOf()
     expect(calendar).toEqual({ day: 3, claimed: [1, 2, 3], last: TODAY, finished: null })
     const gifts = await newcomerGifts()
-    expect(gifts.items.length + gifts.points.length).toBe(1)
+    expect(gifts.points).toEqual([{ amount: 10_000 }])
+    expect(gifts.items).toEqual([])
 
     const r = await gmAt.resetCheckin(actor(boss), me.playerId, 'điểm danh nhầm tài khoản')
-    // The undo takes back the check-in only: the newcomer day, its item or fallback, stay where the claim put them.
-    expect(r.undone).toEqual({ points: claim.points + claim.fallbackPoints, itemIds: claim.items })
+    // The undo takes back the check-in only: the newcomer day and its fallback stay where the claim put them.
+    expect(r.undone).toEqual({ points: claim.points, itemIds: [] })
+    expect(r.balance).toBe(base + 10_000)
+    const books = await totals()
+    expect(books.balances).toBe(books.ledger)
     expect(await newcomerOf()).toEqual(calendar)
     expect(await newcomerGifts()).toEqual(gifts)
 
@@ -443,6 +458,38 @@ describe('GmService — check-in', () => {
     const again = await h.app.services.economy.claimDaily(me.playerId, clock)
     expect(again).toMatchObject({ ok: true, day: claim.day })
     expect(again).not.toHaveProperty('newcomer')
+    expect(await newcomerOf()).toEqual(calendar)
+    expect(await newcomerGifts()).toEqual(gifts)
+  })
+
+  it('resetCheckin on a day both draws come up empty takes back the month\'s fallback and leaves the newcomer\'s', async () => {
+    // Month day 7 draws a common too: with every common owned, one claim writes three ledger rows — the tier's
+    // 15,000 and the month's 10,000 fallback under `daily:`, and the newcomer's 10,000 fallback under `newcomer:`.
+    await seedStreak(me.playerId, 6, YESTERDAY)
+    await seedNewcomerDay2(me.playerId)
+    await ownEveryCommon(me.playerId)
+    const base = await settle()
+
+    const claim = await h.app.services.economy.claimDaily(me.playerId, clock)
+    if (!claim.ok) throw new Error('the claim was refused')
+    expect(claim).toMatchObject({ day: 7, points: 15_000, items: [], fallbackPoints: 10_000 })
+    expect(claim.newcomer).toMatchObject({ day: 3, item: null, fallbackPoints: 10_000 })
+    const rows = rowsOf<{ amount: string | number; reason: string; ref_id: string }>(
+      await db.execute(sql`select amount, reason, ref_id from point_transactions where player_id = ${me.playerId} and (ref_id like 'daily:%' or ref_id like 'newcomer:%') order by id`),
+    ).map((row) => ({ ...row, amount: Number(row.amount) }))
+    expect(rows).toEqual([
+      { amount: 15_000, reason: 'daily_login', ref_id: `daily:${me.playerId}:${TODAY}` },
+      { amount: 10_000, reason: 'daily_item_fallback', ref_id: `daily:${me.playerId}:${TODAY}` },
+      { amount: 10_000, reason: 'daily_item_fallback', ref_id: `newcomer:${me.playerId}:3` },
+    ])
+    const calendar = await newcomerOf()
+    const gifts = await newcomerGifts()
+
+    const r = await gmAt.resetCheckin(actor(boss), me.playerId, 'rút lại cả tiền bù')
+    expect(r.undone).toEqual({ points: claim.points + 10_000, itemIds: [] })
+    expect(r.balance).toBe(base + 10_000)
+    const books = await totals()
+    expect(books.balances).toBe(books.ledger)
     expect(await newcomerOf()).toEqual(calendar)
     expect(await newcomerGifts()).toEqual(gifts)
   })

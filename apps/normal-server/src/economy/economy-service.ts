@@ -280,7 +280,9 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
    * counted yet (the welcome day already has). Day 3 and day 7 draw an item, or append the fallback to `entries` — the
    * claim's own credit batch — under `newcomer:<player>:<day>`, a ref outside the GM undo's reach (`latestClaim` reads
    * `daily:` refs only), so undoing a check-in leaves the calendar and its gifts alone. Day 7's reputation is the
-   * caller's, after the credit. Returns null when nothing advanced.
+   * caller's, after the credit. Returns null when nothing advanced. When the month's draw and this one fall in the same
+   * claim, the month's consumes `rng` first and this one second, and this one reads the month's grant through `tx`, so
+   * the two never pick the same item.
    */
   async function advanceNewcomer(
     tx: AppTx,
@@ -412,7 +414,7 @@ export function createEconomyService(deps: EconomyServiceDeps): EconomyService {
         // Day 7's reputation, once per account under its own key (amendment P26) — after the credit, so a failure here
         // takes the whole claim back with it.
         let newcomerDelta = 0
-        if (newcomer?.day === NEWCOMER_DAYS) {
+        if (newcomer?.finished === true) {
           const grant = (await deps.reputation?.grantRuleWithin(tx, playerId, 'newcomer_day7', 'newcomer_day', `newcomer:${playerId}:${NEWCOMER_DAYS}`)) ?? null
           newcomerReputation = grant
           if (grant?.applied === true) newcomerDelta = grant.reputation - (daily?.reputation ?? grant.reputation)
