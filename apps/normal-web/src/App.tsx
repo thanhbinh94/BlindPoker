@@ -528,10 +528,11 @@ export function App({ api, socketFactory }: AppProps) {
                 </a>
               }
               rank={myId === null ? null : (avatars.get(myId)?.rank ?? null)}
-              // The wardrobe and the shop, by name, under the bar (Plan 27, P20): the rail holds four tabs and no more.
-              // While the welcome gift waits, its button leads the row (C3) — the way back after "Để sau".
-              header={
-                <div className={a.lobbyLinks}>
+              // The wardrobe and the shop, by name, on the player bar's own line (Plan 27, P20): the rail holds four tabs
+              // and no more, and a row of its own under the bar made a lobby of six scroll at 1920×940 (fix wave).
+              // While the welcome gift waits, its button leads them (C3) — the way back after "Để sau".
+              barLinks={
+                <>
                   {giftWaiting ? (
                     <button type="button" className={`${a.lobbyLink} ${w.gift}`} onClick={() => setWelcomeOpen(true)}>
                       {t('welcome.lobbyButton')}
@@ -545,7 +546,7 @@ export function App({ api, socketFactory }: AppProps) {
                       {t('shop.title')}
                     </a>
                   </nav>
-                </div>
+                </>
               }
             />
             {welcomeOpen && welcomeStatus !== null ? (

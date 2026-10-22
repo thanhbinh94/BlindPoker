@@ -524,6 +524,18 @@
   white-space: nowrap;
 }
 
+/* The app's links (Normal: the gift, the wardrobe, the shop) ride the bar's own line, so they cost the lobby no
+   height (Plan 27 fix wave: a row of them under the bar made a lobby of six scroll 55 px at 1920×940). The links bring
+   their own look; the bar only lines them up. */
+.barLinks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
 /* the pill keeps high-contrast ink; the dot carries the hue */
 .conn {
   display: inline-flex;
@@ -575,5 +587,14 @@
   .ticket:hover {
     transition: none;
     transform: none;
+  }
+}
+
+/* A phone: who you are and the connection keep the first line, the links take a whole line under them. */
+@media (max-width: 479px) {
+  .barLinks {
+    order: 1;
+    flex-basis: 100%;
+    justify-content: flex-start;
   }
 }

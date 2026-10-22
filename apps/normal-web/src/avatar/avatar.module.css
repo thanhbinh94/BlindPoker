@@ -57,21 +57,15 @@
   border-radius: 50%;
 }
 
-/* ── the lobby's two named doors under the bar: Phòng thay đồ and Cửa hàng (Plan 27, P20) ── */
-
-.lobbyLinks {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--space-2);
-  margin: var(--space-3) 0;
-}
+/* ── the lobby's two named doors on the player bar's line: Phòng thay đồ and Cửa hàng (Plan 27, P20) ──
+   32 px pills with a mouse, so the bar keeps the height its 44 px face link already gives it; a finger gets the full
+   `--tap` (a phone wraps them onto a line of their own anyway). */
 
 .lobbyLink {
   display: inline-flex;
   align-items: center;
-  min-height: var(--tap);
-  padding: 0 var(--space-4);
+  min-height: 32px;
+  padding: 0 var(--space-3);
   border: 1px solid var(--line);
   border-radius: var(--radius-pill);
   background: var(--bg-elev);
@@ -84,4 +78,10 @@
 
 .lobbyLink:hover {
   border-color: var(--gold);
+}
+
+@media (pointer: coarse) {
+  .lobbyLink {
+    min-height: var(--tap);
+  }
 }

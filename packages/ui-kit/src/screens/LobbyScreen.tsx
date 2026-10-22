@@ -25,6 +25,8 @@ export interface LobbyScreenProps {
   rank?: number | null
   /** App-specific banner above the lobby (edition branding, announcements…). */
   header?: ReactNode
+  /** App links carried inside the player bar, on its line, so they add no row to the lobby's height (Plan 27 fix wave). */
+  barLinks?: ReactNode
 }
 
 /**
@@ -33,7 +35,7 @@ export interface LobbyScreenProps {
  * Composition only. It owns three things — the mode filter, whether the create dialog is open, and the reply to its
  * own last request — and asks `GameClientApi` for everything else.
  */
-export function LobbyScreen({ client, lang, onEnteredRoom, avatar, rank = null, header }: LobbyScreenProps) {
+export function LobbyScreen({ client, lang, onEnteredRoom, avatar, rank = null, header, barLinks }: LobbyScreenProps) {
   const { t } = useTranslation()
   const { state } = client
   const [filter, setFilter] = useState<RoomFilter>('all')
@@ -81,7 +83,9 @@ export function LobbyScreen({ client, lang, onEnteredRoom, avatar, rank = null, 
         lang={lang}
         avatar={avatar}
         rank={rank}
-      />
+      >
+        {barLinks}
+      </PlayerBar>
       {header}
 
       <main className={s.lobbyMain}>

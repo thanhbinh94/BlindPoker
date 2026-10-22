@@ -185,7 +185,7 @@ formatting; strings come from `useTranslation()`.
 
 | Component | Props |
 | --- | --- |
-| `LobbyScreen` | `client`, `lang`, `onEnteredRoom`, `avatar?`, `header?`, `rank?` (Plan 27) — navigation and the language switch are the host app's rail (layout audit U2) |
+| `LobbyScreen` | `client`, `lang`, `onEnteredRoom`, `avatar?`, `header?`, `rank?` (Plan 27), `barLinks?` (app links on the player bar's own line, so they add no row to the lobby's height; Plan 27 fix wave) — navigation and the language switch are the host app's rail (layout audit U2) |
 | `RoomScreen` | `client`, `lang`, `onLeft`, `chibiFor?`, `captionFor?`, `rankFor?` (Plan 27), `header?`, `layout?` |
 | `Toasts` | `error`, `notifications`, `onClearError`, `onDismiss`, `lang` |
 
@@ -542,7 +542,7 @@ always @2x.
 | `RoomList` | `rooms`, `onJoin`, `filter?`, `onFilter?`, `lang`, `busy?` |
 | `CreateRoomForm` | `onSubmit`, `busy?`, `initialMode?`, `lang` |
 | `JoinByCode` | `onJoin`, `busy?`, `lang`, `error?` |
-| `PlayerBar` | `displayName`, `balance`, `status`, `lang`, `avatar?` (the initial in a gold disc when absent), `rank?` (`RankLabel` after the name, Plan 27) |
+| `PlayerBar` | `displayName`, `balance`, `status`, `lang`, `avatar?` (the initial in a gold disc when absent), `rank?` (`RankLabel` after the name, Plan 27), `children?` (the app's links, before the connection pill; a whole line of their own under 480 px) |
 | `LanguageSwitch` | `lang`, `onChange` |
 | `HoldemFields` | `tierIndex`, `onTierIndex`, `minBuyInBB`, `maxBuyInBB`, `onMinBuyInBB`, `onMaxBuyInBB`, `disabled`, `lang` |
 | `BlindFields` | `holeCards`, `onHoleCards`, `decisionMode`, `onDecisionMode`, `fixedWager`, `onFixedWager`, `botCount`, `onBotCount`, `maxBots`, `squeeze`, `onSqueeze`, `disabled`, `lang` |
