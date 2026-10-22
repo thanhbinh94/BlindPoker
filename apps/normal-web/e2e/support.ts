@@ -138,10 +138,26 @@ async function settleAfterSignIn(page: Page, submit: () => Promise<void>): Promi
     .waitForResponse((r) => new URL(r.url()).pathname === '/api/welcome' && r.request().method() === 'GET', { timeout: 15_000 })
     .then(async (r) => ((await r.json()) as { claimed: boolean }).claimed)
     .catch(() => true)
+  // The dialog opens by itself once per account and browser (`bp.welcomeShown` holds the last account it did): the
+  // account comes from the sign-in's own answer, and the flag is read before the app can write it again.
+  const shownTo = await page.evaluate(() => {
+    try {
+      return localStorage.getItem('bp.welcomeShown')
+    } catch {
+      return null
+    }
+  })
+  const signedInAs = page
+    .waitForResponse((r) => /^\/api\/auth\/(login|register)$/.test(new URL(r.url()).pathname) && r.request().method() === 'POST', { timeout: 15_000 })
+    .then(async (r) => ((await r.json()) as { playerId?: string }).playerId ?? null)
+    .catch(() => null)
   await submit()
   const status = (await (await asked).json()) as { claimable: boolean; nextResetAt: number }
   if (!(await welcomed)) {
-    await dismissWelcome(page, 10_000)
+    const me = await signedInAs
+    // Already shown to this account here: the lobby has only its button, so a long wait would be wasted. Otherwise
+    // the dialog is on its way — and should it not come after all, the wait gives up rather than fails.
+    if (me === null || me !== shownTo) await dismissWelcome(page, 10_000)
     await expectLobby(page)
     return
   }

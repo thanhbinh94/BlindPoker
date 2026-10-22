@@ -64,19 +64,12 @@ interface Harness {
   onClaimed?: () => void
 }
 
-/** The lobby's part, cut down: the dialog while open, and the gift button that stays until the gift is taken. */
+/** The lobby's part, cut down: the dialog while open. The lobby's own gift button is App's business (App.test.tsx). */
 function Lobby({ api, status = statusWith(), onClaimed = vi.fn() }: Harness) {
   const [open, setOpen] = useState(true)
-  return (
-    <>
-      <button type="button" onClick={() => setOpen(true)}>
-        gift
-      </button>
-      {open ? (
-        <WelcomeDialog api={api} lang="vi" status={status} avatar={AVATAR} items={ITEMS} bodies={BODIES} onClaimed={onClaimed} onClose={() => setOpen(false)} />
-      ) : null}
-    </>
-  )
+  return open ? (
+    <WelcomeDialog api={api} lang="vi" status={status} avatar={AVATAR} items={ITEMS} bodies={BODIES} onClaimed={onClaimed} onClose={() => setOpen(false)} />
+  ) : null
 }
 
 const renderDialog = (harness: Harness) => renderWithI18n(<Lobby {...harness} />, makeI18n('vi'))
@@ -102,16 +95,21 @@ describe('WelcomeDialog', () => {
     renderDialog({ api, onClaimed })
 
     expect(claimButton()).toBeDisabled()
+    // The status line is there from the start, empty, so a screen reader is already listening when the claim lands.
+    const line = within(dialog()).getByRole('status')
+    expect(line).toBeEmptyDOMElement()
     await user.click(card('outfit_dealer01'))
     expect(card('outfit_dealer01')).toHaveAttribute('aria-pressed', 'true')
     await user.click(claimButton())
 
     expect(api.welcomeClaim).toHaveBeenCalledWith('outfit_dealer01')
     const done = viNormal.welcome.done.replace('{{item}}', viNormal.items.outfit_dealer01).replace('{{amount}}', '100')
-    expect(await within(dialog()).findByText(done)).toBeInTheDocument()
+    await waitFor(() => expect(within(dialog()).getByRole('status')).toHaveTextContent(done))
+    expect(within(dialog()).getByRole('status'), 'the same node, filled in rather than mounted').toBe(line)
     expect(onClaimed).toHaveBeenCalledTimes(1)
-    expect(within(dialog()).getByRole('button', { name: viNormal.welcome.start })).toBeInTheDocument()
     expect(within(dialog()).queryByRole('button', { name: viNormal.welcome.claim })).toBeNull()
+    // The button that pressed Nhận is gone: focus moves to Vào chơi rather than falling to the page.
+    expect(within(dialog()).getByRole('button', { name: viNormal.welcome.start })).toHaveFocus()
   })
 
   it('disables a choice the player already owns, and marks it', () => {
@@ -135,7 +133,7 @@ describe('WelcomeDialog', () => {
     expect(await within(dialog()).findByText(viNormal.welcome.doneReputationOnly.replace('{{amount}}', '100'))).toBeInTheDocument()
   })
 
-  it('closes on Để sau, claiming nothing, and leaves the lobby’s gift button in place', async () => {
+  it('closes on Để sau, claiming nothing', async () => {
     const api = stubApi()
     const user = userEvent.setup()
     renderDialog({ api })
@@ -144,7 +142,6 @@ describe('WelcomeDialog', () => {
 
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(api.welcomeClaim).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'gift' })).toBeInTheDocument()
   })
 
   it('closes when the server says the gift was already taken, and has the lobby read the status again', async () => {

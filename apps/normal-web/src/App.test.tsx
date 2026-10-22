@@ -2,7 +2,7 @@ import { FakeSocket, fakeSocketFactory } from '@bp/ui-kit'
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import { ACCOUNT_ROUTES, App, websocketUrl } from './App.js'
+import { ACCOUNT_ROUTES, App, WELCOME_SHOWN_KEY, websocketUrl } from './App.js'
 import { ApiError, type AuthMeDto, type NormalApi } from './api.js'
 import { DAILY_NUDGE_KEY } from './daily-nudge.js'
 import { resetAvatarCache } from './avatar/useAvatars.js'
@@ -783,6 +783,108 @@ describe('App — the welcome gift (Plan 27, C3)', () => {
     // The lobby's button is the way back in.
     await user.click(await screen.findByRole('button', { name: viNormal.welcome.lobbyButton }))
     expect(await screen.findByRole('dialog', { name: viNormal.welcome.title })).toBeInTheDocument()
+  })
+
+  it('opens by itself once per account in this browser: a reload keeps it shut, and the button still leads back', async () => {
+    const api = stubApi({ welcome: vi.fn().mockResolvedValue(UNCLAIMED) })
+    const user = userEvent.setup()
+    const first = renderApp(api)
+    await settled()
+    await welcome()
+    expect(await screen.findByRole('dialog', { name: viNormal.welcome.title })).toBeInTheDocument()
+    expect(localStorage.getItem(WELCOME_SHOWN_KEY)).toBe('p1')
+    await user.click(screen.getByRole('button', { name: viNormal.welcome.later }))
+
+    // A reload, or a second tab: the same account, the gift still waiting.
+    first.unmount()
+    FakeSocket.reset()
+    const calls = vi.mocked(api.welcome).mock.calls.length
+    renderApp(api)
+    await settled()
+    await welcome()
+    expect(await screen.findByRole('heading', { name: ROOMS_HEADING })).toBeInTheDocument()
+    await waitFor(() => expect(vi.mocked(api.welcome).mock.calls.length).toBeGreaterThan(calls))
+    expect(await screen.findByRole('button', { name: viNormal.welcome.lobbyButton })).toBeInTheDocument()
+    expect(welcomeDialog()).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: viNormal.welcome.lobbyButton }))
+    expect(await screen.findByRole('dialog', { name: viNormal.welcome.title })).toBeInTheDocument()
+  })
+
+  it('still opens by itself for another account that signs in on the same browser', async () => {
+    localStorage.setItem(WELCOME_SHOWN_KEY, 'p0')
+    renderApp(stubApi({ welcome: vi.fn().mockResolvedValue(UNCLAIMED) }))
+    await settled()
+    await welcome()
+
+    expect(await screen.findByRole('dialog', { name: viNormal.welcome.title })).toBeInTheDocument()
+    expect(localStorage.getItem(WELCOME_SHOWN_KEY)).toBe('p1')
+  })
+
+  it('opens once a session even where the browser keeps no storage', async () => {
+    const getItem = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('storage is off')
+    })
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('storage is off')
+    })
+    onTestFinished(() => {
+      getItem.mockRestore()
+      setItem.mockRestore()
+    })
+    const user = userEvent.setup()
+    renderApp(stubApi({ welcome: vi.fn().mockResolvedValue(UNCLAIMED) }))
+    await settled()
+    await welcome()
+
+    expect(await screen.findByRole('dialog', { name: viNormal.welcome.title })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: viNormal.welcome.later }))
+    expect(welcomeDialog()).toBeNull()
+    expect(giftButton()).toBeInTheDocument()
+  })
+
+  it('shuts a dialog left open when the lobby goes off screen, so the next visit does not bring it back', async () => {
+    const api = stubApi({ welcome: vi.fn().mockResolvedValue(UNCLAIMED) })
+    renderApp(api)
+    await settled()
+    await welcome()
+    expect(await screen.findByRole('dialog', { name: viNormal.welcome.title })).toBeInTheDocument()
+
+    // Taken off the lobby with the dialog still open — a link, a redirect into a room, the address bar.
+    const calls = vi.mocked(api.welcome).mock.calls.length
+    act(() => {
+      window.location.hash = '#/daily'
+    })
+    await screen.findByRole('heading', { name: viNormal.daily.title })
+    act(() => {
+      window.location.hash = '#/lobby'
+    })
+    await screen.findByRole('heading', { name: ROOMS_HEADING })
+    await waitFor(() => expect(vi.mocked(api.welcome).mock.calls.length).toBeGreaterThan(calls))
+    expect(await screen.findByRole('button', { name: viNormal.welcome.lobbyButton })).toBeInTheDocument()
+    expect(welcomeDialog()).toBeNull()
+  })
+
+  it('opens nothing and holds nothing back when the gift’s status cannot be read', async () => {
+    const status = { claimable: true, day: 1, streak: 1, reward: 5000, item: null, nextResetAt: 1_800_000_000_000, month: '2027-01', calendar: [] }
+    const api = stubApi({
+      welcome: vi.fn().mockRejectedValue(new ApiError(500, 'INTERNAL', 'boom')),
+      daily: vi.fn().mockResolvedValue(status),
+    })
+    renderApp(api)
+    await settled()
+    await welcome()
+
+    // The arrival move goes ahead as if the gift were taken.
+    await waitFor(() => expect(window.location.hash).toBe('#/daily'))
+    expect(localStorage.getItem(DAILY_NUDGE_KEY)).toBe(String(status.nextResetAt))
+    act(() => {
+      window.location.hash = '#/lobby'
+    })
+    expect(await screen.findByRole('heading', { name: ROOMS_HEADING })).toBeInTheDocument()
+    await waitFor(() => expect(vi.mocked(api.welcome).mock.calls.length).toBeGreaterThan(1))
+    expect(welcomeDialog()).toBeNull()
+    expect(giftButton()).toBeNull()
   })
 
   it('never opens the dialog, nor shows the button, once the gift is taken', async () => {

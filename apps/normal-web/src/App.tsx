@@ -82,6 +82,29 @@ export function websocketUrl(loc: Pick<Location, 'protocol' | 'host'> = window.l
 /** The routes that draw the lobby once signed in. */
 const LOBBY_ROUTES = ['/', '/lobby', '/login', '/register']
 
+/**
+ * The account the welcome dialog last opened by itself for, in this browser (Plan 27, C3). The dialog opens by itself
+ * only for an account other than this one; the lobby's "🎁 Quà chào mừng" opens it whenever the player asks.
+ */
+export const WELCOME_SHOWN_KEY = 'bp.welcomeShown'
+
+/** Storage can be off (a private window, blocked site data): every read and write is allowed to fail. */
+function welcomeShownTo(): string | null {
+  try {
+    return localStorage.getItem(WELCOME_SHOWN_KEY)
+  } catch {
+    return null
+  }
+}
+
+function rememberWelcomeShown(playerId: string): void {
+  try {
+    localStorage.setItem(WELCOME_SHOWN_KEY, playerId)
+  } catch {
+    /* the session's own memory (`welcomeShownFor`) still keeps it to once */
+  }
+}
+
 /** The welcome gift as this session knows it: the last status read, and what it meant for the arrival move. */
 interface WelcomeState {
   playerId: string
@@ -340,14 +363,14 @@ export function App({ api, socketFactory }: AppProps) {
   }, [routePath])
 
   // The welcome gift (Plan 27, C3): read whenever the lobby comes on screen until it is taken. The dialog opens by
-  // itself once per session while the gift waits; after "Để sau" the lobby's button is the way back to it.
+  // itself once per account and browser while the gift waits; after that the lobby's button is the way back to it.
   const sessionId = gate.signedIn ? gateId : null
   const onLobby = sessionId !== null && LOBBY_ROUTES.includes(path)
   const { welcome: welcomeState, reload: reloadWelcome } = useWelcome(guarded, sessionId, onLobby)
   const welcomeStatus = welcomeState?.status ?? null
   const giftWaiting = welcomeStatus !== null && !welcomeStatus.claimed
   const [welcomeOpen, setWelcomeOpen] = useState(false)
-  /** The account the dialog has already opened by itself for, this session. */
+  /** The account the dialog has already opened by itself for, this session — the fallback where storage is off. */
   const welcomeShownFor = useRef<string | null>(null)
   useEffect(() => {
     if (sessionId === null) {
@@ -355,8 +378,17 @@ export function App({ api, socketFactory }: AppProps) {
       setWelcomeOpen(false)
       return
     }
-    if (!giftWaiting || !onLobby || welcomeShownFor.current === sessionId) return
+    // Off the lobby the dialog is not drawn; left open, it would jump back out on the next visit (after a claim
+    // whose "Vào chơi" was never pressed, a redirect into a room, a link).
+    if (!onLobby) {
+      setWelcomeOpen(false)
+      return
+    }
+    if (!giftWaiting || welcomeShownFor.current === sessionId) return
     welcomeShownFor.current = sessionId
+    // Once per account and browser: a reload or a second tab finds the lobby's button, not the dialog over it.
+    if (welcomeShownTo() === sessionId) return
+    rememberWelcomeShown(sessionId)
     setWelcomeOpen(true)
   }, [sessionId, giftWaiting, onLobby])
   const onWelcomeClaimed = useCallback(() => {

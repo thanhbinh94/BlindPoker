@@ -123,7 +123,8 @@ export function WelcomeDialog({ api, lang, status, avatar, items, bodies, onClai
 
   const footer =
     result !== null ? (
-      <Button variant="gold" onClick={onClose}>
+      // The button that was pressed (Nhận) is gone with the claim: focus moves here rather than falling to the page.
+      <Button variant="gold" onClick={onClose} autoFocus>
         {t('welcome.start')}
       </Button>
     ) : (
@@ -166,11 +167,11 @@ export function WelcomeDialog({ api, lang, status, avatar, items, bodies, onClai
           )
         })}
       </ul>
-      {done === null ? null : (
-        <p className={w.done} role="status">
-          {done}
-        </p>
-      )}
+      {/* Always in the page, filled when the claim lands: a live region mounted with its text is not announced. Empty,
+          it carries no class, so its margin does not open a gap under the cards (the global reset zeroes a `p`'s). */}
+      <p className={done === null ? undefined : w.done} role="status">
+        {done}
+      </p>
       {alert === null ? null : (
         <p className={n.alert} role="alert">
           {alert}
