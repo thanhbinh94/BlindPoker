@@ -46,8 +46,8 @@ Caddy là service duy nhất có cổng, và đó là chủ ý.
 ## 2. Lần triển khai đầu tiên
 
 ```bash
-git clone <repository này> /srv/bind-poker
-cd /srv/bind-poker/deploy/normal
+git clone <repository này> /opt/bind-poker
+cd /opt/bind-poker/deploy/normal
 cp .env.example .env
 $EDITOR .env
 ```
@@ -137,7 +137,7 @@ chọn `Promise.all` hay chạy nối đuôi đúng theo điều kiện này, v�
 có CI trong repository này. Vậy nên: hãy tự chạy nó một lần và lưu lại output.
 
 ```bash
-cd /srv/bind-poker
+cd /opt/bind-poker
 
 # 1. Dựng riêng service `db` (cần deploy/normal/.env cho POSTGRES_PASSWORD).
 docker compose -f deploy/normal/docker-compose.yml up -d db
@@ -268,7 +268,7 @@ deployment có thể đặt tất cả bằng biến container và không cần 
 ## 5. Vận hành hằng ngày
 
 ```bash
-cd /srv/bind-poker/deploy/normal
+cd /opt/bind-poker/deploy/normal
 
 docker compose ps                    # cái gì đang chạy, và sức khoẻ ra sao
 docker compose logs -f app           # mỗi dòng một object JSON, ra stdout
@@ -294,7 +294,7 @@ xem và đóng phòng, xem nhật ký. GM đầu tiên chỉ có thể do bạn 
 khác trong game được. Tài khoản phải **đã đăng ký** trên trang web trước, rồi chạy:
 
 ```bash
-cd /srv/bind-poker/deploy/normal
+cd /opt/bind-poker/deploy/normal
 docker compose exec app node dist/grant-gm-cli.js ten@example.com             # trao quyền
 docker compose exec app node dist/grant-gm-cli.js ten@example.com --revoke    # thu quyền
 ```
@@ -343,7 +343,7 @@ Nếu truy vấn cuối trả về dòng nào, log của app cũng có một dò
 ## 6. Sao lưu
 
 ```bash
-cd /srv/bind-poker/deploy/normal
+cd /opt/bind-poker/deploy/normal
 ./backup.sh
 ```
 
@@ -361,7 +361,7 @@ BACKUP_DIR=/var/backups/bind-poker ./backup.sh
 Chạy hằng ngày, 03:15:
 
 ```cron
-15 3 * * * cd /srv/bind-poker/deploy/normal && BACKUP_DIR=/var/backups/bind-poker ./backup.sh >> /var/log/bind-poker-backup.log 2>&1
+15 3 * * * cd /opt/bind-poker/deploy/normal && BACKUP_DIR=/var/backups/bind-poker ./backup.sh >> /var/log/bind-poker-backup.log 2>&1
 ```
 
 (Thư mục `backups/` mặc định và `backup.log` đều đã nằm trong `.gitignore`, nhưng chúng vẫn là bản
@@ -385,9 +385,9 @@ Khôi phục: [`../deploy/normal/restore.md`](../deploy/normal/restore.md). Đ�
 ## 7. Nâng cấp
 
 ```bash
-cd /srv/bind-poker/deploy/normal
+cd /opt/bind-poker/deploy/normal
 ./backup.sh                          # 1. luôn luôn, và ngay trước khi nâng cấp
-git -C /srv/bind-poker pull          # 2.
+git -C /opt/bind-poker pull          # 2.
 docker compose up -d --build         # 3. build lại, chạy lại migrate, tạo lại app
 docker compose logs -f app
 ```
@@ -411,7 +411,7 @@ sau bước 3 ở trên (đã `backup.sh` ở bước 1, `app` đã lên), chạ
 hết chạy thử, rồi chạy thật:
 
 ```bash
-cd /srv/bind-poker/deploy/normal
+cd /opt/bind-poker/deploy/normal
 curl -fsS https://$DOMAIN/health                                         # chờ tới khi "rooms":0
 docker compose exec app node dist/reputation-backfill-cli.js --dry-run   # chỉ tính, không ghi gì
 docker compose exec app node dist/reputation-backfill-cli.js             # ghi thật
@@ -423,7 +423,7 @@ từng bậc 1..5 sau lần chạy); lần chạy thử in thêm tiền tố `(d
 ván thắng × `hand_won` + số ngày điểm danh × `daily_login` + phần thưởng của từng thành tựu đã mở, theo bảng
 `reputation_rules` đang lưu; trừ đi những gì server đã cộng cho ván, lần điểm danh và thành tựu kể từ khi `app` lên (quà
 chào mừng, lịch tân thủ và danh vọng GM cộng thì **không** bị trừ). Lệnh đọc `DATABASE_URL` của container `app`; thoát 0
-khi xong, 2 khi thiếu `DATABASE_URL`, 1 khi lỗi. Chạy lại không cộng thêm gì cho người đã được tính (mỗi người có đúng
+khi xong, 2 khi thiếu `DATABASE_URL` hoặc gõ sai tham số (in dòng hướng dẫn, không ghi gì), 1 khi lỗi. Chạy lại không cộng thêm gì cho người đã được tính (mỗi người có đúng
 một dòng `reputation_events` lý do `backfill`, `ref_id = 'plan27'`), nên lỡ chạy hai lần cũng không sao. Lệnh không gửi
 thông báo lên bậc.
 

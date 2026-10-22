@@ -702,8 +702,8 @@ event: (hands played × `hand_played`) + (hands won × `hand_won`) + (login days
 achievement's rule, minus the live events whose reason mirrors those counters (`hand_played`, `hand_won`,
 `daily_login`, `achievement` — never `welcome`, `newcomer_day` or `gm_grant`; Ruling 9), clamped at 0, written as one
 event `('backfill', 'plan27')` per player. No `RANK_UP`. A rerun skips every credited player. Prints
-`players=<n> applied=<n> ranks=[r1,…,r5]`, prefixed `(dry run) ` under `--dry-run`; exit 0, 2 without `DATABASE_URL`,
-1 on an error. Run it once per upgrade at a quiet moment (the operator's steps: `docs/deployment-normal.md` §7).
+`players=<n> applied=<n> ranks=[r1,…,r5]`, prefixed `(dry run) ` under `--dry-run`; exit 0, 2 without `DATABASE_URL`
+or on an unknown flag (with the usage line, nothing written), 1 on an error. Run it once per upgrade at a quiet moment (the operator's steps: `docs/deployment-normal.md` §7).
 
 ---
 
