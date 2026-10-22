@@ -8,5 +8,5 @@
   "include": ["src"],
   // `e2e-entry.ts` joins them for the same reason: it opens a PGlite database, and nothing that ships
   // may so much as name a devDependency.
-  "exclude": ["src/**/*.test.ts", "src/**/test-db.ts", "src/test-harness.ts", "src/e2e-entry.ts", "src/e2e-promote.ts"]
+  "exclude": ["src/**/*.test.ts", "src/**/test-db.ts", "src/test-harness.ts", "src/e2e-entry.ts", "src/e2e-promote.ts", "src/e2e-options.ts"]
 }

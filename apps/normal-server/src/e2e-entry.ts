@@ -19,6 +19,8 @@
  *   `E2E_PORT`        the loopback port to listen on, and the port in `ALLOWED_ORIGINS` (8091)
  *   `E2E_PUBLIC_DIR`  the web build to serve (`../normal-web/dist`, resolved from this package root)
  *   `E2E_LOG_LEVEL`   the app's log level (`warn`: a passing run should print one line, not a log)
+ *   `E2E_READ_LIMIT`  reads a minute per address (unset: the shipped 240). The ops pack sets 2400, because all of
+ *                     its browsers share one loopback address (`e2e-options.ts`)
  */
 import { resolve } from 'node:path'
 import { createJsonLogger } from '@bp/http-kit'
@@ -26,6 +28,7 @@ import { buildApp } from './app.js'
 import { CONFIG_DEFAULTS, type NormalConfig } from './config.js'
 import { packageRoot } from './db/migrate.js'
 import { createTestDb } from './db/test-db.js'
+import { readRateLimitFromEnv } from './e2e-options.js'
 import { promoteRoute } from './e2e-promote.js'
 import { CHEAP_ARGON2 } from './test-harness.js'
 
@@ -69,6 +72,7 @@ const app = await buildApp({
   pingDb: () => Promise.resolve(true),
   log,
   argon2Params: CHEAP_ARGON2,
+  ...readRateLimitFromEnv(process.env),
   // Test-only (the ops pack has no CLI on the browser side): never part of dist/.
   extraRoutes: promoteRoute(db),
 })
