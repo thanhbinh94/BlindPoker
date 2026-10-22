@@ -1022,9 +1022,11 @@ into the plan, one of them rejected. The rulings below are the SDD ledger's, in 
 - Ruling 14 (D2 review): the carry-over claimant code in `room.ts` is deleted — unreachable once every seat is dealt with
   at least 1 point and an emptied seat is played for it; the doc comment says why. Costs if wrong: an all-fold table
   with a seat at 0 would pay the house; the reviewer's proof says it cannot happen, and a test pins the all-fold case.
-- Ruling 15 (ops ids): the shop's ops cases take the prefix `M` ("M. Cửa hàng, danh vọng và tủ đồ"), because `S-` is the
-  lobby's: M-01 welcome, M-02 buy and the rank lock, M-03 the rank on seat and profile, M-04 the wardrobe's request count
-  (E2's S-04), M-05 the 3G first paint (E2's S-05). Costs if wrong: a rename.
+- Ruling 15 (ops ids): the shop's ops cases take their own section of the operation test plan, because `S-` is the
+  lobby's. The lead first said `M`; F2 found `M` already taken by the layout section ("M. Giao diện trên nhiều cỡ màn
+  hình"), so the section is **"P. Cửa hàng, danh vọng và tủ đồ"**: P-01 welcome, P-02 buy and the rank lock, P-03 the
+  rank on seat and profile (P-03b the pill in landscape), P-04 the wardrobe's request count (E2's S-04), P-05 the 3G
+  first paint (E2's S-05); Q-04 is the GM shop tab. Costs if wrong: a rename.
 - Ruling 16 (E2 measurement): a `head` frame drawn at 110 px or less loads its tinted layers @1x whatever the DPR (72 px
   portraits pulled about 440 KB @2x, 3.25 s on a 3G phone). Parked for the final wave; until it lands, a known
   limitation with the figure. Costs if wrong: slightly soft portraits on DPR-3 phones.

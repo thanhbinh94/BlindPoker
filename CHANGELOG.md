@@ -118,7 +118,7 @@ GATE
   excess, the room's sit-down, stand-up and timeout rules, the soak (`fees === 0` for Blind), `RankLabel`, the seat's
   rank, rank contrast, `PlayerBar`, `Toasts`, `lazy`, `tint-queue`, `tinted`. Web: `ShopScreen`, `ShopCard`, `ShopTab`,
   `WelcomeDialog`, `NewcomerPanel`, `DailyScreen`, `ProfileScreen`, the wardrobe's lazy cards and request counts, the
-  footprint (entry chunk 134 KB of a 140 KB budget). The ops pack is at 50 cases with section M (the welcome gift, a
+  footprint (entry chunk 134 KB of a 140 KB budget). The ops pack is at 50 cases with section P (the welcome gift, a
   purchase and the rank lock, the rank on a seat and the profile, the wardrobe's request count, the 3G first paint) and
   F-10 rewritten as the Blind-to-zero case. Docs: the player guide (Quà chào mừng, Tuần đầu tiên, Danh vọng và bậc, Cửa
   hàng, Blind chơi tới điểm cuối cùng, Chơi trên hai thiết bị), `docs/known-limitations.md` (a Plan 27 section and
