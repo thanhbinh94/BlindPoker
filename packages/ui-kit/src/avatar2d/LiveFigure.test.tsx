@@ -178,6 +178,33 @@ describe('LiveFigure', () => {
     expect(sparkleRing(container)).toBeNull()
   })
 
+  it('unmounting mid-sparkle clears the sparkle timer', () => {
+    vi.useFakeTimers()
+    const { container, rerender, unmount } = renderVi(<LiveFigure subject={SUBJECT} react={null} />)
+    rerender(<LiveFigure subject={SUBJECT} react={cheer(1)} />)
+    advance(300)
+    expect(sparkleRing(container)).not.toBeNull()
+    unmount()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('no greet button where a wave would not play: under reduced motion, or when live is off', () => {
+    stubReducedMotion(true)
+    const reduced = renderVi(<LiveFigure subject={SUBJECT} greet label="Ann" />)
+    expect(screen.queryByRole('button', { name: GREET_VI })).toBeNull()
+    expect(screen.getByRole('img', { name: 'Ann' })).toBeInTheDocument()
+    reduced.unmount()
+
+    stubReducedMotion(false)
+    const off = renderVi(<LiveFigure subject={SUBJECT} live="off" greet label="Ann" />)
+    expect(screen.queryByRole('button', { name: GREET_VI })).toBeNull()
+    off.unmount()
+
+    // A still figure still waves, so it keeps the button.
+    renderVi(<LiveFigure subject={SUBJECT} live="still" greet label="Ann" />)
+    expect(screen.getByRole('button', { name: GREET_VI })).toBeInTheDocument()
+  })
+
   it('greet=false renders no button', () => {
     const { container } = renderVi(<LiveFigure subject={SUBJECT} live="still" greet={false} label="Ann" />)
     expect(screen.queryByRole('button')).toBeNull()

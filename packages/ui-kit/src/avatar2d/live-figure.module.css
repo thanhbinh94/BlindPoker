@@ -22,9 +22,10 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Every stage clips (`overflow: hidden`) and bottom-aligns the figure, so the global `:focus-visible` ring
+   (theme/global.css) is drawn inside the box instead of 2 px outside it, where it would be cut. */
 .greet:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 2px;
+  outline-offset: -3px;
 }
 
 /* The cheer's six sparkles (R7): over the figure's box, around the figure, never tied to an item card. Each mark sits at
@@ -66,14 +67,16 @@
   animation: liveFigureSparkle 700ms ease-out both;
 }
 
+/* The two top marks sit about a fifth of the way down, not on the box's top edge: a stage may let the figure's box
+   reach above its own clipped top (the wardrobe does at 1920×940), and a mark there would be cut in half. */
 .sparkleRing i:nth-child(1) {
   left: 18%;
-  top: 14%;
+  top: 22%;
 }
 
 .sparkleRing i:nth-child(2) {
   left: 82%;
-  top: 10%;
+  top: 18%;
   width: 7%;
 }
 

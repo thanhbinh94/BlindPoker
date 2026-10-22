@@ -33,7 +33,8 @@ export interface LiveFigureProps {
   react?: ChibiReaction | null
   /** Which way the figure faces; controlled by the stage, which places a `TurnButton`. `right` by default. */
   facing?: ChibiFacing
-  /** The transparent greet button over the figure: a tap waves. On by default. */
+  /** The transparent greet button over the figure: a tap waves. On by default; never rendered when `live` is `off` or
+   * under reduced motion, where a wave would not play. */
   greet?: boolean
   /** On the wrapper. */
   className?: string
@@ -77,6 +78,9 @@ export function LiveFigure({
   const sparkleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const sparkles = live !== 'off' && !reducedMotion
+  // `useChibiLife` ignores a wave on a figure that is not live or under reduced motion, so there the button would be
+  // announced and do nothing: it is not rendered.
+  const greets = greet && live !== 'off' && !reducedMotion
   const latest = useRef({ react, sparkles })
   latest.current = { react, sparkles }
 
@@ -126,7 +130,7 @@ export function LiveFigure({
           <i />
         </span>
       ) : null}
-      {greet ? <button type="button" className={s.greet} aria-label={t('avatar.greet')} onClick={wave} /> : null}
+      {greets ? <button type="button" className={s.greet} aria-label={t('avatar.greet')} onClick={wave} /> : null}
     </div>
   )
 }
