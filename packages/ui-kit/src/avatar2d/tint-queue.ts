@@ -35,10 +35,23 @@ function next(): void {
   }
 }
 
-/** Runs `job` once a slot is free — at once, synchronously, when one already is — and settles as it does. */
-export function enqueue<T>(job: () => Promise<T>, priority: number): Promise<T> {
+/** A waiting job's way out (plan 27 E1 fix round): asked when the job's turn comes, `isWanted()` false means nobody on
+ * the page wants the result any more — the tab that asked for it was left, the card unmounted — so the job never runs,
+ * takes no slot, and its promise resolves at once with `value`. */
+export interface TintSkip<T> {
+  isWanted: () => boolean
+  value: T
+}
+
+/** Runs `job` once a slot is free — at once, synchronously, when one already is — and settles as it does. With `skip`,
+ * a job no longer wanted when its turn comes is passed over instead (`TintSkip`), and the next one starts in its place. */
+export function enqueue<T>(job: () => Promise<T>, priority: number, skip?: TintSkip<T>): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const start = () => {
+      if (skip !== undefined && !skip.isWanted()) {
+        resolve(skip.value)
+        return
+      }
       running++
       let result: Promise<T>
       try {

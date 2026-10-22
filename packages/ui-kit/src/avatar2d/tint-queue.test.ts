@@ -68,6 +68,33 @@ describe('tint queue', () => {
     await Promise.all([...running, ...waiting])
   })
 
+  it('passes over a waiting job nobody wants any more: it never runs, takes no slot, and resolves with its skip value', async () => {
+    const started: string[] = []
+    const busy = Array.from({ length: 4 }, (_, i) => gate(started, `busy${i}`, i))
+    const running = busy.map((g) => enqueue(g.job, 0))
+
+    let wanted = true
+    const dropped = gate(started, 'dropped', 'ran')
+    const droppedResult = enqueue(dropped.job, 10, { isWanted: () => wanted, value: 'skipped' })
+    const kept = gate(started, 'kept', 'kept')
+    const keptResult = enqueue(kept.job, 0, { isWanted: () => true, value: 'skipped' })
+    expect(tintQueueStats()).toEqual({ running: 4, waiting: 2 })
+
+    // The page lets go of the first waiter before its turn; one freed slot then goes straight to the next one.
+    wanted = false
+    busy[0]!.resolve()
+    await expect(droppedResult).resolves.toBe('skipped')
+    await flush()
+    expect(started.slice(4)).toEqual(['kept'])
+    expect(tintQueueStats()).toEqual({ running: 4, waiting: 0 })
+
+    for (const g of [...busy, kept]) g.resolve()
+    await expect(keptResult).resolves.toBe('kept')
+    await Promise.all(running)
+    await flush()
+    expect(tintQueueStats()).toEqual({ running: 0, waiting: 0 })
+  })
+
   it('does not let a rejected or throwing job hold its slot', async () => {
     const started: string[] = []
     const failing = Array.from({ length: 4 }, (_, i) => gate(started, `f${i}`, i))

@@ -15,6 +15,10 @@ interface CacheEntry {
   promise: Promise<string | null>
   settled: boolean
   url: string | null
+  /** How many mounted `useTintedLayer` effects are waiting on this entry (plan 27 E1 fix round). A render still in the
+   * tint queue when this falls to 0 — every card that asked for it unmounted, the tab was left — is passed over when
+   * its turn comes instead of loading images nobody will show. */
+  wanted: number
 }
 
 /** file|density|mask:colour,mask:colour… → the entry for that exact paint job. Module-level so every `Chibi` on a
@@ -38,6 +42,12 @@ function tintDensity(): 1 | 2 {
   return typeof window !== 'undefined' && window.devicePixelRatio >= 1.5 ? 2 : 1
 }
 
+/** How long one image of a tinted render may take to load and decode before the render gives up (plan 27 E1 fix
+ * round). A stalled request would otherwise hold one of the queue's four slots for as long as the browser keeps the
+ * connection open; giving up frees the slot, the layer stays plain, and — the failure being uncacheable — the next
+ * mount tries again. */
+export const TINT_LOAD_TIMEOUT_MS = 15_000
+
 function loadImage(src: string): Promise<HTMLImageElement> {
   const img = new Image()
   // The avatar asset base can be a CDN origin different from the page's; without this, drawing that
@@ -45,7 +55,11 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   // of the plain layer's own failure path.
   img.crossOrigin = 'anonymous'
   img.src = src
-  return img.decode().then(() => img)
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`tint image load timed out: ${src}`)), TINT_LOAD_TIMEOUT_MS)
+  })
+  return Promise.race([img.decode().then(() => img), timeout]).finally(() => clearTimeout(timer))
 }
 
 /** The outcome of one render attempt: `cacheable` says whether `cachedRender` may keep a `null` result cached
@@ -119,26 +133,49 @@ function evictIfNeeded(): void {
   }
 }
 
+/** What a render passed over in the queue resolves to: no URL, and not cached, so a later mount asks again. */
+const UNWANTED: RenderOutcome = { url: null, cacheable: false }
+
 /** Runs `factory` for `key` at most once, caching its entry until it settles (and after) — unless the outcome
  * says `cacheable: false`, in which case the entry is dropped the moment it settles so the next caller for the
- * same key gets a fresh attempt instead of the one transient failure replayed for the rest of the session. */
-function cachedRender(key: string, factory: () => Promise<RenderOutcome>): Promise<string | null> {
-  const existing = cache.get(key)
-  if (existing !== undefined) return existing.promise
+ * same key gets a fresh attempt instead of the one transient failure replayed for the rest of the session.
+ *
+ * Counts the caller as one more consumer of the entry (`wanted`) *before* `factory` runs — the queue may start the
+ * job synchronously, and must find it wanted — and returns `release`, which the caller runs once it stops waiting.
+ * `factory` gets the entry's `isWanted` check to hand to the queue. */
+function cachedRender(
+  key: string,
+  factory: (isWanted: () => boolean) => Promise<RenderOutcome>,
+): { promise: Promise<string | null>; release: () => void } {
+  let entry = cache.get(key)
+  if (entry === undefined) {
+    // `promise` is a placeholder until `factory` has returned; nothing reads it before then.
+    const created: CacheEntry = { promise: Promise.resolve(null), settled: false, url: null, wanted: 1 }
+    entry = created
+    cache.set(key, created)
+    const outcome = factory(() => created.wanted > 0)
+    created.promise = outcome.then((result) => result.url)
+    evictIfNeeded()
 
-  const outcome = factory()
-  const promise = outcome.then((result) => result.url)
-  const entry: CacheEntry = { promise, settled: false, url: null }
-  cache.set(key, entry)
-  evictIfNeeded()
+    outcome.then(({ url, cacheable }) => {
+      created.settled = true
+      created.url = url
+      if (!cacheable && cache.get(key) === created) cache.delete(key)
+    })
+  } else {
+    entry.wanted++
+  }
 
-  outcome.then(({ url, cacheable }) => {
-    entry.settled = true
-    entry.url = url
-    if (!cacheable) cache.delete(key)
-  })
-
-  return promise
+  const held = entry
+  let released = false
+  return {
+    promise: held.promise,
+    release: () => {
+      if (released) return
+      released = true
+      held.wanted--
+    },
+  }
 }
 
 /**
@@ -178,13 +215,18 @@ export function useTintedLayer(prefix: string, layer: LayerRef, priority: number
     if (shownRef.current !== identity) setUrl(null)
 
     let cancelled = false
-    cachedRender(key, () => enqueue(() => renderTintedLayer(prefix, layer, density), priority)).then((result) => {
+    const { promise, release } = cachedRender(key, (isWanted) =>
+      enqueue(() => renderTintedLayer(prefix, layer, density), priority, { isWanted, value: UNWANTED }),
+    )
+    promise.then((result) => {
+      release()
       if (cancelled) return
       shownRef.current = result === null ? null : identity
       setUrl(result)
     })
     return () => {
       cancelled = true
+      release()
     }
     // `key` already encodes file, density and every tint; `identity` and `density` are both derived from
     // `prefix`/`layer.file`, already listed — re-running on `layer`'s own (fresh-every-render) object identity

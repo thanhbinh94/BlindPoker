@@ -1,4 +1,4 @@
-import { act, render, renderHook } from '@testing-library/react'
+import { act, render, renderHook, waitFor } from '@testing-library/react'
 import { useRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AvatarAssets } from './AvatarAssets.js'
@@ -7,6 +7,7 @@ import { resetLoadedClips } from './clip.js'
 import { defaultChibi } from './defaults.js'
 import { hashChibi, layersFor } from './layers.js'
 import { useInView } from './lazy.js'
+import { TINT_CONCURRENCY, enqueue } from './tint-queue.js'
 import type { ChibiConfig, WearRef } from './types.js'
 
 const SUBJECT = defaultChibi('ann')
@@ -82,6 +83,71 @@ describe('useInView', () => {
     const off = renderHook(() => useInView({ current: el }, '200px', false))
     expect(off.result.current).toBe(true)
     expect(FakeObserver.instances).toHaveLength(1)
+  })
+
+  it('stops observing when it unmounts before its element is seen', () => {
+    vi.stubGlobal('IntersectionObserver', FakeObserver)
+    FakeObserver.instances = []
+    const el = document.createElement('div')
+    const { unmount } = renderHook(() => useInView({ current: el }))
+    expect(FakeObserver.instances[0]!.disconnected).toBe(false)
+    unmount()
+    expect(FakeObserver.instances[0]!.disconnected).toBe(true)
+  })
+})
+
+describe('Chibi lazy — its place in the tint queue', () => {
+  let originalDecode: typeof HTMLImageElement.prototype.decode
+  const loaded: string[] = []
+
+  beforeEach(() => {
+    loaded.length = 0
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
+      () =>
+        ({
+          drawImage: vi.fn(),
+          getImageData: vi.fn(() => ({ data: new Uint8ClampedArray(2 * 2 * 4).fill(255), width: 2, height: 2 })),
+          putImageData: vi.fn(),
+          clearRect: vi.fn(),
+        }) as unknown as CanvasRenderingContext2D,
+    )
+    // No blob: the render settles on the plain layer, which is all this test needs.
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((callback: BlobCallback) => callback(null))
+    vi.spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get').mockReturnValue(2)
+    vi.spyOn(HTMLImageElement.prototype, 'naturalHeight', 'get').mockReturnValue(2)
+    originalDecode = HTMLImageElement.prototype.decode
+    HTMLImageElement.prototype.decode = function (this: HTMLImageElement) {
+      loaded.push(this.src)
+      return Promise.resolve()
+    }
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+    HTMLImageElement.prototype.decode = originalDecode
+  })
+
+  it('with every slot busy, an eager chibi’s tinted layer starts before a lazy one’s asked for first, even one lower in the stack', async () => {
+    const busy: (() => void)[] = []
+    const busyDone = Array.from({ length: TINT_CONCURRENCY }, () => enqueue(() => new Promise<void>((resolve) => busy.push(resolve)), 1000))
+    // Ranked by order alone, the lazy outfit (L40, −40) would beat the eager hat (L80, −80); a lazy chibi sits 100 lower (−140).
+    const lazyOne: ChibiConfig = { ...SUBJECT, outfit: { ...SUBJECT.outfit, file: 'item_outfit_lazyrank_L40', tint: { colour: '#112233', meanL: 0.5 } } }
+    const eagerOne: ChibiConfig = { ...SUBJECT, head: { id: 'head_eagerrank', order: 80, file: 'item_head_eagerrank_L80', tint: { colour: '#445566', meanL: 0.5 } } }
+    render(
+      <>
+        <Chibi subject={lazyOne} lazy />
+        <Chibi subject={eagerOne} />
+      </>,
+    )
+    expect(loaded).toEqual([])
+
+    busy.shift()!()
+    await busyDone[0]
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(loaded[0]).toContain('item_head_eagerrank_L80@')
+
+    for (const release of busy) release()
+    await Promise.all(busyDone)
+    await waitFor(() => expect(loaded.some((src) => src.includes('item_outfit_lazyrank_L40@'))).toBe(true))
   })
 })
 

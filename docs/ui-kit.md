@@ -513,8 +513,12 @@ in unit tests unless a test stubs the observer. Use it for grids of cards (wardr
 a table seat stay eager. Every tinted render (`useTintedLayer`, also used by the wardrobe's item icons) waits in one
 page-wide queue, `enqueue(job, priority)` (`tint-queue.ts`): at most four renders at once — so at most four tint image
 loads in flight — higher priority first, first come first served within one priority, a failed job freeing its slot.
-`useTintedLayer(prefix, layer, priority = -layer.order)` ranks the body and face ahead of the hat and frame; a lazy
-chibi ranks its layers 100 lower, behind every eager chibi's. A tinted render paints from the @2x files only when
+`enqueue(job, priority, { isWanted, value })` asks `isWanted()` when the job's turn comes and, if it is false, resolves
+with `value` without running the job or taking a slot; `useTintedLayer` counts the mounts waiting on each render, so a
+render every one of whose cards unmounted (a tab switch) is passed over, uncached, and a later mount asks again. Each
+image of a tinted render gives up after `TINT_LOAD_TIMEOUT_MS` (15 s), freeing its slot and leaving the plain layer,
+again uncached. `useTintedLayer(prefix, layer, priority = -layer.order)` ranks the body and face ahead of the hat and
+frame; a lazy chibi ranks its layers 100 lower, behind every eager chibi's. A tinted render paints from the @2x files only when
 `devicePixelRatio >= 1.5` (it was `> 1`); the plain layers keep their two-density `srcset`, and a hat's hair clip is
 always @2x.
 
