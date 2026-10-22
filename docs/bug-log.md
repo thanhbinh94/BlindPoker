@@ -588,3 +588,100 @@ dùng chọn (a): tất tay phần còn lại + bỏ phí Blind (spec §5).
 | K4 | **Quà lập tài khoản lần đầu:** tiền + danh vọng + một bộ trang phục. | Gắn với `starting_balance` hiện có; thêm nguồn ledger `welcome` cho danh vọng và một món quà; cân nhắc với người đã có tài khoản (có tặng bù không). |
 | K5 | **Kho đồ tải chậm lần đầu** (ảnh nhân vật, tóc, phụ kiện): cần lazy-load. (Gửi 2026-10-20.) | Hơn 490 tệp PNG `@1x/@2x` 384×448; tủ đồ vẽ nhiều chibi cùng lúc. Hướng: `loading="lazy"` + `IntersectionObserver` cho thẻ ngoài màn, ảnh đại diện nhỏ cho thẻ (icon 96 px đã có), tải trước theo ô đang mở, giới hạn số ảnh cùng lúc, WebP/sprite cho lớp. |
 | K6 | **Dáng đứng của nhân vật quá cố định** (2026-10-21, trong brainstorm K3): "dáng đứng của nhân vật quá cố định nên cũng làm giảm hứng thú của người chơi". | **Hoãn.** Mỗi dáng mới là vẽ lại toàn bộ lớp thân, tay và mọi trang phục cho cả hai giới qua pipeline avatar (`docs/avatar-2d.md`, cổng kiểm phong cách), tức một dự án nghệ thuật riêng, không phụ thuộc cửa hàng. Brainstorm sau Plan 27; hướng khả dĩ: 2–3 dáng ngồi/tư thế cho ghế ở bàn, giữ một dáng chuẩn cho tủ đồ. |
+
+## 10. Phản hồi 2026-10-22 (ảnh others/review/20261022)
+
+Người dùng gửi 5 ảnh chụp trên điện thoại Android (2340×1080 vật lý, Chrome, cùng máy với mục 8), không kèm chữ. Claude
+đọc ảnh và dò mã ngày 22/10; ý của người dùng ở từng ảnh là Claude đoán, cần xác nhận (nhất là E3).
+
+**Bối cảnh thời điểm.** Ảnh 1–4 chụp lúc 21:42–21:43, cùng phút với bản sao lưu trước khi deploy Plan 27 lên VPS
+(`bp-2026-10-22-2142.dump`, CHANGELOG Plan 27 mục "Deployed"); lần deploy đó **chờ phòng đang mở duy nhất đóng lại**, tức
+chính bàn "Góc Bến Nhà Rồng" trong ảnh. Vậy ảnh 1–4 là bản **Plan 26**. Ảnh 5 chụp lúc 23:01, đã là bản Plan 27 (có nút
+"Cửa hàng"). Phần bố cục nằm ngang của bàn (E1, E2) không đổi trong Plan 27 (`git diff 837485c da8ca8a` không đụng các
+quy tắc `.ring[data-frame='landscape']`), nên lỗi vẫn còn trên bản đang chạy.
+
+**Cỡ màn trong ảnh 1–4.** Ảnh vật lý 2340×1080, DPR khoảng 2,625: trừ dải tai thỏ bên trái (khoảng 37 px CSS) và thanh
+trạng thái cộng thanh địa chỉ của Chrome (khoảng 93 px CSS), vùng nhìn còn **khoảng 855 × 319 px CSS**. Khung nằm ngang
+của Plan 26 thiết kế cho sân khấu từ 290 px trở lên (915 × 355 là cỡ thấp nhất được tính và được test, L-02); ở 319 px
+cao, đo trên ảnh, hình elip của bàn chỉ còn khoảng **430 × 130 px** thay vì 667 × 200 px. Thanh địa chỉ không tự ẩn vì
+trang phòng chơi khoá cuộn (Chrome chỉ thu thanh công cụ khi trang cuộn), nên trên máy này khung luôn ở cỡ thấp đó, trừ
+khi bật "Toàn màn hình" trong menu "⋯" (đã có từ Plan 26).
+
+| # | Ảnh | Mức | Mô tả | Nguyên nhân | Trạng thái |
+|---|---|---|---|---|---|
+| E1 | 1 | P2 | Bàn Blind đang chờ, nằm ngang: dòng gợi ý "Bấm Sẵn sàng để bắt đầu — ván cần ít nhất một người chơi thật." xuống ba dòng, dòng thứ ba đè lên tên "Binh La" và số 5.000 trên ghế mình. Chữ đè chữ. | `.ring .note` (`packages/ui-kit/src/table/table.module.css`, khoảng dòng 1014) đặt ở `top: 60%` của vòng bàn, rộng tối đa `46cqw`. Bàn cao 130 px, rộng 430 px nên dòng chỉ rộng khoảng 200 px, chữ xuống ba dòng (khoảng 49 px) và chạm khối ghế mình (`.seat.seatMe`, đứng ở `-100% + 85px - 4.8cqh`). Nhãn "Bạn" và "♛ Chủ phòng" cũng xuống hai dòng nên khối ghế mình cao thêm. Chú thích trong CSS ghi "plate starts well below this", chỉ đúng từ 200 px trở lên. Có từ Plan 26. | chờ quyết định |
+| E2 | 2, 4 | P1 | Bàn Blind 6 ghế (5 bot), đang chơi, nằm ngang: các khối ghế chồng lên nhau. Hàng nhãn "Bot · Đã chọn" và chip cược của Bot 4 nằm đè lên ghế Bot 5 (che mất tên Bot 5); ghế Bot 1 che hàng nhãn của Bot 2; ba lá úp và hàng nhãn "Bot · Đã chọn · 2.000" của Bot 3 nằm ngay trên ba lá bài của mình (che lá K♥ ở giữa); ba lá bài của mình (lớn, 50 px) lại che **năm lá bài chung**, chỉ thấy một góc lá 6♦ (ảnh 4, lúc "Chờ lật bài"). Người chơi không đọc được bài của mình và bài chung. | Cùng gốc với E1: bàn cao 130 px. (1) Hàng nhãn được phép rộng `--seat-line: 24cqw` (khoảng 103 px ở đây; chú thích CSS tính 160 px ở 915 × 355) nên "Bot · Đã chọn · 2.000" xuống hai dòng, khối ghế cao hơn 86 px đã tính (`--seat-half: 43px`), và khối ghế trên của sườn trái/phải chạm khối ghế dưới. (2) `.seatMe .cardMd { --card-w: clamp(50px, 24cqh, 56px) }` có mức sàn 50 px (lá cao khoảng 70 px, hơn nửa chiều cao bàn), nên bài của mình nhô lên tới hàng bài chung (`.centre { top: 45% }`). (3) Ghế trên cùng treo xuống từ điểm của nó, khối 86 px trên bàn 130 px nên chạm giữa bàn. Có từ Plan 26. | chờ quyết định |
+| E3 | 3 | — | Thẻ kết quả bàn Blind: "Người thắng · Binh La · Hai đôi · +11.760" và dòng **"Phí bàn 240"** (2 % của pot 12.000). Plan 27 hứa Blind không thu phí bàn. | Ảnh chụp trên bản Plan 26 (xem "Bối cảnh"), khi luật cũ còn thu 2 %. Bản Plan 27 đặt phí Blind bằng 0 ngay lúc tạo phòng (`packages/core/src/protocol/validate.ts:131`, `ECONOMY.blindTableFeeRate = 0`), phòng không được lưu qua lần khởi động lại nên không còn phòng cũ mang phí 2 %, và `HandResult.tsx:176` ẩn dòng "Phí bàn" khi phí bằng 0. Unit test có (`soak.test.ts` `fees === 0`, `HandResult.test.tsx`); ops pack chưa có case nào kiểm thẻ kết quả Blind **không** có dòng "Phí bàn" (`feeOn` chỉ dùng ở `03-holdem.spec.ts`). Phần mép: nút **D** nhô trên mép thẻ và nhãn "Chủ phòng" nhô dưới mép, đã ghi ở known-limitations (thẻ kết quả nằm ngang che ghế), không phải lỗi mới. | nhiều khả năng đã sửa, chờ người dùng thử lại |
+| E4 | 5 | P2 | Sảnh chờ, điện thoại dọc, cuộn xuống một chút: hình đại diện của mình (mũ chóp, vòng nguyệt quế) **vẽ đè lên thanh điều hướng** dính ở đầu trang, che chữ "Sảnh chờ" và lấn sang ô ♠. Dòng "Số dư … điểm" trượt dưới thanh như bình thường, chỉ hình đại diện nổi lên trên. | Thanh điều hướng `.bar` (`apps/normal-web/src/screens/normal.module.css:20-23`) là `position: sticky; z-index: 20`. `Chibi` (`packages/ui-kit/src/avatar2d/Chibi.tsx:58`) đặt `z-index` cho từng lớp theo `ORDER` (`layers.ts:5`: tóc sau 20, thân 30 … mũ 80, khung 90), mà gốc `.chibi` (`avatar2d.module.css`) không mở stacking context riêng. Hình đại diện ở sảnh (`App.tsx:533`, `.lobbyAvatar` trong `avatar/avatar.module.css`) cũng không có, nên mọi lớp từ 20 trở lên cạnh tranh trực tiếp với thanh (z 20) và thắng. Có từ 2026-09-28 (hình chibi lên thanh người chơi ở sảnh); dễ thấy hơn sau Plan 27 vì thanh người chơi cao hơn (thêm nút "Cửa hàng", bậc danh vọng) nên sảnh cuộn, và quà chào mừng/thành tựu cho thêm khung (lớp 90). Trang Hồ sơ (`ProfileScreen.tsx:253, 257`) nhiều khả năng bị y hệt khi cuộn (chưa kiểm). Ghế ở bàn đã gặp đúng lỗi này và được sửa bằng `isolation: isolate` (`table.module.css` khoảng dòng 535, "faces were painted over the result card"), Phòng thay đồ cũng vậy (`.cardPortrait`). | chờ quyết định |
+
+**Vì sao bộ test không bắt được.**
+- E1, E2: project `landscape` của ops pack chạy 915 × 412; chỉ L-02 hạ xuống 915 × 355, và ở đó vòng bàn còn 200 px nên
+  vừa. Không case nào chạy dưới 355 px cao, trong khi điện thoại thật có thanh địa chỉ chỉ còn khoảng 319 px. L-02 lại đo
+  `expectNoTextOverlapAt` ngay khi nút "Chơi" hiện, có thể trước khi bot chọn xong, nên hàng nhãn "Bot · Đã chọn · 1.000" (dòng
+  dài nhất) chưa có; và `expectLaidOut` chỉ so khung tên với khung tên, không so lá bài của mình với bài chung hay hàng
+  nhãn của ghế này với khung tên ghế kia. Ghi chú known-limitations "740 × 360 fits with thin margins" cũng dựa trên giả
+  định thanh trình duyệt chỉ ăn khoảng 55 px.
+- E3: chưa có case ops kiểm bàn Blind không in "Phí bàn".
+- E4: `expectNoTextOverlap` chỉ so chữ với chữ, ở vị trí cuộn 0; không case nào cuộn sảnh hay hồ sơ dưới thanh điều hướng
+  trên điện thoại rồi kiểm phần tử nằm trên cùng ở ô "Sảnh chờ".
+
+### E1 + E2 — bàn nằm ngang dưới cỡ thiết kế (cùng gốc)
+
+**Lựa chọn:**
+- (a) **Bậc "nằm ngang thấp"** cho sân khấu dưới 290 px (một truy vấn `max-height` thêm vào khung `landscape`, hoặc một
+  biến tính từ `cqh` của vòng bàn): bài úp của ghế khác nhỏ lại (khoảng 14–16 px, hoặc chỉ hiện số lá), hàng nhãn gộp
+  thành một dòng ngắn (chip cược dời lên dòng stack của khung tên, chữ "Bot" thành biểu tượng), bài của mình bỏ mức sàn
+  50 px (khoảng 40 px) và đứng **cạnh** khung tên của mình thay vì nhô lên giữa bàn, ghế trên cùng chỉ treo khung tên;
+  dòng gợi ý chờ (E1) dời vào dock góc phải dưới cạnh "5/6 sẵn sàng" (hoặc thành `title` của nút "Sẵn sàng"). Thêm case
+  ops L-06 ở **855 × 319** (bàn Blind 6 ghế, "Chơi hoặc bỏ", đo **sau khi** mọi bot đã "Đã chọn"): hộp mỗi ghế (cả bài và
+  nhãn) không giao hộp ghế khác, bài của mình không giao hàng bài chung, `expectNoTextOverlapAt`, và một lần ở 915 × 412
+  để chắc bố cục cũ không đổi. Chi phí: vừa (CSS khung nằm ngang, có thể sửa `Seat.tsx` cho chip cược, ảnh chụp ba cỡ,
+  một case ops, sửa known-limitations và `docs/ui-kit.md`), khoảng một nhánh 1–2 ngày. Rủi ro: đụng các khoá đo trong
+  L-01…L-05 và P-03b (số La Mã bậc danh vọng trên dòng stack), cần chạy lại cả project `landscape`.
+- (b) **Gợi ý "Toàn màn hình"** khi sân khấu thấp hơn 290 px: một dòng nhắc hoặc nút trong dock lúc chờ, gọi lại mục
+  "Toàn màn hình" có sẵn trong menu "⋯". Trên máy này lấy lại khoảng 90 px (về khoảng 855 × 411, vùng đã test). Chi phí
+  thấp (một chuỗi vi/en, một điều kiện, một unit test). Rủi ro: không có trên iPhone (Safari không cho trang web toàn
+  màn hình), người chơi phải bấm mỗi lần vào bàn, nên một mình (b) không đủ.
+- (c) **Vá tối thiểu**: nới `--seat-line` lên khoảng 30cqw, hạ mức sàn bài của mình xuống 40 px, giấu dòng gợi ý khi vòng
+  bàn thấp hơn 160 px. Rẻ, nhưng 6–8 ghế vẫn chật ở 130 px và không có case nào giữ cỡ này.
+
+**Đề xuất:** (a) cộng (b): (a) mới làm bàn đọc được ở cỡ thật của điện thoại có thanh địa chỉ, (b) rẻ và cho người chơi
+Android lấy lại cả màn hình.
+
+**Phân loại:** Bounded fix (UI, không đổi luật), nhánh `bugfix/BP-28-short-landscape-table`. Cần người dùng chốt hai
+điểm của (a): bài úp của bot thu nhỏ hay chỉ hiện số lá, và dòng gợi ý chờ nằm trong dock hay bỏ hẳn.
+
+### E3 — "Phí bàn 240" trên thẻ kết quả Blind
+
+**Lựa chọn:**
+- (a) **Không sửa mã**: người dùng chơi lại một ván Blind trên bản hiện tại và xác nhận thẻ kết quả không còn dòng "Phí
+  bàn", số thắng bằng đúng tổng pot (6 × 2.000 = +12.000 thay vì +11.760).
+- (b) (a) cộng **một khẳng định trong ops pack**: ở F-10 (hoặc case Blind đầu tiên của `04-blind.spec.ts`) thêm
+  `expect(await feeOn(resultCard(page))).toBe(0)`. Chi phí: vài dòng, không thêm lượt đăng ký. Rủi ro: gần như không.
+- (c) Nếu người dùng thấy "Phí bàn" trên bàn Blind **tạo sau 21:46 ngày 22/10**: điều tra như lỗi thật (VPS chạy bản cũ,
+  hoặc bundle web cũ trong tab chưa F5; `stale-chunk.ts` chỉ tải lại khi thiếu chunk).
+
+**Đề xuất:** (b): ảnh nhiều khả năng là bản trước deploy, và một khẳng định rẻ giữ cho luật "Blind không thu phí" không
+bị lùi.
+
+**Phân loại:** nhiều khả năng **không phải lỗi** (đã sửa trong Plan 27); cần người dùng xác nhận. Khẳng định ở (b) đi
+chung nhánh với E4.
+
+### E4 — hình đại diện vẽ đè thanh điều hướng khi cuộn
+
+**Lựa chọn:**
+- (a) **`isolation: isolate` trên gốc `.chibi`** (`packages/ui-kit/src/avatar2d/avatar2d.module.css`): mọi nơi dùng
+  `Chibi` (sảnh, hồ sơ, cửa hàng, hộp quà chào mừng, tủ đồ, ghế ở bàn) tự giữ lớp của mình bên trong. Khung (lớp 90) vẽ
+  ngoài vòng cắt nhưng vẫn trong gốc nên không bị cắt. Chi phí: một dòng CSS, một unit test cho class, một case ops ở
+  project `mobile` (cuộn sảnh 200 px, `document.elementFromPoint` tại ô "Sảnh chờ" phải thuộc thanh điều hướng), ảnh ở ba
+  cỡ cho sảnh, hồ sơ, tủ đồ. Rủi ro: thấp; các chỗ đã tự cô lập (`.cardPortrait`, khung tên ở bàn) không đổi; cần nhìn
+  lại thẻ thử đồ của cửa hàng và "Đang dùng" trong tủ đồ.
+- (b) Chỉ thêm `isolation: isolate` cho `.lobbyAvatar` và hai chibi của trang Hồ sơ. Hẹp hơn, nhưng chỗ dùng `Chibi`
+  mới sau này sẽ gặp lại (đây đã là lần thứ ba).
+- (c) Nâng `z-index` của thanh điều hướng lên trên 90. Không khuyến nghị: phải xếp lại với `--z-modal`, hộp thoại và
+  thông báo, và vẫn hở với bất cứ lớp nào cao hơn.
+
+**Đề xuất:** (a): sửa ở gốc, một lần cho mọi chỗ, đúng bài học của ghế ở bàn và Phòng thay đồ.
+
+**Phân loại:** Bounded fix, nhánh `bugfix/BP-29-chibi-over-rail` (gộp cả khẳng định E3-(b)). Nhỏ, có thể deploy trước
+nhánh BP-28.
