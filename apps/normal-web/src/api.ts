@@ -326,6 +326,52 @@ export interface RankThresholdDto {
   threshold: number
 }
 
+/**
+ * Plan 27: why an item is not for sale, in the server's precedence order (spec 2026-10-21 §3 B1) — the source label a
+ * shop card shows in place of "Mua".
+ */
+export type ShopLockDto =
+  | { kind: 'achievement'; achievementId: string }
+  | { kind: 'gift_month'; month: string }
+  | { kind: 'gift_default' }
+  | { kind: 'free' }
+  | { kind: 'default' }
+  | { kind: 'disabled' }
+  | { kind: 'unpriced' }
+
+/** One catalogue item as the shop sees it, for the player asking. */
+export interface ShopEntryDto {
+  itemId: string
+  slot: ItemSlot
+  rarity: Rarity
+  /** Points; 0 for an `unpriced` item, which is locked, not free. */
+  price: number
+  /** The rank 1..5 the item needs, judged against `me.rank` (the high-water mark). */
+  minRank: number
+  /** `lock === null && !owned` — rank and balance are for the client to show and the server to judge. */
+  purchasable: boolean
+  owned: boolean
+  lock: ShopLockDto | null
+}
+
+/** `GET /api/shop`: every catalogue item, the week's shelf (≤ 6 ids) and the player's standing. */
+export interface ShopViewDto {
+  /** ISO week in the economy's zone, `YYYY-Www`. */
+  weekKey: string
+  featured: string[]
+  /** `gm` when a GM arranged this week's shelf, `auto` for the server's weekly rotation. */
+  featuredSource: 'gm' | 'auto'
+  entries: ShopEntryDto[]
+  me: { balance: number; reputation: number; rank: number; ranks: RankThresholdDto[] }
+}
+
+/** `POST /api/shop/buy`: the balance after the purchase; `repeated` when this `purchaseId` had already bought it. */
+export interface BuyResultDto {
+  balance: number
+  itemId: string
+  repeated: boolean
+}
+
 /** `GET /api/me/stats` — all sixteen counters of §10.3. */
 export interface PlayerStatsDto {
   handsPlayedHoldem: number
@@ -638,6 +684,17 @@ export interface NormalApi {
   claimDaily(): Promise<DailyClaimDto>
   relief(): Promise<ReliefDto>
 
+  /** Plan 27: the shop's shelves, locks and the player's standing. */
+  shop(): Promise<ShopViewDto>
+  /**
+   * Buys one item for points. `purchaseId` is a fresh lower-case UUID per press of "Mua" (`crypto.randomUUID()`), and
+   * the *same* one on a retry: the server charges once per id and answers a repeat `repeated: true`. A malformed id is
+   * `400 INVALID_BODY`. A refusal rejects with an `ApiError` whose `status` is 409 and whose `code` is `SHOP_DISABLED`,
+   * `RANK_TOO_LOW`, `ALREADY_OWNED` or `INSUFFICIENT_POINTS` (read from the `{ error: { code } }` envelope by `failure`;
+   * there are no side fields), or 404 `UNKNOWN_ITEM`.
+   */
+  shopBuy(itemId: string, purchaseId: string): Promise<BuyResultDto>
+
   /** The five saved-outfit slots (design §5.3); a `null` entry is an empty slot. */
   outfits(): Promise<{ outfits: (OutfitDto | null)[] }>
   /** Saves the current draft into one slot, replacing whatever was there. */
@@ -788,6 +845,9 @@ export function createApi(fetchImpl?: typeof fetch, base = ''): NormalApi {
     daily: () => call<DailyStatusDto>({ method: 'GET', path: '/api/rewards/daily' }),
     claimDaily: () => call<DailyClaimDto>({ method: 'POST', path: '/api/rewards/daily/claim' }),
     relief: () => call<ReliefDto>({ method: 'POST', path: '/api/economy/relief' }),
+
+    shop: () => call<ShopViewDto>({ method: 'GET', path: '/api/shop' }),
+    shopBuy: (itemId, purchaseId) => call<BuyResultDto>({ method: 'POST', path: '/api/shop/buy', body: { itemId, purchaseId } }),
 
     outfits: () => call<{ outfits: (OutfitDto | null)[] }>({ method: 'GET', path: '/api/me/outfits' }),
     saveOutfit: (slot, name, config) =>

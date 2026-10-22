@@ -411,6 +411,7 @@ export async function buildApp(deps: AppDeps): Promise<NormalApp> {
     gm,
     gmRooms,
     reputation,
+    shop,
     catalog,
     defs,
     aliases,
