@@ -540,6 +540,38 @@ describe('App — a session that ends under the player', () => {
   })
 })
 
+describe('App — a rank-up reaches the player’s own bar at once', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    FakeSocket.reset()
+    resetAvatarCache()
+    window.history.replaceState(null, '', '/')
+  })
+
+  it('asks for the player’s own avatar again, past the browser cache, when RANK_UP arrives', async () => {
+    const avatar = { v: 2, body: 'male', skin: '#e0ac81', eyes: '#3b2415', hairColor: '#2b2b2b', hair: 'hair_short', top: 'top_tee', bottom: 'bottom_jeans', shoes: 'shoes_sneakers' }
+    const playerAvatar = vi
+      .fn()
+      .mockResolvedValueOnce({ playerId: 'p1', displayName: 'Bình', avatar, rank: 1 })
+      .mockResolvedValue({ playerId: 'p1', displayName: 'Bình', avatar, rank: 3 })
+    renderApp(stubApi({ playerAvatar }))
+    await settled()
+    await welcome()
+    await screen.findByRole('heading', { name: ROOMS_HEADING })
+    await waitFor(() => expect(playerAvatar).toHaveBeenCalledTimes(1))
+    expect(screen.queryByText('Cao thủ', { selector: '[data-rank]' })).toBeNull()
+
+    await act(async () => {
+      socket().receive({ t: 'NOTIFICATION', kind: 'RANK_UP', payload: { rank: 3 } })
+    })
+
+    // The route is served `private, max-age=60`: without `fresh` the browser would answer with the rank it held.
+    await waitFor(() => expect(playerAvatar).toHaveBeenCalledTimes(2))
+    expect(playerAvatar).toHaveBeenLastCalledWith('p1', { fresh: true })
+    expect(await screen.findByText('Cao thủ', { selector: '[data-rank]' })).toBeInTheDocument()
+  })
+})
+
 describe('App — back into the room the server still holds (T5)', () => {
   beforeEach(() => {
     localStorage.clear()

@@ -102,8 +102,9 @@ describe('createApi — reads', () => {
     const fetchImpl = ok({})
     await apiOf(fetchImpl).playerAvatar('p1', { fresh: true })
     // Without this the re-read after `PUT /api/me/avatar` is served out of memory cache: the wardrobe shows
-    // the face the player just replaced, for up to a minute.
-    expect(init(fetchImpl).cache).toBe('no-store')
+    // the face the player just replaced, for up to a minute. `reload`, not `no-store`: the fresh answer is written back,
+    // so a reload or another screen inside that minute reads it too, not the stale one (a rank-up then F5, Plan 27).
+    expect(init(fetchImpl).cache).toBe('reload')
   })
 })
 

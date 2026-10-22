@@ -222,10 +222,12 @@ async function rankOnSeat(browser: Browser, stem: string, landscape: boolean): P
   const { page, who } = player
   try {
     // The lobby already read this player's avatar, rank 1 in it, and the browser keeps that answer for 60 s
-    // (`private, max-age=60` on `GET /api/players/:id/avatar`); nothing invalidates it on a rank-up, so a reload alone
-    // would seat a Tân binh. A player on another device, or a minute later, starts from an empty cache: so does this.
-    const cdp = await player.context.newCDPSession(page)
-    await makeCaoThu(browser, page, () => cdp.send('Network.clearBrowserCache').then(() => undefined))
+    // (`private, max-age=60` on `GET /api/players/:id/avatar`). The grant's `RANK_UP` makes the app ask again past that
+    // cache and write the new answer back: the lobby bar reads Cao thủ with no reload, and the reload after it reads the
+    // same, never a Tân binh.
+    await makeCaoThu(browser, page, () =>
+      expect(page.locator('header [data-rank="3"]'), 'the lobby bar takes the rank-up at once').toHaveText('Cao thủ'),
+    )
     await page.goto('/#/profile')
     await expect(page.locator('[data-reputation]')).toContainText('Danh vọng 400 · Cao thủ · còn 1.400 tới Bậc thầy')
 

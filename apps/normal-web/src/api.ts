@@ -938,9 +938,10 @@ export function createApi(fetchImpl?: typeof fetch, base = ''): NormalApi {
       call<PlayerAvatarDto>({
         method: 'GET',
         path: `/api/players/${encodeURIComponent(playerId)}/avatar`,
-        // `no-store` rather than `reload`: the answer this request exists to replace is already known wrong,
-        // so there is nothing worth writing back into the cache either.
-        ...(opts?.fresh === true ? { cache: 'no-store' as const } : {}),
+        // `reload` rather than `no-store`: past the browser's cache to the server, and the fresh answer written back
+        // over the stale one, so a reload or another screen inside the `max-age` reads it too (Plan 27: a rank-up,
+        // then F5, seated the old rank while `no-store` left the stale entry in place).
+        ...(opts?.fresh === true ? { cache: 'reload' as const } : {}),
       }),
 
     achievements: () => call<AchievementProgressDto[]>({ method: 'GET', path: '/api/me/achievements' }),

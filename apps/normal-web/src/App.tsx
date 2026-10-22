@@ -311,7 +311,10 @@ export function App({ api, socketFactory }: AppProps) {
   // A promotion or a demotion changes the role under a live session: the gate asks the server again, so the Settings
   // row that links the console and the `#/gm` route follow at once instead of at the next reload. Each notice is handled
   // once, by object — the reducer reuses ids after a dismissal, but never a notification object. A reopened check-in is
-  // counted the same way, and the daily page reads its status again when the count moves (Plan 26, Ruling 11).
+  // counted the same way, and the daily page reads its status again when the count moves (Plan 26, Ruling 11). A
+  // `RANK_UP` (Plan 27; only ever pushed to the player it names) drops the player's own avatar entry and asks for it past
+  // the browser's cache: the route is `private, max-age=60`, so the lobby bar and the next seat would otherwise show the
+  // old rank for up to a minute.
   const rawNotifications = client.state.notifications
   const { refresh: refreshGate } = gate
   const roleNoticesSeen = useRef(new WeakSet<ClientNotification>())
@@ -319,16 +322,19 @@ export function App({ api, socketFactory }: AppProps) {
   useEffect(() => {
     let changed = false
     let resets = 0
+    let rankUp = false
     for (const n of rawNotifications) {
       if (roleNoticesSeen.current.has(n)) continue
       roleNoticesSeen.current.add(n)
       const action = gmNoticeAction(n)
       if (action !== null && ROLE_ACTIONS.has(action)) changed = true
       if (action === 'reset_checkin') resets += 1
+      if (n.kind === 'RANK_UP') rankUp = true
     }
     if (changed) refreshGate()
     if (resets > 0) setCheckinResets((count) => count + resets)
-  }, [rawNotifications, refreshGate])
+    if (rankUp && myId !== null) invalidateAvatar(myId)
+  }, [rawNotifications, refreshGate, myId, invalidateAvatar])
 
   // The socket's identity is usable only while it agrees with the gate's. It disagrees for exactly one
   // window — a sign-out followed by a sign-in in the same tab, until the new socket's `WELCOME` — and in that

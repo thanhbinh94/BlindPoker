@@ -316,8 +316,11 @@ have no account, so their id would be a guaranteed 404 apiece.
 `invalidate(playerId)` drops an entry and refetches; the wardrobe calls it after a save. There are
 **two** caches in the way, and it clears both: this module's Map, and the browser's own — the route
 answers `Cache-Control: private, max-age=60`, so the refetch is issued as
-`api.playerAvatar(id, { fresh: true })`, which sets `cache: 'no-store'`. Only the invalidated id is
-marked; every other seat keeps the 60 s the header is there for.
+`api.playerAvatar(id, { fresh: true })`, which sets `cache: 'reload'`: past the browser's cache, and the
+fresh answer written back over the stale one, so a reload inside the minute reads it too (`no-store` left the
+stale entry in place). Only the invalidated id is marked; every other seat keeps the 60 s the header is there
+for. Besides the wardrobe's save and the welcome gift, the app invalidates the player's own entry when a
+`RANK_UP` arrives (Plan 27), so the lobby bar and the next seat show the new rank at once.
 
 `resetAvatarCache()` empties it. One caller in the app — a session ending — because the cache is
 module scope and keyed by player id, so the account that just signed out would otherwise sit there
