@@ -9,7 +9,7 @@ below are the real history.
 
 ---
 
-## BP-29 — the face stays under the rail, a refusal is read over its dialog, and the Blind fee is pinned in a browser — merged `MERGE` (2026-10-22)
+## BP-29 — the face stays under the rail, a refusal is read over its dialog, and the Blind fee is pinned in a browser — merged `4cd43dd` (2026-10-23)
 
 Three items of the 2026-10-22 review round (`docs/bug-log.md` §10): E4 from the user's phone screenshot, confirmed in words
 ("khi scroll top, icon avatar đè lên khung"); E5 reported in words the same day ("lỗi này bị ẩn sau modal vào bàn"); E3 a
